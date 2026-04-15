@@ -71,7 +71,7 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
     set({ status: 'scanning', devices: [], error: undefined });
 
     vescBle.scan((device) => {
-      const name = device.name ?? device.localName ?? device.id;
+      const name = device.name || device.id;
       const rssi = device.rssi ?? -99;
 
       set((state) => {

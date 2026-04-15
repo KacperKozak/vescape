@@ -1,14 +1,14 @@
-# BLE Debugging Log — Floatwheel ADV2 + react-native-ble-plx + New Architecture
+# BLE Debugging Log — Floatwheel ADV2 + React Native + Android
 
 ## Device Under Test
 - **Board**: Floatwheel ADV2 (`B0:81:84:0E:74:EE`, public address)
-- **Phone**: Pixel 9 Pro XL, Android 15
+- **Phone**: Pixel 9 Pro XL, Android 16
 - **Status**: **BONDED** (confirmed via `adb shell dumpsys bluetooth_manager`)
   - Bonded packages: `com.floaty.floatyapp`, `com.anonymous.vescpoc`, `no.nordicsemi.android.mcp`
 - **BLE profile**: Nordic UART Service (NUS)
   - Service: `6e400001-b5a3-f393-e0a9-e50e24dcca9e`
-  - TX char (phone→device, write): `6e400002` — `writeResp=true writeNoResp=true notify=false`
-  - RX char (device→phone, notify): `6e400003` — `notify=true writeResp=false writeNoResp=false`
+  - TX char (phone→device write **AND** device→phone notify): `6e400002` — **non-standard dual-role**
+  - RX char (6e400003): present in GATT table but **NOT used for notifications by ADV2 firmware**
 - **MTU**: negotiated to 517 bytes
 
 ---
@@ -16,7 +16,7 @@
 ## Stack
 - Expo SDK 54, React Native 0.81.5
 - **New Architecture enabled** (`newArchEnabled: true` in app.json)
-- `react-native-ble-plx@3.5.1` (rxandroidble2 1.17.2 internally)
+- Custom native Expo module `vesc-ble` (`modules/vesc-ble/`) — replaces react-native-ble-plx
 - Bun 1.3.11
 
 ---
@@ -27,18 +27,11 @@
 |---------|--------|
 | BLE scanning | ✅ finds ADV2 by name prefix |
 | BLE connection | ✅ connects, MTU 517, GATT discovery |
-| Writing to TX char (6e400002) | ✅ `writeWithoutResponse` sends VESC packets |
-| JS event emission (ScanEvent) | ✅ confirmed via VESCBLE logcat tag |
-| `runOnJSQueueThread` dispatch | ✅ `sendEvent emit on JS thread` fires for scan events |
-
-## What Doesn't Work ❌
-
-| Feature | Status |
-|---------|--------|
-| BLE notifications from RX char (6e400003) | ❌ never received |
-| `monitorCharacteristic.onEvent` native callback | ❌ never fires |
-| `onCharacteristicChanged` in Android GATT log | ❌ never appears |
-| Telemetry data (GET_VALUES response) | ❌ 0 packets received |
+| Writing to TX char (6e400002) | ✅ `writeWithResponse` and `writeWithoutResponse` confirmed |
+| CCCD write on TX char (6e400002) | ✅ `onDescriptorWrite status=0` confirmed |
+| JS event emission | ✅ custom module emits all events correctly on New Architecture |
+| BLE notifications from TX char (6e400002) | ✅ **FIXED** — see Root Cause §3 below |
+| Telemetry data (GET_VALUES response) | ✅ receiving and parsing live data |
 
 ---
 
@@ -47,7 +40,7 @@
 ### Layer 1 — Event Emission (FIXED, not the root cause)
 **Symptom**: `DeviceEventEmitter.addListener('ReadEvent', ...)` never fires
 **Diagnosis**: `sendEvent()` in `BlePlxModule.java` called `getJSModule(RCTDeviceEventEmitter).emit()` from a BLE background thread. In React Native New Architecture (bridgeless mode), this silently drops events.
-**Fix applied** (in `patches/react-native-ble-plx@3.5.1.patch`):
+**Fix attempted** (in `patches/react-native-ble-plx@3.5.1.patch`):
 ```java
 private void sendEvent(@NonNull Event event, @Nullable Object params) {
   getReactApplicationContext().runOnJSQueueThread(() -> {
@@ -57,68 +50,80 @@ private void sendEvent(@NonNull Event event, @Nullable Object params) {
   });
 }
 ```
-**Confirmed working**: ScanEvent, DisconnectionEvent now reach JS correctly.
-**Not the root cause of missing notifications**: the native `onEvent` callback is never called at all.
+**Confirmed working for scan events**, but not the root cause of missing notifications — the native `onCharacteristicChanged` callback was never firing at all.
 
 ---
 
-### Layer 2 — CCCD Not Written (ROOT CAUSE, partially addressed)
+### Layer 2 — react-native-ble-plx / rxandroidble2 broken on Android 13+ (ABANDONED)
 
-**Symptom**: `adb logcat BluetoothGatt:D` shows `setCharacteristicNotification(6e400003) enable=true` but **NO `writeDescriptor()` call**.
-Without writing `0x0100` to the CCCD descriptor, the peripheral doesn't send notifications.
+**Symptom**: Even after the event-emission patch and forcing `QUICK_SETUP` to write the CCCD, `onCharacteristicChanged` never fired in the native GATT log.
 
-**Diagnosis**: In `BleModule.java` (`adapter/`), notification setup mode selection:
-```java
-BluetoothGattDescriptor cccDescriptor = characteristic.getGattDescriptor(CLIENT_CHARACTERISTIC_CONFIG_UUID);
-NotificationSetupMode setupMode = cccDescriptor != null
-  ? NotificationSetupMode.QUICK_SETUP   // writes CCCD
-  : NotificationSetupMode.COMPAT;       // only setCharacteristicNotification, NO CCCD write
+**Diagnosis**: `react-native-ble-plx@3.5.1` uses `rxandroidble2` internally. On Android 13+ (API 33), Android split `BluetoothGattCallback.onCharacteristicChanged` into a new 3-param signature `(gatt, characteristic, value: ByteArray)`. `rxandroidble2` only overrides the deprecated 2-param version, so on API 33+ the new 3-param method is called by the OS but the library never handles it. This is a known unfixed bug (issue #1292).
+
+**Resolution**: Abandoned `react-native-ble-plx` entirely. Built a custom native Expo module `vesc-ble` that owns the `BluetoothGattCallback` directly and overrides both signatures.
+
+---
+
+### Layer 3 — Wrong Characteristic UUID for Notifications (ROOT CAUSE, FIXED ✅)
+
+**Symptom**: Custom `vesc-ble` module connected successfully, CCCD written successfully (`onDescriptorWrite status=0`), but `onCharacteristicChanged` still never fired.
+
+**Investigation**: Decompiled the official Floatwheel APK using `jadx` + `hermes-dec` (the JS bundle is Hermes bytecode, HBC v96). Found this in the decompiled connection logic:
+```javascript
+r9 = r2.VESC_SERVICE_UUID;       // 6e400001-...
+r8 = r2.VESC_CHARACTERISTICS_TX_UUID;  // 6e400002 ← TX char, NOT RX char!
+r0 = r11[r5](r10, r9, r8, r7, r6);    // monitorCharacteristicForDevice(...)
 ```
-When COMPAT is chosen, rxandroidble2 only calls `setCharacteristicNotification()` — it never writes the CCCD descriptor, so the ADV2 never sends notifications.
 
-**Why COMPAT was chosen originally**: Initially suspected the CCCD was not in GATT cache. Actually **CCCD IS present** (`CCCD descriptor found: true` confirmed by our diagnostic log). This looks like a bug in ble-plx/rxandroidble2 on this device.
+**Root cause**: The ADV2 firmware (VESC Express) sends notifications on **`6e400002` (TX char)**, not on `6e400003` (RX char) as the standard NUS spec says. The board uses a single characteristic (`6e400002`) bidirectionally: the phone writes to it, and the board notifies on it.
 
-**Fix 1 applied** (in `patches/react-native-ble-plx@3.5.1.patch`): Changed `BleModule.java` to always use `QUICK_SETUP`.
-**Result**: Still no `writeDescriptor()` in GATT logs. rxandroidble2's internal operation queue stalls or fails silently before the `writeDescriptor` reaches the Android GATT API.
+This is a VESC Express firmware quirk. Looking at `comm_ble.c`, the `notify_conn_id` is set inside `char1_write_handler()` — the characteristic write handler for `6e400002`. The firmware effectively treats `6e400002` as both the write target and the notification source.
 
-**Fix 2 applied** (JS-level, in `src/ble/manager.ts`): Manual CCCD write using `mgr.writeDescriptorForDevice()` before calling `characteristic.monitor()`:
-```ts
-await this.mgr.writeDescriptorForDevice(
-  this.device.id,
-  NUS_SERVICE,        // 6e400001-...
-  NUS_RX_CHAR,        // 6e400003-...
-  '00002902-0000-1000-8000-00805f9b34fb',  // CCCD UUID
-  btoa('\x01\x00'),   // base64 of [0x01, 0x00] = enable notifications
-);
+**Fix applied** in `modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt`:
+- `setCharacteristicNotification()` called on TX char (`6e400002`) instead of RX char
+- CCCD descriptor written on TX char's descriptor
+- `onCharacteristicChanged` filters for `NUS_TX_UUID` (`6e400002`) instead of `NUS_RX_UUID`
+
+```kotlin
+// Was: gatt.setCharacteristicNotification(rxChar, true)
+//      val cccd = rxChar.getDescriptor(CCCD_UUID)
+// Now:
+val notifOk = gatt.setCharacteristicNotification(tx, true)
+val cccd = tx.getDescriptor(CCCD_UUID)
+
+// Was: if (characteristic.uuid == NUS_RX_UUID)
+// Now:
+if (characteristic.uuid == NUS_TX_UUID) {
+  sendEvent("onNotification", mapOf("value" to Base64.encodeToString(value, Base64.NO_WRAP)))
+}
 ```
-**Status: Untested at time of writing** — Metro was down when this was added.
 
 ---
 
 ## Key Observations from Android GATT Logs
 
-### Successful connection sequence (our app, PID varies)
+### Successful connection sequence with `vesc-ble` module (working)
 ```
-connect()
-onClientRegistered(0)
-onClientConnectionState(status=0 connected=true)
-configureMTU(244)               ← we request 244, device accepts 517
-onConfigureMTU(517, 0)
-discoverServices()
-onSearchComplete(0)
-setCharacteristicNotification(6e400003) enable=true
-onConnectionUpdated(interval=39 latency=0 timeout=500)
-                                ← writeDescriptor NEVER appears here
+connectGatt → B0:81:84:0E:74:EE
+onConnectionStateChange status=0 newState=2   ← connected
+connected — requesting MTU 517
+onMtuChanged mtu=517 status=0
+onServicesDiscovered status=0
+txChar=6e400002-...
+setCharacteristicNotification(TX)=true
+writing CCCD 0x0100
+writeDescriptor (API33+) status=0
+onDescriptorWrite uuid=00002902-... status=0
+CCCD written on TX char — resolving connect
+onConnected (mtu=517) emitted to JS
+[BLE] onNotification len: XX               ← notifications flowing ✅
 ```
 
 ### Failed connection attempts (status=133)
-Before the successful connect, we see two `status=133` failures. This is `GATT_ERROR` / connection timeout. It clears on retry.
+The first connect attempt often fails with `onConnectionStateChange status=133` (GATT_ERROR / connection timeout). This is a known Android quirk on bonded devices — retry immediately and it succeeds. The module already handles this: `doConnect()` cleans up and the JS layer can retry.
 
-### nRF Connect (PID 26871) also skips writeDescriptor
-nRF Connect also only calls `setCharacteristicNotification` without `writeDescriptor` on reconnect. This works for nRF Connect because it likely wrote the CCCD in a **previous session** and the bonded device retained the CCCD state.
-
-### Two connections from our app
-`adb shell dumpsys bluetooth_manager` showed two connections (conn_id 155 and 156) from our app to the ADV2. One may be stale from a previous session.
+### nRF Connect CCCD behaviour
+nRF Connect skips `writeDescriptor` on reconnect because it wrote the CCCD in a previous session and the bonded device retained that state. Our module always re-writes it explicitly to ensure clean state.
 
 ---
 
@@ -135,56 +140,44 @@ Similarly, the **official Floatwheel app (`com.floaty.floatyapp`)** is bonded an
 
 ---
 
-## Patch Infrastructure
+## Custom Native Module: `vesc-ble`
 
-### Patch file
-`patches/react-native-ble-plx@3.5.1.patch` — applied automatically by bun.
+The final solution that resolved all three root causes above.
 
-Contains:
-1. `BlePlxModule.java`: `runOnJSQueueThread` fix + diagnostic `Log.d` calls
-2. `BleModule.java` (adapter): always use `QUICK_SETUP` + CCCD found log
+### Architecture
+- Located at `modules/vesc-ble/`
+- Registered via `modules/vesc-ble/expo-module.config.json` (Expo autolinking)
+- Android implementation: `modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt`
+- TypeScript API surface: `modules/vesc-ble/src/index.ts`
+- iOS: stub only (returns NOT_IMPLEMENTED)
 
-### bun.lock integration
-`package.json` has `"patchedDependencies": { "react-native-ble-plx@3.5.1": "patches/react-native-ble-plx@3.5.1.patch" }`.
-Bun applies the patch automatically on `bun install`.
+### Why a custom module was necessary
+1. `react-native-ble-plx@3.5.1` / `rxandroidble2` only overrides the deprecated 2-param `onCharacteristicChanged` — broken on Android 13+.
+2. The library's CCCD write path stalled silently before reaching the Android GATT API.
+3. The firmware quirk (notifications on TX char) required full control of which characteristic gets subscribed.
 
-### Diagnostic logs (in the patched build)
+### Key design decisions in VescBleModule.kt
+- Overrides **both** `onCharacteristicChanged` signatures (3-param API 33+, and deprecated 2-param) to handle all Android versions.
+- Subscribes notifications on **`6e400002` (TX char)**, not `6e400003`.
+- CCCD write uses the API 33+ `writeDescriptor(descriptor, value)` path when available.
+- 3-second CCCD timeout fallback for bonded-device edge case (CCCD ack sometimes never fires).
+- First 3 writes use `WRITE_TYPE_DEFAULT` (write-with-response) for confirmation; subsequent writes use `WRITE_TYPE_NO_RESPONSE` for throughput.
+
+### Diagnostic logs
 ```bash
-# Filter all VESCBLE native logs (excludes noisy ScanEvent entries):
-adb logcat -s VESCBLE:D -d | grep -v ScanEvent
+# All VescBle native logs:
+adb logcat -s VescBle:D
 
-# Watch BluetoothGatt GATT operations for one PID:
-adb logcat -d | grep BluetoothGatt | grep <PID>
-
-# Find our app's current PID:
-adb shell pidof com.anonymous.vescpoc
+# Full working connection sequence to look for:
+# connectGatt → <address>
+# onMtuChanged mtu=517 status=0
+# onServicesDiscovered status=0
+# setCharacteristicNotification(TX)=true
+# writeDescriptor (API33+) status=0
+# onDescriptorWrite uuid=00002902-... status=0
+# CCCD written on TX char — resolving connect
+# onCharacteristicChanged(3-param) uuid=6e400002-... len=XX   ← THIS is what was missing
 ```
-
-Expected log sequence when working correctly:
-```
-VESCBLE: CCCD descriptor found: true for char: 6e400003-...
-BluetoothGatt: setCharacteristicNotification(6e400003) enable=true
-BluetoothGatt: writeDescriptor(00002902-...)          ← KEY: this must appear
-BluetoothGatt: onDescriptorWrite(00002902-..., 0)     ← status=0 means success
-VESCBLE: monitorCharacteristic.onEvent fired!
-VESCBLE: sendEvent called: ReadEvent thread=...
-VESCBLE: sendEvent emit on JS thread: ReadEvent
-ReactNativeJS: [BLE] notification len: XX
-```
-
----
-
-## Alternative Approaches (if manual CCCD write also fails)
-
-1. **Different BLE library**: `react-native-ble-manager` has different New Architecture support. May have same CCCD write problem.
-
-2. **Polling via BLE reads**: The RX char (6e400003) has `READ` property visible in nRF Connect (not shown in ble-plx flags — worth rechecking). Could poll instead of notify.
-
-3. **Force-remove stale connections**: Before connecting, call `mgr.cancelDeviceConnection(deviceId)` to ensure clean state.
-
-4. **Disable New Architecture**: Would require downgrading `react-native-reanimated` from v4 to v3 (v4 requires New Arch). This would be the nuclear option if all else fails.
-
-5. **Custom Expo module**: Write a thin Kotlin module that uses Android BLE directly with proper New Architecture event emission (using `ReactApplicationContext.getJSModule()` from JS thread).
 
 ---
 
@@ -201,14 +194,13 @@ ReactNativeJS: [BLE] notification len: XX
 
 ## Current State of `src/ble/manager.ts`
 
-The `connect()` method does the following in order:
-1. Stop scan, wait 300ms (avoids Android "operation cancelled" on immediate connect)
-2. `connectToDevice(deviceId, { timeout: 10000 })`
-3. `requestMTU(244)` — device responds with 517
-4. `discoverAllServicesAndCharacteristics()`
-5. `characteristicsForService(NUS_SERVICE)` — gets char objects directly
-6. **Manual CCCD write** via `writeDescriptorForDevice()` (0x0100 = enable notifications)
-7. `rxChar.monitor(callback)` — sets up notification listener
-8. Wait 1000ms for peripheral to stabilize
-9. Send COMM_ALIVE (0x1E) ping
-10. Polling starts (bleStore.ts): GET_VALUES every 500ms
+Uses `vesc-ble` native module (not react-native-ble-plx). The `connect()` method does the following in order:
+
+1. Wire up `addNotificationListener` **before** calling `nativeConnect()` to avoid missing early packets
+2. Wire up `addDisconnectedListener`
+3. `nativeConnect(deviceId)` — internally: connectGatt → requestMtu(517) → discoverServices → setCharacteristicNotification(TX) → writeDescriptor(CCCD) → resolve
+4. Wait 500ms for peripheral to activate CCCD
+5. Send COMM_ALIVE (0x1E) ping
+6. Polling starts (bleStore.ts): GET_VALUES every 500ms via `vescBle.send()`
+
+Incoming notifications are reassembled by `src/vesc/reassembler.ts` (handles multi-chunk VESC packets split across BLE MTU boundaries).

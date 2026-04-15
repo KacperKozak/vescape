@@ -43,20 +43,98 @@ index d4ef9c5..977b068 100644
  
    private boolean isRequestPossibleHandler(String functionName, final Promise promise) {
 diff --git a/android/src/main/java/com/bleplx/adapter/BleModule.java b/android/src/main/java/com/bleplx/adapter/BleModule.java
-index 44392b6..71cbaaf 100755
+index 44392b6..9c92c3f 100755
 --- a/android/src/main/java/com/bleplx/adapter/BleModule.java
 +++ b/android/src/main/java/com/bleplx/adapter/BleModule.java
-@@ -1453,9 +1453,10 @@ public class BleModule extends ReactContextBaseJavaModule implements BleAdapter
+@@ -40,7 +40,9 @@ import com.polidea.rxandroidble2.NotificationSetupMode;
+ import com.polidea.rxandroidble2.RxBleAdapterStateObservable;
+ import com.polidea.rxandroidble2.RxBleClient;
+ import com.polidea.rxandroidble2.RxBleConnection;
++import com.polidea.rxandroidble2.RxBleCustomOperation;
+ import com.polidea.rxandroidble2.RxBleDevice;
++import com.polidea.rxandroidble2.internal.connection.RxBleGattCallback;
+ import com.polidea.rxandroidble2.internal.RxBleLog;
+ import com.polidea.rxandroidble2.scan.ScanFilter;
+ import com.polidea.rxandroidble2.scan.ScanSettings;
+@@ -909,10 +911,11 @@ public class BleModule extends ReactContextBaseJavaModule implements BleAdapter
+                                             OnErrorCallback errorCallback) {
+     BluetoothGattDescriptor nativeDescriptor = descriptor.getNativeDescriptor();
  
+-    if (nativeDescriptor.getUuid().equals(Constants.CLIENT_CHARACTERISTIC_CONFIG_UUID)) {
+-      errorCallback.onError(BleErrorUtils.descriptorWriteNotAllowed(UUIDConverter.fromUUID(nativeDescriptor.getUuid())));
+-      return;
+-    }
++    // Android-only: allow writing CCCD (0x2902) directly so callers can
++    // force-enable notifications on devices that reset CCCD on every reconnect
++    // (e.g. Floatwheel ADV2 / VESC Express firmware).
++    // The iOS restriction is irrelevant on Android — CoreBluetooth manages CCCD
++    // automatically on iOS, but on Android we must write it ourselves.
+ 
+     final RxBleConnection connection = getConnectionOrEmitError(descriptor.getDeviceId(), errorCallback);
+     if (connection == null) {
+@@ -1451,12 +1454,60 @@ public class BleModule extends ReactContextBaseJavaModule implements BleAdapter
+ 
+     final SafeExecutor<Void> safeExecutor = new SafeExecutor<>(null, onErrorCallback);
+ 
++    // ---------------------------------------------------------------------------
++    // Write CCCD directly via RxBleCustomOperation — bypasses rxandroidble2's
++    // descriptor write queue and uses the correct Android 13+ API
++    // (writeDescriptor(descriptor, value)) which avoids the deprecated
++    // BluetoothGattDescriptor.setValue() path that silently fails on Android 15.
++    // ---------------------------------------------------------------------------
++    final BluetoothGattDescriptor cccDirectDesc = characteristic.gattCharacteristic
++        .getDescriptor(Constants.CLIENT_CHARACTERISTIC_CONFIG_UUID);
++    if (cccDirectDesc != null) {
++      connection.queue(new RxBleCustomOperation<Boolean>() {
++        @Override
++        public io.reactivex.Observable<Boolean> asObservable(
++            android.bluetooth.BluetoothGatt bluetoothGatt,
++            RxBleGattCallback rxBleGattCallback,
++            io.reactivex.Scheduler scheduler) {
++          // Wait for onDescriptorWrite before completing so the queue doesn't
++          // advance before Android has processed the CCCD write.
++          io.reactivex.Observable<Boolean> onWrite = rxBleGattCallback.getOnDescriptorWrite()
++              .filter(pair -> cccDirectDesc.getUuid().equals(pair.first.getUuid()))
++              .firstOrError()
++              .map(pair -> true)
++              .toObservable()
++              .timeout(3, java.util.concurrent.TimeUnit.SECONDS,
++                  io.reactivex.Observable.just(false));
++
++          // Issue the write using the correct API for the Android version.
++          if (android.os.Build.VERSION.SDK_INT >= 33) {
++            int status = bluetoothGatt.writeDescriptor(
++                cccDirectDesc,
++                android.bluetooth.BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
++            android.util.Log.d("VESCBLE", "writeDescriptor (API33+) status=" + status
++                + " for " + cccDirectDesc.getUuid());
++          } else {
++            cccDirectDesc.setValue(
++                android.bluetooth.BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
++            boolean ok = bluetoothGatt.writeDescriptor(cccDirectDesc);
++            android.util.Log.d("VESCBLE", "writeDescriptor (legacy) ok=" + ok
++                + " for " + cccDirectDesc.getUuid());
++          }
++          return onWrite;
++        }
++      }).subscribe(
++          result -> android.util.Log.d("VESCBLE", "CCCD custom write result=" + result),
++          err    -> android.util.Log.e("VESCBLE", "CCCD custom write error: " + err)
++      );
++    }
++
      final Disposable subscription = Observable.defer(() -> {
-         BluetoothGattDescriptor cccDescriptor = characteristic.getGattDescriptor(Constants.CLIENT_CHARACTERISTIC_CONFIG_UUID);
+-        BluetoothGattDescriptor cccDescriptor = characteristic.getGattDescriptor(Constants.CLIENT_CHARACTERISTIC_CONFIG_UUID);
 -        NotificationSetupMode setupMode = cccDescriptor != null
 -          ? NotificationSetupMode.QUICK_SETUP
 -          : NotificationSetupMode.COMPAT;
-+        android.util.Log.d("VESCBLE", "CCCD descriptor found: " + (cccDescriptor != null) + " for char: " + characteristic.gattCharacteristic.getUuid());
-+        // Always use QUICK_SETUP to ensure CCCD is written on every connection.
-+        // COMPAT mode skips the CCCD write which breaks devices that reset CCCD on reconnect.
-+        NotificationSetupMode setupMode = NotificationSetupMode.QUICK_SETUP;
-         
+-        
++        // Use COMPAT (setCharacteristicNotification only) because we already wrote
++        // CCCD manually above. QUICK_SETUP would try to write it again and could
++        // interfere with the first write on some devices.
++        NotificationSetupMode setupMode = NotificationSetupMode.COMPAT;
++        android.util.Log.d("VESCBLE", "setupNotification COMPAT for " + characteristic.gattCharacteristic.getUuid());
++
          if ("notification".equals(subscriptionType) && characteristic.isNotifiable()) {
              return connection.setupNotification(characteristic.gattCharacteristic, setupMode);
+         } else if ("indication".equals(subscriptionType) && characteristic.isIndicatable()) {

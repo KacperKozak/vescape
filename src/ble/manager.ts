@@ -1,20 +1,17 @@
-import { BleManager, type Characteristic, type Device, type Subscription } from 'react-native-ble-plx';
-import { DeviceEventEmitter } from 'react-native';
+import type { Subscription } from 'expo-modules-core';
+import {
+  scan as nativeScan,
+  stopScan as nativeStopScan,
+  connect as nativeConnect,
+  send as nativeSend,
+  disconnect as nativeDisconnect,
+  addDeviceListener,
+  addNotificationListener,
+  addDisconnectedListener,
+} from 'vesc-ble';
 import { encode } from '../vesc/packet';
 import { Reassembler } from '../vesc/reassembler';
-import { NUS_RX_CHAR, NUS_SERVICE, NUS_TX_CHAR, VESC_NAME_PREFIXES } from './nus';
-
-// ---------------------------------------------------------------------------
-// Raw event tap via DeviceEventEmitter — works with both old bridge and
-// New Architecture TurboModules.  ble-plx emits "ReadEvent" when a BLE
-// notification arrives on the native side.
-//
-// [BLE RAW] fires + [BLE] notification len never fires → ble-plx JS-layer bug
-// [BLE RAW] never fires → native side receives nothing (device not sending)
-// ---------------------------------------------------------------------------
-DeviceEventEmitter.addListener('ReadEvent', (data: unknown) => {
-  console.log('[BLE RAW] ReadEvent:', JSON.stringify(data).slice(0, 150));
-});
+import { NUS_SERVICE, VESC_NAME_PREFIXES } from './nus';
 
 // ---------------------------------------------------------------------------
 // Base64 helpers (uses global atob/btoa available in RN 0.71+)
@@ -48,41 +45,53 @@ function* chunks(data: Uint8Array, size: number): Generator<Uint8Array> {
 }
 
 // ---------------------------------------------------------------------------
-// VescBle — singleton BLE manager
+// Minimal type for devices surfaced to callers
+// ---------------------------------------------------------------------------
+
+export interface ScannedDevice {
+  id: string;
+  name: string;
+  rssi: number;
+}
+
+// ---------------------------------------------------------------------------
+// VescBle — singleton BLE manager backed by the native vesc-ble module
 // ---------------------------------------------------------------------------
 
 const WRITE_CHUNK_SIZE = 180;
 
 class VescBle {
-  private mgr = new BleManager();
-  private device: Device | null = null;
-  private txChar: Characteristic | null = null; // write target
-  private monitor: Subscription | null = null;
+  private _connected = false;
+  private _onPacket: ((payload: Uint8Array) => void) | null = null;
   private reassembler = new Reassembler();
+
+  private scanSub: Subscription | null = null;
+  private notifSub: Subscription | null = null;
+  private disconnSub: Subscription | null = null;
 
   // -------------------------------------------------------------------------
   // Scanning
   // -------------------------------------------------------------------------
 
-  scan(onFound: (d: Device) => void): void {
-    this.mgr.startDeviceScan(
-      null,
-      { allowDuplicates: false },
-      (error, device) => {
-        if (error || !device) return;
-        const name = device.name ?? device.localName ?? '';
-        const isKnown = VESC_NAME_PREFIXES.some((prefix) =>
-          name.toLowerCase().startsWith(prefix.toLowerCase()),
-        );
-        if (isKnown || device.serviceUUIDs?.includes(NUS_SERVICE)) {
-          onFound(device);
-        }
-      },
-    );
+  scan(onFound: (d: ScannedDevice) => void): void {
+    this.scanSub?.remove();
+    this.scanSub = addDeviceListener((event) => {
+      const name = event.name ?? '';
+      const isKnown = VESC_NAME_PREFIXES.some((prefix) =>
+        name.toLowerCase().startsWith(prefix.toLowerCase()),
+      );
+      const hasNus = event.serviceUUIDs?.includes(NUS_SERVICE) ?? false;
+      if (isKnown || hasNus) {
+        onFound({ id: event.id, name, rssi: event.rssi });
+      }
+    });
+    nativeScan();
   }
 
   stopScan(): void {
-    this.mgr.stopDeviceScan();
+    nativeStopScan();
+    this.scanSub?.remove();
+    this.scanSub = null;
   }
 
   // -------------------------------------------------------------------------
@@ -93,100 +102,51 @@ class VescBle {
     deviceId: string,
     onPacket: (payload: Uint8Array) => void,
   ): Promise<void> {
-    this.mgr.stopDeviceScan();
-    await new Promise<void>((r) => setTimeout(r, 300));
+    nativeStopScan();
+    this.scanSub?.remove();
+    this.scanSub = null;
 
-    this.device = await this.mgr.connectToDevice(deviceId, { timeout: 10000 });
-    console.log('[BLE] connected:', deviceId);
-
-    try {
-      const d = await this.device.requestMTU(244);
-      console.log('[BLE] MTU:', d.mtu);
-    } catch (e) {
-      console.warn('[BLE] MTU request failed (non-fatal):', e);
-    }
-
-    await this.device.discoverAllServicesAndCharacteristics();
-    console.log('[BLE] GATT discovery complete');
-
-    // Resolve characteristic objects directly — avoids UUID lookup issues
-    // with ble-plx on New Architecture.
-    const chars = await this.device.characteristicsForService(NUS_SERVICE);
-    console.log('[BLE] NUS characteristics found:', chars.length);
-
-    let rxChar: Characteristic | undefined;
-    for (const ch of chars) {
-      console.log(
-        `[BLE]   char: ${ch.uuid} notify=${ch.isNotifiable}` +
-        ` writeResp=${ch.isWritableWithResponse} writeNoResp=${ch.isWritableWithoutResponse}`,
-      );
-      if (ch.uuid === NUS_RX_CHAR) rxChar = ch;        // notifiable (device→phone)
-      if (ch.uuid === NUS_TX_CHAR) this.txChar = ch;   // writable  (phone→device)
-    }
-
-    if (!rxChar) throw new Error(`NUS RX char (${NUS_RX_CHAR}) not found`);
-    if (!this.txChar) throw new Error(`NUS TX char (${NUS_TX_CHAR}) not found`);
-
+    this._onPacket = onPacket;
     this.reassembler.reset();
 
-    // ---------------------------------------------------------------------------
-    // Manually write CCCD (0x0100) to enable notifications.
-    // rxandroidble2's QUICK_SETUP mode queues the write internally but it
-    // stalls on some devices (Floatwheel ADV2 / VESC Express firmware).
-    // A direct writeDescriptorForDevice bypasses the rxandroidble2 queue
-    // and guarantees the peripheral receives the CCCD enable command.
-    // CCCD UUID: 00002902-0000-1000-8000-00805f9b34fb  value: 0x0100 = btoa('\x01\x00')
-    // ---------------------------------------------------------------------------
-    const CCCD_UUID = '00002902-0000-1000-8000-00805f9b34fb';
-    const CCCD_ENABLE = btoa('\x01\x00'); // base64 of [0x01, 0x00]
-    try {
-      console.log('[BLE] writing CCCD to enable notifications...');
-      await this.mgr.writeDescriptorForDevice(
-        this.device.id,
-        NUS_SERVICE,
-        NUS_RX_CHAR,
-        CCCD_UUID,
-        CCCD_ENABLE,
-      );
-      console.log('[BLE] CCCD written OK');
-    } catch (e) {
-      console.warn('[BLE] CCCD write failed (non-fatal):', e);
-    }
-
-    // Use characteristic.monitor() instead of device.monitorCharacteristicForService —
-    // different native code path, works more reliably with New Architecture.
-    console.log('[BLE] rxChar internal id:', rxChar.id, 'uuid:', rxChar.uuid);
-    console.log('[BLE] subscribing via characteristic.monitor()');
-    this.monitor = rxChar.monitor((err, characteristic) => {
-      if (err) {
-        console.error('[BLE] monitor error:', err.message, err.errorCode);
-        return;
-      }
-      if (!characteristic?.value) return;
-      console.log('[BLE] notification len:', characteristic.value.length);
-      const bytes = base64ToBytes(characteristic.value);
+    // Wire up notification listener BEFORE connect so we don't miss early packets
+    this.notifSub?.remove();
+    this.notifSub = addNotificationListener((event) => {
+      console.log('[BLE] onNotification len:', event.value.length);
+      const bytes = base64ToBytes(event.value);
       for (const pkt of this.reassembler.feed(bytes)) {
-        onPacket(pkt);
+        this._onPacket?.(pkt);
       }
     });
-    console.log('[BLE] monitor active');
 
-    // Give the peripheral time to activate the CCCD notification subscription.
-    await new Promise<void>((r) => setTimeout(r, 1000));
+    this.disconnSub?.remove();
+    this.disconnSub = addDisconnectedListener((event) => {
+      console.log('[BLE] disconnected status=', event.status);
+      this._connected = false;
+    });
 
-    // COMM_ALIVE (0x1E) — wake up VESC before GET_VALUES polling starts.
-    console.log('[BLE] sending COMM_ALIVE ping');
-    await this.send(new Uint8Array([0x1e]));
+    console.log('[BLE] connecting to', deviceId);
+    await nativeConnect(deviceId);
+    this._connected = true;
+    console.log('[BLE] connected:', deviceId);
+
+    // Give the peripheral a moment to activate CCCD
+    await new Promise<void>((r) => setTimeout(r, 500));
+
+    // COMM_FW_VERSION (0x00) — first command the Floatwheel app sends; triggers a
+    // response that confirms the BLE notification path is working end-to-end.
+    console.log('[BLE] sending COMM_FW_VERSION');
+    await this.send(new Uint8Array([0x00]));
   }
 
   // -------------------------------------------------------------------------
-  // Sending — uses cached txChar object for direct write
+  // Sending
   // -------------------------------------------------------------------------
 
   private lastSendLog = 0;
 
   async send(payload: Uint8Array): Promise<void> {
-    if (!this.txChar) throw new Error('VescBle.send: not connected');
+    if (!this._connected) throw new Error('VescBle.send: not connected');
 
     const framed = encode(payload);
 
@@ -197,7 +157,7 @@ class VescBle {
     }
 
     for (const chunk of chunks(framed, WRITE_CHUNK_SIZE)) {
-      await this.txChar.writeWithoutResponse(bytesToBase64(chunk));
+      await nativeSend(bytesToBase64(chunk));
     }
   }
 
@@ -206,24 +166,22 @@ class VescBle {
   // -------------------------------------------------------------------------
 
   async disconnect(): Promise<void> {
-    this.monitor?.remove();
-    this.monitor = null;
-    this.txChar = null;
+    this._connected = false;
+    this._onPacket = null;
 
-    if (this.device) {
-      try {
-        await this.mgr.cancelDeviceConnection(this.device.id);
-      } catch {
-        // device may have already disconnected
-      }
-      this.device = null;
-    }
+    this.notifSub?.remove();
+    this.notifSub = null;
+    this.disconnSub?.remove();
+    this.disconnSub = null;
+    this.scanSub?.remove();
+    this.scanSub = null;
 
     this.reassembler.reset();
+    await nativeDisconnect();
   }
 
   get isConnected(): boolean {
-    return this.device !== null;
+    return this._connected;
   }
 }
 
