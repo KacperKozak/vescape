@@ -1,0 +1,62 @@
+diff --git a/android/src/main/java/com/bleplx/BlePlxModule.java b/android/src/main/java/com/bleplx/BlePlxModule.java
+index d4ef9c5..977b068 100644
+--- a/android/src/main/java/com/bleplx/BlePlxModule.java
++++ b/android/src/main/java/com/bleplx/BlePlxModule.java
+@@ -1,5 +1,6 @@
+ package com.bleplx;
+ 
++import android.util.Log;
+ import androidx.annotation.NonNull;
+ import androidx.annotation.Nullable;
+ 
+@@ -840,6 +841,7 @@ public class BlePlxModule extends ReactContextBaseJavaModule {
+       new OnEventCallback<Characteristic>() {
+         @Override
+         public void onEvent(Characteristic data) {
++          Log.d("VESCBLE", "monitorCharacteristic.onEvent fired!");
+           WritableArray jsResult = Arguments.createArray();
+           jsResult.pushNull();
+           jsResult.pushMap(characteristicConverter.toJSObject(data));
+@@ -849,6 +851,7 @@ public class BlePlxModule extends ReactContextBaseJavaModule {
+       }, new OnErrorCallback() {
+         @Override
+         public void onError(BleError error) {
++          Log.e("VESCBLE", "monitorCharacteristic.onError: " + error.reason);
+           safePromise.reject(getErrorCode(error), errorConverter.toJs(error));
+         }
+       }
+@@ -1105,9 +1108,13 @@ public class BlePlxModule extends ReactContextBaseJavaModule {
+   }
+ 
+   private void sendEvent(@NonNull Event event, @Nullable Object params) {
+-    getReactApplicationContext()
+-      .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
+-      .emit(event.name, params);
++    Log.d("VESCBLE", "sendEvent called: " + event.name + " thread=" + Thread.currentThread().getName());
++    getReactApplicationContext().runOnJSQueueThread(() -> {
++      Log.d("VESCBLE", "sendEvent emit on JS thread: " + event.name);
++      getReactApplicationContext()
++        .getJSModule(DeviceEventManagerModule.RCTDeviceEventEmitter.class)
++        .emit(event.name, params);
++    });
+   }
+ 
+   private boolean isRequestPossibleHandler(String functionName, final Promise promise) {
+diff --git a/android/src/main/java/com/bleplx/adapter/BleModule.java b/android/src/main/java/com/bleplx/adapter/BleModule.java
+index 44392b6..71cbaaf 100755
+--- a/android/src/main/java/com/bleplx/adapter/BleModule.java
++++ b/android/src/main/java/com/bleplx/adapter/BleModule.java
+@@ -1453,9 +1453,10 @@ public class BleModule extends ReactContextBaseJavaModule implements BleAdapter
+ 
+     final Disposable subscription = Observable.defer(() -> {
+         BluetoothGattDescriptor cccDescriptor = characteristic.getGattDescriptor(Constants.CLIENT_CHARACTERISTIC_CONFIG_UUID);
+-        NotificationSetupMode setupMode = cccDescriptor != null
+-          ? NotificationSetupMode.QUICK_SETUP
+-          : NotificationSetupMode.COMPAT;
++        android.util.Log.d("VESCBLE", "CCCD descriptor found: " + (cccDescriptor != null) + " for char: " + characteristic.gattCharacteristic.getUuid());
++        // Always use QUICK_SETUP to ensure CCCD is written on every connection.
++        // COMPAT mode skips the CCCD write which breaks devices that reset CCCD on reconnect.
++        NotificationSetupMode setupMode = NotificationSetupMode.QUICK_SETUP;
+         
+         if ("notification".equals(subscriptionType) && characteristic.isNotifiable()) {
+             return connection.setupNotification(characteristic.gattCharacteristic, setupMode);
