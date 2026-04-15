@@ -13,6 +13,7 @@ import { useLocalSearchParams, router, useNavigation } from 'expo-router';
 import { useBleStore } from '@/src/store/bleStore';
 import { TelemetryCard } from '@/src/components/TelemetryCard';
 import { FAULT_NAMES } from '@/src/vesc/types';
+import { REFLOAT_STATE_NAMES } from '@/src/vesc/refloat';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -22,8 +23,13 @@ function fmt(value: number, decimals = 1): string {
   return value.toFixed(decimals);
 }
 
-function fmtPercent(duty: number): string {
-  return (duty * 100).toFixed(1);
+function fmtSpeed(kmh: number): string {
+  return Math.abs(kmh).toFixed(1);
+}
+
+function fmtKm(metres: number | null | undefined): string {
+  if (metres == null) return '—';
+  return (metres / 1000).toFixed(2);
 }
 
 // ---------------------------------------------------------------------------
@@ -59,7 +65,7 @@ export default function TelemetryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const navigation = useNavigation();
 
-  const { status, values, error, rxCount, connect, disconnect } = useBleStore();
+  const { status, refloatValues, error, rxCount, connect, disconnect } = useBleStore();
 
   // Connect on mount, disconnect when leaving
   useEffect(() => {
@@ -81,8 +87,17 @@ export default function TelemetryScreen() {
   }, [status, navigation]);
 
   const isConnected = status === 'connected';
-  const faultName = values ? (FAULT_NAMES[values.faultCode] ?? `CODE_${values.faultCode}`) : '—';
-  const hasFault = values ? values.faultCode !== 0 : false;
+  const v = refloatValues;
+
+  // State decoding: lower 4 bits = state_compat, upper 4 bits = sat_compat
+  const stateCompat = v ? (v.state & 0xF) : 0;
+  const stateName   = v ? (REFLOAT_STATE_NAMES[stateCompat] ?? `STATE_${stateCompat}`) : '—';
+  const hasFault    = v?.hasFault ?? false;
+  const faultName   = v?.hasFault
+    ? (FAULT_NAMES[v.faultCode] ?? `CODE_${v.faultCode}`)
+    : stateName;
+
+  const speedSign = v && v.erpm < 0 ? '-' : '';
 
   return (
     <SafeAreaView style={styles.container}>
@@ -107,8 +122,8 @@ export default function TelemetryScreen() {
         </View>
       )}
 
-      {/* Connected but waiting for first telemetry packet */}
-      {isConnected && !values && (
+      {/* Connected but waiting for first Refloat packet */}
+      {isConnected && !v && (
         <View style={styles.centerContent}>
           <ActivityIndicator size="large" color="#4ade80" />
           <Text style={styles.connectingText}>Waiting for telemetry…</Text>
@@ -117,17 +132,62 @@ export default function TelemetryScreen() {
       )}
 
       {/* Telemetry grid */}
-      {isConnected && values && (
+      {isConnected && v && (
         <ScrollView contentContainerStyle={styles.grid}>
+
+          {/* ── Primary riding metrics ── */}
+          <Text style={styles.sectionLabel}>RIDING</Text>
+
+          {/* Big speed card spans full width */}
+          <View style={styles.row}>
+            <View style={[styles.cardWide, { backgroundColor: '#1f2937' }]}>
+              <Text style={styles.label}>Speed</Text>
+              <Text style={styles.bigValue}>
+                {speedSign}{fmtSpeed(v.speed)}
+                <Text style={styles.bigUnit}> km/h</Text>
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.row}>
+            <TelemetryCard
+              label="Pitch"
+              value={fmt(v.pitch)}
+              unit="°"
+              alert={Math.abs(v.pitch) > 25}
+            />
+            <TelemetryCard
+              label="Roll"
+              value={fmt(v.roll)}
+              unit="°"
+              alert={Math.abs(v.roll) > 35}
+            />
+          </View>
+
+          <View style={styles.row}>
+            <TelemetryCard
+              label="State"
+              value={faultName}
+              alert={hasFault || stateCompat >= 6}
+            />
+            <TelemetryCard
+              label="Footpad"
+              value={`${v.adc1.toFixed(2)} / ${v.adc2.toFixed(2)}`}
+            />
+          </View>
+
+          {/* ── Electrical ── */}
+          <Text style={styles.sectionLabel}>ELECTRICAL</Text>
+
           <View style={styles.row}>
             <TelemetryCard
               label="Voltage"
-              value={fmt(values.voltage)}
+              value={fmt(v.batteryVoltage)}
               unit="V"
             />
             <TelemetryCard
-              label="Input Current"
-              value={fmt(values.currentInput)}
+              label="Batt Current"
+              value={fmt(v.batteryCurrent)}
               unit="A"
             />
           </View>
@@ -135,56 +195,64 @@ export default function TelemetryScreen() {
           <View style={styles.row}>
             <TelemetryCard
               label="Motor Current"
-              value={fmt(values.currentMotor)}
+              value={fmt(v.motorCurrent)}
               unit="A"
             />
             <TelemetryCard
               label="ERPM"
-              value={values.rpm.toFixed(0)}
+              value={v.erpm.toFixed(0)}
             />
           </View>
 
           <View style={styles.row}>
             <TelemetryCard
               label="Duty Cycle"
-              value={fmtPercent(values.dutyCycle)}
+              value={(v.dutyCycle * 100).toFixed(1)}
               unit="%"
+              alert={Math.abs(v.dutyCycle) > 0.85}
             />
             <TelemetryCard
-              label="MOSFET Temp"
-              value={fmt(values.tempMosfet)}
-              unit="°C"
-              alert={values.tempMosfet > 80}
+              label="Bal. Pitch"
+              value={fmt(v.balancePitch)}
+              unit="°"
             />
           </View>
 
-          <View style={styles.row}>
-            <TelemetryCard
-              label="Motor Temp"
-              value={values.tempMotor > 0 ? fmt(values.tempMotor) : 'N/A'}
-              unit={values.tempMotor > 0 ? '°C' : undefined}
-              alert={values.tempMotor > 100}
-            />
-            <TelemetryCard
-              label="Fault"
-              value={faultName}
-              alert={hasFault}
-            />
-          </View>
+          {/* ── Thermal ── */}
+          {(v.tempMosfet != null || v.tempMotor != null) && (
+            <>
+              <Text style={styles.sectionLabel}>THERMAL</Text>
+              <View style={styles.row}>
+                <TelemetryCard
+                  label="MOSFET Temp"
+                  value={v.tempMosfet != null ? fmt(v.tempMosfet) : 'N/A'}
+                  unit={v.tempMosfet != null ? '°C' : undefined}
+                  alert={(v.tempMosfet ?? 0) > 80}
+                />
+                <TelemetryCard
+                  label="Motor Temp"
+                  value={v.tempMotor != null && v.tempMotor > 0 ? fmt(v.tempMotor) : 'N/A'}
+                  unit={v.tempMotor != null && v.tempMotor > 0 ? '°C' : undefined}
+                  alert={(v.tempMotor ?? 0) > 100}
+                />
+              </View>
+            </>
+          )}
 
-          {/* Secondary row */}
-          <View style={styles.row}>
-            <TelemetryCard
-              label="Amp·Hours"
-              value={fmt(values.ampHours, 3)}
-              unit="Ah"
-            />
-            <TelemetryCard
-              label="Watt·Hours"
-              value={fmt(values.wattHours, 2)}
-              unit="Wh"
-            />
-          </View>
+          {/* ── Trip ── */}
+          {v.odometer != null && (
+            <>
+              <Text style={styles.sectionLabel}>ODOMETER</Text>
+              <View style={styles.row}>
+                <TelemetryCard
+                  label="Total Distance"
+                  value={fmtKm(v.odometer)}
+                  unit="km"
+                />
+              </View>
+            </>
+          )}
+
         </ScrollView>
       )}
     </SafeAreaView>
@@ -257,8 +325,43 @@ const styles = StyleSheet.create({
     padding: 12,
     paddingBottom: 32,
   },
+  sectionLabel: {
+    color: '#4b5563',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    marginTop: 12,
+    marginBottom: 2,
+    marginLeft: 4,
+  },
   row: {
     flexDirection: 'row',
     marginBottom: 4,
+  },
+  // Wide card (spans full row)
+  cardWide: {
+    borderRadius: 10,
+    padding: 14,
+    flex: 1,
+    margin: 4,
+    gap: 6,
+  },
+  label: {
+    color: '#9ca3af',
+    fontSize: 11,
+    fontWeight: '500',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  bigValue: {
+    color: '#f9fafb',
+    fontSize: 48,
+    fontFamily: 'monospace',
+    fontWeight: '700',
+  },
+  bigUnit: {
+    color: '#6b7280',
+    fontSize: 20,
+    fontWeight: '400',
   },
 });

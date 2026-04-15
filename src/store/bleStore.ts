@@ -1,8 +1,8 @@
 import { create } from 'zustand';
 import { vescBle } from '../ble/manager';
-import { buildGetValues, parsePingCan, Comm } from '../vesc/commands';
-import { parseGetValues } from '../vesc/parser';
-import type { VescValues } from '../vesc/types';
+import { parsePingCan, Comm } from '../vesc/commands';
+import { buildGetAllData, parseGetAllData, REFLOAT_MAGIC, RefloatCmd } from '../vesc/refloat';
+import type { RefloatValues } from '../vesc/types';
 
 export type BleStatus = 'idle' | 'scanning' | 'connecting' | 'connected' | 'error';
 
@@ -16,7 +16,7 @@ type BleState = {
   status: BleStatus;
   devices: ScannedDevice[];
   connectedId: string | null;
-  values: VescValues | null;
+  refloatValues: RefloatValues | null;
   error: string | undefined;
   /** Total BLE notification packets received — useful for diagnosing no-data issues */
   rxCount: number;
@@ -43,11 +43,13 @@ function stopPolling(): void {
 
 function startPolling(): void {
   stopPolling();
-  // 2 Hz — poll with CAN forwarding if a motor controller was discovered
+  // 2 Hz — poll GET_ALLDATA (mode 2) with CAN forwarding
   pollInterval = setInterval(() => {
-    vescBle.send(buildGetValues(vescBle.canId)).catch((err) => {
-      console.warn('[BLE] send failed:', err?.message ?? err);
-    });
+    if (vescBle.canId !== undefined) {
+      vescBle.send(buildGetAllData(vescBle.canId, 2)).catch((err) => {
+        console.warn('[BLE] send failed:', err?.message ?? err);
+      });
+    }
   }, 500);
 }
 
@@ -60,7 +62,7 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
   status: 'idle',
   devices: [],
   connectedId: null,
-  values: null,
+  refloatValues: null,
   error: undefined,
   rxCount: 0,
 
@@ -96,7 +98,7 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
   async connect(id: string) {
     const { stopScan } = get();
     stopScan();
-    set({ status: 'connecting', connectedId: null, values: null, error: undefined });
+    set({ status: 'connecting', connectedId: null, refloatValues: null, error: undefined });
 
     try {
       await vescBle.connect(id, (payload) => {
@@ -105,12 +107,19 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
         const cmd = payload[0];
         console.log(`[BLE] packet cmd=0x${cmd?.toString(16).padStart(2, '0')} len=${payload.length}`);
 
-        if (cmd === Comm.GET_VALUES) {
-          try {
-            const values = parseGetValues(payload);
-            set({ values });
-          } catch (err) {
-            console.warn('[BLE] parseGetValues failed:', err);
+        if (cmd === Comm.CUSTOM_APP_DATA) {
+          // Refloat COMMAND_GET_ALLDATA response
+          if (payload[1] === REFLOAT_MAGIC && payload[2] === RefloatCmd.GET_ALLDATA) {
+            try {
+              const refloatValues = parseGetAllData(payload);
+              set({ refloatValues });
+            } catch (err) {
+              console.warn('[BLE] parseGetAllData failed:', err);
+            }
+          } else {
+            console.log(
+              `[BLE] CUSTOM_APP_DATA: magic=${payload[1]} cmd=${payload[2]} (not Refloat GET_ALLDATA)`,
+            );
           }
         } else if (cmd === Comm.PING_CAN) {
           const ids = parsePingCan(payload);
@@ -119,7 +128,7 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
             vescBle.canId = ids[0];
             console.log(`[BLE] using CAN ID ${ids[0]} for motor controller commands`);
           } else {
-            console.warn('[BLE] PING_CAN: no CAN devices found — GET_VALUES may not respond');
+            console.warn('[BLE] PING_CAN: no CAN devices found — GET_ALLDATA may not respond');
           }
         } else {
           // Log unexpected command bytes to help spot firmware differences
@@ -147,7 +156,7 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
     set({
       status: 'idle',
       connectedId: null,
-      values: null,
+      refloatValues: null,
       error: undefined,
       rxCount: 0,
     });

@@ -77,3 +77,59 @@ export type FwVersion = {
   minor: number;
   hwName: string;
 };
+
+/**
+ * Rich telemetry values from the Refloat VESC package (COMMAND_GET_ALLDATA).
+ * Provides balance-specific data — pitch, roll, speed, state — in addition
+ * to the standard motor metrics.
+ */
+export type RefloatValues = {
+  /** True if the motor controller reported an active fault. */
+  hasFault: boolean;
+  /** mc_fault_code value (0 = FAULT_CODE_NONE). Only meaningful when hasFault=true. */
+  faultCode: number;
+
+  // --- IMU / balance ---
+  /** Board pitch angle in degrees (nose-up positive) */
+  pitch: number;
+  /** Board roll angle in degrees */
+  roll: number;
+  /** Balance controller's filtered pitch setpoint in degrees */
+  balancePitch: number;
+  /** Balance PID output current in A */
+  balanceCurrent: number;
+
+  // --- Kinematics ---
+  /** Ground speed in km/h (signed: positive = forward) */
+  speed: number;
+  /** Electrical RPM (signed) */
+  erpm: number;
+  /** Duty cycle as a fraction, range -1..1 */
+  dutyCycle: number;
+
+  // --- Electrical ---
+  /** Battery pack voltage in V */
+  batteryVoltage: number;
+  /** Motor phase current in A */
+  motorCurrent: number;
+  /** Battery draw/regen current in A */
+  batteryCurrent: number;
+
+  // --- Footpad / state ---
+  /** Raw state byte: bits[3:0] = state_compat, bits[7:4] = sat_compat */
+  state: number;
+  /** Raw switch byte: footpad sensor state + handtest/beep flags */
+  switchState: number;
+  /** Front footpad ADC fraction, approx 0..1 */
+  adc1: number;
+  /** Rear footpad ADC fraction, approx 0..1 */
+  adc2: number;
+
+  // --- Mode ≥ 2 (present when mode=2 response is long enough) ---
+  /** Total absolute odometer in metres (null if mode < 2 packet) */
+  odometer: number | null;
+  /** MOSFET temperature in °C (null if mode < 2 packet) */
+  tempMosfet: number | null;
+  /** Motor temperature in °C (null if mode < 2 packet) */
+  tempMotor: number | null;
+};

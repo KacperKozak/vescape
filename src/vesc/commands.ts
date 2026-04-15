@@ -7,6 +7,7 @@ export enum Comm {
   GET_VALUES       = 4,
   ALIVE            = 30,
   FORWARD_CAN      = 34, // wraps a command: [FORWARD_CAN, canId, <command>]
+  CUSTOM_APP_DATA  = 36, // Refloat / custom VESC package commands
   GET_VALUES_SETUP = 47,
   PING_CAN         = 62, // response: [PING_CAN, id0, id1, ...] = live CAN device IDs
 }
