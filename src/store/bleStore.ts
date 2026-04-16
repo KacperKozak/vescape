@@ -17,6 +17,10 @@ interface BleState {
   error: string | undefined;
   /** Total BLE notification packets received — useful for diagnosing no-data issues */
   rxCount: number;
+  /** Timestamp (ms) of the last successfully parsed refloat packet */
+  lastPacketAt: number | null;
+  /** Rolling average round-trip time in ms (poll sent → response received) */
+  avgLatency: number | null;
 }
 
 interface BleActions {
@@ -27,9 +31,12 @@ interface BleActions {
 }
 
 // ---------------------------------------------------------------------------
-// Internal polling interval handle
+// Internal polling interval handle + RTT tracking
 // ---------------------------------------------------------------------------
 let pollInterval: ReturnType<typeof setInterval> | null = null;
+let lastPollAt = 0;
+let rttHistory: number[] = [];
+const RTT_HISTORY_SIZE = 5;
 
 function stopPolling(): void {
   if (pollInterval !== null) {
@@ -43,6 +50,7 @@ function startPolling(): void {
   // 2 Hz — poll GET_ALLDATA (mode 2) with CAN forwarding
   pollInterval = setInterval(() => {
     if (vescBle.canId !== undefined) {
+      lastPollAt = Date.now();
       vescBle.send(buildGetAllData(vescBle.canId, 2)).catch((err) => {
         console.warn('[BLE] send failed:', err?.message ?? err);
       });
@@ -62,6 +70,8 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
   refloatValues: null,
   error: undefined,
   rxCount: 0,
+  lastPacketAt: null,
+  avgLatency: null,
 
   // ---- actions ----
 
@@ -95,7 +105,9 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
   async connect(id: string) {
     const { stopScan } = get();
     stopScan();
-    set({ status: 'connecting', connectedId: null, refloatValues: null, error: undefined });
+    rttHistory = [];
+    lastPollAt = 0;
+    set({ status: 'connecting', connectedId: null, refloatValues: null, error: undefined, lastPacketAt: null, avgLatency: null });
 
     const onPacket = (payload: Uint8Array) => {
       set((s) => ({ rxCount: s.rxCount + 1 }));
@@ -108,7 +120,16 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
         if (payload[1] === REFLOAT_MAGIC && payload[2] === RefloatCmd.GET_ALLDATA) {
           try {
             const refloatValues = parseGetAllData(payload);
-            set({ refloatValues });
+            const rtt = lastPollAt > 0 ? Date.now() - lastPollAt : null;
+            if (rtt !== null) {
+              rttHistory.push(rtt);
+              if (rttHistory.length > RTT_HISTORY_SIZE) rttHistory.shift();
+            }
+            const avgLatency =
+              rttHistory.length > 0
+                ? Math.round(rttHistory.reduce((a, b) => a + b, 0) / rttHistory.length)
+                : null;
+            set({ refloatValues, lastPacketAt: Date.now(), avgLatency });
           } catch (err) {
             console.warn('[BLE] parseGetAllData failed:', err);
           }
@@ -169,6 +190,8 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
 
   async disconnect() {
     stopPolling();
+    rttHistory = [];
+    lastPollAt = 0;
     await vescBle.disconnect();
     vescBle.canId = undefined;
     set({
@@ -177,6 +200,8 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
       refloatValues: null,
       error: undefined,
       rxCount: 0,
+      lastPacketAt: null,
+      avgLatency: null,
     });
   },
 }));

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
+  Animated,
 } from 'react-native';
 import { useLocalSearchParams, router, useNavigation } from 'expo-router';
 
@@ -18,6 +19,8 @@ import { fmt, fmtSpeed, fmtKm } from '@/src/helpers/format';
 interface StatusPillProps { status: string }
 
 function StatusPill({ status }: StatusPillProps) {
+  const { lastPacketAt, avgLatency } = useBleStore();
+
   const colors: Record<string, { bg: string; text: string }> = {
     connected:  { bg: '#14532d', text: '#4ade80' },
     connecting: { bg: '#1e3a5f', text: '#60a5fa' },
@@ -26,10 +29,47 @@ function StatusPill({ status }: StatusPillProps) {
   };
   const c = colors[status] ?? colors.idle!;
 
+  // Dot pulse animation — flashes bright on each incoming packet
+  const pulseOpacity = useRef(new Animated.Value(0.35)).current;
+  const [isStale, setIsStale] = useState(false);
+
+  useEffect(() => {
+    if (lastPacketAt == null) return;
+    setIsStale(false);
+
+    pulseOpacity.setValue(1);
+    Animated.timing(pulseOpacity, {
+      toValue: 0.35,
+      duration: 600,
+      useNativeDriver: true,
+    }).start();
+
+    // If no packet arrives within 2 s, consider the link stale
+    const staleTimer = setTimeout(() => setIsStale(true), 2000);
+    return () => clearTimeout(staleTimer);
+  }, [lastPacketAt]);
+
+  // Green < 150 ms · Amber 150–400 ms · Red > 400 ms or stale
+  const dotColor = isStale
+    ? '#ef4444'
+    : avgLatency == null || avgLatency < 150
+      ? '#4ade80'
+      : avgLatency < 400
+        ? '#fbbf24'
+        : '#ef4444';
+
+  const showDot = status === 'connected';
+
   return (
     <View style={[styles.pill, { backgroundColor: c.bg }]}>
       {status === 'connecting' && (
         <ActivityIndicator size="small" color={c.text} style={styles.pillSpinner} />
+      )}
+      {showDot && (
+        <Animated.View style={[styles.dot, { backgroundColor: dotColor, opacity: pulseOpacity }]} />
+      )}
+      {showDot && avgLatency != null && (
+        <Text style={[styles.latencyText, { color: dotColor }]}>{avgLatency}ms</Text>
       )}
       <Text style={[styles.pillText, { color: c.text }]}>{status.toUpperCase()}</Text>
     </View>
@@ -245,6 +285,16 @@ const styles = StyleSheet.create({
   },
   pillSpinner: {
     transform: [{ scale: 0.7 }],
+  },
+  dot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  latencyText: {
+    fontSize: 10,
+    fontWeight: '600',
+    fontFamily: 'monospace',
   },
   pillText: {
     fontSize: 11,
