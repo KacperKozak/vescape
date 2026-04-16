@@ -7,7 +7,6 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, router, useNavigation } from 'expo-router';
 
 import { useBleStore } from '@/src/store/bleStore';
@@ -57,6 +56,7 @@ export default function TelemetryScreen() {
   useEffect(() => {
     navigation.setOptions({
       title: status === 'connected' ? 'Live Telemetry' : 'Connecting…',
+      headerRight: () => <StatusPill status={status} />,
     });
   }, [status, navigation]);
 
@@ -74,12 +74,7 @@ export default function TelemetryScreen() {
   const speedSign = v && v.erpm < 0 ? '-' : '';
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <StatusPill status={status} />
-        {error && <Text style={styles.errorText}>{error}</Text>}
-      </View>
-
+    <View style={styles.container}>
       {status === 'error' && (
         <View style={styles.centerContent}>
           <Text style={styles.disconnectedIcon}>
@@ -230,7 +225,7 @@ export default function TelemetryScreen() {
 
         </ScrollView>
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -239,14 +234,6 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#111827',
   },
-  header: {
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 4,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -254,6 +241,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 20,
     gap: 6,
+    marginRight: 8,
   },
   pillSpinner: {
     transform: [{ scale: 0.7 }],
