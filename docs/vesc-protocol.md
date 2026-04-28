@@ -33,19 +33,19 @@ The reassembler (`src/vesc/reassembler.ts`) handles packets split across multipl
 1. Send `COMM_PING_CAN` immediately after connect to discover the motor controller's CAN ID
 2. Wrap all motor commands: `[0x22, canId, <cmd>]`
 
-```typescript
-// discovery (once, at connect time)
-await vescBle.send(buildPingCan());           // [0x3E]
+```kotlin
+// VescForegroundService does this natively after GATT setup.
+sendPayload(byteArrayOf(COMM_PING_CAN.toByte()))
 
-// response handler
-if (cmd === Comm.PING_CAN) {
-  const ids = parsePingCan(payload);          // [0x3E, id0, id1, ...]
-  vescBle.canId = ids[0];                     // store for polling
-}
-
-// polling (every 500ms)
-vescBle.send(buildGetAllData(vescBle.canId, 2));
-// sends: [0x22, canId, 0x24, 101, 10, 2]
+// On [0x3E, id0, id1, ...], store id0 and start native polling.
+sendPayload(byteArrayOf(
+  COMM_FORWARD_CAN.toByte(),
+  canId.toByte(),
+  COMM_CUSTOM_APP_DATA.toByte(),
+  REFLOAT_MAGIC.toByte(),
+  REFLOAT_GET_ALLDATA.toByte(),
+  2,
+))
 ```
 
 ## Connect sequence

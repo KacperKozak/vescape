@@ -1,6 +1,6 @@
 import ExpoModulesCore
 
-// iOS stub — BLE on iOS still uses react-native-ble-plx which works fine.
+// iOS stub.
 // A full CoreBluetooth implementation can be added here when needed.
 public class VescBleModule: Module {
   public func definition() -> ModuleDefinition {

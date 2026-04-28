@@ -101,10 +101,10 @@ events as the real BLE backend.
 app/                         Expo Router screens
 app/index.tsx                BLE scan screen
 app/device/[id].tsx          Telemetry screen
-src/ble/manager.ts           Legacy raw BLE packet wrapper used by tests/debug paths
+src/ble/usePermissions.ts    Bluetooth permission helper
 src/store/bleStore.ts        Zustand state that mirrors native session events
 src/vesc/                    VESC packet, command, CRC, and parser code
-src/simulator/virtualBoard.ts Legacy JS simulator model
+src/simulator/virtualBoard.ts Demo board display constants
 modules/vesc-ble/            Custom Expo native BLE/session module
 modules/vesc-ble/android/.../VescBleModule.kt
                              Expo module bridge: scan and session API

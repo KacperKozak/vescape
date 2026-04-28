@@ -4,29 +4,29 @@
 
 ## Overview
 
-Three independent bugs blocked BLE notifications. All three had to be fixed to get data flowing.
+Three independent bugs blocked BLE notifications. All three had to be fixed to get data flowing in the native module.
 
 ---
 
-## Bug 1 — react-native-ble-plx silently drops events on New Architecture
+## Bug 1 — JS events emitted from the wrong thread on New Architecture
 
 **Symptom**: scan events worked, but characteristic notifications never arrived in JS — no errors, just silence.
 
-**Cause**: `react-native-ble-plx@3.5.1` calls `getJSModule(RCTDeviceEventEmitter).emit()` from a BLE background thread. In RN New Architecture (bridgeless mode) this call is a no-op — events are silently discarded.
+**Cause**: the initial BLE bridge emitted JS events from a BLE background thread. In RN New Architecture (bridgeless mode) that emitter path was a no-op, so events were silently discarded.
 
-**Attempted fix**: patch `BlePlxModule.java` to dispatch via `runOnJSQueueThread`. Worked for scan events, but notifications still didn't arrive → revealed Bug 2.
+**Attempted fix**: dispatch via `runOnJSQueueThread`. Scan events started arriving, but notifications still didn't arrive, which exposed Bug 2.
 
-**Final fix**: abandoned the library entirely. See Bug 2.
+**Final fix**: move BLE handling into the custom native Expo module. See Bug 2.
 
 ---
 
-## Bug 2 — rxandroidble2 broken on Android 13+
+## Bug 2 — notification callback mismatch on Android 13+
 
 **Symptom**: Even after Bug 1 fix and explicit CCCD writes, `onCharacteristicChanged` never fired in native logs.
 
-**Cause**: Android 13 (API 33) split `BluetoothGattCallback.onCharacteristicChanged` into a new 3-parameter signature `(gatt, characteristic, value: ByteArray)`. `rxandroidble2` (used internally by ble-plx) only overrides the deprecated 2-param version. The OS calls the 3-param version; library never sees it. Known unfixed issue [#1292](https://github.com/dariuszseweryn/RxAndroidBle/issues/1292).
+**Cause**: Android 13 (API 33) split `BluetoothGattCallback.onCharacteristicChanged` into a new 3-parameter signature `(gatt, characteristic, value: ByteArray)`. Code that only handles the deprecated 2-parameter callback will miss notifications entirely on newer Android versions.
 
-**Fix**: replaced `react-native-ble-plx` with a custom native Expo module `modules/vesc-ble/` that owns `BluetoothGattCallback` directly and overrides **both** signatures:
+**Fix**: the custom native Expo module in `modules/vesc-ble/` owns `BluetoothGattCallback` directly and overrides **both** signatures:
 
 ```kotlin
 // API 33+ (3-param) — this is what Android 13+ calls

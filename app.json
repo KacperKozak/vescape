@@ -42,14 +42,6 @@
         }
       ],
       [
-        "react-native-ble-plx",
-        {
-          "isBackgroundEnabled": false,
-          "modes": ["peripheral", "central"],
-          "bluetoothAlwaysPermission": "Allow $(PRODUCT_NAME) to connect to your VESC board"
-        }
-      ],
-      [
         "expo-build-properties",
         {
           "android": { "minSdkVersion": 26 },

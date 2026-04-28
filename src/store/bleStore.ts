@@ -1,12 +1,22 @@
 import { create } from 'zustand';
 import type { EventSubscription } from 'expo-modules-core';
-import { startSession, stopSession, addSessionStateListener, addTelemetryListener } from 'vesc-ble';
-import { vescBle } from '../ble/manager';
+import {
+  scan as nativeScan,
+  stopScan as nativeStopScan,
+  startSession,
+  stopSession,
+  addDeviceListener,
+  addSessionStateListener,
+  addTelemetryListener,
+} from 'vesc-ble';
 import { type RefloatValues } from '../vesc/types';
 import { VIRTUAL_BOARD_NAME } from '../simulator/virtualBoard';
 
-import type { ScannedDevice } from '../ble/manager';
-export type { ScannedDevice };
+export interface ScannedDevice {
+  id: string;
+  name: string;
+  rssi: number;
+}
 
 export const VIRTUAL_BOARD_ID = '__virtual__';
 
@@ -39,6 +49,7 @@ interface BleActions {
 
 let telemetrySub: EventSubscription | null = null;
 let sessionSub: EventSubscription | null = null;
+let scanSub: EventSubscription | null = null;
 const DEFAULT_BOARD_NAME = 'VESC Board';
 const MAC_ADDRESS_RE = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i;
 
@@ -76,8 +87,9 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
     const virtualDevice: ScannedDevice = { id: VIRTUAL_BOARD_ID, name: VIRTUAL_BOARD_NAME, rssi: -45 };
     set({ status: 'scanning', devices: [virtualDevice], error: undefined });
 
-    vescBle.scan((device) => {
-      const name = device.name || device.id;
+    scanSub?.remove();
+    scanSub = addDeviceListener((device) => {
+      const name = device.name || DEFAULT_BOARD_NAME;
       const rssi = device.rssi ?? -99;
 
       set((state) => {
@@ -91,10 +103,13 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
         return { devices: [...state.devices, { id: device.id, name, rssi }] };
       });
     });
+    nativeScan();
   },
 
   stopScan() {
-    vescBle.stopScan();
+    nativeStopScan();
+    scanSub?.remove();
+    scanSub = null;
     set((state) => ({
       status: state.status === 'scanning' ? 'idle' : state.status,
     }));

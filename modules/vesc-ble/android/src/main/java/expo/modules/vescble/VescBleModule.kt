@@ -16,6 +16,8 @@ import expo.modules.kotlin.modules.ModuleDefinition
 
 private const val TAG = "VescBle"
 private const val DEFAULT_BOARD_NAME = "VESC Board"
+private const val NUS_SERVICE_UUID_STRING = "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
+private val VESC_NAME_PREFIXES = listOf("vesc", "float wheel", "floatwheel", "onewheel")
 
 @SuppressLint("MissingPermission") // permissions are requested at the JS/RN layer
 class VescBleModule : Module() {
@@ -114,6 +116,9 @@ class VescBleModule : Module() {
         val serviceUUIDs = result.scanRecord?.serviceUuids
           ?.map { it.uuid.toString() }
           ?: emptyList()
+        val isKnownName = VESC_NAME_PREFIXES.any { name.lowercase().startsWith(it) }
+        val hasNus = serviceUUIDs.any { it.equals(NUS_SERVICE_UUID_STRING, ignoreCase = true) }
+        if (!isKnownName && !hasNus) return
 
         sendEvent("onDevice", mapOf(
           "id" to device.address,

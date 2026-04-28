@@ -5,8 +5,8 @@ export type PermissionStatus = 'unknown' | 'granted' | 'denied';
 
 /**
  * Request BLE runtime permissions on Android 12+ (API 31+).
- * On iOS the permission is handled by the Info.plist string injected by the
- * react-native-ble-plx Expo config plugin — no runtime request is needed.
+ * On iOS the app relies on static Info.plist usage descriptions, so no
+ * runtime permission request is needed here.
  */
 export function usePermissions(): {
   status: PermissionStatus;
