@@ -33,6 +33,8 @@ export function StatusPill({ status, style }: { status: string; style?: ViewStyl
   }, [lastPacketAt, pulseOpacity])
 
   const c = COLORS[status] ?? COLORS.idle!
+  const pillBg = status === 'connected' && isStale ? COLORS.error.bg : c.bg
+  const pillText = status === 'connected' && isStale ? COLORS.error.text : c.text
   const dotColor = isStale
     ? '#ef4444'
     : avgLatency == null || avgLatency < 150
@@ -44,7 +46,7 @@ export function StatusPill({ status, style }: { status: string; style?: ViewStyl
 
   if (status === 'connected' && !connectedNeedsText) {
     return (
-      <View style={[styles.connectedPill, { backgroundColor: COLORS.connected.bg }, style]}>
+      <View style={[styles.connectedPill, { backgroundColor: pillBg }, style]}>
         <Animated.View style={[styles.dot, { backgroundColor: dotColor, opacity: pulseOpacity }]} />
         {avgLatency != null && (
           <Text style={[styles.latency, { color: dotColor }]}>{avgLatency}ms</Text>
@@ -54,9 +56,9 @@ export function StatusPill({ status, style }: { status: string; style?: ViewStyl
   }
 
   return (
-    <View style={[styles.pill, { backgroundColor: c.bg }, style]}>
+    <View style={[styles.pill, { backgroundColor: pillBg }, style]}>
       {(status === 'connecting' || status === 'scanning') && (
-        <ActivityIndicator size="small" color={c.text} style={styles.spinner} />
+        <ActivityIndicator size="small" color={pillText} style={styles.spinner} />
       )}
       {status === 'connected' && (
         <Animated.View style={[styles.dot, { backgroundColor: dotColor, opacity: pulseOpacity }]} />
@@ -64,7 +66,7 @@ export function StatusPill({ status, style }: { status: string; style?: ViewStyl
       {status === 'connected' && avgLatency != null && (
         <Text style={[styles.latency, { color: dotColor }]}>{avgLatency}ms</Text>
       )}
-      <Text style={[styles.label, { color: c.text }]}>
+      <Text style={[styles.label, { color: pillText }]}>
         {status === 'connected' && isStale
           ? 'STALE'
           : status === 'connected'
