@@ -2,9 +2,9 @@
 
 Mobile telemetry proof of concept for VESC-based boards over BLE.
 
-The app scans for nearby VESC BLE devices, connects over the Nordic UART
-Service, discovers the motor controller on CAN, and polls Refloat telemetry for
-live riding, electrical, and thermal values.
+The app scans for nearby VESC BLE devices, starts an Android native session,
+connects over the Nordic UART Service, discovers the motor controller on CAN,
+and polls Refloat telemetry for live riding, electrical, and thermal values.
 
 ## Supported Hardware
 
@@ -27,30 +27,73 @@ Current development targets Android. iOS has a native module stub only.
 ## How It Works
 
 ```text
-Phone
+React Native UI
+  -> vesc-ble JS session API
+  -> Android foreground service
   -> BLE / Nordic UART Service
   -> VESC BLE bridge
   -> CAN bus
   -> VESC motor controller
 ```
 
-On connect, the app:
+The Android foreground service owns the long-running board session. React
+Native starts/stops the session and renders state, but Android owns connection,
+polling, packet parsing needed for notifications, and notification updates.
+
+On real-board connect, the native service:
 
 1. Enables BLE notifications.
 2. Sends `COMM_FW_VERSION` to verify the notification path.
 3. Sends `COMM_PING_CAN` to discover the motor controller CAN ID.
 4. Polls Refloat `COMMAND_GET_ALLDATA` every 500 ms.
-5. Parses responses into telemetry shown on the device screen.
+5. Reassembles VESC frames from BLE chunks.
+6. Parses Refloat telemetry.
+7. Updates the persistent Android notification directly.
+8. Emits session state and telemetry events to React Native.
+
+This avoids depending on JS timers or the React Native bridge for background
+notification updates.
+
+## Session API
+
+The native module exposes a service-like API to JS:
+
+```ts
+startSession({
+  mode: 'ble',
+  deviceId,
+  deviceName,
+  pollIntervalMs: 500,
+});
+
+startSession({
+  mode: 'demo',
+  deviceName: 'Virtual Board (Demo)',
+  scenario: 'cruise',
+  pollIntervalMs: 500,
+});
+
+stopSession();
+getSessionState();
+addSessionStateListener((state) => {});
+addTelemetryListener((telemetry) => {});
+```
+
+`mode: 'ble'` connects to real hardware. `mode: 'demo'` runs a native demo
+backend that generates framed Refloat packets and feeds them through the same
+native packet reassembler, parser, notification formatter, and JS telemetry
+events as the real BLE backend.
 
 ## Features
 
 - BLE scan and connect flow
-- Android foreground service while connected
+- Android foreground-service-owned BLE session while connected
 - CAN forwarding for controller commands
 - Refloat `GET_ALLDATA` parsing
+- Background notification updates from native telemetry
 - Live speed, pitch, roll, voltage, current, duty cycle, temperature, fault, and
   distance telemetry
-- Virtual board simulator for development without hardware
+- Native demo board mode for development and debugging without hardware
 
 ## Project Layout
 
@@ -58,11 +101,15 @@ On connect, the app:
 app/                         Expo Router screens
 app/index.tsx                BLE scan screen
 app/device/[id].tsx          Telemetry screen
-src/ble/manager.ts           BLE scan/connect/send/disconnect wrapper
-src/store/bleStore.ts        Zustand BLE state and polling
+src/ble/manager.ts           Legacy raw BLE packet wrapper used by tests/debug paths
+src/store/bleStore.ts        Zustand state that mirrors native session events
 src/vesc/                    VESC packet, command, CRC, and parser code
-src/simulator/virtualBoard.ts Virtual telemetry source
-modules/vesc-ble/            Custom Expo native BLE module
+src/simulator/virtualBoard.ts Legacy JS simulator model
+modules/vesc-ble/            Custom Expo native BLE/session module
+modules/vesc-ble/android/.../VescBleModule.kt
+                             Expo module bridge: scan and session API
+modules/vesc-ble/android/.../VescForegroundService.kt
+                             Native BLE/demo session owner
 docs/                        Protocol and architecture notes
 ```
 
@@ -96,6 +143,20 @@ Type-check:
 
 ```bash
 bun run ts
+```
+
+Compile only the Android native BLE module:
+
+```bash
+cd android
+./gradlew :vesc-ble:compileDebugKotlin
+```
+
+Build the full Android debug app:
+
+```bash
+cd android
+./gradlew assembleDebug
 ```
 
 ## Documentation

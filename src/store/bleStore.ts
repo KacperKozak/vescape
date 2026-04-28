@@ -1,11 +1,9 @@
 import { create } from 'zustand';
-import { Platform } from 'react-native';
-import { startForegroundService, stopForegroundService, addStopRequestedListener } from 'vesc-ble';
+import type { EventSubscription } from 'expo-modules-core';
+import { startSession, stopSession, addSessionStateListener, addTelemetryListener } from 'vesc-ble';
 import { vescBle } from '../ble/manager';
-import { parsePingCan, Comm } from '../vesc/commands';
-import { buildGetAllData, parseGetAllData, REFLOAT_MAGIC, RefloatCmd } from '../vesc/refloat';
-import type { RefloatValues } from '../vesc/types';
-import { startVirtualSimulation, VIRTUAL_BOARD_NAME } from '../simulator/virtualBoard';
+import { type RefloatValues } from '../vesc/types';
+import { VIRTUAL_BOARD_NAME } from '../simulator/virtualBoard';
 
 import type { ScannedDevice } from '../ble/manager';
 export type { ScannedDevice };
@@ -36,32 +34,17 @@ interface BleActions {
 }
 
 // ---------------------------------------------------------------------------
-// Internal polling interval handle + RTT tracking
+// Native session subscriptions
 // ---------------------------------------------------------------------------
-let pollInterval: ReturnType<typeof setInterval> | null = null;
-let virtualCleanup: (() => void) | null = null;
-let lastPollAt = 0;
-let rttHistory: number[] = [];
-const RTT_HISTORY_SIZE = 5;
 
-function stopPolling(): void {
-  if (pollInterval !== null) {
-    clearInterval(pollInterval);
-    pollInterval = null;
-  }
-}
+let telemetrySub: EventSubscription | null = null;
+let sessionSub: EventSubscription | null = null;
 
-function startPolling(): void {
-  stopPolling();
-  // 2 Hz — poll GET_ALLDATA (mode 2) with CAN forwarding
-  pollInterval = setInterval(() => {
-    if (vescBle.canId !== undefined) {
-      lastPollAt = Date.now();
-      vescBle.send(buildGetAllData(vescBle.canId, 2)).catch((err) => {
-        console.warn('[BLE] send failed:', err?.message ?? err);
-      });
-    }
-  }, 500);
+function removeSessionSubscriptions(): void {
+  telemetrySub?.remove();
+  telemetrySub = null;
+  sessionSub?.remove();
+  sessionSub = null;
 }
 
 // ---------------------------------------------------------------------------
@@ -110,122 +93,47 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
   },
 
   async connect(id: string) {
-    if (id === VIRTUAL_BOARD_ID) {
-      set({
-        status: 'connected', connectedId: VIRTUAL_BOARD_ID,
-        refloatValues: null, error: undefined, rxCount: 0,
-        lastPacketAt: null, avgLatency: null,
-      });
-      virtualCleanup = startVirtualSimulation((values, latency) => {
-        set((s) => ({
-          refloatValues: values,
-          lastPacketAt: Date.now(),
-          avgLatency: latency,
-          rxCount: s.rxCount + 1,
-        }));
-      });
-      if (Platform.OS === 'android') startForegroundService();
-      return;
-    }
-
     const { stopScan } = get();
     stopScan();
-    rttHistory = [];
-    lastPollAt = 0;
     set({ status: 'connecting', connectedId: null, refloatValues: null, error: undefined, lastPacketAt: null, avgLatency: null });
 
-    const onPacket = (payload: Uint8Array) => {
-      set((s) => ({ rxCount: s.rxCount + 1 }));
-
-      const cmd = payload[0];
-      console.log(`[BLE] packet cmd=0x${cmd?.toString(16).padStart(2, '0')} len=${payload.length}`);
-
-      if (cmd === Comm.CUSTOM_APP_DATA) {
-        // Refloat COMMAND_GET_ALLDATA response
-        if (payload[1] === REFLOAT_MAGIC && payload[2] === RefloatCmd.GET_ALLDATA) {
-          try {
-            const refloatValues = parseGetAllData(payload);
-            const rtt = lastPollAt > 0 ? Date.now() - lastPollAt : null;
-            if (rtt !== null) {
-              rttHistory.push(rtt);
-              if (rttHistory.length > RTT_HISTORY_SIZE) rttHistory.shift();
-            }
-            const avgLatency =
-              rttHistory.length > 0
-                ? Math.round(rttHistory.reduce((a, b) => a + b, 0) / rttHistory.length)
-                : null;
-            set({ refloatValues, lastPacketAt: Date.now(), avgLatency });
-          } catch (err) {
-            console.warn('[BLE] parseGetAllData failed:', err);
-          }
-        } else {
-          console.log(
-            `[BLE] CUSTOM_APP_DATA: magic=${payload[1]} cmd=${payload[2]} (not Refloat GET_ALLDATA)`,
-          );
-        }
-      } else if (cmd === Comm.PING_CAN) {
-        const ids = parsePingCan(payload);
-        console.log('[BLE] PING_CAN response — CAN devices found:', ids);
-        if (ids.length > 0) {
-          vescBle.canId = ids[0];
-          console.log(`[BLE] using CAN ID ${ids[0]} for motor controller commands`);
-        } else {
-          console.warn('[BLE] PING_CAN: no CAN devices found — GET_ALLDATA may not respond');
-        }
-      } else {
-        // Log unexpected command bytes to help spot firmware differences
-        const hex = Array.from(payload.slice(0, 8))
-          .map((b) => b.toString(16).padStart(2, '0'))
-          .join(' ');
-        console.log(`[BLE] unhandled cmd=0x${cmd?.toString(16)} first bytes: ${hex}`);
-      }
-    };
-
-    const onDisconnect = () => {
-      console.warn('[BLE] remote disconnect detected');
-      if (Platform.OS === 'android') stopForegroundService();
-      stopPolling();
-      vescBle.canId = undefined;
+    removeSessionSubscriptions();
+    telemetrySub = addTelemetryListener((telemetry) => {
+      const { avgLatency, lastPacketAt, stateName: _stateName, ...refloatValues } = telemetry;
+      set((s) => ({
+        refloatValues: refloatValues as RefloatValues,
+        lastPacketAt,
+        avgLatency,
+        rxCount: s.rxCount + 1,
+      }));
+    });
+    sessionSub = addSessionStateListener((session) => {
       set({
-        status: 'error',
-        connectedId: null,
-        refloatValues: null,
-        error: 'Board disconnected',
+        status: session.status === 'error' ? 'error' : session.status,
+        connectedId: session.deviceId,
+        error: session.error ?? undefined,
       });
-    };
+    });
 
-    // Retry loop — status=133 is a common Android GATT_ERROR on the first
-    // reconnect attempt to a bonded device. One immediate retry fixes it.
-    for (let attempt = 1; attempt <= 2; attempt++) {
-      try {
-        await vescBle.connect(id, onPacket, onDisconnect);
-        set({ status: 'connected', connectedId: id });
-        startPolling();
-        if (Platform.OS === 'android') startForegroundService();
-        return;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        if (attempt === 1 && msg.includes('133')) {
-          console.warn('[BLE] status=133 (bonded device quirk) — retrying once');
-          continue;
-        }
-        set({ status: 'error', error: msg });
-        return;
-      }
+    const device = get().devices.find((d) => d.id === id);
+    const deviceName = id === VIRTUAL_BOARD_ID ? VIRTUAL_BOARD_NAME : (device?.name || id);
+
+    try {
+      await startSession(
+        id === VIRTUAL_BOARD_ID
+          ? { mode: 'demo', deviceName, scenario: 'cruise', pollIntervalMs: 500 }
+          : { mode: 'ble', deviceId: id, deviceName, pollIntervalMs: 500 },
+      );
+      set({ status: 'connected', connectedId: id });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      set({ status: 'error', error: msg });
     }
   },
 
   async disconnect() {
-    if (Platform.OS === 'android') stopForegroundService();
-    if (virtualCleanup !== null) {
-      virtualCleanup();
-      virtualCleanup = null;
-    }
-    stopPolling();
-    rttHistory = [];
-    lastPollAt = 0;
-    await vescBle.disconnect();
-    vescBle.canId = undefined;
+    await stopSession();
+    removeSessionSubscriptions();
     set({
       status: 'idle',
       connectedId: null,
@@ -237,11 +145,3 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
     });
   },
 }));
-
-// When the user taps "Disconnect" in the foreground service notification,
-// run the full disconnect flow so the store state stays consistent.
-if (Platform.OS === 'android') {
-  addStopRequestedListener(() => {
-    useBleStore.getState().disconnect();
-  });
-}
