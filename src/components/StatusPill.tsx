@@ -1,0 +1,75 @@
+import { useEffect, useRef, useState } from 'react'
+import { View, Text, ActivityIndicator, Animated, StyleSheet, type ViewStyle } from 'react-native'
+import { useBleStore } from '@/src/store/bleStore'
+
+const COLORS: Record<string, { bg: string; text: string }> = {
+  connected: { bg: '#14532d', text: '#4ade80' },
+  connecting: { bg: '#1e3a5f', text: '#60a5fa' },
+  scanning: { bg: '#422006', text: '#facc15' },
+  error: { bg: '#7f1d1d', text: '#f87171' },
+  idle: { bg: '#1f2937', text: '#9ca3af' },
+}
+
+export function StatusPill({ status, style }: { status: string; style?: ViewStyle }) {
+  const { lastPacketAt, avgLatency } = useBleStore()
+  const pulseOpacity = useRef(new Animated.Value(0.35)).current
+  const [isStale, setIsStale] = useState(false)
+
+  useEffect(() => {
+    if (lastPacketAt == null) return
+    setIsStale(false)
+    pulseOpacity.setValue(1)
+    const anim = Animated.timing(pulseOpacity, {
+      toValue: 0.35,
+      duration: 600,
+      useNativeDriver: true,
+    })
+    anim.start()
+    const t = setTimeout(() => setIsStale(true), 2000)
+    return () => {
+      anim.stop()
+      clearTimeout(t)
+    }
+  }, [lastPacketAt, pulseOpacity])
+
+  const c = COLORS[status] ?? COLORS.idle!
+  const dotColor = isStale
+    ? '#ef4444'
+    : avgLatency == null || avgLatency < 150
+      ? '#4ade80'
+      : avgLatency < 400
+        ? '#fbbf24'
+        : '#ef4444'
+
+  return (
+    <View style={[styles.pill, { backgroundColor: c.bg }, style]}>
+      {(status === 'connecting' || status === 'scanning') && (
+        <ActivityIndicator size="small" color={c.text} style={styles.spinner} />
+      )}
+      {status === 'connected' && (
+        <Animated.View style={[styles.dot, { backgroundColor: dotColor, opacity: pulseOpacity }]} />
+      )}
+      {status === 'connected' && avgLatency != null && (
+        <Text style={[styles.latency, { color: dotColor }]}>{avgLatency}ms</Text>
+      )}
+      <Text style={[styles.label, { color: c.text }]}>
+        {status === 'scanning' ? 'SEARCHING' : status.toUpperCase()}
+      </Text>
+    </View>
+  )
+}
+
+const styles = StyleSheet.create({
+  pill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 20,
+    gap: 5,
+  },
+  spinner: { transform: [{ scale: 0.7 }] },
+  dot: { width: 7, height: 7, borderRadius: 4 },
+  latency: { fontSize: 10, fontWeight: '600', fontFamily: 'monospace' },
+  label: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8 },
+})
