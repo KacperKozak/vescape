@@ -1,4 +1,7 @@
-import * as SQLite from 'expo-sqlite'
+import { asc, desc, eq } from 'drizzle-orm'
+
+import { db } from './client'
+import { boardsTable } from './schema'
 
 export interface Board {
   id: string
@@ -9,66 +12,58 @@ export interface Board {
   createdAt: number
 }
 
-const db = SQLite.openDatabaseSync('app.db')
-
-db.execSync(`
-  CREATE TABLE IF NOT EXISTS boards (
-    id TEXT PRIMARY KEY,
-    name TEXT NOT NULL,
-    description TEXT,
-    ble_id TEXT,
-    is_starred INTEGER NOT NULL DEFAULT 0,
-    created_at INTEGER NOT NULL
-  )
-`)
-
-type BoardRow = {
+function rowToBoard(row: {
   id: string
   name: string
   description: string | null
-  ble_id: string | null
-  is_starred: number
-  created_at: number
-}
-
-function rowToBoard(row: BoardRow): Board {
+  bleId: string | null
+  isStarred: boolean
+  createdAt: number
+}): Board {
   return {
     id: row.id,
     name: row.name,
     description: row.description,
-    bleId: row.ble_id,
-    isStarred: row.is_starred === 1,
-    createdAt: row.created_at,
+    bleId: row.bleId,
+    isStarred: row.isStarred,
+    createdAt: row.createdAt,
   }
 }
 
 export function getBoards(): Board[] {
   return db
-    .getAllSync<BoardRow>('SELECT * FROM boards ORDER BY is_starred DESC, created_at ASC')
+    .select()
+    .from(boardsTable)
+    .orderBy(desc(boardsTable.isStarred), asc(boardsTable.createdAt))
+    .all()
     .map(rowToBoard)
 }
 
 export function insertBoard(board: Board): void {
-  db.runSync(
-    'INSERT INTO boards (id, name, description, ble_id, is_starred, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-    [
-      board.id,
-      board.name,
-      board.description,
-      board.bleId,
-      board.isStarred ? 1 : 0,
-      board.createdAt,
-    ],
-  )
+  db.insert(boardsTable)
+    .values({
+      id: board.id,
+      name: board.name,
+      description: board.description,
+      bleId: board.bleId,
+      isStarred: board.isStarred,
+      createdAt: board.createdAt,
+    })
+    .run()
 }
 
 export function updateBoard(board: Board): void {
-  db.runSync(
-    'UPDATE boards SET name = ?, description = ?, ble_id = ?, is_starred = ? WHERE id = ?',
-    [board.name, board.description, board.bleId, board.isStarred ? 1 : 0, board.id],
-  )
+  db.update(boardsTable)
+    .set({
+      name: board.name,
+      description: board.description,
+      bleId: board.bleId,
+      isStarred: board.isStarred,
+    })
+    .where(eq(boardsTable.id, board.id))
+    .run()
 }
 
 export function deleteBoard(id: string): void {
-  db.runSync('DELETE FROM boards WHERE id = ?', [id])
+  db.delete(boardsTable).where(eq(boardsTable.id, id)).run()
 }
