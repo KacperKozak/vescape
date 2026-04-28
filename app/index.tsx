@@ -37,10 +37,10 @@ export default function ScanScreen() {
   }, [request, loadRecordings])
 
   useEffect(() => {
-    if (status === 'granted' && bleStatus === 'idle') {
+    if (status === 'granted') {
       startScan()
     }
-  }, [status, bleStatus, startScan])
+  }, [status, startScan])
 
   useEffect(() => {
     return () => stopScan()
