@@ -29,7 +29,7 @@ interface BleState {
 interface BleActions {
   startScan: () => void;
   stopScan: () => void;
-  connect: (id: string) => Promise<void>;
+  connect: (id: string, name?: string) => Promise<void>;
   disconnect: () => Promise<void>;
 }
 
@@ -39,12 +39,20 @@ interface BleActions {
 
 let telemetrySub: EventSubscription | null = null;
 let sessionSub: EventSubscription | null = null;
+const DEFAULT_BOARD_NAME = 'VESC Board';
+const MAC_ADDRESS_RE = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i;
 
 function removeSessionSubscriptions(): void {
   telemetrySub?.remove();
   telemetrySub = null;
   sessionSub?.remove();
   sessionSub = null;
+}
+
+function friendlyDeviceName(id: string, name?: string): string {
+  const candidate = name?.trim();
+  if (candidate && !MAC_ADDRESS_RE.test(candidate)) return candidate;
+  return id === VIRTUAL_BOARD_ID ? VIRTUAL_BOARD_NAME : DEFAULT_BOARD_NAME;
 }
 
 // ---------------------------------------------------------------------------
@@ -92,7 +100,7 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
     }));
   },
 
-  async connect(id: string) {
+  async connect(id: string, name?: string) {
     const { stopScan } = get();
     stopScan();
     set({ status: 'connecting', connectedId: null, refloatValues: null, error: undefined, lastPacketAt: null, avgLatency: null });
@@ -116,7 +124,7 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
     });
 
     const device = get().devices.find((d) => d.id === id);
-    const deviceName = id === VIRTUAL_BOARD_ID ? VIRTUAL_BOARD_NAME : (device?.name || id);
+    const deviceName = friendlyDeviceName(id, name ?? device?.name);
 
     try {
       await startSession(

@@ -84,7 +84,7 @@ export default function TelemetryScreen() {
 
   useEffect(() => {
     if (id) {
-      void connect(id);
+      void connect(id, name ? decodeURIComponent(name) : undefined);
     }
     return () => {
       void disconnect();
