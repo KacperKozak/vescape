@@ -28,10 +28,23 @@ export interface ErrorEvent {
   message: string
 }
 
+export interface LocationEvent {
+  latitude: number
+  longitude: number
+  speedMps: number | null
+  bearingDeg: number | null
+  accuracyM: number | null
+  altitudeM: number | null
+  timestamp: number
+  precise: boolean
+  saved: boolean
+}
+
 export type SessionStatus = 'idle' | 'connecting' | 'connected' | 'error'
 export type SessionMode = 'ble' | 'replay'
 
 export interface TelemetryEvent {
+  location?: LocationEvent | null
   hasFault: boolean
   faultCode: number
   pitch: number
@@ -104,6 +117,7 @@ type VescBleEvents = {
   onStopRequested: (event: Record<never, never>) => void
   onSessionState: (event: SessionStateEvent) => void
   onTelemetry: (event: TelemetryEvent) => void
+  onLocation: (event: LocationEvent) => void
 }
 
 interface NativeEventEmitter<TEvents extends Record<string, (...args: never[]) => void>> {
@@ -211,4 +225,8 @@ export function addSessionStateListener(cb: (event: SessionStateEvent) => void):
 
 export function addTelemetryListener(cb: (event: TelemetryEvent) => void): EventSubscription {
   return emitter.addListener('onTelemetry', cb)
+}
+
+export function addLocationListener(cb: (event: LocationEvent) => void): EventSubscription {
+  return emitter.addListener('onLocation', cb)
 }

@@ -46,6 +46,7 @@ class VescBleModule : Module() {
       "onStopRequested",
       "onSessionState",
       "onTelemetry",
+      "onLocation",
     )
 
     Function("scan") { startScan() }

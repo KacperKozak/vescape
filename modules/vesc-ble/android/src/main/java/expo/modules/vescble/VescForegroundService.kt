@@ -20,6 +20,10 @@ import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
 import android.os.Environment
 import android.os.Build
 import android.os.Handler
@@ -28,6 +32,7 @@ import android.os.Looper
 import android.provider.MediaStore
 import android.util.Base64
 import android.util.Log
+import androidx.core.content.ContextCompat
 import org.json.JSONObject
 import java.io.File
 import java.io.FileWriter
@@ -54,6 +59,7 @@ private const val COMM_PING_CAN = 62
 private const val REFLOAT_MAGIC = 101
 private const val REFLOAT_GET_ALLDATA = 10
 private const val REFLOAT_FAULT_MODE = 69
+private const val MAX_RECORDING_ACCURACY_M = 20.0
 
 private val NUS_SERVICE_UUID = UUID.fromString("6e400001-b5a3-f393-e0a9-e50e24dcca9e")
 private val NUS_TX_UUID = UUID.fromString("6e400002-b5a3-f393-e0a9-e50e24dcca9e")
@@ -92,6 +98,7 @@ private data class RefloatTelemetry(
     val tempMotor: Double?,
     val avgLatency: Int?,
     val lastPacketAt: Long,
+    val location: LocationSnapshot?,
 ) {
     fun toMap(): Map<String, Any?> = mapOf(
         "hasFault" to hasFault,
@@ -116,6 +123,31 @@ private data class RefloatTelemetry(
         "tempMotor" to tempMotor,
         "avgLatency" to avgLatency,
         "lastPacketAt" to lastPacketAt,
+        "location" to location?.toMap(),
+    )
+}
+
+private data class LocationSnapshot(
+    val latitude: Double,
+    val longitude: Double,
+    val speedMps: Double?,
+    val bearingDeg: Double?,
+    val accuracyM: Double?,
+    val altitudeM: Double?,
+    val timestamp: Long,
+    val precise: Boolean,
+    val saved: Boolean,
+) {
+    fun toMap(): Map<String, Any?> = mapOf(
+        "latitude" to latitude,
+        "longitude" to longitude,
+        "speedMps" to speedMps,
+        "bearingDeg" to bearingDeg,
+        "accuracyM" to accuracyM,
+        "altitudeM" to altitudeM,
+        "timestamp" to timestamp,
+        "precise" to precise,
+        "saved" to saved,
     )
 }
 
@@ -211,6 +243,12 @@ class VescForegroundService : Service() {
     private var intentionalDisconnect = false
     private var connectAttempt = 0
     private var recorder: VescSessionRecorder? = null
+    private var locationManager: LocationManager? = null
+    private var latestLocation: LocationSnapshot? = null
+
+    private val locationListener = LocationListener { location ->
+        onLocationUpdated(location)
+    }
 
     private val bluetoothAdapter: BluetoothAdapter
         get() = (getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter
@@ -278,12 +316,14 @@ class VescForegroundService : Service() {
         canId = start.config.canId
         error = null
         telemetry = null
+        latestLocation = null
         packetReassembler.reset()
         diagWriteCount = 0
         connectAttempt = 0
         if (start.config.recordingEnabled && start.config.mode != "replay") {
             recorder = VescSessionRecorder(this, start.config).also { it.start() }
         }
+        startLocationUpdates()
         setStatus("connecting")
         showNotification("Connecting...")
 
@@ -598,6 +638,7 @@ class VescForegroundService : Service() {
                 tempMotor = null,
                 avgLatency = avgLatency,
                 lastPacketAt = now,
+                location = latestLocation,
             )
         }
         if (payload.size < 34) return null
@@ -628,6 +669,7 @@ class VescForegroundService : Service() {
             tempMotor = if (mode >= 2 && payload.size >= 42) (payload[40].toInt() and 0xff) / 2.0 else null,
             avgLatency = avgLatency,
             lastPacketAt = now,
+            location = latestLocation,
         )
     }
 
@@ -639,6 +681,7 @@ class VescForegroundService : Service() {
     }
 
     private fun stopCurrentSession(emitDisconnected: Boolean) {
+        stopLocationUpdates()
         cancelCccdTimeout()
         stopPolling()
         stopReplayLoop()
@@ -647,6 +690,7 @@ class VescForegroundService : Service() {
         pendingConnect = null
         canId = null
         telemetry = null
+        latestLocation = null
         error = null
         status = "idle"
         showNotification()
@@ -705,6 +749,61 @@ class VescForegroundService : Service() {
         emitEvent?.invoke(name, body)
     }
 
+    private fun startLocationUpdates() {
+        if (config?.mode == "replay") return
+        val hasFine = ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED
+        if (!hasFine) return
+        val lm = (getSystemService(Context.LOCATION_SERVICE) as? LocationManager) ?: return
+        locationManager = lm
+        try {
+            lm.requestLocationUpdates(
+                LocationManager.GPS_PROVIDER,
+                1000L,
+                0f,
+                locationListener,
+                Looper.getMainLooper(),
+            )
+            lm.requestLocationUpdates(
+                LocationManager.NETWORK_PROVIDER,
+                2000L,
+                0f,
+                locationListener,
+                Looper.getMainLooper(),
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Location updates failed: ${e.message}")
+        }
+    }
+
+    private fun stopLocationUpdates() {
+        val lm = locationManager ?: return
+        try {
+            lm.removeUpdates(locationListener)
+        } catch (_: Exception) {
+        }
+        locationManager = null
+    }
+
+    private fun onLocationUpdated(location: Location) {
+        val precise = location.hasAccuracy() && location.accuracy.toDouble() <= MAX_RECORDING_ACCURACY_M
+        val saved = precise && recorder != null
+        val snapshot = LocationSnapshot(
+            latitude = location.latitude,
+            longitude = location.longitude,
+            speedMps = if (location.hasSpeed()) location.speed.toDouble() else null,
+            bearingDeg = if (location.hasBearing()) location.bearing.toDouble() else null,
+            accuracyM = if (location.hasAccuracy()) location.accuracy.toDouble() else null,
+            altitudeM = if (location.hasAltitude()) location.altitude else null,
+            timestamp = location.time,
+            precise = precise,
+            saved = saved,
+        )
+        latestLocation = snapshot
+        emitEvent("onLocation", snapshot.toMap())
+        if (snapshot.precise) recorder?.recordLocation(snapshot)
+    }
+
     private fun sessionStateMap(): Map<String, Any?> = mapOf(
         "status" to status,
         "mode" to config?.mode,
@@ -712,6 +811,7 @@ class VescForegroundService : Service() {
         "deviceName" to config?.deviceName,
         "canId" to canId,
         "telemetry" to telemetry?.toMap(),
+        "location" to latestLocation?.toMap(),
         "error" to error,
     )
 
@@ -919,6 +1019,21 @@ private class VescSessionRecorder(context: Context, private val config: SessionC
                 .put("kind", "ble-chunk")
                 .put("direction", direction)
                 .put("base64", Base64.encodeToString(bytes, Base64.NO_WRAP))
+        )
+    }
+
+    fun recordLocation(location: LocationSnapshot) {
+        write(
+            JSONObject()
+                .put("t", elapsed())
+                .put("kind", "location")
+                .put("latitude", location.latitude)
+                .put("longitude", location.longitude)
+                .put("speedMps", location.speedMps)
+                .put("bearingDeg", location.bearingDeg)
+                .put("accuracyM", location.accuracyM)
+                .put("altitudeM", location.altitudeM)
+                .put("timestamp", location.timestamp)
         )
     }
 

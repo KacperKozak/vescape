@@ -11,8 +11,10 @@ import {
   addDeviceListener,
   addSessionStateListener,
   addTelemetryListener,
+  addLocationListener,
   type RecordingInfo,
   type SessionMode,
+  type LocationEvent,
 } from 'vesc-ble'
 import { type RefloatValues } from '../vesc/types'
 
@@ -26,6 +28,7 @@ export type { RecordingInfo }
 export type { SessionMode }
 
 export type BleStatus = 'idle' | 'scanning' | 'connecting' | 'connected' | 'error'
+export type GpsFix = LocationEvent
 
 interface BleState {
   status: BleStatus
@@ -40,6 +43,7 @@ interface BleState {
   lastPacketAt: number | null
   /** Rolling average round-trip time in ms (poll sent → response received) */
   avgLatency: number | null
+  gpsFix: GpsFix | null
   recordDebugSession: boolean
   recordings: RecordingInfo[]
 }
@@ -62,6 +66,7 @@ interface BleActions {
 
 let telemetrySub: EventSubscription | null = null
 let sessionSub: EventSubscription | null = null
+let locationSub: EventSubscription | null = null
 let scanSub: EventSubscription | null = null
 const DEFAULT_BOARD_NAME = 'VESC Board'
 const MAC_ADDRESS_RE = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i
@@ -71,6 +76,8 @@ function removeSessionSubscriptions(): void {
   telemetrySub = null
   sessionSub?.remove()
   sessionSub = null
+  locationSub?.remove()
+  locationSub = null
 }
 
 function friendlyDeviceName(id: string, name?: string): string {
@@ -94,6 +101,7 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
   rxCount: 0,
   lastPacketAt: null,
   avgLatency: null,
+  gpsFix: null,
   recordDebugSession: false,
   recordings: [],
 
@@ -138,16 +146,27 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
       sessionMode: 'ble',
       connectedId: null,
       refloatValues: null,
+      gpsFix: null,
       error: undefined,
       lastPacketAt: null,
       avgLatency: null,
     })
 
     removeSessionSubscriptions()
+    locationSub = addLocationListener((location) => {
+      set({ gpsFix: location })
+    })
     telemetrySub = addTelemetryListener((telemetry) => {
-      const { avgLatency, lastPacketAt, stateName: _stateName, ...refloatValues } = telemetry
+      const {
+        avgLatency,
+        lastPacketAt,
+        stateName: _stateName,
+        location,
+        ...refloatValues
+      } = telemetry
       set((s) => ({
         refloatValues: refloatValues as RefloatValues,
+        gpsFix: location ?? null,
         lastPacketAt,
         avgLatency,
         rxCount: s.rxCount + 1,
@@ -188,16 +207,27 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
       sessionMode: 'replay',
       connectedId: recording.path,
       refloatValues: null,
+      gpsFix: null,
       error: undefined,
       lastPacketAt: null,
       avgLatency: null,
     })
 
     removeSessionSubscriptions()
+    locationSub = addLocationListener((location) => {
+      set({ gpsFix: location })
+    })
     telemetrySub = addTelemetryListener((telemetry) => {
-      const { avgLatency, lastPacketAt, stateName: _stateName, ...refloatValues } = telemetry
+      const {
+        avgLatency,
+        lastPacketAt,
+        stateName: _stateName,
+        location,
+        ...refloatValues
+      } = telemetry
       set((s) => ({
         refloatValues: refloatValues as RefloatValues,
+        gpsFix: location ?? null,
         lastPacketAt,
         avgLatency,
         rxCount: s.rxCount + 1,
@@ -235,6 +265,7 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
       sessionMode: null,
       connectedId: null,
       refloatValues: null,
+      gpsFix: null,
       error: undefined,
       rxCount: 0,
       lastPacketAt: null,

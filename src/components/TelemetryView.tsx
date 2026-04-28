@@ -6,12 +6,20 @@ import { REFLOAT_STATE_NAMES } from '@/src/vesc/refloat'
 import { fmt, fmtSpeed, fmtKm } from '@/src/helpers/format'
 
 export function TelemetryView() {
-  const { refloatValues: v, status } = useBleStore()
+  const { refloatValues: v, status, gpsFix } = useBleStore()
   const stateCompat = v ? v.state & 0xf : 0
   const stateName = v ? (REFLOAT_STATE_NAMES[stateCompat] ?? `STATE_${stateCompat}`) : '—'
   const hasFault = v?.hasFault ?? false
   const faultName = v?.hasFault ? (FAULT_NAMES[v.faultCode] ?? `CODE_${v.faultCode}`) : stateName
   const speedSign = v && v.erpm < 0 ? '-' : ''
+  const gpsAgeSec = gpsFix ? Math.max(0, (Date.now() - gpsFix.timestamp) / 1000) : null
+  const gpsStatus = !gpsFix
+    ? 'Waiting'
+    : gpsFix.precise
+      ? gpsFix.saved
+        ? 'Saving'
+        : 'Accepted'
+      : 'Rejected'
 
   if (status === 'connecting') {
     return (
@@ -33,6 +41,34 @@ export function TelemetryView() {
 
   return (
     <ScrollView contentContainerStyle={styles.grid}>
+      <Text style={styles.sectionLabel}>GPS</Text>
+      <View style={styles.row}>
+        <TelemetryCard
+          label="GPS Speed"
+          value={gpsFix?.speedMps != null ? (gpsFix.speedMps * 3.6).toFixed(1) : '—'}
+          unit={gpsFix?.speedMps != null ? 'km/h' : undefined}
+        />
+        <TelemetryCard
+          label="Precision"
+          value={gpsFix?.accuracyM != null ? `±${gpsFix.accuracyM.toFixed(1)}` : '—'}
+          unit={gpsFix?.accuracyM != null ? 'm' : undefined}
+          alert={!!gpsFix && !gpsFix.saved}
+        />
+      </View>
+      <View style={styles.row}>
+        <TelemetryCard
+          label="GPS Recording"
+          value={gpsStatus}
+          unit={gpsAgeSec != null ? `${gpsAgeSec.toFixed(0)}s ago` : undefined}
+          alert={gpsStatus === 'Rejected'}
+        />
+        <TelemetryCard
+          label="Location"
+          value={
+            gpsFix ? `${gpsFix.latitude.toFixed(5)}, ${gpsFix.longitude.toFixed(5)}` : 'No fix'
+          }
+        />
+      </View>
       <Text style={styles.sectionLabel}>RIDING</Text>
       <View style={styles.row}>
         <View style={styles.cardWide}>
