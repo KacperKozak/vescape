@@ -29,8 +29,7 @@ export interface ErrorEvent {
 }
 
 export type SessionStatus = 'idle' | 'connecting' | 'connected' | 'error';
-export type SessionMode = 'ble' | 'demo' | 'replay';
-export type DemoScenario = 'idle' | 'cruise' | 'accel-brake' | 'low-battery' | 'fault';
+export type SessionMode = 'ble' | 'replay';
 
 export interface TelemetryEvent {
   hasFault: boolean;
@@ -74,13 +73,6 @@ export type StartSessionOptions =
       deviceName: string;
       canId?: number;
       pollIntervalMs?: number;
-      recordingEnabled?: boolean;
-    }
-  | {
-      mode: 'demo';
-      deviceName?: string;
-      pollIntervalMs?: number;
-      scenario?: DemoScenario;
       recordingEnabled?: boolean;
     }
   | {
@@ -129,18 +121,12 @@ interface NativeEventEmitter<TEvents extends Record<string, (...args: never[]) =
 type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
   scan(): void;
   stopScan(): void;
-  connect(deviceId: string): Promise<void>;
-  send(base64: string): Promise<void>;
-  disconnect(): Promise<void>;
   startSession(options: StartSessionOptions): Promise<void>;
   stopSession(): Promise<void>;
   getSessionState(): SessionStateEvent;
   listRecordings(): Promise<RecordingInfo[]>;
   deleteRecording(path: string): Promise<boolean>;
   exportRecording(path: string): Promise<string>;
-  startForegroundService(deviceName: string): void;
-  stopForegroundService(): void;
-  updateNotification(text: string): void;
 };
 
 const native = requireNativeModule<VescBleNativeModule>('VescBle');
@@ -160,33 +146,12 @@ export function stopScan(): void {
   native.stopScan();
 }
 
-/**
- * Connect to a device by MAC address (Android) / UUID (iOS).
- * Resolves after MTU negotiation, GATT discovery, and CCCD write are complete.
- */
-export async function connect(deviceId: string): Promise<void> {
-  return native.connect(deviceId);
-}
-
-/**
- * Write a single chunk (base64-encoded) to the NUS TX characteristic
- * using write-without-response.
- */
-export async function send(base64: string): Promise<void> {
-  return native.send(base64);
-}
-
-/** Disconnect from the current device and clean up. */
-export async function disconnect(): Promise<void> {
-  return native.disconnect();
-}
-
-/** Start a native Android BLE/demo session. The service owns polling and notification updates. */
+/** Start a native Android BLE/replay session. The service owns polling and notification updates. */
 export async function startSession(options: StartSessionOptions): Promise<void> {
   return native.startSession(options);
 }
 
-/** Stop the native Android BLE/demo session. */
+/** Stop the native Android BLE/replay session. */
 export async function stopSession(): Promise<void> {
   return native.stopSession();
 }
@@ -206,25 +171,6 @@ export async function deleteRecording(path: string): Promise<boolean> {
 
 export async function exportRecording(path: string): Promise<string> {
   return native.exportRecording(path);
-}
-
-/**
- * Start an Android foreground service that keeps the process alive while
- * backgrounded. Shows a persistent notification (required by Android).
- * No-op on other platforms.
- */
-export function startForegroundService(deviceName: string): void {
-  native.startForegroundService(deviceName);
-}
-
-/** Stop the Android foreground service started by startForegroundService. */
-export function stopForegroundService(): void {
-  native.stopForegroundService();
-}
-
-/** Update the foreground service notification text. No-op if the service is not running. */
-export function updateNotification(text: string): void {
-  native.updateNotification(text);
 }
 
 /**

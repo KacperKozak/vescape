@@ -116,45 +116,6 @@ export default function ScanScreen() {
         )}
       </TouchableOpacity>
 
-      <TouchableOpacity
-        style={styles.recordToggle}
-        onPress={() => setRecordDebugSession(!recordDebugSession)}
-        activeOpacity={0.8}
-      >
-        <View style={[styles.checkbox, recordDebugSession && styles.checkboxChecked]}>
-          {recordDebugSession && <Text style={styles.checkboxMark}>x</Text>}
-        </View>
-        <Text style={styles.recordToggleText}>Record Debug BLE Session</Text>
-      </TouchableOpacity>
-
-      {recordings.length > 0 && (
-        <View style={styles.recordingsSection}>
-          <Text style={styles.sectionTitle}>Recordings</Text>
-          {recordings.map((recording) => (
-            <TouchableOpacity
-              key={recording.path}
-              style={styles.recordingRow}
-              onPress={() => handleRecordingPress(recording)}
-              onLongPress={() => handleRecordingMenu(recording)}
-              activeOpacity={0.85}
-            >
-              <View style={styles.recordingInfo}>
-                <Text style={styles.recordingName}>{recording.deviceName}</Text>
-                <Text style={styles.recordingMeta}>
-                  {new Date(recording.startedAt).toLocaleString()} · {Math.ceil(recording.sizeBytes / 1024)} KB
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={styles.menuButton}
-                onPress={() => handleRecordingMenu(recording)}
-              >
-                <Text style={styles.menuButtonText}>...</Text>
-              </TouchableOpacity>
-            </TouchableOpacity>
-          ))}
-        </View>
-      )}
-
       <FlatList<ScannedDevice>
         data={devices}
         keyExtractor={(d) => d.id}
@@ -172,6 +133,48 @@ export default function ScanScreen() {
           ) : (
             <Text style={styles.emptyText}>No devices found. Tap Scan to search.</Text>
           )
+        }
+        ListFooterComponent={
+          <View style={styles.footer}>
+            <TouchableOpacity
+              style={styles.recordToggle}
+              onPress={() => setRecordDebugSession(!recordDebugSession)}
+              activeOpacity={0.8}
+            >
+              <View style={[styles.checkbox, recordDebugSession && styles.checkboxChecked]}>
+                {recordDebugSession && <Text style={styles.checkboxMark}>x</Text>}
+              </View>
+              <Text style={styles.recordToggleText}>Record Debug BLE Session</Text>
+            </TouchableOpacity>
+
+            {recordings.length > 0 && (
+              <View style={styles.recordingsSection}>
+                <Text style={styles.sectionTitle}>Recordings</Text>
+                {recordings.map((recording) => (
+                  <TouchableOpacity
+                    key={recording.path}
+                    style={styles.recordingRow}
+                    onPress={() => handleRecordingPress(recording)}
+                    onLongPress={() => handleRecordingMenu(recording)}
+                    activeOpacity={0.85}
+                  >
+                    <View style={styles.recordingInfo}>
+                      <Text style={styles.recordingName}>{recording.deviceName}</Text>
+                      <Text style={styles.recordingMeta}>
+                        {new Date(recording.startedAt).toLocaleString()} · {Math.ceil(recording.sizeBytes / 1024)} KB
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.menuButton}
+                      onPress={() => handleRecordingMenu(recording)}
+                    >
+                      <Text style={styles.menuButtonText}>...</Text>
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </View>
         }
       />
     </SafeAreaView>
@@ -231,6 +234,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    marginTop: 18,
     marginBottom: 16,
   },
   checkbox: {
@@ -258,6 +262,9 @@ const styles = StyleSheet.create({
   },
   recordingsSection: {
     marginBottom: 16,
+  },
+  footer: {
+    paddingBottom: 8,
   },
   sectionTitle: {
     color: '#9ca3af',

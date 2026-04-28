@@ -64,12 +64,13 @@ startSession({
   deviceId,
   deviceName,
   pollIntervalMs: 500,
+  recordingEnabled: false,
 });
 
 startSession({
-  mode: 'demo',
-  deviceName: 'Virtual Board (Demo)',
-  scenario: 'cruise',
+  mode: 'replay',
+  deviceName: 'Recorded Session',
+  recordingPath,
   pollIntervalMs: 500,
 });
 
@@ -77,12 +78,16 @@ stopSession();
 getSessionState();
 addSessionStateListener((state) => {});
 addTelemetryListener((telemetry) => {});
+listRecordings();
+deleteRecording(path);
+exportRecording(path);
 ```
 
-`mode: 'ble'` connects to real hardware. `mode: 'demo'` runs a native demo
-backend that generates framed Refloat packets and feeds them through the same
-native packet reassembler, parser, notification formatter, and JS telemetry
-events as the real BLE backend.
+`mode: 'ble'` connects to real hardware. When `recordingEnabled` is true, the
+native service writes low-level session state plus BLE TX/RX chunks as JSON
+Lines. `mode: 'replay'` loops a saved recording through the same native packet
+reassembler, parser, notification formatter, and JS telemetry events as the
+real BLE backend.
 
 ## Features
 
@@ -93,7 +98,8 @@ events as the real BLE backend.
 - Background notification updates from native telemetry
 - Live speed, pitch, roll, voltage, current, duty cycle, temperature, fault, and
   distance telemetry
-- Native demo board mode for development and debugging without hardware
+- JSONL BLE session recording, export, deletion, and replay for debugging
+  without hardware
 
 ## Project Layout
 
@@ -104,12 +110,11 @@ app/device/[id].tsx          Telemetry screen
 src/ble/usePermissions.ts    Bluetooth permission helper
 src/store/bleStore.ts        Zustand state that mirrors native session events
 src/vesc/                    VESC packet, command, CRC, and parser code
-src/simulator/virtualBoard.ts Demo board display constants
 modules/vesc-ble/            Custom Expo native BLE/session module
 modules/vesc-ble/android/.../VescBleModule.kt
                              Expo module bridge: scan and session API
 modules/vesc-ble/android/.../VescForegroundService.kt
-                             Native BLE/demo session owner
+                             Native BLE/replay session owner
 docs/                        Protocol and architecture notes
 ```
 

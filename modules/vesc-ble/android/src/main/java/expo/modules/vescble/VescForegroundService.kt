@@ -66,7 +66,6 @@ data class SessionConfig(
     val deviceName: String,
     val canId: Int?,
     val pollIntervalMs: Long,
-    val scenario: String,
     val recordingEnabled: Boolean,
     val recordingPath: String?,
 )
@@ -156,16 +155,7 @@ class VescForegroundService : Service() {
             instance?.consumePendingStop()
         }
 
-        fun send(base64: String): Boolean {
-            val bytes = Base64.decode(base64, Base64.NO_WRAP)
-            return instance?.sendFramedChunk(bytes) == true
-        }
-
         fun currentState(): Map<String, Any?> = instance?.sessionStateMap() ?: idleState()
-
-        fun updateNotification(text: String) {
-            instance?.showNotification(text)
-        }
 
         fun listRecordings(context: Context): List<Map<String, Any?>> {
             return VescRecordingStore(context).list()
@@ -213,13 +203,11 @@ class VescForegroundService : Service() {
     private var cccdTimeout: Runnable? = null
     private var pendingConnect: PendingStart? = null
     private var pollRunnable: Runnable? = null
-    private var demoRunnable: Runnable? = null
     private var replayStartRunnable: Runnable? = null
     private var replayRunnable: Runnable? = null
     private val replayEventRunnables = mutableListOf<Runnable>()
     private var lastPollAt = 0L
     private var diagWriteCount = 0
-    private var demo = DemoBoard()
     private var intentionalDisconnect = false
     private var connectAttempt = 0
     private var recorder: VescSessionRecorder? = null
@@ -300,18 +288,9 @@ class VescForegroundService : Service() {
         showNotification("Connecting...")
 
         when (start.config.mode) {
-            "demo" -> startDemoSession(start)
             "replay" -> startReplaySession(start)
             else -> startBleSession(start)
         }
-    }
-
-    private fun startDemoSession(start: PendingStart) {
-        status = "connected"
-        emitState()
-        showNotification("Demo session running")
-        start.onSuccess()
-        startDemoLoop()
     }
 
     private fun startReplaySession(start: PendingStart) {
@@ -524,20 +503,6 @@ class VescForegroundService : Service() {
         pollRunnable = null
     }
 
-    private fun startDemoLoop() {
-        val session = config ?: return
-        demo = DemoBoard()
-        demoRunnable = object : Runnable {
-            override fun run() {
-                lastPollAt = System.currentTimeMillis() - demo.nextLatency()
-                val payload = demo.nextPayload()
-                handleFrameChunk(VescPacketCodec.encode(payload))
-                mainHandler.postDelayed(this, session.pollIntervalMs)
-            }
-        }
-        mainHandler.post(demoRunnable!!)
-    }
-
     private fun startReplayLoop(events: List<RecordedReplayEvent>) {
         stopReplayLoop()
         if (events.isEmpty()) {
@@ -571,11 +536,6 @@ class VescForegroundService : Service() {
         replayRunnable = null
         replayEventRunnables.forEach { mainHandler.removeCallbacks(it) }
         replayEventRunnables.clear()
-    }
-
-    private fun stopDemoLoop() {
-        demoRunnable?.let { mainHandler.removeCallbacks(it) }
-        demoRunnable = null
     }
 
     private fun sendPayload(payload: ByteArray): Boolean {
@@ -681,7 +641,6 @@ class VescForegroundService : Service() {
     private fun stopCurrentSession(emitDisconnected: Boolean) {
         cancelCccdTimeout()
         stopPolling()
-        stopDemoLoop()
         stopReplayLoop()
         clearGatt(markIntentional = true)
         finishRecording(if (emitDisconnected) "disconnected" else "stopped")
@@ -1068,131 +1027,6 @@ private class VescRecordingStore(private val context: Context) {
     }
 }
 
-private class DemoBoard {
-    private val phases = listOf("idle", "mounting", "accelerating", "cruising", "tiltback", "decelerating", "fault")
-    private val durations = mapOf(
-        "idle" to 4_000L,
-        "mounting" to 2_000L,
-        "accelerating" to 5_000L,
-        "cruising" to 8_000L,
-        "tiltback" to 3_000L,
-        "decelerating" to 4_000L,
-        "fault" to 3_000L,
-    )
-    private var phaseIndex = 0
-    private var phaseStart = System.currentTimeMillis()
-    private var odometer = 0.0
-    private var tempMosfet = 30.0
-    private var tempMotor = 30.0
-
-    fun nextLatency(): Long = 30L + (Math.random() * 30).roundToInt()
-
-    fun nextPayload(): ByteArray {
-        val now = System.currentTimeMillis()
-        val phase = phases[phaseIndex]
-        val duration = durations[phase] ?: 1000L
-        val elapsed = now - phaseStart
-        val t = (elapsed.toDouble() / duration).coerceIn(0.0, 1.0)
-        if (elapsed >= duration) {
-            phaseIndex = (phaseIndex + 1) % phases.size
-            phaseStart = now
-        }
-
-        val values = demoValues(phase, t)
-        odometer += (abs(values.speed) / 3.6) * 0.5
-        val riding = phase in listOf("accelerating", "cruising", "tiltback", "decelerating")
-        tempMosfet = approach(tempMosfet, if (riding) 65.0 else 30.0, if (riding) 0.02 else 0.01)
-        tempMotor = approach(tempMotor, if (riding) 55.0 else 30.0, if (riding) 0.02 else 0.01)
-        return buildPayload(values)
-    }
-
-    private fun demoValues(phase: String, t: Double): DemoValues {
-        val batteryVoltage = max(58.0, 63.5 - (odometer / 1000.0) * 0.8)
-        return when (phase) {
-            "mounting" -> DemoValues(batteryVoltage = batteryVoltage, state = if (t > 0.5) 1 else 0, switchState = if (t > 0.5) 3 else 0, adc1 = lerp(0.0, 0.85, t), adc2 = lerp(0.0, 0.85, t))
-            "accelerating" -> ridingValues(batteryVoltage, lerp(0.0, 22.0, t) + jitter(0.3), lerp(0.0, -4.5, t) + jitter(0.2), lerp(0.0, 18.0, t) + jitter(1.0), lerp(0.0, 0.35, t), 1)
-            "cruising" -> ridingValues(batteryVoltage, 20.0 + jitter(1.5), -1.5 + jitter(0.5), 6.0 + jitter(2.0), 0.30 + jitter(0.03), 1)
-            "tiltback" -> ridingValues(batteryVoltage, lerp(22.0, 15.0, t) + jitter(0.5), lerp(-4.5, 3.5, t) + jitter(0.3), lerp(18.0, 8.0, t) + jitter(1.0), lerp(0.35, 0.20, t), 2)
-            "decelerating" -> ridingValues(batteryVoltage, lerp(15.0, 0.0, t) + jitter(0.2), lerp(3.5, 0.0, t) + jitter(0.2), lerp(8.0, 0.0, t) + jitter(0.5), lerp(0.20, 0.0, t), 1)
-            "fault" -> DemoValues(batteryVoltage = batteryVoltage, hasFault = true, faultCode = 11)
-            else -> DemoValues(batteryVoltage = batteryVoltage, state = 0)
-        }
-    }
-
-    private fun ridingValues(batteryVoltage: Double, speed: Double, pitch: Double, current: Double, duty: Double, state: Int): DemoValues {
-        return DemoValues(
-            batteryVoltage = batteryVoltage,
-            state = state,
-            switchState = 3,
-            adc1 = 0.85,
-            adc2 = 0.85,
-            speed = speed,
-            erpm = ((speed / 3.6) * 30 * 60).roundToInt(),
-            dutyCycle = duty,
-            motorCurrent = current,
-            batteryCurrent = current * 0.4,
-            pitch = pitch,
-            balancePitch = pitch,
-            balanceCurrent = current * 0.6,
-        )
-    }
-
-    private fun buildPayload(v: DemoValues): ByteArray {
-        if (v.hasFault) {
-            return byteArrayOf(COMM_CUSTOM_APP_DATA.toByte(), REFLOAT_MAGIC.toByte(), REFLOAT_GET_ALLDATA.toByte(), REFLOAT_FAULT_MODE.toByte(), v.faultCode.toByte())
-        }
-        val payload = ByteArray(42)
-        payload[0] = COMM_CUSTOM_APP_DATA.toByte()
-        payload[1] = REFLOAT_MAGIC.toByte()
-        payload[2] = REFLOAT_GET_ALLDATA.toByte()
-        payload[3] = 2
-        putInt16(payload, 4, (v.balanceCurrent * 10).roundToInt())
-        putInt16(payload, 6, (v.balancePitch * 10).roundToInt())
-        putInt16(payload, 8, (v.roll * 10).roundToInt())
-        payload[10] = v.state.toByte()
-        payload[11] = v.switchState.toByte()
-        payload[12] = (v.adc1 * 50).roundToInt().toByte()
-        payload[13] = (v.adc2 * 50).roundToInt().toByte()
-        payload[14] = 128.toByte()
-        payload[15] = 128.toByte()
-        payload[16] = 128.toByte()
-        payload[17] = 128.toByte()
-        payload[18] = 128.toByte()
-        payload[19] = 128.toByte()
-        putInt16(payload, 20, (v.pitch * 10).roundToInt())
-        payload[22] = 128.toByte()
-        putInt16(payload, 23, (v.batteryVoltage * 10).roundToInt())
-        putInt16(payload, 25, v.erpm)
-        putInt16(payload, 27, ((v.speed / 3.6) * 10).roundToInt())
-        putInt16(payload, 29, (v.motorCurrent * 10).roundToInt())
-        putInt16(payload, 31, (v.batteryCurrent * 10).roundToInt())
-        payload[33] = ((v.dutyCycle * 100).roundToInt() + 128).toByte()
-        payload[34] = 222.toByte()
-        payload[39] = (tempMosfet * 2).roundToInt().toByte()
-        payload[40] = (tempMotor * 2).roundToInt().toByte()
-        return payload
-    }
-}
-
-private data class DemoValues(
-    val hasFault: Boolean = false,
-    val faultCode: Int = 0,
-    val batteryVoltage: Double,
-    val state: Int = 0,
-    val switchState: Int = 0,
-    val adc1: Double = 0.0,
-    val adc2: Double = 0.0,
-    val speed: Double = 0.0,
-    val erpm: Int = 0,
-    val dutyCycle: Double = 0.0,
-    val motorCurrent: Double = 0.0,
-    val batteryCurrent: Double = 0.0,
-    val pitch: Double = 0.0,
-    val roll: Double = 0.0,
-    val balancePitch: Double = 0.0,
-    val balanceCurrent: Double = 0.0,
-)
-
 private fun crc16(data: ByteArray): Int {
     var crc = 0
     for (b in data) {
@@ -1210,11 +1044,6 @@ private fun crc16(data: ByteArray): Int {
 
 private fun int16(bytes: ByteArray, offset: Int): Int {
     return ByteBuffer.wrap(bytes, offset, 2).order(ByteOrder.BIG_ENDIAN).short.toInt()
-}
-
-private fun putInt16(bytes: ByteArray, offset: Int, value: Int) {
-    bytes[offset] = ((value shr 8) and 0xff).toByte()
-    bytes[offset + 1] = (value and 0xff).toByte()
 }
 
 private fun float32Auto(bytes: ByteArray, offset: Int): Double {
@@ -1248,9 +1077,3 @@ private fun stateName(state: Int): String {
         else -> "UNKNOWN"
     }
 }
-
-private fun lerp(a: Double, b: Double, t: Double): Double = a + (b - a) * t
-
-private fun approach(current: Double, target: Double, rate: Double): Double = current + (target - current) * rate
-
-private fun jitter(amplitude: Double): Double = (Math.random() * 2.0 - 1.0) * amplitude

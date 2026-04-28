@@ -54,45 +54,6 @@ class VescBleModule : Module() {
       VescForegroundService.currentState()
     }
 
-    // Compatibility helpers. New JS should call startSession/stopSession directly.
-    Function("startForegroundService") { name: String ->
-      startSession(
-        mapOf(
-          "mode" to "demo",
-          "deviceName" to name,
-          "pollIntervalMs" to 500,
-        ),
-        null,
-      )
-    }
-    Function("stopForegroundService") {
-      VescForegroundService.stopSession(context.applicationContext)
-    }
-    Function("updateNotification") { text: String ->
-      VescForegroundService.updateNotification(text)
-    }
-
-    AsyncFunction("connect") { deviceId: String, promise: Promise ->
-      startSession(
-        mapOf(
-          "mode" to "ble",
-          "deviceId" to deviceId,
-          "deviceName" to DEFAULT_BOARD_NAME,
-          "pollIntervalMs" to 500,
-        ),
-        promise,
-      )
-    }
-    AsyncFunction("send") { base64: String, promise: Promise ->
-      if (VescForegroundService.send(base64)) {
-        promise.resolve(null)
-      } else {
-        promise.reject("NOT_CONNECTED", "No active BLE session", null)
-      }
-    }
-    AsyncFunction("disconnect") { promise: Promise ->
-      stopSession(promise)
-    }
     AsyncFunction("startSession") { options: Map<String, Any?>, promise: Promise ->
       startSession(options, promise)
     }
@@ -177,7 +138,6 @@ class VescBleModule : Module() {
     val deviceName = options["deviceName"] as? String ?: DEFAULT_BOARD_NAME
     val canId = (options["canId"] as? Number)?.toInt()
     val pollIntervalMs = (options["pollIntervalMs"] as? Number)?.toLong() ?: 500L
-    val scenario = options["scenario"] as? String ?: "cruise"
     val recordingEnabled = options["recordingEnabled"] as? Boolean ?: false
     val recordingPath = options["recordingPath"] as? String
 
@@ -189,7 +149,6 @@ class VescBleModule : Module() {
         deviceName = deviceName,
         canId = canId,
         pollIntervalMs = pollIntervalMs,
-        scenario = scenario,
         recordingEnabled = recordingEnabled,
         recordingPath = recordingPath,
       ),

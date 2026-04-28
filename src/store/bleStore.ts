@@ -14,7 +14,6 @@ import {
   type RecordingInfo,
 } from 'vesc-ble';
 import { type RefloatValues } from '../vesc/types';
-import { VIRTUAL_BOARD_NAME } from '../simulator/virtualBoard';
 
 export interface ScannedDevice {
   id: string;
@@ -23,8 +22,6 @@ export interface ScannedDevice {
 }
 
 export type { RecordingInfo };
-
-export const VIRTUAL_BOARD_ID = '__virtual__';
 
 export type BleStatus = 'idle' | 'scanning' | 'connecting' | 'connected' | 'error';
 
@@ -76,7 +73,7 @@ function removeSessionSubscriptions(): void {
 function friendlyDeviceName(id: string, name?: string): string {
   const candidate = name?.trim();
   if (candidate && !MAC_ADDRESS_RE.test(candidate)) return candidate;
-  return id === VIRTUAL_BOARD_ID ? VIRTUAL_BOARD_NAME : DEFAULT_BOARD_NAME;
+  return DEFAULT_BOARD_NAME;
 }
 
 // ---------------------------------------------------------------------------
@@ -99,8 +96,7 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
   // ---- actions ----
 
   startScan() {
-    const virtualDevice: ScannedDevice = { id: VIRTUAL_BOARD_ID, name: VIRTUAL_BOARD_NAME, rssi: -45 };
-    set({ status: 'scanning', devices: [virtualDevice], error: undefined });
+    set({ status: 'scanning', devices: [], error: undefined });
 
     scanSub?.remove();
     scanSub = addDeviceListener((device) => {
@@ -157,17 +153,13 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
     const deviceName = friendlyDeviceName(id, name ?? device?.name);
 
     try {
-      await startSession(
-        id === VIRTUAL_BOARD_ID
-          ? { mode: 'demo', deviceName, scenario: 'cruise', pollIntervalMs: 500 }
-          : {
-              mode: 'ble',
-              deviceId: id,
-              deviceName,
-              pollIntervalMs: 500,
-              recordingEnabled: get().recordDebugSession,
-            },
-      );
+      await startSession({
+        mode: 'ble',
+        deviceId: id,
+        deviceName,
+        pollIntervalMs: 500,
+        recordingEnabled: get().recordDebugSession,
+      });
       set({ status: 'connected', connectedId: id });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

@@ -35,7 +35,7 @@ modules/vesc-ble/          custom Expo native module (Android)
 modules/vesc-ble/android/.../VescBleModule.kt
                            Expo module bridge — scan and session API
 modules/vesc-ble/android/.../VescForegroundService.kt
-                           native BLE/demo session owner
+                           native BLE/replay session owner
 src/store/bleStore.ts      Zustand store — mirrors native session events
 src/vesc/commands.ts       COMM_* enum + request builders
 src/vesc/packet.ts         VESC packet framing (encode/decode)
