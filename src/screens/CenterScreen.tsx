@@ -159,11 +159,14 @@ export function CenterScreen() {
 
       {activeBoard?.bleId || bleStatus === 'connected' || bleStatus === 'connecting' ? (
         <View style={styles.telemetryShell}>
+          <TelemetryView />
           {activeBoard && bleStatus === 'scanning' && (
-            <View style={styles.connectionBar}>
-              <Text style={styles.connectionText}>Searching for {activeBoard.name}</Text>
+            <View style={[styles.connectionBar, styles.connectionBarScanning]}>
+              <Text style={[styles.connectionText, styles.connectionTextScanning]}>
+                Searching for {activeBoard.name}
+              </Text>
               <TouchableOpacity
-                style={styles.connectionButton}
+                style={[styles.connectionButton, styles.connectionButtonScanning]}
                 onPress={() => {
                   setScanEnabled(false)
                   stopScan()
@@ -174,10 +177,12 @@ export function CenterScreen() {
             </View>
           )}
           {activeBoard && bleStatus === 'idle' && activeBoard.bleId && (
-            <View style={styles.connectionBar}>
-              <Text style={styles.connectionText}>Board not connected</Text>
+            <View style={[styles.connectionBar, styles.connectionBarWarning]}>
+              <Text style={[styles.connectionText, styles.connectionTextWarning]}>
+                Board not connected
+              </Text>
               <TouchableOpacity
-                style={styles.connectionButton}
+                style={[styles.connectionButton, styles.connectionButtonWarning]}
                 onPress={() => {
                   setScanEnabled(true)
                   startScan()
@@ -201,7 +206,6 @@ export function CenterScreen() {
               </TouchableOpacity>
             </View>
           )}
-          <TelemetryView />
         </View>
       ) : (
         <View style={styles.body}>
@@ -279,8 +283,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     marginHorizontal: 12,
-    marginTop: 10,
-    marginBottom: 2,
+    marginBottom: 12,
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 10,
@@ -288,6 +291,20 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   connectionText: { flex: 1, color: '#9ca3af', fontSize: 13, fontWeight: '600' },
+  connectionBarWarning: {
+    backgroundColor: '#451a03',
+    borderWidth: 1,
+    borderColor: '#92400e',
+  },
+  connectionTextWarning: { color: '#fbbf24' },
+  connectionButtonWarning: { backgroundColor: '#b45309' },
+  connectionBarScanning: {
+    backgroundColor: '#0c1a2e',
+    borderWidth: 1,
+    borderColor: '#1e40af',
+  },
+  connectionTextScanning: { color: '#60a5fa' },
+  connectionButtonScanning: { backgroundColor: '#1d4ed8' },
   connectionButton: {
     paddingHorizontal: 14,
     paddingVertical: 7,

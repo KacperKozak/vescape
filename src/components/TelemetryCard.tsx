@@ -5,12 +5,14 @@ interface Props {
   label: string
   value: string
   unit?: string
+  /** Small secondary text shown below the value */
+  sub?: string
   /** Highlight the card when value warrants attention (fault, over-limit, etc.) */
   alert?: boolean
 }
 
 /** A single telemetry value tile. */
-export function TelemetryCard({ label, value, unit, alert = false }: Props) {
+export function TelemetryCard({ label, value, unit, sub, alert = false }: Props) {
   return (
     <View style={styles.card}>
       {alert && <View style={styles.alertDot} />}
@@ -18,6 +20,7 @@ export function TelemetryCard({ label, value, unit, alert = false }: Props) {
       <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit>
         {value}
         {unit ? <Text style={styles.unit}> {unit}</Text> : null}
+        {sub ? <Text style={styles.sub}> {sub}</Text> : null}
       </Text>
     </View>
   )
@@ -59,5 +62,10 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     fontSize: 14,
     fontWeight: '400',
+  },
+  sub: {
+    color: '#6b7280',
+    fontSize: 11,
+    fontWeight: '500',
   },
 })

@@ -43,13 +43,8 @@ export function TelemetryView() {
             />
             <TelemetryCard
               label="Direction"
-              value={
-                targetClock != null
-                  ? `${targetClock} o'clock`
-                  : targetBearing != null
-                    ? `${Math.round(targetBearing)}°`
-                    : '—'
-              }
+              value={targetBearing != null ? `${Math.round(targetBearing)}°` : '—'}
+              sub={targetClock != null ? `${targetClock} o'clock` : undefined}
             />
           </View>
         </>
