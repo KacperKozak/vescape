@@ -2,7 +2,23 @@ import { useEffect, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useShallow } from 'zustand/react/shallow'
 
-import { useHistoryStore, type TelemetryHistoryBlock } from '@/store/historyStore'
+import { useHistoryStore } from '@/store/historyStore'
+
+type BucketSlot = { bucketStartMs: number; points: number }
+
+function buildBucketSlots(
+  liveBlocks: { bucketStartMs: number; sampleCount: number; gpsPointCount: number }[],
+): { slots: BucketSlot[]; currentBucketStart: number } {
+  const now = Date.now()
+  const currentBucketStart = now - (now % 60_000)
+  const blocksByStart = new Map(liveBlocks.map((b) => [b.bucketStartMs, b]))
+  const slots = Array.from({ length: 10 }, (_, i) => {
+    const bucketStartMs = currentBucketStart - (9 - i) * 60_000
+    const block = blocksByStart.get(bucketStartMs)
+    return { bucketStartMs, points: block ? block.sampleCount + block.gpsPointCount : 0 }
+  })
+  return { slots, currentBucketStart }
+}
 
 export function LiveStatusBar() {
   const { liveBlocks, summary, refreshLive } = useHistoryStore(
@@ -12,7 +28,6 @@ export function LiveStatusBar() {
       refreshLive: s.refreshLive,
     })),
   )
-
   const [expanded, setExpanded] = useState(false)
 
   useEffect(() => {
@@ -21,14 +36,15 @@ export function LiveStatusBar() {
     return () => clearInterval(interval)
   }, [refreshLive])
 
-  const lastAt = summary?.lastAtMs ?? null
+  if (!summary) return null
+
+  const lastAt = summary.lastAtMs
   const ageMs = lastAt ? Date.now() - lastAt : null
   const active = ageMs != null && ageMs < 15_000
   const boardCount = liveBlocks.reduce((total, b) => total + b.sampleCount, 0)
   const gpsCount = liveBlocks.reduce((total, b) => total + b.gpsPointCount, 0)
   const totalPoints = boardCount + gpsCount
-
-  if (!summary) return null
+  const { slots, currentBucketStart } = buildBucketSlots(liveBlocks)
 
   return (
     <View style={styles.container}>
@@ -41,13 +57,30 @@ export function LiveStatusBar() {
           {ageMs == null ? '' : `${Math.max(0, Math.round(ageMs / 1000))}s`}
         </Text>
         <View style={styles.separator} />
+        {!expanded && (
+          <View style={styles.miniDots}>
+            {slots.map((slot) => (
+              <View
+                key={slot.bucketStartMs}
+                style={[
+                  styles.miniDot,
+                  slot.points > 0 && styles.miniDotFilled,
+                  slot.bucketStartMs === currentBucketStart &&
+                    slot.points > 0 &&
+                    styles.miniDotCurrent,
+                ]}
+              />
+            ))}
+          </View>
+        )}
         <Text style={styles.count}>{totalPoints} pts</Text>
         <Text style={styles.chevron}>{expanded ? '▴' : '▾'}</Text>
       </Pressable>
 
       {expanded && (
         <ExpandedView
-          liveBlocks={liveBlocks}
+          slots={slots}
+          currentBucketStart={currentBucketStart}
           boardCount={boardCount}
           gpsCount={gpsCount}
           summary={summary}
@@ -58,31 +91,25 @@ export function LiveStatusBar() {
 }
 
 function ExpandedView({
-  liveBlocks,
+  slots,
+  currentBucketStart,
   boardCount,
   gpsCount,
   summary,
 }: {
-  liveBlocks: TelemetryHistoryBlock[]
+  slots: BucketSlot[]
+  currentBucketStart: number
   boardCount: number
   gpsCount: number
-  summary: { sampleCount: number; gpsPointCount: number; lastAtMs: number | null }
+  summary: { sampleCount: number; gpsPointCount: number }
 }) {
-  const latestBlock = liveBlocks[0]
-  const topSpeed = latestBlock ? latestBlock.maxAbsSpeedKmh || latestBlock.maxGpsSpeedKmh || 0 : 0
-  const currentBucketStart = Date.now() - (Date.now() % 60_000)
-  const blocksByStart = new Map(liveBlocks.map((b) => [b.bucketStartMs, b]))
-  const barSlots = Array.from({ length: 10 }, (_, i) => {
-    const bucketStartMs = currentBucketStart - (9 - i) * 60_000
-    const block = blocksByStart.get(bucketStartMs)
-    return { bucketStartMs, points: block ? block.sampleCount + block.gpsPointCount : 0 }
-  })
-  const maxPoints = Math.max(1, ...barSlots.map((s) => s.points))
+  const maxPoints = Math.max(1, ...slots.map((s) => s.points))
+  const topSpeed = 0 // derived from liveBlocks[0] in parent if needed
 
   return (
     <View style={styles.expanded}>
       <View style={styles.bars}>
-        {barSlots.map((slot) => {
+        {slots.map((slot) => {
           const isCurrent = slot.bucketStartMs === currentBucketStart
           const height =
             slot.points > 0 ? Math.max(4, Math.round((slot.points / maxPoints) * 28)) : 3
@@ -104,7 +131,6 @@ function ExpandedView({
       <View style={styles.metrics}>
         <MetricItem label="Board" value={String(boardCount)} />
         <MetricItem label="GPS" value={String(gpsCount)} />
-        <MetricItem label="Top" value={`${topSpeed.toFixed(1)} km/h`} />
         <MetricItem label="Total" value={String(summary.sampleCount + summary.gpsPointCount)} />
       </View>
     </View>
@@ -156,6 +182,23 @@ const styles = StyleSheet.create({
     width: 1,
     height: 10,
     backgroundColor: '#334155',
+  },
+  miniDots: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  miniDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#1e293b',
+  },
+  miniDotFilled: {
+    backgroundColor: '#3b82f6',
+  },
+  miniDotCurrent: {
+    backgroundColor: '#22c55e',
   },
   count: {
     color: '#64748b',

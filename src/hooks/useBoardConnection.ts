@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert } from 'react-native'
 import { router } from 'expo-router'
 import { PencilSimple, Power, Star, Trash } from 'phosphor-react-native'
@@ -154,34 +154,34 @@ export function useBoardConnection() {
     return items
   }, [activeBoard, activeReplay, bleStatus, deleteRecording, disconnect, starBoard])
 
-  const handleSelectBoard = (id: string) => {
-    setActiveBoard(id)
-  }
+  const handleSelectBoard = useCallback((id: string) => setActiveBoard(id), [setActiveBoard])
 
-  const handleAddBoard = () => {
+  const handleAddBoard = useCallback(() => {
     router.push(routes.addBoardScan)
-  }
+  }, [])
 
-  const handleReplay = (recording: RecordingInfo) => {
-    setScanEnabled(false)
-    void replayRecording(recording)
-  }
+  const handleReplay = useCallback(
+    (recording: RecordingInfo) => {
+      setScanEnabled(false)
+      void replayRecording(recording)
+    },
+    [replayRecording],
+  )
 
-  const handleStopScan = () => {
+  const handleStopScan = useCallback(() => {
     setScanEnabled(false)
     stopScan()
-  }
+  }, [stopScan])
 
-  const handleRetryConnect = () => {
+  const handleRetryConnect = useCallback(() => {
     setScanEnabled(true)
     startScan()
-  }
+  }, [startScan])
 
   return {
     boards,
     activeBoard,
     activeBoardId,
-    activeReplay,
     replayBoardName,
     bleStatus,
     recordings,

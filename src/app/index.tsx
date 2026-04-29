@@ -16,7 +16,6 @@ import { MapScreen } from '@/screens/MapScreen'
 import { MainPager, type MainPagerHandle } from '@/components/MainPager'
 import { TopBar } from '@/components/TopBar'
 import { LiveStatusBar } from '@/components/LiveStatusBar'
-import { RecordFAB } from '@/components/RecordFAB'
 
 const TABS = [
   { label: 'History', Icon: ClockCounterClockwise },
@@ -118,16 +117,13 @@ export default function MainScreen() {
           <HistoryScreen key="history" />
           <CenterScreen
             key="center"
-            bleStatus={connection.bleStatus}
             activeBoard={connection.activeBoard}
-            activeReplay={connection.activeReplay}
+            bleStatus={connection.bleStatus}
             onStopScan={connection.handleStopScan}
             onRetryConnect={connection.handleRetryConnect}
           />
           <MapScreen key="map" />
         </MainPager>
-
-        <RecordFAB />
       </View>
 
       <SafeAreaView edges={['bottom']} style={styles.tabBar}>
