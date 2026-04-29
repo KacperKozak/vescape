@@ -78,6 +78,7 @@ data class SessionConfig(
     val canId: Int?,
     val pollIntervalMs: Long,
     val recordingEnabled: Boolean,
+    val telemetryRecordingEnabled: Boolean,
     val recordingPath: String?,
 )
 
@@ -164,6 +165,7 @@ class VescForegroundService : Service() {
         private var instance: VescForegroundService? = null
         private var pendingStart: PendingStart? = null
         private var pendingStop: PendingStop? = null
+        private var requestedTelemetryRecordingEnabled = false
 
         fun startSession(
             context: Context,
@@ -190,6 +192,12 @@ class VescForegroundService : Service() {
             }
             context.startService(intent)
             instance?.consumePendingStop()
+        }
+
+        fun setTelemetryRecordingEnabled(context: Context, enabled: Boolean) {
+            requestedTelemetryRecordingEnabled = enabled
+            instance?.setTelemetryRecordingEnabled(enabled)
+            if (!enabled) TelemetryRepository.get(context.applicationContext).flushBlocking()
         }
 
         fun currentState(): Map<String, Any?> = instance?.sessionStateMap() ?: idleState()
@@ -330,7 +338,14 @@ class VescForegroundService : Service() {
         if (start.config.recordingEnabled && start.config.mode != "replay") {
             recorder = VescSessionRecorder(this, start.config).also { it.start() }
         }
-        telemetryStore = if (start.config.mode == "replay") null else TelemetryRepository.get(applicationContext)
+        telemetryStore = if (
+            start.config.mode != "replay" &&
+            (start.config.telemetryRecordingEnabled || requestedTelemetryRecordingEnabled)
+        ) {
+            TelemetryRepository.get(applicationContext)
+        } else {
+            null
+        }
         startLocationUpdates()
         setStatus("connecting")
         showNotification("Connecting...")
@@ -803,6 +818,31 @@ class VescForegroundService : Service() {
         } catch (_: Exception) {
         }
         locationManager = null
+    }
+
+    private fun setTelemetryRecordingEnabled(enabled: Boolean) {
+        val session = config
+        if (enabled && session?.mode != "replay") {
+            if (telemetryStore == null) {
+                telemetryStore = TelemetryRepository.get(applicationContext)
+                telemetryStore?.recordMarker(
+                    if (status == "connected") "connected" else "app_stop",
+                    session?.deviceId,
+                    session?.deviceName,
+                    if (status == "connected") null else "Recording started",
+                )
+            }
+            return
+        }
+
+        telemetryStore?.recordMarker(
+            "app_stop",
+            session?.deviceId,
+            session?.deviceName,
+            "Recording stopped",
+        )
+        telemetryStore?.flushBlocking()
+        telemetryStore = null
     }
 
     private fun onLocationUpdated(location: Location) {

@@ -5,6 +5,7 @@ import {
   stopScan as nativeStopScan,
   startLocationUpdates as nativeStartLocationUpdates,
   stopLocationUpdates as nativeStopLocationUpdates,
+  setTelemetryRecordingEnabled as nativeSetTelemetryRecordingEnabled,
   startSession,
   stopSession,
   listRecordings as nativeListRecordings,
@@ -48,6 +49,7 @@ interface BleState {
   /** Rolling average round-trip time in ms (poll sent → response received) */
   avgLatency: number | null
   gpsFix: GpsFix | null
+  telemetryRecordingEnabled: boolean
   recordDebugSession: boolean
   recordings: RecordingInfo[]
 }
@@ -62,6 +64,11 @@ interface BleActions {
   loadRecordings: () => Promise<void>
   deleteRecording: (recording: RecordingInfo) => Promise<void>
   exportRecording: (recording: RecordingInfo) => Promise<string>
+  startTelemetryRecording: (context?: {
+    deviceId?: string | null
+    deviceName?: string | null
+  }) => void
+  stopTelemetryRecording: () => void
   startGpsTracking: (context?: { deviceId?: string | null; deviceName?: string | null }) => void
   stopGpsTracking: () => void
 }
@@ -144,6 +151,7 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
   lastPacketAt: null,
   avgLatency: null,
   gpsFix: null,
+  telemetryRecordingEnabled: false,
   recordDebugSession: false,
   recordings: [],
 
@@ -239,6 +247,7 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
         deviceName,
         pollIntervalMs: 500,
         recordingEnabled: get().recordDebugSession,
+        telemetryRecordingEnabled: get().telemetryRecordingEnabled,
       })
       set({ status: 'connected', sessionMode: 'ble', connectedId: id })
     } catch (err) {
@@ -315,6 +324,17 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
 
   async exportRecording(recording: RecordingInfo) {
     return nativeExportRecording(recording.path)
+  },
+
+  startTelemetryRecording(context) {
+    set({ telemetryRecordingEnabled: true })
+    nativeSetTelemetryRecordingEnabled(true)
+    get().startGpsTracking(context)
+  },
+
+  stopTelemetryRecording() {
+    nativeSetTelemetryRecordingEnabled(false)
+    set({ telemetryRecordingEnabled: false })
   },
 
   startGpsTracking(context) {

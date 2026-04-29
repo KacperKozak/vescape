@@ -36,6 +36,7 @@ class VescBleModule : Module() {
   private var locationManager: LocationManager? = null
   private var locationContextDeviceId: String? = null
   private var locationContextDeviceName: String? = null
+  private var telemetryRecordingEnabled: Boolean = false
   private val mainHandler = Handler(Looper.getMainLooper())
 
   private val locationListener = LocationListener { location ->
@@ -70,6 +71,7 @@ class VescBleModule : Module() {
     Function("stopScan") { stopScanInternal() }
     Function("startLocationUpdates") { options: Map<String, Any?>? -> startLocationUpdates(options) }
     Function("stopLocationUpdates") { stopLocationUpdates() }
+    Function("setTelemetryRecordingEnabled") { enabled: Boolean -> setTelemetryRecordingEnabled(enabled) }
     Function("getSessionState") {
       VescForegroundService.currentState()
     }
@@ -215,7 +217,7 @@ class VescBleModule : Module() {
   private fun sendLocation(location: Location) {
     val precise = location.hasAccuracy() && location.accuracy.toDouble() <= MAX_RECORDING_ACCURACY_M
     val serviceActive = VescForegroundService.currentState()["status"] != "idle"
-    val saved = if (serviceActive) {
+    val saved = if (serviceActive || !telemetryRecordingEnabled) {
       false
     } else {
       TelemetryRepository.get(context.applicationContext).recordLocation(
@@ -253,6 +255,7 @@ class VescBleModule : Module() {
     val canId = (options["canId"] as? Number)?.toInt()
     val pollIntervalMs = (options["pollIntervalMs"] as? Number)?.toLong() ?: 500L
     val recordingEnabled = options["recordingEnabled"] as? Boolean ?: false
+    val telemetryRecordingEnabled = options["telemetryRecordingEnabled"] as? Boolean ?: false
     val recordingPath = options["recordingPath"] as? String
 
     VescForegroundService.startSession(
@@ -264,6 +267,7 @@ class VescBleModule : Module() {
         canId = canId,
         pollIntervalMs = pollIntervalMs,
         recordingEnabled = recordingEnabled,
+        telemetryRecordingEnabled = telemetryRecordingEnabled,
         recordingPath = recordingPath,
       ),
       onSuccess = { promise?.resolve(null) },
@@ -280,6 +284,14 @@ class VescBleModule : Module() {
   private fun stopSession(promise: Promise) {
     VescForegroundService.stopSession(context.applicationContext) {
       promise.resolve(null)
+    }
+  }
+
+  private fun setTelemetryRecordingEnabled(enabled: Boolean) {
+    telemetryRecordingEnabled = enabled
+    VescForegroundService.setTelemetryRecordingEnabled(context.applicationContext, enabled)
+    if (!enabled) {
+      TelemetryRepository.get(context.applicationContext).flushBlocking()
     }
   }
 }

@@ -9,9 +9,11 @@ import {
   Text,
   View,
 } from 'react-native'
-import { Database, Trash, WarningCircle } from 'phosphor-react-native'
+import { Database, Record, StopCircle, Trash, WarningCircle } from 'phosphor-react-native'
 import { useShallow } from 'zustand/react/shallow'
 
+import { useBoardStore } from '@/store/boardStore'
+import { useBleStore } from '@/store/bleStore'
 import {
   useHistoryStore,
   type HistoryGpsSample,
@@ -20,6 +22,15 @@ import {
 } from '@/store/historyStore'
 
 export function HistoryScreen() {
+  const activeBoard = useBoardStore((s) => s.boards.find((b) => b.id === s.activeBoardId))
+  const { telemetryRecordingEnabled, startTelemetryRecording, stopTelemetryRecording } =
+    useBleStore(
+      useShallow((s) => ({
+        telemetryRecordingEnabled: s.telemetryRecordingEnabled,
+        startTelemetryRecording: s.startTelemetryRecording,
+        stopTelemetryRecording: s.stopTelemetryRecording,
+      })),
+    )
   const {
     blocks,
     liveBlocks,
@@ -79,6 +90,24 @@ export function HistoryScreen() {
     ])
   }, [clearHistory])
 
+  const toggleRecording = useCallback(() => {
+    if (telemetryRecordingEnabled) {
+      stopTelemetryRecording()
+      return
+    }
+    startTelemetryRecording({
+      deviceId: activeBoard?.bleId ?? activeBoard?.id ?? null,
+      deviceName: activeBoard?.name ?? null,
+    })
+  }, [
+    activeBoard?.bleId,
+    activeBoard?.id,
+    activeBoard?.name,
+    startTelemetryRecording,
+    stopTelemetryRecording,
+    telemetryRecordingEnabled,
+  ])
+
   const totalPoints = (summary?.sampleCount ?? 0) + (summary?.gpsPointCount ?? 0)
 
   return (
@@ -92,13 +121,33 @@ export function HistoryScreen() {
               : 'No history recorded yet'}
           </Text>
         </View>
-        <Pressable
-          style={[styles.iconButton, !totalPoints && styles.iconButtonDisabled]}
-          disabled={!totalPoints}
-          onPress={confirmClear}
-        >
-          <Trash size={18} color={totalPoints ? '#f87171' : '#4b5563'} weight="bold" />
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable
+            style={[styles.recordButton, telemetryRecordingEnabled && styles.recordButtonActive]}
+            onPress={toggleRecording}
+          >
+            {telemetryRecordingEnabled ? (
+              <StopCircle size={16} color="#052e16" weight="fill" />
+            ) : (
+              <Record size={16} color="#d1d5db" weight="fill" />
+            )}
+            <Text
+              style={[
+                styles.recordButtonText,
+                telemetryRecordingEnabled && styles.recordButtonTextActive,
+              ]}
+            >
+              {telemetryRecordingEnabled ? 'Recording' : 'Record'}
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.iconButton, !totalPoints && styles.iconButtonDisabled]}
+            disabled={!totalPoints}
+            onPress={confirmClear}
+          >
+            <Trash size={18} color={totalPoints ? '#f87171' : '#4b5563'} weight="bold" />
+          </Pressable>
+        </View>
       </View>
 
       {error && (
@@ -407,6 +456,25 @@ const styles = StyleSheet.create({
   },
   title: { color: '#f9fafb', fontSize: 22, fontWeight: '800' },
   subtitle: { color: '#6b7280', fontSize: 13, marginTop: 2 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  recordButton: {
+    height: 36,
+    paddingHorizontal: 12,
+    borderRadius: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#1f2937',
+    borderWidth: 1,
+    borderColor: '#374151',
+  },
+  recordButtonActive: {
+    backgroundColor: '#22c55e',
+    borderColor: '#22c55e',
+  },
+  recordButtonText: { color: '#d1d5db', fontSize: 12, fontWeight: '800' },
+  recordButtonTextActive: { color: '#052e16' },
   iconButton: {
     width: 36,
     height: 36,

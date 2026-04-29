@@ -87,6 +87,7 @@ export type StartSessionOptions =
       canId?: number
       pollIntervalMs?: number
       recordingEnabled?: boolean
+      telemetryRecordingEnabled?: boolean
     }
   | {
       mode: 'replay'
@@ -243,6 +244,7 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
   stopScan(): void
   startLocationUpdates(options?: LocationTrackingOptions): void
   stopLocationUpdates(): void
+  setTelemetryRecordingEnabled(enabled: boolean): void
   startSession(options: StartSessionOptions): Promise<void>
   stopSession(): Promise<void>
   getSessionState(): SessionStateEvent
@@ -292,6 +294,11 @@ export function startLocationUpdates(options: LocationTrackingOptions = {}): voi
 /** Stop app-level Android location updates. Board sessions manage their own recording location. */
 export function stopLocationUpdates(): void {
   native.stopLocationUpdates()
+}
+
+/** Enable or disable native SQLite telemetry history writes. */
+export function setTelemetryRecordingEnabled(enabled: boolean): void {
+  native.setTelemetryRecordingEnabled(enabled)
 }
 
 /** Start a native Android BLE/replay session. The service owns polling and notification updates. */

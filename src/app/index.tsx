@@ -26,8 +26,12 @@ export default function MainScreen() {
   const backPressedOnce = useRef(false)
   const load = useBoardStore((s) => s.load)
   const activeBoard = useBoardStore((s) => s.boards.find((b) => b.id === s.activeBoardId))
-  const { startGpsTracking } = useBleStore(
-    useShallow((s) => ({ startGpsTracking: s.startGpsTracking })),
+  const { telemetryRecordingEnabled, startGpsTracking, startTelemetryRecording } = useBleStore(
+    useShallow((s) => ({
+      telemetryRecordingEnabled: s.telemetryRecordingEnabled,
+      startGpsTracking: s.startGpsTracking,
+      startTelemetryRecording: s.startTelemetryRecording,
+    })),
   )
   const { status: permStatus, request } = usePermissions()
 
@@ -43,12 +47,24 @@ export default function MainScreen() {
 
   useEffect(() => {
     if (permStatus === 'granted') {
-      startGpsTracking({
+      const context = {
         deviceId: activeBoard?.bleId ?? activeBoard?.id ?? null,
         deviceName: activeBoard?.name ?? null,
-      })
+      }
+      startGpsTracking(context)
+      if (telemetryRecordingEnabled) {
+        startTelemetryRecording(context)
+      }
     }
-  }, [activeBoard?.bleId, activeBoard?.id, activeBoard?.name, permStatus, startGpsTracking])
+  }, [
+    activeBoard?.bleId,
+    activeBoard?.id,
+    activeBoard?.name,
+    permStatus,
+    startGpsTracking,
+    startTelemetryRecording,
+    telemetryRecordingEnabled,
+  ])
 
   useFocusEffect(
     useCallback(() => {
