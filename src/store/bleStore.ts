@@ -22,6 +22,7 @@ import {
   type TelemetryEvent,
 } from 'vesc-ble'
 import { type RefloatValues } from '../vesc/types'
+import { recordLivePoint, type LiveDataBucket } from './liveMonitor'
 import {
   shouldResumeGpsMonitoringAfterDisconnect,
   shouldStopNativeSessionOnDisconnect,
@@ -53,6 +54,8 @@ interface BleState {
   /** Rolling average round-trip time in ms (poll sent → response received) */
   avgLatency: number | null
   gpsFix: GpsFix | null
+  liveDataBuckets: LiveDataBucket[]
+  liveLastPointAtMs: number | null
   telemetryRecordingEnabled: boolean
   recordDebugSession: boolean
   recordings: RecordingInfo[]
@@ -125,9 +128,12 @@ function installSessionSubscriptions(
 ): void {
   removeSessionSubscriptions()
   telemetrySub = addTelemetryListener((telemetry) => {
+    const receivedAtMs = Date.now()
     set((s) => ({
       ...telemetryToRefloatValues(telemetry),
       rxCount: s.rxCount + 1,
+      liveDataBuckets: recordLivePoint(s.liveDataBuckets, 'board', receivedAtMs),
+      liveLastPointAtMs: receivedAtMs,
     }))
   })
   sessionSub = addSessionStateListener((session) => {
@@ -156,6 +162,8 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
   lastPacketAt: null,
   avgLatency: null,
   gpsFix: null,
+  liveDataBuckets: [],
+  liveLastPointAtMs: null,
   telemetryRecordingEnabled: false,
   recordDebugSession: false,
   recordings: [],
@@ -354,7 +362,12 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
     gpsTrackingContext = context
     if (!gpsSub) {
       gpsSub = addLocationListener((location) => {
-        set({ gpsFix: location })
+        const receivedAtMs = Date.now()
+        set((s) => ({
+          gpsFix: location,
+          liveDataBuckets: recordLivePoint(s.liveDataBuckets, 'gps', receivedAtMs),
+          liveLastPointAtMs: receivedAtMs,
+        }))
       })
     }
     nativeStartLocationUpdates({
