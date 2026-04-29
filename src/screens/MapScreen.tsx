@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { View, Text, StyleSheet, Pressable } from 'react-native'
 import MapView, { Circle, Marker, UrlTile, type Region } from 'react-native-maps'
-import { ArrowUp, Crosshair, CrosshairSimple } from 'phosphor-react-native'
+import { ArrowUp, Crosshair, CrosshairSimple, X } from 'phosphor-react-native'
 import { useBleStore } from '@/src/store/bleStore'
+import { useMapStore } from '@/src/store/mapStore'
 import { GOOGLE_MAPS_API_KEY, MAPY_TILE_URL_TEMPLATE } from '@/src/config/mapy'
 
 export function MapScreen() {
   const gpsFix = useBleStore((s) => s.gpsFix)
+  const { targetLocation, setTargetLocation, clearTargetLocation } = useMapStore()
   const [mapProvider, setMapProvider] = useState<'mapy' | 'google'>('mapy')
   const [followGps, setFollowGps] = useState(true)
   const [heading, setHeading] = useState(0)
@@ -76,6 +78,7 @@ export function MapScreen() {
         initialRegion={gpsRegion}
         rotateEnabled={!rotationLocked}
         onPanDrag={() => setFollowGps(false)}
+        onLongPress={(e) => setTargetLocation(e.nativeEvent.coordinate)}
         onRegionChangeComplete={async (_, gesture) => {
           if (gesture?.isGesture) setFollowGps(false)
           const cam = await mapRef.current?.getCamera()
@@ -102,6 +105,9 @@ export function MapScreen() {
             )}
           </>
         )}
+        {targetLocation && (
+          <Marker coordinate={targetLocation} pinColor="#a855f7" onPress={clearTargetLocation} />
+        )}
       </MapView>
 
       <View style={styles.overlayTop}>
@@ -119,6 +125,12 @@ export function MapScreen() {
           {mapProvider === 'mapy' ? 'Map data: Mapy.com / Seznam.cz' : 'Map data: Google'}
         </Text>
       </View>
+
+      {targetLocation && (
+        <Pressable style={styles.clearTargetButton} onPress={clearTargetLocation}>
+          <X size={18} color="#f9fafb" weight="bold" />
+        </Pressable>
+      )}
 
       <Pressable
         style={[styles.compassButton, rotationLocked && styles.compassButtonLocked]}
@@ -228,6 +240,17 @@ const styles = StyleSheet.create({
     color: 'rgba(209,213,219,0.78)',
     fontSize: 9,
     fontWeight: '500',
+  },
+  clearTargetButton: {
+    position: 'absolute',
+    right: 16,
+    bottom: 190,
+    width: 52,
+    height: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(88,28,135,0.9)',
+    borderRadius: 26,
   },
   compassButton: {
     position: 'absolute',
