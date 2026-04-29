@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { View, Text, ActivityIndicator, Animated, StyleSheet, type ViewStyle } from 'react-native'
-import { NavigationArrow } from 'phosphor-react-native'
+import { Lightning, NavigationArrow, WarningCircle } from 'phosphor-react-native'
 import { useBleStore } from '@/src/store/bleStore'
 
 const COLORS: Record<string, { bg: string; text: string }> = {
@@ -64,6 +64,8 @@ export function StatusPill({ status, style }: { status: string; style?: ViewStyl
       {status === 'connected' && (
         <Animated.View style={[styles.dot, { backgroundColor: dotColor, opacity: pulseOpacity }]} />
       )}
+      {status === 'idle' && <Lightning size={12} color={pillText} weight="fill" />}
+      {status === 'error' && <WarningCircle size={12} color={pillText} weight="fill" />}
       {status === 'connected' && avgLatency != null && (
         <Text style={[styles.latency, { color: dotColor }]}>{avgLatency}ms</Text>
       )}
@@ -95,7 +97,7 @@ export function GpsStatusBadge({ style }: { style?: ViewStyle }) {
   const bg = !gpsFix ? '#1f2937' : isRejected ? '#7f1d1d' : isStale ? '#422006' : '#14532d'
   const color = !gpsFix ? '#9ca3af' : isRejected ? '#f87171' : isStale ? '#facc15' : '#4ade80'
   const label =
-    isRejected && gpsFix?.accuracyM != null
+    gpsFix?.accuracyM != null
       ? `±${gpsFix.accuracyM.toFixed(0)}m`
       : isStale && ageSec != null
         ? `${ageSec.toFixed(0)}s`
@@ -113,10 +115,10 @@ const styles = StyleSheet.create({
   pill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 20,
-    gap: 5,
+    height: 22,
+    paddingHorizontal: 7,
+    borderRadius: 11,
+    gap: 4,
   },
   connectedPill: {
     minWidth: 42,

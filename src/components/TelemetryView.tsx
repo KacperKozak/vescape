@@ -1,4 +1,5 @@
 import { View, Text, ScrollView, ActivityIndicator, StyleSheet } from 'react-native'
+import { Lightning } from 'phosphor-react-native'
 import { useBleStore } from '@/src/store/bleStore'
 import { useMapStore } from '@/src/store/mapStore'
 import { TelemetryCard } from './TelemetryCard'
@@ -91,6 +92,7 @@ export function TelemetryView() {
       )}
       {!v && status !== 'connecting' && status !== 'connected' && (
         <View style={styles.inlineStatus}>
+          <Lightning size={20} color="#4b5563" weight="regular" />
           <Text style={styles.statusText}>Board telemetry unavailable</Text>
         </View>
       )}
