@@ -1,5 +1,5 @@
 import { PropsWithChildren, useState } from 'react'
-import { StyleSheet, TouchableOpacity } from 'react-native'
+import { StyleSheet, Pressable } from 'react-native'
 
 import { ThemedText } from '@/components/themed-text'
 import { ThemedView } from '@/components/themed-view'
@@ -13,10 +13,9 @@ export function Collapsible({ children, title }: PropsWithChildren & { title: st
 
   return (
     <ThemedView>
-      <TouchableOpacity
-        style={styles.heading}
+      <Pressable
+        style={({ pressed }) => [styles.heading, { opacity: pressed ? 0.8 : 1 }]}
         onPress={() => setIsOpen((value) => !value)}
-        activeOpacity={0.8}
       >
         <IconSymbol
           name="chevron.right"
@@ -27,7 +26,7 @@ export function Collapsible({ children, title }: PropsWithChildren & { title: st
         />
 
         <ThemedText type="defaultSemiBold">{title}</ThemedText>
-      </TouchableOpacity>
+      </Pressable>
       {isOpen && <ThemedView style={styles.content}>{children}</ThemedView>}
     </ThemedView>
   )

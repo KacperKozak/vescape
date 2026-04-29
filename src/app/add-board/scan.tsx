@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, StyleSheet } from 'react-native'
+import { View, Text, FlatList, Pressable, ActivityIndicator, StyleSheet } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, useLocalSearchParams } from 'expo-router'
 
@@ -70,9 +70,9 @@ export default function AddBoardScanScreen() {
         }
       />
 
-      <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
+      <Pressable style={styles.skipButton} onPress={handleSkip}>
         <Text style={styles.skipText}>Skip pairing for now</Text>
-      </TouchableOpacity>
+      </Pressable>
     </SafeAreaView>
   )
 }

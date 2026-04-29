@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native'
+import { View, Text, Pressable, StyleSheet, Alert } from 'react-native'
 import { router } from 'expo-router'
 import { CaretDown, PencilSimple, Power, Star, Trash } from 'phosphor-react-native'
 
@@ -146,12 +146,12 @@ export function CenterScreen() {
   return (
     <View style={styles.container}>
       <View style={styles.selectorBar}>
-        <TouchableOpacity style={styles.selector} onPress={() => setSelectorOpen(true)}>
+        <Pressable style={styles.selector} onPress={() => setSelectorOpen(true)}>
           <Text style={styles.selectorText} numberOfLines={1}>
             {replayBoardName ?? activeBoard?.name ?? 'No board selected'}
           </Text>
           <CaretDown size={14} color="#9ca3af" weight="bold" />
-        </TouchableOpacity>
+        </Pressable>
         <GpsStatusBadge />
         <StatusPill status={bleStatus} />
         <BoardMenu items={menuItems} />
@@ -165,7 +165,7 @@ export function CenterScreen() {
               <Text style={[styles.connectionText, styles.connectionTextScanning]}>
                 Searching for {activeBoard.name}
               </Text>
-              <TouchableOpacity
+              <Pressable
                 style={[styles.connectionButton, styles.connectionButtonScanning]}
                 onPress={() => {
                   setScanEnabled(false)
@@ -173,7 +173,7 @@ export function CenterScreen() {
                 }}
               >
                 <Text style={styles.connectionButtonText}>Stop</Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
           )}
           {activeBoard && bleStatus === 'idle' && activeBoard.bleId && (
@@ -181,7 +181,7 @@ export function CenterScreen() {
               <Text style={[styles.connectionText, styles.connectionTextWarning]}>
                 Board not connected
               </Text>
-              <TouchableOpacity
+              <Pressable
                 style={[styles.connectionButton, styles.connectionButtonWarning]}
                 onPress={() => {
                   setScanEnabled(true)
@@ -189,13 +189,13 @@ export function CenterScreen() {
                 }}
               >
                 <Text style={styles.connectionButtonText}>Connect</Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
           )}
           {activeBoard && bleStatus === 'error' && activeBoard.bleId && (
             <View style={styles.connectionBar}>
               <Text style={styles.connectionText}>Connection failed</Text>
-              <TouchableOpacity
+              <Pressable
                 style={styles.connectionButton}
                 onPress={() => {
                   setScanEnabled(true)
@@ -203,7 +203,7 @@ export function CenterScreen() {
                 }}
               >
                 <Text style={styles.connectionButtonText}>Retry</Text>
-              </TouchableOpacity>
+              </Pressable>
             </View>
           )}
         </View>
@@ -213,7 +213,7 @@ export function CenterScreen() {
             <>
               <Text style={styles.bodyTitle}>{activeBoard.name}</Text>
               <Text style={styles.bodySubtitle}>No device paired</Text>
-              <TouchableOpacity
+              <Pressable
                 style={styles.scanStopButton}
                 onPress={() =>
                   router.push({
@@ -223,17 +223,14 @@ export function CenterScreen() {
                 }
               >
                 <Text style={styles.scanStopText}>Open Settings</Text>
-              </TouchableOpacity>
+              </Pressable>
             </>
           ) : (
             <>
               <Text style={styles.bodyTitle}>No board added yet</Text>
-              <TouchableOpacity
-                style={styles.addButton}
-                onPress={() => router.push('/add-board/scan')}
-              >
+              <Pressable style={styles.addButton} onPress={() => router.push('/add-board/scan')}>
                 <Text style={styles.addButtonText}>+ Add your first board</Text>
-              </TouchableOpacity>
+              </Pressable>
             </>
           )}
         </View>

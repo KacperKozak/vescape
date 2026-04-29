@@ -3,7 +3,7 @@ import {
   View,
   Text,
   TextInput,
-  TouchableOpacity,
+  Pressable,
   ScrollView,
   KeyboardAvoidingView,
   Platform,
@@ -106,15 +106,15 @@ export default function BoardDetailsScreen() {
             </View>
           )}
           <View style={styles.pairActions}>
-            <TouchableOpacity style={styles.pairButton} onPress={handleOpenPairing}>
+            <Pressable style={styles.pairButton} onPress={handleOpenPairing}>
               <Text style={styles.pairButtonText}>
                 {pairedBleId ? 'Change BLE Pairing' : 'Pair BLE Device'}
               </Text>
-            </TouchableOpacity>
+            </Pressable>
             {pairedBleId ? (
-              <TouchableOpacity style={styles.secondaryButton} onPress={handleUnpair}>
+              <Pressable style={styles.secondaryButton} onPress={handleUnpair}>
                 <Text style={styles.secondaryButtonText}>Remove pairing</Text>
-              </TouchableOpacity>
+              </Pressable>
             ) : null}
           </View>
 
@@ -141,18 +141,18 @@ export default function BoardDetailsScreen() {
             textAlignVertical="top"
           />
 
-          <TouchableOpacity
+          <Pressable
             style={[styles.saveButton, !name.trim() && styles.saveButtonDisabled]}
             onPress={handleSave}
             disabled={!name.trim()}
           >
             <Text style={styles.saveButtonText}>Save Board</Text>
-          </TouchableOpacity>
+          </Pressable>
 
           {editingBoard ? (
-            <TouchableOpacity style={styles.removeButton} onPress={handleRemoveBoard}>
+            <Pressable style={styles.removeButton} onPress={handleRemoveBoard}>
               <Text style={styles.removeButtonText}>Remove Board</Text>
-            </TouchableOpacity>
+            </Pressable>
           ) : null}
         </ScrollView>
       </SafeAreaView>

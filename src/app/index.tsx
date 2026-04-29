@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { BackHandler, ToastAndroid, View, Text, TouchableOpacity, StyleSheet } from 'react-native'
+import { BackHandler, ToastAndroid, View, Text, Pressable, StyleSheet } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import PagerView from 'react-native-pager-view'
@@ -78,15 +78,11 @@ export default function MainScreen() {
           const active = page === i
           const color = active ? '#f9fafb' : '#6b7280'
           return (
-            <TouchableOpacity
-              key={label}
-              style={styles.tab}
-              onPress={() => pagerRef.current?.setPage(i)}
-            >
+            <Pressable key={label} style={styles.tab} onPress={() => pagerRef.current?.setPage(i)}>
               <Icon size={22} color={color} weight={active ? 'fill' : 'regular'} />
               <Text style={[styles.tabText, active && styles.tabTextActive]}>{label}</Text>
               {active && <View style={styles.tabIndicator} />}
-            </TouchableOpacity>
+            </Pressable>
           )
         })}
       </SafeAreaView>

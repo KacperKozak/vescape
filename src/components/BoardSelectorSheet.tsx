@@ -1,12 +1,4 @@
-import {
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native'
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import type { Board } from '@/db/boards'
@@ -45,7 +37,7 @@ export function BoardSelectorSheet({
         <Text style={styles.modalTitle}>Boards</Text>
         <ScrollView bounces={false}>
           {boards.map((board) => (
-            <TouchableOpacity
+            <Pressable
               key={board.id}
               style={styles.boardRow}
               onPress={() => onSelectBoard(board.id)}
@@ -57,19 +49,19 @@ export function BoardSelectorSheet({
                 {board.name}
               </Text>
               {board.id === activeBoardId && <Text style={styles.boardCheck}>✓</Text>}
-            </TouchableOpacity>
+            </Pressable>
           ))}
 
-          <TouchableOpacity style={styles.addBoardRow} onPress={onAddBoard}>
+          <Pressable style={styles.addBoardRow} onPress={onAddBoard}>
             <Text style={styles.addBoardText}>+ Add new board</Text>
-          </TouchableOpacity>
+          </Pressable>
 
           {recordings.length > 0 && (
             <>
               <View style={styles.modalDivider} />
               <Text style={styles.modalSectionTitle}>Recordings</Text>
               {recordings.map((r) => (
-                <TouchableOpacity key={r.path} style={styles.simRow} onPress={() => onReplay(r)}>
+                <Pressable key={r.path} style={styles.simRow} onPress={() => onReplay(r)}>
                   <View style={styles.simInfo}>
                     <Text style={styles.simName}>{r.deviceName}</Text>
                     <Text style={styles.simMeta}>
@@ -77,18 +69,18 @@ export function BoardSelectorSheet({
                     </Text>
                   </View>
                   <Text style={styles.simChevron}>›</Text>
-                </TouchableOpacity>
+                </Pressable>
               ))}
             </>
           )}
 
           <View style={styles.modalDivider} />
-          <TouchableOpacity style={styles.debugToggleRow} onPress={onToggleRecordDebug}>
+          <Pressable style={styles.debugToggleRow} onPress={onToggleRecordDebug}>
             <View style={[styles.checkbox, recordDebugSession && styles.checkboxOn]}>
               {recordDebugSession && <Text style={styles.checkboxMark}>✓</Text>}
             </View>
             <Text style={styles.debugToggleText}>Record next session</Text>
-          </TouchableOpacity>
+          </Pressable>
         </ScrollView>
       </View>
     </Modal>

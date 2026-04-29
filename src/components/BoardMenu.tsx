@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native'
 import { DotsThreeVertical, type Icon } from 'phosphor-react-native'
 
 export interface BoardMenuItem {
@@ -26,7 +26,7 @@ function DropdownMenu({
         {items.map((item, i) => (
           <View key={item.label}>
             {item.separator && i > 0 && <View style={dropStyles.separator} />}
-            <TouchableOpacity
+            <Pressable
               style={dropStyles.item}
               onPress={() => {
                 onClose()
@@ -41,7 +41,7 @@ function DropdownMenu({
               <Text style={[dropStyles.label, item.destructive && dropStyles.destructive]}>
                 {item.label}
               </Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
         ))}
       </View>
@@ -64,9 +64,9 @@ export function BoardMenu({ items }: { items: BoardMenuItem[] }) {
   return (
     <>
       <View ref={menuButtonRef} collapsable={false}>
-        <TouchableOpacity style={styles.menuButton} onPress={openMenu}>
+        <Pressable style={styles.menuButton} onPress={openMenu}>
           <DotsThreeVertical size={22} color="#9ca3af" weight="bold" />
-        </TouchableOpacity>
+        </Pressable>
       </View>
 
       {anchor && <DropdownMenu items={items} anchor={anchor} onClose={() => setAnchor(null)} />}
