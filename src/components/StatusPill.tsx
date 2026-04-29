@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { View, Text, ActivityIndicator, Animated, StyleSheet, type ViewStyle } from 'react-native'
+import { NavigationArrow } from 'phosphor-react-native'
 import { useBleStore } from '@/src/store/bleStore'
 
 const COLORS: Record<string, { bg: string; text: string }> = {
@@ -93,18 +94,17 @@ export function GpsStatusBadge({ style }: { style?: ViewStyle }) {
   const isRejected = !!gpsFix && !gpsFix.precise
   const bg = !gpsFix ? '#1f2937' : isRejected ? '#7f1d1d' : isStale ? '#422006' : '#14532d'
   const color = !gpsFix ? '#9ca3af' : isRejected ? '#f87171' : isStale ? '#facc15' : '#4ade80'
-  const label = !gpsFix
-    ? 'GPS'
-    : isRejected && gpsFix.accuracyM != null
-      ? `GPS ±${gpsFix.accuracyM.toFixed(0)}m`
-      : isStale
-        ? `GPS ${ageSec.toFixed(0)}s`
-        : 'GPS'
+  const label =
+    isRejected && gpsFix?.accuracyM != null
+      ? `±${gpsFix.accuracyM.toFixed(0)}m`
+      : isStale && ageSec != null
+        ? `${ageSec.toFixed(0)}s`
+        : null
 
   return (
     <View style={[styles.gpsPill, { backgroundColor: bg }, style]}>
-      <View style={[styles.dot, { backgroundColor: color }]} />
-      <Text style={[styles.gpsLabel, { color }]}>{label}</Text>
+      <NavigationArrow size={11} color={color} weight="fill" />
+      {label && <Text style={[styles.gpsLabel, { color }]}>{label}</Text>}
     </View>
   )
 }
@@ -131,7 +131,6 @@ const styles = StyleSheet.create({
   gpsPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    minWidth: 72,
     paddingHorizontal: 7,
     paddingVertical: 3,
     borderRadius: 14,

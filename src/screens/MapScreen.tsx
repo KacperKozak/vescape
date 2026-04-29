@@ -1,14 +1,20 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { View, Text, StyleSheet, Pressable } from 'react-native'
-import MapView, { Circle, Marker, UrlTile } from 'react-native-maps'
+import MapView, { Circle, Marker, UrlTile, type Region } from 'react-native-maps'
+import { ArrowUp, Crosshair, CrosshairSimple } from 'phosphor-react-native'
 import { useBleStore } from '@/src/store/bleStore'
 import { GOOGLE_MAPS_API_KEY, MAPY_TILE_URL_TEMPLATE } from '@/src/config/mapy'
 
 export function MapScreen() {
   const gpsFix = useBleStore((s) => s.gpsFix)
   const [mapProvider, setMapProvider] = useState<'mapy' | 'google'>('mapy')
+  const [followGps, setFollowGps] = useState(true)
+  const [heading, setHeading] = useState(0)
+  const [rotationLocked, setRotationLocked] = useState(false)
+  const mapRef = useRef<MapView>(null)
+  const lastCenteredAtRef = useRef<number | null>(null)
 
-  const region = useMemo(() => {
+  const gpsRegion = useMemo<Region>(() => {
     if (!gpsFix) {
       // Default fallback around Wroclaw until first GPS fix arrives.
       return {
@@ -29,6 +35,27 @@ export function MapScreen() {
 
   const markerColor = !gpsFix ? '#9ca3af' : gpsFix.precise ? '#22c55e' : '#ef4444'
 
+  useEffect(() => {
+    if (!gpsFix || !followGps) return
+    if (lastCenteredAtRef.current === gpsFix.timestamp) return
+    lastCenteredAtRef.current = gpsFix.timestamp
+    mapRef.current?.animateToRegion(gpsRegion, 450)
+  }, [followGps, gpsFix, gpsRegion])
+
+  const resetRotation = async () => {
+    const cam = await mapRef.current?.getCamera()
+    if (cam) mapRef.current?.animateCamera({ ...cam, heading: 0 }, { duration: 350 })
+    setHeading(0)
+  }
+
+  const recenter = () => {
+    setFollowGps(true)
+    if (gpsFix) {
+      lastCenteredAtRef.current = gpsFix.timestamp
+      mapRef.current?.animateToRegion(gpsRegion, 350)
+    }
+  }
+
   if (!GOOGLE_MAPS_API_KEY) {
     return (
       <View style={styles.emptyContainer}>
@@ -43,9 +70,17 @@ export function MapScreen() {
   return (
     <View style={styles.container}>
       <MapView
+        ref={mapRef}
         style={styles.map}
         mapType={mapProvider === 'mapy' ? 'none' : 'standard'}
-        region={region}
+        initialRegion={gpsRegion}
+        rotateEnabled={!rotationLocked}
+        onPanDrag={() => setFollowGps(false)}
+        onRegionChangeComplete={async (_, gesture) => {
+          if (gesture?.isGesture) setFollowGps(false)
+          const cam = await mapRef.current?.getCamera()
+          if (cam?.heading != null) setHeading(cam.heading)
+        }}
       >
         {mapProvider === 'mapy' && (
           <UrlTile urlTemplate={MAPY_TILE_URL_TEMPLATE} maximumZ={19} flipY={false} zIndex={0} />
@@ -84,6 +119,28 @@ export function MapScreen() {
           {mapProvider === 'mapy' ? 'Map data: Mapy.com / Seznam.cz' : 'Map data: Google'}
         </Text>
       </View>
+
+      <Pressable
+        style={[styles.compassButton, rotationLocked && styles.compassButtonLocked]}
+        onPress={resetRotation}
+        onLongPress={() => setRotationLocked((prev) => !prev)}
+        delayLongPress={400}
+      >
+        <View style={{ transform: [{ rotate: `${-heading}deg` }] }}>
+          <ArrowUp size={22} color={rotationLocked ? '#fbbf24' : '#f9fafb'} weight="bold" />
+        </View>
+      </Pressable>
+
+      <Pressable
+        style={[styles.followButton, followGps && styles.followButtonActive]}
+        onPress={recenter}
+      >
+        {followGps ? (
+          <Crosshair size={24} color="#4ade80" weight="fill" />
+        ) : (
+          <CrosshairSimple size={24} color="#f9fafb" weight="bold" />
+        )}
+      </Pressable>
 
       <View style={styles.providerSwitch}>
         <Pressable
@@ -160,16 +217,45 @@ const styles = StyleSheet.create({
   },
   attribution: {
     position: 'absolute',
-    right: 10,
-    bottom: 58,
-    backgroundColor: 'rgba(17,24,39,0.82)',
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    left: 16,
+    bottom: 56,
+    backgroundColor: 'rgba(17,24,39,0.38)',
+    borderRadius: 10,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
   },
   attributionText: {
-    color: '#d1d5db',
-    fontSize: 10,
+    color: 'rgba(209,213,219,0.78)',
+    fontSize: 9,
+    fontWeight: '500',
+  },
+  compassButton: {
+    position: 'absolute',
+    right: 16,
+    bottom: 130,
+    width: 52,
+    height: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(17,24,39,0.9)',
+    borderRadius: 26,
+  },
+  compassButtonLocked: {
+    backgroundColor: 'rgba(120,53,15,0.9)',
+  },
+  followButton: {
+    position: 'absolute',
+    right: 16,
+    bottom: 70,
+    width: 52,
+    height: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(17,24,39,0.9)',
+    borderRadius: 26,
+  },
+  followButtonActive: {
+    backgroundColor: '#14532d',
   },
   providerSwitch: {
     position: 'absolute',

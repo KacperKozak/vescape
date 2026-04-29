@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react'
 import { Modal, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { DotsThreeVertical, type Icon } from 'phosphor-react-native'
 
 export interface BoardMenuItem {
   label: string
-  icon: string
+  icon: Icon
   onPress: () => void
   destructive?: boolean
   separator?: boolean
@@ -32,7 +33,11 @@ function DropdownMenu({
                 item.onPress()
               }}
             >
-              <Text style={dropStyles.icon}>{item.icon}</Text>
+              <item.icon
+                size={18}
+                color={item.destructive ? '#f87171' : '#9ca3af'}
+                weight="regular"
+              />
               <Text style={[dropStyles.label, item.destructive && dropStyles.destructive]}>
                 {item.label}
               </Text>
@@ -60,7 +65,7 @@ export function BoardMenu({ items }: { items: BoardMenuItem[] }) {
     <>
       <View ref={menuButtonRef} collapsable={false}>
         <TouchableOpacity style={styles.menuButton} onPress={openMenu}>
-          <Text style={styles.menuDots}>⋮</Text>
+          <DotsThreeVertical size={22} color="#9ca3af" weight="bold" />
         </TouchableOpacity>
       </View>
 
@@ -71,7 +76,6 @@ export function BoardMenu({ items }: { items: BoardMenuItem[] }) {
 
 const styles = StyleSheet.create({
   menuButton: { paddingHorizontal: 8, paddingVertical: 4 },
-  menuDots: { color: '#9ca3af', fontSize: 22, lineHeight: 22 },
 })
 
 const dropStyles = StyleSheet.create({
@@ -94,7 +98,6 @@ const dropStyles = StyleSheet.create({
     paddingHorizontal: 16,
     gap: 12,
   },
-  icon: { fontSize: 16, width: 20, textAlign: 'center' },
   label: { color: '#f9fafb', fontSize: 15 },
   destructive: { color: '#f87171' },
   separator: { height: 1, backgroundColor: '#374151', marginHorizontal: 0 },

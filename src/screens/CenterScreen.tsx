@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native'
 import { router } from 'expo-router'
+import { CaretDown, PencilSimple, Power, Star, Trash } from 'phosphor-react-native'
 
 import { useBoardStore } from '@/src/store/boardStore'
 import { useBleStore } from '@/src/store/bleStore'
@@ -90,7 +91,7 @@ export function CenterScreen() {
     if (activeBoard && !activeReplay) {
       items.push({
         label: 'Edit Board',
-        icon: '✏️',
+        icon: PencilSimple,
         onPress: () =>
           router.push({ pathname: '/add-board/details', params: { boardId: activeBoard.id } }),
       })
@@ -98,14 +99,14 @@ export function CenterScreen() {
     if (activeBoard && !activeBoard.isStarred && !activeReplay) {
       items.push({
         label: 'Make main',
-        icon: '★',
+        icon: Star,
         onPress: () => starBoard(activeBoard.id),
       })
     }
     if (bleStatus === 'connected' || bleStatus === 'connecting') {
       items.push({
         label: activeReplay ? 'Stop' : 'Disconnect',
-        icon: '⏻',
+        icon: Power,
         onPress: () => {
           setScanEnabled(false)
           void disconnect()
@@ -114,7 +115,7 @@ export function CenterScreen() {
       if (activeReplay) {
         items.push({
           label: 'Remove recording',
-          icon: '🗑',
+          icon: Trash,
           destructive: true,
           onPress: () =>
             Alert.alert(
@@ -149,7 +150,7 @@ export function CenterScreen() {
           <Text style={styles.selectorText} numberOfLines={1}>
             {replayBoardName ?? activeBoard?.name ?? 'No board selected'}
           </Text>
-          <Text style={styles.selectorChevron}>▾</Text>
+          <CaretDown size={14} color="#9ca3af" weight="bold" />
         </TouchableOpacity>
         <GpsStatusBadge />
         <StatusPill status={bleStatus} />
@@ -272,7 +273,6 @@ const styles = StyleSheet.create({
   },
   selector: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
   selectorText: { flex: 1, color: '#f9fafb', fontSize: 16, fontWeight: '600' },
-  selectorChevron: { color: '#6b7280', fontSize: 16 },
   telemetryShell: { flex: 1 },
   connectionBar: {
     flexDirection: 'row',

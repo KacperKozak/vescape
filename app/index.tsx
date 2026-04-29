@@ -1,7 +1,9 @@
-import { useEffect, useRef, useState } from 'react'
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { BackHandler, ToastAndroid, View, Text, TouchableOpacity, StyleSheet } from 'react-native'
+import { useFocusEffect } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import PagerView from 'react-native-pager-view'
+import { ClockCounterClockwise, Lightning, MapPin } from 'phosphor-react-native'
 
 import { useBoardStore } from '@/src/store/boardStore'
 import { useBleStore } from '@/src/store/bleStore'
@@ -10,11 +12,16 @@ import { HistoryScreen } from '@/src/screens/HistoryScreen'
 import { CenterScreen } from '@/src/screens/CenterScreen'
 import { MapScreen } from '@/src/screens/MapScreen'
 
-const TABS = ['History', 'Board', 'Map'] as const
+const TABS = [
+  { label: 'History', Icon: ClockCounterClockwise },
+  { label: 'Board', Icon: Lightning },
+  { label: 'Map', Icon: MapPin },
+] as const
 
 export default function MainScreen() {
   const [page, setPage] = useState(1)
   const pagerRef = useRef<PagerView>(null)
+  const backPressedOnce = useRef(false)
   const load = useBoardStore((s) => s.load)
   const startGpsTracking = useBleStore((s) => s.startGpsTracking)
   const { status: permStatus, request } = usePermissions()
@@ -31,6 +38,28 @@ export default function MainScreen() {
     if (permStatus === 'granted') startGpsTracking()
   }, [permStatus, startGpsTracking])
 
+  useFocusEffect(
+    useCallback(() => {
+      const handler = BackHandler.addEventListener('hardwareBackPress', () => {
+        if (page !== 1) {
+          pagerRef.current?.setPage(1)
+          return true
+        }
+        if (backPressedOnce.current) {
+          BackHandler.exitApp()
+          return true
+        }
+        backPressedOnce.current = true
+        ToastAndroid.show('Press back again to exit', ToastAndroid.SHORT)
+        setTimeout(() => {
+          backPressedOnce.current = false
+        }, 2000)
+        return true
+      })
+      return () => handler.remove()
+    }, [page]),
+  )
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <PagerView
@@ -45,16 +74,21 @@ export default function MainScreen() {
       </PagerView>
 
       <SafeAreaView edges={['bottom']} style={styles.tabBar}>
-        {TABS.map((label, i) => (
-          <TouchableOpacity
-            key={label}
-            style={styles.tab}
-            onPress={() => pagerRef.current?.setPage(i)}
-          >
-            <Text style={[styles.tabText, page === i && styles.tabTextActive]}>{label}</Text>
-            {page === i && <View style={styles.tabIndicator} />}
-          </TouchableOpacity>
-        ))}
+        {TABS.map(({ label, Icon }, i) => {
+          const active = page === i
+          const color = active ? '#f9fafb' : '#6b7280'
+          return (
+            <TouchableOpacity
+              key={label}
+              style={styles.tab}
+              onPress={() => pagerRef.current?.setPage(i)}
+            >
+              <Icon size={22} color={color} weight={active ? 'fill' : 'regular'} />
+              <Text style={[styles.tabText, active && styles.tabTextActive]}>{label}</Text>
+              {active && <View style={styles.tabIndicator} />}
+            </TouchableOpacity>
+          )
+        })}
       </SafeAreaView>
     </SafeAreaView>
   )
