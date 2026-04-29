@@ -13,9 +13,12 @@ import {
 
 interface HistoryState {
   blocks: TelemetryHistoryBlock[]
+  liveBlocks: TelemetryHistoryBlock[]
   selectedBlock: TelemetryHistoryBlock | null
   samples: TelemetrySample[]
   gpsSamples: HistoryGpsSample[]
+  liveSamples: TelemetrySample[]
+  liveGpsSamples: HistoryGpsSample[]
   markers: HistoryMarker[]
   summary: TelemetrySummary | null
   loading: boolean
@@ -27,6 +30,7 @@ interface HistoryState {
 interface HistoryActions {
   loadInitial: () => Promise<void>
   loadMore: () => Promise<void>
+  refreshLive: () => Promise<void>
   selectBlock: (block: TelemetryHistoryBlock | null) => Promise<void>
   refreshSummary: () => Promise<void>
   clearHistory: () => Promise<void>
@@ -36,9 +40,12 @@ const PAGE_SIZE = 100
 
 export const useHistoryStore = create<HistoryState & HistoryActions>((set, get) => ({
   blocks: [],
+  liveBlocks: [],
   selectedBlock: null,
   samples: [],
   gpsSamples: [],
+  liveSamples: [],
+  liveGpsSamples: [],
   markers: [],
   summary: null,
   loading: false,
@@ -56,6 +63,7 @@ export const useHistoryStore = create<HistoryState & HistoryActions>((set, get) 
       set({
         summary,
         blocks,
+        liveBlocks: blocks.slice(0, 10),
         selectedBlock: null,
         samples: [],
         gpsSamples: [],
@@ -66,6 +74,34 @@ export const useHistoryStore = create<HistoryState & HistoryActions>((set, get) 
       set({ error: err instanceof Error ? err.message : String(err) })
     } finally {
       set({ loading: false })
+    }
+  },
+
+  async refreshLive() {
+    try {
+      const now = Date.now()
+      const fromMs = now - 10 * 60_000
+      const [summary, liveBlocks, range] = await Promise.all([
+        getTelemetrySummary(),
+        getTelemetryHistory({ fromMs, toMs: now, limit: 10 }),
+        getHistoryRange({ fromMs, toMs: now, limit: 120 }),
+      ])
+      set((state) => {
+        const known = new Map(state.blocks.map((b) => [b.id, b]))
+        for (const block of liveBlocks) {
+          known.set(block.id, block)
+        }
+        const blocks = Array.from(known.values()).sort((a, b) => b.bucketStartMs - a.bucketStartMs)
+        return {
+          summary,
+          liveBlocks,
+          liveSamples: range.boardSamples,
+          liveGpsSamples: range.gpsSamples,
+          blocks,
+        }
+      })
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : String(err) })
     }
   },
 
@@ -131,9 +167,12 @@ export const useHistoryStore = create<HistoryState & HistoryActions>((set, get) 
       await clearTelemetryHistory()
       set({
         blocks: [],
+        liveBlocks: [],
         selectedBlock: null,
         samples: [],
         gpsSamples: [],
+        liveSamples: [],
+        liveGpsSamples: [],
         markers: [],
         summary: await getTelemetrySummary(),
         hasMore: false,

@@ -22,9 +22,12 @@ import {
 export function HistoryScreen() {
   const {
     blocks,
+    liveBlocks,
     selectedBlock,
     samples,
     gpsSamples,
+    liveSamples,
+    liveGpsSamples,
     summary,
     loading,
     loadingSamples,
@@ -32,14 +35,18 @@ export function HistoryScreen() {
     hasMore,
     loadInitial,
     loadMore,
+    refreshLive,
     selectBlock,
     clearHistory,
   } = useHistoryStore(
     useShallow((s) => ({
       blocks: s.blocks,
+      liveBlocks: s.liveBlocks,
       selectedBlock: s.selectedBlock,
       samples: s.samples,
       gpsSamples: s.gpsSamples,
+      liveSamples: s.liveSamples,
+      liveGpsSamples: s.liveGpsSamples,
       summary: s.summary,
       loading: s.loading,
       loadingSamples: s.loadingSamples,
@@ -47,6 +54,7 @@ export function HistoryScreen() {
       hasMore: s.hasMore,
       loadInitial: s.loadInitial,
       loadMore: s.loadMore,
+      refreshLive: s.refreshLive,
       selectBlock: s.selectBlock,
       clearHistory: s.clearHistory,
     })),
@@ -55,6 +63,14 @@ export function HistoryScreen() {
   useEffect(() => {
     void loadInitial()
   }, [loadInitial])
+
+  useEffect(() => {
+    void refreshLive()
+    const interval = setInterval(() => {
+      void refreshLive()
+    }, 500)
+    return () => clearInterval(interval)
+  }, [refreshLive])
 
   const confirmClear = useCallback(() => {
     Alert.alert('Clear History', 'Remove all stored telemetry history from this device?', [
@@ -93,6 +109,13 @@ export function HistoryScreen() {
           </Text>
         </View>
       )}
+
+      <LiveCollectionCard
+        summary={summary}
+        blocks={liveBlocks}
+        boardSamples={liveSamples}
+        gpsSamples={liveGpsSamples}
+      />
 
       <FlatList
         data={blocks}
@@ -139,6 +162,77 @@ export function HistoryScreen() {
           />
         )}
       />
+    </View>
+  )
+}
+
+function LiveCollectionCard({
+  summary,
+  blocks,
+  boardSamples,
+  gpsSamples,
+}: {
+  summary: { sampleCount: number; gpsPointCount: number; lastAtMs: number | null } | null
+  blocks: TelemetryHistoryBlock[]
+  boardSamples: TelemetrySample[]
+  gpsSamples: HistoryGpsSample[]
+}) {
+  const lastAt = summary?.lastAtMs ?? null
+  const ageMs = lastAt ? Date.now() - lastAt : null
+  const active = ageMs != null && ageMs < 15_000
+  const boardCount = boardSamples.length
+  const gpsCount = gpsSamples.length
+  const latestBlock = blocks[0]
+  const latestSpeed = latestBlock
+    ? latestBlock.maxAbsSpeedKmh || latestBlock.maxGpsSpeedKmh || 0
+    : 0
+  const maxBucketPoints = Math.max(1, ...blocks.map((b) => b.sampleCount + b.gpsPointCount))
+
+  return (
+    <View style={styles.liveCard}>
+      <View style={styles.liveTop}>
+        <View style={styles.liveTitleRow}>
+          <View style={[styles.liveDot, active && styles.liveDotActive]} />
+          <Text style={styles.liveTitle}>{active ? 'Collecting now' : 'Latest window'}</Text>
+        </View>
+        <Text style={styles.liveAge}>
+          {ageMs == null ? '-' : `${Math.max(0, Math.round(ageMs / 1000))}s ago`}
+        </Text>
+      </View>
+      <View style={styles.liveBars}>
+        {blocks.length ? (
+          blocks
+            .slice()
+            .reverse()
+            .map((block) => {
+              const points = block.sampleCount + block.gpsPointCount
+              return (
+                <View key={block.id} style={styles.liveBarWrap}>
+                  <View
+                    style={[
+                      styles.liveBar,
+                      {
+                        height: Math.max(5, Math.round((points / maxBucketPoints) * 34)),
+                      },
+                    ]}
+                  />
+                </View>
+              )
+            })
+        ) : (
+          <View style={styles.liveEmptyBar} />
+        )}
+      </View>
+      <Text style={styles.liveBarsLabel}>Last 10 minutes, saved points per minute</Text>
+      <View style={styles.metricsRow}>
+        <Metric label="10 min board" value={String(boardCount)} />
+        <Metric label="10 min GPS" value={String(gpsCount)} />
+        <Metric label="Top speed" value={`${latestSpeed.toFixed(1)} km/h`} />
+        <Metric
+          label="Total"
+          value={String((summary?.sampleCount ?? 0) + (summary?.gpsPointCount ?? 0))}
+        />
+      </View>
     </View>
   )
 }
@@ -332,6 +426,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   errorText: { color: '#fecaca', fontSize: 12, flex: 1 },
+  liveCard: {
+    marginHorizontal: 12,
+    marginBottom: 8,
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: '#172033',
+    borderWidth: 1,
+    borderColor: '#30415d',
+    gap: 10,
+  },
+  liveTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  liveTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#4b5563' },
+  liveDotActive: { backgroundColor: '#22c55e' },
+  liveTitle: { color: '#f9fafb', fontSize: 14, fontWeight: '800' },
+  liveAge: { color: '#9ca3af', fontSize: 12, fontVariant: ['tabular-nums'] },
+  liveBars: {
+    height: 38,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 4,
+    paddingHorizontal: 2,
+  },
+  liveBarWrap: { flex: 1, justifyContent: 'flex-end' },
+  liveBar: { borderRadius: 3, backgroundColor: '#3b82f6' },
+  liveEmptyBar: { flex: 1, height: 5, borderRadius: 3, backgroundColor: '#374151' },
+  liveBarsLabel: { color: '#6b7280', fontSize: 10, fontWeight: '700', marginTop: -6 },
   list: { padding: 12, paddingBottom: 28 },
   emptyList: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   emptyState: { alignItems: 'center', gap: 8 },
