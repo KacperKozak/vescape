@@ -5,6 +5,7 @@ import { ArrowUp, Crosshair, CrosshairSimple, X } from 'phosphor-react-native'
 import { useBleStore } from '@/store/bleStore'
 import { useMapStore } from '@/store/mapStore'
 import { GOOGLE_MAPS_API_KEY, MAPY_TILE_URL_TEMPLATE } from '@/config/mapy'
+import { theme } from '@/constants/theme'
 
 export function MapScreen() {
   const gpsFix = useBleStore((s) => s.gpsFix)
@@ -35,7 +36,7 @@ export function MapScreen() {
     }
   }, [gpsFix])
 
-  const markerColor = !gpsFix ? '#9ca3af' : gpsFix.precise ? '#22c55e' : '#ef4444'
+  const markerColor = !gpsFix ? '#9ca3af' : gpsFix.precise ? theme.gps.color : theme.error.color
 
   useEffect(() => {
     if (!gpsFix || !followGps) return
@@ -99,14 +100,18 @@ export function MapScreen() {
               <Circle
                 center={{ latitude: gpsFix.latitude, longitude: gpsFix.longitude }}
                 radius={gpsFix.accuracyM}
-                strokeColor={gpsFix.precise ? 'rgba(59,130,246,0.9)' : 'rgba(239,68,68,0.9)'}
-                fillColor={gpsFix.precise ? 'rgba(59,130,246,0.18)' : 'rgba(239,68,68,0.18)'}
+                strokeColor={gpsFix.precise ? 'rgba(34,197,94,0.9)' : 'rgba(239,68,68,0.9)'}
+                fillColor={gpsFix.precise ? 'rgba(34,197,94,0.18)' : 'rgba(239,68,68,0.18)'}
               />
             )}
           </>
         )}
         {targetLocation && (
-          <Marker coordinate={targetLocation} pinColor="#a855f7" onPress={clearTargetLocation} />
+          <Marker
+            coordinate={targetLocation}
+            pinColor={theme.target.color}
+            onPress={clearTargetLocation}
+          />
         )}
       </MapView>
 
@@ -139,7 +144,11 @@ export function MapScreen() {
         delayLongPress={400}
       >
         <View style={{ transform: [{ rotate: `${-heading}deg` }] }}>
-          <ArrowUp size={22} color={rotationLocked ? '#fbbf24' : '#f9fafb'} weight="bold" />
+          <ArrowUp
+            size={22}
+            color={rotationLocked ? theme.warning.color : '#f9fafb'}
+            weight="bold"
+          />
         </View>
       </Pressable>
 
@@ -148,7 +157,7 @@ export function MapScreen() {
         onPress={recenter}
       >
         {followGps ? (
-          <Crosshair size={24} color="#4ade80" weight="fill" />
+          <Crosshair size={24} color={theme.gps.text} weight="fill" />
         ) : (
           <CrosshairSimple size={24} color="#f9fafb" weight="bold" />
         )}
@@ -249,7 +258,7 @@ const styles = StyleSheet.create({
     height: 52,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(88,28,135,0.9)',
+    backgroundColor: 'rgba(30,19,56,0.9)',
     borderRadius: 26,
   },
   compassButton: {
@@ -264,7 +273,7 @@ const styles = StyleSheet.create({
     borderRadius: 26,
   },
   compassButtonLocked: {
-    backgroundColor: 'rgba(120,53,15,0.9)',
+    backgroundColor: 'rgba(67,20,7,0.9)',
   },
   followButton: {
     position: 'absolute',
@@ -278,7 +287,7 @@ const styles = StyleSheet.create({
     borderRadius: 26,
   },
   followButtonActive: {
-    backgroundColor: '#14532d',
+    backgroundColor: theme.gps.bg,
   },
   providerSwitch: {
     position: 'absolute',

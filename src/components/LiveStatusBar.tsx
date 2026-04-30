@@ -5,6 +5,7 @@ import { useShallow } from 'zustand/react/shallow'
 
 import { useBleStore } from '@/store/bleStore'
 import { minuteBucketStart } from '@/store/liveMonitor'
+import { theme } from '@/constants/theme'
 
 type BucketSlot = { bucketStartMs: number; points: number; boardCount: number; gpsCount: number }
 type GpsFix = { timestamp: number; precise: boolean; accuracyM?: number | null }
@@ -37,9 +38,9 @@ function bleLabel(status: string, avgLatency: number | null, isStale: boolean): 
 }
 
 function bleColor(status: string, isStale: boolean): string {
-  if (status === 'connected') return isStale ? '#ef4444' : '#4ade80'
-  if (status === 'scanning' || status === 'connecting') return '#60a5fa'
-  if (status === 'error') return '#ef4444'
+  if (status === 'connected') return isStale ? theme.error.color : theme.gps.color
+  if (status === 'scanning' || status === 'connecting') return theme.wheel.text
+  if (status === 'error') return theme.error.color
   return '#475569'
 }
 
@@ -52,9 +53,9 @@ function gpsLabel(gpsFix: GpsFix | null, ageSec: number | null): string {
 
 function gpsColor(gpsFix: GpsFix | null, ageSec: number | null): string {
   if (!gpsFix) return '#475569'
-  if (!gpsFix.precise) return '#ef4444'
-  if (ageSec != null && ageSec > 5) return '#facc15'
-  return '#4ade80'
+  if (!gpsFix.precise) return theme.error.color
+  if (ageSec != null && ageSec > 5) return theme.warning.color
+  return theme.gps.color
 }
 
 export function LiveStatusBar() {
@@ -116,8 +117,8 @@ export function LiveStatusBar() {
               getValue={(s) => s.boardCount}
               max={maxBoard}
               currentBucketStart={currentBucketStart}
-              activeColor="#3b82f6"
-              currentColor="#60a5fa"
+              activeColor={theme.wheel.color}
+              currentColor={theme.wheel.text}
               valueText={boardText}
               valueColor={boardColor}
             />
@@ -128,8 +129,8 @@ export function LiveStatusBar() {
               getValue={(s) => s.gpsCount}
               max={maxGps}
               currentBucketStart={currentBucketStart}
-              activeColor="#10b981"
-              currentColor="#34d399"
+              activeColor={theme.gps.color}
+              currentColor={theme.gps.text}
               valueText={gpsText}
               valueColor={gpsClr}
             />
@@ -224,8 +225,8 @@ function ExpandedView({
           getValue={(s) => s.boardCount}
           max={maxBoard}
           currentBucketStart={currentBucketStart}
-          activeColor="#3b82f6"
-          currentColor="#60a5fa"
+          activeColor={theme.wheel.color}
+          currentColor={theme.wheel.text}
           total={boardTotal}
           statusText={boardText}
           statusColor={boardColor}
@@ -238,8 +239,8 @@ function ExpandedView({
           getValue={(s) => s.gpsCount}
           max={maxGps}
           currentBucketStart={currentBucketStart}
-          activeColor="#10b981"
-          currentColor="#34d399"
+          activeColor={theme.gps.color}
+          currentColor={theme.gps.text}
           total={gpsTotal}
           statusText={gpsText}
           statusColor={gpsColor}

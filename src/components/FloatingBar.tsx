@@ -5,6 +5,7 @@ import { useShallow } from 'zustand/react/shallow'
 
 import type { Board } from '@/db/boards'
 import { useBleStore } from '@/store/bleStore'
+import { theme } from '@/constants/theme'
 
 interface FloatingBarProps {
   bleStatus: string
@@ -14,9 +15,24 @@ interface FloatingBarProps {
 }
 
 const ALERT_CONFIG = {
-  scanning: { bg: '#0c1a2e', border: '#1e40af', text: '#60a5fa', btnBg: '#1d4ed8' },
-  warning: { bg: '#451a03', border: '#92400e', text: '#fbbf24', btnBg: '#b45309' },
-  error: { bg: '#1e293b', border: '#334155', text: '#94a3b8', btnBg: '#334155' },
+  scanning: {
+    bg: theme.wheel.bg,
+    border: theme.wheel.border,
+    text: theme.wheel.text,
+    btnBg: theme.wheel.color,
+  },
+  warning: {
+    bg: theme.warning.bg,
+    border: theme.warning.border,
+    text: theme.warning.text,
+    btnBg: theme.warning.color,
+  },
+  error: {
+    bg: theme.error.bg,
+    border: theme.error.border,
+    text: theme.error.text,
+    btnBg: theme.error.color,
+  },
 } as const
 
 function getAlert(
@@ -162,7 +178,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     backgroundColor: '#dc2626',
     borderWidth: 1,
-    borderColor: '#ef4444',
+    borderColor: theme.error.color,
     gap: 8,
     shadowColor: '#dc2626',
     shadowOffset: { width: 0, height: 4 },
@@ -171,8 +187,8 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   fabActive: {
-    backgroundColor: '#22c55e',
-    borderColor: '#16a34a',
+    backgroundColor: theme.gps.color,
+    borderColor: theme.gps.border,
   },
   fabLabel: {
     color: '#f1f5f9',

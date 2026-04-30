@@ -3,12 +3,13 @@ import { View, Text, ActivityIndicator, Animated, StyleSheet, type ViewStyle } f
 import { Lightning, NavigationArrow, WarningCircle } from 'phosphor-react-native'
 import { useShallow } from 'zustand/react/shallow'
 import { useBleStore } from '@/store/bleStore'
+import { theme } from '@/constants/theme'
 
 const COLORS: Record<string, { bg: string; text: string }> = {
-  connected: { bg: '#14532d', text: '#4ade80' },
-  connecting: { bg: '#1e3a5f', text: '#60a5fa' },
-  scanning: { bg: '#422006', text: '#facc15' },
-  error: { bg: '#7f1d1d', text: '#f87171' },
+  connected: { bg: theme.gps.bg, text: theme.gps.text },
+  connecting: { bg: theme.wheel.bg, text: theme.wheel.text },
+  scanning: { bg: theme.warning.bg, text: theme.warning.text },
+  error: { bg: theme.error.bg, text: theme.error.text },
   idle: { bg: '#1f2937', text: '#9ca3af' },
 }
 
@@ -40,12 +41,12 @@ export function StatusPill({ status, style }: { status: string; style?: ViewStyl
   const pillBg = status === 'connected' && isStale ? COLORS.error.bg : c.bg
   const pillText = status === 'connected' && isStale ? COLORS.error.text : c.text
   const dotColor = isStale
-    ? '#ef4444'
+    ? theme.error.color
     : avgLatency == null || avgLatency < 150
-      ? '#4ade80'
+      ? theme.gps.color
       : avgLatency < 400
-        ? '#fbbf24'
-        : '#ef4444'
+        ? theme.warning.color
+        : theme.error.color
   const connectedNeedsText = status === 'connected' && (isStale || (avgLatency ?? 0) >= 400)
 
   if (status === 'connected' && !connectedNeedsText) {
@@ -97,8 +98,20 @@ export function GpsStatusBadge({ style }: { style?: ViewStyle }) {
   const ageSec = gpsFix ? Math.max(0, (now - gpsFix.timestamp) / 1000) : null
   const isStale = ageSec != null && ageSec > 5
   const isRejected = !!gpsFix && !gpsFix.precise
-  const bg = !gpsFix ? '#1f2937' : isRejected ? '#7f1d1d' : isStale ? '#422006' : '#14532d'
-  const color = !gpsFix ? '#9ca3af' : isRejected ? '#f87171' : isStale ? '#facc15' : '#4ade80'
+  const bg = !gpsFix
+    ? '#1f2937'
+    : isRejected
+      ? theme.error.bg
+      : isStale
+        ? theme.warning.bg
+        : theme.gps.bg
+  const color = !gpsFix
+    ? '#9ca3af'
+    : isRejected
+      ? theme.error.text
+      : isStale
+        ? theme.warning.text
+        : theme.gps.text
   const label =
     gpsFix?.accuracyM != null
       ? `±${gpsFix.accuracyM.toFixed(0)}m`

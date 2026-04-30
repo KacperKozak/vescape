@@ -13,6 +13,7 @@ import {
 
 import type { Board } from '@/db/boards'
 import type { RecordingInfo } from '@/store/bleStore'
+import { theme } from '@/constants/theme'
 
 interface BoardSelectorSheetProps {
   visible: boolean
@@ -60,7 +61,7 @@ export function BoardSelectorSheet({
                 <View style={[styles.boardIcon, isActive && styles.boardIconActive]}>
                   <Lightning
                     size={16}
-                    color={isActive ? '#3b82f6' : '#6b7280'}
+                    color={isActive ? theme.wheel.color : '#6b7280'}
                     weight={isActive ? 'fill' : 'regular'}
                   />
                 </View>
@@ -75,14 +76,14 @@ export function BoardSelectorSheet({
                     </View>
                   )}
                 </View>
-                {isActive && <CheckCircle size={20} color="#3b82f6" weight="fill" />}
+                {isActive && <CheckCircle size={20} color={theme.wheel.color} weight="fill" />}
               </Pressable>
             )
           })}
 
           <Pressable style={styles.addRow} onPress={onAddBoard}>
             <View style={styles.addIcon}>
-              <Plus size={16} color="#3b82f6" weight="bold" />
+              <Plus size={16} color={theme.wheel.color} weight="bold" />
             </View>
             <Text style={styles.addText}>Add new board</Text>
           </Pressable>
@@ -113,7 +114,7 @@ export function BoardSelectorSheet({
           <View style={styles.divider} />
           <Pressable style={styles.debugRow} onPress={onToggleRecordDebug}>
             {recordDebugSession ? (
-              <Record size={20} color="#3b82f6" weight="fill" />
+              <Record size={20} color={theme.wheel.color} weight="fill" />
             ) : (
               <RadioButton size={20} color="#4b5563" weight="regular" />
             )}
@@ -187,7 +188,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   boardIconActive: {
-    backgroundColor: '#172554',
+    backgroundColor: theme.wheel.bg,
   },
   boardInfo: {
     flex: 1,
@@ -231,7 +232,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   addText: {
-    color: '#3b82f6',
+    color: theme.wheel.color,
     fontSize: 15,
     fontWeight: '700',
   },
