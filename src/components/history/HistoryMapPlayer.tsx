@@ -1,8 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native'
-import type { LayoutChangeEvent } from 'react-native'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import MapView, { Marker, Polyline, type LatLng } from 'react-native-maps'
-import Svg, { Circle as SvgCircle, Polyline as SvgPolyline } from 'react-native-svg'
 import { ListBullets, Pause, Play } from 'phosphor-react-native'
 
 import {
@@ -11,6 +9,8 @@ import {
   findNearestSampleIndexByTime,
   stepHeadTime,
 } from '@/history/playback'
+import { TelemetryLineChart } from '@/components/charts/TelemetryLineChart'
+import { computeAutoRange, type TelemetryChartPoint } from '@/components/charts/chartMath'
 import type {
   HistoryGpsSample,
   HistoryMarker,
@@ -22,20 +22,12 @@ import { HistorySessionSheet } from './HistorySessionSheet'
 const STEP_MS = 5_000
 const SESSION_SAMPLE_LIMIT = 10_000
 const CHART_MAX_POINTS = 220
-const GRAPH_HEIGHT = 54
 
 type MarkerPoint = {
   id: string
   latitude: number
   longitude: number
   type: 'error' | 'disconnected' | 'app_stop'
-}
-
-type HistoryChartKind = 'speed' | 'duty'
-
-interface HistoryChartPoint {
-  date: Date
-  value: number
 }
 
 interface HistoryMapPlayerProps {
@@ -88,7 +80,7 @@ export function HistoryMapPlayer({
     [boardByTime],
   )
 
-  const speedPoints = useMemo<HistoryChartPoint[]>(
+  const speedPoints = useMemo<TelemetryChartPoint[]>(
     () =>
       chartSamples.map((sample) => ({
         date: new Date(sample.capturedAtMs),
@@ -97,7 +89,7 @@ export function HistoryMapPlayer({
     [chartSamples],
   )
 
-  const dutyPoints = useMemo<HistoryChartPoint[]>(
+  const dutyPoints = useMemo<TelemetryChartPoint[]>(
     () =>
       chartSamples.map((sample) => ({
         date: new Date(sample.capturedAtMs),
@@ -195,7 +187,17 @@ export function HistoryMapPlayer({
     return sessions.findIndex((s) => s.id === selectedSession.id)
   }, [selectedSession, sessions])
 
-  const speedRange = useMemo(() => computeSpeedRange(speedPoints), [speedPoints])
+  const speedRange = useMemo(
+    () =>
+      computeAutoRange(speedPoints, {
+        includeZero: true,
+        minSpan: 10,
+        paddingRatio: 0.1,
+        fallbackMin: -5,
+        fallbackMax: 5,
+      }),
+    [speedPoints],
+  )
   const currentChartSample = useMemo(() => {
     if (headTimeMs == null || chartSamples.length === 0) return null
     const idx = findNearestSampleIndexByTime(chartSamples, headTimeMs)
@@ -353,8 +355,7 @@ export function HistoryMapPlayer({
 
         {canRenderCharts ? (
           <View style={styles.chartStack}>
-            <HistoryLineChart
-              kind="speed"
+            <TelemetryLineChart
               label="Speed"
               value={currentBoard ? `${currentBoard.speedKmh.toFixed(1)} km/h` : '-'}
               points={speedPoints}
@@ -370,9 +371,10 @@ export function HistoryMapPlayer({
               }
               onPointSelected={selectChartPoint}
               onGestureStart={stopPlayback}
+              height={54}
+              containerStyle={styles.speedChart}
             />
-            <HistoryLineChart
-              kind="duty"
+            <TelemetryLineChart
               label="Duty"
               value={currentBoard ? `${(currentBoard.dutyCycle * 100).toFixed(0)}%` : '-'}
               points={dutyPoints}
@@ -388,6 +390,8 @@ export function HistoryMapPlayer({
               }
               onPointSelected={selectChartPoint}
               onGestureStart={stopPlayback}
+              height={54}
+              containerStyle={styles.dutyChart}
             />
           </View>
         ) : (
@@ -460,171 +464,6 @@ export function HistoryMapPlayer({
           void onSelectSession(session)
         }}
       />
-    </View>
-  )
-}
-
-function computeSpeedRange(points: HistoryChartPoint[]): { y: { min: number; max: number } } {
-  if (!points.length) return { y: { min: -5, max: 5 } }
-  let min = Number.POSITIVE_INFINITY
-  let max = Number.NEGATIVE_INFINITY
-  for (const point of points) {
-    min = Math.min(min, point.value)
-    max = Math.max(max, point.value)
-  }
-  if (min > 0) min = 0
-  if (max < 0) max = 0
-  const span = Math.max(10, max - min)
-  const pad = span * 0.1
-  return { y: { min: min - pad, max: max + pad } }
-}
-
-function getChartPosition(
-  points: HistoryChartPoint[],
-  point: HistoryChartPoint,
-  range: { y: { min: number; max: number } },
-  width: number,
-  height: number,
-): { x: number; y: number } | null {
-  if (points.length < 2) return null
-  const xMin = points[0].date.getTime()
-  const xMax = points[points.length - 1].date.getTime()
-  const xSpan = xMax - xMin
-  const ySpan = range.y.max - range.y.min
-  if (xSpan <= 0 || ySpan <= 0) return null
-
-  const x = width * ((point.date.getTime() - xMin) / xSpan)
-  const y = height - height * ((point.value - range.y.min) / ySpan)
-  return {
-    x: Math.max(0, Math.min(width, x)),
-    y: Math.max(0, Math.min(height, y)),
-  }
-}
-
-function findNearestChartPointAtX(
-  points: HistoryChartPoint[],
-  x: number,
-  width: number,
-): HistoryChartPoint | null {
-  if (points.length === 0 || width <= 0) return null
-  const xMin = points[0].date.getTime()
-  const xMax = points[points.length - 1].date.getTime()
-  const targetMs = xMin + (Math.max(0, Math.min(width, x)) / width) * (xMax - xMin)
-  let best = points[0]
-  let bestDistance = Math.abs(best.date.getTime() - targetMs)
-  for (const point of points) {
-    const distance = Math.abs(point.date.getTime() - targetMs)
-    if (distance < bestDistance) {
-      best = point
-      bestDistance = distance
-    }
-  }
-  return best
-}
-
-function HistoryLineChart({
-  kind,
-  label,
-  value,
-  points,
-  color,
-  range,
-  currentPoint,
-  onPointSelected,
-  onGestureStart,
-}: {
-  kind: HistoryChartKind
-  label: string
-  value: string
-  points: HistoryChartPoint[]
-  color: string
-  range: { y: { min: number; max: number } }
-  currentPoint: HistoryChartPoint | null
-  onPointSelected: (point: HistoryChartPoint) => void
-  onGestureStart: () => void
-}) {
-  const [chartWidth, setChartWidth] = useState(0)
-  const [chartPageX, setChartPageX] = useState(0)
-  const graphRef = useRef<View>(null)
-  const onGraphLayout = useCallback((event: LayoutChangeEvent) => {
-    setChartWidth(Math.round(event.nativeEvent.layout.width))
-    graphRef.current?.measure((_x, _y, _width, _height, pageX) => {
-      setChartPageX(pageX)
-    })
-  }, [])
-
-  const markerPosition = useMemo(() => {
-    if (!currentPoint || chartWidth < 1) return null
-    return getChartPosition(points, currentPoint, range, chartWidth, GRAPH_HEIGHT)
-  }, [chartWidth, currentPoint, points, range])
-  const polylinePoints = useMemo(
-    () =>
-      chartWidth > 0
-        ? points
-            .map((point) => getChartPosition(points, point, range, chartWidth, GRAPH_HEIGHT))
-            .filter((point): point is { x: number; y: number } => point != null)
-            .map((point) => `${point.x},${point.y}`)
-            .join(' ')
-        : '',
-    [chartWidth, points, range],
-  )
-  const selectAtPageX = useCallback(
-    (x: number) => {
-      const point = findNearestChartPointAtX(points, x - chartPageX, chartWidth)
-      if (!point) return
-      onPointSelected(point)
-    },
-    [chartPageX, chartWidth, onPointSelected, points],
-  )
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => chartWidth > 0,
-        onMoveShouldSetPanResponder: () => chartWidth > 0,
-        onPanResponderGrant: (_event, gesture) => {
-          onGestureStart()
-          selectAtPageX(gesture.x0)
-        },
-        onPanResponderMove: (_event, gesture) => {
-          selectAtPageX(gesture.moveX)
-        },
-      }),
-    [chartWidth, onGestureStart, selectAtPageX],
-  )
-
-  return (
-    <View style={[styles.chartCard, kind === 'speed' ? styles.speedChart : styles.dutyChart]}>
-      <View style={styles.chartHeader}>
-        <Text style={styles.chartLabel}>{label}</Text>
-        <Text style={styles.chartValue}>{value}</Text>
-      </View>
-      <View
-        ref={graphRef}
-        style={styles.graphWrap}
-        onLayout={onGraphLayout}
-        {...panResponder.panHandlers}
-      >
-        <Svg width="100%" height={GRAPH_HEIGHT} style={styles.graph}>
-          <SvgPolyline
-            points={polylinePoints}
-            fill="none"
-            stroke={color}
-            strokeWidth={2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          {markerPosition && (
-            <SvgCircle
-              cx={markerPosition.x}
-              cy={markerPosition.y}
-              r={4}
-              fill="#0f172a"
-              stroke={color}
-              strokeWidth={2}
-            />
-          )}
-        </Svg>
-      </View>
     </View>
   )
 }
@@ -737,44 +576,11 @@ const styles = StyleSheet.create({
   chartStack: {
     gap: 8,
   },
-  chartCard: {
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#111827',
-    overflow: 'hidden',
-    paddingHorizontal: 8,
-    paddingTop: 6,
-    paddingBottom: 4,
-  },
   speedChart: {
     minHeight: 86,
   },
   dutyChart: {
     minHeight: 76,
-  },
-  chartHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  chartLabel: {
-    color: '#94a3b8',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  chartValue: {
-    color: '#e2e8f0',
-    fontSize: 11,
-    fontWeight: '700',
-    fontVariant: ['tabular-nums'],
-  },
-  graph: {
-    height: GRAPH_HEIGHT,
-  },
-  graphWrap: {
-    height: GRAPH_HEIGHT,
-    marginTop: 4,
   },
   chartEmpty: {
     color: '#94a3b8',
