@@ -1,9 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
+import { LineGraph } from 'react-native-graph'
 import MapView, { Marker, Polyline, type LatLng } from 'react-native-maps'
 import { ListBullets, Pause, Play } from 'phosphor-react-native'
 
-import { clampHeadTime, findNearestSampleIndexByTime, stepHeadTime } from '@/history/playback'
+import {
+  clampHeadTime,
+  downsampleTimeSeries,
+  findNearestSampleIndexByTime,
+  stepHeadTime,
+} from '@/history/playback'
 import type {
   HistoryGpsSample,
   HistoryMarker,
@@ -14,11 +20,20 @@ import { HistorySessionSheet } from './HistorySessionSheet'
 
 const STEP_MS = 5_000
 const SESSION_SAMPLE_LIMIT = 10_000
+const CHART_MAX_POINTS = 220
+
 type MarkerPoint = {
   id: string
   latitude: number
   longitude: number
   type: 'error' | 'disconnected' | 'app_stop'
+}
+
+type HistoryChartKind = 'speed' | 'duty'
+
+interface HistoryChartPoint {
+  date: Date
+  value: number
 }
 
 interface HistoryMapPlayerProps {
@@ -66,6 +81,29 @@ export function HistoryMapPlayer({
     [sessionSamples],
   )
 
+  const chartSamples = useMemo(
+    () => downsampleTimeSeries(boardByTime, CHART_MAX_POINTS, (sample) => sample.capturedAtMs),
+    [boardByTime],
+  )
+
+  const speedPoints = useMemo<HistoryChartPoint[]>(
+    () =>
+      chartSamples.map((sample) => ({
+        date: new Date(sample.capturedAtMs),
+        value: sample.speedKmh,
+      })),
+    [chartSamples],
+  )
+
+  const dutyPoints = useMemo<HistoryChartPoint[]>(
+    () =>
+      chartSamples.map((sample) => ({
+        date: new Date(sample.capturedAtMs),
+        value: sample.dutyCycle * 100,
+      })),
+    [chartSamples],
+  )
+
   useEffect(() => {
     if (!selectedSession && sessions.length > 0) {
       void onSelectSession(sessions[0])
@@ -87,7 +125,7 @@ export function HistoryMapPlayer({
   useEffect(() => {
     if (!selectedSession || route.length < 2) return
     mapRef.current?.fitToCoordinates(route, {
-      edgePadding: { top: 80, right: 40, bottom: 220, left: 40 },
+      edgePadding: { top: 80, right: 40, bottom: 360, left: 40 },
       animated: true,
     })
   }, [route, selectedSession])
@@ -155,9 +193,41 @@ export function HistoryMapPlayer({
     return sessions.findIndex((s) => s.id === selectedSession.id)
   }, [selectedSession, sessions])
 
+  const speedRange = useMemo(() => computeSpeedRange(speedPoints), [speedPoints])
+  const compactStats = useMemo(
+    () => [
+      { label: 'Time', value: headTimeMs != null ? formatTime(headTimeMs) : '-' },
+      {
+        label: 'GPS',
+        value: currentGps?.speedMps != null ? `${(currentGps.speedMps * 3.6).toFixed(1)}` : '-',
+      },
+      { label: 'Board', value: currentBoard ? `${currentBoard.speedKmh.toFixed(1)}` : '-' },
+      {
+        label: 'Duty',
+        value: currentBoard ? `${(currentBoard.dutyCycle * 100).toFixed(0)}%` : '-',
+      },
+      { label: 'Volt', value: currentBoard ? `${currentBoard.batteryVoltage.toFixed(1)}V` : '-' },
+      {
+        label: 'State',
+        value: currentBoard
+          ? currentBoard.hasFault
+            ? `F${currentBoard.faultCode}`
+            : String(currentBoard.state)
+          : '-',
+      },
+    ],
+    [currentBoard, currentGps, headTimeMs],
+  )
+
   const canMovePrevSession = selectedIndex >= 0 && selectedIndex < sessions.length - 1
   const canMoveNextSession = selectedIndex > 0
   const canMoveHead = !!selectedSession && headTimeMs != null
+  const canRenderCharts = boardByTime.length >= 2
+
+  const stopPlayback = () => {
+    setPlaying(false)
+    playbackStartRef.current = null
+  }
 
   const togglePlay = () => {
     if (!selectedSession || headTimeMs == null) return
@@ -169,15 +239,13 @@ export function HistoryMapPlayer({
     const nextIndex = selectedIndex - direction
     const next = sessions[nextIndex]
     if (!next) return
-    setPlaying(false)
-    playbackStartRef.current = null
+    stopPlayback()
     void onSelectSession(next)
   }
 
   const stepHead = (direction: -1 | 1) => {
     if (!selectedSession || headTimeMs == null) return
-    setPlaying(false)
-    playbackStartRef.current = null
+    stopPlayback()
     setHeadTimeMs(
       stepHeadTime(
         headTimeMs,
@@ -203,9 +271,16 @@ export function HistoryMapPlayer({
         best = i
       }
     }
-    setPlaying(false)
-    playbackStartRef.current = null
+    stopPlayback()
     setHeadTimeMs(routeByTime[best].capturedAtMs)
+  }
+
+  const selectChartPoint = (point: { date: Date }) => {
+    if (!selectedSession) return
+    stopPlayback()
+    setHeadTimeMs(
+      clampHeadTime(point.date.getTime(), selectedSession.startAtMs, selectedSession.endAtMs),
+    )
   }
 
   return (
@@ -269,6 +344,39 @@ export function HistoryMapPlayer({
           )}
         </View>
 
+        {canRenderCharts ? (
+          <View style={styles.chartStack}>
+            <HistoryLineChart
+              kind="speed"
+              label="Speed"
+              value={currentBoard ? `${currentBoard.speedKmh.toFixed(1)} km/h` : '-'}
+              points={speedPoints}
+              color="#60a5fa"
+              range={speedRange}
+              onPointSelected={selectChartPoint}
+              onGestureStart={stopPlayback}
+            />
+            <HistoryLineChart
+              kind="duty"
+              label="Duty"
+              value={currentBoard ? `${(currentBoard.dutyCycle * 100).toFixed(0)}%` : '-'}
+              points={dutyPoints}
+              color="#34d399"
+              range={{ y: { min: -100, max: 100 } }}
+              onPointSelected={selectChartPoint}
+              onGestureStart={stopPlayback}
+            />
+          </View>
+        ) : (
+          <Text style={styles.chartEmpty}>No board samples for charts.</Text>
+        )}
+
+        <View style={styles.compactStats}>
+          {compactStats.map((stat) => (
+            <Stat key={stat.label} label={stat.label} value={stat.value} />
+          ))}
+        </View>
+
         <View style={styles.tapeRow}>
           <Pressable
             style={[styles.tapeButton, !canMovePrevSession && styles.tapeButtonDisabled]}
@@ -311,55 +419,6 @@ export function HistoryMapPlayer({
           </Pressable>
         </View>
 
-        <View style={styles.statsGrid}>
-          <Stat label="Time" value={headTimeMs != null ? formatTime(headTimeMs) : '—'} />
-          <Stat
-            label="GPS Speed"
-            value={
-              currentGps?.speedMps != null ? `${(currentGps.speedMps * 3.6).toFixed(1)} km/h` : '—'
-            }
-          />
-          <Stat
-            label="Board Speed"
-            value={currentBoard ? `${currentBoard.speedKmh.toFixed(1)} km/h` : '—'}
-          />
-          <Stat
-            label="Voltage"
-            value={currentBoard ? `${currentBoard.batteryVoltage.toFixed(1)} V` : '—'}
-          />
-          <Stat
-            label="Batt Current"
-            value={currentBoard ? `${currentBoard.batteryCurrent.toFixed(1)} A` : '—'}
-          />
-          <Stat
-            label="Motor Current"
-            value={currentBoard ? `${currentBoard.motorCurrent.toFixed(1)} A` : '—'}
-          />
-          <Stat
-            label="MOSFET"
-            value={
-              currentBoard?.tempMosfet != null ? `${currentBoard.tempMosfet.toFixed(1)} C` : '—'
-            }
-          />
-          <Stat
-            label="Motor Temp"
-            value={currentBoard?.tempMotor != null ? `${currentBoard.tempMotor.toFixed(1)} C` : '—'}
-          />
-          <Stat
-            label="Fault/State"
-            value={
-              currentBoard
-                ? currentBoard.hasFault
-                  ? `Fault ${currentBoard.faultCode}`
-                  : String(currentBoard.state)
-                : '—'
-            }
-          />
-          <Stat
-            label="GPS Acc"
-            value={currentGps?.accuracyM != null ? `±${currentGps.accuracyM.toFixed(1)} m` : '—'}
-          />
-        </View>
         {sessionTruncated && (
           <Text style={styles.truncatedText}>
             Session truncated ({'>='} {SESSION_SAMPLE_LIMIT.toLocaleString()} samples loaded).
@@ -374,10 +433,66 @@ export function HistoryMapPlayer({
         onClose={() => setSheetVisible(false)}
         onSelectSession={(session) => {
           setSheetVisible(false)
-          setPlaying(false)
-          playbackStartRef.current = null
+          stopPlayback()
           void onSelectSession(session)
         }}
+      />
+    </View>
+  )
+}
+
+function computeSpeedRange(points: HistoryChartPoint[]): { y: { min: number; max: number } } {
+  if (!points.length) return { y: { min: -5, max: 5 } }
+  let min = Number.POSITIVE_INFINITY
+  let max = Number.NEGATIVE_INFINITY
+  for (const point of points) {
+    min = Math.min(min, point.value)
+    max = Math.max(max, point.value)
+  }
+  if (min > 0) min = 0
+  if (max < 0) max = 0
+  const span = Math.max(10, max - min)
+  const pad = span * 0.1
+  return { y: { min: min - pad, max: max + pad } }
+}
+
+function HistoryLineChart({
+  kind,
+  label,
+  value,
+  points,
+  color,
+  range,
+  onPointSelected,
+  onGestureStart,
+}: {
+  kind: HistoryChartKind
+  label: string
+  value: string
+  points: HistoryChartPoint[]
+  color: string
+  range: { y: { min: number; max: number } }
+  onPointSelected: (point: HistoryChartPoint) => void
+  onGestureStart: () => void
+}) {
+  return (
+    <View style={[styles.chartCard, kind === 'speed' ? styles.speedChart : styles.dutyChart]}>
+      <View style={styles.chartHeader}>
+        <Text style={styles.chartLabel}>{label}</Text>
+        <Text style={styles.chartValue}>{value}</Text>
+      </View>
+      <LineGraph
+        style={styles.graph}
+        points={points}
+        color={color}
+        lineThickness={2}
+        animated
+        enablePanGesture
+        panGestureDelay={0}
+        range={range}
+        onPointSelected={onPointSelected}
+        onGestureStart={onGestureStart}
+        onGestureEnd={() => {}}
       />
     </View>
   )
@@ -488,6 +603,83 @@ const styles = StyleSheet.create({
     fontSize: 12,
     flex: 1,
   },
+  chartStack: {
+    gap: 8,
+  },
+  chartCard: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#334155',
+    backgroundColor: '#111827',
+    overflow: 'hidden',
+    paddingHorizontal: 8,
+    paddingTop: 6,
+    paddingBottom: 4,
+  },
+  speedChart: {
+    minHeight: 86,
+  },
+  dutyChart: {
+    minHeight: 76,
+  },
+  chartHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  chartLabel: {
+    color: '#94a3b8',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  chartValue: {
+    color: '#e2e8f0',
+    fontSize: 11,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+  graph: {
+    height: 54,
+    marginTop: 4,
+  },
+  chartEmpty: {
+    color: '#94a3b8',
+    fontSize: 12,
+    textAlign: 'center',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#334155',
+    backgroundColor: '#111827',
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+  },
+  compactStats: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  statCell: {
+    width: '32%',
+    minHeight: 38,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#334155',
+    paddingHorizontal: 6,
+    paddingVertical: 5,
+    backgroundColor: '#111827',
+    justifyContent: 'center',
+  },
+  statLabel: {
+    color: '#64748b',
+    fontSize: 9,
+    fontWeight: '700',
+  },
+  statValue: {
+    color: '#e2e8f0',
+    fontSize: 11,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
   tapeRow: {
     flexDirection: 'row',
     gap: 6,
@@ -509,33 +701,6 @@ const styles = StyleSheet.create({
     color: '#f1f5f9',
     fontSize: 13,
     fontWeight: '800',
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  statCell: {
-    width: '32%',
-    minHeight: 42,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#334155',
-    paddingHorizontal: 6,
-    paddingVertical: 5,
-    backgroundColor: '#111827',
-    justifyContent: 'center',
-  },
-  statLabel: {
-    color: '#64748b',
-    fontSize: 9,
-    fontWeight: '700',
-  },
-  statValue: {
-    color: '#e2e8f0',
-    fontSize: 11,
-    fontWeight: '700',
-    fontVariant: ['tabular-nums'],
   },
   truncatedText: {
     color: '#fbbf24',

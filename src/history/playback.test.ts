@@ -1,6 +1,11 @@
 import { expect, test } from 'bun:test'
 
-import { clampHeadTime, findNearestSampleIndexByTime, stepHeadTime } from './playback'
+import {
+  clampHeadTime,
+  downsampleTimeSeries,
+  findNearestSampleIndexByTime,
+  stepHeadTime,
+} from './playback'
 
 const samples = [{ capturedAtMs: 1_000 }, { capturedAtMs: 2_000 }, { capturedAtMs: 4_000 }]
 
@@ -21,4 +26,28 @@ test('stepHeadTime clamps to session range', () => {
 test('clampHeadTime clamps playback end correctly', () => {
   expect(clampHeadTime(10_000, 1_000, 4_000)).toBe(4_000)
   expect(clampHeadTime(500, 1_000, 4_000)).toBe(1_000)
+})
+
+test('downsampleTimeSeries returns same array when below limit', () => {
+  const input = [{ capturedAtMs: 1 }, { capturedAtMs: 2 }, { capturedAtMs: 3 }]
+  const output = downsampleTimeSeries(input, 5, (s) => s.capturedAtMs)
+  expect(output).toBe(input)
+})
+
+test('downsampleTimeSeries handles empty input', () => {
+  const output = downsampleTimeSeries<{ capturedAtMs: number }>([], 5, (s) => s.capturedAtMs)
+  expect(output).toEqual([])
+})
+
+test('downsampleTimeSeries preserves first and last points', () => {
+  const input = Array.from({ length: 20 }, (_, i) => ({ capturedAtMs: i }))
+  const output = downsampleTimeSeries(input, 6, (s) => s.capturedAtMs)
+  expect(output[0]).toEqual(input[0])
+  expect(output[output.length - 1]).toEqual(input[input.length - 1])
+})
+
+test('downsampleTimeSeries reduces long arrays to at most maxPoints', () => {
+  const input = Array.from({ length: 1000 }, (_, i) => ({ capturedAtMs: i * 10 }))
+  const output = downsampleTimeSeries(input, 75, (s) => s.capturedAtMs)
+  expect(output.length).toBeLessThanOrEqual(75)
 })
