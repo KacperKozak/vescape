@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
@@ -11,6 +11,8 @@ import {
 } from 'react-native'
 import { Database, Trash, WarningCircle } from 'phosphor-react-native'
 import { useShallow } from 'zustand/react/shallow'
+import { HistoryMapPlayer } from '@/components/history/HistoryMapPlayer'
+import { HistoryModeToggle } from '@/components/history/HistoryModeToggle'
 
 import {
   useHistoryStore,
@@ -20,34 +22,51 @@ import {
 } from '@/store/historyStore'
 
 export function HistoryScreen() {
+  const [mode, setMode] = useState<'list' | 'map'>('list')
   const {
     blocks,
+    sessions,
     selectedBlock,
+    selectedSession,
     samples,
     gpsSamples,
+    sessionSamples,
+    sessionGpsSamples,
+    sessionMarkers,
     summary,
     loading,
     loadingSamples,
+    loadingSession,
+    sessionTruncated,
     error,
     hasMore,
     loadInitial,
     loadMore,
     selectBlock,
+    selectSession,
     clearHistory,
   } = useHistoryStore(
     useShallow((s) => ({
       blocks: s.blocks,
+      sessions: s.sessions,
       selectedBlock: s.selectedBlock,
+      selectedSession: s.selectedSession,
       samples: s.samples,
       gpsSamples: s.gpsSamples,
+      sessionSamples: s.sessionSamples,
+      sessionGpsSamples: s.sessionGpsSamples,
+      sessionMarkers: s.sessionMarkers,
       summary: s.summary,
       loading: s.loading,
       loadingSamples: s.loadingSamples,
+      loadingSession: s.loadingSession,
+      sessionTruncated: s.sessionTruncated,
       error: s.error,
       hasMore: s.hasMore,
       loadInitial: s.loadInitial,
       loadMore: s.loadMore,
       selectBlock: s.selectBlock,
+      selectSession: s.selectSession,
       clearHistory: s.clearHistory,
     })),
   )
@@ -75,6 +94,7 @@ export function HistoryScreen() {
               ? `${totalPoints.toLocaleString()} points since ${formatDate(summary?.firstAtMs)}`
               : 'No history recorded yet'}
           </Text>
+          <HistoryModeToggle mode={mode} onChange={setMode} />
         </View>
         <Pressable
           style={[styles.clearButton, !totalPoints && styles.clearButtonDisabled]}
@@ -94,51 +114,64 @@ export function HistoryScreen() {
         </View>
       )}
 
-      <FlatList
-        data={blocks}
-        keyExtractor={(item) => item.id}
-        contentContainerStyle={blocks.length ? styles.list : styles.emptyList}
-        refreshControl={
-          <RefreshControl
-            refreshing={loading && blocks.length === 0}
-            onRefresh={() => void loadInitial()}
-            tintColor="#f1f5f9"
-          />
-        }
-        onEndReached={() => {
-          if (hasMore) void loadMore()
-        }}
-        onEndReachedThreshold={0.4}
-        ListEmptyComponent={
-          loading ? (
-            <ActivityIndicator color="#3b82f6" />
-          ) : (
-            <View style={styles.emptyState}>
-              <Database size={28} color="#4b5563" weight="regular" />
-              <Text style={styles.emptyTitle}>No telemetry recorded yet</Text>
-              <Text style={styles.emptyText}>
-                Connect to a board and ride data will appear here.
-              </Text>
-            </View>
-          )
-        }
-        ListFooterComponent={
-          loading && blocks.length > 0 ? (
-            <ActivityIndicator style={styles.footerLoader} color="#3b82f6" />
-          ) : null
-        }
-        renderItem={({ item, index }) => (
-          <HistoryBlock
-            block={item}
-            previous={blocks[index - 1]}
-            selected={selectedBlock?.id === item.id}
-            samples={selectedBlock?.id === item.id ? samples : []}
-            gpsSamples={selectedBlock?.id === item.id ? gpsSamples : []}
-            loadingSamples={selectedBlock?.id === item.id && loadingSamples}
-            onPress={() => void selectBlock(selectedBlock?.id === item.id ? null : item)}
-          />
-        )}
-      />
+      {mode === 'list' ? (
+        <FlatList
+          data={blocks}
+          keyExtractor={(item) => item.id}
+          contentContainerStyle={blocks.length ? styles.list : styles.emptyList}
+          refreshControl={
+            <RefreshControl
+              refreshing={loading && blocks.length === 0}
+              onRefresh={() => void loadInitial()}
+              tintColor="#f1f5f9"
+            />
+          }
+          onEndReached={() => {
+            if (hasMore) void loadMore()
+          }}
+          onEndReachedThreshold={0.4}
+          ListEmptyComponent={
+            loading ? (
+              <ActivityIndicator color="#3b82f6" />
+            ) : (
+              <View style={styles.emptyState}>
+                <Database size={28} color="#4b5563" weight="regular" />
+                <Text style={styles.emptyTitle}>No telemetry recorded yet</Text>
+                <Text style={styles.emptyText}>
+                  Connect to a board and ride data will appear here.
+                </Text>
+              </View>
+            )
+          }
+          ListFooterComponent={
+            loading && blocks.length > 0 ? (
+              <ActivityIndicator style={styles.footerLoader} color="#3b82f6" />
+            ) : null
+          }
+          renderItem={({ item, index }) => (
+            <HistoryBlock
+              block={item}
+              previous={blocks[index - 1]}
+              selected={selectedBlock?.id === item.id}
+              samples={selectedBlock?.id === item.id ? samples : []}
+              gpsSamples={selectedBlock?.id === item.id ? gpsSamples : []}
+              loadingSamples={selectedBlock?.id === item.id && loadingSamples}
+              onPress={() => void selectBlock(selectedBlock?.id === item.id ? null : item)}
+            />
+          )}
+        />
+      ) : (
+        <HistoryMapPlayer
+          sessions={sessions}
+          selectedSession={selectedSession}
+          sessionSamples={sessionSamples}
+          sessionGpsSamples={sessionGpsSamples}
+          sessionMarkers={sessionMarkers}
+          loadingSession={loadingSession}
+          sessionTruncated={sessionTruncated}
+          onSelectSession={selectSession}
+        />
+      )}
     </View>
   )
 }
