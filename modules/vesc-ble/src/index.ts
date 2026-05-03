@@ -40,7 +40,7 @@ export interface LocationEvent {
   saved: boolean
 }
 
-export type SessionStatus = 'idle' | 'connecting' | 'connected' | 'error'
+export type SessionStatus = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'error'
 export type SessionMode = 'ble' | 'replay' | 'gps'
 
 export interface TelemetryEvent {
@@ -77,6 +77,7 @@ export interface SessionStateEvent {
   canId: number | null
   telemetry: TelemetryEvent | null
   error: string | null
+  autoReconnect?: boolean
 }
 
 export type StartSessionOptions =
@@ -88,6 +89,7 @@ export type StartSessionOptions =
       pollIntervalMs?: number
       recordingEnabled?: boolean
       telemetryRecordingEnabled?: boolean
+      autoReconnect?: boolean
     }
   | {
       mode: 'replay'
@@ -245,6 +247,8 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
   startLocationUpdates(options?: LocationTrackingOptions): void
   stopLocationUpdates(): void
   setTelemetryRecordingEnabled(enabled: boolean): void
+  startAutoConnect(options: Extract<StartSessionOptions, { mode: 'ble' }>): Promise<void>
+  stopAutoConnect(): Promise<void>
   startSession(options: StartSessionOptions): Promise<void>
   stopSession(): Promise<void>
   getSessionState(): SessionStateEvent
@@ -299,6 +303,18 @@ export function stopLocationUpdates(): void {
 /** Enable or disable native SQLite telemetry history writes. */
 export function setTelemetryRecordingEnabled(enabled: boolean): void {
   native.setTelemetryRecordingEnabled(enabled)
+}
+
+/** Start native-owned saved-board connection with background reconnect. */
+export async function startAutoConnect(
+  options: Extract<StartSessionOptions, { mode: 'ble' }>,
+): Promise<void> {
+  return native.startAutoConnect(options)
+}
+
+/** Stop native-owned saved-board connection/reconnect. */
+export async function stopAutoConnect(): Promise<void> {
+  return native.stopAutoConnect()
 }
 
 /** Start a native Android BLE/replay session. The service owns polling and notification updates. */

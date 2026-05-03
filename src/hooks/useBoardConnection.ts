@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Alert } from 'react-native'
 import { router } from 'expo-router'
 import { PencilSimpleIcon, PowerIcon, StarIcon, TrashIcon } from 'phosphor-react-native'
@@ -10,8 +10,6 @@ import { usePermissions } from '@/ble/usePermissions'
 import { routes } from '@/navigation/routes'
 import type { BoardMenuItem } from '@/components/BoardMenu'
 import type { RecordingInfo } from '@/store/bleStore'
-
-const SCAN_WATCHDOG_MS = 10_000
 
 export function useBoardConnection() {
   const { boards, activeBoardId, setActiveBoard, starBoard } = useBoardStore(
@@ -25,12 +23,10 @@ export function useBoardConnection() {
   const {
     status: bleStatus,
     sessionMode,
-    devices,
     recordings,
     connectedId,
     recordDebugSession,
     loadRecordings,
-    startScan,
     stopScan,
     connect,
     disconnect,
@@ -41,12 +37,10 @@ export function useBoardConnection() {
     useShallow((s) => ({
       status: s.status,
       sessionMode: s.sessionMode,
-      devices: s.devices,
       recordings: s.recordings,
       connectedId: s.connectedId,
       recordDebugSession: s.recordDebugSession,
       loadRecordings: s.loadRecordings,
-      startScan: s.startScan,
       stopScan: s.stopScan,
       connect: s.connect,
       disconnect: s.disconnect,
@@ -56,8 +50,7 @@ export function useBoardConnection() {
     })),
   )
   const { status: permStatus } = usePermissions()
-  const [scanEnabled, setScanEnabled] = useState(true)
-  const connectingRef = useRef(false)
+  const [autoConnectEnabled, setAutoConnectEnabled] = useState(true)
 
   const activeBoard = boards.find((b) => b.id === activeBoardId)
   const activeReplay =
@@ -68,53 +61,23 @@ export function useBoardConnection() {
     ? `${activeReplay.deviceName} (${new Date(activeReplay.startedAt).toLocaleString()})`
     : null
 
-  // Start scanning when conditions align
+  // Native owns scan/connect/reconnect for saved boards.
   useEffect(() => {
-    if (!scanEnabled) return
+    if (!autoConnectEnabled) return
     if (permStatus !== 'granted') return
     if (!activeBoard?.bleId) return
-    if (bleStatus !== 'idle') return
-    connectingRef.current = false
-    startScan()
-  }, [scanEnabled, permStatus, activeBoard?.bleId, bleStatus, startScan])
-
-  useEffect(() => {
-    if (bleStatus === 'error' || bleStatus === 'idle') {
-      connectingRef.current = false
-    }
-  }, [bleStatus])
+    if (bleStatus !== 'idle' && bleStatus !== 'error') return
+    void connect(activeBoard.bleId, activeBoard.name)
+  }, [autoConnectEnabled, permStatus, activeBoard?.bleId, activeBoard?.name, bleStatus, connect])
 
   // Reset on board change or unmount
   useEffect(() => {
-    setScanEnabled(true)
-    connectingRef.current = false
+    setAutoConnectEnabled(true)
     return () => {
       stopScan()
       void disconnect()
     }
   }, [activeBoardId, disconnect, stopScan])
-
-  // Auto-connect when board appears in scan results
-  useEffect(() => {
-    if (!activeBoard?.bleId) return
-    if (bleStatus !== 'scanning') return
-    if (connectingRef.current) return
-    const match = devices.find((d) => d.id === activeBoard.bleId)
-    if (!match) return
-    connectingRef.current = true
-    stopScan()
-    void connect(match.id, activeBoard.name)
-  }, [activeBoard?.bleId, activeBoard?.name, bleStatus, connect, devices, stopScan])
-
-  // Android BLE scans can stall after adapter/GATT errors without reporting onScanFailed.
-  useEffect(() => {
-    if (bleStatus !== 'scanning') return
-    const timer = setTimeout(() => {
-      const status = useBleStore.getState().status
-      if (status === 'scanning') startScan()
-    }, SCAN_WATCHDOG_MS)
-    return () => clearTimeout(timer)
-  }, [bleStatus, devices.length, startScan])
 
   useEffect(() => {
     void loadRecordings()
@@ -137,12 +100,12 @@ export function useBoardConnection() {
         onPress: () => starBoard(activeBoard.id),
       })
     }
-    if (bleStatus === 'connected' || bleStatus === 'connecting') {
+    if (bleStatus === 'connected' || bleStatus === 'connecting' || bleStatus === 'reconnecting') {
       items.push({
         label: activeReplay ? 'Stop' : 'Disconnect',
         icon: PowerIcon,
         onPress: () => {
-          setScanEnabled(false)
+          setAutoConnectEnabled(false)
           void disconnect()
         },
       })
@@ -180,22 +143,22 @@ export function useBoardConnection() {
 
   const handleReplay = useCallback(
     (recording: RecordingInfo) => {
-      setScanEnabled(false)
+      setAutoConnectEnabled(false)
       void replayRecording(recording)
     },
     [replayRecording],
   )
 
   const handleStopScan = useCallback(() => {
-    setScanEnabled(false)
-    stopScan()
-  }, [stopScan])
+    setAutoConnectEnabled(false)
+    void disconnect()
+  }, [disconnect])
 
   const handleRetryConnect = useCallback(() => {
-    connectingRef.current = false
-    setScanEnabled(true)
-    startScan()
-  }, [startScan])
+    if (!activeBoard?.bleId) return
+    setAutoConnectEnabled(true)
+    void connect(activeBoard.bleId, activeBoard.name)
+  }, [activeBoard?.bleId, activeBoard?.name, connect])
 
   return {
     boards,

@@ -50,6 +50,14 @@ function getAlert(
       onPress: onStopScan,
     }
   }
+  if (status === 'reconnecting') {
+    return {
+      text: `Reconnecting to ${board.name}`,
+      buttonText: 'Stop',
+      config: ALERT_CONFIG.scanning,
+      onPress: onStopScan,
+    }
+  }
   if (status === 'idle') {
     return {
       text: 'Board not connected',

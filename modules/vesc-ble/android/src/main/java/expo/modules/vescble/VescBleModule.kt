@@ -66,6 +66,15 @@ class VescBleModule : Module() {
       VescForegroundService.currentState()
     }
 
+    AsyncFunction("startAutoConnect") { options: Map<String, Any?>, promise: Promise ->
+      val autoOptions = options.toMutableMap()
+      autoOptions["autoReconnect"] = true
+      startSession(autoOptions, null)
+      promise.resolve(null)
+    }
+    AsyncFunction("stopAutoConnect") { promise: Promise ->
+      stopSession(promise)
+    }
     AsyncFunction("startSession") { options: Map<String, Any?>, promise: Promise ->
       startSession(options, promise)
     }
@@ -217,6 +226,7 @@ class VescBleModule : Module() {
     val recordingEnabled = options["recordingEnabled"] as? Boolean ?: false
     val telemetryRecordingEnabled = options["telemetryRecordingEnabled"] as? Boolean ?: false
     val recordingPath = options["recordingPath"] as? String
+    val autoReconnect = options["autoReconnect"] as? Boolean ?: false
 
     VescForegroundService.startSession(
       context.applicationContext,
@@ -229,12 +239,13 @@ class VescBleModule : Module() {
         recordingEnabled = recordingEnabled,
         telemetryRecordingEnabled = telemetryRecordingEnabled,
         recordingPath = recordingPath,
+        autoReconnect = autoReconnect,
       ),
       onSuccess = { promise?.resolve(null) },
       onError = { code, message ->
         if (promise != null) {
           promise.reject(code, message, null)
-        } else {
+        } else if (!autoReconnect) {
           sendEvent("onError", mapOf("message" to message))
         }
       },

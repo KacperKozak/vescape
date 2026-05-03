@@ -101,6 +101,7 @@ public class VescBleModule: Module {
         "canId": nil,
         "telemetry": nil,
         "error": nil,
+        "autoReconnect": false,
       ] as [String: Any?]
     }
 
@@ -139,6 +140,49 @@ public class VescBleModule: Module {
         self.startTelemetryTimer()
         promise.resolve(nil)
       }
+    }
+
+    AsyncFunction("startAutoConnect") { (options: [String: Any], promise: Promise) in
+      let deviceId = options["deviceId"] as? String ?? "MOCK-ID"
+      let deviceName = options["deviceName"] as? String ?? "Mock Board"
+
+      self.sessionMode = "ble"
+      self.sessionDeviceId = deviceId
+      self.sessionDeviceName = deviceName
+      self.sessionStatus = "connecting"
+      self.sendEvent("onSessionState", [
+        "status": "connecting",
+        "mode": "ble",
+        "deviceId": deviceId,
+        "deviceName": deviceName,
+        "canId": nil,
+        "telemetry": nil,
+        "error": nil,
+        "autoReconnect": true,
+      ] as [String: Any?])
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+        guard let self = self else { return }
+        self.sessionStatus = "connected"
+        self.sendEvent("onSessionState", [
+          "status": "connected",
+          "mode": "ble",
+          "deviceId": deviceId,
+          "deviceName": deviceName,
+          "canId": nil,
+          "telemetry": nil,
+          "error": nil,
+          "autoReconnect": true,
+        ] as [String: Any?])
+        self.startTelemetryTimer()
+      }
+      promise.resolve(nil)
+    }
+
+    AsyncFunction("stopAutoConnect") { (promise: Promise) in
+      DispatchQueue.main.async { [weak self] in
+        self?.stopMockSession()
+      }
+      promise.resolve(nil)
     }
 
     AsyncFunction("stopSession") { (promise: Promise) in

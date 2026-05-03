@@ -6,6 +6,8 @@ import {
   startLocationUpdates as nativeStartLocationUpdates,
   stopLocationUpdates as nativeStopLocationUpdates,
   setTelemetryRecordingEnabled as nativeSetTelemetryRecordingEnabled,
+  startAutoConnect as nativeStartAutoConnect,
+  stopAutoConnect as nativeStopAutoConnect,
   startSession,
   stopSession,
   listRecordings as nativeListRecordings,
@@ -38,7 +40,7 @@ export interface ScannedDevice {
 export type { RecordingInfo }
 export type { SessionMode }
 
-export type BleStatus = 'idle' | 'scanning' | 'connecting' | 'connected' | 'error'
+export type BleStatus = 'idle' | 'scanning' | 'connecting' | 'connected' | 'reconnecting' | 'error'
 export type GpsFix = LocationEvent
 
 interface BleState {
@@ -146,7 +148,7 @@ function installSessionSubscriptions(
   })
   sessionSub = addSessionStateListener((session) => {
     set({
-      status: session.status === 'error' ? 'error' : session.status,
+      status: (session.status === 'error' ? 'error' : session.status) as BleStatus,
       sessionMode: session.mode ?? fallbackMode,
       connectedId: session.deviceId ?? fallbackDeviceId,
       error: session.error ?? undefined,
@@ -175,7 +177,6 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
   telemetryRecordingEnabled: false,
   recordDebugSession: false,
   recordings: [],
-  scanEnabled: true,
 
   // ---- actions ----
 
@@ -238,8 +239,7 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
   },
 
   async connect(id: string, name?: string) {
-    const { stopScan } = get()
-    stopScan()
+    get().stopScan()
     set({
       status: 'connecting',
       sessionMode: 'ble',
@@ -268,7 +268,7 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
     const deviceName = friendlyDeviceName(id, name ?? device?.name)
 
     try {
-      await startSession({
+      await nativeStartAutoConnect({
         mode: 'ble',
         deviceId: id,
         deviceName,
@@ -276,7 +276,6 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
         recordingEnabled: get().recordDebugSession,
         telemetryRecordingEnabled: get().telemetryRecordingEnabled,
       })
-      set({ status: 'connected', sessionMode: 'ble', connectedId: id })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       set({ status: 'error', sessionMode: 'ble', error: msg })
@@ -318,7 +317,11 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
     const shouldResumeGps = shouldResumeGpsMonitoringAfterDisconnect(sessionMode)
     try {
       if (shouldStopNativeSession) {
-        await stopSession()
+        if (sessionMode === 'ble') {
+          await nativeStopAutoConnect()
+        } else {
+          await stopSession()
+        }
       }
     } catch {
       // Treat native "already stopped" style failures as a completed local teardown.

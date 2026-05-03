@@ -80,6 +80,7 @@ data class SessionConfig(
     val recordingEnabled: Boolean,
     val telemetryRecordingEnabled: Boolean,
     val recordingPath: String?,
+    val autoReconnect: Boolean = false,
 )
 
 private data class RefloatTelemetry(
@@ -254,6 +255,7 @@ class VescForegroundService : Service() {
             "telemetry" to null,
             "location" to null,
             "error" to null,
+            "autoReconnect" to false,
         )
     }
 
@@ -294,6 +296,8 @@ class VescForegroundService : Service() {
     private var locationManager: LocationManager? = null
     private var latestLocation: LocationSnapshot? = null
     private var isStoppingService = false
+    private var autoReconnectRunnable: Runnable? = null
+    private var autoReconnectAttempt = 0
 
     private val locationListener = LocationListener { location ->
         onLocationUpdated(location)
@@ -403,6 +407,7 @@ class VescForegroundService : Service() {
             recordingEnabled = false,
             telemetryRecordingEnabled = requestedTelemetryRecordingEnabled,
             recordingPath = null,
+            autoReconnect = false,
         )
         canId = null
         telemetry = null
@@ -449,6 +454,7 @@ class VescForegroundService : Service() {
         packetReassembler.reset()
         diagWriteCount = 0
         connectAttempt = 0
+        autoReconnectAttempt = 0
         if (start.config.recordingEnabled && start.config.mode != "replay") {
             recorder = VescSessionRecorder(this, start.config).also { it.start() }
         }
@@ -531,9 +537,13 @@ class VescForegroundService : Service() {
                         if (status == 133 && connectAttempt < 2) {
                             Log.w(TAG, "status=133 during connect, retrying once")
                             mainHandler.postDelayed({ startBleSession(wasConnecting) }, 250)
+                        } else if (wasConnecting.config.autoReconnect) {
+                            scheduleAutoReconnect(wasConnecting.config, status, "connect failed")
                         } else {
                             failStart(wasConnecting, "DISCONNECTED", "Device disconnected during connect (status=$status)")
                         }
+                    } else if (config?.autoReconnect == true) {
+                        scheduleAutoReconnect(config!!, status, "board disconnected")
                     } else {
                         setError("Board disconnected")
                         emitEvent("onDisconnected", mapOf("status" to status))
@@ -621,7 +631,9 @@ class VescForegroundService : Service() {
         cancelCccdTimeout()
         val start = pendingConnect ?: return
         pendingConnect = null
+        autoReconnectAttempt = 0
         status = "connected"
+        error = null
         emitState()
         emitEvent("onConnected", mapOf("mtu" to 517))
         telemetryStore?.recordMarker("connected", config?.deviceId, config?.deviceName)
@@ -827,6 +839,8 @@ class VescForegroundService : Service() {
     private fun stopCurrentSession(emitDisconnected: Boolean, updateNotification: Boolean = true) {
         val stoppedConfig = config
         stopLocationUpdates()
+        autoReconnectRunnable?.let { mainHandler.removeCallbacks(it) }
+        autoReconnectRunnable = null
         cancelCccdTimeout()
         cancelConnectTimeout()
         stopPolling()
@@ -874,6 +888,11 @@ class VescForegroundService : Service() {
     }
 
     private fun failStart(start: PendingStart, code: String, message: String) {
+        if (start.config.autoReconnect) {
+            scheduleAutoReconnect(start.config, null, message)
+            start.onError(code, message)
+            return
+        }
         pendingConnect = null
         cancelConnectTimeout()
         cancelCccdTimeout()
@@ -891,6 +910,37 @@ class VescForegroundService : Service() {
         status = next
         recorder?.recordState(next)
         emitState()
+    }
+
+    private fun scheduleAutoReconnect(session: SessionConfig, gattStatus: Int?, reason: String) {
+        if (!session.autoReconnect || isStoppingService) return
+        pendingConnect = null
+        cancelConnectTimeout()
+        cancelCccdTimeout()
+        stopPolling()
+        clearGatt(markIntentional = false)
+        status = "reconnecting"
+        error = reason
+        autoReconnectAttempt += 1
+        recorder?.recordState(
+            "reconnecting",
+            mapOf("attempt" to autoReconnectAttempt, "status" to gattStatus),
+        )
+        emitEvent("onDisconnected", mapOf("status" to (gattStatus ?: -1)))
+        emitState()
+        showNotification("Reconnecting...")
+
+        autoReconnectRunnable?.let { mainHandler.removeCallbacks(it) }
+        val delayMs = minOf(250L * autoReconnectAttempt, 2_000L)
+        val retry = Runnable {
+            autoReconnectRunnable = null
+            if (config?.autoReconnect == true && status == "reconnecting") {
+                connectAttempt = 0
+                startBleSession(PendingStart(session, onSuccess = {}, onError = { _, _ -> }))
+            }
+        }
+        autoReconnectRunnable = retry
+        mainHandler.postDelayed(retry, delayMs)
     }
 
     private fun setError(message: String) {
@@ -1013,6 +1063,7 @@ class VescForegroundService : Service() {
         "telemetry" to telemetry?.toMap(),
         "location" to latestLocation?.toMap(),
         "error" to error,
+        "autoReconnect" to (config?.autoReconnect ?: false),
     )
 
     private fun createNotificationChannel() {
