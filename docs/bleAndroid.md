@@ -76,19 +76,9 @@ if (char.uuid == NUS_RX_UUID || char.uuid == NUS_TX_UUID) { emit() }
 
 ## Other notes
 
-**GATT cache on bonded devices**: re-connecting a bonded device can return stale attribute handles. Fixed by calling `gatt.refresh()` via reflection before `discoverServices()`:
+**GATT cache on bonded devices**: re-connecting a bonded device can return stale attribute handles. Avoid hidden `gatt.refresh()` while connected; it can stall service discovery on this board. Close stale GATT on failure, then reconnect.
 
-```kotlin
-override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
-    try {
-        val refresh = gatt.javaClass.getMethod("refresh")
-        refresh.invoke(gatt)
-    } catch (e: Exception) { /* not available on all firmware */ }
-    gatt.discoverServices()
-}
-```
-
-**status=133 on first connect**: common Android quirk on bonded devices (GATT_ERROR / connection timeout). Retry immediately from JS — it succeeds on the second attempt.
+**status=133 on first connect**: common Android quirk on bonded devices (GATT_ERROR / connection timeout). Native retries and owns reconnect now.
 
 **Competing apps**: nRF Connect and the official board app auto-reconnect in background and can steal the GATT connection. Force-close them before testing.
 
@@ -105,7 +95,6 @@ connectGatt → <address>
 onConnectionStateChange status=0 newState=2
 connected — requesting MTU 517
 onMtuChanged mtu=517 status=0
-gatt.refresh() = true
 onServicesDiscovered status=0
 setCharacteristicNotification(RX 6e400003)=true
 setCharacteristicNotification(TX 6e400002)=true
@@ -114,6 +103,6 @@ onDescriptorWrite char=6e400003 status=0  pendingRemaining=1
 writing CCCD on TX char
 onDescriptorWrite char=6e400002 status=0  pendingRemaining=0
 all CCCDs written — resolving connect
-onConnected (mtu=517) emitted to JS
-[BLE] onNotification len: XX    ← data flowing
+onSessionState(status=connected) emitted to JS
+onTelemetry emitted to JS as data flows
 ```

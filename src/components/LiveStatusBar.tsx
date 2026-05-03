@@ -4,11 +4,18 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useShallow } from 'zustand/react/shallow'
 
 import { useBleStore } from '@/store/bleStore'
-import { minuteBucketStart } from '@/store/liveMonitor'
 import { theme } from '@/constants/theme'
 
 type BucketSlot = { bucketStartMs: number; points: number; boardCount: number; gpsCount: number }
 type GpsFix = { timestamp: number; precise: boolean; accuracyM?: number | null }
+type LiveDataBucket = { bucketStartMs: number; boardCount: number; gpsCount: number }
+
+const MINUTE_MS = 60_000
+const WINDOW_MINUTES = 10
+
+function minuteBucketStart(valueMs: number): number {
+  return valueMs - (valueMs % MINUTE_MS)
+}
 
 function buildBucketSlots(
   liveBuckets: { bucketStartMs: number; boardCount: number; gpsCount: number }[],
@@ -59,13 +66,11 @@ function gpsColor(gpsFix: GpsFix | null, ageSec: number | null): string {
 }
 
 export function LiveStatusBar() {
-  const { liveDataBuckets, status, lastPacketAt, avgLatency, gpsFix } = useBleStore(
+  const { recentTelemetry, recentLocations, status } = useBleStore(
     useShallow((s) => ({
-      liveDataBuckets: s.liveDataBuckets,
+      recentTelemetry: s.recentTelemetry,
+      recentLocations: s.recentLocations,
       status: s.status,
-      lastPacketAt: s.lastPacketAt,
-      avgLatency: s.avgLatency,
-      gpsFix: s.gpsFix,
     })),
   )
   const [nowMs, setNowMs] = useState(() => Date.now())
@@ -76,12 +81,17 @@ export function LiveStatusBar() {
     return () => clearInterval(interval)
   }, [])
 
+  const latestTelemetry = recentTelemetry.at(-1) ?? null
+  const gpsFix = recentLocations.at(-1) ?? null
+  const lastPacketAt = latestTelemetry?.lastPacketAt ?? null
+  const avgLatency = latestTelemetry?.avgLatency ?? null
   const isStale = lastPacketAt != null && nowMs - lastPacketAt > 2000
   const gpsAgeSec = gpsFix ? (nowMs - gpsFix.timestamp) / 1000 : null
 
-  const boardTotal = liveDataBuckets.reduce((total, b) => total + b.boardCount, 0)
-  const gpsTotal = liveDataBuckets.reduce((total, b) => total + b.gpsCount, 0)
-  const { slots, currentBucketStart } = buildBucketSlots(liveDataBuckets, nowMs)
+  const buckets = buildLiveBuckets(recentTelemetry, recentLocations, nowMs)
+  const boardTotal = buckets.reduce((total, b) => total + b.boardCount, 0)
+  const gpsTotal = buckets.reduce((total, b) => total + b.gpsCount, 0)
+  const { slots, currentBucketStart } = buildBucketSlots(buckets, nowMs)
   const maxBoard = Math.max(1, ...slots.map((s) => s.boardCount))
   const maxGps = Math.max(1, ...slots.map((s) => s.gpsCount))
 
@@ -139,6 +149,58 @@ export function LiveStatusBar() {
       )}
     </View>
   )
+}
+
+function buildLiveBuckets(
+  recentTelemetry: { lastPacketAt: number }[],
+  recentLocations: { timestamp: number }[],
+  nowMs: number,
+): LiveDataBucket[] {
+  const currentBucketStartMs = minuteBucketStart(nowMs)
+  const oldestBucketStartMs = currentBucketStartMs - (WINDOW_MINUTES - 1) * MINUTE_MS
+  const bucketsByStart = new Map<number, LiveDataBucket>()
+
+  for (const point of recentTelemetry) {
+    incrementBucket(
+      bucketsByStart,
+      point.lastPacketAt,
+      oldestBucketStartMs,
+      currentBucketStartMs,
+      'board',
+    )
+  }
+  for (const point of recentLocations) {
+    incrementBucket(
+      bucketsByStart,
+      point.timestamp,
+      oldestBucketStartMs,
+      currentBucketStartMs,
+      'gps',
+    )
+  }
+  return Array.from(bucketsByStart.values()).sort((a, b) => a.bucketStartMs - b.bucketStartMs)
+}
+
+function incrementBucket(
+  bucketsByStart: Map<number, LiveDataBucket>,
+  pointMs: number,
+  oldestBucketStartMs: number,
+  currentBucketStartMs: number,
+  source: 'board' | 'gps',
+): void {
+  const bucketStartMs = minuteBucketStart(pointMs)
+  if (bucketStartMs < oldestBucketStartMs || bucketStartMs > currentBucketStartMs) return
+
+  const bucket = bucketsByStart.get(bucketStartMs) ?? {
+    bucketStartMs,
+    boardCount: 0,
+    gpsCount: 0,
+  }
+  bucketsByStart.set(bucketStartMs, {
+    ...bucket,
+    boardCount: bucket.boardCount + (source === 'board' ? 1 : 0),
+    gpsCount: bucket.gpsCount + (source === 'gps' ? 1 : 0),
+  })
 }
 
 function SourceGroup({

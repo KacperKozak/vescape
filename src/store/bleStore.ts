@@ -8,6 +8,7 @@ import {
   setTelemetryRecordingEnabled as nativeSetTelemetryRecordingEnabled,
   startAutoConnect as nativeStartAutoConnect,
   stopAutoConnect as nativeStopAutoConnect,
+  getSessionState as nativeGetSessionState,
   startSession,
   stopSession,
   listRecordings as nativeListRecordings,
@@ -24,8 +25,6 @@ import {
   type LocationEvent,
   type TelemetryEvent,
 } from 'vesc-ble'
-import { type RefloatValues } from '../vesc/types'
-import { recordLivePoint, type LiveDataBucket } from './liveMonitor'
 import {
   shouldResumeGpsMonitoringAfterDisconnect,
   shouldStopNativeSessionOnDisconnect,
@@ -41,24 +40,15 @@ export type { RecordingInfo }
 export type { SessionMode }
 
 export type BleStatus = 'idle' | 'scanning' | 'connecting' | 'connected' | 'reconnecting' | 'error'
-export type GpsFix = LocationEvent
 
 interface BleState {
   status: BleStatus
   sessionMode: SessionMode | null
   devices: ScannedDevice[]
   connectedId: string | null
-  refloatValues: RefloatValues | null
   error: string | undefined
-  /** Total BLE notification packets received — useful for diagnosing no-data issues */
-  rxCount: number
-  /** Timestamp (ms) of the last successfully parsed refloat packet */
-  lastPacketAt: number | null
-  /** Rolling average round-trip time in ms (poll sent → response received) */
-  avgLatency: number | null
-  gpsFix: GpsFix | null
-  liveDataBuckets: LiveDataBucket[]
-  liveLastPointAtMs: number | null
+  recentTelemetry: TelemetryEvent[]
+  recentLocations: LocationEvent[]
   telemetryRecordingEnabled: boolean
   recordDebugSession: boolean
   recordings: RecordingInfo[]
@@ -74,6 +64,7 @@ interface BleActions {
   loadRecordings: () => Promise<void>
   deleteRecording: (recording: RecordingInfo) => Promise<void>
   exportRecording: (recording: RecordingInfo) => Promise<string>
+  syncNativeState: () => void
   startTelemetryRecording: (context?: {
     deviceId?: string | null
     deviceName?: string | null
@@ -101,6 +92,7 @@ let stopRequestedSub: EventSubscription | null = null
 let gpsTrackingContext: { deviceId?: string | null; deviceName?: string | null } | undefined
 const DEFAULT_BOARD_NAME = 'VESC Board'
 const MAC_ADDRESS_RE = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i
+const RECENT_WINDOW_MS = 10 * 60 * 1000
 
 function removeSessionSubscriptions(): void {
   telemetrySub?.remove()
@@ -121,14 +113,19 @@ function scannedDeviceName(id: string, name?: string): string {
   return `Unknown ${id.slice(-5)}`
 }
 
-function telemetryToRefloatValues(telemetry: TelemetryEvent): Partial<BleState> {
-  const { avgLatency, lastPacketAt, stateName: _stateName, location, ...refloatValues } = telemetry
-  return {
-    refloatValues: refloatValues as RefloatValues,
-    ...(location ? { gpsFix: location } : {}),
-    lastPacketAt,
-    avgLatency,
-  }
+function telemetryKey(telemetry: TelemetryEvent): number {
+  return telemetry.lastPacketAt
+}
+
+function locationKey(location: LocationEvent): number {
+  return location.timestamp
+}
+
+function appendByTimestamp<T>(items: T[], item: T, key: (value: T) => number): T[] {
+  const itemKey = key(item)
+  if (items.some((existing) => key(existing) === itemKey)) return items
+  const oldest = itemKey - RECENT_WINDOW_MS
+  return [...items, item].filter((value) => key(value) >= oldest).sort((a, b) => key(a) - key(b))
 }
 
 function installSessionSubscriptions(
@@ -138,21 +135,30 @@ function installSessionSubscriptions(
 ): void {
   removeSessionSubscriptions()
   telemetrySub = addTelemetryListener((telemetry) => {
-    const receivedAtMs = Date.now()
-    set((s) => ({
-      ...telemetryToRefloatValues(telemetry),
-      rxCount: s.rxCount + 1,
-      liveDataBuckets: recordLivePoint(s.liveDataBuckets, 'board', receivedAtMs),
-      liveLastPointAtMs: receivedAtMs,
-    }))
+    const current = useBleStore.getState()
+    const recentTelemetry = appendByTimestamp(current.recentTelemetry, telemetry, telemetryKey)
+    const recentLocations = telemetry.location
+      ? appendByTimestamp(current.recentLocations, telemetry.location, locationKey)
+      : current.recentLocations
+    set({
+      recentTelemetry,
+      recentLocations,
+    })
   })
   sessionSub = addSessionStateListener((session) => {
-    set({
+    set((s) => ({
       status: (session.status === 'error' ? 'error' : session.status) as BleStatus,
       sessionMode: session.mode ?? fallbackMode,
       connectedId: session.deviceId ?? fallbackDeviceId,
       error: session.error ?? undefined,
-    })
+      telemetryRecordingEnabled: session.telemetryRecordingEnabled ?? false,
+      ...(session.recentTelemetry || session.recentLocations
+        ? {
+            recentTelemetry: session.recentTelemetry ?? s.recentTelemetry,
+            recentLocations: session.recentLocations ?? s.recentLocations,
+          }
+        : {}),
+    }))
   })
 }
 
@@ -166,14 +172,9 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
   sessionMode: null,
   devices: [],
   connectedId: null,
-  refloatValues: null,
   error: undefined,
-  rxCount: 0,
-  lastPacketAt: null,
-  avgLatency: null,
-  gpsFix: null,
-  liveDataBuckets: [],
-  liveLastPointAtMs: null,
+  recentTelemetry: [],
+  recentLocations: [],
   telemetryRecordingEnabled: false,
   recordDebugSession: false,
   recordings: [],
@@ -182,7 +183,11 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
 
   startScan() {
     const currentStatus = get().status
-    if (currentStatus === 'connecting' || currentStatus === 'connected') {
+    if (
+      currentStatus === 'connecting' ||
+      currentStatus === 'connected' ||
+      currentStatus === 'reconnecting'
+    ) {
       return
     }
 
@@ -244,10 +249,9 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
       status: 'connecting',
       sessionMode: 'ble',
       connectedId: null,
-      refloatValues: null,
       error: undefined,
-      lastPacketAt: null,
-      avgLatency: null,
+      recentTelemetry: [],
+      recentLocations: [],
     })
 
     installSessionSubscriptions(set, 'ble', id)
@@ -259,7 +263,6 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
         status: 'idle',
         sessionMode: null,
         connectedId: null,
-        refloatValues: null,
         error: undefined,
       })
     })
@@ -289,10 +292,9 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
       status: 'connecting',
       sessionMode: 'replay',
       connectedId: recording.path,
-      refloatValues: null,
       error: undefined,
-      lastPacketAt: null,
-      avgLatency: null,
+      recentTelemetry: [],
+      recentLocations: [],
     })
 
     installSessionSubscriptions(set, 'replay', recording.path)
@@ -334,11 +336,9 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
         status: 'idle',
         sessionMode: null,
         connectedId: null,
-        refloatValues: null,
         error: undefined,
-        rxCount: 0,
-        lastPacketAt: null,
-        avgLatency: null,
+        recentTelemetry: [],
+        recentLocations: [],
       })
       if (shouldResumeGps) {
         get().startGpsTracking(gpsTrackingContext)
@@ -364,26 +364,37 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
     return nativeExportRecording(recording.path)
   },
 
+  syncNativeState() {
+    const session = nativeGetSessionState()
+    if (session.mode) {
+      installSessionSubscriptions(set, session.mode, session.deviceId ?? '')
+    }
+    set({
+      status: session.status as BleStatus,
+      sessionMode: session.mode,
+      connectedId: session.deviceId,
+      error: session.error ?? undefined,
+      telemetryRecordingEnabled: session.telemetryRecordingEnabled ?? false,
+      recentTelemetry: session.recentTelemetry ?? [],
+      recentLocations: session.recentLocations ?? [],
+    })
+  },
+
   startTelemetryRecording(context) {
-    set({ telemetryRecordingEnabled: true })
     nativeSetTelemetryRecordingEnabled(true)
     get().startGpsTracking(context)
   },
 
   stopTelemetryRecording() {
     nativeSetTelemetryRecordingEnabled(false)
-    set({ telemetryRecordingEnabled: false })
   },
 
   startGpsTracking(context) {
     gpsTrackingContext = context
     if (!gpsSub) {
       gpsSub = addLocationListener((location) => {
-        const receivedAtMs = Date.now()
         set((s) => ({
-          gpsFix: location,
-          liveDataBuckets: recordLivePoint(s.liveDataBuckets, 'gps', receivedAtMs),
-          liveLastPointAtMs: receivedAtMs,
+          recentLocations: appendByTimestamp(s.recentLocations, location, locationKey),
         }))
       })
     }
@@ -398,6 +409,5 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
     nativeStopLocationUpdates()
     gpsSub?.remove()
     gpsSub = null
-    set({ gpsFix: null })
   },
 }))

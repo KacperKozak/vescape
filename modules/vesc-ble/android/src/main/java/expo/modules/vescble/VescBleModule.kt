@@ -47,9 +47,6 @@ class VescBleModule : Module() {
 
     Events(
       "onDevice",
-      "onNotification",
-      "onConnected",
-      "onDisconnected",
       "onError",
       "onStopRequested",
       "onSessionState",

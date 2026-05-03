@@ -54,8 +54,7 @@ public class VescBleModule: Module {
     Name("VescBle")
 
     Events(
-      "onDevice", "onNotification", "onConnected", "onDisconnected",
-      "onError", "onStopRequested", "onSessionState", "onTelemetry", "onLocation"
+      "onDevice", "onError", "onStopRequested", "onSessionState", "onTelemetry", "onLocation"
     )
 
     OnDestroy {
@@ -99,9 +98,11 @@ public class VescBleModule: Module {
         "deviceId": self.sessionDeviceId,
         "deviceName": self.sessionDeviceName,
         "canId": nil,
-        "telemetry": nil,
         "error": nil,
         "autoReconnect": false,
+        "telemetryRecordingEnabled": false,
+        "recentTelemetry": [] as [Any],
+        "recentLocations": [] as [Any],
       ] as [String: Any?]
     }
 
@@ -121,7 +122,6 @@ public class VescBleModule: Module {
         "deviceId": deviceId,
         "deviceName": deviceName,
         "canId": nil,
-        "telemetry": nil,
         "error": nil,
       ] as [String: Any?])
 
@@ -134,7 +134,6 @@ public class VescBleModule: Module {
           "deviceId": deviceId,
           "deviceName": deviceName,
           "canId": nil,
-          "telemetry": nil,
           "error": nil,
         ] as [String: Any?])
         self.startTelemetryTimer()
@@ -156,7 +155,6 @@ public class VescBleModule: Module {
         "deviceId": deviceId,
         "deviceName": deviceName,
         "canId": nil,
-        "telemetry": nil,
         "error": nil,
         "autoReconnect": true,
       ] as [String: Any?])
@@ -169,7 +167,6 @@ public class VescBleModule: Module {
           "deviceId": deviceId,
           "deviceName": deviceName,
           "canId": nil,
-          "telemetry": nil,
           "error": nil,
           "autoReconnect": true,
         ] as [String: Any?])
@@ -325,7 +322,6 @@ public class VescBleModule: Module {
       "deviceId": nil,
       "deviceName": nil,
       "canId": nil,
-      "telemetry": nil,
       "error": nil,
     ] as [String: Any?])
   }

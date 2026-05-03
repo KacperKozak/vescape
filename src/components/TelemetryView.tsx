@@ -3,23 +3,21 @@ import { useShallow } from 'zustand/react/shallow'
 import { useBleStore } from '@/store/bleStore'
 import { useMapStore } from '@/store/mapStore'
 import { TelemetryCard } from './TelemetryCard'
-import { FAULT_NAMES } from '@/vesc/types'
+import { FAULT_NAMES, type RefloatValues } from '@/vesc/types'
 import { REFLOAT_STATE_NAMES } from '@/vesc/refloat'
 import { fmt, fmtSpeed, fmtKm } from '@/helpers/format'
 import { haversineM, bearingTo, clockHour, fmtDistance } from '@/helpers/geo'
 
 export function TelemetryView() {
-  const {
-    refloatValues: v,
-    status,
-    gpsFix,
-  } = useBleStore(
+  const { recentTelemetry, recentLocations, status } = useBleStore(
     useShallow((s) => ({
-      refloatValues: s.refloatValues,
+      recentTelemetry: s.recentTelemetry,
+      recentLocations: s.recentLocations,
       status: s.status,
-      gpsFix: s.gpsFix,
     })),
   )
+  const v = (recentTelemetry.at(-1) ?? null) as RefloatValues | null
+  const gpsFix = recentLocations.at(-1) ?? null
   const targetLocation = useMapStore((s) => s.targetLocation)
   const stateCompat = v ? v.state & 0xf : 0
   const stateName = v ? (REFLOAT_STATE_NAMES[stateCompat] ?? `STATE_${stateCompat}`) : '—'

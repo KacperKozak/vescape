@@ -65,6 +65,7 @@ private const val REFLOAT_MAGIC = 101
 private const val REFLOAT_GET_ALLDATA = 10
 private const val REFLOAT_FAULT_MODE = 69
 private const val MAX_RECORDING_ACCURACY_M = 20.0
+private const val RECENT_WINDOW_MS = 10 * 60 * 1000L
 
 private val NUS_SERVICE_UUID = UUID.fromString("6e400001-b5a3-f393-e0a9-e50e24dcca9e")
 private val NUS_TX_UUID = UUID.fromString("6e400002-b5a3-f393-e0a9-e50e24dcca9e")
@@ -232,7 +233,7 @@ class VescForegroundService : Service() {
             if (!enabled) TelemetryRepository.get(context.applicationContext).flushBlocking()
         }
 
-        fun currentState(): Map<String, Any?> = instance?.sessionStateMap() ?: idleState()
+        fun currentState(): Map<String, Any?> = instance?.sessionStateMap(includeRecent = true) ?: idleState()
 
         fun listRecordings(context: Context): List<Map<String, Any?>> {
             return VescRecordingStore(context).list()
@@ -252,8 +253,6 @@ class VescForegroundService : Service() {
             "deviceId" to null,
             "deviceName" to null,
             "canId" to null,
-            "telemetry" to null,
-            "location" to null,
             "error" to null,
             "autoReconnect" to false,
         )
@@ -298,6 +297,8 @@ class VescForegroundService : Service() {
     private var isStoppingService = false
     private var autoReconnectRunnable: Runnable? = null
     private var autoReconnectAttempt = 0
+    private val recentTelemetry = ArrayDeque<Map<String, Any?>>()
+    private val recentLocations = ArrayDeque<Map<String, Any?>>()
 
     private val locationListener = LocationListener { location ->
         onLocationUpdated(location)
@@ -451,6 +452,8 @@ class VescForegroundService : Service() {
         error = null
         telemetry = null
         latestLocation = null
+        recentTelemetry.clear()
+        recentLocations.clear()
         packetReassembler.reset()
         diagWriteCount = 0
         connectAttempt = 0
@@ -546,7 +549,6 @@ class VescForegroundService : Service() {
                         scheduleAutoReconnect(config!!, status, "board disconnected")
                     } else {
                         setError("Board disconnected")
-                        emitEvent("onDisconnected", mapOf("status" to status))
                         finishRecording("error")
                     }
                 }
@@ -635,7 +637,6 @@ class VescForegroundService : Service() {
         status = "connected"
         error = null
         emitState()
-        emitEvent("onConnected", mapOf("mtu" to 517))
         telemetryStore?.recordMarker("connected", config?.deviceId, config?.deviceName)
         showNotification("Discovering board...")
         start.onSuccess()
@@ -646,7 +647,6 @@ class VescForegroundService : Service() {
 
     private fun handleFrameChunk(chunk: ByteArray) {
         recorder?.recordChunk("rx", chunk)
-        emitEvent("onNotification", mapOf("value" to Base64.encodeToString(chunk, Base64.NO_WRAP)))
         for (payload in packetReassembler.feed(chunk)) {
             handlePayload(payload)
         }
@@ -665,6 +665,7 @@ class VescForegroundService : Service() {
             COMM_CUSTOM_APP_DATA -> {
                 val parsed = parseGetAllData(payload) ?: return
                 telemetry = parsed
+                appendRecentTelemetry(parsed)
                 showNotification(formatNotificationText(parsed))
                 emitEvent("onTelemetry", parsed.toMap())
                 recordTelemetry(parsed)
@@ -858,12 +859,13 @@ class VescForegroundService : Service() {
         canId = null
         telemetry = null
         latestLocation = null
+        recentTelemetry.clear()
+        recentLocations.clear()
         error = null
         status = "idle"
         config = null
         if (updateNotification && !isStoppingService && stoppedConfig != null) showNotification()
         emitState()
-        if (emitDisconnected) emitEvent("onDisconnected", mapOf("status" to 0))
     }
 
     private fun clearGatt(markIntentional: Boolean = true) {
@@ -926,7 +928,6 @@ class VescForegroundService : Service() {
             "reconnecting",
             mapOf("attempt" to autoReconnectAttempt, "status" to gattStatus),
         )
-        emitEvent("onDisconnected", mapOf("status" to (gattStatus ?: -1)))
         emitState()
         showNotification("Reconnecting...")
 
@@ -1008,6 +1009,7 @@ class VescForegroundService : Service() {
                     if (status == "connected") null else "Recording started",
                 )
             }
+            emitState()
             return
         }
 
@@ -1019,6 +1021,7 @@ class VescForegroundService : Service() {
         )
         telemetryStore?.flushBlocking()
         telemetryStore = null
+        emitState()
     }
 
     private fun onLocationUpdated(location: Location) {
@@ -1049,22 +1052,52 @@ class VescForegroundService : Service() {
             saved = saved,
         )
         latestLocation = snapshot
+        appendRecentLocation(snapshot)
         emitEvent("onLocation", snapshot.toMap())
         if (config?.mode == "gps") showNotification(formatGpsNotificationText(snapshot))
         if (snapshot.precise) recorder?.recordLocation(snapshot)
     }
 
-    private fun sessionStateMap(): Map<String, Any?> = mapOf(
-        "status" to status,
-        "mode" to config?.mode,
-        "deviceId" to config?.deviceId,
-        "deviceName" to config?.deviceName,
-        "canId" to canId,
-        "telemetry" to telemetry?.toMap(),
-        "location" to latestLocation?.toMap(),
-        "error" to error,
-        "autoReconnect" to (config?.autoReconnect ?: false),
-    )
+    private fun sessionStateMap(includeRecent: Boolean = false): Map<String, Any?> {
+        val state = mutableMapOf<String, Any?>(
+            "status" to status,
+            "mode" to config?.mode,
+            "deviceId" to config?.deviceId,
+            "deviceName" to config?.deviceName,
+            "canId" to canId,
+            "error" to error,
+            "autoReconnect" to (config?.autoReconnect ?: false),
+            "telemetryRecordingEnabled" to (config?.telemetryRecordingEnabled == true || requestedTelemetryRecordingEnabled),
+        )
+        if (includeRecent) {
+            state["recentTelemetry"] = recentTelemetry.toList()
+            state["recentLocations"] = recentLocations.toList()
+        }
+        return state
+    }
+
+    private fun appendRecentTelemetry(values: RefloatTelemetry) {
+        val point = values.toMap()
+        recentTelemetry.addLast(point)
+        pruneRecent(recentTelemetry, values.lastPacketAt)
+    }
+
+    private fun appendRecentLocation(location: LocationSnapshot) {
+        val point = location.toMap()
+        recentLocations.addLast(point)
+        pruneRecent(recentLocations, location.timestamp)
+    }
+
+    private fun pruneRecent(points: ArrayDeque<Map<String, Any?>>, nowMs: Long) {
+        val oldest = nowMs - RECENT_WINDOW_MS
+        while (points.isNotEmpty()) {
+            val timestamp = (points.first()["lastPacketAt"] as? Number)?.toLong()
+                ?: (points.first()["timestamp"] as? Number)?.toLong()
+                ?: break
+            if (timestamp >= oldest) break
+            points.removeFirst()
+        }
+    }
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

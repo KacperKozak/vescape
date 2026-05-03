@@ -11,19 +11,6 @@ export interface DeviceFoundEvent {
   serviceUUIDs: string[]
 }
 
-export interface NotificationEvent {
-  /** Base64-encoded raw bytes from the NUS RX characteristic */
-  value: string
-}
-
-export interface ConnectedEvent {
-  mtu: number
-}
-
-export interface DisconnectedEvent {
-  status: number
-}
-
 export interface ErrorEvent {
   message: string
 }
@@ -75,9 +62,11 @@ export interface SessionStateEvent {
   deviceId: string | null
   deviceName: string | null
   canId: number | null
-  telemetry: TelemetryEvent | null
   error: string | null
   autoReconnect?: boolean
+  telemetryRecordingEnabled?: boolean
+  recentTelemetry?: TelemetryEvent[]
+  recentLocations?: LocationEvent[]
 }
 
 export type StartSessionOptions =
@@ -219,9 +208,6 @@ export interface LocationTrackingOptions {
 
 type VescBleEvents = {
   onDevice: (event: DeviceFoundEvent) => void
-  onNotification: (event: NotificationEvent) => void
-  onConnected: (event: ConnectedEvent) => void
-  onDisconnected: (event: DisconnectedEvent) => void
   onError: (event: ErrorEvent) => void
   onStopRequested: (event: Record<never, never>) => void
   onSessionState: (event: SessionStateEvent) => void
@@ -394,18 +380,6 @@ export function addStopRequestedListener(cb: () => void): EventSubscription {
 
 export function addDeviceListener(cb: (event: DeviceFoundEvent) => void): EventSubscription {
   return emitter.addListener('onDevice', cb)
-}
-
-export function addNotificationListener(cb: (event: NotificationEvent) => void): EventSubscription {
-  return emitter.addListener('onNotification', cb)
-}
-
-export function addConnectedListener(cb: (event: ConnectedEvent) => void): EventSubscription {
-  return emitter.addListener('onConnected', cb)
-}
-
-export function addDisconnectedListener(cb: (event: DisconnectedEvent) => void): EventSubscription {
-  return emitter.addListener('onDisconnected', cb)
 }
 
 export function addErrorListener(cb: (event: ErrorEvent) => void): EventSubscription {

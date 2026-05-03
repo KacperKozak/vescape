@@ -1,22 +1,22 @@
 import { useEffect, useRef, useState } from 'react'
 import { View, Text, ActivityIndicator, Animated, StyleSheet, type ViewStyle } from 'react-native'
 import { LightningIcon, NavigationArrowIcon, WarningCircleIcon } from 'phosphor-react-native'
-import { useShallow } from 'zustand/react/shallow'
 import { useBleStore } from '@/store/bleStore'
 import { theme } from '@/constants/theme'
 
 const COLORS: Record<string, { bg: string; text: string }> = {
   connected: { bg: theme.gps.bg, text: theme.gps.text },
   connecting: { bg: theme.wheel.bg, text: theme.wheel.text },
+  reconnecting: { bg: theme.wheel.bg, text: theme.wheel.text },
   scanning: { bg: theme.warning.bg, text: theme.warning.text },
   error: { bg: theme.error.bg, text: theme.error.text },
   idle: { bg: '#1f2937', text: '#9ca3af' },
 }
 
 export function StatusPill({ status, style }: { status: string; style?: ViewStyle }) {
-  const { lastPacketAt, avgLatency } = useBleStore(
-    useShallow((s) => ({ lastPacketAt: s.lastPacketAt, avgLatency: s.avgLatency })),
-  )
+  const latestTelemetry = useBleStore((s) => s.recentTelemetry.at(-1) ?? null)
+  const lastPacketAt = latestTelemetry?.lastPacketAt ?? null
+  const avgLatency = latestTelemetry?.avgLatency ?? null
   const pulseOpacity = useRef(new Animated.Value(0.35)).current
   const [isStale, setIsStale] = useState(false)
 
@@ -62,7 +62,7 @@ export function StatusPill({ status, style }: { status: string; style?: ViewStyl
 
   return (
     <View style={[styles.pill, { backgroundColor: pillBg }, style]}>
-      {(status === 'connecting' || status === 'scanning') && (
+      {(status === 'connecting' || status === 'reconnecting' || status === 'scanning') && (
         <ActivityIndicator size="small" color={pillText} style={styles.spinner} />
       )}
       {status === 'connected' && (
@@ -87,7 +87,7 @@ export function StatusPill({ status, style }: { status: string; style?: ViewStyl
 }
 
 export function GpsStatusBadge({ style }: { style?: ViewStyle }) {
-  const gpsFix = useBleStore((s) => s.gpsFix)
+  const gpsFix = useBleStore((s) => s.recentLocations.at(-1) ?? null)
   const [now, setNow] = useState(Date.now())
 
   useEffect(() => {

@@ -8,7 +8,7 @@ import { GOOGLE_MAPS_API_KEY, MAPY_TILE_URL_TEMPLATE } from '@/config/mapy'
 import { theme } from '@/constants/theme'
 
 export function MapScreen() {
-  const gpsFix = useBleStore((s) => s.gpsFix)
+  const gpsFix = useBleStore((s) => s.recentLocations.at(-1) ?? null)
   const { targetLocation, setTargetLocation, clearTargetLocation } = useMapStore()
   const [mapProvider, setMapProvider] = useState<'mapy' | 'google'>('google')
   const [followGps, setFollowGps] = useState(true)
