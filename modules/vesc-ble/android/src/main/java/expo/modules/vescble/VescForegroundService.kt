@@ -16,6 +16,9 @@ import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.BluetoothStatusCodes
+import android.bluetooth.le.ScanCallback
+import android.bluetooth.le.ScanResult
+import android.bluetooth.le.ScanSettings
 import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
@@ -299,6 +302,7 @@ class VescForegroundService : Service() {
     private var latestLocation: LocationSnapshot? = null
     private var isStoppingService = false
     private var autoReconnectRunnable: Runnable? = null
+    private var reconnectScanCallback: ScanCallback? = null
     private var autoReconnectAttempt = 0
     private val recentTelemetry = ArrayDeque<Map<String, Any?>>()
     private val recentLocations = ArrayDeque<Map<String, Any?>>()
@@ -515,6 +519,7 @@ class VescForegroundService : Service() {
         pendingConnect = start
         connectAttempt++
         cancelConnectTimeout()
+        stopReconnectScan()
         val device = bluetoothAdapter.getRemoteDevice(deviceId)
         gatt = device.connectGatt(this, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
         connectTimeout = Runnable {
@@ -867,6 +872,7 @@ class VescForegroundService : Service() {
         stopLocationUpdates()
         autoReconnectRunnable?.let { mainHandler.removeCallbacks(it) }
         autoReconnectRunnable = null
+        stopReconnectScan()
         cancelCccdTimeout()
         cancelConnectTimeout()
         stopPolling()
@@ -962,12 +968,72 @@ class VescForegroundService : Service() {
         val retry = Runnable {
             autoReconnectRunnable = null
             if (config?.autoReconnect == true && status == "reconnecting") {
-                connectAttempt = 0
-                startBleSession(PendingStart(session, onSuccess = {}, onError = { _, _ -> }))
+                startReconnectScan(session)
             }
         }
         autoReconnectRunnable = retry
         mainHandler.postDelayed(retry, delayMs)
+    }
+
+    private fun startReconnectScan(session: SessionConfig) {
+        val targetId = session.deviceId
+        if (targetId.isNullOrBlank()) {
+            scheduleAutoReconnect(session, null, "missing reconnect target")
+            return
+        }
+        stopReconnectScan()
+        val scanner = bluetoothAdapter.bluetoothLeScanner
+        if (scanner == null) {
+            scheduleAutoReconnect(session, null, "BLE scanner unavailable")
+            return
+        }
+
+        val callback = object : ScanCallback() {
+            override fun onScanResult(callbackType: Int, result: ScanResult) {
+                if (!result.device.address.equals(targetId, ignoreCase = true)) return
+                stopReconnectScan()
+                if (config?.autoReconnect == true && status == "reconnecting") {
+                    connectAttempt = 0
+                    status = "connecting"
+                    error = null
+                    emitState()
+                    startBleSession(PendingStart(session, onSuccess = {}, onError = { _, _ -> }))
+                }
+            }
+
+            override fun onScanFailed(errorCode: Int) {
+                Log.w(TAG, "Reconnect scan failed errorCode=$errorCode")
+                stopReconnectScan()
+                scheduleAutoReconnect(session, null, "reconnect scan failed ($errorCode)")
+            }
+        }
+
+        reconnectScanCallback = callback
+        try {
+            scanner.startScan(
+                null,
+                ScanSettings.Builder()
+                    .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+                    .setCallbackType(ScanSettings.CALLBACK_TYPE_ALL_MATCHES)
+                    .build(),
+                callback,
+            )
+            Log.d(TAG, "Reconnect scan started for $targetId")
+        } catch (e: Exception) {
+            reconnectScanCallback = null
+            Log.w(TAG, "Reconnect scan start failed: ${e.message}")
+            scheduleAutoReconnect(session, null, "reconnect scan start failed")
+        }
+    }
+
+    private fun stopReconnectScan() {
+        val callback = reconnectScanCallback ?: return
+        reconnectScanCallback = null
+        try {
+            bluetoothAdapter.bluetoothLeScanner?.stopScan(callback)
+        } catch (e: Exception) {
+            Log.w(TAG, "Reconnect scan stop failed: ${e.message}")
+        }
     }
 
     private fun setError(message: String) {
