@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import MapView, { Marker, Polyline, type LatLng } from 'react-native-maps'
-import { ListBullets, Pause, Play } from 'phosphor-react-native'
+import { ListBulletsIcon, PauseIcon, PlayIcon } from 'phosphor-react-native'
 
 import {
   clampHeadTime,
@@ -353,7 +353,7 @@ export function HistoryMapPlayer({
       <View style={styles.controls}>
         <View style={styles.controlsTop}>
           <Pressable style={styles.ridesButton} onPress={() => setSheetVisible(true)}>
-            <ListBullets size={16} color="#e2e8f0" weight="bold" />
+            <ListBulletsIcon size={16} color="#e2e8f0" weight="bold" />
             <Text style={styles.ridesButtonText}>Rides</Text>
           </Pressable>
           {selectedSession && (
@@ -435,9 +435,9 @@ export function HistoryMapPlayer({
             onPress={togglePlay}
           >
             {playing ? (
-              <Pause size={16} color="#f8fafc" weight="fill" />
+              <PauseIcon size={16} color="#f8fafc" weight="fill" />
             ) : (
-              <Play size={16} color="#f8fafc" weight="fill" />
+              <PlayIcon size={16} color="#f8fafc" weight="fill" />
             )}
           </Pressable>
           <Pressable

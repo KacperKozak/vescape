@@ -1,4 +1,4 @@
-import { Record, StopCircle } from 'phosphor-react-native'
+import { RecordIcon, StopCircleIcon } from 'phosphor-react-native'
 import { useCallback } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useShallow } from 'zustand/react/shallow'
@@ -117,9 +117,9 @@ export function FloatingBar({
 
       <Pressable style={[styles.fab, recording && styles.fabActive]} onPress={toggleRecord}>
         {recording ? (
-          <StopCircle size={22} color="#052e16" weight="fill" />
+          <StopCircleIcon size={22} color="#052e16" weight="fill" />
         ) : (
-          <Record size={22} color="#f1f5f9" weight="fill" />
+          <RecordIcon size={22} color="#f1f5f9" weight="fill" />
         )}
         <Text style={[styles.fabLabel, recording && styles.fabLabelActive]}>REC</Text>
       </Pressable>

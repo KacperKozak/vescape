@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { View, Text, StyleSheet, Pressable } from 'react-native'
 import MapView, { Circle, Marker, UrlTile, type Region } from 'react-native-maps'
-import { ArrowUp, Crosshair, CrosshairSimple, X } from 'phosphor-react-native'
+import { ArrowUpIcon, CrosshairIcon, CrosshairSimpleIcon, XIcon } from 'phosphor-react-native'
 import { useBleStore } from '@/store/bleStore'
 import { useMapStore } from '@/store/mapStore'
 import { GOOGLE_MAPS_API_KEY, MAPY_TILE_URL_TEMPLATE } from '@/config/mapy'
@@ -133,7 +133,7 @@ export function MapScreen() {
 
       {targetLocation && (
         <Pressable style={styles.clearTargetButton} onPress={clearTargetLocation}>
-          <X size={18} color="#f9fafb" weight="bold" />
+          <XIcon size={18} color="#f9fafb" weight="bold" />
         </Pressable>
       )}
 
@@ -144,7 +144,7 @@ export function MapScreen() {
         delayLongPress={400}
       >
         <View style={{ transform: [{ rotate: `${-heading}deg` }] }}>
-          <ArrowUp
+          <ArrowUpIcon
             size={22}
             color={rotationLocked ? theme.warning.color : '#f9fafb'}
             weight="bold"
@@ -157,9 +157,9 @@ export function MapScreen() {
         onPress={recenter}
       >
         {followGps ? (
-          <Crosshair size={24} color={theme.gps.text} weight="fill" />
+          <CrosshairIcon size={24} color={theme.gps.text} weight="fill" />
         ) : (
-          <CrosshairSimple size={24} color="#f9fafb" weight="bold" />
+          <CrosshairSimpleIcon size={24} color="#f9fafb" weight="bold" />
         )}
       </Pressable>
 

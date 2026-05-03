@@ -9,7 +9,7 @@ import {
   Text,
   View,
 } from 'react-native'
-import { Database, Trash, WarningCircle } from 'phosphor-react-native'
+import { DatabaseIcon, TrashIcon, WarningCircleIcon } from 'phosphor-react-native'
 import { useShallow } from 'zustand/react/shallow'
 import { HistoryMapPlayer } from '@/components/history/HistoryMapPlayer'
 import { HistoryModeToggle } from '@/components/history/HistoryModeToggle'
@@ -101,13 +101,13 @@ export function HistoryScreen() {
           disabled={!totalPoints}
           onPress={confirmClear}
         >
-          <Trash size={18} color={totalPoints ? '#f87171' : '#4b5563'} weight="bold" />
+          <TrashIcon size={18} color={totalPoints ? '#f87171' : '#4b5563'} weight="bold" />
         </Pressable>
       </View>
 
       {error && (
         <View style={styles.errorBar}>
-          <WarningCircle size={18} color="#fca5a5" weight="bold" />
+          <WarningCircleIcon size={18} color="#fca5a5" weight="bold" />
           <Text style={styles.errorText} selectable>
             {error}
           </Text>
@@ -135,7 +135,7 @@ export function HistoryScreen() {
               <ActivityIndicator color="#3b82f6" />
             ) : (
               <View style={styles.emptyState}>
-                <Database size={28} color="#4b5563" weight="regular" />
+                <DatabaseIcon size={28} color="#4b5563" weight="regular" />
                 <Text style={styles.emptyTitle}>No telemetry recorded yet</Text>
                 <Text style={styles.emptyText}>
                   Connect to a board and ride data will appear here.

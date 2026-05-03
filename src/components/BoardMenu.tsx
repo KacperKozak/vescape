@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native'
-import { DotsThreeVertical, type Icon } from 'phosphor-react-native'
+import { DotsThreeVerticalIcon, type Icon } from 'phosphor-react-native'
 
 export interface BoardMenuItem {
   label: string
@@ -65,7 +65,7 @@ export function BoardMenu({ items }: { items: BoardMenuItem[] }) {
     <>
       <View ref={menuButtonRef} collapsable={false}>
         <Pressable style={styles.menuButton} onPress={openMenu}>
-          <DotsThreeVertical size={22} color="#9ca3af" weight="bold" />
+          <DotsThreeVerticalIcon size={22} color="#9ca3af" weight="bold" />
         </Pressable>
       </View>
 

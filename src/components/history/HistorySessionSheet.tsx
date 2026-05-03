@@ -1,5 +1,5 @@
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { CaretRight, WarningCircle } from 'phosphor-react-native'
+import { CaretRightIcon, WarningCircleIcon } from 'phosphor-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import type { HistorySession } from '@/store/historyStore'
@@ -52,12 +52,12 @@ export function HistorySessionSheet({
                     </Text>
                     {session.faultCount > 0 && (
                       <View style={styles.faultRow}>
-                        <WarningCircle size={12} color="#fca5a5" weight="fill" />
+                        <WarningCircleIcon size={12} color="#fca5a5" weight="fill" />
                         <Text style={styles.faultText}>{session.faultCount} faults</Text>
                       </View>
                     )}
                   </View>
-                  <CaretRight size={16} color="#64748b" weight="bold" />
+                  <CaretRightIcon size={16} color="#64748b" weight="bold" />
                 </Pressable>
               )
             })

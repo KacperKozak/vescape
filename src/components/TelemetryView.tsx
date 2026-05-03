@@ -22,6 +22,7 @@ export function TelemetryView() {
   )
   const targetLocation = useMapStore((s) => s.targetLocation)
   const stateCompat = v ? v.state & 0xf : 0
+  const isCharging = stateCompat === 14
   const stateName = v ? (REFLOAT_STATE_NAMES[stateCompat] ?? `STATE_${stateCompat}`) : '—'
   const hasFault = v?.hasFault ?? false
   const faultName = v?.hasFault ? (FAULT_NAMES[v.faultCode] ?? `CODE_${v.faultCode}`) : stateName
@@ -120,6 +121,7 @@ export function TelemetryView() {
             label="Voltage"
             value={v ? fmt(v.batteryVoltage) : '—'}
             unit={v ? 'V' : undefined}
+            charging={isCharging}
           />
           <TelemetryCard
             label="Batt Current"

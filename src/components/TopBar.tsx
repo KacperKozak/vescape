@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { CaretDown } from 'phosphor-react-native'
+import { CaretDownIcon } from 'phosphor-react-native'
 
 import { BoardMenu, type BoardMenuItem } from '@/components/BoardMenu'
 import { BoardSelectorSheet } from '@/components/BoardSelectorSheet'
@@ -47,7 +47,7 @@ export function TopBar({
           <Text style={styles.selectorText} numberOfLines={1}>
             {displayName}
           </Text>
-          <CaretDown size={12} color="#6b7280" weight="bold" />
+          <CaretDownIcon size={12} color="#6b7280" weight="bold" />
         </View>
       </Pressable>
 

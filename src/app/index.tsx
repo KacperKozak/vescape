@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { BackHandler, ToastAndroid, View, Text, Pressable, StyleSheet } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { ClockCounterClockwise, Lightning, MapPin } from 'phosphor-react-native'
+import { ClockCounterClockwiseIcon, LightningIcon, MapPinIcon } from 'phosphor-react-native'
 import { useShallow } from 'zustand/react/shallow'
 
 import { useBoardStore } from '@/store/boardStore'
@@ -18,9 +18,9 @@ import { TopBar } from '@/components/TopBar'
 import { LiveStatusBar } from '@/components/LiveStatusBar'
 
 const TABS = [
-  { label: 'History', Icon: ClockCounterClockwise },
-  { label: 'Board', Icon: Lightning },
-  { label: 'Map', Icon: MapPin },
+  { label: 'History', Icon: ClockCounterClockwiseIcon },
+  { label: 'Board', Icon: LightningIcon },
+  { label: 'Map', Icon: MapPinIcon },
 ] as const
 
 export default function MainScreen() {

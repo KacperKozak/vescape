@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { View, Text, ActivityIndicator, Animated, StyleSheet, type ViewStyle } from 'react-native'
-import { Lightning, NavigationArrow, WarningCircle } from 'phosphor-react-native'
+import { LightningIcon, NavigationArrowIcon, WarningCircleIcon } from 'phosphor-react-native'
 import { useShallow } from 'zustand/react/shallow'
 import { useBleStore } from '@/store/bleStore'
 import { theme } from '@/constants/theme'
@@ -68,8 +68,8 @@ export function StatusPill({ status, style }: { status: string; style?: ViewStyl
       {status === 'connected' && (
         <Animated.View style={[styles.dot, { backgroundColor: dotColor, opacity: pulseOpacity }]} />
       )}
-      {status === 'idle' && <Lightning size={12} color={pillText} weight="fill" />}
-      {status === 'error' && <WarningCircle size={12} color={pillText} weight="fill" />}
+      {status === 'idle' && <LightningIcon size={12} color={pillText} weight="fill" />}
+      {status === 'error' && <WarningCircleIcon size={12} color={pillText} weight="fill" />}
       {status === 'connected' && avgLatency != null && (
         <Text style={[styles.latency, { color: dotColor }]}>{avgLatency}ms</Text>
       )}
@@ -121,7 +121,7 @@ export function GpsStatusBadge({ style }: { style?: ViewStyle }) {
 
   return (
     <View style={[styles.gpsPill, { backgroundColor: bg }, style]}>
-      <NavigationArrow size={11} color={color} weight="fill" />
+      <NavigationArrowIcon size={11} color={color} weight="fill" />
       {label && <Text style={[styles.gpsLabel, { color }]}>{label}</Text>}
     </View>
   )

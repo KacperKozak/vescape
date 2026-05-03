@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert } from 'react-native'
 import { router } from 'expo-router'
-import { PencilSimple, Power, Star, Trash } from 'phosphor-react-native'
+import { PencilSimpleIcon, PowerIcon, StarIcon, TrashIcon } from 'phosphor-react-native'
 import { useShallow } from 'zustand/react/shallow'
 
 import { useBoardStore } from '@/store/boardStore'
@@ -107,7 +107,7 @@ export function useBoardConnection() {
     if (activeBoard && !activeReplay) {
       items.push({
         label: 'Edit Board',
-        icon: PencilSimple,
+        icon: PencilSimpleIcon,
         onPress: () =>
           router.push({ pathname: routes.addBoardDetails, params: { boardId: activeBoard.id } }),
       })
@@ -115,14 +115,14 @@ export function useBoardConnection() {
     if (activeBoard && !activeBoard.isStarred && !activeReplay) {
       items.push({
         label: 'Make main',
-        icon: Star,
+        icon: StarIcon,
         onPress: () => starBoard(activeBoard.id),
       })
     }
     if (bleStatus === 'connected' || bleStatus === 'connecting') {
       items.push({
         label: activeReplay ? 'Stop' : 'Disconnect',
-        icon: Power,
+        icon: PowerIcon,
         onPress: () => {
           setScanEnabled(false)
           void disconnect()
@@ -131,7 +131,7 @@ export function useBoardConnection() {
       if (activeReplay) {
         items.push({
           label: 'Remove recording',
-          icon: Trash,
+          icon: TrashIcon,
           destructive: true,
           onPress: () =>
             Alert.alert(

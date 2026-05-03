@@ -1,14 +1,14 @@
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import {
-  CaretRight,
-  CheckCircle,
-  Lightning,
-  Plus,
-  Star,
-  VideoCamera,
-  RadioButton,
-  Record,
+  CaretRightIcon,
+  CheckCircleIcon,
+  LightningIcon,
+  PlusIcon,
+  StarIcon,
+  VideoCameraIcon,
+  RadioButtonIcon,
+  RecordIcon,
 } from 'phosphor-react-native'
 
 import type { Board } from '@/db/boards'
@@ -59,7 +59,7 @@ export function BoardSelectorSheet({
                 onPress={() => onSelectBoard(board.id)}
               >
                 <View style={[styles.boardIcon, isActive && styles.boardIconActive]}>
-                  <Lightning
+                  <LightningIcon
                     size={16}
                     color={isActive ? theme.wheel.color : '#6b7280'}
                     weight={isActive ? 'fill' : 'regular'}
@@ -71,19 +71,19 @@ export function BoardSelectorSheet({
                   </Text>
                   {board.isStarred && (
                     <View style={styles.starBadge}>
-                      <Star size={10} color="#facc15" weight="fill" />
+                      <StarIcon size={10} color="#facc15" weight="fill" />
                       <Text style={styles.starText}>Main</Text>
                     </View>
                   )}
                 </View>
-                {isActive && <CheckCircle size={20} color={theme.wheel.color} weight="fill" />}
+                {isActive && <CheckCircleIcon size={20} color={theme.wheel.color} weight="fill" />}
               </Pressable>
             )
           })}
 
           <Pressable style={styles.addRow} onPress={onAddBoard}>
             <View style={styles.addIcon}>
-              <Plus size={16} color={theme.wheel.color} weight="bold" />
+              <PlusIcon size={16} color={theme.wheel.color} weight="bold" />
             </View>
             <Text style={styles.addText}>Add new board</Text>
           </Pressable>
@@ -95,7 +95,7 @@ export function BoardSelectorSheet({
               {recordings.map((r) => (
                 <Pressable key={r.path} style={styles.recordingRow} onPress={() => onReplay(r)}>
                   <View style={styles.recordingIcon}>
-                    <VideoCamera size={14} color="#a78bfa" weight="fill" />
+                    <VideoCameraIcon size={14} color="#a78bfa" weight="fill" />
                   </View>
                   <View style={styles.recordingInfo}>
                     <Text style={styles.recordingName} numberOfLines={1}>
@@ -105,7 +105,7 @@ export function BoardSelectorSheet({
                       {new Date(r.startedAt).toLocaleString()} · {Math.ceil(r.sizeBytes / 1024)} KB
                     </Text>
                   </View>
-                  <CaretRight size={16} color="#4b5563" weight="bold" />
+                  <CaretRightIcon size={16} color="#4b5563" weight="bold" />
                 </Pressable>
               ))}
             </>
@@ -114,9 +114,9 @@ export function BoardSelectorSheet({
           <View style={styles.divider} />
           <Pressable style={styles.debugRow} onPress={onToggleRecordDebug}>
             {recordDebugSession ? (
-              <Record size={20} color={theme.wheel.color} weight="fill" />
+              <RecordIcon size={20} color={theme.wheel.color} weight="fill" />
             ) : (
-              <RadioButton size={20} color="#4b5563" weight="regular" />
+              <RadioButtonIcon size={20} color="#4b5563" weight="regular" />
             )}
             <Text style={[styles.debugText, recordDebugSession && styles.debugTextActive]}>
               Record next session

@@ -1,5 +1,6 @@
 import React from 'react'
 import { View, Text, StyleSheet } from 'react-native'
+import { LightningIcon } from 'phosphor-react-native'
 
 interface Props {
   label: string
@@ -9,6 +10,8 @@ interface Props {
   sub?: string
   /** Highlight the card when value warrants attention (fault, over-limit, etc.) */
   alert?: boolean
+  /** Show a green charging indicator (dot + icon) */
+  charging?: boolean
 }
 
 /** A single telemetry value tile. */
@@ -18,11 +21,16 @@ export const TelemetryCard = React.memo(function TelemetryCard({
   unit,
   sub,
   alert = false,
+  charging = false,
 }: Props) {
   return (
     <View style={styles.card}>
       {alert && <View style={styles.alertDot} />}
-      <Text style={styles.label}>{label}</Text>
+      {charging && <View style={styles.chargingDot} />}
+      <View style={styles.labelRow}>
+        <Text style={styles.label}>{label}</Text>
+        {charging && <LightningIcon size={11} color="#4ade80" weight="fill" />}
+      </View>
       <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit>
         {value}
         {unit ? <Text style={styles.unit}> {unit}</Text> : null}
@@ -50,6 +58,20 @@ const styles = StyleSheet.create({
     height: 7,
     borderRadius: 4,
     backgroundColor: '#ef4444',
+  },
+  chargingDot: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#4ade80',
+  },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   label: {
     color: '#94a3b8',

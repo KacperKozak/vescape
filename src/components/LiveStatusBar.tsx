@@ -1,4 +1,4 @@
-import { Lightning, NavigationArrow } from 'phosphor-react-native'
+import { LightningIcon, NavigationArrowIcon } from 'phosphor-react-native'
 import { useEffect, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useShallow } from 'zustand/react/shallow'
@@ -111,7 +111,7 @@ export function LiveStatusBar() {
         <Pressable style={styles.bar} onPress={() => setExpanded(true)}>
           <View style={styles.sources}>
             <SourceGroup
-              icon={<Lightning size={11} color={boardColor} weight="fill" />}
+              icon={<LightningIcon size={11} color={boardColor} weight="fill" />}
               label="Board:"
               slots={slots}
               getValue={(s) => s.boardCount}
@@ -123,7 +123,7 @@ export function LiveStatusBar() {
               valueColor={boardColor}
             />
             <SourceGroup
-              icon={<NavigationArrow size={11} color={gpsClr} weight="fill" />}
+              icon={<NavigationArrowIcon size={11} color={gpsClr} weight="fill" />}
               label="GPS:"
               slots={slots}
               getValue={(s) => s.gpsCount}
@@ -219,7 +219,7 @@ function ExpandedView({
     <View style={styles.expanded}>
       <View style={styles.expandedSources}>
         <SourceChart
-          icon={<Lightning size={10} color="#475569" weight="fill" />}
+          icon={<LightningIcon size={10} color="#475569" weight="fill" />}
           label="Board"
           slots={slots}
           getValue={(s) => s.boardCount}
@@ -233,7 +233,7 @@ function ExpandedView({
         />
         <View style={styles.expandedDivider} />
         <SourceChart
-          icon={<NavigationArrow size={10} color="#475569" weight="fill" />}
+          icon={<NavigationArrowIcon size={10} color="#475569" weight="fill" />}
           label="GPS"
           slots={slots}
           getValue={(s) => s.gpsCount}
