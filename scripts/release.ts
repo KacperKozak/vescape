@@ -54,7 +54,7 @@ const apkSrc = join(root, 'android/app/build/outputs/apk/release/app-release.apk
 const driveDir =
   '/Users/kacperkozak/Library/CloudStorage/GoogleDrive-dexted.xt@gmail.com/My Drive/Apps'
 await $`mkdir -p ${driveDir}`
-const apkDest = join(driveDir, `vesc-poc-v${newVersion}.apk`)
+const apkDest = join(driveDir, `vibe-wheel-v${newVersion}.apk`)
 await Bun.write(apkDest, Bun.file(apkSrc))
 console.log(`✓ Copied APK → ${apkDest}`)
 
