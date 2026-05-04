@@ -32,10 +32,10 @@ jobs:
           distribution: temurin
           java-version: 17
       - run: bun install
+      - name: Prebuild Android
+        run: bunx expo prebuild --platform android --no-install
       - name: Build Android
-        run: |
-          bun run build:release
-        working-directory: ${{ github.workspace }}/android
+        run: bun run build:release
       - uses: actions/upload-artifact@v4
         with:
           name: app-release
