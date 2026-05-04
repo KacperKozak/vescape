@@ -16,8 +16,8 @@ interface Props {
 }
 
 /**
- * Compact battery indicator: % + voltage on the left, 10-min sparkline
- * filling the right. Sits at the top of the telemetry view.
+ * Compact battery indicator: tiny "BATTERY" label, 10-min sparkline filling
+ * the middle, % + voltage on the right. Sits at the top of the telemetry view.
  */
 export function BatteryBar({ percent, voltage, series, hint, alert = false }: Props) {
   const color = alert
@@ -29,20 +29,18 @@ export function BatteryBar({ percent, voltage, series, hint, alert = false }: Pr
     <View style={[styles.wrap, alert && styles.wrapAlert]}>
       <View style={styles.left}>
         <Text style={styles.label}>BATTERY</Text>
-        <View style={styles.numbers}>
-          <Text style={[styles.percent, { color }]} numberOfLines={1}>
-            {percent != null ? `${Math.round(percent)}%` : '—'}
-          </Text>
-          {voltage != null ? <Text style={styles.voltage}>{voltage.toFixed(1)} V</Text> : null}
-        </View>
+        {voltage != null ? <Text style={styles.voltage}>{voltage.toFixed(1)} V</Text> : null}
       </View>
-      <View style={styles.right}>
+      <View style={styles.middle}>
         {series && series.length > 1 ? (
-          <Sparkline points={series} color={color} height={32} range={{ min: 0, max: 100 }} />
+          <Sparkline points={series} color={color} height={28} range={{ min: 0, max: 100 }} />
         ) : hint ? (
           <Text style={styles.hint}>{hint}</Text>
         ) : null}
       </View>
+      <Text style={[styles.percent, { color }]} numberOfLines={1}>
+        {percent != null ? `${Math.round(percent)}%` : '—'}
+      </Text>
     </View>
   )
 }
@@ -57,14 +55,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     marginHorizontal: 4,
     marginBottom: 6,
-    gap: 14,
+    gap: 12,
   },
   wrapAlert: {
     borderWidth: 1,
     borderColor: theme.error.border,
   },
   left: {
-    minWidth: 92,
+    alignItems: 'flex-start',
   },
   label: {
     color: '#94a3b8',
@@ -72,16 +70,15 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.6,
   },
-  numbers: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 6,
-    marginTop: 2,
+  middle: {
+    flex: 1,
+    justifyContent: 'center',
   },
   percent: {
     fontSize: 22,
     fontFamily: 'monospace',
     fontWeight: '700',
+    lineHeight: 24,
   },
   voltage: {
     color: '#64748b',
@@ -89,14 +86,10 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
     fontWeight: '600',
   },
-  right: {
-    flex: 1,
-    justifyContent: 'center',
-  },
   hint: {
     color: '#64748b',
     fontSize: 10,
     fontWeight: '600',
-    textAlign: 'right',
+    textAlign: 'center',
   },
 })

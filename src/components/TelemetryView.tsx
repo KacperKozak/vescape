@@ -143,15 +143,17 @@ export function TelemetryView() {
           alert={batteryAlert}
         />
 
-        {/* HERO — speedometer with GPS line below */}
+        {/* HERO — speedometer */}
         <SpeedGauge
           value={v ? Math.abs(v.speed) : null}
           gpsValue={gpsSpeedKmh}
           series={series.speed}
+          distance={v?.odometer != null ? `${fmtKm(v.odometer)} km` : undefined}
           max={50}
         />
 
-        {/* PRIMARY TILES — 2 col, with sparklines */}
+        {/* TILES — 2 col, no section header. Distance lives in the gauge corner;
+            other tiles flow continuously to fill the freed slot. */}
         <View style={styles.row}>
           <TelemetryCard
             label="Duty Cycle"
@@ -186,16 +188,6 @@ export function TelemetryView() {
             minSpan={30}
           />
           <TelemetryCard
-            label="Total Distance"
-            value={v?.odometer != null ? fmtKm(v.odometer) : '—'}
-            unit={v?.odometer != null ? 'km' : undefined}
-          />
-        </View>
-
-        {/* SECONDARY */}
-        <Text style={styles.sectionLabel}>OTHER</Text>
-        <View style={styles.row}>
-          <TelemetryCard
             label="Motor Current"
             value={v ? fmt(v.motorCurrent) : '—'}
             unit={v ? 'A' : undefined}
@@ -204,6 +196,8 @@ export function TelemetryView() {
             fmtMax={(value) => `${value.toFixed(0)} A`}
             minSpan={20}
           />
+        </View>
+        <View style={styles.row}>
           <TelemetryCard
             label="Batt Current"
             value={v ? fmt(v.batteryCurrent) : '—'}
@@ -213,19 +207,17 @@ export function TelemetryView() {
             fmtMax={(value) => `${value.toFixed(0)} A`}
             minSpan={20}
           />
-        </View>
-        <View style={styles.row}>
           <TelemetryCard
             label="State"
             value={v ? faultName : '—'}
             alert={v ? hasFault || stateCompat >= 6 : false}
           />
+        </View>
+        <View style={styles.row}>
           <TelemetryCard
             label="Footpad"
             value={v ? `${v.adc1.toFixed(2)} / ${v.adc2.toFixed(2)}` : '—'}
           />
-        </View>
-        <View style={styles.row}>
           <TelemetryCard label="IMU" value={imuValue} alert={imuAlert} />
         </View>
       </View>
