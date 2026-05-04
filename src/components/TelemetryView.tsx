@@ -176,15 +176,6 @@ export function TelemetryView() {
         </View>
         <View style={styles.row}>
           <TelemetryCard
-            label="Controller Temp"
-            value={v?.tempMosfet != null ? fmt(v.tempMosfet) : DASH}
-            unit={v?.tempMosfet != null ? '°C' : undefined}
-            series={series.ctrlTemp}
-            seriesColor={theme.warning.color}
-            fmtMax={TEMP_FMT_MAX}
-            minSpan={TEMP_MIN_SPAN}
-          />
-          <TelemetryCard
             label="Motor Current"
             value={v ? fmt(v.motorCurrent) : DASH}
             unit={v ? 'A' : undefined}
@@ -192,6 +183,15 @@ export function TelemetryView() {
             seriesColor={theme.bran.color}
             fmtMax={AMP_FMT_MAX}
             minSpan={AMP_MIN_SPAN}
+          />
+          <TelemetryCard
+            label="Controller Temp"
+            value={v?.tempMosfet != null ? fmt(v.tempMosfet) : DASH}
+            unit={v?.tempMosfet != null ? '°C' : undefined}
+            series={series.ctrlTemp}
+            seriesColor={theme.warning.color}
+            fmtMax={TEMP_FMT_MAX}
+            minSpan={TEMP_MIN_SPAN}
           />
         </View>
         <View style={styles.row}>
