@@ -25,7 +25,8 @@ const VB_H = 120
 const CX = 100
 const CY = 100
 const R = 80
-const STROKE = 12
+const STROKE_BG = 3
+const STROKE_FILL = 4
 
 /** Project fraction f (0..1) along the half-circle to (x, y) on the arc. */
 function arcPoint(f: number) {
@@ -59,36 +60,43 @@ export function SpeedGauge({ value, series, gpsValue, distance, max = 50 }: Prop
 
       <View style={styles.dial}>
         <Svg viewBox={`0 0 ${VB_W} ${VB_H}`} style={styles.svg}>
-          {/* Background arc (full half-circle) */}
+          {/* Background arc (full half-circle) — thin track */}
           <Path
             d={arcPath(1)}
             stroke="#334155"
-            strokeWidth={STROKE}
+            strokeWidth={STROKE_BG}
             strokeLinecap="round"
             fill="none"
           />
-          {/* Filled arc up to current speed */}
+          {/* Filled arc up to current speed — slightly bolder so it pops */}
           {value != null && fraction > 0 ? (
             <Path
               d={arcPath(fraction)}
               stroke={color}
-              strokeWidth={STROKE}
+              strokeWidth={STROKE_FILL}
               strokeLinecap="round"
               fill="none"
             />
           ) : null}
         </Svg>
 
-        {/* Tick labels at start/end of dial */}
-        <Text style={[styles.tick, styles.tickLeft]}>0</Text>
-        <Text style={[styles.tick, styles.tickRight]}>{max}</Text>
+        {/* Bottom row: range ticks (with units), one flex row so layout is
+            reliable — absolute-positioned Text doesn't always size right. */}
+        <View style={styles.tickRow} pointerEvents="none">
+          <Text style={styles.tick}>
+            0<Text style={styles.tickUnit}> km/h</Text>
+          </Text>
+          <Text style={styles.tick}>
+            {max}
+            <Text style={styles.tickUnit}> km/h</Text>
+          </Text>
+        </View>
 
-        {/* Centered stack — speed, unit, GPS readout — sits in the bowl. */}
+        {/* Centered stack — big speed number + GPS readout. */}
         <View style={styles.bowl} pointerEvents="none">
           <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit>
-            {value != null ? value.toFixed(1) : '—'}
+            {value != null ? Math.round(value) : '—'}
           </Text>
-          <Text style={styles.unit}>km/h</Text>
           <Text style={styles.gpsText}>
             <Text style={styles.gpsLabel}>GPS </Text>
             {gpsValue != null ? `${gpsValue.toFixed(1)} km/h` : '—'}
@@ -168,12 +176,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     lineHeight: 60,
   },
-  unit: {
-    color: '#64748b',
-    fontSize: 13,
-    fontWeight: '500',
-    marginTop: -4,
-  },
   gpsText: {
     color: theme.gps.text,
     fontSize: 12,
@@ -185,20 +187,24 @@ const styles = StyleSheet.create({
     color: '#64748b',
     fontWeight: '700',
   },
-  tick: {
+  tickRow: {
     position: 'absolute',
-    color: '#475569',
-    fontSize: 10,
+    left: '8%',
+    right: '8%',
+    bottom: '4%',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  tick: {
+    color: '#cbd5e1',
+    fontSize: 11,
+    fontFamily: 'monospace',
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
   },
-  tickLeft: {
-    left: '6%',
-    bottom: '8%',
-  },
-  tickRight: {
-    right: '6%',
-    bottom: '8%',
+  tickUnit: {
+    color: '#64748b',
+    fontWeight: '500',
   },
   sparkRow: {
     width: '100%',
