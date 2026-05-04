@@ -145,7 +145,7 @@ export function TelemetryView() {
 
         {/* HERO — speedometer */}
         <SpeedGauge
-          value={v ? Math.abs(v.speed) : null}
+          value={v ? Math.abs(v.speed || 23) : null}
           gpsValue={gpsSpeedKmh}
           series={series.speed}
           distance={v?.odometer != null ? `${fmtKm(v.odometer)} km` : undefined}

@@ -1,5 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native'
-import Svg, { Path } from 'react-native-svg'
+import Svg, { Defs, Line, Path, RadialGradient, Stop } from 'react-native-svg'
 
 import { Sparkline, type SparklinePoint } from '@/components/charts/Sparkline'
 import { theme } from '@/constants/theme'
@@ -25,18 +25,36 @@ const VB_H = 120
 const CX = 100
 const CY = 100
 const R = 80
-const STROKE_BG = 3
-const STROKE_FILL = 4
+const STROKE_BG = 2
+const STROKE_FILL = 2
+const GLOW_GRADIENT_ID = 'speedGaugeGlow'
+
+/** Polar → cartesian on the dial circle at radius `r`. */
+function polar(r: number, f: number) {
+  const angle = Math.PI - Math.PI * f // π → 0, sweeping through π/2 (top)
+  return { x: CX + r * Math.cos(angle), y: CY - r * Math.sin(angle) }
+}
 
 /** Project fraction f (0..1) along the half-circle to (x, y) on the arc. */
 function arcPoint(f: number) {
-  const angle = Math.PI - Math.PI * f // π → 0, sweeping through π/2 (top)
-  return { x: CX + R * Math.cos(angle), y: CY - R * Math.sin(angle) }
+  return polar(R, f)
 }
 
 function arcPath(f: number) {
   const end = arcPoint(Math.min(1, Math.max(0, f)))
   return `M ${CX - R} ${CY} A ${R} ${R} 0 0 1 ${end.x} ${end.y}`
+}
+
+/**
+ * Pie-wedge from the dial center out to the active arc. Used as the canvas
+ * for the inner glow — fill it with a radial gradient that's transparent
+ * at the center and glows toward the arc edge.
+ */
+function wedgePath(f: number) {
+  const clamped = Math.min(1, Math.max(0, f))
+  if (clamped <= 0) return ''
+  const end = arcPoint(clamped)
+  return `M ${CX} ${CY} L ${CX - R} ${CY} A ${R} ${R} 0 0 1 ${end.x} ${end.y} Z`
 }
 
 /**
@@ -60,24 +78,72 @@ export function SpeedGauge({ value, series, gpsValue, distance, max = 50 }: Prop
 
       <View style={styles.dial}>
         <Svg viewBox={`0 0 ${VB_W} ${VB_H}`} style={styles.svg}>
-          {/* Background arc (full half-circle) — thin track */}
+          <Defs>
+            {/* Inner glow — radial fade from transparent at the dial center
+                out to a soft tint at the arc edge. Fills only the active
+                wedge, so the glow tracks the current speed. */}
+            <RadialGradient
+              id={GLOW_GRADIENT_ID}
+              gradientUnits="userSpaceOnUse"
+              cx={CX}
+              cy={CY}
+              r={R}
+            >
+              <Stop offset="0" stopColor={color} stopOpacity={0} />
+              <Stop offset="0.6" stopColor={color} stopOpacity={0} />
+              <Stop offset="0.95" stopColor={color} stopOpacity={0.18} />
+              <Stop offset="1" stopColor={color} stopOpacity={0.35} />
+            </RadialGradient>
+          </Defs>
+
+          {/* Inner-glow wedge under the active arc */}
+          {value != null && fraction > 0 ? (
+            <Path d={wedgePath(fraction)} fill={`url(#${GLOW_GRADIENT_ID})`} stroke="none" />
+          ) : null}
+
+          {/* Background track — thin solid */}
           <Path
             d={arcPath(1)}
             stroke="#334155"
             strokeWidth={STROKE_BG}
-            strokeLinecap="round"
+            strokeLinecap="butt"
             fill="none"
           />
-          {/* Filled arc up to current speed — slightly bolder so it pops */}
+
+          {/* Active arc — thin solid colour, sits on top of the track */}
           {value != null && fraction > 0 ? (
             <Path
               d={arcPath(fraction)}
               stroke={color}
               strokeWidth={STROKE_FILL}
-              strokeLinecap="round"
+              strokeLinecap="butt"
               fill="none"
             />
           ) : null}
+
+          {/* Marker: a thin radial tick on the outside of the arc, in the
+              arc colour. Sits at the current-speed angle, just touching the
+              track from outside. */}
+          {value != null
+            ? (() => {
+                // Outer endpoint sits at the OUTER edge of the arc track
+                // (R + half-stroke), not its center, so the tick top meets
+                // the arc cleanly — no gap, no half-stuck-into-track look.
+                const inner = polar(R - 10, fraction)
+                const outer = polar(R + STROKE_FILL / 2, fraction)
+                return (
+                  <Line
+                    x1={inner.x}
+                    y1={inner.y}
+                    x2={outer.x}
+                    y2={outer.y}
+                    stroke={color}
+                    strokeWidth={1.5}
+                    strokeLinecap="butt"
+                  />
+                )
+              })()
+            : null}
         </Svg>
 
         {/* Bottom row: range ticks (with units), one flex row so layout is
