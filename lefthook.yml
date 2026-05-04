@@ -1,3 +1,6 @@
+output:
+  - failure
+
 pre-commit:
   parallel: true
   commands:
