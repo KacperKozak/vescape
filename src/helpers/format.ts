@@ -1,3 +1,6 @@
+/** Em dash used as placeholder when a value is unavailable. */
+export const DASH = '—'
+
 /** Format a number to a fixed number of decimal places (default 1). */
 export function fmt(value: number, decimals = 1): string {
   return value.toFixed(decimals)
