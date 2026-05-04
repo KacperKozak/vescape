@@ -145,7 +145,7 @@ export function TelemetryView() {
 
         {/* HERO — speedometer */}
         <SpeedGauge
-          value={v ? Math.abs(v.speed || 23) : null}
+          value={v ? Math.abs(v.speed) : null}
           gpsValue={gpsSpeedKmh}
           series={series.speed}
           distance={v?.odometer != null ? `${fmtKm(v.odometer)} km` : undefined}
@@ -226,7 +226,7 @@ export function TelemetryView() {
 }
 
 const styles = StyleSheet.create({
-  grid: { padding: 12, paddingBottom: 32 },
+  grid: { padding: 12, paddingBottom: 96 },
   dimmed: { opacity: 0.35 },
   sectionLabel: {
     color: '#475569',
