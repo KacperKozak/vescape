@@ -41,7 +41,6 @@ type StatusPill = SpinnerPill | ActionPill
 
 function getStatusPill(
   status: string,
-  hasTelemetry: boolean,
   board: Board | undefined,
   onStopScan: () => void,
   onRetryConnect: () => void,
@@ -53,13 +52,6 @@ function getStatusPill(
     return { kind: 'spinner', text: 'Reconnecting…', color: '#3b82f6', onPress: onStopScan }
   if (status === 'connecting')
     return { kind: 'spinner', text: 'Connecting…', color: '#3b82f6', onPress: onStopScan }
-  if (status === 'connected' && !hasTelemetry)
-    return {
-      kind: 'spinner',
-      text: 'Waiting for telemetry…',
-      color: '#4ade80',
-      onPress: onStopScan,
-    }
   if (status === 'idle')
     return {
       kind: 'action',
@@ -85,12 +77,11 @@ export function FloatingBar({
   onStopScan,
   onRetryConnect,
 }: FloatingBarProps) {
-  const { recording, start, stop, hasTelemetry } = useBleStore(
+  const { recording, start, stop } = useBleStore(
     useShallow((s) => ({
       recording: s.telemetryRecordingEnabled,
       start: s.startTelemetryRecording,
       stop: s.stopTelemetryRecording,
-      hasTelemetry: s.recentTelemetry.length > 0,
     })),
   )
 
@@ -102,7 +93,7 @@ export function FloatingBar({
     }
   }, [recording, start, stop])
 
-  const pill = getStatusPill(bleStatus, hasTelemetry, activeBoard, onStopScan, onRetryConnect)
+  const pill = getStatusPill(bleStatus, activeBoard, onStopScan, onRetryConnect)
 
   return (
     <View style={styles.wrapper} pointerEvents="box-none">

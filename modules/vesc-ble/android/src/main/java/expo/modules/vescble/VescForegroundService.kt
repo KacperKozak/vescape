@@ -70,6 +70,7 @@ private const val REFLOAT_FAULT_MODE = 69
 private const val MAX_RECORDING_ACCURACY_M = 20.0
 private const val RECENT_WINDOW_MS = 10 * 60 * 1000L
 private const val TELEMETRY_STALE_MS = 2_500L
+private const val BOARD_READY_TIMEOUT_MS = 4_000L
 
 private val NUS_SERVICE_UUID = UUID.fromString("6e400001-b5a3-f393-e0a9-e50e24dcca9e")
 private val NUS_TX_UUID = UUID.fromString("6e400002-b5a3-f393-e0a9-e50e24dcca9e")
@@ -285,6 +286,7 @@ class VescForegroundService : Service() {
     private var pendingCccdWrites = 0
     private var cccdTimeout: Runnable? = null
     private var connectTimeout: Runnable? = null
+    private var boardReadyTimeout: Runnable? = null
     private var pendingConnect: PendingStart? = null
     private var pollRunnable: Runnable? = null
     private var telemetryStaleRunnable: Runnable? = null
@@ -643,16 +645,15 @@ class VescForegroundService : Service() {
         cancelCccdTimeout()
         val start = pendingConnect ?: return
         pendingConnect = null
-        autoReconnectAttempt = 0
-        status = "connected"
+        status = "connecting"
         error = null
         emitState()
-        telemetryStore?.recordMarker("connected", config?.deviceId, config?.deviceName)
         showNotification("Discovering board...")
         start.onSuccess()
         mainHandler.postDelayed({ sendPayload(byteArrayOf(COMM_FW_VERSION.toByte())) }, 500)
         mainHandler.postDelayed({ sendPayload(byteArrayOf(COMM_PING_CAN.toByte())) }, 800)
         if (canId != null) startPolling()
+        armBoardReadyTimeout(start.config)
     }
 
     private fun handleFrameChunk(chunk: ByteArray) {
@@ -674,6 +675,7 @@ class VescForegroundService : Service() {
             }
             COMM_CUSTOM_APP_DATA -> {
                 val parsed = parseGetAllData(payload) ?: return
+                markBoardReady()
                 telemetry = parsed
                 lastTelemetryAt = parsed.lastPacketAt
                 armTelemetryStaleWatchdog()
@@ -713,6 +715,33 @@ class VescForegroundService : Service() {
         pollRunnable = null
         telemetryStaleRunnable?.let { mainHandler.removeCallbacks(it) }
         telemetryStaleRunnable = null
+    }
+
+    private fun armBoardReadyTimeout(session: SessionConfig) {
+        if (!session.autoReconnect || session.mode == "replay") return
+        cancelBoardReadyTimeout()
+        boardReadyTimeout = Runnable {
+            boardReadyTimeout = null
+            if (status == "connecting" && config?.autoReconnect == true && telemetry == null) {
+                scheduleAutoReconnect(session, null, "board telemetry unavailable")
+            }
+        }
+        mainHandler.postDelayed(boardReadyTimeout!!, BOARD_READY_TIMEOUT_MS)
+    }
+
+    private fun cancelBoardReadyTimeout() {
+        boardReadyTimeout?.let { mainHandler.removeCallbacks(it) }
+        boardReadyTimeout = null
+    }
+
+    private fun markBoardReady() {
+        cancelBoardReadyTimeout()
+        if (status == "connected") return
+        autoReconnectAttempt = 0
+        status = "connected"
+        error = null
+        telemetryStore?.recordMarker("connected", config?.deviceId, config?.deviceName)
+        emitState()
     }
 
     private fun armTelemetryStaleWatchdog() {
@@ -875,6 +904,7 @@ class VescForegroundService : Service() {
         stopReconnectScan()
         cancelCccdTimeout()
         cancelConnectTimeout()
+        cancelBoardReadyTimeout()
         stopPolling()
         stopReplayLoop()
         clearGatt(markIntentional = true)
@@ -926,6 +956,7 @@ class VescForegroundService : Service() {
         }
         pendingConnect = null
         cancelConnectTimeout()
+        cancelBoardReadyTimeout()
         cancelCccdTimeout()
         stopPolling()
         clearGatt(markIntentional = true)
@@ -947,6 +978,7 @@ class VescForegroundService : Service() {
         if (!session.autoReconnect || isStoppingService) return
         pendingConnect = null
         cancelConnectTimeout()
+        cancelBoardReadyTimeout()
         cancelCccdTimeout()
         stopPolling()
         clearGatt(markIntentional = false)
