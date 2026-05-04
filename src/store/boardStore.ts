@@ -26,7 +26,13 @@ interface BoardState {
 
 interface BoardActions {
   load: () => void
-  addBoard: (data: { name: string; description?: string; bleId?: string }) => Board
+  addBoard: (data: {
+    name: string
+    description?: string
+    bleId?: string
+    minVoltage?: number | null
+    maxVoltage?: number | null
+  }) => Board
   updateBoard: (board: Board) => void
   removeBoard: (id: string) => void
   setActiveBoard: (id: string | null) => void
@@ -52,7 +58,7 @@ export const useBoardStore = create<BoardState & BoardActions>((set, get) => ({
     })
   },
 
-  addBoard({ name, description, bleId }) {
+  addBoard({ name, description, bleId, minVoltage, maxVoltage }) {
     const isFirst = get().boards.length === 0
     const board: Board = {
       id: generateId(),
@@ -61,6 +67,8 @@ export const useBoardStore = create<BoardState & BoardActions>((set, get) => ({
       bleId: bleId ?? null,
       isStarred: isFirst,
       createdAt: Date.now(),
+      minVoltage: minVoltage ?? null,
+      maxVoltage: maxVoltage ?? null,
     }
     insertBoard(board)
     set((state) => ({

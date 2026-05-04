@@ -10,6 +10,10 @@ export interface Board {
   bleId: string | null
   isStarred: boolean
   createdAt: number
+  /** Empty-pack voltage (0% battery). Null = unknown. */
+  minVoltage: number | null
+  /** Full-pack voltage (100% battery). Null = unknown. */
+  maxVoltage: number | null
 }
 
 function rowToBoard(row: {
@@ -19,6 +23,8 @@ function rowToBoard(row: {
   bleId: string | null
   isStarred: boolean
   createdAt: number
+  minVoltage: number | null
+  maxVoltage: number | null
 }): Board {
   return {
     id: row.id,
@@ -27,6 +33,8 @@ function rowToBoard(row: {
     bleId: row.bleId,
     isStarred: row.isStarred,
     createdAt: row.createdAt,
+    minVoltage: row.minVoltage,
+    maxVoltage: row.maxVoltage,
   }
 }
 
@@ -48,6 +56,8 @@ export function insertBoard(board: Board): void {
       bleId: board.bleId,
       isStarred: board.isStarred,
       createdAt: board.createdAt,
+      minVoltage: board.minVoltage,
+      maxVoltage: board.maxVoltage,
     })
     .run()
 }
@@ -59,6 +69,8 @@ export function updateBoard(board: Board): void {
       description: board.description,
       bleId: board.bleId,
       isStarred: board.isStarred,
+      minVoltage: board.minVoltage,
+      maxVoltage: board.maxVoltage,
     })
     .where(eq(boardsTable.id, board.id))
     .run()

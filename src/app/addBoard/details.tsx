@@ -39,6 +39,12 @@ export default function BoardDetailsScreen() {
   const [description, setDescription] = useState(editingBoard?.description ?? '')
   const [pairedBleId, setPairedBleId] = useState(editingBoard?.bleId ?? bleId ?? '')
   const [pairedBleName, setPairedBleName] = useState(bleName ?? '')
+  const [minVoltage, setMinVoltage] = useState(
+    editingBoard?.minVoltage != null ? String(editingBoard.minVoltage) : '',
+  )
+  const [maxVoltage, setMaxVoltage] = useState(
+    editingBoard?.maxVoltage != null ? String(editingBoard.maxVoltage) : '',
+  )
 
   useEffect(() => {
     navigation.setOptions({ title: editingBoard ? 'Edit Board' : 'Board Details' })
@@ -49,20 +55,33 @@ export default function BoardDetailsScreen() {
     if (bleName) setPairedBleName(bleName)
   }, [bleId, bleName])
 
+  const parseVoltage = (raw: string): number | null => {
+    const trimmed = raw.trim()
+    if (!trimmed) return null
+    const parsed = Number.parseFloat(trimmed)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+
   const handleSave = () => {
     if (!name.trim()) return
+    const minV = parseVoltage(minVoltage)
+    const maxV = parseVoltage(maxVoltage)
     if (editingBoard) {
       updateBoard({
         ...editingBoard,
         name: name.trim(),
         description: description.trim() || null,
         bleId: pairedBleId.trim() || null,
+        minVoltage: minV,
+        maxVoltage: maxV,
       })
     } else {
       addBoard({
         name: name.trim(),
         description: description.trim() || undefined,
         bleId: pairedBleId.trim() || undefined,
+        minVoltage: minV,
+        maxVoltage: maxV,
       })
     }
     router.dismissAll()
@@ -149,6 +168,31 @@ export default function BoardDetailsScreen() {
             numberOfLines={3}
             textAlignVertical="top"
           />
+
+          <Text style={styles.label}>Battery — pack voltage range (V)</Text>
+          <Text style={styles.helper}>
+            Set empty + full pack voltage to show battery % (e.g. 10S Li-ion: 30 / 42).
+          </Text>
+          <View style={styles.voltageRow}>
+            <TextInput
+              style={[styles.input, styles.voltageInput]}
+              value={minVoltage}
+              onChangeText={setMinVoltage}
+              placeholder="Min (0%)"
+              placeholderTextColor="#4b5563"
+              keyboardType="decimal-pad"
+              returnKeyType="next"
+            />
+            <TextInput
+              style={[styles.input, styles.voltageInput]}
+              value={maxVoltage}
+              onChangeText={setMaxVoltage}
+              placeholder="Max (100%)"
+              placeholderTextColor="#4b5563"
+              keyboardType="decimal-pad"
+              returnKeyType="done"
+            />
+          </View>
 
           <Pressable
             style={[styles.saveButton, !name.trim() && styles.saveButtonDisabled]}
@@ -260,6 +304,18 @@ const styles = StyleSheet.create({
   inputMultiline: {
     minHeight: 80,
     paddingTop: 12,
+  },
+  helper: {
+    color: '#6b7280',
+    fontSize: 11,
+    marginBottom: 6,
+  },
+  voltageRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  voltageInput: {
+    flex: 1,
   },
   saveButton: {
     marginTop: 24,

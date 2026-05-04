@@ -19,6 +19,13 @@ const migrations: Migration[] = [
       )`,
     ],
   },
+  {
+    version: 2,
+    statements: [
+      `ALTER TABLE boards ADD COLUMN min_voltage REAL`,
+      `ALTER TABLE boards ADD COLUMN max_voltage REAL`,
+    ],
+  },
 ]
 
 export function runMigrations(db: SQLiteDatabase): void {

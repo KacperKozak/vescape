@@ -1,5 +1,8 @@
 import React from 'react'
-import { View, Text, StyleSheet } from 'react-native'
+import { StyleSheet, Text, View } from 'react-native'
+
+import { Sparkline, type SparklinePoint } from '@/components/charts/Sparkline'
+import { theme } from '@/constants/theme'
 
 interface Props {
   label: string
@@ -9,6 +12,15 @@ interface Props {
   sub?: string
   /** Highlight the card when value warrants attention (fault, over-limit, etc.) */
   alert?: boolean
+  /** Optional last-10-min sparkline. */
+  series?: SparklinePoint[]
+  seriesColor?: string
+  /** Pass to render max-marker + badge. Omit for clean line only. */
+  fmtMax?: (value: number) => string
+  /** Fixed Y range for the sparkline. */
+  range?: { min: number; max: number }
+  /** Min Y span for auto-range (smooths small jitter). */
+  minSpan?: number
 }
 
 /** A single telemetry value tile. */
@@ -18,6 +30,11 @@ export const TelemetryCard = React.memo(function TelemetryCard({
   unit,
   sub,
   alert = false,
+  series,
+  seriesColor,
+  fmtMax,
+  range,
+  minSpan,
 }: Props) {
   return (
     <View style={styles.card}>
@@ -28,6 +45,16 @@ export const TelemetryCard = React.memo(function TelemetryCard({
         {unit ? <Text style={styles.unit}> {unit}</Text> : null}
         {sub ? <Text style={styles.sub}> {sub}</Text> : null}
       </Text>
+      {series && series.length > 1 ? (
+        <Sparkline
+          points={series}
+          color={seriesColor ?? theme.wheel.color}
+          height={18}
+          fmtMax={fmtMax}
+          range={range}
+          minSpan={minSpan}
+        />
+      ) : null}
     </View>
   )
 })
