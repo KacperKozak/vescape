@@ -12,35 +12,44 @@ interface Props {
   series?: SparklinePoint[]
   /** Hint text shown when voltage limits aren't configured yet. */
   hint?: string
-  alert?: boolean
+}
+
+const BATTERY_LOW_PCT = 30
+const PCT_RANGE = { min: 0, max: 100 }
+
+function pickColor(percent: number | null): string {
+  if (percent != null && percent < BATTERY_LOW_PCT) return theme.warning.color
+  return theme.gps.color
 }
 
 /**
  * Compact battery indicator: tiny "BATTERY" label, 10-min sparkline filling
  * the middle, % + voltage on the right. Sits at the top of the telemetry view.
  */
-export function BatteryBar({ percent, voltage, series, hint, alert = false }: Props) {
-  const color = alert
-    ? theme.error.color
-    : percent != null && percent < 30
-      ? theme.warning.color
-      : theme.gps.color
+export function BatteryBar({ percent, voltage, series, hint }: Props) {
+  const color = pickColor(percent)
   return (
-    <View style={[styles.wrap, alert && styles.wrapAlert]}>
+    <View style={styles.wrap}>
       <View style={styles.left}>
         <Text style={styles.label}>BATTERY</Text>
         {voltage != null ? <Text style={styles.voltage}>{voltage.toFixed(1)} V</Text> : null}
       </View>
       <View style={styles.middle}>
         {series && series.length > 1 ? (
-          <Sparkline points={series} color={color} height={28} range={{ min: 0, max: 100 }} />
+          <Sparkline points={series} color={color} height={28} range={PCT_RANGE} />
         ) : hint ? (
           <Text style={styles.hint}>{hint}</Text>
         ) : null}
       </View>
       <Text style={styles.percent} numberOfLines={1}>
-        {percent != null ? Math.round(percent) : '—'}
-        {percent != null ? <Text style={styles.percentUnit}> %</Text> : null}
+        {percent != null ? (
+          <>
+            {Math.round(percent)}
+            <Text style={styles.percentUnit}> %</Text>
+          </>
+        ) : (
+          '—'
+        )}
       </Text>
     </View>
   )
@@ -57,10 +66,6 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
     marginBottom: 6,
     gap: 12,
-  },
-  wrapAlert: {
-    borderWidth: 1,
-    borderColor: theme.error.border,
   },
   left: {
     alignItems: 'flex-start',

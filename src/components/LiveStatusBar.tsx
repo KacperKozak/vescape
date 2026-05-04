@@ -40,13 +40,15 @@ function bleLabel(status: string, avgLatency: number | null, isStale: boolean): 
   }
   if (status === 'scanning') return 'scanning'
   if (status === 'connecting') return 'connecting'
+  if (status === 'reconnecting') return 'reconnecting'
   if (status === 'error') return 'error'
   return 'idle'
 }
 
 function bleColor(status: string, isStale: boolean): string {
   if (status === 'connected') return isStale ? theme.error.color : theme.gps.color
-  if (status === 'scanning' || status === 'connecting') return theme.wheel.text
+  if (status === 'scanning' || status === 'connecting' || status === 'reconnecting')
+    return theme.wheel.text
   if (status === 'error') return theme.error.color
   return '#475569'
 }

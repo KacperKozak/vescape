@@ -10,8 +10,6 @@ interface Props {
   unit?: string
   /** Small secondary text shown below the value */
   sub?: string
-  /** Highlight the card when value warrants attention (fault, over-limit, etc.) */
-  alert?: boolean
   /** Optional last-10-min sparkline. */
   series?: SparklinePoint[]
   seriesColor?: string
@@ -29,7 +27,6 @@ export const TelemetryCard = React.memo(function TelemetryCard({
   value,
   unit,
   sub,
-  alert = false,
   series,
   seriesColor,
   fmtMax,
@@ -38,7 +35,6 @@ export const TelemetryCard = React.memo(function TelemetryCard({
 }: Props) {
   return (
     <View style={styles.card}>
-      {alert && <View style={styles.alertDot} />}
       <Text style={styles.label}>{label}</Text>
       <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit>
         {value}
@@ -68,15 +64,6 @@ const styles = StyleSheet.create({
     minWidth: '45%',
     margin: 4,
     gap: 6,
-  },
-  alertDot: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: '#ef4444',
   },
   label: {
     color: '#94a3b8',

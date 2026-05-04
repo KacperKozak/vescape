@@ -14,12 +14,23 @@ import { emaSeries } from '@/helpers/smoothing'
 import { useBleStore } from '@/store/bleStore'
 import { useBoardStore } from '@/store/boardStore'
 import { useMapStore } from '@/store/mapStore'
-import { REFLOAT_STATE_NAMES } from '@/vesc/refloat'
+import { REFLOAT_STATE_NAMES, stateCompat } from '@/vesc/refloat'
 import { FAULT_NAMES, type RefloatValues } from '@/vesc/types'
 
+const DASH = '—'
 // Voltage sag smoothing: 20s half-life dampens throttle-burst dips while
 // still tracking real drain over a ~1 min window.
 const BATTERY_SMOOTH_HALF_LIFE_MS = 20_000
+const SPEED_GAUGE_MAX_KMH = 50
+
+// Inline style/prop objects must be hoisted — fresh refs break Sparkline's
+// useMemo deps and force a full polyline reprojection every BLE packet.
+const RANGE_PCT = { min: 0, max: 100 }
+const DUTY_FMT_MAX = (v: number) => `${v.toFixed(0)}%`
+const TEMP_FMT_MAX = (v: number) => `${v.toFixed(0)}°C`
+const AMP_FMT_MAX = (v: number) => `${v.toFixed(0)} A`
+const TEMP_MIN_SPAN = 30
+const AMP_MIN_SPAN = 20
 
 export function TelemetryView() {
   const { recentTelemetry, recentLocations } = useBleStore(
@@ -77,9 +88,8 @@ export function TelemetryView() {
     }
   }, [recentTelemetry, activeBoard?.minVoltage, activeBoard?.maxVoltage])
 
-  const stateCompat = v ? v.state & 0xf : 0
-  const stateName = v ? (REFLOAT_STATE_NAMES[stateCompat] ?? `STATE_${stateCompat}`) : '—'
-  const hasFault = v?.hasFault ?? false
+  const compat = v ? stateCompat(v.state) : 0
+  const stateName = v ? (REFLOAT_STATE_NAMES[compat] ?? `STATE_${compat}`) : DASH
   const faultName = v?.hasFault ? (FAULT_NAMES[v.faultCode] ?? `CODE_${v.faultCode}`) : stateName
 
   // Use smoothed voltage so the indicator doesn't bounce with sag.
@@ -96,7 +106,6 @@ export function TelemetryView() {
 
   const gpsSpeedKmh = gpsFix?.speedMps != null ? gpsFix.speedMps * 3.6 : null
 
-  // Target-location helpers (kept; unrelated to ride stats)
   const targetDistanceM = gpsFix && targetLocation ? haversineM(gpsFix, targetLocation) : null
   const targetBearing = gpsFix && targetLocation ? bearingTo(gpsFix, targetLocation) : null
   const targetClock =
@@ -105,14 +114,10 @@ export function TelemetryView() {
       : null
 
   const dutyAbsPct = v ? Math.abs(v.dutyCycle) * 100 : 0
-  const dutyAlert = v ? dutyAbsPct > 85 : false
-  const motorTempAlert = (v?.tempMotor ?? 0) > 100
-  const ctrlTempAlert = (v?.tempMosfet ?? 0) > 80
-  const batteryAlert = batteryPct != null && batteryPct < 15
-
-  // Combined IMU summary (small tile — pitch/roll/bal not critical)
-  const imuValue = v ? `P${fmt(v.pitch, 0)}° R${fmt(v.roll, 0)}° B${fmt(v.balancePitch, 0)}°` : '—'
-  const imuAlert = v ? Math.abs(v.pitch) > 25 || Math.abs(v.roll) > 35 : false
+  const imuValue = v ? `P${fmt(v.pitch, 0)}° R${fmt(v.roll, 0)}° B${fmt(v.balancePitch, 0)}°` : DASH
+  // Refloat reports tempMotor=0 when the sensor is unwired/disabled; treat as
+  // "no reading" so we render a dash instead of misleading "0 °C".
+  const motorTemp = v?.tempMotor != null && v.tempMotor > 0 ? v.tempMotor : null
 
   return (
     <ScrollView contentContainerStyle={styles.grid}>
@@ -122,11 +127,11 @@ export function TelemetryView() {
           <View style={styles.row}>
             <TelemetryCard
               label="Distance"
-              value={targetDistanceM != null ? fmtDistance(targetDistanceM) : '—'}
+              value={targetDistanceM != null ? fmtDistance(targetDistanceM) : DASH}
             />
             <TelemetryCard
               label="Direction"
-              value={targetBearing != null ? `${Math.round(targetBearing)}°` : '—'}
+              value={targetBearing != null ? `${Math.round(targetBearing)}°` : DASH}
               sub={targetClock != null ? `${targetClock} o'clock` : undefined}
             />
           </View>
@@ -134,91 +139,79 @@ export function TelemetryView() {
       )}
 
       <View style={!v && styles.dimmed}>
-        {/* TOP — compact battery indicator */}
         <BatteryBar
           percent={batteryConfigured ? batteryPct : null}
           voltage={smoothVoltage}
           series={batteryConfigured ? series.battery : undefined}
           hint={!batteryConfigured ? 'Set min/max V in board settings' : undefined}
-          alert={batteryAlert}
         />
 
-        {/* HERO — speedometer */}
         <SpeedGauge
           value={v ? Math.abs(v.speed) : null}
           gpsValue={gpsSpeedKmh}
           series={series.speed}
           distance={v?.odometer != null ? `${fmtKm(v.odometer)} km` : undefined}
-          max={50}
+          max={SPEED_GAUGE_MAX_KMH}
         />
 
-        {/* TILES — 2 col, no section header. Distance lives in the gauge corner;
-            other tiles flow continuously to fill the freed slot. */}
         <View style={styles.row}>
           <TelemetryCard
             label="Duty Cycle"
-            value={v ? dutyAbsPct.toFixed(1) : '—'}
+            value={v ? dutyAbsPct.toFixed(1) : DASH}
             unit={v ? '%' : undefined}
-            alert={dutyAlert}
             series={series.duty}
             seriesColor={theme.bran.color}
-            fmtMax={(value) => `${value.toFixed(0)}%`}
-            range={{ min: 0, max: 100 }}
+            fmtMax={DUTY_FMT_MAX}
+            range={RANGE_PCT}
           />
           <TelemetryCard
             label="Motor Temp"
-            value={v?.tempMotor != null && v.tempMotor > 0 ? fmt(v.tempMotor) : 'N/A'}
-            unit={v?.tempMotor != null && v.tempMotor > 0 ? '°C' : undefined}
-            alert={motorTempAlert}
+            value={motorTemp != null ? fmt(motorTemp) : DASH}
+            unit={motorTemp != null ? '°C' : undefined}
             series={series.motorTemp}
             seriesColor={theme.warning.color}
-            fmtMax={(value) => `${value.toFixed(0)}°C`}
-            minSpan={30}
+            fmtMax={TEMP_FMT_MAX}
+            minSpan={TEMP_MIN_SPAN}
           />
         </View>
         <View style={styles.row}>
           <TelemetryCard
             label="Controller Temp"
-            value={v?.tempMosfet != null ? fmt(v.tempMosfet) : 'N/A'}
+            value={v?.tempMosfet != null ? fmt(v.tempMosfet) : DASH}
             unit={v?.tempMosfet != null ? '°C' : undefined}
-            alert={ctrlTempAlert}
             series={series.ctrlTemp}
             seriesColor={theme.warning.color}
-            fmtMax={(value) => `${value.toFixed(0)}°C`}
-            minSpan={30}
+            fmtMax={TEMP_FMT_MAX}
+            minSpan={TEMP_MIN_SPAN}
           />
           <TelemetryCard
             label="Motor Current"
-            value={v ? fmt(v.motorCurrent) : '—'}
+            value={v ? fmt(v.motorCurrent) : DASH}
             unit={v ? 'A' : undefined}
             series={series.motorCurrent}
             seriesColor={theme.bran.color}
-            fmtMax={(value) => `${value.toFixed(0)} A`}
-            minSpan={20}
+            fmtMax={AMP_FMT_MAX}
+            minSpan={AMP_MIN_SPAN}
           />
         </View>
         <View style={styles.row}>
           <TelemetryCard
             label="Batt Current"
-            value={v ? fmt(v.batteryCurrent) : '—'}
+            value={v ? fmt(v.batteryCurrent) : DASH}
             unit={v ? 'A' : undefined}
             series={series.battCurrent}
             seriesColor={theme.gps.color}
-            fmtMax={(value) => `${value.toFixed(0)} A`}
-            minSpan={20}
+            fmtMax={AMP_FMT_MAX}
+            minSpan={AMP_MIN_SPAN}
           />
-          <TelemetryCard
-            label="State"
-            value={v ? faultName : '—'}
-            alert={v ? hasFault || stateCompat >= 6 : false}
-          />
+          <TelemetryCard label="State" value={v ? faultName : DASH} />
         </View>
         <View style={styles.row}>
           <TelemetryCard
             label="Footpad"
-            value={v ? `${v.adc1.toFixed(2)} / ${v.adc2.toFixed(2)}` : '—'}
+            value={v ? `${v.adc1.toFixed(2)} / ${v.adc2.toFixed(2)}` : DASH}
           />
-          <TelemetryCard label="IMU" value={imuValue} alert={imuAlert} />
+          <TelemetryCard label="IMU" value={imuValue} />
         </View>
       </View>
     </ScrollView>

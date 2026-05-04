@@ -1,8 +1,10 @@
+import { useMemo } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import Svg, { Defs, Line, Path, RadialGradient, Stop } from 'react-native-svg'
 
 import { Sparkline, type SparklinePoint } from '@/components/charts/Sparkline'
 import { theme } from '@/constants/theme'
+import { fmtSpeed } from '@/helpers/format'
 
 interface Props {
   /** Current VESC speed in km/h. */
@@ -18,43 +20,43 @@ interface Props {
 }
 
 // 180° dial. ViewBox 200×120, center (100, 100), radius 80.
-// Arc draws across the top half; the lower bowl is empty space we fill with
-// the speed number and a small GPS readout.
 const VB_W = 200
 const VB_H = 120
 const CX = 100
 const CY = 100
 const R = 80
-const STROKE_BG = 2
-const STROKE_FILL = 2
+const STROKE = 2
+const MARKER_INSET = 10
+const RED_FRACTION = 0.85
 const GLOW_GRADIENT_ID = 'speedGaugeGlow'
+const SPARK_RANGE = { min: 0, max: 50 } // overridden below if `max` differs
 
-/** Polar → cartesian on the dial circle at radius `r`. */
+function clamp01(f: number) {
+  return Math.min(1, Math.max(0, f))
+}
+
 function polar(r: number, f: number) {
   const angle = Math.PI - Math.PI * f // π → 0, sweeping through π/2 (top)
   return { x: CX + r * Math.cos(angle), y: CY - r * Math.sin(angle) }
 }
 
-/** Project fraction f (0..1) along the half-circle to (x, y) on the arc. */
-function arcPoint(f: number) {
-  return polar(R, f)
-}
-
 function arcPath(f: number) {
-  const end = arcPoint(Math.min(1, Math.max(0, f)))
+  const end = polar(R, clamp01(f))
   return `M ${CX - R} ${CY} A ${R} ${R} 0 0 1 ${end.x} ${end.y}`
 }
 
-/**
- * Pie-wedge from the dial center out to the active arc. Used as the canvas
- * for the inner glow — fill it with a radial gradient that's transparent
- * at the center and glows toward the arc edge.
- */
 function wedgePath(f: number) {
-  const clamped = Math.min(1, Math.max(0, f))
-  if (clamped <= 0) return ''
-  const end = arcPoint(clamped)
+  const c = clamp01(f)
+  if (c <= 0) return ''
+  const end = polar(R, c)
   return `M ${CX} ${CY} L ${CX - R} ${CY} A ${R} ${R} 0 0 1 ${end.x} ${end.y} Z`
+}
+
+// Background track is constant — draw it once at module load, not per render.
+const BG_ARC_PATH = arcPath(1)
+
+function fmtSpeedWithUnit(value: number) {
+  return `${fmtSpeed(value)} km/h`
 }
 
 /**
@@ -63,9 +65,12 @@ function wedgePath(f: number) {
  * sparkline under the dial.
  */
 export function SpeedGauge({ value, series, gpsValue, distance, max = 50 }: Props) {
-  const v = value ?? 0
-  const fraction = Math.min(1, Math.max(0, v / max))
-  const color = fraction > 0.85 ? theme.error.color : theme.wheel.color
+  const fraction = clamp01((value ?? 0) / max)
+  const color = fraction > RED_FRACTION ? theme.error.color : theme.wheel.color
+
+  const activeArc = useMemo(() => arcPath(fraction), [fraction])
+  const wedge = useMemo(() => wedgePath(fraction), [fraction])
+  const sparkRange = useMemo(() => (max === SPARK_RANGE.max ? SPARK_RANGE : { min: 0, max }), [max])
 
   return (
     <View style={styles.wrap}>
@@ -96,58 +101,31 @@ export function SpeedGauge({ value, series, gpsValue, distance, max = 50 }: Prop
             </RadialGradient>
           </Defs>
 
-          {/* Inner-glow wedge under the active arc */}
           {value != null && fraction > 0 ? (
-            <Path d={wedgePath(fraction)} fill={`url(#${GLOW_GRADIENT_ID})`} stroke="none" />
+            <Path d={wedge} fill={`url(#${GLOW_GRADIENT_ID})`} stroke="none" />
           ) : null}
 
-          {/* Background track — thin solid */}
           <Path
-            d={arcPath(1)}
+            d={BG_ARC_PATH}
             stroke="#334155"
-            strokeWidth={STROKE_BG}
+            strokeWidth={STROKE}
             strokeLinecap="butt"
             fill="none"
           />
 
-          {/* Active arc — thin solid colour, sits on top of the track */}
           {value != null && fraction > 0 ? (
             <Path
-              d={arcPath(fraction)}
+              d={activeArc}
               stroke={color}
-              strokeWidth={STROKE_FILL}
+              strokeWidth={STROKE}
               strokeLinecap="butt"
               fill="none"
             />
           ) : null}
 
-          {/* Marker: a thin radial tick on the outside of the arc, in the
-              arc colour. Sits at the current-speed angle, just touching the
-              track from outside. */}
-          {value != null
-            ? (() => {
-                // Outer endpoint sits at the OUTER edge of the arc track
-                // (R + half-stroke), not its center, so the tick top meets
-                // the arc cleanly — no gap, no half-stuck-into-track look.
-                const inner = polar(R - 10, fraction)
-                const outer = polar(R + STROKE_FILL / 2, fraction)
-                return (
-                  <Line
-                    x1={inner.x}
-                    y1={inner.y}
-                    x2={outer.x}
-                    y2={outer.y}
-                    stroke={color}
-                    strokeWidth={1.5}
-                    strokeLinecap="butt"
-                  />
-                )
-              })()
-            : null}
+          {value != null ? <Marker fraction={fraction} color={color} /> : null}
         </Svg>
 
-        {/* Bottom row: range ticks (with units), one flex row so layout is
-            reliable — absolute-positioned Text doesn't always size right. */}
         <View style={styles.tickRow} pointerEvents="none">
           <Text style={styles.tick}>
             0<Text style={styles.tickUnit}> km/h</Text>
@@ -158,32 +136,50 @@ export function SpeedGauge({ value, series, gpsValue, distance, max = 50 }: Prop
           </Text>
         </View>
 
-        {/* Centered stack — big speed number + GPS readout. */}
         <View style={styles.bowl} pointerEvents="none">
           <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit>
             {value != null ? Math.round(value) : '—'}
           </Text>
           <Text style={styles.gpsText}>
             <Text style={styles.gpsLabel}>GPS </Text>
-            {gpsValue != null ? `${gpsValue.toFixed(1)} km/h` : '—'}
+            {gpsValue != null ? fmtSpeedWithUnit(gpsValue) : '—'}
           </Text>
         </View>
       </View>
 
-      {/* 10-min speed sparkline. Built-in fmtMax matches the look of the
-          smaller tiles (badge in line color, top-right). */}
       {series && series.length > 1 ? (
         <View style={styles.sparkRow}>
           <Sparkline
             points={series}
             color={color}
             height={28}
-            range={{ min: 0, max }}
-            fmtMax={(value) => `${value.toFixed(1)} km/h`}
+            range={sparkRange}
+            fmtMax={fmtSpeedWithUnit}
           />
         </View>
       ) : null}
     </View>
+  )
+}
+
+/**
+ * Marker tick on the outside of the arc. Outer endpoint sits at the OUTER
+ * edge of the arc track (R + half-stroke), not its center, so the tick top
+ * meets the arc cleanly — no gap, no half-stuck-into-track look.
+ */
+function Marker({ fraction, color }: { fraction: number; color: string }) {
+  const inner = polar(R - MARKER_INSET, fraction)
+  const outer = polar(R + STROKE / 2, fraction)
+  return (
+    <Line
+      x1={inner.x}
+      y1={inner.y}
+      x2={outer.x}
+      y2={outer.y}
+      stroke={color}
+      strokeWidth={1.5}
+      strokeLinecap="butt"
+    />
   )
 }
 
@@ -224,8 +220,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  /** Bowl: centers the value/unit/GPS stack inside the lower portion of the
-   *  dial. Top inset skips the arc cap; flex centering handles the rest. */
+  /** Top inset skips the arc cap; flex centering handles the rest. */
   bowl: {
     position: 'absolute',
     left: 0,
@@ -253,6 +248,7 @@ const styles = StyleSheet.create({
     color: '#64748b',
     fontWeight: '700',
   },
+  /** Absolute-positioned <Text> doesn't always size right; use a flex row. */
   tickRow: {
     position: 'absolute',
     left: '8%',
