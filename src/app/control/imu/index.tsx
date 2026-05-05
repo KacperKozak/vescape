@@ -44,7 +44,7 @@ export default function ImuScreen() {
   const currentBalance = selectedBalance ?? balancePoints.at(-1) ?? null
 
   return (
-    <ControlDetailLayout title="IMU">
+    <ControlDetailLayout title="IMU" controlId="imu" unit="°">
       <View style={styles.liveRow}>
         <View style={styles.liveCell}>
           <Text style={styles.liveLabel}>PITCH</Text>

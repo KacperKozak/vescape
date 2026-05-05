@@ -100,7 +100,7 @@ export function useBoardConnection() {
       items.push({
         label: 'Make main',
         icon: StarIcon,
-        onPress: () => starBoard(activeBoard.id),
+        onPress: () => void starBoard(activeBoard.id),
       })
     }
     if (bleStatus === 'connected' || bleStatus === 'connecting' || bleStatus === 'reconnecting') {

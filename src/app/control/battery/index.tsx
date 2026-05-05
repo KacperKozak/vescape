@@ -36,7 +36,7 @@ export default function BatteryScreen() {
   const displayValue = currentPoint ? `${fmt(currentPoint.value, 2)} V` : DASH
 
   return (
-    <ControlDetailLayout title="Battery Voltage">
+    <ControlDetailLayout title="Battery Voltage" controlId="battery" unit="V">
       <TelemetryLineChart
         label="BATTERY VOLTAGE"
         value={displayValue}

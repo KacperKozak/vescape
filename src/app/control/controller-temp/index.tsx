@@ -39,7 +39,7 @@ export default function ControllerTempScreen() {
   const displayValue = currentPoint ? `${fmt(currentPoint.value, 1)} °C` : DASH
 
   return (
-    <ControlDetailLayout title="Controller Temp">
+    <ControlDetailLayout title="Controller Temp" controlId="controller-temp" unit="°C">
       <TelemetryLineChart
         label="CONTROLLER TEMP"
         value={displayValue}

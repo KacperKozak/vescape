@@ -12,8 +12,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
     HistoryLocationEntity::class,
     TelemetryMinuteBucketEntity::class,
     TelemetryMarkerEntity::class,
+    BoardEntity::class,
+    AlertRuleEntity::class,
   ],
-  version = 2,
+  version = 3,
   exportSchema = false,
 )
 abstract class TelemetryDatabase : RoomDatabase() {

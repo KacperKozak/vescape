@@ -39,7 +39,7 @@ export default function DutyScreen() {
   const displayValue = currentPoint ? `${fmt(currentPoint.value, 1)} %` : DASH
 
   return (
-    <ControlDetailLayout title="Duty Cycle">
+    <ControlDetailLayout title="Duty Cycle" controlId="duty" unit="%">
       <TelemetryLineChart
         label="DUTY CYCLE"
         value={displayValue}

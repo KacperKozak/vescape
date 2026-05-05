@@ -36,7 +36,7 @@ export default function BattCurrentScreen() {
   const displayValue = currentPoint ? `${fmt(currentPoint.value, 1)} A` : DASH
 
   return (
-    <ControlDetailLayout title="Batt Current">
+    <ControlDetailLayout title="Batt Current" controlId="batt-current" unit="A">
       <TelemetryLineChart
         label="BATTERY CURRENT"
         value={displayValue}

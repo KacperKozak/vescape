@@ -3,7 +3,7 @@ import { useCallback } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useShallow } from 'zustand/react/shallow'
 
-import type { Board } from '@/db/boards'
+import type { Board } from '@/store/boardStore'
 import { useBleStore } from '@/store/bleStore'
 import { theme } from '@/constants/theme'
 

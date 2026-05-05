@@ -7,7 +7,7 @@ export default function StateScreen() {
   const latest = useBleStore((s) => s.recentTelemetry.at(-1))
 
   return (
-    <ControlDetailLayout title="State">
+    <ControlDetailLayout title="State" controlId="state">
       <View style={styles.card}>
         <Text style={styles.label}>BOARD STATE</Text>
         <Text style={styles.stateName}>{latest?.stateName ?? '—'}</Text>

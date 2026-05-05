@@ -41,7 +41,7 @@ export default function MotorTempScreen() {
   const displayValue = currentPoint ? `${fmt(currentPoint.value, 1)} °C` : DASH
 
   return (
-    <ControlDetailLayout title="Motor Temp">
+    <ControlDetailLayout title="Motor Temp" controlId="motor-temp" unit="°C">
       <TelemetryLineChart
         label="MOTOR TEMP"
         value={displayValue}

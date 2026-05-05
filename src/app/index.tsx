@@ -43,7 +43,7 @@ export default function MainScreen() {
   useBleAppLifecycle()
 
   useEffect(() => {
-    load()
+    void load()
   }, [load])
 
   useEffect(() => {

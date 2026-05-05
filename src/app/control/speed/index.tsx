@@ -36,7 +36,7 @@ export default function SpeedScreen() {
   const displayValue = currentPoint ? `${fmt(currentPoint.value, 1)} km/h` : DASH
 
   return (
-    <ControlDetailLayout title="Speed">
+    <ControlDetailLayout title="Speed" controlId="speed" unit="km/h">
       <TelemetryLineChart
         label="SPEED"
         value={displayValue}

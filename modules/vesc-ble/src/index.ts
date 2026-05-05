@@ -30,6 +30,39 @@ export interface LocationEvent {
 export type SessionStatus = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'error'
 export type SessionMode = 'ble' | 'replay' | 'gps'
 
+export interface FiredAlert {
+  ruleId: string
+  controlId: string
+  value: number
+  threshold: number
+  thresholdMax: number | null
+  soundType: string
+  firedAt: number
+}
+
+export interface Board {
+  id: string
+  name: string
+  description: string | null
+  bleId: string | null
+  isStarred: boolean
+  createdAt: number
+  minVoltage: number | null
+  maxVoltage: number | null
+}
+
+export type AlertSoundType = 'default'
+
+export interface AlertRule {
+  id: string
+  controlId: string
+  threshold: number
+  thresholdMax: number | null
+  enabled: boolean
+  soundType: AlertSoundType
+  createdAt: number
+}
+
 export interface TelemetryEvent {
   location?: LocationEvent | null
   hasFault: boolean
@@ -54,6 +87,7 @@ export interface TelemetryEvent {
   tempMotor: number | null
   avgLatency: number | null
   lastPacketAt: number
+  firedAlerts?: FiredAlert[]
 }
 
 export interface SessionStateEvent {
@@ -233,6 +267,7 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
   startLocationUpdates(options?: LocationTrackingOptions): void
   stopLocationUpdates(): void
   setTelemetryRecordingEnabled(enabled: boolean): void
+  reloadAlertRules(): void
   startAutoConnect(options: Extract<StartSessionOptions, { mode: 'ble' }>): Promise<void>
   stopAutoConnect(): Promise<void>
   startSession(options: StartSessionOptions): Promise<void>
@@ -257,6 +292,13 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
   getTelemetrySummary(): Promise<TelemetrySummary>
   deleteTelemetryBefore(beforeMs: number): Promise<number>
   clearTelemetryHistory(): Promise<void>
+  getBoards(): Promise<Board[]>
+  upsertBoard(board: Board): Promise<void>
+  deleteBoard(id: string): Promise<void>
+  getAlertRules(): Promise<AlertRule[]>
+  upsertAlertRule(rule: AlertRule): Promise<void>
+  setAlertRuleEnabled(id: string, enabled: boolean): Promise<void>
+  deleteAlertRule(id: string): Promise<void>
 }
 
 const native = requireNativeModule<VescBleNativeModule>('VescBle')
@@ -289,6 +331,11 @@ export function stopLocationUpdates(): void {
 /** Enable or disable native SQLite telemetry history writes. */
 export function setTelemetryRecordingEnabled(enabled: boolean): void {
   native.setTelemetryRecordingEnabled(enabled)
+}
+
+/** Tell the Android foreground service to re-read alert rules from native storage. */
+export function reloadAlertRules(): void {
+  native.reloadAlertRules()
 }
 
 /** Start native-owned saved-board connection with background reconnect. */
@@ -364,6 +411,34 @@ export async function deleteTelemetryBefore(beforeMs: number): Promise<number> {
 
 export async function clearTelemetryHistory(): Promise<void> {
   return native.clearTelemetryHistory()
+}
+
+export async function getBoards(): Promise<Board[]> {
+  return native.getBoards()
+}
+
+export async function upsertBoard(board: Board): Promise<void> {
+  return native.upsertBoard(board)
+}
+
+export async function deleteBoard(id: string): Promise<void> {
+  return native.deleteBoard(id)
+}
+
+export async function getAlertRules(): Promise<AlertRule[]> {
+  return native.getAlertRules()
+}
+
+export async function upsertAlertRule(rule: AlertRule): Promise<void> {
+  return native.upsertAlertRule(rule)
+}
+
+export async function setAlertRuleEnabled(id: string, enabled: boolean): Promise<void> {
+  return native.setAlertRuleEnabled(id, enabled)
+}
+
+export async function deleteAlertRule(id: string): Promise<void> {
+  return native.deleteAlertRule(id)
 }
 
 /**

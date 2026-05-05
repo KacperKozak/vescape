@@ -67,7 +67,7 @@ export default function BoardDetailsScreen() {
     const minV = parseVoltage(minVoltage)
     const maxV = parseVoltage(maxVoltage)
     if (editingBoard) {
-      updateBoard({
+      void updateBoard({
         ...editingBoard,
         name: name.trim(),
         description: description.trim() || null,
@@ -107,7 +107,7 @@ export default function BoardDetailsScreen() {
         text: 'Remove',
         style: 'destructive',
         onPress: () => {
-          removeBoard(editingBoard.id)
+          void removeBoard(editingBoard.id)
           router.dismissAll()
         },
       },

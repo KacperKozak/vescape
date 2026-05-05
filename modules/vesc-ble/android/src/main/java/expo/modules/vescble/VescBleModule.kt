@@ -16,6 +16,7 @@ import expo.modules.kotlin.Promise
 import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import expo.modules.vescble.telemetry.AppDataRepository
 import expo.modules.vescble.telemetry.TelemetryRepository
 import kotlinx.coroutines.runBlocking
 
@@ -59,6 +60,9 @@ class VescBleModule : Module() {
     Function("startLocationUpdates") { options: Map<String, Any?>? -> startLocationUpdates(options) }
     Function("stopLocationUpdates") { stopLocationUpdates() }
     Function("setTelemetryRecordingEnabled") { enabled: Boolean -> setTelemetryRecordingEnabled(enabled) }
+    Function("reloadAlertRules") {
+      VescForegroundService.reloadAlertRules(context.applicationContext)
+    }
     Function("getSessionState") {
       VescForegroundService.currentState()
     }
@@ -108,6 +112,30 @@ class VescBleModule : Module() {
     }
     AsyncFunction("clearTelemetryHistory") {
       runBlocking { TelemetryRepository.get(context.applicationContext).clearAll() }
+    }
+    AsyncFunction("getBoards") {
+      runBlocking { AppDataRepository.get(context.applicationContext).getBoards() }
+    }
+    AsyncFunction("upsertBoard") Coroutine { board: Map<String, Any?> ->
+      AppDataRepository.get(context.applicationContext).upsertBoard(board)
+    }
+    AsyncFunction("deleteBoard") Coroutine { id: String ->
+      AppDataRepository.get(context.applicationContext).deleteBoard(id)
+    }
+    AsyncFunction("getAlertRules") {
+      runBlocking { AppDataRepository.get(context.applicationContext).getAlertRules() }
+    }
+    AsyncFunction("upsertAlertRule") Coroutine { rule: Map<String, Any?> ->
+      AppDataRepository.get(context.applicationContext).upsertAlertRule(rule)
+      VescForegroundService.reloadAlertRules(context.applicationContext)
+    }
+    AsyncFunction("setAlertRuleEnabled") Coroutine { id: String, enabled: Boolean ->
+      AppDataRepository.get(context.applicationContext).setAlertRuleEnabled(id, enabled)
+      VescForegroundService.reloadAlertRules(context.applicationContext)
+    }
+    AsyncFunction("deleteAlertRule") Coroutine { id: String ->
+      AppDataRepository.get(context.applicationContext).deleteAlertRule(id)
+      VescForegroundService.reloadAlertRules(context.applicationContext)
     }
   }
 

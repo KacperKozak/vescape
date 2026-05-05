@@ -5,7 +5,7 @@ import { CaretDownIcon } from 'phosphor-react-native'
 import { BoardMenu, type BoardMenuItem } from '@/components/BoardMenu'
 import { BoardSelectorSheet } from '@/components/BoardSelectorSheet'
 import { VibeWheelLogo } from '@/components/VibeWheelLogo'
-import type { Board } from '@/db/boards'
+import type { Board } from '@/store/boardStore'
 import type { RecordingInfo } from '@/store/bleStore'
 
 interface TopBarProps {

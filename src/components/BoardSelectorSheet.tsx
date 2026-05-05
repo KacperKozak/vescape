@@ -11,7 +11,7 @@ import {
   RecordIcon,
 } from 'phosphor-react-native'
 
-import type { Board } from '@/db/boards'
+import type { Board } from '@/store/boardStore'
 import type { RecordingInfo } from '@/store/bleStore'
 import { theme } from '@/constants/theme'
 

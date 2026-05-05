@@ -1,11 +1,7 @@
-import {
-  type Board,
-  getBoards,
-  insertBoard,
-  updateBoard as dbUpdate,
-  deleteBoard as dbDelete,
-} from '../db/boards'
 import { create } from 'zustand'
+import { deleteBoard as nativeDeleteBoard, getBoards, type Board, upsertBoard } from 'vesc-ble'
+
+export type { Board } from 'vesc-ble'
 
 function generateId(): string {
   if (typeof globalThis.crypto?.randomUUID === 'function') {
@@ -25,7 +21,7 @@ interface BoardState {
 }
 
 interface BoardActions {
-  load: () => void
+  load: () => Promise<void>
   addBoard: (data: {
     name: string
     description?: string
@@ -33,10 +29,10 @@ interface BoardActions {
     minVoltage?: number | null
     maxVoltage?: number | null
   }) => Board
-  updateBoard: (board: Board) => void
-  removeBoard: (id: string) => void
+  updateBoard: (board: Board) => Promise<void>
+  removeBoard: (id: string) => Promise<void>
   setActiveBoard: (id: string | null) => void
-  starBoard: (id: string) => void
+  starBoard: (id: string) => Promise<void>
 }
 
 export const useBoardStore = create<BoardState & BoardActions>((set, get) => ({
@@ -44,8 +40,8 @@ export const useBoardStore = create<BoardState & BoardActions>((set, get) => ({
   activeBoardId: null,
   hasLoaded: false,
 
-  load() {
-    const boards = getBoards()
+  async load() {
+    const boards = await getBoards()
     const { activeBoardId, hasLoaded } = get()
     const activeBoardExists = boards.some((b) => b.id === activeBoardId)
     set({
@@ -70,23 +66,22 @@ export const useBoardStore = create<BoardState & BoardActions>((set, get) => ({
       minVoltage: minVoltage ?? null,
       maxVoltage: maxVoltage ?? null,
     }
-    insertBoard(board)
     set((state) => ({
       boards: [...state.boards, board],
       activeBoardId: state.activeBoardId ?? board.id,
     }))
+    void upsertBoard(board)
     return board
   },
 
-  updateBoard(board) {
-    dbUpdate(board)
+  async updateBoard(board) {
     set((state) => ({
       boards: state.boards.map((b) => (b.id === board.id ? board : b)),
     }))
+    await upsertBoard(board)
   },
 
-  removeBoard(id) {
-    dbDelete(id)
+  async removeBoard(id) {
     set((state) => {
       const remaining = state.boards.filter((b) => b.id !== id)
       return {
@@ -95,15 +90,16 @@ export const useBoardStore = create<BoardState & BoardActions>((set, get) => ({
           state.activeBoardId === id ? (remaining[0]?.id ?? null) : state.activeBoardId,
       }
     })
+    await nativeDeleteBoard(id)
   },
 
   setActiveBoard(id) {
     set({ activeBoardId: id })
   },
 
-  starBoard(id) {
+  async starBoard(id) {
     const updated = get().boards.map((b) => ({ ...b, isStarred: b.id === id }))
-    updated.forEach((b) => dbUpdate(b))
     set({ boards: updated, activeBoardId: id })
+    await Promise.all(updated.map((b) => upsertBoard(b)))
   },
 }))

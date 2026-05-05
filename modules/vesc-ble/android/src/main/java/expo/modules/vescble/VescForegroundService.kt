@@ -26,19 +26,28 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
+import android.media.AudioManager
+import android.media.ToneGenerator
 import android.os.Environment
-import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
 import android.os.SystemClock
+import android.os.VibrationEffect
+import android.os.Vibrator
 import android.provider.MediaStore
 import android.util.Base64
 import android.util.Log
 import androidx.core.content.ContextCompat
+import expo.modules.vescble.telemetry.AlertRuleEntity
+import expo.modules.vescble.telemetry.AppDataRepository
 import expo.modules.vescble.telemetry.TelemetryCapture
 import expo.modules.vescble.telemetry.TelemetryLocationCapture
 import expo.modules.vescble.telemetry.TelemetryRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.io.File
 import java.io.FileWriter
@@ -175,6 +184,7 @@ class VescForegroundService : Service() {
         private var pendingGpsStart: PendingGpsStart? = null
         private var requestedGpsMonitoring: PendingGpsStart? = null
         private var requestedTelemetryRecordingEnabled = false
+        private val appDataScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
         fun startSession(
             context: Context,
@@ -186,11 +196,7 @@ class VescForegroundService : Service() {
             val intent = Intent(context, VescForegroundService::class.java).apply {
                 action = ACTION_START_SESSION
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            context.startForegroundService(intent)
             instance?.consumePendingStart()
         }
 
@@ -214,11 +220,7 @@ class VescForegroundService : Service() {
             val intent = Intent(context, VescForegroundService::class.java).apply {
                 action = ACTION_START_GPS_MONITORING
             }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                context.startForegroundService(intent)
-            } else {
-                context.startService(intent)
-            }
+            context.startForegroundService(intent)
             instance?.consumePendingGpsStart()
         }
 
@@ -236,6 +238,14 @@ class VescForegroundService : Service() {
             requestedTelemetryRecordingEnabled = enabled
             instance?.setTelemetryRecordingEnabled(enabled)
             if (!enabled) TelemetryRepository.get(context.applicationContext).flushBlocking()
+        }
+
+        @Volatile private var alertRules: List<AlertRuleEntity> = emptyList()
+
+        fun reloadAlertRules(context: Context) {
+            appDataScope.launch {
+                instance?.loadAlertRules(context.applicationContext)
+            }
         }
 
         fun currentState(): Map<String, Any?> = instance?.sessionStateMap(includeRecent = true) ?: idleState()
@@ -308,6 +318,7 @@ class VescForegroundService : Service() {
     private var autoReconnectAttempt = 0
     private val recentTelemetry = ArrayDeque<Map<String, Any?>>()
     private val recentLocations = ArrayDeque<Map<String, Any?>>()
+    private val alertLastFiredAt = HashMap<String, Long>()
 
     private val locationListener = LocationListener { location ->
         onLocationUpdated(location)
@@ -342,12 +353,7 @@ class VescForegroundService : Service() {
         }
         stopLocationUpdates()
         instance = null
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            stopForeground(STOP_FOREGROUND_REMOVE)
-        } else {
-            @Suppress("DEPRECATION")
-            stopForeground(true)
-        }
+        stopForeground(STOP_FOREGROUND_REMOVE)
         super.onDestroy()
     }
 
@@ -457,6 +463,7 @@ class VescForegroundService : Service() {
     private fun beginSession(start: PendingStart) {
         isStoppingService = false
         stopCurrentSession(emitDisconnected = false, updateNotification = false)
+        VescForegroundService.reloadAlertRules(applicationContext)
         config = start.config
         canId = start.config.canId
         error = null
@@ -630,14 +637,6 @@ class VescForegroundService : Service() {
                 handleFrameChunk(value)
             }
         }
-
-        @Deprecated("Deprecated in Java")
-        override fun onCharacteristicChanged(gatt: BluetoothGatt, characteristic: BluetoothGattCharacteristic) {
-            val value = characteristic.value ?: return
-            if (characteristic.uuid == NUS_RX_UUID || characteristic.uuid == NUS_TX_UUID) {
-                handleFrameChunk(value)
-            }
-        }
     }
 
     private fun resolveBleConnect() {
@@ -679,9 +678,14 @@ class VescForegroundService : Service() {
                 telemetry = parsed
                 lastTelemetryAt = parsed.lastPacketAt
                 armTelemetryStaleWatchdog()
-                appendRecentTelemetry(parsed)
+                val firedAlerts = evaluateAlerts(parsed)
+                val eventMap = if (firedAlerts.isNotEmpty())
+                    parsed.toMap() + mapOf("firedAlerts" to firedAlerts)
+                else
+                    parsed.toMap()
+                appendRecentTelemetry(eventMap, parsed.lastPacketAt)
                 showNotification(formatNotificationText(parsed))
-                emitEvent("onTelemetry", parsed.toMap())
+                emitEvent("onTelemetry", eventMap)
                 recordTelemetry(parsed)
                 emitState()
             }
@@ -809,16 +813,7 @@ class VescForegroundService : Service() {
         } else {
             BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
         }
-        val ok = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            g.writeCharacteristic(tx, bytes, writeType) == BluetoothStatusCodes.SUCCESS
-        } else {
-            @Suppress("DEPRECATION")
-            tx.value = bytes
-            @Suppress("DEPRECATION")
-            tx.writeType = writeType
-            @Suppress("DEPRECATION")
-            g.writeCharacteristic(tx)
-        }
+        val ok = g.writeCharacteristic(tx, bytes, writeType) == BluetoothStatusCodes.SUCCESS
         if (ok) recorder?.recordChunk("tx", bytes)
         return ok
     }
@@ -1212,10 +1207,124 @@ class VescForegroundService : Service() {
         return state
     }
 
-    private fun appendRecentTelemetry(values: RefloatTelemetry) {
-        val point = values.toMap()
+    private suspend fun loadAlertRules(context: Context) {
+        try {
+            val rules = AppDataRepository.get(context).getEnabledAlertRuleEntities()
+            alertRules = rules
+            alertLastFiredAt.clear()
+            Log.d(TAG, "Loaded ${rules.size} alert rule(s)")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to load alert rules: ${e.message}")
+            alertRules = emptyList()
+        }
+    }
+
+    private fun evaluateAlerts(t: RefloatTelemetry): List<Map<String, Any?>> {
+        val rules = alertRules
+        if (rules.isEmpty()) return emptyList()
+        val now = System.currentTimeMillis()
+        val fired = mutableListOf<Map<String, Any?>>()
+        for (rule in rules) {
+            val id           = rule.id
+            val controlId    = rule.controlId
+            val threshold    = rule.threshold
+            val thresholdMax = rule.thresholdMax
+            val soundType    = rule.soundType
+            val value        = extractAlertValue(controlId, t) ?: continue
+            val aboveDir     = alertDirectionIsAbove(controlId)
+            val triggered    = if (aboveDir) value >= threshold else value <= threshold
+            if (!triggered) continue
+            val rangeDepth = alertRangeDepth(value, threshold, thresholdMax, aboveDir)
+            val debounceMs = rangeDepth?.let { depth ->
+                (1_000L - (650L * depth)).toLong()
+            } ?: 10_000L
+            if (now - (alertLastFiredAt[id] ?: 0L) < debounceMs) continue
+            alertLastFiredAt[id] = now
+            fired.add(mapOf(
+                "ruleId"       to id,
+                "controlId"    to controlId,
+                "value"        to value,
+                "threshold"    to threshold,
+                "thresholdMax" to thresholdMax,
+                "soundType"    to soundType,
+                "rangeDepth"   to rangeDepth,
+                "firedAt"      to now,
+            ))
+        }
+        if (fired.isNotEmpty()) {
+            val first = fired.first()
+            val rangeDepth = (first["rangeDepth"] as? Number)?.toDouble()
+            playAlertTone(first["soundType"] as? String ?: "default", rangeDepth)
+            vibrate(rangeDepth)
+        }
+        return fired
+    }
+
+    // Battery alerts when voltage is LOW (below threshold); everything else alerts high.
+    private fun alertDirectionIsAbove(controlId: String): Boolean = controlId != "battery"
+
+    private fun alertRangeDepth(
+        value: Double,
+        threshold: Double,
+        thresholdMax: Double?,
+        aboveDir: Boolean,
+    ): Double? {
+        if (thresholdMax == null || thresholdMax == threshold) return null
+        val span = if (aboveDir) thresholdMax - threshold else threshold - thresholdMax
+        if (span <= 0.0) return null
+        val depth = if (aboveDir) value - threshold else threshold - value
+        return (depth / span).coerceIn(0.0, 1.0)
+    }
+
+    private fun extractAlertValue(controlId: String, t: RefloatTelemetry): Double? = when (controlId) {
+        "speed"           -> abs(t.speed)
+        "battery"         -> t.batteryVoltage
+        "duty"            -> abs(t.dutyCycle) * 100.0
+        "motor-temp"      -> t.tempMotor?.takeIf { it > 0 }
+        "motor-current"   -> t.motorCurrent
+        "controller-temp" -> t.tempMosfet
+        "batt-current"    -> t.batteryCurrent
+        "imu"             -> t.pitch
+        "footpad"         -> t.adc1
+        else              -> null
+    }
+
+    @Suppress("UNUSED_PARAMETER")
+    private fun playAlertTone(soundType: String, rangeDepth: Double?) {
+        try {
+            val tg = ToneGenerator(AudioManager.STREAM_ALARM, ToneGenerator.MAX_VOLUME)
+            if (rangeDepth != null) {
+                val durationMs = (140L + (760L * rangeDepth)).toInt()
+                tg.startTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, durationMs)
+                mainHandler.postDelayed({ tg.release() }, durationMs + 120L)
+                return
+            }
+            tg.startTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 450)
+            mainHandler.postDelayed({ tg.startTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 450) }, 500)
+            mainHandler.postDelayed({ tg.startTone(ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 450) }, 1_000)
+            mainHandler.postDelayed({ tg.release() }, 1_600)
+        } catch (e: Exception) {
+            Log.w(TAG, "Alert tone failed: ${e.message}")
+        }
+    }
+
+    private fun vibrate(rangeDepth: Double?) {
+        try {
+            val v = getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator ?: return
+            if (rangeDepth != null) {
+                val durationMs = (90L + (260L * rangeDepth)).toLong()
+                v.vibrate(VibrationEffect.createOneShot(durationMs, VibrationEffect.DEFAULT_AMPLITUDE))
+                return
+            }
+            v.vibrate(VibrationEffect.createWaveform(longArrayOf(0, 450, 120, 450, 120, 650), -1))
+        } catch (e: Exception) {
+            Log.w(TAG, "Vibrate failed: ${e.message}")
+        }
+    }
+
+    private fun appendRecentTelemetry(point: Map<String, Any?>, packetAt: Long) {
         recentTelemetry.addLast(point)
-        pruneRecent(recentTelemetry, values.lastPacketAt)
+        pruneRecent(recentTelemetry, packetAt)
     }
 
     private fun appendRecentLocation(location: LocationSnapshot) {
@@ -1236,19 +1345,17 @@ class VescForegroundService : Service() {
     }
 
     private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "VESC Board Monitoring",
-                NotificationManager.IMPORTANCE_LOW,
-            ).apply {
-                description = "Shows while monitoring board and GPS data"
-                setSound(null, null)
-                enableVibration(false)
-                setShowBadge(false)
-            }
-            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+        val channel = NotificationChannel(
+            CHANNEL_ID,
+            "VESC Board Monitoring",
+            NotificationManager.IMPORTANCE_LOW,
+        ).apply {
+            description = "Shows while monitoring board and GPS data"
+            setSound(null, null)
+            enableVibration(false)
+            setShowBadge(false)
         }
+        getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
     private fun showNotification(text: String = "Monitoring board in background") {
@@ -1315,14 +1422,7 @@ class VescForegroundService : Service() {
     }
 
     private fun writeCccd(gatt: BluetoothGatt, descriptor: BluetoothGattDescriptor) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            gatt.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
-        } else {
-            @Suppress("DEPRECATION")
-            descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-            @Suppress("DEPRECATION")
-            gatt.writeDescriptor(descriptor)
-        }
+        gatt.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
     }
 
     private fun cancelCccdTimeout() {
@@ -1598,26 +1698,18 @@ private class VescRecordingStore(private val context: Context) {
         val source = File(path)
         if (!source.exists()) throw IllegalArgumentException("Recording not found")
         val outputName = source.name
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val values = ContentValues().apply {
-                put(MediaStore.Downloads.DISPLAY_NAME, outputName)
-                put(MediaStore.Downloads.MIME_TYPE, "application/jsonl")
-                put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
-            }
-            val resolver = context.contentResolver
-            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
-                ?: throw IllegalStateException("Could not create download")
-            resolver.openOutputStream(uri)?.use { output ->
-                source.inputStream().use { input -> input.copyTo(output) }
-            }
-            return uri.toString()
+        val values = ContentValues().apply {
+            put(MediaStore.Downloads.DISPLAY_NAME, outputName)
+            put(MediaStore.Downloads.MIME_TYPE, "application/jsonl")
+            put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
         }
-        val destDir = context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)
-            ?: throw IllegalStateException("Downloads directory unavailable")
-        destDir.mkdirs()
-        val dest = File(destDir, outputName)
-        source.copyTo(dest, overwrite = true)
-        return dest.absolutePath
+        val resolver = context.contentResolver
+        val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+            ?: throw IllegalStateException("Could not create download")
+        resolver.openOutputStream(uri)?.use { output ->
+            source.inputStream().use { input -> input.copyTo(output) }
+        }
+        return uri.toString()
     }
 
     private fun readMeta(file: File): JSONObject? {

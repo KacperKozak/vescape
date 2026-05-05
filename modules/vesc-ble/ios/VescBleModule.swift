@@ -26,6 +26,8 @@ public class VescBleModule: Module {
   private var mockLat = 52.2297
   private var mockLon = 21.0122
   private var scanDeviceIndex = 0
+  private var boards = Self.loadArray(key: "vesc_ble_boards")
+  private var alertRules = Self.loadArray(key: "vesc_ble_alert_rules")
 
   private let mockDevices: [[String: Any]] = [
     [
@@ -87,6 +89,10 @@ public class VescBleModule: Module {
 
     Function("setTelemetryRecordingEnabled") { (_: Bool) in
       // No persistent storage in the iOS mock
+    }
+
+    Function("reloadAlertRules") {
+      // no-op in iOS simulator mock
     }
 
     // MARK: Session
@@ -238,6 +244,49 @@ public class VescBleModule: Module {
     AsyncFunction("clearTelemetryHistory") { (promise: Promise) in
       promise.resolve(nil)
     }
+
+    AsyncFunction("getBoards") { (promise: Promise) in
+      promise.resolve(self.boards.sorted(by: Self.sortBoards))
+    }
+
+    AsyncFunction("upsertBoard") { (board: [String: Any], promise: Promise) in
+      self.upsert(&self.boards, item: board)
+      self.saveAppData()
+      promise.resolve(nil)
+    }
+
+    AsyncFunction("deleteBoard") { (id: String, promise: Promise) in
+      self.boards.removeAll { ($0["id"] as? String) == id }
+      self.saveAppData()
+      promise.resolve(nil)
+    }
+
+    AsyncFunction("getAlertRules") { (promise: Promise) in
+      promise.resolve(self.alertRules.sorted(by: Self.sortByCreatedAt))
+    }
+
+    AsyncFunction("upsertAlertRule") { (rule: [String: Any], promise: Promise) in
+      self.upsert(&self.alertRules, item: rule)
+      self.saveAppData()
+      promise.resolve(nil)
+    }
+
+    AsyncFunction("setAlertRuleEnabled") { (id: String, enabled: Bool, promise: Promise) in
+      self.alertRules = self.alertRules.map { rule in
+        guard (rule["id"] as? String) == id else { return rule }
+        var next = rule
+        next["enabled"] = enabled
+        return next
+      }
+      self.saveAppData()
+      promise.resolve(nil)
+    }
+
+    AsyncFunction("deleteAlertRule") { (id: String, promise: Promise) in
+      self.alertRules.removeAll { ($0["id"] as? String) == id }
+      self.saveAppData()
+      promise.resolve(nil)
+    }
   }
 
   // MARK: - Scan
@@ -382,5 +431,53 @@ public class VescBleModule: Module {
       "lastPacketAt": Date().timeIntervalSince1970 * 1000.0,
       "location": nil,
     ] as [String: Any?])
+  }
+
+  private func saveAppData() {
+    Self.saveArray(boards, key: "vesc_ble_boards")
+    Self.saveArray(alertRules, key: "vesc_ble_alert_rules")
+  }
+
+  private func upsert(_ array: inout [[String: Any?]], item: [String: Any]) {
+    let normalized = item.reduce(into: [String: Any?]()) { result, entry in
+      result[entry.key] = entry.value
+    }
+    guard let id = normalized["id"] as? String else { return }
+    if let index = array.firstIndex(where: { ($0["id"] as? String) == id }) {
+      array[index] = normalized
+    } else {
+      array.append(normalized)
+    }
+  }
+
+  private static func sortBoards(_ lhs: [String: Any?], _ rhs: [String: Any?]) -> Bool {
+    let leftStarred = lhs["isStarred"] as? Bool ?? false
+    let rightStarred = rhs["isStarred"] as? Bool ?? false
+    if leftStarred != rightStarred { return leftStarred }
+    return createdAt(lhs) < createdAt(rhs)
+  }
+
+  private static func sortByCreatedAt(_ lhs: [String: Any?], _ rhs: [String: Any?]) -> Bool {
+    createdAt(lhs) < createdAt(rhs)
+  }
+
+  private static func createdAt(_ item: [String: Any?]) -> Double {
+    item["createdAt"] as? Double ?? Double(item["createdAt"] as? Int ?? 0)
+  }
+
+  private static func loadArray(key: String) -> [[String: Any?]] {
+    guard
+      let data = UserDefaults.standard.data(forKey: key),
+      let raw = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
+    else {
+      return []
+    }
+    return raw.map { item in item.reduce(into: [String: Any?]()) { $0[$1.key] = $1.value } }
+  }
+
+  private static func saveArray(_ array: [[String: Any?]], key: String) {
+    let normalized = array.map { item in item.compactMapValues { $0 } }
+    guard let data = try? JSONSerialization.data(withJSONObject: normalized) else { return }
+    UserDefaults.standard.set(data, forKey: key)
   }
 }

@@ -10,6 +10,7 @@
 - [vescProtocol.md](./vescProtocol.md) — VESC packet framing, CAN forwarding, Refloat commands
 - [refloatAlldata.md](./refloatAlldata.md) — Refloat `COMMAND_GET_ALLDATA` binary layout
 - [chargingDetection.md](./chargingDetection.md) — charging indicator investigation & findings
+- [alerts.md](./alerts.md) — telemetry alerts: storage, native evaluation, Geiger mode
 
 ## Status
 

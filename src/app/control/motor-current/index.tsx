@@ -36,7 +36,7 @@ export default function MotorCurrentScreen() {
   const displayValue = currentPoint ? `${fmt(currentPoint.value, 1)} A` : DASH
 
   return (
-    <ControlDetailLayout title="Motor Current">
+    <ControlDetailLayout title="Motor Current" controlId="motor-current" unit="A">
       <TelemetryLineChart
         label="MOTOR CURRENT"
         value={displayValue}

@@ -180,6 +180,30 @@ interface TelemetryDao {
     clearMarkers()
     clearBuckets()
   }
+
+  @Query("SELECT * FROM boards ORDER BY is_starred DESC, created_at ASC")
+  suspend fun getBoards(): List<BoardEntity>
+
+  @Insert(onConflict = OnConflictStrategy.REPLACE)
+  suspend fun upsertBoard(board: BoardEntity)
+
+  @Query("DELETE FROM boards WHERE id = :id")
+  suspend fun deleteBoard(id: String)
+
+  @Query("SELECT * FROM alerts ORDER BY created_at ASC")
+  suspend fun getAlertRules(): List<AlertRuleEntity>
+
+  @Query("SELECT * FROM alerts WHERE enabled = 1 ORDER BY created_at ASC")
+  suspend fun getEnabledAlertRules(): List<AlertRuleEntity>
+
+  @Insert(onConflict = OnConflictStrategy.REPLACE)
+  suspend fun upsertAlertRule(rule: AlertRuleEntity)
+
+  @Query("UPDATE alerts SET enabled = :enabled WHERE id = :id")
+  suspend fun setAlertRuleEnabled(id: String, enabled: Boolean)
+
+  @Query("DELETE FROM alerts WHERE id = :id")
+  suspend fun deleteAlertRule(id: String)
 }
 
 private fun TelemetryMinuteBucketEntity.merge(next: TelemetryMinuteBucketEntity): TelemetryMinuteBucketEntity {

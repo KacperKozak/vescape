@@ -3,6 +3,7 @@ package expo.modules.vescble.telemetry
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
+import androidx.room.PrimaryKey
 
 const val TELEMETRY_FLAG_KEYFRAME = 1
 const val TELEMETRY_FLAG_HAS_FAULT = 1 shl 1
@@ -209,4 +210,51 @@ data class TelemetryMarkerEntity(
   val message: String?,
   @ColumnInfo(name = "gap_ms")
   val gapMs: Long?,
+)
+
+@Entity(
+  tableName = "boards",
+  indices = [
+    Index(value = ["created_at"]),
+    Index(value = ["is_starred"]),
+  ],
+)
+data class BoardEntity(
+  @PrimaryKey
+  val id: String,
+  val name: String,
+  val description: String?,
+  @ColumnInfo(name = "ble_id")
+  val bleId: String?,
+  @ColumnInfo(name = "is_starred")
+  val isStarred: Boolean,
+  @ColumnInfo(name = "created_at")
+  val createdAt: Long,
+  @ColumnInfo(name = "min_voltage")
+  val minVoltage: Double?,
+  @ColumnInfo(name = "max_voltage")
+  val maxVoltage: Double?,
+)
+
+@Entity(
+  tableName = "alerts",
+  indices = [
+    Index(value = ["control_id"]),
+    Index(value = ["enabled"]),
+    Index(value = ["created_at"]),
+  ],
+)
+data class AlertRuleEntity(
+  @PrimaryKey
+  val id: String,
+  @ColumnInfo(name = "control_id")
+  val controlId: String,
+  val threshold: Double,
+  @ColumnInfo(name = "threshold_max")
+  val thresholdMax: Double?,
+  val enabled: Boolean,
+  @ColumnInfo(name = "sound_type")
+  val soundType: String,
+  @ColumnInfo(name = "created_at")
+  val createdAt: Long,
 )

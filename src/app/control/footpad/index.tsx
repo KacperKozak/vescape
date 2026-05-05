@@ -45,7 +45,7 @@ export default function FootpadScreen() {
   const current2 = selected2 ?? adc2Points.at(-1) ?? null
 
   return (
-    <ControlDetailLayout title="Footpad">
+    <ControlDetailLayout title="Footpad" controlId="footpad">
       <TelemetryLineChart
         label="ADC 1"
         value={current1 ? fmt(current1.value, 3) : DASH}

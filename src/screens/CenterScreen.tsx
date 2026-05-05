@@ -4,7 +4,7 @@ import { router } from 'expo-router'
 import { FloatingBar } from '@/components/FloatingBar'
 import { TelemetryView } from '@/components/TelemetryView'
 import { routes } from '@/navigation/routes'
-import type { Board } from '@/db/boards'
+import type { Board } from '@/store/boardStore'
 
 interface CenterScreenProps {
   activeBoard: Board | undefined

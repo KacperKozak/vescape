@@ -1,10 +1,16 @@
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
+import { useEffect } from 'react'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 
 import { stackScreens } from '@/navigation/routes'
+import { useAlertsStore } from '@/store/alertsStore'
 
 export default function RootLayout() {
+  useEffect(() => {
+    void useAlertsStore.getState().load()
+  }, [])
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <Stack
