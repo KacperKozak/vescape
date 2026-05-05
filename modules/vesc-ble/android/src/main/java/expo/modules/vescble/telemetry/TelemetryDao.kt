@@ -184,6 +184,9 @@ interface TelemetryDao {
   @Query("SELECT * FROM boards ORDER BY is_starred DESC, created_at ASC")
   suspend fun getBoards(): List<BoardEntity>
 
+  @Query("SELECT * FROM boards WHERE id = :id LIMIT 1")
+  suspend fun getBoard(id: String): BoardEntity?
+
   @Insert(onConflict = OnConflictStrategy.REPLACE)
   suspend fun upsertBoard(board: BoardEntity)
 

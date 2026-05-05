@@ -11,6 +11,10 @@ class AppDataRepository private constructor(context: Context) {
     dao.getBoards().map { it.toMap() }
   }
 
+  suspend fun getBoard(id: String): Map<String, Any?>? = withContext(Dispatchers.IO) {
+    dao.getBoard(id)?.toMap()
+  }
+
   suspend fun upsertBoard(board: Map<String, Any?>): Unit = withContext(Dispatchers.IO) {
     dao.upsertBoard(board.toBoardEntity())
   }

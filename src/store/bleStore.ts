@@ -5,11 +5,11 @@ import {
   stopScan as nativeStopScan,
   startLocationUpdates as nativeStartLocationUpdates,
   setTelemetryRecordingEnabled as nativeSetTelemetryRecordingEnabled,
-  startAutoConnect as nativeStartAutoConnect,
-  stopAutoConnect as nativeStopAutoConnect,
+  selectBoard as nativeSelectBoard,
+  stopBoard as nativeStopBoard,
+  setDebugRecordingEnabled as nativeSetDebugRecordingEnabled,
   getSessionState as nativeGetSessionState,
   startSession,
-  stopSession,
   listRecordings as nativeListRecordings,
   deleteRecording as nativeDeleteRecording,
   exportRecording as nativeExportRecording,
@@ -22,10 +22,11 @@ import {
   type RecordingInfo,
   type SessionMode,
   type SessionStateEvent,
+  type BoardStatus,
+  type ScanStatus,
   type LocationEvent,
   type TelemetryEvent,
 } from 'vesc-ble'
-import { shouldStopNativeSessionOnDisconnect } from './monitoring'
 
 export interface ScannedDevice {
   id: string
@@ -36,12 +37,15 @@ export interface ScannedDevice {
 export type { RecordingInfo }
 export type { SessionMode }
 
-export type BleStatus = 'idle' | 'scanning' | 'connecting' | 'connected' | 'reconnecting' | 'error'
+export type BleStatus = BoardStatus
 
 interface BleState {
   status: BleStatus
   sessionMode: SessionMode | null
   gpsStatus: 'idle' | 'active'
+  scanStatus: ScanStatus
+  generation: number
+  lastTelemetryAt: number | null
   nativeStateReady: boolean
   devices: ScannedDevice[]
   connectedId: string | null
@@ -56,7 +60,7 @@ interface BleState {
 interface BleActions {
   startScan: () => void
   stopScan: () => void
-  connect: (id: string, name?: string) => Promise<void>
+  connect: (boardId: string) => Promise<void>
   replayRecording: (recording: RecordingInfo) => Promise<void>
   disconnect: () => Promise<void>
   setRecordDebugSession: (enabled: boolean) => void
@@ -64,10 +68,9 @@ interface BleActions {
   deleteRecording: (recording: RecordingInfo) => Promise<void>
   exportRecording: (recording: RecordingInfo) => Promise<string>
   syncNativeState: () => void
-  clearRecentTelemetry: () => void
   startTelemetryRecording: () => void
   stopTelemetryRecording: () => void
-  startGpsTracking: (context?: { deviceId?: string | null; deviceName?: string | null }) => void
+  startGpsTracking: (context?: { boardId?: string | null }) => void
 }
 
 type BleStore = BleState & BleActions
@@ -84,7 +87,6 @@ let sessionSub: EventSubscription | null = null
 let scanSub: EventSubscription | null = null
 let scanErrorSub: EventSubscription | null = null
 let stopRequestedSub: EventSubscription | null = null
-const DEFAULT_BOARD_NAME = 'VESC Board'
 const MAC_ADDRESS_RE = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i
 const RECENT_WINDOW_MS = 10 * 60 * 1000
 
@@ -93,12 +95,6 @@ function removeSessionSubscriptions(): void {
   telemetrySub = null
   sessionSub?.remove()
   sessionSub = null
-}
-
-function friendlyDeviceName(id: string, name?: string): string {
-  const candidate = name?.trim()
-  if (candidate && !MAC_ADDRESS_RE.test(candidate)) return candidate
-  return DEFAULT_BOARD_NAME
 }
 
 function scannedDeviceName(id: string, name?: string): string {
@@ -148,6 +144,7 @@ function installSessionSubscriptions(
   removeSessionSubscriptions()
   telemetrySub = addTelemetryListener((telemetry) => {
     const current = useBleStore.getState()
+    if (telemetry.generation != null && telemetry.generation !== current.generation) return
     const recentTelemetry = appendByTimestamp(current.recentTelemetry, telemetry, telemetryKey)
     const recentLocations = telemetry.location
       ? appendByTimestamp(current.recentLocations, telemetry.location, locationKey)
@@ -168,6 +165,9 @@ function installSessionSubscriptions(
         status: boardStatus,
         sessionMode: session.mode ?? fallbackMode,
         gpsStatus: session.gpsStatus ?? 'idle',
+        scanStatus: session.scanStatus ?? s.scanStatus,
+        generation: session.generation ?? s.generation,
+        lastTelemetryAt: session.lastTelemetryAt ?? null,
         nativeStateReady: true,
         connectedId: boardConnectedIdFromSession(session, fallbackDeviceId),
         error: session.error ?? undefined,
@@ -192,6 +192,9 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
   status: 'idle',
   sessionMode: null,
   gpsStatus: 'idle',
+  scanStatus: 'idle',
+  generation: 0,
+  lastTelemetryAt: null,
   nativeStateReady: false,
   devices: [],
   connectedId: null,
@@ -209,17 +212,18 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
     if (
       currentStatus === 'connecting' ||
       currentStatus === 'connected' ||
+      currentStatus === 'stale' ||
       currentStatus === 'reconnecting'
     ) {
       return
     }
 
-    set({ status: 'scanning', devices: [], error: undefined })
+    set({ devices: [], error: undefined })
 
     scanSub?.remove()
     scanErrorSub?.remove()
     scanErrorSub = addErrorListener((event) => {
-      set({ status: 'error', error: event.message })
+      set({ scanStatus: 'error', error: event.message })
     })
     scanSub = addDeviceListener((device) => {
       const name = scannedDeviceName(device.id, device.name)
@@ -239,13 +243,14 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
     })
     try {
       nativeScan()
+      get().syncNativeState()
     } catch (err) {
       scanSub?.remove()
       scanSub = null
       scanErrorSub?.remove()
       scanErrorSub = null
       set({
-        status: 'error',
+        scanStatus: 'error',
         error: err instanceof Error ? err.message : String(err),
       })
     }
@@ -254,6 +259,7 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
   stopScan() {
     try {
       nativeStopScan()
+      get().syncNativeState()
     } catch {
       // Native scan may already be stopped after permission or lifecycle changes.
     }
@@ -261,16 +267,13 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
     scanSub = null
     scanErrorSub?.remove()
     scanErrorSub = null
-    set((state) => ({
-      status: state.status === 'scanning' ? 'idle' : state.status,
-    }))
   },
 
-  async connect(id: string, name?: string) {
+  async connect(boardId: string) {
     get().stopScan()
-    set({ connectedId: null, error: undefined, recentTelemetry: [] })
+    set({ error: undefined })
 
-    installSessionSubscriptions(set, 'ble', id)
+    installSessionSubscriptions(set, 'ble', boardId)
     stopRequestedSub?.remove()
     stopRequestedSub = addStopRequestedListener(() => {
       removeSessionSubscriptions()
@@ -278,18 +281,8 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
       get().syncNativeState()
     })
 
-    const device = get().devices.find((d) => d.id === id)
-    const deviceName = friendlyDeviceName(id, name ?? device?.name)
-
     try {
-      await nativeStartAutoConnect({
-        mode: 'ble',
-        deviceId: id,
-        deviceName,
-        pollIntervalMs: 500,
-        recordingEnabled: get().recordDebugSession,
-        telemetryRecordingEnabled: get().telemetryRecordingEnabled,
-      })
+      await nativeSelectBoard(boardId)
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       set({ status: 'error', sessionMode: 'ble', error: msg })
@@ -317,9 +310,6 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
   },
 
   async disconnect() {
-    const sessionMode = get().sessionMode
-    const shouldStopNativeSession = shouldStopNativeSessionOnDisconnect(sessionMode)
-
     // Remove subscriptions BEFORE the native call so intermediate session-state
     // events emitted during teardown don't flicker status through multiple values.
     removeSessionSubscriptions()
@@ -327,13 +317,7 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
     stopRequestedSub = null
 
     try {
-      if (shouldStopNativeSession) {
-        if (sessionMode === 'ble') {
-          await nativeStopAutoConnect()
-        } else {
-          await stopSession()
-        }
-      }
+      await nativeStopBoard()
     } catch {
       // Treat native "already stopped" style failures as a completed local teardown.
     } finally {
@@ -344,6 +328,7 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
 
   setRecordDebugSession(enabled: boolean) {
     set({ recordDebugSession: enabled })
+    nativeSetDebugRecordingEnabled(enabled)
   },
 
   async loadRecordings() {
@@ -372,6 +357,9 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
       status: boardStatus,
       sessionMode: session.mode,
       gpsStatus: session.gpsStatus ?? 'idle',
+      scanStatus: session.scanStatus ?? 'idle',
+      generation: session.generation ?? 0,
+      lastTelemetryAt: session.lastTelemetryAt ?? null,
       connectedId: boardConnectedIdFromSession(session, ''),
       error: session.error ?? undefined,
       telemetryRecordingEnabled: session.telemetryRecordingEnabled ?? false,
@@ -379,10 +367,6 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
       recentLocations: session.recentLocations ?? [],
       nativeStateReady: true,
     })
-  },
-
-  clearRecentTelemetry() {
-    set({ recentTelemetry: [] })
   },
 
   startTelemetryRecording() {
@@ -397,8 +381,7 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
   // GPS is always running — this just tells native which board to attribute locations to.
   startGpsTracking(context) {
     nativeStartLocationUpdates({
-      deviceId: context?.deviceId ?? null,
-      deviceName: context?.deviceName ?? null,
+      boardId: context?.boardId ?? null,
     })
   },
 }))

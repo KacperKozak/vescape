@@ -30,8 +30,8 @@ class VescBleModule : Module() {
   private var scanCallback: ScanCallback? = null
   private var scanRetryCount = 0
   private var scanRetryRunnable: Runnable? = null
-  private var locationContextDeviceId: String? = null
-  private var locationContextDeviceName: String? = null
+  private var scanStatus: String = "idle"
+  private var requestedDebugRecordingEnabled = false
   private val mainHandler = Handler(Looper.getMainLooper())
 
   private val context: Context get() = appContext.reactContext
@@ -67,23 +67,20 @@ class VescBleModule : Module() {
       VescForegroundService.previewAlertSound(context.applicationContext, soundType)
     }
     Function("getSessionState") {
-      VescForegroundService.currentState()
+      VescForegroundService.currentState() + mapOf("scanStatus" to scanStatus)
+    }
+    Function("setDebugRecordingEnabled") { enabled: Boolean ->
+      requestedDebugRecordingEnabled = enabled
     }
 
-    AsyncFunction("startAutoConnect") { options: Map<String, Any?>, promise: Promise ->
-      val autoOptions = options.toMutableMap()
-      autoOptions["autoReconnect"] = true
-      startSession(autoOptions, null)
-      promise.resolve(null)
+    AsyncFunction("selectBoard") Coroutine { boardId: String ->
+      selectBoard(boardId)
     }
-    AsyncFunction("stopAutoConnect") { promise: Promise ->
+    AsyncFunction("stopBoard") { promise: Promise ->
       stopSession(promise)
     }
     AsyncFunction("startSession") { options: Map<String, Any?>, promise: Promise ->
       startSession(options, promise)
-    }
-    AsyncFunction("stopSession") { promise: Promise ->
-      stopSession(promise)
     }
     AsyncFunction("listRecordings") { promise: Promise ->
       promise.resolve(VescForegroundService.listRecordings(context.applicationContext))
@@ -149,6 +146,7 @@ class VescBleModule : Module() {
     stopScanInternal()
 
     val s = btAdapter.bluetoothLeScanner ?: run {
+      scanStatus = "error"
       sendEvent("onError", mapOf("message" to "BLE scanner unavailable (BT off?)"))
       return
     }
@@ -177,6 +175,7 @@ class VescBleModule : Module() {
         Log.e(TAG, "Scan failed errorCode=$errorCode")
         scanner = null
         scanCallback = null
+        scanStatus = "error"
 
         if (
           errorCode == ScanCallback.SCAN_FAILED_APPLICATION_REGISTRATION_FAILED &&
@@ -209,6 +208,7 @@ class VescBleModule : Module() {
 
     scanner = s
     scanCallback = cb
+    scanStatus = "scanning"
     Log.d(TAG, "scan started")
   }
 
@@ -222,6 +222,7 @@ class VescBleModule : Module() {
     }
     scanner = null
     scanCallback = null
+    scanStatus = "idle"
   }
 
   private fun startLocationUpdates(options: Map<String, Any?>? = null) {
@@ -231,12 +232,41 @@ class VescBleModule : Module() {
       sendEvent("onError", mapOf("message" to "Location permission not granted"))
       return
     }
-    locationContextDeviceId = options?.get("deviceId") as? String
-    locationContextDeviceName = options?.get("deviceName") as? String
+    val board = (options?.get("boardId") as? String)?.let { boardId ->
+      runBlocking { AppDataRepository.get(context.applicationContext).getBoard(boardId) }
+    }
     VescForegroundService.startGpsMonitoring(
       context.applicationContext,
-      locationContextDeviceId,
-      locationContextDeviceName,
+      board?.get("bleId") as? String ?: board?.get("id") as? String,
+      board?.get("name") as? String,
+    )
+  }
+
+  private suspend fun selectBoard(boardId: String) {
+    val board = AppDataRepository.get(context.applicationContext).getBoard(boardId)
+      ?: throw IllegalArgumentException("Board not found: $boardId")
+    val bleId = board["bleId"] as? String
+    if (bleId.isNullOrBlank()) {
+      throw IllegalArgumentException("Board has no BLE pairing: $boardId")
+    }
+    val boardName = board["name"] as? String ?: DEFAULT_BOARD_NAME
+    VescForegroundService.startSession(
+      context.applicationContext,
+      SessionConfig(
+        mode = "ble",
+        deviceId = bleId,
+        deviceName = boardName,
+        canId = null,
+        pollIntervalMs = 500L,
+        recordingEnabled = requestedDebugRecordingEnabled,
+        telemetryRecordingEnabled = false,
+        recordingPath = null,
+        autoReconnect = true,
+      ),
+      onSuccess = {},
+      onError = { _, message ->
+        sendEvent("onError", mapOf("message" to message))
+      },
     )
   }
 

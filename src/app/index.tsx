@@ -28,7 +28,7 @@ export default function MainScreen() {
   const pagerRef = useRef<MainPagerHandle>(null)
   const backPressedOnce = useRef(false)
   const load = useBoardStore((s) => s.load)
-  const activeBoard = useBoardStore((s) => s.boards.find((b) => b.id === s.activeBoardId))
+  const activeBoardId = useBoardStore((s) => s.activeBoardId)
   const { telemetryRecordingEnabled, startGpsTracking, startTelemetryRecording } = useBleStore(
     useShallow((s) => ({
       telemetryRecordingEnabled: s.telemetryRecordingEnabled,
@@ -52,19 +52,13 @@ export default function MainScreen() {
 
   useEffect(() => {
     if (permStatus === 'granted') {
-      const context = {
-        deviceId: activeBoard?.bleId ?? activeBoard?.id ?? null,
-        deviceName: activeBoard?.name ?? null,
-      }
-      startGpsTracking(context)
+      startGpsTracking({ boardId: activeBoardId })
       if (telemetryRecordingEnabled) {
         startTelemetryRecording()
       }
     }
   }, [
-    activeBoard?.bleId,
-    activeBoard?.id,
-    activeBoard?.name,
+    activeBoardId,
     permStatus,
     startGpsTracking,
     startTelemetryRecording,

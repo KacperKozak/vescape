@@ -285,6 +285,7 @@ class VescForegroundService : Service() {
         }
 
         private fun idleState(): Map<String, Any?> = mapOf(
+            "generation" to 0L,
             "status" to "idle",
             "boardStatus" to "idle",
             "gpsStatus" to "idle",
@@ -343,6 +344,7 @@ class VescForegroundService : Service() {
     private var autoReconnectRunnable: Runnable? = null
     private var reconnectScanCallback: ScanCallback? = null
     private var autoReconnectAttempt = 0
+    private var generation = 0L
     private val recentTelemetry = ArrayDeque<Map<String, Any?>>()
     private val recentLocations = ArrayDeque<Map<String, Any?>>()
     private val alertLastFiredAt = HashMap<String, Long>()
@@ -492,6 +494,7 @@ class VescForegroundService : Service() {
         stopCurrentSession(emitDisconnected = false, updateNotification = false)
         VescForegroundService.reloadAlertRules(applicationContext)
         config = start.config
+        generation += 1
         canId = start.config.canId
         error = null
         telemetry = null
@@ -707,9 +710,9 @@ class VescForegroundService : Service() {
                 armTelemetryStaleWatchdog()
                 val firedAlerts = evaluateAlerts(parsed)
                 val eventMap = if (firedAlerts.isNotEmpty())
-                    parsed.toMap() + mapOf("firedAlerts" to firedAlerts)
+                    parsed.toMap() + mapOf("firedAlerts" to firedAlerts, "generation" to generation)
                 else
-                    parsed.toMap()
+                    parsed.toMap() + mapOf("generation" to generation)
                 appendRecentTelemetry(eventMap, parsed.lastPacketAt)
                 showNotification(formatNotificationText(parsed))
                 emitEvent("onTelemetry", eventMap)
@@ -785,6 +788,8 @@ class VescForegroundService : Service() {
             val stillStale = lastTelemetryAt == armedAt ||
                 System.currentTimeMillis() - lastTelemetryAt >= TELEMETRY_STALE_MS
             if (status == "connected" && config?.autoReconnect == true && stillStale) {
+                status = "stale"
+                emitState()
                 scheduleAutoReconnect(session, null, "telemetry stale")
             }
         }
@@ -944,6 +949,7 @@ class VescForegroundService : Service() {
         latestLocation = null
         recentTelemetry.clear()
         recentLocations.clear()
+        generation += 1
         error = null
         status = "idle"
         config = null
@@ -1220,12 +1226,19 @@ class VescForegroundService : Service() {
 
     private fun sessionStateMap(includeRecent: Boolean = false): Map<String, Any?> {
         val mode = config?.mode
+        val now = System.currentTimeMillis()
+        val isTelemetryStale = status == "connected" &&
+            mode == "ble" &&
+            lastTelemetryAt > 0L &&
+            now - lastTelemetryAt >= TELEMETRY_STALE_MS
         val boardStatus = when (mode) {
-            "ble", "replay" -> status
+            "ble" -> if (isTelemetryStale) "stale" else status
+            "replay" -> status
             else -> "idle"
         }
         val gpsStatus = if (locationManager != null) "active" else "idle"
         val state = mutableMapOf<String, Any?>(
+            "generation" to generation,
             "status" to status,
             "boardStatus" to boardStatus,
             "gpsStatus" to gpsStatus,
@@ -1236,6 +1249,7 @@ class VescForegroundService : Service() {
             "error" to error,
             "autoReconnect" to (config?.autoReconnect ?: false),
             "telemetryRecordingEnabled" to (config?.telemetryRecordingEnabled == true || requestedTelemetryRecordingEnabled),
+            "lastTelemetryAt" to telemetry?.lastPacketAt,
         )
         if (includeRecent) {
             state["recentTelemetry"] = recentTelemetry.toList()

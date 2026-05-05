@@ -6,6 +6,7 @@ import { theme } from '@/constants/theme'
 
 const COLORS: Record<string, { bg: string; text: string }> = {
   connected: { bg: theme.gps.bg, text: theme.gps.text },
+  stale: { bg: theme.error.bg, text: theme.error.text },
   connecting: { bg: theme.wheel.bg, text: theme.wheel.text },
   reconnecting: { bg: theme.wheel.bg, text: theme.wheel.text },
   scanning: { bg: theme.warning.bg, text: theme.warning.text },
@@ -18,11 +19,9 @@ export function StatusPill({ status, style }: { status: string; style?: ViewStyl
   const lastPacketAt = latestTelemetry?.lastPacketAt ?? null
   const avgLatency = latestTelemetry?.avgLatency ?? null
   const pulseOpacity = useRef(new Animated.Value(0.35)).current
-  const [isStale, setIsStale] = useState(false)
 
   useEffect(() => {
     if (lastPacketAt == null) return
-    setIsStale(false)
     pulseOpacity.setValue(1)
     const anim = Animated.timing(pulseOpacity, {
       toValue: 0.35,
@@ -30,24 +29,23 @@ export function StatusPill({ status, style }: { status: string; style?: ViewStyl
       useNativeDriver: true,
     })
     anim.start()
-    const t = setTimeout(() => setIsStale(true), 2000)
     return () => {
       anim.stop()
-      clearTimeout(t)
     }
   }, [lastPacketAt, pulseOpacity])
 
   const c = COLORS[status] ?? COLORS.idle!
-  const pillBg = status === 'connected' && isStale ? COLORS.error.bg : c.bg
-  const pillText = status === 'connected' && isStale ? COLORS.error.text : c.text
-  const dotColor = isStale
+  const isNativeStale = status === 'stale'
+  const pillBg = c.bg
+  const pillText = c.text
+  const dotColor = isNativeStale
     ? theme.error.color
     : avgLatency == null || avgLatency < 150
       ? theme.gps.color
       : avgLatency < 400
         ? theme.warning.color
         : theme.error.color
-  const connectedNeedsText = status === 'connected' && (isStale || (avgLatency ?? 0) >= 400)
+  const connectedNeedsText = status === 'connected' && (avgLatency ?? 0) >= 400
 
   if (status === 'connected' && !connectedNeedsText) {
     return (
@@ -65,7 +63,7 @@ export function StatusPill({ status, style }: { status: string; style?: ViewStyl
       {(status === 'connecting' || status === 'reconnecting' || status === 'scanning') && (
         <ActivityIndicator size="small" color={pillText} style={styles.spinner} />
       )}
-      {status === 'connected' && (
+      {(status === 'connected' || status === 'stale') && (
         <Animated.View style={[styles.dot, { backgroundColor: dotColor, opacity: pulseOpacity }]} />
       )}
       {status === 'idle' && <LightningIcon size={12} color={pillText} weight="fill" />}
@@ -74,7 +72,7 @@ export function StatusPill({ status, style }: { status: string; style?: ViewStyl
         <Text style={[styles.latency, { color: dotColor }]}>{avgLatency}ms</Text>
       )}
       <Text style={[styles.label, { color: pillText }]}>
-        {status === 'connected' && isStale
+        {status === 'stale'
           ? 'STALE'
           : status === 'connected'
             ? 'SLOW'

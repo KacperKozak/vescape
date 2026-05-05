@@ -27,10 +27,11 @@ export interface LocationEvent {
   saved: boolean
 }
 
-export type SessionStatus = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'error'
+export type SessionStatus = 'idle' | 'connecting' | 'connected' | 'stale' | 'reconnecting' | 'error'
 export type SessionMode = 'ble' | 'replay' | 'gps'
-export type BoardStatus = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'error'
+export type BoardStatus = 'idle' | 'connecting' | 'connected' | 'stale' | 'reconnecting' | 'error'
 export type GpsStatus = 'idle' | 'active'
+export type ScanStatus = 'idle' | 'scanning' | 'error'
 
 export interface FiredAlert {
   ruleId: string
@@ -66,6 +67,7 @@ export interface AlertRule {
 }
 
 export interface TelemetryEvent {
+  generation?: number
   location?: LocationEvent | null
   hasFault: boolean
   faultCode: number
@@ -93,9 +95,11 @@ export interface TelemetryEvent {
 }
 
 export interface SessionStateEvent {
+  generation?: number
   status: SessionStatus
   boardStatus?: BoardStatus
   gpsStatus?: GpsStatus
+  scanStatus?: ScanStatus
   mode: SessionMode | null
   deviceId: string | null
   deviceName: string | null
@@ -103,27 +107,17 @@ export interface SessionStateEvent {
   error: string | null
   autoReconnect?: boolean
   telemetryRecordingEnabled?: boolean
+  lastTelemetryAt?: number | null
   recentTelemetry?: TelemetryEvent[]
   recentLocations?: LocationEvent[]
 }
 
-export type StartSessionOptions =
-  | {
-      mode: 'ble'
-      deviceId: string
-      deviceName: string
-      canId?: number
-      pollIntervalMs?: number
-      recordingEnabled?: boolean
-      telemetryRecordingEnabled?: boolean
-      autoReconnect?: boolean
-    }
-  | {
-      mode: 'replay'
-      deviceName?: string
-      recordingPath: string
-      pollIntervalMs?: number
-    }
+export type StartSessionOptions = {
+  mode: 'replay'
+  deviceName?: string
+  recordingPath: string
+  pollIntervalMs?: number
+}
 
 export interface RecordingInfo {
   id: string
@@ -236,8 +230,7 @@ export interface TelemetrySummary {
 }
 
 export interface LocationTrackingOptions {
-  deviceId?: string | null
-  deviceName?: string | null
+  boardId?: string | null
 }
 
 // ---------------------------------------------------------------------------
@@ -273,10 +266,10 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
   setTelemetryRecordingEnabled(enabled: boolean): void
   reloadAlertRules(): void
   previewAlertSound(soundType: AlertSoundType): void
-  startAutoConnect(options: Extract<StartSessionOptions, { mode: 'ble' }>): Promise<void>
-  stopAutoConnect(): Promise<void>
+  selectBoard(boardId: string): Promise<void>
+  stopBoard(): Promise<void>
+  setDebugRecordingEnabled(enabled: boolean): void
   startSession(options: StartSessionOptions): Promise<void>
-  stopSession(): Promise<void>
   getSessionState(): SessionStateEvent
   listRecordings(): Promise<RecordingInfo[]>
   deleteRecording(path: string): Promise<boolean>
@@ -347,26 +340,24 @@ export function previewAlertSound(soundType: AlertSoundType): void {
   native.previewAlertSound(soundType)
 }
 
-/** Start native-owned saved-board connection with background reconnect. */
-export async function startAutoConnect(
-  options: Extract<StartSessionOptions, { mode: 'ble' }>,
-): Promise<void> {
-  return native.startAutoConnect(options)
+/** Select saved board by app board id. Native reads BLE id/name from its DB and owns connect. */
+export async function selectBoard(boardId: string): Promise<void> {
+  return native.selectBoard(boardId)
 }
 
-/** Stop native-owned saved-board connection/reconnect. */
-export async function stopAutoConnect(): Promise<void> {
-  return native.stopAutoConnect()
+/** Stop native board BLE/replay session. GPS monitoring may continue independently. */
+export async function stopBoard(): Promise<void> {
+  return native.stopBoard()
+}
+
+/** Enable raw debug session recording for future native board sessions. */
+export function setDebugRecordingEnabled(enabled: boolean): void {
+  native.setDebugRecordingEnabled(enabled)
 }
 
 /** Start a native Android BLE/replay session. The service owns polling and notification updates. */
 export async function startSession(options: StartSessionOptions): Promise<void> {
   return native.startSession(options)
-}
-
-/** Stop the native Android BLE/replay session. */
-export async function stopSession(): Promise<void> {
-  return native.stopSession()
 }
 
 /** Read the current native Android session state snapshot. */

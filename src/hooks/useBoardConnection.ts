@@ -34,7 +34,6 @@ export function useBoardConnection() {
     replayRecording,
     deleteRecording,
     setRecordDebugSession,
-    clearRecentTelemetry,
   } = useBleStore(
     useShallow((s) => ({
       status: s.status,
@@ -50,12 +49,11 @@ export function useBoardConnection() {
       replayRecording: s.replayRecording,
       deleteRecording: s.deleteRecording,
       setRecordDebugSession: s.setRecordDebugSession,
-      clearRecentTelemetry: s.clearRecentTelemetry,
     })),
   )
   const { status: permStatus } = usePermissions()
   const [autoConnectEnabled, setAutoConnectEnabled] = useState(true)
-  const previousActiveBoardId = useRef(activeBoardId)
+  const selectedBoardIntent = useRef<string | null>(null)
 
   const activeBoard = boards.find((b) => b.id === activeBoardId)
   const activeReplay =
@@ -66,38 +64,17 @@ export function useBoardConnection() {
     ? `${activeReplay.deviceName} (${new Date(activeReplay.startedAt).toLocaleString()})`
     : null
 
-  // Native owns scan/connect/reconnect for saved boards.
+  // JS sends board id intent; native reads BLE pairing/name and owns state.
   useEffect(() => {
     if (!autoConnectEnabled) return
     if (!nativeStateReady) return
     if (permStatus !== 'granted') return
-    if (!activeBoard?.bleId) return
+    if (!activeBoardId) return
     if (bleStatus !== 'idle' && bleStatus !== 'error') return
-    void connect(activeBoard.bleId, activeBoard.name)
-  }, [
-    autoConnectEnabled,
-    nativeStateReady,
-    permStatus,
-    activeBoard?.bleId,
-    activeBoard?.name,
-    bleStatus,
-    connect,
-  ])
-
-  // Reset the live board surface on board change. Native sessions are not
-  // stopped from React unmount because Android owns background reconnect.
-  useEffect(() => {
-    const previousBoardId = previousActiveBoardId.current
-    const didChangeBoard = previousBoardId != null && previousBoardId !== activeBoardId
-    previousActiveBoardId.current = activeBoardId
-
-    setAutoConnectEnabled(true)
-    clearRecentTelemetry()
-    stopScan()
-    if (didChangeBoard) {
-      void disconnect()
-    }
-  }, [activeBoardId, clearRecentTelemetry, disconnect, stopScan])
+    if (selectedBoardIntent.current === activeBoardId) return
+    selectedBoardIntent.current = activeBoardId
+    void connect(activeBoardId)
+  }, [autoConnectEnabled, nativeStateReady, permStatus, activeBoardId, bleStatus, connect])
 
   useEffect(() => {
     void loadRecordings()
@@ -120,12 +97,18 @@ export function useBoardConnection() {
         onPress: () => void starBoard(activeBoard.id),
       })
     }
-    if (bleStatus === 'connected' || bleStatus === 'connecting' || bleStatus === 'reconnecting') {
+    if (
+      bleStatus === 'connected' ||
+      bleStatus === 'stale' ||
+      bleStatus === 'connecting' ||
+      bleStatus === 'reconnecting'
+    ) {
       items.push({
         label: activeReplay ? 'Stop' : 'Disconnect',
         icon: PowerIcon,
         onPress: () => {
           setAutoConnectEnabled(false)
+          selectedBoardIntent.current = null
           void disconnect()
         },
       })
@@ -155,7 +138,14 @@ export function useBoardConnection() {
     return items
   }, [activeBoard, activeReplay, bleStatus, deleteRecording, disconnect, starBoard])
 
-  const handleSelectBoard = useCallback((id: string) => setActiveBoard(id), [setActiveBoard])
+  const handleSelectBoard = useCallback(
+    (id: string) => {
+      selectedBoardIntent.current = null
+      setAutoConnectEnabled(true)
+      setActiveBoard(id)
+    },
+    [setActiveBoard],
+  )
 
   const handleAddBoard = useCallback(() => {
     router.push(routes.addBoardScan)
@@ -171,14 +161,15 @@ export function useBoardConnection() {
 
   const handleStopScan = useCallback(() => {
     setAutoConnectEnabled(false)
-    void disconnect()
-  }, [disconnect])
+    stopScan()
+  }, [stopScan])
 
   const handleRetryConnect = useCallback(() => {
-    if (!activeBoard?.bleId) return
+    if (!activeBoardId) return
     setAutoConnectEnabled(true)
-    void connect(activeBoard.bleId, activeBoard.name)
-  }, [activeBoard?.bleId, activeBoard?.name, connect])
+    selectedBoardIntent.current = null
+    void connect(activeBoardId)
+  }, [activeBoardId, connect])
 
   return {
     boards,

@@ -33,23 +33,24 @@ function buildBucketSlots(
   return { slots, currentBucketStart }
 }
 
-function bleLabel(status: string, avgLatency: number | null, isStale: boolean): string {
+function bleLabel(status: string, scanStatus: string, avgLatency: number | null): string {
+  if (scanStatus === 'scanning' && status === 'idle') return 'scanning'
   if (status === 'connected') {
-    if (isStale) return 'stale'
     return avgLatency != null ? `${avgLatency}ms` : 'connected'
   }
-  if (status === 'scanning') return 'scanning'
+  if (status === 'stale') return 'stale'
   if (status === 'connecting') return 'connecting'
   if (status === 'reconnecting') return 'reconnecting'
   if (status === 'error') return 'error'
   return 'idle'
 }
 
-function bleColor(status: string, isStale: boolean): string {
-  if (status === 'connected') return isStale ? theme.error.color : theme.gps.color
-  if (status === 'scanning' || status === 'connecting' || status === 'reconnecting')
+function bleColor(status: string, scanStatus: string): string {
+  if (status === 'connected') return theme.gps.color
+  if (status === 'stale' || status === 'error') return theme.error.color
+  if (scanStatus === 'scanning' || status === 'connecting' || status === 'reconnecting') {
     return theme.wheel.text
-  if (status === 'error') return theme.error.color
+  }
   return '#475569'
 }
 
@@ -68,11 +69,12 @@ function gpsColor(gpsFix: GpsFix | null, ageSec: number | null): string {
 }
 
 export function LiveStatusBar() {
-  const { recentTelemetry, recentLocations, status } = useBleStore(
+  const { recentTelemetry, recentLocations, status, scanStatus } = useBleStore(
     useShallow((s) => ({
       recentTelemetry: s.recentTelemetry,
       recentLocations: s.recentLocations,
       status: s.status,
+      scanStatus: s.scanStatus,
     })),
   )
   const [nowMs, setNowMs] = useState(() => Date.now())
@@ -85,9 +87,7 @@ export function LiveStatusBar() {
 
   const latestTelemetry = recentTelemetry.at(-1) ?? null
   const gpsFix = recentLocations.at(-1) ?? null
-  const lastPacketAt = latestTelemetry?.lastPacketAt ?? null
   const avgLatency = latestTelemetry?.avgLatency ?? null
-  const isStale = lastPacketAt != null && nowMs - lastPacketAt > 2000
   const gpsAgeSec = gpsFix ? (nowMs - gpsFix.timestamp) / 1000 : null
 
   const buckets = buildLiveBuckets(recentTelemetry, recentLocations, nowMs)
@@ -97,8 +97,8 @@ export function LiveStatusBar() {
   const maxBoard = Math.max(1, ...slots.map((s) => s.boardCount))
   const maxGps = Math.max(1, ...slots.map((s) => s.gpsCount))
 
-  const boardColor = bleColor(status, isStale)
-  const boardText = bleLabel(status, avgLatency, isStale)
+  const boardColor = bleColor(status, scanStatus)
+  const boardText = bleLabel(status, scanStatus, avgLatency)
   const gpsText = gpsLabel(gpsFix, gpsAgeSec)
   const gpsClr = gpsColor(gpsFix, gpsAgeSec)
 

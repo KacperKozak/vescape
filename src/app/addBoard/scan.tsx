@@ -19,7 +19,7 @@ export default function AddBoardScanScreen() {
       error: s.error,
       startScan: s.startScan,
       stopScan: s.stopScan,
-      isScanning: s.status === 'scanning',
+      isScanning: s.scanStatus === 'scanning',
     })),
   )
 

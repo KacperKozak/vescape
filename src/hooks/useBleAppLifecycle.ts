@@ -12,8 +12,8 @@ export function useBleAppLifecycle(): void {
     syncNativeState()
     const onChange = (nextState: AppStateStatus) => {
       if (nextState !== 'active') {
-        const status = useBleStore.getState().status
-        if (status === 'scanning') {
+        const scanStatus = useBleStore.getState().scanStatus
+        if (scanStatus === 'scanning') {
           stopScan()
         }
         return
