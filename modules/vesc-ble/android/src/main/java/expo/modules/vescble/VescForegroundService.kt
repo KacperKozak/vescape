@@ -179,6 +179,7 @@ class VescForegroundService : Service() {
         var emitEvent: ((String, Map<String, Any?>) -> Unit)? = null
 
         private var instance: VescForegroundService? = null
+        private var appInForeground = true
         private var pendingStart: PendingStart? = null
         private var pendingStop: PendingStop? = null
         private var pendingGpsStart: PendingGpsStart? = null
@@ -271,6 +272,12 @@ class VescForegroundService : Service() {
         }
 
         fun currentState(): Map<String, Any?> = instance?.sessionStateMap(includeRecent = true) ?: idleState()
+
+        fun setAppInForeground(active: Boolean) {
+            if (appInForeground == active) return
+            appInForeground = active
+            instance?.showNotification()
+        }
 
         fun listRecordings(context: Context): List<Map<String, Any?>> {
             return VescRecordingStore(context).list()
@@ -1428,8 +1435,9 @@ class VescForegroundService : Service() {
     }
 
     private fun buildNotification(text: String = "Monitoring board in background"): Notification {
+        val title = (config?.deviceName ?: "VESC").let { if (appInForeground) it else "$it (bg)" }
         return androidx.core.app.NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle(config?.deviceName ?: "VESC")
+            .setContentTitle(title)
             .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_menu_compass)
             .setContentIntent(buildOpenAppIntent())

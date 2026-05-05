@@ -32,6 +32,9 @@ class VescBleModule : Module() {
   private var scanRetryRunnable: Runnable? = null
   private var scanStatus: String = "idle"
   private var requestedDebugRecordingEnabled = false
+  @Volatile
+  private var frontendActive = true
+  private val observedEvents = mutableSetOf<String>()
   private val mainHandler = Handler(Looper.getMainLooper())
 
   private val context: Context get() = appContext.reactContext
@@ -43,7 +46,11 @@ class VescBleModule : Module() {
     Name("VescBle")
 
     VescForegroundService.emitEvent = { name, body ->
-      mainHandler.post { sendEvent(name, body) }
+      if (shouldEmitToFrontend(name)) {
+        mainHandler.post {
+          if (shouldEmitToFrontend(name)) sendEvent(name, body)
+        }
+      }
     }
 
     Events(
@@ -54,6 +61,36 @@ class VescBleModule : Module() {
       "onTelemetry",
       "onLocation",
     )
+
+    OnStartObserving("onDevice") { observedEvents.add("onDevice") }
+    OnStopObserving("onDevice") { observedEvents.remove("onDevice") }
+    OnStartObserving("onError") { observedEvents.add("onError") }
+    OnStopObserving("onError") { observedEvents.remove("onError") }
+    OnStartObserving("onStopRequested") { observedEvents.add("onStopRequested") }
+    OnStopObserving("onStopRequested") { observedEvents.remove("onStopRequested") }
+    OnStartObserving("onSessionState") { observedEvents.add("onSessionState") }
+    OnStopObserving("onSessionState") { observedEvents.remove("onSessionState") }
+    OnStartObserving("onTelemetry") { observedEvents.add("onTelemetry") }
+    OnStopObserving("onTelemetry") { observedEvents.remove("onTelemetry") }
+    OnStartObserving("onLocation") { observedEvents.add("onLocation") }
+    OnStopObserving("onLocation") { observedEvents.remove("onLocation") }
+
+    OnActivityEntersForeground {
+      frontendActive = true
+      VescForegroundService.setAppInForeground(true)
+    }
+    OnActivityEntersBackground {
+      frontendActive = false
+      VescForegroundService.setAppInForeground(false)
+    }
+    OnDestroy {
+      frontendActive = false
+      VescForegroundService.setAppInForeground(false)
+      observedEvents.clear()
+      if (VescForegroundService.emitEvent != null) {
+        VescForegroundService.emitEvent = null
+      }
+    }
 
     Function("scan") { startScan(resetRetries = true) }
     Function("stopScan") { stopScanInternal() }
@@ -138,6 +175,8 @@ class VescBleModule : Module() {
       VescForegroundService.reloadAlertRules(context.applicationContext)
     }
   }
+
+  private fun shouldEmitToFrontend(name: String): Boolean = frontendActive && observedEvents.contains(name)
 
   private fun startScan(resetRetries: Boolean = true) {
     if (resetRetries) {
