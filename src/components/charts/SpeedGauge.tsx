@@ -17,6 +17,13 @@ interface Props {
   distance?: string
   /** Max gauge value. Defaults to 50 km/h. */
   max?: number
+  alerts?: SpeedGaugeAlert[]
+}
+
+export interface SpeedGaugeAlert {
+  id: string
+  threshold: number
+  thresholdMax: number | null
 }
 
 // 180° dial. ViewBox 200×120, center (100, 100), radius 80.
@@ -29,6 +36,7 @@ const STROKE = 2
 const MARKER_INSET = 10
 const RED_FRACTION = 0.85
 const GLOW_GRADIENT_ID = 'speedGaugeGlow'
+const ALERT_RANGE_GLOW_GRADIENT_ID = 'speedGaugeAlertRangeGlow'
 const SPARK_RANGE = { min: 0, max: 50 } // overridden below if `max` differs
 
 function clamp01(f: number) {
@@ -52,6 +60,16 @@ function wedgePath(f: number) {
   return `M ${CX} ${CY} L ${CX - R} ${CY} A ${R} ${R} 0 0 1 ${end.x} ${end.y} Z`
 }
 
+function rangeWedgePath(fromFraction: number, toFraction: number) {
+  const from = clamp01(fromFraction)
+  const to = clamp01(toFraction)
+  if (to <= from) return ''
+  const radius = R - STROKE / 2
+  const start = polar(radius, from)
+  const end = polar(radius, to)
+  return `M ${CX} ${CY} L ${start.x} ${start.y} A ${radius} ${radius} 0 0 1 ${end.x} ${end.y} Z`
+}
+
 // Background track is constant — draw it once at module load, not per render.
 const BG_ARC_PATH = arcPath(1)
 
@@ -64,7 +82,7 @@ function fmtSpeedWithUnit(value: number) {
  * it for cross-check, total distance tucked in the top-right, and a 10-min
  * sparkline under the dial.
  */
-export function SpeedGauge({ value, series, gpsValue, distance, max = 50 }: Props) {
+export function SpeedGauge({ value, series, gpsValue, distance, max = 50, alerts = [] }: Props) {
   const fraction = clamp01((value ?? 0) / max)
   const color = fraction > RED_FRACTION ? theme.error.color : theme.wheel.color
 
@@ -99,6 +117,19 @@ export function SpeedGauge({ value, series, gpsValue, distance, max = 50 }: Prop
               <Stop offset="0.95" stopColor={color} stopOpacity={0.18} />
               <Stop offset="1" stopColor={color} stopOpacity={0.35} />
             </RadialGradient>
+            <RadialGradient
+              id={ALERT_RANGE_GLOW_GRADIENT_ID}
+              gradientUnits="userSpaceOnUse"
+              cx={CX}
+              cy={CY}
+              r={R}
+            >
+              <Stop offset="0" stopColor="#facc15" stopOpacity={0} />
+              <Stop offset="0.82" stopColor="#facc15" stopOpacity={0} />
+              <Stop offset="0.965" stopColor="#facc15" stopOpacity={0.05} />
+              <Stop offset="0.99" stopColor="#facc15" stopOpacity={0.1} />
+              <Stop offset="1" stopColor="#facc15" stopOpacity={0} />
+            </RadialGradient>
           </Defs>
 
           {value != null && fraction > 0 ? (
@@ -122,6 +153,10 @@ export function SpeedGauge({ value, series, gpsValue, distance, max = 50 }: Prop
               fill="none"
             />
           ) : null}
+
+          {alerts.map((alert) => (
+            <AlertMarker key={alert.id} alert={alert} max={max} />
+          ))}
 
           {value != null ? <Marker fraction={fraction} color={color} /> : null}
         </Svg>
@@ -159,6 +194,40 @@ export function SpeedGauge({ value, series, gpsValue, distance, max = 50 }: Prop
         </View>
       ) : null}
     </View>
+  )
+}
+
+function AlertMarker({ alert, max }: { alert: SpeedGaugeAlert; max: number }) {
+  const thresholdFraction = clamp01(alert.threshold / max)
+  const maxFraction = alert.thresholdMax == null ? null : clamp01(alert.thresholdMax / max)
+  const rangePath = maxFraction != null ? rangeWedgePath(thresholdFraction, maxFraction) : ''
+
+  if (maxFraction != null && rangePath) {
+    return (
+      <>
+        <Path d={rangePath} fill={`url(#${ALERT_RANGE_GLOW_GRADIENT_ID})`} stroke="none" />
+        <AlertTick fraction={thresholdFraction} />
+        <AlertTick fraction={maxFraction} />
+      </>
+    )
+  }
+
+  return <AlertTick fraction={thresholdFraction} />
+}
+
+function AlertTick({ fraction }: { fraction: number }) {
+  const inner = polar(R - 3, fraction)
+  const outer = polar(R - STROKE / 2, fraction)
+  return (
+    <Line
+      x1={inner.x}
+      y1={inner.y}
+      x2={outer.x}
+      y2={outer.y}
+      stroke="#facc15"
+      strokeWidth={0.75}
+      strokeLinecap="butt"
+    />
   )
 }
 
