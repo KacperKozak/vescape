@@ -1,11 +1,119 @@
-import { TelemetryCard } from '@/components/TelemetryCard'
+import { useMemo } from 'react'
+import { StyleSheet, Text, View } from 'react-native'
+
+import { Sparkline, type SparklinePoint } from '@/components/charts/Sparkline'
+import { theme } from '@/constants/theme'
 import { DASH, fmt } from '@/helpers/format'
 import { useBleStore } from '@/store/bleStore'
 
 export function ImuCard() {
-  const v = useBleStore((s) => s.recentTelemetry.at(-1) ?? null)
+  const recentTelemetry = useBleStore((s) => s.recentTelemetry)
+  const latest = recentTelemetry.at(-1) ?? null
 
-  const value = v ? `P${fmt(v.pitch, 0)}° R${fmt(v.roll, 0)}° B${fmt(v.balancePitch, 0)}°` : DASH
+  const pitchSeries = useMemo<SparklinePoint[]>(
+    () => recentTelemetry.map((t) => ({ ts: t.lastPacketAt, value: t.pitch })),
+    [recentTelemetry],
+  )
 
-  return <TelemetryCard label="IMU" value={value} />
+  const rollSeries = useMemo<SparklinePoint[]>(
+    () => recentTelemetry.map((t) => ({ ts: t.lastPacketAt, value: t.roll })),
+    [recentTelemetry],
+  )
+
+  const balanceSeries = useMemo<SparklinePoint[]>(
+    () => recentTelemetry.map((t) => ({ ts: t.lastPacketAt, value: t.balancePitch })),
+    [recentTelemetry],
+  )
+
+  return (
+    <View style={styles.card}>
+      <Text style={styles.cardLabel}>IMU</Text>
+      <View style={styles.row}>
+        <ImuColumn
+          label="P"
+          value={latest ? `${fmt(latest.pitch, 0)}°` : DASH}
+          series={pitchSeries}
+          color={theme.wheel.color}
+        />
+        <View style={styles.divider} />
+        <ImuColumn
+          label="R"
+          value={latest ? `${fmt(latest.roll, 0)}°` : DASH}
+          series={rollSeries}
+          color={theme.bran.color}
+        />
+        <View style={styles.divider} />
+        <ImuColumn
+          label="B"
+          value={latest ? `${fmt(latest.balancePitch, 0)}°` : DASH}
+          series={balanceSeries}
+          color={theme.target.color}
+        />
+      </View>
+    </View>
+  )
 }
+
+function ImuColumn({
+  label,
+  value,
+  series,
+  color,
+}: {
+  label: string
+  value: string
+  series: SparklinePoint[]
+  color: string
+}) {
+  return (
+    <View style={styles.column}>
+      <Text style={styles.label}>{label}</Text>
+      <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit>
+        {value}
+      </Text>
+      <Sparkline points={series} color={color} height={18} minSpan={20} />
+    </View>
+  )
+}
+
+const styles = StyleSheet.create({
+  card: {
+    backgroundColor: '#1e293b',
+    borderRadius: 10,
+    padding: 14,
+    flex: 1,
+    minWidth: '45%',
+    margin: 4,
+    gap: 8,
+  },
+  cardLabel: {
+    color: '#94a3b8',
+    fontSize: 11,
+    fontWeight: '500',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  row: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  divider: {
+    width: 1,
+    backgroundColor: '#334155',
+  },
+  column: {
+    flex: 1,
+    gap: 4,
+  },
+  label: {
+    color: '#64748b',
+    fontSize: 10,
+    fontWeight: '500',
+  },
+  value: {
+    color: '#f1f5f9',
+    fontSize: 18,
+    fontFamily: 'monospace',
+    fontWeight: '600',
+  },
+})
