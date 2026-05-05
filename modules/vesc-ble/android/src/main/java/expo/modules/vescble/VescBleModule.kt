@@ -62,18 +62,18 @@ class VescBleModule : Module() {
       "onLocation",
     )
 
-    OnStartObserving("onDevice") { observedEvents.add("onDevice") }
-    OnStopObserving("onDevice") { observedEvents.remove("onDevice") }
-    OnStartObserving("onError") { observedEvents.add("onError") }
-    OnStopObserving("onError") { observedEvents.remove("onError") }
-    OnStartObserving("onStopRequested") { observedEvents.add("onStopRequested") }
-    OnStopObserving("onStopRequested") { observedEvents.remove("onStopRequested") }
-    OnStartObserving("onSessionState") { observedEvents.add("onSessionState") }
-    OnStopObserving("onSessionState") { observedEvents.remove("onSessionState") }
-    OnStartObserving("onTelemetry") { observedEvents.add("onTelemetry") }
-    OnStopObserving("onTelemetry") { observedEvents.remove("onTelemetry") }
-    OnStartObserving("onLocation") { observedEvents.add("onLocation") }
-    OnStopObserving("onLocation") { observedEvents.remove("onLocation") }
+    OnStartObserving("onDevice") { startObserving("onDevice") }
+    OnStopObserving("onDevice") { stopObserving("onDevice") }
+    OnStartObserving("onError") { startObserving("onError") }
+    OnStopObserving("onError") { stopObserving("onError") }
+    OnStartObserving("onStopRequested") { startObserving("onStopRequested") }
+    OnStopObserving("onStopRequested") { stopObserving("onStopRequested") }
+    OnStartObserving("onSessionState") { startObserving("onSessionState") }
+    OnStopObserving("onSessionState") { stopObserving("onSessionState") }
+    OnStartObserving("onTelemetry") { startObserving("onTelemetry") }
+    OnStopObserving("onTelemetry") { stopObserving("onTelemetry") }
+    OnStartObserving("onLocation") { startObserving("onLocation") }
+    OnStopObserving("onLocation") { stopObserving("onLocation") }
 
     OnActivityEntersForeground {
       frontendActive = true
@@ -177,6 +177,14 @@ class VescBleModule : Module() {
   }
 
   private fun shouldEmitToFrontend(name: String): Boolean = frontendActive && observedEvents.contains(name)
+
+  private fun startObserving(name: String) {
+    observedEvents.add(name)
+  }
+
+  private fun stopObserving(name: String) {
+    observedEvents.remove(name)
+  }
 
   private fun startScan(resetRetries: Boolean = true) {
     if (resetRetries) {

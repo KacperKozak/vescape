@@ -724,7 +724,6 @@ class VescForegroundService : Service() {
                 showNotification(formatNotificationText(parsed))
                 emitEvent("onTelemetry", eventMap)
                 recordTelemetry(parsed)
-                emitState()
             }
         }
     }
