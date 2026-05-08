@@ -8,20 +8,6 @@ import { useBleStore } from '@/store/bleStore'
 
 type GpsFix = { timestamp: number; precise: boolean; accuracyM?: number | null }
 
-function bleLabel(status: string, scanStatus: string, avgLatency: number | null): string {
-  if (scanStatus === 'scanning' && status === 'idle') return 'scanning'
-  if (status === 'connected') return avgLatency != null ? `${avgLatency}ms` : 'connected'
-  if (status === 'stale') return 'stale'
-  if (status === 'connecting') return 'connecting'
-  if (status === 'discovering') return 'discovering'
-  if (status === 'subscribing') return 'subscribing'
-  if (status === 'waiting_for_telemetry') return 'waiting'
-  if (status === 'reconnecting') return 'reconnecting'
-  if (status === 'disconnecting') return 'disconnecting'
-  if (status === 'error') return 'error'
-  return 'idle'
-}
-
 function bleColor(status: string, scanStatus: string): string {
   if (status === 'connected') return theme.gps.color
   if (status === 'stale' || status === 'error') return theme.error.color
@@ -60,6 +46,11 @@ function formatAgeMs(ageMs: number | null): string {
   return `${(ageMs / 1000).toFixed(1)}s`
 }
 
+function formatLastSec(ageMs: number | null): string {
+  if (ageMs == null) return 'last -'
+  return `last ${Math.max(0, Math.round(ageMs / 1000))}s`
+}
+
 export function LiveStatusBar() {
   const { recentTelemetry, recentLocations, status, scanStatus } = useBleStore(
     useShallow((s) => ({
@@ -85,7 +76,14 @@ export function LiveStatusBar() {
   const gpsAgeSec = gpsAgeMs != null ? gpsAgeMs / 1000 : null
 
   const boardColor = bleColor(status, scanStatus)
-  const boardText = bleLabel(status, scanStatus, latestTelemetry?.avgLatency ?? null)
+  const boardText =
+    latestTelemetry?.avgLatency != null ? `${Math.round(latestTelemetry.avgLatency)}ms` : '-'
+  const avg =
+    recentTelemetry
+      .filter((r) => r.avgLatency !== null)
+      .reduce((sum, r) => sum + r.avgLatency!, 0) / recentTelemetry.length
+  const boardMeta =
+    status === 'connected' ? `avg ${Math.round(avg)}ms` : formatLastSec(telemetryAgeMs)
   const gpsText = gpsLabel(latestGps, gpsAgeSec)
   const gpsClr = gpsColor(latestGps, gpsAgeSec)
 
@@ -100,7 +98,7 @@ export function LiveStatusBar() {
             </View>
             <View style={styles.expandedSubLine}>
               <Text style={[styles.expandedValue, { color: boardColor }]}>{boardText}</Text>
-              <Text style={styles.expandedMeta}>last {formatAgeMs(telemetryAgeMs)}</Text>
+              <Text style={styles.expandedMeta}>{boardMeta}</Text>
             </View>
             <Text style={styles.expandedInfoSmall}>BLE state/latency</Text>
           </View>
@@ -131,7 +129,7 @@ export function LiveStatusBar() {
             <LightningIcon size={12} color={boardColor} weight="fill" />
             <Text style={styles.inlineLabel}>Board ({recentTelemetry.length})</Text>
             <Text style={[styles.inlineValue, { color: boardColor }]}>{boardText}</Text>
-            <Text style={styles.inlineMeta}>{formatAgeMs(telemetryAgeMs)}</Text>
+            <Text style={styles.inlineMeta}>{boardMeta}</Text>
           </View>
 
           <View style={styles.divider} />
@@ -155,20 +153,23 @@ const styles = StyleSheet.create({
     borderBottomColor: '#1e293b',
   },
   bar: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
   },
   sources: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
+    gap: 8,
   },
   inlineSection: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 4,
+    flex: 1,
     minWidth: 0,
+    paddingVertical: 7,
   },
   inlineLabel: {
     color: '#64748b',
@@ -188,29 +189,31 @@ const styles = StyleSheet.create({
   },
   divider: {
     width: 1,
-    height: 16,
     backgroundColor: '#1e293b',
+    alignSelf: 'stretch',
   },
   expandedPanel: {
     backgroundColor: '#0c1524',
     borderBottomWidth: 1,
     borderBottomColor: '#1e293b',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
+    paddingHorizontal: 0,
+    paddingVertical: 0,
     gap: 4,
   },
   expandedSources: {
     flexDirection: 'row',
     alignItems: 'stretch',
     justifyContent: 'center',
-    gap: 10,
+    gap: 8,
   },
   expandedSection: {
     flexDirection: 'column',
     justifyContent: 'center',
+    alignItems: 'center',
     flex: 1,
     minWidth: 0,
     gap: 1,
+    paddingVertical: 7,
   },
   expandedLine: {
     flexDirection: 'row',
@@ -226,6 +229,7 @@ const styles = StyleSheet.create({
   expandedDivider: {
     width: 1,
     backgroundColor: '#1e293b',
+    alignSelf: 'stretch',
   },
   expandedLabel: {
     color: '#94a3b8',
