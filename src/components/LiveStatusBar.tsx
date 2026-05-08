@@ -3,41 +3,14 @@ import { useEffect, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useShallow } from 'zustand/react/shallow'
 
-import { useBleStore } from '@/store/bleStore'
 import { theme } from '@/constants/theme'
+import { useBleStore } from '@/store/bleStore'
 
-type BucketSlot = { bucketStartMs: number; points: number; boardCount: number; gpsCount: number }
 type GpsFix = { timestamp: number; precise: boolean; accuracyM?: number | null }
-type LiveDataBucket = { bucketStartMs: number; boardCount: number; gpsCount: number }
-
-const MINUTE_MS = 60_000
-const WINDOW_MINUTES = 10
-
-function minuteBucketStart(valueMs: number): number {
-  return valueMs - (valueMs % MINUTE_MS)
-}
-
-function buildBucketSlots(
-  liveBuckets: { bucketStartMs: number; boardCount: number; gpsCount: number }[],
-  nowMs: number,
-): { slots: BucketSlot[]; currentBucketStart: number } {
-  const currentBucketStart = minuteBucketStart(nowMs)
-  const bucketsByStart = new Map(liveBuckets.map((b) => [b.bucketStartMs, b]))
-  const slots = Array.from({ length: 10 }, (_, i) => {
-    const bucketStartMs = currentBucketStart - (9 - i) * 60_000
-    const bucket = bucketsByStart.get(bucketStartMs)
-    const boardCount = bucket?.boardCount ?? 0
-    const gpsCount = bucket?.gpsCount ?? 0
-    return { bucketStartMs, boardCount, gpsCount, points: boardCount + gpsCount }
-  })
-  return { slots, currentBucketStart }
-}
 
 function bleLabel(status: string, scanStatus: string, avgLatency: number | null): string {
   if (scanStatus === 'scanning' && status === 'idle') return 'scanning'
-  if (status === 'connected') {
-    return avgLatency != null ? `${avgLatency}ms` : 'connected'
-  }
+  if (status === 'connected') return avgLatency != null ? `${avgLatency}ms` : 'connected'
   if (status === 'stale') return 'stale'
   if (status === 'connecting') return 'connecting'
   if (status === 'discovering') return 'discovering'
@@ -67,10 +40,11 @@ function bleColor(status: string, scanStatus: string): string {
 }
 
 function gpsLabel(gpsFix: GpsFix | null, ageSec: number | null): string {
-  if (!gpsFix) return 'no GPS'
-  if (!gpsFix.precise) return gpsFix.accuracyM != null ? `±${gpsFix.accuracyM.toFixed(0)}m` : 'weak'
+  if (!gpsFix) return 'no fix'
+  if (!gpsFix.precise)
+    return gpsFix.accuracyM != null ? `±${gpsFix.accuracyM.toFixed(0)}m` : 'weak fix'
   if (ageSec != null && ageSec > 5) return `${ageSec.toFixed(0)}s old`
-  return gpsFix.accuracyM != null ? `±${gpsFix.accuracyM.toFixed(0)}m` : 'GPS'
+  return gpsFix.accuracyM != null ? `±${gpsFix.accuracyM.toFixed(0)}m` : 'good fix'
 }
 
 function gpsColor(gpsFix: GpsFix | null, ageSec: number | null): string {
@@ -78,6 +52,12 @@ function gpsColor(gpsFix: GpsFix | null, ageSec: number | null): string {
   if (!gpsFix.precise) return theme.error.color
   if (ageSec != null && ageSec > 5) return theme.warning.color
   return theme.gps.color
+}
+
+function formatAgeMs(ageMs: number | null): string {
+  if (ageMs == null) return '-'
+  if (ageMs < 1_000) return `${Math.max(0, Math.round(ageMs))}ms`
+  return `${(ageMs / 1000).toFixed(1)}s`
 }
 
 export function LiveStatusBar() {
@@ -93,299 +73,77 @@ export function LiveStatusBar() {
   const [expanded, setExpanded] = useState(false)
 
   useEffect(() => {
-    const interval = setInterval(() => setNowMs(Date.now()), 500)
+    const interval = setInterval(() => setNowMs(Date.now()), 1_000)
     return () => clearInterval(interval)
   }, [])
 
   const latestTelemetry = recentTelemetry.at(-1) ?? null
-  const gpsFix = recentLocations.at(-1) ?? null
-  const avgLatency = latestTelemetry?.avgLatency ?? null
-  const gpsAgeSec = gpsFix ? (nowMs - gpsFix.timestamp) / 1000 : null
+  const latestGps = recentLocations.at(-1) ?? null
 
-  const buckets = buildLiveBuckets(recentTelemetry, recentLocations, nowMs)
-  const boardTotal = buckets.reduce((total, b) => total + b.boardCount, 0)
-  const gpsTotal = buckets.reduce((total, b) => total + b.gpsCount, 0)
-  const { slots, currentBucketStart } = buildBucketSlots(buckets, nowMs)
-  const maxBoard = Math.max(1, ...slots.map((s) => s.boardCount))
-  const maxGps = Math.max(1, ...slots.map((s) => s.gpsCount))
+  const telemetryAgeMs = latestTelemetry ? nowMs - latestTelemetry.lastPacketAt : null
+  const gpsAgeMs = latestGps ? nowMs - latestGps.timestamp : null
+  const gpsAgeSec = gpsAgeMs != null ? gpsAgeMs / 1000 : null
 
   const boardColor = bleColor(status, scanStatus)
-  const boardText = bleLabel(status, scanStatus, avgLatency)
-  const gpsText = gpsLabel(gpsFix, gpsAgeSec)
-  const gpsClr = gpsColor(gpsFix, gpsAgeSec)
+  const boardText = bleLabel(status, scanStatus, latestTelemetry?.avgLatency ?? null)
+  const gpsText = gpsLabel(latestGps, gpsAgeSec)
+  const gpsClr = gpsColor(latestGps, gpsAgeSec)
 
-  const expandedView = (
-    <ExpandedView
-      slots={slots}
-      currentBucketStart={currentBucketStart}
-      boardText={boardText}
-      boardColor={boardColor}
-      gpsText={gpsText}
-      gpsColor={gpsClr}
-      boardTotal={boardTotal}
-      gpsTotal={gpsTotal}
-    />
-  )
+  if (expanded) {
+    return (
+      <Pressable style={styles.expandedPanel} onPress={() => setExpanded(false)}>
+        <View style={styles.expandedSources}>
+          <View style={styles.expandedSection}>
+            <View style={styles.expandedLine}>
+              <LightningIcon size={12} color={boardColor} weight="fill" />
+              <Text style={styles.expandedLabel}>Board ({recentTelemetry.length} samples)</Text>
+            </View>
+            <View style={styles.expandedSubLine}>
+              <Text style={[styles.expandedValue, { color: boardColor }]}>{boardText}</Text>
+              <Text style={styles.expandedMeta}>last {formatAgeMs(telemetryAgeMs)}</Text>
+            </View>
+            <Text style={styles.expandedInfoSmall}>BLE state/latency</Text>
+          </View>
+
+          <View style={styles.expandedDivider} />
+
+          <View style={styles.expandedSection}>
+            <View style={styles.expandedLine}>
+              <NavigationArrowIcon size={12} color={gpsClr} weight="fill" />
+              <Text style={styles.expandedLabel}>GPS ({recentLocations.length} samples)</Text>
+            </View>
+            <View style={styles.expandedSubLine}>
+              <Text style={[styles.expandedValue, { color: gpsClr }]}>{gpsText}</Text>
+              <Text style={styles.expandedMeta}>last {formatAgeMs(gpsAgeMs)}</Text>
+            </View>
+            <Text style={styles.expandedInfoSmall}>fix quality/accuracy</Text>
+          </View>
+        </View>
+      </Pressable>
+    )
+  }
 
   return (
     <View style={styles.container}>
-      {expanded ? (
-        <Pressable onPress={() => setExpanded(false)}>{expandedView}</Pressable>
-      ) : (
-        <Pressable style={styles.bar} onPress={() => setExpanded(true)}>
-          <View style={styles.sources}>
-            <SourceGroup
-              icon={<LightningIcon size={11} color={boardColor} weight="fill" />}
-              label="Board:"
-              slots={slots}
-              getValue={(s) => s.boardCount}
-              max={maxBoard}
-              currentBucketStart={currentBucketStart}
-              activeColor={theme.wheel.color}
-              currentColor={theme.wheel.text}
-              valueText={boardText}
-              valueColor={boardColor}
-            />
-            <SourceGroup
-              icon={<NavigationArrowIcon size={11} color={gpsClr} weight="fill" />}
-              label="GPS:"
-              slots={slots}
-              getValue={(s) => s.gpsCount}
-              max={maxGps}
-              currentBucketStart={currentBucketStart}
-              activeColor={theme.gps.color}
-              currentColor={theme.gps.text}
-              valueText={gpsText}
-              valueColor={gpsClr}
-            />
+      <Pressable style={styles.bar} onPress={() => setExpanded(true)}>
+        <View style={styles.sources}>
+          <View style={styles.inlineSection}>
+            <LightningIcon size={12} color={boardColor} weight="fill" />
+            <Text style={styles.inlineLabel}>Board ({recentTelemetry.length})</Text>
+            <Text style={[styles.inlineValue, { color: boardColor }]}>{boardText}</Text>
+            <Text style={styles.inlineMeta}>{formatAgeMs(telemetryAgeMs)}</Text>
           </View>
-        </Pressable>
-      )}
-    </View>
-  )
-}
 
-function buildLiveBuckets(
-  recentTelemetry: { lastPacketAt: number }[],
-  recentLocations: { timestamp: number }[],
-  nowMs: number,
-): LiveDataBucket[] {
-  const currentBucketStartMs = minuteBucketStart(nowMs)
-  const oldestBucketStartMs = currentBucketStartMs - (WINDOW_MINUTES - 1) * MINUTE_MS
-  const bucketsByStart = new Map<number, LiveDataBucket>()
+          <View style={styles.divider} />
 
-  for (const point of recentTelemetry) {
-    incrementBucket(
-      bucketsByStart,
-      point.lastPacketAt,
-      oldestBucketStartMs,
-      currentBucketStartMs,
-      'board',
-    )
-  }
-  for (const point of recentLocations) {
-    incrementBucket(
-      bucketsByStart,
-      point.timestamp,
-      oldestBucketStartMs,
-      currentBucketStartMs,
-      'gps',
-    )
-  }
-  return Array.from(bucketsByStart.values()).sort((a, b) => a.bucketStartMs - b.bucketStartMs)
-}
-
-function incrementBucket(
-  bucketsByStart: Map<number, LiveDataBucket>,
-  pointMs: number,
-  oldestBucketStartMs: number,
-  currentBucketStartMs: number,
-  source: 'board' | 'gps',
-): void {
-  const bucketStartMs = minuteBucketStart(pointMs)
-  if (bucketStartMs < oldestBucketStartMs || bucketStartMs > currentBucketStartMs) return
-
-  const bucket = bucketsByStart.get(bucketStartMs) ?? {
-    bucketStartMs,
-    boardCount: 0,
-    gpsCount: 0,
-  }
-  bucketsByStart.set(bucketStartMs, {
-    ...bucket,
-    boardCount: bucket.boardCount + (source === 'board' ? 1 : 0),
-    gpsCount: bucket.gpsCount + (source === 'gps' ? 1 : 0),
-  })
-}
-
-function SourceGroup({
-  icon,
-  label,
-  slots,
-  getValue,
-  max,
-  currentBucketStart,
-  activeColor,
-  currentColor,
-  valueText,
-  valueColor,
-}: {
-  icon: React.ReactNode
-  label: string
-  slots: BucketSlot[]
-  getValue: (s: BucketSlot) => number
-  max: number
-  currentBucketStart: number
-  activeColor: string
-  currentColor: string
-  valueText: string
-  valueColor: string
-}) {
-  const hasData = slots.some((s) => getValue(s) > 0)
-  return (
-    <View style={styles.sourceGroup}>
-      {icon}
-      <Text style={styles.sourceGroupLabel}>{label}</Text>
-      <View style={styles.miniBars}>
-        {slots.map((slot) => {
-          const count = getValue(slot)
-          const isCurrent = slot.bucketStartMs === currentBucketStart
-          const height = count > 0 ? Math.max(5, Math.round((count / max) * 14)) : 4
-          const backgroundColor = !hasData
-            ? '#1e293b'
-            : count > 0
-              ? isCurrent
-                ? currentColor
-                : activeColor
-              : '#1e293b'
-          return (
-            <View key={slot.bucketStartMs} style={styles.miniBarSlot}>
-              <View style={[styles.miniBar, { height, backgroundColor }]} />
-            </View>
-          )
-        })}
-      </View>
-      <Text style={[styles.sourceGroupValue, { color: valueColor }]}>{valueText}</Text>
-    </View>
-  )
-}
-
-function ExpandedView({
-  slots,
-  currentBucketStart,
-  boardText,
-  boardColor,
-  gpsText,
-  gpsColor,
-  boardTotal,
-  gpsTotal,
-}: {
-  slots: BucketSlot[]
-  currentBucketStart: number
-  boardText: string
-  boardColor: string
-  gpsText: string
-  gpsColor: string
-  boardTotal: number
-  gpsTotal: number
-}) {
-  const maxBoard = Math.max(1, ...slots.map((s) => s.boardCount))
-  const maxGps = Math.max(1, ...slots.map((s) => s.gpsCount))
-
-  return (
-    <View style={styles.expanded}>
-      <View style={styles.expandedSources}>
-        <SourceChart
-          icon={<LightningIcon size={10} color="#475569" weight="fill" />}
-          label="Board"
-          slots={slots}
-          getValue={(s) => s.boardCount}
-          max={maxBoard}
-          currentBucketStart={currentBucketStart}
-          activeColor={theme.wheel.color}
-          currentColor={theme.wheel.text}
-          total={boardTotal}
-          statusText={boardText}
-          statusColor={boardColor}
-        />
-        <View style={styles.expandedDivider} />
-        <SourceChart
-          icon={<NavigationArrowIcon size={10} color="#475569" weight="fill" />}
-          label="GPS"
-          slots={slots}
-          getValue={(s) => s.gpsCount}
-          max={maxGps}
-          currentBucketStart={currentBucketStart}
-          activeColor={theme.gps.color}
-          currentColor={theme.gps.text}
-          total={gpsTotal}
-          statusText={gpsText}
-          statusColor={gpsColor}
-        />
-      </View>
-      <Text style={styles.barsLabel}>
-        Each bar shows data points collected per minute · last 10 min
-      </Text>
-    </View>
-  )
-}
-
-function SourceChart({
-  icon,
-  label,
-  slots,
-  getValue,
-  max,
-  currentBucketStart,
-  activeColor,
-  currentColor,
-  total,
-  statusText,
-  statusColor,
-}: {
-  icon: React.ReactNode
-  label: string
-  slots: BucketSlot[]
-  getValue: (s: BucketSlot) => number
-  max: number
-  currentBucketStart: number
-  activeColor: string
-  currentColor: string
-  total: number
-  statusText: string
-  statusColor: string
-}) {
-  const hasData = total > 0
-  return (
-    <View style={styles.sourceChart}>
-      <View style={styles.sourceChartHeader}>
-        <View style={styles.sourceChartTitle}>
-          {icon}
-          <Text style={styles.sourceChartLabel}>{label}</Text>
+          <View style={styles.inlineSection}>
+            <NavigationArrowIcon size={12} color={gpsClr} weight="fill" />
+            <Text style={styles.inlineLabel}>GPS ({recentLocations.length})</Text>
+            <Text style={[styles.inlineValue, { color: gpsClr }]}>{gpsText}</Text>
+            <Text style={styles.inlineMeta}>{formatAgeMs(gpsAgeMs)}</Text>
+          </View>
         </View>
-        <Text style={[styles.sourceChartStatus, { color: statusColor }]}>{statusText}</Text>
-        <Text style={[styles.sourceChartTotal, { color: hasData ? activeColor : '#334155' }]}>
-          {total}
-        </Text>
-      </View>
-      <View style={styles.bars}>
-        {slots.map((slot) => {
-          const count = getValue(slot)
-          const isCurrent = slot.bucketStartMs === currentBucketStart
-          const height = count > 0 ? Math.max(4, Math.round((count / max) * 28)) : 3
-          const backgroundColor = !hasData
-            ? '#1e293b'
-            : count > 0
-              ? isCurrent
-                ? currentColor
-                : activeColor
-              : '#1e293b'
-          return (
-            <View key={slot.bucketStartMs} style={styles.barSlot}>
-              <View style={[styles.barFill, { height, backgroundColor }]} />
-            </View>
-          )
-        })}
-      </View>
+      </Pressable>
     </View>
   )
 }
@@ -397,113 +155,104 @@ const styles = StyleSheet.create({
     borderBottomColor: '#1e293b',
   },
   bar: {
-    flexDirection: 'row',
-    alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    gap: 8,
+    paddingVertical: 7,
   },
   sources: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-around',
+    justifyContent: 'center',
+    gap: 10,
   },
-  sourceGroup: {
+  inlineSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 4,
+    minWidth: 0,
   },
-  sourceGroupLabel: {
+  inlineLabel: {
     color: '#64748b',
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '700',
   },
-  miniBars: {
-    height: 16,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 2,
-  },
-  miniBarSlot: {
-    width: 3,
-    height: 16,
-    justifyContent: 'flex-end',
-  },
-  miniBar: {
-    width: 3,
-    borderRadius: 1,
-  },
-  sourceGroupValue: {
+  inlineValue: {
     fontSize: 11,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+  inlineMeta: {
+    color: '#64748b',
+    fontSize: 10,
     fontWeight: '600',
     fontVariant: ['tabular-nums'],
   },
-  chevron: {
-    color: '#475569',
-    fontSize: 10,
+  divider: {
+    width: 1,
+    height: 16,
+    backgroundColor: '#1e293b',
   },
-  expanded: {
+  expandedPanel: {
+    backgroundColor: '#0c1524',
+    borderBottomWidth: 1,
+    borderBottomColor: '#1e293b',
     paddingHorizontal: 12,
-    paddingTop: 8,
-    paddingBottom: 10,
-    gap: 6,
+    paddingVertical: 7,
+    gap: 4,
   },
   expandedSources: {
     flexDirection: 'row',
+    alignItems: 'stretch',
+    justifyContent: 'center',
     gap: 10,
+  },
+  expandedSection: {
+    flexDirection: 'column',
+    justifyContent: 'center',
+    flex: 1,
+    minWidth: 0,
+    gap: 1,
+  },
+  expandedLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  expandedSubLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginLeft: 16,
   },
   expandedDivider: {
     width: 1,
     backgroundColor: '#1e293b',
-    alignSelf: 'stretch',
   },
-  sourceChart: {
-    flex: 1,
-    gap: 4,
-  },
-  sourceChartHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  sourceChartTitle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  sourceChartLabel: {
-    color: '#475569',
-    fontSize: 9,
+  expandedLabel: {
+    color: '#94a3b8',
+    fontSize: 10,
     fontWeight: '700',
   },
-  sourceChartStatus: {
-    flex: 1,
-    fontSize: 10,
+  expandedValue: {
+    backgroundColor: '#111b2d',
+    borderWidth: 1,
+    borderColor: '#223147',
+    borderRadius: 999,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    fontSize: 11,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+  },
+  expandedMeta: {
+    color: '#64748b',
+    fontSize: 9,
     fontWeight: '600',
     fontVariant: ['tabular-nums'],
   },
-  sourceChartTotal: {
-    fontSize: 9,
-    fontWeight: '700',
-    fontVariant: ['tabular-nums'],
-  },
-  bars: {
-    height: 32,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 3,
-  },
-  barSlot: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  barFill: {
-    borderRadius: 2,
-  },
-  barsLabel: {
+  expandedInfoSmall: {
     color: '#475569',
     fontSize: 9,
-    fontWeight: '700',
+    fontWeight: '600',
+    marginLeft: 16,
   },
 })
