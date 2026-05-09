@@ -4,14 +4,7 @@ import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.Service
 import android.bluetooth.BluetoothAdapter
-import android.bluetooth.BluetoothDevice
-import android.bluetooth.BluetoothGatt
-import android.bluetooth.BluetoothGattCallback
-import android.bluetooth.BluetoothGattCharacteristic
-import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothManager
-import android.bluetooth.BluetoothProfile
-import android.bluetooth.BluetoothStatusCodes
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
@@ -22,18 +15,15 @@ import android.location.LocationManager
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
-import android.os.SystemClock
 import android.util.Log
 import expo.modules.vescble.telemetry.AlertRuleEntity
 import expo.modules.vescble.telemetry.AppDataRepository
-import expo.modules.vescble.telemetry.TelemetryCapture
 import expo.modules.vescble.telemetry.TelemetryLocationCapture
 import expo.modules.vescble.telemetry.TelemetryRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import java.util.UUID
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -53,11 +43,6 @@ private const val MIN_LIVE_HISTORY_LIMIT_MINUTES = 1
 private const val MAX_LIVE_HISTORY_LIMIT_MINUTES = 50
 private const val TELEMETRY_STALE_MS = 2_500L
 private const val BOARD_READY_TIMEOUT_MS = 4_000L
-
-private val NUS_SERVICE_UUID = UUID.fromString("6e400001-b5a3-f393-e0a9-e50e24dcca9e")
-private val NUS_TX_UUID = UUID.fromString("6e400002-b5a3-f393-e0a9-e50e24dcca9e")
-private val NUS_RX_UUID = UUID.fromString("6e400003-b5a3-f393-e0a9-e50e24dcca9e")
-private val CCCD_UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
 
 data class SessionConfig(
     val appBoardId: String?,
@@ -224,16 +209,20 @@ class VescForegroundService : Service() {
             onLocation = ::onLocationUpdated,
         )
     }
+    private val gattClient by lazy {
+        VescGattClient(
+            context = this,
+            handler = mainHandler,
+            recorder = { recorder },
+            listener = gattListener,
+        )
+    }
 
     private var boardConfig: SessionConfig? = null
-    private var boardStatus: String = "idle"
+    private var boardStatus: BoardPhase = BoardPhase.Idle
     private var boardError: String? = null
     private var telemetry: RefloatTelemetry? = null
     private var canId: Int? = null
-    private var gatt: BluetoothGatt? = null
-    private var txChar: BluetoothGattCharacteristic? = null
-    private var pendingCccdWrites = 0
-    private var cccdTimeout: Runnable? = null
     private var connectTimeout: Runnable? = null
     private var boardReadyTimeout: Runnable? = null
     private var pendingConnect: PendingStart? = null
@@ -241,8 +230,6 @@ class VescForegroundService : Service() {
     private var telemetryStaleRunnable: Runnable? = null
     private var lastPollAt = 0L
     private var lastTelemetryAt = 0L
-    private var diagWriteCount = 0
-    private var intentionalDisconnect = false
     private var connectAttempt = 0
     private var recorder: VescSessionRecorder? = null
     private var telemetryStore: TelemetryRepository? = null
@@ -299,7 +286,7 @@ class VescForegroundService : Service() {
         val stop = pendingStop ?: return
         pendingStop = null
         if (boardConfig != null) {
-            setStatus("disconnecting")
+            setStatus(BoardPhase.Disconnecting)
             stopCurrentBoardSession(
                 emitDisconnected = true,
                 updateNotification = !gpsMonitor.active,
@@ -363,7 +350,7 @@ class VescForegroundService : Service() {
         telemetry = null
         recentTelemetry.clear()
         packetReassembler.reset()
-        diagWriteCount = 0
+        gattClient.resetDiagnostics()
         connectAttempt = 0
         autoReconnectAttempt = 0
         lastTelemetryAt = 0L
@@ -376,7 +363,7 @@ class VescForegroundService : Service() {
             null
         }
         startLocationUpdates()
-        setStatus("connecting")
+        setStatus(BoardPhase.Connecting)
         startForeground(NOTIFICATION_ID, buildNotification("Connecting..."))
 
         startBleSession(start)
@@ -393,7 +380,7 @@ class VescForegroundService : Service() {
         cancelConnectTimeout()
         stopReconnectScan()
         val device = bluetoothAdapter.getRemoteDevice(deviceId)
-        gatt = device.connectGatt(this, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
+        gattClient.connect(device)
         connectTimeout = Runnable {
             if (pendingConnect == start) {
                 failStart(start, "CONNECT_TIMEOUT", "Timed out connecting to board")
@@ -403,114 +390,56 @@ class VescForegroundService : Service() {
         Log.d(VESC_SESSION_TAG, "connectGatt $deviceId attempt=$connectAttempt")
     }
 
-    private val gattCallback = object : BluetoothGattCallback() {
-        override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
-            Log.d(VESC_SESSION_TAG, "onConnectionStateChange status=$status newState=$newState")
-            recorder?.recordState("gatt:$newState", mapOf("status" to status))
-            when (newState) {
-                BluetoothProfile.STATE_CONNECTED -> {
-                    setStatus("discovering")
-                    gatt.requestMtu(517)
+    private val gattListener = object : VescGattListener {
+        override fun onGattConnected() {
+            setStatus(BoardPhase.Discovering)
+        }
+
+        override fun onGattSubscribing() {
+            setStatus(BoardPhase.Subscribing)
+        }
+
+        override fun onGattDisconnected(status: Int, intentional: Boolean) {
+            val wasConnecting = pendingConnect
+            cancelConnectTimeout()
+            stopPolling()
+            if (intentional) {
+                return
+            } else if (wasConnecting != null) {
+                if (status == 133 && connectAttempt < 2) {
+                    Log.w(VESC_SESSION_TAG, "status=133 during connect, retrying once")
+                    mainHandler.postDelayed({ startBleSession(wasConnecting) }, 250)
+                } else if (wasConnecting.boardConfig.autoReconnect) {
+                    scheduleAutoReconnect(wasConnecting.boardConfig, status, "connect failed")
+                } else {
+                    failStart(wasConnecting, "DISCONNECTED", "Device disconnected during connect (status=$status)")
                 }
-                BluetoothProfile.STATE_DISCONNECTED -> {
-                    val wasConnecting = pendingConnect
-                    val wasIntentional = intentionalDisconnect
-                    clearGatt(markIntentional = false)
-                    cancelConnectTimeout()
-                    stopPolling()
-                    if (wasIntentional) {
-                        intentionalDisconnect = false
-                    } else if (wasConnecting != null) {
-                        if (status == 133 && connectAttempt < 2) {
-                            Log.w(VESC_SESSION_TAG, "status=133 during connect, retrying once")
-                            mainHandler.postDelayed({ startBleSession(wasConnecting) }, 250)
-                        } else if (wasConnecting.boardConfig.autoReconnect) {
-                            scheduleAutoReconnect(wasConnecting.boardConfig, status, "connect failed")
-                        } else {
-                            failStart(wasConnecting, "DISCONNECTED", "Device disconnected during connect (status=$status)")
-                        }
-                    } else if (boardConfig?.autoReconnect == true) {
-                        scheduleAutoReconnect(boardConfig!!, status, "board disconnected")
-                    } else {
-                        setError("Board disconnected")
-                        finishRecording("error")
-                    }
-                }
+            } else if (boardConfig?.autoReconnect == true) {
+                scheduleAutoReconnect(boardConfig!!, status, "board disconnected")
+            } else {
+                setError("Board disconnected")
+                finishRecording("error")
             }
         }
 
-        override fun onMtuChanged(gatt: BluetoothGatt, mtu: Int, status: Int) {
-            Log.d(VESC_SESSION_TAG, "onMtuChanged mtu=$mtu status=$status")
-            if (!gatt.discoverServices()) {
-                failPendingConnect("DISCOVERY_FAILED", "Could not start service discovery")
-            }
-        }
-
-        override fun onServicesDiscovered(gatt: BluetoothGatt, status: Int) {
-            setStatus("subscribing")
-            if (status != BluetoothGatt.GATT_SUCCESS) {
-                failPendingConnect("DISCOVERY_FAILED", "Service discovery failed status=$status")
-                return
-            }
-            val service = gatt.getService(NUS_SERVICE_UUID)
-            val tx = service?.getCharacteristic(NUS_TX_UUID)
-            val rx = service?.getCharacteristic(NUS_RX_UUID)
-            if (service == null || tx == null || rx == null) {
-                failPendingConnect("NO_CHAR", "NUS service/characteristics not found")
-                return
-            }
-            txChar = tx
-            gatt.setCharacteristicNotification(rx, true)
-            gatt.setCharacteristicNotification(tx, true)
-
-            val rxCccd = rx.getDescriptor(CCCD_UUID)
-            if (rxCccd == null) {
-                resolveBleConnect()
-                return
-            }
-            pendingCccdWrites = 1
-            if (tx.getDescriptor(CCCD_UUID) != null) pendingCccdWrites = 2
-            writeCccd(gatt, rxCccd)
-
-            cccdTimeout = Runnable {
-                Log.w(VESC_SESSION_TAG, "CCCD ack timeout, resolving connect")
-                resolveBleConnect()
-            }
-            mainHandler.postDelayed(cccdTimeout!!, 4000)
-        }
-
-        override fun onDescriptorWrite(gatt: BluetoothGatt, descriptor: BluetoothGattDescriptor, status: Int) {
-            if (descriptor.uuid != CCCD_UUID) return
-            pendingCccdWrites--
-            if (pendingCccdWrites > 0) {
-                val txCccd = gatt.getService(NUS_SERVICE_UUID)
-                    ?.getCharacteristic(NUS_TX_UUID)
-                    ?.getDescriptor(CCCD_UUID)
-                if (txCccd != null) {
-                    writeCccd(gatt, txCccd)
-                    return
-                }
-            }
+        override fun onGattReady() {
             resolveBleConnect()
         }
 
-        override fun onCharacteristicChanged(
-            gatt: BluetoothGatt,
-            characteristic: BluetoothGattCharacteristic,
-            value: ByteArray,
-        ) {
-            if (characteristic.uuid == NUS_RX_UUID || characteristic.uuid == NUS_TX_UUID) {
-                handleFrameChunk(value)
-            }
+        override fun onGattFailure(code: String, message: String) {
+            failPendingConnect(code, message)
+        }
+
+        override fun onGattFrameChunk(chunk: ByteArray) {
+            handleFrameChunk(chunk)
         }
     }
 
     private fun resolveBleConnect() {
         cancelConnectTimeout()
-        cancelCccdTimeout()
         val start = pendingConnect ?: return
         pendingConnect = null
-        boardStatus = "waiting_for_telemetry"
+        boardStatus = BoardPhase.WaitingForTelemetry
         boardError = null
         emitState()
         showNotification("Discovering board...")
@@ -598,7 +527,7 @@ class VescForegroundService : Service() {
         boardReadyTimeout = Runnable {
             boardReadyTimeout = null
             if (
-                (boardStatus == "connecting" || boardStatus == "waiting_for_telemetry") &&
+                (boardStatus == BoardPhase.Connecting || boardStatus == BoardPhase.WaitingForTelemetry) &&
                 boardConfig?.autoReconnect == true &&
                 telemetry == null
             ) {
@@ -615,9 +544,9 @@ class VescForegroundService : Service() {
 
     private fun markBoardReady() {
         cancelBoardReadyTimeout()
-        if (boardStatus == "connected") return
+        if (boardStatus == BoardPhase.Connected) return
         autoReconnectAttempt = 0
-        boardStatus = "connected"
+        boardStatus = BoardPhase.Connected
         val autoRecording = try {
             kotlinx.coroutines.runBlocking {
                 AppDataRepository.get(applicationContext).getSettingsEntity().autoRecording
@@ -642,8 +571,8 @@ class VescForegroundService : Service() {
             telemetryStaleRunnable = null
             val stillStale = lastTelemetryAt == armedAt ||
                 System.currentTimeMillis() - lastTelemetryAt >= TELEMETRY_STALE_MS
-            if (boardStatus == "connected" && boardConfig?.autoReconnect == true && stillStale) {
-                boardStatus = "stale"
+            if (boardStatus == BoardPhase.Connected && boardConfig?.autoReconnect == true && stillStale) {
+                boardStatus = BoardPhase.Stale
                 emitState()
                 scheduleAutoReconnect(session, null, "telemetry stale")
             }
@@ -652,22 +581,7 @@ class VescForegroundService : Service() {
     }
 
     private fun sendPayload(payload: ByteArray): Boolean {
-        val framed = VescPacketCodec.encode(payload)
-        return sendFramedChunk(framed)
-    }
-
-    private fun sendFramedChunk(bytes: ByteArray): Boolean {
-        val g = gatt ?: return false
-        val tx = txChar ?: return false
-        val writeType = if (diagWriteCount < 3) {
-            diagWriteCount++
-            BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-        } else {
-            BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
-        }
-        val ok = g.writeCharacteristic(tx, bytes, writeType) == BluetoothStatusCodes.SUCCESS
-        if (ok) recorder?.recordChunk("tx", bytes)
-        return ok
+        return gattClient.sendPayload(payload)
     }
 
     private fun updateLatency(now: Long): Int? {
@@ -682,11 +596,10 @@ class VescForegroundService : Service() {
         autoReconnectRunnable?.let { mainHandler.removeCallbacks(it) }
         autoReconnectRunnable = null
         stopReconnectScan()
-        cancelCccdTimeout()
         cancelConnectTimeout()
         cancelBoardReadyTimeout()
         stopPolling()
-        clearGatt(markIntentional = true)
+        gattClient.clear(markIntentional = true)
         finishRecording(if (emitDisconnected) "disconnected" else "stopped")
         telemetryStore?.recordMarker(
             if (emitDisconnected) "disconnected" else "app_stop",
@@ -701,22 +614,10 @@ class VescForegroundService : Service() {
         recentTelemetry.clear()
         generation += 1
         boardError = null
-        boardStatus = "idle"
+        boardStatus = BoardPhase.Idle
         boardConfig = null
         if (updateNotification && !isStoppingService && stoppedConfig != null) showNotification()
         emitState()
-    }
-
-    private fun clearGatt(markIntentional: Boolean = true) {
-        try {
-            if (markIntentional && gatt != null) intentionalDisconnect = true
-            gatt?.disconnect()
-            gatt?.close()
-        } catch (e: Exception) {
-            Log.w(VESC_SESSION_TAG, "GATT cleanup failed: ${e.message}")
-        }
-        gatt = null
-        txChar = null
     }
 
     private fun finishRecording(status: String) {
@@ -737,9 +638,8 @@ class VescForegroundService : Service() {
         pendingConnect = null
         cancelConnectTimeout()
         cancelBoardReadyTimeout()
-        cancelCccdTimeout()
         stopPolling()
-        clearGatt(markIntentional = true)
+        gattClient.clear(markIntentional = true)
         setError(message)
         showNotification(message)
         finishRecording("error")
@@ -748,9 +648,9 @@ class VescForegroundService : Service() {
         start.onError(code, message)
     }
 
-    private fun setStatus(next: String) {
+    private fun setStatus(next: BoardPhase) {
         boardStatus = next
-        recorder?.recordState(next)
+        recorder?.recordState(next.recordName())
         emitState()
     }
 
@@ -759,11 +659,10 @@ class VescForegroundService : Service() {
         pendingConnect = null
         cancelConnectTimeout()
         cancelBoardReadyTimeout()
-        cancelCccdTimeout()
         stopPolling()
-        clearGatt(markIntentional = false)
+        gattClient.clear(markIntentional = false)
         lastTelemetryAt = 0L
-        boardStatus = "reconnecting"
+        boardStatus = BoardPhase.Reconnecting
         boardError = reason
         autoReconnectAttempt += 1
         recorder?.recordState(
@@ -777,7 +676,7 @@ class VescForegroundService : Service() {
         val delayMs = minOf(250L * autoReconnectAttempt, 2_000L)
         val retry = Runnable {
             autoReconnectRunnable = null
-            if (boardConfig?.autoReconnect == true && boardStatus == "reconnecting") {
+            if (boardConfig?.autoReconnect == true && boardStatus == BoardPhase.Reconnecting) {
                 startReconnectScan(session)
             }
         }
@@ -802,9 +701,9 @@ class VescForegroundService : Service() {
             override fun onScanResult(callbackType: Int, result: ScanResult) {
                 if (!result.device.address.equals(targetId, ignoreCase = true)) return
                 stopReconnectScan()
-                if (boardConfig?.autoReconnect == true && boardStatus == "reconnecting") {
+                if (boardConfig?.autoReconnect == true && boardStatus == BoardPhase.Reconnecting) {
                     connectAttempt = 0
-                    boardStatus = "connecting"
+                    boardStatus = BoardPhase.Connecting
                     boardError = null
                     emitState()
                     startBleSession(PendingStart(session, onSuccess = {}, onError = { _, _ -> }))
@@ -847,7 +746,7 @@ class VescForegroundService : Service() {
     }
 
     private fun setError(message: String) {
-        boardStatus = "error"
+        boardStatus = BoardPhase.Error
         boardError = message
         recorder?.recordState("error", mapOf("message" to message))
         telemetryStore?.recordMarker("error", boardConfig?.deviceId, boardConfig?.deviceName, message)
@@ -877,12 +776,12 @@ class VescForegroundService : Service() {
         if (enabled) {
             if (
                 session == null ||
-                boardStatus == "idle" ||
-                boardStatus == "connecting" ||
-                boardStatus == "discovering" ||
-                boardStatus == "subscribing" ||
-                boardStatus == "disconnecting" ||
-                boardStatus == "error"
+                boardStatus == BoardPhase.Idle ||
+                boardStatus == BoardPhase.Connecting ||
+                boardStatus == BoardPhase.Discovering ||
+                boardStatus == BoardPhase.Subscribing ||
+                boardStatus == BoardPhase.Disconnecting ||
+                boardStatus == BoardPhase.Error
             ) {
                 requestedTelemetryRecordingEnabled = false
                 emitEvent("onError", mapOf("message" to "Recording requires a connected board"))
@@ -963,42 +862,28 @@ class VescForegroundService : Service() {
         setLiveHistoryLimitMinutes(settings.liveHistoryLimit)
         val now = System.currentTimeMillis()
         val phase = if (
-            boardStatus == "connected" &&
+            boardStatus == BoardPhase.Connected &&
             lastTelemetryAt > 0L &&
             now - lastTelemetryAt >= TELEMETRY_STALE_MS
-        ) "stale" else boardStatus
+        ) BoardPhase.Stale else boardStatus
         val recentTelemetryValue = if (includeRecent) recentTelemetry.toList() else emptyList()
         val recentLocationsValue = if (includeRecent) recentLocations.toList() else emptyList()
 
-        return mapOf(
-            "board" to mapOf(
-                "phase" to phase,
-                "selectedBoardId" to settings.selectedBoardId,
-                "connectedBoardId" to boardConfig?.appBoardId,
-                "bleId" to boardConfig?.deviceId,
-                "name" to boardConfig?.deviceName,
-                "connectionSeq" to generation,
-                "lastTelemetryAt" to telemetry?.lastPacketAt,
-                "recentTelemetry" to recentTelemetryValue,
-                "error" to boardError,
-                "autoConnect" to settings.autoConnect,
-            ),
-            "gps" to mapOf(
-                "phase" to if (gpsMonitor.active) "active" else "idle",
-                "latestFix" to latestLocation?.toMap(),
-                "recentLocations" to recentLocationsValue,
-                "error" to gpsError,
-            ),
-            "scan" to mapOf(
-                "phase" to "idle",
-                "devices" to emptyList<Map<String, Any?>>(),
-                "error" to null,
-            ),
-            "recording" to mapOf(
-                "enabled" to (telemetryStore != null),
-                "activeBoardId" to if (telemetryStore != null) boardConfig?.appBoardId else null,
-                "startedAt" to null,
-            ),
+        return buildLiveState(
+            VescLiveStateSnapshot(
+                boardPhase = phase,
+                boardConfig = boardConfig,
+                boardError = boardError,
+                connectionSeq = generation,
+                lastTelemetryAt = telemetry?.lastPacketAt,
+                recentTelemetry = recentTelemetryValue,
+                gpsActive = gpsMonitor.active,
+                latestLocation = latestLocation,
+                recentLocations = recentLocationsValue,
+                gpsError = gpsError,
+                recordingEnabled = telemetryStore != null,
+                settings = settings,
+            )
         )
     }
 
@@ -1077,15 +962,6 @@ class VescForegroundService : Service() {
         notificationController.closeAppTask()
     }
 
-    private fun writeCccd(gatt: BluetoothGatt, descriptor: BluetoothGattDescriptor) {
-        gatt.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
-    }
-
-    private fun cancelCccdTimeout() {
-        cccdTimeout?.let { mainHandler.removeCallbacks(it) }
-        cccdTimeout = null
-    }
-
     private fun cancelConnectTimeout() {
         connectTimeout?.let { mainHandler.removeCallbacks(it) }
         connectTimeout = null
@@ -1108,46 +984,6 @@ class VescForegroundService : Service() {
 
     private fun recordTelemetry(values: RefloatTelemetry) {
         val session = boardConfig ?: return
-        telemetryStore?.recordTelemetry(
-            TelemetryCapture(
-                capturedAtMs = values.lastPacketAt,
-                elapsedRealtimeMs = SystemClock.elapsedRealtime(),
-                deviceId = session.deviceId,
-                deviceName = session.deviceName,
-                canId = canId,
-                hasFault = values.hasFault,
-                faultCode = values.faultCode,
-                pitch = values.pitch,
-                roll = values.roll,
-                balancePitch = values.balancePitch,
-                balanceCurrent = values.balanceCurrent,
-                speed = values.speed,
-                batteryVoltage = values.batteryVoltage,
-                motorCurrent = values.motorCurrent,
-                batteryCurrent = values.batteryCurrent,
-                erpm = values.erpm,
-                dutyCycle = values.dutyCycle,
-                state = values.state,
-                switchState = values.switchState,
-                adc1 = values.adc1,
-                adc2 = values.adc2,
-                odometer = values.odometer,
-                tempMosfet = values.tempMosfet,
-                tempMotor = values.tempMotor,
-                avgLatency = values.avgLatency,
-                location = values.location?.takeIf { it.precise }?.let {
-                    TelemetryLocationCapture(
-                        latitude = it.latitude,
-                        longitude = it.longitude,
-                        speedMps = it.speedMps,
-                        bearingDeg = it.bearingDeg,
-                        accuracyM = it.accuracyM,
-                        altitudeM = it.altitudeM,
-                        timestamp = it.timestamp,
-                        precise = it.precise,
-                    )
-                },
-            )
-        )
+        telemetryStore?.recordTelemetry(values.toCapture(session, canId))
     }
 }
