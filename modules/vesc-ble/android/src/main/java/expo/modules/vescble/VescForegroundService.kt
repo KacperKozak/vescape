@@ -48,12 +48,9 @@ import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.io.File
 import java.io.FileWriter
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import java.util.UUID
 import kotlin.math.abs
 import kotlin.math.max
-import kotlin.math.pow
 import kotlin.math.roundToInt
 
 private const val TAG = "VescSession"
@@ -65,13 +62,6 @@ private const val ACTION_EXIT_FROM_NOTIFICATION = "expo.modules.vescble.ACTION_E
 private const val ACTION_START_GPS_MONITORING = "expo.modules.vescble.ACTION_START_GPS_MONITORING"
 private const val ACTION_STOP_GPS_MONITORING = "expo.modules.vescble.ACTION_STOP_GPS_MONITORING"
 
-private const val COMM_FW_VERSION = 0
-private const val COMM_FORWARD_CAN = 34
-private const val COMM_CUSTOM_APP_DATA = 36
-private const val COMM_PING_CAN = 62
-private const val REFLOAT_MAGIC = 101
-private const val REFLOAT_GET_ALLDATA = 10
-private const val REFLOAT_FAULT_MODE = 69
 private const val MAX_RECORDING_ACCURACY_M = 20.0
 private const val DEFAULT_LIVE_HISTORY_LIMIT_MINUTES = 5
 private const val MIN_LIVE_HISTORY_LIMIT_MINUTES = 1
@@ -95,81 +85,6 @@ data class SessionConfig(
     val autoReconnect: Boolean = false,
 )
 
-private data class RefloatTelemetry(
-    val hasFault: Boolean,
-    val faultCode: Int,
-    val pitch: Double,
-    val roll: Double,
-    val balancePitch: Double,
-    val balanceCurrent: Double,
-    val speed: Double,
-    val batteryVoltage: Double,
-    val motorCurrent: Double,
-    val batteryCurrent: Double,
-    val erpm: Int,
-    val dutyCycle: Double,
-    val state: Int,
-    val switchState: Int,
-    val adc1: Double,
-    val adc2: Double,
-    val odometer: Double?,
-    val tempMosfet: Double?,
-    val tempMotor: Double?,
-    val avgLatency: Int?,
-    val lastPacketAt: Long,
-    val location: LocationSnapshot?,
-) {
-    fun toMap(): Map<String, Any?> = mapOf(
-        "hasFault" to hasFault,
-        "faultCode" to faultCode,
-        "pitch" to pitch,
-        "roll" to roll,
-        "balancePitch" to balancePitch,
-        "balanceCurrent" to balanceCurrent,
-        "speed" to speed,
-        "batteryVoltage" to batteryVoltage,
-        "motorCurrent" to motorCurrent,
-        "batteryCurrent" to batteryCurrent,
-        "erpm" to erpm,
-        "dutyCycle" to dutyCycle,
-        "state" to state,
-        "stateName" to stateName(state),
-        "switchState" to switchState,
-        "adc1" to adc1,
-        "adc2" to adc2,
-        "odometer" to odometer,
-        "tempMosfet" to tempMosfet,
-        "tempMotor" to tempMotor,
-        "avgLatency" to avgLatency,
-        "lastPacketAt" to lastPacketAt,
-        "location" to location?.toMap(),
-    )
-}
-
-private data class LocationSnapshot(
-    val latitude: Double,
-    val longitude: Double,
-    val speedMps: Double?,
-    val bearingDeg: Double?,
-    val accuracyM: Double?,
-    val altitudeM: Double?,
-    val timestamp: Long,
-    val precise: Boolean,
-    val saved: Boolean,
-) {
-    fun toMap(): Map<String, Any?> = mapOf(
-        "latitude" to latitude,
-        "longitude" to longitude,
-        "speedMps" to speedMps,
-        "bearingDeg" to bearingDeg,
-        "accuracyM" to accuracyM,
-        "altitudeM" to altitudeM,
-        "timestamp" to timestamp,
-        "precise" to precise,
-        "saved" to saved,
-    )
-}
-
 @SuppressLint("MissingPermission")
 class VescForegroundService : Service() {
     companion object {
@@ -179,8 +94,7 @@ class VescForegroundService : Service() {
         private var appInForeground = true
         private var pendingStart: PendingStart? = null
         private var pendingStop: PendingStop? = null
-        private var pendingGpsStart: PendingGpsStart? = null
-        private var requestedGpsMonitoring: PendingGpsStart? = null
+        private var pendingGpsStart = false
         private var requestedTelemetryRecordingEnabled = false
         private var requestedLiveHistoryLimitMinutes = DEFAULT_LIVE_HISTORY_LIMIT_MINUTES
         private val appDataScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -208,14 +122,8 @@ class VescForegroundService : Service() {
             instance?.consumePendingStop()
         }
 
-        fun startGpsMonitoring(
-            context: Context,
-            deviceId: String?,
-            deviceName: String?,
-        ) {
-            val start = PendingGpsStart(deviceId, deviceName)
-            requestedGpsMonitoring = start
-            pendingGpsStart = start
+        fun startGpsMonitoring(context: Context) {
+            pendingGpsStart = true
             val intent = Intent(context, VescForegroundService::class.java).apply {
                 action = ACTION_START_GPS_MONITORING
             }
@@ -224,8 +132,7 @@ class VescForegroundService : Service() {
         }
 
         fun stopGpsMonitoring(context: Context) {
-            requestedGpsMonitoring = null
-            pendingGpsStart = null
+            pendingGpsStart = false
             val intent = Intent(context, VescForegroundService::class.java).apply {
                 action = ACTION_STOP_GPS_MONITORING
             }
@@ -328,7 +235,6 @@ class VescForegroundService : Service() {
     )
 
     private data class PendingStop(val onSuccess: () -> Unit)
-    private data class PendingGpsStart(val deviceId: String?, val deviceName: String?)
 
     private val mainHandler = Handler(Looper.getMainLooper())
     private val packetReassembler = VescPacketReassembler()
@@ -356,8 +262,6 @@ class VescForegroundService : Service() {
     private var recorder: VescSessionRecorder? = null
     private var telemetryStore: TelemetryRepository? = null
     private var locationManager: LocationManager? = null
-    private var gpsDeviceId: String? = null
-    private var gpsDeviceName: String? = null
     private var gpsError: String? = null
     private var latestLocation: LocationSnapshot? = null
     private var isStoppingService = false
@@ -433,9 +337,9 @@ class VescForegroundService : Service() {
     }
 
     private fun consumePendingGpsStart() {
-        val start = pendingGpsStart ?: return
-        pendingGpsStart = null
-        startGpsMonitoring(start.deviceId, start.deviceName)
+        if (!pendingGpsStart) return
+        pendingGpsStart = false
+        startGpsMonitoring()
     }
 
     private fun exitFromNotification() {
@@ -446,10 +350,8 @@ class VescForegroundService : Service() {
         stopSelf()
     }
 
-    private fun startGpsMonitoring(deviceId: String?, deviceName: String?) {
+    private fun startGpsMonitoring() {
         isStoppingService = false
-        gpsDeviceId = deviceId
-        gpsDeviceName = deviceName?.takeIf { it.isNotBlank() }
         gpsError = null
         startLocationUpdates()
         emitState()
@@ -461,11 +363,8 @@ class VescForegroundService : Service() {
     }
 
     private fun stopGpsMonitoring() {
-        requestedGpsMonitoring = null
-        pendingGpsStart = null
+        pendingGpsStart = false
         stopLocationUpdates()
-        gpsDeviceId = null
-        gpsDeviceName = null
         gpsError = null
         emitState()
         if (boardConfig == null) {
@@ -662,7 +561,13 @@ class VescForegroundService : Service() {
                 }
             }
             COMM_CUSTOM_APP_DATA -> {
-                val parsed = parseGetAllData(payload) ?: return
+                val now = System.currentTimeMillis()
+                val parsed = parseRefloatGetAllData(
+                    payload = payload,
+                    avgLatency = updateLatency(now),
+                    packetAt = now,
+                    location = latestLocation,
+                ) ?: return
                 markBoardReady()
                 telemetry = parsed
                 lastTelemetryAt = parsed.lastPacketAt
@@ -785,73 +690,6 @@ class VescForegroundService : Service() {
         val ok = g.writeCharacteristic(tx, bytes, writeType) == BluetoothStatusCodes.SUCCESS
         if (ok) recorder?.recordChunk("tx", bytes)
         return ok
-    }
-
-    private fun parseGetAllData(payload: ByteArray): RefloatTelemetry? {
-        if (payload.size < 5) return null
-        if ((payload[0].toInt() and 0xff) != COMM_CUSTOM_APP_DATA) return null
-        if ((payload[1].toInt() and 0xff) != REFLOAT_MAGIC) return null
-        if ((payload[2].toInt() and 0xff) != REFLOAT_GET_ALLDATA) return null
-
-        val now = System.currentTimeMillis()
-        val avgLatency = updateLatency(now)
-        val mode = payload[3].toInt() and 0xff
-        if (mode == REFLOAT_FAULT_MODE) {
-            return RefloatTelemetry(
-                hasFault = true,
-                faultCode = payload.getOrNull(4)?.toInt()?.and(0xff) ?: 0,
-                pitch = 0.0,
-                roll = 0.0,
-                balancePitch = 0.0,
-                balanceCurrent = 0.0,
-                speed = 0.0,
-                batteryVoltage = 0.0,
-                motorCurrent = 0.0,
-                batteryCurrent = 0.0,
-                erpm = 0,
-                dutyCycle = 0.0,
-                state = 0,
-                switchState = 0,
-                adc1 = 0.0,
-                adc2 = 0.0,
-                odometer = null,
-                tempMosfet = null,
-                tempMotor = null,
-                avgLatency = avgLatency,
-                lastPacketAt = now,
-                location = latestLocation,
-            )
-        }
-        if (payload.size < 34) return null
-
-        val pitch = int16(payload, 20) / 10.0
-        val speed = (int16(payload, 27) / 10.0) * 3.6
-        val state = payload[10].toInt() and 0xff
-        val odometer = if (mode >= 2 && payload.size >= 42) float32Auto(payload, 35) else null
-        return RefloatTelemetry(
-            hasFault = false,
-            faultCode = 0,
-            pitch = pitch,
-            roll = int16(payload, 8) / 10.0,
-            balancePitch = int16(payload, 6) / 10.0,
-            balanceCurrent = int16(payload, 4) / 10.0,
-            speed = speed,
-            batteryVoltage = int16(payload, 23) / 10.0,
-            motorCurrent = int16(payload, 29) / 10.0,
-            batteryCurrent = int16(payload, 31) / 10.0,
-            erpm = int16(payload, 25),
-            dutyCycle = ((payload[33].toInt() and 0xff) - 128) / 100.0,
-            state = state,
-            switchState = payload[11].toInt() and 0xff,
-            adc1 = (payload[12].toInt() and 0xff) / 50.0,
-            adc2 = (payload[13].toInt() and 0xff) / 50.0,
-            odometer = odometer,
-            tempMosfet = if (mode >= 2 && payload.size >= 42) (payload[39].toInt() and 0xff) / 2.0 else null,
-            tempMotor = if (mode >= 2 && payload.size >= 42) (payload[40].toInt() and 0xff) / 2.0 else null,
-            avgLatency = avgLatency,
-            lastPacketAt = now,
-            location = latestLocation,
-        )
     }
 
     private fun updateLatency(now: Long): Int? {
@@ -1306,7 +1144,7 @@ class VescForegroundService : Service() {
             val tg = ToneGenerator(AudioManager.STREAM_ALARM, ToneGenerator.MAX_VOLUME)
             if (rangeDepth != null) {
                 val durationMs = (140L + (760L * rangeDepth)).toInt()
-                tg.startTone(rangeTone(soundType), durationMs)
+                tg.startTone(alertTone(soundType), durationMs)
                 mainHandler.postDelayed({ tg.release() }, durationMs + 120L)
                 return
             }
@@ -1321,12 +1159,6 @@ class VescForegroundService : Service() {
     }
 
     private fun alertTone(soundType: String): Int = when (soundType) {
-        "urgent" -> ToneGenerator.TONE_CDMA_ABBR_ALERT
-        "pulse"  -> ToneGenerator.TONE_PROP_BEEP
-        else     -> ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD
-    }
-
-    private fun rangeTone(soundType: String): Int = when (soundType) {
         "urgent" -> ToneGenerator.TONE_CDMA_ABBR_ALERT
         "pulse"  -> ToneGenerator.TONE_PROP_BEEP
         else     -> ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD
@@ -1539,73 +1371,6 @@ class VescForegroundService : Service() {
     }
 }
 
-private object VescPacketCodec {
-    fun encode(payload: ByteArray): ByteArray {
-        val short = payload.size <= 255
-        val frame = ByteArray((if (short) 2 else 3) + payload.size + 3)
-        var offset = 0
-        if (short) {
-            frame[offset++] = 0x02
-            frame[offset++] = payload.size.toByte()
-        } else {
-            frame[offset++] = 0x03
-            frame[offset++] = ((payload.size shr 8) and 0xff).toByte()
-            frame[offset++] = (payload.size and 0xff).toByte()
-        }
-        payload.copyInto(frame, offset)
-        offset += payload.size
-        val crc = crc16(payload)
-        frame[offset++] = ((crc shr 8) and 0xff).toByte()
-        frame[offset++] = (crc and 0xff).toByte()
-        frame[offset] = 0x03
-        return frame
-    }
-}
-
-private class VescPacketReassembler {
-    private val buffer = ArrayList<Byte>()
-
-    fun reset() {
-        buffer.clear()
-    }
-
-    fun feed(chunk: ByteArray): List<ByteArray> {
-        chunk.forEach { buffer.add(it) }
-        val packets = mutableListOf<ByteArray>()
-        while (buffer.isNotEmpty()) {
-            val start = buffer[0].toInt() and 0xff
-            if (start != 0x02 && start != 0x03) {
-                buffer.removeAt(0)
-                continue
-            }
-            val headerLen = if (start == 0x02) 2 else 3
-            if (buffer.size < headerLen) break
-            val len = if (start == 0x02) {
-                buffer[1].toInt() and 0xff
-            } else {
-                ((buffer[1].toInt() and 0xff) shl 8) or (buffer[2].toInt() and 0xff)
-            }
-            val total = headerLen + len + 3
-            if (buffer.size < total) break
-            if ((buffer[total - 1].toInt() and 0xff) != 0x03) {
-                buffer.removeAt(0)
-                continue
-            }
-            val payload = ByteArray(len)
-            for (i in 0 until len) payload[i] = buffer[headerLen + i]
-            val actual = ((buffer[headerLen + len].toInt() and 0xff) shl 8) or
-                (buffer[headerLen + len + 1].toInt() and 0xff)
-            if (crc16(payload) == actual) {
-                packets.add(payload)
-                repeat(total) { buffer.removeAt(0) }
-            } else {
-                buffer.removeAt(0)
-            }
-        }
-        return packets
-    }
-}
-
 private class VescSessionRecorder(context: Context, private val boardConfig: SessionConfig) {
     private val store = DebugRecordingStore(context)
     private val startedAt = System.currentTimeMillis()
@@ -1697,55 +1462,4 @@ private class DebugRecordingStore(private val context: Context) {
         return File(dir, "${System.currentTimeMillis()}-$safeName.jsonl")
     }
 
-}
-
-private fun crc16(data: ByteArray): Int {
-    var crc = 0
-    for (b in data) {
-        crc = crc xor ((b.toInt() and 0xff) shl 8)
-        repeat(8) {
-            crc = if ((crc and 0x8000) != 0) {
-                ((crc shl 1) xor 0x1021) and 0xffff
-            } else {
-                (crc shl 1) and 0xffff
-            }
-        }
-    }
-    return crc and 0xffff
-}
-
-private fun int16(bytes: ByteArray, offset: Int): Int {
-    return ByteBuffer.wrap(bytes, offset, 2).order(ByteOrder.BIG_ENDIAN).short.toInt()
-}
-
-private fun float32Auto(bytes: ByteArray, offset: Int): Double {
-    val raw = ByteBuffer.wrap(bytes, offset, 4).order(ByteOrder.BIG_ENDIAN).int
-    val eRaw = (raw ushr 23) and 0xff
-    val sigI = raw and 0x7fffff
-    val neg = (raw ushr 31) != 0
-    if (eRaw == 0 && sigI == 0) return 0.0
-    val sig = sigI / (8388608.0 * 2.0) + 0.5
-    val result = sig * 2.0.pow(eRaw - 126)
-    return if (neg) -result else result
-}
-
-private fun stateName(state: Int): String {
-    return when (state and 0x0f) {
-        0 -> "STARTUP"
-        1 -> "RUNNING"
-        2 -> "TILTBACK"
-        3 -> "WHEELSLIP"
-        4 -> "UPSIDEDOWN"
-        5 -> "FLYWHEEL"
-        6 -> "FAULT_PITCH"
-        7 -> "FAULT_ROLL"
-        8 -> "FAULT_SW_HALF"
-        9 -> "FAULT_SW_FULL"
-        11 -> "FAULT_STARTUP"
-        12 -> "FAULT_REVERSE"
-        13 -> "FAULT_QUICKSTOP"
-        14 -> "CHARGING"
-        15 -> "DISABLED"
-        else -> "UNKNOWN"
-    }
 }

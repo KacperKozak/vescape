@@ -289,14 +289,7 @@ class VescBleModule : Module() {
       sendEvent("onError", mapOf("message" to "Location permission not granted"))
       return
     }
-    val board = (options?.get("boardId") as? String)?.let { boardId ->
-      runBlocking { AppDataRepository.get(context.applicationContext).getBoard(boardId) }
-    }
-    VescForegroundService.startGpsMonitoring(
-      context.applicationContext,
-      board?.get("bleId") as? String ?: board?.get("id") as? String,
-      board?.get("name") as? String,
-    )
+    VescForegroundService.startGpsMonitoring(context.applicationContext)
   }
 
   private suspend fun selectBoard(boardId: String) {
