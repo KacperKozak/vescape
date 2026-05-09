@@ -146,7 +146,7 @@ export default function MainScreen() {
             onStopScan={connection.handleCancel}
             onRetryConnect={connection.handleRetryConnect}
           />
-          <MapScreen key="map" />
+          <MapScreen key="map" active={page === 2} />
         </MainPager>
       </View>
 

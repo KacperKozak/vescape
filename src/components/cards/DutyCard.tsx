@@ -3,7 +3,7 @@ import { useMemo } from 'react'
 import { type SparklinePoint } from '@/components/charts/Sparkline'
 import { TelemetryCard } from '@/components/TelemetryCard'
 import { theme } from '@/constants/theme'
-import { DASH } from '@/helpers/format'
+import { DASH, dutyPercent } from '@/helpers/format'
 import { useBleStore } from '@/store/bleStore'
 import { useLiveWindowMs } from '@/store/settingsStore'
 
@@ -16,7 +16,7 @@ export function DutyCard() {
   const v = recentTelemetry.at(-1) ?? null
 
   const series = useMemo<SparklinePoint[]>(
-    () => recentTelemetry.map((t) => ({ ts: t.lastPacketAt, value: Math.abs(t.dutyCycle) * 100 })),
+    () => recentTelemetry.map((t) => ({ ts: t.lastPacketAt, value: dutyPercent(t.dutyCycle) })),
     [recentTelemetry],
   )
 
@@ -24,7 +24,7 @@ export function DutyCard() {
     <TelemetryCard
       controlId="duty"
       label="Duty Cycle"
-      value={v ? (Math.abs(v.dutyCycle) * 100).toFixed(1) : DASH}
+      value={v ? dutyPercent(v.dutyCycle).toFixed(0) : DASH}
       unit={v ? '%' : undefined}
       series={series}
       seriesColor={theme.bran.color}

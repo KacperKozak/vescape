@@ -29,6 +29,7 @@ export const MainPager = forwardRef<MainPagerHandle, MainPagerProps>(function Ma
       ref={pagerRef}
       style={styles.pager}
       initialPage={page}
+      offscreenPageLimit={2}
       onPageSelected={(event) => onPageChange(event.nativeEvent.position)}
     >
       {children}

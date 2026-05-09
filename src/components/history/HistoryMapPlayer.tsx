@@ -11,6 +11,7 @@ import {
 } from '@/history/playback'
 import { TelemetryLineChart } from '@/components/charts/TelemetryLineChart'
 import { computeAutoRange, type TelemetryChartPoint } from '@/components/charts/chartMath'
+import { dutyPercent, fmtDutyPercent } from '@/helpers/format'
 import type {
   HistoryGpsSample,
   HistoryMarker,
@@ -94,7 +95,7 @@ export function HistoryMapPlayer({
     () =>
       chartSamples.map((sample) => ({
         date: new Date(sample.capturedAtMs),
-        value: sample.dutyCycle * 100,
+        value: dutyPercent(sample.dutyCycle, false),
       })),
     [chartSamples],
   )
@@ -222,7 +223,7 @@ export function HistoryMapPlayer({
       { label: 'Board', value: currentBoard ? `${currentBoard.speedKmh.toFixed(1)}` : '-' },
       {
         label: 'Duty',
-        value: currentBoard ? `${(currentBoard.dutyCycle * 100).toFixed(0)}%` : '-',
+        value: currentBoard ? fmtDutyPercent(currentBoard.dutyCycle, false) : '-',
       },
       { label: 'Volt', value: currentBoard ? `${currentBoard.batteryVoltage.toFixed(1)}V` : '-' },
       {
@@ -386,7 +387,7 @@ export function HistoryMapPlayer({
             />
             <TelemetryLineChart
               label="Duty"
-              value={currentBoard ? `${(currentBoard.dutyCycle * 100).toFixed(0)}%` : '-'}
+              value={currentBoard ? fmtDutyPercent(currentBoard.dutyCycle, false) : '-'}
               points={dutyPoints}
               color="#34d399"
               range={{ y: { min: -100, max: 100 } }}
@@ -394,7 +395,7 @@ export function HistoryMapPlayer({
                 currentChartSample
                   ? {
                       date: new Date(currentChartSample.capturedAtMs),
-                      value: currentChartSample.dutyCycle * 100,
+                      value: dutyPercent(currentChartSample.dutyCycle, false),
                     }
                   : null
               }

@@ -969,10 +969,11 @@ class VescForegroundService : Service() {
 
     private fun formatNotificationText(values: RefloatTelemetry): String {
         if (values.hasFault) return "Fault ${values.faultCode}"
+        val dutyPercent = if (abs(values.dutyCycle) <= 0.01) 0.0 else values.dutyCycle * 100.0
         return String.format(
             "%.1f km/h | %.0f%% duty | %.1fV",
             abs(values.speed),
-            values.dutyCycle * 100.0,
+            dutyPercent,
             values.batteryVoltage,
         )
     }
