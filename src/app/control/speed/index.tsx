@@ -47,6 +47,7 @@ export default function SpeedScreen() {
         height={120}
         onPointSelected={setSelected}
         onGestureStart={() => setSelected(null)}
+        formatValue={(v) => `${fmt(v, 1)} km/h`}
       />
       <StatsRow
         current={stats ? `${fmt(stats.current, 1)} km/h` : DASH}

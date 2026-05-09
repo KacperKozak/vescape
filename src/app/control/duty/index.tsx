@@ -50,6 +50,7 @@ export default function DutyScreen() {
         height={120}
         onPointSelected={setSelected}
         onGestureStart={() => setSelected(null)}
+        formatValue={(v) => `${fmt(v, 1)} %`}
       />
       <StatsRow
         current={stats ? `${fmt(stats.current, 1)} %` : DASH}

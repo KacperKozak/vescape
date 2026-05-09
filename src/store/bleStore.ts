@@ -24,6 +24,8 @@ import {
   type LiveStateEvent,
 } from 'vesc-ble'
 
+import { useSettingsStore } from '@/store/settingsStore'
+
 export interface ScannedDevice {
   id: string
   name: string
@@ -74,7 +76,17 @@ let scanErrorSub: EventSubscription | null = null
 let stopRequestedSub: EventSubscription | null = null
 
 const MAC_ADDRESS_RE = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i
-const RECENT_WINDOW_MS = 10 * 60 * 1000
+const MIN_LIVE_HISTORY_MINUTES = 1
+const DEFAULT_LIVE_HISTORY_MINUTES = 5
+
+function liveHistoryWindowMs(): number {
+  const minutes = useSettingsStore.getState().liveHistoryLimit
+  const safeMinutes =
+    Number.isFinite(minutes) && minutes >= MIN_LIVE_HISTORY_MINUTES
+      ? minutes
+      : DEFAULT_LIVE_HISTORY_MINUTES
+  return safeMinutes * 60 * 1000
+}
 
 function scannedDeviceName(id: string, name?: string): string {
   const candidate = name?.trim()
@@ -90,11 +102,15 @@ function locationKey(location: LocationEvent): number {
   return location.timestamp
 }
 
+function pruneByTimestamp<T>(items: T[], nowMs: number, key: (value: T) => number): T[] {
+  const oldest = nowMs - liveHistoryWindowMs()
+  return items.filter((value) => key(value) >= oldest)
+}
+
 function appendByTimestamp<T>(items: T[], item: T, key: (value: T) => number): T[] {
   const itemKey = key(item)
   if (items.some((existing) => key(existing) === itemKey)) return items
-  const oldest = itemKey - RECENT_WINDOW_MS
-  return [...items, item].filter((value) => key(value) >= oldest).sort((a, b) => key(a) - key(b))
+  return pruneByTimestamp([...items, item], itemKey, key).sort((a, b) => key(a) - key(b))
 }
 
 function applyLiveState(state: LiveStateEvent, set: BleSet): void {
@@ -109,6 +125,9 @@ function applyLiveState(state: LiveStateEvent, set: BleSet): void {
     connectedId: state.board.connectedBoardId ?? state.board.bleId,
     error: state.board.error ?? state.gps.error ?? state.scan.error ?? undefined,
     telemetryRecordingEnabled: state.recording.enabled,
+    recentTelemetry: state.board.recentTelemetry.length
+      ? state.board.recentTelemetry
+      : current.recentTelemetry,
     recentLocations: state.gps.recentLocations.length
       ? state.gps.recentLocations
       : current.recentLocations,
@@ -275,5 +294,14 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
 addLocationListener((location) => {
   useBleStore.setState((s) => ({
     recentLocations: appendByTimestamp(s.recentLocations, location, locationKey),
+  }))
+})
+
+useSettingsStore.subscribe((settings, previousSettings) => {
+  if (settings.liveHistoryLimit === previousSettings.liveHistoryLimit) return
+  const nowMs = Date.now()
+  useBleStore.setState((s) => ({
+    recentTelemetry: pruneByTimestamp(s.recentTelemetry, nowMs, telemetryKey),
+    recentLocations: pruneByTimestamp(s.recentLocations, nowMs, locationKey),
   }))
 })

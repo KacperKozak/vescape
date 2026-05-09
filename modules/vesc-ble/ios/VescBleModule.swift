@@ -326,6 +326,7 @@ public class VescBleModule: Module {
         "name": sessionDeviceName,
         "connectionSeq": 0,
         "lastTelemetryAt": nil,
+        "recentTelemetry": [] as [Any],
         "error": nil,
         "autoConnect": settings["autoConnect"] as? Bool ?? true,
       ] as [String: Any?],

@@ -116,6 +116,7 @@ export interface LiveStateEvent {
     name: string | null
     connectionSeq: number
     lastTelemetryAt: number | null
+    recentTelemetry: TelemetryEvent[]
     error: string | null
     autoConnect: boolean
   }

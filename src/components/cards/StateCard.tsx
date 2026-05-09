@@ -11,5 +11,5 @@ export function StateCard() {
   const stateName = v ? (REFLOAT_STATE_NAMES[compat] ?? `STATE_${compat}`) : DASH
   const display = v?.hasFault ? (FAULT_NAMES[v.faultCode] ?? `CODE_${v.faultCode}`) : stateName
 
-  return <TelemetryCard label="State" value={v ? display : DASH} />
+  return <TelemetryCard controlId="state" label="State" value={v ? display : DASH} />
 }

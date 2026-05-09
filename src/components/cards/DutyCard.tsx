@@ -20,6 +20,7 @@ export function DutyCard() {
 
   return (
     <TelemetryCard
+      controlId="duty"
       label="Duty Cycle"
       value={v ? (Math.abs(v.dutyCycle) * 100).toFixed(1) : DASH}
       unit={v ? '%' : undefined}

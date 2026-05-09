@@ -11,13 +11,14 @@ export function computeAutoRange(
     paddingRatio?: number
     fallbackMin?: number
     fallbackMax?: number
+    baseline?: { min: number; max: number }
   },
 ): { y: { min: number; max: number } } {
   const includeZero = options?.includeZero ?? false
   const minSpan = options?.minSpan ?? 0
   const paddingRatio = options?.paddingRatio ?? 0
-  const fallbackMin = options?.fallbackMin ?? -1
-  const fallbackMax = options?.fallbackMax ?? 1
+  const fallbackMin = options?.fallbackMin ?? options?.baseline?.min ?? -1
+  const fallbackMax = options?.fallbackMax ?? options?.baseline?.max ?? 1
 
   if (!points.length) return { y: { min: fallbackMin, max: fallbackMax } }
 
@@ -26,6 +27,11 @@ export function computeAutoRange(
   for (const point of points) {
     min = Math.min(min, point.value)
     max = Math.max(max, point.value)
+  }
+
+  if (options?.baseline) {
+    min = Math.min(min, options.baseline.min)
+    max = Math.max(max, options.baseline.max)
   }
 
   if (includeZero) {

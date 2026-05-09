@@ -33,6 +33,7 @@ type LiveState = {
     name: string | null
     connectionSeq: number
     lastTelemetryAt: number | null
+    recentTelemetry: TelemetryEvent[]
     error: string | null
     autoConnect: boolean
   }
@@ -76,6 +77,7 @@ Board connect/disconnect must not clear GPS fixes. GPS is app-level map data.
 - `onLiveState` replaces lifecycle status
 - `onTelemetry` appends telemetry only when `connectionSeq` matches
 - `onLocation` appends GPS fixes
+- foreground restore hydrates recent telemetry from native `getLiveState()`
 
 Commands call native only:
 

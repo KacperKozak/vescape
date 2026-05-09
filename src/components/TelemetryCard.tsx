@@ -1,8 +1,17 @@
-import React from 'react'
+import React, { useMemo } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 
 import { Sparkline, type SparklinePoint } from '@/components/charts/Sparkline'
 import { theme } from '@/constants/theme'
+import { useAlertsStore } from '@/store/alertsStore'
+
+const CONTROL_UNITS: Record<string, string> = {
+  duty: '%',
+  'motor-temp': '°C',
+  'controller-temp': '°C',
+  'motor-current': 'A',
+  'batt-current': 'A',
+}
 
 interface Props {
   label: string
@@ -19,6 +28,30 @@ interface Props {
   range?: { min: number; max: number }
   /** Min Y span for auto-range (smooths small jitter). */
   minSpan?: number
+  /** When set, shows a yellow warning badge if enabled alert rules exist for this controlId. */
+  controlId?: string
+}
+
+export function AlertBadge({ controlId }: { controlId: string }) {
+  const rules = useAlertsStore((s) => s.rules)
+  const enabledRules = useMemo(
+    () => rules.filter((r) => r.controlId === controlId && r.enabled),
+    [rules, controlId],
+  )
+  if (enabledRules.length === 0) return null
+
+  const unit = CONTROL_UNITS[controlId] ?? ''
+  const label = enabledRules
+    .map((r) =>
+      r.thresholdMax != null ? `${r.threshold}–${r.thresholdMax}${unit}` : `${r.threshold}${unit}`,
+    )
+    .join(', ')
+
+  return (
+    <View style={styles.alertBadge}>
+      <Text style={styles.alertBadgeText}>{label}</Text>
+    </View>
+  )
 }
 
 /** A single telemetry value tile. */
@@ -32,9 +65,15 @@ export const TelemetryCard = React.memo(function TelemetryCard({
   fmtMax,
   range,
   minSpan,
+  controlId,
 }: Props) {
   return (
     <View style={styles.card}>
+      {controlId && (
+        <View style={styles.alertBadgeContainer}>
+          <AlertBadge controlId={controlId} />
+        </View>
+      )}
       <Text style={styles.label}>{label}</Text>
       <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit>
         {value}
@@ -87,5 +126,22 @@ const styles = StyleSheet.create({
     color: '#64748b',
     fontSize: 11,
     fontWeight: '500',
+  },
+  alertBadgeContainer: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    zIndex: 1,
+  },
+  alertBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  alertBadgeText: {
+    color: 'rgba(250, 204, 21, 0.5)',
+    fontSize: 8,
+    fontWeight: '600',
+    fontFamily: 'monospace',
   },
 })

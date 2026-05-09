@@ -23,6 +23,7 @@ export function ControllerTempCard() {
 
   return (
     <TelemetryCard
+      controlId="controller-temp"
       label="Controller Temp"
       value={v?.tempMosfet != null ? fmt(v.tempMosfet) : DASH}
       unit={v?.tempMosfet != null ? '°C' : undefined}

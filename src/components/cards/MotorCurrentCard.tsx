@@ -20,6 +20,7 @@ export function MotorCurrentCard() {
 
   return (
     <TelemetryCard
+      controlId="motor-current"
       label="Motor Current"
       value={v ? fmt(v.motorCurrent) : DASH}
       unit={v ? 'A' : undefined}

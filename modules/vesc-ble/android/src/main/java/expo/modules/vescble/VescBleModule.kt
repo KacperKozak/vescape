@@ -170,6 +170,9 @@ class VescBleModule : Module() {
     }
     AsyncFunction("updateSetting") Coroutine { key: String, value: Any? ->
       AppDataRepository.get(context.applicationContext).updateSetting(key, value)
+      if (key == "liveHistoryLimit") {
+        VescForegroundService.setLiveHistoryLimit(value as? Number)
+      }
     }
   }
 

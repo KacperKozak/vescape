@@ -6,6 +6,7 @@ import { computeAutoRange } from '@/components/charts/chartMath'
 import { ControlDetailLayout } from '@/components/control/ControlDetailLayout'
 import { StatsRow } from '@/components/control/StatsRow'
 import { DASH, fmt } from '@/helpers/format'
+import { CHART_DEFAULTS } from '@/constants/chartDefaults'
 import { theme } from '@/constants/theme'
 import { useBleStore } from '@/store/bleStore'
 
@@ -20,7 +21,10 @@ export default function ControllerTempScreen() {
     [recentTelemetry],
   )
 
-  const range = useMemo(() => computeAutoRange(points, { minSpan: 30 }), [points])
+  const range = useMemo(
+    () => computeAutoRange(points, { baseline: CHART_DEFAULTS.controllerTemp }),
+    [points],
+  )
 
   const stats = useMemo(() => {
     if (!points.length) return null
@@ -50,6 +54,7 @@ export default function ControllerTempScreen() {
         height={120}
         onPointSelected={setSelected}
         onGestureStart={() => setSelected(null)}
+        formatValue={(v) => `${fmt(v, 1)} °C`}
       />
       <StatsRow
         current={stats ? `${fmt(stats.current, 1)} °C` : DASH}

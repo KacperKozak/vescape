@@ -8,16 +8,23 @@ import { StatsRow } from '@/components/control/StatsRow'
 import { DASH, fmt } from '@/helpers/format'
 import { theme } from '@/constants/theme'
 import { useBleStore } from '@/store/bleStore'
+import { useBoardStore } from '@/store/boardStore'
 
 export default function BatteryScreen() {
   const recentTelemetry = useBleStore((s) => s.recentTelemetry)
+  const board = useBoardStore((s) => s.boards.find((b) => b.id === s.activeBoardId))
 
   const points = useMemo<TelemetryChartPoint[]>(
     () => recentTelemetry.map((t) => ({ date: new Date(t.lastPacketAt), value: t.batteryVoltage })),
     [recentTelemetry],
   )
 
-  const range = useMemo(() => computeAutoRange(points, { minSpan: 2 }), [points])
+  const range = useMemo(() => {
+    if (board?.minVoltage != null && board?.maxVoltage != null) {
+      return { y: { min: board.minVoltage, max: board.maxVoltage } }
+    }
+    return computeAutoRange(points, { minSpan: 2 })
+  }, [board?.minVoltage, board?.maxVoltage, points])
 
   const stats = useMemo(() => {
     if (!points.length) return null
@@ -47,6 +54,7 @@ export default function BatteryScreen() {
         height={120}
         onPointSelected={setSelected}
         onGestureStart={() => setSelected(null)}
+        formatValue={(v) => `${fmt(v, 2)} V`}
       />
       <StatsRow
         current={stats ? `${fmt(stats.current, 2)} V` : DASH}

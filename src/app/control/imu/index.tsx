@@ -5,6 +5,7 @@ import { TelemetryLineChart } from '@/components/charts/TelemetryLineChart'
 import type { TelemetryChartPoint } from '@/components/charts/chartMath'
 import { computeAutoRange } from '@/components/charts/chartMath'
 import { ControlDetailLayout } from '@/components/control/ControlDetailLayout'
+import { CHART_DEFAULTS } from '@/constants/chartDefaults'
 import { DASH, fmt } from '@/helpers/format'
 import { theme } from '@/constants/theme'
 import { useBleStore } from '@/store/bleStore'
@@ -28,10 +29,16 @@ export default function ImuScreen() {
     [recentTelemetry],
   )
 
-  const pitchRange = useMemo(() => computeAutoRange(pitchPoints, { minSpan: 20 }), [pitchPoints])
-  const rollRange = useMemo(() => computeAutoRange(rollPoints, { minSpan: 20 }), [rollPoints])
+  const pitchRange = useMemo(
+    () => computeAutoRange(pitchPoints, { baseline: CHART_DEFAULTS.pitch }),
+    [pitchPoints],
+  )
+  const rollRange = useMemo(
+    () => computeAutoRange(rollPoints, { baseline: CHART_DEFAULTS.roll }),
+    [rollPoints],
+  )
   const balanceRange = useMemo(
-    () => computeAutoRange(balancePoints, { minSpan: 20 }),
+    () => computeAutoRange(balancePoints, { baseline: CHART_DEFAULTS.balance }),
     [balancePoints],
   )
 
@@ -44,7 +51,7 @@ export default function ImuScreen() {
   const currentBalance = selectedBalance ?? balancePoints.at(-1) ?? null
 
   return (
-    <ControlDetailLayout title="IMU" controlId="imu" unit="°">
+    <ControlDetailLayout title="IMU">
       <View style={styles.liveRow}>
         <View style={styles.liveCell}>
           <Text style={styles.liveLabel}>PITCH</Text>
@@ -70,6 +77,7 @@ export default function ImuScreen() {
         height={80}
         onPointSelected={setSelectedPitch}
         onGestureStart={() => setSelectedPitch(null)}
+        formatValue={(v) => `${fmt(v, 1)}°`}
       />
 
       <TelemetryLineChart
@@ -82,6 +90,7 @@ export default function ImuScreen() {
         height={80}
         onPointSelected={setSelectedRoll}
         onGestureStart={() => setSelectedRoll(null)}
+        formatValue={(v) => `${fmt(v, 1)}°`}
       />
 
       <TelemetryLineChart
@@ -94,6 +103,7 @@ export default function ImuScreen() {
         height={80}
         onPointSelected={setSelectedBalance}
         onGestureStart={() => setSelectedBalance(null)}
+        formatValue={(v) => `${fmt(v, 1)}°`}
       />
     </ControlDetailLayout>
   )

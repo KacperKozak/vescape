@@ -20,6 +20,7 @@ export function BattCurrentCard() {
 
   return (
     <TelemetryCard
+      controlId="batt-current"
       label="Batt Current"
       value={v ? fmt(v.batteryCurrent) : DASH}
       unit={v ? 'A' : undefined}

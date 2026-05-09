@@ -26,6 +26,7 @@ export function MotorTempCard() {
 
   return (
     <TelemetryCard
+      controlId="motor-temp"
       label="Motor Temp"
       value={motorTemp != null ? fmt(motorTemp) : DASH}
       unit={motorTemp != null ? '°C' : undefined}
