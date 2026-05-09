@@ -5,9 +5,11 @@ import { Sparkline, type SparklinePoint } from '@/components/charts/Sparkline'
 import { theme } from '@/constants/theme'
 import { DASH } from '@/helpers/format'
 import { useBleStore } from '@/store/bleStore'
+import { useLiveWindowMs } from '@/store/settingsStore'
 
 export function FootpadCard() {
   const recentTelemetry = useBleStore((s) => s.recentTelemetry)
+  const windowMs = useLiveWindowMs()
   const latest = recentTelemetry.at(-1) ?? null
 
   const adc1Series = useMemo<SparklinePoint[]>(
@@ -29,6 +31,7 @@ export function FootpadCard() {
           value={latest ? latest.adc1.toFixed(2) : DASH}
           series={adc1Series}
           color={theme.wheel.color}
+          windowMs={windowMs}
         />
         <View style={styles.divider} />
         <AdcColumn
@@ -36,6 +39,7 @@ export function FootpadCard() {
           value={latest ? latest.adc2.toFixed(2) : DASH}
           series={adc2Series}
           color={theme.bran.color}
+          windowMs={windowMs}
         />
       </View>
     </View>
@@ -47,11 +51,13 @@ function AdcColumn({
   value,
   series,
   color,
+  windowMs,
 }: {
   label: string
   value: string
   series: SparklinePoint[]
   color: string
+  windowMs?: number
 }) {
   return (
     <View style={styles.column}>
@@ -59,7 +65,7 @@ function AdcColumn({
       <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit>
         {value}
       </Text>
-      <Sparkline points={series} color={color} height={18} minSpan={0.5} />
+      <Sparkline points={series} color={color} height={18} minSpan={0.5} windowMs={windowMs} />
     </View>
   )
 }

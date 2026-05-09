@@ -9,9 +9,11 @@ import { DASH, fmt } from '@/helpers/format'
 import { CHART_DEFAULTS } from '@/constants/chartDefaults'
 import { theme } from '@/constants/theme'
 import { useBleStore } from '@/store/bleStore'
+import { useLiveWindowMs } from '@/store/settingsStore'
 
 export default function BattCurrentScreen() {
   const recentTelemetry = useBleStore((s) => s.recentTelemetry)
+  const windowMs = useLiveWindowMs()
 
   const points = useMemo<TelemetryChartPoint[]>(
     () => recentTelemetry.map((t) => ({ date: new Date(t.lastPacketAt), value: t.batteryCurrent })),
@@ -52,6 +54,7 @@ export default function BattCurrentScreen() {
         onPointSelected={setSelected}
         onGestureStart={() => setSelected(null)}
         formatValue={(v) => `${fmt(v, 1)} A`}
+        windowMs={windowMs}
       />
       <StatsRow
         current={stats ? `${fmt(stats.current, 1)} A` : DASH}

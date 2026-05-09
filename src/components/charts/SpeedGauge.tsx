@@ -11,6 +11,8 @@ interface Props {
   value: number | null
   /** Last-10-min VESC speed series — drawn under the dial. */
   series?: SparklinePoint[]
+  /** Fixed time window in ms for the sparkline x-axis. */
+  windowMs?: number
   /** GPS speed in km/h, shown as tiny secondary readout under the number. */
   gpsValue?: number | null
   /** Total odometer distance, pre-formatted (e.g. "0.21 km"). Top-right corner. */
@@ -82,7 +84,15 @@ function fmtSpeedWithUnit(value: number) {
  * it for cross-check, total distance tucked in the top-right, and a 10-min
  * sparkline under the dial.
  */
-export function SpeedGauge({ value, series, gpsValue, distance, max = 50, alerts = [] }: Props) {
+export function SpeedGauge({
+  value,
+  series,
+  windowMs,
+  gpsValue,
+  distance,
+  max = 50,
+  alerts = [],
+}: Props) {
   const fraction = clamp01((value ?? 0) / max)
   const color = fraction > RED_FRACTION ? theme.error.color : theme.wheel.color
 
@@ -190,6 +200,7 @@ export function SpeedGauge({ value, series, gpsValue, distance, max = 50, alerts
             height={28}
             range={sparkRange}
             fmtMax={fmtSpeedWithUnit}
+            windowMs={windowMs}
           />
         </View>
       ) : null}

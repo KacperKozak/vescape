@@ -50,16 +50,19 @@ export function getChartPosition(
   range: { y: { min: number; max: number } },
   width: number,
   height: number,
+  windowMs?: number,
 ): { x: number; y: number } | null {
   if (points.length < 2) return null
-  const xMin = points[0].date.getTime()
   const xMax = points[points.length - 1].date.getTime()
+  const xMin = windowMs ? xMax - windowMs : points[0].date.getTime()
   const xSpan = xMax - xMin
   const ySpan = range.y.max - range.y.min
   if (xSpan <= 0 || ySpan <= 0) return null
 
+  const inset = 2
   const x = width * ((point.date.getTime() - xMin) / xSpan)
-  const y = height - height * ((point.value - range.y.min) / ySpan)
+  const t = (point.value - range.y.min) / ySpan
+  const y = height - inset - (height - inset * 2) * t
   return {
     x: Math.max(0, Math.min(width, x)),
     y: Math.max(0, Math.min(height, y)),
@@ -70,10 +73,11 @@ export function findNearestChartPointAtX(
   points: TelemetryChartPoint[],
   x: number,
   width: number,
+  windowMs?: number,
 ): TelemetryChartPoint | null {
   if (points.length === 0 || width <= 0) return null
-  const xMin = points[0].date.getTime()
   const xMax = points[points.length - 1].date.getTime()
+  const xMin = windowMs ? xMax - windowMs : points[0].date.getTime()
   const clampedX = Math.max(0, Math.min(width, x))
   const targetMs = xMin + (clampedX / width) * (xMax - xMin)
 

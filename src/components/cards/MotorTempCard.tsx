@@ -5,12 +5,14 @@ import { TelemetryCard } from '@/components/TelemetryCard'
 import { theme } from '@/constants/theme'
 import { DASH, fmt } from '@/helpers/format'
 import { useBleStore } from '@/store/bleStore'
+import { useLiveWindowMs } from '@/store/settingsStore'
 
 const FMT_MAX = (v: number) => `${v.toFixed(0)}°C`
 const MIN_SPAN = 30
 
 export function MotorTempCard() {
   const recentTelemetry = useBleStore((s) => s.recentTelemetry)
+  const windowMs = useLiveWindowMs()
   const v = recentTelemetry.at(-1) ?? null
 
   // Refloat reports tempMotor=0 when sensor is unwired/disabled — treat as no reading.
@@ -34,6 +36,7 @@ export function MotorTempCard() {
       seriesColor={theme.warning.color}
       fmtMax={FMT_MAX}
       minSpan={MIN_SPAN}
+      windowMs={windowMs}
     />
   )
 }

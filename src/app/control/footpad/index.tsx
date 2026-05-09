@@ -9,6 +9,7 @@ import { CHART_DEFAULTS } from '@/constants/chartDefaults'
 import { DASH, fmt } from '@/helpers/format'
 import { theme } from '@/constants/theme'
 import { useBleStore } from '@/store/bleStore'
+import { useLiveWindowMs } from '@/store/settingsStore'
 
 function computeStats(points: TelemetryChartPoint[]) {
   if (!points.length) return null
@@ -23,6 +24,7 @@ function computeStats(points: TelemetryChartPoint[]) {
 
 export default function FootpadScreen() {
   const recentTelemetry = useBleStore((s) => s.recentTelemetry)
+  const windowMs = useLiveWindowMs()
 
   const adc1Points = useMemo<TelemetryChartPoint[]>(
     () => recentTelemetry.map((t) => ({ date: new Date(t.lastPacketAt), value: t.adc1 })),
@@ -64,6 +66,7 @@ export default function FootpadScreen() {
         onPointSelected={setSelected1}
         onGestureStart={() => setSelected1(null)}
         formatValue={(v) => fmt(v, 3)}
+        windowMs={windowMs}
       />
       <StatsRow
         current={adc1Stats ? fmt(adc1Stats.current, 3) : DASH}
@@ -83,6 +86,7 @@ export default function FootpadScreen() {
         onPointSelected={setSelected2}
         onGestureStart={() => setSelected2(null)}
         formatValue={(v) => fmt(v, 3)}
+        windowMs={windowMs}
       />
       <StatsRow
         current={adc2Stats ? fmt(adc2Stats.current, 3) : DASH}

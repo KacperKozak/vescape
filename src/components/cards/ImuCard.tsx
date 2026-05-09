@@ -5,9 +5,11 @@ import { Sparkline, type SparklinePoint } from '@/components/charts/Sparkline'
 import { theme } from '@/constants/theme'
 import { DASH, fmt } from '@/helpers/format'
 import { useBleStore } from '@/store/bleStore'
+import { useLiveWindowMs } from '@/store/settingsStore'
 
 export function ImuCard() {
   const recentTelemetry = useBleStore((s) => s.recentTelemetry)
+  const windowMs = useLiveWindowMs()
   const latest = recentTelemetry.at(-1) ?? null
 
   const pitchSeries = useMemo<SparklinePoint[]>(
@@ -34,6 +36,7 @@ export function ImuCard() {
           value={latest ? `${fmt(latest.pitch, 0)}°` : DASH}
           series={pitchSeries}
           color={theme.wheel.color}
+          windowMs={windowMs}
         />
         <View style={styles.divider} />
         <ImuColumn
@@ -41,6 +44,7 @@ export function ImuCard() {
           value={latest ? `${fmt(latest.roll, 0)}°` : DASH}
           series={rollSeries}
           color={theme.bran.color}
+          windowMs={windowMs}
         />
         <View style={styles.divider} />
         <ImuColumn
@@ -48,6 +52,7 @@ export function ImuCard() {
           value={latest ? `${fmt(latest.balancePitch, 0)}°` : DASH}
           series={balanceSeries}
           color={theme.target.color}
+          windowMs={windowMs}
         />
       </View>
     </View>
@@ -59,11 +64,13 @@ function ImuColumn({
   value,
   series,
   color,
+  windowMs,
 }: {
   label: string
   value: string
   series: SparklinePoint[]
   color: string
+  windowMs?: number
 }) {
   return (
     <View style={styles.column}>
@@ -71,7 +78,7 @@ function ImuColumn({
       <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit>
         {value}
       </Text>
-      <Sparkline points={series} color={color} height={18} minSpan={20} />
+      <Sparkline points={series} color={color} height={18} minSpan={20} windowMs={windowMs} />
     </View>
   )
 }

@@ -23,6 +23,8 @@ interface SparklineProps {
    * mid-point stays centered.
    */
   minSpan?: number
+  /** Fixed time window in ms. X-axis spans [now - windowMs, now]. */
+  windowMs?: number
 }
 
 const DEFAULT_HEIGHT = 28
@@ -41,6 +43,7 @@ export function Sparkline({
   fmtMax,
   range,
   minSpan = 0,
+  windowMs,
 }: SparklineProps) {
   const showMax = !!fmtMax
   const [width, setWidth] = useState(0)
@@ -52,8 +55,8 @@ export function Sparkline({
     if (points.length < 2 || width < 1) {
       return { polyPoints: '', maxPos: null as { x: number; y: number } | null, maxValue: null }
     }
-    const xMin = points[0].ts
     const xMax = points[points.length - 1].ts
+    const xMin = windowMs ? xMax - windowMs : points[0].ts
     const xSpan = xMax - xMin
 
     let yMin: number
@@ -93,9 +96,11 @@ export function Sparkline({
       }
     })
 
+    const inset = 1.5
     const project = (p: SparklinePoint) => {
       const x = ((p.ts - xMin) / xSpan) * width
-      const y = height - ((p.value - yMin) / ySpan) * height
+      const t = (p.value - yMin) / ySpan
+      const y = height - inset - (height - inset * 2) * t
       return { x, y }
     }
 
@@ -104,7 +109,7 @@ export function Sparkline({
       maxPos: project(points[maxIdx]),
       maxValue: maxV,
     }
-  }, [points, width, height, range, minSpan])
+  }, [points, width, height, range, minSpan, windowMs])
 
   return (
     <View style={styles.wrap}>

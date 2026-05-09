@@ -10,6 +10,8 @@ interface Props {
   voltage: number | null
   /** Last 10 min battery % series (already smoothed). */
   series?: SparklinePoint[]
+  /** Fixed time window in ms for the sparkline x-axis. */
+  windowMs?: number
   /** Hint text shown when voltage limits aren't configured yet. */
   hint?: string
 }
@@ -26,7 +28,7 @@ function pickColor(percent: number | null): string {
  * Compact battery indicator: tiny "BATTERY" label, 10-min sparkline filling
  * the middle, % + voltage on the right. Sits at the top of the telemetry view.
  */
-export function BatteryBar({ percent, voltage, series, hint }: Props) {
+export function BatteryBar({ percent, voltage, series, windowMs, hint }: Props) {
   const color = pickColor(percent)
   return (
     <View style={styles.wrap}>
@@ -36,7 +38,13 @@ export function BatteryBar({ percent, voltage, series, hint }: Props) {
       </View>
       <View style={styles.middle}>
         {series && series.length > 1 ? (
-          <Sparkline points={series} color={color} height={28} range={PCT_RANGE} />
+          <Sparkline
+            points={series}
+            color={color}
+            height={28}
+            range={PCT_RANGE}
+            windowMs={windowMs}
+          />
         ) : hint ? (
           <Text style={styles.hint}>{hint}</Text>
         ) : null}

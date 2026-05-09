@@ -9,9 +9,11 @@ import { CHART_DEFAULTS } from '@/constants/chartDefaults'
 import { DASH, fmt } from '@/helpers/format'
 import { theme } from '@/constants/theme'
 import { useBleStore } from '@/store/bleStore'
+import { useLiveWindowMs } from '@/store/settingsStore'
 
 export default function ImuScreen() {
   const recentTelemetry = useBleStore((s) => s.recentTelemetry)
+  const windowMs = useLiveWindowMs()
   const latest = recentTelemetry.at(-1)
 
   const pitchPoints = useMemo<TelemetryChartPoint[]>(
@@ -78,6 +80,7 @@ export default function ImuScreen() {
         onPointSelected={setSelectedPitch}
         onGestureStart={() => setSelectedPitch(null)}
         formatValue={(v) => `${fmt(v, 1)}°`}
+        windowMs={windowMs}
       />
 
       <TelemetryLineChart
@@ -91,6 +94,7 @@ export default function ImuScreen() {
         onPointSelected={setSelectedRoll}
         onGestureStart={() => setSelectedRoll(null)}
         formatValue={(v) => `${fmt(v, 1)}°`}
+        windowMs={windowMs}
       />
 
       <TelemetryLineChart
@@ -104,6 +108,7 @@ export default function ImuScreen() {
         onPointSelected={setSelectedBalance}
         onGestureStart={() => setSelectedBalance(null)}
         formatValue={(v) => `${fmt(v, 1)}°`}
+        windowMs={windowMs}
       />
     </ControlDetailLayout>
   )

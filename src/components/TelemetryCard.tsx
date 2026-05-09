@@ -30,6 +30,8 @@ interface Props {
   minSpan?: number
   /** When set, shows a yellow warning badge if enabled alert rules exist for this controlId. */
   controlId?: string
+  /** Fixed time window in ms for sparkline x-axis. */
+  windowMs?: number
 }
 
 export function AlertBadge({ controlId }: { controlId: string }) {
@@ -66,6 +68,7 @@ export const TelemetryCard = React.memo(function TelemetryCard({
   range,
   minSpan,
   controlId,
+  windowMs,
 }: Props) {
   return (
     <View style={styles.card}>
@@ -88,6 +91,7 @@ export const TelemetryCard = React.memo(function TelemetryCard({
           fmtMax={fmtMax}
           range={range}
           minSpan={minSpan}
+          windowMs={windowMs}
         />
       ) : null}
     </View>

@@ -7,11 +7,13 @@ import { StatsRow } from '@/components/control/StatsRow'
 import { DASH, fmt } from '@/helpers/format'
 import { theme } from '@/constants/theme'
 import { useBleStore } from '@/store/bleStore'
+import { useLiveWindowMs } from '@/store/settingsStore'
 
 const RANGE = { y: { min: 0, max: 50 } }
 
 export default function SpeedScreen() {
   const recentTelemetry = useBleStore((s) => s.recentTelemetry)
+  const windowMs = useLiveWindowMs()
 
   const points = useMemo<TelemetryChartPoint[]>(
     () =>
@@ -48,6 +50,7 @@ export default function SpeedScreen() {
         onPointSelected={setSelected}
         onGestureStart={() => setSelected(null)}
         formatValue={(v) => `${fmt(v, 1)} km/h`}
+        windowMs={windowMs}
       />
       <StatsRow
         current={stats ? `${fmt(stats.current, 1)} km/h` : DASH}

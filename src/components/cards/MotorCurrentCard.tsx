@@ -5,12 +5,14 @@ import { TelemetryCard } from '@/components/TelemetryCard'
 import { theme } from '@/constants/theme'
 import { DASH, fmt } from '@/helpers/format'
 import { useBleStore } from '@/store/bleStore'
+import { useLiveWindowMs } from '@/store/settingsStore'
 
 const FMT_MAX = (v: number) => `${v.toFixed(0)} A`
 const MIN_SPAN = 20
 
 export function MotorCurrentCard() {
   const recentTelemetry = useBleStore((s) => s.recentTelemetry)
+  const windowMs = useLiveWindowMs()
   const v = recentTelemetry.at(-1) ?? null
 
   const series = useMemo<SparklinePoint[]>(
@@ -28,6 +30,7 @@ export function MotorCurrentCard() {
       seriesColor={theme.bran.color}
       fmtMax={FMT_MAX}
       minSpan={MIN_SPAN}
+      windowMs={windowMs}
     />
   )
 }

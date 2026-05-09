@@ -7,12 +7,14 @@ import { estimateBatteryPercent } from '@/helpers/battery'
 import { emaSeries } from '@/helpers/smoothing'
 import { useBleStore } from '@/store/bleStore'
 import { useBoardStore } from '@/store/boardStore'
+import { useLiveWindowMs } from '@/store/settingsStore'
 
 // 20s half-life dampens throttle-burst dips while tracking real drain over ~1 min.
 const BATTERY_SMOOTH_HALF_LIFE_MS = 20_000
 
 export function BatteryIndicator() {
   const recentTelemetry = useBleStore((s) => s.recentTelemetry)
+  const windowMs = useLiveWindowMs()
   const { minVoltage, maxVoltage } = useBoardStore(
     useShallow((s) => {
       const board = s.boards.find((b) => b.id === s.activeBoardId)
@@ -45,6 +47,7 @@ export function BatteryIndicator() {
       percent={batteryConfigured ? percent : null}
       voltage={voltage}
       series={batteryConfigured ? batterySeries : undefined}
+      windowMs={windowMs}
       hint={!batteryConfigured ? 'Set min/max V in board settings' : undefined}
     />
   )

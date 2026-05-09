@@ -6,6 +6,7 @@ import { SpeedGauge } from '@/components/charts/SpeedGauge'
 import { fmtKm } from '@/helpers/format'
 import { useAlertsStore } from '@/store/alertsStore'
 import { useBleStore } from '@/store/bleStore'
+import { useLiveWindowMs } from '@/store/settingsStore'
 
 const SPEED_GAUGE_MAX_KMH = 50
 
@@ -16,6 +17,7 @@ export function SpeedIndicator() {
       recentLocations: s.recentLocations,
     })),
   )
+  const windowMs = useLiveWindowMs()
 
   const v = recentTelemetry.at(-1) ?? null
   const gpsFix = recentLocations.at(-1) ?? null
@@ -43,6 +45,7 @@ export function SpeedIndicator() {
       value={v ? Math.abs(v.speed) : null}
       gpsValue={gpsSpeedKmh}
       series={series}
+      windowMs={windowMs}
       distance={v?.odometer != null ? `${fmtKm(v.odometer)} km` : undefined}
       max={SPEED_GAUGE_MAX_KMH}
       alerts={speedAlerts}

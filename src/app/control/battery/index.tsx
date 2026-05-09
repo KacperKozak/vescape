@@ -9,9 +9,11 @@ import { DASH, fmt } from '@/helpers/format'
 import { theme } from '@/constants/theme'
 import { useBleStore } from '@/store/bleStore'
 import { useBoardStore } from '@/store/boardStore'
+import { useLiveWindowMs } from '@/store/settingsStore'
 
 export default function BatteryScreen() {
   const recentTelemetry = useBleStore((s) => s.recentTelemetry)
+  const windowMs = useLiveWindowMs()
   const board = useBoardStore((s) => s.boards.find((b) => b.id === s.activeBoardId))
 
   const points = useMemo<TelemetryChartPoint[]>(
@@ -55,6 +57,7 @@ export default function BatteryScreen() {
         onPointSelected={setSelected}
         onGestureStart={() => setSelected(null)}
         formatValue={(v) => `${fmt(v, 2)} V`}
+        windowMs={windowMs}
       />
       <StatsRow
         current={stats ? `${fmt(stats.current, 2)} V` : DASH}
