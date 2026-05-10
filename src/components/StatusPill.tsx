@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { View, Text, ActivityIndicator, Animated, StyleSheet, type ViewStyle } from 'react-native'
 import { LightningIcon, NavigationArrowIcon, WarningCircleIcon } from 'phosphor-react-native'
+import { useShallow } from 'zustand/react/shallow'
 import { useBleStore } from '@/store/bleStore'
 import { theme } from '@/constants/theme'
 
@@ -19,9 +20,12 @@ const COLORS: Record<string, { bg: string; text: string }> = {
 }
 
 export function StatusPill({ status, style }: { status: string; style?: ViewStyle }) {
-  const latestTelemetry = useBleStore((s) => s.recentTelemetry.at(-1) ?? null)
-  const lastPacketAt = latestTelemetry?.lastPacketAt ?? null
-  const avgLatency = latestTelemetry?.avgLatency ?? null
+  const { lastPacketAt, avgLatency } = useBleStore(
+    useShallow((s) => ({
+      lastPacketAt: s.liveStatus.boardLastPacketAt,
+      avgLatency: s.liveStatus.boardAvgLatencyMs,
+    })),
+  )
   const pulseOpacity = useRef(new Animated.Value(0.35)).current
 
   useEffect(() => {
@@ -97,7 +101,13 @@ export function StatusPill({ status, style }: { status: string; style?: ViewStyl
 }
 
 export function GpsStatusBadge({ style }: { style?: ViewStyle }) {
-  const gpsFix = useBleStore((s) => s.recentLocations.at(-1) ?? null)
+  const gpsStatus = useBleStore(
+    useShallow((s) => ({
+      timestamp: s.liveStatus.gpsLastFixAt,
+      precise: s.liveStatus.gpsPrecise,
+      accuracyM: s.liveStatus.gpsAccuracyM,
+    })),
+  )
   const [now, setNow] = useState(Date.now())
 
   useEffect(() => {
@@ -105,17 +115,17 @@ export function GpsStatusBadge({ style }: { style?: ViewStyle }) {
     return () => clearInterval(timer)
   }, [])
 
-  const ageSec = gpsFix ? Math.max(0, (now - gpsFix.timestamp) / 1000) : null
+  const ageSec = gpsStatus.timestamp ? Math.max(0, (now - gpsStatus.timestamp) / 1000) : null
   const isStale = ageSec != null && ageSec > 5
-  const isRejected = !!gpsFix && !gpsFix.precise
-  const bg = !gpsFix
+  const isRejected = gpsStatus.timestamp != null && !gpsStatus.precise
+  const bg = !gpsStatus.timestamp
     ? '#1f2937'
     : isRejected
       ? theme.error.bg
       : isStale
         ? theme.warning.bg
         : theme.gps.bg
-  const color = !gpsFix
+  const color = !gpsStatus.timestamp
     ? '#9ca3af'
     : isRejected
       ? theme.error.text
@@ -123,8 +133,8 @@ export function GpsStatusBadge({ style }: { style?: ViewStyle }) {
         ? theme.warning.text
         : theme.gps.text
   const label =
-    gpsFix?.accuracyM != null
-      ? `±${gpsFix.accuracyM.toFixed(0)}m`
+    gpsStatus.accuracyM != null
+      ? `±${gpsStatus.accuracyM.toFixed(0)}m`
       : isStale && ageSec != null
         ? `${ageSec.toFixed(0)}s`
         : null

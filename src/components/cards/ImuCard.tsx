@@ -1,5 +1,5 @@
-import { useMemo } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
+import { useShallow } from 'zustand/react/shallow'
 
 import { Sparkline, type SparklinePoint } from '@/components/charts/Sparkline'
 import { theme } from '@/constants/theme'
@@ -8,24 +8,17 @@ import { useBleStore } from '@/store/bleStore'
 import { useLiveWindowMs } from '@/store/settingsStore'
 
 export function ImuCard() {
-  const recentTelemetry = useBleStore((s) => s.recentTelemetry)
+  const { pitchSeries, rollSeries, balanceSeries } = useBleStore(
+    useShallow((s) => ({
+      pitchSeries: s.liveMetricHistory.pitch,
+      rollSeries: s.liveMetricHistory.roll,
+      balanceSeries: s.liveMetricHistory.balancePitch,
+    })),
+  )
   const windowMs = useLiveWindowMs()
-  const latest = recentTelemetry.at(-1) ?? null
-
-  const pitchSeries = useMemo<SparklinePoint[]>(
-    () => recentTelemetry.map((t) => ({ ts: t.lastPacketAt, value: t.pitch })),
-    [recentTelemetry],
-  )
-
-  const rollSeries = useMemo<SparklinePoint[]>(
-    () => recentTelemetry.map((t) => ({ ts: t.lastPacketAt, value: t.roll })),
-    [recentTelemetry],
-  )
-
-  const balanceSeries = useMemo<SparklinePoint[]>(
-    () => recentTelemetry.map((t) => ({ ts: t.lastPacketAt, value: t.balancePitch })),
-    [recentTelemetry],
-  )
+  const latestPitch = pitchSeries.at(-1)
+  const latestRoll = rollSeries.at(-1)
+  const latestBalance = balanceSeries.at(-1)
 
   return (
     <View style={styles.card}>
@@ -33,7 +26,7 @@ export function ImuCard() {
       <View style={styles.row}>
         <ImuColumn
           label="P"
-          value={latest ? `${fmt(latest.pitch, 0)}°` : DASH}
+          value={latestPitch ? `${fmt(latestPitch.value, 0)}°` : DASH}
           series={pitchSeries}
           color={theme.wheel.color}
           windowMs={windowMs}
@@ -41,7 +34,7 @@ export function ImuCard() {
         <View style={styles.divider} />
         <ImuColumn
           label="R"
-          value={latest ? `${fmt(latest.roll, 0)}°` : DASH}
+          value={latestRoll ? `${fmt(latestRoll.value, 0)}°` : DASH}
           series={rollSeries}
           color={theme.bran.color}
           windowMs={windowMs}
@@ -49,7 +42,7 @@ export function ImuCard() {
         <View style={styles.divider} />
         <ImuColumn
           label="B"
-          value={latest ? `${fmt(latest.balancePitch, 0)}°` : DASH}
+          value={latestBalance ? `${fmt(latestBalance.value, 0)}°` : DASH}
           series={balanceSeries}
           color={theme.target.color}
           windowMs={windowMs}

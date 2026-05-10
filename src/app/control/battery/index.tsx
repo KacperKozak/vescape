@@ -12,13 +12,13 @@ import { useBoardStore } from '@/store/boardStore'
 import { useLiveWindowMs } from '@/store/settingsStore'
 
 export default function BatteryScreen() {
-  const recentTelemetry = useBleStore((s) => s.recentTelemetry)
+  const batteryVoltage = useBleStore((s) => s.liveMetricHistory.batteryVoltage)
   const windowMs = useLiveWindowMs()
   const board = useBoardStore((s) => s.boards.find((b) => b.id === s.activeBoardId))
 
   const points = useMemo<TelemetryChartPoint[]>(
-    () => recentTelemetry.map((t) => ({ date: new Date(t.lastPacketAt), value: t.batteryVoltage })),
-    [recentTelemetry],
+    () => batteryVoltage.map((p) => ({ date: new Date(p.ts), value: p.value })),
+    [batteryVoltage],
   )
 
   const range = useMemo(() => {

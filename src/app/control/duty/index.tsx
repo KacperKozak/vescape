@@ -4,7 +4,7 @@ import { TelemetryLineChart } from '@/components/charts/TelemetryLineChart'
 import type { TelemetryChartPoint } from '@/components/charts/chartMath'
 import { ControlDetailLayout } from '@/components/control/ControlDetailLayout'
 import { StatsRow } from '@/components/control/StatsRow'
-import { DASH, dutyPercent } from '@/helpers/format'
+import { DASH } from '@/helpers/format'
 import { theme } from '@/constants/theme'
 import { useBleStore } from '@/store/bleStore'
 import { useLiveWindowMs } from '@/store/settingsStore'
@@ -12,16 +12,12 @@ import { useLiveWindowMs } from '@/store/settingsStore'
 const RANGE = { y: { min: 0, max: 100 } }
 
 export default function DutyScreen() {
-  const recentTelemetry = useBleStore((s) => s.recentTelemetry)
+  const duty = useBleStore((s) => s.liveMetricHistory.duty)
   const windowMs = useLiveWindowMs()
 
   const points = useMemo<TelemetryChartPoint[]>(
-    () =>
-      recentTelemetry.map((t) => ({
-        date: new Date(t.lastPacketAt),
-        value: dutyPercent(t.dutyCycle),
-      })),
-    [recentTelemetry],
+    () => duty.map((p) => ({ date: new Date(p.ts), value: p.value })),
+    [duty],
   )
 
   const stats = useMemo(() => {

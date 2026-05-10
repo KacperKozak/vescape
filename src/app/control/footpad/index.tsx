@@ -23,17 +23,18 @@ function computeStats(points: TelemetryChartPoint[]) {
 }
 
 export default function FootpadScreen() {
-  const recentTelemetry = useBleStore((s) => s.recentTelemetry)
+  const adc1 = useBleStore((s) => s.liveMetricHistory.footpadAdc1)
+  const adc2 = useBleStore((s) => s.liveMetricHistory.footpadAdc2)
   const windowMs = useLiveWindowMs()
 
   const adc1Points = useMemo<TelemetryChartPoint[]>(
-    () => recentTelemetry.map((t) => ({ date: new Date(t.lastPacketAt), value: t.adc1 })),
-    [recentTelemetry],
+    () => adc1.map((p) => ({ date: new Date(p.ts), value: p.value })),
+    [adc1],
   )
 
   const adc2Points = useMemo<TelemetryChartPoint[]>(
-    () => recentTelemetry.map((t) => ({ date: new Date(t.lastPacketAt), value: t.adc2 })),
-    [recentTelemetry],
+    () => adc2.map((p) => ({ date: new Date(p.ts), value: p.value })),
+    [adc2],
   )
 
   const adc1Range = useMemo(

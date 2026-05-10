@@ -12,15 +12,12 @@ import { useBleStore } from '@/store/bleStore'
 import { useLiveWindowMs } from '@/store/settingsStore'
 
 export default function ControllerTempScreen() {
-  const recentTelemetry = useBleStore((s) => s.recentTelemetry)
+  const controllerTemp = useBleStore((s) => s.liveMetricHistory.controllerTemp)
   const windowMs = useLiveWindowMs()
 
   const points = useMemo<TelemetryChartPoint[]>(
-    () =>
-      recentTelemetry.flatMap((t) =>
-        t.tempMosfet != null ? [{ date: new Date(t.lastPacketAt), value: t.tempMosfet }] : [],
-      ),
-    [recentTelemetry],
+    () => controllerTemp.map((p) => ({ date: new Date(p.ts), value: p.value })),
+    [controllerTemp],
   )
 
   const range = useMemo(

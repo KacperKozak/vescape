@@ -12,12 +12,12 @@ import { useBleStore } from '@/store/bleStore'
 import { useLiveWindowMs } from '@/store/settingsStore'
 
 export default function BattCurrentScreen() {
-  const recentTelemetry = useBleStore((s) => s.recentTelemetry)
+  const batteryCurrent = useBleStore((s) => s.liveMetricHistory.batteryCurrent)
   const windowMs = useLiveWindowMs()
 
   const points = useMemo<TelemetryChartPoint[]>(
-    () => recentTelemetry.map((t) => ({ date: new Date(t.lastPacketAt), value: t.batteryCurrent })),
-    [recentTelemetry],
+    () => batteryCurrent.map((p) => ({ date: new Date(p.ts), value: p.value })),
+    [batteryCurrent],
   )
 
   const range = useMemo(

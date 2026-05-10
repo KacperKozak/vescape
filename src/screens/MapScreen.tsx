@@ -28,8 +28,8 @@ interface MapScreenProps {
 }
 
 export function MapScreen(_props: MapScreenProps) {
-  const recentLocations = useBleStore((s) => s.recentLocations)
-  const gpsFix = recentLocations.at(-1) ?? null
+  const liveLocations = useBleStore((s) => s.liveLocationHistory)
+  const gpsFix = liveLocations.at(-1) ?? null
   const { targetLocation, setTargetLocation, clearTargetLocation } = useMapStore()
   const [mapStyleKey, setMapStyleKey] = useState<MapStyleKey>('onedark')
   const [followGps, setFollowGps] = useState(true)
@@ -72,8 +72,8 @@ export function MapScreen(_props: MapScreenProps) {
   )
 
   const trailShape = useMemo(
-    () => (recentLocations.length >= 2 ? makeTrailLineString(recentLocations) : null),
-    [recentLocations],
+    () => (liveLocations.length >= 2 ? makeTrailLineString(liveLocations) : null),
+    [liveLocations],
   )
 
   useEffect(() => {

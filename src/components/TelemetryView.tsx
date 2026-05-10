@@ -19,7 +19,7 @@ import { useBleStore } from '@/store/bleStore'
 
 export function TelemetryView() {
   const hasLiveBoardData = useBleStore(
-    (s) => s.status === 'connected' && s.recentTelemetry.length > 0,
+    (s) => s.status === 'connected' && s.liveStatus.boardSampleCount > 0,
   )
 
   return (

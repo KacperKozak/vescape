@@ -12,13 +12,12 @@ import { useLiveWindowMs } from '@/store/settingsStore'
 const RANGE = { y: { min: 0, max: 50 } }
 
 export default function SpeedScreen() {
-  const recentTelemetry = useBleStore((s) => s.recentTelemetry)
+  const speed = useBleStore((s) => s.liveMetricHistory.speed)
   const windowMs = useLiveWindowMs()
 
   const points = useMemo<TelemetryChartPoint[]>(
-    () =>
-      recentTelemetry.map((t) => ({ date: new Date(t.lastPacketAt), value: Math.abs(t.speed) })),
-    [recentTelemetry],
+    () => speed.map((p) => ({ date: new Date(p.ts), value: p.value })),
+    [speed],
   )
 
   const stats = useMemo(() => {

@@ -12,23 +12,24 @@ import { useBleStore } from '@/store/bleStore'
 import { useLiveWindowMs } from '@/store/settingsStore'
 
 export default function ImuScreen() {
-  const recentTelemetry = useBleStore((s) => s.recentTelemetry)
+  const pitch = useBleStore((s) => s.liveMetricHistory.pitch)
+  const roll = useBleStore((s) => s.liveMetricHistory.roll)
+  const balancePitch = useBleStore((s) => s.liveMetricHistory.balancePitch)
   const windowMs = useLiveWindowMs()
-  const latest = recentTelemetry.at(-1)
 
   const pitchPoints = useMemo<TelemetryChartPoint[]>(
-    () => recentTelemetry.map((t) => ({ date: new Date(t.lastPacketAt), value: t.pitch })),
-    [recentTelemetry],
+    () => pitch.map((p) => ({ date: new Date(p.ts), value: p.value })),
+    [pitch],
   )
 
   const rollPoints = useMemo<TelemetryChartPoint[]>(
-    () => recentTelemetry.map((t) => ({ date: new Date(t.lastPacketAt), value: t.roll })),
-    [recentTelemetry],
+    () => roll.map((p) => ({ date: new Date(p.ts), value: p.value })),
+    [roll],
   )
 
   const balancePoints = useMemo<TelemetryChartPoint[]>(
-    () => recentTelemetry.map((t) => ({ date: new Date(t.lastPacketAt), value: t.balancePitch })),
-    [recentTelemetry],
+    () => balancePitch.map((p) => ({ date: new Date(p.ts), value: p.value })),
+    [balancePitch],
   )
 
   const pitchRange = useMemo(
@@ -57,15 +58,21 @@ export default function ImuScreen() {
       <View style={styles.liveRow}>
         <View style={styles.liveCell}>
           <Text style={styles.liveLabel}>PITCH</Text>
-          <Text style={styles.liveValue}>{latest ? `${fmt(latest.pitch, 1)}°` : DASH}</Text>
+          <Text style={styles.liveValue}>
+            {pitchPoints.at(-1) ? `${fmt(pitchPoints.at(-1)!.value, 1)}°` : DASH}
+          </Text>
         </View>
         <View style={styles.liveCell}>
           <Text style={styles.liveLabel}>ROLL</Text>
-          <Text style={styles.liveValue}>{latest ? `${fmt(latest.roll, 1)}°` : DASH}</Text>
+          <Text style={styles.liveValue}>
+            {rollPoints.at(-1) ? `${fmt(rollPoints.at(-1)!.value, 1)}°` : DASH}
+          </Text>
         </View>
         <View style={styles.liveCell}>
           <Text style={styles.liveLabel}>BAL</Text>
-          <Text style={styles.liveValue}>{latest ? `${fmt(latest.balancePitch, 1)}°` : DASH}</Text>
+          <Text style={styles.liveValue}>
+            {balancePoints.at(-1) ? `${fmt(balancePoints.at(-1)!.value, 1)}°` : DASH}
+          </Text>
         </View>
       </View>
 

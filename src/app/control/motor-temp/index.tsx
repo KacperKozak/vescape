@@ -12,17 +12,12 @@ import { useBleStore } from '@/store/bleStore'
 import { useLiveWindowMs } from '@/store/settingsStore'
 
 export default function MotorTempScreen() {
-  const recentTelemetry = useBleStore((s) => s.recentTelemetry)
+  const motorTemp = useBleStore((s) => s.liveMetricHistory.motorTemp)
   const windowMs = useLiveWindowMs()
 
   const points = useMemo<TelemetryChartPoint[]>(
-    () =>
-      recentTelemetry.flatMap((t) =>
-        t.tempMotor != null && t.tempMotor > 0
-          ? [{ date: new Date(t.lastPacketAt), value: t.tempMotor }]
-          : [],
-      ),
-    [recentTelemetry],
+    () => motorTemp.map((p) => ({ date: new Date(p.ts), value: p.value })),
+    [motorTemp],
   )
 
   const range = useMemo(
