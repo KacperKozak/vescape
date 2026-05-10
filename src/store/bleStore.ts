@@ -103,14 +103,12 @@ const EMPTY_LIVE_STATUS: LiveStatusSummary = {
 function applyLiveState(state: LiveStateEvent, set: BleSet): void {
   const hasRecentSnapshot =
     state.board.recentTelemetry.length > 0 || state.gps.recentLocations.length > 0
-  const shouldResetLive =
-    state.board.phase === 'idle' ||
-    state.board.phase === 'error' ||
-    state.board.phase === 'disconnecting'
-  const live =
-    hasRecentSnapshot || shouldResetLive
-      ? liveTelemetryRuntime.seedFromLiveState(state)
-      : liveTelemetryRuntime.getSnapshot()
+  if (!hasRecentSnapshot) {
+    liveTelemetryRuntime.syncConnectionSeq(state.board.connectionSeq)
+  }
+  const live = hasRecentSnapshot
+    ? liveTelemetryRuntime.seedFromLiveState(state)
+    : liveTelemetryRuntime.getSnapshot()
 
   set({
     status: state.board.phase,
@@ -123,6 +121,20 @@ function applyLiveState(state: LiveStateEvent, set: BleSet): void {
     connectedId: state.board.connectedBoardId ?? state.board.bleId,
     error: state.board.error ?? state.gps.error ?? state.scan.error ?? undefined,
     telemetryRecordingEnabled: state.recording.enabled,
+    ...(hasRecentSnapshot
+      ? {
+          liveMetricHistory: live.liveMetricHistory,
+          liveLocationHistory: live.liveLocationHistory,
+          liveStatus: live.liveStatus,
+        }
+      : {}),
+  })
+}
+
+function resetLivePresentation(set: BleSet): void {
+  const live = liveTelemetryRuntime.reset()
+  set({
+    lastTelemetryAt: null,
     liveMetricHistory: live.liveMetricHistory,
     liveLocationHistory: live.liveLocationHistory,
     liveStatus: live.liveStatus,
@@ -249,6 +261,7 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
 
   async connect(boardId: string) {
     get().stopScan()
+    resetLivePresentation(set)
     nativeSetSelectedBoard(boardId)
     try {
       await nativeSelectBoard(boardId)
@@ -263,6 +276,7 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
     } catch {
       // Native may already be stopped.
     } finally {
+      resetLivePresentation(set)
       get().syncNativeState()
     }
   },

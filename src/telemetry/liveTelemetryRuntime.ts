@@ -35,6 +35,7 @@ export interface LiveTelemetrySnapshot {
 
 export interface LiveTelemetryRuntime {
   values: LiveTelemetryValues
+  syncConnectionSeq: (connectionSeq: number) => void
   seedFromLiveState: (state: LiveStateEvent) => LiveTelemetrySnapshot
   ingestTelemetry: (telemetry: TelemetryEvent) => boolean
   ingestLocation: (location: LocationEvent) => void
@@ -153,6 +154,10 @@ export function createLiveTelemetryRuntime({
 
   return {
     values,
+
+    syncConnectionSeq(nextConnectionSeq) {
+      connectionSeq = nextConnectionSeq
+    },
 
     seedFromLiveState(state) {
       connectionSeq = state.board.connectionSeq
