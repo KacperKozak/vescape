@@ -1,11 +1,7 @@
-import { describe, expect, mock, test } from 'bun:test'
-import type { LiveStateEvent, TelemetryEvent } from 'vesc-ble'
+import { describe, expect, test } from 'bun:test'
+import type { LiveStateEvent, LocationEvent, TelemetryEvent } from 'vesc-ble'
 
-mock.module('react-native-reanimated', () => ({
-  makeMutable: <T>(value: T) => ({ value }),
-}))
-
-const { createLiveTelemetryRuntime } = await import('./liveTelemetryRuntime')
+import { createLiveTelemetryRuntime } from './liveTelemetryRuntime'
 
 function telemetry(overrides: Partial<TelemetryEvent> = {}): TelemetryEvent {
   return {
@@ -69,6 +65,21 @@ function liveState(samples: TelemetryEvent[]): LiveStateEvent {
   }
 }
 
+function location(overrides: Partial<LocationEvent> = {}): LocationEvent {
+  return {
+    latitude: 50,
+    longitude: 19,
+    speedMps: 4,
+    bearingDeg: 90,
+    accuracyM: 3,
+    altitudeM: 250,
+    timestamp: 10_000,
+    precise: true,
+    saved: true,
+    ...overrides,
+  }
+}
+
 describe('live telemetry runtime', () => {
   test('seeds hot values and history from native snapshot', () => {
     const runtime = createLiveTelemetryRuntime({ windowMs: () => 60_000 })
@@ -107,5 +118,59 @@ describe('live telemetry runtime', () => {
     expect(runtime.values.dutyPercent.value).toBe(25)
     expect(runtime.values.avgLatencyMs.value).toBe(11)
     expect(runtime.getSnapshot().liveStatus.boardAvgLatencyMs).toBe(11)
+  })
+
+  test('does not regress hot values when older current-generation telemetry arrives late', () => {
+    const runtime = createLiveTelemetryRuntime({ windowMs: () => 60_000 })
+    runtime.seedFromLiveState(liveState([]))
+
+    runtime.ingestTelemetry(telemetry({ lastPacketAt: 20_000, speed: -30, avgLatency: 9 }))
+    runtime.ingestTelemetry(telemetry({ lastPacketAt: 10_000, speed: -5, avgLatency: 40 }))
+
+    expect(runtime.values.speedKmh.value).toBe(30)
+    expect(runtime.values.avgLatencyMs.value).toBe(9)
+    expect(runtime.getSnapshot().liveStatus.boardLastPacketAt).toBe(20_000)
+    expect(runtime.getSnapshot().liveMetricHistory.speed).toEqual([
+      { ts: 10_000, value: 5 },
+      { ts: 20_000, value: 30 },
+    ])
+  })
+
+  test('ingests locations into location history and status', () => {
+    const runtime = createLiveTelemetryRuntime({ windowMs: () => 60_000 })
+
+    const snapshot = runtime.ingestLocation(location({ timestamp: 12_000, accuracyM: 5 }))
+
+    expect(snapshot.liveLocationHistory).toEqual([location({ timestamp: 12_000, accuracyM: 5 })])
+    expect(snapshot.liveStatus).toMatchObject({
+      gpsSampleCount: 1,
+      gpsLastFixAt: 12_000,
+      gpsPrecise: true,
+      gpsAccuracyM: 5,
+    })
+  })
+
+  test('reset clears hot values and snapshot', () => {
+    const runtime = createLiveTelemetryRuntime({ windowMs: () => 60_000 })
+    runtime.seedFromLiveState(liveState([]))
+    runtime.ingestTelemetry(telemetry({ speed: -22, dutyCycle: 0.25, avgLatency: 11 }))
+    runtime.ingestLocation(location({ timestamp: 12_000 }))
+
+    const snapshot = runtime.reset()
+
+    expect(runtime.values.speedKmh.value).toBe(null)
+    expect(runtime.values.dutyPercent.value).toBe(null)
+    expect(runtime.values.avgLatencyMs.value).toBe(null)
+    expect(snapshot.liveLocationHistory).toEqual([])
+    expect(snapshot.liveMetricHistory.speed).toEqual([])
+    expect(snapshot.liveStatus).toEqual({
+      boardSampleCount: 0,
+      boardLastPacketAt: null,
+      boardAvgLatencyMs: null,
+      gpsSampleCount: 0,
+      gpsLastFixAt: null,
+      gpsPrecise: false,
+      gpsAccuracyM: null,
+    })
   })
 })

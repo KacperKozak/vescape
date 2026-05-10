@@ -151,8 +151,10 @@ export function createLiveTelemetryRuntime({
         return null
       }
 
-      updateValuesFromTelemetry(values, telemetry)
       appendTelemetryAndLocation(telemetry)
+      const latestTelemetry = getLatestTelemetry(buffer)
+      if (latestTelemetry) updateValuesFromTelemetry(values, latestTelemetry)
+      else clearValues(values)
       return publishSnapshot()
     },
 
