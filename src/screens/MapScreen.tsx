@@ -1,55 +1,32 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { View, Text, StyleSheet, Pressable } from 'react-native'
+import { View, Text, StyleSheet } from 'react-native'
 import Mapbox, {
   Camera,
   FillLayer,
   FillExtrusionLayer,
   LineLayer,
-  MarkerView,
   RasterLayer,
   RasterSource,
   ShapeSource,
   type Camera as CameraRef,
 } from '@rnmapbox/maps'
-import {
-  ArrowUpIcon,
-  CubeIcon,
-  CrosshairIcon,
-  CrosshairSimpleIcon,
-  MapTrifoldIcon,
-  MoonStarsIcon,
-  MountainsIcon,
-  PlanetIcon,
-  type Icon,
-  XIcon,
-} from 'phosphor-react-native'
 import { useBleStore } from '@/store/bleStore'
 import { useMapStore } from '@/store/mapStore'
 import { MAPBOX_ACCESS_TOKEN, MAPY_TILE_URL_TEMPLATE } from '@/config/mapy'
 import { theme } from '@/constants/theme'
 import { ONE_DARK_MAP_STYLE } from '@/constants/oneDarkMapStyle'
+import {
+  BLANK_STYLE,
+  FALLBACK_COORDINATE,
+  MAP_STYLES,
+  type MapStyleKey,
+} from '@/constants/mapStyles'
+import { makeCircleFeature, makeTrailLineString, zoomLevelForDelta } from '@/helpers/mapGeometry'
+import { MapPin } from '@/components/map/MapPin'
+import { MapControls } from '@/components/map/MapControls'
+import { MapStyleSwitch } from '@/components/map/MapStyleSwitch'
 
 Mapbox.setAccessToken(MAPBOX_ACCESS_TOKEN)
-
-const FALLBACK_COORDINATE: [number, number] = [17.0385, 51.1079]
-const BLANK_STYLE = JSON.stringify({
-  version: 8,
-  sources: {},
-  layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#111827' } }],
-})
-const MAP_STYLES = [
-  { key: 'onedark', label: 'One Dark', styleURL: null, Icon: MoonStarsIcon },
-  { key: 'outdoors', label: 'Outdoors', styleURL: Mapbox.StyleURL.Outdoors, Icon: MountainsIcon },
-  {
-    key: 'satellite',
-    label: 'Satellite',
-    styleURL: Mapbox.StyleURL.SatelliteStreet,
-    Icon: PlanetIcon,
-  },
-  { key: 'mapy', label: 'Mapy.cz', styleURL: null, Icon: MapTrifoldIcon },
-] as const
-
-type MapStyleKey = (typeof MAP_STYLES)[number]['key']
 
 interface MapScreenProps {
   active?: boolean
@@ -63,7 +40,7 @@ export function MapScreen(_props: MapScreenProps) {
   const [followGps, setFollowGps] = useState(true)
   const [heading, setHeading] = useState(0)
   const [rotationLocked, setRotationLocked] = useState(false)
-  const [perspectiveEnabled, setPerspectiveEnabled] = useState(false)
+  const [perspectiveEnabled, setPerspectiveEnabled] = useState(true)
   const cameraRef = useRef<CameraRef>(null)
   const lastCenteredAtRef = useRef<number | null>(null)
 
@@ -74,10 +51,10 @@ export function MapScreen(_props: MapScreenProps) {
         zoomLevel: 11,
       }
     }
-    const baseDelta = gpsFix.accuracyM != null ? Math.max(0.002, gpsFix.accuracyM / 111_000) : 0.008
+    const baseDelta = gpsFix.accuracyM != null ? Math.max(0.002, gpsFix.accuracyM / 111_000) : 0.004
     return {
       centerCoordinate: [gpsFix.longitude, gpsFix.latitude] as [number, number],
-      zoomLevel: zoomLevelForDelta(baseDelta * 8),
+      zoomLevel: zoomLevelForDelta(baseDelta * 4),
     }
   }, [gpsFix])
 
@@ -87,6 +64,7 @@ export function MapScreen(_props: MapScreenProps) {
   const isOneDark = selectedMapStyle.key === 'onedark'
   const useCustomJSON = isMapy || isOneDark
   const showBuildings3d = selectedMapStyle.key === 'outdoors' || selectedMapStyle.key === 'onedark'
+
   const accuracyShape = useMemo(
     () =>
       gpsFix?.accuracyM != null
@@ -132,7 +110,8 @@ export function MapScreen(_props: MapScreenProps) {
     }
   }
 
-  const setPerspective = (enabled: boolean) => {
+  const togglePerspective = () => {
+    const enabled = !perspectiveEnabled
     setPerspectiveEnabled(enabled)
     cameraRef.current?.setCamera({
       pitch: enabled ? 45 : 0,
@@ -160,6 +139,11 @@ export function MapScreen(_props: MapScreenProps) {
         styleJSON={isOneDark ? ONE_DARK_MAP_STYLE : isMapy ? BLANK_STYLE : undefined}
         pitchEnabled
         rotateEnabled={!rotationLocked}
+        compassEnabled={false}
+        scaleBarEnabled
+        scaleBarPosition={{ top: 10, left: 10 }}
+        logoEnabled={false}
+        attributionEnabled={false}
         onLongPress={(feature) => {
           const [longitude, latitude] = feature.geometry.coordinates
           setTargetLocation({ latitude, longitude })
@@ -172,7 +156,7 @@ export function MapScreen(_props: MapScreenProps) {
       >
         <Camera
           ref={cameraRef}
-          defaultSettings={gpsCamera}
+          defaultSettings={{ ...gpsCamera, pitch: 45 }}
           maxZoomLevel={19}
           animationMode="easeTo"
         />
@@ -256,162 +240,28 @@ export function MapScreen(_props: MapScreenProps) {
         )}
       </Mapbox.MapView>
 
-      <View style={styles.overlayTop}>
-        <Text style={styles.overlayTopText}>
-          {!gpsFix
-            ? 'Waiting for GPS fix'
-            : gpsFix.accuracyM != null
-              ? `GPS ±${gpsFix.accuracyM.toFixed(1)}m`
-              : 'GPS fix'}
-        </Text>
-      </View>
-
       <View style={styles.attribution}>
         <Text style={styles.attributionText}>
           {isMapy ? 'Map data: Mapy.com / Seznam.cz' : 'Map data: Mapbox'}
         </Text>
       </View>
 
-      {targetLocation && (
-        <Pressable style={styles.clearTargetButton} onPress={clearTargetLocation}>
-          <XIcon size={18} color="#f9fafb" weight="bold" />
-        </Pressable>
-      )}
+      <MapControls
+        heading={heading}
+        rotationLocked={rotationLocked}
+        perspectiveEnabled={perspectiveEnabled}
+        followGps={followGps}
+        showClearTarget={!!targetLocation}
+        onResetRotation={resetRotation}
+        onToggleRotationLock={() => setRotationLocked((prev) => !prev)}
+        onTogglePerspective={togglePerspective}
+        onRecenter={recenter}
+        onClearTarget={clearTargetLocation}
+      />
 
-      <Pressable
-        style={[styles.compassButton, rotationLocked && styles.compassButtonLocked]}
-        onPress={resetRotation}
-        onLongPress={() => setRotationLocked((prev) => !prev)}
-        delayLongPress={400}
-      >
-        <View style={{ transform: [{ rotate: `${-heading}deg` }] }}>
-          <ArrowUpIcon
-            size={22}
-            color={rotationLocked ? theme.warning.color : '#f9fafb'}
-            weight="bold"
-          />
-        </View>
-      </Pressable>
-
-      <Pressable
-        style={[styles.perspectiveButton, perspectiveEnabled && styles.perspectiveButtonActive]}
-        onPress={() => setPerspective(!perspectiveEnabled)}
-      >
-        <CubeIcon
-          size={22}
-          color={perspectiveEnabled ? theme.gps.text : '#f9fafb'}
-          weight={perspectiveEnabled ? 'fill' : 'bold'}
-        />
-      </Pressable>
-
-      <Pressable
-        style={[styles.followButton, followGps && styles.followButtonActive]}
-        onPress={recenter}
-      >
-        {followGps ? (
-          <CrosshairIcon size={24} color={theme.gps.text} weight="fill" />
-        ) : (
-          <CrosshairSimpleIcon size={24} color="#f9fafb" weight="bold" />
-        )}
-      </Pressable>
-
-      <View style={styles.mapStyleSwitch}>
-        {MAP_STYLES.map((style) => (
-          <MapStyleButton
-            key={style.key}
-            Icon={style.Icon}
-            label={style.label}
-            active={mapStyleKey === style.key}
-            onPress={() => setMapStyleKey(style.key)}
-          />
-        ))}
-      </View>
+      <MapStyleSwitch activeKey={mapStyleKey} onSelect={setMapStyleKey} />
     </View>
   )
-}
-
-function MapStyleButton({
-  Icon,
-  label,
-  active,
-  onPress,
-}: {
-  Icon: Icon
-  label: string
-  active: boolean
-  onPress: () => void
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      accessibilityState={{ selected: active }}
-      style={[styles.mapStyleButton, active && styles.mapStyleButtonActive]}
-      onPress={onPress}
-    >
-      <Icon size={21} color={active ? '#61afef' : '#9ca3af'} weight={active ? 'fill' : 'bold'} />
-    </Pressable>
-  )
-}
-
-function MapPin({
-  coordinate,
-  color,
-  onSelected,
-}: {
-  id: string
-  coordinate: [number, number]
-  color: string
-  onSelected?: () => void
-}) {
-  return (
-    <MarkerView coordinate={coordinate} allowOverlap>
-      <Pressable style={[styles.pin, { borderColor: color }]} onPress={onSelected}>
-        <View style={[styles.pinCore, { backgroundColor: color }]} />
-      </Pressable>
-    </MarkerView>
-  )
-}
-
-function zoomLevelForDelta(delta: number): number {
-  return Math.max(3, Math.min(19, Math.log2(360 / Math.max(delta, 0.0001))))
-}
-
-function makeTrailLineString(
-  locations: { longitude: number; latitude: number }[],
-): GeoJSON.Feature<GeoJSON.LineString> {
-  return {
-    type: 'Feature',
-    geometry: {
-      type: 'LineString',
-      coordinates: locations.map((l) => [l.longitude, l.latitude]),
-    },
-    properties: {},
-  }
-}
-
-function makeCircleFeature(
-  longitude: number,
-  latitude: number,
-  radiusM: number,
-): GeoJSON.Feature<GeoJSON.Polygon> {
-  const earthRadiusM = 6_378_137
-  const latRad = (latitude * Math.PI) / 180
-  const coordinates: [number, number][] = []
-  for (let i = 0; i <= 64; i += 1) {
-    const bearing = (i / 64) * Math.PI * 2
-    const latOffset = (radiusM / earthRadiusM) * Math.cos(bearing)
-    const lonOffset = (radiusM / (earthRadiusM * Math.cos(latRad))) * Math.sin(bearing)
-    coordinates.push([
-      longitude + (lonOffset * 180) / Math.PI,
-      latitude + (latOffset * 180) / Math.PI,
-    ])
-  }
-  return {
-    type: 'Feature',
-    geometry: { type: 'Polygon', coordinates: [coordinates] },
-    properties: {},
-  }
 }
 
 const styles = StyleSheet.create({
@@ -441,34 +291,6 @@ const styles = StyleSheet.create({
   map: {
     flex: 1,
   },
-  pin: {
-    width: 22,
-    height: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 11,
-    borderWidth: 3,
-    backgroundColor: '#f9fafb',
-  },
-  pinCore: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  overlayTop: {
-    position: 'absolute',
-    top: 10,
-    alignSelf: 'center',
-    backgroundColor: 'rgba(17,24,39,0.85)',
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  overlayTopText: {
-    color: '#f3f4f6',
-    fontSize: 12,
-    fontWeight: '600',
-  },
   attribution: {
     position: 'absolute',
     right: 12,
@@ -482,80 +304,5 @@ const styles = StyleSheet.create({
     color: 'rgba(209,213,219,0.78)',
     fontSize: 9,
     fontWeight: '500',
-  },
-  clearTargetButton: {
-    position: 'absolute',
-    right: 12,
-    bottom: 226,
-    width: 52,
-    height: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(30,19,56,0.9)',
-    borderRadius: 26,
-  },
-  compassButton: {
-    position: 'absolute',
-    right: 12,
-    bottom: 106,
-    width: 52,
-    height: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(17,24,39,0.9)',
-    borderRadius: 26,
-  },
-  compassButtonLocked: {
-    backgroundColor: 'rgba(67,20,7,0.9)',
-  },
-  perspectiveButton: {
-    position: 'absolute',
-    right: 12,
-    bottom: 166,
-    width: 52,
-    height: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(17,24,39,0.9)',
-    borderRadius: 26,
-  },
-  perspectiveButtonActive: {
-    backgroundColor: theme.gps.bg,
-  },
-  followButton: {
-    position: 'absolute',
-    right: 12,
-    bottom: 46,
-    width: 52,
-    height: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(17,24,39,0.9)',
-    borderRadius: 26,
-  },
-  followButtonActive: {
-    backgroundColor: theme.gps.bg,
-  },
-  mapStyleSwitch: {
-    position: 'absolute',
-    alignSelf: 'center',
-    bottom: 46,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(17,24,39,0.9)',
-    borderRadius: 28,
-    borderWidth: 1,
-    borderColor: 'rgba(148,163,184,0.18)',
-    padding: 4,
-  },
-  mapStyleButton: {
-    width: 46,
-    height: 46,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 23,
-  },
-  mapStyleButtonActive: {
-    backgroundColor: '#3d4556',
   },
 })

@@ -1,12 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
-import Mapbox, {
-  Camera,
-  LineLayer,
-  PointAnnotation,
-  ShapeSource,
-  type Camera as CameraRef,
-} from '@rnmapbox/maps'
+import Mapbox, { Camera, LineLayer, ShapeSource, type Camera as CameraRef } from '@rnmapbox/maps'
 import { ListBulletsIcon, PauseIcon, PlayIcon } from 'phosphor-react-native'
 
 import {
@@ -25,6 +19,10 @@ import type {
   TelemetrySample,
 } from '@/store/historyStore'
 import { MAPBOX_ACCESS_TOKEN } from '@/config/mapy'
+import { ONE_DARK_MAP_STYLE } from '@/constants/oneDarkMapStyle'
+import { FALLBACK_COORDINATE } from '@/constants/mapStyles'
+import { getBounds } from '@/helpers/mapGeometry'
+import { MapPin } from '@/components/map/MapPin'
 import { HistorySessionSheet } from './HistorySessionSheet'
 
 Mapbox.setAccessToken(MAPBOX_ACCESS_TOKEN)
@@ -32,7 +30,6 @@ Mapbox.setAccessToken(MAPBOX_ACCESS_TOKEN)
 const STEP_MS = 5_000
 const SESSION_SAMPLE_LIMIT = 10_000
 const CHART_MAX_POINTS = 220
-const FALLBACK_COORDINATE: [number, number] = [17.0385, 51.1079]
 
 type MarkerPoint = {
   id: string
@@ -321,7 +318,7 @@ export function HistoryMapPlayer({
     <View style={styles.container}>
       <Mapbox.MapView
         style={styles.map}
-        styleURL={Mapbox.StyleURL.Outdoors}
+        styleJSON={ONE_DARK_MAP_STYLE}
         onDidFinishLoadingMap={() => setMapReady(true)}
         onPress={(feature) => {
           const [longitude, latitude] = feature.geometry.coordinates
@@ -528,44 +525,6 @@ function Stat({ label, value }: { label: string; value: string }) {
   )
 }
 
-function MapPin({
-  id,
-  coordinate,
-  color,
-}: {
-  id: string
-  coordinate: [number, number]
-  color: string
-}) {
-  return (
-    <PointAnnotation id={id} coordinate={coordinate}>
-      <View style={[styles.pin, { borderColor: color }]}>
-        <View style={[styles.pinCore, { backgroundColor: color }]} />
-      </View>
-    </PointAnnotation>
-  )
-}
-
-function getBounds(coordinates: [number, number][]): {
-  ne: [number, number]
-  sw: [number, number]
-} {
-  let minLon = coordinates[0][0]
-  let maxLon = coordinates[0][0]
-  let minLat = coordinates[0][1]
-  let maxLat = coordinates[0][1]
-  for (const [longitude, latitude] of coordinates) {
-    minLon = Math.min(minLon, longitude)
-    maxLon = Math.max(maxLon, longitude)
-    minLat = Math.min(minLat, latitude)
-    maxLat = Math.max(maxLat, latitude)
-  }
-  return {
-    ne: [maxLon, maxLat],
-    sw: [minLon, minLat],
-  }
-}
-
 function formatTime(ms: number): string {
   return new Date(ms).toLocaleTimeString([], {
     hour: '2-digit',
@@ -580,20 +539,6 @@ const styles = StyleSheet.create({
   },
   map: {
     flex: 1,
-  },
-  pin: {
-    width: 20,
-    height: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 10,
-    borderWidth: 3,
-    backgroundColor: '#f8fafc',
-  },
-  pinCore: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
   },
   emptyOverlay: {
     position: 'absolute',
