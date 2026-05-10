@@ -54,7 +54,8 @@
             "deploymentTarget": "15.1"
           }
         }
-      ]
+      ],
+      "@rnmapbox/maps"
     ],
     "experiments": {
       "typedRoutes": true,

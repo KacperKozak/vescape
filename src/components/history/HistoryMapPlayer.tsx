@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
-import MapView, { Marker, Polyline, type LatLng } from 'react-native-maps'
+import Mapbox, {
+  Camera,
+  LineLayer,
+  PointAnnotation,
+  ShapeSource,
+  type Camera as CameraRef,
+} from '@rnmapbox/maps'
 import { ListBulletsIcon, PauseIcon, PlayIcon } from 'phosphor-react-native'
 
 import {
@@ -18,11 +24,15 @@ import type {
   HistorySession,
   TelemetrySample,
 } from '@/store/historyStore'
+import { MAPBOX_ACCESS_TOKEN } from '@/config/mapy'
 import { HistorySessionSheet } from './HistorySessionSheet'
+
+Mapbox.setAccessToken(MAPBOX_ACCESS_TOKEN)
 
 const STEP_MS = 5_000
 const SESSION_SAMPLE_LIMIT = 10_000
 const CHART_MAX_POINTS = 220
+const FALLBACK_COORDINATE: [number, number] = [17.0385, 51.1079]
 
 type MarkerPoint = {
   id: string
@@ -57,20 +67,27 @@ export function HistoryMapPlayer({
   const [headTimeMs, setHeadTimeMs] = useState<number | null>(null)
   const [mapReady, setMapReady] = useState(false)
   const playbackStartRef = useRef<{ realMs: number; headMs: number } | null>(null)
-  const mapRef = useRef<MapView>(null)
+  const cameraRef = useRef<CameraRef>(null)
 
   const routeByTime = useMemo(
     () => [...sessionGpsSamples].sort((a, b) => a.capturedAtMs - b.capturedAtMs),
     [sessionGpsSamples],
   )
 
-  const route = useMemo<LatLng[]>(
-    () =>
-      routeByTime.map((point) => ({
-        latitude: point.latitude,
-        longitude: point.longitude,
-      })),
+  const route = useMemo<[number, number][]>(
+    () => routeByTime.map((point) => [point.longitude, point.latitude] as [number, number]),
     [routeByTime],
+  )
+  const routeShape = useMemo<GeoJSON.Feature<GeoJSON.LineString> | null>(
+    () =>
+      route.length > 1
+        ? {
+            type: 'Feature',
+            geometry: { type: 'LineString', coordinates: route },
+            properties: {},
+          }
+        : null,
+    [route],
   )
   const boardByTime = useMemo(
     () => [...sessionSamples].sort((a, b) => a.capturedAtMs - b.capturedAtMs),
@@ -121,10 +138,8 @@ export function HistoryMapPlayer({
   useEffect(() => {
     if (!mapReady || !selectedSession || route.length < 2) return
     const fit = () => {
-      mapRef.current?.fitToCoordinates(route, {
-        edgePadding: { top: 80, right: 40, bottom: 360, left: 40 },
-        animated: true,
-      })
+      const bounds = getBounds(route)
+      cameraRef.current?.fitBounds(bounds.ne, bounds.sw, [80, 40, 360, 40], 700)
     }
     const frame = requestAnimationFrame(fit)
     const timer = setTimeout(fit, 120)
@@ -304,29 +319,52 @@ export function HistoryMapPlayer({
 
   return (
     <View style={styles.container}>
-      <MapView
-        ref={mapRef}
+      <Mapbox.MapView
         style={styles.map}
-        onMapReady={() => setMapReady(true)}
-        onPress={(e) =>
-          onMapPress(e.nativeEvent.coordinate.latitude, e.nativeEvent.coordinate.longitude)
-        }
+        styleURL={Mapbox.StyleURL.Outdoors}
+        onDidFinishLoadingMap={() => setMapReady(true)}
+        onPress={(feature) => {
+          const [longitude, latitude] = feature.geometry.coordinates
+          onMapPress(latitude, longitude)
+        }}
       >
-        {route.length > 1 && <Polyline coordinates={route} strokeWidth={4} strokeColor="#38bdf8" />}
+        <Camera
+          ref={cameraRef}
+          defaultSettings={{
+            centerCoordinate: route[0] ?? FALLBACK_COORDINATE,
+            zoomLevel: route.length > 0 ? 14 : 11,
+          }}
+          maxZoomLevel={19}
+        />
+        {routeShape && (
+          <ShapeSource id="history-route-source" shape={routeShape}>
+            <LineLayer
+              id="history-route-line"
+              style={{
+                lineColor: '#a855f7',
+                lineWidth: 4,
+                lineCap: 'round',
+                lineJoin: 'round',
+              }}
+            />
+          </ShapeSource>
+        )}
         {currentGps && (
-          <Marker
-            coordinate={{ latitude: currentGps.latitude, longitude: currentGps.longitude }}
-            pinColor="#22c55e"
+          <MapPin
+            id="history-current"
+            coordinate={[currentGps.longitude, currentGps.latitude]}
+            color="#ef4444"
           />
         )}
         {markerPoints.map((point) => (
-          <Marker
+          <MapPin
             key={point.id}
-            coordinate={{ latitude: point.latitude, longitude: point.longitude }}
-            pinColor={point.type === 'error' ? '#ef4444' : '#f59e0b'}
+            id={`history-marker-${point.id}`}
+            coordinate={[point.longitude, point.latitude]}
+            color={point.type === 'error' ? '#ef4444' : '#f59e0b'}
           />
         ))}
-      </MapView>
+      </Mapbox.MapView>
 
       {!selectedSession && !loadingSession && (
         <View style={styles.emptyOverlay}>
@@ -490,6 +528,44 @@ function Stat({ label, value }: { label: string; value: string }) {
   )
 }
 
+function MapPin({
+  id,
+  coordinate,
+  color,
+}: {
+  id: string
+  coordinate: [number, number]
+  color: string
+}) {
+  return (
+    <PointAnnotation id={id} coordinate={coordinate}>
+      <View style={[styles.pin, { borderColor: color }]}>
+        <View style={[styles.pinCore, { backgroundColor: color }]} />
+      </View>
+    </PointAnnotation>
+  )
+}
+
+function getBounds(coordinates: [number, number][]): {
+  ne: [number, number]
+  sw: [number, number]
+} {
+  let minLon = coordinates[0][0]
+  let maxLon = coordinates[0][0]
+  let minLat = coordinates[0][1]
+  let maxLat = coordinates[0][1]
+  for (const [longitude, latitude] of coordinates) {
+    minLon = Math.min(minLon, longitude)
+    maxLon = Math.max(maxLon, longitude)
+    minLat = Math.min(minLat, latitude)
+    maxLat = Math.max(maxLat, latitude)
+  }
+  return {
+    ne: [maxLon, maxLat],
+    sw: [minLon, minLat],
+  }
+}
+
 function formatTime(ms: number): string {
   return new Date(ms).toLocaleTimeString([], {
     hour: '2-digit',
@@ -504,6 +580,20 @@ const styles = StyleSheet.create({
   },
   map: {
     flex: 1,
+  },
+  pin: {
+    width: 20,
+    height: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 10,
+    borderWidth: 3,
+    backgroundColor: '#f8fafc',
+  },
+  pinCore: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
   },
   emptyOverlay: {
     position: 'absolute',

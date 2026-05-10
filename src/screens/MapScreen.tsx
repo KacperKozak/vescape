@@ -1,53 +1,101 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { View, Text, StyleSheet, Pressable } from 'react-native'
-import MapView, { Circle, Marker, UrlTile, type Region } from 'react-native-maps'
-import { ArrowUpIcon, CrosshairIcon, CrosshairSimpleIcon, XIcon } from 'phosphor-react-native'
+import Mapbox, {
+  Camera,
+  FillLayer,
+  FillExtrusionLayer,
+  PointAnnotation,
+  RasterLayer,
+  RasterSource,
+  ShapeSource,
+  type Camera as CameraRef,
+} from '@rnmapbox/maps'
+import {
+  ArrowUpIcon,
+  CubeIcon,
+  CrosshairIcon,
+  CrosshairSimpleIcon,
+  XIcon,
+} from 'phosphor-react-native'
 import { useBleStore } from '@/store/bleStore'
 import { useMapStore } from '@/store/mapStore'
-import { GOOGLE_MAPS_API_KEY, MAPY_TILE_URL_TEMPLATE } from '@/config/mapy'
+import { MAPBOX_ACCESS_TOKEN, MAPY_TILE_URL_TEMPLATE } from '@/config/mapy'
 import { theme } from '@/constants/theme'
 
-export function MapScreen() {
+Mapbox.setAccessToken(MAPBOX_ACCESS_TOKEN)
+
+const FALLBACK_COORDINATE: [number, number] = [17.0385, 51.1079]
+const BLANK_STYLE = JSON.stringify({
+  version: 8,
+  sources: {},
+  layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#111827' } }],
+})
+const MAP_STYLES = [
+  { key: 'outdoors', label: 'Outdoors', styleURL: Mapbox.StyleURL.Outdoors },
+  { key: 'satellite', label: 'Satelite', styleURL: Mapbox.StyleURL.SatelliteStreet },
+  { key: 'mapy', label: 'Mapy.cz', styleURL: null },
+] as const
+
+type MapStyleKey = (typeof MAP_STYLES)[number]['key']
+
+interface MapScreenProps {
+  active?: boolean
+}
+
+export function MapScreen(_props: MapScreenProps) {
   const gpsFix = useBleStore((s) => s.recentLocations.at(-1) ?? null)
   const { targetLocation, setTargetLocation, clearTargetLocation } = useMapStore()
-  const [mapProvider, setMapProvider] = useState<'mapy' | 'google'>('google')
+  const [mapStyleKey, setMapStyleKey] = useState<MapStyleKey>('outdoors')
   const [followGps, setFollowGps] = useState(true)
   const [heading, setHeading] = useState(0)
   const [rotationLocked, setRotationLocked] = useState(false)
-  const mapRef = useRef<MapView>(null)
+  const [perspectiveEnabled, setPerspectiveEnabled] = useState(false)
+  const cameraRef = useRef<CameraRef>(null)
   const lastCenteredAtRef = useRef<number | null>(null)
 
-  const gpsRegion = useMemo<Region>(() => {
+  const gpsCamera = useMemo(() => {
     if (!gpsFix) {
-      // Default fallback around Wroclaw until first GPS fix arrives.
       return {
-        latitude: 51.1079,
-        longitude: 17.0385,
-        latitudeDelta: 0.08,
-        longitudeDelta: 0.08,
+        centerCoordinate: FALLBACK_COORDINATE,
+        zoomLevel: 11,
       }
     }
     const baseDelta = gpsFix.accuracyM != null ? Math.max(0.002, gpsFix.accuracyM / 111_000) : 0.008
     return {
-      latitude: gpsFix.latitude,
-      longitude: gpsFix.longitude,
-      latitudeDelta: baseDelta * 8,
-      longitudeDelta: baseDelta * 8,
+      centerCoordinate: [gpsFix.longitude, gpsFix.latitude] as [number, number],
+      zoomLevel: zoomLevelForDelta(baseDelta * 8),
     }
   }, [gpsFix])
 
   const markerColor = !gpsFix ? '#9ca3af' : gpsFix.precise ? theme.gps.color : theme.error.color
+  const selectedMapStyle = MAP_STYLES.find((style) => style.key === mapStyleKey) ?? MAP_STYLES[0]
+  const isMapy = selectedMapStyle.key === 'mapy'
+  const showBuildings3d = selectedMapStyle.key === 'outdoors'
+  const accuracyShape = useMemo(
+    () =>
+      gpsFix?.accuracyM != null
+        ? makeCircleFeature(gpsFix.longitude, gpsFix.latitude, gpsFix.accuracyM)
+        : null,
+    [gpsFix],
+  )
 
   useEffect(() => {
     if (!gpsFix || !followGps) return
     if (lastCenteredAtRef.current === gpsFix.timestamp) return
     lastCenteredAtRef.current = gpsFix.timestamp
-    mapRef.current?.animateToRegion(gpsRegion, 450)
-  }, [followGps, gpsFix, gpsRegion])
+    cameraRef.current?.setCamera({
+      ...gpsCamera,
+      animationDuration: 450,
+      animationMode: 'easeTo',
+    })
+  }, [followGps, gpsCamera, gpsFix])
 
-  const resetRotation = async () => {
-    const cam = await mapRef.current?.getCamera()
-    if (cam) mapRef.current?.animateCamera({ ...cam, heading: 0 }, { duration: 350 })
+  const resetRotation = () => {
+    cameraRef.current?.setCamera({
+      heading: 0,
+      animationDuration: 350,
+      animationMode: 'easeTo',
+    })
     setHeading(0)
   }
 
@@ -55,16 +103,29 @@ export function MapScreen() {
     setFollowGps(true)
     if (gpsFix) {
       lastCenteredAtRef.current = gpsFix.timestamp
-      mapRef.current?.animateToRegion(gpsRegion, 350)
+      cameraRef.current?.setCamera({
+        ...gpsCamera,
+        animationDuration: 350,
+        animationMode: 'easeTo',
+      })
     }
   }
 
-  if (!GOOGLE_MAPS_API_KEY) {
+  const setPerspective = (enabled: boolean) => {
+    setPerspectiveEnabled(enabled)
+    cameraRef.current?.setCamera({
+      pitch: enabled ? 45 : 0,
+      animationDuration: 350,
+      animationMode: 'easeTo',
+    })
+  }
+
+  if (!MAPBOX_ACCESS_TOKEN) {
     return (
       <View style={styles.emptyContainer}>
         <Text style={styles.emptyTitle}>Map unavailable</Text>
         <Text style={styles.emptyText}>
-          Set EXPO_PUBLIC_GOOGLE_MAPS_API_KEY and rebuild Android to initialize react-native-maps.
+          Set EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN and rebuild the app.
         </Text>
       </View>
     )
@@ -72,48 +133,84 @@ export function MapScreen() {
 
   return (
     <View style={styles.container}>
-      <MapView
-        ref={mapRef}
+      <Mapbox.MapView
         style={styles.map}
-        mapType={mapProvider === 'mapy' ? 'none' : 'standard'}
-        initialRegion={gpsRegion}
+        styleURL={isMapy ? undefined : selectedMapStyle.styleURL}
+        styleJSON={isMapy ? BLANK_STYLE : undefined}
+        pitchEnabled
         rotateEnabled={!rotationLocked}
-        onPanDrag={() => setFollowGps(false)}
-        onLongPress={(e) => setTargetLocation(e.nativeEvent.coordinate)}
-        onRegionChangeComplete={async (_, gesture) => {
-          if (gesture?.isGesture) setFollowGps(false)
-          const cam = await mapRef.current?.getCamera()
-          if (cam?.heading != null) setHeading(cam.heading)
+        onLongPress={(feature) => {
+          const [longitude, latitude] = feature.geometry.coordinates
+          setTargetLocation({ latitude, longitude })
+        }}
+        onCameraChanged={(state) => {
+          if (state.gestures.isGestureActive) setFollowGps(false)
+          setHeading(state.properties.heading)
+          setPerspectiveEnabled(state.properties.pitch > 10)
         }}
       >
-        {mapProvider === 'mapy' && (
-          <UrlTile urlTemplate={MAPY_TILE_URL_TEMPLATE} maximumZ={19} flipY={false} zIndex={0} />
+        <Camera
+          ref={cameraRef}
+          defaultSettings={gpsCamera}
+          maxZoomLevel={19}
+          animationMode="easeTo"
+        />
+
+        {showBuildings3d && (
+          <FillExtrusionLayer
+            id="outdoors-3d-buildings"
+            sourceLayerID="building"
+            minZoomLevel={14}
+            maxZoomLevel={22}
+            style={{
+              fillExtrusionColor: '#e5e7eb',
+              fillExtrusionHeight: ['coalesce', ['get', 'height'], 12],
+              fillExtrusionBase: ['coalesce', ['get', 'min_height'], 0],
+              fillExtrusionOpacity: 0.42,
+              fillExtrusionVerticalGradient: true,
+            }}
+          />
         )}
+
+        {isMapy ? (
+          <RasterSource
+            id="mapy-tiles"
+            tileUrlTemplates={[MAPY_TILE_URL_TEMPLATE]}
+            tileSize={256}
+            maxZoomLevel={19}
+          >
+            <RasterLayer id="mapy-tiles-layer" sourceID="mapy-tiles" style={{}} />
+          </RasterSource>
+        ) : null}
 
         {gpsFix && (
           <>
-            <Marker
-              coordinate={{ latitude: gpsFix.latitude, longitude: gpsFix.longitude }}
-              pinColor={markerColor}
-            />
-            {gpsFix.accuracyM != null && (
-              <Circle
-                center={{ latitude: gpsFix.latitude, longitude: gpsFix.longitude }}
-                radius={gpsFix.accuracyM}
-                strokeColor={gpsFix.precise ? 'rgba(34,197,94,0.9)' : 'rgba(239,68,68,0.9)'}
-                fillColor={gpsFix.precise ? 'rgba(34,197,94,0.18)' : 'rgba(239,68,68,0.18)'}
-              />
+            {accuracyShape && (
+              <ShapeSource id="gps-accuracy-source" shape={accuracyShape}>
+                <FillLayer
+                  id="gps-accuracy-fill"
+                  style={{
+                    fillColor: gpsFix.precise ? 'rgba(34,197,94,0.18)' : 'rgba(239,68,68,0.18)',
+                  }}
+                />
+              </ShapeSource>
             )}
+            <MapPin
+              id="gps-position"
+              coordinate={[gpsFix.longitude, gpsFix.latitude]}
+              color={markerColor}
+            />
           </>
         )}
         {targetLocation && (
-          <Marker
-            coordinate={targetLocation}
-            pinColor={theme.target.color}
-            onPress={clearTargetLocation}
+          <MapPin
+            id="target-position"
+            coordinate={[targetLocation.longitude, targetLocation.latitude]}
+            color={theme.target.color}
+            onSelected={clearTargetLocation}
           />
         )}
-      </MapView>
+      </Mapbox.MapView>
 
       <View style={styles.overlayTop}>
         <Text style={styles.overlayTopText}>
@@ -127,7 +224,7 @@ export function MapScreen() {
 
       <View style={styles.attribution}>
         <Text style={styles.attributionText}>
-          {mapProvider === 'mapy' ? 'Map data: Mapy.com / Seznam.cz' : 'Map data: Google'}
+          {isMapy ? 'Map data: Mapy.com / Seznam.cz' : 'Map data: Mapbox'}
         </Text>
       </View>
 
@@ -153,6 +250,17 @@ export function MapScreen() {
       </Pressable>
 
       <Pressable
+        style={[styles.perspectiveButton, perspectiveEnabled && styles.perspectiveButtonActive]}
+        onPress={() => setPerspective(!perspectiveEnabled)}
+      >
+        <CubeIcon
+          size={22}
+          color={perspectiveEnabled ? theme.gps.text : '#f9fafb'}
+          weight={perspectiveEnabled ? 'fill' : 'bold'}
+        />
+      </Pressable>
+
+      <Pressable
         style={[styles.followButton, followGps && styles.followButtonActive]}
         onPress={recenter}
       >
@@ -164,35 +272,76 @@ export function MapScreen() {
       </Pressable>
 
       <View style={styles.providerSwitch}>
-        <Pressable
-          style={[styles.providerButton, mapProvider === 'google' && styles.providerButtonActive]}
-          onPress={() => setMapProvider('google')}
-        >
-          <Text
+        {MAP_STYLES.map((style) => (
+          <Pressable
+            key={style.key}
             style={[
-              styles.providerButtonText,
-              mapProvider === 'google' && styles.providerButtonTextActive,
+              styles.providerButton,
+              mapStyleKey === style.key && styles.providerButtonActive,
             ]}
+            onPress={() => setMapStyleKey(style.key)}
           >
-            Google Maps
-          </Text>
-        </Pressable>
-        <Pressable
-          style={[styles.providerButton, mapProvider === 'mapy' && styles.providerButtonActive]}
-          onPress={() => setMapProvider('mapy')}
-        >
-          <Text
-            style={[
-              styles.providerButtonText,
-              mapProvider === 'mapy' && styles.providerButtonTextActive,
-            ]}
-          >
-            Mapy.cz
-          </Text>
-        </Pressable>
+            <Text
+              style={[
+                styles.providerButtonText,
+                mapStyleKey === style.key && styles.providerButtonTextActive,
+              ]}
+            >
+              {style.label}
+            </Text>
+          </Pressable>
+        ))}
       </View>
     </View>
   )
+}
+
+function MapPin({
+  id,
+  coordinate,
+  color,
+  onSelected,
+}: {
+  id: string
+  coordinate: [number, number]
+  color: string
+  onSelected?: () => void
+}) {
+  return (
+    <PointAnnotation id={id} coordinate={coordinate} onSelected={onSelected}>
+      <View style={[styles.pin, { borderColor: color }]}>
+        <View style={[styles.pinCore, { backgroundColor: color }]} />
+      </View>
+    </PointAnnotation>
+  )
+}
+
+function zoomLevelForDelta(delta: number): number {
+  return Math.max(3, Math.min(19, Math.log2(360 / Math.max(delta, 0.0001))))
+}
+
+function makeCircleFeature(
+  longitude: number,
+  latitude: number,
+  radiusM: number,
+): GeoJSON.Feature<GeoJSON.Polygon> {
+  const earthRadiusM = 6_378_137
+  const latRad = (latitude * Math.PI) / 180
+  const coordinates: [number, number][] = []
+  for (let i = 0; i <= 64; i += 1) {
+    const bearing = (i / 64) * Math.PI * 2
+    const latOffset = (radiusM / earthRadiusM) * Math.cos(bearing)
+    const lonOffset = (radiusM / (earthRadiusM * Math.cos(latRad))) * Math.sin(bearing)
+    coordinates.push([
+      longitude + (lonOffset * 180) / Math.PI,
+      latitude + (latOffset * 180) / Math.PI,
+    ])
+  }
+  return {
+    type: 'Feature',
+    geometry: { type: 'Polygon', coordinates: [coordinates] },
+    properties: {},
+  }
 }
 
 const styles = StyleSheet.create({
@@ -221,6 +370,20 @@ const styles = StyleSheet.create({
   },
   map: {
     flex: 1,
+  },
+  pin: {
+    width: 22,
+    height: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 11,
+    borderWidth: 3,
+    backgroundColor: '#f9fafb',
+  },
+  pinCore: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   overlayTop: {
     position: 'absolute',
@@ -253,7 +416,7 @@ const styles = StyleSheet.create({
   clearTargetButton: {
     position: 'absolute',
     right: 12,
-    bottom: 166,
+    bottom: 226,
     width: 52,
     height: 52,
     alignItems: 'center',
@@ -274,6 +437,20 @@ const styles = StyleSheet.create({
   },
   compassButtonLocked: {
     backgroundColor: 'rgba(67,20,7,0.9)',
+  },
+  perspectiveButton: {
+    position: 'absolute',
+    right: 12,
+    bottom: 166,
+    width: 52,
+    height: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(17,24,39,0.9)',
+    borderRadius: 26,
+  },
+  perspectiveButtonActive: {
+    backgroundColor: theme.gps.bg,
   },
   followButton: {
     position: 'absolute',
