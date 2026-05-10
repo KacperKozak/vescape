@@ -1,0 +1,113 @@
+package expo.modules.vescble
+
+import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class VescProtocolTest {
+  @Test
+  fun codecRoundTripsSplitFrameThroughReassembler() {
+    val payload = byteArrayOf(COMM_CUSTOM_APP_DATA.toByte(), REFLOAT_MAGIC.toByte(), REFLOAT_GET_ALLDATA.toByte(), 2)
+    val frame = VescPacketCodec.encode(payload)
+    val reassembler = VescPacketReassembler()
+
+    assertTrue(reassembler.feed(frame.copyOfRange(0, 3)).isEmpty())
+    val packets = reassembler.feed(frame.copyOfRange(3, frame.size))
+
+    assertEquals(1, packets.size)
+    assertArrayEquals(payload, packets.single())
+  }
+
+  @Test
+  fun parsesNormalRefloatTelemetryPayload() {
+    val payload = ByteArray(42)
+    payload[0] = COMM_CUSTOM_APP_DATA.toByte()
+    payload[1] = REFLOAT_MAGIC.toByte()
+    payload[2] = REFLOAT_GET_ALLDATA.toByte()
+    payload[3] = 2
+    putInt16(payload, 4, 123)
+    putInt16(payload, 6, 45)
+    putInt16(payload, 8, -67)
+    payload[10] = 1
+    payload[11] = 2
+    payload[12] = 100.toByte()
+    payload[13] = 75
+    putInt16(payload, 20, 91)
+    putInt16(payload, 23, 776)
+    putInt16(payload, 25, 3210)
+    putInt16(payload, 27, -123)
+    putInt16(payload, 29, 456)
+    putInt16(payload, 31, -78)
+    payload[33] = 178.toByte()
+    putInt32(payload, 35, 0x3f800000)
+    payload[39] = 80
+    payload[40] = 100
+
+    val telemetry = parseRefloatGetAllData(payload, avgLatency = 42, packetAt = 1234L, location = null)!!
+
+    assertFalse(telemetry.hasFault)
+    assertEquals(12.3, telemetry.balanceCurrent, 0.001)
+    assertEquals(4.5, telemetry.balancePitch, 0.001)
+    assertEquals(-6.7, telemetry.roll, 0.001)
+    assertEquals(9.1, telemetry.pitch, 0.001)
+    assertEquals(77.6, telemetry.batteryVoltage, 0.001)
+    assertEquals(-44.28, telemetry.speed, 0.001)
+    assertEquals(0.5, telemetry.dutyCycle, 0.001)
+    assertEquals(1.0, telemetry.odometer!!, 0.001)
+    assertEquals(40.0, telemetry.tempMosfet!!, 0.001)
+    assertEquals(50.0, telemetry.tempMotor!!, 0.001)
+    assertEquals(42, telemetry.avgLatency)
+    assertEquals(1234L, telemetry.lastPacketAt)
+    assertNull(telemetry.location)
+  }
+
+  @Test
+  fun clampsIdleDutyQuantization() {
+    val payload = ByteArray(42)
+    payload[0] = COMM_CUSTOM_APP_DATA.toByte()
+    payload[1] = REFLOAT_MAGIC.toByte()
+    payload[2] = REFLOAT_GET_ALLDATA.toByte()
+    payload[3] = 2
+
+    payload[33] = 129.toByte()
+    assertEquals(0.0, parseRefloatGetAllData(payload, null, 1L, null)!!.dutyCycle, 0.001)
+
+    payload[33] = 127.toByte()
+    assertEquals(0.0, parseRefloatGetAllData(payload, null, 1L, null)!!.dutyCycle, 0.001)
+
+    payload[33] = 130.toByte()
+    assertEquals(0.02, parseRefloatGetAllData(payload, null, 1L, null)!!.dutyCycle, 0.001)
+  }
+
+  @Test
+  fun parsesFaultPayload() {
+    val payload = byteArrayOf(
+      COMM_CUSTOM_APP_DATA.toByte(),
+      REFLOAT_MAGIC.toByte(),
+      REFLOAT_GET_ALLDATA.toByte(),
+      69,
+      7,
+    )
+
+    val telemetry = parseRefloatGetAllData(payload, avgLatency = null, packetAt = 200L, location = null)!!
+
+    assertTrue(telemetry.hasFault)
+    assertEquals(7, telemetry.faultCode)
+    assertEquals(200L, telemetry.lastPacketAt)
+  }
+
+  private fun putInt16(bytes: ByteArray, offset: Int, value: Int) {
+    bytes[offset] = ((value shr 8) and 0xff).toByte()
+    bytes[offset + 1] = (value and 0xff).toByte()
+  }
+
+  private fun putInt32(bytes: ByteArray, offset: Int, value: Int) {
+    bytes[offset] = ((value shr 24) and 0xff).toByte()
+    bytes[offset + 1] = ((value shr 16) and 0xff).toByte()
+    bytes[offset + 2] = ((value shr 8) and 0xff).toByte()
+    bytes[offset + 3] = (value and 0xff).toByte()
+  }
+}

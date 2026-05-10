@@ -28,13 +28,20 @@ export default function MainScreen() {
   const [page, setPage] = useState(1)
   const pagerRef = useRef<MainPagerHandle>(null)
   const backPressedOnce = useRef(false)
+  const autoConnectAttemptedBoardRef = useRef<string | null>(null)
   const load = useBoardStore((s) => s.load)
-  const activeBoardId = useBoardStore((s) => s.activeBoardId)
+  const { activeBoardId, boardsLoaded } = useBoardStore(
+    useShallow((s) => ({ activeBoardId: s.activeBoardId, boardsLoaded: s.hasLoaded })),
+  )
   const startGpsTracking = useBleStore((s) => s.startGpsTracking)
   const { status: permStatus, request } = usePermissions()
 
-  const { autoConnect, loadSettings } = useSettingsStore(
-    useShallow((s) => ({ autoConnect: s.autoConnect, loadSettings: s.load })),
+  const { autoConnect, settingsLoaded, loadSettings } = useSettingsStore(
+    useShallow((s) => ({
+      autoConnect: s.autoConnect,
+      settingsLoaded: s.loaded,
+      loadSettings: s.load,
+    })),
   )
 
   const connection = useBoardConnection()
@@ -53,16 +60,36 @@ export default function MainScreen() {
 
   useEffect(() => {
     if (permStatus === 'granted') {
-      startGpsTracking({ boardId: activeBoardId })
+      startGpsTracking()
     }
-  }, [activeBoardId, permStatus, startGpsTracking])
+  }, [permStatus, startGpsTracking])
 
   useEffect(() => {
-    if (!autoConnect || permStatus !== 'granted') return
-    if (!activeBoardId) return
+    if (!activeBoardId) {
+      autoConnectAttemptedBoardRef.current = null
+      return
+    }
+    if (!autoConnect) {
+      autoConnectAttemptedBoardRef.current = null
+      return
+    }
+    if (!boardsLoaded || !settingsLoaded || !connection.nativeStateReady) return
+    if (permStatus !== 'granted') return
+    if (autoConnectAttemptedBoardRef.current === activeBoardId) return
     if (bleStatus !== 'idle' && bleStatus !== 'error') return
+
+    autoConnectAttemptedBoardRef.current = activeBoardId
     handleRetryConnect()
-  }, [activeBoardId, autoConnect, bleStatus, handleRetryConnect, permStatus])
+  }, [
+    activeBoardId,
+    autoConnect,
+    bleStatus,
+    boardsLoaded,
+    connection.nativeStateReady,
+    handleRetryConnect,
+    permStatus,
+    settingsLoaded,
+  ])
 
   useFocusEffect(
     useCallback(() => {
@@ -114,11 +141,12 @@ export default function MainScreen() {
           <CenterScreen
             key="center"
             activeBoard={connection.activeBoard}
+            boardsLoaded={boardsLoaded}
             bleStatus={connection.bleStatus}
             onStopScan={connection.handleCancel}
             onRetryConnect={connection.handleRetryConnect}
           />
-          <MapScreen key="map" />
+          <MapScreen key="map" active={page === 2} />
         </MainPager>
       </View>
 

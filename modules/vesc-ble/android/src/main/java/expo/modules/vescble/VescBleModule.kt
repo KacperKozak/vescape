@@ -60,7 +60,6 @@ class VescBleModule : Module() {
     Events(
       "onDevice",
       "onError",
-      "onStopRequested",
       "onLiveState",
       "onTelemetry",
       "onLocation",
@@ -70,8 +69,6 @@ class VescBleModule : Module() {
     OnStopObserving("onDevice") { stopObserving("onDevice") }
     OnStartObserving("onError") { startObserving("onError") }
     OnStopObserving("onError") { stopObserving("onError") }
-    OnStartObserving("onStopRequested") { startObserving("onStopRequested") }
-    OnStopObserving("onStopRequested") { stopObserving("onStopRequested") }
     OnStartObserving("onLiveState") { startObserving("onLiveState") }
     OnStopObserving("onLiveState") { stopObserving("onLiveState") }
     OnStartObserving("onTelemetry") { startObserving("onTelemetry") }
@@ -98,7 +95,7 @@ class VescBleModule : Module() {
 
     Function("scan") { startScan(resetRetries = true) }
     Function("stopScan") { stopScanInternal() }
-    Function("startLocationUpdates") { options: Map<String, Any?>? -> startLocationUpdates(options) }
+    Function("startLocationUpdates") { startLocationUpdates() }
     Function("stopLocationUpdates") { stopLocationUpdates() }
     Function("setTelemetryRecordingEnabled") { enabled: Boolean -> setTelemetryRecordingEnabled(enabled) }
     Function("reloadAlertRules") {
@@ -282,21 +279,14 @@ class VescBleModule : Module() {
     scanStatus = "idle"
   }
 
-  private fun startLocationUpdates(options: Map<String, Any?>? = null) {
+  private fun startLocationUpdates() {
     val hasFine = ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_FINE_LOCATION) ==
       PackageManager.PERMISSION_GRANTED
     if (!hasFine) {
       sendEvent("onError", mapOf("message" to "Location permission not granted"))
       return
     }
-    val board = (options?.get("boardId") as? String)?.let { boardId ->
-      runBlocking { AppDataRepository.get(context.applicationContext).getBoard(boardId) }
-    }
-    VescForegroundService.startGpsMonitoring(
-      context.applicationContext,
-      board?.get("bleId") as? String ?: board?.get("id") as? String,
-      board?.get("name") as? String,
-    )
+    VescForegroundService.startGpsMonitoring(context.applicationContext)
   }
 
   private suspend fun selectBoard(boardId: String) {

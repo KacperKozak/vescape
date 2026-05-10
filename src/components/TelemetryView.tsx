@@ -11,7 +11,6 @@ import {
   MotorCurrentCard,
   MotorTempCard,
   SpeedIndicator,
-  StateCard,
   TargetSection,
 } from '@/components/cards'
 import { routes } from '@/navigation/routes'
@@ -19,7 +18,7 @@ import { useBleStore } from '@/store/bleStore'
 
 export function TelemetryView() {
   const hasLiveBoardData = useBleStore(
-    (s) => s.status === 'connected' && s.recentTelemetry.length > 0,
+    (s) => s.status === 'connected' && s.liveStatus.boardSampleCount > 0,
   )
 
   return (
@@ -133,17 +132,6 @@ export function TelemetryView() {
             }}
           >
             <ImuCard />
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [styles.rowItem, pressed && styles.cardPressablePressed]}
-            onPress={() => router.push(routes.controlState)}
-            android_ripple={{
-              color: 'rgba(148, 163, 184, 0.18)',
-              borderless: false,
-              foreground: true,
-            }}
-          >
-            <StateCard />
           </Pressable>
         </View>
       </View>

@@ -1,24 +1,22 @@
-import { useMemo } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
+import { useShallow } from 'zustand/react/shallow'
 
 import { Sparkline, type SparklinePoint } from '@/components/charts/Sparkline'
 import { theme } from '@/constants/theme'
 import { DASH } from '@/helpers/format'
 import { useBleStore } from '@/store/bleStore'
+import { useLiveWindowMs } from '@/store/settingsStore'
 
 export function FootpadCard() {
-  const recentTelemetry = useBleStore((s) => s.recentTelemetry)
-  const latest = recentTelemetry.at(-1) ?? null
-
-  const adc1Series = useMemo<SparklinePoint[]>(
-    () => recentTelemetry.map((t) => ({ ts: t.lastPacketAt, value: t.adc1 })),
-    [recentTelemetry],
+  const { adc1Series, adc2Series } = useBleStore(
+    useShallow((s) => ({
+      adc1Series: s.liveMetricHistory.footpadAdc1,
+      adc2Series: s.liveMetricHistory.footpadAdc2,
+    })),
   )
-
-  const adc2Series = useMemo<SparklinePoint[]>(
-    () => recentTelemetry.map((t) => ({ ts: t.lastPacketAt, value: t.adc2 })),
-    [recentTelemetry],
-  )
+  const windowMs = useLiveWindowMs()
+  const latestAdc1 = adc1Series.at(-1)
+  const latestAdc2 = adc2Series.at(-1)
 
   return (
     <View style={styles.card}>
@@ -26,16 +24,18 @@ export function FootpadCard() {
       <View style={styles.row}>
         <AdcColumn
           label="ADC 1"
-          value={latest ? latest.adc1.toFixed(2) : DASH}
+          value={latestAdc1 ? latestAdc1.value.toFixed(2) : DASH}
           series={adc1Series}
           color={theme.wheel.color}
+          windowMs={windowMs}
         />
         <View style={styles.divider} />
         <AdcColumn
           label="ADC 2"
-          value={latest ? latest.adc2.toFixed(2) : DASH}
+          value={latestAdc2 ? latestAdc2.value.toFixed(2) : DASH}
           series={adc2Series}
           color={theme.bran.color}
+          windowMs={windowMs}
         />
       </View>
     </View>
@@ -47,11 +47,13 @@ function AdcColumn({
   value,
   series,
   color,
+  windowMs,
 }: {
   label: string
   value: string
   series: SparklinePoint[]
   color: string
+  windowMs?: number
 }) {
   return (
     <View style={styles.column}>
@@ -59,7 +61,7 @@ function AdcColumn({
       <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit>
         {value}
       </Text>
-      <Sparkline points={series} color={color} height={18} minSpan={0.5} />
+      <Sparkline points={series} color={color} height={18} minSpan={0.5} windowMs={windowMs} />
     </View>
   )
 }

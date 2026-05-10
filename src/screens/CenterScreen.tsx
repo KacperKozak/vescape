@@ -1,4 +1,4 @@
-import { View, Text, Pressable, StyleSheet } from 'react-native'
+import { ActivityIndicator, View, Text, Pressable, StyleSheet } from 'react-native'
 import { router } from 'expo-router'
 
 import { FloatingBar } from '@/components/FloatingBar'
@@ -8,6 +8,7 @@ import type { Board } from '@/store/boardStore'
 
 interface CenterScreenProps {
   activeBoard: Board | undefined
+  boardsLoaded: boolean
   bleStatus: string
   onStopScan: () => void
   onRetryConnect: () => void
@@ -15,11 +16,23 @@ interface CenterScreenProps {
 
 export function CenterScreen({
   activeBoard,
+  boardsLoaded,
   bleStatus,
   onStopScan,
   onRetryConnect,
 }: CenterScreenProps) {
   const hasBle = !!activeBoard?.bleId
+
+  if (!boardsLoaded) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.empty}>
+          <ActivityIndicator size="small" color="#3b82f6" />
+          <Text style={styles.emptySubtitle}>Loading boards...</Text>
+        </View>
+      </View>
+    )
+  }
 
   if (!hasBle) {
     return (

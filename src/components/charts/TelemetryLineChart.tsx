@@ -43,6 +43,7 @@ interface TelemetryLineChartProps {
   onPointSelected?: (point: TelemetryChartPoint) => void
   onGestureStart?: () => void
   formatValue?: (value: number) => string
+  windowMs?: number
 }
 
 export function TelemetryLineChart({
@@ -57,6 +58,7 @@ export function TelemetryLineChart({
   onPointSelected,
   onGestureStart,
   formatValue,
+  windowMs,
 }: TelemetryLineChartProps) {
   const [chartWidth, setChartWidth] = useState(0)
   const [chartPageX, setChartPageX] = useState(0)
@@ -72,29 +74,29 @@ export function TelemetryLineChart({
 
   const markerPosition = useMemo(() => {
     if (!currentPoint || chartWidth < 1) return null
-    return getChartPosition(points, currentPoint, range, chartWidth, height)
-  }, [chartWidth, currentPoint, height, points, range])
+    return getChartPosition(points, currentPoint, range, chartWidth, height, windowMs)
+  }, [chartWidth, currentPoint, height, points, range, windowMs])
 
   const polylinePoints = useMemo(
     () =>
       chartWidth > 0
         ? points
-            .map((point) => getChartPosition(points, point, range, chartWidth, height))
+            .map((point) => getChartPosition(points, point, range, chartWidth, height, windowMs))
             .filter((point): point is { x: number; y: number } => point != null)
             .map((point) => `${point.x},${point.y}`)
             .join(' ')
         : '',
-    [chartWidth, height, points, range],
+    [chartWidth, height, points, range, windowMs],
   )
 
   const selectAtPageX = useCallback(
     (x: number) => {
       if (!onPointSelected) return
-      const point = findNearestChartPointAtX(points, x - chartPageX, chartWidth)
+      const point = findNearestChartPointAtX(points, x - chartPageX, chartWidth, windowMs)
       if (!point) return
       onPointSelected(point)
     },
-    [chartPageX, chartWidth, onPointSelected, points],
+    [chartPageX, chartWidth, onPointSelected, points, windowMs],
   )
 
   const panResponder = useMemo(
@@ -122,11 +124,12 @@ export function TelemetryLineChart({
   const timeLabels = useMemo(() => {
     if (points.length < 2) return null
     const now = points[points.length - 1].date
+    const start = windowMs ? new Date(now.getTime() - windowMs) : points[0].date
     return {
-      start: formatRelativeTime(points[0].date, now),
+      start: formatRelativeTime(start, now),
       end: 'now',
     }
-  }, [points])
+  }, [points, windowMs])
 
   const tooltipLeft = useMemo(() => {
     if (!markerPosition || chartWidth <= 0) return 0

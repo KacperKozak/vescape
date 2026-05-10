@@ -1,5 +1,4 @@
 import { StyleSheet, Text, View } from 'react-native'
-import { useShallow } from 'zustand/react/shallow'
 
 import { TelemetryCard } from '@/components/TelemetryCard'
 import { DASH } from '@/helpers/format'
@@ -9,7 +8,7 @@ import { useMapStore } from '@/store/mapStore'
 
 export function TargetSection() {
   const targetLocation = useMapStore((s) => s.targetLocation)
-  const gpsFix = useBleStore(useShallow((s) => s.recentLocations.at(-1) ?? null))
+  const gpsFix = useBleStore((s) => s.liveLocationHistory.at(-1) ?? null)
 
   if (!targetLocation) return null
 

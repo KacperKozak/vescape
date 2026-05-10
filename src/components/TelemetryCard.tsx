@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, Text, TextInput, View } from 'react-native'
+import Animated, { useAnimatedProps, type SharedValue } from 'react-native-reanimated'
 
 import { Sparkline, type SparklinePoint } from '@/components/charts/Sparkline'
 import { theme } from '@/constants/theme'
@@ -30,6 +31,39 @@ interface Props {
   minSpan?: number
   /** When set, shows a yellow warning badge if enabled alert rules exist for this controlId. */
   controlId?: string
+  /** Fixed time window in ms for sparkline x-axis. */
+  windowMs?: number
+  animatedValue?: SharedValue<number | null>
+  animatedDecimals?: number
+}
+
+const AnimatedTextInput = Animated.createAnimatedComponent(TextInput)
+
+function AnimatedTelemetryValue({
+  value,
+  decimals = 1,
+  unit,
+}: {
+  value: SharedValue<number | null>
+  decimals?: number
+  unit?: string
+}) {
+  const animatedProps = useAnimatedProps(() => {
+    const current = value.value
+    const text = current == null ? '-' : current.toFixed(decimals)
+    return { text, value: text }
+  })
+
+  return (
+    <View style={styles.valueRow}>
+      <AnimatedTextInput
+        editable={false}
+        animatedProps={animatedProps}
+        style={[styles.value, styles.animatedValue]}
+      />
+      {unit ? <Text style={styles.unit}> {unit}</Text> : null}
+    </View>
+  )
 }
 
 export function AlertBadge({ controlId }: { controlId: string }) {
@@ -66,6 +100,9 @@ export const TelemetryCard = React.memo(function TelemetryCard({
   range,
   minSpan,
   controlId,
+  windowMs,
+  animatedValue,
+  animatedDecimals,
 }: Props) {
   return (
     <View style={styles.card}>
@@ -75,11 +112,15 @@ export const TelemetryCard = React.memo(function TelemetryCard({
         </View>
       )}
       <Text style={styles.label}>{label}</Text>
-      <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit>
-        {value}
-        {unit ? <Text style={styles.unit}> {unit}</Text> : null}
-        {sub ? <Text style={styles.sub}> {sub}</Text> : null}
-      </Text>
+      {animatedValue ? (
+        <AnimatedTelemetryValue value={animatedValue} decimals={animatedDecimals} unit={unit} />
+      ) : (
+        <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit>
+          {value}
+          {unit ? <Text style={styles.unit}> {unit}</Text> : null}
+          {sub ? <Text style={styles.sub}> {sub}</Text> : null}
+        </Text>
+      )}
       {series && series.length > 1 ? (
         <Sparkline
           points={series}
@@ -88,6 +129,7 @@ export const TelemetryCard = React.memo(function TelemetryCard({
           fmtMax={fmtMax}
           range={range}
           minSpan={minSpan}
+          windowMs={windowMs}
         />
       ) : null}
     </View>
@@ -116,6 +158,14 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontFamily: 'monospace',
     fontWeight: '600',
+    padding: 0,
+  },
+  valueRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  animatedValue: {
+    minWidth: 0,
   },
   unit: {
     color: '#64748b',

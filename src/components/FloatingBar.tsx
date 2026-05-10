@@ -122,7 +122,7 @@ export function FloatingBar({
     } else {
       start()
     }
-  }, [bleStatus, recording, start, stop])
+  }, [recording, start, stop])
 
   const pill = getStatusPill(bleStatus, scanStatus, activeBoard, onStopScan, onRetryConnect)
 

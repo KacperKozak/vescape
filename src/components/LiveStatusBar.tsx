@@ -52,10 +52,9 @@ function formatLastSec(ageMs: number | null): string {
 }
 
 export function LiveStatusBar() {
-  const { recentTelemetry, recentLocations, status, scanStatus } = useBleStore(
+  const { liveStatus, status, scanStatus } = useBleStore(
     useShallow((s) => ({
-      recentTelemetry: s.recentTelemetry,
-      recentLocations: s.recentLocations,
+      liveStatus: s.liveStatus,
       status: s.status,
       scanStatus: s.scanStatus,
     })),
@@ -68,24 +67,23 @@ export function LiveStatusBar() {
     return () => clearInterval(interval)
   }, [])
 
-  const latestTelemetry = recentTelemetry.at(-1) ?? null
-  const latestGps = recentLocations.at(-1) ?? null
-
-  const telemetryAgeMs = latestTelemetry ? nowMs - latestTelemetry.lastPacketAt : null
-  const gpsAgeMs = latestGps ? nowMs - latestGps.timestamp : null
+  const telemetryAgeMs = liveStatus.boardLastPacketAt ? nowMs - liveStatus.boardLastPacketAt : null
+  const gpsAgeMs = liveStatus.gpsLastFixAt ? nowMs - liveStatus.gpsLastFixAt : null
   const gpsAgeSec = gpsAgeMs != null ? gpsAgeMs / 1000 : null
+  const gpsFix = liveStatus.gpsLastFixAt
+    ? {
+        timestamp: liveStatus.gpsLastFixAt,
+        precise: liveStatus.gpsPrecise,
+        accuracyM: liveStatus.gpsAccuracyM,
+      }
+    : null
 
   const boardColor = bleColor(status, scanStatus)
   const boardText =
-    latestTelemetry?.avgLatency != null ? `${Math.round(latestTelemetry.avgLatency)}ms` : '-'
-  const avg =
-    recentTelemetry
-      .filter((r) => r.avgLatency !== null)
-      .reduce((sum, r) => sum + r.avgLatency!, 0) / recentTelemetry.length
-  const boardMeta =
-    status === 'connected' ? `avg ${Math.round(avg)}ms` : formatLastSec(telemetryAgeMs)
-  const gpsText = gpsLabel(latestGps, gpsAgeSec)
-  const gpsClr = gpsColor(latestGps, gpsAgeSec)
+    liveStatus.boardAvgLatencyMs != null ? `${Math.round(liveStatus.boardAvgLatencyMs)}ms` : '-'
+  const boardMeta = formatLastSec(telemetryAgeMs)
+  const gpsText = gpsLabel(gpsFix, gpsAgeSec)
+  const gpsClr = gpsColor(gpsFix, gpsAgeSec)
 
   if (expanded) {
     return (
@@ -94,7 +92,9 @@ export function LiveStatusBar() {
           <View style={styles.expandedSection}>
             <View style={styles.expandedLine}>
               <LightningIcon size={12} color={boardColor} weight="fill" />
-              <Text style={styles.expandedLabel}>Board ({recentTelemetry.length} samples)</Text>
+              <Text style={styles.expandedLabel}>
+                Board ({liveStatus.boardSampleCount} samples)
+              </Text>
             </View>
             <View style={styles.expandedSubLine}>
               <Text style={[styles.expandedValue, { color: boardColor }]}>{boardText}</Text>
@@ -108,7 +108,7 @@ export function LiveStatusBar() {
           <View style={styles.expandedSection}>
             <View style={styles.expandedLine}>
               <NavigationArrowIcon size={12} color={gpsClr} weight="fill" />
-              <Text style={styles.expandedLabel}>GPS ({recentLocations.length} samples)</Text>
+              <Text style={styles.expandedLabel}>GPS ({liveStatus.gpsSampleCount} samples)</Text>
             </View>
             <View style={styles.expandedSubLine}>
               <Text style={[styles.expandedValue, { color: gpsClr }]}>{gpsText}</Text>
@@ -127,7 +127,7 @@ export function LiveStatusBar() {
         <View style={styles.sources}>
           <View style={styles.inlineSection}>
             <LightningIcon size={12} color={boardColor} weight="fill" />
-            <Text style={styles.inlineLabel}>Board ({recentTelemetry.length})</Text>
+            <Text style={styles.inlineLabel}>Board ({liveStatus.boardSampleCount})</Text>
             <Text style={[styles.inlineValue, { color: boardColor }]}>{boardText}</Text>
             <Text style={styles.inlineMeta}>{boardMeta}</Text>
           </View>
@@ -136,7 +136,7 @@ export function LiveStatusBar() {
 
           <View style={styles.inlineSection}>
             <NavigationArrowIcon size={12} color={gpsClr} weight="fill" />
-            <Text style={styles.inlineLabel}>GPS ({recentLocations.length})</Text>
+            <Text style={styles.inlineLabel}>GPS ({liveStatus.gpsSampleCount})</Text>
             <Text style={[styles.inlineValue, { color: gpsClr }]}>{gpsText}</Text>
             <Text style={styles.inlineMeta}>{formatAgeMs(gpsAgeMs)}</Text>
           </View>

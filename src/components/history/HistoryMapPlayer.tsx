@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
-import MapView, { Marker, Polyline, type LatLng } from 'react-native-maps'
+import Mapbox, { Camera, LineLayer, ShapeSource, type Camera as CameraRef } from '@rnmapbox/maps'
 import { ListBulletsIcon, PauseIcon, PlayIcon } from 'phosphor-react-native'
 
 import {
@@ -11,13 +11,21 @@ import {
 } from '@/history/playback'
 import { TelemetryLineChart } from '@/components/charts/TelemetryLineChart'
 import { computeAutoRange, type TelemetryChartPoint } from '@/components/charts/chartMath'
+import { dutyPercent, fmtDutyPercent } from '@/helpers/format'
 import type {
   HistoryGpsSample,
   HistoryMarker,
   HistorySession,
   TelemetrySample,
 } from '@/store/historyStore'
+import { MAPBOX_ACCESS_TOKEN } from '@/config/mapy'
+import { ONE_DARK_MAP_STYLE } from '@/constants/oneDarkMapStyle'
+import { MAP_DEFAULTS } from '@/constants/mapStyles'
+import { getBounds } from '@/helpers/mapGeometry'
+import { MapPin } from '@/components/map/MapPin'
 import { HistorySessionSheet } from './HistorySessionSheet'
+
+Mapbox.setAccessToken(MAPBOX_ACCESS_TOKEN)
 
 const STEP_MS = 5_000
 const SESSION_SAMPLE_LIMIT = 10_000
@@ -56,20 +64,27 @@ export function HistoryMapPlayer({
   const [headTimeMs, setHeadTimeMs] = useState<number | null>(null)
   const [mapReady, setMapReady] = useState(false)
   const playbackStartRef = useRef<{ realMs: number; headMs: number } | null>(null)
-  const mapRef = useRef<MapView>(null)
+  const cameraRef = useRef<CameraRef>(null)
 
   const routeByTime = useMemo(
     () => [...sessionGpsSamples].sort((a, b) => a.capturedAtMs - b.capturedAtMs),
     [sessionGpsSamples],
   )
 
-  const route = useMemo<LatLng[]>(
-    () =>
-      routeByTime.map((point) => ({
-        latitude: point.latitude,
-        longitude: point.longitude,
-      })),
+  const route = useMemo<[number, number][]>(
+    () => routeByTime.map((point) => [point.longitude, point.latitude] as [number, number]),
     [routeByTime],
+  )
+  const routeShape = useMemo<GeoJSON.Feature<GeoJSON.LineString> | null>(
+    () =>
+      route.length > 1
+        ? {
+            type: 'Feature',
+            geometry: { type: 'LineString', coordinates: route },
+            properties: {},
+          }
+        : null,
+    [route],
   )
   const boardByTime = useMemo(
     () => [...sessionSamples].sort((a, b) => a.capturedAtMs - b.capturedAtMs),
@@ -94,7 +109,7 @@ export function HistoryMapPlayer({
     () =>
       chartSamples.map((sample) => ({
         date: new Date(sample.capturedAtMs),
-        value: sample.dutyCycle * 100,
+        value: dutyPercent(sample.dutyCycle, false),
       })),
     [chartSamples],
   )
@@ -120,10 +135,8 @@ export function HistoryMapPlayer({
   useEffect(() => {
     if (!mapReady || !selectedSession || route.length < 2) return
     const fit = () => {
-      mapRef.current?.fitToCoordinates(route, {
-        edgePadding: { top: 80, right: 40, bottom: 360, left: 40 },
-        animated: true,
-      })
+      const bounds = getBounds(route)
+      cameraRef.current?.fitBounds(bounds.ne, bounds.sw, [80, 40, 360, 40], 700)
     }
     const frame = requestAnimationFrame(fit)
     const timer = setTimeout(fit, 120)
@@ -222,7 +235,7 @@ export function HistoryMapPlayer({
       { label: 'Board', value: currentBoard ? `${currentBoard.speedKmh.toFixed(1)}` : '-' },
       {
         label: 'Duty',
-        value: currentBoard ? `${(currentBoard.dutyCycle * 100).toFixed(0)}%` : '-',
+        value: currentBoard ? fmtDutyPercent(currentBoard.dutyCycle, false) : '-',
       },
       { label: 'Volt', value: currentBoard ? `${currentBoard.batteryVoltage.toFixed(1)}V` : '-' },
       {
@@ -303,29 +316,52 @@ export function HistoryMapPlayer({
 
   return (
     <View style={styles.container}>
-      <MapView
-        ref={mapRef}
+      <Mapbox.MapView
         style={styles.map}
-        onMapReady={() => setMapReady(true)}
-        onPress={(e) =>
-          onMapPress(e.nativeEvent.coordinate.latitude, e.nativeEvent.coordinate.longitude)
-        }
+        styleJSON={ONE_DARK_MAP_STYLE}
+        onDidFinishLoadingMap={() => setMapReady(true)}
+        onPress={(feature) => {
+          const [longitude, latitude] = feature.geometry.coordinates
+          onMapPress(latitude, longitude)
+        }}
       >
-        {route.length > 1 && <Polyline coordinates={route} strokeWidth={4} strokeColor="#38bdf8" />}
+        <Camera
+          ref={cameraRef}
+          defaultSettings={{
+            centerCoordinate: route[0] ?? MAP_DEFAULTS.fallbackCoordinate,
+            zoomLevel: route.length > 0 ? 14 : 11,
+          }}
+          maxZoomLevel={19}
+        />
+        {routeShape && (
+          <ShapeSource id="history-route-source" shape={routeShape}>
+            <LineLayer
+              id="history-route-line"
+              style={{
+                lineColor: '#a855f7',
+                lineWidth: 4,
+                lineCap: 'round',
+                lineJoin: 'round',
+              }}
+            />
+          </ShapeSource>
+        )}
         {currentGps && (
-          <Marker
-            coordinate={{ latitude: currentGps.latitude, longitude: currentGps.longitude }}
-            pinColor="#22c55e"
+          <MapPin
+            id="history-current"
+            coordinate={[currentGps.longitude, currentGps.latitude]}
+            color="#ef4444"
           />
         )}
         {markerPoints.map((point) => (
-          <Marker
+          <MapPin
             key={point.id}
-            coordinate={{ latitude: point.latitude, longitude: point.longitude }}
-            pinColor={point.type === 'error' ? '#ef4444' : '#f59e0b'}
+            id={`history-marker-${point.id}`}
+            coordinate={[point.longitude, point.latitude]}
+            color={point.type === 'error' ? '#ef4444' : '#f59e0b'}
           />
         ))}
-      </MapView>
+      </Mapbox.MapView>
 
       {!selectedSession && !loadingSession && (
         <View style={styles.emptyOverlay}>
@@ -386,7 +422,7 @@ export function HistoryMapPlayer({
             />
             <TelemetryLineChart
               label="Duty"
-              value={currentBoard ? `${(currentBoard.dutyCycle * 100).toFixed(0)}%` : '-'}
+              value={currentBoard ? fmtDutyPercent(currentBoard.dutyCycle, false) : '-'}
               points={dutyPoints}
               color="#34d399"
               range={{ y: { min: -100, max: 100 } }}
@@ -394,7 +430,7 @@ export function HistoryMapPlayer({
                 currentChartSample
                   ? {
                       date: new Date(currentChartSample.capturedAtMs),
-                      value: currentChartSample.dutyCycle * 100,
+                      value: dutyPercent(currentChartSample.dutyCycle, false),
                     }
                   : null
               }

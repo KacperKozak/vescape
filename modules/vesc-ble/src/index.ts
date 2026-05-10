@@ -246,10 +246,6 @@ export interface AppSettings {
   selectedBoardId: string | null
 }
 
-export interface LocationTrackingOptions {
-  boardId?: string | null
-}
-
 // ---------------------------------------------------------------------------
 // Typed emitter
 // ---------------------------------------------------------------------------
@@ -257,7 +253,6 @@ export interface LocationTrackingOptions {
 type VescBleEvents = {
   onDevice: (event: DeviceFoundEvent) => void
   onError: (event: ErrorEvent) => void
-  onStopRequested: (event: Record<never, never>) => void
   onLiveState: (event: LiveStateEvent) => void
   onTelemetry: (event: TelemetryEvent) => void
   onLocation: (event: LocationEvent) => void
@@ -278,7 +273,7 @@ interface NativeEventEmitter<TEvents extends Record<string, (...args: never[]) =
 type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
   scan(): void
   stopScan(): void
-  startLocationUpdates(options?: LocationTrackingOptions): void
+  startLocationUpdates(): void
   stopLocationUpdates(): void
   setTelemetryRecordingEnabled(enabled: boolean): void
   reloadAlertRules(): void
@@ -333,8 +328,8 @@ export function stopScan(): void {
 }
 
 /** Start app-level Android location updates independently of a board session. */
-export function startLocationUpdates(options: LocationTrackingOptions = {}): void {
-  native.startLocationUpdates(options)
+export function startLocationUpdates(): void {
+  native.startLocationUpdates()
 }
 
 /** Stop app-level Android location updates. Board sessions manage their own recording location. */
@@ -454,14 +449,6 @@ export async function updateSetting(
   value: number | boolean | string | null,
 ): Promise<void> {
   return native.updateSetting(key, value)
-}
-
-/**
- * Listen for the user tapping "Disconnect" in the foreground service
- * notification. Fires on Android only.
- */
-export function addStopRequestedListener(cb: () => void): EventSubscription {
-  return emitter.addListener('onStopRequested', cb)
 }
 
 // ---------------------------------------------------------------------------

@@ -55,7 +55,7 @@ public class VescBleModule: Module {
   public func definition() -> ModuleDefinition {
     Name("VescBle")
 
-    Events("onDevice", "onError", "onStopRequested", "onLiveState", "onTelemetry", "onLocation")
+    Events("onDevice", "onError", "onLiveState", "onTelemetry", "onLocation")
 
     OnDestroy {
       self.scanTimer?.invalidate()
@@ -75,7 +75,7 @@ public class VescBleModule: Module {
 
     // MARK: Location
 
-    Function("startLocationUpdates") { (_: [String: Any]) in
+    Function("startLocationUpdates") {
       self.startMockLocation()
     }
 
