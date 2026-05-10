@@ -5,7 +5,7 @@ import type { TelemetryChartPoint } from '@/components/charts/chartMath'
 import { computeAutoRange } from '@/components/charts/chartMath'
 import { ControlDetailLayout } from '@/components/control/ControlDetailLayout'
 import { StatsRow } from '@/components/control/StatsRow'
-import { DASH, fmt } from '@/helpers/format'
+import { DASH, fmtVoltage } from '@/helpers/format'
 import { theme } from '@/constants/theme'
 import { useBleStore } from '@/store/bleStore'
 import { useBoardStore } from '@/store/boardStore'
@@ -42,7 +42,7 @@ export default function BatteryScreen() {
   const [selected, setSelected] = useState<TelemetryChartPoint | null>(null)
   const currentPoint = selected ?? points.at(-1) ?? null
 
-  const displayValue = currentPoint ? `${fmt(currentPoint.value, 2)} V` : DASH
+  const displayValue = currentPoint ? `${fmtVoltage(currentPoint.value)} V` : DASH
 
   return (
     <ControlDetailLayout title="Battery Voltage" controlId="battery" unit="V">
@@ -56,14 +56,14 @@ export default function BatteryScreen() {
         height={120}
         onPointSelected={setSelected}
         onGestureStart={() => setSelected(null)}
-        formatValue={(v) => `${fmt(v, 2)} V`}
+        formatValue={(v) => `${fmtVoltage(v)} V`}
         windowMs={windowMs}
       />
       <StatsRow
-        current={stats ? `${fmt(stats.current, 2)} V` : DASH}
-        min={stats ? `${fmt(stats.min, 2)} V` : DASH}
-        max={stats ? `${fmt(stats.max, 2)} V` : DASH}
-        avg={stats ? `${fmt(stats.avg, 2)} V` : DASH}
+        current={stats ? `${fmtVoltage(stats.current)} V` : DASH}
+        min={stats ? `${fmtVoltage(stats.min)} V` : DASH}
+        max={stats ? `${fmtVoltage(stats.max)} V` : DASH}
+        avg={stats ? `${fmtVoltage(stats.avg)} V` : DASH}
       />
     </ControlDetailLayout>
   )

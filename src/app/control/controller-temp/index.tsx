@@ -5,7 +5,7 @@ import type { TelemetryChartPoint } from '@/components/charts/chartMath'
 import { computeAutoRange } from '@/components/charts/chartMath'
 import { ControlDetailLayout } from '@/components/control/ControlDetailLayout'
 import { StatsRow } from '@/components/control/StatsRow'
-import { DASH, fmt } from '@/helpers/format'
+import { DASH, fmtTemp } from '@/helpers/format'
 import { CHART_DEFAULTS } from '@/constants/chartDefaults'
 import { theme } from '@/constants/theme'
 import { useBleStore } from '@/store/bleStore'
@@ -39,7 +39,7 @@ export default function ControllerTempScreen() {
   const [selected, setSelected] = useState<TelemetryChartPoint | null>(null)
   const currentPoint = selected ?? points.at(-1) ?? null
 
-  const displayValue = currentPoint ? `${fmt(currentPoint.value, 1)} °C` : DASH
+  const displayValue = currentPoint ? `${fmtTemp(currentPoint.value)} °C` : DASH
 
   return (
     <ControlDetailLayout title="Controller Temp" controlId="controller-temp" unit="°C">
@@ -53,14 +53,14 @@ export default function ControllerTempScreen() {
         height={120}
         onPointSelected={setSelected}
         onGestureStart={() => setSelected(null)}
-        formatValue={(v) => `${fmt(v, 1)} °C`}
+        formatValue={(v) => `${fmtTemp(v)} °C`}
         windowMs={windowMs}
       />
       <StatsRow
-        current={stats ? `${fmt(stats.current, 1)} °C` : DASH}
-        min={stats ? `${fmt(stats.min, 1)} °C` : DASH}
-        max={stats ? `${fmt(stats.max, 1)} °C` : DASH}
-        avg={stats ? `${fmt(stats.avg, 1)} °C` : DASH}
+        current={stats ? `${fmtTemp(stats.current)} °C` : DASH}
+        min={stats ? `${fmtTemp(stats.min)} °C` : DASH}
+        max={stats ? `${fmtTemp(stats.max)} °C` : DASH}
+        avg={stats ? `${fmtTemp(stats.avg)} °C` : DASH}
       />
     </ControlDetailLayout>
   )

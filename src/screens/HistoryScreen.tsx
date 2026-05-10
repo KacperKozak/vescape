@@ -14,6 +14,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { HistoryMapPlayer } from '@/components/history/HistoryMapPlayer'
 import { HistoryModeToggle } from '@/components/history/HistoryModeToggle'
 
+import { fmtSpeed, fmtVoltage } from '@/helpers/format'
 import {
   useHistoryStore,
   type HistoryGpsSample,
@@ -214,16 +215,16 @@ function HistoryBlock({
           </View>
           <View style={styles.speedPill}>
             <Text style={styles.speedValue}>
-              {(block.maxAbsSpeedKmh || block.maxGpsSpeedKmh || 0).toFixed(1)}
+              {fmtSpeed(block.maxAbsSpeedKmh || block.maxGpsSpeedKmh || 0)}
             </Text>
             <Text style={styles.speedUnit}>km/h</Text>
           </View>
         </View>
         <View style={styles.metricsRow}>
-          <Metric label="Avg" value={`${block.avgAbsSpeedKmh.toFixed(1)} km/h`} />
+          <Metric label="Avg" value={`${fmtSpeed(block.avgAbsSpeedKmh)} km/h`} />
           <Metric
             label="Voltage"
-            value={block.minBatteryVoltage ? `${block.minBatteryVoltage.toFixed(1)} V` : '-'}
+            value={block.minBatteryVoltage ? `${fmtVoltage(block.minBatteryVoltage)} V` : '-'}
           />
           <Metric
             label="Distance"
@@ -271,8 +272,8 @@ function SampleRow({ sample }: { sample: TelemetrySample }) {
   return (
     <View style={styles.sampleRow}>
       <Text style={styles.sampleTime}>{formatTime(sample.capturedAtMs)}</Text>
-      <Text style={styles.sampleValue}>{sample.speedKmh.toFixed(1)} km/h</Text>
-      <Text style={styles.sampleValue}>{sample.batteryVoltage.toFixed(1)} V</Text>
+      <Text style={styles.sampleValue}>{fmtSpeed(sample.speedKmh)} km/h</Text>
+      <Text style={styles.sampleValue}>{fmtVoltage(sample.batteryVoltage)} V</Text>
       <Text style={[styles.sampleValue, sample.hasFault && styles.sampleFault]}>
         {sample.hasFault ? `Fault ${sample.faultCode}` : `${(sample.dutyCycle * 100).toFixed(0)}%`}
       </Text>
@@ -286,7 +287,7 @@ function GpsRow({ sample }: { sample: HistoryGpsSample }) {
       <Text style={styles.sampleTime}>{formatTime(sample.capturedAtMs)}</Text>
       <Text style={styles.sampleValue}>GPS</Text>
       <Text style={styles.sampleValue}>
-        {sample.speedMps != null ? `${(sample.speedMps * 3.6).toFixed(1)} km/h` : '-'}
+        {sample.speedMps != null ? `${fmtSpeed(sample.speedMps * 3.6)} km/h` : '-'}
       </Text>
       <Text style={styles.sampleValue}>
         {sample.accuracyM != null ? `±${sample.accuracyM.toFixed(0)} m` : '-'}
