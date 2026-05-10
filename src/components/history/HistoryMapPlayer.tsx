@@ -20,7 +20,7 @@ import type {
 } from '@/store/historyStore'
 import { MAPBOX_ACCESS_TOKEN } from '@/config/mapy'
 import { ONE_DARK_MAP_STYLE } from '@/constants/oneDarkMapStyle'
-import { FALLBACK_COORDINATE } from '@/constants/mapStyles'
+import { MAP_DEFAULTS } from '@/constants/mapStyles'
 import { getBounds } from '@/helpers/mapGeometry'
 import { MapPin } from '@/components/map/MapPin'
 import { HistorySessionSheet } from './HistorySessionSheet'
@@ -328,7 +328,7 @@ export function HistoryMapPlayer({
         <Camera
           ref={cameraRef}
           defaultSettings={{
-            centerCoordinate: route[0] ?? FALLBACK_COORDINATE,
+            centerCoordinate: route[0] ?? MAP_DEFAULTS.fallbackCoordinate,
             zoomLevel: route.length > 0 ? 14 : 11,
           }}
           maxZoomLevel={19}

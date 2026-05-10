@@ -15,12 +15,7 @@ import { useMapStore } from '@/store/mapStore'
 import { MAPBOX_ACCESS_TOKEN, MAPY_TILE_URL_TEMPLATE } from '@/config/mapy'
 import { theme } from '@/constants/theme'
 import { ONE_DARK_MAP_STYLE } from '@/constants/oneDarkMapStyle'
-import {
-  BLANK_STYLE,
-  FALLBACK_COORDINATE,
-  MAP_STYLES,
-  type MapStyleKey,
-} from '@/constants/mapStyles'
+import { BLANK_STYLE, MAP_DEFAULTS, MAP_STYLES, type MapStyleKey } from '@/constants/mapStyles'
 import { makeCircleFeature, makeTrailLineString, zoomLevelForDelta } from '@/helpers/mapGeometry'
 import { MapPin } from '@/components/map/MapPin'
 import { MapControls } from '@/components/map/MapControls'
@@ -47,18 +42,21 @@ export function MapScreen(_props: MapScreenProps) {
   const gpsCamera = useMemo(() => {
     if (!gpsFix) {
       return {
-        centerCoordinate: FALLBACK_COORDINATE,
-        zoomLevel: 11,
+        centerCoordinate: MAP_DEFAULTS.fallbackCoordinate,
+        zoomLevel: MAP_DEFAULTS.fallbackZoom,
       }
     }
-    const baseDelta = gpsFix.accuracyM != null ? Math.max(0.002, gpsFix.accuracyM / 111_000) : 0.004
+    const baseDelta =
+      gpsFix.accuracyM != null
+        ? Math.max(MAP_DEFAULTS.zoomDeltaMinAccuracy, gpsFix.accuracyM / 111_000)
+        : MAP_DEFAULTS.zoomDeltaFallback
     return {
       centerCoordinate: [gpsFix.longitude, gpsFix.latitude] as [number, number],
-      zoomLevel: zoomLevelForDelta(baseDelta * 4),
+      zoomLevel: zoomLevelForDelta(baseDelta * MAP_DEFAULTS.zoomDeltaMultiplier),
     }
   }, [gpsFix])
 
-  const markerColor = !gpsFix ? '#9ca3af' : '#7c6fef'
+  const markerColor = !gpsFix ? MAP_DEFAULTS.markerInactiveColor : MAP_DEFAULTS.markerColor
   const selectedMapStyle = MAP_STYLES.find((style) => style.key === mapStyleKey) ?? MAP_STYLES[0]
   const isMapy = selectedMapStyle.key === 'mapy'
   const isOneDark = selectedMapStyle.key === 'onedark'
@@ -84,7 +82,7 @@ export function MapScreen(_props: MapScreenProps) {
     lastCenteredAtRef.current = gpsFix.timestamp
     cameraRef.current?.setCamera({
       ...gpsCamera,
-      animationDuration: 450,
+      animationDuration: MAP_DEFAULTS.followAnimationDuration,
       animationMode: 'easeTo',
     })
   }, [followGps, gpsCamera, gpsFix])
@@ -92,7 +90,7 @@ export function MapScreen(_props: MapScreenProps) {
   const resetRotation = () => {
     cameraRef.current?.setCamera({
       heading: 0,
-      animationDuration: 350,
+      animationDuration: MAP_DEFAULTS.animationDuration,
       animationMode: 'easeTo',
     })
     setHeading(0)
@@ -104,7 +102,7 @@ export function MapScreen(_props: MapScreenProps) {
       lastCenteredAtRef.current = gpsFix.timestamp
       cameraRef.current?.setCamera({
         ...gpsCamera,
-        animationDuration: 350,
+        animationDuration: MAP_DEFAULTS.animationDuration,
         animationMode: 'easeTo',
       })
     }
@@ -114,8 +112,8 @@ export function MapScreen(_props: MapScreenProps) {
     const enabled = !perspectiveEnabled
     setPerspectiveEnabled(enabled)
     cameraRef.current?.setCamera({
-      pitch: enabled ? 45 : 0,
-      animationDuration: 350,
+      pitch: enabled ? MAP_DEFAULTS.activePitch : 0,
+      animationDuration: MAP_DEFAULTS.animationDuration,
       animationMode: 'easeTo',
     })
   }
@@ -151,13 +149,13 @@ export function MapScreen(_props: MapScreenProps) {
         onCameraChanged={(state) => {
           if (state.gestures.isGestureActive) setFollowGps(false)
           setHeading(state.properties.heading)
-          setPerspectiveEnabled(state.properties.pitch > 10)
+          setPerspectiveEnabled(state.properties.pitch > MAP_DEFAULTS.pitchThreshold)
         }}
       >
         <Camera
           ref={cameraRef}
-          defaultSettings={{ ...gpsCamera, pitch: 45 }}
-          maxZoomLevel={19}
+          defaultSettings={{ ...gpsCamera, pitch: MAP_DEFAULTS.defaultPitch }}
+          maxZoomLevel={MAP_DEFAULTS.maxZoom}
           animationMode="easeTo"
         />
 
@@ -182,7 +180,7 @@ export function MapScreen(_props: MapScreenProps) {
             id="mapy-tiles"
             tileUrlTemplates={[MAPY_TILE_URL_TEMPLATE]}
             tileSize={256}
-            maxZoomLevel={19}
+            maxZoomLevel={MAP_DEFAULTS.maxZoom}
           >
             <RasterLayer id="mapy-tiles-layer" sourceID="mapy-tiles" style={{}} />
           </RasterSource>
@@ -193,8 +191,8 @@ export function MapScreen(_props: MapScreenProps) {
             <LineLayer
               id="trail-line"
               style={{
-                lineColor: '#7c6fef',
-                lineWidth: 3,
+                lineColor: MAP_DEFAULTS.trailColor,
+                lineWidth: MAP_DEFAULTS.trailWidth,
                 lineCap: 'round',
                 lineJoin: 'round',
                 lineGradient: [
@@ -202,9 +200,9 @@ export function MapScreen(_props: MapScreenProps) {
                   ['linear'],
                   ['line-progress'],
                   0,
-                  'rgba(124,111,239,0)',
+                  MAP_DEFAULTS.trailGradientStart,
                   1,
-                  'rgba(124,111,239,0.85)',
+                  MAP_DEFAULTS.trailGradientEnd,
                 ],
               }}
             />
@@ -218,7 +216,7 @@ export function MapScreen(_props: MapScreenProps) {
                 <FillLayer
                   id="gps-accuracy-fill"
                   style={{
-                    fillColor: 'rgba(124,111,239,0.18)',
+                    fillColor: MAP_DEFAULTS.accuracyFillColor,
                   }}
                 />
               </ShapeSource>
