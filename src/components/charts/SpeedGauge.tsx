@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, Text, TextInput, View } from 'react-native'
+import Animated, { useAnimatedProps, type SharedValue } from 'react-native-reanimated'
 import Svg, { Defs, Line, Path, RadialGradient, Stop } from 'react-native-svg'
 
 import { Sparkline, type SparklinePoint } from '@/components/charts/Sparkline'
@@ -8,7 +9,7 @@ import { fmtSpeed } from '@/helpers/format'
 
 interface Props {
   /** Current VESC speed in km/h. */
-  value: number | null
+  value: SharedValue<number | null>
   /** Last-10-min VESC speed series — drawn under the dial. */
   series?: SparklinePoint[]
   /** Fixed time window in ms for the sparkline x-axis. */
@@ -36,10 +37,12 @@ const CY = 100
 const R = 80
 const STROKE = 2
 const MARKER_INSET = 10
-const RED_FRACTION = 0.85
 const GLOW_GRADIENT_ID = 'speedGaugeGlow'
 const ALERT_RANGE_GLOW_GRADIENT_ID = 'speedGaugeAlertRangeGlow'
 const SPARK_RANGE = { min: 0, max: 50 } // overridden below if `max` differs
+const AnimatedPath = Animated.createAnimatedComponent(Path)
+const AnimatedLine = Animated.createAnimatedComponent(Line)
+const AnimatedTextInput = Animated.createAnimatedComponent(TextInput)
 
 function clamp01(f: number) {
   return Math.min(1, Math.max(0, f))
@@ -93,12 +96,33 @@ export function SpeedGauge({
   max = 50,
   alerts = [],
 }: Props) {
-  const fraction = clamp01((value ?? 0) / max)
-  const color = fraction > RED_FRACTION ? theme.error.color : theme.wheel.color
-
-  const activeArc = useMemo(() => arcPath(fraction), [fraction])
-  const wedge = useMemo(() => wedgePath(fraction), [fraction])
+  const color = theme.wheel.color
   const sparkRange = useMemo(() => (max === SPARK_RANGE.max ? SPARK_RANGE : { min: 0, max }), [max])
+  const animatedValueProps = useAnimatedProps(() => {
+    const current = value.value
+    const text = current != null ? Math.round(current).toString() : '—'
+    return { text, value: text }
+  })
+  const animatedArcProps = useAnimatedProps(() => {
+    const current = value.value ?? 0
+    return { d: arcPath(clamp01(current / max)) }
+  })
+  const animatedWedgeProps = useAnimatedProps(() => {
+    const current = value.value ?? 0
+    return { d: wedgePath(clamp01(current / max)) }
+  })
+  const animatedMarkerProps = useAnimatedProps(() => {
+    const current = value.value ?? 0
+    const fraction = clamp01(current / max)
+    const inner = polar(R - MARKER_INSET, fraction)
+    const outer = polar(R + STROKE / 2, fraction)
+    return {
+      x1: inner.x,
+      y1: inner.y,
+      x2: outer.x,
+      y2: outer.y,
+    }
+  })
 
   return (
     <View style={styles.wrap}>
@@ -142,9 +166,11 @@ export function SpeedGauge({
             </RadialGradient>
           </Defs>
 
-          {value != null && fraction > 0 ? (
-            <Path d={wedge} fill={`url(#${GLOW_GRADIENT_ID})`} stroke="none" />
-          ) : null}
+          <AnimatedPath
+            animatedProps={animatedWedgeProps}
+            fill={`url(#${GLOW_GRADIENT_ID})`}
+            stroke="none"
+          />
 
           <Path
             d={BG_ARC_PATH}
@@ -154,21 +180,24 @@ export function SpeedGauge({
             fill="none"
           />
 
-          {value != null && fraction > 0 ? (
-            <Path
-              d={activeArc}
-              stroke={color}
-              strokeWidth={STROKE}
-              strokeLinecap="butt"
-              fill="none"
-            />
-          ) : null}
+          <AnimatedPath
+            animatedProps={animatedArcProps}
+            stroke={color}
+            strokeWidth={STROKE}
+            strokeLinecap="butt"
+            fill="none"
+          />
 
           {alerts.map((alert) => (
             <AlertMarker key={alert.id} alert={alert} max={max} />
           ))}
 
-          {value != null ? <Marker fraction={fraction} color={color} /> : null}
+          <AnimatedLine
+            animatedProps={animatedMarkerProps}
+            stroke={color}
+            strokeWidth={1.5}
+            strokeLinecap="butt"
+          />
         </Svg>
 
         <View style={styles.tickRow} pointerEvents="none">
@@ -182,9 +211,11 @@ export function SpeedGauge({
         </View>
 
         <View style={styles.bowl} pointerEvents="none">
-          <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit>
-            {value != null ? Math.round(value) : '—'}
-          </Text>
+          <AnimatedTextInput
+            editable={false}
+            animatedProps={animatedValueProps}
+            style={styles.value}
+          />
           <Text style={styles.gpsText}>
             <Text style={styles.gpsLabel}>GPS </Text>
             {gpsValue != null ? fmtSpeedWithUnit(gpsValue) : '—'}
@@ -237,27 +268,6 @@ function AlertTick({ fraction }: { fraction: number }) {
       y2={outer.y}
       stroke="#facc15"
       strokeWidth={0.75}
-      strokeLinecap="butt"
-    />
-  )
-}
-
-/**
- * Marker tick on the outside of the arc. Outer endpoint sits at the OUTER
- * edge of the arc track (R + half-stroke), not its center, so the tick top
- * meets the arc cleanly — no gap, no half-stuck-into-track look.
- */
-function Marker({ fraction, color }: { fraction: number; color: string }) {
-  const inner = polar(R - MARKER_INSET, fraction)
-  const outer = polar(R + STROKE / 2, fraction)
-  return (
-    <Line
-      x1={inner.x}
-      y1={inner.y}
-      x2={outer.x}
-      y2={outer.y}
-      stroke={color}
-      strokeWidth={1.5}
       strokeLinecap="butt"
     />
   )
@@ -316,6 +326,8 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
     fontWeight: '700',
     lineHeight: 60,
+    padding: 0,
+    textAlign: 'center',
   },
   gpsText: {
     color: theme.gps.text,
