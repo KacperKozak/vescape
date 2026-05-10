@@ -92,9 +92,10 @@ describe('live telemetry runtime', () => {
 
     expect(runtime.values.speedKmh.value).toBe(8)
     expect(runtime.values.dutyPercent.value).toBe(50)
-    expect(runtime.getSnapshot().liveMetricHistory.speed).toEqual([
-      { ts: 9_000, value: 3 },
-      { ts: 10_000, value: 8 },
+    const telemetryBuf = runtime.getTelemetry()
+    expect(telemetryBuf.map((t) => ({ ts: t.lastPacketAt, speed: Math.abs(t.speed!) }))).toEqual([
+      { ts: 9_000, speed: 3 },
+      { ts: 10_000, speed: 8 },
     ])
   })
 
@@ -131,9 +132,12 @@ describe('live telemetry runtime', () => {
     expect(runtime.values.avgLatencyMs.value).toBe(9)
     const snapshot = runtime.consumePendingSnapshot()
     expect(snapshot?.liveStatus.boardLastPacketAt).toBe(20_000)
-    expect(snapshot?.liveMetricHistory.speed).toEqual([
-      { ts: 10_000, value: 5 },
-      { ts: 20_000, value: 30 },
+    const speeds = runtime
+      .getTelemetry()
+      .map((t) => ({ ts: t.lastPacketAt, speed: Math.abs(t.speed!) }))
+    expect(speeds).toEqual([
+      { ts: 10_000, speed: 5 },
+      { ts: 20_000, speed: 30 },
     ])
   })
 
@@ -160,9 +164,13 @@ describe('live telemetry runtime', () => {
     runtime.ingestTelemetry(telemetry({ lastPacketAt: 1_050, speed: 2 }))
 
     expect(runtime.values.speedKmh.value).toBe(2)
-    expect(runtime.consumePendingSnapshot()?.liveMetricHistory.speed).toEqual([
-      { ts: 1_000, value: 1 },
-      { ts: 1_050, value: 2 },
+    runtime.consumePendingSnapshot()
+    const speeds = runtime
+      .getTelemetry()
+      .map((t) => ({ ts: t.lastPacketAt, speed: Math.abs(t.speed!) }))
+    expect(speeds).toEqual([
+      { ts: 1_000, speed: 1 },
+      { ts: 1_050, speed: 2 },
     ])
     expect(runtime.consumePendingSnapshot()).toBe(null)
   })
@@ -179,7 +187,7 @@ describe('live telemetry runtime', () => {
     expect(runtime.values.dutyPercent.value).toBe(null)
     expect(runtime.values.avgLatencyMs.value).toBe(null)
     expect(snapshot.liveLocationHistory).toEqual([])
-    expect(snapshot.liveMetricHistory.speed).toEqual([])
+    expect(runtime.getTelemetry()).toEqual([])
     expect(snapshot.liveStatus).toEqual({
       boardSampleCount: 0,
       boardLastPacketAt: null,

@@ -4,15 +4,15 @@ import { TelemetryLineChart } from '@/components/charts/TelemetryLineChart'
 import type { TelemetryChartPoint } from '@/components/charts/chartMath'
 import { ControlDetailLayout } from '@/components/control/ControlDetailLayout'
 import { StatsRow } from '@/components/control/StatsRow'
-import { DASH, fmt } from '@/helpers/format'
+import { DASH, fmtSpeed } from '@/helpers/format'
 import { theme } from '@/constants/theme'
-import { useBleStore } from '@/store/bleStore'
+import { useLiveMetric, liveSelectors } from '@/hooks/useLiveMetric'
 import { useLiveWindowMs } from '@/store/settingsStore'
 
 const RANGE = { y: { min: 0, max: 50 } }
 
 export default function SpeedScreen() {
-  const speed = useBleStore((s) => s.liveMetricHistory.speed)
+  const speed = useLiveMetric(liveSelectors.speed)
   const windowMs = useLiveWindowMs()
 
   const points = useMemo<TelemetryChartPoint[]>(
@@ -34,7 +34,7 @@ export default function SpeedScreen() {
   const [selected, setSelected] = useState<TelemetryChartPoint | null>(null)
   const currentPoint = selected ?? points.at(-1) ?? null
 
-  const displayValue = currentPoint ? `${fmt(currentPoint.value, 1)} km/h` : DASH
+  const displayValue = currentPoint ? `${fmtSpeed(currentPoint.value)} km/h` : DASH
 
   return (
     <ControlDetailLayout title="Speed" controlId="speed" unit="km/h">
@@ -48,14 +48,14 @@ export default function SpeedScreen() {
         height={120}
         onPointSelected={setSelected}
         onGestureStart={() => setSelected(null)}
-        formatValue={(v) => `${fmt(v, 1)} km/h`}
+        formatValue={(v) => `${fmtSpeed(v)} km/h`}
         windowMs={windowMs}
       />
       <StatsRow
-        current={stats ? `${fmt(stats.current, 1)} km/h` : DASH}
-        min={stats ? `${fmt(stats.min, 1)} km/h` : DASH}
-        max={stats ? `${fmt(stats.max, 1)} km/h` : DASH}
-        avg={stats ? `${fmt(stats.avg, 1)} km/h` : DASH}
+        current={stats ? `${fmtSpeed(stats.current)} km/h` : DASH}
+        min={stats ? `${fmtSpeed(stats.min)} km/h` : DASH}
+        max={stats ? `${fmtSpeed(stats.max)} km/h` : DASH}
+        avg={stats ? `${fmtSpeed(stats.avg)} km/h` : DASH}
       />
     </ControlDetailLayout>
   )

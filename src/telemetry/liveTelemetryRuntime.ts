@@ -6,11 +6,8 @@ import {
   appendTelemetrySample,
   clearLiveMetricBuffer,
   createLiveMetricBuffer,
-  emptyLiveMetricHistory,
   getLatestTelemetry,
-  projectLiveMetricHistory,
   summarizeLiveStatus,
-  type LiveMetricHistory,
   type LiveStatusSummary,
 } from './liveMetricHistory'
 import { useSettingsStore } from '@/store/settingsStore'
@@ -28,7 +25,6 @@ export interface LiveTelemetryValues {
 }
 
 export interface LiveTelemetrySnapshot {
-  liveMetricHistory: LiveMetricHistory
   liveLocationHistory: LocationEvent[]
   liveStatus: LiveStatusSummary
 }
@@ -42,6 +38,9 @@ export interface LiveTelemetryRuntime {
   reset: () => LiveTelemetrySnapshot
   getSnapshot: () => LiveTelemetrySnapshot
   consumePendingSnapshot: () => LiveTelemetrySnapshot | null
+  getVersion: () => number
+  getTelemetry: () => TelemetryEvent[]
+  getLocations: () => LocationEvent[]
 }
 
 interface LiveTelemetryRuntimeOptions {
@@ -120,15 +119,15 @@ export function createLiveTelemetryRuntime({
   const values = createValues()
   let connectionSeq = 0
   let pendingSnapshot = false
+  let version = 0
   let snapshot: LiveTelemetrySnapshot = {
-    liveMetricHistory: emptyLiveMetricHistory(),
     liveLocationHistory: [],
     liveStatus: summarizeLiveStatus(buffer),
   }
 
   function publishSnapshot(): LiveTelemetrySnapshot {
+    version += 1
     snapshot = {
-      liveMetricHistory: projectLiveMetricHistory(buffer),
       liveLocationHistory: [...buffer.locations],
       liveStatus: summarizeLiveStatus(buffer),
     }
@@ -154,6 +153,18 @@ export function createLiveTelemetryRuntime({
 
   return {
     values,
+
+    getVersion() {
+      return version
+    },
+
+    getTelemetry() {
+      return buffer.telemetry
+    },
+
+    getLocations() {
+      return buffer.locations
+    },
 
     syncConnectionSeq(nextConnectionSeq) {
       connectionSeq = nextConnectionSeq

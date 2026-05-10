@@ -1,20 +1,15 @@
 import { StyleSheet, Text, View } from 'react-native'
-import { useShallow } from 'zustand/react/shallow'
 
 import { Sparkline, type SparklinePoint } from '@/components/charts/Sparkline'
 import { theme } from '@/constants/theme'
 import { DASH, fmt } from '@/helpers/format'
-import { useBleStore } from '@/store/bleStore'
+import { useLiveMetric, liveSelectors } from '@/hooks/useLiveMetric'
 import { useLiveWindowMs } from '@/store/settingsStore'
 
 export function ImuCard() {
-  const { pitchSeries, rollSeries, balanceSeries } = useBleStore(
-    useShallow((s) => ({
-      pitchSeries: s.liveMetricHistory.pitch,
-      rollSeries: s.liveMetricHistory.roll,
-      balanceSeries: s.liveMetricHistory.balancePitch,
-    })),
-  )
+  const pitchSeries = useLiveMetric(liveSelectors.pitch)
+  const rollSeries = useLiveMetric(liveSelectors.roll)
+  const balanceSeries = useLiveMetric(liveSelectors.balancePitch)
   const windowMs = useLiveWindowMs()
   const latestPitch = pitchSeries.at(-1)
   const latestRoll = rollSeries.at(-1)

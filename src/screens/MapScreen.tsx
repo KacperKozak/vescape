@@ -138,8 +138,7 @@ export function MapScreen(_props: MapScreenProps) {
         pitchEnabled
         rotateEnabled={!rotationLocked}
         compassEnabled={false}
-        scaleBarEnabled
-        scaleBarPosition={{ top: 10, left: 10 }}
+        scaleBarEnabled={false}
         logoEnabled={false}
         attributionEnabled={false}
         onLongPress={(feature) => {

@@ -1,19 +1,14 @@
 import { StyleSheet, Text, View } from 'react-native'
-import { useShallow } from 'zustand/react/shallow'
 
 import { Sparkline, type SparklinePoint } from '@/components/charts/Sparkline'
 import { theme } from '@/constants/theme'
 import { DASH } from '@/helpers/format'
-import { useBleStore } from '@/store/bleStore'
+import { useLiveMetric, liveSelectors } from '@/hooks/useLiveMetric'
 import { useLiveWindowMs } from '@/store/settingsStore'
 
 export function FootpadCard() {
-  const { adc1Series, adc2Series } = useBleStore(
-    useShallow((s) => ({
-      adc1Series: s.liveMetricHistory.footpadAdc1,
-      adc2Series: s.liveMetricHistory.footpadAdc2,
-    })),
-  )
+  const adc1Series = useLiveMetric(liveSelectors.footpadAdc1)
+  const adc2Series = useLiveMetric(liveSelectors.footpadAdc2)
   const windowMs = useLiveWindowMs()
   const latestAdc1 = adc1Series.at(-1)
   const latestAdc2 = adc2Series.at(-1)

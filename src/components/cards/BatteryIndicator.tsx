@@ -5,7 +5,7 @@ import { BatteryBar } from '@/components/BatteryBar'
 import { type SparklinePoint } from '@/components/charts/Sparkline'
 import { estimateBatteryPercent } from '@/helpers/battery'
 import { emaSeries } from '@/helpers/smoothing'
-import { useBleStore } from '@/store/bleStore'
+import { useLiveMetric, liveSelectors } from '@/hooks/useLiveMetric'
 import { useBoardStore } from '@/store/boardStore'
 import { useLiveWindowMs } from '@/store/settingsStore'
 
@@ -13,7 +13,7 @@ import { useLiveWindowMs } from '@/store/settingsStore'
 const BATTERY_SMOOTH_HALF_LIFE_MS = 20_000
 
 export function BatteryIndicator() {
-  const batteryVoltageHistory = useBleStore((s) => s.liveMetricHistory.batteryVoltage)
+  const batteryVoltageHistory = useLiveMetric(liveSelectors.batteryVoltage)
   const windowMs = useLiveWindowMs()
   const { minVoltage, maxVoltage } = useBoardStore(
     useShallow((s) => {

@@ -8,13 +8,13 @@ import { ControlDetailLayout } from '@/components/control/ControlDetailLayout'
 import { CHART_DEFAULTS } from '@/constants/chartDefaults'
 import { DASH, fmt } from '@/helpers/format'
 import { theme } from '@/constants/theme'
-import { useBleStore } from '@/store/bleStore'
+import { useLiveMetric, liveSelectors } from '@/hooks/useLiveMetric'
 import { useLiveWindowMs } from '@/store/settingsStore'
 
 export default function ImuScreen() {
-  const pitch = useBleStore((s) => s.liveMetricHistory.pitch)
-  const roll = useBleStore((s) => s.liveMetricHistory.roll)
-  const balancePitch = useBleStore((s) => s.liveMetricHistory.balancePitch)
+  const pitch = useLiveMetric(liveSelectors.pitch)
+  const roll = useLiveMetric(liveSelectors.roll)
+  const balancePitch = useLiveMetric(liveSelectors.balancePitch)
   const windowMs = useLiveWindowMs()
 
   const pitchPoints = useMemo<TelemetryChartPoint[]>(

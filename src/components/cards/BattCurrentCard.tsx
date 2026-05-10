@@ -1,15 +1,15 @@
 import { TelemetryCard } from '@/components/TelemetryCard'
 import { theme } from '@/constants/theme'
-import { DASH } from '@/helpers/format'
-import { useBleStore } from '@/store/bleStore'
+import { DASH, fmtCurrent } from '@/helpers/format'
+import { useLiveMetric, liveSelectors } from '@/hooks/useLiveMetric'
 import { useLiveWindowMs } from '@/store/settingsStore'
 import { liveTelemetryRuntime } from '@/telemetry/liveTelemetryRuntime'
 
-const FMT_MAX = (v: number) => `${v.toFixed(0)} A`
+const FMT_MAX = (v: number) => `${fmtCurrent(v)} A`
 const MIN_SPAN = 20
 
 export function BattCurrentCard() {
-  const series = useBleStore((s) => s.liveMetricHistory.batteryCurrent)
+  const series = useLiveMetric(liveSelectors.batteryCurrent)
   const windowMs = useLiveWindowMs()
 
   return (
@@ -19,7 +19,7 @@ export function BattCurrentCard() {
       value={DASH}
       unit="A"
       animatedValue={liveTelemetryRuntime.values.batteryCurrent}
-      animatedDecimals={1}
+      animatedDecimals={0}
       series={series}
       seriesColor={theme.gps.color}
       fmtMax={FMT_MAX}

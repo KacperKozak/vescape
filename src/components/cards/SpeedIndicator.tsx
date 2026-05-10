@@ -2,14 +2,14 @@ import { useMemo } from 'react'
 
 import { SpeedGauge } from '@/components/charts/SpeedGauge'
 import { useAlertsStore } from '@/store/alertsStore'
-import { useBleStore } from '@/store/bleStore'
+import { useLiveMetric, liveSelectors } from '@/hooks/useLiveMetric'
 import { useLiveWindowMs } from '@/store/settingsStore'
 import { liveTelemetryRuntime } from '@/telemetry/liveTelemetryRuntime'
 
 const SPEED_GAUGE_MAX_KMH = 50
 
 export function SpeedIndicator() {
-  const series = useBleStore((s) => s.liveMetricHistory.speed)
+  const series = useLiveMetric(liveSelectors.speed)
   const windowMs = useLiveWindowMs()
   const alertRules = useAlertsStore((s) => s.rules)
 

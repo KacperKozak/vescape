@@ -1,15 +1,15 @@
 import { TelemetryCard } from '@/components/TelemetryCard'
 import { theme } from '@/constants/theme'
-import { DASH } from '@/helpers/format'
-import { useBleStore } from '@/store/bleStore'
+import { DASH, fmtTemp } from '@/helpers/format'
+import { useLiveMetric, liveSelectors } from '@/hooks/useLiveMetric'
 import { useLiveWindowMs } from '@/store/settingsStore'
 import { liveTelemetryRuntime } from '@/telemetry/liveTelemetryRuntime'
 
-const FMT_MAX = (v: number) => `${v.toFixed(0)}°C`
+const FMT_MAX = (v: number) => `${fmtTemp(v)}°C`
 const MIN_SPAN = 30
 
 export function ControllerTempCard() {
-  const series = useBleStore((s) => s.liveMetricHistory.controllerTemp)
+  const series = useLiveMetric(liveSelectors.controllerTemp)
   const windowMs = useLiveWindowMs()
 
   return (
@@ -19,7 +19,7 @@ export function ControllerTempCard() {
       value={DASH}
       unit="°C"
       animatedValue={liveTelemetryRuntime.values.controllerTemp}
-      animatedDecimals={1}
+      animatedDecimals={0}
       series={series}
       seriesColor={theme.warning.color}
       fmtMax={FMT_MAX}

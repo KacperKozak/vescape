@@ -1,25 +1,5 @@
 import type { LocationEvent, TelemetryEvent } from 'vesc-ble'
 
-export interface LiveMetricPoint {
-  ts: number
-  value: number
-}
-
-export interface LiveMetricHistory {
-  speed: LiveMetricPoint[]
-  duty: LiveMetricPoint[]
-  motorCurrent: LiveMetricPoint[]
-  batteryCurrent: LiveMetricPoint[]
-  batteryVoltage: LiveMetricPoint[]
-  motorTemp: LiveMetricPoint[]
-  controllerTemp: LiveMetricPoint[]
-  footpadAdc1: LiveMetricPoint[]
-  footpadAdc2: LiveMetricPoint[]
-  pitch: LiveMetricPoint[]
-  roll: LiveMetricPoint[]
-  balancePitch: LiveMetricPoint[]
-}
-
 export interface LiveStatusSummary {
   boardSampleCount: number
   boardLastPacketAt: number | null
@@ -94,51 +74,6 @@ export function appendLocationSample(
   }
 }
 
-function metric(
-  telemetry: TelemetryEvent[],
-  pick: (sample: TelemetryEvent) => number | null | undefined,
-): LiveMetricPoint[] {
-  const points: LiveMetricPoint[] = []
-  for (const sample of telemetry) {
-    const value = pick(sample)
-    if (value == null || !Number.isFinite(value)) continue
-    points.push({ ts: sample.lastPacketAt, value })
-  }
-  return points
-}
-
-function finite(value: number | null | undefined): number | null {
-  return value == null || !Number.isFinite(value) ? null : value
-}
-
-function absolute(value: number | null | undefined): number | null {
-  const finiteValue = finite(value)
-  return finiteValue == null ? null : Math.abs(finiteValue)
-}
-
-export function projectLiveMetricHistory(buffer: LiveMetricBuffer): LiveMetricHistory {
-  const telemetry = buffer.telemetry
-  return {
-    speed: metric(telemetry, (sample) => absolute(sample.speed)),
-    duty: metric(telemetry, (sample) => {
-      const dutyCycle = absolute(sample.dutyCycle)
-      return dutyCycle == null ? null : dutyCycle * 100
-    }),
-    motorCurrent: metric(telemetry, (sample) => finite(sample.motorCurrent)),
-    batteryCurrent: metric(telemetry, (sample) => finite(sample.batteryCurrent)),
-    batteryVoltage: metric(telemetry, (sample) => finite(sample.batteryVoltage)),
-    motorTemp: metric(telemetry, (sample) =>
-      sample.tempMotor != null && sample.tempMotor > 0 ? sample.tempMotor : null,
-    ),
-    controllerTemp: metric(telemetry, (sample) => finite(sample.tempMosfet)),
-    footpadAdc1: metric(telemetry, (sample) => finite(sample.adc1)),
-    footpadAdc2: metric(telemetry, (sample) => finite(sample.adc2)),
-    pitch: metric(telemetry, (sample) => finite(sample.pitch)),
-    roll: metric(telemetry, (sample) => finite(sample.roll)),
-    balancePitch: metric(telemetry, (sample) => finite(sample.balancePitch)),
-  }
-}
-
 export function summarizeLiveStatus(buffer: LiveMetricBuffer): LiveStatusSummary {
   const latestTelemetry = getLatestTelemetry(buffer)
   const latestGps = getLatestGps(buffer)
@@ -159,21 +94,4 @@ export function getLatestTelemetry(buffer: LiveMetricBuffer): TelemetryEvent | n
 
 export function getLatestGps(buffer: LiveMetricBuffer): LocationEvent | null {
   return buffer.locations.at(-1) ?? null
-}
-
-export function emptyLiveMetricHistory(): LiveMetricHistory {
-  return {
-    speed: [],
-    duty: [],
-    motorCurrent: [],
-    batteryCurrent: [],
-    batteryVoltage: [],
-    motorTemp: [],
-    controllerTemp: [],
-    footpadAdc1: [],
-    footpadAdc2: [],
-    pitch: [],
-    roll: [],
-    balancePitch: [],
-  }
 }

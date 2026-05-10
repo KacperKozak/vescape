@@ -2,6 +2,7 @@ import { StyleSheet, Text, View } from 'react-native'
 
 import { Sparkline, type SparklinePoint } from '@/components/charts/Sparkline'
 import { theme } from '@/constants/theme'
+import { fmtVoltage } from '@/helpers/format'
 
 interface Props {
   /** Current battery state-of-charge in percent (0–100), or null if unknown. */
@@ -34,7 +35,7 @@ export function BatteryBar({ percent, voltage, series, windowMs, hint }: Props) 
     <View style={styles.wrap}>
       <View style={styles.left}>
         <Text style={styles.label}>BATTERY</Text>
-        {voltage != null ? <Text style={styles.voltage}>{voltage.toFixed(1)} V</Text> : null}
+        {voltage != null ? <Text style={styles.voltage}>{fmtVoltage(voltage)} V</Text> : null}
       </View>
       <View style={styles.middle}>
         {series && series.length > 1 ? (

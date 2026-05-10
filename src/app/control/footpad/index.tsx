@@ -8,7 +8,7 @@ import { StatsRow } from '@/components/control/StatsRow'
 import { CHART_DEFAULTS } from '@/constants/chartDefaults'
 import { DASH, fmt } from '@/helpers/format'
 import { theme } from '@/constants/theme'
-import { useBleStore } from '@/store/bleStore'
+import { useLiveMetric, liveSelectors } from '@/hooks/useLiveMetric'
 import { useLiveWindowMs } from '@/store/settingsStore'
 
 function computeStats(points: TelemetryChartPoint[]) {
@@ -23,8 +23,8 @@ function computeStats(points: TelemetryChartPoint[]) {
 }
 
 export default function FootpadScreen() {
-  const adc1 = useBleStore((s) => s.liveMetricHistory.footpadAdc1)
-  const adc2 = useBleStore((s) => s.liveMetricHistory.footpadAdc2)
+  const adc1 = useLiveMetric(liveSelectors.footpadAdc1)
+  const adc2 = useLiveMetric(liveSelectors.footpadAdc2)
   const windowMs = useLiveWindowMs()
 
   const adc1Points = useMemo<TelemetryChartPoint[]>(

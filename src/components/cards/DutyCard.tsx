@@ -1,7 +1,7 @@
 import { TelemetryCard } from '@/components/TelemetryCard'
 import { theme } from '@/constants/theme'
 import { DASH } from '@/helpers/format'
-import { useBleStore } from '@/store/bleStore'
+import { useLiveMetric, liveSelectors } from '@/hooks/useLiveMetric'
 import { useLiveWindowMs } from '@/store/settingsStore'
 import { liveTelemetryRuntime } from '@/telemetry/liveTelemetryRuntime'
 
@@ -9,7 +9,7 @@ const FMT_MAX = (v: number) => `${v.toFixed(0)}%`
 const RANGE = { min: 0, max: 100 }
 
 export function DutyCard() {
-  const series = useBleStore((s) => s.liveMetricHistory.duty)
+  const series = useLiveMetric(liveSelectors.duty)
   const windowMs = useLiveWindowMs()
 
   return (

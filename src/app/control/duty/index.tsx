@@ -6,13 +6,13 @@ import { ControlDetailLayout } from '@/components/control/ControlDetailLayout'
 import { StatsRow } from '@/components/control/StatsRow'
 import { DASH } from '@/helpers/format'
 import { theme } from '@/constants/theme'
-import { useBleStore } from '@/store/bleStore'
+import { useLiveMetric, liveSelectors } from '@/hooks/useLiveMetric'
 import { useLiveWindowMs } from '@/store/settingsStore'
 
 const RANGE = { y: { min: 0, max: 100 } }
 
 export default function DutyScreen() {
-  const duty = useBleStore((s) => s.liveMetricHistory.duty)
+  const duty = useLiveMetric(liveSelectors.duty)
   const windowMs = useLiveWindowMs()
 
   const points = useMemo<TelemetryChartPoint[]>(

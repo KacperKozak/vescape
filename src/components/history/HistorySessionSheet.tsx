@@ -2,6 +2,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { CaretRightIcon, WarningCircleIcon } from 'phosphor-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
+import { fmtSpeed } from '@/helpers/format'
 import type { HistorySession } from '@/store/historyStore'
 
 interface HistorySessionSheetProps {
@@ -47,7 +48,7 @@ export function HistorySessionSheet({
                     </Text>
                     <Text style={styles.rowMeta}>
                       {formatDuration(session.endAtMs - session.startAtMs)} ·{' '}
-                      {formatDistance(session.distanceM)} · {session.maxSpeedKmh.toFixed(1)} km/h ·
+                      {formatDistance(session.distanceM)} · {fmtSpeed(session.maxSpeedKmh)} km/h ·
                       GPS {session.gpsPointCount}
                     </Text>
                     {session.faultCount > 0 && (

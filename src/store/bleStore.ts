@@ -24,11 +24,7 @@ import {
 
 import { useSettingsStore } from '@/store/settingsStore'
 import { liveTelemetryRuntime } from '@/telemetry/liveTelemetryRuntime'
-import {
-  emptyLiveMetricHistory,
-  type LiveMetricHistory,
-  type LiveStatusSummary,
-} from '@/telemetry/liveMetricHistory'
+import { type LiveStatusSummary } from '@/telemetry/liveMetricHistory'
 
 export interface ScannedDevice {
   id: string
@@ -49,9 +45,9 @@ interface BleState {
   selectedBoardId: string | null
   connectedId: string | null
   error: string | undefined
-  liveMetricHistory: LiveMetricHistory
   liveLocationHistory: LocationEvent[]
   liveStatus: LiveStatusSummary
+  metricVersion: number
   telemetryRecordingEnabled: boolean
   recordDebugSession: boolean
 }
@@ -157,9 +153,9 @@ function applyLiveState(state: LiveStateEvent, set: BleSet): void {
     telemetryRecordingEnabled: state.recording.enabled,
     ...(hasRecentSnapshot
       ? {
-          liveMetricHistory: live.liveMetricHistory,
           liveLocationHistory: live.liveLocationHistory,
           liveStatus: live.liveStatus,
+          metricVersion: liveTelemetryRuntime.getVersion(),
         }
       : {}),
   })
@@ -170,9 +166,9 @@ function resetLivePresentation(set: BleSet): void {
   const live = liveTelemetryRuntime.reset()
   set({
     lastTelemetryAt: null,
-    liveMetricHistory: live.liveMetricHistory,
     liveLocationHistory: live.liveLocationHistory,
     liveStatus: live.liveStatus,
+    metricVersion: liveTelemetryRuntime.getVersion(),
   })
 }
 
@@ -183,9 +179,9 @@ function scheduleLiveHistoryPublish(set: BleSet): void {
     const live = liveTelemetryRuntime.consumePendingSnapshot()
     if (!live) return
     set({
-      liveMetricHistory: live.liveMetricHistory,
       liveLocationHistory: live.liveLocationHistory,
       liveStatus: live.liveStatus,
+      metricVersion: liveTelemetryRuntime.getVersion(),
     })
   }, LIVE_HISTORY_PUBLISH_MS)
 }
@@ -223,9 +219,9 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
   selectedBoardId: null,
   connectedId: null,
   error: undefined,
-  liveMetricHistory: emptyLiveMetricHistory(),
   liveLocationHistory: [],
   liveStatus: EMPTY_LIVE_STATUS,
+  metricVersion: 0,
   telemetryRecordingEnabled: false,
   recordDebugSession: false,
 

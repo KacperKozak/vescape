@@ -6,10 +6,8 @@ import {
   appendTelemetrySample,
   clearLiveMetricBuffer,
   createLiveMetricBuffer,
-  emptyLiveMetricHistory,
   getLatestGps,
   getLatestTelemetry,
-  projectLiveMetricHistory,
   summarizeLiveStatus,
 } from './liveMetricHistory'
 
@@ -58,22 +56,13 @@ function location(overrides: Partial<LocationEvent> = {}): LocationEvent {
 }
 
 describe('live metric history', () => {
-  test('appends telemetry, prunes by live window, and projects metrics', () => {
+  test('appends telemetry and prunes by live window', () => {
     const buffer = createLiveMetricBuffer()
     appendTelemetrySample(buffer, telemetry({ lastPacketAt: 0, speed: 1 }), 10_000)
     appendTelemetrySample(buffer, telemetry({ lastPacketAt: 5_000, speed: -8 }), 10_000)
     appendTelemetrySample(buffer, telemetry({ lastPacketAt: 11_000, speed: 14 }), 10_000)
 
-    const history = projectLiveMetricHistory(buffer)
-
-    expect(history.speed).toEqual([
-      { ts: 5_000, value: 8 },
-      { ts: 11_000, value: 14 },
-    ])
-    expect(history.duty).toEqual([
-      { ts: 5_000, value: 42 },
-      { ts: 11_000, value: 42 },
-    ])
+    expect(buffer.telemetry.map((s) => s.lastPacketAt)).toEqual([5_000, 11_000])
   })
 
   test('deduplicates telemetry samples by timestamp', () => {
@@ -81,7 +70,8 @@ describe('live metric history', () => {
     appendTelemetrySample(buffer, telemetry({ lastPacketAt: 1_000, speed: 1 }), 10_000)
     appendTelemetrySample(buffer, telemetry({ lastPacketAt: 1_000, speed: 2 }), 10_000)
 
-    expect(projectLiveMetricHistory(buffer).speed).toEqual([{ ts: 1_000, value: 1 }])
+    expect(buffer.telemetry).toHaveLength(1)
+    expect(buffer.telemetry[0].speed).toBe(1)
   })
 
   test('deduplicates location samples by timestamp', () => {
@@ -100,10 +90,7 @@ describe('live metric history', () => {
     appendTelemetrySample(buffer, telemetry({ lastPacketAt: 5_000, speed: 5 }), 10_000)
     appendTelemetrySample(buffer, telemetry({ lastPacketAt: 0, speed: 1 }), 10_000)
 
-    expect(projectLiveMetricHistory(buffer).speed).toEqual([
-      { ts: 5_000, value: 5 },
-      { ts: 11_000, value: 11 },
-    ])
+    expect(buffer.telemetry.map((s) => s.lastPacketAt)).toEqual([5_000, 11_000])
   })
 
   test('keeps locations sorted and prunes late samples against newest timestamp', () => {
@@ -116,29 +103,13 @@ describe('live metric history', () => {
     expect(getLatestGps(buffer)?.speedMps).toBe(11)
   })
 
-  test('skips null and non-finite metric values', () => {
+  test('stores raw telemetry values without transformation', () => {
     const buffer = createLiveMetricBuffer()
-    appendTelemetrySample(
-      buffer,
-      telemetry({
-        lastPacketAt: 1_000,
-        speed: Number.NaN,
-        dutyCycle: Number.POSITIVE_INFINITY,
-        motorCurrent: null as unknown as number,
-      }),
-      10_000,
-    )
-    appendTelemetrySample(
-      buffer,
-      telemetry({ lastPacketAt: 2_000, speed: -4, dutyCycle: -0.5, motorCurrent: 20 }),
-      10_000,
-    )
+    appendTelemetrySample(buffer, telemetry({ lastPacketAt: 1_000, speed: Number.NaN }), 10_000)
+    appendTelemetrySample(buffer, telemetry({ lastPacketAt: 2_000, speed: -4 }), 10_000)
 
-    const history = projectLiveMetricHistory(buffer)
-
-    expect(history.speed).toEqual([{ ts: 2_000, value: 4 }])
-    expect(history.duty).toEqual([{ ts: 2_000, value: 50 }])
-    expect(history.motorCurrent).toEqual([{ ts: 2_000, value: 20 }])
+    expect(buffer.telemetry).toHaveLength(2)
+    expect(buffer.telemetry[1].speed).toBe(-4)
   })
 
   test('clears live metric buffers in place', () => {
@@ -157,23 +128,6 @@ describe('live metric history', () => {
       gpsLastFixAt: null,
       gpsPrecise: false,
       gpsAccuracyM: null,
-    })
-  })
-
-  test('creates empty live metric history projections', () => {
-    expect(emptyLiveMetricHistory()).toEqual({
-      speed: [],
-      duty: [],
-      motorCurrent: [],
-      batteryCurrent: [],
-      batteryVoltage: [],
-      motorTemp: [],
-      controllerTemp: [],
-      footpadAdc1: [],
-      footpadAdc2: [],
-      pitch: [],
-      roll: [],
-      balancePitch: [],
     })
   })
 

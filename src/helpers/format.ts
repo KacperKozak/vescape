@@ -6,9 +6,29 @@ export function fmt(value: number, decimals = 1): string {
   return value.toFixed(decimals)
 }
 
-/** Format a speed value as absolute km/h with one decimal. */
+/** Format a speed value as absolute km/h, no decimals. */
 export function fmtSpeed(kmh: number): string {
-  return Math.abs(kmh).toFixed(1)
+  return Math.round(Math.abs(kmh)).toString()
+}
+
+/** Format a temperature in °C, no decimals. */
+export function fmtTemp(degC: number): string {
+  return Math.round(degC).toString()
+}
+
+/** Format a current in amps, no decimals. */
+export function fmtCurrent(amps: number): string {
+  return Math.round(amps).toString()
+}
+
+/** Format a voltage in volts, 2 decimals. */
+export function fmtVoltage(volts: number): string {
+  return volts.toFixed(2)
+}
+
+/** Format an ADC sensor value, 3 decimals. */
+export function fmtAdc(v: number): string {
+  return v.toFixed(3)
 }
 
 const DUTY_IDLE_DEADBAND = 0.01
