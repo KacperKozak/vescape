@@ -117,7 +117,7 @@ describe('live telemetry runtime', () => {
     expect(runtime.values.speedKmh.value).toBe(22)
     expect(runtime.values.dutyPercent.value).toBe(25)
     expect(runtime.values.avgLatencyMs.value).toBe(11)
-    expect(runtime.getSnapshot().liveStatus.boardAvgLatencyMs).toBe(11)
+    expect(runtime.consumePendingSnapshot()?.liveStatus.boardAvgLatencyMs).toBe(11)
   })
 
   test('does not regress hot values when older current-generation telemetry arrives late', () => {
@@ -129,8 +129,9 @@ describe('live telemetry runtime', () => {
 
     expect(runtime.values.speedKmh.value).toBe(30)
     expect(runtime.values.avgLatencyMs.value).toBe(9)
-    expect(runtime.getSnapshot().liveStatus.boardLastPacketAt).toBe(20_000)
-    expect(runtime.getSnapshot().liveMetricHistory.speed).toEqual([
+    const snapshot = runtime.consumePendingSnapshot()
+    expect(snapshot?.liveStatus.boardLastPacketAt).toBe(20_000)
+    expect(snapshot?.liveMetricHistory.speed).toEqual([
       { ts: 10_000, value: 5 },
       { ts: 20_000, value: 30 },
     ])
@@ -139,15 +140,31 @@ describe('live telemetry runtime', () => {
   test('ingests locations into location history and status', () => {
     const runtime = createLiveTelemetryRuntime({ windowMs: () => 60_000 })
 
-    const snapshot = runtime.ingestLocation(location({ timestamp: 12_000, accuracyM: 5 }))
+    runtime.ingestLocation(location({ timestamp: 12_000, accuracyM: 5 }))
+    const snapshot = runtime.consumePendingSnapshot()
 
-    expect(snapshot.liveLocationHistory).toEqual([location({ timestamp: 12_000, accuracyM: 5 })])
-    expect(snapshot.liveStatus).toMatchObject({
+    expect(snapshot?.liveLocationHistory).toEqual([location({ timestamp: 12_000, accuracyM: 5 })])
+    expect(snapshot?.liveStatus).toMatchObject({
       gpsSampleCount: 1,
       gpsLastFixAt: 12_000,
       gpsPrecise: true,
       gpsAccuracyM: 5,
     })
+  })
+
+  test('coalesces telemetry frames until a publish is requested', () => {
+    const runtime = createLiveTelemetryRuntime({ windowMs: () => 60_000 })
+    runtime.seedFromLiveState(liveState([]))
+
+    runtime.ingestTelemetry(telemetry({ lastPacketAt: 1_000, speed: 1 }))
+    runtime.ingestTelemetry(telemetry({ lastPacketAt: 1_050, speed: 2 }))
+
+    expect(runtime.values.speedKmh.value).toBe(2)
+    expect(runtime.consumePendingSnapshot()?.liveMetricHistory.speed).toEqual([
+      { ts: 1_000, value: 1 },
+      { ts: 1_050, value: 2 },
+    ])
+    expect(runtime.consumePendingSnapshot()).toBe(null)
   })
 
   test('reset clears hot values and snapshot', () => {

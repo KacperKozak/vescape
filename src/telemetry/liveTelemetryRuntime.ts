@@ -36,10 +36,11 @@ export interface LiveTelemetrySnapshot {
 export interface LiveTelemetryRuntime {
   values: LiveTelemetryValues
   seedFromLiveState: (state: LiveStateEvent) => LiveTelemetrySnapshot
-  ingestTelemetry: (telemetry: TelemetryEvent) => LiveTelemetrySnapshot | null
-  ingestLocation: (location: LocationEvent) => LiveTelemetrySnapshot
+  ingestTelemetry: (telemetry: TelemetryEvent) => boolean
+  ingestLocation: (location: LocationEvent) => void
   reset: () => LiveTelemetrySnapshot
   getSnapshot: () => LiveTelemetrySnapshot
+  consumePendingSnapshot: () => LiveTelemetrySnapshot | null
 }
 
 interface LiveTelemetryRuntimeOptions {
@@ -117,6 +118,7 @@ export function createLiveTelemetryRuntime({
   const buffer = createLiveMetricBuffer()
   const values = createValues()
   let connectionSeq = 0
+  let pendingSnapshot = false
   let snapshot: LiveTelemetrySnapshot = {
     liveMetricHistory: emptyLiveMetricHistory(),
     liveLocationHistory: [],
@@ -137,6 +139,16 @@ export function createLiveTelemetryRuntime({
     if (telemetry.location) {
       appendLocationSample(buffer, telemetry.location, windowMs())
     }
+  }
+
+  function markPending(): void {
+    pendingSnapshot = true
+  }
+
+  function consumePendingSnapshot(): LiveTelemetrySnapshot | null {
+    if (!pendingSnapshot) return null
+    pendingSnapshot = false
+    return publishSnapshot()
   }
 
   return {
@@ -162,30 +174,34 @@ export function createLiveTelemetryRuntime({
 
     ingestTelemetry(telemetry) {
       if (telemetry.generation != null && telemetry.generation !== connectionSeq) {
-        return null
+        return false
       }
 
       appendTelemetryAndLocation(telemetry)
       const latestTelemetry = getLatestTelemetry(buffer)
       if (latestTelemetry) updateValuesFromTelemetry(values, latestTelemetry)
       else clearValues(values)
-      return publishSnapshot()
+      markPending()
+      return true
     },
 
     ingestLocation(location) {
       appendLocationSample(buffer, location, windowMs())
-      return publishSnapshot()
+      markPending()
     },
 
     reset() {
       clearLiveMetricBuffer(buffer)
       clearValues(values)
+      pendingSnapshot = false
       return publishSnapshot()
     },
 
     getSnapshot() {
       return snapshot
     },
+
+    consumePendingSnapshot,
   }
 }
 

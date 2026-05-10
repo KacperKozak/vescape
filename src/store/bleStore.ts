@@ -79,8 +79,10 @@ let telemetrySub: EventSubscription | null = null
 let locationSub: EventSubscription | null = null
 let scanSub: EventSubscription | null = null
 let scanErrorSub: EventSubscription | null = null
+let liveHistoryPublishTimer: ReturnType<typeof setTimeout> | null = null
 
 const MAC_ADDRESS_RE = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i
+const LIVE_HISTORY_PUBLISH_MS = 250
 
 function scannedDeviceName(id: string, name?: string): string {
   const candidate = name?.trim()
@@ -117,26 +119,38 @@ function applyLiveState(state: LiveStateEvent, set: BleSet): void {
   })
 }
 
+function scheduleLiveHistoryPublish(set: BleSet): void {
+  if (liveHistoryPublishTimer) return
+  liveHistoryPublishTimer = setTimeout(() => {
+    liveHistoryPublishTimer = null
+    const live = liveTelemetryRuntime.consumePendingSnapshot()
+    if (!live) return
+    set({
+      liveMetricHistory: live.liveMetricHistory,
+      liveLocationHistory: live.liveLocationHistory,
+      liveStatus: live.liveStatus,
+    })
+  }, LIVE_HISTORY_PUBLISH_MS)
+}
+
 function installLiveSubscriptions(set: BleSet): void {
   if (!liveSub) {
     liveSub = addLiveStateListener((state) => applyLiveState(state, set))
   }
   if (!telemetrySub) {
     telemetrySub = addTelemetryListener((telemetry) => {
-      const live = liveTelemetryRuntime.ingestTelemetry(telemetry)
-      if (!live) return
+      const accepted = liveTelemetryRuntime.ingestTelemetry(telemetry)
+      if (!accepted) return
       set({
         lastTelemetryAt: telemetry.lastPacketAt,
-        liveMetricHistory: live.liveMetricHistory,
-        liveLocationHistory: live.liveLocationHistory,
-        liveStatus: live.liveStatus,
       })
+      scheduleLiveHistoryPublish(set)
     })
   }
   if (!locationSub) {
     locationSub = addLocationListener((location) => {
-      const live = liveTelemetryRuntime.ingestLocation(location)
-      set({ liveLocationHistory: live.liveLocationHistory, liveStatus: live.liveStatus })
+      liveTelemetryRuntime.ingestLocation(location)
+      scheduleLiveHistoryPublish(set)
     })
   }
 }
