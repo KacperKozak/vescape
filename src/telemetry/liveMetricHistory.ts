@@ -71,7 +71,15 @@ export function appendTelemetrySample(
   windowMs: number,
 ): void {
   insertByTime(buffer.telemetry, telemetry, (sample) => sample.lastPacketAt)
-  pruneByTime(buffer.telemetry, telemetry.lastPacketAt, windowMs, (sample) => sample.lastPacketAt)
+  const latestTelemetry = getLatestTelemetry(buffer)
+  if (latestTelemetry) {
+    pruneByTime(
+      buffer.telemetry,
+      latestTelemetry.lastPacketAt,
+      windowMs,
+      (sample) => sample.lastPacketAt,
+    )
+  }
 }
 
 export function appendLocationSample(
@@ -80,7 +88,10 @@ export function appendLocationSample(
   windowMs: number,
 ): void {
   insertByTime(buffer.locations, location, (sample) => sample.timestamp)
-  pruneByTime(buffer.locations, location.timestamp, windowMs, (sample) => sample.timestamp)
+  const latestGps = getLatestGps(buffer)
+  if (latestGps) {
+    pruneByTime(buffer.locations, latestGps.timestamp, windowMs, (sample) => sample.timestamp)
+  }
 }
 
 function metric(
