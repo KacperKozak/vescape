@@ -34,23 +34,24 @@ interface Props {
   /** Fixed time window in ms for sparkline x-axis. */
   windowMs?: number
   animatedValue?: SharedValue<number | null>
-  formatAnimatedValue?: (value: number) => string
+  animatedDecimals?: number
 }
 
 const AnimatedTextInput = Animated.createAnimatedComponent(TextInput)
 
 function AnimatedTelemetryValue({
   value,
-  format,
+  decimals = 1,
   unit,
 }: {
   value: SharedValue<number | null>
-  format: (value: number) => string
+  decimals?: number
   unit?: string
 }) {
   const animatedProps = useAnimatedProps(() => {
     const current = value.value
-    const text = current == null ? '-' : `${format(current)}${unit ? ` ${unit}` : ''}`
+    const formatted = current == null ? '-' : current.toFixed(decimals)
+    const text = current == null ? formatted : `${formatted}${unit ? ` ${unit}` : ''}`
     return { text, value: text }
   })
 
@@ -93,7 +94,7 @@ export const TelemetryCard = React.memo(function TelemetryCard({
   controlId,
   windowMs,
   animatedValue,
-  formatAnimatedValue,
+  animatedDecimals,
 }: Props) {
   return (
     <View style={styles.card}>
@@ -103,8 +104,8 @@ export const TelemetryCard = React.memo(function TelemetryCard({
         </View>
       )}
       <Text style={styles.label}>{label}</Text>
-      {animatedValue && formatAnimatedValue ? (
-        <AnimatedTelemetryValue value={animatedValue} format={formatAnimatedValue} unit={unit} />
+      {animatedValue ? (
+        <AnimatedTelemetryValue value={animatedValue} decimals={animatedDecimals} unit={unit} />
       ) : (
         <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit>
           {value}

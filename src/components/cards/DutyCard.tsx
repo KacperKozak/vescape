@@ -19,7 +19,7 @@ export function DutyCard() {
       value={DASH}
       unit="%"
       animatedValue={liveTelemetryRuntime.values.dutyPercent}
-      formatAnimatedValue={(value) => value.toFixed(0)}
+      animatedDecimals={0}
       series={series}
       seriesColor={theme.bran.color}
       fmtMax={FMT_MAX}

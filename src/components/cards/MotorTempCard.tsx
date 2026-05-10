@@ -1,6 +1,6 @@
 import { TelemetryCard } from '@/components/TelemetryCard'
 import { theme } from '@/constants/theme'
-import { DASH, fmt } from '@/helpers/format'
+import { DASH } from '@/helpers/format'
 import { useBleStore } from '@/store/bleStore'
 import { useLiveWindowMs } from '@/store/settingsStore'
 import { liveTelemetryRuntime } from '@/telemetry/liveTelemetryRuntime'
@@ -19,7 +19,7 @@ export function MotorTempCard() {
       value={DASH}
       unit="°C"
       animatedValue={liveTelemetryRuntime.values.motorTemp}
-      formatAnimatedValue={fmt}
+      animatedDecimals={1}
       series={series}
       seriesColor={theme.warning.color}
       fmtMax={FMT_MAX}

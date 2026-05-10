@@ -1,6 +1,6 @@
 import { TelemetryCard } from '@/components/TelemetryCard'
 import { theme } from '@/constants/theme'
-import { DASH, fmt } from '@/helpers/format'
+import { DASH } from '@/helpers/format'
 import { useBleStore } from '@/store/bleStore'
 import { useLiveWindowMs } from '@/store/settingsStore'
 import { liveTelemetryRuntime } from '@/telemetry/liveTelemetryRuntime'
@@ -19,7 +19,7 @@ export function BattCurrentCard() {
       value={DASH}
       unit="A"
       animatedValue={liveTelemetryRuntime.values.batteryCurrent}
-      formatAnimatedValue={fmt}
+      animatedDecimals={1}
       series={series}
       seriesColor={theme.gps.color}
       fmtMax={FMT_MAX}
