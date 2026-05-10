@@ -101,7 +101,17 @@ const EMPTY_LIVE_STATUS: LiveStatusSummary = {
 }
 
 function applyLiveState(state: LiveStateEvent, set: BleSet): void {
-  const live = liveTelemetryRuntime.seedFromLiveState(state)
+  const hasRecentSnapshot =
+    state.board.recentTelemetry.length > 0 || state.gps.recentLocations.length > 0
+  const shouldResetLive =
+    state.board.phase === 'idle' ||
+    state.board.phase === 'error' ||
+    state.board.phase === 'disconnecting'
+  const live =
+    hasRecentSnapshot || shouldResetLive
+      ? liveTelemetryRuntime.seedFromLiveState(state)
+      : liveTelemetryRuntime.getSnapshot()
+
   set({
     status: state.board.phase,
     gpsStatus: state.gps.phase,
