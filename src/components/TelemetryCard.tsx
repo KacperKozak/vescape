@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, Text, TextInput, View } from 'react-native'
+import Animated, { useAnimatedProps, type SharedValue } from 'react-native-reanimated'
 
 import { Sparkline, type SparklinePoint } from '@/components/charts/Sparkline'
 import { theme } from '@/constants/theme'
@@ -32,6 +33,34 @@ interface Props {
   controlId?: string
   /** Fixed time window in ms for sparkline x-axis. */
   windowMs?: number
+  animatedValue?: SharedValue<number | null>
+  formatAnimatedValue?: (value: number) => string
+}
+
+const AnimatedTextInput = Animated.createAnimatedComponent(TextInput)
+
+function AnimatedTelemetryValue({
+  value,
+  format,
+  unit,
+}: {
+  value: SharedValue<number | null>
+  format: (value: number) => string
+  unit?: string
+}) {
+  const animatedProps = useAnimatedProps(() => {
+    const current = value.value
+    const text = current == null ? '-' : `${format(current)}${unit ? ` ${unit}` : ''}`
+    return { text, value: text }
+  })
+
+  return (
+    <AnimatedTextInput
+      editable={false}
+      animatedProps={animatedProps}
+      style={styles.value}
+    />
+  )
 }
 
 export function AlertBadge({ controlId }: { controlId: string }) {
@@ -69,6 +98,8 @@ export const TelemetryCard = React.memo(function TelemetryCard({
   minSpan,
   controlId,
   windowMs,
+  animatedValue,
+  formatAnimatedValue,
 }: Props) {
   return (
     <View style={styles.card}>
@@ -78,11 +109,15 @@ export const TelemetryCard = React.memo(function TelemetryCard({
         </View>
       )}
       <Text style={styles.label}>{label}</Text>
-      <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit>
-        {value}
-        {unit ? <Text style={styles.unit}> {unit}</Text> : null}
-        {sub ? <Text style={styles.sub}> {sub}</Text> : null}
-      </Text>
+      {animatedValue && formatAnimatedValue ? (
+        <AnimatedTelemetryValue value={animatedValue} format={formatAnimatedValue} unit={unit} />
+      ) : (
+        <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit>
+          {value}
+          {unit ? <Text style={styles.unit}> {unit}</Text> : null}
+          {sub ? <Text style={styles.sub}> {sub}</Text> : null}
+        </Text>
+      )}
       {series && series.length > 1 ? (
         <Sparkline
           points={series}
@@ -120,6 +155,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontFamily: 'monospace',
     fontWeight: '600',
+    padding: 0,
   },
   unit: {
     color: '#64748b',

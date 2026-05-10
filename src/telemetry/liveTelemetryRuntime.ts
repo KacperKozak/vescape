@@ -104,7 +104,8 @@ function updateValuesFromTelemetry(values: LiveTelemetryValues, telemetry: Telem
   values.motorCurrent.value = finite(telemetry.motorCurrent)
   values.batteryCurrent.value = finite(telemetry.batteryCurrent)
   values.batteryVoltage.value = finite(telemetry.batteryVoltage)
-  values.motorTemp.value = finite(telemetry.tempMotor)
+  values.motorTemp.value =
+    telemetry.tempMotor != null && telemetry.tempMotor > 0 ? telemetry.tempMotor : null
   values.controllerTemp.value = finite(telemetry.tempMosfet)
   values.lastPacketAt.value = finite(telemetry.lastPacketAt)
   values.avgLatencyMs.value = finite(telemetry.avgLatency)

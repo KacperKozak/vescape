@@ -13,7 +13,7 @@ import { useLiveWindowMs } from '@/store/settingsStore'
 const BATTERY_SMOOTH_HALF_LIFE_MS = 20_000
 
 export function BatteryIndicator() {
-  const recentTelemetry = useBleStore((s) => s.recentTelemetry)
+  const batteryVoltageHistory = useBleStore((s) => s.liveMetricHistory.batteryVoltage)
   const windowMs = useLiveWindowMs()
   const { minVoltage, maxVoltage } = useBoardStore(
     useShallow((s) => {
@@ -23,20 +23,15 @@ export function BatteryIndicator() {
   )
 
   const { smoothVoltage, batterySeries } = useMemo(() => {
-    const rawVoltage: SparklinePoint[] = recentTelemetry.map((t) => ({
-      ts: t.lastPacketAt,
-      value: t.batteryVoltage,
-    }))
-    const smooth = emaSeries(rawVoltage, BATTERY_SMOOTH_HALF_LIFE_MS)
+    const smooth = emaSeries(batteryVoltageHistory, BATTERY_SMOOTH_HALF_LIFE_MS)
     const series: SparklinePoint[] = smooth.flatMap((p) => {
       const pct = estimateBatteryPercent(p.value, minVoltage, maxVoltage)
       return pct != null ? [{ ts: p.ts, value: pct }] : []
     })
     return { smoothVoltage: smooth.at(-1)?.value ?? null, batterySeries: series }
-  }, [recentTelemetry, minVoltage, maxVoltage])
+  }, [batteryVoltageHistory, minVoltage, maxVoltage])
 
-  const v = recentTelemetry.at(-1) ?? null
-  const voltage = smoothVoltage ?? v?.batteryVoltage ?? null
+  const voltage = smoothVoltage
   const batteryConfigured = minVoltage != null && maxVoltage != null
   const percent = batteryConfigured
     ? estimateBatteryPercent(voltage ?? 0, minVoltage, maxVoltage)

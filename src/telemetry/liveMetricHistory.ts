@@ -127,7 +127,9 @@ export function projectLiveMetricHistory(buffer: LiveMetricBuffer): LiveMetricHi
     motorCurrent: metric(telemetry, (sample) => finite(sample.motorCurrent)),
     batteryCurrent: metric(telemetry, (sample) => finite(sample.batteryCurrent)),
     batteryVoltage: metric(telemetry, (sample) => finite(sample.batteryVoltage)),
-    motorTemp: metric(telemetry, (sample) => finite(sample.tempMotor)),
+    motorTemp: metric(telemetry, (sample) =>
+      sample.tempMotor != null && sample.tempMotor > 0 ? sample.tempMotor : null,
+    ),
     controllerTemp: metric(telemetry, (sample) => finite(sample.tempMosfet)),
     footpadAdc1: metric(telemetry, (sample) => finite(sample.adc1)),
     footpadAdc2: metric(telemetry, (sample) => finite(sample.adc2)),
