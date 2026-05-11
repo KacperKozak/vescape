@@ -135,6 +135,9 @@ class VescBleModule : Module() {
     AsyncFunction("deleteTelemetryBefore") Coroutine { beforeMs: Double ->
       TelemetryRepository.get(context.applicationContext).deleteBefore(beforeMs.toLong())
     }
+    AsyncFunction("deleteTelemetryRange") Coroutine { options: Map<String, Any?> ->
+      TelemetryRepository.get(context.applicationContext).deleteRange(options)
+    }
     AsyncFunction("clearTelemetryHistory") {
       runBlocking { TelemetryRepository.get(context.applicationContext).clearAll() }
     }

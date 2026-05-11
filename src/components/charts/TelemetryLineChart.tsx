@@ -229,12 +229,14 @@ export function TelemetryLineChart({
         </View>
       </View>
 
-      {timeLabels && (
-        <View style={[styles.xAxis, { marginLeft: Y_AXIS_WIDTH }]}>
-          <Text style={styles.xLabel}>{timeLabels.start}</Text>
-          <Text style={styles.xLabel}>{timeLabels.end}</Text>
-        </View>
-      )}
+      <View style={[styles.xAxis, { marginLeft: Y_AXIS_WIDTH }]}>
+        <Text style={[styles.xLabel, !timeLabels && styles.xLabelHidden]}>
+          {timeLabels?.start ?? '--'}
+        </Text>
+        <Text style={[styles.xLabel, !timeLabels && styles.xLabelHidden]}>
+          {timeLabels?.end ?? '--'}
+        </Text>
+      </View>
     </View>
   )
 }
@@ -304,6 +306,9 @@ const styles = StyleSheet.create({
     color: '#475569',
     fontSize: 8,
     fontVariant: ['tabular-nums'],
+  },
+  xLabelHidden: {
+    opacity: 0,
   },
   tooltip: {
     position: 'absolute',

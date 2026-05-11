@@ -18,6 +18,7 @@ export function HistoryScreen() {
     error,
     loadInitial,
     selectSession,
+    removeSelectedSession,
   } = useHistoryStore(
     useShallow((s) => ({
       sessions: s.sessions,
@@ -30,6 +31,7 @@ export function HistoryScreen() {
       error: s.error,
       loadInitial: s.loadInitial,
       selectSession: s.selectSession,
+      removeSelectedSession: s.removeSelectedSession,
     })),
   )
 
@@ -58,6 +60,7 @@ export function HistoryScreen() {
         loadingSession={loadingSession}
         sessionTruncated={sessionTruncated}
         onSelectSession={selectSession}
+        onRemoveSelectedSession={removeSelectedSession}
       />
     </View>
   )

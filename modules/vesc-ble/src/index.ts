@@ -146,6 +146,12 @@ export interface TelemetryHistoryOptions {
   cursorBeforeMs?: number
 }
 
+export interface TelemetryDeleteRangeOptions {
+  fromMs: number
+  toMs: number
+  deviceId?: string | null
+}
+
 export interface TelemetryHistoryBlock {
   id: string
   startAtMs: number
@@ -298,6 +304,7 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
   }): Promise<HistoryRange>
   getTelemetrySummary(): Promise<TelemetrySummary>
   deleteTelemetryBefore(beforeMs: number): Promise<number>
+  deleteTelemetryRange(options: TelemetryDeleteRangeOptions): Promise<number>
   clearTelemetryHistory(): Promise<void>
   getBoards(): Promise<Board[]>
   upsertBoard(board: Board): Promise<void>
@@ -406,6 +413,10 @@ export async function getTelemetrySummary(): Promise<TelemetrySummary> {
 
 export async function deleteTelemetryBefore(beforeMs: number): Promise<number> {
   return native.deleteTelemetryBefore(beforeMs)
+}
+
+export async function deleteTelemetryRange(options: TelemetryDeleteRangeOptions): Promise<number> {
+  return native.deleteTelemetryRange(options)
 }
 
 export async function clearTelemetryHistory(): Promise<void> {

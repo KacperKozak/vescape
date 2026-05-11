@@ -161,6 +161,64 @@ interface TelemetryDao {
     return frames + locations
   }
 
+  @Query(
+    """
+    DELETE FROM telemetry_frames
+    WHERE captured_at_ms >= :fromMs
+      AND captured_at_ms <= :toMs
+      AND (
+        (:deviceId IS NOT NULL AND device_id = :deviceId)
+        OR (:deviceId IS NULL AND device_id IS NULL)
+      )
+    """,
+  )
+  suspend fun deleteFramesRange(fromMs: Long, toMs: Long, deviceId: String?): Int
+
+  @Query(
+    """
+    DELETE FROM history_locations
+    WHERE captured_at_ms >= :fromMs
+      AND captured_at_ms <= :toMs
+      AND (
+        (:deviceId IS NOT NULL AND device_id = :deviceId)
+        OR (:deviceId IS NULL AND device_id IS NULL)
+      )
+    """,
+  )
+  suspend fun deleteLocationsRange(fromMs: Long, toMs: Long, deviceId: String?): Int
+
+  @Query(
+    """
+    DELETE FROM telemetry_markers
+    WHERE occurred_at_ms >= :fromMs
+      AND occurred_at_ms <= :toMs
+      AND (
+        (:deviceId IS NOT NULL AND device_id = :deviceId)
+        OR (:deviceId IS NULL AND device_id IS NULL)
+      )
+    """,
+  )
+  suspend fun deleteMarkersRange(fromMs: Long, toMs: Long, deviceId: String?): Int
+
+  @Query(
+    """
+    DELETE FROM telemetry_minute_buckets
+    WHERE last_sample_at_ms >= :fromMs
+      AND first_sample_at_ms <= :toMs
+      AND device_id = :bucketDeviceId
+    """,
+  )
+  suspend fun deleteBucketsRange(fromMs: Long, toMs: Long, bucketDeviceId: String): Int
+
+  @Transaction
+  suspend fun deleteRange(fromMs: Long, toMs: Long, deviceId: String?): Int {
+    val frames = deleteFramesRange(fromMs, toMs, deviceId)
+    val locations = deleteLocationsRange(fromMs, toMs, deviceId)
+    deleteMarkersRange(fromMs, toMs, deviceId)
+    deleteBucketsRange(fromMs, toMs, deviceId ?: UNKNOWN_TELEMETRY_DEVICE_ID)
+    return frames + locations
+  }
+
   @Query("DELETE FROM telemetry_frames")
   suspend fun clearFrames()
 

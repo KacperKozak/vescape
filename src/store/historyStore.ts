@@ -4,6 +4,7 @@ import {
   getHistoryRange,
   getTelemetrySummary,
   clearTelemetryHistory,
+  deleteTelemetryRange,
   type HistoryGpsSample,
   type HistoryMarker,
   type TelemetryHistoryBlock,
@@ -43,6 +44,7 @@ interface HistoryActions {
   selectBlock: (block: TelemetryHistoryBlock | null) => Promise<void>
   selectSession: (session: HistorySession | null) => Promise<void>
   refreshSummary: () => Promise<void>
+  removeSelectedSession: () => Promise<void>
   clearHistory: () => Promise<void>
 }
 
@@ -234,6 +236,52 @@ export const useHistoryStore = create<HistoryState & HistoryActions>((set, get) 
       set({ summary })
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err) })
+    }
+  },
+
+  async removeSelectedSession() {
+    const { selectedSession, sessions } = get()
+    if (!selectedSession) return
+    liveRefreshVersion++
+    set({ loadingSession: true, error: undefined })
+    try {
+      await deleteTelemetryRange({
+        fromMs: selectedSession.startAtMs,
+        toMs: selectedSession.endAtMs,
+        deviceId: selectedSession.deviceId,
+      })
+      const selectedIndex = sessions.findIndex((session) => session.id === selectedSession.id)
+      const selectedBlockIds = new Set(selectedSession.blockIds)
+      const blocks = get().blocks.filter((block) => !selectedBlockIds.has(block.id))
+      const liveBlocks = get().liveBlocks.filter((block) => !selectedBlockIds.has(block.id))
+      const nextSessions = groupHistorySessions(blocks)
+      const nextSelectedSession =
+        selectedIndex >= 0
+          ? (nextSessions[selectedIndex] ?? nextSessions[selectedIndex - 1] ?? null)
+          : null
+      const summary = await getTelemetrySummary()
+      set({
+        summary,
+        blocks,
+        liveBlocks,
+        sessions: nextSessions,
+        selectedBlock: null,
+        selectedSession: nextSelectedSession,
+        samples: [],
+        gpsSamples: [],
+        sessionSamples: [],
+        sessionGpsSamples: [],
+        sessionMarkers: [],
+        markers: [],
+        sessionTruncated: false,
+      })
+      if (nextSelectedSession) {
+        await get().selectSession(nextSelectedSession)
+      }
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : String(err) })
+    } finally {
+      set({ loadingSession: false })
     }
   },
 

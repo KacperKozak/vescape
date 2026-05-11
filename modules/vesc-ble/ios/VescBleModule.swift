@@ -163,6 +163,10 @@ public class VescBleModule: Module {
       promise.resolve(0)
     }
 
+    AsyncFunction("deleteTelemetryRange") { (_: [String: Any], promise: Promise) in
+      promise.resolve(0)
+    }
+
     AsyncFunction("clearTelemetryHistory") { (promise: Promise) in
       promise.resolve(nil)
     }

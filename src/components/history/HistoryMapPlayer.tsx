@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, View } from 'react-native'
 import Mapbox, { Camera, LineLayer, ShapeSource, type Camera as CameraRef } from '@rnmapbox/maps'
 import {
   CaretLeftIcon,
@@ -9,6 +9,7 @@ import {
   PlayIcon,
   SkipBackIcon,
   SkipForwardIcon,
+  TrashIcon,
 } from 'phosphor-react-native'
 
 import {
@@ -62,6 +63,7 @@ interface HistoryMapPlayerProps {
   loadingSession: boolean
   sessionTruncated: boolean
   onSelectSession: (session: HistorySession | null) => Promise<void>
+  onRemoveSelectedSession: () => Promise<void>
 }
 
 export function HistoryMapPlayer({
@@ -73,12 +75,14 @@ export function HistoryMapPlayer({
   loadingSession,
   sessionTruncated,
   onSelectSession,
+  onRemoveSelectedSession,
 }: HistoryMapPlayerProps) {
   const [sheetVisible, setSheetVisible] = useState(false)
   const [playing, setPlaying] = useState(false)
   const [headTimeMs, setHeadTimeMs] = useState<number | null>(null)
   const [mapReady, setMapReady] = useState(false)
   const [activeCharts, setActiveCharts] = useState<Set<OptionalChartMetric>>(new Set())
+  const [deletingSession, setDeletingSession] = useState(false)
   const playbackStartRef = useRef<{ realMs: number; headMs: number } | null>(null)
   const cameraRef = useRef<CameraRef>(null)
 
@@ -443,6 +447,7 @@ export function HistoryMapPlayer({
   const canMoveNextSession = selectedIndex > 0
   const canMoveHead = !!selectedSession && headTimeMs != null
   const canRenderCharts = boardByTime.length >= 2
+  const showChartShell = !!selectedSession && loadingSession
 
   const stopPlayback = () => {
     setPlaying(false)
@@ -500,6 +505,26 @@ export function HistoryMapPlayer({
     stopPlayback()
     setHeadTimeMs(
       clampHeadTime(point.date.getTime(), selectedSession.startAtMs, selectedSession.endAtMs),
+    )
+  }
+
+  const confirmRemoveSelectedSession = () => {
+    if (!selectedSession || deletingSession) return
+    Alert.alert(
+      'Delete ride',
+      'Delete this ride from history? This removes board samples, GPS points, markers, and graph data.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            stopPlayback()
+            setDeletingSession(true)
+            void onRemoveSelectedSession().finally(() => setDeletingSession(false))
+          },
+        },
+      ],
     )
   }
 
@@ -590,26 +615,42 @@ export function HistoryMapPlayer({
               {new Date(selectedSession.startAtMs).toLocaleString()} · {selectedSession.deviceName}
             </Text>
           )}
+          {selectedSession && (
+            <Pressable
+              style={[
+                styles.deleteButton,
+                (loadingSession || deletingSession) && styles.deleteButtonDisabled,
+              ]}
+              disabled={loadingSession || deletingSession}
+              accessibilityRole="button"
+              accessibilityLabel="Delete selected ride"
+              onPress={confirmRemoveSelectedSession}
+            >
+              <TrashIcon size={16} color="#fecaca" weight="bold" />
+            </Pressable>
+          )}
         </View>
 
-        {canRenderCharts ? (
+        {canRenderCharts || showChartShell ? (
           <View style={styles.chartStack}>
             <TelemetryLineChart
               label="Speed"
-              value={currentBoard ? `${currentBoard.speedKmh.toFixed(1)} km/h` : '-'}
-              points={speedPoints}
+              value={
+                !loadingSession && currentBoard ? `${currentBoard.speedKmh.toFixed(1)} km/h` : '-'
+              }
+              points={loadingSession ? [] : speedPoints}
               color="#60a5fa"
               range={speedRange}
               currentPoint={
-                currentChartSample
+                !loadingSession && currentChartSample
                   ? {
                       date: new Date(currentChartSample.capturedAtMs),
                       value: currentChartSample.speedKmh,
                     }
                   : null
               }
-              onPointSelected={selectChartPoint}
-              onGestureStart={stopPlayback}
+              onPointSelected={loadingSession ? undefined : selectChartPoint}
+              onGestureStart={loadingSession ? undefined : stopPlayback}
               height={54}
               containerStyle={styles.speedChart}
             />
@@ -617,13 +658,13 @@ export function HistoryMapPlayer({
               <TelemetryLineChart
                 key={chart.key}
                 label={chart.label}
-                value={chart.value}
-                points={chart.points}
+                value={loadingSession ? '-' : chart.value}
+                points={loadingSession ? [] : chart.points}
                 color={chart.color}
                 range={chart.range}
-                currentPoint={chart.currentPoint}
-                onPointSelected={selectChartPoint}
-                onGestureStart={stopPlayback}
+                currentPoint={loadingSession ? null : chart.currentPoint}
+                onPointSelected={loadingSession ? undefined : selectChartPoint}
+                onGestureStart={loadingSession ? undefined : stopPlayback}
                 height={54}
                 containerStyle={styles.optionalChart}
                 formatValue={chart.formatValue}
@@ -835,6 +876,19 @@ const styles = StyleSheet.create({
     color: '#cbd5e1',
     fontSize: 12,
     flex: 1,
+  },
+  deleteButton: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#7f1d1d',
+    backgroundColor: '#451a1a',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteButtonDisabled: {
+    opacity: 0.45,
   },
   chartStack: {
     gap: 8,

@@ -331,6 +331,17 @@ class TelemetryRepository private constructor(context: Context) {
     dao.deleteBefore(beforeMs)
   }
 
+  suspend fun deleteRange(options: Map<String, Any?>): Int = withContext(Dispatchers.IO) {
+    val fromMs = (options["fromMs"] as? Number)?.toLong()
+      ?: throw IllegalArgumentException("fromMs is required")
+    val toMs = (options["toMs"] as? Number)?.toLong()
+      ?: throw IllegalArgumentException("toMs is required")
+    require(toMs >= fromMs) { "toMs must be greater than or equal to fromMs" }
+    val deviceId = options["deviceId"] as? String
+    flushNow()
+    dao.deleteRange(fromMs, toMs, deviceId)
+  }
+
   suspend fun clearAll() = withContext(Dispatchers.IO) {
     dao.clearAll()
     synchronized(lock) {
