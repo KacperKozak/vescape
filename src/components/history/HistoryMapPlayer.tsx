@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import Mapbox, { Camera, LineLayer, ShapeSource, type Camera as CameraRef } from '@rnmapbox/maps'
-import { ListBulletsIcon, PauseIcon, PlayIcon } from 'phosphor-react-native'
+import {
+  CaretLeftIcon,
+  CaretRightIcon,
+  ListBulletsIcon,
+  PauseIcon,
+  PlayIcon,
+  SkipBackIcon,
+  SkipForwardIcon,
+} from 'phosphor-react-native'
 
 import {
   clampHeadTime,
@@ -12,6 +20,12 @@ import {
 import { TelemetryLineChart } from '@/components/charts/TelemetryLineChart'
 import { computeAutoRange, type TelemetryChartPoint } from '@/components/charts/chartMath'
 import { dutyPercent, fmtDutyPercent } from '@/helpers/format'
+import {
+  getVisibleChartMetrics,
+  OPTIONAL_CHART_METRICS,
+  toggleOptionalChartMetric,
+  type OptionalChartMetric,
+} from '@/components/history/historyChartMetrics'
 import type {
   HistoryGpsSample,
   HistoryMarker,
@@ -30,6 +44,7 @@ Mapbox.setAccessToken(MAPBOX_ACCESS_TOKEN)
 const STEP_MS = 5_000
 const SESSION_SAMPLE_LIMIT = 10_000
 const CHART_MAX_POINTS = 220
+const OPTIONAL_CHART_TAB_COUNT = OPTIONAL_CHART_METRICS.length
 
 type MarkerPoint = {
   id: string
@@ -63,6 +78,7 @@ export function HistoryMapPlayer({
   const [playing, setPlaying] = useState(false)
   const [headTimeMs, setHeadTimeMs] = useState<number | null>(null)
   const [mapReady, setMapReady] = useState(false)
+  const [activeCharts, setActiveCharts] = useState<Set<OptionalChartMetric>>(new Set())
   const playbackStartRef = useRef<{ realMs: number; headMs: number } | null>(null)
   const cameraRef = useRef<CameraRef>(null)
 
@@ -114,6 +130,89 @@ export function HistoryMapPlayer({
     [chartSamples],
   )
 
+  const batteryVoltagePoints = useMemo<TelemetryChartPoint[]>(
+    () => chartSamples.map((s) => ({ date: new Date(s.capturedAtMs), value: s.batteryVoltage })),
+    [chartSamples],
+  )
+  const tempMotorPoints = useMemo<TelemetryChartPoint[]>(
+    () =>
+      chartSamples
+        .filter((s) => s.tempMotor != null)
+        .map((s) => ({ date: new Date(s.capturedAtMs), value: s.tempMotor! })),
+    [chartSamples],
+  )
+  const tempMosfetPoints = useMemo<TelemetryChartPoint[]>(
+    () =>
+      chartSamples
+        .filter((s) => s.tempMosfet != null)
+        .map((s) => ({ date: new Date(s.capturedAtMs), value: s.tempMosfet! })),
+    [chartSamples],
+  )
+  const motorCurrentPoints = useMemo<TelemetryChartPoint[]>(
+    () => chartSamples.map((s) => ({ date: new Date(s.capturedAtMs), value: s.motorCurrent })),
+    [chartSamples],
+  )
+  const batteryCurrentPoints = useMemo<TelemetryChartPoint[]>(
+    () => chartSamples.map((s) => ({ date: new Date(s.capturedAtMs), value: s.batteryCurrent })),
+    [chartSamples],
+  )
+
+  const batteryRange = useMemo(
+    () =>
+      computeAutoRange(batteryVoltagePoints, {
+        includeZero: false,
+        minSpan: 5,
+        paddingRatio: 0.1,
+        fallbackMin: 30,
+        fallbackMax: 60,
+      }),
+    [batteryVoltagePoints],
+  )
+  const tempMotorRange = useMemo(
+    () =>
+      computeAutoRange(tempMotorPoints, {
+        includeZero: false,
+        minSpan: 20,
+        paddingRatio: 0.1,
+        fallbackMin: 0,
+        fallbackMax: 100,
+      }),
+    [tempMotorPoints],
+  )
+  const tempMosfetRange = useMemo(
+    () =>
+      computeAutoRange(tempMosfetPoints, {
+        includeZero: false,
+        minSpan: 20,
+        paddingRatio: 0.1,
+        fallbackMin: 0,
+        fallbackMax: 100,
+      }),
+    [tempMosfetPoints],
+  )
+  const motorCurrentRange = useMemo(
+    () =>
+      computeAutoRange(motorCurrentPoints, {
+        includeZero: true,
+        minSpan: 20,
+        paddingRatio: 0.1,
+        fallbackMin: -50,
+        fallbackMax: 50,
+      }),
+    [motorCurrentPoints],
+  )
+  const batteryCurrentRange = useMemo(
+    () =>
+      computeAutoRange(batteryCurrentPoints, {
+        includeZero: true,
+        minSpan: 20,
+        paddingRatio: 0.1,
+        fallbackMin: -30,
+        fallbackMax: 30,
+      }),
+    [batteryCurrentPoints],
+  )
+
   useEffect(() => {
     if (!selectedSession && sessions.length > 0) {
       void onSelectSession(sessions[0])
@@ -136,7 +235,7 @@ export function HistoryMapPlayer({
     if (!mapReady || !selectedSession || route.length < 2) return
     const fit = () => {
       const bounds = getBounds(route)
-      cameraRef.current?.fitBounds(bounds.ne, bounds.sw, [80, 40, 360, 40], 700)
+      cameraRef.current?.fitBounds(bounds.ne, bounds.sw, [80, 40, 80, 40], 700)
     }
     const frame = requestAnimationFrame(fit)
     const timer = setTimeout(fit, 120)
@@ -144,7 +243,7 @@ export function HistoryMapPlayer({
       cancelAnimationFrame(frame)
       clearTimeout(timer)
     }
-  }, [mapReady, route, selectedSession])
+  }, [mapReady, route, selectedSession, activeCharts.size])
 
   useEffect(() => {
     if (!playing || !selectedSession || headTimeMs == null) return
@@ -225,31 +324,121 @@ export function HistoryMapPlayer({
     const idx = findNearestSampleIndexByTime(chartSamples, headTimeMs)
     return idx >= 0 ? chartSamples[idx] : null
   }, [chartSamples, headTimeMs])
-  const compactStats = useMemo(
+  const optionalChartConfigs = useMemo(
     () => [
-      { label: 'Time', value: headTimeMs != null ? formatTime(headTimeMs) : '-' },
       {
-        label: 'GPS',
-        value: currentGps?.speedMps != null ? `${(currentGps.speedMps * 3.6).toFixed(1)}` : '-',
-      },
-      { label: 'Board', value: currentBoard ? `${currentBoard.speedKmh.toFixed(1)}` : '-' },
-      {
-        label: 'Duty',
+        key: 'duty' as const,
+        label: 'Duty Cycle',
         value: currentBoard ? fmtDutyPercent(currentBoard.dutyCycle, false) : '-',
+        points: dutyPoints,
+        color: '#34d399',
+        range: { y: { min: -100, max: 100 } },
+        currentPoint: currentChartSample
+          ? {
+              date: new Date(currentChartSample.capturedAtMs),
+              value: dutyPercent(currentChartSample.dutyCycle, false),
+            }
+          : null,
+        formatValue: (value: number) => `${value.toFixed(0)}%`,
       },
-      { label: 'Volt', value: currentBoard ? `${currentBoard.batteryVoltage.toFixed(1)}V` : '-' },
       {
-        label: 'State',
-        value: currentBoard
-          ? currentBoard.hasFault
-            ? `F${currentBoard.faultCode}`
-            : String(currentBoard.state)
-          : '-',
+        key: 'battery' as const,
+        label: 'Battery Voltage',
+        value: currentBoard ? `${currentBoard.batteryVoltage.toFixed(1)} V` : '-',
+        points: batteryVoltagePoints,
+        color: '#fbbf24',
+        range: batteryRange,
+        currentPoint: currentChartSample
+          ? {
+              date: new Date(currentChartSample.capturedAtMs),
+              value: currentChartSample.batteryVoltage,
+            }
+          : null,
+        formatValue: (value: number) => `${value.toFixed(1)} V`,
+      },
+      {
+        key: 'tempMotor' as const,
+        label: 'Motor Temp',
+        value: currentBoard?.tempMotor != null ? `${currentBoard.tempMotor.toFixed(1)} C` : '-',
+        points: tempMotorPoints,
+        color: '#f97316',
+        range: tempMotorRange,
+        currentPoint:
+          currentChartSample?.tempMotor != null
+            ? {
+                date: new Date(currentChartSample.capturedAtMs),
+                value: currentChartSample.tempMotor,
+              }
+            : null,
+        formatValue: (value: number) => `${value.toFixed(1)} C`,
+      },
+      {
+        key: 'tempController' as const,
+        label: 'Controller Temp',
+        value: currentBoard?.tempMosfet != null ? `${currentBoard.tempMosfet.toFixed(1)} C` : '-',
+        points: tempMosfetPoints,
+        color: '#ef4444',
+        range: tempMosfetRange,
+        currentPoint:
+          currentChartSample?.tempMosfet != null
+            ? {
+                date: new Date(currentChartSample.capturedAtMs),
+                value: currentChartSample.tempMosfet,
+              }
+            : null,
+        formatValue: (value: number) => `${value.toFixed(1)} C`,
+      },
+      {
+        key: 'motorCurrent' as const,
+        label: 'Motor Current',
+        value: currentBoard ? `${currentBoard.motorCurrent.toFixed(1)} A` : '-',
+        points: motorCurrentPoints,
+        color: '#22c55e',
+        range: motorCurrentRange,
+        currentPoint: currentChartSample
+          ? {
+              date: new Date(currentChartSample.capturedAtMs),
+              value: currentChartSample.motorCurrent,
+            }
+          : null,
+        formatValue: (value: number) => `${value.toFixed(1)} A`,
+      },
+      {
+        key: 'batteryCurrent' as const,
+        label: 'Batt Current',
+        value: currentBoard ? `${currentBoard.batteryCurrent.toFixed(1)} A` : '-',
+        points: batteryCurrentPoints,
+        color: '#38bdf8',
+        range: batteryCurrentRange,
+        currentPoint: currentChartSample
+          ? {
+              date: new Date(currentChartSample.capturedAtMs),
+              value: currentChartSample.batteryCurrent,
+            }
+          : null,
+        formatValue: (value: number) => `${value.toFixed(1)} A`,
       },
     ],
-    [currentBoard, currentGps, headTimeMs],
+    [
+      batteryCurrentPoints,
+      batteryCurrentRange,
+      batteryRange,
+      batteryVoltagePoints,
+      currentBoard,
+      currentChartSample,
+      dutyPoints,
+      motorCurrentPoints,
+      motorCurrentRange,
+      tempMosfetPoints,
+      tempMosfetRange,
+      tempMotorPoints,
+      tempMotorRange,
+    ],
   )
-
+  const visibleOptionalCharts = useMemo(() => {
+    const visible = new Set(getVisibleChartMetrics(activeCharts))
+    return optionalChartConfigs.filter((chart) => visible.has(chart.key))
+  }, [activeCharts, optionalChartConfigs])
   const canMovePrevSession = selectedIndex >= 0 && selectedIndex < sessions.length - 1
   const canMoveNextSession = selectedIndex > 0
   const canMoveHead = !!selectedSession && headTimeMs != null
@@ -320,6 +509,10 @@ export function HistoryMapPlayer({
         style={styles.map}
         styleJSON={ONE_DARK_MAP_STYLE}
         onDidFinishLoadingMap={() => setMapReady(true)}
+        compassEnabled={false}
+        scaleBarEnabled={false}
+        logoEnabled={false}
+        attributionEnabled={false}
         onPress={(feature) => {
           const [longitude, latitude] = feature.geometry.coordinates
           onMapPress(latitude, longitude)
@@ -420,35 +613,71 @@ export function HistoryMapPlayer({
               height={54}
               containerStyle={styles.speedChart}
             />
-            <TelemetryLineChart
-              label="Duty"
-              value={currentBoard ? fmtDutyPercent(currentBoard.dutyCycle, false) : '-'}
-              points={dutyPoints}
-              color="#34d399"
-              range={{ y: { min: -100, max: 100 } }}
-              currentPoint={
-                currentChartSample
-                  ? {
-                      date: new Date(currentChartSample.capturedAtMs),
-                      value: dutyPercent(currentChartSample.dutyCycle, false),
+            {visibleOptionalCharts.map((chart) => (
+              <TelemetryLineChart
+                key={chart.key}
+                label={chart.label}
+                value={chart.value}
+                points={chart.points}
+                color={chart.color}
+                range={chart.range}
+                currentPoint={chart.currentPoint}
+                onPointSelected={selectChartPoint}
+                onGestureStart={stopPlayback}
+                height={54}
+                containerStyle={styles.optionalChart}
+                formatValue={chart.formatValue}
+              />
+            ))}
+            <View style={styles.metricTabs}>
+              {OPTIONAL_CHART_METRICS.map((metric, index) => {
+                const active = activeCharts.has(metric.key)
+                return (
+                  <Pressable
+                    key={metric.key}
+                    style={[
+                      styles.metricTab,
+                      index < OPTIONAL_CHART_METRICS.length - 1 && styles.metricTabDivider,
+                      active && styles.metricTabActive,
+                    ]}
+                    onPress={() =>
+                      setActiveCharts((prev) => toggleOptionalChartMetric(prev, metric.key))
                     }
-                  : null
-              }
-              onPointSelected={selectChartPoint}
-              onGestureStart={stopPlayback}
-              height={54}
-              containerStyle={styles.dutyChart}
-            />
+                  >
+                    {metric.multilineLabel ? (
+                      <View style={styles.metricTabTextStack}>
+                        <Text
+                          style={[styles.metricTabText, active && styles.metricTabTextActive]}
+                          numberOfLines={1}
+                          ellipsizeMode="tail"
+                        >
+                          {metric.multilineLabel[0]}
+                        </Text>
+                        <Text
+                          style={[styles.metricTabText, active && styles.metricTabTextActive]}
+                          numberOfLines={1}
+                          ellipsizeMode="tail"
+                        >
+                          {metric.multilineLabel[1]}
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text
+                        style={[styles.metricTabText, active && styles.metricTabTextActive]}
+                        numberOfLines={1}
+                        ellipsizeMode="tail"
+                      >
+                        {metric.label}
+                      </Text>
+                    )}
+                  </Pressable>
+                )
+              })}
+            </View>
           </View>
         ) : (
           <Text style={styles.chartEmpty}>No board samples for charts.</Text>
         )}
-
-        <View style={styles.compactStats}>
-          {compactStats.map((stat) => (
-            <Stat key={stat.label} label={stat.label} value={stat.value} />
-          ))}
-        </View>
 
         <View style={styles.tapeRow}>
           <Pressable
@@ -456,14 +685,14 @@ export function HistoryMapPlayer({
             disabled={!canMovePrevSession}
             onPress={() => moveSession(-1)}
           >
-            <Text style={styles.tapeText}>{'<<<'}</Text>
+            <SkipBackIcon size={18} color="#f8fafc" weight="fill" />
           </Pressable>
           <Pressable
             style={[styles.tapeButton, !canMoveHead && styles.tapeButtonDisabled]}
             disabled={!canMoveHead}
             onPress={() => stepHead(-1)}
           >
-            <Text style={styles.tapeText}>{'<'}</Text>
+            <CaretLeftIcon size={18} color="#f8fafc" weight="fill" />
           </Pressable>
           <Pressable
             style={[styles.tapeButton, !canMoveHead && styles.tapeButtonDisabled]}
@@ -481,14 +710,14 @@ export function HistoryMapPlayer({
             disabled={!canMoveHead}
             onPress={() => stepHead(1)}
           >
-            <Text style={styles.tapeText}>{'>'}</Text>
+            <CaretRightIcon size={18} color="#f8fafc" weight="fill" />
           </Pressable>
           <Pressable
             style={[styles.tapeButton, !canMoveNextSession && styles.tapeButtonDisabled]}
             disabled={!canMoveNextSession}
             onPress={() => moveSession(1)}
           >
-            <Text style={styles.tapeText}>{'>>>'}</Text>
+            <SkipForwardIcon size={18} color="#f8fafc" weight="fill" />
           </Pressable>
         </View>
 
@@ -510,17 +739,6 @@ export function HistoryMapPlayer({
           void onSelectSession(session)
         }}
       />
-    </View>
-  )
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.statCell}>
-      <Text style={styles.statLabel}>{label}</Text>
-      <Text style={styles.statValue} numberOfLines={1}>
-        {value}
-      </Text>
     </View>
   )
 }
@@ -582,14 +800,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   controls: {
-    position: 'absolute',
-    left: 10,
-    right: 10,
-    bottom: 10,
+    marginHorizontal: 10,
+    marginBottom: 10,
+    marginTop: 6,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#334155',
-    backgroundColor: 'rgba(15,23,42,0.95)',
+    backgroundColor: '#0f172a',
     padding: 10,
     gap: 8,
   },
@@ -625,8 +842,49 @@ const styles = StyleSheet.create({
   speedChart: {
     minHeight: 86,
   },
-  dutyChart: {
+  optionalChart: {
     minHeight: 76,
+  },
+  metricTabs: {
+    flexDirection: 'row',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#334155',
+    backgroundColor: '#0f172a',
+    overflow: 'hidden',
+  },
+  metricTab: {
+    width: `${100 / OPTIONAL_CHART_TAB_COUNT}%`,
+    minWidth: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0f172a',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+  },
+  metricTabDivider: {
+    borderRightWidth: 1,
+    borderRightColor: '#334155',
+  },
+  metricTabActive: {
+    backgroundColor: '#172554',
+  },
+  metricTabTextStack: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 1,
+  },
+  metricTabText: {
+    color: '#94a3b8',
+    fontSize: 10,
+    fontWeight: '700',
+    width: '100%',
+    textAlign: 'center',
+    lineHeight: 12,
+  },
+  metricTabTextActive: {
+    color: '#dbeafe',
   },
   chartEmpty: {
     color: '#94a3b8',
@@ -638,33 +896,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#111827',
     paddingVertical: 10,
     paddingHorizontal: 8,
-  },
-  compactStats: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  statCell: {
-    width: '32%',
-    minHeight: 38,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#334155',
-    paddingHorizontal: 6,
-    paddingVertical: 5,
-    backgroundColor: '#111827',
-    justifyContent: 'center',
-  },
-  statLabel: {
-    color: '#64748b',
-    fontSize: 9,
-    fontWeight: '700',
-  },
-  statValue: {
-    color: '#e2e8f0',
-    fontSize: 11,
-    fontWeight: '700',
-    fontVariant: ['tabular-nums'],
   },
   tapeRow: {
     flexDirection: 'row',
@@ -682,11 +913,6 @@ const styles = StyleSheet.create({
   },
   tapeButtonDisabled: {
     opacity: 0.45,
-  },
-  tapeText: {
-    color: '#f1f5f9',
-    fontSize: 13,
-    fontWeight: '800',
   },
   truncatedText: {
     color: '#fbbf24',
