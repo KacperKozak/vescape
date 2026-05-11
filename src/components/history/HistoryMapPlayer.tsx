@@ -447,6 +447,7 @@ export function HistoryMapPlayer({
   const canMoveNextSession = selectedIndex > 0
   const canMoveHead = !!selectedSession && headTimeMs != null
   const canRenderCharts = boardByTime.length >= 2
+  const showChartShell = !!selectedSession && loadingSession
 
   const stopPlayback = () => {
     setPlaying(false)
@@ -630,24 +631,26 @@ export function HistoryMapPlayer({
           )}
         </View>
 
-        {canRenderCharts ? (
+        {canRenderCharts || showChartShell ? (
           <View style={styles.chartStack}>
             <TelemetryLineChart
               label="Speed"
-              value={currentBoard ? `${currentBoard.speedKmh.toFixed(1)} km/h` : '-'}
-              points={speedPoints}
+              value={
+                !loadingSession && currentBoard ? `${currentBoard.speedKmh.toFixed(1)} km/h` : '-'
+              }
+              points={loadingSession ? [] : speedPoints}
               color="#60a5fa"
               range={speedRange}
               currentPoint={
-                currentChartSample
+                !loadingSession && currentChartSample
                   ? {
                       date: new Date(currentChartSample.capturedAtMs),
                       value: currentChartSample.speedKmh,
                     }
                   : null
               }
-              onPointSelected={selectChartPoint}
-              onGestureStart={stopPlayback}
+              onPointSelected={loadingSession ? undefined : selectChartPoint}
+              onGestureStart={loadingSession ? undefined : stopPlayback}
               height={54}
               containerStyle={styles.speedChart}
             />
@@ -655,13 +658,13 @@ export function HistoryMapPlayer({
               <TelemetryLineChart
                 key={chart.key}
                 label={chart.label}
-                value={chart.value}
-                points={chart.points}
+                value={loadingSession ? '-' : chart.value}
+                points={loadingSession ? [] : chart.points}
                 color={chart.color}
                 range={chart.range}
-                currentPoint={chart.currentPoint}
-                onPointSelected={selectChartPoint}
-                onGestureStart={stopPlayback}
+                currentPoint={loadingSession ? null : chart.currentPoint}
+                onPointSelected={loadingSession ? undefined : selectChartPoint}
+                onGestureStart={loadingSession ? undefined : stopPlayback}
                 height={54}
                 containerStyle={styles.optionalChart}
                 formatValue={chart.formatValue}
