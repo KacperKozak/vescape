@@ -70,7 +70,7 @@ function ImuColumn({
         <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit>
           {value == null ? DASH : metric.format(value)}
         </Text>
-        {value != null && metric.unit ? <Text style={styles.unit}> {metric.unit}</Text> : null}
+        {value != null && metric.unit ? <Text style={styles.unit}>{metric.unit}</Text> : null}
       </View>
       <Sparkline
         points={series}
@@ -78,6 +78,7 @@ function ImuColumn({
         height={18}
         minSpan={20}
         fmtMax={metric.formatWithUnit}
+        showMaxBadge={false}
         windowMs={windowMs}
       />
     </View>

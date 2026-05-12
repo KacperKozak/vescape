@@ -68,6 +68,7 @@ function AdcColumn({
         height={18}
         minSpan={0.5}
         fmtMax={fmtMax}
+        showMaxBadge={false}
         windowMs={windowMs}
       />
     </View>
