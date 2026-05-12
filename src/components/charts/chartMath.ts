@@ -3,6 +3,10 @@ export interface TelemetryChartPoint {
   value: number
 }
 
+export interface TelemetryChartRange {
+  y: { min: number; max: number }
+}
+
 export function computeAutoRange(
   points: TelemetryChartPoint[],
   options?: {
@@ -13,7 +17,7 @@ export function computeAutoRange(
     fallbackMax?: number
     baseline?: { min: number; max: number }
   },
-): { y: { min: number; max: number } } {
+): TelemetryChartRange {
   const includeZero = options?.includeZero ?? false
   const minSpan = options?.minSpan ?? 0
   const paddingRatio = options?.paddingRatio ?? 0

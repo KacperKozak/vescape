@@ -1,12 +1,15 @@
 import { StyleSheet, Text, View } from 'react-native'
 
 import { Sparkline, type SparklinePoint } from '@/components/charts/Sparkline'
-import { theme } from '@/constants/theme'
-import { DASH, fmt } from '@/helpers/format'
+import { telemetry } from '@/constants/telemetry'
+import { DASH } from '@/helpers/format'
 import { useLiveMetric, liveSelectors } from '@/hooks/useLiveMetric'
 import { useLiveWindowMs } from '@/store/settingsStore'
 
 export function ImuCard() {
+  const pitchCfg = telemetry.pitch
+  const rollCfg = telemetry.roll
+  const balanceCfg = telemetry.balancePitch
   const pitchSeries = useLiveMetric(liveSelectors.pitch)
   const rollSeries = useLiveMetric(liveSelectors.roll)
   const balanceSeries = useLiveMetric(liveSelectors.balancePitch)
@@ -21,25 +24,25 @@ export function ImuCard() {
       <View style={styles.row}>
         <ImuColumn
           label="P"
-          value={latestPitch ? `${fmt(latestPitch.value, 0)}°` : DASH}
+          value={latestPitch?.value ?? null}
+          metric={pitchCfg}
           series={pitchSeries}
-          color={theme.wheel.color}
           windowMs={windowMs}
         />
         <View style={styles.divider} />
         <ImuColumn
           label="R"
-          value={latestRoll ? `${fmt(latestRoll.value, 0)}°` : DASH}
+          value={latestRoll?.value ?? null}
+          metric={rollCfg}
           series={rollSeries}
-          color={theme.bran.color}
           windowMs={windowMs}
         />
         <View style={styles.divider} />
         <ImuColumn
           label="B"
-          value={latestBalance ? `${fmt(latestBalance.value, 0)}°` : DASH}
+          value={latestBalance?.value ?? null}
+          metric={balanceCfg}
           series={balanceSeries}
-          color={theme.target.color}
           windowMs={windowMs}
         />
       </View>
@@ -50,23 +53,34 @@ export function ImuCard() {
 function ImuColumn({
   label,
   value,
+  metric,
   series,
-  color,
   windowMs,
 }: {
   label: string
-  value: string
+  value: number | null
+  metric: typeof telemetry.pitch
   series: SparklinePoint[]
-  color: string
   windowMs?: number
 }) {
   return (
     <View style={styles.column}>
       <Text style={styles.label}>{label}</Text>
-      <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit>
-        {value}
-      </Text>
-      <Sparkline points={series} color={color} height={18} minSpan={20} windowMs={windowMs} />
+      <View style={styles.valueRow}>
+        <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit>
+          {value == null ? DASH : metric.format(value)}
+        </Text>
+        {value != null && metric.unit ? <Text style={styles.unit}>{metric.unit}</Text> : null}
+      </View>
+      <Sparkline
+        points={series}
+        color={metric.color}
+        height={18}
+        minSpan={20}
+        fmtMax={metric.formatWithUnit}
+        showMaxBadge={false}
+        windowMs={windowMs}
+      />
     </View>
   )
 }
@@ -110,5 +124,14 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontFamily: 'monospace',
     fontWeight: '600',
+  },
+  valueRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  unit: {
+    color: '#64748b',
+    fontSize: 11,
+    fontWeight: '500',
   },
 })

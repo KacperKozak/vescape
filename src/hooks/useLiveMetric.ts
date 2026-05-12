@@ -70,11 +70,7 @@ function getOrProject(version: number, pick: TelemetrySelector): LiveMetricPoint
 
 export function useLiveMetric(pick: TelemetrySelector): LiveMetricPoint[] {
   const version = useBleStore((s) => s.metricVersion)
-  return useMemo(
-    () => getOrProject(version, pick),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [version, pick],
-  )
+  return useMemo(() => getOrProject(version, pick), [version, pick])
 }
 
 export function useLiveLocations(): LocationEvent[] {

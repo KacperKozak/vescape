@@ -36,6 +36,8 @@ import type {
 import { MAPBOX_ACCESS_TOKEN } from '@/config/mapy'
 import { ONE_DARK_MAP_STYLE } from '@/constants/oneDarkMapStyle'
 import { MAP_DEFAULTS } from '@/constants/mapStyles'
+import { telemetry } from '@/constants/telemetry'
+import { theme } from '@/constants/theme'
 import { getBounds } from '@/helpers/mapGeometry'
 import { MapPin } from '@/components/map/MapPin'
 import { HistorySessionSheet } from './HistorySessionSheet'
@@ -332,10 +334,10 @@ export function HistoryMapPlayer({
     () => [
       {
         key: 'duty' as const,
-        label: 'Duty Cycle',
+        label: telemetry.duty.label,
         value: currentBoard ? fmtDutyPercent(currentBoard.dutyCycle, false) : '-',
         points: dutyPoints,
-        color: '#34d399',
+        color: telemetry.duty.color,
         range: { y: { min: -100, max: 100 } },
         currentPoint: currentChartSample
           ? {
@@ -343,14 +345,16 @@ export function HistoryMapPlayer({
               value: dutyPercent(currentChartSample.dutyCycle, false),
             }
           : null,
-        formatValue: (value: number) => `${value.toFixed(0)}%`,
+        formatValue: (value: number) => telemetry.duty.formatWithUnit(value),
       },
       {
         key: 'battery' as const,
-        label: 'Battery Voltage',
-        value: currentBoard ? `${currentBoard.batteryVoltage.toFixed(1)} V` : '-',
+        label: telemetry.battVoltage.label,
+        value: currentBoard
+          ? telemetry.battVoltage.formatWithUnit(currentBoard.batteryVoltage)
+          : '-',
         points: batteryVoltagePoints,
-        color: '#fbbf24',
+        color: telemetry.battVoltage.color,
         range: batteryRange,
         currentPoint: currentChartSample
           ? {
@@ -358,14 +362,17 @@ export function HistoryMapPlayer({
               value: currentChartSample.batteryVoltage,
             }
           : null,
-        formatValue: (value: number) => `${value.toFixed(1)} V`,
+        formatValue: (value: number) => telemetry.battVoltage.formatWithUnit(value),
       },
       {
         key: 'tempMotor' as const,
-        label: 'Motor Temp',
-        value: currentBoard?.tempMotor != null ? `${currentBoard.tempMotor.toFixed(1)} C` : '-',
+        label: telemetry.motorTemp.label,
+        value:
+          currentBoard?.tempMotor != null
+            ? telemetry.motorTemp.formatWithUnit(currentBoard.tempMotor)
+            : '-',
         points: tempMotorPoints,
-        color: '#f97316',
+        color: telemetry.motorTemp.color,
         range: tempMotorRange,
         currentPoint:
           currentChartSample?.tempMotor != null
@@ -374,14 +381,17 @@ export function HistoryMapPlayer({
                 value: currentChartSample.tempMotor,
               }
             : null,
-        formatValue: (value: number) => `${value.toFixed(1)} C`,
+        formatValue: (value: number) => telemetry.motorTemp.formatWithUnit(value),
       },
       {
         key: 'tempController' as const,
-        label: 'Controller Temp',
-        value: currentBoard?.tempMosfet != null ? `${currentBoard.tempMosfet.toFixed(1)} C` : '-',
+        label: telemetry.controllerTemp.label,
+        value:
+          currentBoard?.tempMosfet != null
+            ? telemetry.controllerTemp.formatWithUnit(currentBoard.tempMosfet)
+            : '-',
         points: tempMosfetPoints,
-        color: '#ef4444',
+        color: telemetry.controllerTemp.color,
         range: tempMosfetRange,
         currentPoint:
           currentChartSample?.tempMosfet != null
@@ -390,14 +400,16 @@ export function HistoryMapPlayer({
                 value: currentChartSample.tempMosfet,
               }
             : null,
-        formatValue: (value: number) => `${value.toFixed(1)} C`,
+        formatValue: (value: number) => telemetry.controllerTemp.formatWithUnit(value),
       },
       {
         key: 'motorCurrent' as const,
-        label: 'Motor Current',
-        value: currentBoard ? `${currentBoard.motorCurrent.toFixed(1)} A` : '-',
+        label: telemetry.motorCurrent.label,
+        value: currentBoard
+          ? telemetry.motorCurrent.formatWithUnit(currentBoard.motorCurrent)
+          : '-',
         points: motorCurrentPoints,
-        color: '#22c55e',
+        color: telemetry.motorCurrent.color,
         range: motorCurrentRange,
         currentPoint: currentChartSample
           ? {
@@ -405,14 +417,16 @@ export function HistoryMapPlayer({
               value: currentChartSample.motorCurrent,
             }
           : null,
-        formatValue: (value: number) => `${value.toFixed(1)} A`,
+        formatValue: (value: number) => telemetry.motorCurrent.formatWithUnit(value),
       },
       {
         key: 'batteryCurrent' as const,
-        label: 'Batt Current',
-        value: currentBoard ? `${currentBoard.batteryCurrent.toFixed(1)} A` : '-',
+        label: telemetry.battCurrent.label,
+        value: currentBoard
+          ? telemetry.battCurrent.formatWithUnit(currentBoard.batteryCurrent)
+          : '-',
         points: batteryCurrentPoints,
-        color: '#38bdf8',
+        color: telemetry.battCurrent.color,
         range: batteryCurrentRange,
         currentPoint: currentChartSample
           ? {
@@ -420,7 +434,7 @@ export function HistoryMapPlayer({
               value: currentChartSample.batteryCurrent,
             }
           : null,
-        formatValue: (value: number) => `${value.toFixed(1)} A`,
+        formatValue: (value: number) => telemetry.battCurrent.formatWithUnit(value),
       },
     ],
     [
@@ -556,7 +570,7 @@ export function HistoryMapPlayer({
             <LineLayer
               id="history-route-line"
               style={{
-                lineColor: '#a855f7',
+                lineColor: theme.target.color,
                 lineWidth: 4,
                 lineCap: 'round',
                 lineJoin: 'round',
@@ -568,7 +582,7 @@ export function HistoryMapPlayer({
           <MapPin
             id="history-current"
             coordinate={[currentGps.longitude, currentGps.latitude]}
-            color="#ef4444"
+            color={theme.error.color}
           />
         )}
         {markerPoints.map((point) => (
@@ -576,7 +590,7 @@ export function HistoryMapPlayer({
             key={point.id}
             id={`history-marker-${point.id}`}
             coordinate={[point.longitude, point.latitude]}
-            color={point.type === 'error' ? '#ef4444' : '#f59e0b'}
+            color={point.type === 'error' ? theme.error.color : '#f59e0b'}
           />
         ))}
       </Mapbox.MapView>
@@ -634,12 +648,14 @@ export function HistoryMapPlayer({
         {canRenderCharts || showChartShell ? (
           <View style={styles.chartStack}>
             <TelemetryLineChart
-              label="Speed"
+              label={telemetry.speed.label}
               value={
-                !loadingSession && currentBoard ? `${currentBoard.speedKmh.toFixed(1)} km/h` : '-'
+                !loadingSession && currentBoard
+                  ? telemetry.speed.formatWithUnit(currentBoard.speedKmh)
+                  : '-'
               }
               points={loadingSession ? [] : speedPoints}
-              color="#60a5fa"
+              color={telemetry.speed.color}
               range={speedRange}
               currentPoint={
                 !loadingSession && currentChartSample
@@ -653,6 +669,7 @@ export function HistoryMapPlayer({
               onGestureStart={loadingSession ? undefined : stopPlayback}
               height={54}
               containerStyle={styles.speedChart}
+              formatValue={(value) => telemetry.speed.formatWithUnit(value)}
             />
             {visibleOptionalCharts.map((chart) => (
               <TelemetryLineChart
@@ -782,14 +799,6 @@ export function HistoryMapPlayer({
       />
     </View>
   )
-}
-
-function formatTime(ms: number): string {
-  return new Date(ms).toLocaleTimeString([], {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  })
 }
 
 const styles = StyleSheet.create({
@@ -969,7 +978,7 @@ const styles = StyleSheet.create({
     opacity: 0.45,
   },
   truncatedText: {
-    color: '#fbbf24',
+    color: theme.warning.text,
     fontSize: 11,
     fontWeight: '700',
   },

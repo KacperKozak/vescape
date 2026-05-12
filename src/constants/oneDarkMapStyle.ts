@@ -1,3 +1,5 @@
+import { theme } from '@/constants/theme'
+
 export const ONE_DARK_MAP_STYLE = JSON.stringify({
   version: 8,
   name: 'One Dark',
@@ -342,8 +344,8 @@ export const ONE_DARK_MAP_STYLE = JSON.stringify({
         'text-size': ['interpolate', ['linear'], ['zoom'], 8, 10, 14, 13],
       },
       paint: {
-        'text-color': '#38bdf8',
-        'text-halo-color': '#0c2a3f',
+        'text-color': theme.wheel.color,
+        'text-halo-color': theme.wheel.bg,
         'text-halo-width': 1,
       },
     },

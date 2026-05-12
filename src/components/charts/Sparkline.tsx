@@ -15,6 +15,8 @@ interface SparklineProps {
   height?: number
   /** Optional formatter for the max-value badge + dot. Omit for clean line only. */
   fmtMax?: (value: number) => string
+  /** Show/hide the max-value badge text row. Max dot still follows `fmtMax`. */
+  showMaxBadge?: boolean
   /** Optional fixed Y range. Overrides auto-range. */
   range?: { min: number; max: number }
   /**
@@ -91,11 +93,17 @@ export function Sparkline({
   color,
   height = DEFAULT_HEIGHT,
   fmtMax,
+  showMaxBadge = true,
   range,
   minSpan = 0,
   windowMs,
 }: SparklineProps) {
   const showMax = !!fmtMax
+  const showBadge = showMax && showMaxBadge
+  const formatMaxBadgeValue = useCallback(
+    (value: number) => (fmtMax ? fmtMax(value).replace(/(\d)\s+([a-zA-Z%°])/g, '$1$2') : ''),
+    [fmtMax],
+  )
   const [width, setWidth] = useState(0)
   const onLayout = useCallback((event: LayoutChangeEvent) => {
     setWidth(Math.round(event.nativeEvent.layout.width))
@@ -167,11 +175,12 @@ export function Sparkline({
 
   return (
     <View style={styles.wrap}>
-      {showMax ? (
+      {showBadge ? (
         <View style={[styles.badgeRow, { height: BADGE_ROW_HEIGHT }]}>
-          {maxValue != null && fmtMax ? (
-            <Text style={[styles.maxBadge, { color }]} numberOfLines={1}>
-              max {fmtMax(maxValue)}
+          {maxValue != null ? (
+            <Text style={styles.maxBadge} numberOfLines={1}>
+              <Text style={styles.maxLabel}>max </Text>
+              <Text style={{ color }}>{formatMaxBadgeValue(maxValue)}</Text>
             </Text>
           ) : null}
         </View>
@@ -215,7 +224,10 @@ const styles = StyleSheet.create({
   },
   maxBadge: {
     fontSize: 9,
-    fontWeight: '700',
     fontVariant: ['tabular-nums'],
+  },
+  maxLabel: {
+    color: '#64748b',
+    fontWeight: '400',
   },
 })

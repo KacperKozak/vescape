@@ -1,12 +1,13 @@
 import { TelemetryCard } from '@/components/TelemetryCard'
-import { theme } from '@/constants/theme'
+import { telemetry } from '@/constants/telemetry'
 import { DASH } from '@/helpers/format'
 import { useLiveMetric, liveSelectors } from '@/hooks/useLiveMetric'
 import { useLiveWindowMs } from '@/store/settingsStore'
 import { liveTelemetryRuntime } from '@/telemetry/liveTelemetryRuntime'
 
-const FMT_MAX = (v: number) => `${v.toFixed(0)}%`
-const RANGE = { min: 0, max: 100 }
+const cfg = telemetry.duty
+const FMT_MAX = (v: number) => cfg.formatWithUnit(v)
+const RANGE = cfg.chartRange
 
 export function DutyCard() {
   const series = useLiveMetric(liveSelectors.duty)
@@ -14,14 +15,14 @@ export function DutyCard() {
 
   return (
     <TelemetryCard
-      controlId="duty"
-      label="Duty Cycle"
+      controlId={cfg.controlId}
+      label={cfg.label}
       value={DASH}
-      unit="%"
+      unit={cfg.unit}
       animatedValue={liveTelemetryRuntime.values.dutyPercent}
-      animatedDecimals={0}
+      animatedDecimals={cfg.decimals}
       series={series}
-      seriesColor={theme.bran.color}
+      seriesColor={cfg.color}
       fmtMax={FMT_MAX}
       range={RANGE}
       windowMs={windowMs}

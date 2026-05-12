@@ -3,16 +3,9 @@ import { StyleSheet, Text, TextInput, View } from 'react-native'
 import Animated, { useAnimatedProps, type SharedValue } from 'react-native-reanimated'
 
 import { Sparkline, type SparklinePoint } from '@/components/charts/Sparkline'
+import { telemetryByControlId } from '@/constants/telemetry'
 import { theme } from '@/constants/theme'
 import { useAlertsStore } from '@/store/alertsStore'
-
-const CONTROL_UNITS: Record<string, string> = {
-  duty: '%',
-  'motor-temp': '°C',
-  'controller-temp': '°C',
-  'motor-current': 'A',
-  'batt-current': 'A',
-}
 
 interface Props {
   label: string
@@ -74,7 +67,7 @@ export function AlertBadge({ controlId }: { controlId: string }) {
   )
   if (enabledRules.length === 0) return null
 
-  const unit = CONTROL_UNITS[controlId] ?? ''
+  const unit = telemetryByControlId[controlId]?.unit ?? ''
   const label = enabledRules
     .map((r) =>
       r.thresholdMax != null ? `${r.threshold}–${r.thresholdMax}${unit}` : `${r.threshold}${unit}`,

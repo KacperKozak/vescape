@@ -26,6 +26,13 @@ interface Props {
   children: ReactNode
   controlId?: string
   unit?: string
+  alertControls?: AlertControl[]
+}
+
+interface AlertControl {
+  label: string
+  controlId: string
+  unit: string
 }
 
 interface AddModalProps {
@@ -209,11 +216,19 @@ function AlertsSection({ controlId, unit }: AlertsSectionProps) {
   )
 }
 
-export function ControlDetailLayout({ title, children, controlId, unit = '' }: Props) {
+export function ControlDetailLayout({
+  title,
+  children,
+  controlId,
+  unit = '',
+  alertControls,
+}: Props) {
   const navigation = useNavigation()
   useEffect(() => {
     navigation.setOptions({ title })
   }, [title, navigation])
+
+  const controls = alertControls ?? (controlId ? [{ label: title, controlId, unit }] : [])
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -222,8 +237,17 @@ export function ControlDetailLayout({ title, children, controlId, unit = '' }: P
         <View style={styles.alertsHeader}>
           <Text style={styles.sectionLabel}>ALERTS</Text>
         </View>
-        {controlId ? (
-          <AlertsSection controlId={controlId} unit={unit} />
+        {controls.length > 0 ? (
+          controls.map((control, index) => (
+            <View key={control.controlId} style={styles.alertControl}>
+              {controls.length > 1 ? (
+                <Text style={[styles.alertControlLabel, index > 0 && styles.alertControlLabelGap]}>
+                  {control.label.toUpperCase()}
+                </Text>
+              ) : null}
+              <AlertsSection controlId={control.controlId} unit={control.unit} />
+            </View>
+          ))
         ) : (
           <Text style={styles.placeholder}>No alert configuration available.</Text>
         )}
@@ -251,6 +275,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  alertControl: {
+    gap: 8,
+  },
+  alertControlLabel: {
+    color: '#64748b',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  alertControlLabelGap: {
+    marginTop: 8,
   },
   sectionLabel: {
     color: '#94a3b8',
