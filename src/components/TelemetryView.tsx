@@ -2,16 +2,14 @@ import { router } from 'expo-router'
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
 
 import {
-  BattCurrentCard,
   BatteryIndicator,
-  ControllerTempCard,
+  CurrentsCard,
   DutyCard,
   FootpadCard,
   ImuCard,
-  MotorCurrentCard,
-  MotorTempCard,
   SpeedIndicator,
   TargetSection,
+  TemperaturesCard,
 } from '@/components/cards'
 import { routes } from '@/navigation/routes'
 import { useBleStore } from '@/store/bleStore'
@@ -63,51 +61,27 @@ export function TelemetryView() {
           </Pressable>
           <Pressable
             style={({ pressed }) => [styles.rowItem, pressed && styles.cardPressablePressed]}
-            onPress={() => router.push(routes.controlMotorTemp)}
+            onPress={() => router.push(routes.controlTemperatures)}
             android_ripple={{
               color: 'rgba(148, 163, 184, 0.18)',
               borderless: false,
               foreground: true,
             }}
           >
-            <MotorTempCard />
+            <TemperaturesCard />
           </Pressable>
         </View>
         <View style={styles.row}>
           <Pressable
             style={({ pressed }) => [styles.rowItem, pressed && styles.cardPressablePressed]}
-            onPress={() => router.push(routes.controlMotorCurrent)}
+            onPress={() => router.push(routes.controlCurrents)}
             android_ripple={{
               color: 'rgba(148, 163, 184, 0.18)',
               borderless: false,
               foreground: true,
             }}
           >
-            <MotorCurrentCard />
-          </Pressable>
-          <Pressable
-            style={({ pressed }) => [styles.rowItem, pressed && styles.cardPressablePressed]}
-            onPress={() => router.push(routes.controlControllerTemp)}
-            android_ripple={{
-              color: 'rgba(148, 163, 184, 0.18)',
-              borderless: false,
-              foreground: true,
-            }}
-          >
-            <ControllerTempCard />
-          </Pressable>
-        </View>
-        <View style={styles.row}>
-          <Pressable
-            style={({ pressed }) => [styles.rowItem, pressed && styles.cardPressablePressed]}
-            onPress={() => router.push(routes.controlBattCurrent)}
-            android_ripple={{
-              color: 'rgba(148, 163, 184, 0.18)',
-              borderless: false,
-              foreground: true,
-            }}
-          >
-            <BattCurrentCard />
+            <CurrentsCard />
           </Pressable>
           <Pressable
             style={({ pressed }) => [styles.rowItem, pressed && styles.cardPressablePressed]}

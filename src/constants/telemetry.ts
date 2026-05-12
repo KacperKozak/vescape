@@ -84,7 +84,7 @@ const telemetryDefinitions = {
   battCurrent: {
     label: 'Batt Current',
     unit: 'A',
-    color: '#c084fc',
+    color: '#60a5fa',
     decimals: 0,
     chartRange: { min: -30, max: 30 },
     minSpan: 20,
@@ -120,7 +120,7 @@ const telemetryDefinitions = {
   footpadAdc1: {
     label: 'ADC 1',
     unit: '',
-    color: '#f59e0b',
+    color: '#94a3b8',
     decimals: 3,
     chartRange: { min: 0, max: 3.3 },
     minSpan: 0.5,
@@ -128,7 +128,7 @@ const telemetryDefinitions = {
   footpadAdc2: {
     label: 'ADC 2',
     unit: '',
-    color: '#fbbf24',
+    color: '#64748b',
     decimals: 3,
     chartRange: { min: 0, max: 3.3 },
     minSpan: 0.5,

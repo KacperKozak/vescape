@@ -24,6 +24,7 @@ export function FootpadCard() {
           value={latestAdc1 ? adc1.format(latestAdc1.value) : DASH}
           series={adc1Series}
           color={adc1.color}
+          fmtMax={adc1.format}
           windowMs={windowMs}
         />
         <View style={styles.divider} />
@@ -32,6 +33,7 @@ export function FootpadCard() {
           value={latestAdc2 ? adc2.format(latestAdc2.value) : DASH}
           series={adc2Series}
           color={adc2.color}
+          fmtMax={adc2.format}
           windowMs={windowMs}
         />
       </View>
@@ -44,12 +46,14 @@ function AdcColumn({
   value,
   series,
   color,
+  fmtMax,
   windowMs,
 }: {
   label: string
   value: string
   series: SparklinePoint[]
   color: string
+  fmtMax: (value: number) => string
   windowMs?: number
 }) {
   return (
@@ -58,7 +62,14 @@ function AdcColumn({
       <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit>
         {value}
       </Text>
-      <Sparkline points={series} color={color} height={18} minSpan={0.5} windowMs={windowMs} />
+      <Sparkline
+        points={series}
+        color={color}
+        height={18}
+        minSpan={0.5}
+        fmtMax={fmtMax}
+        windowMs={windowMs}
+      />
     </View>
   )
 }

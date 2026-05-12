@@ -1,71 +1,54 @@
 import { StyleSheet, Text, View } from 'react-native'
 
+import { AlertBadge } from '@/components/TelemetryCard'
 import { Sparkline, type SparklinePoint } from '@/components/charts/Sparkline'
-import { telemetry } from '@/constants/telemetry'
+import type { TelemetryMetricConfig } from '@/constants/telemetry'
 import { DASH } from '@/helpers/format'
-import { useLiveMetric, liveSelectors } from '@/hooks/useLiveMetric'
-import { useLiveWindowMs } from '@/store/settingsStore'
 
-export function ImuCard() {
-  const pitchCfg = telemetry.pitch
-  const rollCfg = telemetry.roll
-  const balanceCfg = telemetry.balancePitch
-  const pitchSeries = useLiveMetric(liveSelectors.pitch)
-  const rollSeries = useLiveMetric(liveSelectors.roll)
-  const balanceSeries = useLiveMetric(liveSelectors.balancePitch)
-  const windowMs = useLiveWindowMs()
-  const latestPitch = pitchSeries.at(-1)
-  const latestRoll = rollSeries.at(-1)
-  const latestBalance = balanceSeries.at(-1)
+interface DualMetricCardProps {
+  title: string
+  left: MetricColumnProps
+  right: MetricColumnProps
+}
 
+interface MetricColumnProps {
+  metric: TelemetryMetricConfig
+  label?: string
+  value: number | null
+  series: SparklinePoint[]
+  windowMs?: number
+  formatValue?: (value: number) => string
+}
+
+export function DualMetricCard({ title, left, right }: DualMetricCardProps) {
   return (
     <View style={styles.card}>
-      <Text style={styles.cardLabel}>IMU</Text>
+      <Text style={styles.cardLabel}>{title}</Text>
       <View style={styles.row}>
-        <ImuColumn
-          label="P"
-          value={latestPitch?.value ?? null}
-          metric={pitchCfg}
-          series={pitchSeries}
-          windowMs={windowMs}
-        />
+        <MetricColumn {...left} />
         <View style={styles.divider} />
-        <ImuColumn
-          label="R"
-          value={latestRoll?.value ?? null}
-          metric={rollCfg}
-          series={rollSeries}
-          windowMs={windowMs}
-        />
-        <View style={styles.divider} />
-        <ImuColumn
-          label="B"
-          value={latestBalance?.value ?? null}
-          metric={balanceCfg}
-          series={balanceSeries}
-          windowMs={windowMs}
-        />
+        <MetricColumn {...right} />
       </View>
     </View>
   )
 }
 
-function ImuColumn({
+function MetricColumn({
+  metric,
   label,
   value,
-  metric,
   series,
   windowMs,
-}: {
-  label: string
-  value: number | null
-  metric: typeof telemetry.pitch
-  series: SparklinePoint[]
-  windowMs?: number
-}) {
+  formatValue = metric.formatWithUnit,
+}: MetricColumnProps) {
   return (
     <View style={styles.column}>
-      <Text style={styles.label}>{label}</Text>
+      {metric.controlId ? (
+        <View style={styles.alertBadgeContainer}>
+          <AlertBadge controlId={metric.controlId} />
+        </View>
+      ) : null}
+      <Text style={styles.label}>{label ?? metric.label}</Text>
       <View style={styles.valueRow}>
         <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit>
           {value == null ? DASH : metric.format(value)}
@@ -76,9 +59,9 @@ function ImuColumn({
         points={series}
         color={metric.color}
         height={18}
-        minSpan={20}
-        fmtMax={metric.formatWithUnit}
+        minSpan={metric.minSpan}
         windowMs={windowMs}
+        fmtMax={formatValue}
       />
     </View>
   )
@@ -103,7 +86,7 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 10,
   },
   divider: {
     width: 1,
@@ -113,10 +96,17 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 4,
   },
+  alertBadgeContainer: {
+    position: 'absolute',
+    top: -2,
+    right: 0,
+    zIndex: 1,
+  },
   label: {
     color: '#64748b',
     fontSize: 10,
     fontWeight: '500',
+    paddingRight: 18,
   },
   value: {
     color: '#f1f5f9',
