@@ -356,7 +356,7 @@ export function DualGauge({
               points={dutySeries}
               color={telemetry.duty.color}
               height={28}
-              range={{ min: 0, max: 100 }}
+              range={{ min: 0, max: dutyMax }}
               fmtMax={(v) => telemetry.duty.formatWithUnit(v)}
               windowMs={windowMs}
             />
