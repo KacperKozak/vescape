@@ -59,12 +59,12 @@ function polarLeft(r: number, fraction: number) {
   return { x: LEFT_CX + r * Math.cos(angle), y: LEFT_CY - r * Math.sin(angle) }
 }
 
-// Right arc: angle sweeps from π/2 (f=0) to 0 (f=1)
-// polarRight(r, 0) → (10+80*cos(π/2), 100-80*sin(π/2)) = (10, 20)
-// polarRight(r, 1) → (10+80*cos(0), 100-80*sin(0)) = (90, 100)
+// Right arc: angle sweeps from 0 (f=0) to π/2 (f=1)
+// polarRight(r, 0) → (10+80*cos(0), 100) = (90, 100)  [3-o'clock, bottom-right]
+// polarRight(r, 1) → (10+80*cos(π/2), 100-80*sin(π/2)) = (10, 20)  [12-o'clock, top]
 function polarRight(r: number, fraction: number) {
   'worklet'
-  const angle = Math.PI / 2 - (Math.PI / 2) * fraction
+  const angle = (Math.PI / 2) * fraction
   return { x: RIGHT_CX + r * Math.cos(angle), y: RIGHT_CY - r * Math.sin(angle) }
 }
 
@@ -79,7 +79,7 @@ function arcPathRight(f: number) {
   'worklet'
   const end = polarRight(R, clamp01(f))
   const start = polarRight(R, 0)
-  return `M ${start.x} ${start.y} A ${R} ${R} 0 0 1 ${end.x} ${end.y}`
+  return `M ${start.x} ${start.y} A ${R} ${R} 0 0 0 ${end.x} ${end.y}`
 }
 
 function wedgePathLeft(f: number) {
@@ -97,7 +97,7 @@ function wedgePathRight(f: number) {
   if (c <= 0) return ''
   const start = polarRight(R, 0)
   const end = polarRight(R, c)
-  return `M ${RIGHT_CX} ${RIGHT_CY} L ${start.x} ${start.y} A ${R} ${R} 0 0 1 ${end.x} ${end.y} Z`
+  return `M ${RIGHT_CX} ${RIGHT_CY} L ${start.x} ${start.y} A ${R} ${R} 0 0 0 ${end.x} ${end.y} Z`
 }
 
 function rangeWedgePathLeft(fromFraction: number, toFraction: number) {
@@ -267,19 +267,21 @@ function QuarterArc({ side, value, max, color, unit, alerts = [] }: QuarterArcPr
       {isLeft ? (
         <>
           <Text style={[styles.tick, styles.tickBottomLeft]} pointerEvents="none">
-            0
+            {'0 '}
+            <Text style={styles.tickUnit}>{unit}</Text>
           </Text>
           <Text style={[styles.tick, styles.tickTopRight]} pointerEvents="none">
-            {max}
+            {max} <Text style={styles.tickUnit}>{unit}</Text>
           </Text>
         </>
       ) : (
         <>
           <Text style={[styles.tick, styles.tickTopLeft]} pointerEvents="none">
-            {max}
+            {max} <Text style={styles.tickUnit}>{unit}</Text>
           </Text>
           <Text style={[styles.tick, styles.tickBottomRight]} pointerEvents="none">
-            0
+            {'0 '}
+            <Text style={styles.tickUnit}>{unit}</Text>
           </Text>
         </>
       )}
@@ -423,22 +425,26 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
   },
+  tickUnit: {
+    color: '#64748b',
+    fontWeight: '500',
+  },
   // Left side ticks
   tickBottomLeft: {
-    bottom: '4%',
-    left: '4%',
+    bottom: '6%',
+    left: '6%',
   },
   tickTopRight: {
     top: '4%',
-    right: '4%',
+    right: '6%',
   },
   // Right side ticks
   tickTopLeft: {
     top: '4%',
-    left: '4%',
+    left: '6%',
   },
   tickBottomRight: {
-    bottom: '4%',
-    right: '4%',
+    bottom: '6%',
+    right: '6%',
   },
 })
