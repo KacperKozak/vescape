@@ -67,7 +67,7 @@ const telemetryDefinitions = {
   duty: {
     label: 'Duty Cycle',
     unit: '%',
-    color: '#fbbf24',
+    color: '#14b8a6',
     decimals: 0,
     chartRange: { min: 0, max: 100 },
     controlId: 'duty',
@@ -93,7 +93,7 @@ const telemetryDefinitions = {
   battVoltage: {
     label: 'Battery Voltage',
     unit: 'V',
-    color: '#34d399',
+    color: '#4ade80',
     decimals: 2,
     chartRange: { min: 0, max: 100 },
     minSpan: 2,

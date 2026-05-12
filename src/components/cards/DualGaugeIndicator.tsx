@@ -27,6 +27,18 @@ export function DualGaugeIndicator() {
     [alertRules],
   )
 
+  const dutyAlerts = useMemo(
+    () =>
+      alertRules
+        .filter((rule) => rule.enabled && rule.controlId === 'duty')
+        .map((rule) => ({
+          id: rule.id,
+          threshold: rule.threshold,
+          thresholdMax: rule.thresholdMax,
+        })),
+    [alertRules],
+  )
+
   return (
     <DualGauge
       speedValue={liveTelemetryRuntime.values.speedKmh}
@@ -37,6 +49,7 @@ export function DualGaugeIndicator() {
       speedMax={SPEED_MAX}
       dutyMax={DUTY_MAX}
       speedAlerts={speedAlerts}
+      dutyAlerts={dutyAlerts}
     />
   )
 }

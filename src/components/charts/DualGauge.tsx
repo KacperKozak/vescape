@@ -22,6 +22,7 @@ interface DualGaugeProps {
   speedMax?: number
   dutyMax?: number
   speedAlerts?: DualGaugeAlert[]
+  dutyAlerts?: DualGaugeAlert[]
 }
 
 // Quarter-arc geometry constants
@@ -34,6 +35,7 @@ const MARKER_INSET = 10
 const GLOW_GRADIENT_ID_LEFT = 'dualGaugeGlowLeft'
 const GLOW_GRADIENT_ID_RIGHT = 'dualGaugeGlowRight'
 const ALERT_RANGE_GRADIENT_ID = 'dualGaugeAlertRangeLeft'
+const ALERT_RANGE_GRADIENT_ID_RIGHT = 'dualGaugeAlertRangeRight'
 
 // Left arc center: (100, 100). Right arc center: (10, 100).
 const LEFT_CX = 100
@@ -110,15 +112,26 @@ function rangeWedgePathLeft(fromFraction: number, toFraction: number) {
   return `M ${LEFT_CX} ${LEFT_CY} L ${start.x} ${start.y} A ${radius} ${radius} 0 0 1 ${end.x} ${end.y} Z`
 }
 
+function rangeWedgePathRight(fromFraction: number, toFraction: number) {
+  const from = clamp01(fromFraction)
+  const to = clamp01(toFraction)
+  if (to <= from) return ''
+  const radius = R - STROKE / 2
+  const start = polarRight(radius, from)
+  const end = polarRight(radius, to)
+  return `M ${RIGHT_CX} ${RIGHT_CY} L ${start.x} ${start.y} A ${radius} ${radius} 0 0 0 ${end.x} ${end.y} Z`
+}
+
 // Precomputed static background arcs (full arc, f=1)
 const BG_ARC_LEFT = arcPathLeft(1)
 const BG_ARC_RIGHT = arcPathRight(1)
 
-// ── Alert sub-components (left/speed side only) ──────────────────────────────
+// ── Alert sub-components ──────────────────────────────────────────────────────
 
-function AlertTick({ fraction }: { fraction: number }) {
-  const inner = polarLeft(R - 3, fraction)
-  const outer = polarLeft(R + STROKE / 2, fraction)
+function AlertTick({ side, fraction }: { side: 'left' | 'right'; fraction: number }) {
+  const inner = side === 'left' ? polarLeft(R - 3, fraction) : polarRight(R - 3, fraction)
+  const outer =
+    side === 'left' ? polarLeft(R + STROKE / 2, fraction) : polarRight(R + STROKE / 2, fraction)
   return (
     <Line
       x1={inner.x}
@@ -132,22 +145,36 @@ function AlertTick({ fraction }: { fraction: number }) {
   )
 }
 
-function AlertMarker({ alert, max }: { alert: DualGaugeAlert; max: number }) {
+function AlertMarker({
+  side,
+  alert,
+  max,
+}: {
+  side: 'left' | 'right'
+  alert: DualGaugeAlert
+  max: number
+}) {
   const thresholdFraction = clamp01(alert.threshold / max)
   const maxFraction = alert.thresholdMax == null ? null : clamp01(alert.thresholdMax / max)
-  const rangePath = maxFraction != null ? rangeWedgePathLeft(thresholdFraction, maxFraction) : ''
+  const rangePath =
+    maxFraction != null
+      ? side === 'left'
+        ? rangeWedgePathLeft(thresholdFraction, maxFraction)
+        : rangeWedgePathRight(thresholdFraction, maxFraction)
+      : ''
+  const rangeGradientId = side === 'left' ? ALERT_RANGE_GRADIENT_ID : ALERT_RANGE_GRADIENT_ID_RIGHT
 
   if (maxFraction != null && rangePath) {
     return (
       <>
-        <Path d={rangePath} fill={`url(#${ALERT_RANGE_GRADIENT_ID})`} stroke="none" />
-        <AlertTick fraction={thresholdFraction} />
-        <AlertTick fraction={maxFraction} />
+        <Path d={rangePath} fill={`url(#${rangeGradientId})`} stroke="none" />
+        <AlertTick side={side} fraction={thresholdFraction} />
+        <AlertTick side={side} fraction={maxFraction} />
       </>
     )
   }
 
-  return <AlertTick fraction={thresholdFraction} />
+  return <AlertTick side={side} fraction={thresholdFraction} />
 }
 
 // ── QuarterArc sub-component ─────────────────────────────────────────────────
@@ -164,6 +191,7 @@ interface QuarterArcProps {
 function QuarterArc({ side, value, max, color, unit, alerts = [] }: QuarterArcProps) {
   const isLeft = side === 'left'
   const glowId = isLeft ? GLOW_GRADIENT_ID_LEFT : GLOW_GRADIENT_ID_RIGHT
+  const alertRangeGradientId = isLeft ? ALERT_RANGE_GRADIENT_ID : ALERT_RANGE_GRADIENT_ID_RIGHT
   const cx = isLeft ? LEFT_CX : RIGHT_CX
   const cy = isLeft ? LEFT_CY : RIGHT_CY
 
@@ -209,21 +237,19 @@ function QuarterArc({ side, value, max, color, unit, alerts = [] }: QuarterArcPr
             <Stop offset="0.95" stopColor={color} stopOpacity={0.18} />
             <Stop offset="1" stopColor={color} stopOpacity={0.35} />
           </RadialGradient>
-          {isLeft && (
-            <RadialGradient
-              id={ALERT_RANGE_GRADIENT_ID}
-              gradientUnits="userSpaceOnUse"
-              cx={LEFT_CX}
-              cy={LEFT_CY}
-              r={R}
-            >
-              <Stop offset="0" stopColor="#facc15" stopOpacity={0} />
-              <Stop offset="0.82" stopColor="#facc15" stopOpacity={0} />
-              <Stop offset="0.965" stopColor="#facc15" stopOpacity={0.05} />
-              <Stop offset="0.99" stopColor="#facc15" stopOpacity={0.1} />
-              <Stop offset="1" stopColor="#facc15" stopOpacity={0} />
-            </RadialGradient>
-          )}
+          <RadialGradient
+            id={alertRangeGradientId}
+            gradientUnits="userSpaceOnUse"
+            cx={cx}
+            cy={cy}
+            r={R}
+          >
+            <Stop offset="0" stopColor="#facc15" stopOpacity={0} />
+            <Stop offset="0.82" stopColor="#facc15" stopOpacity={0} />
+            <Stop offset="0.965" stopColor="#facc15" stopOpacity={0.05} />
+            <Stop offset="0.99" stopColor="#facc15" stopOpacity={0.1} />
+            <Stop offset="1" stopColor="#facc15" stopOpacity={0} />
+          </RadialGradient>
         </Defs>
 
         {/* Gradient wedge fill */}
@@ -241,8 +267,10 @@ function QuarterArc({ side, value, max, color, unit, alerts = [] }: QuarterArcPr
           fill="none"
         />
 
-        {/* Alert markers (left/speed side only) */}
-        {isLeft && alerts.map((alert) => <AlertMarker key={alert.id} alert={alert} max={max} />)}
+        {/* Alert markers */}
+        {alerts.map((alert) => (
+          <AlertMarker key={alert.id} side={side} alert={alert} max={max} />
+        ))}
 
         {/* Position marker */}
         <AnimatedLine
@@ -300,6 +328,7 @@ export function DualGauge({
   speedMax = 50,
   dutyMax = 100,
   speedAlerts = [],
+  dutyAlerts = [],
 }: DualGaugeProps) {
   const router = useRouter()
 
@@ -342,6 +371,7 @@ export function DualGauge({
             max={dutyMax}
             color={telemetry.duty.color}
             unit="%"
+            alerts={dutyAlerts}
           />
           {dutySeries && dutySeries.length > 1 && (
             <Sparkline
@@ -363,7 +393,7 @@ const styles = StyleSheet.create({
   wrap: {
     backgroundColor: '#1e293b',
     borderRadius: 16,
-    padding: 16,
+    padding: 12,
     marginHorizontal: 4,
     marginBottom: 6,
     position: 'relative',
@@ -387,8 +417,8 @@ const styles = StyleSheet.create({
     // Anchor to the bottom-right area of the left arc (arc ends at top-center of viewBox)
     right: 0,
     left: '20%',
-    top: '10%',
-    bottom: '10%',
+    top: '14%',
+    bottom: '6%',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -397,8 +427,8 @@ const styles = StyleSheet.create({
     // Anchor to the bottom-left area of the right arc (arc ends at top-center of viewBox)
     left: 0,
     right: '20%',
-    top: '10%',
-    bottom: '10%',
+    top: '14%',
+    bottom: '6%',
     alignItems: 'center',
     justifyContent: 'center',
   },
