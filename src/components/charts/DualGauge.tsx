@@ -365,14 +365,6 @@ export function DualGauge({
           onPress={() => router.push(routes.controlSpeed)}
           android_ripple={{ color: 'rgba(148,163,184,0.18)', borderless: false, foreground: true }}
         >
-          <QuarterArc
-            side="left"
-            value={speedValue}
-            max={speedMax}
-            color={telemetry.speed.color}
-            unit="km/h"
-            alerts={speedAlerts}
-          />
           {speedSeries && speedSeries.length > 1 && (
             <Sparkline
               points={speedSeries}
@@ -383,6 +375,14 @@ export function DualGauge({
               windowMs={windowMs}
             />
           )}
+          <QuarterArc
+            side="left"
+            value={speedValue}
+            max={speedMax}
+            color={telemetry.speed.color}
+            unit="km/h"
+            alerts={speedAlerts}
+          />
         </Pressable>
 
         <Pressable
@@ -390,14 +390,6 @@ export function DualGauge({
           onPress={() => router.push(routes.controlDuty)}
           android_ripple={{ color: 'rgba(148,163,184,0.18)', borderless: false, foreground: true }}
         >
-          <QuarterArc
-            side="right"
-            value={dutyValue}
-            max={dutyMax}
-            color={telemetry.duty.color}
-            unit="%"
-            alerts={dutyAlerts}
-          />
           {dutySeries && dutySeries.length > 1 && (
             <Sparkline
               points={dutySeries}
@@ -408,6 +400,14 @@ export function DualGauge({
               windowMs={windowMs}
             />
           )}
+          <QuarterArc
+            side="right"
+            value={dutyValue}
+            max={dutyMax}
+            color={telemetry.duty.color}
+            unit="%"
+            alerts={dutyAlerts}
+          />
         </Pressable>
       </View>
     </View>
