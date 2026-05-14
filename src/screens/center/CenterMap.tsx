@@ -38,7 +38,6 @@ Mapbox.setAccessToken(MAPBOX_ACCESS_TOKEN)
 
 export interface CenterMapHandle {
   recenterLive: () => void
-  fitRide: () => void
   resetRotation: () => void
   togglePerspective: () => void
   setPadding: (bottom: number) => void
@@ -158,7 +157,6 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
     ref,
     () => ({
       recenterLive,
-      fitRide,
       resetRotation() {
         cameraRef.current?.setCamera({
           heading: 0,
@@ -184,7 +182,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
         })
       },
     }),
-    [fitRide, onHeadingChange, onPerspectiveChange, perspectiveEnabled, recenterLive],
+    [onHeadingChange, onPerspectiveChange, perspectiveEnabled, recenterLive],
   )
 
   useEffect(() => {

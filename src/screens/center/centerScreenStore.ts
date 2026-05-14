@@ -17,8 +17,6 @@ interface CenterScreenActions {
   enterTelemetry: () => void
   enterMap: () => void
   enterHistory: () => void
-  openHistorySheet: () => void
-  closeHistorySheet: () => void
   setHistorySheetVisible: (visible: boolean) => void
   setMapStyleKey: (key: MapStyleKey) => void
   setRotationLocked: (locked: boolean | ((prev: boolean) => boolean)) => void
@@ -52,14 +50,6 @@ export const useCenterScreenStore = create<CenterScreenState & CenterScreenActio
 
   enterHistory() {
     set({ mode: 'history' })
-  },
-
-  openHistorySheet() {
-    set({ historySheetVisible: true })
-  },
-
-  closeHistorySheet() {
-    set({ historySheetVisible: false })
   },
 
   setHistorySheetVisible(visible) {

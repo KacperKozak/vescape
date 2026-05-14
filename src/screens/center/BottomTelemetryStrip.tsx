@@ -8,14 +8,10 @@ import { routes } from '@/navigation/routes'
 import { liveSelectors, useLiveMetric } from '@/hooks/useLiveMetric'
 import { useLiveWindowMs } from '@/store/settingsStore'
 
-interface BottomTelemetryStripProps {
-  visible: boolean
-}
-
 const FOOTPAD_ACTIVE_V = 0.8
 export const STRIP_CONTENT_HEIGHT = 80
 
-export function BottomTelemetryStrip({ visible }: BottomTelemetryStripProps) {
+export function BottomTelemetryStrip() {
   const insets = useSafeAreaInsets()
   const windowMs = useLiveWindowMs()
   const motorTempSeries = useLiveMetric(liveSelectors.motorTemp)
@@ -25,8 +21,6 @@ export function BottomTelemetryStrip({ visible }: BottomTelemetryStripProps) {
   const adc1Series = useLiveMetric(liveSelectors.footpadAdc1)
   const adc2Series = useLiveMetric(liveSelectors.footpadAdc2)
   const pitchSeries = useLiveMetric(liveSelectors.pitch)
-
-  if (!visible) return null
 
   const motorTemp = motorTempSeries.at(-1)?.value ?? null
   const controllerTemp = controllerTempSeries.at(-1)?.value ?? null

@@ -6,7 +6,6 @@ import {
   PencilSimpleIcon,
   PlugsConnectedIcon,
   PowerIcon,
-  UserCircleIcon,
   XCircleIcon,
 } from 'phosphor-react-native'
 import { router } from 'expo-router'
@@ -18,7 +17,6 @@ import type { Board } from '@/store/boardStore'
 import { theme } from '@/constants/theme'
 
 interface TopBarProps {
-  visible: boolean
   boards: Board[]
   activeBoardId: string | null
   activeBoard: Board | undefined
@@ -29,11 +27,9 @@ interface TopBarProps {
   onToggleRecordDebug: () => void
   onDisconnect: () => void
   onRetryConnect: () => void
-  onOpenProfile?: () => void
 }
 
 export function TopBar({
-  visible,
   boards,
   activeBoardId,
   activeBoard,
@@ -44,11 +40,9 @@ export function TopBar({
   onToggleRecordDebug,
   onDisconnect,
   onRetryConnect,
-  onOpenProfile,
 }: TopBarProps) {
   const insets = useSafeAreaInsets()
   const [selectorOpen, setSelectorOpen] = useState(false)
-  if (!visible) return null
 
   const canDisconnect =
     bleStatus === 'connected' ||
@@ -67,12 +61,6 @@ export function TopBar({
   return (
     <View style={[styles.wrap, { paddingTop: Math.max(insets.top, 8) }]} pointerEvents="box-none">
       <View style={styles.row}>
-        {/* Left: profile */}
-        <Pressable style={[styles.iconRound, styles.iconLeft]} onPress={onOpenProfile}>
-          <UserCircleIcon size={18} color="#cbd5e1" weight="bold" />
-        </Pressable>
-
-        {/* Center: board pill — View not Pressable, so nested buttons work */}
         <View style={styles.pill}>
           <Pressable style={styles.boardButton} onPress={() => setSelectorOpen(true)}>
             <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
@@ -107,8 +95,6 @@ export function TopBar({
             )}
           </Pressable>
         </View>
-
-        {/* Right: gear */}
         <Pressable
           style={[styles.iconRound, styles.iconRight]}
           onPress={() => router.push(routes.settings)}
@@ -163,10 +149,6 @@ const styles = StyleSheet.create({
   },
   iconRoundDisabled: {
     opacity: 0.4,
-  },
-  iconLeft: {
-    position: 'absolute',
-    left: 10,
   },
   iconRight: {
     position: 'absolute',

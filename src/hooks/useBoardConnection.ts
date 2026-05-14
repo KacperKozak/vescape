@@ -1,12 +1,10 @@
-import { useCallback, useMemo } from 'react'
+import { useCallback } from 'react'
 import { router } from 'expo-router'
-import { PencilSimpleIcon, PowerIcon, StarIcon } from 'phosphor-react-native'
 import { useShallow } from 'zustand/react/shallow'
 
 import { useBoardStore } from '@/store/boardStore'
 import { useBleStore } from '@/store/bleStore'
 import { routes } from '@/navigation/routes'
-import type { BoardMenuItem } from '@/components/BoardMenu'
 
 function isBoardBusy(status: string): boolean {
   return (
@@ -20,12 +18,11 @@ function isBoardBusy(status: string): boolean {
 }
 
 export function useBoardConnection() {
-  const { boards, activeBoardId, setActiveBoard, starBoard } = useBoardStore(
+  const { boards, activeBoardId, setActiveBoard } = useBoardStore(
     useShallow((s) => ({
       boards: s.boards,
       activeBoardId: s.activeBoardId,
       setActiveBoard: s.setActiveBoard,
-      starBoard: s.starBoard,
     })),
   )
   const {
@@ -51,40 +48,6 @@ export function useBoardConnection() {
   )
 
   const activeBoard = boards.find((b) => b.id === activeBoardId)
-  const isSessionActive =
-    bleStatus === 'connected' || bleStatus === 'stale' || bleStatus === 'reconnecting'
-
-  const inlineItems = useMemo<BoardMenuItem[]>(() => {
-    const items: BoardMenuItem[] = []
-    if (activeBoard) {
-      items.push({
-        label: 'Edit Board',
-        icon: PencilSimpleIcon,
-        onPress: () =>
-          router.push({ pathname: routes.addBoardDetails, params: { boardId: activeBoard.id } }),
-      })
-    }
-    if (isSessionActive) {
-      items.push({
-        label: 'Disconnect',
-        icon: PowerIcon,
-        onPress: () => void disconnect(),
-      })
-    }
-    return items
-  }, [activeBoard, isSessionActive, disconnect])
-
-  const menuItems = useMemo<BoardMenuItem[]>(() => {
-    const items: BoardMenuItem[] = []
-    if (activeBoard && !activeBoard.isStarred) {
-      items.push({
-        label: 'Make main',
-        icon: StarIcon,
-        onPress: () => void starBoard(activeBoard.id),
-      })
-    }
-    return items
-  }, [activeBoard, starBoard])
 
   const handleSelectBoard = useCallback(
     (id: string) => {
@@ -119,8 +82,6 @@ export function useBoardConnection() {
     nativeStateReady,
     bleStatus,
     recordDebugSession,
-    inlineItems,
-    menuItems,
     handleSelectBoard,
     handleAddBoard,
     handleCancel,

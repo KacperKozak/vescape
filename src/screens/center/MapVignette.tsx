@@ -1,15 +1,14 @@
 import { Dimensions, StyleSheet, View } from 'react-native'
 import Svg, { Defs, Rect, RadialGradient, LinearGradient, Stop } from 'react-native-svg'
 
+import type { CenterViewState } from '@/screens/center/centerViewState'
+
 interface MapVignetteProps {
-  visible: boolean
-  mode?: 'live' | 'history'
+  mode: CenterViewState
   panelHeight?: number
 }
 
-export function MapVignette({ visible, mode = 'live', panelHeight = 0 }: MapVignetteProps) {
-  if (!visible) return null
-
+export function MapVignette({ mode, panelHeight = 0 }: MapVignetteProps) {
   if (mode === 'history') {
     const screenHeight = Dimensions.get('window').height
     const panelTopPct =

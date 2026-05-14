@@ -21,7 +21,6 @@ interface UseCenterScreenControllerArgs {
 
 export function useCenterScreenController({ mapRef }: UseCenterScreenControllerArgs) {
   const backPressedOnce = useRef(false)
-  const [historyLoadedOnce, setHistoryLoadedOnce] = useState(false)
   const [heading, setHeading] = useState(0)
   const {
     mode,
@@ -117,16 +116,13 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
   }, [enterTelemetry, mapRef, selectSession])
 
   const enterHistoryMode = useCallback(async () => {
-    if (!historyLoadedOnce) {
-      await loadInitial()
-      setHistoryLoadedOnce(true)
-    }
+    await loadInitial()
     const latest = getLatestSession(useHistoryStore.getState().sessions)
     if (latest) {
       await selectSession(latest)
     }
     enterHistory()
-  }, [enterHistory, historyLoadedOnce, loadInitial, selectSession])
+  }, [enterHistory, loadInitial, selectSession])
 
   const selectRide = useCallback(
     (session: HistorySession) => {

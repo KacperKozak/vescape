@@ -119,12 +119,13 @@ export function FloatingBar({
   )
 
   const toggleRecord = useCallback(() => {
+    if (!recording && !canToggleRecording(bleStatus)) return
     if (recording) {
       stop()
     } else {
       start()
     }
-  }, [recording, start, stop])
+  }, [bleStatus, recording, start, stop])
 
   const pill = getStatusPill(bleStatus, scanStatus, activeBoard, onStopScan, onRetryConnect)
 
@@ -164,6 +165,7 @@ export function FloatingBar({
           recording && styles.fabActive,
           !canToggleRecording(bleStatus) && !recording && styles.fabDisabled,
         ]}
+        disabled={!recording && !canToggleRecording(bleStatus)}
         onPress={toggleRecord}
       >
         {recording ? (

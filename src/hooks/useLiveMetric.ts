@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import type { TelemetryEvent, LocationEvent } from 'vesc-ble'
+import type { TelemetryEvent } from 'vesc-ble'
 
 import { useBleStore } from '@/store/bleStore'
 import { liveTelemetryRuntime } from '@/telemetry/liveTelemetryRuntime'
@@ -71,8 +71,4 @@ function getOrProject(version: number, pick: TelemetrySelector): LiveMetricPoint
 export function useLiveMetric(pick: TelemetrySelector): LiveMetricPoint[] {
   const version = useBleStore((s) => s.metricVersion)
   return useMemo(() => getOrProject(version, pick), [version, pick])
-}
-
-export function useLiveLocations(): LocationEvent[] {
-  return useBleStore((s) => s.liveLocationHistory)
 }

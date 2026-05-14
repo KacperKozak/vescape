@@ -34,7 +34,7 @@ describe('centerScreenStore', () => {
   test('clears ride review UI state when returning to telemetry', () => {
     const store = useCenterScreenStore.getState()
 
-    store.openHistorySheet()
+    store.setHistorySheetVisible(true)
     store.setSeekTimeMs(1234)
     store.enterTelemetry()
 

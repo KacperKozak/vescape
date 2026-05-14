@@ -48,9 +48,3 @@ export function estimateBatteryPercent(
   }
   return 0
 }
-
-/** Format SoC percent for display (no decimals, e.g. "73%"). */
-export function fmtBatteryPercent(soc: number | null): string {
-  if (soc == null) return '—'
-  return `${Math.round(soc)}`
-}

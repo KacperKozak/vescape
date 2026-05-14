@@ -3,13 +3,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { BatteryIndicator, DualGaugeIndicator } from '@/components/cards'
 
-interface LiveHudProps {
-  visible: boolean
-}
-
-export function LiveHud({ visible }: LiveHudProps) {
+export function LiveHud() {
   const insets = useSafeAreaInsets()
-  if (!visible) return null
 
   return (
     <View

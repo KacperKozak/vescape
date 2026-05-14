@@ -92,11 +92,10 @@ export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOver
     <>
       {mode === 'telemetry' && (
         <>
-          <MapVignette visible />
-          <LiveHud visible />
-          <BottomTelemetryStrip visible />
+          <MapVignette mode={mode} />
+          <LiveHud />
+          <BottomTelemetryStrip />
           <TopBar
-            visible
             boards={board.boards}
             activeBoardId={board.activeBoardId}
             activeBoard={board.activeBoard}
@@ -150,7 +149,7 @@ export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOver
 
       {mode === 'history' && history.selectedSession && (
         <>
-          <MapVignette visible mode="history" panelHeight={panelHeight} />
+          <MapVignette mode={mode} panelHeight={panelHeight} />
           <HistoryTelemetryPanel
             samples={history.sessionSamples}
             loading={history.loadingSession}
@@ -197,7 +196,7 @@ export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOver
         onSelectSession={history.selectRide}
       />
 
-      {history.historyError ? (
+      {mode === 'history' && history.historyError ? (
         <View style={[styles.historyError, { bottom: aboveStripBottom }]}>
           <Text style={styles.historyErrorText} selectable>
             {history.historyError}
