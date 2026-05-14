@@ -448,12 +448,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   halfPressableSplit: {
-    flex: 0,
-    width: 138,
-    maxWidth: '39%',
+    flex: 4,
   },
   middleSlot: {
-    flex: 1,
+    flex: 3,
     justifyContent: 'flex-start',
   },
   quarterWrap: {
