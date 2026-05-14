@@ -5,6 +5,8 @@ import { useShallow } from 'zustand/react/shallow'
 
 import { CenterMap, type CenterMapHandle } from '@/screens/center/CenterMap'
 import { TopBar } from '@/screens/center/TopBar'
+import { LiveHud } from '@/screens/center/LiveHud'
+import { BottomTelemetryStrip } from '@/screens/center/BottomTelemetryStrip'
 import { FloatingBar } from '@/components/FloatingBar'
 import { routes } from '@/navigation/routes'
 import type { Board } from '@/store/boardStore'
@@ -118,6 +120,8 @@ export function CenterScreen({
         targetLocation={targetLocation}
         onClearTarget={clearTargetLocation}
       />
+      <LiveHud visible />
+      <BottomTelemetryStrip visible />
       <TopBar
         visible
         boards={boards}
