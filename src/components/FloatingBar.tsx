@@ -12,6 +12,7 @@ interface FloatingBarProps {
   activeBoard: Board | undefined
   onStopScan: () => void
   onRetryConnect: () => void
+  bottomOffset?: number
 }
 
 const ALERT_CONFIG = {
@@ -106,6 +107,7 @@ export function FloatingBar({
   activeBoard,
   onStopScan,
   onRetryConnect,
+  bottomOffset = 16,
 }: FloatingBarProps) {
   const { recording, scanStatus, start, stop } = useBleStore(
     useShallow((s) => ({
@@ -127,7 +129,7 @@ export function FloatingBar({
   const pill = getStatusPill(bleStatus, scanStatus, activeBoard, onStopScan, onRetryConnect)
 
   return (
-    <View style={styles.wrapper} pointerEvents="box-none">
+    <View style={[styles.wrapper, { bottom: bottomOffset }]} pointerEvents="box-none">
       {pill?.kind === 'spinner' && (
         <View style={[styles.pill, { borderColor: pill.color + '55' }]}>
           <ActivityIndicator size="small" color={pill.color} />
@@ -178,7 +180,6 @@ export function FloatingBar({
 const styles = StyleSheet.create({
   wrapper: {
     position: 'absolute',
-    bottom: 16,
     left: 0,
     right: 0,
     flexDirection: 'column',

@@ -1,4 +1,12 @@
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native'
 import Animated, { useAnimatedProps, type SharedValue } from 'react-native-reanimated'
 import { useRouter } from 'expo-router'
 import Svg, { Defs, Line, Path, RadialGradient, Stop } from 'react-native-svg'
@@ -23,6 +31,10 @@ interface DualGaugeProps {
   dutyMax?: number
   speedAlerts?: DualGaugeAlert[]
   dutyAlerts?: DualGaugeAlert[]
+  compact?: boolean
+  transparent?: boolean
+  split?: boolean
+  containerStyle?: StyleProp<ViewStyle>
 }
 
 // Quarter-arc geometry constants
@@ -331,14 +343,25 @@ export function DualGauge({
   dutyMax = 100,
   speedAlerts = [],
   dutyAlerts = [],
+  compact = false,
+  transparent = false,
+  split = false,
+  containerStyle,
 }: DualGaugeProps) {
   const router = useRouter()
 
   return (
-    <View style={styles.wrap}>
-      <View style={{ flexDirection: 'row' }}>
+    <View
+      style={[
+        styles.wrap,
+        compact && styles.wrapCompact,
+        transparent && styles.wrapTransparent,
+        containerStyle,
+      ]}
+    >
+      <View style={[styles.row, split && styles.rowSplit]}>
         <Pressable
-          style={styles.halfPressable}
+          style={[styles.halfPressable, split && styles.halfPressableSplit]}
           onPress={() => router.push(routes.controlSpeed)}
           android_ripple={{ color: 'rgba(148,163,184,0.18)', borderless: false, foreground: true }}
         >
@@ -363,7 +386,7 @@ export function DualGauge({
         </Pressable>
 
         <Pressable
-          style={styles.halfPressable}
+          style={[styles.halfPressable, split && styles.halfPressableSplit]}
           onPress={() => router.push(routes.controlDuty)}
           android_ripple={{ color: 'rgba(148,163,184,0.18)', borderless: false, foreground: true }}
         >
@@ -400,10 +423,29 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     position: 'relative',
   },
+  wrapCompact: {
+    padding: 2,
+    marginHorizontal: 0,
+    marginBottom: 0,
+  },
+  wrapTransparent: {
+    backgroundColor: 'transparent',
+  },
   halfPressable: {
     flex: 1,
     overflow: 'hidden',
     borderRadius: 8,
+  },
+  row: {
+    flexDirection: 'row',
+  },
+  rowSplit: {
+    justifyContent: 'space-between',
+  },
+  halfPressableSplit: {
+    flex: 0,
+    width: 138,
+    maxWidth: '39%',
   },
   quarterWrap: {
     width: '100%',

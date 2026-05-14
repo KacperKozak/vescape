@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
 
 import { Sparkline, type SparklinePoint } from '@/components/charts/Sparkline'
 import { telemetry } from '@/constants/telemetry'
@@ -15,6 +15,9 @@ interface Props {
   windowMs?: number
   /** Hint text shown when voltage limits aren't configured yet. */
   hint?: string
+  compact?: boolean
+  transparent?: boolean
+  containerStyle?: StyleProp<ViewStyle>
 }
 
 const BATTERY_LOW_PCT = 30
@@ -29,10 +32,26 @@ function pickColor(percent: number | null): string {
  * Compact battery indicator: tiny "BATTERY" label, 10-min sparkline filling
  * the middle, % + voltage on the right. Sits at the top of the telemetry view.
  */
-export function BatteryBar({ percent, voltage, series, windowMs, hint }: Props) {
+export function BatteryBar({
+  percent,
+  voltage,
+  series,
+  windowMs,
+  hint,
+  compact,
+  transparent,
+  containerStyle,
+}: Props) {
   const color = pickColor(percent)
   return (
-    <View style={styles.wrap}>
+    <View
+      style={[
+        styles.wrap,
+        compact && styles.wrapCompact,
+        transparent && styles.wrapTransparent,
+        containerStyle,
+      ]}
+    >
       <View style={styles.left}>
         <Text style={styles.label}>BATTERY</Text>
         {voltage != null ? (
@@ -77,6 +96,16 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
     marginBottom: 6,
     gap: 12,
+  },
+  wrapCompact: {
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+    marginHorizontal: 0,
+    marginBottom: 0,
+    gap: 6,
+  },
+  wrapTransparent: {
+    backgroundColor: 'transparent',
   },
   left: {
     alignItems: 'flex-start',

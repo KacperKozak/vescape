@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import type { StyleProp, ViewStyle } from 'react-native'
 
 import { DualGauge } from '@/components/charts/DualGauge'
 import { useAlertsStore } from '@/store/alertsStore'
@@ -9,7 +10,19 @@ import { liveTelemetryRuntime } from '@/telemetry/liveTelemetryRuntime'
 const SPEED_MAX = 50
 const DUTY_MAX = 100
 
-export function DualGaugeIndicator() {
+interface DualGaugeIndicatorProps {
+  compact?: boolean
+  transparent?: boolean
+  split?: boolean
+  containerStyle?: StyleProp<ViewStyle>
+}
+
+export function DualGaugeIndicator({
+  compact,
+  transparent,
+  split,
+  containerStyle,
+}: DualGaugeIndicatorProps) {
   const speedSeries = useLiveMetric(liveSelectors.speed)
   const dutySeries = useLiveMetric(liveSelectors.duty)
   const windowMs = useLiveWindowMs()
@@ -50,6 +63,10 @@ export function DualGaugeIndicator() {
       dutyMax={DUTY_MAX}
       speedAlerts={speedAlerts}
       dutyAlerts={dutyAlerts}
+      compact={compact}
+      transparent={transparent}
+      split={split}
+      containerStyle={containerStyle}
     />
   )
 }

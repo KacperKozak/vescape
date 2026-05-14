@@ -37,23 +37,33 @@ export function BottomTelemetryStrip({ visible }: BottomTelemetryStripProps) {
   const pitchDeg = Math.max(-18, Math.min(18, pitch))
 
   return (
-    <View style={[styles.wrap, { bottom: Math.max(insets.bottom, 10) }]} pointerEvents="box-none">
+    <View style={[styles.wrap, { bottom: Math.max(insets.bottom, 8) }]} pointerEvents="box-none">
       <View style={styles.strip}>
         <Pressable style={styles.cellWide} onPress={() => router.push(routes.controlTemperatures)}>
           <Text style={styles.label}>Temps</Text>
           <View style={styles.tempRow}>
+            <Text style={styles.subLabel}>M</Text>
             <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit>
               {formatValue(motorTemp, telemetry.motorTemp.formatWithUnit)}
             </Text>
+            <Text style={styles.subLabel}>C</Text>
             <Text style={styles.valueMuted} numberOfLines={1} adjustsFontSizeToFit>
               {formatValue(controllerTemp, telemetry.controllerTemp.formatWithUnit)}
             </Text>
           </View>
-          <View style={styles.sparkWrap}>
+          <View style={styles.sparkRow}>
             <Sparkline
               points={motorTempSeries}
               color={telemetry.motorTemp.color}
-              height={14}
+              height={12}
+              minSpan={20}
+              showMaxBadge={false}
+              windowMs={windowMs}
+            />
+            <Sparkline
+              points={controllerTempSeries}
+              color={telemetry.controllerTemp.color}
+              height={12}
               minSpan={20}
               showMaxBadge={false}
               windowMs={windowMs}
@@ -63,12 +73,18 @@ export function BottomTelemetryStrip({ visible }: BottomTelemetryStripProps) {
 
         <Pressable style={styles.cellWide} onPress={() => router.push(routes.controlCurrents)}>
           <Text style={styles.label}>Current</Text>
-          <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit>
-            {formatValue(motorCurrent, telemetry.motorCurrent.formatWithUnit)}
-          </Text>
-          <Text style={styles.valueMuted} numberOfLines={1} adjustsFontSizeToFit>
-            {formatValue(batteryCurrent, telemetry.battCurrent.formatWithUnit)}
-          </Text>
+          <View style={styles.currentRow}>
+            <Text style={styles.subLabel}>Motor</Text>
+            <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit>
+              {formatValue(motorCurrent, telemetry.motorCurrent.formatWithUnit)}
+            </Text>
+          </View>
+          <View style={styles.currentRow}>
+            <Text style={styles.subLabel}>Batt</Text>
+            <Text style={styles.valueMuted} numberOfLines={1} adjustsFontSizeToFit>
+              {formatValue(batteryCurrent, telemetry.battCurrent.formatWithUnit)}
+            </Text>
+          </View>
         </Pressable>
 
         <Pressable style={styles.cell} onPress={() => router.push(routes.controlFootpad)}>
@@ -107,24 +123,24 @@ function formatValue(value: number | null, format: (value: number) => string): s
 const styles = StyleSheet.create({
   wrap: {
     position: 'absolute',
-    left: 10,
-    right: 10,
+    left: 6,
+    right: 6,
     zIndex: 10,
   },
   strip: {
-    minHeight: 58,
+    minHeight: 64,
     flexDirection: 'row',
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: 'rgba(148, 163, 184, 0.22)',
-    backgroundColor: 'rgba(15, 23, 42, 0.64)',
+    backgroundColor: 'rgba(15, 23, 42, 0.42)',
     overflow: 'hidden',
   },
   cell: {
-    width: 54,
+    width: 52,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 5,
+    paddingHorizontal: 4,
     gap: 5,
   },
   cellWide: {
@@ -132,7 +148,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 6,
+    paddingHorizontal: 8,
     gap: 2,
   },
   label: {
@@ -143,8 +159,21 @@ const styles = StyleSheet.create({
   },
   tempRow: {
     flexDirection: 'row',
+    alignItems: 'baseline',
     gap: 6,
     maxWidth: '100%',
+  },
+  currentRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+    maxWidth: '100%',
+  },
+  subLabel: {
+    color: '#64748b',
+    fontSize: 9,
+    fontWeight: '900',
+    textTransform: 'uppercase',
   },
   value: {
     color: '#f8fafc',
@@ -158,9 +187,10 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
     fontWeight: '800',
   },
-  sparkWrap: {
-    height: 14,
+  sparkRow: {
+    height: 24,
     width: '100%',
+    gap: 1,
   },
   footpadRow: {
     flexDirection: 'row',

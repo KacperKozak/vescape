@@ -16,6 +16,7 @@ import { CenterMap, type CenterMapHandle } from '@/screens/center/CenterMap'
 import { TopBar } from '@/screens/center/TopBar'
 import { LiveHud } from '@/screens/center/LiveHud'
 import { BottomTelemetryStrip } from '@/screens/center/BottomTelemetryStrip'
+import { MapVignette } from '@/screens/center/MapVignette'
 import { HistoryControls } from '@/screens/center/HistoryControls'
 import {
   canShowBaseOverlays,
@@ -223,6 +224,7 @@ export function CenterScreen({
         targetLocation={targetLocation}
         onClearTarget={clearTargetLocation}
       />
+      <MapVignette visible={showBaseOverlays} />
       <LiveHud visible={showBaseOverlays} />
       <BottomTelemetryStrip visible={showBaseOverlays} />
       <TopBar
@@ -244,6 +246,7 @@ export function CenterScreen({
           activeBoard={activeBoard}
           onStopScan={onStopScan}
           onRetryConnect={onRetryConnect}
+          bottomOffset={88}
         />
       )}
       {showBaseOverlays && (
@@ -297,10 +300,16 @@ export function CenterScreen({
         onSelectSession={selectRide}
       />
       {historyLoadedOnce && !historyLoading && sessions.length === 0 && !selectedSession && (
-        <View style={styles.historyEmpty}>
-          <Text style={styles.historyEmptyTitle}>No rides yet</Text>
-          <Text style={styles.historyEmptyText}>Recorded rides will show here.</Text>
-        </View>
+        <HistoryControls
+          title="No rides yet"
+          canPrevious={false}
+          canNext={false}
+          loading={false}
+          onBack={() => setHistoryLoadedOnce(false)}
+          onPrevious={() => undefined}
+          onNext={() => undefined}
+          onOpenList={() => setHistorySheetVisible(true)}
+        />
       )}
       {historyError ? (
         <View style={styles.historyError}>
@@ -387,27 +396,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(148, 163, 184, 0.28)',
     backgroundColor: 'rgba(15, 23, 42, 0.72)',
-  },
-  historyEmpty: {
-    position: 'absolute',
-    left: 24,
-    right: 24,
-    top: '45%',
-    zIndex: 25,
-    borderRadius: 12,
-    padding: 14,
-    backgroundColor: 'rgba(15, 23, 42, 0.78)',
-    alignItems: 'center',
-  },
-  historyEmptyTitle: {
-    color: '#f8fafc',
-    fontSize: 15,
-    fontWeight: '800',
-  },
-  historyEmptyText: {
-    color: '#94a3b8',
-    fontSize: 12,
-    marginTop: 4,
   },
   historyError: {
     position: 'absolute',

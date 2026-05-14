@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import {
   CaretDownIcon,
+  GearSixIcon,
   PencilSimpleIcon,
   PlugsConnectedIcon,
   PlugsIcon,
@@ -71,6 +72,10 @@ export function TopBar({
           <CaretDownIcon size={12} color="#cbd5e1" weight="bold" />
         </Pressable>
         <View style={styles.divider} />
+        <Pressable style={styles.iconButton} onPress={() => router.push(routes.settings)}>
+          <GearSixIcon size={15} color="#e2e8f0" weight="bold" />
+        </Pressable>
+        <View style={styles.divider} />
         <Pressable
           style={styles.iconButton}
           disabled={!activeBoard}
@@ -121,12 +126,14 @@ const styles = StyleSheet.create({
   wrap: {
     position: 'absolute',
     top: 0,
-    left: 12,
+    left: 0,
+    right: 0,
     zIndex: 20,
+    alignItems: 'center',
   },
   pill: {
     minHeight: 36,
-    maxWidth: 220,
+    maxWidth: 260,
     flexDirection: 'row',
     alignItems: 'center',
     borderRadius: 18,
@@ -142,7 +149,7 @@ const styles = StyleSheet.create({
     paddingLeft: 10,
     paddingRight: 8,
     minHeight: 36,
-    maxWidth: 132,
+    maxWidth: 124,
   },
   statusDot: {
     width: 7,
@@ -153,7 +160,7 @@ const styles = StyleSheet.create({
     color: '#f8fafc',
     fontSize: 13,
     fontWeight: '800',
-    maxWidth: 92,
+    maxWidth: 84,
   },
   divider: {
     width: 1,

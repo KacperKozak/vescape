@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import type { StyleProp, ViewStyle } from 'react-native'
 import { useShallow } from 'zustand/react/shallow'
 
 import { BatteryBar } from '@/components/BatteryBar'
@@ -12,7 +13,13 @@ import { useLiveWindowMs } from '@/store/settingsStore'
 // 20s half-life dampens throttle-burst dips while tracking real drain over ~1 min.
 const BATTERY_SMOOTH_HALF_LIFE_MS = 20_000
 
-export function BatteryIndicator() {
+interface BatteryIndicatorProps {
+  compact?: boolean
+  transparent?: boolean
+  containerStyle?: StyleProp<ViewStyle>
+}
+
+export function BatteryIndicator({ compact, transparent, containerStyle }: BatteryIndicatorProps) {
   const batteryVoltageHistory = useLiveMetric(liveSelectors.batteryVoltage)
   const windowMs = useLiveWindowMs()
   const { minVoltage, maxVoltage } = useBoardStore(
@@ -44,6 +51,9 @@ export function BatteryIndicator() {
       series={batteryConfigured ? batterySeries : undefined}
       windowMs={windowMs}
       hint={!batteryConfigured ? 'Set min/max V in board settings' : undefined}
+      compact={compact}
+      transparent={transparent}
+      containerStyle={containerStyle}
     />
   )
 }
