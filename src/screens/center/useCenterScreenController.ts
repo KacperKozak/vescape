@@ -111,8 +111,7 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
   const exitHistory = useCallback(() => {
     void selectSession(null)
     enterTelemetry()
-    mapRef.current?.setPadding(0)
-    requestAnimationFrame(() => mapRef.current?.recenterLive())
+    requestAnimationFrame(() => mapRef.current?.recenterLive({ resetPadding: true }))
   }, [enterTelemetry, mapRef, selectSession])
 
   const enterHistoryMode = useCallback(async () => {

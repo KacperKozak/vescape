@@ -37,7 +37,7 @@ import type { HistoryGpsSample, HistoryMarker } from '@/store/historyStore'
 Mapbox.setAccessToken(MAPBOX_ACCESS_TOKEN)
 
 export interface CenterMapHandle {
-  recenterLive: () => void
+  recenterLive: (options?: { resetPadding?: boolean }) => void
   resetRotation: () => void
   togglePerspective: () => void
   setPadding: (bottom: number) => void
@@ -136,16 +136,22 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
     [rideRoute],
   )
 
-  const recenterLive = useCallback(() => {
-    setFollowGps(true)
-    if (!gpsFix) return
-    lastCenteredAtRef.current = gpsFix.timestamp
-    cameraRef.current?.setCamera({
-      ...gpsCamera,
-      animationDuration: MAP_DEFAULTS.animationDuration,
-      animationMode: 'easeTo',
-    })
-  }, [gpsCamera, gpsFix])
+  const recenterLive = useCallback(
+    (options?: { resetPadding?: boolean }) => {
+      setFollowGps(true)
+      if (!gpsFix) return
+      lastCenteredAtRef.current = gpsFix.timestamp
+      cameraRef.current?.setCamera({
+        ...gpsCamera,
+        ...(options?.resetPadding
+          ? { padding: { paddingBottom: 0, paddingTop: 0, paddingLeft: 0, paddingRight: 0 } }
+          : {}),
+        animationDuration: MAP_DEFAULTS.animationDuration,
+        animationMode: 'easeTo',
+      })
+    },
+    [gpsCamera, gpsFix],
+  )
 
   const fitRide = useCallback(() => {
     if (rideRoute.length < 2) return
