@@ -76,11 +76,10 @@ export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOver
   const [panelHeight, setPanelHeight] = useState(0)
 
   useEffect(() => {
-    if (mode !== 'history') {
-      setPanelHeight(0)
-      mapRef.current?.setPadding(0)
-    }
-  }, [mode, mapRef])
+    if (mode === 'history' || panelHeight === 0) return
+    setPanelHeight(0)
+    mapRef.current?.setPadding(0)
+  }, [mode, mapRef, panelHeight])
 
   useEffect(() => {
     if (mode === 'history' && panelHeight > 0) {
