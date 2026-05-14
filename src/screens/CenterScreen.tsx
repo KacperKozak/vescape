@@ -4,6 +4,7 @@ import { router } from 'expo-router'
 import { useShallow } from 'zustand/react/shallow'
 
 import { CenterMap, type CenterMapHandle } from '@/screens/center/CenterMap'
+import { TopBar } from '@/screens/center/TopBar'
 import { FloatingBar } from '@/components/FloatingBar'
 import { routes } from '@/navigation/routes'
 import type { Board } from '@/store/boardStore'
@@ -27,16 +28,16 @@ interface CenterScreenProps {
 
 export function CenterScreen({
   activeBoard,
-  activeBoardId: _activeBoardId,
-  boards: _boards,
+  activeBoardId,
+  boards,
   boardsLoaded,
   bleStatus,
-  recordDebugSession: _recordDebugSession,
+  recordDebugSession,
   onStopScan,
   onRetryConnect,
-  onSelectBoard: _onSelectBoard,
-  onAddBoard: _onAddBoard,
-  onToggleRecordDebug: _onToggleRecordDebug,
+  onSelectBoard,
+  onAddBoard,
+  onToggleRecordDebug,
 }: CenterScreenProps) {
   const mapRef = useRef<CenterMapHandle>(null)
   const [mapStyleKey] = useState<MapStyleKey>('onedark')
@@ -116,6 +117,19 @@ export function CenterScreen({
         onLongPressTarget={setTargetLocation}
         targetLocation={targetLocation}
         onClearTarget={clearTargetLocation}
+      />
+      <TopBar
+        visible
+        boards={boards}
+        activeBoardId={activeBoardId}
+        activeBoard={activeBoard}
+        bleStatus={bleStatus}
+        recordDebugSession={recordDebugSession}
+        onSelectBoard={onSelectBoard}
+        onAddBoard={onAddBoard}
+        onToggleRecordDebug={onToggleRecordDebug}
+        onDisconnect={onStopScan}
+        onRetryConnect={onRetryConnect}
       />
       <FloatingBar
         bleStatus={bleStatus}
