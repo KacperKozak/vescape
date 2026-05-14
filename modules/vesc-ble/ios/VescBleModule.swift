@@ -26,8 +26,8 @@ public class VescBleModule: Module {
   private var mockLat = 52.2297
   private var mockLon = 21.0122
   private var scanDeviceIndex = 0
-  private var boards = Self.loadArray(key: "vesc_ble_boards")
-  private var alertRules = Self.loadArray(key: "vesc_ble_alert_rules")
+  private var boards = VescBleModule.loadArray(key: "vesc_ble_boards")
+  private var alertRules = VescBleModule.loadArray(key: "vesc_ble_alert_rules")
 
   private let mockDevices: [[String: Any]] = [
     [
@@ -218,10 +218,16 @@ public class VescBleModule: Module {
       promise.resolve(Self.loadSettings())
     }
 
-    AsyncFunction("updateSetting") { (key: String, value: Any?, promise: Promise) in
-      var settings = Self.loadSettings()
-      settings[key] = value
-      Self.saveSettings(settings)
+    AsyncFunction("updateSetting") { (key: String, jsonValue: String?, promise: Promise) in
+      var settings = VescBleModule.loadSettings()
+      if let jsonStr = jsonValue,
+         let data = jsonStr.data(using: .utf8),
+         let decoded = try? JSONSerialization.jsonObject(with: data, options: .allowFragments) {
+        settings[key] = decoded
+      } else {
+        settings.removeValue(forKey: key)
+      }
+      VescBleModule.saveSettings(settings)
       promise.resolve(nil)
     }
   }
