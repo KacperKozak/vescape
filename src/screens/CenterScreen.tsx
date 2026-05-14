@@ -90,7 +90,7 @@ export function CenterScreen({
         liveLocations={controller.liveLocations}
         rideGpsSamples={controller.sessionGpsSamples}
         rideMarkers={controller.sessionMarkers}
-        rideActive={controller.rideActive}
+        historyActive={controller.historyActive}
         mapStyleKey={controller.mapStyleKey}
         rotationLocked={controller.rotationLocked}
         perspectiveEnabled={controller.perspectiveEnabled}
@@ -103,42 +103,48 @@ export function CenterScreen({
         seekPosition={controller.seekGpsPosition}
       />
       <CenterOverlays
-        flags={controller.flags}
+        mode={controller.mode}
         mapRef={mapRef}
-        boards={boards}
-        activeBoardId={activeBoardId}
-        activeBoard={activeBoard}
-        bleStatus={bleStatus}
-        recordDebugSession={recordDebugSession}
-        onStopScan={onStopScan}
-        onRetryConnect={onRetryConnect}
-        onSelectBoard={onSelectBoard}
-        onAddBoard={onAddBoard}
-        onToggleRecordDebug={onToggleRecordDebug}
-        heading={controller.heading}
-        rotationLocked={controller.rotationLocked}
-        perspectiveEnabled={controller.perspectiveEnabled}
-        targetLocation={controller.targetLocation}
-        clearTargetLocation={controller.clearTargetLocation}
-        mapStyleKey={controller.mapStyleKey}
-        setMapStyleKey={controller.setMapStyleKey}
-        setRotationLocked={controller.setRotationLocked}
-        exitMapFocus={controller.exitMapFocus}
-        enterRideReview={controller.enterRideReview}
-        selectedSession={controller.selectedSession}
-        sessionSamples={controller.sessionSamples}
-        previousRide={controller.previousRide}
-        nextRide={controller.nextRide}
-        loadingSession={controller.loadingSession}
-        historyLoading={controller.historyLoading}
-        historyError={controller.historyError}
-        sessions={controller.sessions}
-        historySheetVisible={controller.historySheetVisible}
-        setHistorySheetVisible={controller.setHistorySheetVisible}
-        selectSession={controller.selectSession}
-        selectRide={controller.selectRide}
-        exitRideReview={controller.exitRideReview}
-        onSeek={controller.onSeek}
+        board={{
+          boards,
+          activeBoardId,
+          activeBoard,
+          bleStatus,
+          recordDebugSession,
+          onStopScan,
+          onRetryConnect,
+          onSelectBoard,
+          onAddBoard,
+          onToggleRecordDebug,
+        }}
+        map={{
+          heading: controller.heading,
+          rotationLocked: controller.rotationLocked,
+          perspectiveEnabled: controller.perspectiveEnabled,
+          targetLocation: controller.targetLocation,
+          clearTargetLocation: controller.clearTargetLocation,
+          mapStyleKey: controller.mapStyleKey,
+          setMapStyleKey: controller.setMapStyleKey,
+          setRotationLocked: controller.setRotationLocked,
+          exitMapFocus: controller.exitMapFocus,
+        }}
+        history={{
+          enterHistoryMode: controller.enterHistoryMode,
+          selectedSession: controller.selectedSession,
+          sessionSamples: controller.sessionSamples,
+          previousRide: controller.previousRide,
+          nextRide: controller.nextRide,
+          loadingSession: controller.loadingSession,
+          historyLoading: controller.historyLoading,
+          historyError: controller.historyError,
+          sessions: controller.sessions,
+          historySheetVisible: controller.historySheetVisible,
+          setHistorySheetVisible: controller.setHistorySheetVisible,
+          selectSession: controller.selectSession,
+          selectRide: controller.selectRide,
+          exitHistory: controller.exitHistory,
+          onSeek: controller.onSeek,
+        }}
       />
     </View>
   )

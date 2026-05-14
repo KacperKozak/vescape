@@ -4,11 +4,7 @@ import { useFocusEffect } from 'expo-router'
 import { useShallow } from 'zustand/react/shallow'
 
 import type { CenterMapHandle } from '@/screens/center/CenterMap'
-import {
-  canMapGestureFocus,
-  getCenterOverlayFlags,
-  type CenterViewState,
-} from '@/screens/center/centerViewState'
+import { useCenterScreenStore } from '@/screens/center/centerScreenStore'
 import {
   getLatestSession,
   getNextRideSession,
@@ -17,7 +13,6 @@ import {
 import { useBleStore } from '@/store/bleStore'
 import { useHistoryStore, type HistorySession } from '@/store/historyStore'
 import { useMapStore } from '@/store/mapStore'
-import { type MapStyleKey } from '@/constants/mapStyles'
 import { findNearestSampleIndexByTime } from '@/history/playback'
 
 interface UseCenterScreenControllerArgs {
@@ -26,14 +21,41 @@ interface UseCenterScreenControllerArgs {
 
 export function useCenterScreenController({ mapRef }: UseCenterScreenControllerArgs) {
   const backPressedOnce = useRef(false)
-  const [viewState, setViewState] = useState<CenterViewState>('telemetry')
-  const [historySheetVisible, setHistorySheetVisible] = useState(false)
   const [historyLoadedOnce, setHistoryLoadedOnce] = useState(false)
-  const [mapStyleKey, setMapStyleKey] = useState<MapStyleKey>('onedark')
   const [heading, setHeading] = useState(0)
-  const [rotationLocked, setRotationLocked] = useState(false)
-  const [perspectiveEnabled, setPerspectiveEnabled] = useState(true)
-  const [seekTimeMs, setSeekTimeMs] = useState<number | null>(null)
+  const {
+    mode,
+    historySheetVisible,
+    mapStyleKey,
+    rotationLocked,
+    perspectiveEnabled,
+    seekTimeMs,
+    enterTelemetry,
+    enterMap,
+    enterHistory,
+    setHistorySheetVisible,
+    setMapStyleKey,
+    setRotationLocked,
+    setPerspectiveEnabled,
+    setSeekTimeMs,
+  } = useCenterScreenStore(
+    useShallow((s) => ({
+      mode: s.mode,
+      historySheetVisible: s.historySheetVisible,
+      mapStyleKey: s.mapStyleKey,
+      rotationLocked: s.rotationLocked,
+      perspectiveEnabled: s.perspectiveEnabled,
+      seekTimeMs: s.seekTimeMs,
+      enterTelemetry: s.enterTelemetry,
+      enterMap: s.enterMap,
+      enterHistory: s.enterHistory,
+      setHistorySheetVisible: s.setHistorySheetVisible,
+      setMapStyleKey: s.setMapStyleKey,
+      setRotationLocked: s.setRotationLocked,
+      setPerspectiveEnabled: s.setPerspectiveEnabled,
+      setSeekTimeMs: s.setSeekTimeMs,
+    })),
+  )
   const liveLocations = useBleStore((s) => s.liveLocationHistory)
   const {
     sessions,
@@ -70,7 +92,7 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
 
   useEffect(() => {
     setSeekTimeMs(null)
-  }, [selectedSession])
+  }, [selectedSession, setSeekTimeMs])
 
   const seekGpsPosition = useMemo(() => {
     if (seekTimeMs == null || sessionGpsSamples.length === 0) return null
@@ -78,25 +100,23 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
     return idx >= 0 ? sessionGpsSamples[idx] : null
   }, [seekTimeMs, sessionGpsSamples])
 
-  const flags = getCenterOverlayFlags(viewState)
-  const rideActive = flags.showRideReview && !!selectedSession
+  const historyActive = mode === 'history' && !!selectedSession
   const previousRide = getPreviousRideSession(sessions, selectedSession)
   const nextRide = getNextRideSession(sessions, selectedSession)
 
   const exitMapFocus = useCallback(() => {
-    setViewState('telemetry')
+    enterTelemetry()
     mapRef.current?.recenterLive()
-  }, [mapRef])
+  }, [enterTelemetry, mapRef])
 
-  const exitRideReview = useCallback(() => {
+  const exitHistory = useCallback(() => {
     void selectSession(null)
-    setHistorySheetVisible(false)
-    setViewState('telemetry')
+    enterTelemetry()
     mapRef.current?.setPadding(0)
     requestAnimationFrame(() => mapRef.current?.recenterLive())
-  }, [mapRef, selectSession])
+  }, [enterTelemetry, mapRef, selectSession])
 
-  const enterRideReview = useCallback(async () => {
+  const enterHistoryMode = useCallback(async () => {
     if (!historyLoadedOnce) {
       await loadInitial()
       setHistoryLoadedOnce(true)
@@ -104,33 +124,31 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
     const latest = getLatestSession(useHistoryStore.getState().sessions)
     if (latest) {
       await selectSession(latest)
-      setViewState('rideReview')
-      return
     }
-    setViewState('historyEmpty')
-  }, [historyLoadedOnce, loadInitial, selectSession])
+    enterHistory()
+  }, [enterHistory, historyLoadedOnce, loadInitial, selectSession])
 
   const selectRide = useCallback(
     (session: HistorySession) => {
       setHistorySheetVisible(false)
       void selectSession(session)
-      setViewState('rideReview')
+      enterHistory()
     },
-    [selectSession],
+    [enterHistory, selectSession, setHistorySheetVisible],
   )
 
   const handleMapFocus = useCallback(() => {
-    if (canMapGestureFocus(viewState)) setViewState('mapFocus')
-  }, [viewState])
+    if (mode === 'telemetry') enterMap()
+  }, [enterMap, mode])
 
   useFocusEffect(
     useCallback(() => {
       const handler = BackHandler.addEventListener('hardwareBackPress', () => {
-        if (viewState === 'rideReview' || viewState === 'historyEmpty') {
-          exitRideReview()
+        if (mode === 'history') {
+          exitHistory()
           return true
         }
-        if (viewState === 'mapFocus') {
+        if (mode === 'map') {
           exitMapFocus()
           return true
         }
@@ -146,13 +164,13 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
         return true
       })
       return () => handler.remove()
-    }, [exitMapFocus, exitRideReview, viewState]),
+    }, [exitHistory, exitMapFocus, mode]),
   )
 
   return {
-    flags,
+    mode,
     liveLocations,
-    rideActive,
+    historyActive,
     mapStyleKey,
     setMapStyleKey,
     heading,
@@ -177,8 +195,8 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
     historySheetVisible,
     setHistorySheetVisible,
     selectSession,
-    enterRideReview,
-    exitRideReview,
+    enterHistoryMode,
+    exitHistory,
     selectRide,
     handleMapFocus,
     exitMapFocus,

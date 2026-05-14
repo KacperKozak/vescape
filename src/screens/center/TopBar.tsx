@@ -4,7 +4,7 @@ import {
   CaretDownIcon,
   GearSixIcon,
   PencilSimpleIcon,
-  PlugsIcon,
+  PlugsConnectedIcon,
   PowerIcon,
   UserCircleIcon,
   XCircleIcon,
@@ -101,7 +101,7 @@ export function TopBar({
             {canDisconnect ? (
               <PowerIcon size={15} color="#fca5a5" weight="bold" />
             ) : canRetry ? (
-              <PlugsIcon size={15} color="#facc15" weight="bold" />
+              <PlugsConnectedIcon size={15} color="#facc15" weight="bold" />
             ) : (
               <XCircleIcon size={15} color="#94a3b8" weight="bold" />
             )}

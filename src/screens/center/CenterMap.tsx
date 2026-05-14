@@ -48,7 +48,7 @@ interface CenterMapProps {
   liveLocations: LocationEvent[]
   rideGpsSamples: HistoryGpsSample[]
   rideMarkers: HistoryMarker[]
-  rideActive: boolean
+  historyActive: boolean
   mapStyleKey: MapStyleKey
   rotationLocked: boolean
   perspectiveEnabled: boolean
@@ -66,7 +66,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
     liveLocations,
     rideGpsSamples,
     rideMarkers,
-    rideActive,
+    historyActive,
     mapStyleKey,
     rotationLocked,
     perspectiveEnabled,
@@ -188,7 +188,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
   )
 
   useEffect(() => {
-    if (!gpsFix || !followGps || rideActive) return
+    if (!gpsFix || !followGps || historyActive) return
     if (lastCenteredAtRef.current === gpsFix.timestamp) return
     lastCenteredAtRef.current = gpsFix.timestamp
     cameraRef.current?.setCamera({
@@ -196,17 +196,17 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
       animationDuration: MAP_DEFAULTS.followAnimationDuration,
       animationMode: 'easeTo',
     })
-  }, [followGps, gpsCamera, gpsFix, rideActive])
+  }, [followGps, gpsCamera, gpsFix, historyActive])
 
   useEffect(() => {
-    if (!rideActive) return
+    if (!historyActive) return
     const frame = requestAnimationFrame(fitRide)
     const timer = setTimeout(fitRide, 120)
     return () => {
       cancelAnimationFrame(frame)
       clearTimeout(timer)
     }
-  }, [fitRide, rideActive])
+  }, [fitRide, historyActive])
 
   if (!MAPBOX_ACCESS_TOKEN) {
     return (
@@ -277,7 +277,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
         </RasterSource>
       ) : null}
 
-      {!rideActive && liveTrailShape && (
+      {!historyActive && liveTrailShape && (
         <ShapeSource id="center-live-trail-source" shape={liveTrailShape} lineMetrics>
           <LineLayer
             id="center-live-trail-line"
@@ -300,7 +300,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
         </ShapeSource>
       )}
 
-      {rideActive && rideRouteShape && (
+      {historyActive && rideRouteShape && (
         <ShapeSource id="center-ride-route-source" shape={rideRouteShape}>
           <LineLayer
             id="center-ride-route-line"
@@ -314,7 +314,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
         </ShapeSource>
       )}
 
-      {!rideActive && gpsFix && (
+      {!historyActive && gpsFix && (
         <>
           {accuracyShape && (
             <ShapeSource id="center-gps-accuracy-source" shape={accuracyShape}>
@@ -332,13 +332,13 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
         </>
       )}
 
-      {rideActive && rideRoute[0] && (
+      {historyActive && rideRoute[0] && (
         <MapPin id="center-ride-start" coordinate={rideRoute[0]} color="#22c55e" />
       )}
-      {rideActive && rideRoute.at(-1) && (
+      {historyActive && rideRoute.at(-1) && (
         <MapPin id="center-ride-end" coordinate={rideRoute.at(-1)!} color={theme.error.color} />
       )}
-      {rideActive &&
+      {historyActive &&
         seekPosition &&
         seekPosition.latitude != null &&
         seekPosition.longitude != null && (
@@ -348,7 +348,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
             color={MAP_DEFAULTS.markerColor}
           />
         )}
-      {rideActive &&
+      {historyActive &&
         rideMarkers.map((marker) => {
           const idx = findNearestSampleIndexByTime(rideGpsSamples, marker.occurredAtMs)
           const gps = idx >= 0 ? rideGpsSamples[idx] : null
@@ -363,7 +363,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
           )
         })}
 
-      {targetLocation && !rideActive && (
+      {targetLocation && !historyActive && (
         <MapPin
           id="center-target-position"
           coordinate={[targetLocation.longitude, targetLocation.latitude]}

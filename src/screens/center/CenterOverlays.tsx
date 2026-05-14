@@ -15,20 +15,11 @@ import { HistorySessionSheet } from '@/components/history/HistorySessionSheet'
 import { MapControls } from '@/components/map/MapControls'
 import { MapStyleSwitch } from '@/components/map/MapStyleSwitch'
 import type { Board } from '@/store/boardStore'
-import type { HistorySession } from '@/store/historyStore'
-import type { TelemetrySample } from '@/store/historyStore'
+import type { HistorySession, TelemetrySample } from '@/store/historyStore'
 import type { MapStyleKey } from '@/constants/mapStyles'
+import type { CenterViewState } from '@/screens/center/centerViewState'
 
-interface CenterOverlayFlags {
-  showTelemetry: boolean
-  showMapFocus: boolean
-  showRideReview: boolean
-  showHistoryEmpty: boolean
-}
-
-interface CenterOverlaysProps {
-  flags: CenterOverlayFlags
-  mapRef: RefObject<CenterMapHandle | null>
+interface CenterBoardOverlayProps {
   boards: Board[]
   activeBoardId: string | null
   activeBoard: Board | undefined
@@ -39,6 +30,9 @@ interface CenterOverlaysProps {
   onSelectBoard: (id: string) => void
   onAddBoard: () => void
   onToggleRecordDebug: () => void
+}
+
+interface CenterMapOverlayProps {
   heading: number
   rotationLocked: boolean
   perspectiveEnabled: boolean
@@ -48,7 +42,10 @@ interface CenterOverlaysProps {
   setMapStyleKey: (key: MapStyleKey) => void
   setRotationLocked: (updater: (prev: boolean) => boolean) => void
   exitMapFocus: () => void
-  enterRideReview: () => void
+}
+
+interface CenterHistoryOverlayProps {
+  enterHistoryMode: () => void
   selectedSession: HistorySession | null
   sessionSamples: TelemetrySample[]
   previousRide: HistorySession | null
@@ -61,177 +58,149 @@ interface CenterOverlaysProps {
   setHistorySheetVisible: (visible: boolean) => void
   selectSession: (session: HistorySession | null) => Promise<void>
   selectRide: (session: HistorySession) => void
-  exitRideReview: () => void
+  exitHistory: () => void
   onSeek: (timeMs: number) => void
 }
 
-export function CenterOverlays({
-  flags,
-  mapRef,
-  boards,
-  activeBoardId,
-  activeBoard,
-  bleStatus,
-  recordDebugSession,
-  onStopScan,
-  onRetryConnect,
-  onSelectBoard,
-  onAddBoard,
-  onToggleRecordDebug,
-  heading,
-  rotationLocked,
-  perspectiveEnabled,
-  targetLocation,
-  clearTargetLocation,
-  mapStyleKey,
-  setMapStyleKey,
-  setRotationLocked,
-  exitMapFocus,
-  enterRideReview,
-  selectedSession,
-  sessionSamples,
-  previousRide,
-  nextRide,
-  loadingSession,
-  historyLoading,
-  historyError,
-  sessions,
-  historySheetVisible,
-  setHistorySheetVisible,
-  selectSession,
-  selectRide,
-  exitRideReview,
-  onSeek,
-}: CenterOverlaysProps) {
+interface CenterOverlaysProps {
+  mode: CenterViewState
+  mapRef: RefObject<CenterMapHandle | null>
+  board: CenterBoardOverlayProps
+  map: CenterMapOverlayProps
+  history: CenterHistoryOverlayProps
+}
+
+export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOverlaysProps) {
   const insets = useSafeAreaInsets()
   const aboveStripBottom = STRIP_CONTENT_HEIGHT + Math.max(insets.bottom, 6) + 8
   const [panelHeight, setPanelHeight] = useState(0)
 
   useEffect(() => {
-    if (!flags.showRideReview) {
+    if (mode !== 'history') {
+      setPanelHeight(0)
       mapRef.current?.setPadding(0)
     }
-  }, [flags.showRideReview, mapRef])
+  }, [mode, mapRef])
 
   useEffect(() => {
-    if (flags.showRideReview && panelHeight > 0) {
+    if (mode === 'history' && panelHeight > 0) {
       mapRef.current?.setPadding(panelHeight + 12)
     }
-  }, [flags.showRideReview, mapRef, panelHeight])
+  }, [mode, mapRef, panelHeight])
 
   return (
     <>
-      {flags.showTelemetry && (
+      {mode === 'telemetry' && (
         <>
           <MapVignette visible />
           <LiveHud visible />
           <BottomTelemetryStrip visible />
           <TopBar
             visible
-            boards={boards}
-            activeBoardId={activeBoardId}
-            activeBoard={activeBoard}
-            bleStatus={bleStatus}
-            recordDebugSession={recordDebugSession}
-            onSelectBoard={onSelectBoard}
-            onAddBoard={onAddBoard}
-            onToggleRecordDebug={onToggleRecordDebug}
-            onDisconnect={onStopScan}
-            onRetryConnect={onRetryConnect}
+            boards={board.boards}
+            activeBoardId={board.activeBoardId}
+            activeBoard={board.activeBoard}
+            bleStatus={board.bleStatus}
+            recordDebugSession={board.recordDebugSession}
+            onSelectBoard={board.onSelectBoard}
+            onAddBoard={board.onAddBoard}
+            onToggleRecordDebug={board.onToggleRecordDebug}
+            onDisconnect={board.onStopScan}
+            onRetryConnect={board.onRetryConnect}
           />
           <FloatingBar
-            bleStatus={bleStatus}
-            activeBoard={activeBoard}
-            onStopScan={onStopScan}
-            onRetryConnect={onRetryConnect}
+            bleStatus={board.bleStatus}
+            activeBoard={board.activeBoard}
+            onStopScan={board.onStopScan}
+            onRetryConnect={board.onRetryConnect}
             bottomOffset={aboveStripBottom}
           />
           <Pressable
             style={[styles.historyButton, { bottom: aboveStripBottom }]}
-            onPress={() => void enterRideReview()}
+            onPress={() => void history.enterHistoryMode()}
           >
             <ClockCounterClockwiseIcon size={18} color="#f8fafc" weight="bold" />
           </Pressable>
         </>
       )}
 
-      {flags.showMapFocus && (
+      {mode === 'map' && (
         <>
           <Pressable
             style={[styles.backButton, { top: Math.max(insets.top, 8) }]}
-            onPress={exitMapFocus}
+            onPress={map.exitMapFocus}
           >
             <ArrowLeftIcon size={20} color="#f8fafc" weight="bold" />
           </Pressable>
           <MapControls
-            heading={heading}
-            rotationLocked={rotationLocked}
-            perspectiveEnabled={perspectiveEnabled}
+            heading={map.heading}
+            rotationLocked={map.rotationLocked}
+            perspectiveEnabled={map.perspectiveEnabled}
             followGps={false}
-            showClearTarget={!!targetLocation}
+            showClearTarget={!!map.targetLocation}
             onResetRotation={() => mapRef.current?.resetRotation()}
-            onToggleRotationLock={() => setRotationLocked((prev) => !prev)}
+            onToggleRotationLock={() => map.setRotationLocked((prev) => !prev)}
             onTogglePerspective={() => mapRef.current?.togglePerspective()}
-            onRecenter={exitMapFocus}
-            onClearTarget={clearTargetLocation}
+            onRecenter={map.exitMapFocus}
+            onClearTarget={map.clearTargetLocation}
           />
-          <MapStyleSwitch activeKey={mapStyleKey} onSelect={setMapStyleKey} />
+          <MapStyleSwitch activeKey={map.mapStyleKey} onSelect={map.setMapStyleKey} />
         </>
       )}
 
-      {flags.showRideReview && selectedSession && (
+      {mode === 'history' && history.selectedSession && (
         <>
           <MapVignette visible mode="history" panelHeight={panelHeight} />
           <HistoryTelemetryPanel
-            samples={sessionSamples}
-            loading={loadingSession}
-            onSeek={onSeek}
+            samples={history.sessionSamples}
+            loading={history.loadingSession}
+            onSeek={history.onSeek}
             onHeightChange={setPanelHeight}
           />
           <HistoryControls
-            title={`${new Date(selectedSession.startAtMs).toLocaleString()} · ${
-              selectedSession.deviceName
+            title={`${new Date(history.selectedSession.startAtMs).toLocaleString()} · ${
+              history.selectedSession.deviceName
             }`}
-            canPrevious={!!previousRide}
-            canNext={!!nextRide}
-            loading={loadingSession || historyLoading}
-            onBack={exitRideReview}
+            canPrevious={!!history.previousRide}
+            canNext={!!history.nextRide}
+            loading={history.loadingSession || history.historyLoading}
+            onBack={history.exitHistory}
             onPrevious={() => {
-              if (previousRide) void selectSession(previousRide)
+              if (history.previousRide) void history.selectSession(history.previousRide)
             }}
             onNext={() => {
-              if (nextRide) void selectSession(nextRide)
+              if (history.nextRide) void history.selectSession(history.nextRide)
             }}
-            onOpenList={() => setHistorySheetVisible(true)}
+            onOpenList={() => history.setHistorySheetVisible(true)}
           />
         </>
       )}
 
-      {flags.showHistoryEmpty && (
+      {mode === 'history' && !history.selectedSession && !history.loadingSession && (
         <HistoryControls
           title="No rides yet"
           canPrevious={false}
           canNext={false}
           loading={false}
-          onBack={exitRideReview}
+          onBack={history.exitHistory}
           onPrevious={() => undefined}
           onNext={() => undefined}
-          onOpenList={() => setHistorySheetVisible(true)}
+          onOpenList={() => history.setHistorySheetVisible(true)}
         />
       )}
 
       <HistorySessionSheet
-        visible={historySheetVisible}
-        sessions={sessions}
-        selectedSessionId={selectedSession?.id ?? null}
-        onClose={() => setHistorySheetVisible(false)}
-        onSelectSession={selectRide}
+        visible={history.historySheetVisible}
+        sessions={history.sessions}
+        selectedSessionId={history.selectedSession?.id ?? null}
+        onClose={() => history.setHistorySheetVisible(false)}
+        onSelectSession={history.selectRide}
       />
 
-      {historyError ? (
+      {history.historyError ? (
         <View style={[styles.historyError, { bottom: aboveStripBottom }]}>
           <Text style={styles.historyErrorText} selectable>
-            {historyError}
+            {history.historyError}
           </Text>
         </View>
       ) : null}
