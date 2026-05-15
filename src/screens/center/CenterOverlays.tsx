@@ -103,7 +103,6 @@ export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOver
             onAddBoard={board.onAddBoard}
             onToggleRecordDebug={board.onToggleRecordDebug}
             onDisconnect={board.onStopScan}
-            onRetryConnect={board.onRetryConnect}
           />
           <FloatingBar
             bleStatus={board.bleStatus}

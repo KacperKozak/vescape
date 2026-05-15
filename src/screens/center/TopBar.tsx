@@ -1,13 +1,6 @@
 import { useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import {
-  CaretDownIcon,
-  GearSixIcon,
-  PencilSimpleIcon,
-  PlugsConnectedIcon,
-  PowerIcon,
-  XCircleIcon,
-} from 'phosphor-react-native'
+import { CaretDownIcon, GearSixIcon, PencilSimpleIcon, PowerIcon } from 'phosphor-react-native'
 import { router } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
@@ -26,7 +19,6 @@ interface TopBarProps {
   onAddBoard: () => void
   onToggleRecordDebug: () => void
   onDisconnect: () => void
-  onRetryConnect: () => void
 }
 
 export function TopBar({
@@ -39,7 +31,6 @@ export function TopBar({
   onAddBoard,
   onToggleRecordDebug,
   onDisconnect,
-  onRetryConnect,
 }: TopBarProps) {
   const insets = useSafeAreaInsets()
   const [selectorOpen, setSelectorOpen] = useState(false)
@@ -49,7 +40,6 @@ export function TopBar({
     bleStatus === 'stale' ||
     bleStatus === 'reconnecting' ||
     bleStatus === 'waiting_for_telemetry'
-  const canRetry = bleStatus === 'idle' || bleStatus === 'error'
   const name = activeBoard?.name ?? 'No board'
   const statusColor =
     bleStatus === 'connected'
@@ -81,19 +71,11 @@ export function TopBar({
             <PencilSimpleIcon size={14} color={activeBoard ? '#e2e8f0' : '#64748b'} weight="bold" />
           </Pressable>
           <View style={styles.divider} />
-          <Pressable
-            style={styles.plugButton}
-            onPress={canDisconnect ? onDisconnect : onRetryConnect}
-            disabled={!canDisconnect && !canRetry}
-          >
-            {canDisconnect ? (
+          {canDisconnect && (
+            <Pressable style={styles.plugButton} onPress={onDisconnect}>
               <PowerIcon size={15} color="#fca5a5" weight="bold" />
-            ) : canRetry ? (
-              <PlugsConnectedIcon size={15} color="#facc15" weight="bold" />
-            ) : (
-              <XCircleIcon size={15} color="#94a3b8" weight="bold" />
-            )}
-          </Pressable>
+            </Pressable>
+          )}
         </View>
         <Pressable
           style={[styles.iconRound, styles.iconRight]}
