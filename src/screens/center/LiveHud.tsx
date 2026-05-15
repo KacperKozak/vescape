@@ -1,7 +1,7 @@
 import { StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
-import { BatteryIndicator, DualGaugeIndicator } from '@/components/cards'
+import { DualGaugeIndicator } from '@/components/cards'
 
 export function LiveHud() {
   const insets = useSafeAreaInsets()
@@ -11,12 +11,7 @@ export function LiveHud() {
       style={[styles.wrap, { paddingTop: Math.max(insets.top + 46, 64) }]}
       pointerEvents="box-none"
     >
-      <DualGaugeIndicator
-        compact
-        transparent
-        split
-        middleSlot={<BatteryIndicator compact transparent />}
-      />
+      <DualGaugeIndicator compact transparent />
     </View>
   )
 }

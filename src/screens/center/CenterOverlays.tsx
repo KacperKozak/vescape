@@ -72,7 +72,7 @@ interface CenterOverlaysProps {
 
 export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOverlaysProps) {
   const insets = useSafeAreaInsets()
-  const aboveStripBottom = STRIP_CONTENT_HEIGHT + Math.max(insets.bottom, 6) + 8
+  const aboveStripBottom = STRIP_CONTENT_HEIGHT + Math.max(insets.bottom * 0.5, 8) + 8
   const [panelHeight, setPanelHeight] = useState(0)
 
   useEffect(() => {

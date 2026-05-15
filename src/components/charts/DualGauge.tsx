@@ -443,6 +443,7 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: 'row',
+    gap: 6,
   },
   rowSplit: {
     justifyContent: 'space-between',
