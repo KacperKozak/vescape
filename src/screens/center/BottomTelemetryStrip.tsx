@@ -7,6 +7,7 @@ import { BatteryIndicator } from '@/components/cards/BatteryIndicator'
 import { telemetry } from '@/constants/telemetry'
 import { routes } from '@/navigation/routes'
 import { liveSelectors, useLiveMetric } from '@/hooks/useLiveMetric'
+import { useBleStore } from '@/store/bleStore'
 import { useLiveWindowMs } from '@/store/settingsStore'
 
 const FOOTPAD_ACTIVE_V = 0.8
@@ -22,6 +23,7 @@ export function BottomTelemetryStrip() {
   const adc1Series = useLiveMetric(liveSelectors.footpadAdc1)
   const adc2Series = useLiveMetric(liveSelectors.footpadAdc2)
   const pitchSeries = useLiveMetric(liveSelectors.pitch)
+  const bleStatus = useBleStore((s) => s.status)
 
   const motorTemp = motorTempSeries.at(-1)?.value ?? null
   const controllerTemp = controllerTempSeries.at(-1)?.value ?? null
@@ -31,6 +33,7 @@ export function BottomTelemetryStrip() {
   const adc2 = adc2Series.at(-1)?.value ?? null
   const pitch = pitchSeries.at(-1)?.value ?? 0
   const pitchDeg = Math.max(-18, Math.min(18, pitch))
+  const imuConnected = bleStatus === 'connected'
 
   return (
     <View
@@ -108,7 +111,15 @@ export function BottomTelemetryStrip() {
 
       <View style={styles.bottomRow}>
         <Pressable style={styles.sideIcon} onPress={() => router.push(routes.controlImu)}>
-          <View style={[styles.imuLine, { transform: [{ rotate: `${pitchDeg}deg` }] }]} />
+          <View
+            style={[
+              styles.imuLine,
+              {
+                transform: [{ rotate: `${imuConnected ? pitchDeg : 0}deg` }],
+                backgroundColor: imuConnected ? '#a78bfa' : '#64748b',
+              },
+            ]}
+          />
         </Pressable>
         <BatteryIndicator transparent containerStyle={styles.batteryCenter} />
         <Pressable style={styles.sideIcon} onPress={() => router.push(routes.controlFootpad)}>
