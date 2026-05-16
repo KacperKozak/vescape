@@ -245,6 +245,22 @@ export interface TelemetrySummary {
   droppedPendingSamples: number
 }
 
+export interface ProfileStats {
+  distanceM: number | null
+  rideCount: number
+  rideTimeMs: number
+  topSpeedKmh: number
+  avgSpeedKmh: number
+  longestRideM: number | null
+  batteryUsedWh: number | null
+  batteryRegenWh: number | null
+}
+
+export interface ProfileStatsMonth {
+  year: number
+  month: number
+}
+
 export interface AppSettings {
   liveHistoryLimit: number
   autoConnect: boolean
@@ -303,6 +319,9 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
     limit?: number
   }): Promise<HistoryRange>
   getTelemetrySummary(): Promise<TelemetrySummary>
+  getTotalProfileStats(): Promise<ProfileStats>
+  getMonthlyProfileStats(options: ProfileStatsMonth): Promise<ProfileStats>
+  getProfileStatMonths(): Promise<ProfileStatsMonth[]>
   deleteTelemetryBefore(beforeMs: number): Promise<number>
   deleteTelemetryRange(options: TelemetryDeleteRangeOptions): Promise<number>
   clearTelemetryHistory(): Promise<void>
@@ -409,6 +428,18 @@ export async function getHistoryRange(options: {
 
 export async function getTelemetrySummary(): Promise<TelemetrySummary> {
   return native.getTelemetrySummary()
+}
+
+export async function getTotalProfileStats(): Promise<ProfileStats> {
+  return native.getTotalProfileStats()
+}
+
+export async function getMonthlyProfileStats(options: ProfileStatsMonth): Promise<ProfileStats> {
+  return native.getMonthlyProfileStats(options)
+}
+
+export async function getProfileStatMonths(): Promise<ProfileStatsMonth[]> {
+  return native.getProfileStatMonths()
 }
 
 export async function deleteTelemetryBefore(beforeMs: number): Promise<number> {

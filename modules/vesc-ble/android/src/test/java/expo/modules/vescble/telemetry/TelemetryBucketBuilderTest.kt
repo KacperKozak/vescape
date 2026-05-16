@@ -66,6 +66,8 @@ class TelemetryBucketBuilderTest {
     assertEquals(77_100, buckets.minBatteryVoltageMv)
     assertEquals(3_500, buckets.maxMotorCurrentAbsMa)
     assertEquals(1_400, buckets.maxBatteryCurrentAbsMa)
+    assertEquals(129L, buckets.batteryUsedWhMilli)
+    assertEquals(0L, buckets.batteryRegenWhMilli)
     assertEquals(350, buckets.maxDutyAbsPermille)
     assertEquals(10_000L, buckets.firstOdometerCm)
     assertEquals(10_420L, buckets.lastOdometerCm)
@@ -146,5 +148,53 @@ class TelemetryBucketBuilderTest {
     assertEquals(setOf(0L to "a", 60_000L to "a", 0L to "b"), buckets.map {
       it.bucketStartMs to it.deviceId
     }.toSet())
+  }
+
+  @Test
+  fun integratesBatteryUsedAndRegenInsideMinuteBucket() {
+    val bucket = buildTelemetryBuckets(
+      telemetryPoints = listOf(
+        BucketTelemetryPoint(
+          capturedAtMs = 0L,
+          deviceId = "board-1",
+          deviceName = "ADV2",
+          speedCentiKmh = 0,
+          batteryVoltageMv = 50_000,
+          motorCurrentMa = 0,
+          batteryCurrentMa = 10_000,
+          dutyPermille = 0,
+          hasFault = false,
+          odometerCm = 0L,
+        ),
+        BucketTelemetryPoint(
+          capturedAtMs = 3_600L,
+          deviceId = "board-1",
+          deviceName = "ADV2",
+          speedCentiKmh = 0,
+          batteryVoltageMv = 50_000,
+          motorCurrentMa = 0,
+          batteryCurrentMa = -5_000,
+          dutyPermille = 0,
+          hasFault = false,
+          odometerCm = 10L,
+        ),
+        BucketTelemetryPoint(
+          capturedAtMs = 7_200L,
+          deviceId = "board-1",
+          deviceName = "ADV2",
+          speedCentiKmh = 0,
+          batteryVoltageMv = 50_000,
+          motorCurrentMa = 0,
+          batteryCurrentMa = 0,
+          dutyPermille = 0,
+          hasFault = false,
+          odometerCm = 20L,
+        ),
+      ),
+      locationPoints = emptyList(),
+    ).single()
+
+    assertEquals(500L, bucket.batteryUsedWhMilli)
+    assertEquals(250L, bucket.batteryRegenWhMilli)
   }
 }

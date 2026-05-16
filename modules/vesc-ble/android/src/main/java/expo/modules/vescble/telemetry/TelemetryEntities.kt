@@ -170,6 +170,10 @@ data class TelemetryMinuteBucketEntity(
   val maxMotorCurrentAbsMa: Int,
   @ColumnInfo(name = "max_battery_current_abs_ma")
   val maxBatteryCurrentAbsMa: Int,
+  @ColumnInfo(name = "battery_used_wh_milli")
+  val batteryUsedWhMilli: Long,
+  @ColumnInfo(name = "battery_regen_wh_milli")
+  val batteryRegenWhMilli: Long,
   @ColumnInfo(name = "max_duty_abs_permille")
   val maxDutyAbsPermille: Int,
   @ColumnInfo(name = "fault_count")

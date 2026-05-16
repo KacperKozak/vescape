@@ -17,6 +17,7 @@ import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import expo.modules.vescble.telemetry.AppDataRepository
+import expo.modules.vescble.telemetry.ProfileStatsRepository
 import expo.modules.vescble.telemetry.TelemetryRepository
 import kotlinx.coroutines.runBlocking
 
@@ -131,6 +132,15 @@ class VescBleModule : Module() {
     }
     AsyncFunction("getTelemetrySummary") {
       runBlocking { TelemetryRepository.get(context.applicationContext).getSummary() }
+    }
+    AsyncFunction("getTotalProfileStats") {
+      runBlocking { ProfileStatsRepository.get(context.applicationContext).getTotalProfileStats() }
+    }
+    AsyncFunction("getMonthlyProfileStats") Coroutine { options: Map<String, Any?> ->
+      ProfileStatsRepository.get(context.applicationContext).getMonthlyProfileStats(options)
+    }
+    AsyncFunction("getProfileStatMonths") {
+      runBlocking { ProfileStatsRepository.get(context.applicationContext).getProfileStatMonths() }
     }
     AsyncFunction("deleteTelemetryBefore") Coroutine { beforeMs: Double ->
       TelemetryRepository.get(context.applicationContext).deleteBefore(beforeMs.toLong())

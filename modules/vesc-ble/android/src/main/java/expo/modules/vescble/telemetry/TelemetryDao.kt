@@ -71,6 +71,9 @@ interface TelemetryDao {
     limit: Int,
   ): List<TelemetryMinuteBucketEntity>
 
+  @Query("SELECT * FROM telemetry_minute_buckets ORDER BY bucket_start_ms ASC")
+  suspend fun getAllHistoryBucketsAsc(): List<TelemetryMinuteBucketEntity>
+
   @Query(
     """
     SELECT * FROM telemetry_markers
@@ -288,6 +291,8 @@ private fun TelemetryMinuteBucketEntity.merge(next: TelemetryMinuteBucketEntity)
     },
     maxMotorCurrentAbsMa = maxOf(maxMotorCurrentAbsMa, next.maxMotorCurrentAbsMa),
     maxBatteryCurrentAbsMa = maxOf(maxBatteryCurrentAbsMa, next.maxBatteryCurrentAbsMa),
+    batteryUsedWhMilli = batteryUsedWhMilli + next.batteryUsedWhMilli,
+    batteryRegenWhMilli = batteryRegenWhMilli + next.batteryRegenWhMilli,
     maxDutyAbsPermille = maxOf(maxDutyAbsPermille, next.maxDutyAbsPermille),
     faultCount = faultCount + next.faultCount,
     firstOdometerCm = when {

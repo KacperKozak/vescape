@@ -17,7 +17,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
     AlertRuleEntity::class,
     AppSettingsEntity::class,
   ],
-  version = 5,
+  version = 6,
   exportSchema = false,
 )
 abstract class TelemetryDatabase : RoomDatabase() {
@@ -48,6 +48,23 @@ abstract class TelemetryDatabase : RoomDatabase() {
       }
     }
 
+    private val MIGRATION_5_6 = object : Migration(5, 6) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+          """
+          ALTER TABLE telemetry_minute_buckets
+          ADD COLUMN battery_used_wh_milli INTEGER NOT NULL DEFAULT 0
+          """.trimIndent(),
+        )
+        db.execSQL(
+          """
+          ALTER TABLE telemetry_minute_buckets
+          ADD COLUMN battery_regen_wh_milli INTEGER NOT NULL DEFAULT 0
+          """.trimIndent(),
+        )
+      }
+    }
+
     fun get(context: Context): TelemetryDatabase {
       return instance ?: synchronized(this) {
         instance ?: Room.databaseBuilder(
@@ -55,7 +72,7 @@ abstract class TelemetryDatabase : RoomDatabase() {
           TelemetryDatabase::class.java,
           "telemetry.db",
         )
-          .addMigrations(MIGRATION_3_4, MIGRATION_4_5)
+          .addMigrations(MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
           .fallbackToDestructiveMigration(true)
           .addCallback(object : Callback() {
             override fun onCreate(db: SupportSQLiteDatabase) {

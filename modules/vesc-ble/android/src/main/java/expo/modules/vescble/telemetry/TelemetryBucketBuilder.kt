@@ -1,10 +1,12 @@
 package expo.modules.vescble.telemetry
 
 import kotlin.math.abs
+import kotlin.math.roundToLong
 
 internal const val TELEMETRY_BUCKET_SIZE_MS = 60_000L
 internal const val UNKNOWN_TELEMETRY_DEVICE_ID = ""
 internal const val UNKNOWN_TELEMETRY_DEVICE_NAME = "VESC Board"
+private const val MAX_ENERGY_SAMPLE_GAP_MS = 5_000L
 
 internal data class BucketTelemetryPoint(
   val capturedAtMs: Long,
@@ -67,6 +69,8 @@ private class MutableBucket(
   private var minBatteryVoltageMv: Int? = null
   private var maxMotorCurrentAbsMa = 0
   private var maxBatteryCurrentAbsMa = 0
+  private var batteryUsedWhMilli = 0L
+  private var batteryRegenWhMilli = 0L
   private var maxDutyAbsPermille = 0
   private var faultCount = 0
   private var firstOdometerCm: Long? = null
@@ -75,6 +79,7 @@ private class MutableBucket(
   private var preciseGpsPointCount = 0
   private var gpsDistanceCm = 0L
   private var maxGpsSpeedCentiMps: Int? = null
+  private var lastEnergyPoint: BucketTelemetryPoint? = null
 
   fun add(point: BucketTelemetryPoint) {
     sampleCount++
@@ -92,6 +97,21 @@ private class MutableBucket(
     if (point.hasFault) faultCount++
     if (firstOdometerCm == null) firstOdometerCm = point.odometerCm
     if (point.odometerCm != null) lastOdometerCm = point.odometerCm
+
+    lastEnergyPoint?.let { previous ->
+      val dtMs = point.capturedAtMs - previous.capturedAtMs
+      if (dtMs > 0L && dtMs <= MAX_ENERGY_SAMPLE_GAP_MS) {
+        val voltageV = previous.batteryVoltageMv / 1000.0
+        val currentA = previous.batteryCurrentMa / 1000.0
+        val wh = voltageV * currentA * dtMs / 3_600_000.0
+        val whMilli = (abs(wh) * 1000.0).roundToLong()
+        when {
+          wh > 0.0 -> batteryUsedWhMilli += whMilli
+          wh < 0.0 -> batteryRegenWhMilli += whMilli
+        }
+      }
+    }
+    lastEnergyPoint = point
   }
 
   fun addLocation(point: BucketLocationPoint) {
@@ -120,6 +140,8 @@ private class MutableBucket(
     minBatteryVoltageMv = minBatteryVoltageMv,
     maxMotorCurrentAbsMa = maxMotorCurrentAbsMa,
     maxBatteryCurrentAbsMa = maxBatteryCurrentAbsMa,
+    batteryUsedWhMilli = batteryUsedWhMilli,
+    batteryRegenWhMilli = batteryRegenWhMilli,
     maxDutyAbsPermille = maxDutyAbsPermille,
     faultCount = faultCount,
     firstOdometerCm = firstOdometerCm,
