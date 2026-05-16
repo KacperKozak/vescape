@@ -1,6 +1,11 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useCallback, useEffect, useState, type RefObject } from 'react'
-import { ArrowLeftIcon, ClockCounterClockwiseIcon } from 'phosphor-react-native'
+import { router } from 'expo-router'
+import {
+  ArrowLeftIcon,
+  ClockCounterClockwiseIcon,
+  SlidersHorizontalIcon,
+} from 'phosphor-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { BottomTelemetryStrip, STRIP_CONTENT_HEIGHT } from '@/screens/center/BottomTelemetryStrip'
@@ -15,6 +20,7 @@ import { FloatingBar } from '@/components/FloatingBar'
 import { HistorySessionSheet } from '@/components/history/HistorySessionSheet'
 import { MapControls } from '@/components/map/MapControls'
 import { MapStyleSwitch } from '@/components/map/MapStyleSwitch'
+import { routes } from '@/navigation/routes'
 import type { Board } from '@/store/boardStore'
 import type { HistorySession, TelemetrySample } from '@/store/historyStore'
 import type { MapStyleKey } from '@/constants/mapStyles'
@@ -132,6 +138,7 @@ export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOver
           />
           <Pressable
             style={[
+              styles.quickButton,
               styles.historyButton,
               {
                 bottom: aboveStripBottom - (HISTORY_BUTTON_SIZE - RECORD_BUTTON_HEIGHT) / 2,
@@ -140,6 +147,18 @@ export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOver
             onPress={() => void history.enterHistoryMode()}
           >
             <ClockCounterClockwiseIcon size={18} color="#f8fafc" weight="bold" />
+          </Pressable>
+          <Pressable
+            style={[
+              styles.quickButton,
+              styles.tuneButton,
+              {
+                bottom: aboveStripBottom - (HISTORY_BUTTON_SIZE - RECORD_BUTTON_HEIGHT) / 2,
+              },
+            ]}
+            onPress={() => router.push(routes.tune)}
+          >
+            <SlidersHorizontalIcon size={18} color="#f8fafc" weight="bold" />
           </Pressable>
         </>
       )}
@@ -257,9 +276,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(148, 163, 184, 0.28)',
     backgroundColor: 'rgba(15, 23, 42, 0.72)',
   },
-  historyButton: {
+  quickButton: {
     position: 'absolute',
-    right: 12,
     zIndex: 20,
     width: HISTORY_BUTTON_SIZE,
     height: HISTORY_BUTTON_SIZE,
@@ -269,6 +287,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(148, 163, 184, 0.28)',
     backgroundColor: 'rgba(15, 23, 42, 0.72)',
+  },
+  historyButton: {
+    right: 12,
+  },
+  tuneButton: {
+    left: 12,
   },
   historyError: {
     position: 'absolute',
