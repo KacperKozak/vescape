@@ -67,6 +67,7 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
     error: historyError,
     loadInitial,
     selectSession,
+    removeSelectedSession,
   } = useHistoryStore(
     useShallow((s) => ({
       sessions: s.sessions,
@@ -79,6 +80,7 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
       error: s.error,
       loadInitial: s.loadInitial,
       selectSession: s.selectSession,
+      removeSelectedSession: s.removeSelectedSession,
     })),
   )
   const { targetLocation, setTargetLocation, clearTargetLocation } = useMapStore(
@@ -122,6 +124,10 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
     }
     enterHistory()
   }, [enterHistory, loadInitial, selectSession])
+
+  const removeSession = useCallback(() => {
+    void removeSelectedSession()
+  }, [removeSelectedSession])
 
   const selectRide = useCallback(
     (session: HistorySession) => {
@@ -192,6 +198,7 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
     selectSession,
     enterHistoryMode,
     exitHistory,
+    removeSession,
     selectRide,
     handleMapFocus,
     exitMapFocus,

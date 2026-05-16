@@ -1,33 +1,15 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
-import {
-  ArrowLeftIcon,
-  CaretLeftIcon,
-  CaretRightIcon,
-  ListBulletsIcon,
-} from 'phosphor-react-native'
+import { Pressable, StyleSheet, View } from 'react-native'
+import { ArrowLeftIcon, TrashIcon } from 'phosphor-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 interface HistoryControlsProps {
-  title: string
-  canPrevious: boolean
-  canNext: boolean
   loading: boolean
+  canRemove: boolean
   onBack: () => void
-  onPrevious: () => void
-  onNext: () => void
-  onOpenList: () => void
+  onRemove: () => void
 }
 
-export function HistoryControls({
-  title,
-  canPrevious,
-  canNext,
-  loading,
-  onBack,
-  onPrevious,
-  onNext,
-  onOpenList,
-}: HistoryControlsProps) {
+export function HistoryControls({ loading, canRemove, onBack, onRemove }: HistoryControlsProps) {
   const insets = useSafeAreaInsets()
   return (
     <View style={[styles.wrap, { paddingTop: Math.max(insets.top, 8) }]} pointerEvents="box-none">
@@ -35,25 +17,17 @@ export function HistoryControls({
         <Pressable style={styles.iconButton} onPress={onBack}>
           <ArrowLeftIcon size={19} color="#f8fafc" weight="bold" />
         </Pressable>
+        <View style={styles.spacer} />
         <Pressable
-          style={[styles.iconButton, !canPrevious && styles.disabled]}
-          disabled={!canPrevious || loading}
-          onPress={onPrevious}
+          style={[
+            styles.iconButton,
+            styles.removeButton,
+            (!canRemove || loading) && styles.disabled,
+          ]}
+          disabled={!canRemove || loading}
+          onPress={onRemove}
         >
-          <CaretLeftIcon size={18} color="#f8fafc" weight="bold" />
-        </Pressable>
-        <Pressable style={styles.titleButton} onPress={onOpenList}>
-          <ListBulletsIcon size={15} color="#cbd5e1" weight="bold" />
-          <Text style={styles.title} numberOfLines={1}>
-            {loading ? 'Loading ride...' : title}
-          </Text>
-        </Pressable>
-        <Pressable
-          style={[styles.iconButton, !canNext && styles.disabled]}
-          disabled={!canNext || loading}
-          onPress={onNext}
-        >
-          <CaretRightIcon size={18} color="#f8fafc" weight="bold" />
+          <TrashIcon size={17} color="#f87171" weight="bold" />
         </Pressable>
       </View>
     </View>
@@ -71,7 +45,9 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+  },
+  spacer: {
+    flex: 1,
   },
   iconButton: {
     width: 38,
@@ -83,27 +59,10 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(148, 163, 184, 0.28)',
     backgroundColor: 'rgba(15, 23, 42, 0.72)',
   },
+  removeButton: {
+    borderColor: 'rgba(248, 113, 113, 0.28)',
+  },
   disabled: {
     opacity: 0.35,
-  },
-  titleButton: {
-    flex: 1,
-    minWidth: 0,
-    height: 38,
-    borderRadius: 19,
-    borderWidth: 1,
-    borderColor: 'rgba(148, 163, 184, 0.28)',
-    backgroundColor: 'rgba(15, 23, 42, 0.72)',
-    paddingHorizontal: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  title: {
-    flex: 1,
-    minWidth: 0,
-    color: '#f8fafc',
-    fontSize: 12,
-    fontWeight: '800',
   },
 })

@@ -143,6 +143,7 @@ export function CenterScreen({
           selectSession: controller.selectSession,
           selectRide: controller.selectRide,
           exitHistory: controller.exitHistory,
+          removeSession: controller.removeSession,
           onSeek: controller.onSeek,
         }}
       />

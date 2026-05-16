@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { useEffect, useState, type RefObject } from 'react'
+import { useCallback, useEffect, useState, type RefObject } from 'react'
 import { ArrowLeftIcon, ClockCounterClockwiseIcon } from 'phosphor-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
@@ -10,6 +10,7 @@ import { LiveHud } from '@/screens/center/LiveHud'
 import { MapVignette } from '@/screens/center/MapVignette'
 import { TopBar } from '@/screens/center/TopBar'
 import type { CenterMapHandle } from '@/screens/center/CenterMap'
+import { ConfirmModal } from '@/components/ConfirmModal'
 import { FloatingBar } from '@/components/FloatingBar'
 import { HistorySessionSheet } from '@/components/history/HistorySessionSheet'
 import { MapControls } from '@/components/map/MapControls'
@@ -59,6 +60,7 @@ interface CenterHistoryOverlayProps {
   selectSession: (session: HistorySession | null) => Promise<void>
   selectRide: (session: HistorySession) => void
   exitHistory: () => void
+  removeSession: () => void
   onSeek: (timeMs: number) => void
 }
 
@@ -77,6 +79,20 @@ export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOver
   const insets = useSafeAreaInsets()
   const aboveStripBottom = STRIP_CONTENT_HEIGHT + Math.max(insets.bottom * 0.5, 8) + 8
   const [panelHeight, setPanelHeight] = useState(0)
+  const [removeConfirmVisible, setRemoveConfirmVisible] = useState(false)
+
+  const handleRemovePress = useCallback(() => {
+    setRemoveConfirmVisible(true)
+  }, [])
+
+  const handleRemoveConfirm = useCallback(() => {
+    setRemoveConfirmVisible(false)
+    history.removeSession()
+  }, [history])
+
+  const handleRemoveCancel = useCallback(() => {
+    setRemoveConfirmVisible(false)
+  }, [])
 
   useEffect(() => {
     if (mode === 'history' || panelHeight === 0) return
@@ -156,19 +172,13 @@ export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOver
         <>
           <MapVignette mode={mode} panelHeight={panelHeight} />
           <HistoryTelemetryPanel
+            startAtMs={history.selectedSession.startAtMs}
+            endAtMs={history.selectedSession.endAtMs}
+            deviceName={history.selectedSession.deviceName}
             samples={history.sessionSamples}
             loading={history.loadingSession}
-            onSeek={history.onSeek}
-            onHeightChange={setPanelHeight}
-          />
-          <HistoryControls
-            title={`${new Date(history.selectedSession.startAtMs).toLocaleString()} · ${
-              history.selectedSession.deviceName
-            }`}
             canPrevious={!!history.previousRide}
             canNext={!!history.nextRide}
-            loading={history.loadingSession || history.historyLoading}
-            onBack={history.exitHistory}
             onPrevious={() => {
               if (history.previousRide) void history.selectSession(history.previousRide)
             }}
@@ -176,20 +186,24 @@ export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOver
               if (history.nextRide) void history.selectSession(history.nextRide)
             }}
             onOpenList={() => history.setHistorySheetVisible(true)}
+            onSeek={history.onSeek}
+            onHeightChange={setPanelHeight}
+          />
+          <HistoryControls
+            loading={history.loadingSession || history.historyLoading}
+            canRemove={true}
+            onBack={history.exitHistory}
+            onRemove={handleRemovePress}
           />
         </>
       )}
 
       {mode === 'history' && !history.selectedSession && !history.loadingSession && (
         <HistoryControls
-          title="No rides yet"
-          canPrevious={false}
-          canNext={false}
           loading={false}
+          canRemove={false}
           onBack={history.exitHistory}
-          onPrevious={() => undefined}
-          onNext={() => undefined}
-          onOpenList={() => history.setHistorySheetVisible(true)}
+          onRemove={() => undefined}
         />
       )}
 
@@ -208,6 +222,17 @@ export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOver
           </Text>
         </View>
       ) : null}
+
+      <ConfirmModal
+        visible={removeConfirmVisible}
+        title="Delete Ride"
+        message="This ride and all its telemetry data will be permanently removed."
+        confirmLabel="Delete"
+        cancelLabel="Keep"
+        destructive
+        onConfirm={handleRemoveConfirm}
+        onCancel={handleRemoveCancel}
+      />
     </>
   )
 }

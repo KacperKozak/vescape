@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { CaretDownIcon, CaretLeftIcon, CaretRightIcon } from 'phosphor-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { TelemetryLineChart } from '@/components/charts/TelemetryLineChart'
@@ -15,8 +16,16 @@ import { dutyPercent, fmtDutyPercent } from '@/helpers/format'
 import type { TelemetrySample } from '@/store/historyStore'
 
 interface HistoryTelemetryPanelProps {
+  startAtMs: number
+  endAtMs: number
+  deviceName: string
   samples: TelemetrySample[]
   loading: boolean
+  canPrevious: boolean
+  canNext: boolean
+  onPrevious: () => void
+  onNext: () => void
+  onOpenList: () => void
   onSeek?: (timeMs: number) => void
   onHeightChange?: (height: number) => void
 }
@@ -24,9 +33,43 @@ interface HistoryTelemetryPanelProps {
 const CHART_MAX_POINTS = 220
 const OPTIONAL_CHART_TAB_COUNT = OPTIONAL_CHART_METRICS.length
 
+function formatRideTime(startMs: number, endMs: number): string {
+  const start = new Date(startMs)
+  const end = new Date(endMs)
+  const h = (d: Date) => d.getHours().toString().padStart(2, '0')
+  const m = (d: Date) => d.getMinutes().toString().padStart(2, '0')
+  return `${h(start)}:${m(start)} – ${h(end)}:${m(end)}`
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+function formatRideDate(startMs: number, endMs: number): string {
+  const s = new Date(startMs)
+  const e = new Date(endMs)
+  const sameDay =
+    s.getFullYear() === e.getFullYear() &&
+    s.getMonth() === e.getMonth() &&
+    s.getDate() === e.getDate()
+  if (sameDay) {
+    return `${s.getDate()} ${MONTHS[s.getMonth()]} ${s.getFullYear()}`
+  }
+  if (s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear()) {
+    return `${s.getDate()}–${e.getDate()} ${MONTHS[s.getMonth()]} ${s.getFullYear()}`
+  }
+  return `${s.getDate()} ${MONTHS[s.getMonth()]} – ${e.getDate()} ${MONTHS[e.getMonth()]} ${e.getFullYear()}`
+}
+
 export function HistoryTelemetryPanel({
+  startAtMs,
+  endAtMs,
+  deviceName,
   samples,
   loading,
+  canPrevious,
+  canNext,
+  onPrevious,
+  onNext,
+  onOpenList,
   onSeek,
   onHeightChange,
 }: HistoryTelemetryPanelProps) {
@@ -275,6 +318,37 @@ export function HistoryTelemetryPanel({
       style={[styles.panel, { bottom: bottomInset }]}
       onLayout={(e) => onHeightChange?.(e.nativeEvent.layout.height)}
     >
+      <View style={styles.navRow}>
+        <Pressable
+          style={[styles.navButton, !canPrevious && styles.disabled]}
+          disabled={!canPrevious || loading}
+          onPress={onPrevious}
+        >
+          <CaretLeftIcon size={20} color="#f8fafc" weight="bold" />
+        </Pressable>
+        <Pressable style={styles.titleButton} onPress={onOpenList}>
+          {loading ? (
+            <Text style={styles.titleLoading}>Loading...</Text>
+          ) : (
+            <View style={styles.titleContent}>
+              <Text style={styles.titleTime} numberOfLines={1}>
+                {formatRideTime(startAtMs, endAtMs)}
+              </Text>
+              <Text style={styles.titleMeta} numberOfLines={1}>
+                {formatRideDate(startAtMs, endAtMs)} · {deviceName}
+              </Text>
+            </View>
+          )}
+          <CaretDownIcon size={12} color="#64748b" weight="bold" />
+        </Pressable>
+        <Pressable
+          style={[styles.navButton, !canNext && styles.disabled]}
+          disabled={!canNext || loading}
+          onPress={onNext}
+        >
+          <CaretRightIcon size={20} color="#f8fafc" weight="bold" />
+        </Pressable>
+      </View>
       <TelemetryLineChart
         label={telemetry.speed.label}
         value={telemetry.speed.formatWithUnit(headSample.speedKmh)}
@@ -365,6 +439,60 @@ const styles = StyleSheet.create({
     right: 8,
     zIndex: 20,
     gap: 8,
+  },
+  navRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    maxWidth: 280,
+    gap: 6,
+  },
+  navButton: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(148, 163, 184, 0.28)',
+    backgroundColor: 'rgba(15, 23, 42, 0.72)',
+  },
+  disabled: {
+    opacity: 0.35,
+  },
+  titleButton: {
+    flex: 1,
+    minWidth: 0,
+    height: 54,
+    borderRadius: 27,
+    borderWidth: 1,
+    borderColor: 'rgba(148, 163, 184, 0.28)',
+    backgroundColor: 'rgba(15, 23, 42, 0.72)',
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  titleContent: {
+    flex: 1,
+    minWidth: 0,
+    gap: 1,
+  },
+  titleTime: {
+    color: '#f8fafc',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  titleMeta: {
+    color: '#64748b',
+    fontSize: 9,
+    fontWeight: '600',
+  },
+  titleLoading: {
+    flex: 1,
+    color: '#64748b',
+    fontSize: 11,
+    fontWeight: '700',
   },
   chart: {
     minHeight: 72,
