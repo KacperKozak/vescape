@@ -531,6 +531,14 @@ class VescForegroundService : Service() {
             }
             COMM_GET_CUSTOM_CONFIG_XML -> handleConfigXmlPayload(payload)
             COMM_GET_CUSTOM_CONFIG -> handleConfigBytesPayload(payload)
+            COMM_FORWARD_CAN -> {
+                if (payload.size >= 3) {
+                    when (payload[2].toInt() and 0xff) {
+                        COMM_GET_CUSTOM_CONFIG_XML -> handleConfigXmlPayload(payload)
+                        COMM_GET_CUSTOM_CONFIG -> handleConfigBytesPayload(payload)
+                    }
+                }
+            }
             COMM_CUSTOM_APP_DATA -> {
                 val now = System.currentTimeMillis()
                 val parsed = parseRefloatGetAllData(

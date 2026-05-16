@@ -16,6 +16,17 @@ internal data class RefloatConfigBytes(
 )
 
 internal object RefloatConfigProtocol {
+  private fun commandOffset(payload: ByteArray, expectedCommand: Int): Int? {
+    if (payload.isEmpty()) return null
+    val cmd = payload[0].toInt() and 0xff
+    if (cmd == expectedCommand) return 0
+    if (cmd == COMM_FORWARD_CAN && payload.size >= 3) {
+      val forwarded = payload[2].toInt() and 0xff
+      if (forwarded == expectedCommand) return 2
+    }
+    return null
+  }
+
   fun buildGetCustomConfigXml(
     canId: Int,
     confInd: Int,
@@ -49,23 +60,23 @@ internal object RefloatConfigProtocol {
   }
 
   fun parseCustomConfigXmlResponse(payload: ByteArray): RefloatConfigXmlChunk? {
-    if (payload.size < 10) return null
-    if ((payload[0].toInt() and 0xff) != COMM_GET_CUSTOM_CONFIG_XML) return null
+    val cmdOffset = commandOffset(payload, COMM_GET_CUSTOM_CONFIG_XML) ?: return null
+    if (payload.size < cmdOffset + 10) return null
     val view = ByteBuffer.wrap(payload).order(ByteOrder.BIG_ENDIAN)
-    view.position(1)
+    view.position(cmdOffset + 1)
     val confInd = view.get().toInt() and 0xff
     val totalLength = view.int
-    val offset = view.int
-    if (totalLength < 0 || offset < 0 || offset > totalLength) return null
-    val chunk = payload.copyOfRange(10, payload.size)
-    if (offset + chunk.size > totalLength) return null
-    return RefloatConfigXmlChunk(confInd, totalLength, offset, chunk)
+    val dataOffset = view.int
+    if (totalLength < 0 || dataOffset < 0 || dataOffset > totalLength) return null
+    val chunk = payload.copyOfRange(cmdOffset + 10, payload.size)
+    if (dataOffset + chunk.size > totalLength) return null
+    return RefloatConfigXmlChunk(confInd, totalLength, dataOffset, chunk)
   }
 
   fun parseCustomConfigResponse(payload: ByteArray): RefloatConfigBytes? {
-    if (payload.size < 2) return null
-    if ((payload[0].toInt() and 0xff) != COMM_GET_CUSTOM_CONFIG) return null
-    val confInd = payload[1].toInt() and 0xff
-    return RefloatConfigBytes(confInd, payload.copyOfRange(2, payload.size))
+    val offset = commandOffset(payload, COMM_GET_CUSTOM_CONFIG) ?: return null
+    if (payload.size < offset + 2) return null
+    val confInd = payload[offset + 1].toInt() and 0xff
+    return RefloatConfigBytes(confInd, payload.copyOfRange(offset + 2, payload.size))
   }
 }

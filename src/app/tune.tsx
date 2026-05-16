@@ -24,6 +24,15 @@ function errorMessage(error: unknown): string {
   return 'Unable to read Refloat config.'
 }
 
+async function readConfigSnapshotWithTimeout(timeoutMs = 9000): Promise<RefloatConfigSnapshot> {
+  return Promise.race([
+    getRefloatConfigSnapshot(),
+    new Promise<RefloatConfigSnapshot>((_, reject) => {
+      setTimeout(() => reject(new Error('Timed out reading board config.')), timeoutMs)
+    }),
+  ])
+}
+
 export default function TuneScreen() {
   const [state, setState] = useState<LoadState>({
     phase: 'loading',
@@ -34,7 +43,7 @@ export default function TuneScreen() {
   const load = useCallback(async () => {
     setState((current) => ({ phase: 'loading', snapshot: current.snapshot, error: null }))
     try {
-      const snapshot = await getRefloatConfigSnapshot()
+      const snapshot = await readConfigSnapshotWithTimeout()
       setState({ phase: 'ready', snapshot, error: null })
     } catch (error) {
       setState((current) => ({
