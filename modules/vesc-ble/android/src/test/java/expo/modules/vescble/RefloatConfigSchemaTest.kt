@@ -33,4 +33,9 @@ class RefloatConfigSchemaTest {
     val xml = """<CustomConfiguration><params><param type="float" /></params></CustomConfiguration>"""
     RefloatConfigSchemaParser.parse(xml.encodeToByteArray())
   }
+
+  @Test(expected = RefloatConfigSchemaException::class)
+  fun wrapsMalformedXmlAsSchemaError() {
+    RefloatConfigSchemaParser.parse("<CustomConfiguration><params>".encodeToByteArray())
+  }
 }
