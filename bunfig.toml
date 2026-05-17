@@ -1,5 +1,6 @@
 [install]
-minimumReleaseAge = 604800 # 7 days in seconds
+linker = "hoisted"
+minimumReleaseAge = 172800 # 2 days in seconds
 
 [test]
 preload = ["./testSetup.ts"]

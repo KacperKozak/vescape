@@ -7,7 +7,6 @@
     "icon": "./assets/images/icon.png",
     "scheme": "vibewheel",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.vibewheel",
@@ -22,7 +21,6 @@
         "backgroundImage": "./assets/images/androidIconBackground.png",
         "monochromeImage": "./assets/images/androidIconMonochrome.png"
       },
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.anonymous.vibewheel"
     },
