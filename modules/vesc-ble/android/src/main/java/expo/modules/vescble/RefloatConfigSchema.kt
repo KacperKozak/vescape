@@ -44,9 +44,16 @@ internal object RefloatConfigSchemaParser {
       val factory = DocumentBuilderFactory.newInstance().apply {
         isNamespaceAware = false
         isIgnoringComments = true
-        setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
-        setFeature("http://xml.org/sax/features/external-general-entities", false)
-        setFeature("http://xml.org/sax/features/external-parameter-entities", false)
+        for ((feature, value) in listOf(
+          "http://apache.org/xml/features/disallow-doctype-decl" to true,
+          "http://xml.org/sax/features/external-general-entities" to false,
+          "http://xml.org/sax/features/external-parameter-entities" to false,
+        )) {
+          try {
+            setFeature(feature, value)
+          } catch (_: Exception) {
+          }
+        }
       }
       factory.newDocumentBuilder().parse(ByteArrayInputStream(normalizedXmlBytes))
     } catch (e: Exception) {
