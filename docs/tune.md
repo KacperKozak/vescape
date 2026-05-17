@@ -143,10 +143,9 @@ response rather than raw current alone. It is meant to respond to the difference
 between expected acceleration and measured acceleration, which makes uphill and
 downhill response more rider-weight-aware than pure torque tiltback.
 
-Field naming note: the underlying Refloat names are commonly
-`atr_strength_up` and `atr_strength_down`. Our current local model labels these
-as `atr_uphill_strength` and `atr_downhill_strength`; they should map to the
-same user-facing concepts.
+Field naming note: Refloat's canonical field IDs are the serialized struct
+names from `<SerOrder>`, not the VESC Tool `cDefine` defaults. For ATR strength,
+use `atr_strength_up` and `atr_strength_down`.
 
 ### Carve Tilt
 
@@ -572,11 +571,7 @@ Current local read-only field groups live in:
 modules/vesc-ble/android/src/main/java/expo/modules/vescble/RefloatConfigModels.kt
 ```
 
-Before implementing writes, align field IDs with the schema names returned by
-the board. In particular, confirm whether the schema exposes ATR fields as:
-
-- `atr_strength_up` / `atr_strength_down`
-- or `atr_uphill_strength` / `atr_downhill_strength`
-
-The UI can use rider-facing labels either way, but write paths must use exact
-schema field IDs.
+Before implementing writes, keep field IDs aligned with the serialized struct
+names returned by the board's `<SerOrder>`. Do not derive IDs from `cDefine`;
+those defaults are VESC Tool names and can differ from Refloat's wire-format
+field IDs, as with `atr_strength_up` / `atr_strength_down`.

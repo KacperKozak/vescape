@@ -152,12 +152,10 @@ internal object RefloatConfigSchemaParser {
         ?: throw RefloatConfigSchemaException("UNSUPPORTED_SCHEMA: param $name missing type")
       val vTx = text(node, "vTx")?.toIntOrNull() ?: 0
       val valueType = parseVescValueType(type, vTx, name)
-      val cDefine = text(node, "cDefine")
-      val id = normalizeId(cDefine ?: name)
       val field = RefloatConfigSchemaField(
-        id = id,
+        id = name,
         type = valueType,
-        label = text(node, "longName") ?: id,
+        label = text(node, "longName") ?: name,
         unit = text(node, "suffix")?.ifBlank { null },
         min = text(node, "minDouble")?.toDoubleOrNull() ?: text(node, "minInt")?.toDoubleOrNull(),
         max = text(node, "maxDouble")?.toDoubleOrNull() ?: text(node, "maxInt")?.toDoubleOrNull(),
@@ -174,10 +172,6 @@ internal object RefloatConfigSchemaParser {
     val nodes = parent.getElementsByTagName(tag)
     if (nodes.length == 0) return null
     return nodes.item(0).textContent.trim()
-  }
-
-  private fun normalizeId(raw: String): String {
-    return raw.removePrefix("CFG_DFLT_").lowercase()
   }
 
   private fun parseVescValueType(type: Int, vTx: Int, name: String): RefloatConfigValueType {

@@ -28,6 +28,41 @@ class RefloatConfigSchemaTest {
     assertTrue(schema.hash.isNotBlank())
   }
 
+  @Test
+  fun parsesConfigParamsUsingSerializedStructNames() {
+    val xml = """
+      <ConfigParams>
+        <Params>
+          <atr_strength_up>
+            <type>1</type>
+            <vTx>8</vTx>
+            <vTxDoubleScale>1000</vTxDoubleScale>
+            <cDefine>CFG_DFLT_ATR_UPHILL_STRENGTH</cDefine>
+            <longName>ATR Uphill Strength</longName>
+          </atr_strength_up>
+          <turntilt_erpm_boost>
+            <type>2</type>
+            <vTx>3</vTx>
+            <cDefine>CFG_DFLT_TURNTILT_ERPM_BOOST</cDefine>
+            <longName>Speed Boost %</longName>
+          </turntilt_erpm_boost>
+        </Params>
+        <SerOrder>
+          <ser>atr_strength_up</ser>
+          <ser>turntilt_erpm_boost</ser>
+        </SerOrder>
+      </ConfigParams>
+    """.trimIndent()
+
+    val schema = RefloatConfigSchemaParser.parse(xml.encodeToByteArray())
+
+    assertEquals("atr_strength_up", schema.fields[0].id)
+    assertEquals(RefloatConfigValueType.FLOAT32_SCALED, schema.fields[0].type)
+    assertEquals(1000.0, schema.fields[0].scale)
+    assertEquals("turntilt_erpm_boost", schema.fields[1].id)
+    assertEquals(RefloatConfigValueType.UINT16, schema.fields[1].type)
+  }
+
   @Test(expected = RefloatConfigSchemaException::class)
   fun rejectsMissingFieldNames() {
     val xml = """<CustomConfiguration><params><param type="float" /></params></CustomConfiguration>"""

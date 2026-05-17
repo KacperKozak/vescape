@@ -16,6 +16,8 @@ class RefloatConfigModelsTest {
     assertTrue(ids.contains("ki_limit"))
     assertTrue(ids.contains("mahony_kp"))
     assertTrue(ids.contains("mahony_kp_roll"))
+    assertTrue(ids.contains("atr_strength_up"))
+    assertTrue(ids.contains("atr_strength_down"))
   }
 
   @Test
@@ -44,6 +46,7 @@ class RefloatConfigModelsTest {
         ),
       ),
       missingFieldIds = emptyList(),
+      fwVersion = null,
     )
 
     val group = (snapshot.toMap()["groups"] as List<*>).first() as Map<*, *>

@@ -30,6 +30,7 @@ class RefloatConfigDecoderTest {
       boardId = "board-1",
       canId = 7,
       capturedAt = 100L,
+      fwVersion = null,
     )
 
     assertEquals("schema-hash", snapshot.schemaHash)
@@ -48,6 +49,6 @@ class RefloatConfigDecoderTest {
       ),
     )
 
-    RefloatConfigDecoder.decode(schema, byteArrayOf(1, 2), null, 7, 100L)
+    RefloatConfigDecoder.decode(schema, byteArrayOf(1, 2), null, 7, 100L, null)
   }
 }

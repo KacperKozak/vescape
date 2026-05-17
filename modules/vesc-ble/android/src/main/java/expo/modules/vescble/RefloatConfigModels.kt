@@ -99,8 +99,8 @@ internal val REFLOAT_TUNE_GROUPS = listOf(
     id = "atr",
     title = "ATR",
     fields = listOf(
-      RefloatTuneFieldDefinition("atr_uphill_strength", "ATR Uphill Strength"),
-      RefloatTuneFieldDefinition("atr_downhill_strength", "ATR Downhill Strength"),
+      RefloatTuneFieldDefinition("atr_strength_up", "ATR Uphill Strength"),
+      RefloatTuneFieldDefinition("atr_strength_down", "ATR Downhill Strength"),
       RefloatTuneFieldDefinition("atr_threshold_up", "Threshold Angle Up", "deg"),
       RefloatTuneFieldDefinition("atr_threshold_down", "Threshold Angle Down", "deg"),
       RefloatTuneFieldDefinition("atr_speed_boost", "Speed Boost", "%"),
