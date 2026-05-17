@@ -70,17 +70,14 @@ export function BatteryBar({
           )}
         </Text>
       </View>
-      {series && series.length > 1 ? (
-        <Sparkline
-          points={series}
-          color={color}
-          height={compact ? 18 : 24}
-          range={PCT_RANGE}
-          windowMs={windowMs}
-        />
-      ) : hint ? (
-        <Text style={styles.hint}>{hint}</Text>
-      ) : null}
+      <Sparkline
+        points={series ?? []}
+        color={color}
+        height={compact ? 18 : 24}
+        range={PCT_RANGE}
+        windowMs={windowMs}
+      />
+      {hint && !series?.length ? <Text style={styles.hint}>{hint}</Text> : null}
     </Pressable>
   )
 }

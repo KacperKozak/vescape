@@ -358,16 +358,14 @@ export function DualGauge({
           onPress={() => router.push(routes.controlSpeed)}
           android_ripple={{ color: 'rgba(148,163,184,0.18)', borderless: false, foreground: true }}
         >
-          {speedSeries && speedSeries.length > 1 && (
-            <Sparkline
-              points={speedSeries}
-              color={telemetry.speed.color}
-              height={28}
-              range={{ min: 0, max: speedMax }}
-              fmtMax={(v) => telemetry.speed.formatWithUnit(v)}
-              windowMs={windowMs}
-            />
-          )}
+          <Sparkline
+            points={speedSeries ?? []}
+            color={telemetry.speed.color}
+            height={28}
+            range={{ min: 0, max: speedMax }}
+            fmtMax={(v) => telemetry.speed.formatWithUnit(v)}
+            windowMs={windowMs}
+          />
           <QuarterArc
             side="left"
             value={speedValue}
@@ -383,16 +381,14 @@ export function DualGauge({
           onPress={() => router.push(routes.controlDuty)}
           android_ripple={{ color: 'rgba(148,163,184,0.18)', borderless: false, foreground: true }}
         >
-          {dutySeries && dutySeries.length > 1 && (
-            <Sparkline
-              points={dutySeries}
-              color={telemetry.duty.color}
-              height={28}
-              range={{ min: 0, max: dutyMax }}
-              fmtMax={(v) => telemetry.duty.formatWithUnit(v)}
-              windowMs={windowMs}
-            />
-          )}
+          <Sparkline
+            points={dutySeries ?? []}
+            color={telemetry.duty.color}
+            height={28}
+            range={{ min: 0, max: dutyMax }}
+            fmtMax={(v) => telemetry.duty.formatWithUnit(v)}
+            windowMs={windowMs}
+          />
           <QuarterArc
             side="right"
             value={dutyValue}

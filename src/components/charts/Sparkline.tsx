@@ -109,9 +109,24 @@ export function Sparkline({
     setWidth(Math.round(event.nativeEvent.layout.width))
   }, [])
 
-  const { polyPoints, maxPos, maxValue } = useMemo(() => {
+  const { polyPoints, baselineY, firstX, maxPos, maxValue } = useMemo(() => {
+    const inset = 1.5
     if (points.length < 2 || width < 1) {
-      return { polyPoints: '', maxPos: null as { x: number; y: number } | null, maxValue: null }
+      let emptyY = height / 2
+      if (range) {
+        const span = range.max - range.min
+        if (span > 0) {
+          const t = (0 - range.min) / span
+          emptyY = height - inset - (height - inset * 2) * t
+        }
+      }
+      return {
+        polyPoints: '',
+        baselineY: emptyY,
+        firstX: 0,
+        maxPos: null as { x: number; y: number } | null,
+        maxValue: null,
+      }
     }
 
     const buckets = Math.max(width, MIN_BUCKETS)
@@ -146,7 +161,7 @@ export function Sparkline({
     }
     const ySpan = yMax - yMin
     if (xSpan <= 0 || ySpan <= 0) {
-      return { polyPoints: '', maxPos: null, maxValue: null }
+      return { polyPoints: '', baselineY: height / 2, firstX: 0, maxPos: null, maxValue: null }
     }
 
     let maxV = -Infinity
@@ -158,7 +173,6 @@ export function Sparkline({
       }
     })
 
-    const inset = 1.5
     const project = (p: SparklinePoint) => {
       const x = ((p.ts - xMin) / xSpan) * width
       const t = (p.value - yMin) / ySpan
@@ -166,8 +180,12 @@ export function Sparkline({
       return { x, y }
     }
 
+    const firstProj = project(reduced[0])
+
     return {
       polyPoints: reduced.map((p) => `${project(p).x},${project(p).y}`).join(' '),
+      baselineY: firstProj.y,
+      firstX: firstProj.x,
       maxPos: project(reduced[maxIdx]),
       maxValue: maxV,
     }
@@ -177,35 +195,48 @@ export function Sparkline({
     <View style={styles.wrap}>
       {showBadge ? (
         <View style={[styles.badgeRow, { height: BADGE_ROW_HEIGHT }]}>
-          {maxValue != null ? (
-            <Text style={styles.maxBadge} numberOfLines={1}>
-              <Text style={styles.maxLabel}>max </Text>
-              <Text style={{ color }}>{formatMaxBadgeValue(maxValue)}</Text>
+          <Text style={styles.maxBadge} numberOfLines={1}>
+            <Text style={styles.maxLabel}>max </Text>
+            <Text style={{ color: maxValue != null ? color : '#475569' }}>
+              {maxValue != null ? formatMaxBadgeValue(maxValue) : '-'}
             </Text>
-          ) : null}
+          </Text>
         </View>
       ) : null}
       <View style={{ height }} onLayout={onLayout}>
-        {polyPoints ? (
+        {width > 0 ? (
           <Svg width="100%" height={height}>
-            <SvgPolyline
-              points={polyPoints}
-              fill="none"
-              stroke={color}
-              strokeWidth={1.5}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-            {showMax && maxPos && (
-              <SvgCircle
-                cx={maxPos.x}
-                cy={maxPos.y}
-                r={2.5}
-                fill={color}
-                stroke="#0f172a"
+            {firstX > 0 || !polyPoints ? (
+              <SvgPolyline
+                points={`0,${baselineY} ${polyPoints ? firstX : width},${baselineY}`}
+                fill="none"
+                stroke="#334155"
                 strokeWidth={1}
+                strokeLinecap="round"
               />
-            )}
+            ) : null}
+            {polyPoints ? (
+              <>
+                <SvgPolyline
+                  points={polyPoints}
+                  fill="none"
+                  stroke={color}
+                  strokeWidth={1.5}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                {showMax && maxPos && (
+                  <SvgCircle
+                    cx={maxPos.x}
+                    cy={maxPos.y}
+                    r={2.5}
+                    fill={color}
+                    stroke="#0f172a"
+                    strokeWidth={1}
+                  />
+                )}
+              </>
+            ) : null}
           </Svg>
         ) : null}
       </View>

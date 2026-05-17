@@ -40,9 +40,10 @@ export function BatteryIndicator({ compact, transparent, containerStyle }: Batte
 
   const voltage = smoothVoltage
   const batteryConfigured = minVoltage != null && maxVoltage != null
-  const percent = batteryConfigured
-    ? estimateBatteryPercent(voltage ?? 0, minVoltage, maxVoltage)
-    : null
+  const percent =
+    batteryConfigured && voltage != null
+      ? estimateBatteryPercent(voltage, minVoltage, maxVoltage)
+      : null
 
   return (
     <BatteryBar
