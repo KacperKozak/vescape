@@ -258,6 +258,164 @@ advanced editors may allow up to `1.00 deg/A`.
 
 ## UI Behavior Notes
 
+### Retrieval and Persistence Model
+
+There are two related but different tuning paths:
+
+- Custom config read/write: full persisted controller package configuration.
+- Runtime tune commands: smaller Refloat package commands for live tune actions.
+
+The safe default for this app is to build the tune screen on custom config
+readback first, then add writes only after the persistence path is fully tested.
+
+### Custom Config Read Flow
+
+The board exposes custom config metadata and bytes through VESC custom config
+commands. On a CAN-forwarded controller, each command is wrapped as:
+
+```text
+[COMM_FORWARD_CAN, canId, command, ...args]
+```
+
+Relevant custom config commands:
+
+| Command | ID | Purpose |
+| --- | ---: | --- |
+| `COMM_GET_CUSTOM_CONFIG_XML` | `92` | Read the XML/schema for a custom config index. |
+| `COMM_GET_CUSTOM_CONFIG` | `93` | Read the current binary config bytes for a custom config index. |
+| `COMM_GET_CUSTOM_CONFIG_DEFAULT` | `94` | Read default binary config bytes. |
+| `COMM_SET_CUSTOM_CONFIG` | `95` | Write binary config bytes back to the controller. |
+
+Observed read sequence:
+
+1. Discover or already know the motor controller CAN id.
+2. Fetch XML/schema chunks with `COMM_GET_CUSTOM_CONFIG_XML`.
+3. Reassemble the XML bytes until the returned total length is complete.
+4. Parse the XML into ordered fields, value types, scale factors, labels, units,
+   and min/max metadata.
+5. Fetch current config bytes with `COMM_GET_CUSTOM_CONFIG`.
+6. Decode only allowlisted tune fields using XML-derived offsets and types.
+7. Return a snapshot containing decoded groups, missing field IDs, schema hash,
+   raw config hash, config byte length, CAN id, board id, capture time, and
+   firmware string if available.
+
+The XML request carries:
+
+```text
+[92, confIndex, requestedLength:uint32, offset:uint32]
+```
+
+The XML response carries:
+
+```text
+[92, confIndex, totalLength:uint32, offset:uint32, chunk...]
+```
+
+The config bytes request carries:
+
+```text
+[93, confIndex]
+```
+
+The config bytes response carries:
+
+```text
+[93, confIndex, configBytes...]
+```
+
+For Refloat package config, `confIndex` is `0`.
+
+### Custom Config Write Flow
+
+Persistent config writes should be treated as full-config writes, not individual
+field writes.
+
+The write command payload shape is:
+
+```text
+[95, confIndex, packageSignature:uint32, encodedConfigBytes...]
+```
+
+For a safe write flow:
+
+1. Read the current XML/schema.
+2. Read the current binary config bytes.
+3. Decode the fields into a local draft.
+4. Apply UI changes to the draft.
+5. Re-encode the full config using the same schema/signature.
+6. Send `COMM_SET_CUSTOM_CONFIG`.
+7. Confirm success or failure before updating UI state.
+8. Re-read the config after saving when possible.
+
+The full-config rewrite matters because the controller stores a binary struct,
+not independent key/value pairs. Unknown fields must be preserved exactly. A
+write implementation should never create a config from only the visible tune
+fields.
+
+### Runtime Tune Commands
+
+Refloat also exposes package-specific tune commands over
+`COMM_CUSTOM_APP_DATA` (`36`) using the Refloat package id (`101`). These are
+separate from full custom config persistence.
+
+Relevant package command IDs:
+
+| Command | ID | Purpose |
+| --- | ---: | --- |
+| `GET_INFO` | `33` | Read package/device info. |
+| `GET_RTDATA` | `34` | Read runtime data. |
+| `SET_TUNE` | `35` | Apply tune values at runtime. |
+| `SET_DEFAULT_TUNE` | `36` | Apply/reset default tune values. |
+| `SAVE_TUNE` | `37` | Persist current tune state. |
+| `RESTORE_TUNE` | `38` | Restore saved tune state. |
+| `TUNE_OTHER` | `39` | Apply miscellaneous tune values. |
+
+This implies two possible edit strategies:
+
+- Full config strategy: edit a local full config draft and persist through
+  `COMM_SET_CUSTOM_CONFIG`.
+- Runtime strategy: send Refloat tune commands for immediate behavior changes,
+  then explicitly call `SAVE_TUNE` if the change should survive restart.
+
+Do not mix these paths casually. A runtime tune command may affect live behavior
+before a full config save, while a full custom config write may replace values
+that were changed through runtime tune commands. The UI should present clear
+draft/apply/save semantics if both paths are ever supported.
+
+### Version Compatibility
+
+The robust compatibility model is schema-driven, not version-string-driven:
+
+- Read the board's custom config XML/schema before decoding raw config bytes.
+- Use the schema serialization order for binary offsets.
+- Use schema-provided field type, scale, label, unit, min, and max.
+- Decode only known/allowlisted fields.
+- If an allowlisted field is absent, omit it and report it as missing instead
+  of guessing an offset.
+- If the schema shape or field type is unsupported, fail closed instead of
+  writing or displaying potentially wrong values.
+
+The firmware version string is still useful diagnostics, but it should not be
+the primary decoder. A board can expose a different schema on the same nominal
+firmware family, and the XML schema is the source of truth for field order and
+encoding.
+
+Known version-sensitive field semantics:
+
+| Area | Affected fields | Compatibility note |
+| --- | --- | --- |
+| High/low voltage pushback | `tiltback_hv`, `tiltback_lv` | Refloat 1.2 with VESC firmware `6.05+` supports per-cell voltage values. Older `6.02` setups use total pack voltage, e.g. `4.3V * cell_count` for high voltage and `3.0V * cell_count` for low voltage. |
+| I term limit | `ki_limit` | Older firmware exposed this concept as `Deadzone`; the modern value is scaled up 10x. A previous `Deadzone = 3` corresponds to `ki_limit = 30A`. |
+| ATR strength | `atr_strength_up`, `atr_strength_down` | Older `5.3 ATR` values are scaled 10x smaller. A previous ATR strength of `0.10` corresponds to modern `1.0`. |
+| BMS temperature alert | BMS temperature threshold fields | Some BMS-related options require VESC firmware `6.06+` and sufficiently recent BMS firmware. |
+| Parking brake | `parking_brake_mode` | Firmware `6.05+` applies parking brake by shorting motor phases; older behavior may differ. |
+| Audible feedback | haptic/audible feedback fields | Some generated tones rely on `foc_play_tone` behavior from firmware `6.05`; other modes use current modulation instead. |
+
+For our app, this means write support should be gated by schema validation and
+field presence, not just a displayed firmware version. If a value has changed
+meaning across versions, the UI should show version-aware helper text and avoid
+silently converting unless the cell count or old/new semantic can be proven.
+
 ### Basic and Advanced Values Must Stay in Sync
 
 When detailed values change, the basic sliders should recompute their displayed
@@ -316,4 +474,3 @@ the board. In particular, confirm whether the schema exposes ATR fields as:
 
 The UI can use rider-facing labels either way, but write paths must use exact
 schema field IDs.
-
