@@ -1,11 +1,24 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  ActivityIndicator,
+  Modal,
+  PanResponder,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native'
 import { useNavigation } from 'expo-router'
 import {
+  ArrowCounterClockwiseIcon,
   ArrowsClockwiseIcon,
   BluetoothSlashIcon,
+  CheckIcon,
   InfoIcon,
   WarningCircleIcon,
+  XIcon,
 } from 'phosphor-react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
@@ -29,6 +42,12 @@ type LoadState =
 type InfoModalState = {
   title: string
   message: string
+} | null
+
+type EditorState = {
+  field: RefloatConfigField
+  value: number
+  text: string
 } | null
 
 interface BasicSliderItem {
@@ -108,6 +127,27 @@ function errorMessage(error: unknown): string {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max)
+}
+
+function fieldStep(field: RefloatConfigField): number {
+  if (Number.isInteger(field.value) && Number.isInteger(field.min) && Number.isInteger(field.max)) {
+    return 1
+  }
+  const range = (field.max ?? 1) - (field.min ?? 0)
+  if (range <= 1) return 0.01
+  if (range <= 5) return 0.05
+  if (range <= 20) return 0.1
+  if (range <= 100) return 1
+  return 10
+}
+
+function snapFieldValue(value: number, field: RefloatConfigField): number {
+  const min = field.min ?? 0
+  const max = field.max ?? 1
+  const step = fieldStep(field)
+  const snapped = Math.round((value - min) / step) * step + min
+  const decimals = step < 1 ? Math.ceil(Math.abs(Math.log10(step))) : 0
+  return Number(clamp(snapped, min, max).toFixed(decimals))
 }
 
 function fieldNumber(fields: Map<string, RefloatConfigField>, id: string): number | null {
@@ -217,13 +257,37 @@ function groupsWithProfileValues(
   }))
 }
 
+function isEditableNumberField(field: RefloatConfigField): boolean {
+  return (
+    typeof field.value === 'number' &&
+    Number.isFinite(field.value) &&
+    field.min != null &&
+    field.max != null &&
+    Number.isFinite(field.min) &&
+    Number.isFinite(field.max) &&
+    field.max > field.min
+  )
+}
+
+function fieldHelp(field: RefloatConfigField): string {
+  return FIELD_INFO[field.id] ?? 'Read-only field decoded from the board custom config schema.'
+}
+
 export default function TuneScreen() {
   const navigation = useNavigation()
   const bleStatus = useBleStore((s) => s.status)
   const boardConnected = bleStatus === 'connected'
   const activeProfile = useTuneProfileStore((s) => s.activeProfile)
+  const draftFields = useTuneProfileStore((s) => s.draftFields)
+  const hasDirtyFields = useTuneProfileStore((s) => s.hasDirtyFields)
+  const savingProfile = useTuneProfileStore((s) => s.saving)
   const profileError = useTuneProfileStore((s) => s.error)
   const loadProfiles = useTuneProfileStore((s) => s.loadProfiles)
+  const setDraftField = useTuneProfileStore((s) => s.setDraftField)
+  const getDirtyFields = useTuneProfileStore((s) => s.getDirtyFields)
+  const revertField = useTuneProfileStore((s) => s.revertField)
+  const discardAllEdits = useTuneProfileStore((s) => s.discardAllEdits)
+  const saveActiveProfile = useTuneProfileStore((s) => s.saveActiveProfile)
   const clearProfiles = useTuneProfileStore((s) => s.clear)
 
   const [state, setState] = useState<LoadState>({
@@ -232,6 +296,7 @@ export default function TuneScreen() {
     error: null,
   })
   const [infoModal, setInfoModal] = useState<InfoModalState>(null)
+  const [editor, setEditor] = useState<EditorState>(null)
 
   const load = useCallback(async () => {
     setState((current) => ({ phase: 'loading', snapshot: current.snapshot, error: null }))
@@ -255,10 +320,8 @@ export default function TuneScreen() {
   useEffect(() => {
     if (boardConnected) {
       load()
-    } else {
-      clearProfiles()
     }
-  }, [boardConnected, clearProfiles, load])
+  }, [boardConnected, load])
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -281,9 +344,13 @@ export default function TuneScreen() {
   }, [activeProfile, boardConnected, load, navigation, state.phase])
 
   const snapshot = state.snapshot
+  const profileFields = useMemo(
+    () => (activeProfile ? { ...activeProfile.fields, ...draftFields } : null),
+    [activeProfile, draftFields],
+  )
   const displayGroups = useMemo(
-    () => (snapshot ? groupsWithProfileValues(snapshot.groups, activeProfile?.fields ?? null) : []),
-    [activeProfile, snapshot],
+    () => (snapshot ? groupsWithProfileValues(snapshot.groups, profileFields) : []),
+    [profileFields, snapshot],
   )
   const displaySnapshot = useMemo(
     () => (snapshot ? { ...snapshot, groups: displayGroups } : null),
@@ -308,15 +375,42 @@ export default function TuneScreen() {
     const units = field.unit ? `\nUnit: ${field.unit}` : ''
     setInfoModal({
       title: field.label,
-      message: `${FIELD_INFO[field.id] ?? 'Read-only field decoded from the board custom config schema.'}${units}${limits}\nField ID: ${field.id}`,
+      message: `${fieldHelp(field)}${units}${limits}\nField ID: ${field.id}`,
     })
   }
 
   const closeInfo = () => setInfoModal(null)
 
+  const openFieldEditor = (field: RefloatConfigField) => {
+    if (!activeProfile) {
+      showFieldInfo(field)
+      return
+    }
+    if (!isEditableNumberField(field)) {
+      showBadgeInfo(
+        field.label,
+        `${fieldHelp(field)}\n\nThis field is not numeric or has no schema bounds, so it cannot use the slider editor yet.\nField ID: ${field.id}`,
+      )
+      return
+    }
+    setEditor({
+      field,
+      value: field.value as number,
+      text: formatValue(field.value),
+    })
+  }
+
+  const closeEditor = () => setEditor(null)
+
+  const saveProfile = () => {
+    void saveActiveProfile().catch(() => undefined)
+  }
+
+  const dirtyFields = getDirtyFields()
+
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
-      {!boardConnected ? (
+      {!boardConnected && !snapshot ? (
         <Placeholder
           icon={BluetoothSlashIcon}
           title="Board not connected"
@@ -341,7 +435,7 @@ export default function TuneScreen() {
         </View>
       ) : null}
 
-      {boardConnected && snapshot ? (
+      {snapshot ? (
         <ScrollView
           contentContainerStyle={styles.content}
           contentInsetAdjustmentBehavior="automatic"
@@ -417,6 +511,33 @@ export default function TuneScreen() {
             ) : null}
           </View>
 
+          {hasDirtyFields ? (
+            <View style={styles.dirtyBar}>
+              <Text style={styles.dirtyBarText}>
+                {Object.keys(dirtyFields).length} unsaved field
+                {Object.keys(dirtyFields).length === 1 ? '' : 's'}
+              </Text>
+              <View style={styles.dirtyBarActions}>
+                <Pressable style={styles.secondaryActionButton} onPress={discardAllEdits}>
+                  <ArrowCounterClockwiseIcon size={14} color="#cbd5e1" weight="bold" />
+                  <Text style={styles.secondaryActionText}>Discard all</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.saveButton, savingProfile && styles.saveButtonDisabled]}
+                  onPress={saveProfile}
+                  disabled={savingProfile}
+                >
+                  {savingProfile ? (
+                    <ActivityIndicator size="small" color="#020617" />
+                  ) : (
+                    <CheckIcon size={14} color="#020617" weight="bold" />
+                  )}
+                  <Text style={styles.saveButtonText}>Save</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : null}
+
           <View style={styles.group}>
             <View style={styles.groupHeader}>
               <Text style={styles.groupTitle}>Basic</Text>
@@ -450,7 +571,15 @@ export default function TuneScreen() {
               </View>
               <View style={styles.grid}>
                 {group.fields.map((field) => (
-                  <ConfigCell key={field.id} field={field} onInfo={() => showFieldInfo(field)} />
+                  <ConfigCell
+                    key={field.id}
+                    field={field}
+                    savedValue={activeProfile?.fields[field.id]}
+                    dirty={Object.prototype.hasOwnProperty.call(dirtyFields, field.id)}
+                    onPress={() => openFieldEditor(field)}
+                    onInfo={() => showFieldInfo(field)}
+                    onRevert={() => revertField(field.id)}
+                  />
                 ))}
               </View>
             </View>
@@ -463,6 +592,15 @@ export default function TuneScreen() {
         title={infoModal?.title ?? ''}
         message={infoModal?.message ?? ''}
         onDismiss={closeInfo}
+      />
+      <FieldEditorSheet
+        editor={editor}
+        onCancel={closeEditor}
+        onApply={(value) => {
+          if (!editor) return
+          setDraftField(editor.field.id, value)
+          setEditor(null)
+        }}
       />
     </SafeAreaView>
   )
@@ -487,15 +625,39 @@ function InfoBadge({
   )
 }
 
-function ConfigCell({ field, onInfo }: { field: RefloatConfigField; onInfo: () => void }) {
+function ConfigCell({
+  field,
+  savedValue,
+  dirty,
+  onPress,
+  onInfo,
+  onRevert,
+}: {
+  field: RefloatConfigField
+  savedValue: TuneProfileFieldValue | undefined
+  dirty: boolean
+  onPress: () => void
+  onInfo: () => void
+  onRevert: () => void
+}) {
   return (
-    <View style={styles.cell}>
+    <Pressable style={[styles.cell, dirty && styles.cellDirty]} onPress={onPress}>
       <Pressable style={styles.cellInfoButton} onPress={onInfo}>
         <InfoIcon size={13} color="#64748b" weight="bold" />
       </Pressable>
+      {dirty ? (
+        <Pressable style={styles.cellRevertButton} onPress={onRevert}>
+          <ArrowCounterClockwiseIcon size={13} color="#bae6fd" weight="bold" />
+        </Pressable>
+      ) : null}
       <Text style={styles.cellValue} numberOfLines={1} adjustsFontSizeToFit selectable>
         {formatValue(field.value)}
       </Text>
+      {dirty && isDisplayableFieldValue(savedValue) ? (
+        <Text style={styles.cellOldValue} numberOfLines={1}>
+          was {formatValue(savedValue)}
+        </Text>
+      ) : null}
       {field.unit ? (
         <Text style={styles.cellUnit} numberOfLines={1} selectable>
           {field.unit}
@@ -504,10 +666,141 @@ function ConfigCell({ field, onInfo }: { field: RefloatConfigField; onInfo: () =
       <Text style={styles.cellLabel} numberOfLines={2}>
         {field.label}
       </Text>
-    </View>
+    </Pressable>
   )
 }
 
+function FieldEditorSheet({
+  editor,
+  onCancel,
+  onApply,
+}: {
+  editor: EditorState
+  onCancel: () => void
+  onApply: (value: number) => void
+}) {
+  const field = editor?.field
+  const min = field?.min ?? 0
+  const max = field?.max ?? 1
+  const [draftValue, setDraftValue] = useState(min)
+  const [draftText, setDraftText] = useState('')
+  const [trackWidth, setTrackWidth] = useState(1)
+  const [trackLeft, setTrackLeft] = useState(0)
+  const trackRef = useRef<View>(null)
+  const progress = field ? ((draftValue - min) / (max - min)) * 100 : 0
+
+  useEffect(() => {
+    if (!editor) return
+    setDraftValue(editor.value)
+    setDraftText(editor.text)
+  }, [editor])
+
+  const measureTrack = useCallback(() => {
+    trackRef.current?.measureInWindow((x, _y, width) => {
+      setTrackLeft(x)
+      setTrackWidth(width > 0 ? width : 1)
+    })
+  }, [])
+
+  const setValueFromLocalX = useCallback(
+    (localX: number) => {
+      if (!field || trackWidth <= 0) return
+      const rawValue = min + (clamp(localX, 0, trackWidth) / trackWidth) * (max - min)
+      const nextValue = snapFieldValue(rawValue, field)
+      setDraftValue(nextValue)
+      setDraftText(formatValue(nextValue))
+    },
+    [field, max, min, trackWidth],
+  )
+
+  const setValueFromPageX = useCallback(
+    (pageX: number) => {
+      setValueFromLocalX(pageX - trackLeft)
+    },
+    [setValueFromLocalX, trackLeft],
+  )
+
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onPanResponderGrant: (event) => {
+          measureTrack()
+          setValueFromLocalX(event.nativeEvent.locationX)
+        },
+        onPanResponderMove: (event) => setValueFromPageX(event.nativeEvent.pageX),
+      }),
+    [measureTrack, setValueFromLocalX, setValueFromPageX],
+  )
+
+  return (
+    <Modal visible={editor != null} transparent animationType="slide" onRequestClose={onCancel}>
+      <Pressable style={styles.sheetBackdrop} onPress={onCancel}>
+        <Pressable style={styles.sheet} onPress={(event) => event.stopPropagation()}>
+          {field ? (
+            <>
+              <View style={styles.sheetHeader}>
+                <View style={styles.sheetTitleWrap}>
+                  <Text style={styles.sheetTitle}>{field.label}</Text>
+                  <Text style={styles.sheetSubtitle}>{field.id}</Text>
+                </View>
+                <Pressable style={styles.sheetIconButton} onPress={onCancel}>
+                  <XIcon size={16} color="#cbd5e1" weight="bold" />
+                </Pressable>
+              </View>
+              <Text style={styles.sheetInfo}>{fieldHelp(field)}</Text>
+              <TextInput
+                style={styles.editorInput}
+                value={draftText}
+                keyboardType="numeric"
+                selectTextOnFocus
+                onChangeText={(text) => {
+                  const parsed = Number.parseFloat(text)
+                  setDraftText(text)
+                  if (field && Number.isFinite(parsed)) {
+                    setDraftValue(snapFieldValue(parsed, field))
+                  }
+                }}
+              />
+              <View
+                ref={trackRef}
+                style={styles.editorTrack}
+                onLayout={measureTrack}
+                {...panResponder.panHandlers}
+              >
+                <View style={[styles.editorFill, { width: `${clamp(progress, 0, 100)}%` }]} />
+                <View style={[styles.editorThumb, { left: `${clamp(progress, 0, 100)}%` }]} />
+              </View>
+              <View style={styles.editorRange}>
+                <Text style={styles.editorRangeText}>
+                  {formatValue(min)}
+                  {field.unit ? ` ${field.unit}` : ''}
+                </Text>
+                <Text style={styles.editorRangeText}>
+                  {formatValue(max)}
+                  {field.unit ? ` ${field.unit}` : ''}
+                </Text>
+              </View>
+              <View style={styles.sheetActions}>
+                <Pressable style={styles.secondarySheetButton} onPress={onCancel}>
+                  <Text style={styles.secondarySheetButtonText}>Cancel</Text>
+                </Pressable>
+                <Pressable
+                  style={styles.primarySheetButton}
+                  onPress={() => onApply(field ? snapFieldValue(draftValue, field) : draftValue)}
+                >
+                  <CheckIcon size={15} color="#020617" weight="bold" />
+                  <Text style={styles.primarySheetButtonText}>Apply</Text>
+                </Pressable>
+              </View>
+            </>
+          ) : null}
+        </Pressable>
+      </Pressable>
+    </Modal>
+  )
+}
 function BasicSlider({ item, onInfo }: { item: BasicSliderItem; onInfo: () => void }) {
   const progress = item.value == null ? 0 : ((item.value - item.min) / (item.max - item.min)) * 100
   const roundedProgress = clamp(progress, 0, 100)
@@ -607,6 +900,58 @@ const styles = StyleSheet.create({
   errorBannerText: {
     color: '#fecaca',
     flex: 1,
+  },
+  dirtyBar: {
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#0ea5e9',
+    backgroundColor: '#0c2537',
+    padding: 12,
+    gap: 10,
+  },
+  dirtyBarText: {
+    color: '#e0f2fe',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  dirtyBarActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  secondaryActionButton: {
+    minHeight: 36,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#334155',
+    backgroundColor: '#172033',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  secondaryActionText: {
+    color: '#cbd5e1',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  saveButton: {
+    minHeight: 36,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    backgroundColor: '#38bdf8',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  saveButtonDisabled: {
+    opacity: 0.72,
+  },
+  saveButtonText: {
+    color: '#020617',
+    fontSize: 12,
+    fontWeight: '900',
   },
   metaRow: {
     flexDirection: 'row',
@@ -756,6 +1101,10 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 6,
   },
+  cellDirty: {
+    backgroundColor: '#0c2537',
+    borderRadius: 8,
+  },
   cellInfoButton: {
     position: 'absolute',
     top: 9,
@@ -767,12 +1116,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  cellRevertButton: {
+    position: 'absolute',
+    top: 37,
+    right: 6,
+    zIndex: 1,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0f3650',
+  },
   cellValue: {
     color: '#f1f5f9',
     fontSize: 18,
     fontWeight: '700',
     paddingRight: 26,
     fontVariant: ['tabular-nums'],
+  },
+  cellOldValue: {
+    color: '#7dd3fc',
+    fontSize: 10,
+    fontWeight: '800',
+    marginTop: 1,
+    paddingRight: 26,
   },
   cellUnit: {
     color: '#94a3b8',
@@ -785,5 +1153,132 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     marginTop: 3,
+  },
+  sheetBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(2, 6, 23, 0.68)',
+  },
+  sheet: {
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    borderWidth: 1,
+    borderColor: '#334155',
+    backgroundColor: '#111827',
+    padding: 16,
+    paddingBottom: 24,
+    gap: 14,
+  },
+  sheetHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  sheetTitleWrap: {
+    flex: 1,
+    gap: 3,
+  },
+  sheetTitle: {
+    color: '#f8fafc',
+    fontSize: 18,
+    fontWeight: '900',
+  },
+  sheetSubtitle: {
+    color: '#64748b',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  sheetIconButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1e293b',
+  },
+  sheetInfo: {
+    color: '#94a3b8',
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  editorTrack: {
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#0f172a',
+    justifyContent: 'center',
+    overflow: 'visible',
+  },
+  editorFill: {
+    position: 'absolute',
+    left: 0,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#38bdf8',
+  },
+  editorThumb: {
+    position: 'absolute',
+    width: 24,
+    height: 24,
+    marginLeft: -12,
+    borderRadius: 12,
+    backgroundColor: '#f8fafc',
+    borderWidth: 3,
+    borderColor: '#38bdf8',
+  },
+  editorRange: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  editorRangeText: {
+    color: '#64748b',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  editorInput: {
+    height: 48,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#334155',
+    backgroundColor: '#0f172a',
+    color: '#f8fafc',
+    paddingHorizontal: 12,
+    fontSize: 18,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+  },
+  sheetActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+  },
+  secondarySheetButton: {
+    minHeight: 40,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#334155',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  secondarySheetButtonText: {
+    color: '#cbd5e1',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  primarySheetButton: {
+    minHeight: 40,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: '#38bdf8',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  primarySheetButtonText: {
+    color: '#020617',
+    fontSize: 13,
+    fontWeight: '900',
   },
 })

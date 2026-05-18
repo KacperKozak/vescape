@@ -145,6 +145,9 @@ class VescBleModule : Module() {
     AsyncFunction("getTuneProfile") Coroutine { profileId: String ->
       AppDataRepository.get(context.applicationContext).getTuneProfile(profileId)
     }
+    AsyncFunction("saveProfile") Coroutine { profileId: String, fields: Map<String, Any?> ->
+      AppDataRepository.get(context.applicationContext).saveProfile(profileId, fields)
+    }
     AsyncFunction("getTotalProfileStats") {
       runBlocking { ProfileStatsRepository.get(context.applicationContext).getTotalProfileStats() }
     }

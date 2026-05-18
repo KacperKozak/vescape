@@ -296,6 +296,23 @@ interface TelemetryDao {
   @Query("SELECT * FROM tune_history_entries WHERE profile_id = :profileId ORDER BY created_at DESC")
   suspend fun getTuneHistoryEntries(profileId: String): List<TuneHistoryEntryEntity>
 
+  @Query("UPDATE tune_profiles SET fields_json = :fieldsJson, updated_at = :updatedAt WHERE id = :profileId")
+  suspend fun updateProfileFields(profileId: String, fieldsJson: String, updatedAt: Long): Int
+
+  @Transaction
+  suspend fun saveTuneProfile(profileId: String, fieldsJson: String, updatedAt: Long): TuneProfileEntity {
+    val current = getTuneProfile(profileId) ?: throw IllegalArgumentException("Tune Profile not found: $profileId")
+    insertTuneHistoryEntry(
+      TuneHistoryEntryEntity(
+        profileId = current.id,
+        fieldsJson = current.fieldsJson,
+        createdAt = updatedAt,
+      ),
+    )
+    updateProfileFields(profileId, fieldsJson, updatedAt)
+    return getTuneProfile(profileId) ?: throw IllegalStateException("Tune Profile disappeared during save: $profileId")
+  }
+
   @Transaction
   suspend fun insertTuneProfileIfBoardHasNone(
     profile: TuneProfileEntity,

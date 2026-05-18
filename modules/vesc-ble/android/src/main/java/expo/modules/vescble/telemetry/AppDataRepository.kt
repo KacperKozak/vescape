@@ -88,6 +88,15 @@ class AppDataRepository private constructor(context: Context) {
     dao.getTuneProfile(id)?.toMap()
   }
 
+  suspend fun saveProfile(profileId: String, fields: Map<String, Any?>): Map<String, Any?> =
+    withContext(Dispatchers.IO) {
+      dao.saveTuneProfile(
+        profileId = profileId,
+        fieldsJson = fields.toJsonObject().toString(),
+        updatedAt = System.currentTimeMillis(),
+      ).toMap()
+    }
+
   internal suspend fun createMainTuneProfileIfMissing(snapshot: RefloatConfigSnapshot): Map<String, Any?>? =
     withContext(Dispatchers.IO) {
       val boardId = snapshot.boardId?.takeIf { it.isNotBlank() } ?: return@withContext null
@@ -184,6 +193,14 @@ private fun RefloatConfigSnapshot.fieldsJson(): String {
     }
   }
   return json.toString()
+}
+
+private fun Map<String, Any?>.toJsonObject(): JSONObject {
+  val json = JSONObject()
+  forEach { (key, value) ->
+    json.put(key, value ?: JSONObject.NULL)
+  }
+  return json
 }
 
 private fun String.toJsonMap(): Map<String, Any?> {
