@@ -275,4 +275,8 @@ data class AppSettingsEntity(
   val autoRecording: Boolean = false,
   @ColumnInfo(name = "selected_board_id")
   val selectedBoardId: String? = null,
+  @ColumnInfo(name = "last_gps_latitude")
+  val lastGpsLatitude: Double? = null,
+  @ColumnInfo(name = "last_gps_longitude")
+  val lastGpsLongitude: Double? = null,
 )

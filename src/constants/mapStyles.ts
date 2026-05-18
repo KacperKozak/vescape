@@ -8,8 +8,9 @@ import {
 } from 'phosphor-react-native'
 
 export const MAP_DEFAULTS = {
-  fallbackCoordinate: [17.0385, 51.1079] as [number, number],
-  fallbackZoom: 11,
+  fallbackCoordinate: [15.0, 54.0] as [number, number],
+  fallbackZoom: 3.2,
+  persistedGpsFallbackZoom: 11,
   maxZoom: 19,
   defaultPitch: 30,
   activePitch: 30,

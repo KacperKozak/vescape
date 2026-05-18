@@ -1,17 +1,19 @@
 ## Context
 
-The map component (`CenterMap.tsx`) initializes with `liveLocations.at(-1)` — the most recent GPS fix from the live buffer. When no fix exists (cold start), a `Camera` `defaultSettings` prop provides a fallback coordinate (`[17.0385, 51.1079]` — Wrocław). However, due to a race in `@rnmapbox/maps`, the underlying MapView renders its internal default at `[0, 0]` (null island — Gulf of Guinea, off the coast of Africa) before the Camera component processes its props. The user sees Africa for 1–3 seconds before the map jumps to the correct location.
+The map component (`CenterMap.tsx`) initializes with `liveLocations.at(-1)` — the most recent GPS fix from the live buffer. When no fix exists (cold start), a `Camera` `defaultSettings` prop provides a fallback coordinate. However, due to a race in `@rnmapbox/maps`, the underlying MapView can render its internal default at `[0, 0]` (null island — Gulf of Guinea, off the coast of Africa) before the Camera component processes its props.
 
-Settings are persisted through `AppSettings` — a strongly-typed Room entity on Android (`AppDataRepository.kt` → `app_settings` table) and a JSON dict in UserDefaults on iOS (`VescBleModule.swift`). The JS layer reads/writes through `getSettings()`/`updateSetting()` exposed by the `vesc-ble` native module.
+Settings are persisted through `AppSettings` — a strongly-typed Room entity on Android (`AppDataRepository.kt` → `app_settings` table) and a JSON dict in UserDefaults on iOS (`VescBleModule.swift`). Native owns last-location persistence; JS reads through `getSettings()`.
 
 ## Goals / Non-Goals
 
 **Goals:**
-- Map centers near the user's actual location on cold start, before GPS lock.
+
+- Map centers near user's actual location on cold start, before GPS lock.
 - Coordinate persists across app restarts.
 - Minimal write overhead — avoid hammering storage on every GPS tick.
 
 **Non-Goals:**
+
 - Persisting zoom level, bearing, or pitch — GPS accuracy determines zoom dynamically.
 - Background location tracking — only persist during active GPS sessions.
 - Persisting full location history — only the single most recent coordinate.
@@ -26,17 +28,15 @@ Settings are persisted through `AppSettings` — a strongly-typed Room entity on
 
 **Alternative considered:** Dedicated MMKV/AsyncStorage key. Rejected — adds a new storage dependency and read path for two numbers.
 
-### 2. Write on session end, not during
+### 2. Native writes latest location every 30 seconds
 
-**Choice:** Persist the latest coordinate only at two lifecycle points:
-1. When `stopLocationUpdates()` is called (explicit GPS stop).
-2. When AppState transitions to `"background"` while GPS is active.
+**Choice:** Persist the latest coordinate from the native location pipeline at most every 30 seconds.
 
-**Why:** GPS fires every 1–2 seconds. Even a 30-second throttle produces ~120 writes per hour-long ride — unnecessary for a cold-start fallback. Writing at session boundaries yields 1–2 writes total, with zero overhead during active use.
+**Why:** Native owns location updates and durable app data. JS lifecycle edges are unreliable for app close and reload, so JS should not be responsible for saving the last coordinate. Native throttling keeps write volume low during long sessions.
 
-**Where:** JS side — hook into `stopLocationUpdates` cleanup in `bleStore.ts` and add an AppState listener that writes the latest coordinate when backgrounding.
+**Where:** Android writes from `VescForegroundService.onLocationUpdated()` through `AppDataRepository.updateLastGpsLocation()`. The iOS mock writes from its location timer into UserDefaults.
 
-**Alternative considered:** 30-second throttle in JS. Rejected — still too many writes for a value that only matters on next cold start. Session-boundary writes are simpler and sufficient.
+**Alternative considered:** JS listener persistence. Rejected after manual testing showed it was too dependent on JS lifecycle timing.
 
 ### 3. Map reads persisted coordinate via settingsStore
 
@@ -44,7 +44,7 @@ Settings are persisted through `AppSettings` — a strongly-typed Room entity on
 
 **Why:** Settings are loaded early in the app lifecycle (`settingsStore.load()` on mount). No additional async fetch needed.
 
-**Fallback chain:** `gpsFix` → persisted coordinate → hardcoded Wrocław.
+**Fallback chain:** `gpsFix` → persisted coordinate → Europe overview.
 
 ### 4. Android Room migration (v6 → v7)
 
@@ -60,14 +60,14 @@ Settings are persisted through `AppSettings` — a strongly-typed Room entity on
 
 ### 6. Map fade-in to prevent null-island flash
 
-**Choice:** Render the map container with `opacity: 0` until `settingsStore.loaded` is true. Then animate opacity to 1 using `Animated.timing` (~200ms). This ensures the camera's `defaultSettings` (with persisted or hardcoded fallback) are applied before the map becomes visible.
+**Choice:** Do not mount the map until `settingsStore.loaded` is true. Then keep the map container at `opacity: 0` until Mapbox reports the camera center is at the selected initial coordinate. Then animate opacity to 1 using `Animated.timing` (~200ms).
 
-**Why:** Even with a persisted coordinate, `@rnmapbox/maps` may render a frame at `[0, 0]` before Camera processes props. Hiding the map until settings load guarantees the user never sees null island. Settings load is fast (native read), so the delay is imperceptible.
+**Why:** Even with a persisted coordinate, `@rnmapbox/maps` may render a frame at `[0, 0]` before Camera processes props. Settings loaded only guarantees the fallback coordinate is known; the map must stay hidden until the native camera has actually moved.
 
-**Alternative considered:** `onMapIdle` or `onCameraChanged` callback to detect when camera is positioned. Rejected — those events fire asynchronously and unreliably on first render. `settingsStore.loaded` is a simpler, deterministic gate since it guarantees the fallback coordinate is available before the map mounts.
+**Alternative considered:** Settings-loaded-only fade gate. Rejected after manual testing showed it can still reveal the native map before the camera position is applied.
 
 ## Risks / Trade-offs
 
 - **Stale coordinate after travel** → Acceptable. Even a day-old coordinate is better than null island. Gets overwritten at end of next GPS session.
-- **First-ever launch has no persisted coordinate** → Falls back to hardcoded coordinate as today. No regression.
+- **First-ever launch has no persisted coordinate** → Falls back to Europe overview instead of a city-level default.
 - **Room migration failure** → Standard ALTER TABLE ADD COLUMN is safe. If it fails, Room throws on DB open — same risk as any schema migration. Fallback strategy not needed for nullable columns.

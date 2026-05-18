@@ -6,6 +6,8 @@ const DEFAULTS: AppSettings = {
   autoConnect: true,
   autoRecording: false,
   selectedBoardId: null,
+  lastGpsLatitude: null,
+  lastGpsLongitude: null,
 }
 
 interface SettingsState extends AppSettings {

@@ -294,6 +294,8 @@ export interface AppSettings {
   autoConnect: boolean
   autoRecording: boolean
   selectedBoardId: string | null
+  lastGpsLatitude: number | null
+  lastGpsLongitude: number | null
 }
 
 // ---------------------------------------------------------------------------

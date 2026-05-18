@@ -7,7 +7,7 @@ import {
   useRef,
   useState,
 } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { Animated, StyleSheet, Text, View } from 'react-native'
 import Mapbox, {
   Camera,
   FillLayer,
@@ -33,6 +33,7 @@ import {
 } from '@/helpers/mapGeometry'
 import { findNearestSampleIndexByTime } from '@/history/playback'
 import type { HistoryGpsSample, HistoryMarker } from '@/store/historyStore'
+import { useSettingsStore } from '@/store/settingsStore'
 
 Mapbox.setAccessToken(MAPBOX_ACCESS_TOKEN)
 
@@ -81,8 +82,21 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
 ) {
   const cameraRef = useRef<CameraRef>(null)
   const lastCenteredAtRef = useRef<number | null>(null)
+  const mapRevealedRef = useRef(false)
+  const mapOpacity = useRef(new Animated.Value(0)).current
   const [followGps, setFollowGps] = useState(true)
+  const [cameraReady, setCameraReady] = useState(false)
   const gpsFix = liveLocations.at(-1) ?? null
+  const settingsLoaded = useSettingsStore((s) => s.loaded)
+  const lastGpsLatitude = useSettingsStore((s) => s.lastGpsLatitude)
+  const lastGpsLongitude = useSettingsStore((s) => s.lastGpsLongitude)
+  const persistedFallback = useMemo(
+    () =>
+      lastGpsLatitude != null && lastGpsLongitude != null
+        ? ([lastGpsLongitude, lastGpsLatitude] as [number, number])
+        : null,
+    [lastGpsLatitude, lastGpsLongitude],
+  )
   const selectedMapStyle = MAP_STYLES.find((style) => style.key === mapStyleKey) ?? MAP_STYLES[0]
   const isMapy = selectedMapStyle.key === 'mapy'
   const isOneDark = selectedMapStyle.key === 'onedark'
@@ -92,8 +106,11 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
   const gpsCamera = useMemo(() => {
     if (!gpsFix) {
       return {
-        centerCoordinate: MAP_DEFAULTS.fallbackCoordinate,
-        zoomLevel: MAP_DEFAULTS.fallbackZoom,
+        centerCoordinate: persistedFallback ?? MAP_DEFAULTS.fallbackCoordinate,
+        zoomLevel:
+          persistedFallback == null
+            ? MAP_DEFAULTS.fallbackZoom
+            : MAP_DEFAULTS.persistedGpsFallbackZoom,
       }
     }
     const baseDelta =
@@ -104,7 +121,24 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
       centerCoordinate: [gpsFix.longitude, gpsFix.latitude] as [number, number],
       zoomLevel: zoomLevelForDelta(baseDelta * MAP_DEFAULTS.zoomDeltaMultiplier),
     }
-  }, [gpsFix])
+  }, [gpsFix, persistedFallback])
+
+  useEffect(() => {
+    if (mapRevealedRef.current) return
+    mapOpacity.setValue(0)
+    setCameraReady(false)
+  }, [gpsCamera.centerCoordinate, mapOpacity])
+
+  useEffect(() => {
+    if (!settingsLoaded || !cameraReady) return
+    Animated.timing(mapOpacity, {
+      toValue: 1,
+      duration: 200,
+      useNativeDriver: true,
+    }).start(() => {
+      mapRevealedRef.current = true
+    })
+  }, [cameraReady, mapOpacity, settingsLoaded])
 
   const accuracyShape = useMemo(
     () =>
@@ -223,8 +257,12 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
     )
   }
 
+  if (!settingsLoaded) {
+    return <View style={styles.mapContainer} />
+  }
+
   return (
-    <View style={styles.mapContainer}>
+    <Animated.View style={[styles.mapContainer, { opacity: mapOpacity }]}>
       <Mapbox.MapView
         style={styles.map}
         styleURL={useCustomJSON ? undefined : selectedMapStyle.styleURL}
@@ -235,11 +273,26 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
         scaleBarEnabled={false}
         logoEnabled={false}
         attributionEnabled={false}
+        onDidFinishLoadingMap={() => {
+          cameraRef.current?.setCamera({
+            ...gpsCamera,
+            pitch: MAP_DEFAULTS.defaultPitch,
+            animationDuration: 0,
+          })
+        }}
         onLongPress={(feature) => {
           const [longitude, latitude] = feature.geometry.coordinates
           onLongPressTarget({ latitude, longitude })
         }}
         onCameraChanged={(state) => {
+          const [longitude, latitude] = state.properties.center
+          const [targetLongitude, targetLatitude] = gpsCamera.centerCoordinate
+          if (
+            Math.abs(longitude - targetLongitude) < 0.0001 &&
+            Math.abs(latitude - targetLatitude) < 0.0001
+          ) {
+            setCameraReady(true)
+          }
           if (state.gestures.isGestureActive) {
             setFollowGps(false)
             onMapFocus()
@@ -379,7 +432,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
       </Mapbox.MapView>
       <View style={styles.edgeGuardLeft} pointerEvents="box-only" />
       <View style={styles.edgeGuardRight} pointerEvents="box-only" />
-    </View>
+    </Animated.View>
   )
 })
 

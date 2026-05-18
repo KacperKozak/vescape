@@ -58,9 +58,21 @@ class AppDataRepository private constructor(context: Context) {
       "autoConnect" -> current.copy(autoConnect = value as? Boolean ?: true)
       "autoRecording" -> current.copy(autoRecording = value as? Boolean ?: false)
       "selectedBoardId" -> current.copy(selectedBoardId = value as? String)
+      "lastGpsLatitude" -> current.copy(lastGpsLatitude = (value as? Number)?.toDouble())
+      "lastGpsLongitude" -> current.copy(lastGpsLongitude = (value as? Number)?.toDouble())
       else -> current
     }
     dao.upsertSettings(updated)
+  }
+
+  suspend fun updateLastGpsLocation(latitude: Double, longitude: Double): Unit = withContext(Dispatchers.IO) {
+    val current = dao.getSettings() ?: AppSettingsEntity()
+    dao.upsertSettings(
+      current.copy(
+        lastGpsLatitude = latitude,
+        lastGpsLongitude = longitude,
+      ),
+    )
   }
 
   suspend fun setSelectedBoardId(id: String?): Unit = updateSetting("selectedBoardId", id)
@@ -102,6 +114,8 @@ fun AppSettingsEntity.toMap(): Map<String, Any?> = mapOf(
   "autoConnect" to autoConnect,
   "autoRecording" to autoRecording,
   "selectedBoardId" to selectedBoardId,
+  "lastGpsLatitude" to lastGpsLatitude,
+  "lastGpsLongitude" to lastGpsLongitude,
 )
 
 fun AlertRuleEntity.toMap(): Map<String, Any?> = mapOf(

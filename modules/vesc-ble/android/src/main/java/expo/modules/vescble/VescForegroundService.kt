@@ -39,6 +39,7 @@ private const val ACTION_START_GPS_MONITORING = "expo.modules.vescble.ACTION_STA
 private const val ACTION_STOP_GPS_MONITORING = "expo.modules.vescble.ACTION_STOP_GPS_MONITORING"
 
 private const val MAX_RECORDING_ACCURACY_M = 20.0
+private const val LAST_GPS_PERSIST_INTERVAL_MS = 30_000L
 private const val DEFAULT_LIVE_HISTORY_LIMIT_MINUTES = 5
 private const val MIN_LIVE_HISTORY_LIMIT_MINUTES = 1
 private const val MAX_LIVE_HISTORY_LIMIT_MINUTES = 50
@@ -265,6 +266,7 @@ class VescForegroundService : Service() {
     private var telemetryStore: TelemetryRepository? = null
     private var gpsError: String? = null
     private var latestLocation: LocationSnapshot? = null
+    private var lastGpsPersistedAt = 0L
     private var isStoppingService = false
     private var autoReconnectRunnable: Runnable? = null
     private var reconnectScanCallback: ScanCallback? = null
@@ -1192,10 +1194,23 @@ class VescForegroundService : Service() {
             saved = saved,
         )
         latestLocation = snapshot
+        persistLastGpsLocation(snapshot)
         appendRecentLocation(snapshot)
         emitEvent("onLocation", snapshot.toMap())
         if (boardConfig == null) showNotification(formatGpsNotificationText(snapshot))
         if (snapshot.precise) recorder?.recordLocation(snapshot)
+    }
+
+    private fun persistLastGpsLocation(location: LocationSnapshot) {
+        val now = System.currentTimeMillis()
+        if (now - lastGpsPersistedAt < LAST_GPS_PERSIST_INTERVAL_MS) return
+        lastGpsPersistedAt = now
+        appDataScope.launch {
+            AppDataRepository.get(applicationContext).updateLastGpsLocation(
+                latitude = location.latitude,
+                longitude = location.longitude,
+            )
+        }
     }
 
     private fun isRecordableGpsLocation(location: Location, accuracyM: Double?): Boolean =
