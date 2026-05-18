@@ -32,6 +32,14 @@ _Avoid_: Playback, logs
 A read-only view of the board's current Refloat tuning configuration decoded from the board's schema and binary config.
 _Avoid_: Tune cache, settings dump
 
+**Tune Profile**:
+A user-authored, persisted set of all Refloat tune field values stored in semantic (human-meaningful) units, scoped to a Board.
+_Avoid_: Tune preset, config file, settings backup
+
+**Tune History Entry**:
+An immutable snapshot of a Tune Profile's field values captured immediately before an explicit save, enabling rollback to any prior state.
+_Avoid_: Sync log, change event, audit trail
+
 **Alert Rule**:
 A user-defined telemetry threshold that can trigger board-riding feedback during a live connection.
 _Avoid_: Alarm, notification
@@ -42,12 +50,20 @@ _Avoid_: Alarm, notification
 - A **GPS Fix** may be associated with live map state, but only precise fixes captured during connected recording contribute to a **Ride Recording**.
 - A **Ride Recording** becomes part of **Ride History**.
 - A **Tune Snapshot** belongs to the currently connected **Board** and is read-only.
+- A **Tune Profile** belongs to a **Board** and stores semantic field values independently of firmware schema.
+- A **Tune History Entry** captures the previous state of a **Tune Profile** before each explicit save.
 - An **Alert Rule** evaluates against live **Telemetry Samples**.
 
 ## Example Dialogue
 
 > **Dev:** "If GPS is active but no board is connected, should that create a Ride Recording?"
 > **Domain expert:** "No. Standalone GPS can update the live map, but a Ride Recording requires board telemetry from a connected Board."
+
+> **Dev:** "If the board's tune changed outside the app, what happens when the user connects?"
+> **Domain expert:** "The app reads a Tune Snapshot and compares it against the Tune Profile. Changed fields show old and new values with per-field revert. User decides: accept board values into the profile, or push the profile to the board."
+
+> **Dev:** "Can I edit a Tune Profile without a connected board?"
+> **Domain expert:** "Yes. Editing and saving is local. Pushing to a board requires a live connection — the app must read the full config blob first to preserve unknown fields."
 
 ## Flagged Ambiguities
 
