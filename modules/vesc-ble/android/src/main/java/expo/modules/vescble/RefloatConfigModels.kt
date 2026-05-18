@@ -27,7 +27,6 @@ internal data class RefloatConfigField(
     "unit" to unit,
     "min" to min,
     "max" to max,
-    "readOnly" to true,
   )
 }
 

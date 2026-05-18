@@ -668,20 +668,7 @@ class VescForegroundService : Service() {
             return
         }
         try {
-            val schema = try {
-                RefloatConfigSchemaParser.parse(active.xmlBytes)
-            } catch (remoteError: RefloatConfigSchemaException) {
-                Log.w(VESC_SESSION_TAG, "Remote Refloat schema unsupported, using bundled schema", remoteError)
-                try {
-                    RefloatConfigSchemaParser.parse(
-                        assets.open("refloat-settings.xml").use { it.readBytes() },
-                    )
-                } catch (bundledError: RefloatConfigSchemaException) {
-                    throw RefloatConfigSchemaException(
-                        "UNSUPPORTED_SCHEMA: remote schema failed (${remoteError.message}); bundled schema failed (${bundledError.message})",
-                    )
-                }
-            }
+            val schema = RefloatConfigSchemaParser.parse(active.xmlBytes)
             val snapshot = RefloatConfigDecoder.decode(
                 schema = schema,
                 rawConfig = parsed.config,

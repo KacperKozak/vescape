@@ -23,6 +23,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
   getRefloatConfigSnapshot,
+  type TuneProfile,
   type RefloatConfigField,
   type RefloatConfigGroup,
   type RefloatConfigSnapshot,
@@ -31,6 +32,7 @@ import {
 
 import { InfoModal } from '@/components/InfoModal'
 import { Placeholder } from '@/components/Placeholder'
+import { useBoardStore } from '@/store/boardStore'
 import { useBleStore } from '@/store/bleStore'
 import { useTuneProfileStore } from '@/store/tuneProfileStore'
 
@@ -60,6 +62,163 @@ interface BasicSliderItem {
   source: string
   info: string
 }
+
+interface AppTuneFieldDefinition {
+  id: string
+  label: string
+  unit: string | null
+  min: number
+  max: number
+}
+
+interface AppTuneGroupDefinition {
+  id: string
+  title: string
+  fields: AppTuneFieldDefinition[]
+}
+
+const APP_TUNE_GROUPS: AppTuneGroupDefinition[] = [
+  {
+    id: 'general',
+    title: 'General',
+    fields: [
+      { id: 'kp', label: 'Angle P', unit: null, min: 0, max: 50 },
+      { id: 'kp2', label: 'Rate P', unit: null, min: 0, max: 5 },
+      { id: 'kp_brake', label: 'Angle P (Braking)', unit: 'x', min: 0, max: 5 },
+      { id: 'kp2_brake', label: 'Rate P (Braking)', unit: 'x', min: 0, max: 5 },
+      { id: 'ki', label: 'Angle I', unit: null, min: 0, max: 1 },
+      { id: 'ki_limit', label: 'I Term Limit', unit: 'A', min: 0, max: 100 },
+      { id: 'mahony_kp', label: 'Pitch KP', unit: null, min: 0, max: 10 },
+      { id: 'mahony_kp_roll', label: 'Roll KP', unit: null, min: 0, max: 10 },
+    ],
+  },
+  {
+    id: 'atr',
+    title: 'ATR',
+    fields: [
+      { id: 'atr_strength_up', label: 'ATR Uphill Strength', unit: null, min: 0, max: 2 },
+      { id: 'atr_strength_down', label: 'ATR Downhill Strength', unit: null, min: 0, max: 2 },
+      { id: 'atr_threshold_up', label: 'Threshold Angle Up', unit: 'deg', min: 0, max: 20 },
+      { id: 'atr_threshold_down', label: 'Threshold Angle Down', unit: 'deg', min: 0, max: 20 },
+      { id: 'atr_speed_boost', label: 'Speed Boost', unit: '%', min: 0, max: 100 },
+      { id: 'atr_angle_limit', label: 'Tiltback Angle Limit', unit: 'deg', min: 0, max: 20 },
+      { id: 'atr_on_speed', label: 'Max Tiltback Speed', unit: 'deg/s', min: 0, max: 200 },
+      { id: 'atr_off_speed', label: 'Max Tiltback Release Speed', unit: 'deg/s', min: 0, max: 200 },
+      { id: 'atr_response_boost', label: 'Tiltback Response Boost', unit: 'x', min: 0, max: 5 },
+      { id: 'atr_transition_boost', label: 'Tiltback Transition Boost', unit: 'x', min: 0, max: 5 },
+      { id: 'atr_filter', label: 'Current Filter', unit: 'Hz', min: 0, max: 50 },
+      {
+        id: 'atr_amps_accel_ratio',
+        label: 'Amps to Acceleration Ratio',
+        unit: null,
+        min: 0,
+        max: 20,
+      },
+      {
+        id: 'atr_amps_decel_ratio',
+        label: 'Amps to Deceleration Ratio',
+        unit: null,
+        min: 0,
+        max: 20,
+      },
+    ],
+  },
+  {
+    id: 'turn_tiltback',
+    title: 'Turn tiltback',
+    fields: [
+      { id: 'turntilt_strength', label: 'Strength', unit: null, min: 0, max: 15 },
+      { id: 'turntilt_angle_limit', label: 'Tiltback Angle Limit', unit: 'deg', min: 0, max: 20 },
+      {
+        id: 'turntilt_start_angle',
+        label: 'Turn Aggregate Threshold',
+        unit: 'deg',
+        min: 0,
+        max: 90,
+      },
+      { id: 'turntilt_start_erpm', label: 'ERPM Threshold', unit: 'ERPM', min: 0, max: 30000 },
+      { id: 'turntilt_speed', label: 'Max Tiltback Speed', unit: 'deg/s', min: 0, max: 200 },
+      { id: 'turntilt_erpm_boost', label: 'Speed Boost %', unit: '%', min: 0, max: 100 },
+      {
+        id: 'turntilt_erpm_boost_end',
+        label: 'Speed Boost Max ERPM',
+        unit: 'ERPM',
+        min: 0,
+        max: 30000,
+      },
+      {
+        id: 'turntilt_yaw_aggregate',
+        label: 'Turn Aggregate Target',
+        unit: 'deg',
+        min: 0,
+        max: 180,
+      },
+    ],
+  },
+  {
+    id: 'torque_tiltback',
+    title: 'Torque tiltback',
+    fields: [
+      { id: 'torquetilt_strength', label: 'Strength', unit: 'deg/A', min: 0, max: 0.5 },
+      {
+        id: 'torquetilt_strength_regen',
+        label: 'Strength (Regen)',
+        unit: 'deg/A',
+        min: 0,
+        max: 0.5,
+      },
+      {
+        id: 'torquetilt_start_current',
+        label: 'Start Current Threshold',
+        unit: 'A',
+        min: 0,
+        max: 100,
+      },
+      { id: 'torquetilt_angle_limit', label: 'Tiltback Angle Limit', unit: 'deg', min: 0, max: 20 },
+      { id: 'torquetilt_on_speed', label: 'Max Tiltback Speed', unit: 'deg/s', min: 0, max: 200 },
+      {
+        id: 'torquetilt_off_speed',
+        label: 'Max Tiltback Release Speed',
+        unit: 'deg/s',
+        min: 0,
+        max: 200,
+      },
+    ],
+  },
+  {
+    id: 'brake',
+    title: 'Brake',
+    fields: [
+      { id: 'braketilt_strength', label: 'Brake Tilt Strength', unit: null, min: 0, max: 5 },
+      { id: 'braketilt_lingering', label: 'Brake Tilt Lingering', unit: null, min: 0, max: 10 },
+    ],
+  },
+  {
+    id: 'tiltback',
+    title: 'Tiltback',
+    fields: [
+      { id: 'tiltback_constant', label: 'Constant Tiltback', unit: 'deg', min: -10, max: 20 },
+      {
+        id: 'tiltback_variable',
+        label: 'Variable Tiltback Rate',
+        unit: 'deg/1000 ERPM',
+        min: 0,
+        max: 10,
+      },
+      {
+        id: 'tiltback_variable_max',
+        label: 'Variable Tiltback Target',
+        unit: 'deg',
+        min: 0,
+        max: 30,
+      },
+    ],
+  },
+]
+
+const APP_TUNE_FIELD_BY_ID = new Map(
+  APP_TUNE_GROUPS.flatMap((group) => group.fields.map((field) => [field.id, field])),
+)
 
 const FIELD_INFO: Record<string, string> = {
   kp: 'Main proportional angle response. Higher values make the board respond more strongly to nose angle error.',
@@ -247,14 +406,52 @@ function groupsWithProfileValues(
   groups: RefloatConfigGroup[],
   fields: Record<string, TuneProfileFieldValue> | null,
 ): RefloatConfigGroup[] {
-  if (!fields) return groups
   return groups.map((group) => ({
     ...group,
     fields: group.fields.map((field) => {
-      const value = fields[field.id]
-      return isDisplayableFieldValue(value) ? { ...field, value } : field
+      const appField = APP_TUNE_FIELD_BY_ID.get(field.id)
+      const profileValue = fields?.[field.id]
+      return {
+        ...field,
+        label: appField?.label ?? field.label,
+        unit: appField?.unit ?? field.unit,
+        min: appField?.min ?? field.min,
+        max: appField?.max ?? field.max,
+        value: isDisplayableFieldValue(profileValue) ? profileValue : field.value,
+      }
     }),
   }))
+}
+
+function snapshotFromTuneProfile(boardId: string, profile: TuneProfile): RefloatConfigSnapshot {
+  return {
+    capturedAt: Date.now(),
+    boardId,
+    canId: 0,
+    schemaHash: 'app-tune-v1',
+    rawConfigHash: '',
+    rawConfigLength: 0,
+    fwVersion: null,
+    missingFieldIds: [],
+    groups: APP_TUNE_GROUPS.map((group) => ({
+      id: group.id,
+      title: group.title,
+      fields: group.fields.flatMap((field) => {
+        const value = profile.fields[field.id]
+        if (!isDisplayableFieldValue(value)) return []
+        return [
+          {
+            id: field.id,
+            label: field.label,
+            value,
+            unit: field.unit,
+            min: field.min,
+            max: field.max,
+          },
+        ]
+      }),
+    })).filter((group) => group.fields.length > 0),
+  }
 }
 
 function isEditableNumberField(field: RefloatConfigField): boolean {
@@ -277,6 +474,9 @@ export default function TuneScreen() {
   const navigation = useNavigation()
   const bleStatus = useBleStore((s) => s.status)
   const boardConnected = bleStatus === 'connected'
+  const selectedBoardId = useBoardStore((s) => s.activeBoardId)
+  const boardsLoaded = useBoardStore((s) => s.hasLoaded)
+  const loadBoards = useBoardStore((s) => s.load)
   const activeProfile = useTuneProfileStore((s) => s.activeProfile)
   const draftFields = useTuneProfileStore((s) => s.draftFields)
   const hasDirtyFields = useTuneProfileStore((s) => s.hasDirtyFields)
@@ -298,7 +498,7 @@ export default function TuneScreen() {
   const [infoModal, setInfoModal] = useState<InfoModalState>(null)
   const [editor, setEditor] = useState<EditorState>(null)
 
-  const load = useCallback(async () => {
+  const loadOnline = useCallback(async () => {
     setState((current) => ({ phase: 'loading', snapshot: current.snapshot, error: null }))
     try {
       const snapshot = await getRefloatConfigSnapshot()
@@ -317,11 +517,44 @@ export default function TuneScreen() {
     }
   }, [clearProfiles, loadProfiles])
 
+  const loadOffline = useCallback(
+    async (boardId: string) => {
+      setState((current) => ({ phase: 'loading', snapshot: current.snapshot, error: null }))
+      try {
+        const profiles = await loadProfiles(boardId)
+        const profile = profiles[0]
+        if (!profile) {
+          throw new Error('No saved Tune Profile for this Board.')
+        }
+        const snapshot = snapshotFromTuneProfile(boardId, profile)
+        setState({ phase: 'ready', snapshot, error: null })
+      } catch (error) {
+        setState((current) => ({
+          phase: 'error',
+          snapshot: current.snapshot,
+          error: errorMessage(error),
+        }))
+      }
+    },
+    [loadProfiles],
+  )
+
+  useEffect(() => {
+    if (!boardsLoaded) {
+      void loadBoards()
+    }
+  }, [boardsLoaded, loadBoards])
+
   useEffect(() => {
     if (boardConnected) {
-      load()
+      void loadOnline()
+    } else if (selectedBoardId) {
+      void loadOffline(selectedBoardId)
+    } else if (boardsLoaded) {
+      clearProfiles()
+      setState({ phase: 'loading', snapshot: null, error: null })
     }
-  }, [boardConnected, load])
+  }, [boardConnected, boardsLoaded, clearProfiles, loadOffline, loadOnline, selectedBoardId])
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -330,7 +563,7 @@ export default function TuneScreen() {
         boardConnected ? (
           <Pressable
             style={[styles.headerButton, state.phase === 'loading' && styles.headerButtonDisabled]}
-            onPress={() => void load()}
+            onPress={() => void loadOnline()}
             disabled={state.phase === 'loading'}
           >
             {state.phase === 'loading' ? (
@@ -341,7 +574,7 @@ export default function TuneScreen() {
           </Pressable>
         ) : null,
     })
-  }, [activeProfile, boardConnected, load, navigation, state.phase])
+  }, [activeProfile, boardConnected, loadOnline, navigation, state.phase])
 
   const snapshot = state.snapshot
   const profileFields = useMemo(
@@ -410,26 +643,37 @@ export default function TuneScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
-      {!boardConnected && !snapshot ? (
+      {!boardConnected && !selectedBoardId && boardsLoaded && !snapshot ? (
         <Placeholder
           icon={BluetoothSlashIcon}
-          title="Board not connected"
-          description="Connect to a board to read tune config"
+          title="No board selected"
+          description="Select a board to edit its saved Tune Profile"
         />
       ) : null}
 
-      {boardConnected && state.phase === 'loading' && !snapshot ? (
+      {state.phase === 'loading' && !snapshot && (boardConnected || selectedBoardId) ? (
         <View style={styles.centerState}>
           <ActivityIndicator color="#38bdf8" />
-          <Text style={styles.stateText}>Reading board config...</Text>
+          <Text style={styles.stateText}>
+            {boardConnected ? 'Reading board config...' : 'Loading saved tune profile...'}
+          </Text>
         </View>
       ) : null}
 
-      {boardConnected && state.phase === 'error' && !snapshot ? (
+      {state.phase === 'error' && !snapshot ? (
         <View style={styles.centerState}>
           <WarningCircleIcon size={28} color="#f87171" />
           <Text style={styles.errorText}>{state.error}</Text>
-          <Pressable style={styles.retryButton} onPress={load}>
+          <Pressable
+            style={styles.retryButton}
+            onPress={() =>
+              boardConnected
+                ? void loadOnline()
+                : selectedBoardId
+                  ? void loadOffline(selectedBoardId)
+                  : undefined
+            }
+          >
             <Text style={styles.retryText}>Retry</Text>
           </Pressable>
         </View>

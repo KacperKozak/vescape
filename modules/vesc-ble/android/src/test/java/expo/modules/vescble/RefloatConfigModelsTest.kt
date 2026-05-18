@@ -51,6 +51,5 @@ class RefloatConfigModelsTest {
 
     val group = (snapshot.toMap()["groups"] as List<*>).first() as Map<*, *>
     val field = (group["fields"] as List<*>).first() as Map<*, *>
-    assertEquals(true, field["readOnly"])
   }
 }

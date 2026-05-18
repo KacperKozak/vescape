@@ -252,7 +252,6 @@ export interface RefloatConfigField {
   unit: string | null
   min: number | null
   max: number | null
-  readOnly: true
 }
 
 export interface RefloatConfigGroup {
