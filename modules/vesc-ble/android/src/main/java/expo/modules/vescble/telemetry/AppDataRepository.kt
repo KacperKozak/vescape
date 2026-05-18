@@ -88,6 +88,73 @@ class AppDataRepository private constructor(context: Context) {
     dao.getTuneProfile(id)?.toMap()
   }
 
+  suspend fun createProfile(boardId: String, name: String, fields: Map<String, Any?>): Map<String, Any?> =
+    withContext(Dispatchers.IO) {
+      val now = System.currentTimeMillis()
+      val fieldsJson = fields.toJsonObject().toString()
+      val profile = TuneProfileEntity(
+        id = UUID.randomUUID().toString(),
+        boardId = boardId,
+        name = name,
+        fieldsJson = fieldsJson,
+        createdAt = now,
+        updatedAt = now,
+      )
+      dao.upsertTuneProfile(profile)
+      dao.insertTuneHistoryEntry(
+        TuneHistoryEntryEntity(
+          profileId = profile.id,
+          fieldsJson = fieldsJson,
+          createdAt = now,
+        ),
+      )
+      profile.toMap()
+    }
+
+  suspend fun renameProfile(profileId: String, name: String): Map<String, Any?> =
+    withContext(Dispatchers.IO) {
+      dao.updateProfileName(profileId, name, System.currentTimeMillis())
+      dao.getTuneProfile(profileId)?.toMap()
+        ?: throw IllegalArgumentException("Tune Profile not found: $profileId")
+    }
+
+  suspend fun deleteProfile(profileId: String): Unit = withContext(Dispatchers.IO) {
+    dao.deleteTuneProfileSafe(profileId)
+  }
+
+  suspend fun getProfileHistory(profileId: String): List<Map<String, Any?>> = withContext(Dispatchers.IO) {
+    dao.getTuneHistoryEntries(profileId).map { it.toMap() }
+  }
+
+  suspend fun rollbackProfile(profileId: String, historyEntryId: Long): Map<String, Any?> =
+    withContext(Dispatchers.IO) {
+      dao.rollbackTuneProfile(profileId, historyEntryId).toMap()
+    }
+
+  suspend fun copyProfileToBoard(profileId: String, targetBoardId: String, newName: String): Map<String, Any?> =
+    withContext(Dispatchers.IO) {
+      val source = dao.getTuneProfile(profileId)
+        ?: throw IllegalArgumentException("Source profile not found: $profileId")
+      val now = System.currentTimeMillis()
+      val copy = TuneProfileEntity(
+        id = UUID.randomUUID().toString(),
+        boardId = targetBoardId,
+        name = newName,
+        fieldsJson = source.fieldsJson,
+        createdAt = now,
+        updatedAt = now,
+      )
+      dao.upsertTuneProfile(copy)
+      dao.insertTuneHistoryEntry(
+        TuneHistoryEntryEntity(
+          profileId = copy.id,
+          fieldsJson = copy.fieldsJson,
+          createdAt = now,
+        ),
+      )
+      copy.toMap()
+    }
+
   suspend fun saveProfile(profileId: String, fields: Map<String, Any?>): Map<String, Any?> =
     withContext(Dispatchers.IO) {
       dao.saveTuneProfile(

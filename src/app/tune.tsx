@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
+  Alert,
+  FlatList,
   Modal,
   PanResponder,
   Pressable,
@@ -15,15 +17,22 @@ import {
   ArrowCounterClockwiseIcon,
   ArrowsClockwiseIcon,
   BluetoothSlashIcon,
+  CaretDownIcon,
   CheckIcon,
+  ClockCounterClockwiseIcon,
   InfoIcon,
+  PencilSimpleIcon,
+  PlusIcon,
+  TrashIcon,
   WarningCircleIcon,
+  WarningIcon,
   XIcon,
 } from 'phosphor-react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
   getRefloatConfigSnapshot,
   type TuneProfile,
+  type TuneHistoryEntry,
   type RefloatConfigField,
   type RefloatConfigGroup,
   type RefloatConfigSnapshot,
@@ -61,6 +70,7 @@ interface BasicSliderItem {
   step: number
   source: string
   info: string
+  modifiedManually: boolean
 }
 
 interface AppTuneFieldDefinition {
@@ -313,92 +323,221 @@ function snapFieldValue(value: number, field: RefloatConfigField): number {
   return Number(clamp(snapped, min, max).toFixed(decimals))
 }
 
-function fieldNumber(fields: Map<string, RefloatConfigField>, id: string): number | null {
-  const value = fields.get(id)?.value
-  return typeof value === 'number' && Number.isFinite(value) ? value : null
-}
-
 function formatSliderValue(item: BasicSliderItem): string {
   if (item.value == null) return 'Missing'
   return Number.isInteger(item.value) ? item.value.toFixed(0) : item.value.toFixed(1)
 }
 
 function basicSlidersFromSnapshot(snapshot: RefloatConfigSnapshot): BasicSliderItem[] {
-  const fields = new Map(
-    snapshot.groups.flatMap((group) => group.fields.map((field) => [field.id, field])),
-  )
-  const kp = fieldNumber(fields, 'kp')
-  const torqueTilt = fieldNumber(fields, 'torquetilt_strength')
-  const torqueTiltRegen = fieldNumber(fields, 'torquetilt_strength_regen')
-  const turnTilt = fieldNumber(fields, 'turntilt_strength')
-  const brakeTilt = fieldNumber(fields, 'braketilt_strength')
-  const atrUp = fieldNumber(fields, 'atr_strength_up')
-  const atrDown = fieldNumber(fields, 'atr_strength_down')
-  const atrStrength = atrUp != null || atrDown != null ? Math.max(atrUp ?? 0, atrDown ?? 0) : null
+  const fieldMap = new Map<string, number | null>()
+  for (const group of snapshot.groups) {
+    for (const field of group.fields) {
+      const v = typeof field.value === 'number' && Number.isFinite(field.value) ? field.value : null
+      fieldMap.set(field.id, v)
+    }
+  }
 
-  return [
-    {
-      id: 'aggressiveness',
-      label: 'Aggressiveness',
-      value: kp == null ? null : clamp(kp - 20, -5, 10),
-      min: -5,
-      max: 10,
-      step: 1,
-      source: 'kp',
-      info: 'Derived from Angle P as kp - 20, clamped to -5..10. In write mode this would coordinate PID and Mahony filter values together.',
-    },
-    {
-      id: 'noseStiffness',
-      label: 'Nose stiffness',
-      value: torqueTilt == null ? null : clamp(torqueTilt / 0.03, 0, 10),
-      min: 0,
-      max: 10,
-      step: 1,
-      source: 'torquetilt_strength',
-      info: 'Derived from acceleration torque tiltback strength divided by 0.03. This represents nose lift from positive output current.',
-    },
-    {
-      id: 'tailStiffness',
-      label: 'Tail stiffness',
-      value: torqueTiltRegen == null ? null : clamp(torqueTiltRegen / 0.03, 0, 10),
-      min: 0,
-      max: 10,
-      step: 1,
-      source: 'torquetilt_strength_regen',
-      info: 'Derived from regen torque tiltback strength divided by 0.03. This represents nose lowering from negative regen current.',
-    },
-    {
-      id: 'carveTilt',
-      label: 'Carve tilt',
-      value: turnTilt == null ? null : clamp(turnTilt, 0, 15),
-      min: 0,
-      max: 15,
-      step: 1,
-      source: 'turntilt_strength',
-      info: 'Derived directly from turn tiltback strength.',
-    },
-    {
-      id: 'brakeTilt',
-      label: 'Brake tilt',
-      value: brakeTilt == null ? null : clamp(brakeTilt, 0, 5),
-      min: 0,
-      max: 5,
-      step: 1,
-      source: 'braketilt_strength',
-      info: 'Derived directly from brake tiltback strength.',
-    },
-    {
-      id: 'atrIntensity',
-      label: 'ATR intensity',
-      value: atrStrength == null ? null : clamp((atrStrength / 2) * 15, 0, 15),
-      min: 0,
-      max: 15,
-      step: 1,
-      source: 'atr_strength_up/down',
-      info: 'Derived from the stronger uphill or downhill ATR strength, mapped from 0..2 to 0..15.',
-    },
-  ]
+  return BASIC_SLIDER_FORMULAS.map((formula) => {
+    const item = BASIC_SLIDER_ITEMS[formula.id]
+    return {
+      id: formula.id,
+      label: item.label,
+      value: formula.deriveSliderValue(fieldMap),
+      min: item.min,
+      max: item.max,
+      step: item.step,
+      source: item.source,
+      info: item.info,
+      modifiedManually: !formula.checkMatch(fieldMap),
+    }
+  })
 }
+
+const BASIC_SLIDER_ITEMS: Record<
+  string,
+  { label: string; min: number; max: number; step: number; source: string; info: string }
+> = {
+  aggressiveness: {
+    label: 'Aggressiveness',
+    min: -5,
+    max: 10,
+    step: 1,
+    source: 'kp',
+    info: 'Coordinates PID and Mahony filter values. Derived from kp - 20.',
+  },
+  noseStiffness: {
+    label: 'Nose stiffness',
+    min: 0,
+    max: 10,
+    step: 1,
+    source: 'torquetilt_strength',
+    info: 'Acceleration torque tiltback. Nose lift from positive output current.',
+  },
+  tailStiffness: {
+    label: 'Tail stiffness',
+    min: 0,
+    max: 10,
+    step: 1,
+    source: 'torquetilt_strength_regen',
+    info: 'Regen torque tiltback. Nose lowering from negative regen current.',
+  },
+  carveTilt: {
+    label: 'Carve tilt',
+    min: 0,
+    max: 15,
+    step: 1,
+    source: 'turntilt_strength',
+    info: 'Turn tiltback strength. Direct 1:1 mapping.',
+  },
+  brakeTilt: {
+    label: 'Brake tilt',
+    min: 0,
+    max: 5,
+    step: 1,
+    source: 'braketilt_strength',
+    info: 'Brake tiltback strength. Direct 1:1 mapping.',
+  },
+  atrIntensity: {
+    label: 'ATR intensity',
+    min: 0,
+    max: 15,
+    step: 1,
+    source: 'atr_strength_up/down',
+    info: 'ATR uphill and downhill strength, mapped from 0..2 to 0..15.',
+  },
+}
+
+function interpolate(
+  x: number,
+  inputRange: [number, number],
+  outputRange: [number, number],
+): number {
+  const [inMin, inMax] = inputRange
+  const [outMin, outMax] = outputRange
+  return outMin + ((x - inMin) / (inMax - inMin)) * (outMax - outMin)
+}
+
+function roundTo(value: number, decimals: number): number {
+  const factor = 10 ** decimals
+  return Math.round(value * factor) / factor
+}
+
+const EPSILON = 0.015
+
+function nearEqual(a: number, b: number): boolean {
+  return Math.abs(a - b) <= EPSILON
+}
+
+interface BasicSliderFormula {
+  id: string
+  linkedFields: string[]
+  deriveSliderValue: (fields: Map<string, number | null>) => number | null
+  computeFieldValues: (sliderValue: number) => Record<string, number>
+  checkMatch: (fields: Map<string, number | null>) => boolean
+}
+
+const BASIC_SLIDER_FORMULAS: BasicSliderFormula[] = [
+  {
+    id: 'aggressiveness',
+    linkedFields: ['kp', 'kp2', 'ki', 'mahony_kp', 'mahony_kp_roll'],
+    deriveSliderValue: (fields) => {
+      const kp = fields.get('kp')
+      return kp == null ? null : clamp(kp - 20, -5, 10)
+    },
+    computeFieldValues: (x) => ({
+      kp: roundTo(interpolate(x, [-5, 10], [15, 30]), 0),
+      kp2: roundTo(interpolate(x, [-5, 10], [0.4, 1.1]), 1),
+      ki: roundTo(interpolate(x, [-5, 10], [0.015, 0.03]), 3),
+      mahony_kp: roundTo(interpolate(x, [-5, 10], [2.2, 1.5]), 1),
+      mahony_kp_roll: roundTo(interpolate(x, [-5, 10], [2.2, 1.5]), 1),
+    }),
+    checkMatch: (fields) => {
+      const kp = fields.get('kp')
+      if (kp == null) return true
+      const x = clamp(kp - 20, -5, 10)
+      const expected = {
+        kp2: roundTo(interpolate(x, [-5, 10], [0.4, 1.1]), 1),
+        ki: roundTo(interpolate(x, [-5, 10], [0.015, 0.03]), 3),
+        mahony_kp: roundTo(interpolate(x, [-5, 10], [2.2, 1.5]), 1),
+        mahony_kp_roll: roundTo(interpolate(x, [-5, 10], [2.2, 1.5]), 1),
+      }
+      return Object.entries(expected).every(([id, val]) => {
+        const actual = fields.get(id)
+        return actual == null || nearEqual(actual, val)
+      })
+    },
+  },
+  {
+    id: 'noseStiffness',
+    linkedFields: ['torquetilt_strength'],
+    deriveSliderValue: (fields) => {
+      const v = fields.get('torquetilt_strength')
+      return v == null ? null : clamp(v / 0.03, 0, 10)
+    },
+    computeFieldValues: (x) => ({
+      torquetilt_strength: roundTo(x * 0.03, 2),
+    }),
+    checkMatch: () => true,
+  },
+  {
+    id: 'tailStiffness',
+    linkedFields: ['torquetilt_strength_regen'],
+    deriveSliderValue: (fields) => {
+      const v = fields.get('torquetilt_strength_regen')
+      return v == null ? null : clamp(v / 0.03, 0, 10)
+    },
+    computeFieldValues: (x) => ({
+      torquetilt_strength_regen: roundTo(x * 0.03, 2),
+    }),
+    checkMatch: () => true,
+  },
+  {
+    id: 'carveTilt',
+    linkedFields: ['turntilt_strength'],
+    deriveSliderValue: (fields) => {
+      const v = fields.get('turntilt_strength')
+      return v == null ? null : clamp(v, 0, 15)
+    },
+    computeFieldValues: (x) => ({
+      turntilt_strength: x,
+    }),
+    checkMatch: () => true,
+  },
+  {
+    id: 'brakeTilt',
+    linkedFields: ['braketilt_strength'],
+    deriveSliderValue: (fields) => {
+      const v = fields.get('braketilt_strength')
+      return v == null ? null : clamp(v, 0, 5)
+    },
+    computeFieldValues: (x) => ({
+      braketilt_strength: x,
+    }),
+    checkMatch: () => true,
+  },
+  {
+    id: 'atrIntensity',
+    linkedFields: ['atr_strength_up', 'atr_strength_down'],
+    deriveSliderValue: (fields) => {
+      const up = fields.get('atr_strength_up')
+      const down = fields.get('atr_strength_down')
+      const stronger = up != null || down != null ? Math.max(up ?? 0, down ?? 0) : null
+      return stronger == null ? null : clamp(interpolate(stronger, [0, 2], [0, 15]), 0, 15)
+    },
+    computeFieldValues: (x) => {
+      const val = roundTo(interpolate(x, [0, 15], [0, 2]), 1)
+      return { atr_strength_up: val, atr_strength_down: val }
+    },
+    checkMatch: (fields) => {
+      const up = fields.get('atr_strength_up')
+      const down = fields.get('atr_strength_down')
+      if (up == null && down == null) return true
+      return up != null && down != null && nearEqual(up, down)
+    },
+  },
+]
+
+const BASIC_SLIDER_FORMULA_BY_ID = new Map(BASIC_SLIDER_FORMULAS.map((f) => [f.id, f]))
 
 function isDisplayableFieldValue(
   value: TuneProfileFieldValue | undefined,
@@ -481,6 +620,7 @@ export default function TuneScreen() {
   const selectedBoardId = useBoardStore((s) => s.activeBoardId)
   const boardsLoaded = useBoardStore((s) => s.hasLoaded)
   const loadBoards = useBoardStore((s) => s.load)
+  const profiles = useTuneProfileStore((s) => s.profiles)
   const activeProfile = useTuneProfileStore((s) => s.activeProfile)
   const draftFields = useTuneProfileStore((s) => s.draftFields)
   const hasDirtyFields = useTuneProfileStore((s) => s.hasDirtyFields)
@@ -489,6 +629,12 @@ export default function TuneScreen() {
   const boardDiff = useTuneProfileStore((s) => s.boardDiff)
   const hasBoardDiff = useTuneProfileStore((s) => s.hasBoardDiff)
   const loadProfiles = useTuneProfileStore((s) => s.loadProfiles)
+  const setActiveProfile = useTuneProfileStore((s) => s.setActiveProfile)
+  const storeCreateProfile = useTuneProfileStore((s) => s.createProfile)
+  const storeRenameProfile = useTuneProfileStore((s) => s.renameProfile)
+  const storeDeleteProfile = useTuneProfileStore((s) => s.deleteProfile)
+  const loadHistory = useTuneProfileStore((s) => s.loadHistory)
+  const rollbackToHistory = useTuneProfileStore((s) => s.rollbackToHistory)
   const setDraftField = useTuneProfileStore((s) => s.setDraftField)
   const setBoardSnapshot = useTuneProfileStore((s) => s.setBoardSnapshot)
   const getDirtyFields = useTuneProfileStore((s) => s.getDirtyFields)
@@ -506,6 +652,12 @@ export default function TuneScreen() {
   })
   const [infoModal, setInfoModal] = useState<InfoModalState>(null)
   const [editor, setEditor] = useState<EditorState>(null)
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false)
+  const [renameModalProfile, setRenameModalProfile] = useState<TuneProfile | null>(null)
+  const [createModalOpen, setCreateModalOpen] = useState(false)
+  const [createCloneFromId, setCreateCloneFromId] = useState<string | undefined>()
+  const [historyEntries, setHistoryEntries] = useState<TuneHistoryEntry[]>([])
+  const [historyOpen, setHistoryOpen] = useState(false)
 
   const loadOnline = useCallback(async () => {
     setState((current) => ({ phase: 'loading', snapshot: current.snapshot, error: null }))
@@ -576,25 +728,43 @@ export default function TuneScreen() {
     setBoardSnapshot,
   ])
 
+  const openHistory = useCallback(async () => {
+    if (!activeProfile) return
+    const entries = await loadHistory(activeProfile.id)
+    setHistoryEntries(entries)
+    setHistoryOpen(true)
+  }, [activeProfile, loadHistory])
+
   useLayoutEffect(() => {
     navigation.setOptions({
       title: activeProfile ? `Tune - ${activeProfile.name}` : 'Tune',
-      headerRight: () =>
-        boardConnected ? (
-          <Pressable
-            style={[styles.headerButton, state.phase === 'loading' && styles.headerButtonDisabled]}
-            onPress={() => void loadOnline()}
-            disabled={state.phase === 'loading'}
-          >
-            {state.phase === 'loading' ? (
-              <ActivityIndicator size="small" color="#38bdf8" />
-            ) : (
-              <ArrowsClockwiseIcon size={17} color="#cbd5e1" weight="bold" />
-            )}
-          </Pressable>
-        ) : null,
+      headerRight: () => (
+        <View style={styles.headerActions}>
+          {activeProfile ? (
+            <Pressable style={styles.headerButton} onPress={() => void openHistory()}>
+              <ClockCounterClockwiseIcon size={17} color="#cbd5e1" weight="bold" />
+            </Pressable>
+          ) : null}
+          {boardConnected ? (
+            <Pressable
+              style={[
+                styles.headerButton,
+                state.phase === 'loading' && styles.headerButtonDisabled,
+              ]}
+              onPress={() => void loadOnline()}
+              disabled={state.phase === 'loading'}
+            >
+              {state.phase === 'loading' ? (
+                <ActivityIndicator size="small" color="#38bdf8" />
+              ) : (
+                <ArrowsClockwiseIcon size={17} color="#cbd5e1" weight="bold" />
+              )}
+            </Pressable>
+          ) : null}
+        </View>
+      ),
     })
-  }, [activeProfile, boardConnected, loadOnline, navigation, state.phase])
+  }, [activeProfile, boardConnected, openHistory, loadOnline, navigation, state.phase])
 
   const snapshot = state.snapshot
   const profileFields = useMemo(
@@ -657,6 +827,67 @@ export default function TuneScreen() {
 
   const saveProfile = () => {
     void saveActiveProfile().catch(() => undefined)
+  }
+
+  const handleCreateProfile = (cloneFromId?: string) => {
+    setCreateCloneFromId(cloneFromId)
+    setCreateModalOpen(true)
+    setProfileMenuOpen(false)
+  }
+
+  const handleRenameProfile = (profile: TuneProfile) => {
+    setRenameModalProfile(profile)
+    setProfileMenuOpen(false)
+  }
+
+  const handleDeleteProfile = (profile: TuneProfile) => {
+    Alert.alert('Delete Profile', `Delete "${profile.name}"? This cannot be undone.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => void storeDeleteProfile(profile.id),
+      },
+    ])
+    setProfileMenuOpen(false)
+  }
+
+  const handleRollback = (entryId: number) => {
+    Alert.alert('Restore', 'Replace current profile fields with this snapshot?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Restore',
+        onPress: () => {
+          void rollbackToHistory(entryId).then(() => setHistoryOpen(false))
+        },
+      },
+    ])
+  }
+
+  const handleBasicSliderReset = (sliderId: string) => {
+    const formula = BASIC_SLIDER_FORMULA_BY_ID.get(sliderId)
+    if (!formula || !activeProfile) return
+    const currentValue = formula.deriveSliderValue(
+      new Map(
+        Object.entries({ ...activeProfile.fields, ...draftFields })
+          .filter((entry): entry is [string, number] => typeof entry[1] === 'number')
+          .map(([k, v]) => [k, v]),
+      ),
+    )
+    if (currentValue == null) return
+    const fieldValues = formula.computeFieldValues(Math.round(currentValue))
+    for (const [fieldId, value] of Object.entries(fieldValues)) {
+      setDraftField(fieldId, value)
+    }
+  }
+
+  const handleBasicSliderChange = (sliderId: string, newValue: number) => {
+    const formula = BASIC_SLIDER_FORMULA_BY_ID.get(sliderId)
+    if (!formula || !activeProfile) return
+    const fieldValues = formula.computeFieldValues(newValue)
+    for (const [fieldId, value] of Object.entries(fieldValues)) {
+      setDraftField(fieldId, value)
+    }
   }
 
   const dirtyFields = getDirtyFields()
@@ -734,18 +965,27 @@ export default function TuneScreen() {
             </View>
           ) : null}
 
+          {profiles.length > 0 ? (
+            <View style={styles.profileSwitcherRow}>
+              <Pressable
+                style={styles.profileSwitcherButton}
+                onPress={() => setProfileMenuOpen(true)}
+              >
+                <Text style={styles.profileSwitcherText} numberOfLines={1}>
+                  {activeProfile?.name ?? 'Select profile'}
+                </Text>
+                <CaretDownIcon size={14} color="#94a3b8" weight="bold" />
+              </Pressable>
+              <Pressable
+                style={styles.profileActionButton}
+                onPress={() => handleCreateProfile(activeProfile?.id)}
+              >
+                <PlusIcon size={16} color="#38bdf8" weight="bold" />
+              </Pressable>
+            </View>
+          ) : null}
+
           <View style={styles.metaRow}>
-            {activeProfile ? (
-              <InfoBadge
-                label={activeProfile.name}
-                onPress={() =>
-                  showBadgeInfo(
-                    'Tune Profile',
-                    `${activeProfile.name} profile loaded from local storage. Values shown on this screen come from the profile and fall back to the live snapshot for fields the profile does not contain.`,
-                  )
-                }
-              />
-            ) : null}
             {snapshot.fwVersion ? (
               <InfoBadge
                 label={snapshot.fwVersion}
@@ -821,19 +1061,24 @@ export default function TuneScreen() {
           <View style={styles.group}>
             <View style={styles.groupHeader}>
               <Text style={styles.groupTitle}>Basic</Text>
-              <Text style={styles.groupCount}>derived preview</Text>
+              <Text style={styles.groupCount}>
+                {activeProfile ? 'drag to adjust' : 'derived preview'}
+              </Text>
             </View>
             <View style={styles.basicList}>
               {basicSliders.map((item) => (
                 <BasicSlider
                   key={item.id}
                   item={item}
+                  editable={activeProfile != null}
                   onInfo={() =>
                     showBadgeInfo(
                       item.label,
                       `${item.info}\n\nSource: ${item.source}\nRange: ${item.min} to ${item.max}, step ${item.step}`,
                     )
                   }
+                  onReset={() => handleBasicSliderReset(item.id)}
+                  onChange={(value) => handleBasicSliderChange(item.id, value)}
                 />
               ))}
             </View>
@@ -891,6 +1136,46 @@ export default function TuneScreen() {
           setDraftField(editor.field.id, value)
           setEditor(null)
         }}
+      />
+      <ProfileMenuModal
+        visible={profileMenuOpen}
+        profiles={profiles}
+        activeProfileId={activeProfile?.id ?? null}
+        canDelete={profiles.length > 1}
+        onSelect={(id) => {
+          setActiveProfile(id)
+          setProfileMenuOpen(false)
+        }}
+        onCreate={() => handleCreateProfile(activeProfile?.id)}
+        onRename={handleRenameProfile}
+        onDelete={handleDeleteProfile}
+        onDismiss={() => setProfileMenuOpen(false)}
+      />
+      <TextPromptModal
+        visible={createModalOpen}
+        title="New Profile"
+        placeholder="Profile name"
+        initialValue=""
+        confirmLabel="Create"
+        onConfirm={(name) => {
+          void storeCreateProfile(name, createCloneFromId)
+          setCreateModalOpen(false)
+        }}
+        onDismiss={() => setCreateModalOpen(false)}
+      />
+      <RenameProfileModal
+        profile={renameModalProfile}
+        onRename={(name) => {
+          if (renameModalProfile) void storeRenameProfile(renameModalProfile.id, name)
+          setRenameModalProfile(null)
+        }}
+        onDismiss={() => setRenameModalProfile(null)}
+      />
+      <HistoryModal
+        visible={historyOpen}
+        entries={historyEntries}
+        onRestore={handleRollback}
+        onDismiss={() => setHistoryOpen(false)}
       />
     </SafeAreaView>
   )
@@ -1117,16 +1402,75 @@ function FieldEditorSheet({
     </Modal>
   )
 }
-function BasicSlider({ item, onInfo }: { item: BasicSliderItem; onInfo: () => void }) {
+function BasicSlider({
+  item,
+  editable,
+  onInfo,
+  onReset,
+  onChange,
+}: {
+  item: BasicSliderItem
+  editable: boolean
+  onInfo: () => void
+  onReset: () => void
+  onChange: (value: number) => void
+}) {
   const progress = item.value == null ? 0 : ((item.value - item.min) / (item.max - item.min)) * 100
   const roundedProgress = clamp(progress, 0, 100)
+  const [trackWidth, setTrackWidth] = useState(1)
+  const [trackLeft, setTrackLeft] = useState(0)
+  const trackRef = useRef<View>(null)
+
+  const measureTrack = useCallback(() => {
+    trackRef.current?.measureInWindow((x, _y, width) => {
+      setTrackLeft(x)
+      setTrackWidth(width > 0 ? width : 1)
+    })
+  }, [])
+
+  const valueFromX = useCallback(
+    (localX: number) => {
+      const ratio = clamp(localX, 0, trackWidth) / trackWidth
+      return Math.round(item.min + ratio * (item.max - item.min))
+    },
+    [item.min, item.max, trackWidth],
+  )
+
+  const panResponder = useMemo(
+    () =>
+      editable
+        ? PanResponder.create({
+            onStartShouldSetPanResponder: () => true,
+            onMoveShouldSetPanResponder: () => true,
+            onPanResponderGrant: (event) => {
+              measureTrack()
+              onChange(valueFromX(event.nativeEvent.locationX))
+            },
+            onPanResponderMove: (event) => {
+              onChange(valueFromX(event.nativeEvent.pageX - trackLeft))
+            },
+          })
+        : undefined,
+    [editable, measureTrack, onChange, trackLeft, valueFromX],
+  )
 
   return (
     <View style={[styles.basicSlider, item.value == null && styles.basicSliderMissing]}>
       <View style={styles.basicSliderHeader}>
         <View style={styles.basicSliderTitleWrap}>
           <Text style={styles.basicSliderLabel}>{item.label}</Text>
-          <Text style={styles.basicSliderSource}>{item.source}</Text>
+          {item.modifiedManually ? (
+            <View style={styles.modifiedManuallyRow}>
+              <WarningIcon size={11} color="#fbbf24" weight="fill" />
+              <Text style={styles.modifiedManuallyText}>Modified manually</Text>
+              <Pressable style={styles.resetButton} onPress={onReset}>
+                <ArrowCounterClockwiseIcon size={11} color="#38bdf8" weight="bold" />
+                <Text style={styles.resetButtonText}>Reset</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <Text style={styles.basicSliderSource}>{item.source}</Text>
+          )}
         </View>
         <View style={styles.basicSliderValueWrap}>
           <Text
@@ -1139,7 +1483,12 @@ function BasicSlider({ item, onInfo }: { item: BasicSliderItem; onInfo: () => vo
           </Pressable>
         </View>
       </View>
-      <View style={styles.sliderTrack}>
+      <View
+        ref={trackRef}
+        style={styles.sliderTrack}
+        onLayout={measureTrack}
+        {...panResponder?.panHandlers}
+      >
         <View style={[styles.sliderFill, { width: `${roundedProgress}%` }]} />
         {item.value != null ? (
           <View style={[styles.sliderThumb, { left: `${roundedProgress}%` }]} />
@@ -1153,10 +1502,224 @@ function BasicSlider({ item, onInfo }: { item: BasicSliderItem; onInfo: () => vo
   )
 }
 
+function ProfileMenuModal({
+  visible,
+  profiles,
+  activeProfileId,
+  canDelete,
+  onSelect,
+  onCreate,
+  onRename,
+  onDelete,
+  onDismiss,
+}: {
+  visible: boolean
+  profiles: TuneProfile[]
+  activeProfileId: string | null
+  canDelete: boolean
+  onSelect: (id: string) => void
+  onCreate: () => void
+  onRename: (profile: TuneProfile) => void
+  onDelete: (profile: TuneProfile) => void
+  onDismiss: () => void
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onDismiss}>
+      <Pressable style={styles.sheetBackdrop} onPress={onDismiss}>
+        <Pressable style={styles.profileMenu} onPress={(e) => e.stopPropagation()}>
+          <Text style={styles.profileMenuTitle}>Profiles</Text>
+          <ScrollView style={styles.profileMenuList}>
+            {profiles.map((profile) => (
+              <View
+                key={profile.id}
+                style={[
+                  styles.profileMenuItem,
+                  profile.id === activeProfileId && styles.profileMenuItemActive,
+                ]}
+              >
+                <Pressable
+                  style={styles.profileMenuItemContent}
+                  onPress={() => onSelect(profile.id)}
+                >
+                  <Text
+                    style={[
+                      styles.profileMenuItemText,
+                      profile.id === activeProfileId && styles.profileMenuItemTextActive,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {profile.name}
+                  </Text>
+                  {profile.id === activeProfileId ? (
+                    <CheckIcon size={14} color="#38bdf8" weight="bold" />
+                  ) : null}
+                </Pressable>
+                <View style={styles.profileMenuItemActions}>
+                  <Pressable style={styles.profileMenuIconBtn} onPress={() => onRename(profile)}>
+                    <PencilSimpleIcon size={14} color="#94a3b8" weight="bold" />
+                  </Pressable>
+                  {canDelete ? (
+                    <Pressable style={styles.profileMenuIconBtn} onPress={() => onDelete(profile)}>
+                      <TrashIcon size={14} color="#f87171" weight="bold" />
+                    </Pressable>
+                  ) : null}
+                </View>
+              </View>
+            ))}
+          </ScrollView>
+          <Pressable style={styles.profileMenuCreateButton} onPress={onCreate}>
+            <PlusIcon size={14} color="#38bdf8" weight="bold" />
+            <Text style={styles.profileMenuCreateText}>New profile (clone current)</Text>
+          </Pressable>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  )
+}
+
+function TextPromptModal({
+  visible,
+  title,
+  placeholder,
+  initialValue,
+  confirmLabel,
+  onConfirm,
+  onDismiss,
+}: {
+  visible: boolean
+  title: string
+  placeholder?: string
+  initialValue: string
+  confirmLabel: string
+  onConfirm: (value: string) => void
+  onDismiss: () => void
+}) {
+  const [text, setText] = useState(initialValue)
+
+  useEffect(() => {
+    if (visible) setText(initialValue)
+  }, [visible, initialValue])
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onDismiss}>
+      <Pressable style={styles.sheetBackdrop} onPress={onDismiss}>
+        <Pressable style={styles.renameModal} onPress={(e) => e.stopPropagation()}>
+          <Text style={styles.profileMenuTitle}>{title}</Text>
+          <TextInput
+            style={styles.editorInput}
+            value={text}
+            onChangeText={setText}
+            placeholder={placeholder}
+            placeholderTextColor="#475569"
+            autoFocus
+            selectTextOnFocus
+          />
+          <View style={styles.sheetActions}>
+            <Pressable style={styles.secondarySheetButton} onPress={onDismiss}>
+              <Text style={styles.secondarySheetButtonText}>Cancel</Text>
+            </Pressable>
+            <Pressable
+              style={styles.primarySheetButton}
+              onPress={() => text.trim() && onConfirm(text.trim())}
+            >
+              <CheckIcon size={15} color="#020617" weight="bold" />
+              <Text style={styles.primarySheetButtonText}>{confirmLabel}</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  )
+}
+
+function RenameProfileModal({
+  profile,
+  onRename,
+  onDismiss,
+}: {
+  profile: TuneProfile | null
+  onRename: (name: string) => void
+  onDismiss: () => void
+}) {
+  return (
+    <TextPromptModal
+      visible={profile != null}
+      title="Rename Profile"
+      initialValue={profile?.name ?? ''}
+      confirmLabel="Rename"
+      onConfirm={onRename}
+      onDismiss={onDismiss}
+    />
+  )
+}
+
+function HistoryModal({
+  visible,
+  entries,
+  onRestore,
+  onDismiss,
+}: {
+  visible: boolean
+  entries: TuneHistoryEntry[]
+  onRestore: (entryId: number) => void
+  onDismiss: () => void
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onDismiss}>
+      <Pressable style={styles.sheetBackdrop} onPress={onDismiss}>
+        <Pressable style={styles.historySheet} onPress={(e) => e.stopPropagation()}>
+          <View style={styles.sheetHeader}>
+            <Text style={styles.sheetTitle}>History</Text>
+            <Pressable style={styles.sheetIconButton} onPress={onDismiss}>
+              <XIcon size={16} color="#cbd5e1" weight="bold" />
+            </Pressable>
+          </View>
+          {entries.length === 0 ? (
+            <Text style={styles.historyEmpty}>No history entries yet.</Text>
+          ) : (
+            <FlatList
+              data={entries}
+              keyExtractor={(item) => String(item.id)}
+              style={styles.historyList}
+              renderItem={({ item }) => {
+                const fieldCount = Object.keys(item.fields).length
+                const date = new Date(item.createdAt)
+                return (
+                  <View style={styles.historyEntry}>
+                    <View style={styles.historyEntryInfo}>
+                      <Text style={styles.historyEntryDate}>
+                        {date.toLocaleDateString()} {date.toLocaleTimeString()}
+                      </Text>
+                      <Text style={styles.historyEntryDetail}>
+                        {fieldCount} field{fieldCount === 1 ? '' : 's'}
+                      </Text>
+                    </View>
+                    <Pressable
+                      style={styles.historyRestoreButton}
+                      onPress={() => onRestore(item.id)}
+                    >
+                      <ArrowCounterClockwiseIcon size={13} color="#38bdf8" weight="bold" />
+                      <Text style={styles.historyRestoreText}>Restore</Text>
+                    </Pressable>
+                  </View>
+                )
+              }}
+            />
+          )}
+        </Pressable>
+      </Pressable>
+    </Modal>
+  )
+}
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#111827',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 8,
   },
   headerButton: {
     width: 36,
@@ -1395,12 +1958,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sliderTrack: {
-    height: 8,
-    borderRadius: 4,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: '#0f172a',
+    justifyContent: 'center',
     overflow: 'visible',
   },
   sliderFill: {
+    position: 'absolute',
+    left: 0,
     height: 8,
     borderRadius: 4,
     backgroundColor: '#38bdf8',
@@ -1663,5 +2229,205 @@ const styles = StyleSheet.create({
     color: '#020617',
     fontSize: 13,
     fontWeight: '900',
+  },
+  profileSwitcherRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  profileSwitcherButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#1e293b',
+    borderWidth: 1,
+    borderColor: '#334155',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    minHeight: 42,
+    gap: 8,
+  },
+  profileSwitcherText: {
+    color: '#e2e8f0',
+    fontSize: 14,
+    fontWeight: '800',
+    flex: 1,
+  },
+  profileActionButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1e293b',
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  profileMenu: {
+    backgroundColor: '#1e293b',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#334155',
+    marginHorizontal: 32,
+    marginTop: 120,
+    maxHeight: 400,
+    padding: 16,
+    gap: 12,
+  },
+  profileMenuTitle: {
+    color: '#f8fafc',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+  profileMenuList: {
+    maxHeight: 250,
+  },
+  profileMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 8,
+    paddingVertical: 4,
+    paddingLeft: 12,
+    paddingRight: 4,
+    minHeight: 44,
+  },
+  profileMenuItemActive: {
+    backgroundColor: '#0c2537',
+  },
+  profileMenuItemContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  profileMenuItemText: {
+    color: '#cbd5e1',
+    fontSize: 14,
+    fontWeight: '700',
+    flex: 1,
+  },
+  profileMenuItemTextActive: {
+    color: '#38bdf8',
+  },
+  profileMenuItemActions: {
+    flexDirection: 'row',
+    gap: 2,
+  },
+  profileMenuIconBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  profileMenuCreateButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#334155',
+    paddingVertical: 10,
+  },
+  profileMenuCreateText: {
+    color: '#38bdf8',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  renameModal: {
+    backgroundColor: '#1e293b',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#334155',
+    marginHorizontal: 32,
+    marginTop: 160,
+    padding: 16,
+    gap: 14,
+  },
+  modifiedManuallyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  modifiedManuallyText: {
+    color: '#fbbf24',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  resetButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    marginLeft: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    backgroundColor: '#0c2537',
+  },
+  resetButtonText: {
+    color: '#38bdf8',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  historySheet: {
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    borderWidth: 1,
+    borderColor: '#334155',
+    backgroundColor: '#111827',
+    padding: 16,
+    paddingBottom: 24,
+    maxHeight: '70%',
+    marginTop: 'auto',
+    gap: 12,
+  },
+  historyEmpty: {
+    color: '#64748b',
+    fontSize: 13,
+    textAlign: 'center',
+    paddingVertical: 24,
+  },
+  historyList: {
+    flexGrow: 0,
+  },
+  historyEntry: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1e293b',
+    gap: 10,
+  },
+  historyEntryInfo: {
+    flex: 1,
+    gap: 2,
+  },
+  historyEntryDate: {
+    color: '#e2e8f0',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  historyEntryDetail: {
+    color: '#64748b',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  historyRestoreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: '#0c2537',
+    borderWidth: 1,
+    borderColor: '#164e63',
+  },
+  historyRestoreText: {
+    color: '#38bdf8',
+    fontSize: 11,
+    fontWeight: '800',
   },
 })

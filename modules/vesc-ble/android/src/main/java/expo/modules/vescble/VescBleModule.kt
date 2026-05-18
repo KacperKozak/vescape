@@ -145,6 +145,24 @@ class VescBleModule : Module() {
     AsyncFunction("getTuneProfile") Coroutine { profileId: String ->
       AppDataRepository.get(context.applicationContext).getTuneProfile(profileId)
     }
+    AsyncFunction("createProfile") Coroutine { boardId: String, name: String, fields: Map<String, Any?> ->
+      AppDataRepository.get(context.applicationContext).createProfile(boardId, name, fields)
+    }
+    AsyncFunction("renameProfile") Coroutine { profileId: String, name: String ->
+      AppDataRepository.get(context.applicationContext).renameProfile(profileId, name)
+    }
+    AsyncFunction("deleteProfile") Coroutine { profileId: String ->
+      AppDataRepository.get(context.applicationContext).deleteProfile(profileId)
+    }
+    AsyncFunction("getProfileHistory") Coroutine { profileId: String ->
+      AppDataRepository.get(context.applicationContext).getProfileHistory(profileId)
+    }
+    AsyncFunction("rollbackProfile") Coroutine { profileId: String, historyEntryId: Double ->
+      AppDataRepository.get(context.applicationContext).rollbackProfile(profileId, historyEntryId.toLong())
+    }
+    AsyncFunction("copyProfileToBoard") Coroutine { profileId: String, targetBoardId: String, newName: String ->
+      AppDataRepository.get(context.applicationContext).copyProfileToBoard(profileId, targetBoardId, newName)
+    }
     AsyncFunction("saveProfile") Coroutine { profileId: String, fields: Map<String, Any?> ->
       AppDataRepository.get(context.applicationContext).saveProfile(profileId, fields)
     }

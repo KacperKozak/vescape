@@ -283,6 +283,13 @@ export interface TuneProfile {
   updatedAt: number
 }
 
+export interface TuneHistoryEntry {
+  id: number
+  profileId: string
+  fields: Record<string, TuneProfileFieldValue>
+  createdAt: number
+}
+
 export interface ProfileStats {
   distanceM: number | null
   rideCount: number
@@ -362,6 +369,20 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
   getRefloatConfigSnapshot(): Promise<RefloatConfigSnapshot>
   getTuneProfiles(boardId: string): Promise<TuneProfile[]>
   getTuneProfile(profileId: string): Promise<TuneProfile | null>
+  createProfile(
+    boardId: string,
+    name: string,
+    fields: Record<string, TuneProfileFieldValue>,
+  ): Promise<TuneProfile>
+  renameProfile(profileId: string, name: string): Promise<TuneProfile>
+  deleteProfile(profileId: string): Promise<void>
+  getProfileHistory(profileId: string): Promise<TuneHistoryEntry[]>
+  rollbackProfile(profileId: string, historyEntryId: number): Promise<TuneProfile>
+  copyProfileToBoard(
+    profileId: string,
+    targetBoardId: string,
+    newName: string,
+  ): Promise<TuneProfile>
   saveProfile(
     profileId: string,
     fields: Record<string, TuneProfileFieldValue>,
@@ -487,6 +508,41 @@ export async function getTuneProfiles(boardId: string): Promise<TuneProfile[]> {
 
 export async function getTuneProfile(profileId: string): Promise<TuneProfile | null> {
   return native.getTuneProfile(profileId)
+}
+
+export async function createProfile(
+  boardId: string,
+  name: string,
+  fields: Record<string, TuneProfileFieldValue>,
+): Promise<TuneProfile> {
+  return native.createProfile(boardId, name, fields)
+}
+
+export async function renameProfile(profileId: string, name: string): Promise<TuneProfile> {
+  return native.renameProfile(profileId, name)
+}
+
+export async function deleteProfile(profileId: string): Promise<void> {
+  return native.deleteProfile(profileId)
+}
+
+export async function getProfileHistory(profileId: string): Promise<TuneHistoryEntry[]> {
+  return native.getProfileHistory(profileId)
+}
+
+export async function rollbackProfile(
+  profileId: string,
+  historyEntryId: number,
+): Promise<TuneProfile> {
+  return native.rollbackProfile(profileId, historyEntryId)
+}
+
+export async function copyProfileToBoard(
+  profileId: string,
+  targetBoardId: string,
+  newName: string,
+): Promise<TuneProfile> {
+  return native.copyProfileToBoard(profileId, targetBoardId, newName)
 }
 
 export async function saveProfile(

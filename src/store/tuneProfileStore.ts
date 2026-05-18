@@ -3,12 +3,19 @@ import {
   getTuneProfile as nativeGetTuneProfile,
   getTuneProfiles as nativeGetTuneProfiles,
   saveProfile as nativeSaveProfile,
+  createProfile as nativeCreateProfile,
+  renameProfile as nativeRenameProfile,
+  deleteProfile as nativeDeleteProfile,
+  getProfileHistory as nativeGetProfileHistory,
+  rollbackProfile as nativeRollbackProfile,
+  copyProfileToBoard as nativeCopyProfileToBoard,
   type RefloatConfigSnapshot,
   type TuneProfile,
   type TuneProfileFieldValue,
+  type TuneHistoryEntry,
 } from 'vesc-ble'
 
-export type { TuneProfile, TuneProfileFieldValue } from 'vesc-ble'
+export type { TuneProfile, TuneProfileFieldValue, TuneHistoryEntry } from 'vesc-ble'
 
 export interface TuneProfileBoardDiff {
   fieldId: string
@@ -33,6 +40,17 @@ interface TuneProfileState {
 interface TuneProfileActions {
   loadProfiles: (boardId: string) => Promise<TuneProfile[]>
   loadProfile: (profileId: string) => Promise<TuneProfile | null>
+  setActiveProfile: (profileId: string) => void
+  createProfile: (name: string, cloneFromProfileId?: string) => Promise<TuneProfile | null>
+  renameProfile: (profileId: string, name: string) => Promise<TuneProfile | null>
+  deleteProfile: (profileId: string) => Promise<void>
+  loadHistory: (profileId: string) => Promise<TuneHistoryEntry[]>
+  rollbackToHistory: (historyEntryId: number) => Promise<TuneProfile | null>
+  copyProfileToBoard: (
+    profileId: string,
+    targetBoardId: string,
+    newName: string,
+  ) => Promise<TuneProfile | null>
   setDraftField: (fieldId: string, value: TuneProfileFieldValue) => void
   setBoardSnapshot: (snapshot: RefloatConfigSnapshot | null) => void
   getDirtyFields: () => Record<string, TuneProfileFieldValue>
@@ -184,6 +202,124 @@ export const useTuneProfileStore = create<TuneProfileState & TuneProfileActions>
     } catch (error) {
       set({ loading: false, error: errorMessage(error) })
       throw error
+    }
+  },
+
+  setActiveProfile(profileId) {
+    set((state) => {
+      const profile = state.profiles.find((p) => p.id === profileId) ?? null
+      if (!profile) return state
+      const diff = boardDiff(profile, state.boardFields)
+      return {
+        activeProfile: profile,
+        draftFields: {},
+        hasDirtyFields: false,
+        boardDiff: diff,
+        hasBoardDiff: diff.length > 0,
+      }
+    })
+  },
+
+  async createProfile(name, cloneFromProfileId) {
+    const state = get()
+    if (!state.activeBoardId) return null
+    const sourceFields = cloneFromProfileId
+      ? (state.profiles.find((p) => p.id === cloneFromProfileId)?.fields ?? {})
+      : {}
+    try {
+      const profile = await nativeCreateProfile(state.activeBoardId, name, sourceFields)
+      set((prevState) => {
+        const diff = boardDiff(profile, prevState.boardFields)
+        return {
+          profiles: [...prevState.profiles, profile],
+          activeProfile: profile,
+          draftFields: {},
+          hasDirtyFields: false,
+          boardDiff: diff,
+          hasBoardDiff: diff.length > 0,
+        }
+      })
+      return profile
+    } catch (error) {
+      set({ error: errorMessage(error) })
+      return null
+    }
+  },
+
+  async renameProfile(profileId, name) {
+    try {
+      const updated = await nativeRenameProfile(profileId, name)
+      set((state) => ({
+        profiles: state.profiles.map((p) => (p.id === updated.id ? updated : p)),
+        activeProfile: state.activeProfile?.id === updated.id ? updated : state.activeProfile,
+      }))
+      return updated
+    } catch (error) {
+      set({ error: errorMessage(error) })
+      return null
+    }
+  },
+
+  async deleteProfile(profileId) {
+    try {
+      await nativeDeleteProfile(profileId)
+      set((state) => {
+        const remaining = state.profiles.filter((p) => p.id !== profileId)
+        const needSwitch = state.activeProfile?.id === profileId
+        const nextActive = needSwitch ? (remaining[0] ?? null) : state.activeProfile
+        const diff = boardDiff(nextActive, state.boardFields)
+        return {
+          profiles: remaining,
+          activeProfile: nextActive,
+          draftFields: needSwitch ? {} : state.draftFields,
+          hasDirtyFields: needSwitch ? false : state.hasDirtyFields,
+          boardDiff: diff,
+          hasBoardDiff: diff.length > 0,
+        }
+      })
+    } catch (error) {
+      set({ error: errorMessage(error) })
+    }
+  },
+
+  async loadHistory(profileId) {
+    try {
+      return await nativeGetProfileHistory(profileId)
+    } catch (error) {
+      set({ error: errorMessage(error) })
+      return []
+    }
+  },
+
+  async rollbackToHistory(historyEntryId) {
+    const profile = get().activeProfile
+    if (!profile) return null
+    try {
+      const restored = await nativeRollbackProfile(profile.id, historyEntryId)
+      set((state) => {
+        const diff = boardDiff(restored, state.boardFields)
+        return {
+          profiles: state.profiles.map((p) => (p.id === restored.id ? restored : p)),
+          activeProfile: restored,
+          draftFields: {},
+          hasDirtyFields: false,
+          boardDiff: diff,
+          hasBoardDiff: diff.length > 0,
+        }
+      })
+      return restored
+    } catch (error) {
+      set({ error: errorMessage(error) })
+      return null
+    }
+  },
+
+  async copyProfileToBoard(profileId, targetBoardId, newName) {
+    try {
+      return await nativeCopyProfileToBoard(profileId, targetBoardId, newName)
+    } catch (error) {
+      set({ error: errorMessage(error) })
+      return null
     }
   },
 
