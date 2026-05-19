@@ -387,6 +387,7 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
     profileId: string,
     fields: Record<string, TuneProfileFieldValue>,
   ): Promise<TuneProfile>
+  pushProfileToBoard(profileId: string): Promise<RefloatConfigSnapshot>
   getTotalProfileStats(): Promise<ProfileStats>
   getMonthlyProfileStats(options: ProfileStatsMonth): Promise<ProfileStats>
   getProfileStatMonths(): Promise<ProfileStatsMonth[]>
@@ -550,6 +551,10 @@ export async function saveProfile(
   fields: Record<string, TuneProfileFieldValue>,
 ): Promise<TuneProfile> {
   return native.saveProfile(profileId, fields)
+}
+
+export async function pushProfileToBoard(profileId: string): Promise<RefloatConfigSnapshot> {
+  return native.pushProfileToBoard(profileId)
 }
 
 export async function getTotalProfileStats(): Promise<ProfileStats> {

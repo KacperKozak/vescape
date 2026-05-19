@@ -113,6 +113,38 @@ internal object RefloatConfigProtocol {
     return RefloatConfigProtocolResult.Success(RefloatConfigXmlChunk(confInd, totalLength, dataOffset, chunk))
   }
 
+  fun buildSetCustomConfig(canId: Int, confInd: Int, configBytes: ByteArray): ByteArray {
+    require(canId in 0..255) { "canId must fit uint8" }
+    require(confInd in 0..255) { "confInd must fit uint8" }
+    val buf = ByteBuffer.allocate(4 + configBytes.size).order(ByteOrder.BIG_ENDIAN)
+    buf.put(COMM_FORWARD_CAN.toByte())
+    buf.put(canId.toByte())
+    buf.put(COMM_SET_CUSTOM_CONFIG.toByte())
+    buf.put(confInd.toByte())
+    buf.put(configBytes)
+    return buf.array()
+  }
+
+  fun parseSetCustomConfigResponse(
+    payload: ByteArray,
+    expectedConfInd: Int = 0,
+  ): RefloatConfigProtocolResult<Int> {
+    val offset = when (val result = commandOffset(payload, COMM_SET_CUSTOM_CONFIG)) {
+      is RefloatConfigProtocolResult.Success -> result.value
+      is RefloatConfigProtocolResult.Failure -> return result
+    }
+    if (payload.size < offset + 2) {
+      return RefloatConfigProtocolResult.Failure(
+        "Short Refloat set config response: ${payload.size - offset} bytes",
+      )
+    }
+    val confInd = payload[offset + 1].toInt() and 0xff
+    if (confInd != expectedConfInd) {
+      return RefloatConfigProtocolResult.Failure("Unexpected Refloat set config index $confInd")
+    }
+    return RefloatConfigProtocolResult.Success(confInd)
+  }
+
   fun parseCustomConfigResponse(
     payload: ByteArray,
     expectedConfInd: Int = 0,

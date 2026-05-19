@@ -10,6 +10,7 @@ internal const val COMM_FORWARD_CAN = 34
 internal const val COMM_CUSTOM_APP_DATA = 36
 internal const val COMM_GET_CUSTOM_CONFIG_XML = 92
 internal const val COMM_GET_CUSTOM_CONFIG = 93
+internal const val COMM_SET_CUSTOM_CONFIG = 95
 internal const val COMM_PING_CAN = 62
 internal const val REFLOAT_MAGIC = 101
 internal const val REFLOAT_GET_ALLDATA = 10

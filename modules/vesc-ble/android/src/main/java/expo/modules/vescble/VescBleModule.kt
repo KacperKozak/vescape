@@ -139,6 +139,14 @@ class VescBleModule : Module() {
         onError = { code, message -> promise.reject(code, message, null) },
       )
     }
+    AsyncFunction("pushProfileToBoard") { profileId: String, promise: Promise ->
+      VescForegroundService.pushProfileToBoard(
+        context.applicationContext,
+        profileId,
+        onSuccess = { snapshot -> promise.resolve(snapshot) },
+        onError = { code, message -> promise.reject(code, message, null) },
+      )
+    }
     AsyncFunction("getTuneProfiles") Coroutine { boardId: String ->
       AppDataRepository.get(context.applicationContext).getTuneProfiles(boardId)
     }
