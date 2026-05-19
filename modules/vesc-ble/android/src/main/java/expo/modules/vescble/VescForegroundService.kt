@@ -945,6 +945,15 @@ class VescForegroundService : Service() {
                     )
                     return@post
                 }
+                val profileBoardId = profile["boardId"] as? String
+                val connectedBoardId = boardConfig?.appBoardId
+                if (profileBoardId.isNullOrBlank() || connectedBoardId.isNullOrBlank() || profileBoardId != connectedBoardId) {
+                    pending.onError(
+                        RefloatConfigErrorCode.PROFILE_BOARD_MISMATCH.name,
+                        "Tune profile does not belong to the connected board",
+                    )
+                    return@post
+                }
                 val currentId = canId
                 if (currentId == null) {
                     pending.onError(
