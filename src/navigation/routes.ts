@@ -3,6 +3,7 @@ export const routes = {
   profile: '/profile',
   settings: '/settings',
   tune: '/tune',
+  tuneHistory: '/tune/history',
   addBoardScan: '/addBoard/scan',
   addBoardDetails: '/addBoard/details',
   controlSpeed: '/control/speed',
@@ -20,6 +21,7 @@ export const stackScreens = {
   profile: 'profile',
   settings: 'settings',
   tune: 'tune',
+  tuneHistory: 'tune/history',
   addBoardScan: 'addBoard/scan',
   addBoardDetails: 'addBoard/details',
 } as const

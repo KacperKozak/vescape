@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import {
   ActivityIndicator,
-  FlatList,
   Modal,
   PanResponder,
   Pressable,
@@ -11,7 +10,7 @@ import {
   TextInput,
   View,
 } from 'react-native'
-import { useNavigation } from 'expo-router'
+import { useNavigation, useRouter } from 'expo-router'
 import {
   ArrowCounterClockwiseIcon,
   ArrowsClockwiseIcon,
@@ -32,7 +31,6 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import {
   getRefloatConfigSnapshot,
   type TuneProfile,
-  type TuneHistoryEntry,
   type RefloatConfigField,
   type RefloatConfigGroup,
   type RefloatConfigSnapshot,
@@ -42,9 +40,17 @@ import {
 import { ConfirmModal } from '@/components/ConfirmModal'
 import { InfoModal } from '@/components/InfoModal'
 import { Placeholder } from '@/components/Placeholder'
+import { routes } from '@/navigation/routes'
 import { useBoardStore, type Board } from '@/store/boardStore'
 import { useBleStore } from '@/store/bleStore'
 import { useTuneProfileStore } from '@/store/tuneProfileStore'
+import {
+  APP_TUNE_GROUPS,
+  APP_TUNE_FIELD_BY_ID,
+  formatTuneValue,
+  type AppTuneFieldDefinition,
+  type AppTuneGroupDefinition,
+} from '@/tune/fields'
 
 type LoadState =
   | { phase: 'loading'; snapshot: RefloatConfigSnapshot | null; error: string | null }
@@ -73,163 +79,6 @@ interface BasicSliderItem {
   info: string
   modifiedManually: boolean
 }
-
-interface AppTuneFieldDefinition {
-  id: string
-  label: string
-  unit: string | null
-  min: number
-  max: number
-}
-
-interface AppTuneGroupDefinition {
-  id: string
-  title: string
-  fields: AppTuneFieldDefinition[]
-}
-
-const APP_TUNE_GROUPS: AppTuneGroupDefinition[] = [
-  {
-    id: 'general',
-    title: 'General',
-    fields: [
-      { id: 'kp', label: 'Angle P', unit: null, min: 0, max: 50 },
-      { id: 'kp2', label: 'Rate P', unit: null, min: 0, max: 5 },
-      { id: 'kp_brake', label: 'Angle P (Braking)', unit: 'x', min: 0, max: 5 },
-      { id: 'kp2_brake', label: 'Rate P (Braking)', unit: 'x', min: 0, max: 5 },
-      { id: 'ki', label: 'Angle I', unit: null, min: 0, max: 1 },
-      { id: 'ki_limit', label: 'I Term Limit', unit: 'A', min: 0, max: 100 },
-      { id: 'mahony_kp', label: 'Pitch KP', unit: null, min: 0, max: 10 },
-      { id: 'mahony_kp_roll', label: 'Roll KP', unit: null, min: 0, max: 10 },
-    ],
-  },
-  {
-    id: 'atr',
-    title: 'ATR',
-    fields: [
-      { id: 'atr_strength_up', label: 'ATR Uphill Strength', unit: null, min: 0, max: 2 },
-      { id: 'atr_strength_down', label: 'ATR Downhill Strength', unit: null, min: 0, max: 2 },
-      { id: 'atr_threshold_up', label: 'Threshold Angle Up', unit: 'deg', min: 0, max: 20 },
-      { id: 'atr_threshold_down', label: 'Threshold Angle Down', unit: 'deg', min: 0, max: 20 },
-      { id: 'atr_speed_boost', label: 'Speed Boost', unit: '%', min: 0, max: 100 },
-      { id: 'atr_angle_limit', label: 'Tiltback Angle Limit', unit: 'deg', min: 0, max: 20 },
-      { id: 'atr_on_speed', label: 'Max Tiltback Speed', unit: 'deg/s', min: 0, max: 200 },
-      { id: 'atr_off_speed', label: 'Max Tiltback Release Speed', unit: 'deg/s', min: 0, max: 200 },
-      { id: 'atr_response_boost', label: 'Tiltback Response Boost', unit: 'x', min: 0, max: 5 },
-      { id: 'atr_transition_boost', label: 'Tiltback Transition Boost', unit: 'x', min: 0, max: 5 },
-      { id: 'atr_filter', label: 'Current Filter', unit: 'Hz', min: 0, max: 50 },
-      {
-        id: 'atr_amps_accel_ratio',
-        label: 'Amps to Acceleration Ratio',
-        unit: null,
-        min: 0,
-        max: 20,
-      },
-      {
-        id: 'atr_amps_decel_ratio',
-        label: 'Amps to Deceleration Ratio',
-        unit: null,
-        min: 0,
-        max: 20,
-      },
-    ],
-  },
-  {
-    id: 'turn_tiltback',
-    title: 'Turn tiltback',
-    fields: [
-      { id: 'turntilt_strength', label: 'Strength', unit: null, min: 0, max: 15 },
-      { id: 'turntilt_angle_limit', label: 'Tiltback Angle Limit', unit: 'deg', min: 0, max: 20 },
-      {
-        id: 'turntilt_start_angle',
-        label: 'Turn Aggregate Threshold',
-        unit: 'deg',
-        min: 0,
-        max: 90,
-      },
-      { id: 'turntilt_start_erpm', label: 'ERPM Threshold', unit: 'ERPM', min: 0, max: 30000 },
-      { id: 'turntilt_speed', label: 'Max Tiltback Speed', unit: 'deg/s', min: 0, max: 200 },
-      { id: 'turntilt_erpm_boost', label: 'Speed Boost %', unit: '%', min: 0, max: 100 },
-      {
-        id: 'turntilt_erpm_boost_end',
-        label: 'Speed Boost Max ERPM',
-        unit: 'ERPM',
-        min: 0,
-        max: 30000,
-      },
-      {
-        id: 'turntilt_yaw_aggregate',
-        label: 'Turn Aggregate Target',
-        unit: 'deg',
-        min: 0,
-        max: 180,
-      },
-    ],
-  },
-  {
-    id: 'torque_tiltback',
-    title: 'Torque tiltback',
-    fields: [
-      { id: 'torquetilt_strength', label: 'Strength', unit: 'deg/A', min: 0, max: 0.5 },
-      {
-        id: 'torquetilt_strength_regen',
-        label: 'Strength (Regen)',
-        unit: 'deg/A',
-        min: 0,
-        max: 0.5,
-      },
-      {
-        id: 'torquetilt_start_current',
-        label: 'Start Current Threshold',
-        unit: 'A',
-        min: 0,
-        max: 100,
-      },
-      { id: 'torquetilt_angle_limit', label: 'Tiltback Angle Limit', unit: 'deg', min: 0, max: 20 },
-      { id: 'torquetilt_on_speed', label: 'Max Tiltback Speed', unit: 'deg/s', min: 0, max: 200 },
-      {
-        id: 'torquetilt_off_speed',
-        label: 'Max Tiltback Release Speed',
-        unit: 'deg/s',
-        min: 0,
-        max: 200,
-      },
-    ],
-  },
-  {
-    id: 'brake',
-    title: 'Brake',
-    fields: [
-      { id: 'braketilt_strength', label: 'Brake Tilt Strength', unit: null, min: 0, max: 5 },
-      { id: 'braketilt_lingering', label: 'Brake Tilt Lingering', unit: null, min: 0, max: 10 },
-    ],
-  },
-  {
-    id: 'tiltback',
-    title: 'Tiltback',
-    fields: [
-      { id: 'tiltback_constant', label: 'Constant Tiltback', unit: 'deg', min: -10, max: 20 },
-      {
-        id: 'tiltback_variable',
-        label: 'Variable Tiltback Rate',
-        unit: 'deg/1000 ERPM',
-        min: 0,
-        max: 10,
-      },
-      {
-        id: 'tiltback_variable_max',
-        label: 'Variable Tiltback Target',
-        unit: 'deg',
-        min: 0,
-        max: 30,
-      },
-    ],
-  },
-]
-
-const APP_TUNE_FIELD_BY_ID = new Map(
-  APP_TUNE_GROUPS.flatMap((group) => group.fields.map((field) => [field.id, field])),
-)
 
 const FIELD_INFO: Record<string, string> = {
   kp: 'Main proportional angle response. Higher values make the board respond more strongly to nose angle error.',
@@ -280,18 +129,8 @@ const FIELD_INFO: Record<string, string> = {
   tiltback_variable_max: 'Maximum variable tiltback target.',
 }
 
-function formatValue(value: number | boolean | string): string {
-  if (typeof value === 'boolean') return value ? 'On' : 'Off'
-  if (typeof value === 'string') return value
-  if (!Number.isFinite(value)) return '-'
-  if (Math.abs(value) >= 1000) return Math.round(value).toLocaleString()
-  return Number.isInteger(value)
-    ? value.toFixed(0)
-    : value.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')
-}
-
 function formatProfileValue(value: TuneProfileFieldValue | undefined): string {
-  return isDisplayableFieldValue(value) ? formatValue(value) : 'Missing'
+  return isDisplayableFieldValue(value) ? formatTuneValue(value) : 'Missing'
 }
 
 function errorMessage(error: unknown): string {
@@ -593,6 +432,7 @@ function fieldHelp(field: RefloatConfigField): string {
 
 export default function TuneScreen() {
   const navigation = useNavigation()
+  const router = useRouter()
   const bleStatus = useBleStore((s) => s.status)
   const boardConnected = bleStatus === 'connected'
   const allBoards = useBoardStore((s) => s.boards)
@@ -613,8 +453,6 @@ export default function TuneScreen() {
   const storeRenameProfile = useTuneProfileStore((s) => s.renameProfile)
   const storeDeleteProfile = useTuneProfileStore((s) => s.deleteProfile)
   const storeCopyProfile = useTuneProfileStore((s) => s.copyProfileToBoard)
-  const loadHistory = useTuneProfileStore((s) => s.loadHistory)
-  const rollbackToHistory = useTuneProfileStore((s) => s.rollbackToHistory)
   const setDraftField = useTuneProfileStore((s) => s.setDraftField)
   const setBoardSnapshot = useTuneProfileStore((s) => s.setBoardSnapshot)
   const getDirtyFields = useTuneProfileStore((s) => s.getDirtyFields)
@@ -638,10 +476,7 @@ export default function TuneScreen() {
   const [createCloneFromId, setCreateCloneFromId] = useState<string | undefined>()
   const [copySourceProfile, setCopySourceProfile] = useState<TuneProfile | null>(null)
   const [copyTargetBoard, setCopyTargetBoard] = useState<Board | null>(null)
-  const [historyEntries, setHistoryEntries] = useState<TuneHistoryEntry[]>([])
-  const [historyOpen, setHistoryOpen] = useState(false)
   const [deleteConfirmProfile, setDeleteConfirmProfile] = useState<TuneProfile | null>(null)
-  const [rollbackConfirmEntryId, setRollbackConfirmEntryId] = useState<number | null>(null)
 
   const loadOnline = useCallback(async () => {
     setState((current) => ({ phase: 'loading', snapshot: current.snapshot, error: null }))
@@ -712,12 +547,9 @@ export default function TuneScreen() {
     setBoardSnapshot,
   ])
 
-  const openHistory = useCallback(async () => {
-    if (!activeProfile) return
-    const entries = await loadHistory(activeProfile.id)
-    setHistoryEntries(entries)
-    setHistoryOpen(true)
-  }, [activeProfile, loadHistory])
+  const openHistory = useCallback(() => {
+    router.push(routes.tuneHistory)
+  }, [router])
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -787,8 +619,8 @@ export default function TuneScreen() {
   const showFieldInfo = (field: RefloatConfigField) => {
     const limits =
       field.min != null || field.max != null
-        ? `\n\nRange: ${field.min != null ? formatValue(field.min) : '-'} to ${
-            field.max != null ? formatValue(field.max) : '-'
+        ? `\n\nRange: ${field.min != null ? formatTuneValue(field.min) : '-'} to ${
+            field.max != null ? formatTuneValue(field.max) : '-'
           }${field.unit ? ` ${field.unit}` : ''}`
         : ''
     const units = field.unit ? `\nUnit: ${field.unit}` : ''
@@ -815,7 +647,7 @@ export default function TuneScreen() {
     setEditor({
       field,
       value: field.value as number,
-      text: formatValue(field.value),
+      text: formatTuneValue(field.value),
     })
   }
 
@@ -839,10 +671,6 @@ export default function TuneScreen() {
   const handleDeleteProfile = (profile: TuneProfile) => {
     setDeleteConfirmProfile(profile)
     setProfileMenuOpen(false)
-  }
-
-  const handleRollback = (entryId: number) => {
-    setRollbackConfirmEntryId(entryId)
   }
 
   const handleCopyProfile = (profile: TuneProfile) => {
@@ -1230,13 +1058,6 @@ export default function TuneScreen() {
           setCopySourceProfile(null)
         }}
       />
-      <HistoryModal
-        visible={historyOpen}
-        entries={historyEntries}
-        currentFields={activeProfile?.fields}
-        onRestore={handleRollback}
-        onDismiss={() => setHistoryOpen(false)}
-      />
       <ConfirmModal
         visible={deleteConfirmProfile != null}
         title="Delete Profile"
@@ -1248,19 +1069,6 @@ export default function TuneScreen() {
           setDeleteConfirmProfile(null)
         }}
         onCancel={() => setDeleteConfirmProfile(null)}
-      />
-      <ConfirmModal
-        visible={rollbackConfirmEntryId != null}
-        title="Restore"
-        message="Replace current profile fields with this snapshot?"
-        confirmLabel="Restore"
-        onConfirm={() => {
-          if (rollbackConfirmEntryId != null) {
-            void rollbackToHistory(rollbackConfirmEntryId).then(() => setHistoryOpen(false))
-          }
-          setRollbackConfirmEntryId(null)
-        }}
-        onCancel={() => setRollbackConfirmEntryId(null)}
       />
     </SafeAreaView>
   )
@@ -1327,11 +1135,11 @@ function ConfigCell({
         </Pressable>
       ) : null}
       <Text style={styles.cellValue} numberOfLines={1} adjustsFontSizeToFit selectable>
-        {formatValue(field.value)}
+        {formatTuneValue(field.value)}
       </Text>
       {dirty && isDisplayableFieldValue(savedValue) ? (
         <Text style={styles.cellOldValue} numberOfLines={1}>
-          was {formatValue(savedValue)}
+          was {formatTuneValue(savedValue)}
         </Text>
       ) : null}
       {boardChanged ? (
@@ -1341,7 +1149,7 @@ function ConfigCell({
       ) : null}
       {boardChanged && isDisplayableFieldValue(boardValue) ? (
         <Text style={styles.cellBoardValue} numberOfLines={1}>
-          board {formatValue(boardValue)}
+          board {formatTuneValue(boardValue)}
         </Text>
       ) : null}
       {field.unit ? (
@@ -1394,7 +1202,7 @@ function FieldEditorSheet({
       const rawValue = min + (clamp(localX, 0, trackWidth) / trackWidth) * (max - min)
       const nextValue = snapFieldValue(rawValue, field)
       setDraftValue(nextValue)
-      setDraftText(formatValue(nextValue))
+      setDraftText(formatTuneValue(nextValue))
     },
     [field, max, min, trackWidth],
   )
@@ -1460,11 +1268,11 @@ function FieldEditorSheet({
               </View>
               <View style={styles.editorRange}>
                 <Text style={styles.editorRangeText}>
-                  {formatValue(min)}
+                  {formatTuneValue(min)}
                   {field.unit ? ` ${field.unit}` : ''}
                 </Text>
                 <Text style={styles.editorRangeText}>
-                  {formatValue(max)}
+                  {formatTuneValue(max)}
                   {field.unit ? ` ${field.unit}` : ''}
                 </Text>
               </View>
@@ -1777,121 +1585,6 @@ function BoardPickerModal({
                 </Pressable>
               ))}
             </ScrollView>
-          )}
-        </Pressable>
-      </Pressable>
-    </Modal>
-  )
-}
-
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-
-function formatHistoryDate(ms: number): string {
-  const d = new Date(ms)
-  const h = d.getHours().toString().padStart(2, '0')
-  const m = d.getMinutes().toString().padStart(2, '0')
-  return `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()} ${h}:${m}`
-}
-
-interface HistoryFieldDiff {
-  fieldId: string
-  label: string
-  oldValue: string
-  newValue: string
-}
-
-function diffHistoryEntries(
-  newer: { fields: Record<string, TuneProfileFieldValue> },
-  older: { fields: Record<string, TuneProfileFieldValue> },
-): HistoryFieldDiff[] {
-  const diffs: HistoryFieldDiff[] = []
-  const allKeys = new Set([...Object.keys(newer.fields), ...Object.keys(older.fields)])
-  for (const key of allKeys) {
-    const nv = newer.fields[key]
-    const ov = older.fields[key]
-    if (nv === ov) continue
-    if (typeof nv === 'number' && typeof ov === 'number' && Object.is(nv, ov)) continue
-    const label = APP_TUNE_FIELD_BY_ID.get(key)?.label ?? key
-    diffs.push({
-      fieldId: key,
-      label,
-      oldValue:
-        ov != null && ov !== '' ? String(typeof ov === 'number' ? formatValue(ov) : ov) : '–',
-      newValue:
-        nv != null && nv !== '' ? String(typeof nv === 'number' ? formatValue(nv) : nv) : '–',
-    })
-  }
-  return diffs
-}
-
-function HistoryModal({
-  visible,
-  entries,
-  currentFields,
-  onRestore,
-  onDismiss,
-}: {
-  visible: boolean
-  entries: TuneHistoryEntry[]
-  currentFields: Record<string, TuneProfileFieldValue> | undefined
-  onRestore: (entryId: number) => void
-  onDismiss: () => void
-}) {
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onDismiss}>
-      <Pressable style={styles.sheetBackdrop} onPress={onDismiss}>
-        <Pressable style={styles.historySheet} onPress={(e) => e.stopPropagation()}>
-          <View style={styles.sheetHeader}>
-            <Text style={styles.sheetTitle}>History</Text>
-            <Pressable style={styles.sheetIconButton} onPress={onDismiss}>
-              <XIcon size={16} color="#cbd5e1" weight="bold" />
-            </Pressable>
-          </View>
-          {entries.length === 0 ? (
-            <Text style={styles.historyEmpty}>No history entries yet.</Text>
-          ) : (
-            <FlatList
-              data={entries}
-              keyExtractor={(item) => String(item.id)}
-              style={styles.historyList}
-              renderItem={({ item, index }) => {
-                const newer =
-                  index === 0 && currentFields ? { fields: currentFields } : entries[index - 1]
-                const diffs = newer ? diffHistoryEntries(newer, item) : []
-                const isOldest = index === entries.length - 1
-                return (
-                  <View style={styles.historyEntry}>
-                    <View style={styles.historyEntryInfo}>
-                      <Text style={styles.historyEntryDate}>
-                        {formatHistoryDate(item.createdAt)}
-                      </Text>
-                      {diffs.length > 0 ? (
-                        <View style={styles.historyDiffs}>
-                          {diffs.map((d) => (
-                            <Text key={d.fieldId} style={styles.historyDiffLine} numberOfLines={1}>
-                              {d.label} <Text style={styles.historyDiffOld}>{d.oldValue}</Text>
-                              {' → '}
-                              <Text style={styles.historyDiffNew}>{d.newValue}</Text>
-                            </Text>
-                          ))}
-                        </View>
-                      ) : (
-                        <Text style={styles.historyEntryDetail}>
-                          {isOldest ? 'Initial save' : 'No changes'}
-                        </Text>
-                      )}
-                    </View>
-                    <Pressable
-                      style={styles.historyRestoreButton}
-                      onPress={() => onRestore(item.id)}
-                    >
-                      <ArrowCounterClockwiseIcon size={13} color="#38bdf8" weight="bold" />
-                      <Text style={styles.historyRestoreText}>Restore</Text>
-                    </Pressable>
-                  </View>
-                )
-              }}
-            />
           )}
         </Pressable>
       </Pressable>
@@ -2582,80 +2275,10 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
   },
-  historySheet: {
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#111827',
-    padding: 16,
-    paddingBottom: 24,
-    maxHeight: '70%',
-    marginTop: 'auto',
-    gap: 12,
-  },
   historyEmpty: {
     color: '#64748b',
     fontSize: 13,
     textAlign: 'center',
     paddingVertical: 24,
-  },
-  historyList: {
-    flexGrow: 0,
-  },
-  historyEntry: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
-    gap: 10,
-  },
-  historyEntryInfo: {
-    flex: 1,
-    gap: 2,
-  },
-  historyEntryDate: {
-    color: '#e2e8f0',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  historyEntryDetail: {
-    color: '#64748b',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  historyDiffs: {
-    gap: 1,
-    marginTop: 2,
-  },
-  historyDiffLine: {
-    color: '#94a3b8',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  historyDiffOld: {
-    color: '#f87171',
-    fontWeight: '700',
-  },
-  historyDiffNew: {
-    color: '#4ade80',
-    fontWeight: '700',
-  },
-  historyRestoreButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-    backgroundColor: '#0c2537',
-    borderWidth: 1,
-    borderColor: '#164e63',
-  },
-  historyRestoreText: {
-    color: '#38bdf8',
-    fontSize: 11,
-    fontWeight: '800',
   },
 })

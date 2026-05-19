@@ -23,7 +23,7 @@ This is a PoC, but keep it sharp:
 - Make one focused stability change at a time when isolating bugs.
 - Remove unused code when replacing a path; do not keep dead code for later.
 - Keep trivial local predicates inline with their component/module. Do not create standalone helper
-  files for one-line booleans or tiny component-local decisions.
+  files for one-line booleans or tiny component-local decisions, but use existing utility functions when available.
 - Do not add tests for trivial predicates that TypeScript and the surrounding behavior already
   cover. Add tests for meaningful behavior, edge cases, contracts, or regressions.
 - Files under `src/components/` should be React components or component-owned assets. Put
