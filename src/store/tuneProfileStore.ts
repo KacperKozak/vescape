@@ -9,6 +9,7 @@ import {
   getProfileHistory as nativeGetProfileHistory,
   rollbackProfile as nativeRollbackProfile,
   copyProfileToBoard as nativeCopyProfileToBoard,
+  pushProfileToBoard as nativePushProfileToBoard,
   type RefloatConfigSnapshot,
   type TuneProfile,
   type TuneProfileFieldValue,
@@ -34,6 +35,7 @@ interface TuneProfileState {
   hasBoardDiff: boolean
   loading: boolean
   saving: boolean
+  syncing: boolean
   error: string | null
 }
 
@@ -59,6 +61,7 @@ interface TuneProfileActions {
   acceptAllBoardValues: () => void
   discardAllEdits: () => void
   saveActiveProfile: () => Promise<TuneProfile | null>
+  syncToBoard: () => Promise<void>
   clear: () => void
 }
 
@@ -138,6 +141,7 @@ export const useTuneProfileStore = create<TuneProfileState & TuneProfileActions>
   hasBoardDiff: false,
   loading: false,
   saving: false,
+  syncing: false,
   error: null,
 
   async loadProfiles(boardId) {
@@ -436,6 +440,20 @@ export const useTuneProfileStore = create<TuneProfileState & TuneProfileActions>
     }
   },
 
+  async syncToBoard() {
+    const profile = get().activeProfile
+    if (!profile) return
+    set({ syncing: true, error: null })
+    try {
+      const snapshot = await nativePushProfileToBoard(profile.id)
+      get().setBoardSnapshot(snapshot)
+      set({ syncing: false })
+    } catch (error) {
+      set({ syncing: false, error: errorMessage(error) })
+      throw error
+    }
+  },
+
   clear() {
     set({
       profiles: [],
@@ -448,6 +466,7 @@ export const useTuneProfileStore = create<TuneProfileState & TuneProfileActions>
       hasBoardDiff: false,
       loading: false,
       saving: false,
+      syncing: false,
       error: null,
     })
   },
