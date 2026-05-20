@@ -44,6 +44,10 @@ _Avoid_: Sync log, change event, audit trail
 A user-defined telemetry threshold that can trigger board-riding feedback during a live connection.
 _Avoid_: Alarm, notification
 
+**Diagnostic Event**:
+An app-observed abnormal condition that helps explain board connection, telemetry, tuning, recording, or UI failures.
+_Avoid_: Error log, debug session, crash report
+
 ## Relationships
 
 - A **Board** produces **Telemetry Samples** while connected.
@@ -53,6 +57,7 @@ _Avoid_: Alarm, notification
 - A **Tune Profile** belongs to a **Board** and stores semantic field values independently of firmware schema.
 - A **Tune History Entry** captures the previous state of a **Tune Profile** before each explicit save.
 - An **Alert Rule** evaluates against live **Telemetry Samples**.
+- A **Diagnostic Event** may describe failures around a **Board**, **Live State**, **Telemetry Sample**, **Ride Recording**, or **Tune Profile** workflow.
 
 ## Example Dialogue
 
@@ -69,3 +74,4 @@ _Avoid_: Alarm, notification
 
 - "device" may mean the phone BLE peripheral, the saved app board, or the motor controller; resolved term: use **Board** for the saved rideable device.
 - "session" may mean a BLE connection, raw debug capture, or persisted ride; resolved term: use **Ride Recording** for persisted ride capture and avoid using "session" without a qualifier.
+- "error" may mean crash, handled failure, UI message, or diagnostic clue; resolved term: use **Diagnostic Event** for app-observed abnormal conditions worth reviewing.
