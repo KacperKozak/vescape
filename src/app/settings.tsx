@@ -1,15 +1,19 @@
 import { useCallback } from 'react'
 import { View, Text, Switch, Pressable, StyleSheet, ScrollView } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { router } from 'expo-router'
 import {
   ClockCountdownIcon,
   BluetoothConnectedIcon,
   RecordIcon,
   MinusIcon,
   PlusIcon,
+  CodeIcon,
+  CaretRightIcon,
 } from 'phosphor-react-native'
 import { useShallow } from 'zustand/react/shallow'
 
+import { routes } from '@/navigation/routes'
 import { useSettingsStore } from '@/store/settingsStore'
 
 export default function SettingsScreen() {
@@ -92,6 +96,21 @@ export default function SettingsScreen() {
               thumbColor={autoRecording ? '#3b82f6' : '#64748b'}
             />
           </View>
+        </View>
+
+        <Text style={styles.sectionTitle}>Developer</Text>
+
+        <View style={styles.card}>
+          <Pressable style={styles.row} onPress={() => router.push(routes.settingsDev)}>
+            <View style={styles.rowIcon}>
+              <CodeIcon size={20} color="#94a3b8" weight="duotone" />
+            </View>
+            <View style={styles.rowBody}>
+              <Text style={styles.rowLabel}>Dev tools</Text>
+              <Text style={styles.rowHint}>Diagnostics and local verification</Text>
+            </View>
+            <CaretRightIcon size={18} color="#64748b" weight="bold" />
+          </Pressable>
         </View>
       </ScrollView>
     </SafeAreaView>

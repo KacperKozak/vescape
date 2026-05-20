@@ -114,6 +114,32 @@ class VescBleModule : Module() {
     Function("setDebugRecordingEnabled") { enabled: Boolean ->
       requestedDebugRecordingEnabled = enabled
     }
+    Function("reportUiError") { message: String, source: String?, stack: String? ->
+      DiagnosticReporter.get(context.applicationContext).capture(
+        "ui_error",
+        mapOf(
+          "operation" to "ui",
+          "message" to message,
+          "source" to source,
+          "stack" to stack,
+        ),
+      )
+    }
+    Function("reportDiagnosticTest") {
+      val reporter = DiagnosticReporter.get(context.applicationContext)
+      reporter.capture(
+        "diagnostic_test",
+        mapOf(
+          "operation" to "dev_diagnostics",
+          "source" to "settings_dev",
+          "message" to "Manual diagnostic test",
+        ),
+      )
+      reporter.status()
+    }
+    Function("getDiagnosticStatus") {
+      DiagnosticReporter.get(context.applicationContext).status()
+    }
 
     AsyncFunction("selectBoard") Coroutine { boardId: String ->
       selectBoard(boardId)

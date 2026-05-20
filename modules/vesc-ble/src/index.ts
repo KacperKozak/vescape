@@ -315,6 +315,15 @@ export interface AppSettings {
   lastGpsLongitude: number | null
 }
 
+export interface DiagnosticStatus {
+  enabled: boolean
+  host: string
+  distinctId: string | null
+  captureCount: number
+  lastEventName: string | null
+  lastCaptureAt: number | null
+}
+
 // ---------------------------------------------------------------------------
 // Typed emitter
 // ---------------------------------------------------------------------------
@@ -350,6 +359,9 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
   selectBoard(boardId: string): Promise<void>
   stopBoard(): Promise<void>
   setDebugRecordingEnabled(enabled: boolean): void
+  reportUiError(message: string, source?: string | null, stack?: string | null): void
+  reportDiagnosticTest(): DiagnosticStatus
+  getDiagnosticStatus(): DiagnosticStatus
   getLiveState(): LiveStateEvent
   setSelectedBoard(boardId: string | null): void
   getTelemetryHistory(options: TelemetryHistoryOptions): Promise<TelemetryHistoryBlock[]>
@@ -459,6 +471,25 @@ export async function stopBoard(): Promise<void> {
 /** Enable raw debug session recording for future native board sessions. */
 export function setDebugRecordingEnabled(enabled: boolean): void {
   native.setDebugRecordingEnabled(enabled)
+}
+
+/** Report a JS view-layer failure. Native failures are reported at their own operation boundary. */
+export function reportUiError(
+  message: string,
+  source?: string | null,
+  stack?: string | null,
+): void {
+  native.reportUiError(message, source ?? null, stack ?? null)
+}
+
+/** Send a manual native diagnostic event from development tooling. */
+export function reportDiagnosticTest(): DiagnosticStatus {
+  return native.reportDiagnosticTest()
+}
+
+/** Read native diagnostic reporter state for development tooling. */
+export function getDiagnosticStatus(): DiagnosticStatus {
+  return native.getDiagnosticStatus()
 }
 
 /** Read native-owned live state. UI should mirror this, not invent connection state. */

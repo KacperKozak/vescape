@@ -233,9 +233,11 @@ class VescForegroundService : Service() {
     private data class ActiveConfigRead(
         val pending: PendingConfigRead,
         val wasPolling: Boolean,
+        val operationId: String = newOperationId(),
         val xmlBytes: ByteArray = ByteArray(0),
         val expectedXmlLength: Int? = null,
         val nextXmlOffset: Int = 0,
+        val rawConfig: ByteArray? = null,
     )
 
     private data class PendingConfigWrite(
@@ -255,6 +257,7 @@ class VescForegroundService : Service() {
         val pending: PendingConfigWrite,
         val wasPolling: Boolean,
         val profileFields: Map<String, Any>,
+        val operationId: String = newOperationId(),
         val phase: ConfigWritePhase = ConfigWritePhase.READING_SCHEMA,
         val xmlBytes: ByteArray = ByteArray(0),
         val expectedXmlLength: Int? = null,
@@ -320,6 +323,10 @@ class VescForegroundService : Service() {
     private var activeConfigWrite: ActiveConfigWrite? = null
     private var configTimeoutRunnable: Runnable? = null
     private var autoReconnectAttempt = 0
+    private var telemetryParseFailedReported = false
+    private var telemetryParseFailedCount = 0
+    private var lastSentCommand: Int? = null
+    private var lastReceivedCommandByte: Int? = null
     private var generation = 0L
     private var liveHistoryLimitMinutes = requestedLiveHistoryLimitMinutes
     private val configChunkLength = 384
@@ -336,6 +343,7 @@ class VescForegroundService : Service() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        DiagnosticReporter.initialize(this)
         notificationController.createChannel()
     }
 
@@ -357,6 +365,7 @@ class VescForegroundService : Service() {
         }
         stopLocationUpdates()
         instance = null
+        DiagnosticReporter.get(this).flush()
         stopForeground(STOP_FOREGROUND_REMOVE)
         super.onDestroy()
     }
@@ -470,6 +479,8 @@ class VescForegroundService : Service() {
         recentTelemetry.clear()
         packetReassembler.reset()
         gattClient.resetDiagnostics()
+        telemetryParseFailedReported = false
+        telemetryParseFailedCount = 0
         connectAttempt = 0
         autoReconnectAttempt = 0
         lastTelemetryAt = 0L
@@ -555,13 +566,37 @@ class VescForegroundService : Service() {
                     Log.w(VESC_SESSION_TAG, "status=133 during connect, retrying once")
                     mainHandler.postDelayed({ startBleSession(wasConnecting) }, 250)
                 } else if (wasConnecting.boardConfig.autoReconnect) {
+                    captureDiagnostic(
+                        "ble_connect_failed",
+                        diagnosticProperties(wasConnecting.boardConfig, "connect") + mapOf(
+                            "message" to "Device disconnected during connect",
+                            "error_code" to status,
+                            "gatt_status" to status,
+                        ),
+                    )
                     scheduleAutoReconnect(wasConnecting.boardConfig, status, "connect failed")
                 } else {
                     failStart(wasConnecting, "DISCONNECTED", "Device disconnected during connect (status=$status)")
                 }
             } else if (boardConfig?.autoReconnect == true) {
+                captureDiagnostic(
+                    "ble_disconnected_unexpectedly",
+                    diagnosticProperties(boardConfig, "connect") + mapOf(
+                        "message" to "Board disconnected unexpectedly",
+                        "error_code" to status,
+                        "gatt_status" to status,
+                    ),
+                )
                 scheduleAutoReconnect(boardConfig!!, status, "board disconnected")
             } else {
+                captureDiagnostic(
+                    "ble_disconnected_unexpectedly",
+                    diagnosticProperties(boardConfig, "connect") + mapOf(
+                        "message" to "Board disconnected unexpectedly",
+                        "error_code" to status,
+                        "gatt_status" to status,
+                    ),
+                )
                 setError("Board disconnected")
                 finishRecording("error")
             }
@@ -615,6 +650,7 @@ class VescForegroundService : Service() {
 
     private fun handlePayload(payload: ByteArray) {
         if (payload.isEmpty()) return
+        lastReceivedCommandByte = payload[0].toInt() and 0xff
         when (payload[0].toInt() and 0xff) {
             COMM_FW_VERSION -> handleFwVersionPayload(payload)
             COMM_PING_CAN -> {
@@ -649,7 +685,10 @@ class VescForegroundService : Service() {
                     avgLatency = updateLatency(now),
                     packetAt = now,
                     location = latestLocation,
-                ) ?: return
+                ) ?: run {
+                    captureTelemetryParseFailed(payload)
+                    return
+                }
                 markBoardReady()
                 telemetry = parsed
                 lastTelemetryAt = parsed.lastPacketAt
@@ -723,6 +762,7 @@ class VescForegroundService : Service() {
                 return
             }
         }
+        activeConfigRead = active.copy(rawConfig = parsed.config)
         clearConfigTimeout()
         val can = canId ?: run {
             failConfigRead(
@@ -883,6 +923,19 @@ class VescForegroundService : Service() {
         if (resumePolling && active.wasPolling && boardConfig != null && canId != null) {
             startPolling()
         }
+        captureDiagnostic(
+            if (code == RefloatConfigErrorCode.CONFIG_DECODE_FAILED || code == RefloatConfigErrorCode.UNSUPPORTED_SCHEMA) {
+                "config_decode_failed"
+            } else {
+                "config_read_failed"
+            },
+            diagnosticProperties(boardConfig, "config_read") + mapOf(
+                "operation_id" to active.operationId,
+                "message" to message,
+                "error_code" to code.name,
+                "firmware" to fwVersionString,
+            ) + DiagnosticReporter.configBlobProperties(active.rawConfig),
+        )
         active.pending.onError(code.name, message)
     }
 
@@ -1146,6 +1199,16 @@ class VescForegroundService : Service() {
         if (active.wasPolling && boardConfig != null && canId != null) {
             startPolling()
         }
+        captureDiagnostic(
+            "profile_push_failed",
+            diagnosticProperties(boardConfig, "profile_push") + mapOf(
+                "operation_id" to active.operationId,
+                "message" to message,
+                "error_code" to code.name,
+                "phase" to active.phase.name,
+                "firmware" to fwVersionString,
+            ) + DiagnosticReporter.configBlobProperties(active.originalConfig ?: active.patchedConfig),
+        )
         active.pending.onError(code.name, message)
     }
 
@@ -1238,6 +1301,7 @@ class VescForegroundService : Service() {
     }
 
     private fun sendPayload(payload: ByteArray): Boolean {
+        lastSentCommand = payload.getOrNull(0)?.toInt()?.and(0xff)
         return gattClient.sendPayload(payload)
     }
 
@@ -1257,6 +1321,7 @@ class VescForegroundService : Service() {
     }
 
     private fun stopCurrentBoardSession(emitDisconnected: Boolean, updateNotification: Boolean = true) {
+        flushTelemetryDiagnostics("stop")
         if (activeConfigRead != null) {
             failConfigRead(
                 RefloatConfigErrorCode.BOARD_NOT_CONNECTED,
@@ -1309,6 +1374,13 @@ class VescForegroundService : Service() {
     }
 
     private fun failStart(start: PendingStart, code: String, message: String) {
+        captureDiagnostic(
+            "ble_connect_failed",
+            diagnosticProperties(start.boardConfig, "connect") + mapOf(
+                "message" to message,
+                "error_code" to code,
+            ),
+        )
         if (start.boardConfig.autoReconnect) {
             scheduleAutoReconnect(start.boardConfig, null, message)
             start.onError(code, message)
@@ -1335,6 +1407,20 @@ class VescForegroundService : Service() {
 
     private fun scheduleAutoReconnect(session: SessionConfig, gattStatus: Int?, reason: String) {
         if (!session.autoReconnect || isStoppingService) return
+        flushTelemetryDiagnostics("reconnect")
+        if (reason.contains("telemetry", ignoreCase = true)) {
+            captureDiagnostic(
+                if (reason.contains("stale", ignoreCase = true)) "telemetry_stale" else "telemetry_unavailable",
+                diagnosticProperties(session, "telemetry") + mapOf(
+                    "message" to reason,
+                    "reason" to reason,
+                    "gatt_status" to gattStatus,
+                    "auto_reconnect_enabled" to session.autoReconnect,
+                    "last_telemetry_timestamp" to lastTelemetryAt.takeIf { it > 0L },
+                    "telemetry_parse_failed_count" to telemetryParseFailedCount,
+                ),
+            )
+        }
         pendingConnect = null
         cancelConnectTimeout()
         cancelBoardReadyTimeout()
@@ -1679,4 +1765,54 @@ class VescForegroundService : Service() {
         val session = boardConfig ?: return
         telemetryStore?.recordTelemetry(values.toCapture(session, canId))
     }
+
+    private fun captureTelemetryParseFailed(payload: ByteArray) {
+        telemetryParseFailedCount += 1
+        if (telemetryParseFailedReported) return
+        telemetryParseFailedReported = true
+        captureDiagnostic(
+            "telemetry_parse_failed",
+            diagnosticProperties(boardConfig, "telemetry") + DiagnosticReporter.telemetryPayloadProperties(payload) + mapOf(
+                "message" to "Invalid Refloat telemetry payload",
+                "telemetry_parse_failed_count" to telemetryParseFailedCount,
+            ),
+        )
+    }
+
+    private fun flushTelemetryDiagnostics(reason: String) {
+        if (telemetryParseFailedCount <= 0) return
+        captureDiagnostic(
+            "telemetry_parse_failed",
+            diagnosticProperties(boardConfig, "telemetry") + mapOf(
+                "message" to "Telemetry parse failures aggregated",
+                "reason" to reason,
+                "telemetry_parse_failed_count" to telemetryParseFailedCount,
+            ),
+        )
+        telemetryParseFailedReported = false
+        telemetryParseFailedCount = 0
+    }
+
+    private fun captureDiagnostic(eventName: String, properties: Map<String, Any?>) {
+        DiagnosticReporter.get(this).capture(eventName, properties)
+    }
+
+    private fun diagnosticProperties(session: SessionConfig?, operation: String): Map<String, Any?> =
+        mapOf(
+            "board_id" to session?.appBoardId,
+            "ble_id" to session?.deviceId,
+            "board_nickname" to session?.deviceName,
+            "operation" to operation,
+            "phase" to boardStatus.wireValue,
+            "previous_board_phase" to boardStatus.wireValue,
+            "current_board_phase" to boardStatus.wireValue,
+            "connection_seq" to generation,
+            "connect_attempt" to connectAttempt,
+            "auto_reconnect_attempt" to autoReconnectAttempt,
+            "auto_reconnect_enabled" to session?.autoReconnect,
+            "can_id" to canId,
+            "last_sent_command" to lastSentCommand,
+            "last_received_command_byte" to lastReceivedCommandByte,
+            "last_telemetry_timestamp" to lastTelemetryAt.takeIf { it > 0L },
+        )
 }
