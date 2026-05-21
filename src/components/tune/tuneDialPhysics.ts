@@ -84,6 +84,13 @@ export function computeRangeScale(totalWidth: number): number {
   return totalWidth / DIAL_WIDTH_BASELINE
 }
 
+export function computeRenderedWidthScale(renderedWidth: number, screenWidth: number): number {
+  'worklet'
+
+  if (renderedWidth <= 0 || screenWidth <= 0) return 1
+  return Math.max(0.55, Math.min(1, Math.sqrt(renderedWidth / screenWidth)))
+}
+
 export function computeDetentStrength(totalSteps: number): number {
   'worklet'
 

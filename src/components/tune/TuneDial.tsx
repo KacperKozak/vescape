@@ -1,6 +1,13 @@
 import * as Haptics from 'expo-haptics'
-import { useCallback, useEffect, useMemo, useRef } from 'react'
-import { Platform, StyleSheet, Text, View } from 'react-native'
+import { useCallback, useEffect, useMemo } from 'react'
+import {
+  type LayoutChangeEvent,
+  Platform,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+} from 'react-native'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import Animated, {
   cancelAnimation,
@@ -12,7 +19,6 @@ import Animated, {
 import { scheduleOnRN } from 'react-native-worklets'
 
 import { formatTuneValue } from '@/tune/fields'
-import { snapValue } from '@/tune/sliderDefinitions'
 import {
   DETENT_CAPTURE_VELOCITY,
   DETENT_DECAY_PER_FRAME,
@@ -27,6 +33,7 @@ import {
   computeHapticStepSpacing,
   computeMomentumEmitStepIndex,
   computeRangeScale,
+  computeRenderedWidthScale,
   computeThrowDurationMs,
   computeTuneDialLayout,
   resolveThrowGestureVelocity,
@@ -53,6 +60,7 @@ interface TuneDialProps {
 }
 
 export function TuneDial({ value, previousValue, min, max, step, onValueChange }: TuneDialProps) {
+  const { width: screenWidth } = useWindowDimensions()
   const range = max - min
   const {
     totalSteps,
@@ -66,10 +74,7 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
   } = useMemo(() => computeTuneDialLayout(min, max, step), [min, max, step])
   const hapticStepSpacing = computeHapticStepSpacing({ labelEveryStep, majorEvery })
   const rangeScale = computeRangeScale(totalWidth)
-  const lastEmittedValue = useRef(value)
-  const lastStepIndex = useSharedValue(Math.round((value - min) / step))
-  const lastEdgeHapticStepIndex = useRef<number | null>(null)
-  const recentInternalValues = useRef(new Set<number>())
+  const initialStepIndex = Math.round((value - min) / step)
 
   const valueToOffset = useCallback(
     (v: number) => ((v - min) / range) * totalWidth,
@@ -86,6 +91,10 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
   const latestGestureTranslationX = useSharedValue(0)
   const previousFrameGestureTranslationX = useSharedValue(0)
   const stationaryGestureMs = useSharedValue(0)
+  const lastEmittedValue = useSharedValue(value)
+  const lastStepIndex = useSharedValue(initialStepIndex)
+  const lastEdgeHapticStepIndex = useSharedValue(-1)
+  const renderedWidthScale = useSharedValue(1)
 
   const tick = useCallback(() => {
     if (Platform.OS === 'ios') {
@@ -105,61 +114,76 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
 
   const emitEdgeHaptic = useCallback(
     (stepIndex: number) => {
+      'worklet'
       if (stepIndex !== 0 && stepIndex !== totalSteps) {
-        lastEdgeHapticStepIndex.current = null
+        lastEdgeHapticStepIndex.value = -1
         return
       }
 
-      if (lastEdgeHapticStepIndex.current === stepIndex) return
+      if (lastEdgeHapticStepIndex.value === stepIndex) return
 
-      lastEdgeHapticStepIndex.current = stepIndex
-      edgeTick()
+      lastEdgeHapticStepIndex.value = stepIndex
+      scheduleOnRN(edgeTick)
     },
-    [edgeTick, totalSteps],
+    [edgeTick, lastEdgeHapticStepIndex, totalSteps],
   )
-
-  const rememberInternalValue = useCallback((nextValue: number) => {
-    recentInternalValues.current.add(nextValue)
-    if (recentInternalValues.current.size <= 80) return
-
-    const oldestValue = recentInternalValues.current.values().next().value
-    if (oldestValue != null) {
-      recentInternalValues.current.delete(oldestValue)
-    }
-  }, [])
 
   const emitStepIndex = useCallback(
     (rawStepIndex: number, shouldTick = true) => {
+      'worklet'
       const stepIndex = Math.max(0, Math.min(totalSteps, rawStepIndex))
-      const snapped = snapValue(min + stepIndex * step, min, max, step)
+      const snappedRaw = Math.round((min + stepIndex * step - min) / step) * step + min
+      const decimals = step < 1 ? Math.ceil(Math.abs(Math.log10(step))) : 0
+      const snapped = Number(Math.max(min, Math.min(max, snappedRaw)).toFixed(decimals))
       const previousStepIndex = lastStepIndex.value
       lastStepIndex.value = stepIndex
       if (stepIndex !== 0 && stepIndex !== totalSteps) {
-        lastEdgeHapticStepIndex.current = null
+        lastEdgeHapticStepIndex.value = -1
       }
-      if (snapped !== lastEmittedValue.current) {
-        lastEmittedValue.current = snapped
-        rememberInternalValue(snapped)
-        onValueChange(snapped)
+      if (snapped !== lastEmittedValue.value) {
+        lastEmittedValue.value = snapped
+        scheduleOnRN(onValueChange, snapped)
         if (
           shouldTick &&
           shouldPlayTuneDialHaptic(previousStepIndex, stepIndex, hapticStepSpacing)
         ) {
-          tick()
+          scheduleOnRN(tick)
         }
       }
       return snapped
     },
-    [hapticStepSpacing, min, max, step, totalSteps, onValueChange, rememberInternalValue, tick],
+    [
+      hapticStepSpacing,
+      lastEdgeHapticStepIndex,
+      lastEmittedValue,
+      lastStepIndex,
+      min,
+      max,
+      step,
+      totalSteps,
+      onValueChange,
+      tick,
+    ],
   )
 
   const snapOffsetToNearest = useCallback(
     (rawOffset: number) => {
+      'worklet'
       const stepIndex = Math.max(0, Math.min(totalSteps, Math.round(-rawOffset / stepPx)))
       emitStepIndex(stepIndex)
       translateX.value = withSpring(-stepIndex * stepPx, SNAP_SPRING)
     },
     [emitStepIndex, stepPx, totalSteps, translateX],
+  )
+
+  const handleLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      renderedWidthScale.value = computeRenderedWidthScale(
+        event.nativeEvent.layout.width,
+        screenWidth,
+      )
+    },
+    [renderedWidthScale, screenWidth],
   )
 
   useFrameCallback((frame) => {
@@ -192,7 +216,7 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
         throwElapsedMs.value = 0
         const stepIndex = Math.max(0, Math.min(totalSteps, Math.round(-translateX.value / stepPx)))
         translateX.value = withSpring(-stepIndex * stepPx, SNAP_SPRING)
-        scheduleOnRN(emitStepIndex, stepIndex)
+        emitStepIndex(stepIndex)
       }
       return
     }
@@ -205,8 +229,8 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
       throwElapsedMs.value = 0
       const edgeStepIndex = Math.max(0, Math.min(totalSteps, Math.round(-nextOffset / stepPx)))
       translateX.value = withSpring(-edgeStepIndex * stepPx, SNAP_SPRING)
-      scheduleOnRN(emitStepIndex, edgeStepIndex)
-      scheduleOnRN(emitEdgeHaptic, edgeStepIndex)
+      emitStepIndex(edgeStepIndex)
+      emitEdgeHaptic(edgeStepIndex)
       return
     }
 
@@ -230,7 +254,7 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
 
     translateX.value = nextOffset
     const emittedStepIndex = computeMomentumEmitStepIndex(nearestStepIndex, totalSteps)
-    scheduleOnRN(emitStepIndex, emittedStepIndex, true)
+    emitStepIndex(emittedStepIndex, true)
   })
 
   const panGesture = useMemo(
@@ -251,7 +275,8 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
           lastStepIndex.value = Math.round((value - min) / step)
         })
         .onUpdate((e) => {
-          const raw = dragStartX.value + e.translationX * rangeScale * DRAG_RANGE_GAIN
+          const dragScale = rangeScale * renderedWidthScale.value
+          const raw = dragStartX.value + e.translationX * dragScale * DRAG_RANGE_GAIN
           const clamped = Math.max(-totalWidth, Math.min(0, raw))
           translateX.value = clamped
           latestGestureTranslationX.value = e.translationX
@@ -260,9 +285,9 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
             e.velocityX,
           )
           const stepIndex = Math.max(0, Math.min(totalSteps, Math.round(-clamped / stepPx)))
-          scheduleOnRN(emitStepIndex, stepIndex)
+          emitStepIndex(stepIndex)
           if (raw > 0 || raw < -totalWidth) {
-            scheduleOnRN(emitEdgeHaptic, stepIndex)
+            emitEdgeHaptic(stepIndex)
           }
         })
         .onEnd((e) => {
@@ -273,8 +298,9 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
             e.translationX,
             stationaryGestureMs.value,
           )
-          const normalizedVelocity = gestureVelocityX * THROW_DISTANCE_GAIN * rangeScale
-          const maxVelocity = MAX_THROW_VELOCITY * Math.max(0.2, rangeScale)
+          const dragScale = rangeScale * renderedWidthScale.value
+          const normalizedVelocity = gestureVelocityX * THROW_DISTANCE_GAIN * dragScale
+          const maxVelocity = MAX_THROW_VELOCITY * Math.max(0.2, dragScale)
           const v = Math.max(-maxVelocity, Math.min(maxVelocity, normalizedVelocity))
           momentumVelocity.value = Math.max(
             -maxVelocity,
@@ -287,13 +313,13 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
           )
           throwElapsedMs.value = 0
           if (Math.abs(momentumVelocity.value) <= LOCK_VELOCITY) {
-            scheduleOnRN(snapOffsetToNearest, translateX.value)
+            snapOffsetToNearest(translateX.value)
           } else {
             const stepIndex = Math.max(
               0,
               Math.min(totalSteps, Math.round(-translateX.value / stepPx)),
             )
-            scheduleOnRN(emitStepIndex, stepIndex)
+            emitStepIndex(stepIndex)
           }
         }),
     [
@@ -305,6 +331,7 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
       momentumVelocity,
       previousFrameGestureTranslationX,
       rangeScale,
+      renderedWidthScale,
       snapOffsetToNearest,
       smoothedThrowGestureVelocityX,
       stationaryGestureMs,
@@ -317,20 +344,18 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
       min,
       step,
       value,
+      lastStepIndex,
     ],
   )
 
   useEffect(() => {
-    if (value === lastEmittedValue.current) {
-      recentInternalValues.current.clear()
+    if (value === lastEmittedValue.value) {
       return
     }
 
-    if (recentInternalValues.current.has(value)) return
-
     const expectedOffset = -valueToOffset(value)
     if (Math.abs(translateX.value - expectedOffset) > stepPx * 0.3) {
-      lastEmittedValue.current = value
+      lastEmittedValue.value = value
       lastStepIndex.value = Math.round((value - min) / step)
       momentumVelocity.value = 0
       throwDurationMs.value = 0
@@ -347,6 +372,8 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
     valueToOffset,
     translateX,
     stepPx,
+    lastEmittedValue,
+    lastStepIndex,
   ])
 
   const stripStyle = useAnimatedStyle(() => ({
@@ -398,7 +425,7 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
 
   return (
     <GestureHandlerRootView style={styles.rootView}>
-      <View style={styles.container}>
+      <View style={styles.container} onLayout={handleLayout}>
         <GestureDetector gesture={panGesture}>
           <Animated.View style={styles.gestureArea}>
             <Animated.View style={[styles.strip, { width: totalWidth + 1 }, stripStyle]}>

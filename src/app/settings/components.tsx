@@ -411,6 +411,25 @@ function TuneDialShowcase() {
   )
 }
 
+function CompactTuneDialShowcase() {
+  const [value, setValue] = useState(0.5)
+
+  return (
+    <ShowcaseCard name="TuneDial Compact" controls={<ValueRow label="value" value={value} />}>
+      <View style={styles.compactDial}>
+        <TuneDial
+          value={value}
+          previousValue={0.3}
+          min={0}
+          max={1}
+          step={0.01}
+          onValueChange={setValue}
+        />
+      </View>
+    </ShowcaseCard>
+  )
+}
+
 function BannerShowcase() {
   const [variant, setVariant] = useState<'info' | 'warning' | 'error'>('warning')
   const [showTitle, setShowTitle] = useState(true)
@@ -454,6 +473,7 @@ export default function ComponentsScreen() {
         <StatsRowShowcase />
         <SingleGaugeShowcase />
         <TuneDialShowcase />
+        <CompactTuneDialShowcase />
         <BannerShowcase />
         <ConfirmModalShowcase />
         <InfoModalShowcase />
@@ -476,5 +496,8 @@ const styles = StyleSheet.create({
     color: '#475569',
     fontSize: 12,
     fontStyle: 'italic',
+  },
+  compactDial: {
+    width: 180,
   },
 })

@@ -4,6 +4,7 @@ import {
   computeDetentStrength,
   computeHapticStepSpacing,
   computeMomentumEmitStepIndex,
+  computeRenderedWidthScale,
   computeThrowStartVelocity,
   computeTuneDialLayout,
   resolveThrowGestureVelocity,
@@ -68,6 +69,12 @@ describe('TuneDial physics', () => {
     expect(computeThrowStartVelocity(gestureVelocityX, layoutFor('medium').totalWidth)).toBe(
       computeThrowStartVelocity(gestureVelocityX, layoutFor('large').totalWidth),
     )
+  })
+
+  test('rendered width scales dial gestures down in compact containers', () => {
+    expect(computeRenderedWidthScale(180, 360)).toBeCloseTo(0.7071, 4)
+    expect(computeRenderedWidthScale(480, 360)).toBe(1)
+    expect(computeRenderedWidthScale(40, 400)).toBe(0.55)
   })
 
   test('medium has no detent resistance during throw because it has too many stops', () => {
