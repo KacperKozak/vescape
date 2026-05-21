@@ -1,17 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  PanResponder,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
+import { useCallback, useEffect, useState } from 'react'
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { CheckIcon, XIcon } from 'phosphor-react-native'
 
 import { Dropdown } from '@/components/Dropdown'
-import { clamp, snapValue } from '@/tune/sliderDefinitions'
+import { TuneDial } from '@/components/tune/TuneDial'
+import { snapValue } from '@/tune/sliderDefinitions'
 import type { LinkedFieldPreview } from '@/tune/sliderDefinitions'
 import { formatTuneValue } from '@/tune/fields'
 
@@ -37,9 +30,6 @@ interface FieldEditorPopoverProps {
 export function FieldEditorPopover({ target, onCancel, onApply }: FieldEditorPopoverProps) {
   const [draftValue, setDraftValue] = useState(0)
   const [draftText, setDraftText] = useState('')
-  const [trackWidth, setTrackWidth] = useState(1)
-  const [trackLeft, setTrackLeft] = useState(0)
-  const trackRef = useRef<View>(null)
 
   useEffect(() => {
     if (!target) return
@@ -47,47 +37,10 @@ export function FieldEditorPopover({ target, onCancel, onApply }: FieldEditorPop
     setDraftText(formatTuneValue(target.value))
   }, [target])
 
-  const progress = target
-    ? clamp(((draftValue - target.min) / (target.max - target.min)) * 100, 0, 100)
-    : 0
-
-  const measureTrack = useCallback(() => {
-    trackRef.current?.measureInWindow((x, _y, width) => {
-      setTrackLeft(x)
-      setTrackWidth(width > 0 ? width : 1)
-    })
+  const handleDialChange = useCallback((v: number) => {
+    setDraftValue(v)
+    setDraftText(formatTuneValue(v))
   }, [])
-
-  const setValueFromLocalX = useCallback(
-    (localX: number) => {
-      if (!target || trackWidth <= 0) return
-      const rawValue =
-        target.min + (clamp(localX, 0, trackWidth) / trackWidth) * (target.max - target.min)
-      const next = snapValue(rawValue, target.min, target.max, target.step)
-      setDraftValue(next)
-      setDraftText(formatTuneValue(next))
-    },
-    [target, trackWidth],
-  )
-
-  const setValueFromPageX = useCallback(
-    (pageX: number) => setValueFromLocalX(pageX - trackLeft),
-    [setValueFromLocalX, trackLeft],
-  )
-
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
-        onPanResponderGrant: (event) => {
-          measureTrack()
-          setValueFromLocalX(event.nativeEvent.locationX)
-        },
-        onPanResponderMove: (event) => setValueFromPageX(event.nativeEvent.pageX),
-      }),
-    [measureTrack, setValueFromLocalX, setValueFromPageX],
-  )
 
   if (!target) return null
 
@@ -136,26 +89,14 @@ export function FieldEditorPopover({ target, onCancel, onApply }: FieldEditorPop
           }}
         />
 
-        <View
-          ref={trackRef}
-          style={styles.track}
-          onLayout={measureTrack}
-          {...panResponder.panHandlers}
-        >
-          <View style={[styles.fill, { width: `${progress}%` }]} />
-          <View style={[styles.thumb, { left: `${progress}%` }]} />
-        </View>
-
-        <View style={styles.range}>
-          <Text style={styles.rangeText}>
-            {formatTuneValue(target.min)}
-            {target.unit ? ` ${target.unit}` : ''}
-          </Text>
-          <Text style={styles.rangeText}>
-            {formatTuneValue(target.max)}
-            {target.unit ? ` ${target.unit}` : ''}
-          </Text>
-        </View>
+        <TuneDial
+          value={draftValue}
+          previousValue={target.value}
+          min={target.min}
+          max={target.max}
+          step={target.step}
+          onValueChange={handleDialChange}
+        />
 
         {target.linkedFields && target.linkedFields.length > 0 ? (
           <View style={styles.linkedSection}>
@@ -243,40 +184,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
-  },
-  track: {
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: '#0f172a',
-    justifyContent: 'center',
-    overflow: 'visible',
-  },
-  fill: {
-    position: 'absolute',
-    left: 0,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#38bdf8',
-  },
-  thumb: {
-    position: 'absolute',
-    width: 24,
-    height: 24,
-    marginLeft: -12,
-    borderRadius: 12,
-    backgroundColor: '#f8fafc',
-    borderWidth: 3,
-    borderColor: '#38bdf8',
-  },
-  range: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: -4,
-  },
-  rangeText: {
-    color: '#475569',
-    fontSize: 11,
-    fontWeight: '700',
   },
   linkedSection: {
     borderTopWidth: 1,

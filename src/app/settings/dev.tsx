@@ -1,10 +1,18 @@
 import { useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { CheckCircleIcon, TestTubeIcon, WarningCircleIcon } from 'phosphor-react-native'
+import { router } from 'expo-router'
+import {
+  CaretRightIcon,
+  CheckCircleIcon,
+  SwatchesIcon,
+  TestTubeIcon,
+  WarningCircleIcon,
+} from 'phosphor-react-native'
 import { getDiagnosticStatus, reportDiagnosticTest, type DiagnosticStatus } from 'vesc-ble'
 
 import { reportUiError } from '@/diagnostics/uiDiagnostics'
+import { routes } from '@/navigation/routes'
 
 export default function DevSettingsScreen() {
   const [diagnosticStatus, setDiagnosticStatus] = useState<DiagnosticStatus | null>(() => {
@@ -43,6 +51,21 @@ export default function DevSettingsScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
+        <Text style={styles.sectionTitle}>Tools</Text>
+
+        <View style={styles.card}>
+          <Pressable style={styles.row} onPress={() => router.push(routes.settingsComponents)}>
+            <View style={styles.rowIcon}>
+              <SwatchesIcon size={20} color="#94a3b8" weight="duotone" />
+            </View>
+            <View style={styles.rowBody}>
+              <Text style={styles.rowLabel}>Component Library</Text>
+              <Text style={styles.rowHint}>Browse all UI components with live props</Text>
+            </View>
+            <CaretRightIcon size={18} color="#64748b" weight="bold" />
+          </Pressable>
+        </View>
+
         <Text style={styles.sectionTitle}>PostHog</Text>
 
         <View style={styles.card}>

@@ -31,6 +31,7 @@ export default function RootLayout() {
           <Stack.Screen name={stackScreens.profile} options={{ title: 'Profile' }} />
           <Stack.Screen name={stackScreens.settings} options={{ title: 'Settings' }} />
           <Stack.Screen name={stackScreens.settingsDev} options={{ title: 'Dev' }} />
+          <Stack.Screen name={stackScreens.settingsComponents} options={{ title: 'Components' }} />
           <Stack.Screen name={stackScreens.tune} options={{ title: 'Tune' }} />
           <Stack.Screen name={stackScreens.tuneHistory} options={{ title: 'Tune History' }} />
           <Stack.Screen name={stackScreens.addBoardScan} options={{ title: 'Add Board' }} />

@@ -40,7 +40,6 @@ interface DualGaugeProps {
 }
 
 // Quarter-arc geometry constants
-const VB_W = 110
 const VB_H = 120
 const R = 80
 const STROKE = 1

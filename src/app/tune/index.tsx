@@ -337,7 +337,6 @@ export default function TuneScreen() {
         saving: savingProfile,
         syncing: syncingProfile,
       }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       activeProfile,
       bleStatus,

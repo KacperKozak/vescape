@@ -3,7 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { CopyIcon, PencilSimpleIcon, PlusIcon, TrashIcon } from 'phosphor-react-native'
 import type { TuneProfile } from 'vesc-ble'
 
-import { Dropdown, measureTrigger, useTriggerRef } from '@/components/Dropdown'
+import { Dropdown, useTriggerRef } from '@/components/Dropdown'
 import { theme } from '@/constants/theme'
 
 interface ProfilePillsProps {
@@ -45,14 +45,10 @@ export function ProfilePills({
     return pillRefs.current.get(id)!
   }
 
-  const handleLongPress = useCallback(
-    (profile: TuneProfile) => {
-      const ref = getPillRef(profile.id)
-      setContextMenu({ profile, triggerRef: ref })
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
-  )
+  const handleLongPress = useCallback((profile: TuneProfile) => {
+    const ref = getPillRef(profile.id)
+    setContextMenu({ profile, triggerRef: ref })
+  }, [])
 
   const closeMenu = useCallback(() => setContextMenu(null), [])
 
