@@ -67,7 +67,7 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
   const hapticStepSpacing = computeHapticStepSpacing({ labelEveryStep, majorEvery })
   const rangeScale = computeRangeScale(totalWidth)
   const lastEmittedValue = useRef(value)
-  const lastStepIndex = useRef(Math.round((value - min) / step))
+  const lastStepIndex = useSharedValue(Math.round((value - min) / step))
   const lastEdgeHapticStepIndex = useRef<number | null>(null)
   const recentInternalValues = useRef(new Set<number>())
 
@@ -132,8 +132,8 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
     (rawStepIndex: number, shouldTick = true) => {
       const stepIndex = Math.max(0, Math.min(totalSteps, rawStepIndex))
       const snapped = snapValue(min + stepIndex * step, min, max, step)
-      const previousStepIndex = lastStepIndex.current
-      lastStepIndex.current = stepIndex
+      const previousStepIndex = lastStepIndex.value
+      lastStepIndex.value = stepIndex
       if (stepIndex !== 0 && stepIndex !== totalSteps) {
         lastEdgeHapticStepIndex.current = null
       }
@@ -248,7 +248,7 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
           previousFrameGestureTranslationX.value = 0
           stationaryGestureMs.value = 0
           dragStartX.value = translateX.value
-          lastStepIndex.current = Math.round((value - min) / step)
+          lastStepIndex.value = Math.round((value - min) / step)
         })
         .onUpdate((e) => {
           const raw = dragStartX.value + e.translationX * rangeScale * DRAG_RANGE_GAIN
@@ -331,7 +331,7 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
     const expectedOffset = -valueToOffset(value)
     if (Math.abs(translateX.value - expectedOffset) > stepPx * 0.3) {
       lastEmittedValue.current = value
-      lastStepIndex.current = Math.round((value - min) / step)
+      lastStepIndex.value = Math.round((value - min) / step)
       momentumVelocity.value = 0
       throwDurationMs.value = 0
       throwElapsedMs.value = 0
