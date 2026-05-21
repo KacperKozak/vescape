@@ -8,8 +8,7 @@ import type {
   TelemetrySummary,
 } from 'vesc-ble'
 
-// @ts-ignore
-const actualVescBle = await import('../../modules/vesc-ble/src/index.ts')
+const actualVescBle = await import('../../modules/vesc-ble/src/index')
 
 const summary: TelemetrySummary = {
   sampleCount: 0,
@@ -56,7 +55,7 @@ const vescBleMock = {
 }
 
 mock.module('vesc-ble', () => vescBleMock)
-mock.module('../../modules/vesc-ble/src/index.ts', () => vescBleMock)
+mock.module('../../modules/vesc-ble/src/index', () => vescBleMock)
 
 function block(overrides: Partial<TelemetryHistoryBlock>): TelemetryHistoryBlock {
   const startAtMs = overrides.startAtMs ?? 0

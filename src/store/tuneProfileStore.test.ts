@@ -2,8 +2,7 @@ import { beforeEach, expect, mock, test } from 'bun:test'
 
 import type { TuneProfile } from 'vesc-ble'
 
-// @ts-ignore
-const actualVescBle = await import('../../modules/vesc-ble/src/index.ts')
+const actualVescBle = await import('../../modules/vesc-ble/src/index')
 
 const profile: TuneProfile = {
   id: 'profile-1',
@@ -47,7 +46,7 @@ const vescBleMock = {
 }
 
 mock.module('vesc-ble', () => vescBleMock)
-mock.module('../../modules/vesc-ble/src/index.ts', () => vescBleMock)
+mock.module('../../modules/vesc-ble/src/index', () => vescBleMock)
 
 beforeEach(async () => {
   getTuneProfiles.mockClear()

@@ -1,8 +1,8 @@
+import { GhostIcon } from 'phosphor-react-native'
 import { useCallback, useMemo, useState } from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
-import { SafeAreaView } from 'react-native-safe-area-context'
-import { GhostIcon } from 'phosphor-react-native'
 import { useSharedValue } from 'react-native-reanimated'
+import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { Banner } from '@/components/Banner'
 import { ConfirmModal } from '@/components/ConfirmModal'
@@ -15,8 +15,8 @@ import { Sparkline, type SparklinePoint } from '@/components/charts/Sparkline'
 import { StatsRow } from '@/components/control/StatsRow'
 import { ShowcaseCard } from '@/components/dev/ShowcaseCard'
 import { ChipRow, OpenButton, ToggleRow, ValueRow } from '@/components/dev/ShowcaseControls'
-import { telemetry } from '@/constants/telemetry'
 import { TuneDial } from '@/components/tune/TuneDial'
+import { telemetry } from '@/constants/telemetry'
 
 function generateSparklineData(count: number, base: number, variance: number): SparklinePoint[] {
   const now = Date.now()
@@ -235,6 +235,7 @@ function SingleGaugeShowcase() {
 }
 
 const RANGE_CONFIGS = {
+  tune: { min: -5, max: 5, step: 1 },
   small: { min: 0, max: 10, step: 0.5 },
   medium: { min: 0, max: 100, step: 1 },
   large: { min: -50, max: 50, step: 5 },
@@ -262,7 +263,7 @@ function TuneDialShowcase() {
           <ValueRow label="value" value={value} />
           <ChipRow
             label="range"
-            options={['small', 'medium', 'large']}
+            options={['tune', 'small', 'medium', 'large']}
             selected={range}
             onSelect={handleRangeChange}
           />
