@@ -1,4 +1,4 @@
-import { GhostIcon, TrashIcon } from 'phosphor-react-native'
+import { ArrowLeftIcon, GhostIcon, GearSixIcon, TrashIcon } from 'phosphor-react-native'
 import { useCallback, useMemo, useState } from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSharedValue } from 'react-native-reanimated'
@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { Banner } from '@/components/Banner'
 import { Button } from '@/components/Button'
+import { IconButton } from '@/components/IconButton'
 import { ConfirmModal } from '@/components/ConfirmModal'
 import { DeviceRow } from '@/components/DeviceRow'
 import { InfoModal } from '@/components/InfoModal'
@@ -32,6 +33,58 @@ function generateSparklineData(count: number, base: number, variance: number): S
 }
 
 // ─── Individual showcases ──────────────────────────────────────────────
+
+function IconButtonShowcase() {
+  const [loading, setLoading] = useState(false)
+  const [disabled, setDisabled] = useState(false)
+
+  return (
+    <ShowcaseCard
+      name="IconButton"
+      controls={
+        <>
+          <ToggleRow label="loading" value={loading} onToggle={setLoading} />
+          <ToggleRow label="disabled" value={disabled} onToggle={setDisabled} />
+        </>
+      }
+    >
+      <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+        <View style={{ gap: 8, alignItems: 'center' }}>
+          <IconButton
+            icon={ArrowLeftIcon}
+            onPress={() => {}}
+            loading={loading}
+            disabled={disabled}
+          />
+          <IconButton
+            icon={GearSixIcon}
+            size="lg"
+            onPress={() => {}}
+            loading={loading}
+            disabled={disabled}
+          />
+        </View>
+        <View style={{ gap: 8, alignItems: 'center' }}>
+          <IconButton
+            icon={TrashIcon}
+            destructive
+            onPress={() => {}}
+            loading={loading}
+            disabled={disabled}
+          />
+          <IconButton
+            icon={TrashIcon}
+            size="lg"
+            destructive
+            onPress={() => {}}
+            loading={loading}
+            disabled={disabled}
+          />
+        </View>
+      </View>
+    </ShowcaseCard>
+  )
+}
 
 function ButtonShowcase() {
   const [loading, setLoading] = useState(false)
@@ -384,6 +437,7 @@ export default function ComponentsScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
+        <IconButtonShowcase />
         <ButtonShowcase />
         <PlaceholderShowcase />
         <SelectShowcase />

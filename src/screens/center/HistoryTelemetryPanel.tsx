@@ -10,6 +10,7 @@ import {
   toggleOptionalChartMetric,
   type OptionalChartMetric,
 } from '@/components/history/historyChartMetrics'
+import { IconButton } from '@/components/IconButton'
 import { telemetry } from '@/constants/telemetry'
 import { downsampleTimeSeries, findNearestSampleIndexByTime } from '@/history/playback'
 import { dutyPercent, fmtDutyPercent } from '@/helpers/format'
@@ -308,13 +309,12 @@ export function HistoryTelemetryPanel({
       onLayout={(e) => onHeightChange?.(e.nativeEvent.layout.height)}
     >
       <View style={styles.navRow}>
-        <Pressable
-          style={[styles.navButton, !canPrevious && styles.disabled]}
-          disabled={!canPrevious || loading}
+        <IconButton
+          icon={CaretLeftIcon}
+          size="lg"
           onPress={onPrevious}
-        >
-          <CaretLeftIcon size={20} color="#f8fafc" weight="bold" />
-        </Pressable>
+          disabled={!canPrevious || loading}
+        />
         <Pressable style={styles.titleButton} onPress={onOpenList}>
           <View style={styles.titleContent}>
             <Text style={styles.titleTime} numberOfLines={1}>
@@ -326,13 +326,12 @@ export function HistoryTelemetryPanel({
           </View>
           <CaretDownIcon size={12} color="#64748b" weight="bold" />
         </Pressable>
-        <Pressable
-          style={[styles.navButton, !canNext && styles.disabled]}
-          disabled={!canNext || loading}
+        <IconButton
+          icon={CaretRightIcon}
+          size="lg"
           onPress={onNext}
-        >
-          <CaretRightIcon size={20} color="#f8fafc" weight="bold" />
-        </Pressable>
+          disabled={!canNext || loading}
+        />
       </View>
       <TelemetryLineChart
         label={telemetry.speed.label}
@@ -431,19 +430,6 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     maxWidth: 280,
     gap: 6,
-  },
-  navButton: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(148, 163, 184, 0.28)',
-    backgroundColor: 'rgba(15, 23, 42, 0.72)',
-  },
-  disabled: {
-    opacity: 0.35,
   },
   titleButton: {
     flex: 1,

@@ -1,4 +1,4 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
 import { useCallback, useEffect, useState, type RefObject } from 'react'
 import { router } from 'expo-router'
 import {
@@ -17,6 +17,7 @@ import { MapVignette } from '@/screens/center/MapVignette'
 import { TopBar } from '@/screens/center/TopBar'
 import type { CenterMapHandle } from '@/screens/center/CenterMap'
 import { ConfirmModal } from '@/components/ConfirmModal'
+import { IconButton } from '@/components/IconButton'
 import { FloatingBar } from '@/components/FloatingBar'
 import { HistorySessionSheet } from '@/components/history/HistorySessionSheet'
 import { MapControls } from '@/components/map/MapControls'
@@ -144,41 +145,34 @@ export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOver
             onRetryConnect={board.onRetryConnect}
             bottomOffset={aboveStripBottom}
           />
-          <Pressable
-            style={[
-              styles.quickButton,
-              styles.historyButton,
-              {
-                bottom: aboveStripBottom - (HISTORY_BUTTON_SIZE - RECORD_BUTTON_HEIGHT) / 2,
-              },
-            ]}
+          <IconButton
+            icon={ClockCounterClockwiseIcon}
+            size="lg"
             onPress={() => void history.enterHistoryMode()}
-          >
-            <ClockCounterClockwiseIcon size={18} color="#f8fafc" weight="bold" />
-          </Pressable>
-          <Pressable
             style={[
-              styles.quickButton,
-              styles.tuneButton,
-              {
-                bottom: aboveStripBottom - (HISTORY_BUTTON_SIZE - RECORD_BUTTON_HEIGHT) / 2,
-              },
+              styles.historyButton,
+              { bottom: aboveStripBottom - (HISTORY_BUTTON_SIZE - RECORD_BUTTON_HEIGHT) / 2 },
             ]}
+          />
+          <IconButton
+            icon={SlidersHorizontalIcon}
+            size="lg"
             onPress={() => router.push(routes.tune)}
-          >
-            <SlidersHorizontalIcon size={18} color="#f8fafc" weight="bold" />
-          </Pressable>
+            style={[
+              styles.tuneButton,
+              { bottom: aboveStripBottom - (HISTORY_BUTTON_SIZE - RECORD_BUTTON_HEIGHT) / 2 },
+            ]}
+          />
         </>
       )}
 
       {mode === 'map' && (
         <>
-          <Pressable
-            style={[styles.backButton, { top: Math.max(insets.top, 8) }]}
+          <IconButton
+            icon={ArrowLeftIcon}
             onPress={map.exitMapFocus}
-          >
-            <ArrowLeftIcon size={20} color="#f8fafc" weight="bold" />
-          </Pressable>
+            style={[styles.backButton, { top: Math.max(insets.top, 8) }]}
+          />
           <MapControls
             heading={map.heading}
             rotationLocked={map.rotationLocked}
@@ -293,32 +287,16 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 10,
     zIndex: 30,
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(148, 163, 184, 0.28)',
-    backgroundColor: 'rgba(15, 23, 42, 0.72)',
-  },
-  quickButton: {
-    position: 'absolute',
-    zIndex: 20,
-    width: HISTORY_BUTTON_SIZE,
-    height: HISTORY_BUTTON_SIZE,
-    borderRadius: HISTORY_BUTTON_SIZE / 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(148, 163, 184, 0.28)',
-    backgroundColor: 'rgba(15, 23, 42, 0.72)',
   },
   historyButton: {
+    position: 'absolute',
     right: 12,
+    zIndex: 20,
   },
   tuneButton: {
+    position: 'absolute',
     left: 12,
+    zIndex: 20,
   },
   historyError: {
     position: 'absolute',

@@ -31,6 +31,7 @@ import {
 } from 'vesc-ble'
 
 import { Banner } from '@/components/Banner'
+import { IconButton } from '@/components/IconButton'
 import { ConfirmModal } from '@/components/ConfirmModal'
 import { InfoModal } from '@/components/InfoModal'
 import { Placeholder } from '@/components/Placeholder'
@@ -268,25 +269,14 @@ export default function TuneScreen() {
       headerRight: () => (
         <View style={styles.headerActions}>
           {activeProfile ? (
-            <Pressable style={styles.headerButton} onPress={() => void openHistory()}>
-              <ClockCounterClockwiseIcon size={17} color="#cbd5e1" weight="bold" />
-            </Pressable>
+            <IconButton icon={ClockCounterClockwiseIcon} onPress={() => void openHistory()} />
           ) : null}
           {boardConnected ? (
-            <Pressable
-              style={[
-                styles.headerButton,
-                state.phase === 'loading' && styles.headerButtonDisabled,
-              ]}
+            <IconButton
+              icon={ArrowsClockwiseIcon}
               onPress={() => void loadOnline()}
-              disabled={state.phase === 'loading'}
-            >
-              {state.phase === 'loading' ? (
-                <ActivityIndicator size="small" color="#38bdf8" />
-              ) : (
-                <ArrowsClockwiseIcon size={17} color="#cbd5e1" weight="bold" />
-              )}
-            </Pressable>
+              loading={state.phase === 'loading'}
+            />
           ) : null}
         </View>
       ),
@@ -939,19 +929,6 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: 'row',
     gap: 8,
-  },
-  headerButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#1e293b',
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  headerButtonDisabled: {
-    opacity: 0.7,
   },
   content: {
     padding: 16,

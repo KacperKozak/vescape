@@ -26,6 +26,25 @@ import { LightningIcon, WarningCircleIcon } from 'phosphor-react-native'
 - The `type Icon` export for typing icon props is **not** suffixed; import it as `type Icon` as-is.
 - `size` is typically `10`-`16` for inline or label icons, larger for standalone UI elements.
 
+## Icon buttons
+
+Use **`IconButton`** (`@/components/IconButton`) for all circular icon-only pressables. Do not build ad-hoc `Pressable` + icon combinations.
+
+```tsx
+import { IconButton } from '@/components/IconButton'
+import { ArrowLeftIcon, TrashIcon } from 'phosphor-react-native'
+
+<IconButton icon={ArrowLeftIcon} onPress={handleBack} />
+<IconButton icon={TrashIcon} destructive onPress={handleDelete} disabled={!canDelete} />
+<IconButton icon={ArrowsClockwiseIcon} size="lg" loading={syncing} onPress={handleSync} />
+```
+
+- `size`: `'sm'` (default, 38×38 — headers, overlays) | `'lg'` (54×54 — bottom/content area)
+- `destructive` shifts border to red-tinted and auto-tints icon to `#f87171` — no manual color needed
+- `loading` disables the button and shows an `ActivityIndicator` in the icon color
+- `style` accepts layout-level `ViewStyle` (position, margin, bottom/top/left/right)
+- One visual style only: `rgba(15,23,42,0.72)` bg + `rgba(148,163,184,0.28)` border
+
 ## Buttons
 
 Use **`Button`** (`@/components/Button`) for all tappable button actions. Do not build ad-hoc `Pressable` + `Text` combinations for buttons.
