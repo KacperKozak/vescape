@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import Slider from '@react-native-community/slider'
 import { PlayIcon, StopIcon } from 'phosphor-react-native'
+
+import { TuneDial } from '@/components/tune/TuneDial'
 
 import { theme } from '@/constants/theme'
 import {
@@ -131,26 +132,18 @@ export default function SoundPlaygroundScreen() {
           <>
             <Text style={styles.sectionTitle}>Geiger Simulation</Text>
             <View style={styles.card}>
-              <View style={styles.sliderSection}>
-                <View style={styles.sliderHeader}>
-                  <Text style={styles.sliderLabel}>Range Depth</Text>
-                  <Text style={styles.sliderValue}>{rangeDepth.toFixed(2)}</Text>
+              <View style={styles.dialSection}>
+                <View style={styles.dialHeader}>
+                  <Text style={styles.dialLabel}>Range Depth</Text>
+                  <Text style={styles.dialValue}>{rangeDepth.toFixed(2)}</Text>
                 </View>
-                <Slider
-                  style={styles.slider}
-                  minimumValue={0}
-                  maximumValue={1}
-                  step={0.01}
+                <TuneDial
                   value={rangeDepth}
+                  min={0}
+                  max={1}
+                  step={0.01}
                   onValueChange={handleRangeDepthChange}
-                  minimumTrackTintColor={theme.wheel.color}
-                  maximumTrackTintColor="#334155"
-                  thumbTintColor={theme.wheel.color}
                 />
-                <View style={styles.sliderLabels}>
-                  <Text style={styles.sliderEndLabel}>0.0 - slow ticks</Text>
-                  <Text style={styles.sliderEndLabel}>1.0 - sustained</Text>
-                </View>
               </View>
 
               <Pressable
@@ -298,37 +291,24 @@ const styles = StyleSheet.create({
   stopButtonText: {
     color: '#fef2f2',
   },
-  sliderSection: {
-    gap: 4,
+  dialSection: {
+    gap: 8,
     marginBottom: 14,
   },
-  sliderHeader: {
+  dialHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  sliderLabel: {
+  dialLabel: {
     color: '#94a3b8',
     fontSize: 13,
     fontWeight: '600',
   },
-  sliderValue: {
+  dialValue: {
     color: theme.wheel.text,
     fontSize: 16,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
-  },
-  slider: {
-    width: '100%',
-    height: 40,
-  },
-  sliderLabels: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  sliderEndLabel: {
-    color: '#475569',
-    fontSize: 10,
-    fontWeight: '600',
   },
 })
