@@ -10,6 +10,28 @@ import android.util.Log
 import expo.modules.vescble.telemetry.AlertRuleEntity
 import kotlin.math.abs
 
+internal data class FiredAlert(
+    val ruleId: String,
+    val controlId: String,
+    val value: Double,
+    val threshold: Double,
+    val thresholdMax: Double?,
+    val soundType: String,
+    val rangeDepth: Double?,
+    val firedAt: Long,
+) {
+    fun toMap(): Map<String, Any?> = mapOf(
+        "ruleId" to ruleId,
+        "controlId" to controlId,
+        "value" to value,
+        "threshold" to threshold,
+        "thresholdMax" to thresholdMax,
+        "soundType" to soundType,
+        "rangeDepth" to rangeDepth,
+        "firedAt" to firedAt,
+    )
+}
+
 internal class VescAlertEngine {
     private val lastFiredAt = HashMap<String, Long>()
 
@@ -17,38 +39,38 @@ internal class VescAlertEngine {
         lastFiredAt.clear()
     }
 
-    fun evaluate(rules: List<AlertRuleEntity>, t: RefloatTelemetry): List<Map<String, Any?>> {
+    fun evaluate(rules: List<AlertRuleEntity>, t: RefloatTelemetry): List<FiredAlert> {
         if (rules.isEmpty()) return emptyList()
         val now = System.currentTimeMillis()
-        val fired = mutableListOf<Map<String, Any?>>()
+        val fired = mutableListOf<FiredAlert>()
         for (rule in rules) {
-            val id = rule.id
-            val controlId = rule.controlId
-            val threshold = rule.threshold
-            val thresholdMax = rule.thresholdMax
-            val soundType = rule.soundType
-            val value = extractAlertValue(controlId, t) ?: continue
-            val aboveDir = alertDirectionIsAbove(controlId)
-            val triggered = if (aboveDir) value >= threshold else value <= threshold
+            val value = extractAlertValue(rule.controlId, t) ?: continue
+            val aboveDir = alertDirectionIsAbove(rule.controlId)
+            val triggered = if (aboveDir) value >= rule.threshold else value <= rule.threshold
             if (!triggered) continue
-            val rangeDepth = alertRangeDepth(value, threshold, thresholdMax, aboveDir)
+            val rangeDepth = alertRangeDepth(value, rule.threshold, rule.thresholdMax, aboveDir)
             val debounceMs = rangeDepth?.let { depth ->
                 (1_000L - (650L * depth)).toLong()
             } ?: 10_000L
-            if (now - (lastFiredAt[id] ?: 0L) < debounceMs) continue
-            lastFiredAt[id] = now
-            fired.add(mapOf(
-                "ruleId" to id,
-                "controlId" to controlId,
-                "value" to value,
-                "threshold" to threshold,
-                "thresholdMax" to thresholdMax,
-                "soundType" to soundType,
-                "rangeDepth" to rangeDepth,
-                "firedAt" to now,
+            if (now - (lastFiredAt[rule.id] ?: 0L) < debounceMs) continue
+            lastFiredAt[rule.id] = now
+            fired.add(FiredAlert(
+                ruleId = rule.id,
+                controlId = rule.controlId,
+                value = value,
+                threshold = rule.threshold,
+                thresholdMax = rule.thresholdMax,
+                soundType = rule.soundType,
+                rangeDepth = rangeDepth,
+                firedAt = now,
             ))
         }
-        return fired
+        return fired.sortedWith(
+            compareBy<FiredAlert> { if (it.rangeDepth != null) 0 else 1 }
+                .thenByDescending {
+                    if (alertDirectionIsAbove(it.controlId)) it.threshold else -it.threshold
+                }
+        )
     }
 
     private fun alertDirectionIsAbove(controlId: String): Boolean = controlId != "battery"

@@ -44,10 +44,16 @@ Direction is hardcoded per control — not stored.
 
 Set `threshold_max` to add a range. Debounce shrinks linearly:
 
-- at `threshold` → 10 s between beeps
-- at `threshold_max` → 1 s between beeps
+- at `threshold` → 1 s between beeps
+- at `threshold_max` → 350 ms between beeps
 
-Single threshold → fixed 10 s debounce.
+Single threshold (no `threshold_max`) → fixed 10 s debounce.
+
+When multiple alerts fire on the same packet, feedback rotates between them
+so cross-control alerts (e.g. speed + duty) are each heard in turn.
+Within a single evaluation, the most urgent alert is sorted first
+(Geiger over simple; higher threshold for above-direction controls,
+lower threshold for below-direction).
 
 ## JS side
 

@@ -280,6 +280,7 @@ class VescForegroundService : Service() {
         )
     }
     private val alertEngine = VescAlertEngine()
+    private var lastFeedbackRuleId: String? = null
     private val alertFeedback by lazy { VescAlertFeedback(this, mainHandler) }
     private val gpsMonitor by lazy {
         VescGpsMonitor(
@@ -1686,12 +1687,25 @@ class VescForegroundService : Service() {
     private fun evaluateAlerts(t: RefloatTelemetry): List<Map<String, Any?>> {
         val fired = alertEngine.evaluate(alertRules, t)
         if (fired.isNotEmpty()) {
-            val first = fired.first()
-            val rangeDepth = (first["rangeDepth"] as? Number)?.toDouble()
-            alertFeedback.playTone(first["soundType"] as? String ?: "default", rangeDepth)
-            alertFeedback.vibrate(rangeDepth)
+            val alert = pickNextFeedback(fired)
+            alertFeedback.playTone(alert.soundType, alert.rangeDepth)
+            alertFeedback.vibrate(alert.rangeDepth)
+        } else {
+            lastFeedbackRuleId = null
         }
-        return fired
+        return fired.map { it.toMap() }
+    }
+
+    private fun pickNextFeedback(fired: List<FiredAlert>): FiredAlert {
+        if (fired.size == 1) {
+            lastFeedbackRuleId = fired[0].ruleId
+            return fired[0]
+        }
+        val lastIdx = fired.indexOfFirst { it.ruleId == lastFeedbackRuleId }
+        val nextIdx = if (lastIdx < 0) 0 else (lastIdx + 1) % fired.size
+        val pick = fired[nextIdx]
+        lastFeedbackRuleId = pick.ruleId
+        return pick
     }
 
     private fun appendRecentTelemetry(point: Map<String, Any?>, packetAt: Long) {
