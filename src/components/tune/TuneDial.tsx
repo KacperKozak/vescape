@@ -1,6 +1,6 @@
+import * as Haptics from 'expo-haptics'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { Platform, StyleSheet, Text, View } from 'react-native'
-import * as Haptics from 'expo-haptics'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import Animated, {
   cancelAnimation,
@@ -11,8 +11,8 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated'
 
-import { snapValue } from '@/tune/sliderDefinitions'
 import { formatTuneValue } from '@/tune/fields'
+import { snapValue } from '@/tune/sliderDefinitions'
 
 const DIAL_HEIGHT = 56
 const TARGET_LABEL_PX = 70
@@ -81,7 +81,7 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
     if (Platform.OS === 'ios') {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
     } else if (Platform.OS === 'android') {
-      void Haptics.performAndroidHapticsAsync(Haptics.AndroidHaptics.Text_Handle_Move)
+      void Haptics.performAndroidHapticsAsync(Haptics.AndroidHaptics.Clock_Tick)
     }
   }, [])
 
