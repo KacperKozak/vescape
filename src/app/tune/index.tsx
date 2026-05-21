@@ -29,6 +29,7 @@ import {
   type TuneProfileFieldValue,
 } from 'vesc-ble'
 
+import { Banner } from '@/components/Banner'
 import { ConfirmModal } from '@/components/ConfirmModal'
 import { InfoModal } from '@/components/InfoModal'
 import { Placeholder } from '@/components/Placeholder'
@@ -531,6 +532,12 @@ export default function TuneScreen() {
           contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 96 }]}
           contentInsetAdjustmentBehavior="automatic"
         >
+          <Banner
+            variant="warning"
+            title="Work in progress"
+            message="Tune editing is experimental. Do not sync changes to the board until this feature is stable."
+          />
+
           {state.phase === 'error' ? (
             <View style={styles.errorBanner}>
               <WarningCircleIcon size={16} color="#fca5a5" />

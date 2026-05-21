@@ -1,4 +1,13 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import {
+  ActivityIndicator,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native'
 import { CaretRightIcon, WarningCircleIcon } from 'phosphor-react-native'
 
 import { telemetry } from '@/constants/telemetry'
@@ -9,8 +18,11 @@ interface HistorySessionSheetProps {
   bottomOffset: number
   sessions: HistorySession[]
   selectedSessionId: string | null
+  hasMore: boolean
+  loadingMore: boolean
   onClose: () => void
   onSelectSession: (session: HistorySession) => void
+  onLoadMore: () => void
 }
 
 export function HistorySessionSheet({
@@ -18,17 +30,32 @@ export function HistorySessionSheet({
   bottomOffset,
   sessions,
   selectedSessionId,
+  hasMore,
+  loadingMore,
   onClose,
   onSelectSession,
+  onLoadMore,
 }: HistorySessionSheetProps) {
   if (!visible) return null
+
+  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (!hasMore || loadingMore) return
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent
+    const distanceFromEnd = contentSize.height - (contentOffset.y + layoutMeasurement.height)
+    if (distanceFromEnd < 80) onLoadMore()
+  }
 
   return (
     <>
       <Pressable style={styles.backdrop} onPress={onClose} />
       <View style={[styles.panel, { bottom: bottomOffset }]}>
         <Text style={styles.title}>Rides</Text>
-        <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.content}
+          scrollEventThrottle={120}
+          onScroll={handleScroll}
+        >
           {sessions.length === 0 ? (
             <Text style={styles.emptyText}>No sessions</Text>
           ) : (
@@ -68,6 +95,15 @@ export function HistorySessionSheet({
                 </Pressable>
               )
             })
+          )}
+          {hasMore && (
+            <View style={styles.loadingRow}>
+              {loadingMore ? (
+                <ActivityIndicator size="small" color="#38bdf8" />
+              ) : (
+                <Text style={styles.loadingText}>Scroll for older rides</Text>
+              )}
+            </View>
           )}
         </ScrollView>
       </View>
@@ -175,6 +211,16 @@ const styles = StyleSheet.create({
   },
   faultText: {
     color: '#fca5a5',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  loadingRow: {
+    minHeight: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    color: '#64748b',
     fontSize: 11,
     fontWeight: '700',
   },

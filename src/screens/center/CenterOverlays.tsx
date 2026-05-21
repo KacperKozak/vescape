@@ -59,11 +59,13 @@ interface CenterHistoryOverlayProps {
   nextRide: HistorySession | null
   loadingSession: boolean
   historyLoading: boolean
+  historyHasMore: boolean
   historyError: string | undefined
   sessions: HistorySession[]
   historySheetVisible: boolean
   setHistorySheetVisible: (visible: boolean) => void
   selectSession: (session: HistorySession | null) => Promise<void>
+  loadMoreHistory: () => Promise<void>
   selectRide: (session: HistorySession) => void
   exitHistory: () => void
   removeSession: () => void
@@ -238,10 +240,15 @@ export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOver
         bottomOffset={historyPanelBottom + panelHeight + 8}
         sessions={history.sessions}
         selectedSessionId={history.selectedSession?.id ?? null}
+        hasMore={history.historyHasMore}
+        loadingMore={history.historyLoading}
         onClose={() => history.setHistorySheetVisible(false)}
         onSelectSession={(session) => {
           history.setHistorySheetVisible(false)
           history.selectRide(session)
+        }}
+        onLoadMore={() => {
+          void history.loadMoreHistory()
         }}
       />
 

@@ -211,3 +211,33 @@ test('keeps current ride data visible while selecting another ride', async () =>
   )
   expect(useHistoryStore.getState().sessionSamples).toEqual([nextSample])
 })
+
+test('loads older history pages and merges sessions', async () => {
+  const newest = block({ id: 'newest', startAtMs: 3_000_000, endAtMs: 3_060_000 })
+  const oldestLoaded = block({ id: 'oldest-loaded', startAtMs: 2_000_000, endAtMs: 2_060_000 })
+  const older = block({ id: 'older', startAtMs: 1_000_000, endAtMs: 1_060_000 })
+  getTelemetryHistory.mockResolvedValueOnce([newest, oldestLoaded])
+  getTelemetryHistory.mockResolvedValueOnce([older])
+
+  const { useHistoryStore } = await import('./historyStore')
+
+  await useHistoryStore.getState().loadInitial()
+  useHistoryStore.setState({ hasMore: true })
+  await useHistoryStore.getState().loadMore()
+
+  expect((getTelemetryHistory.mock.calls as any[])[1][0]).toEqual({
+    limit: 100,
+    cursorBeforeMs: oldestLoaded.bucketStartMs - 1,
+  })
+  expect(useHistoryStore.getState().blocks.map((b) => b.id)).toEqual([
+    'newest',
+    'oldest-loaded',
+    'older',
+  ])
+  expect(useHistoryStore.getState().sessions.map((s) => s.blockIds)).toEqual([
+    ['newest'],
+    ['oldest-loaded'],
+    ['older'],
+  ])
+  expect(useHistoryStore.getState().hasMore).toBe(false)
+})

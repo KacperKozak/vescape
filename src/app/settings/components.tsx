@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { GhostIcon } from 'phosphor-react-native'
 
+import { Banner } from '@/components/Banner'
 import { ConfirmModal } from '@/components/ConfirmModal'
 import { DeviceRow } from '@/components/DeviceRow'
 import { InfoModal } from '@/components/InfoModal'
@@ -230,6 +231,34 @@ function TuneDialShowcase() {
   )
 }
 
+function BannerShowcase() {
+  const [variant, setVariant] = useState<'info' | 'warning' | 'error'>('warning')
+  const [showTitle, setShowTitle] = useState(true)
+
+  return (
+    <ShowcaseCard
+      name="Banner"
+      controls={
+        <>
+          <ChipRow
+            label="variant"
+            options={['info', 'warning', 'error']}
+            selected={variant}
+            onSelect={(v) => setVariant(v as typeof variant)}
+          />
+          <ToggleRow label="title" value={showTitle} onToggle={setShowTitle} />
+        </>
+      }
+    >
+      <Banner
+        variant={variant}
+        title={showTitle ? 'Work in progress' : undefined}
+        message="Tune editing is experimental. Do not sync changes to the board until this feature is stable."
+      />
+    </ShowcaseCard>
+  )
+}
+
 // ─── Main screen ───────────────────────────────────────────────────────
 
 export default function ComponentsScreen() {
@@ -242,6 +271,7 @@ export default function ComponentsScreen() {
         <DeviceRowShowcase />
         <StatsRowShowcase />
         <TuneDialShowcase />
+        <BannerShowcase />
         <ConfirmModalShowcase />
         <InfoModalShowcase />
       </ScrollView>
