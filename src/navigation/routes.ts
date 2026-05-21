@@ -31,7 +31,7 @@ export const stackScreens = {
   settingsComponents: 'settings/components',
   settingsDiagnostic: 'settings/diagnostic',
   settingsOther: 'settings/other',
-  tune: 'tune',
+  tune: 'tune/index',
   tuneHistory: 'tune/history',
   addBoardScan: 'addBoard/scan',
   addBoardDetails: 'addBoard/details',
