@@ -1,6 +1,6 @@
 {
   "name": "vibe-wheel",
-  "version": "0.36.0",
+  "version": "0.37.0",
   "private": true,
   "workspaces": [
     "modules/*"
@@ -14,6 +14,7 @@
     "lint": "expo lint",
     "format": "oxfmt . '!.agents/skills/**'",
     "format:check": "oxfmt --check . '!.agents/skills/**'",
+    "copy:alert-sounds": "bun run scripts/copy-alert-sounds.ts",
     "test": "bun run test:bun && bun run test:android",
     "test:bun": "bun test",
     "test:android": "cd android && ./gradlew :vesc-ble:testDebugUnitTest",

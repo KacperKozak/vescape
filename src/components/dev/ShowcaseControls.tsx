@@ -1,5 +1,7 @@
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native'
 
+import { Button } from '@/components/Button'
+
 interface ToggleRowProps {
   label: string
   value: boolean
@@ -67,11 +69,7 @@ interface OpenButtonProps {
 }
 
 export function OpenButton({ label = 'Open Modal', onPress }: OpenButtonProps) {
-  return (
-    <Pressable style={styles.openBtn} onPress={onPress}>
-      <Text style={styles.openBtnText}>{label}</Text>
-    </Pressable>
-  )
+  return <Button label={label} onPress={onPress} size="sm" />
 }
 
 const styles = StyleSheet.create({
@@ -121,19 +119,6 @@ const styles = StyleSheet.create({
   },
   chipTextActive: {
     color: '#e0f2fe',
-  },
-  openBtn: {
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: '#1d4ed8',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 2,
-  },
-  openBtnText: {
-    color: '#f8fafc',
-    fontSize: 12,
-    fontWeight: '700',
   },
   valueDisplay: {
     color: '#f1f5f9',

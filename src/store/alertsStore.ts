@@ -32,6 +32,12 @@ interface AlertsActions {
     thresholdMax?: number | null,
     soundType?: AlertSoundType,
   ): void
+  update(
+    id: string,
+    threshold: number,
+    thresholdMax: number | null,
+    soundType: AlertSoundType,
+  ): void
   toggle(id: string): Promise<void>
   remove(id: string): Promise<void>
 }
@@ -43,7 +49,7 @@ export const useAlertsStore = create<AlertsState & AlertsActions>((set, get) => 
     set({ rules: await getAlertRules() })
   },
 
-  add(controlId, threshold, thresholdMax = null, soundType = 'default') {
+  add(controlId, threshold, thresholdMax = null, soundType = 'preset:beep') {
     const rule: AlertRule = {
       id: generateId(),
       controlId,
@@ -55,6 +61,14 @@ export const useAlertsStore = create<AlertsState & AlertsActions>((set, get) => 
     }
     set((s) => ({ rules: [...s.rules, rule] }))
     void upsertAlertRule(rule)
+  },
+
+  update(id, threshold, thresholdMax, soundType) {
+    const rule = get().rules.find((r) => r.id === id)
+    if (!rule) return
+    const updated = { ...rule, threshold, thresholdMax, soundType }
+    set((s) => ({ rules: s.rules.map((r) => (r.id === id ? updated : r)) }))
+    void upsertAlertRule(updated)
   },
 
   async toggle(id) {

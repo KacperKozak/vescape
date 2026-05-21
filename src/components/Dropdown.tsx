@@ -115,6 +115,12 @@ export function Dropdown({
     })
   }, [opacity, translateY, dropAbove, onClose])
 
+  useEffect(() => {
+    if (!visible && mounted) {
+      handleClose()
+    }
+  }, [visible, mounted, handleClose])
+
   if (!mounted) return null
 
   const dropdownPosition = layout

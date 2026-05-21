@@ -12,7 +12,7 @@ import { router } from 'expo-router'
 import { routes } from '@/navigation/routes'
 
 import type { Board } from '@/store/boardStore'
-import { theme } from '@/constants/theme'
+import { interaction, theme } from '@/constants/theme'
 import { Dropdown } from './Dropdown'
 
 interface BoardSelectorSheetProps {
@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#1e293b',
   },
   boardRowPressed: {
-    backgroundColor: '#253548',
+    backgroundColor: interaction.pressedBg,
   },
   boardIcon: {
     width: 32,

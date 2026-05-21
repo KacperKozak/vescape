@@ -218,6 +218,18 @@ class VescAlertEngineTest {
     }
 
     @Test
+    fun geigerAlertReportsWhileStillActive() {
+        val rules = listOf(rule(threshold = 70.0, thresholdMax = 80.0))
+        val t = telemetry(dutyCycle = 0.75)
+
+        val first = engine.evaluate(rules, t)
+        val second = engine.evaluate(rules, t)
+
+        assertEquals(1, first.size)
+        assertEquals(1, second.size)
+    }
+
+    @Test
     fun resetDebounceAllowsRefiring() {
         val rules = listOf(rule(threshold = 60.0))
         val t = telemetry(dutyCycle = 0.66)

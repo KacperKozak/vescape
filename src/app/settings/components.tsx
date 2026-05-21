@@ -1,19 +1,24 @@
+import { ArrowLeftIcon, GhostIcon, GearSixIcon, TrashIcon } from 'phosphor-react-native'
 import { useCallback, useMemo, useState } from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
+import { useSharedValue } from 'react-native-reanimated'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { GhostIcon } from 'phosphor-react-native'
 
 import { Banner } from '@/components/Banner'
+import { Button } from '@/components/Button'
+import { IconButton } from '@/components/IconButton'
 import { ConfirmModal } from '@/components/ConfirmModal'
 import { DeviceRow } from '@/components/DeviceRow'
 import { InfoModal } from '@/components/InfoModal'
 import { Placeholder } from '@/components/Placeholder'
 import { Select, type SelectOption } from '@/components/Select'
+import { SingleGauge } from '@/components/charts/DualGauge'
 import { Sparkline, type SparklinePoint } from '@/components/charts/Sparkline'
 import { StatsRow } from '@/components/control/StatsRow'
 import { ShowcaseCard } from '@/components/dev/ShowcaseCard'
 import { ChipRow, OpenButton, ToggleRow, ValueRow } from '@/components/dev/ShowcaseControls'
 import { TuneDial } from '@/components/tune/TuneDial'
+import { telemetry } from '@/constants/telemetry'
 
 function generateSparklineData(count: number, base: number, variance: number): SparklinePoint[] {
   const now = Date.now()
@@ -28,6 +33,125 @@ function generateSparklineData(count: number, base: number, variance: number): S
 }
 
 // ─── Individual showcases ──────────────────────────────────────────────
+
+function IconButtonShowcase() {
+  const [loading, setLoading] = useState(false)
+  const [disabled, setDisabled] = useState(false)
+
+  return (
+    <ShowcaseCard
+      name="IconButton"
+      controls={
+        <>
+          <ToggleRow label="loading" value={loading} onToggle={setLoading} />
+          <ToggleRow label="disabled" value={disabled} onToggle={setDisabled} />
+        </>
+      }
+    >
+      <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+        <View style={{ gap: 8, alignItems: 'center' }}>
+          <IconButton
+            icon={ArrowLeftIcon}
+            onPress={() => {}}
+            loading={loading}
+            disabled={disabled}
+          />
+          <IconButton
+            icon={GearSixIcon}
+            size="lg"
+            onPress={() => {}}
+            loading={loading}
+            disabled={disabled}
+          />
+        </View>
+        <View style={{ gap: 8, alignItems: 'center' }}>
+          <IconButton
+            icon={TrashIcon}
+            destructive
+            onPress={() => {}}
+            loading={loading}
+            disabled={disabled}
+          />
+          <IconButton
+            icon={TrashIcon}
+            size="lg"
+            destructive
+            onPress={() => {}}
+            loading={loading}
+            disabled={disabled}
+          />
+        </View>
+      </View>
+    </ShowcaseCard>
+  )
+}
+
+function ButtonShowcase() {
+  const [loading, setLoading] = useState(false)
+  const [disabled, setDisabled] = useState(false)
+
+  return (
+    <ShowcaseCard
+      name="Button"
+      controls={
+        <>
+          <ToggleRow label="loading" value={loading} onToggle={setLoading} />
+          <ToggleRow label="disabled" value={disabled} onToggle={setDisabled} />
+        </>
+      }
+    >
+      <View style={{ gap: 8 }}>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <Button
+            style={{ flex: 1 }}
+            label="Primary"
+            variant="primary"
+            onPress={() => {}}
+            loading={loading}
+            disabled={disabled}
+          />
+          <Button
+            style={{ flex: 1 }}
+            label="Secondary"
+            variant="secondary"
+            onPress={() => {}}
+            loading={loading}
+            disabled={disabled}
+          />
+          <Button
+            style={{ flex: 1 }}
+            label="Delete"
+            variant="destructive"
+            onPress={() => {}}
+            loading={loading}
+            disabled={disabled}
+          />
+        </View>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <Button
+            style={{ flex: 1 }}
+            label="With icon"
+            variant="primary"
+            icon={TrashIcon}
+            size="sm"
+            onPress={() => {}}
+            loading={loading}
+            disabled={disabled}
+          />
+          <Button
+            style={{ flex: 1 }}
+            label="Secondary sm"
+            variant="secondary"
+            size="sm"
+            onPress={() => {}}
+            loading={loading}
+            disabled={disabled}
+          />
+        </View>
+      </View>
+    </ShowcaseCard>
+  )
+}
 
 function PlaceholderShowcase() {
   const [showTitle, setShowTitle] = useState(true)
@@ -127,6 +251,7 @@ function SelectShowcase() {
 
 function SparklineShowcase() {
   const [showMax, setShowMax] = useState(true)
+  const [maxPosition, setMaxPosition] = useState<'left' | 'right'>('right')
   const [color, setColor] = useState('#38bdf8')
   const points = useMemo(() => generateSparklineData(120, 42, 2), [])
 
@@ -136,6 +261,12 @@ function SparklineShowcase() {
       controls={
         <>
           <ToggleRow label="showMaxBadge" value={showMax} onToggle={setShowMax} />
+          <ChipRow
+            label="maxPosition"
+            options={['left', 'right']}
+            selected={maxPosition}
+            onSelect={(v) => setMaxPosition(v as 'left' | 'right')}
+          />
           <ChipRow
             label="color"
             options={['#38bdf8', '#4ade80', '#f87171', '#facc15']}
@@ -151,6 +282,7 @@ function SparklineShowcase() {
         height={32}
         fmtMax={(v) => `${v.toFixed(1)} V`}
         showMaxBadge={showMax}
+        maxPosition={maxPosition}
       />
     </ShowcaseCard>
   )
@@ -184,7 +316,55 @@ function StatsRowShowcase() {
   )
 }
 
+function SingleGaugeShowcase() {
+  const [metricKey, setMetricKey] = useState<'speed' | 'duty' | 'battVoltage'>('speed')
+  const value = useSharedValue<number | null>(34)
+  const metric = telemetry[metricKey]
+
+  const handleMetricChange = useCallback(
+    (next: string) => {
+      const key = next as typeof metricKey
+      setMetricKey(key)
+      value.value = key === 'speed' ? 34 : key === 'duty' ? 68 : 42.5
+    },
+    [value],
+  )
+
+  return (
+    <ShowcaseCard
+      name="SingleGauge"
+      controls={
+        <ChipRow
+          label="metric"
+          options={['speed', 'duty', 'battVoltage']}
+          selected={metricKey}
+          onSelect={handleMetricChange}
+        />
+      }
+    >
+      <SingleGauge
+        value={value}
+        min={metric.chartRange.min}
+        max={metric.chartRange.max}
+        color={metric.color}
+        unit={metric.unit}
+        decimals={metric.decimals}
+        label={metric.label.toUpperCase()}
+        alerts={[
+          { id: 'warn', threshold: metric.chartRange.max * 0.75, thresholdMax: null },
+          {
+            id: 'range',
+            threshold: metric.chartRange.max * 0.88,
+            thresholdMax: metric.chartRange.max * 0.98,
+          },
+        ]}
+      />
+    </ShowcaseCard>
+  )
+}
+
 const RANGE_CONFIGS = {
+  tune: { min: -5, max: 5, step: 1 },
   small: { min: 0, max: 10, step: 0.5 },
   medium: { min: 0, max: 100, step: 1 },
   large: { min: -50, max: 50, step: 5 },
@@ -212,7 +392,7 @@ function TuneDialShowcase() {
           <ValueRow label="value" value={value} />
           <ChipRow
             label="range"
-            options={['small', 'medium', 'large']}
+            options={['tune', 'small', 'medium', 'large']}
             selected={range}
             onSelect={handleRangeChange}
           />
@@ -265,11 +445,14 @@ export default function ComponentsScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
+        <IconButtonShowcase />
+        <ButtonShowcase />
         <PlaceholderShowcase />
         <SelectShowcase />
         <SparklineShowcase />
         <DeviceRowShowcase />
         <StatsRowShowcase />
+        <SingleGaugeShowcase />
         <TuneDialShowcase />
         <BannerShowcase />
         <ConfirmModalShowcase />

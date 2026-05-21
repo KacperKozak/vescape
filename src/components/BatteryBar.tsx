@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router'
 
 import { Sparkline, type SparklinePoint } from '@/components/charts/Sparkline'
 import { telemetry } from '@/constants/telemetry'
-import { theme } from '@/constants/theme'
+import { interaction, theme } from '@/constants/theme'
 import { routes } from '@/navigation/routes'
 
 interface Props {
@@ -45,7 +45,7 @@ export function BatteryBar({
   return (
     <Pressable
       onPress={() => router.push(routes.controlBattery)}
-      android_ripple={{ color: 'rgba(148,163,184,0.18)', borderless: false, foreground: true }}
+      android_ripple={interaction.ripple}
       style={[
         styles.wrap,
         compact && styles.wrapCompact,

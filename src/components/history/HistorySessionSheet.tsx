@@ -10,6 +10,7 @@ import {
 } from 'react-native'
 import { CaretRightIcon, WarningCircleIcon } from 'phosphor-react-native'
 
+import { interaction } from '@/constants/theme'
 import { telemetry } from '@/constants/telemetry'
 import type { HistorySession } from '@/store/historyStore'
 
@@ -187,7 +188,7 @@ const styles = StyleSheet.create({
     borderColor: '#3b82f6',
   },
   rowPressed: {
-    backgroundColor: '#172554',
+    backgroundColor: interaction.pressedBg,
   },
   rowMain: {
     flex: 1,
@@ -228,7 +229,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#101827',
   },
   loadingPressed: {
-    backgroundColor: '#172554',
+    backgroundColor: interaction.pressedBg,
   },
   loadingText: {
     color: '#64748b',

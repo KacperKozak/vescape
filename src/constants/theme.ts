@@ -59,3 +59,15 @@ export const theme = {
     border: '#991b1b', // red-800
   },
 } as const
+
+/** Shared press/touch interaction tokens. Use these on every Pressable to keep feedback uniform. */
+export const interaction = {
+  /** Android ripple for bounded pressables (cards, cells). */
+  ripple: { color: 'rgba(148,163,184,0.18)', borderless: false, foreground: true },
+  /** Android ripple for icon-only pressables with no visible bounds. */
+  rippleBorderless: { color: 'rgba(148,163,184,0.18)', borderless: true, foreground: true },
+  /** iOS/cross-platform pressed background for list rows and sheet items. */
+  pressedBg: '#253548',
+  /** iOS/cross-platform pressed opacity for metric cells and icon buttons. */
+  pressedOpacity: 0.55,
+} as const

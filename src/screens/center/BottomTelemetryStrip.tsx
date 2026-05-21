@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { Sparkline } from '@/components/charts/Sparkline'
 import { BatteryIndicator } from '@/components/cards/BatteryIndicator'
+import { interaction } from '@/constants/theme'
 import { telemetry } from '@/constants/telemetry'
 import { routes } from '@/navigation/routes'
 import { liveSelectors, useLiveMetric } from '@/hooks/useLiveMetric'
@@ -42,7 +43,8 @@ export function BottomTelemetryStrip() {
     >
       <View style={styles.strip}>
         <Pressable
-          style={styles.metricCell}
+          style={({ pressed }) => [styles.metricCell, pressed && styles.cellPressed]}
+          android_ripple={interaction.ripple}
           onPress={() => router.push(routes.controlTemperatures)}
         >
           <Text style={styles.subLabel}>Motor</Text>
@@ -60,7 +62,8 @@ export function BottomTelemetryStrip() {
           />
         </Pressable>
         <Pressable
-          style={styles.metricCell}
+          style={({ pressed }) => [styles.metricCell, pressed && styles.cellPressed]}
+          android_ripple={interaction.ripple}
           onPress={() => router.push(routes.controlTemperatures)}
         >
           <Text style={styles.subLabel}>Ctrl</Text>
@@ -77,7 +80,11 @@ export function BottomTelemetryStrip() {
             windowMs={windowMs}
           />
         </Pressable>
-        <Pressable style={styles.metricCell} onPress={() => router.push(routes.controlCurrents)}>
+        <Pressable
+          style={({ pressed }) => [styles.metricCell, pressed && styles.cellPressed]}
+          android_ripple={interaction.ripple}
+          onPress={() => router.push(routes.controlCurrents)}
+        >
           <Text style={styles.subLabel}>Motor</Text>
           <Text style={styles.value} numberOfLines={1}>
             {fmtVal(motorCurrent, telemetry.motorCurrent.formatWithUnit)}
@@ -92,7 +99,11 @@ export function BottomTelemetryStrip() {
             windowMs={windowMs}
           />
         </Pressable>
-        <Pressable style={styles.metricCell} onPress={() => router.push(routes.controlCurrents)}>
+        <Pressable
+          style={({ pressed }) => [styles.metricCell, pressed && styles.cellPressed]}
+          android_ripple={interaction.ripple}
+          onPress={() => router.push(routes.controlCurrents)}
+        >
           <Text style={styles.subLabel}>Batt</Text>
           <Text style={styles.value} numberOfLines={1}>
             {fmtVal(batteryCurrent, telemetry.battCurrent.formatWithUnit)}
@@ -110,7 +121,11 @@ export function BottomTelemetryStrip() {
       </View>
 
       <View style={styles.bottomRow}>
-        <Pressable style={styles.sideIcon} onPress={() => router.push(routes.controlImu)}>
+        <Pressable
+          style={({ pressed }) => [styles.sideIcon, pressed && styles.cellPressed]}
+          android_ripple={interaction.rippleBorderless}
+          onPress={() => router.push(routes.controlImu)}
+        >
           <View
             style={[
               styles.imuLine,
@@ -122,7 +137,11 @@ export function BottomTelemetryStrip() {
           />
         </Pressable>
         <BatteryIndicator transparent containerStyle={styles.batteryCenter} />
-        <Pressable style={styles.sideIcon} onPress={() => router.push(routes.controlFootpad)}>
+        <Pressable
+          style={({ pressed }) => [styles.sideIcon, pressed && styles.cellPressed]}
+          android_ripple={interaction.rippleBorderless}
+          onPress={() => router.push(routes.controlFootpad)}
+        >
           <View style={styles.footpadRow}>
             <View
               style={[
@@ -210,6 +229,9 @@ const styles = StyleSheet.create({
   footpadActive: {
     borderColor: '#4ade80',
     backgroundColor: '#4ade80',
+  },
+  cellPressed: {
+    opacity: interaction.pressedOpacity,
   },
   imuLine: {
     width: 32,

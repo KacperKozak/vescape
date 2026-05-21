@@ -41,8 +41,12 @@ An immutable snapshot of a Tune Profile's field values captured immediately befo
 _Avoid_: Sync log, change event, audit trail
 
 **Alert Rule**:
-A user-defined telemetry threshold that can trigger board-riding feedback during a live connection.
+A user-defined telemetry threshold that can trigger board-riding feedback during a live connection. A rule with only a threshold fires a one-shot alert; a rule with both threshold and thresholdMax fires a geiger-style progressive alert that accelerates with range depth.
 _Avoid_: Alarm, notification
+
+**Alert Preset**:
+A bundled audio asset used for alert feedback, belonging to exactly one category: single (one-threshold alerts) or geiger (range alerts with progressive ticking).
+_Avoid_: Sound effect, ringtone, tone
 
 **Diagnostic Event**:
 An app-observed abnormal condition that helps explain board connection, telemetry, tuning, recording, or UI failures.

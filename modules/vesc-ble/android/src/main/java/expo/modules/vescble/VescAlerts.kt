@@ -2,7 +2,8 @@ package expo.modules.vescble
 
 import android.content.Context
 import android.media.AudioManager
-import android.media.ToneGenerator
+import android.media.AudioAttributes
+import android.media.SoundPool
 import android.os.Handler
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -49,11 +50,10 @@ internal class VescAlertEngine {
             val triggered = if (aboveDir) value >= rule.threshold else value <= rule.threshold
             if (!triggered) continue
             val rangeDepth = alertRangeDepth(value, rule.threshold, rule.thresholdMax, aboveDir)
-            val debounceMs = rangeDepth?.let { depth ->
-                (1_000L - (650L * depth)).toLong()
-            } ?: 10_000L
-            if (now - (lastFiredAt[rule.id] ?: 0L) < debounceMs) continue
-            lastFiredAt[rule.id] = now
+            if (rangeDepth == null) {
+                if (now - (lastFiredAt[rule.id] ?: 0L) < 10_000L) continue
+                lastFiredAt[rule.id] = now
+            }
             fired.add(FiredAlert(
                 ruleId = rule.id,
                 controlId = rule.controlId,
@@ -102,27 +102,111 @@ internal class VescAlertEngine {
     }
 }
 
+internal data class AlertSoundPreset(
+    val name: String,
+    val uri: String,
+    val category: String,
+    val resId: Int,
+) {
+    fun toMap(): Map<String, Any> = mapOf(
+        "name" to name,
+        "uri" to uri,
+        "category" to category,
+    )
+}
+
 internal class VescAlertFeedback(
     private val context: Context,
     private val handler: Handler,
 ) {
-    fun playTone(soundType: String, rangeDepth: Double?) {
+    private val soundPool = SoundPool.Builder()
+        .setMaxStreams(8)
+        .setAudioAttributes(
+            AudioAttributes.Builder()
+                .setLegacyStreamType(AudioManager.STREAM_ALARM)
+                .setUsage(AudioAttributes.USAGE_ALARM)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                .build()
+        )
+        .build()
+    private val soundIds = HashMap<Int, Int>()
+    private val geigerLoops = HashMap<String, GeigerLoop>()
+
+    init {
+        for (preset in ALERT_SOUND_PRESETS) {
+            soundIds[preset.resId] = soundPool.load(context, preset.resId, 1)
+        }
+    }
+
+    fun playSingle(soundType: String) {
         try {
-            val tg = ToneGenerator(AudioManager.STREAM_ALARM, ToneGenerator.MAX_VOLUME)
-            if (rangeDepth != null) {
-                val durationMs = (140L + (760L * rangeDepth)).toInt()
-                tg.startTone(alertTone(soundType), durationMs)
-                handler.postDelayed({ tg.release() }, durationMs + 120L)
+            val preset = resolveAlertPreset(soundType, ALERT_CATEGORY_SINGLE)
+            playPreset(preset)
+            handler.postDelayed({ playPreset(preset) }, 500)
+            handler.postDelayed({ playPreset(preset) }, 1_000)
+        } catch (e: Exception) {
+            Log.w(VESC_SESSION_TAG, "Alert sound failed: ${e.message}")
+        }
+    }
+
+    fun preview(soundType: String) {
+        try {
+            playPreset(resolveAlertPreset(soundType, null))
+        } catch (e: Exception) {
+            Log.w(VESC_SESSION_TAG, "Alert preview failed: ${e.message}")
+        }
+    }
+
+    fun updateGeiger(ruleId: String, soundType: String, rangeDepth: Double) {
+        try {
+            val depth = rangeDepth.coerceIn(0.0, 1.0)
+            val existing = geigerLoops[ruleId]
+            val tickPreset = resolveAlertPreset(soundType, ALERT_CATEGORY_GEIGER)
+            if (depth >= 1.0) {
+                existing?.runnable?.let { handler.removeCallbacks(it) }
+                if (existing?.sustained == true) return
+                existing?.streamId?.let { soundPool.stop(it) }
+                val streamId = playPreset(tickPreset, loop = -1)
+                geigerLoops[ruleId] = GeigerLoop(soundType, depth, sustained = true, streamId = streamId)
                 return
             }
-            val tone = alertTone(soundType)
-            tg.startTone(tone, 450)
-            handler.postDelayed({ tg.startTone(tone, 450) }, 500)
-            handler.postDelayed({ tg.startTone(tone, 450) }, 1_000)
-            handler.postDelayed({ tg.release() }, 1_600)
+
+            if (existing?.sustained == true) {
+                existing.streamId?.let { soundPool.stop(it) }
+            }
+            if (existing != null && !existing.sustained && existing.soundType == soundType) {
+                existing.rangeDepth = depth
+                return
+            }
+            existing?.runnable?.let { handler.removeCallbacks(it) }
+            val loop = GeigerLoop(soundType, depth, sustained = false)
+            val runnable = object : Runnable {
+                override fun run() {
+                    playPreset(tickPreset)
+                    handler.postDelayed(this, geigerIntervalMs(loop.rangeDepth))
+                }
+            }
+            loop.runnable = runnable
+            geigerLoops[ruleId] = loop
+            handler.post(runnable)
         } catch (e: Exception) {
-            Log.w(VESC_SESSION_TAG, "Alert tone failed: ${e.message}")
+            Log.w(VESC_SESSION_TAG, "Geiger sound failed: ${e.message}")
         }
+    }
+
+    fun stopGeiger(ruleId: String) {
+        val loop = geigerLoops.remove(ruleId) ?: return
+        loop.runnable?.let { handler.removeCallbacks(it) }
+        loop.streamId?.let { soundPool.stop(it) }
+    }
+
+    fun stopAllGeiger() {
+        for (ruleId in geigerLoops.keys.toList()) stopGeiger(ruleId)
+    }
+
+    fun release() {
+        stopAllGeiger()
+        soundPool.release()
     }
 
     fun vibrate(rangeDepth: Double?) {
@@ -139,18 +223,44 @@ internal class VescAlertFeedback(
         }
     }
 
+    private fun playPreset(preset: AlertSoundPreset, loop: Int = 0): Int {
+        val soundId = soundIds[preset.resId] ?: return 0
+        return soundPool.play(soundId, 1f, 1f, 1, loop, 1f)
+    }
+
+    private fun geigerIntervalMs(rangeDepth: Double): Long =
+        (800L - (740L * rangeDepth.coerceIn(0.0, 1.0))).toLong().coerceIn(60L, 800L)
+
+    private data class GeigerLoop(
+        val soundType: String,
+        var rangeDepth: Double,
+        val sustained: Boolean,
+        val streamId: Int? = null,
+        var runnable: Runnable? = null,
+    )
+
     companion object {
-        fun preview(soundType: String) {
+        fun preview(context: Context, soundType: String) {
             val handler = Handler(contextMainLooper())
+            val preset = resolveAlertPreset(soundType, null)
+            val pool = SoundPool.Builder()
+                .setMaxStreams(2)
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setLegacyStreamType(AudioManager.STREAM_ALARM)
+                        .setUsage(AudioAttributes.USAGE_ALARM)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                )
+                .build()
             try {
-                val tg = ToneGenerator(AudioManager.STREAM_ALARM, ToneGenerator.MAX_VOLUME)
-                val tone = alertTone(soundType)
-                tg.startTone(tone, 350)
-                if (soundType == "urgent") {
-                    handler.postDelayed({ tg.startTone(tone, 350) }, 380)
+                pool.setOnLoadCompleteListener { soundPool, sampleId, status ->
+                    if (status == 0) soundPool.play(sampleId, 1f, 1f, 1, 0, 1f)
                 }
-                handler.postDelayed({ tg.release() }, if (soundType == "urgent") 900 else 500)
+                pool.load(context, preset.resId, 1)
+                handler.postDelayed({ pool.release() }, 1_000)
             } catch (e: Exception) {
+                pool.release()
                 Log.w(VESC_SESSION_TAG, "Alert preview failed: ${e.message}")
             }
         }
@@ -159,8 +269,37 @@ internal class VescAlertFeedback(
     }
 }
 
-private fun alertTone(soundType: String): Int = when (soundType) {
-    "urgent" -> ToneGenerator.TONE_CDMA_ABBR_ALERT
-    "pulse"  -> ToneGenerator.TONE_PROP_BEEP
-    else     -> ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD
+internal fun alertSoundPresetMaps(): List<Map<String, Any>> =
+    ALERT_SOUND_PRESETS
+        .filter { it.uri != "preset:sustained" }
+        .map { it.toMap() }
+
+private const val ALERT_CATEGORY_SINGLE = "single"
+private const val ALERT_CATEGORY_GEIGER = "geiger"
+
+private val ALERT_SOUND_PRESETS = listOf(
+    AlertSoundPreset("Beep", "preset:beep", ALERT_CATEGORY_SINGLE, R.raw.alert_beep),
+    AlertSoundPreset("Urgent", "preset:urgent", ALERT_CATEGORY_SINGLE, R.raw.alert_urgent),
+    AlertSoundPreset("Notify", "preset:notify", ALERT_CATEGORY_SINGLE, R.raw.alert_notify),
+    AlertSoundPreset("Tick", "preset:tick", ALERT_CATEGORY_GEIGER, R.raw.alert_tick),
+    AlertSoundPreset("Hard Tick", "preset:tick_hard", ALERT_CATEGORY_GEIGER, R.raw.alert_tick_hard),
+    AlertSoundPreset("Gamma", "preset:gamma", ALERT_CATEGORY_GEIGER, R.raw.alert_gamma),
+    AlertSoundPreset("Sustained", "preset:sustained", ALERT_CATEGORY_GEIGER, R.raw.alert_sustained),
+)
+
+private fun resolveAlertPreset(soundType: String, category: String?): AlertSoundPreset {
+    val key = when {
+        soundType.startsWith("preset:") -> soundType.removePrefix("preset:")
+        soundType.contains(":") -> null
+        soundType == "default" -> "beep"
+        soundType == "pulse" -> "notify"
+        else -> soundType
+    }
+    val uri = key?.let { "preset:$it" }
+    val preset = ALERT_SOUND_PRESETS.firstOrNull { it.uri == uri }
+    if (preset != null && (category == null || preset.category == category)) return preset
+    return when (category) {
+        ALERT_CATEGORY_GEIGER -> ALERT_SOUND_PRESETS.first { it.uri == "preset:tick" }
+        else -> ALERT_SOUND_PRESETS.first { it.uri == "preset:beep" }
+    }
 }

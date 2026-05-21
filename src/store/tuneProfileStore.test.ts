@@ -2,6 +2,8 @@ import { beforeEach, expect, mock, test } from 'bun:test'
 
 import type { TuneProfile } from 'vesc-ble'
 
+const actualVescBle = await import('../../modules/vesc-ble/src/index')
+
 const profile: TuneProfile = {
   id: 'profile-1',
   boardId: 'board-1',
@@ -21,15 +23,30 @@ const saveProfile = mock(async (_profileId: string, fields: TuneProfile['fields'
   fields,
   updatedAt: 2000,
 }))
+const createProfile = mock(async () => profile)
+const renameProfile = mock(async () => profile)
+const deleteProfile = mock(async () => {})
+const getProfileHistory = mock(async () => [])
+const rollbackProfile = mock(async () => profile)
+const copyProfileToBoard = mock(async () => profile)
+const pushProfileToBoard = mock(async () => profile)
 
 const vescBleMock = {
+  ...actualVescBle,
   getTuneProfiles,
   getTuneProfile,
   saveProfile,
+  createProfile,
+  renameProfile,
+  deleteProfile,
+  getProfileHistory,
+  rollbackProfile,
+  copyProfileToBoard,
+  pushProfileToBoard,
 }
 
 mock.module('vesc-ble', () => vescBleMock)
-mock.module('../../modules/vesc-ble/src/index.ts', () => vescBleMock)
+mock.module('../../modules/vesc-ble/src/index', () => vescBleMock)
 
 beforeEach(async () => {
   getTuneProfiles.mockClear()

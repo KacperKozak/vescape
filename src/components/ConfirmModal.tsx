@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Animated, Modal, Pressable, StyleSheet, Text, View } from 'react-native'
 
+import { Button } from '@/components/Button'
+
 const FADE_DURATION = 120
 
 interface ConfirmModalProps {
@@ -53,17 +55,18 @@ export function ConfirmModal({
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.message}>{message}</Text>
           <View style={styles.actions}>
-            <Pressable style={styles.cancelButton} onPress={onCancel}>
-              <Text style={styles.cancelText}>{cancelLabel}</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.confirmButton, destructive && styles.confirmDestructive]}
+            <Button
+              style={styles.actionBtn}
+              label={cancelLabel}
+              variant="secondary"
+              onPress={onCancel}
+            />
+            <Button
+              style={styles.actionBtn}
+              label={confirmLabel}
+              variant={destructive ? 'destructive' : 'primary'}
               onPress={onConfirm}
-            >
-              <Text style={[styles.confirmText, destructive && styles.confirmTextDestructive]}>
-                {confirmLabel}
-              </Text>
-            </Pressable>
+            />
           </View>
         </Animated.View>
       </Animated.View>
@@ -108,38 +111,7 @@ const styles = StyleSheet.create({
     gap: 10,
     marginTop: 8,
   },
-  cancelButton: {
+  actionBtn: {
     flex: 1,
-    height: 40,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#1e293b',
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  cancelText: {
-    color: '#cbd5e1',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  confirmButton: {
-    flex: 1,
-    height: 40,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#1d4ed8',
-  },
-  confirmDestructive: {
-    backgroundColor: '#991b1b',
-  },
-  confirmText: {
-    color: '#f8fafc',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  confirmTextDestructive: {
-    color: '#fecaca',
   },
 })

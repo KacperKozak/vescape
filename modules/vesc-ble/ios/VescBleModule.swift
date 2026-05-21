@@ -98,6 +98,25 @@ public class VescBleModule: Module {
       // no-op in iOS simulator mock
     }
 
+    Function("getAlertPresets") {
+      [
+        ["name": "Beep", "uri": "preset:beep", "category": "single"],
+        ["name": "Urgent", "uri": "preset:urgent", "category": "single"],
+        ["name": "Notify", "uri": "preset:notify", "category": "single"],
+        ["name": "Tick", "uri": "preset:tick", "category": "geiger"],
+        ["name": "Hard Tick", "uri": "preset:tick_hard", "category": "geiger"],
+        ["name": "Gamma", "uri": "preset:gamma", "category": "geiger"],
+      ]
+    }
+
+    Function("startGeigerSimulation") { (_: String, _: Double) in
+      // no-op in iOS simulator mock
+    }
+
+    Function("stopGeigerSimulation") {
+      // no-op in iOS simulator mock
+    }
+
     // MARK: Board session
 
     Function("getLiveState") {

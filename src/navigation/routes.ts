@@ -1,3 +1,5 @@
+import type { Href } from 'expo-router'
+
 export const routes = {
   home: '/',
   profile: '/profile',
@@ -18,6 +20,7 @@ export const routes = {
   controlState: '/control/state',
   controlFootpad: '/control/footpad',
   controlImu: '/control/imu',
+  settingsSoundPlayground: '/settings/soundPlayground' as Href,
 } as const
 
 export const stackScreens = {
@@ -32,4 +35,5 @@ export const stackScreens = {
   tuneHistory: 'tune/history',
   addBoardScan: 'addBoard/scan',
   addBoardDetails: 'addBoard/details',
+  settingsSoundPlayground: 'settings/soundPlayground',
 } as const

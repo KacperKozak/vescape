@@ -17,6 +17,8 @@ interface SparklineProps {
   fmtMax?: (value: number) => string
   /** Show/hide the max-value badge text row. Max dot still follows `fmtMax`. */
   showMaxBadge?: boolean
+  /** Horizontal alignment of the max badge. Defaults to 'right'. */
+  maxPosition?: 'left' | 'right'
   /** Optional fixed Y range. Overrides auto-range. */
   range?: { min: number; max: number }
   /**
@@ -94,6 +96,7 @@ export function Sparkline({
   height = DEFAULT_HEIGHT,
   fmtMax,
   showMaxBadge = true,
+  maxPosition = 'right',
   range,
   minSpan = 0,
   windowMs,
@@ -194,7 +197,15 @@ export function Sparkline({
   return (
     <View style={styles.wrap}>
       {showBadge ? (
-        <View style={[styles.badgeRow, { height: BADGE_ROW_HEIGHT }]}>
+        <View
+          style={[
+            styles.badgeRow,
+            {
+              height: BADGE_ROW_HEIGHT,
+              justifyContent: maxPosition === 'left' ? 'flex-start' : 'flex-end',
+            },
+          ]}
+        >
           <Text style={styles.maxBadge} numberOfLines={1}>
             <Text style={styles.maxLabel}>max </Text>
             <Text style={{ color: maxValue != null ? color : '#475569' }}>
@@ -250,7 +261,6 @@ const styles = StyleSheet.create({
   },
   badgeRow: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
     alignItems: 'center',
   },
   maxBadge: {

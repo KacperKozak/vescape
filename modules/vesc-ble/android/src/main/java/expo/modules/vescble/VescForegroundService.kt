@@ -169,8 +169,10 @@ class VescForegroundService : Service() {
         }
 
         fun previewAlertSound(context: Context, soundType: String) {
-            instance?.alertFeedback?.playTone(soundType, null) ?: VescAlertFeedback.preview(soundType)
+            instance?.alertFeedback?.preview(soundType) ?: VescAlertFeedback.preview(context, soundType)
         }
+
+        fun alertSoundPresets(): List<Map<String, Any>> = alertSoundPresetMaps()
 
         fun currentLiveState(context: Context): Map<String, Any?> =
             instance?.liveStateMap(includeRecent = true)
@@ -280,7 +282,7 @@ class VescForegroundService : Service() {
         )
     }
     private val alertEngine = VescAlertEngine()
-    private var lastFeedbackRuleId: String? = null
+    private var activeGeigerRuleIds: Set<String> = emptySet()
     private val alertFeedback by lazy { VescAlertFeedback(this, mainHandler) }
     private val gpsMonitor by lazy {
         VescGpsMonitor(
@@ -365,6 +367,7 @@ class VescForegroundService : Service() {
         if (!isStoppingService) {
             stopCurrentBoardSession(emitDisconnected = false)
         }
+        alertFeedback.release()
         stopLocationUpdates()
         instance = null
         DiagnosticReporter.get(this).flush()
@@ -1345,6 +1348,8 @@ class VescForegroundService : Service() {
         cancelBoardReadyTimeout()
         stopPolling()
         gattClient.clear(markIntentional = true)
+        alertFeedback.stopAllGeiger()
+        activeGeigerRuleIds = emptySet()
         finishRecording(if (emitDisconnected) "disconnected" else "stopped")
         telemetryStore?.recordMarker(
             if (emitDisconnected) "disconnected" else "app_stop",
@@ -1686,26 +1691,24 @@ class VescForegroundService : Service() {
 
     private fun evaluateAlerts(t: RefloatTelemetry): List<Map<String, Any?>> {
         val fired = alertEngine.evaluate(alertRules, t)
-        if (fired.isNotEmpty()) {
-            val alert = pickNextFeedback(fired)
-            alertFeedback.playTone(alert.soundType, alert.rangeDepth)
-            alertFeedback.vibrate(alert.rangeDepth)
-        } else {
-            lastFeedbackRuleId = null
+        val geiger = fired.filter { it.rangeDepth != null }
+        val geigerRuleIds = geiger.mapTo(HashSet()) { it.ruleId }
+        for (ruleId in activeGeigerRuleIds - geigerRuleIds) {
+            alertFeedback.stopGeiger(ruleId)
+        }
+        activeGeigerRuleIds = geigerRuleIds
+        for (alert in geiger) {
+            alertFeedback.updateGeiger(alert.ruleId, alert.soundType, alert.rangeDepth ?: 0.0)
+        }
+
+        val single = fired.filter { it.rangeDepth == null }
+        if (single.isNotEmpty()) {
+            for (alert in single) {
+                alertFeedback.playSingle(alert.soundType)
+            }
+            alertFeedback.vibrate(null)
         }
         return fired.map { it.toMap() }
-    }
-
-    private fun pickNextFeedback(fired: List<FiredAlert>): FiredAlert {
-        if (fired.size == 1) {
-            lastFeedbackRuleId = fired[0].ruleId
-            return fired[0]
-        }
-        val lastIdx = fired.indexOfFirst { it.ruleId == lastFeedbackRuleId }
-        val nextIdx = if (lastIdx < 0) 0 else (lastIdx + 1) % fired.size
-        val pick = fired[nextIdx]
-        lastFeedbackRuleId = pick.ruleId
-        return pick
     }
 
     private fun appendRecentTelemetry(point: Map<String, Any?>, packetAt: Long) {

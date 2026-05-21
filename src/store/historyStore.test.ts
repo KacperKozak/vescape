@@ -8,6 +8,8 @@ import type {
   TelemetrySummary,
 } from 'vesc-ble'
 
+const actualVescBle = await import('../../modules/vesc-ble/src/index')
+
 const summary: TelemetrySummary = {
   sampleCount: 0,
   gpsPointCount: 0,
@@ -24,7 +26,11 @@ type HistoryRangeResult = {
 }
 
 const getHistoryRange = mock(
-  async (): Promise<HistoryRangeResult> => ({ boardSamples: [], gpsSamples: [], markers: [] }),
+  async (): Promise<HistoryRangeResult> => ({
+    boardSamples: [],
+    gpsSamples: [],
+    markers: [],
+  }),
 )
 const getTelemetrySummary = mock(async () => summary)
 const clearTelemetryHistory = mock(async () => {})
@@ -38,6 +44,7 @@ const getSettings = mock(async () => ({
 const updateSetting = mock(async () => {})
 
 const vescBleMock = {
+  ...actualVescBle,
   getTelemetryHistory,
   getHistoryRange,
   getTelemetrySummary,
@@ -48,7 +55,7 @@ const vescBleMock = {
 }
 
 mock.module('vesc-ble', () => vescBleMock)
-mock.module('../../modules/vesc-ble/src/index.ts', () => vescBleMock)
+mock.module('../../modules/vesc-ble/src/index', () => vescBleMock)
 
 function block(overrides: Partial<TelemetryHistoryBlock>): TelemetryHistoryBlock {
   const startAtMs = overrides.startAtMs ?? 0
@@ -143,9 +150,21 @@ beforeEach(async () => {
 })
 
 test('removes selected session from history and selects next ride', async () => {
-  const newest = block({ id: 'newest', startAtMs: 3_000_000, endAtMs: 3_060_000 })
-  const selected = block({ id: 'selected', startAtMs: 2_000_000, endAtMs: 2_060_000 })
-  const oldest = block({ id: 'oldest', startAtMs: 1_000_000, endAtMs: 1_060_000 })
+  const newest = block({
+    id: 'newest',
+    startAtMs: 3_000_000,
+    endAtMs: 3_060_000,
+  })
+  const selected = block({
+    id: 'selected',
+    startAtMs: 2_000_000,
+    endAtMs: 2_060_000,
+  })
+  const oldest = block({
+    id: 'oldest',
+    startAtMs: 1_000_000,
+    endAtMs: 1_060_000,
+  })
   getTelemetryHistory.mockResolvedValueOnce([newest, selected, oldest])
 
   const { useHistoryStore } = await import('./historyStore')
@@ -168,7 +187,11 @@ test('removes selected session from history and selects next ride', async () => 
 })
 
 test('keeps current ride data visible while selecting another ride', async () => {
-  const current = block({ id: 'current', startAtMs: 2_000_000, endAtMs: 2_060_000 })
+  const current = block({
+    id: 'current',
+    startAtMs: 2_000_000,
+    endAtMs: 2_060_000,
+  })
   const next = block({ id: 'next', startAtMs: 1_000_000, endAtMs: 1_060_000 })
   const currentSample = sample({ id: 10, capturedAtMs: current.startAtMs })
   const nextSample = sample({ id: 20, capturedAtMs: next.startAtMs })
@@ -213,9 +236,21 @@ test('keeps current ride data visible while selecting another ride', async () =>
 })
 
 test('loads older history pages and merges sessions', async () => {
-  const newest = block({ id: 'newest', startAtMs: 3_000_000, endAtMs: 3_060_000 })
-  const oldestLoaded = block({ id: 'oldest-loaded', startAtMs: 2_000_000, endAtMs: 2_060_000 })
-  const older = block({ id: 'older', startAtMs: 1_000_000, endAtMs: 1_060_000 })
+  const newest = block({
+    id: 'newest',
+    startAtMs: 3_000_000,
+    endAtMs: 3_060_000,
+  })
+  const oldestLoaded = block({
+    id: 'oldest-loaded',
+    startAtMs: 2_000_000,
+    endAtMs: 2_060_000,
+  })
+  const older = block({
+    id: 'older',
+    startAtMs: 1_000_000,
+    endAtMs: 1_060_000,
+  })
   getTelemetryHistory.mockResolvedValueOnce([newest, oldestLoaded])
   getTelemetryHistory.mockResolvedValueOnce([older])
 
@@ -243,9 +278,21 @@ test('loads older history pages and merges sessions', async () => {
 })
 
 test('keeps selected session addressable when older page expands it', async () => {
-  const newest = block({ id: 'newest', startAtMs: 3_000_000, endAtMs: 3_060_000 })
-  const partial = block({ id: 'partial', startAtMs: 2_000_000, endAtMs: 2_060_000 })
-  const olderSameRide = block({ id: 'older-same-ride', startAtMs: 1_960_000, endAtMs: 1_999_000 })
+  const newest = block({
+    id: 'newest',
+    startAtMs: 3_000_000,
+    endAtMs: 3_060_000,
+  })
+  const partial = block({
+    id: 'partial',
+    startAtMs: 2_000_000,
+    endAtMs: 2_060_000,
+  })
+  const olderSameRide = block({
+    id: 'older-same-ride',
+    startAtMs: 1_960_000,
+    endAtMs: 1_999_000,
+  })
   getTelemetryHistory.mockResolvedValueOnce([newest, partial])
   getTelemetryHistory.mockResolvedValueOnce([olderSameRide])
 

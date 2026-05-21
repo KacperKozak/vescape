@@ -6,7 +6,7 @@ JS layer may be suspended during a ride. Alerts are evaluated natively so they f
 
 ```
 JS calls VescBle alert CRUD → native Room storage updates → VescForegroundService reloads rules
-VescForegroundService: each BLE packet → evaluateAlerts() → ToneGenerator + Vibrator
+VescForegroundService: each BLE packet → evaluateAlerts() → SoundPool + Vibrator
 Fired alerts embedded in that packet's telemetry map → visible in recentTelemetry
 ```
 
@@ -21,7 +21,7 @@ No separate event. No JS-side audio. Native storage is the source of truth.
 | `threshold`     | REAL          | trigger point                   |
 | `threshold_max` | REAL nullable | range upper bound (Geiger mode) |
 | `enabled`       | INTEGER 0/1   | toggled by user                 |
-| `sound_type`    | TEXT          | `'default'` only for now        |
+| `sound_type`    | TEXT          | preset URI, e.g. `preset:beep`  |
 | `created_at`    | INTEGER       | ms epoch                        |
 
 ## Control IDs & implicit direction
@@ -42,18 +42,16 @@ Direction is hardcoded per control — not stored.
 
 ## Geiger mode
 
-Set `threshold_max` to add a range. Debounce shrinks linearly:
+Set `threshold_max` to add a range. Active range alerts run a native SoundPool tick loop using the selected geiger preset. The interval shrinks linearly:
 
-- at `threshold` → 1 s between beeps
-- at `threshold_max` → 350 ms between beeps
+- at `threshold` → about 800 ms between ticks
+- at `threshold_max` → the selected geiger preset loops continuously
 
 Single threshold (no `threshold_max`) → fixed 10 s debounce.
 
-When multiple alerts fire on the same packet, feedback rotates between them
-so cross-control alerts (e.g. speed + duty) are each heard in turn.
-Within a single evaluation, the most urgent alert is sorted first
-(Geiger over simple; higher threshold for above-direction controls,
-lower threshold for below-direction).
+When multiple alerts fire on the same packet, SoundPool lets their clips or geiger loops overlap.
+Within a single evaluation, the most urgent alert is sorted first for telemetry display
+(Geiger over simple; higher threshold for above-direction controls, lower threshold for below-direction).
 
 ## JS side
 

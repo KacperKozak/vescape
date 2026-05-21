@@ -1,7 +1,13 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
-import { CaretRightIcon, ChartLineUpIcon, SwatchesIcon, ToolboxIcon } from 'phosphor-react-native'
+import {
+  CaretRightIcon,
+  ChartLineUpIcon,
+  SpeakerHighIcon,
+  SwatchesIcon,
+  ToolboxIcon,
+} from 'phosphor-react-native'
 
 import { routes } from '@/navigation/routes'
 
@@ -11,6 +17,12 @@ const devPages = [
     hint: 'Browse all UI components with live props',
     route: routes.settingsComponents,
     icon: SwatchesIcon,
+  },
+  {
+    label: 'Sound Playground',
+    hint: 'Preview alert presets and geiger simulation',
+    route: routes.settingsSoundPlayground,
+    icon: SpeakerHighIcon,
   },
   {
     label: 'Diagnostic',
@@ -37,7 +49,7 @@ export default function DevSettingsScreen() {
             const Icon = page.icon
 
             return (
-              <View key={page.route}>
+              <View key={page.label}>
                 <Pressable style={styles.row} onPress={() => router.push(page.route)}>
                   <View style={styles.rowIcon}>
                     <Icon size={20} color="#94a3b8" weight="duotone" />

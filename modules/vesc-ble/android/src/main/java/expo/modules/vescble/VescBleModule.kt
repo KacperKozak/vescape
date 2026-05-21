@@ -37,6 +37,7 @@ class VescBleModule : Module() {
   private var frontendActive = true
   private val observedEvents = mutableSetOf<String>()
   private val mainHandler = Handler(Looper.getMainLooper())
+  private var previewAlertFeedback: VescAlertFeedback? = null
 
   private val context: Context get() = appContext.reactContext
     ?: throw IllegalStateException("No React context")
@@ -89,6 +90,8 @@ class VescBleModule : Module() {
       frontendActive = false
       VescForegroundService.setAppInForeground(false)
       observedEvents.clear()
+      previewAlertFeedback?.release()
+      previewAlertFeedback = null
       if (VescForegroundService.emitEvent != null) {
         VescForegroundService.emitEvent = null
       }
@@ -104,6 +107,17 @@ class VescBleModule : Module() {
     }
     Function("previewAlertSound") { soundType: String ->
       VescForegroundService.previewAlertSound(context.applicationContext, soundType)
+    }
+    Function("getAlertPresets") {
+      VescForegroundService.alertSoundPresets()
+    }
+    Function("startGeigerSimulation") { soundType: String, rangeDepth: Double ->
+      val feedback = previewAlertFeedback ?: VescAlertFeedback(context.applicationContext, mainHandler)
+        .also { previewAlertFeedback = it }
+      feedback.updateGeiger("preview", soundType, rangeDepth)
+    }
+    Function("stopGeigerSimulation") {
+      previewAlertFeedback?.stopGeiger("preview")
     }
     Function("getLiveState") {
       liveStateWithScan(VescForegroundService.currentLiveState(context.applicationContext))

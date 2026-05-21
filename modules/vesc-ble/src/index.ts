@@ -63,7 +63,15 @@ export interface Board {
   maxVoltage: number | null
 }
 
-export type AlertSoundType = 'default' | 'urgent' | 'pulse'
+export type AlertSoundType = string
+
+export type AlertPresetCategory = 'single' | 'geiger'
+
+export interface AlertPreset {
+  name: string
+  uri: string
+  category: AlertPresetCategory
+}
 
 export interface AlertRule {
   id: string
@@ -357,7 +365,10 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
   stopLocationUpdates(): void
   setTelemetryRecordingEnabled(enabled: boolean): void
   reloadAlertRules(): void
+  getAlertPresets(): AlertPreset[]
   previewAlertSound(soundType: AlertSoundType): void
+  startGeigerSimulation(soundType: string, rangeDepth: number): void
+  stopGeigerSimulation(): void
   selectBoard(boardId: string): Promise<void>
   stopBoard(): Promise<void>
   setDebugRecordingEnabled(enabled: boolean): void
@@ -456,8 +467,41 @@ export function reloadAlertRules(): void {
   native.reloadAlertRules()
 }
 
+const FALLBACK_PRESETS: AlertPreset[] = [
+  { name: 'Beep', uri: 'preset:beep', category: 'single' },
+  { name: 'Urgent', uri: 'preset:urgent', category: 'single' },
+  { name: 'Notify', uri: 'preset:notify', category: 'single' },
+  { name: 'Tick', uri: 'preset:tick', category: 'geiger' },
+  { name: 'Hard Tick', uri: 'preset:tick_hard', category: 'geiger' },
+  { name: 'Gamma', uri: 'preset:gamma', category: 'geiger' },
+]
+
+export function getAlertPresets(): AlertPreset[] {
+  try {
+    return native.getAlertPresets()
+  } catch {
+    return FALLBACK_PRESETS
+  }
+}
+
 export function previewAlertSound(soundType: AlertSoundType): void {
   native.previewAlertSound(soundType)
+}
+
+export function startGeigerSimulation(soundType: string, rangeDepth: number): void {
+  try {
+    native.startGeigerSimulation(soundType, rangeDepth)
+  } catch {
+    // Native geiger simulation not yet available
+  }
+}
+
+export function stopGeigerSimulation(): void {
+  try {
+    native.stopGeigerSimulation()
+  } catch {
+    // Native geiger simulation not yet available
+  }
 }
 
 /** Select saved board by app board id. Native reads BLE id/name from its DB and owns connect. */

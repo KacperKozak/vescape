@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { CaretDownIcon, CheckIcon } from 'phosphor-react-native'
 
+import { interaction } from '@/constants/theme'
 import { Dropdown } from './Dropdown'
 
 const MAX_DROPDOWN_HEIGHT = 280
@@ -118,7 +119,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#0c2a3f',
   },
   optionPressed: {
-    backgroundColor: '#253548',
+    backgroundColor: interaction.pressedBg,
   },
   optionText: {
     color: '#e2e8f0',

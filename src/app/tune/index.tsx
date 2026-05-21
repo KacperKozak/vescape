@@ -15,6 +15,7 @@ import {
   BluetoothSlashIcon,
   CheckIcon,
   ClockCounterClockwiseIcon,
+  FadersIcon,
   InfoIcon,
   WarningCircleIcon,
   XIcon,
@@ -30,6 +31,7 @@ import {
 } from 'vesc-ble'
 
 import { Banner } from '@/components/Banner'
+import { IconButton } from '@/components/IconButton'
 import { ConfirmModal } from '@/components/ConfirmModal'
 import { InfoModal } from '@/components/InfoModal'
 import { Placeholder } from '@/components/Placeholder'
@@ -57,6 +59,7 @@ import { getSyncBarState } from '@/tune/syncBarState'
 type LoadState =
   | { phase: 'loading'; snapshot: RefloatConfigSnapshot | null; error: string | null }
   | { phase: 'ready'; snapshot: RefloatConfigSnapshot; error: null }
+  | { phase: 'empty'; snapshot: null; error: null }
   | { phase: 'error'; snapshot: RefloatConfigSnapshot | null; error: string }
 
 type InfoModalState = { title: string; message: string } | null
@@ -212,7 +215,9 @@ export default function TuneScreen() {
         const profileList = await loadProfiles(boardId)
         const profile = profileList[0]
         if (!profile) {
-          throw new Error('No saved Tune Profile for this Board.')
+          setBoardSnapshot(null)
+          setState({ phase: 'empty', snapshot: null, error: null })
+          return
         }
         const snapshot = snapshotFromTuneProfile(boardId, profile)
         setBoardSnapshot(null)
@@ -264,25 +269,14 @@ export default function TuneScreen() {
       headerRight: () => (
         <View style={styles.headerActions}>
           {activeProfile ? (
-            <Pressable style={styles.headerButton} onPress={() => void openHistory()}>
-              <ClockCounterClockwiseIcon size={17} color="#cbd5e1" weight="bold" />
-            </Pressable>
+            <IconButton icon={ClockCounterClockwiseIcon} onPress={() => void openHistory()} />
           ) : null}
           {boardConnected ? (
-            <Pressable
-              style={[
-                styles.headerButton,
-                state.phase === 'loading' && styles.headerButtonDisabled,
-              ]}
+            <IconButton
+              icon={ArrowsClockwiseIcon}
               onPress={() => void loadOnline()}
-              disabled={state.phase === 'loading'}
-            >
-              {state.phase === 'loading' ? (
-                <ActivityIndicator size="small" color="#38bdf8" />
-              ) : (
-                <ArrowsClockwiseIcon size={17} color="#cbd5e1" weight="bold" />
-              )}
-            </Pressable>
+              loading={state.phase === 'loading'}
+            />
           ) : null}
         </View>
       ),
@@ -506,6 +500,14 @@ export default function TuneScreen() {
             {boardConnected ? 'Reading board config...' : 'Loading saved tune profile...'}
           </Text>
         </View>
+      ) : null}
+
+      {state.phase === 'empty' ? (
+        <Placeholder
+          icon={FadersIcon}
+          title="No saved tunes"
+          description="Connect to your board to read its current configuration and create your first Tune Profile"
+        />
       ) : null}
 
       {state.phase === 'error' && !snapshot ? (
@@ -927,19 +929,6 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: 'row',
     gap: 8,
-  },
-  headerButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#1e293b',
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  headerButtonDisabled: {
-    opacity: 0.7,
   },
   content: {
     padding: 16,

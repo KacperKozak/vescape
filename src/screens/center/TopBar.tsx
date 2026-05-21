@@ -11,6 +11,7 @@ import { router } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { BoardSelectorSheet } from '@/components/BoardSelectorSheet'
+import { IconButton } from '@/components/IconButton'
 import { routes } from '@/navigation/routes'
 import type { Board } from '@/store/boardStore'
 import { theme } from '@/constants/theme'
@@ -58,12 +59,11 @@ export function TopBar({
   return (
     <View style={[styles.wrap, { paddingTop: Math.max(insets.top, 8) }]} pointerEvents="box-none">
       <View style={styles.row}>
-        <Pressable
-          style={[styles.iconRound, styles.iconLeft]}
+        <IconButton
+          icon={UserCircleIcon}
           onPress={() => router.push(routes.profile)}
-        >
-          <UserCircleIcon size={17} color="#cbd5e1" weight="bold" />
-        </Pressable>
+          style={styles.iconLeft}
+        />
         <View ref={pillRef} style={styles.pill}>
           <Pressable style={styles.boardButton} onPress={() => setSelectorOpen(true)}>
             <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
@@ -90,12 +90,11 @@ export function TopBar({
             </Pressable>
           )}
         </View>
-        <Pressable
-          style={[styles.iconRound, styles.iconRight]}
+        <IconButton
+          icon={GearSixIcon}
           onPress={() => router.push(routes.settings)}
-        >
-          <GearSixIcon size={15} color="#cbd5e1" weight="bold" />
-        </Pressable>
+          style={styles.iconRight}
+        />
       </View>
 
       <BoardSelectorSheet
@@ -132,16 +131,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 10,
-  },
-  iconRound: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(148, 163, 184, 0.28)',
-    backgroundColor: 'rgba(15, 23, 42, 0.72)',
   },
   iconRoundDisabled: {
     opacity: 0.4,
