@@ -616,6 +616,7 @@ export function DualGauge({
             height={28}
             range={{ min: 0, max: speedMax }}
             fmtMax={(v) => telemetry.speed.formatWithUnit(v)}
+            maxPosition="left"
             windowMs={windowMs}
           />
           <QuarterArc
