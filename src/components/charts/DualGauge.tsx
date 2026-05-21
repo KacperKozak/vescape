@@ -7,7 +7,7 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native'
-import { type ReactNode } from 'react'
+import { type ReactNode, useId } from 'react'
 import Animated, { useAnimatedProps, type SharedValue } from 'react-native-reanimated'
 import { useRouter } from 'expo-router'
 import Svg, { Defs, Line, Path, RadialGradient, Stop } from 'react-native-svg'
@@ -36,6 +36,18 @@ interface DualGaugeProps {
   transparent?: boolean
   split?: boolean
   middleSlot?: ReactNode
+  containerStyle?: StyleProp<ViewStyle>
+}
+
+interface SingleGaugeProps {
+  value: SharedValue<number | null>
+  min?: number
+  max: number
+  color: string
+  unit: string
+  decimals?: number
+  label?: string
+  alerts?: DualGaugeAlert[]
   containerStyle?: StyleProp<ViewStyle>
 }
 
@@ -203,6 +215,219 @@ function AlertMarker({
   return <AlertTick side={side} fraction={thresholdFraction} />
 }
 
+// ── HalfArc sub-component ───────────────────────────────────────────────────
+
+const HALF_CX = 100
+const HALF_CY = 100
+const HALF_R = 88
+const HALF_VB_W = 200
+const HALF_VB_H = 112
+
+function normalizeFraction(value: number, min: number, max: number) {
+  'worklet'
+  const span = max - min
+  if (span <= 0) return 0
+  return clamp01((value - min) / span)
+}
+
+function polarHalf(r: number, fraction: number) {
+  'worklet'
+  const angle = Math.PI - Math.PI * fraction
+  return { x: HALF_CX + r * Math.cos(angle), y: HALF_CY - r * Math.sin(angle) }
+}
+
+function halfArcPath(fraction: number) {
+  'worklet'
+  const start = polarHalf(HALF_R, 0)
+  const end = polarHalf(HALF_R, clamp01(fraction))
+  return `M ${start.x} ${start.y} A ${HALF_R} ${HALF_R} 0 0 1 ${end.x} ${end.y}`
+}
+
+function halfWedgePath(fraction: number) {
+  'worklet'
+  const c = clamp01(fraction)
+  if (c <= 0) return ''
+  const start = polarHalf(HALF_R, 0)
+  const end = polarHalf(HALF_R, c)
+  return `M ${HALF_CX} ${HALF_CY} L ${start.x} ${start.y} A ${HALF_R} ${HALF_R} 0 0 1 ${end.x} ${end.y} Z`
+}
+
+function halfRangeWedgePath(fromFraction: number, toFraction: number) {
+  const from = clamp01(fromFraction)
+  const to = clamp01(toFraction)
+  if (to <= from) return ''
+  const radius = HALF_R - STROKE / 2
+  const start = polarHalf(radius, from)
+  const end = polarHalf(radius, to)
+  return `M ${HALF_CX} ${HALF_CY} L ${start.x} ${start.y} A ${radius} ${radius} 0 0 1 ${end.x} ${end.y} Z`
+}
+
+const HALF_BG_ARC = halfArcPath(1)
+
+function HalfAlertTick({ fraction }: { fraction: number }) {
+  const inner = polarHalf(HALF_R - TICK_LENGHT, fraction)
+  const outer = polarHalf(HALF_R - STROKE / 2, fraction)
+
+  return (
+    <Line
+      x1={inner.x}
+      y1={inner.y}
+      x2={outer.x}
+      y2={outer.y}
+      stroke="#facc15"
+      strokeWidth={TICK_WIDTH}
+      strokeLinecap="butt"
+    />
+  )
+}
+
+function HalfAlertMarker({
+  alert,
+  min,
+  max,
+  rangeGradientId,
+}: {
+  alert: DualGaugeAlert
+  min: number
+  max: number
+  rangeGradientId: string
+}) {
+  const thresholdFraction = normalizeFraction(alert.threshold, min, max)
+  const maxFraction =
+    alert.thresholdMax == null ? null : normalizeFraction(alert.thresholdMax, min, max)
+  const rangePath = maxFraction != null ? halfRangeWedgePath(thresholdFraction, maxFraction) : ''
+
+  if (maxFraction != null && rangePath) {
+    return (
+      <>
+        <Path d={rangePath} fill={`url(#${rangeGradientId})`} stroke="none" />
+        <HalfAlertTick fraction={thresholdFraction} />
+        <HalfAlertTick fraction={maxFraction} />
+      </>
+    )
+  }
+
+  return <HalfAlertTick fraction={thresholdFraction} />
+}
+
+function HalfArc({
+  value,
+  min,
+  max,
+  color,
+  unit,
+  decimals = 0,
+  alerts = [],
+}: Required<Pick<SingleGaugeProps, 'value' | 'min' | 'max' | 'color' | 'unit'>> &
+  Pick<SingleGaugeProps, 'decimals' | 'alerts'>) {
+  const idSuffix = useId().replace(/:/g, '')
+  const glowGradientId = `singleGaugeGlow${idSuffix}`
+  const alertRangeGradientId = `singleGaugeAlertRange${idSuffix}`
+
+  const animatedValueProps = useAnimatedProps(() => {
+    const current = value.value
+    const text =
+      current != null
+        ? decimals === 0
+          ? Math.round(current).toString()
+          : current.toFixed(decimals)
+        : '—'
+    return { text, value: text }
+  })
+
+  const animatedArcProps = useAnimatedProps(() => {
+    const current = value.value ?? min
+    return { d: halfArcPath(normalizeFraction(current, min, max)) }
+  })
+
+  const animatedWedgeProps = useAnimatedProps(() => {
+    const current = value.value ?? min
+    return { d: halfWedgePath(normalizeFraction(current, min, max)) }
+  })
+
+  const animatedMarkerProps = useAnimatedProps(() => {
+    const current = value.value ?? min
+    const fraction = normalizeFraction(current, min, max)
+    const inner = polarHalf(HALF_R - MARKER_INSET, fraction)
+    const outer = polarHalf(HALF_R + STROKE / 2, fraction)
+    return { x1: inner.x, y1: inner.y, x2: outer.x, y2: outer.y }
+  })
+
+  return (
+    <View style={styles.halfWrap}>
+      <Svg viewBox={`0 0 ${HALF_VB_W} ${HALF_VB_H}`} style={styles.svg}>
+        <Defs>
+          <RadialGradient
+            id={glowGradientId}
+            gradientUnits="userSpaceOnUse"
+            cx={HALF_CX}
+            cy={HALF_CY}
+            r={HALF_R}
+          >
+            <Stop offset="0" stopColor={color} stopOpacity={0} />
+            <Stop offset="0.58" stopColor={color} stopOpacity={0} />
+            <Stop offset="0.94" stopColor={color} stopOpacity={0.2} />
+            <Stop offset="1" stopColor={color} stopOpacity={0.38} />
+          </RadialGradient>
+          <RadialGradient
+            id={alertRangeGradientId}
+            gradientUnits="userSpaceOnUse"
+            cx={HALF_CX}
+            cy={HALF_CY}
+            r={HALF_R}
+          >
+            <Stop offset="0" stopColor="#facc15" stopOpacity={0} />
+            <Stop offset="0.82" stopColor="#facc15" stopOpacity={0} />
+            <Stop offset="0.965" stopColor="#facc15" stopOpacity={0.06} />
+            <Stop offset="0.99" stopColor="#facc15" stopOpacity={0.12} />
+            <Stop offset="1" stopColor="#facc15" stopOpacity={0} />
+          </RadialGradient>
+        </Defs>
+
+        <AnimatedPath animatedProps={animatedWedgeProps} fill={`url(#${glowGradientId})`} />
+        <Path
+          d={HALF_BG_ARC}
+          stroke="#334155"
+          strokeWidth={STROKE}
+          strokeLinecap="butt"
+          fill="none"
+        />
+        <AnimatedPath
+          animatedProps={animatedArcProps}
+          stroke={color}
+          strokeWidth={STROKE}
+          strokeLinecap="butt"
+          fill="none"
+        />
+        {alerts.map((alert) => (
+          <HalfAlertMarker
+            key={alert.id}
+            alert={alert}
+            min={min}
+            max={max}
+            rangeGradientId={alertRangeGradientId}
+          />
+        ))}
+        <AnimatedLine
+          animatedProps={animatedMarkerProps}
+          stroke={color}
+          strokeWidth={1.7}
+          strokeLinecap="butt"
+        />
+      </Svg>
+
+      <View style={styles.halfBowl} pointerEvents="none">
+        <AnimatedTextInput
+          editable={false}
+          animatedProps={animatedValueProps}
+          style={styles.halfValue}
+        />
+        <Text style={styles.halfUnit}>{unit}</Text>
+      </View>
+    </View>
+  )
+}
+
 // ── QuarterArc sub-component ─────────────────────────────────────────────────
 
 interface QuarterArcProps {
@@ -325,6 +550,33 @@ function QuarterArc({ side, value, max, color, unit, alerts = [] }: QuarterArcPr
 
 // ── DualGauge ────────────────────────────────────────────────────────────────
 
+export function SingleGauge({
+  value,
+  min = 0,
+  max,
+  color,
+  unit,
+  decimals,
+  label,
+  alerts = [],
+  containerStyle,
+}: SingleGaugeProps) {
+  return (
+    <View style={[styles.singleWrap, containerStyle]}>
+      {label ? <Text style={styles.singleLabel}>{label}</Text> : null}
+      <HalfArc
+        value={value}
+        min={min}
+        max={max}
+        color={color}
+        unit={unit}
+        decimals={decimals}
+        alerts={alerts}
+      />
+    </View>
+  )
+}
+
 export function DualGauge({
   speedValue,
   dutyValue,
@@ -439,6 +691,11 @@ const styles = StyleSheet.create({
     aspectRatio: VB_CROP_W / VB_CROP_H,
     position: 'relative',
   },
+  halfWrap: {
+    width: '100%',
+    aspectRatio: HALF_VB_W / HALF_VB_H,
+    position: 'relative',
+  },
   svg: {
     width: '100%',
     height: '100%',
@@ -473,6 +730,44 @@ const styles = StyleSheet.create({
   unit: {
     color: '#64748b',
     fontSize: 10,
+    textAlign: 'center',
+    marginTop: 2,
+  },
+  singleWrap: {
+    backgroundColor: '#1e293b',
+    borderRadius: 10,
+    paddingHorizontal: 18,
+    paddingTop: 14,
+    paddingBottom: 6,
+    overflow: 'hidden',
+  },
+  singleLabel: {
+    color: '#94a3b8',
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+  },
+  halfBowl: {
+    position: 'absolute',
+    left: '18%',
+    right: '18%',
+    top: '36%',
+    bottom: '4%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  halfValue: {
+    color: '#f1f5f9',
+    fontSize: 52,
+    fontFamily: 'monospace',
+    fontWeight: '700',
+    lineHeight: 58,
+    padding: 0,
+    textAlign: 'center',
+  },
+  halfUnit: {
+    color: '#64748b',
+    fontSize: 12,
     textAlign: 'center',
     marginTop: 2,
   },

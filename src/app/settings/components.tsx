@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { GhostIcon } from 'phosphor-react-native'
+import { useSharedValue } from 'react-native-reanimated'
 
 import { Banner } from '@/components/Banner'
 import { ConfirmModal } from '@/components/ConfirmModal'
@@ -9,10 +10,12 @@ import { DeviceRow } from '@/components/DeviceRow'
 import { InfoModal } from '@/components/InfoModal'
 import { Placeholder } from '@/components/Placeholder'
 import { Select, type SelectOption } from '@/components/Select'
+import { SingleGauge } from '@/components/charts/DualGauge'
 import { Sparkline, type SparklinePoint } from '@/components/charts/Sparkline'
 import { StatsRow } from '@/components/control/StatsRow'
 import { ShowcaseCard } from '@/components/dev/ShowcaseCard'
 import { ChipRow, OpenButton, ToggleRow, ValueRow } from '@/components/dev/ShowcaseControls'
+import { telemetry } from '@/constants/telemetry'
 import { TuneDial } from '@/components/tune/TuneDial'
 
 function generateSparklineData(count: number, base: number, variance: number): SparklinePoint[] {
@@ -184,6 +187,53 @@ function StatsRowShowcase() {
   )
 }
 
+function SingleGaugeShowcase() {
+  const [metricKey, setMetricKey] = useState<'speed' | 'duty' | 'battVoltage'>('speed')
+  const value = useSharedValue<number | null>(34)
+  const metric = telemetry[metricKey]
+
+  const handleMetricChange = useCallback(
+    (next: string) => {
+      const key = next as typeof metricKey
+      setMetricKey(key)
+      value.value = key === 'speed' ? 34 : key === 'duty' ? 68 : 42.5
+    },
+    [value],
+  )
+
+  return (
+    <ShowcaseCard
+      name="SingleGauge"
+      controls={
+        <ChipRow
+          label="metric"
+          options={['speed', 'duty', 'battVoltage']}
+          selected={metricKey}
+          onSelect={handleMetricChange}
+        />
+      }
+    >
+      <SingleGauge
+        value={value}
+        min={metric.chartRange.min}
+        max={metric.chartRange.max}
+        color={metric.color}
+        unit={metric.unit}
+        decimals={metric.decimals}
+        label={metric.label.toUpperCase()}
+        alerts={[
+          { id: 'warn', threshold: metric.chartRange.max * 0.75, thresholdMax: null },
+          {
+            id: 'range',
+            threshold: metric.chartRange.max * 0.88,
+            thresholdMax: metric.chartRange.max * 0.98,
+          },
+        ]}
+      />
+    </ShowcaseCard>
+  )
+}
+
 const RANGE_CONFIGS = {
   small: { min: 0, max: 10, step: 0.5 },
   medium: { min: 0, max: 100, step: 1 },
@@ -270,6 +320,7 @@ export default function ComponentsScreen() {
         <SparklineShowcase />
         <DeviceRowShowcase />
         <StatsRowShowcase />
+        <SingleGaugeShowcase />
         <TuneDialShowcase />
         <BannerShowcase />
         <ConfirmModalShowcase />

@@ -2,6 +2,16 @@
 
 React Native UI conventions for this repo. Add component, styling, navigation, animation, and Expo Router guidance here when it becomes stable enough to apply across the app.
 
+## Component Gallery
+
+When creating or significantly changing a reusable UI component, add or update its showcase in
+`src/app/settings/components.tsx` in the same change.
+
+- Use existing `ShowcaseCard` and controls from `@/components/dev/ShowcaseControls`.
+- Include useful variants, states, and props that future agents/design checks need to see.
+- Keep showcase data local and deterministic enough for quick visual inspection.
+- Skip only components that are route-specific screens or tiny private sub-components with no reuse surface.
+
 ## Icons
 
 Use **`phosphor-react-native`** for all icons. Do **not** use emoji or unicode characters as icon substitutes.
@@ -9,7 +19,7 @@ Use **`phosphor-react-native`** for all icons. Do **not** use emoji or unicode c
 ```tsx
 import { LightningIcon, WarningCircleIcon } from 'phosphor-react-native'
 
-<LightningIcon size={16} color="#4ade80" weight="fill" />
+;<LightningIcon size={16} color="#4ade80" weight="fill" />
 ```
 
 - Always use the **`Icon`-suffixed** export, for example `LightningIcon`, not `Lightning`. The un-suffixed names are deprecated and will produce warnings.
@@ -36,6 +46,6 @@ const [confirmVisible, setConfirmVisible] = useState(false)
 />
 ```
 
-- Drive visibility with state (`useState<boolean>` or `useState<T | null>` when you need to remember *what* to confirm).
+- Drive visibility with state (`useState<boolean>` or `useState<T | null>` when you need to remember _what_ to confirm).
 - Set `destructive` for irreversible actions — it renders the confirm button in red.
 - `confirmLabel` and `cancelLabel` default to "Confirm" / "Cancel"; override when a specific verb is clearer.
