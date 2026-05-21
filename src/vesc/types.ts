@@ -2,7 +2,7 @@
  * Telemetry values returned by COMM_GET_VALUES (command 0x04).
  * Field order matches commands.c in vedderb/bldc firmware.
  */
-export interface VescValues {
+interface VescValues {
   /** MOSFET temperature in °C */
   tempMosfet: number
   /** Motor temperature in °C */
@@ -38,7 +38,7 @@ export interface VescValues {
 }
 
 /** Human-readable fault code names matching mc_fault_code enum in datatypes.h */
-export const FAULT_NAMES: Record<number, string> = {
+const FAULT_NAMES: Record<number, string> = {
   0: 'NONE',
   1: 'OVER_VOLTAGE',
   2: 'UNDER_VOLTAGE',
@@ -72,7 +72,7 @@ export const FAULT_NAMES: Record<number, string> = {
 }
 
 /** Firmware version returned by COMM_FW_VERSION (stubbed for PoC) */
-export interface FwVersion {
+interface FwVersion {
   major: number
   minor: number
   hwName: string

@@ -2,11 +2,11 @@ import type { ProfileStatsMonth } from 'vesc-ble'
 
 export type ProfileMonth = ProfileStatsMonth
 
-export function sameMonth(a: ProfileMonth, b: ProfileMonth): boolean {
+function sameMonth(a: ProfileMonth, b: ProfileMonth): boolean {
   return a.year === b.year && a.month === b.month
 }
 
-export function currentProfileMonth(date = new Date()): ProfileMonth {
+function currentProfileMonth(date = new Date()): ProfileMonth {
   return { year: date.getFullYear(), month: date.getMonth() + 1 }
 }
 

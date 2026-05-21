@@ -32,7 +32,7 @@ export interface ScannedDevice {
   rssi: number
 }
 
-export type BleStatus = BoardPhase
+type BleStatus = BoardPhase
 
 interface BleState {
   status: BleStatus

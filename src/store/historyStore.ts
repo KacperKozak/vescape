@@ -331,11 +331,4 @@ export const useHistoryStore = create<HistoryState & HistoryActions>((set, get) 
   },
 }))
 
-export type {
-  HistoryGpsSample,
-  HistoryMarker,
-  HistorySession,
-  TelemetryHistoryBlock,
-  TelemetrySample,
-  TelemetrySummary,
-}
+export type { HistoryGpsSample, HistoryMarker, HistorySession, TelemetrySample }

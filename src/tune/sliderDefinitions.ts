@@ -2,7 +2,7 @@ import type { RefloatConfigField, RefloatConfigSnapshot, TuneProfileFieldValue }
 
 import { APP_TUNE_FIELD_BY_ID, formatTuneValue } from '@/tune/fields'
 
-export const FIELD_INFO: Record<string, string> = {
+const FIELD_INFO: Record<string, string> = {
   kp: 'Main proportional angle response. Higher values make the board respond more strongly to nose angle error.',
   kp2: 'Responds to angular velocity. This acts like damping and is especially noticeable during fast or aggressive nose-angle changes.',
   kp_brake: 'Multiplier for angle response while braking.',
@@ -77,13 +77,13 @@ export interface BasicSliderDefinition {
   checkMatch: (fields: Map<string, number | null>) => boolean
 }
 
-export const EPSILON = 0.015
+const EPSILON = 0.015
 
 export function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max)
 }
 
-export function interpolate(
+function interpolate(
   x: number,
   inputRange: [number, number],
   outputRange: [number, number],
@@ -93,12 +93,12 @@ export function interpolate(
   return outMin + ((x - inMin) / (inMax - inMin)) * (outMax - outMin)
 }
 
-export function roundTo(value: number, decimals: number): number {
+function roundTo(value: number, decimals: number): number {
   const factor = 10 ** decimals
   return Math.round(value * factor) / factor
 }
 
-export function nearEqual(a: number, b: number): boolean {
+function nearEqual(a: number, b: number): boolean {
   return Math.abs(a - b) <= EPSILON
 }
 
@@ -114,7 +114,7 @@ export function fieldStep(field: RefloatConfigField): number {
   return 10
 }
 
-export function snapFieldValue(value: number, field: RefloatConfigField): number {
+function snapFieldValue(value: number, field: RefloatConfigField): number {
   const min = field.min ?? 0
   const max = field.max ?? 1
   const step = fieldStep(field)
@@ -160,7 +160,7 @@ export function fieldHelp(field: RefloatConfigField): string {
   return FIELD_INFO[field.id] ?? 'Read-only field decoded from the board custom config schema.'
 }
 
-export const BASIC_SLIDERS: BasicSliderDefinition[] = [
+const BASIC_SLIDERS: BasicSliderDefinition[] = [
   {
     id: 'aggressiveness',
     label: 'Aggressiveness',

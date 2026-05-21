@@ -1,4 +1,4 @@
-export interface AppTuneFieldDefinition {
+interface AppTuneFieldDefinition {
   id: string
   label: string
   unit: string | null

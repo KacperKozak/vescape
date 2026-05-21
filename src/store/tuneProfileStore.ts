@@ -16,7 +16,7 @@ import {
   type TuneHistoryEntry,
 } from 'vesc-ble'
 
-export type { TuneProfile, TuneProfileFieldValue, TuneHistoryEntry } from 'vesc-ble'
+export type { TuneProfile, TuneProfileFieldValue } from 'vesc-ble'
 
 export interface TuneProfileBoardDiff {
   fieldId: string

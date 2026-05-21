@@ -1,4 +1,4 @@
-export type TelemetryChartRange = { min: number; max: number }
+type TelemetryChartRange = { min: number; max: number }
 
 export interface TelemetryMetricConfig {
   label: string
@@ -171,4 +171,4 @@ export const telemetryByControlId = Object.fromEntries(
     .map((metric) => [metric.controlId, metric]),
 ) as Record<string, TelemetryMetricConfig>
 
-export type TelemetryMetricKey = keyof typeof telemetry
+type TelemetryMetricKey = keyof typeof telemetry

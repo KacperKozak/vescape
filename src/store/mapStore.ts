@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-export interface TargetLocation {
+interface TargetLocation {
   latitude: number
   longitude: number
 }

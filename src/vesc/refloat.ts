@@ -21,12 +21,12 @@ export enum RefloatCmd {
 const FAULT_MODE_MARKER = 69
 
 /** Extract the compat-state nibble (low 4 bits) from a Refloat state byte. */
-export function stateCompat(stateByte: number): number {
+function stateCompat(stateByte: number): number {
   return stateByte & 0xf
 }
 
 // Compat state values returned by state_compat()
-export const REFLOAT_STATE_NAMES: Record<number, string> = {
+const REFLOAT_STATE_NAMES: Record<number, string> = {
   0: 'STARTUP',
   1: 'RUNNING',
   2: 'TILTBACK',

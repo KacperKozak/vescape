@@ -13,7 +13,7 @@ import {
 } from './liveMetricHistory'
 import { useSettingsStore } from '@/store/settingsStore'
 
-export interface LiveTelemetryValues {
+interface LiveTelemetryValues {
   speedKmh: SharedValue<number | null>
   dutyPercent: SharedValue<number | null>
   motorCurrent: SharedValue<number | null>
@@ -25,7 +25,7 @@ export interface LiveTelemetryValues {
   avgLatencyMs: SharedValue<number | null>
 }
 
-export interface LiveTelemetrySnapshot {
+interface LiveTelemetrySnapshot {
   liveLocationHistory: LocationEvent[]
   latestApproximateLocation: LocationEvent | null
   liveStatus: LiveStatusSummary

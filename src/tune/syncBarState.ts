@@ -1,4 +1,4 @@
-export type SyncBarVariant =
+type SyncBarVariant =
   | 'up_to_date'
   | 'connect_to_sync'
   | 'save_later'

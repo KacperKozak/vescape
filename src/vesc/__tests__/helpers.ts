@@ -5,14 +5,14 @@
  */
 
 /** Encode a signed value as big-endian int16, scaled by 10 (firmware convention). */
-export function i16x10(val: number): [number, number] {
+function i16x10(val: number): [number, number] {
   const raw = Math.round(val * 10)
   const u = raw < 0 ? raw + 65536 : raw
   return [(u >> 8) & 0xff, u & 0xff]
 }
 
 /** Encode a signed value as raw big-endian int16 (no scaling). */
-export function i16(val: number): [number, number] {
+function i16(val: number): [number, number] {
   const u = val < 0 ? val + 65536 : val
   return [(u >> 8) & 0xff, u & 0xff]
 }
@@ -21,7 +21,7 @@ export function i16(val: number): [number, number] {
  * Encode a float as VESC float32_auto (big-endian).
  * Mirrors buffer_append_float32_auto() in lukash/refloat src/conf/buffer.c.
  */
-export function float32Auto(value: number): [number, number, number, number] {
+function float32Auto(value: number): [number, number, number, number] {
   if (value === 0) return [0, 0, 0, 0]
   const neg = value < 0 ? 1 : 0
   const abs = Math.abs(value)

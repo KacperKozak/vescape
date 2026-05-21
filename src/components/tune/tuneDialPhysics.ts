@@ -1,24 +1,24 @@
-export const DIAL_WIDTH_BASELINE = 700
-export const TARGET_LABEL_PX = 70
-export const MIN_STEP_PX = 2
-export const ALL_STEP_LABEL_MIN_PX = 56
+const DIAL_WIDTH_BASELINE = 700
+const TARGET_LABEL_PX = 70
+const MIN_STEP_PX = 2
+const ALL_STEP_LABEL_MIN_PX = 56
 
 export const DRAG_RANGE_GAIN = 1
 export const THROW_DISTANCE_GAIN = 0.9
 export const MAX_THROW_VELOCITY = 900
-export const THROW_SAMPLE_SMOOTHING = 0.16
-export const THROW_RELEASE_BOOST_LIMIT = 1.35
-export const THROW_STATIONARY_FADE_START_MS = 80
-export const THROW_STATIONARY_FADE_END_MS = 120
-export const MIN_THROW_DURATION_MS = 800
-export const MAX_THROW_DURATION_MS = 2000
-export const STRONG_THROW_INPUT_VELOCITY = 1800
+const THROW_SAMPLE_SMOOTHING = 0.16
+const THROW_RELEASE_BOOST_LIMIT = 1.35
+const THROW_STATIONARY_FADE_START_MS = 80
+const THROW_STATIONARY_FADE_END_MS = 120
+const MIN_THROW_DURATION_MS = 800
+const MAX_THROW_DURATION_MS = 2000
+const STRONG_THROW_INPUT_VELOCITY = 1800
 export const THROW_EASE_POWER = 1.15
 export const MOMENTUM_CARRY = 0.9
 export const DETENT_DECAY_PER_FRAME = 0.9
 export const DETENT_PULL = 140
-export const DETENT_FULL_STRENGTH_STEPS = 20
-export const MIN_DENSE_DETENT_STRENGTH = 0
+const DETENT_FULL_STRENGTH_STEPS = 20
+const MIN_DENSE_DETENT_STRENGTH = 0
 export const DETENT_CAPTURE_VELOCITY = 950
 export const LOCK_VELOCITY = 22
 
@@ -33,14 +33,14 @@ export interface TuneDialLayout {
   renderMidpointTicks: boolean
 }
 
-export interface TuneDialThrowState {
+interface TuneDialThrowState {
   offset: number
   velocity: number
   durationMs: number
   elapsedMs: number
 }
 
-export function niceMajorValue(range: number): number {
+function niceMajorValue(range: number): number {
   if (range <= 1) return 0.1
   if (range <= 2) return 0.5
   if (range <= 5) return 1
@@ -98,7 +98,7 @@ export function computeDetentStrength(totalSteps: number): number {
   return 1
 }
 
-export function computeMomentumEmitEverySteps(totalSteps: number): number {
+function computeMomentumEmitEverySteps(totalSteps: number): number {
   'worklet'
 
   return Math.max(1, Math.ceil(totalSteps / DETENT_FULL_STRENGTH_STEPS))
@@ -201,7 +201,7 @@ export function computeThrowDurationMs(
   return MIN_THROW_DURATION_MS + (MAX_THROW_DURATION_MS - MIN_THROW_DURATION_MS) * throwPower
 }
 
-export function tickTuneDialThrowFrame(
+function tickTuneDialThrowFrame(
   state: TuneDialThrowState,
   layout: Pick<TuneDialLayout, 'stepPx' | 'totalSteps' | 'totalWidth'>,
   frameMs: number,
@@ -251,7 +251,7 @@ export function tickTuneDialThrowFrame(
   return { offset, velocity, durationMs: state.durationMs, elapsedMs }
 }
 
-export function simulateTuneDialThrow(
+function simulateTuneDialThrow(
   layout: Pick<TuneDialLayout, 'stepPx' | 'totalSteps' | 'totalWidth'>,
   gestureVelocityX: number,
   startOffset = 0,

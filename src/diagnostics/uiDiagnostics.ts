@@ -1,6 +1,6 @@
 import { reportUiError as nativeReportUiError } from 'vesc-ble'
 
-export interface UiDiagnosticError {
+interface UiDiagnosticError {
   message?: string
   stack?: string
   nativeDiagnosticReported?: boolean

@@ -2,7 +2,7 @@ import type { LocationEvent } from 'vesc-ble'
 
 import { distanceMeters } from './mapGeometry'
 
-export const LIVE_GPS_DEGRADED_GRACE_MS = 2_000
+const LIVE_GPS_DEGRADED_GRACE_MS = 2_000
 
 interface LiveGpsPresentationArgs {
   preciseFix: LocationEvent | null

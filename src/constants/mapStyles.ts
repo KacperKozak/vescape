@@ -1,11 +1,5 @@
 import Mapbox from '@rnmapbox/maps'
-import {
-  MapTrifoldIcon,
-  MoonStarsIcon,
-  MountainsIcon,
-  PlanetIcon,
-  type Icon,
-} from 'phosphor-react-native'
+import { MapTrifoldIcon, MoonStarsIcon, MountainsIcon, PlanetIcon } from 'phosphor-react-native'
 
 export const MAP_DEFAULTS = {
   fallbackCoordinate: [15.0, 54.0] as [number, number],
@@ -48,10 +42,3 @@ export const MAP_STYLES = [
 ] as const
 
 export type MapStyleKey = (typeof MAP_STYLES)[number]['key']
-
-export interface MapStyleConfig {
-  key: MapStyleKey
-  label: string
-  styleURL: string | null
-  Icon: Icon
-}

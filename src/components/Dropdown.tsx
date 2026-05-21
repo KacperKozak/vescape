@@ -24,7 +24,7 @@ export function useTriggerRef() {
   return useRef<View>(null)
 }
 
-export function measureTrigger(ref: React.RefObject<View | null>) {
+function measureTrigger(ref: React.RefObject<View | null>) {
   return new Promise<TriggerLayout>((resolve) => {
     ref.current?.measureInWindow((x, y, width, height) => {
       resolve({ x, y, width, height })
