@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { BottomTelemetryStrip, STRIP_CONTENT_HEIGHT } from '@/screens/center/BottomTelemetryStrip'
 import { HistoryControls } from '@/screens/center/HistoryControls'
+import { HistoryStatsBar } from '@/screens/center/HistoryStatsBar'
 import { HistoryTelemetryPanel } from '@/screens/center/HistoryTelemetryPanel'
 import { LiveHud } from '@/screens/center/LiveHud'
 import { MapVignette } from '@/screens/center/MapVignette'
@@ -221,6 +222,7 @@ export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOver
             onSeek={history.onSeek}
             onHeightChange={setPanelHeight}
           />
+          <HistoryStatsBar session={history.selectedSession} />
           <HistoryControls
             loading={historyBusy}
             canRemove={true}

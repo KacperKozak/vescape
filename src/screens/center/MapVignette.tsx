@@ -28,8 +28,8 @@ export function MapVignette({ mode, panelHeight = 0 }: MapVignetteProps) {
               <Stop offset="100%" stopColor="#0f172a" stopOpacity="0.65" />
             </RadialGradient>
             <LinearGradient id="map-vignette-top-h" x1="0%" y1="0%" x2="0%" y2="100%">
-              <Stop offset="0%" stopColor="#0f172a" stopOpacity="0.7" />
-              <Stop offset="50%" stopColor="#0f172a" stopOpacity="0.28" />
+              <Stop offset="0%" stopColor="#0f172a" stopOpacity="0.9" />
+              <Stop offset="52%" stopColor="#0f172a" stopOpacity="0.5" />
               <Stop offset="100%" stopColor="#0f172a" stopOpacity="0" />
             </LinearGradient>
             <LinearGradient id="map-vignette-bottom-h" x1="0%" y1="100%" x2="0%" y2="0%">
@@ -40,7 +40,7 @@ export function MapVignette({ mode, panelHeight = 0 }: MapVignetteProps) {
             </LinearGradient>
           </Defs>
           <Rect x="0" y="0" width="100%" height="100%" fill="url(#map-vignette-h)" />
-          <Rect x="0" y="0" width="100%" height="30%" fill="url(#map-vignette-top-h)" />
+          <Rect x="0" y="0" width="100%" height="38%" fill="url(#map-vignette-top-h)" />
           <Rect
             x="0"
             y={bottomY}
