@@ -2,5 +2,8 @@
   "name": "vesc-ble",
   "version": "1.0.0",
   "description": "Native BLE module for VESC / NUS communication",
-  "main": "src/index.ts"
+  "main": "src/index.ts",
+  "dependencies": {
+    "expo-modules-core": "55.0.25"
+  }
 }
