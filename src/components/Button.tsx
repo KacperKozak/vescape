@@ -8,7 +8,7 @@ import {
   type ViewStyle,
 } from 'react-native'
 
-import { interaction } from '@/constants/theme'
+import { interaction, theme } from '@/constants/theme'
 
 interface ButtonProps {
   label: string
@@ -85,7 +85,7 @@ const variantStyles = {
     indicatorColor: '#cbd5e1',
   },
   destructive: {
-    button: { backgroundColor: '#991b1b' },
+    button: { backgroundColor: theme.error.border },
     text: { color: '#fecaca' },
     iconColor: '#fecaca',
     indicatorColor: '#fecaca',

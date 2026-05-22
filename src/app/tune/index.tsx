@@ -47,6 +47,7 @@ import {
   type BasicSliderItem,
 } from '@/tune/sliderDefinitions'
 import { useTuneScreenData } from '@/tune/useTuneScreenData'
+import { theme } from '@/constants/theme'
 
 type InfoModalState = { title: string; message: string } | null
 
@@ -276,7 +277,7 @@ export default function TuneScreen() {
 
       {profileState.phase === 'loading' && !hasTuneView && selectedBoardId ? (
         <View style={styles.centerState}>
-          <ActivityIndicator color="#38bdf8" />
+          <ActivityIndicator color={theme.wheel.color} />
           <Text style={styles.stateText}>Loading saved tune profile...</Text>
         </View>
       ) : null}
@@ -291,7 +292,7 @@ export default function TuneScreen() {
 
       {profileState.phase === 'error' && !hasTuneView ? (
         <View style={styles.centerState}>
-          <WarningCircleIcon size={28} color="#f87171" />
+          <WarningCircleIcon size={28} color={theme.error.text} />
           <Text style={styles.errorText}>{profileState.error}</Text>
           <Pressable
             style={styles.retryButton}
@@ -809,7 +810,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   retryButton: {
-    backgroundColor: '#38bdf8',
+    backgroundColor: theme.wheel.color,
     paddingHorizontal: 18,
     paddingVertical: 10,
     borderRadius: 8,
@@ -874,8 +875,8 @@ const styles = StyleSheet.create({
     borderColor: '#334155',
   },
   metaBadgeDanger: {
-    backgroundColor: '#7f1d1d',
-    borderColor: '#991b1b',
+    backgroundColor: theme.error.bg,
+    borderColor: theme.error.border,
   },
   metaText: {
     color: '#cbd5e1',
@@ -953,7 +954,7 @@ const styles = StyleSheet.create({
     minHeight: 40,
     paddingHorizontal: 16,
     borderRadius: 8,
-    backgroundColor: '#38bdf8',
+    backgroundColor: theme.wheel.color,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

@@ -5,6 +5,7 @@ import { CheckCircleIcon, TestTubeIcon, WarningCircleIcon } from 'phosphor-react
 import { getDiagnosticStatus, reportDiagnosticTest, type DiagnosticStatus } from 'vesc-ble'
 
 import { reportUiError } from '@/diagnostics/uiDiagnostics'
+import { theme } from '@/constants/theme'
 
 export default function DiagnosticSettingsScreen() {
   const [diagnosticStatus, setDiagnosticStatus] = useState<DiagnosticStatus | null>(() => {
@@ -49,7 +50,7 @@ export default function DiagnosticSettingsScreen() {
           <View style={styles.row}>
             <View style={styles.rowIcon}>
               {posthogReady ? (
-                <CheckCircleIcon size={20} color="#22c55e" weight="fill" />
+                <CheckCircleIcon size={20} color={theme.gps.color} weight="fill" />
               ) : (
                 <WarningCircleIcon size={20} color="#f59e0b" weight="fill" />
               )}

@@ -32,6 +32,7 @@ import {
   selectInitialMonth,
 } from '@/profile/profileStats'
 import { Select, type SelectOption } from '@/components/Select'
+import { theme } from '@/constants/theme'
 
 const EMPTY_STATS: ProfileStats = {
   distanceM: null,
@@ -133,7 +134,7 @@ export default function ProfileScreen() {
 
         <View style={styles.monthHeader}>
           <Text style={styles.sectionTitle}>Monthly</Text>
-          {monthLoading ? <ActivityIndicator size="small" color="#38bdf8" /> : null}
+          {monthLoading ? <ActivityIndicator size="small" color={theme.wheel.color} /> : null}
         </View>
         <View style={styles.monthNav}>
           <Pressable
@@ -162,7 +163,7 @@ export default function ProfileScreen() {
 
         {loading ? (
           <View style={styles.loadingWrap}>
-            <ActivityIndicator size="small" color="#38bdf8" />
+            <ActivityIndicator size="small" color={theme.wheel.color} />
           </View>
         ) : null}
 
@@ -185,56 +186,56 @@ function statsToItems(stats: ProfileStats): StatItem[] {
       label: 'Distance',
       value: formatDistance(stats.distanceM),
       icon: RoadHorizonIcon,
-      accent: '#38bdf8',
+      accent: theme.wheel.color,
     },
     {
       key: 'rides',
       label: 'Rides',
       value: String(stats.rideCount),
       icon: PathIcon,
-      accent: '#22d3ee',
+      accent: theme.bran.color,
     },
     {
       key: 'rideTime',
       label: 'Ride time',
       value: formatDuration(stats.rideTimeMs),
       icon: ClockCountdownIcon,
-      accent: '#a78bfa',
+      accent: theme.target.color,
     },
     {
       key: 'topSpeed',
       label: 'Top speed',
       value: formatSpeed(stats.topSpeedKmh),
       icon: GaugeIcon,
-      accent: '#f97316',
+      accent: theme.warning.color,
     },
     {
       key: 'avgSpeed',
       label: 'Avg speed',
       value: formatSpeed(stats.avgSpeedKmh),
       icon: RepeatIcon,
-      accent: '#14b8a6',
+      accent: theme.teal.color,
     },
     {
       key: 'longestRide',
       label: 'Longest ride',
       value: formatDistance(stats.longestRideM),
       icon: TrophyIcon,
-      accent: '#facc15',
+      accent: theme.highlight.color,
     },
     {
       key: 'used',
       label: 'Battery used',
       value: formatEnergy(stats.batteryUsedWh),
       icon: BatteryChargingVerticalIcon,
-      accent: '#60a5fa',
+      accent: theme.wheel.color,
     },
     {
       key: 'regen',
       label: 'Regen',
       value: formatEnergy(stats.batteryRegenWh),
       icon: BatteryPlusVerticalIcon,
-      accent: '#4ade80',
+      accent: theme.gps.text,
     },
   ]
 }
@@ -327,8 +328,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   errorCard: {
-    backgroundColor: '#7f1d1d',
-    borderColor: '#991b1b',
+    backgroundColor: theme.error.bg,
+    borderColor: theme.error.border,
     borderWidth: 1,
     borderRadius: 12,
     padding: 12,

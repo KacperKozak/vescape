@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Animated, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { InfoIcon, XIcon } from 'phosphor-react-native'
+import { theme } from '@/constants/theme'
 
 const FADE_DURATION = 120
 
@@ -52,7 +53,7 @@ export function InfoModal({
         <Animated.View style={[styles.card, { transform: [{ scale }] }]}>
           <View style={styles.header}>
             <View style={styles.titleWrap}>
-              <InfoIcon size={16} color="#38bdf8" weight="bold" />
+              <InfoIcon size={16} color={theme.wheel.color} weight="bold" />
               <Text style={styles.title}>{title}</Text>
             </View>
             <Pressable style={styles.closeButton} onPress={onDismiss}>

@@ -7,7 +7,7 @@ import {
   type ViewStyle,
 } from 'react-native'
 
-import { interaction } from '@/constants/theme'
+import { interaction, theme } from '@/constants/theme'
 
 const SIZES = { sm: 38, lg: 54 } as const
 const ICON_SIZES = { sm: 18, lg: 22 } as const
@@ -34,7 +34,7 @@ export function IconButton({
   const isDisabled = disabled || loading
   const dim = SIZES[size]
   const iconSize = ICON_SIZES[size]
-  const iconColor = destructive ? '#f87171' : '#cbd5e1'
+  const iconColor = destructive ? theme.error.text : '#cbd5e1'
   const borderColor = destructive ? 'rgba(248, 113, 113, 0.28)' : 'rgba(148, 163, 184, 0.28)'
 
   return (

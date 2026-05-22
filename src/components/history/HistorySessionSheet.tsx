@@ -10,7 +10,7 @@ import {
 } from 'react-native'
 import { CaretRightIcon, WarningCircleIcon } from 'phosphor-react-native'
 
-import { interaction } from '@/constants/theme'
+import { interaction, theme } from '@/constants/theme'
 import { telemetry } from '@/constants/telemetry'
 import type { HistorySession } from '@/store/historyStore'
 
@@ -104,7 +104,7 @@ export function HistorySessionSheet({
               onPress={onLoadMore}
             >
               {loadingMore ? (
-                <ActivityIndicator size="small" color="#38bdf8" />
+                <ActivityIndicator size="small" color={theme.wheel.color} />
               ) : (
                 <Text style={styles.loadingText}>Load older rides</Text>
               )}

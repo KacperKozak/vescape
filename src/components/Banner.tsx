@@ -1,6 +1,8 @@
 import { StyleSheet, Text, View } from 'react-native'
 import { InfoIcon, WarningIcon, WarningCircleIcon } from 'phosphor-react-native'
 
+import { theme } from '@/constants/theme'
+
 type Variant = 'info' | 'warning' | 'error'
 
 interface BannerProps {
@@ -11,12 +13,12 @@ interface BannerProps {
 
 const config = {
   info: {
-    bg: '#0c2a3f',
+    bg: theme.wheel.bg,
     border: '#0e4f72',
     titleColor: '#e0f2fe',
     messageColor: '#7dd3fc',
     Icon: InfoIcon,
-    iconColor: '#38bdf8',
+    iconColor: theme.wheel.color,
   },
   warning: {
     bg: '#2d1a00',
@@ -28,11 +30,11 @@ const config = {
   },
   error: {
     bg: '#3f1111',
-    border: '#7f1d1d',
+    border: theme.error.bg,
     titleColor: '#fecaca',
     messageColor: '#fca5a5',
     Icon: WarningCircleIcon,
-    iconColor: '#f87171',
+    iconColor: theme.error.text,
   },
 } satisfies Record<Variant, object>
 

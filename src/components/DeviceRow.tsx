@@ -1,5 +1,6 @@
 import React from 'react'
 import { Pressable, View, Text, StyleSheet } from 'react-native'
+import { theme } from '@/constants/theme'
 
 interface Props {
   id: string
@@ -10,7 +11,8 @@ interface Props {
 
 /** A single row in the device scan list. */
 export const DeviceRow = React.memo(function DeviceRow({ id, name, rssi, onPress }: Props) {
-  const signalColor = rssi > -60 ? '#4ade80' : rssi > -75 ? '#facc15' : '#f87171'
+  const signalColor =
+    rssi > -60 ? theme.gps.text : rssi > -75 ? theme.highlight.color : theme.error.text
 
   return (
     <Pressable

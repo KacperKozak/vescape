@@ -2,6 +2,7 @@ import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-n
 import { SafeAreaView } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
 import { VibrateIcon } from 'phosphor-react-native'
+import { theme } from '@/constants/theme'
 
 const androidHaptics = Object.values(Haptics.AndroidHaptics).map((type) => ({
   label: type
@@ -22,7 +23,7 @@ export default function OtherSettingsScreen() {
             <View style={styles.controlGroup}>
               <View style={styles.controlHeader}>
                 <View style={styles.rowIcon}>
-                  <VibrateIcon size={20} color="#38bdf8" weight="duotone" />
+                  <VibrateIcon size={20} color={theme.wheel.color} weight="duotone" />
                 </View>
                 <View style={styles.rowBody}>
                   <Text style={styles.rowLabel}>Android haptics</Text>

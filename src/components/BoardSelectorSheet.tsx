@@ -74,7 +74,7 @@ export function BoardSelectorSheet({
                 </Text>
                 {board.isStarred && (
                   <View style={styles.starBadge}>
-                    <StarIcon size={10} color="#facc15" weight="fill" />
+                    <StarIcon size={10} color={theme.highlight.color} weight="fill" />
                     <Text style={styles.starText}>Main</Text>
                   </View>
                 )}
@@ -185,7 +185,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   starText: {
-    color: '#facc15',
+    color: theme.highlight.color,
     fontSize: 10,
     fontWeight: '700',
   },

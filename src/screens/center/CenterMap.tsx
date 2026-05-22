@@ -95,8 +95,8 @@ const HISTORY_MARKER_ICONS: Record<HistoryMarker['type'], Icon> = {
 
 const HISTORY_MARKER_COLORS: Record<HistoryMarker['type'], string> = {
   app_stop: '#f59e0b',
-  connected: '#22c55e',
-  disconnected: '#f97316',
+  connected: theme.gps.color,
+  disconnected: theme.warning.color,
   error: theme.error.color,
   gap: '#eab308',
 }
@@ -625,7 +625,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
         )}
 
         {historyActive && rideRoute[0] && (
-          <MapPin id="center-ride-start" coordinate={rideRoute[0]} color="#22c55e" />
+          <MapPin id="center-ride-start" coordinate={rideRoute[0]} color={theme.gps.color} />
         )}
         {historyActive && rideRoute.at(-1) && (
           <MapPin id="center-ride-end" coordinate={rideRoute.at(-1)!} color={theme.error.color} />

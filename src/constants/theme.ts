@@ -58,6 +58,22 @@ export const theme = {
     text: '#f87171', // red-400
     border: '#991b1b', // red-800
   },
+
+  /** Highlight / star – yellow */
+  highlight: {
+    color: '#facc15', // yellow-400
+    bg: '#422006', // yellow-950
+    text: '#fde047', // yellow-300
+    border: '#854d0e', // yellow-700
+  },
+
+  /** Secondary data – teal */
+  teal: {
+    color: '#14b8a6', // teal-500
+    bg: '#042f2e', // teal-950
+    text: '#2dd4bf', // teal-400
+    border: '#0f766e', // teal-700
+  },
 } as const
 
 /** Shared press/touch interaction tokens. Use these on every Pressable to keep feedback uniform. */

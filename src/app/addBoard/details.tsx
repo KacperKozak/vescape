@@ -16,6 +16,7 @@ import { useShallow } from 'zustand/react/shallow'
 
 import { useBoardStore } from '@/store/boardStore'
 import { routes } from '@/navigation/routes'
+import { theme } from '@/constants/theme'
 
 export default function BoardDetailsScreen() {
   const { bleId, bleName, boardId } = useLocalSearchParams<{
@@ -233,10 +234,10 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#4ade80',
+    backgroundColor: theme.gps.text,
   },
   pairedText: {
-    color: '#4ade80',
+    color: theme.gps.text,
     fontSize: 13,
     fontWeight: '600',
   },
@@ -332,11 +333,11 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#7f1d1d',
+    borderColor: theme.error.bg,
     backgroundColor: '#1f2937',
   },
   removeButtonText: {
-    color: '#f87171',
+    color: theme.error.text,
     fontSize: 15,
     fontWeight: '700',
   },

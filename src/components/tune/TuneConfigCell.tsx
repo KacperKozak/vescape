@@ -6,6 +6,7 @@ import type { RefloatConfigField, TuneProfileFieldValue } from 'vesc-ble'
 import { isDisplayableFieldValue } from '@/tune/fieldValues'
 import { formatProfileValue } from '@/tune/sliderDefinitions'
 import { formatTuneValue } from '@/tune/fields'
+import { theme } from '@/constants/theme'
 
 interface TuneConfigCellProps {
   field: RefloatConfigField
@@ -135,7 +136,7 @@ const styles = StyleSheet.create({
     borderRadius: 13,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#14532d',
+    backgroundColor: theme.gps.bg,
   },
   cellValue: {
     color: '#f1f5f9',

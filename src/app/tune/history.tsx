@@ -8,6 +8,7 @@ import { type TuneHistoryEntry, type TuneProfileFieldValue } from 'vesc-ble'
 import { ConfirmModal } from '@/components/ConfirmModal'
 import { APP_TUNE_FIELD_BY_ID, formatTuneValue } from '@/tune/fields'
 import { useTuneProfileStore } from '@/store/tuneProfileStore'
+import { theme } from '@/constants/theme'
 
 interface HistoryFieldDiff {
   fieldId: string
@@ -103,7 +104,7 @@ export default function TuneHistoryScreen() {
                   )}
                 </View>
                 <Pressable style={styles.restoreButton} onPress={() => handleRestore(item.id)}>
-                  <ArrowCounterClockwiseIcon size={13} color="#38bdf8" weight="bold" />
+                  <ArrowCounterClockwiseIcon size={13} color={theme.wheel.color} weight="bold" />
                   <Text style={styles.restoreText}>Restore</Text>
                 </Pressable>
               </View>
@@ -175,11 +176,11 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   diffOld: {
-    color: '#f87171',
+    color: theme.error.text,
     fontWeight: '700',
   },
   diffNew: {
-    color: '#4ade80',
+    color: theme.gps.text,
     fontWeight: '700',
   },
   restoreButton: {
@@ -194,7 +195,7 @@ const styles = StyleSheet.create({
     borderColor: '#164e63',
   },
   restoreText: {
-    color: '#38bdf8',
+    color: theme.wheel.color,
     fontSize: 11,
     fontWeight: '800',
   },

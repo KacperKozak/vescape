@@ -4,6 +4,7 @@ import { CheckIcon, XIcon } from 'phosphor-react-native'
 
 import { Dropdown } from '@/components/Dropdown'
 import { TuneDial } from '@/components/tune/TuneDial'
+import { theme } from '@/constants/theme'
 import { snapValue } from '@/tune/sliderDefinitions'
 import type { LinkedFieldPreview } from '@/tune/sliderDefinitions'
 import { formatTuneValue } from '@/tune/fields'
@@ -253,7 +254,7 @@ const styles = StyleSheet.create({
     height: 38,
     paddingHorizontal: 16,
     borderRadius: 8,
-    backgroundColor: '#38bdf8',
+    backgroundColor: theme.wheel.color,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

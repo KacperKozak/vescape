@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native'
+import { theme } from '@/constants/theme'
 
 interface ShowcaseCardProps {
   name: string
@@ -25,7 +26,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   name: {
-    color: '#38bdf8',
+    color: theme.wheel.color,
     fontSize: 12,
     fontWeight: '800',
     fontFamily: 'monospace',

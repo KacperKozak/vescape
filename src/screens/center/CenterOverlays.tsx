@@ -17,6 +17,7 @@ import { IconButton } from '@/components/IconButton'
 import { MapControls } from '@/components/map/MapControls'
 import { MapStyleSwitch } from '@/components/map/MapStyleSwitch'
 import type { MapStyleKey } from '@/constants/mapStyles'
+import { theme } from '@/constants/theme'
 import { routes } from '@/navigation/routes'
 import { BottomTelemetryStrip, STRIP_CONTENT_HEIGHT } from '@/screens/center/BottomTelemetryStrip'
 import type { CenterMapHandle } from '@/screens/center/CenterMap'
@@ -288,7 +289,7 @@ export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOver
           {historyBusy && (
             <View pointerEvents="none" style={styles.mapLoading}>
               <View style={styles.mapLoadingDim} />
-              <ActivityIndicator size="large" color="#38bdf8" />
+              <ActivityIndicator size="large" color={theme.wheel.color} />
             </View>
           )}
           <HistoryTelemetryPanel
@@ -324,7 +325,7 @@ export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOver
           {historyBusy && (
             <View pointerEvents="none" style={styles.mapLoading}>
               <View style={styles.mapLoadingDim} />
-              <ActivityIndicator size="large" color="#38bdf8" />
+              <ActivityIndicator size="large" color={theme.wheel.color} />
             </View>
           )}
           <HistoryControls
@@ -414,7 +415,7 @@ const styles = StyleSheet.create({
     padding: 10,
     backgroundColor: 'rgba(69, 26, 26, 0.88)',
     borderWidth: 1,
-    borderColor: '#7f1d1d',
+    borderColor: theme.error.bg,
   },
   historyErrorText: {
     color: '#fecaca',

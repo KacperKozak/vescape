@@ -201,7 +201,7 @@ export function TuneSyncBar({
         return {
           borderColor: theme.gps.border,
           textColor: '#86efac',
-          accentColor: '#4ade80',
+          accentColor: theme.gps.text,
           accentTextColor: '#022c22',
           text: `${s.diffCount} field${s.diffCount === 1 ? '' : 's'} differ from board`,
           detail: null,

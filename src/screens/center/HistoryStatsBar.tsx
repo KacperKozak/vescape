@@ -5,6 +5,7 @@ import type { Icon } from 'phosphor-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import type { HistorySession } from '@/store/historyStore'
+import { theme } from '@/constants/theme'
 
 interface HistoryStatsBarProps {
   session: HistorySession
@@ -57,21 +58,21 @@ function sessionToStats(session: HistorySession): StatItem[] {
       label: 'Distance',
       value: formatDistance(session.distanceM),
       icon: RoadHorizonIcon,
-      accent: '#38bdf8',
+      accent: theme.wheel.color,
     },
     {
       key: 'rideTime',
       label: 'Ride time',
       value: formatDuration(session.endAtMs - session.startAtMs),
       icon: ClockCountdownIcon,
-      accent: '#a78bfa',
+      accent: theme.target.color,
     },
     {
       key: 'topSpeed',
       label: 'Top speed',
       value: formatSpeed(session.maxSpeedKmh),
       icon: GaugeIcon,
-      accent: '#f97316',
+      accent: theme.warning.color,
     },
     {
       key: 'avgSpeed',

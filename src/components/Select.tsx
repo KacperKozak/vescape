@@ -2,7 +2,7 @@ import { useCallback, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { CaretDownIcon, CheckIcon } from 'phosphor-react-native'
 
-import { interaction } from '@/constants/theme'
+import { interaction, theme } from '@/constants/theme'
 import { Dropdown } from './Dropdown'
 
 const MAX_DROPDOWN_HEIGHT = 280
@@ -72,7 +72,7 @@ export function Select<T extends string = string>({
                 <Text style={[styles.optionText, selected && styles.optionTextSelected]}>
                   {option.label}
                 </Text>
-                {selected ? <CheckIcon size={14} color="#38bdf8" weight="bold" /> : null}
+                {selected ? <CheckIcon size={14} color={theme.wheel.color} weight="bold" /> : null}
               </Pressable>
             )
           })}
@@ -116,7 +116,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#334155',
   },
   optionSelected: {
-    backgroundColor: '#0c2a3f',
+    backgroundColor: theme.wheel.bg,
   },
   optionPressed: {
     backgroundColor: interaction.pressedBg,
@@ -127,7 +127,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   optionTextSelected: {
-    color: '#38bdf8',
+    color: theme.wheel.color,
     fontWeight: '600',
   },
 })

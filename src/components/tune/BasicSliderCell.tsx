@@ -4,6 +4,7 @@ import { InfoIcon, WarningIcon } from 'phosphor-react-native'
 
 import type { BasicSliderItem } from '@/tune/sliderDefinitions'
 import { clamp, formatSliderValue } from '@/tune/sliderDefinitions'
+import { theme } from '@/constants/theme'
 
 interface BasicSliderCellProps {
   item: BasicSliderItem
@@ -70,7 +71,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingLeft: 11,
     borderLeftWidth: 3,
-    borderLeftColor: '#38bdf8',
+    borderLeftColor: theme.wheel.color,
   },
   cellMissing: {
     opacity: 0.58,
@@ -111,7 +112,7 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: 0,
     borderRadius: 3,
-    backgroundColor: '#38bdf8',
+    backgroundColor: theme.wheel.color,
   },
   labelRow: {
     flexDirection: 'row',

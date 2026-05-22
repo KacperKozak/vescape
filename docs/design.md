@@ -36,6 +36,8 @@ Use `src/constants/theme.ts` for all accent colors. Never hardcode a color that 
 | `target`    | `#a855f7`   | Time, iOS platform, profiles   |
 | `warning`   | `#f97316`   | Database, speed, warnings      |
 | `error`     | `#ef4444`   | Destructive, errors            |
+| `highlight` | `#facc15`   | Stars, achievements, gauges    |
+| `teal`      | `#14b8a6`   | Secondary data, avg metrics    |
 
 Each token also provides `.bg`, `.text`, and `.border` variants for pills, cards, and badges.
 

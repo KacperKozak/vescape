@@ -14,7 +14,7 @@ import Svg, { Defs, Line, Path, RadialGradient, Stop } from 'react-native-svg'
 
 import { Sparkline, type SparklinePoint } from '@/components/charts/Sparkline'
 import { telemetry } from '@/constants/telemetry'
-import { interaction } from '@/constants/theme'
+import { interaction, theme } from '@/constants/theme'
 import { routes } from '@/navigation/routes'
 
 export interface DualGaugeAlert {
@@ -177,7 +177,7 @@ function AlertTick({ side, fraction }: { side: 'left' | 'right'; fraction: numbe
       y1={inner.y}
       x2={outer.x}
       y2={outer.y}
-      stroke="#facc15"
+      stroke={theme.highlight.color}
       strokeWidth={TICK_WIDTH}
       strokeLinecap="butt"
     />
@@ -275,7 +275,7 @@ function HalfAlertTick({ fraction }: { fraction: number }) {
       y1={inner.y}
       x2={outer.x}
       y2={outer.y}
-      stroke="#facc15"
+      stroke={theme.highlight.color}
       strokeWidth={TICK_WIDTH}
       strokeLinecap="butt"
     />
@@ -377,11 +377,11 @@ function HalfArc({
             cy={HALF_CY}
             r={HALF_R}
           >
-            <Stop offset="0" stopColor="#facc15" stopOpacity={0} />
-            <Stop offset="0.82" stopColor="#facc15" stopOpacity={0} />
-            <Stop offset="0.965" stopColor="#facc15" stopOpacity={0.06} />
-            <Stop offset="0.99" stopColor="#facc15" stopOpacity={0.12} />
-            <Stop offset="1" stopColor="#facc15" stopOpacity={0} />
+            <Stop offset="0" stopColor={theme.highlight.color} stopOpacity={0} />
+            <Stop offset="0.82" stopColor={theme.highlight.color} stopOpacity={0} />
+            <Stop offset="0.965" stopColor={theme.highlight.color} stopOpacity={0.06} />
+            <Stop offset="0.99" stopColor={theme.highlight.color} stopOpacity={0.12} />
+            <Stop offset="1" stopColor={theme.highlight.color} stopOpacity={0} />
           </RadialGradient>
         </Defs>
 
@@ -499,11 +499,11 @@ function QuarterArc({ side, value, max, color, unit, alerts = [] }: QuarterArcPr
             cy={cy}
             r={R}
           >
-            <Stop offset="0" stopColor="#facc15" stopOpacity={0} />
-            <Stop offset="0.82" stopColor="#facc15" stopOpacity={0} />
-            <Stop offset="0.965" stopColor="#facc15" stopOpacity={0.05} />
-            <Stop offset="0.99" stopColor="#facc15" stopOpacity={0.1} />
-            <Stop offset="1" stopColor="#facc15" stopOpacity={0} />
+            <Stop offset="0" stopColor={theme.highlight.color} stopOpacity={0} />
+            <Stop offset="0.82" stopColor={theme.highlight.color} stopOpacity={0} />
+            <Stop offset="0.965" stopColor={theme.highlight.color} stopOpacity={0.05} />
+            <Stop offset="0.99" stopColor={theme.highlight.color} stopOpacity={0.1} />
+            <Stop offset="1" stopColor={theme.highlight.color} stopOpacity={0} />
           </RadialGradient>
         </Defs>
 

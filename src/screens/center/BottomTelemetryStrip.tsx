@@ -5,7 +5,7 @@ import Animated, { useAnimatedStyle, type SharedValue } from 'react-native-reani
 
 import { Sparkline } from '@/components/charts/Sparkline'
 import { BatteryIndicator } from '@/components/cards/BatteryIndicator'
-import { interaction } from '@/constants/theme'
+import { interaction, theme } from '@/constants/theme'
 import { telemetry } from '@/constants/telemetry'
 import { routes } from '@/navigation/routes'
 import { liveSelectors, useLiveMetric } from '@/hooks/useLiveMetric'
@@ -140,7 +140,7 @@ export function BottomTelemetryStrip({ revealProgress }: BottomTelemetryStripPro
                 styles.imuLine,
                 {
                   transform: [{ rotate: `${imuConnected ? pitchDeg : 0}deg` }],
-                  backgroundColor: imuConnected ? '#a78bfa' : '#64748b',
+                  backgroundColor: imuConnected ? theme.target.color : '#64748b',
                 },
               ]}
             />
@@ -237,8 +237,8 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   footpadActive: {
-    borderColor: '#4ade80',
-    backgroundColor: '#4ade80',
+    borderColor: theme.gps.text,
+    backgroundColor: theme.gps.text,
   },
   cellPressed: {
     opacity: interaction.pressedOpacity,
@@ -247,6 +247,6 @@ const styles = StyleSheet.create({
     width: 32,
     height: 3,
     borderRadius: 1,
-    backgroundColor: '#a78bfa',
+    backgroundColor: theme.target.color,
   },
 })
