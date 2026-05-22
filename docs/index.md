@@ -7,6 +7,7 @@
 
 - [architecture.md](./architecture.md) — hardware topology, BLE profile, protocol stack
 - [connectionState.md](./connectionState.md) — native-owned live state, GPS, recording, auto-connect
+- [history.md](./history.md) — ride history persistence, grouping, markers, and map rendering
 - [bleAndroid.md](./bleAndroid.md) — BLE connection problems & fixes (custom native module)
 - [vescProtocol.md](./vescProtocol.md) — VESC packet framing, CAN forwarding, Refloat commands
 - [refloatAlldata.md](./refloatAlldata.md) — Refloat `COMMAND_GET_ALLDATA` binary layout

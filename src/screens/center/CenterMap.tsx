@@ -9,6 +9,14 @@ import Mapbox, {
   type Camera as CameraRef,
 } from '@rnmapbox/maps'
 import {
+  ClockCountdownIcon,
+  LinkBreakIcon,
+  PlugsConnectedIcon,
+  StopIcon,
+  WarningCircleIcon,
+  type Icon,
+} from 'phosphor-react-native'
+import {
   forwardRef,
   useCallback,
   useEffect,
@@ -20,6 +28,7 @@ import {
 import { Animated, StyleSheet, Text, View } from 'react-native'
 import type { LocationEvent } from 'vesc-ble'
 
+import { InfoModal } from '@/components/InfoModal'
 import { MapPin } from '@/components/map/MapPin'
 import { MAPBOX_ACCESS_TOKEN, MAPY_TILE_URL_TEMPLATE } from '@/config/mapy'
 import { BLANK_STYLE, MAP_DEFAULTS, MAP_STYLES, type MapStyleKey } from '@/constants/mapStyles'
@@ -59,9 +68,38 @@ interface CameraSnapshot {
   pitch: number
 }
 
+interface SelectedHistoryMarker {
+  marker: HistoryMarker
+  gps: HistoryGpsSample
+}
+
 const MERCATOR_TILE_SIZE = 512
 const MAX_MERCATOR_LATITUDE = 85.05112878
 const MIN_ZOOM = 0
+
+const HISTORY_MARKER_LABELS: Record<HistoryMarker['type'], string> = {
+  app_stop: 'Recording stopped',
+  connected: 'Board connected',
+  disconnected: 'Board disconnected',
+  error: 'Error',
+  gap: 'History gap',
+}
+
+const HISTORY_MARKER_ICONS: Record<HistoryMarker['type'], Icon> = {
+  app_stop: StopIcon,
+  connected: PlugsConnectedIcon,
+  disconnected: LinkBreakIcon,
+  error: WarningCircleIcon,
+  gap: ClockCountdownIcon,
+}
+
+const HISTORY_MARKER_COLORS: Record<HistoryMarker['type'], string> = {
+  app_stop: '#f59e0b',
+  connected: '#22c55e',
+  disconnected: '#f97316',
+  error: theme.error.color,
+  gap: '#eab308',
+}
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
@@ -102,6 +140,45 @@ function getCameraForScreenPan(baseCamera: CameraSnapshot, totalX: number, total
       clamp(worldYToLatitude(centerY, worldSize), -MAX_MERCATOR_LATITUDE, MAX_MERCATOR_LATITUDE),
     ] as [number, number],
   }
+}
+
+function formatMarkerTime(ms: number): string {
+  return new Date(ms).toLocaleString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  })
+}
+
+function formatDuration(ms: number): string {
+  if (ms < 1_000) return `${ms} ms`
+  const seconds = Math.round(ms / 1_000)
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  const rest = seconds % 60
+  return rest === 0 ? `${minutes}m` : `${minutes}m ${rest}s`
+}
+
+function buildHistoryMarkerMessage(selection: SelectedHistoryMarker): string {
+  const { marker, gps } = selection
+  const lines = [
+    `Type: ${marker.type}`,
+    `Meaning: ${HISTORY_MARKER_LABELS[marker.type]}`,
+    `Marker time: ${formatMarkerTime(marker.occurredAtMs)}`,
+    `Nearest GPS time: ${formatMarkerTime(gps.capturedAtMs)}`,
+    `Time offset: ${formatDuration(Math.abs(gps.capturedAtMs - marker.occurredAtMs))}`,
+    `Coordinate: ${gps.latitude.toFixed(7)}, ${gps.longitude.toFixed(7)}`,
+  ]
+
+  if (gps.accuracyM != null) lines.push(`GPS accuracy: ${gps.accuracyM.toFixed(1)} m`)
+  if (marker.deviceName) lines.push(`Board: ${marker.deviceName}`)
+  if (marker.gapMs != null) lines.push(`Gap duration: ${formatDuration(marker.gapMs)}`)
+  if (marker.message) lines.push(`Message: ${marker.message}`)
+
+  return lines.join('\n')
 }
 
 interface CenterMapProps {
@@ -149,6 +226,9 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
   const mapOpacity = useRef(new Animated.Value(0)).current
   const [followGps, setFollowGps] = useState(true)
   const [cameraReady, setCameraReady] = useState(false)
+  const [selectedHistoryMarker, setSelectedHistoryMarker] = useState<SelectedHistoryMarker | null>(
+    null,
+  )
   const gpsFix = liveLocations.at(-1) ?? null
   const [initialApproximateFix, setInitialApproximateFix] = useState<LocationEvent | null>(null)
   const settingsLoaded = useSettingsStore((s) => s.loaded)
@@ -570,7 +650,9 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
                 key={marker.id}
                 id={`center-ride-marker-${marker.id}`}
                 coordinate={[gps.longitude, gps.latitude]}
-                color={marker.type === 'error' ? theme.error.color : '#f59e0b'}
+                color={HISTORY_MARKER_COLORS[marker.type]}
+                icon={HISTORY_MARKER_ICONS[marker.type]}
+                onSelected={() => setSelectedHistoryMarker({ marker, gps })}
               />
             )
           })}
@@ -584,6 +666,17 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
           />
         )}
       </Mapbox.MapView>
+      <InfoModal
+        visible={selectedHistoryMarker != null}
+        title={
+          selectedHistoryMarker
+            ? HISTORY_MARKER_LABELS[selectedHistoryMarker.marker.type]
+            : 'History marker'
+        }
+        message={selectedHistoryMarker ? buildHistoryMarkerMessage(selectedHistoryMarker) : ''}
+        dismissLabel="Close"
+        onDismiss={() => setSelectedHistoryMarker(null)}
+      />
       <View style={styles.edgeGuardLeft} pointerEvents="box-only" />
       <View style={styles.edgeGuardRight} pointerEvents="box-only" />
     </Animated.View>
