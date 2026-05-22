@@ -1,5 +1,4 @@
 import { create } from 'zustand'
-import type { EventSubscription } from 'expo-modules-core'
 import {
   scan as nativeScan,
   stopScan as nativeStopScan,
@@ -25,6 +24,10 @@ import {
 import { useSettingsStore } from '@/store/settingsStore'
 import { liveTelemetryRuntime } from '@/telemetry/liveTelemetryRuntime'
 import { type LiveStatusSummary } from '@/telemetry/liveMetricHistory'
+
+interface EventSubscription {
+  remove(): void
+}
 
 export interface ScannedDevice {
   id: string

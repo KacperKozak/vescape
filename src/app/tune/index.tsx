@@ -823,10 +823,13 @@ function TextPromptModal({
   onDismiss: () => void
 }) {
   const [text, setText] = useState(initialValue)
-
-  useEffect(() => {
-    if (visible) setText(initialValue)
-  }, [visible, initialValue])
+  const [prevVisible, setPrevVisible] = useState(visible)
+  if (visible && !prevVisible) {
+    setText(initialValue)
+  }
+  if (visible !== prevVisible) {
+    setPrevVisible(visible)
+  }
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onDismiss}>

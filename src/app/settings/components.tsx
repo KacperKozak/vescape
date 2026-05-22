@@ -325,6 +325,7 @@ function SingleGaugeShowcase() {
     (next: string) => {
       const key = next as typeof metricKey
       setMetricKey(key)
+      // eslint-disable-next-line react-hooks/immutability -- Reanimated shared value
       value.value = key === 'speed' ? 34 : key === 'duty' ? 68 : 42.5
     },
     [value],

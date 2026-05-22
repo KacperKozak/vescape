@@ -1,7 +1,7 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "tags": ["-lintignore"],
-  "ignore": [".agents/**/*", ".claude/**/*", "app.json", "babel.config.js"],
+  "ignore": [".agents/**/*", ".claude/**/*", "app.json"],
   "workspaces": {
     ".": {},
     "modules/*": {}

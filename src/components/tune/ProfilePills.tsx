@@ -34,6 +34,7 @@ export function ProfilePills({
   onDelete,
   onCopy,
 }: ProfilePillsProps) {
+  'use no memo'
   const [contextMenu, setContextMenu] = useState<ContextMenu | null>(null)
   const pillRefs = useRef<Map<string, React.RefObject<View | null>>>(new Map())
   const addRef = useTriggerRef()
@@ -61,6 +62,7 @@ export function ProfilePills({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, centered && styles.scrollContentCentered]}
       >
+        {/* eslint-disable-next-line react-hooks/refs -- ref map read is stable, not reactive */}
         {profiles.map((profile) => {
           const active = profile.id === activeProfileId
           const ref = getPillRef(profile.id)

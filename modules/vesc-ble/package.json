@@ -4,6 +4,6 @@
   "description": "Native BLE module for VESC / NUS communication",
   "main": "src/index.ts",
   "dependencies": {
-    "expo-modules-core": "55.0.25"
+    "expo-modules-core": "~56.0.12"
   }
 }

@@ -83,7 +83,8 @@ export default function ProfileScreen() {
   }, [])
 
   useEffect(() => {
-    void loadInitial()
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- async load on mount, setState in async continuation
+    loadInitial()
   }, [loadInitial])
 
   const loadMonth = useCallback(async (month: ProfileStatsMonth) => {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import { CheckIcon, XIcon } from 'phosphor-react-native'
 
@@ -28,21 +28,34 @@ interface FieldEditorPopoverProps {
 }
 
 export function FieldEditorPopover({ target, onCancel, onApply }: FieldEditorPopoverProps) {
-  const [draftValue, setDraftValue] = useState(0)
-  const [draftText, setDraftText] = useState('')
+  if (!target) return null
 
-  useEffect(() => {
-    if (!target) return
-    setDraftValue(target.value)
-    setDraftText(formatTuneValue(target.value))
-  }, [target])
+  return (
+    <FieldEditorPopoverInner
+      key={target.fieldId}
+      target={target}
+      onCancel={onCancel}
+      onApply={onApply}
+    />
+  )
+}
+
+function FieldEditorPopoverInner({
+  target,
+  onCancel,
+  onApply,
+}: {
+  target: FieldEditorTarget
+  onCancel: () => void
+  onApply: (value: number) => void
+}) {
+  const [draftValue, setDraftValue] = useState(target.value)
+  const [draftText, setDraftText] = useState(formatTuneValue(target.value))
 
   const handleDialChange = useCallback((v: number) => {
     setDraftValue(v)
     setDraftText(formatTuneValue(v))
   }, [])
-
-  if (!target) return null
 
   return (
     <Dropdown

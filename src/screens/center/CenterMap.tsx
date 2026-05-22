@@ -472,10 +472,10 @@ const EDGE_GUARD_WIDTH = 40
 
 const styles = StyleSheet.create({
   mapContainer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   map: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   edgeGuardLeft: {
     position: 'absolute',
@@ -494,7 +494,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.001)',
   },
   emptyContainer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#111827',

@@ -50,11 +50,6 @@ export default function BoardDetailsScreen() {
     navigation.setOptions({ title: editingBoard ? 'Edit Board' : 'Board Details' })
   }, [editingBoard, navigation])
 
-  useEffect(() => {
-    if (bleId) setPairedBleId(bleId)
-    if (bleName) setPairedBleName(bleName)
-  }, [bleId, bleName])
-
   const parseVoltage = (raw: string): number | null => {
     const trimmed = raw.trim()
     if (!trimmed) return null

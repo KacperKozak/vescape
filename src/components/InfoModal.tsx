@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Animated, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { InfoIcon, XIcon } from 'phosphor-react-native'
 
@@ -19,13 +19,18 @@ export function InfoModal({
   dismissLabel = 'Done',
   onDismiss,
 }: InfoModalProps) {
-  const opacity = useRef(new Animated.Value(0)).current
-  const scale = useRef(new Animated.Value(0.92)).current
+  const opacity = useMemo(() => new Animated.Value(0), [])
+  const scale = useMemo(() => new Animated.Value(0.92), [])
   const [mounted, setMounted] = useState(false)
+  const [prevVisible, setPrevVisible] = useState(false)
+
+  if (visible !== prevVisible) {
+    setPrevVisible(visible)
+    if (visible) setMounted(true)
+  }
 
   useEffect(() => {
     if (visible) {
-      setMounted(true)
       Animated.parallel([
         Animated.timing(opacity, { toValue: 1, duration: FADE_DURATION, useNativeDriver: true }),
         Animated.timing(scale, { toValue: 1, duration: FADE_DURATION, useNativeDriver: true }),
@@ -77,7 +82,7 @@ const styles = StyleSheet.create({
     padding: 32,
   },
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   card: {
     width: '100%',

@@ -131,7 +131,7 @@ function formatDistance(distanceM: number | null): string {
 
 const styles = StyleSheet.create({
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 24,
   },
   panel: {

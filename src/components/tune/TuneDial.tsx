@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/immutability */
 import * as Haptics from 'expo-haptics'
 import { useCallback, useEffect, useMemo } from 'react'
 import {
@@ -65,6 +66,7 @@ interface TuneDialProps {
 }
 
 export function TuneDial({ value, previousValue, min, max, step, onValueChange }: TuneDialProps) {
+  'use no memo'
   const { width: screenWidth } = useWindowDimensions()
   const range = max - min
   const {

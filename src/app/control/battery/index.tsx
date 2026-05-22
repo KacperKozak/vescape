@@ -25,7 +25,7 @@ export default function BatteryScreen() {
       return { y: { min: board.minVoltage, max: board.maxVoltage } }
     }
     return computeAutoRange(points, { minSpan: cfg.minSpan })
-  }, [board?.minVoltage, board?.maxVoltage, points])
+  }, [board, points])
 
   return (
     <ControlDetailLayout title={cfg.label} controlId={cfg.controlId} unit={cfg.unit}>

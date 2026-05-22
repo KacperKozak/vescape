@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { PanResponder, StyleSheet, Text, View } from 'react-native'
 import type { LayoutChangeEvent, StyleProp, ViewStyle } from 'react-native'
 import Svg, {
@@ -60,14 +60,18 @@ export function TelemetryLineChart({
   formatValue,
   windowMs,
 }: TelemetryLineChartProps) {
+  'use no memo'
   const [chartWidth, setChartWidth] = useState(0)
   const [chartPageX, setChartPageX] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
   const graphRef = useRef<View>(null)
   const onPointSelectedRef = useRef(onPointSelected)
-  onPointSelectedRef.current = onPointSelected
   const onGestureStartRef = useRef(onGestureStart)
-  onGestureStartRef.current = onGestureStart
+
+  useEffect(() => {
+    onPointSelectedRef.current = onPointSelected
+    onGestureStartRef.current = onGestureStart
+  })
 
   const onGraphLayout = useCallback((event: LayoutChangeEvent) => {
     setChartWidth(Math.round(event.nativeEvent.layout.width))
@@ -105,6 +109,7 @@ export function TelemetryLineChart({
 
   const panResponder = useMemo(
     () =>
+      // eslint-disable-next-line react-hooks/refs -- refs only read inside PanResponder callbacks, not during render
       PanResponder.create({
         onStartShouldSetPanResponder: () =>
           !!onPointSelectedRef.current && points.length > 0 && chartWidth > 0,

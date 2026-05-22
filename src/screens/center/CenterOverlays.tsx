@@ -94,7 +94,15 @@ export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOver
   const historyPanelBottom = Math.max(insets.bottom, 16) + 8
   const [panelHeight, setPanelHeight] = useState(0)
   const [removeConfirmVisible, setRemoveConfirmVisible] = useState(false)
+  const [prevMode, setPrevMode] = useState(mode)
   const historyBusy = history.loadingSession || history.historyLoading
+
+  if (mode !== prevMode) {
+    setPrevMode(mode)
+    if (mode !== 'history' && panelHeight !== 0) {
+      setPanelHeight(0)
+    }
+  }
 
   const handleRemovePress = useCallback(() => {
     setRemoveConfirmVisible(true)
@@ -108,11 +116,6 @@ export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOver
   const handleRemoveCancel = useCallback(() => {
     setRemoveConfirmVisible(false)
   }, [])
-
-  useEffect(() => {
-    if (mode === 'history' || panelHeight === 0) return
-    setPanelHeight(0)
-  }, [mode, panelHeight])
 
   useEffect(() => {
     if (mode === 'history' && panelHeight > 0) {
@@ -315,13 +318,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   mapLoading: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
   mapLoadingDim: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(2, 6, 23, 0.34)',
   },
 })

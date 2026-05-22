@@ -84,7 +84,7 @@ export function MapVignette({ mode, panelHeight = 0 }: MapVignetteProps) {
 
 const styles = StyleSheet.create({
   wrap: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 4,
   },
 })

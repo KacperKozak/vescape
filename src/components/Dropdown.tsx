@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Animated, Dimensions, Modal, Platform, Pressable, StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
@@ -55,8 +55,8 @@ export function Dropdown({
   const [layout, setLayout] = useState<TriggerLayout | null>(null)
   const [dropAbove, setDropAbove] = useState(false)
   const [mounted, setMounted] = useState(false)
-  const opacity = useRef(new Animated.Value(0)).current
-  const translateY = useRef(new Animated.Value(-6)).current
+  const opacity = useMemo(() => new Animated.Value(0), [])
+  const translateY = useMemo(() => new Animated.Value(-6), [])
 
   useEffect(() => {
     if (visible) {
@@ -200,7 +200,7 @@ export function Dropdown({
 
 const styles = StyleSheet.create({
   backdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
   },
   panel: {
     backgroundColor: '#131c2e',
