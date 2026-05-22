@@ -16,7 +16,18 @@ const profile: TuneProfile = {
   updatedAt: 1000,
 }
 
-const getTuneProfiles = mock(async () => [profile])
+const otherBoardProfile: TuneProfile = {
+  id: 'profile-2',
+  boardId: 'board-2',
+  name: 'Other',
+  fields: {
+    kp: 30,
+  },
+  createdAt: 1000,
+  updatedAt: 1000,
+}
+
+const getTuneProfiles = mock(async (_boardId: string) => [profile])
 const getTuneProfile = mock(async () => profile)
 const saveProfile = mock(async (_profileId: string, fields: TuneProfile['fields']) => ({
   ...profile,
@@ -50,6 +61,7 @@ mock.module('../../modules/vesc-ble/src/index', () => vescBleMock)
 
 beforeEach(async () => {
   getTuneProfiles.mockClear()
+  getTuneProfiles.mockImplementation(async (_boardId: string) => [profile])
   getTuneProfile.mockClear()
   saveProfile.mockClear()
   const { useTuneProfileStore } = await import('./tuneProfileStore')
@@ -64,6 +76,7 @@ beforeEach(async () => {
     hasBoardDiff: false,
     loading: false,
     saving: false,
+    syncing: false,
     error: null,
   })
 })
@@ -192,4 +205,35 @@ test('saves dirty fields through native saveProfile and clears the draft', async
   expect(useTuneProfileStore.getState().activeProfile?.fields.kp).toBe(24)
   expect(useTuneProfileStore.getState().draftFields).toEqual({})
   expect(useTuneProfileStore.getState().hasDirtyFields).toBe(false)
+})
+
+test('ignores stale profile loads when board selection changes', async () => {
+  const { useTuneProfileStore } = await import('./tuneProfileStore')
+  let resolveBoard1: ((profiles: TuneProfile[]) => void) | undefined
+  let resolveBoard2: ((profiles: TuneProfile[]) => void) | undefined
+  getTuneProfiles.mockImplementation(
+    (boardId: string) =>
+      new Promise<TuneProfile[]>((resolve) => {
+        if (boardId === 'board-1') {
+          resolveBoard1 = resolve
+        } else {
+          resolveBoard2 = resolve
+        }
+      }),
+  )
+
+  const staleLoad = useTuneProfileStore.getState().loadProfiles('board-1')
+  const currentLoad = useTuneProfileStore.getState().loadProfiles('board-2')
+  resolveBoard2?.([otherBoardProfile])
+  await currentLoad
+
+  expect(useTuneProfileStore.getState().activeBoardId).toBe('board-2')
+  expect(useTuneProfileStore.getState().activeProfile?.id).toBe('profile-2')
+
+  resolveBoard1?.([profile])
+  await staleLoad
+
+  expect(useTuneProfileStore.getState().activeBoardId).toBe('board-2')
+  expect(useTuneProfileStore.getState().activeProfile?.id).toBe('profile-2')
+  expect(useTuneProfileStore.getState().profiles).toEqual([otherBoardProfile])
 })

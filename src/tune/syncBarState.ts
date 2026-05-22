@@ -1,4 +1,5 @@
 type SyncBarVariant =
+  | 'loading_config'
   | 'up_to_date'
   | 'connect_to_sync'
   | 'save_later'
@@ -20,6 +21,7 @@ export function getSyncBarState(params: {
   hasBoardDiff: boolean
   dirtyCount: number
   diffCount: number
+  loadingConfig: boolean
   saving: boolean
   syncing: boolean
 }): SyncBarState | null {
@@ -30,10 +32,12 @@ export function getSyncBarState(params: {
     hasBoardDiff,
     dirtyCount,
     diffCount,
+    loadingConfig,
     saving,
     syncing,
   } = params
   if (!hasProfile) return null
+  if (loadingConfig) return { variant: 'loading_config', dirtyCount, diffCount }
   if (saving) return { variant: 'saving', dirtyCount, diffCount }
   if (syncing) return { variant: 'syncing', dirtyCount, diffCount }
   const connected = bleStatus === 'connected'

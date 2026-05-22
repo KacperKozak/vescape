@@ -73,6 +73,16 @@ export function TuneSyncBar({
 
   function getConfig(s: SyncBarState) {
     switch (s.variant) {
+      case 'loading_config':
+        return {
+          borderColor: theme.wheel.border,
+          textColor: '#bae6fd',
+          accentColor: theme.wheel.color,
+          accentTextColor: '#020617',
+          text: 'Reading board config...',
+          icon: <ActivityIndicator size="small" color={theme.wheel.color} />,
+          actions: [],
+        }
       case 'up_to_date':
         return {
           borderColor: '#334155',
