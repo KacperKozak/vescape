@@ -7,7 +7,7 @@ import {
 } from 'phosphor-react-native'
 import { useCallback, useEffect, useState, type RefObject } from 'react'
 import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native'
-import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated'
+import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { ConfirmModal } from '@/components/ConfirmModal'
@@ -91,6 +91,7 @@ interface CenterOverlaysProps {
 
 const RECORD_BUTTON_HEIGHT = 48
 const HISTORY_BUTTON_SIZE = 54
+const TELEMETRY_FADE_TIMING = { duration: 260 } as const
 
 export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOverlaysProps) {
   const insets = useSafeAreaInsets()
@@ -102,10 +103,15 @@ export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOver
   const [revealGestureActive, setRevealGestureActive] = useState(false)
   const revealProgress = useSharedValue(0)
   const dragOpacity = useSharedValue(0)
+  const telemetryReturnOpacity = useSharedValue(mode === 'telemetry' ? 1 : 0)
   const historyBusy = history.loadingSession || history.historyLoading
-  const interfaceFadeStyle = useAnimatedStyle(() => ({
-    opacity: 1 - dragOpacity.value * 0.88,
-  }))
+  const telemetryInteractive = mode === 'telemetry' && !revealGestureActive
+  const interfaceFadeStyle = useAnimatedStyle(
+    () => ({
+      opacity: telemetryInteractive ? (1 - dragOpacity.value) * telemetryReturnOpacity.value : 0,
+    }),
+    [telemetryInteractive],
+  )
 
   if (mode !== prevMode) {
     setPrevMode(mode)
@@ -183,9 +189,13 @@ export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOver
   useEffect(() => {
     if (mode === 'telemetry') {
       revealProgress.value = 0
-      dragOpacity.value = 0
+      dragOpacity.value = withTiming(0, TELEMETRY_FADE_TIMING)
+      telemetryReturnOpacity.value = 0
+      telemetryReturnOpacity.value = withTiming(1, TELEMETRY_FADE_TIMING)
+    } else {
+      telemetryReturnOpacity.value = 0
     }
-  }, [dragOpacity, mode, revealProgress])
+  }, [dragOpacity, mode, revealProgress, telemetryReturnOpacity])
 
   return (
     <>
@@ -203,81 +213,78 @@ export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOver
         />
       )}
 
-      {mode === 'telemetry' && (
-        <>
-          <Animated.View
-            pointerEvents="box-none"
-            style={[styles.telemetryInterface, interfaceFadeStyle]}
-          >
-            <MapVignette mode={mode} />
-            <LiveHud revealProgress={revealProgress} />
-            <BottomTelemetryStrip revealProgress={revealProgress} />
-            <TopBar
-              boards={board.boards}
-              activeBoardId={board.activeBoardId}
-              activeBoard={board.activeBoard}
-              bleStatus={board.bleStatus}
-              recordDebugSession={board.recordDebugSession}
-              onSelectBoard={board.onSelectBoard}
-              onAddBoard={board.onAddBoard}
-              onToggleRecordDebug={board.onToggleRecordDebug}
-              onDisconnect={board.onStopScan}
-            />
-            <FloatingBar
-              bleStatus={board.bleStatus}
-              activeBoard={board.activeBoard}
-              onStopScan={board.onStopScan}
-              onRetryConnect={board.onRetryConnect}
-              bottomOffset={aboveStripBottom}
-            />
-            <IconButton
-              icon={ClockCounterClockwiseIcon}
-              size="lg"
-              onPress={() => void history.enterHistoryMode()}
-              style={[
-                styles.historyButton,
-                { bottom: aboveStripBottom - (HISTORY_BUTTON_SIZE - RECORD_BUTTON_HEIGHT) / 2 },
-              ]}
-            />
-            <IconButton
-              icon={SlidersHorizontalIcon}
-              size="lg"
-              onPress={() => router.push(routes.tune)}
-              style={[
-                styles.tuneButton,
-                { bottom: aboveStripBottom - (HISTORY_BUTTON_SIZE - RECORD_BUTTON_HEIGHT) / 2 },
-              ]}
-            />
-          </Animated.View>
-        </>
-      )}
+      <Animated.View
+        pointerEvents={telemetryInteractive ? 'box-none' : 'none'}
+        style={[styles.telemetryInterface, interfaceFadeStyle]}
+      >
+        <MapVignette mode={mode} idPrefix="telemetry-map-vignette" />
+        <LiveHud revealProgress={revealProgress} />
+        <BottomTelemetryStrip revealProgress={revealProgress} />
+        <TopBar
+          boards={board.boards}
+          activeBoardId={board.activeBoardId}
+          activeBoard={board.activeBoard}
+          bleStatus={board.bleStatus}
+          recordDebugSession={board.recordDebugSession}
+          onSelectBoard={board.onSelectBoard}
+          onAddBoard={board.onAddBoard}
+          onToggleRecordDebug={board.onToggleRecordDebug}
+          onDisconnect={board.onStopScan}
+        />
+        <FloatingBar
+          bleStatus={board.bleStatus}
+          activeBoard={board.activeBoard}
+          onStopScan={board.onStopScan}
+          onRetryConnect={board.onRetryConnect}
+          bottomOffset={aboveStripBottom}
+        />
+        <IconButton
+          icon={ClockCounterClockwiseIcon}
+          size="lg"
+          onPress={() => void history.enterHistoryMode()}
+          style={[
+            styles.historyButton,
+            { bottom: aboveStripBottom - (HISTORY_BUTTON_SIZE - RECORD_BUTTON_HEIGHT) / 2 },
+          ]}
+        />
+        <IconButton
+          icon={SlidersHorizontalIcon}
+          size="lg"
+          onPress={() => router.push(routes.tune)}
+          style={[
+            styles.tuneButton,
+            { bottom: aboveStripBottom - (HISTORY_BUTTON_SIZE - RECORD_BUTTON_HEIGHT) / 2 },
+          ]}
+        />
+      </Animated.View>
 
-      {mode === 'map' && (
-        <>
-          <IconButton
-            icon={ArrowLeftIcon}
-            onPress={map.exitMapFocus}
-            style={[styles.backButton, { top: Math.max(insets.top, 8) }]}
-          />
-          <MapControls
-            heading={map.heading}
-            rotationLocked={map.rotationLocked}
-            perspectiveEnabled={map.perspectiveEnabled}
-            followGps={false}
-            showClearTarget={!!map.targetLocation}
-            onResetRotation={() => mapRef.current?.resetRotation()}
-            onToggleRotationLock={() => map.setRotationLocked((prev) => !prev)}
-            onTogglePerspective={() => mapRef.current?.togglePerspective()}
-            onRecenter={map.exitMapFocus}
-            onClearTarget={map.clearTargetLocation}
-          />
-          <MapStyleSwitch activeKey={map.mapStyleKey} onSelect={map.setMapStyleKey} />
-        </>
-      )}
+      <View
+        pointerEvents={mode === 'map' ? 'box-none' : 'none'}
+        style={[styles.mapInterface, mode === 'map' ? styles.visible : styles.hidden]}
+      >
+        <IconButton
+          icon={ArrowLeftIcon}
+          onPress={map.exitMapFocus}
+          style={[styles.backButton, { top: Math.max(insets.top, 8) }]}
+        />
+        <MapControls
+          heading={map.heading}
+          rotationLocked={map.rotationLocked}
+          perspectiveEnabled={map.perspectiveEnabled}
+          followGps={false}
+          showClearTarget={!!map.targetLocation}
+          onResetRotation={() => mapRef.current?.resetRotation()}
+          onToggleRotationLock={() => map.setRotationLocked((prev) => !prev)}
+          onTogglePerspective={() => mapRef.current?.togglePerspective()}
+          onRecenter={map.exitMapFocus}
+          onClearTarget={map.clearTargetLocation}
+        />
+        <MapStyleSwitch activeKey={map.mapStyleKey} onSelect={map.setMapStyleKey} />
+      </View>
 
       {mode === 'history' && history.selectedSession && (
         <>
-          <MapVignette mode={mode} panelHeight={panelHeight} />
+          <MapVignette mode={mode} panelHeight={panelHeight} idPrefix="history-map-vignette" />
           {historyBusy && (
             <View pointerEvents="none" style={styles.mapLoading}>
               <View style={styles.mapLoadingDim} />
@@ -377,6 +384,16 @@ const styles = StyleSheet.create({
   telemetryInterface: {
     ...StyleSheet.absoluteFill,
     zIndex: 6,
+  },
+  mapInterface: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 7,
+  },
+  visible: {
+    opacity: 1,
+  },
+  hidden: {
+    opacity: 0,
   },
   historyButton: {
     position: 'absolute',
