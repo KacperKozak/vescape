@@ -390,6 +390,7 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
     limit?: number
   }): Promise<HistoryRange>
   getTelemetrySummary(): Promise<TelemetrySummary>
+  getDatabaseSizeBytes(): Promise<number>
   getRefloatConfigSnapshot(): Promise<RefloatConfigSnapshot>
   getTuneProfiles(boardId: string): Promise<TuneProfile[]>
   getTuneProfile(profileId: string): Promise<TuneProfile | null>
@@ -573,6 +574,10 @@ export async function getHistoryRange(options: {
 
 export async function getTelemetrySummary(): Promise<TelemetrySummary> {
   return native.getTelemetrySummary()
+}
+
+export async function getDatabaseSizeBytes(): Promise<number> {
+  return native.getDatabaseSizeBytes()
 }
 
 export async function getRefloatConfigSnapshot(): Promise<RefloatConfigSnapshot> {

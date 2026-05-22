@@ -32,6 +32,7 @@ This is a PoC, but keep it sharp:
 ## React Native
 
 React Native UI conventions, including icon usage, live in `docs/agents/react.md`.
+Visual design language (colors, layout, typography) lives in `docs/design.md`.
 
 ## Agent skills
 

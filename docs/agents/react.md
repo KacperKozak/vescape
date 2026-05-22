@@ -2,6 +2,8 @@
 
 React Native UI conventions for this repo. Add component, styling, navigation, animation, and Expo Router guidance here when it becomes stable enough to apply across the app.
 
+For visual design principles (colors, layout, typography, when to use cards), see [`docs/design.md`](../design.md).
+
 ## Component Gallery
 
 When creating or significantly changing a reusable UI component, add or update its showcase in

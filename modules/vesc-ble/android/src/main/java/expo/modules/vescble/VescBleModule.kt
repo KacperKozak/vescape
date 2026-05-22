@@ -173,6 +173,10 @@ class VescBleModule : Module() {
     AsyncFunction("getTelemetrySummary") {
       runBlocking { TelemetryRepository.get(context.applicationContext).getSummary() }
     }
+    AsyncFunction("getDatabaseSizeBytes") {
+      val dbFile = context.applicationContext.getDatabasePath("telemetry.db")
+      if (dbFile.exists()) dbFile.length() else 0L
+    }
     AsyncFunction("getRefloatConfigSnapshot") { promise: Promise ->
       VescForegroundService.getRefloatConfigSnapshot(
         onSuccess = { snapshot -> promise.resolve(snapshot) },

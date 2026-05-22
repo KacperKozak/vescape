@@ -179,6 +179,10 @@ public class VescBleModule: Module {
       ] as [String: Any?])
     }
 
+    AsyncFunction("getDatabaseSizeBytes") { () -> Int in
+      return 0
+    }
+
     AsyncFunction("getRefloatConfigSnapshot") { (promise: Promise) in
       promise.reject(
         "UNSUPPORTED_PLATFORM",

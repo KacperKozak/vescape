@@ -1,7 +1,8 @@
-import { useCallback } from 'react'
-import { View, Text, Switch, Pressable, StyleSheet, ScrollView } from 'react-native'
+import { useCallback, useEffect, useState } from 'react'
+import { View, Text, Switch, Pressable, StyleSheet, ScrollView, Platform } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
+import Constants from 'expo-constants'
 import {
   ClockCountdownIcon,
   BluetoothConnectedIcon,
@@ -10,11 +11,25 @@ import {
   PlusIcon,
   CodeIcon,
   CaretRightIcon,
+  DatabaseIcon,
+  TagIcon,
+  AndroidLogoIcon,
+  AppleLogoIcon,
 } from 'phosphor-react-native'
 import { useShallow } from 'zustand/react/shallow'
+import { getDatabaseSizeBytes } from 'vesc-ble'
 
 import { routes } from '@/navigation/routes'
 import { useSettingsStore } from '@/store/settingsStore'
+import { theme } from '@/constants/theme'
+
+const appVersion = Constants.expoConfig?.version ?? '–'
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
 
 export default function SettingsScreen() {
   const { liveHistoryLimit, autoConnect, autoRecording, set } = useSettingsStore(
@@ -25,6 +40,13 @@ export default function SettingsScreen() {
       set: s.set,
     })),
   )
+  const [dbSize, setDbSize] = useState<number | null>(null)
+
+  useEffect(() => {
+    getDatabaseSizeBytes()
+      .then(setDbSize)
+      .catch(() => {})
+  }, [])
 
   const decrementLimit = useCallback(() => {
     if (liveHistoryLimit > 1) void set('liveHistoryLimit', liveHistoryLimit - 1)
@@ -37,6 +59,30 @@ export default function SettingsScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
+        <View style={styles.header}>
+          <Text style={styles.appName}>Vibe Wheel</Text>
+          <View style={styles.headerStats}>
+            <View style={styles.headerItem}>
+              <TagIcon size={14} color={theme.wheel.color} weight="duotone" />
+              <Text style={styles.headerValue}>v{appVersion}</Text>
+            </View>
+            <View style={styles.headerItem}>
+              {Platform.OS === 'ios' ? (
+                <AppleLogoIcon size={14} color={theme.target.color} weight="duotone" />
+              ) : (
+                <AndroidLogoIcon size={14} color={theme.gps.color} weight="duotone" />
+              )}
+              <Text style={styles.headerValue}>
+                {Platform.OS === 'ios' ? 'iOS' : 'Android'} {Platform.Version}
+              </Text>
+            </View>
+            <View style={styles.headerItem}>
+              <DatabaseIcon size={14} color={theme.warning.color} weight="duotone" />
+              <Text style={styles.headerValue}>{dbSize != null ? formatBytes(dbSize) : '–'}</Text>
+            </View>
+          </View>
+        </View>
+
         <Text style={styles.sectionTitle}>General</Text>
 
         <View style={styles.card}>
@@ -125,6 +171,30 @@ const styles = StyleSheet.create({
   content: {
     padding: 16,
     gap: 8,
+  },
+  header: {
+    alignItems: 'center',
+    paddingVertical: 20,
+    gap: 12,
+  },
+  appName: {
+    color: '#f1f5f9',
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  headerStats: {
+    flexDirection: 'row',
+    gap: 20,
+  },
+  headerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  headerValue: {
+    color: '#94a3b8',
+    fontSize: 12,
+    fontWeight: '600',
   },
   sectionTitle: {
     color: '#64748b',
