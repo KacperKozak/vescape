@@ -176,6 +176,14 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
     [emitStepIndex, stepPx, totalSteps, translateX],
   )
 
+  const pauseThrow = useCallback(() => {
+    'worklet'
+    cancelAnimation(translateX)
+    momentumVelocity.value = 0
+    throwDurationMs.value = 0
+    throwElapsedMs.value = 0
+  }, [momentumVelocity, throwDurationMs, throwElapsedMs, translateX])
+
   const handleLayout = useCallback(
     (event: LayoutChangeEvent) => {
       renderedWidthScale.value = computeRenderedWidthScale(
@@ -262,11 +270,12 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
       Gesture.Pan()
         .activeOffsetX([-8, 8])
         .failOffsetY([-15, 15])
+        .onTouchesDown(() => {
+          pauseThrow()
+        })
         .onStart(() => {
-          cancelAnimation(translateX)
+          pauseThrow()
           isDragging.value = true
-          throwDurationMs.value = 0
-          throwElapsedMs.value = 0
           smoothedThrowGestureVelocityX.value = 0
           latestGestureTranslationX.value = 0
           previousFrameGestureTranslationX.value = 0
@@ -329,6 +338,7 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
       isDragging,
       latestGestureTranslationX,
       momentumVelocity,
+      pauseThrow,
       previousFrameGestureTranslationX,
       rangeScale,
       renderedWidthScale,
