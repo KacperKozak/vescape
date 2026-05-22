@@ -1,11 +1,12 @@
 import { router } from 'expo-router'
+import * as Haptics from 'expo-haptics'
 import {
   ArrowLeftIcon,
   ClockCounterClockwiseIcon,
   SlidersHorizontalIcon,
 } from 'phosphor-react-native'
 import { useCallback, useEffect, useState, type RefObject } from 'react'
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native'
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
@@ -153,6 +154,11 @@ export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOver
   }, [mapRef])
 
   const handleReveal = useCallback(() => {
+    if (Platform.OS === 'ios') {
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+    } else if (Platform.OS === 'android') {
+      void Haptics.performAndroidHapticsAsync(Haptics.AndroidHaptics.Confirm)
+    }
     setRevealGestureActive(true)
     map.enterMapFocus()
   }, [map])
