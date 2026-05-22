@@ -107,7 +107,7 @@ export function MapRevealGesture({
 const styles = StyleSheet.create({
   hitArea: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: 40,
+    zIndex: 5,
     backgroundColor: 'rgba(0,0,0,0.001)',
   },
 })
