@@ -6,6 +6,7 @@ import {
   CheckCircleIcon,
   CloudArrowUpIcon,
   CheckIcon,
+  WarningCircleIcon,
 } from 'phosphor-react-native'
 
 import type { SyncBarState } from '@/tune/syncBarState'
@@ -17,6 +18,7 @@ interface TuneSyncBarProps {
   onSaveAndSync: () => void
   onSync: () => void
   onDiscard: () => void
+  onRetryConfig: () => void
   bottomOffset?: number
 }
 
@@ -26,6 +28,7 @@ export function TuneSyncBar({
   onSaveAndSync,
   onSync,
   onDiscard,
+  onRetryConfig,
   bottomOffset = 16,
 }: TuneSyncBarProps) {
   if (!state) return null
@@ -37,9 +40,16 @@ export function TuneSyncBar({
       <View style={[styles.pill, { borderColor: config.borderColor }]}>
         <View style={styles.left}>
           {config.icon}
-          <Text style={[styles.text, { color: config.textColor }]} numberOfLines={1}>
-            {config.text}
-          </Text>
+          <View style={styles.message}>
+            <Text style={[styles.text, { color: config.textColor }]} numberOfLines={1}>
+              {config.text}
+            </Text>
+            {config.detail ? (
+              <Text style={styles.detailText} numberOfLines={2}>
+                {config.detail}
+              </Text>
+            ) : null}
+          </View>
         </View>
 
         {config.actions.length > 0 ? (
@@ -80,8 +90,27 @@ export function TuneSyncBar({
           accentColor: theme.wheel.color,
           accentTextColor: '#020617',
           text: 'Reading board config...',
+          detail: null,
           icon: <ActivityIndicator size="small" color={theme.wheel.color} />,
           actions: [],
+        }
+      case 'config_error':
+        return {
+          borderColor: theme.warning.border,
+          textColor: theme.warning.text,
+          accentColor: theme.warning.color,
+          accentTextColor: '#1c0701',
+          text: 'Board config not read',
+          detail: s.configError,
+          icon: <WarningCircleIcon size={16} color={theme.warning.color} weight="bold" />,
+          actions: [
+            {
+              label: 'Retry',
+              primary: true,
+              icon: <ArrowsClockwiseIcon size={12} color="#1c0701" weight="bold" />,
+              onPress: onRetryConfig,
+            },
+          ],
         }
       case 'up_to_date':
         return {
@@ -90,6 +119,7 @@ export function TuneSyncBar({
           accentColor: theme.gps.color,
           accentTextColor: '#022c22',
           text: 'Your board is up to date',
+          detail: null,
           icon: <CheckCircleIcon size={16} color={theme.gps.color} weight="fill" />,
           actions: [],
         }
@@ -100,6 +130,7 @@ export function TuneSyncBar({
           accentColor: theme.warning.color,
           accentTextColor: '#1c0701',
           text: 'Connect to board to sync',
+          detail: null,
           icon: <BluetoothSlashIcon size={16} color={theme.warning.color} weight="bold" />,
           actions: [],
         }
@@ -110,21 +141,37 @@ export function TuneSyncBar({
           accentColor: theme.wheel.color,
           accentTextColor: '#020617',
           text: `${s.dirtyCount} unsaved field${s.dirtyCount === 1 ? '' : 's'}`,
+          detail: s.configError ? `Board config not read: ${s.configError}` : null,
           icon: <CloudArrowUpIcon size={16} color={theme.wheel.color} weight="bold" />,
-          actions: [
-            {
-              label: 'Discard',
-              primary: false,
-              icon: <ArrowCounterClockwiseIcon size={12} color="#cbd5e1" weight="bold" />,
-              onPress: onDiscard,
-            },
-            {
-              label: 'Save',
-              primary: true,
-              icon: <CheckIcon size={12} color="#020617" weight="bold" />,
-              onPress: onSave,
-            },
-          ],
+          actions: s.configError
+            ? [
+                {
+                  label: 'Retry',
+                  primary: false,
+                  icon: <ArrowsClockwiseIcon size={12} color="#cbd5e1" weight="bold" />,
+                  onPress: onRetryConfig,
+                },
+                {
+                  label: 'Save',
+                  primary: true,
+                  icon: <CheckIcon size={12} color="#020617" weight="bold" />,
+                  onPress: onSave,
+                },
+              ]
+            : [
+                {
+                  label: 'Discard',
+                  primary: false,
+                  icon: <ArrowCounterClockwiseIcon size={12} color="#cbd5e1" weight="bold" />,
+                  onPress: onDiscard,
+                },
+                {
+                  label: 'Save',
+                  primary: true,
+                  icon: <CheckIcon size={12} color="#020617" weight="bold" />,
+                  onPress: onSave,
+                },
+              ],
         }
       case 'save_and_sync':
         return {
@@ -133,6 +180,7 @@ export function TuneSyncBar({
           accentColor: theme.wheel.color,
           accentTextColor: '#020617',
           text: `${s.dirtyCount} unsaved field${s.dirtyCount === 1 ? '' : 's'}`,
+          detail: null,
           icon: <ArrowsClockwiseIcon size={16} color={theme.wheel.color} weight="bold" />,
           actions: [
             {
@@ -156,6 +204,7 @@ export function TuneSyncBar({
           accentColor: '#4ade80',
           accentTextColor: '#022c22',
           text: `${s.diffCount} field${s.diffCount === 1 ? '' : 's'} differ from board`,
+          detail: null,
           icon: <ArrowsClockwiseIcon size={16} color={theme.gps.color} weight="bold" />,
           actions: [
             {
@@ -173,6 +222,7 @@ export function TuneSyncBar({
           accentColor: theme.wheel.color,
           accentTextColor: '#020617',
           text: 'Saving...',
+          detail: null,
           icon: <ActivityIndicator size="small" color={theme.wheel.color} />,
           actions: [],
         }
@@ -183,6 +233,7 @@ export function TuneSyncBar({
           accentColor: theme.gps.color,
           accentTextColor: '#022c22',
           text: 'Syncing to board...',
+          detail: null,
           icon: <ActivityIndicator size="small" color={theme.gps.color} />,
           actions: [],
         }
@@ -226,7 +277,15 @@ const styles = StyleSheet.create({
   text: {
     fontSize: 12,
     fontWeight: '700',
+  },
+  message: {
     flex: 1,
+    gap: 2,
+  },
+  detailText: {
+    color: '#94a3b8',
+    fontSize: 11,
+    fontWeight: '600',
   },
   actions: {
     flexDirection: 'row',

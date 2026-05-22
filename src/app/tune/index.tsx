@@ -62,20 +62,21 @@ export default function TuneScreen() {
     basicSliders,
     boardConnected,
     boardDiffByField,
+    boardSnapshot,
+    boardSnapshotStatus,
     boardsLoaded,
     dirtyFields,
     displayGroups,
-    displaySnapshot,
     draftFields,
     loadOffline,
     loadOnline,
     profileError,
+    profileState,
     profiles,
+    retryBoardSnapshot,
     schemaMismatchFields,
     selectedBoardId,
-    state,
     syncBarState,
-    visibleSnapshot,
   } = useTuneScreenData()
   const setActiveProfile = useTuneProfileStore((s) => s.setActiveProfile)
   const storeCreateProfile = useTuneProfileStore((s) => s.createProfile)
@@ -114,13 +115,13 @@ export default function TuneScreen() {
             <IconButton
               icon={ArrowsClockwiseIcon}
               onPress={() => void loadOnline()}
-              loading={state.phase === 'loading'}
+              loading={boardSnapshotStatus === 'loading'}
             />
           ) : null}
         </View>
       ),
     })
-  }, [activeProfile, boardConnected, openHistory, loadOnline, navigation, state.phase])
+  }, [activeProfile, boardConnected, boardSnapshotStatus, openHistory, loadOnline, navigation])
 
   const showBadgeInfo = (title: string, message: string) => {
     setInfoModal({ title, message })
@@ -261,9 +262,11 @@ export default function TuneScreen() {
     void syncToBoard().catch(() => undefined)
   }
 
+  const hasTuneView = activeProfile != null
+
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
-      {!boardConnected && !selectedBoardId && boardsLoaded && !state.snapshot ? (
+      {!selectedBoardId && boardsLoaded && !hasTuneView ? (
         <Placeholder
           icon={BluetoothSlashIcon}
           title="No board selected"
@@ -271,16 +274,14 @@ export default function TuneScreen() {
         />
       ) : null}
 
-      {state.phase === 'loading' && !visibleSnapshot && (boardConnected || selectedBoardId) ? (
+      {profileState.phase === 'loading' && !hasTuneView && selectedBoardId ? (
         <View style={styles.centerState}>
           <ActivityIndicator color="#38bdf8" />
-          <Text style={styles.stateText}>
-            {boardConnected ? 'Reading board config...' : 'Loading saved tune profile...'}
-          </Text>
+          <Text style={styles.stateText}>Loading saved tune profile...</Text>
         </View>
       ) : null}
 
-      {state.phase === 'empty' ? (
+      {profileState.phase === 'empty' ? (
         <Placeholder
           icon={FadersIcon}
           title="No saved tunes"
@@ -288,26 +289,20 @@ export default function TuneScreen() {
         />
       ) : null}
 
-      {state.phase === 'error' && !state.snapshot ? (
+      {profileState.phase === 'error' && !hasTuneView ? (
         <View style={styles.centerState}>
           <WarningCircleIcon size={28} color="#f87171" />
-          <Text style={styles.errorText}>{state.error}</Text>
+          <Text style={styles.errorText}>{profileState.error}</Text>
           <Pressable
             style={styles.retryButton}
-            onPress={() =>
-              boardConnected
-                ? void loadOnline()
-                : selectedBoardId
-                  ? void loadOffline(selectedBoardId)
-                  : undefined
-            }
+            onPress={() => (selectedBoardId ? void loadOffline(selectedBoardId) : undefined)}
           >
             <Text style={styles.retryText}>Retry</Text>
           </Pressable>
         </View>
       ) : null}
 
-      {displaySnapshot ? (
+      {hasTuneView ? (
         <ScrollView
           contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 96 }]}
           contentInsetAdjustmentBehavior="automatic"
@@ -317,13 +312,6 @@ export default function TuneScreen() {
             title="Work in progress"
             message="Tune editing is experimental. Do not sync changes to the board until this feature is stable."
           />
-
-          {state.phase === 'error' ? (
-            <View style={styles.errorBanner}>
-              <WarningCircleIcon size={16} color="#fca5a5" />
-              <Text style={styles.errorBannerText}>{state.error}</Text>
-            </View>
-          ) : null}
 
           {profileError ? (
             <View style={styles.errorBanner}>
@@ -383,49 +371,51 @@ export default function TuneScreen() {
             />
           ) : null}
 
-          <View style={styles.metaRow}>
-            {displaySnapshot.fwVersion ? (
+          {boardSnapshot ? (
+            <View style={styles.metaRow}>
+              {boardSnapshot.fwVersion ? (
+                <InfoBadge
+                  label={boardSnapshot.fwVersion}
+                  onPress={() =>
+                    showBadgeInfo(
+                      'Firmware',
+                      'Firmware reported by the connected controller. This is useful diagnostic context, but the config decoder uses the board XML schema as the source of truth.',
+                    )
+                  }
+                />
+              ) : null}
               <InfoBadge
-                label={displaySnapshot.fwVersion}
+                label={`CAN ${boardSnapshot.canId}`}
                 onPress={() =>
                   showBadgeInfo(
-                    'Firmware',
-                    'Firmware reported by the connected controller. This is useful diagnostic context, but the config decoder uses the board XML schema as the source of truth.',
+                    'CAN ID',
+                    `Controller CAN ID ${boardSnapshot.canId}. Refloat config commands are forwarded to this controller before reading the schema and binary config.`,
                   )
                 }
               />
-            ) : null}
-            <InfoBadge
-              label={`CAN ${displaySnapshot.canId}`}
-              onPress={() =>
-                showBadgeInfo(
-                  'CAN ID',
-                  `Controller CAN ID ${displaySnapshot.canId}. Refloat config commands are forwarded to this controller before reading the schema and binary config.`,
-                )
-              }
-            />
-            <InfoBadge
-              label={`${displaySnapshot.rawConfigLength} bytes`}
-              onPress={() =>
-                showBadgeInfo(
-                  'Config Size',
-                  `${displaySnapshot.rawConfigLength} bytes is the size of the raw Refloat custom config payload read from the controller. The app decodes only known tune fields from that binary struct.`,
-                )
-              }
-            />
-            {displaySnapshot.missingFieldIds.length > 0 ? (
               <InfoBadge
-                label={`${displaySnapshot.missingFieldIds.length} missing`}
-                danger
+                label={`${boardSnapshot.rawConfigLength} bytes`}
                 onPress={() =>
                   showBadgeInfo(
-                    'Missing Fields',
-                    `These allowlisted fields were not present in the board schema: ${displaySnapshot.missingFieldIds.join(', ')}`,
+                    'Config Size',
+                    `${boardSnapshot.rawConfigLength} bytes is the size of the raw Refloat custom config payload read from the controller. The app decodes only known tune fields from that binary struct.`,
                   )
                 }
               />
-            ) : null}
-          </View>
+              {boardSnapshot.missingFieldIds.length > 0 ? (
+                <InfoBadge
+                  label={`${boardSnapshot.missingFieldIds.length} missing`}
+                  danger
+                  onPress={() =>
+                    showBadgeInfo(
+                      'Missing Fields',
+                      `These allowlisted fields were not present in the board schema: ${boardSnapshot.missingFieldIds.join(', ')}`,
+                    )
+                  }
+                />
+              ) : null}
+            </View>
+          ) : null}
 
           <TuneGroupGrid
             title="Basic"
@@ -484,13 +474,14 @@ export default function TuneScreen() {
         </ScrollView>
       ) : null}
 
-      {displaySnapshot ? (
+      {hasTuneView ? (
         <TuneSyncBar
           state={syncBarState}
           onSave={handleSave}
           onSaveAndSync={handleSaveAndSync}
           onSync={handleSync}
           onDiscard={discardAllEdits}
+          onRetryConfig={() => void retryBoardSnapshot()}
           bottomOffset={insets.bottom + 16}
         />
       ) : null}

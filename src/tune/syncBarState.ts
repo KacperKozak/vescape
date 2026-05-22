@@ -1,5 +1,6 @@
 type SyncBarVariant =
   | 'loading_config'
+  | 'config_error'
   | 'up_to_date'
   | 'connect_to_sync'
   | 'save_later'
@@ -12,6 +13,7 @@ export interface SyncBarState {
   variant: SyncBarVariant
   dirtyCount: number
   diffCount: number
+  configError: string | null
 }
 
 export function getSyncBarState(params: {
@@ -22,6 +24,8 @@ export function getSyncBarState(params: {
   dirtyCount: number
   diffCount: number
   loadingConfig: boolean
+  configError: string | null
+  boardSnapshotReady: boolean
   saving: boolean
   syncing: boolean
 }): SyncBarState | null {
@@ -33,17 +37,26 @@ export function getSyncBarState(params: {
     dirtyCount,
     diffCount,
     loadingConfig,
+    configError,
+    boardSnapshotReady,
     saving,
     syncing,
   } = params
   if (!hasProfile) return null
-  if (loadingConfig) return { variant: 'loading_config', dirtyCount, diffCount }
-  if (saving) return { variant: 'saving', dirtyCount, diffCount }
-  if (syncing) return { variant: 'syncing', dirtyCount, diffCount }
+  if (saving) return { variant: 'saving', dirtyCount, diffCount, configError: null }
+  if (syncing) return { variant: 'syncing', dirtyCount, diffCount, configError: null }
   const connected = bleStatus === 'connected'
-  if (hasDirtyFields && connected) return { variant: 'save_and_sync', dirtyCount, diffCount }
-  if (hasDirtyFields) return { variant: 'save_later', dirtyCount, diffCount }
-  if (hasBoardDiff && connected) return { variant: 'sync_with_board', dirtyCount, diffCount }
-  if (!connected) return { variant: 'connect_to_sync', dirtyCount, diffCount }
-  return { variant: 'up_to_date', dirtyCount, diffCount }
+  if (hasDirtyFields && connected && boardSnapshotReady) {
+    return { variant: 'save_and_sync', dirtyCount, diffCount, configError: null }
+  }
+  if (hasDirtyFields) return { variant: 'save_later', dirtyCount, diffCount, configError }
+  if (loadingConfig) return { variant: 'loading_config', dirtyCount, diffCount, configError: null }
+  if (configError) return { variant: 'config_error', dirtyCount, diffCount, configError }
+  if (hasBoardDiff && connected && boardSnapshotReady) {
+    return { variant: 'sync_with_board', dirtyCount, diffCount, configError: null }
+  }
+  if (!connected) return { variant: 'connect_to_sync', dirtyCount, diffCount, configError: null }
+  if (!boardSnapshotReady)
+    return { variant: 'loading_config', dirtyCount, diffCount, configError: null }
+  return { variant: 'up_to_date', dirtyCount, diffCount, configError: null }
 }

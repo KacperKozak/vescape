@@ -16,6 +16,8 @@ import {
   type TuneHistoryEntry,
 } from 'vesc-ble'
 
+import { useTuneSnapshotStore } from '@/store/tuneSnapshotStore'
+
 export type { TuneProfile, TuneProfileFieldValue } from 'vesc-ble'
 
 export interface TuneProfileBoardDiff {
@@ -449,6 +451,7 @@ export const useTuneProfileStore = create<TuneProfileState & TuneProfileActions>
     set({ syncing: true, error: null })
     try {
       const snapshot = await nativePushProfileToBoard(profile.id)
+      useTuneSnapshotStore.getState().setSnapshot(snapshot)
       get().setBoardSnapshot(snapshot)
       set({ syncing: false })
     } catch (error) {

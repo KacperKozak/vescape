@@ -1,6 +1,12 @@
-import type { RefloatConfigField, RefloatConfigSnapshot, TuneProfileFieldValue } from 'vesc-ble'
+import type {
+  RefloatConfigField,
+  RefloatConfigGroup,
+  RefloatConfigSnapshot,
+  TuneProfileFieldValue,
+} from 'vesc-ble'
 
 import { APP_TUNE_FIELD_BY_ID, formatTuneValue } from '@/tune/fields'
+import { isDisplayableFieldValue } from '@/tune/fieldValues'
 
 const FIELD_INFO: Record<string, string> = {
   kp: 'Main proportional angle response. Higher values make the board respond more strongly to nose angle error.',
@@ -123,12 +129,6 @@ export function snapValue(value: number, min: number, max: number, step: number)
 export function formatSliderValue(item: BasicSliderItem): string {
   if (item.value == null) return 'Missing'
   return Number.isInteger(item.value) ? item.value.toFixed(0) : item.value.toFixed(1)
-}
-
-export function isDisplayableFieldValue(
-  value: TuneProfileFieldValue | undefined,
-): value is number | boolean | string {
-  return typeof value === 'number' || typeof value === 'boolean' || typeof value === 'string'
 }
 
 export function formatProfileValue(value: TuneProfileFieldValue | undefined): string {
@@ -282,13 +282,13 @@ const BASIC_SLIDERS: BasicSliderDefinition[] = [
 
 export const BASIC_SLIDER_BY_ID = new Map(BASIC_SLIDERS.map((s) => [s.id, s]))
 
-export function basicSlidersFromSnapshot(
-  snapshot: RefloatConfigSnapshot,
+export function basicSlidersFromGroups(
+  groups: RefloatConfigGroup[],
   overrideFields?: Map<string, number | null>,
 ): BasicSliderItem[] {
   const fieldMap = overrideFields ?? new Map<string, number | null>()
   if (!overrideFields) {
-    for (const group of snapshot.groups) {
+    for (const group of groups) {
       for (const field of group.fields) {
         const v =
           typeof field.value === 'number' && Number.isFinite(field.value) ? field.value : null
