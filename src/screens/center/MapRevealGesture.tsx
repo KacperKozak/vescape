@@ -1,13 +1,9 @@
-import { useMemo } from 'react'
+/* eslint-disable react-hooks/immutability */
+import { useCallback, useMemo } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
-import {
-  runOnJS,
-  useSharedValue,
-  withSpring,
-  withTiming,
-  type SharedValue,
-} from 'react-native-reanimated'
+import { useSharedValue, withSpring, withTiming, type SharedValue } from 'react-native-reanimated'
+import { scheduleOnRN } from 'react-native-worklets'
 
 interface MapRevealGestureProps {
   progress: SharedValue<number>
@@ -38,6 +34,20 @@ export function MapRevealGesture({
   const appliedX = useSharedValue(0)
   const appliedY = useSharedValue(0)
 
+  const setProgress = useCallback(
+    (next: number | Parameters<typeof withSpring>[1]) => {
+      progress.value = next as never
+    },
+    [progress],
+  )
+
+  const setDragOpacity = useCallback(
+    (next: number | Parameters<typeof withTiming>[1]) => {
+      dragOpacity.value = next as never
+    },
+    [dragOpacity],
+  )
+
   const gesture = useMemo(
     () =>
       Gesture.Pan()
@@ -46,34 +56,34 @@ export function MapRevealGesture({
           completed.value = false
           appliedX.value = 0
           appliedY.value = 0
-          progress.value = 0
-          dragOpacity.value = 0
+          scheduleOnRN(setProgress, 0)
+          scheduleOnRN(setDragOpacity, 0)
         })
         .onUpdate((event) => {
           const distance = Math.hypot(event.translationX, event.translationY)
           const nextProgress = Math.min(1, distance / REVEAL_DISTANCE_DP)
           const easedProgress = nextProgress * nextProgress
-          dragOpacity.value = nextProgress
+          scheduleOnRN(setDragOpacity, nextProgress)
 
           if (completed.value) {
             const deltaX = event.translationX - appliedX.value
             const deltaY = event.translationY - appliedY.value
             appliedX.value = event.translationX
             appliedY.value = event.translationY
-            runOnJS(onPan)(deltaX, deltaY)
+            scheduleOnRN(onPan, deltaX, deltaY)
             return
           }
 
           if (distance >= REVEAL_DISTANCE_DP) {
             completed.value = true
-            progress.value = 1
-            dragOpacity.value = 1
+            scheduleOnRN(setProgress, 1)
+            scheduleOnRN(setDragOpacity, 1)
             const deltaX = event.translationX - appliedX.value
             const deltaY = event.translationY - appliedY.value
             appliedX.value = event.translationX
             appliedY.value = event.translationY
-            runOnJS(onPan)(deltaX, deltaY, BREAK_RELEASE_MS)
-            runOnJS(onReveal)()
+            scheduleOnRN(onPan, deltaX, deltaY, BREAK_RELEASE_MS)
+            scheduleOnRN(onReveal)
             return
           }
 
@@ -84,17 +94,17 @@ export function MapRevealGesture({
           const deltaY = nextAppliedY - appliedY.value
           appliedX.value = nextAppliedX
           appliedY.value = nextAppliedY
-          progress.value = easedProgress
-          runOnJS(onPan)(deltaX, deltaY)
+          scheduleOnRN(setProgress, easedProgress)
+          scheduleOnRN(onPan, deltaX, deltaY)
         })
         .onFinalize(() => {
           if (!completed.value) {
-            progress.value = withSpring(0, REVEAL_SPRING)
-            dragOpacity.value = withTiming(0, FADE_TIMING)
+            scheduleOnRN(setProgress, withSpring(0, REVEAL_SPRING))
+            scheduleOnRN(setDragOpacity, withTiming(0, FADE_TIMING))
           }
-          runOnJS(onFinish)(completed.value)
+          scheduleOnRN(onFinish, completed.value)
         }),
-    [appliedX, appliedY, completed, dragOpacity, onFinish, onPan, onReveal, progress],
+    [appliedX, appliedY, completed, onFinish, onPan, onReveal, setDragOpacity, setProgress],
   )
 
   return (
@@ -106,7 +116,7 @@ export function MapRevealGesture({
 
 const styles = StyleSheet.create({
   hitArea: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 5,
     backgroundColor: 'rgba(0,0,0,0.001)',
   },

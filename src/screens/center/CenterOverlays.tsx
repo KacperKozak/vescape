@@ -345,7 +345,7 @@ const styles = StyleSheet.create({
     zIndex: 30,
   },
   telemetryInterface: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 6,
   },
   historyButton: {
