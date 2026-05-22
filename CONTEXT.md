@@ -21,7 +21,7 @@ A single phone location sample used for live map position or ride recording.
 _Avoid_: Location event, GPS point
 
 **Ride Recording**:
-A persisted ride capture that combines board telemetry with precise GPS fixes while a board is connected.
+A persisted ride capture made from board telemetry samples, optionally enriched with precise GPS fixes captured at the same time as telemetry.
 _Avoid_: Session recording, raw recording
 
 **Ride History**:
@@ -55,7 +55,7 @@ _Avoid_: Error log, debug session, crash report
 ## Relationships
 
 - A **Board** produces **Telemetry Samples** while connected.
-- A **GPS Fix** may be associated with live map state, but only precise fixes captured during connected recording contribute to a **Ride Recording**.
+- A **GPS Fix** may be associated with live map state, but only GPS fixes captured alongside **Telemetry Samples** contribute to a **Ride Recording**.
 - A **Ride Recording** becomes part of **Ride History**.
 - A **Tune Snapshot** belongs to the currently connected **Board** and is read-only.
 - A **Tune Profile** belongs to a **Board** and stores semantic field values independently of firmware schema.

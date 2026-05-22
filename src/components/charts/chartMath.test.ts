@@ -39,6 +39,21 @@ test('findNearestChartPointAtX picks nearest and clamps x', () => {
   expect(findNearestChartPointAtX(points, 1_000, 100)).toEqual(points[2])
 })
 
+test('chart x-domain can extend before first point', () => {
+  const range = { y: { min: 0, max: 40 } }
+  const pos = getChartPosition(points, points[0], range, 100, 50, undefined, {
+    minMs: base - 1_000,
+    maxMs: base + 2_000,
+  })
+  expect(pos?.x).toBeCloseTo(100 / 3)
+})
+
+test('findNearestChartPointAtX uses explicit x-domain', () => {
+  const domain = { minMs: base - 1_000, maxMs: base + 2_000 }
+  expect(findNearestChartPointAtX(points, 0, 100, undefined, domain)).toEqual(points[0])
+  expect(findNearestChartPointAtX(points, 90, 100, undefined, domain)).toEqual(points[2])
+})
+
 test('computeAutoRange supports zero include and min span', () => {
   const positive = [
     { date: new Date(base), value: 12 },

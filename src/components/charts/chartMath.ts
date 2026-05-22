@@ -7,6 +7,26 @@ export interface TelemetryChartRange {
   y: { min: number; max: number }
 }
 
+interface TelemetryChartXDomain {
+  minMs: number
+  maxMs: number
+}
+
+function getTimeDomain(
+  points: TelemetryChartPoint[],
+  windowMs?: number,
+  xDomain?: TelemetryChartXDomain,
+): TelemetryChartXDomain | null {
+  if (points.length < 2) return null
+  if (xDomain && xDomain.maxMs > xDomain.minMs) return xDomain
+
+  const maxMs = points[points.length - 1].date.getTime()
+  return {
+    minMs: windowMs ? maxMs - windowMs : points[0].date.getTime(),
+    maxMs,
+  }
+}
+
 export function computeAutoRange(
   points: TelemetryChartPoint[],
   options?: {
@@ -55,16 +75,16 @@ export function getChartPosition(
   width: number,
   height: number,
   windowMs?: number,
+  xDomain?: TelemetryChartXDomain,
 ): { x: number; y: number } | null {
-  if (points.length < 2) return null
-  const xMax = points[points.length - 1].date.getTime()
-  const xMin = windowMs ? xMax - windowMs : points[0].date.getTime()
-  const xSpan = xMax - xMin
+  const domain = getTimeDomain(points, windowMs, xDomain)
+  if (!domain) return null
+  const xSpan = domain.maxMs - domain.minMs
   const ySpan = range.y.max - range.y.min
   if (xSpan <= 0 || ySpan <= 0) return null
 
   const inset = 2
-  const x = width * ((point.date.getTime() - xMin) / xSpan)
+  const x = width * ((point.date.getTime() - domain.minMs) / xSpan)
   const t = (point.value - range.y.min) / ySpan
   const y = height - inset - (height - inset * 2) * t
   return {
@@ -78,12 +98,13 @@ export function findNearestChartPointAtX(
   x: number,
   width: number,
   windowMs?: number,
+  xDomain?: TelemetryChartXDomain,
 ): TelemetryChartPoint | null {
   if (points.length === 0 || width <= 0) return null
-  const xMax = points[points.length - 1].date.getTime()
-  const xMin = windowMs ? xMax - windowMs : points[0].date.getTime()
+  const domain = getTimeDomain(points, windowMs, xDomain)
+  if (!domain) return null
   const clampedX = Math.max(0, Math.min(width, x))
-  const targetMs = xMin + (clampedX / width) * (xMax - xMin)
+  const targetMs = domain.minMs + (clampedX / width) * (domain.maxMs - domain.minMs)
 
   let best = points[0]
   let bestDistance = Math.abs(best.date.getTime() - targetMs)
