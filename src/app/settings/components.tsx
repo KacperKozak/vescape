@@ -1,6 +1,15 @@
-import { ArrowLeftIcon, GhostIcon, GearSixIcon, TrashIcon } from 'phosphor-react-native'
+import {
+  ArrowLeftIcon,
+  BellIcon,
+  GhostIcon,
+  GearSixIcon,
+  MoonIcon,
+  TrashIcon,
+  UserIcon,
+  WifiHighIcon,
+} from 'phosphor-react-native'
 import { useCallback, useMemo, useState } from 'react'
-import { ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native'
 import { useSharedValue } from 'react-native-reanimated'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
@@ -17,6 +26,9 @@ import { Sparkline, type SparklinePoint } from '@/components/charts/Sparkline'
 import { StatsRow } from '@/components/control/StatsRow'
 import { ShowcaseCard } from '@/components/dev/ShowcaseCard'
 import { ChipRow, OpenButton, ToggleRow, ValueRow } from '@/components/dev/ShowcaseControls'
+import { SettingsCard } from '@/components/settings/SettingsCard'
+import { SettingsRow } from '@/components/settings/SettingsRow'
+import { SettingsSectionTitle } from '@/components/settings/SettingsSectionTitle'
 import { TuneDial } from '@/components/tune/TuneDial'
 import { telemetry } from '@/constants/telemetry'
 
@@ -459,6 +471,72 @@ function BannerShowcase() {
   )
 }
 
+function SettingsComponentsShowcase() {
+  const [darkMode, setDarkMode] = useState(true)
+  const [notifications, setNotifications] = useState(false)
+
+  return (
+    <ShowcaseCard name="Settings components">
+      <SettingsSectionTitle>Account</SettingsSectionTitle>
+      <SettingsCard>
+        <SettingsRow
+          icon={UserIcon}
+          label="Profile"
+          hint="Edit your profile information"
+          onPress={() => {}}
+        />
+        <SettingsRow
+          icon={GearSixIcon}
+          label="Preferences"
+          hint="App settings and defaults"
+          onPress={() => {}}
+        />
+      </SettingsCard>
+
+      <SettingsSectionTitle>Appearance</SettingsSectionTitle>
+      <SettingsCard>
+        <SettingsRow
+          icon={MoonIcon}
+          iconWeight="fill"
+          label="Dark mode"
+          hint="Use dark theme throughout the app"
+          right={
+            <Switch
+              value={darkMode}
+              onValueChange={setDarkMode}
+              trackColor={{ false: '#334155', true: '#1d4ed8' }}
+              thumbColor={darkMode ? '#3b82f6' : '#64748b'}
+            />
+          }
+        />
+      </SettingsCard>
+
+      <SettingsSectionTitle>Notifications</SettingsSectionTitle>
+      <SettingsCard>
+        <SettingsRow
+          icon={BellIcon}
+          label="Push notifications"
+          hint="Receive alerts about your board"
+          right={
+            <Switch
+              value={notifications}
+              onValueChange={setNotifications}
+              trackColor={{ false: '#334155', true: '#1d4ed8' }}
+              thumbColor={notifications ? '#3b82f6' : '#64748b'}
+            />
+          }
+        />
+        <SettingsRow
+          icon={WifiHighIcon}
+          label="Connection alerts"
+          hint="Notify when board connects or disconnects"
+          onPress={() => {}}
+        />
+      </SettingsCard>
+    </ShowcaseCard>
+  )
+}
+
 // ─── Main screen ───────────────────────────────────────────────────────
 
 export default function ComponentsScreen() {
@@ -475,6 +553,7 @@ export default function ComponentsScreen() {
         <SingleGaugeShowcase />
         <TuneDialShowcase />
         <CompactTuneDialShowcase />
+        <SettingsComponentsShowcase />
         <BannerShowcase />
         <ConfirmModalShowcase />
         <InfoModalShowcase />

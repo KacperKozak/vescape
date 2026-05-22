@@ -4,6 +4,13 @@ React Native UI conventions for this repo. Add component, styling, navigation, a
 
 For visual design principles (colors, layout, typography, when to use cards), see [`docs/design.md`](../design.md).
 
+## No barrel files
+
+Do not create `index.ts` barrel files under `src/components/` or any of its subdirectories.
+
+- Import components directly from their source file: `import { Foo } from '@/components/Foo'` or `import { Foo } from '@/components/settings/Foo'`.
+- Barrel files add indirection, slow down TypeScript resolution, and create merge conflicts when multiple agents touch the same index file.
+
 ## Component Gallery
 
 When creating or significantly changing a reusable UI component, add or update its showcase in
