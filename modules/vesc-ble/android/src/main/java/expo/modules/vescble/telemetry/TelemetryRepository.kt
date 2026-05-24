@@ -307,6 +307,10 @@ class TelemetryRepository private constructor(context: Context) {
     dao.getDiagnosticEvents(query.fromMs, query.toMs, query.deviceId, query.limit).map { it.toMap() }
   }
 
+  suspend fun clearDiagnosticEvents() = withContext(Dispatchers.IO) {
+    dao.clearDiagnosticEvents()
+  }
+
   suspend fun deleteBefore(beforeMs: Long): Int = withContext(Dispatchers.IO) {
     dao.deleteBefore(beforeMs)
   }

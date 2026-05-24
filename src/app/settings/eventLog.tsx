@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   FlatList,
@@ -8,7 +8,12 @@ import {
   View,
   type ListRenderItemInfo,
 } from 'react-native'
-import { getDiagnosticEvents, type LocalDiagnosticEvent } from 'vesc-ble'
+import { useNavigation } from 'expo-router'
+import { TrashIcon } from 'phosphor-react-native'
+import { clearDiagnosticEvents, getDiagnosticEvents, type LocalDiagnosticEvent } from 'vesc-ble'
+
+import { ConfirmModal } from '@/components/ConfirmModal'
+import { IconButton } from '@/components/IconButton'
 
 const PAGE_SIZE = 50
 
@@ -96,11 +101,29 @@ function EventItem({
 }
 
 export default function DiagnosticEventsScreen() {
+  const navigation = useNavigation()
   const [events, setEvents] = useState<LocalDiagnosticEvent[]>([])
   const [loading, setLoading] = useState(false)
+  const [clearing, setClearing] = useState(false)
+  const [clearConfirmVisible, setClearConfirmVisible] = useState(false)
   const [hasMore, setHasMore] = useState(true)
   const [expandedId, setExpandedId] = useState<number | null>(null)
   const loadingRef = useRef(false)
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <IconButton
+          icon={TrashIcon}
+          destructive
+          disabled={events.length === 0}
+          loading={clearing}
+          onPress={() => setClearConfirmVisible(true)}
+          style={styles.headerAction}
+        />
+      ),
+    })
+  }, [clearing, events.length, navigation])
 
   const loadPage = useCallback(async (cursor?: number) => {
     if (loadingRef.current) return
@@ -139,6 +162,19 @@ export default function DiagnosticEventsScreen() {
     setExpandedId((prev) => (prev === id ? null : id))
   }, [])
 
+  const clearEvents = useCallback(async () => {
+    setClearConfirmVisible(false)
+    setClearing(true)
+    try {
+      await clearDiagnosticEvents()
+      setEvents([])
+      setExpandedId(null)
+      setHasMore(false)
+    } finally {
+      setClearing(false)
+    }
+  }, [])
+
   const renderItem = useCallback(
     ({ item }: ListRenderItemInfo<LocalDiagnosticEvent>) => (
       <EventItem event={item} expanded={expandedId === item.id} onToggle={toggleExpand} />
@@ -149,36 +185,50 @@ export default function DiagnosticEventsScreen() {
   const keyExtractor = useCallback((item: LocalDiagnosticEvent) => String(item.id), [])
 
   return (
-    <FlatList
-      style={styles.list}
-      contentContainerStyle={styles.content}
-      data={events}
-      keyExtractor={keyExtractor}
-      renderItem={renderItem}
-      onEndReached={loadMore}
-      onEndReachedThreshold={0.4}
-      onRefresh={refresh}
-      refreshing={loading && events.length === 0}
-      ItemSeparatorComponent={() => <View style={styles.separator} />}
-      ListEmptyComponent={
-        loading ? null : (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>No local diagnostic events</Text>
-          </View>
-        )
-      }
-      ListFooterComponent={
-        loading && events.length > 0 ? (
-          <ActivityIndicator color="#64748b" style={styles.footer} />
-        ) : !hasMore && events.length > 0 ? (
-          <Text style={styles.footerText}>— end —</Text>
-        ) : null
-      }
-    />
+    <>
+      <FlatList
+        style={styles.list}
+        contentContainerStyle={styles.content}
+        data={events}
+        keyExtractor={keyExtractor}
+        renderItem={renderItem}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.4}
+        onRefresh={refresh}
+        refreshing={loading && events.length === 0}
+        ItemSeparatorComponent={() => <View style={styles.separator} />}
+        ListEmptyComponent={
+          loading ? null : (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyText}>No local diagnostic events</Text>
+            </View>
+          )
+        }
+        ListFooterComponent={
+          loading && events.length > 0 ? (
+            <ActivityIndicator color="#64748b" style={styles.footer} />
+          ) : !hasMore && events.length > 0 ? (
+            <Text style={styles.footerText}>— end —</Text>
+          ) : null
+        }
+      />
+      <ConfirmModal
+        visible={clearConfirmVisible}
+        title="Clear event log"
+        message="Delete all local diagnostic events?"
+        confirmLabel="Clear"
+        destructive
+        onConfirm={() => void clearEvents()}
+        onCancel={() => setClearConfirmVisible(false)}
+      />
+    </>
   )
 }
 
 const styles = StyleSheet.create({
+  headerAction: {
+    marginRight: 4,
+  },
   list: {
     flex: 1,
     backgroundColor: '#111827',

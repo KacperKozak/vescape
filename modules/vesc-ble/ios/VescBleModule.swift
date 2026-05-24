@@ -169,6 +169,14 @@ public class VescBleModule: Module {
       ])
     }
 
+    AsyncFunction("getDiagnosticEvents") { (_: [String: Any], promise: Promise) in
+      promise.resolve([] as [Any])
+    }
+
+    AsyncFunction("clearDiagnosticEvents") { (promise: Promise) in
+      promise.resolve(nil)
+    }
+
     AsyncFunction("getTelemetrySummary") { (promise: Promise) in
       promise.resolve([
         "sampleCount": 0,

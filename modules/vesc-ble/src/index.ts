@@ -420,6 +420,7 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
   }): Promise<HistoryRange>
   getTelemetrySummary(): Promise<TelemetrySummary>
   getDiagnosticEvents(options: DiagnosticEventOptions): Promise<LocalDiagnosticEvent[]>
+  clearDiagnosticEvents(): Promise<void>
   getDatabaseSizeBytes(): Promise<number>
   getRefloatConfigSnapshot(): Promise<RefloatConfigSnapshot>
   getTuneProfiles(boardId: string): Promise<TuneProfile[]>
@@ -610,6 +611,10 @@ export async function getDiagnosticEvents(
   options: DiagnosticEventOptions = {},
 ): Promise<LocalDiagnosticEvent[]> {
   return native.getDiagnosticEvents(options)
+}
+
+export async function clearDiagnosticEvents(): Promise<void> {
+  return native.clearDiagnosticEvents()
 }
 
 export async function getDatabaseSizeBytes(): Promise<number> {
