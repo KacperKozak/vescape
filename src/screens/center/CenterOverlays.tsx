@@ -23,6 +23,7 @@ import { BottomTelemetryStrip, STRIP_CONTENT_HEIGHT } from '@/screens/center/Bot
 import type { CenterMapHandle } from '@/screens/center/CenterMap'
 import type { CenterViewState } from '@/screens/center/centerViewState'
 import { HistoryControls } from '@/screens/center/HistoryControls'
+import { WeatherPill } from '@/screens/center/WeatherPill'
 import { HistoryStatsBar } from '@/screens/center/HistoryStatsBar'
 import { HistoryTelemetryPanel } from '@/screens/center/HistoryTelemetryPanel'
 import { LiveHud } from '@/screens/center/LiveHud'
@@ -56,6 +57,7 @@ interface CenterMapOverlayProps {
   enterMapFocus: () => void
   setRotationLocked: (updater: (prev: boolean) => boolean) => void
   exitMapFocus: () => void
+  weatherLocation: { latitude: number; longitude: number } | null
 }
 
 interface CenterHistoryOverlayProps {
@@ -268,6 +270,15 @@ export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOver
           onPress={map.exitMapFocus}
           style={[styles.backButton, { top: Math.max(insets.top, 8) }]}
         />
+        <View
+          pointerEvents="box-none"
+          style={[styles.weatherPillContainer, { top: Math.max(insets.top, 8) }]}
+        >
+          <WeatherPill
+            location={map.weatherLocation}
+            onPress={() => mapRef.current?.zoomToLevel(8)}
+          />
+        </View>
         <MapControls
           heading={map.heading}
           rotationLocked={map.rotationLocked}
@@ -380,6 +391,13 @@ const styles = StyleSheet.create({
   backButton: {
     position: 'absolute',
     left: 10,
+    zIndex: 30,
+  },
+  weatherPillContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
     zIndex: 30,
   },
   telemetryInterface: {

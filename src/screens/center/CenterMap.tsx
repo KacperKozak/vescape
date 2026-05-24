@@ -60,6 +60,7 @@ export interface CenterMapHandle {
   resetRotation: () => void
   togglePerspective: () => void
   setPadding: (bottom: number) => void
+  zoomToLevel: (zoom: number) => void
 }
 
 interface CameraSnapshot {
@@ -442,6 +443,16 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
         cameraRef.current?.setCamera({
           padding: { paddingBottom: bottom, paddingTop: 0, paddingLeft: 0, paddingRight: 0 },
           animationDuration: bottom === 0 ? 0 : 300,
+          animationMode: 'easeTo',
+        })
+      },
+      zoomToLevel(zoom: number) {
+        setFollowGps(false)
+        const current = currentCameraRef.current
+        cameraRef.current?.setCamera({
+          ...(current ? { centerCoordinate: current.centerCoordinate } : {}),
+          zoomLevel: zoom,
+          animationDuration: MAP_DEFAULTS.animationDuration,
           animationMode: 'easeTo',
         })
       },

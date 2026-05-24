@@ -128,6 +128,7 @@ export function CenterScreen({
           enterMapFocus: controller.handleMapFocus,
           setRotationLocked: controller.setRotationLocked,
           exitMapFocus: controller.exitMapFocus,
+          weatherLocation: controller.liveLocations.at(-1) ?? controller.latestApproximateLocation,
         }}
         history={{
           enterHistoryMode: controller.enterHistoryMode,

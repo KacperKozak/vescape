@@ -1,4 +1,4 @@
-import { ScrollView, StyleSheet, Text } from 'react-native'
+import { ScrollView, StyleSheet } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { ChartLineUpIcon, SpeakerHighIcon, SwatchesIcon, ToolboxIcon } from 'phosphor-react-native'
