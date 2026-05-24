@@ -1,8 +1,8 @@
 # Database Schema
 
-SQLite via Room. File: `telemetry.db`. Version: 11. Fallback: destructive migration on failure.
+SQLite via Room. File: `telemetry.db`. Version: 12. Fallback: destructive migration on failure.
 
-8 tables. All timestamps epoch ms. Singleton `app_settings` (id=1).
+8 tables. All timestamps epoch ms.
 
 ---
 
@@ -145,18 +145,28 @@ Session boundaries and gaps.
 
 ## app_settings
 
-Singleton. Always id=1.
+Key-value override rows. Native owns schema, defaults, and validation. Missing key → default. Invalid/corrupt row → default + row deleted + Diagnostic Event emitted.
 
-| column                         | type       | default | notes                                                |
-| ------------------------------ | ---------- | ------- | ---------------------------------------------------- |
-| id                             | INTEGER PK | 1       |                                                      |
-| live_history_limit             | INTEGER    | 5       | recent telemetry items in memory                     |
-| auto_connect                   | INTEGER    | 1       | bool                                                 |
-| auto_recording                 | INTEGER    | 0       | bool                                                 |
-| selected_board_id              | TEXT?      | null    | auto-connect target                                  |
-| last_gps_latitude              | REAL?      | null    |                                                      |
-| last_gps_longitude             | REAL?      | null    |                                                      |
-| moving_avg_speed_threshold_kmh | REAL       | 3.0     | cutoff for moving avg. JS alias: `avgSpeedCutoffKmh` |
+| column     | type        | notes                              |
+| ---------- | ----------- | ---------------------------------- |
+| key        | TEXT PK     |                                    |
+| value_json | TEXT        | JSON-encoded scalar value          |
+| updated_at | INTEGER     | epoch ms                           |
+
+**Known keys and defaults** (defined in `AppSettings`/`AppDataRepository`):
+
+| key                     | type     | default | notes                                                        |
+| ----------------------- | -------- | ------- | ------------------------------------------------------------ |
+| liveHistoryLimit        | Int      | 5       | minutes of recent telemetry kept in memory                   |
+| autoConnect             | Boolean  | true    |                                                              |
+| autoRecording           | Boolean  | false   |                                                              |
+| selectedBoardId         | String?  | null    | auto-connect target                                          |
+| lastGpsLatitude         | Double?  | null    |                                                              |
+| lastGpsLongitude        | Double?  | null    |                                                              |
+| movingSpeedThresholdKmh | Double   | 3.0     | cutoff for moving-average speed. JS aliases: `avgSpeedCutoffKmh`, `movingAvgSpeedThresholdKmh` |
+| rainRadarEnabled        | Boolean  | false   |                                                              |
+
+Writing a default-equivalent value deletes the override row.
 
 ---
 
@@ -219,6 +229,7 @@ Singleton. Always id=1.
 | 8->9    | Drop `history_locations`; clean empty buckets                                |
 | 9->10   | Add `moving_speed_sample_count`, `sum_moving_abs_speed_centi_kmh` to buckets |
 | 10->11  | Add `moving_avg_speed_threshold_kmh` to settings                             |
+| 11->12  | Drop singleton `app_settings`; recreate as key-value override rows           |
 
 Migrations before v3 not preserved. `fallbackToDestructiveMigration(true)` wipes DB if path missing.
 

@@ -14,11 +14,11 @@ import androidx.sqlite.db.SupportSQLiteDatabase
     TelemetryMarkerEntity::class,
     BoardEntity::class,
     AlertRuleEntity::class,
-    AppSettingsEntity::class,
+    AppSettingEntity::class,
     TuneProfileEntity::class,
     TuneHistoryEntryEntity::class,
   ],
-  version = 11,
+  version = 12,
   exportSchema = false,
 )
 abstract class TelemetryDatabase : RoomDatabase() {
@@ -123,6 +123,21 @@ abstract class TelemetryDatabase : RoomDatabase() {
       }
     }
 
+    private val MIGRATION_11_12 = object : Migration(11, 12) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("DROP TABLE IF EXISTS app_settings")
+        db.execSQL(
+          """
+          CREATE TABLE IF NOT EXISTS app_settings (
+            key TEXT NOT NULL PRIMARY KEY,
+            value_json TEXT NOT NULL,
+            updated_at INTEGER NOT NULL
+          )
+          """.trimIndent(),
+        )
+      }
+    }
+
     fun get(context: Context): TelemetryDatabase {
       return instance ?: synchronized(this) {
         instance ?: Room.databaseBuilder(
@@ -139,6 +154,7 @@ abstract class TelemetryDatabase : RoomDatabase() {
             MIGRATION_8_9,
             MIGRATION_9_10,
             MIGRATION_10_11,
+            MIGRATION_11_12,
           )
           .fallbackToDestructiveMigration(true)
           .addCallback(object : Callback() {

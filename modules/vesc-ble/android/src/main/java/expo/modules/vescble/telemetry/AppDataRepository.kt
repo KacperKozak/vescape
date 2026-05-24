@@ -1,13 +1,15 @@
 package expo.modules.vescble.telemetry
 
 import android.content.Context
+import expo.modules.vescble.DiagnosticReporter
 import expo.modules.vescble.RefloatConfigSnapshot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 
-class AppDataRepository private constructor(context: Context) {
+class AppDataRepository private constructor(private val context: Context) {
   private val dao = TelemetryDatabase.get(context).telemetryDao()
 
   suspend fun getBoards(): List<Map<String, Any?>> = withContext(Dispatchers.IO) {
@@ -47,38 +49,98 @@ class AppDataRepository private constructor(context: Context) {
   }
 
   suspend fun getSettings(): Map<String, Any?> = withContext(Dispatchers.IO) {
-    (dao.getSettings() ?: AppSettingsEntity()).toMap()
+    getTypedSettings().toMap()
   }
 
-  suspend fun getSettingsEntity(): AppSettingsEntity = withContext(Dispatchers.IO) {
-    dao.getSettings() ?: AppSettingsEntity()
+  suspend fun getTypedSettings(): AppSettings = withContext(Dispatchers.IO) {
+    val rows = dao.getAllAppSettings()
+    val map = rows.associateBy { it.key }
+    val badKeys = mutableListOf<String>()
+
+    fun <T : Any> req(key: String, default: T, coerce: (Any?) -> T?): T {
+      val row = map[key] ?: return default
+      return try {
+        coerce(decodeSettingJson(row.valueJson)) ?: run { badKeys += key; default }
+      } catch (_: Exception) { badKeys += key; default }
+    }
+
+    fun <T : Any> opt(key: String, coerce: (Any) -> T?): T? {
+      val row = map[key] ?: return null
+      return try {
+        val raw = decodeSettingJson(row.valueJson) ?: return null
+        coerce(raw) ?: run { badKeys += key; null }
+      } catch (_: Exception) { badKeys += key; null }
+    }
+
+    val settings = AppSettings(
+      liveHistoryLimit = req("liveHistoryLimit", 5) { (it as? Number)?.toInt() },
+      autoConnect = req("autoConnect", true) { it as? Boolean },
+      autoRecording = req("autoRecording", false) { it as? Boolean },
+      selectedBoardId = opt("selectedBoardId") { it as? String },
+      lastGpsLatitude = opt("lastGpsLatitude") { (it as? Number)?.toDouble() },
+      lastGpsLongitude = opt("lastGpsLongitude") { (it as? Number)?.toDouble() },
+      movingSpeedThresholdKmh = req("movingSpeedThresholdKmh", 3.0) { (it as? Number)?.toDouble() },
+      rainRadarEnabled = req("rainRadarEnabled", false) { it as? Boolean },
+    )
+
+    if (badKeys.isNotEmpty()) {
+      for (key in badKeys) dao.deleteAppSetting(key)
+      DiagnosticReporter.get(context).capture(
+        "app_setting_corrupt",
+        mapOf("keys" to badKeys.joinToString(",")),
+      )
+    }
+
+    settings
   }
 
   suspend fun updateSetting(key: String, value: Any?): Unit = withContext(Dispatchers.IO) {
-    val current = dao.getSettings() ?: AppSettingsEntity()
-    val updated = when (key) {
-      "liveHistoryLimit" -> current.copy(liveHistoryLimit = (value as? Number)?.toInt() ?: 5)
-      "autoConnect" -> current.copy(autoConnect = value as? Boolean ?: true)
-      "autoRecording" -> current.copy(autoRecording = value as? Boolean ?: false)
-      "selectedBoardId" -> current.copy(selectedBoardId = value as? String)
-      "lastGpsLatitude" -> current.copy(lastGpsLatitude = (value as? Number)?.toDouble())
-      "lastGpsLongitude" -> current.copy(lastGpsLongitude = (value as? Number)?.toDouble())
-      "movingSpeedThresholdKmh", "avgSpeedCutoffKmh", "movingAvgSpeedThresholdKmh" -> current.copy(
-        movingAvgSpeedThresholdKmh = ((value as? Number)?.toDouble() ?: 3.0).coerceAtLeast(0.0),
-      )
-      else -> current
+    val coerced: Any? = when (key) {
+      "liveHistoryLimit" -> (value as? Number)?.toInt() ?: return@withContext
+      "autoConnect" -> value as? Boolean ?: return@withContext
+      "autoRecording" -> value as? Boolean ?: return@withContext
+      "selectedBoardId" -> value as? String
+      "lastGpsLatitude" -> (value as? Number)?.toDouble()
+      "lastGpsLongitude" -> (value as? Number)?.toDouble()
+      "movingSpeedThresholdKmh", "avgSpeedCutoffKmh", "movingAvgSpeedThresholdKmh" ->
+        ((value as? Number)?.toDouble() ?: return@withContext).coerceAtLeast(0.0)
+      "rainRadarEnabled" -> value as? Boolean ?: return@withContext
+      else -> return@withContext
     }
-    dao.upsertSettings(updated)
+    val normalizedKey = when (key) {
+      "avgSpeedCutoffKmh", "movingAvgSpeedThresholdKmh" -> "movingSpeedThresholdKmh"
+      else -> key
+    }
+    val default: Any? = AppSettings().let { d ->
+      when (normalizedKey) {
+        "liveHistoryLimit" -> d.liveHistoryLimit
+        "autoConnect" -> d.autoConnect
+        "autoRecording" -> d.autoRecording
+        "selectedBoardId" -> d.selectedBoardId
+        "lastGpsLatitude" -> d.lastGpsLatitude
+        "lastGpsLongitude" -> d.lastGpsLongitude
+        "movingSpeedThresholdKmh" -> d.movingSpeedThresholdKmh
+        "rainRadarEnabled" -> d.rainRadarEnabled
+        else -> null
+      }
+    }
+    if (coerced == default) {
+      dao.deleteAppSetting(normalizedKey)
+    } else {
+      dao.upsertAppSetting(
+        AppSettingEntity(
+          key = normalizedKey,
+          valueJson = encodeSettingJson(coerced),
+          updatedAt = System.currentTimeMillis(),
+        ),
+      )
+    }
   }
 
   suspend fun updateLastGpsLocation(latitude: Double, longitude: Double): Unit = withContext(Dispatchers.IO) {
-    val current = dao.getSettings() ?: AppSettingsEntity()
-    dao.upsertSettings(
-      current.copy(
-        lastGpsLatitude = latitude,
-        lastGpsLongitude = longitude,
-      ),
-    )
+    val now = System.currentTimeMillis()
+    dao.upsertAppSetting(AppSettingEntity("lastGpsLatitude", encodeSettingJson(latitude), now))
+    dao.upsertAppSetting(AppSettingEntity("lastGpsLongitude", encodeSettingJson(longitude), now))
   }
 
   suspend fun setSelectedBoardId(id: String?): Unit = updateSetting("selectedBoardId", id)
@@ -189,7 +251,7 @@ class AppDataRepository private constructor(context: Context) {
     }
 
   suspend fun getAutoConnectBoard(): Map<String, Any?>? = withContext(Dispatchers.IO) {
-    val settings = dao.getSettings() ?: AppSettingsEntity()
+    val settings = getTypedSettings()
     settings.selectedBoardId
       ?.let { dao.getBoard(it) }
       ?.toMap()
@@ -220,15 +282,29 @@ fun BoardEntity.toMap(): Map<String, Any?> = mapOf(
   "maxVoltage" to maxVoltage,
 )
 
-fun AppSettingsEntity.toMap(): Map<String, Any?> = mapOf(
+fun AppSettings.toMap(): Map<String, Any?> = mapOf(
   "liveHistoryLimit" to liveHistoryLimit,
   "autoConnect" to autoConnect,
   "autoRecording" to autoRecording,
   "selectedBoardId" to selectedBoardId,
   "lastGpsLatitude" to lastGpsLatitude,
   "lastGpsLongitude" to lastGpsLongitude,
-  "movingSpeedThresholdKmh" to movingAvgSpeedThresholdKmh,
+  "movingSpeedThresholdKmh" to movingSpeedThresholdKmh,
+  "rainRadarEnabled" to rainRadarEnabled,
 )
+
+private fun encodeSettingJson(value: Any?): String {
+  val arr = JSONArray()
+  if (value == null) arr.put(JSONObject.NULL) else arr.put(value)
+  val s = arr.toString()
+  return s.substring(1, s.length - 1)
+}
+
+private fun decodeSettingJson(json: String): Any? {
+  val obj = JSONObject("{\"v\":$json}")
+  val v = obj.get("v")
+  return if (v == JSONObject.NULL) null else v
+}
 
 fun AlertRuleEntity.toMap(): Map<String, Any?> = mapOf(
   "id" to id,

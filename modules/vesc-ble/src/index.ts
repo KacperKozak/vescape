@@ -324,6 +324,7 @@ export interface AppSettings {
   lastGpsLatitude: number | null
   lastGpsLongitude: number | null
   movingSpeedThresholdKmh: number
+  rainRadarEnabled: boolean
 }
 
 export interface DiagnosticStatus {

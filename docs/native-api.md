@@ -153,7 +153,7 @@ Field omitted (null) when change < threshold from previous:
 Rides computed from buckets + markers:
 
 - New session on: device change, gap >10min, or boundary marker (`disconnected`/`app_stop`/`error`)
-- Moving avg speed uses `movingAvgSpeedThresholdKmh` setting (default 3.0 km/h) to exclude stopped samples
+- Moving avg speed uses `movingSpeedThresholdKmh` setting (default 3.0 km/h) to exclude stopped samples
 - Distance prefers odometer delta, falls back to GPS distance
 - Energy: trapezoidal integration (V*I*dt), max 5s sample gap
 
@@ -242,10 +242,12 @@ Presets: beep, urgent, notify (single); tick, tick_hard, gamma (geiger)
 
 ```ts
 { liveHistoryLimit, autoConnect, autoRecording, selectedBoardId?,
-  lastGpsLatitude?, lastGpsLongitude?, avgSpeedCutoffKmh }
+  lastGpsLatitude?, lastGpsLongitude?, movingSpeedThresholdKmh, rainRadarEnabled }
 ```
 
-Valid keys: `liveHistoryLimit`, `autoConnect`, `autoRecording`, `selectedBoardId`, `lastGpsLatitude`, `lastGpsLongitude`, `avgSpeedCutoffKmh` (alias: `movingAvgSpeedThresholdKmh`)
+Valid keys: `liveHistoryLimit`, `autoConnect`, `autoRecording`, `selectedBoardId`, `lastGpsLatitude`, `lastGpsLongitude`, `movingSpeedThresholdKmh` (aliases: `avgSpeedCutoffKmh`, `movingAvgSpeedThresholdKmh`), `rainRadarEnabled`
+
+Writing default-equivalent value deletes the override row. Unknown keys and type mismatches are silently ignored.
 
 ## Diagnostics
 

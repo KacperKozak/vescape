@@ -225,11 +225,17 @@ interface TelemetryDao {
   @Query("DELETE FROM alerts WHERE id = :id")
   suspend fun deleteAlertRule(id: String)
 
-  @Query("SELECT * FROM app_settings WHERE id = 1 LIMIT 1")
-  suspend fun getSettings(): AppSettingsEntity?
+  @Query("SELECT * FROM app_settings")
+  suspend fun getAllAppSettings(): List<AppSettingEntity>
+
+  @Query("SELECT * FROM app_settings WHERE key = :key LIMIT 1")
+  suspend fun getAppSetting(key: String): AppSettingEntity?
 
   @Insert(onConflict = OnConflictStrategy.REPLACE)
-  suspend fun upsertSettings(settings: AppSettingsEntity)
+  suspend fun upsertAppSetting(setting: AppSettingEntity)
+
+  @Query("DELETE FROM app_settings WHERE key = :key")
+  suspend fun deleteAppSetting(key: String)
 
   @Query("SELECT * FROM tune_profiles WHERE board_id = :boardId ORDER BY created_at ASC")
   suspend fun getTuneProfilesByBoard(boardId: String): List<TuneProfileEntity>

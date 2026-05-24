@@ -184,7 +184,7 @@ class VescForegroundService : Service() {
         }
 
         private fun idleState(repository: AppDataRepository): Map<String, Any?> {
-            val settings = kotlinx.coroutines.runBlocking { repository.getSettingsEntity() }
+            val settings = kotlinx.coroutines.runBlocking { repository.getTypedSettings() }
             return mapOf(
                 "board" to mapOf(
                     "phase" to "idle",
@@ -1273,7 +1273,7 @@ class VescForegroundService : Service() {
         boardStatus = BoardPhase.Connected
         val autoRecording = try {
             kotlinx.coroutines.runBlocking {
-                AppDataRepository.get(applicationContext).getSettingsEntity().autoRecording
+                AppDataRepository.get(applicationContext).getTypedSettings().autoRecording
             }
         } catch (_: Exception) {
             false
@@ -1582,7 +1582,7 @@ class VescForegroundService : Service() {
         val store = TelemetryRepository.get(applicationContext)
         val threshold = try {
             kotlinx.coroutines.runBlocking {
-                AppDataRepository.get(applicationContext).getSettingsEntity().movingAvgSpeedThresholdKmh
+                AppDataRepository.get(applicationContext).getTypedSettings().movingSpeedThresholdKmh
             }
         } catch (_: Exception) {
             3.0
@@ -1641,7 +1641,7 @@ class VescForegroundService : Service() {
 
     private fun liveStateMap(includeRecent: Boolean = false): Map<String, Any?> {
         val settings = kotlinx.coroutines.runBlocking {
-            AppDataRepository.get(applicationContext).getSettingsEntity()
+            AppDataRepository.get(applicationContext).getTypedSettings()
         }
         setLiveHistoryLimitMinutes(settings.liveHistoryLimit)
         val now = System.currentTimeMillis()
@@ -1741,7 +1741,7 @@ class VescForegroundService : Service() {
 
     private fun refreshLiveHistoryLimit() {
         val settings = kotlinx.coroutines.runBlocking {
-            AppDataRepository.get(applicationContext).getSettingsEntity()
+            AppDataRepository.get(applicationContext).getTypedSettings()
         }
         setLiveHistoryLimitMinutes(settings.liveHistoryLimit)
     }

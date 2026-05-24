@@ -1,6 +1,6 @@
 package expo.modules.vescble
 
-import expo.modules.vescble.telemetry.AppSettingsEntity
+import expo.modules.vescble.telemetry.AppSettings
 
 internal data class VescLiveStateSnapshot(
     val boardPhase: BoardPhase,
@@ -15,7 +15,7 @@ internal data class VescLiveStateSnapshot(
     val recentLocations: List<Map<String, Any?>>,
     val gpsError: String?,
     val recordingEnabled: Boolean,
-    val settings: AppSettingsEntity,
+    val settings: AppSettings,
 )
 
 internal fun buildLiveState(snapshot: VescLiveStateSnapshot): Map<String, Any?> =

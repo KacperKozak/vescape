@@ -231,24 +231,24 @@ data class AlertRuleEntity(
 )
 
 @Entity(tableName = "app_settings")
-data class AppSettingsEntity(
+data class AppSettingEntity(
   @PrimaryKey
-  val id: Int = 1,
-  @ColumnInfo(name = "live_history_limit")
+  val key: String,
+  @ColumnInfo(name = "value_json")
+  val valueJson: String,
+  @ColumnInfo(name = "updated_at")
+  val updatedAt: Long,
+)
+
+data class AppSettings(
   val liveHistoryLimit: Int = 5,
-  @ColumnInfo(name = "auto_connect")
   val autoConnect: Boolean = true,
-  @ColumnInfo(name = "auto_recording")
   val autoRecording: Boolean = false,
-  @ColumnInfo(name = "selected_board_id")
   val selectedBoardId: String? = null,
-  @ColumnInfo(name = "last_gps_latitude")
   val lastGpsLatitude: Double? = null,
-  @ColumnInfo(name = "last_gps_longitude")
   val lastGpsLongitude: Double? = null,
-  // TODO rename to movingSpeedThresholdKmh.
-  @ColumnInfo(name = "moving_avg_speed_threshold_kmh")
-  val movingAvgSpeedThresholdKmh: Double = 3.0,
+  val movingSpeedThresholdKmh: Double = 3.0,
+  val rainRadarEnabled: Boolean = false,
 )
 
 @Entity(

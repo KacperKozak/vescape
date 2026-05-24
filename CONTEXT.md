@@ -48,6 +48,10 @@ _Avoid_: Alarm, notification
 A bundled audio asset used for alert feedback, belonging to exactly one category: single (one-threshold alerts) or geiger (range alerts with progressive ticking).
 _Avoid_: Sound effect, ringtone, tone
 
+**App Setting**:
+A user-controlled app preference that affects app behavior across boards unless explicitly scoped elsewhere.
+_Avoid_: Option, config
+
 **Diagnostic Event**:
 An app-observed abnormal condition that helps explain board connection, telemetry, tuning, recording, or UI failures.
 _Avoid_: Error log, debug session, crash report
@@ -61,6 +65,7 @@ _Avoid_: Error log, debug session, crash report
 - A **Tune Profile** belongs to a **Board** and stores semantic field values independently of firmware schema.
 - A **Tune History Entry** captures the previous state of a **Tune Profile** before each explicit save.
 - An **Alert Rule** evaluates against live **Telemetry Samples**.
+- An **App Setting** affects app behavior and is not part of a **Tune Profile** or **Board** identity.
 - A **Diagnostic Event** may describe failures around a **Board**, **Live State**, **Telemetry Sample**, **Ride Recording**, or **Tune Profile** workflow.
 
 ## Example Dialogue
