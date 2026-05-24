@@ -40,6 +40,9 @@ const getSettings = mock(async () => ({
   autoConnect: true,
   autoRecording: true,
   selectedBoardId: null,
+  lastGpsLatitude: null,
+  lastGpsLongitude: null,
+  movingSpeedThresholdKmh: 3,
 }))
 const updateSetting = mock(async () => {})
 
@@ -72,7 +75,8 @@ function block(overrides: Partial<TelemetryHistoryBlock>): TelemetryHistoryBlock
     preciseGpsPointCount: overrides.preciseGpsPointCount ?? 4,
     maxAbsSpeedKmh: overrides.maxAbsSpeedKmh ?? 20,
     maxGpsSpeedKmh: overrides.maxGpsSpeedKmh ?? 18,
-    avgAbsSpeedKmh: overrides.avgAbsSpeedKmh ?? 15,
+    avgSpeedKmh: overrides.avgSpeedKmh ?? 15,
+    avgSpeedSampleCount: overrides.avgSpeedSampleCount ?? 10,
     minBatteryVoltage: overrides.minBatteryVoltage ?? 52,
     maxMotorCurrent: overrides.maxMotorCurrent ?? 10,
     maxBatteryCurrent: overrides.maxBatteryCurrent ?? 8,

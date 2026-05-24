@@ -37,10 +37,8 @@ interface MutableSessionAggregate {
   distanceDeltaCount: number
   gpsDistanceCount: number
   maxSpeedKmh: number
-  weightedSpeedSum: number
-  weightedSpeedCount: number
-  avgSpeedFallbackSum: number
-  avgSpeedFallbackCount: number
+  avgSpeedSum: number
+  avgSpeedSampleCount: number
   faultCount: number
 }
 
@@ -92,10 +90,8 @@ function createAggregate(block: TelemetryHistoryBlock): MutableSessionAggregate 
     distanceDeltaCount: 0,
     gpsDistanceCount: 0,
     maxSpeedKmh: 0,
-    weightedSpeedSum: 0,
-    weightedSpeedCount: 0,
-    avgSpeedFallbackSum: 0,
-    avgSpeedFallbackCount: 0,
+    avgSpeedSum: 0,
+    avgSpeedSampleCount: 0,
     faultCount: 0,
   }
   mergeBlockIntoAggregate(aggregate, block)
@@ -126,11 +122,9 @@ function mergeBlockIntoAggregate(
 
   const blockMax = Math.max(block.maxAbsSpeedKmh, block.maxGpsSpeedKmh ?? 0)
   session.maxSpeedKmh = Math.max(session.maxSpeedKmh, blockMax)
-  session.avgSpeedFallbackSum += block.avgAbsSpeedKmh
-  session.avgSpeedFallbackCount += 1
-  if (block.sampleCount > 0) {
-    session.weightedSpeedSum += block.avgAbsSpeedKmh * block.sampleCount
-    session.weightedSpeedCount += block.sampleCount
+  if (block.avgSpeedSampleCount > 0) {
+    session.avgSpeedSum += block.avgSpeedKmh * block.avgSpeedSampleCount
+    session.avgSpeedSampleCount += block.avgSpeedSampleCount
   }
 }
 
@@ -142,11 +136,7 @@ function finalizeSession(session: MutableSessionAggregate): HistorySession {
         ? session.gpsDistanceSum
         : null
   const avgSpeedKmh =
-    session.weightedSpeedCount > 0
-      ? session.weightedSpeedSum / session.weightedSpeedCount
-      : session.avgSpeedFallbackCount > 0
-        ? session.avgSpeedFallbackSum / session.avgSpeedFallbackCount
-        : 0
+    session.avgSpeedSampleCount > 0 ? session.avgSpeedSum / session.avgSpeedSampleCount : 0
 
   return {
     id: `${session.deviceId ?? 'unknown'}:${session.startAtMs}:${session.endAtMs}`,

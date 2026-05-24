@@ -78,6 +78,11 @@ class TelemetryRepository private constructor(context: Context) {
   private var lastKeyframeAtMs: Long? = null
   private var forceNextKeyframe = true
   private var droppedPendingFrames = 0L
+  private var movingSpeedThresholdCentiKmh = DEFAULT_MOVING_SPEED_THRESHOLD_CENTI_KMH
+
+  fun setMovingSpeedThresholdKmh(value: Double) {
+    movingSpeedThresholdCentiKmh = (value * 100.0).roundToInt().coerceAtLeast(0)
+  }
 
   fun recordMarker(
     type: String,
@@ -185,6 +190,16 @@ class TelemetryRepository private constructor(context: Context) {
       } else {
         0.0
       }
+      val avgSpeedSampleCount = bucket.movingSpeedSampleCount ?: bucket.sampleCount
+      val avgSpeed = if (bucket.movingSpeedSampleCount != null) {
+        if (avgSpeedSampleCount > 0) {
+          (bucket.sumMovingAbsSpeedCentiKmh ?: 0L).toDouble() / avgSpeedSampleCount / 100.0
+        } else {
+          0.0
+        }
+      } else {
+        avgAbsSpeed
+      }
       val maxGpsSpeedKmh = bucket.maxGpsSpeedCentiMps?.let { it / 100.0 * 3.6 }
       val distanceM = distanceDeltaM(bucket) ?: bucket.gpsDistanceCm.takeIf { it > 0L }?.let { it / 100.0 }
       mapOf(
@@ -199,7 +214,8 @@ class TelemetryRepository private constructor(context: Context) {
         "preciseGpsPointCount" to bucket.preciseGpsPointCount,
         "maxAbsSpeedKmh" to bucket.maxAbsSpeedCentiKmh / 100.0,
         "maxGpsSpeedKmh" to maxGpsSpeedKmh,
-        "avgAbsSpeedKmh" to avgAbsSpeed,
+        "avgSpeedKmh" to avgSpeed,
+        "avgSpeedSampleCount" to avgSpeedSampleCount,
         "minBatteryVoltage" to bucket.minBatteryVoltageMv?.let { it / 1000.0 },
         "maxMotorCurrent" to bucket.maxMotorCurrentAbsMa / 1000.0,
         "maxBatteryCurrent" to bucket.maxBatteryCurrentAbsMa / 1000.0,
@@ -314,6 +330,7 @@ class TelemetryRepository private constructor(context: Context) {
         buckets = buildTelemetryBuckets(
           telemetryPoints = frames.map { it.state.toBucketPoint() },
           locationPoints = frames.map { HistoryTelemetryState(it.frame.id, it.state) }.toBucketLocationPoints(),
+          movingSpeedThresholdCentiKmh = movingSpeedThresholdCentiKmh,
         ),
         markers = markers,
       )

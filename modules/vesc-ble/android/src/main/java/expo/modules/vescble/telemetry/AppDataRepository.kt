@@ -63,6 +63,9 @@ class AppDataRepository private constructor(context: Context) {
       "selectedBoardId" -> current.copy(selectedBoardId = value as? String)
       "lastGpsLatitude" -> current.copy(lastGpsLatitude = (value as? Number)?.toDouble())
       "lastGpsLongitude" -> current.copy(lastGpsLongitude = (value as? Number)?.toDouble())
+      "movingSpeedThresholdKmh", "avgSpeedCutoffKmh", "movingAvgSpeedThresholdKmh" -> current.copy(
+        movingAvgSpeedThresholdKmh = ((value as? Number)?.toDouble() ?: 3.0).coerceAtLeast(0.0),
+      )
       else -> current
     }
     dao.upsertSettings(updated)
@@ -224,6 +227,7 @@ fun AppSettingsEntity.toMap(): Map<String, Any?> = mapOf(
   "selectedBoardId" to selectedBoardId,
   "lastGpsLatitude" to lastGpsLatitude,
   "lastGpsLongitude" to lastGpsLongitude,
+  "movingSpeedThresholdKmh" to movingAvgSpeedThresholdKmh,
 )
 
 fun AlertRuleEntity.toMap(): Map<String, Any?> = mapOf(

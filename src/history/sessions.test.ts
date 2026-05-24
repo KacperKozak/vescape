@@ -18,7 +18,8 @@ function block(overrides: Partial<TelemetryHistoryBlock>): TelemetryHistoryBlock
     preciseGpsPointCount: overrides.preciseGpsPointCount ?? 4,
     maxAbsSpeedKmh: overrides.maxAbsSpeedKmh ?? 20,
     maxGpsSpeedKmh: overrides.maxGpsSpeedKmh ?? 18,
-    avgAbsSpeedKmh: overrides.avgAbsSpeedKmh ?? 15,
+    avgSpeedKmh: overrides.avgSpeedKmh ?? 15,
+    avgSpeedSampleCount: overrides.avgSpeedSampleCount ?? 10,
     minBatteryVoltage: overrides.minBatteryVoltage ?? 52,
     maxMotorCurrent: overrides.maxMotorCurrent ?? 10,
     maxBatteryCurrent: overrides.maxBatteryCurrent ?? 8,
@@ -139,6 +140,41 @@ test('max speed uses higher value from board or gps', () => {
     }),
   ])
   expect(sessions[0].maxSpeedKmh).toBe(34)
+})
+
+test('avg speed excludes samples below moving speed threshold when available', () => {
+  const sessions = groupHistorySessions([
+    block({
+      id: 'new',
+      startAtMs: 240_000,
+      endAtMs: 300_000,
+      avgSpeedKmh: 20,
+      avgSpeedSampleCount: 2,
+      sampleCount: 10,
+    }),
+    block({
+      id: 'old',
+      startAtMs: 120_000,
+      endAtMs: 180_000,
+      avgSpeedKmh: 10,
+      avgSpeedSampleCount: 3,
+      sampleCount: 10,
+    }),
+  ])
+
+  expect(sessions[0].avgSpeedKmh).toBe(14)
+})
+
+test('avg speed is zero when moving speed stats exist but no sample is moving', () => {
+  const sessions = groupHistorySessions([
+    block({
+      avgSpeedKmh: 0,
+      avgSpeedSampleCount: 0,
+      sampleCount: 10,
+    }),
+  ])
+
+  expect(sessions[0].avgSpeedKmh).toBe(0)
 })
 
 test('returns newest-first sessions', () => {

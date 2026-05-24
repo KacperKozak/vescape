@@ -68,7 +68,8 @@ private data class ProfileSessionAggregate(
   var startAtMs: Long,
   var endAtMs: Long,
   var sampleCount: Int,
-  var weightedSpeedSum: Double,
+  var avgSpeedSampleCount: Int,
+  var avgSpeedWeightedSum: Double,
   var distanceM: Double?,
   var topSpeedKmh: Double,
   var batteryUsedWh: Double,
@@ -102,16 +103,11 @@ internal fun computeProfileStatsForBuckets(
 
   val totalDurationMs = included.sumOf { (it.endAtMs - it.startAtMs).coerceAtLeast(0L) }
   val totalDistanceM = included.mapNotNull { it.distanceM }.takeIf { it.isNotEmpty() }?.sum()
-  val weightedSamples = included.sumOf { it.sampleCount }
-  val weightedAvgSpeed = if (weightedSamples > 0) {
-    included.sumOf { it.weightedSpeedSum } / weightedSamples
+  val avgSpeedSamples = included.sumOf { it.avgSpeedSampleCount }
+  val avgSpeedKmh = if (avgSpeedSamples > 0) {
+    included.sumOf { it.avgSpeedWeightedSum } / avgSpeedSamples
   } else {
     0.0
-  }
-  val distanceWeightedAvgSpeed = if (totalDistanceM != null && totalDurationMs > 0L) {
-    (totalDistanceM / 1000.0) / (totalDurationMs / 3_600_000.0)
-  } else {
-    weightedAvgSpeed
   }
 
   return mapOf(
@@ -119,7 +115,7 @@ internal fun computeProfileStatsForBuckets(
     "rideCount" to included.size,
     "rideTimeMs" to totalDurationMs,
     "topSpeedKmh" to (included.maxOfOrNull { it.topSpeedKmh } ?: 0.0),
-    "avgSpeedKmh" to distanceWeightedAvgSpeed,
+    "avgSpeedKmh" to avgSpeedKmh,
     "longestRideM" to included.mapNotNull { it.distanceM }.maxOrNull(),
     "batteryUsedWh" to included.sumOf { it.batteryUsedWh },
     "batteryRegenWh" to included.sumOf { it.batteryRegenWh },
@@ -161,7 +157,8 @@ private fun groupProfileSessions(
         startAtMs = bucket.firstSampleAtMs,
         endAtMs = bucket.lastSampleAtMs,
         sampleCount = 0,
-        weightedSpeedSum = 0.0,
+        avgSpeedSampleCount = 0,
+        avgSpeedWeightedSum = 0.0,
         distanceM = null,
         topSpeedKmh = 0.0,
         batteryUsedWh = 0.0,
@@ -201,7 +198,13 @@ private fun mergeBucketIntoSession(
   session.startAtMs = minOf(session.startAtMs, bucket.firstSampleAtMs)
   session.endAtMs = maxOf(session.endAtMs, bucket.lastSampleAtMs)
   session.sampleCount += bucket.sampleCount
-  session.weightedSpeedSum += bucket.sumAbsSpeedCentiKmh.toDouble() / 100.0
+  if (bucket.movingSpeedSampleCount != null) {
+    session.avgSpeedSampleCount += bucket.movingSpeedSampleCount
+    session.avgSpeedWeightedSum += (bucket.sumMovingAbsSpeedCentiKmh ?: 0L).toDouble() / 100.0
+  } else {
+    session.avgSpeedSampleCount += bucket.sampleCount
+    session.avgSpeedWeightedSum += bucket.sumAbsSpeedCentiKmh.toDouble() / 100.0
+  }
   session.topSpeedKmh = maxOf(session.topSpeedKmh, bucket.maxAbsSpeedCentiKmh / 100.0)
   session.batteryUsedWh += bucket.batteryUsedWhMilli / 1000.0
   session.batteryRegenWh += bucket.batteryRegenWhMilli / 1000.0

@@ -1,6 +1,7 @@
 import {
   ArrowLeftIcon,
   BellIcon,
+  GaugeIcon,
   GhostIcon,
   GearSixIcon,
   MoonIcon,
@@ -29,6 +30,7 @@ import { ChipRow, OpenButton, ToggleRow, ValueRow } from '@/components/dev/Showc
 import { SettingsCard } from '@/components/settings/SettingsCard'
 import { SettingsRow } from '@/components/settings/SettingsRow'
 import { SettingsSectionTitle } from '@/components/settings/SettingsSectionTitle'
+import { Stepper } from '@/components/settings/Stepper'
 import { TuneDial } from '@/components/tune/TuneDial'
 import { telemetry } from '@/constants/telemetry'
 
@@ -474,6 +476,7 @@ function BannerShowcase() {
 function SettingsComponentsShowcase() {
   const [darkMode, setDarkMode] = useState(true)
   const [notifications, setNotifications] = useState(false)
+  const [threshold, setThreshold] = useState(3)
 
   return (
     <ShowcaseCard name="Settings components">
@@ -506,6 +509,22 @@ function SettingsComponentsShowcase() {
               onValueChange={setDarkMode}
               trackColor={{ false: '#334155', true: '#1d4ed8' }}
               thumbColor={darkMode ? '#3b82f6' : '#64748b'}
+            />
+          }
+        />
+      </SettingsCard>
+
+      <SettingsSectionTitle>Ride stats</SettingsSectionTitle>
+      <SettingsCard>
+        <SettingsRow
+          icon={GaugeIcon}
+          label="Moving speed threshold"
+          hint="Speeds below this are treated as stopped"
+          right={
+            <Stepper
+              value={`${threshold} km/h`}
+              onDecrement={() => setThreshold((value) => Math.max(0, value - 1))}
+              onIncrement={() => setThreshold((value) => Math.min(20, value + 1))}
             />
           }
         />

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { View, Text, Switch, Pressable, StyleSheet, ScrollView, Platform } from 'react-native'
+import { View, Text, Switch, StyleSheet, ScrollView, Platform } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import Constants from 'expo-constants'
@@ -7,8 +7,7 @@ import {
   ClockCountdownIcon,
   BluetoothConnectedIcon,
   RecordIcon,
-  MinusIcon,
-  PlusIcon,
+  GaugeIcon,
   CodeIcon,
   DatabaseIcon,
   TagIcon,
@@ -24,6 +23,7 @@ import { theme } from '@/constants/theme'
 import { SettingsCard } from '@/components/settings/SettingsCard'
 import { SettingsRow } from '@/components/settings/SettingsRow'
 import { SettingsSectionTitle } from '@/components/settings/SettingsSectionTitle'
+import { Stepper } from '@/components/settings/Stepper'
 
 const appVersion = Constants.expoConfig?.version ?? '–'
 
@@ -34,14 +34,16 @@ function formatBytes(bytes: number): string {
 }
 
 export default function SettingsScreen() {
-  const { liveHistoryLimit, autoConnect, autoRecording, set } = useSettingsStore(
-    useShallow((s) => ({
-      liveHistoryLimit: s.liveHistoryLimit,
-      autoConnect: s.autoConnect,
-      autoRecording: s.autoRecording,
-      set: s.set,
-    })),
-  )
+  const { liveHistoryLimit, autoConnect, autoRecording, movingSpeedThresholdKmh, set } =
+    useSettingsStore(
+      useShallow((s) => ({
+        liveHistoryLimit: s.liveHistoryLimit,
+        autoConnect: s.autoConnect,
+        autoRecording: s.autoRecording,
+        movingSpeedThresholdKmh: s.movingSpeedThresholdKmh,
+        set: s.set,
+      })),
+    )
   const [dbSize, setDbSize] = useState<number | null>(null)
 
   useEffect(() => {
@@ -57,6 +59,18 @@ export default function SettingsScreen() {
   const incrementLimit = useCallback(() => {
     if (liveHistoryLimit < 50) void set('liveHistoryLimit', liveHistoryLimit + 1)
   }, [liveHistoryLimit, set])
+
+  const decrementMovingSpeedThreshold = useCallback(() => {
+    if (movingSpeedThresholdKmh > 0) {
+      void set('movingSpeedThresholdKmh', movingSpeedThresholdKmh - 1)
+    }
+  }, [movingSpeedThresholdKmh, set])
+
+  const incrementMovingSpeedThreshold = useCallback(() => {
+    if (movingSpeedThresholdKmh < 20) {
+      void set('movingSpeedThresholdKmh', movingSpeedThresholdKmh + 1)
+    }
+  }, [movingSpeedThresholdKmh, set])
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -93,15 +107,23 @@ export default function SettingsScreen() {
             label="Live history limit"
             hint="Minutes of telemetry visible in live graphs"
             right={
-              <View style={styles.stepper}>
-                <Pressable style={styles.stepperBtn} onPress={decrementLimit}>
-                  <MinusIcon size={14} color="#f1f5f9" weight="bold" />
-                </Pressable>
-                <Text style={styles.stepperValue}>{liveHistoryLimit}</Text>
-                <Pressable style={styles.stepperBtn} onPress={incrementLimit}>
-                  <PlusIcon size={14} color="#f1f5f9" weight="bold" />
-                </Pressable>
-              </View>
+              <Stepper
+                value={liveHistoryLimit}
+                onDecrement={decrementLimit}
+                onIncrement={incrementLimit}
+              />
+            }
+          />
+          <SettingsRow
+            icon={GaugeIcon}
+            label="Moving speed threshold"
+            hint="Speeds below this are ignored for avg speed. Only affects new rides."
+            right={
+              <Stepper
+                value={`${movingSpeedThresholdKmh} km/h`}
+                onDecrement={decrementMovingSpeedThreshold}
+                onIncrement={incrementMovingSpeedThreshold}
+              />
             }
           />
         </SettingsCard>
@@ -185,24 +207,5 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     fontSize: 12,
     fontWeight: '600',
-  },
-  stepper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#0f172a',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  stepperBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
-  stepperValue: {
-    color: '#f1f5f9',
-    fontSize: 15,
-    fontWeight: '700',
-    minWidth: 28,
-    textAlign: 'center',
   },
 })

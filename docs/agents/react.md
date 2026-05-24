@@ -16,6 +16,9 @@ Do not create `index.ts` barrel files under `src/components/` or any of its subd
 When creating or significantly changing a reusable UI component, add or update its showcase in
 `src/app/settings/components.tsx` in the same change.
 
+- When asked to create a component, create a real component file under `src/components/` or the
+  appropriate subdirectory such as `src/components/settings/`. Do not hide reusable UI as a
+  function at the top of a screen file.
 - Use existing `ShowcaseCard` and controls from `@/components/dev/ShowcaseControls`.
 - Include useful variants, states, and props that future agents/design checks need to see.
 - Keep showcase data local and deterministic enough for quick visual inspection.

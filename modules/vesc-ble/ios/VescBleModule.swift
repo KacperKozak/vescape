@@ -534,6 +534,7 @@ public class VescBleModule: Module {
     "selectedBoardId": NSNull(),
     "lastGpsLatitude": NSNull(),
     "lastGpsLongitude": NSNull(),
+    "movingSpeedThresholdKmh": 3,
   ]
 
   private static func loadSettings() -> [String: Any] {
@@ -545,6 +546,11 @@ public class VescBleModule: Module {
     }
     var merged = defaultSettings
     for (k, v) in raw { merged[k] = v }
+    if raw["movingSpeedThresholdKmh"] == nil {
+      if let oldValue = raw["avgSpeedCutoffKmh"] ?? raw["movingAvgSpeedThresholdKmh"] {
+        merged["movingSpeedThresholdKmh"] = oldValue
+      }
+    }
     return merged
   }
 

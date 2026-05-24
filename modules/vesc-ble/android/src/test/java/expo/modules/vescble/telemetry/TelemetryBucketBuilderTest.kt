@@ -61,6 +61,8 @@ class TelemetryBucketBuilderTest {
     assertEquals(1, buckets.preciseGpsPointCount)
     assertEquals(1, buckets.faultCount)
     assertEquals(2_800L, buckets.sumAbsSpeedCentiKmh)
+    assertEquals(2, buckets.movingSpeedSampleCount)
+    assertEquals(2_800L, buckets.sumMovingAbsSpeedCentiKmh)
     assertEquals(1_600, buckets.maxAbsSpeedCentiKmh)
     assertEquals(77_100, buckets.minBatteryVoltageMv)
     assertEquals(3_500, buckets.maxMotorCurrentAbsMa)
@@ -140,6 +142,55 @@ class TelemetryBucketBuilderTest {
     assertEquals(setOf(0L to "a", 60_000L to "a", 0L to "b"), buckets.map {
       it.bucketStartMs to it.deviceId
     }.toSet())
+  }
+
+  @Test
+  fun tracksMovingSpeedSamplesAtOrAboveConfiguredThreshold() {
+    val bucket = buildTelemetryBuckets(
+      telemetryPoints = listOf(
+        BucketTelemetryPoint(
+          capturedAtMs = 0L,
+          deviceId = "board-1",
+          deviceName = "ADV2",
+          speedCentiKmh = 499,
+          batteryVoltageMv = 70_000,
+          motorCurrentMa = 0,
+          batteryCurrentMa = 0,
+          dutyPermille = 0,
+          hasFault = false,
+          odometerCm = null,
+        ),
+        BucketTelemetryPoint(
+          capturedAtMs = 1_000L,
+          deviceId = "board-1",
+          deviceName = "ADV2",
+          speedCentiKmh = -500,
+          batteryVoltageMv = 70_000,
+          motorCurrentMa = 0,
+          batteryCurrentMa = 0,
+          dutyPermille = 0,
+          hasFault = false,
+          odometerCm = null,
+        ),
+        BucketTelemetryPoint(
+          capturedAtMs = 2_000L,
+          deviceId = "board-1",
+          deviceName = "ADV2",
+          speedCentiKmh = 1_200,
+          batteryVoltageMv = 70_000,
+          motorCurrentMa = 0,
+          batteryCurrentMa = 0,
+          dutyPermille = 0,
+          hasFault = false,
+          odometerCm = null,
+        ),
+      ),
+      locationPoints = emptyList(),
+      movingSpeedThresholdCentiKmh = 500,
+    ).single()
+
+    assertEquals(2, bucket.movingSpeedSampleCount)
+    assertEquals(1_700L, bucket.sumMovingAbsSpeedCentiKmh)
   }
 
   @Test

@@ -25,8 +25,8 @@ class ProfileStatsRepositoryTest {
   @Test
   fun aggregatesTotalStatsFromBoardBucketsOnly() {
     val buckets = listOf(
-      bucket(start = 1_714_521_600_000L, end = 1_714_521_660_000L, firstOdo = 100_000L, lastOdo = 112_000L, maxSpeed = 2_500, avgSpeed = 1_000, used = 1_500L, regen = 100L),
-      bucket(start = 1_714_521_660_001L, end = 1_714_521_720_000L, firstOdo = 112_000L, lastOdo = 120_000L, maxSpeed = 3_500, avgSpeed = 2_000, used = 2_500L, regen = 300L),
+      bucket(start = 1_714_521_600_000L, end = 1_714_521_660_000L, firstOdo = 100_000L, lastOdo = 112_000L, maxSpeed = 2_500, avgSpeed = 1_000, avgSpeedSamples = null, avgSpeedSum = null, used = 1_500L, regen = 100L),
+      bucket(start = 1_714_521_660_001L, end = 1_714_521_720_000L, firstOdo = 112_000L, lastOdo = 120_000L, maxSpeed = 3_500, avgSpeed = 2_000, avgSpeedSamples = null, avgSpeedSum = null, used = 2_500L, regen = 300L),
     )
 
     val result = computeProfileStatsForBuckets(buckets, emptyList(), month = null, zoneId = utc)
@@ -35,10 +35,22 @@ class ProfileStatsRepositoryTest {
     assertEquals(1, result["rideCount"])
     assertEquals(120_000L, result["rideTimeMs"])
     assertEquals(35.0, result["topSpeedKmh"] as Double, 0.0001)
-    assertEquals(6.0, result["avgSpeedKmh"] as Double, 0.01)
+    assertEquals(15.0, result["avgSpeedKmh"] as Double, 0.01)
     assertEquals(200.0, result["longestRideM"] as Double, 0.0001)
     assertEquals(4.0, result["batteryUsedWh"] as Double, 0.0001)
     assertEquals(0.4, result["batteryRegenWh"] as Double, 0.0001)
+  }
+
+  @Test
+  fun avgSpeedUsesPrecomputedCutoffAwareSamplesWhenAvailable() {
+    val buckets = listOf(
+      bucket(start = 1_714_521_600_000L, end = 1_714_521_660_000L, firstOdo = 0L, lastOdo = 10_000L, avgSpeed = 400, avgSpeedSamples = 0, avgSpeedSum = 0L),
+      bucket(start = 1_714_521_660_001L, end = 1_714_521_720_000L, firstOdo = 10_000L, lastOdo = 20_000L, avgSpeed = 1_000, avgSpeedSamples = 2, avgSpeedSum = 3_000L),
+    )
+
+    val result = computeProfileStatsForBuckets(buckets, emptyList(), month = null, zoneId = utc)
+
+    assertEquals(15.0, result["avgSpeedKmh"] as Double, 0.0001)
   }
 
   @Test
@@ -65,6 +77,8 @@ class ProfileStatsRepositoryTest {
     lastOdo: Long?,
     maxSpeed: Int = 1_000,
     avgSpeed: Int = 1_000,
+    avgSpeedSamples: Int? = 1,
+    avgSpeedSum: Long? = avgSpeed.toLong(),
     used: Long = 0L,
     regen: Long = 0L,
   ) = TelemetryMinuteBucketEntity(
@@ -75,6 +89,8 @@ class ProfileStatsRepositoryTest {
     firstSampleAtMs = start,
     lastSampleAtMs = end,
     sumAbsSpeedCentiKmh = avgSpeed.toLong(),
+    movingSpeedSampleCount = avgSpeedSamples,
+    sumMovingAbsSpeedCentiKmh = avgSpeedSum,
     maxAbsSpeedCentiKmh = maxSpeed,
     minBatteryVoltageMv = 50_000,
     maxMotorCurrentAbsMa = 0,

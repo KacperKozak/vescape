@@ -328,6 +328,8 @@ private fun TelemetryMinuteBucketEntity.merge(next: TelemetryMinuteBucketEntity)
     firstSampleAtMs = minOf(firstSampleAtMs, next.firstSampleAtMs),
     lastSampleAtMs = maxOf(lastSampleAtMs, next.lastSampleAtMs),
     sumAbsSpeedCentiKmh = sumAbsSpeedCentiKmh + next.sumAbsSpeedCentiKmh,
+    movingSpeedSampleCount = mergeNullableSums(movingSpeedSampleCount, next.movingSpeedSampleCount),
+    sumMovingAbsSpeedCentiKmh = mergeNullableSums(sumMovingAbsSpeedCentiKmh, next.sumMovingAbsSpeedCentiKmh),
     maxAbsSpeedCentiKmh = maxOf(maxAbsSpeedCentiKmh, next.maxAbsSpeedCentiKmh),
     minBatteryVoltageMv = when {
       minBatteryVoltageMv == null -> next.minBatteryVoltageMv
@@ -361,4 +363,14 @@ private fun TelemetryMinuteBucketEntity.merge(next: TelemetryMinuteBucketEntity)
       else -> maxOf(maxGpsSpeedCentiMps, next.maxGpsSpeedCentiMps)
     },
   )
+}
+
+private fun mergeNullableSums(a: Int?, b: Int?): Int? {
+  if (a == null && b == null) return null
+  return (a ?: 0) + (b ?: 0)
+}
+
+private fun mergeNullableSums(a: Long?, b: Long?): Long? {
+  if (a == null && b == null) return null
+  return (a ?: 0L) + (b ?: 0L)
 }

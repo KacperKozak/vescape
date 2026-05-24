@@ -492,7 +492,7 @@ class VescForegroundService : Service() {
             recorder = VescSessionRecorder(this, start.boardConfig).also { it.start() }
         }
         telemetryStore = if (start.boardConfig.telemetryRecordingEnabled || requestedTelemetryRecordingEnabled) {
-            TelemetryRepository.get(applicationContext)
+            configuredTelemetryStore()
         } else {
             null
         }
@@ -1279,7 +1279,7 @@ class VescForegroundService : Service() {
             false
         }
         if (autoRecording && telemetryStore == null) {
-            telemetryStore = TelemetryRepository.get(applicationContext)
+            telemetryStore = configuredTelemetryStore()
         }
         boardError = null
         telemetryStore?.recordMarker("connected", boardConfig?.deviceId, boardConfig?.deviceName)
@@ -1560,7 +1560,7 @@ class VescForegroundService : Service() {
                 return
             }
             if (telemetryStore == null) {
-                telemetryStore = TelemetryRepository.get(applicationContext)
+                telemetryStore = configuredTelemetryStore()
                 telemetryStore?.recordMarker("connected", session.deviceId, session.deviceName, null)
             }
             emitState()
@@ -1576,6 +1576,19 @@ class VescForegroundService : Service() {
         telemetryStore?.flushBlocking()
         telemetryStore = null
         emitState()
+    }
+
+    private fun configuredTelemetryStore(): TelemetryRepository {
+        val store = TelemetryRepository.get(applicationContext)
+        val threshold = try {
+            kotlinx.coroutines.runBlocking {
+                AppDataRepository.get(applicationContext).getSettingsEntity().movingAvgSpeedThresholdKmh
+            }
+        } catch (_: Exception) {
+            3.0
+        }
+        store.setMovingSpeedThresholdKmh(threshold)
+        return store
     }
 
     private fun onLocationUpdated(location: Location) {
