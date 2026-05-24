@@ -21,6 +21,7 @@ import {
   useCallback,
   useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -226,6 +227,8 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
   const previewPanBaseRef = useRef<CameraSnapshot | null>(null)
   const previewZoomBaseRef = useRef<CameraSnapshot | null>(null)
   const currentCameraRef = useRef<CameraSnapshot | null>(null)
+  const styleReloadCameraRef = useRef<CameraSnapshot | null>(null)
+  const previousMapStyleKeyRef = useRef(mapStyleKey)
   const lastCenteredAtRef = useRef<number | null>(null)
   const mapRevealedRef = useRef(false)
   const mapOpacity = useRef(new Animated.Value(0)).current
@@ -264,6 +267,12 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
     [gpsFix, initialApproximateFix, latestApproximateLocation],
   )
   const { cameraFix, accuracyFix, accuracyRadiusM } = gpsPresentation
+
+  useLayoutEffect(() => {
+    if (previousMapStyleKeyRef.current === mapStyleKey) return
+    previousMapStyleKeyRef.current = mapStyleKey
+    styleReloadCameraRef.current = currentCameraRef.current
+  }, [mapStyleKey])
 
   useEffect(() => {
     setInitialApproximateFix(gpsPresentation.nextInitialApproximateFix)
@@ -519,9 +528,11 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
         logoEnabled={false}
         attributionEnabled={false}
         onDidFinishLoadingMap={() => {
+          const styleReloadCamera = styleReloadCameraRef.current
+          styleReloadCameraRef.current = null
           cameraRef.current?.setCamera({
-            ...gpsCamera,
-            pitch: MAP_DEFAULTS.defaultPitch,
+            ...(styleReloadCamera ?? gpsCamera),
+            pitch: styleReloadCamera?.pitch ?? MAP_DEFAULTS.defaultPitch,
             animationDuration: 0,
           })
         }}
