@@ -8,7 +8,7 @@ function HourItem({ item }: { item: HourForecast }) {
   return (
     <View style={styles.item}>
       <Text style={styles.hour}>{item.hour}</Text>
-      <Icon size={20} color={weatherCodeToColor(item.weatherCode)} weight="duotone" />
+      <Icon size={20} color={weatherCodeToColor(item.weatherCode, item.hourNum)} weight="duotone" />
       <Text style={styles.temp}>{item.temperature}°</Text>
       {item.precipitationProbability > 0 && (
         <Text style={styles.precip}>{item.precipitationProbability}%</Text>

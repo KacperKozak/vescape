@@ -31,7 +31,8 @@ export function WeatherPill({ location, expanded, onPress }: WeatherPillProps) {
   if (!weather) return null
 
   const WeatherIcon = weather.icon
-  const iconColor = weatherCode != null ? weatherCodeToColor(weatherCode) : theme.bran.text
+  const iconColor =
+    weatherCode != null ? weatherCodeToColor(weatherCode, new Date().getHours()) : theme.bran.text
 
   if (expanded) {
     return (

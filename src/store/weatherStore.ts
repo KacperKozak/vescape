@@ -2,9 +2,11 @@ import {
   CloudFogIcon,
   CloudIcon,
   CloudLightningIcon,
+  CloudMoonIcon,
   CloudRainIcon,
   CloudSnowIcon,
   CloudSunIcon,
+  MoonStarsIcon,
   SunIcon,
   type Icon,
 } from 'phosphor-react-native'
@@ -18,6 +20,7 @@ const FORECAST_HOURS = 12
 
 export interface HourForecast {
   hour: string
+  hourNum: number
   temperature: number
   weatherCode: number
   precipitationProbability: number
@@ -41,9 +44,14 @@ interface WeatherActions {
   refresh: () => Promise<void>
 }
 
-function weatherCodeToIcon(code: number): Icon {
-  if (code === 0) return SunIcon
-  if (code <= 2) return CloudSunIcon
+function isNightHour(hour: number): boolean {
+  return hour >= 21 || hour < 6
+}
+
+function weatherCodeToIcon(code: number, hour?: number): Icon {
+  const night = hour != null && isNightHour(hour)
+  if (code === 0) return night ? MoonStarsIcon : SunIcon
+  if (code <= 2) return night ? CloudMoonIcon : CloudSunIcon
   if (code === 3) return CloudIcon
   if (code === 45 || code === 48) return CloudFogIcon
   if (code >= 51 && code <= 57) return CloudRainIcon
@@ -53,9 +61,10 @@ function weatherCodeToIcon(code: number): Icon {
   return CloudIcon
 }
 
-export function weatherCodeToColor(code: number): string {
-  if (code === 0) return theme.weather.sun
-  if (code <= 2) return theme.weather.partly
+export function weatherCodeToColor(code: number, hour?: number): string {
+  const night = hour != null && isNightHour(hour)
+  if (code === 0) return night ? theme.weather.moon : theme.weather.sun
+  if (code <= 2) return night ? theme.weather.moonPartly : theme.weather.partly
   if (code === 3) return theme.weather.cloud
   if (code === 45 || code === 48) return theme.weather.fog
   if (code >= 51 && code <= 57) return theme.weather.rain
@@ -121,12 +130,14 @@ export const useWeatherStore = create<WeatherState & WeatherActions>((set, get) 
       const hourly: HourForecast[] = []
       for (let i = 0; i < times.length; i++) {
         if (!isFutureHour(times[i])) continue
+        const h = new Date(times[i]).getHours()
         hourly.push({
           hour: parseHourLabel(times[i]),
+          hourNum: h,
           temperature: Math.round(temps[i]),
           weatherCode: codes[i],
           precipitationProbability: precips[i] ?? 0,
-          icon: weatherCodeToIcon(codes[i]),
+          icon: weatherCodeToIcon(codes[i], h),
         })
       }
 
@@ -134,7 +145,7 @@ export const useWeatherStore = create<WeatherState & WeatherActions>((set, get) 
         temperature: Math.round(current.temperature_2m),
         weatherCode: current.weather_code,
         precipitationProbability: current.precipitation_probability ?? 0,
-        icon: weatherCodeToIcon(current.weather_code),
+        icon: weatherCodeToIcon(current.weather_code, new Date().getHours()),
         hourly,
         lastLat: lat,
         lastLon: lon,

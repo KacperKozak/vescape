@@ -77,7 +77,9 @@ export const theme = {
   /** Weather condition icons */
   weather: {
     sun: '#fbbf24', // amber-400
-    partly: '#fcd34d', // amber-300
+    partly: '#f59e0b', // amber-500
+    moon: '#a78bfa', // violet-400
+    moonPartly: '#7c3aed', // violet-600
     cloud: '#94a3b8', // slate-400
     fog: '#cbd5e1', // slate-300
     rain: '#60a5fa', // blue-400
