@@ -29,7 +29,7 @@ const initialState: CenterScreenState = {
   mode: 'telemetry',
   historySheetVisible: false,
   mapStyleKey: 'onedark',
-  rotationLocked: false,
+  rotationLocked: true,
   perspectiveEnabled: true,
   seekTimeMs: null,
 }

@@ -121,7 +121,6 @@ export function CenterScreen({
         map={{
           heading: controller.heading,
           rotationLocked: controller.rotationLocked,
-          perspectiveEnabled: controller.perspectiveEnabled,
           targetLocation: controller.targetLocation,
           clearTargetLocation: controller.clearTargetLocation,
           mapStyleKey: controller.mapStyleKey,

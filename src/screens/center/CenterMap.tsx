@@ -146,6 +146,17 @@ function getCameraForScreenPan(baseCamera: CameraSnapshot, totalX: number, total
   }
 }
 
+function getPitchForZoom(zoom: number, perspectiveEnabled: boolean) {
+  if (!perspectiveEnabled) return 0
+  const progress = clamp(
+    (zoom - MAP_DEFAULTS.perspectiveMinZoom) /
+      (MAP_DEFAULTS.perspectiveMaxZoom - MAP_DEFAULTS.perspectiveMinZoom),
+    0,
+    1,
+  )
+  return progress * MAP_DEFAULTS.activePitch
+}
+
 function formatMarkerTime(ms: number): string {
   return new Date(ms).toLocaleString(undefined, {
     hour: '2-digit',
@@ -352,14 +363,17 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
       lastCenteredAtRef.current = cameraFix.timestamp
       cameraRef.current?.setCamera({
         ...gpsCamera,
+        heading: 0,
+        pitch: getPitchForZoom(gpsCamera.zoomLevel, perspectiveEnabled),
         ...(options?.resetPadding
           ? { padding: { paddingBottom: 0, paddingTop: 0, paddingLeft: 0, paddingRight: 0 } }
           : {}),
         animationDuration: MAP_DEFAULTS.animationDuration,
         animationMode: 'easeTo',
       })
+      onHeadingChange(0)
     },
-    [cameraFix, gpsCamera],
+    [cameraFix, gpsCamera, onHeadingChange, perspectiveEnabled],
   )
 
   const fitRide = useCallback(() => {
@@ -373,10 +387,14 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
     cameraRef.current?.setCamera({
       ...gpsCamera,
       zoomLevel: Math.max(MAP_DEFAULTS.fallbackZoom, gpsCamera.zoomLevel - 1.2),
+      pitch: getPitchForZoom(
+        Math.max(MAP_DEFAULTS.fallbackZoom, gpsCamera.zoomLevel - 1.2),
+        perspectiveEnabled,
+      ),
       animationDuration: MAP_DEFAULTS.animationDuration,
       animationMode: 'easeTo',
     })
-  }, [gpsCamera])
+  }, [gpsCamera, perspectiveEnabled])
 
   const restorePreviewPan = useCallback(() => {
     setFollowGps(true)
@@ -388,10 +406,11 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
     }
     cameraRef.current?.setCamera({
       ...restoreCamera,
+      pitch: getPitchForZoom(restoreCamera.zoomLevel, perspectiveEnabled),
       animationDuration: MAP_DEFAULTS.followAnimationDuration,
       animationMode: 'easeTo',
     })
-  }, [cameraFix, gpsCamera])
+  }, [cameraFix, gpsCamera, perspectiveEnabled])
 
   useImperativeHandle(
     ref,
@@ -402,7 +421,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
         previewPanBaseRef.current = currentCameraRef.current ?? {
           ...gpsCamera,
           heading: 0,
-          pitch: MAP_DEFAULTS.defaultPitch,
+          pitch: getPitchForZoom(gpsCamera.zoomLevel, perspectiveEnabled),
         }
         setFollowGps(false)
       },
@@ -412,6 +431,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
         if (!baseCamera) return
         cameraRef.current?.setCamera({
           ...getCameraForScreenPan(baseCamera, deltaX, deltaY),
+          pitch: getPitchForZoom(baseCamera.zoomLevel, perspectiveEnabled),
           animationMode: 'linearTo',
           animationDuration,
         })
@@ -423,9 +443,15 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
       previewZoomBy(scale: number) {
         const baseCamera = previewZoomBaseRef.current
         if (!baseCamera || scale <= 0) return
+        const zoomLevel = clamp(
+          baseCamera.zoomLevel + Math.log2(scale),
+          MIN_ZOOM,
+          MAP_DEFAULTS.maxZoom,
+        )
         cameraRef.current?.setCamera({
           ...baseCamera,
-          zoomLevel: clamp(baseCamera.zoomLevel + Math.log2(scale), MIN_ZOOM, MAP_DEFAULTS.maxZoom),
+          zoomLevel,
+          pitch: getPitchForZoom(zoomLevel, perspectiveEnabled),
           animationDuration: 0,
         })
       },
@@ -444,8 +470,9 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
       togglePerspective() {
         const enabled = !perspectiveEnabled
         onPerspectiveChange(enabled)
+        const zoomLevel = currentCameraRef.current?.zoomLevel ?? gpsCamera.zoomLevel
         cameraRef.current?.setCamera({
-          pitch: enabled ? MAP_DEFAULTS.activePitch : 0,
+          pitch: getPitchForZoom(zoomLevel, enabled),
           animationDuration: MAP_DEFAULTS.animationDuration,
           animationMode: 'easeTo',
         })
@@ -463,6 +490,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
         cameraRef.current?.setCamera({
           ...(current ? { centerCoordinate: current.centerCoordinate } : {}),
           zoomLevel: zoom,
+          pitch: getPitchForZoom(zoom, perspectiveEnabled),
           animationDuration: MAP_DEFAULTS.animationDuration,
           animationMode: 'easeTo',
         })
@@ -485,10 +513,11 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
     lastCenteredAtRef.current = cameraFix.timestamp
     cameraRef.current?.setCamera({
       ...gpsCamera,
+      pitch: getPitchForZoom(gpsCamera.zoomLevel, perspectiveEnabled),
       animationDuration: MAP_DEFAULTS.followAnimationDuration,
       animationMode: 'easeTo',
     })
-  }, [cameraFix, followGps, gpsCamera, historyActive])
+  }, [cameraFix, followGps, gpsCamera, historyActive, perspectiveEnabled])
 
   useEffect(() => {
     if (!historyActive) return
@@ -521,7 +550,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
         style={styles.map}
         styleURL={useCustomJSON ? undefined : selectedMapStyle.styleURL}
         styleJSON={isOneDark ? ONE_DARK_MAP_STYLE : isMapy ? BLANK_STYLE : undefined}
-        pitchEnabled
+        pitchEnabled={false}
         rotateEnabled={!rotationLocked}
         compassEnabled={false}
         scaleBarEnabled={false}
@@ -530,9 +559,10 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
         onDidFinishLoadingMap={() => {
           const styleReloadCamera = styleReloadCameraRef.current
           styleReloadCameraRef.current = null
+          const camera = styleReloadCamera ?? gpsCamera
           cameraRef.current?.setCamera({
-            ...(styleReloadCamera ?? gpsCamera),
-            pitch: styleReloadCamera?.pitch ?? MAP_DEFAULTS.defaultPitch,
+            ...camera,
+            pitch: getPitchForZoom(camera.zoomLevel, perspectiveEnabled),
             animationDuration: 0,
           })
         }}
@@ -557,15 +587,24 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
           }
           if (state.gestures.isGestureActive) {
             setFollowGps(false)
+            const dynamicPitch = getPitchForZoom(state.properties.zoom, perspectiveEnabled)
+            if (Math.abs(state.properties.pitch - dynamicPitch) > 0.5) {
+              cameraRef.current?.setCamera({
+                pitch: dynamicPitch,
+                animationDuration: 0,
+              })
+            }
           }
           onHeadingChange(state.properties.heading)
-          onPerspectiveChange(state.properties.pitch > MAP_DEFAULTS.pitchThreshold)
           setShowRadar(state.properties.zoom <= RADAR_MAX_ZOOM)
         }}
       >
         <Camera
           ref={cameraRef}
-          defaultSettings={{ ...gpsCamera, pitch: MAP_DEFAULTS.defaultPitch }}
+          defaultSettings={{
+            ...gpsCamera,
+            pitch: getPitchForZoom(gpsCamera.zoomLevel, perspectiveEnabled),
+          }}
           maxZoomLevel={MAP_DEFAULTS.maxZoom}
           animationMode="easeTo"
         />

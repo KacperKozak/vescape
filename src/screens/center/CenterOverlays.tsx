@@ -52,7 +52,6 @@ interface CenterBoardOverlayProps {
 interface CenterMapOverlayProps {
   heading: number
   rotationLocked: boolean
-  perspectiveEnabled: boolean
   targetLocation: { latitude: number; longitude: number } | null
   clearTargetLocation: () => void
   mapStyleKey: MapStyleKey
@@ -287,12 +286,12 @@ export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOver
         <MapControls
           heading={map.heading}
           rotationLocked={map.rotationLocked}
-          perspectiveEnabled={map.perspectiveEnabled}
           followGps={false}
           showClearTarget={!!map.targetLocation}
-          onResetRotation={() => mapRef.current?.resetRotation()}
-          onToggleRotationLock={() => map.setRotationLocked((prev) => !prev)}
-          onTogglePerspective={() => mapRef.current?.togglePerspective()}
+          onToggleRotationLock={() => {
+            if (!map.rotationLocked) mapRef.current?.resetRotation()
+            map.setRotationLocked((prev) => !prev)
+          }}
           onRecenter={map.exitMapFocus}
           onClearTarget={map.clearTargetLocation}
         />

@@ -1,22 +1,13 @@
 import { Pressable, StyleSheet, View } from 'react-native'
-import {
-  ArrowUpIcon,
-  CubeIcon,
-  CrosshairIcon,
-  CrosshairSimpleIcon,
-  XIcon,
-} from 'phosphor-react-native'
+import { ArrowUpIcon, CrosshairIcon, CrosshairSimpleIcon, XIcon } from 'phosphor-react-native'
 import { theme } from '@/constants/theme'
 
 interface MapControlsProps {
   heading: number
   rotationLocked: boolean
-  perspectiveEnabled: boolean
   followGps: boolean
   showClearTarget: boolean
-  onResetRotation: () => void
   onToggleRotationLock: () => void
-  onTogglePerspective: () => void
   onRecenter: () => void
   onClearTarget: () => void
 }
@@ -24,12 +15,9 @@ interface MapControlsProps {
 export function MapControls({
   heading,
   rotationLocked,
-  perspectiveEnabled,
   followGps,
   showClearTarget,
-  onResetRotation,
   onToggleRotationLock,
-  onTogglePerspective,
   onRecenter,
   onClearTarget,
 }: MapControlsProps) {
@@ -42,29 +30,16 @@ export function MapControls({
       )}
 
       <Pressable
-        style={[styles.compassButton, rotationLocked && styles.compassButtonLocked]}
-        onPress={onResetRotation}
-        onLongPress={onToggleRotationLock}
-        delayLongPress={400}
+        style={[styles.compassButton, !rotationLocked && styles.compassButtonUnlocked]}
+        onPress={onToggleRotationLock}
       >
         <View style={{ transform: [{ rotate: `${-heading}deg` }] }}>
           <ArrowUpIcon
             size={22}
-            color={rotationLocked ? theme.warning.color : '#f9fafb'}
+            color={rotationLocked ? '#f9fafb' : theme.gps.text}
             weight="bold"
           />
         </View>
-      </Pressable>
-
-      <Pressable
-        style={[styles.perspectiveButton, perspectiveEnabled && styles.perspectiveButtonActive]}
-        onPress={onTogglePerspective}
-      >
-        <CubeIcon
-          size={22}
-          color={perspectiveEnabled ? theme.gps.text : '#f9fafb'}
-          weight={perspectiveEnabled ? 'fill' : 'bold'}
-        />
       </Pressable>
 
       <Pressable
@@ -85,7 +60,7 @@ const styles = StyleSheet.create({
   clearTargetButton: {
     position: 'absolute',
     right: 12,
-    bottom: 226,
+    bottom: 166,
     width: 52,
     height: 52,
     alignItems: 'center',
@@ -104,21 +79,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(17,24,39,0.9)',
     borderRadius: 26,
   },
-  compassButtonLocked: {
-    backgroundColor: 'rgba(67,20,7,0.9)',
-  },
-  perspectiveButton: {
-    position: 'absolute',
-    right: 12,
-    bottom: 166,
-    width: 52,
-    height: 52,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(17,24,39,0.9)',
-    borderRadius: 26,
-  },
-  perspectiveButtonActive: {
+  compassButtonUnlocked: {
     backgroundColor: theme.gps.bg,
   },
   followButton: {
