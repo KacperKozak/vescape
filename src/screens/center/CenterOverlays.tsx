@@ -2,6 +2,7 @@ import { router } from 'expo-router'
 import * as Haptics from 'expo-haptics'
 import {
   ArrowLeftIcon,
+  ArrowsClockwiseIcon,
   ClockCounterClockwiseIcon,
   SlidersHorizontalIcon,
 } from 'phosphor-react-native'
@@ -23,6 +24,7 @@ import { BottomTelemetryStrip, STRIP_CONTENT_HEIGHT } from '@/screens/center/Bot
 import type { CenterMapHandle } from '@/screens/center/CenterMap'
 import type { CenterViewState } from '@/screens/center/centerViewState'
 import { HistoryControls } from '@/screens/center/HistoryControls'
+import { WeatherHourlyStrip } from '@/screens/center/WeatherHourlyStrip'
 import { WeatherPill } from '@/screens/center/WeatherPill'
 import { HistoryStatsBar } from '@/screens/center/HistoryStatsBar'
 import { HistoryTelemetryPanel } from '@/screens/center/HistoryTelemetryPanel'
@@ -32,6 +34,7 @@ import { MapVignette } from '@/screens/center/MapVignette'
 import { TopBar } from '@/screens/center/TopBar'
 import type { Board } from '@/store/boardStore'
 import type { HistorySession, TelemetrySample } from '@/store/historyStore'
+import { useWeatherStore } from '@/store/weatherStore'
 
 interface CenterBoardOverlayProps {
   boards: Board[]
@@ -57,6 +60,9 @@ interface CenterMapOverlayProps {
   enterMapFocus: () => void
   setRotationLocked: (updater: (prev: boolean) => boolean) => void
   exitMapFocus: () => void
+  enterWeather: () => void
+  exitWeather: () => void
+  refreshWeather: () => void
   weatherLocation: { latitude: number; longitude: number } | null
 }
 
@@ -107,6 +113,7 @@ export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOver
   const revealProgress = useSharedValue(0)
   const dragOpacity = useSharedValue(0)
   const telemetryReturnOpacity = useSharedValue(mode === 'telemetry' ? 1 : 0)
+  const weatherLoading = useWeatherStore((s) => s.loading)
   const historyBusy = history.loadingSession || history.historyLoading
   const telemetryInteractive = mode === 'telemetry' && !revealGestureActive
   const interfaceFadeStyle = useAnimatedStyle(
@@ -233,6 +240,7 @@ export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOver
           onAddBoard={board.onAddBoard}
           onToggleRecordDebug={board.onToggleRecordDebug}
           onDisconnect={board.onStopScan}
+          onWeatherPress={map.enterWeather}
         />
         <FloatingBar
           bleStatus={board.bleStatus}
@@ -274,10 +282,7 @@ export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOver
           pointerEvents="box-none"
           style={[styles.weatherPillContainer, { top: Math.max(insets.top, 8) }]}
         >
-          <WeatherPill
-            location={map.weatherLocation}
-            onPress={() => mapRef.current?.zoomToLevel(8)}
-          />
+          <WeatherPill location={map.weatherLocation} onPress={map.enterWeather} />
         </View>
         <MapControls
           heading={map.heading}
@@ -292,6 +297,35 @@ export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOver
           onClearTarget={map.clearTargetLocation}
         />
         <MapStyleSwitch activeKey={map.mapStyleKey} onSelect={map.setMapStyleKey} />
+      </View>
+
+      <View
+        pointerEvents={mode === 'weather' ? 'box-none' : 'none'}
+        style={[styles.weatherInterface, mode === 'weather' ? styles.visible : styles.hidden]}
+      >
+        <MapVignette mode={mode} idPrefix="weather-map-vignette" />
+        <IconButton
+          icon={ArrowLeftIcon}
+          onPress={map.exitWeather}
+          style={[styles.backButton, { top: Math.max(insets.top, 8) }]}
+        />
+        <IconButton
+          icon={ArrowsClockwiseIcon}
+          onPress={map.refreshWeather}
+          loading={weatherLoading}
+          style={[styles.weatherRefreshButton, { top: Math.max(insets.top, 8) }]}
+        />
+        <View
+          pointerEvents="none"
+          style={[styles.weatherExpandedPill, { top: Math.max(insets.top, 8) }]}
+        >
+          <WeatherPill location={map.weatherLocation} expanded onPress={() => undefined} />
+        </View>
+        <View
+          style={[styles.weatherHourlyContainer, { paddingBottom: Math.max(insets.bottom, 16) }]}
+        >
+          <WeatherHourlyStrip />
+        </View>
       </View>
 
       {mode === 'history' && history.selectedSession && (
@@ -407,6 +441,29 @@ const styles = StyleSheet.create({
   mapInterface: {
     ...StyleSheet.absoluteFill,
     zIndex: 7,
+  },
+  weatherInterface: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 8,
+  },
+  weatherRefreshButton: {
+    position: 'absolute',
+    right: 10,
+    zIndex: 30,
+  },
+  weatherExpandedPill: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 29,
+  },
+  weatherHourlyContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    zIndex: 30,
   },
   visible: {
     opacity: 1,

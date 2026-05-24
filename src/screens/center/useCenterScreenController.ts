@@ -13,6 +13,8 @@ import {
 import { useBleStore } from '@/store/bleStore'
 import { useHistoryStore, type HistorySession } from '@/store/historyStore'
 import { useMapStore } from '@/store/mapStore'
+import { useSettingsStore } from '@/store/settingsStore'
+import { useWeatherStore } from '@/store/weatherStore'
 import { findNearestSampleIndexByTime } from '@/history/playback'
 
 interface UseCenterScreenControllerArgs {
@@ -34,6 +36,7 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
     seekTimeMs,
     enterTelemetry,
     enterMap,
+    enterWeather,
     enterHistory,
     setHistorySheetVisible,
     setMapStyleKey,
@@ -50,6 +53,7 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
       seekTimeMs: s.seekTimeMs,
       enterTelemetry: s.enterTelemetry,
       enterMap: s.enterMap,
+      enterWeather: s.enterWeather,
       enterHistory: s.enterHistory,
       setHistorySheetVisible: s.setHistorySheetVisible,
       setMapStyleKey: s.setMapStyleKey,
@@ -60,6 +64,10 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
   )
   const liveLocations = useBleStore((s) => s.liveLocationHistory)
   const latestApproximateLocation = useBleStore((s) => s.latestApproximateLocation)
+  const fetchWeather = useWeatherStore((s) => s.fetch)
+  const refreshWeather = useWeatherStore((s) => s.refresh)
+  const lastGpsLatitude = useSettingsStore((s) => s.lastGpsLatitude)
+  const lastGpsLongitude = useSettingsStore((s) => s.lastGpsLongitude)
   const {
     sessions,
     selectedSession,
@@ -109,12 +117,32 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
     return idx >= 0 ? sessionGpsSamples[idx] : null
   }, [seekTimeMs, sessionGpsSamples])
 
+  useEffect(() => {
+    const loc = liveLocations.at(-1) ?? latestApproximateLocation
+    const lat = loc?.latitude ?? lastGpsLatitude
+    const lon = loc?.longitude ?? lastGpsLongitude
+    if (lat != null && lon != null) {
+      void fetchWeather(lat, lon)
+    }
+  }, [liveLocations, latestApproximateLocation, lastGpsLatitude, lastGpsLongitude, fetchWeather])
+
+  const weatherActive = mode === 'weather'
   const historyActive = mode === 'history'
   const previousRide = getPreviousRideSession(sessions, selectedSession)
   const nextRide = getNextRideSession(sessions, selectedSession)
   const canPreviousRide = !!previousRide || historyHasMore
 
   const exitMapFocus = useCallback(() => {
+    enterTelemetry()
+    mapRef.current?.recenterLive()
+  }, [enterTelemetry, mapRef])
+
+  const enterWeatherMode = useCallback(() => {
+    enterWeather()
+    mapRef.current?.zoomToLevel(8)
+  }, [enterWeather, mapRef])
+
+  const exitWeatherMode = useCallback(() => {
     enterTelemetry()
     mapRef.current?.recenterLive()
   }, [enterTelemetry, mapRef])
@@ -205,6 +233,10 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
           exitHistory()
           return true
         }
+        if (mode === 'weather') {
+          exitWeatherMode()
+          return true
+        }
         if (mode === 'map') {
           exitMapFocus()
           return true
@@ -221,7 +253,7 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
         return true
       })
       return () => handler.remove()
-    }, [exitHistory, exitMapFocus, mode]),
+    }, [exitHistory, exitMapFocus, exitWeatherMode, mode]),
   )
 
   return {
@@ -262,6 +294,10 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
     exitHistory,
     removeSession,
     selectRide,
+    weatherActive,
+    enterWeatherMode,
+    exitWeatherMode,
+    refreshWeather,
     handleMapFocus,
     exitMapFocus,
     seekGpsPosition,

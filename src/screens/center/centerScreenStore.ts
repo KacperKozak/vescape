@@ -16,6 +16,7 @@ interface CenterScreenActions {
   reset: () => void
   enterTelemetry: () => void
   enterMap: () => void
+  enterWeather: () => void
   enterHistory: () => void
   setHistorySheetVisible: (visible: boolean) => void
   setMapStyleKey: (key: MapStyleKey) => void
@@ -46,6 +47,10 @@ export const useCenterScreenStore = create<CenterScreenState & CenterScreenActio
 
   enterMap() {
     set({ mode: 'map' })
+  },
+
+  enterWeather() {
+    set({ mode: 'weather' })
   },
 
   enterHistory() {

@@ -100,6 +100,7 @@ export function CenterScreen({
         onLongPressTarget={controller.setTargetLocation}
         targetLocation={controller.targetLocation}
         onClearTarget={controller.clearTargetLocation}
+        weatherActive={controller.weatherActive}
         seekPosition={controller.seekGpsPosition}
       />
       <CenterOverlays
@@ -128,6 +129,9 @@ export function CenterScreen({
           enterMapFocus: controller.handleMapFocus,
           setRotationLocked: controller.setRotationLocked,
           exitMapFocus: controller.exitMapFocus,
+          enterWeather: controller.enterWeatherMode,
+          exitWeather: controller.exitWeatherMode,
+          refreshWeather: controller.refreshWeather,
           weatherLocation: controller.liveLocations.at(-1) ?? controller.latestApproximateLocation,
         }}
         history={{
