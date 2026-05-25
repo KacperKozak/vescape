@@ -86,6 +86,17 @@ interface HistoryPreviewTarget {
   maxLongitude: number | null
 }
 
+interface HistoryPreviewCameraPlan {
+  duration: number
+  padding: [number, number, number, number]
+  progress: number
+}
+
+interface HistoryPreviewBounds {
+  ne: [number, number]
+  sw: [number, number]
+}
+
 const MERCATOR_TILE_SIZE = 512
 const MAX_MERCATOR_LATITUDE = 85.05112878
 const MIN_ZOOM = 0
@@ -176,6 +187,37 @@ function getPitchForZoom(zoom: number, perspectiveEnabled: boolean) {
     1,
   )
   return progress * MAP_DEFAULTS.activePitch
+}
+
+function getHistoryPreviewBounds(preview: HistoryPreviewTarget): HistoryPreviewBounds | null {
+  if (
+    preview.minLatitude == null ||
+    preview.maxLatitude == null ||
+    preview.minLongitude == null ||
+    preview.maxLongitude == null ||
+    (preview.minLatitude === preview.maxLatitude && preview.minLongitude === preview.maxLongitude)
+  ) {
+    return null
+  }
+  return {
+    ne: [preview.maxLongitude, preview.maxLatitude],
+    sw: [preview.minLongitude, preview.minLatitude],
+  }
+}
+
+function getHistoryPreviewPlan(jumpDistanceM: number): HistoryPreviewCameraPlan {
+  const progress = clamp(jumpDistanceM / HISTORY_DYNAMIC_FULL_DISTANCE_M, 0, 1)
+  const extraPadding = HISTORY_DYNAMIC_MAX_EXTRA_PADDING * progress
+  return {
+    duration: MAP_DEFAULTS.animationDuration + HISTORY_DYNAMIC_MAX_EXTRA_DURATION_MS * progress,
+    progress,
+    padding: [
+      HISTORY_PREVIEW_TOP_PADDING + extraPadding * 0.5,
+      HISTORY_PREVIEW_SIDE_PADDING + extraPadding,
+      HISTORY_PREVIEW_BOTTOM_PADDING + extraPadding,
+      HISTORY_PREVIEW_SIDE_PADDING + extraPadding,
+    ],
+  }
 }
 
 function formatMarkerTime(ms: number): string {
@@ -438,34 +480,15 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
             preview,
           )
         : 0
-      const distanceProgress = clamp(jumpDistanceM / HISTORY_DYNAMIC_FULL_DISTANCE_M, 0, 1)
-      const extraPadding = HISTORY_DYNAMIC_MAX_EXTRA_PADDING * distanceProgress
-      const animationDuration =
-        MAP_DEFAULTS.animationDuration + HISTORY_DYNAMIC_MAX_EXTRA_DURATION_MS * distanceProgress
-      if (
-        preview.minLatitude != null &&
-        preview.maxLatitude != null &&
-        preview.minLongitude != null &&
-        preview.maxLongitude != null &&
-        (preview.minLatitude !== preview.maxLatitude ||
-          preview.minLongitude !== preview.maxLongitude)
-      ) {
-        cameraRef.current?.fitBounds(
-          [preview.maxLongitude, preview.maxLatitude],
-          [preview.minLongitude, preview.minLatitude],
-          [
-            HISTORY_PREVIEW_TOP_PADDING + extraPadding * 0.5,
-            HISTORY_PREVIEW_SIDE_PADDING + extraPadding,
-            HISTORY_PREVIEW_BOTTOM_PADDING + extraPadding,
-            HISTORY_PREVIEW_SIDE_PADDING + extraPadding,
-          ],
-          animationDuration,
-        )
+      const plan = getHistoryPreviewPlan(jumpDistanceM)
+      const bounds = getHistoryPreviewBounds(preview)
+      if (bounds) {
+        cameraRef.current?.fitBounds(bounds.ne, bounds.sw, plan.padding, plan.duration)
       } else {
         cameraRef.current?.setCamera({
           ...getHistoryPreviewCamera(preview),
-          zoomLevel: HISTORY_PREVIEW_ZOOM - HISTORY_DYNAMIC_MAX_ZOOM_OUT * distanceProgress,
-          animationDuration,
+          zoomLevel: HISTORY_PREVIEW_ZOOM - HISTORY_DYNAMIC_MAX_ZOOM_OUT * plan.progress,
+          animationDuration: plan.duration,
         })
       }
       onHeadingChange(0)

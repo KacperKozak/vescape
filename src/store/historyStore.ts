@@ -55,6 +55,22 @@ let liveRefreshInFlight = false
 let liveRefreshVersion = 0
 let sessionLoadVersion = 0
 
+function getSessionRangeOptions(session: HistorySession) {
+  return {
+    fromMs: session.startAtMs,
+    toMs: session.endAtMs,
+    ...(session.deviceId ? { deviceId: session.deviceId } : {}),
+  }
+}
+
+function getSessionPreviewLimit(session: HistorySession) {
+  return Math.min(PREVIEW_SAMPLE_LIMIT, Math.max(1, session.sampleCount + 1))
+}
+
+function getSessionSampleLimit(session: HistorySession) {
+  return Math.max(MIN_SESSION_SAMPLE_LIMIT, session.sampleCount + 1)
+}
+
 export const useHistoryStore = create<HistoryState & HistoryActions>((set, get) => ({
   blocks: [],
   sessions: [],
@@ -224,25 +240,20 @@ export const useHistoryStore = create<HistoryState & HistoryActions>((set, get) 
       error: undefined,
     })
     try {
-      const rangeOptions = {
-        fromMs: session.startAtMs,
-        toMs: session.endAtMs,
-        ...(session.deviceId ? { deviceId: session.deviceId } : {}),
-      }
+      const rangeOptions = getSessionRangeOptions(session)
       if (session.centerLatitude == null || session.centerLongitude == null) {
         void getHistoryRange({
           ...rangeOptions,
-          limit: Math.min(PREVIEW_SAMPLE_LIMIT, Math.max(1, session.sampleCount + 1)),
+          limit: getSessionPreviewLimit(session),
         }).then((previewRange) => {
           if (version !== sessionLoadVersion || previewRange.gpsSamples.length === 0) return
           if (get().sessionGpsSamples.length > 0) return
           set({ sessionGpsSamples: previewRange.gpsSamples })
         })
       }
-      const limit = Math.max(MIN_SESSION_SAMPLE_LIMIT, session.sampleCount + 1)
       const range = await getHistoryRange({
         ...rangeOptions,
-        limit,
+        limit: getSessionSampleLimit(session),
       })
       if (version !== sessionLoadVersion) return
       set({
