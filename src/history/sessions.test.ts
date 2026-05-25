@@ -105,7 +105,7 @@ test('distance falls back to gpsDistance when odometer distance missing', () => 
   expect(sessions[0].distanceM).toBe(100)
 })
 
-test('max speed uses higher value from board or gps', () => {
+test('max speed uses sanitized board bucket max instead of gps speed', () => {
   const sessions = groupHistorySessions([
     block({
       id: 'new',
@@ -122,7 +122,7 @@ test('max speed uses higher value from board or gps', () => {
       maxGpsSpeedKmh: 18,
     }),
   ])
-  expect(sessions[0].maxSpeedKmh).toBe(34)
+  expect(sessions[0].maxSpeedKmh).toBe(25)
 })
 
 test('avg speed excludes samples below moving speed threshold when available', () => {

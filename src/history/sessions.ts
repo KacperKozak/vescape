@@ -161,8 +161,7 @@ function mergeBlockIntoAggregate(
     session.gpsDistanceCount += 1
   }
 
-  const blockMax = Math.max(block.maxAbsSpeedKmh, block.maxGpsSpeedKmh ?? 0)
-  session.maxSpeedKmh = Math.max(session.maxSpeedKmh, blockMax)
+  session.maxSpeedKmh = Math.max(session.maxSpeedKmh, block.maxAbsSpeedKmh)
   if (block.avgSpeedSampleCount > 0) {
     session.avgSpeedSum += block.avgSpeedKmh * block.avgSpeedSampleCount
     session.avgSpeedSampleCount += block.avgSpeedSampleCount
