@@ -12,6 +12,17 @@ interface TelemetryDao {
   @Insert(onConflict = OnConflictStrategy.REPLACE)
   suspend fun insertExclusions(exclusions: List<MetricExclusionEntity>)
 
+  @Query(
+    """
+    SELECT * FROM metric_exclusions
+    WHERE captured_at_ms >= :fromMs
+      AND captured_at_ms <= :toMs
+      AND (:deviceId IS NULL OR device_id = :deviceId)
+    ORDER BY captured_at_ms ASC
+    """,
+  )
+  suspend fun getExclusions(fromMs: Long, toMs: Long, deviceId: String?): List<MetricExclusionEntity>
+
   @Query("DELETE FROM metric_exclusions WHERE captured_at_ms >= :fromMs AND captured_at_ms <= :toMs")
   suspend fun deleteExclusionsRange(fromMs: Long, toMs: Long): Int
 

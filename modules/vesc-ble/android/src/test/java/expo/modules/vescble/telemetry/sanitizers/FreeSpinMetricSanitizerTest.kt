@@ -1,0 +1,140 @@
+package expo.modules.vescble.telemetry.sanitizers
+
+import expo.modules.vescble.telemetry.BucketTelemetryPoint
+import expo.modules.vescble.telemetry.FREE_SPIN_GPS_PRECISE_ACCURACY_CM
+import expo.modules.vescble.telemetry.METRIC_MAX_DUTY
+import expo.modules.vescble.telemetry.METRIC_MAX_SPEED
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+class FreeSpinMetricSanitizerTest {
+  @Test
+  fun excludesMaxSpeedAndDutyWhenLowGpsAndHighBoardSpeed() {
+    val point = pointWithGps(
+      capturedAtMs = 1000L,
+      speedCentiKmh = 1600,
+      dutyPermille = 800,
+      gpsSpeedCentiMps = 100,
+      gpsTimestampMs = 1000L,
+    )
+
+    val result = sanitize(point)
+
+    assertTrue(result.excludedFromMaxSpeed)
+    assertTrue(result.excludedFromMaxDuty)
+    assertFalse(result.excludedFromAvgSpeed)
+    assertEquals(listOf(METRIC_MAX_SPEED, METRIC_MAX_DUTY), result.exclusions.map { it.metric })
+    assertEquals("16.0", result.exclusions.first { it.metric == METRIC_MAX_SPEED }.rawValue)
+    assertEquals("0.8", result.exclusions.first { it.metric == METRIC_MAX_DUTY }.rawValue)
+    assertEquals("3.6", result.exclusions.first().referenceValue)
+  }
+
+  @Test
+  fun keepsSampleWhenDeltaAtThreshold() {
+    val point = pointWithGps(
+      capturedAtMs = 1000L,
+      speedCentiKmh = 3698,
+      gpsSpeedCentiMps = 694,
+      gpsTimestampMs = 1000L,
+    )
+
+    val result = sanitize(point)
+
+    assertFalse(result.excludedFromMaxSpeed)
+    assertFalse(result.excludedFromMaxDuty)
+    assertTrue(result.exclusions.isEmpty())
+  }
+
+  @Test
+  fun ignoresImpreciseGps() {
+    val point = pointWithGps(
+      capturedAtMs = 1000L,
+      speedCentiKmh = 5000,
+      gpsSpeedCentiMps = 100,
+      gpsTimestampMs = 1000L,
+      gpsAccuracyCm = FREE_SPIN_GPS_PRECISE_ACCURACY_CM + 1,
+    )
+
+    val result = sanitize(point)
+
+    assertFalse(result.excludedFromMaxSpeed)
+    assertTrue(result.exclusions.isEmpty())
+  }
+
+  @Test
+  fun usesNearestPreciseGpsFromNeighboringSample() {
+    val points = listOf(
+      pointWithGps(
+        capturedAtMs = 1000L,
+        speedCentiKmh = 1000,
+        gpsSpeedCentiMps = 100,
+        gpsTimestampMs = 1000L,
+      ),
+      point(capturedAtMs = 3000L, speedCentiKmh = 5000),
+    )
+    val context = MetricSanitizationContext(
+      samples = points,
+      preciseGpsIndices = buildPreciseGpsIndex(points),
+    )
+
+    val result = FreeSpinMetricSanitizer().sanitize(1, points[1], context)
+
+    assertTrue(result.excludedFromMaxSpeed)
+    assertEquals(
+      "{\"gpsTimestampMs\":1000,\"sampleTimestampMs\":3000,\"gpsAccuracyCm\":500}",
+      result.exclusions.first().contextJson,
+    )
+  }
+
+  private fun sanitize(point: BucketTelemetryPoint): MetricSanitizerOutput {
+    val context = MetricSanitizationContext(
+      samples = listOf(point),
+      preciseGpsIndices = buildPreciseGpsIndex(listOf(point)),
+    )
+    return FreeSpinMetricSanitizer().sanitize(0, point, context)
+  }
+
+  private fun point(
+    capturedAtMs: Long = 0L,
+    deviceId: String? = "board-1",
+    speedCentiKmh: Int = 0,
+    dutyPermille: Int = 0,
+  ) = BucketTelemetryPoint(
+    capturedAtMs = capturedAtMs,
+    deviceId = deviceId,
+    deviceName = "Test",
+    speedCentiKmh = speedCentiKmh,
+    batteryVoltageMv = 70_000,
+    motorCurrentMa = 0,
+    batteryCurrentMa = 0,
+    dutyPermille = dutyPermille,
+    hasFault = false,
+    odometerCm = null,
+  )
+
+  private fun pointWithGps(
+    capturedAtMs: Long = 0L,
+    deviceId: String? = "board-1",
+    speedCentiKmh: Int = 0,
+    dutyPermille: Int = 0,
+    gpsSpeedCentiMps: Int,
+    gpsTimestampMs: Long,
+    gpsAccuracyCm: Int = 500,
+  ) = BucketTelemetryPoint(
+    capturedAtMs = capturedAtMs,
+    deviceId = deviceId,
+    deviceName = "Test",
+    speedCentiKmh = speedCentiKmh,
+    batteryVoltageMv = 70_000,
+    motorCurrentMa = 0,
+    batteryCurrentMa = 0,
+    dutyPermille = dutyPermille,
+    hasFault = false,
+    odometerCm = null,
+    gpsSpeedCentiMps = gpsSpeedCentiMps,
+    gpsTimestampMs = gpsTimestampMs,
+    gpsAccuracyCm = gpsAccuracyCm,
+  )
+}

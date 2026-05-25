@@ -262,10 +262,21 @@ export interface HistoryMarker {
   gapMs: number | null
 }
 
+export interface MetricExclusion {
+  capturedAtMs: number
+  deviceId: string | null
+  metric: string
+  reason: string
+  rawValue: string | null
+  referenceValue: string | null
+  contextJson: string | null
+}
+
 export interface HistoryRange {
   boardSamples: TelemetrySample[]
   gpsSamples: HistoryGpsSample[]
   markers: HistoryMarker[]
+  exclusions: MetricExclusion[]
 }
 
 export interface TelemetrySummary {

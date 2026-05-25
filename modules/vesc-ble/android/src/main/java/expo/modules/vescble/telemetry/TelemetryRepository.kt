@@ -318,6 +318,7 @@ class TelemetryRepository private constructor(context: Context) {
       "boardSamples" to samples.map { it.state.toSampleMap(it.id) },
       "gpsSamples" to samples.toGpsSampleMaps(),
       "markers" to dao.getMarkers(query.fromMs, query.toMs, query.deviceId).map { it.toMap() },
+      "exclusions" to dao.getExclusions(query.fromMs, query.toMs, query.deviceId).map { it.toMap() },
     )
   }
 
@@ -840,6 +841,16 @@ private fun TelemetryMarkerEntity.toMap(): Map<String, Any?> = mapOf(
   "deviceName" to deviceName,
   "message" to message,
   "gapMs" to gapMs,
+)
+
+private fun MetricExclusionEntity.toMap(): Map<String, Any?> = mapOf(
+  "capturedAtMs" to capturedAtMs,
+  "deviceId" to deviceId.ifBlank { null },
+  "metric" to metric,
+  "reason" to reason,
+  "rawValue" to rawValue,
+  "referenceValue" to referenceValue,
+  "contextJson" to contextJson,
 )
 
 private fun DiagnosticEventEntity.toMap(): Map<String, Any?> = mapOf(
