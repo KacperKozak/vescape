@@ -45,6 +45,17 @@ Example:
 
 Use the slice number from the approved breakdown, not the GitHub issue number. Publish dependent issues sequentially so blocker references use real issue numbers.
 
+Include a `## Likely files` section in each implementation issue. List repo-relative paths that are probably useful starting points for an AFK agent, with one short reason per path:
+
+```markdown
+## Likely files
+
+- `src/tune/readConfig.ts` - existing tune config read flow
+- `modules/vesc-native/ios/VescNativeModule.swift` - native VESC bridge entrypoint
+```
+
+Treat these as navigational hints, not a complete file list or ownership boundary. Keep the section small, normally 3-8 paths. Use codebase evidence from local exploration; if the relevant files cannot be narrowed confidently, say what area to inspect first instead of inventing paths.
+
 ## App-area labels
 
 Use one or more app-area labels for filtering:
