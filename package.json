@@ -1,6 +1,6 @@
 {
   "name": "vibe-wheel",
-  "version": "0.40.0",
+  "version": "0.41.0",
   "private": true,
   "workspaces": [
     "modules/*"
@@ -22,7 +22,11 @@
     "build:release": "cd android && ./gradlew assembleRelease",
     "release": "bun run scripts/release.ts",
     "release:fix": "bun run scripts/release.ts --patch",
-    "knip": "knip"
+    "knip": "knip",
+    "posthog:recent": "bun run scripts/posthog.ts recent",
+    "posthog:events": "bun run scripts/posthog.ts events",
+    "posthog:distinct": "bun run scripts/posthog.ts distinct",
+    "posthog:query": "bun run scripts/posthog.ts query"
   },
   "dependencies": {
     "@rnmapbox/maps": "^10.3.0",

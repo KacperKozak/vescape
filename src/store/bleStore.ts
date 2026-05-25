@@ -243,6 +243,7 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
       currentStatus === 'connected' ||
       currentStatus === 'stale' ||
       currentStatus === 'reconnecting' ||
+      currentStatus === 'rescanning' ||
       currentStatus === 'disconnecting'
     ) {
       return

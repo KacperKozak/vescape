@@ -42,6 +42,9 @@ private const val MIN_LIVE_HISTORY_LIMIT_MINUTES = 1
 private const val MAX_LIVE_HISTORY_LIMIT_MINUTES = 50
 private const val TELEMETRY_STALE_MS = 2_500L
 private const val BOARD_READY_TIMEOUT_MS = 4_000L
+private const val GATT_CONNECT_TIMEOUT_MS = 4_000L
+private const val GATT_READY_TIMEOUT_MS = 4_000L
+private const val RECONNECT_SCAN_TIMEOUT_MS = 4_000L
 
 data class SessionConfig(
     val appBoardId: String?,
@@ -322,6 +325,7 @@ class VescForegroundService : Service() {
     private var isStoppingService = false
     private var autoReconnectRunnable: Runnable? = null
     private var reconnectScanCallback: ScanCallback? = null
+    private var reconnectScanTimeout: Runnable? = null
     private var activeConfigRead: ActiveConfigRead? = null
     private var activeConfigWrite: ActiveConfigWrite? = null
     private var configTimeoutRunnable: Runnable? = null
@@ -330,6 +334,7 @@ class VescForegroundService : Service() {
     private var telemetryParseFailedCount = 0
     private var lastSentCommand: Int? = null
     private var lastReceivedCommandByte: Int? = null
+    private var connectionLostMarkerAt: Long? = null
     private var generation = 0L
     private var liveHistoryLimitMinutes = requestedLiveHistoryLimitMinutes
     private val configChunkLength = 384
@@ -515,30 +520,40 @@ class VescForegroundService : Service() {
         stopReconnectScan()
         val device = bluetoothAdapter.getRemoteDevice(deviceId)
         gattClient.connect(device)
-        connectTimeout = Runnable {
-            if (pendingConnect == start) {
-                Log.w(
-                    VESC_SESSION_TAG,
-                    "connect timeout device=$deviceId attempt=$connectAttempt status=$boardStatus canId=$canId",
-                )
-                failStart(start, "CONNECT_TIMEOUT", "Timed out connecting to board")
-            }
-        }
-        mainHandler.postDelayed(connectTimeout!!, 12_000)
+        armConnectPhaseTimeout(start, "gatt_connect", GATT_CONNECT_TIMEOUT_MS)
         Log.d(
             VESC_SESSION_TAG,
             "connect start device=$deviceId attempt=$connectAttempt autoReconnect=${start.boardConfig.autoReconnect}",
+        )
+        recordLocalDiagnostic(
+            "ble_connect_started",
+            start.boardConfig,
+            "connect",
+            mapOf("message" to "BLE connect started"),
         )
     }
 
     private val gattListener = object : VescGattListener {
         override fun onGattConnected() {
             Log.d(VESC_SESSION_TAG, "connect phase: gatt connected")
+            recordLocalDiagnostic(
+                "gatt_connected",
+                pendingConnect?.boardConfig ?: boardConfig,
+                "connect",
+                mapOf("message" to "GATT connected"),
+            )
             setStatus(BoardPhase.Discovering)
+            pendingConnect?.let { armConnectPhaseTimeout(it, "gatt_ready", GATT_READY_TIMEOUT_MS) }
         }
 
         override fun onGattSubscribing() {
             Log.d(VESC_SESSION_TAG, "connect phase: subscribing")
+            recordLocalDiagnostic(
+                "gatt_subscribing",
+                pendingConnect?.boardConfig ?: boardConfig,
+                "connect",
+                mapOf("message" to "GATT subscribing"),
+            )
             setStatus(BoardPhase.Subscribing)
         }
 
@@ -608,6 +623,12 @@ class VescForegroundService : Service() {
 
         override fun onGattReady() {
             Log.d(VESC_SESSION_TAG, "connect phase: gatt ready")
+            recordLocalDiagnostic(
+                "gatt_ready",
+                pendingConnect?.boardConfig ?: boardConfig,
+                "connect",
+                mapOf("message" to "GATT ready"),
+            )
             resolveBleConnect()
         }
 
@@ -628,6 +649,12 @@ class VescForegroundService : Service() {
         pendingConnect = null
         boardStatus = BoardPhase.WaitingForTelemetry
         boardError = null
+        recordLocalDiagnostic(
+            "waiting_for_telemetry_started",
+            start.boardConfig,
+            "connect",
+            mapOf("message" to "Waiting for board telemetry"),
+        )
         emitState()
         showNotification("Discovering board...")
         start.onSuccess()
@@ -1255,6 +1282,15 @@ class VescForegroundService : Service() {
                 boardConfig?.autoReconnect == true &&
                 telemetry == null
             ) {
+                recordLocalDiagnostic(
+                    "board_ready_timeout",
+                    session,
+                    "connect",
+                    mapOf(
+                        "message" to "Board telemetry unavailable before ready timeout",
+                        "timeout_ms" to BOARD_READY_TIMEOUT_MS,
+                    ),
+                )
                 scheduleAutoReconnect(session, null, "board telemetry unavailable")
             }
         }
@@ -1270,7 +1306,14 @@ class VescForegroundService : Service() {
         cancelBoardReadyTimeout()
         if (boardStatus == BoardPhase.Connected) return
         autoReconnectAttempt = 0
+        connectionLostMarkerAt = null
         boardStatus = BoardPhase.Connected
+        recordLocalDiagnostic(
+            "board_ready",
+            boardConfig,
+            "connect",
+            mapOf("message" to "Board telemetry received"),
+        )
         val autoRecording = try {
             kotlinx.coroutines.runBlocking {
                 AppDataRepository.get(applicationContext).getTypedSettings().autoRecording
@@ -1358,6 +1401,7 @@ class VescForegroundService : Service() {
         telemetryStore?.flushBlocking()
         telemetryStore = null
         pendingConnect = null
+        connectionLostMarkerAt = null
         canId = null
         fwVersionString = null
         telemetry = null
@@ -1414,6 +1458,18 @@ class VescForegroundService : Service() {
     private fun scheduleAutoReconnect(session: SessionConfig, gattStatus: Int?, reason: String) {
         if (!session.autoReconnect || isStoppingService) return
         flushTelemetryDiagnostics("reconnect")
+        recordConnectionLostMarker(session, reason)
+        recordLocalDiagnostic(
+            "reconnect_scheduled",
+            session,
+            "connect",
+            mapOf(
+                "message" to reason,
+                "reason" to reason,
+                "gatt_status" to gattStatus,
+                "auto_reconnect_next_attempt" to (autoReconnectAttempt + 1),
+            ),
+        )
         if (reason.contains("telemetry", ignoreCase = true)) {
             captureDiagnostic(
                 if (reason.contains("stale", ignoreCase = true)) "telemetry_stale" else "telemetry_unavailable",
@@ -1471,18 +1527,33 @@ class VescForegroundService : Service() {
         val callback = object : ScanCallback() {
             override fun onScanResult(callbackType: Int, result: ScanResult) {
                 if (!result.device.address.equals(targetId, ignoreCase = true)) return
+                recordLocalDiagnostic(
+                    "reconnect_scan_found",
+                    session,
+                    "connect",
+                    mapOf(
+                        "message" to "Reconnect target found",
+                        "scan_result_address" to result.device.address,
+                        "rssi" to result.rssi,
+                    ),
+                )
                 stopReconnectScan()
-                if (boardConfig?.autoReconnect == true && boardStatus == BoardPhase.Reconnecting) {
-                    connectAttempt = 0
-                    boardStatus = BoardPhase.Connecting
-                    boardError = null
-                    emitState()
-                    startBleSession(PendingStart(session, onSuccess = {}, onError = { _, _ -> }))
+                if (boardConfig?.autoReconnect == true && boardStatus == BoardPhase.Rescanning) {
+                    startReconnectDirectConnect(session, "scan_found")
                 }
             }
 
             override fun onScanFailed(errorCode: Int) {
                 Log.w(VESC_SESSION_TAG, "Reconnect scan failed errorCode=$errorCode")
+                recordLocalDiagnostic(
+                    "reconnect_scan_failed",
+                    session,
+                    "connect",
+                    mapOf(
+                        "message" to "Reconnect scan failed",
+                        "error_code" to errorCode,
+                    ),
+                )
                 stopReconnectScan()
                 scheduleAutoReconnect(session, null, "reconnect scan failed ($errorCode)")
             }
@@ -1499,14 +1570,34 @@ class VescForegroundService : Service() {
                 callback,
             )
             Log.d(VESC_SESSION_TAG, "Reconnect scan started for $targetId")
+            boardStatus = BoardPhase.Rescanning
+            emitState()
+            recordLocalDiagnostic(
+                "reconnect_scan_started",
+                session,
+                "connect",
+                mapOf("message" to "Reconnect scan started"),
+            )
+            armReconnectScanTimeout(session, callback)
         } catch (e: Exception) {
             reconnectScanCallback = null
             Log.w(VESC_SESSION_TAG, "Reconnect scan start failed: ${e.message}")
+            recordLocalDiagnostic(
+                "reconnect_scan_start_failed",
+                session,
+                "connect",
+                mapOf(
+                    "message" to "Reconnect scan start failed",
+                    "error_message" to e.message,
+                ),
+            )
             scheduleAutoReconnect(session, null, "reconnect scan start failed")
         }
     }
 
     private fun stopReconnectScan() {
+        reconnectScanTimeout?.let { mainHandler.removeCallbacks(it) }
+        reconnectScanTimeout = null
         val callback = reconnectScanCallback ?: return
         reconnectScanCallback = null
         try {
@@ -1514,6 +1605,47 @@ class VescForegroundService : Service() {
         } catch (e: Exception) {
             Log.w(VESC_SESSION_TAG, "Reconnect scan stop failed: ${e.message}")
         }
+    }
+
+    private fun armReconnectScanTimeout(session: SessionConfig, callback: ScanCallback) {
+        reconnectScanTimeout?.let { mainHandler.removeCallbacks(it) }
+        reconnectScanTimeout = Runnable {
+            reconnectScanTimeout = null
+            if (
+                reconnectScanCallback == callback &&
+                boardConfig?.autoReconnect == true &&
+                boardStatus == BoardPhase.Rescanning
+            ) {
+                recordLocalDiagnostic(
+                    "reconnect_scan_timeout",
+                    session,
+                    "connect",
+                    mapOf(
+                        "message" to "Reconnect scan timed out",
+                        "timeout_ms" to RECONNECT_SCAN_TIMEOUT_MS,
+                    ),
+                )
+                stopReconnectScan()
+                startReconnectDirectConnect(session, "scan_timeout")
+            }
+        }
+        mainHandler.postDelayed(reconnectScanTimeout!!, RECONNECT_SCAN_TIMEOUT_MS)
+    }
+
+    private fun startReconnectDirectConnect(session: SessionConfig, reason: String) {
+        recordLocalDiagnostic(
+            "reconnect_direct_connect_started",
+            session,
+            "connect",
+            mapOf(
+                "message" to "Reconnect direct connect started",
+                "reason" to reason,
+            ),
+        )
+        connectAttempt = 0
+        boardError = null
+        setStatus(BoardPhase.Connecting)
+        startBleSession(PendingStart(session, onSuccess = {}, onError = { _, _ -> }))
     }
 
     private fun setError(message: String) {
@@ -1763,6 +1895,33 @@ class VescForegroundService : Service() {
         connectTimeout = null
     }
 
+    private fun armConnectPhaseTimeout(start: PendingStart, phase: String, timeoutMs: Long) {
+        cancelConnectTimeout()
+        val startedAt = System.currentTimeMillis()
+        connectTimeout = Runnable {
+            if (pendingConnect == start) {
+                val elapsedMs = System.currentTimeMillis() - startedAt
+                Log.w(
+                    VESC_SESSION_TAG,
+                    "connect phase timeout phase=$phase device=${start.boardConfig.deviceId} attempt=$connectAttempt elapsedMs=$elapsedMs status=$boardStatus canId=$canId",
+                )
+                recordLocalDiagnostic(
+                    "connect_phase_timeout",
+                    start.boardConfig,
+                    "connect",
+                    mapOf(
+                        "message" to "BLE connect phase timed out",
+                        "connect_phase" to phase,
+                        "elapsed_ms" to elapsedMs,
+                        "timeout_ms" to timeoutMs,
+                    ),
+                )
+                failStart(start, "CONNECT_TIMEOUT", "Timed out connecting to board")
+            }
+        }
+        mainHandler.postDelayed(connectTimeout!!, timeoutMs)
+    }
+
     private fun formatNotificationText(values: RefloatTelemetry): String {
         if (values.hasFault) return "Fault ${values.faultCode}"
         val dutyPercent = if (abs(values.dutyCycle) <= 0.01) 0.0 else values.dutyCycle * 100.0
@@ -1812,7 +1971,34 @@ class VescForegroundService : Service() {
     }
 
     private fun captureDiagnostic(eventName: String, properties: Map<String, Any?>) {
+        TelemetryRepository.get(applicationContext).recordDiagnosticEvent(eventName, properties)
         DiagnosticReporter.get(this).capture(eventName, properties)
+    }
+
+    private fun recordLocalDiagnostic(
+        eventName: String,
+        session: SessionConfig?,
+        operation: String,
+        properties: Map<String, Any?> = emptyMap(),
+    ) {
+        TelemetryRepository.get(applicationContext).recordDiagnosticEvent(
+            eventName,
+            diagnosticProperties(session, operation) + properties,
+        )
+    }
+
+    private fun recordConnectionLostMarker(session: SessionConfig, reason: String) {
+        val store = telemetryStore ?: return
+        val markerAt = lastTelemetryAt.takeIf { it > 0L } ?: return
+        if (connectionLostMarkerAt == markerAt) return
+        connectionLostMarkerAt = markerAt
+        store.recordMarker(
+            type = "connection_lost",
+            deviceId = session.deviceId,
+            deviceName = session.deviceName,
+            message = reason,
+            occurredAtMs = markerAt,
+        )
     }
 
     private fun diagnosticProperties(session: SessionConfig?, operation: String): Map<String, Any?> =

@@ -1,7 +1,13 @@
 import { ScrollView, StyleSheet } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
-import { ChartLineUpIcon, SpeakerHighIcon, SwatchesIcon, ToolboxIcon } from 'phosphor-react-native'
+import {
+  ChartLineUpIcon,
+  ListIcon,
+  SpeakerHighIcon,
+  SwatchesIcon,
+  ToolboxIcon,
+} from 'phosphor-react-native'
 
 import { routes } from '@/navigation/routes'
 import { SettingsCard } from '@/components/settings/SettingsCard'
@@ -23,9 +29,15 @@ const devPages = [
   },
   {
     label: 'Diagnostic',
-    hint: 'PostHog status and manual diagnostic events',
+    hint: 'PostHog status and manual events',
     route: routes.settingsDiagnostic,
     icon: ChartLineUpIcon,
+  },
+  {
+    label: 'Event log',
+    hint: 'Browse locally persisted diagnostic events',
+    route: routes.settingsDiagnosticEvents,
+    icon: ListIcon,
   },
   {
     label: 'Other',

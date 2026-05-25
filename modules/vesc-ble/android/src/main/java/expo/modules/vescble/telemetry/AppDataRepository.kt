@@ -80,7 +80,6 @@ class AppDataRepository private constructor(private val context: Context) {
       lastGpsLatitude = opt("lastGpsLatitude") { (it as? Number)?.toDouble() },
       lastGpsLongitude = opt("lastGpsLongitude") { (it as? Number)?.toDouble() },
       movingSpeedThresholdKmh = req("movingSpeedThresholdKmh", 3.0) { (it as? Number)?.toDouble() },
-      rainRadarEnabled = req("rainRadarEnabled", false) { it as? Boolean },
     )
 
     if (badKeys.isNotEmpty()) {
@@ -104,7 +103,6 @@ class AppDataRepository private constructor(private val context: Context) {
       "lastGpsLongitude" -> (value as? Number)?.toDouble()
       "movingSpeedThresholdKmh", "avgSpeedCutoffKmh", "movingAvgSpeedThresholdKmh" ->
         ((value as? Number)?.toDouble() ?: return@withContext).coerceAtLeast(0.0)
-      "rainRadarEnabled" -> value as? Boolean ?: return@withContext
       else -> return@withContext
     }
     val normalizedKey = when (key) {
@@ -120,7 +118,6 @@ class AppDataRepository private constructor(private val context: Context) {
         "lastGpsLatitude" -> d.lastGpsLatitude
         "lastGpsLongitude" -> d.lastGpsLongitude
         "movingSpeedThresholdKmh" -> d.movingSpeedThresholdKmh
-        "rainRadarEnabled" -> d.rainRadarEnabled
         else -> null
       }
     }
@@ -290,7 +287,6 @@ fun AppSettings.toMap(): Map<String, Any?> = mapOf(
   "lastGpsLatitude" to lastGpsLatitude,
   "lastGpsLongitude" to lastGpsLongitude,
   "movingSpeedThresholdKmh" to movingSpeedThresholdKmh,
-  "rainRadarEnabled" to rainRadarEnabled,
 )
 
 private fun encodeSettingJson(value: Any?): String {

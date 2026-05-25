@@ -15,6 +15,9 @@ interface TelemetryDao {
   @Insert
   suspend fun insertMarkers(markers: List<TelemetryMarkerEntity>)
 
+  @Insert
+  suspend fun insertDiagnosticEvent(event: DiagnosticEventEntity): Long
+
   @Insert(onConflict = OnConflictStrategy.IGNORE)
   suspend fun insertBucket(bucket: TelemetryMinuteBucketEntity): Long
 
@@ -83,6 +86,23 @@ interface TelemetryDao {
 
   @Query(
     """
+    SELECT * FROM diagnostic_events
+    WHERE occurred_at_ms >= :fromMs
+      AND occurred_at_ms <= :toMs
+      AND (:deviceId IS NULL OR device_id = :deviceId)
+    ORDER BY occurred_at_ms DESC
+    LIMIT :limit
+    """,
+  )
+  suspend fun getDiagnosticEvents(
+    fromMs: Long,
+    toMs: Long,
+    deviceId: String?,
+    limit: Int,
+  ): List<DiagnosticEventEntity>
+
+  @Query(
+    """
     SELECT * FROM telemetry_frames
     WHERE captured_at_ms <= :fromMs
       AND (:deviceId IS NULL OR device_id = :deviceId)
@@ -130,11 +150,15 @@ interface TelemetryDao {
   @Query("DELETE FROM telemetry_minute_buckets WHERE bucket_start_ms < :beforeMs")
   suspend fun deleteBucketsBefore(beforeMs: Long): Int
 
+  @Query("DELETE FROM diagnostic_events WHERE occurred_at_ms < :beforeMs")
+  suspend fun deleteDiagnosticEventsBefore(beforeMs: Long): Int
+
   @Transaction
   suspend fun deleteBefore(beforeMs: Long): Int {
     val frames = deleteFramesBefore(beforeMs)
     deleteMarkersBefore(beforeMs)
     deleteBucketsBefore(beforeMs)
+    deleteDiagnosticEventsBefore(beforeMs)
     return frames
   }
 
@@ -191,11 +215,15 @@ interface TelemetryDao {
   @Query("DELETE FROM telemetry_minute_buckets")
   suspend fun clearBuckets()
 
+  @Query("DELETE FROM diagnostic_events")
+  suspend fun clearDiagnosticEvents()
+
   @Transaction
   suspend fun clearAll() {
     clearFrames()
     clearMarkers()
     clearBuckets()
+    clearDiagnosticEvents()
   }
 
   @Query("SELECT * FROM boards ORDER BY is_starred DESC, created_at ASC")

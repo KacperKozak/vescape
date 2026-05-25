@@ -3,6 +3,7 @@ package expo.modules.vescble.telemetry
 import android.content.Context
 import android.os.SystemClock
 import android.util.Log
+import org.json.JSONObject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -90,10 +91,12 @@ class TelemetryRepository private constructor(context: Context) {
     deviceName: String?,
     message: String? = null,
     gapMs: Long? = null,
+    occurredAtMs: Long = System.currentTimeMillis(),
+    elapsedRealtimeMs: Long = SystemClock.elapsedRealtime(),
   ) {
     val marker = TelemetryMarkerEntity(
-      occurredAtMs = System.currentTimeMillis(),
-      elapsedRealtimeMs = SystemClock.elapsedRealtime(),
+      occurredAtMs = occurredAtMs,
+      elapsedRealtimeMs = elapsedRealtimeMs,
       type = type,
       deviceId = deviceId,
       deviceName = deviceName,
@@ -103,6 +106,28 @@ class TelemetryRepository private constructor(context: Context) {
     synchronized(lock) {
       pendingMarkers.addLast(marker)
       scheduleFlushLocked()
+    }
+  }
+
+  fun recordDiagnosticEvent(eventName: String, properties: Map<String, Any?> = emptyMap()) {
+    val now = System.currentTimeMillis()
+    val event = DiagnosticEventEntity(
+      occurredAtMs = now,
+      elapsedRealtimeMs = SystemClock.elapsedRealtime(),
+      eventName = eventName,
+      operation = properties["operation"] as? String,
+      phase = properties["phase"] as? String,
+      deviceId = properties["ble_id"] as? String,
+      deviceName = properties["board_nickname"] as? String,
+      message = properties["message"] as? String,
+      propertiesJson = JSONObject(sanitizeDiagnosticProperties(properties)).toString(),
+    )
+    scope.launch {
+      try {
+        dao.insertDiagnosticEvent(event)
+      } catch (e: Exception) {
+        Log.w(TAG, "Diagnostic event write failed: ${e.message}")
+      }
     }
   }
 
@@ -277,6 +302,15 @@ class TelemetryRepository private constructor(context: Context) {
     )
   }
 
+  suspend fun getDiagnosticEvents(options: Map<String, Any?>): List<Map<String, Any?>> = withContext(Dispatchers.IO) {
+    val query = DiagnosticQueryOptions.from(options)
+    dao.getDiagnosticEvents(query.fromMs, query.toMs, query.deviceId, query.limit).map { it.toMap() }
+  }
+
+  suspend fun clearDiagnosticEvents() = withContext(Dispatchers.IO) {
+    dao.clearDiagnosticEvents()
+  }
+
   suspend fun deleteBefore(beforeMs: Long): Int = withContext(Dispatchers.IO) {
     dao.deleteBefore(beforeMs)
   }
@@ -372,6 +406,25 @@ private data class HistoryQueryOptions(
         beforeMs = options.long("cursorBeforeMs") ?: toMs,
         deviceId = options["deviceId"] as? String,
         limit = (options.int("limit") ?: DEFAULT_HISTORY_LIMIT).coerceIn(1, 500),
+      )
+    }
+  }
+}
+
+private data class DiagnosticQueryOptions(
+  val fromMs: Long,
+  val toMs: Long,
+  val deviceId: String?,
+  val limit: Int,
+) {
+  companion object {
+    fun from(options: Map<String, Any?>): DiagnosticQueryOptions {
+      val toMs = options.long("toMs") ?: System.currentTimeMillis()
+      return DiagnosticQueryOptions(
+        fromMs = options.long("fromMs") ?: 0L,
+        toMs = toMs,
+        deviceId = options["deviceId"] as? String,
+        limit = (options.int("limit") ?: 200).coerceIn(1, 1_000),
       )
     }
   }
@@ -692,6 +745,26 @@ private fun TelemetryMarkerEntity.toMap(): Map<String, Any?> = mapOf(
   "message" to message,
   "gapMs" to gapMs,
 )
+
+private fun DiagnosticEventEntity.toMap(): Map<String, Any?> = mapOf(
+  "id" to id,
+  "occurredAtMs" to occurredAtMs,
+  "eventName" to eventName,
+  "operation" to operation,
+  "phase" to phase,
+  "deviceId" to deviceId,
+  "deviceName" to deviceName,
+  "message" to message,
+  "propertiesJson" to propertiesJson,
+)
+
+private fun sanitizeDiagnosticProperties(properties: Map<String, Any?>): Map<String, Any?> =
+  properties.mapValues { (_, value) ->
+    when (value) {
+      is String, is Number, is Boolean, null -> value
+      else -> value.toString()
+    }
+  }
 
 private fun Map<String, Any?>.long(key: String): Long? = (this[key] as? Number)?.toLong()
 

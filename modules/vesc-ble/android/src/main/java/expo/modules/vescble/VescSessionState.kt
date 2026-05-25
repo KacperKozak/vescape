@@ -9,6 +9,7 @@ internal enum class BoardPhase(val wireValue: String) {
     Connected("connected"),
     Stale("stale"),
     Reconnecting("reconnecting"),
+    Rescanning("rescanning"),
     Disconnecting("disconnecting"),
     Error("error"),
 }

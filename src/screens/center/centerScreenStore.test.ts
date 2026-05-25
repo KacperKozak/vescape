@@ -13,7 +13,7 @@ describe('centerScreenStore', () => {
     expect(state.mode).toBe('telemetry')
     expect(state.historySheetVisible).toBe(false)
     expect(state.mapStyleKey).toBe('onedark')
-    expect(state.rotationLocked).toBe(false)
+    expect(state.rotationLocked).toBe(true)
     expect(state.perspectiveEnabled).toBe(true)
     expect(state.seekTimeMs).toBe(null)
   })

@@ -28,6 +28,10 @@ _Avoid_: Session recording, raw recording
 The persisted list of past ride recordings and their derived samples, routes, markers, and summaries.
 _Avoid_: Playback, logs
 
+**Ride History Marker**:
+A map-visible point in Ride History that explains a ride boundary, connection loss, interruption, or notable recording condition.
+_Avoid_: Telemetry marker, debug marker, log point
+
 **Tune Snapshot**:
 A read-only view of the board's current Refloat tuning configuration decoded from the board's schema and binary config.
 _Avoid_: Tune cache, settings dump
@@ -61,6 +65,7 @@ _Avoid_: Error log, debug session, crash report
 - A **Board** produces **Telemetry Samples** while connected.
 - A **GPS Fix** may be associated with live map state, but only GPS fixes captured alongside **Telemetry Samples** contribute to a **Ride Recording**.
 - A **Ride Recording** becomes part of **Ride History**.
+- A **Ride History Marker** belongs to **Ride History** and may explain where a **Ride Recording** lost or regained board data.
 - A **Tune Snapshot** belongs to the currently connected **Board** and is read-only.
 - A **Tune Profile** belongs to a **Board** and stores semantic field values independently of firmware schema.
 - A **Tune History Entry** captures the previous state of a **Tune Profile** before each explicit save.
@@ -84,3 +89,4 @@ _Avoid_: Error log, debug session, crash report
 - "device" may mean the phone BLE peripheral, the saved app board, or the motor controller; resolved term: use **Board** for the saved rideable device.
 - "session" may mean a BLE connection, raw debug capture, or persisted ride; resolved term: use **Ride Recording** for persisted ride capture and avoid using "session" without a qualifier.
 - "error" may mean crash, handled failure, UI message, or diagnostic clue; resolved term: use **Diagnostic Event** for app-observed abnormal conditions worth reviewing.
+- "telemetry marker" names the storage table, but map-visible history annotations are **Ride History Markers**.

@@ -33,6 +33,10 @@ export default function RootLayout() {
           <Stack.Screen name={stackScreens.settingsDev} options={{ title: 'Dev' }} />
           <Stack.Screen name={stackScreens.settingsComponents} options={{ title: 'Components' }} />
           <Stack.Screen name={stackScreens.settingsDiagnostic} options={{ title: 'Diagnostic' }} />
+          <Stack.Screen
+            name={stackScreens.settingsDiagnosticEvents}
+            options={{ title: 'Event log' }}
+          />
           <Stack.Screen name={stackScreens.settingsOther} options={{ title: 'Other' }} />
           <Stack.Screen
             name={stackScreens.settingsSoundPlayground}

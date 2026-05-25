@@ -9,7 +9,6 @@ const DEFAULTS: AppSettings = {
   lastGpsLatitude: null,
   lastGpsLongitude: null,
   movingSpeedThresholdKmh: 3,
-  rainRadarEnabled: true,
 }
 
 interface SettingsState extends AppSettings {

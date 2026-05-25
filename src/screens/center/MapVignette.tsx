@@ -27,15 +27,24 @@ export function MapVignette({
   const rectTopPct = Math.max(5, panelTopPct - 28)
   const bottomY = `${rectTopPct}%`
   const bottomH = `${100 - rectTopPct}%`
+  const weatherId = `${idPrefix}-weather-radial`
+  const weatherTopId = `${idPrefix}-weather-top`
+  const weatherBottomId = `${idPrefix}-weather-bottom`
   const standardStyle = useAnimatedStyle(
     () => ({
-      opacity: withTiming(mode === 'history' ? 0 : 1, { duration: 180 }),
+      opacity: withTiming(mode === 'history' || mode === 'weather' ? 0 : 1, { duration: 180 }),
     }),
     [mode],
   )
   const historyStyle = useAnimatedStyle(
     () => ({
       opacity: withTiming(mode === 'history' ? 1 : 0, { duration: 180 }),
+    }),
+    [mode],
+  )
+  const weatherStyle = useAnimatedStyle(
+    () => ({
+      opacity: withTiming(mode === 'weather' ? 1 : 0, { duration: 180 }),
     }),
     [mode],
   )
@@ -91,6 +100,31 @@ export function MapVignette({
           <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${historyRadialId})`} />
           <Rect x="0" y="0" width="100%" height="38%" fill={`url(#${historyTopId})`} />
           <Rect x="0" y={bottomY} width="100%" height={bottomH} fill={`url(#${historyBottomId})`} />
+        </Svg>
+      </Animated.View>
+      <Animated.View style={[styles.layer, weatherStyle]}>
+        <Svg width="100%" height="100%" preserveAspectRatio="none">
+          <Defs>
+            <RadialGradient id={weatherId} cx="50%" cy="50%" rx="68%" ry="62%">
+              <Stop offset="0%" stopColor="#0f172a" stopOpacity="0" />
+              <Stop offset="40%" stopColor="#0f172a" stopOpacity="0.08" />
+              <Stop offset="68%" stopColor="#0f172a" stopOpacity="0.28" />
+              <Stop offset="100%" stopColor="#0f172a" stopOpacity="0.55" />
+            </RadialGradient>
+            <LinearGradient id={weatherTopId} x1="0%" y1="0%" x2="0%" y2="100%">
+              <Stop offset="0%" stopColor="#0f172a" stopOpacity="0.92" />
+              <Stop offset="55%" stopColor="#0f172a" stopOpacity="0.45" />
+              <Stop offset="100%" stopColor="#0f172a" stopOpacity="0" />
+            </LinearGradient>
+            <LinearGradient id={weatherBottomId} x1="0%" y1="100%" x2="0%" y2="0%">
+              <Stop offset="0%" stopColor="#0f172a" stopOpacity="0.88" />
+              <Stop offset="55%" stopColor="#0f172a" stopOpacity="0.50" />
+              <Stop offset="100%" stopColor="#0f172a" stopOpacity="0" />
+            </LinearGradient>
+          </Defs>
+          <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${weatherId})`} />
+          <Rect x="0" y="0" width="100%" height="30%" fill={`url(#${weatherTopId})`} />
+          <Rect x="0" y="78%" width="100%" height="22%" fill={`url(#${weatherBottomId})`} />
         </Svg>
       </Animated.View>
     </View>

@@ -164,7 +164,6 @@ Key-value override rows. Native owns schema, defaults, and validation. Missing k
 | lastGpsLatitude         | Double?  | null    |                                                              |
 | lastGpsLongitude        | Double?  | null    |                                                              |
 | movingSpeedThresholdKmh | Double   | 3.0     | cutoff for moving-average speed. JS aliases: `avgSpeedCutoffKmh`, `movingAvgSpeedThresholdKmh` |
-| rainRadarEnabled        | Boolean  | false   |                                                              |
 
 Writing a default-equivalent value deletes the override row.
 

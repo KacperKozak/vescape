@@ -184,6 +184,34 @@ data class TelemetryMarkerEntity(
 )
 
 @Entity(
+  tableName = "diagnostic_events",
+  indices = [
+    Index(value = ["occurred_at_ms"]),
+    Index(value = ["event_name"]),
+    Index(value = ["device_id", "occurred_at_ms"]),
+  ],
+)
+data class DiagnosticEventEntity(
+  @androidx.room.PrimaryKey(autoGenerate = true)
+  val id: Long = 0,
+  @ColumnInfo(name = "occurred_at_ms")
+  val occurredAtMs: Long,
+  @ColumnInfo(name = "elapsed_realtime_ms")
+  val elapsedRealtimeMs: Long,
+  @ColumnInfo(name = "event_name")
+  val eventName: String,
+  val operation: String?,
+  val phase: String?,
+  @ColumnInfo(name = "device_id")
+  val deviceId: String?,
+  @ColumnInfo(name = "device_name")
+  val deviceName: String?,
+  val message: String?,
+  @ColumnInfo(name = "properties_json")
+  val propertiesJson: String,
+)
+
+@Entity(
   tableName = "boards",
   indices = [
     Index(value = ["created_at"]),
@@ -248,7 +276,6 @@ data class AppSettings(
   val lastGpsLatitude: Double? = null,
   val lastGpsLongitude: Double? = null,
   val movingSpeedThresholdKmh: Double = 3.0,
-  val rainRadarEnabled: Boolean = false,
 )
 
 @Entity(

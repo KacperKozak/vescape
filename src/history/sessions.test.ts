@@ -82,6 +82,19 @@ test('keeps connected boundary in same grouped ride when gap small', () => {
   expect(sessions).toHaveLength(1)
 })
 
+test('keeps connection_lost boundary in same grouped ride when gap small', () => {
+  const sessions = groupHistorySessions([
+    block({
+      id: 'new',
+      startAtMs: 240_000,
+      endAtMs: 300_000,
+      boundaryBefore: 'connection_lost',
+    }),
+    block({ id: 'old', startAtMs: 120_000, endAtMs: 180_000 }),
+  ])
+  expect(sessions).toHaveLength(1)
+})
+
 test('distance prefers distanceDelta sum', () => {
   const sessions = groupHistorySessions([
     block({

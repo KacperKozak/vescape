@@ -242,10 +242,10 @@ Presets: beep, urgent, notify (single); tick, tick_hard, gamma (geiger)
 
 ```ts
 { liveHistoryLimit, autoConnect, autoRecording, selectedBoardId?,
-  lastGpsLatitude?, lastGpsLongitude?, movingSpeedThresholdKmh, rainRadarEnabled }
+  lastGpsLatitude?, lastGpsLongitude?, movingSpeedThresholdKmh }
 ```
 
-Valid keys: `liveHistoryLimit`, `autoConnect`, `autoRecording`, `selectedBoardId`, `lastGpsLatitude`, `lastGpsLongitude`, `movingSpeedThresholdKmh` (aliases: `avgSpeedCutoffKmh`, `movingAvgSpeedThresholdKmh`), `rainRadarEnabled`
+Valid keys: `liveHistoryLimit`, `autoConnect`, `autoRecording`, `selectedBoardId`, `lastGpsLatitude`, `lastGpsLongitude`, `movingSpeedThresholdKmh` (aliases: `avgSpeedCutoffKmh`, `movingAvgSpeedThresholdKmh`)
 
 Writing default-equivalent value deletes the override row. Unknown keys and type mismatches are silently ignored.
 

@@ -13,7 +13,6 @@ import {
   TagIcon,
   AndroidLogoIcon,
   AppleLogoIcon,
-  CloudRainIcon,
 } from 'phosphor-react-native'
 import { useShallow } from 'zustand/react/shallow'
 import { getDatabaseSizeBytes } from 'vesc-ble'
@@ -35,23 +34,16 @@ function formatBytes(bytes: number): string {
 }
 
 export default function SettingsScreen() {
-  const {
-    liveHistoryLimit,
-    autoConnect,
-    autoRecording,
-    movingSpeedThresholdKmh,
-    rainRadarEnabled,
-    set,
-  } = useSettingsStore(
-    useShallow((s) => ({
-      liveHistoryLimit: s.liveHistoryLimit,
-      autoConnect: s.autoConnect,
-      autoRecording: s.autoRecording,
-      movingSpeedThresholdKmh: s.movingSpeedThresholdKmh,
-      rainRadarEnabled: s.rainRadarEnabled,
-      set: s.set,
-    })),
-  )
+  const { liveHistoryLimit, autoConnect, autoRecording, movingSpeedThresholdKmh, set } =
+    useSettingsStore(
+      useShallow((s) => ({
+        liveHistoryLimit: s.liveHistoryLimit,
+        autoConnect: s.autoConnect,
+        autoRecording: s.autoRecording,
+        movingSpeedThresholdKmh: s.movingSpeedThresholdKmh,
+        set: s.set,
+      })),
+    )
   const [dbSize, setDbSize] = useState<number | null>(null)
 
   useEffect(() => {
@@ -163,24 +155,6 @@ export default function SettingsScreen() {
                 onValueChange={(v) => void set('autoRecording', v)}
                 trackColor={{ false: '#334155', true: '#1d4ed8' }}
                 thumbColor={autoRecording ? '#3b82f6' : '#64748b'}
-              />
-            }
-          />
-        </SettingsCard>
-
-        <SettingsSectionTitle>Map</SettingsSectionTitle>
-
-        <SettingsCard>
-          <SettingsRow
-            icon={CloudRainIcon}
-            label="Rain radar"
-            hint="Show RainViewer radar overlay at city zoom"
-            right={
-              <Switch
-                value={rainRadarEnabled}
-                onValueChange={(v) => void set('rainRadarEnabled', v)}
-                trackColor={{ false: '#334155', true: '#1d4ed8' }}
-                thumbColor={rainRadarEnabled ? '#3b82f6' : '#64748b'}
               />
             }
           />

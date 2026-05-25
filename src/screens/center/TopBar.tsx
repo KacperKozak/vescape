@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import {
   CaretDownIcon,
+  DropIcon,
   GearSixIcon,
   PencilSimpleIcon,
   PowerIcon,
@@ -14,6 +15,7 @@ import { BoardSelectorSheet } from '@/components/BoardSelectorSheet'
 import { IconButton } from '@/components/IconButton'
 import { routes } from '@/navigation/routes'
 import type { Board } from '@/store/boardStore'
+import { useWeatherStore } from '@/store/weatherStore'
 import { theme } from '@/constants/theme'
 
 interface TopBarProps {
@@ -26,6 +28,7 @@ interface TopBarProps {
   onAddBoard: () => void
   onToggleRecordDebug: () => void
   onDisconnect: () => void
+  onWeatherPress?: () => void
 }
 
 export function TopBar({
@@ -38,15 +41,22 @@ export function TopBar({
   onAddBoard,
   onToggleRecordDebug,
   onDisconnect,
+  onWeatherPress,
 }: TopBarProps) {
   const insets = useSafeAreaInsets()
   const pillRef = useRef<View>(null)
   const [selectorOpen, setSelectorOpen] = useState(false)
 
+  const weatherIcon = useWeatherStore((s) => s.icon)
+  const weatherTemp = useWeatherStore((s) => s.temperature)
+  const weatherPrecip = useWeatherStore((s) => s.precipitationProbability)
+  const hasWeather = weatherIcon != null && weatherTemp != null
+
   const canDisconnect =
     bleStatus === 'connected' ||
     bleStatus === 'stale' ||
     bleStatus === 'reconnecting' ||
+    bleStatus === 'rescanning' ||
     bleStatus === 'waiting_for_telemetry'
   const name = activeBoard?.name ?? 'No board'
   const statusColor =
@@ -96,6 +106,21 @@ export function TopBar({
           style={styles.iconRight}
         />
       </View>
+      {hasWeather && (
+        <Pressable style={styles.weatherRow} onPress={onWeatherPress}>
+          {(() => {
+            const WeatherIcon = weatherIcon
+            return <WeatherIcon size={13} color="#94a3b8" weight="duotone" />
+          })()}
+          <Text style={styles.weatherText}>{weatherTemp}°</Text>
+          {weatherPrecip != null && weatherPrecip > 0 && (
+            <>
+              <DropIcon size={11} color={theme.wheel.color} weight="duotone" />
+              <Text style={styles.weatherPrecip}>{weatherPrecip}%</Text>
+            </>
+          )}
+        </Pressable>
+      )}
 
       <BoardSelectorSheet
         visible={selectorOpen}
@@ -183,5 +208,22 @@ const styles = StyleSheet.create({
     height: 38,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  weatherRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  weatherText: {
+    color: '#94a3b8',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  weatherPrecip: {
+    color: theme.wheel.color,
+    fontSize: 11,
+    fontWeight: '600',
   },
 })

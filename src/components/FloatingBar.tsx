@@ -45,6 +45,7 @@ function canToggleRecording(status: string): boolean {
     status === 'connected' ||
     status === 'stale' ||
     status === 'reconnecting' ||
+    status === 'rescanning' ||
     status === 'waiting_for_telemetry'
   )
 }
@@ -72,6 +73,8 @@ function getStatusPill(
     }
   if (status === 'reconnecting')
     return { kind: 'spinner', text: 'Reconnecting…', color: '#3b82f6', onPress: onStopScan }
+  if (status === 'rescanning')
+    return { kind: 'spinner', text: 'Searching…', color: '#3b82f6', onPress: onStopScan }
   if (status === 'disconnecting')
     return { kind: 'spinner', text: 'Disconnecting…', color: '#3b82f6', onPress: onStopScan }
   if (status === 'connecting')

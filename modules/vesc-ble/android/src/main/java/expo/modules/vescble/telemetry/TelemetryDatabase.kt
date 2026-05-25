@@ -17,8 +17,9 @@ import androidx.sqlite.db.SupportSQLiteDatabase
     AppSettingEntity::class,
     TuneProfileEntity::class,
     TuneHistoryEntryEntity::class,
+    DiagnosticEventEntity::class,
   ],
-  version = 12,
+  version = 13,
   exportSchema = false,
 )
 abstract class TelemetryDatabase : RoomDatabase() {
@@ -138,6 +139,35 @@ abstract class TelemetryDatabase : RoomDatabase() {
       }
     }
 
+    private val MIGRATION_12_13 = object : Migration(12, 13) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+          """
+          CREATE TABLE IF NOT EXISTS diagnostic_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+            occurred_at_ms INTEGER NOT NULL,
+            elapsed_realtime_ms INTEGER NOT NULL,
+            event_name TEXT NOT NULL,
+            operation TEXT,
+            phase TEXT,
+            device_id TEXT,
+            device_name TEXT,
+            message TEXT,
+            properties_json TEXT NOT NULL
+          )
+          """.trimIndent(),
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_diagnostic_events_occurred_at_ms ON diagnostic_events(occurred_at_ms)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_diagnostic_events_event_name ON diagnostic_events(event_name)")
+        db.execSQL(
+          """
+          CREATE INDEX IF NOT EXISTS index_diagnostic_events_device_id_occurred_at_ms
+          ON diagnostic_events(device_id, occurred_at_ms)
+          """.trimIndent(),
+        )
+      }
+    }
+
     fun get(context: Context): TelemetryDatabase {
       return instance ?: synchronized(this) {
         instance ?: Room.databaseBuilder(
@@ -155,6 +185,7 @@ abstract class TelemetryDatabase : RoomDatabase() {
             MIGRATION_9_10,
             MIGRATION_10_11,
             MIGRATION_11_12,
+            MIGRATION_12_13,
           )
           .fallbackToDestructiveMigration(true)
           .addCallback(object : Callback() {

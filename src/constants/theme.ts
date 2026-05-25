@@ -74,6 +74,18 @@ export const theme = {
     text: '#2dd4bf', // teal-400
     border: '#0f766e', // teal-700
   },
+  /** Weather condition icons */
+  weather: {
+    sun: '#fbbf24', // amber-400
+    partly: '#f59e0b', // amber-500
+    moon: '#a78bfa', // violet-400
+    moonPartly: '#7c3aed', // violet-600
+    cloud: '#94a3b8', // slate-400
+    fog: '#cbd5e1', // slate-300
+    rain: '#60a5fa', // blue-400
+    snow: '#bae6fd', // sky-200
+    thunder: '#c084fc', // purple-400
+  },
 } as const
 
 /** Shared press/touch interaction tokens. Use these on every Pressable to keep feedback uniform. */

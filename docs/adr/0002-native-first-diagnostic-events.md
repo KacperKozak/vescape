@@ -4,6 +4,8 @@ Diagnostic Events are captured native-first. Android native emits the primary ev
 
 During alpha, PostHog is the chosen transport and Diagnostic Events are always enabled. Events are anonymous by default and use device/install identity rather than a user account.
 
+Updated by [ADR 0007](./0007-local-diagnostic-events.md): local Room persistence now records Diagnostic Events before optional PostHog transport.
+
 ## Considered Options
 
 - **Sentry-first crash/error monitoring.** Rejected because the app needs simple handled BLE and tune diagnostics more than a full crash-monitoring workflow.
