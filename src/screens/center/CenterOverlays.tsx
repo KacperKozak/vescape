@@ -190,12 +190,6 @@ export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOver
   )
 
   useEffect(() => {
-    if (mode === 'history' && panelHeight > 0) {
-      mapRef.current?.setPadding(panelHeight + 12)
-    }
-  }, [mode, mapRef, panelHeight])
-
-  useEffect(() => {
     if (mode === 'telemetry') {
       revealProgress.value = 0
       dragOpacity.value = withTiming(0, TELEMETRY_FADE_TIMING)

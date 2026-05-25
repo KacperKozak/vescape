@@ -38,6 +38,7 @@ import { ONE_DARK_MAP_STYLE } from '@/constants/oneDarkMapStyle'
 import { theme } from '@/constants/theme'
 import { getLiveGpsPresentation } from '@/helpers/liveGpsPresentation'
 import {
+  distanceMeters,
   getBounds,
   makeCircleFeature,
   makeTrailLineString,
@@ -93,6 +94,10 @@ const HISTORY_PREVIEW_ZOOM = 11.8
 const HISTORY_PREVIEW_BOTTOM_PADDING = 300
 const HISTORY_PREVIEW_SIDE_PADDING = 72
 const HISTORY_PREVIEW_TOP_PADDING = 120
+const HISTORY_DYNAMIC_FULL_DISTANCE_M = 80_000
+const HISTORY_DYNAMIC_MAX_EXTRA_PADDING = 220
+const HISTORY_DYNAMIC_MAX_EXTRA_DURATION_MS = 450
+const HISTORY_DYNAMIC_MAX_ZOOM_OUT = 2.4
 
 const HISTORY_MARKER_LABELS: Record<HistoryMarker['type'], string> = {
   app_stop: 'Recording stopped',
@@ -426,6 +431,17 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
     (preview: HistoryPreviewTarget) => {
       historyPreviewTargetRef.current = preview
       setFollowGps(false)
+      const current = currentCameraRef.current
+      const jumpDistanceM = current
+        ? distanceMeters(
+            { longitude: current.centerCoordinate[0], latitude: current.centerCoordinate[1] },
+            preview,
+          )
+        : 0
+      const distanceProgress = clamp(jumpDistanceM / HISTORY_DYNAMIC_FULL_DISTANCE_M, 0, 1)
+      const extraPadding = HISTORY_DYNAMIC_MAX_EXTRA_PADDING * distanceProgress
+      const animationDuration =
+        MAP_DEFAULTS.animationDuration + HISTORY_DYNAMIC_MAX_EXTRA_DURATION_MS * distanceProgress
       if (
         preview.minLatitude != null &&
         preview.maxLatitude != null &&
@@ -438,15 +454,19 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
           [preview.maxLongitude, preview.maxLatitude],
           [preview.minLongitude, preview.minLatitude],
           [
-            HISTORY_PREVIEW_TOP_PADDING,
-            HISTORY_PREVIEW_SIDE_PADDING,
-            HISTORY_PREVIEW_BOTTOM_PADDING,
-            HISTORY_PREVIEW_SIDE_PADDING,
+            HISTORY_PREVIEW_TOP_PADDING + extraPadding * 0.5,
+            HISTORY_PREVIEW_SIDE_PADDING + extraPadding,
+            HISTORY_PREVIEW_BOTTOM_PADDING + extraPadding,
+            HISTORY_PREVIEW_SIDE_PADDING + extraPadding,
           ],
-          MAP_DEFAULTS.animationDuration,
+          animationDuration,
         )
       } else {
-        cameraRef.current?.setCamera(getHistoryPreviewCamera(preview))
+        cameraRef.current?.setCamera({
+          ...getHistoryPreviewCamera(preview),
+          zoomLevel: HISTORY_PREVIEW_ZOOM - HISTORY_DYNAMIC_MAX_ZOOM_OUT * distanceProgress,
+          animationDuration,
+        })
       }
       onHeadingChange(0)
     },
@@ -535,35 +555,6 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
         })
       },
       setPadding(bottom: number) {
-        const historyTarget = historyPreviewTargetRef.current
-        if (historyTarget) {
-          if (
-            historyTarget.minLatitude != null &&
-            historyTarget.maxLatitude != null &&
-            historyTarget.minLongitude != null &&
-            historyTarget.maxLongitude != null &&
-            (historyTarget.minLatitude !== historyTarget.maxLatitude ||
-              historyTarget.minLongitude !== historyTarget.maxLongitude)
-          ) {
-            cameraRef.current?.fitBounds(
-              [historyTarget.maxLongitude, historyTarget.maxLatitude],
-              [historyTarget.minLongitude, historyTarget.minLatitude],
-              [
-                HISTORY_PREVIEW_TOP_PADDING,
-                HISTORY_PREVIEW_SIDE_PADDING,
-                Math.max(bottom, HISTORY_PREVIEW_BOTTOM_PADDING),
-                HISTORY_PREVIEW_SIDE_PADDING,
-              ],
-              bottom === 0 ? 0 : 300,
-            )
-          } else {
-            cameraRef.current?.setCamera({
-              ...getHistoryPreviewCamera(historyTarget),
-              padding: { paddingBottom: bottom, paddingTop: 0, paddingLeft: 0, paddingRight: 0 },
-            })
-          }
-          return
-        }
         cameraRef.current?.setCamera({
           padding: { paddingBottom: bottom, paddingTop: 0, paddingLeft: 0, paddingRight: 0 },
           animationDuration: bottom === 0 ? 0 : 300,
