@@ -21,7 +21,12 @@ internal data class BucketTelemetryPoint(
   val odometerCm: Long?,
   val tempMosfetDeciC: Int? = null,
   val tempMotorDeciC: Int? = null,
+  val gpsSpeedCentiMps: Int? = null,
+  val gpsTimestampMs: Long? = null,
+  val gpsAccuracyCm: Int? = null,
   val excludedFromAvgSpeed: Boolean = false,
+  val excludedFromMaxSpeed: Boolean = false,
+  val excludedFromMaxDuty: Boolean = false,
 )
 
 internal data class BucketLocationPoint(
@@ -101,12 +106,16 @@ private class MutableBucket(
       movingSpeedSampleCount++
       sumMovingAbsSpeedCentiKmh += absSpeed.toLong()
     }
-    maxAbsSpeedCentiKmh = maxOf(maxAbsSpeedCentiKmh, absSpeed)
+    if (!point.excludedFromMaxSpeed) {
+      maxAbsSpeedCentiKmh = maxOf(maxAbsSpeedCentiKmh, absSpeed)
+    }
     minBatteryVoltageMv = minBatteryVoltageMv?.let { minOf(it, point.batteryVoltageMv) }
       ?: point.batteryVoltageMv
     maxMotorCurrentAbsMa = maxOf(maxMotorCurrentAbsMa, abs(point.motorCurrentMa))
     maxBatteryCurrentAbsMa = maxOf(maxBatteryCurrentAbsMa, abs(point.batteryCurrentMa))
-    maxDutyAbsPermille = maxOf(maxDutyAbsPermille, abs(point.dutyPermille))
+    if (!point.excludedFromMaxDuty) {
+      maxDutyAbsPermille = maxOf(maxDutyAbsPermille, abs(point.dutyPermille))
+    }
     if (point.hasFault) faultCount++
     if (firstOdometerCm == null) firstOdometerCm = point.odometerCm
     if (point.odometerCm != null) lastOdometerCm = point.odometerCm

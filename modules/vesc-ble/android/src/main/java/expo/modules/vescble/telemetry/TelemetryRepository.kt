@@ -371,7 +371,11 @@ class TelemetryRepository private constructor(context: Context) {
         val telemetryPoints = states.map { it.state.toBucketPoint() }
         val sanitization = sanitizeTelemetrySamples(telemetryPoints, movingSpeedThresholdCentiKmh)
         val sanitizedPoints = telemetryPoints.mapIndexed { index, point ->
-          point.copy(excludedFromAvgSpeed = sanitization.samples[index].excludedFromAvgSpeed)
+          point.copy(
+            excludedFromAvgSpeed = sanitization.samples[index].excludedFromAvgSpeed,
+            excludedFromMaxSpeed = sanitization.samples[index].excludedFromMaxSpeed,
+            excludedFromMaxDuty = sanitization.samples[index].excludedFromMaxDuty,
+          )
         }
         if (sanitization.exclusions.isNotEmpty()) {
           dao.insertExclusions(sanitization.exclusions)
@@ -433,7 +437,11 @@ class TelemetryRepository private constructor(context: Context) {
       val telemetryPoints = frames.map { it.state.toBucketPoint() }
       val sanitization = sanitizeTelemetrySamples(telemetryPoints, movingSpeedThresholdCentiKmh)
       val sanitizedPoints = telemetryPoints.mapIndexed { index, point ->
-        point.copy(excludedFromAvgSpeed = sanitization.samples[index].excludedFromAvgSpeed)
+        point.copy(
+          excludedFromAvgSpeed = sanitization.samples[index].excludedFromAvgSpeed,
+          excludedFromMaxSpeed = sanitization.samples[index].excludedFromMaxSpeed,
+          excludedFromMaxDuty = sanitization.samples[index].excludedFromMaxDuty,
+        )
       }
       dao.insertBatch(
         frames = frames.map { it.frame },
@@ -675,6 +683,9 @@ internal data class FullTelemetryState(
     odometerCm = odometerCm,
     tempMosfetDeciC = tempMosfetDeciC,
     tempMotorDeciC = tempMotorDeciC,
+    gpsSpeedCentiMps = location?.gpsSpeedCentiMps,
+    gpsTimestampMs = location?.timestampMs,
+    gpsAccuracyCm = location?.accuracyCm,
   )
 
   companion object {

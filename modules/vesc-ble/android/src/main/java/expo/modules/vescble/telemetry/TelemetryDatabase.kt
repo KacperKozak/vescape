@@ -8,7 +8,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 internal const val TELEMETRY_DATABASE_NAME = "telemetry.db"
-internal const val TELEMETRY_DATABASE_VERSION = 15
+internal const val TELEMETRY_DATABASE_VERSION = 16
 
 @Database(
   entities = [
@@ -204,6 +204,14 @@ abstract class TelemetryDatabase : RoomDatabase() {
       }
     }
 
+    private val MIGRATION_15_16 = object : Migration(15, 16) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE metric_exclusions ADD COLUMN raw_value TEXT")
+        db.execSQL("ALTER TABLE metric_exclusions ADD COLUMN reference_value TEXT")
+        db.execSQL("ALTER TABLE metric_exclusions ADD COLUMN context_json TEXT")
+      }
+    }
+
     fun get(context: Context): TelemetryDatabase {
       return instance ?: synchronized(this) {
         instance ?: Room.databaseBuilder(
@@ -224,6 +232,7 @@ abstract class TelemetryDatabase : RoomDatabase() {
             MIGRATION_12_13,
             MIGRATION_13_14,
             MIGRATION_14_15,
+            MIGRATION_15_16,
           )
           .fallbackToDestructiveMigration(true)
           .addCallback(object : Callback() {

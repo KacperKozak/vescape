@@ -242,4 +242,42 @@ class TelemetryBucketBuilderTest {
     assertEquals(500L, bucket.batteryUsedWhMilli)
     assertEquals(250L, bucket.batteryRegenWhMilli)
   }
+
+  @Test
+  fun excludedFromMaxSpeedSkipsSampleForMaxSpeed() {
+    val bucket = buildTelemetryBuckets(
+      telemetryPoints = listOf(
+        BucketTelemetryPoint(
+          capturedAtMs = 0L,
+          deviceId = "board-1",
+          deviceName = "ADV2",
+          speedCentiKmh = 5000,
+          batteryVoltageMv = 70_000,
+          motorCurrentMa = 0,
+          batteryCurrentMa = 0,
+          dutyPermille = 900,
+          hasFault = false,
+          odometerCm = null,
+          excludedFromMaxSpeed = true,
+          excludedFromMaxDuty = true,
+        ),
+        BucketTelemetryPoint(
+          capturedAtMs = 1_000L,
+          deviceId = "board-1",
+          deviceName = "ADV2",
+          speedCentiKmh = 2000,
+          batteryVoltageMv = 70_000,
+          motorCurrentMa = 0,
+          batteryCurrentMa = 0,
+          dutyPermille = 400,
+          hasFault = false,
+          odometerCm = null,
+        ),
+      ),
+      locationPoints = emptyList(),
+    ).single()
+
+    assertEquals(2000, bucket.maxAbsSpeedCentiKmh)
+    assertEquals(400, bucket.maxDutyAbsPermille)
+  }
 }

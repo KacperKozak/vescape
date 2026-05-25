@@ -281,6 +281,12 @@ data class MetricExclusionEntity(
   val deviceId: String,
   val metric: String,
   val reason: String,
+  @ColumnInfo(name = "raw_value")
+  val rawValue: String? = null,
+  @ColumnInfo(name = "reference_value")
+  val referenceValue: String? = null,
+  @ColumnInfo(name = "context_json")
+  val contextJson: String? = null,
 )
 
 @Entity(tableName = "app_settings")
