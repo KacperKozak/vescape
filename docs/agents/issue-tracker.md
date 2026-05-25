@@ -19,13 +19,47 @@ Create a GitHub issue in `KacperKozak/vesc-app-poc`.
 
 ## PRD issues
 
-When publishing a PRD, create a GitHub issue whose title starts with `[PRD] `.
+When publishing a PRD, create a GitHub issue whose title starts with `[PRD][<Area>] `.
 
 Example:
 
 ```text
-[PRD] Ride recording export
+[PRD][History] Ride export
 ```
+
+Keep titles short: prefixes plus a 2-5 word noun phrase.
+
+## Implementation issues
+
+When publishing implementation issues from a PRD, keep the same area prefix and include the approved slice number:
+
+```text
+[<Area>] <number> - <Short verb phrase>
+```
+
+Example:
+
+```text
+[History] 1 - Export ride file
+```
+
+Use the slice number from the approved breakdown, not the GitHub issue number. Publish dependent issues sequentially so blocker references use real issue numbers.
+
+## App-area labels
+
+Use one or more app-area labels for filtering:
+
+| Area label        | Title prefix  | Use for                                  |
+| ----------------- | ------------- | ---------------------------------------- |
+| `area:history`    | `[History]`   | ride history, sessions, buckets, graphs  |
+| `area:sanitizers` | `[Sanitizers]`| metric sanitizers and exclusions         |
+| `area:map`        | `[Map]`       | maps, routes, GPS display                |
+| `area:weather`    | `[Weather]`   | weather data and UI                      |
+| `area:core`       | `[Core]`      | app shell, storage, lifecycle, infra     |
+| `area:telemetry`  | `[Telemetry]` | live telemetry ingest/display            |
+| `area:tunes`      | `[Tunes]`     | VESC tune read/write flows               |
+
+If a user writes a typo for a known area, normalize it in metadata. For example, use `area:sanitizers` and `[Sanitizers]` for `sanatizers`.
 
 ## When a skill says "fetch the relevant ticket"
 
