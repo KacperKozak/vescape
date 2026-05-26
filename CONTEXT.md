@@ -32,6 +32,10 @@ _Avoid_: Location event, GPS point
 A persisted ride capture made from board telemetry samples, optionally enriched with precise GPS fixes captured at the same time as telemetry.
 _Avoid_: Session recording, raw recording
 
+**Privacy Zone**:
+A user-defined geographic area where Ride Recording data is not retained.
+_Avoid_: Save area, safe area, hidden zone
+
 **Ride History**:
 The persisted list of past ride recordings and their derived samples, routes, markers, and summaries.
 _Avoid_: Playback, logs
@@ -74,6 +78,7 @@ _Avoid_: Error log, debug session, crash report
 - A **Metric Sanitizer** may create **Metric Exclusions** for values derived from **Telemetry Samples** while preserving the original samples and current live board readout.
 - A **Metric Exclusion** belongs to one **Telemetry Sample** and one metric.
 - A **GPS Fix** may be associated with live map state, but only GPS fixes captured alongside **Telemetry Samples** contribute to a **Ride Recording**.
+- A **Privacy Zone** limits what **Ride Recording** data is retained without changing **Live State**.
 - A **Ride Recording** becomes part of **Ride History**.
 - A **Ride History Marker** belongs to **Ride History** and may explain where a **Ride Recording** lost or regained board data.
 - A **Tune Snapshot** belongs to the currently connected **Board** and is read-only.
@@ -101,3 +106,4 @@ _Avoid_: Error log, debug session, crash report
 - "error" may mean crash, handled failure, UI message, or diagnostic clue; resolved term: use **Diagnostic Event** for app-observed abnormal conditions worth reviewing.
 - "telemetry marker" names the storage table, but map-visible history annotations are **Ride History Markers**.
 - "filter" may mean dropping samples, smoothing charts, or excluding implausible values from metrics; resolved term: use **Metric Sanitizer** for metric exclusion that preserves original samples.
+- "save area" or "safe area" may mean a privacy boundary around home or work; resolved term: use **Privacy Zone**.

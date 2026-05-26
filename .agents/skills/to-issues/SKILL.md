@@ -32,9 +32,25 @@ Examples:
 [History] 2 - Rebuild buckets
 ```
 
+If there is no PRD source/title, choose a regular feature tag instead:
+
+```text
+[<Feature Tag>] <number> - <Short verb phrase>
+```
+
+Examples:
+
+```text
+[Privacy Zone] 1 - Store zones
+[Privacy Zone] 2 - Edit zones
+```
+
 Rules:
 
 - Use the same `<Area>` prefix for all issues spawned from one PRD unless a slice clearly belongs elsewhere.
+- When there is no PRD, use the same `<Feature Tag>` prefix for all issues spawned from the same plan unless the user asks for separate tags.
+- If the user gives an explicit bracket tag/prefix, use it exactly after fixing only obvious typos.
+- If the user does not give a tag, infer a short domain tag from the plan using the project's glossary vocabulary. Prefer a noun phrase over an implementation layer.
 - Use 2-5 meaningful words after the number.
 - Number from the approved slice order, not GitHub issue number.
 - Apply the matching GitHub area label, e.g. `area:sanitizers`.
