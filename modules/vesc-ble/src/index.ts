@@ -363,6 +363,8 @@ export interface AppSettings {
   lastGpsLatitude: number | null
   lastGpsLongitude: number | null
   movingSpeedThresholdKmh: number
+  freeSpinMaxSpeedDeltaKmh: number
+  freeSpinStationaryBoardCapKmh: number
 }
 
 export interface DiagnosticStatus {

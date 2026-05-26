@@ -1,4 +1,3 @@
-import { useCallback } from 'react'
 import { View, Text, Switch, StyleSheet, ScrollView, Platform, Pressable } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
@@ -17,6 +16,8 @@ import {
   AppleLogoIcon,
   DownloadSimpleIcon,
   UploadSimpleIcon,
+  ArrowsOutLineHorizontalIcon,
+  ProhibitIcon,
 } from 'phosphor-react-native'
 import { useShallow } from 'zustand/react/shallow'
 
@@ -40,38 +41,27 @@ function formatBytes(bytes: number): string {
 }
 
 export default function SettingsScreen() {
-  const { liveHistoryLimit, autoConnect, autoRecording, movingSpeedThresholdKmh, set } =
-    useSettingsStore(
-      useShallow((s) => ({
-        liveHistoryLimit: s.liveHistoryLimit,
-        autoConnect: s.autoConnect,
-        autoRecording: s.autoRecording,
-        movingSpeedThresholdKmh: s.movingSpeedThresholdKmh,
-        set: s.set,
-      })),
-    )
+  const {
+    liveHistoryLimit,
+    autoConnect,
+    autoRecording,
+    movingSpeedThresholdKmh,
+    freeSpinMaxSpeedDeltaKmh,
+    freeSpinStationaryBoardCapKmh,
+    set,
+  } = useSettingsStore(
+    useShallow((s) => ({
+      liveHistoryLimit: s.liveHistoryLimit,
+      autoConnect: s.autoConnect,
+      autoRecording: s.autoRecording,
+      movingSpeedThresholdKmh: s.movingSpeedThresholdKmh,
+      freeSpinMaxSpeedDeltaKmh: s.freeSpinMaxSpeedDeltaKmh,
+      freeSpinStationaryBoardCapKmh: s.freeSpinStationaryBoardCapKmh,
+      set: s.set,
+    })),
+  )
 
   const db = useSettingsDatabaseOps()
-
-  const decrementLimit = useCallback(() => {
-    if (liveHistoryLimit > 1) void set('liveHistoryLimit', liveHistoryLimit - 1)
-  }, [liveHistoryLimit, set])
-
-  const incrementLimit = useCallback(() => {
-    if (liveHistoryLimit < 50) void set('liveHistoryLimit', liveHistoryLimit + 1)
-  }, [liveHistoryLimit, set])
-
-  const decrementMovingSpeedThreshold = useCallback(() => {
-    if (movingSpeedThresholdKmh > 0) {
-      void set('movingSpeedThresholdKmh', movingSpeedThresholdKmh - 1)
-    }
-  }, [movingSpeedThresholdKmh, set])
-
-  const incrementMovingSpeedThreshold = useCallback(() => {
-    if (movingSpeedThresholdKmh < 20) {
-      void set('movingSpeedThresholdKmh', movingSpeedThresholdKmh + 1)
-    }
-  }, [movingSpeedThresholdKmh, set])
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -112,20 +102,102 @@ export default function SettingsScreen() {
             right={
               <Stepper
                 value={liveHistoryLimit}
-                onDecrement={decrementLimit}
-                onIncrement={incrementLimit}
+                onChange={(nextValue) => {
+                  const clampedValue = Math.min(50, Math.max(1, nextValue))
+                  if (clampedValue !== liveHistoryLimit) {
+                    void set('liveHistoryLimit', clampedValue)
+                  }
+                }}
               />
             }
           />
           <SettingsRow
+            icon={BluetoothConnectedIcon}
+            label="Auto connect"
+            hint="Connect to board on app start"
+            right={
+              <Switch
+                value={autoConnect}
+                onValueChange={(v) => void set('autoConnect', v)}
+                trackColor={{ false: '#334155', true: '#1d4ed8' }}
+                thumbColor={autoConnect ? '#3b82f6' : '#64748b'}
+              />
+            }
+          />
+          <SettingsRow
+            icon={RecordIcon}
+            iconWeight="fill"
+            label="Auto recording"
+            hint="Start recording when board connects"
+            right={
+              <Switch
+                value={autoRecording}
+                onValueChange={(v) => void set('autoRecording', v)}
+                trackColor={{ false: '#334155', true: '#1d4ed8' }}
+                thumbColor={autoRecording ? '#3b82f6' : '#64748b'}
+              />
+            }
+          />
+        </SettingsCard>
+
+        <SettingsSectionTitle>Stats</SettingsSectionTitle>
+        <Text style={styles.sectionHint}>
+          Changes apply to new rides only. Rebuild history to reprocess past rides.
+        </Text>
+
+        <SettingsCard>
+          <SettingsRow
             icon={GaugeIcon}
             label="Moving speed threshold"
-            hint="Speeds below this are ignored for avg speed. Only affects new rides."
+            hint={'Speeds below this are ignored for avg speed.\nDefault: 3 km/h.'}
             right={
               <Stepper
-                value={`${movingSpeedThresholdKmh} km/h`}
-                onDecrement={decrementMovingSpeedThreshold}
-                onIncrement={incrementMovingSpeedThreshold}
+                value={movingSpeedThresholdKmh}
+                unit="km/h"
+                onChange={(nextValue) => {
+                  const clampedValue = Math.min(20, Math.max(0, nextValue))
+                  if (clampedValue !== movingSpeedThresholdKmh) {
+                    void set('movingSpeedThresholdKmh', clampedValue)
+                  }
+                }}
+              />
+            }
+          />
+          <SettingsRow
+            icon={ArrowsOutLineHorizontalIcon}
+            label="Free spin speed delta"
+            hint={
+              'Max board-vs-GPS speed gap before sample is excluded as free spin. Lower will increase the number of excluded samples.\nDefault: 12 km/h.'
+            }
+            right={
+              <Stepper
+                value={freeSpinMaxSpeedDeltaKmh}
+                unit="km/h"
+                onChange={(nextValue) => {
+                  const clampedValue = Math.min(60, Math.max(1, nextValue))
+                  if (clampedValue !== freeSpinMaxSpeedDeltaKmh) {
+                    void set('freeSpinMaxSpeedDeltaKmh', clampedValue)
+                  }
+                }}
+              />
+            }
+          />
+          <SettingsRow
+            icon={ProhibitIcon}
+            label="Free spin stationary cap"
+            hint={
+              'Max board speed allowed when GPS is nearly stationary. Lower will increase the number of excluded samples.\nDefault: 15 km/h.'
+            }
+            right={
+              <Stepper
+                value={freeSpinStationaryBoardCapKmh}
+                unit="km/h"
+                onChange={(nextValue) => {
+                  const clampedValue = Math.min(60, Math.max(1, nextValue))
+                  if (clampedValue !== freeSpinStationaryBoardCapKmh) {
+                    void set('freeSpinStationaryBoardCapKmh', clampedValue)
+                  }
+                }}
               />
             }
           />
@@ -134,38 +206,6 @@ export default function SettingsScreen() {
         <SettingsSectionTitle>Database</SettingsSectionTitle>
 
         <SettingsCard>
-          <SettingsRow
-            icon={DownloadSimpleIcon}
-            iconColor={theme.gps.color}
-            label="Back up database"
-            hint={db.backupHint}
-            right={
-              <Button
-                label={db.backupState === 'running' ? 'Exporting...' : 'Export'}
-                size="sm"
-                variant="secondary"
-                loading={db.backupState === 'running'}
-                disabled={db.restoreState === 'running' || db.rebuildState === 'running'}
-                onPress={db.handleBackupDatabase}
-              />
-            }
-          />
-          <SettingsRow
-            icon={UploadSimpleIcon}
-            iconColor={theme.warning.color}
-            label="Restore database"
-            hint={db.restoreHint}
-            right={
-              <Button
-                label={db.restoreState === 'running' ? 'Restoring...' : 'Restore'}
-                size="sm"
-                variant="destructive"
-                loading={db.restoreState === 'running'}
-                disabled={db.backupState === 'running' || db.rebuildState === 'running'}
-                onPress={() => db.setRestoreConfirmVisible(true)}
-              />
-            }
-          />
           <SettingsRow
             icon={ClockCounterClockwiseIcon}
             label="Rebuild history"
@@ -199,7 +239,9 @@ export default function SettingsScreen() {
                   <View
                     style={[
                       styles.rebuildProgressFill,
-                      { width: `${Math.round(db.rebuildProgressValue * 100)}%` },
+                      {
+                        width: `${Math.round(db.rebuildProgressValue * 100)}%`,
+                      },
                     ]}
                   />
                 </View>
@@ -209,35 +251,35 @@ export default function SettingsScreen() {
               </View>
             )}
           </SettingsRow>
-        </SettingsCard>
-
-        <SettingsSectionTitle>Connection</SettingsSectionTitle>
-
-        <SettingsCard>
           <SettingsRow
-            icon={BluetoothConnectedIcon}
-            label="Auto connect"
-            hint="Connect to board on app start"
+            icon={DownloadSimpleIcon}
+            iconColor={theme.gps.color}
+            label="Back up database"
+            hint={db.backupHint}
             right={
-              <Switch
-                value={autoConnect}
-                onValueChange={(v) => void set('autoConnect', v)}
-                trackColor={{ false: '#334155', true: '#1d4ed8' }}
-                thumbColor={autoConnect ? '#3b82f6' : '#64748b'}
+              <Button
+                label={db.backupState === 'running' ? 'Exporting...' : 'Export'}
+                size="sm"
+                variant="secondary"
+                loading={db.backupState === 'running'}
+                disabled={db.restoreState === 'running' || db.rebuildState === 'running'}
+                onPress={db.handleBackupDatabase}
               />
             }
           />
           <SettingsRow
-            icon={RecordIcon}
-            iconWeight="fill"
-            label="Auto recording"
-            hint="Start recording when board connects"
+            icon={UploadSimpleIcon}
+            iconColor={theme.warning.color}
+            label="Restore database"
+            hint={db.restoreHint}
             right={
-              <Switch
-                value={autoRecording}
-                onValueChange={(v) => void set('autoRecording', v)}
-                trackColor={{ false: '#334155', true: '#1d4ed8' }}
-                thumbColor={autoRecording ? '#3b82f6' : '#64748b'}
+              <Button
+                label={db.restoreState === 'running' ? 'Restoring...' : 'Restore'}
+                size="sm"
+                variant="destructive"
+                loading={db.restoreState === 'running'}
+                disabled={db.backupState === 'running' || db.rebuildState === 'running'}
+                onPress={() => db.setRestoreConfirmVisible(true)}
               />
             }
           />
@@ -299,6 +341,13 @@ const styles = StyleSheet.create({
     color: '#94a3b8',
     fontSize: 12,
     fontWeight: '600',
+  },
+  sectionHint: {
+    color: '#475569',
+    fontSize: 12,
+    marginTop: -4,
+    marginBottom: 4,
+    marginLeft: 4,
   },
   rebuildButton: {
     backgroundColor: '#0f172a',

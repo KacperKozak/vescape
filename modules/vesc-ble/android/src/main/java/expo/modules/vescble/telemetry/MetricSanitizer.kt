@@ -14,9 +14,11 @@ internal const val EXCLUSION_REASON_FREE_SPIN = "free_spin"
 
 internal const val FREE_SPIN_LOW_GPS_CUTOFF_CENTI_KMH = 700
 internal const val FREE_SPIN_MAX_DELTA_CENTI_KMH = 1200
-internal const val FREE_SPIN_LOW_GPS_BOARD_CAP_CENTI_KMH = 1500
 internal const val FREE_SPIN_NEAREST_GPS_MAX_AGE_MS = 10_000L
 internal const val FREE_SPIN_GPS_PRECISE_ACCURACY_CM = 2000
+
+internal const val DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH = 12.0
+internal const val DEFAULT_FREE_SPIN_STATIONARY_BOARD_CAP_KMH = 15.0
 
 internal data class SanitizedSample(
   val index: Int,
@@ -35,10 +37,12 @@ internal data class SanitizationResult(
 internal fun sanitizeTelemetrySamples(
   samples: List<BucketTelemetryPoint>,
   movingSpeedThresholdCentiKmh: Int = DEFAULT_MOVING_SPEED_THRESHOLD_CENTI_KMH,
+  freeSpinMaxSpeedDeltaCentiKmh: Int = (DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH * 100).toInt(),
+  freeSpinStationaryBoardCapCentiKmh: Int = (DEFAULT_FREE_SPIN_STATIONARY_BOARD_CAP_KMH * 100).toInt(),
 ): SanitizationResult {
   val sanitizers = listOf(
     LowSpeedAverageSpeedSanitizer(movingSpeedThresholdCentiKmh),
-    FreeSpinMetricSanitizer(),
+    FreeSpinMetricSanitizer(freeSpinMaxSpeedDeltaCentiKmh, freeSpinStationaryBoardCapCentiKmh),
   )
   val context = MetricSanitizationContext(
     samples = samples,

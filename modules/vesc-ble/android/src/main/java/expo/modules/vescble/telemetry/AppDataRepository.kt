@@ -80,6 +80,8 @@ class AppDataRepository private constructor(private val context: Context) {
       lastGpsLatitude = opt("lastGpsLatitude") { (it as? Number)?.toDouble() },
       lastGpsLongitude = opt("lastGpsLongitude") { (it as? Number)?.toDouble() },
       movingSpeedThresholdKmh = req("movingSpeedThresholdKmh", 3.0) { (it as? Number)?.toDouble() },
+      freeSpinMaxSpeedDeltaKmh = req("freeSpinMaxSpeedDeltaKmh", DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH) { (it as? Number)?.toDouble() },
+      freeSpinStationaryBoardCapKmh = req("freeSpinStationaryBoardCapKmh", DEFAULT_FREE_SPIN_STATIONARY_BOARD_CAP_KMH) { (it as? Number)?.toDouble() },
     )
 
     if (badKeys.isNotEmpty()) {
@@ -103,6 +105,8 @@ class AppDataRepository private constructor(private val context: Context) {
       "lastGpsLongitude" -> (value as? Number)?.toDouble()
       "movingSpeedThresholdKmh", "avgSpeedCutoffKmh", "movingAvgSpeedThresholdKmh" ->
         ((value as? Number)?.toDouble() ?: return@withContext).coerceAtLeast(0.0)
+      "freeSpinMaxSpeedDeltaKmh", "freeSpinStationaryBoardCapKmh" ->
+        ((value as? Number)?.toDouble() ?: return@withContext).coerceAtLeast(0.0)
       else -> return@withContext
     }
     val normalizedKey = when (key) {
@@ -118,6 +122,8 @@ class AppDataRepository private constructor(private val context: Context) {
         "lastGpsLatitude" -> d.lastGpsLatitude
         "lastGpsLongitude" -> d.lastGpsLongitude
         "movingSpeedThresholdKmh" -> d.movingSpeedThresholdKmh
+        "freeSpinMaxSpeedDeltaKmh" -> d.freeSpinMaxSpeedDeltaKmh
+        "freeSpinStationaryBoardCapKmh" -> d.freeSpinStationaryBoardCapKmh
         else -> null
       }
     }
@@ -293,6 +299,8 @@ fun AppSettings.toMap(): Map<String, Any?> = mapOf(
   "lastGpsLatitude" to lastGpsLatitude,
   "lastGpsLongitude" to lastGpsLongitude,
   "movingSpeedThresholdKmh" to movingSpeedThresholdKmh,
+  "freeSpinMaxSpeedDeltaKmh" to freeSpinMaxSpeedDeltaKmh,
+  "freeSpinStationaryBoardCapKmh" to freeSpinStationaryBoardCapKmh,
 )
 
 private fun encodeSettingJson(value: Any?): String {

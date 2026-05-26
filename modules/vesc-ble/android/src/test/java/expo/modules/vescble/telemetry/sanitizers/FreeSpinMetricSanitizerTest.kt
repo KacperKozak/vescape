@@ -79,7 +79,7 @@ class FreeSpinMetricSanitizerTest {
       preciseGpsIndices = buildPreciseGpsIndex(points),
     )
 
-    val result = FreeSpinMetricSanitizer().sanitize(1, points[1], context)
+    val result = FreeSpinMetricSanitizer(maxSpeedDeltaCentiKmh = 1200, stationaryBoardCapCentiKmh = 1500).sanitize(1, points[1], context)
 
     assertTrue(result.excludedFromMaxSpeed)
     assertEquals(
@@ -93,7 +93,7 @@ class FreeSpinMetricSanitizerTest {
       samples = listOf(point),
       preciseGpsIndices = buildPreciseGpsIndex(listOf(point)),
     )
-    return FreeSpinMetricSanitizer().sanitize(0, point, context)
+    return FreeSpinMetricSanitizer(maxSpeedDeltaCentiKmh = 1200, stationaryBoardCapCentiKmh = 1500).sanitize(0, point, context)
   }
 
   private fun point(

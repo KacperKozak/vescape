@@ -3,20 +3,23 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 
 export function Stepper({
   value,
-  onDecrement,
-  onIncrement,
+  unit,
+  onChange,
 }: {
-  value: string | number
-  onDecrement: () => void
-  onIncrement: () => void
+  value: number
+  unit?: string
+  onChange: (nextValue: number) => void
 }) {
   return (
     <View style={styles.stepper}>
-      <Pressable style={styles.stepperBtn} onPress={onDecrement}>
+      <Pressable style={styles.stepperBtn} onPress={() => onChange(value - 1)}>
         <MinusIcon size={14} color="#f1f5f9" weight="bold" />
       </Pressable>
-      <Text style={styles.stepperValue}>{value}</Text>
-      <Pressable style={styles.stepperBtn} onPress={onIncrement}>
+      <View style={styles.valueWrap}>
+        <Text style={styles.stepperValue}>{value}</Text>
+        {unit ? <Text style={styles.stepperUnit}>{unit}</Text> : null}
+      </View>
+      <Pressable style={styles.stepperBtn} onPress={() => onChange(value + 1)}>
         <PlusIcon size={14} color="#f1f5f9" weight="bold" />
       </Pressable>
     </View>
@@ -34,13 +37,27 @@ const styles = StyleSheet.create({
   },
   stepperBtn: {
     paddingHorizontal: 10,
-    paddingVertical: 8,
+    alignSelf: 'stretch',
+    justifyContent: 'center',
+  },
+  valueWrap: {
+    minWidth: 31,
+    alignItems: 'center',
+    paddingHorizontal: 2,
+    paddingVertical: 10,
   },
   stepperValue: {
     color: '#f1f5f9',
     fontSize: 15,
     fontWeight: '700',
-    minWidth: 58,
+    textAlign: 'center',
+  },
+  stepperUnit: {
+    color: '#94a3b8',
+    fontSize: 11,
+    fontWeight: '600',
+    marginTop: 0,
+    lineHeight: 12,
     textAlign: 'center',
   },
 })

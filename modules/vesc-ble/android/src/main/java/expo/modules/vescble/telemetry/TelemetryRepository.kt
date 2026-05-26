@@ -82,9 +82,19 @@ class TelemetryRepository private constructor(context: Context) {
   private var forceNextKeyframe = true
   private var droppedPendingFrames = 0L
   private var movingSpeedThresholdCentiKmh = DEFAULT_MOVING_SPEED_THRESHOLD_CENTI_KMH
+  private var freeSpinMaxSpeedDeltaCentiKmh = (DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH * 100).toInt()
+  private var freeSpinStationaryBoardCapCentiKmh = (DEFAULT_FREE_SPIN_STATIONARY_BOARD_CAP_KMH * 100).toInt()
 
   fun setMovingSpeedThresholdKmh(value: Double) {
     movingSpeedThresholdCentiKmh = (value * 100.0).roundToInt().coerceAtLeast(0)
+  }
+
+  fun setFreeSpinMaxSpeedDeltaKmh(value: Double) {
+    freeSpinMaxSpeedDeltaCentiKmh = (value * 100.0).roundToInt().coerceAtLeast(0)
+  }
+
+  fun setFreeSpinStationaryBoardCapKmh(value: Double) {
+    freeSpinStationaryBoardCapCentiKmh = (value * 100.0).roundToInt().coerceAtLeast(0)
   }
 
   fun recordMarker(
@@ -370,7 +380,7 @@ class TelemetryRepository private constructor(context: Context) {
       val states = getSampleStates(chunkFrom, chunkTo, null, Int.MAX_VALUE)
       if (states.isNotEmpty()) {
         val telemetryPoints = states.map { it.state.toBucketPoint() }
-        val sanitization = sanitizeTelemetrySamples(telemetryPoints, movingSpeedThresholdCentiKmh)
+        val sanitization = sanitizeTelemetrySamples(telemetryPoints, movingSpeedThresholdCentiKmh, freeSpinMaxSpeedDeltaCentiKmh, freeSpinStationaryBoardCapCentiKmh)
         val sanitizedPoints = telemetryPoints.mapIndexed { index, point ->
           point.copy(
             excludedFromAvgSpeed = sanitization.samples[index].excludedFromAvgSpeed,
@@ -436,7 +446,7 @@ class TelemetryRepository private constructor(context: Context) {
 
     try {
       val telemetryPoints = frames.map { it.state.toBucketPoint() }
-      val sanitization = sanitizeTelemetrySamples(telemetryPoints, movingSpeedThresholdCentiKmh)
+      val sanitization = sanitizeTelemetrySamples(telemetryPoints, movingSpeedThresholdCentiKmh, freeSpinMaxSpeedDeltaCentiKmh, freeSpinStationaryBoardCapCentiKmh)
       val sanitizedPoints = telemetryPoints.mapIndexed { index, point ->
         point.copy(
           excludedFromAvgSpeed = sanitization.samples[index].excludedFromAvgSpeed,

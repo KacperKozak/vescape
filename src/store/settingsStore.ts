@@ -9,6 +9,8 @@ const DEFAULTS: AppSettings = {
   lastGpsLatitude: null,
   lastGpsLongitude: null,
   movingSpeedThresholdKmh: 3,
+  freeSpinMaxSpeedDeltaKmh: 12,
+  freeSpinStationaryBoardCapKmh: 15,
 }
 
 interface SettingsState extends AppSettings {

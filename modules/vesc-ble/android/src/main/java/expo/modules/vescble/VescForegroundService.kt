@@ -20,6 +20,8 @@ import expo.modules.vescble.telemetry.AlertRuleEntity
 import expo.modules.vescble.telemetry.AppDataRepository
 import expo.modules.vescble.telemetry.BucketTelemetryPoint
 import expo.modules.vescble.telemetry.FullTelemetryState
+import expo.modules.vescble.telemetry.DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH
+import expo.modules.vescble.telemetry.DEFAULT_FREE_SPIN_STATIONARY_BOARD_CAP_KMH
 import expo.modules.vescble.telemetry.METRIC_AVG_SPEED
 import expo.modules.vescble.telemetry.METRIC_MAX_DUTY
 import expo.modules.vescble.telemetry.METRIC_MAX_SPEED
@@ -1726,14 +1728,16 @@ class VescForegroundService : Service() {
 
     private fun configuredTelemetryStore(): TelemetryRepository {
         val store = TelemetryRepository.get(applicationContext)
-        val threshold = try {
+        val settings = try {
             kotlinx.coroutines.runBlocking {
-                AppDataRepository.get(applicationContext).getTypedSettings().movingSpeedThresholdKmh
+                AppDataRepository.get(applicationContext).getTypedSettings()
             }
         } catch (_: Exception) {
-            3.0
+            null
         }
-        store.setMovingSpeedThresholdKmh(threshold)
+        store.setMovingSpeedThresholdKmh(settings?.movingSpeedThresholdKmh ?: 3.0)
+        store.setFreeSpinMaxSpeedDeltaKmh(settings?.freeSpinMaxSpeedDeltaKmh ?: DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH)
+        store.setFreeSpinStationaryBoardCapKmh(settings?.freeSpinStationaryBoardCapKmh ?: DEFAULT_FREE_SPIN_STATIONARY_BOARD_CAP_KMH)
         return store
     }
 
