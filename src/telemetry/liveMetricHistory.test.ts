@@ -135,6 +135,25 @@ describe('live metric history', () => {
     expect(buffer.telemetry[1].speed).toBe(-4)
   })
 
+  test('applies native metric exclusion updates without changing raw telemetry', () => {
+    const buffer = createLiveMetricBuffer()
+    appendTelemetrySample(buffer, telemetry({ lastPacketAt: 1_000, speed: 46 }), 10_000)
+    appendTelemetrySample(
+      buffer,
+      telemetry({
+        lastPacketAt: 2_000,
+        speed: 4,
+        metricExclusionUpdates: [
+          { lastPacketAt: 1_000, metricExclusions: { max_speed: true, max_duty: true } },
+        ],
+      }),
+      10_000,
+    )
+
+    expect(buffer.telemetry[0].speed).toBe(46)
+    expect(buffer.telemetry[0].metricExclusions).toEqual({ max_speed: true, max_duty: true })
+  })
+
   test('clears live metric buffers in place', () => {
     const buffer = createLiveMetricBuffer()
     appendTelemetrySample(buffer, telemetry({ lastPacketAt: 2_000 }), 10_000)

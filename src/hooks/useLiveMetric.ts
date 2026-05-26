@@ -31,8 +31,9 @@ function projectMetric(telemetry: TelemetryEvent[], pick: TelemetrySelector): Li
 }
 
 export const liveSelectors = {
-  speed: (s: TelemetryEvent) => absolute(s.speed),
+  speed: (s: TelemetryEvent) => (s.metricExclusions?.max_speed ? null : absolute(s.speed)),
   duty: (s: TelemetryEvent) => {
+    if (s.metricExclusions?.max_duty) return null
     const v = absolute(s.dutyCycle)
     return v == null ? null : v * 100
   },

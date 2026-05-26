@@ -86,6 +86,8 @@ export interface AlertRule {
 export interface TelemetryEvent {
   generation?: number
   location?: LocationEvent | null
+  metricExclusions?: Record<string, boolean>
+  metricExclusionUpdates?: LiveMetricExclusionUpdate[]
   hasFault: boolean
   faultCode: number
   pitch: number
@@ -109,6 +111,11 @@ export interface TelemetryEvent {
   avgLatency: number | null
   lastPacketAt: number
   firedAlerts?: FiredAlert[]
+}
+
+export interface LiveMetricExclusionUpdate {
+  lastPacketAt: number
+  metricExclusions: Record<string, boolean>
 }
 
 export type BoardPhase = SessionStatus

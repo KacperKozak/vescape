@@ -52,6 +52,7 @@ export function appendTelemetrySample(
   telemetry: TelemetryEvent,
   windowMs: number,
 ): void {
+  applyMetricExclusionUpdates(buffer, telemetry)
   insertByTime(buffer.telemetry, telemetry, (sample) => sample.lastPacketAt)
   const latestTelemetry = getLatestTelemetry(buffer)
   if (latestTelemetry) {
@@ -61,6 +62,19 @@ export function appendTelemetrySample(
       windowMs,
       (sample) => sample.lastPacketAt,
     )
+  }
+}
+
+function applyMetricExclusionUpdates(buffer: LiveMetricBuffer, telemetry: TelemetryEvent): void {
+  const updates = telemetry.metricExclusionUpdates
+  if (!updates || updates.length === 0) return
+
+  for (const update of updates) {
+    const sample = buffer.telemetry.find((item) => item.lastPacketAt === update.lastPacketAt)
+    if (sample) sample.metricExclusions = update.metricExclusions
+    if (telemetry.lastPacketAt === update.lastPacketAt) {
+      telemetry.metricExclusions = update.metricExclusions
+    }
   }
 }
 
