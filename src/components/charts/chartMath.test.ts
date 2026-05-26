@@ -57,28 +57,43 @@ test('computeAutoRange supports zero include and min span', () => {
 test('toExcludedRanges filters by metric map and merges nearby ranges', () => {
   const ranges = toExcludedRanges(
     [
-      { startMs: 1_000, endMs: 2_000, metrics: { avg_speed: true } },
-      { startMs: 3_000, endMs: 4_000, metrics: { avg_speed: true } },
-      { startMs: 8_000, endMs: 9_000, metrics: { max_duty: true } },
+      { startMs: 1_000, endMs: 2_000, reason: 'low_speed', metrics: { avg_speed: true } },
+      { startMs: 3_000, endMs: 4_000, reason: 'low_speed', metrics: { avg_speed: true } },
+      { startMs: 8_000, endMs: 9_000, reason: 'free_spin', metrics: { max_duty: true } },
     ],
     'avg_speed',
   )
 
-  expect(ranges).toEqual([{ startMs: 1_000, endMs: 4_000 }])
+  expect(ranges).toEqual([{ startMs: 1_000, endMs: 4_000, reason: 'low_speed' }])
 })
 
 test('toExcludedRanges supports multi-metric filters', () => {
   const ranges = toExcludedRanges(
     [
-      { startMs: 1_000, endMs: 2_000, metrics: { avg_speed: true } },
-      { startMs: 7_000, endMs: 8_000, metrics: { max_speed: true } },
-      { startMs: 12_000, endMs: 13_000, metrics: { max_duty: true } },
+      { startMs: 1_000, endMs: 2_000, reason: 'low_speed', metrics: { avg_speed: true } },
+      { startMs: 7_000, endMs: 8_000, reason: 'free_spin', metrics: { max_speed: true } },
+      { startMs: 12_000, endMs: 13_000, reason: 'free_spin', metrics: { max_duty: true } },
     ],
     ['avg_speed', 'max_speed'],
   )
 
   expect(ranges).toEqual([
-    { startMs: 1_000, endMs: 2_000 },
-    { startMs: 7_000, endMs: 8_000 },
+    { startMs: 1_000, endMs: 2_000, reason: 'low_speed' },
+    { startMs: 7_000, endMs: 8_000, reason: 'free_spin' },
+  ])
+})
+
+test('toExcludedRanges does not merge nearby ranges with different reasons', () => {
+  const ranges = toExcludedRanges(
+    [
+      { startMs: 1_000, endMs: 2_000, reason: 'low_speed', metrics: { avg_speed: true } },
+      { startMs: 2_200, endMs: 3_000, reason: 'free_spin', metrics: { avg_speed: true } },
+    ],
+    'avg_speed',
+  )
+
+  expect(ranges).toEqual([
+    { startMs: 1_000, endMs: 2_000, reason: 'low_speed' },
+    { startMs: 2_200, endMs: 3_000, reason: 'free_spin' },
   ])
 })

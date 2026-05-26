@@ -80,14 +80,17 @@ function buildLiveExcludedRanges(
   metricKeys: string[],
   mergeGapMs = 2000,
 ): ExcludedRange[] {
+  const metricKeySet = new Set(metricKeys)
+  const hasSpeedOnly = metricKeySet.has('avg_speed') && metricKeySet.size === 1
+  const reason = hasSpeedOnly ? 'low_speed' : 'free_spin'
   const ranges: ExcludedRange[] = []
   for (const s of telemetry) {
     if (!metricKeys.some((k) => s.metricExclusions?.[k])) continue
     const last = ranges.at(-1)
-    if (last && s.lastPacketAt - last.endMs <= mergeGapMs) {
+    if (last && last.reason === reason && s.lastPacketAt - last.endMs <= mergeGapMs) {
       last.endMs = s.lastPacketAt
     } else {
-      ranges.push({ startMs: s.lastPacketAt, endMs: s.lastPacketAt })
+      ranges.push({ startMs: s.lastPacketAt, endMs: s.lastPacketAt, reason })
     }
   }
   return ranges

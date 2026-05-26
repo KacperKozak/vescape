@@ -19,6 +19,13 @@ import {
 const DEFAULT_HEIGHT = 54
 const Y_AXIS_WIDTH = 34
 const TOOLTIP_WIDTH = 94
+const EXCLUSION_MARKER_HEIGHT = 1
+const EXCLUSION_MARKER_INSET = 1
+
+function exclusionColor(reason: string): string {
+  if (reason === 'free_spin') return '#facc15'
+  return '#94a3b8'
+}
 
 function formatTime(date: Date): string {
   return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}:${date.getSeconds().toString().padStart(2, '0')}`
@@ -211,12 +218,14 @@ export function TelemetryLineChart({
               const bandWidth = Math.max(x2 - x1, 2)
               return (
                 <SvgRect
-                  key={range.startMs}
+                  key={`${range.reason}-${range.startMs}-${range.endMs}`}
                   x={x1}
-                  y={0}
+                  y={height - EXCLUSION_MARKER_HEIGHT - EXCLUSION_MARKER_INSET}
                   width={bandWidth}
-                  height={height}
-                  fill="rgba(148, 163, 184, 0.1)"
+                  height={EXCLUSION_MARKER_HEIGHT}
+                  rx={0.5}
+                  fill={exclusionColor(range.reason)}
+                  fillOpacity={0.85}
                 />
               )
             })}

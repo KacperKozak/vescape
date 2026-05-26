@@ -10,6 +10,7 @@ export interface TelemetryChartRange {
 export interface ExcludedRange {
   startMs: number
   endMs: number
+  reason: string
 }
 
 interface AutoRangeOptions {
@@ -114,7 +115,12 @@ export function getXPosition(
 }
 
 export function toExcludedRanges(
-  exclusions: Array<{ startMs: number; endMs: number; metrics: Record<string, boolean> }>,
+  exclusions: Array<{
+    startMs: number
+    endMs: number
+    reason: string
+    metrics: Record<string, boolean>
+  }>,
   metric: string | string[],
   mergeGapMs = 2000,
 ): ExcludedRange[] {
@@ -125,10 +131,10 @@ export function toExcludedRanges(
   const ranges: ExcludedRange[] = []
   for (const e of sorted) {
     const last = ranges.at(-1)
-    if (last && e.startMs - last.endMs <= mergeGapMs) {
+    if (last && last.reason === e.reason && e.startMs - last.endMs <= mergeGapMs) {
       last.endMs = Math.max(last.endMs, e.endMs)
     } else {
-      ranges.push({ startMs: e.startMs, endMs: e.endMs })
+      ranges.push({ startMs: e.startMs, endMs: e.endMs, reason: e.reason })
     }
   }
   return ranges

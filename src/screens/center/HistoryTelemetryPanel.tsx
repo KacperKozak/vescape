@@ -422,6 +422,20 @@ export function HistoryTelemetryPanel({
               )
             })}
           </View>
+          <View style={styles.metricLegend}>
+            <View style={styles.metricLegendItem}>
+              <View style={[styles.metricLegendLine, { backgroundColor: '#94a3b8' }]} />
+              <Text style={styles.metricLegendText} numberOfLines={1}>
+                Low speed
+              </Text>
+            </View>
+            <View style={styles.metricLegendItem}>
+              <View style={[styles.metricLegendLine, { backgroundColor: '#facc15' }]} />
+              <Text style={styles.metricLegendText} numberOfLines={1}>
+                Free spin
+              </Text>
+            </View>
+          </View>
         </>
       )}
     </View>
@@ -521,6 +535,31 @@ const styles = StyleSheet.create({
   },
   metricTabTextActive: {
     color: '#dbeafe',
+  },
+  metricLegend: {
+    marginTop: 2,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    columnGap: 8,
+    rowGap: 3,
+    paddingHorizontal: 6,
+  },
+  metricLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    maxWidth: '48%',
+  },
+  metricLegendLine: {
+    width: 6,
+    height: 1,
+    borderRadius: 0.5,
+  },
+  metricLegendText: {
+    color: '#64748b',
+    fontSize: 8,
+    fontWeight: '600',
   },
   empty: {
     color: '#94a3b8',
