@@ -35,7 +35,7 @@ class MetricSanitizerTest {
   }
 
   @Test
-  fun producesExclusionEntitiesForExcludedSamples() {
+  fun producesExclusionRangesForExcludedSamples() {
     val points = listOf(
       point(capturedAtMs = 1000L, deviceId = "board-1", speedCentiKmh = 100),
       point(capturedAtMs = 2000L, deviceId = "board-1", speedCentiKmh = 500),
@@ -45,10 +45,11 @@ class MetricSanitizerTest {
 
     assertEquals(1, result.exclusions.size)
     val exclusion = result.exclusions.single()
-    assertEquals(1000L, exclusion.capturedAtMs)
+    assertEquals(1000L, exclusion.startMs)
+    assertEquals(1000L, exclusion.endMs)
     assertEquals("board-1", exclusion.deviceId)
-    assertEquals(METRIC_AVG_SPEED, exclusion.metric)
     assertEquals(EXCLUSION_REASON_LOW_SPEED, exclusion.reason)
+    assertEquals(1, exclusion.sampleCount)
   }
 
   @Test
@@ -74,7 +75,8 @@ class MetricSanitizerTest {
 
     val result = sanitizeTelemetrySamples(points, movingSpeedThresholdCentiKmh = 300)
 
-    assertEquals(2, result.exclusions.size)
+    assertEquals(1, result.exclusions.size)
+    assertEquals(2, result.exclusions.single().sampleCount)
     assertTrue(result.samples.all { it.excludedFromAvgSpeed })
   }
 
@@ -270,7 +272,7 @@ class MetricSanitizerTest {
   }
 
   @Test
-  fun freeSpinProducesExclusionsForBothMaxSpeedAndMaxDuty() {
+  fun freeSpinProducesSingleReasonRange() {
     val points = listOf(
       pointWithGps(
         speedCentiKmh = 5000,
@@ -284,33 +286,12 @@ class MetricSanitizerTest {
 
     val result = sanitizeTelemetrySamples(points)
 
-    val speedExclusion = result.exclusions.find { it.metric == METRIC_MAX_SPEED }!!
-    assertEquals(EXCLUSION_REASON_FREE_SPIN, speedExclusion.reason)
-    assertEquals(1000L, speedExclusion.capturedAtMs)
-    assertEquals("board-1", speedExclusion.deviceId)
-    assertEquals("50.0", speedExclusion.rawValue)
-
-    val dutyExclusion = result.exclusions.find { it.metric == METRIC_MAX_DUTY }!!
-    assertEquals(EXCLUSION_REASON_FREE_SPIN, dutyExclusion.reason)
-    assertEquals("0.8", dutyExclusion.rawValue)
-  }
-
-  @Test
-  fun freeSpinExclusionIncludesReferenceGpsSpeed() {
-    // GPS 100 centi m/s = 3.6 km/h
-    val points = listOf(
-      pointWithGps(
-        speedCentiKmh = 5000,
-        gpsSpeedCentiMps = 100,
-        capturedAtMs = 1000L,
-        gpsTimestampMs = 1000L,
-      ),
-    )
-
-    val result = sanitizeTelemetrySamples(points)
-
-    val exclusion = result.exclusions.find { it.metric == METRIC_MAX_SPEED }!!
-    assertEquals("3.6", exclusion.referenceValue)
+    val exclusion = result.exclusions.single()
+    assertEquals(EXCLUSION_REASON_FREE_SPIN, exclusion.reason)
+    assertEquals(1000L, exclusion.startMs)
+    assertEquals(1000L, exclusion.endMs)
+    assertEquals("board-1", exclusion.deviceId)
+    assertEquals(1, exclusion.sampleCount)
   }
 
   @Test

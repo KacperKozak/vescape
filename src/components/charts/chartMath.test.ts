@@ -5,6 +5,7 @@ import {
   findNearestChartPointAtX,
   getChartPosition,
   type TelemetryChartPoint,
+  toExcludedRanges,
 } from './chartMath'
 
 const base = new Date('2026-01-01T00:00:00.000Z').getTime()
@@ -51,4 +52,33 @@ test('computeAutoRange supports zero include and min span', () => {
   })
   expect(range.y.min).toBeLessThanOrEqual(0)
   expect(range.y.max - range.y.min).toBeGreaterThanOrEqual(11)
+})
+
+test('toExcludedRanges filters by metric map and merges nearby ranges', () => {
+  const ranges = toExcludedRanges(
+    [
+      { startMs: 1_000, endMs: 2_000, metrics: { avg_speed: true } },
+      { startMs: 3_000, endMs: 4_000, metrics: { avg_speed: true } },
+      { startMs: 8_000, endMs: 9_000, metrics: { max_duty: true } },
+    ],
+    'avg_speed',
+  )
+
+  expect(ranges).toEqual([{ startMs: 1_000, endMs: 4_000 }])
+})
+
+test('toExcludedRanges supports multi-metric filters', () => {
+  const ranges = toExcludedRanges(
+    [
+      { startMs: 1_000, endMs: 2_000, metrics: { avg_speed: true } },
+      { startMs: 7_000, endMs: 8_000, metrics: { max_speed: true } },
+      { startMs: 12_000, endMs: 13_000, metrics: { max_duty: true } },
+    ],
+    ['avg_speed', 'max_speed'],
+  )
+
+  expect(ranges).toEqual([
+    { startMs: 1_000, endMs: 2_000 },
+    { startMs: 7_000, endMs: 8_000 },
+  ])
 })

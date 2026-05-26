@@ -2,6 +2,7 @@ package expo.modules.vescble.telemetry
 
 import expo.modules.vescble.telemetry.sanitizers.FreeSpinMetricSanitizer
 import expo.modules.vescble.telemetry.sanitizers.LowSpeedAverageSpeedSanitizer
+import expo.modules.vescble.telemetry.sanitizers.MetricExclusionSample
 import expo.modules.vescble.telemetry.sanitizers.MetricSanitizationContext
 import expo.modules.vescble.telemetry.sanitizers.buildPreciseGpsIndex
 import kotlin.math.roundToInt
@@ -12,6 +13,7 @@ internal const val METRIC_MAX_SPEED = "max_speed"
 internal const val METRIC_MAX_DUTY = "max_duty"
 internal const val EXCLUSION_REASON_LOW_SPEED = "low_speed"
 internal const val EXCLUSION_REASON_FREE_SPIN = "free_spin"
+internal const val METRIC_EXCLUSION_RANGE_MERGE_GAP_MS = 2_000L
 
 internal const val FREE_SPIN_LOW_GPS_CUTOFF_CENTI_KMH = 700
 internal const val FREE_SPIN_MAX_DELTA_CENTI_KMH = 1200
@@ -45,7 +47,7 @@ internal data class SanitizedSample(
 
 internal data class SanitizationResult(
   val samples: List<SanitizedSample>,
-  val exclusions: List<MetricExclusionEntity>,
+  val exclusions: List<MetricExclusionRangeEntity>,
 )
 
 internal fun sanitizeTelemetrySamples(
@@ -74,7 +76,7 @@ internal fun sanitizeTelemetrySamples(
     preciseGpsIndices = buildPreciseGpsIndex(samples),
   )
   val sanitized = mutableListOf<SanitizedSample>()
-  val exclusions = mutableListOf<MetricExclusionEntity>()
+  val exclusionSamples = mutableListOf<MetricExclusionSample>()
 
   for ((index, point) in samples.withIndex()) {
     val results = sanitizers.map { sanitizer -> sanitizer.sanitize(index, point, context) }
@@ -89,8 +91,52 @@ internal fun sanitizeTelemetrySamples(
         excludedFromMaxDuty = results.any { it.excludedFromMaxDuty },
       ),
     )
-    exclusions.addAll(results.flatMap { it.exclusions })
+    exclusionSamples.addAll(results.flatMap { it.exclusions })
   }
 
-  return SanitizationResult(samples = sanitized, exclusions = exclusions)
+  return SanitizationResult(samples = sanitized, exclusions = collapseExclusionSamples(exclusionSamples))
+}
+
+internal fun collapseExclusionSamples(samples: List<MetricExclusionSample>): List<MetricExclusionRangeEntity> {
+  if (samples.isEmpty()) return emptyList()
+  val ranges = mutableListOf<MetricExclusionRangeEntity>()
+  val sorted = samples.sortedWith(compareBy({ it.deviceId }, { it.reason }, { it.capturedAtMs }))
+
+  var deviceId = sorted.first().deviceId
+  var reason = sorted.first().reason
+  var startMs = sorted.first().capturedAtMs
+  var endMs = startMs
+  var sampleCount = 1
+
+  fun flush() {
+    ranges.add(
+      MetricExclusionRangeEntity(
+        deviceId = deviceId,
+        reason = reason,
+        startMs = startMs,
+        endMs = endMs,
+        sampleCount = sampleCount,
+      ),
+    )
+  }
+
+  for (sample in sorted.drop(1)) {
+    val sameRange = sample.deviceId == deviceId &&
+      sample.reason == reason &&
+      sample.capturedAtMs - endMs <= METRIC_EXCLUSION_RANGE_MERGE_GAP_MS
+    if (sameRange) {
+      endMs = sample.capturedAtMs
+      sampleCount++
+    } else {
+      flush()
+      deviceId = sample.deviceId
+      reason = sample.reason
+      startMs = sample.capturedAtMs
+      endMs = sample.capturedAtMs
+      sampleCount = 1
+    }
+  }
+  flush()
+
+  return ranges
 }

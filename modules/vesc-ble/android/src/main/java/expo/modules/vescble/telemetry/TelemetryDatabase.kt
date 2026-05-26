@@ -8,14 +8,14 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
 internal const val TELEMETRY_DATABASE_NAME = "telemetry.db"
-internal const val TELEMETRY_DATABASE_VERSION = 16
+internal const val TELEMETRY_DATABASE_VERSION = 17
 
 @Database(
   entities = [
     TelemetryFrameEntity::class,
     TelemetryMinuteBucketEntity::class,
     TelemetryMarkerEntity::class,
-    MetricExclusionEntity::class,
+    MetricExclusionRangeEntity::class,
     BoardEntity::class,
     AlertRuleEntity::class,
     AppSettingEntity::class,
@@ -212,6 +212,36 @@ abstract class TelemetryDatabase : RoomDatabase() {
       }
     }
 
+    private val MIGRATION_16_17 = object : Migration(16, 17) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("DROP TABLE IF EXISTS metric_exclusions")
+        db.execSQL(
+          """
+          CREATE TABLE IF NOT EXISTS metric_exclusion_ranges (
+            id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+            device_id TEXT NOT NULL,
+            reason TEXT NOT NULL,
+            start_ms INTEGER NOT NULL,
+            end_ms INTEGER NOT NULL,
+            sample_count INTEGER NOT NULL
+          )
+          """.trimIndent(),
+        )
+        db.execSQL(
+          """
+          CREATE INDEX IF NOT EXISTS index_metric_exclusion_ranges_start_ms_end_ms
+          ON metric_exclusion_ranges(start_ms, end_ms)
+          """.trimIndent(),
+        )
+        db.execSQL(
+          """
+          CREATE INDEX IF NOT EXISTS index_metric_exclusion_ranges_device_id_start_ms_end_ms
+          ON metric_exclusion_ranges(device_id, start_ms, end_ms)
+          """.trimIndent(),
+        )
+      }
+    }
+
     fun get(context: Context): TelemetryDatabase {
       return instance ?: synchronized(this) {
         instance ?: Room.databaseBuilder(
@@ -233,6 +263,7 @@ abstract class TelemetryDatabase : RoomDatabase() {
             MIGRATION_13_14,
             MIGRATION_14_15,
             MIGRATION_15_16,
+            MIGRATION_16_17,
           )
           .fallbackToDestructiveMigration(true)
           .addCallback(object : Callback() {

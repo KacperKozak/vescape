@@ -396,9 +396,7 @@ class TelemetryRepository private constructor(context: Context) {
             excludedFromMaxDuty = sanitization.samples[index].excludedFromMaxDuty,
           )
         }
-        if (sanitization.exclusions.isNotEmpty()) {
-          dao.insertExclusions(sanitization.exclusions)
-        }
+        if (sanitization.exclusions.isNotEmpty()) dao.upsertExclusionRanges(sanitization.exclusions)
         val buckets = buildTelemetryBuckets(
           telemetryPoints = sanitizedPoints,
           locationPoints = states.toBucketLocationPoints(),
@@ -861,15 +859,26 @@ private fun TelemetryMarkerEntity.toMap(): Map<String, Any?> = mapOf(
   "gapMs" to gapMs,
 )
 
-private fun MetricExclusionEntity.toMap(): Map<String, Any?> = mapOf(
-  "capturedAtMs" to capturedAtMs,
+private fun MetricExclusionRangeEntity.toMap(): Map<String, Any?> = mapOf(
+  "id" to id,
   "deviceId" to deviceId.ifBlank { null },
-  "metric" to metric,
   "reason" to reason,
-  "rawValue" to rawValue,
-  "referenceValue" to referenceValue,
-  "contextJson" to contextJson,
+  "startMs" to startMs,
+  "endMs" to endMs,
+  "sampleCount" to sampleCount,
+  "metrics" to metricsForExclusionReason(reason),
 )
+
+private fun metricsForExclusionReason(reason: String): Map<String, Boolean> =
+  buildMap {
+    when (reason) {
+      EXCLUSION_REASON_LOW_SPEED -> put(METRIC_AVG_SPEED, true)
+      EXCLUSION_REASON_FREE_SPIN -> {
+        put(METRIC_MAX_SPEED, true)
+        put(METRIC_MAX_DUTY, true)
+      }
+    }
+  }
 
 private fun DiagnosticEventEntity.toMap(): Map<String, Any?> = mapOf(
   "id" to id,

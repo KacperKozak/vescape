@@ -2,8 +2,6 @@ package expo.modules.vescble.telemetry.sanitizers
 
 import expo.modules.vescble.telemetry.BucketTelemetryPoint
 import expo.modules.vescble.telemetry.EXCLUSION_REASON_LOW_SPEED
-import expo.modules.vescble.telemetry.METRIC_AVG_SPEED
-import expo.modules.vescble.telemetry.MetricExclusionEntity
 import expo.modules.vescble.telemetry.UNKNOWN_TELEMETRY_DEVICE_ID
 import kotlin.math.abs
 
@@ -23,14 +21,10 @@ internal class LowSpeedAverageSpeedSanitizer(
     return MetricSanitizerOutput(
       excludedFromAvgSpeed = true,
       exclusions = listOf(
-        MetricExclusionEntity(
+        MetricExclusionSample(
           capturedAtMs = point.capturedAtMs,
           deviceId = point.deviceId ?: UNKNOWN_TELEMETRY_DEVICE_ID,
-          metric = METRIC_AVG_SPEED,
           reason = EXCLUSION_REASON_LOW_SPEED,
-          rawValue = "${absSpeed / 100.0}",
-          referenceValue = null,
-          contextJson = null,
         ),
       ),
     )

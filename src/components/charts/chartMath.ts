@@ -114,21 +114,21 @@ export function getXPosition(
 }
 
 export function toExcludedRanges(
-  exclusions: Array<{ capturedAtMs: number; metric: string }>,
+  exclusions: Array<{ startMs: number; endMs: number; metrics: Record<string, boolean> }>,
   metric: string | string[],
   mergeGapMs = 2000,
 ): ExcludedRange[] {
   const metrics = Array.isArray(metric) ? metric : [metric]
   const sorted = exclusions
-    .filter((e) => metrics.includes(e.metric))
-    .sort((a, b) => a.capturedAtMs - b.capturedAtMs)
+    .filter((e) => metrics.some((m) => e.metrics[m]))
+    .sort((a, b) => a.startMs - b.startMs)
   const ranges: ExcludedRange[] = []
   for (const e of sorted) {
     const last = ranges.at(-1)
-    if (last && e.capturedAtMs - last.endMs <= mergeGapMs) {
-      last.endMs = e.capturedAtMs
+    if (last && e.startMs - last.endMs <= mergeGapMs) {
+      last.endMs = Math.max(last.endMs, e.endMs)
     } else {
-      ranges.push({ startMs: e.capturedAtMs, endMs: e.capturedAtMs })
+      ranges.push({ startMs: e.startMs, endMs: e.endMs })
     }
   }
   return ranges

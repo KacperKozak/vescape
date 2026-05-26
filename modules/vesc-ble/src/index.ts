@@ -270,13 +270,13 @@ export interface HistoryMarker {
 }
 
 export interface MetricExclusion {
-  capturedAtMs: number
+  id: number
   deviceId: string | null
-  metric: string
   reason: string
-  rawValue: string | null
-  referenceValue: string | null
-  contextJson: string | null
+  startMs: number
+  endMs: number
+  sampleCount: number
+  metrics: Record<string, boolean>
 }
 
 export interface HistoryRange {

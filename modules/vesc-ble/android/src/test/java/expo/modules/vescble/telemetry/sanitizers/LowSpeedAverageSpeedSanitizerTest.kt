@@ -2,7 +2,6 @@ package expo.modules.vescble.telemetry.sanitizers
 
 import expo.modules.vescble.telemetry.BucketTelemetryPoint
 import expo.modules.vescble.telemetry.EXCLUSION_REASON_LOW_SPEED
-import expo.modules.vescble.telemetry.METRIC_AVG_SPEED
 import expo.modules.vescble.telemetry.UNKNOWN_TELEMETRY_DEVICE_ID
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -24,9 +23,8 @@ class LowSpeedAverageSpeedSanitizerTest {
     assertFalse(result.excludedFromMaxSpeed)
     assertFalse(result.excludedFromMaxDuty)
     assertEquals(1, result.exclusions.size)
-    assertEquals(METRIC_AVG_SPEED, result.exclusions.single().metric)
     assertEquals(EXCLUSION_REASON_LOW_SPEED, result.exclusions.single().reason)
-    assertEquals("2.99", result.exclusions.single().rawValue)
+    assertEquals(1000L, result.exclusions.single().capturedAtMs)
   }
 
   @Test
@@ -55,7 +53,7 @@ class LowSpeedAverageSpeedSanitizerTest {
 
     assertTrue(result.excludedFromAvgSpeed)
     assertEquals(UNKNOWN_TELEMETRY_DEVICE_ID, result.exclusions.single().deviceId)
-    assertEquals("2.0", result.exclusions.single().rawValue)
+    assertEquals(EXCLUSION_REASON_LOW_SPEED, result.exclusions.single().reason)
   }
 
   private fun contextFor(vararg points: BucketTelemetryPoint) = MetricSanitizationContext(

@@ -1,9 +1,8 @@
 package expo.modules.vescble.telemetry.sanitizers
 
 import expo.modules.vescble.telemetry.BucketTelemetryPoint
+import expo.modules.vescble.telemetry.EXCLUSION_REASON_FREE_SPIN
 import expo.modules.vescble.telemetry.FREE_SPIN_GPS_PRECISE_ACCURACY_CM
-import expo.modules.vescble.telemetry.METRIC_MAX_DUTY
-import expo.modules.vescble.telemetry.METRIC_MAX_SPEED
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -25,10 +24,9 @@ class FreeSpinMetricSanitizerTest {
     assertTrue(result.excludedFromMaxSpeed)
     assertTrue(result.excludedFromMaxDuty)
     assertFalse(result.excludedFromAvgSpeed)
-    assertEquals(listOf(METRIC_MAX_SPEED, METRIC_MAX_DUTY), result.exclusions.map { it.metric })
-    assertEquals("16.0", result.exclusions.first { it.metric == METRIC_MAX_SPEED }.rawValue)
-    assertEquals("0.8", result.exclusions.first { it.metric == METRIC_MAX_DUTY }.rawValue)
-    assertEquals("3.6", result.exclusions.first().referenceValue)
+    assertEquals(1, result.exclusions.size)
+    assertEquals(EXCLUSION_REASON_FREE_SPIN, result.exclusions.single().reason)
+    assertEquals(1000L, result.exclusions.single().capturedAtMs)
   }
 
   @Test
@@ -82,10 +80,7 @@ class FreeSpinMetricSanitizerTest {
     val result = FreeSpinMetricSanitizer(maxSpeedDeltaCentiKmh = 1200, stationaryBoardCapCentiKmh = 1500).sanitize(1, points[1], context)
 
     assertTrue(result.excludedFromMaxSpeed)
-    assertEquals(
-      "{\"gpsTimestampMs\":1000,\"sampleTimestampMs\":3000,\"gpsAccuracyCm\":500}",
-      result.exclusions.first().contextJson,
-    )
+    assertEquals(EXCLUSION_REASON_FREE_SPIN, result.exclusions.single().reason)
   }
 
   private fun sanitize(point: BucketTelemetryPoint): MetricSanitizerOutput {

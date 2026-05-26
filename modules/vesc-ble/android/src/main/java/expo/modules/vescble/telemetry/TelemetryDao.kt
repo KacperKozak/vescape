@@ -9,28 +9,48 @@ import androidx.room.Update
 
 @Dao
 interface TelemetryDao {
-  @Insert(onConflict = OnConflictStrategy.REPLACE)
-  suspend fun insertExclusions(exclusions: List<MetricExclusionEntity>)
+  @Insert
+  suspend fun insertExclusionRange(exclusion: MetricExclusionRangeEntity): Long
 
   @Query(
     """
-    SELECT * FROM metric_exclusions
-    WHERE captured_at_ms >= :fromMs
-      AND captured_at_ms <= :toMs
+    SELECT * FROM metric_exclusion_ranges
+    WHERE start_ms <= :toMs
+      AND end_ms >= :fromMs
       AND (:deviceId IS NULL OR device_id = :deviceId)
-    ORDER BY captured_at_ms ASC
+    ORDER BY start_ms ASC
     """,
   )
-  suspend fun getExclusions(fromMs: Long, toMs: Long, deviceId: String?): List<MetricExclusionEntity>
+  suspend fun getExclusions(fromMs: Long, toMs: Long, deviceId: String?): List<MetricExclusionRangeEntity>
 
-  @Query("DELETE FROM metric_exclusions WHERE captured_at_ms >= :fromMs AND captured_at_ms <= :toMs")
+  @Query("DELETE FROM metric_exclusion_ranges WHERE start_ms <= :toMs AND end_ms >= :fromMs")
   suspend fun deleteExclusionsRange(fromMs: Long, toMs: Long): Int
 
-  @Query("DELETE FROM metric_exclusions")
+  @Query("DELETE FROM metric_exclusion_ranges")
   suspend fun clearExclusions()
 
-  @Query("DELETE FROM metric_exclusions WHERE captured_at_ms < :beforeMs")
+  @Query("DELETE FROM metric_exclusion_ranges WHERE end_ms < :beforeMs")
   suspend fun deleteExclusionsBefore(beforeMs: Long): Int
+
+  @Query(
+    """
+    SELECT * FROM metric_exclusion_ranges
+    WHERE device_id = :deviceId
+      AND reason = :reason
+      AND end_ms >= :startMs - :mergeGapMs
+    ORDER BY end_ms DESC
+    LIMIT 1
+    """,
+  )
+  suspend fun getMergeableExclusionRange(
+    deviceId: String,
+    reason: String,
+    startMs: Long,
+    mergeGapMs: Long,
+  ): MetricExclusionRangeEntity?
+
+  @Update
+  suspend fun updateExclusionRange(exclusion: MetricExclusionRangeEntity)
 
   @Insert
   suspend fun insertFrames(frames: List<TelemetryFrameEntity>): List<Long>
@@ -67,12 +87,34 @@ interface TelemetryDao {
     frames: List<TelemetryFrameEntity>,
     buckets: Collection<TelemetryMinuteBucketEntity>,
     markers: List<TelemetryMarkerEntity>,
-    exclusions: List<MetricExclusionEntity> = emptyList(),
+    exclusions: List<MetricExclusionRangeEntity> = emptyList(),
   ) {
     if (frames.isNotEmpty()) insertFrames(frames)
     if (buckets.isNotEmpty()) upsertBuckets(buckets)
     if (markers.isNotEmpty()) insertMarkers(markers)
-    if (exclusions.isNotEmpty()) insertExclusions(exclusions)
+    if (exclusions.isNotEmpty()) upsertExclusionRanges(exclusions)
+  }
+
+  @Transaction
+  suspend fun upsertExclusionRanges(exclusions: List<MetricExclusionRangeEntity>) {
+    for (exclusion in exclusions.sortedWith(compareBy({ it.deviceId }, { it.reason }, { it.startMs }))) {
+      val existing = getMergeableExclusionRange(
+        exclusion.deviceId,
+        exclusion.reason,
+        exclusion.startMs,
+        METRIC_EXCLUSION_RANGE_MERGE_GAP_MS,
+      )
+      if (existing == null) {
+        insertExclusionRange(exclusion)
+      } else {
+        updateExclusionRange(
+          existing.copy(
+            endMs = maxOf(existing.endMs, exclusion.endMs),
+            sampleCount = existing.sampleCount + exclusion.sampleCount,
+          ),
+        )
+      }
+    }
   }
 
   @Query(
