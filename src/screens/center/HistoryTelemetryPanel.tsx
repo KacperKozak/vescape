@@ -21,7 +21,6 @@ interface HistoryTelemetryPanelProps {
   endAtMs: number
   deviceName: string
   samples: TelemetrySample[]
-  loading: boolean
   canPrevious: boolean
   canNext: boolean
   onPrevious: () => void
@@ -65,7 +64,6 @@ export function HistoryTelemetryPanel({
   endAtMs,
   deviceName,
   samples,
-  loading,
   canPrevious,
   canNext,
   onPrevious,
@@ -201,16 +199,7 @@ export function HistoryTelemetryPanel({
 
   const bottomInset = Math.max(insets.bottom, 16) + 8
 
-  if (!headSample || sortedSamples.length < 2) {
-    return (
-      <View
-        style={[styles.panel, { bottom: bottomInset }]}
-        onLayout={(e) => onHeightChange?.(e.nativeEvent.layout.height)}
-      >
-        <Text style={styles.empty}>No board samples for this ride.</Text>
-      </View>
-    )
-  }
+  const hasChartData = headSample != null && sortedSamples.length >= 2
 
   const handlePointSelected = (point: TelemetryChartPoint) => {
     const ms = point.date.getTime()
@@ -218,90 +207,91 @@ export function HistoryTelemetryPanel({
     onSeek?.(ms)
   }
 
-  const headPoint: TelemetryChartPoint = {
-    date: new Date(headSample.capturedAtMs),
-    value: headSample.speedKmh,
-  }
+  const headPoint: TelemetryChartPoint | null = headSample
+    ? { date: new Date(headSample.capturedAtMs), value: headSample.speedKmh }
+    : null
 
-  const optionalChartConfig: Record<
-    OptionalChartMetric,
-    {
-      points: TelemetryChartPoint[]
-      range: ReturnType<typeof computeAutoRange>
-      label: string
-      value: string
-      headValue: number
-      color: string
-      formatValue: (v: number) => string
-    }
-  > = {
-    duty: {
-      points: dutyPoints,
-      range: computeAutoRange(dutyPoints, {
-        includeZero: true,
-        minSpan: 20,
-        paddingRatio: 0.1,
-        fallbackMin: 0,
-        fallbackMax: 100,
-      }),
-      label: telemetry.duty.label,
-      value: fmtDutyPercent(headSample.dutyCycle, false),
-      headValue: dutyPercent(headSample.dutyCycle, false),
-      color: telemetry.duty.color,
-      formatValue: (v) => `${v.toFixed(1)}%`,
-    },
-    battery: {
-      points: batteryVoltagePoints,
-      range: batteryRange,
-      label: telemetry.battVoltage.label,
-      value: telemetry.battVoltage.formatWithUnit(headSample.batteryVoltage),
-      headValue: headSample.batteryVoltage,
-      color: telemetry.battVoltage.color,
-      formatValue: (v) => telemetry.battVoltage.formatWithUnit(v),
-    },
-    tempMotor: {
-      points: tempMotorPoints,
-      range: tempMotorRange,
-      label: telemetry.motorTemp.label,
-      value:
-        headSample.tempMotor == null
-          ? '-'
-          : telemetry.motorTemp.formatWithUnit(headSample.tempMotor),
-      headValue: headSample.tempMotor ?? 0,
-      color: telemetry.motorTemp.color,
-      formatValue: (v) => telemetry.motorTemp.formatWithUnit(v),
-    },
-    tempController: {
-      points: tempMosfetPoints,
-      range: tempMosfetRange,
-      label: telemetry.controllerTemp.label,
-      value:
-        headSample.tempMosfet == null
-          ? '-'
-          : telemetry.controllerTemp.formatWithUnit(headSample.tempMosfet),
-      headValue: headSample.tempMosfet ?? 0,
-      color: telemetry.controllerTemp.color,
-      formatValue: (v) => telemetry.controllerTemp.formatWithUnit(v),
-    },
-    motorCurrent: {
-      points: motorCurrentPoints,
-      range: motorCurrentRange,
-      label: telemetry.motorCurrent.label,
-      value: telemetry.motorCurrent.formatWithUnit(headSample.motorCurrent),
-      headValue: headSample.motorCurrent,
-      color: telemetry.motorCurrent.color,
-      formatValue: (v) => telemetry.motorCurrent.formatWithUnit(v),
-    },
-    batteryCurrent: {
-      points: batteryCurrentPoints,
-      range: batteryCurrentRange,
-      label: telemetry.battCurrent.label,
-      value: telemetry.battCurrent.formatWithUnit(headSample.batteryCurrent),
-      headValue: headSample.batteryCurrent,
-      color: telemetry.battCurrent.color,
-      formatValue: (v) => telemetry.battCurrent.formatWithUnit(v),
-    },
-  }
+  const optionalChartConfig = headSample
+    ? ({
+        duty: {
+          points: dutyPoints,
+          range: computeAutoRange(dutyPoints, {
+            includeZero: true,
+            minSpan: 20,
+            paddingRatio: 0.1,
+            fallbackMin: 0,
+            fallbackMax: 100,
+          }),
+          label: telemetry.duty.label,
+          value: fmtDutyPercent(headSample.dutyCycle, false),
+          headValue: dutyPercent(headSample.dutyCycle, false),
+          color: telemetry.duty.color,
+          formatValue: (v: number) => `${v.toFixed(1)}%`,
+        },
+        battery: {
+          points: batteryVoltagePoints,
+          range: batteryRange,
+          label: telemetry.battVoltage.label,
+          value: telemetry.battVoltage.formatWithUnit(headSample.batteryVoltage),
+          headValue: headSample.batteryVoltage,
+          color: telemetry.battVoltage.color,
+          formatValue: (v: number) => telemetry.battVoltage.formatWithUnit(v),
+        },
+        tempMotor: {
+          points: tempMotorPoints,
+          range: tempMotorRange,
+          label: telemetry.motorTemp.label,
+          value:
+            headSample.tempMotor == null
+              ? '-'
+              : telemetry.motorTemp.formatWithUnit(headSample.tempMotor),
+          headValue: headSample.tempMotor ?? 0,
+          color: telemetry.motorTemp.color,
+          formatValue: (v: number) => telemetry.motorTemp.formatWithUnit(v),
+        },
+        tempController: {
+          points: tempMosfetPoints,
+          range: tempMosfetRange,
+          label: telemetry.controllerTemp.label,
+          value:
+            headSample.tempMosfet == null
+              ? '-'
+              : telemetry.controllerTemp.formatWithUnit(headSample.tempMosfet),
+          headValue: headSample.tempMosfet ?? 0,
+          color: telemetry.controllerTemp.color,
+          formatValue: (v: number) => telemetry.controllerTemp.formatWithUnit(v),
+        },
+        motorCurrent: {
+          points: motorCurrentPoints,
+          range: motorCurrentRange,
+          label: telemetry.motorCurrent.label,
+          value: telemetry.motorCurrent.formatWithUnit(headSample.motorCurrent),
+          headValue: headSample.motorCurrent,
+          color: telemetry.motorCurrent.color,
+          formatValue: (v: number) => telemetry.motorCurrent.formatWithUnit(v),
+        },
+        batteryCurrent: {
+          points: batteryCurrentPoints,
+          range: batteryCurrentRange,
+          label: telemetry.battCurrent.label,
+          value: telemetry.battCurrent.formatWithUnit(headSample.batteryCurrent),
+          headValue: headSample.batteryCurrent,
+          color: telemetry.battCurrent.color,
+          formatValue: (v: number) => telemetry.battCurrent.formatWithUnit(v),
+        },
+      } satisfies Record<
+        OptionalChartMetric,
+        {
+          points: TelemetryChartPoint[]
+          range: ReturnType<typeof computeAutoRange>
+          label: string
+          value: string
+          headValue: number
+          color: string
+          formatValue: (v: number) => string
+        }
+      >)
+    : null
 
   return (
     <View
@@ -309,12 +299,7 @@ export function HistoryTelemetryPanel({
       onLayout={(e) => onHeightChange?.(e.nativeEvent.layout.height)}
     >
       <View style={styles.navRow}>
-        <IconButton
-          icon={CaretLeftIcon}
-          size="lg"
-          onPress={onPrevious}
-          disabled={!canPrevious || loading}
-        />
+        <IconButton icon={CaretLeftIcon} size="lg" onPress={onPrevious} disabled={!canPrevious} />
         <Pressable style={styles.titleButton} onPress={onOpenList}>
           <View style={styles.titleContent}>
             <Text style={styles.titleTime} numberOfLines={1}>
@@ -326,92 +311,96 @@ export function HistoryTelemetryPanel({
           </View>
           <CaretDownIcon size={12} color="#64748b" weight="bold" />
         </Pressable>
-        <IconButton
-          icon={CaretRightIcon}
-          size="lg"
-          onPress={onNext}
-          disabled={!canNext || loading}
-        />
+        <IconButton icon={CaretRightIcon} size="lg" onPress={onNext} disabled={!canNext} />
       </View>
-      <TelemetryLineChart
-        label={telemetry.speed.label}
-        value={telemetry.speed.formatWithUnit(headSample.speedKmh)}
-        points={speedPoints}
-        color={telemetry.speed.color}
-        range={speedRange}
-        currentPoint={headPoint}
-        height={48}
-        containerStyle={styles.chart}
-        formatValue={(v) => telemetry.speed.formatWithUnit(v)}
-        onPointSelected={(point) => handlePointSelected(point)}
-      />
-
-      {OPTIONAL_CHART_METRICS.filter((m) => activeCharts.has(m.key)).map((metric) => {
-        const cfg = optionalChartConfig[metric.key]
-        return (
+      {hasChartData && headPoint && optionalChartConfig && (
+        <>
           <TelemetryLineChart
-            key={metric.key}
-            label={cfg.label}
-            value={cfg.value}
-            points={cfg.points}
-            color={cfg.color}
-            range={cfg.range}
-            currentPoint={{ date: new Date(headSample.capturedAtMs), value: cfg.headValue }}
-            height={40}
+            label={telemetry.speed.label}
+            value={telemetry.speed.formatWithUnit(headSample!.speedKmh)}
+            points={speedPoints}
+            color={telemetry.speed.color}
+            range={speedRange}
+            currentPoint={headPoint}
+            height={48}
             containerStyle={styles.chart}
-            formatValue={cfg.formatValue}
+            formatValue={(v) => telemetry.speed.formatWithUnit(v)}
             onPointSelected={(point) => handlePointSelected(point)}
           />
-        )
-      })}
 
-      <View style={styles.metricTabs}>
-        {OPTIONAL_CHART_METRICS.map((metric, index) => {
-          const active = activeCharts.has(metric.key)
-          const cfg = optionalChartConfig[metric.key]
-          return (
-            <Pressable
-              key={metric.key}
-              style={[
-                styles.metricTab,
-                index < OPTIONAL_CHART_METRICS.length - 1 && styles.metricTabDivider,
-                active && styles.metricTabActive,
-              ]}
-              onPress={() => setActiveCharts((prev) => toggleOptionalChartMetric(prev, metric.key))}
-            >
-              <View
-                style={[styles.metricTabLine, { backgroundColor: active ? cfg.color : '#1e293b' }]}
+          {OPTIONAL_CHART_METRICS.filter((m) => activeCharts.has(m.key)).map((metric) => {
+            const cfg = optionalChartConfig[metric.key]
+            return (
+              <TelemetryLineChart
+                key={metric.key}
+                label={cfg.label}
+                value={cfg.value}
+                points={cfg.points}
+                color={cfg.color}
+                range={cfg.range}
+                currentPoint={{ date: new Date(headSample!.capturedAtMs), value: cfg.headValue }}
+                height={40}
+                containerStyle={styles.chart}
+                formatValue={cfg.formatValue}
+                onPointSelected={(point) => handlePointSelected(point)}
               />
-              {metric.multilineLabel ? (
-                <View style={styles.metricTabTextStack}>
-                  <Text
-                    style={[styles.metricTabText, active && styles.metricTabTextActive]}
-                    numberOfLines={1}
-                    ellipsizeMode="tail"
-                  >
-                    {metric.multilineLabel[0]}
-                  </Text>
-                  <Text
-                    style={[styles.metricTabText, active && styles.metricTabTextActive]}
-                    numberOfLines={1}
-                    ellipsizeMode="tail"
-                  >
-                    {metric.multilineLabel[1]}
-                  </Text>
-                </View>
-              ) : (
-                <Text
-                  style={[styles.metricTabText, active && styles.metricTabTextActive]}
-                  numberOfLines={1}
-                  ellipsizeMode="tail"
+            )
+          })}
+
+          <View style={styles.metricTabs}>
+            {OPTIONAL_CHART_METRICS.map((metric, index) => {
+              const active = activeCharts.has(metric.key)
+              const cfg = optionalChartConfig[metric.key]
+              return (
+                <Pressable
+                  key={metric.key}
+                  style={[
+                    styles.metricTab,
+                    index < OPTIONAL_CHART_METRICS.length - 1 && styles.metricTabDivider,
+                    active && styles.metricTabActive,
+                  ]}
+                  onPress={() =>
+                    setActiveCharts((prev) => toggleOptionalChartMetric(prev, metric.key))
+                  }
                 >
-                  {metric.label}
-                </Text>
-              )}
-            </Pressable>
-          )
-        })}
-      </View>
+                  <View
+                    style={[
+                      styles.metricTabLine,
+                      { backgroundColor: active ? cfg.color : '#1e293b' },
+                    ]}
+                  />
+                  {metric.multilineLabel ? (
+                    <View style={styles.metricTabTextStack}>
+                      <Text
+                        style={[styles.metricTabText, active && styles.metricTabTextActive]}
+                        numberOfLines={1}
+                        ellipsizeMode="tail"
+                      >
+                        {metric.multilineLabel[0]}
+                      </Text>
+                      <Text
+                        style={[styles.metricTabText, active && styles.metricTabTextActive]}
+                        numberOfLines={1}
+                        ellipsizeMode="tail"
+                      >
+                        {metric.multilineLabel[1]}
+                      </Text>
+                    </View>
+                  ) : (
+                    <Text
+                      style={[styles.metricTabText, active && styles.metricTabTextActive]}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
+                    >
+                      {metric.label}
+                    </Text>
+                  )}
+                </Pressable>
+              )
+            })}
+          </View>
+        </>
+      )}
     </View>
   )
 }

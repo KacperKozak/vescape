@@ -28,6 +28,9 @@ This is a PoC, but keep it sharp:
   cover. Add tests for meaningful behavior, edge cases, contracts, or regressions.
 - Files under `src/components/` should be React components or component-owned assets. Put
   non-component shared logic in an appropriate domain folder only when it is genuinely shared.
+- Files under `src/app/` are Expo Router route/layout files only. Do not put hooks,
+  non-route components, helpers, or other shared logic there; move them to `src/hooks/`,
+  `src/components/`, or the relevant domain folder such as `src/tune/`.
 
 ## React Native
 

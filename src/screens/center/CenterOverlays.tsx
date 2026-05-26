@@ -107,7 +107,6 @@ export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOver
   const historyPanelBottom = Math.max(insets.bottom, 16) + 8
   const [panelHeight, setPanelHeight] = useState(0)
   const [removeConfirmVisible, setRemoveConfirmVisible] = useState(false)
-  const [prevMode, setPrevMode] = useState(mode)
   const [revealGestureActive, setRevealGestureActive] = useState(false)
   const revealProgress = useSharedValue(0)
   const dragOpacity = useSharedValue(0)
@@ -121,13 +120,6 @@ export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOver
     }),
     [telemetryInteractive],
   )
-
-  if (mode !== prevMode) {
-    setPrevMode(mode)
-    if (mode !== 'history' && panelHeight !== 0) {
-      setPanelHeight(0)
-    }
-  }
 
   const handleRemovePress = useCallback(() => {
     setRemoveConfirmVisible(true)
@@ -335,7 +327,6 @@ export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOver
             endAtMs={history.selectedSession.endAtMs}
             deviceName={history.selectedSession.deviceName}
             samples={history.sessionSamples}
-            loading={history.loadingSession}
             canPrevious={history.canPreviousRide}
             canNext={!!history.nextRide}
             onPrevious={() => {

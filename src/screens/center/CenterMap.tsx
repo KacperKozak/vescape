@@ -6,7 +6,6 @@ import Mapbox, {
   RasterLayer,
   RasterSource,
   ShapeSource,
-  type Camera as CameraRef,
 } from '@rnmapbox/maps'
 import {
   ClockCountdownIcon,
@@ -16,16 +15,7 @@ import {
   WarningCircleIcon,
   type Icon,
 } from 'phosphor-react-native'
-import {
-  forwardRef,
-  useCallback,
-  useEffect,
-  useImperativeHandle,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react'
+import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Animated, StyleSheet, Text, View } from 'react-native'
 import type { LocationEvent } from 'vesc-ble'
 
@@ -37,16 +27,17 @@ import { BLANK_STYLE, MAP_DEFAULTS, MAP_STYLES, type MapStyleKey } from '@/const
 import { ONE_DARK_MAP_STYLE } from '@/constants/oneDarkMapStyle'
 import { theme } from '@/constants/theme'
 import { getLiveGpsPresentation } from '@/helpers/liveGpsPresentation'
-import {
-  distanceMeters,
-  getBounds,
-  makeCircleFeature,
-  makeTrailLineString,
-  zoomLevelForDelta,
-} from '@/helpers/mapGeometry'
+import { makeCircleFeature, makeTrailLineString } from '@/helpers/mapGeometry'
 import { findNearestSampleIndexByTime } from '@/history/playback'
 import type { HistoryGpsSample, HistoryMarker } from '@/store/historyStore'
 import { useSettingsStore } from '@/store/settingsStore'
+
+import {
+  type CameraSnapshot,
+  type HistoryPreviewTarget,
+  getPitchForZoom,
+  useCameraControls,
+} from './useCameraControls'
 
 Mapbox.setAccessToken(MAPBOX_ACCESS_TOKEN)
 
@@ -65,39 +56,12 @@ export interface CenterMapHandle {
   zoomToLevel: (zoom: number) => void
 }
 
-interface CameraSnapshot {
-  centerCoordinate: [number, number]
-  zoomLevel: number
-  heading: number
-  pitch: number
-}
-
 interface SelectedHistoryMarker {
   marker: HistoryMarker
   gps: HistoryGpsSample
 }
 
-interface HistoryPreviewTarget {
-  latitude: number
-  longitude: number
-  minLatitude: number | null
-  maxLatitude: number | null
-  minLongitude: number | null
-  maxLongitude: number | null
-}
-
-const MERCATOR_TILE_SIZE = 512
-const MAX_MERCATOR_LATITUDE = 85.05112878
-const MIN_ZOOM = 0
 const RADAR_MAX_ZOOM = 10
-const HISTORY_PREVIEW_ZOOM = 11.8
-const HISTORY_PREVIEW_BOTTOM_PADDING = 300
-const HISTORY_PREVIEW_SIDE_PADDING = 72
-const HISTORY_PREVIEW_TOP_PADDING = 120
-const HISTORY_DYNAMIC_FULL_DISTANCE_M = 80_000
-const HISTORY_DYNAMIC_MAX_EXTRA_PADDING = 220
-const HISTORY_DYNAMIC_MAX_EXTRA_DURATION_MS = 450
-const HISTORY_DYNAMIC_MAX_ZOOM_OUT = 2.4
 
 const HISTORY_MARKER_LABELS: Record<HistoryMarker['type'], string> = {
   app_stop: 'Recording stopped',
@@ -124,58 +88,6 @@ const HISTORY_MARKER_COLORS: Record<HistoryMarker['type'], string> = {
   disconnected: theme.warning.color,
   error: theme.error.color,
   gap: '#eab308',
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value))
-}
-
-function longitudeToWorldX(longitude: number, worldSize: number) {
-  return ((longitude + 180) / 360) * worldSize
-}
-
-function latitudeToWorldY(latitude: number, worldSize: number) {
-  const clampedLatitude = clamp(latitude, -MAX_MERCATOR_LATITUDE, MAX_MERCATOR_LATITUDE)
-  const sinLatitude = Math.sin((clampedLatitude * Math.PI) / 180)
-  return (0.5 - Math.log((1 + sinLatitude) / (1 - sinLatitude)) / (4 * Math.PI)) * worldSize
-}
-
-function worldXToLongitude(x: number, worldSize: number) {
-  return (x / worldSize) * 360 - 180
-}
-
-function worldYToLatitude(y: number, worldSize: number) {
-  const mercatorY = 0.5 - y / worldSize
-  return (180 / Math.PI) * (2 * Math.atan(Math.exp(mercatorY * 2 * Math.PI)) - Math.PI / 2)
-}
-
-function getCameraForScreenPan(baseCamera: CameraSnapshot, totalX: number, totalY: number) {
-  const worldSize = MERCATOR_TILE_SIZE * 2 ** baseCamera.zoomLevel
-  const [longitude, latitude] = baseCamera.centerCoordinate
-  const headingRadians = (-baseCamera.heading * Math.PI) / 180
-  const worldDeltaX = totalX * Math.cos(headingRadians) - totalY * Math.sin(headingRadians)
-  const worldDeltaY = totalX * Math.sin(headingRadians) + totalY * Math.cos(headingRadians)
-  const centerX = longitudeToWorldX(longitude, worldSize) - worldDeltaX
-  const centerY = latitudeToWorldY(latitude, worldSize) - worldDeltaY
-
-  return {
-    ...baseCamera,
-    centerCoordinate: [
-      worldXToLongitude(centerX, worldSize),
-      clamp(worldYToLatitude(centerY, worldSize), -MAX_MERCATOR_LATITUDE, MAX_MERCATOR_LATITUDE),
-    ] as [number, number],
-  }
-}
-
-function getPitchForZoom(zoom: number, perspectiveEnabled: boolean) {
-  if (!perspectiveEnabled) return 0
-  const progress = clamp(
-    (zoom - MAP_DEFAULTS.perspectiveMinZoom) /
-      (MAP_DEFAULTS.perspectiveMaxZoom - MAP_DEFAULTS.perspectiveMinZoom),
-    0,
-    1,
-  )
-  return progress * MAP_DEFAULTS.activePitch
 }
 
 function formatMarkerTime(ms: number): string {
@@ -215,6 +127,228 @@ function buildHistoryMarkerMessage(selection: SelectedHistoryMarker): string {
   if (marker.message) lines.push(`Message: ${marker.message}`)
 
   return lines.join('\n')
+}
+
+interface CenterMapLayersProps {
+  historyActive: boolean
+  isMapy: boolean
+  isOneDark: boolean
+  showBuildings3d: boolean
+  weatherActive: boolean
+  showRadar: boolean
+  liveTrailShape: ReturnType<typeof makeTrailLineString> | null
+  rideRouteShape: {
+    type: 'Feature'
+    geometry: { type: 'LineString'; coordinates: [number, number][] }
+    properties: Record<string, never>
+  } | null
+  accuracyFix: { longitude: number; latitude: number } | null
+  accuracyShape: ReturnType<typeof makeCircleFeature> | null
+  gpsFix: { longitude: number; latitude: number } | null
+  rideRoute: [number, number][]
+  seekPosition: HistoryGpsSample | null
+  rideMarkers: HistoryMarker[]
+  rideGpsSamples: HistoryGpsSample[]
+  targetLocation: { latitude: number; longitude: number } | null
+  onClearTarget: () => void
+  onSelectMarker: (selection: SelectedHistoryMarker) => void
+}
+
+function LiveMapLayers({
+  liveTrailShape,
+  accuracyFix,
+  accuracyShape,
+  gpsFix,
+}: {
+  liveTrailShape: CenterMapLayersProps['liveTrailShape']
+  accuracyFix: CenterMapLayersProps['accuracyFix']
+  accuracyShape: CenterMapLayersProps['accuracyShape']
+  gpsFix: CenterMapLayersProps['gpsFix']
+}) {
+  return (
+    <>
+      {liveTrailShape && (
+        <ShapeSource id="center-live-trail-source" shape={liveTrailShape} lineMetrics>
+          <LineLayer
+            id="center-live-trail-line"
+            style={{
+              lineColor: MAP_DEFAULTS.trailColor,
+              lineWidth: MAP_DEFAULTS.trailWidth,
+              lineCap: 'round',
+              lineJoin: 'round',
+              lineGradient: [
+                'interpolate',
+                ['linear'],
+                ['line-progress'],
+                0,
+                MAP_DEFAULTS.trailGradientStart,
+                1,
+                MAP_DEFAULTS.trailGradientEnd,
+              ],
+            }}
+          />
+        </ShapeSource>
+      )}
+      {accuracyFix && (
+        <>
+          {accuracyShape && (
+            <ShapeSource id="center-gps-accuracy-source" shape={accuracyShape}>
+              <FillLayer
+                id="center-gps-accuracy-fill"
+                style={{ fillColor: MAP_DEFAULTS.accuracyFillColor }}
+              />
+            </ShapeSource>
+          )}
+          {gpsFix && (
+            <MapPin
+              id="center-gps-position"
+              coordinate={[gpsFix.longitude, gpsFix.latitude]}
+              color={MAP_DEFAULTS.markerColor}
+            />
+          )}
+        </>
+      )}
+    </>
+  )
+}
+
+function HistoryMapLayers({
+  rideRouteShape,
+  rideRoute,
+  seekPosition,
+  rideMarkers,
+  rideGpsSamples,
+  onSelectMarker,
+}: {
+  rideRouteShape: CenterMapLayersProps['rideRouteShape']
+  rideRoute: CenterMapLayersProps['rideRoute']
+  seekPosition: CenterMapLayersProps['seekPosition']
+  rideMarkers: CenterMapLayersProps['rideMarkers']
+  rideGpsSamples: CenterMapLayersProps['rideGpsSamples']
+  onSelectMarker: CenterMapLayersProps['onSelectMarker']
+}) {
+  return (
+    <>
+      {rideRouteShape && (
+        <ShapeSource id="center-ride-route-source" shape={rideRouteShape}>
+          <LineLayer
+            id="center-ride-route-line"
+            style={{
+              lineColor: theme.target.color,
+              lineWidth: 4,
+              lineCap: 'round',
+              lineJoin: 'round',
+            }}
+          />
+        </ShapeSource>
+      )}
+      {rideRoute[0] && (
+        <MapPin id="center-ride-start" coordinate={rideRoute[0]} color={theme.gps.color} />
+      )}
+      {rideRoute.at(-1) && (
+        <MapPin id="center-ride-end" coordinate={rideRoute.at(-1)!} color={theme.error.color} />
+      )}
+      {seekPosition && seekPosition.latitude != null && seekPosition.longitude != null && (
+        <MapPin
+          id="center-seek-position"
+          coordinate={[seekPosition.longitude, seekPosition.latitude]}
+          color={MAP_DEFAULTS.markerColor}
+        />
+      )}
+      {rideMarkers.map((marker) => {
+        const idx = findNearestSampleIndexByTime(rideGpsSamples, marker.occurredAtMs)
+        const gps = idx >= 0 ? rideGpsSamples[idx] : null
+        if (!gps) return null
+        return (
+          <MapPin
+            key={marker.id}
+            id={`center-ride-marker-${marker.id}`}
+            coordinate={[gps.longitude, gps.latitude]}
+            color={HISTORY_MARKER_COLORS[marker.type]}
+            icon={HISTORY_MARKER_ICONS[marker.type]}
+            onSelected={() => onSelectMarker({ marker, gps })}
+          />
+        )
+      })}
+    </>
+  )
+}
+
+function CenterMapLayers({
+  historyActive,
+  isMapy,
+  isOneDark,
+  showBuildings3d,
+  weatherActive,
+  showRadar,
+  liveTrailShape,
+  rideRouteShape,
+  accuracyFix,
+  accuracyShape,
+  gpsFix,
+  rideRoute,
+  seekPosition,
+  rideMarkers,
+  rideGpsSamples,
+  targetLocation,
+  onClearTarget,
+  onSelectMarker,
+}: CenterMapLayersProps) {
+  return (
+    <>
+      {showBuildings3d && (
+        <FillExtrusionLayer
+          id="center-3d-buildings"
+          sourceLayerID="building"
+          minZoomLevel={14}
+          maxZoomLevel={22}
+          style={{
+            fillExtrusionColor: isOneDark ? '#3e4451' : '#e5e7eb',
+            fillExtrusionHeight: ['coalesce', ['get', 'height'], 12],
+            fillExtrusionBase: ['coalesce', ['get', 'min_height'], 0],
+            fillExtrusionOpacity: isOneDark ? 0.65 : 0.42,
+            fillExtrusionVerticalGradient: true,
+          }}
+        />
+      )}
+      {isMapy ? (
+        <RasterSource
+          id="center-mapy-tiles"
+          tileUrlTemplates={[MAPY_TILE_URL_TEMPLATE]}
+          tileSize={256}
+          maxZoomLevel={MAP_DEFAULTS.maxZoom}
+        >
+          <RasterLayer id="center-mapy-tiles-layer" sourceID="center-mapy-tiles" style={{}} />
+        </RasterSource>
+      ) : null}
+      <RainViewerOverlay visible={weatherActive || showRadar} />
+      {historyActive ? (
+        <HistoryMapLayers
+          rideRouteShape={rideRouteShape}
+          rideRoute={rideRoute}
+          seekPosition={seekPosition}
+          rideMarkers={rideMarkers}
+          rideGpsSamples={rideGpsSamples}
+          onSelectMarker={onSelectMarker}
+        />
+      ) : (
+        <LiveMapLayers
+          liveTrailShape={liveTrailShape}
+          accuracyFix={accuracyFix}
+          accuracyShape={accuracyShape}
+          gpsFix={gpsFix}
+        />
+      )}
+      {targetLocation && !historyActive && (
+        <MapPin
+          id="center-target-position"
+          coordinate={[targetLocation.longitude, targetLocation.latitude]}
+          color={theme.target.color}
+          onSelected={onClearTarget}
+        />
+      )}
+    </>
+  )
 }
 
 interface CenterMapProps {
@@ -261,25 +395,18 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
   },
   ref,
 ) {
-  const cameraRef = useRef<CameraRef>(null)
-  const previewPanBaseRef = useRef<CameraSnapshot | null>(null)
-  const previewZoomBaseRef = useRef<CameraSnapshot | null>(null)
-  const currentCameraRef = useRef<CameraSnapshot | null>(null)
-  const historyPreviewTargetRef = useRef<HistoryPreviewTarget | null>(null)
   const styleReloadCameraRef = useRef<CameraSnapshot | null>(null)
   const previousMapStyleKeyRef = useRef(mapStyleKey)
-  const lastCenteredAtRef = useRef<number | null>(null)
   const mapRevealedRef = useRef(false)
-  const mapOpacity = useRef(new Animated.Value(0)).current
-  const [followGps, setFollowGps] = useState(true)
+  const [mapOpacity] = useState(() => new Animated.Value(0))
   const [cameraReady, setCameraReady] = useState(false)
   const [selectedHistoryMarker, setSelectedHistoryMarker] = useState<SelectedHistoryMarker | null>(
     null,
   )
   const [showRadar, setShowRadar] = useState(true)
+  const [initialApproximateFix, setInitialApproximateFix] = useState<LocationEvent | null>(null)
 
   const gpsFix = liveLocations.at(-1) ?? null
-  const [initialApproximateFix, setInitialApproximateFix] = useState<LocationEvent | null>(null)
   const settingsLoaded = useSettingsStore((s) => s.loaded)
   const lastGpsLatitude = useSettingsStore((s) => s.lastGpsLatitude)
   const lastGpsLongitude = useSettingsStore((s) => s.lastGpsLongitude)
@@ -295,6 +422,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
   const isOneDark = selectedMapStyle.key === 'onedark'
   const useCustomJSON = isMapy || isOneDark
   const showBuildings3d = selectedMapStyle.key === 'outdoors' || selectedMapStyle.key === 'onedark'
+
   const gpsPresentation = useMemo(
     () =>
       getLiveGpsPresentation({
@@ -306,35 +434,36 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
   )
   const { cameraFix, accuracyFix, accuracyRadiusM } = gpsPresentation
 
-  useLayoutEffect(() => {
+  const rideRoute = useMemo(
+    () => rideGpsSamples.map((point) => [point.longitude, point.latitude] as [number, number]),
+    [rideGpsSamples],
+  )
+
+  const { cameraRef, currentCameraRef, gpsCamera, setFollowGps, getHistoryPreviewCamera } =
+    useCameraControls({
+      ref,
+      cameraFix,
+      persistedFallback,
+      perspectiveEnabled,
+      historyActive,
+      historyPreview,
+      rideRoute,
+      onHeadingChange,
+      onPerspectiveChange,
+    })
+
+  useEffect(() => {
     if (previousMapStyleKeyRef.current === mapStyleKey) return
     previousMapStyleKeyRef.current = mapStyleKey
     styleReloadCameraRef.current = currentCameraRef.current
-  }, [mapStyleKey])
+  }, [currentCameraRef, mapStyleKey])
 
   useEffect(() => {
-    setInitialApproximateFix(gpsPresentation.nextInitialApproximateFix)
+    const frame = requestAnimationFrame(() => {
+      setInitialApproximateFix(gpsPresentation.nextInitialApproximateFix)
+    })
+    return () => cancelAnimationFrame(frame)
   }, [gpsPresentation.nextInitialApproximateFix])
-
-  const gpsCamera = useMemo(() => {
-    if (!cameraFix) {
-      return {
-        centerCoordinate: persistedFallback ?? MAP_DEFAULTS.fallbackCoordinate,
-        zoomLevel:
-          persistedFallback == null
-            ? MAP_DEFAULTS.fallbackZoom
-            : MAP_DEFAULTS.persistedGpsFallbackZoom,
-      }
-    }
-    const baseDelta =
-      cameraFix.accuracyM != null
-        ? Math.max(MAP_DEFAULTS.zoomDeltaMinAccuracy, cameraFix.accuracyM / 111_000)
-        : MAP_DEFAULTS.zoomDeltaFallback
-    return {
-      centerCoordinate: [cameraFix.longitude, cameraFix.latitude] as [number, number],
-      zoomLevel: zoomLevelForDelta(baseDelta * MAP_DEFAULTS.zoomDeltaMultiplier),
-    }
-  }, [cameraFix, persistedFallback])
 
   useEffect(() => {
     if (mapRevealedRef.current) return
@@ -366,11 +495,6 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
     [liveLocations],
   )
 
-  const rideRoute = useMemo(
-    () => rideGpsSamples.map((point) => [point.longitude, point.latitude] as [number, number]),
-    [rideGpsSamples],
-  )
-
   const rideRouteShape = useMemo(
     () =>
       rideRoute.length > 1
@@ -383,235 +507,73 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
     [rideRoute],
   )
 
-  const getHistoryPreviewCamera = useCallback(
-    (coordinate: { latitude: number; longitude: number }) => ({
-      centerCoordinate: [coordinate.longitude, coordinate.latitude] as [number, number],
-      zoomLevel: HISTORY_PREVIEW_ZOOM,
-      heading: 0,
-      pitch: getPitchForZoom(HISTORY_PREVIEW_ZOOM, perspectiveEnabled),
-      padding: {
-        paddingBottom: HISTORY_PREVIEW_BOTTOM_PADDING,
-        paddingTop: 0,
-        paddingLeft: 0,
-        paddingRight: 0,
-      },
-      animationDuration: MAP_DEFAULTS.animationDuration,
-      animationMode: 'easeTo' as const,
-    }),
-    [perspectiveEnabled],
-  )
-
-  const recenterLive = useCallback(
-    (options?: { resetPadding?: boolean }) => {
-      setFollowGps(true)
-      if (!cameraFix) return
-      lastCenteredAtRef.current = cameraFix.timestamp
-      cameraRef.current?.setCamera({
-        ...gpsCamera,
-        heading: 0,
-        pitch: getPitchForZoom(gpsCamera.zoomLevel, perspectiveEnabled),
-        ...(options?.resetPadding
-          ? { padding: { paddingBottom: 0, paddingTop: 0, paddingLeft: 0, paddingRight: 0 } }
-          : {}),
-        animationDuration: MAP_DEFAULTS.animationDuration,
-        animationMode: 'easeTo',
-      })
-      onHeadingChange(0)
-    },
-    [cameraFix, gpsCamera, onHeadingChange, perspectiveEnabled],
-  )
-
-  const fitRide = useCallback(() => {
-    if (rideRoute.length < 2) return
-    const bounds = getBounds(rideRoute)
-    cameraRef.current?.fitBounds(bounds.ne, bounds.sw, [90, 40, 120, 40], 700)
-  }, [rideRoute])
-
-  const previewHistorySession = useCallback(
-    (preview: HistoryPreviewTarget) => {
-      historyPreviewTargetRef.current = preview
-      setFollowGps(false)
-      const current = currentCameraRef.current
-      const jumpDistanceM = current
-        ? distanceMeters(
-            { longitude: current.centerCoordinate[0], latitude: current.centerCoordinate[1] },
-            preview,
-          )
-        : 0
-      const distanceProgress = clamp(jumpDistanceM / HISTORY_DYNAMIC_FULL_DISTANCE_M, 0, 1)
-      const extraPadding = HISTORY_DYNAMIC_MAX_EXTRA_PADDING * distanceProgress
-      const animationDuration =
-        MAP_DEFAULTS.animationDuration + HISTORY_DYNAMIC_MAX_EXTRA_DURATION_MS * distanceProgress
-      if (
-        preview.minLatitude != null &&
-        preview.maxLatitude != null &&
-        preview.minLongitude != null &&
-        preview.maxLongitude != null &&
-        (preview.minLatitude !== preview.maxLatitude ||
-          preview.minLongitude !== preview.maxLongitude)
-      ) {
-        cameraRef.current?.fitBounds(
-          [preview.maxLongitude, preview.maxLatitude],
-          [preview.minLongitude, preview.minLatitude],
-          [
-            HISTORY_PREVIEW_TOP_PADDING + extraPadding * 0.5,
-            HISTORY_PREVIEW_SIDE_PADDING + extraPadding,
-            HISTORY_PREVIEW_BOTTOM_PADDING + extraPadding,
-            HISTORY_PREVIEW_SIDE_PADDING + extraPadding,
-          ],
-          animationDuration,
-        )
-      } else {
-        cameraRef.current?.setCamera({
-          ...getHistoryPreviewCamera(preview),
-          zoomLevel: HISTORY_PREVIEW_ZOOM - HISTORY_DYNAMIC_MAX_ZOOM_OUT * distanceProgress,
-          animationDuration,
-        })
-      }
-      onHeadingChange(0)
-    },
-    [getHistoryPreviewCamera, onHeadingChange],
-  )
-
-  const restorePreviewPan = useCallback(() => {
-    setFollowGps(true)
-    const restoreCamera = previewPanBaseRef.current ?? gpsCamera
-    previewPanBaseRef.current = null
-    // Return to the camera captured when the reveal gesture started.
-    if (cameraFix) {
-      lastCenteredAtRef.current = cameraFix.timestamp
-    }
+  const handleMapLoaded = useCallback(() => {
+    const styleReloadCamera = styleReloadCameraRef.current
+    styleReloadCameraRef.current = null
+    const camera =
+      historyActive && historyPreview
+        ? getHistoryPreviewCamera(historyPreview)
+        : (styleReloadCamera ?? gpsCamera)
     cameraRef.current?.setCamera({
-      ...restoreCamera,
-      pitch: getPitchForZoom(restoreCamera.zoomLevel, perspectiveEnabled),
-      animationDuration: MAP_DEFAULTS.followAnimationDuration,
-      animationMode: 'easeTo',
+      ...camera,
+      pitch: getPitchForZoom(camera.zoomLevel, perspectiveEnabled),
+      animationDuration: 0,
     })
-  }, [cameraFix, gpsCamera, perspectiveEnabled])
+  }, [
+    cameraRef,
+    gpsCamera,
+    getHistoryPreviewCamera,
+    historyActive,
+    historyPreview,
+    perspectiveEnabled,
+  ])
 
-  useImperativeHandle(
-    ref,
-    () => ({
-      recenterLive,
-      previewHistorySession,
-      beginPreviewPan() {
-        previewPanBaseRef.current = currentCameraRef.current ?? {
-          ...gpsCamera,
-          heading: 0,
-          pitch: getPitchForZoom(gpsCamera.zoomLevel, perspectiveEnabled),
+  const handleLongPress = useCallback(
+    (feature: { geometry: { coordinates: number[] } }) => {
+      const [longitude, latitude] = feature.geometry.coordinates
+      onLongPressTarget({ latitude, longitude })
+    },
+    [onLongPressTarget],
+  )
+
+  const handleCameraChanged = useCallback(
+    (state: {
+      properties: { center: number[]; zoom: number; heading: number; pitch: number }
+      gestures: { isGestureActive: boolean }
+    }) => {
+      const [longitude, latitude] = state.properties.center
+      currentCameraRef.current = {
+        centerCoordinate: [longitude, latitude],
+        zoomLevel: state.properties.zoom,
+        heading: state.properties.heading,
+        pitch: state.properties.pitch,
+      }
+      const [targetLongitude, targetLatitude] = gpsCamera.centerCoordinate
+      if (
+        Math.abs(longitude - targetLongitude) < 0.0001 &&
+        Math.abs(latitude - targetLatitude) < 0.0001
+      ) {
+        setCameraReady(true)
+      }
+      if (state.gestures.isGestureActive) {
+        setFollowGps(false)
+        const dynamicPitch = getPitchForZoom(state.properties.zoom, perspectiveEnabled)
+        if (Math.abs(state.properties.pitch - dynamicPitch) > 0.5) {
+          cameraRef.current?.setCamera({ pitch: dynamicPitch, animationDuration: 0 })
         }
-        setFollowGps(false)
-      },
-      previewPanBy(deltaX: number, deltaY: number, animationDuration = 0) {
-        setFollowGps(false)
-        const baseCamera = previewPanBaseRef.current
-        if (!baseCamera) return
-        cameraRef.current?.setCamera({
-          ...getCameraForScreenPan(baseCamera, deltaX, deltaY),
-          pitch: getPitchForZoom(baseCamera.zoomLevel, perspectiveEnabled),
-          animationMode: 'linearTo',
-          animationDuration,
-        })
-      },
-      beginPreviewZoom() {
-        previewZoomBaseRef.current = currentCameraRef.current
-        setFollowGps(false)
-      },
-      previewZoomBy(scale: number) {
-        const baseCamera = previewZoomBaseRef.current
-        if (!baseCamera || scale <= 0) return
-        const zoomLevel = clamp(
-          baseCamera.zoomLevel + Math.log2(scale),
-          MIN_ZOOM,
-          MAP_DEFAULTS.maxZoom,
-        )
-        cameraRef.current?.setCamera({
-          ...baseCamera,
-          zoomLevel,
-          pitch: getPitchForZoom(zoomLevel, perspectiveEnabled),
-          animationDuration: 0,
-        })
-      },
-      endPreviewZoom() {
-        previewZoomBaseRef.current = null
-      },
-      restorePreviewPan,
-      resetRotation() {
-        cameraRef.current?.setCamera({
-          heading: 0,
-          animationDuration: MAP_DEFAULTS.animationDuration,
-          animationMode: 'easeTo',
-        })
-        onHeadingChange(0)
-      },
-      togglePerspective() {
-        const enabled = !perspectiveEnabled
-        onPerspectiveChange(enabled)
-        const zoomLevel = currentCameraRef.current?.zoomLevel ?? gpsCamera.zoomLevel
-        cameraRef.current?.setCamera({
-          pitch: getPitchForZoom(zoomLevel, enabled),
-          animationDuration: MAP_DEFAULTS.animationDuration,
-          animationMode: 'easeTo',
-        })
-      },
-      setPadding(bottom: number) {
-        cameraRef.current?.setCamera({
-          padding: { paddingBottom: bottom, paddingTop: 0, paddingLeft: 0, paddingRight: 0 },
-          animationDuration: bottom === 0 ? 0 : 300,
-          animationMode: 'easeTo',
-        })
-      },
-      zoomToLevel(zoom: number) {
-        setFollowGps(false)
-        const current = currentCameraRef.current
-        cameraRef.current?.setCamera({
-          ...(current ? { centerCoordinate: current.centerCoordinate } : {}),
-          zoomLevel: zoom,
-          pitch: getPitchForZoom(zoom, perspectiveEnabled),
-          animationDuration: MAP_DEFAULTS.animationDuration,
-          animationMode: 'easeTo',
-        })
-      },
-    }),
+      }
+      onHeadingChange(state.properties.heading)
+      setShowRadar(state.properties.zoom <= RADAR_MAX_ZOOM)
+    },
     [
-      gpsCamera,
+      cameraRef,
+      currentCameraRef,
+      gpsCamera.centerCoordinate,
       onHeadingChange,
-      onPerspectiveChange,
       perspectiveEnabled,
-      previewHistorySession,
-      recenterLive,
-      restorePreviewPan,
+      setFollowGps,
     ],
   )
-
-  useEffect(() => {
-    if (!cameraFix || !followGps || historyActive) return
-    historyPreviewTargetRef.current = null
-    if (lastCenteredAtRef.current === cameraFix.timestamp) return
-    lastCenteredAtRef.current = cameraFix.timestamp
-    cameraRef.current?.setCamera({
-      ...gpsCamera,
-      pitch: getPitchForZoom(gpsCamera.zoomLevel, perspectiveEnabled),
-      animationDuration: MAP_DEFAULTS.followAnimationDuration,
-      animationMode: 'easeTo',
-    })
-  }, [cameraFix, followGps, gpsCamera, historyActive, perspectiveEnabled])
-
-  useEffect(() => {
-    if (!historyActive || !historyPreview) return
-    previewHistorySession(historyPreview)
-  }, [historyActive, historyPreview, previewHistorySession])
-
-  useEffect(() => {
-    if (!historyActive || rideRoute.length < 2) return
-    historyPreviewTargetRef.current = null
-    const frame = requestAnimationFrame(fitRide)
-    const timer = setTimeout(fitRide, 120)
-    return () => {
-      cancelAnimationFrame(frame)
-      clearTimeout(timer)
-    }
-  }, [fitRide, historyActive, rideRoute.length])
 
   if (!MAPBOX_ACCESS_TOKEN) {
     return (
@@ -640,51 +602,9 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
         scaleBarEnabled={false}
         logoEnabled={false}
         attributionEnabled={false}
-        onDidFinishLoadingMap={() => {
-          const styleReloadCamera = styleReloadCameraRef.current
-          styleReloadCameraRef.current = null
-          const camera =
-            historyActive && historyPreview
-              ? getHistoryPreviewCamera(historyPreview)
-              : (styleReloadCamera ?? gpsCamera)
-          cameraRef.current?.setCamera({
-            ...camera,
-            pitch: getPitchForZoom(camera.zoomLevel, perspectiveEnabled),
-            animationDuration: 0,
-          })
-        }}
-        onLongPress={(feature) => {
-          const [longitude, latitude] = feature.geometry.coordinates
-          onLongPressTarget({ latitude, longitude })
-        }}
-        onCameraChanged={(state) => {
-          const [longitude, latitude] = state.properties.center
-          currentCameraRef.current = {
-            centerCoordinate: [longitude, latitude],
-            zoomLevel: state.properties.zoom,
-            heading: state.properties.heading,
-            pitch: state.properties.pitch,
-          }
-          const [targetLongitude, targetLatitude] = gpsCamera.centerCoordinate
-          if (
-            Math.abs(longitude - targetLongitude) < 0.0001 &&
-            Math.abs(latitude - targetLatitude) < 0.0001
-          ) {
-            setCameraReady(true)
-          }
-          if (state.gestures.isGestureActive) {
-            setFollowGps(false)
-            const dynamicPitch = getPitchForZoom(state.properties.zoom, perspectiveEnabled)
-            if (Math.abs(state.properties.pitch - dynamicPitch) > 0.5) {
-              cameraRef.current?.setCamera({
-                pitch: dynamicPitch,
-                animationDuration: 0,
-              })
-            }
-          }
-          onHeadingChange(state.properties.heading)
-          setShowRadar(state.properties.zoom <= RADAR_MAX_ZOOM)
-        }}
+        onDidFinishLoadingMap={handleMapLoaded}
+        onLongPress={handleLongPress}
+        onCameraChanged={handleCameraChanged}
       >
         <Camera
           ref={cameraRef}
@@ -695,134 +615,26 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
           maxZoomLevel={MAP_DEFAULTS.maxZoom}
           animationMode="easeTo"
         />
-
-        {showBuildings3d && (
-          <FillExtrusionLayer
-            id="center-3d-buildings"
-            sourceLayerID="building"
-            minZoomLevel={14}
-            maxZoomLevel={22}
-            style={{
-              fillExtrusionColor: isOneDark ? '#3e4451' : '#e5e7eb',
-              fillExtrusionHeight: ['coalesce', ['get', 'height'], 12],
-              fillExtrusionBase: ['coalesce', ['get', 'min_height'], 0],
-              fillExtrusionOpacity: isOneDark ? 0.65 : 0.42,
-              fillExtrusionVerticalGradient: true,
-            }}
-          />
-        )}
-
-        {isMapy ? (
-          <RasterSource
-            id="center-mapy-tiles"
-            tileUrlTemplates={[MAPY_TILE_URL_TEMPLATE]}
-            tileSize={256}
-            maxZoomLevel={MAP_DEFAULTS.maxZoom}
-          >
-            <RasterLayer id="center-mapy-tiles-layer" sourceID="center-mapy-tiles" style={{}} />
-          </RasterSource>
-        ) : null}
-
-        <RainViewerOverlay visible={weatherActive || showRadar} />
-
-        {!historyActive && liveTrailShape && (
-          <ShapeSource id="center-live-trail-source" shape={liveTrailShape} lineMetrics>
-            <LineLayer
-              id="center-live-trail-line"
-              style={{
-                lineColor: MAP_DEFAULTS.trailColor,
-                lineWidth: MAP_DEFAULTS.trailWidth,
-                lineCap: 'round',
-                lineJoin: 'round',
-                lineGradient: [
-                  'interpolate',
-                  ['linear'],
-                  ['line-progress'],
-                  0,
-                  MAP_DEFAULTS.trailGradientStart,
-                  1,
-                  MAP_DEFAULTS.trailGradientEnd,
-                ],
-              }}
-            />
-          </ShapeSource>
-        )}
-
-        {historyActive && rideRouteShape && (
-          <ShapeSource id="center-ride-route-source" shape={rideRouteShape}>
-            <LineLayer
-              id="center-ride-route-line"
-              style={{
-                lineColor: theme.target.color,
-                lineWidth: 4,
-                lineCap: 'round',
-                lineJoin: 'round',
-              }}
-            />
-          </ShapeSource>
-        )}
-
-        {!historyActive && accuracyFix && (
-          <>
-            {accuracyShape && (
-              <ShapeSource id="center-gps-accuracy-source" shape={accuracyShape}>
-                <FillLayer
-                  id="center-gps-accuracy-fill"
-                  style={{ fillColor: MAP_DEFAULTS.accuracyFillColor }}
-                />
-              </ShapeSource>
-            )}
-            {gpsFix && (
-              <MapPin
-                id="center-gps-position"
-                coordinate={[gpsFix.longitude, gpsFix.latitude]}
-                color={MAP_DEFAULTS.markerColor}
-              />
-            )}
-          </>
-        )}
-
-        {historyActive && rideRoute[0] && (
-          <MapPin id="center-ride-start" coordinate={rideRoute[0]} color={theme.gps.color} />
-        )}
-        {historyActive && rideRoute.at(-1) && (
-          <MapPin id="center-ride-end" coordinate={rideRoute.at(-1)!} color={theme.error.color} />
-        )}
-        {historyActive &&
-          seekPosition &&
-          seekPosition.latitude != null &&
-          seekPosition.longitude != null && (
-            <MapPin
-              id="center-seek-position"
-              coordinate={[seekPosition.longitude, seekPosition.latitude]}
-              color={MAP_DEFAULTS.markerColor}
-            />
-          )}
-        {historyActive &&
-          rideMarkers.map((marker) => {
-            const idx = findNearestSampleIndexByTime(rideGpsSamples, marker.occurredAtMs)
-            const gps = idx >= 0 ? rideGpsSamples[idx] : null
-            if (!gps) return null
-            return (
-              <MapPin
-                key={marker.id}
-                id={`center-ride-marker-${marker.id}`}
-                coordinate={[gps.longitude, gps.latitude]}
-                color={HISTORY_MARKER_COLORS[marker.type]}
-                icon={HISTORY_MARKER_ICONS[marker.type]}
-                onSelected={() => setSelectedHistoryMarker({ marker, gps })}
-              />
-            )
-          })}
-
-        {targetLocation && !historyActive && (
-          <MapPin
-            id="center-target-position"
-            coordinate={[targetLocation.longitude, targetLocation.latitude]}
-            color={theme.target.color}
-            onSelected={onClearTarget}
-          />
-        )}
+        <CenterMapLayers
+          historyActive={historyActive}
+          isMapy={isMapy}
+          isOneDark={isOneDark}
+          showBuildings3d={showBuildings3d}
+          weatherActive={weatherActive}
+          showRadar={showRadar}
+          liveTrailShape={liveTrailShape}
+          rideRouteShape={rideRouteShape}
+          accuracyFix={accuracyFix}
+          accuracyShape={accuracyShape}
+          gpsFix={gpsFix}
+          rideRoute={rideRoute}
+          seekPosition={seekPosition}
+          rideMarkers={rideMarkers}
+          rideGpsSamples={rideGpsSamples}
+          targetLocation={targetLocation}
+          onClearTarget={onClearTarget}
+          onSelectMarker={setSelectedHistoryMarker}
+        />
       </Mapbox.MapView>
       <InfoModal
         visible={selectedHistoryMarker != null}

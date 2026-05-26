@@ -266,6 +266,29 @@ data class AlertRuleEntity(
   val createdAt: Long,
 )
 
+@Entity(
+  tableName = "metric_exclusions",
+  primaryKeys = ["captured_at_ms", "device_id", "metric"],
+  indices = [
+    Index(value = ["captured_at_ms"]),
+    Index(value = ["device_id", "captured_at_ms"]),
+  ],
+)
+data class MetricExclusionEntity(
+  @ColumnInfo(name = "captured_at_ms")
+  val capturedAtMs: Long,
+  @ColumnInfo(name = "device_id")
+  val deviceId: String,
+  val metric: String,
+  val reason: String,
+  @ColumnInfo(name = "raw_value")
+  val rawValue: String? = null,
+  @ColumnInfo(name = "reference_value")
+  val referenceValue: String? = null,
+  @ColumnInfo(name = "context_json")
+  val contextJson: String? = null,
+)
+
 @Entity(tableName = "app_settings")
 data class AppSettingEntity(
   @PrimaryKey

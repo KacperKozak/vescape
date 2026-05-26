@@ -161,8 +161,7 @@ function mergeBlockIntoAggregate(
     session.gpsDistanceCount += 1
   }
 
-  const blockMax = Math.max(block.maxAbsSpeedKmh, block.maxGpsSpeedKmh ?? 0)
-  session.maxSpeedKmh = Math.max(session.maxSpeedKmh, blockMax)
+  session.maxSpeedKmh = Math.max(session.maxSpeedKmh, block.maxAbsSpeedKmh)
   if (block.avgSpeedSampleCount > 0) {
     session.avgSpeedSum += block.avgSpeedKmh * block.avgSpeedSampleCount
     session.avgSpeedSampleCount += block.avgSpeedSampleCount
@@ -189,26 +188,26 @@ function mergeBlockIntoAggregate(
     session.firstLongitude = block.firstLongitude
   }
   if (block.firstLatitude != null && block.firstLongitude != null) {
-    session.latitudeSum += block.firstLatitude
-    session.longitudeSum += block.firstLongitude
-    session.coordinateCount += 1
-    session.minLatitude =
-      session.minLatitude == null
-        ? block.firstLatitude
-        : Math.min(session.minLatitude, block.firstLatitude)
-    session.maxLatitude =
-      session.maxLatitude == null
-        ? block.firstLatitude
-        : Math.max(session.maxLatitude, block.firstLatitude)
-    session.minLongitude =
-      session.minLongitude == null
-        ? block.firstLongitude
-        : Math.min(session.minLongitude, block.firstLongitude)
-    session.maxLongitude =
-      session.maxLongitude == null
-        ? block.firstLongitude
-        : Math.max(session.maxLongitude, block.firstLongitude)
+    addCoordinate(session, block.firstLatitude, block.firstLongitude)
   }
+}
+
+function addCoordinate(
+  session: MutableSessionAggregate,
+  latitude: number,
+  longitude: number,
+): void {
+  session.latitudeSum += latitude
+  session.longitudeSum += longitude
+  session.coordinateCount += 1
+  session.minLatitude =
+    session.minLatitude == null ? latitude : Math.min(session.minLatitude, latitude)
+  session.maxLatitude =
+    session.maxLatitude == null ? latitude : Math.max(session.maxLatitude, latitude)
+  session.minLongitude =
+    session.minLongitude == null ? longitude : Math.min(session.minLongitude, longitude)
+  session.maxLongitude =
+    session.maxLongitude == null ? longitude : Math.max(session.maxLongitude, longitude)
 }
 
 function finalizeSession(session: MutableSessionAggregate): HistorySession {

@@ -16,6 +16,14 @@ _Avoid_: UI state, cached status
 A single decoded board data point captured from the connected board.
 _Avoid_: Packet, frame, event
 
+**Metric Sanitizer**:
+A rule that marks an implausible telemetry-derived value as excluded from ride metrics without changing the original sample.
+_Avoid_: Filter, smoother, cleaner
+
+**Metric Exclusion**:
+A durable annotation that explains why a metric value from a Telemetry Sample was left out of one or more ride metrics.
+_Avoid_: Deleted value, hidden sample, rejected packet
+
 **GPS Fix**:
 A single phone location sample used for live map position or ride recording.
 _Avoid_: Location event, GPS point
@@ -63,6 +71,8 @@ _Avoid_: Error log, debug session, crash report
 ## Relationships
 
 - A **Board** produces **Telemetry Samples** while connected.
+- A **Metric Sanitizer** may create **Metric Exclusions** for values derived from **Telemetry Samples** while preserving the original samples and current live board readout.
+- A **Metric Exclusion** belongs to one **Telemetry Sample** and one metric.
 - A **GPS Fix** may be associated with live map state, but only GPS fixes captured alongside **Telemetry Samples** contribute to a **Ride Recording**.
 - A **Ride Recording** becomes part of **Ride History**.
 - A **Ride History Marker** belongs to **Ride History** and may explain where a **Ride Recording** lost or regained board data.
@@ -90,3 +100,4 @@ _Avoid_: Error log, debug session, crash report
 - "session" may mean a BLE connection, raw debug capture, or persisted ride; resolved term: use **Ride Recording** for persisted ride capture and avoid using "session" without a qualifier.
 - "error" may mean crash, handled failure, UI message, or diagnostic clue; resolved term: use **Diagnostic Event** for app-observed abnormal conditions worth reviewing.
 - "telemetry marker" names the storage table, but map-visible history annotations are **Ride History Markers**.
+- "filter" may mean dropping samples, smoothing charts, or excluding implausible values from metrics; resolved term: use **Metric Sanitizer** for metric exclusion that preserves original samples.

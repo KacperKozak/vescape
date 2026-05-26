@@ -9,6 +9,29 @@ import androidx.room.Update
 
 @Dao
 interface TelemetryDao {
+  @Insert(onConflict = OnConflictStrategy.REPLACE)
+  suspend fun insertExclusions(exclusions: List<MetricExclusionEntity>)
+
+  @Query(
+    """
+    SELECT * FROM metric_exclusions
+    WHERE captured_at_ms >= :fromMs
+      AND captured_at_ms <= :toMs
+      AND (:deviceId IS NULL OR device_id = :deviceId)
+    ORDER BY captured_at_ms ASC
+    """,
+  )
+  suspend fun getExclusions(fromMs: Long, toMs: Long, deviceId: String?): List<MetricExclusionEntity>
+
+  @Query("DELETE FROM metric_exclusions WHERE captured_at_ms >= :fromMs AND captured_at_ms <= :toMs")
+  suspend fun deleteExclusionsRange(fromMs: Long, toMs: Long): Int
+
+  @Query("DELETE FROM metric_exclusions")
+  suspend fun clearExclusions()
+
+  @Query("DELETE FROM metric_exclusions WHERE captured_at_ms < :beforeMs")
+  suspend fun deleteExclusionsBefore(beforeMs: Long): Int
+
   @Insert
   suspend fun insertFrames(frames: List<TelemetryFrameEntity>): List<Long>
 
@@ -44,10 +67,12 @@ interface TelemetryDao {
     frames: List<TelemetryFrameEntity>,
     buckets: Collection<TelemetryMinuteBucketEntity>,
     markers: List<TelemetryMarkerEntity>,
+    exclusions: List<MetricExclusionEntity> = emptyList(),
   ) {
     if (frames.isNotEmpty()) insertFrames(frames)
     if (buckets.isNotEmpty()) upsertBuckets(buckets)
     if (markers.isNotEmpty()) insertMarkers(markers)
+    if (exclusions.isNotEmpty()) insertExclusions(exclusions)
   }
 
   @Query(
@@ -159,6 +184,7 @@ interface TelemetryDao {
     deleteMarkersBefore(beforeMs)
     deleteBucketsBefore(beforeMs)
     deleteDiagnosticEventsBefore(beforeMs)
+    deleteExclusionsBefore(beforeMs)
     return frames
   }
 
@@ -203,6 +229,7 @@ interface TelemetryDao {
     val frames = deleteFramesRange(fromMs, toMs, deviceId)
     deleteMarkersRange(fromMs, toMs, deviceId)
     deleteBucketsRange(fromMs, toMs, deviceId ?: UNKNOWN_TELEMETRY_DEVICE_ID)
+    deleteExclusionsRange(fromMs, toMs)
     return frames
   }
 
@@ -224,6 +251,7 @@ interface TelemetryDao {
     clearMarkers()
     clearBuckets()
     clearDiagnosticEvents()
+    clearExclusions()
   }
 
   @Query("SELECT * FROM boards ORDER BY is_starred DESC, created_at ASC")

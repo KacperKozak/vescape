@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import {
   ActivityIndicator,
   Modal,
@@ -29,7 +29,7 @@ import { ConfirmModal } from '@/components/ConfirmModal'
 import { InfoModal } from '@/components/InfoModal'
 import { Placeholder } from '@/components/Placeholder'
 import { BasicSliderCell } from '@/components/tune/BasicSliderCell'
-import { FieldEditorPopover, type FieldEditorTarget } from '@/components/tune/FieldEditorPopover'
+import { FieldEditorPopover } from '@/components/tune/FieldEditorPopover'
 import { ProfilePills } from '@/components/tune/ProfilePills'
 import { TuneConfigCell } from '@/components/tune/TuneConfigCell'
 import { TuneGroupGrid } from '@/components/tune/TuneGroupGrid'
@@ -37,21 +37,10 @@ import { TuneSyncBar } from '@/components/tune/TuneSyncBar'
 import { routes } from '@/navigation/routes'
 import { type Board } from '@/store/boardStore'
 import { useTuneProfileStore } from '@/store/tuneProfileStore'
-import { formatTuneValue } from '@/tune/fields'
-import {
-  BASIC_SLIDER_BY_ID,
-  fieldHelp,
-  fieldStep,
-  getLinkedFieldPreviews,
-  isEditableNumberField,
-  type BasicSliderItem,
-} from '@/tune/sliderDefinitions'
+import type { BasicSliderItem } from '@/tune/sliderDefinitions'
 import { useTuneScreenData } from '@/tune/useTuneScreenData'
 import { theme } from '@/constants/theme'
-
-type InfoModalState = { title: string; message: string } | null
-
-type EditorKind = { kind: 'field'; fieldId: string } | { kind: 'basic'; sliderId: string }
+import { useTuneModals } from '@/tune/useTuneModals'
 
 export default function TuneScreen() {
   const navigation = useNavigation()
@@ -80,25 +69,13 @@ export default function TuneScreen() {
     syncBarState,
   } = useTuneScreenData()
   const setActiveProfile = useTuneProfileStore((s) => s.setActiveProfile)
-  const storeCreateProfile = useTuneProfileStore((s) => s.createProfile)
-  const storeRenameProfile = useTuneProfileStore((s) => s.renameProfile)
-  const storeDeleteProfile = useTuneProfileStore((s) => s.deleteProfile)
-  const storeCopyProfile = useTuneProfileStore((s) => s.copyProfileToBoard)
-  const setDraftField = useTuneProfileStore((s) => s.setDraftField)
   const revertField = useTuneProfileStore((s) => s.revertField)
   const acceptBoardField = useTuneProfileStore((s) => s.acceptBoardField)
   const discardAllEdits = useTuneProfileStore((s) => s.discardAllEdits)
   const saveActiveProfile = useTuneProfileStore((s) => s.saveActiveProfile)
   const syncToBoard = useTuneProfileStore((s) => s.syncToBoard)
-  const [infoModal, setInfoModal] = useState<InfoModalState>(null)
-  const [editor, setEditor] = useState<FieldEditorTarget | null>(null)
-  const [editorKind, setEditorKind] = useState<EditorKind | null>(null)
-  const [renameModalProfile, setRenameModalProfile] = useState<TuneProfile | null>(null)
-  const [createModalOpen, setCreateModalOpen] = useState(false)
-  const [createCloneFromId, setCreateCloneFromId] = useState<string | undefined>()
-  const [copySourceProfile, setCopySourceProfile] = useState<TuneProfile | null>(null)
-  const [copyTargetBoard, setCopyTargetBoard] = useState<Board | null>(null)
-  const [deleteConfirmProfile, setDeleteConfirmProfile] = useState<TuneProfile | null>(null)
+
+  const modals = useTuneModals(activeProfile, basicSliders, draftFields, allBoards, selectedBoardId)
 
   const openHistory = useCallback(() => {
     router.push(routes.tuneHistory)
@@ -123,130 +100,6 @@ export default function TuneScreen() {
       ),
     })
   }, [activeProfile, boardConnected, boardSnapshotStatus, openHistory, loadOnline, navigation])
-
-  const showBadgeInfo = (title: string, message: string) => {
-    setInfoModal({ title, message })
-  }
-
-  const showFieldInfo = (field: RefloatConfigField) => {
-    const limits =
-      field.min != null || field.max != null
-        ? `\n\nRange: ${field.min != null ? formatTuneValue(field.min) : '-'} to ${
-            field.max != null ? formatTuneValue(field.max) : '-'
-          }${field.unit ? ` ${field.unit}` : ''}`
-        : ''
-    const units = field.unit ? `\nUnit: ${field.unit}` : ''
-    setInfoModal({
-      title: field.label,
-      message: `${fieldHelp(field)}${units}${limits}\nField ID: ${field.id}`,
-    })
-  }
-
-  const openFieldEditor = (field: RefloatConfigField, ref: { current: View | null }) => {
-    if (!activeProfile) {
-      showFieldInfo(field)
-      return
-    }
-    if (!isEditableNumberField(field)) {
-      showBadgeInfo(
-        field.label,
-        `${fieldHelp(field)}\n\nThis field is not numeric or has no schema bounds, so it cannot use the slider editor yet.\nField ID: ${field.id}`,
-      )
-      return
-    }
-    setEditorKind({ kind: 'field', fieldId: field.id })
-    setEditor({
-      triggerRef: ref as React.RefObject<View | null>,
-      label: field.label,
-      fieldId: field.id,
-      value: field.value as number,
-      min: field.min!,
-      max: field.max!,
-      step: fieldStep(field),
-      unit: field.unit,
-      help: fieldHelp(field),
-    })
-  }
-
-  const openBasicSliderEditor = (sliderId: string, ref: { current: View | null }) => {
-    if (!activeProfile) return
-    const def = BASIC_SLIDER_BY_ID.get(sliderId)
-    const item = basicSliders.find((s) => s.id === sliderId)
-    if (!def || !item) return
-    setEditorKind({ kind: 'basic', sliderId })
-    setEditor({
-      triggerRef: ref as React.RefObject<View | null>,
-      label: item.label,
-      fieldId: item.id,
-      value: item.value ?? item.min,
-      min: item.min,
-      max: item.max,
-      step: item.step,
-      unit: null,
-      help: item.info,
-      linkedFields: getLinkedFieldPreviews(def),
-    })
-  }
-
-  const handleEditorApply = (value: number) => {
-    if (!editorKind) return
-    if (editorKind.kind === 'field') {
-      setDraftField(editorKind.fieldId, value)
-    } else {
-      const def = BASIC_SLIDER_BY_ID.get(editorKind.sliderId)
-      if (def) {
-        const fieldValues = def.computeFieldValues(value)
-        for (const [id, v] of Object.entries(fieldValues)) {
-          setDraftField(id, v)
-        }
-      }
-    }
-    setEditor(null)
-    setEditorKind(null)
-  }
-
-  const closeEditor = () => {
-    setEditor(null)
-    setEditorKind(null)
-  }
-
-  const handleBasicSliderReset = (sliderId: string) => {
-    const formula = BASIC_SLIDER_BY_ID.get(sliderId)
-    if (!formula || !activeProfile) return
-    const currentValue = formula.deriveSliderValue(
-      new Map(
-        Object.entries({ ...activeProfile.fields, ...draftFields })
-          .filter((entry): entry is [string, number] => typeof entry[1] === 'number')
-          .map(([k, v]) => [k, v]),
-      ),
-    )
-    if (currentValue == null) return
-    const fieldValues = formula.computeFieldValues(Math.round(currentValue))
-    for (const [fieldId, value] of Object.entries(fieldValues)) {
-      setDraftField(fieldId, value)
-    }
-  }
-
-  const handleCreateProfile = (cloneFromId?: string) => {
-    setCreateCloneFromId(cloneFromId)
-    setCreateModalOpen(true)
-  }
-
-  const handleCopyToBoard = (board: Board) => {
-    setCopyTargetBoard(board)
-  }
-
-  const handleCopyConfirm = (name: string) => {
-    if (!copySourceProfile || !copyTargetBoard) return
-    void storeCopyProfile(copySourceProfile.id, copyTargetBoard.id, name)
-    setCopySourceProfile(null)
-    setCopyTargetBoard(null)
-  }
-
-  const otherBoards = useMemo(
-    () => allBoards.filter((b) => b.id !== selectedBoardId),
-    [allBoards, selectedBoardId],
-  )
 
   const handleSave = () => {
     void saveActiveProfile().catch(() => undefined)
@@ -325,7 +178,7 @@ export default function TuneScreen() {
             <Pressable
               style={styles.schemaMismatchBar}
               onPress={() =>
-                showBadgeInfo(
+                modals.showBadgeInfo(
                   'Schema Mismatch',
                   `Profile and board have different field sets.${
                     schemaMismatchFields.profileOnly.length > 0
@@ -363,12 +216,12 @@ export default function TuneScreen() {
               profiles={profiles}
               activeProfileId={activeProfile?.id ?? null}
               canDelete={profiles.length > 1}
-              hasOtherBoards={otherBoards.length > 0}
+              hasOtherBoards={modals.otherBoards.length > 0}
               onSelect={setActiveProfile}
-              onCreate={() => handleCreateProfile(activeProfile?.id)}
-              onRename={(profile) => setRenameModalProfile(profile)}
-              onDelete={(profile) => setDeleteConfirmProfile(profile)}
-              onCopy={(profile) => setCopySourceProfile(profile)}
+              onCreate={() => modals.handleCreateProfile(activeProfile?.id)}
+              onRename={(profile) => modals.setRenameModalProfile(profile)}
+              onDelete={(profile) => modals.setDeleteConfirmProfile(profile)}
+              onCopy={(profile) => modals.setCopySourceProfile(profile)}
             />
           ) : null}
 
@@ -378,7 +231,7 @@ export default function TuneScreen() {
                 <InfoBadge
                   label={boardSnapshot.fwVersion}
                   onPress={() =>
-                    showBadgeInfo(
+                    modals.showBadgeInfo(
                       'Firmware',
                       'Firmware reported by the connected controller. This is useful diagnostic context, but the config decoder uses the board XML schema as the source of truth.',
                     )
@@ -388,7 +241,7 @@ export default function TuneScreen() {
               <InfoBadge
                 label={`CAN ${boardSnapshot.canId}`}
                 onPress={() =>
-                  showBadgeInfo(
+                  modals.showBadgeInfo(
                     'CAN ID',
                     `Controller CAN ID ${boardSnapshot.canId}. Refloat config commands are forwarded to this controller before reading the schema and binary config.`,
                   )
@@ -397,7 +250,7 @@ export default function TuneScreen() {
               <InfoBadge
                 label={`${boardSnapshot.rawConfigLength} bytes`}
                 onPress={() =>
-                  showBadgeInfo(
+                  modals.showBadgeInfo(
                     'Config Size',
                     `${boardSnapshot.rawConfigLength} bytes is the size of the raw Refloat custom config payload read from the controller. The app decodes only known tune fields from that binary struct.`,
                   )
@@ -408,7 +261,7 @@ export default function TuneScreen() {
                   label={`${boardSnapshot.missingFieldIds.length} missing`}
                   danger
                   onPress={() =>
-                    showBadgeInfo(
+                    modals.showBadgeInfo(
                       'Missing Fields',
                       `These allowlisted fields were not present in the board schema: ${boardSnapshot.missingFieldIds.join(', ')}`,
                     )
@@ -427,14 +280,14 @@ export default function TuneScreen() {
                 key={item.id}
                 item={item}
                 editable={activeProfile != null}
-                onPress={openBasicSliderEditor}
+                onPress={modals.openBasicSliderEditor}
                 onInfo={() =>
-                  showBadgeInfo(
+                  modals.showBadgeInfo(
                     item.label,
                     `${item.info}\n\nSource: ${item.source}\nRange: ${item.min} to ${item.max}, step ${item.step}`,
                   )
                 }
-                onResetFormula={() => handleBasicSliderReset(item.id)}
+                onResetFormula={() => modals.handleBasicSliderReset(item.id)}
               />
             ))}
           </TuneGroupGrid>
@@ -464,8 +317,8 @@ export default function TuneScreen() {
                   profileValue={boardDiffByField.get(field.id)?.profileValue}
                   dirty={Object.prototype.hasOwnProperty.call(dirtyFields, field.id)}
                   boardChanged={boardDiffByField.has(field.id)}
-                  onPress={openFieldEditor}
-                  onInfo={() => showFieldInfo(field)}
+                  onPress={modals.openFieldEditor}
+                  onInfo={() => modals.showFieldInfo(field)}
                   onRevert={() => revertField(field.id)}
                   onAcceptBoard={() => acceptBoardField(field.id)}
                 />
@@ -488,67 +341,73 @@ export default function TuneScreen() {
       ) : null}
 
       <InfoModal
-        visible={infoModal != null}
-        title={infoModal?.title ?? ''}
-        message={infoModal?.message ?? ''}
-        onDismiss={() => setInfoModal(null)}
+        visible={modals.infoModal != null}
+        title={modals.infoModal?.title ?? ''}
+        message={modals.infoModal?.message ?? ''}
+        onDismiss={() => modals.setInfoModal(null)}
       />
 
-      <FieldEditorPopover target={editor} onCancel={closeEditor} onApply={handleEditorApply} />
+      <FieldEditorPopover
+        target={modals.editor}
+        onCancel={modals.closeEditor}
+        onApply={modals.handleEditorApply}
+      />
 
       <TextPromptModal
-        visible={createModalOpen}
+        visible={modals.createModalOpen}
         title="New Profile"
         placeholder="Profile name"
         initialValue=""
         confirmLabel="Create"
         onConfirm={(name) => {
-          void storeCreateProfile(name, createCloneFromId)
-          setCreateModalOpen(false)
+          void modals.storeCreateProfile(name, modals.createCloneFromId)
+          modals.setCreateModalOpen(false)
         }}
-        onDismiss={() => setCreateModalOpen(false)}
+        onDismiss={() => modals.setCreateModalOpen(false)}
       />
 
       <RenameProfileModal
-        profile={renameModalProfile}
+        profile={modals.renameModalProfile}
         onRename={(name) => {
-          if (renameModalProfile) void storeRenameProfile(renameModalProfile.id, name)
-          setRenameModalProfile(null)
+          if (modals.renameModalProfile)
+            void modals.storeRenameProfile(modals.renameModalProfile.id, name)
+          modals.setRenameModalProfile(null)
         }}
-        onDismiss={() => setRenameModalProfile(null)}
+        onDismiss={() => modals.setRenameModalProfile(null)}
       />
 
       <BoardPickerModal
-        visible={copySourceProfile != null && copyTargetBoard == null}
-        boards={otherBoards}
-        onSelect={handleCopyToBoard}
-        onDismiss={() => setCopySourceProfile(null)}
+        visible={modals.copySourceProfile != null && modals.copyTargetBoard == null}
+        boards={modals.otherBoards}
+        onSelect={modals.handleCopyToBoard}
+        onDismiss={() => modals.setCopySourceProfile(null)}
       />
 
       <TextPromptModal
-        visible={copyTargetBoard != null}
-        title={`Copy to ${copyTargetBoard?.name ?? 'board'}`}
+        visible={modals.copyTargetBoard != null}
+        title={`Copy to ${modals.copyTargetBoard?.name ?? 'board'}`}
         placeholder="Profile name"
-        initialValue={copySourceProfile ? `${copySourceProfile.name} (copy)` : ''}
+        initialValue={modals.copySourceProfile ? `${modals.copySourceProfile.name} (copy)` : ''}
         confirmLabel="Copy"
-        onConfirm={handleCopyConfirm}
+        onConfirm={modals.handleCopyConfirm}
         onDismiss={() => {
-          setCopyTargetBoard(null)
-          setCopySourceProfile(null)
+          modals.setCopyTargetBoard(null)
+          modals.setCopySourceProfile(null)
         }}
       />
 
       <ConfirmModal
-        visible={deleteConfirmProfile != null}
+        visible={modals.deleteConfirmProfile != null}
         title="Delete Profile"
-        message={`Delete "${deleteConfirmProfile?.name}"? This cannot be undone.`}
+        message={`Delete "${modals.deleteConfirmProfile?.name}"? This cannot be undone.`}
         confirmLabel="Delete"
         destructive
         onConfirm={() => {
-          if (deleteConfirmProfile) void storeDeleteProfile(deleteConfirmProfile.id)
-          setDeleteConfirmProfile(null)
+          if (modals.deleteConfirmProfile)
+            void modals.storeDeleteProfile(modals.deleteConfirmProfile.id)
+          modals.setDeleteConfirmProfile(null)
         }}
-        onCancel={() => setDeleteConfirmProfile(null)}
+        onCancel={() => modals.setDeleteConfirmProfile(null)}
       />
     </SafeAreaView>
   )

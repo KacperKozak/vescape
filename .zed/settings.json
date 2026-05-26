@@ -1,0 +1,7 @@
+{
+  "languages": {
+    "Kotlin": {
+      "enable_language_server": false
+    }
+  }
+}

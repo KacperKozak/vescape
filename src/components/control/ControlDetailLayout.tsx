@@ -108,6 +108,35 @@ interface AlertFormModalProps {
   onSave(threshold: number, thresholdMax: number | null, soundType: AlertSoundType): void
 }
 
+function getEditFormDefaults(
+  editRule: AlertRule,
+  dialConfig: ReturnType<typeof getAlertDialConfig>,
+) {
+  return {
+    tab: (editRule.thresholdMax != null ? 'geiger' : 'single') as AlertTab,
+    threshold: editRule.threshold,
+    thresholdMax: editRule.thresholdMax ?? dialConfig.max,
+    soundType: editRule.soundType,
+  }
+}
+
+function getNewFormDefaults(
+  dialConfig: ReturnType<typeof getAlertDialConfig>,
+  defaultSoundType: AlertSoundType,
+) {
+  const mid =
+    Math.round(((dialConfig.min + dialConfig.max) / 2) * (1 / dialConfig.step)) * dialConfig.step
+  return {
+    tab: 'single' as AlertTab,
+    threshold: mid,
+    thresholdMax:
+      Math.round(
+        (dialConfig.min + (dialConfig.max - dialConfig.min) * 0.75) * (1 / dialConfig.step),
+      ) * dialConfig.step,
+    soundType: defaultSoundType,
+  }
+}
+
 function AlertFormModal({
   visible,
   controlId,
@@ -121,32 +150,22 @@ function AlertFormModal({
 
   const singlePresets = useMemo(() => getPresetsForCategory('single'), [])
   const geigerPresets = useMemo(() => getPresetsForCategory('geiger'), [])
+  const defaultSoundType: AlertSoundType = singlePresets[0]?.uri ?? 'preset:beep'
 
   const [tab, setTab] = useState<AlertTab>('single')
   const [threshold, setThreshold] = useState(dialConfig.min)
   const [thresholdMax, setThresholdMax] = useState(dialConfig.max)
-  const [soundType, setSoundType] = useState<AlertSoundType>(singlePresets[0]?.uri ?? 'preset:beep')
+  const [soundType, setSoundType] = useState<AlertSoundType>(defaultSoundType)
   const [prevVisible, setPrevVisible] = useState(visible)
 
   if (visible && !prevVisible) {
-    if (editRule) {
-      setTab(editRule.thresholdMax != null ? 'geiger' : 'single')
-      setThreshold(editRule.threshold)
-      setThresholdMax(editRule.thresholdMax ?? dialConfig.max)
-      setSoundType(editRule.soundType)
-    } else {
-      setTab('single')
-      const mid =
-        Math.round(((dialConfig.min + dialConfig.max) / 2) * (1 / dialConfig.step)) *
-        dialConfig.step
-      setThreshold(mid)
-      setThresholdMax(
-        Math.round(
-          (dialConfig.min + (dialConfig.max - dialConfig.min) * 0.75) * (1 / dialConfig.step),
-        ) * dialConfig.step,
-      )
-      setSoundType(singlePresets[0]?.uri ?? 'preset:beep')
-    }
+    const defaults = editRule
+      ? getEditFormDefaults(editRule, dialConfig)
+      : getNewFormDefaults(dialConfig, defaultSoundType)
+    setTab(defaults.tab)
+    setThreshold(defaults.threshold)
+    setThresholdMax(defaults.thresholdMax)
+    setSoundType(defaults.soundType)
   }
   if (visible !== prevVisible) {
     setPrevVisible(visible)
@@ -162,11 +181,7 @@ function AlertFormModal({
   )
 
   const handleSave = useCallback(() => {
-    if (tab === 'geiger') {
-      onSave(threshold, thresholdMax, soundType)
-    } else {
-      onSave(threshold, null, soundType)
-    }
+    onSave(threshold, tab === 'geiger' ? thresholdMax : null, soundType)
   }, [tab, threshold, thresholdMax, soundType, onSave])
 
   return (

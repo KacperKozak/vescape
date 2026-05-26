@@ -1,10 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback } from 'react'
 import { View, Text, Switch, StyleSheet, ScrollView, Platform, Pressable } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import Constants from 'expo-constants'
-import * as DocumentPicker from 'expo-document-picker'
-import * as Sharing from 'expo-sharing'
 import {
   ClockCountdownIcon,
   BluetoothConnectedIcon,
@@ -21,17 +19,9 @@ import {
   UploadSimpleIcon,
 } from 'phosphor-react-native'
 import { useShallow } from 'zustand/react/shallow'
-import {
-  addTelemetryRebuildProgressListener,
-  backupDatabase,
-  getDatabaseSizeBytes,
-  rebuildTelemetryBuckets,
-  restoreDatabase,
-} from 'vesc-ble'
 
 import { routes } from '@/navigation/routes'
 import { useSettingsStore } from '@/store/settingsStore'
-import { useHistoryStore } from '@/store/historyStore'
 import { theme } from '@/constants/theme'
 import { SettingsCard } from '@/components/settings/SettingsCard'
 import { SettingsRow } from '@/components/settings/SettingsRow'
@@ -39,6 +29,7 @@ import { SettingsSectionTitle } from '@/components/settings/SettingsSectionTitle
 import { Stepper } from '@/components/settings/Stepper'
 import { Button } from '@/components/Button'
 import { ConfirmModal } from '@/components/ConfirmModal'
+import { useSettingsDatabaseOps } from '@/hooks/useSettingsDatabaseOps'
 
 const appVersion = Constants.expoConfig?.version ?? '–'
 
@@ -59,34 +50,8 @@ export default function SettingsScreen() {
         set: s.set,
       })),
     )
-  const [dbSize, setDbSize] = useState<number | null>(null)
-  const [rebuildState, setRebuildState] = useState<'idle' | 'running' | 'done' | 'error'>('idle')
-  const [rebuildResult, setRebuildResult] = useState<string | null>(null)
-  const [backupState, setBackupState] = useState<'idle' | 'running' | 'done' | 'error'>('idle')
-  const [backupResult, setBackupResult] = useState<string | null>(null)
-  const [restoreState, setRestoreState] = useState<'idle' | 'running' | 'done' | 'error'>('idle')
-  const [restoreResult, setRestoreResult] = useState<string | null>(null)
-  const [restoreConfirmVisible, setRestoreConfirmVisible] = useState(false)
-  const [rebuildProgress, setRebuildProgress] = useState<{ current: number; total: number } | null>(
-    null,
-  )
 
-  const refreshDatabaseSize = useCallback(() => {
-    getDatabaseSizeBytes()
-      .then(setDbSize)
-      .catch(() => {})
-  }, [])
-
-  useEffect(() => {
-    refreshDatabaseSize()
-  }, [refreshDatabaseSize])
-
-  useEffect(() => {
-    const subscription = addTelemetryRebuildProgressListener((event) => {
-      setRebuildProgress(event)
-    })
-    return () => subscription.remove()
-  }, [])
+  const db = useSettingsDatabaseOps()
 
   const decrementLimit = useCallback(() => {
     if (liveHistoryLimit > 1) void set('liveHistoryLimit', liveHistoryLimit - 1)
@@ -107,94 +72,6 @@ export default function SettingsScreen() {
       void set('movingSpeedThresholdKmh', movingSpeedThresholdKmh + 1)
     }
   }, [movingSpeedThresholdKmh, set])
-
-  const handleRebuildBuckets = useCallback(async () => {
-    setRebuildState('running')
-    setRebuildResult(null)
-    setRebuildProgress(null)
-    try {
-      await rebuildTelemetryBuckets()
-      setRebuildState('done')
-      setRebuildResult(null)
-      setRebuildProgress(null)
-    } catch (e: any) {
-      setRebuildState('error')
-      setRebuildResult(e?.message ?? 'Unknown error')
-      setRebuildProgress(null)
-    }
-  }, [])
-
-  const handleBackupDatabase = useCallback(async () => {
-    setBackupState('running')
-    setBackupResult(null)
-    try {
-      const backup = await backupDatabase()
-      await Sharing.shareAsync(backup.uri, {
-        mimeType: 'application/zip',
-        dialogTitle: 'Save or send database backup',
-        UTI: 'com.pkware.zip-archive',
-      })
-      setBackupState('done')
-      setBackupResult(`${backup.name} (${formatBytes(backup.sizeBytes)})`)
-      refreshDatabaseSize()
-    } catch (e: any) {
-      setBackupState('error')
-      setBackupResult(e?.message ?? 'Backup failed')
-    }
-  }, [refreshDatabaseSize])
-
-  const handleRestoreDatabase = useCallback(async () => {
-    setRestoreConfirmVisible(false)
-    setRestoreState('running')
-    setRestoreResult(null)
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['application/zip', 'application/x-zip-compressed'],
-        copyToCacheDirectory: true,
-      })
-      if (result.canceled) {
-        setRestoreState('idle')
-        return
-      }
-      const uri = result.assets[0]?.uri
-      if (!uri) throw new Error('No backup file selected')
-      await restoreDatabase(uri)
-      await Promise.all([
-        useSettingsStore.getState().load(),
-        useHistoryStore.getState().loadInitial(),
-      ])
-      setRestoreState('done')
-      setRestoreResult('Database restored')
-      refreshDatabaseSize()
-    } catch (e: any) {
-      setRestoreState('error')
-      setRestoreResult(e?.message ?? 'Restore failed')
-    }
-  }, [refreshDatabaseSize])
-
-  const rebuildHint =
-    rebuildState === 'error' && rebuildResult
-      ? rebuildResult
-      : 'Refresh historical data with newest algorithms'
-  const rebuildProgressValue =
-    rebuildProgress && rebuildProgress.total > 0
-      ? Math.min(1, rebuildProgress.current / rebuildProgress.total)
-      : 0
-  const rebuildProgressLabel = rebuildProgress
-    ? `${rebuildProgress.current}/${rebuildProgress.total}`
-    : null
-  const backupHint =
-    backupState === 'error' && backupResult
-      ? backupResult
-      : backupState === 'done' && backupResult
-        ? backupResult
-        : 'Create a shareable zip for debugging'
-  const restoreHint =
-    restoreState === 'error' && restoreResult
-      ? restoreResult
-      : restoreState === 'done' && restoreResult
-        ? restoreResult
-        : 'Replace current database from backup zip'
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -218,7 +95,9 @@ export default function SettingsScreen() {
             </View>
             <View style={styles.headerItem}>
               <DatabaseIcon size={14} color={theme.warning.color} weight="duotone" />
-              <Text style={styles.headerValue}>{dbSize != null ? formatBytes(dbSize) : '–'}</Text>
+              <Text style={styles.headerValue}>
+                {db.dbSize != null ? formatBytes(db.dbSize) : '–'}
+              </Text>
             </View>
           </View>
         </View>
@@ -259,15 +138,15 @@ export default function SettingsScreen() {
             icon={DownloadSimpleIcon}
             iconColor={theme.gps.color}
             label="Back up database"
-            hint={backupHint}
+            hint={db.backupHint}
             right={
               <Button
-                label={backupState === 'running' ? 'Exporting...' : 'Export'}
+                label={db.backupState === 'running' ? 'Exporting...' : 'Export'}
                 size="sm"
                 variant="secondary"
-                loading={backupState === 'running'}
-                disabled={restoreState === 'running' || rebuildState === 'running'}
-                onPress={handleBackupDatabase}
+                loading={db.backupState === 'running'}
+                disabled={db.restoreState === 'running' || db.rebuildState === 'running'}
+                onPress={db.handleBackupDatabase}
               />
             }
           />
@@ -275,57 +154,57 @@ export default function SettingsScreen() {
             icon={UploadSimpleIcon}
             iconColor={theme.warning.color}
             label="Restore database"
-            hint={restoreHint}
+            hint={db.restoreHint}
             right={
               <Button
-                label={restoreState === 'running' ? 'Restoring...' : 'Restore'}
+                label={db.restoreState === 'running' ? 'Restoring...' : 'Restore'}
                 size="sm"
                 variant="destructive"
-                loading={restoreState === 'running'}
-                disabled={backupState === 'running' || rebuildState === 'running'}
-                onPress={() => setRestoreConfirmVisible(true)}
+                loading={db.restoreState === 'running'}
+                disabled={db.backupState === 'running' || db.rebuildState === 'running'}
+                onPress={() => db.setRestoreConfirmVisible(true)}
               />
             }
           />
           <SettingsRow
             icon={ClockCounterClockwiseIcon}
             label="Rebuild history"
-            hint={rebuildHint}
+            hint={db.rebuildHint}
             right={
               <Pressable
                 style={[
                   styles.rebuildButton,
-                  rebuildState === 'running' && styles.rebuildButtonDisabled,
-                  rebuildState === 'done' && styles.rebuildButtonDone,
+                  db.rebuildState === 'running' && styles.rebuildButtonDisabled,
+                  db.rebuildState === 'done' && styles.rebuildButtonDone,
                 ]}
-                onPress={handleRebuildBuckets}
-                disabled={rebuildState === 'running'}
+                onPress={db.handleRebuildBuckets}
+                disabled={db.rebuildState === 'running'}
               >
-                {rebuildState === 'done' && (
+                {db.rebuildState === 'done' && (
                   <CheckCircleIcon size={13} color="#bbf7d0" weight="fill" />
                 )}
                 <Text style={styles.rebuildButtonText}>
-                  {rebuildState === 'running'
+                  {db.rebuildState === 'running'
                     ? 'Rebuilding...'
-                    : rebuildState === 'done'
+                    : db.rebuildState === 'done'
                       ? 'Done'
                       : 'Rebuild'}
                 </Text>
               </Pressable>
             }
           >
-            {rebuildState === 'running' && (
+            {db.rebuildState === 'running' && (
               <View style={styles.rebuildProgress}>
                 <View style={styles.rebuildProgressTrack}>
                   <View
                     style={[
                       styles.rebuildProgressFill,
-                      { width: `${Math.round(rebuildProgressValue * 100)}%` },
+                      { width: `${Math.round(db.rebuildProgressValue * 100)}%` },
                     ]}
                   />
                 </View>
-                {rebuildProgressLabel ? (
-                  <Text style={styles.rebuildProgressText}>{rebuildProgressLabel}</Text>
+                {db.rebuildProgressLabel ? (
+                  <Text style={styles.rebuildProgressText}>{db.rebuildProgressLabel}</Text>
                 ) : null}
               </View>
             )}
@@ -376,13 +255,13 @@ export default function SettingsScreen() {
         </SettingsCard>
       </ScrollView>
       <ConfirmModal
-        visible={restoreConfirmVisible}
+        visible={db.restoreConfirmVisible}
         title="Restore database"
         message="Current database will be replaced by selected backup. App keeps a temporary rollback copy during restore and restores old database if restore fails."
         confirmLabel="Choose backup"
         destructive
-        onConfirm={() => void handleRestoreDatabase()}
-        onCancel={() => setRestoreConfirmVisible(false)}
+        onConfirm={() => void db.handleRestoreDatabase()}
+        onCancel={() => db.setRestoreConfirmVisible(false)}
       />
     </SafeAreaView>
   )

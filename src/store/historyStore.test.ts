@@ -7,6 +7,7 @@ import type {
   TelemetrySample,
   TelemetrySummary,
 } from 'vesc-ble'
+import { makeBlock as block, makeSample as sample } from '@/test-utils/factories'
 
 const actualVescBle = await import('../../modules/vesc-ble/src/index')
 
@@ -59,72 +60,6 @@ const vescBleMock = {
 
 mock.module('vesc-ble', () => vescBleMock)
 mock.module('../../modules/vesc-ble/src/index', () => vescBleMock)
-
-function block(overrides: Partial<TelemetryMinuteBucket>): TelemetryMinuteBucket {
-  const startAtMs = overrides.startAtMs ?? 0
-  const endAtMs = overrides.endAtMs ?? startAtMs + 60_000
-  return {
-    id: overrides.id ?? `b-${startAtMs}`,
-    startAtMs,
-    endAtMs,
-    bucketStartMs: overrides.bucketStartMs ?? startAtMs,
-    deviceId: overrides.deviceId ?? 'dev-a',
-    deviceName: overrides.deviceName ?? 'Board A',
-    sampleCount: overrides.sampleCount ?? 10,
-    gpsPointCount: overrides.gpsPointCount ?? 5,
-    preciseGpsPointCount: overrides.preciseGpsPointCount ?? 4,
-    maxAbsSpeedKmh: overrides.maxAbsSpeedKmh ?? 20,
-    maxGpsSpeedKmh: overrides.maxGpsSpeedKmh ?? 18,
-    avgSpeedKmh: overrides.avgSpeedKmh ?? 15,
-    avgSpeedSampleCount: overrides.avgSpeedSampleCount ?? 10,
-    minBatteryVoltage: overrides.minBatteryVoltage ?? 52,
-    maxMotorCurrent: overrides.maxMotorCurrent ?? 10,
-    maxBatteryCurrent: overrides.maxBatteryCurrent ?? 8,
-    maxDuty: overrides.maxDuty ?? 0.5,
-    faultCount: overrides.faultCount ?? 0,
-    distanceDeltaM: overrides.distanceDeltaM !== undefined ? overrides.distanceDeltaM : 100,
-    gpsDistanceM: overrides.gpsDistanceM !== undefined ? overrides.gpsDistanceM : 120,
-    maxTempMosfet: overrides.maxTempMosfet ?? null,
-    maxTempMotor: overrides.maxTempMotor ?? null,
-    firstLatitude: overrides.firstLatitude ?? null,
-    firstLongitude: overrides.firstLongitude ?? null,
-    boundaryBefore: overrides.boundaryBefore ?? 'none',
-    boundaryMessage: overrides.boundaryMessage ?? null,
-    gapBeforeMs: overrides.gapBeforeMs ?? null,
-    batteryUsedWh: overrides.batteryUsedWh ?? 0,
-    batteryRegenWh: overrides.batteryRegenWh ?? 0,
-  }
-}
-
-function sample(overrides: Partial<TelemetrySample>): TelemetrySample {
-  return {
-    id: overrides.id ?? 1,
-    capturedAtMs: overrides.capturedAtMs ?? 0,
-    deviceId: overrides.deviceId ?? 'dev-a',
-    deviceName: overrides.deviceName ?? 'Board A',
-    speedKmh: overrides.speedKmh ?? 0,
-    batteryVoltage: overrides.batteryVoltage ?? 50,
-    motorCurrent: overrides.motorCurrent ?? 0,
-    batteryCurrent: overrides.batteryCurrent ?? 0,
-    dutyCycle: overrides.dutyCycle ?? 0,
-    pitch: overrides.pitch ?? 0,
-    roll: overrides.roll ?? 0,
-    balancePitch: overrides.balancePitch ?? 0,
-    balanceCurrent: overrides.balanceCurrent ?? 0,
-    erpm: overrides.erpm ?? 0,
-    state: overrides.state ?? 0,
-    switchState: overrides.switchState ?? 0,
-    adc1: overrides.adc1 ?? 0,
-    adc2: overrides.adc2 ?? 0,
-    odometer: overrides.odometer ?? null,
-    tempMosfet: overrides.tempMosfet ?? null,
-    tempMotor: overrides.tempMotor ?? null,
-    hasFault: overrides.hasFault ?? false,
-    faultCode: overrides.faultCode ?? 0,
-    latitude: overrides.latitude ?? null,
-    longitude: overrides.longitude ?? null,
-  }
-}
 
 beforeEach(async () => {
   getTelemetryHistory.mockClear()
@@ -240,7 +175,14 @@ test('selects ride immediately while loading its full route', async () => {
   expect(useHistoryStore.getState().selectedSession?.id).toBe(
     useHistoryStore.getState().sessions[1].id,
   )
-  expect(useHistoryStore.getState().sessionSamples).toEqual([])
+  expect(useHistoryStore.getState().sessionSamples).toEqual([
+    expect.objectContaining({
+      capturedAtMs: next.startAtMs,
+      deviceId: next.deviceId,
+      latitude: next.firstLatitude,
+      longitude: next.firstLongitude,
+    }),
+  ])
   expect(getHistoryRange).toHaveBeenLastCalledWith({
     fromMs: next.startAtMs,
     toMs: next.endAtMs,

@@ -195,6 +195,29 @@ describe('live telemetry runtime', () => {
     expect(runtime.consumePendingSnapshot()).toBe(null)
   })
 
+  test('keeps hot values raw when native sanitizer corrects older live metric extrema', () => {
+    const runtime = createLiveTelemetryRuntime({ windowMs: () => 60_000 })
+    runtime.seedFromLiveState(liveState([]))
+
+    runtime.ingestTelemetry(telemetry({ lastPacketAt: 1_000, speed: 46 }))
+    runtime.ingestTelemetry(
+      telemetry({
+        lastPacketAt: 2_000,
+        speed: 4,
+        metricExclusionUpdates: [
+          { lastPacketAt: 1_000, metricExclusions: { max_speed: true, max_duty: true } },
+        ],
+      }),
+    )
+
+    expect(runtime.values.speedKmh.value).toBe(4)
+    expect(runtime.getTelemetry()[0].speed).toBe(46)
+    expect(runtime.getTelemetry()[0].metricExclusions).toEqual({
+      max_speed: true,
+      max_duty: true,
+    })
+  })
+
   test('reset clears hot values and snapshot', () => {
     const runtime = createLiveTelemetryRuntime({ windowMs: () => 60_000 })
     runtime.seedFromLiveState(liveState([]))

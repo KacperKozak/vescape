@@ -18,7 +18,13 @@ import android.util.Log
 import java.io.File
 import expo.modules.vescble.telemetry.AlertRuleEntity
 import expo.modules.vescble.telemetry.AppDataRepository
+import expo.modules.vescble.telemetry.BucketTelemetryPoint
+import expo.modules.vescble.telemetry.FullTelemetryState
+import expo.modules.vescble.telemetry.METRIC_MAX_DUTY
+import expo.modules.vescble.telemetry.METRIC_MAX_SPEED
+import expo.modules.vescble.telemetry.SanitizedSample
 import expo.modules.vescble.telemetry.TelemetryRepository
+import expo.modules.vescble.telemetry.sanitizeTelemetrySamples
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -230,6 +236,11 @@ class VescForegroundService : Service() {
     )
 
     private data class PendingStop(val onSuccess: () -> Unit)
+    private data class LiveTelemetryPoint(
+        val bucketPoint: BucketTelemetryPoint,
+        val eventMap: MutableMap<String, Any?>,
+    )
+
     private data class PendingConfigRead(
         val onSuccess: (Map<String, Any?>) -> Unit,
         val onError: (String, String) -> Unit,
@@ -342,6 +353,7 @@ class VescForegroundService : Service() {
     private val configReadTimeoutMs = 8_000L
     private val configWriteTimeoutMs = 10_000L
     private val recentTelemetry = ArrayDeque<Map<String, Any?>>()
+    private val liveTelemetryPoints = ArrayDeque<LiveTelemetryPoint>()
     private val recentLocations = ArrayDeque<Map<String, Any?>>()
     private val bluetoothAdapter: BluetoothAdapter
         get() = (getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter
@@ -486,6 +498,7 @@ class VescForegroundService : Service() {
         boardError = null
         telemetry = null
         recentTelemetry.clear()
+        liveTelemetryPoints.clear()
         packetReassembler.reset()
         gattClient.resetDiagnostics()
         telemetryParseFailedReported = false
@@ -725,11 +738,10 @@ class VescForegroundService : Service() {
                 lastTelemetryAt = parsed.lastPacketAt
                 armTelemetryStaleWatchdog()
                 val firedAlerts = evaluateAlerts(parsed)
-                val eventMap = if (firedAlerts.isNotEmpty())
-                    parsed.toMap() + mapOf("firedAlerts" to firedAlerts, "generation" to generation)
-                else
-                    parsed.toMap() + mapOf("generation" to generation)
-                appendRecentTelemetry(eventMap, parsed.lastPacketAt)
+                val baseEventMap = parsed.toMap().toMutableMap()
+                if (firedAlerts.isNotEmpty()) baseEventMap["firedAlerts"] = firedAlerts
+                baseEventMap["generation"] = generation
+                val eventMap = appendLiveTelemetry(parsed, baseEventMap)
                 showNotification(formatNotificationText(parsed))
                 emitEvent("onTelemetry", eventMap)
                 recordTelemetry(parsed)
@@ -1406,6 +1418,7 @@ class VescForegroundService : Service() {
         fwVersionString = null
         telemetry = null
         recentTelemetry.clear()
+        liveTelemetryPoints.clear()
         generation += 1
         boardError = null
         boardStatus = BoardPhase.Idle
@@ -1843,6 +1856,57 @@ class VescForegroundService : Service() {
         pruneRecent(recentTelemetry, packetAt)
     }
 
+    private fun appendLiveTelemetry(
+        parsed: RefloatTelemetry,
+        eventMap: MutableMap<String, Any?>,
+    ): Map<String, Any?> {
+        val session = boardConfig
+        if (session == null) {
+            appendRecentTelemetry(eventMap, parsed.lastPacketAt)
+            return eventMap
+        }
+
+        val bucketPoint = FullTelemetryState.from(parsed.toCapture(session, canId)).toBucketPoint()
+        liveTelemetryPoints.addLast(LiveTelemetryPoint(bucketPoint, eventMap))
+        pruneLiveTelemetryPoints(parsed.lastPacketAt)
+        val updates = sanitizeLiveTelemetryPoints()
+        appendRecentTelemetry(eventMap, parsed.lastPacketAt)
+        return if (updates.isNotEmpty()) eventMap + mapOf("metricExclusionUpdates" to updates) else eventMap
+    }
+
+    private fun pruneLiveTelemetryPoints(nowMs: Long) {
+        val oldest = nowMs - recentWindowMs()
+        while (liveTelemetryPoints.isNotEmpty() && liveTelemetryPoints.first().bucketPoint.capturedAtMs < oldest) {
+            liveTelemetryPoints.removeFirst()
+        }
+    }
+
+    private fun sanitizeLiveTelemetryPoints(): List<Map<String, Any?>> {
+        if (liveTelemetryPoints.isEmpty()) return emptyList()
+        val points = liveTelemetryPoints.map { it.bucketPoint }
+        val sanitization = sanitizeTelemetrySamples(points)
+        val updates = mutableListOf<Map<String, Any?>>()
+        val lastIndex = liveTelemetryPoints.size - 1
+        liveTelemetryPoints.forEachIndexed { index, point ->
+            val exclusions = sanitization.samples[index].toLiveMetricExclusions()
+            val previous = point.eventMap["metricExclusions"] as? Map<*, *>
+            point.eventMap["metricExclusions"] = exclusions
+            if (index != lastIndex && previous != exclusions) updates.add(
+                mapOf(
+                    "lastPacketAt" to point.bucketPoint.capturedAtMs,
+                    "metricExclusions" to exclusions,
+                ),
+            )
+        }
+        return updates
+    }
+
+    private fun SanitizedSample.toLiveMetricExclusions(): Map<String, Boolean> =
+        buildMap {
+            if (excludedFromMaxSpeed) put(METRIC_MAX_SPEED, true)
+            if (excludedFromMaxDuty) put(METRIC_MAX_DUTY, true)
+        }
+
     private fun appendRecentLocation(location: LocationSnapshot) {
         val point = location.toMap()
         recentLocations.addLast(point)
@@ -1868,6 +1932,7 @@ class VescForegroundService : Service() {
             MAX_LIVE_HISTORY_LIMIT_MINUTES,
         )
         pruneRecent(recentTelemetry, System.currentTimeMillis())
+        pruneLiveTelemetryPoints(System.currentTimeMillis())
         pruneRecent(recentLocations, System.currentTimeMillis())
     }
 

@@ -7,25 +7,36 @@ export interface TelemetryChartRange {
   y: { min: number; max: number }
 }
 
-export function computeAutoRange(
-  points: TelemetryChartPoint[],
-  options?: {
-    includeZero?: boolean
-    minSpan?: number
-    paddingRatio?: number
-    fallbackMin?: number
-    fallbackMax?: number
-    baseline?: { min: number; max: number }
-  },
-): TelemetryChartRange {
-  const includeZero = options?.includeZero ?? false
-  const minSpan = options?.minSpan ?? 0
-  const paddingRatio = options?.paddingRatio ?? 0
-  const fallbackMin = options?.fallbackMin ?? options?.baseline?.min ?? -1
-  const fallbackMax = options?.fallbackMax ?? options?.baseline?.max ?? 1
+interface AutoRangeOptions {
+  includeZero?: boolean
+  minSpan?: number
+  paddingRatio?: number
+  fallbackMin?: number
+  fallbackMax?: number
+  baseline?: { min: number; max: number }
+}
 
-  if (!points.length) return { y: { min: fallbackMin, max: fallbackMax } }
+interface ResolvedRangeOptions {
+  includeZero: boolean
+  minSpan: number
+  paddingRatio: number
+  fallbackMin: number
+  fallbackMax: number
+  baseline: { min: number; max: number } | undefined
+}
 
+function resolveRangeOptions(options?: AutoRangeOptions): ResolvedRangeOptions {
+  return {
+    includeZero: options?.includeZero ?? false,
+    minSpan: options?.minSpan ?? 0,
+    paddingRatio: options?.paddingRatio ?? 0,
+    fallbackMin: options?.fallbackMin ?? options?.baseline?.min ?? -1,
+    fallbackMax: options?.fallbackMax ?? options?.baseline?.max ?? 1,
+    baseline: options?.baseline,
+  }
+}
+
+function getMinMax(points: TelemetryChartPoint[], opts: ResolvedRangeOptions) {
   let min = Number.POSITIVE_INFINITY
   let max = Number.NEGATIVE_INFINITY
   for (const point of points) {
@@ -33,19 +44,28 @@ export function computeAutoRange(
     max = Math.max(max, point.value)
   }
 
-  if (options?.baseline) {
-    min = Math.min(min, options.baseline.min)
-    max = Math.max(max, options.baseline.max)
+  if (opts.baseline) {
+    min = Math.min(min, opts.baseline.min)
+    max = Math.max(max, opts.baseline.max)
   }
 
-  if (includeZero) {
+  if (opts.includeZero) {
     if (min > 0) min = 0
     if (max < 0) max = 0
   }
 
-  const span = Math.max(minSpan, max - min)
-  const pad = span * paddingRatio
-  return { y: { min: min - pad, max: max + pad } }
+  const span = Math.max(opts.minSpan, max - min)
+  const pad = span * opts.paddingRatio
+  return { min: min - pad, max: max + pad }
+}
+
+export function computeAutoRange(
+  points: TelemetryChartPoint[],
+  options?: AutoRangeOptions,
+): TelemetryChartRange {
+  const opts = resolveRangeOptions(options)
+  if (!points.length) return { y: { min: opts.fallbackMin, max: opts.fallbackMax } }
+  return { y: getMinMax(points, opts) }
 }
 
 export function getChartPosition(
