@@ -263,7 +263,10 @@ class VescBleModule : Module() {
     AsyncFunction("rebuildTelemetryBuckets") { promise: Promise ->
       CoroutineScope(Dispatchers.IO).launch {
         try {
-          val count = TelemetryRepository.get(context.applicationContext).rebuildBuckets { current, total ->
+          val appContext = context.applicationContext
+          val repository = TelemetryRepository.get(appContext)
+          repository.applySettings(AppDataRepository.get(appContext).getTypedSettings())
+          val count = repository.rebuildBuckets { current, total ->
             if (shouldEmitToFrontend("onTelemetryRebuildProgress")) {
               mainHandler.post {
                 if (shouldEmitToFrontend("onTelemetryRebuildProgress")) {
@@ -315,6 +318,15 @@ class VescBleModule : Module() {
       AppDataRepository.get(context.applicationContext).updateSetting(key, value)
       if (key == "liveHistoryLimit") {
         VescForegroundService.setLiveHistoryLimit(value as? Number)
+      }
+      if (
+        key == "movingSpeedThresholdKmh" ||
+        key == "avgSpeedCutoffKmh" ||
+        key == "movingAvgSpeedThresholdKmh" ||
+        key == "freeSpinMaxSpeedDeltaKmh" ||
+        key == "freeSpinStationaryBoardCapKmh"
+      ) {
+        VescForegroundService.reloadTelemetrySettings(context.applicationContext)
       }
     }
   }

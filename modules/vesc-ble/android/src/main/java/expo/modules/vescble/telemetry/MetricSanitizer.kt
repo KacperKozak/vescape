@@ -4,6 +4,7 @@ import expo.modules.vescble.telemetry.sanitizers.FreeSpinMetricSanitizer
 import expo.modules.vescble.telemetry.sanitizers.LowSpeedAverageSpeedSanitizer
 import expo.modules.vescble.telemetry.sanitizers.MetricSanitizationContext
 import expo.modules.vescble.telemetry.sanitizers.buildPreciseGpsIndex
+import kotlin.math.roundToInt
 
 internal const val DEFAULT_MOVING_SPEED_THRESHOLD_CENTI_KMH = 300
 internal const val METRIC_AVG_SPEED = "avg_speed"
@@ -20,6 +21,19 @@ internal const val FREE_SPIN_GPS_PRECISE_ACCURACY_CM = 2000
 internal const val DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH = 12.0
 internal const val DEFAULT_FREE_SPIN_STATIONARY_BOARD_CAP_KMH = 15.0
 
+internal data class MetricSanitizerConfig(
+  val movingSpeedThresholdCentiKmh: Int = DEFAULT_MOVING_SPEED_THRESHOLD_CENTI_KMH,
+  val freeSpinMaxSpeedDeltaCentiKmh: Int = (DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH * 100).toInt(),
+  val freeSpinStationaryBoardCapCentiKmh: Int = (DEFAULT_FREE_SPIN_STATIONARY_BOARD_CAP_KMH * 100).toInt(),
+)
+
+internal fun AppSettings.toMetricSanitizerConfig(): MetricSanitizerConfig =
+  MetricSanitizerConfig(
+    movingSpeedThresholdCentiKmh = (movingSpeedThresholdKmh * 100.0).roundToInt().coerceAtLeast(0),
+    freeSpinMaxSpeedDeltaCentiKmh = (freeSpinMaxSpeedDeltaKmh * 100.0).roundToInt().coerceAtLeast(0),
+    freeSpinStationaryBoardCapCentiKmh = (freeSpinStationaryBoardCapKmh * 100.0).roundToInt().coerceAtLeast(0),
+  )
+
 internal data class SanitizedSample(
   val index: Int,
   val capturedAtMs: Long,
@@ -33,6 +47,17 @@ internal data class SanitizationResult(
   val samples: List<SanitizedSample>,
   val exclusions: List<MetricExclusionEntity>,
 )
+
+internal fun sanitizeTelemetrySamples(
+  samples: List<BucketTelemetryPoint>,
+  config: MetricSanitizerConfig,
+): SanitizationResult =
+  sanitizeTelemetrySamples(
+    samples = samples,
+    movingSpeedThresholdCentiKmh = config.movingSpeedThresholdCentiKmh,
+    freeSpinMaxSpeedDeltaCentiKmh = config.freeSpinMaxSpeedDeltaCentiKmh,
+    freeSpinStationaryBoardCapCentiKmh = config.freeSpinStationaryBoardCapCentiKmh,
+  )
 
 internal fun sanitizeTelemetrySamples(
   samples: List<BucketTelemetryPoint>,

@@ -118,7 +118,7 @@ export function useSettingsDatabaseOps() {
   const rebuildHint =
     rebuildState === 'error' && rebuildResult
       ? rebuildResult
-      : 'Refresh historical data with newest algorithms'
+      : 'Refresh historical data with newest algorithms and settings'
   const rebuildProgressValue =
     rebuildProgress && rebuildProgress.total > 0
       ? Math.min(1, rebuildProgress.current / rebuildProgress.total)

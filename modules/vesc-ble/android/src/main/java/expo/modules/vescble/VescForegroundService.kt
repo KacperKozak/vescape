@@ -18,16 +18,17 @@ import android.util.Log
 import java.io.File
 import expo.modules.vescble.telemetry.AlertRuleEntity
 import expo.modules.vescble.telemetry.AppDataRepository
+import expo.modules.vescble.telemetry.AppSettings
 import expo.modules.vescble.telemetry.BucketTelemetryPoint
 import expo.modules.vescble.telemetry.FullTelemetryState
-import expo.modules.vescble.telemetry.DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH
-import expo.modules.vescble.telemetry.DEFAULT_FREE_SPIN_STATIONARY_BOARD_CAP_KMH
 import expo.modules.vescble.telemetry.METRIC_AVG_SPEED
 import expo.modules.vescble.telemetry.METRIC_MAX_DUTY
 import expo.modules.vescble.telemetry.METRIC_MAX_SPEED
+import expo.modules.vescble.telemetry.MetricSanitizerConfig
 import expo.modules.vescble.telemetry.SanitizedSample
 import expo.modules.vescble.telemetry.TelemetryRepository
 import expo.modules.vescble.telemetry.sanitizeTelemetrySamples
+import expo.modules.vescble.telemetry.toMetricSanitizerConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -169,6 +170,12 @@ class VescForegroundService : Service() {
                 .coerceIn(MIN_LIVE_HISTORY_LIMIT_MINUTES, MAX_LIVE_HISTORY_LIMIT_MINUTES)
             requestedLiveHistoryLimitMinutes = minutes
             instance?.setLiveHistoryLimitMinutes(minutes)
+        }
+
+        fun reloadTelemetrySettings(context: Context) {
+            appDataScope.launch {
+                instance?.loadTelemetrySettings(context.applicationContext)
+            }
         }
 
         @Volatile private var alertRules: List<AlertRuleEntity> = emptyList()
@@ -351,6 +358,7 @@ class VescForegroundService : Service() {
     private var connectionLostMarkerAt: Long? = null
     private var generation = 0L
     private var liveHistoryLimitMinutes = requestedLiveHistoryLimitMinutes
+    private var metricSanitizerConfig = MetricSanitizerConfig()
     private val configChunkLength = 384
     private val configSchemaTimeoutMs = 10_000L
     private val configReadTimeoutMs = 8_000L
@@ -1735,9 +1743,9 @@ class VescForegroundService : Service() {
         } catch (_: Exception) {
             null
         }
-        store.setMovingSpeedThresholdKmh(settings?.movingSpeedThresholdKmh ?: 3.0)
-        store.setFreeSpinMaxSpeedDeltaKmh(settings?.freeSpinMaxSpeedDeltaKmh ?: DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH)
-        store.setFreeSpinStationaryBoardCapKmh(settings?.freeSpinStationaryBoardCapKmh ?: DEFAULT_FREE_SPIN_STATIONARY_BOARD_CAP_KMH)
+        val resolvedSettings = settings ?: AppSettings()
+        applyTelemetrySettings(resolvedSettings)
+        store.applySettings(resolvedSettings)
         return store
     }
 
@@ -1793,7 +1801,7 @@ class VescForegroundService : Service() {
         val settings = kotlinx.coroutines.runBlocking {
             AppDataRepository.get(applicationContext).getTypedSettings()
         }
-        setLiveHistoryLimitMinutes(settings.liveHistoryLimit)
+        applyTelemetrySettings(settings)
         val now = System.currentTimeMillis()
         val phase = if (
             boardStatus == BoardPhase.Connected &&
@@ -1889,7 +1897,7 @@ class VescForegroundService : Service() {
     private fun sanitizeLiveTelemetryPoints(): List<Map<String, Any?>> {
         if (liveTelemetryPoints.isEmpty()) return emptyList()
         val points = liveTelemetryPoints.map { it.bucketPoint }
-        val sanitization = sanitizeTelemetrySamples(points)
+        val sanitization = sanitizeTelemetrySamples(points, metricSanitizerConfig)
         val updates = mutableListOf<Map<String, Any?>>()
         val lastIndex = liveTelemetryPoints.size - 1
         liveTelemetryPoints.forEachIndexed { index, point ->
@@ -1946,7 +1954,17 @@ class VescForegroundService : Service() {
         val settings = kotlinx.coroutines.runBlocking {
             AppDataRepository.get(applicationContext).getTypedSettings()
         }
+        applyTelemetrySettings(settings)
+    }
+
+    private suspend fun loadTelemetrySettings(context: Context) {
+        applyTelemetrySettings(AppDataRepository.get(context).getTypedSettings())
+    }
+
+    private fun applyTelemetrySettings(settings: AppSettings) {
         setLiveHistoryLimitMinutes(settings.liveHistoryLimit)
+        metricSanitizerConfig = settings.toMetricSanitizerConfig()
+        telemetryStore?.applySettings(settings)
     }
 
     private fun showNotification(text: String = "Monitoring board in background") {
