@@ -32,18 +32,11 @@ interface StatItem {
 export function HistoryStatsBar({ session }: HistoryStatsBarProps) {
   const insets = useSafeAreaInsets()
   const stats = useMemo(() => sessionToStats(session), [session])
-  const row1 = stats.slice(0, 4)
-  const row2 = stats.slice(4)
 
   return (
     <View style={[styles.wrap, { top: Math.max(insets.top, 8) + 46 }]} pointerEvents="box-none">
-      <View style={styles.compactRow}>
-        {row1.map((item) => (
-          <CompactStat key={item.key} item={item} />
-        ))}
-      </View>
-      <View style={styles.compactRow}>
-        {row2.map((item) => (
+      <View style={styles.grid}>
+        {stats.map((item) => (
           <CompactStat key={item.key} item={item} />
         ))}
       </View>
@@ -69,15 +62,8 @@ function CompactStat({ item }: { item: StatItem }) {
 function sessionToStats(session: HistorySession): StatItem[] {
   return [
     {
-      key: 'distance',
-      label: 'Distance',
-      value: formatDistance(session.distanceM),
-      icon: RoadHorizonIcon,
-      accent: theme.wheel.color,
-    },
-    {
       key: 'rideTime',
-      label: 'Ride time',
+      label: 'Time',
       value: formatDuration(session.endAtMs - session.startAtMs),
       icon: ClockCountdownIcon,
       accent: theme.target.color,
@@ -90,25 +76,18 @@ function sessionToStats(session: HistorySession): StatItem[] {
       accent: theme.warning.color,
     },
     {
-      key: 'avgSpeed',
-      label: 'Avg speed',
-      value: formatSpeed(session.avgSpeedKmh),
-      icon: RepeatIcon,
-      accent: '#14b8a6',
-    },
-    {
       key: 'mosfetTemp',
-      label: 'Ctrl max temp',
+      label: 'Ctrl max',
       value: formatTemp(session.maxTempMosfet),
       icon: ThermometerHotIcon,
       accent: theme.error.color,
     },
     {
-      key: 'motorTemp',
-      label: 'Motor max temp',
-      value: formatTemp(session.maxTempMotor),
-      icon: ThermometerSimpleIcon,
-      accent: theme.highlight.color,
+      key: 'batteryUsed',
+      label: 'Used',
+      value: formatWh(session.batteryUsedWh),
+      icon: BatteryMediumIcon,
+      accent: theme.warning.color,
     },
     {
       key: 'maxDuty',
@@ -118,11 +97,25 @@ function sessionToStats(session: HistorySession): StatItem[] {
       accent: theme.bran.color,
     },
     {
-      key: 'batteryUsed',
-      label: 'Used',
-      value: formatWh(session.batteryUsedWh),
-      icon: BatteryMediumIcon,
-      accent: theme.warning.color,
+      key: 'distance',
+      label: 'Distance',
+      value: formatDistance(session.distanceM),
+      icon: RoadHorizonIcon,
+      accent: theme.wheel.color,
+    },
+    {
+      key: 'avgSpeed',
+      label: 'Avg speed',
+      value: formatSpeed(session.avgSpeedKmh),
+      icon: RepeatIcon,
+      accent: '#14b8a6',
+    },
+    {
+      key: 'motorTemp',
+      label: 'Motor max',
+      value: formatTemp(session.maxTempMotor),
+      icon: ThermometerSimpleIcon,
+      accent: theme.highlight.color,
     },
     {
       key: 'batteryRegen',
@@ -169,24 +162,12 @@ function formatWh(value: number): string {
 const styles = StyleSheet.create({
   wrap: {
     position: 'absolute',
-    left: 10,
-    right: 10,
+    left: 0,
+    right: 0,
     zIndex: 24,
-    alignItems: 'center',
+    paddingTop: 6,
+    paddingHorizontal: 10,
     gap: 6,
-  },
-  compactRow: {
-    width: '100%',
-    maxWidth: 420,
-    minHeight: 48,
-    flexDirection: 'row',
-    alignItems: 'stretch',
-  },
-  compactCell: {
-    flex: 1,
-    minWidth: 0,
-    gap: 4,
-    paddingHorizontal: 4,
   },
   compactValue: {
     color: '#f8fafc',
@@ -197,5 +178,18 @@ const styles = StyleSheet.create({
     color: '#64748b',
     fontSize: 9,
     fontWeight: '700',
+  },
+  grid: {
+    width: '100%',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'stretch',
+    rowGap: 12,
+  },
+  compactCell: {
+    width: '20%',
+    minWidth: 0,
+    gap: 4,
+    paddingHorizontal: 4,
   },
 })
