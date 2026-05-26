@@ -102,6 +102,8 @@ export default function SettingsScreen() {
             right={
               <Stepper
                 value={liveHistoryLimit}
+                min={1}
+                max={50}
                 onChange={(nextValue) => {
                   const clampedValue = Math.min(50, Math.max(1, nextValue))
                   if (clampedValue !== liveHistoryLimit) {
@@ -154,6 +156,8 @@ export default function SettingsScreen() {
               <Stepper
                 value={movingSpeedThresholdKmh}
                 unit="km/h"
+                min={0}
+                max={20}
                 onChange={(nextValue) => {
                   const clampedValue = Math.min(20, Math.max(0, nextValue))
                   if (clampedValue !== movingSpeedThresholdKmh) {
@@ -173,6 +177,8 @@ export default function SettingsScreen() {
               <Stepper
                 value={freeSpinMaxSpeedDeltaKmh}
                 unit="km/h"
+                min={1}
+                max={60}
                 onChange={(nextValue) => {
                   const clampedValue = Math.min(60, Math.max(1, nextValue))
                   if (clampedValue !== freeSpinMaxSpeedDeltaKmh) {
@@ -192,6 +198,8 @@ export default function SettingsScreen() {
               <Stepper
                 value={freeSpinStationaryBoardCapKmh}
                 unit="km/h"
+                min={1}
+                max={60}
                 onChange={(nextValue) => {
                   const clampedValue = Math.min(60, Math.max(1, nextValue))
                   if (clampedValue !== freeSpinStationaryBoardCapKmh) {

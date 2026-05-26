@@ -524,6 +524,8 @@ function SettingsComponentsShowcase() {
             <Stepper
               value={threshold}
               unit="km/h"
+              min={0}
+              max={20}
               onChange={(nextValue) => setThreshold(Math.min(20, Math.max(0, nextValue)))}
             />
           }
