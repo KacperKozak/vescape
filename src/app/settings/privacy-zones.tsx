@@ -291,8 +291,10 @@ export default function PrivacyZonesScreen() {
   }, [cameraCenter, cameraZoom, circleRadiusPx, selectedId, storeUpdate])
 
   const handleToggle = useCallback(async () => {
-    await storeToggle(selectedId)
-  }, [selectedId, storeToggle])
+    const zone = savedZoneForId(selectedId)
+    if (!zone) return
+    await storeToggle(zone.id)
+  }, [selectedId, savedZoneForId, storeToggle])
 
   const handleStartEdit = useCallback(() => {
     editStartRef.current = { center: cameraCenter, zoom: cameraZoom }
@@ -319,6 +321,7 @@ export default function PrivacyZonesScreen() {
     (selectedId === 'home' || selectedId === 'work' || pendingCustom?.id === selectedId)
 
   const zoneEnabled = savedZone?.enabled ?? false
+  const toggleLabel = zoneEnabled ? 'Disable' : 'Enable'
   const circleDiameter = screenWidth * CIRCLE_DIAMETER_RATIO
   const pillsTop = insets.top + HEADER_HEIGHT
 
@@ -436,7 +439,8 @@ export default function PrivacyZonesScreen() {
               style={styles.actionButton}
             />
             <Button
-              label={zoneEnabled ? 'Disable' : 'Enable'}
+              key={toggleLabel}
+              label={toggleLabel}
               variant={zoneEnabled ? 'secondary' : 'primary'}
               onPress={() => void handleToggle()}
               style={styles.actionButton}
