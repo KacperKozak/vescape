@@ -1,38 +1,44 @@
-import { useEffect, useMemo, useState } from 'react'
-import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-  StyleSheet,
-  Alert,
-} from 'react-native'
+import { type ReactNode, useCallback, useEffect, useLayoutEffect, useState } from 'react'
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, useLocalSearchParams, useNavigation } from 'expo-router'
+import {
+  BatteryChargingIcon,
+  BluetoothIcon,
+  IdentificationCardIcon,
+  TrashIcon,
+} from 'phosphor-react-native'
 import { useShallow } from 'zustand/react/shallow'
 import type { BatteryConfig } from 'vesc-ble'
 
-import { useBoardStore } from '@/store/boardStore'
-import { routes } from '@/navigation/routes'
+import { BoardBatteryEditorModal } from '@/components/BoardBatteryEditorModal'
+import { BoardBatteryForm } from '@/components/BoardBatteryForm'
+import { BoardInfoEditorModal } from '@/components/BoardInfoEditorModal'
+import { BoardInfoForm } from '@/components/BoardInfoForm'
+import { BoardSettingRow } from '@/components/BoardSettingRow'
+import { Button } from '@/components/Button'
+import { ConfirmModal } from '@/components/ConfirmModal'
+import { IconButton } from '@/components/IconButton'
+import { SettingsCard } from '@/components/settings/SettingsCard'
+import { SettingsSectionTitle } from '@/components/settings/SettingsSectionTitle'
 import { theme } from '@/constants/theme'
-import { Select, type SelectOption } from '@/components/Select'
 import {
   BATTERY_CELL_PRESETS,
   DEFAULT_BATTERY_CONFIG,
   deriveBatteryConfig,
-  getBatteryPreset,
 } from '@/helpers/battery'
+import { routes } from '@/navigation/routes'
+import { useBoardStore } from '@/store/boardStore'
 
 type BatteryMode = BatteryConfig['mode']
 
+// eslint-disable-next-line complexity
 export default function BoardDetailsScreen() {
-  const { bleId, bleName, boardId } = useLocalSearchParams<{
+  const { bleId, bleName, boardId, step } = useLocalSearchParams<{
     bleId?: string
     bleName?: string
     boardId?: string
+    step?: string
   }>()
   const { boards, addBoard, updateBoard, removeBoard } = useBoardStore(
     useShallow((s) => ({
@@ -65,47 +71,15 @@ export default function BoardDetailsScreen() {
   const [manualMinVoltage, setManualMinVoltage] = useState(String(initialManual.minVoltage))
   const [manualMaxVoltage, setManualMaxVoltage] = useState(String(initialManual.maxVoltage))
   const [batteryTouched, setBatteryTouched] = useState(false)
-
-  const selectedPreset =
-    getBatteryPreset(cellPresetId) ?? getBatteryPreset(DEFAULT_BATTERY_CONFIG.cellPresetId)
-  const formFactors = useMemo(
-    () => unique(BATTERY_CELL_PRESETS.map((preset) => preset.formFactor)),
-    [],
-  )
-  const formFactorOptions = useMemo<SelectOption[]>(
-    () => formFactors.map((formFactor) => ({ label: formFactor, value: formFactor })),
-    [formFactors],
-  )
-  const selectedFormFactor = selectedPreset?.formFactor ?? formFactors[0]
-  const brands = useMemo(
-    () =>
-      unique(
-        BATTERY_CELL_PRESETS.filter((preset) => preset.formFactor === selectedFormFactor).map(
-          (preset) => preset.brand,
-        ),
-      ),
-    [selectedFormFactor],
-  )
-  const brandOptions = useMemo<SelectOption[]>(
-    () => brands.map((brand) => ({ label: brand, value: brand })),
-    [brands],
-  )
-  const selectedBrand = selectedPreset?.brand ?? brands[0]
-  const models = useMemo(
-    () =>
-      BATTERY_CELL_PRESETS.filter(
-        (preset) => preset.formFactor === selectedFormFactor && preset.brand === selectedBrand,
-      ),
-    [selectedBrand, selectedFormFactor],
-  )
-  const modelOptions = useMemo<SelectOption[]>(
-    () =>
-      models.map((preset) => ({
-        label: `${preset.model}${preset.verified ? '' : ' (unverified)'}`,
-        value: preset.id,
-      })),
-    [models],
-  )
+  const [infoModalVisible, setInfoModalVisible] = useState(false)
+  const [batteryModalVisible, setBatteryModalVisible] = useState(false)
+  const [removeConfirmVisible, setRemoveConfirmVisible] = useState(false)
+  const [wizardStep, setWizardStep] = useState(() => {
+    const parsed = step == null ? NaN : Number.parseInt(step, 10)
+    if (Number.isFinite(parsed)) return Math.max(0, Math.min(3, parsed))
+    return bleId ? 1 : 0
+  })
+  const activeWizardStep = !editingBoard && bleId ? Math.max(wizardStep, 1) : wizardStep
 
   const previewConfig: BatteryConfig =
     batteryMode === 'preset'
@@ -116,12 +90,37 @@ export default function BoardDetailsScreen() {
           maxVoltage: parseVoltage(manualMaxVoltage) ?? 0,
         }
   const derivedBattery = deriveBatteryConfig(previewConfig)
-  const keepMissingBatteryConfig = editingBoard?.batteryConfig == null && !batteryTouched
+  const keepMissingBatteryConfig = Boolean(
+    editingBoard && editingBoard.batteryConfig == null && !batteryTouched,
+  )
   const canSave =
     Boolean(name.trim()) && (keepMissingBatteryConfig || derivedBattery.warning == null)
+  const batterySummary = getBatterySummary(
+    keepMissingBatteryConfig,
+    derivedBattery,
+    batteryMode,
+    cellPresetId,
+    seriesCount,
+    parallelCount,
+  )
 
   useEffect(() => {
-    navigation.setOptions({ title: editingBoard ? 'Edit Board' : 'Board Details' })
+    navigation.setOptions({ title: editingBoard ? 'Edit Board' : 'Add Board' })
+  }, [editingBoard, navigation])
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: editingBoard
+        ? () => (
+            <IconButton
+              icon={TrashIcon}
+              destructive
+              onPress={() => setRemoveConfirmVisible(true)}
+              style={styles.headerAction}
+            />
+          )
+        : undefined,
+    })
   }, [editingBoard, navigation])
 
   const handleSave = () => {
@@ -155,49 +154,38 @@ export default function BoardDetailsScreen() {
     router.dismissAll()
   }
 
-  const choosePreset = (next: { formFactor?: string; brand?: string; cellPresetId?: string }) => {
-    setBatteryTouched(true)
-    if (next.cellPresetId) {
-      setCellPresetId(next.cellPresetId)
-      return
-    }
-    const formFactor = next.formFactor ?? selectedFormFactor
-    const brand =
-      next.brand ??
-      BATTERY_CELL_PRESETS.find((preset) => preset.formFactor === formFactor)?.brand ??
-      selectedBrand
-    const preset = BATTERY_CELL_PRESETS.find(
-      (candidate) => candidate.formFactor === formFactor && candidate.brand === brand,
-    )
-    if (preset) setCellPresetId(preset.id)
-  }
-
   const handleOpenPairing = () => {
     router.push({
       pathname: routes.addBoardScan,
-      params: editingBoard ? { boardId: editingBoard.id } : undefined,
+      params: editingBoard ? { boardId: editingBoard.id } : { step: '1' },
     })
   }
 
-  const handleUnpair = () => {
-    setPairedBleId('')
-    setPairedBleName('')
-  }
-
-  const handleRemoveBoard = () => {
+  const handleRemoveBoard = useCallback(() => {
     if (!editingBoard) return
-    Alert.alert('Remove Board', `Remove "${editingBoard.name}"? This cannot be undone.`, [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Remove',
-        style: 'destructive',
-        onPress: () => {
-          void removeBoard(editingBoard.id)
-          router.dismissAll()
-        },
-      },
-    ])
-  }
+    void removeBoard(editingBoard.id)
+    setRemoveConfirmVisible(false)
+    router.dismissAll()
+  }, [editingBoard, removeBoard])
+
+  const saveEditingBoard = useCallback(
+    (patch: {
+      name?: string
+      description?: string | null
+      batteryConfig?: BatteryConfig | null
+      bleId?: string | null
+    }) => {
+      if (!editingBoard) return
+      void updateBoard({ ...editingBoard, ...patch })
+    },
+    [editingBoard, updateBoard],
+  )
+
+  useEffect(() => {
+    if (!bleId || !editingBoard) return
+    if (editingBoard.bleId === bleId) return
+    saveEditingBoard({ bleId })
+  }, [bleId, editingBoard, saveEditingBoard])
 
   return (
     <KeyboardAvoidingView
@@ -206,197 +194,465 @@ export default function BoardDetailsScreen() {
     >
       <SafeAreaView style={styles.container} edges={['bottom']}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          {pairedBleId ? (
-            <View style={styles.pairedBadge}>
-              <View style={styles.pairedDot} />
-              <Text style={styles.pairedText}>Paired with {pairedBleName || pairedBleId}</Text>
-            </View>
-          ) : (
-            <View style={styles.unpairedBadge}>
-              <Text style={styles.unpairedText}>
-                No device paired — you can pair later in board settings
-              </Text>
-            </View>
-          )}
-          <View style={styles.pairActions}>
-            <Pressable style={styles.pairButton} onPress={handleOpenPairing}>
-              <Text style={styles.pairButtonText}>
-                {pairedBleId ? 'Change BLE Pairing' : 'Pair BLE Device'}
-              </Text>
-            </Pressable>
-            {pairedBleId ? (
-              <Pressable style={styles.secondaryButton} onPress={handleUnpair}>
-                <Text style={styles.secondaryButtonText}>Remove pairing</Text>
-              </Pressable>
-            ) : null}
-          </View>
-
-          <Text style={styles.label}>Board name</Text>
-          <TextInput
-            style={styles.input}
-            value={name}
-            onChangeText={setName}
-            placeholder="e.g. FloBoard Pro"
-            placeholderTextColor="#4b5563"
-            returnKeyType="next"
-          />
-
-          <Text style={styles.label}>Description</Text>
-          <TextInput
-            style={[styles.input, styles.inputMultiline]}
-            value={description ?? ''}
-            onChangeText={setDescription}
-            placeholder="Optional notes about this board"
-            placeholderTextColor="#4b5563"
-            multiline
-            numberOfLines={3}
-            textAlignVertical="top"
-          />
-
-          <Text style={styles.label}>Battery config</Text>
-          <View style={styles.segmented}>
-            <Pressable
-              style={[styles.segment, batteryMode === 'preset' && styles.segmentActive]}
-              onPress={() => {
-                setBatteryTouched(true)
-                setBatteryMode('preset')
-              }}
-            >
-              <Text
-                style={[styles.segmentText, batteryMode === 'preset' && styles.segmentTextActive]}
-              >
-                Preset
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[styles.segment, batteryMode === 'manual' && styles.segmentActive]}
-              onPress={() => {
-                setBatteryTouched(true)
-                setBatteryMode('manual')
-              }}
-            >
-              <Text
-                style={[styles.segmentText, batteryMode === 'manual' && styles.segmentTextActive]}
-              >
-                Manual
-              </Text>
-            </Pressable>
-          </View>
-
-          {batteryMode === 'preset' ? (
-            <>
-              <Text style={styles.helper}>
-                Cell preset derives pack voltage range, nominal Wh, and SoC.
-              </Text>
-              <View style={styles.presetSelectRow}>
-                <View style={styles.presetSelectField}>
-                  <Text style={styles.subLabel}>Form factor</Text>
-                  <Select
-                    options={formFactorOptions}
-                    value={selectedFormFactor}
-                    onChange={(formFactor) => choosePreset({ formFactor })}
-                  />
-                </View>
-                <View style={styles.presetSelectField}>
-                  <Text style={styles.subLabel}>Brand</Text>
-                  <Select
-                    options={brandOptions}
-                    value={selectedBrand}
-                    onChange={(brand) => choosePreset({ brand })}
-                  />
-                </View>
-                <View style={styles.presetSelectField}>
-                  <Text style={styles.subLabel}>Model</Text>
-                  <Select
-                    options={modelOptions}
-                    value={cellPresetId}
-                    onChange={(nextPresetId) => choosePreset({ cellPresetId: nextPresetId })}
-                  />
-                </View>
-              </View>
-              <View style={styles.stepperRow}>
-                <Stepper
-                  label="Series"
-                  value={seriesCount}
-                  min={1}
-                  max={40}
-                  onChange={(value) => {
-                    setBatteryTouched(true)
-                    setSeriesCount(value)
-                  }}
-                />
-                <Stepper
-                  label="Parallel"
-                  value={parallelCount}
-                  min={1}
-                  max={20}
-                  onChange={(value) => {
-                    setBatteryTouched(true)
-                    setParallelCount(value)
-                  }}
-                />
-              </View>
-            </>
-          ) : (
-            <>
-              <Text style={styles.helper}>Manual mode uses only pack empty + full voltage.</Text>
-              <View style={styles.voltageRow}>
-                <TextInput
-                  style={[styles.input, styles.voltageInput]}
-                  value={manualMinVoltage}
-                  onChangeText={(value) => {
-                    setBatteryTouched(true)
-                    setManualMinVoltage(value)
-                  }}
-                  placeholder="Min (0%)"
-                  placeholderTextColor="#4b5563"
-                  keyboardType="decimal-pad"
-                  returnKeyType="next"
-                />
-                <TextInput
-                  style={[styles.input, styles.voltageInput]}
-                  value={manualMaxVoltage}
-                  onChangeText={(value) => {
-                    setBatteryTouched(true)
-                    setManualMaxVoltage(value)
-                  }}
-                  placeholder="Max (100%)"
-                  placeholderTextColor="#4b5563"
-                  keyboardType="decimal-pad"
-                  returnKeyType="done"
-                />
-              </View>
-            </>
-          )}
-
-          <Text style={styles.batterySummary}>
-            {keepMissingBatteryConfig
-              ? 'Battery config not set'
-              : derivedBattery.warning
-                ? 'Battery config incomplete'
-                : `${derivedBattery.minVoltage.toFixed(1)}-${derivedBattery.maxVoltage.toFixed(1)} V${
-                    derivedBattery.nominalWh != null
-                      ? `, ${Math.round(derivedBattery.nominalWh)} Wh nominal`
-                      : ''
-                  }`}
-          </Text>
-
-          <Pressable
-            style={[styles.saveButton, !canSave && styles.saveButtonDisabled]}
-            onPress={handleSave}
-            disabled={!canSave}
-          >
-            <Text style={styles.saveButtonText}>Save Board</Text>
-          </Pressable>
-
           {editingBoard ? (
-            <Pressable style={styles.removeButton} onPress={handleRemoveBoard}>
-              <Text style={styles.removeButtonText}>Remove Board</Text>
-            </Pressable>
-          ) : null}
+            <EditBoardSettings
+              name={name}
+              description={description}
+              pairedBleId={pairedBleId}
+              pairedBleName={pairedBleName}
+              keepMissingBatteryConfig={keepMissingBatteryConfig}
+              batterySummary={batterySummary}
+              onOpenInfo={() => setInfoModalVisible(true)}
+              onOpenBattery={() => setBatteryModalVisible(true)}
+              onOpenPairing={handleOpenPairing}
+              onClearPairing={() => {
+                setPairedBleId('')
+                setPairedBleName('')
+                saveEditingBoard({ bleId: null })
+              }}
+            />
+          ) : (
+            <AddBoardWizard
+              step={activeWizardStep}
+              name={name}
+              description={description}
+              pairedBleId={pairedBleId}
+              pairedBleName={pairedBleName}
+              batteryMode={batteryMode}
+              cellPresetId={cellPresetId}
+              seriesCount={seriesCount}
+              parallelCount={parallelCount}
+              manualMinVoltage={manualMinVoltage}
+              manualMaxVoltage={manualMaxVoltage}
+              batterySummary={batterySummary}
+              batteryWarning={derivedBattery.warning}
+              canSave={canSave}
+              onStepChange={setWizardStep}
+              onOpenPairing={handleOpenPairing}
+              onChangeName={setName}
+              onChangeDescription={setDescription}
+              onChangeBatteryMode={(value) => {
+                setBatteryTouched(true)
+                setBatteryMode(value)
+              }}
+              onChangeCellPresetId={(value) => {
+                setBatteryTouched(true)
+                setCellPresetId(value)
+              }}
+              onChangeSeriesCount={(value) => {
+                setBatteryTouched(true)
+                setSeriesCount(value)
+              }}
+              onChangeParallelCount={(value) => {
+                setBatteryTouched(true)
+                setParallelCount(value)
+              }}
+              onChangeManualMinVoltage={(value) => {
+                setBatteryTouched(true)
+                setManualMinVoltage(value)
+              }}
+              onChangeManualMaxVoltage={(value) => {
+                setBatteryTouched(true)
+                setManualMaxVoltage(value)
+              }}
+              onSave={handleSave}
+            />
+          )}
         </ScrollView>
       </SafeAreaView>
+
+      <BoardInfoEditorModal
+        visible={infoModalVisible}
+        name={name}
+        description={description}
+        onSave={(value) => {
+          setName(value.name)
+          setDescription(value.description)
+          saveEditingBoard({
+            name: value.name.trim(),
+            description: value.description.trim() || null,
+          })
+          setInfoModalVisible(false)
+        }}
+        onCancel={() => setInfoModalVisible(false)}
+      />
+      <BoardBatteryEditorModal
+        visible={batteryModalVisible}
+        batteryMode={batteryMode}
+        cellPresetId={cellPresetId}
+        seriesCount={seriesCount}
+        parallelCount={parallelCount}
+        manualMinVoltage={manualMinVoltage}
+        manualMaxVoltage={manualMaxVoltage}
+        onSave={(value) => {
+          setBatteryMode(value.batteryMode)
+          setCellPresetId(value.cellPresetId)
+          setSeriesCount(value.seriesCount)
+          setParallelCount(value.parallelCount)
+          setManualMinVoltage(value.manualMinVoltage)
+          setManualMaxVoltage(value.manualMaxVoltage)
+          setBatteryTouched(true)
+          saveEditingBoard({
+            batteryConfig: buildBatteryConfig(
+              value.batteryMode,
+              value.cellPresetId,
+              value.seriesCount,
+              value.parallelCount,
+              value.manualMinVoltage,
+              value.manualMaxVoltage,
+            ),
+          })
+          setBatteryModalVisible(false)
+        }}
+        onCancel={() => setBatteryModalVisible(false)}
+      />
+      <ConfirmModal
+        visible={removeConfirmVisible}
+        title="Remove board"
+        message={`Remove "${editingBoard?.name ?? 'board'}"? This cannot be undone.`}
+        confirmLabel="Remove"
+        destructive
+        onConfirm={handleRemoveBoard}
+        onCancel={() => setRemoveConfirmVisible(false)}
+      />
     </KeyboardAvoidingView>
+  )
+}
+
+type BatterySummary = ReturnType<typeof getBatterySummary>
+
+function EditBoardSettings({
+  name,
+  description,
+  pairedBleId,
+  pairedBleName,
+  keepMissingBatteryConfig,
+  batterySummary,
+  onOpenInfo,
+  onOpenBattery,
+  onOpenPairing,
+  onClearPairing,
+}: {
+  name: string
+  description: string
+  pairedBleId: string
+  pairedBleName: string
+  keepMissingBatteryConfig: boolean
+  batterySummary: BatterySummary
+  onOpenInfo: () => void
+  onOpenBattery: () => void
+  onOpenPairing: () => void
+  onClearPairing: () => void
+}) {
+  return (
+    <>
+      <SettingsSectionTitle>Board</SettingsSectionTitle>
+      <SettingsCard>
+        <BoardSettingRow
+          icon={IdentificationCardIcon}
+          iconColor={theme.wheel.text}
+          label={name.trim() || 'Unnamed board'}
+          value={description.trim() || 'No description'}
+          hint="Name and notes"
+          onPress={onOpenInfo}
+        />
+      </SettingsCard>
+
+      <SettingsSectionTitle>Battery</SettingsSectionTitle>
+      <SettingsCard>
+        <BoardSettingRow
+          icon={BatteryChargingIcon}
+          iconColor={theme.highlight.text}
+          label={keepMissingBatteryConfig ? 'Not configured' : batterySummary.title}
+          value={batterySummary.value}
+          hint={batterySummary.hint}
+          onPress={onOpenBattery}
+        />
+      </SettingsCard>
+
+      <View style={styles.pairing}>
+        <View style={styles.pairingCopy}>
+          <View style={styles.pairingTitleRow}>
+            <BluetoothIcon size={14} color={theme.teal.text} weight="duotone" />
+            <Text style={styles.pairingTitle}>BLE pairing</Text>
+          </View>
+          <Text style={styles.pairingValue} numberOfLines={1}>
+            {pairedBleId ? pairedBleName || pairedBleId : 'No device paired'}
+          </Text>
+        </View>
+        <Button
+          label={pairedBleId ? 'Change' : 'Pair'}
+          variant="secondary"
+          size="sm"
+          onPress={onOpenPairing}
+        />
+        {pairedBleId ? (
+          <Button label="Clear" variant="secondary" size="sm" onPress={onClearPairing} />
+        ) : null}
+      </View>
+    </>
+  )
+}
+
+function AddBoardWizard({
+  step,
+  name,
+  description,
+  pairedBleId,
+  pairedBleName,
+  batteryMode,
+  cellPresetId,
+  seriesCount,
+  parallelCount,
+  manualMinVoltage,
+  manualMaxVoltage,
+  batterySummary,
+  batteryWarning,
+  canSave,
+  onStepChange,
+  onOpenPairing,
+  onChangeName,
+  onChangeDescription,
+  onChangeBatteryMode,
+  onChangeCellPresetId,
+  onChangeSeriesCount,
+  onChangeParallelCount,
+  onChangeManualMinVoltage,
+  onChangeManualMaxVoltage,
+  onSave,
+}: {
+  step: number
+  name: string
+  description: string
+  pairedBleId: string
+  pairedBleName: string
+  batteryMode: BatteryMode
+  cellPresetId: string
+  seriesCount: number
+  parallelCount: number
+  manualMinVoltage: string
+  manualMaxVoltage: string
+  batterySummary: BatterySummary
+  batteryWarning: string | null
+  canSave: boolean
+  onStepChange: (step: number) => void
+  onOpenPairing: () => void
+  onChangeName: (value: string) => void
+  onChangeDescription: (value: string) => void
+  onChangeBatteryMode: (value: BatteryMode) => void
+  onChangeCellPresetId: (value: string) => void
+  onChangeSeriesCount: (value: number) => void
+  onChangeParallelCount: (value: number) => void
+  onChangeManualMinVoltage: (value: string) => void
+  onChangeManualMaxVoltage: (value: string) => void
+  onSave: () => void
+}) {
+  return (
+    <>
+      <WizardHeader step={step} />
+      {step === 0 ? (
+        <PairWizardStep
+          pairedBleId={pairedBleId}
+          pairedBleName={pairedBleName}
+          onOpenPairing={onOpenPairing}
+          onNext={() => onStepChange(1)}
+        />
+      ) : null}
+      {step === 1 ? (
+        <NameWizardStep
+          name={name}
+          description={description}
+          onChangeName={onChangeName}
+          onChangeDescription={onChangeDescription}
+          onBack={() => onStepChange(0)}
+          onNext={() => onStepChange(2)}
+        />
+      ) : null}
+      {step === 2 ? (
+        <BatteryWizardStep
+          batteryMode={batteryMode}
+          cellPresetId={cellPresetId}
+          seriesCount={seriesCount}
+          parallelCount={parallelCount}
+          manualMinVoltage={manualMinVoltage}
+          manualMaxVoltage={manualMaxVoltage}
+          batteryWarning={batteryWarning}
+          onChangeBatteryMode={onChangeBatteryMode}
+          onChangeCellPresetId={onChangeCellPresetId}
+          onChangeSeriesCount={onChangeSeriesCount}
+          onChangeParallelCount={onChangeParallelCount}
+          onChangeManualMinVoltage={onChangeManualMinVoltage}
+          onChangeManualMaxVoltage={onChangeManualMaxVoltage}
+          onBack={() => onStepChange(1)}
+          onNext={() => onStepChange(3)}
+        />
+      ) : null}
+      {step === 3 ? (
+        <OverviewWizardStep
+          name={name}
+          description={description}
+          pairedBleId={pairedBleId}
+          pairedBleName={pairedBleName}
+          batterySummary={batterySummary}
+          canSave={canSave}
+          onBack={() => onStepChange(2)}
+          onSave={onSave}
+        />
+      ) : null}
+    </>
+  )
+}
+
+function PairWizardStep({
+  pairedBleId,
+  pairedBleName,
+  onOpenPairing,
+  onNext,
+}: {
+  pairedBleId: string
+  pairedBleName: string
+  onOpenPairing: () => void
+  onNext: () => void
+}) {
+  return (
+    <WizardStep title="Pair board">
+      <Text style={styles.wizardCopy}>
+        {pairedBleId
+          ? `Paired with ${pairedBleName || pairedBleId}`
+          : 'Pair now or skip and pair later.'}
+      </Text>
+      <View style={styles.actionRow}>
+        <Button
+          style={styles.actionButton}
+          label={pairedBleId ? 'Change Pairing' : 'Pair'}
+          onPress={onOpenPairing}
+        />
+        <Button style={styles.actionButton} label="Next" variant="secondary" onPress={onNext} />
+      </View>
+    </WizardStep>
+  )
+}
+
+function NameWizardStep({
+  name,
+  description,
+  onChangeName,
+  onChangeDescription,
+  onBack,
+  onNext,
+}: {
+  name: string
+  description: string
+  onChangeName: (value: string) => void
+  onChangeDescription: (value: string) => void
+  onBack: () => void
+  onNext: () => void
+}) {
+  return (
+    <WizardStep title="Name">
+      <BoardInfoForm
+        name={name}
+        description={description}
+        onChangeName={onChangeName}
+        onChangeDescription={onChangeDescription}
+      />
+      <WizardActions canContinue={Boolean(name.trim())} onBack={onBack} onNext={onNext} />
+    </WizardStep>
+  )
+}
+
+function BatteryWizardStep({
+  batteryMode,
+  cellPresetId,
+  seriesCount,
+  parallelCount,
+  manualMinVoltage,
+  manualMaxVoltage,
+  batteryWarning,
+  onChangeBatteryMode,
+  onChangeCellPresetId,
+  onChangeSeriesCount,
+  onChangeParallelCount,
+  onChangeManualMinVoltage,
+  onChangeManualMaxVoltage,
+  onBack,
+  onNext,
+}: {
+  batteryMode: BatteryMode
+  cellPresetId: string
+  seriesCount: number
+  parallelCount: number
+  manualMinVoltage: string
+  manualMaxVoltage: string
+  batteryWarning: string | null
+  onChangeBatteryMode: (value: BatteryMode) => void
+  onChangeCellPresetId: (value: string) => void
+  onChangeSeriesCount: (value: number) => void
+  onChangeParallelCount: (value: number) => void
+  onChangeManualMinVoltage: (value: string) => void
+  onChangeManualMaxVoltage: (value: string) => void
+  onBack: () => void
+  onNext: () => void
+}) {
+  return (
+    <WizardStep title="Battery">
+      <BoardBatteryForm
+        batteryMode={batteryMode}
+        cellPresetId={cellPresetId}
+        seriesCount={seriesCount}
+        parallelCount={parallelCount}
+        manualMinVoltage={manualMinVoltage}
+        manualMaxVoltage={manualMaxVoltage}
+        onChangeBatteryMode={onChangeBatteryMode}
+        onChangeCellPresetId={onChangeCellPresetId}
+        onChangeSeriesCount={onChangeSeriesCount}
+        onChangeParallelCount={onChangeParallelCount}
+        onChangeManualMinVoltage={onChangeManualMinVoltage}
+        onChangeManualMaxVoltage={onChangeManualMaxVoltage}
+      />
+      <WizardActions canContinue={batteryWarning == null} onBack={onBack} onNext={onNext} />
+    </WizardStep>
+  )
+}
+
+function OverviewWizardStep({
+  name,
+  description,
+  pairedBleId,
+  pairedBleName,
+  batterySummary,
+  canSave,
+  onBack,
+  onSave,
+}: {
+  name: string
+  description: string
+  pairedBleId: string
+  pairedBleName: string
+  batterySummary: BatterySummary
+  canSave: boolean
+  onBack: () => void
+  onSave: () => void
+}) {
+  return (
+    <WizardStep title="Overview">
+      <OverviewRow
+        label="Pairing"
+        value={pairedBleId ? pairedBleName || pairedBleId : 'Not paired'}
+      />
+      <OverviewRow label="Name" value={name.trim() || 'Unnamed board'} />
+      <OverviewRow label="Description" value={description.trim() || 'No description'} />
+      <OverviewRow label="Battery" value={`${batterySummary.title} · ${batterySummary.value}`} />
+      <View style={styles.actionRow}>
+        <Button style={styles.actionButton} label="Back" variant="secondary" onPress={onBack} />
+        <Button
+          style={styles.actionButton}
+          label="Save & Go Back"
+          onPress={onSave}
+          disabled={!canSave}
+        />
+      </View>
+    </WizardStep>
   )
 }
 
@@ -410,212 +666,145 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
-    gap: 8,
+    gap: 10,
   },
-  pairedBadge: {
+  headerAction: {
+    marginRight: 4,
+  },
+  pairing: {
+    marginTop: 20,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    backgroundColor: '#052e16',
-    borderRadius: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    marginBottom: 16,
   },
-  pairedDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: theme.gps.text,
+  pairingCopy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
   },
-  pairedText: {
-    color: theme.gps.text,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  unpairedBadge: {
-    backgroundColor: '#1f2937',
-    borderRadius: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    marginBottom: 16,
-  },
-  unpairedText: {
-    color: '#9ca3af',
-    fontSize: 13,
-  },
-  pairActions: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  pairButton: {
-    backgroundColor: '#1f2937',
-    borderRadius: 8,
-    paddingVertical: 12,
+  pairingTitleRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#374151',
+    gap: 5,
   },
-  pairButtonText: {
-    color: '#d1d5db',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  secondaryButton: {
-    alignItems: 'center',
-    paddingVertical: 10,
-  },
-  secondaryButtonText: {
-    color: '#9ca3af',
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  label: {
-    color: '#9ca3af',
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  input: {
-    backgroundColor: '#1f2937',
-    borderRadius: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    color: '#f9fafb',
-    fontSize: 16,
-    marginBottom: 4,
-  },
-  inputMultiline: {
-    minHeight: 80,
-    paddingTop: 12,
-  },
-  helper: {
-    color: '#6b7280',
-    fontSize: 11,
-    marginBottom: 6,
-  },
-  subLabel: {
+  pairingTitle: {
     color: '#64748b',
     fontSize: 12,
     fontWeight: '700',
-    marginTop: 8,
+    textTransform: 'uppercase',
   },
-  segmented: {
-    flexDirection: 'row',
-    backgroundColor: '#0f172a',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#334155',
-    padding: 3,
-    marginBottom: 6,
-  },
-  segment: {
-    flex: 1,
-    alignItems: 'center',
-    borderRadius: 6,
-    paddingVertical: 10,
-  },
-  segmentActive: {
-    backgroundColor: theme.bran.bg,
-  },
-  segmentText: {
-    color: '#94a3b8',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  segmentTextActive: {
-    color: theme.bran.text,
-  },
-  presetSelectRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  presetSelectField: {
-    flex: 1,
-    minWidth: 0,
-  },
-  stepperRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 2,
-  },
-  stepper: {
-    flex: 1,
-    gap: 6,
-  },
-  stepperControls: {
-    minHeight: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#0f172a',
-    overflow: 'hidden',
-  },
-  stepperButton: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepperButtonText: {
-    color: '#e2e8f0',
-    fontSize: 18,
-    fontWeight: '700',
-  },
-  stepperValue: {
-    color: '#f1f5f9',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  voltageRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  voltageInput: {
-    flex: 1,
-  },
-  saveButton: {
-    marginTop: 24,
-    backgroundColor: '#3b82f6',
-    borderRadius: 10,
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  saveButtonDisabled: {
-    backgroundColor: '#1f2937',
-  },
-  saveButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  batterySummary: {
+  pairingValue: {
     color: '#94a3b8',
     fontSize: 12,
     fontWeight: '600',
-    marginTop: 4,
   },
-  removeButton: {
-    marginTop: 12,
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: theme.error.bg,
-    backgroundColor: '#1f2937',
+  wizardHeader: {
+    gap: 8,
+    marginBottom: 8,
   },
-  removeButtonText: {
-    color: theme.error.text,
-    fontSize: 15,
+  wizardProgress: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  wizardDot: {
+    flex: 1,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#334155',
+  },
+  wizardDotActive: {
+    backgroundColor: theme.bran.color,
+  },
+  wizardMeta: {
+    color: '#64748b',
+    fontSize: 12,
     fontWeight: '700',
+    textAlign: 'center',
+    textTransform: 'uppercase',
+  },
+  wizardStep: {
+    gap: 14,
+  },
+  wizardTitle: {
+    color: '#f1f5f9',
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  wizardCopy: {
+    color: '#94a3b8',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  actionButton: {
+    flex: 1,
+  },
+  overviewRow: {
+    gap: 2,
+  },
+  overviewLabel: {
+    color: '#64748b',
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  overviewValue: {
+    color: '#f1f5f9',
+    fontSize: 14,
+    fontWeight: '600',
   },
 })
+
+function WizardHeader({ step }: { step: number }) {
+  return (
+    <View style={styles.wizardHeader}>
+      <View style={styles.wizardProgress}>
+        {[0, 1, 2, 3].map((index) => (
+          <View key={index} style={[styles.wizardDot, index <= step && styles.wizardDotActive]} />
+        ))}
+      </View>
+      <Text style={styles.wizardMeta}>Step {step + 1} of 4</Text>
+    </View>
+  )
+}
+
+function WizardStep({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <View style={styles.wizardStep}>
+      <Text style={styles.wizardTitle}>{title}</Text>
+      {children}
+    </View>
+  )
+}
+
+function WizardActions({
+  canContinue,
+  onBack,
+  onNext,
+}: {
+  canContinue: boolean
+  onBack: () => void
+  onNext: () => void
+}) {
+  return (
+    <View style={styles.actionRow}>
+      <Button style={styles.actionButton} label="Back" variant="secondary" onPress={onBack} />
+      <Button style={styles.actionButton} label="Next" onPress={onNext} disabled={!canContinue} />
+    </View>
+  )
+}
+
+function OverviewRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.overviewRow}>
+      <Text style={styles.overviewLabel}>{label}</Text>
+      <Text style={styles.overviewValue}>{value}</Text>
+    </View>
+  )
+}
 
 function parseVoltage(raw: string): number | null {
   const trimmed = raw.trim()
@@ -646,43 +835,42 @@ function buildBatteryConfig(
   return { mode: 'manual', minVoltage, maxVoltage }
 }
 
-function unique(values: string[]): string[] {
-  return Array.from(new Set(values))
-}
-
-function Stepper({
-  label,
-  value,
-  min,
-  max,
-  onChange,
-}: {
-  label: string
-  value: number
-  min: number
-  max: number
-  onChange: (value: number) => void
-}) {
-  return (
-    <View style={styles.stepper}>
-      <Text style={styles.subLabel}>{label}</Text>
-      <View style={styles.stepperControls}>
-        <Pressable
-          style={styles.stepperButton}
-          onPress={() => onChange(Math.max(min, value - 1))}
-          disabled={value <= min}
-        >
-          <Text style={styles.stepperButtonText}>-</Text>
-        </Pressable>
-        <Text style={styles.stepperValue}>{value}</Text>
-        <Pressable
-          style={styles.stepperButton}
-          onPress={() => onChange(Math.min(max, value + 1))}
-          disabled={value >= max}
-        >
-          <Text style={styles.stepperButtonText}>+</Text>
-        </Pressable>
-      </View>
-    </View>
-  )
+function getBatterySummary(
+  keepMissingBatteryConfig: boolean,
+  derivedBattery: ReturnType<typeof deriveBatteryConfig>,
+  batteryMode: BatteryMode,
+  cellPresetId: string,
+  seriesCount: number,
+  parallelCount: number,
+) {
+  if (keepMissingBatteryConfig) {
+    return {
+      title: 'Battery',
+      value: 'Tap to add battery config',
+      hint: 'Used for voltage and SoC display',
+    }
+  }
+  if (derivedBattery.warning) {
+    return {
+      title: 'Incomplete config',
+      value: derivedBattery.warning,
+      hint: 'Tap to fix battery config',
+    }
+  }
+  const voltage = `${derivedBattery.minVoltage.toFixed(1)}-${derivedBattery.maxVoltage.toFixed(1)} V`
+  const nominalWh =
+    derivedBattery.nominalWh != null ? `${Math.round(derivedBattery.nominalWh)} Wh nominal` : null
+  if (batteryMode === 'manual') {
+    return {
+      title: 'Manual voltage range',
+      value: voltage,
+      hint: nominalWh ?? 'Manual pack voltage',
+    }
+  }
+  const preset = BATTERY_CELL_PRESETS.find((candidate) => candidate.id === cellPresetId)
+  return {
+    title: preset ? `${preset.brand} ${preset.model}` : 'Cell preset',
+    value: `${seriesCount}s${parallelCount}p, ${voltage}`,
+    hint: nominalWh ?? 'Preset pack config',
+  }
 }

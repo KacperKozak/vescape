@@ -11,7 +11,7 @@ import { routes } from '@/navigation/routes'
 import type { ScannedDevice } from '@/store/bleStore'
 
 export default function AddBoardScanScreen() {
-  const { boardId } = useLocalSearchParams<{ boardId?: string }>()
+  const { boardId, step } = useLocalSearchParams<{ boardId?: string; step?: string }>()
   const { status, request } = usePermissions()
   const { devices, error, startScan, stopScan, isScanning } = useBleStore(
     useShallow((s) => ({
@@ -38,7 +38,7 @@ export default function AddBoardScanScreen() {
     stopScan()
     router.push({
       pathname: routes.addBoardDetails,
-      params: { boardId, bleId: device.id, bleName: device.name },
+      params: { boardId, step: step ?? '1', bleId: device.id, bleName: device.name },
     })
   }
 
@@ -48,7 +48,7 @@ export default function AddBoardScanScreen() {
       router.push({ pathname: routes.addBoardDetails, params: { boardId } })
       return
     }
-    router.push(routes.addBoardDetails)
+    router.push({ pathname: routes.addBoardDetails, params: { step: step ?? '1' } })
   }
 
   return (

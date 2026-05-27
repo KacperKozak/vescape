@@ -1,9 +1,11 @@
 import {
   ArrowLeftIcon,
+  BatteryChargingIcon,
   BellIcon,
   GaugeIcon,
   GhostIcon,
   GearSixIcon,
+  IdentificationCardIcon,
   MoonIcon,
   TrashIcon,
   UserIcon,
@@ -17,6 +19,9 @@ import { useSharedValue } from 'react-native-reanimated'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { Banner } from '@/components/Banner'
+import { BoardBatteryEditorModal } from '@/components/BoardBatteryEditorModal'
+import { BoardInfoEditorModal } from '@/components/BoardInfoEditorModal'
+import { BoardSettingRow } from '@/components/BoardSettingRow'
 import { Button } from '@/components/Button'
 import { IconButton } from '@/components/IconButton'
 import { ConfirmModal } from '@/components/ConfirmModal'
@@ -34,6 +39,7 @@ import { SettingsRow } from '@/components/settings/SettingsRow'
 import { SettingsSectionTitle } from '@/components/settings/SettingsSectionTitle'
 import { Stepper } from '@/components/settings/Stepper'
 import { TuneDial } from '@/components/tune/TuneDial'
+import { theme } from '@/constants/theme'
 import { telemetry } from '@/constants/telemetry'
 
 function generateSparklineData(count: number, base: number, variance: number): SparklinePoint[] {
@@ -560,6 +566,72 @@ function SettingsComponentsShowcase() {
   )
 }
 
+function BoardSettingsShowcase() {
+  const [infoVisible, setInfoVisible] = useState(false)
+  const [batteryVisible, setBatteryVisible] = useState(false)
+  const [name, setName] = useState('Daily board')
+  const [description, setDescription] = useState('Street setup')
+  const [batteryMode, setBatteryMode] = useState<'preset' | 'manual'>('preset')
+  const [cellPresetId, setCellPresetId] = useState('samsung:21700:50s')
+  const [seriesCount, setSeriesCount] = useState(20)
+  const [parallelCount, setParallelCount] = useState(1)
+  const [manualMinVoltage, setManualMinVoltage] = useState('60')
+  const [manualMaxVoltage, setManualMaxVoltage] = useState('84')
+
+  return (
+    <ShowcaseCard name="Board settings">
+      <SettingsCard>
+        <BoardSettingRow
+          icon={IdentificationCardIcon}
+          iconColor={theme.wheel.text}
+          label={name}
+          value={description}
+          hint="Name and notes"
+          onPress={() => setInfoVisible(true)}
+        />
+        <BoardSettingRow
+          icon={BatteryChargingIcon}
+          iconColor={theme.highlight.text}
+          label="Samsung 50S"
+          value={`${seriesCount}s${parallelCount}p, 60.0-84.0 V`}
+          hint="1008 Wh nominal"
+          onPress={() => setBatteryVisible(true)}
+        />
+      </SettingsCard>
+      <BoardInfoEditorModal
+        visible={infoVisible}
+        name={name}
+        description={description}
+        onSave={(value) => {
+          setName(value.name)
+          setDescription(value.description)
+          setInfoVisible(false)
+        }}
+        onCancel={() => setInfoVisible(false)}
+      />
+      <BoardBatteryEditorModal
+        visible={batteryVisible}
+        batteryMode={batteryMode}
+        cellPresetId={cellPresetId}
+        seriesCount={seriesCount}
+        parallelCount={parallelCount}
+        manualMinVoltage={manualMinVoltage}
+        manualMaxVoltage={manualMaxVoltage}
+        onSave={(value) => {
+          setBatteryMode(value.batteryMode)
+          setCellPresetId(value.cellPresetId)
+          setSeriesCount(value.seriesCount)
+          setParallelCount(value.parallelCount)
+          setManualMinVoltage(value.manualMinVoltage)
+          setManualMaxVoltage(value.manualMaxVoltage)
+          setBatteryVisible(false)
+        }}
+        onCancel={() => setBatteryVisible(false)}
+      />
+    </ShowcaseCard>
+  )
+}
+
 const SHOWCASE_ZONES: PrivacyZone[] = [
   {
     id: 'home',
@@ -608,6 +680,7 @@ export default function ComponentsScreen() {
         <TuneDialShowcase />
         <CompactTuneDialShowcase />
         <SettingsComponentsShowcase />
+        <BoardSettingsShowcase />
         <BannerShowcase />
         <ConfirmModalShowcase />
         <InfoModalShowcase />

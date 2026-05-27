@@ -1,0 +1,89 @@
+import { useState } from 'react'
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native'
+
+import { BoardInfoForm } from '@/components/BoardInfoForm'
+import { Button } from '@/components/Button'
+
+interface BoardInfoEditorModalProps {
+  visible: boolean
+  name: string
+  description: string
+  onSave: (value: { name: string; description: string }) => void
+  onCancel: () => void
+}
+
+export function BoardInfoEditorModal({
+  visible,
+  name,
+  description,
+  onSave,
+  onCancel,
+}: BoardInfoEditorModalProps) {
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+      <View style={styles.overlay}>
+        <Pressable style={styles.backdrop} onPress={onCancel} />
+        {visible ? (
+          <BoardInfoEditorModalContent name={name} description={description} onSave={onSave} />
+        ) : null}
+      </View>
+    </Modal>
+  )
+}
+
+function BoardInfoEditorModalContent({
+  name,
+  description,
+  onSave,
+}: {
+  name: string
+  description: string
+  onSave: (value: { name: string; description: string }) => void
+}) {
+  const [draftName, setDraftName] = useState(name)
+  const [draftDescription, setDraftDescription] = useState(description)
+
+  return (
+    <View style={styles.card}>
+      <Text style={styles.title}>Board info</Text>
+      <BoardInfoForm
+        name={draftName}
+        description={draftDescription}
+        onChangeName={setDraftName}
+        onChangeDescription={setDraftDescription}
+      />
+      <Button
+        label="Save"
+        onPress={() => onSave({ name: draftName, description: draftDescription })}
+      />
+    </View>
+  )
+}
+
+const styles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFill,
+  },
+  card: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: '#131c2e',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    padding: 20,
+    gap: 12,
+  },
+  title: {
+    color: '#f1f5f9',
+    fontSize: 18,
+    fontWeight: '800',
+  },
+})

@@ -1,0 +1,79 @@
+import type { Icon } from 'phosphor-react-native'
+import { CaretRightIcon } from 'phosphor-react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
+
+import { interaction } from '@/constants/theme'
+
+interface BoardSettingRowProps {
+  icon: Icon
+  iconColor: string
+  label: string
+  value: string
+  hint?: string
+  onPress: () => void
+}
+
+export function BoardSettingRow({
+  icon: IconComponent,
+  iconColor,
+  label,
+  value,
+  hint,
+  onPress,
+}: BoardSettingRowProps) {
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+      android_ripple={interaction.ripple}
+      onPress={onPress}
+    >
+      <IconComponent size={18} color={iconColor} weight="duotone" />
+      <View style={styles.copy}>
+        <Text style={styles.label}>{label}</Text>
+        <Text style={styles.value} numberOfLines={1}>
+          {value}
+        </Text>
+        {hint ? (
+          <Text style={styles.hint} numberOfLines={1}>
+            {hint}
+          </Text>
+        ) : null}
+      </View>
+      <CaretRightIcon size={16} color="#64748b" weight="bold" />
+    </Pressable>
+  )
+}
+
+const styles = StyleSheet.create({
+  row: {
+    minHeight: 68,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  rowPressed: {
+    backgroundColor: interaction.pressedBg,
+  },
+  copy: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  label: {
+    color: '#f1f5f9',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  value: {
+    color: '#94a3b8',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  hint: {
+    color: '#64748b',
+    fontSize: 12,
+    fontWeight: '500',
+  },
+})

@@ -61,7 +61,7 @@ export function useBoardConnection() {
   )
 
   const handleAddBoard = useCallback(() => {
-    router.push(routes.addBoardScan)
+    router.push(routes.addBoardDetails)
   }, [])
 
   const handleCancel = useCallback(() => {
