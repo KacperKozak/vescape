@@ -44,19 +44,28 @@ internal object RefloatConfigProtocol {
   }
 
   fun buildGetCustomConfigXml(
-    canId: Int,
+    canId: Int?,
     confInd: Int,
     length: Int,
     offset: Int,
   ): ByteArray {
-    require(canId in 0..255) { "canId must fit uint8" }
+    require(canId == null || canId in 0..255) { "canId must fit uint8" }
     require(confInd in 0..255) { "confInd must fit uint8" }
     require(length >= 0) { "length must be non-negative" }
     require(offset >= 0) { "offset must be non-negative" }
-    return ByteBuffer.allocate(12)
+    if (canId != null) {
+      return ByteBuffer.allocate(12)
+        .order(ByteOrder.BIG_ENDIAN)
+        .put(COMM_FORWARD_CAN.toByte())
+        .put(canId.toByte())
+        .put(COMM_GET_CUSTOM_CONFIG_XML.toByte())
+        .put(confInd.toByte())
+        .putInt(length)
+        .putInt(offset)
+        .array()
+    }
+    return ByteBuffer.allocate(10)
       .order(ByteOrder.BIG_ENDIAN)
-      .put(COMM_FORWARD_CAN.toByte())
-      .put(canId.toByte())
       .put(COMM_GET_CUSTOM_CONFIG_XML.toByte())
       .put(confInd.toByte())
       .putInt(length)
@@ -64,12 +73,18 @@ internal object RefloatConfigProtocol {
       .array()
   }
 
-  fun buildGetCustomConfig(canId: Int, confInd: Int): ByteArray {
-    require(canId in 0..255) { "canId must fit uint8" }
+  fun buildGetCustomConfig(canId: Int?, confInd: Int): ByteArray {
+    require(canId == null || canId in 0..255) { "canId must fit uint8" }
     require(confInd in 0..255) { "confInd must fit uint8" }
+    if (canId != null) {
+      return byteArrayOf(
+        COMM_FORWARD_CAN.toByte(),
+        canId.toByte(),
+        COMM_GET_CUSTOM_CONFIG.toByte(),
+        confInd.toByte(),
+      )
+    }
     return byteArrayOf(
-      COMM_FORWARD_CAN.toByte(),
-      canId.toByte(),
       COMM_GET_CUSTOM_CONFIG.toByte(),
       confInd.toByte(),
     )
@@ -113,12 +128,19 @@ internal object RefloatConfigProtocol {
     return RefloatConfigProtocolResult.Success(RefloatConfigXmlChunk(confInd, totalLength, dataOffset, chunk))
   }
 
-  fun buildSetCustomConfig(canId: Int, confInd: Int, configBytes: ByteArray): ByteArray {
-    require(canId in 0..255) { "canId must fit uint8" }
+  fun buildSetCustomConfig(canId: Int?, confInd: Int, configBytes: ByteArray): ByteArray {
+    require(canId == null || canId in 0..255) { "canId must fit uint8" }
     require(confInd in 0..255) { "confInd must fit uint8" }
-    val buf = ByteBuffer.allocate(4 + configBytes.size).order(ByteOrder.BIG_ENDIAN)
-    buf.put(COMM_FORWARD_CAN.toByte())
-    buf.put(canId.toByte())
+    if (canId != null) {
+      val buf = ByteBuffer.allocate(4 + configBytes.size).order(ByteOrder.BIG_ENDIAN)
+      buf.put(COMM_FORWARD_CAN.toByte())
+      buf.put(canId.toByte())
+      buf.put(COMM_SET_CUSTOM_CONFIG.toByte())
+      buf.put(confInd.toByte())
+      buf.put(configBytes)
+      return buf.array()
+    }
+    val buf = ByteBuffer.allocate(2 + configBytes.size).order(ByteOrder.BIG_ENDIAN)
     buf.put(COMM_SET_CUSTOM_CONFIG.toByte())
     buf.put(confInd.toByte())
     buf.put(configBytes)

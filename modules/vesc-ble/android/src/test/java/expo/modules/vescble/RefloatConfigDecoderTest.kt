@@ -51,4 +51,35 @@ class RefloatConfigDecoderTest {
 
     RefloatConfigDecoder.decode(schema, byteArrayOf(1, 2), null, 7, 100L, null)
   }
+
+  @Test
+  fun decodesWithNullCanIdForDirectConnection() {
+    val schema = RefloatConfigSchema(
+      hash = "schema-hash",
+      fields = listOf(
+        RefloatConfigSchemaField("kp", RefloatConfigValueType.FLOAT32, "Angle P", null, 0.0, 100.0, 0),
+        RefloatConfigSchemaField("kp2", RefloatConfigValueType.FLOAT32, "Rate P", null, 0.0, 5.0, 4),
+        RefloatConfigSchemaField("unused", RefloatConfigValueType.INT32, "Unused", null, null, null, 8),
+      ),
+    )
+    val bytes = ByteBuffer.allocate(12)
+      .order(ByteOrder.BIG_ENDIAN)
+      .putFloat(26.0f)
+      .putFloat(0.9f)
+      .putInt(123)
+      .array()
+
+    val snapshot = RefloatConfigDecoder.decode(
+      schema = schema,
+      rawConfig = bytes,
+      boardId = "board-1",
+      canId = null,
+      capturedAt = 100L,
+      fwVersion = null,
+    )
+
+    assertEquals(null, snapshot.canId)
+    assertEquals("schema-hash", snapshot.schemaHash)
+    assertEquals(12, snapshot.rawConfigLength)
+  }
 }

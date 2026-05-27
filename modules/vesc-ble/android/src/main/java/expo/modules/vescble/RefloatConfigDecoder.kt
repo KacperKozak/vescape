@@ -11,7 +11,7 @@ internal object RefloatConfigDecoder {
     schema: RefloatConfigSchema,
     rawConfig: ByteArray,
     boardId: String?,
-    canId: Int,
+    canId: Int?,
     capturedAt: Long,
     fwVersion: String?,
   ): RefloatConfigSnapshot {

@@ -45,7 +45,7 @@ internal data class RefloatConfigGroup(
 internal data class RefloatConfigSnapshot(
   val capturedAt: Long,
   val boardId: String?,
-  val canId: Int,
+  val canId: Int?,
   val schemaHash: String,
   val rawConfigHash: String,
   val rawConfigLength: Int,
