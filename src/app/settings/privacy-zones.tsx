@@ -20,15 +20,72 @@ import { MAPBOX_ACCESS_TOKEN } from '@/config/mapy'
 import { MAP_DEFAULTS } from '@/constants/mapStyles'
 import { ONE_DARK_MAP_STYLE } from '@/constants/oneDarkMapStyle'
 import { theme } from '@/constants/theme'
-import {
-  buildZonePills,
-  ZonePills,
-  type PendingCustomZone,
-} from '@/components/privacy-zones/ZonePills'
+import { BriefcaseIcon, HouseIcon, PencilSimpleIcon, TrashIcon } from 'phosphor-react-native'
+import type { Icon } from 'phosphor-react-native'
+import { HPill, HPillAdd, HPillDot, HPillMenuItem, HPills } from '@/components/HPills'
 import { generateZoneId, usePrivacyZoneStore, type PrivacyZone } from '@/store/privacyZoneStore'
 import { liveTelemetryRuntime } from '@/telemetry/liveTelemetryRuntime'
 
 Mapbox.setAccessToken(MAPBOX_ACCESS_TOKEN)
+
+interface ZonePill {
+  id: string
+  name: string
+  isBuiltIn: boolean
+  isSaved: boolean
+  enabled: boolean
+  icon?: Icon
+}
+
+interface PendingCustomZone {
+  id: string
+  name: string
+}
+
+function buildZonePills(
+  zones: PrivacyZone[],
+  pendingCustom?: PendingCustomZone | null,
+): ZonePill[] {
+  const homeZone = zones.find((z) => z.preset === 'home')
+  const workZone = zones.find((z) => z.preset === 'work')
+
+  const pills: ZonePill[] = [
+    {
+      id: 'home',
+      name: 'Home',
+      isBuiltIn: true,
+      isSaved: !!homeZone,
+      enabled: homeZone?.enabled ?? false,
+      icon: HouseIcon,
+    },
+    {
+      id: 'work',
+      name: 'Work',
+      isBuiltIn: true,
+      isSaved: !!workZone,
+      enabled: workZone?.enabled ?? false,
+      icon: BriefcaseIcon,
+    },
+  ]
+
+  for (const z of zones) {
+    if (z.preset === 'custom') {
+      pills.push({ id: z.id, name: z.name, isBuiltIn: false, isSaved: true, enabled: z.enabled })
+    }
+  }
+
+  if (pendingCustom && !zones.some((z) => z.id === pendingCustom.id)) {
+    pills.push({
+      id: pendingCustom.id,
+      name: pendingCustom.name,
+      isBuiltIn: false,
+      isSaved: false,
+      enabled: false,
+    })
+  }
+
+  return pills
+}
 
 const DEFAULT_ZONE_ZOOM = 15
 const CIRCLE_DIAMETER_RATIO = 0.6
@@ -310,14 +367,41 @@ export default function PrivacyZonesScreen() {
       </View>
 
       <View style={[styles.pillsFloating, { top: pillsTop }]}>
-        <ZonePills
-          pills={pills}
-          selectedId={selectedId}
-          onSelect={handleSelectPill}
-          onAdd={handleAddPress}
-          onRename={handleRenamePress}
-          onDelete={handleDeletePress}
-        />
+        <HPills activeId={selectedId}>
+          {pills.map((pill) => (
+            <HPill
+              key={pill.id}
+              id={pill.id}
+              label={pill.name}
+              icon={pill.icon}
+              badge={
+                <HPillDot
+                  status={!pill.isSaved ? 'draft' : pill.enabled ? 'enabled' : 'disabled'}
+                />
+              }
+              color={theme.gps}
+              onPress={() => handleSelectPill(pill.id)}
+            >
+              {!pill.isBuiltIn ? (
+                <HPillMenuItem
+                  icon={PencilSimpleIcon}
+                  label="Rename"
+                  onPress={() => handleRenamePress(pill.id, pill.name)}
+                />
+              ) : null}
+              {pill.isSaved ? (
+                <HPillMenuItem
+                  icon={TrashIcon}
+                  label="Delete"
+                  onPress={() => handleDeletePress(pill.id)}
+                  danger
+                  separator={!pill.isBuiltIn}
+                />
+              ) : null}
+            </HPill>
+          ))}
+          <HPillAdd onPress={handleAddPress} />
+        </HPills>
       </View>
 
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>

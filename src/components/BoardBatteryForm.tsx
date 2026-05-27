@@ -159,11 +159,23 @@ export function BoardBatteryForm({
           <View style={styles.stepperGrid}>
             <View style={styles.stepperField}>
               <Text style={styles.label}>Series</Text>
-              <Stepper value={seriesCount} min={1} max={40} onChange={onChangeSeriesCount} />
+              <Stepper
+                value={seriesCount}
+                min={1}
+                max={40}
+                onChange={onChangeSeriesCount}
+                fullWidth
+              />
             </View>
             <View style={styles.stepperField}>
               <Text style={styles.label}>Parallel</Text>
-              <Stepper value={parallelCount} min={1} max={20} onChange={onChangeParallelCount} />
+              <Stepper
+                value={parallelCount}
+                min={1}
+                max={20}
+                onChange={onChangeParallelCount}
+                fullWidth
+              />
             </View>
           </View>
         </>

@@ -7,12 +7,14 @@ export function Stepper({
   min,
   max,
   onChange,
+  fullWidth = false,
 }: {
   value: number
   unit?: string
   min?: number
   max?: number
   onChange: (nextValue: number) => void
+  fullWidth?: boolean
 }) {
   const decrementValue = min == null ? value - 1 : Math.max(min, value - 1)
   const incrementValue = max == null ? value + 1 : Math.min(max, value + 1)
@@ -28,7 +30,7 @@ export function Stepper({
       >
         <MinusIcon size={14} color="#f1f5f9" weight="bold" />
       </Pressable>
-      <View style={styles.valueWrap}>
+      <View style={[styles.valueWrap, fullWidth && styles.fullWidthValueWrap]}>
         <Text style={styles.stepperValue}>{value}</Text>
         {unit ? <Text style={styles.stepperUnit}>{unit}</Text> : null}
       </View>
@@ -65,6 +67,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 2,
     paddingVertical: 10,
+  },
+  fullWidthValueWrap: {
+    flex: 1,
   },
   stepperValue: {
     color: '#f1f5f9',

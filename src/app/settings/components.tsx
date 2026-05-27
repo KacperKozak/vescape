@@ -7,12 +7,12 @@ import {
   GearSixIcon,
   IdentificationCardIcon,
   MoonIcon,
+  PencilSimpleIcon,
   TrashIcon,
   UserIcon,
   WifiHighIcon,
 } from 'phosphor-react-native'
-import { buildZonePills, ZonePills } from '@/components/privacy-zones/ZonePills'
-import type { PrivacyZone } from '@/store/privacyZoneStore'
+import { HPill, HPillAdd, HPillDot, HPillMenuItem, HPills } from '@/components/HPills'
 import { useCallback, useMemo, useState } from 'react'
 import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native'
 import { useSharedValue } from 'react-native-reanimated'
@@ -632,33 +632,47 @@ function BoardSettingsShowcase() {
   )
 }
 
-const SHOWCASE_ZONES: PrivacyZone[] = [
-  {
-    id: 'home',
-    preset: 'home',
-    name: 'Home',
-    enabled: true,
-    centerLatitude: 52.23,
-    centerLongitude: 21.01,
-    radiusMeters: 200,
-    createdAt: 0,
-    updatedAt: 0,
-  },
-]
-
 function ZonePillsShowcase() {
   const [selectedId, setSelectedId] = useState('home')
-  const pills = buildZonePills(SHOWCASE_ZONES)
   return (
-    <ShowcaseCard name="ZonePills">
-      <ZonePills
-        pills={pills}
-        selectedId={selectedId}
-        onSelect={setSelectedId}
-        onAdd={() => undefined}
-        onRename={() => undefined}
-        onDelete={() => undefined}
-      />
+    <ShowcaseCard name="HPills (zone)">
+      <HPills activeId={selectedId}>
+        <HPill
+          id="home"
+          label="Home"
+          badge={<HPillDot status="enabled" />}
+          color={theme.gps}
+          onPress={() => setSelectedId('home')}
+        >
+          <HPillMenuItem icon={TrashIcon} label="Delete" onPress={() => undefined} danger />
+        </HPill>
+        <HPill
+          id="work"
+          label="Work"
+          badge={<HPillDot status="disabled" />}
+          color={theme.gps}
+          onPress={() => setSelectedId('work')}
+        >
+          <HPillMenuItem icon={TrashIcon} label="Delete" onPress={() => undefined} danger />
+        </HPill>
+        <HPill
+          id="custom"
+          label="Custom"
+          badge={<HPillDot status="draft" />}
+          color={theme.gps}
+          onPress={() => setSelectedId('custom')}
+        >
+          <HPillMenuItem icon={PencilSimpleIcon} label="Rename" onPress={() => undefined} />
+          <HPillMenuItem
+            icon={TrashIcon}
+            label="Delete"
+            onPress={() => undefined}
+            danger
+            separator
+          />
+        </HPill>
+        <HPillAdd onPress={() => undefined} />
+      </HPills>
     </ShowcaseCard>
   )
 }

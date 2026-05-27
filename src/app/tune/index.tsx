@@ -15,8 +15,11 @@ import {
   BluetoothSlashIcon,
   CheckIcon,
   ClockCounterClockwiseIcon,
+  CopyIcon,
   FadersIcon,
   InfoIcon,
+  PencilSimpleIcon,
+  TrashIcon,
   WarningCircleIcon,
   XIcon,
 } from 'phosphor-react-native'
@@ -30,7 +33,7 @@ import { InfoModal } from '@/components/InfoModal'
 import { Placeholder } from '@/components/Placeholder'
 import { BasicSliderCell } from '@/components/tune/BasicSliderCell'
 import { FieldEditorPopover } from '@/components/tune/FieldEditorPopover'
-import { ProfilePills } from '@/components/tune/ProfilePills'
+import { HPill, HPillAdd, HPillMenuItem, HPills } from '@/components/HPills'
 import { TuneConfigCell } from '@/components/tune/TuneConfigCell'
 import { TuneGroupGrid } from '@/components/tune/TuneGroupGrid'
 import { TuneSyncBar } from '@/components/tune/TuneSyncBar'
@@ -212,17 +215,40 @@ export default function TuneScreen() {
           ) : null}
 
           {profiles.length > 0 ? (
-            <ProfilePills
-              profiles={profiles}
-              activeProfileId={activeProfile?.id ?? null}
-              canDelete={profiles.length > 1}
-              hasOtherBoards={modals.otherBoards.length > 0}
-              onSelect={setActiveProfile}
-              onCreate={() => modals.handleCreateProfile(activeProfile?.id)}
-              onRename={(profile) => modals.setRenameModalProfile(profile)}
-              onDelete={(profile) => modals.setDeleteConfirmProfile(profile)}
-              onCopy={(profile) => modals.setCopySourceProfile(profile)}
-            />
+            <HPills activeId={activeProfile?.id ?? ''}>
+              {profiles.map((profile) => (
+                <HPill
+                  key={profile.id}
+                  id={profile.id}
+                  label={profile.name}
+                  color={theme.wheel}
+                  onPress={() => setActiveProfile(profile.id)}
+                >
+                  <HPillMenuItem
+                    icon={PencilSimpleIcon}
+                    label="Rename"
+                    onPress={() => modals.setRenameModalProfile(profile)}
+                  />
+                  {modals.otherBoards.length > 0 ? (
+                    <HPillMenuItem
+                      icon={CopyIcon}
+                      label="Copy to board"
+                      onPress={() => modals.setCopySourceProfile(profile)}
+                    />
+                  ) : null}
+                  {profiles.length > 1 ? (
+                    <HPillMenuItem
+                      icon={TrashIcon}
+                      label="Delete"
+                      onPress={() => modals.setDeleteConfirmProfile(profile)}
+                      danger
+                      separator
+                    />
+                  ) : null}
+                </HPill>
+              ))}
+              <HPillAdd onPress={() => modals.handleCreateProfile(activeProfile?.id)} />
+            </HPills>
           ) : null}
 
           {boardSnapshot ? (
