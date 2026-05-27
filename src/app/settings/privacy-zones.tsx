@@ -135,7 +135,7 @@ export default function PrivacyZonesScreen() {
     const isInitial = prevSelectedRef.current === null
     if (isInitial || prevSelectedRef.current !== selectedId) {
       prevSelectedRef.current = selectedId
-      flyToZone(selectedId, isInitial ? 0 : 400)
+      flyToZone(selectedId, 0)
     }
   }, [selectedId, loaded, mapReady, flyToZone])
 
@@ -211,8 +211,9 @@ export default function PrivacyZonesScreen() {
       } else if (selectedId === 'work') {
         await storeSave('work', 'work', 'Work', lat, lon, radius)
       } else if (pendingCustom?.id === selectedId) {
-        await storeSave(pendingCustom.id, 'custom', pendingCustom.name, lat, lon, radius)
+        const { id, name } = pendingCustom
         setPendingCustom(null)
+        await storeSave(id, 'custom', name, lat, lon, radius)
       }
       setIsEditing(false)
     } finally {
@@ -511,9 +512,10 @@ const styles = StyleSheet.create({
     paddingTop: 12,
   },
   actionButton: {
-    alignSelf: 'stretch',
+    flex: 1,
   },
   savedActions: {
+    flexDirection: 'row',
     gap: 8,
   },
   modalBackdrop: {

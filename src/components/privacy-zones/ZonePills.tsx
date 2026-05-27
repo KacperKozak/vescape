@@ -34,6 +34,7 @@ interface ZonePillsProps {
 interface ContextMenu {
   id: string
   name: string
+  isBuiltIn: boolean
   triggerRef: React.RefObject<View | null>
 }
 
@@ -69,7 +70,7 @@ export function buildZonePills(
     }
   }
 
-  if (pendingCustom) {
+  if (pendingCustom && !zones.some((z) => z.id === pendingCustom.id)) {
     pills.push({
       id: pendingCustom.id,
       name: pendingCustom.name,
@@ -108,9 +109,9 @@ export function ZonePills({
   }
 
   const handleLongPress = useCallback((pill: ZonePill) => {
-    if (pill.isBuiltIn) return
+    if (!pill.isSaved) return
     const ref = getPillRef(pill.id)
-    setContextMenu({ id: pill.id, name: pill.name, triggerRef: ref })
+    setContextMenu({ id: pill.id, name: pill.name, isBuiltIn: pill.isBuiltIn, triggerRef: ref })
   }, [])
 
   const closeMenu = useCallback(() => setContextMenu(null), [])
@@ -146,7 +147,11 @@ export function ZonePills({
               >
                 {pill.name}
               </Text>
-              {!pill.isSaved ? <View style={styles.draftDot} /> : null}
+              {!pill.isSaved ? (
+                <View style={styles.draftDot} />
+              ) : (
+                <View style={pill.enabled ? styles.enabledDot : styles.disabledDot} />
+              )}
             </Pressable>
           )
         })}
@@ -166,18 +171,20 @@ export function ZonePills({
       >
         {contextMenu ? (
           <View style={styles.menu}>
+            {!contextMenu.isBuiltIn ? (
+              <Pressable
+                style={styles.menuItem}
+                onPress={() => {
+                  closeMenu()
+                  onRename(contextMenu.id, contextMenu.name)
+                }}
+              >
+                <PencilSimpleIcon size={15} color="#94a3b8" weight="bold" />
+                <Text style={styles.menuItemText}>Rename</Text>
+              </Pressable>
+            ) : null}
             <Pressable
-              style={styles.menuItem}
-              onPress={() => {
-                closeMenu()
-                onRename(contextMenu.id, contextMenu.name)
-              }}
-            >
-              <PencilSimpleIcon size={15} color="#94a3b8" weight="bold" />
-              <Text style={styles.menuItemText}>Rename</Text>
-            </Pressable>
-            <Pressable
-              style={[styles.menuItem, styles.menuItemDanger]}
+              style={[styles.menuItem, !contextMenu.isBuiltIn && styles.menuItemDanger]}
               onPress={() => {
                 closeMenu()
                 onDelete(contextMenu.id)
@@ -241,6 +248,19 @@ const styles = StyleSheet.create({
     height: 5,
     borderRadius: 3,
     backgroundColor: '#475569',
+  },
+  enabledDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#22c55e',
+  },
+  disabledDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    borderWidth: 1.5,
+    borderColor: '#475569',
   },
   addPill: {
     height: 36,
