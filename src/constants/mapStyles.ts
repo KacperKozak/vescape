@@ -44,4 +44,10 @@ export const MAP_STYLES = [
 ] as const
 
 export type MapStyleKey = (typeof MAP_STYLES)[number]['key']
-export type MapNavigationMode = 'northUp' | 'freeRotate'
+export const MAP_NAVIGATION_MODES = [
+  { key: 'northUp', label: 'North up' },
+  { key: 'gpsHeading', label: 'GPS heading' },
+  { key: 'freeRotate', label: 'Free rotate' },
+] as const
+
+export type MapNavigationMode = (typeof MAP_NAVIGATION_MODES)[number]['key']

@@ -23,11 +23,20 @@ import { InfoModal } from '@/components/InfoModal'
 import { MapPin } from '@/components/map/MapPin'
 import { RainViewerOverlay } from '@/components/map/RainViewerOverlay'
 import { MAPBOX_ACCESS_TOKEN, MAPY_TILE_URL_TEMPLATE } from '@/config/mapy'
-import { BLANK_STYLE, MAP_DEFAULTS, MAP_STYLES, type MapStyleKey } from '@/constants/mapStyles'
+import {
+  BLANK_STYLE,
+  MAP_DEFAULTS,
+  MAP_STYLES,
+  type MapNavigationMode,
+  type MapStyleKey,
+} from '@/constants/mapStyles'
 import { ONE_DARK_MAP_STYLE } from '@/constants/oneDarkMapStyle'
 import { theme } from '@/constants/theme'
-import { getLiveGpsPresentation } from '@/helpers/liveGpsPresentation'
-import { makeCircleFeature, makeTrailLineString } from '@/helpers/mapGeometry'
+import {
+  getLiveGpsPresentation,
+  getReliableGpsBearingFromFixes,
+} from '@/helpers/liveGpsPresentation'
+import { distanceMeters, makeCircleFeature, makeTrailLineString } from '@/helpers/mapGeometry'
 import { findNearestSampleIndexByTime } from '@/history/playback'
 import type { HistoryGpsSample, HistoryMarker } from '@/store/historyStore'
 import { useSettingsStore } from '@/store/settingsStore'
@@ -35,9 +44,10 @@ import { useSettingsStore } from '@/store/settingsStore'
 import {
   type CameraSnapshot,
   type HistoryPreviewTarget,
-  getPitchForZoom,
   useCameraControls,
 } from './useCameraControls'
+import { getLiveFollowCameraProfile, getPitchForZoom } from './cameraFollowProfile'
+import { shouldPreserveLiveFollowGesture } from './cameraGestureState'
 
 Mapbox.setAccessToken(MAPBOX_ACCESS_TOKEN)
 
@@ -145,6 +155,7 @@ interface CenterMapLayersProps {
   accuracyFix: { longitude: number; latitude: number } | null
   accuracyShape: ReturnType<typeof makeCircleFeature> | null
   gpsFix: { longitude: number; latitude: number } | null
+  gpsBearingDeg: number | null
   rideRoute: [number, number][]
   seekPosition: HistoryGpsSample | null
   rideMarkers: HistoryMarker[]
@@ -159,11 +170,13 @@ function LiveMapLayers({
   accuracyFix,
   accuracyShape,
   gpsFix,
+  gpsBearingDeg,
 }: {
   liveTrailShape: CenterMapLayersProps['liveTrailShape']
   accuracyFix: CenterMapLayersProps['accuracyFix']
   accuracyShape: CenterMapLayersProps['accuracyShape']
   gpsFix: CenterMapLayersProps['gpsFix']
+  gpsBearingDeg: CenterMapLayersProps['gpsBearingDeg']
 }) {
   return (
     <>
@@ -204,6 +217,7 @@ function LiveMapLayers({
               id="center-gps-position"
               coordinate={[gpsFix.longitude, gpsFix.latitude]}
               color={MAP_DEFAULTS.markerColor}
+              bearingDeg={gpsBearingDeg}
             />
           )}
         </>
@@ -286,6 +300,7 @@ function CenterMapLayers({
   accuracyFix,
   accuracyShape,
   gpsFix,
+  gpsBearingDeg,
   rideRoute,
   seekPosition,
   rideMarkers,
@@ -337,6 +352,7 @@ function CenterMapLayers({
           accuracyFix={accuracyFix}
           accuracyShape={accuracyShape}
           gpsFix={gpsFix}
+          gpsBearingDeg={gpsBearingDeg}
         />
       )}
       {targetLocation && !historyActive && (
@@ -358,6 +374,7 @@ interface CenterMapProps {
   rideMarkers: HistoryMarker[]
   historyActive: boolean
   mapStyleKey: MapStyleKey
+  mapNavigationMode: MapNavigationMode
   rotationLocked: boolean
   perspectiveEnabled: boolean
   onPerspectiveChange: (enabled: boolean) => void
@@ -383,6 +400,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
     rideMarkers,
     historyActive,
     mapStyleKey,
+    mapNavigationMode,
     rotationLocked,
     perspectiveEnabled,
     onPerspectiveChange,
@@ -406,9 +424,15 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
     null,
   )
   const [showRadar, setShowRadar] = useState(true)
+  const [cameraHeading, setCameraHeading] = useState(0)
   const [initialApproximateFix, setInitialApproximateFix] = useState<LocationEvent | null>(null)
 
   const gpsFix = liveLocations.at(-1) ?? null
+  const previousGpsFix = liveLocations.at(-2) ?? null
+  const previousReliableBearing = useMemo(
+    () => getReliableGpsBearingFromFixes(liveLocations.slice(0, -1)),
+    [liveLocations],
+  )
   const settingsLoaded = useSettingsStore((s) => s.loaded)
   const lastGpsLatitude = useSettingsStore((s) => s.lastGpsLatitude)
   const lastGpsLongitude = useSettingsStore((s) => s.lastGpsLongitude)
@@ -429,30 +453,51 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
     () =>
       getLiveGpsPresentation({
         preciseFix: gpsFix,
+        previousPreciseFix: previousGpsFix,
         latestApproximateFix: latestApproximateLocation,
         initialApproximateFix,
+        previousReliableBearing,
       }),
-    [gpsFix, initialApproximateFix, latestApproximateLocation],
+    [
+      gpsFix,
+      initialApproximateFix,
+      latestApproximateLocation,
+      previousGpsFix,
+      previousReliableBearing,
+    ],
   )
-  const { cameraFix, accuracyFix, accuracyRadiusM } = gpsPresentation
+  const { cameraFix, accuracyFix, accuracyRadiusM, directionBearingDeg } = gpsPresentation
+  const gpsPinBearingDeg = directionBearingDeg == null ? null : directionBearingDeg - cameraHeading
+  const gpsHeadingMode = mapNavigationMode === 'gpsHeading'
+  const followHeadingDeg = mapNavigationMode === 'gpsHeading' ? (directionBearingDeg ?? 0) : 0
 
   const rideRoute = useMemo(
     () => rideGpsSamples.map((point) => [point.longitude, point.latitude] as [number, number]),
     [rideGpsSamples],
   )
 
-  const { cameraRef, currentCameraRef, gpsCamera, setFollowGps, getHistoryPreviewCamera } =
-    useCameraControls({
-      ref,
-      cameraFix,
-      persistedFallback,
-      perspectiveEnabled,
-      historyActive,
-      historyPreview,
-      rideRoute,
-      onHeadingChange,
-      onPerspectiveChange,
-    })
+  const {
+    cameraRef,
+    currentCameraRef,
+    gpsCamera,
+    followGps,
+    setFollowGps,
+    setFollowZoomLevel,
+    getLiveFollowCamera,
+    getHistoryPreviewCamera,
+  } = useCameraControls({
+    ref,
+    cameraFix,
+    persistedFallback,
+    perspectiveEnabled,
+    historyActive,
+    historyPreview,
+    rideRoute,
+    gpsHeadingMode,
+    followHeadingDeg,
+    onHeadingChange,
+    onPerspectiveChange,
+  })
 
   useEffect(() => {
     if (previousMapStyleKeyRef.current === mapStyleKey) return
@@ -515,16 +560,24 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
     const camera =
       historyActive && historyPreview
         ? getHistoryPreviewCamera(historyPreview)
-        : (styleReloadCamera ?? gpsCamera)
+        : (styleReloadCamera ?? getLiveFollowCamera())
+    const initialHeading =
+      'heading' in camera && typeof camera.heading === 'number'
+        ? camera.heading
+        : historyActive
+          ? 0
+          : followHeadingDeg
     cameraRef.current?.setCamera({
       ...camera,
+      heading: initialHeading,
       pitch: getPitchForZoom(camera.zoomLevel, perspectiveEnabled),
       animationDuration: 0,
     })
   }, [
     cameraRef,
-    gpsCamera,
+    followHeadingDeg,
     getHistoryPreviewCamera,
+    getLiveFollowCamera,
     historyActive,
     historyPreview,
     perspectiveEnabled,
@@ -560,23 +613,54 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
       }
       if (state.gestures.isGestureActive) {
         onMapInteraction()
-        setFollowGps(false)
-        const dynamicPitch = getPitchForZoom(state.properties.zoom, perspectiveEnabled)
-        if (Math.abs(state.properties.pitch - dynamicPitch) > 0.5) {
-          cameraRef.current?.setCamera({ pitch: dynamicPitch, animationDuration: 0 })
+        const gestureCenterDistanceM = cameraFix
+          ? distanceMeters({ longitude, latitude }, cameraFix)
+          : Number.POSITIVE_INFINITY
+        const preservesLiveFollow = shouldPreserveLiveFollowGesture({
+          followGps,
+          historyActive,
+          centerDistanceM: gestureCenterDistanceM,
+          headingDeg: state.properties.heading,
+          followHeadingDeg,
+        })
+        if (preservesLiveFollow) {
+          setFollowZoomLevel(state.properties.zoom)
+          const followCamera = getLiveFollowCameraProfile({
+            gpsCamera: {
+              centerCoordinate: [longitude, latitude],
+              zoomLevel: state.properties.zoom,
+            },
+            followHeadingDeg,
+            gpsHeadingMode,
+            perspectiveEnabled,
+          })
+          if (Math.abs(state.properties.pitch - followCamera.pitch) > 0.5) {
+            cameraRef.current?.setCamera({ pitch: followCamera.pitch, animationDuration: 0 })
+          }
+        } else {
+          setFollowGps(false)
         }
       }
+      setCameraHeading((current) =>
+        Math.abs(current - state.properties.heading) > 0.5 ? state.properties.heading : current,
+      )
       onHeadingChange(state.properties.heading)
       setShowRadar(state.properties.zoom <= RADAR_MAX_ZOOM)
     },
     [
       cameraRef,
+      cameraFix,
       currentCameraRef,
+      followGps,
+      followHeadingDeg,
       gpsCamera.centerCoordinate,
+      gpsHeadingMode,
+      historyActive,
       onHeadingChange,
       onMapInteraction,
       perspectiveEnabled,
       setFollowGps,
+      setFollowZoomLevel,
     ],
   )
 
@@ -618,8 +702,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
         <Camera
           ref={cameraRef}
           defaultSettings={{
-            ...gpsCamera,
-            pitch: getPitchForZoom(gpsCamera.zoomLevel, perspectiveEnabled),
+            ...getLiveFollowCamera(),
           }}
           maxZoomLevel={MAP_DEFAULTS.maxZoom}
           animationMode="easeTo"
@@ -636,6 +719,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
           accuracyFix={accuracyFix}
           accuracyShape={accuracyShape}
           gpsFix={gpsFix}
+          gpsBearingDeg={gpsPinBearingDeg}
           rideRoute={rideRoute}
           seekPosition={seekPosition}
           rideMarkers={rideMarkers}

@@ -1,9 +1,9 @@
-import { ArrowUpIcon, ArrowsClockwiseIcon } from 'phosphor-react-native'
+import { ArrowUpIcon, ArrowsClockwiseIcon, NavigationArrowIcon } from 'phosphor-react-native'
 import { type ReactNode } from 'react'
 import { View } from 'react-native'
 
 import { MapOptionSelector } from '@/components/map/MapOptionSelector'
-import type { MapNavigationMode } from '@/constants/mapStyles'
+import { MAP_NAVIGATION_MODES, type MapNavigationMode } from '@/constants/mapStyles'
 import { theme } from '@/constants/theme'
 
 interface MapNavigationSelectorProps {
@@ -21,33 +21,16 @@ export function MapNavigationSelector({
   onToggle,
   onSelect,
 }: MapNavigationSelectorProps) {
-  const options: { key: MapNavigationMode; label: string; icon: ReactNode }[] = [
-    {
-      key: 'northUp',
-      label: 'North up',
-      icon: (
-        <ArrowUpIcon
-          size={20}
-          color={activeMode === 'northUp' ? theme.gps.text : '#94a3b8'}
-          weight="bold"
-        />
-      ),
-    },
-    {
-      key: 'freeRotate',
-      label: 'Free rotate',
-      icon: (
-        <ArrowsClockwiseIcon
-          size={20}
-          color={activeMode === 'freeRotate' ? theme.gps.text : '#94a3b8'}
-          weight="bold"
-        />
-      ),
-    },
-  ]
+  const options: { key: MapNavigationMode; label: string; icon: ReactNode }[] =
+    MAP_NAVIGATION_MODES.map((option) => ({
+      ...option,
+      icon: getNavigationIcon(option.key, activeMode),
+    }))
   const activeIcon =
     activeMode === 'northUp' ? (
       <ArrowUpIcon size={21} color={theme.gps.text} weight="bold" />
+    ) : activeMode === 'gpsHeading' ? (
+      <NavigationArrowIcon size={21} color={theme.gps.text} weight="fill" />
     ) : (
       <View style={{ transform: [{ rotate: `${-heading}deg` }] }}>
         <ArrowUpIcon size={21} color={theme.gps.text} weight="bold" />
@@ -60,11 +43,20 @@ export function MapNavigationSelector({
       activeIcon={activeIcon}
       activeColor={theme.gps.text}
       activeBackground={`${theme.gps.color}1f`}
-      collapsedAccessibilityLabel={`Navigation: ${activeMode === 'northUp' ? 'North up' : 'Free rotate'}`}
+      collapsedAccessibilityLabel={`Navigation: ${activeMode === 'northUp' ? 'North up' : activeMode === 'gpsHeading' ? 'GPS heading' : 'Free rotate'}`}
       expanded={expanded}
       options={options}
       onToggle={onToggle}
       onSelect={onSelect}
     />
   )
+}
+
+function getNavigationIcon(mode: MapNavigationMode, activeMode: MapNavigationMode) {
+  const color = activeMode === mode ? theme.gps.text : '#94a3b8'
+  if (mode === 'northUp') return <ArrowUpIcon size={20} color={color} weight="bold" />
+  if (mode === 'gpsHeading') {
+    return <NavigationArrowIcon size={20} color={color} weight="fill" />
+  }
+  return <ArrowsClockwiseIcon size={20} color={color} weight="bold" />
 }

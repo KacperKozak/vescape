@@ -13,7 +13,7 @@ internal fun validMapStyleKey(value: Any?): String? =
   (value as? String)?.takeIf { it in setOf("onedark", "outdoors", "satellite", "mapy") }
 
 internal fun validMapNavigationMode(value: Any?): String? =
-  (value as? String)?.takeIf { it in setOf("northUp", "freeRotate") }
+  (value as? String)?.takeIf { it in setOf("northUp", "gpsHeading", "freeRotate") }
 
 class AppDataRepository private constructor(private val context: Context) {
   private val dao = TelemetryDatabase.get(context).telemetryDao()

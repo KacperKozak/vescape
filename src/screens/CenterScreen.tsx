@@ -58,6 +58,7 @@ export function CenterScreen({
         historyPreview={controller.historyPreview}
         historyActive={controller.historyActive}
         mapStyleKey={controller.mapStyleKey}
+        mapNavigationMode={controller.mapNavigationMode}
         rotationLocked={controller.rotationLocked}
         perspectiveEnabled={controller.perspectiveEnabled}
         onPerspectiveChange={controller.setPerspectiveEnabled}

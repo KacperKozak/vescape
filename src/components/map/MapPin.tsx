@@ -8,6 +8,7 @@ interface MapPinProps {
   color: string
   icon?: Icon
   iconColor?: string
+  bearingDeg?: number | null
   onSelected?: () => void
 }
 
@@ -16,6 +17,7 @@ export function MapPin({
   color,
   icon: IconComponent,
   iconColor,
+  bearingDeg,
   onSelected,
 }: MapPinProps) {
   if (IconComponent) {
@@ -31,7 +33,18 @@ export function MapPin({
   return (
     <MarkerView coordinate={coordinate} allowOverlap>
       <Pressable style={[styles.pin, { borderColor: color }]} onPress={onSelected}>
-        <View style={[styles.pinCore, { backgroundColor: color }]} />
+        {bearingDeg == null ? (
+          <View style={[styles.pinCore, { backgroundColor: color }]} />
+        ) : (
+          <View style={[styles.directionArrow, { transform: [{ rotate: `${bearingDeg}deg` }] }]}>
+            <View
+              style={[styles.directionWing, styles.directionWingLeft, { borderColor: color }]}
+            />
+            <View
+              style={[styles.directionWing, styles.directionWingRight, { borderColor: color }]}
+            />
+          </View>
+        )}
       </Pressable>
     </MarkerView>
   )
@@ -66,5 +79,25 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
+  },
+  directionArrow: {
+    width: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  directionWing: {
+    position: 'absolute',
+    top: 3,
+    width: 2,
+    height: 13,
+    borderRadius: 1,
+    borderLeftWidth: 2,
+  },
+  directionWingLeft: {
+    transform: [{ translateX: -3 }, { rotate: '28deg' }],
+  },
+  directionWingRight: {
+    transform: [{ translateX: 3 }, { rotate: '-28deg' }],
   },
 })
