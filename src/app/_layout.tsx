@@ -49,7 +49,8 @@ export default function RootLayout() {
           <Stack.Screen name={stackScreens.tune} options={{ title: 'Tune' }} />
           <Stack.Screen name={stackScreens.tuneHistory} options={{ title: 'Tune History' }} />
           <Stack.Screen name={stackScreens.addBoardScan} options={{ title: 'Pair Board' }} />
-          <Stack.Screen name={stackScreens.addBoardDetails} options={{ title: 'Add Board' }} />
+          <Stack.Screen name={stackScreens.addBoard} options={{ title: 'Add Board' }} />
+          <Stack.Screen name={stackScreens.editBoard} options={{ title: 'Edit Board' }} />
         </Stack>
         <StatusBar style="light" />
       </GestureHandlerRootView>

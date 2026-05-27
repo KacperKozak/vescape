@@ -8,7 +8,8 @@ interface BoardInfoEditorModalProps {
   visible: boolean
   name: string
   description: string
-  onSave: (value: { name: string; description: string }) => void
+  saving?: boolean
+  onSave: (value: { name: string; description: string }) => Promise<void> | void
   onCancel: () => void
 }
 
@@ -16,15 +17,25 @@ export function BoardInfoEditorModal({
   visible,
   name,
   description,
+  saving = false,
   onSave,
   onCancel,
 }: BoardInfoEditorModalProps) {
+  const handleCancel = () => {
+    if (!saving) onCancel()
+  }
+
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleCancel}>
       <View style={styles.overlay}>
-        <Pressable style={styles.backdrop} onPress={onCancel} />
+        <Pressable style={styles.backdrop} onPress={handleCancel} disabled={saving} />
         {visible ? (
-          <BoardInfoEditorModalContent name={name} description={description} onSave={onSave} />
+          <BoardInfoEditorModalContent
+            name={name}
+            description={description}
+            saving={saving}
+            onSave={onSave}
+          />
         ) : null}
       </View>
     </Modal>
@@ -34,11 +45,13 @@ export function BoardInfoEditorModal({
 function BoardInfoEditorModalContent({
   name,
   description,
+  saving,
   onSave,
 }: {
   name: string
   description: string
-  onSave: (value: { name: string; description: string }) => void
+  saving: boolean
+  onSave: (value: { name: string; description: string }) => Promise<void> | void
 }) {
   const [draftName, setDraftName] = useState(name)
   const [draftDescription, setDraftDescription] = useState(description)
@@ -54,6 +67,7 @@ function BoardInfoEditorModalContent({
       />
       <Button
         label="Save"
+        loading={saving}
         onPress={() => onSave({ name: draftName, description: draftDescription })}
       />
     </View>

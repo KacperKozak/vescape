@@ -3,7 +3,9 @@ import type { Board } from 'vesc-ble'
 
 const actualVescBle = await import('../../modules/vesc-ble/src/index')
 
-const getBoards = mock(async () => [] as Board[])
+let persistedBoards: Board[] = []
+
+const getBoards = mock(async () => persistedBoards)
 const getSettings = mock(async () => ({
   liveHistoryLimit: 5,
   autoConnect: true,
@@ -16,8 +18,12 @@ const getSettings = mock(async () => ({
   freeSpinStationaryBoardCapKmh: 15,
 }))
 const setSelectedBoard = mock(() => {})
-const upsertBoard = mock(async () => {})
-const deleteBoard = mock(async () => {})
+const upsertBoard = mock(async (board: Board) => {
+  persistedBoards = [...persistedBoards.filter((b) => b.id !== board.id), board]
+})
+const deleteBoard = mock(async (id: string) => {
+  persistedBoards = persistedBoards.filter((b) => b.id !== id)
+})
 
 const vescBleMock = {
   ...actualVescBle,
@@ -32,6 +38,7 @@ mock.module('vesc-ble', () => vescBleMock)
 mock.module('../../modules/vesc-ble/src/index', () => vescBleMock)
 
 beforeEach(async () => {
+  persistedBoards = []
   getBoards.mockClear()
   getSettings.mockClear()
   setSelectedBoard.mockClear()
@@ -63,5 +70,32 @@ test('new boards can use manual battery config', async () => {
   const board = useBoardStore.getState().addBoard({ name: 'ADV', batteryConfig })
 
   expect(board.batteryConfig).toEqual(batteryConfig)
+  expect(upsertBoard).toHaveBeenCalledWith(expect.objectContaining({ batteryConfig }))
+})
+
+test('updated battery config survives a store reload from native boards', async () => {
+  const { useBoardStore } = await import('./boardStore')
+  const board: Board = {
+    id: 'board-1',
+    name: 'ADV',
+    description: null,
+    bleId: null,
+    isStarred: true,
+    createdAt: 1,
+    batteryConfig: {
+      mode: 'preset',
+      cellPresetId: 'molicel:21700:p50b',
+      seriesCount: 20,
+      parallelCount: 2,
+    },
+  }
+  const batteryConfig = { mode: 'manual' as const, minVoltage: 58, maxVoltage: 82 }
+
+  useBoardStore.setState({ boards: [board], activeBoardId: board.id, hasLoaded: true })
+  await useBoardStore.getState().updateBoard({ ...board, batteryConfig })
+  useBoardStore.setState({ boards: [], activeBoardId: null, hasLoaded: false })
+  await useBoardStore.getState().load()
+
+  expect(useBoardStore.getState().boards[0]?.batteryConfig).toEqual(batteryConfig)
   expect(upsertBoard).toHaveBeenCalledWith(expect.objectContaining({ batteryConfig }))
 })

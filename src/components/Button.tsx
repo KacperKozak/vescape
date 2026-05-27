@@ -12,7 +12,7 @@ import { interaction, theme } from '@/constants/theme'
 
 interface ButtonProps {
   label: string
-  onPress: () => void
+  onPress: () => Promise<void> | void
   variant?: 'primary' | 'secondary' | 'destructive'
   size?: 'sm' | 'md'
   icon?: Icon
@@ -44,7 +44,7 @@ export function Button({
         style,
       ]}
       android_ripple={interaction.ripple}
-      onPress={onPress}
+      onPress={() => void onPress()}
       disabled={isDisabled}
     >
       {loading ? (

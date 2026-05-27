@@ -462,31 +462,38 @@ private fun Map<String, Any?>.toBoardEntity(): BoardEntity = BoardEntity(
 )
 
 internal fun encodeBatteryConfig(value: Any?): String? {
+  val config = normalizeBatteryConfig(value) ?: return null
+  return config.toJsonObject().toString()
+}
+
+internal fun normalizeBatteryConfig(value: Any?): Map<String, Any?>? {
   val config = value as? Map<*, *> ?: return null
   val mode = config["mode"] as? String ?: return null
-  val json = JSONObject()
-  when (mode) {
+  return when (mode) {
     "preset" -> {
       val cellPresetId = config["cellPresetId"] as? String ?: return null
       val seriesCount = (config["seriesCount"] as? Number)?.toInt() ?: return null
       val parallelCount = (config["parallelCount"] as? Number)?.toInt() ?: return null
       if (cellPresetId.isBlank() || seriesCount < 1 || parallelCount < 1) return null
-      json.put("mode", "preset")
-      json.put("cellPresetId", cellPresetId)
-      json.put("seriesCount", seriesCount)
-      json.put("parallelCount", parallelCount)
+      mapOf(
+        "mode" to "preset",
+        "cellPresetId" to cellPresetId,
+        "seriesCount" to seriesCount,
+        "parallelCount" to parallelCount,
+      )
     }
     "manual" -> {
       val minVoltage = (config["minVoltage"] as? Number)?.toDouble() ?: return null
       val maxVoltage = (config["maxVoltage"] as? Number)?.toDouble() ?: return null
       if (!minVoltage.isFinite() || !maxVoltage.isFinite() || maxVoltage <= minVoltage) return null
-      json.put("mode", "manual")
-      json.put("minVoltage", minVoltage)
-      json.put("maxVoltage", maxVoltage)
+      mapOf(
+        "mode" to "manual",
+        "minVoltage" to minVoltage,
+        "maxVoltage" to maxVoltage,
+      )
     }
     else -> return null
   }
-  return json.toString()
 }
 
 private fun Map<String, Any?>.toAlertRuleEntity(): AlertRuleEntity = AlertRuleEntity(

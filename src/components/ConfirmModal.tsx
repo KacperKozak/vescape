@@ -12,7 +12,8 @@ interface ConfirmModalProps {
   confirmLabel?: string
   cancelLabel?: string
   destructive?: boolean
-  onConfirm: () => void
+  loading?: boolean
+  onConfirm: () => Promise<void> | void
   onCancel: () => void
 }
 
@@ -23,6 +24,7 @@ export function ConfirmModal({
   confirmLabel = 'Confirm',
   cancelLabel = 'Cancel',
   destructive = false,
+  loading = false,
   onConfirm,
   onCancel,
 }: ConfirmModalProps) {
@@ -52,10 +54,14 @@ export function ConfirmModal({
 
   if (!mounted) return null
 
+  const handleCancel = () => {
+    if (!loading) onCancel()
+  }
+
   return (
-    <Modal visible transparent animationType="none" onRequestClose={onCancel}>
+    <Modal visible transparent animationType="none" onRequestClose={handleCancel}>
       <Animated.View style={[styles.overlay, { opacity }]}>
-        <Pressable style={styles.backdrop} onPress={onCancel} />
+        <Pressable style={styles.backdrop} onPress={handleCancel} disabled={loading} />
         <Animated.View style={[styles.card, { transform: [{ scale }] }]}>
           <Text style={styles.title}>{title}</Text>
           <Text style={styles.message}>{message}</Text>
@@ -64,12 +70,14 @@ export function ConfirmModal({
               style={styles.actionBtn}
               label={cancelLabel}
               variant="secondary"
-              onPress={onCancel}
+              disabled={loading}
+              onPress={handleCancel}
             />
             <Button
               style={styles.actionBtn}
               label={confirmLabel}
               variant={destructive ? 'destructive' : 'primary'}
+              loading={loading}
               onPress={onConfirm}
             />
           </View>

@@ -4,6 +4,7 @@ import type { BatteryConfig } from 'vesc-ble'
 
 import { BoardBatteryForm } from '@/components/BoardBatteryForm'
 import { Button } from '@/components/Button'
+import { buildBatteryConfig } from '@/boards/boardSetup'
 
 type BatteryMode = BatteryConfig['mode']
 
@@ -15,6 +16,7 @@ interface BoardBatteryEditorModalProps {
   parallelCount: number
   manualMinVoltage: string
   manualMaxVoltage: string
+  saving?: boolean
   onSave: (value: {
     batteryMode: BatteryMode
     cellPresetId: string
@@ -22,7 +24,7 @@ interface BoardBatteryEditorModalProps {
     parallelCount: number
     manualMinVoltage: string
     manualMaxVoltage: string
-  }) => void
+  }) => Promise<void> | void
   onCancel: () => void
 }
 
@@ -34,13 +36,18 @@ export function BoardBatteryEditorModal({
   parallelCount,
   manualMinVoltage,
   manualMaxVoltage,
+  saving = false,
   onSave,
   onCancel,
 }: BoardBatteryEditorModalProps) {
+  const handleCancel = () => {
+    if (!saving) onCancel()
+  }
+
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleCancel}>
       <View style={styles.overlay}>
-        <Pressable style={styles.backdrop} onPress={onCancel} />
+        <Pressable style={styles.backdrop} onPress={handleCancel} disabled={saving} />
         {visible ? (
           <BoardBatteryEditorModalContent
             batteryMode={batteryMode}
@@ -49,6 +56,7 @@ export function BoardBatteryEditorModal({
             parallelCount={parallelCount}
             manualMinVoltage={manualMinVoltage}
             manualMaxVoltage={manualMaxVoltage}
+            saving={saving}
             onSave={onSave}
           />
         ) : null}
@@ -64,6 +72,7 @@ function BoardBatteryEditorModalContent({
   parallelCount,
   manualMinVoltage,
   manualMaxVoltage,
+  saving = false,
   onSave,
 }: Omit<BoardBatteryEditorModalProps, 'visible' | 'onCancel'>) {
   const [draftBatteryMode, setDraftBatteryMode] = useState(batteryMode)
@@ -72,6 +81,16 @@ function BoardBatteryEditorModalContent({
   const [draftParallelCount, setDraftParallelCount] = useState(parallelCount)
   const [draftManualMinVoltage, setDraftManualMinVoltage] = useState(manualMinVoltage)
   const [draftManualMaxVoltage, setDraftManualMaxVoltage] = useState(manualMaxVoltage)
+
+  const canSave =
+    buildBatteryConfig(
+      draftBatteryMode,
+      draftCellPresetId,
+      draftSeriesCount,
+      draftParallelCount,
+      draftManualMinVoltage,
+      draftManualMaxVoltage,
+    ) !== null
 
   return (
     <View style={styles.card}>
@@ -92,6 +111,8 @@ function BoardBatteryEditorModalContent({
       />
       <Button
         label="Save"
+        loading={saving}
+        disabled={!canSave}
         onPress={() =>
           onSave({
             batteryMode: draftBatteryMode,

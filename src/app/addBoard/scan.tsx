@@ -36,19 +36,26 @@ export default function AddBoardScanScreen() {
 
   const handleSelect = (device: ScannedDevice) => {
     stopScan()
-    router.push({
-      pathname: routes.addBoardDetails,
-      params: { boardId, step: step ?? '1', bleId: device.id, bleName: device.name },
-    })
+    if (boardId) {
+      router.push({
+        pathname: routes.editBoard,
+        params: { boardId, bleId: device.id, bleName: device.name },
+      })
+    } else {
+      router.push({
+        pathname: routes.addBoard,
+        params: { step: step ?? '1', bleId: device.id, bleName: device.name },
+      })
+    }
   }
 
   const handleSkip = () => {
     stopScan()
     if (boardId) {
-      router.push({ pathname: routes.addBoardDetails, params: { boardId } })
+      router.push({ pathname: routes.editBoard, params: { boardId } })
       return
     }
-    router.push({ pathname: routes.addBoardDetails, params: { step: step ?? '1' } })
+    router.push({ pathname: routes.addBoard, params: { step: step ?? '1' } })
   }
 
   return (

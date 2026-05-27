@@ -84,7 +84,7 @@ export function BoardSelectorSheet({
                 onPress={(e) => {
                   e.stopPropagation()
                   onClose()
-                  router.push({ pathname: routes.addBoardDetails, params: { boardId: board.id } })
+                  router.push({ pathname: routes.editBoard, params: { boardId: board.id } })
                 }}
                 hitSlop={8}
               >

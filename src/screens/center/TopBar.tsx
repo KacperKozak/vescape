@@ -88,7 +88,7 @@ export function TopBar({
             disabled={!activeBoard}
             onPress={() => {
               if (!activeBoard) return
-              router.push({ pathname: routes.addBoardDetails, params: { boardId: activeBoard.id } })
+              router.push({ pathname: routes.editBoard, params: { boardId: activeBoard.id } })
             }}
           >
             <PencilSimpleIcon size={14} color={activeBoard ? '#e2e8f0' : '#64748b'} weight="bold" />
