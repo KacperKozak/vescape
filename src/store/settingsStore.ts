@@ -11,6 +11,8 @@ const DEFAULTS: AppSettings = {
   movingSpeedThresholdKmh: 3,
   freeSpinMaxSpeedDeltaKmh: 12,
   freeSpinStationaryBoardCapKmh: 15,
+  mapStyleKey: 'onedark',
+  mapNavigationMode: 'northUp',
 }
 
 interface SettingsState extends AppSettings {

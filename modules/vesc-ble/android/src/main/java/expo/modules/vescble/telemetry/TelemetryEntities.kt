@@ -326,6 +326,8 @@ data class AppSettings(
   val movingSpeedThresholdKmh: Double = 3.0,
   val freeSpinMaxSpeedDeltaKmh: Double = DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH,
   val freeSpinStationaryBoardCapKmh: Double = DEFAULT_FREE_SPIN_STATIONARY_BOARD_CAP_KMH,
+  val mapStyleKey: String = "onedark",
+  val mapNavigationMode: String = "northUp",
 )
 
 @Entity(

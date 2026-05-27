@@ -393,6 +393,8 @@ export interface AppSettings {
   movingSpeedThresholdKmh: number
   freeSpinMaxSpeedDeltaKmh: number
   freeSpinStationaryBoardCapKmh: number
+  mapStyleKey: 'onedark' | 'outdoors' | 'satellite' | 'mapy'
+  mapNavigationMode: 'northUp' | 'freeRotate'
 }
 
 export interface DiagnosticStatus {

@@ -1,13 +1,13 @@
 import { create } from 'zustand'
 
-import type { MapStyleKey } from '@/constants/mapStyles'
 import type { CenterViewState } from '@/screens/center/centerViewState'
+
+export type MapSelector = 'navigation' | 'style' | null
 
 interface CenterScreenState {
   mode: CenterViewState
   historySheetVisible: boolean
-  mapStyleKey: MapStyleKey
-  rotationLocked: boolean
+  mapSelector: MapSelector
   perspectiveEnabled: boolean
   seekTimeMs: number | null
 }
@@ -19,8 +19,8 @@ interface CenterScreenActions {
   enterWeather: () => void
   enterHistory: () => void
   setHistorySheetVisible: (visible: boolean) => void
-  setMapStyleKey: (key: MapStyleKey) => void
-  setRotationLocked: (locked: boolean | ((prev: boolean) => boolean)) => void
+  setMapSelector: (selector: MapSelector) => void
+  dismissMapSelector: () => void
   setPerspectiveEnabled: (enabled: boolean) => void
   setSeekTimeMs: (timeMs: number | null) => void
 }
@@ -28,8 +28,7 @@ interface CenterScreenActions {
 const initialState: CenterScreenState = {
   mode: 'telemetry',
   historySheetVisible: false,
-  mapStyleKey: 'onedark',
-  rotationLocked: true,
+  mapSelector: null,
   perspectiveEnabled: true,
   seekTimeMs: null,
 }
@@ -42,33 +41,31 @@ export const useCenterScreenStore = create<CenterScreenState & CenterScreenActio
   },
 
   enterTelemetry() {
-    set({ mode: 'telemetry', historySheetVisible: false, seekTimeMs: null })
+    set({ mode: 'telemetry', historySheetVisible: false, mapSelector: null, seekTimeMs: null })
   },
 
   enterMap() {
-    set({ mode: 'map' })
+    set({ mode: 'map', mapSelector: null })
   },
 
   enterWeather() {
-    set({ mode: 'weather' })
+    set({ mode: 'weather', mapSelector: null })
   },
 
   enterHistory() {
-    set({ mode: 'history' })
+    set({ mode: 'history', mapSelector: null })
   },
 
   setHistorySheetVisible(visible) {
     set({ historySheetVisible: visible })
   },
 
-  setMapStyleKey(key) {
-    set({ mapStyleKey: key })
+  setMapSelector(selector) {
+    set((state) => (state.mapSelector === selector ? state : { mapSelector: selector }))
   },
 
-  setRotationLocked(locked) {
-    set((state) => ({
-      rotationLocked: typeof locked === 'function' ? locked(state.rotationLocked) : locked,
-    }))
+  dismissMapSelector() {
+    set((state) => (state.mapSelector === null ? state : { mapSelector: null }))
   },
 
   setPerspectiveEnabled(enabled) {

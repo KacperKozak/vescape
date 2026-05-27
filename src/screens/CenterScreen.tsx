@@ -99,6 +99,7 @@ export function CenterScreen({
         onPerspectiveChange={controller.setPerspectiveEnabled}
         onHeadingChange={controller.setHeading}
         onLongPressTarget={controller.setTargetLocation}
+        onMapInteraction={controller.dismissMapSelector}
         targetLocation={controller.targetLocation}
         onClearTarget={controller.clearTargetLocation}
         weatherActive={controller.weatherActive}
@@ -121,13 +122,13 @@ export function CenterScreen({
         }}
         map={{
           heading: controller.heading,
-          rotationLocked: controller.rotationLocked,
-          targetLocation: controller.targetLocation,
-          clearTargetLocation: controller.clearTargetLocation,
           mapStyleKey: controller.mapStyleKey,
           setMapStyleKey: controller.setMapStyleKey,
+          mapNavigationMode: controller.mapNavigationMode,
+          setMapNavigationMode: controller.setMapNavigationMode,
+          mapSelector: controller.mapSelector,
+          setMapSelector: controller.setMapSelector,
           enterMapFocus: controller.handleMapFocus,
-          setRotationLocked: controller.setRotationLocked,
           exitMapFocus: controller.exitMapFocus,
           enterWeather: controller.enterWeatherMode,
           exitWeather: controller.exitWeatherMode,

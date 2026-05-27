@@ -30,8 +30,7 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
   const {
     mode,
     historySheetVisible,
-    mapStyleKey,
-    rotationLocked,
+    mapSelector,
     perspectiveEnabled,
     seekTimeMs,
     enterTelemetry,
@@ -39,16 +38,15 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
     enterWeather,
     enterHistory,
     setHistorySheetVisible,
-    setMapStyleKey,
-    setRotationLocked,
+    setMapSelector,
+    dismissMapSelector,
     setPerspectiveEnabled,
     setSeekTimeMs,
   } = useCenterScreenStore(
     useShallow((s) => ({
       mode: s.mode,
       historySheetVisible: s.historySheetVisible,
-      mapStyleKey: s.mapStyleKey,
-      rotationLocked: s.rotationLocked,
+      mapSelector: s.mapSelector,
       perspectiveEnabled: s.perspectiveEnabled,
       seekTimeMs: s.seekTimeMs,
       enterTelemetry: s.enterTelemetry,
@@ -56,8 +54,8 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
       enterWeather: s.enterWeather,
       enterHistory: s.enterHistory,
       setHistorySheetVisible: s.setHistorySheetVisible,
-      setMapStyleKey: s.setMapStyleKey,
-      setRotationLocked: s.setRotationLocked,
+      setMapSelector: s.setMapSelector,
+      dismissMapSelector: s.dismissMapSelector,
       setPerspectiveEnabled: s.setPerspectiveEnabled,
       setSeekTimeMs: s.setSeekTimeMs,
     })),
@@ -68,6 +66,9 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
   const refreshWeather = useWeatherStore((s) => s.refresh)
   const lastGpsLatitude = useSettingsStore((s) => s.lastGpsLatitude)
   const lastGpsLongitude = useSettingsStore((s) => s.lastGpsLongitude)
+  const mapStyleKey = useSettingsStore((s) => s.mapStyleKey)
+  const mapNavigationMode = useSettingsStore((s) => s.mapNavigationMode)
+  const setSetting = useSettingsStore((s) => s.set)
   const {
     sessions,
     selectedSession,
@@ -128,6 +129,7 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
 
   const weatherActive = mode === 'weather'
   const historyActive = mode === 'history'
+  const rotationLocked = mapNavigationMode === 'northUp'
   const previousRide = getPreviousRideSession(sessions, selectedSession)
   const nextRide = getNextRideSession(sessions, selectedSession)
   const canPreviousRide = !!previousRide || historyHasMore
@@ -242,6 +244,20 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
     if (mode === 'telemetry') enterMap()
   }, [enterMap, mode])
 
+  const setMapStyleKey = useCallback(
+    (key: typeof mapStyleKey) => {
+      void setSetting('mapStyleKey', key)
+    },
+    [setSetting],
+  )
+
+  const setMapNavigationMode = useCallback(
+    (nextMode: typeof mapNavigationMode) => {
+      void setSetting('mapNavigationMode', nextMode)
+    },
+    [setSetting],
+  )
+
   useFocusEffect(
     useCallback(() => {
       const handler = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -279,10 +295,14 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
     historyActive,
     mapStyleKey,
     setMapStyleKey,
+    mapNavigationMode,
+    setMapNavigationMode,
+    mapSelector,
+    setMapSelector,
+    dismissMapSelector,
     heading,
     setHeading,
     rotationLocked,
-    setRotationLocked,
     perspectiveEnabled,
     setPerspectiveEnabled,
     targetLocation,

@@ -1,5 +1,5 @@
 import Mapbox from '@rnmapbox/maps'
-import { MapTrifoldIcon, MoonStarsIcon, MountainsIcon, PlanetIcon } from 'phosphor-react-native'
+import { MoonStarsIcon, MountainsIcon, PlanetIcon, SunIcon } from 'phosphor-react-native'
 
 export const MAP_DEFAULTS = {
   fallbackCoordinate: [15.0, 54.0] as [number, number],
@@ -33,14 +33,15 @@ export const BLANK_STYLE = JSON.stringify({
 
 export const MAP_STYLES = [
   { key: 'onedark', label: 'One Dark', styleURL: null, Icon: MoonStarsIcon },
-  { key: 'outdoors', label: 'Outdoors', styleURL: Mapbox.StyleURL.Outdoors, Icon: MountainsIcon },
+  { key: 'outdoors', label: 'Outdoors', styleURL: Mapbox.StyleURL.Outdoors, Icon: SunIcon },
   {
     key: 'satellite',
     label: 'Satellite',
     styleURL: Mapbox.StyleURL.SatelliteStreet,
     Icon: PlanetIcon,
   },
-  { key: 'mapy', label: 'Mapy.cz', styleURL: null, Icon: MapTrifoldIcon },
+  { key: 'mapy', label: 'Mapy.cz', styleURL: null, Icon: MountainsIcon },
 ] as const
 
 export type MapStyleKey = (typeof MAP_STYLES)[number]['key']
+export type MapNavigationMode = 'northUp' | 'freeRotate'

@@ -363,6 +363,7 @@ interface CenterMapProps {
   onPerspectiveChange: (enabled: boolean) => void
   onHeadingChange: (heading: number) => void
   onLongPressTarget: (target: { latitude: number; longitude: number }) => void
+  onMapInteraction: () => void
   targetLocation: { latitude: number; longitude: number } | null
   onClearTarget: () => void
   weatherActive: boolean
@@ -387,6 +388,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
     onPerspectiveChange,
     onHeadingChange,
     onLongPressTarget,
+    onMapInteraction,
     targetLocation,
     weatherActive,
     onClearTarget,
@@ -530,10 +532,11 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
 
   const handleLongPress = useCallback(
     (feature: { geometry: { coordinates: number[] } }) => {
+      onMapInteraction()
       const [longitude, latitude] = feature.geometry.coordinates
       onLongPressTarget({ latitude, longitude })
     },
-    [onLongPressTarget],
+    [onLongPressTarget, onMapInteraction],
   )
 
   const handleCameraChanged = useCallback(
@@ -556,6 +559,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
         setCameraReady(true)
       }
       if (state.gestures.isGestureActive) {
+        onMapInteraction()
         setFollowGps(false)
         const dynamicPitch = getPitchForZoom(state.properties.zoom, perspectiveEnabled)
         if (Math.abs(state.properties.pitch - dynamicPitch) > 0.5) {
@@ -570,6 +574,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
       currentCameraRef,
       gpsCamera.centerCoordinate,
       onHeadingChange,
+      onMapInteraction,
       perspectiveEnabled,
       setFollowGps,
     ],
@@ -591,7 +596,10 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
   }
 
   return (
-    <Animated.View style={[styles.mapContainer, { opacity: mapOpacity }]}>
+    <Animated.View
+      style={[styles.mapContainer, { opacity: mapOpacity }]}
+      onTouchStart={onMapInteraction}
+    >
       <Mapbox.MapView
         style={styles.map}
         styleURL={useCustomJSON ? undefined : selectedMapStyle.styleURL}
@@ -603,6 +611,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
         logoEnabled={false}
         attributionEnabled={false}
         onDidFinishLoadingMap={handleMapLoaded}
+        onPress={onMapInteraction}
         onLongPress={handleLongPress}
         onCameraChanged={handleCameraChanged}
       >

@@ -9,6 +9,12 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 
+internal fun validMapStyleKey(value: Any?): String? =
+  (value as? String)?.takeIf { it in setOf("onedark", "outdoors", "satellite", "mapy") }
+
+internal fun validMapNavigationMode(value: Any?): String? =
+  (value as? String)?.takeIf { it in setOf("northUp", "freeRotate") }
+
 class AppDataRepository private constructor(private val context: Context) {
   private val dao = TelemetryDatabase.get(context).telemetryDao()
 
@@ -82,6 +88,8 @@ class AppDataRepository private constructor(private val context: Context) {
       movingSpeedThresholdKmh = req("movingSpeedThresholdKmh", 3.0) { (it as? Number)?.toDouble() },
       freeSpinMaxSpeedDeltaKmh = req("freeSpinMaxSpeedDeltaKmh", DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH) { (it as? Number)?.toDouble() },
       freeSpinStationaryBoardCapKmh = req("freeSpinStationaryBoardCapKmh", DEFAULT_FREE_SPIN_STATIONARY_BOARD_CAP_KMH) { (it as? Number)?.toDouble() },
+      mapStyleKey = req("mapStyleKey", "onedark", ::validMapStyleKey),
+      mapNavigationMode = req("mapNavigationMode", "northUp", ::validMapNavigationMode),
     )
 
     if (badKeys.isNotEmpty()) {
@@ -107,6 +115,10 @@ class AppDataRepository private constructor(private val context: Context) {
         ((value as? Number)?.toDouble() ?: return@withContext).coerceAtLeast(0.0)
       "freeSpinMaxSpeedDeltaKmh", "freeSpinStationaryBoardCapKmh" ->
         ((value as? Number)?.toDouble() ?: return@withContext).coerceAtLeast(0.0)
+      "mapStyleKey" ->
+        validMapStyleKey(value) ?: return@withContext
+      "mapNavigationMode" ->
+        validMapNavigationMode(value) ?: return@withContext
       else -> return@withContext
     }
     val normalizedKey = when (key) {
@@ -124,6 +136,8 @@ class AppDataRepository private constructor(private val context: Context) {
         "movingSpeedThresholdKmh" -> d.movingSpeedThresholdKmh
         "freeSpinMaxSpeedDeltaKmh" -> d.freeSpinMaxSpeedDeltaKmh
         "freeSpinStationaryBoardCapKmh" -> d.freeSpinStationaryBoardCapKmh
+        "mapStyleKey" -> d.mapStyleKey
+        "mapNavigationMode" -> d.mapNavigationMode
         else -> null
       }
     }
@@ -320,6 +334,8 @@ fun AppSettings.toMap(): Map<String, Any?> = mapOf(
   "movingSpeedThresholdKmh" to movingSpeedThresholdKmh,
   "freeSpinMaxSpeedDeltaKmh" to freeSpinMaxSpeedDeltaKmh,
   "freeSpinStationaryBoardCapKmh" to freeSpinStationaryBoardCapKmh,
+  "mapStyleKey" to mapStyleKey,
+  "mapNavigationMode" to mapNavigationMode,
 )
 
 private fun encodeSettingJson(value: Any?): String {
