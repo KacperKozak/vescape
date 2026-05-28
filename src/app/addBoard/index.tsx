@@ -1,18 +1,17 @@
 import { useState } from 'react'
-import { KeyboardAvoidingView, Platform, ScrollView } from 'react-native'
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, useLocalSearchParams } from 'expo-router'
 import { useShallow } from 'zustand/react/shallow'
 import type { BatteryConfig } from 'vesc-ble'
 
+import { AddBoardWizard } from '@/components/AddBoardWizard'
 import {
-  AddBoardWizard,
   type BatteryMode,
-  boardSetupStyles,
   buildBatteryConfig,
   getBatterySummary,
   parseVoltage,
-} from '@/boards/boardSetup'
+} from '@/lib/boardSetup'
 import { DEFAULT_BATTERY_CONFIG, deriveBatteryConfig } from '@/lib/battery'
 import { routes } from '@/navigation/routes'
 import { useBoardStore } from '@/store/boardStore'
@@ -91,14 +90,11 @@ export default function AddBoardScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={boardSetupStyles.flex}
+      style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <SafeAreaView style={boardSetupStyles.container} edges={['bottom']}>
-        <ScrollView
-          contentContainerStyle={boardSetupStyles.content}
-          keyboardShouldPersistTaps="handled"
-        >
+      <SafeAreaView style={styles.container} edges={['bottom']}>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <AddBoardWizard
             step={activeWizardStep}
             name={name}
@@ -131,3 +127,17 @@ export default function AddBoardScreen() {
     </KeyboardAvoidingView>
   )
 }
+
+const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+    backgroundColor: '#111827',
+  },
+  container: {
+    flex: 1,
+  },
+  content: {
+    padding: 16,
+    gap: 10,
+  },
+})

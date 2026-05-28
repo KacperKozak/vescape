@@ -1,5 +1,5 @@
 import { useCallback, useLayoutEffect, useState } from 'react'
-import { KeyboardAvoidingView, Platform, ScrollView } from 'react-native'
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, useLocalSearchParams, useNavigation } from 'expo-router'
 import { TrashIcon } from 'phosphor-react-native'
@@ -8,8 +8,8 @@ import { useShallow } from 'zustand/react/shallow'
 import { BoardBatteryEditorModal } from '@/components/BoardBatteryEditorModal'
 import { BoardInfoEditorModal } from '@/components/BoardInfoEditorModal'
 import { ConfirmModal } from '@/components/ConfirmModal'
+import { EditBoardSettings } from '@/components/EditBoardSettings'
 import { IconButton } from '@/components/IconButton'
-import { boardSetupStyles, EditBoardSettings } from '@/boards/boardSetup'
 import { useEditBoardForm } from '@/boards/useEditBoardForm'
 import { routes } from '@/navigation/routes'
 import { useBoardStore } from '@/store/boardStore'
@@ -48,7 +48,7 @@ export default function EditBoardScreen() {
           icon={TrashIcon}
           destructive
           onPress={() => setRemoveConfirmVisible(true)}
-          style={boardSetupStyles.headerAction}
+          style={styles.headerAction}
         />
       ),
     })
@@ -77,14 +77,11 @@ export default function EditBoardScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={boardSetupStyles.flex}
+      style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <SafeAreaView style={boardSetupStyles.container} edges={['bottom']}>
-        <ScrollView
-          contentContainerStyle={boardSetupStyles.content}
-          keyboardShouldPersistTaps="handled"
-        >
+      <SafeAreaView style={styles.container} edges={['bottom']}>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <EditBoardSettings
             name={form.name}
             description={form.description}
@@ -139,3 +136,20 @@ export default function EditBoardScreen() {
     </KeyboardAvoidingView>
   )
 }
+
+const styles = StyleSheet.create({
+  flex: {
+    flex: 1,
+    backgroundColor: '#111827',
+  },
+  container: {
+    flex: 1,
+  },
+  content: {
+    padding: 16,
+    gap: 10,
+  },
+  headerAction: {
+    marginRight: 4,
+  },
+})

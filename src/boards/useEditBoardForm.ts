@@ -6,7 +6,7 @@ import {
   buildBatteryConfig,
   getBatterySummary,
   parseVoltage,
-} from '@/boards/boardSetup'
+} from '@/lib/boardSetup'
 import { DEFAULT_BATTERY_CONFIG, deriveBatteryConfig } from '@/lib/battery'
 import type { Board } from '@/store/boardStore'
 

@@ -4,7 +4,7 @@ import type { BatteryConfig } from 'vesc-ble'
 
 import { BoardBatteryForm } from '@/components/BoardBatteryForm'
 import { Button } from '@/components/Button'
-import { buildBatteryConfig } from '@/boards/boardSetup'
+import { buildBatteryConfig } from '@/lib/boardSetup'
 
 type BatteryMode = BatteryConfig['mode']
 
