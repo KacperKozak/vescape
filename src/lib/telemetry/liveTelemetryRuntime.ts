@@ -11,6 +11,7 @@ import {
   summarizeLiveStatus,
   type LiveStatusSummary,
 } from './liveMetricHistory'
+import { finite, absolute } from '@/helpers/finite'
 import { useSettingsStore } from '@/store/settingsStore'
 
 interface LiveTelemetryValues {
@@ -60,16 +61,6 @@ function liveHistoryWindowMs(): number {
       : DEFAULT_LIVE_HISTORY_MINUTES
   return safeMinutes * 60 * 1000
 }
-
-function finite(value: number | null | undefined): number | null {
-  return value == null || !Number.isFinite(value) ? null : value
-}
-
-function absolute(value: number | null | undefined): number | null {
-  const finiteValue = finite(value)
-  return finiteValue == null ? null : Math.abs(finiteValue)
-}
-
 function dutyPercent(value: number | null | undefined): number | null {
   const finiteValue = absolute(value)
   return finiteValue == null ? null : finiteValue * 100

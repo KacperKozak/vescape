@@ -4,6 +4,8 @@ import {
   type RefloatConfigSnapshot,
 } from 'vesc-ble'
 
+import { errorMessage } from '@/helpers/error'
+
 type TuneSnapshotStatus = 'idle' | 'loading' | 'ready' | 'error'
 
 interface TuneSnapshotState {
@@ -17,12 +19,6 @@ interface TuneSnapshotActions {
   setSnapshot: (snapshot: RefloatConfigSnapshot | null) => void
   clear: () => void
 }
-
-function errorMessage(error: unknown): string {
-  if (error instanceof Error && error.message) return error.message
-  return 'Unable to read Refloat config.'
-}
-
 let readInFlight: Promise<RefloatConfigSnapshot | null> | null = null
 let generation = 0
 
@@ -45,7 +41,11 @@ export const useTuneSnapshotStore = create<TuneSnapshotState & TuneSnapshotActio
       })
       .catch((error) => {
         if (readGeneration === generation) {
-          set({ status: 'error', snapshot: null, error: errorMessage(error) })
+          set({
+            status: 'error',
+            snapshot: null,
+            error: errorMessage(error, 'Unable to read Refloat config.'),
+          })
         }
         return null
       })

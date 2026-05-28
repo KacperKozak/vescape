@@ -16,6 +16,7 @@ import {
   type TuneHistoryEntry,
 } from 'vesc-ble'
 
+import { errorMessage } from '@/helpers/error'
 import { useTuneSnapshotStore } from '@/store/tuneSnapshotStore'
 
 export type { TuneProfile, TuneProfileFieldValue } from 'vesc-ble'
@@ -65,11 +66,6 @@ interface TuneProfileActions {
   saveActiveProfile: () => Promise<TuneProfile | null>
   syncToBoard: () => Promise<void>
   clear: () => void
-}
-
-function errorMessage(error: unknown): string {
-  if (error instanceof Error && error.message) return error.message
-  return 'Unable to load tune profiles.'
 }
 
 function sameFieldValue(
@@ -179,7 +175,7 @@ export const useTuneProfileStore = create<TuneProfileState & TuneProfileActions>
       if (requestId !== profileLoadRequestId || get().activeBoardId !== boardId) {
         return get().profiles
       }
-      set({ loading: false, error: errorMessage(error) })
+      set({ loading: false, error: errorMessage(error, 'Unable to load tune profiles.') })
       throw error
     }
   },
@@ -209,7 +205,7 @@ export const useTuneProfileStore = create<TuneProfileState & TuneProfileActions>
       })
       return profile
     } catch (error) {
-      set({ loading: false, error: errorMessage(error) })
+      set({ loading: false, error: errorMessage(error, 'Unable to load tune profiles.') })
       throw error
     }
   },
@@ -250,7 +246,7 @@ export const useTuneProfileStore = create<TuneProfileState & TuneProfileActions>
       })
       return profile
     } catch (error) {
-      set({ error: errorMessage(error) })
+      set({ error: errorMessage(error, 'Unable to load tune profiles.') })
       return null
     }
   },
@@ -264,7 +260,7 @@ export const useTuneProfileStore = create<TuneProfileState & TuneProfileActions>
       }))
       return updated
     } catch (error) {
-      set({ error: errorMessage(error) })
+      set({ error: errorMessage(error, 'Unable to load tune profiles.') })
       return null
     }
   },
@@ -287,7 +283,7 @@ export const useTuneProfileStore = create<TuneProfileState & TuneProfileActions>
         }
       })
     } catch (error) {
-      set({ error: errorMessage(error) })
+      set({ error: errorMessage(error, 'Unable to load tune profiles.') })
     }
   },
 
@@ -295,7 +291,7 @@ export const useTuneProfileStore = create<TuneProfileState & TuneProfileActions>
     try {
       return await nativeGetProfileHistory(profileId)
     } catch (error) {
-      set({ error: errorMessage(error) })
+      set({ error: errorMessage(error, 'Unable to load tune profiles.') })
       return []
     }
   },
@@ -318,7 +314,7 @@ export const useTuneProfileStore = create<TuneProfileState & TuneProfileActions>
       })
       return restored
     } catch (error) {
-      set({ error: errorMessage(error) })
+      set({ error: errorMessage(error, 'Unable to load tune profiles.') })
       return null
     }
   },
@@ -327,7 +323,7 @@ export const useTuneProfileStore = create<TuneProfileState & TuneProfileActions>
     try {
       return await nativeCopyProfileToBoard(profileId, targetBoardId, newName)
     } catch (error) {
-      set({ error: errorMessage(error) })
+      set({ error: errorMessage(error, 'Unable to load tune profiles.') })
       return null
     }
   },
@@ -440,7 +436,7 @@ export const useTuneProfileStore = create<TuneProfileState & TuneProfileActions>
       })
       return saved
     } catch (error) {
-      set({ saving: false, error: errorMessage(error) })
+      set({ saving: false, error: errorMessage(error, 'Unable to load tune profiles.') })
       throw error
     }
   },
@@ -455,7 +451,7 @@ export const useTuneProfileStore = create<TuneProfileState & TuneProfileActions>
       get().setBoardSnapshot(snapshot)
       set({ syncing: false })
     } catch (error) {
-      set({ syncing: false, error: errorMessage(error) })
+      set({ syncing: false, error: errorMessage(error, 'Unable to load tune profiles.') })
       throw error
     }
   },

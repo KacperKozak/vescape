@@ -3,6 +3,7 @@ import type { TelemetryEvent } from 'vesc-ble'
 
 import { useBleStore } from '@/store/bleStore'
 import type { ExcludedRange } from '@/components/charts/chartMath'
+import { finite, absolute } from '@/helpers/finite'
 import { liveTelemetryRuntime } from '@/lib/telemetry/liveTelemetryRuntime'
 
 export interface LiveMetricPoint {
@@ -11,15 +12,6 @@ export interface LiveMetricPoint {
 }
 
 type TelemetrySelector = (sample: TelemetryEvent) => number | null | undefined
-
-function finite(value: number | null | undefined): number | null {
-  return value == null || !Number.isFinite(value) ? null : value
-}
-
-function absolute(value: number | null | undefined): number | null {
-  const v = finite(value)
-  return v == null ? null : Math.abs(v)
-}
 
 function projectMetric(telemetry: TelemetryEvent[], pick: TelemetrySelector): LiveMetricPoint[] {
   const points: LiveMetricPoint[] = []
