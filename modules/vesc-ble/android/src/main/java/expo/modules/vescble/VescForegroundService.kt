@@ -38,7 +38,7 @@ import kotlin.math.max
 import kotlin.math.roundToInt
 
 internal const val VESC_SESSION_TAG = "VescSession"
-private const val CHANNEL_ID = "vesc_monitoring_v4"
+private const val CHANNEL_ID = "vesc_monitoring_v5"
 private const val NOTIFICATION_ID = 1001
 private const val ACTION_START_SESSION = "expo.modules.vescble.ACTION_START_SESSION"
 private const val ACTION_STOP_SESSION = "expo.modules.vescble.ACTION_STOP_SESSION"
@@ -763,7 +763,10 @@ class VescForegroundService : Service() {
                 if (firedAlerts.isNotEmpty()) baseEventMap["firedAlerts"] = firedAlerts
                 baseEventMap["generation"] = generation
                 val eventMap = appendLiveTelemetry(parsed, baseEventMap)
-                showNotification(formatNotificationText(parsed))
+                showNotification(
+                    formatNotificationText(parsed),
+                    shortCriticalText = formatBatteryVoltageChipText(parsed),
+                )
                 emitEvent("onTelemetry", eventMap)
                 recordTelemetry(parsed)
             }
@@ -2034,12 +2037,15 @@ class VescForegroundService : Service() {
         telemetryStore?.applySettings(settings)
     }
 
-    private fun showNotification(text: String = "Monitoring board in background") {
-        notificationController.show(text, boardConfig?.deviceName, appInForeground)
+    private fun showNotification(
+        text: String = "Monitoring board in background",
+        shortCriticalText: String? = null,
+    ) {
+        notificationController.show(text, boardConfig?.deviceName, appInForeground, shortCriticalText)
     }
 
     private fun buildNotification(text: String = "Monitoring board in background"): Notification {
-        return notificationController.build(text, boardConfig?.deviceName, appInForeground)
+        return notificationController.build(text, boardConfig?.deviceName, appInForeground, null)
     }
 
     private fun closeAppTask() {
@@ -2088,6 +2094,9 @@ class VescForegroundService : Service() {
             values.batteryVoltage,
         )
     }
+
+    private fun formatBatteryVoltageChipText(values: RefloatTelemetry): String =
+        if (values.hasFault) "FAULT" else String.format("%.1fV", values.batteryVoltage)
 
     private fun formatGpsNotificationText(location: LocationSnapshot): String {
         val speedKmh = (location.speedMps ?: 0.0) * 3.6
