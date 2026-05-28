@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react'
 import type { View } from 'react-native'
 import type { RefloatConfigField, TuneProfile, TuneProfileFieldValue } from 'vesc-ble'
 
-import type { FieldEditorTarget } from '@/components/tune/FieldEditorPopover'
+import type { FieldEditorTarget } from '@/components/domain/tune/FieldEditorPopover'
 import type { Board } from '@/store/boardStore'
 import { useTuneProfileStore } from '@/store/tuneProfileStore'
 import { formatTuneValue } from '@/lib/tune/fields'

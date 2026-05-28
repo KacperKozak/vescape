@@ -31,7 +31,7 @@ import {
   getAdjacentMonths,
   selectInitialMonth,
 } from '@/lib/profile/profileStats'
-import { Select, type SelectOption } from '@/components/Select'
+import { Select, type SelectOption } from '@/components/ui/forms/Select'
 import { theme } from '@/constants/theme'
 
 const EMPTY_STATS: ProfileStats = {

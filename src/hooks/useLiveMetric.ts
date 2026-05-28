@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import type { TelemetryEvent } from 'vesc-ble'
 
 import { useBleStore } from '@/store/bleStore'
-import type { ExcludedRange } from '@/components/charts/chartMath'
+import type { ExcludedRange } from '@/components/ui/charts/chartMath'
 import { finite, absolute } from '@/helpers/finite'
 import { liveTelemetryRuntime } from '@/lib/telemetry/liveTelemetryRuntime'
 

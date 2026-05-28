@@ -19,9 +19,9 @@ import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'r
 import { Animated, StyleSheet, Text, View } from 'react-native'
 import type { LocationEvent } from 'vesc-ble'
 
-import { InfoModal } from '@/components/InfoModal'
-import { MapPin } from '@/components/map/MapPin'
-import { RainViewerOverlay } from '@/components/map/RainViewerOverlay'
+import { InfoModal } from '@/components/ui/modals/InfoModal'
+import { MapPin } from '@/components/domain/map/MapPin'
+import { RainViewerOverlay } from '@/components/domain/map/RainViewerOverlay'
 import { MAPBOX_ACCESS_TOKEN, MAPY_TILE_URL_TEMPLATE } from '@/config/mapy'
 import {
   BLANK_STYLE,

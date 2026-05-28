@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { CheckCircleIcon, TestTubeIcon, WarningCircleIcon } from 'phosphor-react-native'
 import { getDiagnosticStatus, reportDiagnosticTest, type DiagnosticStatus } from 'vesc-ble'
 
-import { reportUiError } from '@/diagnostics/uiDiagnostics'
+import { reportUiError } from '@/lib/uiDiagnostics'
 import { theme } from '@/constants/theme'
 
 export default function DiagnosticSettingsScreen() {

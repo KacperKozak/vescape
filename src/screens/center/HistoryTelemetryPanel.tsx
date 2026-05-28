@@ -3,19 +3,19 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { CaretDownIcon, CaretLeftIcon, CaretRightIcon } from 'phosphor-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
-import { TelemetryLineChart } from '@/components/charts/TelemetryLineChart'
+import { TelemetryLineChart } from '@/components/ui/charts/TelemetryLineChart'
 import {
   type ExcludedRange,
   type TelemetryChartPoint,
   computeAutoRange,
   toExcludedRanges,
-} from '@/components/charts/chartMath'
+} from '@/components/ui/charts/chartMath'
 import {
   OPTIONAL_CHART_METRICS,
   toggleOptionalChartMetric,
   type OptionalChartMetric,
-} from '@/components/history/historyChartMetrics'
-import { IconButton } from '@/components/IconButton'
+} from '@/components/domain/history/historyChartMetrics'
+import { IconButton } from '@/components/ui/base/IconButton'
 import { telemetry } from '@/constants/telemetry'
 import { downsampleTimeSeries, findNearestSampleIndexByTime } from '@/lib/history/playback'
 import { dutyPercent, fmtDutyPercent } from '@/helpers/format'

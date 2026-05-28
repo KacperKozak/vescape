@@ -14,15 +14,15 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation } from 'expo-router'
 
-import { Button } from '@/components/Button'
-import { ConfirmModal } from '@/components/ConfirmModal'
+import { Button } from '@/components/ui/base/Button'
+import { ConfirmModal } from '@/components/ui/modals/ConfirmModal'
 import { MAPBOX_ACCESS_TOKEN } from '@/config/mapy'
 import { MAP_DEFAULTS } from '@/constants/mapStyles'
 import { ONE_DARK_MAP_STYLE } from '@/constants/oneDarkMapStyle'
 import { theme } from '@/constants/theme'
 import { BriefcaseIcon, HouseIcon, PencilSimpleIcon, TrashIcon } from 'phosphor-react-native'
 import type { Icon } from 'phosphor-react-native'
-import { HPill, HPillAdd, HPillDot, HPillMenuItem, HPills } from '@/components/HPills'
+import { HPill, HPillAdd, HPillDot, HPillMenuItem, HPills } from '@/components/ui/menus/HPills'
 import { generateZoneId, usePrivacyZoneStore, type PrivacyZone } from '@/store/privacyZoneStore'
 import { liveTelemetryRuntime } from '@/lib/telemetry/liveTelemetryRuntime'
 

@@ -5,7 +5,7 @@ import { ArrowCounterClockwiseIcon } from 'phosphor-react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { type TuneHistoryEntry, type TuneProfileFieldValue } from 'vesc-ble'
 
-import { ConfirmModal } from '@/components/ConfirmModal'
+import { ConfirmModal } from '@/components/ui/modals/ConfirmModal'
 import { APP_TUNE_FIELD_BY_ID, formatTuneValue } from '@/lib/tune/fields'
 import { useTuneProfileStore } from '@/store/tuneProfileStore'
 import { theme } from '@/constants/theme'

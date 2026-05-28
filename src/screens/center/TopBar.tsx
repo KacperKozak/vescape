@@ -11,9 +11,9 @@ import {
 import { router } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
-import { BoardSelectorSheet } from '@/components/BoardSelectorSheet'
-import { IconButton } from '@/components/IconButton'
-import { WeatherIcon } from '@/components/weather/WeatherIcon'
+import { BoardSelectorSheet } from '@/components/domain/board/BoardSelectorSheet'
+import { IconButton } from '@/components/ui/base/IconButton'
+import { WeatherIcon } from '@/components/ui/weather/WeatherIcon'
 import { routes } from '@/navigation/routes'
 import type { Board } from '@/store/boardStore'
 import { useWeatherStore } from '@/store/weatherStore'

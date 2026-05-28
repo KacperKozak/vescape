@@ -5,7 +5,7 @@ import { router, useLocalSearchParams } from 'expo-router'
 import { useShallow } from 'zustand/react/shallow'
 import type { BatteryConfig } from 'vesc-ble'
 
-import { AddBoardWizard } from '@/components/AddBoardWizard'
+import { AddBoardWizard } from '@/components/domain/board/AddBoardWizard'
 import {
   type BatteryMode,
   buildBatteryConfig,

@@ -12,8 +12,8 @@ import { useNavigation } from 'expo-router'
 import { TrashIcon } from 'phosphor-react-native'
 import { clearDiagnosticEvents, getDiagnosticEvents, type LocalDiagnosticEvent } from 'vesc-ble'
 
-import { ConfirmModal } from '@/components/ConfirmModal'
-import { IconButton } from '@/components/IconButton'
+import { ConfirmModal } from '@/components/ui/modals/ConfirmModal'
+import { IconButton } from '@/components/ui/base/IconButton'
 import { theme } from '@/constants/theme'
 
 const PAGE_SIZE = 50

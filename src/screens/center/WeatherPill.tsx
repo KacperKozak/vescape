@@ -1,7 +1,7 @@
 import { DropIcon } from 'phosphor-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 
-import { WeatherIcon } from '@/components/weather/WeatherIcon'
+import { WeatherIcon } from '@/components/ui/weather/WeatherIcon'
 import { interaction, theme } from '@/constants/theme'
 import { weatherCodeToColor, weatherCodeToLabel } from '@/lib/weather'
 import { useMapWeather } from '@/screens/center/useMapWeather'

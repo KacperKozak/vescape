@@ -1,6 +1,6 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 
-import { WeatherIcon } from '@/components/weather/WeatherIcon'
+import { WeatherIcon } from '@/components/ui/weather/WeatherIcon'
 import { theme } from '@/constants/theme'
 import { weatherCodeToColor } from '@/lib/weather'
 import { useWeatherStore, type HourForecast } from '@/store/weatherStore'
