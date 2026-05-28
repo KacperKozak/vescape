@@ -18,13 +18,10 @@ Do **not** use `npm`, `yarn`, `npx`, or `pnpm`.
 This is a PoC, but keep it sharp:
 
 - Native owns durable truth and long-lived work; JS renders state and sends intents.
-- Design for lifecycle breaks: reloads, backgrounding, process death, and restart.
 - Prefer clear architecture over compatibility, shortcuts, or hidden assumptions.
-- Make one focused stability change at a time when isolating bugs.
-- Remove unused code when replacing a path; do not keep dead code for later.
-- Keep trivial local predicates inline with their component/module. Extract to a separate file only when logic is genuinely shared across multiple call sites. Single-use helpers belong in the same file as their consumer.
-- Do not add tests for trivial predicates that TypeScript and the surrounding behavior already
-  cover. Add tests for meaningful behavior, edge cases, contracts, or regressions.
+- Remove unused code! Not keep dead code for later.
+- No duplicate code! We do not want to repeat ourselves.
+- Do not add tests for trivial predicates. Add tests for meaningful behavior, edge cases, contracts, or regressions.
 
 ## Dir layout
 
