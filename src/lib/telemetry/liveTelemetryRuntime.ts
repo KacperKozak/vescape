@@ -12,7 +12,7 @@ import {
   type LiveStatusSummary,
 } from './liveMetricHistory'
 import { finite, absolute } from '@/helpers/finite'
-import { useSettingsStore } from '@/store/settingsStore'
+import { getLiveWindowMs } from '@/store/settingsStore'
 
 interface LiveTelemetryValues {
   speedKmh: SharedValue<number | null>
@@ -50,17 +50,6 @@ interface LiveTelemetryRuntimeOptions {
   windowMs: () => number
 }
 
-const MIN_LIVE_HISTORY_MINUTES = 1
-const DEFAULT_LIVE_HISTORY_MINUTES = 5
-
-function liveHistoryWindowMs(): number {
-  const minutes = useSettingsStore.getState().liveHistoryLimit
-  const safeMinutes =
-    Number.isFinite(minutes) && minutes >= MIN_LIVE_HISTORY_MINUTES
-      ? minutes
-      : DEFAULT_LIVE_HISTORY_MINUTES
-  return safeMinutes * 60 * 1000
-}
 function dutyPercent(value: number | null | undefined): number | null {
   const finiteValue = absolute(value)
   return finiteValue == null ? null : finiteValue * 100
@@ -220,4 +209,4 @@ export function createLiveTelemetryRuntime({
   }
 }
 
-export const liveTelemetryRuntime = createLiveTelemetryRuntime({ windowMs: liveHistoryWindowMs })
+export const liveTelemetryRuntime = createLiveTelemetryRuntime({ windowMs: getLiveWindowMs })

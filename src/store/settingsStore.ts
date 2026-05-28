@@ -21,15 +21,12 @@ interface SettingsState extends AppSettings {
   set: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => Promise<void>
 }
 
-const MIN_LIVE_HISTORY_MINUTES = 1
-
 export function useLiveWindowMs(): number {
-  const minutes = useSettingsStore((s) => s.liveHistoryLimit)
-  const safe =
-    Number.isFinite(minutes) && minutes >= MIN_LIVE_HISTORY_MINUTES
-      ? minutes
-      : DEFAULTS.liveHistoryLimit
-  return safe * 60_000
+  return useSettingsStore((s) => s.liveHistoryLimit) * 60_000
+}
+
+export function getLiveWindowMs(): number {
+  return useSettingsStore.getState().liveHistoryLimit * 60_000
 }
 
 export const useSettingsStore = create<SettingsState>((set) => ({

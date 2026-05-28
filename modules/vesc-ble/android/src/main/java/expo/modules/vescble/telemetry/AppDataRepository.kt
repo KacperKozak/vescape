@@ -15,6 +15,14 @@ internal fun validMapStyleKey(value: Any?): String? =
 internal fun validMapNavigationMode(value: Any?): String? =
   (value as? String)?.takeIf { it in setOf("northUp", "gpsHeading", "freeRotate") }
 
+private const val MIN_LIVE_HISTORY_LIMIT_MINUTES = 1
+private const val MAX_LIVE_HISTORY_LIMIT_MINUTES = 50
+
+internal fun validLiveHistoryLimitMinutes(value: Any?): Int? =
+  (value as? Number)
+    ?.toInt()
+    ?.coerceIn(MIN_LIVE_HISTORY_LIMIT_MINUTES, MAX_LIVE_HISTORY_LIMIT_MINUTES)
+
 class AppDataRepository private constructor(private val context: Context) {
   private val dao = TelemetryDatabase.get(context).telemetryDao()
 
@@ -79,7 +87,7 @@ class AppDataRepository private constructor(private val context: Context) {
     }
 
     val settings = AppSettings(
-      liveHistoryLimit = req("liveHistoryLimit", 5) { (it as? Number)?.toInt() },
+      liveHistoryLimit = req("liveHistoryLimit", 5, ::validLiveHistoryLimitMinutes),
       autoConnect = req("autoConnect", true) { it as? Boolean },
       autoRecording = req("autoRecording", false) { it as? Boolean },
       selectedBoardId = opt("selectedBoardId") { it as? String },
@@ -105,7 +113,7 @@ class AppDataRepository private constructor(private val context: Context) {
 
   suspend fun updateSetting(key: String, value: Any?): Unit = withContext(Dispatchers.IO) {
     val coerced: Any? = when (key) {
-      "liveHistoryLimit" -> (value as? Number)?.toInt() ?: return@withContext
+      "liveHistoryLimit" -> validLiveHistoryLimitMinutes(value) ?: return@withContext
       "autoConnect" -> value as? Boolean ?: return@withContext
       "autoRecording" -> value as? Boolean ?: return@withContext
       "selectedBoardId" -> value as? String

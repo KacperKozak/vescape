@@ -6,6 +6,14 @@ import org.junit.Test
 
 class AppSettingsMapPreferencesTest {
   @Test
+  fun liveHistoryLimitValidationAcceptsAndClampsNumericMinutes() {
+    assertEquals(5, validLiveHistoryLimitMinutes(5))
+    assertEquals(1, validLiveHistoryLimitMinutes(-1))
+    assertEquals(50, validLiveHistoryLimitMinutes(120))
+    assertNull(validLiveHistoryLimitMinutes("5"))
+  }
+
+  @Test
   fun mapStyleValidationAcceptsSupportedBasemapsOnly() {
     assertEquals("onedark", validMapStyleKey("onedark"))
     assertEquals("outdoors", validMapStyleKey("outdoors"))
