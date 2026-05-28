@@ -110,13 +110,13 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   pairingTitle: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 12,
     fontWeight: '700',
     textTransform: 'uppercase',
   },
   pairingValue: {
-    color: '#94a3b8',
+    color: theme.neutral.textSecondary,
     fontSize: 12,
     fontWeight: '600',
   },

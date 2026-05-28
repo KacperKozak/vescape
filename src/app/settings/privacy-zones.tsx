@@ -547,7 +547,7 @@ export default function PrivacyZonesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111827',
+    backgroundColor: theme.neutral.bg,
   },
   pillsFloating: {
     position: 'absolute',
@@ -578,7 +578,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   zoneLabel: {
-    color: '#f1f5f9',
+    color: theme.neutral.textPrimary,
     fontSize: 14,
     fontWeight: '700',
     textShadowColor: 'rgba(0,0,0,0.8)',
@@ -615,26 +615,26 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     width: '100%',
-    backgroundColor: '#1e293b',
+    backgroundColor: theme.neutral.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: theme.neutral.border,
     padding: 20,
     gap: 16,
   },
   modalTitle: {
-    color: '#f1f5f9',
+    color: theme.neutral.textPrimary,
     fontSize: 16,
     fontWeight: '700',
   },
   modalInput: {
-    backgroundColor: '#0f172a',
+    backgroundColor: theme.neutral.surfaceDeep,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: theme.neutral.border,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    color: '#f1f5f9',
+    color: theme.neutral.textPrimary,
     fontSize: 15,
     fontWeight: '500',
   },

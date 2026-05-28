@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#131c2e',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: theme.neutral.surface,
     padding: 18,
     gap: 14,
   },
@@ -120,7 +120,7 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#1e293b',
+    backgroundColor: theme.neutral.surface,
   },
   body: {
     maxHeight: 280,
@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
     paddingRight: 2,
   },
   message: {
-    color: '#94a3b8',
+    color: theme.neutral.textSecondary,
     fontSize: 13,
     fontWeight: '500',
     lineHeight: 19,

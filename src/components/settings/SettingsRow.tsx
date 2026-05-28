@@ -2,6 +2,7 @@ import { type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { CaretRightIcon } from 'phosphor-react-native'
 import type { Icon, IconWeight } from 'phosphor-react-native'
+import { theme } from '@/constants/theme'
 
 export type SettingsRowProps = {
   icon: Icon
@@ -16,7 +17,7 @@ export type SettingsRowProps = {
 
 export function SettingsRow({
   icon: IconComponent,
-  iconColor = '#94a3b8',
+  iconColor = theme.neutral.textSecondary,
   iconWeight = 'duotone',
   label,
   hint,
@@ -72,7 +73,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 8,
-    backgroundColor: '#0f172a',
+    backgroundColor: theme.neutral.surfaceDeep,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -81,12 +82,12 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   label: {
-    color: '#f1f5f9',
+    color: theme.neutral.textPrimary,
     fontSize: 15,
     fontWeight: '600',
   },
   hint: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 12,
   },
 })

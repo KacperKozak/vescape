@@ -197,7 +197,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     borderWidth: 1,
     gap: 10,
-    backgroundColor: '#0f172a',
+    backgroundColor: theme.neutral.surfaceDeep,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
@@ -217,7 +217,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   pillButtonText: {
-    color: '#f1f5f9',
+    color: theme.neutral.textPrimary,
     fontSize: 12,
     fontWeight: '800',
   },

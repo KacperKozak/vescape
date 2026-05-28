@@ -8,6 +8,7 @@ import Svg, {
   Rect as SvgRect,
 } from 'react-native-svg'
 
+import { theme } from '@/constants/theme'
 import {
   findNearestChartPointAtX,
   getChartPosition,
@@ -25,7 +26,7 @@ const EXCLUSION_MARKER_INSET = 1
 
 function exclusionColor(reason: string): string {
   if (reason === 'free_spin') return '#facc15'
-  return '#94a3b8'
+  return theme.neutral.textSecondary
 }
 
 function formatTime(date: Date): string {
@@ -307,12 +308,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   headerTime: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 9,
     fontVariant: ['tabular-nums'],
   },
   label: {
-    color: '#94a3b8',
+    color: theme.neutral.textSecondary,
     fontSize: 10,
     fontWeight: '700',
   },
@@ -332,7 +333,7 @@ const styles = StyleSheet.create({
     paddingRight: 4,
   },
   yLabel: {
-    color: '#475569',
+    color: theme.neutral.textDim,
     fontSize: 8,
     fontVariant: ['tabular-nums'],
     lineHeight: 10,
@@ -346,7 +347,7 @@ const styles = StyleSheet.create({
     paddingTop: 2,
   },
   xLabel: {
-    color: '#475569',
+    color: theme.neutral.textDim,
     fontSize: 8,
     fontVariant: ['tabular-nums'],
   },
@@ -360,7 +361,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(15, 23, 42, 0.92)',
     borderRadius: 4,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: theme.neutral.border,
     paddingHorizontal: 6,
     paddingVertical: 3,
     flexDirection: 'row',
@@ -374,7 +375,7 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   tooltipTime: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 8,
     fontVariant: ['tabular-nums'],
   },

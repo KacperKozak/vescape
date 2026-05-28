@@ -9,6 +9,7 @@ import { usePermissions } from '@/ble/usePermissions'
 import { useBleAppLifecycle } from '@/hooks/useBleAppLifecycle'
 import { useBoardConnection } from '@/hooks/useBoardConnection'
 import { CenterScreen } from '@/screens/CenterScreen'
+import { theme } from '@/constants/theme'
 
 export default function MainScreen() {
   const autoConnectAttemptedBoardRef = useRef<string | null>(null)
@@ -96,6 +97,6 @@ export default function MainScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: theme.neutral.surfaceDeep,
   },
 })

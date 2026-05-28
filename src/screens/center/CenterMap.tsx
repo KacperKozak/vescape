@@ -780,7 +780,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#111827',
+    backgroundColor: theme.neutral.bg,
     paddingHorizontal: 28,
     gap: 8,
   },

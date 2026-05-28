@@ -51,9 +51,9 @@ const VALUE_MARKER_TOP = 35
 const MARKER_LINE_WIDTH = 2.5
 const INDICATOR_COLOR = theme.error.color
 const PREV_MARK_COLOR = theme.highlight.color
-const MAJOR_TICK_COLOR = '#94a3b8'
-const MINOR_TICK_COLOR = '#334155'
-const LABEL_COLOR = '#64748b'
+const MAJOR_TICK_COLOR = theme.neutral.textSecondary
+const MINOR_TICK_COLOR = theme.neutral.border
+const LABEL_COLOR = theme.neutral.textMuted
 
 const SNAP_SPRING = { damping: 18, stiffness: 700, mass: 0.8 }
 

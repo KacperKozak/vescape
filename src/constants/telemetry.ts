@@ -1,3 +1,4 @@
+import { theme } from '@/constants/theme'
 type TelemetryChartRange = { min: number; max: number }
 
 export interface TelemetryMetricConfig {
@@ -61,7 +62,7 @@ const telemetryDefinitions = {
   speed: {
     label: 'Speed',
     unit: 'km/h',
-    color: '#38bdf8',
+    color: theme.wheel.color,
     decimals: 0,
     chartRange: { min: 0, max: 50 },
     controlId: 'speed',
@@ -70,7 +71,7 @@ const telemetryDefinitions = {
   duty: {
     label: 'Duty Cycle',
     unit: '%',
-    color: '#14b8a6',
+    color: theme.teal.color,
     decimals: 0,
     chartRange: { min: 0, max: 100 },
     controlId: 'duty',
@@ -106,7 +107,7 @@ const telemetryDefinitions = {
   motorTemp: {
     label: 'Motor Temp',
     unit: '°C',
-    color: '#f97316',
+    color: theme.warning.color,
     decimals: 0,
     chartRange: { min: 0, max: 80 },
     minSpan: 30,
@@ -115,7 +116,7 @@ const telemetryDefinitions = {
   controllerTemp: {
     label: 'Controller Temp',
     unit: '°C',
-    color: '#ef4444',
+    color: theme.error.color,
     decimals: 0,
     chartRange: { min: 0, max: 80 },
     minSpan: 30,
@@ -124,7 +125,7 @@ const telemetryDefinitions = {
   footpadAdc1: {
     label: 'ADC 1',
     unit: '',
-    color: '#94a3b8',
+    color: theme.neutral.textSecondary,
     decimals: 3,
     chartRange: { min: 0, max: 3.3 },
     minSpan: 0.5,
@@ -132,7 +133,7 @@ const telemetryDefinitions = {
   footpadAdc2: {
     label: 'ADC 2',
     unit: '',
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     decimals: 3,
     chartRange: { min: 0, max: 3.3 },
     minSpan: 0.5,

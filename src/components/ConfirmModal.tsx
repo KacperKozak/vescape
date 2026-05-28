@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Animated, Modal, Pressable, StyleSheet, Text, View } from 'react-native'
 
 import { Button } from '@/components/Button'
+import { theme } from '@/constants/theme'
 
 const FADE_DURATION = 120
 
@@ -104,7 +105,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#131c2e',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: theme.neutral.surface,
     padding: 20,
     gap: 12,
   },
@@ -114,7 +115,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   message: {
-    color: '#94a3b8',
+    color: theme.neutral.textSecondary,
     fontSize: 13,
     fontWeight: '500',
     lineHeight: 18,

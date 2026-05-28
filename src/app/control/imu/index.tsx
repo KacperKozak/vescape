@@ -9,6 +9,7 @@ import { DASH } from '@/helpers/format'
 import { telemetry } from '@/constants/telemetry'
 import { useLiveMetric, liveSelectors } from '@/hooks/useLiveMetric'
 import { useLiveWindowMs } from '@/store/settingsStore'
+import { theme } from '@/constants/theme'
 
 const pitchCfg = telemetry.pitch
 const rollCfg = telemetry.roll
@@ -99,19 +100,19 @@ const styles = StyleSheet.create({
   },
   liveCell: {
     flex: 1,
-    backgroundColor: '#1e293b',
+    backgroundColor: theme.neutral.surface,
     borderRadius: 10,
     padding: 14,
     gap: 6,
   },
   liveLabel: {
-    color: '#94a3b8',
+    color: theme.neutral.textSecondary,
     fontSize: 11,
     fontWeight: '600',
     letterSpacing: 0.5,
   },
   liveValue: {
-    color: '#f1f5f9',
+    color: theme.neutral.textPrimary,
     fontSize: 20,
     fontFamily: 'monospace',
     fontWeight: '600',

@@ -126,7 +126,7 @@ export function BoardSelectorSheet({
 
 const styles = StyleSheet.create({
   sectionTitle: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1,
@@ -137,7 +137,7 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: '#1e293b',
+    backgroundColor: theme.neutral.surface,
     marginHorizontal: 16,
     marginTop: 4,
   },
@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   boardRowActive: {
-    backgroundColor: '#1e293b',
+    backgroundColor: theme.neutral.surface,
   },
   boardRowPressed: {
     backgroundColor: interaction.pressedBg,
@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 8,
-    backgroundColor: '#1e293b',
+    backgroundColor: theme.neutral.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -172,12 +172,12 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   boardName: {
-    color: '#94a3b8',
+    color: theme.neutral.textSecondary,
     fontSize: 14,
     fontWeight: '600',
   },
   boardNameActive: {
-    color: '#f1f5f9',
+    color: theme.neutral.textPrimary,
   },
   starBadge: {
     flexDirection: 'row',
@@ -203,7 +203,7 @@ const styles = StyleSheet.create({
     height: 32,
     borderRadius: 8,
     borderWidth: 1.5,
-    borderColor: '#334155',
+    borderColor: theme.neutral.border,
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
@@ -221,11 +221,11 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   debugText: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 13,
     fontWeight: '600',
   },
   debugTextActive: {
-    color: '#94a3b8',
+    color: theme.neutral.textSecondary,
   },
 })

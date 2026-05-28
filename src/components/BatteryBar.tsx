@@ -84,7 +84,7 @@ export function BatteryBar({
 
 const styles = StyleSheet.create({
   wrap: {
-    backgroundColor: '#1e293b',
+    backgroundColor: theme.neutral.surface,
     borderRadius: 12,
     paddingVertical: 10,
     paddingHorizontal: 14,
@@ -111,31 +111,31 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   label: {
-    color: '#94a3b8',
+    color: theme.neutral.textSecondary,
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.6,
   },
   percent: {
-    color: '#f1f5f9',
+    color: theme.neutral.textPrimary,
     fontSize: 16,
     fontFamily: 'monospace',
     fontWeight: '700',
     lineHeight: 18,
   },
   percentUnit: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 11,
     fontWeight: '500',
   },
   voltage: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 11,
     fontFamily: 'monospace',
     fontWeight: '600',
   },
   hint: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 10,
     fontWeight: '600',
     textAlign: 'center',

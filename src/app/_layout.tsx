@@ -7,6 +7,7 @@ import { DiagnosticErrorBoundary } from '@/components/DiagnosticErrorBoundary'
 import { HeaderBackButton } from '@/components/navigation/HeaderBackButton'
 import { stackScreens } from '@/navigation/routes'
 import { useAlertsStore } from '@/store/alertsStore'
+import { theme } from '@/constants/theme'
 
 export default function RootLayout() {
   useEffect(() => {
@@ -18,13 +19,13 @@ export default function RootLayout() {
       <GestureHandlerRootView style={{ flex: 1 }}>
         <Stack
           screenOptions={{
-            headerStyle: { backgroundColor: '#111827' },
+            headerStyle: { backgroundColor: theme.neutral.bg },
             headerTintColor: '#f9fafb',
             headerTitleStyle: { fontWeight: '600', fontSize: 14 },
             headerTitleAlign: 'center',
             headerShadowVisible: false,
             headerLeft: () => <HeaderBackButton />,
-            contentStyle: { backgroundColor: '#111827' },
+            contentStyle: { backgroundColor: theme.neutral.bg },
           }}
         >
           <Stack.Screen name={stackScreens.home} options={{ headerShown: false }} />

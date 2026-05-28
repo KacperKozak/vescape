@@ -12,6 +12,7 @@ import { useLiveMetric, liveSelectors } from '@/hooks/useLiveMetric'
 import { useBoardStore } from '@/store/boardStore'
 import { useLiveWindowMs } from '@/store/settingsStore'
 import { liveTelemetryRuntime } from '@/lib/telemetry/liveTelemetryRuntime'
+import { theme } from '@/constants/theme'
 
 const cfg = telemetry.battVoltage
 
@@ -53,7 +54,7 @@ export default function BatteryScreen() {
 
 const styles = StyleSheet.create({
   unconfigured: {
-    color: '#94a3b8',
+    color: theme.neutral.textSecondary,
     fontSize: 12,
     fontWeight: '600',
     marginBottom: 8,

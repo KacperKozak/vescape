@@ -63,12 +63,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   hour: {
-    color: '#94a3b8',
+    color: theme.neutral.textSecondary,
     fontSize: 11,
     fontWeight: '600',
   },
   temp: {
-    color: '#f1f5f9',
+    color: theme.neutral.textPrimary,
     fontSize: 13,
     fontWeight: '600',
   },

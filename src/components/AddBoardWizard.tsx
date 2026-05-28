@@ -354,13 +354,13 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#334155',
+    backgroundColor: theme.neutral.border,
   },
   wizardDotActive: {
     backgroundColor: theme.bran.color,
   },
   wizardMeta: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 12,
     fontWeight: '700',
     textAlign: 'center',
@@ -370,12 +370,12 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   wizardTitle: {
-    color: '#f1f5f9',
+    color: theme.neutral.textPrimary,
     fontSize: 20,
     fontWeight: '800',
   },
   wizardCopy: {
-    color: '#94a3b8',
+    color: theme.neutral.textSecondary,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -390,13 +390,13 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   overviewLabel: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 12,
     fontWeight: '700',
     textTransform: 'uppercase',
   },
   overviewValue: {
-    color: '#f1f5f9',
+    color: theme.neutral.textPrimary,
     fontSize: 14,
     fontWeight: '600',
   },

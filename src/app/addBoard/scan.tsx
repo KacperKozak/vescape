@@ -9,6 +9,7 @@ import { usePermissions } from '@/ble/usePermissions'
 import { DeviceRow } from '@/components/DeviceRow'
 import { routes } from '@/navigation/routes'
 import type { ScannedDevice } from '@/store/bleStore'
+import { theme } from '@/constants/theme'
 
 export default function AddBoardScanScreen() {
   const { boardId, step } = useLocalSearchParams<{ boardId?: string; step?: string }>()
@@ -103,7 +104,7 @@ export default function AddBoardScanScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111827',
+    backgroundColor: theme.neutral.bg,
   },
   list: {
     padding: 16,

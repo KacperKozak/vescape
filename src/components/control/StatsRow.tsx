@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native'
+import { theme } from '@/constants/theme'
 
 interface Props {
   current: string
@@ -41,19 +42,19 @@ const styles = StyleSheet.create({
   },
   cell: {
     flex: 1,
-    backgroundColor: '#1e293b',
+    backgroundColor: theme.neutral.surface,
     borderRadius: 10,
     padding: 12,
     gap: 6,
   },
   label: {
-    color: '#94a3b8',
+    color: theme.neutral.textSecondary,
     fontSize: 10,
     fontWeight: '600',
     letterSpacing: 0.5,
   },
   value: {
-    color: '#f1f5f9',
+    color: theme.neutral.textPrimary,
     fontSize: 16,
     fontFamily: 'monospace',
     fontWeight: '600',

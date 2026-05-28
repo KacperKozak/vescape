@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native'
+import { theme } from '@/constants/theme'
 
 interface TuneGroupGridProps {
   title: string
@@ -30,14 +31,14 @@ const styles = StyleSheet.create({
     paddingTop: 2,
   },
   groupTitle: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 12,
     fontWeight: '700',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   groupCount: {
-    color: '#475569',
+    color: theme.neutral.textDim,
     fontSize: 11,
     fontWeight: '700',
   },

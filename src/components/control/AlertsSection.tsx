@@ -80,7 +80,7 @@ export function AlertsSection({ controlId, unit }: AlertsSectionProps) {
             <View style={[styles.ruleTypeIcon, rule.enabled && styles.ruleTypeIconActive]}>
               <TypeIcon
                 size={16}
-                color={rule.enabled ? theme.wheel.color : '#475569'}
+                color={rule.enabled ? theme.wheel.color : theme.neutral.textDim}
                 weight="fill"
               />
             </View>
@@ -154,7 +154,7 @@ export function AlertsSection({ controlId, unit }: AlertsSectionProps) {
 
 const styles = StyleSheet.create({
   stateNote: {
-    color: '#475569',
+    color: theme.neutral.textDim,
     fontSize: 14,
   },
   ruleRow: {
@@ -169,7 +169,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#1e293b',
+    backgroundColor: theme.neutral.surface,
   },
   ruleTypeIconActive: {
     backgroundColor: theme.wheel.bg,
@@ -178,12 +178,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   ruleThreshold: {
-    color: '#f1f5f9',
+    color: theme.neutral.textPrimary,
     fontSize: 14,
     fontWeight: '500',
   },
   ruleTextDisabled: {
-    color: '#475569',
+    color: theme.neutral.textDim,
   },
   ruleAction: {
     padding: 6,

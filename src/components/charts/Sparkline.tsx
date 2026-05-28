@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import type { LayoutChangeEvent } from 'react-native'
 import Svg, { Circle as SvgCircle, Polyline as SvgPolyline } from 'react-native-svg'
+import { theme } from '@/constants/theme'
 
 export interface SparklinePoint {
   ts: number
@@ -208,7 +209,7 @@ export function Sparkline({
         >
           <Text style={styles.maxBadge} numberOfLines={1}>
             <Text style={styles.maxLabel}>max </Text>
-            <Text style={{ color: maxValue != null ? color : '#475569' }}>
+            <Text style={{ color: maxValue != null ? color : theme.neutral.textDim }}>
               {maxValue != null ? formatMaxBadgeValue(maxValue) : '-'}
             </Text>
           </Text>
@@ -268,7 +269,7 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   maxLabel: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontWeight: '400',
   },
 })

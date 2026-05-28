@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Animated, Dimensions, Modal, Platform, Pressable, StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { theme } from '@/constants/theme'
 
 const ANIM_DURATION = 150
 const SCREEN_EDGE_PADDING = 8
@@ -206,7 +207,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#131c2e',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: theme.neutral.border,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },

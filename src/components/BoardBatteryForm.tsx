@@ -222,10 +222,10 @@ const styles = StyleSheet.create({
   },
   segmented: {
     flexDirection: 'row',
-    backgroundColor: '#0f172a',
+    backgroundColor: theme.neutral.surfaceDeep,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: theme.neutral.border,
     padding: 3,
   },
   segment: {
@@ -238,7 +238,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.bran.bg,
   },
   segmentText: {
-    color: '#94a3b8',
+    color: theme.neutral.textSecondary,
     fontSize: 13,
     fontWeight: '700',
   },
@@ -262,7 +262,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   label: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.5,

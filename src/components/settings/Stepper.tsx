@@ -1,5 +1,6 @@
 import { MinusIcon, PlusIcon } from 'phosphor-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { theme } from '@/constants/theme'
 
 interface StepperProps {
   value: number
@@ -44,10 +45,10 @@ const styles = StyleSheet.create({
   stepper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0f172a',
+    backgroundColor: theme.neutral.surfaceDeep,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: theme.neutral.border,
   },
   stepperBtn: {
     paddingHorizontal: 10,
@@ -67,13 +68,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   stepperValue: {
-    color: '#f1f5f9',
+    color: theme.neutral.textPrimary,
     fontSize: 15,
     fontWeight: '700',
     textAlign: 'center',
   },
   stepperUnit: {
-    color: '#94a3b8',
+    color: theme.neutral.textSecondary,
     fontSize: 11,
     fontWeight: '600',
     marginTop: 0,

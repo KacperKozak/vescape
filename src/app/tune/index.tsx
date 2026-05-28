@@ -522,7 +522,7 @@ function RenameProfileModal({ profile, onRename, onDismiss }: RenameProfileModal
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111827',
+    backgroundColor: theme.neutral.bg,
   },
   headerActions: {
     flexDirection: 'row',

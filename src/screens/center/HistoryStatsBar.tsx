@@ -179,7 +179,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   compactLabel: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 9,
     fontWeight: '700',
   },

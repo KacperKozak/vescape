@@ -19,10 +19,10 @@ export function ShowcaseCard({ name, children, controls }: ShowcaseCardProps) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#1e293b',
+    backgroundColor: theme.neutral.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: theme.neutral.border,
     overflow: 'hidden',
   },
   name: {
@@ -40,7 +40,7 @@ const styles = StyleSheet.create({
   },
   controls: {
     borderTopWidth: 1,
-    borderTopColor: '#334155',
+    borderTopColor: theme.neutral.border,
     paddingHorizontal: 14,
     paddingVertical: 8,
     gap: 6,

@@ -1,5 +1,6 @@
 import { Children, type ReactNode } from 'react'
 import { StyleSheet, View } from 'react-native'
+import { theme } from '@/constants/theme'
 
 export type SettingsCardProps = {
   children: ReactNode
@@ -22,15 +23,15 @@ export function SettingsCard({ children }: SettingsCardProps) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#1e293b',
+    backgroundColor: theme.neutral.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: theme.neutral.border,
     overflow: 'hidden',
   },
   separator: {
     height: 1,
-    backgroundColor: '#334155',
+    backgroundColor: theme.neutral.border,
     marginLeft: 58,
   },
 })

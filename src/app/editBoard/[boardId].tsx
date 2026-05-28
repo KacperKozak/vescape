@@ -13,6 +13,7 @@ import { IconButton } from '@/components/IconButton'
 import { useEditBoardForm } from '@/boards/useEditBoardForm'
 import { routes } from '@/navigation/routes'
 import { useBoardStore } from '@/store/boardStore'
+import { theme } from '@/constants/theme'
 
 export default function EditBoardScreen() {
   const { boardId, bleId, bleName } = useLocalSearchParams<{
@@ -140,7 +141,7 @@ export default function EditBoardScreen() {
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
-    backgroundColor: '#111827',
+    backgroundColor: theme.neutral.bg,
   },
   container: {
     flex: 1,

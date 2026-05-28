@@ -5,6 +5,7 @@ import { CenterMap, type CenterMapHandle } from '@/screens/center/CenterMap'
 import { CenterOverlays } from '@/screens/center/CenterOverlays'
 import { useCenterScreenController } from '@/screens/center/useCenterScreenController'
 import type { Board } from '@/store/boardStore'
+import { theme } from '@/constants/theme'
 
 interface CenterScreenProps {
   activeBoard: Board | undefined
@@ -131,7 +132,7 @@ export function CenterScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: theme.neutral.surfaceDeep,
   },
   empty: {
     flex: 1,
@@ -141,7 +142,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   emptySubtitle: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 13,
     textAlign: 'center',
   },

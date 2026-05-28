@@ -3,6 +3,7 @@ import { type ReactNode, useEffect } from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 
 import { AlertsSection } from './AlertsSection'
+import { theme } from '@/constants/theme'
 
 interface Props {
   title: string
@@ -59,7 +60,7 @@ export function ControlDetailLayout({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111827',
+    backgroundColor: theme.neutral.bg,
   },
   content: {
     padding: 16,
@@ -73,7 +74,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   alertControlLabel: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.5,
@@ -82,13 +83,13 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   sectionLabel: {
-    color: '#94a3b8',
+    color: theme.neutral.textSecondary,
     fontSize: 11,
     fontWeight: '600',
     letterSpacing: 0.5,
   },
   placeholder: {
-    color: '#475569',
+    color: theme.neutral.textDim,
     fontSize: 14,
   },
 })

@@ -662,7 +662,7 @@ export function DualGauge({
 
 const styles = StyleSheet.create({
   wrap: {
-    backgroundColor: '#1e293b',
+    backgroundColor: theme.neutral.surface,
     borderRadius: 16,
     padding: 12,
     marginHorizontal: 4,
@@ -725,7 +725,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   value: {
-    color: '#f1f5f9',
+    color: theme.neutral.textPrimary,
     fontSize: 36,
     fontFamily: 'monospace',
     fontWeight: '700',
@@ -734,13 +734,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   unit: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 10,
     textAlign: 'center',
     marginTop: 2,
   },
   singleWrap: {
-    backgroundColor: '#1e293b',
+    backgroundColor: theme.neutral.surface,
     borderRadius: 10,
     paddingHorizontal: 18,
     paddingTop: 14,
@@ -748,7 +748,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   singleLabel: {
-    color: '#94a3b8',
+    color: theme.neutral.textSecondary,
     fontSize: 11,
     fontWeight: '600',
     letterSpacing: 0.5,
@@ -763,7 +763,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   halfValue: {
-    color: '#f1f5f9',
+    color: theme.neutral.textPrimary,
     fontSize: 52,
     fontFamily: 'monospace',
     fontWeight: '700',
@@ -772,7 +772,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   halfUnit: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 12,
     textAlign: 'center',
     marginTop: 2,

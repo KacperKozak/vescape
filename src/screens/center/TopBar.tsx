@@ -65,7 +65,7 @@ export function TopBar({
       ? theme.gps.color
       : bleStatus === 'error'
         ? theme.error.color
-        : '#94a3b8'
+        : theme.neutral.textSecondary
 
   return (
     <View style={[styles.wrap, { paddingTop: Math.max(insets.top, 8) }]} pointerEvents="box-none">
@@ -92,7 +92,11 @@ export function TopBar({
               router.push({ pathname: routes.editBoard, params: { boardId: activeBoard.id } })
             }}
           >
-            <PencilSimpleIcon size={14} color={activeBoard ? '#e2e8f0' : '#64748b'} weight="bold" />
+            <PencilSimpleIcon
+              size={14}
+              color={activeBoard ? '#e2e8f0' : theme.neutral.textMuted}
+              weight="bold"
+            />
           </Pressable>
           <View style={styles.divider} />
           {canDisconnect && (
@@ -215,7 +219,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   weatherText: {
-    color: '#94a3b8',
+    color: theme.neutral.textSecondary,
     fontSize: 11,
     fontWeight: '600',
   },

@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.gps.bg,
   },
   cellValue: {
-    color: '#f1f5f9',
+    color: theme.neutral.textPrimary,
     fontSize: 18,
     fontWeight: '700',
     paddingRight: 26,
@@ -153,7 +153,7 @@ const styles = StyleSheet.create({
     paddingRight: 26,
   },
   cellProfileValue: {
-    color: '#94a3b8',
+    color: theme.neutral.textSecondary,
     fontSize: 10,
     fontWeight: '800',
     marginTop: 1,
@@ -167,13 +167,13 @@ const styles = StyleSheet.create({
     paddingRight: 26,
   },
   cellUnit: {
-    color: '#94a3b8',
+    color: theme.neutral.textSecondary,
     fontSize: 11,
     fontWeight: '700',
     marginTop: 1,
   },
   cellLabel: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 11,
     fontWeight: '600',
     marginTop: 3,

@@ -1,5 +1,6 @@
 import { StyleSheet, Text, View, type ViewStyle } from 'react-native'
 import type { Icon } from 'phosphor-react-native'
+import { theme } from '@/constants/theme'
 
 interface PlaceholderProps {
   icon: Icon
@@ -13,7 +14,7 @@ export function Placeholder({
   icon: IconComponent,
   title,
   description,
-  iconColor = '#64748b',
+  iconColor = theme.neutral.textMuted,
   style,
 }: PlaceholderProps) {
   return (
@@ -46,7 +47,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   description: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 13,
     lineHeight: 18,
     textAlign: 'center',

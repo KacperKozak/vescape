@@ -17,7 +17,7 @@ export function MapStyleSwitch({ activeKey, expanded, onToggle, onSelect }: MapS
     icon: (
       <style.Icon
         size={21}
-        color={activeKey === style.key ? theme.wheel.text : '#94a3b8'}
+        color={activeKey === style.key ? theme.wheel.text : theme.neutral.textSecondary}
         weight={activeKey === style.key ? 'fill' : 'bold'}
       />
     ),

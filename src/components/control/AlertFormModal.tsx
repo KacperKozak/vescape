@@ -148,7 +148,7 @@ export function AlertFormModal({
               >
                 <WaveformIcon
                   size={14}
-                  color={tab === 'single' ? '#f1f5f9' : '#64748b'}
+                  color={tab === 'single' ? theme.neutral.textPrimary : theme.neutral.textMuted}
                   weight="fill"
                 />
                 <Text style={[styles.tabText, tab === 'single' && styles.tabTextActive]}>
@@ -161,7 +161,7 @@ export function AlertFormModal({
               >
                 <RadioactiveIcon
                   size={14}
-                  color={tab === 'geiger' ? '#f1f5f9' : '#64748b'}
+                  color={tab === 'geiger' ? theme.neutral.textPrimary : theme.neutral.textMuted}
                   weight="fill"
                 />
                 <Text style={[styles.tabText, tab === 'geiger' && styles.tabTextActive]}>
@@ -232,7 +232,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#131c2e',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: theme.neutral.surface,
     width: '100%',
     maxWidth: 340,
     maxHeight: '90%',
@@ -251,7 +251,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: theme.neutral.surface,
   },
   tab: {
     flex: 1,
@@ -260,24 +260,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     paddingVertical: 10,
-    backgroundColor: '#0f172a',
+    backgroundColor: theme.neutral.surfaceDeep,
   },
   tabActive: {
     backgroundColor: theme.wheel.bg,
   },
   tabText: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 13,
     fontWeight: '600',
   },
   tabTextActive: {
-    color: '#f1f5f9',
+    color: theme.neutral.textPrimary,
   },
   dialField: {
     gap: 6,
   },
   fieldLabel: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 10,
     fontWeight: '600',
     letterSpacing: 0.5,

@@ -1,6 +1,7 @@
 import { Modal, Pressable, Text, View, StyleSheet } from 'react-native'
 import { XIcon } from 'phosphor-react-native'
 import { type Board } from '@/store/boardStore'
+import { theme } from '@/constants/theme'
 
 interface BoardPickerModalProps {
   visible: boolean
@@ -49,10 +50,10 @@ const styles = StyleSheet.create({
   },
   promptModal: {
     width: '100%',
-    backgroundColor: '#1e293b',
+    backgroundColor: theme.neutral.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: theme.neutral.border,
     padding: 16,
     gap: 14,
   },
@@ -72,13 +73,13 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0f172a',
+    backgroundColor: theme.neutral.surfaceDeep,
   },
   boardPickerItem: {
     paddingVertical: 12,
     paddingHorizontal: 4,
     borderTopWidth: 1,
-    borderTopColor: '#0f172a',
+    borderTopColor: theme.neutral.surfaceDeep,
     minHeight: 44,
     justifyContent: 'center',
   },
@@ -88,7 +89,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   emptyText: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 13,
     textAlign: 'center',
     paddingVertical: 16,

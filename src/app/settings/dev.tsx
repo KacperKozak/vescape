@@ -13,6 +13,7 @@ import { routes } from '@/navigation/routes'
 import { SettingsCard } from '@/components/settings/SettingsCard'
 import { SettingsRow } from '@/components/settings/SettingsRow'
 import { SettingsSectionTitle } from '@/components/settings/SettingsSectionTitle'
+import { theme } from '@/constants/theme'
 
 const devPages = [
   {
@@ -72,7 +73,7 @@ export default function DevSettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111827',
+    backgroundColor: theme.neutral.bg,
   },
   content: {
     padding: 16,

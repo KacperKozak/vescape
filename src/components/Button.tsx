@@ -79,7 +79,11 @@ const variantStyles = {
     indicatorColor: '#f8fafc',
   },
   secondary: {
-    button: { backgroundColor: '#1e293b', borderWidth: 1, borderColor: '#334155' },
+    button: {
+      backgroundColor: theme.neutral.surface,
+      borderWidth: 1,
+      borderColor: theme.neutral.border,
+    },
     text: { color: '#cbd5e1' },
     iconColor: '#cbd5e1',
     indicatorColor: '#cbd5e1',

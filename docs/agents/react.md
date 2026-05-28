@@ -4,6 +4,22 @@ React Native UI conventions for this repo. Add component, styling, navigation, a
 
 For visual design principles (colors, layout, typography, when to use cards), see [`docs/design.md`](../design.md).
 
+## Colors
+
+Every color must come from the `theme` object in `src/constants/theme.ts`. Never hardcode a hex or rgba value directly in a component.
+
+```tsx
+import { theme } from '@/constants/theme'
+
+// ✅ Good
+backgroundColor: theme.neutral.surface,
+color: theme.wheel.color,
+
+// ❌ Bad
+backgroundColor: '#1e293b',
+color: '#38bdf8',
+```
+
 ## No barrel files
 
 Do not create `index.ts` barrel files under `src/components/` or any of its subdirectories.
@@ -30,7 +46,8 @@ Use **`phosphor-react-native`** for all icons. Do **not** use emoji or unicode c
 
 ```tsx
 import { LightningIcon, WarningCircleIcon } from 'phosphor-react-native'
-;<LightningIcon size={16} color="#4ade80" weight="fill" />
+import { theme } from '@/constants/theme'
+;<LightningIcon size={16} color={theme.gps.text} weight="fill" />
 ```
 
 - Always use the **`Icon`-suffixed** export, for example `LightningIcon`, not `Lightning`. The un-suffixed names are deprecated and will produce warnings.
@@ -51,10 +68,10 @@ import { ArrowLeftIcon, TrashIcon } from 'phosphor-react-native'
 ```
 
 - `size`: `'sm'` (default, 38×38 — headers, overlays) | `'lg'` (54×54 — bottom/content area)
-- `destructive` shifts border to red-tinted and auto-tints icon to `#f87171` — no manual color needed
+- `destructive` shifts border to red-tinted and auto-tints icon to `theme.error.text` — no manual color needed
 - `loading` disables the button and shows an `ActivityIndicator` in the icon color
 - `style` accepts layout-level `ViewStyle` (position, margin, bottom/top/left/right)
-- One visual style only: `rgba(15,23,42,0.72)` bg + `rgba(148,163,184,0.28)` border
+- One visual style only: `theme.neutral.surfaceDeep` bg at 72% opacity + `theme.neutral.textSecondary` border at 28% opacity
 
 ## Buttons
 

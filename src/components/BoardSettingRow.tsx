@@ -2,7 +2,7 @@ import type { Icon } from 'phosphor-react-native'
 import { CaretRightIcon } from 'phosphor-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 
-import { interaction } from '@/constants/theme'
+import { interaction, theme } from '@/constants/theme'
 
 interface BoardSettingRowProps {
   icon: Icon
@@ -62,17 +62,17 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   label: {
-    color: '#f1f5f9',
+    color: theme.neutral.textPrimary,
     fontSize: 15,
     fontWeight: '700',
   },
   value: {
-    color: '#94a3b8',
+    color: theme.neutral.textSecondary,
     fontSize: 13,
     fontWeight: '600',
   },
   hint: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 12,
     fontWeight: '500',
   },

@@ -75,10 +75,10 @@ const styles = StyleSheet.create({
   },
   cellMissing: {
     opacity: 0.58,
-    borderLeftColor: '#334155',
+    borderLeftColor: theme.neutral.border,
   },
   cellReadOnly: {
-    borderLeftColor: '#334155',
+    borderLeftColor: theme.neutral.border,
   },
   infoBtn: {
     position: 'absolute',
@@ -101,7 +101,7 @@ const styles = StyleSheet.create({
   miniTrack: {
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#0f172a',
+    backgroundColor: theme.neutral.surfaceDeep,
     marginTop: 6,
     marginRight: 26,
     overflow: 'hidden',
@@ -121,13 +121,13 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   label: {
-    color: '#94a3b8',
+    color: theme.neutral.textSecondary,
     fontSize: 11,
     fontWeight: '600',
     flex: 1,
   },
   source: {
-    color: '#475569',
+    color: theme.neutral.textDim,
     fontSize: 10,
     fontWeight: '600',
     marginTop: 1,

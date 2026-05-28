@@ -71,7 +71,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(148,163,184,0.28)',
   },
   temp: {
-    color: '#f1f5f9',
+    color: theme.neutral.textPrimary,
     fontSize: 13,
     fontWeight: '600',
   },
@@ -91,12 +91,12 @@ const styles = StyleSheet.create({
     gap: 1,
   },
   expandedTemp: {
-    color: '#f1f5f9',
+    color: theme.neutral.textPrimary,
     fontSize: 22,
     fontWeight: '700',
   },
   expandedLabel: {
-    color: '#94a3b8',
+    color: theme.neutral.textSecondary,
     fontSize: 12,
     fontWeight: '500',
   },

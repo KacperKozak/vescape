@@ -86,9 +86,9 @@ const styles = StyleSheet.create({
   trigger: {
     height: 40,
     borderRadius: 12,
-    backgroundColor: '#1e293b',
+    backgroundColor: theme.neutral.surface,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: theme.neutral.border,
     paddingHorizontal: 14,
     flexDirection: 'row',
     alignItems: 'center',
@@ -96,13 +96,13 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   triggerText: {
-    color: '#f1f5f9',
+    color: theme.neutral.textPrimary,
     fontSize: 14,
     fontWeight: '600',
     flex: 1,
   },
   placeholderText: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
   },
   option: {
     flexDirection: 'row',
@@ -113,7 +113,7 @@ const styles = StyleSheet.create({
   },
   optionBorder: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#334155',
+    borderBottomColor: theme.neutral.border,
   },
   optionSelected: {
     backgroundColor: theme.wheel.bg,

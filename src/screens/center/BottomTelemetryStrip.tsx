@@ -140,7 +140,7 @@ export function BottomTelemetryStrip({ revealProgress }: BottomTelemetryStripPro
                 styles.imuLine,
                 {
                   transform: [{ rotate: `${imuConnected ? pitchDeg : 0}deg` }],
-                  backgroundColor: imuConnected ? theme.target.color : '#64748b',
+                  backgroundColor: imuConnected ? theme.target.color : theme.neutral.textMuted,
                 },
               ]}
             />
@@ -197,7 +197,7 @@ const styles = StyleSheet.create({
     gap: 1,
   },
   subLabel: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 8,
     fontWeight: '900',
     textTransform: 'uppercase',
@@ -233,7 +233,7 @@ const styles = StyleSheet.create({
     height: 9,
     borderRadius: 5,
     borderWidth: 1,
-    borderColor: '#475569',
+    borderColor: theme.neutral.textDim,
     backgroundColor: 'transparent',
   },
   footpadActive: {

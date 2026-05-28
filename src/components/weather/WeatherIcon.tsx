@@ -12,6 +12,7 @@ import {
 } from 'phosphor-react-native'
 
 import { weatherCodeToIconName, type WeatherIconName } from '@/lib/weather'
+import { theme } from '@/constants/theme'
 
 const ICON_MAP: Record<WeatherIconName, Icon> = {
   sun: SunIcon,
@@ -37,7 +38,7 @@ export function WeatherIcon({
   code,
   hour,
   size = 20,
-  color = '#94a3b8',
+  color = theme.neutral.textSecondary,
   weight = 'duotone',
 }: WeatherIconProps) {
   const name = weatherCodeToIconName(code, hour)

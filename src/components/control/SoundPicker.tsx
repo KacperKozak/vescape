@@ -41,7 +41,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   fieldLabel: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 10,
     fontWeight: '600',
     letterSpacing: 0.5,
@@ -55,8 +55,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#1e293b',
-    backgroundColor: '#0f172a',
+    borderColor: theme.neutral.surface,
+    backgroundColor: theme.neutral.surfaceDeep,
     paddingVertical: 10,
   },
   soundOptionActive: {
@@ -64,11 +64,11 @@ const styles = StyleSheet.create({
     backgroundColor: theme.wheel.bg,
   },
   soundOptionText: {
-    color: '#94a3b8',
+    color: theme.neutral.textSecondary,
     fontSize: 12,
     fontWeight: '600',
   },
   soundOptionTextActive: {
-    color: '#f1f5f9',
+    color: theme.neutral.textPrimary,
   },
 })

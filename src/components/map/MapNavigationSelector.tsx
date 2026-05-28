@@ -53,7 +53,7 @@ export function MapNavigationSelector({
 }
 
 function getNavigationIcon(mode: MapNavigationMode, activeMode: MapNavigationMode) {
-  const color = activeMode === mode ? theme.gps.text : '#94a3b8'
+  const color = activeMode === mode ? theme.gps.text : theme.neutral.textSecondary
   if (mode === 'northUp') return <ArrowUpIcon size={20} color={color} weight="bold" />
   if (mode === 'gpsHeading') {
     return <NavigationArrowIcon size={20} color={color} weight="fill" />

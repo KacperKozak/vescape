@@ -86,6 +86,18 @@ export const theme = {
     snow: '#bae6fd', // sky-200
     thunder: '#c084fc', // purple-400
   },
+
+  /** Neutral palette – surfaces, text, borders, structure. Max 2 levels deep. */
+  neutral: {
+    bg: '#111827',
+    surface: '#1e293b',
+    surfaceDeep: '#0f172a',
+    border: '#334155',
+    textPrimary: '#f1f5f9',
+    textSecondary: '#94a3b8',
+    textMuted: '#64748b',
+    textDim: '#475569',
+  },
 } as const
 
 /** Shared press/touch interaction tokens. Use these on every Pressable to keep feedback uniform. */

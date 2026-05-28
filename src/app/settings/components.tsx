@@ -177,7 +177,7 @@ function ButtonShowcase() {
 
 function PlaceholderShowcase() {
   const [showTitle, setShowTitle] = useState(true)
-  const [color, setColor] = useState('#64748b')
+  const [color, setColor] = useState<string>(theme.neutral.textMuted)
 
   return (
     <ShowcaseCard
@@ -187,7 +187,7 @@ function PlaceholderShowcase() {
           <ToggleRow label="showTitle" value={showTitle} onToggle={setShowTitle} />
           <ChipRow
             label="iconColor"
-            options={['#64748b', '#38bdf8', '#f87171']}
+            options={[theme.neutral.textMuted, '#38bdf8', '#f87171']}
             selected={color}
             onSelect={setColor}
           />
@@ -515,8 +515,8 @@ function SettingsComponentsShowcase() {
             <Switch
               value={darkMode}
               onValueChange={setDarkMode}
-              trackColor={{ false: '#334155', true: '#1d4ed8' }}
-              thumbColor={darkMode ? '#3b82f6' : '#64748b'}
+              trackColor={{ false: theme.neutral.border, true: '#1d4ed8' }}
+              thumbColor={darkMode ? '#3b82f6' : theme.neutral.textMuted}
             />
           }
         />
@@ -550,8 +550,8 @@ function SettingsComponentsShowcase() {
             <Switch
               value={notifications}
               onValueChange={setNotifications}
-              trackColor={{ false: '#334155', true: '#1d4ed8' }}
-              thumbColor={notifications ? '#3b82f6' : '#64748b'}
+              trackColor={{ false: theme.neutral.border, true: '#1d4ed8' }}
+              thumbColor={notifications ? '#3b82f6' : theme.neutral.textMuted}
             />
           }
         />
@@ -707,7 +707,7 @@ export default function ComponentsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111827',
+    backgroundColor: theme.neutral.bg,
   },
   content: {
     padding: 12,
@@ -715,7 +715,7 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   previewHint: {
-    color: '#475569',
+    color: theme.neutral.textDim,
     fontSize: 12,
     fontStyle: 'italic',
   },

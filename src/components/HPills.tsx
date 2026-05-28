@@ -123,7 +123,7 @@ export function HPill({ id, label, icon: IconComp, badge, color, onPress, childr
       delayLongPress={400}
     >
       {IconComp ? (
-        <IconComp size={13} color={active ? accentColor : '#64748b'} weight="fill" />
+        <IconComp size={13} color={active ? accentColor : theme.neutral.textMuted} weight="fill" />
       ) : null}
       <Text
         style={[
@@ -176,7 +176,11 @@ export function HPillMenuItem({
         onPress()
       }}
     >
-      <IconComp size={15} color={danger ? theme.error.text : '#94a3b8'} weight="bold" />
+      <IconComp
+        size={15}
+        color={danger ? theme.error.text : theme.neutral.textSecondary}
+        weight="bold"
+      />
       <Text style={[styles.menuItemText, danger && styles.menuItemTextDanger]}>{label}</Text>
     </Pressable>
   )
@@ -217,15 +221,15 @@ const styles = StyleSheet.create({
     maxWidth: 160,
   },
   pillInactive: {
-    backgroundColor: '#1e293b',
-    borderColor: '#334155',
+    backgroundColor: theme.neutral.surface,
+    borderColor: theme.neutral.border,
   },
   pillText: {
     fontSize: 13,
     fontWeight: '700',
   },
   pillTextInactive: {
-    color: '#94a3b8',
+    color: theme.neutral.textSecondary,
   },
   addPill: {
     height: 36,
@@ -233,7 +237,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: '#334155',
+    borderColor: theme.neutral.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -250,7 +254,7 @@ const styles = StyleSheet.create({
   },
   menuItemSeparator: {
     borderTopWidth: 1,
-    borderTopColor: '#1e293b',
+    borderTopColor: theme.neutral.surface,
   },
   menuItemText: {
     color: '#cbd5e1',
@@ -264,7 +268,7 @@ const styles = StyleSheet.create({
     width: 5,
     height: 5,
     borderRadius: 3,
-    backgroundColor: '#475569',
+    backgroundColor: theme.neutral.textDim,
   },
   enabledDot: {
     width: 6,
@@ -277,6 +281,6 @@ const styles = StyleSheet.create({
     height: 6,
     borderRadius: 3,
     borderWidth: 1.5,
-    borderColor: '#475569',
+    borderColor: theme.neutral.textDim,
   },
 })

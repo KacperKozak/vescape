@@ -122,8 +122,8 @@ export default function SettingsScreen() {
               <Switch
                 value={autoConnect}
                 onValueChange={(v) => void set('autoConnect', v)}
-                trackColor={{ false: '#334155', true: '#1d4ed8' }}
-                thumbColor={autoConnect ? '#3b82f6' : '#64748b'}
+                trackColor={{ false: theme.neutral.border, true: '#1d4ed8' }}
+                thumbColor={autoConnect ? '#3b82f6' : theme.neutral.textMuted}
               />
             }
           />
@@ -136,8 +136,8 @@ export default function SettingsScreen() {
               <Switch
                 value={autoRecording}
                 onValueChange={(v) => void set('autoRecording', v)}
-                trackColor={{ false: '#334155', true: '#1d4ed8' }}
-                thumbColor={autoRecording ? '#3b82f6' : '#64748b'}
+                trackColor={{ false: theme.neutral.border, true: '#1d4ed8' }}
+                thumbColor={autoRecording ? '#3b82f6' : theme.neutral.textMuted}
               />
             }
           />
@@ -333,7 +333,7 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111827',
+    backgroundColor: theme.neutral.bg,
   },
   content: {
     padding: 16,
@@ -345,7 +345,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   appName: {
-    color: '#f1f5f9',
+    color: theme.neutral.textPrimary,
     fontSize: 20,
     fontWeight: '700',
   },
@@ -359,21 +359,21 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   headerValue: {
-    color: '#94a3b8',
+    color: theme.neutral.textSecondary,
     fontSize: 12,
     fontWeight: '600',
   },
   sectionHint: {
-    color: '#475569',
+    color: theme.neutral.textDim,
     fontSize: 12,
     marginTop: -4,
     marginBottom: 4,
     marginLeft: 4,
   },
   rebuildButton: {
-    backgroundColor: '#0f172a',
+    backgroundColor: theme.neutral.surfaceDeep,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: theme.neutral.border,
     borderRadius: 8,
     flexDirection: 'row',
     alignItems: 'center',
@@ -403,7 +403,7 @@ const styles = StyleSheet.create({
   rebuildProgressTrack: {
     flex: 1,
     height: 3,
-    backgroundColor: '#0f172a',
+    backgroundColor: theme.neutral.surfaceDeep,
     borderRadius: 999,
     overflow: 'hidden',
   },
@@ -413,7 +413,7 @@ const styles = StyleSheet.create({
   },
   rebuildProgressText: {
     minWidth: 44,
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 11,
     fontWeight: '700',
     textAlign: 'right',

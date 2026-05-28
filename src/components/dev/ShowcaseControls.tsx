@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native'
 
 import { Button } from '@/components/Button'
+import { theme } from '@/constants/theme'
 
 interface ToggleRowProps {
   label: string
@@ -15,8 +16,8 @@ export function ToggleRow({ label, value, onToggle }: ToggleRowProps) {
       <Switch
         value={value}
         onValueChange={onToggle}
-        trackColor={{ false: '#334155', true: '#1d4ed8' }}
-        thumbColor={value ? '#3b82f6' : '#64748b'}
+        trackColor={{ false: theme.neutral.border, true: '#1d4ed8' }}
+        thumbColor={value ? '#3b82f6' : theme.neutral.textMuted}
         style={styles.toggleSwitch}
       />
     </View>
@@ -80,7 +81,7 @@ const styles = StyleSheet.create({
     minHeight: 28,
   },
   label: {
-    color: '#94a3b8',
+    color: theme.neutral.textSecondary,
     fontSize: 11,
     fontWeight: '700',
     fontFamily: 'monospace',
@@ -103,16 +104,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 6,
-    backgroundColor: '#0f172a',
+    backgroundColor: theme.neutral.surfaceDeep,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: theme.neutral.border,
   },
   chipActive: {
     backgroundColor: '#1d4ed8',
     borderColor: '#3b82f6',
   },
   chipText: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 10,
     fontWeight: '700',
     fontFamily: 'monospace',
@@ -121,7 +122,7 @@ const styles = StyleSheet.create({
     color: '#e0f2fe',
   },
   valueDisplay: {
-    color: '#f1f5f9',
+    color: theme.neutral.textPrimary,
     fontSize: 13,
     fontWeight: '700',
     fontFamily: 'monospace',

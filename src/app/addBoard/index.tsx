@@ -15,6 +15,7 @@ import {
 import { DEFAULT_BATTERY_CONFIG, deriveBatteryConfig } from '@/lib/battery'
 import { routes } from '@/navigation/routes'
 import { useBoardStore } from '@/store/boardStore'
+import { theme } from '@/constants/theme'
 
 export default function AddBoardScreen() {
   const { bleId, bleName, step } = useLocalSearchParams<{
@@ -131,7 +132,7 @@ export default function AddBoardScreen() {
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
-    backgroundColor: '#111827',
+    backgroundColor: theme.neutral.bg,
   },
   container: {
     flex: 1,

@@ -114,8 +114,8 @@ export function TuneSyncBar({
         }
       case 'up_to_date':
         return {
-          borderColor: '#334155',
-          textColor: '#64748b',
+          borderColor: theme.neutral.border,
+          textColor: theme.neutral.textMuted,
           accentColor: theme.gps.color,
           accentTextColor: '#022c22',
           text: 'Your board is up to date',
@@ -260,7 +260,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     borderWidth: 1,
     gap: 8,
-    backgroundColor: '#0f172a',
+    backgroundColor: theme.neutral.surfaceDeep,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
@@ -283,7 +283,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   detailText: {
-    color: '#94a3b8',
+    color: theme.neutral.textSecondary,
     fontSize: 11,
     fontWeight: '600',
   },
@@ -304,7 +304,7 @@ const styles = StyleSheet.create({
   },
   actionBtnSecondary: {
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: theme.neutral.border,
     backgroundColor: '#172033',
   },
   actionText: {

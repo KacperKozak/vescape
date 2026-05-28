@@ -1,5 +1,6 @@
 import Mapbox from '@rnmapbox/maps'
 import { MoonStarsIcon, MountainsIcon, PlanetIcon, SunIcon } from 'phosphor-react-native'
+import { theme } from '@/constants/theme'
 
 export const MAP_DEFAULTS = {
   fallbackCoordinate: [15.0, 54.0] as [number, number],
@@ -28,7 +29,9 @@ export const MAP_DEFAULTS = {
 export const BLANK_STYLE = JSON.stringify({
   version: 8,
   sources: {},
-  layers: [{ id: 'background', type: 'background', paint: { 'background-color': '#111827' } }],
+  layers: [
+    { id: 'background', type: 'background', paint: { 'background-color': theme.neutral.bg } },
+  ],
 })
 
 export const MAP_STYLES = [

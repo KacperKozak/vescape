@@ -1,4 +1,5 @@
 import { StyleSheet, Text, TextInput, View } from 'react-native'
+import { theme } from '@/constants/theme'
 
 interface BoardInfoFormProps {
   name: string
@@ -44,7 +45,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   label: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.5,

@@ -144,7 +144,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#131c2e',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: theme.neutral.border,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
@@ -169,15 +169,15 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   emptyText: {
-    color: '#94a3b8',
+    color: theme.neutral.textSecondary,
     textAlign: 'center',
     paddingVertical: 20,
   },
   row: {
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#0f172a',
+    borderColor: theme.neutral.border,
+    backgroundColor: theme.neutral.surfaceDeep,
     paddingVertical: 10,
     paddingHorizontal: 12,
     flexDirection: 'row',
@@ -201,11 +201,11 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   rowName: {
-    color: '#94a3b8',
+    color: theme.neutral.textSecondary,
     fontSize: 12,
   },
   rowMeta: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 11,
   },
   faultRow: {
@@ -225,14 +225,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: theme.neutral.border,
     backgroundColor: '#101827',
   },
   loadingPressed: {
     backgroundColor: interaction.pressedBg,
   },
   loadingText: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 11,
     fontWeight: '700',
   },

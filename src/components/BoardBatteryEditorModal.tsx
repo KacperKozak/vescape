@@ -5,6 +5,7 @@ import type { BatteryConfig } from 'vesc-ble'
 import { BoardBatteryForm } from '@/components/BoardBatteryForm'
 import { Button } from '@/components/Button'
 import { buildBatteryConfig } from '@/lib/boardSetup'
+import { theme } from '@/constants/theme'
 
 type BatteryMode = BatteryConfig['mode']
 
@@ -145,12 +146,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#131c2e',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: theme.neutral.surface,
     padding: 20,
     gap: 12,
   },
   title: {
-    color: '#f1f5f9',
+    color: theme.neutral.textPrimary,
     fontSize: 18,
     fontWeight: '800',
   },
