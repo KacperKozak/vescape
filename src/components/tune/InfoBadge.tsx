@@ -2,15 +2,13 @@ import { Pressable, Text, StyleSheet } from 'react-native'
 import { InfoIcon } from 'phosphor-react-native'
 import { theme } from '@/constants/theme'
 
-export function InfoBadge({
-  label,
-  danger = false,
-  onPress,
-}: {
+interface InfoBadgeProps {
   label: string
   danger?: boolean
   onPress: () => void
-}) {
+}
+
+export function InfoBadge({ label, danger = false, onPress }: InfoBadgeProps) {
   return (
     <Pressable style={[styles.metaBadge, danger && styles.metaBadgeDanger]} onPress={onPress}>
       <Text style={[styles.metaText, danger && styles.metaTextDanger]} selectable>

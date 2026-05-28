@@ -48,15 +48,13 @@ function formatProperties(json: string): string {
   }
 }
 
-function EventItem({
-  event,
-  expanded,
-  onToggle,
-}: {
+interface EventItemProps {
   event: LocalDiagnosticEvent
   expanded: boolean
   onToggle: (id: number) => void
-}) {
+}
+
+function EventItem({ event, expanded, onToggle }: EventItemProps) {
   const time = new Date(event.occurredAtMs).toLocaleTimeString()
   const meta = [event.operation, event.phase, event.deviceName].filter(Boolean).join(' · ')
   const dotColor = getEventColor(event.eventName)

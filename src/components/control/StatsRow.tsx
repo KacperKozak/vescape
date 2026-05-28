@@ -18,7 +18,12 @@ export function StatsRow({ current, min, max, avg }: Props) {
   )
 }
 
-function StatCell({ label, value }: { label: string; value: string }) {
+interface StatCellProps {
+  label: string
+  value: string
+}
+
+function StatCell({ label, value }: StatCellProps) {
   return (
     <View style={styles.cell}>
       <Text style={styles.label}>{label}</Text>

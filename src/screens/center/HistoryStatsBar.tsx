@@ -44,7 +44,11 @@ export function HistoryStatsBar({ session }: HistoryStatsBarProps) {
   )
 }
 
-function CompactStat({ item }: { item: StatItem }) {
+interface CompactStatProps {
+  item: StatItem
+}
+
+function CompactStat({ item }: CompactStatProps) {
   const IconComponent = item.icon
   return (
     <View style={styles.compactCell}>

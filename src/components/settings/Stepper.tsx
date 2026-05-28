@@ -1,21 +1,16 @@
 import { MinusIcon, PlusIcon } from 'phosphor-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 
-export function Stepper({
-  value,
-  unit,
-  min,
-  max,
-  onChange,
-  fullWidth = false,
-}: {
+interface StepperProps {
   value: number
   unit?: string
   min?: number
   max?: number
   onChange: (nextValue: number) => void
   fullWidth?: boolean
-}) {
+}
+
+export function Stepper({ value, unit, min, max, onChange, fullWidth = false }: StepperProps) {
   const decrementValue = min == null ? value - 1 : Math.max(min, value - 1)
   const incrementValue = max == null ? value + 1 : Math.min(max, value + 1)
   const canDecrement = min == null || value > min

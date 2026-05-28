@@ -41,15 +41,13 @@ export function FieldEditorPopover({ target, onCancel, onApply }: FieldEditorPop
   )
 }
 
-function FieldEditorPopoverInner({
-  target,
-  onCancel,
-  onApply,
-}: {
+interface FieldEditorPopoverInnerProps {
   target: FieldEditorTarget
   onCancel: () => void
   onApply: (value: number) => void
-}) {
+}
+
+function FieldEditorPopoverInner({ target, onCancel, onApply }: FieldEditorPopoverInnerProps) {
   const [draftValue, setDraftValue] = useState(target.value)
   const [draftText, setDraftText] = useState(formatTuneValue(target.value))
 

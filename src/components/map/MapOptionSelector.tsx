@@ -101,6 +101,16 @@ export function MapOptionSelector<Key extends string>({
   )
 }
 
+interface MapOptionButtonProps {
+  label: string
+  icon: ReactNode
+  selected: boolean
+  expanded: boolean
+  activeColor: string
+  activeBackground: string
+  onPress: () => void
+}
+
 function MapOptionButton({
   label,
   icon,
@@ -109,15 +119,7 @@ function MapOptionButton({
   activeColor,
   activeBackground,
   onPress,
-}: {
-  label: string
-  icon: ReactNode
-  selected: boolean
-  expanded: boolean
-  activeColor: string
-  activeBackground: string
-  onPress: () => void
-}) {
+}: MapOptionButtonProps) {
   const style = useAnimatedStyle(
     () => ({
       width: withTiming(expanded && selected ? ACTIVE_WIDTH : OPTION_WIDTH, ANIMATION),

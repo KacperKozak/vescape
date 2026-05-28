@@ -165,7 +165,12 @@ const BG_ARC_RIGHT = arcPathRight(1)
 const TICK_LENGHT = 2
 const TICK_WIDTH = 0.35
 
-function AlertTick({ side, fraction }: { side: 'left' | 'right'; fraction: number }) {
+interface AlertTickProps {
+  side: 'left' | 'right'
+  fraction: number
+}
+
+function AlertTick({ side, fraction }: AlertTickProps) {
   const inner =
     side === 'left' ? polarLeft(R - TICK_LENGHT, fraction) : polarRight(R - TICK_LENGHT, fraction)
   const outer =
@@ -184,15 +189,13 @@ function AlertTick({ side, fraction }: { side: 'left' | 'right'; fraction: numbe
   )
 }
 
-function AlertMarker({
-  side,
-  alert,
-  max,
-}: {
+interface AlertMarkerProps {
   side: 'left' | 'right'
   alert: DualGaugeAlert
   max: number
-}) {
+}
+
+function AlertMarker({ side, alert, max }: AlertMarkerProps) {
   const thresholdFraction = clamp01(alert.threshold / max)
   const maxFraction = alert.thresholdMax == null ? null : clamp01(alert.thresholdMax / max)
   const rangePath =
@@ -265,7 +268,11 @@ function halfRangeWedgePath(fromFraction: number, toFraction: number) {
 
 const HALF_BG_ARC = halfArcPath(1)
 
-function HalfAlertTick({ fraction }: { fraction: number }) {
+interface HalfAlertTickProps {
+  fraction: number
+}
+
+function HalfAlertTick({ fraction }: HalfAlertTickProps) {
   const inner = polarHalf(HALF_R - TICK_LENGHT, fraction)
   const outer = polarHalf(HALF_R - STROKE / 2, fraction)
 
@@ -282,17 +289,14 @@ function HalfAlertTick({ fraction }: { fraction: number }) {
   )
 }
 
-function HalfAlertMarker({
-  alert,
-  min,
-  max,
-  rangeGradientId,
-}: {
+interface HalfAlertMarkerProps {
   alert: DualGaugeAlert
   min: number
   max: number
   rangeGradientId: string
-}) {
+}
+
+function HalfAlertMarker({ alert, min, max, rangeGradientId }: HalfAlertMarkerProps) {
   const thresholdFraction = normalizeFraction(alert.threshold, min, max)
   const maxFraction =
     alert.thresholdMax == null ? null : normalizeFraction(alert.thresholdMax, min, max)

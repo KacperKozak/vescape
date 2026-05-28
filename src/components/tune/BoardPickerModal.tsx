@@ -2,17 +2,14 @@ import { Modal, Pressable, Text, View, StyleSheet } from 'react-native'
 import { XIcon } from 'phosphor-react-native'
 import { type Board } from '@/store/boardStore'
 
-export function BoardPickerModal({
-  visible,
-  boards,
-  onSelect,
-  onDismiss,
-}: {
+interface BoardPickerModalProps {
   visible: boolean
   boards: Board[]
   onSelect: (board: Board) => void
   onDismiss: () => void
-}) {
+}
+
+export function BoardPickerModal({ visible, boards, onSelect, onDismiss }: BoardPickerModalProps) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onDismiss}>
       <Pressable style={styles.modalBackdrop} onPress={onDismiss}>

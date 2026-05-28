@@ -240,7 +240,11 @@ function statsToItems(stats: ProfileStats): StatItem[] {
   ]
 }
 
-function StatsGrid({ items }: { items: StatItem[] }) {
+interface StatsGridProps {
+  items: StatItem[]
+}
+
+function StatsGrid({ items }: StatsGridProps) {
   return (
     <View style={styles.grid}>
       {items.map((item) => {

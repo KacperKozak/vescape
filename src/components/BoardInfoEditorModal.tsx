@@ -42,17 +42,19 @@ export function BoardInfoEditorModal({
   )
 }
 
+interface BoardInfoEditorModalContentProps {
+  name: string
+  description: string
+  saving: boolean
+  onSave: (value: { name: string; description: string }) => Promise<void> | void
+}
+
 function BoardInfoEditorModalContent({
   name,
   description,
   saving,
   onSave,
-}: {
-  name: string
-  description: string
-  saving: boolean
-  onSave: (value: { name: string; description: string }) => Promise<void> | void
-}) {
+}: BoardInfoEditorModalContentProps) {
   const [draftName, setDraftName] = useState(name)
   const [draftDescription, setDraftDescription] = useState(description)
 

@@ -3,6 +3,15 @@ import { Modal, Pressable, TextInput, Text, View, StyleSheet } from 'react-nativ
 import { CheckIcon } from 'phosphor-react-native'
 import { theme } from '@/constants/theme'
 
+interface TextPromptModalContentProps {
+  title: string
+  placeholder?: string
+  initialValue: string
+  confirmLabel: string
+  onConfirm: (value: string) => void
+  onDismiss: () => void
+}
+
 function TextPromptModalContent({
   title,
   placeholder,
@@ -10,14 +19,7 @@ function TextPromptModalContent({
   confirmLabel,
   onConfirm,
   onDismiss,
-}: {
-  title: string
-  placeholder?: string
-  initialValue: string
-  confirmLabel: string
-  onConfirm: (value: string) => void
-  onDismiss: () => void
-}) {
+}: TextPromptModalContentProps) {
   const [text, setText] = useState(initialValue)
   return (
     <Pressable style={styles.modalBackdrop} onPress={onDismiss}>
@@ -49,6 +51,16 @@ function TextPromptModalContent({
   )
 }
 
+interface TextPromptModalProps {
+  visible: boolean
+  title: string
+  placeholder?: string
+  initialValue: string
+  confirmLabel: string
+  onConfirm: (value: string) => void
+  onDismiss: () => void
+}
+
 export function TextPromptModal({
   visible,
   title,
@@ -57,15 +69,7 @@ export function TextPromptModal({
   confirmLabel,
   onConfirm,
   onDismiss,
-}: {
-  visible: boolean
-  title: string
-  placeholder?: string
-  initialValue: string
-  confirmLabel: string
-  onConfirm: (value: string) => void
-  onDismiss: () => void
-}) {
+}: TextPromptModalProps) {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onDismiss}>
       {visible ? (

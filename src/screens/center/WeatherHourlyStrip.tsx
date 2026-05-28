@@ -5,7 +5,11 @@ import { theme } from '@/constants/theme'
 import { weatherCodeToColor } from '@/lib/weather'
 import { useWeatherStore, type HourForecast } from '@/store/weatherStore'
 
-function HourItem({ item }: { item: HourForecast }) {
+interface HourItemProps {
+  item: HourForecast
+}
+
+function HourItem({ item }: HourItemProps) {
   return (
     <View style={styles.item}>
       <Text style={styles.hour}>{item.hour}</Text>

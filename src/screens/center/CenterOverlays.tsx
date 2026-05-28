@@ -102,17 +102,14 @@ const RECORD_BUTTON_HEIGHT = 48
 const HISTORY_BUTTON_SIZE = 54
 const TELEMETRY_FADE_TIMING = { duration: 260 } as const
 
-function FullMapControls({
-  mapRef,
-  map,
-  top,
-  bottom,
-}: {
+interface FullMapControlsProps {
   mapRef: RefObject<CenterMapHandle | null>
   map: CenterMapOverlayProps
   top: number
   bottom: number
-}) {
+}
+
+function FullMapControls({ mapRef, map, top, bottom }: FullMapControlsProps) {
   return (
     <>
       <View pointerEvents="box-none" style={[styles.weatherPillContainer, { top }]}>

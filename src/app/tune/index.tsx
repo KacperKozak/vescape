@@ -429,19 +429,21 @@ export default function TuneScreen() {
   )
 }
 
+interface BasicSliderItemCellProps {
+  item: BasicSliderItem
+  editable: boolean
+  onPress: (sliderId: string, ref: { current: View | null }) => void
+  onInfo: () => void
+  onResetFormula: () => void
+}
+
 function BasicSliderItemCell({
   item,
   editable,
   onPress,
   onInfo,
   onResetFormula,
-}: {
-  item: BasicSliderItem
-  editable: boolean
-  onPress: (sliderId: string, ref: { current: View | null }) => void
-  onInfo: () => void
-  onResetFormula: () => void
-}) {
+}: BasicSliderItemCellProps) {
   const cellRef = useRef<View | null>(null)
   return (
     <BasicSliderCell
@@ -455,6 +457,19 @@ function BasicSliderItemCell({
   )
 }
 
+interface TuneFieldCellProps {
+  field: RefloatConfigField
+  savedValue: TuneProfileFieldValue | undefined
+  boardValue: TuneProfileFieldValue | undefined
+  profileValue: TuneProfileFieldValue | undefined
+  dirty: boolean
+  boardChanged: boolean
+  onPress: (field: RefloatConfigField, ref: { current: View | null }) => void
+  onInfo: () => void
+  onRevert: () => void
+  onAcceptBoard: () => void
+}
+
 function TuneFieldCell({
   field,
   savedValue,
@@ -466,18 +481,7 @@ function TuneFieldCell({
   onInfo,
   onRevert,
   onAcceptBoard,
-}: {
-  field: RefloatConfigField
-  savedValue: TuneProfileFieldValue | undefined
-  boardValue: TuneProfileFieldValue | undefined
-  profileValue: TuneProfileFieldValue | undefined
-  dirty: boolean
-  boardChanged: boolean
-  onPress: (field: RefloatConfigField, ref: { current: View | null }) => void
-  onInfo: () => void
-  onRevert: () => void
-  onAcceptBoard: () => void
-}) {
+}: TuneFieldCellProps) {
   const cellRef = useRef<View | null>(null)
   return (
     <TuneConfigCell
@@ -496,15 +500,13 @@ function TuneFieldCell({
   )
 }
 
-function RenameProfileModal({
-  profile,
-  onRename,
-  onDismiss,
-}: {
+interface RenameProfileModalProps {
   profile: TuneProfile | null
   onRename: (name: string) => void
   onDismiss: () => void
-}) {
+}
+
+function RenameProfileModal({ profile, onRename, onDismiss }: RenameProfileModalProps) {
   return (
     <TextPromptModal
       visible={profile != null}

@@ -167,15 +167,13 @@ export default function SoundPlaygroundScreen() {
   )
 }
 
-function PresetButton({
-  preset,
-  selected,
-  onPress,
-}: {
+interface PresetButtonProps {
   preset: AlertPreset
   selected: boolean
   onPress: () => void
-}) {
+}
+
+function PresetButton({ preset, selected, onPress }: PresetButtonProps) {
   return (
     <Pressable
       style={[styles.presetButton, selected && styles.presetButtonActive]}

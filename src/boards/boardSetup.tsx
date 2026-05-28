@@ -13,7 +13,21 @@ import { theme } from '@/constants/theme'
 import { BATTERY_CELL_PRESETS, deriveBatteryConfig } from '@/lib/battery'
 
 export type BatteryMode = BatteryConfig['mode']
-export type BatterySummary = ReturnType<typeof getBatterySummary>
+type BatterySummary = ReturnType<typeof getBatterySummary>
+
+interface EditBoardSettingsProps {
+  name: string
+  description: string
+  pairedBleId: string
+  pairedBleName: string
+  pairingSaving?: boolean
+  keepMissingBatteryConfig: boolean
+  batterySummary: BatterySummary
+  onOpenInfo: () => void
+  onOpenBattery: () => void
+  onOpenPairing: () => void
+  onClearPairing: () => Promise<void> | void
+}
 
 export function EditBoardSettings({
   name,
@@ -27,19 +41,7 @@ export function EditBoardSettings({
   onOpenBattery,
   onOpenPairing,
   onClearPairing,
-}: {
-  name: string
-  description: string
-  pairedBleId: string
-  pairedBleName: string
-  pairingSaving?: boolean
-  keepMissingBatteryConfig: boolean
-  batterySummary: BatterySummary
-  onOpenInfo: () => void
-  onOpenBattery: () => void
-  onOpenPairing: () => void
-  onClearPairing: () => Promise<void> | void
-}) {
+}: EditBoardSettingsProps) {
   return (
     <>
       <SettingsSectionTitle>Board</SettingsSectionTitle>
@@ -97,6 +99,34 @@ export function EditBoardSettings({
   )
 }
 
+interface AddBoardWizardProps {
+  step: number
+  name: string
+  description: string
+  pairedBleId: string
+  pairedBleName: string
+  batteryMode: BatteryMode
+  cellPresetId: string
+  seriesCount: number
+  parallelCount: number
+  manualMinVoltage: string
+  manualMaxVoltage: string
+  batterySummary: BatterySummary
+  batteryWarning: string | null
+  canSave: boolean
+  onStepChange: (step: number) => void
+  onOpenPairing: () => void
+  onChangeName: (value: string) => void
+  onChangeDescription: (value: string) => void
+  onChangeBatteryMode: (value: BatteryMode) => void
+  onChangeCellPresetId: (value: string) => void
+  onChangeSeriesCount: (value: number) => void
+  onChangeParallelCount: (value: number) => void
+  onChangeManualMinVoltage: (value: string) => void
+  onChangeManualMaxVoltage: (value: string) => void
+  onSave: () => void
+}
+
 export function AddBoardWizard({
   step,
   name,
@@ -123,33 +153,7 @@ export function AddBoardWizard({
   onChangeManualMinVoltage,
   onChangeManualMaxVoltage,
   onSave,
-}: {
-  step: number
-  name: string
-  description: string
-  pairedBleId: string
-  pairedBleName: string
-  batteryMode: BatteryMode
-  cellPresetId: string
-  seriesCount: number
-  parallelCount: number
-  manualMinVoltage: string
-  manualMaxVoltage: string
-  batterySummary: BatterySummary
-  batteryWarning: string | null
-  canSave: boolean
-  onStepChange: (step: number) => void
-  onOpenPairing: () => void
-  onChangeName: (value: string) => void
-  onChangeDescription: (value: string) => void
-  onChangeBatteryMode: (value: BatteryMode) => void
-  onChangeCellPresetId: (value: string) => void
-  onChangeSeriesCount: (value: number) => void
-  onChangeParallelCount: (value: number) => void
-  onChangeManualMinVoltage: (value: string) => void
-  onChangeManualMaxVoltage: (value: string) => void
-  onSave: () => void
-}) {
+}: AddBoardWizardProps) {
   return (
     <>
       <WizardHeader step={step} />
@@ -206,17 +210,19 @@ export function AddBoardWizard({
   )
 }
 
+interface PairWizardStepProps {
+  pairedBleId: string
+  pairedBleName: string
+  onOpenPairing: () => void
+  onNext: () => void
+}
+
 function PairWizardStep({
   pairedBleId,
   pairedBleName,
   onOpenPairing,
   onNext,
-}: {
-  pairedBleId: string
-  pairedBleName: string
-  onOpenPairing: () => void
-  onNext: () => void
-}) {
+}: PairWizardStepProps) {
   return (
     <WizardStep title="Pair board">
       <Text style={styles.wizardCopy}>
@@ -236,6 +242,15 @@ function PairWizardStep({
   )
 }
 
+interface NameWizardStepProps {
+  name: string
+  description: string
+  onChangeName: (value: string) => void
+  onChangeDescription: (value: string) => void
+  onBack: () => void
+  onNext: () => void
+}
+
 function NameWizardStep({
   name,
   description,
@@ -243,14 +258,7 @@ function NameWizardStep({
   onChangeDescription,
   onBack,
   onNext,
-}: {
-  name: string
-  description: string
-  onChangeName: (value: string) => void
-  onChangeDescription: (value: string) => void
-  onBack: () => void
-  onNext: () => void
-}) {
+}: NameWizardStepProps) {
   return (
     <WizardStep title="Name">
       <BoardInfoForm
@@ -262,6 +270,24 @@ function NameWizardStep({
       <WizardActions canContinue={Boolean(name.trim())} onBack={onBack} onNext={onNext} />
     </WizardStep>
   )
+}
+
+interface BatteryWizardStepProps {
+  batteryMode: BatteryMode
+  cellPresetId: string
+  seriesCount: number
+  parallelCount: number
+  manualMinVoltage: string
+  manualMaxVoltage: string
+  batteryWarning: string | null
+  onChangeBatteryMode: (value: BatteryMode) => void
+  onChangeCellPresetId: (value: string) => void
+  onChangeSeriesCount: (value: number) => void
+  onChangeParallelCount: (value: number) => void
+  onChangeManualMinVoltage: (value: string) => void
+  onChangeManualMaxVoltage: (value: string) => void
+  onBack: () => void
+  onNext: () => void
 }
 
 function BatteryWizardStep({
@@ -280,23 +306,7 @@ function BatteryWizardStep({
   onChangeManualMaxVoltage,
   onBack,
   onNext,
-}: {
-  batteryMode: BatteryMode
-  cellPresetId: string
-  seriesCount: number
-  parallelCount: number
-  manualMinVoltage: string
-  manualMaxVoltage: string
-  batteryWarning: string | null
-  onChangeBatteryMode: (value: BatteryMode) => void
-  onChangeCellPresetId: (value: string) => void
-  onChangeSeriesCount: (value: number) => void
-  onChangeParallelCount: (value: number) => void
-  onChangeManualMinVoltage: (value: string) => void
-  onChangeManualMaxVoltage: (value: string) => void
-  onBack: () => void
-  onNext: () => void
-}) {
+}: BatteryWizardStepProps) {
   return (
     <WizardStep title="Battery">
       <BoardBatteryForm
@@ -318,6 +328,17 @@ function BatteryWizardStep({
   )
 }
 
+interface OverviewWizardStepProps {
+  name: string
+  description: string
+  pairedBleId: string
+  pairedBleName: string
+  batterySummary: BatterySummary
+  canSave: boolean
+  onBack: () => void
+  onSave: () => void
+}
+
 function OverviewWizardStep({
   name,
   description,
@@ -327,16 +348,7 @@ function OverviewWizardStep({
   canSave,
   onBack,
   onSave,
-}: {
-  name: string
-  description: string
-  pairedBleId: string
-  pairedBleName: string
-  batterySummary: BatterySummary
-  canSave: boolean
-  onBack: () => void
-  onSave: () => void
-}) {
+}: OverviewWizardStepProps) {
   return (
     <WizardStep title="Overview">
       <OverviewRow
@@ -359,7 +371,11 @@ function OverviewWizardStep({
   )
 }
 
-function WizardHeader({ step }: { step: number }) {
+interface WizardHeaderProps {
+  step: number
+}
+
+function WizardHeader({ step }: WizardHeaderProps) {
   return (
     <View style={styles.wizardHeader}>
       <View style={styles.wizardProgress}>
@@ -372,7 +388,12 @@ function WizardHeader({ step }: { step: number }) {
   )
 }
 
-function WizardStep({ title, children }: { title: string; children: ReactNode }) {
+interface WizardStepProps {
+  title: string
+  children: ReactNode
+}
+
+function WizardStep({ title, children }: WizardStepProps) {
   return (
     <View style={styles.wizardStep}>
       <Text style={styles.wizardTitle}>{title}</Text>
@@ -381,15 +402,13 @@ function WizardStep({ title, children }: { title: string; children: ReactNode })
   )
 }
 
-function WizardActions({
-  canContinue,
-  onBack,
-  onNext,
-}: {
+interface WizardActionsProps {
   canContinue: boolean
   onBack: () => void
   onNext: () => void
-}) {
+}
+
+function WizardActions({ canContinue, onBack, onNext }: WizardActionsProps) {
   return (
     <View style={styles.actionRow}>
       <Button style={styles.actionButton} label="Back" variant="secondary" onPress={onBack} />
@@ -398,7 +417,12 @@ function WizardActions({
   )
 }
 
-function OverviewRow({ label, value }: { label: string; value: string }) {
+interface OverviewRowProps {
+  label: string
+  value: string
+}
+
+function OverviewRow({ label, value }: OverviewRowProps) {
   return (
     <View style={styles.overviewRow}>
       <Text style={styles.overviewLabel}>{label}</Text>
