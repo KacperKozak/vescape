@@ -6,16 +6,16 @@ Visual design principles for the Vibe Wheel app. Follow these when building or m
 
 Dark-first. All screens use dark backgrounds with light text.
 
-| Role              | Color     |
-|-------------------|-----------|
-| Background        | `#111827` |
-| Card / surface    | `#1e293b` |
-| Deep surface      | `#0f172a` |
-| Border            | `#334155` |
-| Primary text      | `#f1f5f9` |
-| Secondary text    | `#94a3b8` |
-| Muted text        | `#64748b` |
-| Dim text          | `#475569` |
+| Role           | Color     |
+| -------------- | --------- |
+| Background     | `#111827` |
+| Card / surface | `#1e293b` |
+| Deep surface   | `#0f172a` |
+| Border         | `#334155` |
+| Primary text   | `#f1f5f9` |
+| Secondary text | `#94a3b8` |
+| Muted text     | `#64748b` |
+| Dim text       | `#475569` |
 
 ## Layout Principles
 
@@ -28,16 +28,16 @@ Dark-first. All screens use dark backgrounds with light text.
 
 Use `src/constants/theme.ts` for all accent colors. Never hardcode a color that belongs to one of these categories directly in a component.
 
-| Token       | `.color`    | Purpose                        |
-|-------------|-------------|--------------------------------|
-| `wheel`     | `#38bdf8`   | Board data, version, distance  |
-| `bran`      | `#06b6d4`   | Brand / primary accents        |
-| `gps`       | `#22c55e`   | GPS, Android platform, success |
-| `target`    | `#a855f7`   | Time, iOS platform, profiles   |
-| `warning`   | `#f97316`   | Database, speed, warnings      |
-| `error`     | `#ef4444`   | Destructive, errors            |
-| `highlight` | `#facc15`   | Stars, achievements, gauges    |
-| `teal`      | `#14b8a6`   | Secondary data, avg metrics    |
+| Token       | `.color`  | Purpose                        |
+| ----------- | --------- | ------------------------------ |
+| `wheel`     | `#38bdf8` | Board data, version, distance  |
+| `bran`      | `#06b6d4` | Brand / primary accents        |
+| `gps`       | `#22c55e` | GPS, Android platform, success |
+| `target`    | `#a855f7` | Time, iOS platform, profiles   |
+| `warning`   | `#f97316` | Database, speed, warnings      |
+| `error`     | `#ef4444` | Destructive, errors            |
+| `highlight` | `#facc15` | Stars, achievements, gauges    |
+| `teal`      | `#14b8a6` | Secondary data, avg metrics    |
 
 Each token also provides `.bg`, `.text`, and `.border` variants for pills, cards, and badges.
 
@@ -48,6 +48,7 @@ Neutral row icons use `#94a3b8` (not in theme — it's a surface-level slate).
 Use `phosphor-react-native` with `weight="duotone"` as default weight. Each icon gets a distinct accent color from `theme` — do not reuse the same color for adjacent icons.
 
 Icon sizing:
+
 - `14` — inline metadata, header stats
 - `16–18` — row icons in settings/lists
 - `20` — row icons inside icon boxes (legacy card rows)
@@ -61,20 +62,21 @@ Inside cards, separate rows with a thin `#334155` line indented past the icon (`
 ## Info Headers
 
 For screen headers showing metadata (version, OS, DB size), use centered text without card wrappers:
+
 - App name large and bold
 - Stats in a horizontal row with colored icons + small muted text
 - No background, no border — sits directly on screen background
 
 ## Typography
 
-| Role           | Size | Weight | Color     |
-|----------------|------|--------|-----------|
-| Screen title   | 20   | 700    | `#f1f5f9` |
-| Row label      | 15   | 600    | `#f1f5f9` |
-| Row hint       | 12   | 400    | `#64748b` |
-| Section title  | 12–13| 700    | `#64748b` |
-| Metadata       | 12   | 600    | `#94a3b8` |
-| Stepper value  | 15   | 700    | `#f1f5f9` |
+| Role          | Size  | Weight | Color     |
+| ------------- | ----- | ------ | --------- |
+| Screen title  | 20    | 700    | `#f1f5f9` |
+| Row label     | 15    | 600    | `#f1f5f9` |
+| Row hint      | 12    | 400    | `#64748b` |
+| Section title | 12–13 | 700    | `#64748b` |
+| Metadata      | 12    | 600    | `#94a3b8` |
+| Stepper value | 15    | 700    | `#f1f5f9` |
 
 ## Avoid
 

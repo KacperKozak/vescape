@@ -61,16 +61,16 @@ Treat these as navigational hints, not a complete file list or ownership boundar
 
 Use one or more app-area labels for filtering:
 
-| Area label        | Title prefix  | Use for                                  |
-| ----------------- | ------------- | ---------------------------------------- |
-| `area:history`    | `[History]`   | ride history, sessions, buckets, graphs  |
-| `area:sanitizers` | `[Sanitizers]`| metric sanitizers and exclusions         |
-| `area:map`        | `[Map]`       | maps, routes, GPS display                |
-| `area:weather`    | `[Weather]`   | weather data and UI                      |
-| `area:core`       | `[Core]`      | app shell, storage, lifecycle, infra     |
-| `area:board`      | `[Board]`     | board profiles, board table/settings     |
-| `area:telemetry`  | `[Telemetry]` | live telemetry ingest/display            |
-| `area:tunes`      | `[Tunes]`     | VESC tune read/write flows               |
+| Area label        | Title prefix   | Use for                                 |
+| ----------------- | -------------- | --------------------------------------- |
+| `area:history`    | `[History]`    | ride history, sessions, buckets, graphs |
+| `area:sanitizers` | `[Sanitizers]` | metric sanitizers and exclusions        |
+| `area:map`        | `[Map]`        | maps, routes, GPS display               |
+| `area:weather`    | `[Weather]`    | weather data and UI                     |
+| `area:core`       | `[Core]`       | app shell, storage, lifecycle, infra    |
+| `area:board`      | `[Board]`      | board profiles, board table/settings    |
+| `area:telemetry`  | `[Telemetry]`  | live telemetry ingest/display           |
+| `area:tunes`      | `[Tunes]`      | VESC tune read/write flows              |
 
 When a PRD or issue-planning skill creates or starts using a new app-area label, update this table in the same turn. Add the label, title prefix, and a short "Use for" description so future PRDs and implementation issues can reuse the prefix consistently.
 

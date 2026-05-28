@@ -16,19 +16,21 @@ Show a visual charging indicator in the telemetry UI when the board is connected
 
 ### 2. `batteryCurrent` negative
 
-When regen-braking during riding, current flows *into* the battery through the VESC motor controller. This shows as a negative `batteryCurrent`. However, this is a riding indicator ("braking hard"), not "wall charger is plugged in."
+When regen-braking during riding, current flows _into_ the battery through the VESC motor controller. This shows as a negative `batteryCurrent`. However, this is a riding indicator ("braking hard"), not "wall charger is plugged in."
 
 **Result:** Always `0.0` when stationary (charger or not). Not useful for detecting wall charging.
 
 ### 3. Mode 4 — `d->charging.current` / `d->charging.voltage`
 
 Refloat mode 4 appends two extra fields at bytes 55–58 of the `COMMAND_GET_ALLDATA` response:
+
 - `[55–56]` `int16 / 10` → `charging.current` (A)
 - `[57–58]` `int16 / 10` → `charging.voltage` (V)
 
 These come from Refloat's `charging` subsystem (`src/charging.h`), which is designed to detect an external charger connected to a dedicated charging circuit wired through or sensed by the VESC.
 
 We wired up the full stack for mode 4:
+
 - Android native parser extended to read bytes 55–58
 - `RefloatTelemetry` data class extended with `chargingCurrent: Double?` / `chargingVoltage: Double?`
 - `TelemetryEvent` TS interface extended
@@ -37,6 +39,7 @@ We wired up the full stack for mode 4:
 - Poll mode changed from `2` → `4`
 
 **Confirmed working via logcat:**
+
 ```
 parseGetAllData: mode=4 payloadSize=59
 parseGetAllData: chargingCurrent=0.0 chargingVoltage=0.0

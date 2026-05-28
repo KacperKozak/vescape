@@ -30,7 +30,6 @@ Use **`phosphor-react-native`** for all icons. Do **not** use emoji or unicode c
 
 ```tsx
 import { LightningIcon, WarningCircleIcon } from 'phosphor-react-native'
-
 ;<LightningIcon size={16} color="#4ade80" weight="fill" />
 ```
 
