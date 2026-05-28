@@ -8,15 +8,26 @@ import Mapbox, {
   ShapeSource,
 } from '@rnmapbox/maps'
 import {
+  ArrowUpIcon,
   ClockCountdownIcon,
+  CrosshairSimpleIcon,
   LinkBreakIcon,
+  MapPinIcon,
   PlugsConnectedIcon,
   StopIcon,
   WarningCircleIcon,
   type Icon,
 } from 'phosphor-react-native'
-import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Animated, StyleSheet, Text, View } from 'react-native'
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ElementRef,
+} from 'react'
+import { Animated, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
 import type { LocationEvent } from 'vesc-ble'
 
 import { InfoModal } from '@/components/ui/modals/InfoModal'
@@ -51,6 +62,7 @@ import {
 } from './useCameraControls'
 import { getLiveFollowCameraProfile, getPitchForZoom } from './cameraFollowProfile'
 import { shouldPreserveLiveFollowGesture } from './cameraGestureState'
+import { MapVignette } from './MapVignette'
 import { phoneHeadingAnimationDuration } from './phoneHeading'
 import { usePhoneHeading } from './usePhoneHeading'
 
@@ -79,6 +91,25 @@ interface SelectedHistoryMarker {
 const RADAR_MAX_ZOOM = 10
 const HEADING_SMOOTHING_TAU_MS = 180
 const HEADING_SNAP_DEG = 0.08
+const OFFSCREEN_GPS_INDICATOR_SIZE = 64
+const OFFSCREEN_GPS_EDGE_SIDE_INSET = 58
+const OFFSCREEN_GPS_EDGE_TOP_INSET = 122
+const OFFSCREEN_GPS_EDGE_BOTTOM_INSET = 142
+const GPS_POINT_COLOR = theme.target.color
+const GPS_POINT_TEXT_COLOR = theme.target.text
+const DESTINATION_POINT_COLOR = theme.gps.color
+const DESTINATION_POINT_TEXT_COLOR = theme.gps.text
+interface MapLayout {
+  width: number
+  height: number
+}
+
+interface OffscreenGpsIndicatorState {
+  id: 'gps' | 'target'
+  x: number
+  y: number
+  angleDeg: number
+}
 
 const HISTORY_MARKER_LABELS: Record<HistoryMarker['type'], string> = {
   app_stop: 'Recording stopped',
@@ -142,6 +173,101 @@ function smoothHeadingStep(current: number, target: number, elapsedMs: number): 
   return normalizeHeading(current + delta * alpha)
 }
 
+function nearlySameIndicator(
+  current: OffscreenGpsIndicatorState[],
+  next: OffscreenGpsIndicatorState[],
+) {
+  if (current.length !== next.length) return false
+  return next.every((nextIndicator, index) => {
+    const currentIndicator = current[index]
+    return (
+      currentIndicator?.id === nextIndicator.id &&
+      Math.abs(currentIndicator.x - nextIndicator.x) < 0.5 &&
+      Math.abs(currentIndicator.y - nextIndicator.y) < 0.5 &&
+      Math.abs(currentIndicator.angleDeg - nextIndicator.angleDeg) < 0.5
+    )
+  })
+}
+
+function clampedEdgeIndicator(
+  id: OffscreenGpsIndicatorState['id'],
+  point: { x: number; y: number },
+  layout: MapLayout,
+): OffscreenGpsIndicatorState | null {
+  if (point.x >= 0 && point.x <= layout.width && point.y >= 0 && point.y <= layout.height) {
+    return null
+  }
+
+  const left = Math.min(OFFSCREEN_GPS_EDGE_SIDE_INSET, layout.width / 2)
+  const right = Math.max(left, layout.width - OFFSCREEN_GPS_EDGE_SIDE_INSET)
+  const top = Math.min(OFFSCREEN_GPS_EDGE_TOP_INSET, layout.height / 2)
+  const bottom = Math.max(top, layout.height - OFFSCREEN_GPS_EDGE_BOTTOM_INSET)
+  const centerX = layout.width / 2
+  const centerY = layout.height / 2
+  const deltaX = point.x - centerX
+  const deltaY = point.y - centerY
+
+  if (!Number.isFinite(deltaX) || !Number.isFinite(deltaY) || (deltaX === 0 && deltaY === 0)) {
+    return null
+  }
+
+  const candidates = [
+    deltaX < 0 ? (left - centerX) / deltaX : Number.POSITIVE_INFINITY,
+    deltaX > 0 ? (right - centerX) / deltaX : Number.POSITIVE_INFINITY,
+    deltaY < 0 ? (top - centerY) / deltaY : Number.POSITIVE_INFINITY,
+    deltaY > 0 ? (bottom - centerY) / deltaY : Number.POSITIVE_INFINITY,
+  ].filter((value) => value > 0)
+  const scale = Math.min(...candidates)
+
+  if (!Number.isFinite(scale)) return null
+
+  return {
+    id,
+    x: Math.min(right, Math.max(left, centerX + deltaX * scale)),
+    y: Math.min(bottom, Math.max(top, centerY + deltaY * scale)),
+    angleDeg: (Math.atan2(deltaX, -deltaY) * 180) / Math.PI,
+  }
+}
+
+function bearingDeg(
+  from: { longitude: number; latitude: number },
+  to: { longitude: number; latitude: number },
+) {
+  const fromLat = (from.latitude * Math.PI) / 180
+  const toLat = (to.latitude * Math.PI) / 180
+  const deltaLon = ((to.longitude - from.longitude) * Math.PI) / 180
+  const y = Math.sin(deltaLon) * Math.cos(toLat)
+  const x =
+    Math.cos(fromLat) * Math.sin(toLat) - Math.sin(fromLat) * Math.cos(toLat) * Math.cos(deltaLon)
+  return normalizeHeading((Math.atan2(y, x) * 180) / Math.PI)
+}
+
+function projectCoordinateToEdgePoint(
+  coordinate: { longitude: number; latitude: number },
+  camera: CameraSnapshot,
+  layout: MapLayout,
+) {
+  const center = {
+    longitude: camera.centerCoordinate[0],
+    latitude: camera.centerCoordinate[1],
+  }
+  const angleRad = ((bearingDeg(center, coordinate) - camera.heading) * Math.PI) / 180
+  const radius = Math.max(layout.width, layout.height)
+  return {
+    x: layout.width / 2 + Math.sin(angleRad) * radius,
+    y: layout.height / 2 - Math.cos(angleRad) * radius,
+  }
+}
+
+function usableCoordinate(location: { longitude: number; latitude: number } | null | undefined) {
+  if (!location) return null
+  if (!Number.isFinite(location.longitude) || !Number.isFinite(location.latitude)) return null
+  return {
+    longitude: location.longitude,
+    latitude: location.latitude,
+  }
+}
+
 function buildHistoryMarkerMessage(selection: SelectedHistoryMarker): string {
   const { marker, gps } = selection
   const lines = [
@@ -159,6 +285,48 @@ function buildHistoryMarkerMessage(selection: SelectedHistoryMarker): string {
   if (marker.message) lines.push(`Message: ${marker.message}`)
 
   return lines.join('\n')
+}
+
+function OffscreenGpsIndicator({
+  indicator,
+  onPress,
+}: {
+  indicator: OffscreenGpsIndicatorState
+  onPress: () => void
+}) {
+  const IconComponent = indicator.id === 'gps' ? CrosshairSimpleIcon : MapPinIcon
+  const color = indicator.id === 'gps' ? GPS_POINT_TEXT_COLOR : DESTINATION_POINT_TEXT_COLOR
+  const borderColor = indicator.id === 'gps' ? GPS_POINT_COLOR : DESTINATION_POINT_COLOR
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={
+        indicator.id === 'gps' ? 'Recenter map on current position' : 'Clear target point'
+      }
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.offscreenGpsIndicator,
+        {
+          left: indicator.x - OFFSCREEN_GPS_INDICATOR_SIZE / 2,
+          top: indicator.y - OFFSCREEN_GPS_INDICATOR_SIZE / 2,
+        },
+        pressed && styles.offscreenGpsIndicatorPressed,
+      ]}
+    >
+      <View
+        pointerEvents="none"
+        style={[
+          styles.offscreenGpsArrowOrbit,
+          { transform: [{ rotate: `${indicator.angleDeg}deg` }] },
+        ]}
+      >
+        <ArrowUpIcon size={22} color={color} weight="bold" />
+      </View>
+      <View pointerEvents="none" style={[styles.offscreenGpsIcon, { borderColor }]}>
+        <IconComponent size={24} color={color} weight="bold" />
+      </View>
+    </Pressable>
+  )
 }
 
 interface CenterMapLayersProps {
@@ -238,7 +406,7 @@ function LiveMapLayers({
             <MapPin
               id="center-gps-position"
               coordinate={[gpsFix.longitude, gpsFix.latitude]}
-              color={MAP_DEFAULTS.markerColor}
+              color={GPS_POINT_COLOR}
               bearingDeg={gpsBearingDeg}
             />
           )}
@@ -378,7 +546,7 @@ function CenterMapLayers({
         <MapPin
           id="center-target-position"
           coordinate={[targetLocation.longitude, targetLocation.latitude]}
-          color={theme.target.color}
+          color={DESTINATION_POINT_COLOR}
           onSelected={onClearTarget}
         />
       )}
@@ -439,6 +607,8 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
   const styleReloadCameraRef = useRef<CameraSnapshot | null>(null)
   const previousMapStyleKeyRef = useRef(mapStyleKey)
   const mapRevealedRef = useRef(false)
+  const mapViewRef = useRef<ElementRef<typeof Mapbox.MapView> | null>(null)
+  const offscreenProjectionRequestRef = useRef(0)
   const [mapOpacity] = useState(() => new Animated.Value(0))
   const [cameraReady, setCameraReady] = useState(false)
   const [selectedHistoryMarker, setSelectedHistoryMarker] = useState<SelectedHistoryMarker | null>(
@@ -447,6 +617,10 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
   const [showRadar, setShowRadar] = useState(true)
   const [cameraHeading, setCameraHeading] = useState(0)
   const [initialApproximateFix, setInitialApproximateFix] = useState<LocationEvent | null>(null)
+  const [mapLayout, setMapLayout] = useState<MapLayout>({ width: 0, height: 0 })
+  const [offscreenGpsIndicators, setOffscreenGpsIndicators] = useState<
+    OffscreenGpsIndicatorState[]
+  >([])
 
   const gpsFix = liveLocations.at(-1) ?? null
   const previousGpsFix = liveLocations.at(-2) ?? null
@@ -488,6 +662,15 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
     ],
   )
   const { cameraFix, accuracyFix, accuracyRadiusM, directionBearingDeg } = gpsPresentation
+  const offscreenGpsCoordinate = useMemo(
+    () =>
+      usableCoordinate(gpsFix) ??
+      usableCoordinate(latestApproximateLocation) ??
+      usableCoordinate(initialApproximateFix) ??
+      usableCoordinate(accuracyFix) ??
+      usableCoordinate(cameraFix),
+    [accuracyFix, cameraFix, gpsFix, initialApproximateFix, latestApproximateLocation],
+  )
   const retainedGpsBearing = gpsPresentation.nextReliableBearing
   const gpsHeadingMode = mapNavigationMode === 'gpsHeading'
   const phoneHeadingMode = mapNavigationMode === 'phoneHeading'
@@ -551,6 +734,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
     followGps,
     setFollowGps,
     setFollowZoomLevel,
+    recenterLive,
     getLiveFollowCamera,
     getHistoryPreviewCamera,
   } = useCameraControls({
@@ -581,6 +765,118 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
         ? null
         : directionBearingDeg - cameraHeading
   const updateNavigationDiagnostics = useNavigationDiagnosticsStore((s) => s.update)
+
+  const handleMapLayout = useCallback((event: LayoutChangeEvent) => {
+    const { width, height } = event.nativeEvent.layout
+    setMapLayout((current) =>
+      Math.abs(current.width - width) < 0.5 && Math.abs(current.height - height) < 0.5
+        ? current
+        : { width, height },
+    )
+  }, [])
+
+  const updateOffscreenGpsIndicator = useCallback(() => {
+    const camera = currentCameraRef.current
+    const mapView = mapViewRef.current
+    if (
+      mapView == null ||
+      historyActive ||
+      (offscreenGpsCoordinate == null && targetLocation == null) ||
+      mapLayout.width <= 0 ||
+      mapLayout.height <= 0
+    ) {
+      offscreenProjectionRequestRef.current += 1
+      setOffscreenGpsIndicators((current) => (current.length === 0 ? current : []))
+      return
+    }
+
+    const requestId = offscreenProjectionRequestRef.current + 1
+    offscreenProjectionRequestRef.current = requestId
+    const trackedPoints = [
+      ...(offscreenGpsCoordinate
+        ? [
+            {
+              id: 'gps' as const,
+              coordinate: [offscreenGpsCoordinate.longitude, offscreenGpsCoordinate.latitude] as [
+                number,
+                number,
+              ],
+            },
+          ]
+        : []),
+      ...(targetLocation
+        ? [
+            {
+              id: 'target' as const,
+              coordinate: [targetLocation.longitude, targetLocation.latitude] as [number, number],
+            },
+          ]
+        : []),
+    ]
+
+    void Promise.all(
+      trackedPoints.map(async (trackedPoint) => ({
+        ...trackedPoint,
+        point: await mapView.getPointInView(trackedPoint.coordinate),
+      })),
+    )
+      .then((projectedPoints) => {
+        if (offscreenProjectionRequestRef.current !== requestId) return
+        const next = projectedPoints.flatMap((trackedPoint) => {
+          const [x, y] = trackedPoint.point
+          if (typeof x !== 'number' || typeof y !== 'number') return []
+
+          const detectedIndicator = clampedEdgeIndicator(trackedPoint.id, { x, y }, mapLayout)
+          if (!detectedIndicator) return []
+          if (!camera) return [detectedIndicator]
+
+          const positionedPoint = projectCoordinateToEdgePoint(
+            {
+              longitude: trackedPoint.coordinate[0],
+              latitude: trackedPoint.coordinate[1],
+            },
+            camera,
+            mapLayout,
+          )
+          const positionedIndicator = clampedEdgeIndicator(
+            trackedPoint.id,
+            positionedPoint,
+            mapLayout,
+          )
+          return [positionedIndicator ?? detectedIndicator]
+        })
+        setOffscreenGpsIndicators((current) =>
+          nearlySameIndicator(current, next) ? current : next,
+        )
+      })
+      .catch(() => {
+        if (offscreenProjectionRequestRef.current !== requestId) return
+        setOffscreenGpsIndicators((current) => (current.length === 0 ? current : []))
+      })
+  }, [currentCameraRef, historyActive, mapLayout, offscreenGpsCoordinate, targetLocation])
+
+  const handleOffscreenIndicatorPress = useCallback(
+    (indicator: OffscreenGpsIndicatorState) => {
+      onMapInteraction()
+      if (indicator.id === 'gps') {
+        recenterLive({ resetPadding: true })
+        return
+      }
+      if (!targetLocation) return
+
+      setFollowGps(false)
+      const currentCamera = currentCameraRef.current
+      cameraRef.current?.setCamera({
+        centerCoordinate: [targetLocation.longitude, targetLocation.latitude],
+        zoomLevel: currentCamera?.zoomLevel,
+        heading: currentCamera?.heading,
+        pitch: currentCamera?.pitch,
+        animationDuration: MAP_DEFAULTS.animationDuration,
+        animationMode: 'easeTo',
+      })
+    },
+    [cameraRef, currentCameraRef, onMapInteraction, recenterLive, setFollowGps, targetLocation],
+  )
 
   useEffect(() => {
     updateNavigationDiagnostics({
@@ -761,6 +1057,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
       )
       onHeadingChange(state.properties.heading)
       setShowRadar(state.properties.zoom <= RADAR_MAX_ZOOM)
+      updateOffscreenGpsIndicator()
     },
     [
       cameraRef,
@@ -777,8 +1074,14 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
       phoneHeadingMode,
       setFollowGps,
       setFollowZoomLevel,
+      updateOffscreenGpsIndicator,
     ],
   )
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(updateOffscreenGpsIndicator)
+    return () => cancelAnimationFrame(frame)
+  }, [updateOffscreenGpsIndicator])
 
   if (!MAPBOX_ACCESS_TOKEN) {
     return (
@@ -798,9 +1101,11 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
   return (
     <Animated.View
       style={[styles.mapContainer, { opacity: mapOpacity }]}
+      onLayout={handleMapLayout}
       onTouchStart={onMapInteraction}
     >
       <Mapbox.MapView
+        ref={mapViewRef}
         style={styles.map}
         styleURL={useCustomJSON ? undefined : selectedMapStyle.styleURL}
         styleJSON={isOneDark ? ONE_DARK_MAP_STYLE : isMapy ? BLANK_STYLE : undefined}
@@ -861,6 +1166,14 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
           Weather data by RainViewer
         </Text>
       ) : null}
+      {mode === 'telemetry' ? <MapVignette mode={mode} idPrefix="telemetry-map-vignette" /> : null}
+      {offscreenGpsIndicators.map((indicator) => (
+        <OffscreenGpsIndicator
+          key={indicator.id}
+          indicator={indicator}
+          onPress={() => handleOffscreenIndicatorPress(indicator)}
+        />
+      ))}
       <View style={styles.edgeGuardLeft} pointerEvents="box-only" />
       <View style={styles.edgeGuardRight} pointerEvents="box-only" />
     </Animated.View>
@@ -876,6 +1189,38 @@ const styles = StyleSheet.create({
   map: {
     ...StyleSheet.absoluteFill,
   },
+  offscreenGpsIndicator: {
+    position: 'absolute',
+    width: OFFSCREEN_GPS_INDICATOR_SIZE,
+    height: OFFSCREEN_GPS_INDICATOR_SIZE,
+    zIndex: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  offscreenGpsIndicatorPressed: {
+    opacity: 0.55,
+  },
+  offscreenGpsIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: GPS_POINT_COLOR,
+    backgroundColor: theme.neutral.surfaceDeep,
+    shadowColor: theme.neutral.surfaceDeep,
+    shadowOpacity: 0.32,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 5,
+  },
+  offscreenGpsArrowOrbit: {
+    position: 'absolute',
+    width: OFFSCREEN_GPS_INDICATOR_SIZE,
+    height: OFFSCREEN_GPS_INDICATOR_SIZE,
+    alignItems: 'center',
+  },
   edgeGuardLeft: {
     position: 'absolute',
     top: 0,
@@ -883,6 +1228,7 @@ const styles = StyleSheet.create({
     left: 0,
     width: EDGE_GUARD_WIDTH,
     backgroundColor: theme.neutral.touchInvisible,
+    zIndex: 3,
   },
   edgeGuardRight: {
     position: 'absolute',
@@ -891,6 +1237,7 @@ const styles = StyleSheet.create({
     right: 0,
     width: EDGE_GUARD_WIDTH,
     backgroundColor: theme.neutral.touchInvisible,
+    zIndex: 3,
   },
   emptyContainer: {
     ...StyleSheet.absoluteFill,

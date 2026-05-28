@@ -579,6 +579,7 @@ export function useCameraControls({
     followGps,
     setFollowGps,
     setFollowZoomLevel,
+    recenterLive,
     getLiveFollowCamera,
     getHistoryPreviewCamera,
   }

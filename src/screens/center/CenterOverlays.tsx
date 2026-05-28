@@ -254,7 +254,6 @@ export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOver
         pointerEvents={telemetryInteractive ? 'box-none' : 'none'}
         style={[styles.telemetryInterface, interfaceFadeStyle]}
       >
-        <MapVignette mode={mode} idPrefix="telemetry-map-vignette" />
         <LiveHud revealProgress={revealProgress} />
         <BottomTelemetryStrip revealProgress={revealProgress} />
         <TopBar
