@@ -394,7 +394,7 @@ export interface AppSettings {
   freeSpinMaxSpeedDeltaKmh: number
   freeSpinStationaryBoardCapKmh: number
   mapStyleKey: 'onedark' | 'outdoors' | 'satellite' | 'mapy'
-  mapNavigationMode: 'northUp' | 'gpsHeading' | 'freeRotate'
+  mapNavigationMode: 'northUp' | 'gpsHeading' | 'phoneHeading' | 'freeRotate'
 }
 
 export interface DiagnosticStatus {

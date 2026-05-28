@@ -1,0 +1,108 @@
+const PHONE_HEADING_INTERVAL_MS = 33
+const PHONE_HEADING_MIN_SMOOTHING_ALPHA = 0.18
+const PHONE_HEADING_MAX_SMOOTHING_ALPHA = 0.82
+const PHONE_HEADING_FULL_SPEED_DELTA_DEG = 90
+
+export interface DeviceMotionMeasurement {
+  rotation: { alpha: number; beta: number; gamma: number; timestamp: number }
+  orientation: number
+}
+
+interface PermissionResponse {
+  status: string
+}
+
+interface Subscription {
+  remove: () => void
+}
+
+export interface PhoneHeadingAdapter {
+  isAvailableAsync: () => Promise<boolean>
+  getPermissionsAsync: () => Promise<PermissionResponse>
+  requestPermissionsAsync: () => Promise<PermissionResponse>
+  setUpdateInterval: (intervalMs: number) => void
+  addListener: (listener: (event: DeviceMotionMeasurement) => void) => Subscription
+}
+
+export type PhoneHeadingStatus = 'ready' | 'unavailable' | 'denied'
+
+export interface PhoneHeadingSubscription {
+  status: PhoneHeadingStatus
+  remove: () => void
+}
+
+export const deviceMotionPhoneHeadingAdapter: PhoneHeadingAdapter = {
+  isAvailableAsync: () => require('expo-sensors').DeviceMotion.isAvailableAsync(),
+  getPermissionsAsync: () => require('expo-sensors').DeviceMotion.getPermissionsAsync(),
+  requestPermissionsAsync: () => require('expo-sensors').DeviceMotion.requestPermissionsAsync(),
+  setUpdateInterval: (intervalMs) =>
+    require('expo-sensors').DeviceMotion.setUpdateInterval(intervalMs),
+  addListener: (listener) => require('expo-sensors').DeviceMotion.addListener(listener),
+}
+
+function normalizeHeading(degrees: number): number {
+  return ((degrees % 360) + 360) % 360
+}
+
+function headingDeltaDeg(from: number, to: number): number {
+  return ((((to - from) % 360) + 540) % 360) - 180
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value))
+}
+
+export function phoneHeadingFromDeviceMotion(event: DeviceMotionMeasurement): number | null {
+  const alpha = event.rotation?.alpha
+  if (typeof alpha !== 'number' || !Number.isFinite(alpha)) return null
+  return normalizeHeading((-alpha * 180) / Math.PI + event.orientation)
+}
+
+export function smoothPhoneHeading(previous: number | null, next: number): number {
+  if (previous == null) return normalizeHeading(next)
+  const delta = headingDeltaDeg(previous, next)
+  const speedRatio = clamp(Math.abs(delta) / PHONE_HEADING_FULL_SPEED_DELTA_DEG, 0, 1)
+  const alpha =
+    PHONE_HEADING_MIN_SMOOTHING_ALPHA +
+    (PHONE_HEADING_MAX_SMOOTHING_ALPHA - PHONE_HEADING_MIN_SMOOTHING_ALPHA) * speedRatio
+  return normalizeHeading(previous + delta * alpha)
+}
+
+export function phoneHeadingAnimationDuration(): number {
+  return 0
+}
+
+export function phoneHeadingUpdateIntervalMs(): number {
+  return PHONE_HEADING_INTERVAL_MS
+}
+
+export function phoneHeadingSmoothingAlphaForTest(previous: number, next: number): number {
+  const delta = headingDeltaDeg(previous, next)
+  const speedRatio = clamp(Math.abs(delta) / PHONE_HEADING_FULL_SPEED_DELTA_DEG, 0, 1)
+  return (
+    PHONE_HEADING_MIN_SMOOTHING_ALPHA +
+    (PHONE_HEADING_MAX_SMOOTHING_ALPHA - PHONE_HEADING_MIN_SMOOTHING_ALPHA) * speedRatio
+  )
+}
+
+export async function startPhoneHeadingUpdates(
+  adapter: PhoneHeadingAdapter,
+  onHeading: (headingDeg: number) => void,
+): Promise<PhoneHeadingSubscription> {
+  const available = await adapter.isAvailableAsync()
+  if (!available) return { status: 'unavailable', remove() {} }
+
+  const existingPermission = await adapter.getPermissionsAsync()
+  const permission =
+    existingPermission.status === 'granted'
+      ? existingPermission
+      : await adapter.requestPermissionsAsync()
+  if (permission.status !== 'granted') return { status: 'denied', remove() {} }
+
+  adapter.setUpdateInterval(PHONE_HEADING_INTERVAL_MS)
+  const subscription = adapter.addListener((event) => {
+    const heading = phoneHeadingFromDeviceMotion(event)
+    if (heading != null) onHeading(heading)
+  })
+  return { status: 'ready', remove: () => subscription.remove() }
+}

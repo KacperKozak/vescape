@@ -41,4 +41,17 @@ describe('live follow camera profile', () => {
       }).zoomLevel,
     ).toBe(13)
   })
+
+  test('manual heading zoom can stay below heading-mode default minimum', () => {
+    const profile = getLiveFollowCameraProfile({
+      gpsCamera,
+      followHeadingDeg: 90,
+      gpsHeadingMode: true,
+      perspectiveEnabled: true,
+      enforceHeadingMinimums: false,
+    })
+
+    expect(profile.zoomLevel).toBe(13)
+    expect(profile.pitch).toBeLessThan(56)
+  })
 })

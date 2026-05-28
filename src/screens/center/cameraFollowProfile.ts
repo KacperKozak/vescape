@@ -40,19 +40,23 @@ export function getLiveFollowCameraProfile({
   gpsHeadingMode,
   perspectiveEnabled,
   viewportHeight,
+  enforceHeadingMinimums = true,
 }: {
   gpsCamera: Pick<LiveFollowCameraProfile, 'centerCoordinate' | 'zoomLevel'>
   followHeadingDeg: number
   gpsHeadingMode: boolean
   perspectiveEnabled: boolean
   viewportHeight?: number
+  enforceHeadingMinimums?: boolean
 }): LiveFollowCameraProfile {
-  const zoomLevel = gpsHeadingMode
-    ? Math.max(gpsCamera.zoomLevel, GPS_HEADING_MIN_ZOOM)
-    : gpsCamera.zoomLevel
-  const pitch = gpsHeadingMode
-    ? Math.max(getPitchForZoom(zoomLevel, perspectiveEnabled), GPS_HEADING_MIN_PITCH)
-    : getPitchForZoom(zoomLevel, perspectiveEnabled)
+  const zoomLevel =
+    gpsHeadingMode && enforceHeadingMinimums
+      ? Math.max(gpsCamera.zoomLevel, GPS_HEADING_MIN_ZOOM)
+      : gpsCamera.zoomLevel
+  const pitch =
+    gpsHeadingMode && enforceHeadingMinimums
+      ? Math.max(getPitchForZoom(zoomLevel, perspectiveEnabled), GPS_HEADING_MIN_PITCH)
+      : getPitchForZoom(zoomLevel, perspectiveEnabled)
 
   return {
     ...gpsCamera,

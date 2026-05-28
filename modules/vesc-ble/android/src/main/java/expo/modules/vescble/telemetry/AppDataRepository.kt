@@ -13,7 +13,7 @@ internal fun validMapStyleKey(value: Any?): String? =
   (value as? String)?.takeIf { it in setOf("onedark", "outdoors", "satellite", "mapy") }
 
 internal fun validMapNavigationMode(value: Any?): String? =
-  (value as? String)?.takeIf { it in setOf("northUp", "gpsHeading", "freeRotate") }
+  (value as? String)?.takeIf { it in setOf("northUp", "gpsHeading", "phoneHeading", "freeRotate") }
 
 private const val MIN_LIVE_HISTORY_LIMIT_MINUTES = 1
 private const val MAX_LIVE_HISTORY_LIMIT_MINUTES = 50

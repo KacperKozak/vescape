@@ -1,4 +1,9 @@
-import { ArrowUpIcon, ArrowsClockwiseIcon, NavigationArrowIcon } from 'phosphor-react-native'
+import {
+  ArrowUpIcon,
+  ArrowsClockwiseIcon,
+  DeviceMobileIcon,
+  NavigationArrowIcon,
+} from 'phosphor-react-native'
 import { type ReactNode } from 'react'
 import { View } from 'react-native'
 
@@ -31,6 +36,8 @@ export function MapNavigationSelector({
       <ArrowUpIcon size={21} color={theme.gps.text} weight="bold" />
     ) : activeMode === 'gpsHeading' ? (
       <NavigationArrowIcon size={21} color={theme.gps.text} weight="fill" />
+    ) : activeMode === 'phoneHeading' ? (
+      <DeviceMobileIcon size={21} color={theme.gps.text} weight="bold" />
     ) : (
       <View style={{ transform: [{ rotate: `${-heading}deg` }] }}>
         <ArrowUpIcon size={21} color={theme.gps.text} weight="bold" />
@@ -43,7 +50,7 @@ export function MapNavigationSelector({
       activeIcon={activeIcon}
       activeColor={theme.gps.text}
       activeBackground={`${theme.gps.color}1f`}
-      collapsedAccessibilityLabel={`Navigation: ${activeMode === 'northUp' ? 'North up' : activeMode === 'gpsHeading' ? 'GPS heading' : 'Free rotate'}`}
+      collapsedAccessibilityLabel={`Navigation: ${activeMode === 'northUp' ? 'North up' : activeMode === 'gpsHeading' ? 'GPS heading' : activeMode === 'phoneHeading' ? 'Phone heading' : 'Free rotate'}`}
       expanded={expanded}
       options={options}
       onToggle={onToggle}
@@ -58,5 +65,6 @@ function getNavigationIcon(mode: MapNavigationMode, activeMode: MapNavigationMod
   if (mode === 'gpsHeading') {
     return <NavigationArrowIcon size={20} color={color} weight="fill" />
   }
+  if (mode === 'phoneHeading') return <DeviceMobileIcon size={20} color={color} weight="bold" />
   return <ArrowsClockwiseIcon size={20} color={color} weight="bold" />
 }

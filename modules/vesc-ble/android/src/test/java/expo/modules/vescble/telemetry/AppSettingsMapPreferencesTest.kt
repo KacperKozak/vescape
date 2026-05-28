@@ -27,6 +27,7 @@ class AppSettingsMapPreferencesTest {
   fun navigationValidationAcceptsSupportedModesOnly() {
     assertEquals("northUp", validMapNavigationMode("northUp"))
     assertEquals("gpsHeading", validMapNavigationMode("gpsHeading"))
+    assertEquals("phoneHeading", validMapNavigationMode("phoneHeading"))
     assertEquals("freeRotate", validMapNavigationMode("freeRotate"))
     assertNull(validMapNavigationMode("bearing"))
     assertNull(validMapNavigationMode(false))
