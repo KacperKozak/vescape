@@ -1,18 +1,6 @@
-import {
-  CloudFogIcon,
-  CloudIcon,
-  CloudLightningIcon,
-  CloudMoonIcon,
-  CloudRainIcon,
-  CloudSnowIcon,
-  CloudSunIcon,
-  MoonStarsIcon,
-  SunIcon,
-  type Icon,
-} from 'phosphor-react-native'
 import { create } from 'zustand'
 
-import { theme } from '@/constants/theme'
+import { parseHourLabel, isFutureHour } from '@/lib/weather'
 
 const CACHE_MS = 10 * 60 * 1_000
 const MIN_DELTA_DEG = 0.01
@@ -24,14 +12,12 @@ export interface HourForecast {
   temperature: number
   weatherCode: number
   precipitationProbability: number
-  icon: Icon
 }
 
 interface WeatherState {
   temperature: number | null
   weatherCode: number | null
   precipitationProbability: number | null
-  icon: Icon | null
   hourly: HourForecast[]
   loading: boolean
   lastLat: number | null
@@ -44,50 +30,10 @@ interface WeatherActions {
   refresh: () => Promise<void>
 }
 
-function isNightHour(hour: number): boolean {
-  return hour >= 21 || hour < 6
-}
-
-function weatherCodeToIcon(code: number, hour?: number): Icon {
-  const night = hour != null && isNightHour(hour)
-  if (code === 0) return night ? MoonStarsIcon : SunIcon
-  if (code <= 2) return night ? CloudMoonIcon : CloudSunIcon
-  if (code === 3) return CloudIcon
-  if (code === 45 || code === 48) return CloudFogIcon
-  if (code >= 51 && code <= 57) return CloudRainIcon
-  if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return CloudRainIcon
-  if ([71, 73, 75, 77, 85, 86].includes(code)) return CloudSnowIcon
-  if ([95, 96, 99].includes(code)) return CloudLightningIcon
-  return CloudIcon
-}
-
-export function weatherCodeToColor(code: number, hour?: number): string {
-  const night = hour != null && isNightHour(hour)
-  if (code === 0) return night ? theme.weather.moon : theme.weather.sun
-  if (code <= 2) return night ? theme.weather.moonPartly : theme.weather.partly
-  if (code === 3) return theme.weather.cloud
-  if (code === 45 || code === 48) return theme.weather.fog
-  if (code >= 51 && code <= 57) return theme.weather.rain
-  if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return theme.weather.rain
-  if ([71, 73, 75, 77, 85, 86].includes(code)) return theme.weather.snow
-  if ([95, 96, 99].includes(code)) return theme.weather.thunder
-  return theme.weather.cloud
-}
-
-function parseHourLabel(isoTime: string): string {
-  const date = new Date(isoTime)
-  return `${date.getHours()}:${String(date.getMinutes()).padStart(2, '0')}`
-}
-
-function isFutureHour(isoTime: string): boolean {
-  return new Date(isoTime).getTime() > Date.now()
-}
-
 export const useWeatherStore = create<WeatherState & WeatherActions>((set, get) => ({
   temperature: null,
   weatherCode: null,
   precipitationProbability: null,
-  icon: null,
   hourly: [],
   loading: false,
   lastLat: null,
@@ -137,7 +83,6 @@ export const useWeatherStore = create<WeatherState & WeatherActions>((set, get) 
           temperature: Math.round(temps[i]),
           weatherCode: codes[i],
           precipitationProbability: precips[i] ?? 0,
-          icon: weatherCodeToIcon(codes[i], h),
         })
       }
 
@@ -145,7 +90,6 @@ export const useWeatherStore = create<WeatherState & WeatherActions>((set, get) 
         temperature: Math.round(current.temperature_2m),
         weatherCode: current.weather_code,
         precipitationProbability: current.precipitation_probability ?? 0,
-        icon: weatherCodeToIcon(current.weather_code, new Date().getHours()),
         hourly,
         lastLat: lat,
         lastLon: lon,

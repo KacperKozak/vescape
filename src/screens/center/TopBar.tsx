@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { BoardSelectorSheet } from '@/components/BoardSelectorSheet'
 import { IconButton } from '@/components/IconButton'
+import { WeatherIcon } from '@/components/weather/WeatherIcon'
 import { routes } from '@/navigation/routes'
 import type { Board } from '@/store/boardStore'
 import { useWeatherStore } from '@/store/weatherStore'
@@ -47,10 +48,10 @@ export function TopBar({
   const pillRef = useRef<View>(null)
   const [selectorOpen, setSelectorOpen] = useState(false)
 
-  const weatherIcon = useWeatherStore((s) => s.icon)
+  const weatherCode = useWeatherStore((s) => s.weatherCode)
   const weatherTemp = useWeatherStore((s) => s.temperature)
   const weatherPrecip = useWeatherStore((s) => s.precipitationProbability)
-  const hasWeather = weatherIcon != null && weatherTemp != null
+  const hasWeather = weatherCode != null && weatherTemp != null
 
   const canDisconnect =
     bleStatus === 'connected' ||
@@ -108,10 +109,7 @@ export function TopBar({
       </View>
       {hasWeather && (
         <Pressable style={styles.weatherRow} onPress={onWeatherPress}>
-          {(() => {
-            const WeatherIcon = weatherIcon
-            return <WeatherIcon size={13} color="#94a3b8" weight="duotone" />
-          })()}
+          <WeatherIcon code={weatherCode} size={13} color="#94a3b8" weight="duotone" />
           <Text style={styles.weatherText}>{weatherTemp}°</Text>
           {weatherPrecip != null && weatherPrecip > 0 && (
             <>

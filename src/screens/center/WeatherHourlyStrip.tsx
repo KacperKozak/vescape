@@ -1,14 +1,21 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 
+import { WeatherIcon } from '@/components/weather/WeatherIcon'
 import { theme } from '@/constants/theme'
-import { useWeatherStore, weatherCodeToColor, type HourForecast } from '@/store/weatherStore'
+import { weatherCodeToColor } from '@/lib/weather'
+import { useWeatherStore, type HourForecast } from '@/store/weatherStore'
 
 function HourItem({ item }: { item: HourForecast }) {
-  const Icon = item.icon
   return (
     <View style={styles.item}>
       <Text style={styles.hour}>{item.hour}</Text>
-      <Icon size={20} color={weatherCodeToColor(item.weatherCode, item.hourNum)} weight="duotone" />
+      <WeatherIcon
+        code={item.weatherCode}
+        hour={item.hourNum}
+        size={20}
+        color={weatherCodeToColor(item.weatherCode, item.hourNum)}
+        weight="duotone"
+      />
       <Text style={styles.temp}>{item.temperature}°</Text>
       {item.precipitationProbability > 0 && (
         <Text style={styles.precip}>{item.precipitationProbability}%</Text>
