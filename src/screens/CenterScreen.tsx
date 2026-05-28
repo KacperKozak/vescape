@@ -1,12 +1,11 @@
 import { useRef } from 'react'
-import { ActivityIndicator, View, Text, Pressable, StyleSheet } from 'react-native'
-import { router } from 'expo-router'
+import { ActivityIndicator, View, Text, StyleSheet } from 'react-native'
 
 import { CenterMap, type CenterMapHandle } from '@/screens/center/CenterMap'
 import { CenterOverlays } from '@/screens/center/CenterOverlays'
 import { useCenterScreenController } from '@/screens/center/useCenterScreenController'
-import { routes } from '@/navigation/routes'
 import type { Board } from '@/store/boardStore'
+import { theme } from '@/constants/theme'
 
 interface CenterScreenProps {
   activeBoard: Board | undefined
@@ -37,7 +36,6 @@ export function CenterScreen({
 }: CenterScreenProps) {
   const mapRef = useRef<CenterMapHandle>(null)
   const controller = useCenterScreenController({ mapRef })
-  const hasBle = !!activeBoard?.bleId
 
   if (!boardsLoaded) {
     return (
@@ -50,43 +48,11 @@ export function CenterScreen({
     )
   }
 
-  if (!hasBle) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.empty}>
-          {activeBoard ? (
-            <>
-              <Text style={styles.emptyTitle}>{activeBoard.name}</Text>
-              <Text style={styles.emptySubtitle}>No device paired</Text>
-              <Pressable
-                style={styles.settingsButton}
-                onPress={() =>
-                  router.push({
-                    pathname: routes.addBoardDetails,
-                    params: { boardId: activeBoard.id },
-                  })
-                }
-              >
-                <Text style={styles.settingsButtonText}>Open Settings</Text>
-              </Pressable>
-            </>
-          ) : (
-            <>
-              <Text style={styles.emptyTitle}>No board added yet</Text>
-              <Pressable style={styles.addButton} onPress={() => router.push(routes.addBoardScan)}>
-                <Text style={styles.addButtonText}>+ Add your first board</Text>
-              </Pressable>
-            </>
-          )}
-        </View>
-      </View>
-    )
-  }
-
   return (
     <View style={styles.container}>
       <CenterMap
         ref={mapRef}
+        mode={controller.mode}
         liveLocations={controller.liveLocations}
         latestApproximateLocation={controller.latestApproximateLocation}
         rideGpsSamples={controller.sessionGpsSamples}
@@ -94,11 +60,13 @@ export function CenterScreen({
         historyPreview={controller.historyPreview}
         historyActive={controller.historyActive}
         mapStyleKey={controller.mapStyleKey}
+        mapNavigationMode={controller.mapNavigationMode}
         rotationLocked={controller.rotationLocked}
         perspectiveEnabled={controller.perspectiveEnabled}
         onPerspectiveChange={controller.setPerspectiveEnabled}
         onHeadingChange={controller.setHeading}
         onLongPressTarget={controller.setTargetLocation}
+        onMapInteraction={controller.dismissMapSelector}
         targetLocation={controller.targetLocation}
         onClearTarget={controller.clearTargetLocation}
         weatherActive={controller.weatherActive}
@@ -121,13 +89,13 @@ export function CenterScreen({
         }}
         map={{
           heading: controller.heading,
-          rotationLocked: controller.rotationLocked,
-          targetLocation: controller.targetLocation,
-          clearTargetLocation: controller.clearTargetLocation,
           mapStyleKey: controller.mapStyleKey,
           setMapStyleKey: controller.setMapStyleKey,
+          mapNavigationMode: controller.mapNavigationMode,
+          setMapNavigationMode: controller.setMapNavigationMode,
+          mapSelector: controller.mapSelector,
+          setMapSelector: controller.setMapSelector,
           enterMapFocus: controller.handleMapFocus,
-          setRotationLocked: controller.setRotationLocked,
           exitMapFocus: controller.exitMapFocus,
           enterWeather: controller.enterWeatherMode,
           exitWeather: controller.exitWeatherMode,
@@ -165,7 +133,7 @@ export function CenterScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: theme.neutral.surfaceDeep,
   },
   empty: {
     flex: 1,
@@ -174,39 +142,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
     gap: 12,
   },
-  emptyTitle: {
-    color: '#94a3b8',
-    fontSize: 16,
-    textAlign: 'center',
-  },
   emptySubtitle: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 13,
     textAlign: 'center',
-  },
-  addButton: {
-    marginTop: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    backgroundColor: '#3b82f6',
-    borderRadius: 10,
-  },
-  addButtonText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 15,
-  },
-  settingsButton: {
-    marginTop: 8,
-    paddingVertical: 10,
-    paddingHorizontal: 28,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  settingsButtonText: {
-    color: '#94a3b8',
-    fontWeight: '600',
-    fontSize: 14,
   },
 })

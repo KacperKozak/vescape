@@ -9,21 +9,12 @@ import {
   upsertBoard,
 } from 'vesc-ble'
 
-import { DEFAULT_BATTERY_CONFIG } from '@/helpers/battery'
+import { DEFAULT_BATTERY_CONFIG } from '@/lib/battery'
 
 export type { Board } from 'vesc-ble'
-export { DEFAULT_BATTERY_CONFIG } from '@/helpers/battery'
+export { DEFAULT_BATTERY_CONFIG } from '@/lib/battery'
 
-function generateId(): string {
-  if (typeof globalThis.crypto?.randomUUID === 'function') {
-    return globalThis.crypto.randomUUID()
-  }
-
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0
-    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16)
-  })
-}
+import { generateId } from '@/helpers/id'
 
 interface BoardState {
   boards: Board[]

@@ -12,8 +12,9 @@ import { useNavigation } from 'expo-router'
 import { TrashIcon } from 'phosphor-react-native'
 import { clearDiagnosticEvents, getDiagnosticEvents, type LocalDiagnosticEvent } from 'vesc-ble'
 
-import { ConfirmModal } from '@/components/ConfirmModal'
-import { IconButton } from '@/components/IconButton'
+import { ConfirmModal } from '@/components/ui/modals/ConfirmModal'
+import { IconButton } from '@/components/ui/base/IconButton'
+import { theme } from '@/constants/theme'
 
 const PAGE_SIZE = 50
 
@@ -48,15 +49,13 @@ function formatProperties(json: string): string {
   }
 }
 
-function EventItem({
-  event,
-  expanded,
-  onToggle,
-}: {
+interface EventItemProps {
   event: LocalDiagnosticEvent
   expanded: boolean
   onToggle: (id: number) => void
-}) {
+}
+
+function EventItem({ event, expanded, onToggle }: EventItemProps) {
   const time = new Date(event.occurredAtMs).toLocaleTimeString()
   const meta = [event.operation, event.phase, event.deviceName].filter(Boolean).join(' · ')
   const dotColor = getEventColor(event.eventName)
@@ -231,7 +230,7 @@ const styles = StyleSheet.create({
   },
   list: {
     flex: 1,
-    backgroundColor: '#111827',
+    backgroundColor: theme.neutral.bg,
   },
   content: {
     padding: 12,
@@ -240,30 +239,30 @@ const styles = StyleSheet.create({
     height: 4,
   },
   emptyCard: {
-    backgroundColor: '#0f172a',
+    backgroundColor: theme.neutral.surfaceDeep,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: theme.neutral.border,
     padding: 14,
   },
   emptyText: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 14,
   },
   footer: {
     paddingVertical: 16,
   },
   footerText: {
-    color: '#334155',
+    color: theme.neutral.border,
     fontSize: 12,
     textAlign: 'center',
     paddingVertical: 16,
   },
   eventRow: {
-    backgroundColor: '#1e293b',
+    backgroundColor: theme.neutral.surface,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: theme.neutral.border,
     padding: 10,
     gap: 2,
   },
@@ -279,34 +278,34 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   eventTime: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 11,
     fontVariant: ['tabular-nums'],
     flexShrink: 0,
   },
   eventName: {
-    color: '#f1f5f9',
+    color: theme.neutral.textPrimary,
     fontSize: 13,
     fontWeight: '600',
     flex: 1,
   },
   eventMeta: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 11,
   },
   eventMessage: {
-    color: '#94a3b8',
+    color: theme.neutral.textSecondary,
     fontSize: 12,
   },
   eventExpanded: {
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: '#334155',
+    borderTopColor: theme.neutral.border,
     gap: 2,
   },
   fieldLabel: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 12,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -315,12 +314,12 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   fieldValue: {
-    color: '#f1f5f9',
+    color: theme.neutral.textPrimary,
     fontSize: 14,
     fontVariant: ['tabular-nums'],
   },
   eventJson: {
-    color: '#f1f5f9',
+    color: theme.neutral.textPrimary,
     fontSize: 11,
     fontFamily: 'monospace',
   },

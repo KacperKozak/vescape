@@ -22,8 +22,8 @@ import {
 } from 'vesc-ble'
 
 import { useSettingsStore } from '@/store/settingsStore'
-import { liveTelemetryRuntime } from '@/telemetry/liveTelemetryRuntime'
-import { type LiveStatusSummary } from '@/telemetry/liveMetricHistory'
+import { liveTelemetryRuntime } from '@/lib/telemetry/liveTelemetryRuntime'
+import { type LiveStatusSummary } from '@/lib/telemetry/liveMetricHistory'
 
 interface EventSubscription {
   remove(): void
@@ -33,7 +33,10 @@ export interface ScannedDevice {
   id: string
   name: string
   rssi: number
+  serviceUUIDs: string[]
 }
+
+export const NUS_SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e'
 
 type BleStatus = BoardPhase
 
@@ -82,6 +85,10 @@ let scanErrorSub: EventSubscription | null = null
 let liveHistoryPublishTimer: ReturnType<typeof setTimeout> | null = null
 let settingsUnsubscribe: (() => void) | null = null
 
+let pendingDevices: Map<string, ScannedDevice> = new Map()
+let scanFlushTimer: ReturnType<typeof setTimeout> | null = null
+const SCAN_FLUSH_MS = 500
+
 const MAC_ADDRESS_RE = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i
 const LIVE_HISTORY_PUBLISH_MS = 1000
 
@@ -117,7 +124,42 @@ function removeLiveSubscriptions(): void {
   locationSub = null
 }
 
+function clearScanFlushTimer(): void {
+  if (!scanFlushTimer) return
+  clearTimeout(scanFlushTimer)
+  scanFlushTimer = null
+}
+
+function flushPendingDevices(set: BleSet): void {
+  clearScanFlushTimer()
+  if (pendingDevices.size === 0) return
+  const batch = pendingDevices
+  pendingDevices = new Map()
+  set((state) => {
+    const updated = [...state.devices]
+    for (const device of batch.values()) {
+      const idx = updated.findIndex((d) => d.id === device.id)
+      if (idx !== -1) {
+        updated[idx] = device
+      } else {
+        updated.push(device)
+      }
+    }
+    return { devices: updated }
+  })
+}
+
+function scheduleScanFlush(set: BleSet): void {
+  if (scanFlushTimer) return
+  scanFlushTimer = setTimeout(() => {
+    scanFlushTimer = null
+    flushPendingDevices(set)
+  }, SCAN_FLUSH_MS)
+}
+
 function removeScanSubscriptions(): void {
+  clearScanFlushTimer()
+  pendingDevices = new Map()
   scanSub?.remove()
   scanErrorSub?.remove()
   scanSub = null
@@ -258,16 +300,15 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
     scanSub = addDeviceListener((device) => {
       const name = scannedDeviceName(device.id, device.name)
       const rssi = device.rssi ?? -99
-
-      set((state) => {
-        const existing = state.devices.findIndex((d) => d.id === device.id)
-        if (existing !== -1) {
-          const updated = [...state.devices]
-          updated[existing] = { id: device.id, name, rssi }
-          return { devices: updated }
-        }
-        return { devices: [...state.devices, { id: device.id, name, rssi }] }
+      const serviceUUIDs = device.serviceUUIDs ?? []
+      const prev = pendingDevices.get(device.id)
+      pendingDevices.set(device.id, {
+        id: device.id,
+        name,
+        rssi,
+        serviceUUIDs: serviceUUIDs.length > 0 ? serviceUUIDs : (prev?.serviceUUIDs ?? []),
       })
+      scheduleScanFlush(set)
     })
 
     try {

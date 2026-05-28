@@ -3,10 +3,11 @@ import { StatusBar } from 'expo-status-bar'
 import { useEffect } from 'react'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 
-import { DiagnosticErrorBoundary } from '@/components/DiagnosticErrorBoundary'
-import { HeaderBackButton } from '@/components/navigation/HeaderBackButton'
+import { DiagnosticErrorBoundary } from '@/components/domain/main/DiagnosticErrorBoundary'
+import { HeaderBackButton } from '@/components/ui/base/HeaderBackButton'
 import { stackScreens } from '@/navigation/routes'
 import { useAlertsStore } from '@/store/alertsStore'
+import { theme } from '@/constants/theme'
 
 export default function RootLayout() {
   useEffect(() => {
@@ -18,13 +19,13 @@ export default function RootLayout() {
       <GestureHandlerRootView style={{ flex: 1 }}>
         <Stack
           screenOptions={{
-            headerStyle: { backgroundColor: '#111827' },
+            headerStyle: { backgroundColor: theme.neutral.bg },
             headerTintColor: '#f9fafb',
             headerTitleStyle: { fontWeight: '600', fontSize: 14 },
             headerTitleAlign: 'center',
             headerShadowVisible: false,
             headerLeft: () => <HeaderBackButton />,
-            contentStyle: { backgroundColor: '#111827' },
+            contentStyle: { backgroundColor: theme.neutral.bg },
           }}
         >
           <Stack.Screen name={stackScreens.home} options={{ headerShown: false }} />
@@ -33,6 +34,10 @@ export default function RootLayout() {
           <Stack.Screen name={stackScreens.settingsDev} options={{ title: 'Dev' }} />
           <Stack.Screen name={stackScreens.settingsComponents} options={{ title: 'Components' }} />
           <Stack.Screen name={stackScreens.settingsDiagnostic} options={{ title: 'Diagnostic' }} />
+          <Stack.Screen
+            name={stackScreens.settingsNavigationDiagnostic}
+            options={{ title: 'Navigation diagnostics' }}
+          />
           <Stack.Screen
             name={stackScreens.settingsDiagnosticEvents}
             options={{ title: 'Event log' }}
@@ -48,8 +53,9 @@ export default function RootLayout() {
           />
           <Stack.Screen name={stackScreens.tune} options={{ title: 'Tune' }} />
           <Stack.Screen name={stackScreens.tuneHistory} options={{ title: 'Tune History' }} />
-          <Stack.Screen name={stackScreens.addBoardScan} options={{ title: 'Add Board' }} />
-          <Stack.Screen name={stackScreens.addBoardDetails} options={{ title: 'Board Details' }} />
+          <Stack.Screen name={stackScreens.addBoardScan} options={{ title: 'Pair Board' }} />
+          <Stack.Screen name={stackScreens.addBoard} options={{ title: 'Add Board' }} />
+          <Stack.Screen name={stackScreens.editBoard} options={{ title: 'Edit Board' }} />
         </Stack>
         <StatusBar style="light" />
       </GestureHandlerRootView>

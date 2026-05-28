@@ -14,21 +14,78 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation } from 'expo-router'
 
-import { Button } from '@/components/Button'
-import { ConfirmModal } from '@/components/ConfirmModal'
+import { Button } from '@/components/ui/base/Button'
+import { ConfirmModal } from '@/components/ui/modals/ConfirmModal'
 import { MAPBOX_ACCESS_TOKEN } from '@/config/mapy'
 import { MAP_DEFAULTS } from '@/constants/mapStyles'
 import { ONE_DARK_MAP_STYLE } from '@/constants/oneDarkMapStyle'
 import { theme } from '@/constants/theme'
-import {
-  buildZonePills,
-  ZonePills,
-  type PendingCustomZone,
-} from '@/components/privacy-zones/ZonePills'
+import { BriefcaseIcon, HouseIcon, PencilSimpleIcon, TrashIcon } from 'phosphor-react-native'
+import type { Icon } from 'phosphor-react-native'
+import { HPill, HPillAdd, HPillDot, HPillMenuItem, HPills } from '@/components/ui/menus/HPills'
 import { generateZoneId, usePrivacyZoneStore, type PrivacyZone } from '@/store/privacyZoneStore'
-import { liveTelemetryRuntime } from '@/telemetry/liveTelemetryRuntime'
+import { liveTelemetryRuntime } from '@/lib/telemetry/liveTelemetryRuntime'
 
 Mapbox.setAccessToken(MAPBOX_ACCESS_TOKEN)
+
+interface ZonePill {
+  id: string
+  name: string
+  isBuiltIn: boolean
+  isSaved: boolean
+  enabled: boolean
+  icon?: Icon
+}
+
+interface PendingCustomZone {
+  id: string
+  name: string
+}
+
+function buildZonePills(
+  zones: PrivacyZone[],
+  pendingCustom?: PendingCustomZone | null,
+): ZonePill[] {
+  const homeZone = zones.find((z) => z.preset === 'home')
+  const workZone = zones.find((z) => z.preset === 'work')
+
+  const pills: ZonePill[] = [
+    {
+      id: 'home',
+      name: 'Home',
+      isBuiltIn: true,
+      isSaved: !!homeZone,
+      enabled: homeZone?.enabled ?? false,
+      icon: HouseIcon,
+    },
+    {
+      id: 'work',
+      name: 'Work',
+      isBuiltIn: true,
+      isSaved: !!workZone,
+      enabled: workZone?.enabled ?? false,
+      icon: BriefcaseIcon,
+    },
+  ]
+
+  for (const z of zones) {
+    if (z.preset === 'custom') {
+      pills.push({ id: z.id, name: z.name, isBuiltIn: false, isSaved: true, enabled: z.enabled })
+    }
+  }
+
+  if (pendingCustom && !zones.some((z) => z.id === pendingCustom.id)) {
+    pills.push({
+      id: pendingCustom.id,
+      name: pendingCustom.name,
+      isBuiltIn: false,
+      isSaved: false,
+      enabled: false,
+    })
+  }
+
+  return pills
+}
 
 const DEFAULT_ZONE_ZOOM = 15
 const CIRCLE_DIAMETER_RATIO = 0.6
@@ -234,8 +291,10 @@ export default function PrivacyZonesScreen() {
   }, [cameraCenter, cameraZoom, circleRadiusPx, selectedId, storeUpdate])
 
   const handleToggle = useCallback(async () => {
-    await storeToggle(selectedId)
-  }, [selectedId, storeToggle])
+    const zone = savedZoneForId(selectedId)
+    if (!zone) return
+    await storeToggle(zone.id)
+  }, [selectedId, savedZoneForId, storeToggle])
 
   const handleStartEdit = useCallback(() => {
     editStartRef.current = { center: cameraCenter, zoom: cameraZoom }
@@ -262,6 +321,7 @@ export default function PrivacyZonesScreen() {
     (selectedId === 'home' || selectedId === 'work' || pendingCustom?.id === selectedId)
 
   const zoneEnabled = savedZone?.enabled ?? false
+  const toggleLabel = zoneEnabled ? 'Disable' : 'Enable'
   const circleDiameter = screenWidth * CIRCLE_DIAMETER_RATIO
   const pillsTop = insets.top + HEADER_HEIGHT
 
@@ -310,14 +370,41 @@ export default function PrivacyZonesScreen() {
       </View>
 
       <View style={[styles.pillsFloating, { top: pillsTop }]}>
-        <ZonePills
-          pills={pills}
-          selectedId={selectedId}
-          onSelect={handleSelectPill}
-          onAdd={handleAddPress}
-          onRename={handleRenamePress}
-          onDelete={handleDeletePress}
-        />
+        <HPills activeId={selectedId}>
+          {pills.map((pill) => (
+            <HPill
+              key={pill.id}
+              id={pill.id}
+              label={pill.name}
+              icon={pill.icon}
+              badge={
+                <HPillDot
+                  status={!pill.isSaved ? 'draft' : pill.enabled ? 'enabled' : 'disabled'}
+                />
+              }
+              color={theme.gps}
+              onPress={() => handleSelectPill(pill.id)}
+            >
+              {!pill.isBuiltIn ? (
+                <HPillMenuItem
+                  icon={PencilSimpleIcon}
+                  label="Rename"
+                  onPress={() => handleRenamePress(pill.id, pill.name)}
+                />
+              ) : null}
+              {pill.isSaved ? (
+                <HPillMenuItem
+                  icon={TrashIcon}
+                  label="Delete"
+                  onPress={() => handleDeletePress(pill.id)}
+                  danger
+                  separator={!pill.isBuiltIn}
+                />
+              ) : null}
+            </HPill>
+          ))}
+          <HPillAdd onPress={handleAddPress} />
+        </HPills>
       </View>
 
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>
@@ -352,7 +439,8 @@ export default function PrivacyZonesScreen() {
               style={styles.actionButton}
             />
             <Button
-              label={zoneEnabled ? 'Disable' : 'Enable'}
+              key={toggleLabel}
+              label={toggleLabel}
               variant={zoneEnabled ? 'secondary' : 'primary'}
               onPress={() => void handleToggle()}
               style={styles.actionButton}
@@ -459,7 +547,7 @@ export default function PrivacyZonesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111827',
+    backgroundColor: theme.neutral.bg,
   },
   pillsFloating: {
     position: 'absolute',
@@ -490,7 +578,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   zoneLabel: {
-    color: '#f1f5f9',
+    color: theme.neutral.textPrimary,
     fontSize: 14,
     fontWeight: '700',
     textShadowColor: 'rgba(0,0,0,0.8)',
@@ -527,26 +615,26 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     width: '100%',
-    backgroundColor: '#1e293b',
+    backgroundColor: theme.neutral.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: theme.neutral.border,
     padding: 20,
     gap: 16,
   },
   modalTitle: {
-    color: '#f1f5f9',
+    color: theme.neutral.textPrimary,
     fontSize: 16,
     fontWeight: '700',
   },
   modalInput: {
-    backgroundColor: '#0f172a',
+    backgroundColor: theme.neutral.surfaceDeep,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: theme.neutral.border,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    color: '#f1f5f9',
+    color: theme.neutral.textPrimary,
     fontSize: 15,
     fontWeight: '500',
   },

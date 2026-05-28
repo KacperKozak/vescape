@@ -2,8 +2,8 @@ import { StyleSheet, View } from 'react-native'
 import { ArrowLeftIcon, TrashIcon } from 'phosphor-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
-import { IconButton } from '@/components/IconButton'
-import { ScreenTitle } from '@/components/navigation/ScreenTitle'
+import { IconButton } from '@/components/ui/base/IconButton'
+import { ScreenTitle } from '@/components/ui/base/ScreenTitle'
 
 interface HistoryControlsProps {
   loading: boolean

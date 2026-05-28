@@ -3,6 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import {
   ChartLineUpIcon,
+  CompassIcon,
   ListIcon,
   SpeakerHighIcon,
   SwatchesIcon,
@@ -10,9 +11,10 @@ import {
 } from 'phosphor-react-native'
 
 import { routes } from '@/navigation/routes'
-import { SettingsCard } from '@/components/settings/SettingsCard'
-import { SettingsRow } from '@/components/settings/SettingsRow'
-import { SettingsSectionTitle } from '@/components/settings/SettingsSectionTitle'
+import { SettingsCard } from '@/components/ui/settings/SettingsCard'
+import { SettingsRow } from '@/components/ui/settings/SettingsRow'
+import { SettingsSectionTitle } from '@/components/ui/settings/SettingsSectionTitle'
+import { theme } from '@/constants/theme'
 
 const devPages = [
   {
@@ -32,6 +34,12 @@ const devPages = [
     hint: 'PostHog status and manual events',
     route: routes.settingsDiagnostic,
     icon: ChartLineUpIcon,
+  },
+  {
+    label: 'Navigation diagnostics',
+    hint: 'Live map heading, GPS, and fallback evidence',
+    route: routes.settingsNavigationDiagnostic,
+    icon: CompassIcon,
   },
   {
     label: 'Event log',
@@ -72,7 +80,7 @@ export default function DevSettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111827',
+    backgroundColor: theme.neutral.bg,
   },
   content: {
     padding: 16,

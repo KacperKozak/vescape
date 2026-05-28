@@ -7,21 +7,22 @@ import {
   SlidersHorizontalIcon,
 } from 'phosphor-react-native'
 import { useCallback, useEffect, useState, type RefObject } from 'react'
-import { ActivityIndicator, Platform, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
-import { ConfirmModal } from '@/components/ConfirmModal'
-import { FloatingBar } from '@/components/FloatingBar'
-import { HistorySessionSheet } from '@/components/history/HistorySessionSheet'
-import { IconButton } from '@/components/IconButton'
-import { MapControls } from '@/components/map/MapControls'
-import { MapStyleSwitch } from '@/components/map/MapStyleSwitch'
-import type { MapStyleKey } from '@/constants/mapStyles'
+import { ConfirmModal } from '@/components/ui/modals/ConfirmModal'
+import { FloatingBar } from '@/components/domain/main/FloatingBar'
+import { HistorySessionSheet } from '@/components/domain/history/HistorySessionSheet'
+import { IconButton } from '@/components/ui/base/IconButton'
+import { MapNavigationSelector } from '@/components/ui/menus/MapNavigationSelector'
+import { MapStyleSwitch } from '@/components/ui/menus/MapStyleSwitch'
+import type { MapNavigationMode, MapStyleKey } from '@/constants/mapStyles'
 import { theme } from '@/constants/theme'
 import { routes } from '@/navigation/routes'
 import { BottomTelemetryStrip, STRIP_CONTENT_HEIGHT } from '@/screens/center/BottomTelemetryStrip'
 import type { CenterMapHandle } from '@/screens/center/CenterMap'
+import type { MapSelector } from '@/screens/center/centerScreenStore'
 import type { CenterViewState } from '@/screens/center/centerViewState'
 import { HistoryControls } from '@/screens/center/HistoryControls'
 import { WeatherHourlyStrip } from '@/screens/center/WeatherHourlyStrip'
@@ -51,13 +52,13 @@ interface CenterBoardOverlayProps {
 
 interface CenterMapOverlayProps {
   heading: number
-  rotationLocked: boolean
-  targetLocation: { latitude: number; longitude: number } | null
-  clearTargetLocation: () => void
   mapStyleKey: MapStyleKey
   setMapStyleKey: (key: MapStyleKey) => void
+  mapNavigationMode: MapNavigationMode
+  setMapNavigationMode: (mode: MapNavigationMode) => void
+  mapSelector: MapSelector
+  setMapSelector: (selector: MapSelector) => void
   enterMapFocus: () => void
-  setRotationLocked: (updater: (prev: boolean) => boolean) => void
   exitMapFocus: () => void
   enterWeather: () => void
   exitWeather: () => void
@@ -100,6 +101,47 @@ interface CenterOverlaysProps {
 const RECORD_BUTTON_HEIGHT = 48
 const HISTORY_BUTTON_SIZE = 54
 const TELEMETRY_FADE_TIMING = { duration: 260 } as const
+
+interface FullMapControlsProps {
+  mapRef: RefObject<CenterMapHandle | null>
+  map: CenterMapOverlayProps
+  top: number
+  bottom: number
+}
+
+function FullMapControls({ mapRef, map, top, bottom }: FullMapControlsProps) {
+  return (
+    <>
+      <View pointerEvents="box-none" style={[styles.weatherPillContainer, { top }]}>
+        <WeatherPill location={map.weatherLocation} onPress={map.enterWeather} />
+      </View>
+      <View style={[styles.mapSelectors, { top }]}>
+        <MapNavigationSelector
+          activeMode={map.mapNavigationMode}
+          heading={map.heading}
+          expanded={map.mapSelector === 'navigation'}
+          onToggle={() =>
+            map.setMapSelector(map.mapSelector === 'navigation' ? null : 'navigation')
+          }
+          onSelect={(nextMode) => {
+            if (nextMode === 'northUp') mapRef.current?.resetRotation()
+            map.setMapNavigationMode(nextMode)
+          }}
+        />
+        <MapStyleSwitch
+          activeKey={map.mapStyleKey}
+          expanded={map.mapSelector === 'style'}
+          onToggle={() => map.setMapSelector(map.mapSelector === 'style' ? null : 'style')}
+          onSelect={map.setMapStyleKey}
+        />
+      </View>
+      <Pressable style={[styles.mapBackAction, { bottom }]} onPress={map.exitMapFocus}>
+        <ArrowLeftIcon size={20} color="#cbd5e1" weight="bold" />
+        <Text style={styles.mapBackLabel}>GO BACK</Text>
+      </Pressable>
+    </>
+  )
+}
 
 export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOverlaysProps) {
   const insets = useSafeAreaInsets()
@@ -258,30 +300,12 @@ export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOver
         pointerEvents={mode === 'map' ? 'box-none' : 'none'}
         style={[styles.mapInterface, mode === 'map' ? styles.visible : styles.hidden]}
       >
-        <IconButton
-          icon={ArrowLeftIcon}
-          onPress={map.exitMapFocus}
-          style={[styles.backButton, { top: Math.max(insets.top, 8) }]}
+        <FullMapControls
+          mapRef={mapRef}
+          map={map}
+          top={Math.max(insets.top, 8)}
+          bottom={aboveStripBottom - 112}
         />
-        <View
-          pointerEvents="box-none"
-          style={[styles.weatherPillContainer, { top: Math.max(insets.top, 8) }]}
-        >
-          <WeatherPill location={map.weatherLocation} onPress={map.enterWeather} />
-        </View>
-        <MapControls
-          heading={map.heading}
-          rotationLocked={map.rotationLocked}
-          followGps={false}
-          showClearTarget={!!map.targetLocation}
-          onToggleRotationLock={() => {
-            if (!map.rotationLocked) mapRef.current?.resetRotation()
-            map.setRotationLocked((prev) => !prev)
-          }}
-          onRecenter={map.exitMapFocus}
-          onClearTarget={map.clearTargetLocation}
-        />
-        <MapStyleSwitch activeKey={map.mapStyleKey} onSelect={map.setMapStyleKey} />
       </View>
 
       <View
@@ -417,6 +441,34 @@ const styles = StyleSheet.create({
     right: 0,
     alignItems: 'center',
     zIndex: 30,
+  },
+  mapSelectors: {
+    position: 'absolute',
+    right: 12,
+    zIndex: 30,
+    alignItems: 'flex-end',
+    gap: 8,
+  },
+  mapBackAction: {
+    position: 'absolute',
+    alignSelf: 'center',
+    zIndex: 30,
+    height: 48,
+    paddingHorizontal: 18,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: 'rgba(148,163,184,0.28)',
+    backgroundColor: 'rgba(15,23,42,0.9)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  mapBackLabel: {
+    color: '#cbd5e1',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1,
   },
   telemetryInterface: {
     ...StyleSheet.absoluteFill,

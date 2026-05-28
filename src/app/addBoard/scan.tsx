@@ -5,13 +5,14 @@ import { router, useLocalSearchParams } from 'expo-router'
 import { useShallow } from 'zustand/react/shallow'
 
 import { useBleStore } from '@/store/bleStore'
-import { usePermissions } from '@/ble/usePermissions'
-import { DeviceRow } from '@/components/DeviceRow'
+import { usePermissions } from '@/hooks/usePermissions'
+import { DeviceRow } from '@/components/ui/base/DeviceRow'
 import { routes } from '@/navigation/routes'
 import type { ScannedDevice } from '@/store/bleStore'
+import { theme } from '@/constants/theme'
 
 export default function AddBoardScanScreen() {
-  const { boardId } = useLocalSearchParams<{ boardId?: string }>()
+  const { boardId, step } = useLocalSearchParams<{ boardId?: string; step?: string }>()
   const { status, request } = usePermissions()
   const { devices, error, startScan, stopScan, isScanning } = useBleStore(
     useShallow((s) => ({
@@ -36,19 +37,26 @@ export default function AddBoardScanScreen() {
 
   const handleSelect = (device: ScannedDevice) => {
     stopScan()
-    router.push({
-      pathname: routes.addBoardDetails,
-      params: { boardId, bleId: device.id, bleName: device.name },
-    })
+    if (boardId) {
+      router.push({
+        pathname: routes.editBoard,
+        params: { boardId, bleId: device.id, bleName: device.name },
+      })
+    } else {
+      router.push({
+        pathname: routes.addBoard,
+        params: { step: step ?? '1', bleId: device.id, bleName: device.name },
+      })
+    }
   }
 
   const handleSkip = () => {
     stopScan()
     if (boardId) {
-      router.push({ pathname: routes.addBoardDetails, params: { boardId } })
+      router.push({ pathname: routes.editBoard, params: { boardId } })
       return
     }
-    router.push(routes.addBoardDetails)
+    router.push({ pathname: routes.addBoard, params: { step: step ?? '1' } })
   }
 
   return (
@@ -67,7 +75,7 @@ export default function AddBoardScanScreen() {
         )}
         ListHeaderComponent={
           <View style={styles.header}>
-            {isScanning && <ActivityIndicator color="#3b82f6" style={styles.spinner} />}
+            {isScanning && <ActivityIndicator color={theme.wheel.color} style={styles.spinner} />}
             <Text style={styles.subtitle}>
               {status === 'denied'
                 ? 'Bluetooth permission required'
@@ -96,7 +104,7 @@ export default function AddBoardScanScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111827',
+    backgroundColor: theme.neutral.bg,
   },
   list: {
     padding: 16,
@@ -112,11 +120,11 @@ const styles = StyleSheet.create({
     marginRight: 4,
   },
   subtitle: {
-    color: '#9ca3af',
+    color: theme.neutral.textSecondary,
     fontSize: 14,
   },
   empty: {
-    color: '#4b5563',
+    color: theme.neutral.textDim,
     textAlign: 'center',
     marginTop: 40,
     fontSize: 14,
@@ -126,11 +134,11 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: theme.neutral.border,
     borderRadius: 10,
   },
   skipText: {
-    color: '#9ca3af',
+    color: theme.neutral.textSecondary,
     fontSize: 15,
     fontWeight: '600',
   },

@@ -60,14 +60,14 @@ export default function OtherSettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111827',
+    backgroundColor: theme.neutral.bg,
   },
   content: {
     padding: 16,
     gap: 8,
   },
   sectionTitle: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 13,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -77,10 +77,10 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   card: {
-    backgroundColor: '#1e293b',
+    backgroundColor: theme.neutral.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: theme.neutral.border,
     overflow: 'hidden',
   },
   row: {
@@ -94,7 +94,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 8,
-    backgroundColor: '#0f172a',
+    backgroundColor: theme.neutral.surfaceDeep,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -103,12 +103,12 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   rowLabel: {
-    color: '#f1f5f9',
+    color: theme.neutral.textPrimary,
     fontSize: 15,
     fontWeight: '600',
   },
   rowHint: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 12,
   },
   controlGroup: {
@@ -126,9 +126,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   hapticButton: {
-    backgroundColor: '#0f172a',
+    backgroundColor: theme.neutral.surfaceDeep,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: theme.neutral.border,
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 8,

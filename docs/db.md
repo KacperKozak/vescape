@@ -147,23 +147,23 @@ Session boundaries and gaps.
 
 Key-value override rows. Native owns schema, defaults, and validation. Missing key → default. Invalid/corrupt row → default + row deleted + Diagnostic Event emitted.
 
-| column     | type        | notes                              |
-| ---------- | ----------- | ---------------------------------- |
-| key        | TEXT PK     |                                    |
-| value_json | TEXT        | JSON-encoded scalar value          |
-| updated_at | INTEGER     | epoch ms                           |
+| column     | type    | notes                     |
+| ---------- | ------- | ------------------------- |
+| key        | TEXT PK |                           |
+| value_json | TEXT    | JSON-encoded scalar value |
+| updated_at | INTEGER | epoch ms                  |
 
 **Known keys and defaults** (defined in `AppSettings`/`AppDataRepository`):
 
-| key                     | type     | default | notes                                                        |
-| ----------------------- | -------- | ------- | ------------------------------------------------------------ |
-| liveHistoryLimit        | Int      | 5       | minutes of recent telemetry kept in memory                   |
-| autoConnect             | Boolean  | true    |                                                              |
-| autoRecording           | Boolean  | false   |                                                              |
-| selectedBoardId         | String?  | null    | auto-connect target                                          |
-| lastGpsLatitude         | Double?  | null    |                                                              |
-| lastGpsLongitude        | Double?  | null    |                                                              |
-| movingSpeedThresholdKmh | Double   | 3.0     | cutoff for moving-average speed. JS aliases: `avgSpeedCutoffKmh`, `movingAvgSpeedThresholdKmh` |
+| key                     | type    | default | notes                                                                                          |
+| ----------------------- | ------- | ------- | ---------------------------------------------------------------------------------------------- |
+| liveHistoryLimit        | Int     | 5       | minutes of recent telemetry kept in memory                                                     |
+| autoConnect             | Boolean | true    |                                                                                                |
+| autoRecording           | Boolean | false   |                                                                                                |
+| selectedBoardId         | String? | null    | auto-connect target                                                                            |
+| lastGpsLatitude         | Double? | null    |                                                                                                |
+| lastGpsLongitude        | Double? | null    |                                                                                                |
+| movingSpeedThresholdKmh | Double  | 3.0     | cutoff for moving-average speed. JS aliases: `avgSpeedCutoffKmh`, `movingAvgSpeedThresholdKmh` |
 
 Writing a default-equivalent value deletes the override row.
 

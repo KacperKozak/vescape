@@ -11,8 +11,9 @@ import {
 import { router } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
-import { BoardSelectorSheet } from '@/components/BoardSelectorSheet'
-import { IconButton } from '@/components/IconButton'
+import { BoardSelectorSheet } from '@/components/domain/board/BoardSelectorSheet'
+import { IconButton } from '@/components/ui/base/IconButton'
+import { WeatherIcon } from '@/components/ui/weather/WeatherIcon'
 import { routes } from '@/navigation/routes'
 import type { Board } from '@/store/boardStore'
 import { useWeatherStore } from '@/store/weatherStore'
@@ -47,10 +48,10 @@ export function TopBar({
   const pillRef = useRef<View>(null)
   const [selectorOpen, setSelectorOpen] = useState(false)
 
-  const weatherIcon = useWeatherStore((s) => s.icon)
+  const weatherCode = useWeatherStore((s) => s.weatherCode)
   const weatherTemp = useWeatherStore((s) => s.temperature)
   const weatherPrecip = useWeatherStore((s) => s.precipitationProbability)
-  const hasWeather = weatherIcon != null && weatherTemp != null
+  const hasWeather = weatherCode != null && weatherTemp != null
 
   const canDisconnect =
     bleStatus === 'connected' ||
@@ -64,7 +65,7 @@ export function TopBar({
       ? theme.gps.color
       : bleStatus === 'error'
         ? theme.error.color
-        : '#94a3b8'
+        : theme.neutral.textSecondary
 
   return (
     <View style={[styles.wrap, { paddingTop: Math.max(insets.top, 8) }]} pointerEvents="box-none">
@@ -88,10 +89,14 @@ export function TopBar({
             disabled={!activeBoard}
             onPress={() => {
               if (!activeBoard) return
-              router.push({ pathname: routes.addBoardDetails, params: { boardId: activeBoard.id } })
+              router.push({ pathname: routes.editBoard, params: { boardId: activeBoard.id } })
             }}
           >
-            <PencilSimpleIcon size={14} color={activeBoard ? '#e2e8f0' : '#64748b'} weight="bold" />
+            <PencilSimpleIcon
+              size={14}
+              color={activeBoard ? '#e2e8f0' : theme.neutral.textMuted}
+              weight="bold"
+            />
           </Pressable>
           <View style={styles.divider} />
           {canDisconnect && (
@@ -108,10 +113,7 @@ export function TopBar({
       </View>
       {hasWeather && (
         <Pressable style={styles.weatherRow} onPress={onWeatherPress}>
-          {(() => {
-            const WeatherIcon = weatherIcon
-            return <WeatherIcon size={13} color="#94a3b8" weight="duotone" />
-          })()}
+          <WeatherIcon code={weatherCode} size={13} color="#94a3b8" weight="duotone" />
           <Text style={styles.weatherText}>{weatherTemp}°</Text>
           {weatherPrecip != null && weatherPrecip > 0 && (
             <>
@@ -217,7 +219,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   weatherText: {
-    color: '#94a3b8',
+    color: theme.neutral.textSecondary,
     fontSize: 11,
     fontWeight: '600',
   },

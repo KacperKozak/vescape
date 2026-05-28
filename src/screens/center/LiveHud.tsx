@@ -2,7 +2,7 @@ import { StyleSheet } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Animated, { useAnimatedStyle, type SharedValue } from 'react-native-reanimated'
 
-import { DualGaugeIndicator } from '@/components/cards'
+import { DualGaugeIndicator } from '@/components/domain/cards/DualGaugeIndicator'
 
 interface LiveHudProps {
   revealProgress?: SharedValue<number>

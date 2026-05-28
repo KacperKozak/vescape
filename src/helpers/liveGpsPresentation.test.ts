@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { LocationEvent } from 'vesc-ble'
 
-import { getLiveGpsPresentation } from './liveGpsPresentation'
+import { getLiveGpsPresentation, getReliableGpsBearingFromFixes } from './liveGpsPresentation'
 
 function location(overrides: Partial<LocationEvent> = {}): LocationEvent {
   return {
@@ -109,5 +109,83 @@ describe('getLiveGpsPresentation', () => {
       accuracyRadiusM: 5,
       degraded: false,
     })
+  })
+
+  test('uses moving GPS bearing as reliable direction', () => {
+    const precise = location({ speedMps: 4, bearingDeg: 91 })
+
+    expect(
+      getLiveGpsPresentation({
+        preciseFix: precise,
+        latestApproximateFix: precise,
+        initialApproximateFix: null,
+      }),
+    ).toMatchObject({
+      directionBearingDeg: 91,
+      nextReliableBearing: { bearingDeg: 91, sourceTimestamp: precise.timestamp },
+    })
+  })
+
+  test('derives travel bearing when moving fix omits bearing', () => {
+    const previous = location({ latitude: 50, longitude: 19, timestamp: 9_000 })
+    const precise = location({
+      latitude: 50.001,
+      longitude: 19,
+      timestamp: 10_000,
+      speedMps: 4,
+      bearingDeg: null,
+    })
+
+    expect(
+      getLiveGpsPresentation({
+        preciseFix: precise,
+        previousPreciseFix: previous,
+        latestApproximateFix: precise,
+        initialApproximateFix: null,
+      }).directionBearingDeg,
+    ).toBeCloseTo(0, 0)
+  })
+
+  test('keeps reliable direction through a short stop or missing bearing update', () => {
+    const previousReliableBearing = { bearingDeg: 120, sourceTimestamp: 10_000 }
+    const stopped = location({ timestamp: 14_000, speedMps: 0, bearingDeg: null })
+
+    expect(
+      getLiveGpsPresentation({
+        preciseFix: stopped,
+        latestApproximateFix: stopped,
+        initialApproximateFix: null,
+        previousReliableBearing,
+      }),
+    ).toMatchObject({
+      directionBearingDeg: 120,
+      nextReliableBearing: previousReliableBearing,
+    })
+  })
+
+  test('drops stale direction after live context stops updating bearing', () => {
+    const stale = location({ timestamp: 25_000, speedMps: 0, bearingDeg: null })
+
+    expect(
+      getLiveGpsPresentation({
+        preciseFix: stale,
+        latestApproximateFix: stale,
+        initialApproximateFix: null,
+        previousReliableBearing: { bearingDeg: 120, sourceTimestamp: 10_000 },
+      }).directionBearingDeg,
+    ).toBeNull()
+  })
+
+  test('resolves reliable direction from current live GPS context only', () => {
+    const fixes = [
+      location({ timestamp: 10_000, speedMps: 4, bearingDeg: 180 }),
+      location({ timestamp: 14_000, speedMps: 0, bearingDeg: null }),
+    ]
+
+    expect(getReliableGpsBearingFromFixes(fixes)).toEqual({
+      bearingDeg: 180,
+      sourceTimestamp: 10_000,
+    })
+    expect(getReliableGpsBearingFromFixes([])).toBeNull()
   })
 })

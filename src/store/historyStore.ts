@@ -12,7 +12,7 @@ import {
   type TelemetrySample,
   type TelemetrySummary,
 } from 'vesc-ble'
-import { groupHistorySessions, type HistorySession } from '@/history/sessions'
+import { groupHistorySessions, type HistorySession } from '@/lib/history/sessions'
 import { useSettingsStore } from '@/store/settingsStore'
 
 interface HistoryState {

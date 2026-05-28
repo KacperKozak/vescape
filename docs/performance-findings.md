@@ -37,23 +37,23 @@ Native events → liveTelemetryRuntime (mutable buffer + SharedValues)
 
 ### Key design decisions
 
-| Decision | Why |
-|----------|-----|
-| Mutable buffer, not zustand state | Avoid creating new arrays every sample. Buffer holds ~6000 items at 5min window. |
-| Module-level projection cache | Multiple cards use same buffer. Project once per selector per frame, not once per component. |
-| Version counter in zustand | Single primitive selector. All metric consumers batch into one React render pass. |
-| SharedValues for real-time display | Speed gauge, duty %, temps update at full telemetry rate (~20Hz) without React renders. |
+| Decision                                            | Why                                                                                          |
+| --------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Mutable buffer, not zustand state                   | Avoid creating new arrays every sample. Buffer holds ~6000 items at 5min window.             |
+| Module-level projection cache                       | Multiple cards use same buffer. Project once per selector per frame, not once per component. |
+| Version counter in zustand                          | Single primitive selector. All metric consumers batch into one React render pass.            |
+| SharedValues for real-time display                  | Speed gauge, duty %, temps update at full telemetry rate (~20Hz) without React renders.      |
 | 1Hz publish rate (`LIVE_HISTORY_PUBLISH_MS = 1000`) | Charts don't need faster updates. Keeps React render budget low. Do not decrease this value. |
 
 ## Performance characteristics
 
-| Metric | Value |
-|--------|-------|
-| Buffer size at 5min/20Hz | ~6000 telemetry samples |
-| Projection cost (single selector, 6000 items) | <1ms |
-| React renders per publish | 1 batch (all metric consumers) |
-| SharedValue updates | ~20/sec, zero React cost |
-| Production JS lag (10min history) | <50ms |
+| Metric                                        | Value                          |
+| --------------------------------------------- | ------------------------------ |
+| Buffer size at 5min/20Hz                      | ~6000 telemetry samples        |
+| Projection cost (single selector, 6000 items) | <1ms                           |
+| React renders per publish                     | 1 batch (all metric consumers) |
+| SharedValue updates                           | ~20/sec, zero React cost       |
+| Production JS lag (10min history)             | <50ms                          |
 
 ## What NOT to do
 
@@ -65,9 +65,9 @@ Native events → liveTelemetryRuntime (mutable buffer + SharedValues)
 
 ## Files
 
-| File | Role |
-|------|------|
+| File                                    | Role                                                               |
+| --------------------------------------- | ------------------------------------------------------------------ |
 | `src/telemetry/liveTelemetryRuntime.ts` | Mutable buffer, SharedValues, version counter, snapshot publishing |
-| `src/telemetry/liveMetricHistory.ts` | Buffer ops: insert, prune, dedup, summarize |
-| `src/hooks/useLiveMetric.ts` | React hook with module-level projection cache |
-| `src/store/bleStore.ts` | Zustand store, 1Hz publish timer, event subscriptions |
+| `src/telemetry/liveMetricHistory.ts`    | Buffer ops: insert, prune, dedup, summarize                        |
+| `src/hooks/useLiveMetric.ts`            | React hook with module-level projection cache                      |
+| `src/store/bleStore.ts`                 | Zustand store, 1Hz publish timer, event subscriptions              |

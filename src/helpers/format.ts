@@ -14,3 +14,13 @@ export function dutyPercent(dutyCycle: number, absolute = true): number {
 export function fmtDutyPercent(dutyCycle: number, absolute = true): string {
   return `${dutyPercent(dutyCycle, absolute).toFixed(0)}%`
 }
+
+/** Format voltage: drop trailing .0 (e.g. 84.0 → "84", 3.7 → "3.7"). */
+function fmtVoltage(v: number): string {
+  return Number.isInteger(v) ? v.toFixed(0) : v.toFixed(1)
+}
+
+/** Format a voltage range: "60–84 V" or "3.2–4.2 V". */
+export function fmtVoltageRange(min: number, max: number): string {
+  return `${fmtVoltage(min)}–${fmtVoltage(max)} V`
+}

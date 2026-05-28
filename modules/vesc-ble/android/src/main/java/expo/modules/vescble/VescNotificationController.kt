@@ -21,7 +21,7 @@ internal class VescNotificationController(
         val channel = NotificationChannel(
             channelId,
             "VESC Board Monitoring",
-            NotificationManager.IMPORTANCE_LOW,
+            NotificationManager.IMPORTANCE_DEFAULT,
         ).apply {
             description = "Shows while monitoring board and GPS data"
             setSound(null, null)
@@ -31,25 +31,36 @@ internal class VescNotificationController(
         service.getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
-    fun show(text: String, deviceName: String?, appInForeground: Boolean) {
+    fun show(
+        text: String,
+        deviceName: String?,
+        appInForeground: Boolean,
+        shortCriticalText: String?,
+    ) {
         service.getSystemService(NotificationManager::class.java)
-            .notify(notificationId, build(text, deviceName, appInForeground))
+            .notify(notificationId, build(text, deviceName, appInForeground, shortCriticalText))
     }
 
-    fun build(text: String, deviceName: String?, appInForeground: Boolean): Notification {
+    fun build(
+        text: String,
+        deviceName: String?,
+        appInForeground: Boolean,
+        shortCriticalText: String?,
+    ): Notification {
         val title = (deviceName ?: "VESC").let { if (appInForeground) it else "$it (bg)" }
         return NotificationCompat.Builder(service, channelId)
             .setContentTitle(title)
             .setContentText(text)
-            .setSmallIcon(android.R.drawable.ic_menu_compass)
+            .setSmallIcon(R.drawable.ic_vesc_notification)
             .setContentIntent(buildOpenAppIntent())
             .setOngoing(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_DEFERRED)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            .setRequestPromotedOngoing(true)
+            .setShortCriticalText(shortCriticalText ?: "—")
             .setOnlyAlertOnce(true)
-            .setSilent(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .addAction(
                 android.R.drawable.ic_menu_close_clear_cancel,
                 "Exit",

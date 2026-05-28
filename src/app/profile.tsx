@@ -30,8 +30,8 @@ import {
   formatSpeed,
   getAdjacentMonths,
   selectInitialMonth,
-} from '@/profile/profileStats'
-import { Select, type SelectOption } from '@/components/Select'
+} from '@/lib/profile/profileStats'
+import { Select, type SelectOption } from '@/components/ui/forms/Select'
 import { theme } from '@/constants/theme'
 
 const EMPTY_STATS: ProfileStats = {
@@ -240,7 +240,11 @@ function statsToItems(stats: ProfileStats): StatItem[] {
   ]
 }
 
-function StatsGrid({ items }: { items: StatItem[] }) {
+interface StatsGridProps {
+  items: StatItem[]
+}
+
+function StatsGrid({ items }: StatsGridProps) {
   return (
     <View style={styles.grid}>
       {items.map((item) => {
@@ -260,14 +264,14 @@ function StatsGrid({ items }: { items: StatItem[] }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111827',
+    backgroundColor: theme.neutral.bg,
   },
   content: {
     padding: 16,
     gap: 12,
   },
   sectionTitle: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 12,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -285,13 +289,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
   cellValue: {
-    color: '#f1f5f9',
+    color: theme.neutral.textPrimary,
     fontSize: 18,
     fontWeight: '700',
     marginTop: 4,
   },
   cellLabel: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 11,
     fontWeight: '600',
   },
@@ -310,9 +314,9 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#1e293b',
+    backgroundColor: theme.neutral.surface,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: theme.neutral.border,
     alignItems: 'center',
     justifyContent: 'center',
   },

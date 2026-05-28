@@ -1,14 +1,25 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 
+import { WeatherIcon } from '@/components/ui/weather/WeatherIcon'
 import { theme } from '@/constants/theme'
-import { useWeatherStore, weatherCodeToColor, type HourForecast } from '@/store/weatherStore'
+import { weatherCodeToColor } from '@/lib/weather'
+import { useWeatherStore, type HourForecast } from '@/store/weatherStore'
 
-function HourItem({ item }: { item: HourForecast }) {
-  const Icon = item.icon
+interface HourItemProps {
+  item: HourForecast
+}
+
+function HourItem({ item }: HourItemProps) {
   return (
     <View style={styles.item}>
       <Text style={styles.hour}>{item.hour}</Text>
-      <Icon size={20} color={weatherCodeToColor(item.weatherCode, item.hourNum)} weight="duotone" />
+      <WeatherIcon
+        code={item.weatherCode}
+        hour={item.hourNum}
+        size={20}
+        color={weatherCodeToColor(item.weatherCode, item.hourNum)}
+        weight="duotone"
+      />
       <Text style={styles.temp}>{item.temperature}°</Text>
       {item.precipitationProbability > 0 && (
         <Text style={styles.precip}>{item.precipitationProbability}%</Text>
@@ -52,12 +63,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   hour: {
-    color: '#94a3b8',
+    color: theme.neutral.textSecondary,
     fontSize: 11,
     fontWeight: '600',
   },
   temp: {
-    color: '#f1f5f9',
+    color: theme.neutral.textPrimary,
     fontSize: 13,
     fontWeight: '600',
   },

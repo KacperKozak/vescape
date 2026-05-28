@@ -1,14 +1,14 @@
 import { useMemo } from 'react'
 
-import { computeAutoRange } from '@/components/charts/chartMath'
-import { ControlDetailLayout } from '@/components/control/ControlDetailLayout'
-import { MetricDetailChart } from '@/components/control/MetricDetailChart'
-import { MetricDetailGauge } from '@/components/control/MetricDetailGauge'
-import { toTelemetryChartPoints } from '@/components/control/metricDetailData'
+import { computeAutoRange } from '@/components/ui/charts/chartMath'
+import { ControlDetailLayout } from '@/components/domain/control/ControlDetailLayout'
+import { MetricDetailChart } from '@/components/domain/control/MetricDetailChart'
+import { MetricDetailGauge } from '@/components/domain/control/MetricDetailGauge'
+import { toTelemetryChartPoints } from '@/components/domain/control/metricDetailData'
 import { telemetry } from '@/constants/telemetry'
 import { liveSelectors, useLiveMetric } from '@/hooks/useLiveMetric'
 import { useLiveWindowMs } from '@/store/settingsStore'
-import { liveTelemetryRuntime } from '@/telemetry/liveTelemetryRuntime'
+import { liveTelemetryRuntime } from '@/lib/telemetry/liveTelemetryRuntime'
 
 const motor = telemetry.motorTemp
 const controller = telemetry.controllerTemp

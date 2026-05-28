@@ -3,23 +3,24 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { CaretDownIcon, CaretLeftIcon, CaretRightIcon } from 'phosphor-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
-import { TelemetryLineChart } from '@/components/charts/TelemetryLineChart'
+import { TelemetryLineChart } from '@/components/ui/charts/TelemetryLineChart'
 import {
   type ExcludedRange,
   type TelemetryChartPoint,
   computeAutoRange,
   toExcludedRanges,
-} from '@/components/charts/chartMath'
+} from '@/components/ui/charts/chartMath'
 import {
   OPTIONAL_CHART_METRICS,
   toggleOptionalChartMetric,
   type OptionalChartMetric,
-} from '@/components/history/historyChartMetrics'
-import { IconButton } from '@/components/IconButton'
+} from '@/components/domain/history/historyChartMetrics'
+import { IconButton } from '@/components/ui/base/IconButton'
 import { telemetry } from '@/constants/telemetry'
-import { downsampleTimeSeries, findNearestSampleIndexByTime } from '@/history/playback'
+import { downsampleTimeSeries, findNearestSampleIndexByTime } from '@/lib/history/playback'
 import { dutyPercent, fmtDutyPercent } from '@/helpers/format'
 import { useHistoryStore, type TelemetrySample } from '@/store/historyStore'
+import { theme } from '@/constants/theme'
 
 interface HistoryTelemetryPanelProps {
   startAtMs: number
@@ -389,7 +390,7 @@ export function HistoryTelemetryPanel({
                   <View
                     style={[
                       styles.metricTabLine,
-                      { backgroundColor: active ? cfg.color : '#1e293b' },
+                      { backgroundColor: active ? cfg.color : theme.neutral.surface },
                     ]}
                   />
                   {metric.multilineLabel ? (
@@ -424,7 +425,9 @@ export function HistoryTelemetryPanel({
           </View>
           <View style={styles.metricLegend}>
             <View style={styles.metricLegendItem}>
-              <View style={[styles.metricLegendLine, { backgroundColor: '#94a3b8' }]} />
+              <View
+                style={[styles.metricLegendLine, { backgroundColor: theme.neutral.textSecondary }]}
+              />
               <Text style={styles.metricLegendText} numberOfLines={1}>
                 Low speed
               </Text>
@@ -481,7 +484,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   titleMeta: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 9,
     fontWeight: '600',
   },
@@ -492,8 +495,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#0f172a',
+    borderColor: theme.neutral.border,
+    backgroundColor: theme.neutral.surfaceDeep,
     overflow: 'hidden',
   },
   metricTab: {
@@ -501,14 +504,14 @@ const styles = StyleSheet.create({
     minWidth: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0f172a',
+    backgroundColor: theme.neutral.surfaceDeep,
     paddingHorizontal: 8,
     paddingTop: 10,
     paddingBottom: 10,
   },
   metricTabDivider: {
     borderRightWidth: 1,
-    borderRightColor: '#334155',
+    borderRightColor: theme.neutral.border,
   },
   metricTabActive: {
     backgroundColor: '#172554',
@@ -526,7 +529,7 @@ const styles = StyleSheet.create({
     gap: 1,
   },
   metricTabText: {
-    color: '#94a3b8',
+    color: theme.neutral.textSecondary,
     fontSize: 10,
     fontWeight: '700',
     width: '100%',
@@ -557,12 +560,12 @@ const styles = StyleSheet.create({
     borderRadius: 0.5,
   },
   metricLegendText: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 8,
     fontWeight: '600',
   },
   empty: {
-    color: '#94a3b8',
+    color: theme.neutral.textSecondary,
     fontSize: 12,
     fontWeight: '700',
     textAlign: 'center',

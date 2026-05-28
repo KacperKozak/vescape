@@ -25,11 +25,17 @@ This is a PoC, but keep it sharp:
 - Keep trivial local predicates inline with their component/module. Extract to a separate file only when logic is genuinely shared across multiple call sites. Single-use helpers belong in the same file as their consumer.
 - Do not add tests for trivial predicates that TypeScript and the surrounding behavior already
   cover. Add tests for meaningful behavior, edge cases, contracts, or regressions.
-- Files under `src/components/` should be React components or component-owned assets. Put
-  non-component shared logic in an appropriate domain folder only when it is genuinely shared.
-- Files under `src/app/` are Expo Router route/layout files only. Do not put hooks,
-  non-route components, helpers, or other shared logic there; move them to `src/hooks/`,
-  `src/components/`, or the relevant domain folder such as `src/tune/`.
+
+## Dir layout
+
+- `src/app/` — Expo Router routes only. No hooks, components, logic.
+- `src/lib/` — Pure domain logic. No React, no native calls.
+- `src/helpers/` — Single-source pure utilities (finite, id, error, format).
+- `src/store/` — Zustand stores. Plain data only, no React elements.
+- `src/components/` — React components only. No pure logic, no native calls.
+- `src/hooks/` — React hooks only. Bridge between store & UI.
+- `src/screens/` — Screen-level component subtrees (center screen).
+- `src/constants/`, `src/config/`, `src/navigation/` — Static defs.
 
 ## React Native
 

@@ -9,6 +9,20 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 
+internal fun validMapStyleKey(value: Any?): String? =
+  (value as? String)?.takeIf { it in setOf("onedark", "outdoors", "satellite", "mapy") }
+
+internal fun validMapNavigationMode(value: Any?): String? =
+  (value as? String)?.takeIf { it in setOf("northUp", "gpsHeading", "phoneHeading", "freeRotate") }
+
+private const val MIN_LIVE_HISTORY_LIMIT_MINUTES = 1
+private const val MAX_LIVE_HISTORY_LIMIT_MINUTES = 50
+
+internal fun validLiveHistoryLimitMinutes(value: Any?): Int? =
+  (value as? Number)
+    ?.toInt()
+    ?.coerceIn(MIN_LIVE_HISTORY_LIMIT_MINUTES, MAX_LIVE_HISTORY_LIMIT_MINUTES)
+
 class AppDataRepository private constructor(private val context: Context) {
   private val dao = TelemetryDatabase.get(context).telemetryDao()
 
@@ -73,7 +87,7 @@ class AppDataRepository private constructor(private val context: Context) {
     }
 
     val settings = AppSettings(
-      liveHistoryLimit = req("liveHistoryLimit", 5) { (it as? Number)?.toInt() },
+      liveHistoryLimit = req("liveHistoryLimit", 5, ::validLiveHistoryLimitMinutes),
       autoConnect = req("autoConnect", true) { it as? Boolean },
       autoRecording = req("autoRecording", false) { it as? Boolean },
       selectedBoardId = opt("selectedBoardId") { it as? String },
@@ -82,6 +96,8 @@ class AppDataRepository private constructor(private val context: Context) {
       movingSpeedThresholdKmh = req("movingSpeedThresholdKmh", 3.0) { (it as? Number)?.toDouble() },
       freeSpinMaxSpeedDeltaKmh = req("freeSpinMaxSpeedDeltaKmh", DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH) { (it as? Number)?.toDouble() },
       freeSpinStationaryBoardCapKmh = req("freeSpinStationaryBoardCapKmh", DEFAULT_FREE_SPIN_STATIONARY_BOARD_CAP_KMH) { (it as? Number)?.toDouble() },
+      mapStyleKey = req("mapStyleKey", "onedark", ::validMapStyleKey),
+      mapNavigationMode = req("mapNavigationMode", "northUp", ::validMapNavigationMode),
     )
 
     if (badKeys.isNotEmpty()) {
@@ -97,7 +113,7 @@ class AppDataRepository private constructor(private val context: Context) {
 
   suspend fun updateSetting(key: String, value: Any?): Unit = withContext(Dispatchers.IO) {
     val coerced: Any? = when (key) {
-      "liveHistoryLimit" -> (value as? Number)?.toInt() ?: return@withContext
+      "liveHistoryLimit" -> validLiveHistoryLimitMinutes(value) ?: return@withContext
       "autoConnect" -> value as? Boolean ?: return@withContext
       "autoRecording" -> value as? Boolean ?: return@withContext
       "selectedBoardId" -> value as? String
@@ -107,6 +123,10 @@ class AppDataRepository private constructor(private val context: Context) {
         ((value as? Number)?.toDouble() ?: return@withContext).coerceAtLeast(0.0)
       "freeSpinMaxSpeedDeltaKmh", "freeSpinStationaryBoardCapKmh" ->
         ((value as? Number)?.toDouble() ?: return@withContext).coerceAtLeast(0.0)
+      "mapStyleKey" ->
+        validMapStyleKey(value) ?: return@withContext
+      "mapNavigationMode" ->
+        validMapNavigationMode(value) ?: return@withContext
       else -> return@withContext
     }
     val normalizedKey = when (key) {
@@ -124,6 +144,8 @@ class AppDataRepository private constructor(private val context: Context) {
         "movingSpeedThresholdKmh" -> d.movingSpeedThresholdKmh
         "freeSpinMaxSpeedDeltaKmh" -> d.freeSpinMaxSpeedDeltaKmh
         "freeSpinStationaryBoardCapKmh" -> d.freeSpinStationaryBoardCapKmh
+        "mapStyleKey" -> d.mapStyleKey
+        "mapNavigationMode" -> d.mapNavigationMode
         else -> null
       }
     }
@@ -320,6 +342,8 @@ fun AppSettings.toMap(): Map<String, Any?> = mapOf(
   "movingSpeedThresholdKmh" to movingSpeedThresholdKmh,
   "freeSpinMaxSpeedDeltaKmh" to freeSpinMaxSpeedDeltaKmh,
   "freeSpinStationaryBoardCapKmh" to freeSpinStationaryBoardCapKmh,
+  "mapStyleKey" to mapStyleKey,
+  "mapNavigationMode" to mapNavigationMode,
 )
 
 private fun encodeSettingJson(value: Any?): String {
@@ -446,31 +470,38 @@ private fun Map<String, Any?>.toBoardEntity(): BoardEntity = BoardEntity(
 )
 
 internal fun encodeBatteryConfig(value: Any?): String? {
+  val config = normalizeBatteryConfig(value) ?: return null
+  return config.toJsonObject().toString()
+}
+
+internal fun normalizeBatteryConfig(value: Any?): Map<String, Any?>? {
   val config = value as? Map<*, *> ?: return null
   val mode = config["mode"] as? String ?: return null
-  val json = JSONObject()
-  when (mode) {
+  return when (mode) {
     "preset" -> {
       val cellPresetId = config["cellPresetId"] as? String ?: return null
       val seriesCount = (config["seriesCount"] as? Number)?.toInt() ?: return null
       val parallelCount = (config["parallelCount"] as? Number)?.toInt() ?: return null
       if (cellPresetId.isBlank() || seriesCount < 1 || parallelCount < 1) return null
-      json.put("mode", "preset")
-      json.put("cellPresetId", cellPresetId)
-      json.put("seriesCount", seriesCount)
-      json.put("parallelCount", parallelCount)
+      mapOf(
+        "mode" to "preset",
+        "cellPresetId" to cellPresetId,
+        "seriesCount" to seriesCount,
+        "parallelCount" to parallelCount,
+      )
     }
     "manual" -> {
       val minVoltage = (config["minVoltage"] as? Number)?.toDouble() ?: return null
       val maxVoltage = (config["maxVoltage"] as? Number)?.toDouble() ?: return null
       if (!minVoltage.isFinite() || !maxVoltage.isFinite() || maxVoltage <= minVoltage) return null
-      json.put("mode", "manual")
-      json.put("minVoltage", minVoltage)
-      json.put("maxVoltage", maxVoltage)
+      mapOf(
+        "mode" to "manual",
+        "minVoltage" to minVoltage,
+        "maxVoltage" to maxVoltage,
+      )
     }
     else -> return null
   }
-  return json.toString()
 }
 
 private fun Map<String, Any?>.toAlertRuleEntity(): AlertRuleEntity = AlertRuleEntity(

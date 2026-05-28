@@ -5,10 +5,11 @@ import { useShallow } from 'zustand/react/shallow'
 import { useBoardStore } from '@/store/boardStore'
 import { useBleStore } from '@/store/bleStore'
 import { useSettingsStore } from '@/store/settingsStore'
-import { usePermissions } from '@/ble/usePermissions'
+import { usePermissions } from '@/hooks/usePermissions'
 import { useBleAppLifecycle } from '@/hooks/useBleAppLifecycle'
 import { useBoardConnection } from '@/hooks/useBoardConnection'
 import { CenterScreen } from '@/screens/CenterScreen'
+import { theme } from '@/constants/theme'
 
 export default function MainScreen() {
   const autoConnectAttemptedBoardRef = useRef<string | null>(null)
@@ -96,6 +97,6 @@ export default function MainScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: theme.neutral.surfaceDeep,
   },
 })

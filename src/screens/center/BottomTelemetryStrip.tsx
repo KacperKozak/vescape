@@ -3,8 +3,8 @@ import { router } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Animated, { useAnimatedStyle, type SharedValue } from 'react-native-reanimated'
 
-import { Sparkline } from '@/components/charts/Sparkline'
-import { BatteryIndicator } from '@/components/cards/BatteryIndicator'
+import { Sparkline } from '@/components/ui/charts/Sparkline'
+import { BatteryIndicator } from '@/components/domain/cards/BatteryIndicator'
 import { interaction, theme } from '@/constants/theme'
 import { telemetry } from '@/constants/telemetry'
 import { routes } from '@/navigation/routes'
@@ -135,12 +135,13 @@ export function BottomTelemetryStrip({ revealProgress }: BottomTelemetryStripPro
             android_ripple={interaction.rippleBorderless}
             onPress={() => router.push(routes.controlImu)}
           >
+            <View style={styles.imuMarker} />
             <View
               style={[
                 styles.imuLine,
                 {
                   transform: [{ rotate: `${imuConnected ? pitchDeg : 0}deg` }],
-                  backgroundColor: imuConnected ? theme.target.color : '#64748b',
+                  backgroundColor: imuConnected ? theme.target.color : theme.neutral.textMuted,
                 },
               ]}
             />
@@ -197,7 +198,7 @@ const styles = StyleSheet.create({
     gap: 1,
   },
   subLabel: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 8,
     fontWeight: '900',
     textTransform: 'uppercase',
@@ -233,7 +234,7 @@ const styles = StyleSheet.create({
     height: 9,
     borderRadius: 5,
     borderWidth: 1,
-    borderColor: '#475569',
+    borderColor: theme.neutral.textDim,
     backgroundColor: 'transparent',
   },
   footpadActive: {
@@ -247,6 +248,13 @@ const styles = StyleSheet.create({
     width: 32,
     height: 3,
     borderRadius: 1,
+    backgroundColor: theme.target.color,
+  },
+  imuMarker: {
+    position: 'absolute',
+    width: 10,
+    height: 10,
+    borderRadius: 999,
     backgroundColor: theme.target.color,
   },
 })

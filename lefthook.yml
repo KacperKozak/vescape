@@ -5,7 +5,7 @@ pre-commit:
   parallel: true
   commands:
     format:
-      glob: '*.{ts,tsx,json}'
+      glob: '*.{ts,tsx,json,md,yml,yaml}'
       run: bunx oxfmt {staged_files}
       stage_fixed: true
     typecheck:
@@ -15,12 +15,11 @@ pre-commit:
       glob: '*.{ts,tsx,json}'
       run: bun run lint
     knip:
-      glob:
-        - 'src/**/*.{ts,tsx,json}'
+      glob: '*.{ts,tsx,json}'
       run: bun knip
     test-bun:
       glob: '*.{ts,tsx}'
       run: bun run test:bun
     test-android:
-      glob: 'modules/vesc-ble/android/**/*.{kt,kts}'
+      glob: '*.{kt,kts}'
       run: bun run test:android

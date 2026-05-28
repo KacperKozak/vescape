@@ -64,6 +64,10 @@ _Avoid_: Alarm, notification
 A bundled audio asset used for alert feedback, belonging to exactly one category: single (one-threshold alerts) or geiger (range alerts with progressive ticking).
 _Avoid_: Sound effect, ringtone, tone
 
+**Alert Message Template**:
+A user-authored spoken phrase on a one-shot Alert Rule that may include current alert-value placeholders and is spoken by native text-to-speech when the rule fires.
+_Avoid_: TTS sound, voice preset, notification text
+
 **App Setting**:
 A user-controlled app preference that affects app behavior across boards unless explicitly scoped elsewhere.
 _Avoid_: Option, config
@@ -85,6 +89,7 @@ _Avoid_: Error log, debug session, crash report
 - A **Tune Profile** belongs to a **Board** and stores semantic field values independently of firmware schema.
 - A **Tune History Entry** captures the previous state of a **Tune Profile** before each explicit save.
 - An **Alert Rule** evaluates against live **Telemetry Samples**.
+- An **Alert Message Template** belongs to one **Alert Rule**.
 - An **App Setting** affects app behavior and is not part of a **Tune Profile** or **Board** identity.
 - A **Diagnostic Event** may describe failures around a **Board**, **Live State**, **Telemetry Sample**, **Ride Recording**, or **Tune Profile** workflow.
 

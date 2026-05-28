@@ -319,7 +319,15 @@ public class VescBleModule: Module {
       if let jsonStr = jsonValue,
          let data = jsonStr.data(using: .utf8),
          let decoded = try? JSONSerialization.jsonObject(with: data, options: .allowFragments) {
-        settings[key] = decoded
+        if key == "liveHistoryLimit" {
+          guard let minutes = Self.liveHistoryLimitMinutes(decoded) else {
+            promise.resolve(nil)
+            return
+          }
+          settings[key] = minutes
+        } else {
+          settings[key] = decoded
+        }
       } else {
         settings.removeValue(forKey: key)
       }
@@ -643,6 +651,23 @@ public class VescBleModule: Module {
     "movingSpeedThresholdKmh": 3,
   ]
 
+  private static func liveHistoryLimitMinutes(_ value: Any?) -> Int? {
+    if let value = value as? Int {
+      return min(50, max(1, value))
+    }
+    if let value = value as? NSNumber {
+      return min(50, max(1, value.intValue))
+    }
+    return nil
+  }
+
+  private static func normalizeSettings(_ settings: [String: Any]) -> [String: Any] {
+    var normalized = settings
+    normalized["liveHistoryLimit"] =
+      liveHistoryLimitMinutes(settings["liveHistoryLimit"]) ?? defaultSettings["liveHistoryLimit"]
+    return normalized
+  }
+
   private static func loadSettings() -> [String: Any] {
     guard
       let data = UserDefaults.standard.data(forKey: "vesc_ble_settings"),
@@ -657,7 +682,7 @@ public class VescBleModule: Module {
         merged["movingSpeedThresholdKmh"] = oldValue
       }
     }
-    return merged
+    return normalizeSettings(merged)
   }
 
   private static func saveSettings(_ settings: [String: Any]) {

@@ -5,8 +5,8 @@ import { ArrowCounterClockwiseIcon } from 'phosphor-react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { type TuneHistoryEntry, type TuneProfileFieldValue } from 'vesc-ble'
 
-import { ConfirmModal } from '@/components/ConfirmModal'
-import { APP_TUNE_FIELD_BY_ID, formatTuneValue } from '@/tune/fields'
+import { ConfirmModal } from '@/components/ui/modals/ConfirmModal'
+import { APP_TUNE_FIELD_BY_ID, formatTuneValue } from '@/lib/tune/fields'
 import { useTuneProfileStore } from '@/store/tuneProfileStore'
 import { theme } from '@/constants/theme'
 
@@ -132,10 +132,10 @@ export default function TuneHistoryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111827',
+    backgroundColor: theme.neutral.bg,
   },
   empty: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 13,
     textAlign: 'center',
     paddingVertical: 24,
@@ -149,7 +149,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
+    borderBottomColor: theme.neutral.surface,
     gap: 10,
   },
   entryInfo: {
@@ -162,7 +162,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   entryDetail: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 11,
     fontWeight: '700',
   },
@@ -171,7 +171,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   diffLine: {
-    color: '#94a3b8',
+    color: theme.neutral.textSecondary,
     fontSize: 11,
     fontWeight: '600',
   },

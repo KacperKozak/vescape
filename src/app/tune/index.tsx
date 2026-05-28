@@ -1,46 +1,39 @@
-import { useCallback, useLayoutEffect, useRef, useState } from 'react'
-import {
-  ActivityIndicator,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
+import { useCallback, useLayoutEffect, useRef } from 'react'
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useNavigation, useRouter } from 'expo-router'
 import {
   ArrowsClockwiseIcon,
   BluetoothSlashIcon,
-  CheckIcon,
   ClockCounterClockwiseIcon,
+  CopyIcon,
   FadersIcon,
-  InfoIcon,
+  PencilSimpleIcon,
+  TrashIcon,
   WarningCircleIcon,
-  XIcon,
 } from 'phosphor-react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { type TuneProfile, type RefloatConfigField, type TuneProfileFieldValue } from 'vesc-ble'
 
-import { Banner } from '@/components/Banner'
-import { IconButton } from '@/components/IconButton'
-import { ConfirmModal } from '@/components/ConfirmModal'
-import { InfoModal } from '@/components/InfoModal'
-import { Placeholder } from '@/components/Placeholder'
-import { BasicSliderCell } from '@/components/tune/BasicSliderCell'
-import { FieldEditorPopover } from '@/components/tune/FieldEditorPopover'
-import { ProfilePills } from '@/components/tune/ProfilePills'
-import { TuneConfigCell } from '@/components/tune/TuneConfigCell'
-import { TuneGroupGrid } from '@/components/tune/TuneGroupGrid'
-import { TuneSyncBar } from '@/components/tune/TuneSyncBar'
+import { Banner } from '@/components/ui/base/Banner'
+import { IconButton } from '@/components/ui/base/IconButton'
+import { ConfirmModal } from '@/components/ui/modals/ConfirmModal'
+import { InfoModal } from '@/components/ui/modals/InfoModal'
+import { Placeholder } from '@/components/ui/base/Placeholder'
+import { BasicSliderCell } from '@/components/ui/tune/BasicSliderCell'
+import { FieldEditorPopover } from '@/components/domain/tune/FieldEditorPopover'
+import { HPill, HPillAdd, HPillMenuItem, HPills } from '@/components/ui/menus/HPills'
+import { TuneConfigCell } from '@/components/domain/tune/TuneConfigCell'
+import { TuneGroupGrid } from '@/components/ui/tune/TuneGroupGrid'
+import { TuneSyncBar } from '@/components/ui/tune/TuneSyncBar'
 import { routes } from '@/navigation/routes'
-import { type Board } from '@/store/boardStore'
+import { TextPromptModal } from '@/components/ui/modals/TextPromptModal'
+import { BoardPickerModal } from '@/components/domain/tune/BoardPickerModal'
+import { InfoBadge } from '@/components/ui/base/InfoBadge'
 import { useTuneProfileStore } from '@/store/tuneProfileStore'
-import type { BasicSliderItem } from '@/tune/sliderDefinitions'
-import { useTuneScreenData } from '@/tune/useTuneScreenData'
+import type { BasicSliderItem } from '@/lib/tune/sliderDefinitions'
+import { useTuneScreenData } from '@/hooks/useTuneScreenData'
 import { theme } from '@/constants/theme'
-import { useTuneModals } from '@/tune/useTuneModals'
+import { useTuneModals } from '@/hooks/useTuneModals'
 
 export default function TuneScreen() {
   const navigation = useNavigation()
@@ -212,17 +205,40 @@ export default function TuneScreen() {
           ) : null}
 
           {profiles.length > 0 ? (
-            <ProfilePills
-              profiles={profiles}
-              activeProfileId={activeProfile?.id ?? null}
-              canDelete={profiles.length > 1}
-              hasOtherBoards={modals.otherBoards.length > 0}
-              onSelect={setActiveProfile}
-              onCreate={() => modals.handleCreateProfile(activeProfile?.id)}
-              onRename={(profile) => modals.setRenameModalProfile(profile)}
-              onDelete={(profile) => modals.setDeleteConfirmProfile(profile)}
-              onCopy={(profile) => modals.setCopySourceProfile(profile)}
-            />
+            <HPills activeId={activeProfile?.id ?? ''}>
+              {profiles.map((profile) => (
+                <HPill
+                  key={profile.id}
+                  id={profile.id}
+                  label={profile.name}
+                  color={theme.wheel}
+                  onPress={() => setActiveProfile(profile.id)}
+                >
+                  <HPillMenuItem
+                    icon={PencilSimpleIcon}
+                    label="Rename"
+                    onPress={() => modals.setRenameModalProfile(profile)}
+                  />
+                  {modals.otherBoards.length > 0 ? (
+                    <HPillMenuItem
+                      icon={CopyIcon}
+                      label="Copy to board"
+                      onPress={() => modals.setCopySourceProfile(profile)}
+                    />
+                  ) : null}
+                  {profiles.length > 1 ? (
+                    <HPillMenuItem
+                      icon={TrashIcon}
+                      label="Delete"
+                      onPress={() => modals.setDeleteConfirmProfile(profile)}
+                      danger
+                      separator
+                    />
+                  ) : null}
+                </HPill>
+              ))}
+              <HPillAdd onPress={() => modals.handleCreateProfile(activeProfile?.id)} />
+            </HPills>
           ) : null}
 
           {boardSnapshot ? (
@@ -413,23 +429,12 @@ export default function TuneScreen() {
   )
 }
 
-function InfoBadge({
-  label,
-  danger = false,
-  onPress,
-}: {
-  label: string
-  danger?: boolean
-  onPress: () => void
-}) {
-  return (
-    <Pressable style={[styles.metaBadge, danger && styles.metaBadgeDanger]} onPress={onPress}>
-      <Text style={[styles.metaText, danger && styles.metaTextDanger]} selectable>
-        {label}
-      </Text>
-      <InfoIcon size={12} color={danger ? '#fecaca' : '#64748b'} weight="bold" />
-    </Pressable>
-  )
+interface BasicSliderItemCellProps {
+  item: BasicSliderItem
+  editable: boolean
+  onPress: (sliderId: string, ref: { current: View | null }) => void
+  onInfo: () => void
+  onResetFormula: () => void
 }
 
 function BasicSliderItemCell({
@@ -438,13 +443,7 @@ function BasicSliderItemCell({
   onPress,
   onInfo,
   onResetFormula,
-}: {
-  item: BasicSliderItem
-  editable: boolean
-  onPress: (sliderId: string, ref: { current: View | null }) => void
-  onInfo: () => void
-  onResetFormula: () => void
-}) {
+}: BasicSliderItemCellProps) {
   const cellRef = useRef<View | null>(null)
   return (
     <BasicSliderCell
@@ -458,6 +457,19 @@ function BasicSliderItemCell({
   )
 }
 
+interface TuneFieldCellProps {
+  field: RefloatConfigField
+  savedValue: TuneProfileFieldValue | undefined
+  boardValue: TuneProfileFieldValue | undefined
+  profileValue: TuneProfileFieldValue | undefined
+  dirty: boolean
+  boardChanged: boolean
+  onPress: (field: RefloatConfigField, ref: { current: View | null }) => void
+  onInfo: () => void
+  onRevert: () => void
+  onAcceptBoard: () => void
+}
+
 function TuneFieldCell({
   field,
   savedValue,
@@ -469,18 +481,7 @@ function TuneFieldCell({
   onInfo,
   onRevert,
   onAcceptBoard,
-}: {
-  field: RefloatConfigField
-  savedValue: TuneProfileFieldValue | undefined
-  boardValue: TuneProfileFieldValue | undefined
-  profileValue: TuneProfileFieldValue | undefined
-  dirty: boolean
-  boardChanged: boolean
-  onPress: (field: RefloatConfigField, ref: { current: View | null }) => void
-  onInfo: () => void
-  onRevert: () => void
-  onAcceptBoard: () => void
-}) {
+}: TuneFieldCellProps) {
   const cellRef = useRef<View | null>(null)
   return (
     <TuneConfigCell
@@ -499,94 +500,13 @@ function TuneFieldCell({
   )
 }
 
-function TextPromptModal({
-  visible,
-  title,
-  placeholder,
-  initialValue,
-  confirmLabel,
-  onConfirm,
-  onDismiss,
-}: {
-  visible: boolean
-  title: string
-  placeholder?: string
-  initialValue: string
-  confirmLabel: string
-  onConfirm: (value: string) => void
-  onDismiss: () => void
-}) {
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onDismiss}>
-      {visible ? (
-        <TextPromptModalContent
-          title={title}
-          placeholder={placeholder}
-          initialValue={initialValue}
-          confirmLabel={confirmLabel}
-          onConfirm={onConfirm}
-          onDismiss={onDismiss}
-        />
-      ) : null}
-    </Modal>
-  )
-}
-
-function TextPromptModalContent({
-  title,
-  placeholder,
-  initialValue,
-  confirmLabel,
-  onConfirm,
-  onDismiss,
-}: {
-  title: string
-  placeholder?: string
-  initialValue: string
-  confirmLabel: string
-  onConfirm: (value: string) => void
-  onDismiss: () => void
-}) {
-  const [text, setText] = useState(initialValue)
-  return (
-    <Pressable style={styles.modalBackdrop} onPress={onDismiss}>
-      <Pressable style={styles.promptModal} onPress={(e) => e.stopPropagation()}>
-        <Text style={styles.promptTitle}>{title}</Text>
-        <TextInput
-          style={styles.promptInput}
-          value={text}
-          onChangeText={setText}
-          placeholder={placeholder}
-          placeholderTextColor="#475569"
-          autoFocus
-          selectTextOnFocus
-        />
-        <View style={styles.promptActions}>
-          <Pressable style={styles.promptCancelBtn} onPress={onDismiss}>
-            <Text style={styles.promptCancelText}>Cancel</Text>
-          </Pressable>
-          <Pressable
-            style={styles.promptConfirmBtn}
-            onPress={() => text.trim() && onConfirm(text.trim())}
-          >
-            <CheckIcon size={15} color="#020617" weight="bold" />
-            <Text style={styles.promptConfirmText}>{confirmLabel}</Text>
-          </Pressable>
-        </View>
-      </Pressable>
-    </Pressable>
-  )
-}
-
-function RenameProfileModal({
-  profile,
-  onRename,
-  onDismiss,
-}: {
+interface RenameProfileModalProps {
   profile: TuneProfile | null
   onRename: (name: string) => void
   onDismiss: () => void
-}) {
+}
+
+function RenameProfileModal({ profile, onRename, onDismiss }: RenameProfileModalProps) {
   return (
     <TextPromptModal
       visible={profile != null}
@@ -599,50 +519,10 @@ function RenameProfileModal({
   )
 }
 
-function BoardPickerModal({
-  visible,
-  boards,
-  onSelect,
-  onDismiss,
-}: {
-  visible: boolean
-  boards: Board[]
-  onSelect: (board: Board) => void
-  onDismiss: () => void
-}) {
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onDismiss}>
-      <Pressable style={styles.modalBackdrop} onPress={onDismiss}>
-        <Pressable style={styles.promptModal} onPress={(e) => e.stopPropagation()}>
-          <View style={styles.promptHeader}>
-            <Text style={styles.promptTitle}>Copy to board</Text>
-            <Pressable style={styles.promptCloseBtn} onPress={onDismiss}>
-              <XIcon size={14} color="#cbd5e1" weight="bold" />
-            </Pressable>
-          </View>
-          {boards.length === 0 ? (
-            <Text style={styles.emptyText}>No other boards available.</Text>
-          ) : (
-            boards.map((board) => (
-              <Pressable
-                key={board.id}
-                style={styles.boardPickerItem}
-                onPress={() => onSelect(board)}
-              >
-                <Text style={styles.boardPickerText}>{board.name}</Text>
-              </Pressable>
-            ))
-          )}
-        </Pressable>
-      </Pressable>
-    </Modal>
-  )
-}
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111827',
+    backgroundColor: theme.neutral.bg,
   },
   headerActions: {
     flexDirection: 'row',
@@ -720,127 +600,5 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     flexWrap: 'wrap',
-  },
-  metaBadge: {
-    minHeight: 30,
-    borderRadius: 15,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: '#1e293b',
-    borderWidth: 1,
-    borderColor: '#334155',
-  },
-  metaBadgeDanger: {
-    backgroundColor: theme.error.bg,
-    borderColor: theme.error.border,
-  },
-  metaText: {
-    color: '#cbd5e1',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  metaTextDanger: {
-    color: '#fee2e2',
-  },
-  modalBackdrop: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(2, 6, 23, 0.72)',
-    padding: 32,
-  },
-  promptModal: {
-    width: '100%',
-    backgroundColor: '#1e293b',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#334155',
-    padding: 16,
-    gap: 14,
-  },
-  promptHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  promptTitle: {
-    color: '#f8fafc',
-    fontSize: 16,
-    fontWeight: '900',
-  },
-  promptCloseBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#0f172a',
-  },
-  promptInput: {
-    height: 48,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#334155',
-    backgroundColor: '#0f172a',
-    color: '#f8fafc',
-    paddingHorizontal: 12,
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  promptActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 10,
-  },
-  promptCancelBtn: {
-    minHeight: 40,
-    paddingHorizontal: 14,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#334155',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  promptCancelText: {
-    color: '#cbd5e1',
-    fontSize: 13,
-    fontWeight: '800',
-  },
-  promptConfirmBtn: {
-    minHeight: 40,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    backgroundColor: theme.wheel.color,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  promptConfirmText: {
-    color: '#020617',
-    fontSize: 13,
-    fontWeight: '900',
-  },
-  boardPickerItem: {
-    paddingVertical: 12,
-    paddingHorizontal: 4,
-    borderTopWidth: 1,
-    borderTopColor: '#0f172a',
-    minHeight: 44,
-    justifyContent: 'center',
-  },
-  boardPickerText: {
-    color: '#cbd5e1',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  emptyText: {
-    color: '#64748b',
-    fontSize: 13,
-    textAlign: 'center',
-    paddingVertical: 16,
   },
 })

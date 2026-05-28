@@ -3,7 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { PlayIcon, StopIcon } from 'phosphor-react-native'
 
-import { TuneDial } from '@/components/tune/TuneDial'
+import { TuneDial } from '@/components/ui/tune/TuneDial'
 
 import { theme } from '@/constants/theme'
 import {
@@ -167,15 +167,13 @@ export default function SoundPlaygroundScreen() {
   )
 }
 
-function PresetButton({
-  preset,
-  selected,
-  onPress,
-}: {
+interface PresetButtonProps {
   preset: AlertPreset
   selected: boolean
   onPress: () => void
-}) {
+}
+
+function PresetButton({ preset, selected, onPress }: PresetButtonProps) {
   return (
     <Pressable
       style={[styles.presetButton, selected && styles.presetButtonActive]}
@@ -190,14 +188,14 @@ function PresetButton({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#111827',
+    backgroundColor: theme.neutral.bg,
   },
   content: {
     padding: 16,
     gap: 8,
   },
   sectionTitle: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 13,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -207,10 +205,10 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   card: {
-    backgroundColor: '#1e293b',
+    backgroundColor: theme.neutral.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: theme.neutral.border,
     overflow: 'hidden',
     padding: 14,
   },
@@ -220,9 +218,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   presetButton: {
-    backgroundColor: '#0f172a',
+    backgroundColor: theme.neutral.surfaceDeep,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: theme.neutral.border,
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -233,15 +231,15 @@ const styles = StyleSheet.create({
     backgroundColor: theme.wheel.bg,
   },
   presetName: {
-    color: '#94a3b8',
+    color: theme.neutral.textSecondary,
     fontSize: 13,
     fontWeight: '700',
   },
   presetNameActive: {
-    color: '#f1f5f9',
+    color: theme.neutral.textPrimary,
   },
   presetCategory: {
-    color: '#475569',
+    color: theme.neutral.textDim,
     fontSize: 10,
     fontWeight: '600',
     textTransform: 'uppercase',
@@ -252,24 +250,24 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: theme.neutral.border,
   },
   modeButton: {
     flex: 1,
     alignItems: 'center',
     paddingVertical: 10,
-    backgroundColor: '#0f172a',
+    backgroundColor: theme.neutral.surfaceDeep,
   },
   modeButtonActive: {
     backgroundColor: theme.wheel.bg,
   },
   modeText: {
-    color: '#64748b',
+    color: theme.neutral.textMuted,
     fontSize: 13,
     fontWeight: '600',
   },
   modeTextActive: {
-    color: '#f1f5f9',
+    color: theme.neutral.textPrimary,
   },
   playButton: {
     backgroundColor: theme.wheel.color,
@@ -301,7 +299,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   dialLabel: {
-    color: '#94a3b8',
+    color: theme.neutral.textSecondary,
     fontSize: 13,
     fontWeight: '600',
   },
