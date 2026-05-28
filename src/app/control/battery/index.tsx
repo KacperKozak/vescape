@@ -11,7 +11,7 @@ import { deriveBatteryConfig } from '@/lib/battery'
 import { useLiveMetric, liveSelectors } from '@/hooks/useLiveMetric'
 import { useBoardStore } from '@/store/boardStore'
 import { useLiveWindowMs } from '@/store/settingsStore'
-import { liveTelemetryRuntime } from '@/telemetry/liveTelemetryRuntime'
+import { liveTelemetryRuntime } from '@/lib/telemetry/liveTelemetryRuntime'
 
 const cfg = telemetry.battVoltage
 

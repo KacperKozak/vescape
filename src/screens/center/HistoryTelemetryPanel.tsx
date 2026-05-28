@@ -17,7 +17,7 @@ import {
 } from '@/components/history/historyChartMetrics'
 import { IconButton } from '@/components/IconButton'
 import { telemetry } from '@/constants/telemetry'
-import { downsampleTimeSeries, findNearestSampleIndexByTime } from '@/history/playback'
+import { downsampleTimeSeries, findNearestSampleIndexByTime } from '@/lib/history/playback'
 import { dutyPercent, fmtDutyPercent } from '@/helpers/format'
 import { useHistoryStore, type TelemetrySample } from '@/store/historyStore'
 

@@ -5,7 +5,7 @@ import type { RefloatConfigField, TuneProfile, TuneProfileFieldValue } from 'ves
 import type { FieldEditorTarget } from '@/components/tune/FieldEditorPopover'
 import type { Board } from '@/store/boardStore'
 import { useTuneProfileStore } from '@/store/tuneProfileStore'
-import { formatTuneValue } from '@/tune/fields'
+import { formatTuneValue } from '@/lib/tune/fields'
 import {
   BASIC_SLIDER_BY_ID,
   fieldHelp,
@@ -13,7 +13,7 @@ import {
   getLinkedFieldPreviews,
   isEditableNumberField,
   type BasicSliderItem,
-} from '@/tune/sliderDefinitions'
+} from '@/lib/tune/sliderDefinitions'
 
 type InfoModalState = { title: string; message: string } | null
 type EditorKind = { kind: 'field'; fieldId: string } | { kind: 'basic'; sliderId: string }

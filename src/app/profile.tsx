@@ -30,7 +30,7 @@ import {
   formatSpeed,
   getAdjacentMonths,
   selectInitialMonth,
-} from '@/profile/profileStats'
+} from '@/lib/profile/profileStats'
 import { Select, type SelectOption } from '@/components/Select'
 import { theme } from '@/constants/theme'
 

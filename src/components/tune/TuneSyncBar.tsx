@@ -9,7 +9,7 @@ import {
   WarningCircleIcon,
 } from 'phosphor-react-native'
 
-import type { SyncBarState } from '@/tune/syncBarState'
+import type { SyncBarState } from '@/lib/tune/syncBarState'
 import { theme } from '@/constants/theme'
 
 interface TuneSyncBarProps {

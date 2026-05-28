@@ -3,7 +3,7 @@ import type { TelemetryEvent } from 'vesc-ble'
 
 import { useBleStore } from '@/store/bleStore'
 import type { ExcludedRange } from '@/components/charts/chartMath'
-import { liveTelemetryRuntime } from '@/telemetry/liveTelemetryRuntime'
+import { liveTelemetryRuntime } from '@/lib/telemetry/liveTelemetryRuntime'
 
 export interface LiveMetricPoint {
   ts: number

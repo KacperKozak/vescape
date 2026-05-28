@@ -30,10 +30,10 @@ import { TextPromptModal } from '@/components/TextPromptModal'
 import { BoardPickerModal } from '@/components/tune/BoardPickerModal'
 import { InfoBadge } from '@/components/tune/InfoBadge'
 import { useTuneProfileStore } from '@/store/tuneProfileStore'
-import type { BasicSliderItem } from '@/tune/sliderDefinitions'
-import { useTuneScreenData } from '@/tune/useTuneScreenData'
+import type { BasicSliderItem } from '@/lib/tune/sliderDefinitions'
+import { useTuneScreenData } from '@/hooks/useTuneScreenData'
 import { theme } from '@/constants/theme'
-import { useTuneModals } from '@/tune/useTuneModals'
+import { useTuneModals } from '@/hooks/useTuneModals'
 
 export default function TuneScreen() {
   const navigation = useNavigation()

@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 
-import { getSyncBarState } from '@/tune/syncBarState'
+import { getSyncBarState } from '@/lib/tune/syncBarState'
 
 test('allows saving dirty profile edits while board config is still loading', () => {
   expect(

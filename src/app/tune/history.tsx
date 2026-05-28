@@ -6,7 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { type TuneHistoryEntry, type TuneProfileFieldValue } from 'vesc-ble'
 
 import { ConfirmModal } from '@/components/ConfirmModal'
-import { APP_TUNE_FIELD_BY_ID, formatTuneValue } from '@/tune/fields'
+import { APP_TUNE_FIELD_BY_ID, formatTuneValue } from '@/lib/tune/fields'
 import { useTuneProfileStore } from '@/store/tuneProfileStore'
 import { theme } from '@/constants/theme'
 

@@ -3,9 +3,9 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { ArrowCounterClockwiseIcon, CheckIcon, InfoIcon } from 'phosphor-react-native'
 import type { RefloatConfigField, TuneProfileFieldValue } from 'vesc-ble'
 
-import { isDisplayableFieldValue } from '@/tune/fieldValues'
-import { formatProfileValue } from '@/tune/sliderDefinitions'
-import { formatTuneValue } from '@/tune/fields'
+import { isDisplayableFieldValue } from '@/lib/tune/fieldValues'
+import { formatProfileValue } from '@/lib/tune/sliderDefinitions'
+import { formatTuneValue } from '@/lib/tune/fields'
 import { theme } from '@/constants/theme'
 
 interface TuneConfigCellProps {

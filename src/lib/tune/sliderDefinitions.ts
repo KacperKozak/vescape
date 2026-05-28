@@ -1,7 +1,7 @@
 import type { RefloatConfigField, RefloatConfigGroup, TuneProfileFieldValue } from 'vesc-ble'
 
-import { APP_TUNE_FIELD_BY_ID, formatTuneValue } from '@/tune/fields'
-import { isDisplayableFieldValue } from '@/tune/fieldValues'
+import { APP_TUNE_FIELD_BY_ID, formatTuneValue } from '@/lib/tune/fields'
+import { isDisplayableFieldValue } from '@/lib/tune/fieldValues'
 
 const FIELD_INFO: Record<string, string> = {
   kp: 'Main proportional angle response. Higher values make the board respond more strongly to nose angle error.',

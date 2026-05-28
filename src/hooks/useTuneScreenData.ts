@@ -9,10 +9,10 @@ import { useBoardStore } from '@/store/boardStore'
 import { useBleStore } from '@/store/bleStore'
 import { useTuneProfileStore } from '@/store/tuneProfileStore'
 import { useTuneSnapshotStore } from '@/store/tuneSnapshotStore'
-import { APP_TUNE_FIELD_BY_ID, APP_TUNE_GROUPS } from '@/tune/fields'
-import { isDisplayableFieldValue } from '@/tune/fieldValues'
-import { basicSlidersFromGroups } from '@/tune/sliderDefinitions'
-import { getSyncBarState } from '@/tune/syncBarState'
+import { APP_TUNE_FIELD_BY_ID, APP_TUNE_GROUPS } from '@/lib/tune/fields'
+import { isDisplayableFieldValue } from '@/lib/tune/fieldValues'
+import { basicSlidersFromGroups } from '@/lib/tune/sliderDefinitions'
+import { getSyncBarState } from '@/lib/tune/syncBarState'
 
 type ProfileState =
   | { phase: 'loading'; error: null }

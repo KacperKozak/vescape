@@ -5,9 +5,9 @@ import { CheckIcon, XIcon } from 'phosphor-react-native'
 import { Dropdown } from '@/components/Dropdown'
 import { TuneDial } from '@/components/tune/TuneDial'
 import { theme } from '@/constants/theme'
-import { snapValue } from '@/tune/sliderDefinitions'
-import type { LinkedFieldPreview } from '@/tune/sliderDefinitions'
-import { formatTuneValue } from '@/tune/fields'
+import { snapValue } from '@/lib/tune/sliderDefinitions'
+import type { LinkedFieldPreview } from '@/lib/tune/sliderDefinitions'
+import { formatTuneValue } from '@/lib/tune/fields'
 
 export interface FieldEditorTarget {
   triggerRef: React.RefObject<View | null>

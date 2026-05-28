@@ -37,7 +37,7 @@ import {
   getReliableGpsBearingFromFixes,
 } from '@/helpers/liveGpsPresentation'
 import { distanceMeters, makeCircleFeature, makeTrailLineString } from '@/helpers/mapGeometry'
-import { findNearestSampleIndexByTime } from '@/history/playback'
+import { findNearestSampleIndexByTime } from '@/lib/history/playback'
 import type { HistoryGpsSample, HistoryMarker } from '@/store/historyStore'
 import { useSettingsStore } from '@/store/settingsStore'
 

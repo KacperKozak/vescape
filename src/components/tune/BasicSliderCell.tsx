@@ -2,8 +2,8 @@ import { forwardRef } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { InfoIcon, WarningIcon } from 'phosphor-react-native'
 
-import type { BasicSliderItem } from '@/tune/sliderDefinitions'
-import { clamp, formatSliderValue } from '@/tune/sliderDefinitions'
+import type { BasicSliderItem } from '@/lib/tune/sliderDefinitions'
+import { clamp, formatSliderValue } from '@/lib/tune/sliderDefinitions'
 import { theme } from '@/constants/theme'
 
 interface BasicSliderCellProps {

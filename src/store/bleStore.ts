@@ -22,8 +22,8 @@ import {
 } from 'vesc-ble'
 
 import { useSettingsStore } from '@/store/settingsStore'
-import { liveTelemetryRuntime } from '@/telemetry/liveTelemetryRuntime'
-import { type LiveStatusSummary } from '@/telemetry/liveMetricHistory'
+import { liveTelemetryRuntime } from '@/lib/telemetry/liveTelemetryRuntime'
+import { type LiveStatusSummary } from '@/lib/telemetry/liveMetricHistory'
 
 interface EventSubscription {
   remove(): void

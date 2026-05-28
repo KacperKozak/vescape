@@ -24,7 +24,7 @@ import { BriefcaseIcon, HouseIcon, PencilSimpleIcon, TrashIcon } from 'phosphor-
 import type { Icon } from 'phosphor-react-native'
 import { HPill, HPillAdd, HPillDot, HPillMenuItem, HPills } from '@/components/HPills'
 import { generateZoneId, usePrivacyZoneStore, type PrivacyZone } from '@/store/privacyZoneStore'
-import { liveTelemetryRuntime } from '@/telemetry/liveTelemetryRuntime'
+import { liveTelemetryRuntime } from '@/lib/telemetry/liveTelemetryRuntime'
 
 Mapbox.setAccessToken(MAPBOX_ACCESS_TOKEN)
 

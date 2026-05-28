@@ -5,7 +5,7 @@ import { DualGauge } from '@/components/charts/DualGauge'
 import { useAlertsStore } from '@/store/alertsStore'
 import { useLiveMetric, liveSelectors } from '@/hooks/useLiveMetric'
 import { useLiveWindowMs } from '@/store/settingsStore'
-import { liveTelemetryRuntime } from '@/telemetry/liveTelemetryRuntime'
+import { liveTelemetryRuntime } from '@/lib/telemetry/liveTelemetryRuntime'
 
 const SPEED_MAX = 50
 const DUTY_MAX = 100

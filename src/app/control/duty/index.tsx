@@ -7,7 +7,7 @@ import { toTelemetryChartPoints } from '@/components/control/metricDetailData'
 import { telemetry } from '@/constants/telemetry'
 import { useLiveMetric, useLiveExcludedRanges, liveSelectors } from '@/hooks/useLiveMetric'
 import { useLiveWindowMs } from '@/store/settingsStore'
-import { liveTelemetryRuntime } from '@/telemetry/liveTelemetryRuntime'
+import { liveTelemetryRuntime } from '@/lib/telemetry/liveTelemetryRuntime'
 
 const cfg = telemetry.duty
 const RANGE = { y: cfg.chartRange }

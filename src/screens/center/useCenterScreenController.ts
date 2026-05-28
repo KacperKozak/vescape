@@ -15,7 +15,7 @@ import { useHistoryStore, type HistorySession } from '@/store/historyStore'
 import { useMapStore } from '@/store/mapStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { useWeatherStore } from '@/store/weatherStore'
-import { findNearestSampleIndexByTime } from '@/history/playback'
+import { findNearestSampleIndexByTime } from '@/lib/history/playback'
 
 interface UseCenterScreenControllerArgs {
   mapRef: RefObject<CenterMapHandle | null>

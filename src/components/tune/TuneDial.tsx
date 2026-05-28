@@ -21,7 +21,7 @@ import Animated, {
 } from 'react-native-reanimated'
 import { scheduleOnRN } from 'react-native-worklets'
 
-import { formatTuneValue } from '@/tune/fields'
+import { formatTuneValue } from '@/lib/tune/fields'
 import { theme } from '@/constants/theme'
 import {
   DETENT_CAPTURE_VELOCITY,
