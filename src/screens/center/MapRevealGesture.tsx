@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { withSpring, withTiming, type SharedValue } from 'react-native-reanimated'
 
+import { theme } from '@/constants/theme'
 import { getBreakoutReleasePan, getResistedRevealPan } from '@/screens/center/mapRevealMotion'
 
 interface MapRevealGestureProps {
@@ -222,6 +223,6 @@ const styles = StyleSheet.create({
   hitArea: {
     ...StyleSheet.absoluteFill,
     zIndex: 5,
-    backgroundColor: 'rgba(0,0,0,0.001)',
+    backgroundColor: theme.neutral.touchInvisible,
   },
 })

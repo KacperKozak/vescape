@@ -5,6 +5,7 @@ import { useState } from 'react'
 import { WeatherIcon } from '@/components/ui/weather/WeatherIcon'
 import { ShowcaseCard } from '@/components/ui/dev/ShowcaseCard'
 import { ChipRow } from '@/components/ui/dev/ShowcaseControls'
+import { theme } from '@/constants/theme'
 
 export default function WeatherPage() {
   const [code, setCode] = useState(0)
@@ -37,12 +38,12 @@ export default function WeatherPage() {
           }
         >
           <View style={{ flexDirection: 'row', gap: 16, alignItems: 'center', paddingVertical: 8 }}>
-            <WeatherIcon code={code} size={48} color="#38bdf8" />
+            <WeatherIcon code={code} size={48} color={theme.wheel.color} />
             <View>
-              <Text style={{ color: '#94a3b8', fontSize: 12, fontWeight: '600' }}>
+              <Text style={{ color: theme.neutral.textSecondary, fontSize: 12, fontWeight: '600' }}>
                 Code: {code}
               </Text>
-              <Text style={{ color: '#64748b', fontSize: 11 }}>
+              <Text style={{ color: theme.neutral.textDim, fontSize: 11 }}>
                 {weatherCodes.find((w) => w.code === code)?.label ?? 'Unknown'}
               </Text>
             </View>
@@ -54,6 +55,6 @@ export default function WeatherPage() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#111827' },
+  container: { flex: 1, backgroundColor: theme.neutral.bg },
   content: { padding: 12, gap: 12, paddingBottom: 40 },
 })

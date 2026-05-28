@@ -161,7 +161,7 @@ function PlaceholderShowcase() {
           <ToggleRow label="showTitle" value={showTitle} onToggle={setShowTitle} />
           <ChipRow
             label="iconColor"
-            options={[theme.neutral.textMuted, '#38bdf8', '#f87171']}
+            options={[theme.neutral.textMuted, theme.wheel.color, theme.error.color]}
             selected={color}
             onSelect={setColor}
           />

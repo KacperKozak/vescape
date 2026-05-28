@@ -42,7 +42,7 @@ function TextPromptModalContent({
             style={styles.promptConfirmBtn}
             onPress={() => text.trim() && onConfirm(text.trim())}
           >
-            <CheckIcon size={15} color="#020617" weight="bold" />
+            <CheckIcon size={15} color={theme.neutral.surfaceDeep} weight="bold" />
             <Text style={styles.promptConfirmText}>{confirmLabel}</Text>
           </Pressable>
         </View>
@@ -91,7 +91,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(2, 6, 23, 0.72)',
+    backgroundColor: theme.neutral.modalBackdrop,
     padding: 32,
   },
   promptModal: {
@@ -104,7 +104,7 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   promptTitle: {
-    color: '#f8fafc',
+    color: theme.neutral.textPrimary,
     fontSize: 16,
     fontWeight: '900',
   },
@@ -114,7 +114,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.neutral.border,
     backgroundColor: theme.neutral.surfaceDeep,
-    color: '#f8fafc',
+    color: theme.neutral.textPrimary,
     paddingHorizontal: 12,
     fontSize: 16,
     fontWeight: '700',
@@ -134,7 +134,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   promptCancelText: {
-    color: '#cbd5e1',
+    color: theme.neutral.textSecondary,
     fontSize: 13,
     fontWeight: '800',
   },
@@ -149,7 +149,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   promptConfirmText: {
-    color: '#020617',
+    color: theme.neutral.surfaceDeep,
     fontSize: 13,
     fontWeight: '900',
   },

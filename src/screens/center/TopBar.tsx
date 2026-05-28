@@ -81,7 +81,7 @@ export function TopBar({
             <Text style={styles.boardText} numberOfLines={1}>
               {name}
             </Text>
-            <CaretDownIcon size={12} color="#cbd5e1" weight="bold" />
+            <CaretDownIcon size={12} color={theme.neutral.textSecondary} weight="bold" />
           </Pressable>
           <View style={styles.divider} />
           <Pressable
@@ -94,14 +94,14 @@ export function TopBar({
           >
             <PencilSimpleIcon
               size={14}
-              color={activeBoard ? '#e2e8f0' : theme.neutral.textMuted}
+              color={activeBoard ? theme.neutral.textPrimary : theme.neutral.textMuted}
               weight="bold"
             />
           </Pressable>
           <View style={styles.divider} />
           {canDisconnect && (
             <Pressable style={styles.plugButton} onPress={onDisconnect}>
-              <PowerIcon size={15} color="#fca5a5" weight="bold" />
+              <PowerIcon size={15} color={theme.error.color} weight="bold" />
             </Pressable>
           )}
         </View>
@@ -113,7 +113,12 @@ export function TopBar({
       </View>
       {hasWeather && (
         <Pressable style={styles.weatherRow} onPress={onWeatherPress}>
-          <WeatherIcon code={weatherCode} size={13} color="#94a3b8" weight="duotone" />
+          <WeatherIcon
+            code={weatherCode}
+            size={13}
+            color={theme.neutral.textSecondary}
+            weight="duotone"
+          />
           <Text style={styles.weatherText}>{weatherTemp}°</Text>
           {weatherPrecip != null && weatherPrecip > 0 && (
             <>
@@ -176,8 +181,8 @@ const styles = StyleSheet.create({
     minHeight: 38,
     borderRadius: 19,
     borderWidth: 1,
-    borderColor: 'rgba(148, 163, 184, 0.28)',
-    backgroundColor: 'rgba(15, 23, 42, 0.72)',
+    borderColor: theme.neutral.border,
+    backgroundColor: theme.neutral.surfaceDeep,
     overflow: 'hidden',
   },
   boardButton: {
@@ -194,7 +199,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   boardText: {
-    color: '#f8fafc',
+    color: theme.neutral.textPrimary,
     fontSize: 13,
     fontWeight: '800',
     maxWidth: 120,
@@ -203,7 +208,7 @@ const styles = StyleSheet.create({
   divider: {
     width: 1,
     height: 20,
-    backgroundColor: 'rgba(148, 163, 184, 0.22)',
+    backgroundColor: theme.neutral.border,
   },
   plugButton: {
     width: 38,

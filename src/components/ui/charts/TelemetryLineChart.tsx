@@ -25,7 +25,7 @@ const EXCLUSION_MARKER_HEIGHT = 1
 const EXCLUSION_MARKER_INSET = 1
 
 function exclusionColor(reason: string): string {
-  if (reason === 'free_spin') return '#facc15'
+  if (reason === 'free_spin') return theme.highlight.color
   return theme.neutral.textSecondary
 }
 
@@ -192,13 +192,20 @@ export function TelemetryLineChart({
           {...panResponder.panHandlers}
         >
           <Svg width="100%" height={height}>
-            <SvgLine x1={0} y1={0.5} x2={chartWidth} y2={0.5} stroke="#1e293b" strokeWidth={0.5} />
+            <SvgLine
+              x1={0}
+              y1={0.5}
+              x2={chartWidth}
+              y2={0.5}
+              stroke={theme.neutral.surface}
+              strokeWidth={0.5}
+            />
             <SvgLine
               x1={0}
               y1={height / 2}
               x2={chartWidth}
               y2={height / 2}
-              stroke="#1e293b"
+              stroke={theme.neutral.surface}
               strokeWidth={0.5}
               strokeDasharray="4,4"
             />
@@ -207,7 +214,7 @@ export function TelemetryLineChart({
               y1={height - 0.5}
               x2={chartWidth}
               y2={height - 0.5}
-              stroke="#1e293b"
+              stroke={theme.neutral.surface}
               strokeWidth={0.5}
             />
 
@@ -248,7 +255,7 @@ export function TelemetryLineChart({
                 y1={0}
                 x2={markerPosition.x}
                 y2={height}
-                stroke="#475569"
+                stroke={theme.neutral.textDim}
                 strokeWidth={1}
                 strokeDasharray="3,3"
               />
@@ -259,7 +266,7 @@ export function TelemetryLineChart({
                 cx={markerPosition.x}
                 cy={markerPosition.y}
                 r={4}
-                fill="#0f172a"
+                fill={theme.neutral.surfaceDeep}
                 stroke={color}
                 strokeWidth={2}
               />
@@ -318,7 +325,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   value: {
-    color: '#e2e8f0',
+    color: theme.neutral.textPrimary,
     fontSize: 11,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
@@ -358,7 +365,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 4,
     width: TOOLTIP_WIDTH,
-    backgroundColor: 'rgba(15, 23, 42, 0.92)',
+    backgroundColor: theme.neutral.surfaceDeep,
     borderRadius: 4,
     borderWidth: 1,
     borderColor: theme.neutral.border,
@@ -369,7 +376,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   tooltipValue: {
-    color: '#e2e8f0',
+    color: theme.neutral.textPrimary,
     fontSize: 9,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],

@@ -142,7 +142,7 @@ export default function ProfileScreen() {
             onPress={() => adjacent.previous && void loadMonth(adjacent.previous)}
             disabled={!adjacent.previous}
           >
-            <CaretLeftIcon size={16} color="#94a3b8" weight="bold" />
+            <CaretLeftIcon size={16} color={theme.neutral.textSecondary} weight="bold" />
           </Pressable>
           <Select
             options={monthOptions}
@@ -156,7 +156,7 @@ export default function ProfileScreen() {
             onPress={() => adjacent.next && void loadMonth(adjacent.next)}
             disabled={!adjacent.next}
           >
-            <CaretRightIcon size={16} color="#94a3b8" weight="bold" />
+            <CaretRightIcon size={16} color={theme.neutral.textSecondary} weight="bold" />
           </Pressable>
         </View>
         <StatsGrid items={monthItems} />
@@ -340,16 +340,16 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   errorTitle: {
-    color: '#fee2e2',
+    color: theme.error.text,
     fontSize: 14,
     fontWeight: '700',
   },
   errorText: {
-    color: '#fecaca',
+    color: theme.error.color,
     fontSize: 12,
   },
   retryText: {
-    color: '#ffffff',
+    color: theme.neutral.textPrimary,
     fontSize: 12,
     fontWeight: '700',
     marginTop: 4,

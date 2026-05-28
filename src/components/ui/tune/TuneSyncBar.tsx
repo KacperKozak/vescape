@@ -86,9 +86,9 @@ export function TuneSyncBar({
       case 'loading_config':
         return {
           borderColor: theme.wheel.border,
-          textColor: '#bae6fd',
+          textColor: theme.wheel.text,
           accentColor: theme.wheel.color,
-          accentTextColor: '#020617',
+          accentTextColor: theme.neutral.surfaceDeep,
           text: 'Reading board config...',
           detail: null,
           icon: <ActivityIndicator size="small" color={theme.wheel.color} />,
@@ -99,7 +99,7 @@ export function TuneSyncBar({
           borderColor: theme.warning.border,
           textColor: theme.warning.text,
           accentColor: theme.warning.color,
-          accentTextColor: '#1c0701',
+          accentTextColor: theme.neutral.surfaceDeep,
           text: 'Board config not read',
           detail: s.configError,
           icon: <WarningCircleIcon size={16} color={theme.warning.color} weight="bold" />,
@@ -107,7 +107,9 @@ export function TuneSyncBar({
             {
               label: 'Retry',
               primary: true,
-              icon: <ArrowsClockwiseIcon size={12} color="#1c0701" weight="bold" />,
+              icon: (
+                <ArrowsClockwiseIcon size={12} color={theme.neutral.surfaceDeep} weight="bold" />
+              ),
               onPress: onRetryConfig,
             },
           ],
@@ -117,7 +119,7 @@ export function TuneSyncBar({
           borderColor: theme.neutral.border,
           textColor: theme.neutral.textMuted,
           accentColor: theme.gps.color,
-          accentTextColor: '#022c22',
+          accentTextColor: theme.gps.bg,
           text: 'Your board is up to date',
           detail: null,
           icon: <CheckCircleIcon size={16} color={theme.gps.color} weight="fill" />,
@@ -128,7 +130,7 @@ export function TuneSyncBar({
           borderColor: theme.warning.border,
           textColor: theme.warning.text,
           accentColor: theme.warning.color,
-          accentTextColor: '#1c0701',
+          accentTextColor: theme.neutral.surfaceDeep,
           text: 'Connect to board to sync',
           detail: null,
           icon: <BluetoothSlashIcon size={16} color={theme.warning.color} weight="bold" />,
@@ -137,9 +139,9 @@ export function TuneSyncBar({
       case 'save_later':
         return {
           borderColor: theme.wheel.border,
-          textColor: '#e0f2fe',
+          textColor: theme.neutral.textPrimary,
           accentColor: theme.wheel.color,
-          accentTextColor: '#020617',
+          accentTextColor: theme.neutral.surfaceDeep,
           text: `${s.dirtyCount} unsaved field${s.dirtyCount === 1 ? '' : 's'}`,
           detail: s.configError ? `Board config not read: ${s.configError}` : null,
           icon: <CloudArrowUpIcon size={16} color={theme.wheel.color} weight="bold" />,
@@ -148,13 +150,19 @@ export function TuneSyncBar({
                 {
                   label: 'Retry',
                   primary: false,
-                  icon: <ArrowsClockwiseIcon size={12} color="#cbd5e1" weight="bold" />,
+                  icon: (
+                    <ArrowsClockwiseIcon
+                      size={12}
+                      color={theme.neutral.textSecondary}
+                      weight="bold"
+                    />
+                  ),
                   onPress: onRetryConfig,
                 },
                 {
                   label: 'Save',
                   primary: true,
-                  icon: <CheckIcon size={12} color="#020617" weight="bold" />,
+                  icon: <CheckIcon size={12} color={theme.neutral.surfaceDeep} weight="bold" />,
                   onPress: onSave,
                 },
               ]
@@ -162,7 +170,13 @@ export function TuneSyncBar({
                 {
                   label: 'Discard',
                   primary: false,
-                  icon: <ArrowCounterClockwiseIcon size={12} color="#cbd5e1" weight="bold" />,
+                  icon: (
+                    <ArrowCounterClockwiseIcon
+                      size={12}
+                      color={theme.neutral.textSecondary}
+                      weight="bold"
+                    />
+                  ),
                   onPress: onDiscard,
                 },
                 {
@@ -176,9 +190,9 @@ export function TuneSyncBar({
       case 'save_and_sync':
         return {
           borderColor: theme.wheel.border,
-          textColor: '#e0f2fe',
+          textColor: theme.neutral.textPrimary,
           accentColor: theme.wheel.color,
-          accentTextColor: '#020617',
+          accentTextColor: theme.neutral.surfaceDeep,
           text: `${s.dirtyCount} unsaved field${s.dirtyCount === 1 ? '' : 's'}`,
           detail: null,
           icon: <ArrowsClockwiseIcon size={16} color={theme.wheel.color} weight="bold" />,
@@ -200,9 +214,9 @@ export function TuneSyncBar({
       case 'sync_with_board':
         return {
           borderColor: theme.gps.border,
-          textColor: '#86efac',
+          textColor: theme.gps.text,
           accentColor: theme.gps.text,
-          accentTextColor: '#022c22',
+          accentTextColor: theme.gps.bg,
           text: `${s.diffCount} field${s.diffCount === 1 ? '' : 's'} differ from board`,
           detail: null,
           icon: <ArrowsClockwiseIcon size={16} color={theme.gps.color} weight="bold" />,
@@ -210,7 +224,7 @@ export function TuneSyncBar({
             {
               label: 'Sync',
               primary: true,
-              icon: <CheckIcon size={12} color="#022c22" weight="bold" />,
+              icon: <CheckIcon size={12} color={theme.gps.bg} weight="bold" />,
               onPress: onSync,
             },
           ],
@@ -218,9 +232,9 @@ export function TuneSyncBar({
       case 'saving':
         return {
           borderColor: theme.wheel.border,
-          textColor: '#bae6fd',
+          textColor: theme.wheel.text,
           accentColor: theme.wheel.color,
-          accentTextColor: '#020617',
+          accentTextColor: theme.neutral.surfaceDeep,
           text: 'Saving...',
           detail: null,
           icon: <ActivityIndicator size="small" color={theme.wheel.color} />,
@@ -229,9 +243,9 @@ export function TuneSyncBar({
       case 'syncing':
         return {
           borderColor: theme.gps.border,
-          textColor: '#bbf7d0',
+          textColor: theme.gps.text,
           accentColor: theme.gps.color,
-          accentTextColor: '#022c22',
+          accentTextColor: theme.gps.bg,
           text: 'Syncing to board...',
           detail: null,
           icon: <ActivityIndicator size="small" color={theme.gps.color} />,
@@ -305,10 +319,10 @@ const styles = StyleSheet.create({
   actionBtnSecondary: {
     borderWidth: 1,
     borderColor: theme.neutral.border,
-    backgroundColor: '#172033',
+    backgroundColor: theme.neutral.surfaceDeep,
   },
   actionText: {
-    color: '#cbd5e1',
+    color: theme.neutral.textSecondary,
     fontSize: 12,
     fontWeight: '800',
   },

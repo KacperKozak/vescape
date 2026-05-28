@@ -87,12 +87,12 @@ export function HistorySessionSheet({
                     </Text>
                     {session.faultCount > 0 && (
                       <View style={styles.faultRow}>
-                        <WarningCircleIcon size={12} color="#fca5a5" weight="fill" />
+                        <WarningCircleIcon size={12} color={theme.error.color} weight="fill" />
                         <Text style={styles.faultText}>{session.faultCount} faults</Text>
                       </View>
                     )}
                   </View>
-                  <CaretRightIcon size={16} color="#64748b" weight="bold" />
+                  <CaretRightIcon size={16} color={theme.neutral.textDim} weight="bold" />
                 </Pressable>
               )
             })
@@ -141,7 +141,7 @@ const styles = StyleSheet.create({
     width: 280,
     maxHeight: 360,
     transform: [{ translateX: -140 }],
-    backgroundColor: '#131c2e',
+    backgroundColor: theme.neutral.surface,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: theme.neutral.border,
@@ -153,7 +153,7 @@ const styles = StyleSheet.create({
     elevation: 16,
   },
   title: {
-    color: '#cbd5e1',
+    color: theme.neutral.textSecondary,
     fontSize: 15,
     fontWeight: '700',
     paddingHorizontal: 14,
@@ -185,7 +185,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   rowSelected: {
-    borderColor: '#3b82f6',
+    borderColor: theme.wheel.color,
   },
   rowPressed: {
     backgroundColor: interaction.pressedBg,
@@ -196,7 +196,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   rowDate: {
-    color: '#e2e8f0',
+    color: theme.neutral.textPrimary,
     fontSize: 13,
     fontWeight: '700',
   },
@@ -215,7 +215,7 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   faultText: {
-    color: '#fca5a5',
+    color: theme.error.color,
     fontSize: 11,
     fontWeight: '700',
   },
@@ -226,7 +226,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: theme.neutral.border,
-    backgroundColor: '#101827',
+    backgroundColor: theme.neutral.surfaceDeep,
   },
   loadingPressed: {
     backgroundColor: interaction.pressedBg,

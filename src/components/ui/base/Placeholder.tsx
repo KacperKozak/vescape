@@ -41,7 +41,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   title: {
-    color: '#e2e8f0',
+    color: theme.neutral.textPrimary,
     fontSize: 16,
     fontWeight: '700',
     textAlign: 'center',

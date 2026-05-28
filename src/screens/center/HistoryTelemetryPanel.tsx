@@ -433,7 +433,7 @@ export function HistoryTelemetryPanel({
               </Text>
             </View>
             <View style={styles.metricLegendItem}>
-              <View style={[styles.metricLegendLine, { backgroundColor: '#facc15' }]} />
+              <View style={[styles.metricLegendLine, { backgroundColor: theme.highlight.color }]} />
               <Text style={styles.metricLegendText} numberOfLines={1}>
                 Free spin
               </Text>
@@ -466,8 +466,8 @@ const styles = StyleSheet.create({
     height: 54,
     borderRadius: 27,
     borderWidth: 1,
-    borderColor: 'rgba(148, 163, 184, 0.28)',
-    backgroundColor: 'rgba(15, 23, 42, 0.72)',
+    borderColor: theme.neutral.border,
+    backgroundColor: theme.neutral.surfaceDeep,
     paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
@@ -479,7 +479,7 @@ const styles = StyleSheet.create({
     gap: 1,
   },
   titleTime: {
-    color: '#f8fafc',
+    color: theme.neutral.textPrimary,
     fontSize: 12,
     fontWeight: '800',
   },
@@ -514,7 +514,7 @@ const styles = StyleSheet.create({
     borderRightColor: theme.neutral.border,
   },
   metricTabActive: {
-    backgroundColor: '#172554',
+    backgroundColor: theme.wheel.bg,
   },
   metricTabLine: {
     width: '60%',
@@ -537,7 +537,7 @@ const styles = StyleSheet.create({
     lineHeight: 12,
   },
   metricTabTextActive: {
-    color: '#dbeafe',
+    color: theme.wheel.text,
   },
   metricLegend: {
     marginTop: 2,

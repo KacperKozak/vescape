@@ -1,6 +1,7 @@
 import { type ReactNode } from 'react'
 import { Pressable, StyleSheet } from 'react-native'
 import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated'
+import { theme } from '@/constants/theme'
 
 interface MapOption<Key extends string> {
   key: Key
@@ -124,7 +125,7 @@ function MapOptionButton({
     () => ({
       width: withTiming(expanded && selected ? ACTIVE_WIDTH : OPTION_WIDTH, ANIMATION),
       backgroundColor: withTiming(
-        expanded && selected ? activeBackground : 'rgba(0,0,0,0)',
+        expanded && selected ? activeBackground : theme.neutral.transparent,
         ANIMATION,
       ),
     }),
@@ -165,9 +166,9 @@ const styles = StyleSheet.create({
     height: 50,
     borderRadius: 25,
     overflow: 'hidden',
-    backgroundColor: 'rgba(15,23,42,0.9)',
+    backgroundColor: theme.neutral.mapOverlaySelector,
     borderWidth: 1,
-    borderColor: 'rgba(148,163,184,0.28)',
+    borderColor: theme.neutral.borderMuted,
   },
   options: {
     position: 'absolute',

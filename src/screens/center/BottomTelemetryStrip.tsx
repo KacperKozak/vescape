@@ -204,7 +204,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   value: {
-    color: '#f8fafc',
+    color: theme.neutral.textPrimary,
     fontSize: 13,
     fontFamily: 'monospace',
     fontWeight: '800',

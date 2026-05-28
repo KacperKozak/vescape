@@ -83,7 +83,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 32,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: theme.neutral.modalBackdrop,
   },
   backdrop: {
     ...StyleSheet.absoluteFill,
@@ -91,10 +91,10 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     maxWidth: 340,
-    backgroundColor: '#131c2e',
+    backgroundColor: theme.neutral.surfaceDeep,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: theme.neutral.surface,
+    borderColor: theme.neutral.border,
     padding: 20,
     gap: 12,
   },

@@ -64,7 +64,7 @@ export function BoardSelectorSheet({
               <View style={[styles.boardIcon, isActive && styles.boardIconActive]}>
                 <LightningIcon
                   size={16}
-                  color={isActive ? theme.wheel.color : '#6b7280'}
+                  color={isActive ? theme.wheel.color : theme.neutral.textMuted}
                   weight={isActive ? 'fill' : 'regular'}
                 />
               </View>
@@ -88,7 +88,7 @@ export function BoardSelectorSheet({
                 }}
                 hitSlop={8}
               >
-                <PencilSimpleIcon size={15} color="#475569" weight="bold" />
+                <PencilSimpleIcon size={15} color={theme.neutral.textDim} weight="bold" />
               </Pressable>
             </Pressable>
           )
@@ -113,7 +113,7 @@ export function BoardSelectorSheet({
           {recordDebugSession ? (
             <RecordIcon size={20} color={theme.wheel.color} weight="fill" />
           ) : (
-            <RadioButtonIcon size={20} color="#4b5563" weight="regular" />
+            <RadioButtonIcon size={20} color={theme.neutral.textMuted} weight="regular" />
           )}
           <Text style={[styles.debugText, recordDebugSession && styles.debugTextActive]}>
             Record next session

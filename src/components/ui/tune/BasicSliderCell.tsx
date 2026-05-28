@@ -32,7 +32,7 @@ export const BasicSliderCell = forwardRef<View, BasicSliderCellProps>(function B
         onPress={editable ? onPress : undefined}
       >
         <Pressable style={styles.infoBtn} onPress={onInfo}>
-          <InfoIcon size={13} color="#64748b" weight="bold" />
+          <InfoIcon size={13} color={theme.neutral.textDim} weight="bold" />
         </Pressable>
 
         <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit>
@@ -46,7 +46,7 @@ export const BasicSliderCell = forwardRef<View, BasicSliderCellProps>(function B
         <View style={styles.labelRow}>
           {item.modifiedManually ? (
             <Pressable onPress={onResetFormula} hitSlop={8}>
-              <WarningIcon size={10} color="#fbbf24" weight="fill" />
+              <WarningIcon size={10} color={theme.highlight.color} weight="fill" />
             </Pressable>
           ) : null}
           <Text style={styles.label} numberOfLines={1}>
@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   value: {
-    color: '#e0f2fe',
+    color: theme.neutral.textPrimary,
     fontSize: 18,
     fontWeight: '800',
     paddingRight: 26,

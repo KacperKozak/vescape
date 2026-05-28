@@ -223,16 +223,16 @@ export function AlertFormModal({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: theme.neutral.modalBackdrop,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
   },
   modal: {
-    backgroundColor: '#131c2e',
+    backgroundColor: theme.neutral.surfaceDeep,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: theme.neutral.surface,
+    borderColor: theme.neutral.border,
     width: '100%',
     maxWidth: 340,
     maxHeight: '90%',
@@ -242,7 +242,7 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   modalTitle: {
-    color: '#f8fafc',
+    color: theme.neutral.textPrimary,
     fontSize: 16,
     fontWeight: '800',
   },
@@ -283,7 +283,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   dialValue: {
-    color: '#f8fafc',
+    color: theme.neutral.textPrimary,
     fontSize: 20,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
@@ -296,7 +296,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   saveButtonText: {
-    color: '#0c2a3f',
+    color: theme.wheel.bg,
     fontSize: 15,
     fontWeight: '700',
   },

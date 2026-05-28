@@ -14,7 +14,11 @@ export function InfoBadge({ label, danger = false, onPress }: InfoBadgeProps) {
       <Text style={[styles.metaText, danger && styles.metaTextDanger]} selectable>
         {label}
       </Text>
-      <InfoIcon size={12} color={danger ? '#fecaca' : theme.neutral.textMuted} weight="bold" />
+      <InfoIcon
+        size={12}
+        color={danger ? theme.error.text : theme.neutral.textMuted}
+        weight="bold"
+      />
     </Pressable>
   )
 }
@@ -37,11 +41,11 @@ const styles = StyleSheet.create({
     borderColor: theme.error.border,
   },
   metaText: {
-    color: '#cbd5e1',
+    color: theme.neutral.textSecondary,
     fontSize: 12,
     fontWeight: '700',
   },
   metaTextDanger: {
-    color: '#fee2e2',
+    color: theme.error.text,
   },
 })

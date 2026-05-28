@@ -46,7 +46,7 @@ export function Select<T extends string = string>({
         <Text style={[styles.triggerText, !selectedOption && styles.placeholderText]}>
           {selectedOption?.label ?? placeholder}
         </Text>
-        <CaretDownIcon size={14} color="#64748b" weight="bold" />
+        <CaretDownIcon size={14} color={theme.neutral.textMuted} weight="bold" />
       </Pressable>
 
       <Dropdown
@@ -122,7 +122,7 @@ const styles = StyleSheet.create({
     backgroundColor: interaction.pressedBg,
   },
   optionText: {
-    color: '#e2e8f0',
+    color: theme.neutral.textPrimary,
     fontSize: 14,
     fontWeight: '500',
   },

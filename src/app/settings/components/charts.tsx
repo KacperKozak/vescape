@@ -7,6 +7,7 @@ import { SingleGauge } from '@/components/ui/charts/DualGauge'
 import { Sparkline, type SparklinePoint } from '@/components/ui/charts/Sparkline'
 import { ShowcaseCard } from '@/components/ui/dev/ShowcaseCard'
 import { ChipRow, ToggleRow } from '@/components/ui/dev/ShowcaseControls'
+import { theme } from '@/constants/theme'
 import { telemetry } from '@/constants/telemetry'
 
 function generateSparklineData(count: number, base: number, variance: number): SparklinePoint[] {
@@ -120,6 +121,6 @@ export default function ChartsPage() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#111827' },
+  container: { flex: 1, backgroundColor: theme.neutral.bg },
   content: { padding: 12, gap: 12, paddingBottom: 40 },
 })

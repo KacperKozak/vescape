@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, View } from 'react-native'
 import { MarkerView } from '@rnmapbox/maps'
 import type { Icon } from 'phosphor-react-native'
+import { theme } from '@/constants/theme'
 
 interface MapPinProps {
   id: string
@@ -58,7 +59,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 11,
     borderWidth: 3,
-    backgroundColor: '#f9fafb',
+    backgroundColor: theme.neutral.textPrimary,
   },
   iconPin: {
     width: 22,
@@ -67,7 +68,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 11,
     borderWidth: 2,
-    backgroundColor: 'rgba(15, 23, 42, 0.58)',
+    backgroundColor: theme.neutral.mapOverlayPin,
     opacity: 0.78,
     shadowColor: '#000',
     shadowOpacity: 0.22,

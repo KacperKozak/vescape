@@ -257,7 +257,7 @@ const styles = StyleSheet.create({
     borderTopColor: theme.neutral.surface,
   },
   menuItemText: {
-    color: '#cbd5e1',
+    color: theme.neutral.textSecondary,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -274,7 +274,7 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: '#22c55e',
+    backgroundColor: theme.gps.color,
   },
   disabledDot: {
     width: 6,

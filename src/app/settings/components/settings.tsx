@@ -53,8 +53,8 @@ export default function SettingsPage() {
                 <Switch
                   value={darkMode}
                   onValueChange={setDarkMode}
-                  trackColor={{ false: theme.neutral.border, true: '#1d4ed8' }}
-                  thumbColor={darkMode ? '#3b82f6' : theme.neutral.textMuted}
+                  trackColor={{ false: theme.neutral.border, true: theme.wheel.border }}
+                  thumbColor={darkMode ? theme.wheel.color : theme.neutral.textMuted}
                 />
               }
             />
@@ -88,8 +88,8 @@ export default function SettingsPage() {
                 <Switch
                   value={notifications}
                   onValueChange={setNotifications}
-                  trackColor={{ false: theme.neutral.border, true: '#1d4ed8' }}
-                  thumbColor={notifications ? '#3b82f6' : theme.neutral.textMuted}
+                  trackColor={{ false: theme.neutral.border, true: theme.wheel.border }}
+                  thumbColor={notifications ? theme.wheel.color : theme.neutral.textMuted}
                 />
               }
             />

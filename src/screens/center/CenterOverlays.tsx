@@ -136,7 +136,7 @@ function FullMapControls({ mapRef, map, top, bottom }: FullMapControlsProps) {
         />
       </View>
       <Pressable style={[styles.mapBackAction, { bottom }]} onPress={map.exitMapFocus}>
-        <ArrowLeftIcon size={20} color="#cbd5e1" weight="bold" />
+        <ArrowLeftIcon size={20} color={theme.neutral.textSecondary} weight="bold" />
         <Text style={styles.mapBackLabel}>GO BACK</Text>
       </Pressable>
     </>
@@ -457,15 +457,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: 'rgba(148,163,184,0.28)',
-    backgroundColor: 'rgba(15,23,42,0.9)',
+    borderColor: theme.neutral.border,
+    backgroundColor: theme.neutral.surfaceDeep,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
   mapBackLabel: {
-    color: '#cbd5e1',
+    color: theme.neutral.textSecondary,
     fontSize: 12,
     fontWeight: '800',
     letterSpacing: 1,
@@ -524,12 +524,12 @@ const styles = StyleSheet.create({
     zIndex: 25,
     borderRadius: 10,
     padding: 10,
-    backgroundColor: 'rgba(69, 26, 26, 0.88)',
+    backgroundColor: theme.error.bg,
     borderWidth: 1,
     borderColor: theme.error.bg,
   },
   historyErrorText: {
-    color: '#fecaca',
+    color: theme.error.text,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -541,6 +541,6 @@ const styles = StyleSheet.create({
   },
   mapLoadingDim: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(2, 6, 23, 0.34)',
+    backgroundColor: theme.neutral.surfaceDeep,
   },
 })

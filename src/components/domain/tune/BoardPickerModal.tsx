@@ -45,7 +45,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(2, 6, 23, 0.72)',
+    backgroundColor: theme.neutral.modalBackdrop,
     padding: 32,
   },
   promptModal: {
@@ -63,7 +63,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   promptTitle: {
-    color: '#f8fafc',
+    color: theme.neutral.textPrimary,
     fontSize: 16,
     fontWeight: '900',
   },
@@ -84,7 +84,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   boardPickerText: {
-    color: '#cbd5e1',
+    color: theme.neutral.textSecondary,
     fontSize: 14,
     fontWeight: '700',
   },

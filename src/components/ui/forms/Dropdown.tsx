@@ -204,7 +204,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
   },
   panel: {
-    backgroundColor: '#131c2e',
+    backgroundColor: theme.neutral.surface,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: theme.neutral.border,

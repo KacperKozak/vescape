@@ -99,12 +99,12 @@ const HISTORY_MARKER_ICONS: Record<HistoryMarker['type'], Icon> = {
 }
 
 const HISTORY_MARKER_COLORS: Record<HistoryMarker['type'], string> = {
-  app_stop: '#f59e0b',
+  app_stop: theme.highlight.color,
   connected: theme.gps.color,
   connection_lost: theme.warning.color,
   disconnected: theme.warning.color,
   error: theme.error.color,
-  gap: '#eab308',
+  gap: theme.highlight.color,
 }
 
 function formatMarkerTime(ms: number): string {
@@ -882,7 +882,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     width: EDGE_GUARD_WIDTH,
-    backgroundColor: 'rgba(0,0,0,0.001)',
+    backgroundColor: theme.neutral.touchInvisible,
   },
   edgeGuardRight: {
     position: 'absolute',
@@ -890,7 +890,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     right: 0,
     width: EDGE_GUARD_WIDTH,
-    backgroundColor: 'rgba(0,0,0,0.001)',
+    backgroundColor: theme.neutral.touchInvisible,
   },
   emptyContainer: {
     ...StyleSheet.absoluteFill,
@@ -901,12 +901,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   emptyTitle: {
-    color: '#f9fafb',
+    color: theme.neutral.textPrimary,
     fontSize: 18,
     fontWeight: '700',
   },
   emptyText: {
-    color: '#9ca3af',
+    color: theme.neutral.textSecondary,
     fontSize: 13,
     textAlign: 'center',
     lineHeight: 19,
@@ -915,10 +915,10 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 6,
     left: 6,
-    color: 'rgba(255,255,255,0.55)',
+    color: theme.neutral.textDimLight,
     fontSize: 10,
     fontWeight: '500',
-    backgroundColor: 'rgba(0,0,0,0.3)',
+    backgroundColor: theme.neutral.dimOverlay,
     paddingHorizontal: 5,
     paddingVertical: 2,
     borderRadius: 4,

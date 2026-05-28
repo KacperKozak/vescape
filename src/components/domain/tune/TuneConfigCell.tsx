@@ -43,16 +43,16 @@ export const TuneConfigCell = forwardRef<View, TuneConfigCellProps>(function Tun
         onPress={onPress}
       >
         <Pressable style={styles.cellInfoButton} onPress={onInfo}>
-          <InfoIcon size={13} color="#64748b" weight="bold" />
+          <InfoIcon size={13} color={theme.neutral.textDim} weight="bold" />
         </Pressable>
         {dirty ? (
           <Pressable style={styles.cellRevertButton} onPress={onRevert}>
-            <ArrowCounterClockwiseIcon size={13} color="#bae6fd" weight="bold" />
+            <ArrowCounterClockwiseIcon size={13} color={theme.wheel.text} weight="bold" />
           </Pressable>
         ) : null}
         {boardChanged && isDisplayableFieldValue(boardValue) ? (
           <Pressable style={styles.cellAcceptButton} onPress={onAcceptBoard}>
-            <CheckIcon size={13} color="#bbf7d0" weight="bold" />
+            <CheckIcon size={13} color={theme.gps.text} weight="bold" />
           </Pressable>
         ) : null}
         <Text style={styles.cellValue} numberOfLines={1} adjustsFontSizeToFit selectable>
@@ -96,11 +96,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
   cellDirty: {
-    backgroundColor: '#0c2537',
+    backgroundColor: theme.wheel.bg,
     borderRadius: 8,
   },
   cellBoardChanged: {
-    backgroundColor: '#082f26',
+    backgroundColor: theme.gps.bg,
     borderRadius: 8,
   },
   cellInfoButton: {
@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
     borderRadius: 13,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0f3650',
+    backgroundColor: theme.wheel.bg,
   },
   cellAcceptButton: {
     position: 'absolute',
@@ -146,7 +146,7 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   cellOldValue: {
-    color: '#7dd3fc',
+    color: theme.wheel.text,
     fontSize: 10,
     fontWeight: '800',
     marginTop: 1,
@@ -160,7 +160,7 @@ const styles = StyleSheet.create({
     paddingRight: 26,
   },
   cellBoardValue: {
-    color: '#86efac',
+    color: theme.gps.text,
     fontSize: 10,
     fontWeight: '900',
     marginTop: 1,

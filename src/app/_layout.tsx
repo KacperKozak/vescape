@@ -20,7 +20,7 @@ export default function RootLayout() {
         <Stack
           screenOptions={{
             headerStyle: { backgroundColor: theme.neutral.bg },
-            headerTintColor: '#f9fafb',
+            headerTintColor: theme.neutral.textPrimary,
             headerTitleStyle: { fontWeight: '600', fontSize: 14 },
             headerTitleAlign: 'center',
             headerShadowVisible: false,

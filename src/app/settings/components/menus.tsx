@@ -73,7 +73,7 @@ function MapOptionSelectorShowcase() {
         icon: (
           <ArrowUpIcon
             size={20}
-            color={active === 'north' ? theme.gps.text : '#64748b'}
+            color={active === 'north' ? theme.gps.text : theme.neutral.textDim}
             weight="bold"
           />
         ),
@@ -84,7 +84,7 @@ function MapOptionSelectorShowcase() {
         icon: (
           <NavigationArrowIcon
             size={20}
-            color={active === 'gps' ? theme.gps.text : '#64748b'}
+            color={active === 'gps' ? theme.gps.text : theme.neutral.textDim}
             weight="fill"
           />
         ),
@@ -95,7 +95,7 @@ function MapOptionSelectorShowcase() {
         icon: (
           <ArrowsClockwiseIcon
             size={20}
-            color={active === 'free' ? theme.gps.text : '#64748b'}
+            color={active === 'free' ? theme.gps.text : theme.neutral.textDim}
             weight="bold"
           />
         ),
@@ -131,7 +131,7 @@ function MapOptionSelectorShowcase() {
           activeKey={active}
           activeIcon={activeIcon}
           activeColor={theme.gps.text}
-          activeBackground={`${theme.gps.color}1f`}
+          activeBackground={theme.gps.bg}
           collapsedAccessibilityLabel="Navigation mode"
           expanded={expanded}
           options={options}
@@ -158,6 +158,6 @@ export default function MenusPage() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#111827' },
+  container: { flex: 1, backgroundColor: theme.neutral.bg },
   content: { padding: 12, gap: 12, paddingBottom: 40 },
 })

@@ -36,9 +36,9 @@ const BAD_EVENTS = new Set([
 ])
 
 function getEventColor(eventName: string): string {
-  if (GOOD_EVENTS.has(eventName)) return '#22c55e'
-  if (BAD_EVENTS.has(eventName)) return '#ef4444'
-  return '#eab308'
+  if (GOOD_EVENTS.has(eventName)) return theme.gps.color
+  if (BAD_EVENTS.has(eventName)) return theme.error.color
+  return theme.highlight.color
 }
 
 function formatProperties(json: string): string {

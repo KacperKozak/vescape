@@ -7,6 +7,7 @@ import { TuneDial } from '@/components/ui/tune/TuneDial'
 import { ShowcaseCard } from '@/components/ui/dev/ShowcaseCard'
 import { ChipRow, ValueRow } from '@/components/ui/dev/ShowcaseControls'
 
+import { theme } from '@/constants/theme'
 import type { BasicSliderItem } from '@/lib/tune/sliderDefinitions'
 
 const RANGE_CONFIGS = {
@@ -114,6 +115,6 @@ export default function TunePage() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#111827' },
+  container: { flex: 1, backgroundColor: theme.neutral.bg },
   content: { padding: 12, gap: 12, paddingBottom: 40 },
 })

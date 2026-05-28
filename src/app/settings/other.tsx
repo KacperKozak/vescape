@@ -134,7 +134,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   hapticButtonText: {
-    color: '#cbd5e1',
+    color: theme.neutral.textSecondary,
     fontSize: 12,
     fontWeight: '700',
   },

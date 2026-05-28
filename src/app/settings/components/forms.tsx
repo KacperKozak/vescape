@@ -8,6 +8,7 @@ import { SoundPicker } from '@/components/ui/forms/SoundPicker'
 import { ShowcaseCard } from '@/components/ui/dev/ShowcaseCard'
 import { OpenButton } from '@/components/ui/dev/ShowcaseControls'
 
+import { theme } from '@/constants/theme'
 import type { AlertPreset } from 'vesc-ble'
 
 function SelectShowcase() {
@@ -50,7 +51,7 @@ function DropdownShowcase() {
         <View style={{ padding: 12, gap: 8 }}>
           <Text style={styles.dropdownItem}>Profile</Text>
           <Text style={styles.dropdownItem}>Settings</Text>
-          <Text style={[styles.dropdownItem, { color: '#f87171' }]}>Logout</Text>
+          <Text style={[styles.dropdownItem, { color: theme.error.color }]}>Logout</Text>
         </View>
       </Dropdown>
     </ShowcaseCard>
@@ -89,8 +90,13 @@ export default function FormsPage() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#111827' },
+  container: { flex: 1, backgroundColor: theme.neutral.bg },
   content: { padding: 12, gap: 12, paddingBottom: 40 },
-  previewHint: { color: '#475569', fontSize: 12, fontStyle: 'italic' },
-  dropdownItem: { color: '#f1f5f9', fontSize: 13, fontWeight: '700', paddingVertical: 4 },
+  previewHint: { color: theme.neutral.textDim, fontSize: 12, fontStyle: 'italic' },
+  dropdownItem: {
+    color: theme.neutral.textPrimary,
+    fontSize: 13,
+    fontWeight: '700',
+    paddingVertical: 4,
+  },
 })

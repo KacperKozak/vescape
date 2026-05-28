@@ -57,7 +57,7 @@ export function InfoModal({
               <Text style={styles.title}>{title}</Text>
             </View>
             <Pressable style={styles.closeButton} onPress={onDismiss}>
-              <XIcon size={15} color="#94a3b8" weight="bold" />
+              <XIcon size={15} color={theme.neutral.textSecondary} weight="bold" />
             </Pressable>
           </View>
           <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
@@ -77,7 +77,7 @@ export function InfoModal({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: theme.neutral.modalBackdrop,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 32,
@@ -89,10 +89,10 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 340,
     maxHeight: '78%',
-    backgroundColor: '#131c2e',
+    backgroundColor: theme.neutral.surfaceDeep,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: theme.neutral.surface,
+    borderColor: theme.neutral.border,
     padding: 18,
     gap: 14,
   },
@@ -110,7 +110,7 @@ const styles = StyleSheet.create({
   },
   title: {
     flex: 1,
-    color: '#f8fafc',
+    color: theme.neutral.textPrimary,
     fontSize: 16,
     fontWeight: '800',
   },
@@ -139,10 +139,10 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#1d4ed8',
+    backgroundColor: theme.wheel.border,
   },
   dismissText: {
-    color: '#f8fafc',
+    color: theme.neutral.textPrimary,
     fontSize: 13,
     fontWeight: '800',
   },

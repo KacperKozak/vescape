@@ -13,13 +13,13 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation } from 'expo-router'
+import { theme } from '@/constants/theme'
 
 import { Button } from '@/components/ui/base/Button'
 import { ConfirmModal } from '@/components/ui/modals/ConfirmModal'
 import { MAPBOX_ACCESS_TOKEN } from '@/config/mapy'
 import { MAP_DEFAULTS } from '@/constants/mapStyles'
 import { ONE_DARK_MAP_STYLE } from '@/constants/oneDarkMapStyle'
-import { theme } from '@/constants/theme'
 import { BriefcaseIcon, HouseIcon, PencilSimpleIcon, TrashIcon } from 'phosphor-react-native'
 import type { Icon } from 'phosphor-react-native'
 import { HPill, HPillAdd, HPillDot, HPillMenuItem, HPills } from '@/components/ui/menus/HPills'
@@ -565,12 +565,12 @@ const styles = StyleSheet.create({
     borderWidth: 2,
   },
   circleEnabled: {
-    backgroundColor: 'rgba(34, 197, 94, 0.18)',
-    borderColor: 'rgba(34, 197, 94, 0.70)',
+    backgroundColor: theme.zone.bg,
+    borderColor: theme.zone.border,
   },
   circleDisabled: {
     backgroundColor: 'transparent',
-    borderColor: 'rgba(100, 116, 139, 0.50)',
+    borderColor: theme.zone.borderDim,
   },
   zoneLabelWrapper: {
     ...StyleSheet.absoluteFill,
@@ -581,7 +581,7 @@ const styles = StyleSheet.create({
     color: theme.neutral.textPrimary,
     fontSize: 14,
     fontWeight: '700',
-    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowColor: theme.neutral.textShadow,
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
   },
@@ -589,7 +589,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(17,24,39,0.6)',
+    backgroundColor: theme.neutral.loadingOverlay,
   },
   bottomBar: {
     position: 'absolute',
@@ -608,7 +608,7 @@ const styles = StyleSheet.create({
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: theme.neutral.modalBackdrop,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,

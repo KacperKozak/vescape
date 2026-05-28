@@ -122,8 +122,8 @@ export default function SettingsScreen() {
               <Switch
                 value={autoConnect}
                 onValueChange={(v) => void set('autoConnect', v)}
-                trackColor={{ false: theme.neutral.border, true: '#1d4ed8' }}
-                thumbColor={autoConnect ? '#3b82f6' : theme.neutral.textMuted}
+                trackColor={{ false: theme.neutral.border, true: theme.wheel.border }}
+                thumbColor={autoConnect ? theme.wheel.color : theme.neutral.textMuted}
               />
             }
           />
@@ -136,8 +136,8 @@ export default function SettingsScreen() {
               <Switch
                 value={autoRecording}
                 onValueChange={(v) => void set('autoRecording', v)}
-                trackColor={{ false: theme.neutral.border, true: '#1d4ed8' }}
-                thumbColor={autoRecording ? '#3b82f6' : theme.neutral.textMuted}
+                trackColor={{ false: theme.neutral.border, true: theme.wheel.border }}
+                thumbColor={autoRecording ? theme.wheel.color : theme.neutral.textMuted}
               />
             }
           />
@@ -242,7 +242,7 @@ export default function SettingsScreen() {
                 disabled={db.rebuildState === 'running'}
               >
                 {db.rebuildState === 'done' && (
-                  <CheckCircleIcon size={13} color="#bbf7d0" weight="fill" />
+                  <CheckCircleIcon size={13} color={theme.gps.text} weight="fill" />
                 )}
                 <Text style={styles.rebuildButtonText}>
                   {db.rebuildState === 'running'
@@ -385,11 +385,11 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   rebuildButtonDone: {
-    borderColor: '#166534',
-    backgroundColor: '#052e16',
+    borderColor: theme.gps.border,
+    backgroundColor: theme.gps.bg,
   },
   rebuildButtonText: {
-    color: '#cbd5e1',
+    color: theme.neutral.textSecondary,
     fontSize: 12,
     fontWeight: '700',
   },

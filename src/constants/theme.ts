@@ -97,6 +97,24 @@ export const theme = {
     textSecondary: '#94a3b8',
     textMuted: '#64748b',
     textDim: '#475569',
+    /** Semi-transparent overlays and map component backgrounds. */
+    mapOverlayPin: 'rgba(15,23,42,0.58)',
+    mapOverlayPill: 'rgba(15,23,42,0.72)',
+    mapOverlaySelector: 'rgba(15,23,42,0.9)',
+    dimOverlay: 'rgba(0,0,0,0.3)',
+    modalBackdrop: 'rgba(0,0,0,0.6)',
+    loadingOverlay: 'rgba(17,24,39,0.6)',
+    textShadow: 'rgba(0,0,0,0.8)',
+    textDimLight: 'rgba(255,255,255,0.55)',
+    borderMuted: 'rgba(148,163,184,0.28)',
+    touchInvisible: 'rgba(0,0,0,0.001)',
+    transparent: 'rgba(0,0,0,0)',
+  },
+  /** Privacy zone colors – green GPS zone markers. */
+  zone: {
+    bg: 'rgba(34,197,94,0.18)',
+    border: 'rgba(34,197,94,0.70)',
+    borderDim: 'rgba(100,116,139,0.50)',
   },
 } as const
 

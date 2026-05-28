@@ -91,7 +91,7 @@ export function ConfirmModal({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    backgroundColor: theme.neutral.modalBackdrop,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 32,
@@ -102,15 +102,15 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     maxWidth: 320,
-    backgroundColor: '#131c2e',
+    backgroundColor: theme.neutral.surfaceDeep,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: theme.neutral.surface,
+    borderColor: theme.neutral.border,
     padding: 20,
     gap: 12,
   },
   title: {
-    color: '#f8fafc',
+    color: theme.neutral.textPrimary,
     fontSize: 16,
     fontWeight: '800',
   },

@@ -162,7 +162,7 @@ export default function TuneScreen() {
 
           {profileError ? (
             <View style={styles.errorBanner}>
-              <WarningCircleIcon size={16} color="#fca5a5" />
+              <WarningCircleIcon size={16} color={theme.error.color} />
               <Text style={styles.errorBannerText}>{profileError}</Text>
             </View>
           ) : null}
@@ -185,7 +185,7 @@ export default function TuneScreen() {
                 )
               }
             >
-              <WarningCircleIcon size={16} color="#fbbf24" weight="fill" />
+              <WarningCircleIcon size={16} color={theme.highlight.color} weight="fill" />
               <View style={styles.schemaMismatchTextWrap}>
                 <Text style={styles.schemaMismatchTitle}>Schema mismatch</Text>
                 <Text style={styles.schemaMismatchText}>
@@ -540,11 +540,11 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   stateText: {
-    color: '#9ca3af',
+    color: theme.neutral.textSecondary,
     fontSize: 15,
   },
   errorText: {
-    color: '#fecaca',
+    color: theme.error.text,
     fontSize: 15,
     textAlign: 'center',
   },
@@ -555,21 +555,21 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   retryText: {
-    color: '#020617',
+    color: theme.neutral.surfaceDeep,
     fontWeight: '700',
   },
   errorBanner: {
     flexDirection: 'row',
     gap: 8,
     alignItems: 'center',
-    backgroundColor: '#3f1111',
-    borderColor: '#7f1d1d',
+    backgroundColor: theme.error.bg,
+    borderColor: theme.error.border,
     borderWidth: 1,
     borderRadius: 8,
     padding: 12,
   },
   errorBannerText: {
-    color: '#fecaca',
+    color: theme.error.text,
     flex: 1,
   },
   schemaMismatchBar: {
@@ -578,8 +578,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#854d0e',
-    backgroundColor: '#422006',
+    borderColor: theme.highlight.border,
+    backgroundColor: theme.highlight.bg,
     padding: 12,
   },
   schemaMismatchTextWrap: {
@@ -587,12 +587,12 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   schemaMismatchTitle: {
-    color: '#fef3c7',
+    color: theme.highlight.text,
     fontSize: 13,
     fontWeight: '900',
   },
   schemaMismatchText: {
-    color: '#fbbf24',
+    color: theme.highlight.color,
     fontSize: 11,
     fontWeight: '700',
   },

@@ -53,26 +53,31 @@ function getStatusPill(
 ): StatusPill | null {
   if (!board?.bleId) return null
   if (scanStatus === 'scanning' && status === 'idle')
-    return { kind: 'spinner', text: 'Searching…', color: '#3b82f6', onPress: onStopScan }
+    return { kind: 'spinner', text: 'Searching…', color: theme.wheel.color, onPress: onStopScan }
   if (status === 'discovering')
-    return { kind: 'spinner', text: 'Discovering…', color: '#3b82f6', onPress: onStopScan }
+    return { kind: 'spinner', text: 'Discovering…', color: theme.wheel.color, onPress: onStopScan }
   if (status === 'subscribing')
-    return { kind: 'spinner', text: 'Subscribing…', color: '#3b82f6', onPress: onStopScan }
+    return { kind: 'spinner', text: 'Subscribing…', color: theme.wheel.color, onPress: onStopScan }
   if (status === 'waiting_for_telemetry')
     return {
       kind: 'spinner',
       text: 'Waiting for telemetry…',
-      color: '#3b82f6',
+      color: theme.wheel.color,
       onPress: onStopScan,
     }
   if (status === 'reconnecting')
-    return { kind: 'spinner', text: 'Reconnecting…', color: '#3b82f6', onPress: onStopScan }
+    return { kind: 'spinner', text: 'Reconnecting…', color: theme.wheel.color, onPress: onStopScan }
   if (status === 'rescanning')
-    return { kind: 'spinner', text: 'Searching…', color: '#3b82f6', onPress: onStopScan }
+    return { kind: 'spinner', text: 'Searching…', color: theme.wheel.color, onPress: onStopScan }
   if (status === 'disconnecting')
-    return { kind: 'spinner', text: 'Disconnecting…', color: '#3b82f6', onPress: onStopScan }
+    return {
+      kind: 'spinner',
+      text: 'Disconnecting…',
+      color: theme.wheel.color,
+      onPress: onStopScan,
+    }
   if (status === 'connecting')
-    return { kind: 'spinner', text: 'Connecting…', color: '#3b82f6', onPress: onStopScan }
+    return { kind: 'spinner', text: 'Connecting…', color: theme.wheel.color, onPress: onStopScan }
   if (status === 'stale')
     return {
       kind: 'spinner',
@@ -166,7 +171,7 @@ export function FloatingBar({
         onPress={toggleRecord}
       >
         {recording ? (
-          <StopIcon size={22} color="#fef2f2" weight="fill" />
+          <StopIcon size={22} color={theme.neutral.textPrimary} weight="fill" />
         ) : (
           <RecordIcon size={22} color={theme.error.color} weight="fill" />
         )}
@@ -247,6 +252,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   fabLabelActive: {
-    color: '#fef2f2',
+    color: theme.neutral.textPrimary,
   },
 })

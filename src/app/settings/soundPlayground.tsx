@@ -151,9 +151,9 @@ export default function SoundPlaygroundScreen() {
                 onPress={handleToggleGeiger}
               >
                 {geigerActive ? (
-                  <StopIcon size={20} color="#fef2f2" weight="fill" />
+                  <StopIcon size={20} color={theme.neutral.textPrimary} weight="fill" />
                 ) : (
-                  <PlayIcon size={20} color="#0c2a3f" weight="fill" />
+                  <PlayIcon size={20} color={theme.wheel.bg} weight="fill" />
                 )}
                 <Text style={[styles.playButtonText, geigerActive && styles.stopButtonText]}>
                   {geigerActive ? 'Stop' : 'Start Geiger'}
@@ -279,7 +279,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   playButtonText: {
-    color: '#0c2a3f',
+    color: theme.wheel.bg,
     fontSize: 15,
     fontWeight: '700',
   },
@@ -287,7 +287,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.error.color,
   },
   stopButtonText: {
-    color: '#fef2f2',
+    color: theme.neutral.textPrimary,
   },
   dialSection: {
     gap: 8,

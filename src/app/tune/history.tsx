@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   entryDate: {
-    color: '#e2e8f0',
+    color: theme.neutral.textPrimary,
     fontSize: 13,
     fontWeight: '700',
   },
@@ -190,9 +190,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 6,
-    backgroundColor: '#0c2537',
+    backgroundColor: theme.wheel.bg,
     borderWidth: 1,
-    borderColor: '#164e63',
+    borderColor: theme.wheel.border,
   },
   restoreText: {
     color: theme.wheel.color,

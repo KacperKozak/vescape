@@ -79,7 +79,7 @@ function FieldEditorPopoverInner({ target, onCancel, onApply }: FieldEditorPopov
             <Text style={styles.fieldId}>{target.fieldId}</Text>
           </View>
           <Pressable style={styles.closeBtn} onPress={onCancel}>
-            <XIcon size={14} color="#cbd5e1" weight="bold" />
+            <XIcon size={14} color={theme.neutral.textSecondary} weight="bold" />
           </Pressable>
         </View>
 
@@ -135,7 +135,7 @@ function FieldEditorPopoverInner({ target, onCancel, onApply }: FieldEditorPopov
             style={styles.applyBtn}
             onPress={() => onApply(snapValue(draftValue, target.min, target.max, target.step))}
           >
-            <CheckIcon size={14} color="#020617" weight="bold" />
+            <CheckIcon size={14} color={theme.neutral.surfaceDeep} weight="bold" />
             <Text style={styles.applyText}>Apply</Text>
           </Pressable>
         </View>
@@ -163,7 +163,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   title: {
-    color: '#f8fafc',
+    color: theme.neutral.textPrimary,
     fontSize: 15,
     fontWeight: '800',
   },
@@ -191,7 +191,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.neutral.border,
     backgroundColor: theme.neutral.surfaceDeep,
-    color: '#f8fafc',
+    color: theme.neutral.textPrimary,
     paddingHorizontal: 12,
     fontSize: 18,
     fontWeight: '800',
@@ -223,7 +223,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   linkedValue: {
-    color: '#cbd5e1',
+    color: theme.neutral.textSecondary,
     fontSize: 12,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
@@ -244,7 +244,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cancelText: {
-    color: '#cbd5e1',
+    color: theme.neutral.textSecondary,
     fontSize: 13,
     fontWeight: '700',
   },
@@ -259,7 +259,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   applyText: {
-    color: '#020617',
+    color: theme.neutral.surfaceDeep,
     fontSize: 13,
     fontWeight: '900',
   },

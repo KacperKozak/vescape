@@ -16,8 +16,8 @@ export function ToggleRow({ label, value, onToggle }: ToggleRowProps) {
       <Switch
         value={value}
         onValueChange={onToggle}
-        trackColor={{ false: theme.neutral.border, true: '#1d4ed8' }}
-        thumbColor={value ? '#3b82f6' : theme.neutral.textMuted}
+        trackColor={{ false: theme.neutral.border, true: theme.wheel.border }}
+        thumbColor={value ? theme.wheel.color : theme.neutral.textMuted}
         style={styles.toggleSwitch}
       />
     </View>
@@ -109,8 +109,8 @@ const styles = StyleSheet.create({
     borderColor: theme.neutral.border,
   },
   chipActive: {
-    backgroundColor: '#1d4ed8',
-    borderColor: '#3b82f6',
+    backgroundColor: theme.wheel.border,
+    borderColor: theme.wheel.color,
   },
   chipText: {
     color: theme.neutral.textMuted,
@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
   },
   chipTextActive: {
-    color: '#e0f2fe',
+    color: theme.neutral.textPrimary,
   },
   valueDisplay: {
     color: theme.neutral.textPrimary,

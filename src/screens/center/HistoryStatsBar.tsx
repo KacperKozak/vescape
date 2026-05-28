@@ -112,7 +112,7 @@ function sessionToStats(session: HistorySession): StatItem[] {
       label: 'Avg speed',
       value: formatSpeed(session.avgSpeedKmh),
       icon: RepeatIcon,
-      accent: '#14b8a6',
+      accent: theme.teal.color,
     },
     {
       key: 'motorTemp',
@@ -174,7 +174,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   compactValue: {
-    color: '#f8fafc',
+    color: theme.neutral.textPrimary,
     fontSize: 12,
     fontWeight: '800',
   },

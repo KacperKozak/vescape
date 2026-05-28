@@ -24,7 +24,7 @@ export function Stepper({ value, unit, min, max, onChange, fullWidth = false }: 
         onPress={() => onChange(decrementValue)}
         disabled={!canDecrement}
       >
-        <MinusIcon size={14} color="#f1f5f9" weight="bold" />
+        <MinusIcon size={14} color={theme.neutral.textPrimary} weight="bold" />
       </Pressable>
       <View style={[styles.valueWrap, fullWidth && styles.fullWidthValueWrap]}>
         <Text style={styles.stepperValue}>{value}</Text>
@@ -35,7 +35,7 @@ export function Stepper({ value, unit, min, max, onChange, fullWidth = false }: 
         onPress={() => onChange(incrementValue)}
         disabled={!canIncrement}
       >
-        <PlusIcon size={14} color="#f1f5f9" weight="bold" />
+        <PlusIcon size={14} color={theme.neutral.textPrimary} weight="bold" />
       </Pressable>
     </View>
   )
