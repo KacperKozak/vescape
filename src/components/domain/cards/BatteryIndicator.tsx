@@ -4,7 +4,7 @@ import { useShallow } from 'zustand/react/shallow'
 
 import { BatteryBar } from '@/components/ui/base/BatteryBar'
 import { type SparklinePoint } from '@/components/ui/charts/Sparkline'
-import { estimateBatteryPercent } from '@/lib/battery'
+import { deriveBatteryConfig, estimateBatteryPercent } from '@/lib/battery'
 import { emaSeries } from '@/helpers/smoothing'
 import { useLiveMetric, liveSelectors } from '@/hooks/useLiveMetric'
 import { useBoardStore } from '@/store/boardStore'
@@ -40,7 +40,7 @@ export function BatteryIndicator({ compact, transparent, containerStyle }: Batte
 
   const voltage = smoothVoltage
   const percent = voltage != null ? estimateBatteryPercent(voltage, batteryConfig) : null
-  const batteryConfigured = percent != null
+  const batteryConfigured = deriveBatteryConfig(batteryConfig).warning == null
 
   return (
     <BatteryBar
