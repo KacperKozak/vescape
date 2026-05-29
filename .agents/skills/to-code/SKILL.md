@@ -72,8 +72,8 @@ Extract issue id from prompt. If missing, ask for it.
 
 6. **Commit when requested**
    - If the user asks to commit, include the issue id in the commit message.
-   - Preferred format: `#<issue-id> <concise summary>`.
-   - Example: `#25 move avg filtering into sanitizer`.
+   - Preferred format: `<concise summary> #<issue-id>`.
+   - Example: `Move avg filtering into sanitizer #25`.
    - If multiple issues are intentionally covered, include all ids in the first line.
 
 ## GitHub Issue Handling
