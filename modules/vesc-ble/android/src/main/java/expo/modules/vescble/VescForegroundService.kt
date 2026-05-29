@@ -15,6 +15,8 @@ import android.os.IBinder
 import android.os.Looper
 import android.util.Log
 import java.io.File
+import expo.modules.vescble.diagnostics.DiagnosticContext
+import expo.modules.vescble.diagnostics.DiagnosticsRecorder
 import expo.modules.vescble.notification.NotificationPresenter
 import expo.modules.vescble.runtime.BoardSession
 import expo.modules.vescble.runtime.Cancellable
@@ -318,6 +320,27 @@ class VescForegroundService : Service() {
     private val alertEngine = VescAlertEngine()
     private var activeGeigerRuleIds: Set<String> = emptySet()
     private val alertFeedback by lazy { VescAlertFeedback(this, mainHandler) }
+    private val diagnosticsRecorder by lazy {
+        DiagnosticsRecorder(
+            local = { name, props ->
+                TelemetryRepository.get(applicationContext).recordDiagnosticEvent(name, props)
+            },
+            remote = { name, props -> DiagnosticReporter.get(this).capture(name, props) },
+            context = {
+                DiagnosticContext(
+                    phaseWire = boardStatus.wireValue,
+                    connectionSeq = currentSessionId,
+                    connectAttempt = connectAttempt,
+                    autoReconnectAttempt = autoReconnectAttempt,
+                    canId = canId,
+                    directConnection = directConnection,
+                    lastSentCommand = lastSentCommand,
+                    lastReceivedCommandByte = lastReceivedCommandByte,
+                    lastTelemetryAt = lastTelemetryAt,
+                )
+            },
+        )
+    }
     private val gpsMonitor by lazy {
         VescGpsMonitor(
             context = this,
@@ -366,8 +389,6 @@ class VescForegroundService : Service() {
     private var activeConfigWrite: ActiveConfigWrite? = null
     private var configTimeoutHandle: Cancellable? = null
     private var autoReconnectAttempt = 0
-    private var telemetryParseFailedReported = false
-    private var telemetryParseFailedCount = 0
     private var lastSentCommand: Int? = null
     private var lastReceivedCommandByte: Int? = null
     private var connectionLostMarkerAt: Long? = null
@@ -533,8 +554,7 @@ class VescForegroundService : Service() {
         liveTelemetryPoints.clear()
         packetReassembler.reset()
         gattClient.resetDiagnostics()
-        telemetryParseFailedReported = false
-        telemetryParseFailedCount = 0
+        diagnosticsRecorder.resetTelemetryParseFailedCounters()
         connectAttempt = 0
         autoReconnectAttempt = 0
         lastTelemetryAt = 0L
@@ -1588,7 +1608,7 @@ class VescForegroundService : Service() {
                     "gatt_status" to gattStatus,
                     "auto_reconnect_enabled" to session.autoReconnect,
                     "last_telemetry_timestamp" to lastTelemetryAt.takeIf { it > 0L },
-                    "telemetry_parse_failed_count" to telemetryParseFailedCount,
+                    "telemetry_parse_failed_count" to diagnosticsRecorder.telemetryParseFailedCount(),
                 ),
             )
         }
@@ -2116,49 +2136,24 @@ class VescForegroundService : Service() {
         telemetryStore?.recordTelemetry(values.toCapture(session, canId))
     }
 
-    private fun captureTelemetryParseFailed(payload: ByteArray) {
-        telemetryParseFailedCount += 1
-        if (telemetryParseFailedReported) return
-        telemetryParseFailedReported = true
-        captureDiagnostic(
-            "telemetry_parse_failed",
-            diagnosticProperties(boardConfig, "telemetry") + DiagnosticReporter.telemetryPayloadProperties(payload) + mapOf(
-                "message" to "Invalid Refloat telemetry payload",
-                "telemetry_parse_failed_count" to telemetryParseFailedCount,
-            ),
-        )
-    }
+    private fun captureTelemetryParseFailed(payload: ByteArray) =
+        diagnosticsRecorder.captureTelemetryParseFailed(payload, boardConfig)
 
-    private fun flushTelemetryDiagnostics(reason: String) {
-        if (telemetryParseFailedCount <= 0) return
-        captureDiagnostic(
-            "telemetry_parse_failed",
-            diagnosticProperties(boardConfig, "telemetry") + mapOf(
-                "message" to "Telemetry parse failures aggregated",
-                "reason" to reason,
-                "telemetry_parse_failed_count" to telemetryParseFailedCount,
-            ),
-        )
-        telemetryParseFailedReported = false
-        telemetryParseFailedCount = 0
-    }
+    private fun flushTelemetryDiagnostics(reason: String) =
+        diagnosticsRecorder.flushTelemetryDiagnostics(reason, boardConfig)
 
-    private fun captureDiagnostic(eventName: String, properties: Map<String, Any?>) {
-        TelemetryRepository.get(applicationContext).recordDiagnosticEvent(eventName, properties)
-        DiagnosticReporter.get(this).capture(eventName, properties)
-    }
+    private fun captureDiagnostic(eventName: String, properties: Map<String, Any?>) =
+        diagnosticsRecorder.captureDiagnostic(eventName, properties)
 
     private fun recordLocalDiagnostic(
         eventName: String,
         session: SessionConfig?,
         operation: String,
         properties: Map<String, Any?> = emptyMap(),
-    ) {
-        TelemetryRepository.get(applicationContext).recordDiagnosticEvent(
-            eventName,
-            diagnosticProperties(session, operation) + properties,
-        )
-    }
+    ) = diagnosticsRecorder.recordLocalDiagnostic(eventName, session, operation, properties)
+
+    private fun diagnosticProperties(session: SessionConfig?, operation: String): Map<String, Any?> =
+        diagnosticsRecorder.diagnosticProperties(session, operation)
 
     private fun recordConnectionLostMarker(session: SessionConfig, reason: String) {
         val store = telemetryStore ?: return
@@ -2174,23 +2169,4 @@ class VescForegroundService : Service() {
         )
     }
 
-    private fun diagnosticProperties(session: SessionConfig?, operation: String): Map<String, Any?> =
-        mapOf(
-            "board_id" to session?.appBoardId,
-            "ble_id" to session?.deviceId,
-            "board_nickname" to session?.deviceName,
-            "operation" to operation,
-            "phase" to boardStatus.wireValue,
-            "previous_board_phase" to boardStatus.wireValue,
-            "current_board_phase" to boardStatus.wireValue,
-            "connection_seq" to currentSessionId,
-            "connect_attempt" to connectAttempt,
-            "auto_reconnect_attempt" to autoReconnectAttempt,
-            "auto_reconnect_enabled" to session?.autoReconnect,
-            "can_id" to canId,
-            "direct_connection" to directConnection,
-            "last_sent_command" to lastSentCommand,
-            "last_received_command_byte" to lastReceivedCommandByte,
-            "last_telemetry_timestamp" to lastTelemetryAt.takeIf { it > 0L },
-        )
 }
