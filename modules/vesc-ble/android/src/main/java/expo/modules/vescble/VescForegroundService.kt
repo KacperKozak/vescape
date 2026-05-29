@@ -48,8 +48,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import kotlin.math.max
-import kotlin.math.roundToInt
 
 internal const val VESC_SESSION_TAG = "VescSession"
 private const val CHANNEL_ID = "vesc_monitoring_v5"
@@ -270,7 +268,11 @@ class VescForegroundService : Service() {
     private val mainHandler = Handler(Looper.getMainLooper())
     private val scheduler: Scheduler = HandlerScheduler(mainHandler)
     private val packetReassembler = VescPacketReassembler()
-    private val rttHistory = ArrayDeque<Long>()
+    private val pollingLoop = PollingLoop(
+        scheduler = scheduler,
+        isCurrentSession = ::isCurrentBoardSession,
+        sendPayloadWithRetry = { payload, session -> sendPayloadWithRetry(payload, session) },
+    )
     private val notificationController by lazy {
         VescNotificationController(
             service = this,
@@ -556,8 +558,6 @@ class VescForegroundService : Service() {
     private var connectTimeoutHandle: Cancellable? = null
     private var boardReadyTimeoutHandle: Cancellable? = null
     private var pendingConnect: PendingStart? = null
-    private var pollHandle: Cancellable? = null
-    private var lastPollAt = 0L
     private var connectAttempt = 0
     private var recorder: VescSessionRecorder? = null
     private var telemetryStore: TelemetryRepository? = null
@@ -665,7 +665,7 @@ class VescForegroundService : Service() {
             )
             return
         }
-        val wasPolling = pollHandle != null
+        val wasPolling = pollingLoop.isActive
         stopPolling()
         configReadCallbacks = pending
         dispatchConfigEvent(
@@ -1131,7 +1131,7 @@ class VescForegroundService : Service() {
                     )
                     return@post
                 }
-                val wasPolling = pollHandle != null
+                val wasPolling = pollingLoop.isActive
                 stopPolling()
                 configWriteCallbacks = pending
                 dispatchConfigEvent(
@@ -1244,44 +1244,12 @@ class VescForegroundService : Service() {
     private fun startPolling() {
         val session = boardConfig ?: return
         val sessionToken = boardSession ?: return
-        val id = canId
-        if (id == null && !directConnection) return
-        stopPolling()
         telemetryPipeline.armStaleWatchdog()
-        val pollPayload = if (id != null) {
-            byteArrayOf(
-                COMM_FORWARD_CAN.toByte(),
-                id.toByte(),
-                COMM_CUSTOM_APP_DATA.toByte(),
-                REFLOAT_MAGIC.toByte(),
-                REFLOAT_GET_ALLDATA.toByte(),
-                2,
-            )
-        } else {
-            byteArrayOf(
-                COMM_CUSTOM_APP_DATA.toByte(),
-                REFLOAT_MAGIC.toByte(),
-                REFLOAT_GET_ALLDATA.toByte(),
-                2,
-            )
-        }
-        fun scheduleNext() {
-            pollHandle = scheduler.postDelayedForSession(sessionToken, session.pollIntervalMs, ::isCurrentBoardSession) {
-                lastPollAt = System.currentTimeMillis()
-                sendPayloadWithRetry(pollPayload, sessionToken)
-                scheduleNext()
-            }
-        }
-        pollHandle = scheduler.postDelayedForSession(sessionToken, 0L, ::isCurrentBoardSession) {
-            lastPollAt = System.currentTimeMillis()
-            sendPayloadWithRetry(pollPayload, sessionToken)
-            scheduleNext()
-        }
+        pollingLoop.start(session, sessionToken, canId, directConnection)
     }
 
     private fun stopPolling() {
-        pollHandle?.cancel()
-        pollHandle = null
+        pollingLoop.stop()
         telemetryPipeline.cancelStaleWatchdog()
     }
 
@@ -1347,7 +1315,7 @@ class VescForegroundService : Service() {
             directConnection = true
             telemetryPipeline.updateCanId(null)
         }
-        if (shouldStartPollingOnReady(canId, directConnection, pollHandle)) {
+        if (shouldStartPollingOnReady(canId, directConnection, pollingLoop.takeIf { it.isActive })) {
             startPolling()
         }
         if (boardStatus == BoardPhase.Connected) return
@@ -1406,10 +1374,7 @@ class VescForegroundService : Service() {
         session.isActive && session === boardSession && !isStoppingService
 
     private fun updateLatency(now: Long): Int? {
-        if (lastPollAt <= 0) return null
-        rttHistory.addLast(max(0, now - lastPollAt))
-        while (rttHistory.size > 5) rttHistory.removeFirst()
-        return rttHistory.average().roundToInt()
+        return pollingLoop.updateLatency(now)
     }
 
     private fun stopCurrentBoardSession(emitDisconnected: Boolean, updateNotification: Boolean = true) {
