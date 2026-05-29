@@ -82,27 +82,27 @@ Always ready (not draft). Base = `dev`.
 ```bash
 gh pr create --base dev --title "<feature title>" --body "$(cat <<'EOF'
 ## Issues
-- Closes [#<id> <title>](<url>)
+- Closes #<id>
 
 ## Summary
 <2-3 lines feature scope>
 
 ## Implementation notes
-- [#<id> <title>](<url>): <note if any, omit section if none>
+- #<id>: <note if any, omit section if none>
 EOF
 )"
 ```
 
 PR title = feature scope (PRD title or `[Area]` group label), NOT single-issue title.
 
-Fetch issue title + url via `gh issue view <id> --json number,title,url --jq '.'`. Format each entry as `[#<id> <title>](<url>)` so PR body shows clickable list of tasks.
+Use bare `#<id>` refs. GitHub auto-renders them as live links with current title + state icon — no manual link/title needed, and stays in sync if issue title changes.
 
 ### PR exists -> edit body
 
 Fetch current body, append:
 
-- `Closes [#<id> <title>](<url>)` line under `## Issues`.
-- `- [#<id> <title>](<url>): <note>` under `## Implementation notes` if findings present. Create section if missing.
+- `Closes #<id>` line under `## Issues`.
+- `- #<id>: <note>` under `## Implementation notes` if findings present. Create section if missing.
 
 ```bash
 gh pr edit <number> --body "$(cat <<'EOF'

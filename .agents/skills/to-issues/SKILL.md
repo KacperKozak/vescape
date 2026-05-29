@@ -118,7 +118,7 @@ For each approved slice, publish a new issue to the issue tracker. Use the issue
 
 Publish issues in dependency order (blockers first) so you can reference real issue identifiers in the "Blocked by" field. Do not publish concurrently when blocker references are needed.
 
-After all issues in the group are published, do a second pass: edit each issue body to fill the `## Related` section with refs to every sibling issue in the same `[Area]`/`[Feature Tag]` group (excluding self). Use `gh issue edit <id> --body-file -` or `gh issue edit <id> --body "..."`. Include title for context, e.g. `- #42 [Sanitizers] 1 - Move avg filter`.
+After all issues in the group are published, do a second pass: edit each issue body to fill the `## Related` section with refs to every sibling issue in the same `[Area]`/`[Feature Tag]` group (excluding self). Use `gh issue edit <id> --body-file -` or `gh issue edit <id> --body "..."`. Use bare `#<id>` refs (e.g. `- #42`). GitHub auto-renders them as live links with current title + state icon — no manual title needed, stays in sync if titles change.
 
 Before publishing, re-check each issue has a **Likely files** section. Paths are navigational hints, not ownership boundaries. Do not force a path into the list if you are guessing without codebase evidence; write "Unknown - inspect <area/module> first" only when the repo structure cannot be narrowed further.
 
@@ -153,9 +153,9 @@ Or "None - can start immediately" if no blockers.
 
 ## Related
 
-All other issues in the same `[Area]`/`[Feature Tag]` group (siblings, blockers, follow-ups). Excludes self. Filled in after all group issues published.
+All other issues in the same `[Area]`/`[Feature Tag]` group (siblings, blockers, follow-ups). Excludes self. Filled in after all group issues published. Use bare `#<id>` so GitHub renders live title + state icon.
 
-- #<id> <title>
+- #<id>
 
 Or "None" if this is a standalone issue with no group siblings.
 
