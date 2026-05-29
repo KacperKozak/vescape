@@ -25,6 +25,7 @@ import expo.modules.vescble.diagnostics.DiagnosticContext
 import expo.modules.vescble.diagnostics.DiagnosticsRecorder
 import expo.modules.vescble.notification.NotificationFormatter
 import expo.modules.vescble.notification.NotificationPresenter
+import expo.modules.vescble.recording.RecordingCoordinator
 import expo.modules.vescble.reconnect.RECONNECT_MAX_ATTEMPTS
 import expo.modules.vescble.reconnect.ReconnectBlePort
 import expo.modules.vescble.reconnect.ReconnectListener
@@ -93,7 +94,6 @@ class VescForegroundService : Service() {
         private var pendingStop: PendingStop? = null
         private var pendingConfigRead: PendingConfigRead? = null
         private var pendingGpsStart = false
-        private var requestedTelemetryRecordingEnabled = false
         private var requestedLiveHistoryLimitMinutes = DEFAULT_LIVE_HISTORY_LIMIT_MINUTES
         private val appDataScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -175,7 +175,7 @@ class VescForegroundService : Service() {
         }
 
         fun setTelemetryRecordingEnabled(context: Context, enabled: Boolean) {
-            requestedTelemetryRecordingEnabled = enabled
+            RecordingCoordinator.requestTelemetryRecording(enabled)
             instance?.setTelemetryRecordingEnabled(enabled)
             if (!enabled) TelemetryRepository.get(context.applicationContext).flushBlocking()
         }
@@ -325,6 +325,12 @@ class VescForegroundService : Service() {
         captureBuilder = { parsed, cfg, id -> parsed.toCapture(cfg, id) },
         staleTimeoutMs = TELEMETRY_STALE_MS,
     )
+    private val recordingCoordinator by lazy {
+        RecordingCoordinator(
+            context = applicationContext,
+            applyLiveSettings = ::applyTelemetryPipelineSettings,
+        )
+    }
     private val gpsMonitor by lazy {
         VescGpsMonitor(
             context = this,
@@ -336,7 +342,7 @@ class VescForegroundService : Service() {
         VescGattClient(
             context = this,
             handler = mainHandler,
-            recorder = { recorder },
+            recorder = { recordingCoordinator.currentRecorder() },
             listener = gattListener,
         )
     }
@@ -402,7 +408,11 @@ class VescForegroundService : Service() {
         ) {
             val cfg = boardConfig ?: return
             flushTelemetryDiagnostics("reconnect")
-            recordConnectionLostMarker(cfg, reason)
+            recordingCoordinator.recordConnectionLost(
+                cfg,
+                telemetryPipeline.lastTelemetryAt,
+                reason,
+            )
             recordLocalDiagnostic(
                 "reconnect_scheduled",
                 cfg,
@@ -435,7 +445,7 @@ class VescForegroundService : Service() {
             telemetryPipeline.resetLastTelemetryAt()
             boardStatus = BoardPhase.Reconnecting
             boardError = reason
-            recorder?.recordState(
+            recordingCoordinator.recordState(
                 "reconnecting",
                 mapOf("attempt" to nextAttempt, "status" to gattStatus),
             )
@@ -541,7 +551,7 @@ class VescForegroundService : Service() {
                 ),
             )
             setError("Reconnect failed after $RECONNECT_MAX_ATTEMPTS attempts")
-            finishRecording("error")
+            recordingCoordinator.finishDebugRecording("error")
         }
     }
 
@@ -561,8 +571,6 @@ class VescForegroundService : Service() {
     private var directConnection = false
     private var fwVersionString: String? = null
     private var boardReadyTimeoutHandle: Cancellable? = null
-    private var recorder: VescSessionRecorder? = null
-    private var telemetryStore: TelemetryRepository? = null
     private var gpsError: String? = null
     private var latestLocation: LocationSnapshot? = null
     private var latestPreciseLocation: LocationSnapshot? = null
@@ -575,7 +583,6 @@ class VescForegroundService : Service() {
     private var configTimeoutHandle: Cancellable? = null
     private var lastSentCommand: Int? = null
     private var lastReceivedCommandByte: Int? = null
-    private var connectionLostMarkerAt: Long? = null
     private var boardSession: BoardSession? = null
     private var sessionSequence: Long = 0L
     private val currentSessionId: Long get() = boardSession?.id ?: sessionSequence
@@ -739,14 +746,7 @@ class VescForegroundService : Service() {
         diagnosticsRecorder.resetTelemetryParseFailedCounters()
         connectionCoordinator.reset()
         reconnectScheduler.cancelAndReset()
-        if (start.boardConfig.recordingEnabled) {
-            recorder = VescSessionRecorder(this, start.boardConfig).also { it.start() }
-        }
-        telemetryStore = if (start.boardConfig.telemetryRecordingEnabled || requestedTelemetryRecordingEnabled) {
-            configuredTelemetryStore()
-        } else {
-            null
-        }
+        recordingCoordinator.beginBoardSession(start.boardConfig)
         startLocationUpdates()
         setStatus(BoardPhase.Connecting)
         startForeground(NOTIFICATION_ID, presenter.build("Connecting..."))
@@ -862,7 +862,7 @@ class VescForegroundService : Service() {
                     ),
                 )
                 setError("Board disconnected")
-                finishRecording("error")
+                recordingCoordinator.finishDebugRecording("error")
             }
         }
 
@@ -919,7 +919,7 @@ class VescForegroundService : Service() {
     }
 
     private fun handleFrameChunk(chunk: ByteArray) {
-        recorder?.recordChunk("rx", chunk)
+        recordingCoordinator.recordChunk("rx", chunk)
         for (payload in packetReassembler.feed(chunk)) {
             handlePayload(payload)
         }
@@ -1004,7 +1004,7 @@ class VescForegroundService : Service() {
                     shortCriticalText = NotificationFormatter.formatBatteryVoltageChipText(parsed),
                 )
                 emitEvent("onTelemetry", emitMap)
-                telemetryStore?.recordTelemetry(processed.capture)
+                recordingCoordinator.recordTelemetry(processed.capture)
             }
         }
     }
@@ -1322,7 +1322,6 @@ class VescForegroundService : Service() {
         }
         if (boardStatus == BoardPhase.Connected) return
         reconnectScheduler.resetAttempts()
-        connectionLostMarkerAt = null
         boardStatus = BoardPhase.Connected
         recordLocalDiagnostic(
             "board_ready",
@@ -1330,18 +1329,8 @@ class VescForegroundService : Service() {
             "connect",
             mapOf("message" to "Board telemetry received"),
         )
-        val autoRecording = try {
-            kotlinx.coroutines.runBlocking {
-                AppDataRepository.get(applicationContext).getTypedSettings().autoRecording
-            }
-        } catch (_: Exception) {
-            false
-        }
-        if (autoRecording && telemetryStore == null) {
-            telemetryStore = configuredTelemetryStore()
-        }
         boardError = null
-        telemetryStore?.recordMarker("connected", boardConfig?.deviceId, boardConfig?.deviceName)
+        boardConfig?.let { recordingCoordinator.markBoardReady(it) }
         emitState()
     }
 
@@ -1394,16 +1383,12 @@ class VescForegroundService : Service() {
         gattClient.clear(markIntentional = true)
         alertFeedback.stopAllGeiger()
         activeGeigerRuleIds = emptySet()
-        finishRecording(if (emitDisconnected) "disconnected" else "stopped")
-        telemetryStore?.recordMarker(
-            if (emitDisconnected) "disconnected" else "app_stop",
-            stoppedConfig?.deviceId,
-            stoppedConfig?.deviceName,
+        recordingCoordinator.finishBoardSession(
+            status = if (emitDisconnected) "disconnected" else "stopped",
+            markerType = if (emitDisconnected) "disconnected" else "app_stop",
+            config = stoppedConfig,
         )
-        telemetryStore?.flushBlocking()
-        telemetryStore = null
         connectionCoordinator.clearPending()
-        connectionLostMarkerAt = null
         canId = null
         directConnection = false
         fwVersionString = null
@@ -1417,11 +1402,6 @@ class VescForegroundService : Service() {
         boardConfig = null
         if (updateNotification && !isStoppingService && stoppedConfig != null) presenter.show()
         emitState()
-    }
-
-    private fun finishRecording(status: String) {
-        recorder?.finish(status = status)
-        recorder = null
     }
 
     private fun failPendingConnect(code: String, message: String) {
@@ -1447,15 +1427,13 @@ class VescForegroundService : Service() {
         gattClient.clear(markIntentional = true)
         setError(message)
         presenter.show(message)
-        finishRecording("error")
-        telemetryStore?.flushBlocking()
-        telemetryStore = null
+        recordingCoordinator.failSession()
         start.onError(code, message)
     }
 
     private fun setStatus(next: BoardPhase) {
         boardStatus = next
-        recorder?.recordState(next.recordName())
+        recordingCoordinator.recordState(next.recordName())
         emitState()
     }
 
@@ -1473,8 +1451,7 @@ class VescForegroundService : Service() {
     private fun setError(message: String) {
         boardStatus = BoardPhase.Error
         boardError = message
-        recorder?.recordState("error", mapOf("message" to message))
-        telemetryStore?.recordMarker("error", boardConfig?.deviceId, boardConfig?.deviceName, message)
+        recordingCoordinator.recordError(boardConfig, message)
         emitEvent("onError", mapOf("message" to message))
         emitState()
     }
@@ -1508,51 +1485,18 @@ class VescForegroundService : Service() {
                 boardStatus == BoardPhase.Disconnecting ||
                 boardStatus == BoardPhase.Error
             ) {
-                requestedTelemetryRecordingEnabled = false
+                RecordingCoordinator.requestTelemetryRecording(false)
                 emitEvent("onError", mapOf("message" to "Recording requires a connected board"))
                 emitState()
                 return
             }
-            if (telemetryStore == null) {
-                telemetryStore = configuredTelemetryStore()
-                telemetryStore?.recordMarker("connected", session.deviceId, session.deviceName, null)
-            }
+            recordingCoordinator.enableTelemetryRecording(session)
             emitState()
             return
         }
 
-        telemetryStore?.recordMarker(
-            "app_stop",
-            session?.deviceId,
-            session?.deviceName,
-            "Recording stopped",
-        )
-        telemetryStore?.flushBlocking()
-        telemetryStore = null
+        recordingCoordinator.disableTelemetryRecording(session)
         emitState()
-    }
-
-    private fun configuredTelemetryStore(): TelemetryRepository {
-        val store = TelemetryRepository.get(applicationContext)
-        val settings = try {
-            kotlinx.coroutines.runBlocking {
-                AppDataRepository.get(applicationContext).getTypedSettings()
-            }
-        } catch (_: Exception) {
-            null
-        }
-        val resolvedSettings = settings ?: AppSettings()
-        applyTelemetrySettings(resolvedSettings)
-        store.applySettings(resolvedSettings)
-        val zones = try {
-            kotlinx.coroutines.runBlocking {
-                AppDataRepository.get(applicationContext).getEnabledPrivacyZoneEntities()
-            }
-        } catch (_: Exception) {
-            emptyList()
-        }
-        store.reloadPrivacyZones(zones)
-        return store
     }
 
     private fun onLocationUpdated(location: Location) {
@@ -1585,7 +1529,7 @@ class VescForegroundService : Service() {
         appendRecentLocation(snapshot)
         emitEvent("onLocation", snapshot.toMap())
         if (boardConfig == null) presenter.show(NotificationFormatter.formatGpsNotificationText(snapshot))
-        recorder?.recordLocation(snapshot)
+        recordingCoordinator.recordLocation(snapshot)
     }
 
     private fun persistLastGpsLocation(location: LocationSnapshot) {
@@ -1631,7 +1575,7 @@ class VescForegroundService : Service() {
                 latestPreciseLocation = latestPreciseLocation,
                 recentLocations = recentLocationsValue,
                 gpsError = gpsError,
-                recordingEnabled = telemetryStore != null,
+                recordingEnabled = recordingCoordinator.telemetryRecordingEnabled,
                 settings = settings,
             )
         )
@@ -1721,9 +1665,13 @@ class VescForegroundService : Service() {
     }
 
     private fun applyTelemetrySettings(settings: AppSettings) {
+        applyTelemetryPipelineSettings(settings)
+        recordingCoordinator.applySettings(settings)
+    }
+
+    private fun applyTelemetryPipelineSettings(settings: AppSettings) {
         applyLiveHistoryLimitMinutes(settings.liveHistoryLimit)
         telemetryPipeline.metricSanitizerConfig = settings.toMetricSanitizerConfig()
-        telemetryStore?.applySettings(settings)
     }
 
     private fun closeAppTask() {
@@ -1778,19 +1726,5 @@ class VescForegroundService : Service() {
 
     private fun diagnosticProperties(session: SessionConfig?, operation: String): Map<String, Any?> =
         diagnosticsRecorder.diagnosticProperties(session, operation)
-
-    private fun recordConnectionLostMarker(session: SessionConfig, reason: String) {
-        val store = telemetryStore ?: return
-        val markerAt = telemetryPipeline.lastTelemetryAt.takeIf { it > 0L } ?: return
-        if (connectionLostMarkerAt == markerAt) return
-        connectionLostMarkerAt = markerAt
-        store.recordMarker(
-            type = "connection_lost",
-            deviceId = session.deviceId,
-            deviceName = session.deviceName,
-            message = reason,
-            occurredAtMs = markerAt,
-        )
-    }
 
 }
