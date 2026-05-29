@@ -1,13 +1,14 @@
 package expo.modules.vescble
 
-internal const val BOARD_READY_TIMEOUT_BASE = 4_000L
-internal const val BOARD_READY_TIMEOUT_MAX = 15_000L
+import expo.modules.vescble.reconnect.BOARD_READY_TIMEOUT_BASE_MS
+import expo.modules.vescble.reconnect.BOARD_READY_TIMEOUT_MAX_MS
+import expo.modules.vescble.reconnect.ReconnectPolicy
+
+internal const val BOARD_READY_TIMEOUT_BASE = BOARD_READY_TIMEOUT_BASE_MS
+internal const val BOARD_READY_TIMEOUT_MAX = BOARD_READY_TIMEOUT_MAX_MS
 internal const val CAN_PING_TIMEOUT = 2_000L
 
-internal fun boardReadyTimeoutMs(attempt: Int): Long {
-    val ms = BOARD_READY_TIMEOUT_BASE + (attempt * 2_000L)
-    return ms.coerceAtMost(BOARD_READY_TIMEOUT_MAX)
-}
+internal fun boardReadyTimeoutMs(attempt: Int): Long = ReconnectPolicy.boardReadyTimeoutMs(attempt)
 
 internal fun isPollingCapable(canId: Int?, directConnection: Boolean): Boolean =
     canId != null || directConnection
