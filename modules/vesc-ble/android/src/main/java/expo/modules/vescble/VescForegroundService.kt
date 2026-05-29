@@ -19,6 +19,8 @@ import expo.modules.vescble.config.ConfigRWEffect
 import expo.modules.vescble.config.ConfigRWEvent
 import expo.modules.vescble.config.ConfigRWFsm
 import expo.modules.vescble.config.ConfigRWState
+import expo.modules.vescble.connection.ConnectPhaseTimeout
+import expo.modules.vescble.connection.ConnectionCoordinator
 import expo.modules.vescble.diagnostics.DiagnosticContext
 import expo.modules.vescble.diagnostics.DiagnosticsRecorder
 import expo.modules.vescble.notification.NotificationFormatter
@@ -72,6 +74,12 @@ data class SessionConfig(
     val recordingEnabled: Boolean,
     val telemetryRecordingEnabled: Boolean,
     val autoReconnect: Boolean = false,
+)
+
+internal data class PendingStart(
+    val boardConfig: SessionConfig,
+    val onSuccess: () -> Unit,
+    val onError: (String, String) -> Unit,
 )
 
 @SuppressLint("MissingPermission")
@@ -246,12 +254,6 @@ class VescForegroundService : Service() {
         }
     }
 
-    private data class PendingStart(
-        val boardConfig: SessionConfig,
-        val onSuccess: () -> Unit,
-        val onError: (String, String) -> Unit,
-    )
-
     private data class PendingStop(val onSuccess: () -> Unit)
 
     private data class PendingConfigRead(
@@ -272,6 +274,10 @@ class VescForegroundService : Service() {
         scheduler = scheduler,
         isCurrentSession = ::isCurrentBoardSession,
         sendPayloadWithRetry = { payload, session -> sendPayloadWithRetry(payload, session) },
+    )
+    private val connectionCoordinator = ConnectionCoordinator(
+        scheduler = scheduler,
+        isCurrentSession = ::isCurrentBoardSession,
     )
     private val notificationController by lazy {
         VescNotificationController(
@@ -302,7 +308,7 @@ class VescForegroundService : Service() {
                 DiagnosticContext(
                     phaseWire = boardStatus.wireValue,
                     connectionSeq = currentSessionId,
-                    connectAttempt = connectAttempt,
+                    connectAttempt = connectionCoordinator.connectAttempt,
                     autoReconnectAttempt = reconnectScheduler.currentAttempt,
                     canId = canId,
                     directConnection = directConnection,
@@ -421,8 +427,7 @@ class VescForegroundService : Service() {
                     ),
                 )
             }
-            pendingConnect = null
-            cancelConnectTimeout()
+            connectionCoordinator.clearPending()
             cancelBoardReadyTimeout()
             cancelCanPingTimeout()
             stopPolling()
@@ -519,7 +524,7 @@ class VescForegroundService : Service() {
                     "reason" to reason,
                 ),
             )
-            connectAttempt = 0
+            connectionCoordinator.resetAttempts()
             boardError = null
             setStatus(BoardPhase.Connecting)
             startBleSession(PendingStart(cfg, onSuccess = {}, onError = { _, _ -> }))
@@ -555,10 +560,7 @@ class VescForegroundService : Service() {
     private var canId: Int? = null
     private var directConnection = false
     private var fwVersionString: String? = null
-    private var connectTimeoutHandle: Cancellable? = null
     private var boardReadyTimeoutHandle: Cancellable? = null
-    private var pendingConnect: PendingStart? = null
-    private var connectAttempt = 0
     private var recorder: VescSessionRecorder? = null
     private var telemetryStore: TelemetryRepository? = null
     private var gpsError: String? = null
@@ -735,7 +737,7 @@ class VescForegroundService : Service() {
         packetReassembler.reset()
         gattClient.resetDiagnostics()
         diagnosticsRecorder.resetTelemetryParseFailedCounters()
-        connectAttempt = 0
+        connectionCoordinator.reset()
         reconnectScheduler.cancelAndReset()
         if (start.boardConfig.recordingEnabled) {
             recorder = VescSessionRecorder(this, start.boardConfig).also { it.start() }
@@ -758,16 +760,14 @@ class VescForegroundService : Service() {
             failStart(start, "INVALID_DEVICE", "Board session requires deviceId")
             return
         }
-        pendingConnect = start
-        connectAttempt++
-        cancelConnectTimeout()
+        val attempt = connectionCoordinator.markConnectStarting(start)
         reconnectScheduler.stopScan()
         val device = bluetoothAdapter.getRemoteDevice(deviceId)
         gattClient.connect(device)
         armConnectPhaseTimeout(start, "gatt_connect", GATT_CONNECT_TIMEOUT_MS)
         Log.d(
             VESC_SESSION_TAG,
-            "connect start device=$deviceId attempt=$connectAttempt autoReconnect=${start.boardConfig.autoReconnect}",
+            "connect start device=$deviceId attempt=$attempt autoReconnect=${start.boardConfig.autoReconnect}",
         )
         recordLocalDiagnostic(
             "ble_connect_started",
@@ -782,19 +782,21 @@ class VescForegroundService : Service() {
             Log.d(VESC_SESSION_TAG, "connect phase: gatt connected")
             recordLocalDiagnostic(
                 "gatt_connected",
-                pendingConnect?.boardConfig ?: boardConfig,
+                connectionCoordinator.pendingConnect?.boardConfig ?: boardConfig,
                 "connect",
                 mapOf("message" to "GATT connected"),
             )
             setStatus(BoardPhase.Discovering)
-            pendingConnect?.let { armConnectPhaseTimeout(it, "gatt_ready", GATT_READY_TIMEOUT_MS) }
+            connectionCoordinator.pendingConnect?.let {
+                armConnectPhaseTimeout(it, "gatt_ready", GATT_READY_TIMEOUT_MS)
+            }
         }
 
         override fun onGattSubscribing() {
             Log.d(VESC_SESSION_TAG, "connect phase: subscribing")
             recordLocalDiagnostic(
                 "gatt_subscribing",
-                pendingConnect?.boardConfig ?: boardConfig,
+                connectionCoordinator.pendingConnect?.boardConfig ?: boardConfig,
                 "connect",
                 mapOf("message" to "GATT subscribing"),
             )
@@ -802,12 +804,12 @@ class VescForegroundService : Service() {
         }
 
         override fun onGattDisconnected(status: Int, intentional: Boolean) {
-            val wasConnecting = pendingConnect
+            val wasConnecting = connectionCoordinator.pendingConnect
             Log.w(
                 VESC_SESSION_TAG,
                 "gatt disconnected status=$status intentional=$intentional wasConnecting=${wasConnecting != null} boardStatus=$boardStatus",
             )
-            cancelConnectTimeout()
+            connectionCoordinator.cancelConnectTimeout()
             stopPolling()
             if (!intentional && configFsmState !is ConfigRWState.Idle) {
                 dispatchConfigEvent(
@@ -817,14 +819,16 @@ class VescForegroundService : Service() {
             if (intentional) {
                 return
             } else if (wasConnecting != null) {
-                if (status == 133 && connectAttempt < 2) {
+                if (
+                    connectionCoordinator.retryStatus133Once(
+                        status = status,
+                        wasConnecting = wasConnecting,
+                        session = boardSession,
+                        retryDelayMs = 250L,
+                        restart = ::startBleSession,
+                    )
+                ) {
                     Log.w(VESC_SESSION_TAG, "status=133 during connect, retrying once")
-                    val session = boardSession
-                    if (session != null) {
-                        scheduler.postDelayedForSession(session, 250L, ::isCurrentBoardSession) {
-                            if (pendingConnect == wasConnecting) startBleSession(wasConnecting)
-                        }
-                    }
                 } else if (wasConnecting.boardConfig.autoReconnect) {
                     captureDiagnostic(
                         "ble_connect_failed",
@@ -866,7 +870,7 @@ class VescForegroundService : Service() {
             Log.d(VESC_SESSION_TAG, "connect phase: gatt ready")
             recordLocalDiagnostic(
                 "gatt_ready",
-                pendingConnect?.boardConfig ?: boardConfig,
+                connectionCoordinator.pendingConnect?.boardConfig ?: boardConfig,
                 "connect",
                 mapOf("message" to "GATT ready"),
             )
@@ -884,10 +888,8 @@ class VescForegroundService : Service() {
     }
 
     private fun resolveBleConnect() {
-        cancelConnectTimeout()
-        val start = pendingConnect ?: return
-        Log.d(VESC_SESSION_TAG, "connect resolved attempt=$connectAttempt canId=$canId")
-        pendingConnect = null
+        val start = connectionCoordinator.resolvePending() ?: return
+        Log.d(VESC_SESSION_TAG, "connect resolved attempt=${connectionCoordinator.connectAttempt} canId=$canId")
         boardStatus = BoardPhase.WaitingForTelemetry
         boardError = null
         recordLocalDiagnostic(
@@ -1386,7 +1388,6 @@ class VescForegroundService : Service() {
         }
         val stoppedConfig = boardConfig
         reconnectScheduler.cancelAndReset()
-        cancelConnectTimeout()
         cancelBoardReadyTimeout()
         cancelCanPingTimeout()
         stopPolling()
@@ -1401,7 +1402,7 @@ class VescForegroundService : Service() {
         )
         telemetryStore?.flushBlocking()
         telemetryStore = null
-        pendingConnect = null
+        connectionCoordinator.clearPending()
         connectionLostMarkerAt = null
         canId = null
         directConnection = false
@@ -1424,7 +1425,7 @@ class VescForegroundService : Service() {
     }
 
     private fun failPendingConnect(code: String, message: String) {
-        pendingConnect?.let { failStart(it, code, message) }
+        connectionCoordinator.pendingConnect?.let { failStart(it, code, message) }
     }
 
     private fun failStart(start: PendingStart, code: String, message: String) {
@@ -1440,8 +1441,7 @@ class VescForegroundService : Service() {
             start.onError(code, message)
             return
         }
-        pendingConnect = null
-        cancelConnectTimeout()
+        connectionCoordinator.clearPending()
         cancelBoardReadyTimeout()
         stopPolling()
         gattClient.clear(markIntentional = true)
@@ -1730,35 +1730,34 @@ class VescForegroundService : Service() {
         notificationController.closeAppTask()
     }
 
-    private fun cancelConnectTimeout() {
-        connectTimeoutHandle?.cancel()
-        connectTimeoutHandle = null
+    private fun armConnectPhaseTimeout(start: PendingStart, phase: String, timeoutMs: Long) {
+        connectionCoordinator.armConnectPhaseTimeout(
+            start = start,
+            phase = phase,
+            timeoutMs = timeoutMs,
+            status = { boardStatus },
+            canId = { canId },
+            onTimeout = ::onConnectPhaseTimeout,
+        )
     }
 
-    private fun armConnectPhaseTimeout(start: PendingStart, phase: String, timeoutMs: Long) {
-        cancelConnectTimeout()
-        val startedAt = System.currentTimeMillis()
-        connectTimeoutHandle = scheduler.postDelayed(timeoutMs) {
-            if (pendingConnect == start) {
-                val elapsedMs = System.currentTimeMillis() - startedAt
-                Log.w(
-                    VESC_SESSION_TAG,
-                    "connect phase timeout phase=$phase device=${start.boardConfig.deviceId} attempt=$connectAttempt elapsedMs=$elapsedMs status=$boardStatus canId=$canId",
-                )
-                recordLocalDiagnostic(
-                    "connect_phase_timeout",
-                    start.boardConfig,
-                    "connect",
-                    mapOf(
-                        "message" to "BLE connect phase timed out",
-                        "connect_phase" to phase,
-                        "elapsed_ms" to elapsedMs,
-                        "timeout_ms" to timeoutMs,
-                    ),
-                )
-                failStart(start, "CONNECT_TIMEOUT", "Timed out connecting to board")
-            }
-        }
+    private fun onConnectPhaseTimeout(timeout: ConnectPhaseTimeout) {
+        Log.w(
+            VESC_SESSION_TAG,
+            "connect phase timeout phase=${timeout.phase} device=${timeout.start.boardConfig.deviceId} attempt=${timeout.attempt} elapsedMs=${timeout.elapsedMs} status=${timeout.boardStatus} canId=${timeout.canId}",
+        )
+        recordLocalDiagnostic(
+            "connect_phase_timeout",
+            timeout.start.boardConfig,
+            "connect",
+            mapOf(
+                "message" to "BLE connect phase timed out",
+                "connect_phase" to timeout.phase,
+                "elapsed_ms" to timeout.elapsedMs,
+                "timeout_ms" to timeout.timeoutMs,
+            ),
+        )
+        failStart(timeout.start, "CONNECT_TIMEOUT", "Timed out connecting to board")
     }
 
     private fun captureTelemetryParseFailed(payload: ByteArray): Unit =
