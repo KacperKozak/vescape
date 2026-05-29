@@ -1,7 +1,6 @@
 package expo.modules.vescble
 
 import android.annotation.SuppressLint
-import android.app.Notification
 import android.app.Service
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
@@ -16,6 +15,7 @@ import android.os.IBinder
 import android.os.Looper
 import android.util.Log
 import java.io.File
+import expo.modules.vescble.notification.NotificationPresenter
 import expo.modules.vescble.runtime.BoardSession
 import expo.modules.vescble.runtime.Cancellable
 import expo.modules.vescble.runtime.HandlerScheduler
@@ -38,7 +38,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -203,7 +202,7 @@ class VescForegroundService : Service() {
         fun setAppInForeground(active: Boolean) {
             if (appInForeground == active) return
             appInForeground = active
-            instance?.showNotification()
+            instance?.presenter?.show()
         }
 
         private fun idleState(repository: AppDataRepository): Map<String, Any?> {
@@ -307,6 +306,13 @@ class VescForegroundService : Service() {
             channelId = CHANNEL_ID,
             notificationId = NOTIFICATION_ID,
             stopAction = ACTION_EXIT_FROM_NOTIFICATION,
+        )
+    }
+    private val presenter by lazy {
+        NotificationPresenter(
+            controller = notificationController,
+            deviceName = { boardConfig?.deviceName },
+            appInForeground = { appInForeground },
         )
     }
     private val alertEngine = VescAlertEngine()
@@ -493,9 +499,9 @@ class VescForegroundService : Service() {
         startLocationUpdates()
         emitState()
         if (boardConfig == null) {
-            startForeground(NOTIFICATION_ID, buildNotification("Monitoring GPS"))
+            startForeground(NOTIFICATION_ID, presenter.build("Monitoring GPS"))
         } else {
-            showNotification()
+            presenter.show()
         }
     }
 
@@ -542,7 +548,7 @@ class VescForegroundService : Service() {
         }
         startLocationUpdates()
         setStatus(BoardPhase.Connecting)
-        startForeground(NOTIFICATION_ID, buildNotification("Connecting..."))
+        startForeground(NOTIFICATION_ID, presenter.build("Connecting..."))
 
         startBleSession(start)
     }
@@ -695,7 +701,7 @@ class VescForegroundService : Service() {
             mapOf("message" to "Waiting for board telemetry"),
         )
         emitState()
-        showNotification("Discovering board...")
+        presenter.show("Discovering board...")
         start.onSuccess()
         if (canId != null) {
             startPolling()
@@ -779,9 +785,9 @@ class VescForegroundService : Service() {
                     batteryConfigCache,
                 )
                 val eventMap = appendLiveTelemetry(parsed, baseEventMap)
-                showNotification(
-                    formatNotificationText(parsed),
-                    shortCriticalText = formatBatteryVoltageChipText(parsed),
+                presenter.show(
+                    NotificationPresenter.formatNotificationText(parsed),
+                    shortCriticalText = NotificationPresenter.formatBatteryVoltageChipText(parsed),
                 )
                 emitEvent("onTelemetry", eventMap)
                 recordTelemetry(parsed)
@@ -1513,7 +1519,7 @@ class VescForegroundService : Service() {
         boardError = null
         boardStatus = BoardPhase.Idle
         boardConfig = null
-        if (updateNotification && !isStoppingService && stoppedConfig != null) showNotification()
+        if (updateNotification && !isStoppingService && stoppedConfig != null) presenter.show()
         emitState()
     }
 
@@ -1545,7 +1551,7 @@ class VescForegroundService : Service() {
         stopPolling()
         gattClient.clear(markIntentional = true)
         setError(message)
-        showNotification(message)
+        presenter.show(message)
         finishRecording("error")
         telemetryStore?.flushBlocking()
         telemetryStore = null
@@ -1601,7 +1607,7 @@ class VescForegroundService : Service() {
             mapOf("attempt" to autoReconnectAttempt, "status" to gattStatus),
         )
         emitState()
-        showNotification("Reconnecting...")
+        presenter.show("Reconnecting...")
 
         autoReconnectHandle?.cancel()
         val delayMs = minOf(250L * autoReconnectAttempt, 2_000L)
@@ -1854,7 +1860,7 @@ class VescForegroundService : Service() {
         if (!precise) {
             emitEvent("onLocation", snapshot.toMap())
             if (boardConfig == null) {
-                showNotification(formatGpsNotificationText(snapshot))
+                presenter.show(NotificationPresenter.formatGpsNotificationText(snapshot))
             }
             return
         }
@@ -1863,7 +1869,7 @@ class VescForegroundService : Service() {
         persistLastGpsLocation(snapshot)
         appendRecentLocation(snapshot)
         emitEvent("onLocation", snapshot.toMap())
-        if (boardConfig == null) showNotification(formatGpsNotificationText(snapshot))
+        if (boardConfig == null) presenter.show(NotificationPresenter.formatGpsNotificationText(snapshot))
         recorder?.recordLocation(snapshot)
     }
 
@@ -2070,17 +2076,6 @@ class VescForegroundService : Service() {
         telemetryStore?.applySettings(settings)
     }
 
-    private fun showNotification(
-        text: String = "Monitoring board in background",
-        shortCriticalText: String? = null,
-    ) {
-        notificationController.show(text, boardConfig?.deviceName, appInForeground, shortCriticalText)
-    }
-
-    private fun buildNotification(text: String = "Monitoring board in background"): Notification {
-        return notificationController.build(text, boardConfig?.deviceName, appInForeground, null)
-    }
-
     private fun closeAppTask() {
         notificationController.closeAppTask()
     }
@@ -2114,25 +2109,6 @@ class VescForegroundService : Service() {
                 failStart(start, "CONNECT_TIMEOUT", "Timed out connecting to board")
             }
         }
-    }
-
-    private fun formatNotificationText(values: RefloatTelemetry): String {
-        if (values.hasFault) return "Fault ${values.faultCode}"
-        val dutyPercent = if (abs(values.dutyCycle) <= 0.01) 0.0 else values.dutyCycle * 100.0
-        return String.format(
-            "%.1f km/h | %.0f%% duty | %.1fV",
-            abs(values.speed),
-            dutyPercent,
-            values.batteryVoltage,
-        )
-    }
-
-    private fun formatBatteryVoltageChipText(values: RefloatTelemetry): String =
-        if (values.hasFault) "FAULT" else String.format("%.1fV", values.batteryVoltage)
-
-    private fun formatGpsNotificationText(location: LocationSnapshot): String {
-        val speedKmh = (location.speedMps ?: 0.0) * 3.6
-        return String.format("GPS %.1f km/h", abs(speedKmh))
     }
 
     private fun recordTelemetry(values: RefloatTelemetry) {
