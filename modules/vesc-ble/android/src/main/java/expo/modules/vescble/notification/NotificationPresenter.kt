@@ -1,31 +1,47 @@
 package expo.modules.vescble.notification
 
 import android.app.Notification
+import expo.modules.vescble.BoardPhase
+import expo.modules.vescble.RefloatTelemetry
 import expo.modules.vescble.VescNotificationController
+import expo.modules.vescble.displayText
 
 internal class NotificationPresenter(
     private val controller: VescNotificationController,
     private val deviceName: () -> String?,
     private val appInForeground: () -> Boolean,
 ) {
-    fun show(text: String = DEFAULT_TEXT, shortCriticalText: String? = null) {
-        controller.show(text, deviceName(), appInForeground(), shortCriticalText)
+    fun show(
+        phase: BoardPhase,
+        telemetry: RefloatTelemetry? = null,
+        batteryPercent: Double? = null,
+        errorMessage: String? = null,
+    ) {
+        val text = resolveText(phase, telemetry, batteryPercent, errorMessage)
+        val chip = NotificationFormatter.formatShortCriticalText(phase, telemetry, batteryPercent)
+        controller.show(text, deviceName(), appInForeground(), chip, batteryPercent?.toInt())
     }
 
-    fun build(text: String = DEFAULT_TEXT): Notification {
-        return controller.build(text, deviceName(), appInForeground(), null)
+    fun build(
+        phase: BoardPhase,
+        telemetry: RefloatTelemetry? = null,
+        batteryPercent: Double? = null,
+        errorMessage: String? = null,
+    ): Notification {
+        val text = resolveText(phase, telemetry, batteryPercent, errorMessage)
+        val chip = NotificationFormatter.formatShortCriticalText(phase, telemetry, batteryPercent)
+        return controller.build(text, deviceName(), appInForeground(), chip, batteryPercent?.toInt())
     }
 
-    companion object {
-        const val DEFAULT_TEXT = "Monitoring board in background"
-
-        fun formatNotificationText(values: expo.modules.vescble.RefloatTelemetry): String =
-            NotificationFormatter.formatNotificationText(values)
-
-        fun formatBatteryVoltageChipText(values: expo.modules.vescble.RefloatTelemetry): String =
-            NotificationFormatter.formatBatteryVoltageChipText(values)
-
-        fun formatGpsNotificationText(location: expo.modules.vescble.LocationSnapshot): String =
-            NotificationFormatter.formatGpsNotificationText(location)
+    private fun resolveText(
+        phase: BoardPhase,
+        telemetry: RefloatTelemetry?,
+        batteryPercent: Double?,
+        errorMessage: String?,
+    ): String = when {
+        phase == BoardPhase.Connected && telemetry != null ->
+            NotificationFormatter.formatTelemetryText(telemetry, batteryPercent)
+        phase == BoardPhase.Error && errorMessage != null -> errorMessage
+        else -> phase.displayText()
     }
 }

@@ -23,7 +23,6 @@ import expo.modules.vescble.connection.ConnectPhaseTimeout
 import expo.modules.vescble.connection.ConnectionCoordinator
 import expo.modules.vescble.diagnostics.DiagnosticContext
 import expo.modules.vescble.diagnostics.DiagnosticsRecorder
-import expo.modules.vescble.notification.NotificationFormatter
 import expo.modules.vescble.notification.NotificationPresenter
 import expo.modules.vescble.recording.RecordingCoordinator
 import expo.modules.vescble.reconnect.RECONNECT_MAX_ATTEMPTS
@@ -214,7 +213,7 @@ class VescForegroundService : Service() {
         fun setAppInForeground(active: Boolean) {
             if (appInForeground == active) return
             appInForeground = active
-            instance?.presenter?.show()
+            instance?.refreshNotification()
         }
 
         private fun idleState(repository: AppDataRepository): Map<String, Any?> {
@@ -450,7 +449,7 @@ class VescForegroundService : Service() {
                 mapOf("attempt" to nextAttempt, "status" to gattStatus),
             )
             emitState()
-            presenter.show("Reconnecting...")
+            presenter.show(boardStatus)
         }
 
         override fun onScanStart(session: BoardSession) {
@@ -709,9 +708,9 @@ class VescForegroundService : Service() {
         startLocationUpdates()
         emitState()
         if (boardConfig == null) {
-            startForeground(NOTIFICATION_ID, presenter.build("Monitoring GPS"))
+            startForeground(NOTIFICATION_ID, presenter.build(boardStatus))
         } else {
-            presenter.show()
+            presenter.show(boardStatus)
         }
     }
 
@@ -749,7 +748,7 @@ class VescForegroundService : Service() {
         recordingCoordinator.beginBoardSession(start.boardConfig)
         startLocationUpdates()
         setStatus(BoardPhase.Connecting)
-        startForeground(NOTIFICATION_ID, presenter.build("Connecting..."))
+        startForeground(NOTIFICATION_ID, presenter.build(boardStatus))
 
         startBleSession(start)
     }
@@ -899,7 +898,7 @@ class VescForegroundService : Service() {
             mapOf("message" to "Waiting for board telemetry"),
         )
         emitState()
-        presenter.show("Discovering board...")
+        presenter.show(boardStatus)
         start.onSuccess()
         if (canId != null) {
             startPolling()
@@ -992,17 +991,15 @@ class VescForegroundService : Service() {
                 val eventMap = processed.eventMap
                 if (firedAlerts.isNotEmpty()) eventMap["firedAlerts"] = firedAlerts
                 eventMap["generation"] = currentSessionId
-                eventMap["batteryPercent"] = BatterySocEstimator.estimateBatteryPercent(
+                val batteryPct = BatterySocEstimator.estimateBatteryPercent(
                     parsed.batteryVoltage,
                     batteryConfigCache,
                 )
+                eventMap["batteryPercent"] = batteryPct
                 val emitMap = if (processed.metricExclusionUpdates.isNotEmpty()) {
                     eventMap + mapOf("metricExclusionUpdates" to processed.metricExclusionUpdates)
                 } else eventMap
-                presenter.show(
-                    NotificationFormatter.formatNotificationText(parsed),
-                    shortCriticalText = NotificationFormatter.formatBatteryVoltageChipText(parsed),
-                )
+                presenter.show(boardStatus, telemetry = parsed, batteryPercent = batteryPct)
                 emitEvent("onTelemetry", emitMap)
                 recordingCoordinator.recordTelemetry(processed.capture)
             }
@@ -1400,7 +1397,7 @@ class VescForegroundService : Service() {
         boardError = null
         boardStatus = BoardPhase.Idle
         boardConfig = null
-        if (updateNotification && !isStoppingService && stoppedConfig != null) presenter.show()
+        if (updateNotification && !isStoppingService && stoppedConfig != null) presenter.show(boardStatus)
         emitState()
     }
 
@@ -1426,7 +1423,7 @@ class VescForegroundService : Service() {
         stopPolling()
         gattClient.clear(markIntentional = true)
         setError(message)
-        presenter.show(message)
+        presenter.show(boardStatus, errorMessage = message)
         recordingCoordinator.failSession()
         start.onError(code, message)
     }
@@ -1454,6 +1451,17 @@ class VescForegroundService : Service() {
         recordingCoordinator.recordError(boardConfig, message)
         emitEvent("onError", mapOf("message" to message))
         emitState()
+    }
+
+    private fun refreshNotification() {
+        presenter.show(
+            phase = boardStatus,
+            telemetry = telemetry,
+            batteryPercent = telemetry?.let {
+                BatterySocEstimator.estimateBatteryPercent(it.batteryVoltage, batteryConfigCache)
+            },
+            errorMessage = boardError,
+        )
     }
 
     private fun emitState() {
@@ -1518,9 +1526,6 @@ class VescForegroundService : Service() {
         latestLocation = snapshot
         if (!precise) {
             emitEvent("onLocation", snapshot.toMap())
-            if (boardConfig == null) {
-                presenter.show(NotificationFormatter.formatGpsNotificationText(snapshot))
-            }
             return
         }
         latestLocation = snapshot
@@ -1528,7 +1533,6 @@ class VescForegroundService : Service() {
         persistLastGpsLocation(snapshot)
         appendRecentLocation(snapshot)
         emitEvent("onLocation", snapshot.toMap())
-        if (boardConfig == null) presenter.show(NotificationFormatter.formatGpsNotificationText(snapshot))
         recordingCoordinator.recordLocation(snapshot)
     }
 

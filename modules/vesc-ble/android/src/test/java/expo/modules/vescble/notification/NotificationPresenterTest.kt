@@ -1,7 +1,8 @@
 package expo.modules.vescble.notification
 
-import expo.modules.vescble.LocationSnapshot
+import expo.modules.vescble.BoardPhase
 import expo.modules.vescble.RefloatTelemetry
+import expo.modules.vescble.displayText
 import java.util.Locale
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -24,84 +25,101 @@ class NotificationPresenterTest {
     }
 
     @Test
-    fun `formatNotificationText reports fault when hasFault set`() {
-        val text = NotificationFormatter.formatNotificationText(telemetry(hasFault = true, faultCode = 7))
-        assertEquals("Fault 7", text)
-    }
-
-    @Test
-    fun `formatNotificationText formats speed duty voltage`() {
-        val text = NotificationFormatter.formatNotificationText(
+    fun `formatTelemetryText with battery percent`() {
+        val text = NotificationFormatter.formatTelemetryText(
             telemetry(speed = 25.5, dutyCycle = 0.42, batteryVoltage = 75.13),
+            batteryPercent = 45.0,
         )
-        assertEquals("25.5 km/h | 42% duty | 75.1V", text)
+        assertEquals("26km/h • 42% • 45% (75.1V)", text)
     }
 
     @Test
-    fun `formatNotificationText takes absolute speed`() {
-        val text = NotificationFormatter.formatNotificationText(
-            telemetry(speed = -12.0, dutyCycle = 0.0, batteryVoltage = 50.0),
+    fun `formatTelemetryText without battery percent falls back to voltage`() {
+        val text = NotificationFormatter.formatTelemetryText(
+            telemetry(speed = 25.5, dutyCycle = 0.42, batteryVoltage = 75.13),
+            batteryPercent = null,
         )
-        assertEquals("12.0 km/h | 0% duty | 50.0V", text)
+        assertEquals("26km/h • 42% • 75.1V", text)
     }
 
     @Test
-    fun `formatNotificationText zeroes duty when below threshold`() {
-        val text = NotificationFormatter.formatNotificationText(
+    fun `formatTelemetryText takes absolute speed and rounds to whole number`() {
+        val text = NotificationFormatter.formatTelemetryText(
+            telemetry(speed = -12.7, dutyCycle = 0.0, batteryVoltage = 50.0),
+            batteryPercent = null,
+        )
+        assertEquals("13km/h • 0% • 50.0V", text)
+    }
+
+    @Test
+    fun `formatTelemetryText zeroes duty when below threshold`() {
+        val text = NotificationFormatter.formatTelemetryText(
             telemetry(speed = 0.0, dutyCycle = 0.005, batteryVoltage = 50.0),
+            batteryPercent = 80.0,
         )
-        assertEquals("0.0 km/h | 0% duty | 50.0V", text)
+        assertEquals("0km/h • 0% • 80% (50.0V)", text)
     }
 
     @Test
-    fun `formatBatteryVoltageChipText returns FAULT for fault`() {
+    fun `displayText idle`() {
+        assertEquals("Board not connected", BoardPhase.Idle.displayText())
+    }
+
+    @Test
+    fun `displayText connecting`() {
+        assertEquals("Connecting…", BoardPhase.Connecting.displayText())
+    }
+
+    @Test
+    fun `displayText rescanning`() {
+        assertEquals("Searching…", BoardPhase.Rescanning.displayText())
+    }
+
+    @Test
+    fun `shortCriticalText connected with battery percent`() {
         assertEquals(
-            "FAULT",
-            NotificationFormatter.formatBatteryVoltageChipText(telemetry(hasFault = true)),
+            "45%",
+            NotificationFormatter.formatShortCriticalText(BoardPhase.Connected, telemetry(), 45.0),
         )
     }
 
     @Test
-    fun `formatBatteryVoltageChipText formats voltage`() {
+    fun `shortCriticalText connected without battery percent`() {
         assertEquals(
             "75.1V",
-            NotificationFormatter.formatBatteryVoltageChipText(telemetry(batteryVoltage = 75.13)),
+            NotificationFormatter.formatShortCriticalText(
+                BoardPhase.Connected, telemetry(batteryVoltage = 75.13), null,
+            ),
         )
     }
 
     @Test
-    fun `formatGpsNotificationText converts mps to kmh`() {
-        assertEquals(
-            "GPS 18.0 km/h",
-            NotificationFormatter.formatGpsNotificationText(location(speedMps = 5.0)),
-        )
+    fun `shortCriticalText stale`() {
+        assertEquals("⚠", NotificationFormatter.formatShortCriticalText(BoardPhase.Stale, null, null))
     }
 
     @Test
-    fun `formatGpsNotificationText handles null speed`() {
-        assertEquals(
-            "GPS 0.0 km/h",
-            NotificationFormatter.formatGpsNotificationText(location(speedMps = null)),
-        )
+    fun `shortCriticalText error`() {
+        assertEquals("✕", NotificationFormatter.formatShortCriticalText(BoardPhase.Error, null, null))
     }
 
     @Test
-    fun `formatGpsNotificationText takes absolute speed`() {
-        assertEquals(
-            "GPS 36.0 km/h",
-            NotificationFormatter.formatGpsNotificationText(location(speedMps = -10.0)),
-        )
+    fun `shortCriticalText connecting`() {
+        assertEquals("…", NotificationFormatter.formatShortCriticalText(BoardPhase.Connecting, null, null))
+    }
+
+    @Test
+    fun `shortCriticalText idle`() {
+        assertEquals("—", NotificationFormatter.formatShortCriticalText(BoardPhase.Idle, null, null))
     }
 
     private fun telemetry(
-        hasFault: Boolean = false,
-        faultCode: Int = 0,
         speed: Double = 0.0,
         dutyCycle: Double = 0.0,
         batteryVoltage: Double = 0.0,
     ): RefloatTelemetry = RefloatTelemetry(
-        hasFault = hasFault,
-        faultCode = faultCode,
+        hasFault = false,
+        faultCode = 0,
         pitch = 0.0,
         roll = 0.0,
         balancePitch = 0.0,
@@ -122,16 +140,5 @@ class NotificationPresenterTest {
         avgLatency = null,
         lastPacketAt = 0L,
         location = null,
-    )
-
-    private fun location(speedMps: Double?): LocationSnapshot = LocationSnapshot(
-        latitude = 0.0,
-        longitude = 0.0,
-        speedMps = speedMps,
-        bearingDeg = null,
-        accuracyM = null,
-        altitudeM = null,
-        timestamp = 0L,
-        precise = false,
     )
 }

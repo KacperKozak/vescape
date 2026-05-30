@@ -36,9 +36,10 @@ internal class VescNotificationController(
         deviceName: String?,
         appInForeground: Boolean,
         shortCriticalText: String?,
+        batteryPercent: Int? = null,
     ) {
         service.getSystemService(NotificationManager::class.java)
-            .notify(notificationId, build(text, deviceName, appInForeground, shortCriticalText))
+            .notify(notificationId, build(text, deviceName, appInForeground, shortCriticalText, batteryPercent))
     }
 
     fun build(
@@ -46,6 +47,7 @@ internal class VescNotificationController(
         deviceName: String?,
         appInForeground: Boolean,
         shortCriticalText: String?,
+        batteryPercent: Int? = null,
     ): Notification {
         val title = (deviceName ?: "VESC").let { if (appInForeground) it else "$it (bg)" }
         return NotificationCompat.Builder(service, channelId)
@@ -61,6 +63,9 @@ internal class VescNotificationController(
             .setShortCriticalText(shortCriticalText ?: "—")
             .setOnlyAlertOnce(true)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .apply {
+                if (batteryPercent != null) setProgress(100, batteryPercent.coerceIn(0, 100), false)
+            }
             .addAction(
                 android.R.drawable.ic_menu_close_clear_cancel,
                 "Exit",
