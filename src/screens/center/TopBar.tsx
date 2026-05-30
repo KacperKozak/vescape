@@ -115,6 +115,7 @@ export function TopBar({
         <Pressable style={styles.weatherRow} onPress={onWeatherPress}>
           <WeatherIcon
             code={weatherCode}
+            hour={new Date().getHours()}
             size={13}
             color={theme.neutral.textSecondary}
             weight="duotone"
