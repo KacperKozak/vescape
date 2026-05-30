@@ -3,6 +3,16 @@ import type { BatteryConfig } from 'vesc-ble'
 import type { DerivedBatteryConfig } from './types'
 import { getBatteryPreset } from './data'
 
+export function voltageToPercent(voltage: number, minVoltage: number, maxVoltage: number): number {
+  if (maxVoltage <= minVoltage) return 0
+  return Math.max(0, Math.min(100, ((voltage - minVoltage) / (maxVoltage - minVoltage)) * 100))
+}
+
+export function percentToVoltage(percent: number, minVoltage: number, maxVoltage: number): number {
+  if (maxVoltage <= minVoltage) return minVoltage
+  return minVoltage + (percent / 100) * (maxVoltage - minVoltage)
+}
+
 export function deriveBatteryConfig(
   config: BatteryConfig | null | undefined,
 ): DerivedBatteryConfig {

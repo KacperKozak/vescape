@@ -16,6 +16,8 @@ import { SoundPicker } from '@/components/ui/forms/SoundPicker'
 import { TuneDial } from '@/components/ui/tune/TuneDial'
 import { telemetryByControlId } from '@/constants/telemetry'
 import { theme } from '@/constants/theme'
+import { voltageToPercent, percentToVoltage } from '@/lib/battery'
+import { type DerivedBatteryConfig } from '@/lib/battery/types'
 import { type AlertRule, type AlertSoundType } from '@/store/alertsStore'
 import {
   type AlertPreset,
@@ -30,16 +32,26 @@ function getPresetsForCategory(category: AlertPresetCategory): AlertPreset[] {
   return getAlertPresets().filter((p) => p.category === category)
 }
 
-function getDefaultMessageTemplate(controlId: string): string {
-  if (controlId === 'battery') return 'Battery {percent}%, {voltage}V'
+function getDefaultMessageTemplate(
+  controlId: string,
+  batteryConfig: DerivedBatteryConfig | null,
+): string {
+  if (controlId === 'battery') {
+    return batteryConfig ? 'Battery {percent}%' : 'Battery {voltage}V'
+  }
   const metric = telemetryByControlId[controlId]
   if (metric) return `${metric.label} {value} {unit}`
   return '{value} {unit}'
 }
 
-function getMessagePlaceholders(controlId: string): string[] {
+function getMessagePlaceholders(
+  controlId: string,
+  batteryConfig: DerivedBatteryConfig | null,
+): string[] {
   const base = ['{value}', '{threshold}', '{unit}']
-  if (controlId === 'battery') return [...base, '{voltage}', '{percent}']
+  if (controlId === 'battery') {
+    return [...base, batteryConfig ? '{percent}' : '{voltage}']
+  }
   return base
 }
 
@@ -49,6 +61,7 @@ function renderPreviewTemplate(
   unit: string,
   dialConfig: ReturnType<typeof getAlertDialConfig>,
   controlId: string,
+  batteryConfig: DerivedBatteryConfig | null,
 ): string {
   const formatted = dialConfig.format(threshold)
   let result = template
@@ -56,13 +69,25 @@ function renderPreviewTemplate(
     .replace(/\{threshold\}/g, formatted)
     .replace(/\{unit\}/g, unit)
   if (controlId === 'battery') {
-    // threshold IS voltage for battery; percent not available at form time
-    result = result.replace(/\{voltage\}/g, formatted).replace(/\{percent\}/g, '80')
+    if (batteryConfig) {
+      result = result.replace(/\{percent\}/g, formatted)
+    } else {
+      result = result.replace(/\{voltage\}/g, formatted)
+    }
   }
   return result
 }
 
-function getAlertDialConfig(controlId: string) {
+function getAlertDialConfig(controlId: string, batteryConfig: DerivedBatteryConfig | null) {
+  if (controlId === 'battery' && batteryConfig) {
+    return {
+      min: 0,
+      max: 100,
+      step: 1,
+      format: (v: number) => `${Math.round(v)}`,
+      unit: '%',
+    }
+  }
   const metric = telemetryByControlId[controlId]
   if (!metric) return { min: 0, max: 100, step: 1, format: (v: number) => String(v), unit: '' }
   const step =
@@ -81,6 +106,7 @@ interface AlertFormModalProps {
   controlId: string
   unit: string
   editRule: AlertRule | null
+  batteryConfig: DerivedBatteryConfig | null
   onClose(): void
   onSave(threshold: number, thresholdMax: number | null, soundType: AlertSoundType): void
 }
@@ -88,16 +114,24 @@ interface AlertFormModalProps {
 function getEditFormDefaults(
   editRule: AlertRule,
   dialConfig: ReturnType<typeof getAlertDialConfig>,
+  batteryConfig: DerivedBatteryConfig | null,
 ) {
   const isTts = editRule.soundType.startsWith('tts:')
+  const threshold = batteryConfig
+    ? voltageToPercent(editRule.threshold, batteryConfig.minVoltage, batteryConfig.maxVoltage)
+    : editRule.threshold
+  const thresholdMax =
+    batteryConfig && editRule.thresholdMax != null
+      ? voltageToPercent(editRule.thresholdMax, batteryConfig.minVoltage, batteryConfig.maxVoltage)
+      : (editRule.thresholdMax ?? dialConfig.max)
   return {
     tab: (isTts ? 'message' : editRule.thresholdMax != null ? 'geiger' : 'single') as AlertTab,
-    threshold: editRule.threshold,
-    thresholdMax: editRule.thresholdMax ?? dialConfig.max,
+    threshold,
+    thresholdMax,
     soundType: editRule.soundType,
     messageTemplate: isTts
       ? editRule.soundType.slice(4)
-      : getDefaultMessageTemplate(editRule.controlId),
+      : getDefaultMessageTemplate(editRule.controlId, batteryConfig),
   }
 }
 
@@ -105,6 +139,7 @@ function getNewFormDefaults(
   dialConfig: ReturnType<typeof getAlertDialConfig>,
   defaultSoundType: AlertSoundType,
   controlId: string,
+  batteryConfig: DerivedBatteryConfig | null,
 ) {
   const mid =
     Math.round(((dialConfig.min + dialConfig.max) / 2) * (1 / dialConfig.step)) * dialConfig.step
@@ -116,7 +151,7 @@ function getNewFormDefaults(
         (dialConfig.min + (dialConfig.max - dialConfig.min) * 0.75) * (1 / dialConfig.step),
       ) * dialConfig.step,
     soundType: defaultSoundType,
-    messageTemplate: getDefaultMessageTemplate(controlId),
+    messageTemplate: getDefaultMessageTemplate(controlId, batteryConfig),
   }
 }
 
@@ -125,11 +160,15 @@ export function AlertFormModal({
   controlId,
   unit,
   editRule,
+  batteryConfig,
   onClose,
   onSave,
 }: AlertFormModalProps) {
   const isEditing = editRule != null
-  const dialConfig = useMemo(() => getAlertDialConfig(controlId), [controlId])
+  const dialConfig = useMemo(
+    () => getAlertDialConfig(controlId, batteryConfig),
+    [controlId, batteryConfig],
+  )
 
   const singlePresets = useMemo(() => getPresetsForCategory('single'), [])
   const geigerPresets = useMemo(() => getPresetsForCategory('geiger'), [])
@@ -139,13 +178,15 @@ export function AlertFormModal({
   const [threshold, setThreshold] = useState(dialConfig.min)
   const [thresholdMax, setThresholdMax] = useState(dialConfig.max)
   const [soundType, setSoundType] = useState<AlertSoundType>(defaultSoundType)
-  const [messageTemplate, setMessageTemplate] = useState(getDefaultMessageTemplate(controlId))
+  const [messageTemplate, setMessageTemplate] = useState(
+    getDefaultMessageTemplate(controlId, batteryConfig),
+  )
   const [prevVisible, setPrevVisible] = useState(visible)
 
   if (visible && !prevVisible) {
     const defaults = editRule
-      ? getEditFormDefaults(editRule, dialConfig)
-      : getNewFormDefaults(dialConfig, defaultSoundType, controlId)
+      ? getEditFormDefaults(editRule, dialConfig, batteryConfig)
+      : getNewFormDefaults(dialConfig, defaultSoundType, controlId, batteryConfig)
     setTab(defaults.tab)
     setThreshold(defaults.threshold)
     setThresholdMax(defaults.thresholdMax)
@@ -160,19 +201,28 @@ export function AlertFormModal({
     (next: AlertTab) => {
       setTab(next)
       if (next === 'message') {
-        setMessageTemplate(getDefaultMessageTemplate(controlId))
+        setMessageTemplate(getDefaultMessageTemplate(controlId, batteryConfig))
       } else {
         const presets = next === 'single' ? singlePresets : geigerPresets
         setSoundType(presets[0]?.uri ?? 'preset:beep')
       }
     },
-    [singlePresets, geigerPresets, controlId],
+    [singlePresets, geigerPresets, controlId, batteryConfig],
   )
 
   const handleSave = useCallback(() => {
     const finalSoundType = tab === 'message' ? `tts:${messageTemplate}` : soundType
-    onSave(threshold, tab === 'geiger' ? thresholdMax : null, finalSoundType)
-  }, [tab, threshold, thresholdMax, soundType, messageTemplate, onSave])
+    const savedThreshold = batteryConfig
+      ? percentToVoltage(threshold, batteryConfig.minVoltage, batteryConfig.maxVoltage)
+      : threshold
+    const savedThresholdMax =
+      tab === 'geiger'
+        ? batteryConfig
+          ? percentToVoltage(thresholdMax, batteryConfig.minVoltage, batteryConfig.maxVoltage)
+          : thresholdMax
+        : null
+    onSave(savedThreshold, savedThresholdMax, finalSoundType)
+  }, [tab, threshold, thresholdMax, soundType, messageTemplate, onSave, batteryConfig])
 
   return (
     <Modal
@@ -238,11 +288,21 @@ export function AlertFormModal({
               <Text style={styles.fieldLabel}>THRESHOLD</Text>
               <Text style={styles.dialValue}>
                 {dialConfig.format(threshold)}
-                {unit ? ` ${unit}` : ''}
+                {dialConfig.unit ? ` ${dialConfig.unit}` : ''}
               </Text>
               <TuneDial
                 value={threshold}
-                previousValue={editRule?.threshold}
+                previousValue={
+                  editRule?.threshold != null
+                    ? batteryConfig
+                      ? voltageToPercent(
+                          editRule.threshold,
+                          batteryConfig.minVoltage,
+                          batteryConfig.maxVoltage,
+                        )
+                      : editRule.threshold
+                    : undefined
+                }
                 min={dialConfig.min}
                 max={dialConfig.max}
                 step={dialConfig.step}
@@ -255,11 +315,21 @@ export function AlertFormModal({
                 <Text style={styles.fieldLabel}>THRESHOLD MAX</Text>
                 <Text style={styles.dialValue}>
                   {dialConfig.format(thresholdMax)}
-                  {unit ? ` ${unit}` : ''}
+                  {dialConfig.unit ? ` ${dialConfig.unit}` : ''}
                 </Text>
                 <TuneDial
                   value={thresholdMax}
-                  previousValue={editRule?.thresholdMax ?? undefined}
+                  previousValue={
+                    editRule?.thresholdMax != null
+                      ? batteryConfig
+                        ? voltageToPercent(
+                            editRule.thresholdMax,
+                            batteryConfig.minVoltage,
+                            batteryConfig.maxVoltage,
+                          )
+                        : editRule.thresholdMax
+                      : undefined
+                  }
                   min={dialConfig.min}
                   max={dialConfig.max}
                   step={dialConfig.step}
@@ -280,7 +350,7 @@ export function AlertFormModal({
                   style={styles.templateInput}
                 />
                 <View style={styles.placeholderRow}>
-                  {getMessagePlaceholders(controlId).map((ph) => (
+                  {getMessagePlaceholders(controlId, batteryConfig).map((ph) => (
                     <TouchableOpacity
                       key={ph}
                       style={styles.placeholderChip}
@@ -294,7 +364,7 @@ export function AlertFormModal({
                   style={styles.previewButton}
                   onPress={() =>
                     previewAlertSound(
-                      `tts:${renderPreviewTemplate(messageTemplate, threshold, unit, dialConfig, controlId)}`,
+                      `tts:${renderPreviewTemplate(messageTemplate, threshold, unit, dialConfig, controlId, batteryConfig)}`,
                     )
                   }
                 >
