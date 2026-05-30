@@ -10,6 +10,7 @@ import android.os.Vibrator
 import android.speech.tts.TextToSpeech
 import android.util.Log
 import expo.modules.vescble.telemetry.AlertRuleEntity
+import expo.modules.vescble.telemetry.normalizeBatteryConfig
 import kotlin.math.abs
 
 private const val TTS_PREFIX = "tts:"
@@ -107,15 +108,33 @@ internal data class FiredAlert(
 
 internal class VescAlertEngine {
     private val lastFiredAt = HashMap<String, Long>()
+    private val armedState = HashMap<String, Boolean>()
 
     fun resetDebounce() {
         lastFiredAt.clear()
+        armedState.clear()
     }
 
-    fun evaluate(rules: List<AlertRuleEntity>, t: RefloatTelemetry): List<FiredAlert> {
+    fun evaluate(
+        rules: List<AlertRuleEntity>,
+        t: RefloatTelemetry,
+        batteryConfig: Map<String, Any?>? = null,
+    ): List<FiredAlert> {
         if (rules.isEmpty()) return emptyList()
         val now = System.currentTimeMillis()
         val fired = mutableListOf<FiredAlert>()
+        val batteryMargin = if (batteryConfig != null) batteryHysteresisMargin(batteryConfig) else null
+
+        if (batteryMargin != null) {
+            for (rule in rules) {
+                if (rule.controlId == "battery" && rule.thresholdMax == null) {
+                    if (armedState[rule.id] == false && t.batteryVoltage > rule.threshold + batteryMargin) {
+                        armedState[rule.id] = true
+                    }
+                }
+            }
+        }
+
         for (rule in rules) {
             val value = extractAlertValue(rule.controlId, t) ?: continue
             val aboveDir = alertDirectionIsAbove(rule.controlId)
@@ -123,8 +142,13 @@ internal class VescAlertEngine {
             if (!triggered) continue
             val rangeDepth = alertRangeDepth(value, rule.threshold, rule.thresholdMax, aboveDir)
             if (rangeDepth == null) {
-                if (now - (lastFiredAt[rule.id] ?: 0L) < 10_000L) continue
-                lastFiredAt[rule.id] = now
+                if (rule.controlId == "battery" && batteryMargin != null) {
+                    if (armedState[rule.id] == false) continue
+                    armedState[rule.id] = false
+                } else {
+                    if (now - (lastFiredAt[rule.id] ?: 0L) < 10_000L) continue
+                    lastFiredAt[rule.id] = now
+                }
             }
             fired.add(FiredAlert(
                 ruleId = rule.id,
@@ -143,6 +167,22 @@ internal class VescAlertEngine {
                     if (alertDirectionIsAbove(it.controlId)) it.threshold else -it.threshold
                 }
         )
+    }
+
+    private fun batteryHysteresisMargin(config: Map<String, Any?>): Double? {
+        val normalized = normalizeBatteryConfig(config) ?: return null
+        return when (normalized["mode"] as? String) {
+            "preset" -> {
+                val seriesCount = (normalized["seriesCount"] as? Number)?.toInt() ?: return null
+                0.1 * seriesCount
+            }
+            "manual" -> {
+                val minV = (normalized["minVoltage"] as? Number)?.toDouble() ?: return null
+                val maxV = (normalized["maxVoltage"] as? Number)?.toDouble() ?: return null
+                (maxV - minV) * 0.03
+            }
+            else -> null
+        }
     }
 
     private fun alertDirectionIsAbove(controlId: String): Boolean =
