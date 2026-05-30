@@ -79,6 +79,20 @@ export const BATTERY_CELL_PRESETS: BatteryCellPreset[] = [
     capacityAh: 5.0,
     verified: false,
   },
+  {
+    id: 'murata:18650:us18650vtc6',
+    formFactor: '18650',
+    brand: 'Murata',
+    model: 'US18650VTC6',
+    chemistry: 'NMC',
+    nominalVoltage: 3.6,
+    fullVoltage: 4.2,
+    datasheetEmptyVoltage: 2.0,
+    recommendedEmptyVoltage: 3.0,
+    capacityAh: 3.0,
+    maxContinuousDischargeA: 30,
+    verified: true,
+  },
 ]
 
 const PRESET_BY_ID = new Map(BATTERY_CELL_PRESETS.map((preset) => [preset.id, preset]))

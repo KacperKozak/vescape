@@ -42,6 +42,7 @@ object BatterySocEstimator {
         CellPreset("molicel:18650:p30b", PRESET_CURVE),
         CellPreset("samsung:21700:50s", PRESET_CURVE),
         CellPreset("reliance:21700:rs50", PRESET_CURVE),
+        CellPreset("murata:18650:us18650vtc6", PRESET_CURVE),
     )
 
     private val PRESET_BY_ID: Map<String, CellPreset> = buildCellPresets().associateBy { it.id }
