@@ -331,6 +331,7 @@ class VescForegroundService : Service() {
             applyLiveSettings = ::applyTelemetryPipelineSettings,
         )
     }
+    private val telemetryRecordingThrottle = TelemetryRecordingThrottle()
     private val gpsMonitor by lazy {
         VescGpsMonitor(
             context = this,
@@ -746,6 +747,7 @@ class VescForegroundService : Service() {
         directConnection = false
         boardError = null
         telemetry = null
+        telemetryRecordingThrottle.reset()
         loadBatteryConfig(start.boardConfig.appBoardId)
         telemetryPipeline.beginSession(session, start.boardConfig)
         packetReassembler.reset()
@@ -994,6 +996,10 @@ class VescForegroundService : Service() {
                 val patched = telemetryCarryForward.updateAndPatch(parsed)
                 markBoardReady()
                 telemetry = patched
+                val sessionConfig = boardConfig
+                if (sessionConfig != null && telemetryRecordingThrottle.shouldRecord(now)) {
+                    recordingCoordinator.recordTelemetry(patched.toCapture(sessionConfig, canId))
+                }
                 val batteryPct = BatterySocEstimator.estimateBatteryPercent(
                     patched.batteryVoltage,
                     batteryConfigCache,
@@ -1290,7 +1296,6 @@ class VescForegroundService : Service() {
             eventMap + mapOf("metricExclusionUpdates" to processed.metricExclusionUpdates)
         } else eventMap
         emitEvent("onTelemetry", emitMap)
-        recordingCoordinator.recordTelemetry(processed.capture)
         latestHotFiredAlerts = emptyList()
     }
 
@@ -1433,6 +1438,7 @@ class VescForegroundService : Service() {
         fwVersionString = null
         telemetry = null
         telemetryCarryForward.reset()
+        telemetryRecordingThrottle.reset()
         latestHotTelemetry = null
         latestHotBatteryPercent = null
         latestHotFiredAlerts = emptyList()

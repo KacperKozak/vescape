@@ -13,7 +13,6 @@ internal const val DEFAULT_TELEMETRY_STALE_MS = 4_000L
 
 internal data class ProcessedTelemetry(
     val eventMap: MutableMap<String, Any?>,
-    val capture: TelemetryCapture,
     val metricExclusionUpdates: List<Map<String, Any?>>,
 )
 
@@ -120,7 +119,7 @@ internal class TelemetryPipeline(
         recentTelemetry.addLast(baseEventMap)
         pruneRecentTelemetry(parsed.lastPacketAt)
 
-        return ProcessedTelemetry(baseEventMap, capture, updates)
+        return ProcessedTelemetry(baseEventMap, updates)
     }
 
     private fun pruneLiveTelemetryPoints(now: Long) {
