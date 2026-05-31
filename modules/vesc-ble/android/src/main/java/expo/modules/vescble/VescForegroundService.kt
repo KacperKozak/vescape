@@ -566,6 +566,7 @@ class VescForegroundService : Service() {
     private var boardStatus: BoardPhase = BoardPhase.Idle
     private var boardError: String? = null
     private var telemetry: RefloatTelemetry? = null
+    private val telemetryCarryForward = TelemetryCarryForward()
     private var canId: Int? = null
     private var directConnection = false
     private var fwVersionString: String? = null
@@ -985,15 +986,16 @@ class VescForegroundService : Service() {
                     return
                 }
                 val sessionToken = boardSession ?: return
-                val processed = telemetryPipeline.process(parsed, sessionToken) ?: return
+                val patched = telemetryCarryForward.updateAndPatch(parsed)
+                val processed = telemetryPipeline.process(patched, sessionToken) ?: return
                 markBoardReady()
-                telemetry = parsed
+                telemetry = patched
                 val batteryPct = BatterySocEstimator.estimateBatteryPercent(
-                    parsed.batteryVoltage,
+                    patched.batteryVoltage,
                     batteryConfigCache,
-                    parsed.batteryCurrent,
+                    patched.batteryCurrent,
                 )
-                val firedAlerts = evaluateAlerts(parsed, batteryPct)
+                val firedAlerts = evaluateAlerts(patched, batteryPct)
                 val eventMap = processed.eventMap
                 if (firedAlerts.isNotEmpty()) eventMap["firedAlerts"] = firedAlerts
                 eventMap["generation"] = currentSessionId
@@ -1001,7 +1003,7 @@ class VescForegroundService : Service() {
                 val emitMap = if (processed.metricExclusionUpdates.isNotEmpty()) {
                     eventMap + mapOf("metricExclusionUpdates" to processed.metricExclusionUpdates)
                 } else eventMap
-                presenter.show(boardStatus, telemetry = parsed, batteryPercent = batteryPct)
+                presenter.show(boardStatus, telemetry = patched, batteryPercent = batteryPct)
                 emitEvent("onTelemetry", emitMap)
                 recordingCoordinator.recordTelemetry(processed.capture)
             }
@@ -1392,6 +1394,7 @@ class VescForegroundService : Service() {
         directConnection = false
         fwVersionString = null
         telemetry = null
+        telemetryCarryForward.reset()
         boardSession?.invalidate()
         boardSession = null
         telemetryPipeline.endSession()

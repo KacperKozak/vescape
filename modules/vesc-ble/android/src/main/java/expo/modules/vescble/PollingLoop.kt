@@ -15,6 +15,7 @@ internal class PollingLoop(
 ) {
     private var pollHandle: Cancellable? = null
     private var lastPollAt = 0L
+    private var pollCount = 0
     private val rttHistory = ArrayDeque<Long>()
 
     val isActive: Boolean
@@ -26,20 +27,24 @@ internal class PollingLoop(
         canId: Int?,
         directConnection: Boolean,
     ) {
-        val pollPayload = pollPayload(canId, directConnection) ?: return
+        if (!isPollingCapable(canId, directConnection)) return
         stop()
+        val mode2EveryN = mode2EveryN(sessionConfig.pollIntervalMs)
+
+        fun sendPoll() {
+            lastPollAt = nowMs()
+            sendPayloadWithRetry(pollPayload(canId, directConnection, nextMode(mode2EveryN)) ?: return, session)
+        }
 
         fun scheduleNext() {
             pollHandle = scheduler.postDelayedForSession(session, sessionConfig.pollIntervalMs, isCurrentSession) {
-                lastPollAt = nowMs()
-                sendPayloadWithRetry(pollPayload, session)
+                sendPoll()
                 scheduleNext()
             }
         }
 
         pollHandle = scheduler.postDelayedForSession(session, 0L, isCurrentSession) {
-            lastPollAt = nowMs()
-            sendPayloadWithRetry(pollPayload, session)
+            sendPoll()
             scheduleNext()
         }
     }
@@ -47,6 +52,7 @@ internal class PollingLoop(
     fun stop() {
         pollHandle?.cancel()
         pollHandle = null
+        pollCount = 0
     }
 
     fun updateLatency(now: Long): Int? {
@@ -56,7 +62,15 @@ internal class PollingLoop(
         return rttHistory.average().roundToInt()
     }
 
-    private fun pollPayload(canId: Int?, directConnection: Boolean): ByteArray? =
+    private fun nextMode(mode2EveryN: Int): Byte {
+        pollCount += 1
+        return if (pollCount % mode2EveryN == 0) 2 else 1
+    }
+
+    private fun mode2EveryN(pollIntervalMs: Long): Int =
+        max(1, (1000L / max(1L, pollIntervalMs)).toInt())
+
+    private fun pollPayload(canId: Int?, directConnection: Boolean, mode: Byte): ByteArray? =
         when {
             canId != null -> byteArrayOf(
                 COMM_FORWARD_CAN.toByte(),
@@ -64,13 +78,13 @@ internal class PollingLoop(
                 COMM_CUSTOM_APP_DATA.toByte(),
                 REFLOAT_MAGIC.toByte(),
                 REFLOAT_GET_ALLDATA.toByte(),
-                2,
+                mode,
             )
             directConnection -> byteArrayOf(
                 COMM_CUSTOM_APP_DATA.toByte(),
                 REFLOAT_MAGIC.toByte(),
                 REFLOAT_GET_ALLDATA.toByte(),
-                2,
+                mode,
             )
             else -> null
         }
