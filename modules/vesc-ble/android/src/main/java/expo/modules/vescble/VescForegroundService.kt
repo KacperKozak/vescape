@@ -62,6 +62,7 @@ private const val ACTION_STOP_GPS_MONITORING = "expo.modules.vescble.ACTION_STOP
 
 private const val LAST_GPS_PERSIST_INTERVAL_MS = 30_000L
 private const val TELEMETRY_STALE_MS = 4_000L
+private const val TELEMETRY_COLD_PATH_INTERVAL_MS = 200L
 private const val GATT_CONNECT_TIMEOUT_MS = 6_000L
 private const val GATT_READY_TIMEOUT_MS = 6_000L
 
@@ -567,6 +568,11 @@ class VescForegroundService : Service() {
     private var boardError: String? = null
     private var telemetry: RefloatTelemetry? = null
     private val telemetryCarryForward = TelemetryCarryForward()
+    private var latestHotTelemetry: RefloatTelemetry? = null
+    private var latestHotBatteryPercent: Double? = null
+    private var latestHotFiredAlerts: List<Map<String, Any?>> = emptyList()
+    private var lastColdTelemetryAt: Long = 0L
+    private var coldPathHandle: Cancellable? = null
     private var canId: Int? = null
     private var directConnection = false
     private var fwVersionString: String? = null
@@ -985,9 +991,7 @@ class VescForegroundService : Service() {
                     captureTelemetryParseFailed(payload)
                     return
                 }
-                val sessionToken = boardSession ?: return
                 val patched = telemetryCarryForward.updateAndPatch(parsed)
-                val processed = telemetryPipeline.process(patched, sessionToken) ?: return
                 markBoardReady()
                 telemetry = patched
                 val batteryPct = BatterySocEstimator.estimateBatteryPercent(
@@ -996,16 +1000,10 @@ class VescForegroundService : Service() {
                     patched.batteryCurrent,
                 )
                 val firedAlerts = evaluateAlerts(patched, batteryPct)
-                val eventMap = processed.eventMap
-                if (firedAlerts.isNotEmpty()) eventMap["firedAlerts"] = firedAlerts
-                eventMap["generation"] = currentSessionId
-                eventMap["batteryPercent"] = batteryPct
-                val emitMap = if (processed.metricExclusionUpdates.isNotEmpty()) {
-                    eventMap + mapOf("metricExclusionUpdates" to processed.metricExclusionUpdates)
-                } else eventMap
                 presenter.show(boardStatus, telemetry = patched, batteryPercent = batteryPct)
-                emitEvent("onTelemetry", emitMap)
-                recordingCoordinator.recordTelemetry(processed.capture)
+                latestHotTelemetry = patched
+                latestHotBatteryPercent = batteryPct
+                latestHotFiredAlerts = firedAlerts
             }
         }
     }
@@ -1249,11 +1247,51 @@ class VescForegroundService : Service() {
         val sessionToken = boardSession ?: return
         telemetryPipeline.armStaleWatchdog()
         pollingLoop.start(session, sessionToken, canId, directConnection)
+        if (isPollingCapable) startColdPathTimer(sessionToken)
     }
 
     private fun stopPolling() {
         pollingLoop.stop()
+        cancelColdPathTimer()
         telemetryPipeline.cancelStaleWatchdog()
+    }
+
+    private fun startColdPathTimer(session: BoardSession) {
+        cancelColdPathTimer()
+        fun scheduleNext() {
+            coldPathHandle = scheduler.postDelayedForSession(
+                session,
+                TELEMETRY_COLD_PATH_INTERVAL_MS,
+                ::isCurrentBoardSession,
+            ) {
+                emitColdPathTelemetry(session)
+                scheduleNext()
+            }
+        }
+        scheduleNext()
+    }
+
+    private fun cancelColdPathTimer() {
+        coldPathHandle?.cancel()
+        coldPathHandle = null
+    }
+
+    private fun emitColdPathTelemetry(session: BoardSession) {
+        val parsed = latestHotTelemetry ?: return
+        if (parsed.lastPacketAt == lastColdTelemetryAt) return
+        val processed = telemetryPipeline.process(parsed, session) ?: return
+        lastColdTelemetryAt = parsed.lastPacketAt
+        val eventMap = processed.eventMap
+        val firedAlerts = latestHotFiredAlerts
+        if (firedAlerts.isNotEmpty()) eventMap["firedAlerts"] = firedAlerts
+        eventMap["generation"] = currentSessionId
+        eventMap["batteryPercent"] = latestHotBatteryPercent
+        val emitMap = if (processed.metricExclusionUpdates.isNotEmpty()) {
+            eventMap + mapOf("metricExclusionUpdates" to processed.metricExclusionUpdates)
+        } else eventMap
+        emitEvent("onTelemetry", emitMap)
+        recordingCoordinator.recordTelemetry(processed.capture)
+        latestHotFiredAlerts = emptyList()
     }
 
     private fun armCanPingTimeout() {
@@ -1395,6 +1433,10 @@ class VescForegroundService : Service() {
         fwVersionString = null
         telemetry = null
         telemetryCarryForward.reset()
+        latestHotTelemetry = null
+        latestHotBatteryPercent = null
+        latestHotFiredAlerts = emptyList()
+        lastColdTelemetryAt = 0L
         boardSession?.invalidate()
         boardSession = null
         telemetryPipeline.endSession()
