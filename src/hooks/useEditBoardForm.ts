@@ -45,6 +45,7 @@ export function useEditBoardForm({
   const [pairedBleName, setPairedBleName] = useState(routeBleName ?? '')
   const [battery, setBattery] = useState(() => batteryDraftFromConfig(board?.batteryConfig))
   const [batteryTouched, setBatteryTouched] = useState(false)
+  const [pollIntervalMs, setPollIntervalMs] = useState(board?.pollIntervalMs ?? 100)
   const [saving, setSaving] = useState<SaveKind | null>(null)
 
   useEffect(() => {
@@ -57,12 +58,15 @@ export function useEditBoardForm({
     setPairedBleName(routeBleName ?? '')
     setBattery(batteryDraftFromConfig(board.batteryConfig))
     setBatteryTouched(false)
+    setPollIntervalMs(board.pollIntervalMs ?? 100)
     syncedBoardIdRef.current = board.id
   }, [board, routeBleId, routeBleName])
 
   const saveBoard = useCallback(
     async (
-      patch: Partial<Pick<Board, 'name' | 'description' | 'batteryConfig' | 'bleId'>>,
+      patch: Partial<
+        Pick<Board, 'name' | 'description' | 'batteryConfig' | 'bleId' | 'pollIntervalMs'>
+      >,
       kind: SaveKind,
     ) => {
       const current = boardRef.current
@@ -152,6 +156,14 @@ export function useEditBoardForm({
     await saveBoard({ bleId: null }, 'pairing')
   }, [saveBoard])
 
+  const savePollInterval = useCallback(
+    async (ms: number) => {
+      setPollIntervalMs(ms)
+      await saveBoard({ pollIntervalMs: ms }, 'pairing')
+    },
+    [saveBoard],
+  )
+
   return {
     name,
     description,
@@ -160,10 +172,12 @@ export function useEditBoardForm({
     battery,
     batterySummary,
     keepMissingBatteryConfig,
+    pollIntervalMs,
     saving,
     saveInfo,
     saveBattery,
     clearPairing,
+    savePollInterval,
   }
 }
 

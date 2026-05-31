@@ -1,7 +1,17 @@
+import { useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
-import { BatteryChargingIcon, BluetoothIcon, IdentificationCardIcon } from 'phosphor-react-native'
+import {
+  BatteryChargingIcon,
+  BluetoothIcon,
+  GaugeIcon,
+  IdentificationCardIcon,
+} from 'phosphor-react-native'
 
 import { BoardSettingRow } from '@/components/domain/board/BoardSettingRow'
+import {
+  PollIntervalPickerModal,
+  formatPollInterval,
+} from '@/components/domain/board/PollIntervalPickerModal'
 import { Button } from '@/components/ui/base/Button'
 import { SettingsCard } from '@/components/ui/settings/SettingsCard'
 import { SettingsSectionTitle } from '@/components/ui/settings/SettingsSectionTitle'
@@ -16,10 +26,12 @@ interface EditBoardSettingsProps {
   pairingSaving?: boolean
   keepMissingBatteryConfig: boolean
   batterySummary: BatterySummary
+  pollIntervalMs: number
   onOpenInfo: () => void
   onOpenBattery: () => void
   onOpenPairing: () => void
   onClearPairing: () => Promise<void> | void
+  onChangePollInterval: (ms: number) => void
 }
 
 export function EditBoardSettings({
@@ -30,11 +42,15 @@ export function EditBoardSettings({
   pairingSaving = false,
   keepMissingBatteryConfig,
   batterySummary,
+  pollIntervalMs,
   onOpenInfo,
   onOpenBattery,
   onOpenPairing,
   onClearPairing,
+  onChangePollInterval,
 }: EditBoardSettingsProps) {
+  const [pollPickerVisible, setPollPickerVisible] = useState(false)
+
   return (
     <>
       <SettingsSectionTitle>Board</SettingsSectionTitle>
@@ -60,6 +76,28 @@ export function EditBoardSettings({
           onPress={onOpenBattery}
         />
       </SettingsCard>
+
+      <SettingsSectionTitle>Connection</SettingsSectionTitle>
+      <SettingsCard>
+        <BoardSettingRow
+          icon={GaugeIcon}
+          iconColor={theme.teal.text}
+          label="Poll interval"
+          value={formatPollInterval(pollIntervalMs)}
+          hint="How often board data is refreshed"
+          onPress={() => setPollPickerVisible(true)}
+        />
+      </SettingsCard>
+
+      <PollIntervalPickerModal
+        visible={pollPickerVisible}
+        pollIntervalMs={pollIntervalMs}
+        onSelect={(ms) => {
+          onChangePollInterval(ms)
+          setPollPickerVisible(false)
+        }}
+        onCancel={() => setPollPickerVisible(false)}
+      />
 
       <View style={styles.pairing}>
         <View style={styles.pairingCopy}>

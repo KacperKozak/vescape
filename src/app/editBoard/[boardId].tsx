@@ -91,10 +91,12 @@ export default function EditBoardScreen() {
             pairingSaving={form.saving === 'pairing'}
             keepMissingBatteryConfig={form.keepMissingBatteryConfig}
             batterySummary={form.batterySummary}
+            pollIntervalMs={form.pollIntervalMs}
             onOpenInfo={() => setInfoModalVisible(true)}
             onOpenBattery={() => setBatteryModalVisible(true)}
             onOpenPairing={handleOpenPairing}
             onClearPairing={form.clearPairing}
+            onChangePollInterval={form.savePollInterval}
           />
         </ScrollView>
       </SafeAreaView>
