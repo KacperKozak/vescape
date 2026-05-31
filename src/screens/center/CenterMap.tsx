@@ -108,9 +108,10 @@ const GPS_POINT_TEXT_COLOR = theme.target.text
 const DESTINATION_POINT_COLOR = theme.gps.color
 const DESTINATION_POINT_TEXT_COLOR = theme.gps.text
 const HISTORY_ROUTE_HIGHLIGHT_INTERVAL_MS = 50
-const HISTORY_ROUTE_HIGHLIGHT_WIDTH = 0.16
-const HISTORY_ROUTE_HIGHLIGHT_COLOR = 'rgba(216, 180, 254, 0.95)'
-const HISTORY_ROUTE_HIGHLIGHT_TRANSPARENT = 'rgba(216, 180, 254, 0)'
+const HISTORY_ROUTE_HIGHLIGHT_DELAY_MS = 500
+const HISTORY_ROUTE_HIGHLIGHT_WIDTH = 0.24
+const HISTORY_ROUTE_HIGHLIGHT_COLOR = 'rgba(255, 255, 255, 0.98)'
+const HISTORY_ROUTE_HIGHLIGHT_TRANSPARENT = 'rgba(255, 255, 255, 0)'
 const HISTORY_ROUTE_HIGHLIGHT_MIN_DURATION_MS = 1400
 const HISTORY_ROUTE_HIGHLIGHT_MAX_DURATION_MS = 5200
 const HISTORY_ROUTE_HIGHLIGHT_MS_PER_KM = 260
@@ -460,13 +461,21 @@ function HistoryMapLayers({
 
   useEffect(() => {
     if (!rideRouteShape) return
-    const startedAt = Date.now()
-    const interval = setInterval(() => {
-      const progress = (Date.now() - startedAt) / highlightDurationMs
-      setHighlightProgress(Math.min(1, progress))
-      if (progress >= 1) clearInterval(interval)
-    }, HISTORY_ROUTE_HIGHLIGHT_INTERVAL_MS)
-    return () => clearInterval(interval)
+    const resetFrame = requestAnimationFrame(() => setHighlightProgress(0))
+    let interval: ReturnType<typeof setInterval> | null = null
+    const timeout = setTimeout(() => {
+      const startedAt = Date.now()
+      interval = setInterval(() => {
+        const progress = (Date.now() - startedAt) / highlightDurationMs
+        setHighlightProgress(Math.min(1, progress))
+        if (progress >= 1 && interval) clearInterval(interval)
+      }, HISTORY_ROUTE_HIGHLIGHT_INTERVAL_MS)
+    }, HISTORY_ROUTE_HIGHLIGHT_DELAY_MS)
+    return () => {
+      cancelAnimationFrame(resetFrame)
+      clearTimeout(timeout)
+      if (interval) clearInterval(interval)
+    }
   }, [highlightDurationMs, rideRouteShape])
 
   const routeHighlightGradient = useMemo(
@@ -699,6 +708,23 @@ function advanceNearestTelemetryIndex(
   return index
 }
 
+function getRouteDistanceProgress(samples: readonly HistoryGpsSample[]): number[] {
+  const distances = new Array<number>(samples.length).fill(0)
+  let distanceM = 0
+  for (let index = 1; index < samples.length; index += 1) {
+    const from = samples[index - 1]
+    const to = samples[index]
+    distanceM += distanceMeters(
+      { longitude: from.longitude, latitude: from.latitude },
+      { longitude: to.longitude, latitude: to.latitude },
+    )
+    distances[index] = distanceM
+  }
+
+  if (distanceM <= 0) return distances
+  return distances.map((distance) => Math.max(0, Math.min(1, distance / distanceM)))
+}
+
 function getHistoryRouteMetricGradient({
   gpsSamples,
   telemetrySamples,
@@ -714,6 +740,7 @@ function getHistoryRouteMetricGradient({
   if (!range) return null
 
   const lastIndex = gpsSamples.length - 1
+  const routeProgress = getRouteDistanceProgress(gpsSamples)
   const maxStops = 160
   const step = Math.max(1, Math.floor(lastIndex / (maxStops - 1)))
   const expression: unknown[] = ['interpolate', ['linear'], ['line-progress']]
@@ -729,7 +756,10 @@ function getHistoryRouteMetricGradient({
     )
     const telemetrySample = telemetrySamples[telemetryIndex]
     const value = telemetrySample ? getTelemetrySampleMetricValue(telemetrySample, metric) : null
-    lastProgress = index / lastIndex
+    const previousStop = expression.at(-2)
+    const previousProgress = typeof previousStop === 'number' ? previousStop : -1
+    lastProgress = routeProgress[index] ?? 0
+    if (lastProgress <= previousProgress) continue
     expression.push(lastProgress, value == null ? baseColor : getMetricRampColor(value, range))
   }
 

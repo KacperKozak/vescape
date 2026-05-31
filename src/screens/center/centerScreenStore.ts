@@ -77,10 +77,12 @@ export const useCenterScreenStore = create<CenterScreenState & CenterScreenActio
   },
 
   setSeekTimeMs(timeMs) {
-    set({ seekTimeMs: timeMs })
+    set((state) => (state.seekTimeMs === timeMs ? state : { seekTimeMs: timeMs }))
   },
 
   setActiveHistoryMapMetric(metric) {
-    set({ activeHistoryMapMetric: metric })
+    set((state) =>
+      state.activeHistoryMapMetric === metric ? state : { activeHistoryMapMetric: metric },
+    )
   },
 }))

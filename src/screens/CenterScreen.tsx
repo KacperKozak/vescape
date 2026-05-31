@@ -115,6 +115,7 @@ export function CenterScreen({
           historyLoading: controller.historyLoading,
           historyHasMore: controller.historyHasMore,
           historyError: controller.historyError,
+          blocks: controller.blocks,
           sessions: controller.sessions,
           historySheetVisible: controller.historySheetVisible,
           setHistorySheetVisible: controller.setHistorySheetVisible,

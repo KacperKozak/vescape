@@ -14,9 +14,9 @@ describe('history camera', () => {
     })
 
     expect(camera?.padding).toEqual({
-      paddingTop: HISTORY_CAMERA.routePaddingPx + 120,
+      paddingTop: HISTORY_CAMERA.routePaddingPx + 90,
       paddingRight: HISTORY_CAMERA.sidePaddingPx,
-      paddingBottom: HISTORY_CAMERA.routePaddingPx + 160,
+      paddingBottom: HISTORY_CAMERA.routePaddingPx + 180,
       paddingLeft: HISTORY_CAMERA.sidePaddingPx,
     })
   })

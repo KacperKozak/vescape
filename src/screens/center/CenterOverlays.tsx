@@ -35,7 +35,7 @@ import { MapRevealGesture } from '@/screens/center/MapRevealGesture'
 import { MapVignette } from '@/screens/center/MapVignette'
 import { TopBar } from '@/screens/center/TopBar'
 import type { Board } from '@/store/boardStore'
-import type { HistorySession, TelemetrySample } from '@/store/historyStore'
+import type { HistorySession, TelemetryMinuteBucket, TelemetrySample } from '@/store/historyStore'
 import { useWeatherStore } from '@/store/weatherStore'
 
 interface CenterBoardOverlayProps {
@@ -78,6 +78,7 @@ interface CenterHistoryOverlayProps {
   historyLoading: boolean
   historyHasMore: boolean
   historyError: string | undefined
+  blocks: TelemetryMinuteBucket[]
   sessions: HistorySession[]
   historySheetVisible: boolean
   setHistorySheetVisible: (visible: boolean) => void
@@ -413,6 +414,7 @@ export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOver
       <HistorySessionSheet
         visible={history.historySheetVisible}
         bottomOffset={historyPanelBottom + panelHeight + 8}
+        blocks={history.blocks}
         sessions={history.sessions}
         selectedSessionId={history.selectedSession?.id ?? null}
         hasMore={history.historyHasMore}

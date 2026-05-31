@@ -74,6 +74,7 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
   const mapNavigationMode = useSettingsStore((s) => s.mapNavigationMode)
   const setSetting = useSettingsStore((s) => s.set)
   const {
+    blocks,
     sessions,
     selectedSession,
     sessionSamples,
@@ -89,6 +90,7 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
     removeSelectedSession,
   } = useHistoryStore(
     useShallow((s) => ({
+      blocks: s.blocks,
       sessions: s.sessions,
       selectedSession: s.selectedSession,
       sessionSamples: s.sessionSamples,
@@ -298,6 +300,7 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
     mode,
     liveLocations,
     latestApproximateLocation,
+    blocks,
     historyActive,
     mapStyleKey,
     setMapStyleKey,

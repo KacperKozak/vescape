@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { PanResponder, StyleSheet, Text, View } from 'react-native'
 import type { LayoutChangeEvent, StyleProp, ViewStyle } from 'react-native'
 import Svg, {
@@ -88,7 +88,7 @@ interface ChartLineSegmentsProps {
   windowMs?: number
 }
 
-function ChartLineSegments({
+const ChartLineSegments = memo(function ChartLineSegments({
   points,
   range,
   width,
@@ -175,7 +175,7 @@ function ChartLineSegments({
       strokeLinejoin="round"
     />
   ))
-}
+})
 
 export function TelemetryLineChart({
   label,
