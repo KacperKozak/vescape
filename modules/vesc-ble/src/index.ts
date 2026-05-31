@@ -156,6 +156,24 @@ export interface RateTestResultEvent {
   maxStableRate: number
 }
 
+export interface RateTestEnduranceEvent {
+  pollsSent: number
+  responsesReceived: number
+}
+
+export interface RateTestTelemetryEvent {
+  speed: number
+  dutyCycle: number
+  batteryVoltage: number
+  motorCurrent: number
+  batteryCurrent: number
+  erpm: number
+  pitch: number
+  roll: number
+  balancePitch: number
+  state: number
+}
+
 export interface LiveMetricExclusionUpdate {
   lastPacketAt: number
   metricExclusions: Record<string, boolean>
@@ -470,6 +488,8 @@ type VescBleEvents = {
   onTelemetryRebuildProgress: (event: TelemetryRebuildProgressEvent) => void
   onRateTestProgress: (event: RateTestStep) => void
   onRateTestResult: (event: RateTestResultEvent) => void
+  onRateTestTelemetry: (event: RateTestTelemetryEvent) => void
+  onRateTestEndurance: (event: RateTestEnduranceEvent) => void
 }
 
 interface NativeEventEmitter<TEvents extends Record<string, (...args: never[]) => void>> {
@@ -922,4 +942,16 @@ export function addRateTestResultListener(
   cb: (event: RateTestResultEvent) => void,
 ): EventSubscription {
   return emitter.addListener('onRateTestResult', cb)
+}
+
+export function addRateTestTelemetryListener(
+  cb: (event: RateTestTelemetryEvent) => void,
+): EventSubscription {
+  return emitter.addListener('onRateTestTelemetry', cb)
+}
+
+export function addRateTestEnduranceListener(
+  cb: (event: RateTestEnduranceEvent) => void,
+): EventSubscription {
+  return emitter.addListener('onRateTestEndurance', cb)
 }

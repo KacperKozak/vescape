@@ -7,16 +7,23 @@ import {
   stopRateTest,
   addRateTestProgressListener,
   addRateTestResultListener,
+  addRateTestTelemetryListener,
+  addRateTestEnduranceListener,
   type RateTestStep,
   type RateTestResultEvent,
+  type RateTestTelemetryEvent,
+  type RateTestEnduranceEvent,
 } from 'vesc-ble'
 import { useBleStore } from '@/store/bleStore'
 import { interaction, theme } from '@/constants/theme'
 
 export default function RateTestScreen() {
   const [running, setRunning] = useState(false)
+  const [endurance, setEndurance] = useState(false)
+  const [enduranceStats, setEnduranceStats] = useState<RateTestEnduranceEvent | null>(null)
   const [steps, setSteps] = useState<RateTestStep[]>([])
   const [result, setResult] = useState<RateTestResultEvent | null>(null)
+  const [live, setLive] = useState<RateTestTelemetryEvent | null>(null)
   const connected = useBleStore((s) => s.status === 'connected')
 
   useEffect(() => {
@@ -25,34 +32,38 @@ export default function RateTestScreen() {
     })
     const subResult = addRateTestResultListener((e) => {
       setResult(e)
-      setRunning(false)
+      setEndurance(true)
+    })
+    const subTelemetry = addRateTestTelemetryListener((e) => {
+      setLive(e)
+    })
+    const subEndurance = addRateTestEnduranceListener((e) => {
+      setEnduranceStats(e)
     })
     return () => {
       subProgress.remove()
       subResult.remove()
+      subTelemetry.remove()
+      subEndurance.remove()
     }
   }, [])
 
-  const handleStart = useCallback(async () => {
+  const handleStart = useCallback(() => {
     setSteps([])
     setResult(null)
+    setLive(null)
+    setEndurance(false)
+    setEnduranceStats(null)
     setRunning(true)
-    try {
-      const res = await startRateTest()
-      if (res.steps.length > 0) {
-        setSteps(res.steps)
-        setResult(res)
-      }
-    } catch {
-      // result will come via event
-    } finally {
-      setRunning(false)
-    }
+    startRateTest()
   }, [])
 
   const handleStop = useCallback(() => {
     stopRateTest()
     setRunning(false)
+    setEndurance(false)
+    setLive(null)
+    setEnduranceStats(null)
   }, [])
 
   return (
@@ -88,10 +99,54 @@ export default function RateTestScreen() {
         <Text style={styles.btnText}>{running ? 'Stop Test' : 'Start Rate Test'}</Text>
       </Pressable>
 
-      {running && (
+      {running && !endurance && (
         <View style={styles.running}>
           <ActivityIndicator color={theme.bran.color} />
           <Text style={styles.runningText}>Testing poll rates...</Text>
+        </View>
+      )}
+
+      {endurance && result && (
+        <View style={styles.enduranceBadge}>
+          <ActivityIndicator color={theme.gps.color} size="small" />
+          <Text style={styles.enduranceText}>
+            Endurance @ {result.recommendedIntervalMs}
+            ms
+            {enduranceStats
+              ? ` · ${enduranceStats.responsesReceived}/${enduranceStats.pollsSent} (${
+                  enduranceStats.pollsSent > 0
+                    ? ((enduranceStats.responsesReceived / enduranceStats.pollsSent) * 100).toFixed(
+                        0,
+                      )
+                    : '-'
+                }%)`
+              : ''}
+          </Text>
+        </View>
+      )}
+
+      {live && (
+        <View style={styles.liveGauges}>
+          <Text style={styles.liveLabel}>Live data</Text>
+          <View style={styles.gaugeRow}>
+            {[
+              ['Speed', `${live.speed.toFixed(1)} km/h`],
+              ['Duty', `${live.dutyCycle.toFixed(2)}`],
+              ['Batt V', `${live.batteryVoltage.toFixed(1)}V`],
+              ['Motor A', `${live.motorCurrent.toFixed(1)}A`],
+              ['Batt A', `${live.batteryCurrent.toFixed(1)}A`],
+              ['ERPM', `${live.erpm}`],
+              ['Pitch', `${live.pitch.toFixed(1)}°`],
+              ['Roll', `${live.roll.toFixed(1)}°`],
+              ['Bal Pch', `${live.balancePitch.toFixed(1)}°`],
+              ['State', `0x${live.state.toString(16)}`],
+            ].map(([label, value]) => (
+              <View key={label} style={styles.gauge}>
+                <Text style={styles.gaugeLabel}>{label}</Text>
+                <Text style={styles.gaugeValue}>{value}</Text>
+              </View>
+            ))}
+          </View>
         </View>
       )}
 
@@ -217,6 +272,23 @@ const styles = StyleSheet.create({
     color: theme.bran.text,
     fontSize: 14,
   },
+  enduranceBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.gps.bg,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 8,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: theme.gps.border,
+  },
+  enduranceText: {
+    color: theme.gps.text,
+    fontSize: 13,
+    fontFamily: 'monospace',
+  },
   table: {
     flex: 1,
   },
@@ -277,5 +349,43 @@ const styles = StyleSheet.create({
     color: theme.neutral.textSecondary,
     fontSize: 13,
     marginTop: 4,
+  },
+  liveGauges: {
+    backgroundColor: theme.neutral.surface,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: theme.neutral.border,
+  },
+  liveLabel: {
+    color: theme.bran.text,
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  gaugeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  gauge: {
+    backgroundColor: theme.neutral.surfaceDeep,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    minWidth: 68,
+    alignItems: 'center',
+  },
+  gaugeLabel: {
+    color: theme.neutral.textMuted,
+    fontSize: 10,
+    marginBottom: 2,
+  },
+  gaugeValue: {
+    color: theme.neutral.textPrimary,
+    fontSize: 13,
+    fontWeight: '600',
+    fontFamily: 'monospace',
   },
 })

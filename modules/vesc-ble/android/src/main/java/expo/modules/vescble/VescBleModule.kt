@@ -73,6 +73,8 @@ class VescBleModule : Module() {
       "onTelemetryRebuildProgress",
       "onRateTestProgress",
       "onRateTestResult",
+      "onRateTestTelemetry",
+      "onRateTestEndurance",
     )
 
     OnStartObserving("onDevice") { startObserving("onDevice") }
@@ -91,6 +93,10 @@ class VescBleModule : Module() {
     OnStopObserving("onRateTestProgress") { stopObserving("onRateTestProgress") }
     OnStartObserving("onRateTestResult") { startObserving("onRateTestResult") }
     OnStopObserving("onRateTestResult") { stopObserving("onRateTestResult") }
+    OnStartObserving("onRateTestTelemetry") { startObserving("onRateTestTelemetry") }
+    OnStopObserving("onRateTestTelemetry") { stopObserving("onRateTestTelemetry") }
+    OnStartObserving("onRateTestEndurance") { startObserving("onRateTestEndurance") }
+    OnStopObserving("onRateTestEndurance") { stopObserving("onRateTestEndurance") }
 
     OnActivityEntersForeground {
       frontendActive = true

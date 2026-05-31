@@ -20,11 +20,13 @@ data class RateTestResult(
 internal class RateProbe(
     private val sendPayload: (ByteArray) -> Boolean,
     private val buildPollPayload: () -> ByteArray,
+    private val onTelemetry: ((RefloatTelemetry) -> Unit)? = null,
 ) {
     private val handler = Handler(Looper.getMainLooper())
     private var active = false
     private var onProgress: ((RateTestStep) -> Unit)? = null
-    private var onComplete: ((RateTestResult) -> Unit)? = null
+    private var onAdaptiveComplete: ((stableIntervalMs: Long) -> Unit)? = null
+    private var onEnduranceStats: ((enduranceSent: Int, enduranceRecv: Int) -> Unit)? = null
 
     private var pollsSent = 0
     private var responsesReceived = 0
@@ -35,8 +37,15 @@ internal class RateProbe(
     private var currentIntervalMs = 0L
     private var acceptingResponses = false
 
+    // Endurance mode
+    private var endurance = false
+    private var enduranceSent = 0
+    private var enduranceRecv = 0
+    private var enduranceStatsTimer: Runnable? = null
+
     private val stepDurationMs = 4000L
     private val drainMs = 600L
+    private val enduranceStatsIntervalMs = 2000L
 
     // Adaptive state
     private var fastestStable = 0L
@@ -44,36 +53,46 @@ internal class RateProbe(
     private var adaptiveDone = false
 
     val isActive: Boolean get() = active
+    val isEndurance: Boolean get() = endurance
 
     fun start(
         onProgress: (RateTestStep) -> Unit,
-        onComplete: (RateTestResult) -> Unit,
+        onAdaptiveComplete: (stableIntervalMs: Long) -> Unit,
+        onEnduranceStats: (enduranceSent: Int, enduranceRecv: Int) -> Unit,
     ) {
         if (active) return
         active = true
+        endurance = false
         this.onProgress = onProgress
-        this.onComplete = onComplete
+        this.onAdaptiveComplete = onAdaptiveComplete
+        this.onEnduranceStats = onEnduranceStats
         fastestStable = 0L
         lastUnstable = Long.MAX_VALUE
         adaptiveDone = false
-        handler.post { runStep(5L) } // start at 5ms
+        handler.post { runStep(5L) }
     }
 
     fun stop() {
         active = false
+        endurance = false
         acceptingResponses = false
         cancelStep()
         cancelStepEnd()
+        cancelEnduranceStats()
         onProgress = null
-        onComplete = null
+        onAdaptiveComplete = null
+        onEnduranceStats = null
     }
 
     fun onResponse(telemetry: RefloatTelemetry) {
         if (!active || !acceptingResponses) return
+        onTelemetry?.invoke(telemetry)
         val now = System.currentTimeMillis()
-        responsesReceived++
-        if (lastPollAt > 0) {
-            pollLatencies.add(now - lastPollAt)
+        if (endurance) {
+            enduranceRecv++
+        } else {
+            responsesReceived++
+            if (lastPollAt > 0) pollLatencies.add(now - lastPollAt)
         }
     }
 
@@ -98,7 +117,11 @@ internal class RateProbe(
         if (!active) return
         sendPayload(buildPollPayload())
         lastPollAt = System.currentTimeMillis()
-        pollsSent++
+        if (endurance) {
+            enduranceSent++
+        } else {
+            pollsSent++
+        }
         stepTimer = Runnable { schedulePolls() }
         handler.postDelayed(stepTimer!!, currentIntervalMs)
     }
@@ -107,6 +130,12 @@ internal class RateProbe(
         cancelStep()
         cancelStepEnd()
         acceptingResponses = false
+
+        if (adaptiveDone) {
+            // Enter endurance mode at the fastest stable interval
+            beginEndurance(fastestStable)
+            return
+        }
 
         val successRate = if (pollsSent == 0) 0.0 else responsesReceived.toDouble() / pollsSent.toDouble()
         val avgLatency = if (pollLatencies.isNotEmpty()) pollLatencies.average() else null
@@ -119,27 +148,19 @@ internal class RateProbe(
         )
         onProgress?.invoke(step)
 
-        if (adaptiveDone) {
-            finish()
-            return
-        }
-
         val stable = successRate >= 0.99
 
         if (stable) {
             fastestStable = currentIntervalMs
-            // Try half the interval
             val next = maxOf(currentIntervalMs / 2, 1L)
             if (next < currentIntervalMs) {
                 scheduleNextAdaptive(next)
             } else {
-                // Can't go lower — we're at the minimum
                 adaptiveDone = true
                 scheduleNextAdaptive(currentIntervalMs)
             }
         } else {
             lastUnstable = minOf(lastUnstable, currentIntervalMs)
-            // Unstable — narrow between fastestStable and current
             if (fastestStable > 0 && lastUnstable - fastestStable <= 2) {
                 adaptiveDone = true
                 scheduleNextAdaptive(fastestStable)
@@ -158,18 +179,40 @@ internal class RateProbe(
     private fun scheduleNextAdaptive(nextMs: Long) {
         handler.postDelayed({
             if (adaptiveDone) {
-                finish()
+                onAdaptiveComplete?.invoke(fastestStable)
+                beginEndurance(fastestStable)
             } else {
                 runStep(nextMs)
             }
         }, drainMs)
     }
 
-    private fun finish() {
-        active = false
-        cancelStep()
-        cancelStepEnd()
-        onComplete?.invoke(RateTestResult(emptyList(), 0, 0))
+    private fun beginEndurance(intervalMs: Long) {
+        if (!active) return
+        endurance = true
+        enduranceSent = 0
+        enduranceRecv = 0
+        currentIntervalMs = intervalMs
+        acceptingResponses = true
+
+        // Fire periodic endurance stats
+        enduranceStatsTimer = Runnable {
+            if (active && endurance) {
+                onEnduranceStats?.invoke(enduranceSent, enduranceRecv)
+                enduranceSent = 0
+                enduranceRecv = 0
+                handler.postDelayed(enduranceStatsTimer!!, enduranceStatsIntervalMs)
+            }
+        }
+        handler.postDelayed(enduranceStatsTimer!!, enduranceStatsIntervalMs)
+
+        // Start polling at the endurance rate
+        schedulePolls()
+    }
+
+    private fun cancelEnduranceStats() {
+        enduranceStatsTimer?.let { handler.removeCallbacks(it) }
+        enduranceStatsTimer = null
     }
 
     private fun cancelStep() {

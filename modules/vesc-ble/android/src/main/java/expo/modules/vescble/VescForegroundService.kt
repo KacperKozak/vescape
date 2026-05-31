@@ -1350,16 +1350,28 @@ class VescForegroundService : Service() {
         val probe = RateProbe(
             sendPayload = { payload -> sendPayloadWithRetry(payload, boardSession) },
             buildPollPayload = { pollPayload },
+            onTelemetry = { t ->
+                emitEvent?.invoke("onRateTestTelemetry", mapOf(
+                    "speed" to t.speed,
+                    "dutyCycle" to t.dutyCycle,
+                    "batteryVoltage" to t.batteryVoltage,
+                    "motorCurrent" to t.motorCurrent,
+                    "batteryCurrent" to t.batteryCurrent,
+                    "erpm" to t.erpm,
+                    "pitch" to t.pitch,
+                    "roll" to t.roll,
+                    "balancePitch" to t.balancePitch,
+                    "state" to t.state,
+                ))
+            },
         )
 
         probe.start(
             onProgress = { step ->
                 rateTestSteps.add(step)
-                val latencyMs = step.avgLatencyMs?.toInt() ?: 0
                 Log.d(VESC_SESSION_TAG,
                     "RateTest: interval=${step.intervalMs}ms sent=${step.pollsSent} " +
-                    "received=${step.responsesReceived} success=${(step.successRate * 100).toInt()}% " +
-                    "latency=${latencyMs}ms")
+                    "received=${step.responsesReceived} success=${(step.successRate * 100).toInt()}%")
                 emitEvent?.invoke("onRateTestProgress", mapOf(
                     "intervalMs" to step.intervalMs,
                     "pollsSent" to step.pollsSent,
@@ -1368,22 +1380,30 @@ class VescForegroundService : Service() {
                     "avgLatencyMs" to step.avgLatencyMs,
                 ))
             },
-            onComplete = { _ ->
+            onAdaptiveComplete = { stableMs ->
                 val result = RateProbe.computeResult(rateTestSteps)
                 Log.d(VESC_SESSION_TAG,
-                    "RateTest finished: recommended=${result.recommendedIntervalMs}ms " +
-                    "maxRate=${result.maxStableRate}hz")
-                rateProbe = null
-                rateTestCompleteCallback?.invoke(result)
-                rateTestCompleteCallback = null
-
-                // Resume normal polling
-                val session = boardConfig
-                val token = boardSession
-                if (session != null && token != null) {
-                    telemetryPipeline.armStaleWatchdog()
-                    pollingLoop.start(session, token, canId, directConnection)
-                }
+                    "RateTest adaptive done: interval=${stableMs}ms " +
+                    "maxRate=${result.maxStableRate}hz. Endurance running...")
+                emitEvent?.invoke("onRateTestResult", mapOf(
+                    "steps" to result.steps.map { step ->
+                        mapOf(
+                            "intervalMs" to step.intervalMs,
+                            "pollsSent" to step.pollsSent,
+                            "responsesReceived" to step.responsesReceived,
+                            "successRate" to step.successRate,
+                            "avgLatencyMs" to step.avgLatencyMs,
+                        )
+                    },
+                    "recommendedIntervalMs" to result.recommendedIntervalMs,
+                    "maxStableRate" to result.maxStableRate,
+                ))
+            },
+            onEnduranceStats = { sent, recv ->
+                emitEvent?.invoke("onRateTestEndurance", mapOf(
+                    "pollsSent" to sent,
+                    "responsesReceived" to recv,
+                ))
             },
         )
 
@@ -1394,7 +1414,13 @@ class VescForegroundService : Service() {
         rateProbe?.stop()
         rateProbe = null
         rateTestSteps.clear()
-        rateTestCompleteCallback = null
+        // Resume normal polling
+        val session = boardConfig
+        val token = boardSession
+        if (session != null && token != null) {
+            telemetryPipeline.armStaleWatchdog()
+            pollingLoop.start(session, token, canId, directConnection)
+        }
     }
 
     private fun armCanPingTimeout() {
