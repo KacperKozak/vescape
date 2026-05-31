@@ -3,13 +3,11 @@ import type { SharedValue } from 'react-native-reanimated'
 
 import { SingleGauge, type DualGaugeAlert } from '@/components/ui/charts/DualGauge'
 import type { TelemetryMetricConfig } from '@/constants/telemetry'
-import { deriveBatteryConfig, percentToVoltage } from '@/lib/battery'
 import {
   getHistoryMetricHotRange,
   getHistoryMetricKeyForControlId,
 } from '@/lib/history/metricColorScale'
 import { useAlertsStore } from '@/store/alertsStore'
-import { useBoardStore } from '@/store/boardStore'
 import { useSettingsStore } from '@/store/settingsStore'
 
 interface MetricDetailGaugeProps {
@@ -28,12 +26,6 @@ export function MetricDetailGauge({
   label = metric.label.toUpperCase(),
 }: MetricDetailGaugeProps) {
   const alertRules = useAlertsStore((s) => s.rules)
-  const board = useBoardStore((s) => s.boards.find((b) => b.id === s.activeBoardId))
-  const batteryConfig = useMemo(() => {
-    if (metric.controlId !== 'battery') return null
-    const derived = deriveBatteryConfig(board?.batteryConfig ?? null)
-    return derived.warning == null ? derived : null
-  }, [metric.controlId, board?.batteryConfig])
   const gradientsEnabled = useSettingsStore((s) => s.historyMetricGradientsEnabled)
   const hotRanges = useSettingsStore((s) => s.historyMetricHotRanges)
   const hotMetric = getHistoryMetricKeyForControlId(metric.controlId)
@@ -49,23 +41,10 @@ export function MetricDetailGauge({
             .filter((rule) => rule.enabled && rule.controlId === metric.controlId)
             .map((rule) => ({
               id: rule.id,
-              threshold: batteryConfig
-                ? percentToVoltage(
-                    rule.threshold,
-                    batteryConfig.minVoltage,
-                    batteryConfig.maxVoltage,
-                  )
-                : rule.threshold,
-              thresholdMax:
-                batteryConfig && rule.thresholdMax != null
-                  ? percentToVoltage(
-                      rule.thresholdMax,
-                      batteryConfig.minVoltage,
-                      batteryConfig.maxVoltage,
-                    )
-                  : rule.thresholdMax,
+              threshold: rule.threshold,
+              thresholdMax: rule.thresholdMax,
             })),
-    [alertRules, metric.controlId, batteryConfig],
+    [alertRules, metric.controlId],
   )
 
   return (

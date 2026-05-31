@@ -1,3 +1,3 @@
 export { BATTERY_CELL_PRESETS, DEFAULT_BATTERY_CONFIG, getBatteryPreset } from './data'
 
-export { deriveBatteryConfig, percentToVoltage } from './config'
+export { deriveBatteryConfig } from './config'

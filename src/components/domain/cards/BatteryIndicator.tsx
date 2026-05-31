@@ -26,23 +26,34 @@ export function BatteryIndicator({ compact, transparent, containerStyle }: Batte
     }),
   )
 
-  const { smoothVoltage, batterySeries } = useMemo(() => {
-    const series: SparklinePoint[] = batteryPercentHistory.map((p) => ({
+  const { smoothVoltage, batterySeries, voltageRange } = useMemo(() => {
+    const series: SparklinePoint[] = batteryVoltageHistory.map((p) => ({
       ts: p.ts,
       value: p.value,
     }))
-    return { smoothVoltage: batteryVoltageHistory.at(-1)?.value ?? null, batterySeries: series }
-  }, [batteryVoltageHistory, batteryPercentHistory])
+    const configured = deriveBatteryConfig(batteryConfig).warning == null
+    return {
+      smoothVoltage: batteryVoltageHistory.at(-1)?.value ?? null,
+      batterySeries: series,
+      voltageRange: configured
+        ? {
+            min: deriveBatteryConfig(batteryConfig!).minVoltage,
+            max: deriveBatteryConfig(batteryConfig!).maxVoltage,
+          }
+        : undefined,
+    }
+  }, [batteryVoltageHistory, batteryConfig])
 
   const voltage = smoothVoltage
   const percent = batteryPercentHistory.at(-1)?.value ?? null
-  const batteryConfigured = deriveBatteryConfig(batteryConfig).warning == null
+  const batteryConfigured = voltageRange != null
 
   return (
     <BatteryBar
       percent={batteryConfigured ? percent : null}
       voltage={voltage}
-      series={batteryConfigured ? batterySeries : undefined}
+      series={batterySeries}
+      range={voltageRange}
       windowMs={windowMs}
       hint={!batteryConfigured ? 'Set battery config in board settings' : undefined}
       compact={compact}

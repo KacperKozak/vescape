@@ -14,7 +14,8 @@ import { useLiveWindowMs } from '@/store/settingsStore'
 import { liveTelemetryRuntime } from '@/lib/telemetry/liveTelemetryRuntime'
 import { theme } from '@/constants/theme'
 
-const cfg = telemetry.battVoltage
+const battVoltageCfg = telemetry.battVoltage
+const battPercentCfg = { ...battVoltageCfg, unit: '%', decimals: 0, label: 'BATTERY' }
 
 export default function BatteryScreen() {
   const batteryVoltage = useLiveMetric(liveSelectors.batteryVoltage)
@@ -27,27 +28,39 @@ export default function BatteryScreen() {
     [board?.batteryConfig],
   )
 
-  const range = useMemo(() => {
-    if (battery.warning == null) {
-      return { y: { min: battery.minVoltage, max: battery.maxVoltage } }
-    }
-    return computeAutoRange(points, { minSpan: cfg.minSpan })
-  }, [battery, points])
+  const configured = battery.warning == null
+  const chartRange = useMemo(() => {
+    if (configured) return { y: { min: battery.minVoltage, max: battery.maxVoltage } }
+    return computeAutoRange(points, { minSpan: battVoltageCfg.minSpan })
+  }, [configured, battery, points])
 
   return (
-    <ControlDetailLayout title={cfg.label} controlId={cfg.controlId} unit={cfg.unit}>
-      {battery.warning != null ? (
+    <ControlDetailLayout
+      title={battVoltageCfg.label}
+      controlId={battVoltageCfg.controlId}
+      unit={battVoltageCfg.unit}
+    >
+      {!configured ? (
         <Text style={styles.unconfigured}>
           Set battery config in board settings for pack range.
         </Text>
       ) : null}
       <MetricDetailGauge
-        metric={cfg}
-        value={liveTelemetryRuntime.values.batteryVoltage}
-        min={range.y.min}
-        max={range.y.max}
+        metric={configured ? battPercentCfg : battVoltageCfg}
+        value={
+          configured
+            ? liveTelemetryRuntime.values.batteryPercent
+            : liveTelemetryRuntime.values.batteryVoltage
+        }
+        min={configured ? 0 : chartRange.y.min}
+        max={configured ? 100 : chartRange.y.max}
       />
-      <MetricDetailChart metric={cfg} points={points} range={range} windowMs={windowMs} />
+      <MetricDetailChart
+        metric={battVoltageCfg}
+        points={points}
+        range={chartRange}
+        windowMs={windowMs}
+      />
     </ControlDetailLayout>
   )
 }

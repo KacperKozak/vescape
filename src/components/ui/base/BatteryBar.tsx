@@ -15,6 +15,8 @@ interface Props {
   series?: SparklinePoint[]
   /** Fixed time window in ms for the sparkline x-axis. */
   windowMs?: number
+  /** Y-axis range for the sparkline. Defaults to 0–100%. */
+  range?: { min: number; max: number }
   /** Hint text shown when voltage limits aren't configured yet. */
   hint?: string
   compact?: boolean
@@ -35,6 +37,7 @@ export function BatteryBar({
   voltage,
   series,
   windowMs,
+  range = PCT_RANGE,
   hint,
   compact,
   transparent,
@@ -74,7 +77,7 @@ export function BatteryBar({
         points={series ?? []}
         color={color}
         height={compact ? 18 : 24}
-        range={PCT_RANGE}
+        range={range}
         windowMs={windowMs}
       />
       {hint && !series?.length ? <Text style={styles.hint}>{hint}</Text> : null}

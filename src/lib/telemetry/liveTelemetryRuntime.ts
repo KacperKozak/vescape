@@ -20,6 +20,7 @@ interface LiveTelemetryValues {
   motorCurrent: SharedValue<number | null>
   batteryCurrent: SharedValue<number | null>
   batteryVoltage: SharedValue<number | null>
+  batteryPercent: SharedValue<number | null>
   motorTemp: SharedValue<number | null>
   controllerTemp: SharedValue<number | null>
   lastPacketAt: SharedValue<number | null>
@@ -62,6 +63,7 @@ function createValues(): LiveTelemetryValues {
     motorCurrent: makeMutable<number | null>(null),
     batteryCurrent: makeMutable<number | null>(null),
     batteryVoltage: makeMutable<number | null>(null),
+    batteryPercent: makeMutable<number | null>(null),
     motorTemp: makeMutable<number | null>(null),
     controllerTemp: makeMutable<number | null>(null),
     lastPacketAt: makeMutable<number | null>(null),
@@ -75,6 +77,7 @@ function clearValues(values: LiveTelemetryValues): void {
   values.motorCurrent.value = null
   values.batteryCurrent.value = null
   values.batteryVoltage.value = null
+  values.batteryPercent.value = null
   values.motorTemp.value = null
   values.controllerTemp.value = null
   values.lastPacketAt.value = null
@@ -87,6 +90,7 @@ function updateValuesFromTelemetry(values: LiveTelemetryValues, telemetry: Telem
   values.motorCurrent.value = finite(telemetry.motorCurrent)
   values.batteryCurrent.value = finite(telemetry.batteryCurrent)
   values.batteryVoltage.value = finite(telemetry.batteryVoltage)
+  values.batteryPercent.value = finite(telemetry.batteryPercent)
   values.motorTemp.value =
     telemetry.tempMotor != null && telemetry.tempMotor > 0 ? telemetry.tempMotor : null
   values.controllerTemp.value = finite(telemetry.tempMosfet)
