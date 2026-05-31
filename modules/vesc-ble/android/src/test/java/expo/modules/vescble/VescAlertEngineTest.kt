@@ -3,6 +3,7 @@ package expo.modules.vescble
 import expo.modules.vescble.telemetry.AlertRuleEntity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -275,6 +276,126 @@ class VescAlertEngineTest {
         val fired = engine.evaluate(rules, telemetry(speed = 15.0, dutyCycle = 0.75))
         assertEquals(2, fired.size)
         assertEquals("duty", fired[0].ruleId)
+    }
+
+    // --- Battery hysteresis ---
+
+    private val presetBatteryConfig: Map<String, Any?> = mapOf(
+        "mode" to "preset",
+        "cellPresetId" to "molicel:21700:p45b",
+        "seriesCount" to 20,
+        "parallelCount" to 2,
+    )
+    // preset margin = 0.1 * 20 = 2.0V
+
+    private val manualBatteryConfig: Map<String, Any?> = mapOf(
+        "mode" to "manual",
+        "minVoltage" to 60.0,
+        "maxVoltage" to 84.0,
+    )
+    // manual margin = (84 - 60) * 0.03 = 0.72V
+
+    @Test
+    fun batteryHysteresisFiresOnce() {
+        val rules = listOf(rule(id = "bat", controlId = "battery", threshold = 70.0))
+        val fired = engine.evaluate(rules, telemetry(batteryVoltage = 68.0), presetBatteryConfig)
+        assertEquals(1, fired.size)
+        assertEquals("bat", fired[0].ruleId)
+    }
+
+    @Test
+    fun batteryHysteresisDoesNotRefireWhileDisarmed() {
+        val rules = listOf(rule(id = "bat", controlId = "battery", threshold = 70.0))
+        engine.evaluate(rules, telemetry(batteryVoltage = 68.0), presetBatteryConfig)
+        val second = engine.evaluate(rules, telemetry(batteryVoltage = 69.0), presetBatteryConfig)
+        assertTrue(second.isEmpty())
+    }
+
+    @Test
+    fun batteryHysteresisRearmsAfterVoltageRecovery() {
+        // margin = 2.0V, so re-arm threshold = 70.0 + 2.0 = 72.0
+        val rules = listOf(rule(id = "bat", controlId = "battery", threshold = 70.0))
+        engine.evaluate(rules, telemetry(batteryVoltage = 68.0), presetBatteryConfig)
+
+        // voltage recovers above threshold + margin
+        engine.evaluate(rules, telemetry(batteryVoltage = 73.0), presetBatteryConfig)
+
+        // drops again → should fire
+        val refired = engine.evaluate(rules, telemetry(batteryVoltage = 68.0), presetBatteryConfig)
+        assertEquals(1, refired.size)
+    }
+
+    @Test
+    fun batteryHysteresisNoRearmsBeforeMargin() {
+        // margin = 2.0V, threshold = 70.0, re-arm needs > 72.0
+        val rules = listOf(rule(id = "bat", controlId = "battery", threshold = 70.0))
+        engine.evaluate(rules, telemetry(batteryVoltage = 68.0), presetBatteryConfig)
+
+        // recovers above threshold but below threshold + margin (71.5 < 72.0)
+        engine.evaluate(rules, telemetry(batteryVoltage = 71.5), presetBatteryConfig)
+
+        val second = engine.evaluate(rules, telemetry(batteryVoltage = 68.0), presetBatteryConfig)
+        assertTrue(second.isEmpty())
+    }
+
+    @Test
+    fun batteryHysteresisResetClearsArmedState() {
+        val rules = listOf(rule(id = "bat", controlId = "battery", threshold = 70.0))
+        engine.evaluate(rules, telemetry(batteryVoltage = 68.0), presetBatteryConfig)
+        engine.resetDebounce()
+        val refired = engine.evaluate(rules, telemetry(batteryVoltage = 68.0), presetBatteryConfig)
+        assertEquals(1, refired.size)
+    }
+
+    @Test
+    fun batteryHysteresisMultipleThresholdsIndependent() {
+        val rules = listOf(
+            rule(id = "high", controlId = "battery", threshold = 70.0),
+            rule(id = "low", controlId = "battery", threshold = 65.0),
+        )
+        // only "high" fires
+        engine.evaluate(rules, telemetry(batteryVoltage = 68.0), presetBatteryConfig)
+
+        // "high" disarmed; "low" still armed and fires now
+        val second = engine.evaluate(rules, telemetry(batteryVoltage = 63.0), presetBatteryConfig)
+        assertEquals(1, second.size)
+        assertEquals("low", second[0].ruleId)
+    }
+
+    @Test
+    fun batteryHysteresisMissingConfigFallsBackToDebounce() {
+        val rules = listOf(rule(id = "bat", controlId = "battery", threshold = 70.0))
+        val first = engine.evaluate(rules, telemetry(batteryVoltage = 68.0))
+        val second = engine.evaluate(rules, telemetry(batteryVoltage = 68.0))
+        assertEquals(1, first.size)
+        assertTrue(second.isEmpty())
+    }
+
+    @Test
+    fun batteryGeigerUnaffectedByHysteresis() {
+        val rules = listOf(rule(id = "bat", controlId = "battery", threshold = 70.0, thresholdMax = 60.0))
+        val first = engine.evaluate(rules, telemetry(batteryVoltage = 65.0), presetBatteryConfig)
+        val second = engine.evaluate(rules, telemetry(batteryVoltage = 65.0), presetBatteryConfig)
+        assertEquals(1, first.size)
+        assertEquals(1, second.size)
+        assertNotNull(first[0].rangeDepth)
+    }
+
+    @Test
+    fun batteryHysteresisManualMargin() {
+        // margin = (84 - 60) * 0.03 = 0.72V, threshold = 70.0, re-arm needs > 70.72
+        val rules = listOf(rule(id = "bat", controlId = "battery", threshold = 70.0))
+        engine.evaluate(rules, telemetry(batteryVoltage = 68.0), manualBatteryConfig)
+
+        // recovers to 70.5 — below margin (70.72), stays disarmed
+        engine.evaluate(rules, telemetry(batteryVoltage = 70.5), manualBatteryConfig)
+        val stillDisarmed = engine.evaluate(rules, telemetry(batteryVoltage = 68.0), manualBatteryConfig)
+        assertTrue(stillDisarmed.isEmpty())
+
+        // recovers above 70.72
+        engine.evaluate(rules, telemetry(batteryVoltage = 71.0), manualBatteryConfig)
+        val rearmed = engine.evaluate(rules, telemetry(batteryVoltage = 68.0), manualBatteryConfig)
+        assertEquals(1, rearmed.size)
     }
 }
 

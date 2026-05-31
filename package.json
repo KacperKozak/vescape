@@ -1,6 +1,6 @@
 {
   "name": "vibe-wheel",
-  "version": "0.49.0",
+  "version": "0.50.0",
   "private": true,
   "workspaces": [
     "modules/*"
@@ -14,10 +14,10 @@
     "lint": "expo lint",
     "format": "oxfmt . '!.agents/skills/**'",
     "format:check": "oxfmt --check . '!.agents/skills/**'",
-    "copy:alert-sounds": "bun run scripts/copy-alert-sounds.ts",
+    "copy:shared": "bun run scripts/copy-shared.ts",
     "skills-check": "bun run scripts/skills-check.ts",
     "screenshot": "bun run scripts/screenshot.ts",
-    "test": "bun run test:bun && bun run test:android",
+    "test": "bun run copy:shared && bun run test:bun && bun run test:android",
     "test:bun": "bun test",
     "test:android": "export NODE_BINARY=$(command -v node); export PATH=$(dirname \"$NODE_BINARY\"):$PATH; cd android && ./gradlew :vesc-ble:testDebugUnitTest",
     "ts": "tsc --noEmit",

@@ -595,6 +595,7 @@ class VescForegroundService : Service() {
     override fun onCreate() {
         super.onCreate()
         instance = this
+        BatterySocEstimator.init(this)
         DiagnosticReporter.initialize(this)
         notificationController.createChannel()
     }
@@ -990,6 +991,7 @@ class VescForegroundService : Service() {
                 val batteryPct = BatterySocEstimator.estimateBatteryPercent(
                     parsed.batteryVoltage,
                     batteryConfigCache,
+                    parsed.batteryCurrent,
                 )
                 val firedAlerts = evaluateAlerts(parsed, batteryPct)
                 val eventMap = processed.eventMap
@@ -1458,7 +1460,7 @@ class VescForegroundService : Service() {
             phase = boardStatus,
             telemetry = telemetry,
             batteryPercent = telemetry?.let {
-                BatterySocEstimator.estimateBatteryPercent(it.batteryVoltage, batteryConfigCache)
+                BatterySocEstimator.estimateBatteryPercent(it.batteryVoltage, batteryConfigCache, it.batteryCurrent)
             },
             errorMessage = boardError,
         )
@@ -1616,7 +1618,7 @@ class VescForegroundService : Service() {
     }
 
     private fun evaluateAlerts(t: RefloatTelemetry, batteryPercent: Double?): List<Map<String, Any?>> {
-        val fired = alertEngine.evaluate(alertRules, t)
+        val fired = alertEngine.evaluate(alertRules, t, batteryConfigCache)
         val geiger = fired.filter { it.rangeDepth != null }
         val geigerRuleIds = geiger.mapTo(HashSet()) { it.ruleId }
         for (ruleId in activeGeigerRuleIds - geigerRuleIds) {

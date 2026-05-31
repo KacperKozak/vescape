@@ -43,6 +43,7 @@ await ensureCleanWorkingTree()
 await run('Pull latest', 'git pull')
 await run('TypeScript check', 'bun run ts')
 await run('Lint', 'bun run lint')
+await run('Copy shared files', 'bun run copy:shared')
 await run('Tests', 'bun run test')
 await run('Build release APK', 'bun run build:release')
 

@@ -1,6 +1,7 @@
 import { expect, test, describe } from 'bun:test'
 
 import { BATTERY_CELL_PRESETS, DEFAULT_BATTERY_CONFIG, getBatteryPreset } from './data'
+import cellPresetsJson from '../../../shared/data/cell-presets.json'
 
 describe('BATTERY_CELL_PRESETS', () => {
   test('has at least one preset', () => {
@@ -31,6 +32,31 @@ describe('BATTERY_CELL_PRESETS', () => {
       expect(preset.model).toBeTruthy()
       expect(preset.chemistry).toBeTruthy()
       expect(preset.capacityAh).toBeGreaterThan(0)
+    }
+  })
+
+  test('all curveIds reference existing curves', () => {
+    const curveIds = new Set(Object.keys(cellPresetsJson.curves))
+    for (const preset of BATTERY_CELL_PRESETS) {
+      expect(curveIds.has(preset.curveId)).toBe(true)
+    }
+  })
+
+  test('every curve is valid: monotonic, SOC 100→0', () => {
+    for (const [name, curve] of Object.entries(cellPresetsJson.curves)) {
+      expect(curve.length, `curve "${name}": need >=2 points`).toBeGreaterThanOrEqual(2)
+      expect(curve[0].soc, `curve "${name}": first SOC must be 100`).toBe(100)
+      expect(curve[curve.length - 1].soc, `curve "${name}": last SOC must be 0`).toBe(0)
+      for (let i = 1; i < curve.length; i++) {
+        expect(
+          curve[i].voltage,
+          `curve "${name}"[${i}]: voltage ${curve[i].voltage}V >= ${curve[i - 1].voltage}V`,
+        ).toBeLessThan(curve[i - 1].voltage)
+        expect(
+          curve[i].soc,
+          `curve "${name}"[${i}]: SOC ${curve[i].soc}% >= ${curve[i - 1].soc}%`,
+        ).toBeLessThan(curve[i - 1].soc)
+      }
     }
   })
 })
