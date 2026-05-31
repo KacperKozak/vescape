@@ -1,5 +1,5 @@
 import { copyFileSync, mkdirSync, readdirSync } from 'fs'
-import { extname, join, parse } from 'path'
+import { extname, join, parse, relative } from 'path'
 
 const ROOT = join(import.meta.dir, '..')
 const ANDROID_SRC = join(ROOT, 'modules', 'vesc-ble', 'android', 'src')
@@ -30,20 +30,23 @@ let totalCopied = 0
 
 for (const { src, dest, extensions, rename } of targets) {
   mkdirSync(dest, { recursive: true })
-  let copied = 0
+
+  const relSrc = relative(ROOT, src)
+  const relDest = relative(ROOT, dest)
+  console.log(`\n  ${relSrc} → ${relDest}`)
 
   for (const file of readdirSync(src)) {
     if (!extensions.has(extname(file))) continue
     const outputName = rename(file)
     copyFileSync(join(src, file), join(dest, outputName))
-    copied += 1
-    console.log(`${src}/${file} -> ${dest}/${outputName}`)
+    const renamed = outputName !== file ? ` (→ ${outputName})` : ''
+    console.log(`    ✓ ${file}${renamed}`)
+    totalCopied += 1
   }
-
-  console.log(`Copied ${copied} file(s) to ${dest}`)
-  totalCopied += copied
 }
 
 if (totalCopied === 0) {
   throw new Error('No shared files found to copy')
 }
+
+console.log(`\n✓ ${totalCopied} file${totalCopied !== 1 ? 's' : ''} copied`)
