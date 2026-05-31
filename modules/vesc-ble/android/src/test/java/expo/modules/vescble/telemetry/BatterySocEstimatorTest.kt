@@ -25,9 +25,10 @@ class BatterySocEstimatorTest {
             "parallelCount" to 2,
         )
 
+        // 84V = 4.2V/cell = 100%, 50V = 2.5V/cell = 0%, 76V = 3.8V/cell ≈ 55%
         assertEquals(100.0, BatterySocEstimator.estimateBatteryPercent(84.0, config)!!, 0.0)
-        assertEquals(0.0, BatterySocEstimator.estimateBatteryPercent(60.0, config)!!, 0.0)
-        assertEquals(60.0, BatterySocEstimator.estimateBatteryPercent(76.0, config)!!, 5.0)
+        assertEquals(0.0, BatterySocEstimator.estimateBatteryPercent(50.0, config)!!, 0.0)
+        assertEquals(55.0, BatterySocEstimator.estimateBatteryPercent(76.0, config)!!, 3.0)
     }
 
     @Test
@@ -118,7 +119,7 @@ class BatterySocEstimatorTest {
         )
 
         assertEquals(100.0, BatterySocEstimator.estimateBatteryPercent(84.0, config)!!, 0.0)
-        assertEquals(0.0, BatterySocEstimator.estimateBatteryPercent(60.0, config)!!, 0.0)
+        assertEquals(0.0, BatterySocEstimator.estimateBatteryPercent(50.0, config)!!, 0.0)
         assertNotNull(BatterySocEstimator.estimateBatteryPercent(76.0, config))
     }
 

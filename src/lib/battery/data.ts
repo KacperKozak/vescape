@@ -11,7 +11,8 @@ export const DEFAULT_BATTERY_CONFIG: BatteryPresetConfig = {
   parallelCount: 2,
 }
 
-export const BATTERY_CELL_PRESETS: BatteryCellPreset[] = cellPresetsJson as BatteryCellPreset[]
+export const BATTERY_CELL_PRESETS: BatteryCellPreset[] =
+  cellPresetsJson.cells as BatteryCellPreset[]
 
 const PRESET_BY_ID = new Map(BATTERY_CELL_PRESETS.map((preset) => [preset.id, preset]))
 

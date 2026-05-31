@@ -21,19 +21,6 @@ object BatterySocEstimator {
         NormPoint(0.0, 0.0),
     )
 
-    private val PRESET_CURVE: List<SocPoint> = listOf(
-        SocPoint(4.2, 100.0),
-        SocPoint(4.1, 92.0),
-        SocPoint(4.0, 83.0),
-        SocPoint(3.9, 72.0),
-        SocPoint(3.8, 60.0),
-        SocPoint(3.7, 46.0),
-        SocPoint(3.6, 32.0),
-        SocPoint(3.5, 18.0),
-        SocPoint(3.3, 7.0),
-        SocPoint(3.0, 0.0),
-    )
-
     data class CellPreset(
         val id: String,
         val socCurve: List<SocPoint>,
@@ -50,13 +37,27 @@ object BatterySocEstimator {
     }
 
     fun loadPresets(json: String) {
-        val arr = JSONArray(json)
+        val root = org.json.JSONObject(json)
+        val curvesObj = root.getJSONObject("curves")
+        val curves = mutableMapOf<String, List<SocPoint>>()
+        for (key in curvesObj.keys()) {
+            val arr = curvesObj.getJSONArray(key)
+            val points = mutableListOf<SocPoint>()
+            for (i in 0 until arr.length()) {
+                val pt = arr.getJSONObject(i)
+                points.add(SocPoint(pt.getDouble("voltage"), pt.getDouble("soc")))
+            }
+            curves[key] = points
+        }
+        val cellsArr = root.getJSONArray("cells")
         val map = mutableMapOf<String, CellPreset>()
-        for (i in 0 until arr.length()) {
-            val obj = arr.getJSONObject(i)
+        for (i in 0 until cellsArr.length()) {
+            val obj = cellsArr.getJSONObject(i)
             val id = obj.getString("id")
             val ir = obj.getInt("internalResistanceMilliOhm")
-            map[id] = CellPreset(id, PRESET_CURVE, ir)
+            val curveId = obj.getString("curveId")
+            val curve = curves[curveId] ?: continue
+            map[id] = CellPreset(id, curve, ir)
         }
         presetById = map
     }

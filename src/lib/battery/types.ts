@@ -2,6 +2,7 @@ import type { BatteryConfig, BatteryPresetConfig } from 'vesc-ble'
 
 export interface BatteryCellPreset {
   id: string
+  curveId: string
   formFactor: string
   brand: string
   model: string
