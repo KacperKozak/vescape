@@ -442,6 +442,7 @@ class VescForegroundService : Service() {
             stopPolling()
             gattClient.clear(markIntentional = false)
             telemetryPipeline.resetLastTelemetryAt()
+            directConnection = false
             boardStatus = BoardPhase.Reconnecting
             boardError = reason
             recordingCoordinator.recordState(
@@ -735,7 +736,7 @@ class VescForegroundService : Service() {
         sessionSequence += 1
         val session = BoardSession(id = sessionSequence)
         boardSession = session
-        canId = start.boardConfig.canId
+        canId = start.boardConfig.canId ?: loadCachedCanId(start.boardConfig.deviceId)
         directConnection = false
         boardError = null
         telemetry = null
@@ -941,6 +942,7 @@ class VescForegroundService : Service() {
                 if (payload.size > 1) {
                     canId = payload[1].toInt() and 0xff
                     telemetryPipeline.updateCanId(canId)
+                    persistCanId(boardConfig?.deviceId, canId)
                     emitState()
                     startPolling()
                     sendPayloadWithRetry(byteArrayOf(
@@ -1252,6 +1254,22 @@ class VescForegroundService : Service() {
     private fun stopPolling() {
         pollingLoop.stop()
         telemetryPipeline.cancelStaleWatchdog()
+    }
+
+    private fun persistCanId(deviceId: String?, discovered: Int?) {
+        val id = deviceId ?: return
+        val prefs = getSharedPreferences("vesc_can_cache", MODE_PRIVATE)
+        if (discovered != null) {
+            prefs.edit().putInt("can_id_$id", discovered).apply()
+        } else {
+            prefs.edit().remove("can_id_$id").apply()
+        }
+    }
+
+    private fun loadCachedCanId(deviceId: String?): Int? {
+        val id = deviceId ?: return null
+        val v = getSharedPreferences("vesc_can_cache", MODE_PRIVATE).getInt("can_id_$id", -1)
+        return if (v >= 0) v else null
     }
 
     private fun armCanPingTimeout() {

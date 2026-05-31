@@ -205,8 +205,8 @@ class ConnectionLogicTest {
     // --- Constants sanity ---
 
     @Test
-    fun `CAN ping timeout is 2 seconds`() {
-        assertEquals(2_000L, CAN_PING_TIMEOUT)
+    fun `CAN ping timeout is 3500ms`() {
+        assertEquals(3_500L, CAN_PING_TIMEOUT)
     }
 
     @Test
