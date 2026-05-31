@@ -60,6 +60,7 @@ export interface Board {
   isStarred: boolean
   createdAt: number
   batteryConfig: BatteryConfig | null
+  pollIntervalMs: number
 }
 
 export type BatteryConfig = BatteryPresetConfig | BatteryManualConfig

@@ -73,6 +73,7 @@ export const useBoardStore = create<BoardState & BoardActions>((set, get) => ({
       isStarred: isFirst,
       createdAt: Date.now(),
       batteryConfig: batteryConfig ?? DEFAULT_BATTERY_CONFIG,
+      pollIntervalMs: 100,
     }
     set((state) => ({
       boards: [...state.boards, board],

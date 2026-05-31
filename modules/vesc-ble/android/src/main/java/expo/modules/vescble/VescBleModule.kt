@@ -491,7 +491,7 @@ class VescBleModule : Module() {
         deviceId = bleId,
         deviceName = boardName,
         canId = null,
-        pollIntervalMs = 500L,
+        pollIntervalMs = (board["pollIntervalMs"] as? Number)?.toLong() ?: 100L,
         recordingEnabled = requestedDebugRecordingEnabled,
         telemetryRecordingEnabled = false,
         autoReconnect = true,

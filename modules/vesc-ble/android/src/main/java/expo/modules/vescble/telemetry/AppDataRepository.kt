@@ -385,6 +385,7 @@ fun BoardEntity.toMap(): Map<String, Any?> = mapOf(
   "isStarred" to isStarred,
   "createdAt" to createdAt,
   "batteryConfig" to batteryConfigJson?.toJsonMap(),
+  "pollIntervalMs" to pollIntervalMs,
 )
 
 fun AppSettings.toMap(): Map<String, Any?> = mapOf(
@@ -524,6 +525,7 @@ private fun Map<String, Any?>.toBoardEntity(): BoardEntity = BoardEntity(
   isStarred = getBoolean("isStarred"),
   createdAt = getLong("createdAt"),
   batteryConfigJson = encodeBatteryConfig(get("batteryConfig")),
+  pollIntervalMs = (get("pollIntervalMs") as? Number)?.toLong() ?: 100L,
 )
 
 internal fun encodeBatteryConfig(value: Any?): String? {

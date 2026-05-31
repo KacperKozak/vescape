@@ -92,6 +92,7 @@ test('updated battery config survives a store reload from native boards', async 
       seriesCount: 20,
       parallelCount: 2,
     },
+    pollIntervalMs: 100,
   }
   const batteryConfig = { mode: 'manual' as const, minVoltage: 58, maxVoltage: 82 }
 
