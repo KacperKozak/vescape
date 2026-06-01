@@ -17,7 +17,8 @@ internal object NotificationFormatter {
         val dutyRaw = if (abs(values.dutyCycle) <= 0.01) 0.0 else values.dutyCycle * 100.0
         val duty = telemetryMetricByControlId["duty"]!!.formatValueWithUnit(dutyRaw)
         val battery = formatBatterySegment(values.batteryVoltage, batteryPercent)
-        return "$speed$SEP$duty$SEP$battery"
+        val latency = if (values.avgLatency != null) "${values.avgLatency}ms" else ""
+        return listOf(speed, duty, battery, latency).filter { it.isNotEmpty() }.joinToString(SEP)
     }
 
     fun formatShortCriticalText(phase: BoardPhase, values: RefloatTelemetry?, batteryPercent: Double?): String =

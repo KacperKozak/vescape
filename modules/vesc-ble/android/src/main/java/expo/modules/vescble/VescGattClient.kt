@@ -74,6 +74,8 @@ internal class VescGattClient(
                     listener.onGattConnected()
                     val requested = gatt.requestMtu(517)
                     Log.d(VESC_SESSION_TAG, "gatt requestMtu requested=$requested")
+                    val priorityRequested = gatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
+                    Log.d(VESC_SESSION_TAG, "gatt requestConnectionPriority HIGH=$priorityRequested")
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
                     val wasIntentional = intentionalDisconnect

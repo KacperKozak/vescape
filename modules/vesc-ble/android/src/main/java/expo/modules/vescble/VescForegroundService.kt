@@ -62,7 +62,6 @@ private const val ACTION_STOP_GPS_MONITORING = "expo.modules.vescble.ACTION_STOP
 
 private const val LAST_GPS_PERSIST_INTERVAL_MS = 30_000L
 private const val TELEMETRY_STALE_MS = 4_000L
-private const val TELEMETRY_COLD_PATH_INTERVAL_MS = 200L
 private const val GATT_CONNECT_TIMEOUT_MS = 6_000L
 private const val GATT_READY_TIMEOUT_MS = 6_000L
 
@@ -578,8 +577,6 @@ class VescForegroundService : Service() {
     private var latestHotTelemetry: RefloatTelemetry? = null
     private var latestHotBatteryPercent: Double? = null
     private var latestHotFiredAlerts: List<Map<String, Any?>> = emptyList()
-    private var lastColdTelemetryAt: Long = 0L
-    private var coldPathHandle: Cancellable? = null
     private var canId: Int? = null
     private var directConnection = false
     private var fwVersionString: String? = null
@@ -1016,6 +1013,7 @@ class VescForegroundService : Service() {
                 latestHotTelemetry = patched
                 latestHotBatteryPercent = batteryPct
                 latestHotFiredAlerts = firedAlerts
+                emitHotPathTelemetry(patched, batteryPct, firedAlerts)
             }
         }
     }
@@ -1259,12 +1257,10 @@ class VescForegroundService : Service() {
         val sessionToken = boardSession ?: return
         telemetryPipeline.armStaleWatchdog()
         pollingLoop.start(session, sessionToken, canId, directConnection)
-        if (isPollingCapable) startColdPathTimer(sessionToken)
     }
 
     private fun stopPolling() {
         pollingLoop.stop()
-        cancelColdPathTimer()
         telemetryPipeline.cancelStaleWatchdog()
     }
 
@@ -1288,36 +1284,17 @@ class VescForegroundService : Service() {
         }
     }
 
-    private fun startColdPathTimer(session: BoardSession) {
-        cancelColdPathTimer()
-        fun scheduleNext() {
-            coldPathHandle = scheduler.postDelayedForSession(
-                session,
-                TELEMETRY_COLD_PATH_INTERVAL_MS,
-                ::isCurrentBoardSession,
-            ) {
-                emitColdPathTelemetry(session)
-                scheduleNext()
-            }
-        }
-        scheduleNext()
-    }
-
-    private fun cancelColdPathTimer() {
-        coldPathHandle?.cancel()
-        coldPathHandle = null
-    }
-
-    private fun emitColdPathTelemetry(session: BoardSession) {
-        val parsed = latestHotTelemetry ?: return
-        if (parsed.lastPacketAt == lastColdTelemetryAt) return
+    private fun emitHotPathTelemetry(
+        parsed: RefloatTelemetry,
+        batteryPct: Double?,
+        firedAlerts: List<Map<String, Any?>>,
+    ) {
+        val session = boardSession ?: return
         val processed = telemetryPipeline.process(parsed, session) ?: return
-        lastColdTelemetryAt = parsed.lastPacketAt
         val eventMap = processed.eventMap
-        val firedAlerts = latestHotFiredAlerts
         if (firedAlerts.isNotEmpty()) eventMap["firedAlerts"] = firedAlerts
         eventMap["generation"] = currentSessionId
-        eventMap["batteryPercent"] = latestHotBatteryPercent
+        eventMap["batteryPercent"] = batteryPct
         val emitMap = if (processed.metricExclusionUpdates.isNotEmpty()) {
             eventMap + mapOf("metricExclusionUpdates" to processed.metricExclusionUpdates)
         } else eventMap
@@ -1468,7 +1445,6 @@ class VescForegroundService : Service() {
         latestHotTelemetry = null
         latestHotBatteryPercent = null
         latestHotFiredAlerts = emptyList()
-        lastColdTelemetryAt = 0L
         boardSession?.invalidate()
         boardSession = null
         telemetryPipeline.endSession()

@@ -174,17 +174,10 @@ function cleanupBleStoreModule(): void {
 }
 
 function applyLiveState(state: LiveStateEvent, set: BleSet): void {
-  const hasRecentSamples =
-    state.board.recentTelemetry.length > 0 || state.gps.recentLocations.length > 0
-  if (hasRecentSamples) {
-    clearLiveHistoryPublishTimer()
-  }
-  if (!hasRecentSamples) {
+  // TODO(telemetry-queue): re-enable seeding after measuring pure bridge throughput
+  if (!state.board.recentTelemetry.length && !state.gps.recentLocations.length) {
     liveTelemetryRuntime.syncConnectionSeq(state.board.connectionSeq)
   }
-  const live = hasRecentSamples
-    ? liveTelemetryRuntime.seedFromLiveState(state)
-    : liveTelemetryRuntime.getSnapshot()
 
   set({
     status: state.board.phase,
@@ -197,14 +190,6 @@ function applyLiveState(state: LiveStateEvent, set: BleSet): void {
     connectedId: state.board.connectedBoardId ?? state.board.bleId,
     error: state.board.error ?? state.gps.error ?? state.scan.error ?? undefined,
     telemetryRecordingEnabled: state.recording.enabled,
-    ...(hasRecentSamples
-      ? {
-          liveLocationHistory: live.liveLocationHistory,
-          latestApproximateLocation: live.latestApproximateLocation,
-          liveStatus: live.liveStatus,
-          metricVersion: liveTelemetryRuntime.getVersion(),
-        }
-      : {}),
   })
 }
 
@@ -243,10 +228,9 @@ function installLiveSubscriptions(set: BleSet): void {
     telemetrySub = addTelemetryListener((telemetry) => {
       const accepted = liveTelemetryRuntime.ingestTelemetry(telemetry)
       if (!accepted) return
-      set({
-        lastTelemetryAt: telemetry.lastPacketAt,
-      })
-      scheduleLiveHistoryPublish(set)
+      // TODO(telemetry-queue): re-enable after measuring pure bridge throughput
+      // set({ lastTelemetryAt: telemetry.lastPacketAt })
+      // scheduleLiveHistoryPublish(set)
     })
   }
   if (!locationSub) {

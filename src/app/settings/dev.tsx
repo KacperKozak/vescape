@@ -5,6 +5,7 @@ import {
   ChartLineUpIcon,
   CompassIcon,
   ListIcon,
+  PulseIcon,
   SpeakerHighIcon,
   SwatchesIcon,
   ToolboxIcon,
@@ -40,6 +41,12 @@ const devPages = [
     hint: 'Live map heading, GPS, and fallback evidence',
     route: routes.settingsNavigationDiagnostic,
     icon: CompassIcon,
+  },
+  {
+    label: 'Telemetry timing',
+    hint: 'Message rate, gaps, batch detection',
+    route: routes.settingsTelemetryTiming,
+    icon: PulseIcon,
   },
   {
     label: 'Event log',

@@ -16,8 +16,6 @@ internal class PollingLoop(
     private var pollHandle: Cancellable? = null
     private var lastPollAt = 0L
     private var pollCount = 0
-    private val rttHistory = ArrayDeque<Long>()
-
     val isActive: Boolean
         get() = pollHandle != null
 
@@ -57,9 +55,7 @@ internal class PollingLoop(
 
     fun updateLatency(now: Long): Int? {
         if (lastPollAt <= 0) return null
-        rttHistory.addLast(max(0, now - lastPollAt))
-        while (rttHistory.size > 5) rttHistory.removeFirst()
-        return rttHistory.average().roundToInt()
+        return max(0, now - lastPollAt).toInt()
     }
 
     private fun nextMode(mode2EveryN: Int): Byte {

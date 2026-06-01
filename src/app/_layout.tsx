@@ -51,6 +51,10 @@ export default function RootLayout() {
             name={stackScreens.settingsPrivacyZones}
             options={{ title: 'Privacy Zones' }}
           />
+          <Stack.Screen
+            name={stackScreens.settingsTelemetryTiming}
+            options={{ title: 'Telemetry Timing' }}
+          />
           <Stack.Screen name={stackScreens.tune} options={{ title: 'Tune' }} />
           <Stack.Screen name={stackScreens.tuneHistory} options={{ title: 'Tune History' }} />
           <Stack.Screen name={stackScreens.addBoardScan} options={{ title: 'Pair Board' }} />
