@@ -111,6 +111,25 @@ export interface PrivacyZone {
   updatedAt: number
 }
 
+export type MapPointKind =
+  | 'direction'
+  | 'drop'
+  | 'bonk'
+  | 'nose_slide'
+  | 'trail_entry'
+  | 'viewpoint'
+  | 'charging'
+  | 'charging_food'
+
+export interface MapPoint {
+  id: string
+  kind: MapPointKind
+  latitude: number
+  longitude: number
+  createdAt: number
+  updatedAt: number
+}
+
 export interface TelemetryEvent {
   generation?: number
   location?: LocationEvent | null
@@ -546,6 +565,10 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
   upsertPrivacyZone(zone: PrivacyZone): Promise<void>
   setPrivacyZoneEnabled(id: string, enabled: boolean): Promise<void>
   deletePrivacyZone(id: string): Promise<void>
+  getMapPoints(): Promise<MapPoint[]>
+  upsertMapPoint(point: MapPoint): Promise<void>
+  replaceDirectionMapPoint(point: MapPoint): Promise<void>
+  deleteMapPoint(id: string): Promise<void>
   getSettings(): Promise<AppSettings>
   updateSetting(
     key: string,
@@ -849,6 +872,22 @@ export async function setPrivacyZoneEnabled(id: string, enabled: boolean): Promi
 
 export async function deletePrivacyZone(id: string): Promise<void> {
   return native.deletePrivacyZone(id)
+}
+
+export async function getMapPoints(): Promise<MapPoint[]> {
+  return native.getMapPoints()
+}
+
+export async function upsertMapPoint(point: MapPoint): Promise<void> {
+  return native.upsertMapPoint(point)
+}
+
+export async function replaceDirectionMapPoint(point: MapPoint): Promise<void> {
+  return native.replaceDirectionMapPoint(point)
+}
+
+export async function deleteMapPoint(id: string): Promise<void> {
+  return native.deleteMapPoint(id)
 }
 
 export async function getSettings(): Promise<AppSettings> {

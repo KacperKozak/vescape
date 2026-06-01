@@ -8,7 +8,7 @@
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
-    "android": "export NODE_BINARY=$(command -v node); export PATH=$(dirname \"$NODE_BINARY\"):$PATH; REACT_NATIVE_PACKAGER_HOSTNAME=localhost expo run:android",
+    "android": "bun run copy:shared && export NODE_BINARY=$(command -v node); export PATH=$(dirname \"$NODE_BINARY\"):$PATH; REACT_NATIVE_PACKAGER_HOSTNAME=localhost expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",
@@ -21,7 +21,7 @@
     "test:bun": "bun test",
     "test:android": "export NODE_BINARY=$(command -v node); export PATH=$(dirname \"$NODE_BINARY\"):$PATH; cd android && ./gradlew :vesc-ble:testDebugUnitTest",
     "ts": "tsc --noEmit",
-    "build:release": "export NODE_BINARY=$(command -v node); export PATH=$(dirname \"$NODE_BINARY\"):$PATH; cd android && ./gradlew assembleRelease",
+    "build:release": "bun run copy:shared && export NODE_BINARY=$(command -v node); export PATH=$(dirname \"$NODE_BINARY\"):$PATH; cd android && ./gradlew assembleRelease",
     "release": "bun run scripts/release.ts",
     "release:fix": "bun run scripts/release.ts --patch",
     "check": "bun run ts && bun run lint && bun run format:check && bun run knip && bun run test",

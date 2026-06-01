@@ -106,13 +106,22 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
       removeSelectedSession: s.removeSelectedSession,
     })),
   )
-  const { targetLocation, setTargetLocation, clearTargetLocation } = useMapStore(
+  const { mapPoints, loadMapPoints, replaceDirectionPoint, clearDirectionPoint } = useMapStore(
     useShallow((s) => ({
-      targetLocation: s.targetLocation,
-      setTargetLocation: s.setTargetLocation,
-      clearTargetLocation: s.clearTargetLocation,
+      mapPoints: s.mapPoints,
+      loadMapPoints: s.load,
+      replaceDirectionPoint: s.replaceDirectionPoint,
+      clearDirectionPoint: s.clearDirectionPoint,
     })),
   )
+  const directionPoint = useMemo(
+    () => mapPoints.find((point) => point.kind === 'direction') ?? null,
+    [mapPoints],
+  )
+
+  useEffect(() => {
+    void loadMapPoints()
+  }, [loadMapPoints])
 
   useEffect(() => {
     setSeekTimeMs(null)
@@ -314,9 +323,9 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
     rotationLocked,
     perspectiveEnabled,
     setPerspectiveEnabled,
-    targetLocation,
-    setTargetLocation,
-    clearTargetLocation,
+    directionPoint,
+    replaceDirectionPoint,
+    clearDirectionPoint,
     sessions,
     selectedSession,
     sessionSamples,

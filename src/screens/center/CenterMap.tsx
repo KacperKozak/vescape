@@ -29,7 +29,7 @@ import {
   type ElementRef,
 } from 'react'
 import { Animated, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
-import type { LocationEvent } from 'vesc-ble'
+import type { LocationEvent, MapPoint } from 'vesc-ble'
 
 import { InfoModal } from '@/components/ui/modals/InfoModal'
 import { MapPin } from '@/components/domain/map/MapPin'
@@ -121,8 +121,8 @@ interface MapLayout {
   height: number
 }
 
-interface OffscreenGpsIndicatorState {
-  id: 'gps' | 'target'
+interface OffscreenMapIndicatorState {
+  id: 'gps' | 'direction'
   x: number
   y: number
   angleDeg: number
@@ -191,8 +191,8 @@ function smoothHeadingStep(current: number, target: number, elapsedMs: number): 
 }
 
 function nearlySameIndicator(
-  current: OffscreenGpsIndicatorState[],
-  next: OffscreenGpsIndicatorState[],
+  current: OffscreenMapIndicatorState[],
+  next: OffscreenMapIndicatorState[],
 ) {
   if (current.length !== next.length) return false
   return next.every((nextIndicator, index) => {
@@ -207,10 +207,10 @@ function nearlySameIndicator(
 }
 
 function clampedEdgeIndicator(
-  id: OffscreenGpsIndicatorState['id'],
+  id: OffscreenMapIndicatorState['id'],
   point: { x: number; y: number },
   layout: MapLayout,
-): OffscreenGpsIndicatorState | null {
+): OffscreenMapIndicatorState | null {
   if (point.x >= 0 && point.x <= layout.width && point.y >= 0 && point.y <= layout.height) {
     return null
   }
@@ -304,11 +304,11 @@ function buildHistoryMarkerMessage(selection: SelectedHistoryMarker): string {
   return lines.join('\n')
 }
 
-function OffscreenGpsIndicator({
+function OffscreenMapIndicator({
   indicator,
   onPress,
 }: {
-  indicator: OffscreenGpsIndicatorState
+  indicator: OffscreenMapIndicatorState
   onPress: () => void
 }) {
   const IconComponent = indicator.id === 'gps' ? CrosshairSimpleIcon : MapPinIcon
@@ -318,28 +318,28 @@ function OffscreenGpsIndicator({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={
-        indicator.id === 'gps' ? 'Recenter map on current position' : 'Clear target point'
+        indicator.id === 'gps' ? 'Recenter map on current position' : 'Show direction point'
       }
       onPress={onPress}
       style={({ pressed }) => [
-        styles.offscreenGpsIndicator,
+        styles.offscreenMapIndicator,
         {
           left: indicator.x - OFFSCREEN_GPS_INDICATOR_SIZE / 2,
           top: indicator.y - OFFSCREEN_GPS_INDICATOR_SIZE / 2,
         },
-        pressed && styles.offscreenGpsIndicatorPressed,
+        pressed && styles.offscreenMapIndicatorPressed,
       ]}
     >
       <View
         pointerEvents="none"
         style={[
-          styles.offscreenGpsArrowOrbit,
+          styles.offscreenMapArrowOrbit,
           { transform: [{ rotate: `${indicator.angleDeg}deg` }] },
         ]}
       >
         <ArrowUpIcon size={22} color={color} weight="bold" />
       </View>
-      <View pointerEvents="none" style={[styles.offscreenGpsIcon, { borderColor }]}>
+      <View pointerEvents="none" style={[styles.offscreenMapIcon, { borderColor }]}>
         <IconComponent size={24} color={color} weight="bold" />
       </View>
     </Pressable>
@@ -369,8 +369,8 @@ interface CenterMapLayersProps {
   activeHistoryMapMetric: HistoryMetricKey
   rideMarkers: HistoryMarker[]
   rideGpsSamples: HistoryGpsSample[]
-  targetLocation: { latitude: number; longitude: number } | null
-  onClearTarget: () => void
+  directionPoint: MapPoint | null
+  onClearDirectionPoint: () => void
   onSelectMarker: (selection: SelectedHistoryMarker) => void
 }
 
@@ -826,8 +826,8 @@ function CenterMapLayers({
   activeHistoryMapMetric,
   rideMarkers,
   rideGpsSamples,
-  targetLocation,
-  onClearTarget,
+  directionPoint,
+  onClearDirectionPoint,
   onSelectMarker,
 }: CenterMapLayersProps) {
   return (
@@ -878,12 +878,12 @@ function CenterMapLayers({
           gpsBearingDeg={gpsBearingDeg}
         />
       )}
-      {targetLocation && !historyActive && (
+      {directionPoint && !historyActive && (
         <MapPin
-          id="center-target-position"
-          coordinate={[targetLocation.longitude, targetLocation.latitude]}
+          id="center-direction-position"
+          coordinate={[directionPoint.longitude, directionPoint.latitude]}
           color={DESTINATION_POINT_COLOR}
-          onSelected={onClearTarget}
+          onSelected={onClearDirectionPoint}
         />
       )}
     </>
@@ -907,8 +907,8 @@ interface CenterMapProps {
   onHeadingChange: (heading: number) => void
   onLongPressTarget: (target: { latitude: number; longitude: number }) => void
   onMapInteraction: () => void
-  targetLocation: { latitude: number; longitude: number } | null
-  onClearTarget: () => void
+  directionPoint: MapPoint | null
+  onClearDirectionPoint: () => void
   weatherActive: boolean
   seekPosition: HistoryGpsSample | null
   historyPreview:
@@ -936,9 +936,9 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
     onHeadingChange,
     onLongPressTarget,
     onMapInteraction,
-    targetLocation,
+    directionPoint,
     weatherActive,
-    onClearTarget,
+    onClearDirectionPoint,
     seekPosition,
     historyPreview,
   },
@@ -958,8 +958,8 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
   const [cameraHeading, setCameraHeading] = useState(0)
   const [initialApproximateFix, setInitialApproximateFix] = useState<LocationEvent | null>(null)
   const [mapLayout, setMapLayout] = useState<MapLayout>({ width: 0, height: 0 })
-  const [offscreenGpsIndicators, setOffscreenGpsIndicators] = useState<
-    OffscreenGpsIndicatorState[]
+  const [offscreenMapIndicators, setOffscreenMapIndicators] = useState<
+    OffscreenMapIndicatorState[]
   >([])
 
   const gpsFix = liveLocations.at(-1) ?? null
@@ -1002,7 +1002,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
     ],
   )
   const { cameraFix, accuracyFix, accuracyRadiusM, directionBearingDeg } = gpsPresentation
-  const offscreenGpsCoordinate = useMemo(
+  const offscreenMapGpsCoordinate = useMemo(
     () =>
       usableCoordinate(gpsFix) ??
       usableCoordinate(latestApproximateLocation) ??
@@ -1115,40 +1115,40 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
     )
   }, [])
 
-  const updateOffscreenGpsIndicator = useCallback(() => {
+  const updateOffscreenMapIndicators = useCallback(() => {
     const camera = currentCameraRef.current
     const mapView = mapViewRef.current
     if (
       mapView == null ||
       historyActive ||
-      (offscreenGpsCoordinate == null && targetLocation == null) ||
+      (offscreenMapGpsCoordinate == null && directionPoint == null) ||
       mapLayout.width <= 0 ||
       mapLayout.height <= 0
     ) {
       offscreenProjectionRequestRef.current += 1
-      setOffscreenGpsIndicators((current) => (current.length === 0 ? current : []))
+      setOffscreenMapIndicators((current) => (current.length === 0 ? current : []))
       return
     }
 
     const requestId = offscreenProjectionRequestRef.current + 1
     offscreenProjectionRequestRef.current = requestId
     const trackedPoints = [
-      ...(offscreenGpsCoordinate
+      ...(offscreenMapGpsCoordinate
         ? [
             {
               id: 'gps' as const,
-              coordinate: [offscreenGpsCoordinate.longitude, offscreenGpsCoordinate.latitude] as [
-                number,
-                number,
-              ],
+              coordinate: [
+                offscreenMapGpsCoordinate.longitude,
+                offscreenMapGpsCoordinate.latitude,
+              ] as [number, number],
             },
           ]
         : []),
-      ...(targetLocation
+      ...(directionPoint
         ? [
             {
-              id: 'target' as const,
-              coordinate: [targetLocation.longitude, targetLocation.latitude] as [number, number],
+              id: 'direction' as const,
+              coordinate: [directionPoint.longitude, directionPoint.latitude] as [number, number],
             },
           ]
         : []),
@@ -1185,29 +1185,29 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
           )
           return [positionedIndicator ?? detectedIndicator]
         })
-        setOffscreenGpsIndicators((current) =>
+        setOffscreenMapIndicators((current) =>
           nearlySameIndicator(current, next) ? current : next,
         )
       })
       .catch(() => {
         if (offscreenProjectionRequestRef.current !== requestId) return
-        setOffscreenGpsIndicators((current) => (current.length === 0 ? current : []))
+        setOffscreenMapIndicators((current) => (current.length === 0 ? current : []))
       })
-  }, [currentCameraRef, historyActive, mapLayout, offscreenGpsCoordinate, targetLocation])
+  }, [currentCameraRef, directionPoint, historyActive, mapLayout, offscreenMapGpsCoordinate])
 
   const handleOffscreenIndicatorPress = useCallback(
-    (indicator: OffscreenGpsIndicatorState) => {
+    (indicator: OffscreenMapIndicatorState) => {
       onMapInteraction()
       if (indicator.id === 'gps') {
         recenterLive({ resetPadding: true })
         return
       }
-      if (!targetLocation) return
+      if (!directionPoint) return
 
       setFollowGps(false)
       const currentCamera = currentCameraRef.current
       cameraRef.current?.setCamera({
-        centerCoordinate: [targetLocation.longitude, targetLocation.latitude],
+        centerCoordinate: [directionPoint.longitude, directionPoint.latitude],
         zoomLevel: currentCamera?.zoomLevel,
         heading: currentCamera?.heading,
         pitch: currentCamera?.pitch,
@@ -1215,7 +1215,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
         animationMode: 'easeTo',
       })
     },
-    [cameraRef, currentCameraRef, onMapInteraction, recenterLive, setFollowGps, targetLocation],
+    [cameraRef, currentCameraRef, directionPoint, onMapInteraction, recenterLive, setFollowGps],
   )
 
   useEffect(() => {
@@ -1333,11 +1333,12 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
 
   const handleLongPress = useCallback(
     (feature: { geometry: { coordinates: number[] } }) => {
+      if (historyActive) return
       onMapInteraction()
       const [longitude, latitude] = feature.geometry.coordinates
       onLongPressTarget({ latitude, longitude })
     },
-    [onLongPressTarget, onMapInteraction],
+    [historyActive, onLongPressTarget, onMapInteraction],
   )
 
   const handleCameraChanged = useCallback(
@@ -1397,7 +1398,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
       )
       onHeadingChange(state.properties.heading)
       setShowRadar(state.properties.zoom <= RADAR_MAX_ZOOM)
-      updateOffscreenGpsIndicator()
+      updateOffscreenMapIndicators()
     },
     [
       cameraRef,
@@ -1414,14 +1415,14 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
       phoneHeadingMode,
       setFollowGps,
       setFollowZoomLevel,
-      updateOffscreenGpsIndicator,
+      updateOffscreenMapIndicators,
     ],
   )
 
   useEffect(() => {
-    const frame = requestAnimationFrame(updateOffscreenGpsIndicator)
+    const frame = requestAnimationFrame(updateOffscreenMapIndicators)
     return () => cancelAnimationFrame(frame)
-  }, [updateOffscreenGpsIndicator])
+  }, [updateOffscreenMapIndicators])
 
   if (!MAPBOX_ACCESS_TOKEN) {
     return (
@@ -1487,8 +1488,8 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
           activeHistoryMapMetric={activeHistoryMapMetric}
           rideMarkers={rideMarkers}
           rideGpsSamples={rideGpsSamples}
-          targetLocation={targetLocation}
-          onClearTarget={onClearTarget}
+          directionPoint={directionPoint}
+          onClearDirectionPoint={onClearDirectionPoint}
           onSelectMarker={setSelectedHistoryMarker}
         />
       </Mapbox.MapView>
@@ -1509,8 +1510,8 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
         </Text>
       ) : null}
       {mode === 'telemetry' ? <MapVignette mode={mode} idPrefix="telemetry-map-vignette" /> : null}
-      {offscreenGpsIndicators.map((indicator) => (
-        <OffscreenGpsIndicator
+      {offscreenMapIndicators.map((indicator) => (
+        <OffscreenMapIndicator
           key={indicator.id}
           indicator={indicator}
           onPress={() => handleOffscreenIndicatorPress(indicator)}
@@ -1531,7 +1532,7 @@ const styles = StyleSheet.create({
   map: {
     ...StyleSheet.absoluteFill,
   },
-  offscreenGpsIndicator: {
+  offscreenMapIndicator: {
     position: 'absolute',
     width: OFFSCREEN_GPS_INDICATOR_SIZE,
     height: OFFSCREEN_GPS_INDICATOR_SIZE,
@@ -1539,10 +1540,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  offscreenGpsIndicatorPressed: {
+  offscreenMapIndicatorPressed: {
     opacity: 0.55,
   },
-  offscreenGpsIcon: {
+  offscreenMapIcon: {
     width: 34,
     height: 34,
     borderRadius: 17,
@@ -1557,7 +1558,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 3 },
     elevation: 5,
   },
-  offscreenGpsArrowOrbit: {
+  offscreenMapArrowOrbit: {
     position: 'absolute',
     width: OFFSCREEN_GPS_INDICATOR_SIZE,
     height: OFFSCREEN_GPS_INDICATOR_SIZE,

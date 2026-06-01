@@ -329,6 +329,18 @@ class VescBleModule : Module() {
       AppDataRepository.get(appCtx).deletePrivacyZone(id)
       reloadPrivacyZonesIntoRecorder(appCtx)
     }
+    AsyncFunction("getMapPoints") {
+      runBlocking { AppDataRepository.get(context.applicationContext).getMapPoints() }
+    }
+    AsyncFunction("upsertMapPoint") Coroutine { point: Map<String, Any?> ->
+      AppDataRepository.get(context.applicationContext).upsertMapPoint(point)
+    }
+    AsyncFunction("replaceDirectionMapPoint") Coroutine { point: Map<String, Any?> ->
+      AppDataRepository.get(context.applicationContext).replaceDirectionMapPoint(point)
+    }
+    AsyncFunction("deleteMapPoint") Coroutine { id: String ->
+      AppDataRepository.get(context.applicationContext).deleteMapPoint(id)
+    }
     AsyncFunction("getSettings") {
       runBlocking { AppDataRepository.get(context.applicationContext).getSettings() }
     }

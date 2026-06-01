@@ -48,6 +48,10 @@ _Avoid_: Playback, logs
 A map-visible point in Ride History that explains a ride boundary, connection loss, interruption, or notable recording condition.
 _Avoid_: Telemetry marker, debug marker, log point
 
+**Map Point**:
+A user-authored map-visible location that is independent from Ride Recording and Ride History. A Map Point may describe a direction target, trail feature, viewpoint, charging place, or similar location.
+_Avoid_: Marker, GPS point, telemetry marker
+
 **Tune Snapshot**:
 A read-only view of the board's current Refloat tuning configuration decoded from the board's schema and binary config.
 _Avoid_: Tune cache, settings dump
@@ -87,6 +91,7 @@ _Avoid_: Error log, debug session, crash report
 - A **Metric Sanitizer** may create **Metric Exclusions** for values derived from **Telemetry Samples** while preserving the original samples and current live board readout.
 - A **Metric Exclusion** belongs to one **Telemetry Sample** and one metric.
 - A **GPS Fix** may be associated with live map state, but only GPS fixes captured alongside **Telemetry Samples** contribute to a **Ride Recording**.
+- A **Map Point** is placed by the user on the live map and does not belong to **Ride Recording** or **Ride History**.
 - A **Privacy Zone** limits what **Ride Recording** data is retained without changing **Live State**.
 - A **Ride Recording** becomes part of **Ride History**.
 - A **Ride History Marker** belongs to **Ride History** and may explain where a **Ride Recording** lost or regained board data.
@@ -115,5 +120,6 @@ _Avoid_: Error log, debug session, crash report
 - "session" may mean a BLE connection, raw debug capture, or persisted ride; resolved terms: use **Board Session** for the live BLE connection lifecycle and **Ride Recording** for the persisted ride capture. Avoid bare "session".
 - "error" may mean crash, handled failure, UI message, or diagnostic clue; resolved term: use **Diagnostic Event** for app-observed abnormal conditions worth reviewing.
 - "telemetry marker" names the storage table, but map-visible history annotations are **Ride History Markers**.
+- "point" may mean a GPS coordinate, route coordinate, history annotation, or user-authored map location; resolved term: use **Map Point** for user-authored map locations.
 - "filter" may mean dropping samples, smoothing charts, or excluding implausible values from metrics; resolved term: use **Metric Sanitizer** for metric exclusion that preserves original samples.
 - "save area" or "safe area" may mean a privacy boundary around home or work; resolved term: use **Privacy Zone**.

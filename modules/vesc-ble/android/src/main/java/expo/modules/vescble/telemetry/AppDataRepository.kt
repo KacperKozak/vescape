@@ -350,6 +350,22 @@ class AppDataRepository private constructor(private val context: Context) {
     dao.deletePrivacyZone(id)
   }
 
+  suspend fun getMapPoints(): List<Map<String, Any?>> = withContext(Dispatchers.IO) {
+    dao.getMapPoints().map { it.toMap() }
+  }
+
+  suspend fun upsertMapPoint(point: Map<String, Any?>): Unit = withContext(Dispatchers.IO) {
+    dao.upsertMapPoint(point.toMapPointEntity())
+  }
+
+  suspend fun replaceDirectionMapPoint(point: Map<String, Any?>): Unit = withContext(Dispatchers.IO) {
+    dao.replaceDirectionMapPoint(point.toDirectionMapPointEntity())
+  }
+
+  suspend fun deleteMapPoint(id: String): Unit = withContext(Dispatchers.IO) {
+    dao.deleteMapPoint(id)
+  }
+
   suspend fun getAutoConnectBoard(): Map<String, Any?>? = withContext(Dispatchers.IO) {
     val settings = getTypedSettings()
     settings.selectedBoardId
@@ -499,6 +515,47 @@ fun PrivacyZoneEntity.toMap(): Map<String, Any?> = mapOf(
   "createdAt" to createdAt,
   "updatedAt" to updatedAt,
 )
+
+internal const val MAP_POINT_KIND_DIRECTION = "direction"
+internal val VALID_MAP_POINT_KINDS = setOf(
+  MAP_POINT_KIND_DIRECTION,
+  "drop",
+  "bonk",
+  "nose_slide",
+  "trail_entry",
+  "viewpoint",
+  "charging",
+  "charging_food",
+)
+
+fun MapPointEntity.toMap(): Map<String, Any?> = mapOf(
+  "id" to id,
+  "kind" to kind,
+  "latitude" to latitudeE7 / 10_000_000.0,
+  "longitude" to longitudeE7 / 10_000_000.0,
+  "createdAt" to createdAt,
+  "updatedAt" to updatedAt,
+)
+
+internal fun Map<String, Any?>.toMapPointEntity(): MapPointEntity {
+  val now = System.currentTimeMillis()
+  val kind = getString("kind").takeIf { it in VALID_MAP_POINT_KINDS }
+    ?: throw IllegalArgumentException("Invalid Map Point kind: ${get("kind")}")
+  val latitude = getDouble("latitude")
+  val longitude = getDouble("longitude")
+  require(latitude.isFinite() && longitude.isFinite()) { "Invalid Map Point coordinate" }
+  return MapPointEntity(
+    id = getString("id"),
+    kind = kind,
+    latitudeE7 = (latitude * 10_000_000.0).toInt(),
+    longitudeE7 = (longitude * 10_000_000.0).toInt(),
+    createdAt = (get("createdAt") as? Number)?.toLong() ?: now,
+    updatedAt = (get("updatedAt") as? Number)?.toLong() ?: now,
+  )
+}
+
+internal fun Map<String, Any?>.toDirectionMapPointEntity(): MapPointEntity =
+  toMapPointEntity().copy(kind = MAP_POINT_KIND_DIRECTION)
 
 private fun Map<String, Any?>.toPrivacyZoneEntity(): PrivacyZoneEntity {
   val now = System.currentTimeMillis()

@@ -30,6 +30,7 @@ public class VescBleModule: Module {
   private var boards = VescBleModule.loadArray(key: "vesc_ble_boards")
   private var alertRules = VescBleModule.loadArray(key: "vesc_ble_alert_rules")
   private var privacyZones = VescBleModule.loadArray(key: "vesc_ble_privacy_zones")
+  private var mapPoints = VescBleModule.loadArray(key: "vesc_ble_map_points")
 
   private let mockDevices: [[String: Any]] = [
     [
@@ -310,6 +311,31 @@ public class VescBleModule: Module {
       promise.resolve(nil)
     }
 
+    AsyncFunction("getMapPoints") { (promise: Promise) in
+      promise.resolve(self.mapPoints.sorted(by: Self.sortByCreatedAt))
+    }
+
+    AsyncFunction("upsertMapPoint") { (point: [String: Any], promise: Promise) in
+      self.upsert(&self.mapPoints, item: point)
+      self.saveAppData()
+      promise.resolve(nil)
+    }
+
+    AsyncFunction("replaceDirectionMapPoint") { (point: [String: Any], promise: Promise) in
+      var directionPoint = point
+      directionPoint["kind"] = "direction"
+      self.mapPoints.removeAll { ($0["kind"] as? String) == "direction" }
+      self.upsert(&self.mapPoints, item: directionPoint)
+      self.saveAppData()
+      promise.resolve(nil)
+    }
+
+    AsyncFunction("deleteMapPoint") { (id: String, promise: Promise) in
+      self.mapPoints.removeAll { ($0["id"] as? String) == id }
+      self.saveAppData()
+      promise.resolve(nil)
+    }
+
     AsyncFunction("getSettings") { (promise: Promise) in
       promise.resolve(Self.loadSettings())
     }
@@ -536,6 +562,7 @@ public class VescBleModule: Module {
     Self.saveArray(boards, key: "vesc_ble_boards")
     Self.saveArray(alertRules, key: "vesc_ble_alert_rules")
     Self.saveArray(privacyZones, key: "vesc_ble_privacy_zones")
+    Self.saveArray(mapPoints, key: "vesc_ble_map_points")
   }
 
   private func upsert(_ array: inout [[String: Any?]], item: [String: Any?]) {

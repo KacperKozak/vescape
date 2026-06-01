@@ -67,6 +67,24 @@ interface TelemetryDao {
   @Query("DELETE FROM privacy_zones WHERE id = :id")
   suspend fun deletePrivacyZone(id: String)
 
+  @Query("SELECT * FROM map_points ORDER BY created_at ASC")
+  suspend fun getMapPoints(): List<MapPointEntity>
+
+  @Insert(onConflict = OnConflictStrategy.REPLACE)
+  suspend fun upsertMapPoint(point: MapPointEntity)
+
+  @Query("DELETE FROM map_points WHERE kind = 'direction'")
+  suspend fun deleteDirectionMapPoints()
+
+  @Transaction
+  suspend fun replaceDirectionMapPoint(point: MapPointEntity) {
+    deleteDirectionMapPoints()
+    upsertMapPoint(point)
+  }
+
+  @Query("DELETE FROM map_points WHERE id = :id")
+  suspend fun deleteMapPoint(id: String)
+
   @Insert
   suspend fun insertFrames(frames: List<TelemetryFrameEntity>): List<Long>
 

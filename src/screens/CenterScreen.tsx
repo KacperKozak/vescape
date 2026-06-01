@@ -67,10 +67,12 @@ export function CenterScreen({
         perspectiveEnabled={controller.perspectiveEnabled}
         onPerspectiveChange={controller.setPerspectiveEnabled}
         onHeadingChange={controller.setHeading}
-        onLongPressTarget={controller.setTargetLocation}
+        onLongPressTarget={(target) =>
+          void controller.replaceDirectionPoint(target.latitude, target.longitude)
+        }
         onMapInteraction={controller.dismissMapSelector}
-        targetLocation={controller.targetLocation}
-        onClearTarget={controller.clearTargetLocation}
+        directionPoint={controller.directionPoint}
+        onClearDirectionPoint={() => void controller.clearDirectionPoint()}
         weatherActive={controller.weatherActive}
         seekPosition={controller.seekGpsPosition}
       />

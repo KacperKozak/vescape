@@ -306,6 +306,26 @@ data class PrivacyZoneEntity(
   val updatedAt: Long,
 )
 
+@Entity(
+  tableName = "map_points",
+  indices = [
+    Index(value = ["kind"]),
+  ],
+)
+data class MapPointEntity(
+  @PrimaryKey
+  val id: String,
+  val kind: String,
+  @ColumnInfo(name = "latitude_e7")
+  val latitudeE7: Int,
+  @ColumnInfo(name = "longitude_e7")
+  val longitudeE7: Int,
+  @ColumnInfo(name = "created_at")
+  val createdAt: Long,
+  @ColumnInfo(name = "updated_at")
+  val updatedAt: Long,
+)
+
 @Entity(tableName = "app_settings")
 data class AppSettingEntity(
   @PrimaryKey
