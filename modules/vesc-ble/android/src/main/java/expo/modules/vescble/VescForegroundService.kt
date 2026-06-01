@@ -193,6 +193,12 @@ class VescForegroundService : Service() {
             }
         }
 
+        fun updateBoard(board: Map<String, Any?>) {
+            Handler(Looper.getMainLooper()).post {
+                instance?.updateBoard(board)
+            }
+        }
+
         @Volatile private var alertRules: List<AlertRuleEntity> = emptyList()
 
         fun reloadAlertRules(context: Context) {
@@ -1260,6 +1266,26 @@ class VescForegroundService : Service() {
         pollingLoop.stop()
         cancelColdPathTimer()
         telemetryPipeline.cancelStaleWatchdog()
+    }
+
+    private fun updateBoard(board: Map<String, Any?>) {
+        val current = boardConfig ?: return
+        if (board["id"] != current.appBoardId) return
+
+        val pollIntervalMs = (board["pollIntervalMs"] as? Number)?.toLong() ?: current.pollIntervalMs
+        val next = current.copy(
+            deviceName = board["name"] as? String ?: current.deviceName,
+            deviceId = board["bleId"] as? String ?: current.deviceId,
+            pollIntervalMs = pollIntervalMs,
+        )
+        if (next == current) return
+
+        val wasPolling = pollingLoop.isActive
+        boardConfig = next
+        if (wasPolling && next.pollIntervalMs != current.pollIntervalMs && isPollingCapable) {
+            pollingLoop.stop()
+            startPolling()
+        }
     }
 
     private fun startColdPathTimer(session: BoardSession) {

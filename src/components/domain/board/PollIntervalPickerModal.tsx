@@ -6,10 +6,13 @@ import { Button } from '@/components/ui/base/Button'
 import { interaction, theme } from '@/constants/theme'
 
 const POLL_INTERVAL_PRESETS = [
+  { ms: 500, label: '500ms (2 Hz)', description: 'Not useful' },
   { ms: 200, label: '200ms (5 Hz)', description: 'Battery saver' },
   { ms: 100, label: '100ms (10 Hz)', description: 'Default' },
   { ms: 50, label: '50ms (20 Hz)', description: 'Fast' },
   { ms: 20, label: '20ms (50 Hz)', description: 'Ultra fast' },
+  { ms: 10, label: '10ms (100 Hz)', description: 'Oh my...' },
+  { ms: 5, label: '5ms (200 Hz)', description: 'Your phone will explode' },
 ] as const
 
 export function formatPollInterval(ms: number): string {
@@ -66,7 +69,7 @@ export function PollIntervalPickerModal({
         <Pressable style={styles.backdrop} onPress={onCancel} />
         <Animated.View style={[styles.card, { transform: [{ scale }] }]}>
           <Text style={styles.title}>Poll interval</Text>
-          <Text style={styles.hint}>Takes effect on next connection</Text>
+          <Text style={styles.hint}>Takes effect immediately while connected</Text>
           {POLL_INTERVAL_PRESETS.map((preset, index) => {
             const selected = preset.ms === pollIntervalMs
             const isLast = index === POLL_INTERVAL_PRESETS.length - 1
