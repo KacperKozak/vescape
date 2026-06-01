@@ -316,8 +316,29 @@ abstract class TelemetryDatabase : RoomDatabase() {
     internal val MIGRATION_20_21 = object : Migration(20, 21) {
       override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL(
-          "ALTER TABLE boards ADD COLUMN poll_interval_ms INTEGER NOT NULL DEFAULT 100",
+          """
+          CREATE TABLE IF NOT EXISTS map_points (
+            id TEXT NOT NULL PRIMARY KEY,
+            kind TEXT NOT NULL,
+            latitude_e7 INTEGER NOT NULL,
+            longitude_e7 INTEGER NOT NULL,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL
+          )
+          """.trimIndent(),
         )
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_map_points_kind ON map_points(kind)")
+
+        val cursor = db.query("PRAGMA table_info(boards)")
+        val nameIdx = cursor.getColumnIndex("name")
+        var hasColumn = false
+        while (cursor.moveToNext()) {
+          if (cursor.getString(nameIdx) == "poll_interval_ms") { hasColumn = true; break }
+        }
+        cursor.close()
+        if (!hasColumn) {
+          db.execSQL("ALTER TABLE boards ADD COLUMN poll_interval_ms INTEGER NOT NULL DEFAULT 100")
+        }
       }
     }
 
