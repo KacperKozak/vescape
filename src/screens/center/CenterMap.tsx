@@ -29,7 +29,7 @@ import {
   type ElementRef,
 } from 'react'
 import { Animated, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
-import type { LocationEvent, MapPoint } from 'vesc-ble'
+import type { LocationEvent, MapPoint, MapPointKind } from 'vesc-ble'
 
 import { InfoModal } from '@/components/ui/modals/InfoModal'
 import { MapPin } from '@/components/domain/map/MapPin'
@@ -43,7 +43,11 @@ import {
   type MapStyleKey,
 } from '@/constants/mapStyles'
 import { getMapPointKindIcon } from '@/constants/mapPointIcons'
-import { getMapPointKindColor, getMapPointKindTextColor } from '@/constants/mapPoints'
+import {
+  getMapPointKindColor,
+  getMapPointKindLabel,
+  getMapPointKindTextColor,
+} from '@/constants/mapPoints'
 import { ONE_DARK_MAP_STYLE } from '@/constants/oneDarkMapStyle'
 import { theme } from '@/constants/theme'
 import { telemetry } from '@/constants/telemetry'
@@ -53,6 +57,7 @@ import {
 } from '@/helpers/liveGpsPresentation'
 import { distanceMeters, makeCircleFeature, makeTrailLineString } from '@/helpers/mapGeometry'
 import { resolveMarkerRenderData } from '@/lib/history/markerOverlap'
+import { isMapPointKindVisible } from '@/lib/mapPointVisibility'
 import {
   getHistoryMetricColorRange,
   getMetricRampColor,
@@ -93,7 +98,7 @@ export interface CenterMapHandle {
   setPadding: (bottom: number) => void
   zoomToLevel: (zoom: number) => void
   focusCoordinate: (coordinate: [number, number]) => void
-  getCenterCoordinate: () => { latitude: number; longitude: number }
+  getViewfinderCoordinate: () => Promise<{ latitude: number; longitude: number }>
 }
 
 interface SelectedHistoryMarker {
@@ -365,6 +370,7 @@ export function OffscreenMapIndicator({
 
 interface CenterMapLayersProps {
   historyActive: boolean
+  expandSelectedMapPoints: boolean
   isMapy: boolean
   isOneDark: boolean
   showBuildings3d: boolean
@@ -389,8 +395,10 @@ interface CenterMapLayersProps {
   directionPoint: MapPoint | null
   mapPoints: MapPoint[]
   selectedMapPointId: string | null
+  hiddenMapPointKinds: MapPointKind[]
   onClearDirectionPoint: () => void
   onToggleMapPointSelection: (id: string) => void
+  onRemoveMapPoint: (id: string) => void
   onSuppressNextMapPress: () => void
   onSelectMarker: (selection: SelectedHistoryMarker) => void
 }
@@ -835,6 +843,7 @@ function getHistoryRouteHighlightDurationMs(route: [number, number][]) {
 
 function CenterMapLayers({
   historyActive,
+  expandSelectedMapPoints,
   isMapy,
   isOneDark,
   showBuildings3d,
@@ -855,14 +864,20 @@ function CenterMapLayers({
   directionPoint,
   mapPoints,
   selectedMapPointId,
+  hiddenMapPointKinds,
   onClearDirectionPoint,
   onToggleMapPointSelection,
+  onRemoveMapPoint,
   onSuppressNextMapPress,
   onSelectMarker,
 }: CenterMapLayersProps) {
   const selectedMapPoint = useMemo(
-    () => mapPoints.find((point) => point.id === selectedMapPointId) ?? null,
-    [mapPoints, selectedMapPointId],
+    () =>
+      mapPoints.find(
+        (point) =>
+          point.id === selectedMapPointId && isMapPointKindVisible(point.kind, hiddenMapPointKinds),
+      ) ?? null,
+    [hiddenMapPointKinds, mapPoints, selectedMapPointId],
   )
 
   return (
@@ -929,7 +944,10 @@ function CenterMapLayers({
       )}
       {!historyActive &&
         mapPoints
-          .filter((point) => point.kind !== 'direction')
+          .filter(
+            (point) =>
+              point.kind !== 'direction' && isMapPointKindVisible(point.kind, hiddenMapPointKinds),
+          )
           .map((point) => (
             <MapPin
               key={point.id}
@@ -939,9 +957,15 @@ function CenterMapLayers({
               icon={getMapPointKindIcon(point.kind)}
               iconColor={getMapPointKindTextColor(point.kind)}
               selected={selectedMapPoint?.id === point.id}
+              expandSelected={expandSelectedMapPoints}
+              label={getMapPointKindLabel(point.kind)}
               onSelected={() => {
                 onSuppressNextMapPress()
                 onToggleMapPointSelection(point.id)
+              }}
+              onRemove={() => {
+                onSuppressNextMapPress()
+                onRemoveMapPoint(point.id)
               }}
             />
           ))}
@@ -972,7 +996,9 @@ interface CenterMapProps {
   directionPoint: MapPoint | null
   mapPoints: MapPoint[]
   selectedMapPointId: string | null
+  hiddenMapPointKinds: MapPointKind[]
   onToggleMapPointSelection: (id: string) => void
+  onRemoveMapPoint: (id: string) => void
   onClearDirectionPoint: () => void
   weatherActive: boolean
   seekPosition: HistoryGpsSample | null
@@ -1007,7 +1033,9 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
     directionPoint,
     mapPoints,
     selectedMapPointId,
+    hiddenMapPointKinds,
     onToggleMapPointSelection,
+    onRemoveMapPoint,
     weatherActive,
     onClearDirectionPoint,
     seekPosition,
@@ -1086,9 +1114,13 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
   )
   const selectedMapPoint = useMemo(
     () =>
-      mapPoints.find((point) => point.kind !== 'direction' && point.id === selectedMapPointId) ??
-      null,
-    [mapPoints, selectedMapPointId],
+      mapPoints.find(
+        (point) =>
+          point.kind !== 'direction' &&
+          point.id === selectedMapPointId &&
+          isMapPointKindVisible(point.kind, hiddenMapPointKinds),
+      ) ?? null,
+    [hiddenMapPointKinds, mapPoints, selectedMapPointId],
   )
   const retainedGpsBearing = gpsPresentation.nextReliableBearing
   const gpsHeadingMode = mapNavigationMode === 'gpsHeading'
@@ -1145,6 +1177,21 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
     () => rideGpsSamples.map((point) => [point.longitude, point.latitude] as [number, number]),
     [rideGpsSamples],
   )
+
+  const getViewfinderCoordinateFromMap = useCallback(async () => {
+    const mapView = mapViewRef.current
+    if (!mapView || mapLayout.width <= 0 || mapLayout.height <= 0) return null
+
+    const coordinate = await mapView.getCoordinateFromView([
+      mapLayout.width / 2,
+      mapLayout.height / 2,
+    ])
+    const [longitude, latitude] = coordinate
+    if (typeof longitude !== 'number' || typeof latitude !== 'number') return null
+    if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) return null
+    return { longitude, latitude }
+  }, [mapLayout.height, mapLayout.width])
+
   const {
     cameraRef,
     currentCameraRef,
@@ -1174,6 +1221,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
     followAnimationDuration: headingFollowMode
       ? phoneHeadingAnimationDuration()
       : MAP_DEFAULTS.followAnimationDuration,
+    getViewfinderCoordinateFromMap,
     onHeadingChange,
     onPerspectiveChange,
   })
@@ -1624,6 +1672,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
         />
         <CenterMapLayers
           historyActive={historyActive}
+          expandSelectedMapPoints={mode === 'map'}
           isMapy={isMapy}
           isOneDark={isOneDark}
           showBuildings3d={showBuildings3d}
@@ -1644,8 +1693,10 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
           directionPoint={directionPoint}
           mapPoints={mapPoints}
           selectedMapPointId={selectedMapPointId}
+          hiddenMapPointKinds={hiddenMapPointKinds}
           onClearDirectionPoint={onClearDirectionPoint}
           onToggleMapPointSelection={onToggleMapPointSelection}
+          onRemoveMapPoint={onRemoveMapPoint}
           onSuppressNextMapPress={handleSuppressNextMapPress}
           onSelectMarker={setSelectedHistoryMarker}
         />

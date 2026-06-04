@@ -1,20 +1,23 @@
 import {
-  ArrowBendDoubleUpRightIcon,
   ChargingStationIcon,
   CompassIcon,
-  DropIcon,
   EyeIcon,
   FlagIcon,
-  MountainsIcon,
   type Icon,
 } from 'phosphor-react-native'
 import type { MapPointKind } from 'vesc-ble'
 
+import {
+  BonkMapPointIcon,
+  DropMapPointIcon,
+  SlideMapPointIcon,
+} from '@/components/domain/map/MapPointSvgIcons'
+
 const MAP_POINT_KIND_ICONS: Record<MapPointKind, Icon> = {
   direction: CompassIcon,
-  drop: DropIcon,
-  bonk: MountainsIcon,
-  nose_slide: ArrowBendDoubleUpRightIcon,
+  drop: DropMapPointIcon,
+  bonk: BonkMapPointIcon,
+  nose_slide: SlideMapPointIcon,
   trail_entry: FlagIcon,
   viewpoint: EyeIcon,
   charging: ChargingStationIcon,

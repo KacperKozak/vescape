@@ -99,7 +99,9 @@ export function CenterScreen({
         directionPoint={controller.directionPoint}
         mapPoints={controller.mapPoints}
         selectedMapPointId={controller.selectedMapPointId}
+        hiddenMapPointKinds={controller.hiddenMapPointKinds}
         onToggleMapPointSelection={controller.toggleMapPointSelection}
+        onRemoveMapPoint={(id) => void controller.removeMapPoint(id)}
         onClearDirectionPoint={() => void controller.clearDirectionPoint()}
         weatherActive={controller.weatherActive}
         seekPosition={controller.seekGpsPosition}
@@ -134,6 +136,8 @@ export function CenterScreen({
           refreshWeather: controller.refreshWeather,
           weatherLocation: controller.liveLocations.at(-1) ?? controller.latestApproximateLocation,
           addMapPoint: controller.saveMapPoint,
+          hiddenMapPointKinds: controller.hiddenMapPointKinds,
+          toggleMapPointKindVisibility: controller.toggleMapPointKindVisibility,
           offscreenMapIndicators,
           onOffscreenIndicatorPress: handleOffscreenIndicatorPress,
         }}

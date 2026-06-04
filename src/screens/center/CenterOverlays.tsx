@@ -4,8 +4,10 @@ import {
   ArrowLeftIcon,
   ArrowsClockwiseIcon,
   ClockCounterClockwiseIcon,
+  FunnelIcon,
   PlusIcon,
   SlidersHorizontalIcon,
+  XIcon,
 } from 'phosphor-react-native'
 import { useCallback, useEffect, useState, type RefObject } from 'react'
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native'
@@ -22,6 +24,7 @@ import { MapStyleSwitch } from '@/components/ui/menus/MapStyleSwitch'
 import type { MapNavigationMode, MapStyleKey } from '@/constants/mapStyles'
 import { getMapPointKindIcon } from '@/constants/mapPointIcons'
 import {
+  FILTERABLE_MAP_POINT_KIND_OPTIONS,
   getMapPointKindColor,
   getMapPointKindTextColor,
   MAP_POINT_KIND_OPTIONS,
@@ -78,6 +81,8 @@ interface CenterMapOverlayProps {
   refreshWeather: () => void
   weatherLocation: { latitude: number; longitude: number } | null
   addMapPoint: (kind: MapPointKind, latitude: number, longitude: number) => Promise<unknown>
+  hiddenMapPointKinds: MapPointKind[]
+  toggleMapPointKindVisibility: (kind: MapPointKind) => void
   offscreenMapIndicators: OffscreenMapIndicatorState[]
   onOffscreenIndicatorPress: (indicator: OffscreenMapIndicatorState) => void
 }
@@ -134,22 +139,21 @@ interface FullMapControlsProps {
 
 function FullMapControls({ mapRef, map, top, bottom }: FullMapControlsProps) {
   const [addMenuOpen, setAddMenuOpen] = useState(false)
-  const addRotation = useSharedValue(0)
-  const addButtonStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${addRotation.value}deg` }],
-  }))
-
-  useEffect(() => {
-    addRotation.value = withTiming(addMenuOpen ? 45 : 0, { duration: 160 })
-  }, [addMenuOpen, addRotation])
+  const [filterMenuOpen, setFilterMenuOpen] = useState(false)
 
   const toggleAddMenu = useCallback(() => {
+    setFilterMenuOpen(false)
     setAddMenuOpen((open) => !open)
   }, [])
 
+  const toggleFilterMenu = useCallback(() => {
+    setAddMenuOpen(false)
+    setFilterMenuOpen((open) => !open)
+  }, [])
+
   const handleSelectMapPoint = useCallback(
-    (kind: MapPointKind) => {
-      const center = mapRef.current?.getCenterCoordinate()
+    async (kind: MapPointKind) => {
+      const center = await mapRef.current?.getViewfinderCoordinate()
       if (!center) return
       setAddMenuOpen(false)
       void map.addMapPoint(kind, center.latitude, center.longitude)
@@ -193,9 +197,52 @@ function FullMapControls({ mapRef, map, top, bottom }: FullMapControlsProps) {
         <ArrowLeftIcon size={20} color={theme.neutral.textSecondary} weight="bold" />
         <Text style={styles.mapBackLabel}>GO BACK</Text>
       </Pressable>
+      <View style={[styles.mapFilterAction, { bottom }]}>
+        {filterMenuOpen ? (
+          <View style={[styles.mapFilterMenu, styles.mapFilterMenuAttached]}>
+            {FILTERABLE_MAP_POINT_KIND_OPTIONS.map((option, index) => {
+              const IconComponent = getMapPointKindIcon(option.kind)
+              const color = getMapPointKindColor(option.kind)
+              const visible = !map.hiddenMapPointKinds.includes(option.kind)
+              return (
+                <Pressable
+                  key={option.kind}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${option.label} visibility`}
+                  accessibilityState={{ checked: visible }}
+                  style={({ pressed }) => [
+                    styles.mapFilterRow,
+                    !visible && styles.mapFilterRowHidden,
+                    pressed && styles.mapAddRowPressed,
+                  ]}
+                  onPress={() => map.toggleMapPointKindVisibility(option.kind)}
+                >
+                  <View style={[styles.mapAddRowIcon, { borderColor: color }]}>
+                    <IconComponent
+                      size={16}
+                      color={getMapPointKindTextColor(option.kind)}
+                      weight="duotone"
+                    />
+                  </View>
+                  <Text style={styles.mapFilterRowLabel}>{option.label}</Text>
+                  {index < FILTERABLE_MAP_POINT_KIND_OPTIONS.length - 1 ? (
+                    <View style={styles.mapFilterRowBorder} />
+                  ) : null}
+                </Pressable>
+              )
+            })}
+          </View>
+        ) : null}
+        <IconButton
+          icon={FunnelIcon}
+          size="lg"
+          onPress={toggleFilterMenu}
+          style={filterMenuOpen ? styles.mapFilterButtonAttached : undefined}
+        />
+      </View>
       <View style={[styles.mapAddAction, { bottom }]}>
         {addMenuOpen ? (
-          <View style={styles.mapAddMenu}>
+          <View style={[styles.mapAddMenu, styles.mapAddMenuAttached]}>
             <View style={styles.mapAddCompactRow}>
               {compactMapPointOptions.map((option, index) => {
                 const IconComponent = getMapPointKindIcon(option.kind)
@@ -251,8 +298,13 @@ function FullMapControls({ mapRef, map, top, bottom }: FullMapControlsProps) {
             })}
           </View>
         ) : null}
-        <Animated.View style={addButtonStyle}>
-          <IconButton icon={PlusIcon} size="lg" onPress={toggleAddMenu} />
+        <Animated.View>
+          <IconButton
+            icon={addMenuOpen ? XIcon : PlusIcon}
+            size="lg"
+            onPress={toggleAddMenu}
+            style={addMenuOpen ? styles.mapAddButtonAttached : undefined}
+          />
         </Animated.View>
       </View>
     </>
@@ -634,7 +686,59 @@ const styles = StyleSheet.create({
     right: 12,
     zIndex: 31,
     alignItems: 'flex-end',
-    gap: 10,
+    gap: 0,
+  },
+  mapFilterAction: {
+    position: 'absolute',
+    left: 12,
+    zIndex: 31,
+    alignItems: 'flex-start',
+    gap: 0,
+  },
+  mapFilterMenu: {
+    minWidth: 178,
+    alignItems: 'stretch',
+    borderRadius: 21,
+    overflow: 'hidden',
+    backgroundColor: theme.neutral.mapOverlaySelector,
+    borderWidth: 1,
+    borderColor: theme.neutral.borderMuted,
+  },
+  mapFilterMenuAttached: {
+    borderBottomLeftRadius: 5,
+  },
+  mapFilterButtonAttached: {
+    backgroundColor: theme.neutral.mapOverlaySelector,
+    borderColor: theme.neutral.borderMuted,
+    borderTopLeftRadius: 5,
+    borderTopRightRadius: 5,
+    borderBottomLeftRadius: 27,
+    borderBottomRightRadius: 27,
+  },
+  mapFilterRow: {
+    height: 42,
+    paddingLeft: 5,
+    paddingRight: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    gap: 12,
+  },
+  mapFilterRowHidden: {
+    opacity: 0.38,
+  },
+  mapFilterRowLabel: {
+    color: theme.neutral.textPrimary,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  mapFilterRowBorder: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 1,
+    backgroundColor: theme.neutral.borderMuted,
   },
   mapAddMenu: {
     minWidth: 178,
@@ -644,6 +748,17 @@ const styles = StyleSheet.create({
     backgroundColor: theme.neutral.mapOverlaySelector,
     borderWidth: 1,
     borderColor: theme.neutral.borderMuted,
+  },
+  mapAddMenuAttached: {
+    borderBottomRightRadius: 5,
+  },
+  mapAddButtonAttached: {
+    backgroundColor: theme.neutral.mapOverlaySelector,
+    borderColor: theme.neutral.borderMuted,
+    borderTopLeftRadius: 5,
+    borderTopRightRadius: 5,
+    borderBottomLeftRadius: 27,
+    borderBottomRightRadius: 27,
   },
   mapAddRow: {
     height: 42,

@@ -9,6 +9,7 @@ import {
 } from 'vesc-ble'
 
 import { generateId } from '@/helpers/id'
+import { isFilterableMapPointKind } from '@/lib/mapPointVisibility'
 
 export type { MapPoint } from 'vesc-ble'
 
@@ -17,6 +18,7 @@ const DIRECTION_MAP_POINT_KIND: MapPointKind = 'direction'
 interface MapState {
   mapPoints: MapPoint[]
   selectedMapPointId: string | null
+  hiddenMapPointKinds: MapPointKind[]
   loaded: boolean
 }
 
@@ -29,6 +31,7 @@ interface MapActions {
   getDirectionPoint(): MapPoint | null
   toggleMapPointSelection(id: string): void
   clearSelectedMapPoints(): void
+  toggleMapPointKindVisibility(kind: MapPointKind): void
 }
 
 const byCreatedAt = (a: MapPoint, b: MapPoint) => a.createdAt - b.createdAt
@@ -43,6 +46,7 @@ function pruneSelectedMapPointId(selectedId: string | null, mapPoints: MapPoint[
 export const useMapStore = create<MapState & MapActions>((set, get) => ({
   mapPoints: [],
   selectedMapPointId: null,
+  hiddenMapPointKinds: [],
   loaded: false,
 
   async load() {
@@ -125,5 +129,14 @@ export const useMapStore = create<MapState & MapActions>((set, get) => ({
 
   clearSelectedMapPoints() {
     set((s) => (s.selectedMapPointId == null ? s : { selectedMapPointId: null }))
+  },
+
+  toggleMapPointKindVisibility(kind) {
+    if (!isFilterableMapPointKind(kind)) return
+    set((s) => ({
+      hiddenMapPointKinds: s.hiddenMapPointKinds.includes(kind)
+        ? s.hiddenMapPointKinds.filter((candidate) => candidate !== kind)
+        : [...s.hiddenMapPointKinds, kind],
+    }))
   },
 }))
