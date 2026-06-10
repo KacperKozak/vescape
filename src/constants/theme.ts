@@ -109,6 +109,10 @@ export const theme = {
     borderMuted: 'rgba(148,163,184,0.28)',
     touchInvisible: 'rgba(0,0,0,0.001)',
     transparent: 'rgba(0,0,0,0)',
+    routeHighlight: 'rgba(255,255,255,0.98)',
+    routeHighlightTransparent: 'rgba(255,255,255,0)',
+    mapBuildingDark: '#3e4451',
+    mapBuildingLight: '#e5e7eb',
   },
   /** Privacy zone colors – green GPS zone markers. */
   zone: {

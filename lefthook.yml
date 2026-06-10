@@ -1,6 +1,12 @@
 output:
   - failure
 
+post-merge:
+  commands:
+    install:
+      glob: 'bun.lockb'
+      run: bun install
+
 pre-commit:
   parallel: true
   commands:
