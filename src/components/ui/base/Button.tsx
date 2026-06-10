@@ -13,6 +13,8 @@ import { interaction, theme } from '@/constants/theme'
 interface ButtonProps {
   label: string
   onPress: () => Promise<void> | void
+  testID?: string
+  accessibilityLabel?: string
   variant?: 'primary' | 'secondary' | 'destructive'
   size?: 'sm' | 'md'
   icon?: Icon
@@ -24,6 +26,8 @@ interface ButtonProps {
 export function Button({
   label,
   onPress,
+  testID,
+  accessibilityLabel,
   variant = 'primary',
   size = 'md',
   icon: IconComponent,
@@ -46,6 +50,8 @@ export function Button({
       android_ripple={interaction.ripple}
       onPress={() => void onPress()}
       disabled={isDisabled}
+      testID={testID}
+      accessibilityLabel={accessibilityLabel ?? label}
     >
       {loading ? (
         <ActivityIndicator size="small" color={variantStyles[variant].indicatorColor} />

@@ -97,6 +97,8 @@ export function BoardSelectorSheet({
         <Pressable
           style={({ pressed }) => [styles.addRow, pressed && styles.boardRowPressed]}
           onPress={onAddBoard}
+          testID="board-selector-add-board"
+          accessibilityLabel="Add new board"
         >
           <View style={styles.addIcon}>
             <PlusIcon size={16} color={theme.wheel.color} weight="bold" />

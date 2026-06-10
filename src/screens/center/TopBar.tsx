@@ -76,7 +76,12 @@ export function TopBar({
           style={styles.iconLeft}
         />
         <View ref={pillRef} style={styles.pill}>
-          <Pressable style={styles.boardButton} onPress={() => setSelectorOpen(true)}>
+          <Pressable
+            style={styles.boardButton}
+            onPress={() => setSelectorOpen(true)}
+            testID="board-selector-trigger"
+            accessibilityLabel="Board selector"
+          >
             <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
             <Text style={styles.boardText} numberOfLines={1}>
               {name}

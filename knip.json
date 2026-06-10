@@ -1,6 +1,7 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "tags": ["-lintignore"],
+  "ignoreBinaries": ["maestro"],
   "ignore": ["scripts/**/*", ".agents/**/*", ".claude/**/*", "app.config.ts"],
   "workspaces": {
     ".": {},

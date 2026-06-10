@@ -1,0 +1,49 @@
+appId: com.anonymous.vescpoc
+---
+- clearState
+- launchApp
+
+- extendedWaitUntil:
+    visible: DEVELOPMENT SERVERS
+    timeout: 15000
+- tapOn: 'http://.*:8081'
+- extendedWaitUntil:
+    visible: No board
+    timeout: 60000
+- tapOn:
+    id: board-selector-trigger
+- tapOn:
+    id: board-selector-add-board
+
+- extendedWaitUntil:
+    visible: Pair your board
+    timeout: 15000
+- extendedWaitUntil:
+    visible: E2E VESC Board
+    timeout: 15000
+- tapOn: E2E VESC Board
+
+- assertVisible: Name your board
+- tapOn:
+    id: add-board-name-input
+- eraseText
+- inputText: E2E Board
+- hideKeyboard
+- tapOn:
+    id: add-board-description-input
+- inputText: Created by Maestro
+- hideKeyboard
+- tapOn:
+    id: add-board-name-next
+
+- assertVisible: Battery config
+- tapOn:
+    id: add-board-battery-next
+
+- assertVisible: Review & save
+- assertVisible: E2E Board
+- assertVisible: E2E VESC Board
+- tapOn:
+    id: add-board-save
+
+- assertVisible: E2E Board

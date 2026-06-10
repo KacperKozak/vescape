@@ -125,11 +125,11 @@ function ScanStep({ wizard }: Props) {
         <Text style={styles.stepTitle}>Pair your board</Text>
         <View style={styles.stepHeaderSpacer} />
         {wizard.bleId ? (
-          <Pressable onPress={wizard.next} hitSlop={8}>
+          <Pressable onPress={wizard.next} hitSlop={8} testID="add-board-pair-next">
             <Text style={styles.skipLink}>Next →</Text>
           </Pressable>
         ) : (
-          <Pressable onPress={wizard.next} hitSlop={8}>
+          <Pressable onPress={wizard.next} hitSlop={8} testID="add-board-skip-pairing">
             <Text style={styles.skipLink}>Skip</Text>
           </Pressable>
         )}
@@ -219,11 +219,14 @@ function NameStep({ wizard }: Props) {
         description={wizard.description}
         onChangeName={wizard.setName}
         onChangeDescription={wizard.setDescription}
+        nameTestID="add-board-name-input"
+        descriptionTestID="add-board-description-input"
       />
       <NavActions
         canContinue={Boolean(wizard.name.trim())}
         onBack={wizard.back}
         onNext={wizard.next}
+        testIDPrefix="add-board-name"
       />
     </StepContainer>
   )
@@ -250,6 +253,7 @@ function BatteryStep({ wizard }: Props) {
         canContinue={wizard.batteryWarning == null}
         onBack={wizard.back}
         onNext={wizard.next}
+        testIDPrefix="add-board-battery"
       />
     </StepContainer>
   )
@@ -297,6 +301,7 @@ function ConfirmStep({ wizard }: Props) {
           label="Back"
           variant="secondary"
           onPress={wizard.back}
+          testID="add-board-confirm-back"
         />
         <Button
           style={styles.actionButton}
@@ -304,6 +309,7 @@ function ConfirmStep({ wizard }: Props) {
           icon={CheckCircle}
           onPress={wizard.save}
           disabled={!wizard.canSave}
+          testID="add-board-save"
         />
       </View>
     </StepContainer>
@@ -335,13 +341,26 @@ interface NavActionsProps {
   canContinue: boolean
   onBack: () => void
   onNext: () => void
+  testIDPrefix: string
 }
 
-function NavActions({ canContinue, onBack, onNext }: NavActionsProps) {
+function NavActions({ canContinue, onBack, onNext, testIDPrefix }: NavActionsProps) {
   return (
     <View style={styles.actionRow}>
-      <Button style={styles.actionButton} label="Back" variant="secondary" onPress={onBack} />
-      <Button style={styles.actionButton} label="Next" onPress={onNext} disabled={!canContinue} />
+      <Button
+        style={styles.actionButton}
+        label="Back"
+        variant="secondary"
+        onPress={onBack}
+        testID={`${testIDPrefix}-back`}
+      />
+      <Button
+        style={styles.actionButton}
+        label="Next"
+        onPress={onNext}
+        disabled={!canContinue}
+        testID={`${testIDPrefix}-next`}
+      />
     </View>
   )
 }

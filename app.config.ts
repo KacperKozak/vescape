@@ -33,6 +33,14 @@ const config: ExpoConfig = {
   plugins: [
     'expo-router',
     [
+      'expo-dev-client',
+      {
+        toolsButton: false,
+        skipOnboarding: true,
+        showMenuAtLaunch: false,
+      },
+    ],
+    [
       'expo-splash-screen',
       {
         image: './assets/images/splashIcon.png',
