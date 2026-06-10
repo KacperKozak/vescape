@@ -1,9 +1,14 @@
-import { DropIcon } from 'phosphor-react-native'
+import { ArrowDownIcon, ArrowUpIcon, DropIcon, SunHorizonIcon } from 'phosphor-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 
 import { WeatherIcon } from '@/components/ui/weather/WeatherIcon'
 import { interaction, theme } from '@/constants/theme'
-import { weatherCodeToColor, weatherCodeToLabel } from '@/lib/weather'
+import {
+  isNightAtTime,
+  parseHourLabel,
+  weatherCodeToColor,
+  weatherCodeToLabel,
+} from '@/lib/weather'
 import { useMapWeather } from '@/screens/center/useMapWeather'
 import { useWeatherStore } from '@/store/weatherStore'
 
@@ -16,13 +21,17 @@ interface WeatherPillProps {
 export function WeatherPill({ location, expanded, onPress }: WeatherPillProps) {
   const weather = useMapWeather(location)
   const precipitationProbability = useWeatherStore((s) => s.precipitationProbability)
+  const sunrise = useWeatherStore((s) => s.sunrise)
+  const sunset = useWeatherStore((s) => s.sunset)
 
   if (!weather) return null
 
-  const currentHour = new Date().getHours()
+  const now = new Date()
+  const currentHour = now.getHours()
+  const isNight = isNightAtTime(currentHour, now.getMinutes(), sunrise, sunset)
   const iconColor =
     weather.weatherCode != null
-      ? weatherCodeToColor(weather.weatherCode, currentHour)
+      ? weatherCodeToColor(weather.weatherCode, currentHour, isNight)
       : theme.bran.text
 
   if (expanded) {
@@ -31,14 +40,31 @@ export function WeatherPill({ location, expanded, onPress }: WeatherPillProps) {
         <WeatherIcon
           code={weather.weatherCode}
           hour={currentHour}
+          isNight={isNight}
           size={28}
           color={iconColor}
           weight="duotone"
         />
-        <View style={styles.expandedText}>
-          <Text style={styles.expandedTemp}>{weather.temperature}°</Text>
-          {weather.weatherCode != null && (
-            <Text style={styles.expandedLabel}>{weatherCodeToLabel(weather.weatherCode)}</Text>
+        <View style={styles.expandedDetails}>
+          <View style={styles.expandedText}>
+            <Text style={styles.expandedTemp}>{weather.temperature}°</Text>
+            {weather.weatherCode != null && (
+              <Text style={styles.expandedLabel}>{weatherCodeToLabel(weather.weatherCode)}</Text>
+            )}
+          </View>
+          {sunrise && sunset && (
+            <View style={styles.sunTimes}>
+              <View style={styles.sunTime}>
+                <SunHorizonIcon size={14} color={theme.weather.sun} weight="duotone" />
+                <ArrowUpIcon size={10} color={theme.weather.sun} weight="bold" />
+                <Text style={styles.sunTimeText}>{parseHourLabel(sunrise)}</Text>
+              </View>
+              <View style={styles.sunTime}>
+                <SunHorizonIcon size={14} color={theme.weather.moonPartly} weight="duotone" />
+                <ArrowDownIcon size={10} color={theme.weather.moonPartly} weight="bold" />
+                <Text style={styles.sunTimeText}>{parseHourLabel(sunset)}</Text>
+              </View>
+            </View>
           )}
         </View>
         {precipitationProbability != null && precipitationProbability > 0 && (
@@ -56,6 +82,7 @@ export function WeatherPill({ location, expanded, onPress }: WeatherPillProps) {
       <WeatherIcon
         code={weather.weatherCode}
         hour={currentHour}
+        isNight={isNight}
         size={16}
         color={iconColor}
         weight="duotone"
@@ -103,6 +130,11 @@ const styles = StyleSheet.create({
   expandedText: {
     gap: 1,
   },
+  expandedDetails: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   expandedTemp: {
     color: theme.neutral.textPrimary,
     fontSize: 22,
@@ -112,6 +144,19 @@ const styles = StyleSheet.create({
     color: theme.neutral.textSecondary,
     fontSize: 12,
     fontWeight: '500',
+  },
+  sunTimes: {
+    gap: 3,
+  },
+  sunTime: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
+  sunTimeText: {
+    color: theme.neutral.textMuted,
+    fontSize: 11,
+    fontWeight: '600',
   },
   precipRow: {
     flexDirection: 'row',

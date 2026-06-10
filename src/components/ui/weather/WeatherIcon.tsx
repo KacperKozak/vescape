@@ -29,6 +29,7 @@ const ICON_MAP: Record<WeatherIconName, Icon> = {
 interface WeatherIconProps {
   code: number
   hour?: number
+  isNight?: boolean
   size?: number
   color?: string
   weight?: 'thin' | 'light' | 'regular' | 'bold' | 'fill' | 'duotone'
@@ -37,11 +38,12 @@ interface WeatherIconProps {
 export function WeatherIcon({
   code,
   hour,
+  isNight,
   size = 20,
   color = theme.neutral.textSecondary,
   weight = 'duotone',
 }: WeatherIconProps) {
-  const name = weatherCodeToIconName(code, hour)
+  const name = weatherCodeToIconName(code, hour, isNight)
   const IconComponent = ICON_MAP[name]
   return <IconComponent size={size} color={color} weight={weight} />
 }

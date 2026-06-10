@@ -10,6 +10,7 @@ export interface OpenMeteoHourInput {
 export interface WeatherHourForecast {
   hour: string
   hourNum: number
+  minuteNum: number
   temperature: number
   weatherCode: number
   precipitationProbability: number
@@ -30,8 +31,12 @@ function isNightHour(hour: number): boolean {
   return hour >= 21 || hour < 6
 }
 
-export function weatherCodeToIconName(code: number, hour?: number): WeatherIconName {
-  const night = hour != null && isNightHour(hour)
+export function weatherCodeToIconName(
+  code: number,
+  hour?: number,
+  nightOverride?: boolean,
+): WeatherIconName {
+  const night = nightOverride ?? (hour != null && isNightHour(hour))
   if (code === 0) return night ? 'moon' : 'sun'
   if (code <= 2) return night ? 'cloud-moon' : 'cloud-sun'
   if (code === 3) return 'cloud'
@@ -43,8 +48,8 @@ export function weatherCodeToIconName(code: number, hour?: number): WeatherIconN
   return 'cloud'
 }
 
-export function weatherCodeToColor(code: number, hour?: number): string {
-  const night = hour != null && isNightHour(hour)
+export function weatherCodeToColor(code: number, hour?: number, nightOverride?: boolean): string {
+  const night = nightOverride ?? (hour != null && isNightHour(hour))
   if (code === 0) return night ? theme.weather.moon : theme.weather.sun
   if (code <= 2) return night ? theme.weather.moonPartly : theme.weather.partly
   if (code === 3) return theme.weather.cloud
@@ -80,6 +85,27 @@ function parseHourNumber(isoTime: string): number {
   return Number(hour)
 }
 
+function parseMinuteNumber(isoTime: string): number {
+  const [, time = ''] = isoTime.split('T')
+  const [, minute = '0'] = time.split(':')
+  return Number(minute)
+}
+
+function minutesOfDay(isoTime: string): number {
+  return parseHourNumber(isoTime) * 60 + parseMinuteNumber(isoTime)
+}
+
+export function isNightAtTime(
+  hour: number,
+  minute: number,
+  sunrise: string | null,
+  sunset: string | null,
+): boolean {
+  if (!sunrise || !sunset) return isNightHour(hour)
+  const timeMinutes = hour * 60 + minute
+  return timeMinutes < minutesOfDay(sunrise) || timeMinutes >= minutesOfDay(sunset)
+}
+
 export function buildOpenMeteoHourlyForecast({
   times,
   temperatures,
@@ -89,6 +115,7 @@ export function buildOpenMeteoHourlyForecast({
   return times.map((time, index) => ({
     hour: parseHourLabel(time),
     hourNum: parseHourNumber(time),
+    minuteNum: parseMinuteNumber(time),
     temperature: Math.round(temperatures[index]),
     weatherCode: weatherCodes[index],
     precipitationProbability: precipitationProbabilities[index] ?? 0,
