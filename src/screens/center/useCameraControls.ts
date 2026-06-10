@@ -503,6 +503,18 @@ export function useCameraControls({
           animationMode: 'easeTo',
         })
       },
+      focusCoordinate(coordinate: [number, number]) {
+        setFollowGps(false)
+        const current = currentCameraRef.current
+        cameraRef.current?.setCamera({
+          centerCoordinate: coordinate,
+          zoomLevel: current?.zoomLevel,
+          heading: current?.heading,
+          pitch: current?.pitch,
+          animationDuration: MAP_DEFAULTS.animationDuration,
+          animationMode: 'easeTo',
+        })
+      },
     }),
     [
       applyLiveFollowCamera,

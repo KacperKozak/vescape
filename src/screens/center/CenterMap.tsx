@@ -90,6 +90,7 @@ export interface CenterMapHandle {
   togglePerspective: () => void
   setPadding: (bottom: number) => void
   zoomToLevel: (zoom: number) => void
+  focusCoordinate: (coordinate: [number, number]) => void
 }
 
 interface SelectedHistoryMarker {

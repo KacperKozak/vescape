@@ -105,6 +105,7 @@ export function CenterScreen({
           exitWeather: controller.exitWeatherMode,
           refreshWeather: controller.refreshWeather,
           weatherLocation: controller.liveLocations.at(-1) ?? controller.latestApproximateLocation,
+          replaceDirectionPoint: controller.replaceDirectionPoint,
         }}
         history={{
           enterHistoryMode: controller.enterHistoryMode,
