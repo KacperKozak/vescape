@@ -1,7 +1,11 @@
-import { useRef } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { ActivityIndicator, View, Text, StyleSheet } from 'react-native'
 
-import { CenterMap, type CenterMapHandle } from '@/screens/center/CenterMap'
+import {
+  CenterMap,
+  type CenterMapHandle,
+  type OffscreenMapIndicatorState,
+} from '@/screens/center/CenterMap'
 import { CenterOverlays } from '@/screens/center/CenterOverlays'
 import { useCenterScreenController } from '@/screens/center/useCenterScreenController'
 import type { Board } from '@/store/boardStore'
@@ -35,13 +39,28 @@ export function CenterScreen({
   onToggleRecordDebug,
 }: CenterScreenProps) {
   const mapRef = useRef<CenterMapHandle>(null)
+  const [offscreenMapIndicators, setOffscreenMapIndicators] = useState<
+    OffscreenMapIndicatorState[]
+  >([])
   const controller = useCenterScreenController({ mapRef })
+  const handleOffscreenIndicatorPress = useCallback(
+    (indicator: OffscreenMapIndicatorState) => {
+      controller.dismissMapSelector()
+      if (indicator.type === 'gps') {
+        mapRef.current?.recenterLive({ resetPadding: true })
+        return
+      }
+      controller.handleMapFocus()
+      mapRef.current?.focusCoordinate(indicator.coordinate)
+    },
+    [controller],
+  )
 
   if (!boardsLoaded) {
     return (
       <View style={styles.container}>
         <View style={styles.empty}>
-          <ActivityIndicator size="small" color="#3b82f6" />
+          <ActivityIndicator size="small" color={theme.wheel.color} />
           <Text style={styles.emptySubtitle}>Loading boards...</Text>
         </View>
       </View>
@@ -71,7 +90,18 @@ export function CenterScreen({
           void controller.replaceDirectionPoint(target.latitude, target.longitude)
         }
         onMapInteraction={controller.dismissMapSelector}
+        onMapPress={() => {
+          controller.dismissMapSelector()
+          controller.clearSelectedMapPoints()
+        }}
+        onEnterMapMode={controller.handleMapFocus}
+        onOffscreenMapIndicatorsChange={setOffscreenMapIndicators}
         directionPoint={controller.directionPoint}
+        mapPoints={controller.mapPoints}
+        selectedMapPointId={controller.selectedMapPointId}
+        hiddenMapPointKinds={controller.hiddenMapPointKinds}
+        onToggleMapPointSelection={controller.toggleMapPointSelection}
+        onRemoveMapPoint={(id) => void controller.removeMapPoint(id)}
         onClearDirectionPoint={() => void controller.clearDirectionPoint()}
         weatherActive={controller.weatherActive}
         seekPosition={controller.seekGpsPosition}
@@ -105,6 +135,11 @@ export function CenterScreen({
           exitWeather: controller.exitWeatherMode,
           refreshWeather: controller.refreshWeather,
           weatherLocation: controller.liveLocations.at(-1) ?? controller.latestApproximateLocation,
+          addMapPoint: controller.saveMapPoint,
+          hiddenMapPointKinds: controller.hiddenMapPointKinds,
+          toggleMapPointKindVisibility: controller.toggleMapPointKindVisibility,
+          offscreenMapIndicators,
+          onOffscreenIndicatorPress: handleOffscreenIndicatorPress,
         }}
         history={{
           enterHistoryMode: controller.enterHistoryMode,

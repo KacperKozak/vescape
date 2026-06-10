@@ -42,6 +42,8 @@ beforeEach(async () => {
   const { useMapStore } = await import('./mapStore')
   useMapStore.setState({
     mapPoints: [],
+    selectedMapPointId: null,
+    hiddenMapPointKinds: [],
     loaded: false,
   })
 })
@@ -169,4 +171,160 @@ test('clears direction point through native storage', async () => {
 
   expect(useMapStore.getState().mapPoints).toEqual([])
   expect(deleteMapPoint).toHaveBeenCalledWith(direction.id)
+})
+
+test('toggles one non-direction Map Point selection at a time', async () => {
+  const { useMapStore } = await import('./mapStore')
+  const first: MapPoint = {
+    id: 'drop-1',
+    kind: 'drop',
+    latitude: 52.1,
+    longitude: 21.1,
+    createdAt: 1000,
+    updatedAt: 1000,
+  }
+  const second: MapPoint = {
+    id: 'bonk-1',
+    kind: 'bonk',
+    latitude: 52.2,
+    longitude: 21.2,
+    createdAt: 1100,
+    updatedAt: 1100,
+  }
+  useMapStore.setState({ mapPoints: [first, second], selectedMapPointId: null, loaded: true })
+
+  useMapStore.getState().toggleMapPointSelection(first.id)
+
+  expect(useMapStore.getState().selectedMapPointId).toBe(first.id)
+
+  useMapStore.getState().toggleMapPointSelection(second.id)
+
+  expect(useMapStore.getState().selectedMapPointId).toBe(second.id)
+
+  useMapStore.getState().toggleMapPointSelection(second.id)
+
+  expect(useMapStore.getState().selectedMapPointId).toBe(null)
+})
+
+test('ignores direction point selection', async () => {
+  const { useMapStore } = await import('./mapStore')
+  const direction: MapPoint = {
+    id: 'direction-1',
+    kind: 'direction',
+    latitude: 52.2,
+    longitude: 21.2,
+    createdAt: 1100,
+    updatedAt: 1100,
+  }
+  useMapStore.setState({ mapPoints: [direction], selectedMapPointId: null, loaded: true })
+
+  useMapStore.getState().toggleMapPointSelection(direction.id)
+
+  expect(useMapStore.getState().selectedMapPointId).toBe(null)
+})
+
+test('clears selected non-direction Map Points without clearing direction point', async () => {
+  const { useMapStore } = await import('./mapStore')
+  const drop: MapPoint = {
+    id: 'drop-1',
+    kind: 'drop',
+    latitude: 52.1,
+    longitude: 21.1,
+    createdAt: 1000,
+    updatedAt: 1000,
+  }
+  const direction: MapPoint = {
+    id: 'direction-1',
+    kind: 'direction',
+    latitude: 52.2,
+    longitude: 21.2,
+    createdAt: 1100,
+    updatedAt: 1100,
+  }
+  useMapStore.setState({
+    mapPoints: [drop, direction],
+    selectedMapPointId: drop.id,
+    loaded: true,
+  })
+
+  useMapStore.getState().clearSelectedMapPoints()
+
+  expect(useMapStore.getState().selectedMapPointId).toBe(null)
+  expect(useMapStore.getState().getDirectionPoint()).toEqual(direction)
+})
+
+test('prunes stale selected Map Point id on remove and load', async () => {
+  const { useMapStore } = await import('./mapStore')
+  const drop: MapPoint = {
+    id: 'drop-1',
+    kind: 'drop',
+    latitude: 52.1,
+    longitude: 21.1,
+    createdAt: 1000,
+    updatedAt: 1000,
+  }
+  const bonk: MapPoint = {
+    id: 'bonk-1',
+    kind: 'bonk',
+    latitude: 52.2,
+    longitude: 21.2,
+    createdAt: 1100,
+    updatedAt: 1100,
+  }
+  persistedMapPoints = [bonk]
+  useMapStore.setState({
+    mapPoints: [drop, bonk],
+    selectedMapPointId: drop.id,
+    loaded: true,
+  })
+
+  await useMapStore.getState().removeMapPoint(drop.id)
+
+  expect(useMapStore.getState().selectedMapPointId).toBe(null)
+
+  useMapStore.setState({ selectedMapPointId: bonk.id })
+
+  await useMapStore.getState().load()
+
+  expect(useMapStore.getState().selectedMapPointId).toBe(bonk.id)
+
+  useMapStore.setState({ selectedMapPointId: 'missing' })
+
+  await useMapStore.getState().load()
+
+  expect(useMapStore.getState().selectedMapPointId).toBe(null)
+})
+
+test('toggles Map Point Visibility without changing stored Map Points', async () => {
+  const { useMapStore } = await import('./mapStore')
+  const drop: MapPoint = {
+    id: 'drop-1',
+    kind: 'drop',
+    latitude: 52.1,
+    longitude: 21.1,
+    createdAt: 1000,
+    updatedAt: 1000,
+  }
+  useMapStore.setState({ mapPoints: [drop], hiddenMapPointKinds: [], loaded: true })
+
+  useMapStore.getState().toggleMapPointKindVisibility('drop')
+
+  expect(useMapStore.getState().hiddenMapPointKinds).toEqual(['drop'])
+  expect(useMapStore.getState().mapPoints).toEqual([drop])
+  expect(upsertMapPoint).not.toHaveBeenCalled()
+  expect(deleteMapPoint).not.toHaveBeenCalled()
+
+  useMapStore.getState().toggleMapPointKindVisibility('drop')
+
+  expect(useMapStore.getState().hiddenMapPointKinds).toEqual([])
+  expect(useMapStore.getState().mapPoints).toEqual([drop])
+})
+
+test('keeps direction Map Point always visible', async () => {
+  const { useMapStore } = await import('./mapStore')
+
+  useMapStore.getState().toggleMapPointKindVisibility('direction')
+
+  expect(useMapStore.getState().hiddenMapPointKinds).toEqual([])
+  expect(deleteMapPoint).not.toHaveBeenCalled()
 })

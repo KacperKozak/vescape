@@ -110,6 +110,7 @@ interface UseCameraControlsParams {
   resetHeadingOnRecenter: boolean
   liveFollowUpdatesEnabled: boolean
   followAnimationDuration: number
+  getViewfinderCoordinateFromMap?: () => Promise<{ latitude: number; longitude: number } | null>
   onHeadingChange: (heading: number) => void
   onPerspectiveChange: (enabled: boolean) => void
 }
@@ -131,6 +132,7 @@ export function useCameraControls({
   resetHeadingOnRecenter,
   liveFollowUpdatesEnabled,
   followAnimationDuration,
+  getViewfinderCoordinateFromMap,
   onHeadingChange,
   onPerspectiveChange,
 }: UseCameraControlsParams) {
@@ -466,6 +468,12 @@ export function useCameraControls({
         previewZoomBaseRef.current = null
       },
       restorePreviewPan,
+      async getViewfinderCoordinate() {
+        const viewfinderCoordinate = await getViewfinderCoordinateFromMap?.()
+        if (viewfinderCoordinate) return viewfinderCoordinate
+        const center = currentCameraRef.current?.centerCoordinate ?? gpsCamera.centerCoordinate
+        return { longitude: center[0], latitude: center[1] }
+      },
       resetRotation() {
         followZoomLevelRef.current = null
         cameraRef.current?.setCamera({
@@ -503,12 +511,25 @@ export function useCameraControls({
           animationMode: 'easeTo',
         })
       },
+      focusCoordinate(coordinate: [number, number]) {
+        setFollowGps(false)
+        const current = currentCameraRef.current
+        cameraRef.current?.setCamera({
+          centerCoordinate: coordinate,
+          zoomLevel: current?.zoomLevel,
+          heading: current?.heading,
+          pitch: current?.pitch,
+          animationDuration: MAP_DEFAULTS.animationDuration,
+          animationMode: 'easeTo',
+        })
+      },
     }),
     [
       applyLiveFollowCamera,
       followGps,
       followHeadingDeg,
       getLiveFollowCamera,
+      getViewfinderCoordinateFromMap,
       gpsCamera,
       gpsHeadingMode,
       historyActive,
