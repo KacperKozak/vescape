@@ -13,6 +13,14 @@ Always use **bun** for all package management and script execution:
 
 Do **not** use `npm`, `yarn`, `npx`, or `pnpm`.
 
+## Environment Fixes
+
+Do not fix local machine, shell, PATH, Java, Android SDK, Maestro, or other CLI/tooling environment problems in project code, package scripts, Expo config, or source files.
+
+- Fix user or agent environment files instead, such as shell rc/profile files.
+- Keep project scripts portable and free of machine-specific paths.
+- If a tool is missing from non-interactive shells, repair the shell/agent environment, not `package.json`.
+
 ## Architecture Discipline
 
 This is a PoC, but keep it sharp:
@@ -46,6 +54,10 @@ PostHog agent debugging commands live in `docs/agents/posthog.md`.
 ### Issue tracker
 
 Issues and PRDs are tracked in GitHub Issues for `KacperKozak/vesc-app-poc`. See `docs/agents/issue-tracker.md`.
+
+### E2E tests
+
+Use the local `/e2e` skill for Maestro E2E runs. It covers fresh-shell execution, Android device checks, app install rules, and env-vs-project boundaries.
 
 ### Triage labels
 
