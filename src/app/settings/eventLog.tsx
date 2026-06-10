@@ -18,7 +18,14 @@ import { theme } from '@/constants/theme'
 
 const PAGE_SIZE = 50
 
-const GOOD_EVENTS = new Set(['board_ready', 'gatt_connected', 'gatt_ready', 'reconnect_scan_found'])
+const GOOD_EVENTS = new Set([
+  'board_ready',
+  'can_ping_direct_fallback',
+  'gatt_connected',
+  'gatt_ready',
+  'reconnect_scan_found',
+  'telemetry_polling_started',
+])
 
 const BAD_EVENTS = new Set([
   'ble_connect_failed',

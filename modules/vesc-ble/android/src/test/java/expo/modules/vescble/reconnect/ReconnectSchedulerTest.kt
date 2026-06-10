@@ -25,7 +25,7 @@ class ReconnectSchedulerTest {
         val fixture = Fixture()
         fixture.reconnect.schedule(fixture.session, TARGET_ID, "board disconnected", null)
 
-        fixture.scheduler.advance(250L)
+        fixture.scheduler.advance(500L)
         assertTrue(fixture.reconnect.isScanning)
         assertEquals(listOf("attempt:1", "scan_start"), fixture.listener.events)
 
@@ -53,7 +53,7 @@ class ReconnectSchedulerTest {
     fun `disconnect during scan cancels rescue`() {
         val fixture = Fixture()
         fixture.reconnect.schedule(fixture.session, TARGET_ID, "board disconnected", null)
-        fixture.scheduler.advance(250L)
+        fixture.scheduler.advance(500L)
 
         fixture.reconnect.cancel()
         fixture.scheduler.advance(ReconnectPolicy.scanTimeoutMs())

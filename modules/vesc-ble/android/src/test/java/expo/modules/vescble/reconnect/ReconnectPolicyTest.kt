@@ -7,10 +7,10 @@ import org.junit.Test
 class ReconnectPolicyTest {
     @Test
     fun `backoff grows linearly then caps`() {
-        assertEquals(ReconnectDecision.Retry(attempt = 1, delayMs = 250L), ReconnectPolicy.nextDecision(0))
-        assertEquals(ReconnectDecision.Retry(attempt = 2, delayMs = 500L), ReconnectPolicy.nextDecision(1))
-        assertEquals(ReconnectDecision.Retry(attempt = 8, delayMs = 2_000L), ReconnectPolicy.nextDecision(7))
-        assertEquals(ReconnectDecision.Retry(attempt = 60, delayMs = 2_000L), ReconnectPolicy.nextDecision(59))
+        assertEquals(ReconnectDecision.Retry(attempt = 1, delayMs = 500L), ReconnectPolicy.nextDecision(0))
+        assertEquals(ReconnectDecision.Retry(attempt = 2, delayMs = 1_000L), ReconnectPolicy.nextDecision(1))
+        assertEquals(ReconnectDecision.Retry(attempt = 10, delayMs = 5_000L), ReconnectPolicy.nextDecision(9))
+        assertEquals(ReconnectDecision.Retry(attempt = 60, delayMs = 5_000L), ReconnectPolicy.nextDecision(59))
     }
 
     @Test

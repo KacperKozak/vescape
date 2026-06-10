@@ -1,7 +1,7 @@
 package expo.modules.vescble.reconnect
 
-internal const val RECONNECT_BACKOFF_STEP_MS = 250L
-internal const val RECONNECT_BACKOFF_MAX_MS = 2_000L
+internal const val RECONNECT_BACKOFF_STEP_MS = 500L
+internal const val RECONNECT_BACKOFF_MAX_MS = 5_000L
 internal const val RECONNECT_SCAN_TIMEOUT_MS = 6_000L
 internal const val RECONNECT_MAX_ATTEMPTS = 60
 internal const val BOARD_READY_TIMEOUT_BASE_MS = 4_000L
