@@ -30,7 +30,7 @@ import { MapNavigationSelector } from '@/components/ui/menus/MapNavigationSelect
 import { MapStyleSwitch } from '@/components/ui/menus/MapStyleSwitch'
 import type { MapNavigationMode, MapStyleKey } from '@/constants/mapStyles'
 import { theme } from '@/constants/theme'
-import { searchMapConceptResults, type MapSearchConceptResult } from '@/lib/map/searchConcept'
+import { searchMapResults, type MapSearchResult } from '@/lib/map/search'
 import type { HistoryMetricKey } from '@/lib/history/metricColorScale'
 import { routes } from '@/navigation/routes'
 import { BottomTelemetryStrip, STRIP_CONTENT_HEIGHT } from '@/screens/center/BottomTelemetryStrip'
@@ -109,6 +109,7 @@ interface CenterHistoryOverlayProps {
 interface CenterOverlaysProps {
   mode: CenterViewState
   mapRef: RefObject<CenterMapHandle | null>
+  mapInteractionRevision: number
   board: CenterBoardOverlayProps
   map: CenterMapOverlayProps
   history: CenterHistoryOverlayProps
@@ -121,16 +122,24 @@ const TELEMETRY_FADE_TIMING = { duration: 260 } as const
 interface FullMapControlsProps {
   mapRef: RefObject<CenterMapHandle | null>
   map: CenterMapOverlayProps
+  mapInteractionRevision: number
   top: number
   bottom: number
 }
 
-function FullMapControls({ mapRef, map, top, bottom }: FullMapControlsProps) {
-  const [searchOpen, setSearchOpen] = useState(false)
+function FullMapControls({
+  mapRef,
+  map,
+  mapInteractionRevision,
+  top,
+  bottom,
+}: FullMapControlsProps) {
+  const [searchOpenedAtRevision, setSearchOpenedAtRevision] = useState<number | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const [searchResults, setSearchResults] = useState<MapSearchConceptResult[]>([])
+  const [searchResults, setSearchResults] = useState<MapSearchResult[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
+  const searchOpen = searchOpenedAtRevision === mapInteractionRevision
 
   useEffect(() => {
     const query = searchQuery.trim()
@@ -141,7 +150,7 @@ function FullMapControls({ mapRef, map, top, bottom }: FullMapControlsProps) {
     const controller = new AbortController()
     const timeout = setTimeout(() => {
       setSearchLoading(true)
-      void searchMapConceptResults(query, {
+      void searchMapResults(query, {
         proximity: map.weatherLocation,
         signal: controller.signal,
       })
@@ -164,11 +173,11 @@ function FullMapControls({ mapRef, map, top, bottom }: FullMapControlsProps) {
   }, [map.weatherLocation, searchOpen, searchQuery])
 
   const openSearch = useCallback(() => {
-    setSearchOpen(true)
-  }, [])
+    setSearchOpenedAtRevision(mapInteractionRevision)
+  }, [mapInteractionRevision])
 
   const closeSearch = useCallback(() => {
-    setSearchOpen(false)
+    setSearchOpenedAtRevision(null)
     setSearchQuery('')
     setSearchResults([])
     setSearchError(null)
@@ -187,8 +196,8 @@ function FullMapControls({ mapRef, map, top, bottom }: FullMapControlsProps) {
   }, [])
 
   const handleSearchSelect = useCallback(
-    (result: MapSearchConceptResult) => {
-      setSearchOpen(false)
+    (result: MapSearchResult) => {
+      setSearchOpenedAtRevision(null)
       setSearchQuery(result.title)
       mapRef.current?.focusCoordinate([result.longitude, result.latitude])
       void map.replaceDirectionPoint(result.latitude, result.longitude)
@@ -201,6 +210,9 @@ function FullMapControls({ mapRef, map, top, bottom }: FullMapControlsProps) {
     if (first) handleSearchSelect(first)
   }, [handleSearchSelect, searchResults])
 
+  const showNoResults =
+    !searchLoading && !searchError && searchQuery.trim().length >= 2 && searchResults.length === 0
+
   return (
     <>
       {searchOpen ? (
@@ -209,6 +221,7 @@ function FullMapControls({ mapRef, map, top, bottom }: FullMapControlsProps) {
             <MagnifyingGlassIcon size={22} color={theme.neutral.textSecondary} weight="bold" />
             <TextInput
               autoFocus
+              selectTextOnFocus
               value={searchQuery}
               onChangeText={handleSearchQueryChange}
               onSubmitEditing={handleSearchSubmit}
@@ -219,53 +232,52 @@ function FullMapControls({ mapRef, map, top, bottom }: FullMapControlsProps) {
             />
             <IconButton icon={XIcon} size="lg" onPress={closeSearch} />
           </View>
-          <View style={styles.mapSearchResults}>
-            {searchLoading ? (
-              <View style={styles.mapSearchStatusRow}>
-                <ActivityIndicator size="small" color={theme.wheel.color} />
-                <Text style={styles.mapSearchStatusText}>Searching Mapbox</Text>
-              </View>
-            ) : null}
-            {searchError ? (
-              <View style={styles.mapSearchStatusRow}>
-                <Text style={styles.mapSearchErrorText}>{searchError}</Text>
-              </View>
-            ) : null}
-            {!searchLoading &&
-            !searchError &&
-            searchQuery.trim().length >= 2 &&
-            searchResults.length === 0 ? (
-              <View style={styles.mapSearchStatusRow}>
-                <Text style={styles.mapSearchStatusText}>No results</Text>
-              </View>
-            ) : null}
-            {searchResults.map((result, index) => (
-              <Pressable
-                key={result.id}
-                accessibilityRole="button"
-                style={({ pressed }) => [
-                  styles.mapSearchResult,
-                  pressed && styles.mapSearchResultPressed,
-                ]}
-                onPress={() => handleSearchSelect(result)}
-              >
-                <View style={styles.mapSearchResultIcon}>
-                  <MapPinIcon size={16} color={theme.gps.text} weight="duotone" />
+          {searchLoading || searchError || showNoResults || searchResults.length > 0 ? (
+            <View style={styles.mapSearchResults}>
+              {searchLoading ? (
+                <View style={styles.mapSearchStatusRow}>
+                  <ActivityIndicator size="small" color={theme.wheel.color} />
+                  <Text style={styles.mapSearchStatusText}>Searching Mapbox</Text>
                 </View>
-                <View style={styles.mapSearchResultText}>
-                  <Text style={styles.mapSearchResultTitle} numberOfLines={1}>
-                    {result.title}
-                  </Text>
-                  <Text style={styles.mapSearchResultSubtitle} numberOfLines={1}>
-                    {result.subtitle}
-                  </Text>
+              ) : null}
+              {searchError ? (
+                <View style={styles.mapSearchStatusRow}>
+                  <Text style={styles.mapSearchErrorText}>{searchError}</Text>
                 </View>
-                {index < searchResults.length - 1 ? (
-                  <View style={styles.mapSearchResultBorder} />
-                ) : null}
-              </Pressable>
-            ))}
-          </View>
+              ) : null}
+              {showNoResults ? (
+                <View style={styles.mapSearchStatusRow}>
+                  <Text style={styles.mapSearchStatusText}>No results</Text>
+                </View>
+              ) : null}
+              {searchResults.map((result, index) => (
+                <Pressable
+                  key={result.id}
+                  accessibilityRole="button"
+                  style={({ pressed }) => [
+                    styles.mapSearchResult,
+                    pressed && styles.mapSearchResultPressed,
+                  ]}
+                  onPress={() => handleSearchSelect(result)}
+                >
+                  <View style={styles.mapSearchResultIcon}>
+                    <MapPinIcon size={16} color={theme.gps.text} weight="duotone" />
+                  </View>
+                  <View style={styles.mapSearchResultText}>
+                    <Text style={styles.mapSearchResultTitle} numberOfLines={1}>
+                      {result.title}
+                    </Text>
+                    <Text style={styles.mapSearchResultSubtitle} numberOfLines={1}>
+                      {result.subtitle}
+                    </Text>
+                  </View>
+                  {index < searchResults.length - 1 ? (
+                    <View style={styles.mapSearchResultBorder} />
+                  ) : null}
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
         </View>
       ) : (
         <IconButton
@@ -306,7 +318,14 @@ function FullMapControls({ mapRef, map, top, bottom }: FullMapControlsProps) {
   )
 }
 
-export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOverlaysProps) {
+export function CenterOverlays({
+  mode,
+  mapRef,
+  mapInteractionRevision,
+  board,
+  map,
+  history,
+}: CenterOverlaysProps) {
   const insets = useSafeAreaInsets()
   const aboveStripBottom = STRIP_CONTENT_HEIGHT + Math.max(insets.bottom * 0.5, 8) + 8
   const historyPanelBottom = Math.max(insets.bottom, 16) + 8
@@ -465,6 +484,7 @@ export function CenterOverlays({ mode, mapRef, board, map, history }: CenterOver
         <FullMapControls
           mapRef={mapRef}
           map={map}
+          mapInteractionRevision={mapInteractionRevision}
           top={Math.max(insets.top, 8)}
           bottom={aboveStripBottom - 112}
         />

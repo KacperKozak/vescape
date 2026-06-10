@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { ActivityIndicator, View, Text, StyleSheet } from 'react-native'
 
 import { CenterMap, type CenterMapHandle } from '@/screens/center/CenterMap'
@@ -36,6 +36,12 @@ export function CenterScreen({
 }: CenterScreenProps) {
   const mapRef = useRef<CenterMapHandle>(null)
   const controller = useCenterScreenController({ mapRef })
+  const dismissMapSelector = controller.dismissMapSelector
+  const [mapInteractionRevision, setMapInteractionRevision] = useState(0)
+  const handleMapInteraction = useCallback(() => {
+    dismissMapSelector()
+    setMapInteractionRevision((revision) => revision + 1)
+  }, [dismissMapSelector])
 
   if (!boardsLoaded) {
     return (
@@ -70,7 +76,7 @@ export function CenterScreen({
         onLongPressTarget={(target) =>
           void controller.replaceDirectionPoint(target.latitude, target.longitude)
         }
-        onMapInteraction={controller.dismissMapSelector}
+        onMapInteraction={handleMapInteraction}
         directionPoint={controller.directionPoint}
         onClearDirectionPoint={() => void controller.clearDirectionPoint()}
         weatherActive={controller.weatherActive}
@@ -79,6 +85,7 @@ export function CenterScreen({
       <CenterOverlays
         mode={controller.mode}
         mapRef={mapRef}
+        mapInteractionRevision={mapInteractionRevision}
         board={{
           boards,
           activeBoardId,

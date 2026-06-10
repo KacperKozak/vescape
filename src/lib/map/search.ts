@@ -1,6 +1,6 @@
 import { MAPBOX_ACCESS_TOKEN } from '@/config/mapy'
 
-export interface MapSearchConceptResult {
+export interface MapSearchResult {
   id: string
   title: string
   subtitle: string
@@ -47,7 +47,7 @@ function getFeatureSubtitle(feature: MapboxGeocodingFeature) {
   return fullAddress && place ? fullAddress : fullAddress || place || 'Mapbox result'
 }
 
-function toMapSearchResult(feature: MapboxGeocodingFeature): MapSearchConceptResult | null {
+function toMapSearchResult(feature: MapboxGeocodingFeature): MapSearchResult | null {
   const coordinate = getFeatureCoordinates(feature)
   if (!coordinate) return null
 
@@ -63,15 +63,12 @@ function toMapSearchResult(feature: MapboxGeocodingFeature): MapSearchConceptRes
   }
 }
 
-interface SearchMapConceptResultsOptions {
+interface SearchMapResultsOptions {
   proximity?: { latitude: number; longitude: number } | null
   signal?: AbortSignal
 }
 
-export async function searchMapConceptResults(
-  query: string,
-  options: SearchMapConceptResultsOptions = {},
-) {
+export async function searchMapResults(query: string, options: SearchMapResultsOptions = {}) {
   const normalized = normalizeSearchQuery(query)
   if (normalized.length < 2) return []
   if (!MAPBOX_ACCESS_TOKEN) throw new Error('Mapbox access token missing')
@@ -81,7 +78,7 @@ export async function searchMapConceptResults(
     access_token: MAPBOX_ACCESS_TOKEN,
     autocomplete: 'true',
     limit: '5',
-    types: 'address,street,place,locality,neighborhood,poi',
+    types: 'address,street,place,locality,neighborhood',
   })
   if (options.proximity) {
     params.set('proximity', `${options.proximity.longitude},${options.proximity.latitude}`)
