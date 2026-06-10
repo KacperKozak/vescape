@@ -14,10 +14,16 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;27.1.12297006"
       - run: bun install
-      - run: bun run ts
-      - run: bun run lint
-      - run: bun run test:bun
+      - run: bun run copy:shared
+      - run: bun x expo prebuild --platform android --no-install
+      - run: bun run check
 
   build:
     runs-on: ubuntu-latest
