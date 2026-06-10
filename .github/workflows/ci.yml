@@ -10,8 +10,8 @@ jobs:
   check:
     runs-on: ubuntu-latest
     env:
-      ANDROID_HOME: ${{ runner.temp }}/android-sdk
-      ANDROID_SDK_ROOT: ${{ runner.temp }}/android-sdk
+      ANDROID_HOME: /tmp/android-sdk
+      ANDROID_SDK_ROOT: /tmp/android-sdk
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
