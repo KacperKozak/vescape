@@ -109,6 +109,7 @@ function BoardBatteryEditorModalContent({
         onChangeParallelCount={setDraftParallelCount}
         onChangeManualMinVoltage={setDraftManualMinVoltage}
         onChangeManualMaxVoltage={setDraftManualMaxVoltage}
+        testIDPrefix="edit-board-battery"
       />
       <Button
         label="Save"
@@ -124,6 +125,7 @@ function BoardBatteryEditorModalContent({
             manualMaxVoltage: draftManualMaxVoltage,
           })
         }
+        testID="edit-board-battery-save"
       />
     </View>
   )

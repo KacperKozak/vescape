@@ -2,22 +2,26 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native'
 
 import { WeatherIcon } from '@/components/ui/weather/WeatherIcon'
 import { theme } from '@/constants/theme'
-import { weatherCodeToColor } from '@/lib/weather'
+import { isNightAtTime, weatherCodeToColor } from '@/lib/weather'
 import { useWeatherStore, type HourForecast } from '@/store/weatherStore'
 
 interface HourItemProps {
   item: HourForecast
+  sunrise: string | null
+  sunset: string | null
 }
 
-function HourItem({ item }: HourItemProps) {
+function HourItem({ item, sunrise, sunset }: HourItemProps) {
+  const isNight = isNightAtTime(item.hourNum, item.minuteNum, sunrise, sunset)
   return (
     <View style={styles.item}>
       <Text style={styles.hour}>{item.hour}</Text>
       <WeatherIcon
         code={item.weatherCode}
         hour={item.hourNum}
+        isNight={isNight}
         size={20}
-        color={weatherCodeToColor(item.weatherCode, item.hourNum)}
+        color={weatherCodeToColor(item.weatherCode, item.hourNum, isNight)}
         weight="duotone"
       />
       <Text style={styles.temp}>{item.temperature}°</Text>
@@ -30,6 +34,8 @@ function HourItem({ item }: HourItemProps) {
 
 export function WeatherHourlyStrip() {
   const hourly = useWeatherStore((s) => s.hourly)
+  const sunrise = useWeatherStore((s) => s.sunrise)
+  const sunset = useWeatherStore((s) => s.sunset)
 
   if (hourly.length === 0) return null
 
@@ -41,7 +47,7 @@ export function WeatherHourlyStrip() {
       style={styles.container}
     >
       {hourly.map((item) => (
-        <HourItem key={item.hour} item={item} />
+        <HourItem key={item.hour} item={item} sunrise={sunrise} sunset={sunset} />
       ))}
     </ScrollView>
   )

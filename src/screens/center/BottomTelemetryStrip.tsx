@@ -55,6 +55,7 @@ export function BottomTelemetryStrip({ revealProgress }: BottomTelemetryStripPro
             style={({ pressed }) => [styles.metricCell, pressed && styles.cellPressed]}
             android_ripple={interaction.ripple}
             onPress={() => router.push(routes.controlTemperatures)}
+            testID="telemetry-motor-temp-cell"
           >
             <Text style={styles.subLabel}>Motor</Text>
             <Text style={styles.value} numberOfLines={1}>
@@ -74,6 +75,7 @@ export function BottomTelemetryStrip({ revealProgress }: BottomTelemetryStripPro
             style={({ pressed }) => [styles.metricCell, pressed && styles.cellPressed]}
             android_ripple={interaction.ripple}
             onPress={() => router.push(routes.controlTemperatures)}
+            testID="telemetry-controller-temp-cell"
           >
             <Text style={styles.subLabel}>Ctrl</Text>
             <Text style={styles.value} numberOfLines={1}>
@@ -93,6 +95,7 @@ export function BottomTelemetryStrip({ revealProgress }: BottomTelemetryStripPro
             style={({ pressed }) => [styles.metricCell, pressed && styles.cellPressed]}
             android_ripple={interaction.ripple}
             onPress={() => router.push(routes.controlCurrents)}
+            testID="telemetry-motor-current-cell"
           >
             <Text style={styles.subLabel}>Motor</Text>
             <Text style={styles.value} numberOfLines={1}>
@@ -112,6 +115,7 @@ export function BottomTelemetryStrip({ revealProgress }: BottomTelemetryStripPro
             style={({ pressed }) => [styles.metricCell, pressed && styles.cellPressed]}
             android_ripple={interaction.ripple}
             onPress={() => router.push(routes.controlCurrents)}
+            testID="telemetry-battery-current-cell"
           >
             <Text style={styles.subLabel}>Batt</Text>
             <Text style={styles.value} numberOfLines={1}>

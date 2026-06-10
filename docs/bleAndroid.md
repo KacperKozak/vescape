@@ -96,6 +96,13 @@ if (char.uuid == NUS_RX_UUID || char.uuid == NUS_TX_UUID) { emit() }
 
 **Tune/config reads**: Refloat custom config reads are high-volume BLE/CAN work. Treat them as a separate operation from normal telemetry startup. Do not run config reads concurrently with startup probes, and avoid adding fallback traffic while a config read is active.
 
+**CAN ping and direct-connection fallback**: boards with a VESC Express (ESP32 BLE/WiFi module) use CAN bus to reach the motor controller. On connect, native sends `COMM_PING_CAN` to discover the CAN id. If the response arrives in time, polling uses `COMM_FORWARD_CAN` to reach the motor controller. If it times out (3.5s), native falls back to direct polling. Two board architectures exist:
+
+- **CAN bridge boards** (VESC Express T, Tronic 250r with BLE UART bridge): the motor controller + Refloat app sit behind CAN. Direct polling gets no telemetry — the Express/bridge has no motor data itself. These boards depend on CAN discovery succeeding.
+- **Direct boards**: the motor controller is directly connected via BLE. CAN ping returns empty or times out, direct polling works fine.
+
+On CAN bridge boards, the CAN ping response can arrive slightly after the 3.5s timeout. Native must accept late CAN ping responses during `WaitingForTelemetry` phase — rejecting them traps the board in a reconnect loop (direct polling fails, timeout, reconnect, repeat). Late CAN ping is only rejected once `boardStatus == Connected`, where it would disrupt a working session.
+
 ---
 
 ## Working connection log

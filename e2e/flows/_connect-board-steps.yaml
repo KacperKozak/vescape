@@ -1,0 +1,76 @@
+appId: com.anonymous.vescpoc
+---
+- extendedWaitUntil:
+    visible: E2E Board
+    timeout: 15000
+- tapOn:
+    id: floating-bar-connect
+- assertVisible: Connecting…
+- extendedWaitUntil:
+    visible:
+      id: board-disconnect-button
+    timeout: 15000
+
+- assertVisible:
+    id: telemetry-motor-temp-cell
+- assertVisible:
+    id: telemetry-controller-temp-cell
+- assertVisible:
+    id: telemetry-motor-current-cell
+- assertVisible:
+    id: telemetry-battery-current-cell
+- assertVisible:
+    id: battery-bar
+
+- tapOn:
+    id: board-edit-button
+- assertVisible: Board
+- assertVisible: 21s2p.*
+- tapOn:
+    id: edit-board-info-row
+- assertVisible: Board info
+- tapOn:
+    id: edit-board-name-input
+- eraseText
+- inputText: E2E Renamed Board
+- hideKeyboard
+- tapOn:
+    id: edit-board-info-save
+- assertVisible: E2E Renamed Board
+
+- tapOn:
+    id: edit-board-battery-row
+- assertVisible: Battery
+- tapOn:
+    id: edit-board-battery-manual-mode
+- tapOn:
+    id: edit-board-battery-manual-min-input
+- eraseText
+- inputText: 70
+- hideKeyboard
+- tapOn:
+    id: edit-board-battery-manual-max-input
+- eraseText
+- inputText: 84
+- hideKeyboard
+- tapOn:
+    id: edit-board-battery-save
+- assertVisible: Manual voltage range
+
+- back
+- assertVisible: E2E Renamed Board
+- tapOn:
+    id: board-disconnect-button
+- extendedWaitUntil:
+    visible: Board not connected
+    timeout: 15000
+- tapOn:
+    id: floating-bar-connect
+- assertVisible: Connecting…
+- extendedWaitUntil:
+    visible:
+      id: board-disconnect-button
+    timeout: 15000
+- assertVisible: E2E Renamed Board
+- assertVisible:
+    id: telemetry-motor-temp-cell

@@ -1,23 +1,23 @@
 import { create } from 'zustand'
 
-import { parseHourLabel, isFutureHour } from '@/lib/weather'
+import { buildOpenMeteoHourlyForecast, type WeatherHourForecast } from '@/lib/weather'
 
 const CACHE_MS = 10 * 60 * 1_000
 const MIN_DELTA_DEG = 0.01
 const FORECAST_HOURS = 12
 
-export interface HourForecast {
-  hour: string
-  hourNum: number
-  temperature: number
-  weatherCode: number
-  precipitationProbability: number
+function getDeviceTimeZone(): string {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone
 }
+
+export type HourForecast = WeatherHourForecast
 
 interface WeatherState {
   temperature: number | null
   weatherCode: number | null
   precipitationProbability: number | null
+  sunrise: string | null
+  sunset: string | null
   hourly: HourForecast[]
   loading: boolean
   lastLat: number | null
@@ -34,6 +34,8 @@ export const useWeatherStore = create<WeatherState & WeatherActions>((set, get) 
   temperature: null,
   weatherCode: null,
   precipitationProbability: null,
+  sunrise: null,
+  sunset: null,
   hourly: [],
   loading: false,
   lastLat: null,
@@ -57,7 +59,8 @@ export const useWeatherStore = create<WeatherState & WeatherActions>((set, get) 
     set({ loading: true })
 
     try {
-      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,precipitation_probability&hourly=temperature_2m,weather_code,precipitation_probability&forecast_hours=${FORECAST_HOURS}&timezone=auto`
+      const timezone = encodeURIComponent(getDeviceTimeZone())
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code,precipitation_probability&hourly=temperature_2m,weather_code,precipitation_probability&daily=sunrise,sunset&forecast_hours=${FORECAST_HOURS}&forecast_days=1&timezone=${timezone}`
       const res = await globalThis.fetch(url)
       if (!res.ok) return
       const json = await res.json()
@@ -72,24 +75,22 @@ export const useWeatherStore = create<WeatherState & WeatherActions>((set, get) 
       const temps: number[] = json.hourly?.temperature_2m ?? []
       const codes: number[] = json.hourly?.weather_code ?? []
       const precips: (number | null)[] = json.hourly?.precipitation_probability ?? []
+      const sunrise: string | null = json.daily?.sunrise?.[0] ?? null
+      const sunset: string | null = json.daily?.sunset?.[0] ?? null
 
-      const hourly: HourForecast[] = []
-      for (let i = 0; i < times.length; i++) {
-        if (!isFutureHour(times[i])) continue
-        const h = new Date(times[i]).getHours()
-        hourly.push({
-          hour: parseHourLabel(times[i]),
-          hourNum: h,
-          temperature: Math.round(temps[i]),
-          weatherCode: codes[i],
-          precipitationProbability: precips[i] ?? 0,
-        })
-      }
+      const hourly = buildOpenMeteoHourlyForecast({
+        times,
+        temperatures: temps,
+        weatherCodes: codes,
+        precipitationProbabilities: precips,
+      })
 
       set({
         temperature: Math.round(current.temperature_2m),
         weatherCode: current.weather_code,
         precipitationProbability: current.precipitation_probability ?? 0,
+        sunrise,
+        sunset,
         hourly,
         lastLat: lat,
         lastLon: lon,

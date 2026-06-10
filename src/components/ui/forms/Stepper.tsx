@@ -10,9 +10,18 @@ interface StepperProps {
   max?: number
   onChange: (nextValue: number) => void
   fullWidth?: boolean
+  testIDPrefix?: string
 }
 
-export function Stepper({ value, unit, min, max, onChange, fullWidth = false }: StepperProps) {
+export function Stepper({
+  value,
+  unit,
+  min,
+  max,
+  onChange,
+  fullWidth = false,
+  testIDPrefix,
+}: StepperProps) {
   const decrementValue = min == null ? value - 1 : Math.max(min, value - 1)
   const incrementValue = max == null ? value + 1 : Math.min(max, value + 1)
   const canDecrement = min == null || value > min
@@ -24,6 +33,7 @@ export function Stepper({ value, unit, min, max, onChange, fullWidth = false }: 
         style={[styles.stepperBtn, !canDecrement && styles.stepperBtnDisabled]}
         onPress={() => onChange(decrementValue)}
         disabled={!canDecrement}
+        testID={testIDPrefix ? `${testIDPrefix}-decrement` : undefined}
       >
         <MinusIcon size={14} color={theme.neutral.textPrimary} weight="bold" />
       </Pressable>
@@ -35,6 +45,7 @@ export function Stepper({ value, unit, min, max, onChange, fullWidth = false }: 
         style={[styles.stepperBtn, !canIncrement && styles.stepperBtnDisabled]}
         onPress={() => onChange(incrementValue)}
         disabled={!canIncrement}
+        testID={testIDPrefix ? `${testIDPrefix}-increment` : undefined}
       >
         <PlusIcon size={14} color={theme.neutral.textPrimary} weight="bold" />
       </Pressable>

@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { BoardSelectorSheet } from '@/components/domain/board/BoardSelectorSheet'
 import { IconButton } from '@/components/ui/base/IconButton'
 import { WeatherIcon } from '@/components/ui/weather/WeatherIcon'
+import { isNightAtTime } from '@/lib/weather'
 import { routes } from '@/navigation/routes'
 import type { Board } from '@/store/boardStore'
 import { useWeatherStore } from '@/store/weatherStore'
@@ -51,7 +52,11 @@ export function TopBar({
   const weatherCode = useWeatherStore((s) => s.weatherCode)
   const weatherTemp = useWeatherStore((s) => s.temperature)
   const weatherPrecip = useWeatherStore((s) => s.precipitationProbability)
+  const sunrise = useWeatherStore((s) => s.sunrise)
+  const sunset = useWeatherStore((s) => s.sunset)
   const hasWeather = weatherCode != null && weatherTemp != null
+  const now = new Date()
+  const isNight = isNightAtTime(now.getHours(), now.getMinutes(), sunrise, sunset)
 
   const canDisconnect =
     bleStatus === 'connected' ||
@@ -76,7 +81,12 @@ export function TopBar({
           style={styles.iconLeft}
         />
         <View ref={pillRef} style={styles.pill}>
-          <Pressable style={styles.boardButton} onPress={() => setSelectorOpen(true)}>
+          <Pressable
+            style={styles.boardButton}
+            onPress={() => setSelectorOpen(true)}
+            testID="board-selector-trigger"
+            accessibilityLabel="Board selector"
+          >
             <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
             <Text style={styles.boardText} numberOfLines={1}>
               {name}
@@ -91,6 +101,7 @@ export function TopBar({
               if (!activeBoard) return
               router.push({ pathname: routes.editBoard, params: { boardId: activeBoard.id } })
             }}
+            testID="board-edit-button"
           >
             <PencilSimpleIcon
               size={14}
@@ -100,7 +111,11 @@ export function TopBar({
           </Pressable>
           <View style={styles.divider} />
           {canDisconnect && (
-            <Pressable style={styles.plugButton} onPress={onDisconnect}>
+            <Pressable
+              style={styles.plugButton}
+              onPress={onDisconnect}
+              testID="board-disconnect-button"
+            >
               <PowerIcon size={15} color={theme.error.color} weight="bold" />
             </Pressable>
           )}
@@ -115,7 +130,8 @@ export function TopBar({
         <Pressable style={styles.weatherRow} onPress={onWeatherPress}>
           <WeatherIcon
             code={weatherCode}
-            hour={new Date().getHours()}
+            hour={now.getHours()}
+            isNight={isNight}
             size={13}
             color={theme.neutral.textSecondary}
             weight="duotone"

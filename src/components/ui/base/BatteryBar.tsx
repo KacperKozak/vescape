@@ -49,6 +49,7 @@ export function BatteryBar({
     <Pressable
       onPress={() => router.push(routes.controlBattery)}
       android_ripple={interaction.ripple}
+      testID="battery-bar"
       style={[
         styles.wrap,
         compact && styles.wrapCompact,

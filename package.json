@@ -1,6 +1,6 @@
 {
   "name": "vibe-wheel",
-  "version": "0.50.0",
+  "version": "0.52.0",
   "private": true,
   "workspaces": [
     "modules/*"
@@ -9,6 +9,7 @@
   "scripts": {
     "start": "expo start",
     "android": "bun run copy:shared && export NODE_BINARY=$(command -v node); export PATH=$(dirname \"$NODE_BINARY\"):$PATH; REACT_NATIVE_PACKAGER_HOSTNAME=localhost expo run:android",
+    "android:e2e": "EXPO_PUBLIC_E2E=1 bun run android",
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",
@@ -17,6 +18,7 @@
     "copy:shared": "bun run scripts/copy-shared.ts",
     "skills-check": "bun run scripts/skills-check.ts",
     "screenshot": "bun run scripts/screenshot.ts",
+    "e2e": "bun run scripts/e2e.ts",
     "test": "bun run copy:shared && bun run test:bun && bun run test:android",
     "test:bun": "bun test",
     "test:android": "export NODE_BINARY=$(command -v node); export PATH=$(dirname \"$NODE_BINARY\"):$PATH; cd android && ./gradlew :vesc-ble:testDebugUnitTest",

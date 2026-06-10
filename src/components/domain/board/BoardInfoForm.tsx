@@ -7,6 +7,8 @@ interface BoardInfoFormProps {
   description: string
   onChangeName: (value: string) => void
   onChangeDescription: (value: string) => void
+  nameTestID?: string
+  descriptionTestID?: string
 }
 
 export function BoardInfoForm({
@@ -14,6 +16,8 @@ export function BoardInfoForm({
   description,
   onChangeName,
   onChangeDescription,
+  nameTestID,
+  descriptionTestID,
 }: BoardInfoFormProps) {
   return (
     <View style={styles.form}>
@@ -24,6 +28,8 @@ export function BoardInfoForm({
         placeholder="e.g. FloBoard Pro"
         placeholderTextColor={theme.neutral.textDim}
         returnKeyType="next"
+        testID={nameTestID}
+        accessibilityLabel="Board name"
       />
       <Text style={styles.label}>Description</Text>
       <Input
@@ -35,6 +41,8 @@ export function BoardInfoForm({
         multiline
         numberOfLines={3}
         textAlignVertical="top"
+        testID={descriptionTestID}
+        accessibilityLabel="Board description"
       />
     </View>
   )

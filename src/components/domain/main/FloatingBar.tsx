@@ -134,12 +134,15 @@ export function FloatingBar({
   return (
     <View style={[styles.wrapper, { bottom: bottomOffset }]} pointerEvents="box-none">
       {pill?.kind === 'spinner' && (
-        <View style={[styles.pill, { borderColor: pill.color + '55' }]}>
+        <View
+          style={[styles.pill, { borderColor: pill.color + '55' }]}
+          testID="floating-bar-status"
+        >
           <ActivityIndicator size="small" color={pill.color} />
           <Text style={[styles.pillText, { color: pill.color }]} numberOfLines={1}>
             {pill.text}
           </Text>
-          <Pressable style={styles.pillButton} onPress={pill.onPress}>
+          <Pressable style={styles.pillButton} onPress={pill.onPress} testID="floating-bar-cancel">
             <Text style={styles.pillButtonText}>Cancel</Text>
           </Pressable>
         </View>
@@ -151,6 +154,7 @@ export function FloatingBar({
             { backgroundColor: pill.config.bg, borderColor: pill.config.border },
           ]}
           onPress={pill.onPress}
+          testID="floating-bar-connect"
         >
           <Text style={[styles.pillText, { color: pill.config.text }]} numberOfLines={1}>
             {pill.text}
@@ -169,6 +173,7 @@ export function FloatingBar({
         ]}
         disabled={!recording && !canToggleRecording(bleStatus)}
         onPress={toggleRecord}
+        testID="floating-bar-record"
       >
         {recording ? (
           <StopIcon size={22} color={theme.neutral.textPrimary} weight="fill" />

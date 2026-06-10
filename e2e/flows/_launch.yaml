@@ -1,0 +1,12 @@
+appId: com.anonymous.vescpoc
+---
+- clearState
+- launchApp
+
+- extendedWaitUntil:
+    visible: DEVELOPMENT SERVERS
+    timeout: 15000
+- tapOn: 'http://.*:8081'
+- extendedWaitUntil:
+    visible: No board
+    timeout: 60000

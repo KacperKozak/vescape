@@ -67,11 +67,14 @@ function BoardInfoEditorModalContent({
         description={draftDescription}
         onChangeName={setDraftName}
         onChangeDescription={setDraftDescription}
+        nameTestID="edit-board-name-input"
+        descriptionTestID="edit-board-description-input"
       />
       <Button
         label="Save"
         loading={saving}
         onPress={() => onSave({ name: draftName, description: draftDescription })}
+        testID="edit-board-info-save"
       />
     </View>
   )

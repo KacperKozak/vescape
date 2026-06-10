@@ -29,6 +29,7 @@ interface BoardBatteryFormProps {
   onChangeParallelCount: (value: number) => void
   onChangeManualMinVoltage: (value: string) => void
   onChangeManualMaxVoltage: (value: string) => void
+  testIDPrefix?: string
 }
 
 export function BoardBatteryForm({
@@ -44,6 +45,7 @@ export function BoardBatteryForm({
   onChangeParallelCount,
   onChangeManualMinVoltage,
   onChangeManualMaxVoltage,
+  testIDPrefix,
 }: BoardBatteryFormProps) {
   const selectedPreset =
     getBatteryPreset(cellPresetId) ?? getBatteryPreset(DEFAULT_BATTERY_CONFIG.cellPresetId)
@@ -117,6 +119,7 @@ export function BoardBatteryForm({
         <Pressable
           style={[styles.segment, batteryMode === 'preset' && styles.segmentActive]}
           onPress={() => onChangeBatteryMode('preset')}
+          testID={testIDPrefix ? `${testIDPrefix}-preset-mode` : undefined}
         >
           <Text style={[styles.segmentText, batteryMode === 'preset' && styles.segmentTextActive]}>
             Preset
@@ -125,6 +128,7 @@ export function BoardBatteryForm({
         <Pressable
           style={[styles.segment, batteryMode === 'manual' && styles.segmentActive]}
           onPress={() => onChangeBatteryMode('manual')}
+          testID={testIDPrefix ? `${testIDPrefix}-manual-mode` : undefined}
         >
           <Text style={[styles.segmentText, batteryMode === 'manual' && styles.segmentTextActive]}>
             Manual
@@ -167,6 +171,7 @@ export function BoardBatteryForm({
                 max={40}
                 onChange={onChangeSeriesCount}
                 fullWidth
+                testIDPrefix={testIDPrefix ? `${testIDPrefix}-series` : undefined}
               />
             </View>
             <View style={styles.stepperField}>
@@ -177,6 +182,7 @@ export function BoardBatteryForm({
                 max={20}
                 onChange={onChangeParallelCount}
                 fullWidth
+                testIDPrefix={testIDPrefix ? `${testIDPrefix}-parallel` : undefined}
               />
             </View>
           </View>
@@ -190,6 +196,7 @@ export function BoardBatteryForm({
             placeholder="Min (0%)"
             placeholderTextColor={theme.neutral.textDim}
             keyboardType="decimal-pad"
+            testID={testIDPrefix ? `${testIDPrefix}-manual-min-input` : undefined}
           />
           <Input
             style={styles.voltageInput}
@@ -198,6 +205,7 @@ export function BoardBatteryForm({
             placeholder="Max (100%)"
             placeholderTextColor={theme.neutral.textDim}
             keyboardType="decimal-pad"
+            testID={testIDPrefix ? `${testIDPrefix}-manual-max-input` : undefined}
           />
         </View>
       )}

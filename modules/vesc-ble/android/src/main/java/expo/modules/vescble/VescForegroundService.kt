@@ -939,7 +939,7 @@ class VescForegroundService : Service() {
             COMM_FW_VERSION -> handleFwVersionPayload(payload)
             COMM_PING_CAN -> {
                 cancelCanPingTimeout()
-                if (!shouldAcceptCanPingResponse(boardStatus, directConnection)) {
+                if (!shouldAcceptCanPingResponse(boardStatus)) {
                     Log.d(VESC_SESSION_TAG, "Ignoring late CAN ping response, direct=$directConnection status=$boardStatus")
                     recordLocalDiagnostic(
                         "can_ping_response_ignored",
@@ -953,6 +953,7 @@ class VescForegroundService : Service() {
                     )
                 } else if (payload.size > 1) {
                     canId = payload[1].toInt() and 0xff
+                    directConnection = false
                     telemetryPipeline.updateCanId(canId)
                     recordLocalDiagnostic(
                         "can_ping_can_id_discovered",

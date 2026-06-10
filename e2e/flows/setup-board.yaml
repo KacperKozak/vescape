@@ -1,0 +1,4 @@
+appId: com.anonymous.vescpoc
+---
+- runFlow: _launch.yaml
+- runFlow: _setup-board-steps.yaml

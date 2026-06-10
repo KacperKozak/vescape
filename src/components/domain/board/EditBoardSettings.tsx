@@ -46,6 +46,7 @@ export function EditBoardSettings({
           value={description.trim() || 'No description'}
           hint="Name and notes"
           onPress={onOpenInfo}
+          testID="edit-board-info-row"
         />
       </SettingsCard>
 
@@ -58,6 +59,7 @@ export function EditBoardSettings({
           value={batterySummary.value}
           hint={batterySummary.hint}
           onPress={onOpenBattery}
+          testID="edit-board-battery-row"
         />
       </SettingsCard>
 
@@ -77,6 +79,7 @@ export function EditBoardSettings({
           size="sm"
           loading={pairingSaving}
           onPress={onOpenPairing}
+          testID="edit-board-pair-button"
         />
         {pairedBleId ? (
           <Button
@@ -85,6 +88,7 @@ export function EditBoardSettings({
             size="sm"
             loading={pairingSaving}
             onPress={onClearPairing}
+            testID="edit-board-clear-pairing-button"
           />
         ) : null}
       </View>

@@ -1,0 +1,8 @@
+appId: com.anonymous.vescpoc
+---
+- runFlow: _launch.yaml
+- openLink: 'vescpoc://e2e-seed?flow=connect-board'
+- extendedWaitUntil:
+    visible: E2E Board
+    timeout: 15000
+- runFlow: _connect-board-steps.yaml

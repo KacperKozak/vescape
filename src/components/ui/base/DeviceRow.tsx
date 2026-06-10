@@ -18,6 +18,8 @@ export const DeviceRow = React.memo(function DeviceRow({ id, name, rssi, onPress
       style={({ pressed }) => [styles.row, pressed && { opacity: interaction.pressedOpacity }]}
       android_ripple={interaction.ripple}
       onPress={onPress}
+      testID={`device-row-${id}`}
+      accessibilityLabel={name}
     >
       <View style={styles.info}>
         <Text style={styles.name}>{name}</Text>

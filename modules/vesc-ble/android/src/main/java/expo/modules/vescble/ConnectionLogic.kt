@@ -22,9 +22,8 @@ internal fun shouldCanPingFallback(
 
 internal fun shouldAcceptCanPingResponse(
     boardStatus: BoardPhase,
-    directConnection: Boolean,
 ): Boolean =
-    boardStatus != BoardPhase.Connected && !directConnection
+    boardStatus != BoardPhase.Connected
 
 internal fun shouldSetDirectOnReady(canId: Int?, directConnection: Boolean): Boolean =
     !isPollingCapable(canId, directConnection)

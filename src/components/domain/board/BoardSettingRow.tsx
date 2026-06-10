@@ -11,6 +11,7 @@ interface BoardSettingRowProps {
   value: string
   hint?: string
   onPress: () => void
+  testID?: string
 }
 
 export function BoardSettingRow({
@@ -20,12 +21,14 @@ export function BoardSettingRow({
   value,
   hint,
   onPress,
+  testID,
 }: BoardSettingRowProps) {
   return (
     <Pressable
       style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
       android_ripple={interaction.ripple}
       onPress={onPress}
+      testID={testID}
     >
       <IconComponent size={18} color={iconColor} weight="duotone" />
       <View style={styles.copy}>
