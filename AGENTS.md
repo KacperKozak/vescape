@@ -25,6 +25,7 @@ This is a PoC, but keep it sharp:
 
 ## Dir layout
 
+- `android/`, `ios/` — Expo-generated native folders. They are gitignored and not durable source; do not make lasting changes there. Update Expo config, modules, plugins, or source inputs instead.
 - `src/app/` — Expo Router routes only. No hooks, components, logic.
 - `src/lib/` — Pure domain logic. No React, no native calls.
 - `src/helpers/` — Single-source pure utilities (finite, id, error, format).
