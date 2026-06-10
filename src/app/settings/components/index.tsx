@@ -20,13 +20,13 @@ import { theme } from '@/constants/theme'
 const sections = [
   {
     label: 'Base',
-    hint: 'Button, IconButton, Banner, DeviceRow, BatteryBar, InfoBadge, StatsRow, Placeholder, ScreenTitle',
+    hint: 'Button, IconButton, Banner, DeviceRow, InfoBadge, StatsRow, Placeholder, ScreenTitle',
     route: '/settings/components/base',
     icon: CubeIcon,
   },
   {
     label: 'Charts',
-    hint: 'Sparkline, SingleGauge, TelemetryLineChart',
+    hint: 'Sparkline, BatteryBar, SingleGauge, TelemetryLineChart',
     route: '/settings/components/charts',
     icon: ChartLineUpIcon,
   },

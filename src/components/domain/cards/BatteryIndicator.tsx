@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import type { StyleProp, ViewStyle } from 'react-native'
+import { useRouter } from 'expo-router'
 import { useShallow } from 'zustand/react/shallow'
 
 import { BatteryBar } from '@/components/ui/base/BatteryBar'
@@ -8,6 +9,7 @@ import { deriveBatteryConfig } from '@/lib/battery'
 import { useLiveMetric, liveSelectors } from '@/hooks/useLiveMetric'
 import { useBoardStore } from '@/store/boardStore'
 import { useLiveWindowMs } from '@/store/settingsStore'
+import { routes } from '@/navigation/routes'
 
 interface BatteryIndicatorProps {
   compact?: boolean
@@ -16,6 +18,7 @@ interface BatteryIndicatorProps {
 }
 
 export function BatteryIndicator({ compact, transparent, containerStyle }: BatteryIndicatorProps) {
+  const router = useRouter()
   const batteryVoltageHistory = useLiveMetric(liveSelectors.batteryVoltage)
   const batteryPercentHistory = useLiveMetric(liveSelectors.batteryPercent)
   const windowMs = useLiveWindowMs()
@@ -59,6 +62,7 @@ export function BatteryIndicator({ compact, transparent, containerStyle }: Batte
       compact={compact}
       transparent={transparent}
       containerStyle={containerStyle}
+      onPress={() => router.push(routes.controlBattery)}
     />
   )
 }
