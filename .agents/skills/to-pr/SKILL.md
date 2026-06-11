@@ -1,11 +1,11 @@
 ---
 name: to-pr
-description: Implement a tracked issue end-to-end and manage the branch/PR lifecycle on GitHub. Use when user invokes `/to-pr <issue-id>`, says "implement issue and open PR", or asks to ship an issue into an existing/new feature PR.
+description: Implement a tracked issue end-to-end and open/update a PR on GitHub. Combines `/to-code` for implementation with `/pr` for branch/PR lifecycle. Use when user invokes `/to-pr <issue-id>`, says "implement issue and open PR", or asks to ship an issue into a feature PR.
 ---
 
 # To PR
 
-`/to-code` + branch/PR mgmt. One issue at a time, multi-issue PR per feature.
+`/to-code` + `/pr`. One issue at a time, multi-issue PR per feature.
 
 ## Comms
 
@@ -49,85 +49,44 @@ Branch rules:
 - On feature branch matching current `[Area]` group -> reuse.
 - On feature branch for different area -> stop, ask: switch / new branch / proceed.
 
-```bash
-git checkout -b <area-slug>-<short-desc>
-```
+## Step 3 — Delegate to `/pr`
 
-## Step 3 — Commit
+Follow `/pr` SKILL.md using the caller protocol. Pass:
 
-One commit per issue. Format from `/to-code`:
+- **Branch name**: determined in Step 2 (skip `/pr` Step 2 inference).
+- **Commit message**: `<concise summary> #<issue-id>`. Ex: `Move avg filtering into sanitizer #25`.
+- **PR title**: feature scope (PRD title or `[Area]` group label), NOT single-issue title.
+- **PR body**: use the issue-aware template below.
+- **Issue ids**: for `Closes #<id>` lines.
 
-```
-<concise summary> #<issue-id>
-```
+`/pr` handles: commit, push, PR create/update, screenshot, report.
 
-Example: `Move avg filtering into sanitizer #25`.
+### PR body — new PR
 
-## Step 4 — Push
-
-First push: `git push -u origin <branch>`. Later: `git push`. No rebase. No force.
-
-## Step 5 — PR
-
-Detect existing:
-
-```bash
-gh pr list --head <branch> --base dev --json number,url,body --jq '.[0]'
-```
-
-### No PR -> create
-
-Always ready (not draft). Base = `dev`.
-
-```bash
-gh pr create --base dev --title "<feature title>" --body "$(cat <<'EOF'
+```markdown
 ## Issues
+
 - Closes #<id>
 
 ## Summary
+
 <2-3 lines feature scope>
 
 ## Implementation notes
+
 - #<id>: <note if any, omit section if none>
-EOF
-)"
 ```
 
-PR title = feature scope (PRD title or `[Area]` group label), NOT single-issue title.
+Use bare `#<id>` refs. GitHub auto-renders them as live links with current title + state icon.
 
-Use bare `#<id>` refs. GitHub auto-renders them as live links with current title + state icon — no manual link/title needed, and stays in sync if issue title changes.
-
-### PR exists -> edit body
+### PR body — existing PR
 
 Fetch current body, append:
 
 - `Closes #<id>` line under `## Issues`.
 - `- #<id>: <note>` under `## Implementation notes` if findings present. Create section if missing.
 
-```bash
-gh pr edit <number> --body "$(cat <<'EOF'
-<updated body>
-EOF
-)"
-```
-
 Don't remove existing entries.
-
-## Step 6 — Screenshot (conditional)
-
-After PR is created/updated, attach a device screenshot if ALL conditions met:
-
-1. `git diff dev...HEAD --name-only` touches files in `src/screens/`, `src/components/`, or `src/app/` routes.
-2. `adb devices` shows a connected device.
-
-If both true: use `/nav` to deep-link to the affected screen, then `/ss` upload mode to capture and embed in PR body via `gh pr edit`. If either false: skip silently.
-
-## Step 7 — Report
-
-- PR url + number.
-- Issue id(s) closed by this run.
-- Files changed.
-- Notes appended.
 
 ## Implementation Notes — when to add
 
