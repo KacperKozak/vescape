@@ -69,11 +69,11 @@ For each selected-ride Media History read:
 2. Use the OS photo-library asset creation timestamp as capture time. Treat it as playback start time for videos. Exclude assets without a valid creation timestamp; do not substitute file modification time.
 3. Ignore all asset GPS metadata.
 4. Find the nearest GPS fix in `sessionGpsSamples`.
-5. Show the asset only when that recording-backed GPS fix is at most `5_000ms` from capture time and belongs to the same continuous recording-backed GPS span.
+5. Show the asset only when that recording-backed GPS fix is at most `30_000ms` from capture time and belongs to the same continuous recording-backed GPS span.
 
-A continuous recording-backed GPS span contains adjacent GPS fixes no more than `10_000ms` apart. Explicit `gap` markers and ride-boundary markers (`disconnected`, `app_stop`, or `error`) always split spans. Span coverage begins at its first GPS fix and ends at its last GPS fix; matching tolerance does not extend it.
+A continuous recording-backed GPS span contains adjacent GPS fixes no more than `30_000ms` apart. Explicit `gap` markers and ride-boundary markers (`disconnected`, `app_stop`, or `error`) always split spans. Span coverage begins at its first GPS fix and ends at its last GPS fix; matching tolerance does not extend it.
 
-No valid nearby recording-backed GPS fix means no map pin. This excludes media captured during unsupported route spans, including GPS outages and Privacy Zone or Ride History gaps. Media cannot match into or across a gap even when a fix on its other side is within `5_000ms`.
+No valid nearby recording-backed GPS fix means no map pin. This excludes media captured during unsupported route spans, including GPS outages and Privacy Zone or Ride History gaps. Media cannot match into or across a gap even when a fix on its other side is within `30_000ms`.
 
 Matching is recomputed from current photo-library access and selected Ride History data whenever Media History is read for a selected ride. Results may live in memory for that active read only; changing ride, disabling Media History, changing permission, or refreshing discards them.
 

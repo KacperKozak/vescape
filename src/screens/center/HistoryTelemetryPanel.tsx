@@ -1,9 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { CaretDownIcon, CaretLeftIcon, CaretRightIcon } from 'phosphor-react-native'
+import {
+  CaretDownIcon,
+  CaretLeftIcon,
+  CaretRightIcon,
+  ImagesSquareIcon,
+} from 'phosphor-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { TelemetryLineChart } from '@/components/ui/charts/TelemetryLineChart'
+import { IconButton } from '@/components/ui/base/IconButton'
 import {
   type ExcludedRange,
   type TelemetryChartPoint,
@@ -34,9 +40,13 @@ interface HistoryTelemetryPanelProps {
   samples: TelemetrySample[]
   canPrevious: boolean
   canNext: boolean
+  mediaEnabled: boolean
+  mediaLoading: boolean
+  mediaCount: number
   onPrevious: () => void
   onNext: () => void
   onOpenList: () => void
+  onToggleMedia: () => void
   onSeek?: (timeMs: number) => void
   onMetricInteraction?: (metric: HistoryMetricKey) => void
   onHeightChange?: (height: number) => void
@@ -94,9 +104,13 @@ export function HistoryTelemetryPanel({
   samples,
   canPrevious,
   canNext,
+  mediaEnabled,
+  mediaLoading,
+  mediaCount,
   onPrevious,
   onNext,
   onOpenList,
+  onToggleMedia,
   onSeek,
   onMetricInteraction,
   onHeightChange,
@@ -444,48 +458,64 @@ export function HistoryTelemetryPanel({
       style={[styles.panel, { bottom: bottomInset }]}
       onLayout={(e) => onHeightChange?.(e.nativeEvent.layout.height)}
     >
-      <View style={styles.navRow}>
-        <Pressable
-          style={({ pressed }) => [
-            styles.navSegment,
-            !canPrevious && styles.navSegmentDisabled,
-            pressed && canPrevious && styles.navSegmentPressed,
-          ]}
-          android_ripple={interaction.ripple}
-          onPress={onPrevious}
-          disabled={!canPrevious}
-        >
-          <CaretLeftIcon size={22} color={theme.neutral.textSecondary} weight="bold" />
-        </Pressable>
-        <View style={styles.navDivider} />
-        <Pressable
-          style={({ pressed }) => [styles.titleButton, pressed && styles.navSegmentPressed]}
-          android_ripple={interaction.ripple}
-          onPress={onOpenList}
-        >
-          <View style={styles.titleContent}>
-            <Text style={styles.titleTime} numberOfLines={1}>
-              {formatRideTitle(startAtMs, endAtMs)}
-            </Text>
-            <Text style={styles.titleMeta} numberOfLines={1}>
-              {formatRideMeta(startAtMs, endAtMs, deviceName)}
-            </Text>
-          </View>
-          <CaretDownIcon size={12} color={theme.neutral.textSecondary} weight="bold" />
-        </Pressable>
-        <View style={styles.navDivider} />
-        <Pressable
-          style={({ pressed }) => [
-            styles.navSegment,
-            !canNext && styles.navSegmentDisabled,
-            pressed && canNext && styles.navSegmentPressed,
-          ]}
-          android_ripple={interaction.ripple}
-          onPress={onNext}
-          disabled={!canNext}
-        >
-          <CaretRightIcon size={22} color={theme.neutral.textSecondary} weight="bold" />
-        </Pressable>
+      <View style={styles.navControls}>
+        <View>
+          <IconButton
+            icon={ImagesSquareIcon}
+            onPress={onToggleMedia}
+            loading={mediaLoading}
+            size="lg"
+            style={mediaEnabled ? styles.mediaEnabled : undefined}
+          />
+          {mediaCount > 0 ? (
+            <View style={styles.mediaCountBadge} pointerEvents="none">
+              <Text style={styles.mediaCountText}>{mediaCount > 99 ? '99+' : mediaCount}</Text>
+            </View>
+          ) : null}
+        </View>
+        <View style={styles.navRow}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.navSegment,
+              !canPrevious && styles.navSegmentDisabled,
+              pressed && canPrevious && styles.navSegmentPressed,
+            ]}
+            android_ripple={interaction.ripple}
+            onPress={onPrevious}
+            disabled={!canPrevious}
+          >
+            <CaretLeftIcon size={22} color={theme.neutral.textSecondary} weight="bold" />
+          </Pressable>
+          <View style={styles.navDivider} />
+          <Pressable
+            style={({ pressed }) => [styles.titleButton, pressed && styles.navSegmentPressed]}
+            android_ripple={interaction.ripple}
+            onPress={onOpenList}
+          >
+            <View style={styles.titleContent}>
+              <Text style={styles.titleTime} numberOfLines={1}>
+                {formatRideTitle(startAtMs, endAtMs)}
+              </Text>
+              <Text style={styles.titleMeta} numberOfLines={1}>
+                {formatRideMeta(startAtMs, endAtMs, deviceName)}
+              </Text>
+            </View>
+            <CaretDownIcon size={12} color={theme.neutral.textSecondary} weight="bold" />
+          </Pressable>
+          <View style={styles.navDivider} />
+          <Pressable
+            style={({ pressed }) => [
+              styles.navSegment,
+              !canNext && styles.navSegmentDisabled,
+              pressed && canNext && styles.navSegmentPressed,
+            ]}
+            android_ripple={interaction.ripple}
+            onPress={onNext}
+            disabled={!canNext}
+          >
+            <CaretRightIcon size={22} color={theme.neutral.textSecondary} weight="bold" />
+          </Pressable>
+        </View>
       </View>
       {hasChartData && headPoint && optionalChartConfig && (
         <>
@@ -614,11 +644,17 @@ const styles = StyleSheet.create({
     zIndex: 20,
     gap: 8,
   },
-  navRow: {
+  navControls: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'center',
     width: '100%',
+    gap: 8,
+  },
+  navRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     maxWidth: 320,
     height: 54,
     borderRadius: 27,
@@ -626,6 +662,30 @@ const styles = StyleSheet.create({
     borderColor: theme.neutral.border,
     backgroundColor: theme.neutral.surfaceDeep,
     overflow: 'hidden',
+  },
+  mediaEnabled: {
+    borderColor: theme.target.border,
+    backgroundColor: theme.target.bg,
+  },
+  mediaCountBadge: {
+    position: 'absolute',
+    top: -3,
+    right: -3,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: theme.neutral.surfaceDeep,
+    backgroundColor: theme.target.color,
+  },
+  mediaCountText: {
+    color: theme.neutral.bg,
+    fontSize: 9,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
   },
   navSegment: {
     width: 54,

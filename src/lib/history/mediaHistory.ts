@@ -2,8 +2,8 @@ import type { HistoryGpsSample, HistoryMarker, TelemetrySample } from 'vesc-ble'
 
 import { findNearestSampleIndexByTime } from '@/lib/history/playback'
 
-const MEDIA_GPS_TOLERANCE_MS = 5_000
-const MEDIA_GPS_SPAN_GAP_MS = 10_000
+const MEDIA_GPS_TOLERANCE_MS = 30_000
+const MEDIA_GPS_SPAN_GAP_MS = 30_000
 export const MEDIA_CLUSTER_DISTANCE_M = 12
 const MEDIA_TELEMETRY_TOLERANCE_MS = 5_000
 const MEDIA_TELEMETRY_SPAN_GAP_MS = 10_000
@@ -34,6 +34,15 @@ export interface MediaHistoryCluster {
   id: string
   coordinate: [number, number]
   assets: MediaHistoryAsset[]
+}
+
+export interface MediaHistoryMatchDiagnostics {
+  queried: number
+  matched: number
+  outsideRide: number
+  noRecordingGps: number
+  outsideTolerance: number
+  outsideGpsSpan: number
 }
 
 function hasBreakBetween(markers: readonly HistoryMarker[], fromMs: number, toMs: number) {
@@ -73,22 +82,67 @@ export function matchMediaHistoryAssets({
   startAtMs: number
   endAtMs: number
 }): MediaHistoryAsset[] {
-  return assets
-    .filter(
-      (asset) =>
-        Number.isFinite(asset.creationTime) &&
-        asset.creationTime >= startAtMs &&
-        asset.creationTime <= endAtMs,
-    )
-    .sort((a, b) => a.creationTime - b.creationTime || a.id.localeCompare(b.id))
-    .flatMap((asset) => {
-      const index = findNearestSampleIndexByTime(gpsSamples, asset.creationTime)
-      const gps = index >= 0 ? gpsSamples[index] : null
-      if (!gps || Math.abs(gps.capturedAtMs - asset.creationTime) > MEDIA_GPS_TOLERANCE_MS)
-        return []
-      if (!belongsToGpsSpan(gpsSamples, index, asset.creationTime, markers)) return []
-      return [{ ...asset, gps }]
-    })
+  return matchMediaHistoryAssetsWithDiagnostics({
+    assets,
+    gpsSamples,
+    markers,
+    startAtMs,
+    endAtMs,
+  }).assets
+}
+
+export function matchMediaHistoryAssetsWithDiagnostics({
+  assets,
+  gpsSamples,
+  markers,
+  startAtMs,
+  endAtMs,
+}: {
+  assets: readonly MediaAssetInput[]
+  gpsSamples: readonly HistoryGpsSample[]
+  markers: readonly HistoryMarker[]
+  startAtMs: number
+  endAtMs: number
+}): { assets: MediaHistoryAsset[]; diagnostics: MediaHistoryMatchDiagnostics } {
+  const diagnostics: MediaHistoryMatchDiagnostics = {
+    queried: assets.length,
+    matched: 0,
+    outsideRide: 0,
+    noRecordingGps: 0,
+    outsideTolerance: 0,
+    outsideGpsSpan: 0,
+  }
+  const matched: MediaHistoryAsset[] = []
+
+  for (const asset of [...assets].sort(
+    (a, b) => a.creationTime - b.creationTime || a.id.localeCompare(b.id),
+  )) {
+    if (
+      !Number.isFinite(asset.creationTime) ||
+      asset.creationTime < startAtMs ||
+      asset.creationTime > endAtMs
+    ) {
+      diagnostics.outsideRide += 1
+      continue
+    }
+    const index = findNearestSampleIndexByTime(gpsSamples, asset.creationTime)
+    const gps = index >= 0 ? gpsSamples[index] : null
+    if (!gps) {
+      diagnostics.noRecordingGps += 1
+      continue
+    }
+    if (Math.abs(gps.capturedAtMs - asset.creationTime) > MEDIA_GPS_TOLERANCE_MS) {
+      diagnostics.outsideTolerance += 1
+      continue
+    }
+    if (!belongsToGpsSpan(gpsSamples, index, asset.creationTime, markers)) {
+      diagnostics.outsideGpsSpan += 1
+      continue
+    }
+    matched.push({ ...asset, gps })
+  }
+  diagnostics.matched = matched.length
+  return { assets: matched, diagnostics }
 }
 
 function distanceMeters(a: HistoryGpsSample, b: HistoryGpsSample) {

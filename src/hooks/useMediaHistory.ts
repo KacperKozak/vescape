@@ -3,13 +3,22 @@ import * as MediaLibrary from 'expo-media-library'
 import * as LegacyMediaLibrary from 'expo-media-library/legacy'
 
 import {
-  matchMediaHistoryAssets,
+  matchMediaHistoryAssetsWithDiagnostics,
   type MediaAssetInput,
   type MediaHistoryAsset,
+  type MediaHistoryMatchDiagnostics,
 } from '@/lib/history/mediaHistory'
 import type { HistoryGpsSample, HistoryMarker, HistorySession } from '@/store/historyStore'
 
 type MediaPermissionState = 'unknown' | 'full' | 'limited' | 'denied'
+const EMPTY_DIAGNOSTICS: MediaHistoryMatchDiagnostics = {
+  queried: 0,
+  matched: 0,
+  outsideRide: 0,
+  noRecordingGps: 0,
+  outsideTolerance: 0,
+  outsideGpsSpan: 0,
+}
 
 async function queryRideAssets(startAtMs: number, endAtMs: number): Promise<MediaAssetInput[]> {
   const assets: MediaAssetInput[] = []
@@ -59,6 +68,7 @@ export function useMediaHistory({
   const [permission, setPermission] = useState<MediaPermissionState>('unknown')
   const [assets, setAssets] = useState<MediaHistoryAsset[]>([])
   const [loadedSessionId, setLoadedSessionId] = useState<string | null>(null)
+  const [diagnostics, setDiagnostics] = useState<MediaHistoryMatchDiagnostics>(EMPTY_DIAGNOSTICS)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [refreshRevision, setRefreshRevision] = useState(0)
@@ -66,7 +76,10 @@ export function useMediaHistory({
   const refresh = useCallback(() => setRefreshRevision((revision) => revision + 1), [])
 
   const toggle = useCallback(() => {
-    setEnabled((current) => !current)
+    setEnabled((current) => {
+      if (!current) setLoading(true)
+      return !current
+    })
   }, [])
 
   const manageLimitedAccess = useCallback(async () => {
@@ -100,25 +113,27 @@ export function useMediaHistory({
       if (!response.granted) {
         setPermission('denied')
         setAssets([])
+        setDiagnostics(EMPTY_DIAGNOSTICS)
         return
       }
       setPermission(accessPrivileges === 'limited' ? 'limited' : 'full')
       const queried = await queryRideAssets(selectedSession.startAtMs, selectedSession.endAtMs)
       if (cancelled) return
-      setAssets(
-        matchMediaHistoryAssets({
-          assets: queried,
-          gpsSamples,
-          markers,
-          startAtMs: selectedSession.startAtMs,
-          endAtMs: selectedSession.endAtMs,
-        }),
-      )
+      const result = matchMediaHistoryAssetsWithDiagnostics({
+        assets: queried,
+        gpsSamples,
+        markers,
+        startAtMs: selectedSession.startAtMs,
+        endAtMs: selectedSession.endAtMs,
+      })
+      setAssets(result.assets)
+      setDiagnostics(result.diagnostics)
       setLoadedSessionId(selectedSession.id)
     })()
       .catch((cause: unknown) => {
         if (cancelled) return
         setAssets([])
+        setDiagnostics(EMPTY_DIAGNOSTICS)
         setError(cause instanceof Error ? cause.message : 'Could not read local media')
       })
       .finally(() => {
@@ -134,6 +149,9 @@ export function useMediaHistory({
     enabled,
     permission,
     assets: enabled && loadedSessionId === selectedSession?.id ? assets : [],
+    mediaCount: loadedSessionId === selectedSession?.id ? assets.length : 0,
+    diagnostics:
+      enabled && loadedSessionId === selectedSession?.id ? diagnostics : EMPTY_DIAGNOSTICS,
     loading: enabled && !!selectedSession && loading,
     error: enabled ? error : null,
     toggle,
