@@ -1,9 +1,10 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useCallback, useState } from 'react'
-import { ArrowLeftIcon, GearSixIcon, GhostIcon, TrashIcon } from 'phosphor-react-native'
+import { ArrowLeftIcon, CubeIcon, GearSixIcon, GhostIcon, TrashIcon } from 'phosphor-react-native'
 
 import { Banner } from '@/components/ui/base/Banner'
+import { IconHero } from '@/components/ui/settings/IconHero'
 import { Button } from '@/components/ui/base/Button'
 import { DeviceRow } from '@/components/ui/base/DeviceRow'
 import { IconButton } from '@/components/ui/base/IconButton'
@@ -244,6 +245,10 @@ export default function BaseComponentsPage() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
+        <IconHero
+          icon={CubeIcon}
+          description="Button, IconButton, Banner, DeviceRow, InfoBadge, StatsRow, Placeholder, ScreenTitle."
+        />
         <IconButtonShowcase />
         <ButtonShowcase />
         <PlaceholderShowcase />

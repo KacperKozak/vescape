@@ -8,6 +8,7 @@ import {
   RecordIcon,
   CodeIcon,
   DatabaseIcon,
+  InfoIcon,
   TagIcon,
   AndroidLogoIcon,
   AppleLogoIcon,
@@ -169,6 +170,13 @@ export default function SettingsScreen() {
             label="Database"
             hint="Back up, restore, and rebuild history"
             onPress={() => router.push(routes.settingsDatabase)}
+          />
+          <SettingsRow
+            icon={InfoIcon}
+            iconColor={theme.teal.color}
+            label="About us"
+            hint="The people who built this app"
+            onPress={() => router.push(routes.settingsAbout)}
           />
         </SettingsCard>
       </ScrollView>

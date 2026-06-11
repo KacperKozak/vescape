@@ -2,7 +2,9 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useState } from 'react'
 
+import { CloudMoonIcon } from 'phosphor-react-native'
 import { WeatherIcon } from '@/components/ui/weather/WeatherIcon'
+import { IconHero } from '@/components/ui/settings/IconHero'
 import { ShowcaseCard } from '@/components/ui/dev/ShowcaseCard'
 import { ChipRow } from '@/components/ui/dev/ShowcaseControls'
 import { theme } from '@/constants/theme'
@@ -23,6 +25,7 @@ export default function WeatherPage() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
+        <IconHero icon={CloudMoonIcon} description="WeatherIcon." />
         <ShowcaseCard
           name="WeatherIcon"
           controls={

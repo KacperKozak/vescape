@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { PlayIcon, SpeakerHighIcon, StopIcon } from 'phosphor-react-native'
 
 import { TuneDial } from '@/components/ui/tune/TuneDial'
+import { IconHero } from '@/components/ui/settings/IconHero'
 
 import { theme } from '@/constants/theme'
 import {
@@ -82,6 +83,10 @@ export default function SoundPlaygroundScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
+        <IconHero
+          icon={SpeakerHighIcon}
+          description="Preview alert presets and geiger simulation."
+        />
         <Text style={styles.sectionTitle}>Preset</Text>
         <View style={styles.card}>
           <View style={styles.presetGrid}>

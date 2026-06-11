@@ -2,7 +2,9 @@ import { ScrollView, StyleSheet, Text } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useState } from 'react'
 
+import { SquaresFourIcon } from 'phosphor-react-native'
 import { ConfirmModal } from '@/components/ui/modals/ConfirmModal'
+import { IconHero } from '@/components/ui/settings/IconHero'
 import { InfoModal } from '@/components/ui/modals/InfoModal'
 import { TextPromptModal } from '@/components/ui/modals/TextPromptModal'
 import { ShowcaseCard } from '@/components/ui/dev/ShowcaseCard'
@@ -81,6 +83,7 @@ export default function ModalsPage() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
+        <IconHero icon={SquaresFourIcon} description="ConfirmModal, InfoModal, TextPromptModal." />
         <ConfirmModalShowcase />
         <InfoModalShowcase />
         <TextPromptModalShowcase />

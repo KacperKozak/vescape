@@ -3,7 +3,9 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Easing, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated'
 
+import { ChartLineUpIcon } from 'phosphor-react-native'
 import { BatteryBar } from '@/components/ui/base/BatteryBar'
+import { IconHero } from '@/components/ui/settings/IconHero'
 import { TelemetryLineChart } from '@/components/ui/charts/TelemetryLineChart'
 import { computeAutoRange, type TelemetryChartPoint } from '@/components/ui/charts/chartMath'
 import { SingleGauge } from '@/components/ui/charts/DualGauge'
@@ -269,6 +271,10 @@ export default function ChartsPage() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
+        <IconHero
+          icon={ChartLineUpIcon}
+          description="Sparkline, BatteryBar, SingleGauge, TelemetryLineChart."
+        />
         <SparklineShowcase />
         <BatteryBarShowcase />
         <AnimatedSingleGaugeShowcase />

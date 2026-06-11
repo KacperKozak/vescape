@@ -2,8 +2,10 @@ import { ScrollView, StyleSheet, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useCallback, useMemo, useState } from 'react'
 
+import { ToolboxIcon } from 'phosphor-react-native'
 import { BasicSliderCell } from '@/components/ui/tune/BasicSliderCell'
 import { TuneDial } from '@/components/ui/tune/TuneDial'
+import { IconHero } from '@/components/ui/settings/IconHero'
 import { ShowcaseCard } from '@/components/ui/dev/ShowcaseCard'
 import { ChipRow, ValueRow } from '@/components/ui/dev/ShowcaseControls'
 
@@ -106,6 +108,10 @@ export default function TunePage() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
+        <IconHero
+          icon={ToolboxIcon}
+          description="TuneDial, BasicSliderCell, TuneSyncBar, TuneGroupGrid."
+        />
         <TuneDialShowcase />
         <CompactTuneDialShowcase />
         <BasicSliderCellShowcase />

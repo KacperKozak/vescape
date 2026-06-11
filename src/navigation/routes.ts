@@ -28,6 +28,7 @@ export const routes = {
   settingsFilters: '/settings/filters' as Href,
   settingsGraphs: '/settings/graphs' as Href,
   settingsDatabase: '/settings/database' as Href,
+  settingsAbout: '/settings/about' as Href,
 } as const
 
 export const stackScreens = {
@@ -50,4 +51,5 @@ export const stackScreens = {
   settingsFilters: 'settings/filters',
   settingsGraphs: 'settings/graphs',
   settingsDatabase: 'settings/database',
+  settingsAbout: 'settings/about',
 } as const

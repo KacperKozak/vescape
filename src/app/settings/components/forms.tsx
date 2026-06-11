@@ -2,7 +2,9 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useCallback, useMemo, useState } from 'react'
 
+import { ListIcon } from 'phosphor-react-native'
 import { Dropdown, useTriggerRef } from '@/components/ui/forms/Dropdown'
+import { IconHero } from '@/components/ui/settings/IconHero'
 import { Input } from '@/components/ui/forms/Input'
 import { Select, type SelectOption } from '@/components/ui/forms/Select'
 import { SoundPicker } from '@/components/ui/forms/SoundPicker'
@@ -108,6 +110,7 @@ export default function FormsPage() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
+        <IconHero icon={ListIcon} description="Select, Dropdown, Stepper, SoundPicker." />
         <InputShowcase />
         <TextareaShowcase />
         <SelectShowcase />
