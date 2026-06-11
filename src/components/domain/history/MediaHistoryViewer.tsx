@@ -123,18 +123,27 @@ function PhotoAsset({ asset }: { asset: MediaHistoryAsset }) {
 
 export function MediaHistoryViewer({
   assets,
+  initialAssetId,
   samples,
   markers,
   onClose,
 }: {
   assets: MediaHistoryAsset[]
+  initialAssetId: string
   samples: TelemetrySample[]
   markers: HistoryMarker[]
   onClose: () => void
 }) {
   const insets = useSafeAreaInsets()
-  const [index, setIndex] = useState(0)
-  const asset = assets[Math.min(index, assets.length - 1)]
+  const orderedAssets = useMemo(
+    () => [...assets].sort((a, b) => a.creationTime - b.creationTime || a.id.localeCompare(b.id)),
+    [assets],
+  )
+  const [index, setIndex] = useState(() => {
+    const initialIndex = orderedAssets.findIndex((asset) => asset.id === initialAssetId)
+    return initialIndex >= 0 ? initialIndex : 0
+  })
+  const asset = orderedAssets[Math.min(index, orderedAssets.length - 1)]
 
   if (!asset) return null
 
@@ -155,7 +164,7 @@ export function MediaHistoryViewer({
           <PhotoAsset key={asset.id} asset={asset} />
         )}
         <IconButton icon={XIcon} onPress={onClose} style={[styles.close, { top: headerTop }]} />
-        {assets.length > 1 ? (
+        {orderedAssets.length > 1 ? (
           <>
             <IconButton
               icon={CaretLeftIcon}
@@ -165,12 +174,12 @@ export function MediaHistoryViewer({
             />
             <IconButton
               icon={CaretRightIcon}
-              onPress={() => setIndex((current) => Math.min(assets.length - 1, current + 1))}
-              disabled={index === assets.length - 1}
+              onPress={() => setIndex((current) => Math.min(orderedAssets.length - 1, current + 1))}
+              disabled={index === orderedAssets.length - 1}
               style={styles.next}
             />
             <Text style={[styles.position, { bottom: Math.max(insets.bottom, 12) }]}>
-              {index + 1} / {assets.length}
+              {index + 1} / {orderedAssets.length}
             </Text>
           </>
         ) : null}

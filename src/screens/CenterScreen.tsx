@@ -177,7 +177,7 @@ export function CenterScreen({
           onSeek: controller.onSeek,
           setActiveHistoryMapMetric: controller.setActiveHistoryMapMetric,
           mediaHistory: controller.mediaHistory,
-          openMediaAssets: controller.openMediaAssets,
+          openMediaAssetId: controller.openMediaAssetId,
           closeMedia: controller.closeMedia,
         }}
       />

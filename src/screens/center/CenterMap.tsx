@@ -435,7 +435,7 @@ interface CenterMapLayersProps {
   onRemoveMapPoint: (id: string) => void
   onSuppressNextMapPress: () => void
   onSelectMarker: (selection: SelectedHistoryMarker) => void
-  onOpenMedia: (assets: MediaHistoryAsset[]) => void
+  onOpenMedia: (asset: MediaHistoryAsset) => void
 }
 
 function LiveMapLayers({
@@ -632,7 +632,7 @@ function HistoryMapLayers({
           cluster={cluster}
           onPress={() => {
             onSuppressNextMapPress()
-            onOpenMedia(cluster.assets)
+            onOpenMedia(cluster.assets[0])
           }}
         />
       ))}
@@ -1040,7 +1040,7 @@ interface CenterMapProps {
   rideTelemetrySamples: TelemetrySample[]
   rideMarkers: HistoryMarker[]
   mediaAssets: MediaHistoryAsset[]
-  onOpenMedia: (assets: MediaHistoryAsset[]) => void
+  onOpenMedia: (asset: MediaHistoryAsset) => void
   activeHistoryMapMetric: HistoryMetricKey
   historyActive: boolean
   mapStyleKey: MapStyleKey

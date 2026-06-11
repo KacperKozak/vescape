@@ -29,7 +29,7 @@ const MAX_HISTORY_PREFETCH_PAGES = 8
 export function useCenterScreenController({ mapRef }: UseCenterScreenControllerArgs) {
   const backPressedOnce = useRef(false)
   const [heading, setHeading] = useState(0)
-  const [openMediaAssets, setOpenMediaAssets] = useState<MediaHistoryAsset[]>([])
+  const [openMediaAssetId, setOpenMediaAssetId] = useState<string | null>(null)
   const {
     mode,
     historySheetVisible,
@@ -209,7 +209,7 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
   }, [enterTelemetry, mapRef])
 
   const exitHistory = useCallback(() => {
-    setOpenMediaAssets([])
+    setOpenMediaAssetId(null)
     void selectSession(null)
     enterTelemetry()
     requestAnimationFrame(() =>
@@ -244,7 +244,7 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
   }, [enterHistory, loadInitial, loadOlderHistoryPages, selectSession])
 
   const selectPreviousRide = useCallback(async () => {
-    setOpenMediaAssets([])
+    setOpenMediaAssetId(null)
     let previous = getPreviousRideSession(
       useHistoryStore.getState().sessions,
       useHistoryStore.getState().selectedSession,
@@ -266,7 +266,7 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
   }, [selectSession])
 
   const selectNextRide = useCallback(async () => {
-    setOpenMediaAssets([])
+    setOpenMediaAssetId(null)
     const next = getNextRideSession(
       useHistoryStore.getState().sessions,
       useHistoryStore.getState().selectedSession,
@@ -280,7 +280,7 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
 
   const selectRide = useCallback(
     (session: HistorySession) => {
-      setOpenMediaAssets([])
+      setOpenMediaAssetId(null)
       setHistorySheetVisible(false)
       void selectSession(session)
       enterHistory()
@@ -373,13 +373,13 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
     mediaHistory: {
       ...mediaHistory,
       toggle: () => {
-        setOpenMediaAssets([])
+        setOpenMediaAssetId(null)
         mediaHistory.toggle()
       },
     },
-    openMediaAssets,
-    openMedia: setOpenMediaAssets,
-    closeMedia: () => setOpenMediaAssets([]),
+    openMediaAssetId,
+    openMedia: (asset: MediaHistoryAsset) => setOpenMediaAssetId(asset.id),
+    closeMedia: () => setOpenMediaAssetId(null),
     historyPreview,
     previousRide,
     nextRide,

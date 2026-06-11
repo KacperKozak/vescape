@@ -138,7 +138,7 @@ interface CenterHistoryOverlayProps {
     refresh: () => void
     manageLimitedAccess: () => Promise<void>
   }
-  openMediaAssets: MediaHistoryAsset[]
+  openMediaAssetId: string | null
   closeMedia: () => void
 }
 
@@ -842,9 +842,11 @@ export function CenterOverlays({
         </View>
       ) : null}
 
-      {history.openMediaAssets.length > 0 ? (
+      {history.openMediaAssetId ? (
         <MediaHistoryViewer
-          assets={history.openMediaAssets}
+          key={history.openMediaAssetId}
+          assets={history.mediaHistory.assets}
+          initialAssetId={history.openMediaAssetId}
           samples={history.sessionSamples}
           markers={history.sessionMarkers}
           onClose={history.closeMedia}
