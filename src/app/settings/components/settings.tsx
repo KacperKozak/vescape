@@ -15,6 +15,7 @@ import { SettingsRow } from '@/components/ui/settings/SettingsRow'
 import { SettingsSectionTitle } from '@/components/ui/settings/SettingsSectionTitle'
 import { Stepper } from '@/components/ui/forms/Stepper'
 import { ShowcaseCard } from '@/components/ui/dev/ShowcaseCard'
+import { IconHero } from '@/components/ui/settings/IconHero'
 import { theme } from '@/constants/theme'
 
 export default function SettingsPage() {
@@ -26,6 +27,11 @@ export default function SettingsPage() {
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
         <ShowcaseCard name="Settings components">
+          <IconHero
+            icon={GearSixIcon}
+            description="IconHero with a large thin icon and centered description."
+          />
+
           <SettingsSectionTitle>Account</SettingsSectionTitle>
           <SettingsCard>
             <SettingsRow

@@ -1,4 +1,4 @@
-import { View, Text, Switch, StyleSheet, ScrollView, Platform, Pressable } from 'react-native'
+import { View, Text, Switch, StyleSheet, ScrollView, Platform } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import Constants from 'expo-constants'
@@ -6,107 +6,50 @@ import {
   ClockCountdownIcon,
   BluetoothConnectedIcon,
   RecordIcon,
-  GaugeIcon,
   CodeIcon,
   DatabaseIcon,
-  CheckCircleIcon,
-  ClockCounterClockwiseIcon,
   TagIcon,
   AndroidLogoIcon,
   AppleLogoIcon,
-  DownloadSimpleIcon,
-  UploadSimpleIcon,
-  ArrowsOutLineHorizontalIcon,
-  ProhibitIcon,
   MapPinIcon,
+  FadersIcon,
+  ChartLineUpIcon,
+  GearSixIcon,
 } from 'phosphor-react-native'
 import { useShallow } from 'zustand/react/shallow'
 
 import { routes } from '@/navigation/routes'
 import { useSettingsStore } from '@/store/settingsStore'
 import { theme } from '@/constants/theme'
-import {
-  DEFAULT_HISTORY_METRIC_HOT_RANGES,
-  type HistoryMetricHotRanges,
-  type HistoryMetricKey,
-} from '@/lib/history/metricColorScale'
+import { formatBytes } from '@/helpers/format'
 import { SettingsCard } from '@/components/ui/settings/SettingsCard'
 import { SettingsRow } from '@/components/ui/settings/SettingsRow'
 import { SettingsSectionTitle } from '@/components/ui/settings/SettingsSectionTitle'
 import { Stepper } from '@/components/ui/forms/Stepper'
-import { Button } from '@/components/ui/base/Button'
-import { ConfirmModal } from '@/components/ui/modals/ConfirmModal'
+import { IconHero } from '@/components/ui/settings/IconHero'
 import { useSettingsDatabaseOps } from '@/hooks/useSettingsDatabaseOps'
 
 const appVersion = Constants.expoConfig?.version ?? '–'
 
-const HOT_RANGE_METRICS: {
-  key: Exclude<HistoryMetricKey, 'battery'>
-  label: string
-  unit: string
-  min: number
-  max: number
-}[] = [
-  { key: 'speed', label: 'Speed', unit: 'km/h', min: 0, max: 120 },
-  { key: 'duty', label: 'Duty', unit: '%', min: 0, max: 100 },
-  { key: 'tempMotor', label: 'Motor temp', unit: '°C', min: 0, max: 140 },
-  { key: 'tempController', label: 'Controller temp', unit: '°C', min: 0, max: 140 },
-  { key: 'motorCurrent', label: 'Motor current', unit: 'A', min: 0, max: 200 },
-  { key: 'batteryCurrent', label: 'Battery current', unit: 'A', min: 0, max: 200 },
-]
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
 export default function SettingsScreen() {
-  const {
-    liveHistoryLimit,
-    autoConnect,
-    autoRecording,
-    movingSpeedThresholdKmh,
-    freeSpinMaxSpeedDeltaKmh,
-    freeSpinStationaryBoardCapKmh,
-    historyMetricGradientsEnabled,
-    historyMetricHotRanges,
-    set,
-  } = useSettingsStore(
+  const { liveHistoryLimit, autoConnect, autoRecording, set } = useSettingsStore(
     useShallow((s) => ({
       liveHistoryLimit: s.liveHistoryLimit,
       autoConnect: s.autoConnect,
       autoRecording: s.autoRecording,
-      movingSpeedThresholdKmh: s.movingSpeedThresholdKmh,
-      freeSpinMaxSpeedDeltaKmh: s.freeSpinMaxSpeedDeltaKmh,
-      freeSpinStationaryBoardCapKmh: s.freeSpinStationaryBoardCapKmh,
-      historyMetricGradientsEnabled: s.historyMetricGradientsEnabled,
-      historyMetricHotRanges: s.historyMetricHotRanges,
       set: s.set,
     })),
   )
 
   const db = useSettingsDatabaseOps()
 
-  const setHotRangeValue = (
-    metric: Exclude<HistoryMetricKey, 'battery'>,
-    edge: 'start' | 'end',
-    value: number,
-  ) => {
-    const fallback = DEFAULT_HISTORY_METRIC_HOT_RANGES[metric] ?? { start: 0, end: 1 }
-    const current = historyMetricHotRanges[metric] ?? fallback
-    const nextRanges: HistoryMetricHotRanges = {
-      ...historyMetricHotRanges,
-      [metric]: { ...current, [edge]: value },
-    }
-    void set('historyMetricHotRanges', nextRanges)
-  }
-
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.header}>
-          <Text style={styles.appName}>Vibe Wheel</Text>
+        <IconHero
+          icon={GearSixIcon}
+          description="These settings apply across the entire app and persist between rides."
+        >
           <View style={styles.headerStats}>
             <View style={styles.headerItem}>
               <TagIcon size={14} color={theme.wheel.color} weight="duotone" />
@@ -129,13 +72,14 @@ export default function SettingsScreen() {
               </Text>
             </View>
           </View>
-        </View>
+        </IconHero>
 
         <SettingsSectionTitle>General</SettingsSectionTitle>
 
         <SettingsCard>
           <SettingsRow
             icon={ClockCountdownIcon}
+            iconColor={theme.wheel.color}
             label="Live history limit"
             hint="Minutes of telemetry visible in live graphs"
             right={
@@ -154,6 +98,7 @@ export default function SettingsScreen() {
           />
           <SettingsRow
             icon={BluetoothConnectedIcon}
+            iconColor={theme.bran.color}
             label="Auto connect"
             hint="Connect to board on app start"
             right={
@@ -168,6 +113,7 @@ export default function SettingsScreen() {
           <SettingsRow
             icon={RecordIcon}
             iconWeight="fill"
+            iconColor={theme.error.color}
             label="Auto recording"
             hint="Start recording when board connects"
             right={
@@ -191,224 +137,19 @@ export default function SettingsScreen() {
             hint="Skip recording near saved places"
             onPress={() => router.push(routes.settingsPrivacyZones)}
           />
-        </SettingsCard>
-
-        <SettingsSectionTitle>Stats</SettingsSectionTitle>
-        <Text style={styles.sectionHint}>
-          Changes apply to new rides only. Rebuild history to reprocess past rides.
-        </Text>
-
-        <SettingsCard>
           <SettingsRow
-            icon={GaugeIcon}
-            label="Moving speed threshold"
-            hint={'Speeds below this are ignored for avg speed.\nDefault: 3 km/h.'}
-            right={
-              <Stepper
-                value={movingSpeedThresholdKmh}
-                unit="km/h"
-                min={0}
-                max={20}
-                onChange={(nextValue) => {
-                  const clampedValue = Math.min(20, Math.max(0, nextValue))
-                  if (clampedValue !== movingSpeedThresholdKmh) {
-                    void set('movingSpeedThresholdKmh', clampedValue)
-                  }
-                }}
-              />
-            }
+            icon={FadersIcon}
+            iconColor={theme.target.color}
+            label="Filters"
+            hint="Ride data filtering and free-spin detection"
+            onPress={() => router.push(routes.settingsFilters)}
           />
           <SettingsRow
-            icon={ArrowsOutLineHorizontalIcon}
-            label="Free spin speed delta"
-            hint={
-              'Max board-vs-GPS speed gap before sample is excluded as free spin. Lower will increase the number of excluded samples.\nDefault: 12 km/h.'
-            }
-            right={
-              <Stepper
-                value={freeSpinMaxSpeedDeltaKmh}
-                unit="km/h"
-                min={1}
-                max={60}
-                onChange={(nextValue) => {
-                  const clampedValue = Math.min(60, Math.max(1, nextValue))
-                  if (clampedValue !== freeSpinMaxSpeedDeltaKmh) {
-                    void set('freeSpinMaxSpeedDeltaKmh', clampedValue)
-                  }
-                }}
-              />
-            }
-          />
-          <SettingsRow
-            icon={ProhibitIcon}
-            label="Free spin stationary cap"
-            hint={
-              'Max board speed allowed when GPS is nearly stationary. Lower will increase the number of excluded samples.\nDefault: 15 km/h.'
-            }
-            right={
-              <Stepper
-                value={freeSpinStationaryBoardCapKmh}
-                unit="km/h"
-                min={1}
-                max={60}
-                onChange={(nextValue) => {
-                  const clampedValue = Math.min(60, Math.max(1, nextValue))
-                  if (clampedValue !== freeSpinStationaryBoardCapKmh) {
-                    void set('freeSpinStationaryBoardCapKmh', clampedValue)
-                  }
-                }}
-              />
-            }
-          />
-        </SettingsCard>
-
-        <SettingsSectionTitle>Advanced</SettingsSectionTitle>
-        <Text style={styles.sectionHint}>
-          Hot graph ramps start at Start and reach full warning color at End.
-        </Text>
-
-        <SettingsCard>
-          <SettingsRow
-            icon={GaugeIcon}
-            label="Graph hot gradients"
-            hint="Color live, history, and map graphs by metric value"
-            right={
-              <Switch
-                value={historyMetricGradientsEnabled}
-                onValueChange={(v) => void set('historyMetricGradientsEnabled', v)}
-                trackColor={{ false: theme.neutral.border, true: theme.warning.border }}
-                thumbColor={
-                  historyMetricGradientsEnabled ? theme.warning.color : theme.neutral.textMuted
-                }
-              />
-            }
-          />
-          {HOT_RANGE_METRICS.map((metric) => {
-            const fallback = DEFAULT_HISTORY_METRIC_HOT_RANGES[metric.key] ?? { start: 0, end: 1 }
-            const range = historyMetricHotRanges[metric.key] ?? fallback
-
-            return (
-              <View key={metric.key} style={styles.hotRangeRow}>
-                <View style={styles.hotRangeBody}>
-                  <Text style={styles.hotRangeName}>{metric.label}</Text>
-                  <Text style={styles.hotRangeHint}>
-                    Default: {fallback.start}-{fallback.end} {metric.unit}
-                  </Text>
-                </View>
-                <View style={styles.hotRangeControl}>
-                  <Text style={styles.hotRangeLabel}>Start</Text>
-                  <Stepper
-                    value={range.start}
-                    unit={metric.unit}
-                    min={metric.min}
-                    max={metric.max}
-                    onChange={(nextValue) => {
-                      const clampedValue = Math.min(metric.max, Math.max(metric.min, nextValue))
-                      if (clampedValue !== range.start) {
-                        setHotRangeValue(metric.key, 'start', clampedValue)
-                      }
-                    }}
-                  />
-                </View>
-                <View style={styles.hotRangeControl}>
-                  <Text style={styles.hotRangeLabel}>End</Text>
-                  <Stepper
-                    value={range.end}
-                    unit={metric.unit}
-                    min={metric.min}
-                    max={metric.max}
-                    onChange={(nextValue) => {
-                      const clampedValue = Math.min(metric.max, Math.max(metric.min, nextValue))
-                      if (clampedValue !== range.end) {
-                        setHotRangeValue(metric.key, 'end', clampedValue)
-                      }
-                    }}
-                  />
-                </View>
-              </View>
-            )
-          })}
-        </SettingsCard>
-
-        <SettingsSectionTitle>Database</SettingsSectionTitle>
-
-        <SettingsCard>
-          <SettingsRow
-            icon={ClockCounterClockwiseIcon}
-            label="Rebuild history"
-            hint={db.rebuildHint}
-            right={
-              <Pressable
-                style={[
-                  styles.rebuildButton,
-                  db.rebuildState === 'running' && styles.rebuildButtonDisabled,
-                  db.rebuildState === 'done' && styles.rebuildButtonDone,
-                ]}
-                onPress={db.handleRebuildBuckets}
-                disabled={db.rebuildState === 'running'}
-              >
-                {db.rebuildState === 'done' && (
-                  <CheckCircleIcon size={13} color={theme.gps.text} weight="fill" />
-                )}
-                <Text style={styles.rebuildButtonText}>
-                  {db.rebuildState === 'running'
-                    ? 'Rebuilding...'
-                    : db.rebuildState === 'done'
-                      ? 'Done'
-                      : 'Rebuild'}
-                </Text>
-              </Pressable>
-            }
-          >
-            {db.rebuildState === 'running' && (
-              <View style={styles.rebuildProgress}>
-                <View style={styles.rebuildProgressTrack}>
-                  <View
-                    style={[
-                      styles.rebuildProgressFill,
-                      {
-                        width: `${Math.round(db.rebuildProgressValue * 100)}%`,
-                      },
-                    ]}
-                  />
-                </View>
-                {db.rebuildProgressLabel ? (
-                  <Text style={styles.rebuildProgressText}>{db.rebuildProgressLabel}</Text>
-                ) : null}
-              </View>
-            )}
-          </SettingsRow>
-          <SettingsRow
-            icon={DownloadSimpleIcon}
-            iconColor={theme.gps.color}
-            label="Back up database"
-            hint={db.backupHint}
-            right={
-              <Button
-                label={db.backupState === 'running' ? 'Exporting...' : 'Export'}
-                size="sm"
-                variant="secondary"
-                loading={db.backupState === 'running'}
-                disabled={db.restoreState === 'running' || db.rebuildState === 'running'}
-                onPress={db.handleBackupDatabase}
-              />
-            }
-          />
-          <SettingsRow
-            icon={UploadSimpleIcon}
-            iconColor={theme.warning.color}
-            label="Restore database"
-            hint={db.restoreHint}
-            right={
-              <Button
-                label={db.restoreState === 'running' ? 'Restoring...' : 'Restore'}
-                size="sm"
-                variant="destructive"
-                loading={db.restoreState === 'running'}
-                disabled={db.backupState === 'running' || db.rebuildState === 'running'}
-                onPress={() => db.setRestoreConfirmVisible(true)}
-              />
-            }
+            icon={ChartLineUpIcon}
+            iconColor={theme.teal.color}
+            label="Graphs"
+            hint="Hot gradients and color ramps"
+            onPress={() => router.push(routes.settingsGraphs)}
           />
         </SettingsCard>
 
@@ -417,21 +158,20 @@ export default function SettingsScreen() {
         <SettingsCard>
           <SettingsRow
             icon={CodeIcon}
+            iconColor={theme.highlight.color}
             label="Dev tools"
             hint="Diagnostics and local verification"
             onPress={() => router.push(routes.settingsDev)}
           />
+          <SettingsRow
+            icon={DatabaseIcon}
+            iconColor={theme.warning.color}
+            label="Database"
+            hint="Back up, restore, and rebuild history"
+            onPress={() => router.push(routes.settingsDatabase)}
+          />
         </SettingsCard>
       </ScrollView>
-      <ConfirmModal
-        visible={db.restoreConfirmVisible}
-        title="Restore database"
-        message="Current database will be replaced by selected backup. App keeps a temporary rollback copy during restore and restores old database if restore fails."
-        confirmLabel="Choose backup"
-        destructive
-        onConfirm={() => void db.handleRestoreDatabase()}
-        onCancel={() => db.setRestoreConfirmVisible(false)}
-      />
     </SafeAreaView>
   )
 }
@@ -444,16 +184,6 @@ const styles = StyleSheet.create({
   content: {
     padding: 16,
     gap: 8,
-  },
-  header: {
-    alignItems: 'center',
-    paddingVertical: 20,
-    gap: 12,
-  },
-  appName: {
-    color: theme.neutral.textPrimary,
-    fontSize: 20,
-    fontWeight: '700',
   },
   headerStats: {
     flexDirection: 'row',
@@ -468,91 +198,5 @@ const styles = StyleSheet.create({
     color: theme.neutral.textSecondary,
     fontSize: 12,
     fontWeight: '600',
-  },
-  sectionHint: {
-    color: theme.neutral.textDim,
-    fontSize: 12,
-    marginTop: -4,
-    marginBottom: 4,
-    marginLeft: 4,
-  },
-  rebuildButton: {
-    backgroundColor: theme.neutral.surfaceDeep,
-    borderWidth: 1,
-    borderColor: theme.neutral.border,
-    borderRadius: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-  },
-  rebuildButtonDisabled: {
-    opacity: 0.5,
-  },
-  rebuildButtonDone: {
-    borderColor: theme.gps.border,
-    backgroundColor: theme.gps.bg,
-  },
-  rebuildButtonText: {
-    color: theme.neutral.textSecondary,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  rebuildProgress: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginHorizontal: 14,
-    marginBottom: 12,
-  },
-  rebuildProgressTrack: {
-    flex: 1,
-    height: 3,
-    backgroundColor: theme.neutral.surfaceDeep,
-    borderRadius: 999,
-    overflow: 'hidden',
-  },
-  rebuildProgressFill: {
-    height: '100%',
-    backgroundColor: theme.warning.color,
-  },
-  rebuildProgressText: {
-    minWidth: 44,
-    color: theme.neutral.textMuted,
-    fontSize: 11,
-    fontWeight: '700',
-    textAlign: 'right',
-  },
-  hotRangeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  hotRangeBody: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-  },
-  hotRangeName: {
-    color: theme.neutral.textPrimary,
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  hotRangeHint: {
-    color: theme.neutral.textMuted,
-    fontSize: 12,
-  },
-  hotRangeControl: {
-    width: 96,
-    gap: 6,
-  },
-  hotRangeLabel: {
-    color: theme.neutral.textMuted,
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
   },
 })

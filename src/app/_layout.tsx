@@ -51,6 +51,9 @@ export default function RootLayout() {
             name={stackScreens.settingsPrivacyZones}
             options={{ title: 'Privacy Zones' }}
           />
+          <Stack.Screen name={stackScreens.settingsFilters} options={{ title: 'Filters' }} />
+          <Stack.Screen name={stackScreens.settingsGraphs} options={{ title: 'Graphs' }} />
+          <Stack.Screen name={stackScreens.settingsDatabase} options={{ title: 'Database' }} />
           <Stack.Screen name={stackScreens.tune} options={{ title: 'Tune' }} />
           <Stack.Screen name={stackScreens.tuneHistory} options={{ title: 'Tune History' }} />
           <Stack.Screen name={stackScreens.addBoardScan} options={{ title: 'Pair Board' }} />

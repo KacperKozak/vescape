@@ -11,14 +11,9 @@ import {
 
 import { useSettingsStore } from '@/store/settingsStore'
 import { useHistoryStore } from '@/store/historyStore'
+import { formatBytes } from '@/helpers/format'
 
 type OpState = 'idle' | 'running' | 'done' | 'error'
-
-function formatBytes(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
 
 export function useSettingsDatabaseOps() {
   const [dbSize, setDbSize] = useState<number | null>(null)
