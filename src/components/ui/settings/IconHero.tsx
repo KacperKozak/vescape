@@ -25,9 +25,7 @@ export function IconHero({
 }: IconHeroProps) {
   return (
     <View style={styles.container}>
-      <View style={styles.iconBg}>
-        <IconComponent size={iconSize} color={iconColor} weight={iconWeight} />
-      </View>
+      <IconComponent size={iconSize} color={iconColor} weight={iconWeight} />
       {title ? <Text style={styles.title}>{title}</Text> : null}
       {description ? <Text style={styles.description}>{description}</Text> : null}
       {children}
@@ -43,14 +41,7 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
     gap: 12,
   },
-  iconBg: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: theme.neutral.surfaceDeep,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+
   title: {
     color: theme.neutral.textPrimary,
     fontSize: 28,
