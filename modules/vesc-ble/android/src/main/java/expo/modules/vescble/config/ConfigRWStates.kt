@@ -1,11 +1,12 @@
 package expo.modules.vescble.config
 
+import expo.modules.vescble.BoardTransport
 import expo.modules.vescble.RefloatConfigSchema
 
 internal data class ReadContext(
     val opId: String,
     val canId: Int?,
-    val directConnection: Boolean,
+    val transport: BoardTransport,
     val wasPolling: Boolean,
     val appBoardId: String?,
     val fwVersion: String?,
@@ -14,7 +15,7 @@ internal data class ReadContext(
 internal data class WriteContext(
     val opId: String,
     val canId: Int?,
-    val directConnection: Boolean,
+    val transport: BoardTransport,
     val wasPolling: Boolean,
     val profileFields: Map<String, Any>,
     val appBoardId: String?,
