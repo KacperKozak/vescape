@@ -69,6 +69,7 @@ data class SessionConfig(
     val appBoardId: String?,
     val deviceId: String?,
     val deviceName: String,
+    val transport: BoardTransport?,
     val canId: Int?,
     val pollIntervalMs: Long,
     val recordingEnabled: Boolean,

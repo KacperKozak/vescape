@@ -54,6 +54,12 @@ export interface FiredAlert {
   firedAt: number
 }
 
+/**
+ * How a Board is reached. `null` = undetected (no persisted "unknown" state),
+ * `'direct'` = direct connection, a number = CAN-forwarded to that CAN id.
+ */
+export type BoardTransport = 'direct' | number
+
 export interface Board {
   id: string
   name: string
@@ -62,6 +68,7 @@ export interface Board {
   isStarred: boolean
   createdAt: number
   batteryConfig: BatteryConfig | null
+  transport: BoardTransport | null
 }
 
 export type BatteryConfig = BatteryPresetConfig | BatteryManualConfig

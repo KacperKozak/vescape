@@ -1,6 +1,7 @@
 package expo.modules.vescble.telemetry
 
 import android.content.Context
+import expo.modules.vescble.BoardTransport
 import expo.modules.vescble.DiagnosticReporter
 import expo.modules.vescble.RefloatConfigSnapshot
 import kotlinx.coroutines.Dispatchers
@@ -401,6 +402,7 @@ fun BoardEntity.toMap(): Map<String, Any?> = mapOf(
   "isStarred" to isStarred,
   "createdAt" to createdAt,
   "batteryConfig" to batteryConfigJson?.toJsonMap(),
+  "transport" to BoardTransport.toBridge(BoardTransport.decode(transport)),
 )
 
 fun AppSettings.toMap(): Map<String, Any?> = mapOf(
@@ -581,6 +583,7 @@ private fun Map<String, Any?>.toBoardEntity(): BoardEntity = BoardEntity(
   isStarred = getBoolean("isStarred"),
   createdAt = getLong("createdAt"),
   batteryConfigJson = encodeBatteryConfig(get("batteryConfig")),
+  transport = BoardTransport.encode(BoardTransport.fromBridge(get("transport"))),
 )
 
 internal fun encodeBatteryConfig(value: Any?): String? {

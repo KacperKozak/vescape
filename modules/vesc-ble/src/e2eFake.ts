@@ -270,6 +270,7 @@ export const e2eFake = {
           seriesCount: 21,
           parallelCount: 2,
         },
+        transport: null,
       }
       e2eBoards.length = 0
       e2eBoards.push(board)

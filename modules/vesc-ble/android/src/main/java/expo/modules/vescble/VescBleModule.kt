@@ -503,6 +503,7 @@ class VescBleModule : Module() {
         appBoardId = boardId,
         deviceId = bleId,
         deviceName = boardName,
+        transport = BoardTransport.fromBridge(board["transport"]),
         canId = null,
         pollIntervalMs = 500L,
         recordingEnabled = requestedDebugRecordingEnabled,

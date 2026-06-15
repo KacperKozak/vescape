@@ -14,6 +14,7 @@ class DiagnosticsRecorderTest {
         appBoardId = "board-1",
         deviceId = "AA:BB",
         deviceName = "Test Board",
+        transport = null,
         canId = 10,
         pollIntervalMs = 100L,
         recordingEnabled = false,

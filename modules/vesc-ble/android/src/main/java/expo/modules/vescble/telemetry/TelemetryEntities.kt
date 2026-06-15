@@ -239,6 +239,8 @@ data class BoardEntity(
   val createdAt: Long,
   @ColumnInfo(name = "battery_config_json")
   val batteryConfigJson: String?,
+  @ColumnInfo(name = "transport")
+  val transport: String? = null,
 )
 
 @Entity(
