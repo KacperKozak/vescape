@@ -21,7 +21,6 @@ const PAGE_SIZE = 50
 
 const GOOD_EVENTS = new Set([
   'board_ready',
-  'can_ping_direct_fallback',
   'gatt_connected',
   'gatt_ready',
   'reconnect_scan_found',

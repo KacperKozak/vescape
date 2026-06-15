@@ -72,7 +72,7 @@ internal class BoardTransportDetector(
       phase = Phase.Pinging
       handler.postDelayed({ if (!finished) gatt.sendPayload(byteArrayOf(COMM_FW_VERSION.toByte())) }, DETECT_FW_DELAY_MS)
       handler.postDelayed({ if (!finished) gatt.sendPayload(byteArrayOf(COMM_PING_CAN.toByte())) }, DETECT_PING_DELAY_MS)
-      armStep(CAN_PING_TIMEOUT) { beginProbing() }
+      armStep(DETECT_CAN_PING_TIMEOUT_MS) { beginProbing() }
     }
   }
 
