@@ -292,6 +292,7 @@ class VescBleModule : Module() {
     }
     AsyncFunction("upsertBoard") Coroutine { board: Map<String, Any?> ->
       AppDataRepository.get(context.applicationContext).upsertBoard(board)
+      VescForegroundService.reloadBatteryConfig()
     }
     AsyncFunction("deleteBoard") Coroutine { id: String ->
       AppDataRepository.get(context.applicationContext).deleteBoard(id)
