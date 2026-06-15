@@ -21,7 +21,10 @@ import {
   type ExcludedRange,
   type TelemetryChartPoint,
 } from '@/components/ui/charts/chartMath'
-import { TelemetryLineChart } from '@/components/ui/charts/TelemetryLineChart'
+import {
+  TelemetryLineChart,
+  type SecondaryChartSeries,
+} from '@/components/ui/charts/TelemetryLineChart'
 import { InfoModal } from '@/components/ui/modals/InfoModal'
 import { telemetry } from '@/constants/telemetry'
 import { interaction, theme } from '@/constants/theme'
@@ -164,6 +167,13 @@ export function HistoryTelemetryPanel({
   )
   const batteryVoltagePoints = useMemo<TelemetryChartPoint[]>(
     () => chartSamples.map((s) => ({ date: new Date(s.capturedAtMs), value: s.batteryVoltage })),
+    [chartSamples],
+  )
+  const batteryPercentPoints = useMemo<TelemetryChartPoint[]>(
+    () =>
+      chartSamples
+        .filter((s) => s.batteryPercent != null)
+        .map((s) => ({ date: new Date(s.capturedAtMs), value: s.batteryPercent! })),
     [chartSamples],
   )
   const tempMotorPoints = useMemo<TelemetryChartPoint[]>(
@@ -384,16 +394,39 @@ export function HistoryTelemetryPanel({
           formatValue: (v: number) => `${v.toFixed(1)}%`,
           excludedRanges: dutyExcludedRanges,
         },
-        battery: {
-          points: batteryVoltagePoints,
-          range: batteryRange,
-          label: telemetry.battVoltage.label,
-          value: telemetry.battVoltage.formatWithUnit(headSample.batteryVoltage),
-          headValue: headSample.batteryVoltage,
-          color: telemetry.battVoltage.color,
-          getPointColor: metricPointColors.battery,
-          formatValue: (v: number) => telemetry.battVoltage.formatWithUnit(v),
-        },
+        battery:
+          batteryPercentPoints.length > 0
+            ? {
+                // % is the main green line; voltage rides under it as dim gray.
+                points: batteryPercentPoints,
+                range: { y: { min: 0, max: 100 } },
+                label: 'Battery',
+                value:
+                  headSample.batteryPercent != null
+                    ? `${Math.round(headSample.batteryPercent)}%`
+                    : '-',
+                headValue: headSample.batteryPercent ?? 0,
+                color: telemetry.battVoltage.color,
+                getPointColor: undefined,
+                formatValue: (v: number) => `${Math.round(v)}%`,
+                secondary: {
+                  points: batteryVoltagePoints,
+                  range: batteryRange,
+                  color: theme.neutral.textMuted,
+                  value: telemetry.battVoltage.formatWithUnit(headSample.batteryVoltage),
+                },
+              }
+            : {
+                // No derived % for this ride (no pack config) — fall back to voltage only.
+                points: batteryVoltagePoints,
+                range: batteryRange,
+                label: 'Battery',
+                value: telemetry.battVoltage.formatWithUnit(headSample.batteryVoltage),
+                headValue: headSample.batteryVoltage,
+                color: telemetry.battVoltage.color,
+                getPointColor: metricPointColors.battery,
+                formatValue: (v: number) => telemetry.battVoltage.formatWithUnit(v),
+              },
         tempMotor: {
           points: tempMotorPoints,
           range: tempMotorRange,
@@ -452,6 +485,7 @@ export function HistoryTelemetryPanel({
           getPointColor: ((value: number) => string) | undefined
           formatValue: (v: number) => string
           excludedRanges?: ExcludedRange[]
+          secondary?: SecondaryChartSeries
         }
       >)
     : null
@@ -563,6 +597,7 @@ export function HistoryTelemetryPanel({
                     ? (cfg.excludedRanges as ExcludedRange[] | undefined)
                     : undefined
                 }
+                secondary={'secondary' in cfg ? cfg.secondary : undefined}
               />
             )
           })}

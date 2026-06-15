@@ -14,7 +14,7 @@ export const OPTIONAL_CHART_METRICS: readonly {
   multilineLabel?: [string, string]
 }[] = [
   { key: 'duty', label: telemetry.duty.label, multilineLabel: ['Duty', 'Cycle'] },
-  { key: 'battery', label: telemetry.battVoltage.label, multilineLabel: ['Battery', 'Voltage'] },
+  { key: 'battery', label: 'Battery' },
   { key: 'tempMotor', label: telemetry.motorTemp.label, multilineLabel: ['Motor', 'Temp'] },
   {
     key: 'tempController',

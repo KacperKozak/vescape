@@ -52,6 +52,7 @@ const SAMPLE_DEFAULTS: TelemetrySample = {
   deviceName: 'Board A',
   speedKmh: 0,
   batteryVoltage: 50,
+  batteryPercent: null,
   motorCurrent: 0,
   batteryCurrent: 0,
   dutyCycle: 0,

@@ -48,7 +48,7 @@ function formatRelativeTime(date: Date, now: Date): string {
 
 function formatAxisNumber(value: number): string {
   const abs = Math.abs(value)
-  if (abs >= 100) return Math.round(value).toString()
+  if (abs >= 100 || Number.isInteger(value)) return Math.round(value).toString()
   return value.toFixed(1)
 }
 
@@ -59,6 +59,14 @@ function resolveActiveChartColor(
 ): string {
   if (!currentPoint || !getPointColor) return baseColor
   return getPointColor(currentPoint.value)
+}
+
+export interface SecondaryChartSeries {
+  points: TelemetryChartPoint[]
+  range: { y: { min: number; max: number } }
+  color: string
+  /** Display value for the current/selected time, shown in the header. */
+  value: string
 }
 
 interface TelemetryLineChartProps {
@@ -76,6 +84,8 @@ interface TelemetryLineChartProps {
   getPointColor?: (value: number) => string
   windowMs?: number
   excludedRanges?: ExcludedRange[]
+  /** Optional second line plotted on a right-side axis with its own range. */
+  secondary?: SecondaryChartSeries
 }
 
 interface ChartLineSegmentsProps {
@@ -193,6 +203,7 @@ export function TelemetryLineChart({
   getPointColor,
   windowMs,
   excludedRanges,
+  secondary,
 }: TelemetryLineChartProps) {
   'use no memo'
   const gradientIdPrefix = `telemetry-line-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`
@@ -253,6 +264,7 @@ export function TelemetryLineChart({
   )
 
   const yMid = (range.y.min + range.y.max) / 2
+  const secondaryYMid = secondary ? (secondary.range.y.min + secondary.range.y.max) / 2 : 0
 
   const timeLabels = useMemo(() => {
     if (points.length < 2) return null
@@ -286,15 +298,22 @@ export function TelemetryLineChart({
           {isDragging && currentPoint && (
             <Text style={styles.headerTime}>{formatTime(currentPoint.date)}</Text>
           )}
-          <Text style={[styles.value, valueColorStyle]}>{value}</Text>
+          <Text style={[styles.value, secondary ? { color } : valueColorStyle]}>{value}</Text>
         </View>
       </View>
 
       {isDragging && currentPoint && markerPosition && (
         <View style={[styles.tooltip, { left: tooltipLeft }]}>
-          <Text style={styles.tooltipValue}>
-            {formatValue ? formatValue(currentPoint.value) : currentPoint.value.toFixed(1)}
-          </Text>
+          <View style={styles.tooltipValues}>
+            <Text style={[styles.tooltipValue, { color: activeColor }]}>
+              {formatValue ? formatValue(currentPoint.value) : currentPoint.value.toFixed(1)}
+            </Text>
+            {secondary && (
+              <Text style={[styles.tooltipValue, { color: secondary.color }]}>
+                {secondary.value}
+              </Text>
+            )}
+          </View>
           <Text style={styles.tooltipTime}>{formatTime(currentPoint.date)}</Text>
         </View>
       )}
@@ -358,6 +377,18 @@ export function TelemetryLineChart({
               )
             })}
 
+            {secondary && (
+              <ChartLineSegments
+                points={secondary.points}
+                range={secondary.range}
+                width={chartWidth}
+                height={height}
+                color={secondary.color}
+                gradientIdPrefix={`${gradientIdPrefix}-secondary`}
+                windowMs={windowMs}
+              />
+            )}
+
             <ChartLineSegments
               points={points}
               range={range}
@@ -393,9 +424,22 @@ export function TelemetryLineChart({
             )}
           </Svg>
         </View>
+
+        {secondary && (
+          <View style={[styles.rightAxis, { height }]}>
+            <Text style={styles.yLabel}>{formatAxisNumber(secondary.range.y.max)}</Text>
+            <Text style={styles.yLabel}>{formatAxisNumber(secondaryYMid)}</Text>
+            <Text style={styles.yLabel}>{formatAxisNumber(secondary.range.y.min)}</Text>
+          </View>
+        )}
       </View>
 
-      <View style={[styles.xAxis, { marginLeft: Y_AXIS_WIDTH }]}>
+      <View
+        style={[
+          styles.xAxis,
+          { marginLeft: Y_AXIS_WIDTH, marginRight: secondary ? Y_AXIS_WIDTH : 0 },
+        ]}
+      >
         <Text style={[styles.xLabel, !timeLabels && styles.xLabelHidden]}>
           {timeLabels?.start ?? '--'}
         </Text>
@@ -451,6 +495,12 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     paddingRight: 4,
   },
+  rightAxis: {
+    width: Y_AXIS_WIDTH,
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingLeft: 4,
+  },
   yLabel: {
     color: theme.neutral.textDim,
     fontSize: 8,
@@ -483,9 +533,15 @@ const styles = StyleSheet.create({
     borderColor: theme.neutral.border,
     paddingHorizontal: 6,
     paddingVertical: 2,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexDirection: 'column',
     alignItems: 'center',
+    gap: 1,
+  },
+  tooltipValues: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
   },
   tooltipValue: {
     color: theme.neutral.textPrimary,
