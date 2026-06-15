@@ -54,6 +54,12 @@ export function useTransportDetection(boardId: string): TransportDetection {
         setSelected(pickDefaultTransport(result.candidates))
         setPhase('picking')
       })
+      .catch(() => {
+        if (run !== runRef.current) return
+        setCandidates([])
+        setSelected(null)
+        setPhase('failed')
+      })
   }, [boardId])
 
   useEffect(() => {
