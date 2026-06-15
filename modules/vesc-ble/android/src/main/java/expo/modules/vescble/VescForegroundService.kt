@@ -673,8 +673,9 @@ class VescForegroundService : Service() {
             )
             return
         }
-        val id = canId
-        if (id == null && !directConnection) {
+        val currentCanId = canId
+        val transport = boardTransport(currentCanId, directConnection)
+        if (transport == null) {
             pending.onError(
                 RefloatConfigErrorCode.CAN_ID_UNAVAILABLE.name,
                 "Cannot read Refloat config before CAN id discovery",
@@ -687,8 +688,8 @@ class VescForegroundService : Service() {
         dispatchConfigEvent(
             ConfigRWEvent.StartRead(
                 opId = newOperationId(),
-                canId = id,
-                directConnection = directConnection,
+                canId = currentCanId,
+                transport = transport,
                 wasPolling = wasPolling,
                 appBoardId = boardConfig?.appBoardId,
                 fwVersion = fwVersionString,
@@ -922,7 +923,6 @@ class VescForegroundService : Service() {
             }
             armCanPingTimeout()
         }
-        armBoardReadyTimeout(start.boardConfig)
     }
 
     private fun handleFrameChunk(chunk: ByteArray) {
@@ -1116,8 +1116,8 @@ class VescForegroundService : Service() {
             )
             return
         }
-        val id = canId
-        if (id == null && !directConnection) {
+        val transport = currentBoardTransport()
+        if (transport == null) {
             pending.onError(
                 RefloatConfigErrorCode.CAN_ID_UNAVAILABLE.name,
                 "Cannot push config before CAN id discovery",
@@ -1165,8 +1165,9 @@ class VescForegroundService : Service() {
                     )
                     return@post
                 }
-                val currentId = canId
-                if (currentId == null && !directConnection) {
+                val currentCanId = canId
+                val currentTransport = boardTransport(currentCanId, directConnection)
+                if (currentTransport == null) {
                     pending.onError(
                         RefloatConfigErrorCode.CAN_ID_UNAVAILABLE.name,
                         "Cannot push config before CAN id discovery",
@@ -1179,8 +1180,8 @@ class VescForegroundService : Service() {
                 dispatchConfigEvent(
                     ConfigRWEvent.StartWrite(
                         opId = newOperationId(),
-                        canId = currentId,
-                        directConnection = directConnection,
+                        canId = currentCanId,
+                        transport = currentTransport,
                         wasPolling = wasPolling,
                         profileFields = fields,
                         appBoardId = boardConfig?.appBoardId,
@@ -1286,6 +1287,14 @@ class VescForegroundService : Service() {
     private fun startPolling() {
         val session = boardConfig ?: return
         val sessionToken = boardSession ?: return
+        val transport = currentBoardTransport() ?: return
+        // Arm the board-ready timeout only once telemetry polling actually begins,
+        // i.e. after CAN id resolution. Arming it on WaitingForTelemetry entry let the
+        // CAN ping discovery window (CAN_PING_TIMEOUT) overlap the ready budget and
+        // spuriously trip a reconnect on the first connect to an unknown CAN id.
+        if (boardStatus == BoardPhase.WaitingForTelemetry) {
+            armBoardReadyTimeout(session)
+        }
         telemetryPipeline.armStaleWatchdog()
         recordLocalDiagnostic(
             "telemetry_polling_started",
@@ -1297,8 +1306,10 @@ class VescForegroundService : Service() {
                 "poll_interval_ms" to session.pollIntervalMs,
             ),
         )
-        pollingLoop.start(session, sessionToken, canId, directConnection)
+        pollingLoop.start(session, sessionToken, transport)
     }
+
+    private fun currentBoardTransport(): BoardTransport? = boardTransport(canId, directConnection)
 
     private fun stopPolling() {
         pollingLoop.stop()

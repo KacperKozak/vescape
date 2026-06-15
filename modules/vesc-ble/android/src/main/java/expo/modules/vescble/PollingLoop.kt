@@ -23,10 +23,9 @@ internal class PollingLoop(
     fun start(
         sessionConfig: SessionConfig,
         session: BoardSession,
-        canId: Int?,
-        directConnection: Boolean,
+        transport: BoardTransport,
     ) {
-        val pollPayload = pollPayload(canId, directConnection) ?: return
+        val pollPayload = pollPayload(transport)
         stop()
 
         fun scheduleNext() {
@@ -56,22 +55,13 @@ internal class PollingLoop(
         return rttHistory.average().roundToInt()
     }
 
-    private fun pollPayload(canId: Int?, directConnection: Boolean): ByteArray? =
-        when {
-            canId != null -> byteArrayOf(
-                COMM_FORWARD_CAN.toByte(),
-                canId.toByte(),
+    private fun pollPayload(transport: BoardTransport): ByteArray =
+        transport.frame(
+            byteArrayOf(
                 COMM_CUSTOM_APP_DATA.toByte(),
                 REFLOAT_MAGIC.toByte(),
                 REFLOAT_GET_ALLDATA.toByte(),
                 2,
-            )
-            directConnection -> byteArrayOf(
-                COMM_CUSTOM_APP_DATA.toByte(),
-                REFLOAT_MAGIC.toByte(),
-                REFLOAT_GET_ALLDATA.toByte(),
-                2,
-            )
-            else -> null
-        }
+            ),
+        )
 }

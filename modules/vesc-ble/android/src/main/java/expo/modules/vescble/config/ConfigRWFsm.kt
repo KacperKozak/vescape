@@ -1,5 +1,6 @@
 package expo.modules.vescble.config
 
+import expo.modules.vescble.BoardTransport
 import expo.modules.vescble.RefloatConfigDecodeException
 import expo.modules.vescble.RefloatConfigDecoder
 import expo.modules.vescble.RefloatConfigEncodeException
@@ -41,7 +42,7 @@ internal object ConfigRWFsm {
         val ctx = ReadContext(
             opId = event.opId,
             canId = event.canId,
-            directConnection = event.directConnection,
+            transport = event.transport,
             wasPolling = event.wasPolling,
             appBoardId = event.appBoardId,
             fwVersion = event.fwVersion,
@@ -57,7 +58,7 @@ internal object ConfigRWFsm {
                 RefloatConfigErrorCode.CONFIG_SCHEMA_TIMEOUT,
                 CONFIG_SCHEMA_TIMEOUT_MS,
             ),
-            ConfigRWEffect.SendFrame(buildXmlRequest(ctx.canId, expected = null, nextOffset = 0)),
+            ConfigRWEffect.SendFrame(buildXmlRequest(ctx.transport, expected = null, nextOffset = 0)),
         )
     }
 
@@ -69,7 +70,7 @@ internal object ConfigRWFsm {
         val ctx = WriteContext(
             opId = event.opId,
             canId = event.canId,
-            directConnection = event.directConnection,
+            transport = event.transport,
             wasPolling = event.wasPolling,
             profileFields = event.profileFields,
             appBoardId = event.appBoardId,
@@ -86,7 +87,7 @@ internal object ConfigRWFsm {
                 RefloatConfigErrorCode.CONFIG_SCHEMA_TIMEOUT,
                 CONFIG_SCHEMA_TIMEOUT_MS,
             ),
-            ConfigRWEffect.SendFrame(buildXmlRequest(ctx.canId, expected = null, nextOffset = 0)),
+            ConfigRWEffect.SendFrame(buildXmlRequest(ctx.transport, expected = null, nextOffset = 0)),
         )
     }
 
@@ -115,7 +116,7 @@ internal object ConfigRWFsm {
                                 RefloatConfigErrorCode.CONFIG_READ_TIMEOUT,
                                 CONFIG_READ_TIMEOUT_MS,
                             ),
-                            ConfigRWEffect.SendFrame(buildConfigBytesRequest(state.ctx.canId)),
+                            ConfigRWEffect.SendFrame(buildConfigBytesRequest(state.ctx.transport)),
                         )
                     } else {
                         ConfigRWState.ReadCollectingXml(
@@ -130,7 +131,7 @@ internal object ConfigRWFsm {
                                 CONFIG_SCHEMA_TIMEOUT_MS,
                             ),
                             ConfigRWEffect.SendFrame(
-                                buildXmlRequest(state.ctx.canId, chunk.totalLength, nextOffset),
+                                buildXmlRequest(state.ctx.transport, chunk.totalLength, nextOffset),
                             ),
                         )
                     }
@@ -160,7 +161,7 @@ internal object ConfigRWFsm {
                                 RefloatConfigErrorCode.CONFIG_READ_TIMEOUT,
                                 CONFIG_READ_TIMEOUT_MS,
                             ),
-                            ConfigRWEffect.SendFrame(buildConfigBytesRequest(state.ctx.canId)),
+                            ConfigRWEffect.SendFrame(buildConfigBytesRequest(state.ctx.transport)),
                         )
                     } else {
                         ConfigRWState.WriteCollectingXml(
@@ -175,7 +176,7 @@ internal object ConfigRWFsm {
                                 CONFIG_SCHEMA_TIMEOUT_MS,
                             ),
                             ConfigRWEffect.SendFrame(
-                                buildXmlRequest(state.ctx.canId, chunk.totalLength, nextOffset),
+                                buildXmlRequest(state.ctx.transport, chunk.totalLength, nextOffset),
                             ),
                         )
                     }
@@ -268,7 +269,7 @@ internal object ConfigRWFsm {
                     RefloatConfigErrorCode.CONFIG_READ_TIMEOUT,
                     CONFIG_READ_TIMEOUT_MS,
                 ),
-                ConfigRWEffect.SendFrame(buildConfigBytesRequest(state.ctx.canId)),
+                ConfigRWEffect.SendFrame(buildConfigBytesRequest(state.ctx.transport)),
             )
         }
     }
@@ -437,7 +438,7 @@ internal object ConfigRWFsm {
                 CONFIG_WRITE_TIMEOUT_MS,
             ),
             ConfigRWEffect.SendFrame(
-                RefloatConfigProtocol.buildSetCustomConfig(ctx.canId, 0, patched),
+                RefloatConfigProtocol.buildSetCustomConfig(ctx.transport, 0, patched),
             ),
         )
     } catch (e: RefloatConfigSchemaException) {
@@ -582,19 +583,19 @@ internal object ConfigRWFsm {
         else -> null
     }
 
-    private fun buildXmlRequest(canId: Int?, expected: Int?, nextOffset: Int): ByteArray {
+    private fun buildXmlRequest(transport: BoardTransport, expected: Int?, nextOffset: Int): ByteArray {
         val length = (
             if (expected == null) CONFIG_CHUNK_LENGTH
             else (expected - nextOffset).coerceAtMost(CONFIG_CHUNK_LENGTH)
             ).coerceAtLeast(0)
         return RefloatConfigProtocol.buildGetCustomConfigXml(
-            canId = canId,
+            transport = transport,
             confInd = 0,
             length = length,
             offset = nextOffset,
         )
     }
 
-    private fun buildConfigBytesRequest(canId: Int?): ByteArray =
-        RefloatConfigProtocol.buildGetCustomConfig(canId = canId, confInd = 0)
+    private fun buildConfigBytesRequest(transport: BoardTransport): ByteArray =
+        RefloatConfigProtocol.buildGetCustomConfig(transport = transport, confInd = 0)
 }

@@ -1,12 +1,13 @@
 package expo.modules.vescble.config
 
 import expo.modules.vescble.RefloatConfigErrorCode
+import expo.modules.vescble.BoardTransport
 
 internal sealed class ConfigRWEvent {
     data class StartRead(
         val opId: String,
         val canId: Int?,
-        val directConnection: Boolean,
+        val transport: BoardTransport,
         val wasPolling: Boolean,
         val appBoardId: String?,
         val fwVersion: String?,
@@ -15,7 +16,7 @@ internal sealed class ConfigRWEvent {
     data class StartWrite(
         val opId: String,
         val canId: Int?,
-        val directConnection: Boolean,
+        val transport: BoardTransport,
         val wasPolling: Boolean,
         val profileFields: Map<String, Any>,
         val appBoardId: String?,
