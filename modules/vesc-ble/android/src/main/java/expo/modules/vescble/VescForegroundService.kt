@@ -200,6 +200,12 @@ class VescForegroundService : Service() {
             }
         }
 
+        fun reloadBatteryConfig() {
+            appDataScope.launch {
+                instance?.reloadBatteryConfigForActiveBoard()
+            }
+        }
+
         fun previewAlertSound(context: Context, soundType: String) {
             instance?.alertFeedback?.preview(soundType) ?: VescAlertFeedback.preview(context, soundType)
         }
@@ -1654,6 +1660,10 @@ class VescForegroundService : Service() {
             Log.w(VESC_SESSION_TAG, "Failed to load alert rules: ${e.message}")
             alertRules = emptyList()
         }
+    }
+
+    private fun reloadBatteryConfigForActiveBoard() {
+        loadBatteryConfig(boardConfig?.appBoardId)
     }
 
     private fun loadBatteryConfig(appBoardId: String?) {
