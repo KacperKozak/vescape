@@ -1,31 +1,42 @@
+import {
+  CaretDownIcon,
+  CaretLeftIcon,
+  CaretRightIcon,
+  ImagesSquareIcon,
+  CloudArrowUpIcon,
+} from 'phosphor-react-native'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { CaretDownIcon, CaretLeftIcon, CaretRightIcon } from 'phosphor-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
-import { TelemetryLineChart } from '@/components/ui/charts/TelemetryLineChart'
-import {
-  type ExcludedRange,
-  type TelemetryChartPoint,
-  computeAutoRange,
-  toExcludedRanges,
-} from '@/components/ui/charts/chartMath'
 import {
   OPTIONAL_CHART_METRICS,
   toggleOptionalChartMetric,
   type OptionalChartMetric,
 } from '@/components/domain/history/historyChartMetrics'
+import { IconButton } from '@/components/ui/base/IconButton'
+import {
+  computeAutoRange,
+  toExcludedRanges,
+  type ExcludedRange,
+  type TelemetryChartPoint,
+} from '@/components/ui/charts/chartMath'
+import {
+  TelemetryLineChart,
+  type SecondaryChartSeries,
+} from '@/components/ui/charts/TelemetryLineChart'
+import { InfoModal } from '@/components/ui/modals/InfoModal'
 import { telemetry } from '@/constants/telemetry'
-import { downsampleTimeSeries, findNearestSampleIndexByTime } from '@/lib/history/playback'
+import { interaction, theme } from '@/constants/theme'
+import { dutyPercent, fmtDutyPercent } from '@/helpers/format'
 import {
   getHistoryMetricColorRange,
   getMetricRampColor,
   type HistoryMetricKey,
 } from '@/lib/history/metricColorScale'
-import { dutyPercent, fmtDutyPercent } from '@/helpers/format'
+import { downsampleTimeSeries, findNearestSampleIndexByTime } from '@/lib/history/playback'
 import { useHistoryStore, type TelemetrySample } from '@/store/historyStore'
 import { useSettingsStore } from '@/store/settingsStore'
-import { interaction, theme } from '@/constants/theme'
 
 interface HistoryTelemetryPanelProps {
   startAtMs: number | null
@@ -34,9 +45,13 @@ interface HistoryTelemetryPanelProps {
   samples: TelemetrySample[]
   canPrevious: boolean
   canNext: boolean
+  mediaEnabled: boolean
+  mediaLoading: boolean
+  mediaCount: number
   onPrevious: () => void
   onNext: () => void
   onOpenList: () => void
+  onToggleMedia: () => void
   onSeek?: (timeMs: number) => void
   onMetricInteraction?: (metric: HistoryMetricKey) => void
   onHeightChange?: (height: number) => void
@@ -94,9 +109,13 @@ export function HistoryTelemetryPanel({
   samples,
   canPrevious,
   canNext,
+  mediaEnabled,
+  mediaLoading,
+  mediaCount,
   onPrevious,
   onNext,
   onOpenList,
+  onToggleMedia,
   onSeek,
   onMetricInteraction,
   onHeightChange,
@@ -104,6 +123,7 @@ export function HistoryTelemetryPanel({
   const insets = useSafeAreaInsets()
   const [headTimeMs, setHeadTimeMs] = useState<number | null>(null)
   const [activeCharts, setActiveCharts] = useState<Set<OptionalChartMetric>>(new Set())
+  const [shareInfoVisible, setShareInfoVisible] = useState(false)
   const pendingSelectionRef = useRef<TelemetryChartPoint | null>(null)
   const selectionFrameRef = useRef<number | null>(null)
 
@@ -147,6 +167,13 @@ export function HistoryTelemetryPanel({
   )
   const batteryVoltagePoints = useMemo<TelemetryChartPoint[]>(
     () => chartSamples.map((s) => ({ date: new Date(s.capturedAtMs), value: s.batteryVoltage })),
+    [chartSamples],
+  )
+  const batteryPercentPoints = useMemo<TelemetryChartPoint[]>(
+    () =>
+      chartSamples
+        .filter((s) => s.batteryPercent != null)
+        .map((s) => ({ date: new Date(s.capturedAtMs), value: s.batteryPercent! })),
     [chartSamples],
   )
   const tempMotorPoints = useMemo<TelemetryChartPoint[]>(
@@ -367,16 +394,39 @@ export function HistoryTelemetryPanel({
           formatValue: (v: number) => `${v.toFixed(1)}%`,
           excludedRanges: dutyExcludedRanges,
         },
-        battery: {
-          points: batteryVoltagePoints,
-          range: batteryRange,
-          label: telemetry.battVoltage.label,
-          value: telemetry.battVoltage.formatWithUnit(headSample.batteryVoltage),
-          headValue: headSample.batteryVoltage,
-          color: telemetry.battVoltage.color,
-          getPointColor: metricPointColors.battery,
-          formatValue: (v: number) => telemetry.battVoltage.formatWithUnit(v),
-        },
+        battery:
+          batteryPercentPoints.length > 0
+            ? {
+                // % is the main green line; voltage rides under it as dim gray.
+                points: batteryPercentPoints,
+                range: { y: { min: 0, max: 100 } },
+                label: 'Battery',
+                value:
+                  headSample.batteryPercent != null
+                    ? `${Math.round(headSample.batteryPercent)}%`
+                    : '-',
+                headValue: headSample.batteryPercent ?? 0,
+                color: telemetry.battVoltage.color,
+                getPointColor: undefined,
+                formatValue: (v: number) => `${Math.round(v)}%`,
+                secondary: {
+                  points: batteryVoltagePoints,
+                  range: batteryRange,
+                  color: theme.neutral.textMuted,
+                  value: telemetry.battVoltage.formatWithUnit(headSample.batteryVoltage),
+                },
+              }
+            : {
+                // No derived % for this ride (no pack config) — fall back to voltage only.
+                points: batteryVoltagePoints,
+                range: batteryRange,
+                label: 'Battery',
+                value: telemetry.battVoltage.formatWithUnit(headSample.batteryVoltage),
+                headValue: headSample.batteryVoltage,
+                color: telemetry.battVoltage.color,
+                getPointColor: metricPointColors.battery,
+                formatValue: (v: number) => telemetry.battVoltage.formatWithUnit(v),
+              },
         tempMotor: {
           points: tempMotorPoints,
           range: tempMotorRange,
@@ -435,6 +485,7 @@ export function HistoryTelemetryPanel({
           getPointColor: ((value: number) => string) | undefined
           formatValue: (v: number) => string
           excludedRanges?: ExcludedRange[]
+          secondary?: SecondaryChartSeries
         }
       >)
     : null
@@ -444,48 +495,67 @@ export function HistoryTelemetryPanel({
       style={[styles.panel, { bottom: bottomInset }]}
       onLayout={(e) => onHeightChange?.(e.nativeEvent.layout.height)}
     >
-      <View style={styles.navRow}>
-        <Pressable
-          style={({ pressed }) => [
-            styles.navSegment,
-            !canPrevious && styles.navSegmentDisabled,
-            pressed && canPrevious && styles.navSegmentPressed,
-          ]}
-          android_ripple={interaction.ripple}
-          onPress={onPrevious}
-          disabled={!canPrevious}
-        >
-          <CaretLeftIcon size={22} color={theme.neutral.textSecondary} weight="bold" />
-        </Pressable>
-        <View style={styles.navDivider} />
-        <Pressable
-          style={({ pressed }) => [styles.titleButton, pressed && styles.navSegmentPressed]}
-          android_ripple={interaction.ripple}
-          onPress={onOpenList}
-        >
-          <View style={styles.titleContent}>
-            <Text style={styles.titleTime} numberOfLines={1}>
-              {formatRideTitle(startAtMs, endAtMs)}
-            </Text>
-            <Text style={styles.titleMeta} numberOfLines={1}>
-              {formatRideMeta(startAtMs, endAtMs, deviceName)}
-            </Text>
-          </View>
-          <CaretDownIcon size={12} color={theme.neutral.textSecondary} weight="bold" />
-        </Pressable>
-        <View style={styles.navDivider} />
-        <Pressable
-          style={({ pressed }) => [
-            styles.navSegment,
-            !canNext && styles.navSegmentDisabled,
-            pressed && canNext && styles.navSegmentPressed,
-          ]}
-          android_ripple={interaction.ripple}
-          onPress={onNext}
-          disabled={!canNext}
-        >
-          <CaretRightIcon size={22} color={theme.neutral.textSecondary} weight="bold" />
-        </Pressable>
+      <View style={styles.navControls}>
+        <View style={styles.navSide}>
+          <IconButton
+            icon={ImagesSquareIcon}
+            onPress={onToggleMedia}
+            loading={mediaLoading}
+            size="lg"
+            style={mediaEnabled ? styles.mediaEnabled : undefined}
+          />
+          {mediaCount > 0 ? (
+            <View style={styles.mediaCountBadge} pointerEvents="none">
+              <Text style={styles.mediaCountText}>{mediaCount > 99 ? '99+' : mediaCount}</Text>
+            </View>
+          ) : null}
+        </View>
+        <View style={styles.navRow}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.navSegment,
+              !canPrevious && styles.navSegmentDisabled,
+              pressed && canPrevious && styles.navSegmentPressed,
+            ]}
+            android_ripple={interaction.ripple}
+            onPress={onPrevious}
+            disabled={!canPrevious}
+          >
+            <CaretLeftIcon size={22} color={theme.neutral.textSecondary} weight="bold" />
+          </Pressable>
+          <View style={styles.navDivider} />
+          <Pressable
+            style={({ pressed }) => [styles.titleButton, pressed && styles.navSegmentPressed]}
+            android_ripple={interaction.ripple}
+            onPress={onOpenList}
+          >
+            <View style={styles.titleContent}>
+              <Text style={styles.titleTime} numberOfLines={1}>
+                {formatRideTitle(startAtMs, endAtMs)}
+              </Text>
+              <Text style={styles.titleMeta} numberOfLines={1}>
+                {formatRideMeta(startAtMs, endAtMs, deviceName)}
+              </Text>
+            </View>
+            <CaretDownIcon size={12} color={theme.neutral.textSecondary} weight="bold" />
+          </Pressable>
+          <View style={styles.navDivider} />
+          <Pressable
+            style={({ pressed }) => [
+              styles.navSegment,
+              !canNext && styles.navSegmentDisabled,
+              pressed && canNext && styles.navSegmentPressed,
+            ]}
+            android_ripple={interaction.ripple}
+            onPress={onNext}
+            disabled={!canNext}
+          >
+            <CaretRightIcon size={22} color={theme.neutral.textSecondary} weight="bold" />
+          </Pressable>
+        </View>
+        <View style={styles.navSide}>
+          <IconButton icon={CloudArrowUpIcon} onPress={() => setShareInfoVisible(true)} size="lg" />
+        </View>
       </View>
       {hasChartData && headPoint && optionalChartConfig && (
         <>
@@ -527,6 +597,7 @@ export function HistoryTelemetryPanel({
                     ? (cfg.excludedRanges as ExcludedRange[] | undefined)
                     : undefined
                 }
+                secondary={'secondary' in cfg ? cfg.secondary : undefined}
               />
             )
           })}
@@ -602,6 +673,12 @@ export function HistoryTelemetryPanel({
           </View>
         </>
       )}
+      <InfoModal
+        visible={shareInfoVisible}
+        title="Share Ride"
+        message="Ride sharing is coming in the future."
+        onDismiss={() => setShareInfoVisible(false)}
+      />
     </View>
   )
 }
@@ -614,11 +691,23 @@ const styles = StyleSheet.create({
     zIndex: 20,
     gap: 8,
   },
-  navRow: {
+  navControls: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     alignSelf: 'center',
     width: '100%',
+    gap: 8,
+  },
+  navSide: {
+    width: 54,
+    height: 54,
+  },
+  navRow: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
     maxWidth: 320,
     height: 54,
     borderRadius: 27,
@@ -626,6 +715,30 @@ const styles = StyleSheet.create({
     borderColor: theme.neutral.border,
     backgroundColor: theme.neutral.surfaceDeep,
     overflow: 'hidden',
+  },
+  mediaEnabled: {
+    borderColor: theme.target.border,
+    backgroundColor: theme.target.bg,
+  },
+  mediaCountBadge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: theme.neutral.surfaceDeep,
+    backgroundColor: theme.target.color,
+  },
+  mediaCountText: {
+    color: theme.neutral.bg,
+    fontSize: 9,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
   },
   navSegment: {
     width: 54,

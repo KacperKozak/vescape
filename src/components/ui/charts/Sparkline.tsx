@@ -120,7 +120,7 @@ export function Sparkline({
       if (range) {
         const span = range.max - range.min
         if (span > 0) {
-          const t = (0 - range.min) / span
+          const t = Math.max(0, Math.min(1, (0 - range.min) / span))
           emptyY = height - inset - (height - inset * 2) * t
         }
       }

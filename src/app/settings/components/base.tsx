@@ -1,10 +1,10 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useCallback, useMemo, useState } from 'react'
-import { ArrowLeftIcon, GearSixIcon, GhostIcon, TrashIcon } from 'phosphor-react-native'
+import { useCallback, useState } from 'react'
+import { ArrowLeftIcon, CubeIcon, GearSixIcon, GhostIcon, TrashIcon } from 'phosphor-react-native'
 
 import { Banner } from '@/components/ui/base/Banner'
-import { BatteryBar } from '@/components/ui/base/BatteryBar'
+import { IconHero } from '@/components/ui/settings/IconHero'
 import { Button } from '@/components/ui/base/Button'
 import { DeviceRow } from '@/components/ui/base/DeviceRow'
 import { IconButton } from '@/components/ui/base/IconButton'
@@ -15,20 +15,6 @@ import { StatsRow } from '@/components/ui/base/StatsRow'
 import { ShowcaseCard } from '@/components/ui/dev/ShowcaseCard'
 import { ChipRow, ToggleRow } from '@/components/ui/dev/ShowcaseControls'
 import { theme } from '@/constants/theme'
-
-import type { SparklinePoint } from '@/components/ui/charts/Sparkline'
-
-function generateSparklineData(count: number, base: number, variance: number): SparklinePoint[] {
-  const now = Date.now()
-  const points: SparklinePoint[] = []
-  let value = base
-  for (let i = 0; i < count; i++) {
-    value += (Math.random() - 0.48) * variance
-    value = Math.max(base - variance * 3, Math.min(base + variance * 3, value))
-    points.push({ ts: now - (count - i) * 1000, value })
-  }
-  return points
-}
 
 function IconButtonShowcase() {
   const [loading, setLoading] = useState(false)
@@ -228,16 +214,6 @@ function DeviceRowShowcase() {
   )
 }
 
-function BatteryBarShowcase() {
-  const points = useMemo(() => generateSparklineData(60, 82, 3), [])
-
-  return (
-    <ShowcaseCard name="BatteryBar">
-      <BatteryBar percent={82} voltage={74.5} series={points} />
-    </ShowcaseCard>
-  )
-}
-
 function StatsRowShowcase() {
   return (
     <ShowcaseCard name="StatsRow">
@@ -269,12 +245,15 @@ export default function BaseComponentsPage() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
+        <IconHero
+          icon={CubeIcon}
+          description="Button, IconButton, Banner, DeviceRow, InfoBadge, StatsRow, Placeholder, ScreenTitle."
+        />
         <IconButtonShowcase />
         <ButtonShowcase />
         <PlaceholderShowcase />
         <BannerShowcase />
         <DeviceRowShowcase />
-        <BatteryBarShowcase />
         <StatsRowShowcase />
         <InfoBadgeShowcase />
         <ScreenTitleShowcase />

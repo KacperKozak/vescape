@@ -1,53 +1,39 @@
 /* eslint-disable react-hooks/immutability */
 import * as Haptics from 'expo-haptics'
 import { useCallback, useEffect, useMemo } from 'react'
-import {
-  type LayoutChangeEvent,
-  Platform,
-  StyleSheet,
-  Text,
-  View,
-  useWindowDimensions,
-} from 'react-native'
+import { Platform, StyleSheet, Text, View } from 'react-native'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import Animated, {
   cancelAnimation,
   useAnimatedStyle,
   useFrameCallback,
   useSharedValue,
-  withSequence,
   withSpring,
-  withTiming,
 } from 'react-native-reanimated'
 import { scheduleOnRN } from 'react-native-worklets'
 
 import { formatTuneValue } from '@/lib/tune/fields'
 import { theme } from '@/constants/theme'
 import {
-  DETENT_CAPTURE_VELOCITY,
-  DETENT_DECAY_PER_FRAME,
-  DETENT_PULL,
   DRAG_RANGE_GAIN,
-  LOCK_VELOCITY,
-  MAX_THROW_VELOCITY,
-  MOMENTUM_CARRY,
-  THROW_DISTANCE_GAIN,
-  THROW_EASE_POWER,
-  computeDetentStrength,
+  THROW_STOP_VELOCITY,
+  advanceTuneDialThrow,
   computeHapticStepSpacing,
-  computeMomentumEmitStepIndex,
-  computeRangeScale,
-  computeRenderedWidthScale,
-  computeThrowDurationMs,
   computeTuneDialLayout,
-  resolveThrowGestureVelocity,
-  smoothThrowGestureVelocity,
+  isTuneDialEdgeStep,
+  resolveTuneDialThrowVelocity,
+  shouldApplyExternalTuneDialValue,
   shouldPlayTuneDialHaptic,
 } from '@/components/ui/tune/tuneDialPhysics'
 
-const DIAL_HEIGHT = 78
-const VALUE_MARKER_SIZE = 26
-const VALUE_MARKER_TOP = 35
+const DIAL_HEIGHT = 105
+const TOP_VALUE_BAND_HEIGHT = 22
+const MAJOR_TICK_TOP = TOP_VALUE_BAND_HEIGHT + 5
+const RULER_LABEL_BAND_TOP = 76
+const VALUE_LABEL_WIDTH = 28
+const VALUE_LABEL_HEIGHT = 14
+const CURRENT_VALUE_TOP = 2
+const RULER_LABEL_BAND_BOTTOM = RULER_LABEL_BAND_TOP + VALUE_LABEL_HEIGHT
 const MARKER_LINE_WIDTH = 2.5
 const INDICATOR_COLOR = theme.error.color
 const PREV_MARK_COLOR = theme.highlight.color
@@ -68,7 +54,6 @@ interface TuneDialProps {
 
 export function TuneDial({ value, previousValue, min, max, step, onValueChange }: TuneDialProps) {
   'use no memo'
-  const { width: screenWidth } = useWindowDimensions()
   const range = max - min
   const {
     totalSteps,
@@ -80,8 +65,7 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
     labelEveryStep,
     renderMidpointTicks,
   } = useMemo(() => computeTuneDialLayout(min, max, step), [min, max, step])
-  const hapticStepSpacing = computeHapticStepSpacing({ labelEveryStep, majorEvery })
-  const rangeScale = computeRangeScale(totalWidth)
+  const hapticStepSpacing = computeHapticStepSpacing()
   const initialStepIndex = Math.round((value - min) / step)
 
   const valueToOffset = useCallback(
@@ -91,19 +75,11 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
 
   const translateX = useSharedValue(-valueToOffset(value))
   const dragStartX = useSharedValue(0)
-  const isDragging = useSharedValue(false)
+  const interactionActive = useSharedValue(false)
   const momentumVelocity = useSharedValue(0)
-  const throwDurationMs = useSharedValue(0)
-  const throwElapsedMs = useSharedValue(0)
-  const smoothedThrowGestureVelocityX = useSharedValue(0)
-  const latestGestureTranslationX = useSharedValue(0)
-  const previousFrameGestureTranslationX = useSharedValue(0)
-  const stationaryGestureMs = useSharedValue(0)
   const lastEmittedValue = useSharedValue(value)
   const lastStepIndex = useSharedValue(initialStepIndex)
   const lastEdgeHapticStepIndex = useSharedValue(-1)
-  const renderedWidthScale = useSharedValue(1)
-  const valueBadgeScale = useSharedValue(1)
 
   const tick = useCallback(() => {
     if (Platform.OS === 'ios') {
@@ -152,7 +128,9 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
       if (snapped !== lastEmittedValue.value) {
         lastEmittedValue.value = snapped
         scheduleOnRN(onValueChange, snapped)
-        if (
+        if (isTuneDialEdgeStep(stepIndex, totalSteps)) {
+          emitEdgeHaptic(stepIndex)
+        } else if (
           shouldTick &&
           shouldPlayTuneDialHaptic(previousStepIndex, stepIndex, hapticStepSpacing)
         ) {
@@ -163,6 +141,7 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
     },
     [
       hapticStepSpacing,
+      emitEdgeHaptic,
       lastEdgeHapticStepIndex,
       lastEmittedValue,
       lastStepIndex,
@@ -175,103 +154,54 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
     ],
   )
 
-  const snapOffsetToNearest = useCallback(
+  const settleOffsetToNearest = useCallback(
     (rawOffset: number) => {
       'worklet'
       const stepIndex = Math.max(0, Math.min(totalSteps, Math.round(-rawOffset / stepPx)))
       emitStepIndex(stepIndex)
-      translateX.value = withSpring(-stepIndex * stepPx, SNAP_SPRING)
+      translateX.value = withSpring(-stepIndex * stepPx, SNAP_SPRING, (finished) => {
+        if (finished) interactionActive.value = false
+      })
     },
-    [emitStepIndex, stepPx, totalSteps, translateX],
+    [emitStepIndex, interactionActive, stepPx, totalSteps, translateX],
   )
 
   const pauseThrow = useCallback(() => {
     'worklet'
     cancelAnimation(translateX)
     momentumVelocity.value = 0
-    throwDurationMs.value = 0
-    throwElapsedMs.value = 0
-  }, [momentumVelocity, throwDurationMs, throwElapsedMs, translateX])
-
-  const handleLayout = useCallback(
-    (event: LayoutChangeEvent) => {
-      renderedWidthScale.value = computeRenderedWidthScale(
-        event.nativeEvent.layout.width,
-        screenWidth,
-      )
-    },
-    [renderedWidthScale, screenWidth],
-  )
+  }, [momentumVelocity, translateX])
 
   useFrameCallback((frame) => {
     const rawDt = frame.timeSincePreviousFrame ?? 16
-
-    if (isDragging.value) {
-      const translationDelta = Math.abs(
-        latestGestureTranslationX.value - previousFrameGestureTranslationX.value,
-      )
-      stationaryGestureMs.value = translationDelta < 0.35 ? stationaryGestureMs.value + rawDt : 0
-      previousFrameGestureTranslationX.value = latestGestureTranslationX.value
-      return
-    }
-
-    const dt = Math.min(rawDt, 34) / 1000
-    const durationMs = throwDurationMs.value
-    const previousProgress = durationMs > 0 ? Math.min(1, throwElapsedMs.value / durationMs) : 1
-    throwElapsedMs.value = durationMs > 0 ? Math.min(durationMs, throwElapsedMs.value + rawDt) : 0
-    const progress = durationMs > 0 ? Math.min(1, throwElapsedMs.value / durationMs) : 1
-    const remainingRatio =
-      previousProgress >= 1 ? 0 : (1 - progress) / Math.max(0.001, 1 - previousProgress)
-    momentumVelocity.value *= Math.pow(Math.max(0, remainingRatio), THROW_EASE_POWER)
-
     const speed = Math.abs(momentumVelocity.value)
 
-    if (speed <= LOCK_VELOCITY) {
+    if (speed <= THROW_STOP_VELOCITY) {
       if (speed > 0) {
         momentumVelocity.value = 0
-        throwDurationMs.value = 0
-        throwElapsedMs.value = 0
-        const stepIndex = Math.max(0, Math.min(totalSteps, Math.round(-translateX.value / stepPx)))
-        translateX.value = withSpring(-stepIndex * stepPx, SNAP_SPRING)
-        emitStepIndex(stepIndex)
+        settleOffsetToNearest(translateX.value)
       }
       return
     }
 
-    let nextOffset = translateX.value + momentumVelocity.value * dt
+    const nextThrow = advanceTuneDialThrow(momentumVelocity.value, rawDt)
+    let nextOffset = translateX.value + nextThrow.distance
     if (nextOffset > 0 || nextOffset < -totalWidth) {
       nextOffset = Math.max(-totalWidth, Math.min(0, nextOffset))
       momentumVelocity.value = 0
-      throwDurationMs.value = 0
-      throwElapsedMs.value = 0
       const edgeStepIndex = Math.max(0, Math.min(totalSteps, Math.round(-nextOffset / stepPx)))
-      translateX.value = withSpring(-edgeStepIndex * stepPx, SNAP_SPRING)
+      translateX.value = withSpring(-edgeStepIndex * stepPx, SNAP_SPRING, (finished) => {
+        if (finished) interactionActive.value = false
+      })
       emitStepIndex(edgeStepIndex)
       emitEdgeHaptic(edgeStepIndex)
       return
     }
 
+    momentumVelocity.value = nextThrow.velocity
     const nearestStepIndex = Math.max(0, Math.min(totalSteps, Math.round(-nextOffset / stepPx)))
-    const nearestStepOffset = -nearestStepIndex * stepPx
-    const detentRadius = Math.max(1.5, Math.min(stepPx * 0.34, 18))
-    const detentStrength = computeDetentStrength(totalSteps)
-    const detentPull = DETENT_PULL * detentStrength
-    const detentDecayPerFrame = 1 - (1 - DETENT_DECAY_PER_FRAME) * detentStrength
-    const detentCaptureVelocity = DETENT_CAPTURE_VELOCITY * detentStrength
-    const detentDistance = nextOffset - nearestStepOffset
-
-    if (
-      Math.abs(detentDistance) <= detentRadius &&
-      Math.abs(momentumVelocity.value) <= detentCaptureVelocity
-    ) {
-      momentumVelocity.value =
-        (momentumVelocity.value - detentDistance * detentPull * dt) *
-        Math.pow(detentDecayPerFrame, dt * 60)
-    }
-
     translateX.value = nextOffset
-    const emittedStepIndex = computeMomentumEmitStepIndex(nearestStepIndex, totalSteps)
-    emitStepIndex(emittedStepIndex, true)
+    emitStepIndex(nearestStepIndex, true)
   })
 
   const panGesture = useMemo(
@@ -284,24 +214,14 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
         })
         .onStart(() => {
           pauseThrow()
-          isDragging.value = true
-          smoothedThrowGestureVelocityX.value = 0
-          latestGestureTranslationX.value = 0
-          previousFrameGestureTranslationX.value = 0
-          stationaryGestureMs.value = 0
+          interactionActive.value = true
           dragStartX.value = translateX.value
           lastStepIndex.value = Math.round((value - min) / step)
         })
         .onUpdate((e) => {
-          const dragScale = rangeScale * renderedWidthScale.value
-          const raw = dragStartX.value + e.translationX * dragScale * DRAG_RANGE_GAIN
+          const raw = dragStartX.value + e.translationX * DRAG_RANGE_GAIN
           const clamped = Math.max(-totalWidth, Math.min(0, raw))
           translateX.value = clamped
-          latestGestureTranslationX.value = e.translationX
-          smoothedThrowGestureVelocityX.value = smoothThrowGestureVelocity(
-            smoothedThrowGestureVelocityX.value,
-            e.velocityX,
-          )
           const stepIndex = Math.max(0, Math.min(totalSteps, Math.round(-clamped / stepPx)))
           emitStepIndex(stepIndex)
           if (raw > 0 || raw < -totalWidth) {
@@ -309,29 +229,9 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
           }
         })
         .onEnd((e) => {
-          isDragging.value = false
-          const gestureVelocityX = resolveThrowGestureVelocity(
-            e.velocityX,
-            smoothedThrowGestureVelocityX.value,
-            e.translationX,
-            stationaryGestureMs.value,
-          )
-          const dragScale = rangeScale * renderedWidthScale.value
-          const normalizedVelocity = gestureVelocityX * THROW_DISTANCE_GAIN * dragScale
-          const maxVelocity = MAX_THROW_VELOCITY * Math.max(0.2, dragScale)
-          const v = Math.max(-maxVelocity, Math.min(maxVelocity, normalizedVelocity))
-          momentumVelocity.value = Math.max(
-            -maxVelocity,
-            Math.min(maxVelocity, momentumVelocity.value * MOMENTUM_CARRY + v),
-          )
-          throwDurationMs.value = computeThrowDurationMs(
-            gestureVelocityX,
-            momentumVelocity.value,
-            totalWidth,
-          )
-          throwElapsedMs.value = 0
-          if (Math.abs(momentumVelocity.value) <= LOCK_VELOCITY) {
-            snapOffsetToNearest(translateX.value)
+          momentumVelocity.value = resolveTuneDialThrowVelocity(e.velocityX, e.translationX)
+          if (momentumVelocity.value === 0) {
+            settleOffsetToNearest(translateX.value)
           } else {
             const stepIndex = Math.max(
               0,
@@ -339,24 +239,21 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
             )
             emitStepIndex(stepIndex)
           }
+        })
+        .onFinalize((_e, success) => {
+          if (!success && interactionActive.value) {
+            settleOffsetToNearest(translateX.value)
+          }
         }),
     [
       dragStartX,
       emitStepIndex,
       emitEdgeHaptic,
-      isDragging,
-      latestGestureTranslationX,
+      interactionActive,
       momentumVelocity,
       pauseThrow,
-      previousFrameGestureTranslationX,
-      rangeScale,
-      renderedWidthScale,
-      snapOffsetToNearest,
-      smoothedThrowGestureVelocityX,
-      stationaryGestureMs,
+      settleOffsetToNearest,
       stepPx,
-      throwDurationMs,
-      throwElapsedMs,
       totalSteps,
       totalWidth,
       translateX,
@@ -368,7 +265,7 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
   )
 
   useEffect(() => {
-    if (value === lastEmittedValue.value) {
+    if (!shouldApplyExternalTuneDialValue(value, lastEmittedValue.value, interactionActive.value)) {
       return
     }
 
@@ -377,16 +274,13 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
       lastEmittedValue.value = value
       lastStepIndex.value = Math.round((value - min) / step)
       momentumVelocity.value = 0
-      throwDurationMs.value = 0
-      throwElapsedMs.value = 0
       translateX.value = withSpring(expectedOffset, SNAP_SPRING)
     }
   }, [
     min,
+    interactionActive,
     momentumVelocity,
     step,
-    throwDurationMs,
-    throwElapsedMs,
     value,
     valueToOffset,
     translateX,
@@ -397,17 +291,6 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
 
   const stripStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }],
-  }))
-
-  useEffect(() => {
-    valueBadgeScale.value = withSequence(
-      withTiming(1.06, { duration: 80 }),
-      withTiming(1, { duration: 140 }),
-    )
-  }, [value, valueBadgeScale])
-
-  const valueBadgeStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: valueBadgeScale.value }],
   }))
 
   const prevMarkOffset = previousValue != null ? valueToOffset(previousValue) : null
@@ -456,7 +339,7 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
 
   return (
     <GestureHandlerRootView style={styles.rootView}>
-      <View style={styles.container} onLayout={handleLayout}>
+      <View style={styles.container}>
         <GestureDetector gesture={panGesture}>
           <Animated.View style={styles.gestureArea}>
             <Animated.View style={[styles.strip, { width: totalWidth + 1 }, stripStyle]}>
@@ -473,11 +356,12 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
             </Animated.View>
           </Animated.View>
         </GestureDetector>
-        <View style={styles.indicator} pointerEvents="none" />
+        <View style={styles.indicatorTop} pointerEvents="none" />
+        <View style={styles.indicatorBottom} pointerEvents="none" />
         <View style={styles.valueBadgeAnchor} pointerEvents="none">
-          <Animated.View style={[styles.valueBadge, valueBadgeStyle]}>
+          <View style={styles.valueBadge}>
             <Text style={styles.valueBadgeText}>{formatTuneValue(value)}</Text>
-          </Animated.View>
+          </View>
         </View>
       </View>
     </GestureHandlerRootView>
@@ -504,71 +388,73 @@ const styles = StyleSheet.create({
   },
   majorTick: {
     position: 'absolute',
-    top: 6,
+    top: MAJOR_TICK_TOP,
     alignItems: 'center',
     width: 0,
   },
   majorTickLine: {
     width: 2,
-    height: 27,
+    height: RULER_LABEL_BAND_TOP - MAJOR_TICK_TOP,
     backgroundColor: MAJOR_TICK_COLOR,
     borderRadius: 1,
   },
   tickLabel: {
+    position: 'absolute',
+    top: RULER_LABEL_BAND_TOP - MAJOR_TICK_TOP,
     color: LABEL_COLOR,
     fontSize: 9,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
     lineHeight: 11,
-    marginTop: 9,
+    height: VALUE_LABEL_HEIGHT,
+    textAlignVertical: 'center',
     width: 50,
     textAlign: 'center',
   },
   minorTick: {
     position: 'absolute',
-    top: 12,
+    top: TOP_VALUE_BAND_HEIGHT + 9,
     width: 1,
-    height: 13,
+    height: 36,
     backgroundColor: MINOR_TICK_COLOR,
     borderRadius: 0.5,
   },
   midpointTick: {
     position: 'absolute',
-    top: 15,
+    top: TOP_VALUE_BAND_HEIGHT + 11,
     width: 1,
-    height: 9,
+    height: 26,
     backgroundColor: MINOR_TICK_COLOR,
     borderRadius: 0.5,
   },
   prevMarkTop: {
     position: 'absolute',
-    top: 0,
+    top: TOP_VALUE_BAND_HEIGHT,
     width: MARKER_LINE_WIDTH,
-    height: VALUE_MARKER_TOP,
+    height: RULER_LABEL_BAND_TOP - TOP_VALUE_BAND_HEIGHT,
     marginLeft: -MARKER_LINE_WIDTH / 2,
     backgroundColor: PREV_MARK_COLOR,
     borderRadius: 1,
   },
   prevMarkBottom: {
     position: 'absolute',
-    top: VALUE_MARKER_TOP + VALUE_MARKER_SIZE,
+    top: RULER_LABEL_BAND_BOTTOM,
     width: MARKER_LINE_WIDTH,
-    height: DIAL_HEIGHT - VALUE_MARKER_TOP - VALUE_MARKER_SIZE,
+    height: DIAL_HEIGHT - RULER_LABEL_BAND_BOTTOM,
     marginLeft: -MARKER_LINE_WIDTH / 2,
     backgroundColor: PREV_MARK_COLOR,
     borderRadius: 1,
   },
   prevValueRing: {
     position: 'absolute',
-    top: VALUE_MARKER_TOP,
-    width: VALUE_MARKER_SIZE,
-    height: VALUE_MARKER_SIZE,
-    marginLeft: -VALUE_MARKER_SIZE / 2,
+    top: RULER_LABEL_BAND_TOP,
+    width: VALUE_LABEL_WIDTH,
+    height: VALUE_LABEL_HEIGHT,
+    marginLeft: -VALUE_LABEL_WIDTH / 2,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: PREV_MARK_COLOR,
-    borderRadius: VALUE_MARKER_SIZE / 2,
+    backgroundColor: theme.neutral.surface,
+    borderRadius: 4,
   },
   prevValueText: {
     color: PREV_MARK_COLOR,
@@ -576,14 +462,31 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
     lineHeight: 11,
+    height: VALUE_LABEL_HEIGHT,
+    textAlignVertical: 'center',
     textAlign: 'center',
   },
-  indicator: {
+  indicatorTop: {
     position: 'absolute',
-    top: 0,
-    bottom: 0,
+    top: TOP_VALUE_BAND_HEIGHT,
     left: '50%',
     width: MARKER_LINE_WIDTH,
+    height: RULER_LABEL_BAND_TOP - TOP_VALUE_BAND_HEIGHT,
+    marginLeft: -MARKER_LINE_WIDTH / 2,
+    backgroundColor: INDICATOR_COLOR,
+    borderRadius: 2,
+    shadowColor: INDICATOR_COLOR,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  indicatorBottom: {
+    position: 'absolute',
+    top: RULER_LABEL_BAND_BOTTOM,
+    left: '50%',
+    width: MARKER_LINE_WIDTH,
+    height: DIAL_HEIGHT - RULER_LABEL_BAND_BOTTOM,
     marginLeft: -MARKER_LINE_WIDTH / 2,
     backgroundColor: INDICATOR_COLOR,
     borderRadius: 2,
@@ -594,31 +497,23 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   valueBadge: {
-    width: VALUE_MARKER_SIZE,
-    height: VALUE_MARKER_SIZE,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: INDICATOR_COLOR,
-    borderRadius: VALUE_MARKER_SIZE / 2,
-    shadowColor: INDICATOR_COLOR,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.45,
-    shadowRadius: 4,
-    elevation: 5,
+    paddingHorizontal: 4,
   },
   valueBadgeAnchor: {
     position: 'absolute',
     left: 0,
     right: 0,
-    bottom: DIAL_HEIGHT - VALUE_MARKER_TOP - VALUE_MARKER_SIZE,
+    top: CURRENT_VALUE_TOP,
     alignItems: 'center',
   },
   valueBadgeText: {
-    color: '#fff',
-    fontSize: 9,
+    color: INDICATOR_COLOR,
+    fontSize: 14,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
-    lineHeight: 11,
+    lineHeight: 16,
     textAlign: 'center',
   },
 })

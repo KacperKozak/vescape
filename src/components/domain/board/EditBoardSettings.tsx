@@ -1,11 +1,12 @@
-import { StyleSheet, Text, View } from 'react-native'
-import { BatteryChargingIcon, BluetoothIcon, IdentificationCardIcon } from 'phosphor-react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { BatteryChargingIcon, BluetoothIcon, LightningIcon, TrashIcon } from 'phosphor-react-native'
 
 import { BoardSettingRow } from '@/components/domain/board/BoardSettingRow'
 import { Button } from '@/components/ui/base/Button'
+import { IconHero } from '@/components/ui/settings/IconHero'
 import { SettingsCard } from '@/components/ui/settings/SettingsCard'
-import { SettingsSectionTitle } from '@/components/ui/settings/SettingsSectionTitle'
-import { theme } from '@/constants/theme'
+import { SettingsRow } from '@/components/ui/settings/SettingsRow'
+import { interaction, theme } from '@/constants/theme'
 import type { BatterySummary } from '@/lib/boardSetup'
 
 interface EditBoardSettingsProps {
@@ -16,10 +17,10 @@ interface EditBoardSettingsProps {
   pairingSaving?: boolean
   keepMissingBatteryConfig: boolean
   batterySummary: BatterySummary
-  onOpenInfo: () => void
   onOpenBattery: () => void
   onOpenPairing: () => void
   onClearPairing: () => Promise<void> | void
+  onRemove: () => void
 }
 
 export function EditBoardSettings({
@@ -30,27 +31,22 @@ export function EditBoardSettings({
   pairingSaving = false,
   keepMissingBatteryConfig,
   batterySummary,
-  onOpenInfo,
   onOpenBattery,
   onOpenPairing,
   onClearPairing,
+  onRemove,
 }: EditBoardSettingsProps) {
   return (
     <>
-      <SettingsSectionTitle>Board</SettingsSectionTitle>
-      <SettingsCard>
-        <BoardSettingRow
-          icon={IdentificationCardIcon}
-          iconColor={theme.wheel.text}
-          label={name.trim() || 'Unnamed board'}
-          value={description.trim() || 'No description'}
-          hint="Name and notes"
-          onPress={onOpenInfo}
-          testID="edit-board-info-row"
-        />
-      </SettingsCard>
+      <IconHero
+        icon={LightningIcon}
+        title={name.trim() || 'Unnamed board'}
+        description={description.trim() || 'No description'}
+        iconSize={48}
+        iconColor={theme.wheel.color}
+        iconWeight="duotone"
+      />
 
-      <SettingsSectionTitle>Battery</SettingsSectionTitle>
       <SettingsCard>
         <BoardSettingRow
           icon={BatteryChargingIcon}
@@ -63,64 +59,70 @@ export function EditBoardSettings({
         />
       </SettingsCard>
 
-      <View style={styles.pairing}>
-        <View style={styles.pairingCopy}>
-          <View style={styles.pairingTitleRow}>
-            <BluetoothIcon size={14} color={theme.teal.text} weight="duotone" />
-            <Text style={styles.pairingTitle}>BLE pairing</Text>
-          </View>
-          <Text style={styles.pairingValue} numberOfLines={1}>
-            {pairedBleId ? pairedBleName || pairedBleId : 'No device paired'}
-          </Text>
-        </View>
-        <Button
-          label={pairedBleId ? 'Change' : 'Pair'}
-          variant="secondary"
-          size="sm"
-          loading={pairingSaving}
-          onPress={onOpenPairing}
-          testID="edit-board-pair-button"
+      <SettingsCard>
+        <SettingsRow
+          icon={BluetoothIcon}
+          iconColor={theme.teal.color}
+          label="BLE pairing"
+          hint={pairedBleId ? pairedBleName || pairedBleId : 'No device paired'}
+          right={
+            <View style={styles.buttonGroup}>
+              <Button
+                label={pairedBleId ? 'Change' : 'Pair'}
+                variant="secondary"
+                size="sm"
+                loading={pairingSaving}
+                onPress={onOpenPairing}
+                testID="edit-board-pair-button"
+              />
+              {pairedBleId ? (
+                <Button
+                  label="Clear"
+                  variant="destructive"
+                  size="sm"
+                  loading={pairingSaving}
+                  onPress={onClearPairing}
+                  testID="edit-board-clear-pairing-button"
+                />
+              ) : null}
+            </View>
+          }
         />
-        {pairedBleId ? (
-          <Button
-            label="Clear"
-            variant="secondary"
-            size="sm"
-            loading={pairingSaving}
-            onPress={onClearPairing}
-            testID="edit-board-clear-pairing-button"
-          />
-        ) : null}
-      </View>
+      </SettingsCard>
+
+      <Pressable
+        style={({ pressed }) => [styles.removeSection, pressed && styles.removeSectionPressed]}
+        android_ripple={interaction.ripple}
+        onPress={onRemove}
+      >
+        <TrashIcon size={14} color={theme.error.text} weight="bold" />
+        <Text style={styles.removeLabel}>Remove board</Text>
+      </Pressable>
     </>
   )
 }
 
 const styles = StyleSheet.create({
-  pairing: {
-    marginTop: 20,
+  buttonGroup: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  pairingCopy: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-  },
-  pairingTitleRow: {
+  removeSection: {
+    marginTop: 24,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
   },
-  pairingTitle: {
-    color: theme.neutral.textMuted,
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
+  removeSectionPressed: {
+    backgroundColor: interaction.pressedBg,
   },
-  pairingValue: {
-    color: theme.neutral.textSecondary,
+  removeLabel: {
+    color: theme.error.text,
     fontSize: 12,
     fontWeight: '600',
   },

@@ -24,3 +24,10 @@ function fmtVoltage(v: number): string {
 export function fmtVoltageRange(min: number, max: number): string {
   return `${fmtVoltage(min)}–${fmtVoltage(max)} V`
 }
+
+/** Format bytes to human-readable string (B, KB, MB). */
+export function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}

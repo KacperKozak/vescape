@@ -8,12 +8,14 @@ import {
   SpeakerHighIcon,
   SwatchesIcon,
   ToolboxIcon,
+  CodeIcon,
 } from 'phosphor-react-native'
 
 import { routes } from '@/navigation/routes'
 import { SettingsCard } from '@/components/ui/settings/SettingsCard'
 import { SettingsRow } from '@/components/ui/settings/SettingsRow'
 import { SettingsSectionTitle } from '@/components/ui/settings/SettingsSectionTitle'
+import { IconHero } from '@/components/ui/settings/IconHero'
 import { theme } from '@/constants/theme'
 
 const devPages = [
@@ -59,8 +61,10 @@ export default function DevSettingsScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
-        <SettingsSectionTitle>Dev tools</SettingsSectionTitle>
-
+        <IconHero
+          icon={CodeIcon}
+          description="Diagnostics, local verification, and component previews."
+        />
         <SettingsCard>
           {devPages.map((page) => (
             <SettingsRow

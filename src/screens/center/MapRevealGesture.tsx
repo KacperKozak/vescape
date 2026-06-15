@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { withSpring, withTiming, type SharedValue } from 'react-native-reanimated'
@@ -184,6 +184,14 @@ function createMapRevealGesture({
   return Gesture.Simultaneous(pan, pinch)
 }
 
+function useLatestCallback<Args extends unknown[]>(callback: (...args: Args) => void) {
+  const callbackRef = useRef(callback)
+  useEffect(() => {
+    callbackRef.current = callback
+  }, [callback])
+  return useCallback((...args: Args) => callbackRef.current(...args), [])
+}
+
 export function MapRevealGesture({
   progress,
   dragOpacity,
@@ -196,20 +204,38 @@ export function MapRevealGesture({
   onFinish,
 }: MapRevealGestureProps) {
   'use no memo'
+  const handlePanStart = useLatestCallback(onPanStart)
+  const handlePan = useLatestCallback(onPan)
+  const handleZoomStart = useLatestCallback(onZoomStart)
+  const handleZoom = useLatestCallback(onZoom)
+  const handleZoomEnd = useLatestCallback(onZoomEnd)
+  const handleReveal = useLatestCallback(onReveal)
+  const handleFinish = useLatestCallback(onFinish)
+
   const gesture = useMemo(
     () =>
       createMapRevealGesture({
         progress,
         dragOpacity,
-        onPanStart,
-        onPan,
-        onZoomStart,
-        onZoom,
-        onZoomEnd,
-        onReveal,
-        onFinish,
+        onPanStart: handlePanStart,
+        onPan: handlePan,
+        onZoomStart: handleZoomStart,
+        onZoom: handleZoom,
+        onZoomEnd: handleZoomEnd,
+        onReveal: handleReveal,
+        onFinish: handleFinish,
       }),
-    [dragOpacity, onFinish, onPan, onPanStart, onReveal, onZoom, onZoomEnd, onZoomStart, progress],
+    [
+      dragOpacity,
+      handleFinish,
+      handlePan,
+      handlePanStart,
+      handleReveal,
+      handleZoom,
+      handleZoomEnd,
+      handleZoomStart,
+      progress,
+    ],
   )
 
   return (

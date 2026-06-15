@@ -4,7 +4,9 @@
   "ignoreBinaries": ["maestro"],
   "ignore": ["scripts/**/*", ".agents/**/*", ".claude/**/*", "app.config.ts"],
   "workspaces": {
-    ".": {},
+    ".": {
+      "entry": ["plugins/**/*"]
+    },
     "modules/*": {}
   }
 }

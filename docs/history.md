@@ -55,6 +55,39 @@ Standalone GPS may update live map state but should not create a Ride Recording.
 
 Selected history is rendered from `sessionSamples`, `sessionGpsSamples`, and `sessionMarkers`.
 
+## Media History
+
+Media History is an optional, local-only view of phone photos and videos captured during the selected Ride Recording. It is off by default and requests photo-library permission only when the user enables it.
+
+The OS photo library remains durable media truth. Ride Recording storage remains durable ride truth. The app does not copy or persist assets, thumbnails, media-to-ride links, media metadata, or routes, and does not upload or publish media or routes.
+
+### Qualification And Placement
+
+For each selected-ride Media History read:
+
+1. Query currently accessible OS photo-library assets whose capture time falls inside the selected ride's inclusive `[startAtMs, endAtMs]` range.
+2. Use the OS photo-library asset creation timestamp as capture time. Treat it as playback start time for videos. Exclude assets without a valid creation timestamp; do not substitute file modification time.
+3. Ignore all asset GPS metadata.
+4. Find the nearest GPS fix in `sessionGpsSamples`.
+5. Show the asset only when that recording-backed GPS fix is at most `30_000ms` from capture time and belongs to the same continuous recording-backed GPS span.
+
+A continuous recording-backed GPS span contains adjacent GPS fixes no more than `30_000ms` apart. Explicit `gap` markers and ride-boundary markers (`disconnected`, `app_stop`, or `error`) always split spans. Span coverage begins at its first GPS fix and ends at its last GPS fix; matching tolerance does not extend it.
+
+No valid nearby recording-backed GPS fix means no map pin. This excludes media captured during unsupported route spans, including GPS outages and Privacy Zone or Ride History gaps. Media cannot match into or across a gap even when a fix on its other side is within `30_000ms`.
+
+Matching is recomputed from current photo-library access and selected Ride History data whenever Media History is read for a selected ride. Results may live in memory for that active read only; changing ride, disabling Media History, changing permission, or refreshing discards them.
+
+### Permission And Missing Assets
+
+- Full photo-library permission: show all qualifying accessible assets.
+- Limited permission: show only qualifying assets exposed by the OS and explain that results are partial.
+- Denied or restricted permission: show no media and leave selected Ride History usable.
+- Deleted, unavailable, unreadable, or permission-revoked assets: omit them without changing the Ride Recording.
+
+Permission states should expose the relevant OS action for changing access. Asset load or playback failure affects that asset only.
+
+See ADR 0014 for the ownership and matching decision.
+
 ## Session Grouping
 
 `groupHistorySessions(...)` groups minute buckets oldest-first.

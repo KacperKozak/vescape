@@ -200,6 +200,12 @@ class VescForegroundService : Service() {
             }
         }
 
+        fun reloadBatteryConfig() {
+            appDataScope.launch {
+                instance?.reloadBatteryConfigForActiveBoard()
+            }
+        }
+
         fun previewAlertSound(context: Context, soundType: String) {
             instance?.alertFeedback?.preview(soundType) ?: VescAlertFeedback.preview(context, soundType)
         }
@@ -1656,6 +1662,10 @@ class VescForegroundService : Service() {
         }
     }
 
+    private fun reloadBatteryConfigForActiveBoard() {
+        loadBatteryConfig(boardConfig?.appBoardId)
+    }
+
     private fun loadBatteryConfig(appBoardId: String?) {
         if (appBoardId == null) {
             batteryConfigCache = null
@@ -1676,6 +1686,24 @@ class VescForegroundService : Service() {
 
     private fun evaluateAlerts(t: RefloatTelemetry, batteryPercent: Double?): List<Map<String, Any?>> {
         val fired = alertEngine.evaluate(alertRules, t, batteryPercent)
+        for (alert in fired) {
+            if (alert.controlId != "battery" || alert.rangeDepth != null) continue
+            recordLocalDiagnostic(
+                "battery_alert_fired",
+                boardConfig,
+                "alert",
+                mapOf(
+                    "rule_id" to alert.ruleId,
+                    "used_ir_compensated_percent" to (batteryPercent != null),
+                    "battery_percent" to batteryPercent,
+                    "battery_voltage" to t.batteryVoltage,
+                    "battery_current" to t.batteryCurrent,
+                    "threshold" to alert.threshold,
+                    "threshold_max" to alert.thresholdMax,
+                    "battery_config_loaded" to (batteryConfigCache != null),
+                ),
+            )
+        }
         val geiger = fired.filter { it.rangeDepth != null }
         val geigerRuleIds = geiger.mapTo(HashSet()) { it.ruleId }
         for (ruleId in activeGeigerRuleIds - geigerRuleIds) {

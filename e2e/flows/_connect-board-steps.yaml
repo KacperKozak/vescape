@@ -24,10 +24,9 @@ appId: com.anonymous.vescpoc
 
 - tapOn:
     id: board-edit-button
-- assertVisible: Board
 - assertVisible: 21s2p.*
 - tapOn:
-    id: edit-board-info-row
+    id: edit-board-header
 - assertVisible: Board info
 - tapOn:
     id: edit-board-name-input
@@ -40,7 +39,6 @@ appId: com.anonymous.vescpoc
 
 - tapOn:
     id: edit-board-battery-row
-- assertVisible: Battery
 - tapOn:
     id: edit-board-battery-manual-mode
 - tapOn:

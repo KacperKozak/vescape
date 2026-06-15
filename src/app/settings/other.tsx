@@ -1,7 +1,8 @@
 import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
-import { VibrateIcon } from 'phosphor-react-native'
+import { ToolboxIcon, VibrateIcon } from 'phosphor-react-native'
+import { IconHero } from '@/components/ui/settings/IconHero'
 import { theme } from '@/constants/theme'
 
 const androidHaptics = Object.values(Haptics.AndroidHaptics).map((type) => ({
@@ -16,6 +17,7 @@ export default function OtherSettingsScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
+        <IconHero icon={ToolboxIcon} description="Small platform probes and local experiments." />
         <Text style={styles.sectionTitle}>Haptics</Text>
 
         <View style={styles.card}>

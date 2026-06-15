@@ -1,0 +1,179 @@
+import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
+import {
+  ClockCounterClockwiseIcon,
+  CheckCircleIcon,
+  DownloadSimpleIcon,
+  UploadSimpleIcon,
+  DatabaseIcon,
+} from 'phosphor-react-native'
+
+import { theme } from '@/constants/theme'
+import { SettingsCard } from '@/components/ui/settings/SettingsCard'
+import { SettingsRow } from '@/components/ui/settings/SettingsRow'
+import { Button } from '@/components/ui/base/Button'
+import { ConfirmModal } from '@/components/ui/modals/ConfirmModal'
+import { useSettingsDatabaseOps } from '@/hooks/useSettingsDatabaseOps'
+import { IconHero } from '@/components/ui/settings/IconHero'
+
+export default function DatabaseSettingsScreen() {
+  const db = useSettingsDatabaseOps()
+
+  return (
+    <SafeAreaView style={styles.container} edges={['bottom']}>
+      <ScrollView contentContainerStyle={styles.content}>
+        <IconHero
+          icon={DatabaseIcon}
+          description="Back up, restore, and rebuild your ride history database."
+        />
+        <SettingsCard>
+          <SettingsRow
+            icon={ClockCounterClockwiseIcon}
+            label="Rebuild history"
+            hint={db.rebuildHint}
+            right={
+              <Pressable
+                style={[
+                  styles.rebuildButton,
+                  db.rebuildState === 'running' && styles.rebuildButtonDisabled,
+                  db.rebuildState === 'done' && styles.rebuildButtonDone,
+                ]}
+                onPress={db.handleRebuildBuckets}
+                disabled={db.rebuildState === 'running'}
+              >
+                {db.rebuildState === 'done' && (
+                  <CheckCircleIcon size={13} color={theme.gps.text} weight="fill" />
+                )}
+                <Text style={styles.rebuildButtonText}>
+                  {db.rebuildState === 'running'
+                    ? 'Rebuilding...'
+                    : db.rebuildState === 'done'
+                      ? 'Done'
+                      : 'Rebuild'}
+                </Text>
+              </Pressable>
+            }
+          >
+            {db.rebuildState === 'running' && (
+              <View style={styles.rebuildProgress}>
+                <View style={styles.rebuildProgressTrack}>
+                  <View
+                    style={[
+                      styles.rebuildProgressFill,
+                      {
+                        width: `${Math.round(db.rebuildProgressValue * 100)}%`,
+                      },
+                    ]}
+                  />
+                </View>
+                {db.rebuildProgressLabel ? (
+                  <Text style={styles.rebuildProgressText}>{db.rebuildProgressLabel}</Text>
+                ) : null}
+              </View>
+            )}
+          </SettingsRow>
+          <SettingsRow
+            icon={DownloadSimpleIcon}
+            iconColor={theme.gps.color}
+            label="Back up database"
+            hint={db.backupHint}
+            right={
+              <Button
+                label={db.backupState === 'running' ? 'Exporting...' : 'Export'}
+                size="sm"
+                variant="secondary"
+                loading={db.backupState === 'running'}
+                disabled={db.restoreState === 'running' || db.rebuildState === 'running'}
+                onPress={db.handleBackupDatabase}
+              />
+            }
+          />
+          <SettingsRow
+            icon={UploadSimpleIcon}
+            iconColor={theme.warning.color}
+            label="Restore database"
+            hint={db.restoreHint}
+            right={
+              <Button
+                label={db.restoreState === 'running' ? 'Restoring...' : 'Restore'}
+                size="sm"
+                variant="destructive"
+                loading={db.restoreState === 'running'}
+                disabled={db.backupState === 'running' || db.rebuildState === 'running'}
+                onPress={() => db.setRestoreConfirmVisible(true)}
+              />
+            }
+          />
+        </SettingsCard>
+      </ScrollView>
+      <ConfirmModal
+        visible={db.restoreConfirmVisible}
+        title="Restore database"
+        message="Current database will be replaced by selected backup. App keeps a temporary rollback copy during restore and restores old database if restore fails."
+        confirmLabel="Choose backup"
+        destructive
+        onConfirm={() => void db.handleRestoreDatabase()}
+        onCancel={() => db.setRestoreConfirmVisible(false)}
+      />
+    </SafeAreaView>
+  )
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: theme.neutral.bg,
+  },
+  content: {
+    padding: 16,
+    gap: 8,
+  },
+  rebuildButton: {
+    backgroundColor: theme.neutral.surfaceDeep,
+    borderWidth: 1,
+    borderColor: theme.neutral.border,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  rebuildButtonDisabled: {
+    opacity: 0.5,
+  },
+  rebuildButtonDone: {
+    borderColor: theme.gps.border,
+    backgroundColor: theme.gps.bg,
+  },
+  rebuildButtonText: {
+    color: theme.neutral.textSecondary,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  rebuildProgress: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: 14,
+    marginBottom: 12,
+  },
+  rebuildProgressTrack: {
+    flex: 1,
+    height: 3,
+    backgroundColor: theme.neutral.surfaceDeep,
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  rebuildProgressFill: {
+    height: '100%',
+    backgroundColor: theme.warning.color,
+  },
+  rebuildProgressText: {
+    minWidth: 44,
+    color: theme.neutral.textMuted,
+    fontSize: 11,
+    fontWeight: '700',
+    textAlign: 'right',
+  },
+})

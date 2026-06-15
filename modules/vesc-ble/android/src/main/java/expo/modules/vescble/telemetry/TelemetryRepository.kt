@@ -67,6 +67,7 @@ data class TelemetryCapture(
 )
 
 class TelemetryRepository private constructor(context: Context) {
+  private val appContext = context.applicationContext
   private val db = TelemetryDatabase.get(context)
   private val dao = db.telemetryDao()
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -310,8 +311,35 @@ class TelemetryRepository private constructor(context: Context) {
 
   suspend fun getSamples(options: Map<String, Any?>): List<Map<String, Any?>> = withContext(Dispatchers.IO) {
     val query = SampleQueryOptions.from(options)
+    val configs = batteryConfigByDevice()
     getSampleStates(query.fromMs, query.toMs, query.deviceId, query.limit)
-      .map { it.state.toSampleMap(it.id) }
+      .map { it.state.toSampleMap(it.id, deriveBatteryPercent(it.state, configs)) }
+  }
+
+  /** bleId (telemetry deviceId) -> the board's normalized battery config. */
+  private suspend fun batteryConfigByDevice(): Map<String, Map<String, Any?>> {
+    BatterySocEstimator.ensureInitialized(appContext)
+    val result = mutableMapOf<String, Map<String, Any?>>()
+    for (board in AppDataRepository.get(appContext).getBoards()) {
+      val bleId = board["bleId"] as? String ?: continue
+      @Suppress("UNCHECKED_CAST")
+      val config = board["batteryConfig"] as? Map<String, Any?> ?: continue
+      result[bleId] = config
+    }
+    return result
+  }
+
+  /** Derive IR-compensated battery % on read, mirroring the live native path. */
+  private fun deriveBatteryPercent(
+    state: FullTelemetryState,
+    configs: Map<String, Map<String, Any?>>,
+  ): Double? {
+    val config = state.deviceId?.let { configs[it] } ?: return null
+    return BatterySocEstimator.estimateBatteryPercent(
+      state.batteryVoltageMv / 1000.0,
+      config,
+      state.batteryCurrentMa / 1000.0,
+    )
   }
 
   private suspend fun getSampleStates(
@@ -338,8 +366,9 @@ class TelemetryRepository private constructor(context: Context) {
   suspend fun getRange(options: Map<String, Any?>): Map<String, Any?> = withContext(Dispatchers.IO) {
     val query = SampleQueryOptions.from(options)
     val samples = getSampleStates(query.fromMs, query.toMs, query.deviceId, query.limit)
+    val configs = batteryConfigByDevice()
     mapOf(
-      "boardSamples" to samples.map { it.state.toSampleMap(it.id) },
+      "boardSamples" to samples.map { it.state.toSampleMap(it.id, deriveBatteryPercent(it.state, configs)) },
       "gpsSamples" to samples.toGpsSampleMaps(),
       "markers" to dao.getMarkers(query.fromMs, query.toMs, query.deviceId).map { it.toMap() },
       "exclusions" to dao.getExclusions(query.fromMs, query.toMs, query.deviceId).map { it.toMap() },
@@ -672,13 +701,14 @@ internal data class FullTelemetryState(
     ).copy(changedMask1 = mask1, changedMask2 = mask2)
   }
 
-  fun toSampleMap(id: Long): Map<String, Any?> = mapOf(
+  fun toSampleMap(id: Long, batteryPercent: Double? = null): Map<String, Any?> = mapOf(
     "id" to id,
     "capturedAtMs" to capturedAtMs,
     "deviceId" to deviceId,
     "deviceName" to (deviceName ?: UNKNOWN_TELEMETRY_DEVICE_NAME),
     "speedKmh" to speedCentiKmh / 100.0,
     "batteryVoltage" to batteryVoltageMv / 1000.0,
+    "batteryPercent" to batteryPercent,
     "motorCurrent" to motorCurrentMa / 1000.0,
     "batteryCurrent" to batteryCurrentMa / 1000.0,
     "dutyCycle" to dutyPermille / 1000.0,

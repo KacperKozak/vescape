@@ -413,6 +413,21 @@ export function useCameraControls({
     })
   }, [cameraFix, enterCameraMode, getLiveFollowCamera])
 
+  const setFreeMapZoom = useCallback(
+    (zoomLevel: number) => {
+      setFollowGps(false)
+      const current = currentCameraRef.current
+      cameraRef.current?.setCamera({
+        ...(current ? { centerCoordinate: current.centerCoordinate } : {}),
+        zoomLevel,
+        pitch: getPitchForZoom(zoomLevel, perspectiveEnabled),
+        animationDuration: MAP_DEFAULTS.animationDuration,
+        animationMode: 'easeTo',
+      })
+    },
+    [perspectiveEnabled, setFollowGps],
+  )
+
   useImperativeHandle(
     ref,
     () => ({
@@ -500,16 +515,17 @@ export function useCameraControls({
           animationMode: 'easeTo',
         })
       },
+      zoomBy(delta: number) {
+        setFreeMapZoom(
+          clamp(
+            (currentCameraRef.current?.zoomLevel ?? gpsCamera.zoomLevel) + delta,
+            MIN_ZOOM,
+            MAP_DEFAULTS.maxZoom,
+          ),
+        )
+      },
       zoomToLevel(zoom: number) {
-        setFollowGps(false)
-        const current = currentCameraRef.current
-        cameraRef.current?.setCamera({
-          ...(current ? { centerCoordinate: current.centerCoordinate } : {}),
-          zoomLevel: zoom,
-          pitch: getPitchForZoom(zoom, perspectiveEnabled),
-          animationDuration: MAP_DEFAULTS.animationDuration,
-          animationMode: 'easeTo',
-        })
+        setFreeMapZoom(zoom)
       },
       focusCoordinate(coordinate: [number, number]) {
         setFollowGps(false)
@@ -539,6 +555,7 @@ export function useCameraControls({
       previewHistorySession,
       recenterLive,
       restorePreviewPan,
+      setFreeMapZoom,
       setFollowGps,
       setFollowZoomLevel,
     ],

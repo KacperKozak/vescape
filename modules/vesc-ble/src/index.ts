@@ -272,6 +272,8 @@ export interface TelemetrySample {
   deviceName: string
   speedKmh: number
   batteryVoltage: number
+  /** IR-compensated battery %, derived on read from the board's battery config. Null if no config. */
+  batteryPercent: number | null
   motorCurrent: number
   batteryCurrent: number
   dutyCycle: number

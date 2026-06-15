@@ -1,10 +1,8 @@
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
-import { useRouter } from 'expo-router'
 
 import { Sparkline, type SparklinePoint } from '@/components/ui/charts/Sparkline'
 import { telemetry } from '@/constants/telemetry'
 import { interaction, theme } from '@/constants/theme'
-import { routes } from '@/navigation/routes'
 
 interface Props {
   /** Current battery state-of-charge in percent (0–100), or null if unknown. */
@@ -22,6 +20,8 @@ interface Props {
   compact?: boolean
   transparent?: boolean
   containerStyle?: StyleProp<ViewStyle>
+  /** Callback when the bar is pressed. Omit to render a non-interactive view. */
+  onPress?: () => void
 }
 
 const BATTERY_LOW_PCT = 30
@@ -42,21 +42,11 @@ export function BatteryBar({
   compact,
   transparent,
   containerStyle,
+  onPress,
 }: Props) {
   const color = pickColor(percent)
-  const router = useRouter()
-  return (
-    <Pressable
-      onPress={() => router.push(routes.controlBattery)}
-      android_ripple={interaction.ripple}
-      testID="battery-bar"
-      style={[
-        styles.wrap,
-        compact && styles.wrapCompact,
-        transparent && styles.wrapTransparent,
-        containerStyle,
-      ]}
-    >
+  const content = (
+    <>
       <View style={styles.topRow}>
         <View style={styles.left}>
           {voltage != null ? (
@@ -82,6 +72,32 @@ export function BatteryBar({
         windowMs={windowMs}
       />
       {hint && !series?.length ? <Text style={styles.hint}>{hint}</Text> : null}
+    </>
+  )
+
+  const style = [
+    styles.wrap,
+    compact && styles.wrapCompact,
+    transparent && styles.wrapTransparent,
+    containerStyle,
+  ]
+
+  if (!onPress) {
+    return (
+      <View testID="battery-bar" style={style}>
+        {content}
+      </View>
+    )
+  }
+
+  return (
+    <Pressable
+      onPress={onPress}
+      android_ripple={interaction.ripple}
+      testID="battery-bar"
+      style={style}
+    >
+      {content}
     </Pressable>
   )
 }

@@ -16,6 +16,8 @@ import { useMapStore } from '@/store/mapStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { useWeatherStore } from '@/store/weatherStore'
 import { findNearestSampleIndexByTime } from '@/lib/history/playback'
+import { useMediaHistory } from '@/hooks/useMediaHistory'
+import type { MediaHistoryAsset } from '@/lib/history/mediaHistory'
 
 interface UseCenterScreenControllerArgs {
   mapRef: RefObject<CenterMapHandle | null>
@@ -27,6 +29,7 @@ const MAX_HISTORY_PREFETCH_PAGES = 8
 export function useCenterScreenController({ mapRef }: UseCenterScreenControllerArgs) {
   const backPressedOnce = useRef(false)
   const [heading, setHeading] = useState(0)
+  const [openMediaAssetId, setOpenMediaAssetId] = useState<string | null>(null)
   const {
     mode,
     historySheetVisible,
@@ -137,6 +140,11 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
     () => mapPoints.find((point) => point.kind === 'direction') ?? null,
     [mapPoints],
   )
+  const mediaHistory = useMediaHistory({
+    selectedSession,
+    gpsSamples: sessionGpsSamples,
+    markers: sessionMarkers,
+  })
 
   useEffect(() => {
     void loadMapPoints()
@@ -201,6 +209,7 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
   }, [enterTelemetry, mapRef])
 
   const exitHistory = useCallback(() => {
+    setOpenMediaAssetId(null)
     void selectSession(null)
     enterTelemetry()
     requestAnimationFrame(() =>
@@ -235,6 +244,7 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
   }, [enterHistory, loadInitial, loadOlderHistoryPages, selectSession])
 
   const selectPreviousRide = useCallback(async () => {
+    setOpenMediaAssetId(null)
     let previous = getPreviousRideSession(
       useHistoryStore.getState().sessions,
       useHistoryStore.getState().selectedSession,
@@ -256,6 +266,7 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
   }, [selectSession])
 
   const selectNextRide = useCallback(async () => {
+    setOpenMediaAssetId(null)
     const next = getNextRideSession(
       useHistoryStore.getState().sessions,
       useHistoryStore.getState().selectedSession,
@@ -269,6 +280,7 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
 
   const selectRide = useCallback(
     (session: HistorySession) => {
+      setOpenMediaAssetId(null)
       setHistorySheetVisible(false)
       void selectSession(session)
       enterHistory()
@@ -358,6 +370,16 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
     sessionSamples,
     sessionGpsSamples,
     sessionMarkers,
+    mediaHistory: {
+      ...mediaHistory,
+      toggle: () => {
+        setOpenMediaAssetId(null)
+        mediaHistory.toggle()
+      },
+    },
+    openMediaAssetId,
+    openMedia: (asset: MediaHistoryAsset) => setOpenMediaAssetId(asset.id),
+    closeMedia: () => setOpenMediaAssetId(null),
     historyPreview,
     previousRide,
     nextRide,

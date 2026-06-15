@@ -74,6 +74,32 @@ export const theme = {
     text: '#2dd4bf', // teal-400
     border: '#0f766e', // teal-700
   },
+
+  /** Banner callouts – info, warning, error */
+  banner: {
+    info: {
+      bg: '#0f1d2e',
+      border: '#1e3a5f',
+      icon: '#60a5fa', // blue-400
+      title: '#60a5fa', // blue-400
+      message: '#bfdbfe', // blue-200
+    },
+    warning: {
+      bg: '#2a1a0f',
+      border: '#78350f',
+      icon: '#f59e0b', // amber-500
+      title: '#f59e0b', // amber-500
+      message: '#fde68a', // amber-200
+    },
+    error: {
+      bg: '#2a0f0f',
+      border: '#7f1d1d',
+      icon: '#ef4444', // red-500
+      title: '#ef4444', // red-500
+      message: '#fecaca', // red-200
+    },
+  },
+
   /** Weather condition icons */
   weather: {
     sun: '#fbbf24', // amber-400

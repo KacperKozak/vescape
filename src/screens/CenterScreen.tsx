@@ -83,6 +83,8 @@ export function CenterScreen({
         rideGpsSamples={controller.sessionGpsSamples}
         rideTelemetrySamples={controller.sessionSamples}
         rideMarkers={controller.sessionMarkers}
+        mediaAssets={controller.mediaHistory.assets}
+        onOpenMedia={controller.openMedia}
         activeHistoryMapMetric={controller.activeHistoryMapMetric}
         historyPreview={controller.historyPreview}
         historyActive={controller.historyActive}
@@ -153,6 +155,7 @@ export function CenterScreen({
           enterHistoryMode: controller.enterHistoryMode,
           selectedSession: controller.selectedSession,
           sessionSamples: controller.sessionSamples,
+          sessionMarkers: controller.sessionMarkers,
           previousRide: controller.previousRide,
           nextRide: controller.nextRide,
           canPreviousRide: controller.canPreviousRide,
@@ -173,6 +176,9 @@ export function CenterScreen({
           removeSession: controller.removeSession,
           onSeek: controller.onSeek,
           setActiveHistoryMapMetric: controller.setActiveHistoryMapMetric,
+          mediaHistory: controller.mediaHistory,
+          openMediaAssetId: controller.openMediaAssetId,
+          closeMedia: controller.closeMedia,
         }}
       />
     </View>

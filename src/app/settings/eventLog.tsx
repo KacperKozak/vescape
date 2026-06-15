@@ -9,11 +9,12 @@ import {
   type ListRenderItemInfo,
 } from 'react-native'
 import { useNavigation } from 'expo-router'
-import { TrashIcon } from 'phosphor-react-native'
+import { ListIcon, TrashIcon } from 'phosphor-react-native'
 import { clearDiagnosticEvents, getDiagnosticEvents, type LocalDiagnosticEvent } from 'vesc-ble'
 
 import { ConfirmModal } from '@/components/ui/modals/ConfirmModal'
 import { IconButton } from '@/components/ui/base/IconButton'
+import { IconHero } from '@/components/ui/settings/IconHero'
 import { theme } from '@/constants/theme'
 
 const PAGE_SIZE = 50
@@ -195,6 +196,9 @@ export default function DiagnosticEventsScreen() {
       <FlatList
         style={styles.list}
         contentContainerStyle={styles.content}
+        ListHeaderComponent={
+          <IconHero icon={ListIcon} description="Browse locally persisted diagnostic events." />
+        }
         data={events}
         keyExtractor={keyExtractor}
         renderItem={renderItem}

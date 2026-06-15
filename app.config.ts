@@ -65,6 +65,16 @@ const config: ExpoConfig = {
     ],
     '@rnmapbox/maps',
     'expo-sharing',
+    [
+      'expo-media-library',
+      {
+        photosPermission:
+          'Allow Vibe Wheel to show local photos and videos captured during selected rides.',
+        granularPermissions: ['photo', 'video'],
+      },
+    ],
+    'expo-video',
+    './plugins/withGradleJvmArgs',
   ],
   experiments: {
     typedRoutes: true,

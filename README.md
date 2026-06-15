@@ -166,26 +166,41 @@ cd android
 
 ## Agent Skills
 
-Project-local skills under `.claude/skills/` chain into a plan-to-PR pipeline. Each runs as a slash command.
+Project-local skills under `.claude/skills/` are slash commands you type in Claude Code. They chain together into a plan-to-PR pipeline, but each works standalone too.
 
-- `/to-prd` — Turn current conversation context into a PRD issue. Publishes `[PRD][Area] Title` to GitHub Issues with `ready-for-agent` + matching `area:*` label.
-- `/to-issues` — Break a PRD or plan into vertical-slice implementation issues. Titles use `[Area] N - Verb phrase`. Auto-fills `## Related` cross-refs across siblings after publish.
-- `/to-code` — Implement one issue end-to-end. Reads repo + domain docs, follows existing conventions, runs focused tests, reports. No git ops unless asked.
-- `/to-pr` — Same as `/to-code` plus branch/PR lifecycle. Creates feature branch off `dev`, opens PR with linked issue list, appends `Closes #N` + implementation notes on later runs.
-- `/grill-me` — Interview-style stress test for a plan or design. Walks the decision tree one question at a time, recommends an answer, resolves dependencies before code is written. Use before `/to-prd` or `/to-issues` when scope is fuzzy.
-- `/grill-with-docs` — Same as `/grill-me` but checks each answer against `CONTEXT.md`, ADRs under `docs/adr/`, and the domain glossary. Updates docs inline as decisions crystallise.
+### Planning
 
-Typical flow:
+- `/grill-me` — Stress-test your idea before writing code. Asks pointed questions one at a time until the plan is solid. Good when scope is fuzzy.
+- `/grill-with-docs` — Same as `/grill-me` but cross-checks answers against project docs (`CONTEXT.md`, ADRs, glossary) and updates them as decisions land.
+- `/to-prd` — Turn a conversation into a PRD issue on GitHub. Use after grilling or when you already know what to build.
+
+### Breaking down work
+
+- `/to-issues <prd>` — Break a PRD or plan into small, independently-grabbable GitHub issues. Each issue is a vertical slice (thin end-to-end, not one layer at a time).
+
+### Implementation
+
+- `/to-code <issue>` — Pick up one issue and implement it locally. Reads project docs, writes code, runs tests, reports what changed. No git operations — your working tree stays uncommitted.
+- `/pr` — Take whatever changes are in your working tree, create a branch, commit, push, and open a PR. Works without an issue — just describe what you did. Attaches a device screenshot if UI files changed and a phone is connected.
+- `/to-pr <issue>` — End-to-end: implements the issue (via `/to-code`) then ships it (via `/pr`). Groups related issues into one feature PR automatically.
+
+### Typical flow
 
 ```text
-/grill-me          # optional: sharpen idea
-/to-prd            # idea -> PRD issue
-/to-issues <prd>   # PRD -> N implementation issues
-/to-code <id>      # implement one issue locally
-/to-pr <id>        # implement + push + open/update feature PR
+/grill-me            # sharpen the idea (optional)
+/to-prd              # idea -> PRD issue on GitHub
+/to-issues <prd>     # PRD -> N implementation issues
+/to-pr <id>          # implement issue + open/update feature PR
 ```
 
-`/to-pr` reuses `/to-code` verify gate — tests run once. PR base is `dev` (`main` reserved for production releases).
+Or skip issues entirely:
+
+```text
+# just make changes and ship
+/pr "Add dark mode support"
+```
+
+PR base is always `dev` (`main` is reserved for production releases).
 
 ## Documentation
 

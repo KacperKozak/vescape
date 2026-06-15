@@ -139,7 +139,12 @@ export function BottomTelemetryStrip({ revealProgress }: BottomTelemetryStripPro
             android_ripple={interaction.rippleBorderless}
             onPress={() => router.push(routes.controlImu)}
           >
-            <View style={styles.imuMarker} />
+            <View
+              style={[
+                styles.imuMarker,
+                { borderColor: imuConnected ? theme.target.color : theme.neutral.textMuted },
+              ]}
+            />
             <View
               style={[
                 styles.imuLine,
@@ -250,15 +255,17 @@ const styles = StyleSheet.create({
   },
   imuLine: {
     width: 32,
-    height: 3,
+    height: 1,
     borderRadius: 1,
     backgroundColor: theme.target.color,
   },
   imuMarker: {
     position: 'absolute',
-    width: 10,
-    height: 10,
+    width: 14,
+    height: 14,
     borderRadius: 999,
-    backgroundColor: theme.target.color,
+    borderWidth: 1,
+    borderColor: theme.target.color,
+    backgroundColor: 'transparent',
   },
 })

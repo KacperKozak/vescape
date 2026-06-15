@@ -6,9 +6,11 @@ import {
   ArrowsClockwiseIcon,
   NavigationArrowIcon,
   PencilSimpleIcon,
+  SwatchesIcon,
   TrashIcon,
 } from 'phosphor-react-native'
 
+import { IconHero } from '@/components/ui/settings/IconHero'
 import { HPill, HPillAdd, HPillDot, HPillMenuItem, HPills } from '@/components/ui/menus/HPills'
 import { MapOptionSelector } from '@/components/ui/menus/MapOptionSelector'
 import { ShowcaseCard } from '@/components/ui/dev/ShowcaseCard'
@@ -150,6 +152,10 @@ export default function MenusPage() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
+        <IconHero
+          icon={SwatchesIcon}
+          description="HPills, MapOptionSelector, MapNavigationSelector."
+        />
         <ZonePillsShowcase />
         <MapOptionSelectorShowcase />
       </ScrollView>

@@ -3,6 +3,9 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Easing, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated'
 
+import { ChartLineUpIcon } from 'phosphor-react-native'
+import { BatteryBar } from '@/components/ui/base/BatteryBar'
+import { IconHero } from '@/components/ui/settings/IconHero'
 import { TelemetryLineChart } from '@/components/ui/charts/TelemetryLineChart'
 import { computeAutoRange, type TelemetryChartPoint } from '@/components/ui/charts/chartMath'
 import { SingleGauge } from '@/components/ui/charts/DualGauge'
@@ -180,6 +183,29 @@ function AnimatedSingleGaugeShowcase() {
   )
 }
 
+function BatteryBarShowcase() {
+  const [empty, setEmpty] = useState(false)
+  const points = useMemo(() => generateSparklineData(60, 82, 3, 42), [])
+
+  return (
+    <ShowcaseCard
+      name="BatteryBar"
+      controls={
+        <>
+          <ToggleRow label="empty" value={empty} onToggle={setEmpty} />
+        </>
+      }
+    >
+      <BatteryBar
+        percent={empty ? null : 82}
+        voltage={empty ? null : 74.5}
+        series={empty ? [] : points}
+        range={{ min: 42, max: 84 }}
+      />
+    </ShowcaseCard>
+  )
+}
+
 function RandomLineChartsShowcase() {
   const charts = useMemo(
     () => [
@@ -245,7 +271,12 @@ export default function ChartsPage() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
+        <IconHero
+          icon={ChartLineUpIcon}
+          description="Sparkline, BatteryBar, SingleGauge, TelemetryLineChart."
+        />
         <SparklineShowcase />
+        <BatteryBarShowcase />
         <AnimatedSingleGaugeShowcase />
         <RandomLineChartsShowcase />
       </ScrollView>

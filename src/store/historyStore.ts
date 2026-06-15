@@ -65,6 +65,7 @@ function bucketToPreviewSample(bucket: TelemetryMinuteBucket): TelemetrySample {
     deviceName: bucket.deviceName,
     speedKmh: bucket.avgSpeedKmh,
     batteryVoltage: bucket.minBatteryVoltage ?? 0,
+    batteryPercent: null,
     motorCurrent: bucket.maxMotorCurrent,
     batteryCurrent: bucket.maxBatteryCurrent,
     dutyCycle: bucket.maxDuty,

@@ -76,15 +76,13 @@ export async function searchMapResults(query: string, options: SearchMapResultsO
   const params = new URLSearchParams({
     q: normalized,
     access_token: MAPBOX_ACCESS_TOKEN,
-    autocomplete: 'true',
     limit: '5',
-    types: 'address,street,place,locality,neighborhood',
   })
   if (options.proximity) {
     params.set('proximity', `${options.proximity.longitude},${options.proximity.latitude}`)
   }
 
-  const response = await fetch(`https://api.mapbox.com/search/geocode/v6/forward?${params}`, {
+  const response = await fetch(`https://api.mapbox.com/search/searchbox/v1/forward?${params}`, {
     signal: options.signal,
   })
   if (!response.ok) {

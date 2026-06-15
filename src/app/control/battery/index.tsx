@@ -16,23 +16,43 @@ import { theme } from '@/constants/theme'
 
 const battVoltageCfg = telemetry.battVoltage
 const battPercentCfg = { ...battVoltageCfg, unit: '%', decimals: 0, label: 'BATTERY' }
+const formatPercent = (value: number) => `${Math.round(value)}%`
+const formatVoltage = battVoltageCfg.formatWithUnit
+
+const PERCENT_RANGE = { y: { min: 0, max: 100 } }
+/** Battery % is the main (green) line; voltage rides under it as a dim, de-emphasized gray. */
+const VOLTAGE_LINE_COLOR = theme.neutral.textMuted
 
 export default function BatteryScreen() {
   const batteryVoltage = useLiveMetric(liveSelectors.batteryVoltage)
+  const batteryPercent = useLiveMetric(liveSelectors.batteryPercent)
   const windowMs = useLiveWindowMs()
   const board = useBoardStore((s) => s.boards.find((b) => b.id === s.activeBoardId))
 
-  const points = useMemo(() => toTelemetryChartPoints(batteryVoltage), [batteryVoltage])
+  const voltagePoints = useMemo(() => toTelemetryChartPoints(batteryVoltage), [batteryVoltage])
+  const percentPoints = useMemo(() => toTelemetryChartPoints(batteryPercent), [batteryPercent])
   const battery = useMemo(
     () => deriveBatteryConfig(board?.batteryConfig ?? null),
     [board?.batteryConfig],
   )
 
   const configured = battery.warning == null
-  const chartRange = useMemo(() => {
+  const voltageRange = useMemo(() => {
     if (configured) return { y: { min: battery.minVoltage, max: battery.maxVoltage } }
-    return computeAutoRange(points, { minSpan: battVoltageCfg.minSpan })
-  }, [configured, battery, points])
+    return computeAutoRange(voltagePoints, { minSpan: battVoltageCfg.minSpan })
+  }, [configured, battery, voltagePoints])
+
+  // When configured, plot % as the main line (left axis) with voltage underneath (right axis).
+  // Without a pack config there is no %, so fall back to voltage as the only line.
+  const voltageSecondary = useMemo(
+    () => ({
+      points: voltagePoints,
+      range: voltageRange,
+      color: VOLTAGE_LINE_COLOR,
+      formatValue: formatVoltage,
+    }),
+    [voltagePoints, voltageRange],
+  )
 
   return (
     <ControlDetailLayout
@@ -52,15 +72,27 @@ export default function BatteryScreen() {
             ? liveTelemetryRuntime.values.batteryPercent
             : liveTelemetryRuntime.values.batteryVoltage
         }
-        min={configured ? 0 : chartRange.y.min}
-        max={configured ? 100 : chartRange.y.max}
+        min={configured ? 0 : voltageRange.y.min}
+        max={configured ? 100 : voltageRange.y.max}
       />
-      <MetricDetailChart
-        metric={battVoltageCfg}
-        points={points}
-        range={chartRange}
-        windowMs={windowMs}
-      />
+      {configured ? (
+        <MetricDetailChart
+          metric={battVoltageCfg}
+          label="BATTERY %"
+          points={percentPoints}
+          range={PERCENT_RANGE}
+          formatValue={formatPercent}
+          windowMs={windowMs}
+          secondary={voltageSecondary}
+        />
+      ) : (
+        <MetricDetailChart
+          metric={battVoltageCfg}
+          points={voltagePoints}
+          range={voltageRange}
+          windowMs={windowMs}
+        />
+      )}
     </ControlDetailLayout>
   )
 }

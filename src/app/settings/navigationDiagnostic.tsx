@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { CompassIcon } from 'phosphor-react-native'
 import { useShallow } from 'zustand/react/shallow'
 
 import { theme } from '@/constants/theme'
+import { IconHero } from '@/components/ui/settings/IconHero'
 import {
   buildNavigationDiagnosticsViewModel,
   type DiagnosticRow,
@@ -47,6 +49,7 @@ export default function NavigationDiagnosticScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
+        <IconHero icon={CompassIcon} description="Live map heading, GPS, and fallback evidence." />
         <Text style={styles.sectionTitle}>Navigation</Text>
         <View style={styles.card}>
           <DiagnosticRowView label="Selected mode" value={vm.selectedMode} />

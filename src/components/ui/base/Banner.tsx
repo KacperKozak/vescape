@@ -13,28 +13,28 @@ interface BannerProps {
 
 const config = {
   info: {
-    bg: theme.wheel.bg,
-    border: theme.wheel.border,
-    titleColor: theme.neutral.textPrimary,
-    messageColor: theme.wheel.text,
+    bg: theme.banner.info.bg,
+    border: theme.banner.info.border,
+    titleColor: theme.banner.info.title,
+    messageColor: theme.banner.info.message,
     Icon: InfoIcon,
-    iconColor: theme.wheel.color,
+    iconColor: theme.banner.info.icon,
   },
   warning: {
-    bg: theme.warning.bg,
-    border: theme.warning.border,
-    titleColor: theme.warning.text,
-    messageColor: theme.highlight.color,
+    bg: theme.banner.warning.bg,
+    border: theme.banner.warning.border,
+    titleColor: theme.banner.warning.title,
+    messageColor: theme.banner.warning.message,
     Icon: WarningIcon,
-    iconColor: theme.highlight.color,
+    iconColor: theme.banner.warning.icon,
   },
   error: {
-    bg: theme.error.bg,
-    border: theme.error.border,
-    titleColor: theme.error.text,
-    messageColor: theme.error.color,
+    bg: theme.banner.error.bg,
+    border: theme.banner.error.border,
+    titleColor: theme.banner.error.title,
+    messageColor: theme.banner.error.message,
     Icon: WarningCircleIcon,
-    iconColor: theme.error.text,
+    iconColor: theme.banner.error.icon,
   },
 } satisfies Record<Variant, object>
 
@@ -70,11 +70,11 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: '700',
   },
   message: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '400',
     lineHeight: 17,
   },
 })

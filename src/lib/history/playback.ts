@@ -3,7 +3,7 @@ export interface TimeStamped {
 }
 
 export function findNearestSampleIndexByTime<T extends TimeStamped>(
-  samples: T[],
+  samples: readonly T[],
   targetMs: number,
 ): number {
   if (!samples.length) return -1

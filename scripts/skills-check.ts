@@ -13,6 +13,16 @@ const root = resolve(import.meta.dir, '..')
 const agentsSkillsDir = resolve(root, '.agents/skills')
 const claudeSkillsDir = resolve(root, '.claude/skills')
 
+// If .claude/skills is a dir-level symlink to .agents/skills, nothing to do
+const claudeStat = lstatSync(claudeSkillsDir, { throwIfNoEntry: false })
+if (claudeStat?.isSymbolicLink()) {
+  const target = resolve(root, '.claude', readlinkSync(claudeSkillsDir))
+  if (target === agentsSkillsDir) {
+    console.log('skills-check ok (dir symlink)')
+    process.exit(0)
+  }
+}
+
 type Problem = {
   path: string
   message: string

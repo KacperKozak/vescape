@@ -1,15 +1,14 @@
 import { useCallback, useLayoutEffect, useState } from 'react'
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet } from 'react-native'
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, useLocalSearchParams, useNavigation } from 'expo-router'
-import { TrashIcon } from 'phosphor-react-native'
+import { PencilSimpleIcon } from 'phosphor-react-native'
 import { useShallow } from 'zustand/react/shallow'
 
 import { BoardBatteryEditorModal } from '@/components/domain/board/BoardBatteryEditorModal'
 import { BoardInfoEditorModal } from '@/components/domain/board/BoardInfoEditorModal'
 import { ConfirmModal } from '@/components/ui/modals/ConfirmModal'
 import { EditBoardSettings } from '@/components/domain/board/EditBoardSettings'
-import { IconButton } from '@/components/ui/base/IconButton'
 import { useEditBoardForm } from '@/hooks/useEditBoardForm'
 import { routes } from '@/navigation/routes'
 import { useBoardStore } from '@/store/boardStore'
@@ -45,12 +44,14 @@ export default function EditBoardScreen() {
   useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: () => (
-        <IconButton
-          icon={TrashIcon}
-          destructive
-          onPress={() => setRemoveConfirmVisible(true)}
+        <Pressable
+          onPress={() => setInfoModalVisible(true)}
           style={styles.headerAction}
-        />
+          hitSlop={8}
+          testID="edit-board-header"
+        >
+          <PencilSimpleIcon size={20} color={theme.neutral.textSecondary} weight="duotone" />
+        </Pressable>
       ),
     })
   }, [navigation])
@@ -91,10 +92,10 @@ export default function EditBoardScreen() {
             pairingSaving={form.saving === 'pairing'}
             keepMissingBatteryConfig={form.keepMissingBatteryConfig}
             batterySummary={form.batterySummary}
-            onOpenInfo={() => setInfoModalVisible(true)}
             onOpenBattery={() => setBatteryModalVisible(true)}
             onOpenPairing={handleOpenPairing}
             onClearPairing={form.clearPairing}
+            onRemove={() => setRemoveConfirmVisible(true)}
           />
         </ScrollView>
       </SafeAreaView>
@@ -148,7 +149,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: 16,
-    gap: 10,
+    gap: 8,
   },
   headerAction: {
     marginRight: 4,

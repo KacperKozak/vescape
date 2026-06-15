@@ -1,14 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 
 import {
-  computeDetentStrength,
+  advanceTuneDialThrow,
   computeHapticStepSpacing,
-  computeMomentumEmitStepIndex,
-  computeRenderedWidthScale,
-  computeThrowStartVelocity,
   computeTuneDialLayout,
-  resolveThrowGestureVelocity,
-  smoothThrowGestureVelocity,
+  isTuneDialEdgeStep,
+  resolveTuneDialThrowVelocity,
+  shouldApplyExternalTuneDialValue,
   shouldPlayTuneDialHaptic,
 } from './tuneDialPhysics'
 
@@ -24,10 +22,11 @@ function layoutFor(name: keyof typeof ranges) {
 }
 
 describe('TuneDial physics', () => {
-  test('showcase ranges keep the same visual track width', () => {
+  test('dense hundred-division ranges use a longer strip', () => {
     expect(layoutFor('small').totalWidth).toBe(700)
-    expect(layoutFor('medium').totalWidth).toBe(700)
+    expect(layoutFor('medium').totalWidth).toBe(1400)
     expect(layoutFor('large').totalWidth).toBe(700)
+    expect(computeTuneDialLayout(0, 50, 0.5).totalWidth).toBe(1400)
   })
 
   test('short integer tune ranges label every step and render midpoint ticks', () => {
@@ -46,108 +45,66 @@ describe('TuneDial physics', () => {
     expect(layout.renderMidpointTicks).toBe(false)
   })
 
-  test('haptic cadence follows the painted lines', () => {
-    expect(computeHapticStepSpacing(layoutFor('small'))).toBe(2)
-    expect(computeHapticStepSpacing(layoutFor('medium'))).toBe(10)
-    expect(computeHapticStepSpacing(layoutFor('large'))).toBe(2)
-    expect(computeHapticStepSpacing(computeTuneDialLayout(-5, 5, 1))).toBe(1)
+  test('haptic cadence follows every selectable value', () => {
+    expect(computeHapticStepSpacing()).toBe(1)
   })
 
-  test('haptics fire when movement crosses a painted label bucket', () => {
-    expect(shouldPlayTuneDialHaptic(9, 10, 10)).toBe(true)
-    expect(shouldPlayTuneDialHaptic(10, 12, 10)).toBe(false)
-    expect(shouldPlayTuneDialHaptic(11, 9, 10)).toBe(true)
+  test('haptics fire whenever movement crosses a selectable value', () => {
+    expect(shouldPlayTuneDialHaptic(9, 10, 1)).toBe(true)
+    expect(shouldPlayTuneDialHaptic(10, 12, 1)).toBe(true)
+    expect(shouldPlayTuneDialHaptic(11, 9, 1)).toBe(true)
     expect(shouldPlayTuneDialHaptic(3, 4, 1)).toBe(true)
   })
 
-  test('same gesture velocity starts with the same throw velocity across showcase ranges', () => {
-    const gestureVelocityX = -1200
-
-    expect(computeThrowStartVelocity(gestureVelocityX, layoutFor('small').totalWidth)).toBe(
-      computeThrowStartVelocity(gestureVelocityX, layoutFor('medium').totalWidth),
-    )
-    expect(computeThrowStartVelocity(gestureVelocityX, layoutFor('medium').totalWidth)).toBe(
-      computeThrowStartVelocity(gestureVelocityX, layoutFor('large').totalWidth),
-    )
+  test('scale ends are identified for stronger haptics', () => {
+    expect(isTuneDialEdgeStep(0, 100)).toBe(true)
+    expect(isTuneDialEdgeStep(100, 100)).toBe(true)
+    expect(isTuneDialEdgeStep(99, 100)).toBe(false)
   })
 
-  test('rendered width scales dial gestures down in compact containers', () => {
-    expect(computeRenderedWidthScale(180, 360)).toBeCloseTo(0.7071, 4)
-    expect(computeRenderedWidthScale(480, 360)).toBe(1)
-    expect(computeRenderedWidthScale(40, 400)).toBe(0.55)
+  test('large moving release starts throw independently from dial layout', () => {
+    const releaseVelocityX = -1200
+    const translationX = -80
+
+    expect(resolveTuneDialThrowVelocity(releaseVelocityX, translationX)).toBe(-900)
   })
 
-  test('medium has no detent resistance during throw because it has too many stops', () => {
-    expect(layoutFor('small').totalSteps).toBe(20)
-    expect(layoutFor('medium').totalSteps).toBe(100)
-    expect(layoutFor('large').totalSteps).toBe(20)
-
-    expect(computeDetentStrength(layoutFor('small').totalSteps)).toBe(1)
-    expect(computeDetentStrength(layoutFor('medium').totalSteps)).toBe(0)
-    expect(computeDetentStrength(layoutFor('large').totalSteps)).toBe(1)
+  test('precise short adjustment never starts throw', () => {
+    expect(resolveTuneDialThrowVelocity(-1800, -20)).toBe(0)
   })
 
-  test('momentum emits value changes at the same visual cadence for dense and sparse dials', () => {
-    const small = layoutFor('small')
-    const medium = layoutFor('medium')
-    const large = layoutFor('large')
-
-    const smallEmits = new Set(
-      Array.from({ length: small.totalSteps + 1 }, (_, stepIndex) =>
-        computeMomentumEmitStepIndex(stepIndex, small.totalSteps),
-      ),
-    )
-    const mediumEmits = new Set(
-      Array.from({ length: medium.totalSteps + 1 }, (_, stepIndex) =>
-        computeMomentumEmitStepIndex(stepIndex, medium.totalSteps),
-      ),
-    )
-    const largeEmits = new Set(
-      Array.from({ length: large.totalSteps + 1 }, (_, stepIndex) =>
-        computeMomentumEmitStepIndex(stepIndex, large.totalSteps),
-      ),
-    )
-
-    expect(smallEmits.size).toBe(21)
-    expect(mediumEmits.size).toBe(21)
-    expect(largeEmits.size).toBe(21)
+  test('large drag released slowly never starts throw', () => {
+    expect(resolveTuneDialThrowVelocity(-300, -120)).toBe(0)
   })
 
-  test('throw velocity uses sampled motion when release velocity drops near zero', () => {
-    let smoothedVelocityX = 0
+  test('opposite release wobble never starts throw', () => {
+    expect(resolveTuneDialThrowVelocity(1200, -80)).toBe(0)
+  })
 
-    for (const velocityX of [-250, -600, -900, -700, -300]) {
-      smoothedVelocityX = smoothThrowGestureVelocity(smoothedVelocityX, velocityX)
+  test('controlled value echoes cannot interrupt active dial interaction', () => {
+    expect(shouldApplyExternalTuneDialValue(42, 45, true)).toBe(false)
+    expect(shouldApplyExternalTuneDialValue(42, 45, false)).toBe(true)
+    expect(shouldApplyExternalTuneDialValue(45, 45, false)).toBe(false)
+  })
+
+  test('throw distance is stable across frame rates', () => {
+    function simulate(frameMs: number) {
+      let velocity = resolveTuneDialThrowVelocity(-1800, -100)
+      let distance = 0
+      let elapsed = 0
+
+      while (elapsed < 2000) {
+        const elapsedMs = Math.min(frameMs, 2000 - elapsed)
+        const next = advanceTuneDialThrow(velocity, elapsedMs)
+        distance += next.distance
+        velocity = next.velocity
+        elapsed += elapsedMs
+      }
+
+      return distance
     }
 
-    const resolved = resolveThrowGestureVelocity(-20, smoothedVelocityX, -42)
-
-    expect(resolved).toBeLessThan(-400)
-  })
-
-  test('throw velocity ignores opposite release wobble after a clear movement direction', () => {
-    const resolved = resolveThrowGestureVelocity(180, -500, -32)
-
-    expect(resolved).toBeLessThan(0)
-  })
-
-  test('throw velocity caps one-frame release spikes against the sampled motion', () => {
-    const resolved = resolveThrowGestureVelocity(-2000, -500, -28)
-
-    expect(resolved).toBeGreaterThan(-700)
-  })
-
-  test('throw velocity expires after holding the dial still', () => {
-    const resolved = resolveThrowGestureVelocity(-20, -500, -28, 240)
-
-    expect(Math.abs(resolved)).toBeLessThan(30)
-  })
-
-  test('throw velocity partially fades during a short hold', () => {
-    const fresh = resolveThrowGestureVelocity(-20, -500, -28, 0)
-    const faded = resolveThrowGestureVelocity(-20, -500, -28, 100)
-
-    expect(Math.abs(faded)).toBeLessThan(Math.abs(fresh))
-    expect(Math.abs(faded)).toBeGreaterThan(100)
+    expect(simulate(1000 / 30)).toBeCloseTo(simulate(1000 / 60), 6)
+    expect(simulate(1000 / 60)).toBeCloseTo(simulate(1000 / 120), 6)
   })
 })

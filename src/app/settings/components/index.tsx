@@ -15,18 +15,19 @@ import {
 import { SettingsCard } from '@/components/ui/settings/SettingsCard'
 import { SettingsRow } from '@/components/ui/settings/SettingsRow'
 import { SettingsSectionTitle } from '@/components/ui/settings/SettingsSectionTitle'
+import { IconHero } from '@/components/ui/settings/IconHero'
 import { theme } from '@/constants/theme'
 
 const sections = [
   {
     label: 'Base',
-    hint: 'Button, IconButton, Banner, DeviceRow, BatteryBar, InfoBadge, StatsRow, Placeholder, ScreenTitle',
+    hint: 'Button, IconButton, Banner, DeviceRow, InfoBadge, StatsRow, Placeholder, ScreenTitle',
     route: '/settings/components/base',
     icon: CubeIcon,
   },
   {
     label: 'Charts',
-    hint: 'Sparkline, SingleGauge, TelemetryLineChart',
+    hint: 'Sparkline, BatteryBar, SingleGauge, TelemetryLineChart',
     route: '/settings/components/charts',
     icon: ChartLineUpIcon,
   },
@@ -72,6 +73,10 @@ export default function ComponentsIndex() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
+        <IconHero
+          icon={SwatchesIcon}
+          description="Browse and preview all UI components with live controls."
+        />
         <SettingsSectionTitle>Component groups</SettingsSectionTitle>
         <SettingsCard>
           {sections.map((s) => (

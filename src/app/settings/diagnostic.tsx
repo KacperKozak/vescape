@@ -1,10 +1,16 @@
 import { useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { CheckCircleIcon, TestTubeIcon, WarningCircleIcon } from 'phosphor-react-native'
+import {
+  ChartLineUpIcon,
+  CheckCircleIcon,
+  TestTubeIcon,
+  WarningCircleIcon,
+} from 'phosphor-react-native'
 import { getDiagnosticStatus, reportDiagnosticTest, type DiagnosticStatus } from 'vesc-ble'
 
 import { reportUiError } from '@/lib/uiDiagnostics'
+import { IconHero } from '@/components/ui/settings/IconHero'
 import { theme } from '@/constants/theme'
 
 export default function DiagnosticSettingsScreen() {
@@ -44,6 +50,10 @@ export default function DiagnosticSettingsScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
+        <IconHero
+          icon={ChartLineUpIcon}
+          description="PostHog status and manual diagnostic events."
+        />
         <Text style={styles.sectionTitle}>PostHog</Text>
 
         <View style={styles.card}>

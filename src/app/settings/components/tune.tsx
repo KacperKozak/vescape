@@ -2,8 +2,15 @@ import { ScrollView, StyleSheet, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useCallback, useMemo, useState } from 'react'
 
+import { ToolboxIcon } from 'phosphor-react-native'
+import {
+  FieldEditorPopover,
+  type FieldEditorTarget,
+} from '@/components/domain/tune/FieldEditorPopover'
+import { useTriggerRef } from '@/components/ui/forms/Dropdown'
 import { BasicSliderCell } from '@/components/ui/tune/BasicSliderCell'
 import { TuneDial } from '@/components/ui/tune/TuneDial'
+import { IconHero } from '@/components/ui/settings/IconHero'
 import { ShowcaseCard } from '@/components/ui/dev/ShowcaseCard'
 import { ChipRow, ValueRow } from '@/components/ui/dev/ShowcaseControls'
 
@@ -77,12 +84,35 @@ function CompactTuneDialShowcase() {
   )
 }
 
+function AlertPercentageTuneDialShowcase() {
+  const [threshold, setThreshold] = useState(80)
+
+  return (
+    <ShowcaseCard
+      name="TuneDial Alert Percentage"
+      controls={<ValueRow label="threshold" value={`${threshold}%`} />}
+    >
+      <TuneDial
+        value={threshold}
+        previousValue={65}
+        min={0}
+        max={100}
+        step={1}
+        onValueChange={setThreshold}
+      />
+    </ShowcaseCard>
+  )
+}
+
 function BasicSliderCellShowcase() {
+  const triggerRef = useTriggerRef()
+  const [value, setValue] = useState(6.5)
+  const [editorOpen, setEditorOpen] = useState(false)
   const mockItem: BasicSliderItem = useMemo(
     () => ({
       id: 'mock-angle',
       label: 'Pushback angle',
-      value: 6.5,
+      value,
       min: 0,
       max: 15,
       step: 0.5,
@@ -90,15 +120,47 @@ function BasicSliderCellShowcase() {
       info: 'Sets the tilt angle for pushback notification.',
       modifiedManually: false,
     }),
-    [],
+    [value],
   )
+  const editorTarget: FieldEditorTarget | null = editorOpen
+    ? {
+        triggerRef,
+        label: mockItem.label,
+        fieldId: mockItem.id,
+        value,
+        min: mockItem.min,
+        max: mockItem.max,
+        step: mockItem.step,
+        unit: 'deg',
+        help: mockItem.info,
+      }
+    : null
 
   return (
-    <ShowcaseCard name="BasicSliderCell">
-      <View style={{ maxWidth: 200 }}>
-        <BasicSliderCell item={mockItem} editable onPress={() => {}} onInfo={() => {}} />
-      </View>
-    </ShowcaseCard>
+    <>
+      <ShowcaseCard
+        name="BasicSliderCell + FieldEditorPopover"
+        controls={<ValueRow label="applied value" value={value} />}
+      >
+        <View style={{ maxWidth: 200 }}>
+          <BasicSliderCell
+            ref={triggerRef}
+            item={mockItem}
+            editable
+            onPress={() => setEditorOpen(true)}
+            onInfo={() => {}}
+          />
+        </View>
+      </ShowcaseCard>
+      <FieldEditorPopover
+        target={editorTarget}
+        onCancel={() => setEditorOpen(false)}
+        onApply={(nextValue) => {
+          setValue(nextValue)
+          setEditorOpen(false)
+        }}
+      />
+    </>
   )
 }
 
@@ -106,8 +168,13 @@ export default function TunePage() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
+        <IconHero
+          icon={ToolboxIcon}
+          description="TuneDial, BasicSliderCell, TuneSyncBar, TuneGroupGrid."
+        />
         <TuneDialShowcase />
         <CompactTuneDialShowcase />
+        <AlertPercentageTuneDialShowcase />
         <BasicSliderCellShowcase />
       </ScrollView>
     </SafeAreaView>
