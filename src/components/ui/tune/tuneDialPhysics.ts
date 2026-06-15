@@ -1,5 +1,5 @@
 const TARGET_LABEL_PX = 70
-const MIN_STEP_PX = 2
+const MIN_STEP_PX = 14
 const ALL_STEP_LABEL_MIN_PX = 56
 
 export const DRAG_RANGE_GAIN = 1
@@ -76,6 +76,12 @@ export function shouldPlayTuneDialHaptic(
 
   const spacing = Math.max(1, hapticStepSpacing)
   return Math.floor(previousStepIndex / spacing) !== Math.floor(nextStepIndex / spacing)
+}
+
+export function isTuneDialEdgeStep(stepIndex: number, totalSteps: number): boolean {
+  'worklet'
+
+  return stepIndex === 0 || stepIndex === totalSteps
 }
 
 export function shouldApplyExternalTuneDialValue(

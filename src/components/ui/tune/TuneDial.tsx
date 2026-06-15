@@ -8,9 +8,7 @@ import Animated, {
   useAnimatedStyle,
   useFrameCallback,
   useSharedValue,
-  withSequence,
   withSpring,
-  withTiming,
 } from 'react-native-reanimated'
 import { scheduleOnRN } from 'react-native-worklets'
 
@@ -22,14 +20,20 @@ import {
   advanceTuneDialThrow,
   computeHapticStepSpacing,
   computeTuneDialLayout,
+  isTuneDialEdgeStep,
   resolveTuneDialThrowVelocity,
   shouldApplyExternalTuneDialValue,
   shouldPlayTuneDialHaptic,
 } from '@/components/ui/tune/tuneDialPhysics'
 
-const DIAL_HEIGHT = 78
-const VALUE_MARKER_SIZE = 26
-const VALUE_MARKER_TOP = 35
+const DIAL_HEIGHT = 105
+const TOP_VALUE_BAND_HEIGHT = 22
+const MAJOR_TICK_TOP = TOP_VALUE_BAND_HEIGHT + 5
+const RULER_LABEL_BAND_TOP = 76
+const VALUE_LABEL_WIDTH = 28
+const VALUE_LABEL_HEIGHT = 14
+const CURRENT_VALUE_TOP = 2
+const RULER_LABEL_BAND_BOTTOM = RULER_LABEL_BAND_TOP + VALUE_LABEL_HEIGHT
 const MARKER_LINE_WIDTH = 2.5
 const INDICATOR_COLOR = theme.error.color
 const PREV_MARK_COLOR = theme.highlight.color
@@ -76,7 +80,6 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
   const lastEmittedValue = useSharedValue(value)
   const lastStepIndex = useSharedValue(initialStepIndex)
   const lastEdgeHapticStepIndex = useSharedValue(-1)
-  const valueBadgeScale = useSharedValue(1)
 
   const tick = useCallback(() => {
     if (Platform.OS === 'ios') {
@@ -125,7 +128,9 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
       if (snapped !== lastEmittedValue.value) {
         lastEmittedValue.value = snapped
         scheduleOnRN(onValueChange, snapped)
-        if (
+        if (isTuneDialEdgeStep(stepIndex, totalSteps)) {
+          emitEdgeHaptic(stepIndex)
+        } else if (
           shouldTick &&
           shouldPlayTuneDialHaptic(previousStepIndex, stepIndex, hapticStepSpacing)
         ) {
@@ -136,6 +141,7 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
     },
     [
       hapticStepSpacing,
+      emitEdgeHaptic,
       lastEdgeHapticStepIndex,
       lastEmittedValue,
       lastStepIndex,
@@ -287,17 +293,6 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
     transform: [{ translateX: translateX.value }],
   }))
 
-  useEffect(() => {
-    valueBadgeScale.value = withSequence(
-      withTiming(1.06, { duration: 80 }),
-      withTiming(1, { duration: 140 }),
-    )
-  }, [value, valueBadgeScale])
-
-  const valueBadgeStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: valueBadgeScale.value }],
-  }))
-
   const prevMarkOffset = previousValue != null ? valueToOffset(previousValue) : null
   const previousValueLabel = previousValue != null ? formatTuneValue(previousValue) : null
   const decimals = step < 1 ? Math.ceil(Math.abs(Math.log10(step))) : 0
@@ -361,11 +356,12 @@ export function TuneDial({ value, previousValue, min, max, step, onValueChange }
             </Animated.View>
           </Animated.View>
         </GestureDetector>
-        <View style={styles.indicator} pointerEvents="none" />
+        <View style={styles.indicatorTop} pointerEvents="none" />
+        <View style={styles.indicatorBottom} pointerEvents="none" />
         <View style={styles.valueBadgeAnchor} pointerEvents="none">
-          <Animated.View style={[styles.valueBadge, valueBadgeStyle]}>
+          <View style={styles.valueBadge}>
             <Text style={styles.valueBadgeText}>{formatTuneValue(value)}</Text>
-          </Animated.View>
+          </View>
         </View>
       </View>
     </GestureHandlerRootView>
@@ -392,71 +388,73 @@ const styles = StyleSheet.create({
   },
   majorTick: {
     position: 'absolute',
-    top: 6,
+    top: MAJOR_TICK_TOP,
     alignItems: 'center',
     width: 0,
   },
   majorTickLine: {
     width: 2,
-    height: 27,
+    height: RULER_LABEL_BAND_TOP - MAJOR_TICK_TOP,
     backgroundColor: MAJOR_TICK_COLOR,
     borderRadius: 1,
   },
   tickLabel: {
+    position: 'absolute',
+    top: RULER_LABEL_BAND_TOP - MAJOR_TICK_TOP,
     color: LABEL_COLOR,
     fontSize: 9,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
     lineHeight: 11,
-    marginTop: 9,
+    height: VALUE_LABEL_HEIGHT,
+    textAlignVertical: 'center',
     width: 50,
     textAlign: 'center',
   },
   minorTick: {
     position: 'absolute',
-    top: 12,
+    top: TOP_VALUE_BAND_HEIGHT + 9,
     width: 1,
-    height: 13,
+    height: 36,
     backgroundColor: MINOR_TICK_COLOR,
     borderRadius: 0.5,
   },
   midpointTick: {
     position: 'absolute',
-    top: 15,
+    top: TOP_VALUE_BAND_HEIGHT + 11,
     width: 1,
-    height: 9,
+    height: 26,
     backgroundColor: MINOR_TICK_COLOR,
     borderRadius: 0.5,
   },
   prevMarkTop: {
     position: 'absolute',
-    top: 0,
+    top: TOP_VALUE_BAND_HEIGHT,
     width: MARKER_LINE_WIDTH,
-    height: VALUE_MARKER_TOP,
+    height: RULER_LABEL_BAND_TOP - TOP_VALUE_BAND_HEIGHT,
     marginLeft: -MARKER_LINE_WIDTH / 2,
     backgroundColor: PREV_MARK_COLOR,
     borderRadius: 1,
   },
   prevMarkBottom: {
     position: 'absolute',
-    top: VALUE_MARKER_TOP + VALUE_MARKER_SIZE,
+    top: RULER_LABEL_BAND_BOTTOM,
     width: MARKER_LINE_WIDTH,
-    height: DIAL_HEIGHT - VALUE_MARKER_TOP - VALUE_MARKER_SIZE,
+    height: DIAL_HEIGHT - RULER_LABEL_BAND_BOTTOM,
     marginLeft: -MARKER_LINE_WIDTH / 2,
     backgroundColor: PREV_MARK_COLOR,
     borderRadius: 1,
   },
   prevValueRing: {
     position: 'absolute',
-    top: VALUE_MARKER_TOP,
-    width: VALUE_MARKER_SIZE,
-    height: VALUE_MARKER_SIZE,
-    marginLeft: -VALUE_MARKER_SIZE / 2,
+    top: RULER_LABEL_BAND_TOP,
+    width: VALUE_LABEL_WIDTH,
+    height: VALUE_LABEL_HEIGHT,
+    marginLeft: -VALUE_LABEL_WIDTH / 2,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: PREV_MARK_COLOR,
-    borderRadius: VALUE_MARKER_SIZE / 2,
+    backgroundColor: theme.neutral.surface,
+    borderRadius: 4,
   },
   prevValueText: {
     color: PREV_MARK_COLOR,
@@ -464,14 +462,31 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
     lineHeight: 11,
+    height: VALUE_LABEL_HEIGHT,
+    textAlignVertical: 'center',
     textAlign: 'center',
   },
-  indicator: {
+  indicatorTop: {
     position: 'absolute',
-    top: 0,
-    bottom: 0,
+    top: TOP_VALUE_BAND_HEIGHT,
     left: '50%',
     width: MARKER_LINE_WIDTH,
+    height: RULER_LABEL_BAND_TOP - TOP_VALUE_BAND_HEIGHT,
+    marginLeft: -MARKER_LINE_WIDTH / 2,
+    backgroundColor: INDICATOR_COLOR,
+    borderRadius: 2,
+    shadowColor: INDICATOR_COLOR,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  indicatorBottom: {
+    position: 'absolute',
+    top: RULER_LABEL_BAND_BOTTOM,
+    left: '50%',
+    width: MARKER_LINE_WIDTH,
+    height: DIAL_HEIGHT - RULER_LABEL_BAND_BOTTOM,
     marginLeft: -MARKER_LINE_WIDTH / 2,
     backgroundColor: INDICATOR_COLOR,
     borderRadius: 2,
@@ -482,31 +497,23 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   valueBadge: {
-    width: VALUE_MARKER_SIZE,
-    height: VALUE_MARKER_SIZE,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: INDICATOR_COLOR,
-    borderRadius: VALUE_MARKER_SIZE / 2,
-    shadowColor: INDICATOR_COLOR,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.45,
-    shadowRadius: 4,
-    elevation: 5,
+    paddingHorizontal: 4,
   },
   valueBadgeAnchor: {
     position: 'absolute',
     left: 0,
     right: 0,
-    bottom: DIAL_HEIGHT - VALUE_MARKER_TOP - VALUE_MARKER_SIZE,
+    top: CURRENT_VALUE_TOP,
     alignItems: 'center',
   },
   valueBadgeText: {
-    color: '#fff',
-    fontSize: 9,
+    color: INDICATOR_COLOR,
+    fontSize: 14,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
-    lineHeight: 11,
+    lineHeight: 16,
     textAlign: 'center',
   },
 })

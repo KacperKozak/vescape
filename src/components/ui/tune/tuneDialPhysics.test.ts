@@ -4,6 +4,7 @@ import {
   advanceTuneDialThrow,
   computeHapticStepSpacing,
   computeTuneDialLayout,
+  isTuneDialEdgeStep,
   resolveTuneDialThrowVelocity,
   shouldApplyExternalTuneDialValue,
   shouldPlayTuneDialHaptic,
@@ -21,10 +22,11 @@ function layoutFor(name: keyof typeof ranges) {
 }
 
 describe('TuneDial physics', () => {
-  test('showcase ranges keep the same visual track width', () => {
+  test('dense hundred-division ranges use a longer strip', () => {
     expect(layoutFor('small').totalWidth).toBe(700)
-    expect(layoutFor('medium').totalWidth).toBe(700)
+    expect(layoutFor('medium').totalWidth).toBe(1400)
     expect(layoutFor('large').totalWidth).toBe(700)
+    expect(computeTuneDialLayout(0, 50, 0.5).totalWidth).toBe(1400)
   })
 
   test('short integer tune ranges label every step and render midpoint ticks', () => {
@@ -52,6 +54,12 @@ describe('TuneDial physics', () => {
     expect(shouldPlayTuneDialHaptic(10, 12, 1)).toBe(true)
     expect(shouldPlayTuneDialHaptic(11, 9, 1)).toBe(true)
     expect(shouldPlayTuneDialHaptic(3, 4, 1)).toBe(true)
+  })
+
+  test('scale ends are identified for stronger haptics', () => {
+    expect(isTuneDialEdgeStep(0, 100)).toBe(true)
+    expect(isTuneDialEdgeStep(100, 100)).toBe(true)
+    expect(isTuneDialEdgeStep(99, 100)).toBe(false)
   })
 
   test('large moving release starts throw independently from dial layout', () => {
