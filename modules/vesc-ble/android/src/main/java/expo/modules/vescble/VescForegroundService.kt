@@ -917,7 +917,6 @@ class VescForegroundService : Service() {
             }
             armCanPingTimeout()
         }
-        armBoardReadyTimeout(start.boardConfig)
     }
 
     private fun handleFrameChunk(chunk: ByteArray) {
@@ -1283,6 +1282,13 @@ class VescForegroundService : Service() {
         val session = boardConfig ?: return
         val sessionToken = boardSession ?: return
         val transport = currentBoardTransport() ?: return
+        // Arm the board-ready timeout only once telemetry polling actually begins,
+        // i.e. after CAN id resolution. Arming it on WaitingForTelemetry entry let the
+        // CAN ping discovery window (CAN_PING_TIMEOUT) overlap the ready budget and
+        // spuriously trip a reconnect on the first connect to an unknown CAN id.
+        if (boardStatus == BoardPhase.WaitingForTelemetry) {
+            armBoardReadyTimeout(session)
+        }
         telemetryPipeline.armStaleWatchdog()
         recordLocalDiagnostic(
             "telemetry_polling_started",
