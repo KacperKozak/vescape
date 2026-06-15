@@ -3,7 +3,7 @@ import {
   CaretLeftIcon,
   CaretRightIcon,
   ImagesSquareIcon,
-  ShareNetworkIcon,
+  CloudArrowUpIcon,
 } from 'phosphor-react-native'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
@@ -520,7 +520,7 @@ export function HistoryTelemetryPanel({
           </Pressable>
         </View>
         <View style={styles.navSide}>
-          <IconButton icon={ShareNetworkIcon} onPress={() => setShareInfoVisible(true)} size="lg" />
+          <IconButton icon={CloudArrowUpIcon} onPress={() => setShareInfoVisible(true)} size="lg" />
         </View>
       </View>
       {hasChartData && headPoint && optionalChartConfig && (
