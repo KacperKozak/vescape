@@ -209,6 +209,22 @@ export interface TelemetryEvent {
   firedAlerts?: FiredAlert[]
 }
 
+/** Smart-BMS snapshot decoded from a VESC `COMM_BMS_GET_VALUES` reply. */
+export interface BmsEvent {
+  capturedAt: number
+  /** Pack voltage as reported by the BMS (sum of cell groups). */
+  voltageTotal: number
+  current: number
+  ampHours: number
+  wattHours: number
+  /** State of charge 0–1, or null when the firmware variant omits it. */
+  soc: number | null
+  /** Per cell-group voltage, index 0 = first group. */
+  cellVoltages: number[]
+  /** Per cell-group balancing flag, aligned with cellVoltages. */
+  balancing: boolean[]
+}
+
 export interface LiveMetricExclusionUpdate {
   lastPacketAt: number
   metricExclusions: Record<string, boolean>
@@ -521,6 +537,7 @@ type VescBleEvents = {
   onError: (event: ErrorEvent) => void
   onLiveState: (event: LiveStateEvent) => void
   onTelemetry: (event: TelemetryEvent) => void
+  onBms: (event: BmsEvent) => void
   onLocation: (event: LocationEvent) => void
   onTelemetryRebuildProgress: (event: TelemetryRebuildProgressEvent) => void
   onBoardProbeProgress: (event: BoardProbeProgressEvent) => void
@@ -1044,6 +1061,10 @@ export function addTelemetryListener(cb: (event: TelemetryEvent) => void): Event
   }
 
   return emitter.addListener('onTelemetry', cb)
+}
+
+export function addBmsListener(cb: (event: BmsEvent) => void): EventSubscription {
+  return emitter.addListener('onBms', cb)
 }
 
 export function addLocationListener(cb: (event: LocationEvent) => void): EventSubscription {

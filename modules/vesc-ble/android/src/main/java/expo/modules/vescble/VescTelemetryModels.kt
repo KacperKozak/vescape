@@ -51,6 +51,28 @@ data class RefloatTelemetry(
     )
 }
 
+data class BmsTelemetry(
+    val capturedAt: Long,
+    val voltageTotal: Double,
+    val current: Double,
+    val ampHours: Double,
+    val wattHours: Double,
+    val soc: Double?,
+    val cellVoltages: List<Double>,
+    val balancing: List<Boolean>,
+) {
+    fun toMap(): Map<String, Any?> = mapOf(
+        "capturedAt" to capturedAt,
+        "voltageTotal" to voltageTotal,
+        "current" to current,
+        "ampHours" to ampHours,
+        "wattHours" to wattHours,
+        "soc" to soc,
+        "cellVoltages" to cellVoltages,
+        "balancing" to balancing,
+    )
+}
+
 data class LocationSnapshot(
     val latitude: Double,
     val longitude: Double,

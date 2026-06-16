@@ -13,12 +13,14 @@ import {
   addErrorListener,
   addLiveStateListener,
   addTelemetryListener,
+  addBmsListener,
   addLocationListener,
   type BoardPhase,
   type GpsPhase,
   type ScanStatus,
   type LocationEvent,
   type LiveStateEvent,
+  type BmsEvent,
 } from 'vesc-ble'
 
 import { useSettingsStore } from '@/store/settingsStore'
@@ -57,6 +59,7 @@ interface BleState {
   metricVersion: number
   telemetryRecordingEnabled: boolean
   recordDebugSession: boolean
+  latestBms: BmsEvent | null
 }
 
 interface BleActions {
@@ -79,6 +82,7 @@ type BleSet = {
 
 let liveSub: EventSubscription | null = null
 let telemetrySub: EventSubscription | null = null
+let bmsSub: EventSubscription | null = null
 let locationSub: EventSubscription | null = null
 let scanSub: EventSubscription | null = null
 let scanErrorSub: EventSubscription | null = null
@@ -119,9 +123,11 @@ function removeLiveSubscriptions(): void {
   clearLiveHistoryPublishTimer()
   liveSub?.remove()
   telemetrySub?.remove()
+  bmsSub?.remove()
   locationSub?.remove()
   liveSub = null
   telemetrySub = null
+  bmsSub = null
   locationSub = null
 }
 
@@ -218,6 +224,7 @@ function resetLivePresentation(set: BleSet): void {
     latestApproximateLocation: live.latestApproximateLocation,
     liveStatus: live.liveStatus,
     metricVersion: liveTelemetryRuntime.getVersion(),
+    latestBms: null,
   })
 }
 
@@ -261,6 +268,11 @@ function installLiveSubscriptions(set: BleSet): void {
       scheduleLiveHistoryPublish(set)
     })
   }
+  if (!bmsSub) {
+    bmsSub = addBmsListener((bms) => {
+      set({ latestBms: bms })
+    })
+  }
   if (!locationSub) {
     locationSub = addLocationListener((location) => {
       liveTelemetryRuntime.ingestLocation(location)
@@ -286,6 +298,7 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
   metricVersion: 0,
   telemetryRecordingEnabled: false,
   recordDebugSession: false,
+  latestBms: null,
 
   startScan() {
     const currentStatus = get().status

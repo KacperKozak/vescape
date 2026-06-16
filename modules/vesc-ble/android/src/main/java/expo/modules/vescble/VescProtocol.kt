@@ -8,6 +8,7 @@ import kotlin.math.pow
 internal const val COMM_FW_VERSION = 0
 internal const val COMM_FORWARD_CAN = 34
 internal const val COMM_CUSTOM_APP_DATA = 36
+internal const val COMM_BMS_GET_VALUES = 96
 internal const val COMM_GET_CUSTOM_CONFIG_XML = 92
 internal const val COMM_GET_CUSTOM_CONFIG = 93
 internal const val COMM_SET_CUSTOM_CONFIG = 95
@@ -155,6 +156,72 @@ internal fun parseRefloatGetAllData(
     )
 }
 
+/**
+ * Decode a COMM_BMS_GET_VALUES reply from a VESC-attached smart BMS.
+ *
+ * The VESC firmware packs scaled big-endian integers (not IEEE floats): float32 fields are
+ * `int32 / scale`, float16 fields are `int16 / scale`. Layout mirrors `commands.c`:
+ *   v_tot, v_charge, i_in, i_in_ic (float32 1e6) · ah_cnt, wh_cnt (float32 1e3) ·
+ *   cell_num (u8) · v_cell[cell_num] (float16 1e3) · bal_state[cell_num] (u8) ·
+ *   temp_adc_num (u8) · temps_adc[] (float16 1e2) · temp_ic/temp_hum/hum/temp_max_cell (float16 1e2) ·
+ *   soc (u8 ×255) · soh (u8 ×255) · can_id (u8) ...
+ *
+ * Only the stable prefix (voltages + balancing) is required; soc is best-effort so firmware
+ * variants with different trailing fields still yield cell data.
+ */
+internal fun parseBmsValues(payload: ByteArray, packetAt: Long): BmsTelemetry? {
+    if (payload.isEmpty()) return null
+    if ((payload[0].toInt() and 0xff) != COMM_BMS_GET_VALUES) return null
+    if (payload.size < 26) return null
+
+    var ind = 1
+    val voltageTotal = int32(payload, ind) / 1e6; ind += 4
+    /* v_charge */ ind += 4
+    val current = int32(payload, ind) / 1e6; ind += 4
+    /* i_in_ic */ ind += 4
+    val ampHours = int32(payload, ind) / 1e3; ind += 4
+    val wattHours = int32(payload, ind) / 1e3; ind += 4
+
+    val cellNum = payload[ind].toInt() and 0xff; ind += 1
+    if (cellNum <= 0 || cellNum > 60) return null
+    if (payload.size < ind + cellNum * 2) return null
+
+    val cellVoltages = DoubleArray(cellNum)
+    for (i in 0 until cellNum) {
+        cellVoltages[i] = int16(payload, ind) / 1e3
+        ind += 2
+    }
+
+    val balancing = BooleanArray(cellNum)
+    if (payload.size >= ind + cellNum) {
+        for (i in 0 until cellNum) {
+            balancing[i] = (payload[ind].toInt() and 0xff) != 0
+            ind += 1
+        }
+    }
+
+    var soc: Double? = null
+    if (payload.size > ind) {
+        val tempAdcNum = payload[ind].toInt() and 0xff
+        // temp_adc_num + temps_adc[] + temp_ic + temp_hum + hum + temp_max_cell
+        val socIndex = ind + 1 + tempAdcNum * 2 + 8
+        if (socIndex < payload.size) {
+            soc = (payload[socIndex].toInt() and 0xff) / 255.0
+        }
+    }
+
+    return BmsTelemetry(
+        capturedAt = packetAt,
+        voltageTotal = voltageTotal,
+        current = current,
+        ampHours = ampHours,
+        wattHours = wattHours,
+        soc = soc,
+        cellVoltages = cellVoltages.toList(),
+        balancing = balancing.toList(),
+    )
+}
+
 private fun crc16(data: ByteArray): Int {
     var crc = 0
     for (b in data) {
@@ -172,6 +239,10 @@ private fun crc16(data: ByteArray): Int {
 
 private fun int16(bytes: ByteArray, offset: Int): Int {
     return ByteBuffer.wrap(bytes, offset, 2).order(ByteOrder.BIG_ENDIAN).short.toInt()
+}
+
+private fun int32(bytes: ByteArray, offset: Int): Int {
+    return ByteBuffer.wrap(bytes, offset, 4).order(ByteOrder.BIG_ENDIAN).int
 }
 
 private fun float32Auto(bytes: ByteArray, offset: Int): Double {

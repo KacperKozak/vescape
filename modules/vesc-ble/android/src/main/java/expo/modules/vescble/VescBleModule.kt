@@ -69,6 +69,7 @@ class VescBleModule : Module() {
       "onError",
       "onLiveState",
       "onTelemetry",
+      "onBms",
       "onLocation",
       "onTelemetryRebuildProgress",
       "onBoardProbeProgress",
@@ -82,6 +83,8 @@ class VescBleModule : Module() {
     OnStopObserving("onLiveState") { stopObserving("onLiveState") }
     OnStartObserving("onTelemetry") { startObserving("onTelemetry") }
     OnStopObserving("onTelemetry") { stopObserving("onTelemetry") }
+    OnStartObserving("onBms") { startObserving("onBms") }
+    OnStopObserving("onBms") { stopObserving("onBms") }
     OnStartObserving("onLocation") { startObserving("onLocation") }
     OnStopObserving("onLocation") { stopObserving("onLocation") }
     OnStartObserving("onTelemetryRebuildProgress") { startObserving("onTelemetryRebuildProgress") }
