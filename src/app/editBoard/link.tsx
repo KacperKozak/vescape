@@ -1,18 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, useLocalSearchParams } from 'expo-router'
-import {
-  BluetoothIcon,
-  CheckCircleIcon,
-  CircleIcon,
-  WarningCircleIcon,
-} from 'phosphor-react-native'
+import { BluetoothIcon, WarningCircleIcon } from 'phosphor-react-native'
 import { useShallow } from 'zustand/react/shallow'
 
+import { BoardProbeCandidates } from '@/components/domain/board/BoardProbeCandidates'
 import { BoardProbeProgress } from '@/components/domain/board/BoardProbeProgress'
 import { Button } from '@/components/ui/base/Button'
-import { formatBoardTransport } from '@/lib/boardTransport'
 import { useBoardProbe } from '@/hooks/useBoardProbe'
 import { routes } from '@/navigation/routes'
 import { useBoardStore } from '@/store/boardStore'
@@ -100,24 +95,12 @@ export default function BoardLinkScreen() {
             <Text style={styles.title}>
               {probe.candidates.length === 1 ? 'Confirm transport' : 'Pick a transport'}
             </Text>
-            {probe.candidates.map((candidate) => {
-              const isSelected = candidate === probe.selected
-              return (
-                <Pressable
-                  key={String(candidate)}
-                  style={[styles.option, isSelected && styles.optionSelected]}
-                  onPress={() => probe.select(candidate)}
-                  testID={`board-link-option-${candidate}`}
-                >
-                  {isSelected ? (
-                    <CheckCircleIcon size={22} color={theme.wheel.color} weight="fill" />
-                  ) : (
-                    <CircleIcon size={22} color={theme.neutral.textMuted} weight="regular" />
-                  )}
-                  <Text style={styles.optionLabel}>{formatBoardTransport(candidate)}</Text>
-                </Pressable>
-              )
-            })}
+            <BoardProbeCandidates
+              candidates={probe.candidates}
+              selected={probe.selected}
+              onSelect={probe.select}
+              testIDPrefix="board-link-option"
+            />
           </View>
         ) : null}
       </ScrollView>
@@ -185,25 +168,6 @@ const styles = StyleSheet.create({
     color: theme.neutral.textSecondary,
     fontSize: 14,
     textAlign: 'center',
-  },
-  option: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: theme.neutral.border,
-    backgroundColor: theme.neutral.surface,
-  },
-  optionSelected: {
-    borderColor: theme.wheel.color,
-  },
-  optionLabel: {
-    color: theme.neutral.textPrimary,
-    fontSize: 16,
-    fontWeight: '600',
   },
   footer: {
     padding: 16,

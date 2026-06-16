@@ -47,7 +47,6 @@ interface AddBoardWizardActions {
   clearDevice: () => void
   onDeviceProbed: (link: BoardLink) => void
   continueOffline: () => void
-  chooseAnotherDevice: () => void
   setName: (v: string) => void
   setDescription: (v: string) => void
   setBatteryMode: (v: BatteryMode) => void
@@ -112,6 +111,7 @@ export function useAddBoardWizard(): UseAddBoardWizard {
     setPairPhase('probing')
   }
 
+  // Drop the chosen peripheral and return to the device list.
   const clearDevice = () => {
     setBleId('')
     setBleName('')
@@ -128,18 +128,8 @@ export function useAddBoardWizard(): UseAddBoardWizard {
 
   // Explicit offline path: create the Board with no Board Link.
   const continueOffline = () => {
-    setBleId('')
-    setBleName('')
-    setDraftLink(null)
-    setPairPhase('select')
+    clearDevice()
     next()
-  }
-
-  const chooseAnotherDevice = () => {
-    setBleId('')
-    setBleName('')
-    setDraftLink(null)
-    setPairPhase('select')
   }
 
   const save = () => {
@@ -187,7 +177,6 @@ export function useAddBoardWizard(): UseAddBoardWizard {
     clearDevice,
     onDeviceProbed,
     continueOffline,
-    chooseAnotherDevice,
     setName,
     setDescription,
     setBatteryMode,

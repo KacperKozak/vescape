@@ -13,10 +13,10 @@ private const val DETECT_PING_DELAY_MS = 600L
 private const val DETECT_GATT_RELEASE_DELAY_MS = 600L
 
 /**
- * BLE orchestration that runs a single Board Transport detection session and
- * resolves it through the pure [TransportDetection] brain. It owns its own GATT
- * connection, kept separate from the live Board Session so discovery stays out
- * of the runtime hot path.
+ * BLE orchestration that runs a single Board Probe and resolves it through the
+ * pure [TransportDetection] brain. It owns its own GATT connection, kept
+ * separate from the live Board Session so probing stays out of the runtime hot
+ * path, and surfaces live milestones through [onProgress].
  *
  * Flow: connect → ping CAN (collect every responder, not just the first) →
  * probe Direct and each responder by polling telemetry and confirming a

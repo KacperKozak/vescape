@@ -15,6 +15,7 @@ import { useShallow } from 'zustand/react/shallow'
 
 import { BoardBatteryForm } from '@/components/domain/board/BoardBatteryForm'
 import { BoardInfoForm } from '@/components/domain/board/BoardInfoForm'
+import { BoardProbeCandidates } from '@/components/domain/board/BoardProbeCandidates'
 import { BoardProbeProgress } from '@/components/domain/board/BoardProbeProgress'
 import { Button } from '@/components/ui/base/Button'
 import { DeviceRow } from '@/components/ui/base/DeviceRow'
@@ -128,7 +129,7 @@ function ProbeStep({ wizard }: Props) {
             label="Choose another device"
             variant="secondary"
             icon={Bluetooth}
-            onPress={wizard.chooseAnotherDevice}
+            onPress={wizard.clearDevice}
             testID="add-board-probe-choose-another"
           />
           <Button
@@ -147,24 +148,12 @@ function ProbeStep({ wizard }: Props) {
               ? 'Telemetry confirmed. Save this transport.'
               : 'Multiple transports returned telemetry. Pick one to save.'}
           </Text>
-          {probe.candidates.map((candidate) => {
-            const isSelected = candidate === probe.selected
-            return (
-              <Pressable
-                key={String(candidate)}
-                style={[styles.probeOption, isSelected && styles.probeOptionSelected]}
-                onPress={() => probe.select(candidate)}
-                testID={`add-board-probe-option-${candidate}`}
-              >
-                {isSelected ? (
-                  <CheckCircle size={22} color={theme.wheel.color} weight="fill" />
-                ) : (
-                  <CaretRight size={22} color={theme.neutral.textMuted} weight="regular" />
-                )}
-                <Text style={styles.probeOptionLabel}>{formatBoardTransport(candidate)}</Text>
-              </Pressable>
-            )
-          })}
+          <BoardProbeCandidates
+            candidates={probe.candidates}
+            selected={probe.selected}
+            onSelect={probe.select}
+            testIDPrefix="add-board-probe-option"
+          />
           <Button
             label="Confirm"
             icon={CheckCircle}
@@ -636,24 +625,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
     paddingVertical: 24,
-  },
-  probeOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: theme.neutral.border,
-    backgroundColor: theme.neutral.surface,
-  },
-  probeOptionSelected: {
-    borderColor: theme.wheel.color,
-  },
-  probeOptionLabel: {
-    color: theme.neutral.textPrimary,
-    fontSize: 16,
-    fontWeight: '600',
   },
 })
