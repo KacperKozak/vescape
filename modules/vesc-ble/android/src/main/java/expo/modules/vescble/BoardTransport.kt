@@ -4,7 +4,7 @@ package expo.modules.vescble
  * How a Board is reached. Resolved once by detection and stored on the Board.
  * A `null` transport means undetected — there is no persisted "unknown" state.
  *
- * Persisted form (boards.transport TEXT column): null | "direct" | "<canId>".
+ * Persisted form (board_settings transport JSON scalar): null | "direct" | "<canId>".
  * Bridge form (JS): null | "direct" | Int.
  */
 sealed interface BoardTransport {

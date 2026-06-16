@@ -161,16 +161,16 @@ Rides computed from buckets + markers:
 
 ## Boards
 
-| fn                   | sync  | returns                                             |
-| -------------------- | ----- | --------------------------------------------------- |
-| `getBoards()`        | async | `Board[]` sorted starred-first, then created_at ASC |
-| `upsertBoard(board)` | async | void                                                |
-| `deleteBoard(id)`    | async | void                                                |
+| fn                   | sync  | returns                            |
+| -------------------- | ----- | ---------------------------------- |
+| `getBoards()`        | async | `Board[]` sorted by created_at ASC |
+| `upsertBoard(board)` | async | void                               |
+| `deleteBoard(id)`    | async | void                               |
 
 ### Board shape
 
 ```ts
-{ id, name, description?, bleId?, isStarred, createdAt, minVoltage?, maxVoltage? }
+{ id, name, description?, bleId?, createdAt, batteryConfig?, transport? }
 ```
 
 ## Alert rules

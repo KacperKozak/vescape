@@ -76,7 +76,6 @@ export interface Board {
   name: string
   description: string | null
   bleId: string | null
-  isStarred: boolean
   createdAt: number
   batteryConfig: BatteryConfig | null
   transport: BoardTransport | null

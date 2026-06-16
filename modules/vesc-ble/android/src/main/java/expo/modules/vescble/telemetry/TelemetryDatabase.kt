@@ -17,6 +17,7 @@ internal const val TELEMETRY_DATABASE_VERSION = 21
     TelemetryMarkerEntity::class,
     MetricExclusionRangeEntity::class,
     BoardEntity::class,
+    BoardSettingEntity::class,
     AlertRuleEntity::class,
     AppSettingEntity::class,
     TuneProfileEntity::class,
@@ -315,7 +316,56 @@ abstract class TelemetryDatabase : RoomDatabase() {
 
     internal val MIGRATION_20_21 = object : Migration(20, 21) {
       override fun migrate(db: SupportSQLiteDatabase) {
-        db.execSQL("ALTER TABLE boards ADD COLUMN transport TEXT")
+        db.execSQL(
+          """
+          CREATE TABLE IF NOT EXISTS board_settings (
+            board_id TEXT NOT NULL,
+            key TEXT NOT NULL,
+            value_json TEXT NOT NULL,
+            updated_at INTEGER NOT NULL,
+            PRIMARY KEY (board_id, key)
+          )
+          """.trimIndent(),
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_board_settings_board_id ON board_settings(board_id)")
+        db.execSQL(
+          """
+          INSERT OR REPLACE INTO board_settings (board_id, key, value_json, updated_at)
+          SELECT id, 'description', json_quote(description), created_at
+          FROM boards
+          WHERE description IS NOT NULL
+          """.trimIndent(),
+        )
+        db.execSQL(
+          """
+          INSERT OR REPLACE INTO board_settings (board_id, key, value_json, updated_at)
+          SELECT id, 'batteryConfig', battery_config_json, created_at
+          FROM boards
+          WHERE battery_config_json IS NOT NULL
+          """.trimIndent(),
+        )
+        db.execSQL("DROP INDEX IF EXISTS index_boards_is_starred")
+        db.execSQL("DROP INDEX IF EXISTS index_boards_created_at")
+        db.execSQL(
+          """
+          CREATE TABLE IF NOT EXISTS boards_new (
+            id TEXT NOT NULL PRIMARY KEY,
+            name TEXT NOT NULL,
+            ble_id TEXT,
+            created_at INTEGER NOT NULL
+          )
+          """.trimIndent(),
+        )
+        db.execSQL(
+          """
+          INSERT INTO boards_new (id, name, ble_id, created_at)
+          SELECT id, name, ble_id, created_at
+          FROM boards
+          """.trimIndent(),
+        )
+        db.execSQL("DROP TABLE boards")
+        db.execSQL("ALTER TABLE boards_new RENAME TO boards")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_boards_created_at ON boards(created_at)")
       }
     }
 

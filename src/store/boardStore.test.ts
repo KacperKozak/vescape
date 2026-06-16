@@ -83,7 +83,6 @@ test('stored transport survives a store reload from native boards', async () => 
     name: 'ADV',
     description: null,
     bleId: null,
-    isStarred: true,
     createdAt: 1,
     batteryConfig: null,
     transport: null,
@@ -114,7 +113,6 @@ test('updated battery config survives a store reload from native boards', async 
     name: 'ADV',
     description: null,
     bleId: null,
-    isStarred: true,
     createdAt: 1,
     batteryConfig: {
       mode: 'preset',

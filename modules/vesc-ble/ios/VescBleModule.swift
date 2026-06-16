@@ -638,9 +638,6 @@ public class VescBleModule: Module {
   }
 
   private static func sortBoards(_ lhs: [String: Any?], _ rhs: [String: Any?]) -> Bool {
-    let leftStarred = lhs["isStarred"] as? Bool ?? false
-    let rightStarred = rhs["isStarred"] as? Bool ?? false
-    if leftStarred != rightStarred { return leftStarred }
     return createdAt(lhs) < createdAt(rhs)
   }
 

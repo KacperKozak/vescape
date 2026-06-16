@@ -76,19 +76,24 @@ class AppDataRepository private constructor(private val context: Context) {
   private val dao = TelemetryDatabase.get(context).telemetryDao()
 
   suspend fun getBoards(): List<Map<String, Any?>> = withContext(Dispatchers.IO) {
-    dao.getBoards().map { it.toMap() }
+    val boards = dao.getBoards()
+    val settingsByBoard =
+      if (boards.isEmpty()) emptyMap() else dao.getBoardSettings(boards.map { it.id }).groupBy { it.boardId }
+    boards.map { it.toMap(settingsByBoard[it.id].orEmpty()) }
   }
 
   suspend fun getBoard(id: String): Map<String, Any?>? = withContext(Dispatchers.IO) {
-    dao.getBoard(id)?.toMap()
+    dao.getBoard(id)?.toMap(dao.getBoardSettings(id))
   }
 
   suspend fun upsertBoard(board: Map<String, Any?>): Unit = withContext(Dispatchers.IO) {
-    dao.upsertBoard(board.toBoardEntity())
+    val boardId = board.getString("id")
+    val (settings, deletedKeys) = board.toBoardSettingEntities(boardId)
+    dao.upsertBoardWithSettings(board.toBoardEntity(), settings, deletedKeys)
   }
 
   suspend fun deleteBoard(id: String): Unit = withContext(Dispatchers.IO) {
-    dao.deleteBoard(id)
+    dao.deleteBoardWithSettings(id)
   }
 
   suspend fun getAlertRules(): List<Map<String, Any?>> = withContext(Dispatchers.IO) {
@@ -371,9 +376,8 @@ class AppDataRepository private constructor(private val context: Context) {
     val settings = getTypedSettings()
     settings.selectedBoardId
       ?.let { dao.getBoard(it) }
-      ?.toMap()
-      ?: dao.getBoards().firstOrNull { it.isStarred }?.toMap()
-      ?: dao.getBoards().firstOrNull()?.toMap()
+      ?.let { it.toMap(dao.getBoardSettings(it.id)) }
+      ?: dao.getBoards().firstOrNull()?.let { it.toMap(dao.getBoardSettings(it.id)) }
   }
 
   companion object {
@@ -394,16 +398,18 @@ class AppDataRepository private constructor(private val context: Context) {
   }
 }
 
-fun BoardEntity.toMap(): Map<String, Any?> = mapOf(
-  "id" to id,
-  "name" to name,
-  "description" to description,
-  "bleId" to bleId,
-  "isStarred" to isStarred,
-  "createdAt" to createdAt,
-  "batteryConfig" to batteryConfigJson?.toJsonMap(),
-  "transport" to BoardTransport.toBridge(BoardTransport.decode(transport)),
-)
+fun BoardEntity.toMap(settings: List<BoardSettingEntity>): Map<String, Any?> {
+  val values = settings.mapNotNull { it.decodeBoardSetting() }.toMap()
+  return mapOf(
+    "id" to id,
+    "name" to name,
+    "description" to values["description"],
+    "bleId" to bleId,
+    "createdAt" to createdAt,
+    "batteryConfig" to values["batteryConfig"],
+    "transport" to values["transport"],
+  )
+}
 
 fun AppSettings.toMap(): Map<String, Any?> = mapOf(
   "liveHistoryLimit" to liveHistoryLimit,
@@ -421,17 +427,17 @@ fun AppSettings.toMap(): Map<String, Any?> = mapOf(
   "historyMetricHotRanges" to historyMetricHotRanges,
 )
 
-private fun encodeSettingJson(value: Any?): String {
+internal fun encodeSettingJson(value: Any?): String {
   val arr = JSONArray()
-  if (value == null) arr.put(JSONObject.NULL) else arr.put(value)
+  arr.put(jsonCompatibleValue(value))
   val s = arr.toString()
   return s.substring(1, s.length - 1)
 }
 
-private fun decodeSettingJson(json: String): Any? {
+internal fun decodeSettingJson(json: String): Any? {
   val obj = JSONObject("{\"v\":$json}")
   val v = obj.get("v")
-  return if (v == JSONObject.NULL) null else v
+  return jsonValue(v)
 }
 
 fun AlertRuleEntity.toMap(): Map<String, Any?> = mapOf(
@@ -473,9 +479,27 @@ private fun RefloatConfigSnapshot.fieldsJson(): String {
 private fun Map<String, Any?>.toJsonObject(): JSONObject {
   val json = JSONObject()
   forEach { (key, value) ->
-    json.put(key, value ?: JSONObject.NULL)
+    json.put(key, jsonCompatibleValue(value))
   }
   return json
+}
+
+private fun jsonCompatibleValue(value: Any?): Any = when (value) {
+  null -> JSONObject.NULL
+  is Map<*, *> -> {
+    val json = JSONObject()
+    value.forEach { (key, item) ->
+      if (key is String) json.put(key, jsonCompatibleValue(item))
+    }
+    json
+  }
+  is Iterable<*> -> JSONArray().also { arr ->
+    value.forEach { arr.put(jsonCompatibleValue(it)) }
+  }
+  is Array<*> -> JSONArray().also { arr ->
+    value.forEach { arr.put(jsonCompatibleValue(it)) }
+  }
+  else -> value
 }
 
 private fun String.toJsonMap(): Map<String, Any?> {
@@ -578,13 +602,45 @@ private fun Map<String, Any?>.toPrivacyZoneEntity(): PrivacyZoneEntity {
 private fun Map<String, Any?>.toBoardEntity(): BoardEntity = BoardEntity(
   id = getString("id"),
   name = getString("name"),
-  description = get("description") as? String,
   bleId = get("bleId") as? String,
-  isStarred = getBoolean("isStarred"),
   createdAt = getLong("createdAt"),
-  batteryConfigJson = encodeBatteryConfig(get("batteryConfig")),
-  transport = BoardTransport.encode(BoardTransport.fromBridge(get("transport"))),
 )
+
+private fun Map<String, Any?>.toBoardSettingEntities(boardId: String): Pair<List<BoardSettingEntity>, List<String>> {
+  val now = System.currentTimeMillis()
+  val settings = mutableListOf<BoardSettingEntity>()
+  val deletedKeys = mutableListOf<String>()
+
+  fun putOrDelete(key: String, value: Any?) {
+    if (value == null) {
+      deletedKeys += key
+    } else {
+      settings += BoardSettingEntity(boardId, key, encodeSettingJson(value), now)
+    }
+  }
+
+  putOrDelete("description", (get("description") as? String)?.takeIf { it.isNotBlank() })
+  putOrDelete("batteryConfig", normalizeBatteryConfig(get("batteryConfig")))
+  putOrDelete("transport", BoardTransport.encode(BoardTransport.fromBridge(get("transport"))))
+
+  return settings to deletedKeys
+}
+
+private fun BoardSettingEntity.decodeBoardSetting(): Pair<String, Any?>? {
+  val raw = try {
+    decodeSettingJson(valueJson)
+  } catch (_: Exception) {
+    return null
+  }
+  return when (key) {
+    "description" -> (raw as? String)?.let { key to it }
+    "batteryConfig" -> normalizeBatteryConfig(raw)?.let { key to it }
+    "transport" -> (raw as? String)?.let {
+      key to BoardTransport.toBridge(BoardTransport.decode(it))
+    }
+    else -> null
+  }
+}
 
 internal fun encodeBatteryConfig(value: Any?): String? {
   val config = normalizeBatteryConfig(value) ?: return null
@@ -592,7 +648,11 @@ internal fun encodeBatteryConfig(value: Any?): String? {
 }
 
 internal fun normalizeBatteryConfig(value: Any?): Map<String, Any?>? {
-  val config = value as? Map<*, *> ?: return null
+  val config = when (value) {
+    is Map<*, *> -> value
+    is String -> parseLegacyMapString(value) ?: return null
+    else -> return null
+  }
   val mode = config["mode"] as? String ?: return null
   return when (mode) {
     "preset" -> {
@@ -619,6 +679,20 @@ internal fun normalizeBatteryConfig(value: Any?): Map<String, Any?>? {
     }
     else -> return null
   }
+}
+
+private fun parseLegacyMapString(value: String): Map<String, Any?>? {
+  val trimmed = value.trim()
+  if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return null
+  val body = trimmed.substring(1, trimmed.length - 1)
+  if (body.isBlank()) return emptyMap()
+  return body.split(", ").mapNotNull { entry ->
+    val separator = entry.indexOf('=')
+    if (separator <= 0) return@mapNotNull null
+    val key = entry.substring(0, separator)
+    val raw = entry.substring(separator + 1)
+    key to (raw.toIntOrNull() ?: raw.toDoubleOrNull() ?: raw)
+  }.toMap()
 }
 
 private fun Map<String, Any?>.toAlertRuleEntity(): AlertRuleEntity = AlertRuleEntity(

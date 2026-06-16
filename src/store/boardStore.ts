@@ -33,7 +33,6 @@ interface BoardActions {
   updateBoard: (board: Board) => Promise<void>
   removeBoard: (id: string) => Promise<void>
   setActiveBoard: (id: string | null) => void
-  starBoard: (id: string) => Promise<void>
 }
 
 export const useBoardStore = create<BoardState & BoardActions>((set, get) => ({
@@ -52,7 +51,7 @@ export const useBoardStore = create<BoardState & BoardActions>((set, get) => ({
         ? activeBoardId
         : selectedBoardExists
           ? settings.selectedBoardId
-          : (boards.find((b) => b.isStarred)?.id ?? boards[0]?.id ?? null)
+          : (boards[0]?.id ?? null)
     set({
       boards,
       hasLoaded: true,
@@ -64,13 +63,11 @@ export const useBoardStore = create<BoardState & BoardActions>((set, get) => ({
   },
 
   addBoard({ name, description, bleId, batteryConfig }) {
-    const isFirst = get().boards.length === 0
     const board: Board = {
       id: generateId(),
       name,
       description: description ?? null,
       bleId: bleId ?? null,
-      isStarred: isFirst,
       createdAt: Date.now(),
       batteryConfig: batteryConfig ?? DEFAULT_BATTERY_CONFIG,
       transport: null,
@@ -105,11 +102,5 @@ export const useBoardStore = create<BoardState & BoardActions>((set, get) => ({
   setActiveBoard(id) {
     set({ activeBoardId: id })
     nativeSetSelectedBoard(id)
-  },
-
-  async starBoard(id) {
-    const updated = get().boards.map((b) => ({ ...b, isStarred: b.id === id }))
-    set({ boards: updated, activeBoardId: id })
-    await Promise.all(updated.map((b) => upsertBoard(b)))
   },
 }))

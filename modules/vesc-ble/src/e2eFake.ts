@@ -274,7 +274,6 @@ export const e2eFake = {
         name: 'E2E Board',
         description: 'Seeded by Maestro',
         bleId: 'E2:E2:E2:E2:E2:01',
-        isStarred: true,
         createdAt: Date.now(),
         batteryConfig: {
           mode: 'preset',

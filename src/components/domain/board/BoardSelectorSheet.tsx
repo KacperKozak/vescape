@@ -4,7 +4,6 @@ import {
   LightningIcon,
   PencilSimpleIcon,
   PlusIcon,
-  StarIcon,
   RadioButtonIcon,
   RecordIcon,
 } from 'phosphor-react-native'
@@ -72,12 +71,6 @@ export function BoardSelectorSheet({
                 <Text style={[styles.boardName, isActive && styles.boardNameActive]}>
                   {board.name}
                 </Text>
-                {board.isStarred && (
-                  <View style={styles.starBadge}>
-                    <StarIcon size={10} color={theme.highlight.color} weight="fill" />
-                    <Text style={styles.starText}>Main</Text>
-                  </View>
-                )}
               </View>
               {isActive && <CheckCircleIcon size={20} color={theme.wheel.color} weight="fill" />}
               <Pressable
@@ -180,16 +173,6 @@ const styles = StyleSheet.create({
   },
   boardNameActive: {
     color: theme.neutral.textPrimary,
-  },
-  starBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  starText: {
-    color: theme.highlight.color,
-    fontSize: 10,
-    fontWeight: '700',
   },
   addRow: {
     flexDirection: 'row',
