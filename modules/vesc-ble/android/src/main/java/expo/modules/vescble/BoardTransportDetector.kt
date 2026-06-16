@@ -10,6 +10,7 @@ private const val DETECT_TAG = "VescDetect"
 private const val DETECT_CONNECT_TIMEOUT_MS = 8_000L
 private const val DETECT_FW_DELAY_MS = 300L
 private const val DETECT_PING_DELAY_MS = 600L
+private const val DETECT_GATT_RELEASE_DELAY_MS = 600L
 
 /**
  * BLE orchestration that runs a single Board Transport detection session and
@@ -173,13 +174,13 @@ internal class BoardTransportDetector(
       )
     }
     cleanup()
-    onComplete(result)
+    completeAfterGattRelease { onComplete(result) }
   }
 
   private fun fail(code: String, message: String) {
     if (finished) return
     cleanup()
-    onError(code, message)
+    completeAfterGattRelease { onError(code, message) }
   }
 
   private fun cleanup() {
@@ -203,6 +204,10 @@ internal class BoardTransportDetector(
   private fun cancelStep() {
     stepTimeout?.let { handler.removeCallbacks(it) }
     stepTimeout = null
+  }
+
+  private fun completeAfterGattRelease(action: () -> Unit) {
+    handler.postDelayed(action, DETECT_GATT_RELEASE_DELAY_MS)
   }
 
   private fun probePayload(transport: BoardTransport): ByteArray = when (transport) {
