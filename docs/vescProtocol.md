@@ -16,14 +16,15 @@ The reassembler (`src/vesc/reassembler.ts`) handles packets split across multipl
 
 ## Command IDs (subset)
 
-| Name                   | ID   | Notes                                                                         |
-| ---------------------- | ---- | ----------------------------------------------------------------------------- |
-| `COMM_FW_VERSION`      | 0x00 | Handled by ESP32 locally. Use as connectivity ping — it generates a response. |
-| `COMM_GET_VALUES`      | 0x04 | Standard motor telemetry. Must be CAN-forwarded on ADV2.                      |
-| `COMM_ALIVE`           | 0x1E | Keepalive. **No response** — useless as a connectivity test.                  |
-| `COMM_FORWARD_CAN`     | 0x22 | Prefix wrapper: `[0x22, canId, <actual command>]`                             |
-| `COMM_CUSTOM_APP_DATA` | 0x24 | Refloat package commands. Must be CAN-forwarded.                              |
-| `COMM_PING_CAN`        | 0x3E | ESP32 discovers CAN bus devices. Response: `[0x3E, id0, id1, ...]`            |
+| Name                   | ID   | Notes                                                                                                                       |
+| ---------------------- | ---- | --------------------------------------------------------------------------------------------------------------------------- |
+| `COMM_FW_VERSION`      | 0x00 | Handled by ESP32 locally. Use as connectivity ping — it generates a response.                                               |
+| `COMM_GET_VALUES`      | 0x04 | Standard motor telemetry. Must be CAN-forwarded on ADV2.                                                                    |
+| `COMM_ALIVE`           | 0x1E | Keepalive. **No response** — useless as a connectivity test.                                                                |
+| `COMM_FORWARD_CAN`     | 0x22 | Prefix wrapper: `[0x22, canId, <actual command>]`                                                                           |
+| `COMM_CUSTOM_APP_DATA` | 0x24 | Refloat package commands. Must be CAN-forwarded.                                                                            |
+| `COMM_PING_CAN`        | 0x3E | ESP32 discovers CAN bus devices. Response: `[0x3E, id0, id1, ...]`                                                          |
+| `COMM_BMS_GET_VALUES`  | 0x60 | Smart-BMS values (cell-group voltages, balancing, SoC). CAN-forwarded like other cmds. See [below](#bms-cell-group-values). |
 
 ## Problem: GET_VALUES never responded
 
@@ -71,3 +72,51 @@ Runtime connect (every session, dumb):
 ```
 
 Note: `COMM_ALIVE` (0x1E) was tried as the first ping — it generates no response, so it cannot confirm the notification path. `COMM_FW_VERSION` must be used instead.
+
+## BMS cell-group values
+
+A smart BMS (e.g. Smart BMS / ANT / JBD over CAN) reports per-cell-group voltages. We read
+them with `COMM_BMS_GET_VALUES` (0x60) — the standard VESC BMS command, **not** anything from
+the Refloat `GET_ALLDATA` stream (that only carries pack-level voltage).
+
+### Polling
+
+`PollingLoop` interleaves a BMS poll into the normal telemetry loop at **1/8** of the
+telemetry rate (`BMS_POLL_STRIDE`). Cell voltages change slowly and the reply is large, so a
+slower cadence avoids crowding the BLE link. The poll reuses the session transport, so it is
+CAN-forwarded (`[0x22, canId, 0x60]`) or sent direct exactly like the Refloat poll. The reply
+arrives unwrapped at the top level as `[0x60, ...]` (the ESP32 strips the CAN-forward wrapper
+on responses), with a nested `[0x22, ?, 0x60, ...]` form also handled defensively.
+
+### Payload layout (`parseBmsValues` in `VescProtocol.kt`)
+
+VESC packs **scaled big-endian integers**, not IEEE floats: a `float32` field is `int32 / scale`
+and a `float16` field is `int16 / scale`. Layout mirrors `commands.c`:
+
+```
+[0]      id = 0x60
+float32  v_tot      (÷1e6)   pack voltage
+float32  v_charge   (÷1e6)
+float32  i_in       (÷1e6)   pack current
+float32  i_in_ic    (÷1e6)
+float32  ah_cnt     (÷1e3)
+float32  wh_cnt     (÷1e3)
+u8       cell_num
+float16  v_cell[cell_num] (÷1e3)   ← the per-group voltages we surface
+u8       bal_state[cell_num]       ← balancing flag per group
+u8       temp_adc_num
+float16  temps_adc[temp_adc_num] (÷1e2)
+float16  temp_ic, temp_hum, hum, temp_max_cell (÷1e2)
+u8       soc (×255 → 0–1), soh, can_id, ...
+```
+
+Only the stable prefix (voltages + balancing) is required. `soc` is best-effort: parsed by
+walking past the variable-length temp block with bounds checks, so firmware variants with
+different trailing fields still yield cell data. Sanity guards reject `cell_num` outside 1–60
+and payloads too short for the claimed cell count.
+
+### Flow to UI
+
+`handleBmsPayload` → emit `onBms` → `bleStore.latestBms` → `summarizeBms` (min/max/spread/avg,
+extreme tagging) → `BmsCellVoltages` grid on the battery control screen. iOS is a mock-only
+module and emits a synthetic 20S `onBms` stream for parity in the simulator.

@@ -17,10 +17,11 @@
 
 ## Status
 
-| Area                               | State                                               |
-| ---------------------------------- | --------------------------------------------------- |
-| BLE scan & connect                 | ✅                                                  |
-| BLE notifications (Android 13+)    | ✅ fixed — see [bleAndroid.md](./bleAndroid.md)     |
-| CAN forwarding to motor controller | ✅ fixed — see [vescProtocol.md](./vescProtocol.md) |
-| Refloat GET_ALLDATA telemetry      | ✅                                                  |
-| iOS                                | stub only                                           |
+| Area                               | State                                                                   |
+| ---------------------------------- | ----------------------------------------------------------------------- |
+| BLE scan & connect                 | ✅                                                                      |
+| BLE notifications (Android 13+)    | ✅ fixed — see [bleAndroid.md](./bleAndroid.md)                         |
+| CAN forwarding to motor controller | ✅ fixed — see [vescProtocol.md](./vescProtocol.md)                     |
+| Refloat GET_ALLDATA telemetry      | ✅                                                                      |
+| Smart-BMS cell-group voltages      | 🧪 PoC — see [vescProtocol.md](./vescProtocol.md#bms-cell-group-values) |
+| iOS                                | stub only                                                               |
