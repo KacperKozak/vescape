@@ -15,11 +15,7 @@ import { useBoardStore } from '@/store/boardStore'
 import { theme } from '@/constants/theme'
 
 export default function EditBoardScreen() {
-  const { boardId, bleId, bleName } = useLocalSearchParams<{
-    boardId: string
-    bleId?: string
-    bleName?: string
-  }>()
+  const { boardId } = useLocalSearchParams<{ boardId: string }>()
   const { boards, updateBoard, removeBoard } = useBoardStore(
     useShallow((s) => ({
       boards: s.boards,
@@ -36,8 +32,6 @@ export default function EditBoardScreen() {
   const [removeSaving, setRemoveSaving] = useState(false)
   const form = useEditBoardForm({
     board: editingBoard,
-    routeBleId: bleId,
-    routeBleName: bleName,
     updateBoard,
   })
 
@@ -68,16 +62,18 @@ export default function EditBoardScreen() {
     }
   }, [editingBoard, removeBoard])
 
-  const handleOpenPairing = () => {
+  // Link a device: scan, then probe and save the Board Link.
+  const handleLink = () => {
     router.push({
       pathname: routes.addBoardScan,
       params: { boardId },
     })
   }
 
-  const handleDetectTransport = () => {
+  // Re-probe the existing link's peripheral.
+  const handleReprobe = () => {
     router.push({
-      pathname: routes.editBoardTransport,
+      pathname: routes.editBoardLink,
       params: { boardId },
     })
   }
@@ -94,16 +90,14 @@ export default function EditBoardScreen() {
           <EditBoardSettings
             name={form.name}
             description={form.description}
-            pairedBleId={form.pairedBleId}
-            pairedBleName={form.pairedBleName}
-            pairingSaving={form.saving === 'pairing'}
-            transport={editingBoard.transport}
+            link={editingBoard.link}
+            linkSaving={form.saving === 'link'}
             keepMissingBatteryConfig={form.keepMissingBatteryConfig}
             batterySummary={form.batterySummary}
             onOpenBattery={() => setBatteryModalVisible(true)}
-            onOpenPairing={handleOpenPairing}
-            onClearPairing={form.clearPairing}
-            onDetectTransport={handleDetectTransport}
+            onLink={handleLink}
+            onReprobe={handleReprobe}
+            onUnlink={form.unlink}
             onRemove={() => setRemoveConfirmVisible(true)}
           />
         </ScrollView>

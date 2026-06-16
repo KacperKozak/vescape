@@ -321,7 +321,9 @@ class TelemetryRepository private constructor(context: Context) {
     BatterySocEstimator.ensureInitialized(appContext)
     val result = mutableMapOf<String, Map<String, Any?>>()
     for (board in AppDataRepository.get(appContext).getBoards()) {
-      val bleId = board["bleId"] as? String ?: continue
+      @Suppress("UNCHECKED_CAST")
+      val link = board["link"] as? Map<String, Any?> ?: continue
+      val bleId = link["bleId"] as? String ?: continue
       @Suppress("UNCHECKED_CAST")
       val config = board["batteryConfig"] as? Map<String, Any?> ?: continue
       result[bleId] = config

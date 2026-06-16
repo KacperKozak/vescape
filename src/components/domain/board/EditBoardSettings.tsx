@@ -1,12 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import {
-  ArrowsLeftRightIcon,
-  BatteryChargingIcon,
-  BluetoothIcon,
-  LightningIcon,
-  TrashIcon,
-} from 'phosphor-react-native'
-import type { BoardTransport } from 'vesc-ble'
+import { BatteryChargingIcon, LightningIcon, LinkIcon, TrashIcon } from 'phosphor-react-native'
+import type { BoardLink } from 'vesc-ble'
 
 import { BoardSettingRow } from '@/components/domain/board/BoardSettingRow'
 import { Button } from '@/components/ui/base/Button'
@@ -20,32 +14,28 @@ import type { BatterySummary } from '@/lib/boardSetup'
 interface EditBoardSettingsProps {
   name: string
   description: string
-  pairedBleId: string
-  pairedBleName: string
-  pairingSaving?: boolean
-  transport: BoardTransport | null
+  link: BoardLink | null
+  linkSaving?: boolean
   keepMissingBatteryConfig: boolean
   batterySummary: BatterySummary
   onOpenBattery: () => void
-  onOpenPairing: () => void
-  onClearPairing: () => Promise<void> | void
-  onDetectTransport: () => void
+  onLink: () => void
+  onReprobe: () => void
+  onUnlink: () => Promise<void> | void
   onRemove: () => void
 }
 
 export function EditBoardSettings({
   name,
   description,
-  pairedBleId,
-  pairedBleName,
-  pairingSaving = false,
-  transport,
+  link,
+  linkSaving = false,
   keepMissingBatteryConfig,
   batterySummary,
   onOpenBattery,
-  onOpenPairing,
-  onClearPairing,
-  onDetectTransport,
+  onLink,
+  onReprobe,
+  onUnlink,
   onRemove,
 }: EditBoardSettingsProps) {
   return (
@@ -73,49 +63,46 @@ export function EditBoardSettings({
 
       <SettingsCard>
         <SettingsRow
-          icon={BluetoothIcon}
+          icon={LinkIcon}
           iconColor={theme.teal.color}
-          label="BLE pairing"
-          hint={pairedBleId ? pairedBleName || pairedBleId : 'No device paired'}
+          label="Board Link"
+          hint={
+            link
+              ? `${link.bleId} · ${formatBoardTransport(link.transport)}`
+              : 'Not linked — probe a device to ride'
+          }
           right={
             <View style={styles.buttonGroup}>
-              <Button
-                label={pairedBleId ? 'Change' : 'Pair'}
-                variant="secondary"
-                size="sm"
-                loading={pairingSaving}
-                onPress={onOpenPairing}
-                testID="edit-board-pair-button"
-              />
-              {pairedBleId ? (
+              {link ? (
+                <>
+                  <Button
+                    label="Re-probe"
+                    variant="secondary"
+                    size="sm"
+                    loading={linkSaving}
+                    onPress={onReprobe}
+                    testID="edit-board-reprobe-button"
+                  />
+                  <Button
+                    label="Unlink"
+                    variant="destructive"
+                    size="sm"
+                    loading={linkSaving}
+                    onPress={onUnlink}
+                    testID="edit-board-unlink-button"
+                  />
+                </>
+              ) : (
                 <Button
-                  label="Clear"
-                  variant="destructive"
+                  label="Link"
+                  variant="secondary"
                   size="sm"
-                  loading={pairingSaving}
-                  onPress={onClearPairing}
-                  testID="edit-board-clear-pairing-button"
+                  loading={linkSaving}
+                  onPress={onLink}
+                  testID="edit-board-link-button"
                 />
-              ) : null}
+              )}
             </View>
-          }
-        />
-      </SettingsCard>
-
-      <SettingsCard>
-        <SettingsRow
-          icon={ArrowsLeftRightIcon}
-          iconColor={theme.wheel.color}
-          label="Board Transport"
-          hint={formatBoardTransport(transport)}
-          right={
-            <Button
-              label={transport == null ? 'Detect' : 'Re-detect'}
-              variant="secondary"
-              size="sm"
-              onPress={onDetectTransport}
-              testID="edit-board-detect-transport-button"
-            />
           }
         />
       </SettingsCard>

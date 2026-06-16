@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 
-import {
-  formatBoardTransport,
-  pickDefaultTransport,
-  requiresTransportDetection,
-} from './boardTransport'
+import { boardNeedsLink, formatBoardTransport, pickDefaultTransport } from './boardTransport'
 
 describe('formatBoardTransport', () => {
   it('labels an undetected transport', () => {
@@ -32,10 +28,10 @@ describe('pickDefaultTransport', () => {
   })
 })
 
-describe('requiresTransportDetection', () => {
-  it('requires detection only for an undetected Board Transport', () => {
-    expect(requiresTransportDetection(null)).toBe(true)
-    expect(requiresTransportDetection('direct')).toBe(false)
-    expect(requiresTransportDetection(36)).toBe(false)
+describe('boardNeedsLink', () => {
+  it('needs a link only when the board has none', () => {
+    expect(boardNeedsLink(undefined)).toBe(true)
+    expect(boardNeedsLink({ link: null })).toBe(true)
+    expect(boardNeedsLink({ link: { bleId: 'AA', transport: 'direct' } })).toBe(false)
   })
 })

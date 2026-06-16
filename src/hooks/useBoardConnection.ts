@@ -5,7 +5,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useBoardStore } from '@/store/boardStore'
 import { useBleStore } from '@/store/bleStore'
 import { routes } from '@/navigation/routes'
-import { requiresTransportDetection } from '@/lib/boardTransport'
+import { boardNeedsLink } from '@/lib/boardTransport'
 
 function isBoardBusy(status: string): boolean {
   return (
@@ -76,8 +76,9 @@ export function useBoardConnection() {
 
   const handleRetryConnect = useCallback(() => {
     if (!activeBoard) return
-    if (requiresTransportDetection(activeBoard.transport)) {
-      router.push({ pathname: routes.editBoardTransport, params: { boardId: activeBoard.id } })
+    // An unlinked Board can't start a Board Session; route to the link/probe flow.
+    if (boardNeedsLink(activeBoard)) {
+      router.push({ pathname: routes.editBoardLink, params: { boardId: activeBoard.id } })
       return
     }
     const activeBoardId = activeBoard.id

@@ -30,6 +30,7 @@ internal class BoardTransportDetector(
   private val handler: Handler,
   private val device: BluetoothDevice,
   private val recordDiagnostic: (String, Map<String, Any?>) -> Unit,
+  private val onProgress: (Map<String, Any?>) -> Unit,
   private val onComplete: (TransportDetection.Result) -> Unit,
   private val onError: (String, String) -> Unit,
   private val nowMs: () -> Long = { System.currentTimeMillis() },
@@ -47,22 +48,52 @@ internal class BoardTransportDetector(
   private var phase = Phase.Connecting
   private var stepTimeout: Runnable? = null
   private var finished = false
+  private var startMs = 0L
+
+  private fun elapsed(): Long = nowMs() - startMs
+
+  /** Surface a live probe milestone to JS so UI can show connect/probe steps. */
+  private fun emitProgress(
+    step: String,
+    transport: BoardTransport? = null,
+    message: String? = null,
+  ) {
+    onProgress(
+      mapOf(
+        "step" to step,
+        "elapsedMs" to elapsed(),
+        "transport" to BoardTransport.toBridge(transport),
+        "message" to message,
+      ),
+    )
+  }
 
   fun start() {
+    startMs = nowMs()
     recordDiagnostic(
-      "transport_detect_started",
-      mapOf("message" to "Board Transport detection started", "device_id" to device.address),
+      "board_probe_started",
+      mapOf("message" to "Board Probe started", "ble_id" to device.address),
     )
+    emitProgress("ble_connecting")
     phase = Phase.Connecting
     gatt.connect(device)
     armStep(DETECT_CONNECT_TIMEOUT_MS) {
-      fail("DETECT_CONNECT_TIMEOUT", "Detection could not connect to the board")
+      fail("PROBE_CONNECT_TIMEOUT", "Probe could not connect to the board")
     }
   }
 
   // --- VescGattListener (marshalled onto the handler thread) ---
 
-  override fun onGattConnected() {}
+  override fun onGattConnected() {
+    handler.post {
+      if (finished) return@post
+      recordDiagnostic(
+        "board_probe_ble_connected",
+        mapOf("message" to "BLE connected", "ble_id" to device.address, "elapsed_ms" to elapsed()),
+      )
+      emitProgress("ble_connected")
+    }
+  }
 
   override fun onGattSubscribing() {}
 
@@ -70,6 +101,11 @@ internal class BoardTransportDetector(
     handler.post {
       if (finished || phase != Phase.Connecting) return@post
       cancelStep()
+      recordDiagnostic(
+        "board_probe_service_ready",
+        mapOf("message" to "VESC service ready", "elapsed_ms" to elapsed()),
+      )
+      emitProgress("service_ready")
       phase = Phase.Pinging
       handler.postDelayed({ if (!finished) gatt.sendPayload(byteArrayOf(COMM_FW_VERSION.toByte())) }, DETECT_FW_DELAY_MS)
       handler.postDelayed({ if (!finished) gatt.sendPayload(byteArrayOf(COMM_PING_CAN.toByte())) }, DETECT_PING_DELAY_MS)
@@ -81,7 +117,7 @@ internal class BoardTransportDetector(
     handler.post {
       if (finished || intentional) return@post
       if (phase == Phase.Connecting) {
-        fail("DETECT_DISCONNECTED", "Board disconnected during detection (status=$status)")
+        fail("PROBE_DISCONNECTED", "Board disconnected during probe (status=$status)")
       } else {
         // Connection dropped mid-detection: resolve with whatever was confirmed
         // so far rather than hanging.
@@ -130,6 +166,18 @@ internal class BoardTransportDetector(
     cancelStep()
     current = probeQueue.removeFirstOrNull()
     val transport = current ?: return finishResolved()
+    recordDiagnostic(
+      "board_probe_transport_probe_started",
+      mapOf(
+        "message" to "Probing transport",
+        "transport" to BoardTransport.toBridge(transport),
+        "elapsed_ms" to elapsed(),
+      ),
+    )
+    emitProgress(
+      if (transport is BoardTransport.Can) "probing_can" else "probing_direct",
+      transport,
+    )
     val payload = probePayload(transport)
     gatt.sendPayload(payload)
     // Re-send once mid-window in case the first request dropped.
@@ -146,12 +194,14 @@ internal class BoardTransportDetector(
     cancelStep()
     observations.add(TransportDetection.Probe(transport, confirmed = true))
     recordDiagnostic(
-      "transport_detect_candidate_confirmed",
+      "board_probe_transport_confirmed",
       mapOf(
         "message" to "Transport confirmed by telemetry sample",
         "transport" to BoardTransport.toBridge(transport),
+        "elapsed_ms" to elapsed(),
       ),
     )
+    emitProgress("telemetry_confirmed", transport)
     current = null
     probeNext()
   }
@@ -159,26 +209,32 @@ internal class BoardTransportDetector(
   private fun finishResolved() {
     if (finished) return
     val result = TransportDetection.resolve(observations)
-    if (result.outcome is TransportDetection.Outcome.None) {
-      recordDiagnostic(
-        "transport_detect_none",
-        mapOf("message" to "No working transport found during detection"),
-      )
-    } else {
-      recordDiagnostic(
-        "transport_detect_completed",
-        mapOf(
-          "message" to "Board Transport detection completed",
-          "candidate_count" to result.candidates.size,
-        ),
-      )
+    val outcome = when (result.outcome) {
+      is TransportDetection.Outcome.Resolved -> "resolved"
+      is TransportDetection.Outcome.NeedsPick -> "needs-pick"
+      TransportDetection.Outcome.None -> "none"
     }
+    recordDiagnostic(
+      "board_probe_completed",
+      mapOf(
+        "message" to "Board Probe completed",
+        "candidate_count" to result.candidates.size,
+        "outcome" to outcome,
+        "elapsed_ms" to elapsed(),
+      ),
+    )
+    emitProgress("completed")
     cleanup()
     completeAfterGattRelease { onComplete(result) }
   }
 
   private fun fail(code: String, message: String) {
     if (finished) return
+    recordDiagnostic(
+      "board_probe_failed",
+      mapOf("message" to message, "code" to code, "elapsed_ms" to elapsed()),
+    )
+    emitProgress("failed", message = message)
     cleanup()
     completeAfterGattRelease { onError(code, message) }
   }

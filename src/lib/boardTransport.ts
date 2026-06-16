@@ -1,4 +1,4 @@
-import type { BoardTransport } from 'vesc-ble'
+import type { Board, BoardTransport } from 'vesc-ble'
 
 /** Human-readable label for a Board Transport, including the undetected case. */
 export function formatBoardTransport(transport: BoardTransport | null): string {
@@ -12,6 +12,7 @@ export function pickDefaultTransport(candidates: BoardTransport[]): BoardTranspo
   return candidates[0] ?? null
 }
 
-export function requiresTransportDetection(transport: BoardTransport | null): boolean {
-  return transport == null
+/** A Board needs a Board Probe before it can start a Board Session when it has no link. */
+export function boardNeedsLink(board: Pick<Board, 'link'> | undefined): boolean {
+  return board?.link == null
 }

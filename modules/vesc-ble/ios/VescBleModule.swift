@@ -58,7 +58,7 @@ public class VescBleModule: Module {
   public func definition() -> ModuleDefinition {
     Name("VescBle")
 
-    Events("onDevice", "onError", "onLiveState", "onTelemetry", "onLocation", "onTelemetryRebuildProgress")
+    Events("onDevice", "onError", "onLiveState", "onTelemetry", "onLocation", "onTelemetryRebuildProgress", "onBoardProbeProgress")
 
     OnDestroy {
       self.scanTimer?.invalidate()
@@ -142,7 +142,8 @@ public class VescBleModule: Module {
       settings["selectedBoardId"] = boardId
       Self.saveSettings(settings)
       let board = self.boards.first { ($0["id"] as? String) == boardId }
-      let deviceId = board?["bleId"] as? String ?? "MOCK-ID"
+      let link = board?["link"] as? [String: Any]
+      let deviceId = link?["bleId"] as? String ?? "MOCK-ID"
       let deviceName = board?["name"] as? String ?? "Mock Board"
       self.startMockBoard(deviceId: deviceId, deviceName: deviceName)
       promise.resolve(nil)
@@ -151,6 +152,17 @@ public class VescBleModule: Module {
     AsyncFunction("stopBoard") { (promise: Promise) in
       DispatchQueue.main.async { [weak self] in self?.stopMockSession() }
       promise.resolve(nil)
+    }
+
+    // Mock Board Probe: iOS BLE is not implemented, so confirm a Direct
+    // transport so the Add Board flow stays exercisable.
+    AsyncFunction("probeBoardLink") { (_: String, promise: Promise) in
+      DispatchQueue.main.async { [weak self] in self?.stopMockSession() }
+      promise.resolve([
+        "outcome": "resolved",
+        "candidates": ["direct"],
+        "transport": "direct",
+      ])
     }
 
     // MARK: Telemetry history (empty stubs)

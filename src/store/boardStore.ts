@@ -6,6 +6,7 @@ import {
   setSelectedBoard as nativeSetSelectedBoard,
   type BatteryConfig,
   type Board,
+  type BoardLink,
   upsertBoard,
 } from 'vesc-ble'
 
@@ -27,7 +28,7 @@ interface BoardActions {
   addBoard: (data: {
     name: string
     description?: string
-    bleId?: string
+    link?: BoardLink | null
     batteryConfig?: BatteryConfig | null
   }) => Board
   updateBoard: (board: Board) => Promise<void>
@@ -62,15 +63,14 @@ export const useBoardStore = create<BoardState & BoardActions>((set, get) => ({
     }
   },
 
-  addBoard({ name, description, bleId, batteryConfig }) {
+  addBoard({ name, description, link, batteryConfig }) {
     const board: Board = {
       id: generateId(),
       name,
       description: description ?? null,
-      bleId: bleId ?? null,
       createdAt: Date.now(),
       batteryConfig: batteryConfig ?? DEFAULT_BATTERY_CONFIG,
-      transport: null,
+      link: link ?? null,
     }
     set((state) => ({
       boards: [...state.boards, board],

@@ -10,7 +10,7 @@ import {
 import { DEFAULT_BATTERY_CONFIG, deriveBatteryConfig } from '@/lib/battery'
 import type { Board } from '@/store/boardStore'
 
-type SaveKind = 'info' | 'battery' | 'pairing'
+type SaveKind = 'info' | 'battery' | 'link'
 
 export interface BoardInfoDraft {
   name: string
@@ -28,21 +28,15 @@ export interface BoardBatteryDraft {
 
 export function useEditBoardForm({
   board,
-  routeBleId,
-  routeBleName,
   updateBoard,
 }: {
   board: Board | undefined
-  routeBleId?: string
-  routeBleName?: string
   updateBoard: (board: Board) => Promise<void>
 }) {
   const boardRef = useRef<Board | undefined>(board)
   const syncedBoardIdRef = useRef<string | null>(null)
   const [name, setName] = useState(board?.name ?? '')
   const [description, setDescription] = useState(board?.description ?? '')
-  const [pairedBleId, setPairedBleId] = useState(board?.bleId ?? routeBleId ?? '')
-  const [pairedBleName, setPairedBleName] = useState(routeBleName ?? '')
   const [battery, setBattery] = useState(() => batteryDraftFromConfig(board?.batteryConfig))
   const [batteryTouched, setBatteryTouched] = useState(false)
   const [saving, setSaving] = useState<SaveKind | null>(null)
@@ -53,16 +47,14 @@ export function useEditBoardForm({
 
     setName(board.name)
     setDescription(board.description ?? '')
-    setPairedBleId(board.bleId ?? routeBleId ?? '')
-    setPairedBleName(routeBleName ?? '')
     setBattery(batteryDraftFromConfig(board.batteryConfig))
     setBatteryTouched(false)
     syncedBoardIdRef.current = board.id
-  }, [board, routeBleId, routeBleName])
+  }, [board])
 
   const saveBoard = useCallback(
     async (
-      patch: Partial<Pick<Board, 'name' | 'description' | 'batteryConfig' | 'bleId'>>,
+      patch: Partial<Pick<Board, 'name' | 'description' | 'batteryConfig' | 'link'>>,
       kind: SaveKind,
     ) => {
       const current = boardRef.current
@@ -78,14 +70,6 @@ export function useEditBoardForm({
     },
     [updateBoard],
   )
-
-  useEffect(() => {
-    if (!routeBleId || !boardRef.current) return
-    if (boardRef.current.bleId === routeBleId) return
-    setPairedBleId(routeBleId)
-    setPairedBleName(routeBleName ?? '')
-    void saveBoard({ bleId: routeBleId }, 'pairing')
-  }, [routeBleId, routeBleName, saveBoard])
 
   const previewConfig: BatteryConfig =
     battery.batteryMode === 'preset'
@@ -146,24 +130,21 @@ export function useEditBoardForm({
     [saveBoard],
   )
 
-  const clearPairing = useCallback(async () => {
-    setPairedBleId('')
-    setPairedBleName('')
-    await saveBoard({ bleId: null }, 'pairing')
+  // Unlinking clears the whole Board Link (BLE id + transport) at once.
+  const unlink = useCallback(async () => {
+    await saveBoard({ link: null }, 'link')
   }, [saveBoard])
 
   return {
     name,
     description,
-    pairedBleId,
-    pairedBleName,
     battery,
     batterySummary,
     keepMissingBatteryConfig,
     saving,
     saveInfo,
     saveBattery,
-    clearPairing,
+    unlink,
   }
 }
 

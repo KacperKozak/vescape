@@ -400,14 +400,21 @@ class AppDataRepository private constructor(private val context: Context) {
 
 fun BoardEntity.toMap(settings: List<BoardSettingEntity>): Map<String, Any?> {
   val values = settings.mapNotNull { it.decodeBoardSetting() }.toMap()
+  // A Board Link exists only when both a BLE peripheral and a proven transport
+  // are stored; a partial bleId-without-transport row reads as unlinked.
+  val transport = values["transport"]
+  val link = if (bleId != null && transport != null) {
+    mapOf("bleId" to bleId, "transport" to transport)
+  } else {
+    null
+  }
   return mapOf(
     "id" to id,
     "name" to name,
     "description" to values["description"],
-    "bleId" to bleId,
     "createdAt" to createdAt,
     "batteryConfig" to values["batteryConfig"],
-    "transport" to values["transport"],
+    "link" to link,
   )
 }
 
@@ -599,10 +606,13 @@ private fun Map<String, Any?>.toPrivacyZoneEntity(): PrivacyZoneEntity {
   )
 }
 
+@Suppress("UNCHECKED_CAST")
+private fun Map<String, Any?>.boardLink(): Map<String, Any?>? = get("link") as? Map<String, Any?>
+
 private fun Map<String, Any?>.toBoardEntity(): BoardEntity = BoardEntity(
   id = getString("id"),
   name = getString("name"),
-  bleId = get("bleId") as? String,
+  bleId = (boardLink()?.get("bleId") as? String)?.takeIf { it.isNotBlank() },
   createdAt = getLong("createdAt"),
 )
 
@@ -621,7 +631,10 @@ private fun Map<String, Any?>.toBoardSettingEntities(boardId: String): Pair<List
 
   putOrDelete("description", (get("description") as? String)?.takeIf { it.isNotBlank() })
   putOrDelete("batteryConfig", normalizeBatteryConfig(get("batteryConfig")))
-  putOrDelete("transport", BoardTransport.encode(BoardTransport.fromBridge(get("transport"))))
+  putOrDelete(
+    "transport",
+    BoardTransport.encode(BoardTransport.fromBridge(boardLink()?.get("transport"))),
+  )
 
   return settings to deletedKeys
 }
