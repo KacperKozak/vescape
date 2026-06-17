@@ -90,18 +90,18 @@ if (char.uuid == NUS_RX_UUID || char.uuid == NUS_TX_UUID) { emit() }
 
 **CCCD timeout fallback**: if `onDescriptorWrite` never fires (edge case on some bonded states), a 4-second timeout resolves the connect promise anyway. Always cancel this timeout when all descriptor writes succeed. A stale CCCD timeout can call the ready path twice and create confusing reconnect/ready logs even though subscription already completed.
 
-**Fast connect write priority**: when a saved board already has a CAN id, start telemetry polling immediately and do not also send startup discovery probes (`COMM_FW_VERSION` / `COMM_PING_CAN`) on the same connect path. Android GATT accepts only one write in flight; immediate polling plus startup probes can return GATT busy, delay the first telemetry packet, and briefly push auto-connect into `reconnecting`.
+**Fast connect write priority**: the runtime connect path is dumb — it seeds direct/CAN mode from the stored Board Transport and starts telemetry polling immediately, with no startup discovery probes (`COMM_FW_VERSION` / `COMM_PING_CAN`) on the connect path. Android GATT accepts only one write in flight; immediate polling plus startup probes can return GATT busy, delay the first telemetry packet, and briefly push auto-connect into `reconnecting`.
 
 **Short write retry**: poll/startup writes should tolerate a transient Android GATT busy result with one short retry (~100-150ms). Do not solve this by adding long connect delays; that makes first connection feel broken. Prefer fewer competing writes and a tight retry.
 
 **Tune/config reads**: Refloat custom config reads are high-volume BLE/CAN work. Treat them as a separate operation from normal telemetry startup. Do not run config reads concurrently with startup probes, and avoid adding fallback traffic while a config read is active.
 
-**CAN ping and direct-connection fallback**: boards with a VESC Express (ESP32 BLE/WiFi module) use CAN bus to reach the motor controller. On connect, native sends `COMM_PING_CAN` to discover the CAN id. If the response arrives in time, polling uses `COMM_FORWARD_CAN` to reach the motor controller. If it times out (3.5s), native falls back to direct polling. Two board architectures exist:
+**CAN ping discovery lives in Board Probe, not runtime connect**: boards with a VESC Express (ESP32 BLE/WiFi module) use CAN bus to reach the motor controller. The CAN id is resolved once at setup by `probeBoardLink` (the `BoardTransportDetector`), which sends `COMM_PING_CAN`, collects _every_ responding CAN id, and confirms a transport only after a valid decoded telemetry sample. The result is stored as the Board Transport; runtime connect just reads it. Two board architectures exist:
 
-- **CAN bridge boards** (VESC Express T, Tronic 250r with BLE UART bridge): the motor controller + Refloat app sit behind CAN. Direct polling gets no telemetry — the Express/bridge has no motor data itself. These boards depend on CAN discovery succeeding.
-- **Direct boards**: the motor controller is directly connected via BLE. CAN ping returns empty or times out, direct polling works fine.
+- **CAN bridge boards** (VESC Express T, Tronic 250r with BLE UART bridge): the motor controller + Refloat app sit behind CAN. Direct polling gets no telemetry — the Express/bridge has no motor data itself. The probe confirms a CAN transport for these.
+- **Direct boards**: the motor controller is directly connected via BLE. The probe confirms the Direct transport.
 
-On CAN bridge boards, the CAN ping response can arrive slightly after the 3.5s timeout. Native must accept late CAN ping responses during `WaitingForTelemetry` phase — rejecting them traps the board in a reconnect loop (direct polling fails, timeout, reconnect, repeat). Late CAN ping is only rejected once `boardStatus == Connected`, where it would disrupt a working session.
+A stale stored transport (board rewired, CAN id reassigned, module replaced) is not self-healed at runtime — the dumb runtime keeps retrying and the rider re-probes manually. See `docs/adr/0015-board-transport-detected-at-setup.md`.
 
 ---
 

@@ -8,6 +8,10 @@ This context defines the shared language for the VESC-based board app. The app c
 A saved rideable device that can be connected over BLE and may expose one motor controller through CAN.
 _Avoid_: Device, controller, scooter
 
+**Board Link**:
+The saved, probe-confirmed reachability details for a Board, including BLE peripheral id, Board Transport, and optional auxiliary CAN targets such as BMS.
+_Avoid_: Pairing, connection settings, device config
+
 **Board Session**:
 The lifecycle of a single live BLE-bound connection to a Board, from connect attempt through disconnect. Owns the in-flight identity used to discard stale callbacks across reconnects. Distinct from Ride Recording, which is the persisted ride capture.
 _Avoid_: Session, connection, BLE session
@@ -15,6 +19,10 @@ _Avoid_: Session, connection, BLE session
 **Board Transport**:
 The resolved path used to reach a Board's telemetry: Direct (the BLE-connected controller is the data source) or CAN-forwarded to a specific CAN id. A durable per-Board fact, not per-session. Absence means the transport has not been detected yet.
 _Avoid_: Connection path, routing, channel
+
+**Board Probe**:
+A pre-save check that a scanned BLE peripheral can produce telemetry over at least one Board Transport and produce a Board Link.
+_Avoid_: Validation, test connection, scan
 
 **Live State**:
 The current app-visible snapshot of board connection, GPS, scan, recording, and recent telemetry state.
@@ -94,7 +102,11 @@ _Avoid_: Error log, debug session, crash report
 
 ## Relationships
 
-- A **Board** has at most one **Board Transport**, resolved once by detection; a **Board Session** uses the stored **Board Transport** and is not established for a Board whose transport is undetected.
+- A **Board** has at most one **Board Link**; absence means the Board is offline-only or not yet linked.
+- A **Board Link** has exactly one **Board Transport**.
+- A **Board Link** is only saved after a successful **Board Probe**.
+- A **Board Session** uses the stored **Board Link** and is not established for a Board without one.
+- A **Board Probe** can resolve a **Board Transport** before a **Board** is created.
 - A **Board Session** owns one live BLE connection to a **Board**; only Telemetry Samples received during the active session count toward live state and Ride Recording.
 - A **Board** produces **Telemetry Samples** while connected.
 - A **Metric Sanitizer** may create **Metric Exclusions** for values derived from **Telemetry Samples** while preserving the original samples and current live board readout.
@@ -127,6 +139,9 @@ _Avoid_: Error log, debug session, crash report
 ## Flagged Ambiguities
 
 - "device" may mean the phone BLE peripheral, the saved app board, or the motor controller; resolved term: use **Board** for the saved rideable device.
+- "scan" may mean BLE discovery or telemetry validation; resolved term: use **Board Probe** for the pre-save telemetry check after selecting a BLE peripheral.
+- "paired" may mean a selected BLE peripheral or a Board that is ready to connect; resolved term: use **Board Link** for the saved, probed reachability details.
+- `bleId` without a **Board Transport** is an invalid partial **Board Link**; resolved: save the whole **Board Link** or none of it.
 - "session" may mean a BLE connection, raw debug capture, or persisted ride; resolved terms: use **Board Session** for the live BLE connection lifecycle and **Ride Recording** for the persisted ride capture. Avoid bare "session".
 - "error" may mean crash, handled failure, UI message, or diagnostic clue; resolved term: use **Diagnostic Event** for app-observed abnormal conditions worth reviewing.
 - "telemetry marker" names the storage table, but map-visible history annotations are **Ride History Markers**.

@@ -33,14 +33,15 @@ The reassembler (`src/vesc/reassembler.ts`) handles packets split across multipl
 
 **Fix**:
 
-1. Send `COMM_PING_CAN` immediately after connect to discover the motor controller's CAN ID
-2. Wrap all motor commands: `[0x22, canId, <cmd>]`
+1. Resolve the motor controller's CAN ID **once at setup** via Board Probe (`COMM_PING_CAN`), store it as the Board Transport
+2. Wrap all motor commands with the stored transport: `[0x22, canId, <cmd>]`
 
 ```kotlin
-// VescForegroundService does this natively after GATT setup.
+// Setup only: BoardTransportDetector pings to discover responders.
 sendPayload(byteArrayOf(COMM_PING_CAN.toByte()))
 
-// On [0x3E, id0, id1, ...], store id0 and start native polling.
+// Runtime: the stored Board Transport frames each poll — no discovery.
+// BoardTransport.Can(canId).frame(cmd) prepends [FORWARD_CAN, canId].
 sendPayload(byteArrayOf(
   COMM_FORWARD_CAN.toByte(),
   canId.toByte(),
@@ -53,15 +54,20 @@ sendPayload(byteArrayOf(
 
 ## Connect sequence
 
+CAN id discovery is a setup-time **Board Probe** (`BoardTransportDetector`), not part of
+runtime connect. At runtime the stored Board Transport is read and polling starts directly.
+
 ```
+Board Probe (setup, once):
+  connect → COMM_FW_VERSION → COMM_PING_CAN → probe each responder + Direct
+  → confirm a transport on first valid telemetry sample → store Board Transport
+
+Runtime connect (every session, dumb):
 1. nativeConnect(deviceId)                  — GATT connect, MTU 517, CCCD writes
-2. wait 500ms                               — peripheral activates CCCD
-3. send COMM_FW_VERSION (0x00)              — confirms notification path is alive
-4. wait 300ms
-5. send COMM_PING_CAN (0x3E)               — discover motor controller CAN ID
-   → on response: store canId, start polling
-6. poll every 500ms:
-   send [FORWARD_CAN, canId, CUSTOM_APP_DATA, 101, GET_ALLDATA, 2]
+2. seed direct/CAN mode from stored Board Transport
+3. poll every 500ms (no discovery probes):
+   direct: send [CUSTOM_APP_DATA, 101, GET_ALLDATA, 2]
+   CAN:    send [FORWARD_CAN, canId, CUSTOM_APP_DATA, 101, GET_ALLDATA, 2]
 ```
 
 Note: `COMM_ALIVE` (0x1E) was tried as the first ping — it generates no response, so it cannot confirm the notification path. `COMM_FW_VERSION` must be used instead.

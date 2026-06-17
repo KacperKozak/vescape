@@ -54,14 +54,60 @@ export interface FiredAlert {
   firedAt: number
 }
 
+/**
+ * How a Board is reached. `null` = undetected (no persisted "unknown" state),
+ * `'direct'` = direct connection, a number = CAN-forwarded to that CAN id.
+ */
+export type BoardTransport = 'direct' | number
+
+export type BoardProbeOutcome = 'resolved' | 'needs-pick' | 'none'
+
+/** Result of a native Board Probe of a BLE peripheral. */
+export interface BoardProbeResult {
+  outcome: BoardProbeOutcome
+  /** Every transport that produced a valid Telemetry Sample, in probe order. */
+  candidates: BoardTransport[]
+  /** Set only for `resolved` (single confirmed transport); otherwise null. */
+  transport: BoardTransport | null
+}
+
+/** Probe progress milestones, surfaced live so UI can show connect/probe steps. */
+export type BoardProbeStep =
+  | 'ble_connecting'
+  | 'ble_connected'
+  | 'service_ready'
+  | 'probing_direct'
+  | 'probing_can'
+  | 'telemetry_confirmed'
+  | 'completed'
+  | 'failed'
+
+export interface BoardProbeProgressEvent {
+  step: BoardProbeStep
+  /** Milliseconds elapsed since the probe started. */
+  elapsedMs: number
+  /** The transport this step concerns, when applicable. */
+  transport?: BoardTransport | null
+  message?: string | null
+}
+
+/**
+ * Durable, probe-confirmed reachability for a Board. Saved whole or not at all:
+ * a Board Link always carries a proven BLE peripheral id and Board Transport.
+ */
+export interface BoardLink {
+  bleId: string
+  transport: BoardTransport
+}
+
 export interface Board {
   id: string
   name: string
   description: string | null
-  bleId: string | null
-  isStarred: boolean
   createdAt: number
   batteryConfig: BatteryConfig | null
+  /** Probe-confirmed reachability. `null` means offline-only/unlinked. */
+  link: BoardLink | null
 }
 
 export type BatteryConfig = BatteryPresetConfig | BatteryManualConfig
@@ -477,6 +523,7 @@ type VescBleEvents = {
   onTelemetry: (event: TelemetryEvent) => void
   onLocation: (event: LocationEvent) => void
   onTelemetryRebuildProgress: (event: TelemetryRebuildProgressEvent) => void
+  onBoardProbeProgress: (event: BoardProbeProgressEvent) => void
 }
 
 interface NativeEventEmitter<TEvents extends Record<string, (...args: never[]) => void>> {
@@ -504,6 +551,7 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
   stopGeigerSimulation(): void
   selectBoard(boardId: string): Promise<void>
   stopBoard(): Promise<void>
+  probeBoardLink(bleId: string): Promise<BoardProbeResult>
   setDebugRecordingEnabled(enabled: boolean): void
   reportUiError(message: string, source?: string | null, stack?: string | null): void
   reportDiagnosticTest(): DiagnosticStatus
@@ -683,6 +731,20 @@ export async function stopBoard(): Promise<void> {
   }
 
   return native.stopBoard()
+}
+
+/**
+ * Run a native Board Probe of a BLE peripheral: connect, probe direct and CAN,
+ * and return every transport confirmed by a valid Telemetry Sample. Runs before
+ * a Board necessarily exists and tears down any live Board Session first.
+ * Emits `onBoardProbeProgress` events while it runs.
+ */
+export async function probeBoardLink(bleId: string): Promise<BoardProbeResult> {
+  if (E2E_ENABLED) {
+    return e2eFake.probeBoardLink(bleId)
+  }
+
+  return native.probeBoardLink(bleId)
 }
 
 /** Enable raw debug session recording for future native board sessions. */
@@ -992,4 +1054,14 @@ export function addTelemetryRebuildProgressListener(
   cb: (event: TelemetryRebuildProgressEvent) => void,
 ): EventSubscription {
   return emitter.addListener('onTelemetryRebuildProgress', cb)
+}
+
+export function addBoardProbeProgressListener(
+  cb: (event: BoardProbeProgressEvent) => void,
+): EventSubscription {
+  if (E2E_ENABLED) {
+    return e2eFake.addBoardProbeProgressListener(cb)
+  }
+
+  return emitter.addListener('onBoardProbeProgress', cb)
 }

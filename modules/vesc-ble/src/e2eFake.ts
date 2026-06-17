@@ -1,6 +1,14 @@
 import type { EventSubscription } from 'expo-modules-core'
 
-import type { AppSettings, Board, DeviceFoundEvent, LiveStateEvent, TelemetryEvent } from './index'
+import type {
+  AppSettings,
+  Board,
+  BoardProbeProgressEvent,
+  BoardProbeResult,
+  DeviceFoundEvent,
+  LiveStateEvent,
+  TelemetryEvent,
+} from './index'
 
 const E2E_BOARD_SCAN_RESULT: DeviceFoundEvent = {
   id: 'E2:E2:E2:E2:E2:01',
@@ -22,6 +30,7 @@ let telemetryTimer: ReturnType<typeof setInterval> | null = null
 const deviceListeners = new Set<(event: DeviceFoundEvent) => void>()
 const liveStateListeners = new Set<(event: LiveStateEvent) => void>()
 const telemetryListeners = new Set<(event: TelemetryEvent) => void>()
+const boardProbeProgressListeners = new Set<(event: BoardProbeProgressEvent) => void>()
 
 const e2eBoards: Board[] = []
 
@@ -200,6 +209,19 @@ export const e2eFake = {
     stopBoardSession()
   },
 
+  probeBoardLink(_bleId: string): BoardProbeResult {
+    stopBoardSession()
+    for (const listener of boardProbeProgressListeners) {
+      listener({ step: 'completed', elapsedMs: 0, transport: 'direct' })
+    }
+    return { outcome: 'resolved', candidates: ['direct'], transport: 'direct' }
+  },
+
+  addBoardProbeProgressListener(cb: (event: BoardProbeProgressEvent) => void): EventSubscription {
+    boardProbeProgressListeners.add(cb)
+    return { remove: () => boardProbeProgressListeners.delete(cb) }
+  },
+
   getLiveState(baseState: LiveStateEvent): LiveStateEvent {
     if (selectedBoardId || connectedBoardId || connectingBoardId) return getLiveState()
     return {
@@ -261,8 +283,6 @@ export const e2eFake = {
         id: boardId,
         name: 'E2E Board',
         description: 'Seeded by Maestro',
-        bleId: 'E2:E2:E2:E2:E2:01',
-        isStarred: true,
         createdAt: Date.now(),
         batteryConfig: {
           mode: 'preset',
@@ -270,6 +290,7 @@ export const e2eFake = {
           seriesCount: 21,
           parallelCount: 2,
         },
+        link: { bleId: 'E2:E2:E2:E2:E2:01', transport: 'direct' },
       }
       e2eBoards.length = 0
       e2eBoards.push(board)

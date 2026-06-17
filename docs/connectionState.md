@@ -100,8 +100,9 @@ The fastest stable path is not to wait longer; it is to avoid competing native
 writes during startup.
 
 - `connected` means first valid telemetry arrived, not just GATT ready.
-- When a saved board already has a CAN id, native should start telemetry polling
-  directly and skip extra startup discovery probes.
+- The runtime connect path is dumb: it seeds direct/CAN mode from the stored Board
+  Transport and starts telemetry polling directly, with no startup discovery probes.
+  CAN id resolution happens once at setup via Board Probe, not on connect.
 - GATT descriptor timeout fallbacks must be canceled after successful CCCD writes,
   otherwise a stale timeout can double-resolve the connection.
 - Tune/config reads should not compete with initial telemetry startup. If a config

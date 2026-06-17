@@ -1,5 +1,6 @@
 package expo.modules.vescble.diagnostics
 
+import expo.modules.vescble.BoardTransport
 import expo.modules.vescble.SessionConfig
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -14,7 +15,7 @@ class DiagnosticsRecorderTest {
         appBoardId = "board-1",
         deviceId = "AA:BB",
         deviceName = "Test Board",
-        canId = 10,
+        transport = BoardTransport.Can(10),
         pollIntervalMs = 100L,
         recordingEnabled = false,
         telemetryRecordingEnabled = false,

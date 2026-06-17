@@ -51,7 +51,7 @@ function getStatusPill(
   onStopScan: () => void,
   onRetryConnect: () => void,
 ): StatusPill | null {
-  if (!board?.bleId) return null
+  if (!board?.link) return null
   if (scanStatus === 'scanning' && status === 'idle')
     return { kind: 'spinner', text: 'Searching…', color: theme.wheel.color, onPress: onStopScan }
   if (status === 'discovering')

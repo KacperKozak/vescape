@@ -35,12 +35,13 @@ Source of truth: `modules/vesc-ble/src/index.ts` (types), `VescBleModule.kt` (An
 
 ## Board session
 
-| fn                                  | sync  | returns                                                                            |
-| ----------------------------------- | ----- | ---------------------------------------------------------------------------------- |
-| `selectBoard(boardId)`              | async | void. Native reads bleId from DB, owns connect. Emits `onLiveState`, `onTelemetry` |
-| `stopBoard()`                       | async | void. GPS may continue independently                                               |
-| `getLiveState()`                    | sync  | `LiveStateEvent`. UI should mirror, not invent state                               |
-| `setSelectedBoard(boardId \| null)` | sync  | void. Persists auto-connect target. Native uses while JS frozen                    |
+| fn                                  | sync  | returns                                                                                                          |
+| ----------------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------- |
+| `selectBoard(boardId)`              | async | void. Native reads the Board Link from DB, owns connect. Emits `onLiveState`, `onTelemetry`                      |
+| `stopBoard()`                       | async | void. GPS may continue independently                                                                             |
+| `probeBoardLink(bleId)`             | async | `BoardProbeResult`. Probes a peripheral, returns transports confirmed by telemetry. Emits `onBoardProbeProgress` |
+| `getLiveState()`                    | sync  | `LiveStateEvent`. UI should mirror, not invent state                                                             |
+| `setSelectedBoard(boardId \| null)` | sync  | void. Persists auto-connect target. Native uses while JS frozen                                                  |
 
 ### LiveStateEvent shape
 
@@ -161,17 +162,23 @@ Rides computed from buckets + markers:
 
 ## Boards
 
-| fn                   | sync  | returns                                             |
-| -------------------- | ----- | --------------------------------------------------- |
-| `getBoards()`        | async | `Board[]` sorted starred-first, then created_at ASC |
-| `upsertBoard(board)` | async | void                                                |
-| `deleteBoard(id)`    | async | void                                                |
+| fn                   | sync  | returns                            |
+| -------------------- | ----- | ---------------------------------- |
+| `getBoards()`        | async | `Board[]` sorted by created_at ASC |
+| `upsertBoard(board)` | async | void                               |
+| `deleteBoard(id)`    | async | void                               |
 
 ### Board shape
 
 ```ts
-{ id, name, description?, bleId?, isStarred, createdAt, minVoltage?, maxVoltage? }
+{ id, name, description?, createdAt, batteryConfig?, link: { bleId, transport } | null }
 ```
+
+A **Board Link** is saved whole or not at all: it always carries a proven BLE peripheral id
+plus a Board Transport (`'direct'` | CAN id). `link: null` means the board is unlinked
+(offline-only). Mutable per-board fields (`description`, `batteryConfig`, `transport`) live in
+the `board_settings` key-value table; the `boards` row holds only stable identity (`id`, `name`,
+`ble_id`, `created_at`).
 
 ## Alert rules
 

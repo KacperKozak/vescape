@@ -91,6 +91,7 @@ const SCAN_FLUSH_MS = 500
 
 const MAC_ADDRESS_RE = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i
 const LIVE_HISTORY_PUBLISH_MS = 1000
+const LIVE_HISTORY_IMMEDIATE_SAMPLE_COUNT = 3
 
 function scannedDeviceName(id: string, name?: string): string {
   const candidate = name?.trim()
@@ -224,15 +225,19 @@ function scheduleLiveHistoryPublish(set: BleSet): void {
   if (liveHistoryPublishTimer) return
   liveHistoryPublishTimer = setTimeout(() => {
     liveHistoryPublishTimer = null
-    const live = liveTelemetryRuntime.consumePendingSnapshot()
-    if (!live) return
-    set({
-      liveLocationHistory: live.liveLocationHistory,
-      latestApproximateLocation: live.latestApproximateLocation,
-      liveStatus: live.liveStatus,
-      metricVersion: liveTelemetryRuntime.getVersion(),
-    })
+    publishPendingLiveHistory(set)
   }, LIVE_HISTORY_PUBLISH_MS)
+}
+
+function publishPendingLiveHistory(set: BleSet): void {
+  const live = liveTelemetryRuntime.consumePendingSnapshot()
+  if (!live) return
+  set({
+    liveLocationHistory: live.liveLocationHistory,
+    latestApproximateLocation: live.latestApproximateLocation,
+    liveStatus: live.liveStatus,
+    metricVersion: liveTelemetryRuntime.getVersion(),
+  })
 }
 
 function installLiveSubscriptions(set: BleSet): void {
@@ -241,11 +246,18 @@ function installLiveSubscriptions(set: BleSet): void {
   }
   if (!telemetrySub) {
     telemetrySub = addTelemetryListener((telemetry) => {
+      const shouldPublishImmediately =
+        liveTelemetryRuntime.getSnapshot().liveStatus.boardSampleCount <
+        LIVE_HISTORY_IMMEDIATE_SAMPLE_COUNT
       const accepted = liveTelemetryRuntime.ingestTelemetry(telemetry)
       if (!accepted) return
       set({
         lastTelemetryAt: telemetry.lastPacketAt,
       })
+      if (shouldPublishImmediately) {
+        publishPendingLiveHistory(set)
+        return
+      }
       scheduleLiveHistoryPublish(set)
     })
   }

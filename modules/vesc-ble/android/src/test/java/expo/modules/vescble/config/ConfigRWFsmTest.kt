@@ -4,7 +4,7 @@ import expo.modules.vescble.COMM_FORWARD_CAN
 import expo.modules.vescble.COMM_GET_CUSTOM_CONFIG
 import expo.modules.vescble.COMM_GET_CUSTOM_CONFIG_XML
 import expo.modules.vescble.COMM_SET_CUSTOM_CONFIG
-import expo.modules.vescble.CanForwardTransport
+import expo.modules.vescble.BoardTransport
 import expo.modules.vescble.RefloatConfigErrorCode
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -329,7 +329,7 @@ class ConfigRWFsmTest {
         ConfigRWEvent.StartRead(
             opId = opId,
             canId = canId,
-            transport = CanForwardTransport(canId ?: 0),
+            transport = BoardTransport.Can(canId ?: 0),
             wasPolling = wasPolling,
             appBoardId = "board-1",
             fwVersion = "fw-test",
@@ -339,7 +339,7 @@ class ConfigRWFsmTest {
         ConfigRWEvent.StartWrite(
             opId = opId,
             canId = canId,
-            transport = CanForwardTransport(canId ?: 0),
+            transport = BoardTransport.Can(canId ?: 0),
             wasPolling = wasPolling,
             profileFields = profileFields,
             appBoardId = "board-1",

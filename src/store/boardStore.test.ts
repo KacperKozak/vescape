@@ -67,6 +67,47 @@ test('new boards default to Molicel P50B 20S2P preset battery config', async () 
   )
 })
 
+test('new boards start unlinked (no Board Link)', async () => {
+  const { useBoardStore } = await import('./boardStore')
+
+  const board = useBoardStore.getState().addBoard({ name: 'ADV' })
+
+  expect(board.link).toBeNull()
+  expect(upsertBoard).toHaveBeenCalledWith(expect.objectContaining({ link: null }))
+})
+
+test('new boards can be created with a draft Board Link', async () => {
+  const { useBoardStore } = await import('./boardStore')
+
+  const board = useBoardStore
+    .getState()
+    .addBoard({ name: 'ADV', link: { bleId: 'AA:BB', transport: 36 } })
+
+  expect(board.link).toEqual({ bleId: 'AA:BB', transport: 36 })
+  expect(upsertBoard).toHaveBeenCalledWith(
+    expect.objectContaining({ link: { bleId: 'AA:BB', transport: 36 } }),
+  )
+})
+
+test('stored Board Link survives a store reload from native boards', async () => {
+  const { useBoardStore } = await import('./boardStore')
+  const board: Board = {
+    id: 'board-1',
+    name: 'ADV',
+    description: null,
+    createdAt: 1,
+    batteryConfig: null,
+    link: null,
+  }
+
+  useBoardStore.setState({ boards: [board], activeBoardId: board.id, hasLoaded: true })
+  await useBoardStore.getState().updateBoard({ ...board, link: { bleId: 'AA:BB', transport: 12 } })
+  useBoardStore.setState({ boards: [], activeBoardId: null, hasLoaded: false })
+  await useBoardStore.getState().load()
+
+  expect(useBoardStore.getState().boards[0]?.link).toEqual({ bleId: 'AA:BB', transport: 12 })
+})
+
 test('new boards can use manual battery config', async () => {
   const { useBoardStore } = await import('./boardStore')
   const batteryConfig = { mode: 'manual' as const, minVoltage: 60, maxVoltage: 84 }
@@ -83,8 +124,6 @@ test('updated battery config survives a store reload from native boards', async 
     id: 'board-1',
     name: 'ADV',
     description: null,
-    bleId: null,
-    isStarred: true,
     createdAt: 1,
     batteryConfig: {
       mode: 'preset',
@@ -92,6 +131,7 @@ test('updated battery config survives a store reload from native boards', async 
       seriesCount: 20,
       parallelCount: 2,
     },
+    link: null,
   }
   const batteryConfig = { mode: 'manual' as const, minVoltage: 58, maxVoltage: 82 }
 

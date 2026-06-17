@@ -48,7 +48,9 @@ internal class TelemetryPipeline(
         lastTelemetryAt = 0L
         this.session = session
         this.sessionConfig = config
-        this.canId = config.canId
+        // The active CAN id is seeded by the service from the stored Board
+        // Transport via updateCanId; a fresh session starts untagged.
+        this.canId = null
     }
 
     fun endSession() {
