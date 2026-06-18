@@ -11,7 +11,7 @@ export interface LiveMetricPoint {
   value: number
 }
 
-type TelemetrySelector = (sample: TelemetryEvent) => number | null | undefined
+export type TelemetrySelector = (sample: TelemetryEvent) => number | null | undefined
 
 function projectMetric(telemetry: TelemetryEvent[], pick: TelemetrySelector): LiveMetricPoint[] {
   const points: LiveMetricPoint[] = []

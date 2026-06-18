@@ -1,3 +1,4 @@
+import { memo } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { router } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -9,7 +10,7 @@ import { BatteryIndicator } from '@/components/domain/cards/BatteryIndicator'
 import { interaction, theme } from '@/constants/theme'
 import { telemetry } from '@/constants/telemetry'
 import { routes } from '@/navigation/routes'
-import { liveSelectors, useLiveMetric } from '@/hooks/useLiveMetric'
+import { liveSelectors, useLiveMetric, type TelemetrySelector } from '@/hooks/useLiveMetric'
 import { useBleStore } from '@/store/bleStore'
 import { useLiveWindowMs } from '@/store/settingsStore'
 import { liveTelemetryRuntime } from '@/lib/telemetry/liveTelemetryRuntime'
@@ -18,18 +19,41 @@ const FOOTPAD_ACTIVE_V = 0.8
 const PITCH_CLAMP_DEG = 18
 export const STRIP_CONTENT_HEIGHT = 160
 
+interface MetricSparklineProps {
+  selector: TelemetrySelector
+  color: string
+  fmtMax: (value: number) => string
+}
+
+// Isolated so the cold-path store publish (~1-3Hz) re-renders only the sparkline, not the whole
+// strip. The strip itself no longer subscribes to metricVersion, so its TickText numbers, IMU
+// tilt and footpad dots keep updating purely off SharedValues with no React render.
+const MetricSparkline = memo(function MetricSparkline({
+  selector,
+  color,
+  fmtMax,
+}: MetricSparklineProps) {
+  const series = useLiveMetric(selector)
+  const windowMs = useLiveWindowMs()
+  return (
+    <Sparkline
+      points={series}
+      color={color}
+      height={18}
+      fmtMax={fmtMax}
+      showMaxBadge
+      minSpan={20}
+      windowMs={windowMs}
+    />
+  )
+})
+
 interface BottomTelemetryStripProps {
   revealProgress?: SharedValue<number>
 }
 
 export function BottomTelemetryStrip({ revealProgress }: BottomTelemetryStripProps) {
   const insets = useSafeAreaInsets()
-  const windowMs = useLiveWindowMs()
-  // Sparklines need the windowed history series (cold path, ~3Hz).
-  const motorTempSeries = useLiveMetric(liveSelectors.motorTemp)
-  const controllerTempSeries = useLiveMetric(liveSelectors.controllerTemp)
-  const motorCurrentSeries = useLiveMetric(liveSelectors.motorCurrent)
-  const batteryCurrentSeries = useLiveMetric(liveSelectors.batteryCurrent)
   const bleStatus = useBleStore((s) => s.status)
   const imuConnected = bleStatus === 'connected'
   // Live numbers, IMU tilt and footpad dots read SharedValues (hot path, ~31Hz, no re-render).
@@ -83,14 +107,10 @@ export function BottomTelemetryStrip({ revealProgress }: BottomTelemetryStripPro
               unit={telemetry.motorTemp.unit}
               style={styles.value}
             />
-            <Sparkline
-              points={motorTempSeries}
+            <MetricSparkline
+              selector={liveSelectors.motorTemp}
               color={telemetry.motorTemp.color}
-              height={18}
               fmtMax={telemetry.motorTemp.formatWithUnit}
-              showMaxBadge
-              minSpan={20}
-              windowMs={windowMs}
             />
           </Pressable>
           <Pressable
@@ -106,14 +126,10 @@ export function BottomTelemetryStrip({ revealProgress }: BottomTelemetryStripPro
               unit={telemetry.controllerTemp.unit}
               style={styles.value}
             />
-            <Sparkline
-              points={controllerTempSeries}
+            <MetricSparkline
+              selector={liveSelectors.controllerTemp}
               color={telemetry.controllerTemp.color}
-              height={18}
               fmtMax={telemetry.controllerTemp.formatWithUnit}
-              showMaxBadge
-              minSpan={20}
-              windowMs={windowMs}
             />
           </Pressable>
           <Pressable
@@ -129,14 +145,10 @@ export function BottomTelemetryStrip({ revealProgress }: BottomTelemetryStripPro
               unit={telemetry.motorCurrent.unit}
               style={styles.value}
             />
-            <Sparkline
-              points={motorCurrentSeries}
+            <MetricSparkline
+              selector={liveSelectors.motorCurrent}
               color={telemetry.motorCurrent.color}
-              height={18}
               fmtMax={telemetry.motorCurrent.formatWithUnit}
-              showMaxBadge
-              minSpan={20}
-              windowMs={windowMs}
             />
           </Pressable>
           <Pressable
@@ -152,14 +164,10 @@ export function BottomTelemetryStrip({ revealProgress }: BottomTelemetryStripPro
               unit={telemetry.battCurrent.unit}
               style={styles.value}
             />
-            <Sparkline
-              points={batteryCurrentSeries}
+            <MetricSparkline
+              selector={liveSelectors.batteryCurrent}
               color={telemetry.battCurrent.color}
-              height={18}
               fmtMax={telemetry.battCurrent.formatWithUnit}
-              showMaxBadge
-              minSpan={20}
-              windowMs={windowMs}
             />
           </Pressable>
         </View>
