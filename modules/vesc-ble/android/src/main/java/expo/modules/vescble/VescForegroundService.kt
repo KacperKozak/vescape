@@ -1318,6 +1318,7 @@ class VescForegroundService : Service() {
         )
         boardError = null
         boardConfig?.let { recordingCoordinator.markBoardReady(it) }
+        alertFeedback.playConnect()
         emitState()
     }
 
@@ -1426,6 +1427,11 @@ class VescForegroundService : Service() {
     private fun scheduleAutoReconnect(session: SessionConfig, gattStatus: Int?, reason: String) {
         if (!session.autoReconnect || isStoppingService) return
         val reconnectSession = boardSession ?: return
+        // Lost a live link (telemetry was flowing) — signal the rider we're now without telemetry.
+        // Fires once at loss: subsequent reconnect attempts enter here as Reconnecting/Rescanning.
+        if (boardStatus == BoardPhase.Connected || boardStatus == BoardPhase.Stale) {
+            alertFeedback.playDisconnect()
+        }
         reconnectScheduler.schedule(
             session = reconnectSession,
             targetDeviceId = session.deviceId,
