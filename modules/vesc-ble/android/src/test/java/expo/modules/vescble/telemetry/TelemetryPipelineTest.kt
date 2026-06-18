@@ -16,7 +16,7 @@ class TelemetryPipelineTest {
         appBoardId = "board-1",
         deviceId = "AA:BB",
         deviceName = "Test Board",
-        canId = null,
+        transport = null,
         pollIntervalMs = 100L,
         recordingEnabled = false,
         telemetryRecordingEnabled = false,

@@ -16,14 +16,15 @@ The reassembler (`src/vesc/reassembler.ts`) handles packets split across multipl
 
 ## Command IDs (subset)
 
-| Name                   | ID   | Notes                                                                         |
-| ---------------------- | ---- | ----------------------------------------------------------------------------- |
-| `COMM_FW_VERSION`      | 0x00 | Handled by ESP32 locally. Use as connectivity ping — it generates a response. |
-| `COMM_GET_VALUES`      | 0x04 | Standard motor telemetry. Must be CAN-forwarded on ADV2.                      |
-| `COMM_ALIVE`           | 0x1E | Keepalive. **No response** — useless as a connectivity test.                  |
-| `COMM_FORWARD_CAN`     | 0x22 | Prefix wrapper: `[0x22, canId, <actual command>]`                             |
-| `COMM_CUSTOM_APP_DATA` | 0x24 | Refloat package commands. Must be CAN-forwarded.                              |
-| `COMM_PING_CAN`        | 0x3E | ESP32 discovers CAN bus devices. Response: `[0x3E, id0, id1, ...]`            |
+| Name                   | ID   | Notes                                                                                                                       |
+| ---------------------- | ---- | --------------------------------------------------------------------------------------------------------------------------- |
+| `COMM_FW_VERSION`      | 0x00 | Handled by ESP32 locally. Use as connectivity ping — it generates a response.                                               |
+| `COMM_GET_VALUES`      | 0x04 | Standard motor telemetry. Must be CAN-forwarded on ADV2.                                                                    |
+| `COMM_ALIVE`           | 0x1E | Keepalive. **No response** — useless as a connectivity test.                                                                |
+| `COMM_FORWARD_CAN`     | 0x22 | Prefix wrapper: `[0x22, canId, <actual command>]`                                                                           |
+| `COMM_CUSTOM_APP_DATA` | 0x24 | Refloat package commands. Must be CAN-forwarded.                                                                            |
+| `COMM_PING_CAN`        | 0x3E | ESP32 discovers CAN bus devices. Response: `[0x3E, id0, id1, ...]`                                                          |
+| `COMM_BMS_GET_VALUES`  | 0x60 | Smart-BMS values (cell-group voltages, balancing, SoC). CAN-forwarded like other cmds. See [below](#bms-cell-group-values). |
 
 ## Problem: GET_VALUES never responded
 
@@ -33,14 +34,15 @@ The reassembler (`src/vesc/reassembler.ts`) handles packets split across multipl
 
 **Fix**:
 
-1. Send `COMM_PING_CAN` immediately after connect to discover the motor controller's CAN ID
-2. Wrap all motor commands: `[0x22, canId, <cmd>]`
+1. Resolve the motor controller's CAN ID **once at setup** via Board Probe (`COMM_PING_CAN`), store it as the Board Transport
+2. Wrap all motor commands with the stored transport: `[0x22, canId, <cmd>]`
 
 ```kotlin
-// VescForegroundService does this natively after GATT setup.
+// Setup only: BoardTransportDetector pings to discover responders.
 sendPayload(byteArrayOf(COMM_PING_CAN.toByte()))
 
-// On [0x3E, id0, id1, ...], store id0 and start native polling.
+// Runtime: the stored Board Transport frames each poll — no discovery.
+// BoardTransport.Can(canId).frame(cmd) prepends [FORWARD_CAN, canId].
 sendPayload(byteArrayOf(
   COMM_FORWARD_CAN.toByte(),
   canId.toByte(),
@@ -53,15 +55,84 @@ sendPayload(byteArrayOf(
 
 ## Connect sequence
 
+CAN id discovery is a setup-time **Board Probe** (`BoardTransportDetector`), not part of
+runtime connect. At runtime the stored Board Transport is read and polling starts directly.
+
 ```
+Board Probe (setup, once):
+  connect → COMM_FW_VERSION → COMM_PING_CAN → probe each responder + Direct
+  → confirm a transport on first valid telemetry sample → store Board Transport
+
+Runtime connect (every session, dumb):
 1. nativeConnect(deviceId)                  — GATT connect, MTU 517, CCCD writes
-2. wait 500ms                               — peripheral activates CCCD
-3. send COMM_FW_VERSION (0x00)              — confirms notification path is alive
-4. wait 300ms
-5. send COMM_PING_CAN (0x3E)               — discover motor controller CAN ID
-   → on response: store canId, start polling
-6. poll every 500ms:
-   send [FORWARD_CAN, canId, CUSTOM_APP_DATA, 101, GET_ALLDATA, 2]
+2. seed direct/CAN mode from stored Board Transport
+3. poll every 500ms (no discovery probes):
+   direct: send [CUSTOM_APP_DATA, 101, GET_ALLDATA, 2]
+   CAN:    send [FORWARD_CAN, canId, CUSTOM_APP_DATA, 101, GET_ALLDATA, 2]
 ```
 
 Note: `COMM_ALIVE` (0x1E) was tried as the first ping — it generates no response, so it cannot confirm the notification path. `COMM_FW_VERSION` must be used instead.
+
+## BMS cell-group values
+
+A smart BMS (e.g. Smart BMS / ANT / JBD over CAN) reports per-cell-group voltages. We read
+them with `COMM_BMS_GET_VALUES` (0x60) — the standard VESC BMS command, **not** anything from
+the Refloat `GET_ALLDATA` stream (that only carries pack-level voltage).
+
+### Capability detection (at probe, not runtime)
+
+Smart-BMS presence is discovered once, during the **Board Probe**, not re-sniffed every
+session. While probing each transport for telemetry, `BoardTransportDetector` also fires a
+`COMM_BMS_GET_VALUES` request; a valid reply within the probe window marks that candidate
+`hasBms = true`. The flag rides on the chosen `BoardCandidate` into the saved `BoardLink`
+(`link.hasBms`), so reachability and capability are proven together and stored together.
+
+The probe is authoritative: BMS is polled **only** when it proved one present
+(`hasBms === true`). Unknown (legacy `null`) or proven-absent (`false`) → never polled.
+A legacy link therefore needs a re-probe before cell data appears.
+
+### Polling
+
+`PollingLoop` interleaves a BMS poll into the normal telemetry loop at **1/8** of the
+telemetry rate (`BMS_POLL_STRIDE`). Cell voltages change slowly and the reply is large, so a
+slower cadence avoids crowding the BLE link. The poll reuses the session transport, so it is
+CAN-forwarded (`[0x22, canId, 0x60]`) or sent direct exactly like the Refloat poll. The reply
+arrives unwrapped at the top level as `[0x60, ...]` (the ESP32 strips the CAN-forward wrapper
+on responses), with a nested `[0x22, ?, 0x60, ...]` form also handled defensively.
+
+The loop sends the BMS poll **only** when `link.hasBms === true`; otherwise it is skipped
+entirely — no wasted frames, and `BmsCellVoltages` shows a definitive "No smart-BMS detected"
+instead of an open-ended "waiting".
+
+### Payload layout (`parseBmsValues` in `VescProtocol.kt`)
+
+VESC packs **scaled big-endian integers**, not IEEE floats: a `float32` field is `int32 / scale`
+and a `float16` field is `int16 / scale`. Layout mirrors `commands.c`:
+
+```
+[0]      id = 0x60
+float32  v_tot      (÷1e6)   pack voltage
+float32  v_charge   (÷1e6)
+float32  i_in       (÷1e6)   pack current
+float32  i_in_ic    (÷1e6)
+float32  ah_cnt     (÷1e3)
+float32  wh_cnt     (÷1e3)
+u8       cell_num
+float16  v_cell[cell_num] (÷1e3)   ← the per-group voltages we surface
+u8       bal_state[cell_num]       ← balancing flag per group
+u8       temp_adc_num
+float16  temps_adc[temp_adc_num] (÷1e2)
+float16  temp_ic, temp_hum, hum, temp_max_cell (÷1e2)
+u8       soc (×255 → 0–1), soh, can_id, ...
+```
+
+Only the stable prefix (voltages + balancing) is required. `soc` is best-effort: parsed by
+walking past the variable-length temp block with bounds checks, so firmware variants with
+different trailing fields still yield cell data. Sanity guards reject `cell_num` outside 1–60
+and payloads too short for the claimed cell count.
+
+### Flow to UI
+
+`handleBmsPayload` → emit `onBms` → `bleStore.latestBms` → `summarizeBms` (min/max/spread/avg,
+extreme tagging) → `BmsCellVoltages` grid on the battery control screen. iOS is a mock-only
+module and emits a synthetic 20S `onBms` stream for parity in the simulator.

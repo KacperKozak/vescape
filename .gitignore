@@ -52,3 +52,6 @@ modules/vesc-ble/android/src/test/resources/data/
 # other stuff
 /reports/*
 /reverse-engineering/
+
+# Claude Code local (machine-specific) settings
+.claude/settings.local.json

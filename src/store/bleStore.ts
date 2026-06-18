@@ -13,12 +13,14 @@ import {
   addErrorListener,
   addLiveStateListener,
   addTelemetryListener,
+  addBmsListener,
   addLocationListener,
   type BoardPhase,
   type GpsPhase,
   type ScanStatus,
   type LocationEvent,
   type LiveStateEvent,
+  type BmsEvent,
 } from 'vesc-ble'
 
 import { useSettingsStore } from '@/store/settingsStore'
@@ -57,6 +59,7 @@ interface BleState {
   metricVersion: number
   telemetryRecordingEnabled: boolean
   recordDebugSession: boolean
+  latestBms: BmsEvent | null
 }
 
 interface BleActions {
@@ -79,6 +82,7 @@ type BleSet = {
 
 let liveSub: EventSubscription | null = null
 let telemetrySub: EventSubscription | null = null
+let bmsSub: EventSubscription | null = null
 let locationSub: EventSubscription | null = null
 let scanSub: EventSubscription | null = null
 let scanErrorSub: EventSubscription | null = null
@@ -91,6 +95,7 @@ const SCAN_FLUSH_MS = 500
 
 const MAC_ADDRESS_RE = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i
 const LIVE_HISTORY_PUBLISH_MS = 1000
+const LIVE_HISTORY_IMMEDIATE_SAMPLE_COUNT = 3
 
 function scannedDeviceName(id: string, name?: string): string {
   const candidate = name?.trim()
@@ -118,9 +123,11 @@ function removeLiveSubscriptions(): void {
   clearLiveHistoryPublishTimer()
   liveSub?.remove()
   telemetrySub?.remove()
+  bmsSub?.remove()
   locationSub?.remove()
   liveSub = null
   telemetrySub = null
+  bmsSub = null
   locationSub = null
 }
 
@@ -217,6 +224,7 @@ function resetLivePresentation(set: BleSet): void {
     latestApproximateLocation: live.latestApproximateLocation,
     liveStatus: live.liveStatus,
     metricVersion: liveTelemetryRuntime.getVersion(),
+    latestBms: null,
   })
 }
 
@@ -224,15 +232,19 @@ function scheduleLiveHistoryPublish(set: BleSet): void {
   if (liveHistoryPublishTimer) return
   liveHistoryPublishTimer = setTimeout(() => {
     liveHistoryPublishTimer = null
-    const live = liveTelemetryRuntime.consumePendingSnapshot()
-    if (!live) return
-    set({
-      liveLocationHistory: live.liveLocationHistory,
-      latestApproximateLocation: live.latestApproximateLocation,
-      liveStatus: live.liveStatus,
-      metricVersion: liveTelemetryRuntime.getVersion(),
-    })
+    publishPendingLiveHistory(set)
   }, LIVE_HISTORY_PUBLISH_MS)
+}
+
+function publishPendingLiveHistory(set: BleSet): void {
+  const live = liveTelemetryRuntime.consumePendingSnapshot()
+  if (!live) return
+  set({
+    liveLocationHistory: live.liveLocationHistory,
+    latestApproximateLocation: live.latestApproximateLocation,
+    liveStatus: live.liveStatus,
+    metricVersion: liveTelemetryRuntime.getVersion(),
+  })
 }
 
 function installLiveSubscriptions(set: BleSet): void {
@@ -241,12 +253,24 @@ function installLiveSubscriptions(set: BleSet): void {
   }
   if (!telemetrySub) {
     telemetrySub = addTelemetryListener((telemetry) => {
+      const shouldPublishImmediately =
+        liveTelemetryRuntime.getSnapshot().liveStatus.boardSampleCount <
+        LIVE_HISTORY_IMMEDIATE_SAMPLE_COUNT
       const accepted = liveTelemetryRuntime.ingestTelemetry(telemetry)
       if (!accepted) return
       set({
         lastTelemetryAt: telemetry.lastPacketAt,
       })
+      if (shouldPublishImmediately) {
+        publishPendingLiveHistory(set)
+        return
+      }
       scheduleLiveHistoryPublish(set)
+    })
+  }
+  if (!bmsSub) {
+    bmsSub = addBmsListener((bms) => {
+      set({ latestBms: bms })
     })
   }
   if (!locationSub) {
@@ -274,6 +298,7 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
   metricVersion: 0,
   telemetryRecordingEnabled: false,
   recordDebugSession: false,
+  latestBms: null,
 
   startScan() {
     const currentStatus = get().status

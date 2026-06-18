@@ -1,7 +1,17 @@
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useCallback, useState } from 'react'
-import { ArrowLeftIcon, CubeIcon, GearSixIcon, GhostIcon, TrashIcon } from 'phosphor-react-native'
+import {
+  ArrowLeftIcon,
+  CloudCheckIcon,
+  CubeIcon,
+  DownloadSimpleIcon,
+  GearSixIcon,
+  GhostIcon,
+  PackageIcon,
+  PlugIcon,
+  TrashIcon,
+} from 'phosphor-react-native'
 
 import { Banner } from '@/components/ui/base/Banner'
 import { IconHero } from '@/components/ui/settings/IconHero'
@@ -12,6 +22,7 @@ import { InfoBadge } from '@/components/ui/base/InfoBadge'
 import { Placeholder } from '@/components/ui/base/Placeholder'
 import { ScreenTitle } from '@/components/ui/base/ScreenTitle'
 import { StatsRow } from '@/components/ui/base/StatsRow'
+import { StepTimeline, type StepState, type TimelineStep } from '@/components/ui/base/StepTimeline'
 import { ShowcaseCard } from '@/components/ui/dev/ShowcaseCard'
 import { ChipRow, ToggleRow } from '@/components/ui/dev/ShowcaseControls'
 import { theme } from '@/constants/theme'
@@ -233,6 +244,57 @@ function InfoBadgeShowcase() {
   )
 }
 
+const TIMELINE_ICONS = [PlugIcon, DownloadSimpleIcon, PackageIcon, CloudCheckIcon]
+const TIMELINE_LABELS = ['Connect', 'Download', 'Install', 'Verify']
+const TIMELINE_CAPTIONS = [
+  'Opening the connection',
+  'Fetching the payload',
+  'Writing files to disk',
+  'Checking the signature',
+]
+
+/** Build a 4-step list where everything before `reach` is done, the step at
+ *  `reach` is active, and the rest pending. A negative `reach` fails the last
+ *  done step instead, to show the error state. */
+function buildDemoSteps(reach: number, failed: boolean): TimelineStep[] {
+  return TIMELINE_LABELS.map((label, i): TimelineStep => {
+    let state: StepState = i < reach ? 'done' : i === reach ? 'active' : 'pending'
+    if (failed && i === reach) state = 'failed'
+    else if (failed && i > reach) state = 'absent'
+    return {
+      key: label,
+      icon: TIMELINE_ICONS[i],
+      label,
+      caption: state === 'done' ? 'Done' : TIMELINE_CAPTIONS[i],
+      state,
+    }
+  })
+}
+
+function StepTimelineShowcase() {
+  const [reach, setReach] = useState('2')
+  const [failed, setFailed] = useState(false)
+
+  return (
+    <ShowcaseCard
+      name="StepTimeline"
+      controls={
+        <>
+          <ChipRow
+            label="reach"
+            options={['0', '1', '2', '3', '4']}
+            selected={reach}
+            onSelect={setReach}
+          />
+          <ToggleRow label="failed" value={failed} onToggle={setFailed} />
+        </>
+      }
+    >
+      <StepTimeline steps={buildDemoSteps(Number(reach), failed)} />
+    </ShowcaseCard>
+  )
+}
+
 function ScreenTitleShowcase() {
   return (
     <ShowcaseCard name="ScreenTitle">
@@ -247,7 +309,7 @@ export default function BaseComponentsPage() {
       <ScrollView contentContainerStyle={styles.content}>
         <IconHero
           icon={CubeIcon}
-          description="Button, IconButton, Banner, DeviceRow, InfoBadge, StatsRow, Placeholder, ScreenTitle."
+          description="Button, IconButton, Banner, DeviceRow, InfoBadge, StatsRow, StepTimeline, Placeholder, ScreenTitle."
         />
         <IconButtonShowcase />
         <ButtonShowcase />
@@ -256,6 +318,7 @@ export default function BaseComponentsPage() {
         <DeviceRowShowcase />
         <StatsRowShowcase />
         <InfoBadgeShowcase />
+        <StepTimelineShowcase />
         <ScreenTitleShowcase />
       </ScrollView>
     </SafeAreaView>

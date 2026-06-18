@@ -98,7 +98,48 @@ function AlertPercentageTuneDialShowcase() {
         min={0}
         max={100}
         step={1}
+        unit="%"
         onValueChange={setThreshold}
+      />
+    </ShowcaseCard>
+  )
+}
+
+function GeigerAlertTuneDialShowcase() {
+  const [threshold, setThreshold] = useState(35)
+  const [thresholdMax, setThresholdMax] = useState(75)
+
+  return (
+    <ShowcaseCard
+      name="TuneDial Geiger Alert"
+      controls={
+        <>
+          <ValueRow label="threshold" value={`${threshold}%`} />
+          <ValueRow label="max" value={`${thresholdMax}%`} />
+        </>
+      }
+    >
+      <TuneDial
+        value={threshold}
+        previousValue={25}
+        min={0}
+        max={100}
+        step={1}
+        unit="%"
+        indicatorGlow="right"
+        valueChangeMode="commit"
+        onValueChange={setThreshold}
+      />
+      <TuneDial
+        value={thresholdMax}
+        previousValue={85}
+        min={0}
+        max={100}
+        step={1}
+        unit="%"
+        indicatorGlow="left"
+        valueChangeMode="commit"
+        onValueChange={setThresholdMax}
       />
     </ShowcaseCard>
   )
@@ -175,6 +216,7 @@ export default function TunePage() {
         <TuneDialShowcase />
         <CompactTuneDialShowcase />
         <AlertPercentageTuneDialShowcase />
+        <GeigerAlertTuneDialShowcase />
         <BasicSliderCellShowcase />
       </ScrollView>
     </SafeAreaView>

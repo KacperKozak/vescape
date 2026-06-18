@@ -6,27 +6,15 @@ import expo.modules.vescble.reconnect.ReconnectPolicy
 
 internal const val BOARD_READY_TIMEOUT_BASE = BOARD_READY_TIMEOUT_BASE_MS
 internal const val BOARD_READY_TIMEOUT_MAX = BOARD_READY_TIMEOUT_MAX_MS
-internal const val CAN_PING_TIMEOUT = 3_500L
+internal const val DETECT_CAN_PING_TIMEOUT_MS = 3_500L
+
+/** Per-candidate window a detection probe waits for one valid Telemetry Sample. */
+internal const val DETECT_PROBE_TIMEOUT_MS = 2_500L
 
 internal fun boardReadyTimeoutMs(attempt: Int): Long = ReconnectPolicy.boardReadyTimeoutMs(attempt)
 
 internal fun isPollingCapable(canId: Int?, directConnection: Boolean): Boolean =
     canId != null || directConnection
-
-internal fun shouldCanPingFallback(
-    canId: Int?,
-    directConnection: Boolean,
-    boardStatus: BoardPhase,
-): Boolean =
-    canId == null && !directConnection && boardStatus == BoardPhase.WaitingForTelemetry
-
-internal fun shouldAcceptCanPingResponse(
-    boardStatus: BoardPhase,
-): Boolean =
-    boardStatus != BoardPhase.Connected
-
-internal fun shouldSetDirectOnReady(canId: Int?, directConnection: Boolean): Boolean =
-    !isPollingCapable(canId, directConnection)
 
 internal fun shouldStartPollingOnReady(
     canId: Int?,

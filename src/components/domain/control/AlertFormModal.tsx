@@ -269,16 +269,15 @@ export function AlertFormModal({
 
             <View style={styles.dialField}>
               <Text style={styles.fieldLabel}>THRESHOLD</Text>
-              <Text style={styles.dialValue}>
-                {dialConfig.format(threshold)}
-                {dialConfig.unit ? ` ${dialConfig.unit}` : ''}
-              </Text>
               <TuneDial
                 value={threshold}
                 previousValue={editRule?.threshold ?? undefined}
                 min={dialConfig.min}
                 max={dialConfig.max}
                 step={dialConfig.step}
+                unit={dialConfig.unit}
+                indicatorGlow={tab === 'geiger' ? 'right' : undefined}
+                valueChangeMode="commit"
                 onValueChange={setThreshold}
               />
             </View>
@@ -286,16 +285,15 @@ export function AlertFormModal({
             {tab === 'geiger' && (
               <View style={styles.dialField}>
                 <Text style={styles.fieldLabel}>THRESHOLD MAX</Text>
-                <Text style={styles.dialValue}>
-                  {dialConfig.format(thresholdMax)}
-                  {dialConfig.unit ? ` ${dialConfig.unit}` : ''}
-                </Text>
                 <TuneDial
                   value={thresholdMax}
                   previousValue={editRule?.thresholdMax ?? undefined}
                   min={dialConfig.min}
                   max={dialConfig.max}
                   step={dialConfig.step}
+                  unit={dialConfig.unit}
+                  indicatorGlow="left"
+                  valueChangeMode="commit"
                   onValueChange={setThresholdMax}
                 />
               </View>
@@ -361,7 +359,7 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   modal: {
-    backgroundColor: theme.neutral.surfaceDeep,
+    backgroundColor: theme.neutral.surface,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: theme.neutral.border,
@@ -413,12 +411,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
     letterSpacing: 0.5,
-  },
-  dialValue: {
-    color: theme.neutral.textPrimary,
-    fontSize: 20,
-    fontWeight: '700',
-    fontVariant: ['tabular-nums'],
   },
   saveButton: {
     backgroundColor: theme.wheel.color,

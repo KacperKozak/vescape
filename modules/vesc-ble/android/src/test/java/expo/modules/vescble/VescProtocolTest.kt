@@ -99,6 +99,58 @@ class VescProtocolTest {
     assertEquals(200L, telemetry.lastPacketAt)
   }
 
+  @Test
+  fun parsesBmsCellVoltagesBalancingAndSoc() {
+    val payload = ByteArray(45)
+    payload[0] = COMM_BMS_GET_VALUES.toByte()
+    putInt32(payload, 1, 60_000_000) // v_tot 60.0V (scale 1e6)
+    putInt32(payload, 9, 5_000_000) // i_in 5.0A (scale 1e6)
+    payload[25] = 3 // cell_num
+    putInt16(payload, 26, 3650) // 3.650V
+    putInt16(payload, 28, 3700) // 3.700V
+    putInt16(payload, 30, 3680) // 3.680V
+    payload[32] = 0 // balancing cell 0
+    payload[33] = 1 // balancing cell 1
+    payload[34] = 0 // balancing cell 2
+    payload[35] = 0 // temp_adc_num
+    payload[44] = 216.toByte() // soc ≈ 0.847
+
+    val bms = parseBmsValues(payload, packetAt = 555L)!!
+
+    assertEquals(555L, bms.capturedAt)
+    assertEquals(60.0, bms.voltageTotal, 0.001)
+    assertEquals(5.0, bms.current, 0.001)
+    assertEquals(listOf(3.65, 3.70, 3.68), bms.cellVoltages.map { (it * 1000).toInt() / 1000.0 })
+    assertEquals(listOf(false, true, false), bms.balancing)
+    assertEquals(216.0 / 255.0, bms.soc!!, 0.001)
+  }
+
+  @Test
+  fun parsesBmsWithoutTrailingFields() {
+    // id + 6 float32 + cell_num + 2 cells, nothing after.
+    val payload = ByteArray(30)
+    payload[0] = COMM_BMS_GET_VALUES.toByte()
+    payload[25] = 2
+    putInt16(payload, 26, 4100)
+    putInt16(payload, 28, 4050)
+
+    val bms = parseBmsValues(payload, packetAt = 1L)!!
+
+    assertEquals(2, bms.cellVoltages.size)
+    assertEquals(4.1, bms.cellVoltages[0], 0.001)
+    assertEquals(listOf(false, false), bms.balancing)
+    assertNull(bms.soc)
+  }
+
+  @Test
+  fun rejectsNonBmsOrTruncatedPayloads() {
+    assertNull(parseBmsValues(byteArrayOf(COMM_FW_VERSION.toByte()), 1L))
+    val tooShort = ByteArray(26)
+    tooShort[0] = COMM_BMS_GET_VALUES.toByte()
+    tooShort[25] = 5 // claims 5 cells but no cell bytes follow
+    assertNull(parseBmsValues(tooShort, 1L))
+  }
+
   private fun putInt16(bytes: ByteArray, offset: Int, value: Int) {
     bytes[offset] = ((value shr 8) and 0xff).toByte()
     bytes[offset + 1] = (value and 0xff).toByte()

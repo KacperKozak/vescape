@@ -175,6 +175,13 @@ try {
     apkLabel = `v${baseVersion}-${safeBranch}`
   }
 
+  // Drop Expo's generated typed-routes file before the TS check. It's only
+  // refreshed by a running dev server (or `expo export`), so at release time it
+  // can be stale — listing routes that no longer exist, or missing newly-added
+  // ones — and fail tsc against correct code. Absent, expo-router falls back to
+  // a permissive `Href`, so route strings aren't checked here; the live dev
+  // server still enforces them day-to-day. Regenerated next time Metro runs.
+  await run('Clear stale route types', 'rm -f .expo/types/router.d.ts')
   await run('TypeScript check', 'bun run ts')
   await run('Lint', 'bun run lint')
   await run('Copy shared files', 'bun run copy:shared')

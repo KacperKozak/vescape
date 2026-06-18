@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { StyleSheet, Text } from 'react-native'
 
 import { computeAutoRange } from '@/components/ui/charts/chartMath'
+import { BmsCellVoltages } from '@/components/domain/control/BmsCellVoltages'
 import { ControlDetailLayout } from '@/components/domain/control/ControlDetailLayout'
 import { MetricDetailChart } from '@/components/domain/control/MetricDetailChart'
 import { MetricDetailGauge } from '@/components/domain/control/MetricDetailGauge'
@@ -93,6 +94,7 @@ export default function BatteryScreen() {
           windowMs={windowMs}
         />
       )}
+      <BmsCellVoltages />
     </ControlDetailLayout>
   )
 }

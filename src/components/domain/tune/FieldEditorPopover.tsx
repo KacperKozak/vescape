@@ -108,6 +108,7 @@ function FieldEditorPopoverInner({ target, onCancel, onApply }: FieldEditorPopov
           min={target.min}
           max={target.max}
           step={target.step}
+          unit={target.unit}
           onValueChange={handleDialChange}
         />
 

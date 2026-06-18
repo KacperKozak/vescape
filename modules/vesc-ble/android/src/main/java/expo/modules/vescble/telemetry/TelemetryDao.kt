@@ -329,7 +329,7 @@ interface TelemetryDao {
     clearExclusions()
   }
 
-  @Query("SELECT * FROM boards ORDER BY is_starred DESC, created_at ASC")
+  @Query("SELECT * FROM boards ORDER BY created_at ASC")
   suspend fun getBoards(): List<BoardEntity>
 
   @Query("SELECT * FROM boards WHERE id = :id LIMIT 1")
@@ -338,8 +338,36 @@ interface TelemetryDao {
   @Insert(onConflict = OnConflictStrategy.REPLACE)
   suspend fun upsertBoard(board: BoardEntity)
 
+  @Query("SELECT * FROM board_settings WHERE board_id = :boardId")
+  suspend fun getBoardSettings(boardId: String): List<BoardSettingEntity>
+
+  @Query("SELECT * FROM board_settings WHERE board_id IN (:boardIds)")
+  suspend fun getBoardSettings(boardIds: List<String>): List<BoardSettingEntity>
+
+  @Insert(onConflict = OnConflictStrategy.REPLACE)
+  suspend fun upsertBoardSetting(setting: BoardSettingEntity)
+
+  @Query("DELETE FROM board_settings WHERE board_id = :boardId AND key = :key")
+  suspend fun deleteBoardSetting(boardId: String, key: String)
+
+  @Transaction
+  suspend fun upsertBoardWithSettings(board: BoardEntity, settings: List<BoardSettingEntity>, deletedKeys: List<String>) {
+    upsertBoard(board)
+    deletedKeys.forEach { deleteBoardSetting(board.id, it) }
+    settings.forEach { upsertBoardSetting(it) }
+  }
+
+  @Query("DELETE FROM board_settings WHERE board_id = :boardId")
+  suspend fun deleteBoardSettings(boardId: String)
+
   @Query("DELETE FROM boards WHERE id = :id")
   suspend fun deleteBoard(id: String)
+
+  @Transaction
+  suspend fun deleteBoardWithSettings(id: String) {
+    deleteBoardSettings(id)
+    deleteBoard(id)
+  }
 
   @Query("SELECT * FROM alerts ORDER BY created_at ASC")
   suspend fun getAlertRules(): List<AlertRuleEntity>

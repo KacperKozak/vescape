@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { router } from 'expo-router'
 import { useShallow } from 'zustand/react/shallow'
-import type { BatteryConfig } from 'vesc-ble'
+import type { BatteryConfig, BoardLink } from 'vesc-ble'
 
 import { DEFAULT_BATTERY_CONFIG, deriveBatteryConfig } from '@/lib/battery'
 import {
@@ -16,11 +16,16 @@ import { useBoardStore } from '@/store/boardStore'
 export const WIZARD_STEPS = ['scan', 'name', 'battery', 'confirm'] as const
 export type WizardStepId = (typeof WIZARD_STEPS)[number]
 
+/** Sub-phase of the Pair step: choosing a peripheral, or probing the chosen one. */
+type PairPhase = 'select' | 'probing'
+
 interface AddBoardWizardState {
   step: number
   stepId: WizardStepId
+  pairPhase: PairPhase
   bleId: string
   bleName: string
+  draftLink: BoardLink | null
   name: string
   description: string
   batteryMode: BatteryMode
@@ -40,6 +45,8 @@ interface AddBoardWizardActions {
   back: () => void
   selectDevice: (id: string, deviceName: string) => void
   clearDevice: () => void
+  onDeviceProbed: (link: BoardLink) => void
+  continueOffline: () => void
   setName: (v: string) => void
   setDescription: (v: string) => void
   setBatteryMode: (v: BatteryMode) => void
@@ -59,8 +66,10 @@ export function useAddBoardWizard(): UseAddBoardWizard {
   )
 
   const [step, setStep] = useState(0)
+  const [pairPhase, setPairPhase] = useState<PairPhase>('select')
   const [bleId, setBleId] = useState('')
   const [bleName, setBleName] = useState('')
+  const [draftLink, setDraftLink] = useState<BoardLink | null>(null)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [batteryMode, setBatteryMode] = useState<BatteryMode>(DEFAULT_BATTERY_CONFIG.mode)
@@ -93,16 +102,34 @@ export function useAddBoardWizard(): UseAddBoardWizard {
   const next = () => setStep((s) => Math.min(s + 1, WIZARD_STEPS.length - 1))
   const back = () => setStep((s) => Math.max(s - 1, 0))
 
+  // Selecting a peripheral starts a Board Probe before the rest of the wizard.
   const selectDevice = (id: string, deviceName: string) => {
     setBleId(id)
     setBleName(deviceName)
     if (!name.trim()) setName(deviceName)
-    next()
+    setDraftLink(null)
+    setPairPhase('probing')
   }
 
+  // Drop the chosen peripheral and return to the device list.
   const clearDevice = () => {
     setBleId('')
     setBleName('')
+    setDraftLink(null)
+    setPairPhase('select')
+  }
+
+  // A successful probe yields a draft Board Link; advance to the rest of setup.
+  const onDeviceProbed = (link: BoardLink) => {
+    setDraftLink(link)
+    setPairPhase('select')
+    next()
+  }
+
+  // Explicit offline path: create the Board with no Board Link.
+  const continueOffline = () => {
+    clearDevice()
+    next()
   }
 
   const save = () => {
@@ -118,7 +145,7 @@ export function useAddBoardWizard(): UseAddBoardWizard {
     const board = addBoard({
       name: name.trim(),
       description: description.trim() || undefined,
-      bleId: bleId.trim() || undefined,
+      link: draftLink,
       batteryConfig,
     })
     setActiveBoard(board.id)
@@ -128,8 +155,10 @@ export function useAddBoardWizard(): UseAddBoardWizard {
   return {
     step,
     stepId: WIZARD_STEPS[step],
+    pairPhase,
     bleId,
     bleName,
+    draftLink,
     name,
     description,
     batteryMode,
@@ -146,6 +175,8 @@ export function useAddBoardWizard(): UseAddBoardWizard {
     back,
     selectDevice,
     clearDevice,
+    onDeviceProbed,
+    continueOffline,
     setName,
     setDescription,
     setBatteryMode,

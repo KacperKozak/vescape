@@ -51,107 +51,6 @@ class ConnectionLogicTest {
         assertFalse(isPollingCapable(canId = null, directConnection = false))
     }
 
-    // --- shouldCanPingFallback (CAN ping timeout decision) ---
-
-    @Test
-    fun `fallback when no canId, not direct, waiting for telemetry`() {
-        assertTrue(
-            shouldCanPingFallback(
-                canId = null,
-                directConnection = false,
-                boardStatus = BoardPhase.WaitingForTelemetry,
-            ),
-        )
-    }
-
-    @Test
-    fun `no fallback when canId already discovered`() {
-        assertFalse(
-            shouldCanPingFallback(
-                canId = 5,
-                directConnection = false,
-                boardStatus = BoardPhase.WaitingForTelemetry,
-            ),
-        )
-    }
-
-    @Test
-    fun `no fallback when already direct connection`() {
-        assertFalse(
-            shouldCanPingFallback(
-                canId = null,
-                directConnection = true,
-                boardStatus = BoardPhase.WaitingForTelemetry,
-            ),
-        )
-    }
-
-    @Test
-    fun `no fallback when board already connected`() {
-        assertFalse(
-            shouldCanPingFallback(
-                canId = null,
-                directConnection = false,
-                boardStatus = BoardPhase.Connected,
-            ),
-        )
-    }
-
-    @Test
-    fun `no fallback when board still connecting`() {
-        assertFalse(
-            shouldCanPingFallback(
-                canId = null,
-                directConnection = false,
-                boardStatus = BoardPhase.Connecting,
-            ),
-        )
-    }
-
-    @Test
-    fun `accept CAN ping while waiting for telemetry`() {
-        assertTrue(
-            shouldAcceptCanPingResponse(
-                boardStatus = BoardPhase.WaitingForTelemetry,
-            ),
-        )
-    }
-
-    @Test
-    fun `accept CAN ping while reconnecting`() {
-        assertTrue(
-            shouldAcceptCanPingResponse(
-                boardStatus = BoardPhase.Reconnecting,
-            ),
-        )
-    }
-
-    @Test
-    fun `ignore CAN ping once connected`() {
-        assertFalse(
-            shouldAcceptCanPingResponse(
-                boardStatus = BoardPhase.Connected,
-            ),
-        )
-    }
-
-    // --- shouldSetDirectOnReady (markBoardReady sets direct) ---
-
-    @Test
-    fun `set direct on ready when not polling capable`() {
-        assertTrue(shouldSetDirectOnReady(canId = null, directConnection = false))
-    }
-
-    @Test
-    fun `no set direct when canId present`() {
-        assertFalse(shouldSetDirectOnReady(canId = 3, directConnection = false))
-    }
-
-    @Test
-    fun `no set direct when already direct`() {
-        assertFalse(shouldSetDirectOnReady(canId = null, directConnection = true))
-    }
-
     // --- shouldStartPollingOnReady ---
 
     @Test
@@ -182,44 +81,6 @@ class ConnectionLogicTest {
         )
     }
 
-    // --- markBoardReady sequence (PintV path) ---
-
-    @Test
-    fun `pintv path - telemetry before CAN sets direct then starts polling`() {
-        var canId: Int? = null
-        var directConnection = false
-        val pollRunnable: Any? = null
-
-        // Step 1: should set direct (not polling capable yet)
-        assertTrue(shouldSetDirectOnReady(canId, directConnection))
-        directConnection = true // mirrors service mutation
-
-        // Step 2: now should start polling (became capable)
-        assertTrue(shouldStartPollingOnReady(canId, directConnection, pollRunnable))
-    }
-
-    @Test
-    fun `can device found - no direct set, polling via canId`() {
-        val canId: Int? = 5
-        val directConnection = false
-        val pollRunnable: Any? = null
-
-        assertFalse(shouldSetDirectOnReady(canId, directConnection))
-        assertTrue(shouldStartPollingOnReady(canId, directConnection, pollRunnable))
-    }
-
-    @Test
-    fun `already polling - markBoardReady is noop on polling`() {
-        var canId: Int? = null
-        var directConnection = false
-        val pollRunnable = Any()
-
-        assertTrue(shouldSetDirectOnReady(canId, directConnection))
-        directConnection = true
-
-        assertFalse(shouldStartPollingOnReady(canId, directConnection, pollRunnable))
-    }
-
     // --- boardReadyTimeoutMs edge ---
 
     @Test
@@ -232,8 +93,8 @@ class ConnectionLogicTest {
     // --- Constants sanity ---
 
     @Test
-    fun `CAN ping timeout is 3500ms`() {
-        assertEquals(3_500L, CAN_PING_TIMEOUT)
+    fun `detection CAN ping timeout is 3500ms`() {
+        assertEquals(3_500L, DETECT_CAN_PING_TIMEOUT_MS)
     }
 
     @Test

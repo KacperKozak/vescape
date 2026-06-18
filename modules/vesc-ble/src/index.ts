@@ -54,14 +54,66 @@ export interface FiredAlert {
   firedAt: number
 }
 
+/**
+ * How a Board is reached. `null` = undetected (no persisted "unknown" state),
+ * `'direct'` = direct connection, a number = CAN-forwarded to that CAN id.
+ */
+export type BoardTransport = 'direct' | number
+
+export type BoardProbeOutcome = 'resolved' | 'needs-pick' | 'none'
+
+/** A probe-confirmed transport plus the capabilities discovered while probing it. */
+export interface BoardCandidate {
+  transport: BoardTransport
+  /** Whether a smart-BMS answered on this transport during the probe. */
+  hasBms: boolean
+}
+
+/** Result of a native Board Probe of a BLE peripheral. */
+export interface BoardProbeResult {
+  outcome: BoardProbeOutcome
+  /** Every transport that produced a valid Telemetry Sample, in probe order. */
+  candidates: BoardCandidate[]
+}
+
+/**
+ * Coarse, monotonic probe phase surfaced live so UI can show progress. These are
+ * the rider-facing phases, not the probe loop's per-transport internals: a probe
+ * connects, handshakes the VESC service, then probes transports until one returns
+ * telemetry. The resolved transport(s) and smart-BMS capability are read from the
+ * returned {@link BoardCandidate}s, not from progress events. Detailed
+ * per-transport milestones stay in Diagnostic Events for debugging.
+ */
+export type BoardProbeStep = 'connecting' | 'handshake' | 'probing' | 'completed' | 'failed'
+
+export interface BoardProbeProgressEvent {
+  step: BoardProbeStep
+  /** Milliseconds elapsed since the probe started. */
+  elapsedMs: number
+}
+
+/**
+ * Durable, probe-confirmed reachability for a Board. Saved whole or not at all:
+ * a Board Link always carries a proven BLE peripheral id and Board Transport.
+ */
+export interface BoardLink {
+  bleId: string
+  transport: BoardTransport
+  /**
+   * Probe-confirmed smart-BMS presence on {@link transport}. `undefined` on links
+   * saved before BMS detection existed — treated as unknown (still polled).
+   */
+  hasBms?: boolean
+}
+
 export interface Board {
   id: string
   name: string
   description: string | null
-  bleId: string | null
-  isStarred: boolean
   createdAt: number
   batteryConfig: BatteryConfig | null
+  /** Probe-confirmed reachability. `null` means offline-only/unlinked. */
+  link: BoardLink | null
 }
 
 export type BatteryConfig = BatteryPresetConfig | BatteryManualConfig
@@ -161,6 +213,22 @@ export interface TelemetryEvent {
   avgLatency: number | null
   lastPacketAt: number
   firedAlerts?: FiredAlert[]
+}
+
+/** Smart-BMS snapshot decoded from a VESC `COMM_BMS_GET_VALUES` reply. */
+export interface BmsEvent {
+  capturedAt: number
+  /** Pack voltage as reported by the BMS (sum of cell groups). */
+  voltageTotal: number
+  current: number
+  ampHours: number
+  wattHours: number
+  /** State of charge 0–1, or null when the firmware variant omits it. */
+  soc: number | null
+  /** Per cell-group voltage, index 0 = first group. */
+  cellVoltages: number[]
+  /** Per cell-group balancing flag, aligned with cellVoltages. */
+  balancing: boolean[]
 }
 
 export interface LiveMetricExclusionUpdate {
@@ -475,8 +543,10 @@ type VescBleEvents = {
   onError: (event: ErrorEvent) => void
   onLiveState: (event: LiveStateEvent) => void
   onTelemetry: (event: TelemetryEvent) => void
+  onBms: (event: BmsEvent) => void
   onLocation: (event: LocationEvent) => void
   onTelemetryRebuildProgress: (event: TelemetryRebuildProgressEvent) => void
+  onBoardProbeProgress: (event: BoardProbeProgressEvent) => void
 }
 
 interface NativeEventEmitter<TEvents extends Record<string, (...args: never[]) => void>> {
@@ -504,6 +574,7 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
   stopGeigerSimulation(): void
   selectBoard(boardId: string): Promise<void>
   stopBoard(): Promise<void>
+  probeBoardLink(bleId: string): Promise<BoardProbeResult>
   setDebugRecordingEnabled(enabled: boolean): void
   reportUiError(message: string, source?: string | null, stack?: string | null): void
   reportDiagnosticTest(): DiagnosticStatus
@@ -683,6 +754,20 @@ export async function stopBoard(): Promise<void> {
   }
 
   return native.stopBoard()
+}
+
+/**
+ * Run a native Board Probe of a BLE peripheral: connect, probe direct and CAN,
+ * and return every transport confirmed by a valid Telemetry Sample. Runs before
+ * a Board necessarily exists and tears down any live Board Session first.
+ * Emits `onBoardProbeProgress` events while it runs.
+ */
+export async function probeBoardLink(bleId: string): Promise<BoardProbeResult> {
+  if (E2E_ENABLED) {
+    return e2eFake.probeBoardLink(bleId)
+  }
+
+  return native.probeBoardLink(bleId)
 }
 
 /** Enable raw debug session recording for future native board sessions. */
@@ -984,6 +1069,10 @@ export function addTelemetryListener(cb: (event: TelemetryEvent) => void): Event
   return emitter.addListener('onTelemetry', cb)
 }
 
+export function addBmsListener(cb: (event: BmsEvent) => void): EventSubscription {
+  return emitter.addListener('onBms', cb)
+}
+
 export function addLocationListener(cb: (event: LocationEvent) => void): EventSubscription {
   return emitter.addListener('onLocation', cb)
 }
@@ -992,4 +1081,14 @@ export function addTelemetryRebuildProgressListener(
   cb: (event: TelemetryRebuildProgressEvent) => void,
 ): EventSubscription {
   return emitter.addListener('onTelemetryRebuildProgress', cb)
+}
+
+export function addBoardProbeProgressListener(
+  cb: (event: BoardProbeProgressEvent) => void,
+): EventSubscription {
+  if (E2E_ENABLED) {
+    return e2eFake.addBoardProbeProgressListener(cb)
+  }
+
+  return emitter.addListener('onBoardProbeProgress', cb)
 }

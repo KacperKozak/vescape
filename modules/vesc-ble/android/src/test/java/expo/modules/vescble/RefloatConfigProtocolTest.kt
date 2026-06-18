@@ -8,7 +8,12 @@ import org.junit.Test
 class RefloatConfigProtocolTest {
   @Test
   fun buildsForwardedCustomConfigXmlRequest() {
-    val payload = RefloatConfigProtocol.buildGetCustomConfigXml(canId = 7, confInd = 0, length = 384, offset = 768)
+    val payload = RefloatConfigProtocol.buildGetCustomConfigXml(
+      transport = BoardTransport.Can(7),
+      confInd = 0,
+      length = 384,
+      offset = 768,
+    )
 
     assertArrayEquals(
       byteArrayOf(
@@ -25,7 +30,7 @@ class RefloatConfigProtocolTest {
 
   @Test
   fun buildsForwardedCustomConfigRequest() {
-    val payload = RefloatConfigProtocol.buildGetCustomConfig(canId = 7, confInd = 0)
+    val payload = RefloatConfigProtocol.buildGetCustomConfig(transport = BoardTransport.Can(7), confInd = 0)
 
     assertArrayEquals(
       byteArrayOf(
@@ -187,7 +192,11 @@ class RefloatConfigProtocolTest {
   @Test
   fun buildsForwardedSetCustomConfigRequest() {
     val configBytes = byteArrayOf(0x01, 0x02, 0x03, 0x04)
-    val payload = RefloatConfigProtocol.buildSetCustomConfig(canId = 7, confInd = 0, configBytes = configBytes)
+    val payload = RefloatConfigProtocol.buildSetCustomConfig(
+      transport = BoardTransport.Can(7),
+      confInd = 0,
+      configBytes = configBytes,
+    )
 
     assertArrayEquals(
       byteArrayOf(
@@ -231,11 +240,16 @@ class RefloatConfigProtocolTest {
     assertEquals("Short Refloat set config response: 1 bytes", failure.message)
   }
 
-  // --- Direct connection (null canId) tests ---
+  // --- Direct connection tests ---
 
   @Test
   fun buildsDirectCustomConfigXmlRequest() {
-    val payload = RefloatConfigProtocol.buildGetCustomConfigXml(canId = null, confInd = 0, length = 384, offset = 768)
+    val payload = RefloatConfigProtocol.buildGetCustomConfigXml(
+      transport = BoardTransport.Direct,
+      confInd = 0,
+      length = 384,
+      offset = 768,
+    )
 
     assertArrayEquals(
       byteArrayOf(
@@ -250,7 +264,7 @@ class RefloatConfigProtocolTest {
 
   @Test
   fun buildsDirectCustomConfigRequest() {
-    val payload = RefloatConfigProtocol.buildGetCustomConfig(canId = null, confInd = 0)
+    val payload = RefloatConfigProtocol.buildGetCustomConfig(transport = BoardTransport.Direct, confInd = 0)
 
     assertArrayEquals(
       byteArrayOf(
@@ -264,7 +278,11 @@ class RefloatConfigProtocolTest {
   @Test
   fun buildsDirectSetCustomConfigRequest() {
     val configBytes = byteArrayOf(0x01, 0x02, 0x03, 0x04)
-    val payload = RefloatConfigProtocol.buildSetCustomConfig(canId = null, confInd = 0, configBytes = configBytes)
+    val payload = RefloatConfigProtocol.buildSetCustomConfig(
+      transport = BoardTransport.Direct,
+      confInd = 0,
+      configBytes = configBytes,
+    )
 
     assertArrayEquals(
       byteArrayOf(
@@ -278,7 +296,7 @@ class RefloatConfigProtocolTest {
 
   @Test
   fun forwardedBuildStillWorksWithExplicitCanId() {
-    val payload = RefloatConfigProtocol.buildGetCustomConfig(canId = 7, confInd = 0)
+    val payload = RefloatConfigProtocol.buildGetCustomConfig(transport = BoardTransport.Can(7), confInd = 0)
     assertArrayEquals(
       byteArrayOf(
         COMM_FORWARD_CAN.toByte(),
@@ -292,13 +310,23 @@ class RefloatConfigProtocolTest {
 
   @Test
   fun directXmlRequestHasCorrectSize() {
-    val payload = RefloatConfigProtocol.buildGetCustomConfigXml(canId = null, confInd = 0, length = 100, offset = 0)
+    val payload = RefloatConfigProtocol.buildGetCustomConfigXml(
+      transport = BoardTransport.Direct,
+      confInd = 0,
+      length = 100,
+      offset = 0,
+    )
     assertEquals(10, payload.size)
   }
 
   @Test
   fun forwardedXmlRequestHasCorrectSize() {
-    val payload = RefloatConfigProtocol.buildGetCustomConfigXml(canId = 7, confInd = 0, length = 100, offset = 0)
+    val payload = RefloatConfigProtocol.buildGetCustomConfigXml(
+      transport = BoardTransport.Can(7),
+      confInd = 0,
+      length = 100,
+      offset = 0,
+    )
     assertEquals(12, payload.size)
   }
 

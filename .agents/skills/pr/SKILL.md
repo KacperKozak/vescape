@@ -98,16 +98,7 @@ EOF
 
 Don't remove existing entries.
 
-## Step 6 — Screenshot (conditional)
-
-After PR is created/updated, attach a device screenshot if ALL conditions met:
-
-1. `git diff dev...HEAD --name-only` touches files in `src/screens/`, `src/components/`, or `src/app/` routes.
-2. `adb devices` shows a connected device.
-
-If both true: use `/nav` to deep-link to the affected screen, then `/ss` upload mode to capture and embed in PR body via `gh pr edit`. If either false: skip silently.
-
-## Step 7 — Report
+## Step 6 — Report
 
 - PR url + number.
 - Branch name.

@@ -1,8 +1,10 @@
+import { router } from 'expo-router'
 import { RecordIcon, StopIcon } from 'phosphor-react-native'
 import { useCallback } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { useShallow } from 'zustand/react/shallow'
 
+import { routes } from '@/navigation/routes'
 import type { Board } from '@/store/boardStore'
 import { useBleStore } from '@/store/bleStore'
 import { theme } from '@/constants/theme'
@@ -51,7 +53,15 @@ function getStatusPill(
   onStopScan: () => void,
   onRetryConnect: () => void,
 ): StatusPill | null {
-  if (!board?.bleId) return null
+  if (!board) return null
+  if (!board.link)
+    return {
+      kind: 'action',
+      text: 'Board not linked',
+      buttonText: 'Link',
+      config: ALERT_CONFIG.warning,
+      onPress: () => router.push({ pathname: routes.addBoardScan, params: { boardId: board.id } }),
+    }
   if (scanStatus === 'scanning' && status === 'idle')
     return { kind: 'spinner', text: 'Searching…', color: theme.wheel.color, onPress: onStopScan }
   if (status === 'discovering')

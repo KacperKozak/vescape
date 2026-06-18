@@ -59,7 +59,7 @@ Follow `/pr` SKILL.md using the caller protocol. Pass:
 - **PR body**: use the issue-aware template below.
 - **Issue ids**: for `Closes #<id>` lines.
 
-`/pr` handles: commit, push, PR create/update, screenshot, report.
+`/pr` handles: commit, push, PR create/update, report.
 
 ### PR body — new PR
 

@@ -115,7 +115,7 @@ export function Sparkline({
 
   const { polyPoints, baselineY, firstX, maxPos, maxValue } = useMemo(() => {
     const inset = 1.5
-    if (points.length < 2 || width < 1) {
+    if (width < 1) {
       let emptyY = height / 2
       if (range) {
         const span = range.max - range.min
@@ -127,6 +127,40 @@ export function Sparkline({
       return {
         polyPoints: '',
         baselineY: emptyY,
+        firstX: 0,
+        maxPos: null as { x: number; y: number } | null,
+        maxValue: null,
+      }
+    }
+    if (points.length === 1) {
+      const point = points[0]
+      let yMin: number
+      let yMax: number
+      if (range) {
+        yMin = range.min
+        yMax = range.max
+      } else {
+        yMin = point.value - minSpan / 2
+        yMax = point.value + minSpan / 2
+        if (yMax <= yMin) {
+          yMin = point.value - 1
+          yMax = point.value + 1
+        }
+      }
+      const t = Math.max(0, Math.min(1, (point.value - yMin) / (yMax - yMin)))
+      const y = height - inset - (height - inset * 2) * t
+      return {
+        polyPoints: '',
+        baselineY: y,
+        firstX: 0,
+        maxPos: { x: width, y },
+        maxValue: point.value,
+      }
+    }
+    if (points.length < 2) {
+      return {
+        polyPoints: '',
+        baselineY: height / 2,
         firstX: 0,
         maxPos: null as { x: number; y: number } | null,
         maxValue: null,

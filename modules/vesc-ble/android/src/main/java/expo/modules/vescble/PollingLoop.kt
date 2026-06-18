@@ -15,6 +15,7 @@ internal class PollingLoop(
 ) {
     private var pollHandle: Cancellable? = null
     private var lastPollAt = 0L
+    private var tick = 0L
     private val rttHistory = ArrayDeque<Long>()
 
     val isActive: Boolean
@@ -23,23 +24,36 @@ internal class PollingLoop(
     fun start(
         sessionConfig: SessionConfig,
         session: BoardSession,
-        canId: Int?,
-        directConnection: Boolean,
+        transport: BoardTransport,
     ) {
-        val pollPayload = pollPayload(canId, directConnection) ?: return
+        val pollPayload = pollPayload(transport)
+        val bmsPayload = bmsPayload(transport)
+        // BMS is polled only when the probe proved one present (`hasBms == true`). The probe
+        // is authoritative: unknown (legacy `null`) or proven-absent (`false`) → never poll.
+        val pollBms = sessionConfig.hasBms == true
         stop()
+        tick = 0L
+
+        fun poll() {
+            lastPollAt = nowMs()
+            sendPayloadWithRetry(pollPayload, session)
+            // BMS values change slowly; poll them at 1/BMS_POLL_STRIDE of the telemetry rate
+            // to avoid crowding the BLE link with large cell-voltage replies.
+            if (pollBms && tick % BMS_POLL_STRIDE == 0L) {
+                sendPayloadWithRetry(bmsPayload, session)
+            }
+            tick++
+        }
 
         fun scheduleNext() {
             pollHandle = scheduler.postDelayedForSession(session, sessionConfig.pollIntervalMs, isCurrentSession) {
-                lastPollAt = nowMs()
-                sendPayloadWithRetry(pollPayload, session)
+                poll()
                 scheduleNext()
             }
         }
 
         pollHandle = scheduler.postDelayedForSession(session, 0L, isCurrentSession) {
-            lastPollAt = nowMs()
-            sendPayloadWithRetry(pollPayload, session)
+            poll()
             scheduleNext()
         }
     }
@@ -56,22 +70,20 @@ internal class PollingLoop(
         return rttHistory.average().roundToInt()
     }
 
-    private fun pollPayload(canId: Int?, directConnection: Boolean): ByteArray? =
-        when {
-            canId != null -> byteArrayOf(
-                COMM_FORWARD_CAN.toByte(),
-                canId.toByte(),
+    private fun pollPayload(transport: BoardTransport): ByteArray =
+        transport.frame(
+            byteArrayOf(
                 COMM_CUSTOM_APP_DATA.toByte(),
                 REFLOAT_MAGIC.toByte(),
                 REFLOAT_GET_ALLDATA.toByte(),
                 2,
-            )
-            directConnection -> byteArrayOf(
-                COMM_CUSTOM_APP_DATA.toByte(),
-                REFLOAT_MAGIC.toByte(),
-                REFLOAT_GET_ALLDATA.toByte(),
-                2,
-            )
-            else -> null
-        }
+            ),
+        )
+
+    private fun bmsPayload(transport: BoardTransport): ByteArray =
+        transport.frame(byteArrayOf(COMM_BMS_GET_VALUES.toByte()))
+
+    private companion object {
+        const val BMS_POLL_STRIDE = 8L
+    }
 }

@@ -223,22 +223,33 @@ data class DiagnosticEventEntity(
   tableName = "boards",
   indices = [
     Index(value = ["created_at"]),
-    Index(value = ["is_starred"]),
   ],
 )
 data class BoardEntity(
   @PrimaryKey
   val id: String,
   val name: String,
-  val description: String?,
   @ColumnInfo(name = "ble_id")
   val bleId: String?,
-  @ColumnInfo(name = "is_starred")
-  val isStarred: Boolean,
   @ColumnInfo(name = "created_at")
   val createdAt: Long,
-  @ColumnInfo(name = "battery_config_json")
-  val batteryConfigJson: String?,
+)
+
+@Entity(
+  tableName = "board_settings",
+  primaryKeys = ["board_id", "key"],
+  indices = [
+    Index(value = ["board_id"]),
+  ],
+)
+data class BoardSettingEntity(
+  @ColumnInfo(name = "board_id")
+  val boardId: String,
+  val key: String,
+  @ColumnInfo(name = "value_json")
+  val valueJson: String,
+  @ColumnInfo(name = "updated_at")
+  val updatedAt: Long,
 )
 
 @Entity(

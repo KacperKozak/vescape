@@ -58,7 +58,7 @@ public class VescBleModule: Module {
   public func definition() -> ModuleDefinition {
     Name("VescBle")
 
-    Events("onDevice", "onError", "onLiveState", "onTelemetry", "onLocation", "onTelemetryRebuildProgress")
+    Events("onDevice", "onError", "onLiveState", "onTelemetry", "onBms", "onLocation", "onTelemetryRebuildProgress", "onBoardProbeProgress")
 
     OnDestroy {
       self.scanTimer?.invalidate()
@@ -142,7 +142,8 @@ public class VescBleModule: Module {
       settings["selectedBoardId"] = boardId
       Self.saveSettings(settings)
       let board = self.boards.first { ($0["id"] as? String) == boardId }
-      let deviceId = board?["bleId"] as? String ?? "MOCK-ID"
+      let link = board?["link"] as? [String: Any]
+      let deviceId = link?["bleId"] as? String ?? "MOCK-ID"
       let deviceName = board?["name"] as? String ?? "Mock Board"
       self.startMockBoard(deviceId: deviceId, deviceName: deviceName)
       promise.resolve(nil)
@@ -151,6 +152,16 @@ public class VescBleModule: Module {
     AsyncFunction("stopBoard") { (promise: Promise) in
       DispatchQueue.main.async { [weak self] in self?.stopMockSession() }
       promise.resolve(nil)
+    }
+
+    // Mock Board Probe: iOS BLE is not implemented, so confirm a Direct
+    // transport so the Add Board flow stays exercisable.
+    AsyncFunction("probeBoardLink") { (_: String, promise: Promise) in
+      DispatchQueue.main.async { [weak self] in self?.stopMockSession() }
+      promise.resolve([
+        "outcome": "resolved",
+        "candidates": [["transport": "direct", "hasBms": true]],
+      ])
     }
 
     // MARK: Telemetry history (empty stubs)
@@ -439,6 +450,7 @@ public class VescBleModule: Module {
     telemetryTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
       guard let self = self else { return }
       self.emitMockTelemetry()
+      if self.tick % 8 == 0 { self.emitMockBms() }
     }
   }
 
@@ -558,6 +570,31 @@ public class VescBleModule: Module {
     ] as [String: Any?])
   }
 
+  private func emitMockBms() {
+    let t = Double(tick)
+    let cellCount = 20
+    let base = max(3.0, 4.05 - t * 0.00005)
+    var cells: [Double] = []
+    var balancing: [Bool] = []
+    for i in 0..<cellCount {
+      // Slight per-cell spread plus a small wandering imbalance so the UI shows variation.
+      let cell = base + 0.02 * sin(t * 0.05 + Double(i)) + Double(i % 3) * 0.004
+      cells.append(cell)
+      balancing.append(cell > base + 0.03)
+    }
+    let total = cells.reduce(0, +)
+    sendEvent("onBms", [
+      "capturedAt": Date().timeIntervalSince1970 * 1000.0,
+      "voltageTotal": total,
+      "current": 8.0 * cos(t * 0.1),
+      "ampHours": t * 0.01,
+      "wattHours": t * 0.4,
+      "soc": min(1.0, max(0.0, (base - 3.0) / 1.2)),
+      "cellVoltages": cells,
+      "balancing": balancing,
+    ] as [String: Any?])
+  }
+
   private func saveAppData() {
     Self.saveArray(boards, key: "vesc_ble_boards")
     Self.saveArray(alertRules, key: "vesc_ble_alert_rules")
@@ -638,9 +675,6 @@ public class VescBleModule: Module {
   }
 
   private static func sortBoards(_ lhs: [String: Any?], _ rhs: [String: Any?]) -> Bool {
-    let leftStarred = lhs["isStarred"] as? Bool ?? false
-    let rightStarred = rhs["isStarred"] as? Bool ?? false
-    if leftStarred != rightStarred { return leftStarred }
     return createdAt(lhs) < createdAt(rhs)
   }
 

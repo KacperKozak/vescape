@@ -69,8 +69,10 @@ class VescBleModule : Module() {
       "onError",
       "onLiveState",
       "onTelemetry",
+      "onBms",
       "onLocation",
       "onTelemetryRebuildProgress",
+      "onBoardProbeProgress",
     )
 
     OnStartObserving("onDevice") { startObserving("onDevice") }
@@ -81,10 +83,14 @@ class VescBleModule : Module() {
     OnStopObserving("onLiveState") { stopObserving("onLiveState") }
     OnStartObserving("onTelemetry") { startObserving("onTelemetry") }
     OnStopObserving("onTelemetry") { stopObserving("onTelemetry") }
+    OnStartObserving("onBms") { startObserving("onBms") }
+    OnStopObserving("onBms") { stopObserving("onBms") }
     OnStartObserving("onLocation") { startObserving("onLocation") }
     OnStopObserving("onLocation") { stopObserving("onLocation") }
     OnStartObserving("onTelemetryRebuildProgress") { startObserving("onTelemetryRebuildProgress") }
     OnStopObserving("onTelemetryRebuildProgress") { stopObserving("onTelemetryRebuildProgress") }
+    OnStartObserving("onBoardProbeProgress") { startObserving("onBoardProbeProgress") }
+    OnStopObserving("onBoardProbeProgress") { stopObserving("onBoardProbeProgress") }
 
     OnActivityEntersForeground {
       frontendActive = true
@@ -168,6 +174,9 @@ class VescBleModule : Module() {
     }
     AsyncFunction("stopBoard") { promise: Promise ->
       stopBoardSession(promise)
+    }
+    AsyncFunction("probeBoardLink") Coroutine { bleId: String ->
+      probeBoardLink(bleId)
     }
     AsyncFunction("getTelemetryHistory") Coroutine { options: Map<String, Any?> ->
       TelemetryRepository.get(context.applicationContext).getHistory(options)
@@ -492,9 +501,11 @@ class VescBleModule : Module() {
     AppDataRepository.get(context.applicationContext).setSelectedBoardId(boardId)
     val board = AppDataRepository.get(context.applicationContext).getBoard(boardId)
       ?: throw IllegalArgumentException("Board not found: $boardId")
-    val bleId = board["bleId"] as? String
+    @Suppress("UNCHECKED_CAST")
+    val link = board["link"] as? Map<String, Any?>
+    val bleId = link?.get("bleId") as? String
     if (bleId.isNullOrBlank()) {
-      throw IllegalArgumentException("Board has no BLE pairing: $boardId")
+      throw IllegalArgumentException("Board has no Board Link: $boardId")
     }
     val boardName = board["name"] as? String ?: DEFAULT_BOARD_NAME
     VescForegroundService.startBoardSession(
@@ -503,7 +514,8 @@ class VescBleModule : Module() {
         appBoardId = boardId,
         deviceId = bleId,
         deviceName = boardName,
-        canId = null,
+        transport = BoardTransport.fromBridge(link["transport"]),
+        hasBms = link["hasBms"] as? Boolean,
         pollIntervalMs = 500L,
         recordingEnabled = requestedDebugRecordingEnabled,
         telemetryRecordingEnabled = false,
@@ -514,6 +526,48 @@ class VescBleModule : Module() {
         sendEvent("onError", mapOf("message" to message))
       },
     )
+  }
+
+  private suspend fun probeBoardLink(bleId: String): Map<String, Any?> {
+    if (bleId.isBlank()) {
+      throw IllegalArgumentException("Board Probe needs a BLE peripheral id")
+    }
+    val appCtx = context.applicationContext
+
+    // A Board Probe owns the single BLE connection: tear down any live Board
+    // Session before probing so the probe isn't fighting an active session.
+    val stopped = CompletableDeferred<Unit>()
+    VescForegroundService.stopBoardSession(appCtx) { stopped.complete(Unit) }
+    stopped.await()
+
+    val device = btAdapter.getRemoteDevice(bleId)
+    val result = CompletableDeferred<TransportDetection.Result>()
+    mainHandler.post {
+      BoardTransportDetector(
+        context = appCtx,
+        handler = mainHandler,
+        device = device,
+        recordDiagnostic = { name, props ->
+          TelemetryRepository.get(appCtx).recordDiagnosticEvent(name, props)
+        },
+        onProgress = { progress -> sendEvent("onBoardProbeProgress", progress) },
+        onComplete = { result.complete(it) },
+        onError = { code, message -> result.completeExceptionally(IllegalStateException("$code: $message")) },
+      ).start()
+    }
+    return probeResultToBridge(result.await())
+  }
+
+  private fun probeResultToBridge(result: TransportDetection.Result): Map<String, Any?> {
+    val candidates = result.candidates.map {
+      mapOf("transport" to BoardTransport.toBridge(it.transport), "hasBms" to it.hasBms)
+    }
+    val outcome = when (result.outcome) {
+      is TransportDetection.Outcome.Resolved -> "resolved"
+      is TransportDetection.Outcome.NeedsPick -> "needs-pick"
+      TransportDetection.Outcome.None -> "none"
+    }
+    return mapOf("outcome" to outcome, "candidates" to candidates)
   }
 
   private fun stopLocationUpdates() {

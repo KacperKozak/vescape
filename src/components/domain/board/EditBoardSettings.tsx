@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { BatteryChargingIcon, BluetoothIcon, LightningIcon, TrashIcon } from 'phosphor-react-native'
+import { BatteryChargingIcon, LightningIcon, LinkIcon, TrashIcon } from 'phosphor-react-native'
+import type { BoardLink } from 'vesc-ble'
 
 import { BoardSettingRow } from '@/components/domain/board/BoardSettingRow'
 import { Button } from '@/components/ui/base/Button'
@@ -7,33 +8,34 @@ import { IconHero } from '@/components/ui/settings/IconHero'
 import { SettingsCard } from '@/components/ui/settings/SettingsCard'
 import { SettingsRow } from '@/components/ui/settings/SettingsRow'
 import { interaction, theme } from '@/constants/theme'
+import { formatBmsSuffix, formatBoardTransport } from '@/lib/boardTransport'
 import type { BatterySummary } from '@/lib/boardSetup'
 
 interface EditBoardSettingsProps {
   name: string
   description: string
-  pairedBleId: string
-  pairedBleName: string
-  pairingSaving?: boolean
+  link: BoardLink | null
+  linkSaving?: boolean
   keepMissingBatteryConfig: boolean
   batterySummary: BatterySummary
   onOpenBattery: () => void
-  onOpenPairing: () => void
-  onClearPairing: () => Promise<void> | void
+  onLink: () => void
+  onRelink: () => void
+  onUnlink: () => Promise<void> | void
   onRemove: () => void
 }
 
 export function EditBoardSettings({
   name,
   description,
-  pairedBleId,
-  pairedBleName,
-  pairingSaving = false,
+  link,
+  linkSaving = false,
   keepMissingBatteryConfig,
   batterySummary,
   onOpenBattery,
-  onOpenPairing,
-  onClearPairing,
+  onLink,
+  onRelink,
+  onUnlink,
   onRemove,
 }: EditBoardSettingsProps) {
   return (
@@ -61,30 +63,45 @@ export function EditBoardSettings({
 
       <SettingsCard>
         <SettingsRow
-          icon={BluetoothIcon}
+          icon={LinkIcon}
           iconColor={theme.teal.color}
-          label="BLE pairing"
-          hint={pairedBleId ? pairedBleName || pairedBleId : 'No device paired'}
+          label="Board Link"
+          hint={
+            link
+              ? `${link.bleId} · ${formatBoardTransport(link.transport)}${formatBmsSuffix(link.hasBms)}`
+              : 'Not linked — probe a device to ride'
+          }
           right={
             <View style={styles.buttonGroup}>
-              <Button
-                label={pairedBleId ? 'Change' : 'Pair'}
-                variant="secondary"
-                size="sm"
-                loading={pairingSaving}
-                onPress={onOpenPairing}
-                testID="edit-board-pair-button"
-              />
-              {pairedBleId ? (
+              {link ? (
+                <>
+                  <Button
+                    label="Re-link"
+                    variant="secondary"
+                    size="sm"
+                    loading={linkSaving}
+                    onPress={onRelink}
+                    testID="edit-board-relink-button"
+                  />
+                  <Button
+                    label="Unlink"
+                    variant="destructive"
+                    size="sm"
+                    loading={linkSaving}
+                    onPress={onUnlink}
+                    testID="edit-board-unlink-button"
+                  />
+                </>
+              ) : (
                 <Button
-                  label="Clear"
-                  variant="destructive"
+                  label="Link"
+                  variant="secondary"
                   size="sm"
-                  loading={pairingSaving}
-                  onPress={onClearPairing}
-                  testID="edit-board-clear-pairing-button"
+                  loading={linkSaving}
+                  onPress={onLink}
+                  testID="edit-board-link-button"
                 />
-              ) : null}
+              )}
             </View>
           }
         />
