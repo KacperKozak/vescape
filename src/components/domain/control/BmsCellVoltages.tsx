@@ -29,7 +29,7 @@ export function BmsCellVoltages() {
         <Text style={styles.empty}>
           {bmsLinked
             ? 'No smart-BMS data yet.'
-            : 'No smart-BMS detected. Re-probe a board with a BMS over CAN.'}
+            : 'No smart-BMS detected. Re-link a board with a BMS over CAN.'}
         </Text>
       </View>
     )

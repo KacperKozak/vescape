@@ -70,8 +70,8 @@ export default function EditBoardScreen() {
     })
   }
 
-  // Re-probe the existing link's peripheral.
-  const handleReprobe = () => {
+  // Re-link the board: re-probe its existing peripheral and replace the link.
+  const handleRelink = () => {
     router.push({
       pathname: routes.editBoardLink,
       params: { boardId },
@@ -96,7 +96,7 @@ export default function EditBoardScreen() {
             batterySummary={form.batterySummary}
             onOpenBattery={() => setBatteryModalVisible(true)}
             onLink={handleLink}
-            onReprobe={handleReprobe}
+            onRelink={handleRelink}
             onUnlink={form.unlink}
             onRemove={() => setRemoveConfirmVisible(true)}
           />

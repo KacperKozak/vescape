@@ -21,7 +21,7 @@ The resolved path used to reach a Board's telemetry: Direct (the BLE-connected c
 _Avoid_: Connection path, routing, channel
 
 **Board Probe**:
-A pre-save check that a scanned BLE peripheral can produce telemetry over at least one Board Transport and produce a Board Link.
+A pre-save check that a scanned BLE peripheral can produce telemetry over at least one Board Transport and produce a Board Link. The rider-facing UI calls running a Board Probe "linking" (and re-running it "re-linking") — the screen, buttons, and progress timeline say "link", while the domain and code keep "Board Probe" for the act and "Board Link" for the saved result.
 _Avoid_: Validation, test connection, scan
 
 **Live State**:
@@ -139,7 +139,7 @@ _Avoid_: Error log, debug session, crash report
 ## Flagged Ambiguities
 
 - "device" may mean the phone BLE peripheral, the saved app board, or the motor controller; resolved term: use **Board** for the saved rideable device.
-- "scan" may mean BLE discovery or telemetry validation; resolved term: use **Board Probe** for the pre-save telemetry check after selecting a BLE peripheral.
+- "scan" may mean BLE discovery or telemetry validation; resolved term: use **Board Probe** for the pre-save telemetry check after selecting a BLE peripheral. UI copy says "linking" for this; code/domain keep "Board Probe".
 - "paired" may mean a selected BLE peripheral or a Board that is ready to connect; resolved term: use **Board Link** for the saved, probed reachability details.
 - `bleId` without a **Board Transport** is an invalid partial **Board Link**; resolved: save the whole **Board Link** or none of it.
 - "session" may mean a BLE connection, raw debug capture, or persisted ride; resolved terms: use **Board Session** for the live BLE connection lifecycle and **Ride Recording** for the persisted ride capture. Avoid bare "session".

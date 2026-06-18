@@ -1,14 +1,16 @@
-import { useEffect, useRef, useState } from 'react'
-import { ScrollView, StyleSheet, Text, View } from 'react-native'
+import { useState } from 'react'
+import { ScrollView, StyleSheet, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, useLocalSearchParams } from 'expo-router'
-import { BluetoothIcon, WarningCircleIcon } from 'phosphor-react-native'
 import { useShallow } from 'zustand/react/shallow'
 
-import { BoardProbeCandidates } from '@/components/domain/board/BoardProbeCandidates'
-import { BoardProbeProgress } from '@/components/domain/board/BoardProbeProgress'
+import { LinkIcon } from 'phosphor-react-native'
+
+import { BoardLinkTimeline } from '@/components/domain/board/BoardLinkTimeline'
+import { IconHero } from '@/components/ui/settings/IconHero'
 import { Button } from '@/components/ui/base/Button'
-import { useBoardProbe } from '@/hooks/useBoardProbe'
+import { useBoardLink } from '@/hooks/useBoardLink'
+import { formatBmsSuffix, formatBoardTransport } from '@/lib/boardTransport'
 import { routes } from '@/navigation/routes'
 import { useBoardStore } from '@/store/boardStore'
 import { theme } from '@/constants/theme'
@@ -30,114 +32,87 @@ export default function BoardLinkScreen() {
     })),
   )
 
-  // Capture the peripheral to probe once: a freshly-scanned device, else the
-  // existing Board Link's peripheral (re-probe).
+  // The peripheral to link: a freshly-scanned device, else the board's existing
+  // link (re-link). The existing link is left intact until a new one is saved —
+  // a cancelled or failed re-link must not destroy a working link.
   const [bleId] = useState(() => routeBleId ?? board?.link?.bleId ?? null)
-  const isReprobe = !routeBleId && board?.link != null
+  const existingLink = board?.link ?? null
 
-  // Re-probing clears the old Board Link as it starts; a new one is saved only
-  // if probing succeeds, so a failed re-probe leaves the Board unlinked.
-  const clearedRef = useRef(false)
-  useEffect(() => {
-    if (isReprobe && board && !clearedRef.current) {
-      clearedRef.current = true
-      void updateBoard({ ...board, link: null })
-    }
-  }, [isReprobe, board, updateBoard])
-
-  const probe = useBoardProbe(bleId)
+  const link = useBoardLink(bleId)
   const [saving, setSaving] = useState(false)
 
-  const handleConfirm = async () => {
-    if (!board || !probe.selectedLink) return
+  const handleSave = async () => {
+    if (!board || !link.selectedLink) return
     setSaving(true)
     try {
-      await updateBoard({ ...board, link: probe.selectedLink })
+      await updateBoard({ ...board, link: link.selectedLink })
       router.back()
     } finally {
       setSaving(false)
     }
   }
 
-  const chooseDevice = () => {
+  const scanNewDevice = () => {
     router.push({ pathname: routes.addBoardScan, params: { boardId } })
   }
 
+  const deviceLabel = board?.name?.trim() || bleName || bleId || 'Board'
+
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
+      <IconHero
+        icon={LinkIcon}
+        title={deviceLabel}
+        description="Linking your board over Bluetooth"
+      />
       <ScrollView contentContainerStyle={styles.content}>
-        {bleId == null ? (
-          <View style={styles.centered}>
-            <BluetoothIcon size={40} color={theme.wheel.color} weight="duotone" />
-            <Text style={styles.title}>No device to link</Text>
-            <Text style={styles.statusText}>
-              Choose a BLE peripheral to probe and link to this board.
-            </Text>
-          </View>
-        ) : null}
-
-        {bleId != null && probe.phase === 'probing' ? (
-          <BoardProbeProgress
-            progress={probe.progress}
-            bmsDetected={probe.bmsDetected}
-            deviceName={bleName ?? bleId}
+        {bleId != null ? (
+          <BoardLinkTimeline
+            phase={link.phase}
+            progress={link.progress}
+            candidates={link.candidates}
+            selected={link.selected}
+            onSelect={link.select}
+            deviceLabel={deviceLabel}
+            hideHeader
+            bleId={bleId}
+            testIDPrefix="board-link"
+            failureNote={
+              existingLink
+                ? `Existing link kept · ${formatBoardTransport(existingLink.transport)}${formatBmsSuffix(existingLink.hasBms)}`
+                : undefined
+            }
           />
-        ) : null}
-
-        {bleId != null && probe.phase === 'failed' ? (
-          <View style={styles.centered}>
-            <WarningCircleIcon size={40} color={theme.error.text} weight="duotone" />
-            <Text style={styles.title}>No working transport</Text>
-            <Text style={styles.statusText}>
-              The probe found no Board Transport that returns telemetry. Nothing was saved.
-            </Text>
-          </View>
-        ) : null}
-
-        {probe.phase === 'picking' ? (
-          <View style={styles.list}>
-            <Text style={styles.title}>
-              {probe.candidates.length === 1 ? 'Confirm transport' : 'Pick a transport'}
-            </Text>
-            <BoardProbeCandidates
-              candidates={probe.candidates}
-              selected={probe.selected}
-              onSelect={probe.select}
-              testIDPrefix="board-link-option"
-            />
-          </View>
         ) : null}
       </ScrollView>
 
-      <View style={styles.footer}>
-        {bleId == null ? (
-          <Button label="Choose device" onPress={chooseDevice} testID="board-link-choose-device" />
-        ) : probe.phase === 'failed' ? (
-          <View style={styles.footerRow}>
-            <Button
-              style={styles.footerButton}
-              label="Choose another"
-              variant="secondary"
-              onPress={chooseDevice}
-              testID="board-link-choose-another"
-            />
-            <Button
-              style={styles.footerButton}
-              label="Retry"
-              onPress={probe.retry}
-              testID="board-link-retry"
-            />
-          </View>
-        ) : (
+      {link.phase === 'failed' ? (
+        <View style={[styles.footer, styles.actionRow]}>
           <Button
-            label="Confirm"
-            onPress={handleConfirm}
-            disabled={probe.phase !== 'picking' || probe.selectedLink == null}
-            loading={saving}
-            testID="board-link-confirm"
+            style={styles.actionButton}
+            label="Scan new device"
+            variant="secondary"
+            onPress={scanNewDevice}
+            testID="board-link-choose-another"
           />
-        )}
-      </View>
+          <Button
+            style={styles.actionButton}
+            label="Retry"
+            onPress={link.retry}
+            testID="board-link-retry"
+          />
+        </View>
+      ) : (
+        <View style={styles.footer}>
+          <Button
+            label="Save link"
+            onPress={handleSave}
+            disabled={link.phase !== 'picking' || link.selectedLink == null}
+            loading={saving}
+            testID="board-link-save"
+          />
+        </View>
+      )}
     </SafeAreaView>
   )
 }
@@ -149,38 +124,19 @@ const styles = StyleSheet.create({
   },
   content: {
     flexGrow: 1,
-    padding: 16,
-  },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
-    paddingHorizontal: 24,
-  },
-  list: {
-    gap: 8,
-  },
-  title: {
-    color: theme.neutral.textPrimary,
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  statusText: {
-    color: theme.neutral.textSecondary,
-    fontSize: 14,
-    textAlign: 'center',
+    padding: 16,
   },
   footer: {
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 24,
   },
-  footerRow: {
+  actionRow: {
     flexDirection: 'row',
     gap: 10,
   },
-  footerButton: {
+  actionButton: {
     flex: 1,
   },
 })

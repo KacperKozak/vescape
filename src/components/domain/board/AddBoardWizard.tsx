@@ -15,13 +15,12 @@ import { useShallow } from 'zustand/react/shallow'
 
 import { BoardBatteryForm } from '@/components/domain/board/BoardBatteryForm'
 import { BoardInfoForm } from '@/components/domain/board/BoardInfoForm'
-import { BoardProbeCandidates } from '@/components/domain/board/BoardProbeCandidates'
-import { BoardProbeProgress } from '@/components/domain/board/BoardProbeProgress'
+import { BoardLinkTimeline } from '@/components/domain/board/BoardLinkTimeline'
 import { Button } from '@/components/ui/base/Button'
 import { DeviceRow } from '@/components/ui/base/DeviceRow'
 import { theme } from '@/constants/theme'
 import { type UseAddBoardWizard, WIZARD_STEPS, type WizardStepId } from '@/hooks/useAddBoardWizard'
-import { useBoardProbe } from '@/hooks/useBoardProbe'
+import { useBoardLink } from '@/hooks/useBoardLink'
 import { formatBmsSuffix, formatBoardTransport } from '@/lib/boardTransport'
 import { useBleStore, NUS_SERVICE_UUID } from '@/store/bleStore'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -86,86 +85,60 @@ function ProgressBar({ step }: { step: number }) {
 }
 
 function ScanStep({ wizard }: Props) {
-  if (wizard.pairPhase === 'probing') return <ProbeStep wizard={wizard} />
+  if (wizard.pairPhase === 'probing') return <LinkStep wizard={wizard} />
   return <ScanSelectStep wizard={wizard} />
 }
 
-function ProbeStep({ wizard }: Props) {
-  const probe = useBoardProbe(wizard.bleId || null)
+function LinkStep({ wizard }: Props) {
+  const link = useBoardLink(wizard.bleId || null)
 
   return (
     <View style={styles.step}>
-      <View style={styles.stepHeader}>
-        <Bluetooth size={20} color={theme.wheel.color} weight="duotone" />
-        <Text style={styles.stepTitle}>Probe board</Text>
-      </View>
-
-      {probe.phase === 'probing' ? (
-        <View style={styles.probeBody}>
-          <BoardProbeProgress
-            progress={probe.progress}
-            bmsDetected={probe.bmsDetected}
-            deviceName={wizard.bleName || wizard.bleId}
-          />
-        </View>
-      ) : null}
-
-      {probe.phase === 'failed' ? (
-        <>
-          <View style={styles.probeBody}>
-            <WifiSlash size={40} color={theme.error.text} weight="duotone" />
-            <Text style={styles.stepTitle}>No working transport</Text>
-            <Text style={styles.detectText}>
-              The probe found no Board Transport that returns telemetry. Nothing was saved — retry,
-              choose another device, or create the board offline.
-            </Text>
-          </View>
-          <Button
-            label="Retry"
-            icon={WifiHigh}
-            onPress={probe.retry}
-            testID="add-board-probe-retry"
-          />
-          <Button
-            label="Choose another device"
-            variant="secondary"
-            icon={Bluetooth}
-            onPress={wizard.clearDevice}
-            testID="add-board-probe-choose-another"
-          />
-          <Button
-            label="Create offline"
-            variant="secondary"
-            onPress={wizard.continueOffline}
-            testID="add-board-probe-offline"
-          />
-        </>
-      ) : null}
-
-      {probe.phase === 'picking' ? (
-        <>
-          <Text style={styles.detectText}>
-            {probe.candidates.length === 1
-              ? 'Telemetry confirmed. Save this transport.'
-              : 'Multiple transports returned telemetry. Pick one to save.'}
-          </Text>
-          <BoardProbeCandidates
-            candidates={probe.candidates}
-            selected={probe.selected}
-            onSelect={probe.select}
-            testIDPrefix="add-board-probe-option"
-          />
-          <Button
-            label="Confirm"
-            icon={CheckCircle}
-            disabled={probe.selectedLink == null}
-            onPress={() => {
-              if (probe.selectedLink) wizard.onDeviceProbed(probe.selectedLink)
-            }}
-            testID="add-board-probe-confirm"
-          />
-        </>
-      ) : null}
+      <BoardLinkTimeline
+        phase={link.phase}
+        progress={link.progress}
+        candidates={link.candidates}
+        selected={link.selected}
+        onSelect={link.select}
+        deviceLabel={wizard.bleName || wizard.bleId}
+        bleId={wizard.bleId}
+        testIDPrefix="add-board-link"
+        actions={
+          link.phase === 'picking' ? (
+            <Button
+              label="Save link"
+              icon={CheckCircle}
+              disabled={link.selectedLink == null}
+              onPress={() => {
+                if (link.selectedLink) wizard.onDeviceProbed(link.selectedLink)
+              }}
+              testID="add-board-link-save"
+            />
+          ) : link.phase === 'failed' ? (
+            <>
+              <Button
+                label="Retry"
+                icon={WifiHigh}
+                onPress={link.retry}
+                testID="add-board-link-retry"
+              />
+              <Button
+                label="Choose another device"
+                variant="secondary"
+                icon={Bluetooth}
+                onPress={wizard.clearDevice}
+                testID="add-board-link-choose-another"
+              />
+              <Button
+                label="Create offline"
+                variant="secondary"
+                onPress={wizard.continueOffline}
+                testID="add-board-link-offline"
+              />
+            </>
+          ) : null
+        }
+      />
     </View>
   )
 }
@@ -617,15 +590,5 @@ const styles = StyleSheet.create({
     color: theme.neutral.textPrimary,
     fontSize: 14,
     fontWeight: '600',
-  },
-  detectText: {
-    color: theme.neutral.textSecondary,
-    fontSize: 14,
-    lineHeight: 20,
-  },
-  probeBody: {
-    alignItems: 'center',
-    gap: 10,
-    paddingVertical: 24,
   },
 })

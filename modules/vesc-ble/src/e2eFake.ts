@@ -212,7 +212,7 @@ export const e2eFake = {
   probeBoardLink(_bleId: string): BoardProbeResult {
     stopBoardSession()
     for (const listener of boardProbeProgressListeners) {
-      listener({ step: 'completed', elapsedMs: 0, transport: 'direct' })
+      listener({ step: 'completed', elapsedMs: 0 })
     }
     return { outcome: 'resolved', candidates: [{ transport: 'direct', hasBms: false }] }
   },

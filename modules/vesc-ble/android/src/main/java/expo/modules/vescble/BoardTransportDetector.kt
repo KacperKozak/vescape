@@ -64,20 +64,13 @@ internal class BoardTransportDetector(
 
   private fun elapsed(): Long = nowMs() - startMs
 
-  /** Surface a live probe milestone to JS so UI can show connect/probe steps. */
-  private fun emitProgress(
-    step: String,
-    transport: BoardTransport? = null,
-    message: String? = null,
-  ) {
-    onProgress(
-      mapOf(
-        "step" to step,
-        "elapsedMs" to elapsed(),
-        "transport" to BoardTransport.toBridge(transport),
-        "message" to message,
-      ),
-    )
+  /**
+   * Surface the coarse, monotonic probe phase to JS. Per-transport detail
+   * (which transport, telemetry/BMS replies) stays in Diagnostic Events; the UI
+   * reads resolved transports from the returned candidates, not from here.
+   */
+  private fun emitProgress(step: String) {
+    onProgress(mapOf("step" to step, "elapsedMs" to elapsed()))
   }
 
   fun start() {
@@ -98,7 +91,7 @@ internal class BoardTransportDetector(
   private fun attemptConnect(initial: Boolean) {
     if (finished) return
     connectAttempts++
-    emitProgress("ble_connecting")
+    emitProgress("connecting")
     val delay = if (initial) DETECT_CONNECT_SETTLE_MS else DETECT_CONNECT_RETRY_BACKOFF_MS
     handler.postDelayed({
       if (finished) return@postDelayed
@@ -119,7 +112,6 @@ internal class BoardTransportDetector(
         "board_probe_ble_connected",
         mapOf("message" to "BLE connected", "ble_id" to device.address, "elapsed_ms" to elapsed()),
       )
-      emitProgress("ble_connected")
     }
   }
 
@@ -133,7 +125,7 @@ internal class BoardTransportDetector(
         "board_probe_service_ready",
         mapOf("message" to "VESC service ready", "elapsed_ms" to elapsed()),
       )
-      emitProgress("service_ready")
+      emitProgress("handshake")
       phase = Phase.Pinging
       handler.postDelayed({ if (!finished) gatt.sendPayload(byteArrayOf(COMM_FW_VERSION.toByte())) }, DETECT_FW_DELAY_MS)
       handler.postDelayed({ if (!finished) gatt.sendPayload(byteArrayOf(COMM_PING_CAN.toByte())) }, DETECT_PING_DELAY_MS)
@@ -213,6 +205,7 @@ internal class BoardTransportDetector(
   private fun beginProbing() {
     if (finished) return
     phase = Phase.Probing
+    emitProgress("probing")
     probeQueue.clear()
     probeQueue.addAll(TransportDetection.candidatesToProbe(responders.toList()))
     probeNext()
@@ -231,10 +224,6 @@ internal class BoardTransportDetector(
         "transport" to BoardTransport.toBridge(transport),
         "elapsed_ms" to elapsed(),
       ),
-    )
-    emitProgress(
-      if (transport is BoardTransport.Can) "probing_can" else "probing_direct",
-      transport,
     )
     // Ask for telemetry (confirms the transport) and BMS values (capability) in one
     // window. The BMS reply is best-effort: absence within the window means no BMS.
@@ -261,17 +250,12 @@ internal class BoardTransportDetector(
   private fun markConfirmed() {
     if (currentConfirmed) return
     currentConfirmed = true
-    val transport = current ?: return
-    emitProgress("telemetry_confirmed", transport)
     maybeFinishProbe()
   }
 
   /** A smart-BMS answered on the current transport. */
   private fun markBms() {
-    if (!currentHasBms) {
-      currentHasBms = true
-      current?.let { emitProgress("bms_detected", it, "Smart-BMS detected") }
-    }
+    currentHasBms = true
     maybeFinishProbe()
   }
 
@@ -333,7 +317,7 @@ internal class BoardTransportDetector(
       "board_probe_failed",
       mapOf("message" to message, "code" to code, "elapsed_ms" to elapsed()),
     )
-    emitProgress("failed", message = message)
+    emitProgress("failed")
     cleanup()
     completeAfterGattRelease { onError(code, message) }
   }

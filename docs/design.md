@@ -6,6 +6,10 @@ Visual design principles for the Vibe Wheel app. Follow these when building or m
 > Never hardcode a hex value (`#...`), rgba literal, or any color string directly in a component file.
 > If you need a new color, add a token to `theme.ts` first — then use it everywhere via `theme.*`.
 
+> **No large solid bright fills — anywhere in the app.**
+> Bright accent colours (`theme.*.color`) are for **thin borders, icons, and text**, not for filling large areas. Avoid `weight="fill"` glyphs, bright filled discs/badges/blocks, and bright-coloured backgrounds behind content. State and emphasis come from thin borders + coloured icons/text on the dark surface.
+> Permitted fills: dark surfaces (`theme.neutral.surface`/`surfaceDeep`), dark tinted pill backgrounds (`theme.*.bg`), and the primary `Button`. Small bright accents (a thin underline, a dot, a 1–2px border) are fine; large bright planes are not.
+
 ## Theme
 
 Dark-first. All screens use dark backgrounds with light text.
@@ -57,6 +61,14 @@ Icon sizing:
 - `16–18` — row icons in settings/lists
 - `20` — row icons inside icon boxes (legacy card rows)
 
+## Status & Selection Indicators
+
+A specific application of the no-bright-fills rule. Status and selection states (checklist steps, radios, progress milestones) use **thin-bordered outline circles**:
+
+- Wrap the indicator in a generous circle (`40–44px`, `borderWidth: 1.5`, transparent background). State is carried by the **thin border colour + the icon colour**, both from `theme.*` — done in `gps`, active in `wheel`, error in `error`, idle in `theme.neutral.border`/`textMuted`.
+- Never a `weight="fill"` disc or filled dot — a bright filled glyph reads as a heavy blob on the dark surface.
+- **Bigger is calmer.** Prefer large outline circles with breathing room over small dense glyphs.
+
 ## Cards
 
 Use cards (`backgroundColor: theme.neutral.surface`, `borderRadius: 12`, `borderColor: theme.neutral.border`) only for grouping interactive elements (switches, steppers, pressable rows). A card groups related controls — not labels or read-only info.
@@ -86,6 +98,7 @@ For screen headers showing metadata (version, OS, DB size), use centered text wi
 
 - Wrapping non-interactive content in cards or bordered boxes
 - Using the same icon color for adjacent items
+- Solid bright fills for status/selection (filled check discs, `weight="fill"` dots) — use thin-bordered outline circles instead
 - `Alert.alert` — use `ConfirmModal` instead
 - Ad-hoc `Pressable` + `Text` — use `Button` or `IconButton`
 - Emoji or unicode as icon substitutes

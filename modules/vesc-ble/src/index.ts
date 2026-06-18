@@ -76,25 +76,20 @@ export interface BoardProbeResult {
   candidates: BoardCandidate[]
 }
 
-/** Probe progress milestones, surfaced live so UI can show connect/probe steps. */
-export type BoardProbeStep =
-  | 'ble_connecting'
-  | 'ble_connected'
-  | 'service_ready'
-  | 'probing_direct'
-  | 'probing_can'
-  | 'bms_detected'
-  | 'telemetry_confirmed'
-  | 'completed'
-  | 'failed'
+/**
+ * Coarse, monotonic probe phase surfaced live so UI can show progress. These are
+ * the rider-facing phases, not the probe loop's per-transport internals: a probe
+ * connects, handshakes the VESC service, then probes transports until one returns
+ * telemetry. The resolved transport(s) and smart-BMS capability are read from the
+ * returned {@link BoardCandidate}s, not from progress events. Detailed
+ * per-transport milestones stay in Diagnostic Events for debugging.
+ */
+export type BoardProbeStep = 'connecting' | 'handshake' | 'probing' | 'completed' | 'failed'
 
 export interface BoardProbeProgressEvent {
   step: BoardProbeStep
   /** Milliseconds elapsed since the probe started. */
   elapsedMs: number
-  /** The transport this step concerns, when applicable. */
-  transport?: BoardTransport | null
-  message?: string | null
 }
 
 /**

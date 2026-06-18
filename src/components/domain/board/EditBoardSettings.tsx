@@ -20,7 +20,7 @@ interface EditBoardSettingsProps {
   batterySummary: BatterySummary
   onOpenBattery: () => void
   onLink: () => void
-  onReprobe: () => void
+  onRelink: () => void
   onUnlink: () => Promise<void> | void
   onRemove: () => void
 }
@@ -34,7 +34,7 @@ export function EditBoardSettings({
   batterySummary,
   onOpenBattery,
   onLink,
-  onReprobe,
+  onRelink,
   onUnlink,
   onRemove,
 }: EditBoardSettingsProps) {
@@ -76,12 +76,12 @@ export function EditBoardSettings({
               {link ? (
                 <>
                   <Button
-                    label="Re-probe"
+                    label="Re-link"
                     variant="secondary"
                     size="sm"
                     loading={linkSaving}
-                    onPress={onReprobe}
-                    testID="edit-board-reprobe-button"
+                    onPress={onRelink}
+                    testID="edit-board-relink-button"
                   />
                   <Button
                     label="Unlink"
