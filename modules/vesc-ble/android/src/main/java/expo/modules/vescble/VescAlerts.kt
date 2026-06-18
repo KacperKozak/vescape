@@ -235,10 +235,25 @@ internal class VescAlertFeedback(
         .build()
     private val soundIds = HashMap<Int, Int>()
     private val geigerLoops = HashMap<String, GeigerLoop>()
+    private val connectSoundId = soundPool.load(context, R.raw.on, 1)
+    private val disconnectSoundId = soundPool.load(context, R.raw.off, 1)
 
     init {
         for (preset in ALERT_SOUND_PRESETS) {
             soundIds[preset.resId] = soundPool.load(context, preset.resId, 1)
+        }
+    }
+
+    fun playConnect() = playRaw(connectSoundId)
+
+    fun playDisconnect() = playRaw(disconnectSoundId)
+
+    private fun playRaw(soundId: Int) {
+        if (soundId == 0) return
+        try {
+            soundPool.play(soundId, 1f, 1f, 1, 0, 1f)
+        } catch (e: Exception) {
+            Log.w(VESC_SESSION_TAG, "Connection sound failed: ${e.message}")
         }
     }
 

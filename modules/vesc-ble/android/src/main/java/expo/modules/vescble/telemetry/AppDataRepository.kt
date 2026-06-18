@@ -414,7 +414,11 @@ fun BoardEntity.toMap(settings: List<BoardSettingEntity>): Map<String, Any?> {
   // are stored; a partial bleId-without-transport row reads as unlinked.
   val transport = values["transport"]
   val link = if (bleId != null && transport != null) {
-    mapOf("bleId" to bleId, "transport" to transport)
+    buildMap<String, Any?> {
+      put("bleId", bleId)
+      put("transport", transport)
+      (values["hasBms"] as? Boolean)?.let { put("hasBms", it) }
+    }
   } else {
     null
   }
@@ -620,14 +624,14 @@ private fun Map<String, Any?>.toPrivacyZoneEntity(): PrivacyZoneEntity {
 @Suppress("UNCHECKED_CAST")
 private fun Map<String, Any?>.boardLink(): Map<String, Any?>? = get("link") as? Map<String, Any?>
 
-private fun Map<String, Any?>.toBoardEntity(): BoardEntity = BoardEntity(
+internal fun Map<String, Any?>.toBoardEntity(): BoardEntity = BoardEntity(
   id = getString("id"),
   name = getString("name"),
   bleId = (boardLink()?.get("bleId") as? String)?.takeIf { it.isNotBlank() },
   createdAt = getLong("createdAt"),
 )
 
-private fun Map<String, Any?>.toBoardSettingEntities(boardId: String): Pair<List<BoardSettingEntity>, List<String>> {
+internal fun Map<String, Any?>.toBoardSettingEntities(boardId: String): Pair<List<BoardSettingEntity>, List<String>> {
   val now = System.currentTimeMillis()
   val settings = mutableListOf<BoardSettingEntity>()
   val deletedKeys = mutableListOf<String>()
@@ -646,6 +650,7 @@ private fun Map<String, Any?>.toBoardSettingEntities(boardId: String): Pair<List
     "transport",
     BoardTransport.encode(BoardTransport.fromBridge(boardLink()?.get("transport"))),
   )
+  putOrDelete("hasBms", boardLink()?.get("hasBms") as? Boolean)
 
   return settings to deletedKeys
 }
@@ -662,6 +667,7 @@ private fun BoardSettingEntity.decodeBoardSetting(): Pair<String, Any?>? {
     "transport" -> (raw as? String)?.let {
       key to BoardTransport.toBridge(BoardTransport.decode(it))
     }
+    "hasBms" -> (raw as? Boolean)?.let { key to it }
     else -> null
   }
 }
