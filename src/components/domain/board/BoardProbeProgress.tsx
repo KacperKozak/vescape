@@ -1,5 +1,5 @@
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
-import { CheckCircleIcon, CircleIcon } from 'phosphor-react-native'
+import { CheckCircleIcon, CircleIcon, LightningIcon } from 'phosphor-react-native'
 import type { BoardProbeProgressEvent, BoardProbeStep } from 'vesc-ble'
 
 import { theme } from '@/constants/theme'
@@ -13,6 +13,9 @@ const STEP_STAGE: Record<BoardProbeStep, number> = {
   service_ready: 1,
   probing_direct: 2,
   probing_can: 2,
+  // BMS detection happens within the probing stage; it's an optional capability,
+  // surfaced as its own indicator rather than a pipeline step.
+  bms_detected: 2,
   telemetry_confirmed: 3,
   completed: 4,
   failed: 0,
@@ -20,10 +23,12 @@ const STEP_STAGE: Record<BoardProbeStep, number> = {
 
 interface Props {
   progress: BoardProbeProgressEvent | null
+  /** Latched smart-BMS detection for the current run (the hook remembers the one-shot event). */
+  bmsDetected: boolean
   deviceName: string
 }
 
-export function BoardProbeProgress({ progress, deviceName }: Props) {
+export function BoardProbeProgress({ progress, bmsDetected, deviceName }: Props) {
   const currentStage = progress ? STEP_STAGE[progress.step] : 0
   const elapsedSeconds = progress ? (progress.elapsedMs / 1000).toFixed(1) : '0.0'
 
@@ -52,6 +57,13 @@ export function BoardProbeProgress({ progress, deviceName }: Props) {
           )
         })}
       </View>
+
+      {bmsDetected ? (
+        <View style={styles.bmsRow}>
+          <LightningIcon size={18} color={theme.gps.color} weight="fill" />
+          <Text style={styles.bmsText}>Smart-BMS detected</Text>
+        </View>
+      ) : null}
 
       {progress?.message ? <Text style={styles.message}>{progress.message}</Text> : null}
     </View>
@@ -95,10 +107,22 @@ const styles = StyleSheet.create({
   stageLabelActive: {
     color: theme.neutral.textPrimary,
   },
+  bmsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    gap: 8,
+    marginTop: 16,
+  },
+  bmsText: {
+    color: theme.gps.color,
+    fontSize: 14,
+    fontWeight: '700',
+  },
   message: {
     color: theme.neutral.textSecondary,
     fontSize: 13,
     textAlign: 'center',
-    marginTop: 16,
+    marginTop: 8,
   },
 })

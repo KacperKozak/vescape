@@ -83,6 +83,7 @@ export type BoardProbeStep =
   | 'service_ready'
   | 'probing_direct'
   | 'probing_can'
+  | 'bms_detected'
   | 'telemetry_confirmed'
   | 'completed'
   | 'failed'

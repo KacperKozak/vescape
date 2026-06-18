@@ -17,6 +17,8 @@ export interface UseBoardProbe {
   candidates: BoardCandidate[]
   selected: BoardCandidate | null
   progress: BoardProbeProgressEvent | null
+  /** Latched: a smart-BMS answered during the current probe run. */
+  bmsDetected: boolean
   /** Draft Board Link for the current selection, or null while probing/failed. */
   selectedLink: BoardLink | null
   select: (candidate: BoardCandidate) => void
@@ -34,6 +36,7 @@ export function useBoardProbe(bleId: string | null): UseBoardProbe {
   const [candidates, setCandidates] = useState<BoardCandidate[]>([])
   const [selected, setSelected] = useState<BoardCandidate | null>(null)
   const [progress, setProgress] = useState<BoardProbeProgressEvent | null>(null)
+  const [bmsDetected, setBmsDetected] = useState(false)
   const runRef = useRef(0)
 
   const runProbe = useCallback(() => {
@@ -65,7 +68,10 @@ export function useBoardProbe(bleId: string | null): UseBoardProbe {
   }, [bleId])
 
   useEffect(() => {
-    const subscription = addBoardProbeProgressListener((event) => setProgress(event))
+    const subscription = addBoardProbeProgressListener((event) => {
+      setProgress(event)
+      if (event.step === 'bms_detected') setBmsDetected(true)
+    })
     return () => subscription.remove()
   }, [])
 
@@ -83,6 +89,7 @@ export function useBoardProbe(bleId: string | null): UseBoardProbe {
     setCandidates([])
     setSelected(null)
     setProgress(null)
+    setBmsDetected(false)
     runProbe()
   }, [runProbe])
 
@@ -91,5 +98,5 @@ export function useBoardProbe(bleId: string | null): UseBoardProbe {
       ? { bleId, transport: selected.transport, hasBms: selected.hasBms }
       : null
 
-  return { phase, candidates, selected, progress, selectedLink, select, retry }
+  return { phase, candidates, selected, progress, bmsDetected, selectedLink, select, retry }
 }

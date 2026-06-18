@@ -12,6 +12,16 @@ export function pickDefaultCandidate(candidates: BoardCandidate[]): BoardCandida
   return candidates[0] ?? null
 }
 
+/**
+ * Suffix describing a Board Link's probe-detected smart-BMS presence, for appending to a
+ * transport label. Empty for legacy links (`undefined`) where presence is unknown.
+ */
+export function formatBmsSuffix(hasBms: boolean | undefined): string {
+  if (hasBms === true) return ' · BMS'
+  if (hasBms === false) return ' · no BMS'
+  return ''
+}
+
 /** A Board needs a Board Probe before it can start a Board Session when it has no link. */
 export function boardNeedsLink(board: Pick<Board, 'link'> | undefined): boolean {
   return board?.link == null

@@ -77,7 +77,11 @@ export default function BoardLinkScreen() {
         ) : null}
 
         {bleId != null && probe.phase === 'probing' ? (
-          <BoardProbeProgress progress={probe.progress} deviceName={bleName ?? bleId} />
+          <BoardProbeProgress
+            progress={probe.progress}
+            bmsDetected={probe.bmsDetected}
+            deviceName={bleName ?? bleId}
+          />
         ) : null}
 
         {bleId != null && probe.phase === 'failed' ? (

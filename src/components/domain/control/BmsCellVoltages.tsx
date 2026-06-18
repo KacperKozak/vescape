@@ -16,10 +16,10 @@ const formatCell = (v: number) => `${v.toFixed(2)}V`
 export function BmsCellVoltages() {
   const bms = useBleStore((s) => s.latestBms)
   const summary = useMemo(() => summarizeBms(bms), [bms])
-  // The probe records smart-BMS presence on the active Board Link, so the empty
-  // state can say "this board has none" instead of an indefinite "waiting".
-  const noBmsLinked = useBoardStore(
-    (s) => s.boards.find((b) => b.id === s.activeBoardId)?.link?.hasBms === false,
+  // BMS is polled only when the probe proved one (`hasBms === true`); anything else
+  // is never polled, so the empty state is definitive, not an indefinite "waiting".
+  const bmsLinked = useBoardStore(
+    (s) => s.boards.find((b) => b.id === s.activeBoardId)?.link?.hasBms === true,
   )
 
   if (!summary) {
@@ -27,9 +27,9 @@ export function BmsCellVoltages() {
       <View style={styles.container}>
         <Text style={styles.title}>CELL GROUPS</Text>
         <Text style={styles.empty}>
-          {noBmsLinked
-            ? 'This board has no smart-BMS.'
-            : 'No smart-BMS data. Connect a board with a BMS over CAN.'}
+          {bmsLinked
+            ? 'No smart-BMS data yet.'
+            : 'No smart-BMS detected. Re-probe a board with a BMS over CAN.'}
         </Text>
       </View>
     )

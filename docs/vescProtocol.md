@@ -87,8 +87,9 @@ session. While probing each transport for telemetry, `BoardTransportDetector` al
 `hasBms = true`. The flag rides on the chosen `BoardCandidate` into the saved `BoardLink`
 (`link.hasBms`), so reachability and capability are proven together and stored together.
 
-`null`/absent `hasBms` (links saved before this existed) means _unknown_ and is treated as
-"poll anyway" — only an explicit `false` suppresses polling.
+The probe is authoritative: BMS is polled **only** when it proved one present
+(`hasBms === true`). Unknown (legacy `null`) or proven-absent (`false`) → never polled.
+A legacy link therefore needs a re-probe before cell data appears.
 
 ### Polling
 
@@ -99,9 +100,9 @@ CAN-forwarded (`[0x22, canId, 0x60]`) or sent direct exactly like the Refloat po
 arrives unwrapped at the top level as `[0x60, ...]` (the ESP32 strips the CAN-forward wrapper
 on responses), with a nested `[0x22, ?, 0x60, ...]` form also handled defensively.
 
-When `link.hasBms` is `false`, the probe proved this board has no smart-BMS, so the loop
-**skips the BMS poll entirely** — no wasted frames, and `BmsCellVoltages` shows a definitive
-"This board has no smart-BMS" instead of an open-ended "waiting".
+The loop sends the BMS poll **only** when `link.hasBms === true`; otherwise it is skipped
+entirely — no wasted frames, and `BmsCellVoltages` shows a definitive "No smart-BMS detected"
+instead of an open-ended "waiting".
 
 ### Payload layout (`parseBmsValues` in `VescProtocol.kt`)
 

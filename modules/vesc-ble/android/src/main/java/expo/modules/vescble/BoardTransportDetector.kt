@@ -12,6 +12,15 @@ private const val DETECT_FW_DELAY_MS = 300L
 private const val DETECT_PING_DELAY_MS = 600L
 private const val DETECT_GATT_RELEASE_DELAY_MS = 600L
 
+// Re-probing a connected board tears down the live GATT and reconnects immediately; Android
+// releases the old connection asynchronously, so connecting too soon yields status 133. Settle
+// before the first connect, then retry a bounded number of times with backoff on connect-phase
+// drops (133 and friends are transient).
+private const val DETECT_PROBE_BMS_DELAY_MS = 300L
+private const val DETECT_CONNECT_SETTLE_MS = 500L
+private const val DETECT_CONNECT_RETRY_BACKOFF_MS = 400L
+private const val DETECT_CONNECT_MAX_ATTEMPTS = 3
+
 /**
  * BLE orchestration that runs a single Board Probe and resolves it through the
  * pure [TransportDetection] brain. It owns its own GATT connection, kept
@@ -47,6 +56,7 @@ internal class BoardTransportDetector(
   private var current: BoardTransport? = null
   private var currentConfirmed = false
   private var currentHasBms = false
+  private var connectAttempts = 0
   private var phase = Phase.Connecting
   private var stepTimeout: Runnable? = null
   private var finished = false
@@ -76,12 +86,28 @@ internal class BoardTransportDetector(
       "board_probe_started",
       mapOf("message" to "Board Probe started", "ble_id" to device.address),
     )
-    emitProgress("ble_connecting")
     phase = Phase.Connecting
-    gatt.connect(device)
-    armStep(DETECT_CONNECT_TIMEOUT_MS) {
-      fail("PROBE_CONNECT_TIMEOUT", "Probe could not connect to the board")
-    }
+    attemptConnect(initial = true)
+  }
+
+  /**
+   * Open the probe's GATT connection after a settle delay. The first attempt waits for any
+   * just-released live connection to clear; retries back off after a transient connect-phase
+   * drop. Each attempt re-closes the previous handle so the stack starts clean.
+   */
+  private fun attemptConnect(initial: Boolean) {
+    if (finished) return
+    connectAttempts++
+    emitProgress("ble_connecting")
+    val delay = if (initial) DETECT_CONNECT_SETTLE_MS else DETECT_CONNECT_RETRY_BACKOFF_MS
+    handler.postDelayed({
+      if (finished) return@postDelayed
+      gatt.clear(markIntentional = true)
+      gatt.connect(device)
+      armStep(DETECT_CONNECT_TIMEOUT_MS) {
+        fail("PROBE_CONNECT_TIMEOUT", "Probe could not connect to the board")
+      }
+    }, delay)
   }
 
   // --- VescGattListener (marshalled onto the handler thread) ---
@@ -119,6 +145,22 @@ internal class BoardTransportDetector(
     handler.post {
       if (finished || intentional) return@post
       if (phase == Phase.Connecting) {
+        // Connect-phase drops (typically Android 133 from a not-yet-released prior connection)
+        // are transient — retry a bounded number of times before giving up.
+        if (connectAttempts < DETECT_CONNECT_MAX_ATTEMPTS) {
+          cancelStep()
+          recordDiagnostic(
+            "board_probe_connect_retry",
+            mapOf(
+              "message" to "Connect attempt failed, retrying",
+              "status" to status,
+              "attempt" to connectAttempts,
+              "elapsed_ms" to elapsed(),
+            ),
+          )
+          attemptConnect(initial = false)
+          return@post
+        }
         fail("PROBE_DISCONNECTED", "Board disconnected during probe (status=$status)")
       } else {
         // Connection dropped mid-detection: resolve with whatever was confirmed
@@ -196,18 +238,23 @@ internal class BoardTransportDetector(
     )
     // Ask for telemetry (confirms the transport) and BMS values (capability) in one
     // window. The BMS reply is best-effort: absence within the window means no BMS.
-    val telemetry = probePayload(transport)
-    val bms = bmsProbePayload(transport)
-    gatt.sendPayload(telemetry)
-    gatt.sendPayload(bms)
+    sendProbeBurst(transport)
     // Re-send once mid-window in case the first request dropped.
-    handler.postDelayed({
-      if (!finished && current === transport) {
-        gatt.sendPayload(telemetry)
-        gatt.sendPayload(bms)
-      }
-    }, DETECT_PROBE_TIMEOUT_MS / 2)
+    handler.postDelayed({ sendProbeBurst(transport) }, DETECT_PROBE_TIMEOUT_MS / 2)
     armStep(DETECT_PROBE_TIMEOUT_MS) { finalizeProbe() }
+  }
+
+  /**
+   * Send the telemetry then BMS request, staggered: Android allows only one
+   * write-with-response in flight, so firing both back-to-back drops the second and
+   * the BMS reply never comes (false "no BMS"). Spacing them lets each land.
+   */
+  private fun sendProbeBurst(transport: BoardTransport) {
+    if (finished || current !== transport) return
+    gatt.sendPayload(probePayload(transport))
+    handler.postDelayed({
+      if (!finished && current === transport) gatt.sendPayload(bmsProbePayload(transport))
+    }, DETECT_PROBE_BMS_DELAY_MS)
   }
 
   /** Telemetry sample proves the transport works; mark and finish if BMS already seen. */
@@ -221,7 +268,10 @@ internal class BoardTransportDetector(
 
   /** A smart-BMS answered on the current transport. */
   private fun markBms() {
-    currentHasBms = true
+    if (!currentHasBms) {
+      currentHasBms = true
+      current?.let { emitProgress("bms_detected", it, "Smart-BMS detected") }
+    }
     maybeFinishProbe()
   }
 

@@ -28,9 +28,9 @@ internal class PollingLoop(
     ) {
         val pollPayload = pollPayload(transport)
         val bmsPayload = bmsPayload(transport)
-        // The probe records smart-BMS presence on the Board Link; skip BMS polling entirely
-        // when it confirmed none. `null` (legacy link) is treated as unknown → keep polling.
-        val pollBms = sessionConfig.hasBms != false
+        // BMS is polled only when the probe proved one present (`hasBms == true`). The probe
+        // is authoritative: unknown (legacy `null`) or proven-absent (`false`) → never poll.
+        val pollBms = sessionConfig.hasBms == true
         stop()
         tick = 0L
 

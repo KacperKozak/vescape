@@ -22,7 +22,7 @@ import { DeviceRow } from '@/components/ui/base/DeviceRow'
 import { theme } from '@/constants/theme'
 import { type UseAddBoardWizard, WIZARD_STEPS, type WizardStepId } from '@/hooks/useAddBoardWizard'
 import { useBoardProbe } from '@/hooks/useBoardProbe'
-import { formatBoardTransport } from '@/lib/boardTransport'
+import { formatBmsSuffix, formatBoardTransport } from '@/lib/boardTransport'
 import { useBleStore, NUS_SERVICE_UUID } from '@/store/bleStore'
 import { usePermissions } from '@/hooks/usePermissions'
 
@@ -104,6 +104,7 @@ function ProbeStep({ wizard }: Props) {
         <View style={styles.probeBody}>
           <BoardProbeProgress
             progress={probe.progress}
+            bmsDetected={probe.bmsDetected}
             deviceName={wizard.bleName || wizard.bleId}
           />
         </View>
@@ -230,6 +231,7 @@ function ScanSelectStep({ wizard }: Props) {
             <Text style={styles.pairedText}>
               Linked to {wizard.bleName || wizard.bleId} ·{' '}
               {formatBoardTransport(wizard.draftLink.transport)}
+              {formatBmsSuffix(wizard.draftLink.hasBms)}
             </Text>
           </View>
           <Button
@@ -361,7 +363,7 @@ function ConfirmStep({ wizard }: Props) {
           label="Board Link"
           value={
             wizard.draftLink
-              ? `${wizard.bleName || wizard.bleId} · ${formatBoardTransport(wizard.draftLink.transport)}`
+              ? `${wizard.bleName || wizard.bleId} · ${formatBoardTransport(wizard.draftLink.transport)}${formatBmsSuffix(wizard.draftLink.hasBms)}`
               : 'Offline (not linked)'
           }
         />

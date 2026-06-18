@@ -8,7 +8,7 @@ import { IconHero } from '@/components/ui/settings/IconHero'
 import { SettingsCard } from '@/components/ui/settings/SettingsCard'
 import { SettingsRow } from '@/components/ui/settings/SettingsRow'
 import { interaction, theme } from '@/constants/theme'
-import { formatBoardTransport } from '@/lib/boardTransport'
+import { formatBmsSuffix, formatBoardTransport } from '@/lib/boardTransport'
 import type { BatterySummary } from '@/lib/boardSetup'
 
 interface EditBoardSettingsProps {
@@ -68,7 +68,7 @@ export function EditBoardSettings({
           label="Board Link"
           hint={
             link
-              ? `${link.bleId} · ${formatBoardTransport(link.transport)}`
+              ? `${link.bleId} · ${formatBoardTransport(link.transport)}${formatBmsSuffix(link.hasBms)}`
               : 'Not linked — probe a device to ride'
           }
           right={
