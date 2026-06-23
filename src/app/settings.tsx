@@ -122,7 +122,7 @@ export default function SettingsScreen() {
                 unit="Hz"
                 min={0}
                 max={100}
-                step={5}
+                step={(v, dir) => (dir === 1 ? (v < 5 ? 1 : 5) : v <= 5 ? 1 : 5)}
                 onChange={(nextValue) => {
                   const clampedValue = Math.min(100, Math.max(0, nextValue))
                   if (clampedValue !== telemetryPollRateHz) {
