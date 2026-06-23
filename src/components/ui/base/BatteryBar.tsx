@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
 
 import { Sparkline, type SparklinePoint } from '@/components/ui/charts/Sparkline'
@@ -20,6 +21,8 @@ interface Props {
   compact?: boolean
   transparent?: boolean
   containerStyle?: StyleProp<ViewStyle>
+  /** Parent-owned draw slot. Replaces standalone Sparkline when scenes share one Canvas. */
+  sparklineSlot?: ReactNode
   /** Callback when the bar is pressed. Omit to render a non-interactive view. */
   onPress?: () => void
 }
@@ -42,6 +45,7 @@ export function BatteryBar({
   compact,
   transparent,
   containerStyle,
+  sparklineSlot,
   onPress,
 }: Props) {
   const color = pickColor(percent)
@@ -64,13 +68,15 @@ export function BatteryBar({
           )}
         </Text>
       </View>
-      <Sparkline
-        points={series ?? []}
-        color={color}
-        height={compact ? 18 : 24}
-        range={range}
-        windowMs={windowMs}
-      />
+      {sparklineSlot ?? (
+        <Sparkline
+          points={series ?? []}
+          color={color}
+          height={compact ? 18 : 24}
+          range={range}
+          windowMs={windowMs}
+        />
+      )}
       {hint && !series?.length ? <Text style={styles.hint}>{hint}</Text> : null}
     </>
   )

@@ -4,7 +4,8 @@ import type { TelemetryEvent } from 'vesc-ble'
 import { useBleStore } from '@/store/bleStore'
 import type { ExcludedRange } from '@/components/ui/charts/chartMath'
 import { finite, absolute } from '@/helpers/finite'
-import { liveTelemetryRuntime } from '@/lib/telemetry/liveTelemetryRuntime'
+import { liveTelemetryRuntime, type ChartedMetricKey } from '@/lib/telemetry/liveTelemetryRuntime'
+import type { SparklineBuckets } from '@/lib/telemetry/sparklineBuckets'
 
 export interface LiveMetricPoint {
   ts: number
@@ -66,6 +67,42 @@ function getOrProject(version: number, pick: TelemetrySelector): LiveMetricPoint
 export function useLiveMetric(pick: TelemetrySelector): LiveMetricPoint[] {
   const version = useBleStore((s) => s.metricVersion)
   return useMemo(() => getOrProject(version, pick), [version, pick])
+}
+
+function bucketsToPoints(buckets: SparklineBuckets): LiveMetricPoint[] {
+  const points: LiveMetricPoint[] = []
+  for (let i = 0; i < buckets.last.length; i += 1) {
+    const value = buckets.last[i]
+    if (!Number.isFinite(value)) continue
+    points.push({ ts: buckets.startMs + i * buckets.bucketMs, value })
+  }
+  return points
+}
+
+/**
+ * Display-bucket series for a charted metric — a small (~32–64 point) calm
+ * trace maintained incrementally by the runtime. Unlike {@link useLiveMetric}
+ * this never re-projects the full raw history, so it stays cheap at publish.
+ */
+export function useLiveBuckets(key: ChartedMetricKey): LiveMetricPoint[] {
+  const version = useBleStore((s) => s.metricVersion)
+  return useMemo(
+    () => bucketsToPoints(liveTelemetryRuntime.getBuckets(key)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- version drives republish
+    [version, key],
+  )
+}
+
+/** Latest finite value for a metric, O(1) from the newest raw sample. */
+export function useLiveLatest(pick: TelemetrySelector): number | null {
+  const version = useBleStore((s) => s.metricVersion)
+  return useMemo(() => {
+    const latest = liveTelemetryRuntime.getTelemetry().at(-1)
+    if (!latest) return null
+    const value = pick(latest)
+    return value != null && Number.isFinite(value) ? value : null
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- version drives republish
+  }, [version, pick])
 }
 
 function buildLiveExcludedRanges(

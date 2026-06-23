@@ -11,6 +11,7 @@ import {
   summarizeLiveStatus,
   type LiveStatusSummary,
 } from './liveMetricHistory'
+import { createBuckets, pushBucketSample, type SparklineBuckets } from './sparklineBuckets'
 import { finite, absolute } from '@/helpers/finite'
 import { getLiveWindowMs } from '@/store/settingsStore'
 
@@ -46,6 +47,7 @@ export interface LiveTelemetryRuntime {
   getVersion: () => number
   getTelemetry: () => TelemetryEvent[]
   getLocations: () => LocationEvent[]
+  getBuckets: (key: ChartedMetricKey) => SparklineBuckets
 }
 
 interface LiveTelemetryRuntimeOptions {
@@ -56,6 +58,42 @@ function dutyPercent(value: number | null | undefined): number | null {
   const finiteValue = absolute(value)
   return finiteValue == null ? null : finiteValue * 100
 }
+
+/**
+ * Metrics drawn as live sparklines. The runtime keeps a small, fixed-count set
+ * of display buckets per metric (updated O(1) per sample) so charts never
+ * re-project the full raw history on publish. Top gauge lines get more buckets
+ * for detail; compact strip slots get fewer for a calmer trace.
+ */
+const TOP_BUCKET_COUNT = 64
+const STRIP_BUCKET_COUNT = 32
+
+export type ChartedMetricKey =
+  | 'speedKmh'
+  | 'dutyPercent'
+  | 'motorTemp'
+  | 'controllerTemp'
+  | 'motorCurrent'
+  | 'batteryCurrent'
+  | 'batteryVoltage'
+
+const CHARTED_METRICS: Record<
+  ChartedMetricKey,
+  { count: number; pick: (telemetry: TelemetryEvent) => number | null }
+> = {
+  speedKmh: { count: TOP_BUCKET_COUNT, pick: (t) => absolute(t.speed) },
+  dutyPercent: { count: TOP_BUCKET_COUNT, pick: (t) => dutyPercent(t.dutyCycle) },
+  motorTemp: {
+    count: STRIP_BUCKET_COUNT,
+    pick: (t) => (t.tempMotor != null && t.tempMotor > 0 ? t.tempMotor : null),
+  },
+  controllerTemp: { count: STRIP_BUCKET_COUNT, pick: (t) => finite(t.tempMosfet) },
+  motorCurrent: { count: STRIP_BUCKET_COUNT, pick: (t) => finite(t.motorCurrent) },
+  batteryCurrent: { count: STRIP_BUCKET_COUNT, pick: (t) => finite(t.batteryCurrent) },
+  batteryVoltage: { count: STRIP_BUCKET_COUNT, pick: (t) => finite(t.batteryVoltage) },
+}
+
+const CHARTED_KEYS = Object.keys(CHARTED_METRICS) as ChartedMetricKey[]
 
 function createValues(): LiveTelemetryValues {
   return {
@@ -116,6 +154,29 @@ export function createLiveTelemetryRuntime({
     liveStatus: summarizeLiveStatus(buffer),
   }
 
+  const bucketStates = {} as Record<ChartedMetricKey, SparklineBuckets>
+  let bucketWindowMs = windowMs()
+
+  function pushSampleToBuckets(telemetry: TelemetryEvent): void {
+    for (const key of CHARTED_KEYS) {
+      const value = CHARTED_METRICS[key].pick(telemetry)
+      if (value == null) continue
+      pushBucketSample(bucketStates[key], telemetry.lastPacketAt, value)
+    }
+  }
+
+  /** Recreate every metric's buckets and replay the current raw buffer. */
+  function rebuildBuckets(): void {
+    bucketWindowMs = windowMs()
+    const now = getLatestTelemetry(buffer)?.lastPacketAt ?? Date.now()
+    for (const key of CHARTED_KEYS) {
+      bucketStates[key] = createBuckets(CHARTED_METRICS[key].count, bucketWindowMs, now)
+    }
+    for (const sample of buffer.telemetry) pushSampleToBuckets(sample)
+  }
+
+  rebuildBuckets()
+
   function publishSnapshot(): LiveTelemetrySnapshot {
     version += 1
     snapshot = {
@@ -158,6 +219,10 @@ export function createLiveTelemetryRuntime({
       return buffer.locations
     },
 
+    getBuckets(key) {
+      return bucketStates[key]
+    },
+
     syncConnectionSeq(nextConnectionSeq) {
       connectionSeq = nextConnectionSeq
     },
@@ -180,6 +245,7 @@ export function createLiveTelemetryRuntime({
       const latestTelemetry = getLatestTelemetry(buffer)
       if (latestTelemetry) updateValuesFromTelemetry(values, latestTelemetry)
       else clearValues(values)
+      rebuildBuckets()
 
       return publishSnapshot()
     },
@@ -190,6 +256,8 @@ export function createLiveTelemetryRuntime({
       }
 
       appendTelemetryAndLocation(telemetry)
+      if (windowMs() !== bucketWindowMs) rebuildBuckets()
+      else pushSampleToBuckets(telemetry)
       const latestTelemetry = getLatestTelemetry(buffer)
       if (latestTelemetry) updateValuesFromTelemetry(values, latestTelemetry)
       else clearValues(values)
@@ -205,6 +273,7 @@ export function createLiveTelemetryRuntime({
     reset() {
       clearLiveMetricBuffer(buffer)
       clearValues(values)
+      rebuildBuckets()
       pendingSnapshot = false
       return publishSnapshot()
     },

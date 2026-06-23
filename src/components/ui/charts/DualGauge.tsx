@@ -27,7 +27,8 @@ import {
   type SkPath,
 } from '@shopify/react-native-skia'
 
-import { Sparkline, type SparklinePoint } from '@/components/ui/charts/Sparkline'
+import { SparklineMaxBadge, type SparklinePoint } from '@/components/ui/charts/Sparkline'
+import { buildSparklinePaths, SparklineLayer } from '@/components/ui/charts/SparklineLayer'
 import { telemetry } from '@/constants/telemetry'
 import { interaction, theme } from '@/constants/theme'
 import { getHistoryMetricHotRange, type MetricHotRange } from '@/lib/history/metricColorScale'
@@ -93,6 +94,9 @@ const VB_CROP_W = R + CROP_PAD * 2
 const VB_CROP_H = VB_H - CROP_TOP
 const VB_CROP_LEFT_X = LEFT_CX - R - CROP_PAD
 const VB_CROP_RIGHT_X = RIGHT_CX - CROP_PAD
+const SPARKLINE_HEIGHT = 28
+const SPARKLINE_TOP = 12
+const SPARKLINE_GAP = 32
 
 /** Bake a 0–1 alpha into a 6-digit hex color → 8-digit #RRGGBBAA. */
 function alpha(hex: string, a: number) {
@@ -531,24 +535,23 @@ interface QuarterArcProps {
   hotRange?: MetricHotRange | null
 }
 
-function QuarterArc({ side, value, max, color, unit, alerts = [], hotRange }: QuarterArcProps) {
+interface QuarterArcLayerProps extends QuarterArcProps {
+  transform: ({ translateX: number } | { translateY: number } | { scale: number })[]
+}
+
+function QuarterArcLayer({
+  side,
+  value,
+  max,
+  color,
+  alerts = [],
+  hotRange,
+  transform,
+}: QuarterArcLayerProps) {
   const isLeft = side === 'left'
   const cx = isLeft ? LEFT_CX : RIGHT_CX
   const cy = isLeft ? LEFT_CY : RIGHT_CY
   const originX = isLeft ? VB_CROP_LEFT_X : VB_CROP_RIGHT_X
-
-  const { size, onLayout } = useCanvasSize()
-  const scale = size.w > 0 ? size.w / VB_CROP_W : 0
-  const transform = useMemo(
-    () => [{ translateX: -originX * scale }, { translateY: -CROP_TOP * scale }, { scale }],
-    [originX, scale],
-  )
-
-  const animatedValueProps = useAnimatedProps(() => {
-    const current = value.value
-    const text = current != null ? Math.round(current).toString() : '—'
-    return { text, value: text }
-  })
 
   const arcPath = useDerivedValue(() => {
     const f = clamp01((value.value ?? 0) / max)
@@ -570,75 +573,235 @@ function QuarterArc({ side, value, max, color, unit, alerts = [], hotRange }: Qu
     return segmentPath(inner.x, inner.y, outer.x, outer.y)
   })
 
-  const animatedValueStyle = useAnimatedStyle(() => {
-    return { color: gaugeRampColor(value.value, color, hotRange) }
-  })
-
   const bgArc = isLeft ? BG_ARC_LEFT : BG_ARC_RIGHT
 
+  return (
+    <Group transform={transform}>
+      {/* Gradient wedge fill */}
+      <Path path={wedgePath}>
+        <GlowGradient
+          color={color}
+          cx={cx}
+          cy={cy}
+          r={R}
+          stops={QUARTER_GLOW_STOPS}
+          opacities={QUARTER_GLOW_OPACITIES}
+        />
+      </Path>
+
+      {/* Static background arc */}
+      <Path
+        path={bgArc}
+        color={BG_ARC_COLOR}
+        style="stroke"
+        strokeWidth={STROKE}
+        strokeCap="butt"
+      />
+
+      {/* Animated colored arc overlay */}
+      <Path path={arcPath} color={arcColor} style="stroke" strokeWidth={STROKE} strokeCap="butt" />
+
+      {/* Alert markers */}
+      {alerts.map((alert) => (
+        <AlertMarker key={alert.id} side={side} alert={alert} max={max} cx={cx} cy={cy} />
+      ))}
+
+      {/* Position marker */}
+      <Path path={markerPath} color={arcColor} style="stroke" strokeWidth={1.5} strokeCap="butt" />
+    </Group>
+  )
+}
+
+function GaugeValue({
+  side,
+  value,
+  color,
+  hotRange,
+  unit,
+  pair = false,
+  pairBounds,
+}: QuarterArcProps & { pair?: boolean; pairBounds?: { top: number; bottom: number } }) {
+  const animatedValueProps = useAnimatedProps(() => {
+    const current = value.value
+    const text = current != null ? Math.round(current).toString() : '—'
+    return { text, value: text }
+  })
+  const animatedValueStyle = useAnimatedStyle(() => ({
+    color: gaugeRampColor(value.value, color, hotRange),
+  }))
+  return (
+    <View
+      style={
+        pair
+          ? side === 'left'
+            ? [styles.pairBowlLeft, pairBounds]
+            : [styles.pairBowlRight, pairBounds]
+          : side === 'left'
+            ? styles.bowlLeft
+            : styles.bowlRight
+      }
+      pointerEvents="none"
+    >
+      <AnimatedTextInput
+        editable={false}
+        animatedProps={animatedValueProps}
+        style={[styles.value, animatedValueStyle]}
+      />
+      <Text style={styles.unit}>{unit}</Text>
+    </View>
+  )
+}
+
+function QuarterArc(props: QuarterArcProps) {
+  const { size, onLayout } = useCanvasSize()
+  const scale = size.w > 0 ? size.w / VB_CROP_W : 0
+  const originX = props.side === 'left' ? VB_CROP_LEFT_X : VB_CROP_RIGHT_X
+  const transform = useMemo(
+    () => [{ translateX: -originX * scale }, { translateY: -CROP_TOP * scale }, { scale }],
+    [originX, scale],
+  )
   return (
     <View style={styles.quarterWrap}>
       <View style={styles.svg} onLayout={onLayout}>
         {scale > 0 ? (
           <Canvas style={styles.svg}>
-            <Group transform={transform}>
-              {/* Gradient wedge fill */}
-              <Path path={wedgePath}>
-                <GlowGradient
-                  color={color}
-                  cx={cx}
-                  cy={cy}
-                  r={R}
-                  stops={QUARTER_GLOW_STOPS}
-                  opacities={QUARTER_GLOW_OPACITIES}
-                />
-              </Path>
-
-              {/* Static background arc */}
-              <Path
-                path={bgArc}
-                color={BG_ARC_COLOR}
-                style="stroke"
-                strokeWidth={STROKE}
-                strokeCap="butt"
-              />
-
-              {/* Animated colored arc overlay */}
-              <Path
-                path={arcPath}
-                color={arcColor}
-                style="stroke"
-                strokeWidth={STROKE}
-                strokeCap="butt"
-              />
-
-              {/* Alert markers */}
-              {alerts.map((alert) => (
-                <AlertMarker key={alert.id} side={side} alert={alert} max={max} cx={cx} cy={cy} />
-              ))}
-
-              {/* Position marker */}
-              <Path
-                path={markerPath}
-                color={arcColor}
-                style="stroke"
-                strokeWidth={1.5}
-                strokeCap="butt"
-              />
-            </Group>
+            <QuarterArcLayer {...props} transform={transform} />
           </Canvas>
         ) : null}
       </View>
+      <GaugeValue {...props} />
+    </View>
+  )
+}
 
-      {/* Value bowl — absolutely positioned over the canvas */}
-      <View style={isLeft ? styles.bowlLeft : styles.bowlRight} pointerEvents="none">
-        <AnimatedTextInput
-          editable={false}
-          animatedProps={animatedValueProps}
-          style={[styles.value, animatedValueStyle]}
-        />
-        <Text style={styles.unit}>{unit}</Text>
-      </View>
+interface GaugePairProps {
+  speedValue: SharedValue<number | null>
+  dutyValue: SharedValue<number | null>
+  speedMax: number
+  dutyMax: number
+  speedAlerts: DualGaugeAlert[]
+  dutyAlerts: DualGaugeAlert[]
+  speedHotRange: MetricHotRange | null
+  dutyHotRange: MetricHotRange | null
+  speedSeries: SparklinePoint[]
+  dutySeries: SparklinePoint[]
+  windowMs?: number
+}
+
+function GaugePair({
+  speedValue,
+  dutyValue,
+  speedMax,
+  dutyMax,
+  speedAlerts,
+  dutyAlerts,
+  speedHotRange,
+  dutyHotRange,
+  speedSeries,
+  dutySeries,
+  windowMs,
+}: GaugePairProps) {
+  const { size, onLayout } = useCanvasSize()
+  const cellWidth = Math.max(0, (size.w - SPARKLINE_GAP) / 2)
+  const scale = cellWidth / VB_CROP_W
+  const gaugeHeight = cellWidth * (VB_CROP_H / VB_CROP_W)
+  const sparklinePaths = useMemo(
+    () => [
+      buildSparklinePaths({
+        points: speedSeries,
+        width: cellWidth,
+        height: SPARKLINE_HEIGHT,
+        range: { min: 0, max: speedMax },
+        windowMs,
+      }),
+      buildSparklinePaths({
+        points: dutySeries,
+        width: cellWidth,
+        height: SPARKLINE_HEIGHT,
+        range: { min: 0, max: dutyMax },
+        windowMs,
+      }),
+    ],
+    [cellWidth, dutyMax, dutySeries, speedMax, speedSeries, windowMs],
+  )
+  const leftTransform = useMemo(
+    () => [
+      { translateX: -VB_CROP_LEFT_X * scale },
+      { translateY: SPARKLINE_HEIGHT + SPARKLINE_TOP - CROP_TOP * scale },
+      { scale },
+    ],
+    [scale],
+  )
+  const rightTransform = useMemo(
+    () => [
+      { translateX: cellWidth + SPARKLINE_GAP - VB_CROP_RIGHT_X * scale },
+      { translateY: SPARKLINE_HEIGHT + SPARKLINE_TOP - CROP_TOP * scale },
+      { scale },
+    ],
+    [cellWidth, scale],
+  )
+  return (
+    <View style={styles.gaugePair} onLayout={onLayout}>
+      {scale > 0 ? (
+        <Canvas style={styles.svg}>
+          <Group transform={[{ translateY: SPARKLINE_TOP }]}>
+            <SparklineLayer paths={sparklinePaths[0]} color={telemetry.speed.color} showMax />
+          </Group>
+          <Group
+            transform={[{ translateX: cellWidth + SPARKLINE_GAP }, { translateY: SPARKLINE_TOP }]}
+          >
+            <SparklineLayer paths={sparklinePaths[1]} color={telemetry.duty.color} showMax />
+          </Group>
+          <QuarterArcLayer
+            side="left"
+            value={speedValue}
+            max={speedMax}
+            color={telemetry.speed.color}
+            unit="km/h"
+            alerts={speedAlerts}
+            hotRange={speedHotRange}
+            transform={leftTransform}
+          />
+          <QuarterArcLayer
+            side="right"
+            value={dutyValue}
+            max={dutyMax}
+            color={telemetry.duty.color}
+            unit="%"
+            alerts={dutyAlerts}
+            hotRange={dutyHotRange}
+            transform={rightTransform}
+          />
+        </Canvas>
+      ) : null}
+      <GaugeValue
+        side="left"
+        value={speedValue}
+        max={speedMax}
+        color={telemetry.speed.color}
+        unit="km/h"
+        alerts={speedAlerts}
+        hotRange={speedHotRange}
+        pair
+        pairBounds={{
+          top: SPARKLINE_HEIGHT + SPARKLINE_TOP + gaugeHeight * 0.1,
+          bottom: gaugeHeight * 0.05,
+        }}
+      />
+      <GaugeValue
+        side="right"
+        value={dutyValue}
+        max={dutyMax}
+        color={telemetry.duty.color}
+        unit="%"
+        alerts={dutyAlerts}
+        hotRange={dutyHotRange}
+        pair
+        pairBounds={{
+          top: SPARKLINE_HEIGHT + SPARKLINE_TOP + gaugeHeight * 0.1,
+          bottom: gaugeHeight * 0.05,
+        }}
+      />
     </View>
   )
 }
@@ -694,7 +857,6 @@ export function DualGauge({
   containerStyle,
 }: DualGaugeProps) {
   const router = useRouter()
-
   return (
     <View
       style={[
@@ -704,55 +866,49 @@ export function DualGauge({
         containerStyle,
       ]}
     >
-      <View style={[styles.row, split && styles.rowSplit]}>
-        <Pressable
-          style={[styles.halfPressable, split && styles.halfPressableSplit]}
-          onPress={() => router.push(routes.controlSpeed)}
-          android_ripple={interaction.ripple}
-        >
-          <Sparkline
-            points={speedSeries ?? []}
-            color={telemetry.speed.color}
-            height={28}
-            range={{ min: 0, max: speedMax }}
-            fmtMax={(v) => telemetry.speed.formatWithUnit(v)}
-            maxPosition="left"
-            windowMs={windowMs}
+      <View style={styles.gaugeContent}>
+        <View style={[styles.row, split && styles.rowSplit]} pointerEvents="none">
+          <View style={[styles.halfPressable, split && styles.halfPressableSplit]}>
+            <SparklineMaxBadge
+              points={speedSeries ?? []}
+              color={telemetry.speed.color}
+              fmt={telemetry.speed.formatWithUnit}
+              position="left"
+            />
+          </View>
+          <View style={[styles.halfPressable, split && styles.halfPressableSplit]}>
+            <SparklineMaxBadge
+              points={dutySeries ?? []}
+              color={telemetry.duty.color}
+              fmt={telemetry.duty.formatWithUnit}
+            />
+          </View>
+        </View>
+        <GaugePair
+          speedValue={speedValue}
+          dutyValue={dutyValue}
+          speedMax={speedMax}
+          dutyMax={dutyMax}
+          speedAlerts={speedAlerts}
+          dutyAlerts={dutyAlerts}
+          speedHotRange={speedHotRange}
+          dutyHotRange={dutyHotRange}
+          speedSeries={speedSeries ?? []}
+          dutySeries={dutySeries ?? []}
+          windowMs={windowMs}
+        />
+        <View style={styles.gaugeTouchRow}>
+          <Pressable
+            style={styles.halfPressable}
+            onPress={() => router.push(routes.controlSpeed)}
+            android_ripple={interaction.ripple}
           />
-          <QuarterArc
-            side="left"
-            value={speedValue}
-            max={speedMax}
-            color={telemetry.speed.color}
-            unit="km/h"
-            alerts={speedAlerts}
-            hotRange={speedHotRange}
+          <Pressable
+            style={styles.halfPressable}
+            onPress={() => router.push(routes.controlDuty)}
+            android_ripple={interaction.ripple}
           />
-        </Pressable>
-
-        <Pressable
-          style={[styles.halfPressable, split && styles.halfPressableSplit]}
-          onPress={() => router.push(routes.controlDuty)}
-          android_ripple={interaction.ripple}
-        >
-          <Sparkline
-            points={dutySeries ?? []}
-            color={telemetry.duty.color}
-            height={28}
-            range={{ min: 0, max: dutyMax }}
-            fmtMax={(v) => telemetry.duty.formatWithUnit(v)}
-            windowMs={windowMs}
-          />
-          <QuarterArc
-            side="right"
-            value={dutyValue}
-            max={dutyMax}
-            color={telemetry.duty.color}
-            unit="%"
-            alerts={dutyAlerts}
-            hotRange={dutyHotRange}
-          />
-        </Pressable>
+        </View>
       </View>
     </View>
   )
@@ -780,10 +936,14 @@ const styles = StyleSheet.create({
     flex: 1,
     overflow: 'visible',
   },
+  gaugeContent: { position: 'relative' },
+  gaugeTouchRow: { position: 'absolute', inset: 0, flexDirection: 'row', gap: 32 },
   row: {
     flexDirection: 'row',
     gap: 32,
+    position: 'relative',
   },
+  gaugePair: { width: '100%', aspectRatio: 1.4, position: 'relative' },
   rowSplit: {
     justifyContent: 'space-between',
   },
@@ -816,6 +976,24 @@ const styles = StyleSheet.create({
   bowlRight: {
     position: 'absolute',
     left: 0,
+    right: '5%',
+    top: '10%',
+    bottom: '5%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pairBowlLeft: {
+    position: 'absolute',
+    left: '5%',
+    right: '55%',
+    top: '10%',
+    bottom: '5%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pairBowlRight: {
+    position: 'absolute',
+    left: '55%',
     right: '5%',
     top: '10%',
     bottom: '5%',

@@ -3,7 +3,7 @@ import type { StyleProp, ViewStyle } from 'react-native'
 
 import { DualGauge } from '@/components/ui/charts/DualGauge'
 import { useAlertsStore } from '@/store/alertsStore'
-import { useLiveMetric, liveSelectors } from '@/hooks/useLiveMetric'
+import { useLiveBuckets } from '@/hooks/useLiveMetric'
 import { useLiveWindowMs, useSettingsStore } from '@/store/settingsStore'
 import { liveTelemetryRuntime } from '@/lib/telemetry/liveTelemetryRuntime'
 import { getHistoryMetricHotRange } from '@/lib/history/metricColorScale'
@@ -26,8 +26,8 @@ export function DualGaugeIndicator({
   middleSlot,
   containerStyle,
 }: DualGaugeIndicatorProps) {
-  const speedSeries = useLiveMetric(liveSelectors.speed)
-  const dutySeries = useLiveMetric(liveSelectors.duty)
+  const speedSeries = useLiveBuckets('speedKmh')
+  const dutySeries = useLiveBuckets('dutyPercent')
   const windowMs = useLiveWindowMs()
   const alertRules = useAlertsStore((s) => s.rules)
   const gradientsEnabled = useSettingsStore((s) => s.historyMetricGradientsEnabled)

@@ -40,11 +40,28 @@ function pruneByTime<T>(
 
 function insertByTime<T>(items: T[], item: T, key: (item: T) => number): void {
   const itemKey = key(item)
-  if (items.some((existing) => key(existing) === itemKey)) return
+  // Fast path: monotonic append. Live feeds and the connect backfill both
+  // arrive in ascending time, so this is the common case and stays O(1) —
+  // avoiding the O(N) dedup scan + findIndex that made backfill O(N²).
+  const lastKey = items.length > 0 ? key(items[items.length - 1]) : null
+  if (lastKey == null || itemKey > lastKey) {
+    items.push(item)
+    return
+  }
+  if (itemKey === lastKey) return // duplicate of newest sample
 
-  const insertAt = items.findIndex((existing) => key(existing) > itemKey)
-  if (insertAt === -1) items.push(item)
-  else items.splice(insertAt, 0, item)
+  // Out-of-order arrival: walk back from the end to find the slot, deduping
+  // along the way (equal keys are contiguous in a time-sorted array).
+  let insertAt = 0
+  for (let i = items.length - 1; i >= 0; i -= 1) {
+    const k = key(items[i])
+    if (k === itemKey) return // duplicate
+    if (k < itemKey) {
+      insertAt = i + 1
+      break
+    }
+  }
+  items.splice(insertAt, 0, item)
 }
 
 export function appendTelemetrySample(
