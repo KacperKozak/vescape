@@ -11,7 +11,7 @@ import {
   SlidersHorizontalIcon,
   XIcon,
 } from 'phosphor-react-native'
-import { useCallback, useEffect, useState, type RefObject } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useState, type RefObject } from 'react'
 import {
   ActivityIndicator,
   Platform,
@@ -22,6 +22,7 @@ import {
   View,
 } from 'react-native'
 import Animated, {
+  cancelAnimation,
   FadeOut,
   useAnimatedStyle,
   useSharedValue,
@@ -563,12 +564,9 @@ export function CenterOverlays({
   const weatherLoading = useWeatherStore((s) => s.loading)
   const historyBusy = history.loadingSession || history.historyLoading
   const telemetryInteractive = mode === 'telemetry' && !revealGestureActive
-  const interfaceFadeStyle = useAnimatedStyle(
-    () => ({
-      opacity: telemetryInteractive ? (1 - dragOpacity.value) * telemetryReturnOpacity.value : 0,
-    }),
-    [telemetryInteractive],
-  )
+  const interfaceFadeStyle = useAnimatedStyle(() => ({
+    opacity: (1 - dragOpacity.value) * telemetryReturnOpacity.value,
+  }))
 
   const handleRemovePress = useCallback(() => {
     setRemoveConfirmVisible(true)
@@ -630,7 +628,8 @@ export function CenterOverlays({
     [mapRef, mode],
   )
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    cancelAnimation(telemetryReturnOpacity)
     if (mode === 'telemetry') {
       revealProgress.value = 0
       dragOpacity.value = withTiming(0, TELEMETRY_FADE_TIMING)
