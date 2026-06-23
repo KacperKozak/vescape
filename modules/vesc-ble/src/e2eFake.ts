@@ -70,31 +70,92 @@ function clearConnectTimer(): void {
   connectTimer = null
 }
 
+// Chaotic-but-deterministic fake telemetry. A seeded random walk keeps the
+// stream reproducible (so SVG vs Skia perf runs see an identical workload)
+// while looking like a real noisy ride — sparklines fill with jagged lines
+// and the gauges/IMU move constantly. Reset on each connect via resetSim().
+interface SimState {
+  speed: number
+  duty: number
+  motorCurrent: number
+  batteryCurrent: number
+  batteryVoltage: number
+  batteryPercent: number
+  tempMosfet: number
+  tempMotor: number
+  pitch: number
+  roll: number
+}
+
+let rngState = 0
+let sim: SimState | null = null
+
+function rng(): number {
+  rngState = (rngState * 1664525 + 1013904223) >>> 0
+  return rngState / 0xffffffff
+}
+
+function resetSim(): void {
+  rngState = 0x9e3779b9
+  sim = {
+    speed: 18,
+    duty: 0.4,
+    motorCurrent: 12,
+    batteryCurrent: -10,
+    batteryVoltage: 75.6,
+    batteryPercent: 78,
+    tempMosfet: 38,
+    tempMotor: 34,
+    pitch: 0,
+    roll: 0,
+  }
+}
+
+/** Random-walk a value, with occasional larger spikes, clamped to [min, max]. */
+function walk(value: number, step: number, min: number, max: number, spike = 0): number {
+  let next = value + (rng() - 0.5) * step
+  if (spike > 0 && rng() < 0.08) next += (rng() - 0.5) * spike
+  return Math.max(min, Math.min(max, next))
+}
+
 function makeTelemetry(): TelemetryEvent {
   const now = Date.now()
-  const wobble = Math.sin(now / 1000)
+  if (!sim) resetSim()
+  const s = sim!
+
+  s.speed = walk(s.speed, 6, 0, 45, 14)
+  s.duty = walk(s.duty, 0.12, 0, 0.95, 0.4)
+  s.motorCurrent = walk(s.motorCurrent, 14, -25, 70, 40)
+  s.batteryCurrent = walk(s.batteryCurrent, 10, -45, 12, 25)
+  s.batteryVoltage = walk(s.batteryVoltage, 0.25, 60, 84)
+  s.batteryPercent = walk(s.batteryPercent, 0.15, 0, 100)
+  s.tempMosfet = walk(s.tempMosfet, 0.4, 30, 72)
+  s.tempMotor = walk(s.tempMotor, 0.35, 28, 66)
+  s.pitch = walk(s.pitch, 5, -16, 16, 18)
+  s.roll = walk(s.roll, 3, -12, 12, 10)
+
   return {
     hasFault: false,
     faultCode: 0,
-    pitch: wobble * 3,
-    roll: wobble,
-    balancePitch: wobble * 2,
-    balanceCurrent: 0.6,
-    speed: 12 + wobble,
-    batteryVoltage: 75.6,
-    batteryPercent: 75,
-    motorCurrent: 8 + wobble,
-    batteryCurrent: -3.4,
-    erpm: 2400,
-    dutyCycle: 0.18,
+    pitch: s.pitch,
+    roll: s.roll,
+    balancePitch: s.pitch * 0.6,
+    balanceCurrent: s.motorCurrent * 0.1,
+    speed: s.speed,
+    batteryVoltage: s.batteryVoltage,
+    batteryPercent: s.batteryPercent,
+    motorCurrent: s.motorCurrent,
+    batteryCurrent: s.batteryCurrent,
+    erpm: s.speed * 190,
+    dutyCycle: s.duty,
     state: 0,
     stateName: 'RUNNING',
     switchState: 0,
     adc1: 1.2,
     adc2: 1.1,
     odometer: 1234,
-    tempMosfet: 36,
-    tempMotor: 33,
+    tempMosfet: s.tempMosfet,
+    tempMotor: s.tempMotor,
     avgLatency: 18,
     lastPacketAt: now,
   }
@@ -174,6 +235,7 @@ function startBoardSession(boardId: string): void {
     connectedBoardId = boardId
     connectingBoardId = null
     connectionSeq += 1
+    resetSim()
     emitTelemetry()
     telemetryTimer = setInterval(emitTelemetry, 50)
   }, 3000)
