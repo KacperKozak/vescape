@@ -36,6 +36,7 @@
   },
   "dependencies": {
     "@rnmapbox/maps": "^10.3.0",
+    "@shopify/react-native-skia": "2.6.2",
     "expo": "56.0.3",
     "expo-build-properties": "~56.0.13",
     "expo-constants": "~56.0.14",
@@ -76,5 +77,8 @@
     "lefthook": "^2.1.6",
     "oxfmt": "^0.50.0",
     "typescript": "^6.0.3"
-  }
+  },
+  "trustedDependencies": [
+    "@shopify/react-native-skia"
+  ]
 }

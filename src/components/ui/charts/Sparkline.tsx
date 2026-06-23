@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import type { LayoutChangeEvent } from 'react-native'
-import Svg, { Circle as SvgCircle, Polyline as SvgPolyline } from 'react-native-svg'
+import { Canvas, Circle, Path, Skia } from '@shopify/react-native-skia'
 import { theme } from '@/constants/theme'
 
 export interface SparklinePoint {
@@ -35,6 +35,8 @@ interface SparklineProps {
 const DEFAULT_HEIGHT = 28
 const BADGE_ROW_HEIGHT = 12
 const MIN_BUCKETS = 50
+const BASELINE_COLOR = '#334155'
+const MAX_DOT_STROKE = '#0f172a'
 
 function downsampleMinMax(points: SparklinePoint[], bucketCount: number): SparklinePoint[] {
   if (points.length <= bucketCount * 2) return points
@@ -86,7 +88,8 @@ function downsampleMinMax(points: SparklinePoint[], bucketCount: number): Sparkl
 }
 
 /**
- * Lightweight sparkline. Draws a polyline of recent values. When `fmtMax` is
+ * Lightweight sparkline. Draws a polyline of recent values on a single Skia
+ * canvas (one GPU draw, no per-segment native views). When `fmtMax` is
  * supplied, also renders a small dot at the all-time-max within the window
  * and a labeled badge above the chart (badge sits in its own row so it never
  * overlaps the line).
@@ -113,25 +116,24 @@ export function Sparkline({
     setWidth(Math.round(event.nativeEvent.layout.width))
   }, [])
 
-  const { polyPoints, baselineY, firstX, maxPos, maxValue } = useMemo(() => {
+  const { linePath, baselinePath, maxPos, maxValue } = useMemo(() => {
     const inset = 1.5
-    if (width < 1) {
-      let emptyY = height / 2
-      if (range) {
-        const span = range.max - range.min
-        if (span > 0) {
-          const t = Math.max(0, Math.min(1, (0 - range.min) / span))
-          emptyY = height - inset - (height - inset * 2) * t
-        }
-      }
-      return {
-        polyPoints: '',
-        baselineY: emptyY,
-        firstX: 0,
-        maxPos: null as { x: number; y: number } | null,
-        maxValue: null,
-      }
+    const empty = {
+      linePath: null as ReturnType<typeof Skia.Path.Make> | null,
+      baselinePath: null as ReturnType<typeof Skia.Path.Make> | null,
+      maxPos: null as { x: number; y: number } | null,
+      maxValue: null as number | null,
     }
+
+    if (width < 1) return empty
+
+    const makeBaseline = (fromX: number, toX: number, y: number) => {
+      const p = Skia.Path.Make()
+      p.moveTo(fromX, y)
+      p.lineTo(toX, y)
+      return p
+    }
+
     if (points.length === 1) {
       const point = points[0]
       let yMin: number
@@ -150,21 +152,15 @@ export function Sparkline({
       const t = Math.max(0, Math.min(1, (point.value - yMin) / (yMax - yMin)))
       const y = height - inset - (height - inset * 2) * t
       return {
-        polyPoints: '',
-        baselineY: y,
-        firstX: 0,
+        ...empty,
+        baselinePath: makeBaseline(0, width, y),
         maxPos: { x: width, y },
         maxValue: point.value,
       }
     }
+
     if (points.length < 2) {
-      return {
-        polyPoints: '',
-        baselineY: height / 2,
-        firstX: 0,
-        maxPos: null as { x: number; y: number } | null,
-        maxValue: null,
-      }
+      return { ...empty, baselinePath: makeBaseline(0, width, height / 2) }
     }
 
     const buckets = Math.max(width, MIN_BUCKETS)
@@ -199,7 +195,14 @@ export function Sparkline({
     }
     const ySpan = yMax - yMin
     if (xSpan <= 0 || ySpan <= 0) {
-      return { polyPoints: '', baselineY: height / 2, firstX: 0, maxPos: null, maxValue: null }
+      return { ...empty, baselinePath: makeBaseline(0, width, height / 2) }
+    }
+
+    const project = (p: SparklinePoint) => {
+      const x = ((p.ts - xMin) / xSpan) * width
+      const t = (p.value - yMin) / ySpan
+      const y = height - inset - (height - inset * 2) * t
+      return { x, y }
     }
 
     let maxV = -Infinity
@@ -211,19 +214,18 @@ export function Sparkline({
       }
     })
 
-    const project = (p: SparklinePoint) => {
-      const x = ((p.ts - xMin) / xSpan) * width
-      const t = (p.value - yMin) / ySpan
-      const y = height - inset - (height - inset * 2) * t
-      return { x, y }
+    const line = Skia.Path.Make()
+    const first = project(reduced[0])
+    line.moveTo(first.x, first.y)
+    for (let i = 1; i < reduced.length; i += 1) {
+      const proj = project(reduced[i])
+      line.lineTo(proj.x, proj.y)
     }
 
-    const firstProj = project(reduced[0])
-
     return {
-      polyPoints: reduced.map((p) => `${project(p).x},${project(p).y}`).join(' '),
-      baselineY: firstProj.y,
-      firstX: firstProj.x,
+      linePath: line,
+      // Flat lead-in from the left edge to where real data begins.
+      baselinePath: first.x > 0 ? makeBaseline(0, first.x, first.y) : null,
       maxPos: project(reduced[maxIdx]),
       maxValue: maxV,
     }
@@ -251,39 +253,40 @@ export function Sparkline({
       ) : null}
       <View style={{ height }} onLayout={onLayout}>
         {width > 0 ? (
-          <Svg width="100%" height={height}>
-            {firstX > 0 || !polyPoints ? (
-              <SvgPolyline
-                points={`0,${baselineY} ${polyPoints ? firstX : width},${baselineY}`}
-                fill="none"
-                stroke="#334155"
+          <Canvas style={{ width, height }}>
+            {baselinePath ? (
+              <Path
+                path={baselinePath}
+                color={BASELINE_COLOR}
+                style="stroke"
                 strokeWidth={1}
-                strokeLinecap="round"
+                strokeCap="round"
               />
             ) : null}
-            {polyPoints ? (
+            {linePath ? (
+              <Path
+                path={linePath}
+                color={color}
+                style="stroke"
+                strokeWidth={1.5}
+                strokeCap="round"
+                strokeJoin="round"
+              />
+            ) : null}
+            {showMax && maxPos ? (
               <>
-                <SvgPolyline
-                  points={polyPoints}
-                  fill="none"
-                  stroke={color}
-                  strokeWidth={1.5}
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+                <Circle cx={maxPos.x} cy={maxPos.y} r={2.5} color={color} />
+                <Circle
+                  cx={maxPos.x}
+                  cy={maxPos.y}
+                  r={2.5}
+                  color={MAX_DOT_STROKE}
+                  style="stroke"
+                  strokeWidth={1}
                 />
-                {showMax && maxPos && (
-                  <SvgCircle
-                    cx={maxPos.x}
-                    cy={maxPos.y}
-                    r={2.5}
-                    fill={color}
-                    stroke="#0f172a"
-                    strokeWidth={1}
-                  />
-                )}
               </>
             ) : null}
-          </Svg>
+          </Canvas>
         ) : null}
       </View>
     </View>
