@@ -605,6 +605,9 @@ class VescForegroundService : Service() {
     private val historySamples = ArrayDeque<Map<String, Any?>>()
     private var historyFlushHandle: Cancellable? = null
     private var liveSeriesHandle: Cancellable? = null
+    // One-shot: emit the first sparkline frame the instant data arrives instead of
+    // waiting a full LIVE_SERIES_INTERVAL_MS for the first scheduled emit.
+    private var liveSeriesPrimed = false
     private val bluetoothAdapter: BluetoothAdapter
         get() = (getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter
 
@@ -1005,6 +1008,8 @@ class VescForegroundService : Service() {
                 emitEvent("onLiveTick", buildLiveTick(parsed, batteryEstimate, currentSessionId, firedAlerts))
                 // Cold path: full samples buffered and flushed in batches for history/charts.
                 enqueueHistorySample(historySample)
+                // First sample of the session also drives the first sparkline frame immediately.
+                primeLiveSeriesIfNeeded()
                 recordingCoordinator.recordTelemetry(processed.capture)
             }
         }
@@ -1339,7 +1344,19 @@ class VescForegroundService : Service() {
 
     private fun startLiveSeries() {
         if (liveSeriesHandle != null) return
+        liveSeriesPrimed = false
         scheduleLiveSeries()
+    }
+
+    /**
+     * Surface the first sparkline frame as soon as the first sample of the session
+     * lands, so sparklines appear with the live gauges instead of a 1s gap. The
+     * scheduled 1s cadence takes over after this one-shot prime.
+     */
+    private fun primeLiveSeriesIfNeeded() {
+        if (liveSeriesHandle == null || liveSeriesPrimed) return
+        liveSeriesPrimed = true
+        emitLiveSeries()
     }
 
     private fun scheduleLiveSeries() {
@@ -1363,6 +1380,7 @@ class VescForegroundService : Service() {
     private fun stopLiveSeries() {
         liveSeriesHandle?.cancel()
         liveSeriesHandle = null
+        liveSeriesPrimed = false
     }
 
     private fun boardReadyTimeoutMs(): Long =
