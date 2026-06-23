@@ -148,6 +148,24 @@ class VescBleModule : Module() {
     Function("setDebugRecordingEnabled") { enabled: Boolean ->
       requestedDebugRecordingEnabled = enabled
     }
+    AsyncFunction("listDebugRecordings") { promise: Promise ->
+      CoroutineScope(Dispatchers.IO).launch {
+        try {
+          promise.resolve(DebugRecordingStore(context.applicationContext).list())
+        } catch (e: Exception) {
+          promise.reject("ERR_LIST_DEBUG_RECORDINGS", e.message, e)
+        }
+      }
+    }
+    AsyncFunction("exportDebugRecording") { name: String, promise: Promise ->
+      CoroutineScope(Dispatchers.IO).launch {
+        try {
+          promise.resolve(DebugRecordingStore(context.applicationContext).export(name))
+        } catch (e: Exception) {
+          promise.reject("ERR_EXPORT_DEBUG_RECORDING", e.message, e)
+        }
+      }
+    }
     Function("reportUiError") { message: String, source: String?, stack: String? ->
       DiagnosticReporter.get(context.applicationContext).capture(
         "ui_error",

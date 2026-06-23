@@ -54,40 +54,12 @@ On real-board connect, the native service:
 This avoids depending on JS timers or the React Native bridge for background
 notification updates.
 
-## Session API
+## Debug Recording
 
-The native module exposes a service-like API to JS:
-
-```ts
-startSession({
-  mode: 'ble',
-  deviceId,
-  deviceName,
-  pollIntervalMs: 500,
-  recordingEnabled: false,
-})
-
-startSession({
-  mode: 'replay',
-  deviceName: 'Recorded Session',
-  recordingPath,
-  pollIntervalMs: 500,
-})
-
-stopSession()
-getSessionState()
-addSessionStateListener((state) => {})
-addTelemetryListener((telemetry) => {})
-listRecordings()
-deleteRecording(path)
-exportRecording(path)
-```
-
-`mode: 'ble'` connects to real hardware. When `recordingEnabled` is true, the
-native service writes low-level session state plus BLE TX/RX chunks as JSON
-Lines. `mode: 'replay'` loops a saved recording through the same native packet
-reassembler, parser, notification formatter, and JS telemetry events as the
-real BLE backend.
+Android Dev → Debug recordings can capture future board sessions as JSONL files
+containing low-level session state, BLE TX/RX chunks, and location. The page
+lists captures and exports them through the system share sheet. Replay is not
+part of the current app.
 
 ## Features
 
@@ -98,8 +70,7 @@ real BLE backend.
 - Background notification updates from native telemetry
 - Live speed, pitch, roll, voltage, current, duty cycle, temperature, fault, and
   distance telemetry
-- JSONL BLE session recording, export, deletion, and replay for debugging
-  without hardware
+- JSONL BLE session recording and export for debugging
 
 ## Project Layout
 

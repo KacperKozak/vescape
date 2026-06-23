@@ -86,12 +86,10 @@ export default function MainScreen() {
         boards={connection.boards}
         boardsLoaded={boardsLoaded}
         bleStatus={connection.bleStatus}
-        recordDebugSession={connection.recordDebugSession}
         onStopScan={connection.handleCancel}
         onRetryConnect={connection.handleRetryConnect}
         onSelectBoard={connection.handleSelectBoard}
         onAddBoard={connection.handleAddBoard}
-        onToggleRecordDebug={() => connection.setRecordDebugSession(!connection.recordDebugSession)}
       />
     </View>
   )

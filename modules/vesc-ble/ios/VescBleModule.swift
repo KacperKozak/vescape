@@ -137,6 +137,14 @@ public class VescBleModule: Module {
       // Debug raw BLE recording is Android-only.
     }
 
+    AsyncFunction("listDebugRecordings") { () -> [[String: Any]] in
+      []
+    }
+
+    AsyncFunction("exportDebugRecording") { (_: String, promise: Promise) in
+      promise.reject("UNSUPPORTED_PLATFORM", "Debug recording export is Android-only")
+    }
+
     AsyncFunction("selectBoard") { (boardId: String, promise: Promise) in
       self.selectedBoardId = boardId
       var settings = Self.loadSettings()

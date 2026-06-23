@@ -545,6 +545,13 @@ export interface DatabaseBackupResult {
   sizeBytes: number
 }
 
+/** Raw BLE debug capture stored by the Android native module. */
+export interface DebugRecording {
+  name: string
+  createdAt: number
+  sizeBytes: number
+}
+
 // ---------------------------------------------------------------------------
 // Typed emitter
 // ---------------------------------------------------------------------------
@@ -608,6 +615,8 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
   stopBoard(): Promise<void>
   probeBoardLink(bleId: string): Promise<BoardProbeResult>
   setDebugRecordingEnabled(enabled: boolean): void
+  listDebugRecordings(): Promise<DebugRecording[]>
+  exportDebugRecording(name: string): Promise<DatabaseBackupResult>
   reportUiError(message: string, source?: string | null, stack?: string | null): void
   reportDiagnosticTest(): DiagnosticStatus
   getDiagnosticStatus(): DiagnosticStatus
@@ -805,6 +814,16 @@ export async function probeBoardLink(bleId: string): Promise<BoardProbeResult> {
 /** Enable raw debug session recording for future native board sessions. */
 export function setDebugRecordingEnabled(enabled: boolean): void {
   native.setDebugRecordingEnabled(enabled)
+}
+
+/** List locally retained raw BLE debug captures. Android only. */
+export async function listDebugRecordings(): Promise<DebugRecording[]> {
+  return native.listDebugRecordings()
+}
+
+/** Copy a raw BLE debug capture to cache storage for sharing. Android only. */
+export async function exportDebugRecording(name: string): Promise<DatabaseBackupResult> {
+  return native.exportDebugRecording(name)
 }
 
 /** Report a JS view-layer failure. Native failures are reported at their own operation boundary. */

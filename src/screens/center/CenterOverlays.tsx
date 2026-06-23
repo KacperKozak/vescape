@@ -76,12 +76,10 @@ interface CenterBoardOverlayProps {
   activeBoardId: string | null
   activeBoard: Board | undefined
   bleStatus: string
-  recordDebugSession: boolean
   onStopScan: () => void
   onRetryConnect: () => void
   onSelectBoard: (id: string) => void
   onAddBoard: () => void
-  onToggleRecordDebug: () => void
 }
 
 interface CenterMapOverlayProps {
@@ -670,10 +668,8 @@ export function CenterOverlays({
           activeBoardId={board.activeBoardId}
           activeBoard={board.activeBoard}
           bleStatus={board.bleStatus}
-          recordDebugSession={board.recordDebugSession}
           onSelectBoard={board.onSelectBoard}
           onAddBoard={board.onAddBoard}
-          onToggleRecordDebug={board.onToggleRecordDebug}
           onDisconnect={board.onStopScan}
           onWeatherPress={map.enterWeather}
         />
