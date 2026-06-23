@@ -199,10 +199,7 @@ function svgPath(d: string): SkPath {
 /** Single straight segment as an SkPath. */
 function segmentPath(x1: number, y1: number, x2: number, y2: number): SkPath {
   'worklet'
-  const p = Skia.Path.Make()
-  p.moveTo(x1, y1)
-  p.lineTo(x2, y2)
-  return p
+  return Skia.PathBuilder.Make().moveTo(x1, y1).lineTo(x2, y2).detach()
 }
 
 // Precomputed static background arcs (full arc, f=1)

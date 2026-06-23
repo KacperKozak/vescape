@@ -127,12 +127,8 @@ export function Sparkline({
 
     if (width < 1) return empty
 
-    const makeBaseline = (fromX: number, toX: number, y: number) => {
-      const p = Skia.Path.Make()
-      p.moveTo(fromX, y)
-      p.lineTo(toX, y)
-      return p
-    }
+    const makeBaseline = (fromX: number, toX: number, y: number) =>
+      Skia.PathBuilder.Make().moveTo(fromX, y).lineTo(toX, y).detach()
 
     if (points.length === 1) {
       const point = points[0]
@@ -214,16 +210,16 @@ export function Sparkline({
       }
     })
 
-    const line = Skia.Path.Make()
+    const builder = Skia.PathBuilder.Make()
     const first = project(reduced[0])
-    line.moveTo(first.x, first.y)
+    builder.moveTo(first.x, first.y)
     for (let i = 1; i < reduced.length; i += 1) {
       const proj = project(reduced[i])
-      line.lineTo(proj.x, proj.y)
+      builder.lineTo(proj.x, proj.y)
     }
 
     return {
-      linePath: line,
+      linePath: builder.detach(),
       // Flat lead-in from the left edge to where real data begins.
       baselinePath: first.x > 0 ? makeBaseline(0, first.x, first.y) : null,
       maxPos: project(reduced[maxIdx]),

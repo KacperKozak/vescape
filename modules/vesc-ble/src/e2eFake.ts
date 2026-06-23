@@ -35,7 +35,7 @@ const boardProbeProgressListeners = new Set<(event: BoardProbeProgressEvent) => 
 const e2eBoards: Board[] = []
 
 const e2eSettings: AppSettings = {
-  liveHistoryLimit: 1000,
+  liveHistoryLimit: 5,
   autoConnect: true,
   autoRecording: false,
   selectedBoardId: null,
@@ -217,7 +217,26 @@ function emitTelemetry(): void {
   for (const listener of telemetryListeners) {
     listener(lastTelemetry)
   }
-  emitLiveState()
+  // NOTE: do not emit liveState per packet — its recentTelemetry reseeds (and
+  // clears) the live history buffer, which would wipe accumulated samples on
+  // every tick. liveState is emitted only on connection-state transitions.
+}
+
+// Seed a full window of past samples on connect so the sparklines render full
+// of chaotic history immediately (instead of a slow right-edge crawl), and the
+// charts get a representative point count to render.
+const BACKFILL_WINDOW_MS = 5 * 60_000
+const BACKFILL_STEP_MS = 100
+
+function backfillTelemetry(): void {
+  const now = Date.now()
+  for (let ago = BACKFILL_WINDOW_MS; ago > 0; ago -= BACKFILL_STEP_MS) {
+    const sample = makeTelemetry()
+    sample.lastPacketAt = now - ago
+    for (const listener of telemetryListeners) {
+      listener(sample)
+    }
+  }
 }
 
 function startBoardSession(boardId: string): void {
@@ -236,6 +255,10 @@ function startBoardSession(boardId: string): void {
     connectingBoardId = null
     connectionSeq += 1
     resetSim()
+    // Announce "connected" once. lastTelemetry is still null here, so liveState
+    // carries no recentTelemetry and won't clear the buffer we backfill next.
+    emitLiveState()
+    backfillTelemetry()
     emitTelemetry()
     telemetryTimer = setInterval(emitTelemetry, 50)
   }, 3000)
