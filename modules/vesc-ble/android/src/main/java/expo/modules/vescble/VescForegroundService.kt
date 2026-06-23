@@ -1418,6 +1418,17 @@ class VescForegroundService : Service() {
     }
 
     private fun markBoardReady() {
+        // A telemetry frame can land in flight after the rider tore the session down
+        // (stop, or a stale GATT delivering one last packet). Promoting to Connected here
+        // would resurrect a dead session with a null board config — the notification then
+        // shows 0 km/h / 0% and disconnect can never settle. Only promote from a live phase.
+        if (isStoppingService ||
+            boardStatus == BoardPhase.Disconnecting ||
+            boardStatus == BoardPhase.Idle ||
+            boardConfig == null
+        ) {
+            return
+        }
         cancelBoardReadyTimeout()
         if (shouldStartPollingOnReady(canId, directConnection, pollingLoop.takeIf { it.isActive })) {
             startPolling()
