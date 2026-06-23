@@ -3,7 +3,6 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import Constants from 'expo-constants'
 import {
-  ClockCountdownIcon,
   BluetoothConnectedIcon,
   RecordIcon,
   CodeIcon,
@@ -16,7 +15,6 @@ import {
   FadersIcon,
   ChartLineUpIcon,
   GearSixIcon,
-  WaveformIcon,
   SpeakerHighIcon,
   GaugeIcon,
 } from 'phosphor-react-native'
@@ -29,26 +27,14 @@ import { formatBytes } from '@/helpers/format'
 import { SettingsCard } from '@/components/ui/settings/SettingsCard'
 import { SettingsRow } from '@/components/ui/settings/SettingsRow'
 import { SettingsSectionTitle } from '@/components/ui/settings/SettingsSectionTitle'
-import { Stepper } from '@/components/ui/forms/Stepper'
 import { IconHero } from '@/components/ui/settings/IconHero'
 import { useSettingsDatabaseOps } from '@/hooks/useSettingsDatabaseOps'
 
 const appVersion = Constants.expoConfig?.version ?? '–'
 
 export default function SettingsScreen() {
-  const {
-    liveHistoryLimit,
-    socEstimateWindowSeconds,
-    telemetryPollRateHz,
-    autoConnect,
-    autoRecording,
-    connectionSoundsEnabled,
-    set,
-  } = useSettingsStore(
+  const { autoConnect, autoRecording, connectionSoundsEnabled, set } = useSettingsStore(
     useShallow((s) => ({
-      liveHistoryLimit: s.liveHistoryLimit,
-      socEstimateWindowSeconds: s.socEstimateWindowSeconds,
-      telemetryPollRateHz: s.telemetryPollRateHz,
       autoConnect: s.autoConnect,
       autoRecording: s.autoRecording,
       connectionSoundsEnabled: s.connectionSoundsEnabled,
@@ -93,67 +79,6 @@ export default function SettingsScreen() {
 
         <SettingsCard>
           <SettingsRow
-            icon={ClockCountdownIcon}
-            iconColor={theme.wheel.color}
-            label="Live history limit"
-            hint="Minutes of telemetry visible in live graphs"
-            right={
-              <Stepper
-                value={liveHistoryLimit}
-                min={1}
-                max={50}
-                onChange={(nextValue) => {
-                  const clampedValue = Math.min(50, Math.max(1, nextValue))
-                  if (clampedValue !== liveHistoryLimit) {
-                    void set('liveHistoryLimit', clampedValue)
-                  }
-                }}
-              />
-            }
-          />
-          <SettingsRow
-            icon={GaugeIcon}
-            iconColor={theme.gps.color}
-            label="Telemetry rate limit"
-            hint="Caps telemetry requests per second. 0 = unlimited"
-            right={
-              <Stepper
-                value={telemetryPollRateHz}
-                unit="Hz"
-                min={0}
-                max={100}
-                step={(v, dir) => (dir === 1 ? (v < 5 ? 1 : 5) : v <= 5 ? 1 : 5)}
-                onChange={(nextValue) => {
-                  const clampedValue = Math.min(100, Math.max(0, nextValue))
-                  if (clampedValue !== telemetryPollRateHz) {
-                    void set('telemetryPollRateHz', clampedValue)
-                  }
-                }}
-              />
-            }
-          />
-          <SettingsRow
-            icon={WaveformIcon}
-            iconColor={theme.target.color}
-            label="Battery smoothing"
-            hint="Median window steadies battery % for display and alerts. 0 = off"
-            right={
-              <Stepper
-                value={socEstimateWindowSeconds}
-                unit="s"
-                min={0}
-                max={120}
-                step={5}
-                onChange={(nextValue) => {
-                  const clampedValue = Math.min(120, Math.max(0, nextValue))
-                  if (clampedValue !== socEstimateWindowSeconds) {
-                    void set('socEstimateWindowSeconds', clampedValue)
-                  }
-                }}
-              />
-            }
-          />
-          <SettingsRow
             icon={BluetoothConnectedIcon}
             iconColor={theme.bran.color}
             label="Auto connect"
@@ -195,6 +120,13 @@ export default function SettingsScreen() {
                 thumbColor={connectionSoundsEnabled ? theme.wheel.color : theme.neutral.textMuted}
               />
             }
+          />
+          <SettingsRow
+            icon={GaugeIcon}
+            iconColor={theme.gps.color}
+            label="Live telemetry"
+            hint="Graphs, update rate, and battery smoothing"
+            onPress={() => router.push(routes.settingsLiveTelemetry)}
           />
         </SettingsCard>
 

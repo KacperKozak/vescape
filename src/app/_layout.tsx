@@ -55,6 +55,10 @@ export default function RootLayout() {
             name={stackScreens.settingsPrivacyZones}
             options={{ title: 'Privacy Zones' }}
           />
+          <Stack.Screen
+            name={stackScreens.settingsLiveTelemetry}
+            options={{ title: 'Live telemetry' }}
+          />
           <Stack.Screen name={stackScreens.settingsFilters} options={{ title: 'Filters' }} />
           <Stack.Screen name={stackScreens.settingsGraphs} options={{ title: 'Graphs' }} />
           <Stack.Screen name={stackScreens.settingsDatabase} options={{ title: 'Database' }} />
