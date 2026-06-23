@@ -25,10 +25,8 @@ interface TopBarProps {
   activeBoardId: string | null
   activeBoard: Board | undefined
   bleStatus: string
-  recordDebugSession: boolean
   onSelectBoard: (id: string) => void
   onAddBoard: () => void
-  onToggleRecordDebug: () => void
   onDisconnect: () => void
   onWeatherPress?: () => void
 }
@@ -38,10 +36,8 @@ export function TopBar({
   activeBoardId,
   activeBoard,
   bleStatus,
-  recordDebugSession,
   onSelectBoard,
   onAddBoard,
-  onToggleRecordDebug,
   onDisconnect,
   onWeatherPress,
 }: TopBarProps) {
@@ -151,7 +147,6 @@ export function TopBar({
         triggerRef={pillRef}
         boards={boards}
         activeBoardId={activeBoardId}
-        recordDebugSession={recordDebugSession}
         onClose={() => setSelectorOpen(false)}
         onSelectBoard={(id) => {
           onSelectBoard(id)
@@ -161,7 +156,6 @@ export function TopBar({
           setSelectorOpen(false)
           onAddBoard()
         }}
-        onToggleRecordDebug={onToggleRecordDebug}
       />
     </View>
   )

@@ -27,37 +27,28 @@ class NotificationPresenterTest {
     @Test
     fun `formatTelemetryText with battery percent`() {
         val text = NotificationFormatter.formatTelemetryText(
-            telemetry(speed = 25.5, dutyCycle = 0.42, batteryVoltage = 75.13),
+            telemetry(batteryVoltage = 75.13),
             batteryPercent = 45.0,
         )
-        assertEquals("26km/h • 42% • 45% (75.1V)", text)
+        assertEquals("45% (75.1V)", text)
     }
 
     @Test
     fun `formatTelemetryText without battery percent falls back to voltage`() {
         val text = NotificationFormatter.formatTelemetryText(
-            telemetry(speed = 25.5, dutyCycle = 0.42, batteryVoltage = 75.13),
+            telemetry(batteryVoltage = 75.13),
             batteryPercent = null,
         )
-        assertEquals("26km/h • 42% • 75.1V", text)
+        assertEquals("75.1V", text)
     }
 
     @Test
-    fun `formatTelemetryText takes absolute speed and rounds to whole number`() {
+    fun `formatTelemetryText ignores speed and duty cycle`() {
         val text = NotificationFormatter.formatTelemetryText(
-            telemetry(speed = -12.7, dutyCycle = 0.0, batteryVoltage = 50.0),
+            telemetry(speed = -12.7, dutyCycle = 0.42, batteryVoltage = 50.0),
             batteryPercent = null,
         )
-        assertEquals("13km/h • 0% • 50.0V", text)
-    }
-
-    @Test
-    fun `formatTelemetryText zeroes duty when below threshold`() {
-        val text = NotificationFormatter.formatTelemetryText(
-            telemetry(speed = 0.0, dutyCycle = 0.005, batteryVoltage = 50.0),
-            batteryPercent = 80.0,
-        )
-        assertEquals("0km/h • 0% • 80% (50.0V)", text)
+        assertEquals("50.0V", text)
     }
 
     @Test

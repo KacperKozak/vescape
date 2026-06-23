@@ -504,6 +504,13 @@ export interface AppSettings {
   socEstimateWindowSeconds: number
   /** Play on/off sounds on board connect and involuntary disconnect. */
   connectionSoundsEnabled: boolean
+  /**
+   * Max telemetry poll rate in Hz, applied as a minimum spacing floor between
+   * requests. Polling stays response-paced (the next request is only sent once
+   * the previous reply lands), so this caps the rate without ever outrunning the
+   * controller. 0 = unlimited (pure response-paced, the original behaviour).
+   */
+  telemetryPollRateHz: number
 }
 
 export interface DiagnosticStatus {
@@ -538,15 +545,43 @@ export interface DatabaseBackupResult {
   sizeBytes: number
 }
 
+/** Raw BLE debug capture stored by the Android native module. */
+export interface DebugRecording {
+  name: string
+  createdAt: number
+  sizeBytes: number
+}
+
 // ---------------------------------------------------------------------------
 // Typed emitter
 // ---------------------------------------------------------------------------
+
+/** Batched history payload: full samples flushed by native a few times per second. */
+export interface TelemetryHistoryEvent {
+  samples: TelemetryEvent[]
+}
+
+/**
+ * Decimated live sparkline series, computed natively from the in-memory window.
+ * Each metric is a flat `[ts0, v0, ts1, v1, ...]` array (min/max per time bucket),
+ * so the strip (and, while the perf flag is on, the `/control` detail charts) render
+ * without streaming raw samples across the bridge.
+ */
+export interface LiveSeriesEvent {
+  metrics: Record<string, number[]>
+  generation: number
+}
 
 type VescBleEvents = {
   onDevice: (event: DeviceFoundEvent) => void
   onError: (event: ErrorEvent) => void
   onLiveState: (event: LiveStateEvent) => void
-  onTelemetry: (event: TelemetryEvent) => void
+  /** High-frequency (per-frame) scalar tick for live gauges. No history, no nested arrays. */
+  onLiveTick: (event: TelemetryEvent) => void
+  /** Decimated per-metric min/max sparkline series (~1Hz) for the live strip + detail charts. */
+  onLiveSeries: (event: LiveSeriesEvent) => void
+  /** Batched full samples (~3Hz) for history buffer and detail charts. */
+  onTelemetryHistory: (event: TelemetryHistoryEvent) => void
   onBms: (event: BmsEvent) => void
   onLocation: (event: LocationEvent) => void
   onTelemetryRebuildProgress: (event: TelemetryRebuildProgressEvent) => void
@@ -580,6 +615,8 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
   stopBoard(): Promise<void>
   probeBoardLink(bleId: string): Promise<BoardProbeResult>
   setDebugRecordingEnabled(enabled: boolean): void
+  listDebugRecordings(): Promise<DebugRecording[]>
+  exportDebugRecording(name: string): Promise<DatabaseBackupResult>
   reportUiError(message: string, source?: string | null, stack?: string | null): void
   reportDiagnosticTest(): DiagnosticStatus
   getDiagnosticStatus(): DiagnosticStatus
@@ -777,6 +814,16 @@ export async function probeBoardLink(bleId: string): Promise<BoardProbeResult> {
 /** Enable raw debug session recording for future native board sessions. */
 export function setDebugRecordingEnabled(enabled: boolean): void {
   native.setDebugRecordingEnabled(enabled)
+}
+
+/** List locally retained raw BLE debug captures. Android only. */
+export async function listDebugRecordings(): Promise<DebugRecording[]> {
+  return native.listDebugRecordings()
+}
+
+/** Copy a raw BLE debug capture to cache storage for sharing. Android only. */
+export async function exportDebugRecording(name: string): Promise<DatabaseBackupResult> {
+  return native.exportDebugRecording(name)
 }
 
 /** Report a JS view-layer failure. Native failures are reported at their own operation boundary. */
@@ -1065,12 +1112,30 @@ export function addLiveStateListener(cb: (event: LiveStateEvent) => void): Event
   return emitter.addListener('onLiveState', cb)
 }
 
-export function addTelemetryListener(cb: (event: TelemetryEvent) => void): EventSubscription {
+export function addLiveTickListener(cb: (event: TelemetryEvent) => void): EventSubscription {
   if (E2E_ENABLED) {
-    return e2eFake.addTelemetryListener(cb)
+    return e2eFake.addLiveTickListener(cb)
   }
 
-  return emitter.addListener('onTelemetry', cb)
+  return emitter.addListener('onLiveTick', cb)
+}
+
+export function addLiveSeriesListener(cb: (event: LiveSeriesEvent) => void): EventSubscription {
+  if (E2E_ENABLED) {
+    return e2eFake.addLiveSeriesListener(cb)
+  }
+
+  return emitter.addListener('onLiveSeries', cb)
+}
+
+export function addTelemetryHistoryListener(
+  cb: (event: TelemetryHistoryEvent) => void,
+): EventSubscription {
+  if (E2E_ENABLED) {
+    return e2eFake.addTelemetryHistoryListener(cb)
+  }
+
+  return emitter.addListener('onTelemetryHistory', cb)
 }
 
 export function addBmsListener(cb: (event: BmsEvent) => void): EventSubscription {

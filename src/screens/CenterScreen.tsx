@@ -17,12 +17,10 @@ interface CenterScreenProps {
   boards: Board[]
   boardsLoaded: boolean
   bleStatus: string
-  recordDebugSession: boolean
   onStopScan: () => void
   onRetryConnect: () => void
   onSelectBoard: (id: string) => void
   onAddBoard: () => void
-  onToggleRecordDebug: () => void
 }
 
 export function CenterScreen({
@@ -31,12 +29,10 @@ export function CenterScreen({
   boards,
   boardsLoaded,
   bleStatus,
-  recordDebugSession,
   onStopScan,
   onRetryConnect,
   onSelectBoard,
   onAddBoard,
-  onToggleRecordDebug,
 }: CenterScreenProps) {
   const mapRef = useRef<CenterMapHandle>(null)
   const [offscreenMapIndicators, setOffscreenMapIndicators] = useState<
@@ -123,12 +119,10 @@ export function CenterScreen({
           activeBoardId,
           activeBoard,
           bleStatus,
-          recordDebugSession,
           onStopScan,
           onRetryConnect,
           onSelectBoard,
           onAddBoard,
-          onToggleRecordDebug,
         }}
         map={{
           heading: controller.heading,

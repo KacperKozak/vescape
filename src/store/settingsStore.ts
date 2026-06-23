@@ -18,6 +18,7 @@ const DEFAULTS: AppSettings = {
   historyMetricHotRanges: DEFAULT_HISTORY_METRIC_HOT_RANGES,
   socEstimateWindowSeconds: 20,
   connectionSoundsEnabled: true,
+  telemetryPollRateHz: 20,
 }
 
 interface SettingsState extends AppSettings {

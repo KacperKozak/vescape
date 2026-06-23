@@ -15,6 +15,12 @@ mock.module('react-native-reanimated', () => ({
   makeMutable: <T>(value: T) => ({ value }),
 }))
 
+mock.module('react-native-worklets', () => ({
+  // No UI runtime in tests — run the worklet synchronously on the JS thread.
+  scheduleOnUI: <Args extends unknown[]>(fn: (...args: Args) => unknown, ...args: Args) =>
+    fn(...args),
+}))
+
 mock.module('expo-modules-core', () => ({
   requireNativeModule: (_name: string) => ({}),
   EventEmitter: class {

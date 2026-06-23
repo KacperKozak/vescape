@@ -1,4 +1,5 @@
 import { makeMutable, type SharedValue } from 'react-native-reanimated'
+import { scheduleOnUI } from 'react-native-worklets'
 import type { LiveStateEvent, LocationEvent, TelemetryEvent } from 'vesc-ble'
 
 import {
@@ -24,8 +25,29 @@ interface LiveTelemetryValues {
   motorTemp: SharedValue<number | null>
   controllerTemp: SharedValue<number | null>
   pitch: SharedValue<number | null>
+  adc1: SharedValue<number | null>
+  adc2: SharedValue<number | null>
   lastPacketAt: SharedValue<number | null>
   avgLatencyMs: SharedValue<number | null>
+}
+
+/** Plain scalar bundle shipped to the UI thread in one hop, instead of 13 separate SharedValue writes. */
+type TickScalars = Record<keyof LiveTelemetryValues, number | null>
+
+const EMPTY_TICK: TickScalars = {
+  speedKmh: null,
+  dutyPercent: null,
+  motorCurrent: null,
+  batteryCurrent: null,
+  batteryVoltage: null,
+  batteryPercent: null,
+  motorTemp: null,
+  controllerTemp: null,
+  pitch: null,
+  adc1: null,
+  adc2: null,
+  lastPacketAt: null,
+  avgLatencyMs: null,
 }
 
 interface LiveTelemetrySnapshot {
@@ -38,7 +60,10 @@ export interface LiveTelemetryRuntime {
   values: LiveTelemetryValues
   syncConnectionSeq: (connectionSeq: number) => void
   seedFromLiveState: (state: LiveStateEvent) => LiveTelemetrySnapshot
-  ingestTelemetry: (telemetry: TelemetryEvent) => boolean
+  /** Hot path: per-frame scalar tick. Updates live SharedValues only — no buffer, no snapshot. */
+  ingestTick: (tick: TelemetryEvent) => void
+  /** Cold path: batched full samples into the history buffer. Returns last accepted lastPacketAt, or null. */
+  ingestHistoryBatch: (samples: TelemetryEvent[]) => number | null
   ingestLocation: (location: LocationEvent) => void
   reset: () => LiveTelemetrySnapshot
   getSnapshot: () => LiveTelemetrySnapshot
@@ -68,38 +93,30 @@ function createValues(): LiveTelemetryValues {
     motorTemp: makeMutable<number | null>(null),
     controllerTemp: makeMutable<number | null>(null),
     pitch: makeMutable<number | null>(null),
+    adc1: makeMutable<number | null>(null),
+    adc2: makeMutable<number | null>(null),
     lastPacketAt: makeMutable<number | null>(null),
     avgLatencyMs: makeMutable<number | null>(null),
   }
 }
 
-function clearValues(values: LiveTelemetryValues): void {
-  values.speedKmh.value = null
-  values.dutyPercent.value = null
-  values.motorCurrent.value = null
-  values.batteryCurrent.value = null
-  values.batteryVoltage.value = null
-  values.batteryPercent.value = null
-  values.motorTemp.value = null
-  values.controllerTemp.value = null
-  values.pitch.value = null
-  values.lastPacketAt.value = null
-  values.avgLatencyMs.value = null
-}
-
-function updateValuesFromTelemetry(values: LiveTelemetryValues, telemetry: TelemetryEvent): void {
-  values.speedKmh.value = absolute(telemetry.speed)
-  values.dutyPercent.value = dutyPercent(telemetry.dutyCycle)
-  values.motorCurrent.value = finite(telemetry.motorCurrent)
-  values.batteryCurrent.value = finite(telemetry.batteryCurrent)
-  values.batteryVoltage.value = finite(telemetry.batteryVoltage)
-  values.batteryPercent.value = finite(telemetry.batteryPercent)
-  values.motorTemp.value =
-    telemetry.tempMotor != null && telemetry.tempMotor > 0 ? telemetry.tempMotor : null
-  values.controllerTemp.value = finite(telemetry.tempMosfet)
-  values.pitch.value = finite(telemetry.pitch)
-  values.lastPacketAt.value = finite(telemetry.lastPacketAt)
-  values.avgLatencyMs.value = finite(telemetry.avgLatency)
+/** Pure JS projection of a telemetry frame into the scalar bundle. No SharedValue writes. */
+function tickScalars(telemetry: TelemetryEvent): TickScalars {
+  return {
+    speedKmh: absolute(telemetry.speed),
+    dutyPercent: dutyPercent(telemetry.dutyCycle),
+    motorCurrent: finite(telemetry.motorCurrent),
+    batteryCurrent: finite(telemetry.batteryCurrent),
+    batteryVoltage: finite(telemetry.batteryVoltage),
+    batteryPercent: finite(telemetry.batteryPercent),
+    motorTemp: telemetry.tempMotor != null && telemetry.tempMotor > 0 ? telemetry.tempMotor : null,
+    controllerTemp: finite(telemetry.tempMosfet),
+    pitch: finite(telemetry.pitch),
+    adc1: finite(telemetry.adc1),
+    adc2: finite(telemetry.adc2),
+    lastPacketAt: finite(telemetry.lastPacketAt),
+    avgLatencyMs: finite(telemetry.avgLatency),
+  }
 }
 
 export function createLiveTelemetryRuntime({
@@ -107,6 +124,31 @@ export function createLiveTelemetryRuntime({
 }: LiveTelemetryRuntimeOptions): LiveTelemetryRuntime {
   const buffer = createLiveMetricBuffer()
   const values = createValues()
+
+  // One UI-thread worklet assigns all 13 SharedValues. Only the scalar bundle crosses the
+  // JS→UI boundary (a single serialization per frame) instead of 13 separate `.value=` hops
+  // on the JS thread, which were the dominant live-telemetry cost (createSerializable + GC).
+  function applyTick(next: TickScalars): void {
+    'worklet'
+    values.speedKmh.value = next.speedKmh
+    values.dutyPercent.value = next.dutyPercent
+    values.motorCurrent.value = next.motorCurrent
+    values.batteryCurrent.value = next.batteryCurrent
+    values.batteryVoltage.value = next.batteryVoltage
+    values.batteryPercent.value = next.batteryPercent
+    values.motorTemp.value = next.motorTemp
+    values.controllerTemp.value = next.controllerTemp
+    values.pitch.value = next.pitch
+    values.adc1.value = next.adc1
+    values.adc2.value = next.adc2
+    values.lastPacketAt.value = next.lastPacketAt
+    values.avgLatencyMs.value = next.avgLatencyMs
+  }
+
+  function pushTick(next: TickScalars): void {
+    scheduleOnUI(applyTick, next)
+  }
+
   let connectionSeq = 0
   let pendingSnapshot = false
   let version = 0
@@ -178,23 +220,26 @@ export function createLiveTelemetryRuntime({
       }
 
       const latestTelemetry = getLatestTelemetry(buffer)
-      if (latestTelemetry) updateValuesFromTelemetry(values, latestTelemetry)
-      else clearValues(values)
+      pushTick(latestTelemetry ? tickScalars(latestTelemetry) : EMPTY_TICK)
 
       return publishSnapshot()
     },
 
-    ingestTelemetry(telemetry) {
-      if (telemetry.generation != null && telemetry.generation !== connectionSeq) {
-        return false
-      }
+    ingestTick(tick) {
+      if (tick.generation != null && tick.generation !== connectionSeq) return
+      pushTick(tickScalars(tick))
+    },
 
-      appendTelemetryAndLocation(telemetry)
-      const latestTelemetry = getLatestTelemetry(buffer)
-      if (latestTelemetry) updateValuesFromTelemetry(values, latestTelemetry)
-      else clearValues(values)
+    ingestHistoryBatch(samples) {
+      let lastAccepted: number | null = null
+      for (const sample of samples) {
+        if (sample.generation != null && sample.generation !== connectionSeq) continue
+        appendTelemetryAndLocation(sample)
+        lastAccepted = sample.lastPacketAt
+      }
+      if (lastAccepted == null) return null
       markPending()
-      return true
+      return lastAccepted
     },
 
     ingestLocation(location) {
@@ -204,7 +249,7 @@ export function createLiveTelemetryRuntime({
 
     reset() {
       clearLiveMetricBuffer(buffer)
-      clearValues(values)
+      pushTick(EMPTY_TICK)
       pendingSnapshot = false
       return publishSnapshot()
     },

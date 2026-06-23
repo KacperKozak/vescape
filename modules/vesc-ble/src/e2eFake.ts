@@ -6,8 +6,10 @@ import type {
   BoardProbeProgressEvent,
   BoardProbeResult,
   DeviceFoundEvent,
+  LiveSeriesEvent,
   LiveStateEvent,
   TelemetryEvent,
+  TelemetryHistoryEvent,
 } from './index'
 
 const E2E_BOARD_SCAN_RESULT: DeviceFoundEvent = {
@@ -29,7 +31,9 @@ let telemetryTimer: ReturnType<typeof setInterval> | null = null
 
 const deviceListeners = new Set<(event: DeviceFoundEvent) => void>()
 const liveStateListeners = new Set<(event: LiveStateEvent) => void>()
-const telemetryListeners = new Set<(event: TelemetryEvent) => void>()
+const liveTickListeners = new Set<(event: TelemetryEvent) => void>()
+const liveSeriesListeners = new Set<(event: LiveSeriesEvent) => void>()
+const telemetryHistoryListeners = new Set<(event: TelemetryHistoryEvent) => void>()
 const boardProbeProgressListeners = new Set<(event: BoardProbeProgressEvent) => void>()
 
 const e2eBoards: Board[] = []
@@ -50,6 +54,7 @@ const e2eSettings: AppSettings = {
   historyMetricHotRanges: {},
   socEstimateWindowSeconds: 20,
   connectionSoundsEnabled: true,
+  telemetryPollRateHz: 20,
 }
 
 function emitDevice(event: DeviceFoundEvent): void {
@@ -153,10 +158,46 @@ function clearTelemetryTimer(): void {
 function emitTelemetry(): void {
   if (!connectedBoardId) return
   lastTelemetry = makeTelemetry()
-  for (const listener of telemetryListeners) {
+  for (const listener of liveTickListeners) {
     listener(lastTelemetry)
   }
+  const batch: TelemetryHistoryEvent = { samples: [lastTelemetry] }
+  for (const listener of telemetryHistoryListeners) {
+    listener(batch)
+  }
+  emitLiveSeries(lastTelemetry)
   emitLiveState()
+}
+
+function emitLiveSeries(sample: TelemetryEvent): void {
+  if (liveSeriesListeners.size === 0) return
+  const ts = sample.lastPacketAt
+  const point = (v: number | null | undefined): number[] =>
+    v == null || !Number.isFinite(v) ? [] : [ts, v]
+  const abs = (v: number | null | undefined): number | null =>
+    v == null || !Number.isFinite(v) ? null : Math.abs(v)
+  const event: LiveSeriesEvent = {
+    metrics: {
+      motorTemp: sample.tempMotor != null && sample.tempMotor > 0 ? [ts, sample.tempMotor] : [],
+      controllerTemp: point(sample.tempMosfet),
+      motorCurrent: point(sample.motorCurrent),
+      batteryCurrent: point(sample.batteryCurrent),
+      batteryVoltage: point(sample.batteryVoltage),
+      batteryPercent: point(sample.batteryPercent),
+      speed: point(abs(sample.speed)),
+      duty: point(abs(sample.dutyCycle) == null ? null : (abs(sample.dutyCycle) as number) * 100),
+      // Detail-chart-only metrics (mirrors LIVE_SERIES_METRICS on native).
+      pitch: point(sample.pitch),
+      roll: point(sample.roll),
+      balancePitch: point(sample.balancePitch),
+      footpadAdc1: point(sample.adc1),
+      footpadAdc2: point(sample.adc2),
+    },
+    generation: connectionSeq,
+  }
+  for (const listener of liveSeriesListeners) {
+    listener(event)
+  }
 }
 
 function startBoardSession(boardId: string): void {
@@ -252,9 +293,19 @@ export const e2eFake = {
     return { remove: () => liveStateListeners.delete(cb) }
   },
 
-  addTelemetryListener(cb: (event: TelemetryEvent) => void): EventSubscription {
-    telemetryListeners.add(cb)
-    return { remove: () => telemetryListeners.delete(cb) }
+  addLiveTickListener(cb: (event: TelemetryEvent) => void): EventSubscription {
+    liveTickListeners.add(cb)
+    return { remove: () => liveTickListeners.delete(cb) }
+  },
+
+  addLiveSeriesListener(cb: (event: LiveSeriesEvent) => void): EventSubscription {
+    liveSeriesListeners.add(cb)
+    return { remove: () => liveSeriesListeners.delete(cb) }
+  },
+
+  addTelemetryHistoryListener(cb: (event: TelemetryHistoryEvent) => void): EventSubscription {
+    telemetryHistoryListeners.add(cb)
+    return { remove: () => telemetryHistoryListeners.delete(cb) }
   },
 
   getBoards(): Board[] {

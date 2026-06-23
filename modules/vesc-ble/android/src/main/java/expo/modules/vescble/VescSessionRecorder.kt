@@ -1,6 +1,7 @@
 package expo.modules.vescble
 
 import android.content.Context
+import android.net.Uri
 import android.util.Base64
 import android.util.Log
 import org.json.JSONObject
@@ -89,12 +90,43 @@ internal class VescSessionRecorder(context: Context, private val boardConfig: Se
     }
 }
 
-private class DebugRecordingStore(private val context: Context) {
+internal class DebugRecordingStore(private val context: Context) {
     private val dir: File
         get() = File(context.filesDir, "vesc-recordings").also { it.mkdirs() }
 
     fun createFile(deviceName: String): File {
         val safeName = deviceName.replace(Regex("[^A-Za-z0-9._-]+"), "-").trim('-').ifBlank { "vesc-board" }
         return File(dir, "${System.currentTimeMillis()}-$safeName.jsonl")
+    }
+
+    fun list(): List<Map<String, Any>> =
+        dir.listFiles()
+            ?.asSequence()
+            ?.filter { it.isFile && it.extension == "jsonl" }
+            ?.sortedByDescending { it.lastModified() }
+            ?.map {
+                mapOf(
+                    "name" to it.name,
+                    "createdAt" to it.lastModified(),
+                    "sizeBytes" to it.length(),
+                )
+            }
+            ?.toList()
+            ?: emptyList()
+
+    fun export(name: String): Map<String, Any> {
+        require(File(name).name == name && name.endsWith(".jsonl")) { "Invalid debug recording name" }
+        val source = File(dir, name)
+        require(source.isFile) { "Debug recording not found" }
+
+        val exportDir = File(context.cacheDir, "debug-recording-exports").also { it.mkdirs() }
+        val export = File(exportDir, name)
+        source.copyTo(export, overwrite = true)
+
+        return mapOf(
+            "uri" to Uri.fromFile(export).toString(),
+            "name" to export.name,
+            "sizeBytes" to export.length(),
+        )
     }
 }

@@ -6,19 +6,11 @@ import expo.modules.vescble.displayText
 import expo.modules.vescble.formatValueWithUnit
 import expo.modules.vescble.shortCriticalSymbol
 import expo.modules.vescble.telemetryMetricByControlId
-import kotlin.math.abs
 import kotlin.math.roundToInt
 
 internal object NotificationFormatter {
-    private const val SEP = " • "
-
-    fun formatTelemetryText(values: RefloatTelemetry, batteryPercent: Double?): String {
-        val speed = telemetryMetricByControlId["speed"]!!.formatValueWithUnit(abs(values.speed))
-        val dutyRaw = if (abs(values.dutyCycle) <= 0.01) 0.0 else values.dutyCycle * 100.0
-        val duty = telemetryMetricByControlId["duty"]!!.formatValueWithUnit(dutyRaw)
-        val battery = formatBatterySegment(values.batteryVoltage, batteryPercent)
-        return "$speed$SEP$duty$SEP$battery"
-    }
+    fun formatTelemetryText(values: RefloatTelemetry, batteryPercent: Double?): String =
+        formatBatterySegment(values.batteryVoltage, batteryPercent)
 
     fun formatShortCriticalText(phase: BoardPhase, values: RefloatTelemetry?, batteryPercent: Double?): String =
         when (phase) {

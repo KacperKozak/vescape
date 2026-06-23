@@ -15,7 +15,10 @@ export default function MainScreen() {
   const autoConnectAttemptedBoardRef = useRef<string | null>(null)
   const load = useBoardStore((s) => s.load)
   const { activeBoardId, boardsLoaded } = useBoardStore(
-    useShallow((s) => ({ activeBoardId: s.activeBoardId, boardsLoaded: s.hasLoaded })),
+    useShallow((s) => ({
+      activeBoardId: s.activeBoardId,
+      boardsLoaded: s.hasLoaded,
+    })),
   )
   const startGpsTracking = useBleStore((s) => s.startGpsTracking)
   const { status: permStatus, request } = usePermissions()
@@ -83,12 +86,10 @@ export default function MainScreen() {
         boards={connection.boards}
         boardsLoaded={boardsLoaded}
         bleStatus={connection.bleStatus}
-        recordDebugSession={connection.recordDebugSession}
         onStopScan={connection.handleCancel}
         onRetryConnect={connection.handleRetryConnect}
         onSelectBoard={connection.handleSelectBoard}
         onAddBoard={connection.handleAddBoard}
-        onToggleRecordDebug={() => connection.setRecordDebugSession(!connection.recordDebugSession)}
       />
     </View>
   )

@@ -12,6 +12,7 @@ public class VescBleModule: Module {
   private var selectedBoardId: String? = nil
   private var sessionDeviceId: String? = nil
   private var sessionDeviceName: String? = nil
+  private var sessionGeneration = 0
 
   // MARK: - Timers
 
@@ -58,7 +59,7 @@ public class VescBleModule: Module {
   public func definition() -> ModuleDefinition {
     Name("VescBle")
 
-    Events("onDevice", "onError", "onLiveState", "onTelemetry", "onBms", "onLocation", "onTelemetryRebuildProgress", "onBoardProbeProgress")
+    Events("onDevice", "onError", "onLiveState", "onLiveTick", "onLiveSeries", "onTelemetryHistory", "onBms", "onLocation", "onTelemetryRebuildProgress", "onBoardProbeProgress")
 
     OnDestroy {
       self.scanTimer?.invalidate()
@@ -134,6 +135,14 @@ public class VescBleModule: Module {
 
     Function("setDebugRecordingEnabled") { (_: Bool) in
       // Debug raw BLE recording is Android-only.
+    }
+
+    AsyncFunction("listDebugRecordings") { () -> [[String: Any]] in
+      []
+    }
+
+    AsyncFunction("exportDebugRecording") { (_: String, promise: Promise) in
+      promise.reject("UNSUPPORTED_PLATFORM", "Debug recording export is Android-only")
     }
 
     AsyncFunction("selectBoard") { (boardId: String, promise: Promise) in
@@ -455,6 +464,7 @@ public class VescBleModule: Module {
   }
 
   private func startMockBoard(deviceId: String, deviceName: String) {
+    sessionGeneration += 1
     sessionDeviceId = deviceId
     sessionDeviceName = deviceName
     sessionStatus = "connecting"
@@ -487,7 +497,7 @@ public class VescBleModule: Module {
         "connectedBoardId": sessionStatus == "idle" ? nil : selectedBoardId,
         "bleId": sessionDeviceId,
         "name": sessionDeviceName,
-        "connectionSeq": 0,
+        "connectionSeq": sessionGeneration,
         "lastTelemetryAt": nil,
         "recentTelemetry": [] as [Any],
         "error": nil,
@@ -531,6 +541,7 @@ public class VescBleModule: Module {
     let motorCurrent = 12.5 * cos(t * 0.1)
     let batteryCurrent = motorCurrent * dutyCycle
     let batteryVoltage = max(50.0, 58.0 - t * 0.002 + 0.3 * sin(t * 0.05))
+    let batteryPercent = min(100.0, max(0.0, (batteryVoltage - 50.0) / 8.0 * 100.0))
 
     // Footpads — both pressed
     let adc1 = 0.85 + 0.05 * sin(t * 0.2)
@@ -543,7 +554,7 @@ public class VescBleModule: Module {
     // Odometer: speed (km/h) → m/s × 0.5 s interval
     mockOdometer += abs(speed) / 3.6 * 0.5
 
-    sendEvent("onTelemetry", [
+    let telemetry: [String: Any?] = [
       "hasFault": false,
       "faultCode": 0,
       "pitch": pitch,
@@ -552,6 +563,7 @@ public class VescBleModule: Module {
       "balanceCurrent": balanceCurrent,
       "speed": speed,
       "batteryVoltage": batteryVoltage,
+      "batteryPercent": batteryPercent,
       "motorCurrent": motorCurrent,
       "batteryCurrent": batteryCurrent,
       "erpm": erpm,
@@ -567,7 +579,38 @@ public class VescBleModule: Module {
       "avgLatency": 12.0,
       "lastPacketAt": Date().timeIntervalSince1970 * 1000.0,
       "location": nil,
-    ] as [String: Any?])
+      "generation": sessionGeneration,
+    ]
+    sendEvent("onLiveTick", telemetry)
+    sendEvent("onTelemetryHistory", ["samples": [telemetry]])
+    emitMockLiveSeries(telemetry)
+  }
+
+  private func emitMockLiveSeries(_ telemetry: [String: Any?]) {
+    guard let timestamp = telemetry["lastPacketAt"] as? Double else { return }
+    func point(_ value: Double?) -> [Double] {
+      guard let value, value.isFinite else { return [] }
+      return [timestamp, value]
+    }
+    func value(_ key: String) -> Double? { telemetry[key] as? Double }
+
+    let duty = value("dutyCycle").map { abs($0) * 100 }
+    let metrics: [String: [Double]] = [
+      "motorTemp": point(value("tempMotor").flatMap { $0 > 0 ? $0 : nil }),
+      "controllerTemp": point(value("tempMosfet")),
+      "motorCurrent": point(value("motorCurrent")),
+      "batteryCurrent": point(value("batteryCurrent")),
+      "batteryVoltage": point(value("batteryVoltage")),
+      "batteryPercent": point(value("batteryPercent")),
+      "speed": point(value("speed").map(abs)),
+      "duty": point(duty),
+      "pitch": point(value("pitch")),
+      "roll": point(value("roll")),
+      "balancePitch": point(value("balancePitch")),
+      "footpadAdc1": point(value("adc1")),
+      "footpadAdc2": point(value("adc2")),
+    ]
+    sendEvent("onLiveSeries", ["metrics": metrics, "generation": sessionGeneration])
   }
 
   private func emitMockBms() {
@@ -710,6 +753,7 @@ public class VescBleModule: Module {
     "lastGpsLatitude": NSNull(),
     "lastGpsLongitude": NSNull(),
     "movingSpeedThresholdKmh": 3,
+    "telemetryPollRateHz": 20,
     "historyMetricGradientsEnabled": true,
     "historyMetricHotRanges": [
       "speed": ["start": 30, "end": 40],

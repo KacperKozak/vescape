@@ -7,6 +7,63 @@ import org.junit.Test
 
 class ConnectionLogicTest {
 
+    private fun reportedPhaseInput(
+        rawPhase: BoardPhase = BoardPhase.Connected,
+        hasBoardConfig: Boolean = true,
+        hasActiveBoardSession: Boolean = true,
+        isStoppingService: Boolean = false,
+        lastTelemetryAt: Long = 1_000L,
+        nowMs: Long = 1_000L,
+    ) = ReportedBoardPhaseInput(
+        rawPhase = rawPhase,
+        hasBoardConfig = hasBoardConfig,
+        hasActiveBoardSession = hasActiveBoardSession,
+        isStoppingService = isStoppingService,
+        lastTelemetryAt = lastTelemetryAt,
+        nowMs = nowMs,
+    )
+
+    @Test
+    fun `frame after Board Session teardown never reports Connected`() {
+        val phase = deriveReportedBoardPhase(
+            reportedPhaseInput(hasBoardConfig = false, hasActiveBoardSession = false),
+        )
+
+        assertEquals(BoardPhase.Idle, phase)
+    }
+
+    @Test
+    fun `stale Connected reports Stale on notification and JS surfaces`() {
+        val input = reportedPhaseInput(nowMs = 1_000L + TELEMETRY_STALE_MS)
+
+        val notificationPhase = deriveReportedBoardPhase(input)
+        val jsPhase = deriveReportedBoardPhase(input)
+
+        assertEquals(BoardPhase.Stale, notificationPhase)
+        assertEquals(BoardPhase.Stale, jsPhase)
+    }
+
+    @Test
+    fun `notification phase equals JS phase for same raw state`() {
+        val inputs = BoardPhase.values().flatMap { rawPhase ->
+            listOf(
+                reportedPhaseInput(rawPhase = rawPhase),
+                reportedPhaseInput(
+                    rawPhase = rawPhase,
+                    hasBoardConfig = false,
+                    hasActiveBoardSession = false,
+                    nowMs = 1_000L + TELEMETRY_STALE_MS,
+                ),
+            )
+        }
+
+        inputs.forEach { input ->
+            val notificationPhase = deriveReportedBoardPhase(input)
+            val jsPhase = deriveReportedBoardPhase(input)
+            assertEquals(notificationPhase, jsPhase)
+        }
+    }
+
     // --- boardReadyTimeoutMs: progressive timeout ---
 
     @Test

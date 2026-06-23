@@ -44,6 +44,7 @@ import expo.modules.vescble.telemetry.SocMedianWindow
 import expo.modules.vescble.telemetry.DEFAULT_LIVE_HISTORY_LIMIT_MINUTES
 import expo.modules.vescble.telemetry.MAX_LIVE_HISTORY_LIMIT_MINUTES
 import expo.modules.vescble.telemetry.MIN_LIVE_HISTORY_LIMIT_MINUTES
+import expo.modules.vescble.telemetry.LIVE_SERIES_METRICS
 import expo.modules.vescble.telemetry.TelemetryPipeline
 import expo.modules.vescble.telemetry.TelemetryRepository
 import expo.modules.vescble.telemetry.toMetricSanitizerConfig
@@ -62,7 +63,10 @@ private const val ACTION_START_GPS_MONITORING = "expo.modules.vescble.ACTION_STA
 private const val ACTION_STOP_GPS_MONITORING = "expo.modules.vescble.ACTION_STOP_GPS_MONITORING"
 
 private const val LAST_GPS_PERSIST_INTERVAL_MS = 30_000L
-private const val TELEMETRY_STALE_MS = 4_000L
+internal const val TELEMETRY_STALE_MS = 4_000L
+private const val HISTORY_FLUSH_INTERVAL_MS = 300L
+private const val LIVE_SERIES_INTERVAL_MS = 1_000L
+private const val LIVE_SERIES_BUCKETS = 64
 private const val GATT_CONNECT_TIMEOUT_MS = 6_000L
 private const val GATT_READY_TIMEOUT_MS = 6_000L
 
@@ -351,6 +355,7 @@ class VescForegroundService : Service() {
             context = this,
             handler = mainHandler,
             recorder = { recordingCoordinator.currentRecorder() },
+            dispatchListener = ::dispatchGattEvent,
             listener = gattListener,
         )
     }
@@ -369,11 +374,11 @@ class VescForegroundService : Service() {
             val cb = object : ScanCallback() {
                 override fun onScanResult(callbackType: Int, result: ScanResult) {
                     if (!result.device.address.equals(targetId, ignoreCase = true)) return
-                    onFound(ReconnectScanMatch(result.device.address, result.rssi))
+                    scheduler.post { onFound(ReconnectScanMatch(result.device.address, result.rssi)) }
                 }
 
                 override fun onScanFailed(errorCode: Int) {
-                    onFailed(errorCode)
+                    scheduler.post { onFailed(errorCode) }
                 }
             }
             activeCallback = cb
@@ -451,19 +456,17 @@ class VescForegroundService : Service() {
             gattClient.clear(markIntentional = false)
             telemetryPipeline.resetLastTelemetryAt()
             directConnection = false
-            boardStatus = BoardPhase.Reconnecting
             boardError = reason
-            recordingCoordinator.recordState(
-                "reconnecting",
-                mapOf("attempt" to nextAttempt, "status" to gattStatus),
+            transitionBoardPhase(
+                next = BoardPhase.Reconnecting,
+                recordName = "reconnecting",
+                recordProperties = mapOf("attempt" to nextAttempt, "status" to gattStatus),
             )
-            emitState()
-            presenter.show(boardStatus)
+            presenter.show(reportedBoardPhase())
         }
 
         override fun onScanStart(session: BoardSession) {
-            boardStatus = BoardPhase.Rescanning
-            emitState()
+            transitionBoardPhase(BoardPhase.Rescanning)
             recordLocalDiagnostic(
                 "reconnect_scan_started",
                 boardConfig,
@@ -598,6 +601,12 @@ class VescForegroundService : Service() {
     private val currentSessionId: Long get() = boardSession?.id ?: sessionSequence
     private val isPollingCapable get() = isPollingCapable(canId, directConnection)
     private val recentLocations = ArrayDeque<Map<String, Any?>>()
+    private val historySamples = ArrayDeque<Map<String, Any?>>()
+    private var historyFlushHandle: Cancellable? = null
+    private var liveSeriesHandle: Cancellable? = null
+    // One-shot: emit the first sparkline frame the instant data arrives instead of
+    // waiting a full LIVE_SERIES_INTERVAL_MS for the first scheduled emit.
+    private var liveSeriesPrimed = false
     private val bluetoothAdapter: BluetoothAdapter
         get() = (getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter
 
@@ -721,9 +730,9 @@ class VescForegroundService : Service() {
         startLocationUpdates()
         emitState()
         if (boardConfig == null) {
-            startForeground(NOTIFICATION_ID, presenter.build(boardStatus))
+            startForeground(NOTIFICATION_ID, presenter.build(reportedBoardPhase()))
         } else {
-            presenter.show(boardStatus)
+            presenter.show(reportedBoardPhase())
         }
     }
 
@@ -776,7 +785,7 @@ class VescForegroundService : Service() {
         recordingCoordinator.beginBoardSession(start.boardConfig)
         startLocationUpdates()
         setStatus(BoardPhase.Connecting)
-        startForeground(NOTIFICATION_ID, presenter.build(boardStatus))
+        startForeground(NOTIFICATION_ID, presenter.build(reportedBoardPhase()))
 
         startBleSession(start)
     }
@@ -914,10 +923,17 @@ class VescForegroundService : Service() {
         }
     }
 
+    /** GATT callbacks can arrive on Binder threads; only this scheduler mutates Board Session state. */
+    private fun dispatchGattEvent(event: () -> Unit) {
+        val session = boardSession ?: return
+        scheduler.post {
+            if (isCurrentBoardSession(session)) event()
+        }
+    }
+
     private fun resolveBleConnect() {
         val start = connectionCoordinator.resolvePending() ?: return
         Log.d(VESC_SESSION_TAG, "connect resolved attempt=${connectionCoordinator.connectAttempt} canId=$canId")
-        boardStatus = BoardPhase.WaitingForTelemetry
         boardError = null
         recordLocalDiagnostic(
             "waiting_for_telemetry_started",
@@ -925,8 +941,8 @@ class VescForegroundService : Service() {
             "connect",
             mapOf("message" to "Waiting for board telemetry"),
         )
-        emitState()
-        presenter.show(boardStatus)
+        transitionBoardPhase(BoardPhase.WaitingForTelemetry)
+        presenter.show(reportedBoardPhase())
         start.onSuccess()
         startPolling()
     }
@@ -974,6 +990,7 @@ class VescForegroundService : Service() {
                     return
                 }
                 val sessionToken = boardSession ?: return
+                pollingLoop.onResponse()
                 val processed = telemetryPipeline.process(parsed, sessionToken) ?: return
                 markBoardReady()
                 telemetry = parsed
@@ -989,11 +1006,16 @@ class VescForegroundService : Service() {
                 if (firedAlerts.isNotEmpty()) eventMap["firedAlerts"] = firedAlerts
                 eventMap["generation"] = currentSessionId
                 eventMap["batteryPercent"] = batteryEstimate
-                val emitMap = if (processed.metricExclusionUpdates.isNotEmpty()) {
+                val historySample = if (processed.metricExclusionUpdates.isNotEmpty()) {
                     eventMap + mapOf("metricExclusionUpdates" to processed.metricExclusionUpdates)
                 } else eventMap
-                presenter.show(boardStatus, telemetry = parsed, batteryPercent = batteryEstimate)
-                emitEvent("onTelemetry", emitMap)
+                refreshNotification(telemetry = parsed, batteryPercent = batteryEstimate)
+                // Hot path: tiny scalar tick every frame drives the live gauges (SharedValues, no React render).
+                emitEvent("onLiveTick", buildLiveTick(parsed, batteryEstimate, currentSessionId, firedAlerts))
+                // Cold path: full samples buffered and flushed in batches for history/charts.
+                enqueueHistorySample(historySample)
+                // First sample of the session also drives the first sparkline frame immediately.
+                primeLiveSeriesIfNeeded()
                 recordingCoordinator.recordTelemetry(processed.capture)
             }
         }
@@ -1260,6 +1282,8 @@ class VescForegroundService : Service() {
             ),
         )
         pollingLoop.start(session, sessionToken, transport)
+        startHistoryFlush()
+        startLiveSeries()
     }
 
     private fun currentBoardTransport(): BoardTransport? = boardTransport(canId, directConnection)
@@ -1267,6 +1291,102 @@ class VescForegroundService : Service() {
     private fun stopPolling() {
         pollingLoop.stop()
         telemetryPipeline.cancelStaleWatchdog()
+        stopHistoryFlush()
+        stopLiveSeries()
+    }
+
+    private fun buildLiveTick(
+        parsed: RefloatTelemetry,
+        batteryPercent: Double?,
+        generation: Long,
+        firedAlerts: List<Map<String, Any?>>,
+    ): Map<String, Any?> {
+        val tick = parsed.toMap().toMutableMap()
+        tick.remove("location")
+        tick["batteryPercent"] = batteryPercent
+        tick["generation"] = generation
+        if (firedAlerts.isNotEmpty()) tick["firedAlerts"] = firedAlerts
+        return tick
+    }
+
+    // Samples are enqueued on the BLE callback thread and drained on the main thread.
+    private val historyLock = Any()
+
+    private fun enqueueHistorySample(sample: Map<String, Any?>) {
+        synchronized(historyLock) { historySamples.addLast(sample) }
+    }
+
+    private fun startHistoryFlush() {
+        if (historyFlushHandle != null) return
+        scheduleHistoryFlush()
+    }
+
+    private fun scheduleHistoryFlush() {
+        val session = boardSession ?: return
+        historyFlushHandle = scheduler.postDelayedForSession(
+            session,
+            HISTORY_FLUSH_INTERVAL_MS,
+            ::isCurrentBoardSession,
+        ) {
+            flushHistorySamples()
+            scheduleHistoryFlush()
+        }
+    }
+
+    private fun flushHistorySamples() {
+        val batch = synchronized(historyLock) {
+            if (historySamples.isEmpty()) return
+            historySamples.toList().also { historySamples.clear() }
+        }
+        emitEvent("onTelemetryHistory", mapOf("samples" to batch))
+    }
+
+    private fun stopHistoryFlush() {
+        historyFlushHandle?.cancel()
+        historyFlushHandle = null
+        flushHistorySamples()
+        synchronized(historyLock) { historySamples.clear() }
+    }
+
+    private fun startLiveSeries() {
+        if (liveSeriesHandle != null) return
+        liveSeriesPrimed = false
+        scheduleLiveSeries()
+    }
+
+    /**
+     * Surface the first sparkline frame as soon as the first sample of the session
+     * lands, so sparklines appear with the live gauges instead of a 1s gap. The
+     * scheduled 1s cadence takes over after this one-shot prime.
+     */
+    private fun primeLiveSeriesIfNeeded() {
+        if (liveSeriesHandle == null || liveSeriesPrimed) return
+        liveSeriesPrimed = true
+        emitLiveSeries()
+    }
+
+    private fun scheduleLiveSeries() {
+        val session = boardSession ?: return
+        liveSeriesHandle = scheduler.postDelayedForSession(
+            session,
+            LIVE_SERIES_INTERVAL_MS,
+            ::isCurrentBoardSession,
+        ) {
+            emitLiveSeries()
+            scheduleLiveSeries()
+        }
+    }
+
+    private fun emitLiveSeries() {
+        val metrics = telemetryPipeline.liveSeries(LIVE_SERIES_METRICS, LIVE_SERIES_BUCKETS)
+        if (metrics.isEmpty()) return
+        emitEvent("onLiveSeries", mapOf("metrics" to metrics, "generation" to currentSessionId))
+    }
+
+    private fun stopLiveSeries() {
+        liveSeriesHandle?.cancel()
+        liveSeriesHandle = null
+        liveSeriesPrimed = false
     }
 
     private fun boardReadyTimeoutMs(): Long =
@@ -1304,31 +1424,46 @@ class VescForegroundService : Service() {
     }
 
     private fun markBoardReady() {
+        // A telemetry frame can land in flight after the rider tore the session down
+        // (stop, or a stale GATT delivering one last packet). Promoting to Connected here
+        // would resurrect a dead session with a null board config — the notification then
+        // shows 0 km/h / 0% and disconnect can never settle. Only promote from a live phase.
+        if (isStoppingService ||
+            boardStatus == BoardPhase.Disconnecting ||
+            boardStatus == BoardPhase.Idle ||
+            boardConfig == null
+        ) {
+            return
+        }
         cancelBoardReadyTimeout()
         if (shouldStartPollingOnReady(canId, directConnection, pollingLoop.takeIf { it.isActive })) {
             startPolling()
         }
         if (boardStatus == BoardPhase.Connected) return
         reconnectScheduler.resetAttempts()
-        boardStatus = BoardPhase.Connected
+        boardError = null
         recordLocalDiagnostic(
             "board_ready",
             boardConfig,
             "connect",
             mapOf("message" to "Board telemetry received"),
         )
-        boardError = null
         boardConfig?.let { recordingCoordinator.markBoardReady(it) }
         if (connectionSoundsEnabled) alertFeedback.playConnect()
-        emitState()
+        transitionBoardPhase(BoardPhase.Connected)
     }
 
     private fun onTelemetryStaleFired() {
-        val session = boardConfig ?: return
-        if (boardStatus == BoardPhase.Connected && session.autoReconnect) {
-            boardStatus = BoardPhase.Stale
-            emitState()
-            scheduleAutoReconnect(session, null, "telemetry stale")
+        val now = System.currentTimeMillis()
+        if (
+            boardStatus != BoardPhase.Connected ||
+            now - telemetryPipeline.lastTelemetryAt < TELEMETRY_STALE_MS
+        ) return
+
+        transitionBoardPhase(BoardPhase.Stale)
+        refreshNotification()
+        boardConfig?.takeIf { it.autoReconnect }?.let {
+            scheduleAutoReconnect(it, null, "telemetry stale")
         }
     }
 
@@ -1385,11 +1520,12 @@ class VescForegroundService : Service() {
         boardSession = null
         telemetryPipeline.endSession()
         sessionSequence += 1
-        boardError = null
-        boardStatus = BoardPhase.Idle
         boardConfig = null
-        if (updateNotification && !isStoppingService && stoppedConfig != null) presenter.show(boardStatus)
-        emitState()
+        boardError = null
+        transitionBoardPhase(BoardPhase.Idle)
+        if (updateNotification && !isStoppingService && stoppedConfig != null) {
+            presenter.show(reportedBoardPhase())
+        }
     }
 
     private fun failPendingConnect(code: String, message: String) {
@@ -1414,16 +1550,24 @@ class VescForegroundService : Service() {
         stopPolling()
         gattClient.clear(markIntentional = true)
         setError(message)
-        presenter.show(boardStatus, errorMessage = message)
+        refreshNotification(errorMessage = message)
         recordingCoordinator.failSession()
         start.onError(code, message)
     }
 
-    private fun setStatus(next: BoardPhase) {
+    /** Sole raw Board phase writer; all rider-facing phase derives from this raw state. */
+    private fun transitionBoardPhase(
+        next: BoardPhase,
+        recordName: String? = null,
+        recordProperties: Map<String, Any?> = emptyMap(),
+    ) {
         boardStatus = next
-        recordingCoordinator.recordState(next.recordName())
+        recordName?.let { recordingCoordinator.recordState(it, recordProperties) }
         emitState()
     }
+
+    private fun setStatus(next: BoardPhase) =
+        transitionBoardPhase(next, recordName = next.recordName())
 
     private fun scheduleAutoReconnect(session: SessionConfig, gattStatus: Int?, reason: String) {
         if (!session.autoReconnect || isStoppingService) return
@@ -1442,21 +1586,36 @@ class VescForegroundService : Service() {
     }
 
     private fun setError(message: String) {
-        boardStatus = BoardPhase.Error
         boardError = message
         recordingCoordinator.recordError(boardConfig, message)
         emitEvent("onError", mapOf("message" to message))
-        emitState()
+        transitionBoardPhase(BoardPhase.Error)
     }
 
-    private fun refreshNotification() {
+    private fun reportedBoardPhase(nowMs: Long = System.currentTimeMillis()): BoardPhase =
+        deriveReportedBoardPhase(
+            ReportedBoardPhaseInput(
+                rawPhase = boardStatus,
+                hasBoardConfig = boardConfig != null,
+                hasActiveBoardSession = boardSession?.let(::isCurrentBoardSession) == true,
+                isStoppingService = isStoppingService,
+                lastTelemetryAt = telemetryPipeline.lastTelemetryAt,
+                nowMs = nowMs,
+            ),
+        )
+
+    private fun refreshNotification(
+        telemetry: RefloatTelemetry? = this.telemetry,
+        batteryPercent: Double? = telemetry?.let {
+            BatterySocEstimator.estimateBatteryPercent(it.batteryVoltage, batteryConfigCache, it.batteryCurrent)
+        },
+        errorMessage: String? = boardError,
+    ) {
         presenter.show(
-            phase = boardStatus,
+            phase = reportedBoardPhase(),
             telemetry = telemetry,
-            batteryPercent = telemetry?.let {
-                BatterySocEstimator.estimateBatteryPercent(it.batteryVoltage, batteryConfigCache, it.batteryCurrent)
-            },
-            errorMessage = boardError,
+            batteryPercent = batteryPercent,
+            errorMessage = errorMessage,
         )
     }
 
@@ -1552,19 +1711,12 @@ class VescForegroundService : Service() {
             AppDataRepository.get(applicationContext).getTypedSettings()
         }
         applyTelemetrySettings(settings)
-        val now = System.currentTimeMillis()
-        val lastTelemetryAt = telemetryPipeline.lastTelemetryAt
-        val phase = if (
-            boardStatus == BoardPhase.Connected &&
-            lastTelemetryAt > 0L &&
-            now - lastTelemetryAt >= TELEMETRY_STALE_MS
-        ) BoardPhase.Stale else boardStatus
         val recentTelemetryValue = if (includeRecent) telemetryPipeline.recentSnapshot() else emptyList()
         val recentLocationsValue = if (includeRecent) recentLocations.toList() else emptyList()
 
         return buildLiveState(
             VescLiveStateSnapshot(
-                boardPhase = phase,
+                boardPhase = reportedBoardPhase(),
                 boardConfig = boardConfig,
                 boardError = boardError,
                 connectionSeq = currentSessionId,
@@ -1701,6 +1853,7 @@ class VescForegroundService : Service() {
         recordingCoordinator.applySettings(settings)
         socWindow.windowMs = settings.socEstimateWindowSeconds * 1000L
         connectionSoundsEnabled = settings.connectionSoundsEnabled
+        pollingLoop.setPollIntervalMs(pollIntervalMsForHz(settings.telemetryPollRateHz))
     }
 
     private fun applyTelemetryPipelineSettings(settings: AppSettings) {

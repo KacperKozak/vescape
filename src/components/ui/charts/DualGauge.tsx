@@ -4,20 +4,31 @@ import {
   Text,
   TextInput,
   View,
+  type LayoutChangeEvent,
   type StyleProp,
   type ViewStyle,
 } from 'react-native'
-import { type ReactNode, useId } from 'react'
+import { type ReactNode, useCallback, useMemo, useState } from 'react'
 import Animated, {
   interpolateColor,
   useAnimatedProps,
   useAnimatedStyle,
+  useDerivedValue,
   type SharedValue,
 } from 'react-native-reanimated'
 import { useRouter } from 'expo-router'
-import Svg, { Defs, Line, Path, RadialGradient, Stop } from 'react-native-svg'
+import {
+  Canvas,
+  Group,
+  Path,
+  RadialGradient,
+  Skia,
+  vec,
+  type SkPath,
+} from '@shopify/react-native-skia'
 
-import { Sparkline, type SparklinePoint } from '@/components/ui/charts/Sparkline'
+import { SparklineMaxBadge, type SparklinePoint } from '@/components/ui/charts/Sparkline'
+import { buildSparklinePaths, SparklineLayer } from '@/components/ui/charts/SparklineLayer'
 import { telemetry } from '@/constants/telemetry'
 import { interaction, theme } from '@/constants/theme'
 import { getHistoryMetricHotRange, type MetricHotRange } from '@/lib/history/metricColorScale'
@@ -67,10 +78,8 @@ const R = 80
 const STROKE = 1
 const MARKER_INSET = 10
 
-const GLOW_GRADIENT_ID_LEFT = 'dualGaugeGlowLeft'
-const GLOW_GRADIENT_ID_RIGHT = 'dualGaugeGlowRight'
-const ALERT_RANGE_GRADIENT_ID = 'dualGaugeAlertRangeLeft'
-const ALERT_RANGE_GRADIENT_ID_RIGHT = 'dualGaugeAlertRangeRight'
+const BG_ARC_COLOR = '#334155'
+const GAUGE_HOT_COLOR = theme.error.color
 
 // Left arc center: (100, 100). Right arc center: (10, 100).
 const LEFT_CX = 100
@@ -85,11 +94,18 @@ const VB_CROP_W = R + CROP_PAD * 2
 const VB_CROP_H = VB_H - CROP_TOP
 const VB_CROP_LEFT_X = LEFT_CX - R - CROP_PAD
 const VB_CROP_RIGHT_X = RIGHT_CX - CROP_PAD
+const SPARKLINE_HEIGHT = 28
+const SPARKLINE_TOP = 12
+const SPARKLINE_GAP = 32
 
-const AnimatedPath = Animated.createAnimatedComponent(Path)
-const AnimatedLine = Animated.createAnimatedComponent(Line)
-const AnimatedTextInput = Animated.createAnimatedComponent(TextInput)
-const GAUGE_HOT_COLOR = theme.error.color
+/** Bake a 0–1 alpha into a 6-digit hex color → 8-digit #RRGGBBAA. */
+function alpha(hex: string, a: number) {
+  'worklet'
+  const clamped = Math.min(1, Math.max(0, a))
+  return `${hex}${Math.round(clamped * 255)
+    .toString(16)
+    .padStart(2, '0')}`
+}
 
 function clamp01(f: number) {
   'worklet'
@@ -111,8 +127,6 @@ function gaugeRampColor(
 }
 
 // Left arc: angle sweeps from π (f=0) to π/2 (f=1)
-// polarLeft(r, 0) → (100+80*cos(π), 100) = (20, 100)
-// polarLeft(r, 1) → (100+80*cos(π/2), 100-80*sin(π/2)) = (100, 20)
 function polarLeft(r: number, fraction: number) {
   'worklet'
   const angle = Math.PI - (Math.PI / 2) * fraction
@@ -120,8 +134,6 @@ function polarLeft(r: number, fraction: number) {
 }
 
 // Right arc: angle sweeps from 0 (f=0) to π/2 (f=1)
-// polarRight(r, 0) → (10+80*cos(0), 100) = (90, 100)  [3-o'clock, bottom-right]
-// polarRight(r, 1) → (10+80*cos(π/2), 100-80*sin(π/2)) = (10, 20)  [12-o'clock, top]
 function polarRight(r: number, fraction: number) {
   'worklet'
   const angle = (Math.PI / 2) * fraction
@@ -180,9 +192,23 @@ function rangeWedgePathRight(fromFraction: number, toFraction: number) {
   return `M ${RIGHT_CX} ${RIGHT_CY} L ${start.x} ${start.y} A ${radius} ${radius} 0 0 0 ${end.x} ${end.y} Z`
 }
 
+// ── Skia helpers ─────────────────────────────────────────────────────────────
+
+/** Build an SkPath from an SVG path string (worklet-safe), never null. */
+function svgPath(d: string): SkPath {
+  'worklet'
+  return Skia.Path.MakeFromSVGString(d) ?? Skia.Path.Make()
+}
+
+/** Single straight segment as an SkPath. */
+function segmentPath(x1: number, y1: number, x2: number, y2: number): SkPath {
+  'worklet'
+  return Skia.PathBuilder.Make().moveTo(x1, y1).lineTo(x2, y2).detach()
+}
+
 // Precomputed static background arcs (full arc, f=1)
-const BG_ARC_LEFT = arcPathLeft(1)
-const BG_ARC_RIGHT = arcPathRight(1)
+const BG_ARC_LEFT = svgPath(arcPathLeft(1))
+const BG_ARC_RIGHT = svgPath(arcPathRight(1))
 
 // ── Alert sub-components ──────────────────────────────────────────────────────
 
@@ -195,20 +221,21 @@ interface AlertTickProps {
 }
 
 function AlertTick({ side, fraction }: AlertTickProps) {
-  const inner =
-    side === 'left' ? polarLeft(R - TICK_LENGHT, fraction) : polarRight(R - TICK_LENGHT, fraction)
-  const outer =
-    side === 'left' ? polarLeft(R - STROKE / 2, fraction) : polarRight(R - STROKE / 2, fraction)
+  const path = useMemo(() => {
+    const inner =
+      side === 'left' ? polarLeft(R - TICK_LENGHT, fraction) : polarRight(R - TICK_LENGHT, fraction)
+    const outer =
+      side === 'left' ? polarLeft(R - STROKE / 2, fraction) : polarRight(R - STROKE / 2, fraction)
+    return segmentPath(inner.x, inner.y, outer.x, outer.y)
+  }, [side, fraction])
 
   return (
-    <Line
-      x1={inner.x}
-      y1={inner.y}
-      x2={outer.x}
-      y2={outer.y}
-      stroke={theme.highlight.color}
+    <Path
+      path={path}
+      color={theme.highlight.color}
+      style="stroke"
       strokeWidth={TICK_WIDTH}
-      strokeLinecap="butt"
+      strokeCap="butt"
     />
   )
 }
@@ -217,23 +244,28 @@ interface AlertMarkerProps {
   side: 'left' | 'right'
   alert: DualGaugeAlert
   max: number
+  cx: number
+  cy: number
 }
 
-function AlertMarker({ side, alert, max }: AlertMarkerProps) {
+function AlertMarker({ side, alert, max, cx, cy }: AlertMarkerProps) {
   const thresholdFraction = clamp01(alert.threshold / max)
   const maxFraction = alert.thresholdMax == null ? null : clamp01(alert.thresholdMax / max)
-  const rangePath =
-    maxFraction != null
-      ? side === 'left'
+  const rangePath = useMemo(() => {
+    if (maxFraction == null) return null
+    const d =
+      side === 'left'
         ? rangeWedgePathLeft(thresholdFraction, maxFraction)
         : rangeWedgePathRight(thresholdFraction, maxFraction)
-      : ''
-  const rangeGradientId = side === 'left' ? ALERT_RANGE_GRADIENT_ID : ALERT_RANGE_GRADIENT_ID_RIGHT
+    return d ? Skia.Path.MakeFromSVGString(d) : null
+  }, [side, thresholdFraction, maxFraction])
 
   if (maxFraction != null && rangePath) {
     return (
       <>
-        <Path d={rangePath} fill={`url(#${rangeGradientId})`} stroke="none" />
+        <Path path={rangePath}>
+          <AlertRangeGradient cx={cx} cy={cy} r={R} />
+        </Path>
         <AlertTick side={side} fraction={thresholdFraction} />
         <AlertTick side={side} fraction={maxFraction} />
       </>
@@ -243,6 +275,34 @@ function AlertMarker({ side, alert, max }: AlertMarkerProps) {
   return <AlertTick side={side} fraction={thresholdFraction} />
 }
 
+// ── Gradients ────────────────────────────────────────────────────────────────
+
+interface GlowGradientProps {
+  color: string
+  cx: number
+  cy: number
+  r: number
+  /** Stop offsets + opacities, matching the SVG RadialGradient stops. */
+  stops: number[]
+  opacities: number[]
+}
+
+function GlowGradient({ color, cx, cy, r, stops, opacities }: GlowGradientProps) {
+  const colors = useMemo(() => opacities.map((o) => alpha(color, o)), [color, opacities])
+  return <RadialGradient c={vec(cx, cy)} r={r} colors={colors} positions={stops} />
+}
+
+const ALERT_STOPS = [0, 0.82, 0.965, 0.99, 1]
+const ALERT_OPACITIES = [0, 0, 0.05, 0.1, 0]
+
+function AlertRangeGradient({ cx, cy, r }: { cx: number; cy: number; r: number }) {
+  const colors = useMemo(() => ALERT_OPACITIES.map((o) => alpha(theme.highlight.color, o)), [])
+  return <RadialGradient c={vec(cx, cy)} r={r} colors={colors} positions={ALERT_STOPS} />
+}
+
+const QUARTER_GLOW_STOPS = [0, 0.6, 0.95, 1]
+const QUARTER_GLOW_OPACITIES = [0, 0, 0.18, 0.35]
+
 // ── HalfArc sub-component ───────────────────────────────────────────────────
 
 const HALF_CX = 100
@@ -250,6 +310,10 @@ const HALF_CY = 100
 const HALF_R = 88
 const HALF_VB_W = 200
 const HALF_VB_H = 112
+const HALF_GLOW_STOPS = [0, 0.58, 0.94, 1]
+const HALF_GLOW_OPACITIES = [0, 0, 0.2, 0.38]
+const HALF_ALERT_STOPS = [0, 0.82, 0.965, 0.99, 1]
+const HALF_ALERT_OPACITIES = [0, 0, 0.06, 0.12, 0]
 
 function normalizeFraction(value: number, min: number, max: number) {
   'worklet'
@@ -290,25 +354,26 @@ function halfRangeWedgePath(fromFraction: number, toFraction: number) {
   return `M ${HALF_CX} ${HALF_CY} L ${start.x} ${start.y} A ${radius} ${radius} 0 0 1 ${end.x} ${end.y} Z`
 }
 
-const HALF_BG_ARC = halfArcPath(1)
+const HALF_BG_ARC = svgPath(halfArcPath(1))
 
 interface HalfAlertTickProps {
   fraction: number
 }
 
 function HalfAlertTick({ fraction }: HalfAlertTickProps) {
-  const inner = polarHalf(HALF_R - TICK_LENGHT, fraction)
-  const outer = polarHalf(HALF_R - STROKE / 2, fraction)
+  const path = useMemo(() => {
+    const inner = polarHalf(HALF_R - TICK_LENGHT, fraction)
+    const outer = polarHalf(HALF_R - STROKE / 2, fraction)
+    return segmentPath(inner.x, inner.y, outer.x, outer.y)
+  }, [fraction])
 
   return (
-    <Line
-      x1={inner.x}
-      y1={inner.y}
-      x2={outer.x}
-      y2={outer.y}
-      stroke={theme.highlight.color}
+    <Path
+      path={path}
+      color={theme.highlight.color}
+      style="stroke"
       strokeWidth={TICK_WIDTH}
-      strokeLinecap="butt"
+      strokeCap="butt"
     />
   )
 }
@@ -317,19 +382,29 @@ interface HalfAlertMarkerProps {
   alert: DualGaugeAlert
   min: number
   max: number
-  rangeGradientId: string
 }
 
-function HalfAlertMarker({ alert, min, max, rangeGradientId }: HalfAlertMarkerProps) {
+function HalfAlertMarker({ alert, min, max }: HalfAlertMarkerProps) {
   const thresholdFraction = normalizeFraction(alert.threshold, min, max)
   const maxFraction =
     alert.thresholdMax == null ? null : normalizeFraction(alert.thresholdMax, min, max)
-  const rangePath = maxFraction != null ? halfRangeWedgePath(thresholdFraction, maxFraction) : ''
+  const rangePath = useMemo(() => {
+    if (maxFraction == null) return null
+    const d = halfRangeWedgePath(thresholdFraction, maxFraction)
+    return d ? Skia.Path.MakeFromSVGString(d) : null
+  }, [thresholdFraction, maxFraction])
 
   if (maxFraction != null && rangePath) {
     return (
       <>
-        <Path d={rangePath} fill={`url(#${rangeGradientId})`} stroke="none" />
+        <Path path={rangePath}>
+          <RadialGradient
+            c={vec(HALF_CX, HALF_CY)}
+            r={HALF_R}
+            colors={HALF_ALERT_OPACITIES.map((o) => alpha(theme.highlight.color, o))}
+            positions={HALF_ALERT_STOPS}
+          />
+        </Path>
         <HalfAlertTick fraction={thresholdFraction} />
         <HalfAlertTick fraction={maxFraction} />
       </>
@@ -337,6 +412,15 @@ function HalfAlertMarker({ alert, min, max, rangeGradientId }: HalfAlertMarkerPr
   }
 
   return <HalfAlertTick fraction={thresholdFraction} />
+}
+
+function useCanvasSize() {
+  const [size, setSize] = useState({ w: 0, h: 0 })
+  const onLayout = useCallback((e: LayoutChangeEvent) => {
+    const { width, height } = e.nativeEvent.layout
+    setSize((prev) => (prev.w === width && prev.h === height ? prev : { w: width, h: height }))
+  }, [])
+  return { size, onLayout }
 }
 
 function HalfArc({
@@ -350,9 +434,8 @@ function HalfArc({
   hotRange,
 }: Required<Pick<SingleGaugeProps, 'value' | 'min' | 'max' | 'color' | 'unit'>> &
   Pick<SingleGaugeProps, 'decimals' | 'alerts' | 'hotRange'>) {
-  const idSuffix = useId().replace(/:/g, '')
-  const glowGradientId = `singleGaugeGlow${idSuffix}`
-  const alertRangeGradientId = `singleGaugeAlertRange${idSuffix}`
+  const { size, onLayout } = useCanvasSize()
+  const scale = size.w > 0 ? size.w / HALF_VB_W : 0
 
   const animatedValueProps = useAnimatedProps(() => {
     const current = value.value
@@ -365,31 +448,18 @@ function HalfArc({
     return { text, value: text }
   })
 
-  const animatedArcProps = useAnimatedProps(() => {
-    const current = value.value ?? min
-    return {
-      d: halfArcPath(normalizeFraction(current, min, max)),
-      stroke: gaugeRampColor(current, color, hotRange),
-    }
-  })
-
-  const animatedWedgeProps = useAnimatedProps(() => {
-    const current = value.value ?? min
-    return { d: halfWedgePath(normalizeFraction(current, min, max)) }
-  })
-
-  const animatedMarkerProps = useAnimatedProps(() => {
-    const current = value.value ?? min
-    const fraction = normalizeFraction(current, min, max)
+  const arcPath = useDerivedValue(() =>
+    svgPath(halfArcPath(normalizeFraction(value.value ?? min, min, max))),
+  )
+  const arcColor = useDerivedValue(() => gaugeRampColor(value.value ?? min, color, hotRange))
+  const wedgePath = useDerivedValue(() =>
+    svgPath(halfWedgePath(normalizeFraction(value.value ?? min, min, max))),
+  )
+  const markerPath = useDerivedValue(() => {
+    const fraction = normalizeFraction(value.value ?? min, min, max)
     const inner = polarHalf(HALF_R - MARKER_INSET, fraction)
     const outer = polarHalf(HALF_R + STROKE / 2, fraction)
-    return {
-      x1: inner.x,
-      y1: inner.y,
-      x2: outer.x,
-      y2: outer.y,
-      stroke: gaugeRampColor(current, color, hotRange),
-    }
+    return segmentPath(inner.x, inner.y, outer.x, outer.y)
   })
 
   const animatedValueStyle = useAnimatedStyle(() => {
@@ -398,60 +468,48 @@ function HalfArc({
 
   return (
     <View style={styles.halfWrap}>
-      <Svg viewBox={`0 0 ${HALF_VB_W} ${HALF_VB_H}`} style={styles.svg}>
-        <Defs>
-          <RadialGradient
-            id={glowGradientId}
-            gradientUnits="userSpaceOnUse"
-            cx={HALF_CX}
-            cy={HALF_CY}
-            r={HALF_R}
-          >
-            <Stop offset="0" stopColor={color} stopOpacity={0} />
-            <Stop offset="0.58" stopColor={color} stopOpacity={0} />
-            <Stop offset="0.94" stopColor={color} stopOpacity={0.2} />
-            <Stop offset="1" stopColor={color} stopOpacity={0.38} />
-          </RadialGradient>
-          <RadialGradient
-            id={alertRangeGradientId}
-            gradientUnits="userSpaceOnUse"
-            cx={HALF_CX}
-            cy={HALF_CY}
-            r={HALF_R}
-          >
-            <Stop offset="0" stopColor={theme.highlight.color} stopOpacity={0} />
-            <Stop offset="0.82" stopColor={theme.highlight.color} stopOpacity={0} />
-            <Stop offset="0.965" stopColor={theme.highlight.color} stopOpacity={0.06} />
-            <Stop offset="0.99" stopColor={theme.highlight.color} stopOpacity={0.12} />
-            <Stop offset="1" stopColor={theme.highlight.color} stopOpacity={0} />
-          </RadialGradient>
-        </Defs>
-
-        <AnimatedPath animatedProps={animatedWedgeProps} fill={`url(#${glowGradientId})`} />
-        <Path
-          d={HALF_BG_ARC}
-          stroke="#334155"
-          strokeWidth={STROKE}
-          strokeLinecap="butt"
-          fill="none"
-        />
-        <AnimatedPath
-          animatedProps={animatedArcProps}
-          strokeWidth={STROKE}
-          strokeLinecap="butt"
-          fill="none"
-        />
-        {alerts.map((alert) => (
-          <HalfAlertMarker
-            key={alert.id}
-            alert={alert}
-            min={min}
-            max={max}
-            rangeGradientId={alertRangeGradientId}
-          />
-        ))}
-        <AnimatedLine animatedProps={animatedMarkerProps} strokeWidth={1.7} strokeLinecap="butt" />
-      </Svg>
+      <View style={styles.svg} onLayout={onLayout}>
+        {scale > 0 ? (
+          <Canvas style={styles.svg}>
+            <Group transform={[{ scale }]}>
+              <Path path={wedgePath}>
+                <GlowGradient
+                  color={color}
+                  cx={HALF_CX}
+                  cy={HALF_CY}
+                  r={HALF_R}
+                  stops={HALF_GLOW_STOPS}
+                  opacities={HALF_GLOW_OPACITIES}
+                />
+              </Path>
+              <Path
+                path={HALF_BG_ARC}
+                color={BG_ARC_COLOR}
+                style="stroke"
+                strokeWidth={STROKE}
+                strokeCap="butt"
+              />
+              <Path
+                path={arcPath}
+                color={arcColor}
+                style="stroke"
+                strokeWidth={STROKE}
+                strokeCap="butt"
+              />
+              {alerts.map((alert) => (
+                <HalfAlertMarker key={alert.id} alert={alert} min={min} max={max} />
+              ))}
+              <Path
+                path={markerPath}
+                color={arcColor}
+                style="stroke"
+                strokeWidth={1.7}
+                strokeCap="butt"
+              />
+            </Group>
+          </Canvas>
+        ) : null}
+      </View>
 
       <View style={styles.halfBowl} pointerEvents="none">
         <AnimatedTextInput
@@ -477,121 +535,278 @@ interface QuarterArcProps {
   hotRange?: MetricHotRange | null
 }
 
-function QuarterArc({ side, value, max, color, unit, alerts = [], hotRange }: QuarterArcProps) {
+interface QuarterArcLayerProps extends QuarterArcProps {
+  transform: ({ translateX: number } | { translateY: number } | { scale: number })[]
+}
+
+function QuarterArcLayer({
+  side,
+  value,
+  max,
+  color,
+  alerts = [],
+  hotRange,
+  transform,
+}: QuarterArcLayerProps) {
   const isLeft = side === 'left'
-  const glowId = isLeft ? GLOW_GRADIENT_ID_LEFT : GLOW_GRADIENT_ID_RIGHT
-  const alertRangeGradientId = isLeft ? ALERT_RANGE_GRADIENT_ID : ALERT_RANGE_GRADIENT_ID_RIGHT
   const cx = isLeft ? LEFT_CX : RIGHT_CX
   const cy = isLeft ? LEFT_CY : RIGHT_CY
+  const originX = isLeft ? VB_CROP_LEFT_X : VB_CROP_RIGHT_X
 
-  const animatedValueProps = useAnimatedProps(() => {
-    const current = value.value
-    const text = current != null ? Math.round(current).toString() : '—'
-    return { text, value: text }
+  const arcPath = useDerivedValue(() => {
+    const f = clamp01((value.value ?? 0) / max)
+    return svgPath(isLeft ? arcPathLeft(f) : arcPathRight(f))
   })
-
-  const animatedArcProps = useAnimatedProps(() => {
-    const current = value.value ?? 0
-    const f = clamp01(current / max)
-    return {
-      d: isLeft ? arcPathLeft(f) : arcPathRight(f),
-      stroke: gaugeRampColor(current, color, hotRange),
-    }
+  const arcColor = useDerivedValue(() => gaugeRampColor(value.value ?? 0, color, hotRange))
+  const wedgePath = useDerivedValue(() => {
+    const f = clamp01((value.value ?? 0) / max)
+    return svgPath(isLeft ? wedgePathLeft(f) : wedgePathRight(f))
   })
-
-  const animatedWedgeProps = useAnimatedProps(() => {
-    const current = value.value ?? 0
-    const f = clamp01(current / max)
-    return { d: isLeft ? wedgePathLeft(f) : wedgePathRight(f) }
-  })
-
-  const animatedMarkerProps = useAnimatedProps(() => {
-    const current = value.value ?? 0
-    const fraction = clamp01(current / max)
+  const markerPath = useDerivedValue(() => {
+    const fraction = clamp01((value.value ?? 0) / max)
     const inner = isLeft
       ? polarLeft(R - MARKER_INSET, fraction)
       : polarRight(R - MARKER_INSET, fraction)
     const outer = isLeft
       ? polarLeft(R + STROKE / 2, fraction)
       : polarRight(R + STROKE / 2, fraction)
-    return {
-      x1: inner.x,
-      y1: inner.y,
-      x2: outer.x,
-      y2: outer.y,
-      stroke: gaugeRampColor(current, color, hotRange),
-    }
-  })
-
-  const animatedValueStyle = useAnimatedStyle(() => {
-    return { color: gaugeRampColor(value.value, color, hotRange) }
+    return segmentPath(inner.x, inner.y, outer.x, outer.y)
   })
 
   const bgArc = isLeft ? BG_ARC_LEFT : BG_ARC_RIGHT
 
   return (
-    <View style={styles.quarterWrap}>
-      <Svg
-        viewBox={`${isLeft ? VB_CROP_LEFT_X : VB_CROP_RIGHT_X} ${CROP_TOP} ${VB_CROP_W} ${VB_CROP_H}`}
-        style={styles.svg}
-      >
-        <Defs>
-          <RadialGradient id={glowId} gradientUnits="userSpaceOnUse" cx={cx} cy={cy} r={R}>
-            <Stop offset="0" stopColor={color} stopOpacity={0} />
-            <Stop offset="0.6" stopColor={color} stopOpacity={0} />
-            <Stop offset="0.95" stopColor={color} stopOpacity={0.18} />
-            <Stop offset="1" stopColor={color} stopOpacity={0.35} />
-          </RadialGradient>
-          <RadialGradient
-            id={alertRangeGradientId}
-            gradientUnits="userSpaceOnUse"
-            cx={cx}
-            cy={cy}
-            r={R}
-          >
-            <Stop offset="0" stopColor={theme.highlight.color} stopOpacity={0} />
-            <Stop offset="0.82" stopColor={theme.highlight.color} stopOpacity={0} />
-            <Stop offset="0.965" stopColor={theme.highlight.color} stopOpacity={0.05} />
-            <Stop offset="0.99" stopColor={theme.highlight.color} stopOpacity={0.1} />
-            <Stop offset="1" stopColor={theme.highlight.color} stopOpacity={0} />
-          </RadialGradient>
-        </Defs>
-
-        {/* Gradient wedge fill */}
-        <AnimatedPath animatedProps={animatedWedgeProps} fill={`url(#${glowId})`} stroke="none" />
-
-        {/* Static background arc */}
-        <Path d={bgArc} stroke="#334155" strokeWidth={STROKE} strokeLinecap="butt" fill="none" />
-
-        {/* Animated colored arc overlay */}
-        <AnimatedPath
-          animatedProps={animatedArcProps}
-          strokeWidth={STROKE}
-          strokeLinecap="butt"
-          fill="none"
+    <Group transform={transform}>
+      {/* Gradient wedge fill */}
+      <Path path={wedgePath}>
+        <GlowGradient
+          color={color}
+          cx={cx}
+          cy={cy}
+          r={R}
+          stops={QUARTER_GLOW_STOPS}
+          opacities={QUARTER_GLOW_OPACITIES}
         />
+      </Path>
 
-        {/* Alert markers */}
-        {alerts.map((alert) => (
-          <AlertMarker key={alert.id} side={side} alert={alert} max={max} />
-        ))}
+      {/* Static background arc */}
+      <Path
+        path={bgArc}
+        color={BG_ARC_COLOR}
+        style="stroke"
+        strokeWidth={STROKE}
+        strokeCap="butt"
+      />
 
-        {/* Position marker */}
-        <AnimatedLine animatedProps={animatedMarkerProps} strokeWidth={1.5} strokeLinecap="butt" />
-      </Svg>
+      {/* Animated colored arc overlay */}
+      <Path path={arcPath} color={arcColor} style="stroke" strokeWidth={STROKE} strokeCap="butt" />
 
-      {/* Value bowl — absolutely positioned over the SVG */}
-      <View style={isLeft ? styles.bowlLeft : styles.bowlRight} pointerEvents="none">
-        <AnimatedTextInput
-          editable={false}
-          animatedProps={animatedValueProps}
-          style={[styles.value, animatedValueStyle]}
-        />
-        <Text style={styles.unit}>{unit}</Text>
-      </View>
+      {/* Alert markers */}
+      {alerts.map((alert) => (
+        <AlertMarker key={alert.id} side={side} alert={alert} max={max} cx={cx} cy={cy} />
+      ))}
+
+      {/* Position marker */}
+      <Path path={markerPath} color={arcColor} style="stroke" strokeWidth={1.5} strokeCap="butt" />
+    </Group>
+  )
+}
+
+function GaugeValue({
+  side,
+  value,
+  color,
+  hotRange,
+  unit,
+  pair = false,
+  pairBounds,
+}: QuarterArcProps & { pair?: boolean; pairBounds?: { top: number; bottom: number } }) {
+  const animatedValueProps = useAnimatedProps(() => {
+    const current = value.value
+    const text = current != null ? Math.round(current).toString() : '—'
+    return { text, value: text }
+  })
+  const animatedValueStyle = useAnimatedStyle(() => ({
+    color: gaugeRampColor(value.value, color, hotRange),
+  }))
+  return (
+    <View
+      style={
+        pair
+          ? side === 'left'
+            ? [styles.pairBowlLeft, pairBounds]
+            : [styles.pairBowlRight, pairBounds]
+          : side === 'left'
+            ? styles.bowlLeft
+            : styles.bowlRight
+      }
+      pointerEvents="none"
+    >
+      <AnimatedTextInput
+        editable={false}
+        animatedProps={animatedValueProps}
+        style={[styles.value, animatedValueStyle]}
+      />
+      <Text style={styles.unit}>{unit}</Text>
     </View>
   )
 }
+
+function QuarterArc(props: QuarterArcProps) {
+  const { size, onLayout } = useCanvasSize()
+  const scale = size.w > 0 ? size.w / VB_CROP_W : 0
+  const originX = props.side === 'left' ? VB_CROP_LEFT_X : VB_CROP_RIGHT_X
+  const transform = useMemo(
+    () => [{ translateX: -originX * scale }, { translateY: -CROP_TOP * scale }, { scale }],
+    [originX, scale],
+  )
+  return (
+    <View style={styles.quarterWrap}>
+      <View style={styles.svg} onLayout={onLayout}>
+        {scale > 0 ? (
+          <Canvas style={styles.svg}>
+            <QuarterArcLayer {...props} transform={transform} />
+          </Canvas>
+        ) : null}
+      </View>
+      <GaugeValue {...props} />
+    </View>
+  )
+}
+
+interface GaugePairProps {
+  speedValue: SharedValue<number | null>
+  dutyValue: SharedValue<number | null>
+  speedMax: number
+  dutyMax: number
+  speedAlerts: DualGaugeAlert[]
+  dutyAlerts: DualGaugeAlert[]
+  speedHotRange: MetricHotRange | null
+  dutyHotRange: MetricHotRange | null
+  speedSeries: SparklinePoint[]
+  dutySeries: SparklinePoint[]
+  windowMs?: number
+}
+
+function GaugePair({
+  speedValue,
+  dutyValue,
+  speedMax,
+  dutyMax,
+  speedAlerts,
+  dutyAlerts,
+  speedHotRange,
+  dutyHotRange,
+  speedSeries,
+  dutySeries,
+  windowMs,
+}: GaugePairProps) {
+  const { size, onLayout } = useCanvasSize()
+  const cellWidth = Math.max(0, (size.w - SPARKLINE_GAP) / 2)
+  const scale = cellWidth / VB_CROP_W
+  const gaugeHeight = cellWidth * (VB_CROP_H / VB_CROP_W)
+  const sparklinePaths = useMemo(
+    () => [
+      buildSparklinePaths({
+        points: speedSeries,
+        width: cellWidth,
+        height: SPARKLINE_HEIGHT,
+        range: { min: 0, max: speedMax },
+        windowMs,
+      }),
+      buildSparklinePaths({
+        points: dutySeries,
+        width: cellWidth,
+        height: SPARKLINE_HEIGHT,
+        range: { min: 0, max: dutyMax },
+        windowMs,
+      }),
+    ],
+    [cellWidth, dutyMax, dutySeries, speedMax, speedSeries, windowMs],
+  )
+  const leftTransform = useMemo(
+    () => [
+      { translateX: -VB_CROP_LEFT_X * scale },
+      { translateY: SPARKLINE_HEIGHT + SPARKLINE_TOP - CROP_TOP * scale },
+      { scale },
+    ],
+    [scale],
+  )
+  const rightTransform = useMemo(
+    () => [
+      { translateX: cellWidth + SPARKLINE_GAP - VB_CROP_RIGHT_X * scale },
+      { translateY: SPARKLINE_HEIGHT + SPARKLINE_TOP - CROP_TOP * scale },
+      { scale },
+    ],
+    [cellWidth, scale],
+  )
+  return (
+    <View style={styles.gaugePair} onLayout={onLayout}>
+      {scale > 0 ? (
+        <Canvas style={styles.svg}>
+          <Group transform={[{ translateY: SPARKLINE_TOP }]}>
+            <SparklineLayer paths={sparklinePaths[0]} color={telemetry.speed.color} showMax />
+          </Group>
+          <Group
+            transform={[{ translateX: cellWidth + SPARKLINE_GAP }, { translateY: SPARKLINE_TOP }]}
+          >
+            <SparklineLayer paths={sparklinePaths[1]} color={telemetry.duty.color} showMax />
+          </Group>
+          <QuarterArcLayer
+            side="left"
+            value={speedValue}
+            max={speedMax}
+            color={telemetry.speed.color}
+            unit="km/h"
+            alerts={speedAlerts}
+            hotRange={speedHotRange}
+            transform={leftTransform}
+          />
+          <QuarterArcLayer
+            side="right"
+            value={dutyValue}
+            max={dutyMax}
+            color={telemetry.duty.color}
+            unit="%"
+            alerts={dutyAlerts}
+            hotRange={dutyHotRange}
+            transform={rightTransform}
+          />
+        </Canvas>
+      ) : null}
+      <GaugeValue
+        side="left"
+        value={speedValue}
+        max={speedMax}
+        color={telemetry.speed.color}
+        unit="km/h"
+        alerts={speedAlerts}
+        hotRange={speedHotRange}
+        pair
+        pairBounds={{
+          top: SPARKLINE_HEIGHT + SPARKLINE_TOP + gaugeHeight * 0.1,
+          bottom: gaugeHeight * 0.05,
+        }}
+      />
+      <GaugeValue
+        side="right"
+        value={dutyValue}
+        max={dutyMax}
+        color={telemetry.duty.color}
+        unit="%"
+        alerts={dutyAlerts}
+        hotRange={dutyHotRange}
+        pair
+        pairBounds={{
+          top: SPARKLINE_HEIGHT + SPARKLINE_TOP + gaugeHeight * 0.1,
+          bottom: gaugeHeight * 0.05,
+        }}
+      />
+    </View>
+  )
+}
+
+const AnimatedTextInput = Animated.createAnimatedComponent(TextInput)
 
 // ── DualGauge ────────────────────────────────────────────────────────────────
 
@@ -642,7 +857,6 @@ export function DualGauge({
   containerStyle,
 }: DualGaugeProps) {
   const router = useRouter()
-
   return (
     <View
       style={[
@@ -652,55 +866,49 @@ export function DualGauge({
         containerStyle,
       ]}
     >
-      <View style={[styles.row, split && styles.rowSplit]}>
-        <Pressable
-          style={[styles.halfPressable, split && styles.halfPressableSplit]}
-          onPress={() => router.push(routes.controlSpeed)}
-          android_ripple={interaction.ripple}
-        >
-          <Sparkline
-            points={speedSeries ?? []}
-            color={telemetry.speed.color}
-            height={28}
-            range={{ min: 0, max: speedMax }}
-            fmtMax={(v) => telemetry.speed.formatWithUnit(v)}
-            maxPosition="left"
-            windowMs={windowMs}
+      <View style={styles.gaugeContent}>
+        <View style={[styles.row, split && styles.rowSplit]} pointerEvents="none">
+          <View style={[styles.halfPressable, split && styles.halfPressableSplit]}>
+            <SparklineMaxBadge
+              points={speedSeries ?? []}
+              color={telemetry.speed.color}
+              fmt={telemetry.speed.formatWithUnit}
+              position="left"
+            />
+          </View>
+          <View style={[styles.halfPressable, split && styles.halfPressableSplit]}>
+            <SparklineMaxBadge
+              points={dutySeries ?? []}
+              color={telemetry.duty.color}
+              fmt={telemetry.duty.formatWithUnit}
+            />
+          </View>
+        </View>
+        <GaugePair
+          speedValue={speedValue}
+          dutyValue={dutyValue}
+          speedMax={speedMax}
+          dutyMax={dutyMax}
+          speedAlerts={speedAlerts}
+          dutyAlerts={dutyAlerts}
+          speedHotRange={speedHotRange}
+          dutyHotRange={dutyHotRange}
+          speedSeries={speedSeries ?? []}
+          dutySeries={dutySeries ?? []}
+          windowMs={windowMs}
+        />
+        <View style={styles.gaugeTouchRow}>
+          <Pressable
+            style={styles.halfPressable}
+            onPress={() => router.push(routes.controlSpeed)}
+            android_ripple={interaction.ripple}
           />
-          <QuarterArc
-            side="left"
-            value={speedValue}
-            max={speedMax}
-            color={telemetry.speed.color}
-            unit="km/h"
-            alerts={speedAlerts}
-            hotRange={speedHotRange}
+          <Pressable
+            style={styles.halfPressable}
+            onPress={() => router.push(routes.controlDuty)}
+            android_ripple={interaction.ripple}
           />
-        </Pressable>
-
-        <Pressable
-          style={[styles.halfPressable, split && styles.halfPressableSplit]}
-          onPress={() => router.push(routes.controlDuty)}
-          android_ripple={interaction.ripple}
-        >
-          <Sparkline
-            points={dutySeries ?? []}
-            color={telemetry.duty.color}
-            height={28}
-            range={{ min: 0, max: dutyMax }}
-            fmtMax={(v) => telemetry.duty.formatWithUnit(v)}
-            windowMs={windowMs}
-          />
-          <QuarterArc
-            side="right"
-            value={dutyValue}
-            max={dutyMax}
-            color={telemetry.duty.color}
-            unit="%"
-            alerts={dutyAlerts}
-            hotRange={dutyHotRange}
-          />
-        </Pressable>
+        </View>
       </View>
     </View>
   )
@@ -728,10 +936,14 @@ const styles = StyleSheet.create({
     flex: 1,
     overflow: 'visible',
   },
+  gaugeContent: { position: 'relative' },
+  gaugeTouchRow: { position: 'absolute', inset: 0, flexDirection: 'row', gap: 32 },
   row: {
     flexDirection: 'row',
     gap: 32,
+    position: 'relative',
   },
+  gaugePair: { width: '100%', aspectRatio: 1.4, position: 'relative' },
   rowSplit: {
     justifyContent: 'space-between',
   },
@@ -764,6 +976,24 @@ const styles = StyleSheet.create({
   bowlRight: {
     position: 'absolute',
     left: 0,
+    right: '5%',
+    top: '10%',
+    bottom: '5%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pairBowlLeft: {
+    position: 'absolute',
+    left: '5%',
+    right: '55%',
+    top: '10%',
+    bottom: '5%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pairBowlRight: {
+    position: 'absolute',
+    left: '55%',
     right: '5%',
     top: '10%',
     bottom: '5%',

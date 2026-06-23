@@ -11,6 +11,44 @@ internal const val MIN_LIVE_HISTORY_LIMIT_MINUTES = 1
 internal const val MAX_LIVE_HISTORY_LIMIT_MINUTES = 50
 internal const val DEFAULT_TELEMETRY_STALE_MS = 4_000L
 
+/** One decimated live metric: a key the JS UI knows + how to read it off a telemetry row. */
+internal data class LiveSeriesMetric(val key: String, val select: (Map<String, Any?>) -> Double?)
+
+private fun Map<String, Any?>.num(key: String): Double? = (this[key] as? Number)?.toDouble()
+
+private fun Map<String, Any?>.excluded(key: String): Boolean =
+    (this["metricExclusions"] as? Map<*, *>)?.get(key) == true
+
+/**
+ * Every live metric the JS UI renders from the decimated series: the center-screen
+ * sparklines (strip + dual gauge + battery) plus, temporarily, the `/control` detail
+ * charts (which used to stream raw full samples — see the perf note on `useLiveMetric`).
+ * Kept in sync with `liveSelectors` on the JS side, keyed by the same names: any
+ * abs/scale/exclusion is applied here *before* min/max bucketing so native decimation
+ * matches what JS would compute, and the UI renders the values verbatim.
+ */
+internal val LIVE_SERIES_METRICS = listOf(
+    LiveSeriesMetric("motorTemp") { row -> row.num("tempMotor")?.takeIf { it > 0 } },
+    LiveSeriesMetric("controllerTemp") { row -> row.num("tempMosfet") },
+    LiveSeriesMetric("motorCurrent") { row -> row.num("motorCurrent") },
+    LiveSeriesMetric("batteryCurrent") { row -> row.num("batteryCurrent") },
+    LiveSeriesMetric("batteryVoltage") { row -> row.num("batteryVoltage") },
+    LiveSeriesMetric("batteryPercent") { row -> row.num("batteryPercent") },
+    LiveSeriesMetric("speed") { row ->
+        if (row.excluded("max_speed")) null else row.num("speed")?.let { kotlin.math.abs(it) }
+    },
+    LiveSeriesMetric("duty") { row ->
+        if (row.excluded("max_duty")) null else row.num("dutyCycle")?.let { kotlin.math.abs(it) * 100 }
+    },
+    // Detail-chart-only metrics (no center sparkline). Here so `/control` screens can
+    // read the cheap decimated series instead of the full-sample firehose.
+    LiveSeriesMetric("pitch") { row -> row.num("pitch") },
+    LiveSeriesMetric("roll") { row -> row.num("roll") },
+    LiveSeriesMetric("balancePitch") { row -> row.num("balancePitch") },
+    LiveSeriesMetric("footpadAdc1") { row -> row.num("adc1") },
+    LiveSeriesMetric("footpadAdc2") { row -> row.num("adc2") },
+)
+
 internal data class ProcessedTelemetry(
     val eventMap: MutableMap<String, Any?>,
     val capture: TelemetryCapture,
@@ -31,6 +69,9 @@ internal class TelemetryPipeline(
 
     private val recentTelemetry = ArrayDeque<MutableMap<String, Any?>>()
     private val liveTelemetryPoints = ArrayDeque<LivePoint>()
+    // recentTelemetry is appended on the BLE callback thread and read (snapshot/decimated)
+    // on the main thread, so every structural access goes through this lock.
+    private val recentLock = Any()
     private var session: BoardSession? = null
     private var sessionConfig: SessionConfig? = null
     private var canId: Int? = null
@@ -43,7 +84,7 @@ internal class TelemetryPipeline(
 
     fun beginSession(session: BoardSession, config: SessionConfig) {
         cancelStaleWatchdog()
-        recentTelemetry.clear()
+        synchronized(recentLock) { recentTelemetry.clear() }
         liveTelemetryPoints.clear()
         lastTelemetryAt = 0L
         this.session = session
@@ -55,7 +96,7 @@ internal class TelemetryPipeline(
 
     fun endSession() {
         cancelStaleWatchdog()
-        recentTelemetry.clear()
+        synchronized(recentLock) { recentTelemetry.clear() }
         liveTelemetryPoints.clear()
         lastTelemetryAt = 0L
         session = null
@@ -77,7 +118,7 @@ internal class TelemetryPipeline(
             MAX_LIVE_HISTORY_LIMIT_MINUTES,
         )
         val now = nowMs()
-        pruneRecentTelemetry(now)
+        synchronized(recentLock) { pruneRecentTelemetry(now) }
         pruneLiveTelemetryPoints(now)
     }
 
@@ -85,11 +126,31 @@ internal class TelemetryPipeline(
 
     fun recentWindowMs(): Long = liveHistoryLimitMinutes.toLong() * 60_000L
 
-    fun recentSnapshot(): List<Map<String, Any?>> = recentTelemetry.toList()
+    fun recentSnapshot(): List<Map<String, Any?>> = synchronized(recentLock) { recentTelemetry.toList() }
+
+    /**
+     * Render-ready min/max series per metric, decimated from the in-memory live
+     * window. Lets the UI draw sparklines without streaming every raw sample.
+     */
+    fun liveSeries(metrics: List<LiveSeriesMetric>, bucketCount: Int): Map<String, DoubleArray> {
+        // Copy the deque under lock, then decimate the snapshot without holding it.
+        val rows = synchronized(recentLock) { if (recentTelemetry.isEmpty()) null else recentTelemetry.toList() }
+            ?: return emptyMap()
+        val windowMs = recentWindowMs()
+        val result = HashMap<String, DoubleArray>(metrics.size)
+        for (metric in metrics) {
+            result[metric.key] = LiveSeriesDownsampler.downsampleMinMax(
+                rows,
+                bucketCount,
+                windowMs,
+                { (it["lastPacketAt"] as Number).toLong() },
+                metric.select,
+            )
+        }
+        return result
+    }
 
     fun armStaleWatchdog() {
-        val cfg = sessionConfig ?: return
-        if (!cfg.autoReconnect) return
         val armedAt = lastTelemetryAt
         staleHandle?.cancel()
         staleHandle = scheduler.postDelayed(staleTimeoutMs) {
@@ -119,8 +180,10 @@ internal class TelemetryPipeline(
         liveTelemetryPoints.addLast(LivePoint(bucketPoint, baseEventMap))
         pruneLiveTelemetryPoints(parsed.lastPacketAt)
         val updates = sanitizeLivePoints()
-        recentTelemetry.addLast(baseEventMap)
-        pruneRecentTelemetry(parsed.lastPacketAt)
+        synchronized(recentLock) {
+            recentTelemetry.addLast(baseEventMap)
+            pruneRecentTelemetry(parsed.lastPacketAt)
+        }
 
         return ProcessedTelemetry(baseEventMap, capture, updates)
     }

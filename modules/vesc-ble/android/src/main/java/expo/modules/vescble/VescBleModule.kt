@@ -68,7 +68,9 @@ class VescBleModule : Module() {
       "onDevice",
       "onError",
       "onLiveState",
-      "onTelemetry",
+      "onLiveTick",
+      "onLiveSeries",
+      "onTelemetryHistory",
       "onBms",
       "onLocation",
       "onTelemetryRebuildProgress",
@@ -81,8 +83,12 @@ class VescBleModule : Module() {
     OnStopObserving("onError") { stopObserving("onError") }
     OnStartObserving("onLiveState") { startObserving("onLiveState") }
     OnStopObserving("onLiveState") { stopObserving("onLiveState") }
-    OnStartObserving("onTelemetry") { startObserving("onTelemetry") }
-    OnStopObserving("onTelemetry") { stopObserving("onTelemetry") }
+    OnStartObserving("onLiveTick") { startObserving("onLiveTick") }
+    OnStopObserving("onLiveTick") { stopObserving("onLiveTick") }
+    OnStartObserving("onLiveSeries") { startObserving("onLiveSeries") }
+    OnStopObserving("onLiveSeries") { stopObserving("onLiveSeries") }
+    OnStartObserving("onTelemetryHistory") { startObserving("onTelemetryHistory") }
+    OnStopObserving("onTelemetryHistory") { stopObserving("onTelemetryHistory") }
     OnStartObserving("onBms") { startObserving("onBms") }
     OnStopObserving("onBms") { stopObserving("onBms") }
     OnStartObserving("onLocation") { startObserving("onLocation") }
@@ -141,6 +147,24 @@ class VescBleModule : Module() {
     }
     Function("setDebugRecordingEnabled") { enabled: Boolean ->
       requestedDebugRecordingEnabled = enabled
+    }
+    AsyncFunction("listDebugRecordings") { promise: Promise ->
+      CoroutineScope(Dispatchers.IO).launch {
+        try {
+          promise.resolve(DebugRecordingStore(context.applicationContext).list())
+        } catch (e: Exception) {
+          promise.reject("ERR_LIST_DEBUG_RECORDINGS", e.message, e)
+        }
+      }
+    }
+    AsyncFunction("exportDebugRecording") { name: String, promise: Promise ->
+      CoroutineScope(Dispatchers.IO).launch {
+        try {
+          promise.resolve(DebugRecordingStore(context.applicationContext).export(name))
+        } catch (e: Exception) {
+          promise.reject("ERR_EXPORT_DEBUG_RECORDING", e.message, e)
+        }
+      }
     }
     Function("reportUiError") { message: String, source: String?, stack: String? ->
       DiagnosticReporter.get(context.applicationContext).capture(
@@ -365,7 +389,8 @@ class VescBleModule : Module() {
         key == "movingAvgSpeedThresholdKmh" ||
         key == "freeSpinMaxSpeedDeltaKmh" ||
         key == "freeSpinStationaryBoardCapKmh" ||
-        key == "socEstimateWindowSeconds"
+        key == "socEstimateWindowSeconds" ||
+        key == "telemetryPollRateHz"
       ) {
         VescForegroundService.reloadTelemetrySettings(context.applicationContext)
       }
@@ -499,8 +524,9 @@ class VescBleModule : Module() {
   }
 
   private suspend fun selectBoard(boardId: String) {
-    AppDataRepository.get(context.applicationContext).setSelectedBoardId(boardId)
-    val board = AppDataRepository.get(context.applicationContext).getBoard(boardId)
+    val repo = AppDataRepository.get(context.applicationContext)
+    repo.setSelectedBoardId(boardId)
+    val board = repo.getBoard(boardId)
       ?: throw IllegalArgumentException("Board not found: $boardId")
     @Suppress("UNCHECKED_CAST")
     val link = board["link"] as? Map<String, Any?>
@@ -509,6 +535,11 @@ class VescBleModule : Module() {
       throw IllegalArgumentException("Board has no Board Link: $boardId")
     }
     val boardName = board["name"] as? String ?: DEFAULT_BOARD_NAME
+    // Poll rate cap (Hz) → minimum spacing floor between requests. 0 Hz = unlimited
+    // (pure response-paced: send the next poll as soon as the reply lands). Polling stays
+    // response-paced either way, so the floor caps the rate without outrunning the controller.
+    // Changing the cap mid-session is applied live via reloadTelemetrySettings (see updateSetting).
+    val pollIntervalMs = pollIntervalMsForHz(repo.getTypedSettings().telemetryPollRateHz)
     VescForegroundService.startBoardSession(
       context.applicationContext,
       SessionConfig(
@@ -517,7 +548,7 @@ class VescBleModule : Module() {
         deviceName = boardName,
         transport = BoardTransport.fromBridge(link["transport"]),
         hasBms = link["hasBms"] as? Boolean,
-        pollIntervalMs = 500L,
+        pollIntervalMs = pollIntervalMs,
         recordingEnabled = requestedDebugRecordingEnabled,
         telemetryRecordingEnabled = false,
         autoReconnect = true,

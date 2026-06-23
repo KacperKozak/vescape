@@ -32,22 +32,18 @@ export function useBoardConnection() {
   const {
     status: bleStatus,
     nativeStateReady,
-    recordDebugSession,
     stopScan,
     connect,
     disconnect,
     setSelectedBoard,
-    setRecordDebugSession,
   } = useBleStore(
     useShallow((s) => ({
       status: s.status,
       nativeStateReady: s.nativeStateReady,
-      recordDebugSession: s.recordDebugSession,
       stopScan: s.stopScan,
       connect: s.connect,
       disconnect: s.disconnect,
       setSelectedBoard: s.setSelectedBoard,
-      setRecordDebugSession: s.setRecordDebugSession,
     })),
   )
 
@@ -91,11 +87,9 @@ export function useBoardConnection() {
     activeBoardId,
     nativeStateReady,
     bleStatus,
-    recordDebugSession,
     handleSelectBoard,
     handleAddBoard,
     handleCancel,
     handleRetryConnect,
-    setRecordDebugSession,
   }
 }

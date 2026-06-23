@@ -155,7 +155,7 @@ class TelemetryPipelineTest {
     }
 
     @Test
-    fun `stale watchdog does not arm when autoReconnect disabled`() {
+    fun `stale watchdog fires when autoReconnect disabled`() {
         val scheduler = TestScheduler()
         var stale = 0
         val pipeline = buildPipeline(
@@ -167,8 +167,8 @@ class TelemetryPipelineTest {
         pipeline.beginSession(session, sessionConfig.copy(autoReconnect = false))
         pipeline.process(telemetry(packetAt = 0L), session)
 
-        scheduler.advance(10_000L)
-        assertEquals(0, stale)
+        scheduler.advance(1_000L)
+        assertEquals(1, stale)
     }
 
     @Test

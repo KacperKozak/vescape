@@ -1,12 +1,5 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import {
-  CheckCircleIcon,
-  LightningIcon,
-  PencilSimpleIcon,
-  PlusIcon,
-  RadioButtonIcon,
-  RecordIcon,
-} from 'phosphor-react-native'
+import { CheckCircleIcon, LightningIcon, PencilSimpleIcon, PlusIcon } from 'phosphor-react-native'
 import { router } from 'expo-router'
 import { routes } from '@/navigation/routes'
 
@@ -19,11 +12,9 @@ interface BoardSelectorSheetProps {
   triggerRef: React.RefObject<View | null>
   boards: Board[]
   activeBoardId: string | null
-  recordDebugSession: boolean
   onClose: () => void
   onSelectBoard: (id: string) => void
   onAddBoard: () => void
-  onToggleRecordDebug: () => void
 }
 
 export function BoardSelectorSheet({
@@ -31,11 +22,9 @@ export function BoardSelectorSheet({
   triggerRef,
   boards,
   activeBoardId,
-  recordDebugSession,
   onClose,
   onSelectBoard,
   onAddBoard,
-  onToggleRecordDebug,
 }: BoardSelectorSheetProps) {
   return (
     <Dropdown
@@ -98,22 +87,6 @@ export function BoardSelectorSheet({
           </View>
           <Text style={styles.addText}>Add new board</Text>
         </Pressable>
-
-        <View style={styles.divider} />
-
-        <Pressable
-          style={({ pressed }) => [styles.debugRow, pressed && styles.boardRowPressed]}
-          onPress={onToggleRecordDebug}
-        >
-          {recordDebugSession ? (
-            <RecordIcon size={20} color={theme.wheel.color} weight="fill" />
-          ) : (
-            <RadioButtonIcon size={20} color={theme.neutral.textMuted} weight="regular" />
-          )}
-          <Text style={[styles.debugText, recordDebugSession && styles.debugTextActive]}>
-            Record next session
-          </Text>
-        </Pressable>
       </ScrollView>
     </Dropdown>
   )
@@ -129,12 +102,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 14,
     paddingBottom: 6,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: theme.neutral.surface,
-    marginHorizontal: 16,
-    marginTop: 4,
   },
   boardRow: {
     flexDirection: 'row',
@@ -197,20 +164,5 @@ const styles = StyleSheet.create({
     color: theme.wheel.color,
     fontSize: 14,
     fontWeight: '700',
-  },
-  debugRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    gap: 10,
-  },
-  debugText: {
-    color: theme.neutral.textMuted,
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  debugTextActive: {
-    color: theme.neutral.textSecondary,
   },
 })

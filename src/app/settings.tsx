@@ -18,6 +18,7 @@ import {
   GearSixIcon,
   WaveformIcon,
   SpeakerHighIcon,
+  GaugeIcon,
 } from 'phosphor-react-native'
 import { useShallow } from 'zustand/react/shallow'
 
@@ -38,6 +39,7 @@ export default function SettingsScreen() {
   const {
     liveHistoryLimit,
     socEstimateWindowSeconds,
+    telemetryPollRateHz,
     autoConnect,
     autoRecording,
     connectionSoundsEnabled,
@@ -46,6 +48,7 @@ export default function SettingsScreen() {
     useShallow((s) => ({
       liveHistoryLimit: s.liveHistoryLimit,
       socEstimateWindowSeconds: s.socEstimateWindowSeconds,
+      telemetryPollRateHz: s.telemetryPollRateHz,
       autoConnect: s.autoConnect,
       autoRecording: s.autoRecording,
       connectionSoundsEnabled: s.connectionSoundsEnabled,
@@ -103,6 +106,27 @@ export default function SettingsScreen() {
                   const clampedValue = Math.min(50, Math.max(1, nextValue))
                   if (clampedValue !== liveHistoryLimit) {
                     void set('liveHistoryLimit', clampedValue)
+                  }
+                }}
+              />
+            }
+          />
+          <SettingsRow
+            icon={GaugeIcon}
+            iconColor={theme.gps.color}
+            label="Telemetry rate limit"
+            hint="Caps telemetry requests per second. 0 = unlimited"
+            right={
+              <Stepper
+                value={telemetryPollRateHz}
+                unit="Hz"
+                min={0}
+                max={100}
+                step={(v, dir) => (dir === 1 ? (v < 5 ? 1 : 5) : v <= 5 ? 1 : 5)}
+                onChange={(nextValue) => {
+                  const clampedValue = Math.min(100, Math.max(0, nextValue))
+                  if (clampedValue !== telemetryPollRateHz) {
+                    void set('telemetryPollRateHz', clampedValue)
                   }
                 }}
               />

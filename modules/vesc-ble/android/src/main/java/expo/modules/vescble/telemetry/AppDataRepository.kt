@@ -27,6 +27,12 @@ internal fun validSocEstimateWindowSeconds(value: Any?): Int? =
     ?.toInt()
     ?.coerceIn(0, 120)
 
+/** Max telemetry poll rate in Hz; 0 = unlimited (pure response-paced), capped at 100Hz. */
+internal fun validTelemetryPollRateHz(value: Any?): Int? =
+  (value as? Number)
+    ?.toInt()
+    ?.coerceIn(0, 100)
+
 val DEFAULT_HISTORY_METRIC_HOT_RANGES: Map<String, Map<String, Double>> = mapOf(
   "speed" to mapOf("start" to 30.0, "end" to 40.0),
   "duty" to mapOf("start" to 60.0, "end" to 80.0),
@@ -162,6 +168,7 @@ class AppDataRepository private constructor(private val context: Context) {
       historyMetricHotRanges = req("historyMetricHotRanges", DEFAULT_HISTORY_METRIC_HOT_RANGES, ::validHistoryMetricHotRanges),
       socEstimateWindowSeconds = req("socEstimateWindowSeconds", 20, ::validSocEstimateWindowSeconds),
       connectionSoundsEnabled = req("connectionSoundsEnabled", true) { it as? Boolean },
+      telemetryPollRateHz = req("telemetryPollRateHz", 20, ::validTelemetryPollRateHz),
     )
 
     if (badKeys.isNotEmpty()) {
@@ -197,6 +204,8 @@ class AppDataRepository private constructor(private val context: Context) {
       "socEstimateWindowSeconds" ->
         validSocEstimateWindowSeconds(value) ?: return@withContext
       "connectionSoundsEnabled" -> value as? Boolean ?: return@withContext
+      "telemetryPollRateHz" ->
+        validTelemetryPollRateHz(value) ?: return@withContext
       else -> return@withContext
     }
     val normalizedKey = when (key) {
@@ -220,6 +229,7 @@ class AppDataRepository private constructor(private val context: Context) {
         "historyMetricHotRanges" -> d.historyMetricHotRanges
         "socEstimateWindowSeconds" -> d.socEstimateWindowSeconds
         "connectionSoundsEnabled" -> d.connectionSoundsEnabled
+        "telemetryPollRateHz" -> d.telemetryPollRateHz
         else -> null
       }
     }
@@ -451,6 +461,7 @@ fun AppSettings.toMap(): Map<String, Any?> = mapOf(
   "historyMetricHotRanges" to historyMetricHotRanges,
   "socEstimateWindowSeconds" to socEstimateWindowSeconds,
   "connectionSoundsEnabled" to connectionSoundsEnabled,
+  "telemetryPollRateHz" to telemetryPollRateHz,
 )
 
 internal fun encodeSettingJson(value: Any?): String {

@@ -120,8 +120,9 @@ Recording means real ride recording:
 
 Standalone GPS does not create ride history. GPS without board is only for map/status.
 
-Debug raw BLE recording is separate. It can capture raw chunks for diagnosis, but
-debug replay playback is intentionally removed from the app.
+Debug raw BLE recording is separate. Android Dev → Debug recordings can capture
+raw chunks, connection states, and location for diagnosis, then list and export
+the JSONL files. Debug replay playback is intentionally removed from the app.
 
 ## Restore
 

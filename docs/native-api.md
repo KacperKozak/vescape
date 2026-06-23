@@ -260,12 +260,14 @@ Writing default-equivalent value deletes the override row. Unknown keys and type
 
 ## Diagnostics
 
-| fn                                      | sync | returns            |
-| --------------------------------------- | ---- | ------------------ |
-| `setDebugRecordingEnabled(enabled)`     | sync | void. Android only |
-| `reportUiError(message,source?,stack?)` | sync | void               |
-| `reportDiagnosticTest()`                | sync | `DiagnosticStatus` |
-| `getDiagnosticStatus()`                 | sync | `DiagnosticStatus` |
+| fn                                      | sync | returns                                  |
+| --------------------------------------- | ---- | ---------------------------------------- |
+| `setDebugRecordingEnabled(enabled)`     | yes  | void. Android only                       |
+| `listDebugRecordings()`                 | no   | `{ name, createdAt, sizeBytes }[]`       |
+| `exportDebugRecording(name)`            | no   | `{ uri, name, sizeBytes }`. Android only |
+| `reportUiError(message,source?,stack?)` | yes  | void                                     |
+| `reportDiagnosticTest()`                | yes  | `DiagnosticStatus`                       |
+| `getDiagnosticStatus()`                 | yes  | `DiagnosticStatus`                       |
 
 ### DiagnosticStatus shape
 

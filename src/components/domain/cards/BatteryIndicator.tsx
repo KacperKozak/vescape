@@ -4,9 +4,8 @@ import { useRouter } from 'expo-router'
 import { useShallow } from 'zustand/react/shallow'
 
 import { BatteryBar } from '@/components/ui/base/BatteryBar'
-import { type SparklinePoint } from '@/components/ui/charts/Sparkline'
 import { deriveBatteryConfig } from '@/lib/battery'
-import { useLiveMetric, liveSelectors } from '@/hooks/useLiveMetric'
+import { useLiveSeries } from '@/hooks/useLiveMetric'
 import { useBoardStore } from '@/store/boardStore'
 import { useLiveWindowMs } from '@/store/settingsStore'
 import { routes } from '@/navigation/routes'
@@ -19,8 +18,13 @@ interface BatteryIndicatorProps {
 
 export function BatteryIndicator({ compact, transparent, containerStyle }: BatteryIndicatorProps) {
   const router = useRouter()
-  const batteryVoltageHistory = useLiveMetric(liveSelectors.batteryVoltage)
-  const batteryPercentHistory = useLiveMetric(liveSelectors.batteryPercent)
+  // Decimated sparkline series (native, ~1Hz). Plots the median-smoothed SoC Estimate
+  // (ADR-0016) over 0–100 so the line matches the % readout and the detail screen,
+  // instead of raw pack voltage which sags sharply under load. The series publish also
+  // paces this component's re-render, at which point the live numbers are sampled off
+  // the 31Hz tick.
+  const batterySeries = useLiveSeries('batteryPercent')
+  const voltageSeries = useLiveSeries('batteryVoltage')
   const windowMs = useLiveWindowMs()
   const batteryConfig = useBoardStore(
     useShallow((s) => {
@@ -29,34 +33,22 @@ export function BatteryIndicator({ compact, transparent, containerStyle }: Batte
     }),
   )
 
-  const { smoothVoltage, batterySeries, voltageRange } = useMemo(() => {
-    const series: SparklinePoint[] = batteryVoltageHistory.map((p) => ({
-      ts: p.ts,
-      value: p.value,
-    }))
-    const configured = deriveBatteryConfig(batteryConfig).warning == null
-    return {
-      smoothVoltage: batteryVoltageHistory.at(-1)?.value ?? null,
-      batterySeries: series,
-      voltageRange: configured
-        ? {
-            min: deriveBatteryConfig(batteryConfig!).minVoltage,
-            max: deriveBatteryConfig(batteryConfig!).maxVoltage,
-          }
-        : undefined,
-    }
-  }, [batteryVoltageHistory, batteryConfig])
+  // Config gates whether a SoC reading exists at all (voltage limits set).
+  const batteryConfigured = useMemo(
+    () => deriveBatteryConfig(batteryConfig).warning == null,
+    [batteryConfig],
+  )
 
-  const voltage = smoothVoltage
-  const percent = batteryPercentHistory.at(-1)?.value ?? null
-  const batteryConfigured = voltageRange != null
+  // Latest decimated sample (~1Hz). Battery is a slow signal, so the series cadence is
+  // plenty — and reading it here avoids touching a Reanimated SharedValue during render.
+  const percent = batterySeries.at(-1)?.value ?? null
+  const voltage = voltageSeries.at(-1)?.value ?? null
 
   return (
     <BatteryBar
       percent={batteryConfigured ? percent : null}
       voltage={voltage}
       series={batterySeries}
-      range={voltageRange}
       windowMs={windowMs}
       hint={!batteryConfigured ? 'Set battery config in board settings' : undefined}
       compact={compact}

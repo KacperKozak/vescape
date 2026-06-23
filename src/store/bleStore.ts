@@ -12,7 +12,9 @@ import {
   addDeviceListener,
   addErrorListener,
   addLiveStateListener,
-  addTelemetryListener,
+  addLiveTickListener,
+  addLiveSeriesListener,
+  addTelemetryHistoryListener,
   addBmsListener,
   addLocationListener,
   type BoardPhase,
@@ -24,6 +26,7 @@ import {
 } from 'vesc-ble'
 
 import { useSettingsStore } from '@/store/settingsStore'
+import { useLiveSeriesStore } from '@/store/liveSeriesStore'
 import { liveTelemetryRuntime } from '@/lib/telemetry/liveTelemetryRuntime'
 import { type LiveStatusSummary } from '@/lib/telemetry/liveMetricHistory'
 
@@ -47,7 +50,6 @@ interface BleState {
   gpsStatus: GpsPhase
   scanStatus: ScanStatus
   connectionSeq: number
-  lastTelemetryAt: number | null
   nativeStateReady: boolean
   devices: ScannedDevice[]
   selectedBoardId: string | null
@@ -81,21 +83,31 @@ type BleSet = {
 }
 
 let liveSub: EventSubscription | null = null
-let telemetrySub: EventSubscription | null = null
+let liveTickSub: EventSubscription | null = null
+let liveSeriesSub: EventSubscription | null = null
+let historySub: EventSubscription | null = null
 let bmsSub: EventSubscription | null = null
 let locationSub: EventSubscription | null = null
+// The raw full-sample stream only runs while a detail chart is mounted. Ref-counted
+// so native stops emitting `onTelemetryHistory` whenever no chart needs it.
+let fullSampleStreamRefs = 0
 let scanSub: EventSubscription | null = null
 let scanErrorSub: EventSubscription | null = null
-let liveHistoryPublishTimer: ReturnType<typeof setTimeout> | null = null
 let settingsUnsubscribe: (() => void) | null = null
 
 let pendingDevices: Map<string, ScannedDevice> = new Map()
 let scanFlushTimer: ReturnType<typeof setTimeout> | null = null
 const SCAN_FLUSH_MS = 500
 
-const MAC_ADDRESS_RE = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i
+// Cold-path publish throttle. The 31Hz tick → SharedValues path stays unthrottled (no render);
+// this only caps how often the store snapshot bumps, which re-renders the SVG sparklines, live
+// charts and map trail. History flushes at ~3Hz and GPS adds more, so an unthrottled publish
+// saturates the JS thread. First few samples publish immediately so the UI populates on connect.
+let liveHistoryPublishTimer: ReturnType<typeof setTimeout> | null = null
 const LIVE_HISTORY_PUBLISH_MS = 1000
 const LIVE_HISTORY_IMMEDIATE_SAMPLE_COUNT = 3
+
+const MAC_ADDRESS_RE = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/i
 
 function scannedDeviceName(id: string, name?: string): string {
   const candidate = name?.trim()
@@ -113,22 +125,28 @@ const EMPTY_LIVE_STATUS: LiveStatusSummary = {
   gpsAccuracyM: null,
 }
 
+function removeLiveSubscriptions(): void {
+  liveSub?.remove()
+  liveTickSub?.remove()
+  liveSeriesSub?.remove()
+  historySub?.remove()
+  bmsSub?.remove()
+  locationSub?.remove()
+  liveSub = null
+  liveTickSub = null
+  liveSeriesSub = null
+  historySub = null
+  bmsSub = null
+  locationSub = null
+  fullSampleStreamRefs = 0
+  useLiveSeriesStore.getState().clear()
+  clearLiveHistoryPublishTimer()
+}
+
 function clearLiveHistoryPublishTimer(): void {
   if (!liveHistoryPublishTimer) return
   clearTimeout(liveHistoryPublishTimer)
   liveHistoryPublishTimer = null
-}
-
-function removeLiveSubscriptions(): void {
-  clearLiveHistoryPublishTimer()
-  liveSub?.remove()
-  telemetrySub?.remove()
-  bmsSub?.remove()
-  locationSub?.remove()
-  liveSub = null
-  telemetrySub = null
-  bmsSub = null
-  locationSub = null
 }
 
 function clearScanFlushTimer(): void {
@@ -183,9 +201,6 @@ function cleanupBleStoreModule(): void {
 function applyLiveState(state: LiveStateEvent, set: BleSet): void {
   const hasRecentSamples =
     state.board.recentTelemetry.length > 0 || state.gps.recentLocations.length > 0
-  if (hasRecentSamples) {
-    clearLiveHistoryPublishTimer()
-  }
   if (!hasRecentSamples) {
     liveTelemetryRuntime.syncConnectionSeq(state.board.connectionSeq)
   }
@@ -198,7 +213,6 @@ function applyLiveState(state: LiveStateEvent, set: BleSet): void {
     gpsStatus: state.gps.phase,
     scanStatus: state.scan.phase,
     connectionSeq: state.board.connectionSeq,
-    lastTelemetryAt: state.board.lastTelemetryAt,
     nativeStateReady: true,
     selectedBoardId: state.board.selectedBoardId,
     connectedId: state.board.connectedBoardId ?? state.board.bleId,
@@ -217,9 +231,9 @@ function applyLiveState(state: LiveStateEvent, set: BleSet): void {
 
 function resetLivePresentation(set: BleSet): void {
   clearLiveHistoryPublishTimer()
+  useLiveSeriesStore.getState().clear()
   const live = liveTelemetryRuntime.reset()
   set({
-    lastTelemetryAt: null,
     liveLocationHistory: live.liveLocationHistory,
     latestApproximateLocation: live.latestApproximateLocation,
     liveStatus: live.liveStatus,
@@ -228,15 +242,17 @@ function resetLivePresentation(set: BleSet): void {
   })
 }
 
-function scheduleLiveHistoryPublish(set: BleSet): void {
+// Coalesces store snapshot bumps onto a fixed cadence. The 31Hz tick path never calls this —
+// it only touches SharedValues. This drives the cold render path (sparklines/charts/map trail).
+function scheduleLiveSnapshot(set: BleSet): void {
   if (liveHistoryPublishTimer) return
   liveHistoryPublishTimer = setTimeout(() => {
     liveHistoryPublishTimer = null
-    publishPendingLiveHistory(set)
+    publishLiveSnapshot(set)
   }, LIVE_HISTORY_PUBLISH_MS)
 }
 
-function publishPendingLiveHistory(set: BleSet): void {
+function publishLiveSnapshot(set: BleSet): void {
   const live = liveTelemetryRuntime.consumePendingSnapshot()
   if (!live) return
   set({
@@ -251,23 +267,21 @@ function installLiveSubscriptions(set: BleSet): void {
   if (!liveSub) {
     liveSub = addLiveStateListener((state) => applyLiveState(state, set))
   }
-  if (!telemetrySub) {
-    telemetrySub = addTelemetryListener((telemetry) => {
-      const shouldPublishImmediately =
-        liveTelemetryRuntime.getSnapshot().liveStatus.boardSampleCount <
-        LIVE_HISTORY_IMMEDIATE_SAMPLE_COUNT
-      const accepted = liveTelemetryRuntime.ingestTelemetry(telemetry)
-      if (!accepted) return
-      set({
-        lastTelemetryAt: telemetry.lastPacketAt,
-      })
-      if (shouldPublishImmediately) {
-        publishPendingLiveHistory(set)
-        return
-      }
-      scheduleLiveHistoryPublish(set)
+  if (!liveTickSub) {
+    // Hot path: per-frame scalar tick → SharedValues only. No store write, no React render.
+    liveTickSub = addLiveTickListener((tick) => {
+      liveTelemetryRuntime.ingestTick(tick)
     })
   }
+  if (!liveSeriesSub) {
+    // Cold path: natively-decimated min/max sparkline series (~1Hz). Tiny payload, no raw
+    // samples. Drives every center-screen sparkline with zero JS-thread projection.
+    liveSeriesSub = addLiveSeriesListener((event) => {
+      useLiveSeriesStore.getState().setSeries(event.metrics, event.generation)
+    })
+  }
+  // The raw full-sample stream (`historySub`) is installed on demand by
+  // acquireFullSampleStream, only while a detail chart is mounted.
   if (!bmsSub) {
     bmsSub = addBmsListener((bms) => {
       set({ latestBms: bms })
@@ -276,9 +290,53 @@ function installLiveSubscriptions(set: BleSet): void {
   if (!locationSub) {
     locationSub = addLocationListener((location) => {
       liveTelemetryRuntime.ingestLocation(location)
-      scheduleLiveHistoryPublish(set)
+      scheduleLiveSnapshot(set)
     })
   }
+}
+
+function installHistorySub(set: BleSet): void {
+  if (historySub) return
+  // Cold path: batched full samples → history buffer → throttled store publish for detail charts.
+  historySub = addTelemetryHistoryListener((batch) => {
+    const publishImmediately =
+      liveTelemetryRuntime.getSnapshot().liveStatus.boardSampleCount <
+      LIVE_HISTORY_IMMEDIATE_SAMPLE_COUNT
+    const lastAccepted = liveTelemetryRuntime.ingestHistoryBatch(batch.samples)
+    if (lastAccepted == null) return
+    if (publishImmediately) {
+      clearLiveHistoryPublishTimer()
+      publishLiveSnapshot(set)
+    } else {
+      scheduleLiveSnapshot(set)
+    }
+  })
+}
+
+/**
+ * Opens the raw full-sample stream for a detail chart. Ref-counted: the first
+ * acquirer seeds the JS window from native's in-memory history (so the chart
+ * paints the full window immediately) and subscribes; later acquirers share it.
+ */
+export function acquireFullSampleStream(): void {
+  fullSampleStreamRefs += 1
+  if (fullSampleStreamRefs > 1) return
+  const set = useBleStore.setState as BleSet
+  try {
+    applyLiveState(nativeGetLiveState(), set)
+  } catch {
+    // No live state yet (not connected) — the stream still attaches for new samples.
+  }
+  installHistorySub(set)
+}
+
+/** Releases a detail chart's hold; the last release stops native's firehose. */
+export function releaseFullSampleStream(): void {
+  if (fullSampleStreamRefs === 0) return
+  fullSampleStreamRefs -= 1
+  if (fullSampleStreamRefs > 0) return
+  historySub?.remove()
+  historySub = null
 }
 
 export const useBleStore = create<BleState & BleActions>((set, get) => ({
@@ -286,7 +344,6 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
   gpsStatus: 'idle',
   scanStatus: 'idle',
   connectionSeq: 0,
-  lastTelemetryAt: null,
   nativeStateReady: false,
   devices: [],
   selectedBoardId: null,

@@ -1,6 +1,6 @@
 {
   "name": "vibe-wheel",
-  "version": "0.58.0",
+  "version": "0.59.0",
   "private": true,
   "workspaces": [
     "modules/*"
@@ -20,6 +20,7 @@
     "skills-check": "bun run scripts/skills-check.ts",
     "screenshot": "bun run scripts/screenshot.ts",
     "e2e": "bun run scripts/e2e.ts",
+    "perf": "bun run scripts/perf-telemetry.ts",
     "test": "bun run copy:shared && bun run test:bun && bun run test:android",
     "test:bun": "bun test",
     "test:android": "export NODE_BINARY=$(command -v node); export PATH=$(dirname \"$NODE_BINARY\"):$PATH; cd android && ./gradlew :vesc-ble:testDebugUnitTest",
@@ -36,6 +37,7 @@
   },
   "dependencies": {
     "@rnmapbox/maps": "^10.3.0",
+    "@shopify/react-native-skia": "2.6.2",
     "expo": "56.0.3",
     "expo-build-properties": "~56.0.13",
     "expo-constants": "~56.0.14",
@@ -76,5 +78,8 @@
     "lefthook": "^2.1.6",
     "oxfmt": "^0.50.0",
     "typescript": "^6.0.3"
-  }
+  },
+  "trustedDependencies": [
+    "@shopify/react-native-skia"
+  ]
 }

@@ -363,6 +363,7 @@ data class AppSettings(
   val historyMetricHotRanges: Map<String, Map<String, Double>> = DEFAULT_HISTORY_METRIC_HOT_RANGES,
   val socEstimateWindowSeconds: Int = 20,
   val connectionSoundsEnabled: Boolean = true,
+  val telemetryPollRateHz: Int = 20,
 )
 
 @Entity(
