@@ -9,6 +9,7 @@ import { getCameraAfterScreenDrag } from '@/screens/center/cameraPanProjection'
 import { getHistoryRouteCamera, type HistoryCameraViewport } from '@/screens/center/historyCamera'
 
 const MIN_ZOOM = 0
+const MAP_REVEAL_ZOOM_OUT_DELTA = 0.65
 const HISTORY_DYNAMIC_FULL_DISTANCE_M = 80_000
 const HISTORY_DYNAMIC_MAX_EXTRA_DURATION_MS = 450
 const INSTANT_JUMP_DISTANCE_M = 10_000
@@ -451,13 +452,19 @@ export function useCameraControls({
             : baseCamera
         setFollowGps(false)
       },
-      previewPanBy(deltaX: number, deltaY: number, animationDuration = 0) {
+      previewPanBy(deltaX: number, deltaY: number, animationDuration = 0, revealProgress = 0) {
         setFollowGps(false)
         const baseCamera = previewPanBaseRef.current
         if (!baseCamera) return
+        const zoomLevel = clamp(
+          baseCamera.zoomLevel - MAP_REVEAL_ZOOM_OUT_DELTA * revealProgress,
+          MIN_ZOOM,
+          MAP_DEFAULTS.maxZoom,
+        )
         cameraRef.current?.setCamera({
           ...getCameraAfterScreenDrag(baseCamera, deltaX, deltaY),
-          pitch: baseCamera.pitch,
+          zoomLevel,
+          pitch: getPitchForZoom(zoomLevel, perspectiveEnabled),
           animationMode: 'linearTo',
           animationDuration,
         })

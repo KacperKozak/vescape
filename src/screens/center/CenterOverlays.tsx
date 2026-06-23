@@ -582,8 +582,8 @@ export function CenterOverlays({
   }, [])
 
   const handleRevealPan = useCallback(
-    (totalX: number, totalY: number, animationDuration?: number) => {
-      mapRef.current?.previewPanBy(totalX, totalY, animationDuration)
+    (totalX: number, totalY: number, animationDuration?: number, revealProgress?: number) => {
+      mapRef.current?.previewPanBy(totalX, totalY, animationDuration, revealProgress)
     },
     [mapRef],
   )

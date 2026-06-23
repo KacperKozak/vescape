@@ -10,7 +10,12 @@ interface MapRevealGestureProps {
   progress: SharedValue<number>
   dragOpacity: SharedValue<number>
   onPanStart: () => void
-  onPan: (totalX: number, totalY: number, animationDuration?: number) => void
+  onPan: (
+    totalX: number,
+    totalY: number,
+    animationDuration?: number,
+    revealProgress?: number,
+  ) => void
   onZoomStart: () => void
   onZoom: (scale: number) => void
   onZoomEnd: () => void
@@ -100,7 +105,7 @@ function createMapRevealGesture({
         )
         appliedX = releasedPan.x
         appliedY = releasedPan.y
-        onPan(appliedX, appliedY)
+        onPan(appliedX, appliedY, undefined, 1)
         return
       }
 
@@ -119,7 +124,7 @@ function createMapRevealGesture({
         breakoutX = resistedPan.x
         breakoutY = resistedPan.y
         breakoutStartedAt = Date.now()
-        onPan(appliedX, appliedY)
+        onPan(appliedX, appliedY, undefined, 1)
         onReveal()
         return
       }
@@ -133,7 +138,7 @@ function createMapRevealGesture({
       appliedX = resistedPan.x
       appliedY = resistedPan.y
       progress.value = easedProgress
-      onPan(appliedX, appliedY)
+      onPan(appliedX, appliedY, undefined, nextProgress)
     })
     .onFinalize((event) => {
       const wasCompleted = completed
