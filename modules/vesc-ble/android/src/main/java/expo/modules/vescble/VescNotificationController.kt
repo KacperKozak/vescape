@@ -42,6 +42,10 @@ internal class VescNotificationController(
             .notify(notificationId, build(text, deviceName, appInForeground, shortCriticalText, batteryPercent))
     }
 
+    fun cancel() {
+        service.getSystemService(NotificationManager::class.java).cancel(notificationId)
+    }
+
     fun build(
         text: String,
         deviceName: String?,

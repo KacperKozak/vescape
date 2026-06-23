@@ -718,6 +718,8 @@ class VescForegroundService : Service() {
 
     private fun exitFromNotification() {
         isStoppingService = true
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        notificationController.cancel()
         stopCurrentBoardSession(emitDisconnected = true)
         stopLocationUpdates()
         closeAppTask()
@@ -1611,6 +1613,7 @@ class VescForegroundService : Service() {
         },
         errorMessage: String? = boardError,
     ) {
+        if (isStoppingService) return
         presenter.show(
             phase = reportedBoardPhase(),
             telemetry = telemetry,
