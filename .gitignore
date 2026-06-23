@@ -56,3 +56,6 @@ modules/vesc-ble/android/src/test/resources/data/
 
 # Claude Code local (machine-specific) settings
 .claude/settings.local.json
+
+# perf harness output
+perf-results/

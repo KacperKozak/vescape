@@ -1,0 +1,19 @@
+# Perf harness setup flow (not a standalone e2e test — prefixed with _).
+# Lands on the connected home telemetry view (map + gauges + sparklines),
+# with the e2e fake feed streaming. scripts/perf-telemetry.ts then measures
+# rendering while the app sits here.
+appId: com.anonymous.vescpoc
+---
+- runFlow: _launch.yaml
+- openLink: 'vescpoc://e2e-seed?flow=connect-board'
+- extendedWaitUntil:
+    visible: E2E Board
+    timeout: 15000
+- tapOn:
+    id: floating-bar-connect
+- extendedWaitUntil:
+    visible:
+      id: board-disconnect-button
+    timeout: 15000
+- assertVisible:
+    id: battery-bar

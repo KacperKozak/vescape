@@ -175,7 +175,7 @@ function startBoardSession(boardId: string): void {
     connectingBoardId = null
     connectionSeq += 1
     emitTelemetry()
-    telemetryTimer = setInterval(emitTelemetry, 1000)
+    telemetryTimer = setInterval(emitTelemetry, 50)
   }, 3000)
 }
 
