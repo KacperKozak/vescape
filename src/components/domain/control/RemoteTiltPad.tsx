@@ -3,12 +3,12 @@ import {
   type GestureResponderEvent,
   type LayoutChangeEvent,
   PanResponder,
-  Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native'
 
+import { Button } from '@/components/ui/base/Button'
 import { theme } from '@/constants/theme'
 import { useBleStore } from '@/store/bleStore'
 import type { RemoteTiltPhase, RemoteTiltState } from 'vesc-ble'
@@ -293,9 +293,7 @@ export function RemoteTiltPad({
       </View>
       {active ? (
         <View style={styles.cancelRow}>
-          <Pressable onPress={cancel} style={styles.cancel}>
-            <Text style={styles.cancelText}>Cancel</Text>
-          </Pressable>
+          <Button label="Cancel tilt" onPress={cancel} variant="destructive" size="sm" />
         </View>
       ) : null}
     </View>
@@ -423,18 +421,5 @@ const styles = StyleSheet.create({
   cancelRow: {
     alignItems: 'center',
     marginTop: 8,
-  },
-  cancel: {
-    paddingVertical: 6,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: theme.warning.border,
-    backgroundColor: theme.warning.bg,
-  },
-  cancelText: {
-    color: theme.warning.text,
-    fontSize: 13,
-    fontWeight: '700',
   },
 })

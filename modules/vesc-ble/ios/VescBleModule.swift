@@ -236,12 +236,20 @@ public class VescBleModule: Module {
       false
     }
 
+    AsyncFunction("lockRemoteTilt") { (_: Int) -> Bool in
+      false
+    }
+
     AsyncFunction("releaseRemoteTilt") { (_: Int, _: Int) -> Bool in
       false
     }
 
     AsyncFunction("stopRemoteTilt") { () -> Bool in
       false
+    }
+
+    Function("getRemoteTiltState") { () -> [String: Any]? in
+      nil
     }
 
     AsyncFunction("getTuneProfiles") { (_: String, promise: Promise) in
