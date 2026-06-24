@@ -458,12 +458,22 @@ which Refloat reads as its UART remote when `inputtilt_remote_type` is `1`:
 Floaty Android v3.0.0 was used as the protocol reference. `value` is the
 `0..255` slider with `128` as the rest/neutral position; the second data byte is
 the chuck Y axis, inverted to `255 - value`. The board maps this to a tilt
-target via `throttle_val * inputtilt_angle_limit` (see `float.c`), so the slider
+target via `throttle_val * inputtilt_angle_limit` (see `float.c`), so the input
 sets dynamic nose tilt while riding. `inputtilt_invert_throttle` flips the
 direction. The board drops the remote input after roughly one second of silence,
-so the app repeats the current value (~100 ms) while the slider is held and
-sends a neutral value on release. This is runtime input only; it never writes
-configuration.
+so the app repeats the active value on a fixed ~40 ms tick. This is runtime
+input only; it never writes configuration.
+
+The UI is a 2D pad rather than a 1D slider. The horizontal axis is the tilt
+value above; the vertical axis sets a release decay time (bottom = instant snap,
+up to `60 s`). The top band of the pad is a **lock** zone: releasing there holds
+the tilt indefinitely (the live hold stream just keeps running) until the user
+cancels. While the finger is down the app streams the held tilt live. On a
+normal release it hands off to a linear ease: the held value is interpolated back
+to `128` (neutral) over the chosen duration, one step per ~40 ms tick, then the
+stream stops. The decay is owned natively (`RemoteTiltController`) and is
+tick-based, so JS only sends the intent (`value`, `durationMs`). A duration
+shorter than one tick snaps straight to neutral.
 
 Do not confuse this with the Refloat `MOVE` (`FLOAT_COMMAND_RC_MOVE`, id `7`)
 command. `MOVE` drives motor current to spin the wheel **while the board is

@@ -644,6 +644,7 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
   restoreDatabase(uri: string): Promise<void>
   getRefloatConfigSnapshot(): Promise<RefloatConfigSnapshot>
   setRemoteTilt(value: number): Promise<boolean>
+  releaseRemoteTilt(value: number, durationMs: number): Promise<boolean>
   stopRemoteTilt(): Promise<boolean>
   getTuneProfiles(boardId: string): Promise<TuneProfile[]>
   getTuneProfile(profileId: string): Promise<TuneProfile | null>
@@ -931,6 +932,15 @@ export async function getRefloatConfigSnapshot(): Promise<RefloatConfigSnapshot>
 export async function setRemoteTilt(value: number): Promise<boolean> {
   if (E2E_ENABLED) return true
   return native.setRemoteTilt(value)
+}
+
+/**
+ * Release the pad: ease `value` (0..255) linearly back to neutral over
+ * `durationMs`, then stop. A zero duration snaps straight to neutral.
+ */
+export async function releaseRemoteTilt(value: number, durationMs: number): Promise<boolean> {
+  if (E2E_ENABLED) return true
+  return native.releaseRemoteTilt(value, durationMs)
 }
 
 /** Stop streaming tilt and snap the board back to neutral. */

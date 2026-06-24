@@ -247,6 +247,9 @@ class VescBleModule : Module() {
     AsyncFunction("setRemoteTilt") { value: Int ->
       VescForegroundService.setRemoteTilt(value)
     }
+    AsyncFunction("releaseRemoteTilt") { value: Int, durationMs: Int ->
+      VescForegroundService.releaseRemoteTilt(value, durationMs.toLong())
+    }
     AsyncFunction("stopRemoteTilt") {
       VescForegroundService.stopRemoteTilt()
     }

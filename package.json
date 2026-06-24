@@ -36,7 +36,6 @@
     "posthog:query": "bun run scripts/posthog.ts query"
   },
   "dependencies": {
-    "@react-native-community/slider": "5.2.0",
     "@rnmapbox/maps": "^10.3.0",
     "@shopify/react-native-skia": "2.6.2",
     "expo": "56.0.3",

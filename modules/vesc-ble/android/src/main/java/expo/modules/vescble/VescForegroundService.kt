@@ -149,6 +149,9 @@ class VescForegroundService : Service() {
 
         fun setRemoteTilt(value: Int): Boolean = instance?.setRemoteTilt(value) ?: false
 
+        fun releaseRemoteTilt(value: Int, durationMs: Long): Boolean =
+            instance?.releaseRemoteTilt(value, durationMs) ?: false
+
         fun stopRemoteTilt(): Boolean = instance?.stopRemoteTilt() ?: false
 
         private var pendingConfigWrite: PendingConfigWrite? = null
@@ -1489,7 +1492,10 @@ class VescForegroundService : Service() {
         return gattClient.sendPayload(payload)
     }
 
-    fun setRemoteTilt(value: Int): Boolean = remoteTiltController.set(value)
+    fun setRemoteTilt(value: Int): Boolean = remoteTiltController.hold(value)
+
+    fun releaseRemoteTilt(value: Int, durationMs: Long): Boolean =
+        remoteTiltController.release(value, durationMs)
 
     fun stopRemoteTilt(): Boolean = remoteTiltController.stop()
 

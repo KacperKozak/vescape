@@ -1,10 +1,10 @@
-import Slider from '@react-native-community/slider'
-import { type ReactNode, useEffect, useMemo, useState } from 'react'
+import { type ReactNode, useEffect, useMemo } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 
 import { computeAutoRange } from '@/components/ui/charts/chartMath'
 import { ControlDetailLayout } from '@/components/domain/control/ControlDetailLayout'
 import { MetricDetailChart } from '@/components/domain/control/MetricDetailChart'
+import { RemoteTiltPad } from '@/components/domain/control/RemoteTiltPad'
 import { toTelemetryChartPoints } from '@/components/domain/control/metricDetailData'
 import { DASH } from '@/helpers/format'
 import { telemetry } from '@/constants/telemetry'
@@ -12,14 +12,11 @@ import { useLiveMetric, liveSelectors } from '@/hooks/useLiveMetric'
 import { useLiveWindowMs } from '@/store/settingsStore'
 import { useBleStore } from '@/store/bleStore'
 import { theme } from '@/constants/theme'
-import { setRemoteTilt, stopRemoteTilt } from 'vesc-ble'
+import { releaseRemoteTilt, setRemoteTilt, stopRemoteTilt } from 'vesc-ble'
 
 const pitchCfg = telemetry.pitch
 const rollCfg = telemetry.roll
 const balanceCfg = telemetry.balancePitch
-
-/** Neutral position of the remote-tilt slider (0..255), matching native. */
-const REMOTE_TILT_CENTER = 128
 
 function latestValue(points: { value: number }[]) {
   return points.at(-1)?.value ?? null
@@ -67,8 +64,6 @@ export default function ImuScreen() {
   const balancePitch = useLiveMetric(liveSelectors.balancePitch)
   const windowMs = useLiveWindowMs()
   const boardConnected = useBleStore((state) => state.status === 'connected')
-  const [remoteTiltValue, setRemoteTiltValue] = useState(REMOTE_TILT_CENTER)
-  const remoteTiltPercent = Math.round(((remoteTiltValue - REMOTE_TILT_CENTER) / 127) * 100)
 
   useEffect(
     () => () => {
@@ -78,13 +73,21 @@ export default function ImuScreen() {
   )
 
   const updateRemoteTilt = (value: number) => {
-    setRemoteTiltValue(value)
     void setRemoteTilt(value)
   }
 
-  // Spring back to neutral on release; native snaps the board back too.
-  const releaseRemoteTilt = () => {
-    setRemoteTiltValue(REMOTE_TILT_CENTER)
+  // On lift, native eases the held tilt back to neutral over the chosen time.
+  const easeRemoteTilt = (value: number, durationMs: number) => {
+    void releaseRemoteTilt(value, durationMs)
+  }
+
+  // Lock band: hold the tilt indefinitely (native keeps streaming until cancel).
+  const lockRemoteTilt = (value: number) => {
+    void setRemoteTilt(value)
+  }
+
+  // Cancel: native snaps to neutral; the pad stops its own thumb glide.
+  const cancelRemoteTilt = () => {
     void stopRemoteTilt()
   }
 
@@ -191,26 +194,19 @@ export default function ImuScreen() {
       <View style={styles.remoteTiltControl}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionLabel}>REMOTE TILT</Text>
-          <Text style={styles.remoteTiltValue}>
-            {remoteTiltPercent > 0 ? `+${remoteTiltPercent}` : remoteTiltPercent}%
-          </Text>
         </View>
         <Text style={styles.remoteTiltHint}>
-          Drag to tilt the nose; release springs back to neutral. Requires Remote Tilt (UART)
-          enabled in the board config.
+          Drag sideways to tilt the nose, up to set how long it eases back to center on release.
+          Release in the top LOCK band to hold the tilt until you cancel. Requires Remote Tilt
+          (UART) enabled in the board config.
         </Text>
         <Text style={styles.remoteTiltWarning}>Moves the setpoint live while riding.</Text>
-        <Slider
+        <RemoteTiltPad
           disabled={!boardConnected}
-          minimumValue={0}
-          maximumValue={255}
-          step={1}
-          value={remoteTiltValue}
-          minimumTrackTintColor={theme.wheel.color}
-          maximumTrackTintColor={theme.neutral.border}
-          thumbTintColor={theme.wheel.color}
-          onValueChange={updateRemoteTilt}
-          onSlidingComplete={releaseRemoteTilt}
+          onChange={updateRemoteTilt}
+          onRelease={easeRemoteTilt}
+          onLock={lockRemoteTilt}
+          onCancel={cancelRemoteTilt}
         />
         {!boardConnected ? (
           <Text style={styles.remoteTiltDisabled}>Connect board to control tilt.</Text>
@@ -302,13 +298,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.neutral.border,
     backgroundColor: theme.neutral.surface,
-  },
-  remoteTiltValue: {
-    color: theme.wheel.text,
-    fontFamily: 'monospace',
-    fontSize: 14,
-    fontWeight: '700',
-    fontVariant: ['tabular-nums'],
   },
   remoteTiltHint: {
     color: theme.neutral.textSecondary,
