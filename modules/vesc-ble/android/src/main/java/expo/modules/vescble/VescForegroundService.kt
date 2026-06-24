@@ -69,6 +69,7 @@ private const val LIVE_SERIES_INTERVAL_MS = 1_000L
 private const val LIVE_SERIES_BUCKETS = 64
 private const val GATT_CONNECT_TIMEOUT_MS = 6_000L
 private const val GATT_READY_TIMEOUT_MS = 6_000L
+private const val REMOTE_TILT_REPEAT_MS = 100L
 
 data class SessionConfig(
     val appBoardId: String?,
@@ -146,6 +147,10 @@ class VescForegroundService : Service() {
             pendingConfigRead = PendingConfigRead(onSuccess, onError)
             service.consumePendingConfigRead()
         }
+
+        fun setRemoteTilt(direction: Int, value: Int): Boolean = instance?.setRemoteTilt(direction, value) ?: false
+
+        fun stopRemoteTilt(): Boolean = instance?.stopRemoteTilt() ?: false
 
         private var pendingConfigWrite: PendingConfigWrite? = null
 
@@ -594,6 +599,10 @@ class VescForegroundService : Service() {
     private var latestPreciseLocation: LocationSnapshot? = null
     private var lastGpsPersistedAt = 0L
     private var isStoppingService = false
+    private data class RemoteTiltInput(val direction: Int, val value: Int)
+
+    private var remoteTiltInput: RemoteTiltInput? = null
+    private var remoteTiltRepeat: Cancellable? = null
     private var connectionSoundsEnabled = true
     private var configFsmState: ConfigRWState = ConfigRWState.Idle
     private var configReadCallbacks: PendingConfigRead? = null
@@ -785,7 +794,6 @@ class VescForegroundService : Service() {
         // Tag telemetry frames with the CAN id resolved from the stored transport.
         telemetryPipeline.updateCanId(canId)
         packetReassembler.reset()
-        gattClient.resetDiagnostics()
         diagnosticsRecorder.resetTelemetryParseFailedCounters()
         connectionCoordinator.reset()
         reconnectScheduler.cancelAndReset()
@@ -1479,6 +1487,50 @@ class VescForegroundService : Service() {
         return gattClient.sendPayload(payload)
     }
 
+    /**
+     * Set Floaty's temporary Refloat remote-control input. Refloat expires it
+     * after 500ms, so native repeats while JS holds the control.
+     */
+    fun setRemoteTilt(direction: Int, value: Int): Boolean {
+        val transport = currentBoardTransport() ?: return false
+        if (boardStatus != BoardPhase.Connected || boardConfig == null) return false
+
+        val command = RemoteTiltInput(direction.coerceIn(0, 1), value.coerceIn(20, 80))
+        remoteTiltInput = command
+        remoteTiltRepeat?.cancel()
+        remoteTiltRepeat = null
+
+        val sent = sendPayload(buildRefloatMoveCommand(transport, command.direction, command.value))
+        scheduleRemoteTiltRepeat()
+        return sent
+    }
+
+    private fun scheduleRemoteTiltRepeat() {
+        remoteTiltRepeat = scheduler.postDelayed(REMOTE_TILT_REPEAT_MS) {
+            val input = remoteTiltInput ?: return@postDelayed
+            val transport = currentBoardTransport()
+            if (boardStatus != BoardPhase.Connected || boardConfig == null || transport == null) {
+                remoteTiltInput = null
+                remoteTiltRepeat = null
+                return@postDelayed
+            }
+            sendPayload(buildRefloatMoveCommand(transport, input.direction, input.value))
+            scheduleRemoteTiltRepeat()
+        }
+    }
+
+    fun stopRemoteTilt(): Boolean {
+        val wasActive = remoteTiltInput != null
+        remoteTiltInput = null
+        remoteTiltRepeat?.cancel()
+        remoteTiltRepeat = null
+        return wasActive
+    }
+
+    private fun clearRemoteTilt() {
+        stopRemoteTilt()
+    }
+
     private fun sendPayloadWithRetry(payload: ByteArray, session: BoardSession? = boardSession): Boolean {
         if (session != null && !isCurrentBoardSession(session)) return false
         val sent = sendPayload(payload)
@@ -1500,6 +1552,7 @@ class VescForegroundService : Service() {
     }
 
     private fun stopCurrentBoardSession(emitDisconnected: Boolean, updateNotification: Boolean = true) {
+        clearRemoteTilt()
         flushTelemetryDiagnostics("stop")
         if (configFsmState !is ConfigRWState.Idle) {
             dispatchConfigEvent(

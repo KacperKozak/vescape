@@ -643,6 +643,8 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
   backupDatabase(): Promise<DatabaseBackupResult>
   restoreDatabase(uri: string): Promise<void>
   getRefloatConfigSnapshot(): Promise<RefloatConfigSnapshot>
+  setRemoteTilt(direction: number, value: number): Promise<boolean>
+  stopRemoteTilt(): Promise<boolean>
   getTuneProfiles(boardId: string): Promise<TuneProfile[]>
   getTuneProfile(profileId: string): Promise<TuneProfile | null>
   createProfile(
@@ -920,6 +922,18 @@ export async function restoreDatabase(uri: string): Promise<void> {
 
 export async function getRefloatConfigSnapshot(): Promise<RefloatConfigSnapshot> {
   return native.getRefloatConfigSnapshot()
+}
+
+/** Start Floaty's temporary Refloat remote-control input. */
+export async function setRemoteTilt(direction: 0 | 1, value: number): Promise<boolean> {
+  if (E2E_ENABLED) return true
+  return native.setRemoteTilt(direction, value)
+}
+
+/** Stop transmitting temporary remote-control input. Refloat then expires it. */
+export async function stopRemoteTilt(): Promise<boolean> {
+  if (E2E_ENABLED) return true
+  return native.stopRemoteTilt()
 }
 
 export async function getTuneProfiles(boardId: string): Promise<TuneProfile[]> {

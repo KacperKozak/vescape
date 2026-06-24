@@ -15,7 +15,31 @@ internal const val COMM_SET_CUSTOM_CONFIG = 95
 internal const val COMM_PING_CAN = 62
 internal const val REFLOAT_MAGIC = 101
 internal const val REFLOAT_GET_ALLDATA = 10
+internal const val REFLOAT_MOVE = 40
 private const val REFLOAT_FAULT_MODE = 69
+
+/**
+ * Builds Floaty's temporary Refloat remote-control command.
+ *
+ * `direction` is Back (0) or Forward (1); `value` is Floaty's 20..80 slider.
+ * This command updates runtime state only; it never writes Refloat config.
+ */
+internal fun buildRefloatMoveCommand(transport: BoardTransport, direction: Int, value: Int): ByteArray {
+    require(direction in 0..1) { "Remote direction must be Back (0) or Forward (1)" }
+    require(value in 20..80) { "Remote value must be between 20 and 80" }
+    return transport.frame(
+        byteArrayOf(
+            COMM_CUSTOM_APP_DATA.toByte(),
+            REFLOAT_MAGIC.toByte(),
+            REFLOAT_MOVE.toByte(),
+            direction.toByte(),
+            value.toByte(),
+            1,
+            (value + 1).toByte(),
+            value.toByte(),
+        ),
+    )
+}
 
 internal object VescPacketCodec {
     fun encode(payload: ByteArray): ByteArray {

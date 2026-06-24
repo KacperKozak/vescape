@@ -449,19 +449,18 @@ When Remote Tilt is toggled from the UI, the flow is:
 The live slider input is then sent separately over runtime packets:
 
 ```text
-[COMM_CUSTOM_APP_DATA, FLOAT, MOVE, ...liveInput]
+[COMM_CUSTOM_APP_DATA, FLOAT, MOVE, direction, value, 1, value + 1, value]
 ```
 
-The `MOVE` command clamps the slider value to `20..80` before sending it. That
-range appears to be a centered control range, with `50` acting as neutral and
-values below/above neutral producing movement or tilt in the selected direction.
-Treat the exact board-side units as runtime input units, not stored config
-units.
+Floaty Android v3.0.0 was used as the protocol reference. `direction` is Back
+`0` or Forward `1`; `value` is clamped to `20..80` (Floaty's default is `60`).
+The app repeats this packet while a direction control is held, then stops
+transmitting on release so Refloat's runtime input expires. Treat the units as
+runtime input units, not stored config units.
 
-The movement UI has explicit `Forward` and `Back` direction states. Pressing a
-direction marks movement active; releasing stops it. While active, the app keeps
-sending the current direction plus the current slider value. Slider release
-resets the UI value back to the neutral/default value.
+The movement UI has explicit `Forward` and `Back` hold controls. Holding one
+repeats the current direction and slider value; releasing it stops the temporary
+command stream without writing configuration.
 
 There is also a second live-input path using VESC chuck data:
 

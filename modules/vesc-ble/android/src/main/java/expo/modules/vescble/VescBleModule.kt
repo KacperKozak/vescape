@@ -244,6 +244,12 @@ class VescBleModule : Module() {
         onError = { code, message -> promise.reject(code, message, null) },
       )
     }
+    AsyncFunction("setRemoteTilt") { direction: Int, value: Int ->
+      VescForegroundService.setRemoteTilt(direction, value)
+    }
+    AsyncFunction("stopRemoteTilt") {
+      VescForegroundService.stopRemoteTilt()
+    }
     AsyncFunction("pushProfileToBoard") { profileId: String, promise: Promise ->
       VescForegroundService.pushProfileToBoard(
         context.applicationContext,

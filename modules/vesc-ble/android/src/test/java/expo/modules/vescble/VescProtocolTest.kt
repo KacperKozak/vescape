@@ -9,6 +9,22 @@ import org.junit.Test
 
 class VescProtocolTest {
   @Test
+  fun buildsDirectFloatyMoveCommand() {
+    assertArrayEquals(
+      byteArrayOf(COMM_CUSTOM_APP_DATA.toByte(), REFLOAT_MAGIC.toByte(), REFLOAT_MOVE.toByte(), 1, 60, 1, 61, 60),
+      buildRefloatMoveCommand(BoardTransport.Direct, direction = 1, value = 60),
+    )
+  }
+
+  @Test
+  fun framesFloatyMoveCommandForCan() {
+    assertArrayEquals(
+      byteArrayOf(COMM_FORWARD_CAN.toByte(), 7, COMM_CUSTOM_APP_DATA.toByte(), REFLOAT_MAGIC.toByte(), REFLOAT_MOVE.toByte(), 0, 20, 1, 21, 20),
+      buildRefloatMoveCommand(BoardTransport.Can(7), direction = 0, value = 20),
+    )
+  }
+
+  @Test
   fun codecRoundTripsSplitFrameThroughReassembler() {
     val payload = byteArrayOf(COMM_CUSTOM_APP_DATA.toByte(), REFLOAT_MAGIC.toByte(), REFLOAT_GET_ALLDATA.toByte(), 2)
     val frame = VescPacketCodec.encode(payload)

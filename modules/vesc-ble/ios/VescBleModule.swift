@@ -228,6 +228,14 @@ public class VescBleModule: Module {
       )
     }
 
+    AsyncFunction("setRemoteTilt") { (_: Int, _: Int) -> Bool in
+      false
+    }
+
+    AsyncFunction("stopRemoteTilt") { () -> Bool in
+      false
+    }
+
     AsyncFunction("getTuneProfiles") { (_: String, promise: Promise) in
       promise.resolve([] as [Any])
     }

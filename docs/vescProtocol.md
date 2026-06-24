@@ -71,6 +71,13 @@ Runtime connect (every session, dumb):
    CAN:    send [FORWARD_CAN, canId, CUSTOM_APP_DATA, 101, GET_ALLDATA, 2]
 ```
 
+## BLE write serialization
+
+Android accepts only one GATT characteristic write at a time. The native
+transport queues every framed packet and sends the next only after the previous
+write callback. This prevents remote-control repeats and telemetry polling from
+causing `writeCharacteristic` busy failures and silently losing commands.
+
 Note: `COMM_ALIVE` (0x1E) was tried as the first ping — it generates no response, so it cannot confirm the notification path. `COMM_FW_VERSION` must be used instead.
 
 ## BMS cell-group values
