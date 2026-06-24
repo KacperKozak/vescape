@@ -27,6 +27,23 @@ class VescProtocolTest {
   }
 
   @Test
+  fun parsesFirmwareVersionPayloads() {
+    assertNull(parseFwVersion(byteArrayOf(COMM_FW_VERSION.toByte(), 6)))
+    assertEquals("FW 6.05", parseFwVersion(byteArrayOf(COMM_FW_VERSION.toByte(), 6, 5)))
+    assertEquals(
+      "FW 6.05 · VESC Express · Refloat, Float Package",
+      parseFwVersion(fwVersionPayload("VESC Express", "Refloat", "Float Package")),
+    )
+  }
+
+  @Test
+  fun toleratesTruncatedFirmwareCustomConfigTail() {
+    val payload = fwVersionPayload("VESC", "Refloat").copyOfRange(0, 3 + 4 + 1 + 15 + 1 + 4)
+
+    assertEquals("FW 6.05 · VESC · Refl", parseFwVersion(payload))
+  }
+
+  @Test
   fun codecRoundTripsSplitFrameThroughReassembler() {
     val payload = byteArrayOf(COMM_CUSTOM_APP_DATA.toByte(), REFLOAT_MAGIC.toByte(), REFLOAT_GET_ALLDATA.toByte(), 2)
     val frame = VescPacketCodec.encode(payload)
@@ -172,6 +189,22 @@ class VescProtocolTest {
   private fun putInt16(bytes: ByteArray, offset: Int, value: Int) {
     bytes[offset] = ((value shr 8) and 0xff).toByte()
     bytes[offset + 1] = (value and 0xff).toByte()
+  }
+
+  private fun fwVersionPayload(hardwareName: String, vararg customConfigs: String): ByteArray {
+    val bytes = ArrayList<Byte>()
+    bytes += COMM_FW_VERSION.toByte()
+    bytes += 6
+    bytes += 5
+    hardwareName.encodeToByteArray().forEach { bytes += it }
+    bytes += 0
+    repeat(15) { bytes += 0 }
+    bytes += customConfigs.size.toByte()
+    for (config in customConfigs) {
+      config.encodeToByteArray().forEach { bytes += it }
+      bytes += 0
+    }
+    return bytes.toByteArray()
   }
 
   private fun putInt32(bytes: ByteArray, offset: Int, value: Int) {

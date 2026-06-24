@@ -38,6 +38,34 @@ internal fun buildRemoteTiltCommand(transport: BoardTransport, value: Int): Byte
     )
 }
 
+/** Decodes the human-readable portion of a COMM_FW_VERSION response. */
+internal fun parseFwVersion(payload: ByteArray): String? {
+    if (payload.size < 3) return null
+    val major = payload[1].toInt() and 0xff
+    val minor = payload[2].toInt() and 0xff
+    var hwNameEnd = 3
+    while (hwNameEnd < payload.size && payload[hwNameEnd] != 0.toByte()) hwNameEnd++
+    val hwName = if (hwNameEnd > 3) String(payload, 3, hwNameEnd - 3, Charsets.UTF_8) else null
+    // After HW name null: 12 UUID + 1 paired + 1 test version + 1 hw type = 15 bytes.
+    var offset = hwNameEnd + 1 + 15
+    val customConfigs = mutableListOf<String>()
+    if (offset < payload.size) {
+        val count = payload[offset].toInt() and 0xff
+        offset++
+        for (i in 0 until count) {
+            val start = offset
+            while (offset < payload.size && payload[offset] != 0.toByte()) offset++
+            if (offset > start) customConfigs.add(String(payload, start, offset - start, Charsets.UTF_8))
+            offset++
+        }
+    }
+    return buildList {
+        add("FW $major.${"%02d".format(minor)}")
+        hwName?.let(::add)
+        if (customConfigs.isNotEmpty()) add(customConfigs.joinToString(", "))
+    }.joinToString(" · ")
+}
+
 internal object VescPacketCodec {
     fun encode(payload: ByteArray): ByteArray {
         val short = payload.size <= 255

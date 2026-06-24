@@ -15,10 +15,7 @@ import android.os.IBinder
 import android.os.Looper
 import android.util.Log
 import java.io.File
-import expo.modules.vescble.config.ConfigRWEffect
 import expo.modules.vescble.config.ConfigRWEvent
-import expo.modules.vescble.config.ConfigRWFsm
-import expo.modules.vescble.config.ConfigRWState
 import expo.modules.vescble.connection.ConnectPhaseTimeout
 import expo.modules.vescble.connection.ConnectionCoordinator
 import expo.modules.vescble.diagnostics.DiagnosticContext
@@ -36,7 +33,6 @@ import expo.modules.vescble.runtime.Cancellable
 import expo.modules.vescble.runtime.HandlerScheduler
 import expo.modules.vescble.runtime.Scheduler
 import expo.modules.vescble.runtime.postDelayedForSession
-import expo.modules.vescble.telemetry.AlertRuleEntity
 import expo.modules.vescble.telemetry.AppDataRepository
 import expo.modules.vescble.telemetry.AppSettings
 import expo.modules.vescble.telemetry.BatterySocEstimator
@@ -44,7 +40,6 @@ import expo.modules.vescble.telemetry.SocMedianWindow
 import expo.modules.vescble.telemetry.DEFAULT_LIVE_HISTORY_LIMIT_MINUTES
 import expo.modules.vescble.telemetry.MAX_LIVE_HISTORY_LIMIT_MINUTES
 import expo.modules.vescble.telemetry.MIN_LIVE_HISTORY_LIMIT_MINUTES
-import expo.modules.vescble.telemetry.LIVE_SERIES_METRICS
 import expo.modules.vescble.telemetry.TelemetryPipeline
 import expo.modules.vescble.telemetry.TelemetryRepository
 import expo.modules.vescble.telemetry.toMetricSanitizerConfig
@@ -62,7 +57,6 @@ private const val ACTION_EXIT_FROM_NOTIFICATION = "expo.modules.vescble.ACTION_E
 private const val ACTION_START_GPS_MONITORING = "expo.modules.vescble.ACTION_START_GPS_MONITORING"
 private const val ACTION_STOP_GPS_MONITORING = "expo.modules.vescble.ACTION_STOP_GPS_MONITORING"
 
-private const val LAST_GPS_PERSIST_INTERVAL_MS = 30_000L
 internal const val TELEMETRY_STALE_MS = 4_000L
 private const val HISTORY_FLUSH_INTERVAL_MS = 300L
 private const val LIVE_SERIES_INTERVAL_MS = 1_000L
@@ -213,8 +207,6 @@ class VescForegroundService : Service() {
             }
         }
 
-        @Volatile private var alertRules: List<AlertRuleEntity> = emptyList()
-
         fun reloadAlertRules(context: Context) {
             appDataScope.launch {
                 instance?.loadAlertRules(context.applicationContext)
@@ -285,17 +277,6 @@ class VescForegroundService : Service() {
 
     private data class PendingStop(val onSuccess: () -> Unit)
 
-    private data class PendingConfigRead(
-        val onSuccess: (Map<String, Any?>) -> Unit,
-        val onError: (String, String) -> Unit,
-    )
-
-    private data class PendingConfigWrite(
-        val profileId: String,
-        val onSuccess: (Map<String, Any?>) -> Unit,
-        val onError: (String, String) -> Unit,
-    )
-
     private val mainHandler = Handler(Looper.getMainLooper())
     private val scheduler: Scheduler = HandlerScheduler(mainHandler)
     private val packetReassembler = VescPacketReassembler()
@@ -331,9 +312,8 @@ class VescForegroundService : Service() {
             appInForeground = { appInForeground },
         )
     }
-    private val alertEngine = VescAlertEngine()
-    private var activeGeigerRuleIds: Set<String> = emptySet()
     private val alertFeedback by lazy { VescAlertFeedback(this, mainHandler) }
+    private val alertCoordinator by lazy { AlertCoordinator { alertFeedback } }
     private val diagnosticsRecorder: DiagnosticsRecorder by lazy {
         DiagnosticsRecorder(
             local = { name, props ->
@@ -366,6 +346,34 @@ class VescForegroundService : Service() {
             context = applicationContext,
             applyLiveSettings = ::applyTelemetryPipelineSettings,
         )
+    }
+    private val liveSeriesEmitter by lazy {
+        LiveSeriesEmitter(
+            scheduler = scheduler,
+            emitEvent = ::emitEvent,
+            telemetryPipeline = telemetryPipeline,
+            session = { boardSession },
+            isCurrentSession = ::isCurrentBoardSession,
+            generation = { currentSessionId },
+            historyFlushIntervalMs = HISTORY_FLUSH_INTERVAL_MS,
+            liveSeriesIntervalMs = LIVE_SERIES_INTERVAL_MS,
+            liveSeriesBuckets = LIVE_SERIES_BUCKETS,
+        )
+    }
+    private val locationTracker by lazy {
+        LocationTracker(applicationContext, appDataScope, ::emitEvent, recordingCoordinator, telemetryPipeline)
+    }
+    private val configController by lazy {
+        ConfigRWController(scheduler, appDataScope, { AppDataRepository.get(applicationContext) }, object : ConfigRWControllerPort {
+            override fun connection() = ConfigConnectionSnapshot(boardConfig, boardStatus, canId, directConnection, fwVersionString)
+            override fun isPollingActive() = pollingLoop.isActive
+            override fun stopPolling() = this@VescForegroundService.stopPolling()
+            override fun startPolling() = this@VescForegroundService.startPolling()
+            override fun sendPayload(payload: ByteArray) = this@VescForegroundService.sendPayload(payload)
+            override fun captureDiagnostic(name: String, properties: Map<String, Any?>) = this@VescForegroundService.captureDiagnostic(name, properties)
+            override fun diagnosticProperties(config: SessionConfig?, category: String) = this@VescForegroundService.diagnosticProperties(config, category)
+            override fun dumpDebugBytes(xmlBytes: ByteArray, configBytes: ByteArray) = this@VescForegroundService.dumpRefloatConfigDebug(xmlBytes, configBytes)
+        })
     }
     private val gpsMonitor by lazy {
         VescGpsMonitor(
@@ -609,28 +617,13 @@ class VescForegroundService : Service() {
     private var fwVersionString: String? = null
     private var boardReadyTimeoutHandle: Cancellable? = null
     private var gpsError: String? = null
-    private var latestLocation: LocationSnapshot? = null
-    private var latestPreciseLocation: LocationSnapshot? = null
-    private var lastGpsPersistedAt = 0L
     private var isStoppingService = false
     private var connectionSoundsEnabled = true
-    private var configFsmState: ConfigRWState = ConfigRWState.Idle
-    private var configReadCallbacks: PendingConfigRead? = null
-    private var configWriteCallbacks: PendingConfigWrite? = null
-    private var configTimeoutHandle: Cancellable? = null
     private var lastSentCommand: Int? = null
     private var lastReceivedCommandByte: Int? = null
     private var boardSession: BoardSession? = null
     private var sessionSequence: Long = 0L
     private val currentSessionId: Long get() = boardSession?.id ?: sessionSequence
-    private val isPollingCapable get() = isPollingCapable(canId, directConnection)
-    private val recentLocations = ArrayDeque<Map<String, Any?>>()
-    private val historySamples = ArrayDeque<Map<String, Any?>>()
-    private var historyFlushHandle: Cancellable? = null
-    private var liveSeriesHandle: Cancellable? = null
-    // One-shot: emit the first sparkline frame the instant data arrives instead of
-    // waiting a full LIVE_SERIES_INTERVAL_MS for the first scheduled emit.
-    private var liveSeriesPrimed = false
     private val bluetoothAdapter: BluetoothAdapter
         get() = (getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter
 
@@ -696,42 +689,7 @@ class VescForegroundService : Service() {
     private fun consumePendingConfigRead() {
         val pending = pendingConfigRead ?: return
         pendingConfigRead = null
-        if (configFsmState !is ConfigRWState.Idle) {
-            pending.onError(
-                RefloatConfigErrorCode.CONFIG_REQUEST_IN_FLIGHT.name,
-                "Config operation already in flight",
-            )
-            return
-        }
-        if (boardConfig == null || boardStatus != BoardPhase.Connected) {
-            pending.onError(
-                RefloatConfigErrorCode.BOARD_NOT_CONNECTED.name,
-                "Board must be connected before reading Refloat config",
-            )
-            return
-        }
-        val currentCanId = canId
-        val transport = boardTransport(currentCanId, directConnection)
-        if (transport == null) {
-            pending.onError(
-                RefloatConfigErrorCode.CAN_ID_UNAVAILABLE.name,
-                "Cannot read Refloat config before CAN id discovery",
-            )
-            return
-        }
-        val wasPolling = pollingLoop.isActive
-        stopPolling()
-        configReadCallbacks = pending
-        dispatchConfigEvent(
-            ConfigRWEvent.StartRead(
-                opId = newOperationId(),
-                canId = currentCanId,
-                transport = transport,
-                wasPolling = wasPolling,
-                appBoardId = boardConfig?.appBoardId,
-                fwVersion = fwVersionString,
-            ),
-        )
+        configController.consumeRead(pending)
     }
 
     private fun consumePendingGpsStart() {
@@ -872,11 +830,7 @@ class VescForegroundService : Service() {
             )
             connectionCoordinator.cancelConnectTimeout()
             stopPolling()
-            if (!intentional && configFsmState !is ConfigRWState.Idle) {
-                dispatchConfigEvent(
-                    ConfigRWEvent.SessionTerminated("Board disconnected during Refloat config op"),
-                )
-            }
+            if (!intentional) configController.onSessionTerminated("Board disconnected during Refloat config op")
             if (intentional) {
                 return
             } else if (wasConnecting != null) {
@@ -985,21 +939,21 @@ class VescForegroundService : Service() {
         when (payload[0].toInt() and 0xff) {
             COMM_FW_VERSION -> handleFwVersionPayload(payload)
             COMM_BMS_GET_VALUES -> handleBmsPayload(payload)
-            COMM_GET_CUSTOM_CONFIG_XML -> dispatchConfigEvent(ConfigRWEvent.XmlPayloadReceived(payload))
-            COMM_GET_CUSTOM_CONFIG -> dispatchConfigEvent(
+            COMM_GET_CUSTOM_CONFIG_XML -> configController.onPayload(ConfigRWEvent.XmlPayloadReceived(payload))
+            COMM_GET_CUSTOM_CONFIG -> configController.onPayload(
                 ConfigRWEvent.ConfigBytesPayloadReceived(payload, System.currentTimeMillis()),
             )
-            COMM_SET_CUSTOM_CONFIG -> dispatchConfigEvent(ConfigRWEvent.SetConfigResponseReceived(payload))
+            COMM_SET_CUSTOM_CONFIG -> configController.onPayload(ConfigRWEvent.SetConfigResponseReceived(payload))
             COMM_FORWARD_CAN -> {
                 if (payload.size >= 3) {
                     when (payload[2].toInt() and 0xff) {
                         COMM_BMS_GET_VALUES -> handleBmsPayload(payload.copyOfRange(2, payload.size))
                         COMM_FW_VERSION -> handleFwVersionPayload(payload.copyOfRange(2, payload.size))
-                        COMM_GET_CUSTOM_CONFIG_XML -> dispatchConfigEvent(ConfigRWEvent.XmlPayloadReceived(payload))
-                        COMM_GET_CUSTOM_CONFIG -> dispatchConfigEvent(
+                        COMM_GET_CUSTOM_CONFIG_XML -> configController.onPayload(ConfigRWEvent.XmlPayloadReceived(payload))
+                        COMM_GET_CUSTOM_CONFIG -> configController.onPayload(
                             ConfigRWEvent.ConfigBytesPayloadReceived(payload, System.currentTimeMillis()),
                         )
-                        COMM_SET_CUSTOM_CONFIG -> dispatchConfigEvent(ConfigRWEvent.SetConfigResponseReceived(payload))
+                        COMM_SET_CUSTOM_CONFIG -> configController.onPayload(ConfigRWEvent.SetConfigResponseReceived(payload))
                     }
                 }
             }
@@ -1009,7 +963,7 @@ class VescForegroundService : Service() {
                     payload = payload,
                     avgLatency = updateLatency(now),
                     packetAt = now,
-                    location = latestLocation,
+                    location = locationTracker.latestLocation,
                 ) ?: run {
                     captureTelemetryParseFailed(payload)
                     return
@@ -1038,9 +992,9 @@ class VescForegroundService : Service() {
                 // Hot path: tiny scalar tick every frame drives the live gauges (SharedValues, no React render).
                 emitEvent("onLiveTick", buildLiveTick(parsed, batteryEstimate, currentSessionId, firedAlerts))
                 // Cold path: full samples buffered and flushed in batches for history/charts.
-                enqueueHistorySample(historySample)
+                liveSeriesEmitter.enqueueHistorySample(historySample)
                 // First sample of the session also drives the first sparkline frame immediately.
-                primeLiveSeriesIfNeeded()
+                liveSeriesEmitter.primeLiveSeriesIfNeeded()
                 recordingCoordinator.recordTelemetry(processed.capture)
             }
         }
@@ -1052,31 +1006,9 @@ class VescForegroundService : Service() {
     }
 
     private fun handleFwVersionPayload(payload: ByteArray) {
-        if (payload.size < 3) return
         val hex = payload.joinToString(" ") { "%02x".format(it) }
         Log.d(VESC_SESSION_TAG, "FW version raw (${payload.size} bytes): $hex")
-        val major = payload[1].toInt() and 0xff
-        val minor = payload[2].toInt() and 0xff
-        var hwNameEnd = 3
-        while (hwNameEnd < payload.size && payload[hwNameEnd] != 0.toByte()) hwNameEnd++
-        val hwName = if (hwNameEnd > 3) String(payload, 3, hwNameEnd - 3, Charsets.UTF_8) else null
-        // After HW name null: 12 UUID + 1 paired + 1 test version + 1 hw type = 15 bytes
-        var offset = hwNameEnd + 1 + 15
-        val customConfigs = mutableListOf<String>()
-        if (offset < payload.size) {
-            val count = payload[offset].toInt() and 0xff
-            offset++
-            for (i in 0 until count) {
-                val start = offset
-                while (offset < payload.size && payload[offset] != 0.toByte()) offset++
-                if (offset > start) customConfigs.add(String(payload, start, offset - start, Charsets.UTF_8))
-                offset++
-            }
-        }
-        val parts = mutableListOf("FW $major.${"%02d".format(minor)}")
-        if (hwName != null) parts.add(hwName)
-        if (customConfigs.isNotEmpty()) parts.add(customConfigs.joinToString(", "))
-        fwVersionString = parts.joinToString(" · ")
+        fwVersionString = parseFwVersion(payload) ?: return
         Log.d(VESC_SESSION_TAG, "FW version: $fwVersionString")
     }
 
@@ -1099,191 +1031,10 @@ class VescForegroundService : Service() {
         }
     }
 
-    // --- Config write flow (push profile to board) ---
-
     private fun consumePendingConfigWrite() {
         val pending = pendingConfigWrite ?: return
         pendingConfigWrite = null
-        if (configFsmState !is ConfigRWState.Idle) {
-            pending.onError(
-                RefloatConfigErrorCode.CONFIG_REQUEST_IN_FLIGHT.name,
-                "Config operation already in flight",
-            )
-            return
-        }
-        if (boardConfig == null || boardStatus != BoardPhase.Connected) {
-            pending.onError(
-                RefloatConfigErrorCode.BOARD_NOT_CONNECTED.name,
-                "Board must be connected before pushing config",
-            )
-            return
-        }
-        val transport = currentBoardTransport()
-        if (transport == null) {
-            pending.onError(
-                RefloatConfigErrorCode.CAN_ID_UNAVAILABLE.name,
-                "Cannot push config before CAN id discovery",
-            )
-            return
-        }
-        appDataScope.launch {
-            val profile = try {
-                AppDataRepository.get(applicationContext).getTuneProfile(pending.profileId)
-            } catch (e: Exception) {
-                null
-            }
-            if (profile == null) {
-                scheduler.post {
-                    pending.onError(
-                        RefloatConfigErrorCode.PROFILE_NOT_FOUND.name,
-                        "Tune profile not found: ${pending.profileId}",
-                    )
-                }
-                return@launch
-            }
-            @Suppress("UNCHECKED_CAST")
-            val fields = (profile["fields"] as? Map<String, Any>) ?: emptyMap()
-            scheduler.post {
-                if (configFsmState !is ConfigRWState.Idle) {
-                    pending.onError(
-                        RefloatConfigErrorCode.CONFIG_REQUEST_IN_FLIGHT.name,
-                        "Config operation already in flight",
-                    )
-                    return@post
-                }
-                if (boardConfig == null || boardStatus != BoardPhase.Connected) {
-                    pending.onError(
-                        RefloatConfigErrorCode.BOARD_NOT_CONNECTED.name,
-                        "Board must be connected before pushing config",
-                    )
-                    return@post
-                }
-                val profileBoardId = profile["boardId"] as? String
-                val connectedBoardId = boardConfig?.appBoardId
-                if (profileBoardId.isNullOrBlank() || connectedBoardId.isNullOrBlank() || profileBoardId != connectedBoardId) {
-                    pending.onError(
-                        RefloatConfigErrorCode.PROFILE_BOARD_MISMATCH.name,
-                        "Tune profile does not belong to the connected board",
-                    )
-                    return@post
-                }
-                val currentCanId = canId
-                val currentTransport = boardTransport(currentCanId, directConnection)
-                if (currentTransport == null) {
-                    pending.onError(
-                        RefloatConfigErrorCode.CAN_ID_UNAVAILABLE.name,
-                        "Cannot push config before CAN id discovery",
-                    )
-                    return@post
-                }
-                val wasPolling = pollingLoop.isActive
-                stopPolling()
-                configWriteCallbacks = pending
-                dispatchConfigEvent(
-                    ConfigRWEvent.StartWrite(
-                        opId = newOperationId(),
-                        canId = currentCanId,
-                        transport = currentTransport,
-                        wasPolling = wasPolling,
-                        profileFields = fields,
-                        appBoardId = boardConfig?.appBoardId,
-                        fwVersion = fwVersionString,
-                    ),
-                )
-            }
-        }
-    }
-
-    private fun dispatchConfigEvent(event: ConfigRWEvent) {
-        val (next, effects) = ConfigRWFsm.apply(configFsmState, event)
-        configFsmState = next
-        effects.forEach(::interpretConfigEffect)
-    }
-
-    private fun interpretConfigEffect(effect: ConfigRWEffect) {
-        when (effect) {
-            is ConfigRWEffect.SendFrame -> {
-                if (!sendPayload(effect.payload)) {
-                    dispatchConfigEvent(ConfigRWEvent.GattWriteFailed("Board GATT is not writable"))
-                }
-            }
-            is ConfigRWEffect.ScheduleTimeout -> {
-                configTimeoutHandle?.cancel()
-                val code = effect.code
-                configTimeoutHandle = scheduler.postDelayed(effect.timeoutMs) {
-                    configTimeoutHandle = null
-                    dispatchConfigEvent(ConfigRWEvent.Timeout(code))
-                }
-            }
-            ConfigRWEffect.CancelTimeout -> {
-                configTimeoutHandle?.cancel()
-                configTimeoutHandle = null
-            }
-            is ConfigRWEffect.EmitReadComplete -> {
-                val callbacks = configReadCallbacks
-                configReadCallbacks = null
-                if (effect.resumePolling && boardConfig != null && isPollingCapable) startPolling()
-                val snapshot = effect.snapshot
-                appDataScope.launch {
-                    try {
-                        AppDataRepository.get(applicationContext).createMainTuneProfileIfMissing(snapshot)
-                    } catch (e: Exception) {
-                        Log.w(VESC_SESSION_TAG, "Failed to auto-create main tune profile", e)
-                    }
-                    scheduler.post { callbacks?.onSuccess?.invoke(snapshot.toMap()) }
-                }
-            }
-            is ConfigRWEffect.EmitReadFailure -> {
-                val callbacks = configReadCallbacks
-                configReadCallbacks = null
-                if (effect.resumePolling && boardConfig != null && isPollingCapable) startPolling()
-                val eventName = if (
-                    effect.code == RefloatConfigErrorCode.CONFIG_DECODE_FAILED ||
-                    effect.code == RefloatConfigErrorCode.UNSUPPORTED_SCHEMA
-                ) "config_decode_failed" else "config_read_failed"
-                captureDiagnostic(
-                    eventName,
-                    diagnosticProperties(boardConfig, "config_read") + mapOf(
-                        "operation_id" to effect.opId,
-                        "message" to effect.message,
-                        "error_code" to effect.code.name,
-                        "firmware" to fwVersionString,
-                    ) + DiagnosticReporter.configBlobProperties(effect.rawConfig),
-                )
-                callbacks?.onError?.invoke(effect.code.name, effect.message)
-            }
-            is ConfigRWEffect.EmitWriteComplete -> {
-                val callbacks = configWriteCallbacks
-                configWriteCallbacks = null
-                if (effect.resumePolling && boardConfig != null && isPollingCapable) startPolling()
-                val snapshot = effect.snapshot
-                appDataScope.launch {
-                    try {
-                        AppDataRepository.get(applicationContext).createMainTuneProfileIfMissing(snapshot)
-                    } catch (e: Exception) {
-                        Log.w(VESC_SESSION_TAG, "Failed to update profile after push", e)
-                    }
-                    scheduler.post { callbacks?.onSuccess?.invoke(snapshot.toMap()) }
-                }
-            }
-            is ConfigRWEffect.EmitWriteFailure -> {
-                val callbacks = configWriteCallbacks
-                configWriteCallbacks = null
-                if (effect.resumePolling && boardConfig != null && isPollingCapable) startPolling()
-                captureDiagnostic(
-                    "profile_push_failed",
-                    diagnosticProperties(boardConfig, "profile_push") + mapOf(
-                        "operation_id" to effect.opId,
-                        "message" to effect.message,
-                        "error_code" to effect.code.name,
-                        "phase" to effect.phase.name,
-                        "firmware" to fwVersionString,
-                    ) + DiagnosticReporter.configBlobProperties(effect.rawConfig),
-                )
-                callbacks?.onError?.invoke(effect.code.name, effect.message)
-            }
-            is ConfigRWEffect.DumpDebugBytes -> dumpRefloatConfigDebug(effect.xmlBytes, effect.configBytes)
-        }
+        configController.consumeWrite(pending)
     }
 
     private fun startPolling() {
@@ -1307,8 +1058,7 @@ class VescForegroundService : Service() {
             ),
         )
         pollingLoop.start(session, sessionToken, transport)
-        startHistoryFlush()
-        startLiveSeries()
+        liveSeriesEmitter.start()
     }
 
     private fun currentBoardTransport(): BoardTransport? = boardTransport(canId, directConnection)
@@ -1316,8 +1066,7 @@ class VescForegroundService : Service() {
     private fun stopPolling() {
         pollingLoop.stop()
         telemetryPipeline.cancelStaleWatchdog()
-        stopHistoryFlush()
-        stopLiveSeries()
+        liveSeriesEmitter.stop()
     }
 
     private fun buildLiveTick(
@@ -1335,85 +1084,6 @@ class VescForegroundService : Service() {
         return tick
     }
 
-    // Samples are enqueued on the BLE callback thread and drained on the main thread.
-    private val historyLock = Any()
-
-    private fun enqueueHistorySample(sample: Map<String, Any?>) {
-        synchronized(historyLock) { historySamples.addLast(sample) }
-    }
-
-    private fun startHistoryFlush() {
-        if (historyFlushHandle != null) return
-        scheduleHistoryFlush()
-    }
-
-    private fun scheduleHistoryFlush() {
-        val session = boardSession ?: return
-        historyFlushHandle = scheduler.postDelayedForSession(
-            session,
-            HISTORY_FLUSH_INTERVAL_MS,
-            ::isCurrentBoardSession,
-        ) {
-            flushHistorySamples()
-            scheduleHistoryFlush()
-        }
-    }
-
-    private fun flushHistorySamples() {
-        val batch = synchronized(historyLock) {
-            if (historySamples.isEmpty()) return
-            historySamples.toList().also { historySamples.clear() }
-        }
-        emitEvent("onTelemetryHistory", mapOf("samples" to batch))
-    }
-
-    private fun stopHistoryFlush() {
-        historyFlushHandle?.cancel()
-        historyFlushHandle = null
-        flushHistorySamples()
-        synchronized(historyLock) { historySamples.clear() }
-    }
-
-    private fun startLiveSeries() {
-        if (liveSeriesHandle != null) return
-        liveSeriesPrimed = false
-        scheduleLiveSeries()
-    }
-
-    /**
-     * Surface the first sparkline frame as soon as the first sample of the session
-     * lands, so sparklines appear with the live gauges instead of a 1s gap. The
-     * scheduled 1s cadence takes over after this one-shot prime.
-     */
-    private fun primeLiveSeriesIfNeeded() {
-        if (liveSeriesHandle == null || liveSeriesPrimed) return
-        liveSeriesPrimed = true
-        emitLiveSeries()
-    }
-
-    private fun scheduleLiveSeries() {
-        val session = boardSession ?: return
-        liveSeriesHandle = scheduler.postDelayedForSession(
-            session,
-            LIVE_SERIES_INTERVAL_MS,
-            ::isCurrentBoardSession,
-        ) {
-            emitLiveSeries()
-            scheduleLiveSeries()
-        }
-    }
-
-    private fun emitLiveSeries() {
-        val metrics = telemetryPipeline.liveSeries(LIVE_SERIES_METRICS, LIVE_SERIES_BUCKETS)
-        if (metrics.isEmpty()) return
-        emitEvent("onLiveSeries", mapOf("metrics" to metrics, "generation" to currentSessionId))
-    }
-
-    private fun stopLiveSeries() {
-        liveSeriesHandle?.cancel()
-        liveSeriesHandle = null
-        liveSeriesPrimed = false
-    }
 
     private fun boardReadyTimeoutMs(): Long =
         ReconnectPolicy.boardReadyTimeoutMs(reconnectScheduler.currentAttempt)
@@ -1537,18 +1207,13 @@ class VescForegroundService : Service() {
     private fun stopCurrentBoardSession(emitDisconnected: Boolean, updateNotification: Boolean = true) {
         remoteTiltController.stop()
         flushTelemetryDiagnostics("stop")
-        if (configFsmState !is ConfigRWState.Idle) {
-            dispatchConfigEvent(
-                ConfigRWEvent.SessionTerminated("Board session stopped during Refloat config op"),
-            )
-        }
+        configController.onSessionTerminated("Board session stopped during Refloat config op")
         val stoppedConfig = boardConfig
         reconnectScheduler.cancelAndReset()
         cancelBoardReadyTimeout()
         stopPolling()
         gattClient.clear(markIntentional = true)
-        alertFeedback.stopAllGeiger()
-        activeGeigerRuleIds = emptySet()
+        alertCoordinator.stopAllGeiger()
         recordingCoordinator.finishBoardSession(
             status = if (emitDisconnected) "disconnected" else "stopped",
             markerType = if (emitDisconnected) "disconnected" else "app_stop",
@@ -1707,48 +1372,8 @@ class VescForegroundService : Service() {
     }
 
     private fun onLocationUpdated(location: Location) {
-        val speedMps = if (location.hasSpeed()) location.speed.toDouble() else null
-        val bearingDeg = if (location.hasBearing()) location.bearing.toDouble() else null
-        val accuracyM = if (location.hasAccuracy()) location.accuracy.toDouble() else null
-        val altitudeM = if (location.hasAltitude()) location.altitude else null
-        val precise = isRecordableGpsLocation(location, accuracyM)
-        val snapshot = LocationSnapshot(
-            latitude = location.latitude,
-            longitude = location.longitude,
-            speedMps = speedMps,
-            bearingDeg = bearingDeg,
-            accuracyM = accuracyM,
-            altitudeM = altitudeM,
-            timestamp = location.time,
-            precise = precise,
-        )
-        latestLocation = snapshot
-        if (!precise) {
-            emitEvent("onLocation", snapshot.toMap())
-            return
-        }
-        latestLocation = snapshot
-        latestPreciseLocation = snapshot
-        persistLastGpsLocation(snapshot)
-        appendRecentLocation(snapshot)
-        emitEvent("onLocation", snapshot.toMap())
-        recordingCoordinator.recordLocation(snapshot)
+        locationTracker.onLocationUpdated(location)
     }
-
-    private fun persistLastGpsLocation(location: LocationSnapshot) {
-        val now = System.currentTimeMillis()
-        if (now - lastGpsPersistedAt < LAST_GPS_PERSIST_INTERVAL_MS) return
-        lastGpsPersistedAt = now
-        appDataScope.launch {
-            AppDataRepository.get(applicationContext).updateLastGpsLocation(
-                latitude = location.latitude,
-                longitude = location.longitude,
-            )
-        }
-    }
-
-    private fun isRecordableGpsLocation(location: Location, accuracyM: Double?): Boolean =
-        isPreciseGpsFix(location.provider, accuracyM)
 
     private fun liveStateMap(includeRecent: Boolean = false): Map<String, Any?> {
         val settings = kotlinx.coroutines.runBlocking {
@@ -1756,7 +1381,7 @@ class VescForegroundService : Service() {
         }
         applyTelemetrySettings(settings)
         val recentTelemetryValue = if (includeRecent) telemetryPipeline.recentSnapshot() else emptyList()
-        val recentLocationsValue = if (includeRecent) recentLocations.toList() else emptyList()
+        val recentLocationsValue = if (includeRecent) locationTracker.recentLocations() else emptyList()
 
         return buildLiveState(
             VescLiveStateSnapshot(
@@ -1767,8 +1392,8 @@ class VescForegroundService : Service() {
                 lastTelemetryAt = telemetry?.lastPacketAt,
                 recentTelemetry = recentTelemetryValue,
                 gpsActive = gpsMonitor.active,
-                latestLocation = latestLocation,
-                latestPreciseLocation = latestPreciseLocation,
+                latestLocation = locationTracker.latestLocation,
+                latestPreciseLocation = locationTracker.latestPreciseLocation,
                 recentLocations = recentLocationsValue,
                 gpsError = gpsError,
                 recordingEnabled = recordingCoordinator.telemetryRecordingEnabled,
@@ -1783,12 +1408,11 @@ class VescForegroundService : Service() {
     private suspend fun loadAlertRules(context: Context) {
         try {
             val rules = AppDataRepository.get(context).getEnabledAlertRuleEntities()
-            alertRules = rules
-            alertEngine.resetDebounce()
+            alertCoordinator.replaceRules(rules)
             Log.d(VESC_SESSION_TAG, "Loaded ${rules.size} alert rule(s)")
         } catch (e: Exception) {
             Log.w(VESC_SESSION_TAG, "Failed to load alert rules: ${e.message}")
-            alertRules = emptyList()
+            alertCoordinator.replaceRules(emptyList())
         }
     }
 
@@ -1814,74 +1438,15 @@ class VescForegroundService : Service() {
         }
     }
 
-    private fun evaluateAlerts(t: RefloatTelemetry, batteryPercent: Double?): List<Map<String, Any?>> {
-        val fired = alertEngine.evaluate(alertRules, t, batteryPercent)
-        for (alert in fired) {
-            if (alert.controlId != "battery" || alert.rangeDepth != null) continue
-            recordLocalDiagnostic(
-                "battery_alert_fired",
-                boardConfig,
-                "alert",
-                mapOf(
-                    "rule_id" to alert.ruleId,
-                    "used_ir_compensated_percent" to (batteryPercent != null),
-                    "battery_percent" to batteryPercent,
-                    "battery_voltage" to t.batteryVoltage,
-                    "battery_current" to t.batteryCurrent,
-                    "threshold" to alert.threshold,
-                    "threshold_max" to alert.thresholdMax,
-                    "battery_config_loaded" to (batteryConfigCache != null),
-                ),
-            )
+    private fun evaluateAlerts(t: RefloatTelemetry, batteryPercent: Double?): List<Map<String, Any?>> =
+        alertCoordinator.evaluate(t, batteryPercent) { name, properties ->
+            val batteryProperties = if (name == "battery_alert_fired") properties + mapOf("battery_config_loaded" to (batteryConfigCache != null)) else properties
+            recordLocalDiagnostic(name, boardConfig, "alert", batteryProperties)
         }
-        val geiger = fired.filter { it.rangeDepth != null }
-        val geigerRuleIds = geiger.mapTo(HashSet()) { it.ruleId }
-        for (ruleId in activeGeigerRuleIds - geigerRuleIds) {
-            alertFeedback.stopGeiger(ruleId)
-        }
-        activeGeigerRuleIds = geigerRuleIds
-        for (alert in geiger) {
-            alertFeedback.updateGeiger(alert.ruleId, alert.soundType, alert.rangeDepth ?: 0.0)
-        }
-
-        val single = fired.filter { it.rangeDepth == null }
-        if (single.isNotEmpty()) {
-            val ttsAlert = single.firstOrNull { it.soundType.startsWith("tts:") && it.thresholdMax == null }
-            if (ttsAlert != null) {
-                val template = ttsAlert.soundType.removePrefix("tts:")
-                val text = renderAlertMessageTemplate(template, ttsAlert, batteryPercent) { name, props ->
-                    recordLocalDiagnostic(name, boardConfig, "alert", props)
-                }
-                if (text.isNotEmpty()) alertFeedback.speakMessage(text)
-            }
-            for (alert in single) {
-                if (!alert.soundType.startsWith("tts:")) {
-                    alertFeedback.playSingle(alert.soundType)
-                }
-            }
-            alertFeedback.vibrate(null)
-        }
-        return fired.map { it.toMap() }
-    }
-
-    private fun appendRecentLocation(location: LocationSnapshot) {
-        val point = location.toMap()
-        recentLocations.addLast(point)
-        pruneRecentLocations(location.timestamp)
-    }
-
-    private fun pruneRecentLocations(nowMs: Long) {
-        val oldest = nowMs - telemetryPipeline.recentWindowMs()
-        while (recentLocations.isNotEmpty()) {
-            val ts = (recentLocations.first()["timestamp"] as? Number)?.toLong() ?: break
-            if (ts >= oldest) break
-            recentLocations.removeFirst()
-        }
-    }
 
     private fun applyLiveHistoryLimitMinutes(minutes: Int) {
         telemetryPipeline.setLiveHistoryLimitMinutes(minutes)
-        pruneRecentLocations(System.currentTimeMillis())
+        locationTracker.pruneRecentLocations(System.currentTimeMillis())
     }
 
     private fun refreshLiveHistoryLimit() {
