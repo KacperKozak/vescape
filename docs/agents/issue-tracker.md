@@ -74,6 +74,7 @@ Use one or more app-area labels for filtering:
 | `area:alerts`     | `[Alerts]`     | alert rules, alert feedback, audio/TTS                            |
 | `area:battery`    | `[Battery]`    | battery config, SoC estimation, voltage compensation              |
 | `area:tech`       | `[Tech]`       | internal refactor, tech upgrades, no user-visible behavior change |
+| `area:design`     | `[Design]`     | design system, theme, color tokens, and visual conventions        |
 | `area:ios`        | `[iOS]`        | iOS platform port and iOS-specific native code                    |
 
 When a PRD or issue-planning skill creates or starts using a new app-area label, update this table in the same turn. Add the label, title prefix, and a short "Use for" description so future PRDs and implementation issues can reuse the prefix consistently.

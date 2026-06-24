@@ -9,6 +9,24 @@ import org.junit.Test
 
 class VescProtocolTest {
   @Test
+  fun buildsRemoteTiltChuckCommand() {
+    // Neutral slider (128) inverts to a centered chuck Y byte (127).
+    assertArrayEquals(
+      byteArrayOf(COMM_SET_CHUCK_DATA.toByte(), 0, 127),
+      buildRemoteTiltCommand(BoardTransport.Direct, value = 128),
+    )
+  }
+
+  @Test
+  fun framesRemoteTiltChuckForCan() {
+    // Full slider (255) inverts to chuck Y 0, wrapped in a CAN forward frame.
+    assertArrayEquals(
+      byteArrayOf(COMM_FORWARD_CAN.toByte(), 7, COMM_SET_CHUCK_DATA.toByte(), 0, 0),
+      buildRemoteTiltCommand(BoardTransport.Can(7), value = 255),
+    )
+  }
+
+  @Test
   fun codecRoundTripsSplitFrameThroughReassembler() {
     val payload = byteArrayOf(COMM_CUSTOM_APP_DATA.toByte(), REFLOAT_MAGIC.toByte(), REFLOAT_GET_ALLDATA.toByte(), 2)
     val frame = VescPacketCodec.encode(payload)

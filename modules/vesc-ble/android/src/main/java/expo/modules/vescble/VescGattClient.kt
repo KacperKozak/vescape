@@ -39,8 +39,9 @@ internal class VescGattClient(
     private var txChar: BluetoothGattCharacteristic? = null
     private var pendingCccdWrites = 0
     private var cccdTimeout: Runnable? = null
-    private var diagWriteCount = 0
+    private var writeRetry: Runnable? = null
     private var intentionalDisconnect = false
+    private val writeQueue = VescWriteQueue()
 
     fun connect(device: BluetoothDevice) {
         Log.d(VESC_SESSION_TAG, "gatt connect request device=${device.address}")
@@ -53,15 +54,28 @@ internal class VescGattClient(
         gatt = device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
     }
 
-    fun resetDiagnostics() {
-        diagWriteCount = 0
+    fun sendPayload(payload: ByteArray): Boolean {
+        if (gatt == null || txChar == null) return false
+        writeQueue.enqueueNormal(VescPacketCodec.encode(payload))
+        return drainWriteQueue()
     }
 
-    fun sendPayload(payload: ByteArray): Boolean = sendFramedChunk(VescPacketCodec.encode(payload))
+    /**
+     * Enqueue transient remote tilt. Only latest unsent value survives, so an
+     * emergency neutral command cannot sit behind stale tilt commands.
+     */
+    fun sendRemoteTilt(payload: ByteArray, urgent: Boolean = false): Boolean {
+        if (gatt == null || txChar == null) return false
+        writeQueue.replaceRemoteTilt(VescPacketCodec.encode(payload), urgent)
+        return drainWriteQueue()
+    }
 
     fun clear(markIntentional: Boolean = true) {
         try {
             cancelCccdTimeout()
+            writeRetry?.let { handler.removeCallbacks(it) }
+            writeRetry = null
+            writeQueue.clear()
             if (markIntentional && gatt != null) intentionalDisconnect = true
             gatt?.disconnect()
             gatt?.close()
@@ -176,20 +190,45 @@ internal class VescGattClient(
                 dispatchListener { listener.onGattFrameChunk(chunk) }
             }
         }
+
+        override fun onCharacteristicWrite(
+            gatt: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic,
+            status: Int,
+        ) {
+            if (gatt !== this@VescGattClient.gatt || characteristic.uuid != NUS_TX_UUID) return
+            val completed = writeQueue.completeInFlight()
+            val bytes = completed?.bytes
+            if (status != BluetoothGatt.GATT_SUCCESS) {
+                Log.w(VESC_SESSION_TAG, "gatt write callback failed status=$status bytes=${bytes?.size}")
+            }
+            drainWriteQueue()
+        }
     }
 
-    private fun sendFramedChunk(bytes: ByteArray): Boolean {
+    /** Android permits one characteristic write at a time. Serializing all writes
+     * prevents telemetry polling and held remote controls from dropping each other. */
+    private fun drainWriteQueue(): Boolean {
         val g = gatt ?: return false
         val tx = txChar ?: return false
-        val writeType = if (diagWriteCount < 3) {
-            diagWriteCount++
-            BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-        } else {
-            BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
+        val write = writeQueue.startNext() ?: return true
+        val bytes = write.bytes
+        writeRetry?.let { handler.removeCallbacks(it) }
+        writeRetry = null
+        val ok = g.writeCharacteristic(
+            tx,
+            bytes,
+            BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT,
+        ) == BluetoothStatusCodes.SUCCESS
+        if (!ok) {
+            writeQueue.retryInFlight()
+            Log.w(VESC_SESSION_TAG, "gatt writeCharacteristic failed bytes=${bytes.size}; retrying")
+            val retry = Runnable { drainWriteQueue() }
+            writeRetry = retry
+            handler.postDelayed(retry, 25L)
+            return false
         }
-        val ok = g.writeCharacteristic(tx, bytes, writeType) == BluetoothStatusCodes.SUCCESS
-        if (!ok) Log.w(VESC_SESSION_TAG, "gatt writeCharacteristic failed bytes=${bytes.size} writeType=$writeType")
-        if (ok) recorder()?.recordChunk("tx", bytes)
+        recorder()?.recordChunk("tx", bytes)
         return ok
     }
 

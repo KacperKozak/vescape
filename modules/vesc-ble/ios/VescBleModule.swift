@@ -126,6 +126,10 @@ public class VescBleModule: Module {
       self.liveState()
     }
 
+    Function("getRemoteTiltState") { () -> [String: Any]? in
+      nil
+    }
+
     Function("setSelectedBoard") { (boardId: String?) in
       self.selectedBoardId = boardId
       var settings = Self.loadSettings()
@@ -226,6 +230,26 @@ public class VescBleModule: Module {
         "UNSUPPORTED_PLATFORM",
         "Refloat config reading is Android-only until iOS BLE transport is implemented"
       )
+    }
+
+    AsyncFunction("setRemoteTilt") { (_: Int) -> Bool in
+      false
+    }
+
+    AsyncFunction("lockRemoteTilt") { (_: Int) -> Bool in
+      false
+    }
+
+    AsyncFunction("releaseRemoteTilt") { (_: Int, _: Int) -> Bool in
+      false
+    }
+
+    AsyncFunction("stopRemoteTilt") { () -> Bool in
+      false
+    }
+
+    Function("getRemoteTiltState") { () -> [String: Any]? in
+      nil
     }
 
     AsyncFunction("getTuneProfiles") { (_: String, promise: Promise) in

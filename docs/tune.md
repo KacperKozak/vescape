@@ -360,23 +360,23 @@ commands, live control commands, accessory controls, and read commands.
 
 Relevant package command IDs:
 
-| Command            |    ID | Purpose                                         |
-| ------------------ | ----: | ----------------------------------------------- |
-| `FLYWHEEL`         |  `22` | Apply flywheel-related runtime action.          |
-| `LIGHT_INFO`       |  `25` | Read light controller/runtime light info.       |
-| `LIGHT_CTRL`       |  `26` | Apply live light control values.                |
-| `LCM_INFO`         |  `27` | Read LCM-related info.                          |
-| `GET_INFO`         |  `33` | Read package/device info.                       |
-| `GET_RTDATA`       |  `34` | Read runtime data.                              |
-| `SET_TUNE`         |  `35` | Apply tune values at runtime.                   |
-| `SET_DEFAULT_TUNE` |  `36` | Apply/reset default tune values.                |
-| `SAVE_TUNE`        |  `37` | Persist current tune state.                     |
-| `RESTORE_TUNE`     |  `38` | Restore saved tune state.                       |
-| `TUNE_OTHER`       |  `39` | Apply miscellaneous tune values.                |
-| `MOVE`             |  `40` | Apply live remote movement / remote tilt input. |
-| `BOOSTER`          |  `41` | Apply booster-related runtime action.           |
-| `LOCK`             |  `45` | Toggle package-level lock state.                |
-| `TONE`             | `210` | Tone/horn/playback runtime channel.             |
+| Command            |    ID | Purpose                                                            |
+| ------------------ | ----: | ------------------------------------------------------------------ |
+| `FLYWHEEL`         |  `22` | Apply flywheel-related runtime action.                             |
+| `LIGHT_INFO`       |  `25` | Read light controller/runtime light info.                          |
+| `LIGHT_CTRL`       |  `26` | Apply live light control values.                                   |
+| `LCM_INFO`         |  `27` | Read LCM-related info.                                             |
+| `GET_INFO`         |  `33` | Read package/device info.                                          |
+| `GET_RTDATA`       |  `34` | Read runtime data.                                                 |
+| `SET_TUNE`         |  `35` | Apply tune values at runtime.                                      |
+| `SET_DEFAULT_TUNE` |  `36` | Apply/reset default tune values.                                   |
+| `SAVE_TUNE`        |  `37` | Persist current tune state.                                        |
+| `RESTORE_TUNE`     |  `38` | Restore saved tune state.                                          |
+| `TUNE_OTHER`       |  `39` | Apply miscellaneous tune values.                                   |
+| `MOVE`             |   `7` | `FLOAT_COMMAND_RC_MOVE`: spin motor while board is idle. Not tilt. |
+| `BOOSTER`          |  `41` | Apply booster-related runtime action.                              |
+| `LOCK`             |  `45` | Toggle package-level lock state.                                   |
+| `TONE`             | `210` | Tone/horn/playback runtime channel.                                |
 
 This implies two possible edit strategies:
 
@@ -415,9 +415,11 @@ The practical split is:
 
 ### Remote Tilt and Move Controls
 
-The forward/backward board movement and dynamic tilt controls are live input
-features, not normal tune sliders. They combine configuration gates with a
-short-lived runtime command stream.
+Floaty's `MOVE` channel is live remote-control input, not a direct angle
+setter. It can drive forward/reverse board input. When Remote Tilt is enabled,
+the board maps that same input into dynamic tilt according to its configuration.
+These features combine a persistent configuration gate with a short-lived
+runtime command stream.
 
 There are two setup/config pieces:
 
@@ -446,32 +448,36 @@ When Remote Tilt is toggled from the UI, the flow is:
 4. Encode the full config payload with the current schema.
 5. Write it back with `COMM_SET_CUSTOM_CONFIG`.
 
-The live slider input is then sent separately over runtime packets:
-
-```text
-[COMM_CUSTOM_APP_DATA, FLOAT, MOVE, ...liveInput]
-```
-
-The `MOVE` command clamps the slider value to `20..80` before sending it. That
-range appears to be a centered control range, with `50` acting as neutral and
-values below/above neutral producing movement or tilt in the selected direction.
-Treat the exact board-side units as runtime input units, not stored config
-units.
-
-The movement UI has explicit `Forward` and `Back` direction states. Pressing a
-direction marks movement active; releasing stops it. While active, the app keeps
-sending the current direction plus the current slider value. Slider release
-resets the UI value back to the neutral/default value.
-
-There is also a second live-input path using VESC chuck data:
+The live slider input is then sent separately as VESC chuck (Nunchuk) data,
+which Refloat reads as its UART remote when `inputtilt_remote_type` is `1`:
 
 ```text
 [COMM_SET_CHUCK_DATA, 0, 255 - value]
 ```
 
-That path emulates a nunchuk/chuck throttle-style input instead of using the
-Refloat `MOVE` packet directly. It should be treated as an immediate motor input
-path, not a persisted tune setting.
+Floaty Android v3.0.0 was used as the protocol reference. `value` is the
+`0..255` slider with `128` as the rest/neutral position; the second data byte is
+the chuck Y axis, inverted to `255 - value`. The board maps this to a tilt
+target via `throttle_val * inputtilt_angle_limit` (see `float.c`), so the input
+sets dynamic nose tilt while riding. `inputtilt_invert_throttle` flips the
+direction. The board drops the remote input after roughly one second of silence,
+so the app repeats the active value on a fixed ~40 ms tick. This is runtime
+input only; it never writes configuration.
+
+The UI is a 2D pad rather than a 1D slider. The horizontal axis is the tilt
+value above; the vertical axis sets a release decay time (bottom = instant snap,
+up to `60 s`). The top band of the pad is a **lock** zone: releasing there holds
+the tilt indefinitely (the live hold stream just keeps running) until the user
+cancels. While the finger is down the app streams the held tilt live. On a
+normal release it hands off to a linear ease: the held value is interpolated back
+to `128` (neutral) over the chosen duration, one step per ~40 ms tick, then the
+stream stops. The decay is owned natively (`RemoteTiltController`) and is
+tick-based, so JS only sends the intent (`value`, `durationMs`). A duration
+shorter than one tick snaps straight to neutral.
+
+Do not confuse this with the Refloat `MOVE` (`FLOAT_COMMAND_RC_MOVE`, id `7`)
+command. `MOVE` drives motor current to spin the wheel **while the board is
+idle/off** and has nothing to do with tilt — it is not used for Remote Tilt.
 
 Moving the board forward/backward while disengaged is governed by the Remote
 Throttle config fields:

@@ -46,6 +46,7 @@ function liveState(samples: TelemetryEvent[]): LiveStateEvent {
       recentTelemetry: samples,
       error: null,
       autoConnect: true,
+      remoteTilt: null,
     },
     gps: {
       phase: 'active',

@@ -15,8 +15,29 @@ internal data class VescLiveStateSnapshot(
     val recentLocations: List<Map<String, Any?>>,
     val gpsError: String?,
     val recordingEnabled: Boolean,
+    val remoteTiltValue: Int,
+    val remoteTiltPhase: RemoteTiltPhase,
+    val remoteTiltDecay: RemoteTiltDecayProgress?,
     val settings: AppSettings,
 )
+
+/**
+ * Exact native remote-tilt command. Raw values avoid asymmetric percent rounding.
+ */
+internal fun remoteTiltWire(
+    value: Int,
+    phase: RemoteTiltPhase,
+    decay: RemoteTiltDecayProgress?,
+): Map<String, Any?>? {
+    if (phase == RemoteTiltPhase.Idle) return null
+    return buildMap {
+        put("value", value)
+        put("phase", phase.wireValue)
+        if (decay != null) {
+            put("decay", mapOf("elapsedMs" to decay.elapsedMs, "totalMs" to decay.totalMs))
+        }
+    }
+}
 
 internal fun buildLiveState(snapshot: VescLiveStateSnapshot): Map<String, Any?> =
     mapOf(
@@ -31,6 +52,11 @@ internal fun buildLiveState(snapshot: VescLiveStateSnapshot): Map<String, Any?> 
             "recentTelemetry" to snapshot.recentTelemetry,
             "error" to snapshot.boardError,
             "autoConnect" to snapshot.settings.autoConnect,
+            "remoteTilt" to remoteTiltWire(
+                snapshot.remoteTiltValue,
+                snapshot.remoteTiltPhase,
+                snapshot.remoteTiltDecay,
+            ),
         ),
         "gps" to mapOf(
             "phase" to if (snapshot.gpsActive) "active" else "idle",

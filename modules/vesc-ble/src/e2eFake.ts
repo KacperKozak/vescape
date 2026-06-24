@@ -120,6 +120,7 @@ function getLiveState(): LiveStateEvent {
       recentTelemetry: lastTelemetry ? [lastTelemetry] : [],
       error: null,
       autoConnect: true,
+      remoteTilt: null,
     },
     gps: {
       phase: 'idle',

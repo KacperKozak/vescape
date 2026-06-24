@@ -147,6 +147,15 @@ class VescForegroundService : Service() {
             service.consumePendingConfigRead()
         }
 
+        fun setRemoteTilt(value: Int): Boolean = instance?.setRemoteTilt(value) ?: false
+
+        fun lockRemoteTilt(value: Int): Boolean = instance?.lockRemoteTilt(value) ?: false
+
+        fun releaseRemoteTilt(value: Int, durationMs: Long): Boolean =
+            instance?.releaseRemoteTilt(value, durationMs) ?: false
+
+        fun stopRemoteTilt(): Boolean = instance?.stopRemoteTilt() ?: false
+
         private var pendingConfigWrite: PendingConfigWrite? = null
 
         fun pushProfileToBoard(
@@ -228,6 +237,8 @@ class VescForegroundService : Service() {
             instance?.liveStateMap(includeRecent = true)
                 ?: idleState(AppDataRepository.get(context.applicationContext))
 
+        fun currentRemoteTiltState(): Map<String, Any?>? = instance?.remoteTiltState()
+
         fun setAppInForeground(active: Boolean) {
             if (appInForeground == active) return
             appInForeground = active
@@ -248,6 +259,7 @@ class VescForegroundService : Service() {
                     "recentTelemetry" to emptyList<Map<String, Any?>>(),
                     "error" to null,
                     "autoConnect" to settings.autoConnect,
+                    "remoteTilt" to null,
                 ),
                 "gps" to mapOf(
                     "phase" to "idle",
@@ -295,6 +307,13 @@ class VescForegroundService : Service() {
     private val connectionCoordinator = ConnectionCoordinator(
         scheduler = scheduler,
         isCurrentSession = ::isCurrentBoardSession,
+    )
+    private val remoteTiltController = RemoteTiltController(
+        scheduler = scheduler,
+        transport = {
+            if (boardStatus == BoardPhase.Connected && boardConfig != null) currentBoardTransport() else null
+        },
+        send = { payload, urgent -> gattClient.sendRemoteTilt(payload, urgent) },
     )
     private val notificationController by lazy {
         VescNotificationController(
@@ -785,7 +804,6 @@ class VescForegroundService : Service() {
         // Tag telemetry frames with the CAN id resolved from the stored transport.
         telemetryPipeline.updateCanId(canId)
         packetReassembler.reset()
-        gattClient.resetDiagnostics()
         diagnosticsRecorder.resetTelemetryParseFailedCounters()
         connectionCoordinator.reset()
         reconnectScheduler.cancelAndReset()
@@ -1312,6 +1330,7 @@ class VescForegroundService : Service() {
         tick.remove("location")
         tick["batteryPercent"] = batteryPercent
         tick["generation"] = generation
+        tick["remoteTilt"] = remoteTiltState()
         if (firedAlerts.isNotEmpty()) tick["firedAlerts"] = firedAlerts
         return tick
     }
@@ -1479,6 +1498,22 @@ class VescForegroundService : Service() {
         return gattClient.sendPayload(payload)
     }
 
+    fun setRemoteTilt(value: Int): Boolean = remoteTiltController.hold(value)
+
+    fun lockRemoteTilt(value: Int): Boolean = remoteTiltController.lock(value)
+
+    fun releaseRemoteTilt(value: Int, durationMs: Long): Boolean =
+        remoteTiltController.release(value, durationMs)
+
+    fun stopRemoteTilt(): Boolean = remoteTiltController.stop()
+
+    private fun remoteTiltState(): Map<String, Any?>? =
+        remoteTiltWire(
+            remoteTiltController.currentValue,
+            remoteTiltController.phase,
+            remoteTiltController.decayProgress,
+        )
+
     private fun sendPayloadWithRetry(payload: ByteArray, session: BoardSession? = boardSession): Boolean {
         if (session != null && !isCurrentBoardSession(session)) return false
         val sent = sendPayload(payload)
@@ -1500,6 +1535,7 @@ class VescForegroundService : Service() {
     }
 
     private fun stopCurrentBoardSession(emitDisconnected: Boolean, updateNotification: Boolean = true) {
+        remoteTiltController.stop()
         flushTelemetryDiagnostics("stop")
         if (configFsmState !is ConfigRWState.Idle) {
             dispatchConfigEvent(
@@ -1736,6 +1772,9 @@ class VescForegroundService : Service() {
                 recentLocations = recentLocationsValue,
                 gpsError = gpsError,
                 recordingEnabled = recordingCoordinator.telemetryRecordingEnabled,
+                remoteTiltValue = remoteTiltController.currentValue,
+                remoteTiltPhase = remoteTiltController.phase,
+                remoteTiltDecay = remoteTiltController.decayProgress,
                 settings = settings,
             )
         )

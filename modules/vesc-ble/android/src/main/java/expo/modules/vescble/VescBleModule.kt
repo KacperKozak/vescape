@@ -143,6 +143,9 @@ class VescBleModule : Module() {
     Function("getLiveState") {
       liveStateWithScan(VescForegroundService.currentLiveState(context.applicationContext))
     }
+    Function("getRemoteTiltState") {
+      VescForegroundService.currentRemoteTiltState()
+    }
     Function("setSelectedBoard") { boardId: String? ->
       runBlocking { AppDataRepository.get(context.applicationContext).setSelectedBoardId(boardId) }
     }
@@ -243,6 +246,18 @@ class VescBleModule : Module() {
         onSuccess = { snapshot -> promise.resolve(snapshot) },
         onError = { code, message -> promise.reject(code, message, null) },
       )
+    }
+    AsyncFunction("setRemoteTilt") { value: Int ->
+      VescForegroundService.setRemoteTilt(value)
+    }
+    AsyncFunction("lockRemoteTilt") { value: Int ->
+      VescForegroundService.lockRemoteTilt(value)
+    }
+    AsyncFunction("releaseRemoteTilt") { value: Int, durationMs: Int ->
+      VescForegroundService.releaseRemoteTilt(value, durationMs.toLong())
+    }
+    AsyncFunction("stopRemoteTilt") {
+      VescForegroundService.stopRemoteTilt()
     }
     AsyncFunction("pushProfileToBoard") { profileId: String, promise: Promise ->
       VescForegroundService.pushProfileToBoard(

@@ -186,6 +186,8 @@ export interface MapPoint {
 
 export interface TelemetryEvent {
   generation?: number
+  /** Native remote-tilt snapshot paired with this telemetry tick. */
+  remoteTilt?: RemoteTiltState | null
   location?: LocationEvent | null
   metricExclusions?: Record<string, boolean>
   metricExclusionUpdates?: LiveMetricExclusionUpdate[]
@@ -239,6 +241,20 @@ export interface LiveMetricExclusionUpdate {
 export type BoardPhase = SessionStatus
 export type GpsPhase = 'idle' | 'starting' | 'active' | 'error'
 export type ScanPhase = ScanStatus
+export type RemoteTiltPhase = 'idle' | 'holding' | 'decaying' | 'locked'
+
+export interface RemoteTiltDecay {
+  elapsedMs: number
+  totalMs: number
+}
+
+/** Native-owned active remote-tilt command. `null` represents idle. */
+export interface RemoteTiltState {
+  value: number
+  phase: Exclude<RemoteTiltPhase, 'idle'>
+  /** Present only while native is executing a release decay. */
+  decay?: RemoteTiltDecay
+}
 
 export interface LiveStateEvent {
   board: {
@@ -252,6 +268,8 @@ export interface LiveStateEvent {
     recentTelemetry: TelemetryEvent[]
     error: string | null
     autoConnect: boolean
+    /** Native-owned active remote-tilt command, or `null` when idle. */
+    remoteTilt: RemoteTiltState | null
   }
   gps: {
     phase: GpsPhase
@@ -622,6 +640,7 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
   reportDiagnosticTest(): DiagnosticStatus
   getDiagnosticStatus(): DiagnosticStatus
   getLiveState(): LiveStateEvent
+  getRemoteTiltState(): RemoteTiltState | null
   setSelectedBoard(boardId: string | null): void
   getTelemetryHistory(options: TelemetryHistoryOptions): Promise<TelemetryMinuteBucket[]>
   getTelemetrySamples(options: {
@@ -643,6 +662,10 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
   backupDatabase(): Promise<DatabaseBackupResult>
   restoreDatabase(uri: string): Promise<void>
   getRefloatConfigSnapshot(): Promise<RefloatConfigSnapshot>
+  setRemoteTilt(value: number): Promise<boolean>
+  lockRemoteTilt(value: number): Promise<boolean>
+  releaseRemoteTilt(value: number, durationMs: number): Promise<boolean>
+  stopRemoteTilt(): Promise<boolean>
   getTuneProfiles(boardId: string): Promise<TuneProfile[]>
   getTuneProfile(profileId: string): Promise<TuneProfile | null>
   createProfile(
@@ -858,6 +881,12 @@ export function getLiveState(): LiveStateEvent {
   return native.getLiveState()
 }
 
+/** Read remote tilt without reseeding native telemetry into the JS history buffer. */
+export function getRemoteTiltState(): RemoteTiltState | null {
+  if (E2E_ENABLED) return null
+  return native.getRemoteTiltState()
+}
+
 /** Persist native auto-connect target. Native can use this while JS is frozen. */
 export function setSelectedBoard(boardId: string | null): void {
   if (E2E_ENABLED) {
@@ -920,6 +949,36 @@ export async function restoreDatabase(uri: string): Promise<void> {
 
 export async function getRefloatConfigSnapshot(): Promise<RefloatConfigSnapshot> {
   return native.getRefloatConfigSnapshot()
+}
+
+/**
+ * Stream Floaty's temporary remote-tilt input. `value` is the 0..255 slider
+ * (128 = neutral). Requires `inputtilt_remote_type` = UART in the board config.
+ */
+export async function setRemoteTilt(value: number): Promise<boolean> {
+  if (E2E_ENABLED) return true
+  return native.setRemoteTilt(value)
+}
+
+/** Lock the held tilt indefinitely (lock band) until cancelled. */
+export async function lockRemoteTilt(value: number): Promise<boolean> {
+  if (E2E_ENABLED) return true
+  return native.lockRemoteTilt(value)
+}
+
+/**
+ * Release the pad: ease `value` (0..255) linearly back to neutral over
+ * `durationMs`, then stop. A zero duration snaps straight to neutral.
+ */
+export async function releaseRemoteTilt(value: number, durationMs: number): Promise<boolean> {
+  if (E2E_ENABLED) return true
+  return native.releaseRemoteTilt(value, durationMs)
+}
+
+/** Stop streaming tilt and snap the board back to neutral. */
+export async function stopRemoteTilt(): Promise<boolean> {
+  if (E2E_ENABLED) return true
+  return native.stopRemoteTilt()
 }
 
 export async function getTuneProfiles(boardId: string): Promise<TuneProfile[]> {
