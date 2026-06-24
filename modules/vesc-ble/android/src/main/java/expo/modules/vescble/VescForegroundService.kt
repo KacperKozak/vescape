@@ -69,7 +69,7 @@ private const val LIVE_SERIES_INTERVAL_MS = 1_000L
 private const val LIVE_SERIES_BUCKETS = 64
 private const val GATT_CONNECT_TIMEOUT_MS = 6_000L
 private const val GATT_READY_TIMEOUT_MS = 6_000L
-private const val REMOTE_TILT_REPEAT_MS = 100L
+private const val REMOTE_TILT_REPEAT_MS = 40L
 
 data class SessionConfig(
     val appBoardId: String?,
@@ -1490,16 +1490,22 @@ class VescForegroundService : Service() {
      * Refloat drops the remote input after ~1s of silence, so native repeats the
      * current value while JS holds the slider. Requires `inputtilt_remote_type`
      * to be set to UART in the board config.
+     *
+     * The repeat loop is the sole sender: rapid slider updates only mutate
+     * [remoteTiltValue] and coalesce to the latest value, instead of flooding the
+     * serialized GATT write queue with stale packets (which lagged the board the
+     * longer the slider was dragged).
      */
     fun setRemoteTilt(value: Int): Boolean {
         val transport = currentBoardTransport()
         if (transport == null || boardStatus != BoardPhase.Connected || boardConfig == null) return false
 
         val clamped = value.coerceIn(0, 255)
+        val alreadyStreaming = remoteTiltValue != null
         remoteTiltValue = clamped
-        remoteTiltRepeat?.cancel()
-        remoteTiltRepeat = null
+        if (alreadyStreaming) return true
 
+        // First press: send once immediately, then let the loop drive the stream.
         val sent = sendPayload(buildRemoteTiltCommand(transport, clamped))
         scheduleRemoteTiltRepeat()
         return sent
