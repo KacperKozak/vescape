@@ -21,9 +21,14 @@ export function createLiveMetricBuffer(): LiveMetricBuffer {
 }
 
 export function clearLiveMetricBuffer(buffer: LiveMetricBuffer): void {
-  buffer.telemetry.length = 0
+  clearLiveTelemetryBuffer(buffer)
   buffer.locations.length = 0
   buffer.latestApproximateLocation = null
+}
+
+/** Drops Board samples while preserving phone GPS live state. */
+export function clearLiveTelemetryBuffer(buffer: LiveMetricBuffer): void {
+  buffer.telemetry.length = 0
 }
 
 function pruneByTime<T>(

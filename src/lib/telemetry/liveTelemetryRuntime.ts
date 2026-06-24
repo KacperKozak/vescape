@@ -6,6 +6,7 @@ import {
   appendLocationSample,
   appendTelemetrySample,
   clearLiveMetricBuffer,
+  clearLiveTelemetryBuffer,
   createLiveMetricBuffer,
   getLatestApproximateGps,
   getLatestTelemetry,
@@ -65,6 +66,8 @@ export interface LiveTelemetryRuntime {
   /** Cold path: batched full samples into the history buffer. Returns last accepted lastPacketAt, or null. */
   ingestHistoryBatch: (samples: TelemetryEvent[]) => number | null
   ingestLocation: (location: LocationEvent) => void
+  /** Clears board-derived readouts while retaining phone GPS live state. */
+  clearBoardTelemetry: () => LiveTelemetrySnapshot
   reset: () => LiveTelemetrySnapshot
   getSnapshot: () => LiveTelemetrySnapshot
   consumePendingSnapshot: () => LiveTelemetrySnapshot | null
@@ -245,6 +248,13 @@ export function createLiveTelemetryRuntime({
     ingestLocation(location) {
       appendLocationSample(buffer, location, windowMs())
       markPending()
+    },
+
+    clearBoardTelemetry() {
+      clearLiveTelemetryBuffer(buffer)
+      pushTick(EMPTY_TICK)
+      pendingSnapshot = false
+      return publishSnapshot()
     },
 
     reset() {

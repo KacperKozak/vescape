@@ -199,14 +199,21 @@ function cleanupBleStoreModule(): void {
 }
 
 function applyLiveState(state: LiveStateEvent, set: BleSet): void {
-  const hasRecentSamples =
-    state.board.recentTelemetry.length > 0 || state.gps.recentLocations.length > 0
-  if (!hasRecentSamples) {
+  const isBoardConnected = state.board.phase === 'connected'
+  const hasRecentTelemetry = isBoardConnected && state.board.recentTelemetry.length > 0
+  const hasRecentLocations = state.gps.recentLocations.length > 0
+  const shouldSeedLiveState = hasRecentTelemetry || hasRecentLocations
+  let live
+
+  if (isBoardConnected) {
+    live = shouldSeedLiveState
+      ? liveTelemetryRuntime.seedFromLiveState(state)
+      : liveTelemetryRuntime.getSnapshot()
+  } else {
     liveTelemetryRuntime.syncConnectionSeq(state.board.connectionSeq)
+    useLiveSeriesStore.getState().clear()
+    live = liveTelemetryRuntime.clearBoardTelemetry()
   }
-  const live = hasRecentSamples
-    ? liveTelemetryRuntime.seedFromLiveState(state)
-    : liveTelemetryRuntime.getSnapshot()
 
   set({
     status: state.board.phase,
@@ -218,7 +225,7 @@ function applyLiveState(state: LiveStateEvent, set: BleSet): void {
     connectedId: state.board.connectedBoardId ?? state.board.bleId,
     error: state.board.error ?? state.gps.error ?? state.scan.error ?? undefined,
     telemetryRecordingEnabled: state.recording.enabled,
-    ...(hasRecentSamples
+    ...(shouldSeedLiveState || !isBoardConnected
       ? {
           liveLocationHistory: live.liveLocationHistory,
           latestApproximateLocation: live.latestApproximateLocation,
@@ -263,6 +270,12 @@ function publishLiveSnapshot(set: BleSet): void {
   })
 }
 
+/** Board telemetry is only displayable while native reports a live Board connection. */
+function acceptsBoardTelemetry(generation: number | null | undefined): boolean {
+  const state = useBleStore.getState()
+  return state.status === 'connected' && (generation == null || generation === state.connectionSeq)
+}
+
 function installLiveSubscriptions(set: BleSet): void {
   if (!liveSub) {
     liveSub = addLiveStateListener((state) => applyLiveState(state, set))
@@ -270,6 +283,7 @@ function installLiveSubscriptions(set: BleSet): void {
   if (!liveTickSub) {
     // Hot path: per-frame scalar tick → SharedValues only. No store write, no React render.
     liveTickSub = addLiveTickListener((tick) => {
+      if (!acceptsBoardTelemetry(tick.generation)) return
       liveTelemetryRuntime.ingestTick(tick)
     })
   }
@@ -277,6 +291,7 @@ function installLiveSubscriptions(set: BleSet): void {
     // Cold path: natively-decimated min/max sparkline series (~1Hz). Tiny payload, no raw
     // samples. Drives every center-screen sparkline with zero JS-thread projection.
     liveSeriesSub = addLiveSeriesListener((event) => {
+      if (!acceptsBoardTelemetry(event.generation)) return
       useLiveSeriesStore.getState().setSeries(event.metrics, event.generation)
     })
   }
@@ -299,6 +314,7 @@ function installHistorySub(set: BleSet): void {
   if (historySub) return
   // Cold path: batched full samples → history buffer → throttled store publish for detail charts.
   historySub = addTelemetryHistoryListener((batch) => {
+    if (!batch.samples.some((sample) => acceptsBoardTelemetry(sample.generation))) return
     const publishImmediately =
       liveTelemetryRuntime.getSnapshot().liveStatus.boardSampleCount <
       LIVE_HISTORY_IMMEDIATE_SAMPLE_COUNT

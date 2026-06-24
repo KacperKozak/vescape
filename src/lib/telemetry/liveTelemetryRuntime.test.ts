@@ -258,4 +258,20 @@ describe('live telemetry runtime', () => {
       gpsAccuracyM: null,
     })
   })
+
+  test('clears board telemetry while retaining phone GPS state', () => {
+    const runtime = createLiveTelemetryRuntime({ windowMs: () => 60_000 })
+    runtime.seedFromLiveState(liveState([telemetry({ speed: 22 })]))
+    runtime.ingestLocation(location({ timestamp: 12_000 }))
+    runtime.consumePendingSnapshot()
+
+    const snapshot = runtime.clearBoardTelemetry()
+
+    expect(runtime.values.speedKmh.value).toBe(null)
+    expect(runtime.values.motorCurrent.value).toBe(null)
+    expect(runtime.getTelemetry()).toEqual([])
+    expect(snapshot.liveLocationHistory).toEqual([location({ timestamp: 12_000 })])
+    expect(snapshot.liveStatus.boardSampleCount).toBe(0)
+    expect(snapshot.liveStatus.gpsSampleCount).toBe(1)
+  })
 })

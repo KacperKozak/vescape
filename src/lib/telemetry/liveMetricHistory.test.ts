@@ -5,6 +5,7 @@ import {
   appendLocationSample,
   appendTelemetrySample,
   clearLiveMetricBuffer,
+  clearLiveTelemetryBuffer,
   createLiveMetricBuffer,
   getLatestGps,
   getLatestTelemetry,
@@ -172,6 +173,17 @@ describe('live metric history', () => {
       gpsPrecise: false,
       gpsAccuracyM: null,
     })
+  })
+
+  test('clears board telemetry without dropping phone GPS state', () => {
+    const buffer = createLiveMetricBuffer()
+    appendTelemetrySample(buffer, telemetry({ lastPacketAt: 2_000 }), 10_000)
+    appendLocationSample(buffer, location({ timestamp: 3_000 }), 10_000)
+
+    clearLiveTelemetryBuffer(buffer)
+
+    expect(buffer.telemetry).toEqual([])
+    expect(buffer.locations).toEqual([location({ timestamp: 3_000 })])
   })
 
   test('summarizes board and GPS freshness without exposing sample arrays', () => {

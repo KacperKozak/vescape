@@ -459,7 +459,7 @@ class VescForegroundService : Service() {
             cancelBoardReadyTimeout()
             stopPolling()
             gattClient.clear(markIntentional = false)
-            telemetryPipeline.resetLastTelemetryAt()
+            telemetryPipeline.clearLiveTelemetry()
             directConnection = false
             boardError = reason
             transitionBoardPhase(

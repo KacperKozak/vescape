@@ -108,7 +108,15 @@ internal class TelemetryPipeline(
         this.canId = canId
     }
 
-    fun resetLastTelemetryAt() {
+    /**
+     * Drops prior connection data before reconnecting within the same Board Session.
+     * Reconnect reuses its session identity, so resetLastTelemetryAt alone would leave
+     * stale values available to the live state and decimated-series read paths.
+     */
+    fun clearLiveTelemetry() {
+        cancelStaleWatchdog()
+        synchronized(recentLock) { recentTelemetry.clear() }
+        liveTelemetryPoints.clear()
         lastTelemetryAt = 0L
     }
 

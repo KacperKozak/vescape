@@ -215,6 +215,22 @@ class TelemetryPipelineTest {
         assertEquals(0L, pipeline.lastTelemetryAt)
     }
 
+    @Test
+    fun `clearLiveTelemetry drops stale data while keeping Board Session active`() {
+        val scheduler = TestScheduler()
+        val pipeline = buildPipeline(scheduler)
+        val session = BoardSession(id = 1)
+        pipeline.beginSession(session, sessionConfig)
+        pipeline.process(telemetry(speed = 20.0, packetAt = 100L), session)
+
+        pipeline.clearLiveTelemetry()
+        val next = pipeline.process(telemetry(speed = 5.0, packetAt = 200L), session)
+
+        assertNotNull(next)
+        assertEquals(200L, pipeline.lastTelemetryAt)
+        assertEquals(listOf(5.0), pipeline.recentSnapshot().map { it["speed"] })
+    }
+
     private fun telemetry(
         speed: Double = 0.0,
         packetAt: Long = 0L,
