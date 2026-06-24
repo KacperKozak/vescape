@@ -21,7 +21,7 @@ import { theme } from '@/constants/theme'
 const sections = [
   {
     label: 'Base',
-    hint: 'Button, IconButton, Banner, DeviceRow, InfoBadge, StatsRow, StepTimeline, Placeholder, ScreenTitle',
+    hint: 'Button, IconButton, Banner, DeviceRow, InfoBadge, StepTimeline, Placeholder, ScreenTitle',
     route: '/settings/components/base',
     icon: CubeIcon,
   },

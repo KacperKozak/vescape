@@ -167,7 +167,6 @@ export default function ImuScreen() {
         points={pitchPoints}
         range={pitchRange}
         height={80}
-        showStats={false}
         windowMs={windowMs}
       />
 
@@ -177,7 +176,6 @@ export default function ImuScreen() {
         points={rollPoints}
         range={rollRange}
         height={80}
-        showStats={false}
         windowMs={windowMs}
       />
 
@@ -187,7 +185,6 @@ export default function ImuScreen() {
         points={balancePoints}
         range={balanceRange}
         height={80}
-        showStats={false}
         windowMs={windowMs}
       />
     </ControlDetailLayout>

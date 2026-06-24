@@ -1,4 +1,5 @@
 import { useNavigation } from 'expo-router'
+import { BellRingingIcon } from 'phosphor-react-native'
 import { type ReactNode, useEffect } from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 
@@ -11,6 +12,8 @@ interface Props {
   controlId?: string
   unit?: string
   alertControls?: AlertControl[]
+  /** When provided, layout renders gauge → alerts → children. Otherwise children → alerts. */
+  gauge?: ReactNode
 }
 
 interface AlertControl {
@@ -25,6 +28,7 @@ export function ControlDetailLayout({
   controlId,
   unit = '',
   alertControls,
+  gauge,
 }: Props) {
   const navigation = useNavigation()
   useEffect(() => {
@@ -33,26 +37,43 @@ export function ControlDetailLayout({
 
   const controls = alertControls ?? (controlId ? [{ label: title, controlId, unit }] : [])
 
+  const alerts = (
+    <View style={styles.alertsSection}>
+      <View style={styles.sectionHeader}>
+        <BellRingingIcon size={20} color={theme.highlight.color} weight="duotone" />
+        <Text style={styles.sectionLabel}>Alerts</Text>
+      </View>
+      {controls.length > 0 ? (
+        controls.map((control, index) => (
+          <View key={control.controlId} style={styles.alertControl}>
+            {controls.length > 1 ? (
+              <Text style={[styles.alertControlLabel, index > 0 && styles.alertControlLabelGap]}>
+                {control.label.toUpperCase()}
+              </Text>
+            ) : null}
+            <AlertsSection controlId={control.controlId} unit={control.unit} />
+          </View>
+        ))
+      ) : (
+        <Text style={styles.placeholder}>No alert configuration available.</Text>
+      )}
+    </View>
+  )
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {children}
-      <View style={styles.alertsSection}>
-        <Text style={styles.sectionLabel}>ALERTS</Text>
-        {controls.length > 0 ? (
-          controls.map((control, index) => (
-            <View key={control.controlId} style={styles.alertControl}>
-              {controls.length > 1 ? (
-                <Text style={[styles.alertControlLabel, index > 0 && styles.alertControlLabelGap]}>
-                  {control.label.toUpperCase()}
-                </Text>
-              ) : null}
-              <AlertsSection controlId={control.controlId} unit={control.unit} />
-            </View>
-          ))
-        ) : (
-          <Text style={styles.placeholder}>No alert configuration available.</Text>
-        )}
-      </View>
+      {gauge != null ? (
+        <>
+          {gauge}
+          {alerts}
+          {children}
+        </>
+      ) : (
+        <>
+          {children}
+          {alerts}
+        </>
+      )}
     </ScrollView>
   )
 }
@@ -70,6 +91,12 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingTop: 8,
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 2,
+  },
   alertControl: {
     gap: 8,
   },
@@ -83,10 +110,10 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   sectionLabel: {
-    color: theme.neutral.textSecondary,
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 0.5,
+    color: theme.neutral.textPrimary,
+    fontSize: 18,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   placeholder: {
     color: theme.neutral.textDim,

@@ -12,6 +12,7 @@ import {
 
 import { AlertFormModal } from './AlertFormModal'
 
+import { Button } from '@/components/ui/base/Button'
 import { ConfirmModal } from '@/components/ui/modals/ConfirmModal'
 import { theme } from '@/constants/theme'
 import { deriveBatteryConfig } from '@/lib/battery'
@@ -94,11 +95,11 @@ export function AlertsSection({ controlId, unit }: AlertsSectionProps) {
             onPress={() => handleEdit(rule)}
             activeOpacity={0.7}
           >
-            <View style={[styles.ruleTypeIcon, rule.enabled && styles.ruleTypeIconActive]}>
+            <View style={styles.ruleTypeIcon}>
               <TypeIcon
-                size={16}
-                color={rule.enabled ? theme.wheel.color : theme.neutral.textDim}
-                weight="fill"
+                size={18}
+                color={rule.enabled ? theme.highlight.color : theme.neutral.textDim}
+                weight="duotone"
               />
             </View>
 
@@ -127,7 +128,7 @@ export function AlertsSection({ controlId, unit }: AlertsSectionProps) {
               style={styles.ruleAction}
             >
               {rule.enabled ? (
-                <SpeakerHighIcon size={16} color={theme.wheel.color} />
+                <SpeakerHighIcon size={16} color={theme.highlight.color} />
               ) : (
                 <SpeakerSlashIcon size={16} color="#475569" />
               )}
@@ -147,10 +148,20 @@ export function AlertsSection({ controlId, unit }: AlertsSectionProps) {
         )
       })}
 
-      <TouchableOpacity style={styles.addButton} onPress={handleAdd}>
-        <PlusIcon size={14} color={theme.wheel.color} weight="fill" />
-        <Text style={styles.addButtonText}>Add Rule</Text>
-      </TouchableOpacity>
+      {rules.length === 0 ? (
+        <Text style={styles.emptyHintText}>
+          No alerts yet — get notified when this crosses a threshold
+        </Text>
+      ) : null}
+
+      <Button
+        label="Add alert"
+        icon={PlusIcon}
+        variant="secondary"
+        size="sm"
+        onPress={handleAdd}
+        style={styles.addButton}
+      />
 
       <AlertFormModal
         visible={formVisible}
@@ -165,7 +176,7 @@ export function AlertsSection({ controlId, unit }: AlertsSectionProps) {
       <ConfirmModal
         visible={deleteTarget != null}
         title="Delete Alert"
-        message="Remove this alert rule? This cannot be undone."
+        message="Remove this alert? This cannot be undone."
         confirmLabel="Delete"
         destructive
         onConfirm={() => {
@@ -197,9 +208,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: theme.neutral.surface,
   },
-  ruleTypeIconActive: {
-    backgroundColor: theme.wheel.bg,
-  },
   ruleContent: {
     flex: 1,
   },
@@ -221,14 +229,12 @@ const styles = StyleSheet.create({
     padding: 6,
   },
   addButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 6,
+    alignSelf: 'flex-start',
+    marginTop: 2,
   },
-  addButtonText: {
-    color: theme.wheel.color,
-    fontSize: 14,
-    fontWeight: '500',
+  emptyHintText: {
+    color: theme.neutral.textMuted,
+    fontSize: 12,
+    fontWeight: '400',
   },
 })

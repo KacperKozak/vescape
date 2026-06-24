@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { StyleSheet } from 'react-native'
 import type { SharedValue } from 'react-native-reanimated'
 
 import { SingleGauge, type DualGaugeAlert } from '@/components/ui/charts/DualGauge'
@@ -15,7 +16,6 @@ interface MetricDetailGaugeProps {
   value: SharedValue<number | null>
   min?: number
   max?: number
-  label?: string
 }
 
 export function MetricDetailGauge({
@@ -23,7 +23,6 @@ export function MetricDetailGauge({
   value,
   min = metric.chartRange.min,
   max = metric.chartRange.max,
-  label,
 }: MetricDetailGaugeProps) {
   const alertRules = useAlertsStore((s) => s.rules)
   const gradientsEnabled = useSettingsStore((s) => s.historyMetricGradientsEnabled)
@@ -55,9 +54,16 @@ export function MetricDetailGauge({
       color={metric.color}
       unit={metric.unit}
       decimals={metric.decimals}
-      label={label}
       alerts={alerts}
       hotRange={hotRange}
+      containerStyle={styles.gauge}
     />
   )
 }
+
+const styles = StyleSheet.create({
+  gauge: {
+    backgroundColor: 'transparent',
+    paddingHorizontal: 0,
+  },
+})

@@ -21,7 +21,6 @@ import { IconButton } from '@/components/ui/base/IconButton'
 import { InfoBadge } from '@/components/ui/base/InfoBadge'
 import { Placeholder } from '@/components/ui/base/Placeholder'
 import { ScreenTitle } from '@/components/ui/base/ScreenTitle'
-import { StatsRow } from '@/components/ui/base/StatsRow'
 import { StepTimeline, type StepState, type TimelineStep } from '@/components/ui/base/StepTimeline'
 import { ShowcaseCard } from '@/components/ui/dev/ShowcaseCard'
 import { ChipRow, ToggleRow } from '@/components/ui/dev/ShowcaseControls'
@@ -225,14 +224,6 @@ function DeviceRowShowcase() {
   )
 }
 
-function StatsRowShowcase() {
-  return (
-    <ShowcaseCard name="StatsRow">
-      <StatsRow current="28.4 km/h" min="0.0" max="42.1" avg="18.7" />
-    </ShowcaseCard>
-  )
-}
-
 function InfoBadgeShowcase() {
   return (
     <ShowcaseCard name="InfoBadge">
@@ -309,14 +300,13 @@ export default function BaseComponentsPage() {
       <ScrollView contentContainerStyle={styles.content}>
         <IconHero
           icon={CubeIcon}
-          description="Button, IconButton, Banner, DeviceRow, InfoBadge, StatsRow, StepTimeline, Placeholder, ScreenTitle."
+          description="Button, IconButton, Banner, DeviceRow, InfoBadge, StepTimeline, Placeholder, ScreenTitle."
         />
         <IconButtonShowcase />
         <ButtonShowcase />
         <PlaceholderShowcase />
         <BannerShowcase />
         <DeviceRowShowcase />
-        <StatsRowShowcase />
         <InfoBadgeShowcase />
         <StepTimelineShowcase />
         <ScreenTitleShowcase />

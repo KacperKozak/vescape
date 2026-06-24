@@ -27,6 +27,20 @@ import {
 
 type AlertTab = 'single' | 'geiger' | 'message'
 
+/** Sensible default alert per control — preselects tab + thresholds when adding a new alert. */
+interface ControlAlertPreset {
+  tab: AlertTab
+  threshold: number
+  thresholdMax?: number
+}
+
+const DEFAULT_ALERT_PRESETS: Record<string, ControlAlertPreset> = {
+  'motor-temp': { tab: 'message', threshold: 70 },
+  battery: { tab: 'message', threshold: 30 },
+  speed: { tab: 'geiger', threshold: 35, thresholdMax: 45 },
+  duty: { tab: 'geiger', threshold: 80, thresholdMax: 90 },
+}
+
 function getPresetsForCategory(category: AlertPresetCategory): AlertPreset[] {
   return getAlertPresets().filter((p) => p.category === category)
 }
@@ -39,7 +53,8 @@ function getDefaultMessageTemplate(
     return batteryConfig ? 'Battery {percent}%' : 'Battery {voltage}V'
   }
   const metric = telemetryByControlId[controlId]
-  if (metric) return `${metric.label} {value} {unit}`
+  // Drop the "Temp" suffix — the °C unit already makes temperature obvious when spoken.
+  if (metric) return `${metric.label.replace(/ Temp$/, '')} {value} {unit}`
   return '{value} {unit}'
 }
 
@@ -130,18 +145,32 @@ function getEditFormDefaults(
 function getNewFormDefaults(
   dialConfig: ReturnType<typeof getAlertDialConfig>,
   defaultSoundType: AlertSoundType,
+  geigerSoundType: AlertSoundType,
   controlId: string,
   batteryConfig: DerivedBatteryConfig | null,
 ) {
-  const mid =
-    Math.round(((dialConfig.min + dialConfig.max) / 2) * (1 / dialConfig.step)) * dialConfig.step
+  const snap = (v: number) =>
+    Math.min(
+      dialConfig.max,
+      Math.max(dialConfig.min, Math.round(v / dialConfig.step) * dialConfig.step),
+    )
+  const high = snap(dialConfig.min + (dialConfig.max - dialConfig.min) * 0.75)
+
+  const preset = DEFAULT_ALERT_PRESETS[controlId]
+  if (preset) {
+    return {
+      tab: preset.tab,
+      threshold: snap(preset.threshold),
+      thresholdMax: preset.thresholdMax != null ? snap(preset.thresholdMax) : high,
+      soundType: preset.tab === 'geiger' ? geigerSoundType : defaultSoundType,
+      messageTemplate: getDefaultMessageTemplate(controlId, batteryConfig),
+    }
+  }
+
   return {
     tab: 'single' as AlertTab,
-    threshold: mid,
-    thresholdMax:
-      Math.round(
-        (dialConfig.min + (dialConfig.max - dialConfig.min) * 0.75) * (1 / dialConfig.step),
-      ) * dialConfig.step,
+    threshold: snap((dialConfig.min + dialConfig.max) / 2),
+    thresholdMax: high,
     soundType: defaultSoundType,
     messageTemplate: getDefaultMessageTemplate(controlId, batteryConfig),
   }
@@ -165,6 +194,7 @@ export function AlertFormModal({
   const singlePresets = useMemo(() => getPresetsForCategory('single'), [])
   const geigerPresets = useMemo(() => getPresetsForCategory('geiger'), [])
   const defaultSoundType: AlertSoundType = singlePresets[0]?.uri ?? 'preset:beep'
+  const geigerDefaultSoundType: AlertSoundType = geigerPresets[0]?.uri ?? 'preset:beep'
 
   const [tab, setTab] = useState<AlertTab>('single')
   const [threshold, setThreshold] = useState(dialConfig.min)
@@ -178,7 +208,13 @@ export function AlertFormModal({
   if (visible && !prevVisible) {
     const defaults = editRule
       ? getEditFormDefaults(editRule, dialConfig, batteryConfig)
-      : getNewFormDefaults(dialConfig, defaultSoundType, controlId, batteryConfig)
+      : getNewFormDefaults(
+          dialConfig,
+          defaultSoundType,
+          geigerDefaultSoundType,
+          controlId,
+          batteryConfig,
+        )
     setTab(defaults.tab)
     setThreshold(defaults.threshold)
     setThresholdMax(defaults.thresholdMax)

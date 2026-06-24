@@ -94,7 +94,7 @@ export function BottomTelemetryStrip({ revealProgress }: BottomTelemetryStripPro
           <Pressable
             style={({ pressed }) => [styles.metricCell, pressed && styles.cellPressed]}
             android_ripple={interaction.ripple}
-            onPress={() => router.push(routes.controlTemperatures)}
+            onPress={() => router.push(routes.controlMotorTemp)}
             testID="telemetry-motor-temp-cell"
           >
             <Text style={styles.subLabel}>Motor</Text>
@@ -113,7 +113,7 @@ export function BottomTelemetryStrip({ revealProgress }: BottomTelemetryStripPro
           <Pressable
             style={({ pressed }) => [styles.metricCell, pressed && styles.cellPressed]}
             android_ripple={interaction.ripple}
-            onPress={() => router.push(routes.controlTemperatures)}
+            onPress={() => router.push(routes.controlControllerTemp)}
             testID="telemetry-controller-temp-cell"
           >
             <Text style={styles.subLabel}>Ctrl</Text>
@@ -132,7 +132,7 @@ export function BottomTelemetryStrip({ revealProgress }: BottomTelemetryStripPro
           <Pressable
             style={({ pressed }) => [styles.metricCell, pressed && styles.cellPressed]}
             android_ripple={interaction.ripple}
-            onPress={() => router.push(routes.controlCurrents)}
+            onPress={() => router.push(routes.controlMotorCurrent)}
             testID="telemetry-motor-current-cell"
           >
             <Text style={styles.subLabel}>Motor</Text>
@@ -151,7 +151,7 @@ export function BottomTelemetryStrip({ revealProgress }: BottomTelemetryStripPro
           <Pressable
             style={({ pressed }) => [styles.metricCell, pressed && styles.cellPressed]}
             android_ripple={interaction.ripple}
-            onPress={() => router.push(routes.controlCurrents)}
+            onPress={() => router.push(routes.controlBatteryCurrent)}
             testID="telemetry-battery-current-cell"
           >
             <Text style={styles.subLabel}>Batt</Text>

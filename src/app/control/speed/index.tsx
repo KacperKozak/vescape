@@ -19,8 +19,12 @@ export default function SpeedScreen() {
   const excludedRanges = useLiveExcludedRanges('avg_speed', 'max_speed')
 
   return (
-    <ControlDetailLayout title={cfg.label} controlId={cfg.controlId} unit={cfg.unit}>
-      <MetricDetailGauge metric={cfg} value={liveTelemetryRuntime.values.speedKmh} />
+    <ControlDetailLayout
+      title={cfg.label}
+      controlId={cfg.controlId}
+      unit={cfg.unit}
+      gauge={<MetricDetailGauge metric={cfg} value={liveTelemetryRuntime.values.speedKmh} />}
+    >
       <MetricDetailChart
         metric={cfg}
         points={points}
