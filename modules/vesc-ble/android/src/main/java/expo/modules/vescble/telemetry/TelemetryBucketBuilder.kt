@@ -75,6 +75,8 @@ private class MutableBucket(
   private var sumAbsSpeedCentiKmh = 0L
   private var movingSpeedSampleCount = 0
   private var sumMovingAbsSpeedCentiKmh = 0L
+  private var firstMovingAtMs: Long? = null
+  private var lastMovingAtMs: Long? = null
   private var maxAbsSpeedCentiKmh = 0
   private var minBatteryVoltageMv: Int? = null
   private var maxMotorCurrentAbsMa = 0
@@ -105,6 +107,8 @@ private class MutableBucket(
     if (!point.excludedFromAvgSpeed) {
       movingSpeedSampleCount++
       sumMovingAbsSpeedCentiKmh += absSpeed.toLong()
+      firstMovingAtMs = minOf(firstMovingAtMs ?: point.capturedAtMs, point.capturedAtMs)
+      lastMovingAtMs = maxOf(lastMovingAtMs ?: point.capturedAtMs, point.capturedAtMs)
     }
     if (!point.excludedFromMaxSpeed) {
       maxAbsSpeedCentiKmh = maxOf(maxAbsSpeedCentiKmh, absSpeed)
@@ -184,5 +188,7 @@ private class MutableBucket(
     maxTempMotorDeciC = maxTempMotorDeciC,
     firstLatitudeE7 = firstLatitudeE7,
     firstLongitudeE7 = firstLongitudeE7,
+    firstMovingAtMs = firstMovingAtMs,
+    lastMovingAtMs = lastMovingAtMs,
   )
 }

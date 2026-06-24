@@ -17,6 +17,7 @@ import type { Icon } from 'phosphor-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import type { HistorySession } from '@/store/historyStore'
+import { rideDurationMs } from '@/lib/history/sessions'
 import { interaction, theme } from '@/constants/theme'
 
 interface HistoryStatsBarProps {
@@ -130,7 +131,7 @@ function sessionToStats(session: HistorySession | null): StatItem[] {
     {
       key: 'rideTime',
       label: 'Time',
-      value: session ? formatDuration(session.endAtMs - session.startAtMs) : '',
+      value: session ? formatDuration(rideDurationMs(session)) : '',
       icon: ClockCountdownIcon,
       accent: theme.target.color,
     },

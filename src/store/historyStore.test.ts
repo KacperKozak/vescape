@@ -273,6 +273,8 @@ test('loads a small GPS preview when selected ride has no bucket coordinate', as
     boundaryBefore: ride.boundaryBefore,
     startAtMs: ride.startAtMs,
     endAtMs: ride.endAtMs,
+    movingStartAtMs: ride.firstMovingAtMs,
+    movingEndAtMs: ride.lastMovingAtMs,
     blockIds: [ride.id],
     blockCount: 1,
     sampleCount: ride.sampleCount,

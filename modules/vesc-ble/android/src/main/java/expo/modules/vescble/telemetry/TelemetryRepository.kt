@@ -302,6 +302,8 @@ class TelemetryRepository private constructor(context: Context) {
         "batteryRegenWh" to bucket.batteryRegenWhMilli / 1000.0,
         "firstLatitude" to bucket.firstLatitudeE7?.let { it / 1e7 },
         "firstLongitude" to bucket.firstLongitudeE7?.let { it / 1e7 },
+        "firstMovingAtMs" to bucket.firstMovingAtMs,
+        "lastMovingAtMs" to bucket.lastMovingAtMs,
         "boundaryBefore" to (marker?.type ?: "none"),
         "boundaryMessage" to marker?.message,
         "gapBeforeMs" to marker?.gapMs,

@@ -1,7 +1,41 @@
 import { expect, test } from 'bun:test'
 
-import { groupHistorySessions } from './sessions'
+import { groupHistorySessions, rideDurationMs, rideMovingWindow } from './sessions'
 import { makeBlock as block } from '@/test-utils/factories'
+
+test('moving window spans the outermost moving samples across blocks', () => {
+  const sessions = groupHistorySessions([
+    block({
+      id: 'a',
+      startAtMs: 0,
+      endAtMs: 60_000,
+      firstMovingAtMs: 20_000,
+      lastMovingAtMs: 55_000,
+    }),
+    block({
+      id: 'b',
+      startAtMs: 60_000,
+      endAtMs: 120_000,
+      firstMovingAtMs: 61_000,
+      lastMovingAtMs: 90_000,
+    }),
+  ])
+
+  expect(rideMovingWindow(sessions[0])).toEqual({ startMs: 20_000, endMs: 90_000 })
+  // Time is the riding span (ends trimmed), not the 0–120s wall-clock span.
+  expect(rideDurationMs(sessions[0])).toBe(70_000)
+})
+
+test('rideDurationMs falls back to wall-clock when no moving window exists', () => {
+  const session = {
+    movingStartAtMs: null,
+    movingEndAtMs: null,
+    startAtMs: 1_000,
+    endAtMs: 61_000,
+  }
+  expect(rideMovingWindow(session)).toBeNull()
+  expect(rideDurationMs(session)).toBe(60_000)
+})
 
 test('combines same-device adjacent blocks under 10 min gap', () => {
   const sessions = groupHistorySessions([
@@ -148,7 +182,7 @@ test('avg speed excludes samples below moving speed threshold when available', (
   expect(sessions[0].avgSpeedKmh).toBe(14)
 })
 
-test('avg speed is zero when moving speed stats exist but no sample is moving', () => {
+test('drops a session with no moving samples (board on but never ridden)', () => {
   const sessions = groupHistorySessions([
     block({
       avgSpeedKmh: 0,
@@ -157,7 +191,23 @@ test('avg speed is zero when moving speed stats exist but no sample is moving', 
     }),
   ])
 
-  expect(sessions[0].avgSpeedKmh).toBe(0)
+  expect(sessions).toHaveLength(0)
+})
+
+test('keeps legacy sessions whose moving count was never computed', () => {
+  // Legacy buckets bridge avgSpeedSampleCount = sampleCount (> 0), so they must stay visible.
+  const sessions = groupHistorySessions([
+    block({
+      avgSpeedKmh: 12,
+      avgSpeedSampleCount: 10,
+      sampleCount: 10,
+      firstMovingAtMs: null,
+      lastMovingAtMs: null,
+    }),
+  ])
+
+  expect(sessions).toHaveLength(1)
+  expect(sessions[0].movingStartAtMs).toBeNull()
 })
 
 test('returns newest-first sessions', () => {

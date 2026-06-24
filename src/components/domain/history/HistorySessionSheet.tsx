@@ -16,6 +16,7 @@ import Svg, { Circle, Polyline } from 'react-native-svg'
 
 import { interaction, theme } from '@/constants/theme'
 import { telemetry } from '@/constants/telemetry'
+import { rideDurationMs } from '@/lib/history/sessions'
 import type { HistorySession, TelemetryMinuteBucket } from '@/store/historyStore'
 
 interface HistorySessionSheetProps {
@@ -120,7 +121,7 @@ export function HistorySessionSheet({
                       {session.deviceName}
                     </Text>
                     <Text style={styles.rowMeta}>
-                      {formatDuration(session.endAtMs - session.startAtMs)} ·{' '}
+                      {formatDuration(rideDurationMs(session))} ·{' '}
                       {formatDistance(session.distanceM)} ·{' '}
                       {telemetry.speed.formatWithUnit(session.maxSpeedKmh)} · GPS{' '}
                       {session.gpsPointCount}

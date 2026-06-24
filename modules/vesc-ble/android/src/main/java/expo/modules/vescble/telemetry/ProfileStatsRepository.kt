@@ -76,6 +76,8 @@ private data class ProfileSessionAggregate(
   var sampleCount: Int,
   var avgSpeedSampleCount: Int,
   var avgSpeedWeightedSum: Double,
+  var movingStartAtMs: Long?,
+  var movingEndAtMs: Long?,
   var distanceM: Double?,
   var topSpeedKmh: Double,
   var batteryUsedWh: Double,
@@ -88,7 +90,7 @@ internal fun computeProfileStatsForBuckets(
   month: ProfileStatsMonth?,
   zoneId: ZoneId = ZoneId.systemDefault(),
 ): Map<String, Any?> {
-  val sessions = groupProfileSessions(buckets, markers)
+  val sessions = groupProfileSessions(buckets, markers).filter { it.avgSpeedSampleCount > 0 }
   val included = if (month == null) {
     sessions
   } else {
@@ -107,7 +109,12 @@ internal fun computeProfileStatsForBuckets(
     )
   }
 
-  val totalDurationMs = included.sumOf { (it.endAtMs - it.startAtMs).coerceAtLeast(0L) }
+  val totalDurationMs = included.sumOf { session ->
+    val start = session.movingStartAtMs
+    val end = session.movingEndAtMs
+    val span = if (start != null && end != null) end - start else session.endAtMs - session.startAtMs
+    span.coerceAtLeast(0L)
+  }
   val totalDistanceM = included.mapNotNull { it.distanceM }.takeIf { it.isNotEmpty() }?.sum()
   val avgSpeedSamples = included.sumOf { it.avgSpeedSampleCount }
   val avgSpeedKmh = if (avgSpeedSamples > 0) {
@@ -134,6 +141,7 @@ internal fun computeProfileStatMonthsForBuckets(
   zoneId: ZoneId = ZoneId.systemDefault(),
 ): List<ProfileStatsMonth> {
   return groupProfileSessions(buckets, markers)
+    .filter { it.avgSpeedSampleCount > 0 }
     .map { profileMonth(it.startAtMs, zoneId) }
     .distinct()
     .sortedWith(compareByDescending<ProfileStatsMonth> { it.year }.thenByDescending { it.month })
@@ -165,6 +173,8 @@ private fun groupProfileSessions(
         sampleCount = 0,
         avgSpeedSampleCount = 0,
         avgSpeedWeightedSum = 0.0,
+        movingStartAtMs = null,
+        movingEndAtMs = null,
         distanceM = null,
         topSpeedKmh = 0.0,
         batteryUsedWh = 0.0,
@@ -210,6 +220,12 @@ private fun mergeBucketIntoSession(
   } else {
     session.avgSpeedSampleCount += bucket.sampleCount
     session.avgSpeedWeightedSum += bucket.sumAbsSpeedCentiKmh.toDouble() / 100.0
+  }
+  bucket.firstMovingAtMs?.let { first ->
+    session.movingStartAtMs = session.movingStartAtMs?.let { minOf(it, first) } ?: first
+  }
+  bucket.lastMovingAtMs?.let { last ->
+    session.movingEndAtMs = session.movingEndAtMs?.let { maxOf(it, last) } ?: last
   }
   session.topSpeedKmh = maxOf(session.topSpeedKmh, bucket.maxAbsSpeedCentiKmh / 100.0)
   session.batteryUsedWh += bucket.batteryUsedWhMilli / 1000.0

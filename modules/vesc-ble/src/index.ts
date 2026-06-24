@@ -339,6 +339,8 @@ export interface TelemetryMinuteBucket {
   batteryRegenWh: number
   firstLatitude: number | null
   firstLongitude: number | null
+  firstMovingAtMs: number | null
+  lastMovingAtMs: number | null
   boundaryBefore:
     | 'none'
     | 'connected'

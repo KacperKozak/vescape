@@ -17,6 +17,8 @@ function session(id: string, startAtMs: number): HistorySession {
     deviceName: 'ADV',
     startAtMs,
     endAtMs: startAtMs + 60_000,
+    movingStartAtMs: startAtMs,
+    movingEndAtMs: startAtMs + 60_000,
     blockIds: [id],
     blockCount: 1,
     distanceM: 1200,

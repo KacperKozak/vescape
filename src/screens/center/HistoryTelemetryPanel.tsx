@@ -35,12 +35,15 @@ import {
   type HistoryMetricKey,
 } from '@/lib/history/metricColorScale'
 import { downsampleTimeSeries, findNearestSampleIndexByTime } from '@/lib/history/playback'
+import { RIDE_TRIM_PADDING_MS, rideMovingWindow } from '@/lib/history/sessions'
 import { useHistoryStore, type TelemetrySample } from '@/store/historyStore'
 import { useSettingsStore } from '@/store/settingsStore'
 
 interface HistoryTelemetryPanelProps {
   startAtMs: number | null
   endAtMs: number | null
+  movingStartAtMs: number | null
+  movingEndAtMs: number | null
   deviceName: string | null
   samples: TelemetrySample[]
   canPrevious: boolean
@@ -105,6 +108,8 @@ function formatRideMeta(
 export function HistoryTelemetryPanel({
   startAtMs,
   endAtMs,
+  movingStartAtMs,
+  movingEndAtMs,
   deviceName,
   samples,
   canPrevious,
@@ -131,16 +136,29 @@ export function HistoryTelemetryPanel({
     () => [...samples].sort((a, b) => a.capturedAtMs - b.capturedAtMs),
     [samples],
   )
+  // Trim leading/trailing idle to the Moving Window (± display padding). Falls back to the full
+  // sample range on legacy rides that have no precomputed window.
+  const visibleSamples = useMemo(() => {
+    const window = rideMovingWindow({ movingStartAtMs, movingEndAtMs })
+    if (!window) return sortedSamples
+    const lo = window.startMs - RIDE_TRIM_PADDING_MS
+    const hi = window.endMs + RIDE_TRIM_PADDING_MS
+    const trimmed = sortedSamples.filter((s) => s.capturedAtMs >= lo && s.capturedAtMs <= hi)
+    return trimmed.length > 0 ? trimmed : sortedSamples
+  }, [sortedSamples, movingStartAtMs, movingEndAtMs])
+  const rideWindow = rideMovingWindow({ movingStartAtMs, movingEndAtMs })
+  const titleStartMs = rideWindow?.startMs ?? startAtMs
+  const titleEndMs = rideWindow?.endMs ?? endAtMs
   const chartSamples = useMemo(
-    () => downsampleTimeSeries(sortedSamples, CHART_MAX_POINTS, (sample) => sample.capturedAtMs),
-    [sortedSamples],
+    () => downsampleTimeSeries(visibleSamples, CHART_MAX_POINTS, (sample) => sample.capturedAtMs),
+    [visibleSamples],
   )
 
   const headSample = useMemo(() => {
-    if (headTimeMs == null) return sortedSamples.at(-1) ?? null
-    const idx = findNearestSampleIndexByTime(sortedSamples, headTimeMs)
-    return idx >= 0 ? sortedSamples[idx] : (sortedSamples.at(-1) ?? null)
-  }, [sortedSamples, headTimeMs])
+    if (headTimeMs == null) return visibleSamples.at(-1) ?? null
+    const idx = findNearestSampleIndexByTime(visibleSamples, headTimeMs)
+    return idx >= 0 ? visibleSamples[idx] : (visibleSamples.at(-1) ?? null)
+  }, [visibleSamples, headTimeMs])
 
   const speedPoints = useMemo<TelemetryChartPoint[]>(
     () => chartSamples.map((s) => ({ date: new Date(s.capturedAtMs), value: s.speedKmh })),
@@ -348,7 +366,7 @@ export function HistoryTelemetryPanel({
     [sessionExclusions],
   )
 
-  const hasChartData = headSample != null && sortedSamples.length >= 2
+  const hasChartData = headSample != null && visibleSamples.length >= 2
 
   useEffect(
     () => () => {
@@ -531,10 +549,10 @@ export function HistoryTelemetryPanel({
           >
             <View style={styles.titleContent}>
               <Text style={styles.titleTime} numberOfLines={1}>
-                {formatRideTitle(startAtMs, endAtMs)}
+                {formatRideTitle(titleStartMs, titleEndMs)}
               </Text>
               <Text style={styles.titleMeta} numberOfLines={1}>
-                {formatRideMeta(startAtMs, endAtMs, deviceName)}
+                {formatRideMeta(titleStartMs, titleEndMs, deviceName)}
               </Text>
             </View>
             <CaretDownIcon size={12} color={theme.neutral.textSecondary} weight="bold" />

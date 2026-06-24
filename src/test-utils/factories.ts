@@ -25,6 +25,8 @@ const BLOCK_DEFAULTS: TelemetryMinuteBucket = {
   maxTempMotor: null,
   firstLatitude: null,
   firstLongitude: null,
+  firstMovingAtMs: 0,
+  lastMovingAtMs: 60_000,
   boundaryBefore: 'none',
   boundaryMessage: null,
   gapBeforeMs: null,
@@ -42,6 +44,8 @@ export function makeBlock(overrides: Partial<TelemetryMinuteBucket> = {}): Telem
     startAtMs,
     endAtMs,
     bucketStartMs: overrides.bucketStartMs ?? startAtMs,
+    firstMovingAtMs: 'firstMovingAtMs' in overrides ? overrides.firstMovingAtMs! : startAtMs,
+    lastMovingAtMs: 'lastMovingAtMs' in overrides ? overrides.lastMovingAtMs! : endAtMs,
   }
 }
 

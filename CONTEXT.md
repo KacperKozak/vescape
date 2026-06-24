@@ -64,6 +64,10 @@ _Avoid_: Playback, logs
 A map-visible point in Ride History that explains a ride boundary, connection loss, interruption, or notable recording condition.
 _Avoid_: Telemetry marker, debug marker, log point
 
+**Moving Window**:
+The span of a Ride Recording from its first to its last moving Telemetry Sample — the part the rider treats as actual riding. A Telemetry Sample counts as moving when it is not excluded from speed metrics (so low-speed and free-spin samples do not count). Leading and trailing non-moving spans fall outside the Moving Window; internal stops (photos, cooldown) stay inside it. Drives history-timeline trimming and the moving ride time shown in stats. A Ride Recording with no moving samples has no Moving Window and is not shown in Ride History; legacy recordings with an unknown Moving Window fall back to their full wall-clock span.
+_Avoid_: Trim range, active range, ride duration
+
 **Media History Asset**:
 A phone photo or video whose capture time falls inside a selected Ride Recording and which can be placed using a nearby recording-backed GPS fix. The asset remains owned by the OS photo library and is never copied into Ride History.
 _Avoid_: Ride photo, recording media, uploaded media
@@ -119,6 +123,7 @@ _Avoid_: Error log, debug session, crash report
 - A **Map Point** is placed by the user on the live map and does not belong to **Ride Recording** or **Ride History**.
 - A **Privacy Zone** limits what **Ride Recording** data is retained without changing **Live State**.
 - A **Ride Recording** becomes part of **Ride History**.
+- A **Moving Window** belongs to one **Ride Recording** and is derived from which **Telemetry Samples** are excluded from speed metrics; a Ride Recording without one is excluded from **Ride History**.
 - A **Ride History Marker** belongs to **Ride History** and may explain where a **Ride Recording** lost or regained board data.
 - A **Media History Asset** is a local-only view of an OS photo-library asset matched to one selected **Ride Recording** by capture time and placed from a nearby recording-backed **GPS Fix**.
 - A **Tune Snapshot** belongs to the currently connected **Board** and is read-only.

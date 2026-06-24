@@ -1,6 +1,7 @@
 package expo.modules.vescble.telemetry
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class TelemetryBucketBuilderTest {
@@ -193,6 +194,35 @@ class TelemetryBucketBuilderTest {
 
     assertEquals(2, bucket.movingSpeedSampleCount)
     assertEquals(1_700L, bucket.sumMovingAbsSpeedCentiKmh)
+    // Moving Window spans only the non-excluded samples (1_000–2_000), not the leading excluded one.
+    assertEquals(1_000L, bucket.firstMovingAtMs)
+    assertEquals(2_000L, bucket.lastMovingAtMs)
+  }
+
+  @Test
+  fun leavesMovingWindowNullWhenNoSampleIsMoving() {
+    val bucket = buildTelemetryBuckets(
+      telemetryPoints = listOf(
+        BucketTelemetryPoint(
+          capturedAtMs = 0L,
+          deviceId = "board-1",
+          deviceName = "ADV2",
+          speedCentiKmh = 100,
+          batteryVoltageMv = 70_000,
+          motorCurrentMa = 0,
+          batteryCurrentMa = 0,
+          dutyPermille = 0,
+          hasFault = false,
+          odometerCm = null,
+          excludedFromAvgSpeed = true,
+        ),
+      ),
+      locationPoints = emptyList(),
+    ).single()
+
+    assertEquals(0, bucket.movingSpeedSampleCount)
+    assertNull(bucket.firstMovingAtMs)
+    assertNull(bucket.lastMovingAtMs)
   }
 
   @Test

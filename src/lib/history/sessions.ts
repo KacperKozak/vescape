@@ -3,12 +3,18 @@ import type { TelemetryMinuteBucket } from 'vesc-ble'
 const DEFAULT_GAP_MS = 10 * 60_000
 const SESSION_BREAK_BOUNDARIES = new Set(['disconnected', 'app_stop', 'error'])
 
+/** Display breathing room kept on each side of the Moving Window so the stop/start transition stays visible. */
+export const RIDE_TRIM_PADDING_MS = 5_000
+
 export interface HistorySession {
   id: string
   deviceId: string | null
   deviceName: string
   startAtMs: number
   endAtMs: number
+  /** First/last moving Telemetry Sample across the session — the Moving Window. Null on legacy data. */
+  movingStartAtMs: number | null
+  movingEndAtMs: number | null
   blockIds: string[]
   blockCount: number
   sampleCount: number
@@ -40,6 +46,8 @@ interface MutableSessionAggregate {
   boundaryBefore: TelemetryMinuteBucket['boundaryBefore']
   startAtMs: number
   endAtMs: number
+  movingStartAtMs: number | null
+  movingEndAtMs: number | null
   blockIds: string[]
   blockCount: number
   sampleCount: number
@@ -97,7 +105,30 @@ export function groupHistorySessions(
 
   if (current) sessions.push(current)
 
-  return sessions.map(finalizeSession).sort((a, b) => b.startAtMs - a.startAtMs)
+  return sessions
+    .filter((session) => session.avgSpeedSampleCount > 0)
+    .map(finalizeSession)
+    .sort((a, b) => b.startAtMs - a.startAtMs)
+}
+
+/**
+ * The Moving Window of a ride: first→last moving sample. Null when no moving samples were
+ * recorded (legacy data with no precomputed window, or a non-ride that was filtered out).
+ */
+export function rideMovingWindow(
+  session: Pick<HistorySession, 'movingStartAtMs' | 'movingEndAtMs'>,
+): { startMs: number; endMs: number } | null {
+  if (session.movingStartAtMs == null || session.movingEndAtMs == null) return null
+  return { startMs: session.movingStartAtMs, endMs: session.movingEndAtMs }
+}
+
+/** Riding span shown as ride Time: Moving Window duration, or full wall-clock span on legacy data. */
+export function rideDurationMs(
+  session: Pick<HistorySession, 'movingStartAtMs' | 'movingEndAtMs' | 'startAtMs' | 'endAtMs'>,
+): number {
+  const window = rideMovingWindow(session)
+  if (window) return window.endMs - window.startMs
+  return session.endAtMs - session.startAtMs
 }
 
 function createAggregate(block: TelemetryMinuteBucket): MutableSessionAggregate {
@@ -107,6 +138,8 @@ function createAggregate(block: TelemetryMinuteBucket): MutableSessionAggregate 
     boundaryBefore: block.boundaryBefore,
     startAtMs: block.startAtMs,
     endAtMs: block.endAtMs,
+    movingStartAtMs: null,
+    movingEndAtMs: null,
     blockIds: [],
     blockCount: 0,
     sampleCount: 0,
@@ -145,6 +178,18 @@ function mergeBlockIntoAggregate(
 ): void {
   session.startAtMs = Math.min(session.startAtMs, block.startAtMs)
   session.endAtMs = Math.max(session.endAtMs, block.endAtMs)
+  if (block.firstMovingAtMs != null) {
+    session.movingStartAtMs =
+      session.movingStartAtMs == null
+        ? block.firstMovingAtMs
+        : Math.min(session.movingStartAtMs, block.firstMovingAtMs)
+  }
+  if (block.lastMovingAtMs != null) {
+    session.movingEndAtMs =
+      session.movingEndAtMs == null
+        ? block.lastMovingAtMs
+        : Math.max(session.movingEndAtMs, block.lastMovingAtMs)
+  }
   session.blockIds.push(block.id)
   session.blockCount += 1
   session.sampleCount += block.sampleCount
@@ -230,6 +275,8 @@ function finalizeSession(session: MutableSessionAggregate): HistorySession {
     deviceName: session.deviceName,
     startAtMs: session.startAtMs,
     endAtMs: session.endAtMs,
+    movingStartAtMs: session.movingStartAtMs,
+    movingEndAtMs: session.movingEndAtMs,
     blockIds: session.blockIds,
     blockCount: session.blockCount,
     sampleCount: session.sampleCount,

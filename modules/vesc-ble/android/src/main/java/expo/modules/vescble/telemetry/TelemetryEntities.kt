@@ -165,6 +165,10 @@ data class TelemetryMinuteBucketEntity(
   val firstLatitudeE7: Int? = null,
   @ColumnInfo(name = "first_longitude_e7")
   val firstLongitudeE7: Int? = null,
+  @ColumnInfo(name = "first_moving_at_ms")
+  val firstMovingAtMs: Long? = null,
+  @ColumnInfo(name = "last_moving_at_ms")
+  val lastMovingAtMs: Long? = null,
 )
 
 @Entity(

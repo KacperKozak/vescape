@@ -773,6 +773,8 @@ export function CenterOverlays({
           <HistoryTelemetryPanel
             startAtMs={history.selectedSession.startAtMs}
             endAtMs={history.selectedSession.endAtMs}
+            movingStartAtMs={history.selectedSession.movingStartAtMs}
+            movingEndAtMs={history.selectedSession.movingEndAtMs}
             deviceName={history.selectedSession.deviceName}
             samples={history.sessionSamples}
             canPrevious={history.canPreviousRide}
@@ -812,6 +814,8 @@ export function CenterOverlays({
           <HistoryTelemetryPanel
             startAtMs={null}
             endAtMs={null}
+            movingStartAtMs={null}
+            movingEndAtMs={null}
             deviceName={null}
             samples={[]}
             canPrevious={false}

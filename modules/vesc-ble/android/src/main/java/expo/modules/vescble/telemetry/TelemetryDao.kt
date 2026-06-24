@@ -547,6 +547,8 @@ private fun TelemetryMinuteBucketEntity.merge(next: TelemetryMinuteBucketEntity)
       next.firstLongitudeE7 != null -> next.firstLongitudeE7
       else -> firstLongitudeE7
     },
+    firstMovingAtMs = mergeNullableMin(firstMovingAtMs, next.firstMovingAtMs),
+    lastMovingAtMs = mergeNullableMax(lastMovingAtMs, next.lastMovingAtMs),
   )
 }
 
@@ -558,4 +560,16 @@ private fun mergeNullableSums(a: Int?, b: Int?): Int? {
 private fun mergeNullableSums(a: Long?, b: Long?): Long? {
   if (a == null && b == null) return null
   return (a ?: 0L) + (b ?: 0L)
+}
+
+private fun mergeNullableMin(a: Long?, b: Long?): Long? {
+  if (a == null) return b
+  if (b == null) return a
+  return minOf(a, b)
+}
+
+private fun mergeNullableMax(a: Long?, b: Long?): Long? {
+  if (a == null) return b
+  if (b == null) return a
+  return maxOf(a, b)
 }

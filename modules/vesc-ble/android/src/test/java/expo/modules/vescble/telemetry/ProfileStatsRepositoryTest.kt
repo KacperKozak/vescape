@@ -70,6 +70,33 @@ class ProfileStatsRepositoryTest {
     assertEquals(listOf(ProfileStatsMonth(2024, 6), ProfileStatsMonth(2024, 5)), months)
   }
 
+  @Test
+  fun hidesSessionsWithNoMovingSamples() {
+    val buckets = listOf(
+      bucket(start = 1_714_521_600_000L, end = 1_714_521_660_000L, firstOdo = 0L, lastOdo = 0L, avgSpeedSamples = 0, avgSpeedSum = 0L),
+    )
+
+    val result = computeProfileStatsForBuckets(buckets, emptyList(), month = null, zoneId = utc)
+
+    assertEquals(0, result["rideCount"])
+    assertEquals(0L, result["rideTimeMs"])
+    assertEquals(emptyList<ProfileStatsMonth>(), computeProfileStatMonthsForBuckets(buckets, emptyList(), zoneId = utc))
+  }
+
+  @Test
+  fun rideTimeUsesMovingWindowNotWallClock() {
+    // 120s wall-clock, but movement only spans 30s → ride time is the Moving Window.
+    val buckets = listOf(
+      bucket(start = 1_714_521_600_000L, end = 1_714_521_660_000L, firstOdo = 0L, lastOdo = 5_000L, avgSpeedSamples = 1, firstMoving = 1_714_521_630_000L, lastMoving = 1_714_521_660_000L),
+      bucket(start = 1_714_521_660_001L, end = 1_714_521_720_000L, firstOdo = 5_000L, lastOdo = 6_000L, avgSpeedSamples = 0, avgSpeedSum = 0L),
+    )
+
+    val result = computeProfileStatsForBuckets(buckets, emptyList(), month = null, zoneId = utc)
+
+    assertEquals(1, result["rideCount"])
+    assertEquals(30_000L, result["rideTimeMs"])
+  }
+
   private fun bucket(
     start: Long,
     end: Long,
@@ -81,6 +108,8 @@ class ProfileStatsRepositoryTest {
     avgSpeedSum: Long? = avgSpeed.toLong(),
     used: Long = 0L,
     regen: Long = 0L,
+    firstMoving: Long? = null,
+    lastMoving: Long? = null,
   ) = TelemetryMinuteBucketEntity(
     bucketStartMs = start - (start % TELEMETRY_BUCKET_SIZE_MS),
     deviceId = "board-1",
@@ -105,5 +134,7 @@ class ProfileStatsRepositoryTest {
     preciseGpsPointCount = 0,
     gpsDistanceCm = 999_999L,
     maxGpsSpeedCentiMps = 9_999,
+    firstMovingAtMs = firstMoving,
+    lastMovingAtMs = lastMoving,
   )
 }
