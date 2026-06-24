@@ -17,7 +17,7 @@ class RemoteTiltControllerTest {
     RemoteTiltController(
       scheduler = scheduler,
       transport = { transport },
-      send = { sent.add(it); true },
+      send = { payload, _ -> sent.add(payload); true },
     )
 
   private fun tilt(value: Int) = buildRemoteTiltCommand(BoardTransport.Direct, value)

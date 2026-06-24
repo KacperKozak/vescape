@@ -313,7 +313,7 @@ class VescForegroundService : Service() {
         transport = {
             if (boardStatus == BoardPhase.Connected && boardConfig != null) currentBoardTransport() else null
         },
-        send = ::sendPayload,
+        send = { payload, urgent -> gattClient.sendRemoteTilt(payload, urgent) },
     )
     private val notificationController by lazy {
         VescNotificationController(

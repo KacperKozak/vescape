@@ -39,12 +39,13 @@ internal data class RemoteTiltDecayProgress(
  *
  * @param transport supplies the active transport only while a tilt stream is
  *   allowed (board connected with a loaded config); `null` otherwise.
- * @param send writes a framed payload to the board, returning whether it was sent.
+ * @param send writes a framed payload to the board. `urgent` means neutral cancel
+ *   input, which must pass normal traffic at the next write boundary.
  */
 internal class RemoteTiltController(
     private val scheduler: Scheduler,
     private val transport: () -> BoardTransport?,
-    private val send: (ByteArray) -> Boolean,
+    private val send: (payload: ByteArray, urgent: Boolean) -> Boolean,
 ) {
     /** The tilt currently being streamed, as a function of elapsed ticks. */
     private sealed interface Stream {
@@ -140,7 +141,7 @@ internal class RemoteTiltController(
 
         // Snap to neutral so the board releases tilt immediately instead of
         // waiting for its ~1s remote-input timeout.
-        transport()?.let { send(buildRemoteTiltCommand(it, REMOTE_TILT_CENTER)) }
+        transport()?.let { send(buildRemoteTiltCommand(it, REMOTE_TILT_CENTER), true) }
         return wasActive
     }
 
@@ -154,7 +155,7 @@ internal class RemoteTiltController(
         tick = 0
         if (alreadyStreaming) return true
 
-        val sent = send(buildRemoteTiltCommand(transport, next.valueAt(0)))
+        val sent = send(buildRemoteTiltCommand(transport, next.valueAt(0)), false)
         scheduleRepeat()
         return sent
     }
@@ -168,7 +169,7 @@ internal class RemoteTiltController(
                 return@postDelayed
             }
             tick += 1
-            send(buildRemoteTiltCommand(transport, stream.valueAt(tick)))
+            send(buildRemoteTiltCommand(transport, stream.valueAt(tick)), false)
             if (stream.finished(tick)) {
                 clear()
                 return@postDelayed
