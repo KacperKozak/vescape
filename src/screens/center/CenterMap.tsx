@@ -13,7 +13,6 @@ import {
   ClockCountdownIcon,
   CrosshairSimpleIcon,
   LinkBreakIcon,
-  MapPinIcon,
   PlugsConnectedIcon,
   StopIcon,
   WarningCircleIcon,
@@ -29,6 +28,11 @@ import {
   type ElementRef,
 } from 'react'
 import { Animated, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
+import Reanimated, {
+  makeMutable,
+  useAnimatedStyle,
+  type SharedValue,
+} from 'react-native-reanimated'
 import type { LocationEvent, MapPoint, MapPointKind } from 'vesc-ble'
 
 import { InfoModal } from '@/components/ui/modals/InfoModal'
@@ -152,6 +156,18 @@ export interface OffscreenMapIndicatorState {
   color: string
   textColor: string
   icon: Icon
+  x: SharedValue<number>
+  y: SharedValue<number>
+  angleDeg: SharedValue<number>
+}
+
+interface OffscreenMapIndicatorDraft {
+  id: string
+  type: 'gps' | 'direction' | 'mapPoint'
+  coordinate: [number, number]
+  color: string
+  textColor: string
+  icon: Icon
   x: number
   y: number
   angleDeg: number
@@ -219,30 +235,33 @@ function smoothHeadingStep(current: number, target: number, elapsedMs: number): 
   return normalizeHeading(current + delta * alpha)
 }
 
-function nearlySameIndicator(
+function sameIndicatorIdentity(
   current: OffscreenMapIndicatorState[],
-  next: OffscreenMapIndicatorState[],
+  next: OffscreenMapIndicatorDraft[],
 ) {
   if (current.length !== next.length) return false
   return next.every((nextIndicator, index) => {
     const currentIndicator = current[index]
     return (
       currentIndicator?.id === nextIndicator.id &&
-      Math.abs(currentIndicator.x - nextIndicator.x) < 0.5 &&
-      Math.abs(currentIndicator.y - nextIndicator.y) < 0.5 &&
-      Math.abs(currentIndicator.angleDeg - nextIndicator.angleDeg) < 0.5
+      currentIndicator.type === nextIndicator.type &&
+      currentIndicator.coordinate[0] === nextIndicator.coordinate[0] &&
+      currentIndicator.coordinate[1] === nextIndicator.coordinate[1] &&
+      currentIndicator.color === nextIndicator.color &&
+      currentIndicator.textColor === nextIndicator.textColor &&
+      currentIndicator.icon === nextIndicator.icon
     )
   })
 }
 
 function clampedEdgeIndicator(
   trackedPoint: Pick<
-    OffscreenMapIndicatorState,
+    OffscreenMapIndicatorDraft,
     'id' | 'type' | 'coordinate' | 'color' | 'textColor' | 'icon'
   >,
   point: { x: number; y: number },
   layout: MapLayout,
-): OffscreenMapIndicatorState | null {
+): OffscreenMapIndicatorDraft | null {
   if (
     !isPointOutsideVisibleMapArea(point, layout, {
       top: OFFSCREEN_GPS_EDGE_TOP_INSET,
@@ -327,7 +346,36 @@ function repositionOffscreenMapIndicators(
     const positioned = clampedEdgeIndicator(indicator, point, layout)
     return positioned ? [positioned] : []
   })
-  return nearlySameIndicator(current, next) ? current : next
+  return applyOffscreenIndicatorDrafts(current, next)
+}
+
+function createOffscreenMapIndicatorState(
+  draft: OffscreenMapIndicatorDraft,
+): OffscreenMapIndicatorState {
+  return {
+    ...draft,
+    x: makeMutable(draft.x),
+    y: makeMutable(draft.y),
+    angleDeg: makeMutable(draft.angleDeg),
+  }
+}
+
+function applyOffscreenIndicatorDrafts(
+  current: OffscreenMapIndicatorState[],
+  next: OffscreenMapIndicatorDraft[],
+): OffscreenMapIndicatorState[] {
+  if (!sameIndicatorIdentity(current, next)) {
+    return next.map(createOffscreenMapIndicatorState)
+  }
+
+  for (let index = 0; index < next.length; index += 1) {
+    const currentIndicator = current[index]
+    const nextIndicator = next[index]
+    currentIndicator.x.value = nextIndicator.x
+    currentIndicator.y.value = nextIndicator.y
+    currentIndicator.angleDeg.value = nextIndicator.angleDeg
+  }
+  return current
 }
 
 function usableCoordinate(location: { longitude: number; latitude: number } | null | undefined) {
@@ -366,42 +414,42 @@ export function OffscreenMapIndicator({
   onPress: () => void
 }) {
   const IconComponent = indicator.icon
+  const indicatorStyle = useAnimatedStyle(() => ({
+    left: indicator.x.value - OFFSCREEN_GPS_INDICATOR_SIZE / 2,
+    top: indicator.y.value - OFFSCREEN_GPS_INDICATOR_SIZE / 2,
+  }))
+  const arrowStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${indicator.angleDeg.value}deg` }],
+  }))
+
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={
-        indicator.type === 'gps'
-          ? 'Recenter map on current position'
-          : indicator.type === 'direction'
-            ? 'Show direction point'
-            : 'Show selected map point'
-      }
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.offscreenMapIndicator,
-        {
-          left: indicator.x - OFFSCREEN_GPS_INDICATOR_SIZE / 2,
-          top: indicator.y - OFFSCREEN_GPS_INDICATOR_SIZE / 2,
-        },
-        pressed && styles.offscreenMapIndicatorPressed,
-      ]}
-    >
-      <View
-        pointerEvents="none"
-        style={[
-          styles.offscreenMapArrowOrbit,
-          { transform: [{ rotate: `${indicator.angleDeg}deg` }] },
+    <Reanimated.View style={[styles.offscreenMapPosition, indicatorStyle]}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={
+          indicator.type === 'gps'
+            ? 'Recenter map on current position'
+            : indicator.type === 'direction'
+              ? 'Show direction point'
+              : 'Show selected map point'
+        }
+        onPress={onPress}
+        style={({ pressed }) => [
+          styles.offscreenMapIndicator,
+          pressed && styles.offscreenMapIndicatorPressed,
         ]}
       >
-        <ArrowUpIcon size={22} color={indicator.textColor} weight="bold" />
-      </View>
-      <View
-        pointerEvents="none"
-        style={[styles.offscreenMapIcon, { borderColor: indicator.color }]}
-      >
-        <IconComponent size={24} color={indicator.textColor} weight="bold" />
-      </View>
-    </Pressable>
+        <Reanimated.View pointerEvents="none" style={[styles.offscreenMapArrowOrbit, arrowStyle]}>
+          <ArrowUpIcon size={22} color={indicator.textColor} weight="bold" />
+        </Reanimated.View>
+        <View
+          pointerEvents="none"
+          style={[styles.offscreenMapIcon, { borderColor: indicator.color }]}
+        >
+          <IconComponent size={24} color={indicator.textColor} weight="bold" />
+        </View>
+      </Pressable>
+    </Reanimated.View>
   )
 }
 
@@ -1003,6 +1051,8 @@ function CenterMapLayers({
           id="center-direction-position"
           coordinate={[directionPoint.longitude, directionPoint.latitude]}
           color={DESTINATION_POINT_COLOR}
+          icon={getMapPointKindIcon(directionPoint.kind)}
+          iconColor={DESTINATION_POINT_TEXT_COLOR}
           onSelected={() => {
             onSuppressNextMapPress()
             onClearDirectionPoint()
@@ -1133,6 +1183,28 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
   const [offscreenMapIndicators, setOffscreenMapIndicators] = useState<
     OffscreenMapIndicatorState[]
   >([])
+  const offscreenMapIndicatorsRef = useRef<OffscreenMapIndicatorState[]>([])
+
+  const publishOffscreenMapIndicators = useCallback((next: OffscreenMapIndicatorState[]) => {
+    offscreenMapIndicatorsRef.current = next
+    setOffscreenMapIndicators(next)
+  }, [])
+
+  const applyOffscreenMapIndicatorDrafts = useCallback(
+    (drafts: OffscreenMapIndicatorDraft[]) => {
+      const current = offscreenMapIndicatorsRef.current
+      const next = applyOffscreenIndicatorDrafts(current, drafts)
+      if (next !== current) {
+        publishOffscreenMapIndicators(next)
+      }
+    },
+    [publishOffscreenMapIndicators],
+  )
+
+  const clearOffscreenMapIndicators = useCallback(() => {
+    if (offscreenMapIndicatorsRef.current.length === 0) return
+    publishOffscreenMapIndicators([])
+  }, [publishOffscreenMapIndicators])
 
   const gpsFix = liveLocations.at(-1) ?? null
   const previousGpsFix = liveLocations.at(-2) ?? null
@@ -1324,7 +1396,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
       mapLayout.height <= 0
     ) {
       offscreenProjectionRequestRef.current += 1
-      setOffscreenMapIndicators((current) => (current.length === 0 ? current : []))
+      clearOffscreenMapIndicators()
       return
     }
 
@@ -1354,7 +1426,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
               coordinate: [directionPoint.longitude, directionPoint.latitude] as [number, number],
               color: DESTINATION_POINT_COLOR,
               textColor: DESTINATION_POINT_TEXT_COLOR,
-              icon: MapPinIcon,
+              icon: getMapPointKindIcon('direction'),
             },
           ]
         : []),
@@ -1402,15 +1474,15 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
           const positionedIndicator = clampedEdgeIndicator(trackedPoint, positionedPoint, mapLayout)
           return [positionedIndicator ?? detectedIndicator]
         })
-        setOffscreenMapIndicators((current) =>
-          nearlySameIndicator(current, next) ? current : next,
-        )
+        applyOffscreenMapIndicatorDrafts(next)
       })
       .catch(() => {
         if (offscreenProjectionRequestRef.current !== requestId) return
-        setOffscreenMapIndicators((current) => (current.length === 0 ? current : []))
+        clearOffscreenMapIndicators()
       })
   }, [
+    applyOffscreenMapIndicatorDrafts,
+    clearOffscreenMapIndicators,
     currentCameraRef,
     directionPoint,
     historyActive,
@@ -1626,9 +1698,14 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
         pitch: state.properties.pitch,
       } satisfies CameraSnapshot
       currentCameraRef.current = camera
-      setOffscreenMapIndicators((current) =>
-        repositionOffscreenMapIndicators(current, camera, mapLayout),
+      const repositionedIndicators = repositionOffscreenMapIndicators(
+        offscreenMapIndicatorsRef.current,
+        camera,
+        mapLayout,
       )
+      if (repositionedIndicators !== offscreenMapIndicatorsRef.current) {
+        publishOffscreenMapIndicators(repositionedIndicators)
+      }
       const [targetLongitude, targetLatitude] = gpsCamera.centerCoordinate
       if (
         Math.abs(longitude - targetLongitude) < 0.0001 &&
@@ -1692,6 +1769,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
       onMapInteraction,
       perspectiveEnabled,
       phoneHeadingMode,
+      publishOffscreenMapIndicators,
       setFollowGps,
       setFollowZoomLevel,
       updateOffscreenMapIndicators,
@@ -1821,12 +1899,17 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
   },
   offscreenMapIndicator: {
-    position: 'absolute',
     width: OFFSCREEN_GPS_INDICATOR_SIZE,
     height: OFFSCREEN_GPS_INDICATOR_SIZE,
     zIndex: 6,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  offscreenMapPosition: {
+    position: 'absolute',
+    width: OFFSCREEN_GPS_INDICATOR_SIZE,
+    height: OFFSCREEN_GPS_INDICATOR_SIZE,
+    zIndex: 6,
   },
   offscreenMapIndicatorPressed: {
     opacity: 0.55,
