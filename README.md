@@ -179,3 +179,12 @@ PR base is always `dev` (`main` is reserved for production releases).
 - [VESC protocol](docs/vescProtocol.md)
 - [Refloat GET_ALLDATA layout](docs/refloatAlldata.md)
 - [Android BLE notes](docs/bleAndroid.md)
+
+## License
+
+Copyright (C) 2026 Kacper Kozak
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version. See [LICENSE](LICENSE) for details.
