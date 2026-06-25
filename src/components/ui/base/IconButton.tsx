@@ -15,6 +15,7 @@ const ICON_SIZES = { sm: 18, md: 21, lg: 22 } as const
 interface IconButtonProps {
   icon: Icon
   onPress: () => void
+  onLongPress?: () => void
   size?: keyof typeof SIZES
   disabled?: boolean
   destructive?: boolean
@@ -25,6 +26,7 @@ interface IconButtonProps {
 export function IconButton({
   icon: Icon,
   onPress,
+  onLongPress,
   size = 'sm',
   disabled = false,
   destructive = false,
@@ -48,6 +50,7 @@ export function IconButton({
       ]}
       android_ripple={interaction.ripple}
       onPress={onPress}
+      onLongPress={onLongPress}
       disabled={isDisabled}
     >
       {loading ? (

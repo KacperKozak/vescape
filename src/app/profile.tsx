@@ -4,8 +4,6 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import {
   BatteryChargingVerticalIcon,
   BatteryPlusVerticalIcon,
-  CaretLeftIcon,
-  CaretRightIcon,
   ClockCountdownIcon,
   GaugeIcon,
   PathIcon,
@@ -31,6 +29,7 @@ import {
   getAdjacentMonths,
   selectInitialMonth,
 } from '@/lib/profile/profileStats'
+import { PrevNextSelector } from '@/components/ui/controls/PrevNextSelector'
 import { Select, type SelectOption } from '@/components/ui/forms/Select'
 import { theme } from '@/constants/theme'
 
@@ -136,29 +135,24 @@ export default function ProfileScreen() {
           <Text style={styles.sectionTitle}>Monthly</Text>
           {monthLoading ? <ActivityIndicator size="small" color={theme.palette.sky.color} /> : null}
         </View>
-        <View style={styles.monthNav}>
-          <Pressable
-            style={[styles.navButton, !adjacent.previous && styles.navDisabled]}
-            onPress={() => adjacent.previous && void loadMonth(adjacent.previous)}
-            disabled={!adjacent.previous}
-          >
-            <CaretLeftIcon size={16} color={theme.palette.slate.textSecondary} weight="bold" />
-          </Pressable>
-          <Select
-            options={monthOptions}
-            value={selectedMonthValue}
-            onChange={handleMonthSelect}
-            placeholder="Select month"
-            style={styles.monthSelect}
-          />
-          <Pressable
-            style={[styles.navButton, !adjacent.next && styles.navDisabled]}
-            onPress={() => adjacent.next && void loadMonth(adjacent.next)}
-            disabled={!adjacent.next}
-          >
-            <CaretRightIcon size={16} color={theme.palette.slate.textSecondary} weight="bold" />
-          </Pressable>
-        </View>
+        <PrevNextSelector
+          label={formatMonthLabel(selectedMonth)}
+          previousDisabled={!adjacent.previous}
+          nextDisabled={!adjacent.next}
+          onPrevious={() => adjacent.previous && void loadMonth(adjacent.previous)}
+          onNext={() => adjacent.next && void loadMonth(adjacent.next)}
+          accessibilityLabel="Select profile month"
+          style={styles.monthNav}
+          selectControl={
+            <Select
+              options={monthOptions}
+              value={selectedMonthValue}
+              onChange={handleMonthSelect}
+              placeholder="Select month"
+              style={styles.monthSelect}
+            />
+          }
+        />
         <StatsGrid items={monthItems} />
 
         {loading ? (
@@ -306,26 +300,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   monthNav: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  navButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: theme.palette.slate.surface,
-    borderWidth: 1,
-    borderColor: theme.palette.slate.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  navDisabled: {
-    opacity: 0.35,
+    maxWidth: '100%',
+    width: '100%',
   },
   monthSelect: {
     flex: 1,
-    borderRadius: 20,
+    height: 54,
+    borderWidth: 0,
+    borderRadius: 0,
+    backgroundColor: theme.alpha(theme.palette.mono.black, 0),
   },
   loadingWrap: {
     padding: 18,

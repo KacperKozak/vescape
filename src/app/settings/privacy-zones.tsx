@@ -22,7 +22,13 @@ import { MAP_DEFAULTS } from '@/constants/mapStyles'
 import { ONE_DARK_MAP_STYLE } from '@/constants/oneDarkMapStyle'
 import { BriefcaseIcon, HouseIcon, PencilSimpleIcon, TrashIcon } from 'phosphor-react-native'
 import type { Icon } from 'phosphor-react-native'
-import { HPill, HPillAdd, HPillDot, HPillMenuItem, HPills } from '@/components/ui/controls/HPills'
+import {
+  PillSelectorItem,
+  PillSelectorAdd,
+  PillSelectorDot,
+  PillSelectorMenuItem,
+  PillSelector,
+} from '@/components/ui/controls/PillSelector'
 import { generateZoneId, usePrivacyZoneStore, type PrivacyZone } from '@/store/privacyZoneStore'
 import { liveTelemetryRuntime } from '@/lib/telemetry/liveTelemetryRuntime'
 
@@ -370,15 +376,15 @@ export default function PrivacyZonesScreen() {
       </View>
 
       <View style={[styles.pillsFloating, { top: pillsTop }]}>
-        <HPills activeId={selectedId}>
+        <PillSelector activeId={selectedId}>
           {pills.map((pill) => (
-            <HPill
+            <PillSelectorItem
               key={pill.id}
               id={pill.id}
               label={pill.name}
               icon={pill.icon}
               badge={
-                <HPillDot
+                <PillSelectorDot
                   status={!pill.isSaved ? 'draft' : pill.enabled ? 'enabled' : 'disabled'}
                 />
               }
@@ -386,14 +392,14 @@ export default function PrivacyZonesScreen() {
               onPress={() => handleSelectPill(pill.id)}
             >
               {!pill.isBuiltIn ? (
-                <HPillMenuItem
+                <PillSelectorMenuItem
                   icon={PencilSimpleIcon}
                   label="Rename"
                   onPress={() => handleRenamePress(pill.id, pill.name)}
                 />
               ) : null}
               {pill.isSaved ? (
-                <HPillMenuItem
+                <PillSelectorMenuItem
                   icon={TrashIcon}
                   label="Delete"
                   onPress={() => handleDeletePress(pill.id)}
@@ -401,10 +407,10 @@ export default function PrivacyZonesScreen() {
                   separator={!pill.isBuiltIn}
                 />
               ) : null}
-            </HPill>
+            </PillSelectorItem>
           ))}
-          <HPillAdd onPress={handleAddPress} />
-        </HPills>
+          <PillSelectorAdd onPress={handleAddPress} />
+        </PillSelector>
       </View>
 
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + 12 }]}>

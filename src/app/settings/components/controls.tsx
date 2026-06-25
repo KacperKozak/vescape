@@ -1,11 +1,15 @@
-import { ScrollView, StyleSheet, View } from 'react-native'
+import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useMemo, useState } from 'react'
 import {
   ArrowUpIcon,
   ArrowsClockwiseIcon,
+  BriefcaseIcon,
   CameraIcon,
   HeartIcon,
+  HouseIcon,
+  LightningIcon,
+  MapPinIcon,
   NavigationArrowIcon,
   PencilSimpleIcon,
   RecordIcon,
@@ -22,8 +26,14 @@ import {
   FloatingStatusPill,
   type FloatingStatusPillModel,
 } from '@/components/ui/controls/FloatingBar'
-import { HistoryNavigator } from '@/components/ui/controls/HistoryNavigator'
-import { HPill, HPillAdd, HPillDot, HPillMenuItem, HPills } from '@/components/ui/controls/HPills'
+import { PrevNextSelector } from '@/components/ui/controls/PrevNextSelector'
+import {
+  PillSelectorItem,
+  PillSelectorAdd,
+  PillSelectorDot,
+  PillSelectorMenuItem,
+  PillSelector,
+} from '@/components/ui/controls/PillSelector'
 import { MapOptionSelector } from '@/components/ui/controls/MapOptionSelector'
 import { ShowcaseCard } from '@/components/ui/dev/ShowcaseCard'
 import { ChipRow } from '@/components/ui/dev/ShowcaseControls'
@@ -31,46 +41,102 @@ import { theme } from '@/constants/theme'
 
 function ZonePillsShowcase() {
   const [selectedId, setSelectedId] = useState('home')
+  const [wideSelectedId, setWideSelectedId] = useState('trail')
+  const iconOptions = [
+    { id: 'trail', label: 'Trail', icon: MapPinIcon, color: theme.palette.violet },
+    { id: 'street', label: 'Street', icon: NavigationArrowIcon, color: theme.palette.sky },
+    { id: 'boost', label: 'Boost', icon: LightningIcon, color: theme.palette.amber },
+    { id: 'camera', label: 'Camera', icon: CameraIcon, color: theme.palette.purple },
+    { id: 'favorites', label: 'Favorites', icon: HeartIcon, color: theme.palette.red },
+  ]
+  const renderIconOptions = (includeAdd = false) => (
+    <PillSelector activeId={wideSelectedId}>
+      {iconOptions.map((option) => (
+        <PillSelectorItem
+          key={option.id}
+          id={option.id}
+          label={option.label}
+          icon={option.icon}
+          color={option.color}
+          onPress={() => setWideSelectedId(option.id)}
+        />
+      ))}
+      {includeAdd ? <PillSelectorAdd onPress={() => undefined} /> : null}
+    </PillSelector>
+  )
 
   return (
-    <ShowcaseCard name="HPills (zone)">
-      <HPills activeId={selectedId}>
-        <HPill
-          id="home"
-          label="Home"
-          badge={<HPillDot status="enabled" />}
-          color={theme.palette.green}
-          onPress={() => setSelectedId('home')}
-        >
-          <HPillMenuItem icon={TrashIcon} label="Delete" onPress={() => undefined} danger />
-        </HPill>
-        <HPill
-          id="work"
-          label="Work"
-          badge={<HPillDot status="disabled" />}
-          color={theme.palette.green}
-          onPress={() => setSelectedId('work')}
-        >
-          <HPillMenuItem icon={TrashIcon} label="Delete" onPress={() => undefined} danger />
-        </HPill>
-        <HPill
-          id="custom"
-          label="Custom"
-          badge={<HPillDot status="draft" />}
-          color={theme.palette.green}
-          onPress={() => setSelectedId('custom')}
-        >
-          <HPillMenuItem icon={PencilSimpleIcon} label="Rename" onPress={() => undefined} />
-          <HPillMenuItem
-            icon={TrashIcon}
-            label="Delete"
-            onPress={() => undefined}
-            danger
-            separator
-          />
-        </HPill>
-        <HPillAdd onPress={() => undefined} />
-      </HPills>
+    <ShowcaseCard name="PillSelector">
+      <View style={styles.selectorVariants}>
+        <View style={styles.selectorVariant}>
+          <Text style={styles.selectorCaption}>
+            icons, status dots, add button, long-press menu
+          </Text>
+          <PillSelector activeId={selectedId}>
+            <PillSelectorItem
+              id="home"
+              label="Home"
+              icon={HouseIcon}
+              badge={<PillSelectorDot status="enabled" />}
+              color={theme.palette.green}
+              onPress={() => setSelectedId('home')}
+            >
+              <PillSelectorMenuItem
+                icon={TrashIcon}
+                label="Delete"
+                onPress={() => undefined}
+                danger
+              />
+            </PillSelectorItem>
+            <PillSelectorItem
+              id="work"
+              label="Work"
+              icon={BriefcaseIcon}
+              badge={<PillSelectorDot status="disabled" />}
+              color={theme.palette.green}
+              onPress={() => setSelectedId('work')}
+            >
+              <PillSelectorMenuItem
+                icon={TrashIcon}
+                label="Delete"
+                onPress={() => undefined}
+                danger
+              />
+            </PillSelectorItem>
+            <PillSelectorItem
+              id="custom"
+              label="Custom"
+              badge={<PillSelectorDot status="draft" />}
+              color={theme.palette.green}
+              onPress={() => setSelectedId('custom')}
+            >
+              <PillSelectorMenuItem
+                icon={PencilSimpleIcon}
+                label="Rename"
+                onPress={() => undefined}
+              />
+              <PillSelectorMenuItem
+                icon={TrashIcon}
+                label="Delete"
+                onPress={() => undefined}
+                danger
+                separator
+              />
+            </PillSelectorItem>
+            <PillSelectorAdd onPress={() => undefined} />
+          </PillSelector>
+        </View>
+
+        <View style={styles.selectorVariant}>
+          <Text style={styles.selectorCaption}>mixed active colors and icon-only differences</Text>
+          {renderIconOptions()}
+        </View>
+
+        <View style={styles.selectorVariant}>
+          <Text style={styles.selectorCaption}>constrained width, horizontal scroll</Text>
+          <View style={styles.narrowPreview}>{renderIconOptions(true)}</View>
+        </View>
+      </View>
     </ShowcaseCard>
   )
 }
@@ -212,14 +278,14 @@ function FloatingActionPillShowcase() {
   )
 }
 
-function HistoryNavigatorShowcase() {
+function PrevNextSelectorShowcase() {
   const [index, setIndex] = useState(1)
   const labels = ['Ride 08:12', 'Ride 12:47', 'Ride 18:05']
 
   return (
-    <ShowcaseCard name="HistoryNavigator">
+    <ShowcaseCard name="PrevNextSelector">
       <View style={styles.centeredPreview}>
-        <HistoryNavigator
+        <PrevNextSelector
           label={labels[index]}
           previousDisabled={index === 0}
           nextDisabled={index === labels.length - 1}
@@ -324,12 +390,12 @@ export default function ControlsPage() {
       <ScrollView contentContainerStyle={styles.content}>
         <IconHero
           icon={SwatchesIcon}
-          description="CircleButton, FloatingBar, HistoryNavigator, HPills, MapOptionSelector."
+          description="CircleButton, FloatingBar, PrevNextSelector, PillSelector, MapOptionSelector."
         />
         <CircleButtonShowcase />
         <FloatingBarShowcase />
         <FloatingActionPillShowcase />
-        <HistoryNavigatorShowcase />
+        <PrevNextSelectorShowcase />
         <ZonePillsShowcase />
         <MapOptionSelectorShowcase />
       </ScrollView>
@@ -354,5 +420,24 @@ const styles = StyleSheet.create({
   centeredPreview: {
     alignItems: 'center',
     paddingVertical: 12,
+  },
+  selectorVariants: {
+    gap: 18,
+    paddingVertical: 8,
+  },
+  selectorVariant: {
+    gap: 8,
+  },
+  selectorCaption: {
+    color: theme.palette.slate.textMuted,
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  narrowPreview: {
+    width: 220,
+    alignSelf: 'center',
+    overflow: 'hidden',
+    paddingVertical: 10,
   },
 })

@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { PlusIcon, TrashIcon } from 'phosphor-react-native'
+import { PlusIcon } from 'phosphor-react-native'
 import type { Icon } from 'phosphor-react-native'
 
 import { Dropdown, useTriggerRef } from '@/components/ui/forms/Dropdown'
@@ -17,27 +17,27 @@ interface MenuState {
   content: ReactNode
 }
 
-interface HPillsCtx {
+interface PillSelectorCtx {
   activeId: string
   openMenu: (id: string, triggerRef: React.RefObject<View | null>, content: ReactNode) => void
   closeMenu: () => void
   addRef: React.RefObject<View | null>
 }
 
-const HPillsContext = createContext<HPillsCtx | null>(null)
+const PillSelectorContext = createContext<PillSelectorCtx | null>(null)
 
-function useHPillsCtx() {
-  const ctx = useContext(HPillsContext)
-  if (!ctx) throw new Error('HPill must be inside HPills')
+function usePillSelectorCtx() {
+  const ctx = useContext(PillSelectorContext)
+  if (!ctx) throw new Error('PillSelectorItem must be inside PillSelector')
   return ctx
 }
 
-interface HPillsProps {
+interface PillSelectorProps {
   activeId: string
   children: ReactNode
 }
 
-export function HPills({ activeId, children }: HPillsProps) {
+export function PillSelector({ activeId, children }: PillSelectorProps) {
   'use no memo'
   const [menu, setMenu] = useState<MenuState | null>(null)
   const addRef = useTriggerRef()
@@ -57,7 +57,7 @@ export function HPills({ activeId, children }: HPillsProps) {
   })()
 
   return (
-    <HPillsContext.Provider value={{ activeId, openMenu, closeMenu, addRef }}>
+    <PillSelectorContext.Provider value={{ activeId, openMenu, closeMenu, addRef }}>
       <View style={styles.container}>
         <ScrollView
           horizontal
@@ -78,11 +78,11 @@ export function HPills({ activeId, children }: HPillsProps) {
           {menu?.content}
         </Dropdown>
       </View>
-    </HPillsContext.Provider>
+    </PillSelectorContext.Provider>
   )
 }
 
-interface HPillProps {
+interface PillSelectorItemProps {
   id: string
   label: string
   icon?: Icon
@@ -92,8 +92,16 @@ interface HPillProps {
   children?: ReactNode
 }
 
-export function HPill({ id, label, icon: IconComp, badge, color, onPress, children }: HPillProps) {
-  const { activeId, openMenu, closeMenu } = useHPillsCtx()
+export function PillSelectorItem({
+  id,
+  label,
+  icon: IconComp,
+  badge,
+  color,
+  onPress,
+  children,
+}: PillSelectorItemProps) {
+  const { activeId, openMenu, closeMenu } = usePillSelectorCtx()
   const pillRef = useRef<View>(null)
   const active = id === activeId
   const accentBg = color?.bg ?? theme.palette.green.bg
@@ -143,12 +151,12 @@ export function HPill({ id, label, icon: IconComp, badge, color, onPress, childr
   )
 }
 
-interface HPillAddProps {
+interface PillSelectorAddProps {
   onPress: () => void
 }
 
-export function HPillAdd({ onPress }: HPillAddProps) {
-  const { addRef } = useHPillsCtx()
+export function PillSelectorAdd({ onPress }: PillSelectorAddProps) {
+  const { addRef } = usePillSelectorCtx()
   return (
     <Pressable ref={addRef} style={styles.addPill} onPress={onPress}>
       <PlusIcon size={14} color={theme.palette.slate.color} weight="bold" />
@@ -156,7 +164,7 @@ export function HPillAdd({ onPress }: HPillAddProps) {
   )
 }
 
-interface HPillMenuItemProps {
+interface PillSelectorMenuItemProps {
   icon: Icon
   label: string
   onPress: () => void
@@ -164,14 +172,14 @@ interface HPillMenuItemProps {
   separator?: boolean
 }
 
-export function HPillMenuItem({
+export function PillSelectorMenuItem({
   icon: IconComp,
   label,
   onPress,
   danger,
   separator,
-}: HPillMenuItemProps) {
-  const { closeMenu } = useHPillsCtx()
+}: PillSelectorMenuItemProps) {
+  const { closeMenu } = usePillSelectorCtx()
   return (
     <Pressable
       style={[styles.menuItem, separator && styles.menuItemSeparator]}
@@ -190,11 +198,11 @@ export function HPillMenuItem({
   )
 }
 
-export interface HPillDotProps {
+export interface PillSelectorDotProps {
   status: 'draft' | 'enabled' | 'disabled'
 }
 
-export function HPillDot({ status }: HPillDotProps) {
+export function PillSelectorDot({ status }: PillSelectorDotProps) {
   if (status === 'draft') return <View style={styles.draftDot} />
   if (status === 'enabled') return <View style={styles.enabledDot} />
   return <View style={styles.disabledDot} />

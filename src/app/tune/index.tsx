@@ -21,7 +21,12 @@ import { InfoModal } from '@/components/ui/modals/InfoModal'
 import { Placeholder } from '@/components/ui/base/Placeholder'
 import { BasicSliderCell } from '@/components/ui/tune/BasicSliderCell'
 import { FieldEditorPopover } from '@/components/domain/tune/FieldEditorPopover'
-import { HPill, HPillAdd, HPillMenuItem, HPills } from '@/components/ui/controls/HPills'
+import {
+  PillSelectorItem,
+  PillSelectorAdd,
+  PillSelectorMenuItem,
+  PillSelector,
+} from '@/components/ui/controls/PillSelector'
 import { TuneConfigCell } from '@/components/domain/tune/TuneConfigCell'
 import { TuneGroupGrid } from '@/components/ui/tune/TuneGroupGrid'
 import { TuneSyncBar } from '@/components/ui/tune/TuneSyncBar'
@@ -205,29 +210,29 @@ export default function TuneScreen() {
           ) : null}
 
           {profiles.length > 0 ? (
-            <HPills activeId={activeProfile?.id ?? ''}>
+            <PillSelector activeId={activeProfile?.id ?? ''}>
               {profiles.map((profile) => (
-                <HPill
+                <PillSelectorItem
                   key={profile.id}
                   id={profile.id}
                   label={profile.name}
                   color={theme.palette.sky}
                   onPress={() => setActiveProfile(profile.id)}
                 >
-                  <HPillMenuItem
+                  <PillSelectorMenuItem
                     icon={PencilSimpleIcon}
                     label="Rename"
                     onPress={() => modals.setRenameModalProfile(profile)}
                   />
                   {modals.otherBoards.length > 0 ? (
-                    <HPillMenuItem
+                    <PillSelectorMenuItem
                       icon={CopyIcon}
                       label="Copy to board"
                       onPress={() => modals.setCopySourceProfile(profile)}
                     />
                   ) : null}
                   {profiles.length > 1 ? (
-                    <HPillMenuItem
+                    <PillSelectorMenuItem
                       icon={TrashIcon}
                       label="Delete"
                       onPress={() => modals.setDeleteConfirmProfile(profile)}
@@ -235,10 +240,10 @@ export default function TuneScreen() {
                       separator
                     />
                   ) : null}
-                </HPill>
+                </PillSelectorItem>
               ))}
-              <HPillAdd onPress={() => modals.handleCreateProfile(activeProfile?.id)} />
-            </HPills>
+              <PillSelectorAdd onPress={() => modals.handleCreateProfile(activeProfile?.id)} />
+            </PillSelector>
           ) : null}
 
           {boardSnapshot ? (

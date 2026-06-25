@@ -118,6 +118,7 @@ export function TopBar({
         <IconButton
           icon={GearSixIcon}
           onPress={() => router.push(routes.settings)}
+          onLongPress={() => router.push(routes.settingsComponents)}
           style={styles.iconRight}
         />
       </View>

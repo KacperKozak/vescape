@@ -1,10 +1,4 @@
-import {
-  CaretDownIcon,
-  CaretLeftIcon,
-  CaretRightIcon,
-  ImagesSquareIcon,
-  CloudArrowUpIcon,
-} from 'phosphor-react-native'
+import { CaretDownIcon, ImagesSquareIcon, CloudArrowUpIcon } from 'phosphor-react-native'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -25,6 +19,7 @@ import {
   TelemetryLineChart,
   type SecondaryChartSeries,
 } from '@/components/ui/charts/TelemetryLineChart'
+import { PrevNextSelector } from '@/components/ui/controls/PrevNextSelector'
 import { InfoModal } from '@/components/ui/modals/InfoModal'
 import { telemetry } from '@/constants/telemetry'
 import { interaction, theme } from '@/constants/theme'
@@ -528,49 +523,31 @@ export function HistoryTelemetryPanel({
             </View>
           ) : null}
         </View>
-        <View style={styles.navRow}>
-          <Pressable
-            style={({ pressed }) => [
-              styles.navSegment,
-              !canPrevious && styles.navSegmentDisabled,
-              pressed && canPrevious && styles.navSegmentPressed,
-            ]}
-            android_ripple={interaction.ripple}
-            onPress={onPrevious}
-            disabled={!canPrevious}
-          >
-            <CaretLeftIcon size={22} color={theme.palette.slate.textSecondary} weight="bold" />
-          </Pressable>
-          <View style={styles.navDivider} />
-          <Pressable
-            style={({ pressed }) => [styles.titleButton, pressed && styles.navSegmentPressed]}
-            android_ripple={interaction.ripple}
-            onPress={onOpenList}
-          >
-            <View style={styles.titleContent}>
-              <Text style={styles.titleTime} numberOfLines={1}>
-                {formatRideTitle(titleStartMs, titleEndMs)}
-              </Text>
-              <Text style={styles.titleMeta} numberOfLines={1}>
-                {formatRideMeta(titleStartMs, titleEndMs, deviceName)}
-              </Text>
-            </View>
-            <CaretDownIcon size={12} color={theme.palette.slate.textSecondary} weight="bold" />
-          </Pressable>
-          <View style={styles.navDivider} />
-          <Pressable
-            style={({ pressed }) => [
-              styles.navSegment,
-              !canNext && styles.navSegmentDisabled,
-              pressed && canNext && styles.navSegmentPressed,
-            ]}
-            android_ripple={interaction.ripple}
-            onPress={onNext}
-            disabled={!canNext}
-          >
-            <CaretRightIcon size={22} color={theme.palette.slate.textSecondary} weight="bold" />
-          </Pressable>
-        </View>
+        <PrevNextSelector
+          label={formatRideTitle(titleStartMs, titleEndMs)}
+          previousDisabled={!canPrevious}
+          nextDisabled={!canNext}
+          onPrevious={onPrevious}
+          onNext={onNext}
+          style={styles.navSelector}
+          selectControl={
+            <Pressable
+              style={({ pressed }) => [styles.titleButton, pressed && styles.titleButtonPressed]}
+              android_ripple={interaction.ripple}
+              onPress={onOpenList}
+            >
+              <View style={styles.titleContent}>
+                <Text style={styles.titleTime} numberOfLines={1}>
+                  {formatRideTitle(titleStartMs, titleEndMs)}
+                </Text>
+                <Text style={styles.titleMeta} numberOfLines={1}>
+                  {formatRideMeta(titleStartMs, titleEndMs, deviceName)}
+                </Text>
+              </View>
+              <CaretDownIcon size={12} color={theme.palette.slate.textSecondary} weight="bold" />
+            </Pressable>
+          }
+        />
         <View style={styles.navSide}>
           <IconButton icon={CloudArrowUpIcon} onPress={() => setShareInfoVisible(true)} size="lg" />
         </View>
@@ -726,18 +703,9 @@ const styles = StyleSheet.create({
     width: 54,
     height: 54,
   },
-  navRow: {
+  navSelector: {
     flex: 1,
     minWidth: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    maxWidth: 320,
-    height: 54,
-    borderRadius: 27,
-    borderWidth: 1,
-    borderColor: theme.palette.slate.border,
-    backgroundColor: theme.palette.slate.surfaceDeep,
-    overflow: 'hidden',
   },
   mediaEnabled: {
     borderColor: theme.palette.purple.border,
@@ -763,22 +731,8 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
   },
-  navSegment: {
-    width: 54,
-    height: 54,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  navSegmentDisabled: {
-    opacity: 0.35,
-  },
-  navSegmentPressed: {
+  titleButtonPressed: {
     opacity: 0.72,
-  },
-  navDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: theme.palette.slate.border,
   },
   titleButton: {
     flex: 1,

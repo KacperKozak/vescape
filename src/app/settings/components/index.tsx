@@ -45,7 +45,7 @@ const sections = [
   },
   {
     label: 'Controls',
-    hint: 'CircleButton, FloatingBar, HistoryNavigator, HPills, MapOptionSelector',
+    hint: 'CircleButton, FloatingBar, PrevNextSelector, PillSelector, MapOptionSelector',
     route: '/settings/components/controls',
     icon: SwatchesIcon,
   },
