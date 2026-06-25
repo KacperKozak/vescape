@@ -13,6 +13,12 @@ class SocMedianWindowTest {
     }
 
     @Test
+    fun `quantizes to tenth percent buckets`() {
+        val w = SocMedianWindow(windowMs = 20_000L)
+        assertEquals(54.1, w.median(54.06, 0L), 0.001)
+    }
+
+    @Test
     fun `odd count returns middle value`() {
         val w = SocMedianWindow(windowMs = 20_000L)
         w.median(50.0, 0L)
