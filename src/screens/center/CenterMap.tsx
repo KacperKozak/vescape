@@ -1,11 +1,14 @@
 import Mapbox, {
   Camera,
+  CircleLayer,
   FillExtrusionLayer,
   FillLayer,
+  Images,
   LineLayer,
   RasterLayer,
   RasterSource,
   ShapeSource,
+  SymbolLayer,
 } from '@rnmapbox/maps'
 import type { LineLayerStyle } from '@rnmapbox/maps'
 import {
@@ -134,6 +137,8 @@ const OFFSCREEN_GPS_EDGE_TOP_INSET = 122
 const OFFSCREEN_GPS_EDGE_BOTTOM_INSET = 142
 const GPS_POINT_COLOR = theme.map.user
 const GPS_POINT_TEXT_COLOR = theme.palette.purple.text
+const GPS_HEADING_ICON_ID = 'center-gps-heading'
+const GPS_HEADING_ICON = require('@rnmapbox/maps/src/assets/heading.png')
 const DESTINATION_POINT_COLOR = theme.map.target
 const DESTINATION_POINT_TEXT_COLOR = theme.palette.green.text
 const HISTORY_ROUTE_HIGHLIGHT_INTERVAL_MS = 50
@@ -468,7 +473,7 @@ interface CenterMapLayersProps {
   } | null
   accuracyFix: { longitude: number; latitude: number } | null
   accuracyShape: ReturnType<typeof makeCircleFeature> | null
-  gpsBearingDeg: number | null
+  gpsPuckBearingDeg: number | null
   rideRoute: [number, number][]
   seekPosition: HistoryGpsSample | null
   rideTelemetrySamples: TelemetrySample[]
@@ -493,13 +498,33 @@ function LiveMapLayers({
   liveTrailShape,
   accuracyFix,
   accuracyShape,
-  gpsBearingDeg,
+  gpsPuckBearingDeg,
 }: {
   liveTrailShape: CenterMapLayersProps['liveTrailShape']
   accuracyFix: CenterMapLayersProps['accuracyFix']
   accuracyShape: CenterMapLayersProps['accuracyShape']
-  gpsBearingDeg: CenterMapLayersProps['gpsBearingDeg']
+  gpsPuckBearingDeg: CenterMapLayersProps['gpsPuckBearingDeg']
 }) {
+  const gpsPuckShape = useMemo(
+    () =>
+      accuracyFix && gpsPuckBearingDeg != null
+        ? ({
+            type: 'FeatureCollection',
+            features: [
+              {
+                type: 'Feature',
+                geometry: {
+                  type: 'Point',
+                  coordinates: [accuracyFix.longitude, accuracyFix.latitude],
+                },
+                properties: { bearing: gpsPuckBearingDeg },
+              },
+            ],
+          } as GeoJSON.FeatureCollection)
+        : null,
+    [accuracyFix, gpsPuckBearingDeg],
+  )
+
   return (
     <>
       {liveTrailShape && (
@@ -534,12 +559,41 @@ function LiveMapLayers({
               />
             </ShapeSource>
           )}
-          <MapPin
-            id="center-gps-position"
-            coordinate={[accuracyFix.longitude, accuracyFix.latitude]}
-            color={GPS_POINT_COLOR}
-            bearingDeg={gpsBearingDeg}
-          />
+          {gpsPuckShape ? (
+            <>
+              <Images images={{ [GPS_HEADING_ICON_ID]: { image: GPS_HEADING_ICON, sdf: true } }} />
+              <ShapeSource id="center-gps-puck-source" shape={gpsPuckShape}>
+                <CircleLayer
+                  id="center-gps-puck-core"
+                  style={{
+                    circleRadius: 8,
+                    circleColor: GPS_POINT_COLOR,
+                    circleStrokeColor: theme.palette.mono.white,
+                    circleStrokeWidth: 3,
+                  }}
+                />
+                <SymbolLayer
+                  id="center-gps-puck-heading-outline"
+                  style={{
+                    iconImage: GPS_HEADING_ICON_ID,
+                    iconRotate: ['get', 'bearing'],
+                    iconAllowOverlap: true,
+                    iconIgnorePlacement: true,
+                    iconRotationAlignment: 'map',
+                    iconSize: 0.95,
+                    iconOffset: [0, -10],
+                    iconColor: theme.palette.mono.white,
+                  }}
+                />
+              </ShapeSource>
+            </>
+          ) : (
+            <MapPin
+              id="center-gps-position"
+              coordinate={[accuracyFix.longitude, accuracyFix.latitude]}
+              color={GPS_POINT_COLOR}
+            />
+          )}
         </>
       )}
     </>
@@ -966,7 +1020,7 @@ function CenterMapLayers({
   rideRouteShape,
   accuracyFix,
   accuracyShape,
-  gpsBearingDeg,
+  gpsPuckBearingDeg,
   rideRoute,
   seekPosition,
   rideTelemetrySamples,
@@ -1043,7 +1097,7 @@ function CenterMapLayers({
           liveTrailShape={liveTrailShape}
           accuracyFix={accuracyFix}
           accuracyShape={accuracyShape}
-          gpsBearingDeg={gpsBearingDeg}
+          gpsPuckBearingDeg={gpsPuckBearingDeg}
         />
       )}
       {directionPoint && !historyActive && (
@@ -1246,6 +1300,9 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
     ],
   )
   const { cameraFix, accuracyFix, accuracyRadiusM, directionBearingDeg } = gpsPresentation
+  const approximateGpsPuckActive =
+    gpsPresentation.degraded ||
+    (gpsFix == null && (latestApproximateLocation != null || initialApproximateFix != null))
   const offscreenMapGpsCoordinate = useMemo(
     () =>
       usableCoordinate(gpsFix) ??
@@ -1268,7 +1325,9 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
   const retainedGpsBearing = gpsPresentation.nextReliableBearing
   const gpsHeadingMode = mapNavigationMode === 'gpsHeading'
   const phoneHeadingMode = mapNavigationMode === 'phoneHeading'
-  const phoneHeading = usePhoneHeading(phoneHeadingMode && !historyActive)
+  const phoneHeading = usePhoneHeading(
+    (phoneHeadingMode || approximateGpsPuckActive) && !historyActive,
+  )
   const headingFollowMode = gpsHeadingMode || phoneHeadingMode
   const phoneHeadingDeg = phoneHeading.headingDeg
   const targetFollowHeadingDeg = gpsHeadingMode
@@ -1369,11 +1428,15 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
     onPerspectiveChange,
   })
   const gpsPinBearingDeg =
-    phoneHeadingMode && phoneHeadingDeg != null
+    (phoneHeadingMode || approximateGpsPuckActive) && phoneHeadingDeg != null
       ? phoneHeadingDeg - cameraHeading
       : directionBearingDeg == null
         ? null
         : directionBearingDeg - cameraHeading
+  const gpsPuckBearingDeg =
+    (phoneHeadingMode || approximateGpsPuckActive) && phoneHeadingDeg != null
+      ? phoneHeadingDeg
+      : directionBearingDeg
   const updateNavigationDiagnostics = useNavigationDiagnosticsStore((s) => s.update)
 
   const handleMapLayout = useCallback((event: LayoutChangeEvent) => {
@@ -1837,7 +1900,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
           rideRouteShape={rideRouteShape}
           accuracyFix={accuracyFix}
           accuracyShape={accuracyShape}
-          gpsBearingDeg={gpsPinBearingDeg}
+          gpsPuckBearingDeg={gpsPuckBearingDeg}
           rideRoute={rideRoute}
           seekPosition={seekPosition}
           rideTelemetrySamples={rideTelemetrySamples}

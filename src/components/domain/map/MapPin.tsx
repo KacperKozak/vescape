@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
-import { MarkerView } from '@rnmapbox/maps'
+import { MarkerView, PointAnnotation } from '@rnmapbox/maps'
 import { TrashIcon, type Icon } from 'phosphor-react-native'
 import { theme } from '@/constants/theme'
 
@@ -18,6 +18,7 @@ interface MapPinProps {
 }
 
 export function MapPin({
+  id,
   coordinate,
   color,
   icon: IconComponent,
@@ -30,9 +31,9 @@ export function MapPin({
   onRemove,
 }: MapPinProps) {
   if (IconComponent) {
-    return (
-      <MarkerView coordinate={coordinate} allowOverlap>
-        {selected && expandSelected && label && onRemove ? (
+    if (selected && expandSelected && label && onRemove) {
+      return (
+        <MarkerView coordinate={coordinate} allowOverlap>
           <View style={styles.selectedMapPoint}>
             <Pressable
               style={[styles.iconPin, styles.iconPinSelected, { borderColor: color }]}
@@ -54,25 +55,30 @@ export function MapPin({
               </Pressable>
             </View>
           </View>
-        ) : (
-          <Pressable
-            style={[styles.iconPin, { borderColor: color }, selected && styles.iconPinSelected]}
-            onPress={onSelected}
-          >
-            <IconComponent size={selected ? 24 : 15} color={iconColor ?? color} weight="bold" />
-          </Pressable>
-        )}
-      </MarkerView>
+        </MarkerView>
+      )
+    }
+
+    return (
+      <PointAnnotation id={id} coordinate={coordinate} onSelected={onSelected}>
+        <View style={[styles.iconPin, { borderColor: color }, selected && styles.iconPinSelected]}>
+          <IconComponent size={selected ? 24 : 15} color={iconColor ?? color} weight="bold" />
+        </View>
+      </PointAnnotation>
     )
   }
 
-  return (
-    <MarkerView coordinate={coordinate} allowOverlap>
-      <Pressable style={[styles.pin, { borderColor: color }]} onPress={onSelected}>
-        {bearingDeg == null ? (
-          <View style={[styles.pinCore, { backgroundColor: color }]} />
-        ) : (
+  if (bearingDeg != null) {
+    return (
+      <PointAnnotation id={id} coordinate={coordinate} onSelected={onSelected}>
+        <View style={[styles.pin, { borderColor: color }]}>
           <View style={[styles.directionArrow, { transform: [{ rotate: `${bearingDeg}deg` }] }]}>
+            <View
+              style={[styles.directionWing, styles.directionWingOutline, styles.directionWingLeft]}
+            />
+            <View
+              style={[styles.directionWing, styles.directionWingOutline, styles.directionWingRight]}
+            />
             <View
               style={[styles.directionWing, styles.directionWingLeft, { borderColor: color }]}
             />
@@ -80,19 +86,27 @@ export function MapPin({
               style={[styles.directionWing, styles.directionWingRight, { borderColor: color }]}
             />
           </View>
-        )}
-      </Pressable>
-    </MarkerView>
+        </View>
+      </PointAnnotation>
+    )
+  }
+
+  return (
+    <PointAnnotation id={id} coordinate={coordinate} onSelected={onSelected}>
+      <View style={[styles.pin, { borderColor: color }]}>
+        <View style={[styles.pinCore, { backgroundColor: color }]} />
+      </View>
+    </PointAnnotation>
   )
 }
 
 const styles = StyleSheet.create({
   pin: {
-    width: 22,
-    height: 22,
+    width: 32,
+    height: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 11,
+    borderRadius: 16,
     borderWidth: 3,
     backgroundColor: theme.palette.slate.textPrimary,
   },
@@ -159,28 +173,35 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   pinCore: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 11,
+    height: 11,
+    borderRadius: 5.5,
   },
   directionArrow: {
-    width: 18,
-    height: 18,
+    width: 27,
+    height: 27,
     alignItems: 'center',
     justifyContent: 'center',
   },
   directionWing: {
     position: 'absolute',
-    top: 3,
-    width: 2,
-    height: 13,
-    borderRadius: 1,
-    borderLeftWidth: 2,
+    top: 2,
+    width: 3,
+    height: 20,
+    borderRadius: 1.5,
+    borderLeftWidth: 4,
+  },
+  directionWingOutline: {
+    top: 0,
+    height: 24,
+    borderRadius: 2.5,
+    borderLeftWidth: 7,
+    borderColor: theme.palette.mono.white,
   },
   directionWingLeft: {
-    transform: [{ translateX: -3 }, { rotate: '28deg' }],
+    transform: [{ translateX: -4.5 }, { rotate: '28deg' }],
   },
   directionWingRight: {
-    transform: [{ translateX: 3 }, { rotate: '-28deg' }],
+    transform: [{ translateX: 4.5 }, { rotate: '-28deg' }],
   },
 })
