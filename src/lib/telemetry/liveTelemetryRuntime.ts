@@ -26,6 +26,8 @@ interface LiveTelemetryValues {
   motorTemp: SharedValue<number | null>
   controllerTemp: SharedValue<number | null>
   pitch: SharedValue<number | null>
+  roll: SharedValue<number | null>
+  balancePitch: SharedValue<number | null>
   adc1: SharedValue<number | null>
   adc2: SharedValue<number | null>
   lastPacketAt: SharedValue<number | null>
@@ -45,6 +47,8 @@ const EMPTY_TICK: TickScalars = {
   motorTemp: null,
   controllerTemp: null,
   pitch: null,
+  roll: null,
+  balancePitch: null,
   adc1: null,
   adc2: null,
   lastPacketAt: null,
@@ -96,6 +100,8 @@ function createValues(): LiveTelemetryValues {
     motorTemp: makeMutable<number | null>(null),
     controllerTemp: makeMutable<number | null>(null),
     pitch: makeMutable<number | null>(null),
+    roll: makeMutable<number | null>(null),
+    balancePitch: makeMutable<number | null>(null),
     adc1: makeMutable<number | null>(null),
     adc2: makeMutable<number | null>(null),
     lastPacketAt: makeMutable<number | null>(null),
@@ -115,6 +121,8 @@ function tickScalars(telemetry: TelemetryEvent): TickScalars {
     motorTemp: telemetry.tempMotor != null && telemetry.tempMotor > 0 ? telemetry.tempMotor : null,
     controllerTemp: finite(telemetry.tempMosfet),
     pitch: finite(telemetry.pitch),
+    roll: finite(telemetry.roll),
+    balancePitch: finite(telemetry.balancePitch),
     adc1: finite(telemetry.adc1),
     adc2: finite(telemetry.adc2),
     lastPacketAt: finite(telemetry.lastPacketAt),
@@ -142,6 +150,8 @@ export function createLiveTelemetryRuntime({
     values.motorTemp.value = next.motorTemp
     values.controllerTemp.value = next.controllerTemp
     values.pitch.value = next.pitch
+    values.roll.value = next.roll
+    values.balancePitch.value = next.balancePitch
     values.adc1.value = next.adc1
     values.adc2.value = next.adc2
     values.lastPacketAt.value = next.lastPacketAt

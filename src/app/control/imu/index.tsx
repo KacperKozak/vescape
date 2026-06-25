@@ -1,17 +1,23 @@
 import { type ReactNode, useEffect, useMemo } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, Text, View, type ViewStyle } from 'react-native'
+import Animated, {
+  useAnimatedStyle,
+  type AnimatedStyle,
+  type SharedValue,
+} from 'react-native-reanimated'
 
 import { computeAutoRange } from '@/components/ui/charts/chartMath'
 import { ControlDetailLayout } from '@/components/domain/control/ControlDetailLayout'
 import { MetricDetailChart } from '@/components/domain/control/MetricDetailChart'
 import { RemoteTiltPad } from '@/components/domain/control/RemoteTiltPad'
 import { toTelemetryChartPoints } from '@/components/domain/control/metricDetailData'
-import { DASH } from '@/helpers/format'
+import { TickText } from '@/components/ui/base/TickText'
 import { telemetry } from '@/constants/telemetry'
 import { useLiveMetric, liveSelectors } from '@/hooks/useLiveMetric'
 import { useLiveWindowMs } from '@/store/settingsStore'
 import { useBleStore } from '@/store/bleStore'
 import { theme } from '@/constants/theme'
+import { liveTelemetryRuntime } from '@/lib/telemetry/liveTelemetryRuntime'
 import {
   lockRemoteTilt as lockRemoteTiltNative,
   releaseRemoteTilt,
@@ -23,41 +29,99 @@ const pitchCfg = telemetry.pitch
 const rollCfg = telemetry.roll
 const balanceCfg = telemetry.balancePitch
 
-function latestValue(points: { value: number }[]) {
-  return points.at(-1)?.value ?? null
-}
-
-function rotationDeg(value: number | null) {
-  return value ?? 0
-}
-
 interface AttitudeViewProps {
   title: string
-  value: string
+  value: SharedValue<number | null>
+  unit: string
+  accentColor: string
   children: ReactNode
 }
 
-function AttitudeView({ title, value, children }: AttitudeViewProps) {
+function AttitudeView({ title, value, unit, accentColor, children }: AttitudeViewProps) {
   return (
     <View style={styles.attitudeView}>
       <View style={styles.attitudeHeader}>
         <Text style={styles.attitudeTitle}>{title}</Text>
-        <Text style={styles.attitudeValue}>{value}</Text>
+        <TickText value={value} decimals={1} unit={unit} style={styles.attitudeValue} />
       </View>
+      <View style={[styles.attitudeAccent, { backgroundColor: accentColor }]} />
       <View style={styles.attitudeCanvas}>{children}</View>
     </View>
   )
 }
 
-interface ZeroLevelMarkerProps {
+interface LiveMetricReadoutProps {
+  label: string
+  value: SharedValue<number | null>
+  decimals: number
+  unit: string
   color: string
 }
 
-function ZeroLevelMarker({ color }: ZeroLevelMarkerProps) {
+function LiveMetricReadout({ label, value, decimals, unit, color }: LiveMetricReadoutProps) {
+  return (
+    <View style={styles.liveCell}>
+      <Text style={styles.liveLabel}>{label.toUpperCase()}</Text>
+      <TickText
+        value={value}
+        decimals={decimals}
+        unit={unit}
+        style={[styles.liveValue, { color }]}
+      />
+    </View>
+  )
+}
+
+interface HotAttitudeBarsProps {
+  pitch: SharedValue<number | null>
+  roll: SharedValue<number | null>
+  balancePitch: SharedValue<number | null>
+}
+
+function HotAttitudeBars({ pitch, roll, balancePitch }: HotAttitudeBarsProps) {
+  const pitchZeroColorStyle = useAnimatedStyle<ViewStyle>(() => ({
+    backgroundColor: pitch.value == null ? theme.neutral.textDim : theme.wheel.color,
+  }))
+  const rollZeroColorStyle = useAnimatedStyle<ViewStyle>(() => ({
+    backgroundColor: roll.value == null ? theme.neutral.textDim : theme.teal.color,
+  }))
+  const balanceLineStyle = useAnimatedStyle<ViewStyle>(() => ({
+    transform: [{ rotate: `${balancePitch.value ?? 0}deg` }],
+  }))
+  const pitchBoardStyle = useAnimatedStyle<ViewStyle>(() => ({
+    transform: [{ rotate: `${pitch.value ?? 0}deg` }],
+    backgroundColor: pitch.value == null ? theme.neutral.textDim : theme.wheel.color,
+  }))
+  const rollBoardStyle = useAnimatedStyle<ViewStyle>(() => ({
+    transform: [{ rotate: `${roll.value ?? 0}deg` }],
+    backgroundColor: roll.value == null ? theme.neutral.textDim : theme.teal.color,
+  }))
+
+  return (
+    <View style={styles.attitudeGrid}>
+      <AttitudeView title="SIDE" value={pitch} unit={pitchCfg.unit} accentColor={theme.wheel.color}>
+        <ZeroLevelMarker colorStyle={pitchZeroColorStyle} />
+        <Animated.View style={[styles.balanceLine, balanceLineStyle]} />
+        <Animated.View style={[styles.sideBoard, pitchBoardStyle]} />
+      </AttitudeView>
+
+      <AttitudeView title="BACK" value={roll} unit={rollCfg.unit} accentColor={theme.teal.color}>
+        <ZeroLevelMarker colorStyle={rollZeroColorStyle} />
+        <Animated.View style={[styles.frontBoard, rollBoardStyle]} />
+      </AttitudeView>
+    </View>
+  )
+}
+
+interface ZeroLevelMarkerProps {
+  colorStyle: AnimatedStyle<ViewStyle>
+}
+
+function ZeroLevelMarker({ colorStyle }: ZeroLevelMarkerProps) {
   return (
     <View pointerEvents="none" style={styles.zeroLevelMarker}>
       <View style={styles.zeroTick} />
-      <View style={[styles.zeroRing, { backgroundColor: color }]} />
+      <Animated.View style={[styles.zeroRing, colorStyle]} />
       <View style={styles.zeroTick} />
     </View>
   )
@@ -70,6 +134,7 @@ export default function ImuScreen() {
   const windowMs = useLiveWindowMs()
   const boardConnected = useBleStore((state) => state.status === 'connected')
   const syncRemoteTilt = useBleStore((state) => state.syncRemoteTilt)
+  const hot = liveTelemetryRuntime.values
 
   // Rehydrate the pad without reseeding native telemetry into chart history.
   useEffect(() => {
@@ -113,34 +178,31 @@ export default function ImuScreen() {
     () => computeAutoRange(balancePoints, { baseline: balanceCfg.chartRange }),
     [balancePoints],
   )
-  const currentPitch = latestValue(pitchPoints)
-  const currentRoll = latestValue(rollPoints)
-  const currentBalancePitch = latestValue(balancePoints)
-  const pitchDeg = rotationDeg(currentPitch)
-  const rollDeg = rotationDeg(currentRoll)
-  const balanceDeg = rotationDeg(currentBalancePitch)
 
   return (
     <ControlDetailLayout title="IMU">
       <View style={styles.liveRow}>
-        <View style={styles.liveCell}>
-          <Text style={styles.liveLabel}>{pitchCfg.label.toUpperCase()}</Text>
-          <Text style={styles.liveValue}>
-            {pitchPoints.at(-1) ? pitchCfg.formatWithUnit(pitchPoints.at(-1)!.value) : DASH}
-          </Text>
-        </View>
-        <View style={styles.liveCell}>
-          <Text style={styles.liveLabel}>{rollCfg.label.toUpperCase()}</Text>
-          <Text style={styles.liveValue}>
-            {rollPoints.at(-1) ? rollCfg.formatWithUnit(rollPoints.at(-1)!.value) : DASH}
-          </Text>
-        </View>
-        <View style={styles.liveCell}>
-          <Text style={styles.liveLabel}>BAL</Text>
-          <Text style={styles.liveValue}>
-            {balancePoints.at(-1) ? balanceCfg.formatWithUnit(balancePoints.at(-1)!.value) : DASH}
-          </Text>
-        </View>
+        <LiveMetricReadout
+          label={pitchCfg.label}
+          value={hot.pitch}
+          decimals={pitchCfg.decimals}
+          unit={pitchCfg.unit}
+          color={theme.wheel.color}
+        />
+        <LiveMetricReadout
+          label={rollCfg.label}
+          value={hot.roll}
+          decimals={rollCfg.decimals}
+          unit={rollCfg.unit}
+          color={theme.teal.color}
+        />
+        <LiveMetricReadout
+          label="Balance"
+          value={hot.balancePitch}
+          decimals={balanceCfg.decimals}
+          unit={balanceCfg.unit}
+          color={theme.neutral.textSecondary}
+        />
       </View>
 
       <View style={styles.attitudePanel}>
@@ -148,62 +210,13 @@ export default function ImuScreen() {
           <Text style={styles.sectionLabel}>ATTITUDE</Text>
           <Text style={styles.sectionHint}>Gray line shows balance pitch</Text>
         </View>
-        <View style={styles.attitudeGrid}>
-          <AttitudeView
-            title="SIDE"
-            value={currentPitch == null ? DASH : pitchCfg.formatWithUnit(currentPitch)}
-          >
-            <ZeroLevelMarker
-              color={currentPitch == null ? theme.neutral.textDim : theme.wheel.color}
-            />
-            <View
-              style={[
-                styles.balanceLine,
-                {
-                  transform: [{ rotate: `${balanceDeg}deg` }],
-                },
-              ]}
-            />
-            <View
-              style={[
-                styles.sideBoard,
-                {
-                  transform: [{ rotate: `${pitchDeg}deg` }],
-                  backgroundColor: currentPitch == null ? theme.neutral.textDim : theme.wheel.color,
-                },
-              ]}
-            />
-          </AttitudeView>
-
-          <AttitudeView
-            title="BACK"
-            value={currentRoll == null ? DASH : rollCfg.formatWithUnit(currentRoll)}
-          >
-            <ZeroLevelMarker
-              color={currentRoll == null ? theme.neutral.textDim : theme.teal.color}
-            />
-            <View
-              style={[
-                styles.frontBoard,
-                {
-                  transform: [{ rotate: `${rollDeg}deg` }],
-                  backgroundColor: currentRoll == null ? theme.neutral.textDim : theme.teal.color,
-                },
-              ]}
-            />
-          </AttitudeView>
-        </View>
+        <HotAttitudeBars pitch={hot.pitch} roll={hot.roll} balancePitch={hot.balancePitch} />
       </View>
 
       <View style={styles.remoteTiltControl}>
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionLabel}>REMOTE TILT</Text>
         </View>
-        <Text style={styles.remoteTiltHint}>
-          Drag sideways to tilt the nose, up to set how long it eases back to center on release.
-          Release in the top LOCK band to hold the tilt until you cancel. Requires Remote Tilt
-          (UART) enabled in the board config.
-        </Text>
         <Text style={styles.remoteTiltWarning}>Moves the setpoint live while riding.</Text>
         <RemoteTiltPad
           disabled={!boardConnected}
@@ -250,26 +263,25 @@ export default function ImuScreen() {
 const styles = StyleSheet.create({
   liveRow: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 18,
+    alignItems: 'flex-end',
   },
   liveCell: {
     flex: 1,
-    backgroundColor: theme.neutral.surface,
-    borderRadius: 10,
-    padding: 14,
-    gap: 6,
+    minWidth: 0,
+    gap: 4,
   },
   liveLabel: {
-    color: theme.neutral.textSecondary,
+    color: theme.neutral.textMuted,
     fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 0.5,
+    fontWeight: '700',
+    letterSpacing: 0.7,
   },
   liveValue: {
-    color: theme.neutral.textPrimary,
-    fontSize: 20,
+    fontSize: 24,
     fontFamily: 'monospace',
-    fontWeight: '600',
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
   },
   attitudePanel: {
     gap: 10,
@@ -297,16 +309,6 @@ const styles = StyleSheet.create({
   },
   remoteTiltControl: {
     gap: 8,
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: theme.neutral.border,
-    backgroundColor: theme.neutral.surface,
-  },
-  remoteTiltHint: {
-    color: theme.neutral.textSecondary,
-    fontSize: 12,
-    lineHeight: 17,
   },
   remoteTiltDisabled: {
     color: theme.neutral.textDim,
@@ -320,9 +322,6 @@ const styles = StyleSheet.create({
   attitudeView: {
     flex: 1,
     minHeight: 176,
-    backgroundColor: theme.neutral.surface,
-    borderRadius: 10,
-    padding: 10,
     gap: 10,
   },
   attitudeHeader: {
@@ -335,13 +334,17 @@ const styles = StyleSheet.create({
     color: theme.neutral.textMuted,
     fontSize: 10,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    letterSpacing: 0.7,
   },
   attitudeValue: {
     color: theme.neutral.textSecondary,
     fontSize: 11,
     fontFamily: 'monospace',
     fontWeight: '600',
+  },
+  attitudeAccent: {
+    height: 2,
+    borderRadius: 1,
   },
   attitudeCanvas: {
     flex: 1,
@@ -379,20 +382,20 @@ const styles = StyleSheet.create({
   sideBoard: {
     position: 'absolute',
     width: '72%',
-    height: 4,
-    borderRadius: 2,
+    height: 3,
+    borderRadius: 1.5,
   },
   balanceLine: {
     position: 'absolute',
     width: '54%',
-    height: 3,
-    borderRadius: 2,
+    height: 2,
+    borderRadius: 1,
     backgroundColor: theme.neutral.textMuted,
   },
   frontBoard: {
     position: 'absolute',
     width: '70%',
-    height: 4,
-    borderRadius: 2,
+    height: 3,
+    borderRadius: 1.5,
   },
 })
