@@ -7,7 +7,7 @@ import {
 import { type ReactNode } from 'react'
 import { StyleSheet, View } from 'react-native'
 
-import { MapOptionSelector } from '@/components/ui/menus/MapOptionSelector'
+import { MapOptionSelector } from '@/components/ui/controls/MapOptionSelector'
 import { MAP_NAVIGATION_MODES, type MapNavigationMode } from '@/constants/mapStyles'
 import { theme } from '@/constants/theme'
 

@@ -22,7 +22,7 @@ import { MAP_DEFAULTS } from '@/constants/mapStyles'
 import { ONE_DARK_MAP_STYLE } from '@/constants/oneDarkMapStyle'
 import { BriefcaseIcon, HouseIcon, PencilSimpleIcon, TrashIcon } from 'phosphor-react-native'
 import type { Icon } from 'phosphor-react-native'
-import { HPill, HPillAdd, HPillDot, HPillMenuItem, HPills } from '@/components/ui/menus/HPills'
+import { HPill, HPillAdd, HPillDot, HPillMenuItem, HPills } from '@/components/ui/controls/HPills'
 import { generateZoneId, usePrivacyZoneStore, type PrivacyZone } from '@/store/privacyZoneStore'
 import { liveTelemetryRuntime } from '@/lib/telemetry/liveTelemetryRuntime'
 

@@ -1,0 +1,179 @@
+import type { Icon } from 'phosphor-react-native'
+import type { ReactNode } from 'react'
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
+
+import { theme } from '@/constants/theme'
+
+interface FloatingBarFrameProps {
+  bottomOffset?: number
+  children: ReactNode
+}
+
+export interface FloatingStatusPillAction {
+  kind: 'action'
+  text: string
+  buttonText: string
+  bg: string
+  border: string
+  textColor: string
+  buttonBg: string
+  onPress: () => void
+  testID?: string
+}
+
+export interface FloatingStatusPillSpinner {
+  kind: 'spinner'
+  text: string
+  color: string
+  onPress: () => void
+  testID?: string
+  cancelTestID?: string
+}
+
+export type FloatingStatusPillModel = FloatingStatusPillAction | FloatingStatusPillSpinner
+
+interface FloatingActionPillProps {
+  icon: Icon
+  label: string
+  onPress: () => void
+  active?: boolean
+  disabled?: boolean
+  testID?: string
+}
+
+export function FloatingBarFrame({ bottomOffset = 16, children }: FloatingBarFrameProps) {
+  return (
+    <View style={[styles.wrapper, { bottom: bottomOffset }]} pointerEvents="box-none">
+      {children}
+    </View>
+  )
+}
+
+export function FloatingStatusPill({ pill }: { pill: FloatingStatusPillModel }) {
+  if (pill.kind === 'spinner') {
+    return (
+      <View style={[styles.pill, { borderColor: `${pill.color}55` }]} testID={pill.testID}>
+        <ActivityIndicator size="small" color={pill.color} />
+        <Text style={[styles.pillText, { color: pill.color }]} numberOfLines={1}>
+          {pill.text}
+        </Text>
+        <Pressable style={styles.pillButton} onPress={pill.onPress} testID={pill.cancelTestID}>
+          <Text style={styles.pillButtonText}>Cancel</Text>
+        </Pressable>
+      </View>
+    )
+  }
+
+  return (
+    <Pressable
+      style={[styles.pill, { backgroundColor: pill.bg, borderColor: pill.border }]}
+      onPress={pill.onPress}
+      testID={pill.testID}
+    >
+      <Text style={[styles.pillText, { color: pill.textColor }]} numberOfLines={1}>
+        {pill.text}
+      </Text>
+      <View style={[styles.pillButton, { backgroundColor: pill.buttonBg }]}>
+        <Text style={styles.pillButtonText}>{pill.buttonText}</Text>
+      </View>
+    </Pressable>
+  )
+}
+
+export function FloatingActionPill({
+  icon: IconComp,
+  label,
+  onPress,
+  active = false,
+  disabled = false,
+  testID,
+}: FloatingActionPillProps) {
+  return (
+    <Pressable
+      style={[styles.actionPill, active && styles.actionPillActive, disabled && styles.disabled]}
+      disabled={disabled}
+      onPress={onPress}
+      testID={testID}
+    >
+      <IconComp
+        size={22}
+        color={active ? theme.palette.slate.textPrimary : theme.status.error.color}
+        weight="fill"
+      />
+      <Text style={[styles.actionPillText, active && styles.actionPillTextActive]}>{label}</Text>
+    </Pressable>
+  )
+}
+
+const styles = StyleSheet.create({
+  wrapper: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    zIndex: 30,
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: 10,
+  },
+  pill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 44,
+    paddingLeft: 14,
+    paddingRight: 4,
+    borderRadius: 22,
+    borderWidth: 1,
+    gap: 10,
+    backgroundColor: theme.palette.slate.surfaceDeep,
+    shadowColor: theme.palette.mono.black,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  pillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    maxWidth: 180,
+  },
+  pillButton: {
+    height: 36,
+    paddingHorizontal: 14,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pillButtonText: {
+    color: theme.palette.slate.textPrimary,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  actionPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 48,
+    paddingHorizontal: 18,
+    borderRadius: 24,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: theme.status.error.color,
+    gap: 8,
+  },
+  actionPillActive: {
+    backgroundColor: theme.status.error.bg,
+    borderColor: theme.status.error.color,
+  },
+  actionPillText: {
+    color: theme.status.error.color,
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  actionPillTextActive: {
+    color: theme.palette.slate.textPrimary,
+  },
+  disabled: {
+    opacity: 0.45,
+  },
+})

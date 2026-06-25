@@ -36,8 +36,8 @@ import { MediaHistoryViewer } from '@/components/domain/history/MediaHistoryView
 import { FloatingBar } from '@/components/domain/main/FloatingBar'
 import { HistorySessionSheet } from '@/components/domain/history/HistorySessionSheet'
 import { IconButton } from '@/components/ui/base/IconButton'
-import { MapNavigationSelector } from '@/components/ui/menus/MapNavigationSelector'
-import { MapStyleSwitch } from '@/components/ui/menus/MapStyleSwitch'
+import { MapNavigationSelector } from '@/components/ui/controls/MapNavigationSelector'
+import { MapStyleSwitch } from '@/components/ui/controls/MapStyleSwitch'
 import type { MapNavigationMode, MapStyleKey } from '@/constants/mapStyles'
 import { getMapPointKindIcon } from '@/constants/mapPointIcons'
 import {

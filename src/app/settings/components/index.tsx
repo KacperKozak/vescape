@@ -44,9 +44,9 @@ const sections = [
     icon: SquaresFourIcon,
   },
   {
-    label: 'Menus',
-    hint: 'HPills, MapOptionSelector, MapNavigationSelector',
-    route: '/settings/components/menus',
+    label: 'Controls',
+    hint: 'CircleButton, FloatingBar, HistoryNavigator, HPills, MapOptionSelector',
+    route: '/settings/components/controls',
     icon: SwatchesIcon,
   },
   {

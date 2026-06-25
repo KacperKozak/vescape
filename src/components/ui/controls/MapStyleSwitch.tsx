@@ -1,4 +1,4 @@
-import { MapOptionSelector } from '@/components/ui/menus/MapOptionSelector'
+import { MapOptionSelector } from '@/components/ui/controls/MapOptionSelector'
 import { IS_MAPY_CONFIGURED } from '@/config/mapy'
 import { MAP_STYLES, type MapStyleKey } from '@/constants/mapStyles'
 import { theme } from '@/constants/theme'
