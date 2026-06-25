@@ -53,7 +53,14 @@ function getStatusPill(
   onStopScan: () => void,
   onRetryConnect: () => void,
 ): StatusPill | null {
-  if (!board) return null
+  if (!board)
+    return {
+      kind: 'action',
+      text: 'No board added',
+      buttonText: 'Add',
+      config: ALERT_CONFIG.warning,
+      onPress: () => router.push(routes.addBoard),
+    }
   if (!board.link)
     return {
       kind: 'action',

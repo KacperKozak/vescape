@@ -33,10 +33,10 @@ export function BatteryIndicator({ compact, transparent, containerStyle }: Batte
   // supplies the latest SoC/voltage sample and paces this component's re-render.
   const batterySeries = useLiveSeries('batteryPercent')
   const voltageSeries = useLiveSeries('batteryVoltage')
-  const batteryConfig = useBoardStore(
+  const { batteryConfig, hasBoard } = useBoardStore(
     useShallow((s) => {
       const board = s.boards.find((b) => b.id === s.activeBoardId)
-      return board?.batteryConfig ?? null
+      return { batteryConfig: board?.batteryConfig ?? null, hasBoard: board != null }
     }),
   )
   const alertRules = useAlertsStore((s) => s.rules)
@@ -74,11 +74,11 @@ export function BatteryIndicator({ compact, transparent, containerStyle }: Batte
       unit="%"
       alerts={alerts}
       aux={voltage != null ? telemetry.battVoltage.formatWithUnit(voltage) : undefined}
-      hint={!batteryConfigured ? 'Set battery config in board settings' : undefined}
+      hint={!batteryConfigured && hasBoard ? 'Set battery config in board settings' : undefined}
       compact={compact}
       transparent={transparent}
       containerStyle={containerStyle}
-      onPress={() => router.push(routes.controlBattery)}
+      onPress={() => router.push(hasBoard ? routes.controlBattery : routes.addBoard)}
       testID="battery-bar"
     />
   )
