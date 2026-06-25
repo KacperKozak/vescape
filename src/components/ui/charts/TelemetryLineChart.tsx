@@ -1,15 +1,17 @@
-import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { PanResponder, StyleSheet, Text, View } from 'react-native'
 import type { LayoutChangeEvent, StyleProp, ViewStyle } from 'react-native'
-import Svg, {
-  Circle as SvgCircle,
-  Defs as SvgDefs,
-  LinearGradient as SvgLinearGradient,
-  Line as SvgLine,
-  Polyline as SvgPolyline,
-  Rect as SvgRect,
-  Stop as SvgStop,
-} from 'react-native-svg'
+import {
+  Canvas,
+  Circle,
+  DashPathEffect,
+  Line,
+  LinearGradient,
+  Path,
+  RoundedRect,
+  Skia,
+  vec,
+} from '@shopify/react-native-skia'
 
 import { theme } from '@/constants/theme'
 import {
@@ -50,6 +52,12 @@ function formatAxisNumber(value: number): string {
   const abs = Math.abs(value)
   if (abs >= 100 || Number.isInteger(value)) return Math.round(value).toString()
   return value.toFixed(1)
+}
+
+function buildLinePath(coords: { x: number; y: number }[]) {
+  const builder = Skia.PathBuilder.Make().moveTo(coords[0].x, coords[0].y)
+  for (let i = 1; i < coords.length; i += 1) builder.lineTo(coords[i].x, coords[i].y)
+  return builder.detach()
 }
 
 function resolveActiveChartColor(
@@ -95,7 +103,6 @@ interface ChartLineSegmentsProps {
   height: number
   color: string
   getPointColor?: (value: number) => string
-  gradientIdPrefix: string
   windowMs?: number
 }
 
@@ -106,86 +113,70 @@ const ChartLineSegments = memo(function ChartLineSegments({
   height,
   color,
   getPointColor,
-  gradientIdPrefix,
   windowMs,
 }: ChartLineSegmentsProps) {
-  const polylineSegments = useMemo(
+  const plainPaths = useMemo(
     () =>
-      width > 0
+      !getPointColor && width > 0
         ? splitChartLineSegments(points, range, width, height, windowMs)
-            .map((segment) => segment.map((point) => `${point.x},${point.y}`).join(' '))
-            .filter((segment) => segment.length > 0)
+            .filter((segment) => segment.length >= 2)
+            .map(buildLinePath)
         : [],
-    [height, points, range, width, windowMs],
+    [getPointColor, height, points, range, width, windowMs],
   )
-  const coloredLineSegments = useMemo(
+  const gradientSegments = useMemo(
     () =>
       getPointColor && width > 0
-        ? splitChartPointSegments(points, range, width, height, windowMs).map(
-            (segment, segmentIndex) => ({
-              key: `${segmentIndex}`,
-              gradientId: `${gradientIdPrefix}-${segmentIndex}`,
-              points: segment.map((point) => `${point.x},${point.y}`).join(' '),
-              stops: segment.map((point) => ({
-                offset: `${Math.max(0, Math.min(1, point.x / width)) * 100}%`,
-                color: getPointColor(point.point.value),
-              })),
-            }),
-          )
+        ? splitChartPointSegments(points, range, width, height, windowMs)
+            .filter((segment) => segment.length >= 2)
+            .map((segment) => ({
+              path: buildLinePath(segment),
+              colors: segment.map((point) => getPointColor(point.point.value)),
+              positions: segment.map((point) => Math.max(0, Math.min(1, point.x / width))),
+            }))
         : [],
-    [getPointColor, gradientIdPrefix, height, points, range, width, windowMs],
+    [getPointColor, height, points, range, width, windowMs],
   )
 
   if (getPointColor) {
     return (
       <>
-        <SvgDefs>
-          {coloredLineSegments.map((segment) => (
-            <SvgLinearGradient
-              key={segment.gradientId}
-              id={segment.gradientId}
-              x1={0}
-              y1={0}
-              x2={width}
-              y2={0}
-              gradientUnits="userSpaceOnUse"
-            >
-              {segment.stops.map((stop, index) => (
-                <SvgStop
-                  key={`${segment.gradientId}-${index}`}
-                  offset={stop.offset}
-                  stopColor={stop.color}
-                />
-              ))}
-            </SvgLinearGradient>
-          ))}
-        </SvgDefs>
-        {coloredLineSegments.map((segment) => (
-          <SvgPolyline
-            key={segment.key}
-            points={segment.points}
-            fill="none"
-            stroke={`url(#${segment.gradientId})`}
+        {gradientSegments.map((segment, index) => (
+          <Path
+            key={index}
+            path={segment.path}
+            style="stroke"
             strokeWidth={2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
+            strokeCap="round"
+            strokeJoin="round"
+          >
+            <LinearGradient
+              start={vec(0, 0)}
+              end={vec(width, 0)}
+              colors={segment.colors}
+              positions={segment.positions}
+            />
+          </Path>
         ))}
       </>
     )
   }
 
-  return polylineSegments.map((segment, index) => (
-    <SvgPolyline
-      key={`segment-${index}`}
-      points={segment}
-      fill="none"
-      stroke={color}
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-  ))
+  return (
+    <>
+      {plainPaths.map((path, index) => (
+        <Path
+          key={index}
+          path={path}
+          color={color}
+          style="stroke"
+          strokeWidth={2}
+          strokeCap="round"
+          strokeJoin="round"
+        />
+      ))}
+    </>
+  )
 })
 
 export function TelemetryLineChart({
@@ -206,7 +197,6 @@ export function TelemetryLineChart({
   secondary,
 }: TelemetryLineChartProps) {
   'use no memo'
-  const gradientIdPrefix = `telemetry-line-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`
   const [chartWidth, setChartWidth] = useState(0)
   const [chartPageX, setChartPageX] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
@@ -331,98 +321,100 @@ export function TelemetryLineChart({
           onLayout={onGraphLayout}
           {...panResponder.panHandlers}
         >
-          <Svg width="100%" height={height}>
-            <SvgLine
-              x1={0}
-              y1={0.5}
-              x2={chartWidth}
-              y2={0.5}
-              stroke={theme.palette.slate.surface}
-              strokeWidth={0.5}
-            />
-            <SvgLine
-              x1={0}
-              y1={height / 2}
-              x2={chartWidth}
-              y2={height / 2}
-              stroke={theme.palette.slate.surface}
-              strokeWidth={0.5}
-              strokeDasharray="4,4"
-            />
-            <SvgLine
-              x1={0}
-              y1={height - 0.5}
-              x2={chartWidth}
-              y2={height - 0.5}
-              stroke={theme.palette.slate.surface}
-              strokeWidth={0.5}
-            />
+          {chartWidth > 0 && (
+            <Canvas style={{ width: chartWidth, height }}>
+              <Line
+                p1={vec(0, 0.5)}
+                p2={vec(chartWidth, 0.5)}
+                color={theme.palette.slate.surface}
+                strokeWidth={0.5}
+              />
+              <Line
+                p1={vec(0, height / 2)}
+                p2={vec(chartWidth, height / 2)}
+                color={theme.palette.slate.surface}
+                strokeWidth={0.5}
+              >
+                <DashPathEffect intervals={[4, 4]} />
+              </Line>
+              <Line
+                p1={vec(0, height - 0.5)}
+                p2={vec(chartWidth, height - 0.5)}
+                color={theme.palette.slate.surface}
+                strokeWidth={0.5}
+              />
 
-            {excludedRanges?.map((range) => {
-              const x1 = getXPosition(points, range.startMs, chartWidth, windowMs)
-              const x2 = getXPosition(points, range.endMs, chartWidth, windowMs)
-              if (x1 == null || x2 == null) return null
-              const bandWidth = Math.max(x2 - x1, 2)
-              return (
-                <SvgRect
-                  key={`${range.reason}-${range.startMs}-${range.endMs}`}
-                  x={x1}
-                  y={height - EXCLUSION_MARKER_HEIGHT - EXCLUSION_MARKER_INSET}
-                  width={bandWidth}
-                  height={EXCLUSION_MARKER_HEIGHT}
-                  rx={0.5}
-                  fill={exclusionColor(range.reason)}
-                  fillOpacity={0.85}
+              {excludedRanges?.map((range) => {
+                const x1 = getXPosition(points, range.startMs, chartWidth, windowMs)
+                const x2 = getXPosition(points, range.endMs, chartWidth, windowMs)
+                if (x1 == null || x2 == null) return null
+                const bandWidth = Math.max(x2 - x1, 2)
+                return (
+                  <RoundedRect
+                    key={`${range.reason}-${range.startMs}-${range.endMs}`}
+                    x={x1}
+                    y={height - EXCLUSION_MARKER_HEIGHT - EXCLUSION_MARKER_INSET}
+                    width={bandWidth}
+                    height={EXCLUSION_MARKER_HEIGHT}
+                    r={0.5}
+                    color={exclusionColor(range.reason)}
+                    opacity={0.85}
+                  />
+                )
+              })}
+
+              {secondary && (
+                <ChartLineSegments
+                  points={secondary.points}
+                  range={secondary.range}
+                  width={chartWidth}
+                  height={height}
+                  color={secondary.color}
+                  windowMs={windowMs}
                 />
-              )
-            })}
+              )}
 
-            {secondary && (
               <ChartLineSegments
-                points={secondary.points}
-                range={secondary.range}
+                points={points}
+                range={range}
                 width={chartWidth}
                 height={height}
-                color={secondary.color}
-                gradientIdPrefix={`${gradientIdPrefix}-secondary`}
+                color={color}
+                getPointColor={getPointColor}
                 windowMs={windowMs}
               />
-            )}
 
-            <ChartLineSegments
-              points={points}
-              range={range}
-              width={chartWidth}
-              height={height}
-              color={color}
-              getPointColor={getPointColor}
-              gradientIdPrefix={gradientIdPrefix}
-              windowMs={windowMs}
-            />
+              {markerPosition && isDragging && (
+                <Line
+                  p1={vec(markerPosition.x, 0)}
+                  p2={vec(markerPosition.x, height)}
+                  color={theme.palette.slate.textDim}
+                  strokeWidth={1}
+                >
+                  <DashPathEffect intervals={[3, 3]} />
+                </Line>
+              )}
 
-            {markerPosition && isDragging && (
-              <SvgLine
-                x1={markerPosition.x}
-                y1={0}
-                x2={markerPosition.x}
-                y2={height}
-                stroke={theme.palette.slate.textDim}
-                strokeWidth={1}
-                strokeDasharray="3,3"
-              />
-            )}
-
-            {markerPosition && (
-              <SvgCircle
-                cx={markerPosition.x}
-                cy={markerPosition.y}
-                r={4}
-                fill={theme.palette.slate.surfaceDeep}
-                stroke={activeColor}
-                strokeWidth={2}
-              />
-            )}
-          </Svg>
+              {markerPosition && (
+                <>
+                  <Circle
+                    cx={markerPosition.x}
+                    cy={markerPosition.y}
+                    r={4}
+                    color={theme.palette.slate.surfaceDeep}
+                  />
+                  <Circle
+                    cx={markerPosition.x}
+                    cy={markerPosition.y}
+                    r={4}
+                    color={activeColor}
+                    style="stroke"
+                    strokeWidth={2}
+                  />
+                </>
+              )}
+            </Canvas>
+          )}
         </View>
 
         {secondary && (

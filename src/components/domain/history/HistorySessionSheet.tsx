@@ -12,7 +12,7 @@ import {
 } from 'react-native'
 import { CaretRightIcon, WarningCircleIcon } from 'phosphor-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import Svg, { Circle, Polyline } from 'react-native-svg'
+import { Canvas, Circle, Path, Skia } from '@shopify/react-native-skia'
 
 import { interaction, theme } from '@/constants/theme'
 import { telemetry } from '@/constants/telemetry'
@@ -184,7 +184,7 @@ function getSessionRoutePreviewPoints(
 }
 
 function RoutePreview({ points, selected }: { points: RoutePoint[]; selected: boolean }) {
-  const path = formatPreviewPath(points)
+  const path = useMemo(() => buildPreviewPath(points), [points])
   const start = points.length > 0 ? formatPreviewPoint(points, 0) : null
   const end = points.length > 1 ? formatPreviewPoint(points, points.length - 1) : null
   const strokeColor = selected ? theme.palette.sky.color : theme.palette.purple.color
@@ -192,18 +192,18 @@ function RoutePreview({ points, selected }: { points: RoutePoint[]; selected: bo
   return (
     <View style={styles.routePreview}>
       {path ? (
-        <Svg width="100%" height="100%" viewBox="0 0 74 52">
-          <Polyline
-            points={path}
-            fill="none"
-            stroke={strokeColor}
+        <Canvas style={styles.routeCanvas}>
+          <Path
+            path={path}
+            style="stroke"
+            color={strokeColor}
             strokeWidth={2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
+            strokeCap="round"
+            strokeJoin="round"
           />
-          {start && <Circle cx={start.x} cy={start.y} r={3} fill={theme.palette.green.color} />}
-          {end && <Circle cx={end.x} cy={end.y} r={3} fill={theme.status.error.color} />}
-        </Svg>
+          {start && <Circle cx={start.x} cy={start.y} r={3} color={theme.palette.green.color} />}
+          {end && <Circle cx={end.x} cy={end.y} r={3} color={theme.status.error.color} />}
+        </Canvas>
       ) : (
         <View style={styles.routeEmpty}>
           <View style={styles.routeEmptyLine} />
@@ -213,17 +213,23 @@ function RoutePreview({ points, selected }: { points: RoutePoint[]; selected: bo
   )
 }
 
-function formatPreviewPath(points: RoutePoint[]): string | null {
+function buildPreviewPath(points: RoutePoint[]) {
   if (points.length < 2) return null
-  return points
-    .map((_, index) => formatPreviewPoint(points, index))
-    .map(({ x, y }) => `${x},${y}`)
-    .join(' ')
+  const first = formatPreviewPoint(points, 0)
+  const builder = Skia.PathBuilder.Make().moveTo(first.x, first.y)
+  for (let index = 1; index < points.length; index += 1) {
+    const { x, y } = formatPreviewPoint(points, index)
+    builder.lineTo(x, y)
+  }
+  return builder.detach()
 }
 
+const PREVIEW_WIDTH = 74
+const PREVIEW_HEIGHT = 52
+
 function formatPreviewPoint(points: RoutePoint[], index: number): { x: number; y: number } {
-  const width = 74
-  const height = 52
+  const width = PREVIEW_WIDTH
+  const height = PREVIEW_HEIGHT
   const padding = 8
   const minLatitude = Math.min(...points.map((point) => point.latitude))
   const maxLatitude = Math.max(...points.map((point) => point.latitude))
@@ -320,10 +326,14 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   routePreview: {
-    width: 74,
-    height: 52,
+    width: PREVIEW_WIDTH,
+    height: PREVIEW_HEIGHT,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  routeCanvas: {
+    width: PREVIEW_WIDTH,
+    height: PREVIEW_HEIGHT,
   },
   routeEmpty: {
     width: '100%',
