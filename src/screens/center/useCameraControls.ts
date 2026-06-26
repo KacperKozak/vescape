@@ -589,13 +589,31 @@ export function useCameraControls({
         setFreeMapZoom(zoom)
       },
       focusCoordinate(coordinate: [number, number]) {
-        setFollowGps(false)
+        const effect = dispatchCameraIntent({
+          type: 'FocusCoordinate',
+          coordinate,
+          currentCamera: currentCameraRef.current,
+          fallbackZoomLevel: gpsCamera.zoomLevel,
+          navigationMode: mapNavigationMode,
+          perspectiveEnabled,
+        })
         const current = currentCameraRef.current
         cameraRef.current?.setCamera({
-          centerCoordinate: coordinate,
-          zoomLevel: current?.zoomLevel,
-          heading: current?.heading,
-          pitch: current?.pitch,
+          ...effect?.camera,
+          zoomLevel: effect?.camera.zoomLevel ?? current?.zoomLevel,
+          animationDuration: MAP_DEFAULTS.animationDuration,
+          animationMode: 'easeTo',
+        })
+      },
+      focusWeather() {
+        const effect = dispatchCameraIntent({
+          type: 'EnterWeatherView',
+          currentCamera: currentCameraRef.current,
+          fallbackCenterCoordinate: gpsCamera.centerCoordinate,
+          perspectiveEnabled,
+        })
+        cameraRef.current?.setCamera({
+          ...effect?.camera,
           animationDuration: MAP_DEFAULTS.animationDuration,
           animationMode: 'easeTo',
         })

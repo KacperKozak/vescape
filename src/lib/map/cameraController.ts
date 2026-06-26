@@ -5,6 +5,7 @@ import {
   getPaddingForProfile,
   getPitchForProfileZoom,
   getProfileZoomLevel,
+  MAP_CAMERA_PROFILES,
   type CameraPadding,
   type MapCameraProfileKey,
 } from './cameraProfiles'
@@ -76,6 +77,20 @@ export type MapCameraIntent =
       type: 'RefineRideHistoryRoute'
       selectionKey: string | null
       camera: MapCameraSnapshot
+    }
+  | {
+      type: 'FocusCoordinate'
+      coordinate: [number, number]
+      currentCamera: MapCameraSnapshot | null
+      fallbackZoomLevel: number
+      navigationMode: MapNavigationMode
+      perspectiveEnabled: boolean
+    }
+  | {
+      type: 'EnterWeatherView'
+      currentCamera: MapCameraSnapshot | null
+      fallbackCenterCoordinate: [number, number]
+      perspectiveEnabled: boolean
     }
 
 export interface MapCameraEffect {
@@ -211,6 +226,54 @@ export function reduceMapCameraIntent(
         mode: { kind: 'rideHistory', selectionKey: intent.selectionKey, phase: 'route' },
       },
       effect: { camera: intent.camera },
+    }
+  }
+
+  if (intent.type === 'FocusCoordinate') {
+    const profile = liveProfileForMode(intent.navigationMode)
+    const zoomLevel = intent.currentCamera?.zoomLevel ?? intent.fallbackZoomLevel
+    return {
+      state: {
+        ...state,
+        mode: { kind: 'manualBrowse' },
+      },
+      effect: {
+        camera: {
+          centerCoordinate: intent.coordinate,
+          zoomLevel,
+          heading: profile === 'northUp' ? 0 : intent.currentCamera?.heading,
+          pitch: getPitchForProfileZoom({
+            profile,
+            zoom: zoomLevel,
+            perspectiveEnabled: intent.perspectiveEnabled,
+            enforceMinimums: false,
+          }),
+        },
+      },
+    }
+  }
+
+  if (intent.type === 'EnterWeatherView') {
+    const zoomLevel = 8
+    return {
+      state: {
+        ...state,
+        mode: { kind: 'manualBrowse' },
+      },
+      effect: {
+        camera: {
+          centerCoordinate:
+            intent.currentCamera?.centerCoordinate ?? intent.fallbackCenterCoordinate,
+          zoomLevel,
+          heading: 0,
+          pitch: getPitchForProfileZoom({
+            profile: MAP_CAMERA_PROFILES.weather,
+            zoom: zoomLevel,
+            perspectiveEnabled: intent.perspectiveEnabled,
+            enforceMinimums: false,
+          }),
+        },
+      },
     }
   }
 
