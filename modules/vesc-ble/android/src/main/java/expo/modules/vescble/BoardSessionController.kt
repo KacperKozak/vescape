@@ -400,14 +400,12 @@ internal class BoardSessionController(private val service: VescForegroundService
     }
 
     fun consumePendingStart() {
-        val start = VescForegroundService.pendingStart ?: return
-        VescForegroundService.pendingStart = null
+        val start = VescForegroundService.claimPendingStart() ?: return
         beginSession(start)
     }
 
     fun consumePendingStop() {
-        val stop = VescForegroundService.pendingStop ?: return
-        VescForegroundService.pendingStop = null
+        val stop = VescForegroundService.claimPendingStop() ?: return
         if (boardConfig != null) {
             setStatus(BoardPhase.Disconnecting)
             stopCurrentBoardSession(
@@ -437,8 +435,7 @@ internal class BoardSessionController(private val service: VescForegroundService
     }
 
     fun consumePendingGpsStart() {
-        if (!VescForegroundService.pendingGpsStart) return
-        VescForegroundService.pendingGpsStart = false
+        if (!VescForegroundService.claimPendingGpsStart()) return
         startGpsMonitoring()
     }
 
