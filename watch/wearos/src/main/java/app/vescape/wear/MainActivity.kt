@@ -1,6 +1,7 @@
 package app.vescape.wear
 
 import android.os.Bundle
+import android.os.SystemClock
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import com.google.android.gms.wearable.MessageClient
@@ -16,7 +17,9 @@ class MainActivity : ComponentActivity() {
 
     private val listener = MessageClient.OnMessageReceivedListener { event ->
         if (event.path != TELEMETRY_PATH) return@OnMessageReceivedListener
-        WatchFrameDecoder.decode(event.data)?.let { TelemetryState.frame.value = it }
+        WatchFrameDecoder.decode(event.data)?.let { frame ->
+            runOnUiThread { TelemetryState.acceptFrame(frame, SystemClock.elapsedRealtime()) }
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
