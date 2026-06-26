@@ -76,6 +76,22 @@ _Avoid_: Ride photo, recording media, uploaded media
 A user-authored map-visible location that is independent from Ride Recording and Ride History. A Map Point may describe a direction target, trail feature, viewpoint, charging place, or similar location.
 _Avoid_: Marker, GPS point, telemetry marker
 
+**Map Camera Controller**:
+The app-owned volatile coordinator for map camera position, zoom, pitch, heading, padding, animation, and transitions between live follow, manual browse, and ride history framing.
+_Avoid_: Map manager, map state manager, camera helper
+
+**Map Camera Intent**:
+A user or app request for the Map Camera Controller to choose the next camera state, such as following live GPS, browsing manually, or framing ride history.
+_Avoid_: Camera command, map action, imperative camera call
+
+**History Camera Refinement**:
+The Map Camera Controller's in-flight adjustment from approximate Ride History framing to exact route framing for the same selected ride.
+_Avoid_: Second jump, route correction, recenter after load
+
+**Map Camera Profile**:
+A named camera behavior used by the Map Camera Controller to derive heading, zoom, pitch, padding, and animation policy for a view or navigation mode.
+_Avoid_: Tilt setting, view camera hack, mode special case
+
 **Tune Snapshot**:
 A read-only view of the board's current Refloat tuning configuration decoded from the board's schema and binary config.
 _Avoid_: Tune cache, settings dump
@@ -121,6 +137,15 @@ _Avoid_: Error log, debug session, crash report
 - A **Metric Exclusion** belongs to one **Telemetry Sample** and one metric.
 - A **GPS Fix** may be associated with live map state, but only GPS fixes captured alongside **Telemetry Samples** contribute to a **Ride Recording**.
 - A **Map Point** is placed by the user on the live map and does not belong to **Ride Recording** or **Ride History**.
+- A **Map Camera Controller** may frame **Live State**, **Ride History**, **GPS Fixes**, or **Map Points**, but does not own those domain objects.
+- A **Map Camera Intent** is interpreted by the **Map Camera Controller**; outside components request camera behavior instead of mutating the map camera directly.
+- A **History Camera Refinement** belongs to one selected **Ride Recording** in **Ride History** and is ignored if the selected ride changes or the rider manually browses the map.
+- A **Map Camera Profile** belongs to the **Map Camera Controller** and keeps pitch zoom-derived, including removing map tilt at far zoom levels.
+- A **Map Camera Profile** for compass follow preserves live follow during zoom-only gestures near the followed GPS fix, matching GPS-heading follow behavior.
+- A **Map Camera Profile** for compass follow is applied only after a real compass heading is available; heading zero is not used as a placeholder for compass readiness.
+- A style reload is treated as a **Map Camera Intent** that preserves the current manual camera snapshot or recomputes the active logical target without resetting heading or pitch.
+- A weather view uses a **Map Camera Profile** rather than a direct zoom change; it keeps the current map center while applying a weather overview zoom and low or flat pitch.
+- A **Map Camera Controller** uses **App Settings** such as map style, navigation mode, and perspective mode, but those settings remain durable preferences outside the controller.
 - A **Privacy Zone** limits what **Ride Recording** data is retained without changing **Live State**.
 - A **Ride Recording** becomes part of **Ride History**.
 - A **Moving Window** belongs to one **Ride Recording** and is derived from which **Telemetry Samples** are excluded from speed metrics; a Ride Recording without one is excluded from **Ride History**.
@@ -155,6 +180,10 @@ _Avoid_: Error log, debug session, crash report
 - "error" may mean crash, handled failure, UI message, or diagnostic clue; resolved term: use **Diagnostic Event** for app-observed abnormal conditions worth reviewing.
 - "telemetry marker" names the storage table, but map-visible history annotations are **Ride History Markers**.
 - "point" may mean a GPS coordinate, route coordinate, history annotation, or user-authored map location; resolved term: use **Map Point** for user-authored map locations.
+- "map manager" may mean camera orchestration, map style selection, layer visibility, or map data ownership; resolved term: use **Map Camera Controller** for camera orchestration only.
+- "camera command" and direct method-style names obscure who chooses the final camera; resolved term: use **Map Camera Intent** for requests handled by the **Map Camera Controller**.
+- "route correction" sounds like changing Ride History data; resolved term: use **History Camera Refinement** for camera-only retargeting from approximate to exact ride framing.
+- "tilt setting" is too narrow because pitch depends on zoom, heading, padding, and view intent; resolved term: use **Map Camera Profile**.
 - "filter" may mean dropping samples, smoothing charts, or excluding implausible values from metrics; resolved term: use **Metric Sanitizer** for metric exclusion that preserves original samples.
 - "save area" or "safe area" may mean a privacy boundary around home or work; resolved term: use **Privacy Zone**.
 - "smoother" is avoided in the raw-telemetry layer (see **Metric Sanitizer**) but is legitimate for the **Battery SoC Estimate**, a processed derived value that smooths the percentage only — never the raw voltage **Telemetry Sample**.
