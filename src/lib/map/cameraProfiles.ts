@@ -1,3 +1,5 @@
+import type { MapNavigationMode } from '@/constants/mapStyles'
+
 const MIN_ZOOM = 0
 const GPS_HEADING_MIN_ZOOM = 16
 const GPS_HEADING_VERTICAL_OFFSET_RATIO = 0.2
@@ -80,6 +82,15 @@ export const MAP_CAMERA_PROFILES: Record<MapCameraProfileKey, CameraProfileDefin
     animationDurationMs: 350,
   },
 } as const
+
+export function getMapCameraProfileForNavigationMode(
+  navigationMode: MapNavigationMode,
+): MapCameraProfileKey {
+  if (navigationMode === 'gpsHeading') return 'gpsHeading'
+  if (navigationMode === 'phoneHeading') return 'compass'
+  if (navigationMode === 'freeRotate') return 'freeRotate'
+  return 'northUp'
+}
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
