@@ -395,6 +395,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
     historyPreview,
     rideRoute,
     mapViewport: mapLayout,
+    mapNavigationMode,
     gpsHeadingMode: headingFollowMode,
     phoneHeadingMode,
     phoneHeadingReady: phoneHeadingDeg != null,
