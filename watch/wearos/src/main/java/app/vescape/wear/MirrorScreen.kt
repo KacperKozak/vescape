@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -24,12 +25,18 @@ import kotlinx.coroutines.delay
  * a frozen value is never presented as live.
  */
 @Composable
-fun MirrorScreen() {
+fun MirrorScreen(isAmbient: Boolean = false, onKeepScreenAwakeChanged: (Boolean) -> Unit = {}) {
     val state by TelemetryState.mirrorState
+    val keepScreenAwake = state.status == MirrorStatus.LIVE && !isAmbient
 
-    LaunchedEffect(Unit) {
+    DisposableEffect(keepScreenAwake) {
+        onKeepScreenAwakeChanged(keepScreenAwake)
+        onDispose { onKeepScreenAwakeChanged(false) }
+    }
+
+    LaunchedEffect(isAmbient) {
         while (true) {
-            delay(WATCH_FRAME_INTERVAL_MS)
+            delay(if (isAmbient) AMBIENT_REFRESH_INTERVAL_MS else WATCH_FRAME_INTERVAL_MS)
             TelemetryState.refresh()
         }
     }
@@ -37,56 +44,61 @@ fun MirrorScreen() {
     MaterialTheme {
         Box(modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
             when (state.status) {
-                MirrorStatus.DISCONNECTED -> DisconnectedLayout()
-                MirrorStatus.STALE -> FrameLayout(state.frame!!, ConnectionStatus.STALE)
-                MirrorStatus.LIVE -> FrameLayout(state.frame!!, ConnectionStatus.LIVE)
+                MirrorStatus.DISCONNECTED -> DisconnectedLayout(isAmbient)
+                MirrorStatus.STALE -> FrameLayout(state.frame!!, ConnectionStatus.STALE, isAmbient)
+                MirrorStatus.LIVE -> FrameLayout(state.frame!!, ConnectionStatus.LIVE, isAmbient)
             }
         }
     }
 }
 
 @Composable
-private fun FrameLayout(frame: WatchFrame, connectionStatus: ConnectionStatus) {
-    val stale = connectionStatus == ConnectionStatus.STALE
+private fun FrameLayout(frame: WatchFrame, connectionStatus: ConnectionStatus, isAmbient: Boolean) {
+    val muted = isAmbient || connectionStatus == ConnectionStatus.STALE
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(3.dp),
+        verticalArrangement = Arrangement.spacedBy(if (isAmbient) 1.dp else 3.dp),
     ) {
-        ConnectionLabel(connectionStatus)
+        ConnectionLabel(if (isAmbient) ConnectionStatus.AMBIENT else connectionStatus, isAmbient)
         MetricText(
             value = format(frame.speed, 0),
             unit = "km/h",
-            color = if (stale) DimText else SpeedColor,
+            color = if (muted) AmbientText else SpeedColor,
             hero = true,
+            isAmbient = isAmbient,
         )
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            MetricText(
-                value = frame.duty?.let { format(it, 0) } ?: "--",
-                unit = "%",
-                color = if (stale) DimText else DutyColor,
-                hero = false,
-            )
-            MetricText(
-                value = frame.battery?.let { format(it, 0) } ?: "--",
-                unit = "%",
-                color = if (stale) DimText else batteryColor(frame.battery),
-                hero = false,
+        if (!isAmbient) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                MetricText(
+                    value = frame.duty?.let { format(it, 0) } ?: "--",
+                    unit = "%",
+                    color = if (muted) DimText else DutyColor,
+                    hero = false,
+                    isAmbient = false,
+                )
+                MetricText(
+                    value = frame.battery?.let { format(it, 0) } ?: "--",
+                    unit = "%",
+                    color = if (muted) DimText else batteryColor(frame.battery),
+                    hero = false,
+                    isAmbient = false,
+                )
+            }
+            Text(
+                text = "M ${temp(frame.motorTemp)}   C ${temp(frame.ctrlTemp)}",
+                style = MaterialTheme.typography.caption2,
+                color = if (muted) DimText else TempColor,
+                textAlign = TextAlign.Center,
             )
         }
-        Text(
-            text = "M ${temp(frame.motorTemp)}   C ${temp(frame.ctrlTemp)}",
-            style = MaterialTheme.typography.caption2,
-            color = if (stale) DimText else TempColor,
-            textAlign = TextAlign.Center,
-        )
     }
 }
 
 @Composable
-private fun DisconnectedLayout() {
+private fun DisconnectedLayout(isAmbient: Boolean) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -94,14 +106,14 @@ private fun DisconnectedLayout() {
         Text(
             text = "--",
             style = MaterialTheme.typography.display1,
-            color = DimText,
+            color = if (isAmbient) AmbientText else DimText,
         )
-        ConnectionLabel(ConnectionStatus.DISCONNECTED)
+        ConnectionLabel(if (isAmbient) ConnectionStatus.AMBIENT else ConnectionStatus.DISCONNECTED, isAmbient)
     }
 }
 
 @Composable
-private fun MetricText(value: String, unit: String, color: Color, hero: Boolean) {
+private fun MetricText(value: String, unit: String, color: Color, hero: Boolean, isAmbient: Boolean) {
     Row(
         horizontalArrangement = Arrangement.spacedBy(if (hero) 4.dp else 2.dp),
         verticalAlignment = Alignment.Bottom,
@@ -112,21 +124,23 @@ private fun MetricText(value: String, unit: String, color: Color, hero: Boolean)
             color = color,
             textAlign = TextAlign.Center,
         )
-        Text(
-            text = unit,
-            style = MaterialTheme.typography.caption2,
-            color = SecondaryText,
-            textAlign = TextAlign.Center,
-        )
+        if (!isAmbient) {
+            Text(
+                text = unit,
+                style = MaterialTheme.typography.caption2,
+                color = SecondaryText,
+                textAlign = TextAlign.Center,
+            )
+        }
     }
 }
 
 @Composable
-private fun ConnectionLabel(status: ConnectionStatus) {
+private fun ConnectionLabel(status: ConnectionStatus, isAmbient: Boolean) {
     Text(
         text = status.label,
         style = MaterialTheme.typography.caption2,
-        color = status.color,
+        color = if (isAmbient) AmbientText else status.color,
         textAlign = TextAlign.Center,
     )
 }
@@ -135,6 +149,7 @@ private enum class ConnectionStatus(val label: String, val color: Color) {
     LIVE("LIVE", LiveColor),
     STALE("STALE", DimText),
     DISCONNECTED("DISCONNECTED", DimText),
+    AMBIENT("AOD", AmbientText),
 }
 
 private fun format(value: Double, decimals: Int): String = String.format("%.${decimals}f", value)
@@ -156,3 +171,6 @@ private val BatteryColor = Color(0xFF7CDB8A)
 private val TempColor = Color(0xFFFF9A5A)
 private val WarningColor = Color(0xFFFFC65C)
 private val LiveColor = Color(0xFF7CDB8A)
+private val AmbientText = Color(0xFFB8C4CE)
+
+private const val AMBIENT_REFRESH_INTERVAL_MS = 60_000L

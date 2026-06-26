@@ -5,10 +5,13 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.mutableStateOf
 import androidx.core.content.ContextCompat
+import androidx.wear.ambient.AmbientLifecycleObserver
 import com.google.android.gms.wearable.MessageClient
 import com.google.android.gms.wearable.Wearable
 
@@ -20,6 +23,8 @@ import com.google.android.gms.wearable.Wearable
 class MainActivity : ComponentActivity() {
     private val messageClient by lazy { Wearable.getMessageClient(this) }
     private val ongoingActivityController by lazy { OngoingActivityController(this) }
+    private val isAmbient = mutableStateOf(false)
+    private val ambientObserver = AmbientLifecycleObserver(this, AmbientCallback())
     private val requestPostNotifications = registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { isGranted ->
@@ -35,21 +40,29 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { MirrorScreen() }
+        lifecycle.addObserver(ambientObserver)
+        setContent {
+            MirrorScreen(
+                isAmbient = isAmbient.value,
+                onKeepScreenAwakeChanged = ::setKeepScreenAwake,
+            )
+        }
         startOngoingActivityWhenAllowed()
     }
 
-    override fun onResume() {
-        super.onResume()
+    override fun onStart() {
+        super.onStart()
         messageClient.addListener(listener)
     }
 
-    override fun onPause() {
-        super.onPause()
+    override fun onStop() {
         messageClient.removeListener(listener)
+        super.onStop()
     }
 
     override fun onDestroy() {
+        lifecycle.removeObserver(ambientObserver)
+        setKeepScreenAwake(false)
         ongoingActivityController.stop()
         super.onDestroy()
     }
@@ -70,4 +83,21 @@ class MainActivity : ComponentActivity() {
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
             PackageManager.PERMISSION_GRANTED
 
+    private fun setKeepScreenAwake(keepAwake: Boolean) {
+        if (keepAwake) {
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
+    private inner class AmbientCallback : AmbientLifecycleObserver.AmbientLifecycleCallback {
+        override fun onEnterAmbient(ambientDetails: AmbientLifecycleObserver.AmbientDetails) {
+            isAmbient.value = true
+        }
+
+        override fun onExitAmbient() {
+            isAmbient.value = false
+        }
+    }
 }
