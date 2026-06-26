@@ -154,7 +154,6 @@ interface CenterMapProps {
   onRemoveMapPoint: (id: string) => void
   onClearDirectionPoint: () => void
   weatherActive: boolean
-  seekPosition: HistoryGpsSample | null
   historyPreview:
     | ({
         key: string
@@ -193,7 +192,6 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
     onRemoveMapPoint,
     weatherActive,
     onClearDirectionPoint,
-    seekPosition,
     historyPreview,
   },
   ref,
@@ -884,7 +882,6 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
           accuracyShape={accuracyShape}
           gpsPuckBearingDeg={gpsPuckBearingDeg}
           rideRoute={rideRoute}
-          seekPosition={seekPosition}
           rideTelemetrySamples={rideTelemetrySamples}
           activeHistoryMapMetric={activeHistoryMapMetric}
           rideMarkers={rideMarkers}

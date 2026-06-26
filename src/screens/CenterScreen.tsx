@@ -106,7 +106,6 @@ export function CenterScreen({
         onRemoveMapPoint={(id) => void controller.removeMapPoint(id)}
         onClearDirectionPoint={() => void controller.clearDirectionPoint()}
         weatherActive={controller.weatherActive}
-        seekPosition={controller.seekGpsPosition}
       />
       <CenterOverlays
         mode={controller.mode}

@@ -25,6 +25,7 @@ import {
 } from '@/constants/mapPoints'
 import { theme } from '@/constants/theme'
 import { makeCircleFeature, makeTrailLineString } from '@/helpers/mapGeometry'
+import { findNearestSampleIndexByTime } from '@/lib/history/playback'
 import { resolveMarkerRenderData } from '@/lib/history/markerOverlap'
 import {
   clusterMediaHistoryAssets,
@@ -35,6 +36,7 @@ import type { HistoryMetricKey } from '@/lib/history/metricColorScale'
 import { isMapPointKindVisible } from '@/lib/mapPointVisibility'
 import type { HistoryGpsSample, HistoryMarker, TelemetrySample } from '@/store/historyStore'
 import { useSettingsStore } from '@/store/settingsStore'
+import { useCenterScreenStore } from '@/screens/center/centerScreenStore'
 
 import {
   HISTORY_MARKER_COLORS,
@@ -75,7 +77,6 @@ interface CenterMapLayersProps {
   accuracyShape: ReturnType<typeof makeCircleFeature> | null
   gpsPuckBearingDeg: number | null
   rideRoute: [number, number][]
-  seekPosition: HistoryGpsSample | null
   rideTelemetrySamples: TelemetrySample[]
   activeHistoryMapMetric: HistoryMetricKey
   rideMarkers: HistoryMarker[]
@@ -200,10 +201,29 @@ function LiveMapLayers({
   )
 }
 
+// Subscribes to the scrub head directly so dragging the telemetry chart only re-renders this pin,
+// not the whole map/overlay tree. rideGpsSamples is a stable prop (changes only on session switch).
+function SeekPositionPin({ rideGpsSamples }: { rideGpsSamples: HistoryGpsSample[] }) {
+  const seekTimeMs = useCenterScreenStore((s) => s.seekTimeMs)
+  const seekPosition = useMemo(() => {
+    if (seekTimeMs == null || rideGpsSamples.length === 0) return null
+    const idx = findNearestSampleIndexByTime(rideGpsSamples, seekTimeMs)
+    return idx >= 0 ? rideGpsSamples[idx] : null
+  }, [seekTimeMs, rideGpsSamples])
+
+  if (!seekPosition || seekPosition.latitude == null || seekPosition.longitude == null) return null
+  return (
+    <MapPin
+      id="center-seek-position"
+      coordinate={[seekPosition.longitude, seekPosition.latitude]}
+      color={MAP_DEFAULTS.markerColor}
+    />
+  )
+}
+
 function HistoryMapLayers({
   rideRouteShape,
   rideRoute,
-  seekPosition,
   rideTelemetrySamples,
   activeHistoryMapMetric,
   rideMarkers,
@@ -216,7 +236,6 @@ function HistoryMapLayers({
 }: {
   rideRouteShape: CenterMapLayersProps['rideRouteShape']
   rideRoute: CenterMapLayersProps['rideRoute']
-  seekPosition: CenterMapLayersProps['seekPosition']
   rideTelemetrySamples: CenterMapLayersProps['rideTelemetrySamples']
   activeHistoryMapMetric: CenterMapLayersProps['activeHistoryMapMetric']
   rideMarkers: CenterMapLayersProps['rideMarkers']
@@ -317,13 +336,8 @@ function HistoryMapLayers({
           color={theme.status.error.color}
         />
       )}
-      {seekPosition && seekPosition.latitude != null && seekPosition.longitude != null && (
-        <MapPin
-          id="center-seek-position"
-          coordinate={[seekPosition.longitude, seekPosition.latitude]}
-          color={MAP_DEFAULTS.markerColor}
-        />
-      )}
+      <SeekPositionPin rideGpsSamples={rideGpsSamples} />
+
       {resolveMarkerRenderData(rideMarkers, rideGpsSamples).map(
         ({ marker, gps, renderCoordinate }) => (
           <MapPin
@@ -366,7 +380,6 @@ export function CenterMapLayers({
   accuracyShape,
   gpsPuckBearingDeg,
   rideRoute,
-  seekPosition,
   rideTelemetrySamples,
   activeHistoryMapMetric,
   rideMarkers,
@@ -425,7 +438,6 @@ export function CenterMapLayers({
         <HistoryMapLayers
           rideRouteShape={rideRouteShape}
           rideRoute={rideRoute}
-          seekPosition={seekPosition}
           rideTelemetrySamples={rideTelemetrySamples}
           activeHistoryMapMetric={activeHistoryMapMetric}
           rideMarkers={rideMarkers}
