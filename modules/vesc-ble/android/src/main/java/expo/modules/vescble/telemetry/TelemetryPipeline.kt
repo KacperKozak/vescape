@@ -72,6 +72,8 @@ internal class TelemetryPipeline(
     // recentTelemetry is appended on the BLE callback thread and read (snapshot/decimated)
     // on the main thread, so every structural access goes through this lock.
     private val recentLock = Any()
+    // liveTelemetryPoints is also touched by settings/session calls while telemetry is flowing.
+    private val liveLock = Any()
     private var session: BoardSession? = null
     private var sessionConfig: SessionConfig? = null
     private var canId: Int? = null
@@ -85,7 +87,7 @@ internal class TelemetryPipeline(
     fun beginSession(session: BoardSession, config: SessionConfig) {
         cancelStaleWatchdog()
         synchronized(recentLock) { recentTelemetry.clear() }
-        liveTelemetryPoints.clear()
+        synchronized(liveLock) { liveTelemetryPoints.clear() }
         lastTelemetryAt = 0L
         this.session = session
         this.sessionConfig = config
@@ -97,7 +99,7 @@ internal class TelemetryPipeline(
     fun endSession() {
         cancelStaleWatchdog()
         synchronized(recentLock) { recentTelemetry.clear() }
-        liveTelemetryPoints.clear()
+        synchronized(liveLock) { liveTelemetryPoints.clear() }
         lastTelemetryAt = 0L
         session = null
         sessionConfig = null
@@ -116,7 +118,7 @@ internal class TelemetryPipeline(
     fun clearLiveTelemetry() {
         cancelStaleWatchdog()
         synchronized(recentLock) { recentTelemetry.clear() }
-        liveTelemetryPoints.clear()
+        synchronized(liveLock) { liveTelemetryPoints.clear() }
         lastTelemetryAt = 0L
     }
 
@@ -127,7 +129,7 @@ internal class TelemetryPipeline(
         )
         val now = nowMs()
         synchronized(recentLock) { pruneRecentTelemetry(now) }
-        pruneLiveTelemetryPoints(now)
+        synchronized(liveLock) { pruneLiveTelemetryPoints(now) }
     }
 
     fun liveHistoryLimitMinutes(): Int = liveHistoryLimitMinutes
@@ -185,9 +187,11 @@ internal class TelemetryPipeline(
         val capture = captureBuilder(parsed, cfg, canId)
         val baseEventMap = parsed.toMap().toMutableMap()
         val bucketPoint = FullTelemetryState.from(capture).toBucketPoint()
-        liveTelemetryPoints.addLast(LivePoint(bucketPoint, baseEventMap))
-        pruneLiveTelemetryPoints(parsed.lastPacketAt)
-        val updates = sanitizeLivePoints()
+        val updates = synchronized(liveLock) {
+            liveTelemetryPoints.addLast(LivePoint(bucketPoint, baseEventMap))
+            pruneLiveTelemetryPoints(parsed.lastPacketAt)
+            sanitizeLivePoints()
+        }
         synchronized(recentLock) {
             recentTelemetry.addLast(baseEventMap)
             pruneRecentTelemetry(parsed.lastPacketAt)
