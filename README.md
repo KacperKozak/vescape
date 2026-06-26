@@ -1,7 +1,5 @@
 <img width="3190" height="1690" alt="image" src="https://github.com/user-attachments/assets/4bb49f5a-b0d5-4afd-87dc-861cdcdd6d30" />
 
-
-
 # Vescape
 
 Mobile telemetry proof of concept for VESC-based boards over BLE.
