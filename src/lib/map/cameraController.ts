@@ -67,6 +67,16 @@ export type MapCameraIntent =
       fallbackZoomLevel: number
       navigationMode: MapNavigationMode
     }
+  | {
+      type: 'FrameRideHistoryPreview'
+      selectionKey: string | null
+      camera: MapCameraSnapshot
+    }
+  | {
+      type: 'RefineRideHistoryRoute'
+      selectionKey: string | null
+      camera: MapCameraSnapshot
+    }
 
 export interface MapCameraEffect {
   camera: Partial<MapCameraSnapshot>
@@ -173,6 +183,34 @@ export function reduceMapCameraIntent(
           }),
         },
       },
+    }
+  }
+
+  if (intent.type === 'FrameRideHistoryPreview') {
+    return {
+      state: {
+        ...state,
+        mode: { kind: 'rideHistory', selectionKey: intent.selectionKey, phase: 'preview' },
+      },
+      effect: { camera: intent.camera },
+    }
+  }
+
+  if (intent.type === 'RefineRideHistoryRoute') {
+    const currentMode = state.mode
+    if (
+      currentMode.kind !== 'rideHistory' ||
+      currentMode.selectionKey !== intent.selectionKey ||
+      currentMode.phase === 'manualInspect'
+    ) {
+      return { state, effect: null }
+    }
+    return {
+      state: {
+        ...state,
+        mode: { kind: 'rideHistory', selectionKey: intent.selectionKey, phase: 'route' },
+      },
+      effect: { camera: intent.camera },
     }
   }
 

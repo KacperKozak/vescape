@@ -354,34 +354,36 @@ export function useCameraControls({
         maxZoom: MAP_DEFAULTS.maxZoom,
       })
       if (!historyCamera) return
-      enterCameraMode({ kind: 'rideHistory', selectionKey, phase: 'route' })
       const currentCamera = currentCameraRef.current
       const routeCenter = {
         longitude: historyCamera.centerCoordinate[0],
         latitude: historyCamera.centerCoordinate[1],
       }
       const duration = historyMoveDuration(cameraDistanceTo(currentCamera, routeCenter))
+      const effect = dispatchCameraIntent({
+        type: 'RefineRideHistoryRoute',
+        selectionKey,
+        camera: {
+          ...historyCamera,
+          heading: 0,
+          pitch: getPitchForZoom(historyCamera.zoomLevel, perspectiveEnabled),
+        },
+      })
+      if (!effect) return
       cameraRef.current?.setCamera({
-        ...historyCamera,
-        heading: 0,
-        pitch: getPitchForZoom(historyCamera.zoomLevel, perspectiveEnabled),
+        ...effect.camera,
         animationDuration: duration,
         animationMode: 'easeTo',
       })
       onHeadingChange(0)
     },
-    [enterCameraMode, historyViewport, onHeadingChange, perspectiveEnabled, rideRoute],
+    [dispatchCameraIntent, historyViewport, onHeadingChange, perspectiveEnabled, rideRoute],
   )
 
   const previewHistorySession = useCallback(
     (preview: HistoryPreviewTarget & { key?: string }) => {
       const lastTarget = historyPreviewTargetRef.current
       historyPreviewTargetRef.current = preview
-      enterCameraMode({
-        kind: 'rideHistory',
-        selectionKey: preview.key ?? null,
-        phase: 'preview',
-      })
       const currentCamera = currentCameraRef.current
       const currentDistanceM = cameraDistanceTo(currentCamera, preview)
       const lastTargetDistanceM = lastTarget
@@ -397,25 +399,40 @@ export function useCameraControls({
         })
         if (historyCamera) {
           const zoomLevel = getHistoryPreviewZoom(historyCamera.zoomLevel)
+          const effect = dispatchCameraIntent({
+            type: 'FrameRideHistoryPreview',
+            selectionKey: preview.key ?? null,
+            camera: {
+              ...historyCamera,
+              zoomLevel,
+              heading: 0,
+              pitch: getPitchForZoom(zoomLevel, perspectiveEnabled),
+            },
+          })
+          if (!effect) return
           cameraRef.current?.setCamera({
-            ...historyCamera,
-            zoomLevel,
-            heading: 0,
-            pitch: getPitchForZoom(zoomLevel, perspectiveEnabled),
+            ...effect.camera,
             animationDuration: duration,
             animationMode: 'easeTo',
           })
         }
       } else {
+        const previewCamera = getHistoryPreviewCamera(preview)
+        const effect = dispatchCameraIntent({
+          type: 'FrameRideHistoryPreview',
+          selectionKey: preview.key ?? null,
+          camera: previewCamera,
+        })
+        if (!effect) return
         cameraRef.current?.setCamera({
-          ...getHistoryPreviewCamera(preview),
+          ...effect.camera,
           animationDuration: duration,
         })
       }
       onHeadingChange(0)
     },
     [
-      enterCameraMode,
+      dispatchCameraIntent,
       getHistoryPreviewCamera,
       historyViewport,
       onHeadingChange,
