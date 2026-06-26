@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <!--
+    Wear capability the phone gates frame pushes on (ADR-0019). Declaring it here is what lets the
+    phone's CapabilityClient distinguish "our Mirror app is installed and reachable" from "a watch is
+    merely paired". Must match WATCH_MIRROR_CAPABILITY in the phone-side WatchMirrorPresence.
+  -->
+  <string-array name="android_wear_capabilities">
+    <item>vescape_watch_mirror</item>
+  </string-array>
+</resources>

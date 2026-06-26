@@ -144,6 +144,9 @@ internal class BoardSessionController(private val service: VescForegroundService
     private val watchPusher by lazy {
         WatchTelemetryPusher(service.applicationContext, VescForegroundService.appDataScope)
     }
+    private val watchMirrorPresence by lazy {
+        WatchMirrorPresence(service.applicationContext, VescForegroundService.appDataScope)
+    }
     private val watchTick by lazy {
         WatchTick(
             scheduler = scheduler,
@@ -151,6 +154,7 @@ internal class BoardSessionController(private val service: VescForegroundService
             isCurrentSession = ::isCurrentBoardSession,
             snapshot = ::watchSnapshot,
             isStale = { isTelemetryStale() },
+            canPush = { watchMirrorPresence.present },
             push = watchPusher::pushFrame,
             intervalMs = WATCH_FRAME_INTERVAL_MS,
         )
@@ -944,6 +948,7 @@ internal class BoardSessionController(private val service: VescForegroundService
         )
         pollingLoop.start(session, sessionToken, transport)
         liveSeriesEmitter.start()
+        watchMirrorPresence.start()
         watchTick.start()
     }
 
@@ -954,6 +959,7 @@ internal class BoardSessionController(private val service: VescForegroundService
         telemetryPipeline.cancelStaleWatchdog()
         liveSeriesEmitter.stop()
         watchTick.stop()
+        watchMirrorPresence.stop()
     }
 
     /** Latest cold-path snapshot the watch tick pushes; null until the first sample / after a reset. */
