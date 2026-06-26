@@ -91,6 +91,7 @@ export interface CenterMapHandle {
   zoomBy: (delta: number) => void
   zoomToLevel: (zoom: number) => void
   focusCoordinate: (coordinate: [number, number]) => void
+  focusWeather: () => void
   getViewfinderCoordinate: () => Promise<{ latitude: number; longitude: number }>
 }
 
@@ -693,7 +694,9 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
     cameraRef.current?.setCamera({
       ...camera,
       heading: initialHeading,
-      pitch: getPitchForZoom(camera.zoomLevel, perspectiveEnabled),
+      pitch: styleReloadCamera
+        ? styleReloadCamera.pitch
+        : getPitchForZoom(camera.zoomLevel, perspectiveEnabled),
       animationDuration: 0,
     })
   }, [

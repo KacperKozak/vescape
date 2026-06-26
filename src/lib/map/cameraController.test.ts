@@ -161,4 +161,49 @@ describe('map camera controller', () => {
     })
     expect(route.effect).toBeNull()
   })
+
+  test('weather view keeps current center and uses flat weather profile', () => {
+    const result = reduceMapCameraIntent(initialMapCameraControllerState, {
+      type: 'EnterWeatherView',
+      currentCamera: {
+        centerCoordinate: [19, 50],
+        zoomLevel: 14,
+        heading: 37,
+        pitch: 45,
+      },
+      fallbackCenterCoordinate: [15, 54],
+      perspectiveEnabled: true,
+    })
+
+    expect(result.effect?.camera).toEqual({
+      centerCoordinate: [19, 50],
+      zoomLevel: 8,
+      heading: 0,
+      pitch: 0,
+    })
+  })
+
+  test('map point focus recomputes pitch from profile and zoom', () => {
+    const result = reduceMapCameraIntent(initialMapCameraControllerState, {
+      type: 'FocusCoordinate',
+      coordinate: [20, 51],
+      currentCamera: {
+        centerCoordinate: [19, 50],
+        zoomLevel: 16,
+        heading: 33,
+        pitch: 3,
+      },
+      fallbackZoomLevel: 13,
+      navigationMode: 'northUp',
+      perspectiveEnabled: true,
+    })
+
+    expect(result.state.mode).toEqual({ kind: 'manualBrowse' })
+    expect(result.effect?.camera).toEqual({
+      centerCoordinate: [20, 51],
+      zoomLevel: 16,
+      heading: 0,
+      pitch: 45,
+    })
+  })
 })
