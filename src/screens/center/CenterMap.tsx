@@ -45,7 +45,7 @@ import {
   type HistoryPreviewTarget,
   useCameraControls,
 } from './useCameraControls'
-import { getLiveFollowCameraProfile, getPitchForZoom } from './cameraFollowProfile'
+import { getLiveFollowCameraProfile, getPitchForZoom } from '@/lib/map/cameraProfiles'
 import { shouldPreserveLiveFollowGesture } from './cameraGestureState'
 import { phoneHeadingAnimationDuration } from './phoneHeading'
 import { usePhoneHeading } from './usePhoneHeading'
@@ -89,7 +89,6 @@ export interface CenterMapHandle {
   togglePerspective: () => void
   setPadding: (bottom: number) => void
   zoomBy: (delta: number) => void
-  zoomToLevel: (zoom: number) => void
   focusCoordinate: (coordinate: [number, number]) => void
   focusWeather: () => void
   getViewfinderCoordinate: () => Promise<{ latitude: number; longitude: number }>

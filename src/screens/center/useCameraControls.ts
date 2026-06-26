@@ -10,7 +10,7 @@ import {
   reduceMapCameraIntent,
   type MapCameraMode,
 } from '@/lib/map/cameraController'
-import { getLiveFollowCameraProfile, getPitchForZoom } from '@/screens/center/cameraFollowProfile'
+import { getLiveFollowCameraProfile, getPitchForZoom } from '@/lib/map/cameraProfiles'
 import { getCameraAfterScreenDrag } from '@/screens/center/cameraPanProjection'
 import { getHistoryRouteCamera, type HistoryCameraViewport } from '@/screens/center/historyCamera'
 
@@ -584,9 +584,6 @@ export function useCameraControls({
             MAP_DEFAULTS.maxZoom,
           ),
         )
-      },
-      zoomToLevel(zoom: number) {
-        setFreeMapZoom(zoom)
       },
       focusCoordinate(coordinate: [number, number]) {
         const effect = dispatchCameraIntent({
