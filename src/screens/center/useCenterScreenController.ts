@@ -17,7 +17,6 @@ import { useHistoryStore, type HistorySession } from '@/store/historyStore'
 import { useMapStore } from '@/store/mapStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { useWeatherStore } from '@/store/weatherStore'
-import { findNearestSampleIndexByTime } from '@/lib/history/playback'
 import { useMediaHistory } from '@/hooks/useMediaHistory'
 import type { MediaHistoryAsset } from '@/lib/history/mediaHistory'
 
@@ -37,7 +36,6 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
     historySheetVisible,
     mapSelector,
     perspectiveEnabled,
-    seekTimeMs,
     activeHistoryMapMetric,
     enterTelemetry,
     enterMap,
@@ -55,7 +53,6 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
       historySheetVisible: s.historySheetVisible,
       mapSelector: s.mapSelector,
       perspectiveEnabled: s.perspectiveEnabled,
-      seekTimeMs: s.seekTimeMs,
       activeHistoryMapMetric: s.activeHistoryMapMetric,
       enterTelemetry: s.enterTelemetry,
       enterMap: s.enterMap,
@@ -155,12 +152,6 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
   useEffect(() => {
     setSeekTimeMs(null)
   }, [selectedSession, setSeekTimeMs])
-
-  const seekGpsPosition = useMemo(() => {
-    if (seekTimeMs == null || sessionGpsSamples.length === 0) return null
-    const idx = findNearestSampleIndexByTime(sessionGpsSamples, seekTimeMs)
-    return idx >= 0 ? sessionGpsSamples[idx] : null
-  }, [seekTimeMs, sessionGpsSamples])
 
   useEffect(() => {
     const loc = liveLocations.at(-1) ?? latestApproximateLocation
@@ -406,7 +397,6 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
     refreshWeather,
     handleMapFocus,
     exitMapFocus,
-    seekGpsPosition,
     onSeek: setSeekTimeMs,
     activeHistoryMapMetric,
     setActiveHistoryMapMetric,

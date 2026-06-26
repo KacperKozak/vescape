@@ -56,6 +56,7 @@ const e2eSettings: AppSettings = {
   connectionSoundsEnabled: true,
   companionPresenceEnabled: false,
   telemetryPollRateHz: 20,
+  wearMirrorIntervalMs: 500,
 }
 
 function emitDevice(event: DeviceFoundEvent): void {

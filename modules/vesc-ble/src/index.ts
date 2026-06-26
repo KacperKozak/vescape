@@ -594,6 +594,12 @@ export interface AppSettings {
    * controller. 0 = unlimited (pure response-paced, the original behaviour).
    */
   telemetryPollRateHz: number
+  /**
+   * Watch Mirror push interval in ms — the cadence of the dedicated watch tick,
+   * independent of the board poll rate. Lower values increase wrist update rate
+   * for stress-testing the link. Floored at 50ms (20Hz), capped at 10s.
+   */
+  wearMirrorIntervalMs: number
 }
 
 export interface DiagnosticStatus {

@@ -412,7 +412,8 @@ class VescBleModule : Module() {
         key == "freeSpinMaxSpeedDeltaKmh" ||
         key == "freeSpinStationaryBoardCapKmh" ||
         key == "socEstimateWindowSeconds" ||
-        key == "telemetryPollRateHz"
+        key == "telemetryPollRateHz" ||
+        key == "wearMirrorIntervalMs"
       ) {
         VescForegroundService.reloadTelemetrySettings(context.applicationContext)
       }

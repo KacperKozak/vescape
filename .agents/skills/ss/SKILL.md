@@ -1,6 +1,6 @@
 ---
 name: ss
-description: Take a screenshot from a connected Android device and optionally upload it to a GitHub PR. Use when agent needs to see what's on the phone screen, verify UI changes visually, or attach screenshots to PRs. Triggered by "/ss", "take a screenshot", "what does the screen look like", or automatically by /to-pr when UI files changed.
+description: Take a screenshot from a connected Android device and optionally upload it to a GitHub PR. Use when agent needs to see what's on the phone screen, verify UI changes visually, or attach screenshots to PRs. Triggered by "/ss", "take a screenshot", or "what does the screen look like".
 ---
 
 # Screenshot
@@ -63,21 +63,6 @@ bun run scripts/gh-upload-screenshot.ts /tmp/screen.png --pr <number>
 ```
 
 Script outputs `![screenshot](url)` — embed directly in PR body.
-
-## When /to-pr should use this
-
-After creating/updating a PR, check if screenshots make sense:
-
-1. **Check diff for UI files**: `git diff dev...HEAD --name-only` contains files in `src/screens/`, `src/components/`, `src/app/` (route files), or theme/style changes.
-2. **Check device connected**: `adb devices` shows a device.
-3. **Both true** -> determine which screen(s) changed, use `/nav` to navigate there, then `/ss` upload mode.
-4. **Either false** -> skip screenshots silently.
-
-Determine affected screen from changed files:
-
-- `src/screens/<name>/` or `src/app/<route>.tsx` -> navigate to that route.
-- `src/components/` only -> navigate to the screen that uses the changed component (grep for imports).
-- Multiple screens -> screenshot the most relevant one (largest diff).
 
 ## Cleanup
 

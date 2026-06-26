@@ -20,6 +20,7 @@ const DEFAULTS: AppSettings = {
   connectionSoundsEnabled: true,
   companionPresenceEnabled: false,
   telemetryPollRateHz: 20,
+  wearMirrorIntervalMs: 500,
 }
 
 interface SettingsState extends AppSettings {

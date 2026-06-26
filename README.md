@@ -11,84 +11,84 @@ and polls Refloat telemetry for live riding, electrical, and thermal values.
 ## Supported Hardware
 
 - Floatwheel ADV2
+- Floatwheel Pint V
 - Thor 301 controller
+- Tronic 250R controller
+
+These are the boards and controllers we have tested on. It should work with most
+VESC-based controllers running Refloat.
 
 Current development targets Android. iOS has a native module stub only.
 
+## Features
+
+- Fast live telemetry (up to ~35 Hz)
+- Fast connect and reconnect
+- Multiple saved boards
+- Ride history recordings with map routes, photos, and videos
+- Ride alerts: TTS spoken messages and Geiger-style audio alerts
+- Battery state-of-charge with charging detection
+- Smart BMS readout with per-cell display
+- Weather and rain radar
+- Refloat tune profiles (read, edit, sync)
+
 ## Stack
 
-- Expo SDK 54
-- React Native 0.81
+- Expo SDK 56
+- React Native 0.85
 - Expo Router
 - TypeScript
 - Zustand
-- NativeWind
+- Reanimated + React Native Skia (gauges, charts)
+- `phosphor-react-native` icons
+- Styling via `StyleSheet` + design tokens in `src/constants/theme.ts` (no NativeWind/Tailwind)
 - Bun
 - Custom Expo native module for BLE: `modules/vesc-ble`
 
 ## How It Works
 
 ```text
-React Native UI
-  -> vesc-ble JS session API
-  -> Android foreground service
-  -> BLE / Nordic UART Service
-  -> VESC BLE bridge
-  -> CAN bus
-  -> VESC motor controller
+React Native UI                 Companion device / auto-connect provider
+  -> vesc-ble JS session API      -> (wakes service without JS)
+        \                        /
+         -> Android foreground service
+              -> BLE / Nordic UART Service
+              -> VESC BLE bridge
+              -> CAN bus
+              -> VESC motor controller
 ```
 
-The Android foreground service owns the long-running board session. React
-Native starts/stops the session and renders state, but Android owns connection,
-polling, packet parsing needed for notifications, and notification updates.
+The Android foreground service owns the long-running board session. It owns
+connection, polling, packet parsing, and notification updates, keeping
+telemetry off JS timers and the React Native bridge. React Native renders state
+and sends intents, but it is not required for a session to run.
 
-On real-board connect, the native service:
+The session can start without the JS layer alive at all:
 
-1. Enables BLE notifications.
-2. Sends `COMM_FW_VERSION` to verify the notification path.
-3. Sends `COMM_PING_CAN` to discover the motor controller CAN ID.
-4. Polls Refloat `COMMAND_GET_ALLDATA` every 500 ms.
-5. Reassembles VESC frames from BLE chunks.
-6. Parses Refloat telemetry.
-7. Updates the persistent Android notification directly.
-8. Emits session state and telemetry events to React Native.
+- A `CompanionDeviceService` lets Android wake the app and connect when the
+  paired board comes into BLE range, even with the app process dead.
+- A `ContentProvider` runs at process start (before React Native) to
+  auto-connect the selected board.
 
-This avoids depending on JS timers or the React Native bridge for background
-notification updates.
-
-## Debug Recording
-
-Android Dev → Debug recordings can capture future board sessions as JSONL files
-containing low-level session state, BLE TX/RX chunks, and location. The page
-lists captures and exports them through the system share sheet. Replay is not
-part of the current app.
-
-## Features
-
-- BLE scan and connect flow
-- Android foreground-service-owned BLE session while connected
-- CAN forwarding for controller commands
-- Refloat `GET_ALLDATA` parsing
-- Background notification updates from native telemetry
-- Live speed, pitch, roll, voltage, current, duty cycle, temperature, fault, and
-  distance telemetry
-- JSONL BLE session recording and export for debugging
+So the board can connect and stream in the background, and the UI attaches to an
+already-running session when it opens.
 
 ## Project Layout
 
 ```text
-app/                         Expo Router screens
-app/index.tsx                BLE scan screen
-app/device/[id].tsx          Telemetry screen
-src/ble/usePermissions.ts    Bluetooth permission helper
-src/store/bleStore.ts        Zustand state that mirrors native session events
-src/vesc/                    VESC packet, command, CRC, and parser code
+src/app/                     Expo Router routes only (no logic)
+src/lib/                     Pure domain logic (battery, tune, history, map, telemetry)
+src/store/                   Zustand stores mirroring native session + app state
+src/components/              React components (ui/ + domain/)
+src/screens/                 Screen-level component subtrees
+src/hooks/                   React hooks bridging store and UI
+src/constants/theme.ts       Design tokens (single source of color/typography)
+shared/                      Pure JS shared with native (copied in via copy:shared)
 modules/vesc-ble/            Custom Expo native BLE/session module
-modules/vesc-ble/android/.../VescBleModule.kt
-                             Expo module bridge: scan and session API
-modules/vesc-ble/android/.../VescForegroundService.kt
-                             Native BLE/replay session owner
-docs/                        Protocol and architecture notes
+modules/vesc-ble/android/    Kotlin: Expo bridge, foreground service, polling, protocol
+modules/vesc-ble/ios/        Swift module stub (iOS not yet functional)
+docs/                        Protocol, architecture, ADRs, and agent notes
+CONTEXT.md                   Shared domain language
 ```
 
 ## Development
@@ -111,10 +111,22 @@ Run on Android:
 bun run android
 ```
 
-Run tests:
+Run tests (JS via Bun + native Kotlin unit tests):
 
 ```bash
-bun test
+bun run test
+```
+
+JS tests only:
+
+```bash
+bun run test:bun
+```
+
+Native Kotlin unit tests only:
+
+```bash
+bun run test:android
 ```
 
 Type-check:
@@ -178,9 +190,15 @@ PR base is always `dev` (`main` is reserved for production releases).
 ## Documentation
 
 - [Architecture](docs/architecture.md)
+- [Domain language](CONTEXT.md)
+- [Architecture Decision Records](docs/adr/)
 - [VESC protocol](docs/vescProtocol.md)
 - [Refloat GET_ALLDATA layout](docs/refloatAlldata.md)
 - [Android BLE notes](docs/bleAndroid.md)
+- [Tune](docs/tune.md)
+- [Alerts](docs/alerts.md)
+- [Ride history](docs/history.md)
+- [Connection state](docs/connectionState.md)
 
 ## License
 

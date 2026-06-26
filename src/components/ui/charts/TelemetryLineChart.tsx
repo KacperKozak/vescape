@@ -1,6 +1,13 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { PanResponder, StyleSheet, Text, View } from 'react-native'
-import type { LayoutChangeEvent, StyleProp, ViewStyle } from 'react-native'
+import { PanResponder, StyleSheet, Text, TextInput, View } from 'react-native'
+import type { LayoutChangeEvent, StyleProp, TextStyle, ViewStyle } from 'react-native'
+import Animated, {
+  useAnimatedProps,
+  useAnimatedStyle,
+  useDerivedValue,
+  useSharedValue,
+  type SharedValue,
+} from 'react-native-reanimated'
 import {
   Canvas,
   Circle,
@@ -30,6 +37,46 @@ const TOOLTIP_WIDTH = 94
 const CARD_HORIZONTAL_PADDING = 8
 const EXCLUSION_MARKER_HEIGHT = 1
 const EXCLUSION_MARKER_INSET = 1
+const EMPTY_MARKER_TABLE: MarkerTable = {
+  ts: [],
+  xs: [],
+  ys: [],
+  colors: [],
+  valueStrs: [],
+  timeStrs: [],
+}
+
+const AnimatedTextInput = Animated.createAnimatedComponent(TextInput)
+
+interface MarkerTable {
+  ts: number[]
+  xs: number[]
+  ys: number[]
+  colors: string[]
+  valueStrs: string[]
+  timeStrs: string[]
+  secondaryValueStrs?: string[]
+}
+
+function setSharedValue<T>(shared: SharedValue<T>, value: T) {
+  shared.value = value
+}
+
+function pickMarkerIndex(table: MarkerTable, timeMs: number | null): number {
+  'worklet'
+  const count = table.ts.length
+  if (count === 0 || timeMs == null) return -1
+  let lo = 0
+  let hi = count - 1
+  while (lo < hi) {
+    const mid = Math.floor((lo + hi) / 2)
+    if (table.ts[mid] < timeMs) lo = mid + 1
+    else hi = mid
+  }
+  if (lo === 0) return 0
+  const prev = lo - 1
+  return Math.abs(table.ts[prev] - timeMs) <= Math.abs(table.ts[lo] - timeMs) ? prev : lo
+}
 
 function exclusionColor(reason: string): string {
   if (reason === 'free_spin') return theme.palette.yellow.color
@@ -69,12 +116,99 @@ function resolveActiveChartColor(
   return getPointColor(currentPoint.value)
 }
 
+function valueAtTime(points: TelemetryChartPoint[], timeMs: number): TelemetryChartPoint | null {
+  if (points.length === 0) return null
+  let best = points[0]
+  let bestDistance = Math.abs(best.date.getTime() - timeMs)
+  for (const point of points) {
+    const distance = Math.abs(point.date.getTime() - timeMs)
+    if (distance < bestDistance) {
+      best = point
+      bestDistance = distance
+    }
+  }
+  return best
+}
+
+function buildMarkerTable({
+  points,
+  range,
+  width,
+  height,
+  color,
+  getPointColor,
+  formatValue,
+  windowMs,
+  secondary,
+}: {
+  points: TelemetryChartPoint[]
+  range: { y: { min: number; max: number } }
+  width: number
+  height: number
+  color: string
+  getPointColor?: (value: number) => string
+  formatValue?: (value: number) => string
+  windowMs?: number
+  secondary?: SecondaryChartSeries
+}): MarkerTable {
+  if (width < 1 || points.length < 1) return EMPTY_MARKER_TABLE
+  const table: MarkerTable = {
+    ts: [],
+    xs: [],
+    ys: [],
+    colors: [],
+    valueStrs: [],
+    timeStrs: [],
+    secondaryValueStrs: secondary ? [] : undefined,
+  }
+  for (const point of points) {
+    const position = getChartPosition(points, point, range, width, height, windowMs)
+    if (!position) continue
+    const timeMs = point.date.getTime()
+    table.ts.push(timeMs)
+    table.xs.push(position.x)
+    table.ys.push(position.y)
+    table.colors.push(getPointColor ? getPointColor(point.value) : color)
+    table.valueStrs.push(formatValue ? formatValue(point.value) : point.value.toFixed(1))
+    table.timeStrs.push(formatTime(point.date))
+    if (secondary && table.secondaryValueStrs) {
+      const secondaryPoint = valueAtTime(secondary.points, timeMs)
+      table.secondaryValueStrs.push(
+        secondaryPoint
+          ? secondary.formatValue
+            ? secondary.formatValue(secondaryPoint.value)
+            : secondary.value
+          : '-',
+      )
+    }
+  }
+  return table
+}
+
+function AnimatedChartText({ text, style }: { text: { readonly value: string }; style?: unknown }) {
+  const animatedProps = useAnimatedProps(() => {
+    const value = text.value
+    return { text: value, value, defaultValue: value }
+  })
+  return (
+    <AnimatedTextInput
+      editable={false}
+      caretHidden
+      pointerEvents="none"
+      underlineColorAndroid="transparent"
+      style={[styles.animatedText, style as StyleProp<TextStyle>]}
+      animatedProps={animatedProps}
+    />
+  )
+}
+
 export interface SecondaryChartSeries {
   points: TelemetryChartPoint[]
   range: { y: { min: number; max: number } }
   color: string
   /** Display value for the current/selected time, shown in the header. */
   value: string
+  formatValue?: (value: number) => string
 }
 
 interface TelemetryLineChartProps {
@@ -94,6 +228,8 @@ interface TelemetryLineChartProps {
   excludedRanges?: ExcludedRange[]
   /** Optional second line plotted on a right-side axis with its own range. */
   secondary?: SecondaryChartSeries
+  scrubTimeMs?: SharedValue<number | null>
+  onScrubTimeChange?: (timeMs: number) => void
 }
 
 interface ChartLineSegmentsProps {
@@ -195,19 +331,31 @@ export function TelemetryLineChart({
   windowMs,
   excludedRanges,
   secondary,
+  scrubTimeMs,
+  onScrubTimeChange,
 }: TelemetryLineChartProps) {
   'use no memo'
   const [chartWidth, setChartWidth] = useState(0)
   const [chartPageX, setChartPageX] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
+  const internalScrubTimeMs = useSharedValue<number | null>(null)
+  const activeScrubTimeMs = scrubTimeMs ?? internalScrubTimeMs
+  const currentTimeMs = useSharedValue<number | null>(currentPoint?.date.getTime() ?? null)
   const graphRef = useRef<View>(null)
   const onPointSelectedRef = useRef(onPointSelected)
   const onGestureStartRef = useRef(onGestureStart)
+  const onScrubTimeChangeRef = useRef(onScrubTimeChange)
+  const activeSelectionRef = useRef<TelemetryChartPoint | null>(null)
 
   useEffect(() => {
     onPointSelectedRef.current = onPointSelected
     onGestureStartRef.current = onGestureStart
+    onScrubTimeChangeRef.current = onScrubTimeChange
   })
+
+  useEffect(() => {
+    setSharedValue(currentTimeMs, currentPoint?.date.getTime() ?? null)
+  }, [currentPoint, currentTimeMs])
 
   const onGraphLayout = useCallback((event: LayoutChangeEvent) => {
     setChartWidth(Math.round(event.nativeEvent.layout.width))
@@ -216,19 +364,78 @@ export function TelemetryLineChart({
     })
   }, [])
 
-  const markerPosition = useMemo(() => {
-    if (!currentPoint || chartWidth < 1) return null
-    return getChartPosition(points, currentPoint, range, chartWidth, height, windowMs)
-  }, [chartWidth, currentPoint, height, points, range, windowMs])
+  const markerTable = useMemo(
+    () =>
+      buildMarkerTable({
+        points,
+        range,
+        width: chartWidth,
+        height,
+        color,
+        getPointColor,
+        formatValue,
+        windowMs,
+        secondary,
+      }),
+    [chartWidth, color, formatValue, getPointColor, height, points, range, secondary, windowMs],
+  )
+  const markerTableSV = useSharedValue<MarkerTable>(markerTable)
+
+  useEffect(() => {
+    setSharedValue(markerTableSV, markerTable)
+  }, [markerTable, markerTableSV])
+
+  const liveIdx = useDerivedValue(() =>
+    pickMarkerIndex(markerTableSV.value, activeScrubTimeMs.value ?? currentTimeMs.value),
+  )
+  const markerX = useDerivedValue(() => {
+    const idx = liveIdx.value
+    return idx >= 0 ? markerTableSV.value.xs[idx] : -100
+  })
+  const markerY = useDerivedValue(() => {
+    const idx = liveIdx.value
+    return idx >= 0 ? markerTableSV.value.ys[idx] : -100
+  })
+  const markerColor = useDerivedValue(() => {
+    const idx = liveIdx.value
+    return idx >= 0 ? markerTableSV.value.colors[idx] : color
+  })
+  const markerLineTop = useDerivedValue(() => vec(markerX.value, 0))
+  const markerLineBottom = useDerivedValue(() => vec(markerX.value, height))
+  const liveValueText = useDerivedValue(() => {
+    const idx = liveIdx.value
+    return idx >= 0 ? markerTableSV.value.valueStrs[idx] : value
+  })
+  const liveTimeText = useDerivedValue(() => {
+    const idx = liveIdx.value
+    return idx >= 0 ? markerTableSV.value.timeStrs[idx] : ''
+  })
+  const liveSecondaryValueText = useDerivedValue(() => {
+    const idx = liveIdx.value
+    const values = markerTableSV.value.secondaryValueStrs
+    return idx >= 0 && values ? values[idx] : (secondary?.value ?? '-')
+  })
+  const tooltipAnimatedStyle = useAnimatedStyle(() => {
+    const half = TOOLTIP_WIDTH / 2
+    const cardChartLeft = CARD_HORIZONTAL_PADDING + Y_AXIS_WIDTH
+    const cardChartRight = cardChartLeft + chartWidth
+    let left = cardChartLeft + markerX.value - half
+    if (left < CARD_HORIZONTAL_PADDING) left = CARD_HORIZONTAL_PADDING
+    if (left + TOOLTIP_WIDTH > cardChartRight) left = cardChartRight - TOOLTIP_WIDTH
+    return { left }
+  })
+  const liveValueColorStyle = useAnimatedStyle(() => ({ color: markerColor.value }))
 
   const selectAtPageX = useCallback(
     (x: number) => {
-      if (!onPointSelectedRef.current) return
       const point = findNearestChartPointAtX(points, x - chartPageX, chartWidth, windowMs)
+      activeSelectionRef.current = point
       if (!point) return
-      onPointSelectedRef.current(point)
+      const timeMs = point.date.getTime()
+      setSharedValue(activeScrubTimeMs, timeMs)
+      onScrubTimeChangeRef.current?.(timeMs)
     },
-    [chartPageX, chartWidth, points, windowMs],
+    [activeScrubTimeMs, chartPageX, chartWidth, points, windowMs],
   )
 
   const panResponder = useMemo(
@@ -236,9 +443,13 @@ export function TelemetryLineChart({
       // eslint-disable-next-line react-hooks/refs -- refs only read inside PanResponder callbacks, not during render
       PanResponder.create({
         onStartShouldSetPanResponder: () =>
-          !!onPointSelectedRef.current && points.length > 0 && chartWidth > 0,
+          points.length > 0 &&
+          chartWidth > 0 &&
+          (!!onPointSelectedRef.current || !!onScrubTimeChangeRef.current),
         onMoveShouldSetPanResponder: () =>
-          !!onPointSelectedRef.current && points.length > 0 && chartWidth > 0,
+          points.length > 0 &&
+          chartWidth > 0 &&
+          (!!onPointSelectedRef.current || !!onScrubTimeChangeRef.current),
         onPanResponderGrant: (_event, gesture) => {
           setIsDragging(true)
           onGestureStartRef.current?.()
@@ -247,10 +458,20 @@ export function TelemetryLineChart({
         onPanResponderMove: (_event, gesture) => {
           selectAtPageX(gesture.moveX)
         },
-        onPanResponderRelease: () => setIsDragging(false),
-        onPanResponderTerminate: () => setIsDragging(false),
+        onPanResponderRelease: () => {
+          setIsDragging(false)
+          setSharedValue(activeScrubTimeMs, null)
+          const point = activeSelectionRef.current
+          activeSelectionRef.current = null
+          if (point) onPointSelectedRef.current?.(point)
+        },
+        onPanResponderTerminate: () => {
+          setIsDragging(false)
+          setSharedValue(activeScrubTimeMs, null)
+          activeSelectionRef.current = null
+        },
       }),
-    [chartWidth, points.length, selectAtPageX],
+    [activeScrubTimeMs, chartWidth, points.length, selectAtPageX],
   )
 
   const yMid = (range.y.min + range.y.max) / 2
@@ -266,46 +487,43 @@ export function TelemetryLineChart({
     }
   }, [points, windowMs])
 
-  const tooltipLeft = useMemo(() => {
-    if (!markerPosition || chartWidth <= 0) return 0
-    const half = TOOLTIP_WIDTH / 2
-    const cardChartLeft = CARD_HORIZONTAL_PADDING + Y_AXIS_WIDTH
-    const cardChartRight = cardChartLeft + chartWidth
-    let left = cardChartLeft + markerPosition.x - half
-    if (left < CARD_HORIZONTAL_PADDING) left = CARD_HORIZONTAL_PADDING
-    if (left + TOOLTIP_WIDTH > cardChartRight) left = cardChartRight - TOOLTIP_WIDTH
-    return left
-  }, [chartWidth, markerPosition])
-
   const activeColor = resolveActiveChartColor(currentPoint, color, getPointColor)
   const valueColorStyle = getPointColor && currentPoint ? { color: activeColor } : undefined
+  const hasMarker = markerTable.ts.length > 0
 
   return (
     <View style={[styles.card, containerStyle]}>
       <View style={styles.header}>
         {label ? <Text style={styles.label}>{label}</Text> : <View />}
         <View style={styles.headerRight}>
-          {isDragging && currentPoint && (
-            <Text style={styles.headerTime}>{formatTime(currentPoint.date)}</Text>
-          )}
-          <Text style={[styles.value, secondary ? { color } : valueColorStyle]}>{value}</Text>
+          {isDragging && <AnimatedChartText text={liveTimeText} style={styles.headerTime} />}
+          <AnimatedChartText
+            text={liveValueText}
+            style={[
+              styles.value,
+              secondary ? { color } : valueColorStyle,
+              getPointColor && !secondary ? liveValueColorStyle : undefined,
+            ]}
+          />
         </View>
       </View>
 
-      {isDragging && currentPoint && markerPosition && (
-        <View style={[styles.tooltip, { left: tooltipLeft }]}>
+      {isDragging && hasMarker && (
+        <Animated.View style={[styles.tooltip, tooltipAnimatedStyle]}>
           <View style={styles.tooltipValues}>
-            <Text style={[styles.tooltipValue, { color: activeColor }]}>
-              {formatValue ? formatValue(currentPoint.value) : currentPoint.value.toFixed(1)}
-            </Text>
+            <AnimatedChartText
+              text={liveValueText}
+              style={[styles.tooltipValue, { color: activeColor }, liveValueColorStyle]}
+            />
             {secondary && (
-              <Text style={[styles.tooltipValue, { color: secondary.color }]}>
-                {secondary.value}
-              </Text>
+              <AnimatedChartText
+                text={liveSecondaryValueText}
+                style={[styles.tooltipValue, { color: secondary.color }]}
+              />
             )}
           </View>
-          <Text style={styles.tooltipTime}>{formatTime(currentPoint.date)}</Text>
-        </View>
+          <AnimatedChartText text={liveTimeText} style={styles.tooltipTime} />
+        </Animated.View>
       )}
 
       <View style={styles.chartBody}>
@@ -383,11 +601,14 @@ export function TelemetryLineChart({
                 getPointColor={getPointColor}
                 windowMs={windowMs}
               />
-
-              {markerPosition && isDragging && (
+            </Canvas>
+          )}
+          {chartWidth > 0 && hasMarker && (
+            <Canvas style={[styles.markerCanvas, { width: chartWidth, height }]}>
+              {isDragging && (
                 <Line
-                  p1={vec(markerPosition.x, 0)}
-                  p2={vec(markerPosition.x, height)}
+                  p1={markerLineTop}
+                  p2={markerLineBottom}
                   color={theme.palette.slate.textDim}
                   strokeWidth={1}
                 >
@@ -395,24 +616,15 @@ export function TelemetryLineChart({
                 </Line>
               )}
 
-              {markerPosition && (
-                <>
-                  <Circle
-                    cx={markerPosition.x}
-                    cy={markerPosition.y}
-                    r={4}
-                    color={theme.palette.slate.surfaceDeep}
-                  />
-                  <Circle
-                    cx={markerPosition.x}
-                    cy={markerPosition.y}
-                    r={4}
-                    color={activeColor}
-                    style="stroke"
-                    strokeWidth={2}
-                  />
-                </>
-              )}
+              <Circle cx={markerX} cy={markerY} r={4} color={theme.palette.slate.surfaceDeep} />
+              <Circle
+                cx={markerX}
+                cy={markerY}
+                r={4}
+                color={markerColor}
+                style="stroke"
+                strokeWidth={2}
+              />
             </Canvas>
           )}
         </View>
@@ -503,6 +715,14 @@ const styles = StyleSheet.create({
   graphWrap: {
     flex: 1,
   },
+  markerCanvas: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    pointerEvents: 'none',
+  },
   xAxis: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -546,5 +766,9 @@ const styles = StyleSheet.create({
     color: theme.palette.slate.textMuted,
     fontSize: 8,
     fontVariant: ['tabular-nums'],
+  },
+  animatedText: {
+    padding: 0,
+    margin: 0,
   },
 })

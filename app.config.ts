@@ -77,6 +77,7 @@ const config: ExpoConfig = {
     ],
     'expo-video',
     './plugins/withGradleJvmArgs',
+    './plugins/withWearMirror',
   ],
   experiments: {
     typedRoutes: true,

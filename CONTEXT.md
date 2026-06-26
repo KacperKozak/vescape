@@ -100,6 +100,18 @@ _Avoid_: Sound effect, ringtone, tone
 A user-authored spoken phrase on a one-shot Alert Rule that may include current alert-value placeholders and is spoken by native text-to-speech when the rule fires.
 _Avoid_: TTS sound, voice preset, notification text
 
+**Watch Mirror**:
+The platform-neutral concept of the app on the rider's wrist that mirrors live board state and plays alert feedback. Display and playback only — it owns no durable truth, makes no alert decisions, and sends nothing back to the phone. A one-way reflection of phone truth. Has two concrete implementations: the **Wear OS Mirror** (Kotlin/Compose, Android) and the future **watchOS Mirror** (Apple Watch).
+_Avoid_: Wear Mirror (bakes in Google's Wear OS brand; use for the Android impl only), watch app, companion (Companion names the CompanionDeviceManager board-presence association, not the watch)
+
+**Watch Frame**:
+The compact, throttled telemetry snapshot the phone pushes to a **Watch Mirror** to drive its display. Distinct from a **Telemetry Sample** (raw, per-packet) and from **Live State** (the full app snapshot sent to JS).
+_Avoid_: Watch payload, wear message
+
+**Watch Alert**:
+A one-shot command the phone pushes to a **Watch Mirror** when the native alert engine fires, telling it to vibrate and/or sound. Carries no threshold logic — the alert decision already happened on the phone against an **Alert Rule**.
+_Avoid_: Wear alarm, watch notification
+
 **App Setting**:
 A user-controlled app preference that affects app behavior across boards unless explicitly scoped elsewhere.
 _Avoid_: Option, config
@@ -131,6 +143,9 @@ _Avoid_: Error log, debug session, crash report
 - A **Tune History Entry** captures the previous state of a **Tune Profile** before each explicit save.
 - An **Alert Rule** evaluates against live **Telemetry Samples**.
 - An **Alert Message Template** belongs to one **Alert Rule**.
+- A **Watch Mirror** receives **Watch Frames** and **Watch Alerts** from the phone and never sends data back; it is not a **Board**, a **Board Session**, or a source of **Telemetry Samples**.
+- A **Watch Frame** is derived from **Live State** and is only pushed while a **Board Session** is producing **Telemetry Samples**.
+- A **Watch Alert** is pushed when an **Alert Rule** fires on the phone and does not re-evaluate any threshold on the **Watch Mirror**.
 - An **App Setting** affects app behavior and is not part of a **Tune Profile** or **Board** identity.
 - A **Diagnostic Event** may describe failures around a **Board**, **Live State**, **Telemetry Sample**, **Ride Recording**, or **Tune Profile** workflow.
 
