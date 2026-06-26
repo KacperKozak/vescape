@@ -86,16 +86,19 @@ private fun FrameLayout(frame: WatchFrame, muted: Boolean) {
             val battFrac = ((frame.battery ?: 0.0) / 100.0).toFloat().coerceIn(0f, 1f)
             val motorFrac = tempFraction(frame.motorTemp)
             val ctrlFrac = tempFraction(frame.ctrlTemp)
+            val motorGlow = 0.08f + 0.40f * motorFrac
+            val ctrlGlow = 0.08f + 0.40f * ctrlFrac
+            val battGlow = 0.06f + 0.20f * battFrac
 
             // Speed: left (180°) -> top, sweep clockwise.
             drawGauge(center, radius, 180f, QUARTER_SWEEP, speedFrac, speedColor, style = StrongGaugeStyle)
             // Duty: right (360°) -> top, sweep counter-clockwise.
             drawGauge(center, radius, 360f, -QUARTER_SWEEP, dutyFrac, dutyColor, style = StrongGaugeStyle)
             // Battery: bottom arc, left (140°) -> right (40°) through 90°.
-            drawGauge(center, radius, 140f, -BATTERY_SWEEP, battFrac, battColor, style = SoftGaugeStyle, drawHead = false)
+            drawGauge(center, radius, 140f, -BATTERY_SWEEP, battFrac, battColor, style = SoftGaugeStyle, drawHead = false, glowStrength = battGlow)
             // Temps: small arcs in the gaps beside the battery gauge, growing from the bottom.
-            drawGauge(center, radius, 144f, TEMP_SWEEP, motorFrac, motorColor, style = SoftGaugeStyle, drawHead = false)
-            drawGauge(center, radius, 36f, -TEMP_SWEEP, ctrlFrac, ctrlColor, style = SoftGaugeStyle, drawHead = false)
+            drawGauge(center, radius, 144f, TEMP_SWEEP, motorFrac, motorColor, style = SoftGaugeStyle, drawHead = false, glowStrength = motorGlow)
+            drawGauge(center, radius, 36f, -TEMP_SWEEP, ctrlFrac, ctrlColor, style = SoftGaugeStyle, drawHead = false, glowStrength = ctrlGlow)
         }
 
         Column(
@@ -111,18 +114,30 @@ private fun FrameLayout(frame: WatchFrame, muted: Boolean) {
                 LargeGaugeValue(Modifier.weight(1f), frame.duty?.let { format(it, 0) } ?: "--", "%", dutyColor)
             }
 
-            // ── Bottom: temps near center like speed/duty, battery % above bottom gauge ──
+            // ── Bottom: temps near center, nudged toward their side gauges, battery % above bottom gauge ──
             Column(
                 modifier = Modifier.fillMaxWidth().weight(1f).padding(bottom = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.SpaceBetween,
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
+                    modifier = Modifier.fillMaxWidth().padding(top = 20.dp, start = 24.dp, end = 24.dp),
                     verticalAlignment = Alignment.Top,
                 ) {
-                    SmallGaugeValue(Modifier.weight(1f), temp(frame.motorTemp), "Motor", motorColor)
-                    SmallGaugeValue(Modifier.weight(1f), temp(frame.ctrlTemp), "Ctrl", ctrlColor)
+                    SmallGaugeValue(
+                        Modifier.weight(1f),
+                        temp(frame.motorTemp),
+                        "Motor",
+                        motorColor,
+                        horizontalAlignment = Alignment.Start,
+                    )
+                    SmallGaugeValue(
+                        Modifier.weight(1f),
+                        temp(frame.ctrlTemp),
+                        "Ctrl",
+                        ctrlColor,
+                        horizontalAlignment = Alignment.End,
+                    )
                 }
                 Text(
                     text = frame.battery?.let { "${format(it, 0)}%" } ?: "--",
@@ -147,6 +162,7 @@ private fun DrawScope.drawGauge(
     color: Color,
     style: GaugeStyle = DefaultGaugeStyle,
     drawHead: Boolean = true,
+    glowStrength: Float = 0.38f,
 ) {
     val topLeft = Offset(center.x - radius, center.y - radius)
     val arcSize = Size(radius * 2f, radius * 2f)
@@ -162,9 +178,9 @@ private fun DrawScope.drawGauge(
         val brush = Brush.radialGradient(
             0f to Color.Transparent,
             0.5f to Color.Transparent,
-            0.8f to color.copy(alpha = 0.15f),
-            0.95f to color.copy(alpha = 0.28f),
-            1f to color.copy(alpha = 0.38f),
+            0.8f to color.copy(alpha = glowStrength * 0.40f),
+            0.95f to color.copy(alpha = glowStrength * 0.74f),
+            1f to color.copy(alpha = glowStrength),
             center = center,
             radius = radius,
         )
@@ -206,9 +222,10 @@ private fun DisconnectedLayout(isAmbient: Boolean) {
         )
     } else {
         CircularProgressIndicator(
+            modifier = Modifier.fillMaxSize().padding(8.dp),
             indicatorColor = SpeedColor,
             trackColor = GuideColor,
-            strokeWidth = 3.dp,
+            strokeWidth = 4.dp,
         )
     }
 }
@@ -226,15 +243,21 @@ private fun GaugeValue(modifier: Modifier, value: String, unit: String, color: C
 @Composable
 private fun LargeGaugeValue(modifier: Modifier, value: String, unit: String, color: Color) {
     Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(text = value, style = MaterialTheme.typography.display2, color = color)
+        Text(text = value, style = MaterialTheme.typography.display1, color = color)
         Text(text = unit, style = MaterialTheme.typography.caption3, color = SecondaryText)
     }
 }
 
-/** Smaller centered value + label for the temperature readouts. */
+/** Smaller value + label for the temperature readouts. */
 @Composable
-private fun SmallGaugeValue(modifier: Modifier, value: String, unit: String, color: Color) {
-    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+private fun SmallGaugeValue(
+    modifier: Modifier,
+    value: String,
+    unit: String,
+    color: Color,
+    horizontalAlignment: Alignment.Horizontal = Alignment.CenterHorizontally,
+) {
+    Column(modifier = modifier, horizontalAlignment = horizontalAlignment) {
         Text(text = value, style = MaterialTheme.typography.title3, color = color)
         Text(text = unit, style = MaterialTheme.typography.caption3, color = SecondaryText)
     }
