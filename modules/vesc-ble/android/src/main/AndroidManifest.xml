@@ -9,12 +9,28 @@
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"/>
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
+  <uses-permission android:name="android.permission.REQUEST_OBSERVE_COMPANION_DEVICE_PRESENCE"/>
+  <uses-permission android:name="android.permission.REQUEST_COMPANION_START_FOREGROUND_SERVICES_FROM_BACKGROUND"/>
   <uses-permission android:name="android.permission.VIBRATE"/>
+  <uses-feature android:name="android.software.companion_device_setup" android:required="false"/>
 
   <application>
     <service
       android:name=".VescForegroundService"
       android:exported="false"
       android:foregroundServiceType="connectedDevice|location"/>
+    <service
+      android:name=".VescCompanionDeviceService"
+      android:exported="true"
+      android:permission="android.permission.BIND_COMPANION_DEVICE_SERVICE">
+      <intent-filter>
+        <action android:name="android.companion.CompanionDeviceService"/>
+      </intent-filter>
+    </service>
+    <provider
+      android:name=".VescAutoConnectProvider"
+      android:authorities="${applicationId}.vesc-auto-connect"
+      android:exported="false"
+      android:initOrder="100"/>
   </application>
 </manifest>

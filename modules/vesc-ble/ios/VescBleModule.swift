@@ -137,6 +137,10 @@ public class VescBleModule: Module {
       Self.saveSettings(settings)
     }
 
+    AsyncFunction("setCompanionPresenceEnabled") { (enabled: Bool, promise: Promise) in
+      promise.reject("UNSUPPORTED_PLATFORM", "Companion presence is Android-only")
+    }
+
     Function("setDebugRecordingEnabled") { (_: Bool) in
       // Debug raw BLE recording is Android-only.
     }
@@ -773,6 +777,7 @@ public class VescBleModule: Module {
     "liveHistoryLimit": 5,
     "autoConnect": true,
     "autoRecording": false,
+    "companionPresenceEnabled": false,
     "selectedBoardId": NSNull(),
     "lastGpsLatitude": NSNull(),
     "lastGpsLongitude": NSNull(),

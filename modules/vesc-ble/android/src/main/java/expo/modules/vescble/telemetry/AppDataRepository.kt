@@ -169,6 +169,7 @@ class AppDataRepository private constructor(private val context: Context) {
       socEstimateWindowSeconds = req("socEstimateWindowSeconds", 20, ::validSocEstimateWindowSeconds),
       connectionSoundsEnabled = req("connectionSoundsEnabled", true) { it as? Boolean },
       telemetryPollRateHz = req("telemetryPollRateHz", 20, ::validTelemetryPollRateHz),
+      companionPresenceEnabled = req("companionPresenceEnabled", false) { it as? Boolean },
     )
 
     if (badKeys.isNotEmpty()) {
@@ -177,6 +178,17 @@ class AppDataRepository private constructor(private val context: Context) {
         "app_setting_corrupt",
         mapOf("keys" to badKeys.joinToString(",")),
       )
+    }
+
+    if (settings.companionPresenceEnabled && !settings.autoConnect) {
+      dao.upsertAppSetting(
+        AppSettingEntity(
+          key = "autoConnect",
+          valueJson = encodeSettingJson(true),
+          updatedAt = System.currentTimeMillis(),
+        ),
+      )
+      return@withContext settings.copy(autoConnect = true)
     }
 
     settings
@@ -206,11 +218,15 @@ class AppDataRepository private constructor(private val context: Context) {
       "connectionSoundsEnabled" -> value as? Boolean ?: return@withContext
       "telemetryPollRateHz" ->
         validTelemetryPollRateHz(value) ?: return@withContext
+      "companionPresenceEnabled" -> value as? Boolean ?: return@withContext
       else -> return@withContext
     }
     val normalizedKey = when (key) {
       "avgSpeedCutoffKmh", "movingAvgSpeedThresholdKmh" -> "movingSpeedThresholdKmh"
       else -> key
+    }
+    if (normalizedKey == "autoConnect" && coerced == false && getTypedSettings().companionPresenceEnabled) {
+      return@withContext
     }
     val default: Any? = AppSettings().let { d ->
       when (normalizedKey) {
@@ -230,6 +246,7 @@ class AppDataRepository private constructor(private val context: Context) {
         "socEstimateWindowSeconds" -> d.socEstimateWindowSeconds
         "connectionSoundsEnabled" -> d.connectionSoundsEnabled
         "telemetryPollRateHz" -> d.telemetryPollRateHz
+        "companionPresenceEnabled" -> d.companionPresenceEnabled
         else -> null
       }
     }
@@ -462,6 +479,7 @@ fun AppSettings.toMap(): Map<String, Any?> = mapOf(
   "socEstimateWindowSeconds" to socEstimateWindowSeconds,
   "connectionSoundsEnabled" to connectionSoundsEnabled,
   "telemetryPollRateHz" to telemetryPollRateHz,
+  "companionPresenceEnabled" to companionPresenceEnabled,
 )
 
 internal fun encodeSettingJson(value: Any?): String {

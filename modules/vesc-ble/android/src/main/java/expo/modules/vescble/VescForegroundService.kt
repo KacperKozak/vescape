@@ -20,9 +20,13 @@ internal const val VESC_SESSION_TAG = "VescSession"
 private const val ACTION_START_SESSION = "expo.modules.vescble.ACTION_START_SESSION"
 private const val ACTION_STOP_SESSION = "expo.modules.vescble.ACTION_STOP_SESSION"
 internal const val ACTION_EXIT_FROM_NOTIFICATION = "expo.modules.vescble.ACTION_EXIT_FROM_NOTIFICATION"
+internal const val ACTION_CONNECT_FROM_NOTIFICATION = "expo.modules.vescble.ACTION_CONNECT_FROM_NOTIFICATION"
+internal const val ACTION_DISCONNECT_FROM_NOTIFICATION = "expo.modules.vescble.ACTION_DISCONNECT_FROM_NOTIFICATION"
 private const val ACTION_START_GPS_MONITORING = "expo.modules.vescble.ACTION_START_GPS_MONITORING"
 private const val ACTION_STOP_GPS_MONITORING = "expo.modules.vescble.ACTION_STOP_GPS_MONITORING"
-
+private const val ACTION_AUTO_CONNECT_SELECTED_BOARD = "expo.modules.vescble.ACTION_AUTO_CONNECT_SELECTED_BOARD"
+private const val ACTION_COMPANION_DEVICE_APPEARED = "expo.modules.vescble.ACTION_COMPANION_DEVICE_APPEARED"
+private const val EXTRA_COMPANION_ADDRESS = "expo.modules.vescble.EXTRA_COMPANION_ADDRESS"
 internal const val TELEMETRY_STALE_MS = 4_000L
 
 data class SessionConfig(
@@ -56,7 +60,6 @@ class VescForegroundService : Service() {
         var emitEvent: ((String, Map<String, Any?>) -> Unit)? = null
 
         private var instance: VescForegroundService? = null
-        internal var appInForeground = true
         internal var pendingStart: PendingStart? = null
         internal var pendingStop: PendingStop? = null
         internal var pendingConfigRead: PendingConfigRead? = null
@@ -107,6 +110,31 @@ class VescForegroundService : Service() {
         fun exitApp(context: Context) {
             instance?.controller?.exitFromNotification()
                 ?: VescNotificationController.closeAppTask(context.applicationContext)
+        }
+
+        fun onCompanionDeviceAppeared(context: Context, address: String) {
+            val intent = Intent(context, VescForegroundService::class.java).apply {
+                action = ACTION_COMPANION_DEVICE_APPEARED
+                putExtra(EXTRA_COMPANION_ADDRESS, address)
+            }
+            try {
+                context.startForegroundService(intent)
+            } catch (e: Exception) {
+                android.util.Log.w(VESC_SESSION_TAG, "Companion service start failed: ${e.message}")
+            }
+        }
+
+        fun autoConnectSelectedBoard(context: Context) {
+            val intent = Intent(context, VescForegroundService::class.java).apply {
+                action = ACTION_AUTO_CONNECT_SELECTED_BOARD
+            }
+            try {
+                context.startForegroundService(intent)
+            } catch (e: Exception) {
+                android.util.Log.w(VESC_SESSION_TAG, "Auto-connect service start ignored: ${e.message}")
+                return
+            }
+            instance?.controller?.autoConnectSelectedBoard()
         }
 
         fun getRefloatConfigSnapshot(
@@ -212,12 +240,6 @@ class VescForegroundService : Service() {
 
         fun currentRemoteTiltState(): Map<String, Any?>? = instance?.controller?.remoteTiltState()
 
-        fun setAppInForeground(active: Boolean) {
-            if (appInForeground == active) return
-            appInForeground = active
-            instance?.controller?.refreshNotification()
-        }
-
         private fun idleState(repository: AppDataRepository): Map<String, Any?> {
             val settings = kotlinx.coroutines.runBlocking { repository.getTypedSettings() }
             return mapOf(
@@ -273,11 +295,22 @@ class VescForegroundService : Service() {
             ACTION_START_SESSION -> controller.consumePendingStart()
             ACTION_STOP_SESSION -> controller.consumePendingStop()
             ACTION_EXIT_FROM_NOTIFICATION -> controller.exitFromNotification()
+            ACTION_CONNECT_FROM_NOTIFICATION -> controller.connectSelectedBoardFromNotification()
+            ACTION_DISCONNECT_FROM_NOTIFICATION -> controller.disconnectFromNotification()
             ACTION_START_GPS_MONITORING -> controller.consumePendingGpsStart()
             ACTION_STOP_GPS_MONITORING -> controller.stopGpsMonitoring()
+            ACTION_AUTO_CONNECT_SELECTED_BOARD -> controller.autoConnectSelectedBoard()
+            ACTION_COMPANION_DEVICE_APPEARED ->
+                intent.getStringExtra(EXTRA_COMPANION_ADDRESS)?.let(controller::connectCompanionDevice)
+                    ?: controller.stopIfIdle()
             else -> controller.stopIfIdle()
         }
         return if (controller.isStopping) START_NOT_STICKY else START_STICKY
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        controller.exitFromNotification()
+        super.onTaskRemoved(rootIntent)
     }
 
     override fun onDestroy() {

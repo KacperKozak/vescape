@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { getSettings, updateSetting, type AppSettings } from 'vesc-ble'
+import { getSettings, setCompanionPresenceEnabled, updateSetting, type AppSettings } from 'vesc-ble'
 import { DEFAULT_HISTORY_METRIC_HOT_RANGES } from '@/lib/history/metricColorScale'
 
 const DEFAULTS: AppSettings = {
@@ -18,6 +18,7 @@ const DEFAULTS: AppSettings = {
   historyMetricHotRanges: DEFAULT_HISTORY_METRIC_HOT_RANGES,
   socEstimateWindowSeconds: 20,
   connectionSoundsEnabled: true,
+  companionPresenceEnabled: false,
   telemetryPollRateHz: 20,
 }
 
@@ -25,6 +26,7 @@ interface SettingsState extends AppSettings {
   loaded: boolean
   load: () => Promise<void>
   set: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => Promise<void>
+  setCompanionPresence: (enabled: boolean) => Promise<void>
 }
 
 export function useLiveWindowMs(): number {
@@ -35,21 +37,35 @@ export function getLiveWindowMs(): number {
   return useSettingsStore.getState().liveHistoryLimit * 60_000
 }
 
-export const useSettingsStore = create<SettingsState>((set) => ({
+export const useSettingsStore = create<SettingsState>((set, get) => ({
   ...DEFAULTS,
   loaded: false,
 
   async load() {
     try {
       const s = await getSettings()
-      set({ ...s, loaded: true })
+      set({
+        ...s,
+        autoConnect: s.companionPresenceEnabled ? true : s.autoConnect,
+        loaded: true,
+      })
     } catch {
       set({ loaded: true })
     }
   },
 
   async set(key, value) {
+    if (key === 'autoConnect' && value === false && get().companionPresenceEnabled) return
     set({ [key]: value })
     await updateSetting(key, value)
+  },
+
+  async setCompanionPresence(enabled) {
+    await setCompanionPresenceEnabled(enabled)
+    set(
+      enabled
+        ? { companionPresenceEnabled: true, autoConnect: true }
+        : { companionPresenceEnabled: false },
+    )
   },
 }))

@@ -54,6 +54,7 @@ const e2eSettings: AppSettings = {
   historyMetricHotRanges: {},
   socEstimateWindowSeconds: 20,
   connectionSoundsEnabled: true,
+  companionPresenceEnabled: false,
   telemetryPollRateHz: 20,
 }
 

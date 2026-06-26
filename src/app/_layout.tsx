@@ -7,10 +7,12 @@ import { DiagnosticErrorBoundary } from '@/components/domain/main/DiagnosticErro
 import { HeaderBackButton } from '@/components/ui/base/HeaderBackButton'
 import { stackScreens } from '@/navigation/routes'
 import { useAlertsStore } from '@/store/alertsStore'
+import { useSettingsStore } from '@/store/settingsStore'
 import { theme } from '@/constants/theme'
 
 export default function RootLayout() {
   useEffect(() => {
+    void useSettingsStore.getState().load()
     void useAlertsStore.getState().load()
   }, [])
 
@@ -55,6 +57,7 @@ export default function RootLayout() {
             name={stackScreens.settingsPrivacyZones}
             options={{ title: 'Privacy Zones' }}
           />
+          <Stack.Screen name={stackScreens.settingsConnection} options={{ title: 'Connection' }} />
           <Stack.Screen
             name={stackScreens.settingsLiveTelemetry}
             options={{ title: 'Live telemetry' }}

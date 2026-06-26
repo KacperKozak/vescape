@@ -1,10 +1,9 @@
-import { View, Text, Switch, StyleSheet, ScrollView, Platform } from 'react-native'
+import { View, Text, StyleSheet, ScrollView, Platform } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import Constants from 'expo-constants'
 import {
   BluetoothConnectedIcon,
-  RecordIcon,
   CodeIcon,
   DatabaseIcon,
   InfoIcon,
@@ -14,13 +13,10 @@ import {
   MapPinIcon,
   FadersIcon,
   ChartLineUpIcon,
-  SpeakerHighIcon,
   GaugeIcon,
 } from 'phosphor-react-native'
-import { useShallow } from 'zustand/react/shallow'
 
 import { routes } from '@/navigation/routes'
-import { useSettingsStore } from '@/store/settingsStore'
 import { theme } from '@/constants/theme'
 import { formatBytes } from '@/helpers/format'
 import { SettingsCard } from '@/components/ui/settings/SettingsCard'
@@ -33,15 +29,6 @@ import { useSettingsDatabaseOps } from '@/hooks/useSettingsDatabaseOps'
 const appVersion = Constants.expoConfig?.version ?? '–'
 
 export default function SettingsScreen() {
-  const { autoConnect, autoRecording, connectionSoundsEnabled, set } = useSettingsStore(
-    useShallow((s) => ({
-      autoConnect: s.autoConnect,
-      autoRecording: s.autoRecording,
-      connectionSoundsEnabled: s.connectionSoundsEnabled,
-      set: s.set,
-    })),
-  )
-
   const db = useSettingsDatabaseOps()
 
   return (
@@ -78,47 +65,9 @@ export default function SettingsScreen() {
           <SettingsRow
             icon={BluetoothConnectedIcon}
             iconColor={theme.palette.cyan.color}
-            label="Auto connect"
-            hint="Connect to board on app start"
-            right={
-              <Switch
-                value={autoConnect}
-                onValueChange={(v) => void set('autoConnect', v)}
-                trackColor={{ false: theme.palette.slate.border, true: theme.palette.sky.border }}
-                thumbColor={autoConnect ? theme.palette.sky.color : theme.palette.slate.textMuted}
-              />
-            }
-          />
-          <SettingsRow
-            icon={RecordIcon}
-            iconWeight="fill"
-            iconColor={theme.status.error.color}
-            label="Auto recording"
-            hint="Start recording when board connects"
-            right={
-              <Switch
-                value={autoRecording}
-                onValueChange={(v) => void set('autoRecording', v)}
-                trackColor={{ false: theme.palette.slate.border, true: theme.palette.sky.border }}
-                thumbColor={autoRecording ? theme.palette.sky.color : theme.palette.slate.textMuted}
-              />
-            }
-          />
-          <SettingsRow
-            icon={SpeakerHighIcon}
-            iconColor={theme.palette.cyan.color}
-            label="Connection sounds"
-            hint="Play on/off sounds on connect and dropout"
-            right={
-              <Switch
-                value={connectionSoundsEnabled}
-                onValueChange={(v) => void set('connectionSoundsEnabled', v)}
-                trackColor={{ false: theme.palette.slate.border, true: theme.palette.sky.border }}
-                thumbColor={
-                  connectionSoundsEnabled ? theme.palette.sky.color : theme.palette.slate.textMuted
-                }
-              />
-            }
+            label="Connection"
+            hint="Auto start, auto connect, and sounds"
+            onPress={() => router.push(routes.settingsConnection)}
           />
           <SettingsRow
             icon={GaugeIcon}

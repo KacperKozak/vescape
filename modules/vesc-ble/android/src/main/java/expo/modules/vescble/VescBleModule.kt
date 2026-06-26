@@ -27,7 +27,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 
 private const val TAG = "VescBle"
-private const val DEFAULT_BOARD_NAME = "VESC Board"
 private const val SCAN_RETRY_LIMIT = 3
 
 @SuppressLint("MissingPermission") // permissions are requested at the JS/RN layer
@@ -43,6 +42,9 @@ class VescBleModule : Module() {
   private val observedEvents = mutableSetOf<String>()
   private val mainHandler = Handler(Looper.getMainLooper())
   private var previewAlertFeedback: VescAlertFeedback? = null
+  private val companionPresence by lazy {
+    VescCompanionPresence(context.applicationContext, activityProvider = { appContext.currentActivity })
+  }
 
   private val context: Context get() = appContext.reactContext
     ?: throw IllegalStateException("No React context")
@@ -100,15 +102,15 @@ class VescBleModule : Module() {
 
     OnActivityEntersForeground {
       frontendActive = true
-      VescForegroundService.setAppInForeground(true)
     }
     OnActivityEntersBackground {
       frontendActive = false
-      VescForegroundService.setAppInForeground(false)
+    }
+    OnActivityResult { _, result ->
+      companionPresence.onActivityResult(result.requestCode, result.resultCode)
     }
     OnDestroy {
       frontendActive = false
-      VescForegroundService.setAppInForeground(false)
       observedEvents.clear()
       previewAlertFeedback?.release()
       previewAlertFeedback = null
@@ -148,6 +150,7 @@ class VescBleModule : Module() {
     }
     Function("setSelectedBoard") { boardId: String? ->
       runBlocking { AppDataRepository.get(context.applicationContext).setSelectedBoardId(boardId) }
+      companionPresence.refreshForSelectedBoard()
     }
     Function("setDebugRecordingEnabled") { enabled: Boolean ->
       requestedDebugRecordingEnabled = enabled
@@ -199,6 +202,9 @@ class VescBleModule : Module() {
 
     AsyncFunction("selectBoard") Coroutine { boardId: String ->
       selectBoard(boardId)
+    }
+    AsyncFunction("setCompanionPresenceEnabled") { enabled: Boolean, promise: Promise ->
+      companionPresence.setEnabled(enabled, promise)
     }
     AsyncFunction("stopBoard") { promise: Promise ->
       stopBoardSession(promise)
@@ -540,35 +546,13 @@ class VescBleModule : Module() {
   }
 
   private suspend fun selectBoard(boardId: String) {
-    val repo = AppDataRepository.get(context.applicationContext)
-    repo.setSelectedBoardId(boardId)
-    val board = repo.getBoard(boardId)
-      ?: throw IllegalArgumentException("Board not found: $boardId")
-    @Suppress("UNCHECKED_CAST")
-    val link = board["link"] as? Map<String, Any?>
-    val bleId = link?.get("bleId") as? String
-    if (bleId.isNullOrBlank()) {
-      throw IllegalArgumentException("Board has no Board Link: $boardId")
-    }
-    val boardName = board["name"] as? String ?: DEFAULT_BOARD_NAME
-    // Poll rate cap (Hz) → minimum spacing floor between requests. 0 Hz = unlimited
-    // (pure response-paced: send the next poll as soon as the reply lands). Polling stays
-    // response-paced either way, so the floor caps the rate without outrunning the controller.
-    // Changing the cap mid-session is applied live via reloadTelemetrySettings (see updateSetting).
-    val pollIntervalMs = pollIntervalMsForHz(repo.getTypedSettings().telemetryPollRateHz)
+    val appCtx = context.applicationContext
+    AppDataRepository.get(appCtx).setSelectedBoardId(boardId)
+    companionPresence.refreshForSelectedBoard()
+    val config = buildSessionConfig(appCtx, boardId, requestedDebugRecordingEnabled)
     VescForegroundService.startBoardSession(
-      context.applicationContext,
-      SessionConfig(
-        appBoardId = boardId,
-        deviceId = bleId,
-        deviceName = boardName,
-        transport = BoardTransport.fromBridge(link["transport"]),
-        hasBms = link["hasBms"] as? Boolean,
-        pollIntervalMs = pollIntervalMs,
-        recordingEnabled = requestedDebugRecordingEnabled,
-        telemetryRecordingEnabled = false,
-        autoReconnect = true,
-      ),
+      appCtx,
+      config,
       onSuccess = {},
       onError = { _, message ->
         sendEvent("onError", mapOf("message" to message))

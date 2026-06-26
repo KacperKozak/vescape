@@ -585,6 +585,8 @@ export interface AppSettings {
   socEstimateWindowSeconds: number
   /** Play on/off sounds on board connect and involuntary disconnect. */
   connectionSoundsEnabled: boolean
+  /** Android-only: use CompanionDeviceManager presence to connect selected board when nearby. */
+  companionPresenceEnabled: boolean
   /**
    * Max telemetry poll rate in Hz, applied as a minimum spacing floor between
    * requests. Polling stays response-paced (the next request is only sent once
@@ -705,6 +707,7 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
   getLiveState(): LiveStateEvent
   getRemoteTiltState(): RemoteTiltState | null
   setSelectedBoard(boardId: string | null): void
+  setCompanionPresenceEnabled(enabled: boolean): Promise<void>
   getTelemetryHistory(options: TelemetryHistoryOptions): Promise<TelemetryMinuteBucket[]>
   getTelemetrySamples(options: {
     fromMs: number
@@ -1215,6 +1218,14 @@ export async function updateSetting(
     return
   }
   return native.updateSetting(key, value)
+}
+
+export async function setCompanionPresenceEnabled(enabled: boolean): Promise<void> {
+  if (E2E_ENABLED) {
+    e2eFake.updateSetting('companionPresenceEnabled', enabled)
+    return
+  }
+  return native.setCompanionPresenceEnabled(enabled)
 }
 
 export function seedE2EData(flow: string): void {

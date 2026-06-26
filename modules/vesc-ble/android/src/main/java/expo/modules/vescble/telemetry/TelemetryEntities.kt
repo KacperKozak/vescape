@@ -368,6 +368,7 @@ data class AppSettings(
   val socEstimateWindowSeconds: Int = 20,
   val connectionSoundsEnabled: Boolean = true,
   val telemetryPollRateHz: Int = 20,
+  val companionPresenceEnabled: Boolean = false,
 )
 
 @Entity(
