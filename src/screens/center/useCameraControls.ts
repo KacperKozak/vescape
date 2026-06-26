@@ -240,11 +240,13 @@ export function useCameraControls({
   const getLiveFollowCamera = useCallback(() => {
     const baseZoomLevel = followZoomLevelRef.current ?? gpsCamera.zoomLevel
     const manualFollowZoom = followZoomLevelRef.current != null
+    const effectiveNavigationMode =
+      mapNavigationMode === 'phoneHeading' && !phoneHeadingReady ? 'freeRotate' : mapNavigationMode
     const effect = dispatchCameraIntent({
       type: 'FollowLive',
       gpsCamera: { ...gpsCamera, zoomLevel: baseZoomLevel },
       followHeadingDeg,
-      navigationMode: mapNavigationMode,
+      navigationMode: effectiveNavigationMode,
       perspectiveEnabled,
       viewportHeight,
       preserveHeading: resetHeadingOnRecenter ? undefined : currentCameraRef.current?.heading,
@@ -262,6 +264,7 @@ export function useCameraControls({
     dispatchCameraIntent,
     mapNavigationMode,
     perspectiveEnabled,
+    phoneHeadingReady,
     resetHeadingOnRecenter,
     viewportHeight,
   ])

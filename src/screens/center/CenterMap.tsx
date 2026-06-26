@@ -316,7 +316,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
   const targetFollowHeadingDeg = gpsHeadingMode
     ? (directionBearingDeg ?? 0)
     : phoneHeadingMode
-      ? (phoneHeadingDeg ?? 0)
+      ? (phoneHeadingDeg ?? cameraHeading)
       : 0
   const [smoothedFollowHeadingDeg, setSmoothedFollowHeadingDeg] = useState(targetFollowHeadingDeg)
   const smoothingFrameRef = useRef<number | null>(null)
@@ -782,9 +782,6 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
       }
       if (state.gestures.isGestureActive) {
         onMapInteraction()
-        if (phoneHeadingMode) {
-          setFollowGps(false)
-        }
         const gestureCenterDistanceM = cameraFix
           ? distanceMeters({ longitude, latitude }, cameraFix)
           : Number.POSITIVE_INFINITY
@@ -795,7 +792,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
           headingDeg: state.properties.heading,
           followHeadingDeg,
         })
-        if (!phoneHeadingMode && preservesLiveFollow) {
+        if (preservesLiveFollow) {
           setFollowZoomLevel(state.properties.zoom)
           const followCamera = getLiveFollowCameraProfile({
             gpsCamera: {
@@ -804,6 +801,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
             },
             followHeadingDeg,
             gpsHeadingMode: headingFollowMode,
+            profileKey: phoneHeadingMode ? 'compass' : undefined,
             perspectiveEnabled,
           })
           if (Math.abs(state.properties.pitch - followCamera.pitch) > 0.5) {
