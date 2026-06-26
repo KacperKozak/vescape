@@ -64,6 +64,23 @@ class VescForegroundService : Service() {
         internal var pendingGpsStart = false
         internal val appDataScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
+        // start/stop/gps requests are dispatched twice: synchronously by the caller thread and
+        // again on the main thread via onStartCommand. Claim atomically so only one path wins,
+        // otherwise the pending promise settles twice and crashes the service.
+        private val pendingLock = Any()
+
+        internal fun claimPendingStart(): PendingStart? = synchronized(pendingLock) {
+            pendingStart.also { pendingStart = null }
+        }
+
+        internal fun claimPendingStop(): PendingStop? = synchronized(pendingLock) {
+            pendingStop.also { pendingStop = null }
+        }
+
+        internal fun claimPendingGpsStart(): Boolean = synchronized(pendingLock) {
+            pendingGpsStart.also { pendingGpsStart = false }
+        }
+
         fun startBoardSession(
             context: Context,
             boardConfig: SessionConfig,
