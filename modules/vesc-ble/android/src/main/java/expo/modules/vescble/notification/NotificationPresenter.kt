@@ -9,7 +9,8 @@ import expo.modules.vescble.displayText
 internal class NotificationPresenter(
     private val controller: VescNotificationController,
     private val deviceName: () -> String?,
-    private val appInForeground: () -> Boolean,
+    private val sessionActive: () -> Boolean,
+    private val canConnect: () -> Boolean,
 ) {
     fun show(
         phase: BoardPhase,
@@ -19,7 +20,7 @@ internal class NotificationPresenter(
     ) {
         val text = resolveText(phase, telemetry, batteryPercent, errorMessage)
         val chip = NotificationFormatter.formatShortCriticalText(phase, telemetry, batteryPercent)
-        controller.show(text, deviceName(), appInForeground(), chip, batteryPercent?.toInt())
+        controller.show(text, deviceName(), chip, batteryPercent?.toInt(), sessionActive(), canConnect())
     }
 
     fun build(
@@ -30,7 +31,7 @@ internal class NotificationPresenter(
     ): Notification {
         val text = resolveText(phase, telemetry, batteryPercent, errorMessage)
         val chip = NotificationFormatter.formatShortCriticalText(phase, telemetry, batteryPercent)
-        return controller.build(text, deviceName(), appInForeground(), chip, batteryPercent?.toInt())
+        return controller.build(text, deviceName(), chip, batteryPercent?.toInt(), sessionActive(), canConnect())
     }
 
     private fun resolveText(

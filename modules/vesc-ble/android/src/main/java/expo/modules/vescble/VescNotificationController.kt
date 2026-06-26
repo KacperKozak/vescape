@@ -17,6 +17,8 @@ internal class VescNotificationController(
     private val channelId: String,
     private val notificationId: Int,
     private val stopAction: String,
+    private val connectAction: String,
+    private val disconnectAction: String,
 ) {
     fun createChannel() {
         val channel = NotificationChannel(
@@ -35,12 +37,16 @@ internal class VescNotificationController(
     fun show(
         text: String,
         deviceName: String?,
-        appInForeground: Boolean,
         shortCriticalText: String?,
         batteryPercent: Int? = null,
+        sessionActive: Boolean = false,
+        canConnect: Boolean = false,
     ) {
         service.getSystemService(NotificationManager::class.java)
-            .notify(notificationId, build(text, deviceName, appInForeground, shortCriticalText, batteryPercent))
+            .notify(
+                notificationId,
+                build(text, deviceName, shortCriticalText, batteryPercent, sessionActive, canConnect),
+            )
     }
 
     fun cancel() {
@@ -50,11 +56,12 @@ internal class VescNotificationController(
     fun build(
         text: String,
         deviceName: String?,
-        appInForeground: Boolean,
         shortCriticalText: String?,
         batteryPercent: Int? = null,
+        sessionActive: Boolean = false,
+        canConnect: Boolean = false,
     ): Notification {
-        val title = (deviceName ?: "VESC").let { if (appInForeground) it else "$it (bg)" }
+        val title = deviceName ?: "VESC"
         return NotificationCompat.Builder(service, channelId)
             .setContentTitle(title)
             .setContentText(text)
@@ -70,11 +77,23 @@ internal class VescNotificationController(
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .apply {
                 if (batteryPercent != null) setProgress(100, batteryPercent.coerceIn(0, 100), false)
+                when {
+                    sessionActive -> addAction(
+                        android.R.drawable.ic_menu_close_clear_cancel,
+                        "Disconnect",
+                        buildServiceActionIntent(REQUEST_DISCONNECT, disconnectAction),
+                    )
+                    canConnect -> addAction(
+                        android.R.drawable.ic_menu_send,
+                        "Connect",
+                        buildServiceActionIntent(REQUEST_CONNECT, connectAction),
+                    )
+                }
             }
             .addAction(
                 android.R.drawable.ic_menu_close_clear_cancel,
                 "Exit",
-                buildStopIntent(),
+                buildServiceActionIntent(REQUEST_EXIT, stopAction),
             )
             .build()
             .apply {
@@ -87,6 +106,10 @@ internal class VescNotificationController(
     }
 
     companion object {
+        private const val REQUEST_EXIT = 1
+        private const val REQUEST_DISCONNECT = 2
+        private const val REQUEST_CONNECT = 3
+
         fun closeAppTask(context: Context) {
             try {
                 context.getSystemService(ActivityManager::class.java)
@@ -98,13 +121,11 @@ internal class VescNotificationController(
         }
     }
 
-    private fun buildStopIntent(): PendingIntent {
-        val intent = Intent(service, serviceClass).apply {
-            action = stopAction
-        }
+    private fun buildServiceActionIntent(requestCode: Int, action: String): PendingIntent {
+        val intent = Intent(service, serviceClass).apply { this.action = action }
         return PendingIntent.getService(
             service,
-            1,
+            requestCode,
             intent,
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )

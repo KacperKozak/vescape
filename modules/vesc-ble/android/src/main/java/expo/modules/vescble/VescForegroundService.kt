@@ -20,6 +20,8 @@ internal const val VESC_SESSION_TAG = "VescSession"
 private const val ACTION_START_SESSION = "expo.modules.vescble.ACTION_START_SESSION"
 private const val ACTION_STOP_SESSION = "expo.modules.vescble.ACTION_STOP_SESSION"
 internal const val ACTION_EXIT_FROM_NOTIFICATION = "expo.modules.vescble.ACTION_EXIT_FROM_NOTIFICATION"
+internal const val ACTION_CONNECT_FROM_NOTIFICATION = "expo.modules.vescble.ACTION_CONNECT_FROM_NOTIFICATION"
+internal const val ACTION_DISCONNECT_FROM_NOTIFICATION = "expo.modules.vescble.ACTION_DISCONNECT_FROM_NOTIFICATION"
 private const val ACTION_START_GPS_MONITORING = "expo.modules.vescble.ACTION_START_GPS_MONITORING"
 private const val ACTION_STOP_GPS_MONITORING = "expo.modules.vescble.ACTION_STOP_GPS_MONITORING"
 
@@ -56,7 +58,6 @@ class VescForegroundService : Service() {
         var emitEvent: ((String, Map<String, Any?>) -> Unit)? = null
 
         private var instance: VescForegroundService? = null
-        internal var appInForeground = true
         internal var pendingStart: PendingStart? = null
         internal var pendingStop: PendingStop? = null
         internal var pendingConfigRead: PendingConfigRead? = null
@@ -212,12 +213,6 @@ class VescForegroundService : Service() {
 
         fun currentRemoteTiltState(): Map<String, Any?>? = instance?.controller?.remoteTiltState()
 
-        fun setAppInForeground(active: Boolean) {
-            if (appInForeground == active) return
-            appInForeground = active
-            instance?.controller?.refreshNotification()
-        }
-
         private fun idleState(repository: AppDataRepository): Map<String, Any?> {
             val settings = kotlinx.coroutines.runBlocking { repository.getTypedSettings() }
             return mapOf(
@@ -273,6 +268,8 @@ class VescForegroundService : Service() {
             ACTION_START_SESSION -> controller.consumePendingStart()
             ACTION_STOP_SESSION -> controller.consumePendingStop()
             ACTION_EXIT_FROM_NOTIFICATION -> controller.exitFromNotification()
+            ACTION_CONNECT_FROM_NOTIFICATION -> controller.connectSelectedBoardFromNotification()
+            ACTION_DISCONNECT_FROM_NOTIFICATION -> controller.disconnectFromNotification()
             ACTION_START_GPS_MONITORING -> controller.consumePendingGpsStart()
             ACTION_STOP_GPS_MONITORING -> controller.stopGpsMonitoring()
             else -> controller.stopIfIdle()
