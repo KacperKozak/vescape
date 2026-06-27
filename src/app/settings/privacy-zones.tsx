@@ -383,6 +383,7 @@ export default function PrivacyZonesScreen() {
               id={pill.id}
               label={pill.name}
               icon={pill.icon}
+              testID={`privacy-zone-pill-${pill.id}`}
               badge={
                 <PillSelectorDot
                   status={!pill.isSaved ? 'draft' : pill.enabled ? 'enabled' : 'disabled'}
@@ -395,6 +396,7 @@ export default function PrivacyZonesScreen() {
                 <PillSelectorMenuItem
                   icon={PencilSimpleIcon}
                   label="Rename"
+                  testID={`privacy-zone-menu-rename-${pill.id}`}
                   onPress={() => handleRenamePress(pill.id, pill.name)}
                 />
               ) : null}
@@ -402,6 +404,7 @@ export default function PrivacyZonesScreen() {
                 <PillSelectorMenuItem
                   icon={TrashIcon}
                   label="Delete"
+                  testID={`privacy-zone-menu-delete-${pill.id}`}
                   onPress={() => handleDeletePress(pill.id)}
                   danger
                   separator={!pill.isBuiltIn}
@@ -409,7 +412,7 @@ export default function PrivacyZonesScreen() {
               ) : null}
             </PillSelectorItem>
           ))}
-          <PillSelectorAdd onPress={handleAddPress} />
+          <PillSelectorAdd testID="privacy-zone-add-button" onPress={handleAddPress} />
         </PillSelector>
       </View>
 
@@ -417,6 +420,7 @@ export default function PrivacyZonesScreen() {
         {isUnsaved ? (
           <Button
             label="Save and enable"
+            testID="privacy-zone-save-button"
             onPress={() => void handleSave()}
             loading={saving}
             style={styles.actionButton}
@@ -425,12 +429,14 @@ export default function PrivacyZonesScreen() {
           <View style={styles.savedActions}>
             <Button
               label="Cancel"
+              testID="privacy-zone-edit-cancel-button"
               variant="secondary"
               onPress={handleCancelEdit}
               style={styles.actionButton}
             />
             <Button
               label="Save changes"
+              testID="privacy-zone-save-button"
               onPress={() => void handleUpdate()}
               loading={saving}
               style={styles.actionButton}
@@ -440,6 +446,7 @@ export default function PrivacyZonesScreen() {
           <View style={styles.savedActions}>
             <Button
               label="Change zone"
+              testID="privacy-zone-change-button"
               variant="secondary"
               onPress={handleStartEdit}
               style={styles.actionButton}
@@ -447,6 +454,7 @@ export default function PrivacyZonesScreen() {
             <Button
               key={toggleLabel}
               label={toggleLabel}
+              testID="privacy-zone-toggle-button"
               variant={zoneEnabled ? 'secondary' : 'primary'}
               onPress={() => void handleToggle()}
               style={styles.actionButton}
@@ -471,6 +479,7 @@ export default function PrivacyZonesScreen() {
           <Pressable style={styles.modalCard} onPress={() => undefined}>
             <Text style={styles.modalTitle}>Zone name</Text>
             <Input
+              testID="privacy-zone-name-input"
               style={styles.modalInput}
               value={addNameText}
               onChangeText={setAddNameText}
@@ -484,12 +493,14 @@ export default function PrivacyZonesScreen() {
             <View style={styles.modalActions}>
               <Button
                 label="Cancel"
+                testID="privacy-zone-name-cancel-button"
                 variant="secondary"
                 onPress={() => setAddNameVisible(false)}
                 style={styles.modalButton}
               />
               <Button
                 label="Add"
+                testID="privacy-zone-name-add-button"
                 onPress={handleAddConfirm}
                 disabled={!addNameText.trim()}
                 style={styles.modalButton}
@@ -509,6 +520,7 @@ export default function PrivacyZonesScreen() {
           <Pressable style={styles.modalCard} onPress={() => undefined}>
             <Text style={styles.modalTitle}>Rename zone</Text>
             <Input
+              testID="privacy-zone-rename-input"
               style={styles.modalInput}
               value={renameText}
               onChangeText={setRenameText}
@@ -522,12 +534,14 @@ export default function PrivacyZonesScreen() {
             <View style={styles.modalActions}>
               <Button
                 label="Cancel"
+                testID="privacy-zone-rename-cancel-button"
                 variant="secondary"
                 onPress={() => setRenameTarget(null)}
                 style={styles.modalButton}
               />
               <Button
                 label="Save"
+                testID="privacy-zone-rename-save-button"
                 onPress={() => void handleRenameConfirm()}
                 disabled={!renameText.trim()}
                 style={styles.modalButton}

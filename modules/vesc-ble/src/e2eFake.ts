@@ -11,6 +11,7 @@ import type {
   LiveSeriesEvent,
   LiveStateEvent,
   MetricExclusion,
+  PrivacyZone,
   TelemetryEvent,
   TelemetryHistoryEvent,
   TelemetryHistoryOptions,
@@ -252,6 +253,8 @@ let historySamples: TelemetrySample[] = []
 let historyGps: HistoryGpsSample[] = []
 let historyMarkers: HistoryMarker[] = []
 let historyExclusions: MetricExclusion[] = []
+
+let e2ePrivacyZones: PrivacyZone[] = []
 
 function clearTelemetryHistory(): void {
   telemetryHistory = []
@@ -714,6 +717,41 @@ export const e2eFake = {
       e2eSettings.autoConnect = false
       seedHistoryData(boardId, board.name)
     }
+
+    if (flow === 'privacy-zones') {
+      const boardId = 'e2e-board-privacy'
+      const board: Board = {
+        id: boardId,
+        name: 'E2E Privacy Board',
+        description: 'Seeded by Maestro',
+        createdAt: Date.now(),
+        batteryConfig: {
+          mode: 'preset',
+          cellPresetId: 'molicel:21700:p50b',
+          seriesCount: 21,
+          parallelCount: 2,
+        },
+        link: { bleId: 'E2:E2:E2:E2:E2:03', transport: 'direct' },
+      }
+      e2eBoards.length = 0
+      e2eBoards.push(board)
+      e2eSettings.selectedBoardId = boardId
+      e2eSettings.autoConnect = false
+      const now = Date.now()
+      e2ePrivacyZones = [
+        {
+          id: 'e2e-office',
+          preset: 'custom',
+          name: 'Office',
+          enabled: false,
+          centerLatitude: 54.0,
+          centerLongitude: 15.0,
+          radiusMeters: 500,
+          createdAt: now,
+          updatedAt: now,
+        },
+      ]
+    }
   },
 
   getTelemetryHistory,
@@ -723,4 +761,28 @@ export const e2eFake = {
   getTelemetrySummary,
 
   clearTelemetryHistory,
+
+  getPrivacyZones(): PrivacyZone[] {
+    return [...e2ePrivacyZones].sort((a, b) => a.createdAt - b.createdAt)
+  },
+
+  upsertPrivacyZone(zone: PrivacyZone): void {
+    const index = e2ePrivacyZones.findIndex((z) => z.id === zone.id)
+    if (index >= 0) {
+      e2ePrivacyZones[index] = zone
+    } else {
+      e2ePrivacyZones.push(zone)
+    }
+  },
+
+  setPrivacyZoneEnabled(id: string, enabled: boolean): void {
+    const index = e2ePrivacyZones.findIndex((z) => z.id === id)
+    if (index >= 0) {
+      e2ePrivacyZones[index] = { ...e2ePrivacyZones[index], enabled, updatedAt: Date.now() }
+    }
+  },
+
+  deletePrivacyZone(id: string): void {
+    e2ePrivacyZones = e2ePrivacyZones.filter((z) => z.id !== id)
+  },
 }

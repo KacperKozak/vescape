@@ -2,3 +2,4 @@ appId: app.vescape
 ---
 - runFlow: connect-board.yaml
 - runFlow: history.yaml
+- runFlow: privacy-zones.yaml

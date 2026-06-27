@@ -1193,18 +1193,31 @@ export async function deleteAlertRule(id: string): Promise<void> {
 }
 
 export async function getPrivacyZones(): Promise<PrivacyZone[]> {
+  if (E2E_ENABLED) return e2eFake.getPrivacyZones()
   return native.getPrivacyZones()
 }
 
 export async function upsertPrivacyZone(zone: PrivacyZone): Promise<void> {
+  if (E2E_ENABLED) {
+    e2eFake.upsertPrivacyZone(zone)
+    return
+  }
   return native.upsertPrivacyZone(zone)
 }
 
 export async function setPrivacyZoneEnabled(id: string, enabled: boolean): Promise<void> {
+  if (E2E_ENABLED) {
+    e2eFake.setPrivacyZoneEnabled(id, enabled)
+    return
+  }
   return native.setPrivacyZoneEnabled(id, enabled)
 }
 
 export async function deletePrivacyZone(id: string): Promise<void> {
+  if (E2E_ENABLED) {
+    e2eFake.deletePrivacyZone(id)
+    return
+  }
   return native.deletePrivacyZone(id)
 }
 
