@@ -608,6 +608,15 @@ internal class BoardSessionController(private val service: VescForegroundService
         groupRideObserver.create(riderId, riderName, name, lat, lng)
     }
 
+    fun joinGroupRide(riderId: String, riderName: String, rideId: String) {
+        startGpsMonitoring()
+        groupRideObserver.join(riderId, riderName, rideId, latestRiderPresence())
+    }
+
+    fun leaveGroupRide() {
+        groupRideObserver.leave()
+    }
+
     fun exitFromNotification() {
         isStoppingService = true
         service.stopForeground(Service.STOP_FOREGROUND_REMOVE)
@@ -1328,6 +1337,20 @@ internal class BoardSessionController(private val service: VescForegroundService
 
     private fun onLocationUpdated(location: Location) {
         locationTracker.onLocationUpdated(location)
+        latestRiderPresence()?.let(groupRideObserver::pushPresence)
+    }
+
+    private fun latestRiderPresence(): RiderPresence? {
+        val location = locationTracker.latestPreciseLocation ?: locationTracker.latestLocation ?: return null
+        val currentTelemetry = telemetry
+        val telemetryFresh = currentTelemetry != null && !isTelemetryStale()
+        return RiderPresence(
+            lat = location.latitude,
+            lng = location.longitude,
+            heading = location.bearingDeg,
+            speed = if (telemetryFresh) currentTelemetry?.speed?.let { kotlin.math.abs(it) / 3.6 } else null,
+            soc = if (telemetryFresh) latestBatterySoc?.let { (it / 100.0).coerceIn(0.0, 1.0) } else null,
+        )
     }
 
     fun liveStateMap(includeRecent: Boolean = false): Map<String, Any?> {

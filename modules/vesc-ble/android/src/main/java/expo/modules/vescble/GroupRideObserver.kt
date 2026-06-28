@@ -32,6 +32,11 @@ internal class GroupRideObserver(
     private var serverUrl: String? = null
     private var reconnectAttempt = 0
     private var stopped = true
+    private var riderId: String? = null
+    private var riderName: String? = null
+    private var joinedRideId: String? = null
+    private var desiredRideId: String? = null
+    private var lastPresence: RiderPresence? = null
     private val reconnectRunnable = Runnable { connect() }
 
     /** True while the observe connection should be kept alive (drives service idle checks). */
@@ -50,6 +55,9 @@ internal class GroupRideObserver(
         handler.removeCallbacks(reconnectRunnable)
         webSocket?.close(NORMAL_CLOSURE, "client stop")
         webSocket = null
+        joinedRideId = null
+        desiredRideId = null
+        lastPresence = null
         emitConnection("idle")
     }
 
@@ -66,18 +74,56 @@ internal class GroupRideObserver(
                 Log.w(TAG, "create ignored: observe socket not connected")
                 return@post
             }
-            ws.send(
-                JSONObject()
-                    .put("type", "hello")
-                    .put("riderId", riderId)
-                    .put("name", riderName)
-                    .toString(),
-            )
+            sendHello(ws, riderId, riderName)
+            lastPresence = RiderPresence(lat = lat, lng = lng, heading = null, speed = null, soc = null)
             val create = JSONObject()
                 .put("type", "create")
                 .put("location", JSONObject().put("lat", lat).put("lng", lng))
             if (!name.isNullOrBlank()) create.put("name", name)
             ws.send(create.toString())
+        }
+    }
+
+    fun join(riderId: String, riderName: String, rideId: String, presence: RiderPresence?) {
+        handler.post {
+            val ws = webSocket
+            if (stopped || ws == null) {
+                Log.w(TAG, "join ignored: observe socket not connected")
+                return@post
+            }
+            sendHello(ws, riderId, riderName)
+            desiredRideId = rideId
+            presence?.let { lastPresence = it }
+            val join = JSONObject()
+                .put("type", "join")
+                .put("rideId", rideId)
+            presence?.let { join.put("presence", it.toJson()) }
+            ws.send(join.toString())
+        }
+    }
+
+    fun leave() {
+        handler.post {
+            val ws = webSocket ?: return@post
+            ws.send(JSONObject().put("type", "leave").toString())
+            joinedRideId = null
+            desiredRideId = null
+            emit("onGroupRideJoined", mapOf("rideId" to null))
+            emit("onGroupRideRoster", mapOf("rideId" to null, "riders" to emptyList<Map<String, Any?>>()))
+        }
+    }
+
+    fun pushPresence(presence: RiderPresence) {
+        handler.post {
+            val ws = webSocket
+            if (stopped || ws == null || joinedRideId == null) return@post
+            lastPresence = presence
+            ws.send(
+                JSONObject()
+                    .put("type", "presence")
+                    .put("presence", presence.toJson())
+                    .toString(),
+            )
         }
     }
 
@@ -95,6 +141,11 @@ internal class GroupRideObserver(
                 if (stopped) return@post
                 reconnectAttempt = 0
                 emitConnection("connected")
+                val id = riderId
+                val name = riderName
+                if (id != null && name != null) sendHello(ws, id, name)
+                val rideId = desiredRideId
+                if (rideId != null && id != null && name != null) sendJoin(ws, rideId, lastPresence)
             }
         }
 
@@ -119,6 +170,7 @@ internal class GroupRideObserver(
     private fun scheduleReconnect() {
         webSocket = null
         if (stopped) return
+        joinedRideId = null
         emitConnection("disconnected")
         val delay = RECONNECT_DELAYS_MS[reconnectAttempt.coerceAtMost(RECONNECT_DELAYS_MS.lastIndex)]
         reconnectAttempt++
@@ -152,9 +204,64 @@ internal class GroupRideObserver(
             "ride-ended" -> {
                 val rideId = json.optString("rideId")
                 if (rideId.isNotEmpty()) emit("onGroupRideEnded", mapOf("rideId" to rideId))
+                if (rideId.isNotEmpty() && rideId == joinedRideId) {
+                    joinedRideId = null
+                    desiredRideId = null
+                    emit("onGroupRideJoined", mapOf("rideId" to null))
+                    emit(
+                        "onGroupRideRoster",
+                        mapOf("rideId" to null, "riders" to emptyList<Map<String, Any?>>()),
+                    )
+                }
             }
-            // roster / joined / error are join-scoped — ignored while observing.
+            "joined" -> {
+                val rideId = json.optString("rideId")
+                if (rideId.isNotEmpty()) {
+                    joinedRideId = rideId
+                    desiredRideId = rideId
+                    emit("onGroupRideJoined", mapOf("rideId" to rideId))
+                }
+            }
+            "roster" -> {
+                val ridersJson = json.optJSONArray("riders")
+                val riders = mutableListOf<Map<String, Any?>>()
+                if (ridersJson != null) {
+                    for (i in 0 until ridersJson.length()) {
+                        riderView(ridersJson.optJSONObject(i))?.let(riders::add)
+                    }
+                }
+                emit(
+                    "onGroupRideRoster",
+                    mapOf("rideId" to json.optString("rideId").takeIf { it.isNotEmpty() }, "riders" to riders),
+                )
+            }
+            "error" -> {
+                val message = json.optString("message")
+                if (message.isNotEmpty()) {
+                    emit("onGroupRideError", mapOf("message" to message))
+                }
+            }
         }
+    }
+
+    private fun sendHello(ws: WebSocket, riderId: String, riderName: String) {
+        this.riderId = riderId
+        this.riderName = riderName
+        ws.send(
+            JSONObject()
+                .put("type", "hello")
+                .put("riderId", riderId)
+                .put("name", riderName)
+                .toString(),
+        )
+    }
+
+    private fun sendJoin(ws: WebSocket, rideId: String, presence: RiderPresence?) {
+        val join = JSONObject()
+            .put("type", "join")
+            .put("rideId", rideId)
+        presence?.let { join.put("presence", it.toJson()) }
+        ws.send(join.toString())
     }
 
     /** Decode the `RideSummary` shape shared by `snapshot` and `ride-created`. */
@@ -180,6 +287,30 @@ internal class GroupRideObserver(
         )
     }
 
+    private fun riderView(obj: JSONObject?): Map<String, Any?>? {
+        obj ?: return null
+        val id = obj.optString("id")
+        if (id.isEmpty()) return null
+        return mapOf(
+            "id" to id,
+            "name" to obj.optString("name"),
+            "presence" to presenceMap(obj.optJSONObject("presence")),
+            "stale" to obj.optBoolean("stale"),
+            "lastSeen" to obj.optLong("lastSeen"),
+        )
+    }
+
+    private fun presenceMap(obj: JSONObject?): Map<String, Any?>? {
+        obj ?: return null
+        return mapOf(
+            "lat" to obj.optDouble("lat"),
+            "lng" to obj.optDouble("lng"),
+            "heading" to obj.optionalDouble("heading"),
+            "speed" to obj.optionalDouble("speed"),
+            "soc" to obj.optionalDouble("soc"),
+        )
+    }
+
     private fun emitConnection(state: String) {
         emit("onGroupRideConnection", mapOf("state" to state))
     }
@@ -191,3 +322,24 @@ internal class GroupRideObserver(
         private val RECONNECT_DELAYS_MS = longArrayOf(1_000, 2_000, 5_000, 10_000, 30_000)
     }
 }
+
+internal data class RiderPresence(
+    val lat: Double,
+    val lng: Double,
+    val heading: Double?,
+    val speed: Double?,
+    val soc: Double?,
+) {
+    fun toJson(): JSONObject {
+        val json = JSONObject()
+            .put("lat", lat)
+            .put("lng", lng)
+        heading?.let { json.put("heading", it) }
+        speed?.let { json.put("speed", it) }
+        soc?.let { json.put("soc", it) }
+        return json
+    }
+}
+
+private fun JSONObject.optionalDouble(key: String): Double? =
+    if (has(key) && !isNull(key)) optDouble(key) else null

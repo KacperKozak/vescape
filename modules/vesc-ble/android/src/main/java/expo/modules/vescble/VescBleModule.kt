@@ -82,6 +82,9 @@ class VescBleModule : Module() {
       "onGroupRideCreated",
       "onGroupRideUpdated",
       "onGroupRideEnded",
+      "onGroupRideJoined",
+      "onGroupRideRoster",
+      "onGroupRideError",
     )
 
     OnStartObserving("onDevice") { startObserving("onDevice") }
@@ -114,6 +117,12 @@ class VescBleModule : Module() {
     OnStopObserving("onGroupRideUpdated") { stopObserving("onGroupRideUpdated") }
     OnStartObserving("onGroupRideEnded") { startObserving("onGroupRideEnded") }
     OnStopObserving("onGroupRideEnded") { stopObserving("onGroupRideEnded") }
+    OnStartObserving("onGroupRideJoined") { startObserving("onGroupRideJoined") }
+    OnStopObserving("onGroupRideJoined") { stopObserving("onGroupRideJoined") }
+    OnStartObserving("onGroupRideRoster") { startObserving("onGroupRideRoster") }
+    OnStopObserving("onGroupRideRoster") { stopObserving("onGroupRideRoster") }
+    OnStartObserving("onGroupRideError") { startObserving("onGroupRideError") }
+    OnStopObserving("onGroupRideError") { stopObserving("onGroupRideError") }
 
     OnActivityEntersForeground {
       frontendActive = true
@@ -147,6 +156,12 @@ class VescBleModule : Module() {
     }
     Function("createGroupRide") { riderId: String, riderName: String, name: String?, lat: Double, lng: Double ->
       VescForegroundService.createGroupRide(context.applicationContext, riderId, riderName, name, lat, lng)
+    }
+    Function("joinGroupRide") { riderId: String, riderName: String, rideId: String ->
+      VescForegroundService.joinGroupRide(context.applicationContext, riderId, riderName, rideId)
+    }
+    Function("leaveGroupRide") {
+      VescForegroundService.leaveGroupRide(context.applicationContext)
     }
     Function("setTelemetryRecordingEnabled") { enabled: Boolean -> setTelemetryRecordingEnabled(enabled) }
     Function("reloadAlertRules") {

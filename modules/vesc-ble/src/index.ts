@@ -687,6 +687,24 @@ export interface GroupRideSummary {
   creator: { id: string; name: string }
 }
 
+export interface RiderPresence {
+  lat: number
+  lng: number
+  heading?: number | null
+  /** Board-enriched speed in m/s. Null/omitted when no fresh Board Session is live. */
+  speed?: number | null
+  /** Battery SoC Estimate as a 0-1 fraction. Null/omitted when unavailable. */
+  soc?: number | null
+}
+
+export interface GroupRideRider {
+  id: string
+  name: string
+  presence: RiderPresence | null
+  stale: boolean
+  lastSeen: number
+}
+
 export type GroupRideConnectionState = 'idle' | 'connecting' | 'connected' | 'disconnected'
 
 export interface GroupRideConnectionEvent {
@@ -707,6 +725,19 @@ export interface GroupRideUpdatedEvent {
 
 export interface GroupRideEndedEvent {
   rideId: string
+}
+
+export interface GroupRideJoinedEvent {
+  rideId: string | null
+}
+
+export interface GroupRideRosterEvent {
+  rideId: string | null
+  riders: GroupRideRider[]
+}
+
+export interface GroupRideErrorEvent {
+  message: string
 }
 
 type VescBleEvents = {
@@ -730,6 +761,9 @@ type VescBleEvents = {
   onGroupRideCreated: (event: GroupRideCreatedEvent) => void
   onGroupRideUpdated: (event: GroupRideUpdatedEvent) => void
   onGroupRideEnded: (event: GroupRideEndedEvent) => void
+  onGroupRideJoined: (event: GroupRideJoinedEvent) => void
+  onGroupRideRoster: (event: GroupRideRosterEvent) => void
+  onGroupRideError: (event: GroupRideErrorEvent) => void
 }
 
 interface NativeEventEmitter<TEvents extends Record<string, (...args: never[]) => void>> {
@@ -759,6 +793,8 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
     lat: number,
     lng: number,
   ): void
+  joinGroupRide(riderId: string, riderName: string, rideId: string): void
+  leaveGroupRide(): void
   setTelemetryRecordingEnabled(enabled: boolean): void
   reloadAlertRules(): void
   getAlertPresets(): AlertPreset[]
@@ -930,6 +966,24 @@ export function createGroupRide({
 }: CreateGroupRideParams): void {
   if (E2E_ENABLED) return
   native.createGroupRide(riderId, riderName, name, lat, lng)
+}
+
+export interface JoinGroupRideParams {
+  riderId: string
+  riderName: string
+  rideId: string
+}
+
+/** Join a Group Ride by id. Native sends Rider Presence from the foreground GPS stream. */
+export function joinGroupRide({ riderId, riderName, rideId }: JoinGroupRideParams): void {
+  if (E2E_ENABLED) return
+  native.joinGroupRide(riderId, riderName, rideId)
+}
+
+/** Leave the current Group Ride. */
+export function leaveGroupRide(): void {
+  if (E2E_ENABLED) return
+  native.leaveGroupRide()
 }
 
 /** Enable or disable native SQLite telemetry history writes. */
@@ -1477,4 +1531,22 @@ export function addGroupRideEndedListener(
   cb: (event: GroupRideEndedEvent) => void,
 ): EventSubscription {
   return emitter.addListener('onGroupRideEnded', cb)
+}
+
+export function addGroupRideJoinedListener(
+  cb: (event: GroupRideJoinedEvent) => void,
+): EventSubscription {
+  return emitter.addListener('onGroupRideJoined', cb)
+}
+
+export function addGroupRideRosterListener(
+  cb: (event: GroupRideRosterEvent) => void,
+): EventSubscription {
+  return emitter.addListener('onGroupRideRoster', cb)
+}
+
+export function addGroupRideErrorListener(
+  cb: (event: GroupRideErrorEvent) => void,
+): EventSubscription {
+  return emitter.addListener('onGroupRideError', cb)
 }

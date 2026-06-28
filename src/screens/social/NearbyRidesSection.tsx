@@ -10,7 +10,9 @@ import { theme } from '@/constants/theme'
 export function NearbyRidesSection() {
   const nearby = useGroupRideStore((s) => s.nearby)
   const hasLocation = useGroupRideStore((s) => s.ownLocation !== null)
+  const activeRideId = useGroupRideStore((s) => s.activeRideId)
   const createRide = useGroupRideStore((s) => s.createRide)
+  const joinRide = useGroupRideStore((s) => s.joinRide)
   const [name, setName] = useState('')
 
   const create = () => {
@@ -51,7 +53,12 @@ export function NearbyRidesSection() {
       ) : (
         <View style={styles.list}>
           {nearby.map((entry) => (
-            <NearbyRideRow key={entry.ride.id} entry={entry} />
+            <NearbyRideRow
+              key={entry.ride.id}
+              entry={entry}
+              active={entry.ride.id === activeRideId}
+              onJoin={() => joinRide(entry.ride.id)}
+            />
           ))}
         </View>
       )}
@@ -59,18 +66,35 @@ export function NearbyRidesSection() {
   )
 }
 
-function NearbyRideRow({ entry }: { entry: NearbyRide }) {
+function NearbyRideRow({
+  entry,
+  active,
+  onJoin,
+}: {
+  entry: NearbyRide
+  active: boolean
+  onJoin: () => void
+}) {
   const { ride, distanceM } = entry
   const riders = `${ride.riderCount} ${ride.riderCount === 1 ? 'rider' : 'riders'}`
 
   return (
     <View style={styles.row}>
-      <Text style={styles.rideName} numberOfLines={1}>
-        {ride.name}
-      </Text>
-      <Text style={styles.rideMeta}>
-        {riders} · {formatDistance(distanceM)}
-      </Text>
+      <View style={styles.rowText}>
+        <Text style={styles.rideName} numberOfLines={1}>
+          {ride.name}
+        </Text>
+        <Text style={styles.rideMeta}>
+          {riders} · {formatDistance(distanceM)}
+        </Text>
+      </View>
+      <Button
+        label={active ? 'Joined' : 'Join'}
+        size="sm"
+        variant={active ? 'secondary' : 'primary'}
+        disabled={active}
+        onPress={onJoin}
+      />
     </View>
   )
 }
@@ -127,6 +151,13 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 16,
     paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  rowText: {
+    flex: 1,
+    minWidth: 0,
     gap: 4,
   },
   rideName: {

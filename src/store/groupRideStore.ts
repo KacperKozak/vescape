@@ -3,17 +3,24 @@ import {
   addGroupRideConnectionListener,
   addGroupRideCreatedListener,
   addGroupRideEndedListener,
+  addGroupRideErrorListener,
+  addGroupRideJoinedListener,
+  addGroupRideRosterListener,
   addGroupRideSnapshotListener,
   addGroupRideUpdatedListener,
   addLocationListener,
   createGroupRide,
+  joinGroupRide,
+  leaveGroupRide,
   startGroupRideObserve,
   stopGroupRideObserve,
   type GroupRideConnectionState,
+  type GroupRideRider,
   type GroupRideSummary,
 } from 'vesc-ble'
 
 import { nearbyRides, type NearbyRide } from '@/lib/groupRide/nearby'
+import { riderRoster, type RosterRider } from '@/lib/groupRide/roster'
 import { useRiderStore } from '@/store/riderStore'
 import { GROUP_RIDE_SERVER_URL } from '@/config/groupRide'
 
@@ -27,6 +34,11 @@ interface GroupRideState {
   nearby: NearbyRide[]
   /** Social-button badge state: true when at least one nearby ride exists. */
   badge: boolean
+  activeRideId: string | null
+  roster: GroupRideRider[]
+  rosterRows: RosterRider[]
+  error: string | null
+  focusRequest: { riderId: string; nonce: number } | null
   observing: boolean
   /** Open the native observe WebSocket and mirror its lifecycle events into the store. */
   startObserving: () => void
@@ -34,6 +46,10 @@ interface GroupRideState {
   stopObserving: () => void
   /** Create a Group Ride from the device's own location; result arrives via `ride-created`. */
   createRide: (name: string) => void
+  joinRide: (rideId: string) => void
+  leaveRide: () => void
+  focusRider: (riderId: string) => void
+  clearError: () => void
 }
 
 let subscriptions: { remove: () => void }[] = []
@@ -44,6 +60,11 @@ export const useGroupRideStore = create<GroupRideState>((set, get) => ({
   ownLocation: null,
   nearby: [],
   badge: false,
+  activeRideId: null,
+  roster: [],
+  rosterRows: [],
+  error: null,
+  focusRequest: null,
   observing: false,
 
   startObserving() {
@@ -58,10 +79,25 @@ export const useGroupRideStore = create<GroupRideState>((set, get) => ({
         set(deriveNearby({ rides: upsertRide(get().rides, ride) }, get())),
       ),
       addGroupRideEndedListener(({ rideId }) =>
-        set(deriveNearby({ rides: get().rides.filter((ride) => ride.id !== rideId) }, get())),
+        set((state) => ({
+          ...deriveNearby({ rides: state.rides.filter((ride) => ride.id !== rideId) }, state),
+          ...(state.activeRideId === rideId
+            ? { activeRideId: null, roster: [], rosterRows: [] }
+            : {}),
+        })),
       ),
+      addGroupRideJoinedListener(({ rideId }) =>
+        set({ activeRideId: rideId, roster: rideId ? get().roster : [], rosterRows: [] }),
+      ),
+      addGroupRideRosterListener(({ rideId, riders }) =>
+        set((state) => deriveRoster({ activeRideId: rideId, roster: riders }, state)),
+      ),
+      addGroupRideErrorListener(({ message }) => set({ error: message })),
       addLocationListener(({ latitude, longitude }) =>
-        set(deriveNearby({ ownLocation: { lat: latitude, lng: longitude } }, get())),
+        set((state) => ({
+          ...deriveNearby({ ownLocation: { lat: latitude, lng: longitude } }, state),
+          ...deriveRoster({ ownLocation: { lat: latitude, lng: longitude } }, state),
+        })),
       ),
     ]
     set({ observing: true })
@@ -80,6 +116,11 @@ export const useGroupRideStore = create<GroupRideState>((set, get) => ({
       ownLocation: null,
       nearby: [],
       badge: false,
+      activeRideId: null,
+      roster: [],
+      rosterRows: [],
+      error: null,
+      focusRequest: null,
     })
   },
 
@@ -95,6 +136,29 @@ export const useGroupRideStore = create<GroupRideState>((set, get) => ({
       lat: ownLocation.lat,
       lng: ownLocation.lng,
     })
+  },
+
+  joinRide(rideId) {
+    const { riderId, riderName } = useRiderStore.getState()
+    if (!riderId) return
+    joinGroupRide({
+      riderId,
+      riderName: riderName?.trim() || 'Rider',
+      rideId,
+    })
+  },
+
+  leaveRide() {
+    leaveGroupRide()
+    set({ activeRideId: null, roster: [], rosterRows: [] })
+  },
+
+  focusRider(riderId) {
+    set((state) => ({ focusRequest: { riderId, nonce: (state.focusRequest?.nonce ?? 0) + 1 } }))
+  },
+
+  clearError() {
+    set({ error: null })
   },
 }))
 
@@ -115,4 +179,18 @@ function upsertRide(rides: GroupRideSummary[], ride: GroupRideSummary): GroupRid
   const next = rides.slice()
   next[index] = ride
   return next
+}
+
+function deriveRoster(
+  patch: Partial<Pick<GroupRideState, 'activeRideId' | 'roster' | 'ownLocation'>>,
+  current: GroupRideState,
+): Pick<GroupRideState, 'activeRideId' | 'roster' | 'rosterRows'> {
+  const activeRideId = patch.activeRideId ?? current.activeRideId
+  const roster = patch.roster ?? current.roster
+  const ownLocation = patch.ownLocation ?? current.ownLocation
+  return {
+    activeRideId,
+    roster,
+    rosterRows: riderRoster(roster, useRiderStore.getState().riderId, ownLocation),
+  }
 }

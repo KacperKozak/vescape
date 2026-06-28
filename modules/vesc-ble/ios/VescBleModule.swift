@@ -59,7 +59,7 @@ public class VescBleModule: Module {
   public func definition() -> ModuleDefinition {
     Name("VescBle")
 
-    Events("onDevice", "onError", "onLiveState", "onLiveTick", "onLiveSeries", "onTelemetryHistory", "onBms", "onLocation", "onTelemetryRebuildProgress", "onBoardProbeProgress")
+    Events("onDevice", "onError", "onLiveState", "onLiveTick", "onLiveSeries", "onTelemetryHistory", "onBms", "onLocation", "onTelemetryRebuildProgress", "onBoardProbeProgress", "onGroupRideConnection", "onGroupRideSnapshot", "onGroupRideCreated", "onGroupRideUpdated", "onGroupRideEnded", "onGroupRideJoined", "onGroupRideRoster", "onGroupRideError")
 
     OnDestroy {
       self.scanTimer?.invalidate()
@@ -85,6 +85,30 @@ public class VescBleModule: Module {
 
     Function("stopLocationUpdates") {
       self.stopLocation()
+    }
+
+    // MARK: Group Ride (Android native implementation; iOS mock keeps bridge shape)
+
+    Function("startGroupRideObserve") { (_: String) in
+      self.sendEvent("onGroupRideConnection", ["state": "idle"])
+      self.sendEvent("onGroupRideSnapshot", ["rides": []])
+    }
+
+    Function("stopGroupRideObserve") {
+      self.sendEvent("onGroupRideConnection", ["state": "idle"])
+    }
+
+    Function("createGroupRide") { (_: String, _: String, _: String?, _: Double, _: Double) in
+      // no-op in iOS simulator mock
+    }
+
+    Function("joinGroupRide") { (_: String, _: String, _: String) in
+      // no-op in iOS simulator mock
+    }
+
+    Function("leaveGroupRide") {
+      self.sendEvent("onGroupRideJoined", ["rideId": nil])
+      self.sendEvent("onGroupRideRoster", ["rideId": nil, "riders": []])
     }
 
     // MARK: Telemetry recording toggle (no-op on mock)
