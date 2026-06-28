@@ -264,10 +264,24 @@ internal class GroupRideObserver(
             "error" -> {
                 val message = json.optString("message")
                 if (message.isNotEmpty()) {
-                    emit("onGroupRideError", mapOf("message" to message))
+                    handleError(message)
                 }
             }
         }
+    }
+
+    private fun handleError(message: String) {
+        val missingRideId = message.removePrefix(NO_SUCH_RIDE_PREFIX).takeIf { it != message }?.trim()
+        if (missingRideId != null) {
+            val isCurrentRide = missingRideId == desiredRideId || missingRideId == joinedRideId
+            if (!isCurrentRide) return
+            joinedRideId = null
+            desiredRideId = null
+            stopHeartbeat()
+            emit("onGroupRideJoined", mapOf("rideId" to null))
+            emit("onGroupRideRoster", mapOf("rideId" to null, "riders" to emptyList<Map<String, Any?>>()))
+        }
+        emit("onGroupRideError", mapOf("message" to message))
     }
 
     private fun sendHello(ws: WebSocket, riderId: String, riderName: String) {
@@ -355,6 +369,7 @@ internal class GroupRideObserver(
         private const val NORMAL_CLOSURE = 1000
         private const val PING_INTERVAL_SECONDS = 20L
         private const val HEARTBEAT_INTERVAL_MS = 10_000L
+        private const val NO_SUCH_RIDE_PREFIX = "no such ride:"
         private val RECONNECT_DELAYS_MS = longArrayOf(1_000, 2_000, 5_000, 10_000, 30_000)
     }
 }

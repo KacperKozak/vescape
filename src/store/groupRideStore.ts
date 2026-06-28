@@ -74,29 +74,47 @@ export const useGroupRideStore = create<GroupRideState>((set, get) => ({
     if (get().observing) return
     subscriptions = [
       addGroupRideConnectionListener(({ state }) => set({ connection: state })),
-      addGroupRideSnapshotListener(({ rides }) => set(deriveNearby({ rides }, get()))),
+      addGroupRideSnapshotListener(({ rides }) =>
+        set((state) => ({
+          ...deriveNearby({ rides }, state),
+          ...(!state.activeRideId || rides.some((ride) => ride.id === state.activeRideId)
+            ? {}
+            : { activeRideId: null, roster: [], rosterRows: [] }),
+        })),
+      ),
       addGroupRideCreatedListener(({ ride }) =>
-        set(deriveNearby({ rides: upsertRide(get().rides, ride) }, get())),
+        set((state) => ({
+          ...deriveNearby({ rides: upsertRide(state.rides, ride) }, state),
+          error: null,
+        })),
       ),
       addGroupRideUpdatedListener(({ ride }) =>
-        set(deriveNearby({ rides: upsertRide(get().rides, ride) }, get())),
+        set((state) => ({
+          ...deriveNearby({ rides: upsertRide(state.rides, ride) }, state),
+          error: null,
+        })),
       ),
       addGroupRideEndedListener(({ rideId }) =>
         set((state) => ({
           ...deriveNearby({ rides: state.rides.filter((ride) => ride.id !== rideId) }, state),
           ...(state.activeRideId === rideId
-            ? { activeRideId: null, roster: [], rosterRows: [] }
+            ? { activeRideId: null, roster: [], rosterRows: [], error: null }
             : {}),
         })),
       ),
       addGroupRideJoinedListener(({ rideId }) =>
-        set((state) => deriveRoster({ activeRideId: rideId, roster: [] }, state)),
+        set((state) => ({
+          ...deriveRoster({ activeRideId: rideId, roster: [] }, state),
+          error: null,
+        })),
       ),
       addGroupRideRosterListener(({ rideId, riders }) =>
         set((state) => {
-          if (!rideId) return deriveRoster({ activeRideId: null, roster: [] }, state)
+          if (!rideId) {
+            return { ...deriveRoster({ activeRideId: null, roster: [] }, state), error: null }
+          }
           if (state.activeRideId && state.activeRideId !== rideId) return state
-          return deriveRoster({ activeRideId: rideId, roster: riders }, state)
+          return { ...deriveRoster({ activeRideId: rideId, roster: riders }, state), error: null }
         }),
       ),
       addGroupRideErrorListener(({ message }) => set({ error: message })),
@@ -143,7 +161,10 @@ export const useGroupRideStore = create<GroupRideState>((set, get) => ({
     if (!ownLocation) return
     const { riderId, riderName } = useRiderStore.getState()
     if (!riderId) return
-    set((state) => deriveRoster({ activeRideId: null, roster: [] }, state))
+    set((state) => ({
+      ...deriveRoster({ activeRideId: null, roster: [] }, state),
+      error: null,
+    }))
     createGroupRide({
       riderId,
       riderName: riderName?.trim() || 'Rider',
@@ -156,7 +177,10 @@ export const useGroupRideStore = create<GroupRideState>((set, get) => ({
   joinRide(rideId) {
     const { riderId, riderName } = useRiderStore.getState()
     if (!riderId) return
-    set((state) => deriveRoster({ activeRideId: rideId, roster: [] }, state))
+    set((state) => ({
+      ...deriveRoster({ activeRideId: rideId, roster: [] }, state),
+      error: null,
+    }))
     joinGroupRide({
       riderId,
       riderName: riderName?.trim() || 'Rider',
@@ -166,7 +190,7 @@ export const useGroupRideStore = create<GroupRideState>((set, get) => ({
 
   leaveRide() {
     leaveGroupRide()
-    set({ activeRideId: null, roster: [], rosterRows: [] })
+    set({ activeRideId: null, roster: [], rosterRows: [], error: null })
   },
 
   focusRider(riderId) {
