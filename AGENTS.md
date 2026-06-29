@@ -49,6 +49,8 @@ React Native UI conventions, including icon usage, live in `docs/agents/react.md
 Visual design language (colors, layout, typography) lives in `docs/design.md`.
 PostHog agent debugging commands live in `docs/agents/posthog.md`.
 
+When adding or changing a reusable UI component (or a new visual variant/state of one), add or update its preview in the component showcase under `src/app/settings/components/` so every component stays browsable with live controls.
+
 ## Agent skills
 
 ### Issue tracker

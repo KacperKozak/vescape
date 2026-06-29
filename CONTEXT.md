@@ -68,6 +68,10 @@ _Avoid_: Telemetry marker, debug marker, log point
 The span of a Ride Recording from its first to its last moving Telemetry Sample — the part the rider treats as actual riding. A Telemetry Sample counts as moving when it is not excluded from speed metrics (so low-speed and free-spin samples do not count). Leading and trailing non-moving spans fall outside the Moving Window; internal stops (photos, cooldown) stay inside it. Drives history-timeline trimming and the moving ride time shown in stats. A Ride Recording with no moving samples has no Moving Window and is not shown in Ride History; legacy recordings with an unknown Moving Window fall back to their full wall-clock span.
 _Avoid_: Trim range, active range, ride duration
 
+**Idle Pause**:
+A temporary state of a Ride Recording in which sample persistence halts because the Board has produced no moving Telemetry Sample for a sustained interval, while the Board Session stays live at a reduced poll rate and auto-resumes on the next moving sample. Cuts battery, stored frames, and bucket sample counts together while the board is parked.
+_Avoid_: Stop recording, auto-stop, sleep, parked mode
+
 **Media History Asset**:
 A phone photo or video whose capture time falls inside a selected Ride Recording and which can be placed using a nearby recording-backed GPS fix. The asset remains owned by the OS photo library and is never copied into Ride History.
 _Avoid_: Ride photo, recording media, uploaded media
@@ -137,6 +141,7 @@ _Avoid_: Error log, debug session, crash report
 - A **Ride Recording** becomes part of **Ride History**.
 - A **Moving Window** belongs to one **Ride Recording** and is derived from which **Telemetry Samples** are excluded from speed metrics; a Ride Recording without one is excluded from **Ride History**.
 - A **Ride History Marker** belongs to **Ride History** and may explain where a **Ride Recording** lost or regained board data.
+- An **Idle Pause** belongs to one **Ride Recording**, begins after a sustained absence of moving **Telemetry Samples**, keeps the **Board Session** live at a reduced poll rate, and produces a **Ride History Marker**; its sample gap stays inside the **Moving Window** (and counts toward ride time) when it occurs between two moving spans.
 - A **Media History Asset** is a local-only view of an OS photo-library asset matched to one selected **Ride Recording** by capture time and placed from a nearby recording-backed **GPS Fix**.
 - A **Tune Snapshot** belongs to the currently connected **Board** and is read-only.
 - A **Tune Profile** belongs to a **Board** and stores semantic field values independently of firmware schema.
@@ -173,3 +178,4 @@ _Avoid_: Error log, debug session, crash report
 - "filter" may mean dropping samples, smoothing charts, or excluding implausible values from metrics; resolved term: use **Metric Sanitizer** for metric exclusion that preserves original samples.
 - "save area" or "safe area" may mean a privacy boundary around home or work; resolved term: use **Privacy Zone**.
 - "smoother" is avoided in the raw-telemetry layer (see **Metric Sanitizer**) but is legitimate for the **Battery SoC Estimate**, a processed derived value that smooths the percentage only — never the raw voltage **Telemetry Sample**.
+- "pause" may mean stopping the **Board Session** versus temporarily halting sample persistence; resolved: **Idle Pause** halts **Ride Recording** sample persistence only — the **Board Session** stays connected and live at a reduced poll rate.

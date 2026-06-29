@@ -286,6 +286,7 @@ export interface LiveStateEvent {
   }
   recording: {
     enabled: boolean
+    paused: boolean
     activeBoardId: string | null
     startedAt: number | null
   }
