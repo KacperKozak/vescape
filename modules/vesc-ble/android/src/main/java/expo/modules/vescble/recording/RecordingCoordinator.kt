@@ -95,6 +95,11 @@ internal class RecordingCoordinator(
         telemetryStore?.recordTelemetry(capture)
     }
 
+    /** Marks where a Ride Recording entered an Idle Pause so the resulting gap is explained (ADR-0021). */
+    fun recordIdlePauseMarker(config: SessionConfig?) {
+        recordMarker("auto_pause", config, "Recording paused — idle")
+    }
+
     fun recordError(config: SessionConfig?, message: String) {
         recordState("error", mapOf("message" to message))
         recordMarker("error", config, message)

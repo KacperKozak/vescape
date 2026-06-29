@@ -147,6 +147,7 @@ function getLiveState(): LiveStateEvent {
     },
     recording: {
       enabled: false,
+      paused: false,
       activeBoardId: connected ? connectedBoardId : null,
       startedAt: null,
     },

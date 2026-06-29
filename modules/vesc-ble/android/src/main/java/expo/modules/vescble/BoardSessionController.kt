@@ -12,6 +12,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import java.io.File
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import expo.modules.vescble.config.ConfigRWEvent
 import expo.modules.vescble.connection.ConnectPhaseTimeout
@@ -33,8 +34,13 @@ import expo.modules.vescble.runtime.postDelayedForSession
 import expo.modules.vescble.telemetry.AppDataRepository
 import expo.modules.vescble.telemetry.AppSettings
 import expo.modules.vescble.telemetry.BatterySocEstimator
+import expo.modules.vescble.telemetry.DEFAULT_MOVING_SPEED_THRESHOLD_CENTI_KMH
+import expo.modules.vescble.telemetry.IDLE_PAUSE_POLL_INTERVAL_MS
+import expo.modules.vescble.telemetry.IdlePauseDetector
+import expo.modules.vescble.telemetry.IdlePauseTransition
 import expo.modules.vescble.telemetry.METRIC_MAX_DUTY
 import expo.modules.vescble.telemetry.SocMedianWindow
+import expo.modules.vescble.telemetry.TelemetryCapture
 import expo.modules.vescble.telemetry.TelemetryPipeline
 import expo.modules.vescble.telemetry.TelemetryRepository
 import expo.modules.vescble.telemetry.toMetricSanitizerConfig
@@ -63,6 +69,12 @@ internal class BoardSessionController(private val service: VescForegroundService
         isCurrentSession = ::isCurrentBoardSession,
         sendPayloadWithRetry = { payload, session -> sendPayloadWithRetry(payload, session) },
     )
+    // Idle Pause (ADR-0021): while recording a stationary board, throttle polling to ~1 Hz and stop
+    // persisting samples. configuredPollIntervalMs / movingThresholdCentiKmh are cached from settings
+    // so the hot path can flip pacing without re-reading settings.
+    private val idlePauseDetector = IdlePauseDetector()
+    private var configuredPollIntervalMs: Long = 0L
+    private var movingThresholdCentiKmh: Int = DEFAULT_MOVING_SPEED_THRESHOLD_CENTI_KMH
     private val connectionCoordinator = ConnectionCoordinator(
         scheduler = scheduler,
         isCurrentSession = ::isCurrentBoardSession,
@@ -894,7 +906,12 @@ internal class BoardSessionController(private val service: VescForegroundService
                 liveSeriesEmitter.enqueueHistorySample(historySample)
                 // First sample of the session also drives the first sparkline frame immediately.
                 liveSeriesEmitter.primeLiveSeriesIfNeeded()
-                recordingCoordinator.recordTelemetry(processed.capture)
+                updateIdlePause(processed.capture)
+                // Skip persistence while paused; live display, watch, and presence keep running off the
+                // paths above. When recording is off, recordTelemetry is already a no-op.
+                if (!idlePauseDetector.isPaused) {
+                    recordingCoordinator.recordTelemetry(processed.capture)
+                }
             }
         }
     }
@@ -950,6 +967,7 @@ internal class BoardSessionController(private val service: VescForegroundService
                 "poll_interval_ms" to session.pollIntervalMs,
             ),
         )
+        idlePauseDetector.reset()
         pollingLoop.start(session, sessionToken, transport)
         liveSeriesEmitter.start()
         watchMirrorPresence.start()
@@ -960,6 +978,7 @@ internal class BoardSessionController(private val service: VescForegroundService
 
     private fun stopPolling() {
         pollingLoop.stop()
+        idlePauseDetector.reset()
         telemetryPipeline.cancelStaleWatchdog()
         liveSeriesEmitter.stop()
         watchTick.stop()
@@ -1279,6 +1298,7 @@ internal class BoardSessionController(private val service: VescForegroundService
             return
         }
 
+        resetIdlePause()
         recordingCoordinator.disableTelemetryRecording(session)
         emitState()
     }
@@ -1309,6 +1329,7 @@ internal class BoardSessionController(private val service: VescForegroundService
                 recentLocations = recentLocationsValue,
                 gpsError = gpsError,
                 recordingEnabled = recordingCoordinator.telemetryRecordingEnabled,
+                recordingPaused = idlePauseDetector.isPaused,
                 remoteTiltValue = remoteTiltController.currentValue,
                 remoteTiltPhase = remoteTiltController.phase,
                 remoteTiltDecay = remoteTiltController.decayProgress,
@@ -1377,8 +1398,41 @@ internal class BoardSessionController(private val service: VescForegroundService
         recordingCoordinator.applySettings(settings)
         socWindow.windowMs = settings.socEstimateWindowSeconds * 1000L
         connectionSoundsEnabled = settings.connectionSoundsEnabled
-        pollingLoop.setPollIntervalMs(pollIntervalMsForHz(settings.telemetryPollRateHz))
+        configuredPollIntervalMs = pollIntervalMsForHz(settings.telemetryPollRateHz)
+        movingThresholdCentiKmh = settings.toMetricSanitizerConfig().movingSpeedThresholdCentiKmh
+        pollingLoop.setPollIntervalMs(effectivePollIntervalMs())
         watchTick.setIntervalMs(settings.wearMirrorIntervalMs.toLong())
+    }
+
+    /** Poll spacing honoring an active Idle Pause: never faster than the configured rate. */
+    private fun effectivePollIntervalMs(): Long =
+        if (idlePauseDetector.isPaused) maxOf(IDLE_PAUSE_POLL_INTERVAL_MS, configuredPollIntervalMs)
+        else configuredPollIntervalMs
+
+    private fun updateIdlePause(capture: TelemetryCapture) {
+        if (!recordingCoordinator.telemetryRecordingEnabled) {
+            // Recording turned off mid-pause: drop the pause and restore the configured poll rate.
+            if (idlePauseDetector.isPaused) {
+                resetIdlePause()
+                emitState()
+            }
+            return
+        }
+        val transition = idlePauseDetector.onSample(
+            speedCentiKmh = (capture.speed * 100.0).roundToInt(),
+            movingThresholdCentiKmh = movingThresholdCentiKmh,
+            atMs = capture.capturedAtMs,
+        ) ?: return
+        if (transition == IdlePauseTransition.Paused) {
+            recordingCoordinator.recordIdlePauseMarker(boardConfig)
+        }
+        pollingLoop.setPollIntervalMs(effectivePollIntervalMs())
+        emitState()
+    }
+
+    private fun resetIdlePause() {
+        idlePauseDetector.reset()
+        pollingLoop.setPollIntervalMs(effectivePollIntervalMs())
     }
 
     private fun applyTelemetryPipelineSettings(settings: AppSettings) {

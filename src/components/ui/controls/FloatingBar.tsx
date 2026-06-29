@@ -37,6 +37,7 @@ interface FloatingActionPillProps {
   label: string
   onPress: () => void
   active?: boolean
+  paused?: boolean
   disabled?: boolean
   testID?: string
 }
@@ -85,22 +86,37 @@ export function FloatingActionPill({
   label,
   onPress,
   active = false,
+  paused = false,
   disabled = false,
   testID,
 }: FloatingActionPillProps) {
+  const iconColor = paused
+    ? theme.status.warning.color
+    : active
+      ? theme.palette.slate.textPrimary
+      : theme.status.error.color
   return (
     <Pressable
-      style={[styles.actionPill, active && styles.actionPillActive, disabled && styles.disabled]}
+      style={[
+        styles.actionPill,
+        active && styles.actionPillActive,
+        paused && styles.actionPillPaused,
+        disabled && styles.disabled,
+      ]}
       disabled={disabled}
       onPress={onPress}
       testID={testID}
     >
-      <IconComp
-        size={22}
-        color={active ? theme.palette.slate.textPrimary : theme.status.error.color}
-        weight="fill"
-      />
-      <Text style={[styles.actionPillText, active && styles.actionPillTextActive]}>{label}</Text>
+      <IconComp size={22} color={iconColor} weight="fill" />
+      <Text
+        style={[
+          styles.actionPillText,
+          active && styles.actionPillTextActive,
+          paused && styles.actionPillTextPaused,
+        ]}
+      >
+        {label}
+      </Text>
     </Pressable>
   )
 }
@@ -163,6 +179,13 @@ const styles = StyleSheet.create({
   actionPillActive: {
     backgroundColor: theme.status.error.bg,
     borderColor: theme.status.error.color,
+  },
+  actionPillPaused: {
+    backgroundColor: theme.status.warning.bg,
+    borderColor: theme.status.warning.color,
+  },
+  actionPillTextPaused: {
+    color: theme.status.warning.color,
   },
   actionPillText: {
     color: theme.status.error.color,
