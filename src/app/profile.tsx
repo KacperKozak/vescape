@@ -1,5 +1,5 @@
-import { SocialPanel } from '@/screens/social/SocialPanel'
+import { ProfilePanel } from '@/screens/profile/ProfilePanel'
 
 export default function ProfileScreen() {
-  return <SocialPanel />
+  return <ProfilePanel />
 }

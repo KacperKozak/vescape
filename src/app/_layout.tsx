@@ -36,7 +36,7 @@ export default function RootLayout() {
           }}
         >
           <Stack.Screen name={stackScreens.home} options={{ headerShown: false }} />
-          <Stack.Screen name={stackScreens.profile} options={{ title: 'Social' }} />
+          <Stack.Screen name={stackScreens.profile} options={{ title: 'Profile' }} />
           <Stack.Screen name={stackScreens.settings} options={{ title: 'Settings' }} />
           <Stack.Screen name={stackScreens.settingsDev} options={{ title: 'Dev' }} />
           <Stack.Screen
