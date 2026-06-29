@@ -21,6 +21,8 @@ interface IconButtonProps {
   destructive?: boolean
   /** Draw with the brand accent to signal an active/notable state (e.g. nearby Group Rides). */
   highlighted?: boolean
+  /** Override the icon + border colour (takes precedence over `highlighted`). */
+  accent?: string
   loading?: boolean
   style?: StyleProp<ViewStyle>
   testID?: string
@@ -35,6 +37,7 @@ export function IconButton({
   disabled = false,
   destructive = false,
   highlighted = false,
+  accent,
   loading = false,
   style,
   testID,
@@ -45,14 +48,10 @@ export function IconButton({
   const iconSize = ICON_SIZES[size]
   const iconColor = destructive
     ? theme.status.error.text
-    : highlighted
-      ? theme.palette.cyan.light
-      : theme.palette.slate.textSecondary
+    : (accent ?? (highlighted ? theme.palette.cyan.light : theme.palette.slate.textSecondary))
   const borderColor = destructive
     ? theme.status.error.border
-    : highlighted
-      ? theme.palette.cyan.color
-      : theme.palette.slate.border
+    : (accent ?? (highlighted ? theme.palette.cyan.color : theme.palette.slate.border))
 
   return (
     <Pressable

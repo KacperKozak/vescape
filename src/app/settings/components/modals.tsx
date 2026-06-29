@@ -1,9 +1,11 @@
-import { ScrollView, StyleSheet, Text } from 'react-native'
+import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useState } from 'react'
 
 import { SquaresFourIcon } from 'phosphor-react-native'
 import { ConfirmModal } from '@/components/ui/modals/ConfirmModal'
+import { CornerSheet } from '@/components/ui/overlays/CornerSheet'
+import { useTriggerRef } from '@/components/ui/overlays/measureTrigger'
 import { IconHero } from '@/components/ui/settings/IconHero'
 import { InfoModal } from '@/components/ui/modals/InfoModal'
 import { TextPromptModal } from '@/components/ui/modals/TextPromptModal'
@@ -79,14 +81,50 @@ function TextPromptModalShowcase() {
   )
 }
 
+function CornerSheetShowcase() {
+  const triggerRef = useTriggerRef()
+  const [visible, setVisible] = useState(false)
+
+  return (
+    <ShowcaseCard
+      name="CornerSheet"
+      controls={
+        <View ref={triggerRef} collapsable={false} style={styles.trigger}>
+          <OpenButton onPress={() => setVisible(true)} />
+        </View>
+      }
+    >
+      <Text style={styles.previewHint}>Near-full-width sheet that drops from a corner trigger</Text>
+      <CornerSheet
+        visible={visible}
+        triggerRef={triggerRef}
+        anchor="left"
+        title="Sheet title"
+        onClose={() => setVisible(false)}
+      >
+        <View style={styles.tile}>
+          <Text style={styles.tileText}>Tile one — a widget could live here.</Text>
+        </View>
+        <View style={styles.tile}>
+          <Text style={styles.tileText}>Tile two — another interactive block.</Text>
+        </View>
+      </CornerSheet>
+    </ShowcaseCard>
+  )
+}
+
 export default function ModalsPage() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
-        <IconHero icon={SquaresFourIcon} description="ConfirmModal, InfoModal, TextPromptModal." />
+        <IconHero
+          icon={SquaresFourIcon}
+          description="ConfirmModal, InfoModal, TextPromptModal, CornerSheet."
+        />
         <ConfirmModalShowcase />
         <InfoModalShowcase />
         <TextPromptModalShowcase />
+        <CornerSheetShowcase />
       </ScrollView>
     </SafeAreaView>
   )
@@ -96,4 +134,13 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.palette.slate.bg },
   content: { padding: 12, gap: 12, paddingBottom: 40 },
   previewHint: { color: theme.palette.slate.textDim, fontSize: 12, fontStyle: 'italic' },
+  trigger: { alignSelf: 'flex-start' },
+  tile: {
+    backgroundColor: theme.palette.slate.surfaceDeep,
+    borderColor: theme.palette.slate.border,
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 16,
+  },
+  tileText: { color: theme.palette.slate.textSecondary, fontSize: 14 },
 })

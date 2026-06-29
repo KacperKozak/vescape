@@ -10,6 +10,7 @@ import {
   CubeIcon,
   GearSixIcon,
   SquaresFourIcon,
+  StackIcon,
 } from 'phosphor-react-native'
 
 import { SettingsCard } from '@/components/ui/settings/SettingsCard'
@@ -39,7 +40,7 @@ const sections = [
   },
   {
     label: 'Modals',
-    hint: 'ConfirmModal, InfoModal, TextPromptModal',
+    hint: 'ConfirmModal, InfoModal, TextPromptModal, CornerSheet',
     route: '/settings/components/modals',
     icon: SquaresFourIcon,
   },
@@ -48,6 +49,12 @@ const sections = [
     hint: 'CircleButton, FloatingBar, PrevNextSelector, PillSelector, MapOptionSelector',
     route: '/settings/components/controls',
     icon: SwatchesIcon,
+  },
+  {
+    label: 'Widgets',
+    hint: 'InputWidget, LinkWidget, CanvasWidget',
+    route: '/settings/components/widgets',
+    icon: StackIcon,
   },
   {
     label: 'Settings',
