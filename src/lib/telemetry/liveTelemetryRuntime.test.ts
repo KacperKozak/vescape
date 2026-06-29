@@ -61,6 +61,7 @@ function liveState(samples: TelemetryEvent[]): LiveStateEvent {
     },
     recording: {
       enabled: false,
+      paused: false,
       activeBoardId: null,
       startedAt: null,
     },
