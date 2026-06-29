@@ -28,7 +28,9 @@ internal class IdlePauseDetector(
   val isPaused: Boolean get() = paused
 
   fun onSample(speedCentiKmh: Int, movingThresholdCentiKmh: Int, atMs: Long): IdlePauseTransition? {
-    val moving = movingThresholdCentiKmh > 0 && abs(speedCentiKmh) >= movingThresholdCentiKmh
+    // Mirror LowSpeedAverageSpeedSanitizer exactly: moving when abs(speed) >= threshold (>= 0).
+    // A threshold of 0 means every sample is moving, so a stopped board never idle-pauses.
+    val moving = abs(speedCentiKmh) >= movingThresholdCentiKmh.coerceAtLeast(0)
     if (moving) {
       nonMovingSinceMs = null
       if (!paused) return null

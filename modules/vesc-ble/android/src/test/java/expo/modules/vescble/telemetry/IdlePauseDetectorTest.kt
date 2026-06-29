@@ -81,6 +81,14 @@ class IdlePauseDetectorTest {
   }
 
   @Test
+  fun `threshold of zero treats every sample as moving so never pauses`() {
+    val d = IdlePauseDetector(pauseAfterMs = 30_000L)
+    assertNull(d.onSample(0, 0, 0L))
+    assertNull(d.onSample(0, 0, 60_000L))
+    assertFalse(d.isPaused)
+  }
+
+  @Test
   fun `reset clears pause and timer`() {
     val d = IdlePauseDetector(pauseAfterMs = 30_000L)
     d.onSample(0, threshold, 0L)

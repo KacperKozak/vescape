@@ -1298,6 +1298,7 @@ internal class BoardSessionController(private val service: VescForegroundService
             return
         }
 
+        resetIdlePause()
         recordingCoordinator.disableTelemetryRecording(session)
         emitState()
     }
