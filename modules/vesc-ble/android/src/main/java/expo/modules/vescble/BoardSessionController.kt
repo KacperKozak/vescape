@@ -1410,29 +1410,24 @@ internal class BoardSessionController(private val service: VescForegroundService
         else configuredPollIntervalMs
 
     private fun updateIdlePause(capture: TelemetryCapture) {
-        if (recordingCoordinator.telemetryRecordingEnabled) {
-            val transition = idlePauseDetector.onSample(
-                speedCentiKmh = (capture.speed * 100.0).roundToInt(),
-                movingThresholdCentiKmh = movingThresholdCentiKmh,
-                atMs = capture.capturedAtMs,
-            )
-            when (transition) {
-                IdlePauseTransition.Paused -> {
-                    pollingLoop.setPollIntervalMs(effectivePollIntervalMs())
-                    recordingCoordinator.recordIdlePauseMarker(boardConfig)
-                    emitState()
-                }
-                IdlePauseTransition.Resumed -> {
-                    pollingLoop.setPollIntervalMs(effectivePollIntervalMs())
-                    emitState()
-                }
-                null -> {}
-            }
-        } else if (idlePauseDetector.isPaused) {
+        if (!recordingCoordinator.telemetryRecordingEnabled) {
             // Recording turned off mid-pause: drop the pause and restore the configured poll rate.
-            resetIdlePause()
-            emitState()
+            if (idlePauseDetector.isPaused) {
+                resetIdlePause()
+                emitState()
+            }
+            return
         }
+        val transition = idlePauseDetector.onSample(
+            speedCentiKmh = (capture.speed * 100.0).roundToInt(),
+            movingThresholdCentiKmh = movingThresholdCentiKmh,
+            atMs = capture.capturedAtMs,
+        ) ?: return
+        if (transition == IdlePauseTransition.Paused) {
+            recordingCoordinator.recordIdlePauseMarker(boardConfig)
+        }
+        pollingLoop.setPollIntervalMs(effectivePollIntervalMs())
+        emitState()
     }
 
     private fun resetIdlePause() {
