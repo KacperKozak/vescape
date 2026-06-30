@@ -34,7 +34,7 @@ const sections = [
   },
   {
     label: 'Forms',
-    hint: 'Select, Dropdown, Stepper, SoundPicker',
+    hint: 'Select, Dropdown, ColorPicker, Stepper, SoundPicker',
     route: '/settings/components/forms',
     icon: ListIcon,
   },
@@ -52,7 +52,7 @@ const sections = [
   },
   {
     label: 'Widgets',
-    hint: 'InputWidget, LinkWidget, CanvasWidget',
+    hint: 'InputWidget, LinkWidget, SwitchWidget, DialWidget, CanvasWidget',
     route: '/settings/components/widgets',
     icon: StackIcon,
   },

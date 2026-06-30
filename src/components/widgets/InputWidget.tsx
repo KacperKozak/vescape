@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { CheckIcon, PencilSimpleIcon } from 'phosphor-react-native'
 
 import { Input } from '@/components/ui/forms/Input'
-import { widgetSurface } from '@/components/widgets/widgetSurface'
+import { TextPromptModal } from '@/components/ui/modals/TextPromptModal'
+import { widgetSurface, type WidgetSize } from '@/components/widgets/widgetSurface'
 import { theme } from '@/constants/theme'
 
 interface InputWidgetProps {
@@ -11,18 +12,27 @@ interface InputWidgetProps {
   value: string | null
   placeholder?: string
   maxLength?: number
+  size?: WidgetSize
   onCommit: (value: string) => void
   accessibilityLabel?: string
+  /** Optional control rendered at the widget's trailing edge, before the edit button. */
+  accessory?: ReactNode
 }
 
 /** A labelled value that flips to an inline text field when the pencil is tapped. */
-export function InputWidget({
+export function InputWidget(props: InputWidgetProps) {
+  if (props.size === 'square') return <SquareInput {...props} />
+  return <RowInput {...props} />
+}
+
+function RowInput({
   label,
   value,
   placeholder,
   maxLength,
   onCommit,
   accessibilityLabel,
+  accessory,
 }: InputWidgetProps) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
@@ -38,7 +48,7 @@ export function InputWidget({
   }
 
   return (
-    <View style={styles.widget}>
+    <View style={[styles.widget, styles.widgetRow]}>
       <View style={styles.text}>
         <Text style={styles.label}>{label}</Text>
         {editing ? (
@@ -61,6 +71,7 @@ export function InputWidget({
           </Text>
         )}
       </View>
+      {accessory}
       <Pressable
         onPress={editing ? commit : startEdit}
         hitSlop={10}
@@ -77,13 +88,66 @@ export function InputWidget({
   )
 }
 
+function SquareInput({
+  label,
+  value,
+  placeholder,
+  maxLength,
+  onCommit,
+  accessibilityLabel,
+  accessory,
+}: InputWidgetProps) {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <>
+      <Pressable
+        style={({ pressed }) => [styles.widget, styles.widgetSquare, pressed && styles.pressed]}
+        onPress={() => setOpen(true)}
+        accessibilityLabel={accessibilityLabel ?? `Edit ${label}`}
+      >
+        <Text style={styles.label}>{label}</Text>
+        <View style={styles.squareFooter}>
+          <Text style={styles.value} numberOfLines={2}>
+            {value?.trim() || placeholder}
+          </Text>
+          {accessory}
+        </View>
+      </Pressable>
+      <TextPromptModal
+        visible={open}
+        title={label}
+        placeholder={placeholder}
+        initialValue={value ?? ''}
+        confirmLabel="Save"
+        onConfirm={(next) => {
+          onCommit(maxLength ? next.slice(0, maxLength) : next)
+          setOpen(false)
+        }}
+        onDismiss={() => setOpen(false)}
+      />
+    </>
+  )
+}
+
 const styles = StyleSheet.create({
   widget: {
     ...widgetSurface,
+  },
+  widgetRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     padding: 16,
+  },
+  widgetSquare: {
+    aspectRatio: 1,
+    justifyContent: 'space-between',
+    gap: 8,
+    padding: 14,
+  },
+  pressed: {
+    backgroundColor: theme.palette.slate.surface,
   },
   text: {
     flex: 1,
@@ -101,9 +165,16 @@ const styles = StyleSheet.create({
     color: theme.palette.slate.textPrimary,
     fontSize: 17,
     fontWeight: '700',
+    flex: 1,
+    minWidth: 0,
   },
   input: {
     paddingVertical: 6,
+  },
+  squareFooter: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
   },
   editBtn: {
     width: 38,

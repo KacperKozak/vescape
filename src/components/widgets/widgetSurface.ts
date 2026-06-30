@@ -7,3 +7,11 @@ export const widgetSurface = {
   borderWidth: 1,
   borderRadius: 18,
 } as const
+
+/**
+ * Footprint a widget occupies in the 4-column widget grid:
+ *   - `square` → 1×1 icon tile (aspect-1)
+ *   - `half`   → 1×2 compact row
+ *   - `full`   → 1×4 full-width row (default)
+ */
+export type WidgetSize = 'square' | 'half' | 'full'

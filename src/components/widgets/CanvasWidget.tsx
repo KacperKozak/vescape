@@ -2,7 +2,7 @@ import type { ReactNode } from 'react'
 import { StyleSheet, Text, View } from 'react-native'
 import type { Icon } from 'phosphor-react-native'
 
-import { widgetSurface } from '@/components/widgets/widgetSurface'
+import { widgetSurface, type WidgetSize } from '@/components/widgets/widgetSurface'
 import { theme } from '@/constants/theme'
 
 interface CanvasWidgetProps {
@@ -12,7 +12,9 @@ interface CanvasWidgetProps {
   accent?: string
   /** Raise the border to `accent` and show a status dot. */
   active?: boolean
-  /** Fixed widget height — content is centred within it. */
+  /** Footprint in the widget grid. `square` forces an aspect-1 tile and ignores `height`. */
+  size?: WidgetSize
+  /** Fixed widget height — content is centred within it. Ignored when `size` is `square`. */
   height?: number
   /** Pinned bottom area, e.g. an action button. */
   footer?: ReactNode
@@ -26,15 +28,28 @@ export function CanvasWidget({
   title,
   accent = theme.palette.slate.textSecondary,
   active = false,
+  size = 'full',
   height,
   footer,
   children,
 }: CanvasWidgetProps) {
+  const square = size === 'square'
+
   return (
-    <View style={[styles.widget, { height }, active && { borderColor: accent }]}>
+    <View
+      style={[
+        styles.widget,
+        square ? styles.square : { height },
+        active && { borderColor: accent },
+      ]}
+    >
       <View style={styles.header}>
-        <IconComponent size={20} color={accent} weight="duotone" />
-        <Text style={styles.title}>{title}</Text>
+        <IconComponent size={square ? 18 : 20} color={accent} weight="duotone" />
+        {square ? null : (
+          <Text style={styles.title} numberOfLines={1}>
+            {title}
+          </Text>
+        )}
         {active ? <View style={[styles.dot, { backgroundColor: accent }]} /> : null}
       </View>
       <View style={styles.body}>{children}</View>
@@ -48,6 +63,11 @@ const styles = StyleSheet.create({
     ...widgetSurface,
     padding: 16,
     gap: 10,
+  },
+  square: {
+    aspectRatio: 1,
+    padding: 14,
+    gap: 6,
   },
   header: {
     flexDirection: 'row',
