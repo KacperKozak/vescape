@@ -231,7 +231,7 @@ function RiderPresencePin({
   return (
     <MarkerView coordinate={[rider.presence.lng, rider.presence.lat]} allowOverlap>
       <View style={styles.riderMarker}>
-        <View style={[styles.riderDot, { borderColor: color }]}>
+        <View style={[styles.riderDot, { backgroundColor: color }]}>
           {heading != null && (
             <View style={[styles.riderHeading, { transform: [{ rotate: `${heading}deg` }] }]}>
               <View style={[styles.riderHeadingNeedle, { backgroundColor: color }]} />
@@ -551,24 +551,22 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   riderDot: {
-    width: 30,
-    height: 30,
+    width: 16,
+    height: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 15,
-    borderWidth: 3,
-    backgroundColor: theme.palette.slate.textPrimary,
+    borderRadius: 8,
   },
   riderHeading: {
     position: 'absolute',
-    top: -13,
-    width: 4,
-    height: 18,
+    top: -11,
+    width: 3,
+    height: 12,
     alignItems: 'center',
   },
   riderHeadingNeedle: {
-    width: 4,
-    height: 18,
+    width: 3,
+    height: 12,
     borderRadius: 2,
   },
   riderLabel: {
