@@ -248,6 +248,8 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
   const settingsLoaded = useSettingsStore((s) => s.loaded)
   const lastGpsLatitude = useSettingsStore((s) => s.lastGpsLatitude)
   const lastGpsLongitude = useSettingsStore((s) => s.lastGpsLongitude)
+  const historyMetricGradientsEnabled = useSettingsStore((s) => s.historyMetricGradientsEnabled)
+  const historyMetricHotRanges = useSettingsStore((s) => s.historyMetricHotRanges)
   const persistedFallback = useMemo(
     () =>
       lastGpsLatitude != null && lastGpsLongitude != null
@@ -900,6 +902,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
           accuracyFix={accuracyFix}
           accuracyShape={accuracyShape}
           gpsPuckBearingDeg={gpsPuckBearingDeg}
+          riders={riderFocusRows}
           rideRoute={rideRoute}
           rideTelemetrySamples={rideTelemetrySamples}
           activeHistoryMapMetric={activeHistoryMapMetric}
@@ -907,6 +910,8 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
           rideGpsSamples={rideGpsSamples}
           mediaAssets={mediaAssets}
           mapZoom={cameraZoom}
+          historyMetricGradientsEnabled={historyMetricGradientsEnabled}
+          historyMetricHotRanges={historyMetricHotRanges}
           directionPoint={directionPoint}
           mapPoints={mapPoints}
           selectedMapPointId={selectedMapPointId}

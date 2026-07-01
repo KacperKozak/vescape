@@ -4,6 +4,7 @@ import { router } from 'expo-router'
 import {
   ChartLineUpIcon,
   ListIcon,
+  MapTrifoldIcon,
   SwatchesIcon,
   ToolboxIcon,
   CloudMoonIcon,
@@ -73,6 +74,12 @@ const sections = [
     hint: 'WeatherIcon, WeatherStat, WeatherPill, WeatherHourlyStrip',
     route: '/settings/components/weather',
     icon: CloudMoonIcon,
+  },
+  {
+    label: 'Map',
+    hint: 'Map pins, routes, riders, weather radar, buildings — all layers, live controls',
+    route: '/settings/components/map',
+    icon: MapTrifoldIcon,
   },
 ]
 
