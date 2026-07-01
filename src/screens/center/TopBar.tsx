@@ -152,6 +152,7 @@ export function TopBar({
         triggerRef={socialRef}
         anchor="left"
         title="Social"
+        icon={UsersThreeIcon}
         onClose={() => setSocialOpen(false)}
       >
         <SocialSheet onNavigate={() => setSocialOpen(false)} />

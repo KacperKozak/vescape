@@ -198,6 +198,7 @@ export const FIXTURE_RIDERS: RosterRider[] = [
     stale: false,
     lastSeen: NOW,
     distanceM: 42,
+    isSelf: false,
   },
   {
     id: 'fixture-rider-jonas',
@@ -214,6 +215,7 @@ export const FIXTURE_RIDERS: RosterRider[] = [
     stale: false,
     lastSeen: NOW,
     distanceM: 96,
+    isSelf: false,
   },
   {
     id: 'fixture-rider-miguel',
@@ -230,6 +232,7 @@ export const FIXTURE_RIDERS: RosterRider[] = [
     stale: true,
     lastSeen: NOW - 20_000,
     distanceM: 180,
+    isSelf: false,
   },
 ]
 

@@ -14,6 +14,7 @@
     "android": "bun run copy:shared && export NODE_BINARY=$(command -v node); export PATH=$(dirname \"$NODE_BINARY\"):$PATH; REACT_NATIVE_PACKAGER_HOSTNAME=localhost expo run:android",
     "android:e2e": "EXPO_PUBLIC_E2E=1 bun run android",
     "ios": "expo run:ios",
+    "relay:reverse": "adb devices | awk 'NR>1 && $2==\"device\" {print $1}' | xargs -I{} adb -s {} reverse tcp:3000 tcp:3000",
     "lint": "expo lint",
     "format": "oxfmt . '!.agents/skills/**'",
     "format:check": "oxfmt --check . '!.agents/skills/**'",

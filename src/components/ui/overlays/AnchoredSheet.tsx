@@ -13,6 +13,7 @@ import {
   type ViewStyle,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import type { Icon } from 'phosphor-react-native'
 
 import {
   getModalCoordinateOffset,
@@ -120,6 +121,8 @@ interface SheetProps {
   onClose: () => void
   layout: SheetLayoutMode
   title?: string
+  /** Optional glyph shown left of a centred title. */
+  icon?: Icon
   contentContainerStyle?: StyleProp<ViewStyle>
   children: React.ReactNode
 }
@@ -137,6 +140,7 @@ function Sheet({
   onClose,
   layout,
   title,
+  icon: IconComponent,
   contentContainerStyle,
   children,
 }: SheetProps) {
@@ -216,6 +220,9 @@ function Sheet({
       >
         {title ? (
           <View style={styles.header}>
+            {IconComponent ? (
+              <IconComponent size={18} color={theme.palette.slate.textSecondary} weight="duotone" />
+            ) : null}
             <Text style={styles.title}>{title}</Text>
           </View>
         ) : null}
@@ -238,6 +245,8 @@ interface CornerSheetProps {
   /** Which corner the sheet grows from — matches the trigger's screen side. */
   anchor?: 'left' | 'right'
   title?: string
+  /** Optional glyph shown left of a centred title. */
+  icon?: Icon
   children: React.ReactNode
 }
 
@@ -294,7 +303,8 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+    gap: 6,
     paddingHorizontal: 16,
     paddingTop: 14,
     paddingBottom: 4,

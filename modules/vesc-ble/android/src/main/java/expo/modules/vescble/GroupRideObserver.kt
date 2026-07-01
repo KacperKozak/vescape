@@ -92,7 +92,7 @@ internal class GroupRideObserver(
                 stopHeartbeat()
             }
             sendHello(ws, riderId, riderName, riderColor)
-            lastPresence = RiderPresence(lat = lat, lng = lng, heading = null, speed = null, soc = null, boardName = null)
+            lastPresence = RiderPresence(lat = lat, lng = lng, heading = null, speed = null, soc = null, motorTemp = null, ctrlTemp = null, phoneBattery = null, boardName = null)
             val create = JSONObject()
                 .put("type", "create")
                 .put("location", JSONObject().put("lat", lat).put("lng", lng))
@@ -367,6 +367,9 @@ internal class GroupRideObserver(
             "heading" to obj.optionalDouble("heading"),
             "speed" to obj.optionalDouble("speed"),
             "soc" to obj.optionalDouble("soc"),
+            "motorTemp" to obj.optionalDouble("motorTemp"),
+            "ctrlTemp" to obj.optionalDouble("ctrlTemp"),
+            "phoneBattery" to obj.optionalDouble("phoneBattery"),
             "boardName" to obj.optString("boardName").takeIf { it.isNotEmpty() },
         )
     }
@@ -400,6 +403,9 @@ internal data class RiderPresence(
     val heading: Double?,
     val speed: Double?,
     val soc: Double?,
+    val motorTemp: Double?,
+    val ctrlTemp: Double?,
+    val phoneBattery: Double?,
     val boardName: String?,
 ) {
     fun toJson(): JSONObject {
@@ -409,6 +415,9 @@ internal data class RiderPresence(
         heading?.let { json.put("heading", it) }
         speed?.let { json.put("speed", it) }
         soc?.let { json.put("soc", it) }
+        motorTemp?.let { json.put("motorTemp", it) }
+        ctrlTemp?.let { json.put("ctrlTemp", it) }
+        phoneBattery?.let { json.put("phoneBattery", it) }
         boardName?.let { json.put("boardName", it) }
         return json
     }

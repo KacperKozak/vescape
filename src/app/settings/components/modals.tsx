@@ -2,7 +2,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useState } from 'react'
 
-import { SquaresFourIcon } from 'phosphor-react-native'
+import { SquaresFourIcon, UsersThreeIcon } from 'phosphor-react-native'
 import { ConfirmModal } from '@/components/ui/modals/ConfirmModal'
 import { CornerSheet, FloatingSheet } from '@/components/ui/overlays/AnchoredSheet'
 import { useTriggerRef } from '@/components/ui/overlays/measureTrigger'
@@ -100,6 +100,7 @@ function CornerSheetShowcase() {
         triggerRef={triggerRef}
         anchor="left"
         title="Sheet title"
+        icon={UsersThreeIcon}
         onClose={() => setVisible(false)}
       >
         <View style={styles.tile}>

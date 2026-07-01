@@ -706,6 +706,12 @@ export interface RiderPresence {
   speed?: number | null
   /** Battery SoC Estimate as a 0-1 fraction. Null/omitted when unavailable. */
   soc?: number | null
+  /** Motor temperature in °C. Null/omitted when no fresh Board Session is live. */
+  motorTemp?: number | null
+  /** Controller/FET temperature in °C. Null/omitted when no fresh Board Session is live. */
+  ctrlTemp?: number | null
+  /** Device battery as a 0-1 fraction. Null/omitted when the platform can't report it. */
+  phoneBattery?: number | null
   /** Connected board's display name. Null/omitted when no Board Session is live. */
   boardName?: string | null
 }
