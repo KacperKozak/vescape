@@ -261,7 +261,7 @@ function RiderCell({
   connected: boolean
 }) {
   const dotColor = rider.color || theme.palette.slate.textMuted
-  const boardName = rider.presence?.boardName?.trim() || 'No board'
+  const boardName = rider.presence?.boardName?.trim() || 'Board not connected'
   // Only claim a rider is "Live" when our own relay link is up — otherwise the roster is just
   // the last snapshot we received and we can't know it's current.
   const fresh = !rider.stale && connected
