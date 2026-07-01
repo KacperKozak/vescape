@@ -15,11 +15,10 @@ const DARK = '#111827'
 const signet = readFileSync(join(logoDir, 'vescape-sygnet.svg'), 'utf8')
 const text = readFileSync(join(logoDir, 'Vescape-text.svg'), 'utf8')
 
-// Monochrome signet: drop the gradient-filled path + defs, force white fill.
+// Monochrome signet: keep the mark, force white fill, and drop gradient defs.
 const signetMono = signet
-  .replace(/<path d="[^"]*" fill="url\(#[^)]*\)"\/>/, '')
+  .replace(/fill="url\(#[^)]*\)"/, 'fill="#FFFFFF"')
   .replace(/<defs>[\s\S]*?<\/defs>/, '')
-  .replace(/fill="#38BDF8"/g, 'fill="#FFFFFF"')
 
 const svg = (s: string) => Buffer.from(s)
 
@@ -28,11 +27,22 @@ const render = (src: string, size: number) =>
 
 async function main() {
   // iOS / store icon — opaque dark background.
-  await render(signet, 1024).flatten({ background: DARK }).toFile(join(out, 'icon.png'))
+  const iconInner = 820
+  const iconPad = (1024 - iconInner) / 2
+  await render(signet, iconInner)
+    .extend({
+      top: iconPad,
+      bottom: iconPad,
+      left: iconPad,
+      right: iconPad,
+      background: '#00000000',
+    })
+    .flatten({ background: DARK })
+    .toFile(join(out, 'icon.png'))
 
   // Android adaptive icon layers. The launcher crops the foreground to a
   // center safe zone, so render the mark smaller and pad it to 512.
-  const fgInner = 320
+  const fgInner = 280
   const fgPad = (512 - fgInner) / 2
   await render(signet, fgInner)
     .extend({ top: fgPad, bottom: fgPad, left: fgPad, right: fgPad, background: '#00000000' })
@@ -42,7 +52,7 @@ async function main() {
   })
     .png()
     .toFile(join(out, 'androidIconBackground.png'))
-  const monoInner = 270
+  const monoInner = 220
   const monoPad = (432 - monoInner) / 2
   await render(signetMono, monoInner)
     .extend({
