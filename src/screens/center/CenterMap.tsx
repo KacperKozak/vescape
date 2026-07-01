@@ -122,6 +122,8 @@ interface CenterMapProps {
   onOpenMedia: (asset: MediaHistoryAsset) => void
   activeHistoryMapMetric: HistoryMetricKey
   historyActive: boolean
+  historySelectionKey: string | null
+  historyPreviewRoute: [number, number][]
   mapStyleKey: MapStyleKey
   mapNavigationMode: MapNavigationMode
   rotationLocked: boolean
@@ -160,6 +162,8 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
     onOpenMedia,
     activeHistoryMapMetric,
     historyActive,
+    historySelectionKey,
+    historyPreviewRoute,
     mapStyleKey,
     mapNavigationMode,
     rotationLocked,
@@ -392,7 +396,9 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
     persistedFallback,
     perspectiveEnabled,
     historyActive,
+    historySelectionKey,
     historyPreview,
+    historyPreviewRoute,
     rideRoute,
     mapViewport: mapLayout,
     mapNavigationMode,

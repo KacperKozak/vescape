@@ -80,7 +80,9 @@ export function CenterScreen({
         mediaAssets={controller.mediaHistory.assets}
         onOpenMedia={controller.openMedia}
         activeHistoryMapMetric={controller.activeHistoryMapMetric}
+        historySelectionKey={controller.selectedSession?.id ?? null}
         historyPreview={controller.historyPreview}
+        historyPreviewRoute={controller.historyPreviewRoute}
         historyActive={controller.historyActive}
         mapStyleKey={controller.mapStyleKey}
         mapNavigationMode={controller.mapNavigationMode}
