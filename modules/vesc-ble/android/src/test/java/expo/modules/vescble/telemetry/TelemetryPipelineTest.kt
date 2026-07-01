@@ -255,6 +255,7 @@ class TelemetryPipelineTest {
         tempMosfet = null,
         tempMotor = null,
         avgLatency = null,
+        pullRateHz = null,
         lastPacketAt = packetAt,
         location = null,
     )

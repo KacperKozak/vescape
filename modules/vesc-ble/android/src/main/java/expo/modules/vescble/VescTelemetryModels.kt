@@ -21,6 +21,7 @@ data class RefloatTelemetry(
     val tempMosfet: Double?,
     val tempMotor: Double?,
     val avgLatency: Int?,
+    val pullRateHz: Double?,
     val lastPacketAt: Long,
     val location: LocationSnapshot?,
 ) {
@@ -46,6 +47,7 @@ data class RefloatTelemetry(
         "tempMosfet" to tempMosfet,
         "tempMotor" to tempMotor,
         "avgLatency" to avgLatency,
+        "pullRateHz" to pullRateHz,
         "lastPacketAt" to lastPacketAt,
         "location" to location?.toMap(),
     )

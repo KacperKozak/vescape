@@ -138,6 +138,7 @@ internal fun parseRefloatGetAllData(
     avgLatency: Int?,
     packetAt: Long,
     location: LocationSnapshot?,
+    pullRateHz: Double? = null,
 ): RefloatTelemetry? {
     if (payload.size < 5) return null
     if ((payload[0].toInt() and 0xff) != COMM_CUSTOM_APP_DATA) return null
@@ -167,6 +168,7 @@ internal fun parseRefloatGetAllData(
             tempMosfet = null,
             tempMotor = null,
             avgLatency = avgLatency,
+            pullRateHz = pullRateHz,
             lastPacketAt = packetAt,
             location = location,
         )
@@ -200,6 +202,7 @@ internal fun parseRefloatGetAllData(
         tempMosfet = if (mode >= 2 && payload.size >= 42) (payload[39].toInt() and 0xff) / 2.0 else null,
         tempMotor = if (mode >= 2 && payload.size >= 42) (payload[40].toInt() and 0xff) / 2.0 else null,
         avgLatency = avgLatency,
+        pullRateHz = pullRateHz,
         lastPacketAt = packetAt,
         location = location,
     )

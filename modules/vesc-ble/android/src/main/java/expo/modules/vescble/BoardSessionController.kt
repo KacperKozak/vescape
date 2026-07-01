@@ -923,6 +923,7 @@ internal class BoardSessionController(private val service: VescForegroundService
                     avgLatency = updateLatency(now),
                     packetAt = now,
                     location = locationTracker.latestLocation,
+                    pullRateHz = pollingLoop.measuredRateHz(),
                 ) ?: run {
                     captureTelemetryParseFailed(payload)
                     return

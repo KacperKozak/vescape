@@ -213,6 +213,8 @@ export interface TelemetryEvent {
   tempMosfet: number | null
   tempMotor: number | null
   avgLatency: number | null
+  /** Achieved telemetry pull rate in Hz (native-measured, smoothed), or null before it's known. */
+  pullRateHz: number | null
   lastPacketAt: number
   firedAlerts?: FiredAlert[]
 }
@@ -403,7 +405,14 @@ export interface HistoryGpsSample {
 export interface HistoryMarker {
   id: number
   occurredAtMs: number
-  type: 'connected' | 'disconnected' | 'connection_lost' | 'error' | 'gap' | 'app_stop'
+  type:
+    | 'connected'
+    | 'disconnected'
+    | 'connection_lost'
+    | 'error'
+    | 'gap'
+    | 'app_stop'
+    | 'auto_pause'
   deviceId: string | null
   deviceName: string | null
   message: string | null

@@ -38,6 +38,7 @@ function telemetry(overrides: Partial<TelemetryEvent> = {}): TelemetryEvent {
     tempMosfet: 40,
     tempMotor: 35,
     avgLatency: 18,
+    pullRateHz: 20,
     lastPacketAt: 10_000,
     ...overrides,
   }

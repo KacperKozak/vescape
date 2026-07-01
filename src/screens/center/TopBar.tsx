@@ -162,6 +162,7 @@ export function TopBar({
         triggerRef={pillRef}
         boards={boards}
         activeBoardId={activeBoardId}
+        activeBoardLive={bleStatus === 'connected' || bleStatus === 'stale'}
         onClose={() => setSelectorOpen(false)}
         onSelectBoard={(id) => {
           onSelectBoard(id)

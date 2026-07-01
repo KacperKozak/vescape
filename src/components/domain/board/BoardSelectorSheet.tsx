@@ -6,12 +6,16 @@ import { routes } from '@/navigation/routes'
 import type { Board } from '@/store/boardStore'
 import { interaction, theme } from '@/constants/theme'
 import { FloatingSheet } from '@/components/ui/overlays/AnchoredSheet'
+import { TickText } from '@/components/ui/base/TickText'
+import { liveTelemetryRuntime } from '@/lib/telemetry/liveTelemetryRuntime'
 
 interface BoardSelectorSheetProps {
   visible: boolean
   triggerRef: React.RefObject<View | null>
   boards: Board[]
   activeBoardId: string | null
+  /** True while the active board has a live telemetry link, so its row shows the pull rate. */
+  activeBoardLive?: boolean
   onClose: () => void
   onSelectBoard: (id: string) => void
   onAddBoard: () => void
@@ -22,6 +26,7 @@ export function BoardSelectorSheet({
   triggerRef,
   boards,
   activeBoardId,
+  activeBoardLive = false,
   onClose,
   onSelectBoard,
   onAddBoard,
@@ -60,6 +65,14 @@ export function BoardSelectorSheet({
               <Text style={[styles.boardName, isActive && styles.boardNameActive]}>
                 {board.name}
               </Text>
+              {isActive && activeBoardLive && (
+                <TickText
+                  value={liveTelemetryRuntime.values.pullRateHz}
+                  decimals={0}
+                  unit=" Hz"
+                  style={styles.pullRate}
+                />
+              )}
             </View>
             {isActive && (
               <CheckCircleIcon size={20} color={theme.palette.sky.color} weight="fill" />
@@ -145,6 +158,11 @@ const styles = StyleSheet.create({
   },
   boardNameActive: {
     color: theme.palette.slate.textPrimary,
+  },
+  pullRate: {
+    color: theme.palette.slate.textMuted,
+    fontSize: 11,
+    fontWeight: '700',
   },
   addRow: {
     flexDirection: 'row',
