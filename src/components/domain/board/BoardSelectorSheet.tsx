@@ -1,17 +1,21 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { CheckCircleIcon, LightningIcon, PencilSimpleIcon, PlusIcon } from 'phosphor-react-native'
 import { router } from 'expo-router'
 import { routes } from '@/navigation/routes'
 
 import type { Board } from '@/store/boardStore'
 import { interaction, theme } from '@/constants/theme'
-import { Dropdown } from '@/components/ui/forms/Dropdown'
+import { FloatingSheet } from '@/components/ui/overlays/AnchoredSheet'
+import { TickText } from '@/components/ui/base/TickText'
+import { liveTelemetryRuntime } from '@/lib/telemetry/liveTelemetryRuntime'
 
 interface BoardSelectorSheetProps {
   visible: boolean
   triggerRef: React.RefObject<View | null>
   boards: Board[]
   activeBoardId: string | null
+  /** True while the active board has a live telemetry link, so its row shows the pull rate. */
+  activeBoardLive?: boolean
   onClose: () => void
   onSelectBoard: (id: string) => void
   onAddBoard: () => void
@@ -22,79 +26,91 @@ export function BoardSelectorSheet({
   triggerRef,
   boards,
   activeBoardId,
+  activeBoardLive = false,
   onClose,
   onSelectBoard,
   onAddBoard,
 }: BoardSelectorSheetProps) {
   return (
-    <Dropdown
+    <FloatingSheet
       visible={visible}
       triggerRef={triggerRef}
       onClose={onClose}
       matchTriggerWidth={false}
       minWidth={280}
+      contentContainerStyle={styles.content}
     >
-      <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
-        <Text style={styles.sectionTitle}>Your Boards</Text>
+      <Text style={styles.sectionTitle}>Your Boards</Text>
 
-        {boards.map((board) => {
-          const isActive = board.id === activeBoardId
-          return (
-            <Pressable
-              key={board.id}
-              style={({ pressed }) => [
-                styles.boardRow,
-                isActive && styles.boardRowActive,
-                pressed && styles.boardRowPressed,
-              ]}
-              onPress={() => onSelectBoard(board.id)}
-            >
-              <View style={[styles.boardIcon, isActive && styles.boardIconActive]}>
-                <LightningIcon
-                  size={16}
-                  color={isActive ? theme.palette.sky.color : theme.palette.slate.textMuted}
-                  weight={isActive ? 'fill' : 'regular'}
+      {boards.map((board) => {
+        const isActive = board.id === activeBoardId
+        return (
+          <Pressable
+            key={board.id}
+            style={({ pressed }) => [
+              styles.boardRow,
+              isActive && styles.boardRowActive,
+              pressed && styles.boardRowPressed,
+            ]}
+            onPress={() => onSelectBoard(board.id)}
+          >
+            <View style={[styles.boardIcon, isActive && styles.boardIconActive]}>
+              <LightningIcon
+                size={16}
+                color={isActive ? theme.palette.sky.color : theme.palette.slate.textMuted}
+                weight={isActive ? 'fill' : 'regular'}
+              />
+            </View>
+            <View style={styles.boardInfo}>
+              <Text style={[styles.boardName, isActive && styles.boardNameActive]}>
+                {board.name}
+              </Text>
+              {isActive && activeBoardLive && (
+                <TickText
+                  value={liveTelemetryRuntime.values.pullRateHz}
+                  decimals={0}
+                  unit=" Hz"
+                  style={styles.pullRate}
                 />
-              </View>
-              <View style={styles.boardInfo}>
-                <Text style={[styles.boardName, isActive && styles.boardNameActive]}>
-                  {board.name}
-                </Text>
-              </View>
-              {isActive && (
-                <CheckCircleIcon size={20} color={theme.palette.sky.color} weight="fill" />
               )}
-              <Pressable
-                onPress={(e) => {
-                  e.stopPropagation()
-                  onClose()
-                  router.push({ pathname: routes.editBoard, params: { boardId: board.id } })
-                }}
-                hitSlop={8}
-              >
-                <PencilSimpleIcon size={15} color={theme.palette.slate.textDim} weight="bold" />
-              </Pressable>
+            </View>
+            {isActive && (
+              <CheckCircleIcon size={20} color={theme.palette.sky.color} weight="fill" />
+            )}
+            <Pressable
+              onPress={(e) => {
+                e.stopPropagation()
+                onClose()
+                router.push({ pathname: routes.editBoard, params: { boardId: board.id } })
+              }}
+              hitSlop={8}
+            >
+              <PencilSimpleIcon size={15} color={theme.palette.slate.textDim} weight="bold" />
             </Pressable>
-          )
-        })}
+          </Pressable>
+        )
+      })}
 
-        <Pressable
-          style={({ pressed }) => [styles.addRow, pressed && styles.boardRowPressed]}
-          onPress={onAddBoard}
-          testID="board-selector-add-board"
-          accessibilityLabel="Add new board"
-        >
-          <View style={styles.addIcon}>
-            <PlusIcon size={16} color={theme.palette.sky.color} weight="bold" />
-          </View>
-          <Text style={styles.addText}>Add new board</Text>
-        </Pressable>
-      </ScrollView>
-    </Dropdown>
+      <Pressable
+        style={({ pressed }) => [styles.addRow, pressed && styles.boardRowPressed]}
+        onPress={onAddBoard}
+        testID="board-selector-add-board"
+        accessibilityLabel="Add new board"
+      >
+        <View style={styles.addIcon}>
+          <PlusIcon size={16} color={theme.palette.sky.color} weight="bold" />
+        </View>
+        <Text style={styles.addText}>Add new board</Text>
+      </Pressable>
+    </FloatingSheet>
   )
 }
 
 const styles = StyleSheet.create({
+  content: {
+    padding: 0,
+    gap: 0,
+  },
   sectionTitle: {
     color: theme.palette.slate.textMuted,
     fontSize: 11,
@@ -142,6 +158,11 @@ const styles = StyleSheet.create({
   },
   boardNameActive: {
     color: theme.palette.slate.textPrimary,
+  },
+  pullRate: {
+    color: theme.palette.slate.textMuted,
+    fontSize: 11,
+    fontWeight: '700',
   },
   addRow: {
     flexDirection: 'row',

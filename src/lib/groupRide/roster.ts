@@ -4,6 +4,8 @@ import { distanceMeters } from '@/helpers/mapGeometry'
 
 export interface RosterRider extends GroupRideRider {
   distanceM: number | null
+  /** True for the device's own Rider — pinned first and labelled "You". */
+  isSelf: boolean
 }
 
 export const RIDER_STALE_AFTER_MS = 5_000
@@ -27,9 +29,9 @@ export function riderRoster(
   const from = ownLocation ? { latitude: ownLocation.lat, longitude: ownLocation.lng } : null
 
   return clientFreshRoster(riders, nowMs)
-    .filter((rider) => rider.id !== ownRiderId)
     .map((rider) => ({
       ...rider,
+      isSelf: rider.id === ownRiderId,
       distanceM:
         from && rider.presence
           ? distanceMeters(from, {
@@ -39,6 +41,8 @@ export function riderRoster(
           : null,
     }))
     .sort((a, b) => {
+      // The device's own Rider is always pinned to the front of the roster.
+      if (a.isSelf !== b.isSelf) return a.isSelf ? -1 : 1
       if (a.stale !== b.stale) return a.stale ? 1 : -1
       if (a.distanceM == null && b.distanceM == null) return a.name.localeCompare(b.name)
       if (a.distanceM == null) return 1

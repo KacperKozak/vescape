@@ -248,6 +248,8 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
   const settingsLoaded = useSettingsStore((s) => s.loaded)
   const lastGpsLatitude = useSettingsStore((s) => s.lastGpsLatitude)
   const lastGpsLongitude = useSettingsStore((s) => s.lastGpsLongitude)
+  const historyMetricGradientsEnabled = useSettingsStore((s) => s.historyMetricGradientsEnabled)
+  const historyMetricHotRanges = useSettingsStore((s) => s.historyMetricHotRanges)
   const persistedFallback = useMemo(
     () =>
       lastGpsLatitude != null && lastGpsLongitude != null
@@ -421,6 +423,8 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
   const updateNavigationDiagnostics = useNavigationDiagnosticsStore((s) => s.update)
   const riderFocusRequest = useGroupRideStore((s) => s.focusRequest)
   const riderFocusRows = useGroupRideStore((s) => s.rosterRows)
+  // Own Rider is drawn by the GPS puck, so keep it out of the roster map pins.
+  const mapRiders = useMemo(() => riderFocusRows.filter((row) => !row.isSelf), [riderFocusRows])
 
   const handleMapLayout = useCallback((event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout
@@ -900,6 +904,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
           accuracyFix={accuracyFix}
           accuracyShape={accuracyShape}
           gpsPuckBearingDeg={gpsPuckBearingDeg}
+          riders={mapRiders}
           rideRoute={rideRoute}
           rideTelemetrySamples={rideTelemetrySamples}
           activeHistoryMapMetric={activeHistoryMapMetric}
@@ -907,6 +912,8 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
           rideGpsSamples={rideGpsSamples}
           mediaAssets={mediaAssets}
           mapZoom={cameraZoom}
+          historyMetricGradientsEnabled={historyMetricGradientsEnabled}
+          historyMetricHotRanges={historyMetricHotRanges}
           directionPoint={directionPoint}
           mapPoints={mapPoints}
           selectedMapPointId={selectedMapPointId}

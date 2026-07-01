@@ -129,6 +129,7 @@ class NotificationPresenterTest {
         tempMosfet = null,
         tempMotor = null,
         avgLatency = null,
+        pullRateHz = null,
         lastPacketAt = 0L,
         location = null,
     )

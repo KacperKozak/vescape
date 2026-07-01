@@ -31,6 +31,21 @@ export function fmtDistance(meters: number): string {
   return `${(meters / 1000).toFixed(1)} km`
 }
 
+/** Format a speed in m/s as a whole km/h label, e.g. "24 km/h". */
+export function fmtSpeedKmh(metersPerSecond: number): string {
+  return `${Math.round(metersPerSecond * 3.6)} km/h`
+}
+
+/** Format a temperature in °C as a whole-degree label, e.g. "64°". */
+export function fmtTempC(celsius: number): string {
+  return `${Math.round(celsius)}°`
+}
+
+/** Format a 0–1 fraction as a whole percent, e.g. "72%". */
+export function fmtPercent(fraction: number): string {
+  return `${Math.round(fraction * 100)}%`
+}
+
 /** Compact "time since" label: "12s", "3m", "2h", "5d" from an epoch-ms timestamp. */
 export function fmtSince(timestampMs: number, nowMs = Date.now()): string {
   const s = Math.max(0, Math.round((nowMs - timestampMs) / 1000))

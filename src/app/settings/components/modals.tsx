@@ -2,9 +2,9 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useState } from 'react'
 
-import { SquaresFourIcon } from 'phosphor-react-native'
+import { SquaresFourIcon, UsersThreeIcon } from 'phosphor-react-native'
 import { ConfirmModal } from '@/components/ui/modals/ConfirmModal'
-import { CornerSheet } from '@/components/ui/overlays/CornerSheet'
+import { CornerSheet, FloatingSheet } from '@/components/ui/overlays/AnchoredSheet'
 import { useTriggerRef } from '@/components/ui/overlays/measureTrigger'
 import { IconHero } from '@/components/ui/settings/IconHero'
 import { InfoModal } from '@/components/ui/modals/InfoModal'
@@ -100,6 +100,7 @@ function CornerSheetShowcase() {
         triggerRef={triggerRef}
         anchor="left"
         title="Sheet title"
+        icon={UsersThreeIcon}
         onClose={() => setVisible(false)}
       >
         <View style={styles.tile}>
@@ -113,18 +114,51 @@ function CornerSheetShowcase() {
   )
 }
 
+function FloatingSheetShowcase() {
+  const triggerRef = useTriggerRef()
+  const [visible, setVisible] = useState(false)
+
+  return (
+    <ShowcaseCard
+      name="FloatingSheet"
+      controls={
+        <View ref={triggerRef} collapsable={false} style={styles.trigger}>
+          <OpenButton onPress={() => setVisible(true)} />
+        </View>
+      }
+    >
+      <Text style={styles.previewHint}>Compact popover centered under its trigger</Text>
+      <FloatingSheet
+        visible={visible}
+        triggerRef={triggerRef}
+        matchTriggerWidth={false}
+        minWidth={220}
+        onClose={() => setVisible(false)}
+      >
+        <View style={styles.tile}>
+          <Text style={styles.tileText}>Option one</Text>
+        </View>
+        <View style={styles.tile}>
+          <Text style={styles.tileText}>Option two</Text>
+        </View>
+      </FloatingSheet>
+    </ShowcaseCard>
+  )
+}
+
 export default function ModalsPage() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
         <IconHero
           icon={SquaresFourIcon}
-          description="ConfirmModal, InfoModal, TextPromptModal, CornerSheet."
+          description="ConfirmModal, InfoModal, TextPromptModal, CornerSheet, FloatingSheet."
         />
         <ConfirmModalShowcase />
         <InfoModalShowcase />
         <TextPromptModalShowcase />
         <CornerSheetShowcase />
+        <FloatingSheetShowcase />
       </ScrollView>
     </SafeAreaView>
   )

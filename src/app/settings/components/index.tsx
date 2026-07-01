@@ -4,6 +4,7 @@ import { router } from 'expo-router'
 import {
   ChartLineUpIcon,
   ListIcon,
+  MapTrifoldIcon,
   SwatchesIcon,
   ToolboxIcon,
   CloudMoonIcon,
@@ -22,57 +23,63 @@ import { theme } from '@/constants/theme'
 const sections = [
   {
     label: 'Base',
-    hint: 'Button, IconButton, Banner, DeviceRow, InfoBadge, StepTimeline, Placeholder, ScreenTitle',
+    hint: 'Buttons, banners, device rows, badges, and other everyday building blocks',
     route: '/settings/components/base',
     icon: CubeIcon,
   },
   {
     label: 'Charts',
-    hint: 'Sparkline, LinearGauge, SingleGauge, TelemetryLineChart',
+    hint: 'Sparklines and gauges for showing telemetry over time',
     route: '/settings/components/charts',
     icon: ChartLineUpIcon,
   },
   {
     label: 'Forms',
-    hint: 'Select, Dropdown, ColorPicker, Stepper, SoundPicker',
+    hint: 'Inputs, dropdowns, pickers, and steppers for entering data',
     route: '/settings/components/forms',
     icon: ListIcon,
   },
   {
     label: 'Modals',
-    hint: 'ConfirmModal, InfoModal, TextPromptModal, CornerSheet',
+    hint: 'Popups, confirmations, and sheets that float above the screen',
     route: '/settings/components/modals',
     icon: SquaresFourIcon,
   },
   {
     label: 'Controls',
-    hint: 'CircleButton, FloatingBar, PrevNextSelector, PillSelector, MapOptionSelector',
+    hint: 'Buttons and selectors for switching between options or views',
     route: '/settings/components/controls',
     icon: SwatchesIcon,
   },
   {
     label: 'Widgets',
-    hint: 'InputWidget, LinkWidget, SwitchWidget, DialWidget, CanvasWidget',
+    hint: 'Dashboard tiles for showing and editing live board data',
     route: '/settings/components/widgets',
     icon: StackIcon,
   },
   {
     label: 'Settings',
-    hint: 'SettingsCard, SettingsRow, SectionTitle, Stepper',
+    hint: 'Cards and rows used to build settings screens',
     route: '/settings/components/settings',
     icon: GearSixIcon,
   },
   {
     label: 'Tune',
-    hint: 'TuneDial, BasicSliderCell, TuneSyncBar, TuneGroupGrid',
+    hint: 'Dials, sliders, and grids for adjusting board tuning',
     route: '/settings/components/tune',
     icon: ToolboxIcon,
   },
   {
     label: 'Weather',
-    hint: 'WeatherIcon, WeatherStat, WeatherPill, WeatherHourlyStrip',
+    hint: 'Icons and strips for showing weather conditions and forecasts',
     route: '/settings/components/weather',
     icon: CloudMoonIcon,
+  },
+  {
+    label: 'Map',
+    hint: 'Map pins, routes, riders, weather radar, buildings — all layers, live controls',
+    route: '/settings/components/map',
+    icon: MapTrifoldIcon,
   },
 ]
 

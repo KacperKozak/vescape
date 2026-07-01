@@ -34,11 +34,10 @@ import {
   MEDIA_CLUSTER_DISTANCE_M,
   type MediaHistoryAsset,
 } from '@/lib/history/mediaHistory'
-import type { HistoryMetricKey } from '@/lib/history/metricColorScale'
+import type { HistoryMetricKey, HistoryMetricHotRanges } from '@/lib/history/metricColorScale'
 import { isMapPointKindVisible } from '@/lib/mapPointVisibility'
 import type { HistoryGpsSample, HistoryMarker, TelemetrySample } from '@/store/historyStore'
-import { useGroupRideStore } from '@/store/groupRideStore'
-import { useSettingsStore } from '@/store/settingsStore'
+import type { RosterRider } from '@/lib/groupRide/roster'
 import { useCenterScreenStore } from '@/screens/center/centerScreenStore'
 
 import {
@@ -86,6 +85,7 @@ interface CenterMapLayersProps {
   accuracyFix: { longitude: number; latitude: number } | null
   accuracyShape: ReturnType<typeof makeCircleFeature> | null
   gpsPuckBearingDeg: number | null
+  riders: RosterRider[]
   rideRoute: [number, number][]
   rideTelemetrySamples: TelemetrySample[]
   activeHistoryMapMetric: HistoryMetricKey
@@ -93,6 +93,8 @@ interface CenterMapLayersProps {
   rideGpsSamples: HistoryGpsSample[]
   mediaAssets: MediaHistoryAsset[]
   mapZoom: number
+  historyMetricGradientsEnabled: boolean
+  historyMetricHotRanges: HistoryMetricHotRanges
   directionPoint: MapPoint | null
   mapPoints: MapPoint[]
   selectedMapPointId: string | null
@@ -110,13 +112,14 @@ function LiveMapLayers({
   accuracyFix,
   accuracyShape,
   gpsPuckBearingDeg,
+  riders,
 }: {
   liveTrailShape: CenterMapLayersProps['liveTrailShape']
   accuracyFix: CenterMapLayersProps['accuracyFix']
   accuracyShape: CenterMapLayersProps['accuracyShape']
   gpsPuckBearingDeg: CenterMapLayersProps['gpsPuckBearingDeg']
+  riders: CenterMapLayersProps['riders']
 }) {
-  const riders = useGroupRideStore((s) => s.rosterRows)
   const gpsPuckShape = useMemo(
     () =>
       accuracyFix && gpsPuckBearingDeg != null
@@ -215,13 +218,7 @@ function LiveMapLayers({
   )
 }
 
-function RiderPresencePin({
-  rider,
-  index,
-}: {
-  rider: ReturnType<typeof useGroupRideStore.getState>['rosterRows'][number]
-  index: number
-}) {
+function RiderPresencePin({ rider, index }: { rider: RosterRider; index: number }) {
   const color = rider.stale
     ? theme.palette.slate.textMuted
     : (rider.color ?? RIDER_COLORS[index % RIDER_COLORS.length])
@@ -266,7 +263,7 @@ function SeekPositionPin({ rideGpsSamples }: { rideGpsSamples: HistoryGpsSample[
   )
 }
 
-function HistoryMapLayers({
+export function HistoryMapLayers({
   rideRouteShape,
   rideRoute,
   rideTelemetrySamples,
@@ -275,6 +272,8 @@ function HistoryMapLayers({
   rideGpsSamples,
   mediaAssets,
   mapZoom,
+  historyMetricGradientsEnabled: gradientsEnabled,
+  historyMetricHotRanges: hotRanges,
   onSuppressNextMapPress,
   onSelectMarker,
   onOpenMedia,
@@ -287,6 +286,8 @@ function HistoryMapLayers({
   rideGpsSamples: CenterMapLayersProps['rideGpsSamples']
   mediaAssets: CenterMapLayersProps['mediaAssets']
   mapZoom: CenterMapLayersProps['mapZoom']
+  historyMetricGradientsEnabled: CenterMapLayersProps['historyMetricGradientsEnabled']
+  historyMetricHotRanges: CenterMapLayersProps['historyMetricHotRanges']
   onSuppressNextMapPress: CenterMapLayersProps['onSuppressNextMapPress']
   onSelectMarker: CenterMapLayersProps['onSelectMarker']
   onOpenMedia: CenterMapLayersProps['onOpenMedia']
@@ -320,8 +321,6 @@ function HistoryMapLayers({
     () => getHistoryRouteHighlightGradient(highlightProgress),
     [highlightProgress],
   )
-  const gradientsEnabled = useSettingsStore((s) => s.historyMetricGradientsEnabled)
-  const hotRanges = useSettingsStore((s) => s.historyMetricHotRanges)
   const routeMetricGradient = useMemo(
     () =>
       getHistoryRouteMetricGradient({
@@ -424,6 +423,7 @@ export function CenterMapLayers({
   accuracyFix,
   accuracyShape,
   gpsPuckBearingDeg,
+  riders,
   rideRoute,
   rideTelemetrySamples,
   activeHistoryMapMetric,
@@ -431,6 +431,8 @@ export function CenterMapLayers({
   rideGpsSamples,
   mediaAssets,
   mapZoom,
+  historyMetricGradientsEnabled,
+  historyMetricHotRanges,
   directionPoint,
   mapPoints,
   selectedMapPointId,
@@ -489,6 +491,8 @@ export function CenterMapLayers({
           rideGpsSamples={rideGpsSamples}
           mediaAssets={mediaAssets}
           mapZoom={mapZoom}
+          historyMetricGradientsEnabled={historyMetricGradientsEnabled}
+          historyMetricHotRanges={historyMetricHotRanges}
           onSuppressNextMapPress={onSuppressNextMapPress}
           onSelectMarker={onSelectMarker}
           onOpenMedia={onOpenMedia}
@@ -499,6 +503,7 @@ export function CenterMapLayers({
           accuracyFix={accuracyFix}
           accuracyShape={accuracyShape}
           gpsPuckBearingDeg={gpsPuckBearingDeg}
+          riders={riders}
         />
       )}
       {directionPoint && !historyActive && (

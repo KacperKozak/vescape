@@ -28,6 +28,7 @@ function telemetry(overrides: Partial<TelemetryEvent> = {}): TelemetryEvent {
     tempMosfet: 40,
     tempMotor: 35,
     avgLatency: 18,
+    pullRateHz: 20,
     lastPacketAt: 10_000,
     ...overrides,
   }
@@ -120,11 +121,14 @@ describe('live telemetry runtime', () => {
     const runtime = createLiveTelemetryRuntime({ windowMs: () => 60_000 })
     runtime.seedFromLiveState(liveState([]))
 
-    runtime.ingestTick(telemetry({ speed: -22, dutyCycle: 0.25, pitch: 37.5, avgLatency: 11 }))
+    runtime.ingestTick(
+      telemetry({ speed: -22, dutyCycle: 0.25, pitch: 37.5, avgLatency: 11, pullRateHz: 28 }),
+    )
     expect(runtime.values.speedKmh.value).toBe(22)
     expect(runtime.values.dutyPercent.value).toBe(25)
     expect(runtime.values.pitch.value).toBe(37.5)
     expect(runtime.values.avgLatencyMs.value).toBe(11)
+    expect(runtime.values.pullRateHz.value).toBe(28)
 
     runtime.ingestTick(telemetry({ roll: -12.25, balancePitch: 4.5 }))
     expect(runtime.values.roll.value).toBe(-12.25)

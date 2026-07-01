@@ -633,6 +633,7 @@ public class VescBleModule: Module {
       "tempMosfet": tempMosfet,
       "tempMotor": tempMotor,
       "avgLatency": 12.0,
+      "pullRateHz": 20.0,
       "lastPacketAt": Date().timeIntervalSince1970 * 1000.0,
       "location": nil,
       "generation": sessionGeneration,

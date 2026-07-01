@@ -1,6 +1,7 @@
 import {
   ClockCountdownIcon,
   LinkBreakIcon,
+  PauseIcon,
   PlugsConnectedIcon,
   StopIcon,
   WarningCircleIcon,
@@ -17,6 +18,7 @@ export interface SelectedHistoryMarker {
 
 export const HISTORY_MARKER_LABELS: Record<HistoryMarker['type'], string> = {
   app_stop: 'Recording stopped',
+  auto_pause: 'Recording paused — idle',
   connected: 'Board connected',
   connection_lost: 'Board connection lost',
   disconnected: 'Board disconnected',
@@ -26,6 +28,7 @@ export const HISTORY_MARKER_LABELS: Record<HistoryMarker['type'], string> = {
 
 export const HISTORY_MARKER_ICONS: Record<HistoryMarker['type'], Icon> = {
   app_stop: StopIcon,
+  auto_pause: PauseIcon,
   connected: PlugsConnectedIcon,
   connection_lost: LinkBreakIcon,
   disconnected: LinkBreakIcon,
@@ -35,6 +38,7 @@ export const HISTORY_MARKER_ICONS: Record<HistoryMarker['type'], Icon> = {
 
 export const HISTORY_MARKER_COLORS: Record<HistoryMarker['type'], string> = {
   app_stop: theme.palette.yellow.color,
+  auto_pause: theme.status.warning.color,
   connected: theme.palette.green.color,
   connection_lost: theme.status.warning.color,
   disconnected: theme.status.warning.color,

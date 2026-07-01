@@ -6,7 +6,7 @@ import kotlin.math.abs
 internal const val IDLE_PAUSE_POLL_INTERVAL_MS = 1_000L
 
 /** Continuous non-moving time before a Ride Recording enters an Idle Pause. */
-internal const val DEFAULT_IDLE_PAUSE_AFTER_MS = 30_000L
+internal const val DEFAULT_IDLE_PAUSE_AFTER_MS = 180_000L
 
 internal enum class IdlePauseTransition { Paused, Resumed }
 
