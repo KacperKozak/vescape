@@ -1,4 +1,5 @@
-import { Alert, Platform, ScrollView, StyleSheet, Switch } from 'react-native'
+import { useState } from 'react'
+import { Alert, Linking, Platform, ScrollView, StyleSheet, Switch } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
   BluetoothConnectedIcon,
@@ -12,7 +13,9 @@ import { theme } from '@/constants/theme'
 import { SettingsCard } from '@/components/ui/settings/SettingsCard'
 import { SettingsRow } from '@/components/ui/settings/SettingsRow'
 import { IconHero } from '@/components/ui/settings/IconHero'
+import { ConfirmModal } from '@/components/ui/modals/ConfirmModal'
 import { useSettingsStore } from '@/store/settingsStore'
+import { ensureBackgroundLocation, hasBackgroundLocation } from '@/hooks/usePermissions'
 
 export default function ConnectionSettingsScreen() {
   const {
@@ -33,6 +36,41 @@ export default function ConnectionSettingsScreen() {
     })),
   )
 
+  const [bgLocationPrompt, setBgLocationPrompt] = useState(false)
+
+  const enableCompanion = () =>
+    setCompanionPresence(true).catch((error) => {
+      console.warn('Companion presence toggle failed', error)
+      Alert.alert(
+        'Auto start app',
+        error instanceof Error ? error.message : 'Could not enable auto start',
+      )
+    })
+
+  const onCompanionToggle = async (next: boolean) => {
+    if (!next) {
+      void setCompanionPresence(false)
+      return
+    }
+    // Hands-off auto-start records GPS only with "Allow all the time": the OS starts the service
+    // from the background and withholds while-in-use location. Explain why before any grant attempt.
+    if (await hasBackgroundLocation()) {
+      void enableCompanion()
+    } else {
+      setBgLocationPrompt(true)
+    }
+  }
+
+  const onBgLocationConfirm = async () => {
+    setBgLocationPrompt(false)
+    // Android 10 grants inline; Android 11+ removed the dialog, so fall back to Settings.
+    if (await ensureBackgroundLocation()) {
+      void enableCompanion()
+    } else {
+      Linking.openSettings()
+    }
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
@@ -50,15 +88,7 @@ export default function ConnectionSettingsScreen() {
               right={
                 <Switch
                   value={companionPresenceEnabled}
-                  onValueChange={(v) => {
-                    void setCompanionPresence(v).catch((error) => {
-                      console.warn('Companion presence toggle failed', error)
-                      Alert.alert(
-                        'Auto start app',
-                        error instanceof Error ? error.message : 'Could not enable auto start',
-                      )
-                    })
-                  }}
+                  onValueChange={(v) => void onCompanionToggle(v)}
                   trackColor={{ false: theme.palette.slate.border, true: theme.palette.sky.border }}
                   thumbColor={
                     companionPresenceEnabled
@@ -132,6 +162,19 @@ export default function ConnectionSettingsScreen() {
           />
         </SettingsCard>
       </ScrollView>
+      <ConfirmModal
+        visible={bgLocationPrompt}
+        title="Allow location all the time"
+        message={
+          'Auto start wakes the app and records your ride while the phone is in your pocket. ' +
+          'Android only sends GPS to a background-started app when location is set to “Allow all ' +
+          'the time”. Without it, these rides have no GPS track.'
+        }
+        confirmLabel="Continue"
+        cancelLabel="Not now"
+        onConfirm={onBgLocationConfirm}
+        onCancel={() => setBgLocationPrompt(false)}
+      />
     </SafeAreaView>
   )
 }

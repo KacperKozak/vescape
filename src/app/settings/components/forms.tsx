@@ -3,6 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useCallback, useMemo, useState } from 'react'
 
 import { ListIcon } from 'phosphor-react-native'
+import { ColorPicker } from '@/components/ui/forms/ColorPicker'
 import { Dropdown, useTriggerRef } from '@/components/ui/forms/Dropdown'
 import { IconHero } from '@/components/ui/settings/IconHero'
 import { Input } from '@/components/ui/forms/Input'
@@ -11,6 +12,7 @@ import { SoundPicker } from '@/components/ui/forms/SoundPicker'
 import { ShowcaseCard } from '@/components/ui/dev/ShowcaseCard'
 import { OpenButton } from '@/components/ui/dev/ShowcaseControls'
 
+import { riderColorOptions } from '@/constants/riderColors'
 import { theme } from '@/constants/theme'
 import type { AlertPreset } from 'vesc-ble'
 
@@ -106,15 +108,25 @@ function SoundPickerShowcase() {
   )
 }
 
+function ColorPickerShowcase() {
+  const [color, setColor] = useState<string | null>(riderColorOptions[0] ?? null)
+  return (
+    <ShowcaseCard name="ColorPicker">
+      <ColorPicker value={color} colors={riderColorOptions} onChange={setColor} />
+    </ShowcaseCard>
+  )
+}
+
 export default function FormsPage() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
-        <IconHero icon={ListIcon} description="Select, Dropdown, Stepper, SoundPicker." />
+        <IconHero icon={ListIcon} description="Select, Dropdown, ColorPicker, SoundPicker." />
         <InputShowcase />
         <TextareaShowcase />
         <SelectShowcase />
         <DropdownShowcase />
+        <ColorPickerShowcase />
         <SoundPickerShowcase />
       </ScrollView>
     </SafeAreaView>

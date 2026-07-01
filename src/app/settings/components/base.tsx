@@ -11,6 +11,7 @@ import {
   PackageIcon,
   PlugIcon,
   TrashIcon,
+  UsersThreeIcon,
 } from 'phosphor-react-native'
 
 import { Banner } from '@/components/ui/base/Banner'
@@ -29,6 +30,7 @@ import { theme } from '@/constants/theme'
 function IconButtonShowcase() {
   const [loading, setLoading] = useState(false)
   const [disabled, setDisabled] = useState(false)
+  const [dot, setDot] = useState(true)
 
   return (
     <ShowcaseCard
@@ -37,6 +39,7 @@ function IconButtonShowcase() {
         <>
           <ToggleRow label="loading" value={loading} onToggle={setLoading} />
           <ToggleRow label="disabled" value={disabled} onToggle={setDisabled} />
+          <ToggleRow label="dot" value={dot} onToggle={setDot} />
         </>
       }
     >
@@ -68,6 +71,25 @@ function IconButtonShowcase() {
             icon={TrashIcon}
             size="lg"
             destructive
+            onPress={() => {}}
+            loading={loading}
+            disabled={disabled}
+          />
+        </View>
+        <View style={{ gap: 8, alignItems: 'center' }}>
+          <IconButton
+            icon={UsersThreeIcon}
+            dot={dot ? theme.palette.groupRide.color : undefined}
+            accessibilityLabel="Nearby ride"
+            onPress={() => {}}
+            loading={loading}
+            disabled={disabled}
+          />
+          <IconButton
+            icon={UsersThreeIcon}
+            size="lg"
+            dot={dot ? theme.palette.groupRide.color : undefined}
+            accessibilityLabel="Nearby ride"
             onPress={() => {}}
             loading={loading}
             disabled={disabled}

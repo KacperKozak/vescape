@@ -35,6 +35,7 @@ import { isMapPointKindVisible } from '@/lib/mapPointVisibility'
 import type { HistoryMetricKey } from '@/lib/history/metricColorScale'
 import { getNavigationFallbackReason } from '@/lib/map/navigationDiagnostics'
 import type { HistoryGpsSample, HistoryMarker, TelemetrySample } from '@/store/historyStore'
+import { useGroupRideStore } from '@/store/groupRideStore'
 import { useNavigationDiagnosticsStore } from '@/store/navigationDiagnosticsStore'
 import { useSettingsStore } from '@/store/settingsStore'
 
@@ -418,6 +419,8 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
       ? phoneHeadingDeg
       : directionBearingDeg
   const updateNavigationDiagnostics = useNavigationDiagnosticsStore((s) => s.update)
+  const riderFocusRequest = useGroupRideStore((s) => s.focusRequest)
+  const riderFocusRows = useGroupRideStore((s) => s.rosterRows)
 
   const handleMapLayout = useCallback((event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout
@@ -427,6 +430,22 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
         : { width, height },
     )
   }, [])
+
+  useEffect(() => {
+    if (!riderFocusRequest || historyActive) return
+    const rider = riderFocusRows.find((row) => row.id === riderFocusRequest.riderId)
+    if (!rider?.presence) return
+    setFollowGps(false)
+    const current = currentCameraRef.current
+    cameraRef.current?.setCamera({
+      centerCoordinate: [rider.presence.lng, rider.presence.lat],
+      zoomLevel: Math.max(current?.zoomLevel ?? MAP_DEFAULTS.persistedGpsFallbackZoom, 15),
+      heading: current?.heading,
+      pitch: current?.pitch,
+      animationDuration: MAP_DEFAULTS.animationDuration,
+      animationMode: 'easeTo',
+    })
+  }, [cameraRef, currentCameraRef, historyActive, riderFocusRequest, riderFocusRows, setFollowGps])
 
   const updateOffscreenMapIndicators = useCallback(() => {
     const camera = currentCameraRef.current

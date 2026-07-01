@@ -370,6 +370,9 @@ data class AppSettings(
   val telemetryPollRateHz: Int = 20,
   val wearMirrorIntervalMs: Int = 500,
   val companionPresenceEnabled: Boolean = false,
+  val riderId: String? = null,
+  val riderName: String? = null,
+  val riderColor: String? = null,
 )
 
 @Entity(

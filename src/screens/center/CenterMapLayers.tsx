@@ -4,12 +4,14 @@ import {
   FillLayer,
   Images,
   LineLayer,
+  MarkerView,
   RasterLayer,
   RasterSource,
   ShapeSource,
   SymbolLayer,
 } from '@rnmapbox/maps'
 import { useEffect, useMemo, useState } from 'react'
+import { StyleSheet, Text, View } from 'react-native'
 import type { MapPoint, MapPointKind } from 'vesc-ble'
 
 import { MediaHistoryPin } from '@/components/domain/history/MediaHistoryPin'
@@ -35,6 +37,7 @@ import {
 import type { HistoryMetricKey } from '@/lib/history/metricColorScale'
 import { isMapPointKindVisible } from '@/lib/mapPointVisibility'
 import type { HistoryGpsSample, HistoryMarker, TelemetrySample } from '@/store/historyStore'
+import { useGroupRideStore } from '@/store/groupRideStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { useCenterScreenStore } from '@/screens/center/centerScreenStore'
 
@@ -59,6 +62,13 @@ const GPS_HEADING_ICON_ID = 'center-gps-heading'
 const GPS_HEADING_ICON = require('@rnmapbox/maps/src/assets/heading.png')
 const HISTORY_ROUTE_HIGHLIGHT_INTERVAL_MS = 50
 const HISTORY_ROUTE_HIGHLIGHT_DELAY_MS = 500
+const RIDER_COLORS = [
+  theme.palette.cyan.color,
+  theme.palette.green.color,
+  theme.palette.amber.color,
+  theme.palette.fuchsia.color,
+  theme.palette.sky.color,
+]
 
 interface CenterMapLayersProps {
   historyActive: boolean
@@ -106,6 +116,7 @@ function LiveMapLayers({
   accuracyShape: CenterMapLayersProps['accuracyShape']
   gpsPuckBearingDeg: CenterMapLayersProps['gpsPuckBearingDeg']
 }) {
+  const riders = useGroupRideStore((s) => s.rosterRows)
   const gpsPuckShape = useMemo(
     () =>
       accuracyFix && gpsPuckBearingDeg != null
@@ -197,7 +208,41 @@ function LiveMapLayers({
           )}
         </>
       )}
+      {riders.map((rider, index) =>
+        rider.presence ? <RiderPresencePin key={rider.id} rider={rider} index={index} /> : null,
+      )}
     </>
+  )
+}
+
+function RiderPresencePin({
+  rider,
+  index,
+}: {
+  rider: ReturnType<typeof useGroupRideStore.getState>['rosterRows'][number]
+  index: number
+}) {
+  const color = rider.stale
+    ? theme.palette.slate.textMuted
+    : (rider.color ?? RIDER_COLORS[index % RIDER_COLORS.length])
+  const heading = rider.presence?.heading ?? null
+  if (!rider.presence) return null
+
+  return (
+    <MarkerView coordinate={[rider.presence.lng, rider.presence.lat]} allowOverlap>
+      <View style={styles.riderMarker}>
+        <View style={[styles.riderDot, { backgroundColor: color }]}>
+          {heading != null && (
+            <View style={[styles.riderHeading, { transform: [{ rotate: `${heading}deg` }] }]}>
+              <View style={[styles.riderHeadingNeedle, { backgroundColor: color }]} />
+            </View>
+          )}
+        </View>
+        <Text style={[styles.riderLabel, rider.stale && styles.riderLabelStale]} numberOfLines={1}>
+          {rider.name || 'Rider'}
+        </Text>
+      </View>
+    </MarkerView>
   )
 }
 
@@ -499,3 +544,43 @@ export function CenterMapLayers({
     </>
   )
 }
+
+const styles = StyleSheet.create({
+  riderMarker: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  riderDot: {
+    width: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+  },
+  riderHeading: {
+    position: 'absolute',
+    top: -11,
+    width: 3,
+    height: 12,
+    alignItems: 'center',
+  },
+  riderHeadingNeedle: {
+    width: 3,
+    height: 12,
+    borderRadius: 2,
+  },
+  riderLabel: {
+    maxWidth: 96,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+    overflow: 'hidden',
+    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
+    color: theme.palette.slate.textPrimary,
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  riderLabelStale: {
+    color: theme.palette.slate.textMuted,
+  },
+})

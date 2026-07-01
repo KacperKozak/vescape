@@ -124,6 +124,18 @@ _Avoid_: Option, config
 An app-observed abnormal condition that helps explain board connection, telemetry, tuning, recording, or UI failures.
 _Avoid_: Error log, debug session, crash report
 
+**Group Ride**:
+A live, ephemeral, server-relayed room of **Riders** sharing **Rider Presence** so they can see each other on the live map while riding together. It has no owner and lives only while at least one Rider is present; the server reaps it when empty. Network-backed and multi-device — the first app concept that is not local-only truth. Strictly distinct from a **Ride Recording** (each Rider may still make their own private Ride Recording during a Group Ride) and from **Ride History**.
+_Avoid_: Group session, room, party, ride session, group ride recording
+
+**Rider**:
+An anonymous participant in **Group Rides**, identified by a persistent device-generated id plus a rider-chosen display name. Carries no login, account, or server-side identity record, and is not a **Board**. The same person on two phones is two Riders.
+_Avoid_: User, account, member, profile, friend
+
+**Rider Presence**:
+A **Rider's** live shared snapshot within a **Group Ride**: location and heading from the phone **GPS Fix**, plus optional speed and **Battery SoC Estimate** when a **Board Session** is live. Ephemeral and server-relayed, never persisted on phone or server, suppressed while the Rider is inside a **Privacy Zone**. A Rider with no recent Rider Presence goes stale, then drops from the Group Ride.
+_Avoid_: Position update, presence ping, location share, group telemetry
+
 ## Relationships
 
 - A **Board** has at most one **Board Link**; absence means the Board is offline-only or not yet linked.
@@ -153,6 +165,10 @@ _Avoid_: Error log, debug session, crash report
 - A **Watch Alert** is pushed when an **Alert Rule** fires on the phone and does not re-evaluate any threshold on the **Watch Mirror**.
 - An **App Setting** affects app behavior and is not part of a **Tune Profile** or **Board** identity.
 - A **Diagnostic Event** may describe failures around a **Board**, **Live State**, **Telemetry Sample**, **Ride Recording**, or **Tune Profile** workflow.
+- A **Group Ride** contains zero or more **Riders** and exists only while at least one **Rider** is present; it owns no durable truth and is never written to **Ride History**.
+- A **Rider** may be in at most one **Group Ride** at a time and is identified independently of any **Board**.
+- A **Rider Presence** belongs to one **Rider** in one **Group Ride**, derives location from a **GPS Fix** and optional speed/**Battery SoC Estimate** from a live **Board Session**, and is not produced while the Rider is inside a **Privacy Zone**.
+- A **Group Ride** requires only a phone **GPS Fix** to join; a **Board Session** is optional and only enriches a **Rider Presence**, never gates it.
 
 ## Example Dialogue
 
@@ -179,3 +195,5 @@ _Avoid_: Error log, debug session, crash report
 - "save area" or "safe area" may mean a privacy boundary around home or work; resolved term: use **Privacy Zone**.
 - "smoother" is avoided in the raw-telemetry layer (see **Metric Sanitizer**) but is legitimate for the **Battery SoC Estimate**, a processed derived value that smooths the percentage only — never the raw voltage **Telemetry Sample**.
 - "pause" may mean stopping the **Board Session** versus temporarily halting sample persistence; resolved: **Idle Pause** halts **Ride Recording** sample persistence only — the **Board Session** stays connected and live at a reduced poll rate.
+- "ride" may mean a personal persisted capture or a live shared room; resolved terms: use **Ride Recording** for the local persisted capture and **Group Ride** for the live shared room. The two are independent — a Rider can do either, both, or neither.
+- "presence" / "location share" may mean a one-off map dot or the live group feed; resolved term: use **Rider Presence** for what a **Rider** shares into a **Group Ride**.
