@@ -4,12 +4,14 @@ import { router } from 'expo-router'
 import {
   ChartLineUpIcon,
   ListIcon,
+  MapTrifoldIcon,
   SwatchesIcon,
   ToolboxIcon,
   CloudMoonIcon,
   CubeIcon,
   GearSixIcon,
   SquaresFourIcon,
+  StackIcon,
 } from 'phosphor-react-native'
 
 import { SettingsCard } from '@/components/ui/settings/SettingsCard'
@@ -33,13 +35,13 @@ const sections = [
   },
   {
     label: 'Forms',
-    hint: 'Select, Dropdown, Stepper, SoundPicker',
+    hint: 'Select, Dropdown, ColorPicker, Stepper, SoundPicker',
     route: '/settings/components/forms',
     icon: ListIcon,
   },
   {
     label: 'Modals',
-    hint: 'ConfirmModal, InfoModal, TextPromptModal',
+    hint: 'ConfirmModal, InfoModal, TextPromptModal, CornerSheet',
     route: '/settings/components/modals',
     icon: SquaresFourIcon,
   },
@@ -48,6 +50,12 @@ const sections = [
     hint: 'CircleButton, FloatingBar, PrevNextSelector, PillSelector, MapOptionSelector',
     route: '/settings/components/controls',
     icon: SwatchesIcon,
+  },
+  {
+    label: 'Widgets',
+    hint: 'InputWidget, LinkWidget, SwitchWidget, DialWidget, CanvasWidget',
+    route: '/settings/components/widgets',
+    icon: StackIcon,
   },
   {
     label: 'Settings',
@@ -66,6 +74,12 @@ const sections = [
     hint: 'WeatherIcon, WeatherStat, WeatherPill, WeatherHourlyStrip',
     route: '/settings/components/weather',
     icon: CloudMoonIcon,
+  },
+  {
+    label: 'Map',
+    hint: 'Map pins, routes, riders, weather radar, buildings — all layers, live controls',
+    route: '/settings/components/map',
+    icon: MapTrifoldIcon,
   },
 ]
 

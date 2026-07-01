@@ -77,6 +77,14 @@ class VescBleModule : Module() {
       "onLocation",
       "onTelemetryRebuildProgress",
       "onBoardProbeProgress",
+      "onGroupRideConnection",
+      "onGroupRideSnapshot",
+      "onGroupRideCreated",
+      "onGroupRideUpdated",
+      "onGroupRideEnded",
+      "onGroupRideJoined",
+      "onGroupRideRoster",
+      "onGroupRideError",
     )
 
     OnStartObserving("onDevice") { startObserving("onDevice") }
@@ -99,6 +107,22 @@ class VescBleModule : Module() {
     OnStopObserving("onTelemetryRebuildProgress") { stopObserving("onTelemetryRebuildProgress") }
     OnStartObserving("onBoardProbeProgress") { startObserving("onBoardProbeProgress") }
     OnStopObserving("onBoardProbeProgress") { stopObserving("onBoardProbeProgress") }
+    OnStartObserving("onGroupRideConnection") { startObserving("onGroupRideConnection") }
+    OnStopObserving("onGroupRideConnection") { stopObserving("onGroupRideConnection") }
+    OnStartObserving("onGroupRideSnapshot") { startObserving("onGroupRideSnapshot") }
+    OnStopObserving("onGroupRideSnapshot") { stopObserving("onGroupRideSnapshot") }
+    OnStartObserving("onGroupRideCreated") { startObserving("onGroupRideCreated") }
+    OnStopObserving("onGroupRideCreated") { stopObserving("onGroupRideCreated") }
+    OnStartObserving("onGroupRideUpdated") { startObserving("onGroupRideUpdated") }
+    OnStopObserving("onGroupRideUpdated") { stopObserving("onGroupRideUpdated") }
+    OnStartObserving("onGroupRideEnded") { startObserving("onGroupRideEnded") }
+    OnStopObserving("onGroupRideEnded") { stopObserving("onGroupRideEnded") }
+    OnStartObserving("onGroupRideJoined") { startObserving("onGroupRideJoined") }
+    OnStopObserving("onGroupRideJoined") { stopObserving("onGroupRideJoined") }
+    OnStartObserving("onGroupRideRoster") { startObserving("onGroupRideRoster") }
+    OnStopObserving("onGroupRideRoster") { stopObserving("onGroupRideRoster") }
+    OnStartObserving("onGroupRideError") { startObserving("onGroupRideError") }
+    OnStopObserving("onGroupRideError") { stopObserving("onGroupRideError") }
 
     OnActivityEntersForeground {
       frontendActive = true
@@ -124,6 +148,24 @@ class VescBleModule : Module() {
     Function("exitApp") { VescForegroundService.exitApp(context.applicationContext) }
     Function("startLocationUpdates") { startLocationUpdates() }
     Function("stopLocationUpdates") { stopLocationUpdates() }
+    Function("startGroupRideObserve") { serverUrl: String ->
+      VescForegroundService.startGroupRideObserve(context.applicationContext, serverUrl)
+    }
+    Function("stopGroupRideObserve") {
+      VescForegroundService.stopGroupRideObserve(context.applicationContext)
+    }
+    Function("createGroupRide") { riderId: String, riderName: String, riderColor: String?, name: String?, lat: Double, lng: Double ->
+      VescForegroundService.createGroupRide(context.applicationContext, riderId, riderName, riderColor, name, lat, lng)
+    }
+    Function("joinGroupRide") { riderId: String, riderName: String, riderColor: String?, rideId: String ->
+      VescForegroundService.joinGroupRide(context.applicationContext, riderId, riderName, riderColor, rideId)
+    }
+    Function("leaveGroupRide") {
+      VescForegroundService.leaveGroupRide(context.applicationContext)
+    }
+    Function("updateGroupRideIdentity") { riderId: String, riderName: String, riderColor: String? ->
+      VescForegroundService.updateGroupRideIdentity(context.applicationContext, riderId, riderName, riderColor)
+    }
     Function("setTelemetryRecordingEnabled") { enabled: Boolean -> setTelemetryRecordingEnabled(enabled) }
     Function("reloadAlertRules") {
       VescForegroundService.reloadAlertRules(context.applicationContext)
@@ -617,6 +659,8 @@ class VescBleModule : Module() {
   private suspend fun reloadPrivacyZonesIntoRecorder(appContext: Context) {
     val zones = AppDataRepository.get(appContext).getEnabledPrivacyZoneEntities()
     TelemetryRepository.get(appContext).reloadPrivacyZones(zones)
+    // Keep the Group Ride presence egress gate (issue #144) in sync with the same zones.
+    VescForegroundService.reloadPrivacyZones(appContext)
   }
 
   private fun setTelemetryRecordingEnabled(enabled: Boolean) {

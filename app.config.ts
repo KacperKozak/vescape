@@ -76,6 +76,7 @@ const config: ExpoConfig = {
       },
     ],
     'expo-video',
+    'expo-image',
     './plugins/withGradleJvmArgs',
     './plugins/withWearMirror',
   ],

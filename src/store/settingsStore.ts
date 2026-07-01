@@ -21,6 +21,9 @@ const DEFAULTS: AppSettings = {
   companionPresenceEnabled: false,
   telemetryPollRateHz: 20,
   wearMirrorIntervalMs: 500,
+  riderId: null,
+  riderName: null,
+  riderColor: null,
 }
 
 interface SettingsState extends AppSettings {

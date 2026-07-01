@@ -4,12 +4,14 @@ import {
   FillLayer,
   Images,
   LineLayer,
+  MarkerView,
   RasterLayer,
   RasterSource,
   ShapeSource,
   SymbolLayer,
 } from '@rnmapbox/maps'
 import { useEffect, useMemo, useState } from 'react'
+import { StyleSheet, Text, View } from 'react-native'
 import type { MapPoint, MapPointKind } from 'vesc-ble'
 
 import { MediaHistoryPin } from '@/components/domain/history/MediaHistoryPin'
@@ -32,10 +34,10 @@ import {
   MEDIA_CLUSTER_DISTANCE_M,
   type MediaHistoryAsset,
 } from '@/lib/history/mediaHistory'
-import type { HistoryMetricKey } from '@/lib/history/metricColorScale'
+import type { HistoryMetricKey, HistoryMetricHotRanges } from '@/lib/history/metricColorScale'
 import { isMapPointKindVisible } from '@/lib/mapPointVisibility'
 import type { HistoryGpsSample, HistoryMarker, TelemetrySample } from '@/store/historyStore'
-import { useSettingsStore } from '@/store/settingsStore'
+import type { RosterRider } from '@/lib/groupRide/roster'
 import { useCenterScreenStore } from '@/screens/center/centerScreenStore'
 
 import {
@@ -59,6 +61,13 @@ const GPS_HEADING_ICON_ID = 'center-gps-heading'
 const GPS_HEADING_ICON = require('@rnmapbox/maps/src/assets/heading.png')
 const HISTORY_ROUTE_HIGHLIGHT_INTERVAL_MS = 50
 const HISTORY_ROUTE_HIGHLIGHT_DELAY_MS = 500
+const RIDER_COLORS = [
+  theme.palette.cyan.color,
+  theme.palette.green.color,
+  theme.palette.amber.color,
+  theme.palette.fuchsia.color,
+  theme.palette.sky.color,
+]
 
 interface CenterMapLayersProps {
   historyActive: boolean
@@ -76,6 +85,7 @@ interface CenterMapLayersProps {
   accuracyFix: { longitude: number; latitude: number } | null
   accuracyShape: ReturnType<typeof makeCircleFeature> | null
   gpsPuckBearingDeg: number | null
+  riders: RosterRider[]
   rideRoute: [number, number][]
   rideTelemetrySamples: TelemetrySample[]
   activeHistoryMapMetric: HistoryMetricKey
@@ -83,6 +93,8 @@ interface CenterMapLayersProps {
   rideGpsSamples: HistoryGpsSample[]
   mediaAssets: MediaHistoryAsset[]
   mapZoom: number
+  historyMetricGradientsEnabled: boolean
+  historyMetricHotRanges: HistoryMetricHotRanges
   directionPoint: MapPoint | null
   mapPoints: MapPoint[]
   selectedMapPointId: string | null
@@ -100,11 +112,13 @@ function LiveMapLayers({
   accuracyFix,
   accuracyShape,
   gpsPuckBearingDeg,
+  riders,
 }: {
   liveTrailShape: CenterMapLayersProps['liveTrailShape']
   accuracyFix: CenterMapLayersProps['accuracyFix']
   accuracyShape: CenterMapLayersProps['accuracyShape']
   gpsPuckBearingDeg: CenterMapLayersProps['gpsPuckBearingDeg']
+  riders: CenterMapLayersProps['riders']
 }) {
   const gpsPuckShape = useMemo(
     () =>
@@ -197,7 +211,35 @@ function LiveMapLayers({
           )}
         </>
       )}
+      {riders.map((rider, index) =>
+        rider.presence ? <RiderPresencePin key={rider.id} rider={rider} index={index} /> : null,
+      )}
     </>
+  )
+}
+
+function RiderPresencePin({ rider, index }: { rider: RosterRider; index: number }) {
+  const color = rider.stale
+    ? theme.palette.slate.textMuted
+    : (rider.color ?? RIDER_COLORS[index % RIDER_COLORS.length])
+  const heading = rider.presence?.heading ?? null
+  if (!rider.presence) return null
+
+  return (
+    <MarkerView coordinate={[rider.presence.lng, rider.presence.lat]} allowOverlap>
+      <View style={styles.riderMarker}>
+        <View style={[styles.riderDot, { backgroundColor: color }]}>
+          {heading != null && (
+            <View style={[styles.riderHeading, { transform: [{ rotate: `${heading}deg` }] }]}>
+              <View style={[styles.riderHeadingNeedle, { backgroundColor: color }]} />
+            </View>
+          )}
+        </View>
+        <Text style={[styles.riderLabel, rider.stale && styles.riderLabelStale]} numberOfLines={1}>
+          {rider.name || 'Rider'}
+        </Text>
+      </View>
+    </MarkerView>
   )
 }
 
@@ -221,7 +263,7 @@ function SeekPositionPin({ rideGpsSamples }: { rideGpsSamples: HistoryGpsSample[
   )
 }
 
-function HistoryMapLayers({
+export function HistoryMapLayers({
   rideRouteShape,
   rideRoute,
   rideTelemetrySamples,
@@ -230,6 +272,8 @@ function HistoryMapLayers({
   rideGpsSamples,
   mediaAssets,
   mapZoom,
+  historyMetricGradientsEnabled: gradientsEnabled,
+  historyMetricHotRanges: hotRanges,
   onSuppressNextMapPress,
   onSelectMarker,
   onOpenMedia,
@@ -242,6 +286,8 @@ function HistoryMapLayers({
   rideGpsSamples: CenterMapLayersProps['rideGpsSamples']
   mediaAssets: CenterMapLayersProps['mediaAssets']
   mapZoom: CenterMapLayersProps['mapZoom']
+  historyMetricGradientsEnabled: CenterMapLayersProps['historyMetricGradientsEnabled']
+  historyMetricHotRanges: CenterMapLayersProps['historyMetricHotRanges']
   onSuppressNextMapPress: CenterMapLayersProps['onSuppressNextMapPress']
   onSelectMarker: CenterMapLayersProps['onSelectMarker']
   onOpenMedia: CenterMapLayersProps['onOpenMedia']
@@ -275,8 +321,6 @@ function HistoryMapLayers({
     () => getHistoryRouteHighlightGradient(highlightProgress),
     [highlightProgress],
   )
-  const gradientsEnabled = useSettingsStore((s) => s.historyMetricGradientsEnabled)
-  const hotRanges = useSettingsStore((s) => s.historyMetricHotRanges)
   const routeMetricGradient = useMemo(
     () =>
       getHistoryRouteMetricGradient({
@@ -379,6 +423,7 @@ export function CenterMapLayers({
   accuracyFix,
   accuracyShape,
   gpsPuckBearingDeg,
+  riders,
   rideRoute,
   rideTelemetrySamples,
   activeHistoryMapMetric,
@@ -386,6 +431,8 @@ export function CenterMapLayers({
   rideGpsSamples,
   mediaAssets,
   mapZoom,
+  historyMetricGradientsEnabled,
+  historyMetricHotRanges,
   directionPoint,
   mapPoints,
   selectedMapPointId,
@@ -444,6 +491,8 @@ export function CenterMapLayers({
           rideGpsSamples={rideGpsSamples}
           mediaAssets={mediaAssets}
           mapZoom={mapZoom}
+          historyMetricGradientsEnabled={historyMetricGradientsEnabled}
+          historyMetricHotRanges={historyMetricHotRanges}
           onSuppressNextMapPress={onSuppressNextMapPress}
           onSelectMarker={onSelectMarker}
           onOpenMedia={onOpenMedia}
@@ -454,6 +503,7 @@ export function CenterMapLayers({
           accuracyFix={accuracyFix}
           accuracyShape={accuracyShape}
           gpsPuckBearingDeg={gpsPuckBearingDeg}
+          riders={riders}
         />
       )}
       {directionPoint && !historyActive && (
@@ -499,3 +549,43 @@ export function CenterMapLayers({
     </>
   )
 }
+
+const styles = StyleSheet.create({
+  riderMarker: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  riderDot: {
+    width: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+  },
+  riderHeading: {
+    position: 'absolute',
+    top: -11,
+    width: 3,
+    height: 12,
+    alignItems: 'center',
+  },
+  riderHeadingNeedle: {
+    width: 3,
+    height: 12,
+    borderRadius: 2,
+  },
+  riderLabel: {
+    maxWidth: 96,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+    overflow: 'hidden',
+    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
+    color: theme.palette.slate.textPrimary,
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  riderLabelStale: {
+    color: theme.palette.slate.textMuted,
+  },
+})

@@ -68,6 +68,10 @@ _Avoid_: Telemetry marker, debug marker, log point
 The span of a Ride Recording from its first to its last moving Telemetry Sample — the part the rider treats as actual riding. A Telemetry Sample counts as moving when it is not excluded from speed metrics (so low-speed and free-spin samples do not count). Leading and trailing non-moving spans fall outside the Moving Window; internal stops (photos, cooldown) stay inside it. Drives history-timeline trimming and the moving ride time shown in stats. A Ride Recording with no moving samples has no Moving Window and is not shown in Ride History; legacy recordings with an unknown Moving Window fall back to their full wall-clock span.
 _Avoid_: Trim range, active range, ride duration
 
+**Idle Pause**:
+A temporary state of a Ride Recording in which sample persistence halts because the Board has produced no moving Telemetry Sample for a sustained interval, while the Board Session stays live at a reduced poll rate and auto-resumes on the next moving sample. Cuts battery, stored frames, and bucket sample counts together while the board is parked.
+_Avoid_: Stop recording, auto-stop, sleep, parked mode
+
 **Media History Asset**:
 A phone photo or video whose capture time falls inside a selected Ride Recording and which can be placed using a nearby recording-backed GPS fix. The asset remains owned by the OS photo library and is never copied into Ride History.
 _Avoid_: Ride photo, recording media, uploaded media
@@ -136,6 +140,18 @@ _Avoid_: Option, config
 An app-observed abnormal condition that helps explain board connection, telemetry, tuning, recording, or UI failures.
 _Avoid_: Error log, debug session, crash report
 
+**Group Ride**:
+A live, ephemeral, server-relayed room of **Riders** sharing **Rider Presence** so they can see each other on the live map while riding together. It has no owner and lives only while at least one Rider is present; the server reaps it when empty. Network-backed and multi-device — the first app concept that is not local-only truth. Strictly distinct from a **Ride Recording** (each Rider may still make their own private Ride Recording during a Group Ride) and from **Ride History**.
+_Avoid_: Group session, room, party, ride session, group ride recording
+
+**Rider**:
+An anonymous participant in **Group Rides**, identified by a persistent device-generated id plus a rider-chosen display name. Carries no login, account, or server-side identity record, and is not a **Board**. The same person on two phones is two Riders.
+_Avoid_: User, account, member, profile, friend
+
+**Rider Presence**:
+A **Rider's** live shared snapshot within a **Group Ride**: location and heading from the phone **GPS Fix**, plus optional speed and **Battery SoC Estimate** when a **Board Session** is live. Ephemeral and server-relayed, never persisted on phone or server, suppressed while the Rider is inside a **Privacy Zone**. A Rider with no recent Rider Presence goes stale, then drops from the Group Ride.
+_Avoid_: Position update, presence ping, location share, group telemetry
+
 ## Relationships
 
 - A **Board** has at most one **Board Link**; absence means the Board is offline-only or not yet linked.
@@ -162,6 +178,7 @@ _Avoid_: Error log, debug session, crash report
 - A **Ride Recording** becomes part of **Ride History**.
 - A **Moving Window** belongs to one **Ride Recording** and is derived from which **Telemetry Samples** are excluded from speed metrics; a Ride Recording without one is excluded from **Ride History**.
 - A **Ride History Marker** belongs to **Ride History** and may explain where a **Ride Recording** lost or regained board data.
+- An **Idle Pause** belongs to one **Ride Recording**, begins after a sustained absence of moving **Telemetry Samples**, keeps the **Board Session** live at a reduced poll rate, and produces a **Ride History Marker**; its sample gap stays inside the **Moving Window** (and counts toward ride time) when it occurs between two moving spans.
 - A **Media History Asset** is a local-only view of an OS photo-library asset matched to one selected **Ride Recording** by capture time and placed from a nearby recording-backed **GPS Fix**.
 - A **Tune Snapshot** belongs to the currently connected **Board** and is read-only.
 - A **Tune Profile** belongs to a **Board** and stores semantic field values independently of firmware schema.
@@ -173,6 +190,10 @@ _Avoid_: Error log, debug session, crash report
 - A **Watch Alert** is pushed when an **Alert Rule** fires on the phone and does not re-evaluate any threshold on the **Watch Mirror**.
 - An **App Setting** affects app behavior and is not part of a **Tune Profile** or **Board** identity.
 - A **Diagnostic Event** may describe failures around a **Board**, **Live State**, **Telemetry Sample**, **Ride Recording**, or **Tune Profile** workflow.
+- A **Group Ride** contains zero or more **Riders** and exists only while at least one **Rider** is present; it owns no durable truth and is never written to **Ride History**.
+- A **Rider** may be in at most one **Group Ride** at a time and is identified independently of any **Board**.
+- A **Rider Presence** belongs to one **Rider** in one **Group Ride**, derives location from a **GPS Fix** and optional speed/**Battery SoC Estimate** from a live **Board Session**, and is not produced while the Rider is inside a **Privacy Zone**.
+- A **Group Ride** requires only a phone **GPS Fix** to join; a **Board Session** is optional and only enriches a **Rider Presence**, never gates it.
 
 ## Example Dialogue
 
@@ -202,3 +223,6 @@ _Avoid_: Error log, debug session, crash report
 - "filter" may mean dropping samples, smoothing charts, or excluding implausible values from metrics; resolved term: use **Metric Sanitizer** for metric exclusion that preserves original samples.
 - "save area" or "safe area" may mean a privacy boundary around home or work; resolved term: use **Privacy Zone**.
 - "smoother" is avoided in the raw-telemetry layer (see **Metric Sanitizer**) but is legitimate for the **Battery SoC Estimate**, a processed derived value that smooths the percentage only — never the raw voltage **Telemetry Sample**.
+- "pause" may mean stopping the **Board Session** versus temporarily halting sample persistence; resolved: **Idle Pause** halts **Ride Recording** sample persistence only — the **Board Session** stays connected and live at a reduced poll rate.
+- "ride" may mean a personal persisted capture or a live shared room; resolved terms: use **Ride Recording** for the local persisted capture and **Group Ride** for the live shared room. The two are independent — a Rider can do either, both, or neither.
+- "presence" / "location share" may mean a one-off map dot or the live group feed; resolved term: use **Rider Presence** for what a **Rider** shares into a **Group Ride**.

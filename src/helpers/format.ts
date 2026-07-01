@@ -25,6 +25,23 @@ export function fmtVoltageRange(min: number, max: number): string {
   return `${fmtVoltage(min)}–${fmtVoltage(max)} V`
 }
 
+/** Format a distance in meters as "240 m" below 1 km, else "1.2 km". */
+export function fmtDistance(meters: number): string {
+  if (meters < 1000) return `${Math.round(meters)} m`
+  return `${(meters / 1000).toFixed(1)} km`
+}
+
+/** Compact "time since" label: "12s", "3m", "2h", "5d" from an epoch-ms timestamp. */
+export function fmtSince(timestampMs: number, nowMs = Date.now()): string {
+  const s = Math.max(0, Math.round((nowMs - timestampMs) / 1000))
+  if (s < 60) return `${s}s`
+  const m = Math.floor(s / 60)
+  if (m < 60) return `${m}m`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h`
+  return `${Math.floor(h / 24)}d`
+}
+
 /** Format bytes to human-readable string (B, KB, MB). */
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`

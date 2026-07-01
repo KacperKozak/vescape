@@ -12,6 +12,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import java.io.File
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import expo.modules.vescble.config.ConfigRWEvent
 import expo.modules.vescble.connection.ConnectPhaseTimeout
@@ -33,10 +34,17 @@ import expo.modules.vescble.runtime.postDelayedForSession
 import expo.modules.vescble.telemetry.AppDataRepository
 import expo.modules.vescble.telemetry.AppSettings
 import expo.modules.vescble.telemetry.BatterySocEstimator
+import expo.modules.vescble.telemetry.DEFAULT_MOVING_SPEED_THRESHOLD_CENTI_KMH
+import expo.modules.vescble.telemetry.IDLE_PAUSE_POLL_INTERVAL_MS
+import expo.modules.vescble.telemetry.IdlePauseDetector
+import expo.modules.vescble.telemetry.IdlePauseTransition
 import expo.modules.vescble.telemetry.METRIC_MAX_DUTY
+import expo.modules.vescble.telemetry.PrivacyZoneEntity
 import expo.modules.vescble.telemetry.SocMedianWindow
+import expo.modules.vescble.telemetry.TelemetryCapture
 import expo.modules.vescble.telemetry.TelemetryPipeline
 import expo.modules.vescble.telemetry.TelemetryRepository
+import expo.modules.vescble.telemetry.isInsideAnyPrivacyZone
 import expo.modules.vescble.telemetry.toMetricSanitizerConfig
 
 private const val CHANNEL_ID = "vesc_monitoring_v5"
@@ -63,6 +71,12 @@ internal class BoardSessionController(private val service: VescForegroundService
         isCurrentSession = ::isCurrentBoardSession,
         sendPayloadWithRetry = { payload, session -> sendPayloadWithRetry(payload, session) },
     )
+    // Idle Pause (ADR-0021): while recording a stationary board, throttle polling to ~1 Hz and stop
+    // persisting samples. configuredPollIntervalMs / movingThresholdCentiKmh are cached from settings
+    // so the hot path can flip pacing without re-reading settings.
+    private val idlePauseDetector = IdlePauseDetector()
+    private var configuredPollIntervalMs: Long = 0L
+    private var movingThresholdCentiKmh: Int = DEFAULT_MOVING_SPEED_THRESHOLD_CENTI_KMH
     private val connectionCoordinator = ConnectionCoordinator(
         scheduler = scheduler,
         isCurrentSession = ::isCurrentBoardSession,
@@ -196,6 +210,17 @@ internal class BoardSessionController(private val service: VescForegroundService
             onLocation = ::onLocationUpdated,
         )
     }
+    private val groupRideObserver by lazy {
+        GroupRideObserver(handler = mainHandler, emit = ::emitEvent)
+    }
+
+    /**
+     * Enabled Privacy Zones cached for the Group Ride presence egress gate (issue #144). Refreshed
+     * when observing starts and on zone CRUD; reuses the same geometry as Ride Recording
+     * suppression (ADR-0009 / ADR-0020). Touched off the main thread, so kept @Volatile.
+     */
+    @Volatile
+    private var groupRidePrivacyZones: List<PrivacyZoneEntity> = emptyList()
     private val gattClient by lazy {
         VescGattClient(
             context = service,
@@ -417,7 +442,7 @@ internal class BoardSessionController(private val service: VescForegroundService
         // startForegroundService() requires startForeground() to be called quickly; satisfy it
         // immediately for every service creation, even when we later decide there's no board to
         // auto-connect. The notification will be refreshed once the idle state/selected board is ready.
-        startForeground(ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+        reassertForeground()
     }
 
     /** Caches the selected board name so the idle notification can title it + offer Connect. */
@@ -451,7 +476,7 @@ internal class BoardSessionController(private val service: VescForegroundService
     fun connectCompanionDevice(address: String) {
         if (boardConfig != null) return
         isStoppingService = false
-        startBoardForeground()
+        reassertForeground()
         VescForegroundService.appDataScope.launch {
             val appCtx = service.applicationContext
             val boardId = selectedCompanionBoardId(AppDataRepository.get(appCtx), address)
@@ -523,6 +548,7 @@ internal class BoardSessionController(private val service: VescForegroundService
         }
         alertFeedback.release()
         stopLocationUpdates()
+        groupRideObserver.stop()
         DiagnosticReporter.get(service).flush()
         service.stopForeground(Service.STOP_FOREGROUND_REMOVE)
     }
@@ -530,7 +556,7 @@ internal class BoardSessionController(private val service: VescForegroundService
     val isStopping: Boolean get() = isStoppingService
 
     fun stopIfIdle() {
-        if (boardConfig == null && !gpsMonitor.active) service.stopSelf()
+        if (boardConfig == null && !gpsMonitor.active && !groupRideObserver.active) service.stopSelf()
     }
 
     fun consumePendingStart() {
@@ -550,7 +576,7 @@ internal class BoardSessionController(private val service: VescForegroundService
             return
         }
         stop.onSuccess()
-        if (!gpsMonitor.active) {
+        if (!gpsMonitor.active && !groupRideObserver.active) {
             isStoppingService = true
             service.stopSelf()
         }
@@ -573,6 +599,40 @@ internal class BoardSessionController(private val service: VescForegroundService
         startGpsMonitoring()
     }
 
+    fun consumePendingGroupRideObserve() {
+        val url = VescForegroundService.claimPendingGroupRideUrl() ?: return
+        isStoppingService = false
+        VescForegroundService.appDataScope.launch { loadPrivacyZones(service.applicationContext) }
+        groupRideObserver.start(url)
+        reassertForeground()
+    }
+
+    fun stopGroupRideObserve() {
+        VescForegroundService.pendingGroupRideUrl = null
+        groupRideObserver.stop()
+        if (boardConfig == null && !gpsMonitor.active) {
+            isStoppingService = true
+            service.stopSelf()
+        }
+    }
+
+    fun createGroupRide(riderId: String, riderName: String, riderColor: String?, name: String?, lat: Double, lng: Double) {
+        groupRideObserver.create(riderId, riderName, riderColor, name, lat, lng)
+    }
+
+    fun joinGroupRide(riderId: String, riderName: String, riderColor: String?, rideId: String) {
+        startGpsMonitoring()
+        groupRideObserver.join(riderId, riderName, riderColor, rideId, latestRiderPresence())
+    }
+
+    fun leaveGroupRide() {
+        groupRideObserver.leave()
+    }
+
+    fun updateGroupRideIdentity(riderId: String, riderName: String, riderColor: String?) {
+        groupRideObserver.updateIdentity(riderId, riderName, riderColor)
+    }
+
     fun exitFromNotification() {
         isStoppingService = true
         service.stopForeground(Service.STOP_FOREGROUND_REMOVE)
@@ -588,11 +648,7 @@ internal class BoardSessionController(private val service: VescForegroundService
         gpsError = null
         startLocationUpdates()
         emitState()
-        if (boardConfig == null) {
-            startGpsForeground()
-        } else {
-            presenter.show(reportedBoardPhase())
-        }
+        reassertForeground()
     }
 
     fun stopGpsMonitoring() {
@@ -600,9 +656,11 @@ internal class BoardSessionController(private val service: VescForegroundService
         stopLocationUpdates()
         gpsError = null
         emitState()
-        if (boardConfig == null) {
+        if (boardConfig == null && !groupRideObserver.active) {
             isStoppingService = true
             service.stopSelf()
+        } else {
+            reassertForeground()
         }
     }
 
@@ -646,23 +704,29 @@ internal class BoardSessionController(private val service: VescForegroundService
         recordingCoordinator.beginBoardSession(start.boardConfig)
         startLocationUpdates()
         setStatus(BoardPhase.Connecting)
-        startBoardForeground()
+        reassertForeground()
 
         startBleSession(start)
     }
 
-    private fun startBoardForeground() {
-        startForeground(ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+    /**
+     * Foreground-service type for the *current* live state. Android 14+ withholds background
+     * location from a foreground service whose type omits [ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION],
+     * so the LOCATION bit must be present whenever GPS is running — including during a board
+     * session, where it sits alongside CONNECTED_DEVICE. A single hardcoded type silently starves
+     * GPS recording while the app is backgrounded, so every state change re-asserts this.
+     */
+    private fun foregroundServiceType(): Int {
+        var type = 0
+        if (boardConfig != null) type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+        if (gpsMonitor.active) type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+        return if (type != 0) type else ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
     }
 
-    private fun startGpsForeground() {
-        startForeground(ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION)
-    }
-
-    private fun startForeground(type: Int) {
+    private fun reassertForeground() {
         val notification = presenter.build(reportedBoardPhase())
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            service.startForeground(NOTIFICATION_ID, notification, type)
+            service.startForeground(NOTIFICATION_ID, notification, foregroundServiceType())
         } else {
             service.startForeground(NOTIFICATION_ID, notification)
         }
@@ -894,7 +958,12 @@ internal class BoardSessionController(private val service: VescForegroundService
                 liveSeriesEmitter.enqueueHistorySample(historySample)
                 // First sample of the session also drives the first sparkline frame immediately.
                 liveSeriesEmitter.primeLiveSeriesIfNeeded()
-                recordingCoordinator.recordTelemetry(processed.capture)
+                updateIdlePause(processed.capture)
+                // Skip persistence while paused; live display, watch, and presence keep running off the
+                // paths above. When recording is off, recordTelemetry is already a no-op.
+                if (!idlePauseDetector.isPaused) {
+                    recordingCoordinator.recordTelemetry(processed.capture)
+                }
             }
         }
     }
@@ -950,6 +1019,7 @@ internal class BoardSessionController(private val service: VescForegroundService
                 "poll_interval_ms" to session.pollIntervalMs,
             ),
         )
+        idlePauseDetector.reset()
         pollingLoop.start(session, sessionToken, transport)
         liveSeriesEmitter.start()
         watchMirrorPresence.start()
@@ -960,6 +1030,7 @@ internal class BoardSessionController(private val service: VescForegroundService
 
     private fun stopPolling() {
         pollingLoop.stop()
+        idlePauseDetector.reset()
         telemetryPipeline.cancelStaleWatchdog()
         liveSeriesEmitter.stop()
         watchTick.stop()
@@ -1279,12 +1350,49 @@ internal class BoardSessionController(private val service: VescForegroundService
             return
         }
 
+        resetIdlePause()
         recordingCoordinator.disableTelemetryRecording(session)
         emitState()
     }
 
     private fun onLocationUpdated(location: Location) {
         locationTracker.onLocationUpdated(location)
+        latestRiderPresence()?.let(groupRideObserver::pushPresence)
+    }
+
+    private fun latestRiderPresence(): RiderPresence? {
+        val location = locationTracker.latestPreciseLocation ?: locationTracker.latestLocation ?: return null
+        // Privacy Zone egress gate (issue #144): freeze the group dot while inside a zone. Local GPS
+        // keeps ticking; only the broadcast is suppressed, resuming automatically on exit.
+        if (isInsidePrivacyZone(location)) return null
+        val currentTelemetry = telemetry
+        val telemetryFresh = currentTelemetry != null && !isTelemetryStale()
+        return RiderPresence(
+            lat = location.latitude,
+            lng = location.longitude,
+            heading = location.bearingDeg,
+            speed = if (telemetryFresh) currentTelemetry?.speed?.let { kotlin.math.abs(it) / 3.6 } else null,
+            soc = if (telemetryFresh) latestBatterySoc?.let { (it / 100.0).coerceIn(0.0, 1.0) } else null,
+            boardName = if (boardConfig != null) (boardConfig?.deviceName ?: selectedBoardName) else null,
+        )
+    }
+
+    private fun isInsidePrivacyZone(location: LocationSnapshot): Boolean {
+        val zones = groupRidePrivacyZones
+        if (zones.isEmpty()) return false
+        val latitudeE7 = (location.latitude * 10_000_000.0).roundToInt()
+        val longitudeE7 = (location.longitude * 10_000_000.0).roundToInt()
+        return isInsideAnyPrivacyZone(latitudeE7, longitudeE7, zones)
+    }
+
+    /** Refresh the Group Ride presence zone gate from native storage (observe start + zone CRUD). */
+    suspend fun loadPrivacyZones(context: Context) {
+        groupRidePrivacyZones = try {
+            AppDataRepository.get(context).getEnabledPrivacyZoneEntities()
+        } catch (e: Exception) {
+            Log.w(VESC_SESSION_TAG, "Failed to load privacy zones for presence gate: ${e.message}")
+            emptyList()
+        }
     }
 
     fun liveStateMap(includeRecent: Boolean = false): Map<String, Any?> {
@@ -1309,6 +1417,7 @@ internal class BoardSessionController(private val service: VescForegroundService
                 recentLocations = recentLocationsValue,
                 gpsError = gpsError,
                 recordingEnabled = recordingCoordinator.telemetryRecordingEnabled,
+                recordingPaused = idlePauseDetector.isPaused,
                 remoteTiltValue = remoteTiltController.currentValue,
                 remoteTiltPhase = remoteTiltController.phase,
                 remoteTiltDecay = remoteTiltController.decayProgress,
@@ -1377,8 +1486,41 @@ internal class BoardSessionController(private val service: VescForegroundService
         recordingCoordinator.applySettings(settings)
         socWindow.windowMs = settings.socEstimateWindowSeconds * 1000L
         connectionSoundsEnabled = settings.connectionSoundsEnabled
-        pollingLoop.setPollIntervalMs(pollIntervalMsForHz(settings.telemetryPollRateHz))
+        configuredPollIntervalMs = pollIntervalMsForHz(settings.telemetryPollRateHz)
+        movingThresholdCentiKmh = settings.toMetricSanitizerConfig().movingSpeedThresholdCentiKmh
+        pollingLoop.setPollIntervalMs(effectivePollIntervalMs())
         watchTick.setIntervalMs(settings.wearMirrorIntervalMs.toLong())
+    }
+
+    /** Poll spacing honoring an active Idle Pause: never faster than the configured rate. */
+    private fun effectivePollIntervalMs(): Long =
+        if (idlePauseDetector.isPaused) maxOf(IDLE_PAUSE_POLL_INTERVAL_MS, configuredPollIntervalMs)
+        else configuredPollIntervalMs
+
+    private fun updateIdlePause(capture: TelemetryCapture) {
+        if (!recordingCoordinator.telemetryRecordingEnabled) {
+            // Recording turned off mid-pause: drop the pause and restore the configured poll rate.
+            if (idlePauseDetector.isPaused) {
+                resetIdlePause()
+                emitState()
+            }
+            return
+        }
+        val transition = idlePauseDetector.onSample(
+            speedCentiKmh = (capture.speed * 100.0).roundToInt(),
+            movingThresholdCentiKmh = movingThresholdCentiKmh,
+            atMs = capture.capturedAtMs,
+        ) ?: return
+        if (transition == IdlePauseTransition.Paused) {
+            recordingCoordinator.recordIdlePauseMarker(boardConfig)
+        }
+        pollingLoop.setPollIntervalMs(effectivePollIntervalMs())
+        emitState()
+    }
+
+    private fun resetIdlePause() {
+        idlePauseDetector.reset()
+        pollingLoop.setPollIntervalMs(effectivePollIntervalMs())
     }
 
     private fun applyTelemetryPipelineSettings(settings: AppSettings) {

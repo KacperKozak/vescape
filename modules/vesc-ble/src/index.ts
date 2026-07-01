@@ -286,6 +286,7 @@ export interface LiveStateEvent {
   }
   recording: {
     enabled: boolean
+    paused: boolean
     activeBoardId: string | null
     startedAt: number | null
   }
@@ -600,6 +601,16 @@ export interface AppSettings {
    * for stress-testing the link. Floored at 50ms (20Hz), capped at 10s.
    */
   wearMirrorIntervalMs: number
+  /**
+   * Persistent device-scoped anonymous Group Ride Rider id. Generated once on
+   * first use and stored locally; sent to the relay server as the Rider's
+   * identity. See ADR-0020.
+   */
+  riderId: string | null
+  /** Rider-chosen display name shown to other Riders in a Group Ride. */
+  riderName: string | null
+  /** Rider-chosen marker color (hex) shown on other Riders' maps. Null when unset. */
+  riderColor: string | null
 }
 
 export interface DiagnosticStatus {
@@ -661,6 +672,80 @@ export interface LiveSeriesEvent {
   generation: number
 }
 
+// ---------------------------------------------------------------------------
+// Group Ride (observe) — wire protocol mirror of vescape-server
+// docs/group-ride/PROTOCOL.md. Observing only receives; it sends nothing.
+// ---------------------------------------------------------------------------
+
+/** Globally-broadcast ride view; identical in `snapshot` and `ride-created`. */
+export interface GroupRideSummary {
+  id: string
+  name: string
+  /** Epoch ms when the ride was created. */
+  createdAt: number
+  riderCount: number
+  /** Reference point = creator's latest location, for client-side distance filtering. */
+  location: { lat: number; lng: number }
+  creator: { id: string; name: string }
+}
+
+export interface RiderPresence {
+  lat: number
+  lng: number
+  heading?: number | null
+  /** Board-enriched speed in m/s. Null/omitted when no fresh Board Session is live. */
+  speed?: number | null
+  /** Battery SoC Estimate as a 0-1 fraction. Null/omitted when unavailable. */
+  soc?: number | null
+  /** Connected board's display name. Null/omitted when no Board Session is live. */
+  boardName?: string | null
+}
+
+export interface GroupRideRider {
+  id: string
+  name: string
+  /** Rider-chosen marker color (hex), or null when unset. */
+  color: string | null
+  presence: RiderPresence | null
+  stale: boolean
+  lastSeen: number
+}
+
+export type GroupRideConnectionState = 'idle' | 'connecting' | 'connected' | 'disconnected'
+
+export interface GroupRideConnectionEvent {
+  state: GroupRideConnectionState
+}
+
+export interface GroupRideSnapshotEvent {
+  rides: GroupRideSummary[]
+}
+
+export interface GroupRideCreatedEvent {
+  ride: GroupRideSummary
+}
+
+export interface GroupRideUpdatedEvent {
+  ride: GroupRideSummary
+}
+
+export interface GroupRideEndedEvent {
+  rideId: string
+}
+
+export interface GroupRideJoinedEvent {
+  rideId: string | null
+}
+
+export interface GroupRideRosterEvent {
+  rideId: string | null
+  riders: GroupRideRider[]
+}
+
+export interface GroupRideErrorEvent {
+  message: string
+}
+
 type VescBleEvents = {
   onDevice: (event: DeviceFoundEvent) => void
   onError: (event: ErrorEvent) => void
@@ -675,6 +760,16 @@ type VescBleEvents = {
   onLocation: (event: LocationEvent) => void
   onTelemetryRebuildProgress: (event: TelemetryRebuildProgressEvent) => void
   onBoardProbeProgress: (event: BoardProbeProgressEvent) => void
+  /** Observe WebSocket connection state to the Group Ride relay. */
+  onGroupRideConnection: (event: GroupRideConnectionEvent) => void
+  /** Full active-ride list, sent once on connect. */
+  onGroupRideSnapshot: (event: GroupRideSnapshotEvent) => void
+  onGroupRideCreated: (event: GroupRideCreatedEvent) => void
+  onGroupRideUpdated: (event: GroupRideUpdatedEvent) => void
+  onGroupRideEnded: (event: GroupRideEndedEvent) => void
+  onGroupRideJoined: (event: GroupRideJoinedEvent) => void
+  onGroupRideRoster: (event: GroupRideRosterEvent) => void
+  onGroupRideError: (event: GroupRideErrorEvent) => void
 }
 
 interface NativeEventEmitter<TEvents extends Record<string, (...args: never[]) => void>> {
@@ -695,6 +790,19 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
   exitApp(): void
   startLocationUpdates(): void
   stopLocationUpdates(): void
+  startGroupRideObserve(serverUrl: string): void
+  stopGroupRideObserve(): void
+  createGroupRide(
+    riderId: string,
+    riderName: string,
+    riderColor: string | null,
+    name: string | null,
+    lat: number,
+    lng: number,
+  ): void
+  joinGroupRide(riderId: string, riderName: string, riderColor: string | null, rideId: string): void
+  leaveGroupRide(): void
+  updateGroupRideIdentity(riderId: string, riderName: string, riderColor: string | null): void
   setTelemetryRecordingEnabled(enabled: boolean): void
   reloadAlertRules(): void
   getAlertPresets(): AlertPreset[]
@@ -824,6 +932,95 @@ export function startLocationUpdates(): void {
 /** Stop app-level Android location updates. Board sessions manage their own recording location. */
 export function stopLocationUpdates(): void {
   native.stopLocationUpdates()
+}
+
+/**
+ * Start the native Group Ride observe WebSocket (lives in the foreground service).
+ * Observing only receives lifecycle events — it sends no location.
+ */
+export function startGroupRideObserve(serverUrl: string): void {
+  if (E2E_ENABLED) return
+  native.startGroupRideObserve(serverUrl)
+}
+
+/** Stop the native Group Ride observe WebSocket. */
+export function stopGroupRideObserve(): void {
+  if (E2E_ENABLED) return
+  native.stopGroupRideObserve()
+}
+
+export interface CreateGroupRideParams {
+  /** Persistent device-scoped Rider id. */
+  riderId: string
+  /** Rider display name bound to the connection (used for the auto-name fallback). */
+  riderName: string
+  /** Rider-chosen marker color (hex), bound to the connection. Null when unset. */
+  riderColor: string | null
+  /** Optional custom ride name; server auto-names `"<name>'s ride"` when blank/null. */
+  name: string | null
+  lat: number
+  lng: number
+}
+
+/**
+ * Create a Group Ride over the live observe socket. Sends the creator's location once — the
+ * only location egress while observing. The new ride arrives back via the `ride-created`
+ * fan-out, so callers update state from that event rather than optimistically.
+ */
+export function createGroupRide({
+  riderId,
+  riderName,
+  riderColor,
+  name,
+  lat,
+  lng,
+}: CreateGroupRideParams): void {
+  if (E2E_ENABLED) return
+  native.createGroupRide(riderId, riderName, riderColor, name, lat, lng)
+}
+
+export interface JoinGroupRideParams {
+  riderId: string
+  riderName: string
+  riderColor: string | null
+  rideId: string
+}
+
+/** Join a Group Ride by id. Native sends Rider Presence from the foreground GPS stream. */
+export function joinGroupRide({
+  riderId,
+  riderName,
+  riderColor,
+  rideId,
+}: JoinGroupRideParams): void {
+  if (E2E_ENABLED) return
+  native.joinGroupRide(riderId, riderName, riderColor, rideId)
+}
+
+/** Leave the current Group Ride. */
+export function leaveGroupRide(): void {
+  if (E2E_ENABLED) return
+  native.leaveGroupRide()
+}
+
+export interface UpdateGroupRideIdentityParams {
+  riderId: string
+  riderName: string
+  riderColor: string | null
+}
+
+/**
+ * Push a Rider name/color change to the live observe socket. While joined, the relay
+ * re-emits the roster so peers update without a rejoin; otherwise the new identity is
+ * applied on the next create/join. No-op when the observe socket is not connected.
+ */
+export function updateGroupRideIdentity({
+  riderId,
+  riderName,
+  riderColor,
+}: UpdateGroupRideIdentityParams): void {
+  if (E2E_ENABLED) return
+  native.updateGroupRideIdentity(riderId, riderName, riderColor)
 }
 
 /** Enable or disable native SQLite telemetry history writes. */
@@ -1341,4 +1538,52 @@ export function addBoardProbeProgressListener(
   }
 
   return emitter.addListener('onBoardProbeProgress', cb)
+}
+
+export function addGroupRideConnectionListener(
+  cb: (event: GroupRideConnectionEvent) => void,
+): EventSubscription {
+  return emitter.addListener('onGroupRideConnection', cb)
+}
+
+export function addGroupRideSnapshotListener(
+  cb: (event: GroupRideSnapshotEvent) => void,
+): EventSubscription {
+  return emitter.addListener('onGroupRideSnapshot', cb)
+}
+
+export function addGroupRideCreatedListener(
+  cb: (event: GroupRideCreatedEvent) => void,
+): EventSubscription {
+  return emitter.addListener('onGroupRideCreated', cb)
+}
+
+export function addGroupRideUpdatedListener(
+  cb: (event: GroupRideUpdatedEvent) => void,
+): EventSubscription {
+  return emitter.addListener('onGroupRideUpdated', cb)
+}
+
+export function addGroupRideEndedListener(
+  cb: (event: GroupRideEndedEvent) => void,
+): EventSubscription {
+  return emitter.addListener('onGroupRideEnded', cb)
+}
+
+export function addGroupRideJoinedListener(
+  cb: (event: GroupRideJoinedEvent) => void,
+): EventSubscription {
+  return emitter.addListener('onGroupRideJoined', cb)
+}
+
+export function addGroupRideRosterListener(
+  cb: (event: GroupRideRosterEvent) => void,
+): EventSubscription {
+  return emitter.addListener('onGroupRideRoster', cb)
+}
+
+export function addGroupRideErrorListener(
+  cb: (event: GroupRideErrorEvent) => void,
+): EventSubscription {
+  return emitter.addListener('onGroupRideError', cb)
 }

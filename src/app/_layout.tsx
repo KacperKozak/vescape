@@ -7,6 +7,8 @@ import { DiagnosticErrorBoundary } from '@/components/domain/main/DiagnosticErro
 import { HeaderBackButton } from '@/components/ui/base/HeaderBackButton'
 import { stackScreens } from '@/navigation/routes'
 import { useAlertsStore } from '@/store/alertsStore'
+import { useGroupRideStore } from '@/store/groupRideStore'
+import { useRiderStore } from '@/store/riderStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { theme } from '@/constants/theme'
 
@@ -14,6 +16,9 @@ export default function RootLayout() {
   useEffect(() => {
     void useSettingsStore.getState().load()
     void useAlertsStore.getState().load()
+    void useRiderStore.getState().load()
+    useGroupRideStore.getState().startObserving()
+    return () => useGroupRideStore.getState().stopObserving()
   }, [])
 
   return (

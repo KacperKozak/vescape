@@ -84,21 +84,15 @@ internal class VescCompanionPresence(
                 promise.reject("COMPANION_BOARD_UNLINKED", "Selected board must have a BLE link", null)
                 return@launch
             }
+            // Auto-start claims the board exclusively. Rather than ask the user to disconnect first,
+            // drop the live session ourselves and continue once it's down.
             if (isSelectedBoardConnected(bleId)) {
-                promise.reject(
-                    "COMPANION_BOARD_CONNECTED",
-                    "Disconnect the selected board before enabling nearby board detection",
-                    null,
-                )
+                VescForegroundService.stopBoardSession(context.applicationContext) {
+                    mainHandler.post { associateOrObserveSafely(bleId, promise) }
+                }
                 return@launch
             }
-            mainHandler.post {
-                try {
-                    associateOrObserve(bleId, promise)
-                } catch (e: Exception) {
-                    promise.reject("COMPANION_ASSOCIATION_FAILED", e.message, e)
-                }
-            }
+            mainHandler.post { associateOrObserveSafely(bleId, promise) }
         }
     }
 
@@ -116,6 +110,14 @@ internal class VescCompanionPresence(
             }
             repo.updateSetting("companionPresenceEnabled", false)
             promise.resolve(null)
+        }
+    }
+
+    private fun associateOrObserveSafely(bleId: String, promise: Promise) {
+        try {
+            associateOrObserve(bleId, promise)
+        } catch (e: Exception) {
+            promise.reject("COMPANION_ASSOCIATION_FAILED", e.message, e)
         }
     }
 

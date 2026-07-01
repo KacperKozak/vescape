@@ -62,6 +62,7 @@ interface BleState {
   liveStatus: LiveStatusSummary
   metricVersion: number
   telemetryRecordingEnabled: boolean
+  telemetryRecordingPaused: boolean
   recordDebugSession: boolean
   latestBms: BmsEvent | null
   /** Active remote-tilt command mirrored from native telemetry, or null when idle. */
@@ -230,6 +231,7 @@ function applyLiveState(state: LiveStateEvent, set: BleSet): void {
     connectedId: state.board.connectedBoardId ?? state.board.bleId,
     error: state.board.error ?? state.gps.error ?? state.scan.error ?? undefined,
     telemetryRecordingEnabled: state.recording.enabled,
+    telemetryRecordingPaused: state.recording.paused,
     remoteTilt: state.board.remoteTilt,
     ...(shouldSeedLiveState || !isBoardConnected
       ? {
@@ -390,6 +392,7 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
   liveStatus: EMPTY_LIVE_STATUS,
   metricVersion: 0,
   telemetryRecordingEnabled: false,
+  telemetryRecordingPaused: false,
   recordDebugSession: false,
   latestBms: null,
   remoteTilt: null,

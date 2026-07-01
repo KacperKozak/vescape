@@ -65,6 +65,9 @@ const e2eSettings: AppSettings = {
   companionPresenceEnabled: false,
   telemetryPollRateHz: 20,
   wearMirrorIntervalMs: 500,
+  riderId: null,
+  riderName: null,
+  riderColor: null,
 }
 
 function emitDevice(event: DeviceFoundEvent): void {
@@ -147,6 +150,7 @@ function getLiveState(): LiveStateEvent {
     },
     recording: {
       enabled: false,
+      paused: false,
       activeBoardId: connected ? connectedBoardId : null,
       startedAt: null,
     },

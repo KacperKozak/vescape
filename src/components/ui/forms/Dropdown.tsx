@@ -1,37 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Animated, Dimensions, Modal, Platform, Pressable, StyleSheet, View } from 'react-native'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Animated, Dimensions, Modal, Pressable, StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+
+import {
+  getModalCoordinateOffset,
+  measureTrigger,
+  type TriggerLayout,
+} from '@/components/ui/overlays/measureTrigger'
 import { theme } from '@/constants/theme'
+
+export { useTriggerRef } from '@/components/ui/overlays/measureTrigger'
 
 const ANIM_DURATION = 150
 const SCREEN_EDGE_PADDING = 8
-
-interface TriggerLayout {
-  x: number
-  y: number
-  width: number
-  height: number
-}
-
-function getModalCoordinateOffset() {
-  if (Platform.OS !== 'android') return 0
-
-  const windowHeight = Dimensions.get('window').height
-  const screenHeight = Dimensions.get('screen').height
-  return Math.max(0, screenHeight - windowHeight)
-}
-
-export function useTriggerRef() {
-  return useRef<View>(null)
-}
-
-function measureTrigger(ref: React.RefObject<View | null>) {
-  return new Promise<TriggerLayout>((resolve) => {
-    ref.current?.measureInWindow((x, y, width, height) => {
-      resolve({ x, y, width, height })
-    })
-  })
-}
 
 interface DropdownProps {
   visible: boolean

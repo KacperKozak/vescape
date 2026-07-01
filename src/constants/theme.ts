@@ -111,6 +111,8 @@ export const palette = {
   },
   // Secondary data / duty — original `teal`
   teal: hue('#14b8a6', '#2dd4bf', '#99f6e4', '#042f2e', '#0f766e'),
+  // Group rides — sea, pushed a touch greener
+  groupRide: hue('#10c69a', '#5eead4', '#7af0d6', '#04302a', '#0c8f74'),
   // Balance pitch alternate — kept for pink family completeness
   pink: hue('#ec4899', '#f472b6', '#fbcfe8', '#500724', '#be185d'),
 } as const
