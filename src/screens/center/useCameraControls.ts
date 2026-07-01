@@ -10,7 +10,11 @@ import {
   reduceMapCameraIntent,
   type MapCameraMode,
 } from '@/lib/map/cameraController'
-import { getLiveFollowCameraProfile, getPitchForZoom } from '@/lib/map/cameraProfiles'
+import {
+  getLiveFollowCameraProfile,
+  getMapRevealPitch,
+  getPitchForZoom,
+} from '@/lib/map/cameraProfiles'
 import { getCameraAfterScreenDrag } from '@/screens/center/cameraPanProjection'
 import { getHistoryRouteCamera, type HistoryCameraViewport } from '@/screens/center/historyCamera'
 
@@ -583,7 +587,12 @@ export function useCameraControls({
         cameraRef.current?.setCamera({
           ...getCameraAfterScreenDrag(baseCamera, deltaX, deltaY),
           zoomLevel,
-          pitch: getPitchForZoom(zoomLevel, perspectiveEnabled),
+          pitch: getMapRevealPitch({
+            basePitch: baseCamera.pitch,
+            zoom: zoomLevel,
+            revealProgress,
+            perspectiveEnabled,
+          }),
           animationMode: 'linearTo',
           animationDuration,
         })
