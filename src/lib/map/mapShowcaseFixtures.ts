@@ -182,6 +182,20 @@ export const FIXTURE_ACCURACY_SHAPE = makeCircleFeature(
 )
 export const FIXTURE_GPS_PUCK_BEARING_DEG = 48
 
+/** A short path of `count` points trailing behind `(lat, lng)`, for showcasing rider trails. */
+function fixtureTrail(
+  lat: number,
+  lng: number,
+  dLat: number,
+  dLng: number,
+  count = 8,
+): { lat: number; lng: number }[] {
+  return Array.from({ length: count }, (_, i) => {
+    const back = count - 1 - i
+    return { lat: lat - dLat * back, lng: lng - dLng * back }
+  })
+}
+
 export const FIXTURE_RIDERS: RosterRider[] = [
   {
     id: 'fixture-rider-ana',
@@ -195,6 +209,7 @@ export const FIXTURE_RIDERS: RosterRider[] = [
       soc: 0.71,
       boardName: 'Ana Board',
     },
+    trail: fixtureTrail(BASE_LAT + 0.005, BASE_LON + 0.0005, 0.0003, 0.0002),
     stale: false,
     lastSeen: NOW,
     distanceM: 42,
@@ -212,6 +227,7 @@ export const FIXTURE_RIDERS: RosterRider[] = [
       soc: 0.44,
       boardName: 'Jonáš Board',
     },
+    trail: fixtureTrail(BASE_LAT + 0.0042, BASE_LON - 0.0012, -0.00005, 0.00035),
     stale: false,
     lastSeen: NOW,
     distanceM: 96,
@@ -229,6 +245,7 @@ export const FIXTURE_RIDERS: RosterRider[] = [
       soc: null,
       boardName: null,
     },
+    trail: fixtureTrail(BASE_LAT + 0.0058, BASE_LON + 0.0022, 0.0002, -0.0003),
     stale: true,
     lastSeen: NOW - 20_000,
     distanceM: 180,

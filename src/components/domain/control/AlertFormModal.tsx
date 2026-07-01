@@ -16,6 +16,10 @@ import { SoundPicker } from '@/components/ui/forms/SoundPicker'
 import { TuneDial } from '@/components/ui/tune/TuneDial'
 import { telemetryByControlId } from '@/constants/telemetry'
 import { theme } from '@/constants/theme'
+import {
+  DEFAULT_ALERT_PRESETS,
+  type TelemetryAlertTab as AlertTab,
+} from '@/constants/telemetryThresholds'
 import { type DerivedBatteryConfig } from '@/lib/battery/types'
 import { type AlertRule, type AlertSoundType } from '@/store/alertsStore'
 import {
@@ -24,22 +28,6 @@ import {
   getAlertPresets,
   previewAlertSound,
 } from 'vesc-ble'
-
-type AlertTab = 'single' | 'geiger' | 'message'
-
-/** Sensible default alert per control — preselects tab + thresholds when adding a new alert. */
-interface ControlAlertPreset {
-  tab: AlertTab
-  threshold: number
-  thresholdMax?: number
-}
-
-const DEFAULT_ALERT_PRESETS: Record<string, ControlAlertPreset> = {
-  'motor-temp': { tab: 'message', threshold: 70 },
-  battery: { tab: 'message', threshold: 30 },
-  speed: { tab: 'geiger', threshold: 35, thresholdMax: 45 },
-  duty: { tab: 'geiger', threshold: 80, thresholdMax: 90 },
-}
 
 function getPresetsForCategory(category: AlertPresetCategory): AlertPreset[] {
   return getAlertPresets().filter((p) => p.category === category)

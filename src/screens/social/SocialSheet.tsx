@@ -23,7 +23,13 @@ import { InputWidget } from '@/components/widgets/InputWidget'
 import { LinkWidget } from '@/components/widgets/LinkWidget'
 import { widgetSurface } from '@/components/widgets/widgetSurface'
 import { riderColorOptions } from '@/constants/riderColors'
-import { DASH, fmtDistance, fmtPercent, fmtSince, fmtSpeedKmh, fmtTempC } from '@/helpers/format'
+import {
+  batteryLevel,
+  type TelemetryLevel,
+  TELEMETRY_LEVEL_COLOR,
+  tempLevel,
+} from '@/constants/telemetryThresholds'
+import { DASH, fmtDistance, fmtPercent, fmtSpeedKmh, fmtTempC } from '@/helpers/format'
 import type { NearbyRide } from '@/lib/groupRide/nearby'
 import type { RosterRider } from '@/lib/groupRide/roster'
 import { routes } from '@/navigation/routes'
@@ -217,34 +223,68 @@ function RosterGrid({
   )
 }
 
-interface RiderStats {
-  speed?: string
-  soc?: string
-  motor?: string
-  ctrl?: string
-  phone?: string
+interface RiderStat {
+  value?: string
+  level: TelemetryLevel
 }
 
-/** Format the per-Rider telemetry values shown in the roster stat grid. */
+interface RiderStats {
+  speed: RiderStat
+  soc: RiderStat
+  motor: RiderStat
+  ctrl: RiderStat
+  phone: RiderStat
+}
+
+const NORMAL_STAT: RiderStat = { level: 'normal' }
+
+/** Per-Rider telemetry values for the roster stat grid, each carrying its alert level. */
 function riderStats(p: RosterRider['presence']): RiderStats {
-  if (!p) return {}
+  if (!p)
+    return {
+      speed: NORMAL_STAT,
+      soc: NORMAL_STAT,
+      motor: NORMAL_STAT,
+      ctrl: NORMAL_STAT,
+      phone: NORMAL_STAT,
+    }
   return {
-    speed: p.speed != null ? fmtSpeedKmh(p.speed) : undefined,
-    soc: p.soc != null ? fmtPercent(p.soc) : undefined,
-    motor: p.motorTemp != null ? `M ${fmtTempC(p.motorTemp)}` : undefined,
-    ctrl: p.ctrlTemp != null ? `C ${fmtTempC(p.ctrlTemp)}` : undefined,
-    phone: p.phoneBattery != null ? fmtPercent(p.phoneBattery) : undefined,
+    speed: { value: p.speed != null ? fmtSpeedKmh(p.speed) : undefined, level: 'normal' },
+    soc: { value: p.soc != null ? fmtPercent(p.soc) : undefined, level: batteryLevel(p.soc) },
+    motor: {
+      value: p.motorTemp != null ? `M ${fmtTempC(p.motorTemp)}` : undefined,
+      level: tempLevel(p.motorTemp),
+    },
+    ctrl: {
+      value: p.ctrlTemp != null ? `C ${fmtTempC(p.ctrlTemp)}` : undefined,
+      level: tempLevel(p.ctrlTemp),
+    },
+    phone: {
+      value: p.phoneBattery != null ? fmtPercent(p.phoneBattery) : undefined,
+      level: 'normal',
+    },
   }
 }
 
-/** One fixed column of the stat grid: its icon is always shown; a missing value reads as a dash. */
-function StatCell({ icon: StatIcon, value }: { icon: Icon; value?: string }) {
+/** One fixed column of the stat grid: its icon is always shown; a missing value reads as a dash.
+ *  When `level` is warning/critical the icon and value adopt the matching alert color. */
+function StatCell({
+  icon: StatIcon,
+  value,
+  level = 'normal',
+}: {
+  icon: Icon
+  value?: string
+  level?: TelemetryLevel
+}) {
+  const alert = level !== 'normal'
+  const color = alert ? TELEMETRY_LEVEL_COLOR[level] : theme.palette.slate.textSecondary
   return (
     <View style={styles.statCell}>
       <View style={styles.statIconSlot}>
-        <StatIcon size={11} color={theme.palette.slate.textSecondary} weight="bold" />
+        <StatIcon size={11} color={color} weight="bold" />
       </View>
-      <Text style={styles.statValue} numberOfLines={1}>
+      <Text style={[styles.statValue, alert && { color }]} numberOfLines={1}>
         {value ?? DASH}
       </Text>
     </View>
@@ -266,7 +306,7 @@ function RiderCell({
   // the last snapshot we received and we can't know it's current.
   const fresh = !rider.stale && connected
   const statusColor = fresh ? accent : theme.palette.slate.textMuted
-  const status = fresh ? 'Live' : fmtSince(rider.lastSeen)
+  const status = fresh ? 'Live' : 'Stale'
   const s = riderStats(rider.presence)
 
   return (
@@ -291,15 +331,15 @@ function RiderCell({
               {status}
             </Text>
           </View>
-          <StatCell icon={DeviceMobileIcon} value={s.phone} />
+          <StatCell icon={DeviceMobileIcon} value={s.phone.value} level={s.phone.level} />
         </View>
         <View style={styles.statRow}>
-          <StatCell icon={GaugeIcon} value={s.speed} />
-          <StatCell icon={ThermometerSimpleIcon} value={s.motor} />
+          <StatCell icon={GaugeIcon} value={s.speed.value} level={s.speed.level} />
+          <StatCell icon={ThermometerSimpleIcon} value={s.motor.value} level={s.motor.level} />
         </View>
         <View style={styles.statRow}>
-          <StatCell icon={BatteryMediumIcon} value={s.soc} />
-          <StatCell icon={ThermometerSimpleIcon} value={s.ctrl} />
+          <StatCell icon={BatteryMediumIcon} value={s.soc.value} level={s.soc.level} />
+          <StatCell icon={ThermometerSimpleIcon} value={s.ctrl.value} level={s.ctrl.level} />
         </View>
       </View>
     </View>

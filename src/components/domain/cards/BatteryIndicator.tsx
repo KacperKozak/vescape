@@ -6,6 +6,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { LinearGauge } from '@/components/ui/charts/LinearGauge'
 import { type DualGaugeAlert } from '@/components/ui/charts/DualGauge'
 import { telemetry } from '@/constants/telemetry'
+import { TELEMETRY_THRESHOLDS } from '@/constants/telemetryThresholds'
 import { theme } from '@/constants/theme'
 import { deriveBatteryConfig } from '@/lib/battery'
 import { useLiveSeries } from '@/hooks/useLiveMetric'
@@ -19,11 +20,13 @@ interface BatteryIndicatorProps {
   containerStyle?: StyleProp<ViewStyle>
 }
 
-const BATTERY_LOW_PCT = 30
-
-/** Warning shade when low on charge, else the battery metric color. Mirrors the gauge fill. */
+/** Warning shade when low on charge, else the battery metric color. Mirrors the gauge fill.
+ *  Threshold sourced from the shared telemetry thresholds (battery.warning is a
+ *  0-1 fraction; battery percent is 0-100). */
 function pickColor(percent: number | null): string {
-  if (percent != null && percent < BATTERY_LOW_PCT) return theme.status.warning.color
+  if (percent != null && percent < TELEMETRY_THRESHOLDS.battery.warning * 100) {
+    return theme.status.warning.color
+  }
   return telemetry.battVoltage.color
 }
 

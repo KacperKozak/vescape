@@ -716,12 +716,20 @@ export interface RiderPresence {
   boardName?: string | null
 }
 
+/** One breadcrumb in a Rider's recent shared path. */
+export interface TrailPoint {
+  lat: number
+  lng: number
+}
+
 export interface GroupRideRider {
   id: string
   name: string
   /** Rider-chosen marker color (hex), or null when unset. */
   color: string | null
   presence: RiderPresence | null
+  /** Recent path (oldest → newest), server-capped to ~30s. Null/omitted while empty. */
+  trail?: TrailPoint[] | null
   stale: boolean
   lastSeen: number
 }
