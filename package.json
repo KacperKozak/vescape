@@ -28,7 +28,7 @@
     "test:bun": "bun test",
     "test:android": "export NODE_BINARY=$(command -v node); export PATH=$(dirname \"$NODE_BINARY\"):$PATH; cd android && ./gradlew :vesc-ble:testDebugUnitTest",
     "ts": "tsc --noEmit",
-    "build:release": "bun run copy:shared && export NODE_BINARY=$(command -v node); export PATH=$(dirname \"$NODE_BINARY\"):$PATH; cd android && ./gradlew assembleRelease",
+    "build:release": "bun run copy:shared && export NODE_BINARY=$(command -v node); export PATH=$(dirname \"$NODE_BINARY\"):$PATH; export EXPO_PUBLIC_SERVER_URL=https://vescape.app; cd android && ./gradlew assembleRelease",
     "release": "bun run scripts/release.ts",
     "release:fix": "bun run scripts/release.ts --patch",
     "check": "bun run ts && bun run lint && bun run format:check && bun run knip && bun run test",

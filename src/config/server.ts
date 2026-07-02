@@ -4,6 +4,9 @@
  * (`../vescape-server`) and is deployed to `https://vescape.app`. Override per
  * environment with `EXPO_PUBLIC_SERVER_URL` (e.g. `http://localhost:3000` for a
  * local `bun dev` server).
+ *
+ * Expo layers `.env.local` into release bundles too, so `build:release` pins this
+ * var to the prod URL — a dev localhost override can't leak into a shipped APK.
  */
 export const SERVER_URL = process.env.EXPO_PUBLIC_SERVER_URL ?? 'https://vescape.app'
 
