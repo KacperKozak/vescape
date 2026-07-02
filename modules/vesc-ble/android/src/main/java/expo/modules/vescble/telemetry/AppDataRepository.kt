@@ -421,6 +421,10 @@ class AppDataRepository private constructor(private val context: Context) {
     dao.upsertMapPoint(point.toMapPointEntity())
   }
 
+  suspend fun getDirectionMapPointEntity(): MapPointEntity? = withContext(Dispatchers.IO) {
+    dao.getDirectionMapPoint()
+  }
+
   suspend fun replaceDirectionMapPoint(point: Map<String, Any?>): Unit = withContext(Dispatchers.IO) {
     dao.replaceDirectionMapPoint(point.toDirectionMapPointEntity())
   }

@@ -208,6 +208,7 @@ export const FIXTURE_RIDERS: RosterRider[] = [
       speed: 6.2,
       soc: 0.71,
       boardName: 'Ana Board',
+      target: { lat: BASE_LAT + 0.0075, lng: BASE_LON + 0.003 },
     },
     trail: fixtureTrail(BASE_LAT + 0.005, BASE_LON + 0.0005, 0.0003, 0.0002),
     stale: false,

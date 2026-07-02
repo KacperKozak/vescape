@@ -714,6 +714,8 @@ export interface RiderPresence {
   phoneBattery?: number | null
   /** Connected board's display name. Null/omitted when no Board Session is live. */
   boardName?: string | null
+  /** The Rider's shared map target (their direction point). Null/omitted when none is set. */
+  target?: { lat: number; lng: number } | null
 }
 
 /** One breadcrumb in a Rider's recent shared path. */

@@ -246,7 +246,7 @@ function LiveMapLayers({
 }
 
 /** Marker/trail tint for a Rider: their chosen color, a palette fallback, or muted when stale. */
-function riderColor(rider: RosterRider, index: number): string {
+export function rosterRiderColor(rider: RosterRider, index: number): string {
   return rider.stale
     ? theme.palette.slate.textMuted
     : (rider.color ?? RIDER_COLORS[index % RIDER_COLORS.length])
@@ -255,7 +255,7 @@ function riderColor(rider: RosterRider, index: number): string {
 // A peer's recent path, tinted like their marker and fading out toward the tail —
 // the group-ride counterpart to the device's own live trail.
 function RiderTrail({ rider, index }: { rider: RosterRider; index: number }) {
-  const color = riderColor(rider, index)
+  const color = rosterRiderColor(rider, index)
   const shape = useMemo(
     () =>
       rider.trail && rider.trail.length >= 2
@@ -290,7 +290,7 @@ function RiderTrail({ rider, index }: { rider: RosterRider; index: number }) {
 }
 
 function RiderPresencePin({ rider, index }: { rider: RosterRider; index: number }) {
-  const color = riderColor(rider, index)
+  const color = rosterRiderColor(rider, index)
   const heading = rider.presence?.heading ?? null
   if (!rider.presence) return null
 
@@ -588,6 +588,18 @@ export function CenterMapLayers({
           }}
         />
       )}
+      {!historyActive &&
+        riders.map((rider, index) =>
+          rider.presence?.target ? (
+            <MapPin
+              key={`center-rider-target-${rider.id}`}
+              id={`center-rider-target-${rider.id}`}
+              coordinate={[rider.presence.target.lng, rider.presence.target.lat]}
+              color={rosterRiderColor(rider, index)}
+              icon={getMapPointKindIcon('direction')}
+            />
+          ) : null,
+        )}
       {!historyActive &&
         mapPoints
           .filter(

@@ -290,6 +290,13 @@ class VescForegroundService : Service() {
             }
         }
 
+        /** Refresh the shared Group Ride target after a direction Map Point change. */
+        fun reloadGroupRideTarget(context: Context) {
+            appDataScope.launch {
+                instance?.controller?.loadGroupRideTarget(context.applicationContext)
+            }
+        }
+
         fun reloadBatteryConfig() {
             appDataScope.launch {
                 instance?.controller?.reloadBatteryConfigForActiveBoard()

@@ -51,7 +51,7 @@ import { getLiveFollowCameraProfile, getPitchForZoom } from '@/lib/map/cameraPro
 import { shouldPreserveLiveFollowGesture } from './cameraGestureState'
 import { phoneHeadingAnimationDuration } from './phoneHeading'
 import { usePhoneHeading } from './usePhoneHeading'
-import { CenterMapLayers } from './CenterMapLayers'
+import { CenterMapLayers, rosterRiderColor } from './CenterMapLayers'
 import {
   DESTINATION_POINT_COLOR,
   DESTINATION_POINT_TEXT_COLOR,
@@ -429,6 +429,27 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
   const riderFocusRows = useGroupRideStore((s) => s.rosterRows)
   // Own Rider is drawn by the GPS puck, so keep it out of the roster map pins.
   const mapRiders = useMemo(() => riderFocusRows.filter((row) => !row.isSelf), [riderFocusRows])
+  // Peers' shared targets, pre-shaped as offscreen-indicator tracked points. Index-aligned
+  // with the `riders` prop of CenterMapLayers so pin and edge indicator share one tint.
+  const riderTargetPoints = useMemo(
+    () =>
+      mapRiders.flatMap((rider, index) => {
+        const target = rider.presence?.target
+        if (!target) return []
+        const color = rosterRiderColor(rider, index)
+        return [
+          {
+            id: `rider-target-${rider.id}`,
+            type: 'riderTarget' as const,
+            coordinate: [target.lng, target.lat] as [number, number],
+            color,
+            textColor: color,
+            icon: getMapPointKindIcon('direction'),
+          },
+        ]
+      }),
+    [mapRiders],
+  )
 
   const handleMapLayout = useCallback((event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout
@@ -461,7 +482,10 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
     if (
       mapView == null ||
       historyActive ||
-      (offscreenMapGpsCoordinate == null && directionPoint == null && selectedMapPoint == null) ||
+      (offscreenMapGpsCoordinate == null &&
+        directionPoint == null &&
+        selectedMapPoint == null &&
+        riderTargetPoints.length === 0) ||
       mapLayout.width <= 0 ||
       mapLayout.height <= 0
     ) {
@@ -515,6 +539,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
             },
           ]
         : []),
+      ...riderTargetPoints,
     ]
 
     void Promise.all(
@@ -558,6 +583,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
     historyActive,
     mapLayout,
     offscreenMapGpsCoordinate,
+    riderTargetPoints,
     selectedMapPoint,
   ])
 
