@@ -4,6 +4,7 @@ import { CheckIcon, XIcon } from 'phosphor-react-native'
 
 import { Dropdown } from '@/components/ui/forms/Dropdown'
 import { Input } from '@/components/ui/forms/Input'
+import { Button } from '@/components/ui/base/Button'
 import { TuneDial } from '@/components/ui/tune/TuneDial'
 import { theme } from '@/constants/theme'
 import { snapValue } from '@/lib/tune/sliderDefinitions'
@@ -130,16 +131,13 @@ function FieldEditorPopoverInner({ target, onCancel, onApply }: FieldEditorPopov
         ) : null}
 
         <View style={styles.actions}>
-          <Pressable style={styles.cancelBtn} onPress={onCancel}>
-            <Text style={styles.cancelText}>Cancel</Text>
-          </Pressable>
-          <Pressable
-            style={styles.applyBtn}
+          <Button label="Cancel" variant="secondary" size="sm" onPress={onCancel} />
+          <Button
+            label="Apply"
+            icon={CheckIcon}
+            size="sm"
             onPress={() => onApply(snapValue(draftValue, target.min, target.max, target.step))}
-          >
-            <CheckIcon size={14} color={theme.palette.slate.surfaceDeep} weight="bold" />
-            <Text style={styles.applyText}>Apply</Text>
-          </Pressable>
+          />
         </View>
       </ScrollView>
     </Dropdown>
@@ -230,34 +228,5 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
     gap: 8,
     paddingTop: 4,
-  },
-  cancelBtn: {
-    height: 38,
-    paddingHorizontal: 14,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: theme.palette.slate.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cancelText: {
-    color: theme.palette.slate.textSecondary,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  applyBtn: {
-    height: 38,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    backgroundColor: theme.palette.sky.color,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  applyText: {
-    color: theme.palette.slate.surfaceDeep,
-    fontSize: 13,
-    fontWeight: '900',
   },
 })
