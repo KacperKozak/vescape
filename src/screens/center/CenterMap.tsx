@@ -1,5 +1,5 @@
 import Mapbox, { Camera } from '@rnmapbox/maps'
-import { CrosshairSimpleIcon } from 'phosphor-react-native'
+import { CrosshairSimpleIcon, type Icon } from 'phosphor-react-native'
 import {
   forwardRef,
   useCallback,
@@ -51,7 +51,7 @@ import { getLiveFollowCameraProfile, getPitchForZoom } from '@/lib/map/cameraPro
 import { shouldPreserveLiveFollowGesture } from './cameraGestureState'
 import { phoneHeadingAnimationDuration } from './phoneHeading'
 import { usePhoneHeading } from './usePhoneHeading'
-import { CenterMapLayers } from './CenterMapLayers'
+import { CenterMapLayers, rosterRiderColor } from './CenterMapLayers'
 import {
   DESTINATION_POINT_COLOR,
   DESTINATION_POINT_TEXT_COLOR,
@@ -101,6 +101,12 @@ interface MapLayout {
   width: number
   height: number
 }
+
+// Filled dot matching the rider's map marker, so the edge indicator reads as that rider.
+// Module scope keeps the reference stable for the indicator identity check.
+const RiderDotIcon: Icon = ({ color }) => (
+  <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: color }} />
+)
 
 function usableCoordinate(location: { longitude: number; latitude: number } | null | undefined) {
   if (!location) return null
@@ -426,9 +432,52 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
   const gpsPinBearingDeg = gpsPuckBearingDeg == null ? null : gpsPuckBearingDeg - cameraHeading
   const updateNavigationDiagnostics = useNavigationDiagnosticsStore((s) => s.update)
   const riderFocusRequest = useGroupRideStore((s) => s.focusRequest)
+  const focusRider = useGroupRideStore((s) => s.focusRider)
+  const handledRiderFocusNonceRef = useRef(0)
   const riderFocusRows = useGroupRideStore((s) => s.rosterRows)
   // Own Rider is drawn by the GPS puck, so keep it out of the roster map pins.
   const mapRiders = useMemo(() => riderFocusRows.filter((row) => !row.isSelf), [riderFocusRows])
+  // Peers' shared targets, pre-shaped as offscreen-indicator tracked points. Index-aligned
+  // with the `riders` prop of CenterMapLayers so pin and edge indicator share one tint.
+  const riderTargetPoints = useMemo(
+    () =>
+      mapRiders.flatMap((rider, index) => {
+        const target = rider.presence?.target
+        if (!target) return []
+        const color = rosterRiderColor(rider, index)
+        return [
+          {
+            id: `rider-target-${rider.id}`,
+            type: 'riderTarget' as const,
+            coordinate: [target.lng, target.lat] as [number, number],
+            color,
+            textColor: color,
+            icon: getMapPointKindIcon('direction'),
+          },
+        ]
+      }),
+    [mapRiders],
+  )
+  // Peers themselves, same shape and index-aligned tint as their map pins.
+  const riderPoints = useMemo(
+    () =>
+      mapRiders.flatMap((rider, index) => {
+        const presence = rider.presence
+        if (!presence) return []
+        const color = rosterRiderColor(rider, index)
+        return [
+          {
+            id: `rider-${rider.id}`,
+            type: 'rider' as const,
+            coordinate: [presence.lng, presence.lat] as [number, number],
+            color,
+            textColor: color,
+            icon: RiderDotIcon,
+          },
+        ]
+      }),
+    [mapRiders],
+  )
 
   const handleMapLayout = useCallback((event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout
@@ -441,8 +490,12 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
 
   useEffect(() => {
     if (!riderFocusRequest || historyActive) return
+    // One camera move per request: rosterRows refresh on every presence tick, so
+    // without consuming the nonce this effect would keep re-centering on the rider.
+    if (riderFocusRequest.nonce === handledRiderFocusNonceRef.current) return
     const rider = riderFocusRows.find((row) => row.id === riderFocusRequest.riderId)
     if (!rider?.presence) return
+    handledRiderFocusNonceRef.current = riderFocusRequest.nonce
     setFollowGps(false)
     const current = currentCameraRef.current
     cameraRef.current?.setCamera({
@@ -461,7 +514,11 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
     if (
       mapView == null ||
       historyActive ||
-      (offscreenMapGpsCoordinate == null && directionPoint == null && selectedMapPoint == null) ||
+      (offscreenMapGpsCoordinate == null &&
+        directionPoint == null &&
+        selectedMapPoint == null &&
+        riderTargetPoints.length === 0 &&
+        riderPoints.length === 0) ||
       mapLayout.width <= 0 ||
       mapLayout.height <= 0
     ) {
@@ -515,6 +572,8 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
             },
           ]
         : []),
+      ...riderTargetPoints,
+      ...riderPoints,
     ]
 
     void Promise.all(
@@ -558,6 +617,8 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
     historyActive,
     mapLayout,
     offscreenMapGpsCoordinate,
+    riderPoints,
+    riderTargetPoints,
     selectedMapPoint,
   ])
 
@@ -566,6 +627,11 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
       onMapInteraction()
       if (indicator.id === 'gps') {
         recenterLive({ resetPadding: true })
+        return
+      }
+      if (indicator.type === 'rider') {
+        // Same focus flow as tapping a rider in the roster (centers with min zoom).
+        focusRider(indicator.id.slice('rider-'.length))
         return
       }
       if (indicator.type === 'direction' && !directionPoint) return
@@ -589,6 +655,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
       cameraRef,
       currentCameraRef,
       directionPoint,
+      focusRider,
       onEnterMapMode,
       onMapInteraction,
       recenterLive,

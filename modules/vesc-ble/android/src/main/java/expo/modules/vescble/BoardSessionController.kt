@@ -222,6 +222,14 @@ internal class BoardSessionController(private val service: VescForegroundService
      */
     @Volatile
     private var groupRidePrivacyZones: List<PrivacyZoneEntity> = emptyList()
+
+    /**
+     * The Rider's shared map target (their direction Map Point), cached for presence egress.
+     * Refreshed when observing starts and on direction-point CRUD; touched off the main
+     * thread, so kept @Volatile.
+     */
+    @Volatile
+    private var groupRideTarget: TargetPoint? = null
     private val gattClient by lazy {
         VescGattClient(
             context = service,
@@ -603,7 +611,10 @@ internal class BoardSessionController(private val service: VescForegroundService
     fun consumePendingGroupRideObserve() {
         val url = VescForegroundService.claimPendingGroupRideUrl() ?: return
         isStoppingService = false
-        VescForegroundService.appDataScope.launch { loadPrivacyZones(service.applicationContext) }
+        VescForegroundService.appDataScope.launch {
+            loadPrivacyZones(service.applicationContext)
+            loadGroupRideTarget(service.applicationContext)
+        }
         groupRideObserver.start(url)
         reassertForeground()
     }
@@ -1379,6 +1390,7 @@ internal class BoardSessionController(private val service: VescForegroundService
             ctrlTemp = if (telemetryFresh) currentTelemetry?.tempMosfet else null,
             phoneBattery = readPhoneBattery(),
             boardName = if (boardConfig != null) (boardConfig?.deviceName ?: selectedBoardName) else null,
+            target = groupRideTarget,
         )
     }
 
@@ -1405,6 +1417,23 @@ internal class BoardSessionController(private val service: VescForegroundService
             Log.w(VESC_SESSION_TAG, "Failed to load privacy zones for presence gate: ${e.message}")
             emptyList()
         }
+    }
+
+    /**
+     * Refresh the shared Group Ride target from native storage (observe start + direction-point
+     * CRUD), then push presence immediately so peers see the change without waiting for the
+     * next GPS tick.
+     */
+    suspend fun loadGroupRideTarget(context: Context) {
+        groupRideTarget = try {
+            AppDataRepository.get(context).getDirectionMapPointEntity()?.let {
+                TargetPoint(lat = it.latitudeE7 / 10_000_000.0, lng = it.longitudeE7 / 10_000_000.0)
+            }
+        } catch (e: Exception) {
+            Log.w(VESC_SESSION_TAG, "Failed to load direction target for presence: ${e.message}")
+            null
+        }
+        mainHandler.post { latestRiderPresence()?.let(groupRideObserver::pushPresence) }
     }
 
     fun liveStateMap(includeRecent: Boolean = false): Map<String, Any?> {

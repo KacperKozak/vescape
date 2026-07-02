@@ -383,6 +383,9 @@ internal class GroupRideObserver(
             "ctrlTemp" to obj.optionalDouble("ctrlTemp"),
             "phoneBattery" to obj.optionalDouble("phoneBattery"),
             "boardName" to obj.optString("boardName").takeIf { it.isNotEmpty() },
+            "target" to obj.optJSONObject("target")?.let {
+                mapOf("lat" to it.optDouble("lat"), "lng" to it.optDouble("lng"))
+            },
         )
     }
 
@@ -412,6 +415,12 @@ internal class GroupRideObserver(
     }
 }
 
+/** The Rider's shared map target (their direction Map Point). */
+internal data class TargetPoint(
+    val lat: Double,
+    val lng: Double,
+)
+
 internal data class RiderPresence(
     val lat: Double,
     val lng: Double,
@@ -422,6 +431,7 @@ internal data class RiderPresence(
     val ctrlTemp: Double?,
     val phoneBattery: Double?,
     val boardName: String?,
+    val target: TargetPoint? = null,
 ) {
     fun toJson(): JSONObject {
         val json = JSONObject()
@@ -434,6 +444,7 @@ internal data class RiderPresence(
         ctrlTemp?.let { json.put("ctrlTemp", it) }
         phoneBattery?.let { json.put("phoneBattery", it) }
         boardName?.let { json.put("boardName", it) }
+        target?.let { json.put("target", JSONObject().put("lat", it.lat).put("lng", it.lng)) }
         return json
     }
 }

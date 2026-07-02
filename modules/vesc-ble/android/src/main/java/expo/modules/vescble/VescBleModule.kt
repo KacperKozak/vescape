@@ -434,10 +434,14 @@ class VescBleModule : Module() {
       AppDataRepository.get(context.applicationContext).upsertMapPoint(point)
     }
     AsyncFunction("replaceDirectionMapPoint") Coroutine { point: Map<String, Any?> ->
-      AppDataRepository.get(context.applicationContext).replaceDirectionMapPoint(point)
+      val appCtx = context.applicationContext
+      AppDataRepository.get(appCtx).replaceDirectionMapPoint(point)
+      VescForegroundService.reloadGroupRideTarget(appCtx)
     }
     AsyncFunction("deleteMapPoint") Coroutine { id: String ->
-      AppDataRepository.get(context.applicationContext).deleteMapPoint(id)
+      val appCtx = context.applicationContext
+      AppDataRepository.get(appCtx).deleteMapPoint(id)
+      VescForegroundService.reloadGroupRideTarget(appCtx)
     }
     AsyncFunction("getSettings") {
       runBlocking { AppDataRepository.get(context.applicationContext).getSettings() }

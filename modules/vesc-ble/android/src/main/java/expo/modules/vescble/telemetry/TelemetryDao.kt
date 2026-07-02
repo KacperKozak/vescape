@@ -70,6 +70,9 @@ interface TelemetryDao {
   @Query("SELECT * FROM map_points ORDER BY created_at ASC")
   suspend fun getMapPoints(): List<MapPointEntity>
 
+  @Query("SELECT * FROM map_points WHERE kind = 'direction' LIMIT 1")
+  suspend fun getDirectionMapPoint(): MapPointEntity?
+
   @Insert(onConflict = OnConflictStrategy.REPLACE)
   suspend fun upsertMapPoint(point: MapPointEntity)
 
