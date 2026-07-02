@@ -592,7 +592,9 @@ export function CenterMapLayers({
         riders.map((rider, index) =>
           rider.presence?.target ? (
             <MapPin
-              key={`center-rider-target-${rider.id}`}
+              // Color in the key: PointAnnotation snapshots its children natively, so a
+              // color change must remount the pin to re-render.
+              key={`center-rider-target-${rider.id}-${rosterRiderColor(rider, index)}`}
               id={`center-rider-target-${rider.id}`}
               coordinate={[rider.presence.target.lng, rider.presence.target.lat]}
               color={rosterRiderColor(rider, index)}
