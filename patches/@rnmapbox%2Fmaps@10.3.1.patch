@@ -1,0 +1,159 @@
+diff --git a/android/src/main/java/com/rnmapbox/rnmbx/components/camera/RNMBXCameraModule.kt b/android/src/main/java/com/rnmapbox/rnmbx/components/camera/RNMBXCameraModule.kt
+index 722903d70657a81d7f78bcff50c03ea424887b5b..34332c6abae3c4540155eb14ff210147a5671164 100644
+--- a/android/src/main/java/com/rnmapbox/rnmbx/components/camera/RNMBXCameraModule.kt
++++ b/android/src/main/java/com/rnmapbox/rnmbx/components/camera/RNMBXCameraModule.kt
+@@ -8,6 +8,7 @@ import com.facebook.react.bridge.ReadableMap
+ import com.facebook.react.bridge.WritableMap
+ import com.facebook.react.bridge.WritableNativeMap
+ import com.mapbox.maps.ScreenCoordinate
++import com.mapbox.maps.CameraOptions
+ import com.mapbox.maps.plugin.animation.MapAnimationOptions
+ import com.mapbox.maps.plugin.animation.easeTo
+ import com.mapbox.maps.plugin.animation.moveBy
+@@ -57,6 +58,13 @@ class RNMBXCameraModule(context: ReactApplicationContext, val viewTagResolver: V
+         }
+     }
+ 
++    override fun setCameraDirect(viewRef: ViewRefTag?, pitch: Double, promise: Promise) {
++        withViewportOnUIThread(viewRef, promise) {
++            it.mapboxMap?.setCamera(CameraOptions.Builder().pitch(pitch).build())
++            promise.resolve(null)
++        }
++    }
++
+     private fun getAnimationOptions(
+         animationMode: Double,
+         animationDuration: Double
+diff --git a/ios/RNMBX/RNMBXCamera.swift b/ios/RNMBX/RNMBXCamera.swift
+index 191bfe54eb761b89c04a02aae1fefc0e3769dfa7..0b311e75ede590881b302d8df2319d4570276ae5 100644
+--- a/ios/RNMBX/RNMBXCamera.swift
++++ b/ios/RNMBX/RNMBXCamera.swift
+@@ -313,6 +313,12 @@ open class RNMBXCamera : RNMBXMapAndMapViewComponentBase {
+   @objc public func updateCameraStop(_ stop: [String: Any]) {
+     self.stop = stop
+   }
++
++  @objc public func setCameraDirect(_ pitch: Double) {
++    withMapView { map in
++      map.mapboxMap.setCamera(to: CameraOptions(pitch: pitch))
++    }
++  }
+   
+   func _toCoordinateBounds(_ bounds: FeatureCollection) throws -> CoordinateBounds  {
+     guard bounds.features.count == 2 else {
+diff --git a/ios/RNMBX/RNMBXCameraModule.mm b/ios/RNMBX/RNMBXCameraModule.mm
+index 6599a79f947b737709bf9bab13dfc497231eb8e2..9f05f8df6ed2cf86d927ee63a1aa0c513fe88d7f 100644
+--- a/ios/RNMBX/RNMBXCameraModule.mm
++++ b/ios/RNMBX/RNMBXCameraModule.mm
+@@ -50,6 +50,17 @@ - (void)withCamera:(nonnull NSNumber*)viewRef block:(void (^)(RNMBXCamera *))blo
+     } reject:reject methodName:@"updateCameraStop"];
+ }
+ 
++RCT_EXPORT_METHOD(setCameraDirect:(nonnull NSNumber *)viewRef
++                  pitch:(double)pitch
++                  resolve:(RCTPromiseResolveBlock)resolve
++                  reject:(RCTPromiseRejectBlock)reject)
++{
++    [self withCamera:viewRef block:^(RNMBXCamera *view) {
++        [view setCameraDirect:pitch];
++        resolve(@true);
++    } reject:reject methodName:@"setCameraDirect"];
++}
++
+ RCT_EXPORT_METHOD(moveBy:(nonnull NSNumber *)viewRef
+                   x:(double)x
+                   y:(double)y
+diff --git a/lib/module/components/Camera.js b/lib/module/components/Camera.js
+index da6b273215f41d316fdb1d638ede2de5c73384a1..960b203052b0e0152f15a4e053ce9c6d8ae3ad17 100644
+--- a/lib/module/components/Camera.js
++++ b/lib/module/components/Camera.js
+@@ -201,6 +201,9 @@ export const Camera = /*#__PURE__*/memo(/*#__PURE__*/forwardRef((props, ref) =>
+     }
+   };
+   const setCamera = useCallback(_setCamera, [allowUpdates, buildNativeStop, commands]);
++  const setCameraDirect = useCallback(config => {
++    commands.call('setCameraDirect', [config.pitch]);
++  }, [commands]);
+   const _fitBounds = (ne, sw, paddingConfig = 0, _animationDuration = 0) => {
+     let _padding = {
+       paddingTop: 0,
+@@ -288,6 +291,7 @@ export const Camera = /*#__PURE__*/memo(/*#__PURE__*/forwardRef((props, ref) =>
+      * @param {CameraStop | CameraStops} config
+      */
+     setCamera,
++    setCameraDirect,
+     /**
+      * Set the camera position to enclose the provided bounds, with optional
+      * padding and duration.
+diff --git a/lib/typescript/src/components/Camera.d.ts b/lib/typescript/src/components/Camera.d.ts
+index 7f6240f3e5c43daa88202b067da139b541b757fd..98304deac9be4fc8311a8a8f45d27da7028c6435 100644
+--- a/lib/typescript/src/components/Camera.d.ts
++++ b/lib/typescript/src/components/Camera.d.ts
+@@ -12,6 +12,9 @@ export type UserTrackingModeChangeCallback = (event: MapboxGLEvent<'usertracking
+ }>) => void;
+ export interface CameraRef {
+     setCamera: (config: CameraStop | CameraStops) => void;
++    setCameraDirect: (config: {
++        pitch: number;
++    }) => void;
+     fitBounds: (ne: Position, sw: Position, paddingConfig?: number | number[], animationDuration?: number) => void;
+     flyTo: (centerCoordinate: Position, animationDuration?: number) => void;
+     moveTo: (centerCoordinate: Position, animationDuration?: number) => void;
+diff --git a/lib/typescript/src/specs/NativeRNMBXCameraModule.d.ts b/lib/typescript/src/specs/NativeRNMBXCameraModule.d.ts
+index 3fda8aa42ab2d96329be85791bee4dd0f8141557..299f0081cbe97afff8c9076692bb604224155adb 100644
+--- a/lib/typescript/src/specs/NativeRNMBXCameraModule.d.ts
++++ b/lib/typescript/src/specs/NativeRNMBXCameraModule.d.ts
+@@ -20,6 +20,7 @@ type Stop = {
+ type ObjectOr<_T> = Object;
+ export interface Spec extends TurboModule {
+     updateCameraStop(viewRef: ViewRef, stop: ObjectOr<Stop>): Promise<void>;
++    setCameraDirect(viewRef: ViewRef, pitch: number): Promise<void>;
+     moveBy: (viewRef: ViewRef, x: number, y: number, animationMode: number, animationDuration: number) => Promise<void>;
+     scaleBy: (viewRef: ViewRef, x: number, y: number, animationMode: number, animationDuration: number, scaleFactor: number) => Promise<void>;
+ }
+diff --git a/src/components/Camera.tsx b/src/components/Camera.tsx
+index 6f6ed50ee28b8d5dcc9deb4ddbfd8ffac9b74c97..0594cc9c2e44c4ef0712f5ec0412ba338b5b586a 100644
+--- a/src/components/Camera.tsx
++++ b/src/components/Camera.tsx
+@@ -97,6 +97,7 @@ interface NativeCameraStop {
+ 
+ export interface CameraRef {
+   setCamera: (config: CameraStop | CameraStops) => void;
++  setCameraDirect: (config: { pitch: number }) => void;
+   fitBounds: (
+     ne: Position,
+     sw: Position,
+@@ -473,6 +474,13 @@ export const Camera = memo(
+         commands,
+       ]);
+ 
++      const setCameraDirect = useCallback(
++        (config: { pitch: number }) => {
++          commands.call<void>('setCameraDirect', [config.pitch]);
++        },
++        [commands],
++      );
++
+       const _fitBounds: CameraRef['fitBounds'] = (
+         ne,
+         sw,
+@@ -605,6 +613,7 @@ export const Camera = memo(
+          * @param {CameraStop | CameraStops} config
+          */
+         setCamera,
++        setCameraDirect,
+         /**
+          * Set the camera position to enclose the provided bounds, with optional
+          * padding and duration.
+diff --git a/src/specs/NativeRNMBXCameraModule.ts b/src/specs/NativeRNMBXCameraModule.ts
+index 51e22647de0011459dee4bd160ede4fcca1f4263..de3b865ed6c69685807ef15c571aa22ba723b4af 100644
+--- a/src/specs/NativeRNMBXCameraModule.ts
++++ b/src/specs/NativeRNMBXCameraModule.ts
+@@ -30,6 +30,7 @@ type ObjectOr<_T> = Object;
+ 
+ export interface Spec extends TurboModule {
+   updateCameraStop(viewRef: ViewRef, stop: ObjectOr<Stop>): Promise<void>;
++  setCameraDirect(viewRef: ViewRef, pitch: number): Promise<void>;
+   moveBy: (
+     viewRef: ViewRef,
+     x: number,

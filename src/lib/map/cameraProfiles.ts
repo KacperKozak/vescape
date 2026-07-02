@@ -137,6 +137,22 @@ export function getPitchForZoom(zoom: number, perspectiveEnabled: boolean) {
   })
 }
 
+export function getMapRevealPitch({
+  basePitch,
+  zoom,
+  revealProgress,
+  perspectiveEnabled,
+}: {
+  basePitch: number
+  zoom: number
+  revealProgress: number
+  perspectiveEnabled: boolean
+}) {
+  const targetPitch = getPitchForZoom(zoom, perspectiveEnabled)
+  const progress = clamp(revealProgress, 0, 1)
+  return basePitch + (targetPitch - basePitch) * progress
+}
+
 export function getPaddingForProfile({
   profile,
   viewportHeight,

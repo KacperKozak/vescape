@@ -10,15 +10,19 @@ import {
   reduceMapCameraIntent,
   type MapCameraMode,
 } from '@/lib/map/cameraController'
-import { getLiveFollowCameraProfile, getPitchForZoom } from '@/lib/map/cameraProfiles'
+import { getMapRevealPitch, getPitchForZoom } from '@/lib/map/cameraProfiles'
 import { getCameraAfterScreenDrag } from '@/screens/center/cameraPanProjection'
 import { getHistoryRouteCamera, type HistoryCameraViewport } from '@/screens/center/historyCamera'
 
 const MIN_ZOOM = 0
 const MAP_REVEAL_ZOOM_OUT_DELTA = 0.65
 const HISTORY_PREVIEW_ZOOM_OUT_DELTA = 0.8
+const HISTORY_BUCKET_PREVIEW_ZOOM_OUT_DELTA = 0.35
 const HISTORY_DYNAMIC_FULL_DISTANCE_M = 80_000
 const HISTORY_DYNAMIC_MAX_EXTRA_DURATION_MS = 450
+const HISTORY_BUCKET_PREVIEW_MIN_DURATION_MS = 600
+const HISTORY_BUCKET_PREVIEW_MAX_DURATION_MS = 800
+const HISTORY_ROUTE_REFINEMENT_DURATION_MS = 500
 const INSTANT_JUMP_DISTANCE_M = 10_000
 
 export interface CameraSnapshot {
@@ -83,6 +87,15 @@ function historyMoveDuration(distanceM: number) {
   return MAP_DEFAULTS.animationDuration + HISTORY_DYNAMIC_MAX_EXTRA_DURATION_MS * progress
 }
 
+function historyBucketPreviewDuration(distanceM: number) {
+  if (distanceM > INSTANT_JUMP_DISTANCE_M) return 0
+  const progress = clamp(distanceM / HISTORY_DYNAMIC_FULL_DISTANCE_M, 0, 1)
+  return (
+    HISTORY_BUCKET_PREVIEW_MIN_DURATION_MS +
+    (HISTORY_BUCKET_PREVIEW_MAX_DURATION_MS - HISTORY_BUCKET_PREVIEW_MIN_DURATION_MS) * progress
+  )
+}
+
 function cameraMoveDuration(distanceM: number, smoothDuration: number) {
   return distanceM > INSTANT_JUMP_DISTANCE_M ? 0 : smoothDuration
 }
@@ -108,7 +121,9 @@ interface UseCameraControlsParams {
   persistedFallback: [number, number] | null
   perspectiveEnabled: boolean
   historyActive: boolean
+  historySelectionKey: string | null
   historyPreview: ({ key: string } & HistoryPreviewTarget) | null
+  historyPreviewRoute: [number, number][]
   rideRoute: [number, number][]
   mapViewport: HistoryCameraViewport
   mapNavigationMode: MapNavigationMode
@@ -131,7 +146,9 @@ export function useCameraControls({
   persistedFallback,
   perspectiveEnabled,
   historyActive,
+  historySelectionKey,
   historyPreview,
+  historyPreviewRoute,
   rideRoute,
   mapViewport,
   mapNavigationMode,
@@ -150,6 +167,7 @@ export function useCameraControls({
   const cameraRef = useRef<CameraRef>(null)
   const previewPanBaseRef = useRef<CameraSnapshot | null>(null)
   const previewZoomBaseRef = useRef<CameraSnapshot | null>(null)
+  const previewPanActiveRef = useRef(false)
   const currentCameraRef = useRef<CameraSnapshot | null>(null)
   const historyPreviewTargetRef = useRef<HistoryPreviewTarget | null>(null)
   const lastFollowKeyRef = useRef<string | null>(null)
@@ -217,6 +235,16 @@ export function useCameraControls({
     lastFollowKeyRef.current = null
   }, [])
 
+  const stopCameraAnimation = useCallback(() => {
+    setFollowGps(false)
+    const current = currentCameraRef.current
+    if (!current) return
+    cameraRef.current?.setCamera({
+      ...current,
+      animationDuration: 0,
+    })
+  }, [setFollowGps])
+
   const gpsCamera = useMemo(() => {
     if (!cameraFix) {
       return {
@@ -242,7 +270,7 @@ export function useCameraControls({
     const manualFollowZoom = followZoomLevelRef.current != null
     const effectiveNavigationMode =
       mapNavigationMode === 'phoneHeading' && !phoneHeadingReady ? 'freeRotate' : mapNavigationMode
-    const effect = dispatchCameraIntent({
+    const effect = reduceMapCameraIntent(controllerStateRef.current, {
       type: 'FollowLive',
       gpsCamera: { ...gpsCamera, zoomLevel: baseZoomLevel },
       followHeadingDeg,
@@ -251,7 +279,7 @@ export function useCameraControls({
       viewportHeight,
       preserveHeading: resetHeadingOnRecenter ? undefined : currentCameraRef.current?.heading,
       enforceMinimums: !manualFollowZoom,
-    })
+    }).effect
     const followCamera = effect?.camera as CameraSnapshot
     if (resetHeadingOnRecenter) return followCamera
     return {
@@ -261,7 +289,6 @@ export function useCameraControls({
   }, [
     followHeadingDeg,
     gpsCamera,
-    dispatchCameraIntent,
     mapNavigationMode,
     perspectiveEnabled,
     phoneHeadingReady,
@@ -354,12 +381,14 @@ export function useCameraControls({
         maxZoom: MAP_DEFAULTS.maxZoom,
       })
       if (!historyCamera) return
-      const currentCamera = currentCameraRef.current
       const routeCenter = {
         longitude: historyCamera.centerCoordinate[0],
         latitude: historyCamera.centerCoordinate[1],
       }
-      const duration = historyMoveDuration(cameraDistanceTo(currentCamera, routeCenter))
+      const duration =
+        cameraDistanceTo(currentCameraRef.current, routeCenter) > INSTANT_JUMP_DISTANCE_M
+          ? 0
+          : HISTORY_ROUTE_REFINEMENT_DURATION_MS
       const effect = dispatchCameraIntent({
         type: 'RefineRideHistoryRoute',
         selectionKey,
@@ -440,7 +469,48 @@ export function useCameraControls({
     ],
   )
 
+  const previewHistoryRoute = useCallback(
+    (selectionKey: string, route: [number, number][]) => {
+      const historyCamera = getHistoryRouteCamera({
+        route,
+        viewport: historyViewport,
+        maxZoom: MAP_DEFAULTS.maxZoom,
+      })
+      if (!historyCamera) return
+      const zoomLevel = clamp(
+        historyCamera.zoomLevel - HISTORY_BUCKET_PREVIEW_ZOOM_OUT_DELTA,
+        MIN_ZOOM,
+        MAP_DEFAULTS.maxZoom,
+      )
+      const routeCenter = {
+        longitude: historyCamera.centerCoordinate[0],
+        latitude: historyCamera.centerCoordinate[1],
+      }
+      const effect = dispatchCameraIntent({
+        type: 'FrameRideHistoryPreview',
+        selectionKey,
+        camera: {
+          ...historyCamera,
+          zoomLevel,
+          heading: 0,
+          pitch: getPitchForZoom(zoomLevel, perspectiveEnabled),
+        },
+      })
+      if (!effect) return
+      cameraRef.current?.setCamera({
+        ...effect.camera,
+        animationDuration: historyBucketPreviewDuration(
+          cameraDistanceTo(currentCameraRef.current, routeCenter),
+        ),
+        animationMode: 'easeTo',
+      })
+      onHeadingChange(0)
+    },
+    [dispatchCameraIntent, historyViewport, onHeadingChange, perspectiveEnabled],
+  )
+
   const restorePreviewPan = useCallback(() => {
+    previewPanActiveRef.current = false
     enterCameraMode({ kind: 'liveFollow' })
     const restoreCamera = previewPanBaseRef.current ?? getLiveFollowCamera()
     previewPanBaseRef.current = null
@@ -483,6 +553,7 @@ export function useCameraControls({
       recenterLive,
       previewHistorySession,
       beginPreviewPan() {
+        previewPanActiveRef.current = true
         const baseCamera =
           followGps && !historyActive
             ? getLiveFollowCamera()
@@ -512,10 +583,19 @@ export function useCameraControls({
         cameraRef.current?.setCamera({
           ...getCameraAfterScreenDrag(baseCamera, deltaX, deltaY),
           zoomLevel,
-          pitch: getPitchForZoom(zoomLevel, perspectiveEnabled),
+          pitch: getMapRevealPitch({
+            basePitch: baseCamera.pitch,
+            zoom: zoomLevel,
+            revealProgress,
+            perspectiveEnabled,
+          }),
           animationMode: 'linearTo',
           animationDuration,
         })
+      },
+      endPreviewPan() {
+        previewPanActiveRef.current = false
+        previewPanBaseRef.current = null
       },
       beginPreviewZoom() {
         previewZoomBaseRef.current =
@@ -640,7 +720,15 @@ export function useCameraControls({
   )
 
   useEffect(() => {
-    if (!cameraFix || !followGps || historyActive || !liveFollowUpdatesEnabled) return
+    if (
+      !cameraFix ||
+      !followGps ||
+      historyActive ||
+      !liveFollowUpdatesEnabled ||
+      previewPanActiveRef.current ||
+      controllerStateRef.current.mode.kind !== 'liveFollow'
+    )
+      return
     historyPreviewTargetRef.current = null
     const followCamera = getLiveFollowCamera()
     const nextFollowKey = liveFollowKey(cameraFix.timestamp, followCamera)
@@ -675,7 +763,9 @@ export function useCameraControls({
     }
 
     if (!actualGpsHeadingMode) return
-    const frame = requestAnimationFrame(() => recenterLiveRef.current?.({ resetPadding: true }))
+    const frame = requestAnimationFrame(() =>
+      recenterLiveRef.current?.({ resetPadding: true, animationDuration: 0 }),
+    )
     return () => cancelAnimationFrame(frame)
   }, [gpsHeadingMode, historyActive, phoneHeadingMode])
 
@@ -705,34 +795,43 @@ export function useCameraControls({
   }, [historyActive, phoneHeadingMode, phoneHeadingOneShot, phoneHeadingReady])
 
   useEffect(() => {
-    if (!historyActive || !historyPreview) return
-    setCameraModeRef({
-      kind: 'rideHistory',
-      selectionKey: historyPreview.key,
-      phase: 'preview',
-    })
+    if (!historyActive || !historySelectionKey) return
+
+    const mode = controllerStateRef.current.mode
+    if (mode.kind !== 'rideHistory' || mode.selectionKey !== historySelectionKey) {
+      setCameraModeRef({
+        kind: 'rideHistory',
+        selectionKey: historySelectionKey,
+        phase: 'preview',
+      })
+    }
+
     const frame = requestAnimationFrame(() => {
-      const mode = controllerStateRef.current.mode
-      if (
-        mode.kind === 'rideHistory' &&
-        mode.selectionKey === historyPreview.key &&
-        mode.phase === 'route'
-      ) {
+      if (rideRoute.length > 0) {
+        historyPreviewTargetRef.current = null
+        fitRide(historySelectionKey)
         return
       }
-      previewHistorySession(historyPreview)
+      if (historyPreviewRoute.length > 0) {
+        previewHistoryRoute(historySelectionKey, historyPreviewRoute)
+        return
+      }
+      if (historyPreview?.key === historySelectionKey) {
+        previewHistorySession(historyPreview)
+      }
     })
     return () => cancelAnimationFrame(frame)
-  }, [historyActive, historyPreview, previewHistorySession, setCameraModeRef])
-
-  useEffect(() => {
-    if (!historyActive || rideRoute.length === 0) return
-    historyPreviewTargetRef.current = null
-    const selectionKey = historyPreview?.key ?? null
-    setCameraModeRef({ kind: 'rideHistory', selectionKey, phase: 'route' })
-    const frame = requestAnimationFrame(() => fitRide(selectionKey))
-    return () => cancelAnimationFrame(frame)
-  }, [fitRide, historyActive, historyPreview?.key, rideRoute.length, setCameraModeRef])
+  }, [
+    fitRide,
+    historyActive,
+    historyPreview,
+    historyPreviewRoute,
+    historySelectionKey,
+    previewHistoryRoute,
+    previewHistorySession,
+    rideRoute,
+    setCameraModeRef,
+  ])
 
   return {
     cameraRef,
@@ -740,6 +839,7 @@ export function useCameraControls({
     gpsCamera,
     followGps,
     setFollowGps,
+    stopCameraAnimation,
     setFollowZoomLevel,
     recenterLive,
     getLiveFollowCamera,
