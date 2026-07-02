@@ -114,6 +114,7 @@ function makeTelemetry(): TelemetryEvent {
     tempMosfet: 36,
     tempMotor: 33,
     avgLatency: 18,
+    pullRateHz: 20,
     lastPacketAt: now,
   }
 }

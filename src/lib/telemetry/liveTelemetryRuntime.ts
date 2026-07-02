@@ -32,6 +32,7 @@ interface LiveTelemetryValues {
   adc2: SharedValue<number | null>
   lastPacketAt: SharedValue<number | null>
   avgLatencyMs: SharedValue<number | null>
+  pullRateHz: SharedValue<number | null>
 }
 
 /** Plain scalar bundle shipped to the UI thread in one hop, instead of 13 separate SharedValue writes. */
@@ -53,6 +54,7 @@ const EMPTY_TICK: TickScalars = {
   adc2: null,
   lastPacketAt: null,
   avgLatencyMs: null,
+  pullRateHz: null,
 }
 
 interface LiveTelemetrySnapshot {
@@ -106,6 +108,7 @@ function createValues(): LiveTelemetryValues {
     adc2: makeMutable<number | null>(null),
     lastPacketAt: makeMutable<number | null>(null),
     avgLatencyMs: makeMutable<number | null>(null),
+    pullRateHz: makeMutable<number | null>(null),
   }
 }
 
@@ -127,6 +130,7 @@ function tickScalars(telemetry: TelemetryEvent): TickScalars {
     adc2: finite(telemetry.adc2),
     lastPacketAt: finite(telemetry.lastPacketAt),
     avgLatencyMs: finite(telemetry.avgLatency),
+    pullRateHz: finite(telemetry.pullRateHz),
   }
 }
 
@@ -156,6 +160,7 @@ export function createLiveTelemetryRuntime({
     values.adc2.value = next.adc2
     values.lastPacketAt.value = next.lastPacketAt
     values.avgLatencyMs.value = next.avgLatencyMs
+    values.pullRateHz.value = next.pullRateHz
   }
 
   function pushTick(next: TickScalars): void {

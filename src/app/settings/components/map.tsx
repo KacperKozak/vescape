@@ -5,7 +5,7 @@ import { StyleSheet, Text, View } from 'react-native'
 import type { MapPoint } from 'vesc-ble'
 
 import { IconButton } from '@/components/ui/base/IconButton'
-import { CornerSheet } from '@/components/ui/overlays/CornerSheet'
+import { CornerSheet } from '@/components/ui/overlays/AnchoredSheet'
 import { useTriggerRef } from '@/components/ui/overlays/measureTrigger'
 import { ChipRow, ToggleRow, ValueRow } from '@/components/ui/dev/ShowcaseControls'
 import { MapStyleSwitch } from '@/components/ui/controls/MapStyleSwitch'

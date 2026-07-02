@@ -234,16 +234,63 @@ function LiveMapLayers({
         </>
       )}
       {riders.map((rider, index) =>
+        rider.trail && rider.trail.length >= 2 ? (
+          <RiderTrail key={rider.id} rider={rider} index={index} />
+        ) : null,
+      )}
+      {riders.map((rider, index) =>
         rider.presence ? <RiderPresencePin key={rider.id} rider={rider} index={index} /> : null,
       )}
     </>
   )
 }
 
-function RiderPresencePin({ rider, index }: { rider: RosterRider; index: number }) {
-  const color = rider.stale
+/** Marker/trail tint for a Rider: their chosen color, a palette fallback, or muted when stale. */
+function riderColor(rider: RosterRider, index: number): string {
+  return rider.stale
     ? theme.palette.slate.textMuted
     : (rider.color ?? RIDER_COLORS[index % RIDER_COLORS.length])
+}
+
+// A peer's recent path, tinted like their marker and fading out toward the tail —
+// the group-ride counterpart to the device's own live trail.
+function RiderTrail({ rider, index }: { rider: RosterRider; index: number }) {
+  const color = riderColor(rider, index)
+  const shape = useMemo(
+    () =>
+      rider.trail && rider.trail.length >= 2
+        ? makeTrailLineString(rider.trail.map((p) => ({ longitude: p.lng, latitude: p.lat })))
+        : null,
+    [rider.trail],
+  )
+  if (!shape) return null
+
+  return (
+    <ShapeSource id={`center-rider-trail-source-${rider.id}`} shape={shape} lineMetrics>
+      <LineLayer
+        id={`center-rider-trail-line-${rider.id}`}
+        style={{
+          lineColor: color,
+          lineWidth: MAP_DEFAULTS.trailWidth,
+          lineCap: 'round',
+          lineJoin: 'round',
+          lineGradient: [
+            'interpolate',
+            ['linear'],
+            ['line-progress'],
+            0,
+            theme.alpha(color, 0),
+            1,
+            theme.alpha(color, 0.85),
+          ],
+        }}
+      />
+    </ShapeSource>
+  )
+}
+
+function RiderPresencePin({ rider, index }: { rider: RosterRider; index: number }) {
+  const color = riderColor(rider, index)
   const heading = rider.presence?.heading ?? null
   if (!rider.presence) return null
 

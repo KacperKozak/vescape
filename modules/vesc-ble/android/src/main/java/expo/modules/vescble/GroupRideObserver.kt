@@ -7,6 +7,7 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
+import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
 
@@ -92,7 +93,7 @@ internal class GroupRideObserver(
                 stopHeartbeat()
             }
             sendHello(ws, riderId, riderName, riderColor)
-            lastPresence = RiderPresence(lat = lat, lng = lng, heading = null, speed = null, soc = null, boardName = null)
+            lastPresence = RiderPresence(lat = lat, lng = lng, heading = null, speed = null, soc = null, motorTemp = null, ctrlTemp = null, phoneBattery = null, boardName = null)
             val create = JSONObject()
                 .put("type", "create")
                 .put("location", JSONObject().put("lat", lat).put("lng", lng))
@@ -354,9 +355,20 @@ internal class GroupRideObserver(
             "name" to obj.optString("name"),
             "color" to obj.optString("color").takeIf { it.isNotEmpty() },
             "presence" to presenceMap(obj.optJSONObject("presence")),
+            "trail" to trailList(obj.optJSONArray("trail")),
             "stale" to obj.optBoolean("stale"),
             "lastSeen" to obj.optLong("lastSeen"),
         )
+    }
+
+    private fun trailList(arr: JSONArray?): List<Map<String, Any?>>? {
+        arr ?: return null
+        val points = mutableListOf<Map<String, Any?>>()
+        for (i in 0 until arr.length()) {
+            val p = arr.optJSONObject(i) ?: continue
+            points.add(mapOf("lat" to p.optDouble("lat"), "lng" to p.optDouble("lng")))
+        }
+        return points
     }
 
     private fun presenceMap(obj: JSONObject?): Map<String, Any?>? {
@@ -367,6 +379,9 @@ internal class GroupRideObserver(
             "heading" to obj.optionalDouble("heading"),
             "speed" to obj.optionalDouble("speed"),
             "soc" to obj.optionalDouble("soc"),
+            "motorTemp" to obj.optionalDouble("motorTemp"),
+            "ctrlTemp" to obj.optionalDouble("ctrlTemp"),
+            "phoneBattery" to obj.optionalDouble("phoneBattery"),
             "boardName" to obj.optString("boardName").takeIf { it.isNotEmpty() },
         )
     }
@@ -388,7 +403,10 @@ internal class GroupRideObserver(
         private const val TAG = "GroupRideObserver"
         private const val NORMAL_CLOSURE = 1000
         private const val PING_INTERVAL_SECONDS = 20L
-        private const val HEARTBEAT_INTERVAL_MS = 10_000L
+        // Must stay well under the server's 5s stale threshold: it's the sole keepalive
+        // when a Rider isn't actively streaming presence (stationary, no GPS/board), so a
+        // slower beat would leave them perpetually greyed as "Stale".
+        private const val HEARTBEAT_INTERVAL_MS = 3_000L
         private const val NO_SUCH_RIDE_PREFIX = "no such ride:"
         private val RECONNECT_DELAYS_MS = longArrayOf(1_000, 2_000, 5_000, 10_000, 30_000)
     }
@@ -400,6 +418,9 @@ internal data class RiderPresence(
     val heading: Double?,
     val speed: Double?,
     val soc: Double?,
+    val motorTemp: Double?,
+    val ctrlTemp: Double?,
+    val phoneBattery: Double?,
     val boardName: String?,
 ) {
     fun toJson(): JSONObject {
@@ -409,6 +430,9 @@ internal data class RiderPresence(
         heading?.let { json.put("heading", it) }
         speed?.let { json.put("speed", it) }
         soc?.let { json.put("soc", it) }
+        motorTemp?.let { json.put("motorTemp", it) }
+        ctrlTemp?.let { json.put("ctrlTemp", it) }
+        phoneBattery?.let { json.put("phoneBattery", it) }
         boardName?.let { json.put("boardName", it) }
         return json
     }

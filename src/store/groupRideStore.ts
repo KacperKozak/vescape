@@ -23,7 +23,7 @@ import {
 import { nearbyRides, type NearbyRide } from '@/lib/groupRide/nearby'
 import { riderRoster, type RosterRider } from '@/lib/groupRide/roster'
 import { useRiderStore } from '@/store/riderStore'
-import { GROUP_RIDE_SERVER_URL } from '@/config/groupRide'
+import { SERVER_WS_URL } from '@/config/server'
 
 type TimerHandle = ReturnType<typeof setInterval>
 
@@ -140,7 +140,7 @@ export const useGroupRideStore = create<GroupRideState>((set, get) => ({
       set((state) => deriveRoster({}, state))
     }, 1_000)
     set({ observing: true })
-    startGroupRideObserve(GROUP_RIDE_SERVER_URL)
+    startGroupRideObserve(SERVER_WS_URL)
   },
 
   stopObserving() {

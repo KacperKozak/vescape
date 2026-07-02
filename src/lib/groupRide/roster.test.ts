@@ -17,27 +17,29 @@ function rider(id: string, lat: number | null, stale = false): GroupRideRider {
 }
 
 describe('riderRoster', () => {
-  test('drops the current Rider from the shared roster', () => {
-    expect(
-      riderRoster([rider('me', OWN.lat), rider('bob', OWN.lat)], 'me', OWN, 0).map((r) => r.id),
-    ).toEqual(['bob'])
+  test('pins the current Rider to the front, flagged as self', () => {
+    const rows = riderRoster([rider('bob', OWN.lat), rider('me', OWN.lat)], 'me', OWN, 0)
+    expect(rows.map((r) => r.id)).toEqual(['me', 'bob'])
+    expect(rows[0].isSelf).toBe(true)
+    expect(rows[1].isSelf).toBe(false)
   })
 
-  test('sorts fresh riders with locations before stale or locationless riders', () => {
+  test('sorts self first, then fresh riders with locations before stale or locationless', () => {
     const result = riderRoster(
       [
         rider('stale', OWN.lat, true),
         rider('far', OWN.lat + 0.02),
         rider('near', OWN.lat + 0.001),
         rider('none', null),
+        rider('me', OWN.lat + 0.05),
       ],
       'me',
       OWN,
       0,
     )
 
-    expect(result.map((r) => r.id)).toEqual(['near', 'far', 'none', 'stale'])
-    expect(result[0].distanceM).toBeLessThan(result[1].distanceM!)
+    expect(result.map((r) => r.id)).toEqual(['me', 'near', 'far', 'none', 'stale'])
+    expect(result[1].distanceM).toBeLessThan(result[2].distanceM!)
   })
 
   test('keeps null distance when own location is unavailable', () => {

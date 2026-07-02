@@ -10,11 +10,7 @@ import {
   reduceMapCameraIntent,
   type MapCameraMode,
 } from '@/lib/map/cameraController'
-import {
-  getLiveFollowCameraProfile,
-  getMapRevealPitch,
-  getPitchForZoom,
-} from '@/lib/map/cameraProfiles'
+import { getMapRevealPitch, getPitchForZoom } from '@/lib/map/cameraProfiles'
 import { getCameraAfterScreenDrag } from '@/screens/center/cameraPanProjection'
 import { getHistoryRouteCamera, type HistoryCameraViewport } from '@/screens/center/historyCamera'
 

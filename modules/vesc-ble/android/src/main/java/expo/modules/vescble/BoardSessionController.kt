@@ -7,6 +7,7 @@ import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.pm.ServiceInfo
 import android.location.Location
+import android.os.BatteryManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -923,6 +924,7 @@ internal class BoardSessionController(private val service: VescForegroundService
                     avgLatency = updateLatency(now),
                     packetAt = now,
                     location = locationTracker.latestLocation,
+                    pullRateHz = pollingLoop.measuredRateHz(),
                 ) ?: run {
                     captureTelemetryParseFailed(payload)
                     return
@@ -1373,8 +1375,18 @@ internal class BoardSessionController(private val service: VescForegroundService
             heading = location.bearingDeg,
             speed = if (telemetryFresh) currentTelemetry?.speed?.let { kotlin.math.abs(it) / 3.6 } else null,
             soc = if (telemetryFresh) latestBatterySoc?.let { (it / 100.0).coerceIn(0.0, 1.0) } else null,
+            motorTemp = if (telemetryFresh) currentTelemetry?.tempMotor else null,
+            ctrlTemp = if (telemetryFresh) currentTelemetry?.tempMosfet else null,
+            phoneBattery = readPhoneBattery(),
             boardName = if (boardConfig != null) (boardConfig?.deviceName ?: selectedBoardName) else null,
         )
+    }
+
+    /** Device battery as a 0–1 fraction, or null when the platform can't report it. */
+    private fun readPhoneBattery(): Double? {
+        val manager = service.getSystemService(Context.BATTERY_SERVICE) as? BatteryManager ?: return null
+        val level = manager.getIntProperty(BatteryManager.BATTERY_PROPERTY_CAPACITY)
+        return if (level in 0..100) level / 100.0 else null
     }
 
     private fun isInsidePrivacyZone(location: LocationSnapshot): Boolean {

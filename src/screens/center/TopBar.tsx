@@ -12,7 +12,7 @@ import { router } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { BoardSelectorSheet } from '@/components/domain/board/BoardSelectorSheet'
-import { CornerSheet } from '@/components/ui/overlays/CornerSheet'
+import { CornerSheet } from '@/components/ui/overlays/AnchoredSheet'
 import { IconButton } from '@/components/ui/base/IconButton'
 import { WeatherStat } from '@/components/ui/weather/WeatherStat'
 import { SocialSheet } from '@/screens/social/SocialSheet'
@@ -152,6 +152,7 @@ export function TopBar({
         triggerRef={socialRef}
         anchor="left"
         title="Social"
+        icon={UsersThreeIcon}
         onClose={() => setSocialOpen(false)}
       >
         <SocialSheet onNavigate={() => setSocialOpen(false)} />
@@ -162,6 +163,7 @@ export function TopBar({
         triggerRef={pillRef}
         boards={boards}
         activeBoardId={activeBoardId}
+        activeBoardLive={bleStatus === 'connected' || bleStatus === 'stale'}
         onClose={() => setSelectorOpen(false)}
         onSelectBoard={(id) => {
           onSelectBoard(id)

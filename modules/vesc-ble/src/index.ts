@@ -213,6 +213,8 @@ export interface TelemetryEvent {
   tempMosfet: number | null
   tempMotor: number | null
   avgLatency: number | null
+  /** Achieved telemetry pull rate in Hz (native-measured, smoothed), or null before it's known. */
+  pullRateHz: number | null
   lastPacketAt: number
   firedAlerts?: FiredAlert[]
 }
@@ -403,7 +405,14 @@ export interface HistoryGpsSample {
 export interface HistoryMarker {
   id: number
   occurredAtMs: number
-  type: 'connected' | 'disconnected' | 'connection_lost' | 'error' | 'gap' | 'app_stop'
+  type:
+    | 'connected'
+    | 'disconnected'
+    | 'connection_lost'
+    | 'error'
+    | 'gap'
+    | 'app_stop'
+    | 'auto_pause'
   deviceId: string | null
   deviceName: string | null
   message: string | null
@@ -697,8 +706,20 @@ export interface RiderPresence {
   speed?: number | null
   /** Battery SoC Estimate as a 0-1 fraction. Null/omitted when unavailable. */
   soc?: number | null
+  /** Motor temperature in °C. Null/omitted when no fresh Board Session is live. */
+  motorTemp?: number | null
+  /** Controller/FET temperature in °C. Null/omitted when no fresh Board Session is live. */
+  ctrlTemp?: number | null
+  /** Device battery as a 0-1 fraction. Null/omitted when the platform can't report it. */
+  phoneBattery?: number | null
   /** Connected board's display name. Null/omitted when no Board Session is live. */
   boardName?: string | null
+}
+
+/** One breadcrumb in a Rider's recent shared path. */
+export interface TrailPoint {
+  lat: number
+  lng: number
 }
 
 export interface GroupRideRider {
@@ -707,6 +728,8 @@ export interface GroupRideRider {
   /** Rider-chosen marker color (hex), or null when unset. */
   color: string | null
   presence: RiderPresence | null
+  /** Recent path (oldest → newest), server-capped to ~30s. Null/omitted while empty. */
+  trail?: TrailPoint[] | null
   stale: boolean
   lastSeen: number
 }

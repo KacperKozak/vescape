@@ -20,6 +20,13 @@ internal class PollingLoop(
     private var current: Active? = null
 
     /**
+     * EWMA of the interval between successive polls, in ms. The loop is response-paced, so the send
+     * cadence equals the achieved telemetry rate. 0 = not yet measured. Exposed as [measuredRateHz]
+     * so the UI can show the real pull rate the link is sustaining, distinct from the requested cap.
+     */
+    private var smoothedPeriodMs = 0.0
+
+    /**
      * Minimum spacing between requests, in ms. 0 = unlimited (pure response-paced). Held as a
      * standalone field rather than inside [Active] so the rate cap can be changed live mid-session
      * (see [setPollIntervalMs]). Volatile because live updates arrive off the loop's thread.
@@ -47,6 +54,8 @@ internal class PollingLoop(
         val bmsPayload = if (sessionConfig.hasBms == true) bmsPayload(transport) else null
         stop()
         tick = 0L
+        lastPollAt = 0L
+        smoothedPeriodMs = 0.0
         floorMs = max(0L, sessionConfig.pollIntervalMs)
         current = Active(session, pollPayload, bmsPayload)
         active = true
@@ -91,9 +100,22 @@ internal class PollingLoop(
         return max(0, now - lastPollAt).toInt()
     }
 
+    /** Achieved telemetry rate in Hz (smoothed), or null before the second poll lands. */
+    fun measuredRateHz(): Double? {
+        if (smoothedPeriodMs <= 0.0) return null
+        return 1_000.0 / smoothedPeriodMs
+    }
+
     private fun sendNow() {
         val ctx = current ?: return
-        lastPollAt = nowMs()
+        val now = nowMs()
+        if (lastPollAt > 0L) {
+            val delta = (now - lastPollAt).toDouble()
+            smoothedPeriodMs =
+                if (smoothedPeriodMs <= 0.0) delta
+                else smoothedPeriodMs + RATE_SMOOTHING * (delta - smoothedPeriodMs)
+        }
+        lastPollAt = now
         sendPayloadWithRetry(ctx.payload, ctx.session)
         // BMS values change slowly; poll them at 1/BMS_POLL_STRIDE of the telemetry rate
         // to avoid crowding the BLE link with large cell-voltage replies.
@@ -136,6 +158,9 @@ internal class PollingLoop(
     private companion object {
         const val SAFETY_MIN_MS = 1_000L
         const val BMS_POLL_STRIDE = 8L
+        // EWMA weight for the newest poll interval. Low enough to ride out jitter, high enough to
+        // track a real rate change (e.g. rider drops the rate cap mid-ride) within a second or two.
+        const val RATE_SMOOTHING = 0.2
     }
 }
 
