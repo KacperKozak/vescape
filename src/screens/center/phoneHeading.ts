@@ -1,6 +1,6 @@
 const PHONE_HEADING_INTERVAL_MS = 33
-const PHONE_HEADING_MIN_SMOOTHING_ALPHA = 0.18
-const PHONE_HEADING_MAX_SMOOTHING_ALPHA = 0.82
+const PHONE_HEADING_MIN_SMOOTHING_ALPHA = 0.1
+const PHONE_HEADING_MAX_SMOOTHING_ALPHA = 0.45
 const PHONE_HEADING_FULL_SPEED_DELTA_DEG = 90
 
 export interface DeviceMotionMeasurement {
@@ -49,14 +49,18 @@ export function phoneHeadingFromDeviceMotion(event: DeviceMotionMeasurement): nu
   return normalizeHeading((-alpha * 180) / Math.PI + event.orientation)
 }
 
-export function smoothPhoneHeading(previous: number | null, next: number): number {
+export function smoothPhoneHeading(
+  previous: number | null,
+  next: number,
+  responseScale = 1,
+): number {
   if (previous == null) return normalizeHeading(next)
   const delta = headingDeltaDeg(previous, next)
   const speedRatio = clamp(Math.abs(delta) / PHONE_HEADING_FULL_SPEED_DELTA_DEG, 0, 1)
   const alpha =
     PHONE_HEADING_MIN_SMOOTHING_ALPHA +
     (PHONE_HEADING_MAX_SMOOTHING_ALPHA - PHONE_HEADING_MIN_SMOOTHING_ALPHA) * speedRatio
-  return normalizeHeading(previous + delta * alpha)
+  return normalizeHeading(previous + delta * alpha * responseScale)
 }
 
 export function phoneHeadingAnimationDuration(): number {

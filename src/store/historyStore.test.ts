@@ -52,6 +52,7 @@ const getSettings = mock(async () => ({
   historyMetricHotRanges: {},
 }))
 const updateSetting = mock(async () => {})
+const wait = mock(async () => {})
 
 const vescBleMock = {
   ...actualVescBle,
@@ -66,6 +67,7 @@ const vescBleMock = {
 
 mock.module('vesc-ble', () => vescBleMock)
 mock.module('../../modules/vesc-ble/src/index', () => vescBleMock)
+mock.module('@/helpers/wait', () => ({ wait }))
 
 beforeEach(async () => {
   getTelemetryHistory.mockClear()
@@ -75,6 +77,8 @@ beforeEach(async () => {
   deleteTelemetryRange.mockClear()
   getSettings.mockClear()
   updateSetting.mockClear()
+  wait.mockClear()
+  wait.mockImplementation(async () => {})
   const { useHistoryStore } = await import('./historyStore')
   useHistoryStore.setState({
     blocks: [],
@@ -189,6 +193,7 @@ test('selects ride immediately while loading its full route', async () => {
       longitude: next.firstLongitude,
     }),
   ])
+  await Promise.resolve()
   expect(getHistoryRange).toHaveBeenLastCalledWith({
     fromMs: next.startAtMs,
     toMs: next.endAtMs,
@@ -227,6 +232,47 @@ test('selects ride immediately while loading its full route', async () => {
   expect(useHistoryStore.getState().sessionTruncated).toBe(false)
 })
 
+test('loads the full route immediately but keeps loading visible for at least 150ms', async () => {
+  const ride = block({
+    id: 'ride',
+    startAtMs: 1_000_000,
+    endAtMs: 1_060_000,
+    firstLatitude: 51,
+    firstLongitude: 17,
+  })
+  const fullSample = sample({ id: 42, capturedAtMs: ride.startAtMs + 1 })
+  getTelemetryHistory.mockResolvedValueOnce([ride])
+  getHistoryRange.mockResolvedValueOnce({
+    boardSamples: [fullSample],
+    gpsSamples: [],
+    markers: [],
+  })
+  let finishMinimumLoading: () => void = () => {}
+  wait.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finishMinimumLoading = resolve
+      }),
+  )
+
+  const { useHistoryStore } = await import('./historyStore')
+  await useHistoryStore.getState().loadInitial()
+
+  const select = useHistoryStore.getState().selectSession(useHistoryStore.getState().sessions[0])
+  await Promise.resolve()
+
+  expect(wait).toHaveBeenCalledWith(150)
+  expect(getHistoryRange).toHaveBeenCalledTimes(1)
+  expect(useHistoryStore.getState().loadingSession).toBe(true)
+  expect(useHistoryStore.getState().sessionSamples[0]?.id).toBe(0)
+
+  finishMinimumLoading()
+  await select
+
+  expect(useHistoryStore.getState().loadingSession).toBe(false)
+  expect(useHistoryStore.getState().sessionSamples).toEqual([fullSample])
+})
+
 test('loads a small GPS preview when selected ride has no bucket coordinate', async () => {
   const ride = block({
     id: 'ride',
@@ -252,12 +298,14 @@ test('loads a small GPS preview when selected ride has no bucket coordinate', as
     distanceFromPreviousM: null,
     precise: true,
   }
+  let resolvePreviewRange: (value: HistoryRangeResult) => void = () => {}
   let resolveFullRange: (value: HistoryRangeResult) => void = () => {}
-  getHistoryRange.mockResolvedValueOnce({
-    boardSamples: [],
-    gpsSamples: [previewGps],
-    markers: [],
-  })
+  getHistoryRange.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        resolvePreviewRange = resolve
+      }),
+  )
   getHistoryRange.mockImplementationOnce(
     () =>
       new Promise((resolve) => {
@@ -307,7 +355,18 @@ test('loads a small GPS preview when selected ride has no bucket coordinate', as
     deviceId: ride.deviceId,
     limit: 240,
   })
+  expect(getHistoryRange).toHaveBeenCalledTimes(1)
+
+  resolvePreviewRange({
+    boardSamples: [],
+    gpsSamples: [previewGps],
+    markers: [],
+  })
+  await Promise.resolve()
+  await Promise.resolve()
+
   expect(useHistoryStore.getState().sessionGpsSamples).toEqual([previewGps])
+  expect(getHistoryRange).toHaveBeenCalledTimes(2)
 
   resolveFullRange({
     boardSamples: Array.from({ length: ride.sampleCount }, (_, index) =>

@@ -626,6 +626,8 @@ export function CenterOverlays({
       const actuallyRevealed = revealed || mode === 'map'
       if (!actuallyRevealed) {
         mapRef.current?.restorePreviewPan()
+      } else {
+        mapRef.current?.endPreviewPan()
       }
       setRevealGestureActive(false)
     },

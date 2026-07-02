@@ -84,6 +84,9 @@
     "sharp": "^0.35.2",
     "typescript": "^6.0.3"
   },
+  "patchedDependencies": {
+    "@rnmapbox/maps@10.3.1": "patches/@rnmapbox%2Fmaps@10.3.1.patch"
+  },
   "trustedDependencies": [
     "@shopify/react-native-skia"
   ]
