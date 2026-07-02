@@ -13,6 +13,7 @@ import {
   type TelemetrySummary,
 } from 'vesc-ble'
 import { groupHistorySessions, type HistorySession } from '@/lib/history/sessions'
+import { wait } from '@/helpers/wait'
 import { useSettingsStore } from '@/store/settingsStore'
 
 interface HistoryState {
@@ -53,6 +54,7 @@ interface HistoryActions {
 const PAGE_SIZE = 100
 const MIN_SESSION_SAMPLE_LIMIT = 10_000
 const PREVIEW_SAMPLE_LIMIT = 240
+const MIN_SESSION_LOADING_MS = 150
 let liveRefreshInFlight = false
 let liveRefreshVersion = 0
 let sessionLoadVersion = 0
@@ -211,7 +213,10 @@ export const useHistoryStore = create<HistoryState & HistoryActions>((set, get) 
     set({ loading: true, error: undefined })
     try {
       const cursorBeforeMs = Math.min(...blocks.map((b) => b.bucketStartMs)) - 1
-      const next = await getTelemetryHistory({ limit: PAGE_SIZE, cursorBeforeMs })
+      const next = await getTelemetryHistory({
+        limit: PAGE_SIZE,
+        cursorBeforeMs,
+      })
       const ids = new Set(blocks.map((b) => b.id))
       const merged = [...blocks, ...next.filter((b) => !ids.has(b.id))]
       const sessions = groupHistorySessions(merged)
@@ -240,7 +245,13 @@ export const useHistoryStore = create<HistoryState & HistoryActions>((set, get) 
 
   async selectBlock(block) {
     if (!block) {
-      set({ selectedBlock: null, samples: [], gpsSamples: [], markers: [], loadingSamples: false })
+      set({
+        selectedBlock: null,
+        samples: [],
+        gpsSamples: [],
+        markers: [],
+        loadingSamples: false,
+      })
       return
     }
     set({
@@ -258,7 +269,11 @@ export const useHistoryStore = create<HistoryState & HistoryActions>((set, get) 
         ...(block.deviceId ? { deviceId: block.deviceId } : {}),
         limit: 500,
       })
-      set({ samples: range.boardSamples, gpsSamples: range.gpsSamples, markers: range.markers })
+      set({
+        samples: range.boardSamples,
+        gpsSamples: range.gpsSamples,
+        markers: range.markers,
+      })
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err) })
     } finally {
@@ -289,22 +304,24 @@ export const useHistoryStore = create<HistoryState & HistoryActions>((set, get) 
       sessionTruncated: false,
       error: undefined,
     })
+    const minimumLoading = wait(MIN_SESSION_LOADING_MS)
     try {
       const rangeOptions = getSessionRangeOptions(session)
       if (session.centerLatitude == null || session.centerLongitude == null) {
-        void getHistoryRange({
+        const previewRange = await getHistoryRange({
           ...rangeOptions,
           limit: getSessionPreviewLimit(session),
-        }).then((previewRange) => {
-          if (version !== sessionLoadVersion || previewRange.gpsSamples.length === 0) return
-          if (get().sessionGpsSamples.length > 0) return
-          set({ sessionGpsSamples: previewRange.gpsSamples })
         })
+        if (version !== sessionLoadVersion) return
+        if (previewRange.gpsSamples.length > 0) {
+          set({ sessionGpsSamples: previewRange.gpsSamples })
+        }
       }
       const range = await getHistoryRange({
         ...rangeOptions,
         limit: getSessionSampleLimit(session),
       })
+      await minimumLoading
       if (version !== sessionLoadVersion) return
       set({
         sessionSamples: range.boardSamples,
@@ -316,10 +333,12 @@ export const useHistoryStore = create<HistoryState & HistoryActions>((set, get) 
           range.gpsSamples.length < session.gpsPointCount,
       })
     } catch (err) {
+      await minimumLoading
       if (version === sessionLoadVersion) {
         set({ error: err instanceof Error ? err.message : String(err) })
       }
     } finally {
+      await minimumLoading
       if (version === sessionLoadVersion) {
         set({ loadingSession: false })
       }

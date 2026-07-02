@@ -54,15 +54,16 @@ describe('phoneHeading', () => {
 
   test('smooths compass heading across the shortest wrap-around path', () => {
     expect(smoothPhoneHeading(null, 90)).toBe(90)
-    expect(smoothPhoneHeading(350, 10)).toBeCloseTo(356.44)
-    expect(smoothPhoneHeading(10, 350)).toBeCloseTo(3.56)
+    expect(smoothPhoneHeading(350, 10)).toBeCloseTo(353.56)
+    expect(smoothPhoneHeading(10, 350)).toBeCloseTo(6.44)
   })
 
   test('uses adaptive smoothing and no camera animation', () => {
     expect(phoneHeadingSmoothingAlphaForTest(0, 2)).toBeLessThan(
       phoneHeadingSmoothingAlphaForTest(0, 90),
     )
-    expect(smoothPhoneHeading(0, 90)).toBeCloseTo(73.8)
+    expect(smoothPhoneHeading(0, 90)).toBeCloseTo(40.5)
+    expect(smoothPhoneHeading(0, 90, 0.5)).toBeCloseTo(20.25)
     expect(phoneHeadingUpdateIntervalMs()).toBe(33)
     expect(phoneHeadingAnimationDuration()).toBe(0)
   })

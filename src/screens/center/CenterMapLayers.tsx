@@ -37,6 +37,7 @@ import {
 import type { HistoryMetricKey, HistoryMetricHotRanges } from '@/lib/history/metricColorScale'
 import { isMapPointKindVisible } from '@/lib/mapPointVisibility'
 import type { HistoryGpsSample, HistoryMarker, TelemetrySample } from '@/store/historyStore'
+import { useRiderStore } from '@/store/riderStore'
 import type { RosterRider } from '@/lib/groupRide/roster'
 import { useCenterScreenStore } from '@/screens/center/centerScreenStore'
 
@@ -120,6 +121,29 @@ function LiveMapLayers({
   gpsPuckBearingDeg: CenterMapLayersProps['gpsPuckBearingDeg']
   riders: CenterMapLayersProps['riders']
 }) {
+  const riderColor = useRiderStore((state) => state.riderColor)
+  const gpsPointColor = riderColor ?? GPS_POINT_COLOR
+  const trailColor = riderColor ?? MAP_DEFAULTS.trailColor
+  const trailGradientStart = riderColor
+    ? theme.alpha(riderColor, 0)
+    : MAP_DEFAULTS.trailGradientStart
+  const trailGradientEnd = riderColor
+    ? theme.alpha(riderColor, 0.85)
+    : MAP_DEFAULTS.trailGradientEnd
+  const gpsPuckPositionShape = useMemo(
+    () =>
+      accuracyFix
+        ? ({
+            type: 'Feature',
+            geometry: {
+              type: 'Point',
+              coordinates: [accuracyFix.longitude, accuracyFix.latitude],
+            },
+            properties: {},
+          } as GeoJSON.Feature<GeoJSON.Point>)
+        : null,
+    [accuracyFix],
+  )
   const gpsPuckShape = useMemo(
     () =>
       accuracyFix && gpsPuckBearingDeg != null
@@ -147,7 +171,7 @@ function LiveMapLayers({
           <LineLayer
             id="center-live-trail-line"
             style={{
-              lineColor: MAP_DEFAULTS.trailColor,
+              lineColor: trailColor,
               lineWidth: MAP_DEFAULTS.trailWidth,
               lineCap: 'round',
               lineJoin: 'round',
@@ -156,9 +180,9 @@ function LiveMapLayers({
                 ['linear'],
                 ['line-progress'],
                 0,
-                MAP_DEFAULTS.trailGradientStart,
+                trailGradientStart,
                 1,
-                MAP_DEFAULTS.trailGradientEnd,
+                trailGradientEnd,
               ],
             }}
           />
@@ -174,19 +198,23 @@ function LiveMapLayers({
               />
             </ShapeSource>
           )}
-          {gpsPuckShape ? (
+          {gpsPuckPositionShape && (
+            <ShapeSource id="center-gps-puck-position-source" shape={gpsPuckPositionShape}>
+              <CircleLayer
+                id="center-gps-puck-core"
+                style={{
+                  circleRadius: 8,
+                  circleColor: gpsPointColor,
+                  circleStrokeColor: theme.palette.mono.white,
+                  circleStrokeWidth: 3,
+                }}
+              />
+            </ShapeSource>
+          )}
+          {gpsPuckShape && (
             <>
               <Images images={{ [GPS_HEADING_ICON_ID]: { image: GPS_HEADING_ICON, sdf: true } }} />
-              <ShapeSource id="center-gps-puck-source" shape={gpsPuckShape}>
-                <CircleLayer
-                  id="center-gps-puck-core"
-                  style={{
-                    circleRadius: 8,
-                    circleColor: GPS_POINT_COLOR,
-                    circleStrokeColor: theme.palette.mono.white,
-                    circleStrokeWidth: 3,
-                  }}
-                />
+              <ShapeSource id="center-gps-puck-heading-source" shape={gpsPuckShape}>
                 <SymbolLayer
                   id="center-gps-puck-heading-outline"
                   style={{
@@ -202,12 +230,6 @@ function LiveMapLayers({
                 />
               </ShapeSource>
             </>
-          ) : (
-            <MapPin
-              id="center-gps-position"
-              coordinate={[accuracyFix.longitude, accuracyFix.latitude]}
-              color={GPS_POINT_COLOR}
-            />
           )}
         </>
       )}

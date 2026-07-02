@@ -19,6 +19,7 @@ import { useSettingsStore } from '@/store/settingsStore'
 import { useWeatherStore } from '@/store/weatherStore'
 import { useMediaHistory } from '@/hooks/useMediaHistory'
 import type { MediaHistoryAsset } from '@/lib/history/mediaHistory'
+import { getHistoryPreviewRoute } from '@/lib/history/previewRoute'
 
 interface UseCenterScreenControllerArgs {
   mapRef: RefObject<CenterMapHandle | null>
@@ -185,6 +186,11 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
       maxLongitude: selectedSession.maxLongitude,
     }
   }, [loadingSession, selectedSession, sessionGpsSamples])
+
+  const historyPreviewRoute = useMemo(
+    () => (loadingSession ? getHistoryPreviewRoute(sessionSamples) : []),
+    [loadingSession, sessionSamples],
+  )
 
   const exitMapFocus = useCallback(() => {
     enterTelemetry()
@@ -374,6 +380,7 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
     openMedia: (asset: MediaHistoryAsset) => setOpenMediaAssetId(asset.id),
     closeMedia: () => setOpenMediaAssetId(null),
     historyPreview,
+    historyPreviewRoute,
     previousRide,
     nextRide,
     canPreviousRide,
