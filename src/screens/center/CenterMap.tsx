@@ -433,6 +433,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
   const updateNavigationDiagnostics = useNavigationDiagnosticsStore((s) => s.update)
   const riderFocusRequest = useGroupRideStore((s) => s.focusRequest)
   const focusRider = useGroupRideStore((s) => s.focusRider)
+  const handledRiderFocusNonceRef = useRef(0)
   const riderFocusRows = useGroupRideStore((s) => s.rosterRows)
   // Own Rider is drawn by the GPS puck, so keep it out of the roster map pins.
   const mapRiders = useMemo(() => riderFocusRows.filter((row) => !row.isSelf), [riderFocusRows])
@@ -489,8 +490,12 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
 
   useEffect(() => {
     if (!riderFocusRequest || historyActive) return
+    // One camera move per request: rosterRows refresh on every presence tick, so
+    // without consuming the nonce this effect would keep re-centering on the rider.
+    if (riderFocusRequest.nonce === handledRiderFocusNonceRef.current) return
     const rider = riderFocusRows.find((row) => row.id === riderFocusRequest.riderId)
     if (!rider?.presence) return
+    handledRiderFocusNonceRef.current = riderFocusRequest.nonce
     setFollowGps(false)
     const current = currentCameraRef.current
     cameraRef.current?.setCamera({
