@@ -38,8 +38,10 @@ const CLOSE_DURATION = 180
 const SCREEN_EDGE_PADDING = 10
 /** Fraction of the screen height a sheet is allowed to occupy. */
 const HEIGHT_FRACTION = 0.6
-/** Continue closing automatically once this fraction of the drawer remains visible. */
-const DRAWER_AUTO_CLOSE_VISIBLE_FRACTION = 0.2
+/** Continue closing automatically once this many pixels of the drawer remain visible. */
+const DRAWER_AUTO_CLOSE_VISIBLE_PX = 200
+/** Approximate native fling travel from Android's release velocity in points/ms. */
+const DRAWER_FLING_PROJECTION_MS = 250
 const DRAWER_OPEN_TRANSLATE_Y = 42
 const DRAWER_OPEN_DURATION = 280
 const DRAWER_ENTER_FROM_TOP = new Keyframe({
@@ -366,6 +368,22 @@ function EdgeDrawer({
     [animatedDismissRange, height, opensFromTop, scrollOffset],
   )
 
+  const shouldAutoCloseAtOffset = useCallback(
+    (offset: number) => {
+      const visiblePixels = opensFromTop ? dismissRange - offset : offset
+      const autoCloseThreshold = Math.min(DRAWER_AUTO_CLOSE_VISIBLE_PX, dismissRange / 2)
+      return visiblePixels <= autoCloseThreshold
+    },
+    [dismissRange, opensFromTop],
+  )
+
+  const scrollFullyOut = useCallback(() => {
+    scrollRef.current?.scrollTo({
+      y: opensFromTop ? dismissRange : 0,
+      animated: true,
+    })
+  }, [dismissRange, opensFromTop])
+
   const handleScrollEnd = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const offset = event.nativeEvent.contentOffset.y
@@ -375,15 +393,25 @@ function EdgeDrawer({
         return
       }
 
-      const visibleFraction = opensFromTop ? 1 - offset / dismissRange : offset / dismissRange
-      if (visibleFraction <= DRAWER_AUTO_CLOSE_VISIBLE_FRACTION) {
-        scrollRef.current?.scrollTo({
-          y: opensFromTop ? dismissRange : 0,
-          animated: true,
-        })
-      }
+      if (shouldAutoCloseAtOffset(offset)) scrollFullyOut()
     },
-    [dismissRange, finishClose, opensFromTop],
+    [dismissRange, finishClose, opensFromTop, scrollFullyOut, shouldAutoCloseAtOffset],
+  )
+
+  const handleScrollEndDrag = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const { contentOffset, targetContentOffset, velocity } = event.nativeEvent
+      const projectedOffset =
+        targetContentOffset?.y ?? contentOffset.y - (velocity?.y ?? 0) * DRAWER_FLING_PROJECTION_MS
+
+      if (shouldAutoCloseAtOffset(projectedOffset)) {
+        scrollFullyOut()
+        return
+      }
+
+      handleScrollEnd(event)
+    },
+    [handleScrollEnd, scrollFullyOut, shouldAutoCloseAtOffset],
   )
 
   if (!mounted) return null
@@ -435,7 +463,7 @@ function EdgeDrawer({
           ref={scrollRef}
           onContentSizeChange={handleContentSizeChange}
           onScroll={scrollHandler}
-          onScrollEndDrag={handleScrollEnd}
+          onScrollEndDrag={handleScrollEndDrag}
           onMomentumScrollEnd={handleScrollEnd}
           scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
