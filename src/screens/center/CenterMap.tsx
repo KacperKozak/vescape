@@ -1,5 +1,5 @@
 import Mapbox, { Camera } from '@rnmapbox/maps'
-import { CrosshairSimpleIcon } from 'phosphor-react-native'
+import { CrosshairSimpleIcon, type Icon } from 'phosphor-react-native'
 import {
   forwardRef,
   useCallback,
@@ -101,6 +101,12 @@ interface MapLayout {
   width: number
   height: number
 }
+
+// Filled dot matching the rider's map marker, so the edge indicator reads as that rider.
+// Module scope keeps the reference stable for the indicator identity check.
+const RiderDotIcon: Icon = ({ color }) => (
+  <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: color }} />
+)
 
 function usableCoordinate(location: { longitude: number; latitude: number } | null | undefined) {
   if (!location) return null
@@ -426,6 +432,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
   const gpsPinBearingDeg = gpsPuckBearingDeg == null ? null : gpsPuckBearingDeg - cameraHeading
   const updateNavigationDiagnostics = useNavigationDiagnosticsStore((s) => s.update)
   const riderFocusRequest = useGroupRideStore((s) => s.focusRequest)
+  const focusRider = useGroupRideStore((s) => s.focusRider)
   const riderFocusRows = useGroupRideStore((s) => s.rosterRows)
   // Own Rider is drawn by the GPS puck, so keep it out of the roster map pins.
   const mapRiders = useMemo(() => riderFocusRows.filter((row) => !row.isSelf), [riderFocusRows])
@@ -445,6 +452,26 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
             color,
             textColor: color,
             icon: getMapPointKindIcon('direction'),
+          },
+        ]
+      }),
+    [mapRiders],
+  )
+  // Peers themselves, same shape and index-aligned tint as their map pins.
+  const riderPoints = useMemo(
+    () =>
+      mapRiders.flatMap((rider, index) => {
+        const presence = rider.presence
+        if (!presence) return []
+        const color = rosterRiderColor(rider, index)
+        return [
+          {
+            id: `rider-${rider.id}`,
+            type: 'rider' as const,
+            coordinate: [presence.lng, presence.lat] as [number, number],
+            color,
+            textColor: color,
+            icon: RiderDotIcon,
           },
         ]
       }),
@@ -485,7 +512,8 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
       (offscreenMapGpsCoordinate == null &&
         directionPoint == null &&
         selectedMapPoint == null &&
-        riderTargetPoints.length === 0) ||
+        riderTargetPoints.length === 0 &&
+        riderPoints.length === 0) ||
       mapLayout.width <= 0 ||
       mapLayout.height <= 0
     ) {
@@ -540,6 +568,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
           ]
         : []),
       ...riderTargetPoints,
+      ...riderPoints,
     ]
 
     void Promise.all(
@@ -583,6 +612,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
     historyActive,
     mapLayout,
     offscreenMapGpsCoordinate,
+    riderPoints,
     riderTargetPoints,
     selectedMapPoint,
   ])
@@ -592,6 +622,11 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
       onMapInteraction()
       if (indicator.id === 'gps') {
         recenterLive({ resetPadding: true })
+        return
+      }
+      if (indicator.type === 'rider') {
+        // Same focus flow as tapping a rider in the roster (centers with min zoom).
+        focusRider(indicator.id.slice('rider-'.length))
         return
       }
       if (indicator.type === 'direction' && !directionPoint) return
@@ -615,6 +650,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
       cameraRef,
       currentCameraRef,
       directionPoint,
+      focusRider,
       onEnterMapMode,
       onMapInteraction,
       recenterLive,

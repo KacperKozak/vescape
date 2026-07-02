@@ -28,7 +28,7 @@ interface MapLayout {
 
 export interface OffscreenMapIndicatorState {
   id: string
-  type: 'gps' | 'direction' | 'mapPoint' | 'riderTarget'
+  type: 'gps' | 'direction' | 'mapPoint' | 'riderTarget' | 'rider'
   coordinate: [number, number]
   color: string
   textColor: string
@@ -40,7 +40,7 @@ export interface OffscreenMapIndicatorState {
 
 export interface OffscreenMapIndicatorDraft {
   id: string
-  type: 'gps' | 'direction' | 'mapPoint' | 'riderTarget'
+  type: 'gps' | 'direction' | 'mapPoint' | 'riderTarget' | 'rider'
   coordinate: [number, number]
   color: string
   textColor: string
@@ -224,7 +224,9 @@ export function OffscreenMapIndicator({
               ? 'Show direction point'
               : indicator.type === 'riderTarget'
                 ? "Show rider's target"
-                : 'Show selected map point'
+                : indicator.type === 'rider'
+                  ? 'Show rider'
+                  : 'Show selected map point'
         }
         onPress={onPress}
         style={({ pressed }) => [
