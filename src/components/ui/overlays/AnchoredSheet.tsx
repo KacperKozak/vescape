@@ -17,10 +17,11 @@ import {
 } from 'react-native'
 import { Canvas, LinearGradient, Rect, vec } from '@shopify/react-native-skia'
 import Reanimated, {
+  FadeIn,
+  Keyframe,
   useAnimatedScrollHandler,
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
 } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { Icon } from 'phosphor-react-native'
@@ -40,7 +41,15 @@ const HEIGHT_FRACTION = 0.6
 /** Continue closing automatically once this fraction of the drawer remains visible. */
 const DRAWER_AUTO_CLOSE_VISIBLE_FRACTION = 0.2
 const DRAWER_OPEN_TRANSLATE_Y = 42
-const DRAWER_OPEN_SPRING = { damping: 20, stiffness: 170, mass: 0.9 } as const
+const DRAWER_OPEN_DURATION = 280
+const DRAWER_ENTER_FROM_TOP = new Keyframe({
+  0: { opacity: 0, transform: [{ translateY: -DRAWER_OPEN_TRANSLATE_Y }] },
+  100: { opacity: 1, transform: [{ translateY: 0 }] },
+}).duration(DRAWER_OPEN_DURATION)
+const DRAWER_ENTER_FROM_BOTTOM = new Keyframe({
+  0: { opacity: 0, transform: [{ translateY: DRAWER_OPEN_TRANSLATE_Y }] },
+  100: { opacity: 1, transform: [{ translateY: 0 }] },
+}).duration(DRAWER_OPEN_DURATION)
 type SheetLayoutMode = {
   mode: 'floating'
   matchTriggerWidth: boolean
@@ -281,7 +290,6 @@ function EdgeDrawer({
   const [dismissRange, setDismissRange] = useState(0)
   const scrollRef = useRef<ScrollView>(null)
   const positionedRef = useRef(false)
-  const progress = useSharedValue(0)
   const scrollOffset = useSharedValue(0)
   const animatedDismissRange = useSharedValue(1)
 
@@ -294,8 +302,6 @@ function EdgeDrawer({
       setDismissRange(0)
       positionedRef.current = false
       scrollOffset.value = 0
-      progress.value = 0
-      progress.value = withSpring(1, DRAWER_OPEN_SPRING)
     }
 
     if (edge !== 'auto') {
@@ -306,7 +312,7 @@ function EdgeDrawer({
     void measureTrigger(triggerRef).then((trigger) => {
       openFrom(trigger.y + trigger.height / 2 < height / 2)
     })
-  }, [edge, height, progress, scrollOffset, triggerRef, visible])
+  }, [edge, height, scrollOffset, triggerRef, visible])
 
   const finishClose = useCallback(() => {
     setMounted(false)
@@ -335,25 +341,11 @@ function EdgeDrawer({
     },
   })
 
-  const drawerStyle = useAnimatedStyle(() => {
-    return {
-      opacity: progress.value,
-      transform: [
-        {
-          translateY:
-            (opensFromTop ? -DRAWER_OPEN_TRANSLATE_Y : DRAWER_OPEN_TRANSLATE_Y) *
-            (1 - progress.value),
-        },
-      ],
-    }
-  })
   const backdropStyle = useAnimatedStyle(() => {
     const visibleFraction = opensFromTop
       ? 1 - scrollOffset.value / animatedDismissRange.value
       : scrollOffset.value / animatedDismissRange.value
-    return {
-      opacity: progress.value * Math.max(0, Math.min(1, visibleFraction)),
-    }
+    return { opacity: Math.max(0, Math.min(1, visibleFraction)) }
   })
 
   const handleContentSizeChange = useCallback(
@@ -420,20 +412,25 @@ function EdgeDrawer({
       presentationStyle="overFullScreen"
       onRequestClose={close}
     >
-      <Reanimated.View style={[StyleSheet.absoluteFill, backdropStyle]}>
-        <Canvas style={StyleSheet.absoluteFill} pointerEvents="none">
-          <Rect x={0} y={0} width={width} height={height}>
-            <LinearGradient
-              start={vec(0, 0)}
-              end={vec(0, height)}
-              colors={gradientColors}
-              positions={[0, 0.55, 1]}
-            />
-          </Rect>
-        </Canvas>
-        <Pressable style={StyleSheet.absoluteFill} onPress={close} />
+      <Reanimated.View entering={FadeIn.duration(DRAWER_OPEN_DURATION)} style={styles.drawer}>
+        <Reanimated.View style={[StyleSheet.absoluteFill, backdropStyle]}>
+          <Canvas style={StyleSheet.absoluteFill} pointerEvents="none">
+            <Rect x={0} y={0} width={width} height={height}>
+              <LinearGradient
+                start={vec(0, 0)}
+                end={vec(0, height)}
+                colors={gradientColors}
+                positions={[0, 0.55, 1]}
+              />
+            </Rect>
+          </Canvas>
+          <Pressable style={StyleSheet.absoluteFill} onPress={close} />
+        </Reanimated.View>
       </Reanimated.View>
-      <Reanimated.View style={[styles.drawer, drawerStyle]}>
+      <Reanimated.View
+        entering={opensFromTop ? DRAWER_ENTER_FROM_TOP : DRAWER_ENTER_FROM_BOTTOM}
+        style={styles.drawer}
+      >
         <Reanimated.ScrollView
           ref={scrollRef}
           onContentSizeChange={handleContentSizeChange}
