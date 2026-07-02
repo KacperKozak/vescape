@@ -193,7 +193,7 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
 
   const enterWeatherMode = useCallback(() => {
     enterWeather()
-    mapRef.current?.zoomToLevel(8)
+    mapRef.current?.focusWeather()
   }, [enterWeather, mapRef])
 
   const exitWeatherMode = useCallback(() => {

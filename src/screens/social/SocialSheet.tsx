@@ -122,6 +122,7 @@ function GroupRideWidget() {
 
   const activeRide = rides.find((r) => r.id === activeRideId)
   const active = activeRideId != null
+  const connected = connection === 'connected'
   const showNearby = !active && nearby.length > 0 && !nearbyDismissed
   const accent = theme.palette.groupRide.color
   const rideName = activeRide?.name?.trim() || 'Your group ride'
@@ -138,6 +139,7 @@ function GroupRideWidget() {
     <Button
       label="Join"
       onPress={() => joinRide(nearby[0].ride.id)}
+      disabled={!connected}
       style={[styles.fill, styles.actionBtn]}
       accessibilityLabel="Join nearest group ride"
     />
@@ -145,7 +147,7 @@ function GroupRideWidget() {
     <Button
       label="Create"
       onPress={() => createRide('')}
-      disabled={!hasLocation}
+      disabled={!hasLocation || !connected}
       style={[styles.fill, styles.actionBtn]}
       accessibilityLabel="Create group ride"
     />
@@ -181,6 +183,8 @@ function GroupRideWidget() {
         )
       ) : showNearby ? (
         <NearbyRideBody nearby={nearby} />
+      ) : !connected ? (
+        <Placeholder icon={BroadcastIcon} description="Connecting to server…" />
       ) : !hasLocation ? (
         <Placeholder icon={CrosshairIcon} description="Finding your location…" />
       ) : (
