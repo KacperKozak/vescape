@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Animated,
   Dimensions,
@@ -8,10 +8,20 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
   type StyleProp,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
   type ViewStyle,
 } from 'react-native'
+import { Canvas, LinearGradient, Rect, vec } from '@shopify/react-native-skia'
+import Reanimated, {
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+} from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { Icon } from 'phosphor-react-native'
 
@@ -27,10 +37,15 @@ const CLOSE_DURATION = 180
 const SCREEN_EDGE_PADDING = 10
 /** Fraction of the screen height a sheet is allowed to occupy. */
 const HEIGHT_FRACTION = 0.6
-
-type SheetLayoutMode =
-  | { mode: 'corner'; anchor: 'left' | 'right' }
-  | { mode: 'floating'; matchTriggerWidth: boolean; minWidth?: number }
+/** Continue closing automatically once this fraction of the drawer remains visible. */
+const DRAWER_AUTO_CLOSE_VISIBLE_FRACTION = 0.2
+const DRAWER_OPEN_TRANSLATE_Y = 42
+const DRAWER_OPEN_SPRING = { damping: 20, stiffness: 170, mass: 0.9 } as const
+type SheetLayoutMode = {
+  mode: 'floating'
+  matchTriggerWidth: boolean
+  minWidth?: number
+}
 
 interface ComputedLayout {
   top?: number
@@ -50,27 +65,6 @@ function computeLayout(
 ): ComputedLayout {
   const screen = Dimensions.get('window')
   const screenHeight = screen.height + getModalCoordinateOffset()
-
-  if (layoutMode.mode === 'corner') {
-    const top = Math.max(insets.top, trigger.y)
-    const left = layoutMode.anchor === 'left' ? trigger.x : SCREEN_EDGE_PADDING
-    const width =
-      layoutMode.anchor === 'left'
-        ? screen.width - trigger.x - SCREEN_EDGE_PADDING
-        : trigger.x + trigger.width - SCREEN_EDGE_PADDING
-    const maxHeight = Math.min(
-      screenHeight * HEIGHT_FRACTION,
-      screenHeight - top - insets.bottom - SCREEN_EDGE_PADDING,
-    )
-    return {
-      top,
-      left,
-      width,
-      maxHeight,
-      transformOrigin: layoutMode.anchor === 'left' ? '0% 0%' : '100% 0%',
-      translateFrom: -14,
-    }
-  }
 
   // Floating: centered on the trigger, fully covering it — grows down (or, if
   // short on space, up) from the trigger's own edge instead of dropping below it.
@@ -152,7 +146,10 @@ function Sheet({
   useEffect(() => {
     if (!visible) return
     void measureTrigger(triggerRef).then((measured) => {
-      setTriggerLayout({ ...measured, y: measured.y + getModalCoordinateOffset() })
+      setTriggerLayout({
+        ...measured,
+        y: measured.y + getModalCoordinateOffset(),
+      })
       setMounted(true)
       progress.setValue(0)
       Animated.timing(progress, {
@@ -184,7 +181,10 @@ function Sheet({
   if (!mounted || !triggerLayout) return null
 
   const computed = computeLayout(layout, triggerLayout, insets)
-  const scale = progress.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] })
+  const scale = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.9, 1],
+  })
   const translateY = progress.interpolate({
     inputRange: [0, 1],
     outputRange: [computed.translateFrom, 0],
@@ -242,8 +242,10 @@ interface CornerSheetProps {
   visible: boolean
   triggerRef: React.RefObject<View | null>
   onClose: () => void
-  /** Which corner the sheet grows from — matches the trigger's screen side. */
+  /** Retained for call-site compatibility; edge drawers span the available width. */
   anchor?: 'left' | 'right'
+  /** Override edge selection. `auto` chooses the edge nearest the trigger. */
+  edge?: 'auto' | 'top' | 'bottom'
   title?: string
   /** Optional glyph shown left of a centred title. */
   icon?: Icon
@@ -251,12 +253,228 @@ interface CornerSheetProps {
 }
 
 /**
- * A near-full-width popover "sheet" that drops from a corner trigger and grows
- * out of that corner. Holds interactive tiles (widgets, links).
+ * A full-width edge drawer. It opens from the edge nearest its trigger and can
+ * be dragged back toward that edge to dismiss.
  */
-export function CornerSheet({ anchor = 'left', ...props }: CornerSheetProps) {
-  return <Sheet {...props} layout={{ mode: 'corner', anchor }} />
+export function CornerSheet({ anchor: _anchor = 'left', ...props }: CornerSheetProps) {
+  return <EdgeDrawer {...props} />
 }
+
+type EdgeDrawerProps = Omit<CornerSheetProps, 'anchor'>
+
+// Reanimated shared values are mutable handles by design. React's immutability
+// lint cannot distinguish their UI-thread writes from React-owned state.
+/* eslint-disable react-hooks/immutability */
+function EdgeDrawer({
+  visible,
+  triggerRef,
+  onClose,
+  edge = 'auto',
+  title,
+  icon: IconComponent,
+  children,
+}: EdgeDrawerProps) {
+  const insets = useSafeAreaInsets()
+  const { width, height } = useWindowDimensions()
+  const [mounted, setMounted] = useState(false)
+  const [opensFromTop, setOpensFromTop] = useState(true)
+  const [dismissRange, setDismissRange] = useState(0)
+  const scrollRef = useRef<ScrollView>(null)
+  const positionedRef = useRef(false)
+  const progress = useSharedValue(0)
+  const scrollOffset = useSharedValue(0)
+  const animatedDismissRange = useSharedValue(1)
+
+  useEffect(() => {
+    if (!visible) return
+
+    const openFrom = (fromTop: boolean) => {
+      setOpensFromTop(fromTop)
+      setMounted(true)
+      setDismissRange(0)
+      positionedRef.current = false
+      scrollOffset.value = 0
+      progress.value = 0
+      progress.value = withSpring(1, DRAWER_OPEN_SPRING)
+    }
+
+    if (edge !== 'auto') {
+      openFrom(edge === 'top')
+      return
+    }
+
+    void measureTrigger(triggerRef).then((trigger) => {
+      openFrom(trigger.y + trigger.height / 2 < height / 2)
+    })
+  }, [edge, height, progress, scrollOffset, triggerRef, visible])
+
+  const finishClose = useCallback(() => {
+    setMounted(false)
+    setDismissRange(0)
+    onClose()
+  }, [onClose])
+
+  const close = useCallback(() => {
+    if (dismissRange <= 0) {
+      requestAnimationFrame(finishClose)
+      return
+    }
+    scrollRef.current?.scrollTo({
+      y: opensFromTop ? dismissRange : 0,
+      animated: true,
+    })
+  }, [dismissRange, finishClose, opensFromTop])
+
+  useEffect(() => {
+    if (!visible && mounted) close()
+  }, [close, mounted, visible])
+
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      scrollOffset.value = event.contentOffset.y
+    },
+  })
+
+  const drawerStyle = useAnimatedStyle(() => {
+    return {
+      opacity: progress.value,
+      transform: [
+        {
+          translateY:
+            (opensFromTop ? -DRAWER_OPEN_TRANSLATE_Y : DRAWER_OPEN_TRANSLATE_Y) *
+            (1 - progress.value),
+        },
+      ],
+    }
+  })
+  const backdropStyle = useAnimatedStyle(() => {
+    const visibleFraction = opensFromTop
+      ? 1 - scrollOffset.value / animatedDismissRange.value
+      : scrollOffset.value / animatedDismissRange.value
+    return {
+      opacity: progress.value * Math.max(0, Math.min(1, visibleFraction)),
+    }
+  })
+
+  const handleContentSizeChange = useCallback(
+    (_contentWidth: number, contentHeight: number) => {
+      const range = Math.max(1, contentHeight - height)
+      setDismissRange(range)
+      animatedDismissRange.value = range
+
+      if (!positionedRef.current) {
+        positionedRef.current = true
+        const initialOffset = opensFromTop ? 0 : range
+        scrollOffset.value = initialOffset
+        requestAnimationFrame(() => {
+          scrollRef.current?.scrollTo({ y: initialOffset, animated: false })
+        })
+      }
+    },
+    [animatedDismissRange, height, opensFromTop, scrollOffset],
+  )
+
+  const handleScrollEnd = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const offset = event.nativeEvent.contentOffset.y
+      const fullyHidden = opensFromTop ? offset >= dismissRange - 1 : offset <= 1
+      if (fullyHidden) {
+        finishClose()
+        return
+      }
+
+      const visibleFraction = opensFromTop ? 1 - offset / dismissRange : offset / dismissRange
+      if (visibleFraction <= DRAWER_AUTO_CLOSE_VISIBLE_FRACTION) {
+        scrollRef.current?.scrollTo({
+          y: opensFromTop ? dismissRange : 0,
+          animated: true,
+        })
+      }
+    },
+    [dismissRange, finishClose, opensFromTop],
+  )
+
+  if (!mounted) return null
+
+  const edgePadding = opensFromTop ? insets.top : insets.bottom
+  const vignetteColor = theme.palette.slate.surfaceDeep
+  const gradientColors = opensFromTop
+    ? [
+        theme.alpha(vignetteColor, 0.85),
+        theme.alpha(vignetteColor, 0.6),
+        theme.alpha(vignetteColor, 0.3),
+      ]
+    : [
+        theme.alpha(vignetteColor, 0.3),
+        theme.alpha(vignetteColor, 0.6),
+        theme.alpha(vignetteColor, 0.85),
+      ]
+
+  return (
+    <Modal
+      visible
+      transparent
+      animationType="none"
+      statusBarTranslucent
+      navigationBarTranslucent
+      presentationStyle="overFullScreen"
+      onRequestClose={close}
+    >
+      <Reanimated.View style={[StyleSheet.absoluteFill, backdropStyle]}>
+        <Canvas style={StyleSheet.absoluteFill} pointerEvents="none">
+          <Rect x={0} y={0} width={width} height={height}>
+            <LinearGradient
+              start={vec(0, 0)}
+              end={vec(0, height)}
+              colors={gradientColors}
+              positions={[0, 0.55, 1]}
+            />
+          </Rect>
+        </Canvas>
+        <Pressable style={StyleSheet.absoluteFill} onPress={close} />
+      </Reanimated.View>
+      <Reanimated.View style={[styles.drawer, drawerStyle]}>
+        <Reanimated.ScrollView
+          ref={scrollRef}
+          onContentSizeChange={handleContentSizeChange}
+          onScroll={scrollHandler}
+          onScrollEndDrag={handleScrollEnd}
+          onMomentumScrollEnd={handleScrollEnd}
+          scrollEventThrottle={16}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+          overScrollMode="never"
+        >
+          {!opensFromTop ? <View style={{ height }} /> : null}
+          <View
+            style={[
+              styles.drawerBody,
+              opensFromTop ? { paddingTop: edgePadding } : { paddingBottom: edgePadding },
+            ]}
+          >
+            {!opensFromTop ? <View style={styles.grabber} /> : null}
+            {title ? (
+              <View style={styles.drawerHeader}>
+                {IconComponent ? (
+                  <IconComponent
+                    size={28}
+                    color={theme.palette.slate.textSecondary}
+                    weight="duotone"
+                  />
+                ) : null}
+                <Text style={styles.drawerTitle}>{title}</Text>
+              </View>
+            ) : null}
+            <View style={styles.drawerContent}>{children}</View>
+            {opensFromTop ? <View style={styles.grabber} /> : null}
+          </View>
+          {opensFromTop ? <View style={{ height }} /> : null}
+        </Reanimated.ScrollView>
+      </Reanimated.View>
+    </Modal>
+  )
+}
+/* eslint-enable react-hooks/immutability */
 
 interface FloatingSheetProps {
   visible: boolean
@@ -317,5 +535,40 @@ const styles = StyleSheet.create({
   content: {
     padding: 12,
     gap: 12,
+  },
+  drawer: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+  },
+  drawerBody: {
+    paddingHorizontal: 12,
+    gap: 10,
+  },
+  drawerHeader: {
+    minHeight: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+  },
+  drawerTitle: {
+    color: theme.palette.slate.textPrimary,
+    fontSize: 22,
+    fontWeight: '300',
+  },
+  drawerContent: {
+    gap: 12,
+  },
+  grabber: {
+    alignSelf: 'center',
+    width: 42,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: theme.alpha(theme.palette.slate.textSecondary, 0.6),
+    marginVertical: 3,
   },
 })
