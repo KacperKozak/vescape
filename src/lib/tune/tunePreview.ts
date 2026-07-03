@@ -21,6 +21,17 @@ const REQUIRED_FIELDS = [
   'braketilt_lingering',
   'atr_on_speed',
   'atr_off_speed',
+  'atr_strength_up',
+  'atr_strength_down',
+  'atr_threshold_up',
+  'atr_threshold_down',
+  'atr_speed_boost',
+  'atr_angle_limit',
+  'atr_response_boost',
+  'atr_transition_boost',
+  'atr_filter',
+  'atr_amps_accel_ratio',
+  'atr_amps_decel_ratio',
   'tiltback_constant',
   'tiltback_variable',
   'tiltback_variable_max',
@@ -54,6 +65,17 @@ export interface TunePreviewParameters {
   brakeTiltLingering: number
   atrOnSpeed: number
   atrOffSpeed: number
+  atrStrengthUp: number
+  atrStrengthDown: number
+  atrThresholdUp: number
+  atrThresholdDown: number
+  atrSpeedBoost: number
+  atrAngleLimit: number
+  atrResponseBoost: number
+  atrTransitionBoost: number
+  atrFilter: number
+  atrAmpsAccelRatio: number
+  atrAmpsDecelRatio: number
   tiltbackConstant: number
   tiltbackConstantErpm: number
   tiltbackVariable: number
@@ -72,6 +94,7 @@ export type TunePreviewModel =
 export interface TunePreviewTarget {
   torqueTiltDegrees: number
   brakeTiltDegrees: number
+  atrDegrees: number
   constantTiltbackDegrees: number
   variableTiltbackDegrees: number
   totalDegrees: number
@@ -86,16 +109,23 @@ export interface TunePreviewState {
   targetAngleDegrees: number
   torqueTiltDegrees: number
   brakeTiltDegrees: number
+  atrDegrees: number
   constantTiltbackDegrees: number
   variableTiltbackDegrees: number
   syntheticCurrentAmps: number
   erpm: number
   groundTravelMeters: number
+  terrainSlope: number
+  atrAccelDiff: number
+  atrTargetDegrees: number
 }
 
 export interface TunePreviewInput {
   riderLean: number
   speedKmh: number
+  hillsEnabled?: boolean
+  hillHeightMeters?: number
+  hillSpacingMeters?: number
   paused?: boolean
 }
 
@@ -135,6 +165,17 @@ export function createTunePreviewModel(
       brakeTiltLingering: numberField(fields, 'braketilt_lingering'),
       atrOnSpeed: numberField(fields, 'atr_on_speed'),
       atrOffSpeed: numberField(fields, 'atr_off_speed'),
+      atrStrengthUp: numberField(fields, 'atr_strength_up'),
+      atrStrengthDown: numberField(fields, 'atr_strength_down'),
+      atrThresholdUp: numberField(fields, 'atr_threshold_up'),
+      atrThresholdDown: numberField(fields, 'atr_threshold_down'),
+      atrSpeedBoost: numberField(fields, 'atr_speed_boost'),
+      atrAngleLimit: numberField(fields, 'atr_angle_limit'),
+      atrResponseBoost: numberField(fields, 'atr_response_boost'),
+      atrTransitionBoost: numberField(fields, 'atr_transition_boost'),
+      atrFilter: numberField(fields, 'atr_filter'),
+      atrAmpsAccelRatio: numberField(fields, 'atr_amps_accel_ratio'),
+      atrAmpsDecelRatio: numberField(fields, 'atr_amps_decel_ratio'),
       tiltbackConstant: numberField(fields, 'tiltback_constant'),
       tiltbackConstantErpm: numberFieldOrDefault(
         fields,
@@ -160,11 +201,15 @@ export function createTunePreviewState(): TunePreviewState {
     targetAngleDegrees: 0,
     torqueTiltDegrees: 0,
     brakeTiltDegrees: 0,
+    atrDegrees: 0,
     constantTiltbackDegrees: 0,
     variableTiltbackDegrees: 0,
     syntheticCurrentAmps: 0,
     erpm: 0,
     groundTravelMeters: 0,
+    terrainSlope: 0,
+    atrAccelDiff: 0,
+    atrTargetDegrees: 0,
   }
 }
 
@@ -222,6 +267,7 @@ export function calculateLongitudinalTarget(
   return {
     torqueTiltDegrees,
     brakeTiltDegrees,
+    atrDegrees: 0,
     constantTiltbackDegrees,
     variableTiltbackDegrees,
     totalDegrees,
@@ -255,6 +301,48 @@ function stepFixed(
   dt: number,
 ): TunePreviewState {
   const target = calculateLongitudinalTarget(state, parameters, input, dt)
+  const terrainSlope = calculateTerrainSlope(state.groundTravelMeters, input)
+  const braking = input.riderLean < 0
+  const ratio = Math.max(braking ? parameters.atrAmpsDecelRatio : parameters.atrAmpsAccelRatio, 0.1)
+  const expectedAcceleration = (target.syntheticCurrentAmps - 8) / ratio
+  const rawAccelDiff = expectedAcceleration + terrainSlope * 5
+  const filterAlpha = clamp(dt * Math.max(parameters.atrFilter, 0.1), 0, 1)
+  const atrAccelDiff = state.atrAccelDiff + (rawAccelDiff - state.atrAccelDiff) * filterAlpha
+  let atrStrength = atrAccelDiff >= 0 ? parameters.atrStrengthUp : parameters.atrStrengthDown
+  if (target.erpm > 3000 && !braking) {
+    const span =
+      Math.abs(parameters.atrSpeedBoost) > 0.4
+        ? (Math.abs(parameters.atrSpeedBoost) - 0.4) * 5000 + 3000
+        : 3000
+    atrStrength *= 1 + Math.min(1, (target.erpm - 3000) / span) * parameters.atrSpeedBoost
+  }
+  const threshold = braking ? parameters.atrThresholdDown : parameters.atrThresholdUp
+  const rawAtr = atrStrength * atrAccelDiff
+  const thresholded = Math.abs(rawAtr) < threshold ? 0 : rawAtr - Math.sign(rawAtr) * threshold
+  const atrTargetDegrees = clamp(
+    state.atrTargetDegrees * 0.95 + thresholded * 0.05,
+    -parameters.atrAngleLimit,
+    parameters.atrAngleLimit,
+  )
+  let atrRate =
+    Math.abs(atrTargetDegrees) > Math.abs(state.atrDegrees)
+      ? parameters.atrOnSpeed
+      : parameters.atrOffSpeed
+  if (
+    state.atrDegrees * atrTargetDegrees < 0 &&
+    Math.abs(atrTargetDegrees - state.atrDegrees) > 2
+  ) {
+    atrRate *= parameters.atrTransitionBoost
+  }
+  if (target.erpm > 2500) atrRate *= parameters.atrResponseBoost
+  if (target.erpm > 6000) atrRate *= parameters.atrResponseBoost
+  const atrDegrees = moveTowards(state.atrDegrees, atrTargetDegrees, atrRate * dt)
+  target.atrDegrees = atrDegrees
+  target.totalDegrees = clamp(
+    target.totalDegrees + atrDegrees,
+    -MAX_ANGLE_DEGREES,
+    MAX_ANGLE_DEGREES,
+  )
   const error = state.angleDegrees - target.totalDegrees
   const integralError = clamp(state.integralError + error * dt, -20, 20)
 
@@ -289,12 +377,27 @@ function stepFixed(
     targetAngleDegrees: target.totalDegrees,
     torqueTiltDegrees: target.torqueTiltDegrees,
     brakeTiltDegrees: target.brakeTiltDegrees,
+    atrDegrees,
     constantTiltbackDegrees: target.constantTiltbackDegrees,
     variableTiltbackDegrees: target.variableTiltbackDegrees,
     syntheticCurrentAmps: target.syntheticCurrentAmps,
     erpm: target.erpm,
     groundTravelMeters: state.groundTravelMeters + (clamp(input.speedKmh, 0, 40) / 3.6) * dt,
+    terrainSlope,
+    atrAccelDiff,
+    atrTargetDegrees,
   }
+}
+
+export function calculateTerrainSlope(
+  travelMeters: number,
+  input: Pick<TunePreviewInput, 'hillsEnabled' | 'hillHeightMeters' | 'hillSpacingMeters'>,
+): number {
+  if (!input.hillsEnabled) return 0
+  const height = clamp(input.hillHeightMeters ?? 0.5, 0.1, 2)
+  const spacing = clamp(input.hillSpacingMeters ?? 8, 2, 20)
+  const wave = (2 * Math.PI) / spacing
+  return height * wave * Math.cos(travelMeters * wave)
 }
 
 function torqueTiltTarget(parameters: TunePreviewParameters, currentAmps: number): number {

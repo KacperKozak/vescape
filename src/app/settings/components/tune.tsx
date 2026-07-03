@@ -212,6 +212,9 @@ function TunePreviewShowcase() {
   const [riderLean, setRiderLean] = useState(0.55)
   const [speedKmh, setSpeedKmh] = useState(15)
   const [scenario, setScenario] = useState('acceleration')
+  const [hillsEnabled, setHillsEnabled] = useState(false)
+  const [hillHeightMeters, setHillHeightMeters] = useState(0.5)
+  const [hillSpacingMeters, setHillSpacingMeters] = useState(8)
   const fields = useMemo(
     () => ({
       kp: 20,
@@ -229,6 +232,17 @@ function TunePreviewShowcase() {
       braketilt_lingering: 2,
       atr_on_speed: 10,
       atr_off_speed: 8,
+      atr_strength_up: 1.5,
+      atr_strength_down: 1.5,
+      atr_threshold_up: 1,
+      atr_threshold_down: 1,
+      atr_speed_boost: 0.3,
+      atr_angle_limit: 8,
+      atr_response_boost: 1.5,
+      atr_transition_boost: 1.5,
+      atr_filter: 5,
+      atr_amps_accel_ratio: 8,
+      atr_amps_decel_ratio: 8,
       tiltback_constant: 1,
       tiltback_constant_erpm: 500,
       tiltback_variable: 0.3,
@@ -241,14 +255,23 @@ function TunePreviewShowcase() {
   const selectScenario = (next: string) => {
     setScenario(next)
     if (next === 'acceleration') {
+      setHillsEnabled(false)
       setRiderLean(0.7)
       setSpeedKmh(15)
     } else if (next === 'braking') {
+      setHillsEnabled(false)
       setRiderLean(-0.7)
       setSpeedKmh(15)
-    } else {
+    } else if (next === 'high speed') {
+      setHillsEnabled(false)
       setRiderLean(0)
       setSpeedKmh(40)
+    } else {
+      setHillsEnabled(true)
+      setRiderLean(next === 'uphill' ? 0.6 : -0.6)
+      setSpeedKmh(15)
+      setHillHeightMeters(next === 'dense hills' ? 1.2 : 0.6)
+      setHillSpacingMeters(next === 'dense hills' ? 4 : 8)
     }
   }
 
@@ -259,7 +282,7 @@ function TunePreviewShowcase() {
         <>
           <ChipRow
             label="state"
-            options={['acceleration', 'braking', 'high speed']}
+            options={['acceleration', 'braking', 'high speed', 'uphill', 'downhill', 'dense hills']}
             selected={scenario}
             onSelect={selectScenario}
           />
@@ -267,9 +290,26 @@ function TunePreviewShowcase() {
         </>
       }
     >
-      <TunePreview fields={fields} riderLean={riderLean} speedKmh={speedKmh} onHelp={() => {}} />
+      <TunePreview
+        fields={fields}
+        riderLean={riderLean}
+        speedKmh={speedKmh}
+        hillsEnabled={hillsEnabled}
+        hillHeightMeters={hillHeightMeters}
+        hillSpacingMeters={hillSpacingMeters}
+        onHelp={() => {}}
+      />
       <RiderBalanceControl value={riderLean} onValueChange={setRiderLean} />
-      <TunePreviewScenarioControls speedKmh={speedKmh} onSpeedChange={setSpeedKmh} />
+      <TunePreviewScenarioControls
+        speedKmh={speedKmh}
+        onSpeedChange={setSpeedKmh}
+        hillsEnabled={hillsEnabled}
+        onHillsChange={setHillsEnabled}
+        hillHeightMeters={hillHeightMeters}
+        onHillHeightChange={setHillHeightMeters}
+        hillSpacingMeters={hillSpacingMeters}
+        onHillSpacingChange={setHillSpacingMeters}
+      />
     </ShowcaseCard>
   )
 }

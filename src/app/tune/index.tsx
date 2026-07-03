@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/ui/base/Text'
 import { useIsFocused, useNavigation, useRouter } from 'expo-router'
@@ -45,6 +45,8 @@ import { useTuneScreenData } from '@/hooks/useTuneScreenData'
 import { theme } from '@/constants/theme'
 import { useTuneModals } from '@/hooks/useTuneModals'
 
+let previewHelpShownThisSession = false
+
 export default function TuneScreen() {
   const navigation = useNavigation()
   const router = useRouter()
@@ -52,7 +54,14 @@ export default function TuneScreen() {
   const isFocused = useIsFocused()
   const [riderLean, setRiderLean] = useState(0)
   const [previewSpeedKmh, setPreviewSpeedKmh] = useState(15)
-  const [previewHelpVisible, setPreviewHelpVisible] = useState(false)
+  const [hillsEnabled, setHillsEnabled] = useState(false)
+  const [hillHeightMeters, setHillHeightMeters] = useState(0.5)
+  const [hillSpacingMeters, setHillSpacingMeters] = useState(8)
+  const [previewHelpVisible, setPreviewHelpVisible] = useState(() => {
+    if (previewHelpShownThisSession) return false
+    previewHelpShownThisSession = true
+    return true
+  })
   const {
     activeProfile,
     allBoards,
@@ -171,6 +180,9 @@ export default function TuneScreen() {
               fields={profileFields ?? {}}
               riderLean={riderLean}
               speedKmh={previewSpeedKmh}
+              hillsEnabled={hillsEnabled}
+              hillHeightMeters={hillHeightMeters}
+              hillSpacingMeters={hillSpacingMeters}
               active={isFocused}
               onHelp={() => setPreviewHelpVisible(true)}
             />
@@ -192,6 +204,12 @@ export default function TuneScreen() {
             <TunePreviewScenarioControls
               speedKmh={previewSpeedKmh}
               onSpeedChange={setPreviewSpeedKmh}
+              hillsEnabled={hillsEnabled}
+              onHillsChange={setHillsEnabled}
+              hillHeightMeters={hillHeightMeters}
+              onHillHeightChange={setHillHeightMeters}
+              hillSpacingMeters={hillSpacingMeters}
+              onHillSpacingChange={setHillSpacingMeters}
             />
 
             {profileError ? (
@@ -406,7 +424,7 @@ export default function TuneScreen() {
       <InfoModal
         visible={previewHelpVisible}
         title="About Tune Preview"
-        message="Comparative model only. It does not model motor power, traction, rider mass, exact Board geometry, or nosedive limits. Angle, speed, current, and response timing are not real measurements or safety predictions. The model assumes forward riding, synthetic flat terrain, a reference 11-inch wheel, fixed geometry, and an ideal drive with no power limit. Speed uses the comparative conversion 3.5 km/h = 1000 ERPM; it is not Board calibration. It uses the current bundled legacy Refloat model; Carve Tilt requires a turn scenario and is not shown in this side view."
+        message="Comparative model only. It does not model motor power, traction, rider mass, exact Board geometry, suspension, collisions, or nosedive limits. Angle, speed, current, and response timing are not real measurements or safety predictions. Hills are synthetic ATR load disturbances, not terrain or traction simulation. The model assumes forward riding, a reference 11-inch wheel, fixed geometry, and an ideal drive with no power limit. Speed uses the comparative conversion 3.5 km/h = 1000 ERPM; it is not Board calibration. It uses the current bundled legacy Refloat model; Carve Tilt requires a turn scenario and is not shown in this side view."
         onDismiss={() => setPreviewHelpVisible(false)}
       />
 

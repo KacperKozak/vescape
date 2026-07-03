@@ -1,4 +1,4 @@
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, Switch, Text, View } from 'react-native'
 
 import { TuneDial } from '@/components/ui/tune/TuneDial'
 import { theme } from '@/constants/theme'
@@ -6,16 +6,28 @@ import { theme } from '@/constants/theme'
 interface TunePreviewScenarioControlsProps {
   speedKmh: number
   onSpeedChange: (speedKmh: number) => void
+  hillsEnabled: boolean
+  onHillsChange: (enabled: boolean) => void
+  hillHeightMeters: number
+  onHillHeightChange: (value: number) => void
+  hillSpacingMeters: number
+  onHillSpacingChange: (value: number) => void
 }
 
 export function TunePreviewScenarioControls({
   speedKmh,
   onSpeedChange,
+  hillsEnabled,
+  onHillsChange,
+  hillHeightMeters,
+  onHillHeightChange,
+  hillSpacingMeters,
+  onHillSpacingChange,
 }: TunePreviewScenarioControlsProps) {
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Preview scenario</Text>
+        <Text style={styles.title}>Constant speed</Text>
         <Text style={styles.value}>{speedKmh.toFixed(0)} km/h</Text>
       </View>
       <Text style={styles.description}>Forward speed · reference 11-inch wheel</Text>
@@ -28,6 +40,34 @@ export function TunePreviewScenarioControls({
         valueChangeMode="live"
         onValueChange={onSpeedChange}
       />
+      <View style={styles.header}>
+        <Text style={styles.title}>Hills</Text>
+        <Switch value={hillsEnabled} onValueChange={onHillsChange} />
+      </View>
+      {hillsEnabled ? (
+        <>
+          <Text style={styles.description}>Height · {hillHeightMeters.toFixed(1)} m</Text>
+          <TuneDial
+            value={hillHeightMeters}
+            min={0.1}
+            max={2}
+            step={0.1}
+            unit="m"
+            valueChangeMode="live"
+            onValueChange={onHillHeightChange}
+          />
+          <Text style={styles.description}>Spacing · {hillSpacingMeters.toFixed(0)} m</Text>
+          <TuneDial
+            value={hillSpacingMeters}
+            min={2}
+            max={20}
+            step={1}
+            unit="m"
+            valueChangeMode="live"
+            onValueChange={onHillSpacingChange}
+          />
+        </>
+      ) : null}
     </View>
   )
 }

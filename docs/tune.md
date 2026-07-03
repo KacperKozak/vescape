@@ -18,6 +18,11 @@ Tune Profiles saved before the ERPM thresholds entered the app allowlist use the
 defaults (`500 ERPM` constant, `0 ERPM` variable). The preview labels this fallback; fresh profiles
 retain the decoded fields explicitly.
 
+Optional preview hills are a moving spatial sinusoid. Height controls amplitude, spacing controls
+wavelength, and scenario speed advances phase. Terrain slope feeds a synthetic measured-
+acceleration disturbance into the legacy ATR equations; it never forces Board pitch to the terrain
+tangent and does not model traction, suspension, or collision.
+
 This document captures practical tune-screen behavior used by a Refloat-focused
 board app. It is intended as product and implementation reference for building a
 safe tuning UI in this app.

@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native'
+import { Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native'
 import { QuestionIcon } from 'phosphor-react-native'
-import Svg, { Circle, G, Line } from 'react-native-svg'
+import Svg, { Circle, G, Line, Path } from 'react-native-svg'
 import Animated, { useAnimatedProps, useSharedValue } from 'react-native-reanimated'
 import type { TuneProfileFieldValue } from 'vesc-ble'
 
-import { IconButton } from '@/components/ui/base/IconButton'
 import { theme } from '@/constants/theme'
 import {
   createTunePreviewModel,
@@ -18,6 +17,9 @@ interface TunePreviewProps {
   fields: Record<string, TuneProfileFieldValue>
   riderLean: number
   speedKmh: number
+  hillsEnabled?: boolean
+  hillHeightMeters?: number
+  hillSpacingMeters?: number
   active?: boolean
   onHelp: () => void
 }
@@ -30,11 +32,16 @@ const GROUND_TICK_SPACING = 30
 const AnimatedLine = Animated.createAnimatedComponent(Line)
 const AnimatedGroup = Animated.createAnimatedComponent(G)
 const AnimatedTextInput = Animated.createAnimatedComponent(TextInput)
+const AnimatedPath = Animated.createAnimatedComponent(Path)
+const AnimatedCircle = Animated.createAnimatedComponent(Circle)
 
 export function TunePreview({
   fields,
   riderLean,
   speedKmh,
+  hillsEnabled = false,
+  hillHeightMeters = 0.5,
+  hillSpacingMeters = 8,
   active = true,
   onHelp,
 }: TunePreviewProps) {
@@ -45,6 +52,7 @@ export function TunePreview({
   const angleDegrees = useSharedValue(0)
   const targetAngleDegrees = useSharedValue(0)
   const groundOffset = useSharedValue(0)
+  const groundTravel = useSharedValue(0)
   const centerX = canvasWidth / 2
 
   const deckAnimatedProps = useAnimatedProps(() => lineForAngle(angleDegrees.value, centerX))
@@ -58,6 +66,15 @@ export function TunePreview({
     const value = `${angleDegrees.value.toFixed(1)}°`
     return { text: value, value }
   })
+  const terrainAnimatedProps = useAnimatedProps(() => ({
+    d: terrainPath(canvasWidth, groundTravel.value, hillHeightMeters, hillSpacingMeters),
+  }))
+  const wheelAnimatedProps = useAnimatedProps(() => ({
+    cy:
+      GROUND_Y +
+      hillHeightMeters * 18 * Math.sin((-groundTravel.value * 2 * Math.PI) / hillSpacingMeters) -
+      WHEEL_RADIUS,
+  }))
 
   useEffect(() => {
     if (!active || model.status !== 'ready') {
@@ -73,13 +90,14 @@ export function TunePreview({
         const next = stepTunePreview(
           stateRef.current,
           model.parameters,
-          { riderLean, speedKmh },
+          { riderLean, speedKmh, hillsEnabled, hillHeightMeters, hillSpacingMeters },
           (timestamp - previous) / 1000,
         )
         stateRef.current = next
         angleDegrees.value = next.angleDegrees
         targetAngleDegrees.value = next.targetAngleDegrees
         groundOffset.value = groundTravelToVisualOffset(next.groundTravelMeters)
+        groundTravel.value = next.groundTravelMeters
       }
       frame = requestAnimationFrame(tick)
     }
@@ -88,21 +106,29 @@ export function TunePreview({
       cancelAnimationFrame(frame)
       lastTimestampRef.current = null
     }
-  }, [active, angleDegrees, groundOffset, model, riderLean, speedKmh, targetAngleDegrees])
+  }, [
+    active,
+    angleDegrees,
+    groundOffset,
+    groundTravel,
+    hillHeightMeters,
+    hillSpacingMeters,
+    hillsEnabled,
+    model,
+    riderLean,
+    speedKmh,
+    targetAngleDegrees,
+  ])
 
   return (
     <View style={styles.card}>
       <View style={styles.header}>
-        <View>
+        <View style={styles.titleRow}>
           <Text style={styles.title}>Tune Preview</Text>
-          <Text style={styles.subtitle}>
-            Comparative ideal response · {speedKmh.toFixed(0)} km/h
-          </Text>
-          {model.status === 'ready' && model.assumedFields.length > 0 ? (
-            <Text style={styles.assumption}>Bundled Tiltback thresholds</Text>
-          ) : null}
+          <Pressable hitSlop={8} onPress={onHelp}>
+            <QuestionIcon size={14} color={theme.palette.slate.textMuted} weight="bold" />
+          </Pressable>
         </View>
-        <IconButton icon={QuestionIcon} onPress={onHelp} />
       </View>
 
       {model.status === 'unsupported' ? (
@@ -130,7 +156,8 @@ export function TunePreview({
               strokeWidth={1}
               strokeLinecap="round"
             />
-            <Circle
+            <AnimatedCircle
+              animatedProps={hillsEnabled ? wheelAnimatedProps : undefined}
               cx={centerX}
               cy={GROUND_Y - WHEEL_RADIUS}
               r={WHEEL_RADIUS}
@@ -138,33 +165,45 @@ export function TunePreview({
               stroke={theme.palette.slate.textSecondary}
               strokeWidth={1}
             />
-            <AnimatedGroup animatedProps={groundAnimatedProps}>
-              {groundTicks(canvasWidth).map((x, index) => (
-                <Line
-                  key={index}
-                  x1={x}
-                  y1={GROUND_Y}
-                  x2={x - 4}
-                  y2={GROUND_Y + 6}
-                  stroke={theme.palette.slate.textMuted}
-                  strokeWidth={1}
-                />
-              ))}
-            </AnimatedGroup>
-            <Circle
+            {!hillsEnabled ? (
+              <AnimatedGroup animatedProps={groundAnimatedProps}>
+                {groundTicks(canvasWidth).map((x, index) => (
+                  <Line
+                    key={index}
+                    x1={x}
+                    y1={GROUND_Y}
+                    x2={x - 4}
+                    y2={GROUND_Y + 6}
+                    stroke={theme.palette.slate.textMuted}
+                    strokeWidth={1}
+                  />
+                ))}
+              </AnimatedGroup>
+            ) : null}
+            <AnimatedCircle
+              animatedProps={hillsEnabled ? wheelAnimatedProps : undefined}
               cx={centerX}
               cy={GROUND_Y - WHEEL_RADIUS}
               r={4}
               fill={theme.palette.slate.textSecondary}
             />
-            <Line
-              x1={0}
-              y1={GROUND_Y}
-              x2={canvasWidth}
-              y2={GROUND_Y}
-              stroke={theme.palette.slate.textMuted}
-              strokeWidth={1}
-            />
+            {hillsEnabled ? (
+              <AnimatedPath
+                animatedProps={terrainAnimatedProps}
+                fill="none"
+                stroke={theme.palette.slate.textMuted}
+                strokeWidth={1}
+              />
+            ) : (
+              <Line
+                x1={0}
+                y1={GROUND_Y}
+                x2={canvasWidth}
+                y2={GROUND_Y}
+                stroke={theme.palette.slate.textMuted}
+                strokeWidth={1}
+              />
+            )}
           </Svg>
           <View style={styles.legend}>
             <View style={styles.legendItem}>
@@ -203,17 +242,25 @@ function groundTicks(canvasWidth: number): number[] {
   )
 }
 
+function terrainPath(width: number, travel: number, height: number, spacing: number): string {
+  'worklet'
+  let path = ''
+  for (let x = 0; x <= width; x += 6) {
+    const phase = (((x - width / 2) / 60 - travel) * 2 * Math.PI) / spacing
+    const y = GROUND_Y - height * 18 * Math.sin(phase)
+    path += `${x === 0 ? 'M' : 'L'}${x},${y} `
+  }
+  return path
+}
+
 const styles = StyleSheet.create({
   card: {},
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     paddingHorizontal: 16,
   },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   title: { color: theme.palette.slate.textPrimary, fontSize: 14, fontWeight: '900' },
-  subtitle: { color: theme.palette.slate.textMuted, fontSize: 10, fontWeight: '600', marginTop: 2 },
-  assumption: { color: theme.palette.amber.text, fontSize: 9, fontWeight: '700', marginTop: 2 },
+
   unsupported: { height: 122, alignItems: 'center', justifyContent: 'center', gap: 5 },
   unsupportedTitle: { color: theme.palette.slate.textPrimary, fontSize: 13, fontWeight: '800' },
   unsupportedText: { color: theme.palette.slate.textMuted, fontSize: 11 },

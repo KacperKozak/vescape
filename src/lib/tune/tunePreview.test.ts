@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 
 import {
   calculateLongitudinalTarget,
+  calculateTerrainSlope,
   createTunePreviewModel,
   createTunePreviewState,
   groundTravelToVisualOffset,
@@ -24,6 +25,17 @@ const baseFields = {
   braketilt_lingering: 2,
   atr_on_speed: 10,
   atr_off_speed: 8,
+  atr_strength_up: 1.5,
+  atr_strength_down: 1.5,
+  atr_threshold_up: 1,
+  atr_threshold_down: 1,
+  atr_speed_boost: 0.3,
+  atr_angle_limit: 8,
+  atr_response_boost: 1.5,
+  atr_transition_boost: 1.5,
+  atr_filter: 5,
+  atr_amps_accel_ratio: 8,
+  atr_amps_decel_ratio: 8,
   tiltback_constant: 1,
   tiltback_constant_erpm: 500,
   tiltback_variable: 0.3,
@@ -92,6 +104,33 @@ describe('Tune Preview longitudinal response', () => {
     expect(groundTravelToVisualOffset(0.1)).toBeGreaterThan(0)
   })
 
+  test('flat terrain has no slope disturbance', () => {
+    expect(calculateTerrainSlope(2, { hillsEnabled: false })).toBe(0)
+  })
+
+  test('taller and denser hills create stronger deterministic slope', () => {
+    const gentle = calculateTerrainSlope(0, {
+      hillsEnabled: true,
+      hillHeightMeters: 0.3,
+      hillSpacingMeters: 12,
+    })
+    const dense = calculateTerrainSlope(0, {
+      hillsEnabled: true,
+      hillHeightMeters: 1,
+      hillSpacingMeters: 4,
+    })
+    expect(dense).toBeGreaterThan(gentle)
+    expect(
+      calculateTerrainSlope(0, { hillsEnabled: true, hillHeightMeters: 1, hillSpacingMeters: 4 }),
+    ).toBe(dense)
+  })
+
+  test('terrain phase changes uphill and downhill signs', () => {
+    const input = { hillsEnabled: true, hillHeightMeters: 1, hillSpacingMeters: 4 }
+    expect(calculateTerrainSlope(0, input)).toBeGreaterThan(0)
+    expect(calculateTerrainSlope(2, input)).toBeLessThan(0)
+  })
+
   test('applies acceleration Torque Tilt above threshold and clamps its angle', () => {
     const parameters = readyParameters({ ...baseFields, torquetilt_angle_limit: 2 })
     const below = calculateLongitudinalTarget(
@@ -117,6 +156,7 @@ describe('Tune Preview longitudinal response', () => {
     expect(state.targetAngleDegrees).toBeCloseTo(
       state.torqueTiltDegrees +
         state.brakeTiltDegrees +
+        state.atrDegrees +
         state.constantTiltbackDegrees +
         state.variableTiltbackDegrees,
     )
