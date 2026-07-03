@@ -213,7 +213,7 @@ function TunePreviewShowcase() {
   const [speedKmh, setSpeedKmh] = useState(15)
   const [scenario, setScenario] = useState('acceleration')
   const [hillsEnabled, setHillsEnabled] = useState(false)
-  const [hillHeightMeters, setHillHeightMeters] = useState(0.5)
+  const [hillHeightMeters, setHillHeightMeters] = useState(5)
   const [hillSpacingMeters, setHillSpacingMeters] = useState(8)
   const fields = useMemo(
     () => ({

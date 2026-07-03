@@ -305,7 +305,7 @@ function stepFixed(
   const braking = input.riderLean < 0
   const ratio = Math.max(braking ? parameters.atrAmpsDecelRatio : parameters.atrAmpsAccelRatio, 0.1)
   const expectedAcceleration = (target.syntheticCurrentAmps - 8) / ratio
-  const rawAccelDiff = expectedAcceleration + terrainSlope * 5
+  const rawAccelDiff = expectedAcceleration + terrainSlopeToSyntheticAcceleration(terrainSlope)
   const filterAlpha = clamp(dt * Math.max(parameters.atrFilter, 0.1), 0, 1)
   const atrAccelDiff = state.atrAccelDiff + (rawAccelDiff - state.atrAccelDiff) * filterAlpha
   let atrStrength = atrAccelDiff >= 0 ? parameters.atrStrengthUp : parameters.atrStrengthDown
@@ -394,10 +394,28 @@ export function calculateTerrainSlope(
   input: Pick<TunePreviewInput, 'hillsEnabled' | 'hillHeightMeters' | 'hillSpacingMeters'>,
 ): number {
   if (!input.hillsEnabled) return 0
-  const height = clamp(input.hillHeightMeters ?? 0.5, 0.1, 2)
-  const spacing = clamp(input.hillSpacingMeters ?? 8, 2, 20)
+  const height = clamp(input.hillHeightMeters ?? 5, 0, 20)
+  const spacing = clamp(input.hillSpacingMeters ?? 8, 2, 100)
   const wave = (2 * Math.PI) / spacing
   return height * wave * Math.cos(travelMeters * wave)
+}
+
+export function terrainHeightRelativeToWheel(
+  xPixels: number,
+  travelMeters: number,
+  heightMeters: number,
+  spacingMeters: number,
+): number {
+  'worklet'
+  const wave = (2 * Math.PI) / spacingMeters
+  const visualAmplitude = Math.log1p(heightMeters) * 12
+  const centerHeight = visualAmplitude * Math.sin(-travelMeters * wave)
+  const pointHeight = visualAmplitude * Math.sin((xPixels / 60 - travelMeters) * wave)
+  return pointHeight - centerHeight
+}
+
+export function terrainSlopeToSyntheticAcceleration(slope: number): number {
+  return Math.asinh(slope) * 1.5
 }
 
 function torqueTiltTarget(parameters: TunePreviewParameters, currentAmps: number): number {

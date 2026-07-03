@@ -54,7 +54,7 @@ export default function TuneScreen() {
   const [riderLean, setRiderLean] = useState(0)
   const [previewSpeedKmh, setPreviewSpeedKmh] = useState(15)
   const [hillsEnabled, setHillsEnabled] = useState(false)
-  const [hillHeightMeters, setHillHeightMeters] = useState(0.5)
+  const [hillHeightMeters, setHillHeightMeters] = useState(5)
   const [hillSpacingMeters, setHillSpacingMeters] = useState(8)
   const [previewHelpVisible, setPreviewHelpVisible] = useState(() => {
     if (previewHelpShownThisSession) return false

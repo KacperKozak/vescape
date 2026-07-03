@@ -8,6 +8,8 @@ import {
   groundTravelToVisualOffset,
   speedKmhToReferenceErpm,
   stepTunePreview,
+  terrainHeightRelativeToWheel,
+  terrainSlopeToSyntheticAcceleration,
 } from '@/lib/tune/tunePreview'
 
 const baseFields = {
@@ -125,10 +127,44 @@ describe('Tune Preview longitudinal response', () => {
     ).toBe(dense)
   })
 
+  test('clamps terrain scenario to 20 m height and 100 m spacing', () => {
+    expect(
+      calculateTerrainSlope(0, {
+        hillsEnabled: true,
+        hillHeightMeters: 30,
+        hillSpacingMeters: 200,
+      }),
+    ).toBeCloseTo(
+      calculateTerrainSlope(0, {
+        hillsEnabled: true,
+        hillHeightMeters: 20,
+        hillSpacingMeters: 100,
+      }),
+    )
+  })
+
+  test('allows zero hill height', () => {
+    expect(
+      calculateTerrainSlope(0, { hillsEnabled: true, hillHeightMeters: 0, hillSpacingMeters: 8 }),
+    ).toBe(0)
+  })
+
   test('terrain phase changes uphill and downhill signs', () => {
     const input = { hillsEnabled: true, hillHeightMeters: 1, hillSpacingMeters: 4 }
     expect(calculateTerrainSlope(0, input)).toBeGreaterThan(0)
     expect(calculateTerrainSlope(2, input)).toBeLessThan(0)
+  })
+
+  test('normalizes terrain height to the fixed wheel contact point', () => {
+    expect(terrainHeightRelativeToWheel(0, 1.25, 1, 4)).toBe(0)
+    expect(terrainHeightRelativeToWheel(60, 1.25, 1, 4)).not.toBe(0)
+  })
+
+  test('compresses extreme terrain load without losing strength ordering', () => {
+    const moderate = terrainSlopeToSyntheticAcceleration(4)
+    const extreme = terrainSlopeToSyntheticAcceleration(60)
+    expect(extreme).toBeGreaterThan(moderate)
+    expect(extreme).toBeLessThan(10)
   })
 
   test('applies acceleration Torque Tilt above threshold and clamps its angle', () => {

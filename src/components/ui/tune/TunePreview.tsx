@@ -11,6 +11,8 @@ import {
   createTunePreviewState,
   groundTravelToVisualOffset,
   stepTunePreview,
+  terrainHeightRelativeToWheel,
+  terrainSlopeToSyntheticAcceleration,
 } from '@/lib/tune/tunePreview'
 
 interface TunePreviewProps {
@@ -24,7 +26,7 @@ interface TunePreviewProps {
   onHelp: () => void
 }
 
-const GROUND_Y = 104
+const GROUND_Y = 78
 const WHEEL_RADIUS = 25
 const DECK_HALF_LENGTH = 72
 const DECK_CENTER_Y = GROUND_Y - WHEEL_RADIUS
@@ -33,14 +35,13 @@ const AnimatedLine = Animated.createAnimatedComponent(Line)
 const AnimatedGroup = Animated.createAnimatedComponent(G)
 const AnimatedTextInput = Animated.createAnimatedComponent(TextInput)
 const AnimatedPath = Animated.createAnimatedComponent(Path)
-const AnimatedCircle = Animated.createAnimatedComponent(Circle)
 
 export function TunePreview({
   fields,
   riderLean,
   speedKmh,
   hillsEnabled = false,
-  hillHeightMeters = 0.5,
+  hillHeightMeters = 5,
   hillSpacingMeters = 8,
   active = true,
   onHelp,
@@ -53,6 +54,7 @@ export function TunePreview({
   const targetAngleDegrees = useSharedValue(0)
   const groundOffset = useSharedValue(0)
   const groundTravel = useSharedValue(0)
+  const terrainResistance = useSharedValue(0)
   const centerX = canvasWidth / 2
 
   const deckAnimatedProps = useAnimatedProps(() => lineForAngle(angleDegrees.value, centerX))
@@ -66,14 +68,13 @@ export function TunePreview({
     const value = `${angleDegrees.value.toFixed(1)}°`
     return { text: value, value }
   })
+  const resistanceTextAnimatedProps = useAnimatedProps(() => {
+    const resistance = terrainResistance.value
+    const value = `Resistance ${resistance >= 0 ? '+' : ''}${resistance.toFixed(2)}`
+    return { text: value, value }
+  })
   const terrainAnimatedProps = useAnimatedProps(() => ({
     d: terrainPath(canvasWidth, groundTravel.value, hillHeightMeters, hillSpacingMeters),
-  }))
-  const wheelAnimatedProps = useAnimatedProps(() => ({
-    cy:
-      GROUND_Y +
-      hillHeightMeters * 18 * Math.sin((-groundTravel.value * 2 * Math.PI) / hillSpacingMeters) -
-      WHEEL_RADIUS,
   }))
 
   useEffect(() => {
@@ -98,6 +99,7 @@ export function TunePreview({
         targetAngleDegrees.value = next.targetAngleDegrees
         groundOffset.value = groundTravelToVisualOffset(next.groundTravelMeters)
         groundTravel.value = next.groundTravelMeters
+        terrainResistance.value = terrainSlopeToSyntheticAcceleration(next.terrainSlope)
       }
       frame = requestAnimationFrame(tick)
     }
@@ -118,6 +120,7 @@ export function TunePreview({
     riderLean,
     speedKmh,
     targetAngleDegrees,
+    terrainResistance,
   ])
 
   return (
@@ -156,8 +159,7 @@ export function TunePreview({
               strokeWidth={1}
               strokeLinecap="round"
             />
-            <AnimatedCircle
-              animatedProps={hillsEnabled ? wheelAnimatedProps : undefined}
+            <Circle
               cx={centerX}
               cy={GROUND_Y - WHEEL_RADIUS}
               r={WHEEL_RADIUS}
@@ -180,8 +182,7 @@ export function TunePreview({
                 ))}
               </AnimatedGroup>
             ) : null}
-            <AnimatedCircle
-              animatedProps={hillsEnabled ? wheelAnimatedProps : undefined}
+            <Circle
               cx={centerX}
               cy={GROUND_Y - WHEEL_RADIUS}
               r={4}
@@ -220,6 +221,14 @@ export function TunePreview({
               animatedProps={angleTextAnimatedProps}
               style={styles.angle}
             />
+            {hillsEnabled ? (
+              <AnimatedTextInput
+                editable={false}
+                defaultValue="Resistance +0.00"
+                animatedProps={resistanceTextAnimatedProps}
+                style={styles.resistance}
+              />
+            ) : null}
           </View>
         </>
       )}
@@ -246,8 +255,7 @@ function terrainPath(width: number, travel: number, height: number, spacing: num
   'worklet'
   let path = ''
   for (let x = 0; x <= width; x += 6) {
-    const phase = (((x - width / 2) / 60 - travel) * 2 * Math.PI) / spacing
-    const y = GROUND_Y - height * 18 * Math.sin(phase)
+    const y = GROUND_Y - terrainHeightRelativeToWheel(x - width / 2, travel, height, spacing)
     path += `${x === 0 ? 'M' : 'L'}${x},${y} `
   }
   return path
@@ -282,5 +290,14 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     textAlign: 'right',
+  },
+  resistance: {
+    width: 112,
+    padding: 0,
+    color: theme.palette.amber.text,
+    fontSize: 10,
+    fontWeight: '800',
+    textAlign: 'right',
+    fontVariant: ['tabular-nums'],
   },
 })

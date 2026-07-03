@@ -60,8 +60,8 @@ export function TunePreviewScenarioControls({
             <Text style={styles.description}>Height · {hillHeightMeters.toFixed(1)} m</Text>
             <TuneDial
               value={hillHeightMeters}
-              min={0.1}
-              max={2}
+              min={0}
+              max={20}
               step={0.1}
               unit="m"
               valueChangeMode="live"
@@ -71,7 +71,7 @@ export function TunePreviewScenarioControls({
             <TuneDial
               value={hillSpacingMeters}
               min={2}
-              max={20}
+              max={100}
               step={1}
               unit="m"
               valueChangeMode="live"
