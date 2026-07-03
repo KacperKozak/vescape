@@ -180,7 +180,7 @@ function BasicSliderCellShowcase() {
   return (
     <>
       <ShowcaseCard
-        name="BasicSliderCell + FieldEditorPopover"
+        name="BasicSliderCell + automatic-edge tune editor"
         controls={<ValueRow label="applied value" value={value} />}
       >
         <View style={{ maxWidth: 200 }}>

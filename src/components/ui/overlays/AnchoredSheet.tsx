@@ -44,6 +44,7 @@ const DRAWER_AUTO_CLOSE_VISIBLE_PX = 200
 const DRAWER_FLING_PROJECTION_MS = 250
 const DRAWER_OPEN_TRANSLATE_Y = 42
 const DRAWER_OPEN_DURATION = 280
+const DRAWER_BOTTOM_CONTENT_PADDING = 16
 const DRAWER_ENTER_FROM_TOP = new Keyframe({
   0: { opacity: 0, transform: [{ translateY: -DRAWER_OPEN_TRANSLATE_Y }] },
   100: { opacity: 1, transform: [{ translateY: 0 }] },
@@ -416,19 +417,20 @@ function EdgeDrawer({
 
   if (!mounted) return null
 
-  const edgePadding = opensFromTop ? insets.top : insets.bottom
+  const edgePadding = opensFromTop ? insets.top : insets.bottom + DRAWER_BOTTOM_CONTENT_PADDING
   const vignetteColor = theme.palette.slate.surfaceDeep
   const gradientColors = opensFromTop
     ? [
-        theme.alpha(vignetteColor, 0.85),
+        theme.alpha(vignetteColor, 1),
+        theme.alpha(vignetteColor, 0.8),
         theme.alpha(vignetteColor, 0.6),
-        theme.alpha(vignetteColor, 0.3),
       ]
     : [
-        theme.alpha(vignetteColor, 0.3),
         theme.alpha(vignetteColor, 0.6),
-        theme.alpha(vignetteColor, 0.85),
+        theme.alpha(vignetteColor, 0.8),
+        theme.alpha(vignetteColor, 1),
       ]
+  const emptyDismissArea = <Pressable style={{ height }} onPress={close} accessible={false} />
 
   return (
     <Modal
@@ -448,7 +450,7 @@ function EdgeDrawer({
                 start={vec(0, 0)}
                 end={vec(0, height)}
                 colors={gradientColors}
-                positions={[0, 0.55, 1]}
+                positions={[0, 0.7, 1]}
               />
             </Rect>
           </Canvas>
@@ -470,7 +472,7 @@ function EdgeDrawer({
           bounces={false}
           overScrollMode="never"
         >
-          {!opensFromTop ? <View style={{ height }} /> : null}
+          {!opensFromTop ? emptyDismissArea : null}
           <View
             style={[
               styles.drawerBody,
@@ -479,7 +481,12 @@ function EdgeDrawer({
           >
             {!opensFromTop ? <View style={styles.grabber} /> : null}
             {title ? (
-              <View style={styles.drawerHeader}>
+              <Pressable
+                style={styles.drawerHeader}
+                onPress={close}
+                accessibilityRole="button"
+                accessibilityLabel={`Close ${title}`}
+              >
                 {IconComponent ? (
                   <IconComponent
                     size={28}
@@ -488,12 +495,12 @@ function EdgeDrawer({
                   />
                 ) : null}
                 <Text style={styles.drawerTitle}>{title}</Text>
-              </View>
+              </Pressable>
             ) : null}
             <View style={styles.drawerContent}>{children}</View>
             {opensFromTop ? <View style={styles.grabber} /> : null}
           </View>
-          {opensFromTop ? <View style={{ height }} /> : null}
+          {opensFromTop ? emptyDismissArea : null}
         </Reanimated.ScrollView>
       </Reanimated.View>
     </Modal>
