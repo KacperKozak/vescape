@@ -494,7 +494,6 @@ internal final class ConnectionCoordinator: VescGattListener {
       pruneRecentLocations(now: location.timestamp)
     }
     emit?("onLocation", location.map)
-    onStateChanged?()
   }
 
   private func pruneRecentLocations(now: Int64) {
