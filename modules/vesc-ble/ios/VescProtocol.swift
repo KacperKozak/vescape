@@ -1,7 +1,8 @@
 import Foundation
 
 /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescProtocol.kt
-/// TODO(iOS parity): port Android telemetry/config/BMS decoders as iOS BLE transport lands.
+/// TODO(iOS parity): port Android config (Refloat) + BMS decoders as those subsystems land on iOS.
+private let REFLOAT_FAULT_MODE = 69
 internal let COMM_FW_VERSION = 0
 internal let COMM_FORWARD_CAN = 34
 internal let COMM_CUSTOM_APP_DATA = 36
@@ -23,7 +24,8 @@ internal enum VescUartUUIDs {
 }
 
 /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardTransport.kt
-/// TODO(iOS parity): add persisted/bridge transport encoding matching Android board storage.
+/// iOS stores boards as JSON in UserDefaults, so the transport rides inside the Board Link JSON —
+/// no separate persisted TEXT column to encode/decode like Android's board_settings.
 internal enum BoardTransport: Equatable {
   case direct
   case can(Int)
@@ -35,6 +37,28 @@ internal enum BoardTransport: Equatable {
     case .can(let canId):
       precondition((0...255).contains(canId), "CAN id must be between 0 and 255")
       return [UInt8(COMM_FORWARD_CAN), UInt8(canId)] + command
+    }
+  }
+
+  /// Wire scalar for JS: `"direct"` or a CAN id. Mirrors `BoardTransport.toBridge`.
+  var bridgeValue: Any {
+    switch self {
+    case .direct: return "direct"
+    case .can(let canId): return canId
+    }
+  }
+
+  /// Coerce a bridge value coming from JS (`null` | `"direct"` | Number). Junk → `nil`
+  /// (undetected). Mirrors Android `BoardTransport.fromBridge`.
+  static func fromBridge(_ value: Any?) -> BoardTransport? {
+    switch value {
+    case let text as String where text == "direct":
+      return .direct
+    case let number as NSNumber:
+      let canId = number.intValue
+      return (0...255).contains(canId) ? .can(canId) : nil
+    default:
+      return nil
     }
   }
 }
@@ -189,4 +213,172 @@ internal final class VescPacketReassembler {
 
     return packets
   }
+}
+
+// MARK: - Refloat telemetry decode
+
+/// One decoded Refloat `GET_ALLDATA` telemetry frame. Mirrors Android `RefloatTelemetry`.
+internal struct RefloatTelemetry {
+  let hasFault: Bool
+  let faultCode: Int
+  let pitch: Double
+  let roll: Double
+  let balancePitch: Double
+  let balanceCurrent: Double
+  let speed: Double
+  let batteryVoltage: Double
+  let motorCurrent: Double
+  let batteryCurrent: Double
+  let erpm: Int
+  let dutyCycle: Double
+  let state: Int
+  let switchState: Int
+  let adc1: Double
+  let adc2: Double
+  let odometer: Double?
+  let tempMosfet: Double?
+  let tempMotor: Double?
+  let avgLatency: Int?
+  let pullRateHz: Double?
+  let lastPacketAt: Int64
+
+  /// Bridge shape matching the TS `TelemetryEvent`. `location` is omitted here (added by
+  /// higher layers when GPS lands); the hot-path live tick never carries it.
+  func toMap() -> [String: Any?] {
+    [
+      "hasFault": hasFault,
+      "faultCode": faultCode,
+      "pitch": pitch,
+      "roll": roll,
+      "balancePitch": balancePitch,
+      "balanceCurrent": balanceCurrent,
+      "speed": speed,
+      "batteryVoltage": batteryVoltage,
+      "motorCurrent": motorCurrent,
+      "batteryCurrent": batteryCurrent,
+      "erpm": erpm,
+      "dutyCycle": dutyCycle,
+      "state": state,
+      "stateName": stateName(state),
+      "switchState": switchState,
+      "adc1": adc1,
+      "adc2": adc2,
+      "odometer": odometer,
+      "tempMosfet": tempMosfet,
+      "tempMotor": tempMotor,
+      "avgLatency": avgLatency,
+      "pullRateHz": pullRateHz,
+      "lastPacketAt": lastPacketAt,
+    ]
+  }
+}
+
+/// Decode a Refloat `COMM_CUSTOM_APP_DATA` / `GET_ALLDATA` telemetry reply. Returns `nil` for
+/// unrelated payloads or truncated frames. Mirrors Android `parseRefloatGetAllData`.
+internal func parseRefloatGetAllData(
+  payload: [UInt8],
+  avgLatency: Int?,
+  packetAt: Int64,
+  pullRateHz: Double?
+) -> RefloatTelemetry? {
+  if payload.count < 5 { return nil }
+  if Int(payload[0]) != COMM_CUSTOM_APP_DATA { return nil }
+  if Int(payload[1]) != REFLOAT_MAGIC { return nil }
+  if Int(payload[2]) != REFLOAT_GET_ALLDATA { return nil }
+
+  let mode = Int(payload[3])
+  if mode == REFLOAT_FAULT_MODE {
+    return RefloatTelemetry(
+      hasFault: true,
+      faultCode: payload.count > 4 ? Int(payload[4]) : 0,
+      pitch: 0.0,
+      roll: 0.0,
+      balancePitch: 0.0,
+      balanceCurrent: 0.0,
+      speed: 0.0,
+      batteryVoltage: 0.0,
+      motorCurrent: 0.0,
+      batteryCurrent: 0.0,
+      erpm: 0,
+      dutyCycle: 0.0,
+      state: 0,
+      switchState: 0,
+      adc1: 0.0,
+      adc2: 0.0,
+      odometer: nil,
+      tempMosfet: nil,
+      tempMotor: nil,
+      avgLatency: avgLatency,
+      pullRateHz: pullRateHz,
+      lastPacketAt: packetAt
+    )
+  }
+  if payload.count < 34 { return nil }
+
+  let hasExtended = mode >= 2 && payload.count >= 42
+  let dutyRaw = Int(payload[33]) - 128
+  let dutyCycle = abs(dutyRaw) <= 1 ? 0.0 : Double(dutyRaw) / 100.0
+  return RefloatTelemetry(
+    hasFault: false,
+    faultCode: 0,
+    pitch: Double(int16(payload, 20)) / 10.0,
+    roll: Double(int16(payload, 8)) / 10.0,
+    balancePitch: Double(int16(payload, 6)) / 10.0,
+    balanceCurrent: Double(int16(payload, 4)) / 10.0,
+    speed: (Double(int16(payload, 27)) / 10.0) * 3.6,
+    batteryVoltage: Double(int16(payload, 23)) / 10.0,
+    motorCurrent: Double(int16(payload, 29)) / 10.0,
+    batteryCurrent: Double(int16(payload, 31)) / 10.0,
+    erpm: int16(payload, 25),
+    dutyCycle: dutyCycle,
+    state: Int(payload[10]),
+    switchState: Int(payload[11]),
+    adc1: Double(payload[12]) / 50.0,
+    adc2: Double(payload[13]) / 50.0,
+    odometer: hasExtended ? float32Auto(payload, 35) : nil,
+    tempMosfet: hasExtended ? Double(payload[39]) / 2.0 : nil,
+    tempMotor: hasExtended ? Double(payload[40]) / 2.0 : nil,
+    avgLatency: avgLatency,
+    pullRateHz: pullRateHz,
+    lastPacketAt: packetAt
+  )
+}
+
+/// Refloat/Float package board state → wire label. Mirrors Android `stateName`.
+internal func stateName(_ state: Int) -> String {
+  switch state & 0x0f {
+  case 0: return "STARTUP"
+  case 1: return "RUNNING"
+  case 2: return "TILTBACK"
+  case 3: return "WHEELSLIP"
+  case 4: return "UPSIDEDOWN"
+  case 5: return "FLYWHEEL"
+  case 6: return "FAULT_PITCH"
+  case 7: return "FAULT_ROLL"
+  case 8: return "FAULT_SW_HALF"
+  case 9: return "FAULT_SW_FULL"
+  case 11: return "FAULT_STARTUP"
+  case 12: return "FAULT_REVERSE"
+  case 13: return "FAULT_QUICKSTOP"
+  case 14: return "CHARGING"
+  case 15: return "DISABLED"
+  default: return "UNKNOWN"
+  }
+}
+
+private func int16(_ bytes: [UInt8], _ offset: Int) -> Int {
+  let raw = (Int(bytes[offset]) << 8) | Int(bytes[offset + 1])
+  return raw >= 0x8000 ? raw - 0x10000 : raw
+}
+
+private func float32Auto(_ bytes: [UInt8], _ offset: Int) -> Double {
+  let raw = (UInt32(bytes[offset]) << 24) | (UInt32(bytes[offset + 1]) << 16)
+    | (UInt32(bytes[offset + 2]) << 8) | UInt32(bytes[offset + 3])
+  let eRaw = Int((raw >> 23) & 0xff)
+  let sigI = Int(raw & 0x7fffff)
+  let negative = (raw >> 31) != 0
+  if eRaw == 0 && sigI == 0 { return 0.0 }
+  let significand = Double(sigI) / (8388608.0 * 2.0) + 0.5
+  let result = significand * pow(2.0, Double(eRaw - 126))
+  return negative ? -result : result
 }

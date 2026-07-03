@@ -1,27 +1,30 @@
 import ExpoModulesCore
 import Foundation
 
-// iOS bridge stub.
-// Board features must use real CoreBluetooth; until that lands, fail explicitly
-// instead of emitting fake devices or telemetry on physical iOS builds.
+// Thin JS bridge. Board scan/connect/telemetry delegate to the CoreBluetooth stack
+// (VescGattClient + ConnectionCoordinator); everything else is a persisted stub until the
+// matching iOS subsystem lands.
 /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt
-/// TODO(iOS parity): replace bridge stubs with CoreBluetooth, telemetry, location, alerts, Group Ride,
-/// debug recording, and database implementations matching Android API/events/errors.
+/// TODO(iOS parity): port location, alerts, Group Ride, debug recording, and database
+/// subsystems to match Android API/events/errors (#58–#63).
 public class VescBleModule: Module {
 
   // MARK: - Session state
 
-  private var sessionStatus = "idle"
   private var selectedBoardId: String? = nil
-  private var sessionDeviceId: String? = nil
-  private var sessionDeviceName: String? = nil
-  private var sessionGeneration = 0
 
-  // MARK: - Timers
+  private lazy var coordinator: ConnectionCoordinator = {
+    let coordinator = ConnectionCoordinator()
+    coordinator.emit = { [weak self] name, body in
+      self?.sendEvent(name, body)
+    }
+    coordinator.onStateChanged = { [weak self] in
+      guard let self else { return }
+      self.sendEvent("onLiveState", self.liveState())
+    }
+    return coordinator
+  }()
 
-  private var scanTimer: Timer?
-  private var telemetryTimer: Timer?
-  private var locationTimer: Timer?
   // MARK: - App data state
 
   private var boards = VescBleModule.loadArray(key: "vesc_ble_boards")
@@ -37,31 +40,28 @@ public class VescBleModule: Module {
     Events("onDevice", "onError", "onLiveState", "onLiveTick", "onLiveSeries", "onTelemetryHistory", "onBms", "onLocation", "onTelemetryRebuildProgress", "onBoardProbeProgress", "onGroupRideConnection", "onGroupRideSnapshot", "onGroupRideCreated", "onGroupRideUpdated", "onGroupRideEnded", "onGroupRideJoined", "onGroupRideRoster", "onGroupRideError")
 
     OnDestroy {
-      self.scanTimer?.invalidate()
-      self.telemetryTimer?.invalidate()
-      self.locationTimer?.invalidate()
+      self.coordinator.stopBoard()
+      self.coordinator.stopScan()
     }
 
     // MARK: Scan
 
     Function("scan") {
-      self.stopScan()
-      self.emitUnsupported("scan", "iOS CoreBluetooth scan is not implemented yet")
+      self.coordinator.scan()
     }
 
     Function("stopScan") {
-      self.stopScan()
+      self.coordinator.stopScan()
     }
 
     // MARK: Location
 
     Function("startLocationUpdates") {
-      self.stopLocation()
-      self.emitUnsupported("location", "iOS location updates are not implemented yet")
+      self.emitUnsupported("iOS location updates are not implemented yet")
     }
 
     Function("stopLocationUpdates") {
-      self.stopLocation()
+      // No location work started yet on iOS.
     }
 
     // MARK: Group Ride (Android native implementation; iOS keeps bridge shape)
@@ -163,18 +163,26 @@ public class VescBleModule: Module {
       var settings = Self.loadSettings()
       settings["selectedBoardId"] = boardId
       Self.saveSettings(settings)
-      self.stopNativeSession()
-      promise.reject("UNSUPPORTED_PLATFORM", "iOS CoreBluetooth board sessions are not implemented yet")
+      guard let config = self.connectConfig(boardId: boardId) else {
+        promise.reject("NO_LINK", "Board has no Board Link: \(boardId)")
+        return
+      }
+      self.coordinator.connect(
+        config: config,
+        onSuccess: { promise.resolve(nil) },
+        onError: { code, message in promise.reject(code, message) }
+      )
     }
 
     AsyncFunction("stopBoard") { (promise: Promise) in
-      DispatchQueue.main.async { [weak self] in self?.stopNativeSession() }
+      self.coordinator.stopBoard()
       promise.resolve(nil)
     }
 
+    // Board Probe lands with the probe subsystem (#111); connect gating routes unlinked boards
+    // here in JS, so a plain rejection is the correct not-yet-implemented stub.
     AsyncFunction("probeBoardLink") { (_: String, promise: Promise) in
-      DispatchQueue.main.async { [weak self] in self?.stopNativeSession() }
-      promise.reject("UNSUPPORTED_PLATFORM", "iOS Board Probe requires the CoreBluetooth implementation")
+      promise.reject("UNSUPPORTED_PLATFORM", "iOS Board Probe requires the probe subsystem (#111)")
     }
 
     // MARK: Telemetry history (empty stubs)
@@ -246,10 +254,6 @@ public class VescBleModule: Module {
 
     AsyncFunction("stopRemoteTilt") { () -> Bool in
       false
-    }
-
-    Function("getRemoteTiltState") { () -> [String: Any]? in
-      nil
     }
 
     AsyncFunction("getTuneProfiles") { (_: String, promise: Promise) in
@@ -406,72 +410,67 @@ public class VescBleModule: Module {
     }
   }
 
-  // MARK: - Scan
+  // MARK: - Board session bridge
 
-  private func stopScan() {
-    DispatchQueue.main.async { [weak self] in
-      self?.scanTimer?.invalidate()
-      self?.scanTimer = nil
-    }
-  }
-
-  // MARK: - Location
-
-  private func stopLocation() {
-    DispatchQueue.main.async { [weak self] in
-      self?.locationTimer?.invalidate()
-      self?.locationTimer = nil
-    }
-  }
-
-  // MARK: - Telemetry
-
-  private func stopNativeSession() {
-    telemetryTimer?.invalidate()
-    telemetryTimer = nil
-    sessionStatus = "idle"
-    sessionDeviceId = nil
-    sessionDeviceName = nil
-    sendEvent("onLiveState", liveState())
+  /// Resolve a stored board's Board Link into a runtime connect config. Returns `nil` when the
+  /// board is unlinked (JS routes those to Board Probe instead). Dumb connect (ADR 0015): the
+  /// transport is read straight from the link, never rediscovered.
+  private func connectConfig(boardId: String) -> BoardConnectConfig? {
+    guard let board = boards.first(where: { ($0["id"] as? String) == boardId }) else { return nil }
+    guard let link = board["link"] as? [String: Any?] else { return nil }
+    guard let bleId = link["bleId"] as? String, !bleId.isEmpty else { return nil }
+    let transport = BoardTransport.fromBridge(link["transport"] ?? nil) ?? .direct
+    let name = board["name"] as? String ?? "VESC Board"
+    let hz = Self.intValue(Self.loadSettings()["telemetryPollRateHz"]) ?? 0
+    return BoardConnectConfig(
+      appBoardId: boardId,
+      bleId: bleId,
+      name: name,
+      transport: transport,
+      pollIntervalMs: hz > 0 ? 1000 / hz : 0
+    )
   }
 
   private func liveState() -> [String: Any?] {
     let settings = Self.loadSettings()
-    let gpsActive = locationTimer != nil
     return [
       "board": [
-        "phase": sessionStatus,
+        "phase": coordinator.phase.rawValue,
         "selectedBoardId": selectedBoardId ?? settings["selectedBoardId"],
-        "connectedBoardId": sessionStatus == "idle" ? nil : selectedBoardId,
-        "bleId": sessionDeviceId,
-        "name": sessionDeviceName,
-        "connectionSeq": sessionGeneration,
-        "lastTelemetryAt": nil,
+        "connectedBoardId": coordinator.connectedBoardId,
+        "bleId": coordinator.bleId,
+        "name": coordinator.boardName,
+        "connectionSeq": coordinator.connectionSeq,
+        "lastTelemetryAt": coordinator.lastTelemetryAt,
         "recentTelemetry": [] as [Any],
-        "error": nil,
+        "error": coordinator.boardError,
         "autoConnect": settings["autoConnect"] as? Bool ?? true,
+        "remoteTilt": coordinator.remoteTiltState(),
       ] as [String: Any?],
       "gps": [
-        "phase": gpsActive ? "active" : "idle",
+        "phase": "idle",
         "latestFix": nil,
+        "latestApproximateFix": nil,
+        "latestPreciseFix": nil,
         "recentLocations": [] as [Any],
         "error": nil,
       ] as [String: Any?],
       "scan": [
-        "phase": scanTimer == nil ? "idle" : "scanning",
+        "phase": coordinator.scanPhase,
         "devices": [] as [Any],
-        "error": nil,
+        "error": coordinator.scanError,
       ] as [String: Any?],
       "recording": [
         "enabled": false,
+        "paused": false,
         "activeBoardId": nil,
         "startedAt": nil,
       ] as [String: Any?],
     ]
   }
 
-  private func emitUnsupported(_ operation: String, _ message: String) {
-    sendEvent("onError", ["operation": operation, "message": message])
+  private func emitUnsupported(_ message: String) {
+    sendEvent("onError", ["message": message])
   }
 
   private func saveAppData() {
