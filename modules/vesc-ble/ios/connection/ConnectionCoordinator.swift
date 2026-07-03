@@ -1,8 +1,9 @@
 import Foundation
+import UIKit
 
 /// Rider-facing Board Session phase. Mirrors the Android `BoardPhase` wire contract the JS
 /// layer depends on: `idle → connecting → discovering → subscribing → waiting_for_telemetry →
-/// connected`.
+/// connected`, plus the mid-ride reconnect states `reconnecting → rescanning` (#58).
 ///
 /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardPhase.kt
 internal enum BoardPhase: String {
@@ -12,6 +13,8 @@ internal enum BoardPhase: String {
   case subscribing
   case waitingForTelemetry = "waiting_for_telemetry"
   case connected
+  case reconnecting
+  case rescanning
   case error
 }
 
@@ -31,14 +34,21 @@ internal struct BoardConnectConfig {
 }
 
 /// Owns the live Board Session: drives connect phases off GATT callbacks, seeds the stored
-/// transport, polls telemetry response-paced, decodes Refloat frames, and emits live events.
-/// Deliberately narrower than Android's `BoardSessionController` — no reconnect, watchdog,
-/// recording, or alerts yet (those land in later iOS slices).
+/// transport, polls telemetry response-paced, decodes Refloat frames, emits live events, and
+/// recovers a dropped mid-ride link via CoreBluetooth persistent connect plus active rescan
+/// (#58). Still narrower than Android's `BoardSessionController` — no stale watchdog, recording,
+/// or alerts yet (those land in later iOS slices).
+///
+/// iOS reconnect deliberately diverges from Android's exponential-backoff `ReconnectScheduler`:
+/// `CBCentralManager.connect(_:options:)` is persistent (retries until success or cancel, even
+/// waking the app from suspension), so there is no per-attempt backoff to replicate. The active
+/// rescan below only *supplements* that passive retry to accelerate rediscovery while the app is
+/// alive under the `location` background mode.
 ///
 /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/connection/ConnectionCoordinator.kt
-/// @platform-diff iOS starts with a minimal connect/telemetry slice; Android's controller also
-/// owns reconnect, stale watchdog, recording, alerts, and GPS. Peers converge as those iOS
-/// subsystems land (#58–#63).
+/// @platform-diff iOS relies on CoreBluetooth persistent connect for retry timing instead of
+/// Android's backoff scheduler, and still defers the stale watchdog, recording, alerts, and GPS.
+/// Peers converge as those iOS subsystems land (#59–#63).
 internal final class ConnectionCoordinator: VescGattListener {
   /// Send a native event to JS. Set by the module.
   var emit: ((String, [String: Any?]) -> Void)?
@@ -68,6 +78,18 @@ internal final class ConnectionCoordinator: VescGattListener {
   private var pendingOnSuccess: (() -> Void)?
   private var pendingOnError: ((String, String) -> Void)?
   private var connectSettled = false
+
+  // MARK: Reconnect state (#58)
+
+  /// True from a mid-ride link drop until the GATT link is re-established or the session ends.
+  /// Guards the rescan cycle timers so they stop the moment reconnect resolves or is torn down.
+  private var reconnecting = false
+  /// Active-scan window vs idle gap (ms) while reconnecting, tuned per app run-state: aggressive
+  /// in the foreground, gentle under the `location` background mode to spare battery.
+  private let rescanForegroundWindowMs = 4000
+  private let rescanForegroundIdleMs = 2000
+  private let rescanBackgroundWindowMs = 4000
+  private let rescanBackgroundIdleMs = 12000
 
   // MARK: Scan state
 
@@ -135,6 +157,7 @@ internal final class ConnectionCoordinator: VescGattListener {
   ) {
     session?.invalidate()
     stopPolling()
+    stopReconnect()
     reassembler.reset()
 
     sessionSequence += 1
@@ -157,6 +180,7 @@ internal final class ConnectionCoordinator: VescGattListener {
     session = nil
     config = nil
     stopPolling()
+    stopReconnect()
     gatt.disconnect()
     reassembler.reset()
     connectedBoardId = nil
@@ -203,9 +227,68 @@ internal final class ConnectionCoordinator: VescGattListener {
     session = nil
     config = nil
     stopPolling()
+    stopReconnect()
     gatt.disconnect()
     emit?("onError", ["message": message])
     setPhase(.error)
+  }
+
+  // MARK: - Reconnect (#58)
+
+  /// Recover a dropped mid-ride link. Bumps the Board Session identity so any poll/safety timers
+  /// still armed under the dead link are discarded (stale-callback guard), hands the persistent
+  /// reconnect to CoreBluetooth, and starts the supplemental rescan cycle. The JS `generation`
+  /// (`connectionSeq`) is intentionally *not* bumped — the logical session survives the drop, so
+  /// the live series keeps flowing once telemetry resumes (Android parity).
+  private func beginReconnect() {
+    guard config != nil else { return }
+    session?.invalidate()
+    stopPolling()
+    reassembler.reset()
+
+    sessionSequence += 1
+    session = BoardSession(id: sessionSequence)
+    reconnecting = true
+    boardError = nil
+    lastTelemetryAt = nil
+    setPhase(.reconnecting)
+    gatt.reconnect()
+    if let session { scheduleRescanCycle(session: session) }
+  }
+
+  /// One active-scan window followed by an idle gap, re-armed until the link returns or the
+  /// session ends. Persistent connect keeps retrying throughout; the scan just accelerates
+  /// rediscovery while the app is alive.
+  private func scheduleRescanCycle(session: BoardSession) {
+    guard reconnecting, session === self.session, session.isActive else { return }
+    setPhase(.rescanning)
+    gatt.startReconnectScan()
+    DispatchQueue.main.asyncAfter(deadline: .now() + Double(rescanWindowMs) / 1000.0) { [weak self] in
+      guard let self, self.reconnecting, session === self.session, session.isActive else { return }
+      self.gatt.stopReconnectScan()
+      if self.phase == .rescanning { self.setPhase(.reconnecting) }
+      DispatchQueue.main.asyncAfter(deadline: .now() + Double(self.rescanIdleMs) / 1000.0) { [weak self] in
+        self?.scheduleRescanCycle(session: session)
+      }
+    }
+  }
+
+  private func stopReconnect() {
+    guard reconnecting else { return }
+    reconnecting = false
+    gatt.stopReconnectScan()
+  }
+
+  private var appIsForeground: Bool {
+    UIApplication.shared.applicationState == .active
+  }
+
+  private var rescanWindowMs: Int {
+    appIsForeground ? rescanForegroundWindowMs : rescanBackgroundWindowMs
+  }
+
+  private var rescanIdleMs: Int {
+    appIsForeground ? rescanForegroundIdleMs : rescanBackgroundIdleMs
   }
 
   // MARK: - VescGattListener
@@ -228,6 +311,12 @@ internal final class ConnectionCoordinator: VescGattListener {
 
   func onGattConnected() {
     guard session != nil else { return }
+    // Link re-established: the persistent connect landed, so drop the supplemental rescan and let
+    // the normal discover → subscribe → telemetry phases carry the reconnect to `connected`.
+    if reconnecting {
+      reconnecting = false
+      gatt.stopReconnectScan()
+    }
     setPhase(.discovering)
   }
 
@@ -253,9 +342,12 @@ internal final class ConnectionCoordinator: VescGattListener {
     if intentional { return }
     guard session != nil else { return }
     if !connectSettled {
+      // Drop during the initial connect handshake stays a hard failure — the rider is actively
+      // trying to connect and wants feedback, not a silent retry loop.
       fail(code: "DISCONNECTED", message: message)
     } else {
-      endSession(phase: .error, error: message)
+      // Established mid-ride link dropped: alerts are safety-critical, so recover automatically.
+      beginReconnect()
     }
   }
 

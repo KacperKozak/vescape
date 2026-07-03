@@ -19,8 +19,9 @@ internal protocol VescGattListener: AnyObject {
 
 /// CoreBluetooth wrapper around a single VESC board connection plus BLE scanning. Owns one
 /// `CBCentralManager` shared by scan and connect; the coordinator drives phases through the
-/// listener. Deliberately dumb: no reconnect, no watchdog, no session identity — those live
-/// one layer up.
+/// listener. Deliberately dumb: it exposes a persistent `reconnect()` (re-issuing CoreBluetooth's
+/// self-retrying `connect`) and a supplemental rescan, but the reconnect *policy* — when to give
+/// up, phase transitions, session identity — lives one layer up.
 ///
 /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescGattClient.kt
 internal final class VescGattClient: NSObject {
@@ -42,6 +43,8 @@ internal final class VescGattClient: NSObject {
   /// Deferred until the central reports `.poweredOn`.
   private var pendingDiscoveryScan = false
   private var pendingConnectId: UUID?
+  /// A persistent reconnect queued while the central was not yet `.poweredOn`.
+  private var pendingReconnect = false
 
   init(listener: VescGattListener) {
     self.listener = listener
@@ -114,6 +117,47 @@ internal final class VescGattClient: NSObject {
     clear(markIntentional: true)
   }
 
+  // MARK: - Reconnect (#58)
+
+  /// Re-issue a persistent connect on the peripheral retained across an unintentional disconnect.
+  /// `connect(_:options:)` is self-retrying — CoreBluetooth keeps trying until it succeeds or the
+  /// connection is cancelled, even waking the app from suspension — so there is nothing to poll.
+  ///
+  /// @platform-diff Android has no gatt-level peer: its `connectGatt(autoConnect = false)` is
+  /// one-shot and the `ReconnectScheduler` drives retries with a fresh connect each attempt. iOS
+  /// leans on CoreBluetooth's built-in persistent connect instead (see `ConnectionCoordinator`).
+  func reconnect() {
+    guard let peripheral else {
+      listener?.onGattFailure(code: "RECONNECT_FAILED", message: "No peripheral to reconnect")
+      return
+    }
+    intentionalDisconnect = false
+    readyResolved = false
+    txChar = nil
+    pendingNotifyEnables = 0
+    guard central.state == .poweredOn else {
+      pendingReconnect = true
+      return
+    }
+    central.connect(peripheral, options: nil)
+  }
+
+  /// Open a supplemental scan window that reconnects the moment the retained peripheral advertises,
+  /// accelerating rediscovery on top of the persistent connect's passive retry.
+  func startReconnectScan() {
+    guard let peripheral, central.state == .poweredOn else { return }
+    connectTargetId = peripheral.identifier
+    beginScan()
+  }
+
+  /// Close the supplemental scan window (persistent connect keeps running). A live JS `scan()`
+  /// keeps the radio scanning.
+  func stopReconnectScan() {
+    if !isDiscoveryScanning {
+      central.stopScan()
+    }
+  }
+
   func sendPayload(_ payload: [UInt8]) -> Bool {
     guard let peripheral, let txChar else { return false }
     peripheral.writeValue(Data(VescPacketCodec.encode(payload)), for: txChar, type: writeType)
@@ -124,6 +168,7 @@ internal final class VescGattClient: NSObject {
 
   private func clear(markIntentional: Bool) {
     connectTargetId = nil
+    pendingReconnect = false
     if !isDiscoveryScanning {
       central.stopScan()
     }
@@ -167,6 +212,10 @@ extension VescGattClient: CBCentralManagerDelegate {
       if let uuid = pendingConnectId {
         pendingConnectId = nil
         connectResolved(uuid)
+      }
+      if pendingReconnect {
+        pendingReconnect = false
+        reconnect()
       }
     case .poweredOff:
       if isDiscoveryScanning || pendingDiscoveryScan {
@@ -231,9 +280,13 @@ extension VescGattClient: CBCentralManagerDelegate {
     guard peripheral === self.peripheral else { return }
     let wasIntentional = intentionalDisconnect
     intentionalDisconnect = false
-    self.peripheral = nil
     txChar = nil
     pendingNotifyEnables = 0
+    // Keep the peripheral reference on an unexpected drop so the coordinator can hand it back to a
+    // persistent `reconnect()`; only an intentional teardown releases it (via `clear`).
+    if wasIntentional {
+      self.peripheral = nil
+    }
     listener?.onGattDisconnected(
       intentional: wasIntentional,
       message: error?.localizedDescription ?? "Board disconnected"
