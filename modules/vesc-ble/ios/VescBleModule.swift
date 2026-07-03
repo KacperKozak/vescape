@@ -13,6 +13,10 @@ public class VescBleModule: Module {
 
   private var selectedBoardId: String? = nil
 
+  /// Retains the in-flight Board Probe across its async BLE lifecycle. Only one runs at a time —
+  /// the probe owns the single BLE link (see Android `probeBoardLink`).
+  private var activeProbe: BoardTransportDetector?
+
   private lazy var coordinator: ConnectionCoordinator = {
     let coordinator = ConnectionCoordinator()
     coordinator.emit = { [weak self] name, body in
@@ -40,6 +44,7 @@ public class VescBleModule: Module {
     Events("onDevice", "onError", "onLiveState", "onLiveTick", "onLiveSeries", "onTelemetryHistory", "onBms", "onLocation", "onTelemetryRebuildProgress", "onBoardProbeProgress", "onGroupRideConnection", "onGroupRideSnapshot", "onGroupRideCreated", "onGroupRideUpdated", "onGroupRideEnded", "onGroupRideJoined", "onGroupRideRoster", "onGroupRideError")
 
     OnDestroy {
+      self.activeProbe = nil
       self.coordinator.stopBoard()
       self.coordinator.stopScan()
     }
@@ -179,10 +184,8 @@ public class VescBleModule: Module {
       promise.resolve(nil)
     }
 
-    // Board Probe lands with the probe subsystem (#111); connect gating routes unlinked boards
-    // here in JS, so a plain rejection is the correct not-yet-implemented stub.
-    AsyncFunction("probeBoardLink") { (_: String, promise: Promise) in
-      promise.reject("UNSUPPORTED_PLATFORM", "iOS Board Probe requires the probe subsystem (#111)")
+    AsyncFunction("probeBoardLink") { (bleId: String, promise: Promise) in
+      DispatchQueue.main.async { self.startProbe(bleId: bleId, promise: promise) }
     }
 
     // MARK: Telemetry history (empty stubs)
@@ -408,6 +411,46 @@ public class VescBleModule: Module {
       VescBleModule.saveSettings(settings)
       promise.resolve(nil)
     }
+  }
+
+  // MARK: - Board Probe
+
+  /// Run a Board Probe of one BLE peripheral: end any live Board Session (the probe owns the
+  /// single BLE link), then drive `BoardTransportDetector` and resolve with the confirmed
+  /// candidate set. Mirrors Android `probeBoardLink`.
+  private func startProbe(bleId: String, promise: Promise) {
+    guard !bleId.isEmpty else {
+      promise.reject("INVALID_ARGUMENT", "Board Probe needs a BLE peripheral id")
+      return
+    }
+    coordinator.stopBoard()
+    let detector = BoardTransportDetector(
+      bleId: bleId,
+      onProgress: { [weak self] progress in self?.sendEvent("onBoardProbeProgress", progress) },
+      onComplete: { [weak self] result in
+        self?.activeProbe = nil
+        promise.resolve(self?.probeResultToBridge(result) ?? ["outcome": "none", "candidates": [] as [Any]])
+      },
+      onError: { [weak self] code, message in
+        self?.activeProbe = nil
+        promise.reject(code, message)
+      }
+    )
+    activeProbe = detector
+    detector.start()
+  }
+
+  private func probeResultToBridge(_ result: TransportDetection.Result) -> [String: Any?] {
+    let candidates = result.candidates.map { candidate in
+      ["transport": candidate.transport.bridgeValue, "hasBms": candidate.hasBms] as [String: Any?]
+    }
+    let outcome: String
+    switch result.outcome {
+    case .resolved: outcome = "resolved"
+    case .needsPick: outcome = "needs-pick"
+    case .none: outcome = "none"
+    }
+    return ["outcome": outcome, "candidates": candidates]
   }
 
   // MARK: - Board session bridge

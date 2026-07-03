@@ -344,6 +344,24 @@ internal func parseRefloatGetAllData(
   )
 }
 
+/// Validate a `COMM_BMS_GET_VALUES` reply enough to prove a smart BMS answered during a Board
+/// Probe. iOS has no BMS telemetry pipeline yet, so the probe needs only the capability bit, not a
+/// decoded sample — this mirrors the prefix checks in Android `parseBmsValues`:
+/// header + `v_tot,v_charge,i_in,i_in_ic` (4×float32) + `ah_cnt,wh_cnt` (2×float32) + `cell_num`
+/// (u8) + `v_cell[cell_num]` (float16). A plausible `cell_num` with room for its cell voltages is
+/// enough evidence a real BMS replied.
+///
+/// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescProtocol.kt (parseBmsValues)
+/// @platform-diff Android decodes full `BmsTelemetry`; iOS returns only validity until the iOS BMS
+/// subsystem lands.
+internal func bmsValuesValid(_ payload: [UInt8]) -> Bool {
+  guard !payload.isEmpty, Int(payload[0]) == COMM_BMS_GET_VALUES else { return false }
+  guard payload.count >= 26 else { return false }
+  let cellNum = Int(payload[25])
+  guard cellNum > 0, cellNum <= 60 else { return false }
+  return payload.count >= 26 + cellNum * 2
+}
+
 /// Refloat/Float package board state → wire label. Mirrors Android `stateName`.
 internal func stateName(_ state: Int) -> String {
   switch state & 0x0f {

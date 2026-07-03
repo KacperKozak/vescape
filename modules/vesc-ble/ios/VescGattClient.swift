@@ -137,8 +137,12 @@ internal final class VescGattClient: NSObject {
   }
 
   private func beginScan() {
+    // Scan unfiltered, mirroring Android's null-filter scan. VESC boards (Nordic UART BLE
+    // modules) don't advertise the NUS service UUID in the advertisement packet — it only
+    // appears in the GATT table after connecting — so `withServices: [NUS]` never surfaces
+    // them. The board is identified by name/id at the UI layer, not by advertised service.
     central.scanForPeripherals(
-      withServices: [VescGattUUIDs.service],
+      withServices: nil,
       options: [CBCentralManagerScanOptionAllowDuplicatesKey: true]
     )
   }
