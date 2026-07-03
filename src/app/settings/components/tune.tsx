@@ -10,6 +10,8 @@ import {
 import { useTriggerRef } from '@/components/ui/forms/Dropdown'
 import { BasicSliderCell } from '@/components/ui/tune/BasicSliderCell'
 import { TuneDial } from '@/components/ui/tune/TuneDial'
+import { TunePreview } from '@/components/ui/tune/TunePreview'
+import { RiderBalanceControl } from '@/components/ui/tune/RiderBalanceControl'
 import { IconHero } from '@/components/ui/settings/IconHero'
 import { ShowcaseCard } from '@/components/ui/dev/ShowcaseCard'
 import { ChipRow, ValueRow } from '@/components/ui/dev/ShowcaseControls'
@@ -205,19 +207,47 @@ function BasicSliderCellShowcase() {
   )
 }
 
+function TunePreviewShowcase() {
+  const [riderLean, setRiderLean] = useState(0.55)
+  const fields = useMemo(
+    () => ({ kp: 20, kp2: 0.6, ki: 0.02, mahony_kp: 2, mahony_kp_roll: 1.4 }),
+    [],
+  )
+
+  return (
+    <ShowcaseCard
+      name="Tune Preview"
+      controls={<ValueRow label="rider balance" value={`${Math.round(riderLean * 100)}%`} />}
+    >
+      <TunePreview fields={fields} riderLean={riderLean} onHelp={() => {}} />
+      <RiderBalanceControl value={riderLean} onValueChange={setRiderLean} />
+    </ShowcaseCard>
+  )
+}
+
+function UnsupportedTunePreviewShowcase() {
+  return (
+    <ShowcaseCard name="Tune Preview — unsupported">
+      <TunePreview fields={{ kp: 20 }} riderLean={0} active={false} onHelp={() => {}} />
+    </ShowcaseCard>
+  )
+}
+
 export default function TunePage() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
         <IconHero
           icon={ToolboxIcon}
-          description="TuneDial, BasicSliderCell, TuneSyncBar, TuneGroupGrid."
+          description="TuneDial, BasicSliderCell, Tune Preview, TuneSyncBar, TuneGroupGrid."
         />
         <TuneDialShowcase />
         <CompactTuneDialShowcase />
         <AlertPercentageTuneDialShowcase />
         <GeigerAlertTuneDialShowcase />
         <BasicSliderCellShowcase />
+        <TunePreviewShowcase />
+        <UnsupportedTunePreviewShowcase />
       </ScrollView>
     </SafeAreaView>
   )

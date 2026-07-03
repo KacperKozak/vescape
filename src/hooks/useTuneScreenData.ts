@@ -268,6 +268,7 @@ export function useTuneScreenData() {
     loadOffline: loadProfileConfig,
     loadOnline: retryBoardSnapshot,
     profileError,
+    profileFields,
     profiles,
     profileState,
     retryBoardSnapshot,

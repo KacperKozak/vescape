@@ -1,5 +1,13 @@
 # Tune Screen Reference
 
+## Tune Preview model
+
+The flat-response Tune Preview uses model version `refloat-bundled-legacy-v1`, tied to
+`modules/vesc-ble/android/src/main/assets/refloat-settings.xml`. It is a deterministic,
+comparative ideal-drive model. Synthetic Rider Lean applies a sustained normalized pitch moment;
+it does not request an angle, speed, acceleration, or motor output. The model intentionally omits
+motor-power, traction, rider-mass, exact-geometry, and nosedive limits.
+
 This document captures practical tune-screen behavior used by a Refloat-focused
 board app. It is intended as product and implementation reference for building a
 safe tuning UI in this app.
