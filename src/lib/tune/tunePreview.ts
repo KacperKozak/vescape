@@ -5,6 +5,7 @@ import type { TuneProfileFieldValue } from 'vesc-ble'
 
 export const TUNE_PREVIEW_MODEL_VERSION = 'refloat-bundled-legacy-v1' as const
 export const REFERENCE_ERPM_PER_KMH = 1000 / 3.5
+export const COMPARATIVE_ACCELERATION_KMH_PER_SECOND = 6
 
 const REQUIRED_FIELDS = [
   'kp',
@@ -103,6 +104,7 @@ export interface TunePreviewTarget {
 }
 
 export interface TunePreviewState {
+  syntheticSpeedKmh: number
   angleDegrees: number
   angularRateDegreesPerSecond: number
   integralError: number
@@ -123,6 +125,7 @@ export interface TunePreviewState {
 export interface TunePreviewInput {
   riderLean: number
   speedKmh: number
+  holdSpeed?: boolean
   hillsEnabled?: boolean
   hillHeightMeters?: number
   hillSpacingMeters?: number
@@ -193,8 +196,9 @@ export function createTunePreviewModel(
   }
 }
 
-export function createTunePreviewState(): TunePreviewState {
+export function createTunePreviewState(speedKmh = 0): TunePreviewState {
   return {
+    syntheticSpeedKmh: boundedSpeed(speedKmh),
     angleDegrees: 0,
     angularRateDegreesPerSecond: 0,
     integralError: 0,
@@ -211,6 +215,10 @@ export function createTunePreviewState(): TunePreviewState {
     atrAccelDiff: 0,
     atrTargetDegrees: 0,
   }
+}
+
+export function resetTunePreviewSpeed(state: TunePreviewState, speedKmh: number): TunePreviewState {
+  return { ...state, syntheticSpeedKmh: boundedSpeed(speedKmh) }
 }
 
 export function speedKmhToReferenceErpm(speedKmh: number): number {
@@ -300,7 +308,15 @@ function stepFixed(
   input: TunePreviewInput,
   dt: number,
 ): TunePreviewState {
-  const target = calculateLongitudinalTarget(state, parameters, input, dt)
+  const syntheticSpeedKmh =
+    input.holdSpeed === false
+      ? boundedSpeed(
+          state.syntheticSpeedKmh +
+            clamp(input.riderLean, -1, 1) * COMPARATIVE_ACCELERATION_KMH_PER_SECOND * dt,
+        )
+      : boundedSpeed(input.speedKmh)
+  const effectiveInput = { ...input, speedKmh: syntheticSpeedKmh }
+  const target = calculateLongitudinalTarget(state, parameters, effectiveInput, dt)
   const terrainSlope = calculateTerrainSlope(state.groundTravelMeters, input)
   const braking = input.riderLean < 0
   const ratio = Math.max(braking ? parameters.atrAmpsDecelRatio : parameters.atrAmpsAccelRatio, 0.1)
@@ -371,6 +387,7 @@ function stepFixed(
   )
 
   return {
+    syntheticSpeedKmh,
     angleDegrees: finiteOrZero(angleDegrees),
     angularRateDegreesPerSecond: finiteOrZero(angularRateDegreesPerSecond),
     integralError: finiteOrZero(integralError),
@@ -382,7 +399,7 @@ function stepFixed(
     variableTiltbackDegrees: target.variableTiltbackDegrees,
     syntheticCurrentAmps: target.syntheticCurrentAmps,
     erpm: target.erpm,
-    groundTravelMeters: state.groundTravelMeters + (clamp(input.speedKmh, 0, 40) / 3.6) * dt,
+    groundTravelMeters: state.groundTravelMeters + (syntheticSpeedKmh / 3.6) * dt,
     terrainSlope,
     atrAccelDiff,
     atrTargetDegrees,
@@ -477,6 +494,10 @@ function numberFieldOrDefault(
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
+}
+
+function boundedSpeed(speedKmh: number): number {
+  return Number.isFinite(speedKmh) ? clamp(speedKmh, 0, 40) : 0
 }
 
 function finiteOrZero(value: number): number {

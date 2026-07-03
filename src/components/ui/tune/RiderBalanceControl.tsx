@@ -1,42 +1,55 @@
-import { useCallback, useMemo, useState } from 'react'
-import { PanResponder, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
+/* eslint-disable react-hooks/immutability */
+import { useMemo } from 'react'
+import { StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
+import { Gesture, GestureDetector } from 'react-native-gesture-handler'
+import Animated, {
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  type SharedValue,
+} from 'react-native-reanimated'
 
 import { theme } from '@/constants/theme'
 
 interface RiderBalanceControlProps {
-  value: number
-  onValueChange: (value: number) => void
+  value: SharedValue<number>
+  onValueChangeEnd?: (value: number) => void
 }
 
-export function RiderBalanceControl({ value, onValueChange }: RiderBalanceControlProps) {
-  const [width, setWidth] = useState(0)
+const THUMB_SIZE = 18
 
-  const updateFromX = useCallback(
-    (x: number) => {
-      const next = Math.max(-1, Math.min(1, 1 - (x / Math.max(width, 1)) * 2))
-      onValueChange(Math.round(next * 100) / 100)
-    },
-    [onValueChange, width],
-  )
+export function RiderBalanceControl({ value, onValueChangeEnd }: RiderBalanceControlProps) {
+  const width = useSharedValue(0)
 
-  const panResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onMoveShouldSetPanResponder: () => true,
-        onPanResponderGrant: (event) => updateFromX(event.nativeEvent.locationX),
-        onPanResponderMove: (event) => updateFromX(event.nativeEvent.locationX),
-      }),
-    [updateFromX],
-  )
+  const gesture = useMemo(() => {
+    const updateFromX = (x: number) => {
+      'worklet'
+      const travel = Math.max(width.value - THUMB_SIZE, 1)
+      const thumbLeft = Math.max(0, Math.min(travel, x - THUMB_SIZE / 2))
+      value.value = Math.round((1 - (thumbLeft / travel) * 2) * 100) / 100
+    }
+
+    return Gesture.Pan()
+      .minDistance(0)
+      .onBegin((event) => updateFromX(event.x))
+      .onUpdate((event) => updateFromX(event.x))
+      .onFinalize(() => {
+        if (onValueChangeEnd) runOnJS(onValueChangeEnd)(value.value)
+      })
+  }, [onValueChangeEnd, value, width])
+
+  const thumbStyle = useAnimatedStyle(() => {
+    const travel = Math.max(width.value - THUMB_SIZE, 0)
+    return { transform: [{ translateX: ((1 - value.value) / 2) * travel }] }
+  })
 
   const handleLayout = (event: LayoutChangeEvent) => {
-    const nextWidth = event.nativeEvent.layout.width
-    setWidth(nextWidth)
+    width.value = event.nativeEvent.layout.width
   }
 
   const adjust = (delta: number) => {
-    onValueChange(Math.max(-1, Math.min(1, value + delta)))
+    value.value = Math.max(-1, Math.min(1, value.value + delta))
+    onValueChangeEnd?.(value.value)
   }
 
   return (
@@ -46,23 +59,23 @@ export function RiderBalanceControl({ value, onValueChange }: RiderBalanceContro
         <Text style={styles.title}>Rider balance</Text>
         <Text style={styles.edgeLabel}>Tail</Text>
       </View>
-      <View
-        style={styles.trackTouch}
-        onLayout={handleLayout}
-        accessible
-        accessibilityRole="adjustable"
-        accessibilityLabel="Rider balance"
-        accessibilityValue={{ min: -100, max: 100, now: Math.round(value * 100) }}
-        accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
-        onAccessibilityAction={(event) =>
-          adjust(event.nativeEvent.actionName === 'increment' ? 0.1 : -0.1)
-        }
-        {...panResponder.panHandlers}
-      >
-        <View style={styles.track} />
-        <View style={styles.centerMark} />
-        <View style={[styles.thumb, { left: Math.max(0, ((1 - value) / 2) * width - 9) }]} />
-      </View>
+      <GestureDetector gesture={gesture}>
+        <View
+          style={styles.trackTouch}
+          onLayout={handleLayout}
+          accessible
+          accessibilityRole="adjustable"
+          accessibilityLabel="Rider balance"
+          accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+          onAccessibilityAction={(event) =>
+            adjust(event.nativeEvent.actionName === 'increment' ? 0.1 : -0.1)
+          }
+        >
+          <View style={styles.track} />
+          <View style={styles.centerMark} />
+          <Animated.View style={[styles.thumb, thumbStyle]} />
+        </View>
+      </GestureDetector>
     </View>
   )
 }
@@ -83,9 +96,10 @@ const styles = StyleSheet.create({
   },
   thumb: {
     position: 'absolute',
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    left: 0,
+    width: THUMB_SIZE,
+    height: THUMB_SIZE,
+    borderRadius: THUMB_SIZE / 2,
     backgroundColor: theme.palette.sky.color,
     borderWidth: 2,
     borderColor: theme.palette.slate.textPrimary,

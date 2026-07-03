@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/ui/base/Text'
 import { useIsFocused, useNavigation, useRouter } from 'expo-router'
@@ -13,6 +13,7 @@ import {
   WarningCircleIcon,
 } from 'phosphor-react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useSharedValue } from 'react-native-reanimated'
 import { type TuneProfile, type RefloatConfigField, type TuneProfileFieldValue } from 'vesc-ble'
 
 import { Button } from '@/components/ui/base/Button'
@@ -51,8 +52,9 @@ export default function TuneScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const isFocused = useIsFocused()
-  const [riderLean, setRiderLean] = useState(0)
+  const riderLean = useSharedValue(0)
   const [previewSpeedKmh, setPreviewSpeedKmh] = useState(15)
+  const [holdPreviewSpeed, setHoldPreviewSpeed] = useState(true)
   const [hillsEnabled, setHillsEnabled] = useState(false)
   const [hillHeightMeters, setHillHeightMeters] = useState(5)
   const [hillSpacingMeters, setHillSpacingMeters] = useState(8)
@@ -231,6 +233,7 @@ export default function TuneScreen() {
               fields={profileFields ?? {}}
               riderLean={riderLean}
               speedKmh={previewSpeedKmh}
+              holdSpeed={holdPreviewSpeed}
               hillsEnabled={hillsEnabled}
               hillHeightMeters={hillHeightMeters}
               hillSpacingMeters={hillSpacingMeters}
@@ -238,7 +241,7 @@ export default function TuneScreen() {
               onHelp={() => setPreviewHelpVisible(true)}
             />
             <View style={styles.balancePinned}>
-              <RiderBalanceControl value={riderLean} onValueChange={setRiderLean} />
+              <RiderBalanceControl value={riderLean} />
             </View>
           </View>
           <ScrollView
@@ -249,6 +252,8 @@ export default function TuneScreen() {
             <TunePreviewScenarioControls
               speedKmh={previewSpeedKmh}
               onSpeedChange={setPreviewSpeedKmh}
+              holdSpeed={holdPreviewSpeed}
+              onHoldSpeedChange={setHoldPreviewSpeed}
               hillsEnabled={hillsEnabled}
               onHillsChange={setHillsEnabled}
               hillHeightMeters={hillHeightMeters}
@@ -430,7 +435,7 @@ export default function TuneScreen() {
         visible={previewHelpVisible}
         variant="warning"
         title="Work in progress"
-        message="Tune editing is experimental. Do not ride with these settings until you have verified them on the bench and confirmed safe behaviour."
+        message="Tune editing and Tune Preview are experimental. Dynamic speed is synthetic, bounded, and comparative. It does not predict real acceleration, braking distance, power, traction, or safety. Synthetic Rider Lean changes dynamic speed directly; absolute deck angle is not converted into acceleration. Do not ride with these settings until you have verified them on the bench and confirmed safe behaviour."
         onDismiss={() => setPreviewHelpVisible(false)}
       />
 

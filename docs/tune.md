@@ -23,6 +23,14 @@ wavelength, and scenario speed advances phase. Terrain slope feeds a synthetic m
 acceleration disturbance into the legacy ATR equations; it never forces Board pitch to the terrain
 tangent and does not model traction, suspension, or collision.
 
+`Hold speed` is enabled by default so tune comparisons keep an identical constant speed. When it
+is disabled, the configured speed is the starting speed and Synthetic Rider Lean changes a
+runtime-only synthetic speed at the model's named comparative acceleration scale. Speed is bounded
+to `0-40 km/h`, reverse is unsupported, and the evolving value drives the existing ERPM, tilt,
+ATR, terrain phase, and ground-travel paths. Switching modes restores the configured speed without
+changing the Tune Profile. Dynamic speed does not predict physical acceleration, braking distance,
+power, traction, or safety; absolute Board angle is never converted into acceleration.
+
 This document captures practical tune-screen behavior used by a Refloat-focused
 board app. It is intended as product and implementation reference for building a
 safe tuning UI in this app.

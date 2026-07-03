@@ -2,7 +2,11 @@ import { useEffect, useMemo, useRef } from 'react'
 import { Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native'
 import { QuestionIcon } from 'phosphor-react-native'
 import Svg, { Circle, G, Line, Path } from 'react-native-svg'
-import Animated, { useAnimatedProps, useSharedValue } from 'react-native-reanimated'
+import Animated, {
+  useAnimatedProps,
+  useSharedValue,
+  type SharedValue,
+} from 'react-native-reanimated'
 import type { TuneProfileFieldValue } from 'vesc-ble'
 
 import { theme } from '@/constants/theme'
@@ -10,6 +14,7 @@ import {
   createTunePreviewModel,
   createTunePreviewState,
   groundTravelToVisualOffset,
+  resetTunePreviewSpeed,
   stepTunePreview,
   terrainHeightRelativeToWheel,
   terrainSlopeToSyntheticAcceleration,
@@ -17,8 +22,9 @@ import {
 
 interface TunePreviewProps {
   fields: Record<string, TuneProfileFieldValue>
-  riderLean: number
+  riderLean: SharedValue<number>
   speedKmh: number
+  holdSpeed?: boolean
   hillsEnabled?: boolean
   hillHeightMeters?: number
   hillSpacingMeters?: number
@@ -40,6 +46,7 @@ export function TunePreview({
   fields,
   riderLean,
   speedKmh,
+  holdSpeed = true,
   hillsEnabled = false,
   hillHeightMeters = 5,
   hillSpacingMeters = 8,
@@ -48,13 +55,15 @@ export function TunePreview({
 }: TunePreviewProps) {
   const model = useMemo(() => createTunePreviewModel(fields), [fields])
   const { width: canvasWidth } = useWindowDimensions()
-  const stateRef = useRef(createTunePreviewState())
+  const stateRef = useRef(createTunePreviewState(speedKmh))
+  const configuredSpeedRef = useRef(speedKmh)
   const lastTimestampRef = useRef<number | null>(null)
   const angleDegrees = useSharedValue(0)
   const targetAngleDegrees = useSharedValue(0)
   const groundOffset = useSharedValue(0)
   const groundTravel = useSharedValue(0)
   const terrainResistance = useSharedValue(0)
+  const syntheticSpeed = useSharedValue(speedKmh)
   const centerX = canvasWidth / 2
 
   const deckAnimatedProps = useAnimatedProps(() => lineForAngle(angleDegrees.value, centerX))
@@ -73,9 +82,22 @@ export function TunePreview({
     const value = `Resistance ${resistance >= 0 ? '+' : ''}${resistance.toFixed(2)}`
     return { text: value, value }
   })
+  const speedTextAnimatedProps = useAnimatedProps(() => {
+    const value = syntheticSpeed.value.toFixed(1)
+    return { text: value, value }
+  })
   const terrainAnimatedProps = useAnimatedProps(() => ({
     d: terrainPath(canvasWidth, groundTravel.value, hillHeightMeters, hillSpacingMeters),
   }))
+
+  useEffect(() => {
+    configuredSpeedRef.current = speedKmh
+  }, [speedKmh])
+
+  useEffect(() => {
+    const configuredSpeed = configuredSpeedRef.current
+    stateRef.current = resetTunePreviewSpeed(stateRef.current, configuredSpeed)
+  }, [holdSpeed])
 
   useEffect(() => {
     if (!active || model.status !== 'ready') {
@@ -91,7 +113,14 @@ export function TunePreview({
         const next = stepTunePreview(
           stateRef.current,
           model.parameters,
-          { riderLean, speedKmh, hillsEnabled, hillHeightMeters, hillSpacingMeters },
+          {
+            riderLean: riderLean.value,
+            speedKmh,
+            holdSpeed,
+            hillsEnabled,
+            hillHeightMeters,
+            hillSpacingMeters,
+          },
           (timestamp - previous) / 1000,
         )
         stateRef.current = next
@@ -100,6 +129,7 @@ export function TunePreview({
         groundOffset.value = groundTravelToVisualOffset(next.groundTravelMeters)
         groundTravel.value = next.groundTravelMeters
         terrainResistance.value = terrainSlopeToSyntheticAcceleration(next.terrainSlope)
+        syntheticSpeed.value = next.syntheticSpeedKmh
       }
       frame = requestAnimationFrame(tick)
     }
@@ -116,9 +146,11 @@ export function TunePreview({
     hillHeightMeters,
     hillSpacingMeters,
     hillsEnabled,
+    holdSpeed,
     model,
     riderLean,
     speedKmh,
+    syntheticSpeed,
     targetAngleDegrees,
     terrainResistance,
   ])
@@ -131,6 +163,15 @@ export function TunePreview({
           <Pressable hitSlop={8} onPress={onHelp}>
             <QuestionIcon size={14} color={theme.palette.slate.textMuted} weight="bold" />
           </Pressable>
+        </View>
+        <View style={styles.speedReadout}>
+          <AnimatedTextInput
+            editable={false}
+            defaultValue={speedKmh.toFixed(1)}
+            animatedProps={speedTextAnimatedProps}
+            style={styles.speedValue}
+          />
+          <Text style={styles.speedUnit}>km/h</Text>
         </View>
       </View>
 
@@ -265,6 +306,9 @@ const styles = StyleSheet.create({
   card: {},
   header: {
     paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   title: { color: theme.palette.slate.textPrimary, fontSize: 14, fontWeight: '900' },
@@ -299,5 +343,25 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     textAlign: 'right',
     fontVariant: ['tabular-nums'],
+  },
+  speedReadout: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+  },
+  speedValue: {
+    width: 64,
+    padding: 0,
+    color: theme.telemetry.speed,
+    fontSize: 24,
+    lineHeight: 28,
+    fontWeight: '900',
+    textAlign: 'right',
+    fontVariant: ['tabular-nums'],
+  },
+  speedUnit: {
+    color: theme.palette.slate.textMuted,
+    fontSize: 10,
+    fontWeight: '700',
   },
 })

@@ -1,6 +1,7 @@
 import { ScrollView, StyleSheet, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useCallback, useMemo, useState } from 'react'
+import { useSharedValue } from 'react-native-reanimated'
 
 import { ToolboxIcon } from 'phosphor-react-native'
 import {
@@ -210,7 +211,9 @@ function BasicSliderCellShowcase() {
 
 function TunePreviewShowcase() {
   const [riderLean, setRiderLean] = useState(0.55)
+  const riderLeanValue = useSharedValue(riderLean)
   const [speedKmh, setSpeedKmh] = useState(15)
+  const [holdSpeed, setHoldSpeed] = useState(true)
   const [scenario, setScenario] = useState('acceleration')
   const [hillsEnabled, setHillsEnabled] = useState(false)
   const [hillHeightMeters, setHillHeightMeters] = useState(5)
@@ -257,19 +260,27 @@ function TunePreviewShowcase() {
     if (next === 'acceleration') {
       setHillsEnabled(false)
       setRiderLean(0.7)
+      riderLeanValue.value = 0.7
       setSpeedKmh(15)
+      setHoldSpeed(false)
     } else if (next === 'braking') {
       setHillsEnabled(false)
       setRiderLean(-0.7)
+      riderLeanValue.value = -0.7
       setSpeedKmh(15)
+      setHoldSpeed(false)
     } else if (next === 'high speed') {
       setHillsEnabled(false)
       setRiderLean(0)
+      riderLeanValue.value = 0
       setSpeedKmh(40)
+      setHoldSpeed(true)
     } else {
       setHillsEnabled(true)
       setRiderLean(next === 'uphill' ? 0.6 : -0.6)
+      riderLeanValue.value = next === 'uphill' ? 0.6 : -0.6
       setSpeedKmh(15)
+      setHoldSpeed(true)
       setHillHeightMeters(next === 'dense hills' ? 1.2 : 0.6)
       setHillSpacingMeters(next === 'dense hills' ? 4 : 8)
     }
@@ -292,17 +303,20 @@ function TunePreviewShowcase() {
     >
       <TunePreview
         fields={fields}
-        riderLean={riderLean}
+        riderLean={riderLeanValue}
         speedKmh={speedKmh}
+        holdSpeed={holdSpeed}
         hillsEnabled={hillsEnabled}
         hillHeightMeters={hillHeightMeters}
         hillSpacingMeters={hillSpacingMeters}
         onHelp={() => {}}
       />
-      <RiderBalanceControl value={riderLean} onValueChange={setRiderLean} />
+      <RiderBalanceControl value={riderLeanValue} onValueChangeEnd={setRiderLean} />
       <TunePreviewScenarioControls
         speedKmh={speedKmh}
         onSpeedChange={setSpeedKmh}
+        holdSpeed={holdSpeed}
+        onHoldSpeedChange={setHoldSpeed}
         hillsEnabled={hillsEnabled}
         onHillsChange={setHillsEnabled}
         hillHeightMeters={hillHeightMeters}
@@ -315,11 +329,13 @@ function TunePreviewShowcase() {
 }
 
 function UnsupportedTunePreviewShowcase() {
+  const riderLean = useSharedValue(0)
+
   return (
     <ShowcaseCard name="Tune Preview — unsupported">
       <TunePreview
         fields={{ kp: 20 }}
-        riderLean={0}
+        riderLean={riderLean}
         speedKmh={15}
         active={false}
         onHelp={() => {}}

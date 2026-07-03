@@ -7,6 +7,8 @@ import { theme } from '@/constants/theme'
 interface TunePreviewScenarioControlsProps {
   speedKmh: number
   onSpeedChange: (speedKmh: number) => void
+  holdSpeed: boolean
+  onHoldSpeedChange: (holdSpeed: boolean) => void
   hillsEnabled: boolean
   onHillsChange: (enabled: boolean) => void
   hillHeightMeters: number
@@ -18,6 +20,8 @@ interface TunePreviewScenarioControlsProps {
 export function TunePreviewScenarioControls({
   speedKmh,
   onSpeedChange,
+  holdSpeed,
+  onHoldSpeedChange,
   hillsEnabled,
   onHillsChange,
   hillHeightMeters,
@@ -33,18 +37,24 @@ export function TunePreviewScenarioControls({
             <GaugeIcon size={16} color={theme.telemetry.speed} weight="duotone" />
             <Text style={styles.title}>Constant speed</Text>
           </View>
-          <Text style={styles.value}>{speedKmh.toFixed(0)} km/h</Text>
+          <Switch value={holdSpeed} onValueChange={onHoldSpeedChange} />
         </View>
-        <Text style={styles.description}>Forward speed · reference 11-inch wheel</Text>
-        <TuneDial
-          value={speedKmh}
-          min={0}
-          max={40}
-          step={1}
-          unit="km/h"
-          valueChangeMode="live"
-          onValueChange={onSpeedChange}
-        />
+        <Text style={styles.description}>
+          {holdSpeed
+            ? 'Constant forward speed · reference 11-inch wheel'
+            : 'Synthetic Rider Lean changes speed · 0-40 km/h'}
+        </Text>
+        {holdSpeed ? (
+          <TuneDial
+            value={speedKmh}
+            min={0}
+            max={40}
+            step={1}
+            unit="km/h"
+            valueChangeMode="live"
+            onValueChange={onSpeedChange}
+          />
+        ) : null}
       </View>
 
       <View style={styles.container}>
@@ -99,11 +109,5 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   title: { color: theme.palette.slate.textPrimary, fontSize: 13, fontWeight: '900' },
-  value: {
-    color: theme.palette.sky.text,
-    fontSize: 12,
-    fontWeight: '800',
-    fontVariant: ['tabular-nums'],
-  },
   description: { color: theme.palette.slate.textMuted, fontSize: 10, fontWeight: '600' },
 })

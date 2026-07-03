@@ -1,11 +1,13 @@
 import { describe, expect, test } from 'bun:test'
 
 import {
+  COMPARATIVE_ACCELERATION_KMH_PER_SECOND,
   calculateLongitudinalTarget,
   calculateTerrainSlope,
   createTunePreviewModel,
   createTunePreviewState,
   groundTravelToVisualOffset,
+  resetTunePreviewSpeed,
   speedKmhToReferenceErpm,
   stepTunePreview,
   terrainHeightRelativeToWheel,
@@ -228,6 +230,97 @@ describe('Tune Preview longitudinal response', () => {
     expect(
       stepTunePreview(state, parameters, { riderLean: 1, speedKmh: 15, paused: true }, 1),
     ).toBe(state)
+  })
+
+  test('fixed speed remains compatible and follows configured speed', () => {
+    const parameters = readyParameters()
+    const next = stepTunePreview(
+      createTunePreviewState(3),
+      parameters,
+      { riderLean: 1, speedKmh: 15, holdSpeed: true },
+      1 / 60,
+    )
+    expect(next.syntheticSpeedKmh).toBe(15)
+    expect(next.erpm).toBeCloseTo(speedKmhToReferenceErpm(15))
+  })
+
+  test('dynamic speed accelerates, brakes, and holds neutrally', () => {
+    const parameters = readyParameters()
+    const initial = createTunePreviewState(15)
+    const accelerated = stepTunePreview(
+      initial,
+      parameters,
+      { riderLean: 1, speedKmh: 15, holdSpeed: false },
+      0.25,
+    )
+    const braked = stepTunePreview(
+      initial,
+      parameters,
+      { riderLean: -1, speedKmh: 15, holdSpeed: false },
+      0.25,
+    )
+    const neutral = stepTunePreview(
+      initial,
+      parameters,
+      { riderLean: 0, speedKmh: 15, holdSpeed: false },
+      0.25,
+    )
+    expect(accelerated.syntheticSpeedKmh).toBeCloseTo(
+      15 + COMPARATIVE_ACCELERATION_KMH_PER_SECOND * 0.25,
+    )
+    expect(braked.syntheticSpeedKmh).toBeCloseTo(
+      15 - COMPARATIVE_ACCELERATION_KMH_PER_SECOND * 0.25,
+    )
+    expect(neutral.syntheticSpeedKmh).toBe(15)
+  })
+
+  test('dynamic speed is bounded, finite, and never reverses', () => {
+    const parameters = readyParameters()
+    const upper = stepTunePreview(
+      createTunePreviewState(39.5),
+      parameters,
+      { riderLean: 1, speedKmh: 15, holdSpeed: false },
+      10,
+    )
+    const lower = stepTunePreview(
+      createTunePreviewState(0.5),
+      parameters,
+      { riderLean: -1, speedKmh: 15, holdSpeed: false },
+      10,
+    )
+    const nonFinite = stepTunePreview(
+      createTunePreviewState(Number.NaN),
+      parameters,
+      { riderLean: Number.POSITIVE_INFINITY, speedKmh: 15, holdSpeed: false },
+      0.1,
+    )
+    expect(upper.syntheticSpeedKmh).toBe(40)
+    expect(lower.syntheticSpeedKmh).toBe(0)
+    expect(Number.isFinite(nonFinite.syntheticSpeedKmh)).toBe(true)
+  })
+
+  test('reset restores configured starting speed without changing other runtime state', () => {
+    const state = { ...createTunePreviewState(25), angleDegrees: 4, groundTravelMeters: 12 }
+    expect(resetTunePreviewSpeed(state, 9)).toEqual({
+      ...state,
+      syntheticSpeedKmh: 9,
+    })
+  })
+
+  test('dynamic speed crosses a Tiltback ERPM boundary through the existing path', () => {
+    const parameters = readyParameters()
+    let state = createTunePreviewState(1)
+    expect(state.syntheticSpeedKmh).toBeLessThan(1.75)
+    for (let elapsed = 0; elapsed < 0.25; elapsed += 1 / 60) {
+      state = stepTunePreview(
+        state,
+        parameters,
+        { riderLean: 1, speedKmh: 1, holdSpeed: false },
+        1 / 60,
+      )
+    }
+    expect(state.syntheticSpeedKmh).toBeGreaterThan(1.75)
+    expect(state.constantTiltbackDegrees).toBe(1)
   })
 
   test('large deltas and extreme allowed values remain finite and bounded', () => {
