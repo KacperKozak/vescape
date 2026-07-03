@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { StyleProp, ViewStyle } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useShallow } from 'zustand/react/shallow'
@@ -9,8 +9,10 @@ import { telemetry } from '@/constants/telemetry'
 import { TELEMETRY_THRESHOLDS } from '@/constants/telemetryThresholds'
 import { theme } from '@/constants/theme'
 import { deriveBatteryConfig } from '@/lib/battery'
+import { fmtTimeAgo } from '@/helpers/format'
 import { useLiveSeries } from '@/hooks/useLiveMetric'
 import { useAlertsStore } from '@/store/alertsStore'
+import { useBleStore } from '@/store/bleStore'
 import { useBoardStore } from '@/store/boardStore'
 import { routes } from '@/navigation/routes'
 
@@ -30,19 +32,39 @@ function pickColor(percent: number | null): string {
   return telemetry.battVoltage.color
 }
 
+/** Current time, refreshed once a minute while enabled so the age label keeps up. */
+function useMinuteNow(enabled: boolean): number {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!enabled) return
+    const id = setInterval(() => setNow(Date.now()), 60_000)
+    return () => clearInterval(id)
+  }, [enabled])
+  return now
+}
+
 export function BatteryIndicator({ compact, transparent, containerStyle }: BatteryIndicatorProps) {
   const router = useRouter()
   // Decimated series (native, ~1Hz). Battery is a slow signal, so the series cadence both
   // supplies the latest SoC/voltage sample and paces this component's re-render.
   const batterySeries = useLiveSeries('batteryPercent')
   const voltageSeries = useLiveSeries('batteryVoltage')
-  const { batteryConfig, hasBoard } = useBoardStore(
+  const connected = useBleStore((s) => s.status === 'connected')
+  const { batteryConfig, hasBoard, lastBattery } = useBoardStore(
     useShallow((s) => {
       const board = s.boards.find((b) => b.id === s.activeBoardId)
-      return { batteryConfig: board?.batteryConfig ?? null, hasBoard: board != null }
+      return {
+        batteryConfig: board?.batteryConfig ?? null,
+        hasBoard: board != null,
+        lastBattery: board?.lastBattery ?? null,
+      }
     }),
   )
   const alertRules = useAlertsStore((s) => s.rules)
+
+  // Disconnected with a natively persisted reading: show it dimmed with its age.
+  const stale = !connected && lastBattery != null
+  const now = useMinuteNow(stale)
 
   // Config gates whether a SoC reading exists at all (voltage limits set).
   const batteryConfigured = useMemo(
@@ -66,18 +88,36 @@ export function BatteryIndicator({ compact, transparent, containerStyle }: Batte
     [alertRules, batteryConfigured],
   )
 
-  const percent = batteryConfigured ? (batterySeries.at(-1)?.value ?? null) : null
-  const voltage = voltageSeries.at(-1)?.value ?? null
+  const livePercent = batteryConfigured ? (batterySeries.at(-1)?.value ?? null) : null
+  const liveVoltage = voltageSeries.at(-1)?.value ?? null
+  const percent = stale ? lastBattery.percent : livePercent
+  const voltage = stale ? lastBattery.voltage : liveVoltage
+
+  const aux = stale
+    ? [
+        voltage != null ? telemetry.battVoltage.formatWithUnit(voltage) : null,
+        // Recent readings read as current; only flag the age once it's over an hour old.
+        now - lastBattery.at >= 3_600_000 ? fmtTimeAgo(lastBattery.at, now) : null,
+      ]
+        .filter(Boolean)
+        .join(' · ') || undefined
+    : voltage != null
+      ? telemetry.battVoltage.formatWithUnit(voltage)
+      : undefined
 
   return (
     <LinearGauge
       value={percent}
       max={100}
-      color={pickColor(percent)}
+      color={stale ? theme.palette.slate.textSecondary : pickColor(percent)}
       unit="%"
       alerts={alerts}
-      aux={voltage != null ? telemetry.battVoltage.formatWithUnit(voltage) : undefined}
-      hint={!batteryConfigured && hasBoard ? 'Set battery config in board settings' : undefined}
+      aux={aux}
+      hint={
+        !batteryConfigured && hasBoard && !stale
+          ? 'Set battery config in board settings'
+          : undefined
+      }
       compact={compact}
       transparent={transparent}
       containerStyle={containerStyle}

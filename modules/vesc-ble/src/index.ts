@@ -112,8 +112,17 @@ export interface Board {
   description: string | null
   createdAt: number
   batteryConfig: BatteryConfig | null
+  /** Last Battery SoC Estimate persisted natively; survives full app kill. `undefined` before first session. */
+  lastBattery?: LastBattery | null
   /** Probe-confirmed reachability. `null` means offline-only/unlinked. */
   link: BoardLink | null
+}
+
+export interface LastBattery {
+  percent: number
+  voltage: number | null
+  /** Epoch ms of the reading. */
+  at: number
 }
 
 export type BatteryConfig = BatteryPresetConfig | BatteryManualConfig
