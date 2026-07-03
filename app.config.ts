@@ -15,6 +15,11 @@ const config: ExpoConfig = {
     bundleIdentifier: 'app.vescape',
     infoPlist: {
       ITSAppUsesNonExemptEncryption: false,
+      NSBluetoothAlwaysUsageDescription:
+        'Allow Vescape to connect to your board over Bluetooth for live telemetry, alerts, and ride recording.',
+      NSLocationWhenInUseUsageDescription:
+        'Allow Vescape to use your location for live maps, ride recording, and reconnect support while you ride.',
+      UIBackgroundModes: ['bluetooth-central', 'location', 'audio'],
     },
   },
   android: {
