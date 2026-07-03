@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import type { StyleProp, ViewStyle } from 'react-native'
 import { useRouter } from 'expo-router'
 import { useShallow } from 'zustand/react/shallow'
@@ -11,6 +11,7 @@ import { theme } from '@/constants/theme'
 import { deriveBatteryConfig } from '@/lib/battery'
 import { fmtTimeAgo } from '@/helpers/format'
 import { useLiveSeries } from '@/hooks/useLiveMetric'
+import { useMinuteNow } from '@/hooks/useMinuteNow'
 import { useAlertsStore } from '@/store/alertsStore'
 import { useBleStore } from '@/store/bleStore'
 import { useBoardStore } from '@/store/boardStore'
@@ -30,17 +31,6 @@ function pickColor(percent: number | null): string {
     return theme.status.warning.color
   }
   return telemetry.battVoltage.color
-}
-
-/** Current time, refreshed once a minute while enabled so the age label keeps up. */
-function useMinuteNow(enabled: boolean): number {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    if (!enabled) return
-    const id = setInterval(() => setNow(Date.now()), 60_000)
-    return () => clearInterval(id)
-  }, [enabled])
-  return now
 }
 
 export function BatteryIndicator({ compact, transparent, containerStyle }: BatteryIndicatorProps) {
