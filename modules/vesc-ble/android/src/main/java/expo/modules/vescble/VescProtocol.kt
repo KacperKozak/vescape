@@ -5,6 +5,9 @@ import java.nio.ByteOrder
 import kotlin.math.abs
 import kotlin.math.pow
 
+/**
+ * @parity /modules/vesc-ble/ios/VescProtocol.swift
+ */
 internal const val COMM_FW_VERSION = 0
 internal const val COMM_FORWARD_CAN = 34
 internal const val COMM_CUSTOM_APP_DATA = 36

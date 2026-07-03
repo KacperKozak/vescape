@@ -1,5 +1,7 @@
 import Foundation
 
+/// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescProtocol.kt
+/// TODO(iOS parity): port Android telemetry/config/BMS decoders as iOS BLE transport lands.
 internal let COMM_FW_VERSION = 0
 internal let COMM_FORWARD_CAN = 34
 internal let COMM_CUSTOM_APP_DATA = 36
@@ -20,6 +22,8 @@ internal enum VescUartUUIDs {
   static let rx = UUID(uuidString: "6e400003-b5a3-f393-e0a9-e50e24dcca9e")!
 }
 
+/// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardTransport.kt
+/// TODO(iOS parity): add persisted/bridge transport encoding matching Android board storage.
 internal enum BoardTransport: Equatable {
   case direct
   case can(Int)

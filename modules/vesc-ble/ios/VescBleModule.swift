@@ -4,6 +4,9 @@ import Foundation
 // iOS bridge stub.
 // Board features must use real CoreBluetooth; until that lands, fail explicitly
 // instead of emitting fake devices or telemetry on physical iOS builds.
+/// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt
+/// TODO(iOS parity): replace bridge stubs with CoreBluetooth, telemetry, location, alerts, Group Ride,
+/// debug recording, and database implementations matching Android API/events/errors.
 public class VescBleModule: Module {
 
   // MARK: - Session state

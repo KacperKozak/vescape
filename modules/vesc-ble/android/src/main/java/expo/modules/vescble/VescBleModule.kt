@@ -29,6 +29,9 @@ import kotlinx.coroutines.runBlocking
 private const val TAG = "VescBle"
 private const val SCAN_RETRY_LIMIT = 3
 
+/**
+ * @parity /modules/vesc-ble/ios/VescBleModule.swift
+ */
 @SuppressLint("MissingPermission") // permissions are requested at the JS/RN layer
 class VescBleModule : Module() {
   private var scanner: android.bluetooth.le.BluetoothLeScanner? = null
