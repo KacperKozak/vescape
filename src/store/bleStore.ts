@@ -67,6 +67,11 @@ interface BleState {
   latestBms: BmsEvent | null
   /** Active remote-tilt command mirrored from native telemetry, or null when idle. */
   remoteTilt: RemoteTiltState | null
+  /**
+   * Last known battery percent persisted by native across disconnects/restarts.
+   * Used to keep the gauge readable when the board goes away.
+   */
+  lastBatteryPercent: number | null
 }
 
 interface BleActions {
@@ -233,6 +238,7 @@ function applyLiveState(state: LiveStateEvent, set: BleSet): void {
     telemetryRecordingEnabled: state.recording.enabled,
     telemetryRecordingPaused: state.recording.paused,
     remoteTilt: state.board.remoteTilt,
+    lastBatteryPercent: state.board.lastBatteryPercent,
     ...(shouldSeedLiveState || !isBoardConnected
       ? {
           liveLocationHistory: live.liveLocationHistory,
@@ -396,6 +402,7 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
   recordDebugSession: false,
   latestBms: null,
   remoteTilt: null,
+  lastBatteryPercent: null,
 
   startScan() {
     const currentStatus = get().status

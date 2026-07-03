@@ -135,6 +135,7 @@ function getLiveState(): LiveStateEvent {
       error: null,
       autoConnect: true,
       remoteTilt: null,
+      lastBatteryPercent: null,
     },
     gps: {
       phase: 'idle',

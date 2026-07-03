@@ -1463,6 +1463,7 @@ internal class BoardSessionController(private val service: VescForegroundService
                 remoteTiltPhase = remoteTiltController.phase,
                 remoteTiltDecay = remoteTiltController.decayProgress,
                 settings = settings,
+                lastBatteryPercent = latestBatterySoc,
             )
         )
     }

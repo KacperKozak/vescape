@@ -11,6 +11,7 @@ import { theme } from '@/constants/theme'
 import { deriveBatteryConfig } from '@/lib/battery'
 import { useLiveSeries } from '@/hooks/useLiveMetric'
 import { useAlertsStore } from '@/store/alertsStore'
+import { useBleStore } from '@/store/bleStore'
 import { useBoardStore } from '@/store/boardStore'
 import { routes } from '@/navigation/routes'
 
@@ -50,6 +51,10 @@ export function BatteryIndicator({ compact, transparent, containerStyle }: Batte
     [batteryConfig],
   )
 
+  // When disconnected, show the last known percent persisted by native.
+  const lastBatteryPercent = useBleStore((s) => s.lastBatteryPercent)
+  const stale = batterySeries.length === 0 && lastBatteryPercent != null
+
   // Battery alert thresholds are percent-scaled, so they only map onto the 0–100 bar once a
   // pack config exists. Hide them (and show the hint) until then.
   const alerts = useMemo<DualGaugeAlert[]>(
@@ -66,7 +71,8 @@ export function BatteryIndicator({ compact, transparent, containerStyle }: Batte
     [alertRules, batteryConfigured],
   )
 
-  const percent = batteryConfigured ? (batterySeries.at(-1)?.value ?? null) : null
+  const livePercent = batterySeries.at(-1)?.value ?? null
+  const percent = batteryConfigured ? (livePercent ?? (stale ? lastBatteryPercent : null)) : null
   const voltage = voltageSeries.at(-1)?.value ?? null
 
   return (

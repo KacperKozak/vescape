@@ -272,6 +272,12 @@ export interface LiveStateEvent {
     autoConnect: boolean
     /** Native-owned active remote-tilt command, or `null` when idle. */
     remoteTilt: RemoteTiltState | null
+    /**
+     * Last known battery SoC estimate, persisted natively across disconnects.
+     * Non-null when the board had ever reported a battery percent in this or a
+     * prior session. `null` if never configured or never connected.
+     */
+    lastBatteryPercent: number | null
   }
   gps: {
     phase: GpsPhase

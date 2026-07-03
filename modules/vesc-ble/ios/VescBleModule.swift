@@ -558,6 +558,8 @@ public class VescBleModule: Module {
         "recentTelemetry": [] as [Any],
         "error": nil,
         "autoConnect": settings["autoConnect"] as? Bool ?? true,
+        "remoteTilt": nil,
+        "lastBatteryPercent": nil,
       ] as [String: Any?],
       "gps": [
         "phase": gpsActive ? "active" : "idle",

@@ -8,6 +8,7 @@ import { MetricDetailGauge } from '@/components/domain/control/MetricDetailGauge
 import { toTelemetryChartPoints } from '@/components/domain/control/metricDetailData'
 import { telemetry } from '@/constants/telemetry'
 import { useLiveMetric, liveSelectors } from '@/hooks/useLiveMetric'
+import { useBleStore } from '@/store/bleStore'
 import { useLiveWindowMs } from '@/store/settingsStore'
 
 const battVoltageCfg = telemetry.battVoltage
@@ -25,7 +26,10 @@ export default function BatteryScreen() {
   // Gauge reads the latest of the calm ~1Hz decimated series — the same SoC source/cadence the
   // center BatteryIndicator uses. The per-frame `liveTelemetryRuntime` tick carries the identical
   // smoothed estimate but updates every BLE frame, which made the big % readout jitter.
-  const latestPercent = batteryPercent.at(-1)?.value ?? null
+  // Falls back to the natively-cached value when disconnected.
+  const lastBatteryPercent = useBleStore((s) => s.lastBatteryPercent)
+  const livePercent = batteryPercent.at(-1)?.value ?? null
+  const latestPercent = livePercent ?? lastBatteryPercent
   const percentValue = useSharedValue<number | null>(latestPercent)
   useEffect(() => {
     percentValue.value = latestPercent

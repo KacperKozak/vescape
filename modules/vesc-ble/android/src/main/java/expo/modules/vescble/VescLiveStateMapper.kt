@@ -20,6 +20,7 @@ internal data class VescLiveStateSnapshot(
     val remoteTiltPhase: RemoteTiltPhase,
     val remoteTiltDecay: RemoteTiltDecayProgress?,
     val settings: AppSettings,
+    val lastBatteryPercent: Double?,
 )
 
 /**
@@ -58,6 +59,7 @@ internal fun buildLiveState(snapshot: VescLiveStateSnapshot): Map<String, Any?> 
                 snapshot.remoteTiltPhase,
                 snapshot.remoteTiltDecay,
             ),
+            "lastBatteryPercent" to snapshot.lastBatteryPercent,
         ),
         "gps" to mapOf(
             "phase" to if (snapshot.gpsActive) "active" else "idle",
