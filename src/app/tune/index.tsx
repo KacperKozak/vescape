@@ -15,6 +15,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { type TuneProfile, type RefloatConfigField, type TuneProfileFieldValue } from 'vesc-ble'
 
 import { Banner } from '@/components/ui/base/Banner'
+import { Button } from '@/components/ui/base/Button'
 import { IconButton } from '@/components/ui/base/IconButton'
 import { ConfirmModal } from '@/components/ui/modals/ConfirmModal'
 import { InfoModal } from '@/components/ui/modals/InfoModal'
@@ -145,12 +146,11 @@ export default function TuneScreen() {
         <View style={styles.centerState}>
           <WarningCircleIcon size={28} color={theme.status.error.text} />
           <Text style={styles.errorText}>{profileState.error}</Text>
-          <Pressable
-            style={styles.retryButton}
+          <Button
+            label="Retry"
+            icon={ArrowsClockwiseIcon}
             onPress={() => (selectedBoardId ? void loadOffline(selectedBoardId) : undefined)}
-          >
-            <Text style={styles.retryText}>Retry</Text>
-          </Pressable>
+          />
         </View>
       ) : null}
 
@@ -552,16 +552,6 @@ const styles = StyleSheet.create({
     color: theme.status.error.text,
     fontSize: 15,
     textAlign: 'center',
-  },
-  retryButton: {
-    backgroundColor: theme.palette.sky.color,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  retryText: {
-    color: theme.palette.slate.surfaceDeep,
-    fontWeight: '700',
   },
   errorBanner: {
     flexDirection: 'row',

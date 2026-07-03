@@ -95,7 +95,11 @@ const variantStyles = {
     indicatorColor: theme.palette.slate.textSecondary,
   },
   destructive: {
-    button: { backgroundColor: theme.status.error.border },
+    button: {
+      backgroundColor: theme.status.error.bg,
+      borderWidth: 1,
+      borderColor: theme.status.error.border,
+    },
     text: { color: theme.status.error.text },
     iconColor: theme.status.error.text,
     indicatorColor: theme.status.error.text,
@@ -107,7 +111,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 10,
+    borderRadius: 999,
     gap: 6,
     overflow: 'hidden',
   },
@@ -118,7 +122,6 @@ const styles = StyleSheet.create({
   sm: {
     height: 32,
     paddingHorizontal: 12,
-    borderRadius: 8,
   },
   disabled: {
     opacity: 0.4,

@@ -8,6 +8,8 @@ import {
   GaugeIcon,
   BatteryMediumIcon,
   PaletteIcon,
+  PlusIcon,
+  SignOutIcon,
   ThermometerSimpleIcon,
   UsersIcon,
   XIcon,
@@ -130,7 +132,8 @@ function GroupRideWidget() {
   const footer = active ? (
     <Button
       label="Leave"
-      variant="secondary"
+      variant="destructive"
+      icon={SignOutIcon}
       onPress={leaveRide}
       style={styles.fill}
       accessibilityLabel="Leave group ride"
@@ -146,6 +149,7 @@ function GroupRideWidget() {
   ) : (
     <Button
       label="Create"
+      icon={PlusIcon}
       onPress={() => createRide('')}
       disabled={!hasLocation || !connected}
       style={[styles.fill, styles.actionBtn]}
@@ -253,8 +257,14 @@ function riderStats(p: RosterRider['presence']): RiderStats {
       phone: NORMAL_STAT,
     }
   return {
-    speed: { value: p.speed != null ? fmtSpeedKmh(p.speed) : undefined, level: 'normal' },
-    soc: { value: p.soc != null ? fmtPercent(p.soc) : undefined, level: batteryLevel(p.soc) },
+    speed: {
+      value: p.speed != null ? fmtSpeedKmh(p.speed) : undefined,
+      level: 'normal',
+    },
+    soc: {
+      value: p.soc != null ? fmtPercent(p.soc) : undefined,
+      level: batteryLevel(p.soc),
+    },
     motor: {
       value: p.motorTemp != null ? `M ${fmtTempC(p.motorTemp)}` : undefined,
       level: tempLevel(p.motorTemp),
