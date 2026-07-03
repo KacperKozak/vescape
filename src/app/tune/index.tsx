@@ -70,6 +70,7 @@ export default function TuneScreen() {
   const setActiveProfile = useTuneProfileStore((s) => s.setActiveProfile)
   const revertField = useTuneProfileStore((s) => s.revertField)
   const acceptBoardField = useTuneProfileStore((s) => s.acceptBoardField)
+  const acceptAllBoardValues = useTuneProfileStore((s) => s.acceptAllBoardValues)
   const discardAllEdits = useTuneProfileStore((s) => s.discardAllEdits)
   const saveActiveProfile = useTuneProfileStore((s) => s.saveActiveProfile)
   const syncToBoard = useTuneProfileStore((s) => s.syncToBoard)
@@ -355,6 +356,7 @@ export default function TuneScreen() {
           onSave={handleSave}
           onSaveAndSync={handleSaveAndSync}
           onSync={handleSync}
+          onUpdateTune={acceptAllBoardValues}
           onDiscard={discardAllEdits}
           onRetryConfig={() => void retryBoardSnapshot()}
           bottomOffset={insets.bottom + 16}
