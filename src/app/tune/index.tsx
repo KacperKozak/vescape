@@ -33,7 +33,7 @@ import { TuneConfigCell } from '@/components/domain/tune/TuneConfigCell'
 import { TuneGroupGrid } from '@/components/ui/tune/TuneGroupGrid'
 import { TuneSyncBar } from '@/components/ui/tune/TuneSyncBar'
 import { TunePreview } from '@/components/ui/tune/TunePreview'
-import { RiderBalanceControl } from '@/components/ui/tune/RiderBalanceControl'
+import { SyntheticLoadControl } from '@/components/ui/tune/SyntheticLoadControl'
 import { TunePreviewScenarioControls } from '@/components/ui/tune/TunePreviewScenarioControls'
 import { routes } from '@/navigation/routes'
 import { TextPromptModal } from '@/components/ui/modals/TextPromptModal'
@@ -41,6 +41,7 @@ import { BoardPickerModal } from '@/components/domain/tune/BoardPickerModal'
 import { InfoBadge } from '@/components/ui/base/InfoBadge'
 import { useTuneProfileStore } from '@/store/tuneProfileStore'
 import type { BasicSliderItem } from '@/lib/tune/sliderDefinitions'
+import { DEFAULT_TUNE_PREVIEW_REFERENCE_PHYSICS } from '@/lib/tune/tunePreview'
 import { useTuneScreenData } from '@/hooks/useTuneScreenData'
 import { theme } from '@/constants/theme'
 import { useTuneModals } from '@/hooks/useTuneModals'
@@ -52,9 +53,10 @@ export default function TuneScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const isFocused = useIsFocused()
-  const riderLean = useSharedValue(0)
+  const syntheticLoad = useSharedValue(0)
   const [previewSpeedKmh, setPreviewSpeedKmh] = useState(15)
   const [holdPreviewSpeed, setHoldPreviewSpeed] = useState(true)
+  const [referencePhysics, setReferencePhysics] = useState(DEFAULT_TUNE_PREVIEW_REFERENCE_PHYSICS)
   const [hillsEnabled, setHillsEnabled] = useState(false)
   const [hillHeightMeters, setHillHeightMeters] = useState(5)
   const [hillSpacingMeters, setHillSpacingMeters] = useState(8)
@@ -231,9 +233,10 @@ export default function TuneScreen() {
           <View style={styles.previewPinned}>
             <TunePreview
               fields={profileFields ?? {}}
-              riderLean={riderLean}
+              syntheticLoad={syntheticLoad}
               speedKmh={previewSpeedKmh}
               holdSpeed={holdPreviewSpeed}
+              referencePhysics={referencePhysics}
               hillsEnabled={hillsEnabled}
               hillHeightMeters={hillHeightMeters}
               hillSpacingMeters={hillSpacingMeters}
@@ -241,7 +244,7 @@ export default function TuneScreen() {
               onHelp={() => setPreviewHelpVisible(true)}
             />
             <View style={styles.balancePinned}>
-              <RiderBalanceControl value={riderLean} />
+              <SyntheticLoadControl value={syntheticLoad} />
             </View>
           </View>
           <ScrollView
@@ -254,6 +257,8 @@ export default function TuneScreen() {
               onSpeedChange={setPreviewSpeedKmh}
               holdSpeed={holdPreviewSpeed}
               onHoldSpeedChange={setHoldPreviewSpeed}
+              referencePhysics={referencePhysics}
+              onReferencePhysicsChange={setReferencePhysics}
               hillsEnabled={hillsEnabled}
               onHillsChange={setHillsEnabled}
               hillHeightMeters={hillHeightMeters}
@@ -435,7 +440,7 @@ export default function TuneScreen() {
         visible={previewHelpVisible}
         variant="warning"
         title="Work in progress"
-        message="Tune editing and Tune Preview are experimental. Dynamic speed is synthetic, bounded, and comparative. It does not predict real acceleration, braking distance, power, traction, or safety. Synthetic Rider Lean changes dynamic speed directly; absolute deck angle is not converted into acceleration. Do not ride with these settings until you have verified them on the bench and confirmed safe behaviour."
+        message="Tune editing and Tune Preview are experimental. Synthetic Load is a bounded reference motor current, not a measured or commanded Board current. Reference Physics estimates acceleration from user-provided scenario values but does not model traction, drag, power limits, voltage sag, terrain force, braking distance, or safety. Absolute deck angle is not converted into acceleration. Do not ride with these settings until you have verified them on the bench and confirmed safe behaviour."
         onDismiss={() => setPreviewHelpVisible(false)}
       />
 

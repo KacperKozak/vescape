@@ -12,7 +12,7 @@ import { useTriggerRef } from '@/components/ui/forms/Dropdown'
 import { BasicSliderCell } from '@/components/ui/tune/BasicSliderCell'
 import { TuneDial } from '@/components/ui/tune/TuneDial'
 import { TunePreview } from '@/components/ui/tune/TunePreview'
-import { RiderBalanceControl } from '@/components/ui/tune/RiderBalanceControl'
+import { SyntheticLoadControl } from '@/components/ui/tune/SyntheticLoadControl'
 import { TunePreviewScenarioControls } from '@/components/ui/tune/TunePreviewScenarioControls'
 import { IconHero } from '@/components/ui/settings/IconHero'
 import { ShowcaseCard } from '@/components/ui/dev/ShowcaseCard'
@@ -20,6 +20,7 @@ import { ChipRow, ValueRow } from '@/components/ui/dev/ShowcaseControls'
 
 import { theme } from '@/constants/theme'
 import type { BasicSliderItem } from '@/lib/tune/sliderDefinitions'
+import { DEFAULT_TUNE_PREVIEW_REFERENCE_PHYSICS } from '@/lib/tune/tunePreview'
 
 const RANGE_CONFIGS = {
   tune: { min: -5, max: 5, step: 1 },
@@ -210,10 +211,11 @@ function BasicSliderCellShowcase() {
 }
 
 function TunePreviewShowcase() {
-  const [riderLean, setRiderLean] = useState(0.55)
-  const riderLeanValue = useSharedValue(riderLean)
+  const [syntheticLoad, setSyntheticLoad] = useState(0.55)
+  const syntheticLoadValue = useSharedValue(syntheticLoad)
   const [speedKmh, setSpeedKmh] = useState(15)
   const [holdSpeed, setHoldSpeed] = useState(true)
+  const [referencePhysics, setReferencePhysics] = useState(DEFAULT_TUNE_PREVIEW_REFERENCE_PHYSICS)
   const [scenario, setScenario] = useState('acceleration')
   const [hillsEnabled, setHillsEnabled] = useState(false)
   const [hillHeightMeters, setHillHeightMeters] = useState(5)
@@ -259,26 +261,26 @@ function TunePreviewShowcase() {
     setScenario(next)
     if (next === 'acceleration') {
       setHillsEnabled(false)
-      setRiderLean(0.7)
-      riderLeanValue.value = 0.7
+      setSyntheticLoad(0.7)
+      syntheticLoadValue.value = 0.7
       setSpeedKmh(15)
       setHoldSpeed(false)
     } else if (next === 'braking') {
       setHillsEnabled(false)
-      setRiderLean(-0.7)
-      riderLeanValue.value = -0.7
+      setSyntheticLoad(-0.7)
+      syntheticLoadValue.value = -0.7
       setSpeedKmh(15)
       setHoldSpeed(false)
     } else if (next === 'high speed') {
       setHillsEnabled(false)
-      setRiderLean(0)
-      riderLeanValue.value = 0
+      setSyntheticLoad(0)
+      syntheticLoadValue.value = 0
       setSpeedKmh(40)
       setHoldSpeed(true)
     } else {
       setHillsEnabled(true)
-      setRiderLean(next === 'uphill' ? 0.6 : -0.6)
-      riderLeanValue.value = next === 'uphill' ? 0.6 : -0.6
+      setSyntheticLoad(next === 'uphill' ? 0.6 : -0.6)
+      syntheticLoadValue.value = next === 'uphill' ? 0.6 : -0.6
       setSpeedKmh(15)
       setHoldSpeed(true)
       setHillHeightMeters(next === 'dense hills' ? 1.2 : 0.6)
@@ -297,26 +299,29 @@ function TunePreviewShowcase() {
             selected={scenario}
             onSelect={selectScenario}
           />
-          <ValueRow label="rider balance" value={`${Math.round(riderLean * 100)}%`} />
+          <ValueRow label="synthetic load" value={`${Math.round(syntheticLoad * 60)} A`} />
         </>
       }
     >
       <TunePreview
         fields={fields}
-        riderLean={riderLeanValue}
+        syntheticLoad={syntheticLoadValue}
         speedKmh={speedKmh}
         holdSpeed={holdSpeed}
+        referencePhysics={referencePhysics}
         hillsEnabled={hillsEnabled}
         hillHeightMeters={hillHeightMeters}
         hillSpacingMeters={hillSpacingMeters}
         onHelp={() => {}}
       />
-      <RiderBalanceControl value={riderLeanValue} onValueChangeEnd={setRiderLean} />
+      <SyntheticLoadControl value={syntheticLoadValue} onValueChangeEnd={setSyntheticLoad} />
       <TunePreviewScenarioControls
         speedKmh={speedKmh}
         onSpeedChange={setSpeedKmh}
         holdSpeed={holdSpeed}
         onHoldSpeedChange={setHoldSpeed}
+        referencePhysics={referencePhysics}
+        onReferencePhysicsChange={setReferencePhysics}
         hillsEnabled={hillsEnabled}
         onHillsChange={setHillsEnabled}
         hillHeightMeters={hillHeightMeters}
@@ -329,13 +334,13 @@ function TunePreviewShowcase() {
 }
 
 function UnsupportedTunePreviewShowcase() {
-  const riderLean = useSharedValue(0)
+  const syntheticLoad = useSharedValue(0)
 
   return (
     <ShowcaseCard name="Tune Preview — unsupported">
       <TunePreview
         fields={{ kp: 20 }}
-        riderLean={riderLean}
+        syntheticLoad={syntheticLoad}
         speedKmh={15}
         active={false}
         onHelp={() => {}}

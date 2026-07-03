@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test'
 
 import {
   COMPARATIVE_ACCELERATION_KMH_PER_SECOND,
+  DEFAULT_TUNE_PREVIEW_REFERENCE_PHYSICS,
+  calculateSyntheticAcceleration,
   calculateLongitudinalTarget,
   calculateTerrainSlope,
   createTunePreviewModel,
@@ -12,6 +14,7 @@ import {
   stepTunePreview,
   terrainHeightRelativeToWheel,
   terrainSlopeToSyntheticAcceleration,
+  syntheticLoadToCurrentAmps,
 } from '@/lib/tune/tunePreview'
 
 const baseFields = {
@@ -53,11 +56,11 @@ function readyParameters(fields: typeof baseFields = baseFields) {
   return model.parameters
 }
 
-function run(fields: typeof baseFields, riderLean = 0.8, speedKmh = 15, seconds = 2) {
+function run(fields: typeof baseFields, syntheticLoad = 0.8, speedKmh = 15, seconds = 2) {
   const parameters = readyParameters(fields)
   let state = createTunePreviewState()
   for (let elapsed = 0; elapsed < seconds; elapsed += 1 / 60) {
-    state = stepTunePreview(state, parameters, { riderLean, speedKmh }, 1 / 60)
+    state = stepTunePreview(state, parameters, { syntheticLoad, speedKmh }, 1 / 60)
   }
   return state
 }
@@ -174,13 +177,13 @@ describe('Tune Preview longitudinal response', () => {
     const below = calculateLongitudinalTarget(
       createTunePreviewState(),
       parameters,
-      { riderLean: 0.25, speedKmh: 15 },
+      { syntheticLoad: 0.25, speedKmh: 15 },
       1,
     )
     const above = calculateLongitudinalTarget(
       createTunePreviewState(),
       parameters,
-      { riderLean: 1, speedKmh: 15 },
+      { syntheticLoad: 1, speedKmh: 15 },
       1,
     )
     expect(below.torqueTiltDegrees).toBe(0)
@@ -209,8 +212,8 @@ describe('Tune Preview longitudinal response', () => {
     const fastParameters = readyParameters({ ...baseFields, braketilt_lingering: 1 })
     const slowParameters = readyParameters({ ...baseFields, braketilt_lingering: 5 })
     const braking = run(baseFields, -1, 15, 1)
-    const fast = stepTunePreview(braking, fastParameters, { riderLean: 0, speedKmh: 15 }, 0.1)
-    const slow = stepTunePreview(braking, slowParameters, { riderLean: 0, speedKmh: 15 }, 0.1)
+    const fast = stepTunePreview(braking, fastParameters, { syntheticLoad: 0, speedKmh: 15 }, 0.1)
+    const slow = stepTunePreview(braking, slowParameters, { syntheticLoad: 0, speedKmh: 15 }, 0.1)
     expect(slow.brakeTiltDegrees).toBeGreaterThan(fast.brakeTiltDegrees)
   })
 
@@ -226,9 +229,9 @@ describe('Tune Preview longitudinal response', () => {
   test('zero and paused time do not advance response or ground', () => {
     const parameters = readyParameters()
     const state = createTunePreviewState()
-    expect(stepTunePreview(state, parameters, { riderLean: 1, speedKmh: 15 }, 0)).toBe(state)
+    expect(stepTunePreview(state, parameters, { syntheticLoad: 1, speedKmh: 15 }, 0)).toBe(state)
     expect(
-      stepTunePreview(state, parameters, { riderLean: 1, speedKmh: 15, paused: true }, 1),
+      stepTunePreview(state, parameters, { syntheticLoad: 1, speedKmh: 15, paused: true }, 1),
     ).toBe(state)
   })
 
@@ -237,7 +240,7 @@ describe('Tune Preview longitudinal response', () => {
     const next = stepTunePreview(
       createTunePreviewState(3),
       parameters,
-      { riderLean: 1, speedKmh: 15, holdSpeed: true },
+      { syntheticLoad: 1, speedKmh: 15, holdSpeed: true },
       1 / 60,
     )
     expect(next.syntheticSpeedKmh).toBe(15)
@@ -250,19 +253,19 @@ describe('Tune Preview longitudinal response', () => {
     const accelerated = stepTunePreview(
       initial,
       parameters,
-      { riderLean: 1, speedKmh: 15, holdSpeed: false },
+      { syntheticLoad: 1, speedKmh: 15, holdSpeed: false },
       0.25,
     )
     const braked = stepTunePreview(
       initial,
       parameters,
-      { riderLean: -1, speedKmh: 15, holdSpeed: false },
+      { syntheticLoad: -1, speedKmh: 15, holdSpeed: false },
       0.25,
     )
     const neutral = stepTunePreview(
       initial,
       parameters,
-      { riderLean: 0, speedKmh: 15, holdSpeed: false },
+      { syntheticLoad: 0, speedKmh: 15, holdSpeed: false },
       0.25,
     )
     expect(accelerated.syntheticSpeedKmh).toBeCloseTo(
@@ -274,24 +277,76 @@ describe('Tune Preview longitudinal response', () => {
     expect(neutral.syntheticSpeedKmh).toBe(15)
   })
 
+  test('maps synthetic load to bounded motor current', () => {
+    expect(syntheticLoadToCurrentAmps(0.5)).toBe(30)
+    expect(syntheticLoadToCurrentAmps(-1)).toBe(-60)
+    expect(syntheticLoadToCurrentAmps(2)).toBe(60)
+  })
+
+  test('reference physics derives acceleration from current, torque, wheel, mass, and efficiency', () => {
+    const referencePhysics = {
+      ...DEFAULT_TUNE_PREVIEW_REFERENCE_PHYSICS,
+      enabled: true,
+      totalMassKg: 100,
+      wheelDiameterInches: 10,
+      motorTorqueNmPerAmp: 0.2,
+      drivetrainEfficiency: 0.9,
+    }
+    const acceleration = calculateSyntheticAcceleration({ syntheticLoad: 1, referencePhysics })
+    const expectedWheelRadiusMeters = (10 * 0.0254) / 2
+    const expected = ((60 * 0.2 * 0.9) / expectedWheelRadiusMeters / 100) * 3.6
+    expect(acceleration).toBeCloseTo(expected)
+    expect(calculateSyntheticAcceleration({ syntheticLoad: -1, referencePhysics })).toBeCloseTo(
+      -expected,
+    )
+  })
+
+  test('reference physics affects dynamic speed but not held speed', () => {
+    const parameters = readyParameters()
+    const referencePhysics = {
+      ...DEFAULT_TUNE_PREVIEW_REFERENCE_PHYSICS,
+      enabled: true,
+      motorTorqueNmPerAmp: 0.4,
+    }
+    const dynamic = stepTunePreview(
+      createTunePreviewState(10),
+      parameters,
+      { syntheticLoad: 1, speedKmh: 10, holdSpeed: false, referencePhysics },
+      0.25,
+    )
+    const held = stepTunePreview(
+      createTunePreviewState(10),
+      parameters,
+      { syntheticLoad: 1, speedKmh: 10, holdSpeed: true, referencePhysics },
+      0.25,
+    )
+    expect(dynamic.syntheticSpeedKmh).toBeCloseTo(
+      10 + calculateSyntheticAcceleration({ syntheticLoad: 1, referencePhysics }) * 0.25,
+    )
+    expect(dynamic.syntheticSpeedKmh).not.toBeCloseTo(
+      10 + COMPARATIVE_ACCELERATION_KMH_PER_SECOND * 0.25,
+    )
+    expect(held.syntheticSpeedKmh).toBe(10)
+  })
+
   test('dynamic speed is bounded, finite, and never reverses', () => {
     const parameters = readyParameters()
     const upper = stepTunePreview(
       createTunePreviewState(39.5),
       parameters,
-      { riderLean: 1, speedKmh: 15, holdSpeed: false },
+      { syntheticLoad: 1, speedKmh: 15, holdSpeed: false },
       10,
     )
     const lower = stepTunePreview(
       createTunePreviewState(0.5),
       parameters,
-      { riderLean: -1, speedKmh: 15, holdSpeed: false },
+      { syntheticLoad: -1, speedKmh: 15, holdSpeed: false },
       10,
     )
     const nonFinite = stepTunePreview(
       createTunePreviewState(Number.NaN),
       parameters,
-      { riderLean: Number.POSITIVE_INFINITY, speedKmh: 15, holdSpeed: false },
+      { syntheticLoad: Number.POSITIVE_INFINITY, speedKmh: 15, holdSpeed: false },
       0.1,
     )
     expect(upper.syntheticSpeedKmh).toBe(40)
@@ -315,7 +370,7 @@ describe('Tune Preview longitudinal response', () => {
       state = stepTunePreview(
         state,
         parameters,
-        { riderLean: 1, speedKmh: 1, holdSpeed: false },
+        { syntheticLoad: 1, speedKmh: 1, holdSpeed: false },
         1 / 60,
       )
     }
@@ -339,7 +394,7 @@ describe('Tune Preview longitudinal response', () => {
       state = stepTunePreview(
         state,
         parameters,
-        { riderLean: index % 2 ? -1 : 1, speedKmh: 40 },
+        { syntheticLoad: index % 2 ? -1 : 1, speedKmh: 40 },
         30,
       )
     }

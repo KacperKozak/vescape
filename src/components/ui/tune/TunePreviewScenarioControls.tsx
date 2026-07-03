@@ -1,14 +1,20 @@
 import { StyleSheet, Switch, Text, View } from 'react-native'
-import { GaugeIcon, MountainsIcon } from 'phosphor-react-native'
+import { AtomIcon, GaugeIcon, MountainsIcon } from 'phosphor-react-native'
 
 import { TuneDial } from '@/components/ui/tune/TuneDial'
 import { theme } from '@/constants/theme'
+import {
+  calculateSyntheticAcceleration,
+  type TunePreviewReferencePhysics,
+} from '@/lib/tune/tunePreview'
 
 interface TunePreviewScenarioControlsProps {
   speedKmh: number
   onSpeedChange: (speedKmh: number) => void
   holdSpeed: boolean
   onHoldSpeedChange: (holdSpeed: boolean) => void
+  referencePhysics: TunePreviewReferencePhysics
+  onReferencePhysicsChange: (physics: TunePreviewReferencePhysics) => void
   hillsEnabled: boolean
   onHillsChange: (enabled: boolean) => void
   hillHeightMeters: number
@@ -22,6 +28,8 @@ export function TunePreviewScenarioControls({
   onSpeedChange,
   holdSpeed,
   onHoldSpeedChange,
+  referencePhysics,
+  onReferencePhysicsChange,
   hillsEnabled,
   onHillsChange,
   hillHeightMeters,
@@ -29,6 +37,13 @@ export function TunePreviewScenarioControls({
   hillSpacingMeters,
   onHillSpacingChange,
 }: TunePreviewScenarioControlsProps) {
+  const updatePhysics = (patch: Partial<Omit<TunePreviewReferencePhysics, 'enabled'>>) =>
+    onReferencePhysicsChange({ ...referencePhysics, ...patch })
+  const maxAcceleration = calculateSyntheticAcceleration({
+    syntheticLoad: 1,
+    referencePhysics,
+  })
+
   return (
     <View style={styles.stack}>
       <View style={styles.container}>
@@ -42,7 +57,7 @@ export function TunePreviewScenarioControls({
         <Text style={styles.description}>
           {holdSpeed
             ? 'Constant forward speed · reference 11-inch wheel'
-            : 'Synthetic Rider Lean changes speed · 0-40 km/h'}
+            : 'Synthetic Load changes speed · 0-40 km/h'}
         </Text>
         {holdSpeed ? (
           <TuneDial
@@ -54,6 +69,77 @@ export function TunePreviewScenarioControls({
             valueChangeMode="live"
             onValueChange={onSpeedChange}
           />
+        ) : null}
+      </View>
+
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <View style={styles.titleRow}>
+            <AtomIcon size={16} color={theme.palette.purple.color} weight="duotone" />
+            <Text style={styles.title}>Reference physics</Text>
+          </View>
+          <Switch
+            value={referencePhysics.enabled}
+            onValueChange={(enabled) => onReferencePhysicsChange({ ...referencePhysics, enabled })}
+          />
+        </View>
+        <Text style={styles.description}>
+          Optional current-to-acceleration estimate · dynamic speed only
+        </Text>
+        {referencePhysics.enabled ? (
+          <View style={styles.physicsControls}>
+            <Text style={styles.valueSummary}>
+              ±60 A gives approximately ±{maxAcceleration.toFixed(2)} km/h/s
+            </Text>
+            <Text style={styles.description}>
+              Rider + Board mass · {referencePhysics.totalMassKg.toFixed(0)} kg
+            </Text>
+            <TuneDial
+              value={referencePhysics.totalMassKg}
+              min={20}
+              max={250}
+              step={1}
+              unit="kg"
+              valueChangeMode="live"
+              onValueChange={(totalMassKg) => updatePhysics({ totalMassKg })}
+            />
+            <Text style={styles.description}>
+              Wheel diameter · {referencePhysics.wheelDiameterInches.toFixed(1)} in
+            </Text>
+            <TuneDial
+              value={referencePhysics.wheelDiameterInches}
+              min={8}
+              max={20}
+              step={0.1}
+              unit="in"
+              valueChangeMode="live"
+              onValueChange={(wheelDiameterInches) => updatePhysics({ wheelDiameterInches })}
+            />
+            <Text style={styles.description}>
+              Motor torque constant · {referencePhysics.motorTorqueNmPerAmp.toFixed(2)} Nm/A
+            </Text>
+            <TuneDial
+              value={referencePhysics.motorTorqueNmPerAmp}
+              min={0.01}
+              max={2}
+              step={0.01}
+              unit="Nm/A"
+              valueChangeMode="live"
+              onValueChange={(motorTorqueNmPerAmp) => updatePhysics({ motorTorqueNmPerAmp })}
+            />
+            <Text style={styles.description}>
+              Drivetrain efficiency · {(referencePhysics.drivetrainEfficiency * 100).toFixed(0)}%
+            </Text>
+            <TuneDial
+              value={referencePhysics.drivetrainEfficiency * 100}
+              min={10}
+              max={100}
+              step={1}
+              unit="%"
+              valueChangeMode="live"
+              onValueChange={(percent) => updatePhysics({ drivetrainEfficiency: percent / 100 })}
+            />
+          </View>
         ) : null}
       </View>
 
@@ -110,4 +196,11 @@ const styles = StyleSheet.create({
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   title: { color: theme.palette.slate.textPrimary, fontSize: 13, fontWeight: '900' },
   description: { color: theme.palette.slate.textMuted, fontSize: 10, fontWeight: '600' },
+  physicsControls: { gap: 4 },
+  valueSummary: {
+    color: theme.telemetry.motorCurrent,
+    fontSize: 11,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+  },
 })

@@ -3,9 +3,26 @@ import type { TuneProfileFieldValue } from 'vesc-ble'
 // Longitudinal target equations and transition signs derive from Refloat v1.2.1
 // torque_tilt.c and brake_tilt.c (GPL-3.0-or-later), matching the bundled schema.
 
-export const TUNE_PREVIEW_MODEL_VERSION = 'refloat-bundled-legacy-v1' as const
+export const TUNE_PREVIEW_MODEL_VERSION = 'refloat-bundled-legacy-v2' as const
 export const REFERENCE_ERPM_PER_KMH = 1000 / 3.5
 export const COMPARATIVE_ACCELERATION_KMH_PER_SECOND = 6
+export const MAX_SYNTHETIC_CURRENT_AMPS = 60
+
+export interface TunePreviewReferencePhysics {
+  enabled: boolean
+  totalMassKg: number
+  wheelDiameterInches: number
+  motorTorqueNmPerAmp: number
+  drivetrainEfficiency: number
+}
+
+export const DEFAULT_TUNE_PREVIEW_REFERENCE_PHYSICS: TunePreviewReferencePhysics = {
+  enabled: false,
+  totalMassKg: 100,
+  wheelDiameterInches: 11,
+  motorTorqueNmPerAmp: 0.1,
+  drivetrainEfficiency: 0.85,
+}
 
 const REQUIRED_FIELDS = [
   'kp',
@@ -47,7 +64,6 @@ const MAX_ELAPSED_SECONDS = 0.25
 const STEP_SECONDS = 1 / 120
 const MAX_ANGLE_DEGREES = 35
 const MAX_RATE_DEGREES_PER_SECOND = 120
-const SYNTHETIC_CURRENT_AMPS = 60
 const SYNTHETIC_BALANCE_OFFSET_DEGREES = 8
 
 export interface TunePreviewParameters {
@@ -123,9 +139,10 @@ export interface TunePreviewState {
 }
 
 export interface TunePreviewInput {
-  riderLean: number
+  syntheticLoad: number
   speedKmh: number
   holdSpeed?: boolean
+  referencePhysics?: TunePreviewReferencePhysics
   hillsEnabled?: boolean
   hillHeightMeters?: number
   hillSpacingMeters?: number
@@ -235,9 +252,9 @@ export function calculateLongitudinalTarget(
   input: TunePreviewInput,
   elapsedSeconds: number,
 ): TunePreviewTarget {
-  const riderLean = clamp(input.riderLean, -1, 1)
+  const syntheticLoad = clamp(input.syntheticLoad, -1, 1)
   const erpm = speedKmhToReferenceErpm(input.speedKmh)
-  const syntheticCurrentAmps = riderLean * SYNTHETIC_CURRENT_AMPS
+  const syntheticCurrentAmps = syntheticLoadToCurrentAmps(syntheticLoad)
   const torqueTarget = torqueTiltTarget(parameters, syntheticCurrentAmps)
   const torqueRate = torqueTiltRate(state.torqueTiltDegrees, torqueTarget, parameters, erpm)
   const torqueTiltDegrees = moveTowards(
@@ -246,7 +263,7 @@ export function calculateLongitudinalTarget(
     torqueRate * elapsedSeconds,
   )
 
-  const brakeTarget = brakeTiltTarget(parameters, riderLean, erpm)
+  const brakeTarget = brakeTiltTarget(parameters, syntheticLoad, erpm)
   const brakeApplying = Math.abs(brakeTarget) > Math.abs(state.brakeTiltDegrees)
   const brakeRate = brakeApplying
     ? parameters.atrOnSpeed * 1.5
@@ -310,15 +327,12 @@ function stepFixed(
 ): TunePreviewState {
   const syntheticSpeedKmh =
     input.holdSpeed === false
-      ? boundedSpeed(
-          state.syntheticSpeedKmh +
-            clamp(input.riderLean, -1, 1) * COMPARATIVE_ACCELERATION_KMH_PER_SECOND * dt,
-        )
+      ? boundedSpeed(state.syntheticSpeedKmh + calculateSyntheticAcceleration(input) * dt)
       : boundedSpeed(input.speedKmh)
   const effectiveInput = { ...input, speedKmh: syntheticSpeedKmh }
   const target = calculateLongitudinalTarget(state, parameters, effectiveInput, dt)
   const terrainSlope = calculateTerrainSlope(state.groundTravelMeters, input)
-  const braking = input.riderLean < 0
+  const braking = input.syntheticLoad < 0
   const ratio = Math.max(braking ? parameters.atrAmpsDecelRatio : parameters.atrAmpsAccelRatio, 0.1)
   const expectedAcceleration = (target.syntheticCurrentAmps - 8) / ratio
   const rawAccelDiff = expectedAcceleration + terrainSlopeToSyntheticAcceleration(terrainSlope)
@@ -362,13 +376,13 @@ function stepFixed(
   const error = state.angleDegrees - target.totalDegrees
   const integralError = clamp(state.integralError + error * dt, -20, 20)
 
-  // Comparative ideal-drive response. Synthetic Rider Lean is an external pitch moment,
+  // Comparative ideal-drive response. Synthetic Load is an external pitch moment,
   // never an angle command. Coefficients normalize the bundled Refloat PID/filter ranges.
   const stiffness = clamp(parameters.kp, 0, 40) * 0.32
   const rateDamping = 1.6 + clamp(parameters.kp2, 0, 3) * 4.2
   const filterSoftness = 0.7 + clamp(parameters.mahonyKp, 0.2, 3) * 0.35
   const integralCorrection = clamp(parameters.ki, 0, 0.5) * integralError * 16
-  const riderMoment = clamp(input.riderLean, -1, 1) * 34
+  const riderMoment = clamp(input.syntheticLoad, -1, 1) * 34
   const angularAcceleration =
     (riderMoment -
       stiffness * error -
@@ -464,12 +478,35 @@ function torqueTiltRate(
 
 function brakeTiltTarget(
   parameters: TunePreviewParameters,
-  riderLean: number,
+  syntheticLoad: number,
   erpm: number,
 ): number {
-  if (parameters.brakeTiltStrength <= 0 || riderLean >= 0 || erpm <= 2000) return 0
+  if (parameters.brakeTiltStrength <= 0 || syntheticLoad >= 0 || erpm <= 2000) return 0
   const factor = -(0.5 + (20 - parameters.brakeTiltStrength) / 5)
-  return (riderLean * SYNTHETIC_BALANCE_OFFSET_DEGREES) / factor
+  return (syntheticLoad * SYNTHETIC_BALANCE_OFFSET_DEGREES) / factor
+}
+
+export function syntheticLoadToCurrentAmps(syntheticLoad: number): number {
+  return clamp(syntheticLoad, -1, 1) * MAX_SYNTHETIC_CURRENT_AMPS
+}
+
+export function calculateSyntheticAcceleration(
+  input: Pick<TunePreviewInput, 'syntheticLoad' | 'referencePhysics'>,
+): number {
+  const syntheticLoad = clamp(input.syntheticLoad, -1, 1)
+  const physics = input.referencePhysics
+  if (!physics?.enabled) return syntheticLoad * COMPARATIVE_ACCELERATION_KMH_PER_SECOND
+
+  const totalMassKg = clampFinite(physics.totalMassKg, 20, 250, 100)
+  const wheelDiameterInches = clampFinite(physics.wheelDiameterInches, 8, 20, 11)
+  const motorTorqueNmPerAmp = clampFinite(physics.motorTorqueNmPerAmp, 0.01, 2, 0.1)
+  const drivetrainEfficiency = clampFinite(physics.drivetrainEfficiency, 0.1, 1, 0.85)
+  const wheelRadiusMeters = (wheelDiameterInches * 0.0254) / 2
+  const currentAmps = syntheticLoadToCurrentAmps(syntheticLoad)
+  const wheelForceNewtons =
+    (currentAmps * motorTorqueNmPerAmp * drivetrainEfficiency) / wheelRadiusMeters
+  const accelerationMetersPerSecondSquared = wheelForceNewtons / totalMassKg
+  return accelerationMetersPerSecondSquared * 3.6
 }
 
 function moveTowards(current: number, target: number, maxDelta: number): number {
@@ -494,6 +531,10 @@ function numberFieldOrDefault(
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value))
+}
+
+function clampFinite(value: number, min: number, max: number, fallback: number): number {
+  return Number.isFinite(value) ? clamp(value, min, max) : fallback
 }
 
 function boundedSpeed(speedKmh: number): number {

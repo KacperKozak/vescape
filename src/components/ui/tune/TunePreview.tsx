@@ -18,13 +18,15 @@ import {
   stepTunePreview,
   terrainHeightRelativeToWheel,
   terrainSlopeToSyntheticAcceleration,
+  type TunePreviewReferencePhysics,
 } from '@/lib/tune/tunePreview'
 
 interface TunePreviewProps {
   fields: Record<string, TuneProfileFieldValue>
-  riderLean: SharedValue<number>
+  syntheticLoad: SharedValue<number>
   speedKmh: number
   holdSpeed?: boolean
+  referencePhysics?: TunePreviewReferencePhysics
   hillsEnabled?: boolean
   hillHeightMeters?: number
   hillSpacingMeters?: number
@@ -44,9 +46,10 @@ const AnimatedPath = Animated.createAnimatedComponent(Path)
 
 export function TunePreview({
   fields,
-  riderLean,
+  syntheticLoad,
   speedKmh,
   holdSpeed = true,
+  referencePhysics,
   hillsEnabled = false,
   hillHeightMeters = 5,
   hillSpacingMeters = 8,
@@ -114,9 +117,10 @@ export function TunePreview({
           stateRef.current,
           model.parameters,
           {
-            riderLean: riderLean.value,
+            syntheticLoad: syntheticLoad.value,
             speedKmh,
             holdSpeed,
+            referencePhysics,
             hillsEnabled,
             hillHeightMeters,
             hillSpacingMeters,
@@ -148,7 +152,8 @@ export function TunePreview({
     hillsEnabled,
     holdSpeed,
     model,
-    riderLean,
+    referencePhysics,
+    syntheticLoad,
     speedKmh,
     syntheticSpeed,
     targetAngleDegrees,

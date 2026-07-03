@@ -2,9 +2,10 @@
 
 ## Tune Preview model
 
-The flat-response Tune Preview uses model version `refloat-bundled-legacy-v1`, tied to
+The flat-response Tune Preview uses model version `refloat-bundled-legacy-v2`, tied to
 `modules/vesc-ble/android/src/main/assets/refloat-settings.xml`. It is a deterministic,
-comparative ideal-drive model. Synthetic Rider Lean applies a sustained normalized pitch moment;
+comparative ideal-drive model. Synthetic Load applies a sustained normalized pitch moment and a
+bounded `-60..60 A` reference motor current;
 it does not request an angle, speed, acceleration, or motor output. The model intentionally omits
 motor-power, traction, rider-mass, exact-geometry, and nosedive limits.
 
@@ -24,12 +25,17 @@ acceleration disturbance into the legacy ATR equations; it never forces Board pi
 tangent and does not model traction, suspension, or collision.
 
 `Hold speed` is enabled by default so tune comparisons keep an identical constant speed. When it
-is disabled, the configured speed is the starting speed and Synthetic Rider Lean changes a
+is disabled, the configured speed is the starting speed and Synthetic Load changes a
 runtime-only synthetic speed at the model's named comparative acceleration scale. Speed is bounded
 to `0-40 km/h`, reverse is unsupported, and the evolving value drives the existing ERPM, tilt,
 ATR, terrain phase, and ground-travel paths. Switching modes restores the configured speed without
 changing the Tune Profile. Dynamic speed does not predict physical acceleration, braking distance,
 power, traction, or safety; absolute Board angle is never converted into acceleration.
+
+The optional Reference Physics scenario replaces the fixed comparative acceleration scale with a
+current-to-acceleration estimate using total Rider + Board mass, wheel diameter, motor torque per
+amp, and drivetrain efficiency. It remains a reference calculation: it does not model traction,
+drag, rolling resistance, power/current limits, voltage sag, terrain force, or safety.
 
 This document captures practical tune-screen behavior used by a Refloat-focused
 board app. It is intended as product and implementation reference for building a
