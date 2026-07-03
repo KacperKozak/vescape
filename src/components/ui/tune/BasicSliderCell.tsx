@@ -64,22 +64,22 @@ export const BasicSliderCell = forwardRef<View, BasicSliderCellProps>(function B
 
 const styles = StyleSheet.create({
   wrapper: {
-    width: '50%',
+    flex: 1,
   },
   cell: {
     minHeight: 92,
     paddingVertical: 10,
-    paddingHorizontal: 8,
-    paddingLeft: 11,
-    borderLeftWidth: 3,
-    borderLeftColor: theme.palette.sky.color,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: theme.palette.slate.border,
+    backgroundColor: theme.palette.slate.surface,
   },
   cellMissing: {
     opacity: 0.58,
-    borderLeftColor: theme.palette.slate.border,
   },
   cellReadOnly: {
-    borderLeftColor: theme.palette.slate.border,
+    borderColor: theme.palette.slate.border,
   },
   infoBtn: {
     position: 'absolute',

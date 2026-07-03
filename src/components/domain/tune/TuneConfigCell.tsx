@@ -89,20 +89,24 @@ export const TuneConfigCell = forwardRef<View, TuneConfigCellProps>(function Tun
 
 const styles = StyleSheet.create({
   cellWrapper: {
-    width: '50%',
+    flex: 1,
   },
   cell: {
     minHeight: 92,
     paddingVertical: 10,
-    paddingHorizontal: 6,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: theme.palette.slate.border,
+    backgroundColor: theme.palette.slate.surface,
   },
   cellDirty: {
     backgroundColor: theme.palette.sky.bg,
-    borderRadius: 8,
+    borderColor: theme.palette.sky.border,
   },
   cellBoardChanged: {
     backgroundColor: theme.palette.green.bg,
-    borderRadius: 8,
+    borderColor: theme.palette.green.border,
   },
   cellInfoButton: {
     position: 'absolute',

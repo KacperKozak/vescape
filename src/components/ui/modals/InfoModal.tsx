@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Animated, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/ui/base/Text'
-import { InfoIcon, XIcon } from 'phosphor-react-native'
+import { InfoIcon, WarningCircleIcon, XIcon } from 'phosphor-react-native'
 import { theme } from '@/constants/theme'
 
 const FADE_DURATION = 120
@@ -10,17 +10,33 @@ interface InfoModalProps {
   visible: boolean
   title: string
   message: string
+  variant?: 'info' | 'warning'
   dismissLabel?: string
   onDismiss: () => void
+}
+
+const INFO_ACCENT = {
+  Icon: InfoIcon,
+  color: theme.palette.sky.color,
+  buttonBg: theme.palette.sky.border,
+}
+
+const WARNING_ACCENT = {
+  Icon: WarningCircleIcon,
+  color: theme.palette.amber.text,
+  buttonBg: theme.palette.amber.border,
 }
 
 export function InfoModal({
   visible,
   title,
   message,
+  variant = 'info',
   dismissLabel = 'Done',
   onDismiss,
 }: InfoModalProps) {
+  const accent = variant === 'warning' ? WARNING_ACCENT : INFO_ACCENT
+  const IconComp = accent.Icon
   const opacity = useMemo(() => new Animated.Value(0), [])
   const scale = useMemo(() => new Animated.Value(0.92), [])
   const [mounted, setMounted] = useState(false)
@@ -54,7 +70,7 @@ export function InfoModal({
         <Animated.View style={[styles.card, { transform: [{ scale }] }]}>
           <View style={styles.header}>
             <View style={styles.titleWrap}>
-              <InfoIcon size={16} color={theme.palette.sky.color} weight="bold" />
+              <IconComp size={16} color={accent.color} weight="fill" />
               <Text style={styles.title}>{title}</Text>
             </View>
             <Pressable style={styles.closeButton} onPress={onDismiss}>
@@ -66,7 +82,10 @@ export function InfoModal({
               {message}
             </Text>
           </ScrollView>
-          <Pressable style={styles.dismissButton} onPress={onDismiss}>
+          <Pressable
+            style={[styles.dismissButton, { backgroundColor: accent.buttonBg }]}
+            onPress={onDismiss}
+          >
             <Text style={styles.dismissText}>{dismissLabel}</Text>
           </Pressable>
         </Animated.View>
@@ -140,7 +159,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: theme.palette.sky.border,
   },
   dismissText: {
     color: theme.palette.slate.textPrimary,

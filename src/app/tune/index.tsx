@@ -15,7 +15,6 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { type TuneProfile, type RefloatConfigField, type TuneProfileFieldValue } from 'vesc-ble'
 
-import { Banner } from '@/components/ui/base/Banner'
 import { Button } from '@/components/ui/base/Button'
 import { IconButton } from '@/components/ui/base/IconButton'
 import { ConfirmModal } from '@/components/ui/modals/ConfirmModal'
@@ -101,7 +100,49 @@ export default function TuneScreen() {
 
   useLayoutEffect(() => {
     navigation.setOptions({
-      title: 'Tune',
+      headerTitle: () =>
+        profiles.length > 0 ? (
+          <PillSelector
+            activeId={activeProfile?.id ?? ''}
+            style={styles.headerPills}
+            contentContainerStyle={styles.headerPillsContent}
+          >
+            {profiles.map((profile) => (
+              <PillSelectorItem
+                key={profile.id}
+                id={profile.id}
+                label={profile.name}
+                color={theme.palette.sky}
+                onPress={() => setActiveProfile(profile.id)}
+              >
+                <PillSelectorMenuItem
+                  icon={PencilSimpleIcon}
+                  label="Rename"
+                  onPress={() => modals.setRenameModalProfile(profile)}
+                />
+                {modals.otherBoards.length > 0 ? (
+                  <PillSelectorMenuItem
+                    icon={CopyIcon}
+                    label="Copy to board"
+                    onPress={() => modals.setCopySourceProfile(profile)}
+                  />
+                ) : null}
+                {profiles.length > 1 ? (
+                  <PillSelectorMenuItem
+                    icon={TrashIcon}
+                    label="Delete"
+                    onPress={() => modals.setDeleteConfirmProfile(profile)}
+                    danger
+                    separator
+                  />
+                ) : null}
+              </PillSelectorItem>
+            ))}
+            <PillSelectorAdd onPress={() => modals.handleCreateProfile(activeProfile?.id)} />
+          </PillSelector>
+        ) : (
+          <Text style={styles.headerTitle}>Tune</Text>
+        ),
       headerRight: () => (
         <View style={styles.headerActions}>
           {activeProfile ? (
@@ -117,7 +158,17 @@ export default function TuneScreen() {
         </View>
       ),
     })
-  }, [activeProfile, boardConnected, boardSnapshotStatus, openHistory, loadOnline, navigation])
+  }, [
+    activeProfile,
+    boardConnected,
+    boardSnapshotStatus,
+    openHistory,
+    loadOnline,
+    navigation,
+    profiles,
+    modals,
+    setActiveProfile,
+  ])
 
   const handleSave = () => {
     void saveActiveProfile().catch(() => undefined)
@@ -195,12 +246,6 @@ export default function TuneScreen() {
             contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 96 }]}
             contentInsetAdjustmentBehavior="automatic"
           >
-            <Banner
-              variant="warning"
-              title="Work in progress"
-              message="Tune editing is experimental. Do not sync changes to the board until this feature is stable."
-            />
-
             <TunePreviewScenarioControls
               speedKmh={previewSpeedKmh}
               onSpeedChange={setPreviewSpeedKmh}
@@ -254,43 +299,6 @@ export default function TuneScreen() {
                   </Text>
                 </View>
               </Pressable>
-            ) : null}
-
-            {profiles.length > 0 ? (
-              <PillSelector activeId={activeProfile?.id ?? ''}>
-                {profiles.map((profile) => (
-                  <PillSelectorItem
-                    key={profile.id}
-                    id={profile.id}
-                    label={profile.name}
-                    color={theme.palette.sky}
-                    onPress={() => setActiveProfile(profile.id)}
-                  >
-                    <PillSelectorMenuItem
-                      icon={PencilSimpleIcon}
-                      label="Rename"
-                      onPress={() => modals.setRenameModalProfile(profile)}
-                    />
-                    {modals.otherBoards.length > 0 ? (
-                      <PillSelectorMenuItem
-                        icon={CopyIcon}
-                        label="Copy to board"
-                        onPress={() => modals.setCopySourceProfile(profile)}
-                      />
-                    ) : null}
-                    {profiles.length > 1 ? (
-                      <PillSelectorMenuItem
-                        icon={TrashIcon}
-                        label="Delete"
-                        onPress={() => modals.setDeleteConfirmProfile(profile)}
-                        danger
-                        separator
-                      />
-                    ) : null}
-                  </PillSelectorItem>
-                ))}
-                <PillSelectorAdd onPress={() => modals.handleCreateProfile(activeProfile?.id)} />
-              </PillSelector>
             ) : null}
 
             {boardSnapshot ? (
@@ -350,10 +358,7 @@ export default function TuneScreen() {
               </View>
             ) : null}
 
-            <TuneGroupGrid
-              title="Basic"
-              subtitle={activeProfile ? 'tap to adjust' : 'derived preview'}
-            >
+            <TuneGroupGrid title="Basic">
               {basicSliders.map((item) => (
                 <BasicSliderItemCell
                   key={item.id}
@@ -423,8 +428,9 @@ export default function TuneScreen() {
 
       <InfoModal
         visible={previewHelpVisible}
-        title="About Tune Preview"
-        message="Comparative model only. It does not model motor power, traction, rider mass, exact Board geometry, suspension, collisions, or nosedive limits. Angle, speed, current, and response timing are not real measurements or safety predictions. Hills are synthetic ATR load disturbances, not terrain or traction simulation. The model assumes forward riding, a reference 11-inch wheel, fixed geometry, and an ideal drive with no power limit. Speed uses the comparative conversion 3.5 km/h = 1000 ERPM; it is not Board calibration. It uses the current bundled legacy Refloat model; Carve Tilt requires a turn scenario and is not shown in this side view."
+        variant="warning"
+        title="Work in progress"
+        message="Tune editing is experimental. Do not ride with these settings until you have verified them on the bench and confirmed safe behaviour."
         onDismiss={() => setPreviewHelpVisible(false)}
       />
 
@@ -599,6 +605,18 @@ const styles = StyleSheet.create({
   headerActions: {
     flexDirection: 'row',
     gap: 8,
+  },
+  headerTitle: {
+    color: theme.palette.slate.textPrimary,
+    fontSize: 17,
+    fontWeight: '900',
+  },
+  headerPills: {
+    marginHorizontal: 0,
+  },
+  headerPillsContent: {
+    minWidth: 0,
+    paddingHorizontal: 8,
   },
   tuneView: { flex: 1 },
   previewPinned: {

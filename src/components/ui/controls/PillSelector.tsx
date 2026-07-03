@@ -1,5 +1,12 @@
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react'
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native'
 import { Text } from '@/components/ui/base/Text'
 import { PlusIcon } from 'phosphor-react-native'
 import type { Icon } from 'phosphor-react-native'
@@ -36,9 +43,16 @@ function usePillSelectorCtx() {
 interface PillSelectorProps {
   activeId: string
   children: ReactNode
+  style?: StyleProp<ViewStyle>
+  contentContainerStyle?: StyleProp<ViewStyle>
 }
 
-export function PillSelector({ activeId, children }: PillSelectorProps) {
+export function PillSelector({
+  activeId,
+  children,
+  style,
+  contentContainerStyle,
+}: PillSelectorProps) {
   'use no memo'
   const [menu, setMenu] = useState<MenuState | null>(null)
   const addRef = useTriggerRef()
@@ -59,11 +73,15 @@ export function PillSelector({ activeId, children }: PillSelectorProps) {
 
   return (
     <PillSelectorContext.Provider value={{ activeId, openMenu, closeMenu, addRef }}>
-      <View style={styles.container}>
+      <View style={[styles.container, style]}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={[styles.scrollContent, centered && styles.scrollContentCentered]}
+          contentContainerStyle={[
+            styles.scrollContent,
+            centered && styles.scrollContentCentered,
+            contentContainerStyle,
+          ]}
         >
           {children}
         </ScrollView>
