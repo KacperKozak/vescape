@@ -464,13 +464,16 @@ public class VescBleModule: Module {
     guard let bleId = link["bleId"] as? String, !bleId.isEmpty else { return nil }
     let transport = BoardTransport.fromBridge(link["transport"] ?? nil) ?? .direct
     let name = board["name"] as? String ?? "VESC Board"
-    let hz = Self.intValue(Self.loadSettings()["telemetryPollRateHz"]) ?? 0
+    let settings = Self.loadSettings()
+    let hz = Self.intValue(settings["telemetryPollRateHz"]) ?? 0
     return BoardConnectConfig(
       appBoardId: boardId,
       bleId: bleId,
       name: name,
       transport: transport,
-      pollIntervalMs: hz > 0 ? 1000 / hz : 0
+      pollIntervalMs: hz > 0 ? 1000 / hz : 0,
+      batteryConfig: Self.normalizeBatteryConfig(board["batteryConfig"] ?? nil),
+      liveHistoryLimitMinutes: Self.liveHistoryLimitMinutes(settings["liveHistoryLimit"]) ?? 5
     )
   }
 

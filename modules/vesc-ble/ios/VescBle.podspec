@@ -26,6 +26,14 @@ Pod::Spec.new do |s|
   s.source_files = "**/*.{h,m,mm,swift}"
   s.exclude_files = "**/*Tests.swift"
 
+  # Bundle the canonical cell-preset SoC curves so the iOS BatterySocEstimator can estimate battery
+  # percent. `cell-presets.json` is a symlink to the single shared source (../../../shared/data);
+  # CocoaPods only copies resources under the pod root, and following the symlink keeps one source
+  # of truth instead of a committed per-platform copy.
+  s.resource_bundles = {
+    'VescBleAssets' => ['cell-presets.json']
+  }
+
   s.test_spec 'Tests' do |test_spec|
     test_spec.source_files = "**/*Tests.swift"
   end

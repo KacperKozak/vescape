@@ -23,6 +23,11 @@ internal struct BoardConnectConfig {
   let name: String
   let transport: BoardTransport
   let pollIntervalMs: Int
+  /// Normalized Board `batteryConfig` used to estimate battery percent, or `nil` when the board
+  /// has no battery config (the gauge then stays empty).
+  let batteryConfig: [String: Any]?
+  /// Live-history window (minutes) for the decimated `onLiveSeries` series.
+  let liveHistoryLimitMinutes: Int
 }
 
 /// Owns the live Board Session: drives connect phases off GATT callbacks, seeds the stored
@@ -57,6 +62,8 @@ internal final class ConnectionCoordinator: VescGattListener {
   private var sessionSequence: Int64 = 0
   private var config: BoardConnectConfig?
   private let reassembler = VescPacketReassembler()
+  private let batteryEstimator = BatterySocEstimator()
+  private let liveSeries = LiveSeriesEmitter()
 
   private var pendingOnSuccess: (() -> Void)?
   private var pendingOnError: ((String, String) -> Void)?
@@ -102,6 +109,10 @@ internal final class ConnectionCoordinator: VescGattListener {
     onSuccess: @escaping () -> Void,
     onError: @escaping (String, String) -> Void
   ) {
+    batteryEstimator.ensureLoaded()
+    liveSeries.emit = { [weak self] name, body in self?.emit?(name, body) }
+    liveSeries.generation = { [weak self] in self?.connectionSeq ?? 0 }
+    liveSeries.setWindowMinutes(config.liveHistoryLimitMinutes)
     beginSession(config: config, onSuccess: onSuccess, onError: onError)
     gatt.connect(peripheralId: config.bleId)
     armConnectTimeout()
@@ -283,10 +294,17 @@ internal final class ConnectionCoordinator: VescGattListener {
   private func emitTelemetry(_ telemetry: RefloatTelemetry) {
     // Hot path: a scalar tick every frame drives the live gauges.
     var tick = telemetry.toMap()
-    tick["batteryPercent"] = nil
+    tick["batteryPercent"] = batteryEstimator.estimateBatteryPercent(
+      voltageV: telemetry.batteryVoltage,
+      config: config?.batteryConfig,
+      batteryCurrentA: telemetry.batteryCurrent
+    )
     tick["generation"] = connectionSeq
     tick["remoteTilt"] = nil
     emit?("onLiveTick", tick)
+
+    // Decimated ~1Hz series for sparklines + battery gauge (native downsamples the live window).
+    liveSeries.add(tick)
 
     // Cold path: full samples batched a few times a second for history + charts.
     historyBuffer.append(tick)
@@ -313,11 +331,13 @@ internal final class ConnectionCoordinator: VescGattListener {
     lastHistoryFlushAt = 0
     historyBuffer.removeAll(keepingCapacity: true)
     polling = true
+    liveSeries.start()
     sendPoll(session: session)
   }
 
   private func stopPolling() {
     polling = false
+    liveSeries.stop()
     flushHistory()
   }
 
