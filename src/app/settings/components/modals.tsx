@@ -81,33 +81,115 @@ function TextPromptModalShowcase() {
   )
 }
 
-function CornerSheetShowcase() {
+interface CornerSheetPositionShowcaseProps {
+  edge: 'auto' | 'top' | 'bottom'
+  name: string
+  description: string
+}
+
+function CornerSheetPositionShowcase({
+  edge,
+  name,
+  description,
+}: CornerSheetPositionShowcaseProps) {
+  const triggerRef = useTriggerRef()
+  const [visible, setVisible] = useState(false)
+  const dragInstruction =
+    edge === 'top'
+      ? 'Scroll to the end, then continue upward to move the whole drawer out.'
+      : edge === 'bottom'
+        ? 'At the top of the list, drag downward to move the whole drawer out.'
+        : 'Scroll to the dismiss-side edge, then continue dragging to move the whole drawer out.'
+
+  return (
+    <ShowcaseCard
+      name={name}
+      controls={
+        <View ref={triggerRef} collapsable={false} style={styles.trigger}>
+          <OpenButton label={`Open ${edge}`} onPress={() => setVisible(true)} />
+        </View>
+      }
+    >
+      <Text style={styles.previewHint}>{description}</Text>
+      <CornerSheet
+        visible={visible}
+        triggerRef={triggerRef}
+        edge={edge}
+        title={`${edge[0].toUpperCase()}${edge.slice(1)} drawer`}
+        icon={UsersThreeIcon}
+        onClose={() => setVisible(false)}
+      >
+        <View style={styles.tile}>
+          <Text style={styles.tileText}>{dragInstruction}</Text>
+        </View>
+        <View style={styles.tile}>
+          <Text style={styles.tileText}>Release early to test spring-back.</Text>
+        </View>
+      </CornerSheet>
+    </ShowcaseCard>
+  )
+}
+
+const LONG_CONTENT_SECTIONS = [
+  {
+    title: 'How the gesture works',
+    body: 'This drawer contains ordinary text instead of a stack of controls. Swipe upward to read it exactly like a regular scroll view. The content should remain under your finger and preserve normal momentum.',
+  },
+  {
+    title: 'Scrolling through content',
+    body: 'While there is more text below, vertical gestures belong to the content. The surrounding drawer remains fixed in place. Slow drags, quick flicks, and stopping midway should all behave like normal list scrolling.',
+  },
+  {
+    title: 'Reaching the boundary',
+    body: 'At the end of the article there is nowhere left for the content to scroll. Continue dragging upward from that boundary and the gesture transfers to the complete drawer instead.',
+  },
+  {
+    title: 'Moving the window',
+    body: 'After the transfer, the title, text, grabber, and backdrop move together. The drawer tracks the finger directly rather than waiting for a swipe threshold before showing any movement.',
+  },
+  {
+    title: 'Fling behavior',
+    body: 'Release with enough upward velocity and the drawer continues off-screen. Release early with little velocity and it returns to its open position. This is the same interaction model used by system notification panels.',
+  },
+  {
+    title: 'End of example',
+    body: 'You are now at the dismiss boundary. Keep dragging upward to push the entire window out of view and close it.',
+  },
+] as const
+
+function CornerSheetLongContentShowcase() {
   const triggerRef = useTriggerRef()
   const [visible, setVisible] = useState(false)
 
   return (
     <ShowcaseCard
-      name="CornerSheet"
+      name="CornerSheet — long scrolling content"
       controls={
         <View ref={triggerRef} collapsable={false} style={styles.trigger}>
-          <OpenButton onPress={() => setVisible(true)} />
+          <OpenButton label="Open long content" onPress={() => setVisible(true)} />
         </View>
       }
     >
-      <Text style={styles.previewHint}>Near-full-width sheet that drops from a corner trigger</Text>
+      <Text style={styles.previewHint}>
+        Regular text scrolls first; an upward drag at the end moves the complete drawer out.
+      </Text>
       <CornerSheet
         visible={visible}
         triggerRef={triggerRef}
-        anchor="left"
-        title="Sheet title"
-        icon={UsersThreeIcon}
+        edge="top"
+        title="Gesture guide"
         onClose={() => setVisible(false)}
       >
-        <View style={styles.tile}>
-          <Text style={styles.tileText}>Tile one — a widget could live here.</Text>
-        </View>
-        <View style={styles.tile}>
-          <Text style={styles.tileText}>Tile two — another interactive block.</Text>
+        <View style={styles.article}>
+          <Text style={styles.articleLead}>
+            Scroll this full article, then continue the same upward motion at the end.
+          </Text>
+          {LONG_CONTENT_SECTIONS.map((section) => (
+            <View key={section.title} style={styles.articleSection}>
+              <Text style={styles.articleTitle}>{section.title}</Text>
+              <Text style={styles.articleBody}>{section.body}</Text>
+            </View>
+          ))}
         </View>
       </CornerSheet>
     </ShowcaseCard>
@@ -157,7 +239,22 @@ export default function ModalsPage() {
         <ConfirmModalShowcase />
         <InfoModalShowcase />
         <TextPromptModalShowcase />
-        <CornerSheetShowcase />
+        <CornerSheetPositionShowcase
+          edge="auto"
+          name="CornerSheet — automatic edge"
+          description="Chooses top or bottom from the trigger's current screen position."
+        />
+        <CornerSheetPositionShowcase
+          edge="top"
+          name="CornerSheet — top edge"
+          description="Always opens from the top. The complete drawer follows an upward drag."
+        />
+        <CornerSheetPositionShowcase
+          edge="bottom"
+          name="CornerSheet — bottom edge"
+          description="Always opens from the bottom. The complete drawer follows a downward drag."
+        />
+        <CornerSheetLongContentShowcase />
         <FloatingSheetShowcase />
       </ScrollView>
     </SafeAreaView>
@@ -177,4 +274,23 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   tileText: { color: theme.palette.slate.textSecondary, fontSize: 14 },
+  article: { gap: 28, paddingHorizontal: 10, paddingBottom: 24 },
+  articleLead: {
+    color: theme.palette.slate.textPrimary,
+    fontSize: 18,
+    lineHeight: 27,
+    fontWeight: '600',
+  },
+  articleSection: { gap: 8 },
+  articleTitle: {
+    color: theme.palette.slate.textPrimary,
+    fontSize: 16,
+    lineHeight: 22,
+    fontWeight: '700',
+  },
+  articleBody: {
+    color: theme.palette.slate.textSecondary,
+    fontSize: 15,
+    lineHeight: 24,
+  },
 })

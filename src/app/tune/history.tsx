@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native'
+import { FlatList, StyleSheet, Text, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { ArrowCounterClockwiseIcon } from 'phosphor-react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { type TuneHistoryEntry, type TuneProfileFieldValue } from 'vesc-ble'
 
 import { ConfirmModal } from '@/components/ui/modals/ConfirmModal'
+import { Button } from '@/components/ui/base/Button'
 import { APP_TUNE_FIELD_BY_ID, formatTuneValue } from '@/lib/tune/fields'
 import { useTuneProfileStore } from '@/store/tuneProfileStore'
 import { theme } from '@/constants/theme'
@@ -103,14 +104,13 @@ export default function TuneHistoryScreen() {
                     </Text>
                   )}
                 </View>
-                <Pressable style={styles.restoreButton} onPress={() => handleRestore(item.id)}>
-                  <ArrowCounterClockwiseIcon
-                    size={13}
-                    color={theme.palette.sky.color}
-                    weight="bold"
-                  />
-                  <Text style={styles.restoreText}>Restore</Text>
-                </Pressable>
+                <Button
+                  label="Restore"
+                  icon={ArrowCounterClockwiseIcon}
+                  variant="secondary"
+                  size="sm"
+                  onPress={() => handleRestore(item.id)}
+                />
               </View>
             )
           }}
@@ -186,21 +186,5 @@ const styles = StyleSheet.create({
   diffNew: {
     color: theme.palette.green.text,
     fontWeight: '700',
-  },
-  restoreButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-    backgroundColor: theme.palette.sky.bg,
-    borderWidth: 1,
-    borderColor: theme.palette.sky.border,
-  },
-  restoreText: {
-    color: theme.palette.sky.color,
-    fontSize: 11,
-    fontWeight: '800',
   },
 })

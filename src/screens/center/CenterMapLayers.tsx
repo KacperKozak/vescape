@@ -513,6 +513,9 @@ export function CenterMapLayers({
   onSelectMarker,
   onOpenMedia,
 }: CenterMapLayersProps) {
+  const riderColor = useRiderStore((state) => state.riderColor)
+  const directionColor = riderColor ?? DESTINATION_POINT_COLOR
+  const directionTextColor = riderColor ?? DESTINATION_POINT_TEXT_COLOR
   const selectedMapPoint = useMemo(
     () =>
       mapPoints.find(
@@ -577,11 +580,14 @@ export function CenterMapLayers({
       )}
       {directionPoint && !historyActive && (
         <MapPin
+          // Color in the key: PointAnnotation snapshots its children natively, so a
+          // rider-color change must remount the pin to re-render.
+          key={`center-direction-position-${directionColor}`}
           id="center-direction-position"
           coordinate={[directionPoint.longitude, directionPoint.latitude]}
-          color={DESTINATION_POINT_COLOR}
+          color={directionColor}
           icon={getMapPointKindIcon(directionPoint.kind)}
-          iconColor={DESTINATION_POINT_TEXT_COLOR}
+          iconColor={directionTextColor}
           onSelected={() => {
             onSuppressNextMapPress()
             onClearDirectionPoint()

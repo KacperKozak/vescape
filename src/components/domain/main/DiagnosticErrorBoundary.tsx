@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/react-native'
 import { Component, type ErrorInfo, type PropsWithChildren } from 'react'
 
 import { reportUiError } from '@/lib/uiDiagnostics'
@@ -11,6 +12,7 @@ export class DiagnosticErrorBoundary extends Component<PropsWithChildren, { fail
 
   componentDidCatch(error: Error, _info: ErrorInfo) {
     reportUiError(error, 'root_layout')
+    Sentry.captureException(error)
   }
 
   render() {

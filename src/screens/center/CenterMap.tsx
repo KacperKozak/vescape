@@ -39,6 +39,7 @@ import { normalizeHeading, smoothHeadingStep } from '@/lib/map/headingSmoothing'
 import type { HistoryGpsSample, HistoryMarker, TelemetrySample } from '@/store/historyStore'
 import { useGroupRideStore } from '@/store/groupRideStore'
 import { useNavigationDiagnosticsStore } from '@/store/navigationDiagnosticsStore'
+import { useRiderStore } from '@/store/riderStore'
 import { useSettingsStore } from '@/store/settingsStore'
 
 import type { CenterViewState } from './centerViewState'
@@ -244,6 +245,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
   const settingsLoaded = useSettingsStore((s) => s.loaded)
   const lastGpsLatitude = useSettingsStore((s) => s.lastGpsLatitude)
   const lastGpsLongitude = useSettingsStore((s) => s.lastGpsLongitude)
+  const riderColor = useRiderStore((s) => s.riderColor)
   const historyMetricGradientsEnabled = useSettingsStore((s) => s.historyMetricGradientsEnabled)
   const historyMetricHotRanges = useSettingsStore((s) => s.historyMetricHotRanges)
   const persistedFallback = useMemo(
@@ -551,8 +553,8 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
               id: 'direction',
               type: 'direction' as const,
               coordinate: [directionPoint.longitude, directionPoint.latitude] as [number, number],
-              color: DESTINATION_POINT_COLOR,
-              textColor: DESTINATION_POINT_TEXT_COLOR,
+              color: riderColor ?? DESTINATION_POINT_COLOR,
+              textColor: riderColor ?? DESTINATION_POINT_TEXT_COLOR,
               icon: getMapPointKindIcon('direction'),
             },
           ]
@@ -617,6 +619,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
     historyActive,
     mapLayout,
     offscreenMapGpsCoordinate,
+    riderColor,
     riderPoints,
     riderTargetPoints,
     selectedMapPoint,

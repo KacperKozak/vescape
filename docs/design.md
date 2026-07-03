@@ -104,7 +104,7 @@ Semantic UI-state tokens. Each exposes `.color`, `.text`, `.bg`, and `.border`.
 Every translucent value (overlays, backdrops, zone tints, glow gradients, vignettes) must be created with `theme.alpha(color, level)` using one of the typed levels:
 
 ```ts
-type AlphaLevel = 0 | 0.12 | 0.3 | 0.6 | 0.85
+type AlphaLevel = 0 | 0.12 | 0.3 | 0.4 | 0.6 | 0.7 | 0.8 | 0.85 | 1
 ```
 
 Neutral row icons use `theme.palette.slate.textSecondary`.

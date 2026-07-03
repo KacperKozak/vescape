@@ -13,7 +13,7 @@
  */
 
 /** Allowed opacity levels for every translucent color value. */
-export type AlphaLevel = 0 | 0.12 | 0.3 | 0.6 | 0.85
+export type AlphaLevel = 0 | 0.12 | 0.3 | 0.4 | 0.6 | 0.7 | 0.8 | 0.85 | 1
 
 function alpha(color: string, level: AlphaLevel): string {
   'worklet'

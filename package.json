@@ -1,6 +1,6 @@
 {
   "name": "vibe-wheel",
-  "version": "0.73.0",
+  "version": "0.74.0",
   "private": true,
   "license": "GPL-3.0-or-later",
   "author": "Kacper Kozak",
@@ -40,6 +40,7 @@
   },
   "dependencies": {
     "@rnmapbox/maps": "^10.3.0",
+    "@sentry/react-native": "~7.11.0",
     "@shopify/react-native-skia": "2.6.2",
     "expo": "~56.0.12",
     "expo-build-properties": "~56.0.19",
