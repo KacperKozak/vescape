@@ -1,8 +1,8 @@
 # Native API
 
-JS bridge surface exposed by `VescBle` Expo module. Android: full impl. iOS: simulator mock (UserDefaults, no DB).
+JS bridge surface exposed by `VescBle` Expo module. Android: full impl. iOS: bridge stub until the native CoreBluetooth and storage subsystems land.
 
-Source of truth: `modules/vesc-ble/src/index.ts` (types), `VescBleModule.kt` (Android), `VescBleModule.swift` (iOS mock).
+Source of truth: `modules/vesc-ble/src/index.ts` (types), `VescBleModule.kt` (Android), `VescBleModule.swift` (iOS bridge stub).
 
 ## Term map
 

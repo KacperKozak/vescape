@@ -110,4 +110,4 @@ Native alert mutations reload foreground-service rules after writing.
 
 ## iOS
 
-The current iOS module is still a simulator mock. It persists alert rules for UI parity but does not run real alert evaluation.
+The current iOS module is a bridge stub. It persists alert rules for UI parity but does not run real alert evaluation.

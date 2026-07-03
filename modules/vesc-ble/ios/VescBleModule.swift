@@ -1,9 +1,9 @@
 import ExpoModulesCore
 import Foundation
 
-// iOS simulator mock.
-// Emits realistic fake data so the UI can be explored without real BLE hardware.
-// A full CoreBluetooth implementation can replace this when needed.
+// iOS bridge stub.
+// Board features must use real CoreBluetooth; until that lands, fail explicitly
+// instead of emitting fake devices or telemetry on physical iOS builds.
 public class VescBleModule: Module {
 
   // MARK: - Session state
@@ -19,40 +19,12 @@ public class VescBleModule: Module {
   private var scanTimer: Timer?
   private var telemetryTimer: Timer?
   private var locationTimer: Timer?
-  private var lastGpsPersistedAt = Date.distantPast
+  // MARK: - App data state
 
-  // MARK: - Mock data state
-
-  private var tick = 0
-  private var mockOdometer = 0.0
-  private var mockLat = 52.2297
-  private var mockLon = 21.0122
-  private var scanDeviceIndex = 0
   private var boards = VescBleModule.loadArray(key: "vesc_ble_boards")
   private var alertRules = VescBleModule.loadArray(key: "vesc_ble_alert_rules")
   private var privacyZones = VescBleModule.loadArray(key: "vesc_ble_privacy_zones")
   private var mapPoints = VescBleModule.loadArray(key: "vesc_ble_map_points")
-
-  private let mockDevices: [[String: Any]] = [
-    [
-      "id": "AA:BB:CC:DD:EE:01",
-      "name": "FloatWheel ADV",
-      "rssi": -45,
-      "serviceUUIDs": ["6e400001-b5a3-f393-e0a9-e50e24dcca9e"],
-    ],
-    [
-      "id": "AA:BB:CC:DD:EE:02",
-      "name": "VESC Board Pro",
-      "rssi": -62,
-      "serviceUUIDs": ["6e400001-b5a3-f393-e0a9-e50e24dcca9e"],
-    ],
-    [
-      "id": "AA:BB:CC:DD:EE:03",
-      "name": "Refloat GT",
-      "rssi": -78,
-      "serviceUUIDs": ["6e400001-b5a3-f393-e0a9-e50e24dcca9e"],
-    ],
-  ]
 
   // MARK: - Module definition
 
@@ -70,7 +42,8 @@ public class VescBleModule: Module {
     // MARK: Scan
 
     Function("scan") {
-      self.startMockScan()
+      self.stopScan()
+      self.emitUnsupported("scan", "iOS CoreBluetooth scan is not implemented yet")
     }
 
     Function("stopScan") {
@@ -80,14 +53,15 @@ public class VescBleModule: Module {
     // MARK: Location
 
     Function("startLocationUpdates") {
-      self.startMockLocation()
+      self.stopLocation()
+      self.emitUnsupported("location", "iOS location updates are not implemented yet")
     }
 
     Function("stopLocationUpdates") {
       self.stopLocation()
     }
 
-    // MARK: Group Ride (Android native implementation; iOS mock keeps bridge shape)
+    // MARK: Group Ride (Android native implementation; iOS keeps bridge shape)
 
     Function("startGroupRideObserve") { (_: String) in
       self.sendEvent("onGroupRideConnection", ["state": "idle"])
@@ -99,11 +73,11 @@ public class VescBleModule: Module {
     }
 
     Function("createGroupRide") { (_: String, _: String, _: String?, _: String?, _: Double, _: Double) in
-      // no-op in iOS simulator mock
+      // no-op until iOS native Group Ride support lands
     }
 
     Function("joinGroupRide") { (_: String, _: String, _: String?, _: String) in
-      // no-op in iOS simulator mock
+      // no-op until iOS native Group Ride support lands
     }
 
     Function("leaveGroupRide") {
@@ -112,21 +86,21 @@ public class VescBleModule: Module {
     }
 
     Function("updateGroupRideIdentity") { (_: String, _: String, _: String?) in
-      // no-op in iOS simulator mock
+      // no-op until iOS native Group Ride support lands
     }
 
-    // MARK: Telemetry recording toggle (no-op on mock)
+    // MARK: Telemetry recording toggle
 
     Function("setTelemetryRecordingEnabled") { (_: Bool) in
-      // No persistent storage in the iOS mock
+      // No persistent storage until iOS storage lands.
     }
 
     Function("reloadAlertRules") {
-      // no-op in iOS simulator mock
+      // no-op until iOS native alert evaluation lands
     }
 
     Function("previewAlertSound") { (_: String) in
-      // no-op in iOS simulator mock
+      // no-op until iOS native alert playback lands
     }
 
     Function("getAlertPresets") {
@@ -141,11 +115,11 @@ public class VescBleModule: Module {
     }
 
     Function("startGeigerSimulation") { (_: String, _: Double) in
-      // no-op in iOS simulator mock
+      // no-op until iOS native alert playback lands
     }
 
     Function("stopGeigerSimulation") {
-      // no-op in iOS simulator mock
+      // no-op until iOS native alert playback lands
     }
 
     // MARK: Board session
@@ -186,27 +160,18 @@ public class VescBleModule: Module {
       var settings = Self.loadSettings()
       settings["selectedBoardId"] = boardId
       Self.saveSettings(settings)
-      let board = self.boards.first { ($0["id"] as? String) == boardId }
-      let link = board?["link"] as? [String: Any]
-      let deviceId = link?["bleId"] as? String ?? "MOCK-ID"
-      let deviceName = board?["name"] as? String ?? "Mock Board"
-      self.startMockBoard(deviceId: deviceId, deviceName: deviceName)
-      promise.resolve(nil)
+      self.stopNativeSession()
+      promise.reject("UNSUPPORTED_PLATFORM", "iOS CoreBluetooth board sessions are not implemented yet")
     }
 
     AsyncFunction("stopBoard") { (promise: Promise) in
-      DispatchQueue.main.async { [weak self] in self?.stopMockSession() }
+      DispatchQueue.main.async { [weak self] in self?.stopNativeSession() }
       promise.resolve(nil)
     }
 
-    // Mock Board Probe: iOS BLE is not implemented, so confirm a Direct
-    // transport so the Add Board flow stays exercisable.
     AsyncFunction("probeBoardLink") { (_: String, promise: Promise) in
-      DispatchQueue.main.async { [weak self] in self?.stopMockSession() }
-      promise.resolve([
-        "outcome": "resolved",
-        "candidates": [["transport": "direct", "hasBms": true]],
-      ])
+      DispatchQueue.main.async { [weak self] in self?.stopNativeSession() }
+      promise.reject("UNSUPPORTED_PLATFORM", "iOS Board Probe requires the CoreBluetooth implementation")
     }
 
     // MARK: Telemetry history (empty stubs)
@@ -440,22 +405,6 @@ public class VescBleModule: Module {
 
   // MARK: - Scan
 
-  private func startMockScan() {
-    DispatchQueue.main.async { [weak self] in
-      guard let self = self else { return }
-      self.scanTimer?.invalidate()
-      self.scanDeviceIndex = 0
-      self.scanTimer = Timer.scheduledTimer(withTimeInterval: 0.7, repeats: true) { [weak self] _ in
-        guard let self = self else { return }
-        let device = self.mockDevices[self.scanDeviceIndex % self.mockDevices.count]
-        var event = device
-        event["rssi"] = (device["rssi"] as! Int) + Int.random(in: -5...5)
-        self.sendEvent("onDevice", event)
-        self.scanDeviceIndex += 1
-      }
-    }
-  }
-
   private func stopScan() {
     DispatchQueue.main.async { [weak self] in
       self?.scanTimer?.invalidate()
@@ -465,30 +414,6 @@ public class VescBleModule: Module {
 
   // MARK: - Location
 
-  private func startMockLocation() {
-    DispatchQueue.main.async { [weak self] in
-      guard let self = self else { return }
-      self.locationTimer?.invalidate()
-      self.locationTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
-        guard let self = self else { return }
-        self.mockLat += Double.random(in: -0.0001...0.0001)
-        self.mockLon += Double.random(in: -0.0001...0.0001)
-        self.persistMockLocationIfNeeded(latitude: self.mockLat, longitude: self.mockLon)
-        self.sendEvent("onLocation", [
-          "latitude": self.mockLat,
-          "longitude": self.mockLon,
-          "speedMps": Double.random(in: 0...5),
-          "bearingDeg": Double.random(in: 0...360),
-          "accuracyM": Double.random(in: 3...10),
-          "altitudeM": 120.0,
-          "timestamp": Date().timeIntervalSince1970 * 1000.0,
-          "precise": true,
-          "saved": false,
-        ] as [String: Any])
-      }
-    }
-  }
-
   private func stopLocation() {
     DispatchQueue.main.async { [weak self] in
       self?.locationTimer?.invalidate()
@@ -496,45 +421,9 @@ public class VescBleModule: Module {
     }
   }
 
-  private func persistMockLocationIfNeeded(latitude: Double, longitude: Double) {
-    let now = Date()
-    guard now.timeIntervalSince(lastGpsPersistedAt) >= 30 else { return }
-    lastGpsPersistedAt = now
-    var settings = Self.loadSettings()
-    settings["lastGpsLatitude"] = latitude
-    settings["lastGpsLongitude"] = longitude
-    Self.saveSettings(settings)
-  }
-
   // MARK: - Telemetry
 
-  private func startTelemetryTimer() {
-    telemetryTimer?.invalidate()
-    tick = 0
-    mockOdometer = 0.0
-    telemetryTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-      guard let self = self else { return }
-      self.emitMockTelemetry()
-      if self.tick % 8 == 0 { self.emitMockBms() }
-    }
-  }
-
-  private func startMockBoard(deviceId: String, deviceName: String) {
-    sessionGeneration += 1
-    sessionDeviceId = deviceId
-    sessionDeviceName = deviceName
-    sessionStatus = "connecting"
-    sendEvent("onLiveState", liveState())
-
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-      guard let self = self else { return }
-      self.sessionStatus = "connected"
-      self.sendEvent("onLiveState", self.liveState())
-      self.startTelemetryTimer()
-    }
-  }
-
-  private func stopMockSession() {
+  private func stopNativeSession() {
     telemetryTimer?.invalidate()
     telemetryTimer = nil
     sessionStatus = "idle"
@@ -578,121 +467,8 @@ public class VescBleModule: Module {
     ]
   }
 
-  private func emitMockTelemetry() {
-    let t = Double(tick)
-    tick += 1
-
-    // Speed: 0–25 km/h sine wave with ~30 s period
-    let speed = 12.5 + 12.5 * sin(t * 0.1)
-    let erpm = speed * 300.0
-
-    // Attitude
-    let pitch = 3.0 * sin(t * 0.3)
-    let roll = 5.0 * sin(t * 0.17 + 1.0)
-    let balancePitch = 2.8 * sin(t * 0.3 - 0.1)
-    let balanceCurrent = 1.5 * sin(t * 0.4)
-
-    // Power
-    let dutyCycle = min(0.8, max(0.0, speed / 50.0))
-    let motorCurrent = 12.5 * cos(t * 0.1)
-    let batteryCurrent = motorCurrent * dutyCycle
-    let batteryVoltage = max(50.0, 58.0 - t * 0.002 + 0.3 * sin(t * 0.05))
-    let batteryPercent = min(100.0, max(0.0, (batteryVoltage - 50.0) / 8.0 * 100.0))
-
-    // Footpads — both pressed
-    let adc1 = 0.85 + 0.05 * sin(t * 0.2)
-    let adc2 = 0.88 + 0.04 * sin(t * 0.15)
-
-    // Temperatures — slowly rising
-    let tempMosfet = min(70.0, 35.0 + t * 0.02 + 2.0 * sin(t * 0.03))
-    let tempMotor = min(60.0, 28.0 + t * 0.015)
-
-    // Odometer: speed (km/h) → m/s × 0.5 s interval
-    mockOdometer += abs(speed) / 3.6 * 0.5
-
-    let telemetry: [String: Any?] = [
-      "hasFault": false,
-      "faultCode": 0,
-      "pitch": pitch,
-      "roll": roll,
-      "balancePitch": balancePitch,
-      "balanceCurrent": balanceCurrent,
-      "speed": speed,
-      "batteryVoltage": batteryVoltage,
-      "batteryPercent": batteryPercent,
-      "motorCurrent": motorCurrent,
-      "batteryCurrent": batteryCurrent,
-      "erpm": erpm,
-      "dutyCycle": dutyCycle,
-      "state": 1,
-      "stateName": "RUNNING",
-      "switchState": 2,
-      "adc1": adc1,
-      "adc2": adc2,
-      "odometer": mockOdometer,
-      "tempMosfet": tempMosfet,
-      "tempMotor": tempMotor,
-      "avgLatency": 12.0,
-      "pullRateHz": 20.0,
-      "lastPacketAt": Date().timeIntervalSince1970 * 1000.0,
-      "location": nil,
-      "generation": sessionGeneration,
-    ]
-    sendEvent("onLiveTick", telemetry)
-    sendEvent("onTelemetryHistory", ["samples": [telemetry]])
-    emitMockLiveSeries(telemetry)
-  }
-
-  private func emitMockLiveSeries(_ telemetry: [String: Any?]) {
-    guard let timestamp = telemetry["lastPacketAt"] as? Double else { return }
-    func point(_ value: Double?) -> [Double] {
-      guard let value, value.isFinite else { return [] }
-      return [timestamp, value]
-    }
-    func value(_ key: String) -> Double? { telemetry[key] as? Double }
-
-    let duty = value("dutyCycle").map { abs($0) * 100 }
-    let metrics: [String: [Double]] = [
-      "motorTemp": point(value("tempMotor").flatMap { $0 > 0 ? $0 : nil }),
-      "controllerTemp": point(value("tempMosfet")),
-      "motorCurrent": point(value("motorCurrent")),
-      "batteryCurrent": point(value("batteryCurrent")),
-      "batteryVoltage": point(value("batteryVoltage")),
-      "batteryPercent": point(value("batteryPercent")),
-      "speed": point(value("speed").map(abs)),
-      "duty": point(duty),
-      "pitch": point(value("pitch")),
-      "roll": point(value("roll")),
-      "balancePitch": point(value("balancePitch")),
-      "footpadAdc1": point(value("adc1")),
-      "footpadAdc2": point(value("adc2")),
-    ]
-    sendEvent("onLiveSeries", ["metrics": metrics, "generation": sessionGeneration])
-  }
-
-  private func emitMockBms() {
-    let t = Double(tick)
-    let cellCount = 20
-    let base = max(3.0, 4.05 - t * 0.00005)
-    var cells: [Double] = []
-    var balancing: [Bool] = []
-    for i in 0..<cellCount {
-      // Slight per-cell spread plus a small wandering imbalance so the UI shows variation.
-      let cell = base + 0.02 * sin(t * 0.05 + Double(i)) + Double(i % 3) * 0.004
-      cells.append(cell)
-      balancing.append(cell > base + 0.03)
-    }
-    let total = cells.reduce(0, +)
-    sendEvent("onBms", [
-      "capturedAt": Date().timeIntervalSince1970 * 1000.0,
-      "voltageTotal": total,
-      "current": 8.0 * cos(t * 0.1),
-      "ampHours": t * 0.01,
-      "wattHours": t * 0.4,
-      "soc": min(1.0, max(0.0, (base - 3.0) / 1.2)),
-      "cellVoltages": cells,
-      "balancing": balancing,
-    ] as [String: Any?])
+  private func emitUnsupported(_ operation: String, _ message: String) {
+    sendEvent("onError", ["operation": operation, "message": message])
   }
 
   private func saveAppData() {
