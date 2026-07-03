@@ -36,8 +36,7 @@ internal struct BoardConnectConfig {
 /// Owns the live Board Session: drives connect phases off GATT callbacks, seeds the stored
 /// transport, polls telemetry response-paced, decodes Refloat frames, emits live events, and
 /// recovers a dropped mid-ride link via CoreBluetooth persistent connect plus active rescan
-/// (#58). Still narrower than Android's `BoardSessionController` — no stale watchdog, recording,
-/// or alerts yet (those land in later iOS slices).
+/// (#58), and owns iOS Ride Recording telemetry/GPS writes.
 ///
 /// iOS reconnect deliberately diverges from Android's exponential-backoff `ReconnectScheduler`:
 /// `CBCentralManager.connect(_:options:)` is persistent (retries until success or cancel, even
@@ -47,8 +46,8 @@ internal struct BoardConnectConfig {
 ///
 /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/connection/ConnectionCoordinator.kt
 /// @platform-diff iOS relies on CoreBluetooth persistent connect for retry timing instead of
-/// Android's backoff scheduler, and still defers the stale watchdog, recording, alerts, and GPS.
-/// Peers converge as those iOS subsystems land (#59–#63).
+/// Android's backoff scheduler, and still defers stale watchdog and alerts. Peers converge as
+/// those iOS subsystems land (#61–#63).
 internal final class ConnectionCoordinator: VescGattListener {
   /// Send a native event to JS. Set by the module.
   var emit: ((String, [String: Any?]) -> Void)?
@@ -74,6 +73,13 @@ internal final class ConnectionCoordinator: VescGattListener {
   private let reassembler = VescPacketReassembler()
   private let batteryEstimator = BatterySocEstimator()
   private let liveSeries = LiveSeriesEmitter()
+  private let appData: AppDataRepository
+  private lazy var recordingCoordinator = RecordingCoordinator(appData: appData)
+  private lazy var gpsMonitor = VescGpsMonitor { [weak self] location in self?.onLocationUpdated(location) }
+  private var latestLocation: TelemetryLocationCapture?
+  private var latestPreciseLocation: TelemetryLocationCapture?
+  private var recentLocations: [[String: Any?]] = []
+  private var gpsError: String?
 
   private var pendingOnSuccess: (() -> Void)?
   private var pendingOnError: ((String, String) -> Void)?
@@ -108,6 +114,10 @@ internal final class ConnectionCoordinator: VescGattListener {
   private var historyBuffer: [[String: Any?]] = []
   private var lastHistoryFlushAt: Int64 = 0
   private let historyFlushIntervalMs: Int64 = 300
+
+  init(appData: AppDataRepository = .shared) {
+    self.appData = appData
+  }
 
   // MARK: - Scan API
 
@@ -147,6 +157,31 @@ internal final class ConnectionCoordinator: VescGattListener {
   // MARK: - Live-state snapshot
 
   func remoteTiltState() -> [String: Any?]? { nil }
+  func gpsActive() -> Bool { gpsMonitor.active }
+  func gpsLatestLocation() -> [String: Any?]? { latestLocation?.map }
+  func gpsLatestPreciseLocation() -> [String: Any?]? { latestPreciseLocation?.map }
+  func gpsRecentLocations() -> [[String: Any?]] { recentLocations }
+  func gpsLastError() -> String? { gpsError }
+  func telemetryRecordingEnabled() -> Bool { recordingCoordinator.telemetryRecordingEnabled }
+  func recordingStartedAt() -> Int64? { recordingCoordinator.recordingStartedAtMs }
+  func recordingActiveBoardId() -> String? { recordingCoordinator.activeBoardId }
+
+  func startLocationUpdates() {
+    gpsError = gpsMonitor.start()
+    onStateChanged?()
+  }
+
+  func stopLocationUpdates() {
+    gpsMonitor.stop()
+    onStateChanged?()
+  }
+
+  func setTelemetryRecordingEnabled(_ enabled: Bool) -> Bool {
+    let ok = recordingCoordinator.setTelemetryRecordingEnabled(enabled)
+    if enabled && ok { startLocationUpdates() }
+    onStateChanged?()
+    return ok
+  }
 
   // MARK: - Session lifecycle
 
@@ -163,6 +198,8 @@ internal final class ConnectionCoordinator: VescGattListener {
     sessionSequence += 1
     session = BoardSession(id: sessionSequence)
     self.config = config
+    recordingCoordinator.beginBoardSession(config: config)
+    gpsError = gpsMonitor.start()
     connectionSeq = sessionSequence
     connectedBoardId = config.appBoardId
     bleId = config.bleId
@@ -179,6 +216,8 @@ internal final class ConnectionCoordinator: VescGattListener {
     session?.invalidate()
     session = nil
     config = nil
+    recordingCoordinator.finishBoardSession(markerType: error == nil ? "disconnect" : "error")
+    gpsMonitor.stop()
     stopPolling()
     stopReconnect()
     gatt.disconnect()
@@ -188,6 +227,9 @@ internal final class ConnectionCoordinator: VescGattListener {
     boardName = nil
     boardError = error
     lastTelemetryAt = nil
+    latestLocation = nil
+    latestPreciseLocation = nil
+    recentLocations.removeAll(keepingCapacity: true)
     settleConnect(success: false, code: error == nil ? nil : "DISCONNECTED", message: error)
     setPhase(phase)
   }
@@ -226,6 +268,8 @@ internal final class ConnectionCoordinator: VescGattListener {
     session?.invalidate()
     session = nil
     config = nil
+    recordingCoordinator.failSession()
+    gpsMonitor.stop()
     stopPolling()
     stopReconnect()
     gatt.disconnect()
@@ -380,6 +424,9 @@ internal final class ConnectionCoordinator: VescGattListener {
   private func markBoardReady() {
     guard phase == .waitingForTelemetry else { return }
     boardError = nil
+    if let config {
+      recordingCoordinator.markBoardReady(config: config)
+    }
     setPhase(.connected)
   }
 
@@ -393,7 +440,14 @@ internal final class ConnectionCoordinator: VescGattListener {
     )
     tick["generation"] = connectionSeq
     tick["remoteTilt"] = nil
+    if let latestPreciseLocation {
+      tick["location"] = latestPreciseLocation.map
+    }
     emit?("onLiveTick", tick)
+
+    if let capture = telemetryCapture(telemetry) {
+      recordingCoordinator.recordTelemetry(capture)
+    }
 
     // Decimated ~1Hz series for sparklines + battery gauge (native downsamples the live window).
     liveSeries.add(tick)
@@ -411,6 +465,45 @@ internal final class ConnectionCoordinator: VescGattListener {
     emit?("onTelemetryHistory", ["samples": historyBuffer])
     historyBuffer.removeAll(keepingCapacity: true)
     lastHistoryFlushAt = nowMs()
+  }
+
+  private func telemetryCapture(_ telemetry: RefloatTelemetry) -> TelemetryCapture? {
+    guard let config else { return nil }
+    let canId: Int?
+    if case let .can(id) = config.transport {
+      canId = id
+    } else {
+      canId = nil
+    }
+    return TelemetryCapture(
+      capturedAtMs: telemetry.lastPacketAt,
+      elapsedRealtimeMs: elapsedMs(),
+      deviceId: config.bleId,
+      deviceName: config.name,
+      canId: canId,
+      telemetry: telemetry,
+      location: latestPreciseLocation
+    )
+  }
+
+  private func onLocationUpdated(_ location: TelemetryLocationCapture) {
+    latestLocation = location
+    if location.precise {
+      latestPreciseLocation = location
+      recentLocations.append(location.map)
+      pruneRecentLocations(now: location.timestamp)
+    }
+    emit?("onLocation", location.map)
+    onStateChanged?()
+  }
+
+  private func pruneRecentLocations(now: Int64) {
+    let windowMs = Int64(max(1, config?.liveHistoryLimitMinutes ?? 5)) * 60_000
+    let oldest = now - windowMs
+    recentLocations.removeAll { row in
+      guard let timestamp = (row["timestamp"] ?? nil) as? NSNumber else { return false }
+      return timestamp.int64Value < oldest
+    }
   }
 
   // MARK: - Polling (response-paced; ADR 0015 dumb connect)
@@ -484,4 +577,5 @@ internal final class ConnectionCoordinator: VescGattListener {
   }
 
   private func nowMs() -> Int64 { Int64(Date().timeIntervalSince1970 * 1000) }
+  private func elapsedMs() -> Int64 { Int64(ProcessInfo.processInfo.systemUptime * 1000.0) }
 }

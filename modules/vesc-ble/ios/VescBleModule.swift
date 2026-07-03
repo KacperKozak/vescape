@@ -644,6 +644,8 @@ final class AppDataRepository {
     "lastGpsLatitude": NSNull(),
     "lastGpsLongitude": NSNull(),
     "movingSpeedThresholdKmh": 3,
+    "freeSpinMaxSpeedDeltaKmh": DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH,
+    "freeSpinStationaryBoardCapKmh": DEFAULT_FREE_SPIN_STATIONARY_BOARD_CAP_KMH,
     "telemetryPollRateHz": 20,
     "historyMetricGradientsEnabled": true,
     "historyMetricHotRanges": [
@@ -745,8 +747,8 @@ private extension Double {
 // (VescGattClient + ConnectionCoordinator); app data delegates to GRDB, while later iOS
 // subsystems still keep bridge-shaped stubs.
 /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt
-/// TODO(iOS parity): port location, alert evaluation/playback, Group Ride, debug recording,
-/// telemetry history, backup, and config subsystems to match Android API/events/errors (#60–#63).
+/// TODO(iOS parity): port alert evaluation/playback, Group Ride, debug recording, backup, and
+/// config subsystems to match Android API/events/errors (#61–#63).
 public class VescBleModule: Module {
 
   // MARK: - Session state
@@ -758,7 +760,7 @@ public class VescBleModule: Module {
   private var activeProbe: BoardTransportDetector?
 
   private lazy var coordinator: ConnectionCoordinator = {
-    let coordinator = ConnectionCoordinator()
+    let coordinator = ConnectionCoordinator(appData: self.appData)
     coordinator.emit = { [weak self] name, body in
       self?.sendEvent(name, body)
     }
@@ -799,11 +801,11 @@ public class VescBleModule: Module {
     // MARK: Location
 
     Function("startLocationUpdates") {
-      self.emitUnsupported("iOS location updates are not implemented yet")
+      self.coordinator.startLocationUpdates()
     }
 
     Function("stopLocationUpdates") {
-      // No location work started yet on iOS.
+      self.coordinator.stopLocationUpdates()
     }
 
     // MARK: Group Ride (Android native implementation; iOS keeps bridge shape)
@@ -836,8 +838,10 @@ public class VescBleModule: Module {
 
     // MARK: Telemetry recording toggle
 
-    Function("setTelemetryRecordingEnabled") { (_: Bool) in
-      // No persistent storage until iOS storage lands.
+    Function("setTelemetryRecordingEnabled") { (enabled: Bool) in
+      if !self.coordinator.setTelemetryRecordingEnabled(enabled), enabled {
+        self.sendEvent("onError", ["message": "Recording requires a connected board"])
+      }
     }
 
     Function("reloadAlertRules") {
@@ -921,22 +925,18 @@ public class VescBleModule: Module {
       DispatchQueue.main.async { self.startProbe(bleId: bleId, promise: promise) }
     }
 
-    // MARK: Telemetry history (empty stubs)
+    // MARK: Telemetry history
 
-    AsyncFunction("getTelemetryHistory") { (_: [String: Any], promise: Promise) in
-      promise.resolve([] as [Any])
+    AsyncFunction("getTelemetryHistory") { (options: [String: Any], promise: Promise) in
+      promise.resolve(TelemetryRepository.shared.getHistory(options))
     }
 
-    AsyncFunction("getTelemetrySamples") { (_: [String: Any], promise: Promise) in
-      promise.resolve([] as [Any])
+    AsyncFunction("getTelemetrySamples") { (options: [String: Any], promise: Promise) in
+      promise.resolve(TelemetryRepository.shared.getSamples(options))
     }
 
-    AsyncFunction("getHistoryRange") { (_: [String: Any], promise: Promise) in
-      promise.resolve([
-        "boardSamples": [] as [Any],
-        "gpsSamples": [] as [Any],
-        "markers": [] as [Any],
-      ])
+    AsyncFunction("getHistoryRange") { (options: [String: Any], promise: Promise) in
+      promise.resolve(TelemetryRepository.shared.getRange(options))
     }
 
     AsyncFunction("getDiagnosticEvents") { (_: [String: Any], promise: Promise) in
@@ -948,13 +948,7 @@ public class VescBleModule: Module {
     }
 
     AsyncFunction("getTelemetrySummary") { (promise: Promise) in
-      promise.resolve([
-        "sampleCount": 0,
-        "gpsPointCount": 0,
-        "firstAtMs": nil,
-        "lastAtMs": nil,
-        "droppedPendingSamples": 0,
-      ] as [String: Any?])
+      promise.resolve(TelemetryRepository.shared.getSummary())
     }
 
     AsyncFunction("getDatabaseSizeBytes") { () -> Int in
@@ -1012,15 +1006,16 @@ public class VescBleModule: Module {
       promise.resolve([] as [Any])
     }
 
-    AsyncFunction("deleteTelemetryBefore") { (_: Double, promise: Promise) in
-      promise.resolve(0)
+    AsyncFunction("deleteTelemetryBefore") { (beforeMs: Double, promise: Promise) in
+      promise.resolve(TelemetryRepository.shared.deleteBefore(Int64(beforeMs)))
     }
 
-    AsyncFunction("deleteTelemetryRange") { (_: [String: Any], promise: Promise) in
-      promise.resolve(0)
+    AsyncFunction("deleteTelemetryRange") { (options: [String: Any], promise: Promise) in
+      promise.resolve(TelemetryRepository.shared.deleteRange(options))
     }
 
     AsyncFunction("clearTelemetryHistory") { (promise: Promise) in
+      TelemetryRepository.shared.clearAll()
       promise.resolve(nil)
     }
 
@@ -1180,7 +1175,7 @@ public class VescBleModule: Module {
     return [
       "board": [
         "phase": coordinator.phase.rawValue,
-        "selectedBoardId": selectedBoardId ?? settings["selectedBoardId"],
+        "selectedBoardId": selectedBoardId ?? (settings["selectedBoardId"] ?? nil),
         "connectedBoardId": coordinator.connectedBoardId,
         "bleId": coordinator.bleId,
         "name": coordinator.boardName,
@@ -1192,12 +1187,12 @@ public class VescBleModule: Module {
         "remoteTilt": coordinator.remoteTiltState(),
       ] as [String: Any?],
       "gps": [
-        "phase": "idle",
-        "latestFix": nil,
-        "latestApproximateFix": nil,
-        "latestPreciseFix": nil,
-        "recentLocations": [] as [Any],
-        "error": nil,
+        "phase": coordinator.gpsActive() ? "active" : "idle",
+        "latestFix": coordinator.gpsLatestLocation(),
+        "latestApproximateFix": coordinator.gpsLatestLocation(),
+        "latestPreciseFix": coordinator.gpsLatestPreciseLocation(),
+        "recentLocations": coordinator.gpsRecentLocations(),
+        "error": coordinator.gpsLastError(),
       ] as [String: Any?],
       "scan": [
         "phase": coordinator.scanPhase,
@@ -1205,10 +1200,10 @@ public class VescBleModule: Module {
         "error": coordinator.scanError,
       ] as [String: Any?],
       "recording": [
-        "enabled": false,
+        "enabled": coordinator.telemetryRecordingEnabled(),
         "paused": false,
-        "activeBoardId": nil,
-        "startedAt": nil,
+        "activeBoardId": coordinator.recordingActiveBoardId(),
+        "startedAt": coordinator.recordingStartedAt(),
       ] as [String: Any?],
     ]
   }
