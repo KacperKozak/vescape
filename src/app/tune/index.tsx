@@ -34,6 +34,7 @@ import { TuneGroupGrid } from '@/components/ui/tune/TuneGroupGrid'
 import { TuneSyncBar } from '@/components/ui/tune/TuneSyncBar'
 import { TunePreview } from '@/components/ui/tune/TunePreview'
 import { RiderBalanceControl } from '@/components/ui/tune/RiderBalanceControl'
+import { TunePreviewScenarioControls } from '@/components/ui/tune/TunePreviewScenarioControls'
 import { routes } from '@/navigation/routes'
 import { TextPromptModal } from '@/components/ui/modals/TextPromptModal'
 import { BoardPickerModal } from '@/components/domain/tune/BoardPickerModal'
@@ -50,6 +51,7 @@ export default function TuneScreen() {
   const insets = useSafeAreaInsets()
   const isFocused = useIsFocused()
   const [riderLean, setRiderLean] = useState(0)
+  const [previewSpeedKmh, setPreviewSpeedKmh] = useState(15)
   const [previewHelpVisible, setPreviewHelpVisible] = useState(false)
   const {
     activeProfile,
@@ -168,6 +170,7 @@ export default function TuneScreen() {
             <TunePreview
               fields={profileFields ?? {}}
               riderLean={riderLean}
+              speedKmh={previewSpeedKmh}
               active={isFocused}
               onHelp={() => setPreviewHelpVisible(true)}
             />
@@ -184,6 +187,11 @@ export default function TuneScreen() {
               variant="warning"
               title="Work in progress"
               message="Tune editing is experimental. Do not sync changes to the board until this feature is stable."
+            />
+
+            <TunePreviewScenarioControls
+              speedKmh={previewSpeedKmh}
+              onSpeedChange={setPreviewSpeedKmh}
             />
 
             {profileError ? (
@@ -398,7 +406,7 @@ export default function TuneScreen() {
       <InfoModal
         visible={previewHelpVisible}
         title="About Tune Preview"
-        message="Comparative model only. It does not model motor power, traction, rider mass, exact Board geometry, or nosedive limits. Angle and response timing are not real measurements or safety predictions. The model assumes forward riding, synthetic flat terrain, fixed reference geometry, and an ideal drive with no power limit. It uses the current bundled legacy Refloat model; Carve Tilt requires a turn scenario and is not shown in this side view."
+        message="Comparative model only. It does not model motor power, traction, rider mass, exact Board geometry, or nosedive limits. Angle, speed, current, and response timing are not real measurements or safety predictions. The model assumes forward riding, synthetic flat terrain, a reference 11-inch wheel, fixed geometry, and an ideal drive with no power limit. Speed uses the comparative conversion 3.5 km/h = 1000 ERPM; it is not Board calibration. It uses the current bundled legacy Refloat model; Carve Tilt requires a turn scenario and is not shown in this side view."
         onDismiss={() => setPreviewHelpVisible(false)}
       />
 

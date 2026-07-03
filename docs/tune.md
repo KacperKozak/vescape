@@ -8,6 +8,16 @@ comparative ideal-drive model. Synthetic Rider Lean applies a sustained normaliz
 it does not request an angle, speed, acceleration, or motor output. The model intentionally omits
 motor-power, traction, rider-mass, exact-geometry, and nosedive limits.
 
+Longitudinal preview speed uses the bundled schema's documented reference conversion for an
+11-inch tire on a 30-pole Hypercore motor: `3.5 km/h = 1000 ERPM`. This is a named comparative
+constant, not Board-specific wheel calibration. Torque Tilt and Brake Tilt transition behavior is
+derived from Refloat v1.2.1 `torque_tilt.c` and `brake_tilt.c` (GPL-3.0-or-later), matching the
+legacy field model bundled by the app rather than Refloat 1.3 smoothing.
+
+Tune Profiles saved before the ERPM thresholds entered the app allowlist use the bundled schema
+defaults (`500 ERPM` constant, `0 ERPM` variable). The preview labels this fallback; fresh profiles
+retain the decoded fields explicitly.
+
 This document captures practical tune-screen behavior used by a Refloat-focused
 board app. It is intended as product and implementation reference for building a
 safe tuning UI in this app.

@@ -37,7 +37,8 @@ const FIELD_INFO: Record<string, string> = {
   torquetilt_angle_limit: 'Maximum angle torque tiltback is allowed to apply.',
   torquetilt_on_speed: 'Maximum speed where torque tiltback can be applied.',
   torquetilt_off_speed: 'Maximum speed where torque tiltback can be released.',
-  turntilt_strength: 'Turn tiltback strength. The basic Carve tilt control writes this directly.',
+  turntilt_strength:
+    'Turn tiltback strength. The basic Carve tilt control writes this directly. Tune Preview does not show it because Carve Tilt requires a turn scenario.',
   turntilt_angle_limit: 'Maximum turn tiltback angle.',
   turntilt_start_angle: 'Turn aggregate threshold before turn tiltback response starts.',
   turntilt_start_erpm: 'ERPM threshold before turn tiltback response starts.',
@@ -48,8 +49,10 @@ const FIELD_INFO: Record<string, string> = {
   braketilt_strength: 'Brake tilt strength. The basic Brake tilt control writes this directly.',
   braketilt_lingering: 'Controls how brake tilt lingers or releases after braking.',
   tiltback_constant: 'Constant nose angle offset.',
+  tiltback_constant_erpm: 'Forward speed threshold where Constant Tiltback begins.',
   tiltback_variable: 'Variable tiltback amount per ERPM.',
   tiltback_variable_max: 'Maximum variable tiltback target.',
+  tiltback_variable_erpm: 'Forward speed threshold where Variable Tiltback begins.',
 }
 
 export interface BasicSliderItem {

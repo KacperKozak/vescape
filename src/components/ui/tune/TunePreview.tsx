@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { useEffect, useMemo, useRef } from 'react'
+import { StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native'
 import { QuestionIcon } from 'phosphor-react-native'
-import Svg, { Circle, Line } from 'react-native-svg'
+import Svg, { Circle, G, Line } from 'react-native-svg'
+import Animated, { useAnimatedProps, useSharedValue } from 'react-native-reanimated'
 import type { TuneProfileFieldValue } from 'vesc-ble'
 
 import { IconButton } from '@/components/ui/base/IconButton'
@@ -9,27 +10,54 @@ import { theme } from '@/constants/theme'
 import {
   createTunePreviewModel,
   createTunePreviewState,
+  groundTravelToVisualOffset,
   stepTunePreview,
 } from '@/lib/tune/tunePreview'
 
 interface TunePreviewProps {
   fields: Record<string, TuneProfileFieldValue>
   riderLean: number
+  speedKmh: number
   active?: boolean
   onHelp: () => void
 }
 
-const CENTER_X = 150
 const GROUND_Y = 104
 const WHEEL_RADIUS = 25
 const DECK_HALF_LENGTH = 72
 const DECK_CENTER_Y = GROUND_Y - WHEEL_RADIUS
+const GROUND_TICK_SPACING = 30
+const AnimatedLine = Animated.createAnimatedComponent(Line)
+const AnimatedGroup = Animated.createAnimatedComponent(G)
+const AnimatedTextInput = Animated.createAnimatedComponent(TextInput)
 
-export function TunePreview({ fields, riderLean, active = true, onHelp }: TunePreviewProps) {
+export function TunePreview({
+  fields,
+  riderLean,
+  speedKmh,
+  active = true,
+  onHelp,
+}: TunePreviewProps) {
   const model = useMemo(() => createTunePreviewModel(fields), [fields])
-  const [state, setState] = useState(createTunePreviewState)
-  const stateRef = useRef(state)
+  const { width: canvasWidth } = useWindowDimensions()
+  const stateRef = useRef(createTunePreviewState())
   const lastTimestampRef = useRef<number | null>(null)
+  const angleDegrees = useSharedValue(0)
+  const targetAngleDegrees = useSharedValue(0)
+  const groundOffset = useSharedValue(0)
+  const centerX = canvasWidth / 2
+
+  const deckAnimatedProps = useAnimatedProps(() => lineForAngle(angleDegrees.value, centerX))
+  const targetAnimatedProps = useAnimatedProps(() =>
+    lineForAngle(targetAngleDegrees.value, centerX),
+  )
+  const groundAnimatedProps = useAnimatedProps(() => ({
+    transform: [{ translateX: groundOffset.value }],
+  }))
+  const angleTextAnimatedProps = useAnimatedProps(() => {
+    const value = `${angleDegrees.value.toFixed(1)}°`
+    return { text: value, value }
+  })
 
   useEffect(() => {
     if (!active || model.status !== 'ready') {
@@ -45,11 +73,13 @@ export function TunePreview({ fields, riderLean, active = true, onHelp }: TunePr
         const next = stepTunePreview(
           stateRef.current,
           model.parameters,
-          { riderLean },
+          { riderLean, speedKmh },
           (timestamp - previous) / 1000,
         )
         stateRef.current = next
-        setState(next)
+        angleDegrees.value = next.angleDegrees
+        targetAngleDegrees.value = next.targetAngleDegrees
+        groundOffset.value = groundTravelToVisualOffset(next.groundTravelMeters)
       }
       frame = requestAnimationFrame(tick)
     }
@@ -58,17 +88,19 @@ export function TunePreview({ fields, riderLean, active = true, onHelp }: TunePr
       cancelAnimationFrame(frame)
       lastTimestampRef.current = null
     }
-  }, [active, model, riderLean])
-
-  const deck = lineForAngle(state.angleDegrees)
-  const target = lineForAngle(state.targetAngleDegrees)
+  }, [active, angleDegrees, groundOffset, model, riderLean, speedKmh, targetAngleDegrees])
 
   return (
     <View style={styles.card}>
       <View style={styles.header}>
         <View>
           <Text style={styles.title}>Tune Preview</Text>
-          <Text style={styles.subtitle}>Comparative ideal response · 15 km/h</Text>
+          <Text style={styles.subtitle}>
+            Comparative ideal response · {speedKmh.toFixed(0)} km/h
+          </Text>
+          {model.status === 'ready' && model.assumedFields.length > 0 ? (
+            <Text style={styles.assumption}>Bundled Tiltback thresholds</Text>
+          ) : null}
         </View>
         <IconButton icon={QuestionIcon} onPress={onHelp} />
       </View>
@@ -83,37 +115,44 @@ export function TunePreview({ fields, riderLean, active = true, onHelp }: TunePr
           <Svg
             width="100%"
             height={122}
-            viewBox="0 0 300 122"
+            viewBox={`0 0 ${canvasWidth} 122`}
             accessibilityLabel="Board angle preview"
           >
-            <Line
-              x1={target.x1}
-              y1={target.y1}
-              x2={target.x2}
-              y2={target.y2}
+            <AnimatedLine
+              animatedProps={targetAnimatedProps}
               stroke={theme.palette.purple.light}
               strokeWidth={1}
               strokeDasharray="6 5"
             />
-            <Line
-              x1={deck.x1}
-              y1={deck.y1}
-              x2={deck.x2}
-              y2={deck.y2}
+            <AnimatedLine
+              animatedProps={deckAnimatedProps}
               stroke={theme.palette.sky.color}
               strokeWidth={1}
               strokeLinecap="round"
             />
             <Circle
-              cx={CENTER_X}
+              cx={centerX}
               cy={GROUND_Y - WHEEL_RADIUS}
               r={WHEEL_RADIUS}
               fill={theme.palette.slate.surfaceDeep}
               stroke={theme.palette.slate.textSecondary}
               strokeWidth={1}
             />
+            <AnimatedGroup animatedProps={groundAnimatedProps}>
+              {groundTicks(canvasWidth).map((x, index) => (
+                <Line
+                  key={index}
+                  x1={x}
+                  y1={GROUND_Y}
+                  x2={x - 4}
+                  y2={GROUND_Y + 6}
+                  stroke={theme.palette.slate.textMuted}
+                  strokeWidth={1}
+                />
+              ))}
+            </AnimatedGroup>
             <Circle
-              cx={CENTER_X}
+              cx={centerX}
               cy={GROUND_Y - WHEEL_RADIUS}
               r={4}
               fill={theme.palette.slate.textSecondary}
@@ -121,7 +160,7 @@ export function TunePreview({ fields, riderLean, active = true, onHelp }: TunePr
             <Line
               x1={0}
               y1={GROUND_Y}
-              x2={300}
+              x2={canvasWidth}
               y2={GROUND_Y}
               stroke={theme.palette.slate.textMuted}
               strokeWidth={1}
@@ -136,7 +175,12 @@ export function TunePreview({ fields, riderLean, active = true, onHelp }: TunePr
               <View style={styles.targetSwatch} />
               <Text style={styles.legendText}>Target</Text>
             </View>
-            <Text style={styles.angle}>{state.angleDegrees.toFixed(1)}°</Text>
+            <AnimatedTextInput
+              editable={false}
+              defaultValue="0.0°"
+              animatedProps={angleTextAnimatedProps}
+              style={styles.angle}
+            />
           </View>
         </>
       )}
@@ -144,11 +188,19 @@ export function TunePreview({ fields, riderLean, active = true, onHelp }: TunePr
   )
 }
 
-function lineForAngle(angleDegrees: number) {
+function lineForAngle(angleDegrees: number, centerX: number) {
+  'worklet'
   const radians = (-angleDegrees * Math.PI) / 180
   const dx = Math.cos(radians) * DECK_HALF_LENGTH
   const dy = Math.sin(radians) * DECK_HALF_LENGTH
-  return { x1: CENTER_X - dx, y1: DECK_CENTER_Y - dy, x2: CENTER_X + dx, y2: DECK_CENTER_Y + dy }
+  return { x1: centerX - dx, y1: DECK_CENTER_Y - dy, x2: centerX + dx, y2: DECK_CENTER_Y + dy }
+}
+
+function groundTicks(canvasWidth: number): number[] {
+  return Array.from(
+    { length: Math.ceil(canvasWidth / GROUND_TICK_SPACING) + 1 },
+    (_, index) => index * GROUND_TICK_SPACING,
+  )
 }
 
 const styles = StyleSheet.create({
@@ -161,6 +213,7 @@ const styles = StyleSheet.create({
   },
   title: { color: theme.palette.slate.textPrimary, fontSize: 14, fontWeight: '900' },
   subtitle: { color: theme.palette.slate.textMuted, fontSize: 10, fontWeight: '600', marginTop: 2 },
+  assumption: { color: theme.palette.amber.text, fontSize: 9, fontWeight: '700', marginTop: 2 },
   unsupported: { height: 122, alignItems: 'center', justifyContent: 'center', gap: 5 },
   unsupportedTitle: { color: theme.palette.slate.textPrimary, fontSize: 13, fontWeight: '800' },
   unsupportedText: { color: theme.palette.slate.textMuted, fontSize: 11 },
@@ -175,5 +228,12 @@ const styles = StyleSheet.create({
     borderColor: theme.palette.purple.light,
   },
   legendText: { color: theme.palette.slate.textMuted, fontSize: 10, fontWeight: '700' },
-  angle: { marginLeft: 'auto', color: theme.palette.slate.text, fontSize: 11, fontWeight: '800' },
+  angle: {
+    marginLeft: 'auto',
+    padding: 0,
+    color: theme.palette.slate.text,
+    fontSize: 11,
+    fontWeight: '800',
+    textAlign: 'right',
+  },
 })
