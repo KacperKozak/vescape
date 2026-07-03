@@ -195,6 +195,7 @@ class RefloatConfigProtocolTest {
     val payload = RefloatConfigProtocol.buildSetCustomConfig(
       transport = BoardTransport.Can(7),
       confInd = 0,
+      packageSignature = 0x12345678L,
       configBytes = configBytes,
     )
 
@@ -204,6 +205,10 @@ class RefloatConfigProtocolTest {
         7,
         COMM_SET_CUSTOM_CONFIG.toByte(),
         0,
+        0x12,
+        0x34,
+        0x56,
+        0x78,
         1, 2, 3, 4,
       ),
       payload,
@@ -212,14 +217,14 @@ class RefloatConfigProtocolTest {
 
   @Test
   fun parsesSetCustomConfigResponse() {
-    val payload = byteArrayOf(COMM_SET_CUSTOM_CONFIG.toByte(), 0)
+    val payload = byteArrayOf(COMM_SET_CUSTOM_CONFIG.toByte())
     val confInd = RefloatConfigProtocol.parseSetCustomConfigResponse(payload).success()
     assertEquals(0, confInd)
   }
 
   @Test
   fun parsesForwardedSetCustomConfigResponse() {
-    val payload = byteArrayOf(COMM_FORWARD_CAN.toByte(), 7, COMM_SET_CUSTOM_CONFIG.toByte(), 0)
+    val payload = byteArrayOf(COMM_FORWARD_CAN.toByte(), 7, COMM_SET_CUSTOM_CONFIG.toByte())
     val confInd = RefloatConfigProtocol.parseSetCustomConfigResponse(payload).success()
     assertEquals(0, confInd)
   }
@@ -233,11 +238,11 @@ class RefloatConfigProtocolTest {
   }
 
   @Test
-  fun rejectsShortSetConfigResponse() {
-    val failure = RefloatConfigProtocol
-      .parseSetCustomConfigResponse(byteArrayOf(COMM_SET_CUSTOM_CONFIG.toByte()))
-      .failure()
-    assertEquals("Short Refloat set config response: 1 bytes", failure.message)
+  fun parsesLegacySetConfigResponseWithConfigIndex() {
+    val confInd = RefloatConfigProtocol
+      .parseSetCustomConfigResponse(byteArrayOf(COMM_SET_CUSTOM_CONFIG.toByte(), 0))
+      .success()
+    assertEquals(0, confInd)
   }
 
   // --- Direct connection tests ---
@@ -281,6 +286,7 @@ class RefloatConfigProtocolTest {
     val payload = RefloatConfigProtocol.buildSetCustomConfig(
       transport = BoardTransport.Direct,
       confInd = 0,
+      packageSignature = 0x12345678L,
       configBytes = configBytes,
     )
 
@@ -288,6 +294,10 @@ class RefloatConfigProtocolTest {
       byteArrayOf(
         COMM_SET_CUSTOM_CONFIG.toByte(),
         0,
+        0x12,
+        0x34,
+        0x56,
+        0x78,
         1, 2, 3, 4,
       ),
       payload,

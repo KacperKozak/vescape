@@ -1,6 +1,7 @@
 package expo.modules.vescble.config
 
 import expo.modules.vescble.BoardTransport
+import expo.modules.vescble.RefloatConfigBytes
 import expo.modules.vescble.RefloatConfigDecodeException
 import expo.modules.vescble.RefloatConfigDecoder
 import expo.modules.vescble.RefloatConfigEncodeException
@@ -220,7 +221,7 @@ internal object ConfigRWFsm {
                 is RefloatConfigProtocolResult.Success -> encodeAndSendWrite(
                     state.ctx,
                     state.xmlBytes,
-                    parsed.value.config,
+                    parsed.value,
                 )
             }
         }
@@ -422,43 +423,51 @@ internal object ConfigRWFsm {
     private fun encodeAndSendWrite(
         ctx: WriteContext,
         xmlBytes: ByteArray,
-        rawConfig: ByteArray,
-    ): Pair<ConfigRWState, List<ConfigRWEffect>> = try {
-        val schema = RefloatConfigSchemaParser.parse(xmlBytes)
-        val patched = RefloatConfigEncoder.encode(schema, rawConfig, ctx.profileFields)
-        ConfigRWState.WriteAwaitingSetAck(
-            ctx = ctx,
-            schema = schema,
-            originalConfig = rawConfig,
-            patchedConfig = patched,
-        ) to listOf(
-            ConfigRWEffect.CancelTimeout,
-            ConfigRWEffect.ScheduleTimeout(
-                RefloatConfigErrorCode.CONFIG_WRITE_TIMEOUT,
-                CONFIG_WRITE_TIMEOUT_MS,
-            ),
-            ConfigRWEffect.SendFrame(
-                RefloatConfigProtocol.buildSetCustomConfig(ctx.transport, 0, patched),
-            ),
-        )
-    } catch (e: RefloatConfigSchemaException) {
-        writeFailure(
-            ctx, RefloatConfigErrorCode.UNSUPPORTED_SCHEMA,
-            e.message ?: "Unsupported schema",
-            phase = ConfigWritePhaseTag.READING_CONFIG, rawConfig = rawConfig,
-        )
-    } catch (e: RefloatConfigEncodeException) {
-        writeFailure(
-            ctx, RefloatConfigErrorCode.CONFIG_ENCODE_FAILED,
-            e.message ?: "Encode failed",
-            phase = ConfigWritePhaseTag.READING_CONFIG, rawConfig = rawConfig,
-        )
-    } catch (e: Exception) {
-        writeFailure(
-            ctx, RefloatConfigErrorCode.CONFIG_WRITE_FAILED,
-            e.message ?: "Write failed",
-            phase = ConfigWritePhaseTag.READING_CONFIG, rawConfig = rawConfig,
-        )
+        configBytes: RefloatConfigBytes,
+    ): Pair<ConfigRWState, List<ConfigRWEffect>> {
+        val rawConfig = configBytes.config
+        return try {
+            val schema = RefloatConfigSchemaParser.parse(xmlBytes)
+            val patched = RefloatConfigEncoder.encode(schema, rawConfig, ctx.profileFields)
+            ConfigRWState.WriteAwaitingSetAck(
+                ctx = ctx,
+                schema = schema,
+                originalConfig = rawConfig,
+                patchedConfig = patched,
+            ) to listOf(
+                ConfigRWEffect.CancelTimeout,
+                ConfigRWEffect.ScheduleTimeout(
+                    RefloatConfigErrorCode.CONFIG_WRITE_TIMEOUT,
+                    CONFIG_WRITE_TIMEOUT_MS,
+                ),
+                ConfigRWEffect.SendFrame(
+                    RefloatConfigProtocol.buildSetCustomConfig(
+                        ctx.transport,
+                        0,
+                        configBytes.packageSignature,
+                        patched,
+                    ),
+                ),
+            )
+        } catch (e: RefloatConfigSchemaException) {
+            writeFailure(
+                ctx, RefloatConfigErrorCode.UNSUPPORTED_SCHEMA,
+                e.message ?: "Unsupported schema",
+                phase = ConfigWritePhaseTag.READING_CONFIG, rawConfig = rawConfig,
+            )
+        } catch (e: RefloatConfigEncodeException) {
+            writeFailure(
+                ctx, RefloatConfigErrorCode.CONFIG_ENCODE_FAILED,
+                e.message ?: "Encode failed",
+                phase = ConfigWritePhaseTag.READING_CONFIG, rawConfig = rawConfig,
+            )
+        } catch (e: Exception) {
+            writeFailure(
+                ctx, RefloatConfigErrorCode.CONFIG_WRITE_FAILED,
+                e.message ?: "Write failed",
+                phase = ConfigWritePhaseTag.READING_CONFIG, rawConfig = rawConfig,
+            )
+        }
     }
 
     private fun verifyAndCompleteWrite(

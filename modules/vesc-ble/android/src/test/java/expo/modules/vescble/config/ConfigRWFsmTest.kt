@@ -110,6 +110,10 @@ class ConfigRWFsmTest {
             sentFrame.payload.size >= 4 &&
                 sentFrame.payload[2].toInt() and 0xff == COMM_SET_CUSTOM_CONFIG,
         )
+        assertEquals(0x12, sentFrame.payload[4].toInt() and 0xff)
+        assertEquals(0x34, sentFrame.payload[5].toInt() and 0xff)
+        assertEquals(0x56, sentFrame.payload[6].toInt() and 0xff)
+        assertEquals(0x78, sentFrame.payload[7].toInt() and 0xff)
         val patchedConfig = (afterConfig as ConfigRWState.WriteAwaitingSetAck).patchedConfig
         val patchedKp = ByteBuffer.wrap(patchedConfig).order(ByteOrder.BIG_ENDIAN).float
         assertEquals(33.0f, patchedKp, 0.001f)
@@ -390,7 +394,7 @@ class ConfigRWFsmTest {
             .put((canId ?: 0).toByte())
             .put(COMM_GET_CUSTOM_CONFIG.toByte())
             .put(0.toByte())
-            .putInt(0) // package signature
+            .putInt(0x12345678) // package signature
             .put(config)
         return buf.array()
     }
@@ -399,6 +403,5 @@ class ConfigRWFsmTest {
         COMM_FORWARD_CAN.toByte(),
         (canId ?: 0).toByte(),
         COMM_SET_CUSTOM_CONFIG.toByte(),
-        0,
     )
 }
