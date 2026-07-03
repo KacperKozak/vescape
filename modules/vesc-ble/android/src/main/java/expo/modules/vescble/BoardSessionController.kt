@@ -420,6 +420,7 @@ internal class BoardSessionController(private val service: VescForegroundService
     private var batteryConfigCache: Map<String, Any?>? = null
     /** Median window producing the Battery SoC Estimate for display + alerts (ADR-0016). */
     private val socWindow = SocMedianWindow()
+    private var lastBatteryPersistedAt = 0L
     private var boardStatus: BoardPhase = BoardPhase.Idle
     private var boardError: String? = null
     private var telemetry: RefloatTelemetry? = null
@@ -920,6 +921,7 @@ internal class BoardSessionController(private val service: VescForegroundService
                     when (payload[2].toInt() and 0xff) {
                         COMM_BMS_GET_VALUES -> handleBmsPayload(payload.copyOfRange(2, payload.size))
                         COMM_FW_VERSION -> handleFwVersionPayload(payload.copyOfRange(2, payload.size))
+                        COMM_CUSTOM_APP_DATA -> handleCustomAppPayload(payload)
                         COMM_GET_CUSTOM_CONFIG_XML -> configController.onPayload(ConfigRWEvent.XmlPayloadReceived(payload))
                         COMM_GET_CUSTOM_CONFIG -> configController.onPayload(
                             ConfigRWEvent.ConfigBytesPayloadReceived(payload, System.currentTimeMillis()),
@@ -928,42 +930,64 @@ internal class BoardSessionController(private val service: VescForegroundService
                     }
                 }
             }
-            COMM_CUSTOM_APP_DATA -> {
-                val now = System.currentTimeMillis()
-                val parsed = parseRefloatGetAllData(
-                    payload = payload,
-                    avgLatency = updateLatency(now),
-                    packetAt = now,
-                    location = locationTracker.latestLocation,
-                    pullRateHz = pollingLoop.measuredRateHz(),
-                ) ?: run {
-                    captureTelemetryParseFailed(payload)
-                    return
-                }
-                val sessionToken = boardSession ?: return
-                pollingLoop.onResponse()
-                val processed = telemetryPipeline.process(parsed, sessionToken) ?: return
-                markBoardReady()
-                telemetry = parsed
-                val batteryPct = BatterySocEstimator.estimateBatteryPercent(
-                    parsed.batteryVoltage,
-                    batteryConfigCache,
-                    parsed.batteryCurrent,
-                )
-                // Smooth the IR-compensated % into the Battery SoC Estimate; display + alerts share it.
-                val batteryEstimate = batteryPct?.let { socWindow.median(it, now) }
-                val firedAlerts = evaluateAlerts(parsed, batteryEstimate)
-                val eventMap = processed.eventMap
-                // Latest cold-path values for the dedicated watch tick (ADR-0019); the tick pushes them
-                // on its own cadence, so the wrist sees the same SoC Estimate + duty nulling as the phone.
-                latestBatterySoc = batteryEstimate
-                latestDutyExcluded = (eventMap["metricExclusions"] as? Map<*, *>)?.get(METRIC_MAX_DUTY) == true
-                if (firedAlerts.isNotEmpty()) eventMap["firedAlerts"] = firedAlerts
-                eventMap["generation"] = currentSessionId
-                eventMap["batteryPercent"] = batteryEstimate
-                val historySample = if (processed.metricExclusionUpdates.isNotEmpty()) {
-                    eventMap + mapOf("metricExclusionUpdates" to processed.metricExclusionUpdates)
-                } else eventMap
+            COMM_CUSTOM_APP_DATA -> handleCustomAppPayload(payload)
+        }
+    }
+
+    private fun handleCustomAppPayload(payload: ByteArray) {
+        if (payload.size >= 3 &&
+            (payload[1].toInt() and 0xff) == REFLOAT_MAGIC &&
+            (payload[2].toInt() and 0xff) == REFLOAT_GET_INFO
+        ) {
+            configController.onPayload(ConfigRWEvent.InfoPayloadReceived(payload))
+            return
+        }
+        if (payload.size >= 5 &&
+            (payload[0].toInt() and 0xff) == COMM_FORWARD_CAN &&
+            (payload[2].toInt() and 0xff) == COMM_CUSTOM_APP_DATA &&
+            (payload[3].toInt() and 0xff) == REFLOAT_MAGIC &&
+            (payload[4].toInt() and 0xff) == REFLOAT_GET_INFO
+        ) {
+            configController.onPayload(ConfigRWEvent.InfoPayloadReceived(payload))
+            return
+        }
+        if ((payload[0].toInt() and 0xff) == COMM_CUSTOM_APP_DATA) {
+            val now = System.currentTimeMillis()
+            val parsed = parseRefloatGetAllData(
+                payload = payload,
+                avgLatency = updateLatency(now),
+                packetAt = now,
+                location = locationTracker.latestLocation,
+                pullRateHz = pollingLoop.measuredRateHz(),
+            ) ?: run {
+                captureTelemetryParseFailed(payload)
+                return
+            }
+            val sessionToken = boardSession ?: return
+            pollingLoop.onResponse()
+            val processed = telemetryPipeline.process(parsed, sessionToken) ?: return
+            markBoardReady()
+            telemetry = parsed
+            val batteryPct = BatterySocEstimator.estimateBatteryPercent(
+                parsed.batteryVoltage,
+                batteryConfigCache,
+                parsed.batteryCurrent,
+            )
+            // Smooth the IR-compensated % into the Battery SoC Estimate; display + alerts share it.
+            val batteryEstimate = batteryPct?.let { socWindow.median(it, now) }
+            val firedAlerts = evaluateAlerts(parsed, batteryEstimate)
+            val eventMap = processed.eventMap
+            // Latest cold-path values for the dedicated watch tick (ADR-0019); the tick pushes them
+            // on its own cadence, so the wrist sees the same SoC Estimate + duty nulling as the phone.
+            latestBatterySoc = batteryEstimate
+            persistLastBattery(batteryEstimate, parsed.batteryVoltage, now)
+            latestDutyExcluded = (eventMap["metricExclusions"] as? Map<*, *>)?.get(METRIC_MAX_DUTY) == true
+            if (firedAlerts.isNotEmpty()) eventMap["firedAlerts"] = firedAlerts
+            eventMap["generation"] = currentSessionId
+            eventMap["batteryPercent"] = batteryEstimate
+            val historySample = if (processed.metricExclusionUpdates.isNotEmpty()) {
+                eventMap + mapOf("metricExclusionUpdates" to processed.metricExclusionUpdates)
+            } else eventMap
                 refreshNotification(telemetry = parsed, batteryPercent = batteryEstimate)
                 // Hot path: tiny scalar tick every frame drives the live gauges (SharedValues, no React render).
                 emitEvent("onLiveTick", buildLiveTick(parsed, batteryEstimate, currentSessionId, firedAlerts))
@@ -979,7 +1003,6 @@ internal class BoardSessionController(private val service: VescForegroundService
                 }
             }
         }
-    }
 
     private fun handleBmsPayload(payload: ByteArray) {
         val bms = parseBmsValues(payload, System.currentTimeMillis()) ?: return
@@ -1201,6 +1224,8 @@ internal class BoardSessionController(private val service: VescForegroundService
     }
 
     private fun stopCurrentBoardSession(emitDisconnected: Boolean, updateNotification: Boolean = true) {
+        // Final write so the persisted last battery is fresh, not up to 30s stale.
+        persistLastBattery(latestBatterySoc, telemetry?.batteryVoltage, System.currentTimeMillis(), force = true)
         remoteTiltController.stop()
         flushTelemetryDiagnostics("stop")
         configController.onSessionTerminated("Board session stopped during Refloat config op")
@@ -1229,6 +1254,18 @@ internal class BoardSessionController(private val service: VescForegroundService
         transitionBoardPhase(BoardPhase.Idle)
         if (updateNotification && !isStoppingService && stoppedConfig != null) {
             presenter.show(reportedBoardPhase())
+        }
+    }
+
+    /** Persist the last Battery SoC Estimate per board so it survives full app kill (#152).
+     *  Throttled like the GPS persist in [LocationTracker]; `force` skips the gate on session end. */
+    private fun persistLastBattery(percent: Double?, voltage: Double?, now: Long, force: Boolean = false) {
+        if (percent == null) return
+        val boardId = boardConfig?.appBoardId ?: return
+        if (!force && now - lastBatteryPersistedAt < 30_000L) return
+        lastBatteryPersistedAt = now
+        VescForegroundService.appDataScope.launch {
+            AppDataRepository.get(service.applicationContext).updateLastBattery(boardId, percent, voltage, now)
         }
     }
 

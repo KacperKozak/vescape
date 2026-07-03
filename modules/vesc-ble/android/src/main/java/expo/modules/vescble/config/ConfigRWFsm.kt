@@ -1,6 +1,7 @@
 package expo.modules.vescble.config
 
 import expo.modules.vescble.BoardTransport
+import expo.modules.vescble.RefloatConfigBytes
 import expo.modules.vescble.RefloatConfigDecodeException
 import expo.modules.vescble.RefloatConfigDecoder
 import expo.modules.vescble.RefloatConfigEncodeException
@@ -26,6 +27,7 @@ internal object ConfigRWFsm {
     ): Pair<ConfigRWState, List<ConfigRWEffect>> = when (event) {
         is ConfigRWEvent.StartRead -> onStartRead(state, event)
         is ConfigRWEvent.StartWrite -> onStartWrite(state, event)
+        is ConfigRWEvent.InfoPayloadReceived -> onInfo(state, event)
         is ConfigRWEvent.XmlPayloadReceived -> onXml(state, event)
         is ConfigRWEvent.ConfigBytesPayloadReceived -> onConfigBytes(state, event)
         is ConfigRWEvent.SetConfigResponseReceived -> onSetAck(state, event)
@@ -58,6 +60,7 @@ internal object ConfigRWFsm {
                 RefloatConfigErrorCode.CONFIG_SCHEMA_TIMEOUT,
                 CONFIG_SCHEMA_TIMEOUT_MS,
             ),
+            ConfigRWEffect.SendFrame(RefloatConfigProtocol.buildGetInfo(ctx.transport)),
             ConfigRWEffect.SendFrame(buildXmlRequest(ctx.transport, expected = null, nextOffset = 0)),
         )
     }
@@ -87,8 +90,29 @@ internal object ConfigRWFsm {
                 RefloatConfigErrorCode.CONFIG_SCHEMA_TIMEOUT,
                 CONFIG_SCHEMA_TIMEOUT_MS,
             ),
+            ConfigRWEffect.SendFrame(RefloatConfigProtocol.buildGetInfo(ctx.transport)),
             ConfigRWEffect.SendFrame(buildXmlRequest(ctx.transport, expected = null, nextOffset = 0)),
         )
+    }
+
+    private fun onInfo(
+        state: ConfigRWState,
+        event: ConfigRWEvent.InfoPayloadReceived,
+    ): Pair<ConfigRWState, List<ConfigRWEffect>> {
+        val info = when (val parsed = RefloatConfigProtocol.parseGetInfoResponse(event.payload)) {
+            is RefloatConfigProtocolResult.Success -> parsed.value.version
+            is RefloatConfigProtocolResult.Failure -> null
+        }
+        if (info == null) return state to emptyList()
+        return when (state) {
+            is ConfigRWState.ReadCollectingXml -> state.copy(ctx = state.ctx.copy(refloatVersion = info)) to emptyList()
+            is ConfigRWState.ReadAwaitingConfig -> state.copy(ctx = state.ctx.copy(refloatVersion = info)) to emptyList()
+            is ConfigRWState.WriteCollectingXml -> state.copy(ctx = state.ctx.copy(refloatVersion = info)) to emptyList()
+            is ConfigRWState.WriteAwaitingConfig -> state.copy(ctx = state.ctx.copy(refloatVersion = info)) to emptyList()
+            is ConfigRWState.WriteAwaitingSetAck -> state.copy(ctx = state.ctx.copy(refloatVersion = info)) to emptyList()
+            is ConfigRWState.WriteVerifying -> state.copy(ctx = state.ctx.copy(refloatVersion = info)) to emptyList()
+            ConfigRWState.Idle -> state to emptyList()
+        }
     }
 
     private fun onXml(
@@ -220,7 +244,7 @@ internal object ConfigRWFsm {
                 is RefloatConfigProtocolResult.Success -> encodeAndSendWrite(
                     state.ctx,
                     state.xmlBytes,
-                    parsed.value.config,
+                    parsed.value,
                 )
             }
         }
@@ -376,6 +400,7 @@ internal object ConfigRWFsm {
             canId = ctx.canId,
             capturedAt = capturedAtMs,
             fwVersion = ctx.fwVersion,
+            refloatVersion = ctx.refloatVersion,
         )
         ConfigRWState.Idle to listOf(
             ConfigRWEffect.CancelTimeout,
@@ -422,43 +447,51 @@ internal object ConfigRWFsm {
     private fun encodeAndSendWrite(
         ctx: WriteContext,
         xmlBytes: ByteArray,
-        rawConfig: ByteArray,
-    ): Pair<ConfigRWState, List<ConfigRWEffect>> = try {
-        val schema = RefloatConfigSchemaParser.parse(xmlBytes)
-        val patched = RefloatConfigEncoder.encode(schema, rawConfig, ctx.profileFields)
-        ConfigRWState.WriteAwaitingSetAck(
-            ctx = ctx,
-            schema = schema,
-            originalConfig = rawConfig,
-            patchedConfig = patched,
-        ) to listOf(
-            ConfigRWEffect.CancelTimeout,
-            ConfigRWEffect.ScheduleTimeout(
-                RefloatConfigErrorCode.CONFIG_WRITE_TIMEOUT,
-                CONFIG_WRITE_TIMEOUT_MS,
-            ),
-            ConfigRWEffect.SendFrame(
-                RefloatConfigProtocol.buildSetCustomConfig(ctx.transport, 0, patched),
-            ),
-        )
-    } catch (e: RefloatConfigSchemaException) {
-        writeFailure(
-            ctx, RefloatConfigErrorCode.UNSUPPORTED_SCHEMA,
-            e.message ?: "Unsupported schema",
-            phase = ConfigWritePhaseTag.READING_CONFIG, rawConfig = rawConfig,
-        )
-    } catch (e: RefloatConfigEncodeException) {
-        writeFailure(
-            ctx, RefloatConfigErrorCode.CONFIG_ENCODE_FAILED,
-            e.message ?: "Encode failed",
-            phase = ConfigWritePhaseTag.READING_CONFIG, rawConfig = rawConfig,
-        )
-    } catch (e: Exception) {
-        writeFailure(
-            ctx, RefloatConfigErrorCode.CONFIG_WRITE_FAILED,
-            e.message ?: "Write failed",
-            phase = ConfigWritePhaseTag.READING_CONFIG, rawConfig = rawConfig,
-        )
+        configBytes: RefloatConfigBytes,
+    ): Pair<ConfigRWState, List<ConfigRWEffect>> {
+        val rawConfig = configBytes.config
+        return try {
+            val schema = RefloatConfigSchemaParser.parse(xmlBytes)
+            val patched = RefloatConfigEncoder.encode(schema, rawConfig, ctx.profileFields)
+            ConfigRWState.WriteAwaitingSetAck(
+                ctx = ctx,
+                schema = schema,
+                originalConfig = rawConfig,
+                patchedConfig = patched,
+            ) to listOf(
+                ConfigRWEffect.CancelTimeout,
+                ConfigRWEffect.ScheduleTimeout(
+                    RefloatConfigErrorCode.CONFIG_WRITE_TIMEOUT,
+                    CONFIG_WRITE_TIMEOUT_MS,
+                ),
+                ConfigRWEffect.SendFrame(
+                    RefloatConfigProtocol.buildSetCustomConfig(
+                        ctx.transport,
+                        0,
+                        configBytes.packageSignature,
+                        patched,
+                    ),
+                ),
+            )
+        } catch (e: RefloatConfigSchemaException) {
+            writeFailure(
+                ctx, RefloatConfigErrorCode.UNSUPPORTED_SCHEMA,
+                e.message ?: "Unsupported schema",
+                phase = ConfigWritePhaseTag.READING_CONFIG, rawConfig = rawConfig,
+            )
+        } catch (e: RefloatConfigEncodeException) {
+            writeFailure(
+                ctx, RefloatConfigErrorCode.CONFIG_ENCODE_FAILED,
+                e.message ?: "Encode failed",
+                phase = ConfigWritePhaseTag.READING_CONFIG, rawConfig = rawConfig,
+            )
+        } catch (e: Exception) {
+            writeFailure(
+                ctx, RefloatConfigErrorCode.CONFIG_WRITE_FAILED,
+                e.message ?: "Write failed",
+                phase = ConfigWritePhaseTag.READING_CONFIG, rawConfig = rawConfig,
+            )
+        }
     }
 
     private fun verifyAndCompleteWrite(
@@ -486,6 +519,7 @@ internal object ConfigRWFsm {
                 canId = state.ctx.canId,
                 capturedAt = capturedAtMs,
                 fwVersion = state.ctx.fwVersion,
+                refloatVersion = state.ctx.refloatVersion,
             )
             ConfigRWState.Idle to listOf(
                 ConfigRWEffect.CancelTimeout,

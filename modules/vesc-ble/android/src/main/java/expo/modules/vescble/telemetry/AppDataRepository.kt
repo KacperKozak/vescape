@@ -288,6 +288,16 @@ class AppDataRepository private constructor(private val context: Context) {
 
   suspend fun setSelectedBoardId(id: String?): Unit = updateSetting("selectedBoardId", id)
 
+  suspend fun updateLastBattery(
+    boardId: String,
+    percent: Double,
+    voltage: Double?,
+    atMs: Long,
+  ): Unit = withContext(Dispatchers.IO) {
+    val value = mapOf("percent" to percent, "voltage" to voltage, "at" to atMs)
+    dao.upsertBoardSetting(BoardSettingEntity(boardId, "lastBattery", encodeSettingJson(value), atMs))
+  }
+
   suspend fun getTuneProfiles(boardId: String): List<Map<String, Any?>> = withContext(Dispatchers.IO) {
     dao.getTuneProfilesByBoard(boardId).map { it.toMap() }
   }
@@ -479,6 +489,7 @@ fun BoardEntity.toMap(settings: List<BoardSettingEntity>): Map<String, Any?> {
     "description" to values["description"],
     "createdAt" to createdAt,
     "batteryConfig" to values["batteryConfig"],
+    "lastBattery" to values["lastBattery"],
     "link" to link,
   )
 }
@@ -726,8 +737,20 @@ private fun BoardSettingEntity.decodeBoardSetting(): Pair<String, Any?>? {
       key to BoardTransport.toBridge(BoardTransport.decode(it))
     }
     "hasBms" -> (raw as? Boolean)?.let { key to it }
+    "lastBattery" -> decodeLastBattery(raw)?.let { key to it }
     else -> null
   }
+}
+
+private fun decodeLastBattery(raw: Any?): Map<String, Any?>? {
+  val map = raw as? Map<*, *> ?: return null
+  val percent = (map["percent"] as? Number)?.toDouble() ?: return null
+  val at = (map["at"] as? Number)?.toLong() ?: return null
+  return mapOf(
+    "percent" to percent,
+    "voltage" to (map["voltage"] as? Number)?.toDouble(),
+    "at" to at,
+  )
 }
 
 internal fun encodeBatteryConfig(value: Any?): String? {

@@ -237,7 +237,7 @@ Presets: beep, urgent, notify (single); tick, tick_hard, gamma (geiger)
 ```ts
 { capturedAt, boardId?, canId, schemaHash, rawConfigHash, rawConfigLength,
   groups: { id, title, fields: { id, label, value, unit?, min?, max? }[] }[],
-  missingFieldIds[], fwVersion? }
+  missingFieldIds[], fwVersion?, refloatVersion? }
 ```
 
 ## Settings

@@ -14,6 +14,7 @@ internal object RefloatConfigDecoder {
     canId: Int?,
     capturedAt: Long,
     fwVersion: String?,
+    refloatVersion: String? = null,
   ): RefloatConfigSnapshot {
     val byId = schema.fields.associateBy { it.id }
     val requiredLength = schema.fields.maxOfOrNull { it.offset + it.type.byteSize } ?: 0
@@ -50,6 +51,7 @@ internal object RefloatConfigDecoder {
       groups = groups,
       missingFieldIds = missing,
       fwVersion = fwVersion,
+      refloatVersion = refloatVersion,
     )
   }
 

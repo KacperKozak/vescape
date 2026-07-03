@@ -46,6 +46,16 @@ export function fmtPercent(fraction: number): string {
   return `${Math.round(fraction * 100)}%`
 }
 
+/** Format elapsed time since a timestamp, e.g. "5m ago", "2h ago", "3d ago". */
+export function fmtTimeAgo(atMs: number, nowMs = Date.now()): string {
+  const diffMin = Math.max(0, Math.floor((nowMs - atMs) / 60_000))
+  if (diffMin < 1) return 'now'
+  if (diffMin < 60) return `${diffMin}m ago`
+  const diffH = Math.floor(diffMin / 60)
+  if (diffH < 24) return `${diffH}h ago`
+  return `${Math.floor(diffH / 24)}d ago`
+}
+
 /** Format bytes to human-readable string (B, KB, MB). */
 export function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`

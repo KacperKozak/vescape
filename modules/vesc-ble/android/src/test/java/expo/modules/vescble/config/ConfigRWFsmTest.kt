@@ -1,9 +1,12 @@
 package expo.modules.vescble.config
 
 import expo.modules.vescble.COMM_FORWARD_CAN
+import expo.modules.vescble.COMM_CUSTOM_APP_DATA
 import expo.modules.vescble.COMM_GET_CUSTOM_CONFIG
 import expo.modules.vescble.COMM_GET_CUSTOM_CONFIG_XML
 import expo.modules.vescble.COMM_SET_CUSTOM_CONFIG
+import expo.modules.vescble.REFLOAT_GET_INFO
+import expo.modules.vescble.REFLOAT_MAGIC
 import expo.modules.vescble.BoardTransport
 import expo.modules.vescble.RefloatConfigErrorCode
 import java.nio.ByteBuffer
@@ -45,11 +48,17 @@ class ConfigRWFsmTest {
         assertTimeoutScheduled(startEffects, RefloatConfigErrorCode.CONFIG_SCHEMA_TIMEOUT)
         assertSendFrame(startEffects)
 
+        val (afterInfo, infoEffects) = ConfigRWFsm.apply(
+            afterStart,
+            ConfigRWEvent.InfoPayloadReceived(buildInfoV1Payload(12)),
+        )
+        assertTrue(infoEffects.isEmpty())
+
         val firstHalf = schemaXml.copyOfRange(0, schemaXml.size / 2)
         val secondHalf = schemaXml.copyOfRange(schemaXml.size / 2, schemaXml.size)
 
         val (afterFirst, firstEffects) = ConfigRWFsm.apply(
-            afterStart,
+            afterInfo,
             ConfigRWEvent.XmlPayloadReceived(
                 buildXmlChunkPayload(schemaXml.size, 0, firstHalf),
             ),
@@ -78,6 +87,7 @@ class ConfigRWFsmTest {
         assertEquals(12345L, complete.snapshot.capturedAt)
         assertTrue(complete.resumePolling)
         assertEquals(4, complete.snapshot.rawConfigLength)
+        assertEquals("Refloat 1.2", complete.snapshot.refloatVersion)
     }
 
     @Test
@@ -110,6 +120,10 @@ class ConfigRWFsmTest {
             sentFrame.payload.size >= 4 &&
                 sentFrame.payload[2].toInt() and 0xff == COMM_SET_CUSTOM_CONFIG,
         )
+        assertEquals(0x12, sentFrame.payload[4].toInt() and 0xff)
+        assertEquals(0x34, sentFrame.payload[5].toInt() and 0xff)
+        assertEquals(0x56, sentFrame.payload[6].toInt() and 0xff)
+        assertEquals(0x78, sentFrame.payload[7].toInt() and 0xff)
         val patchedConfig = (afterConfig as ConfigRWState.WriteAwaitingSetAck).patchedConfig
         val patchedKp = ByteBuffer.wrap(patchedConfig).order(ByteOrder.BIG_ENDIAN).float
         assertEquals(33.0f, patchedKp, 0.001f)
@@ -390,7 +404,7 @@ class ConfigRWFsmTest {
             .put((canId ?: 0).toByte())
             .put(COMM_GET_CUSTOM_CONFIG.toByte())
             .put(0.toByte())
-            .putInt(0) // package signature
+            .putInt(0x12345678) // package signature
             .put(config)
         return buf.array()
     }
@@ -399,6 +413,16 @@ class ConfigRWFsmTest {
         COMM_FORWARD_CAN.toByte(),
         (canId ?: 0).toByte(),
         COMM_SET_CUSTOM_CONFIG.toByte(),
+    )
+
+    private fun buildInfoV1Payload(versionCode: Int): ByteArray = byteArrayOf(
+        COMM_FORWARD_CAN.toByte(),
+        (canId ?: 0).toByte(),
+        COMM_CUSTOM_APP_DATA.toByte(),
+        REFLOAT_MAGIC.toByte(),
+        REFLOAT_GET_INFO.toByte(),
+        versionCode.toByte(),
+        1,
         0,
     )
 }

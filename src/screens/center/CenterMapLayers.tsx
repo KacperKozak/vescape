@@ -299,8 +299,10 @@ function RiderPresencePin({ rider, index }: { rider: RosterRider; index: number 
       <View style={styles.riderMarker}>
         <View style={[styles.riderDot, { backgroundColor: color }]}>
           {heading != null && (
-            <View style={[styles.riderHeading, { transform: [{ rotate: `${heading}deg` }] }]}>
-              <View style={[styles.riderHeadingNeedle, { backgroundColor: color }]} />
+            // Rotating a ring centered on the dot keeps the arrow orbiting the dot;
+            // rotating the arrow itself would spin it in place at a fixed offset.
+            <View style={[styles.riderHeadingRing, { transform: [{ rotate: `${heading}deg` }] }]}>
+              <View style={[styles.riderHeadingArrow, { borderBottomColor: color }]} />
             </View>
           )}
         </View>
@@ -647,21 +649,24 @@ const styles = StyleSheet.create({
   riderDot: {
     width: 16,
     height: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
     borderRadius: 8,
   },
-  riderHeading: {
+  riderHeadingRing: {
     position: 'absolute',
-    top: -11,
-    width: 3,
-    height: 12,
+    top: -8,
+    left: -8,
+    width: 32,
+    height: 32,
     alignItems: 'center',
   },
-  riderHeadingNeedle: {
-    width: 3,
-    height: 12,
-    borderRadius: 2,
+  riderHeadingArrow: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 4,
+    borderRightWidth: 4,
+    borderBottomWidth: 7,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
   },
   riderLabel: {
     maxWidth: 96,
