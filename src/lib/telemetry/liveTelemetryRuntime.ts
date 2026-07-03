@@ -266,15 +266,27 @@ export function createLiveTelemetryRuntime({
     },
 
     clearBoardTelemetry() {
+      const lastBatteryPercent = values.batteryPercent.value
+      const lastBatteryVoltage = values.batteryVoltage.value
       clearLiveTelemetryBuffer(buffer)
-      pushTick(EMPTY_TICK)
+      pushTick({
+        ...EMPTY_TICK,
+        batteryPercent: lastBatteryPercent,
+        batteryVoltage: lastBatteryVoltage,
+      })
       pendingSnapshot = false
       return publishSnapshot()
     },
 
     reset() {
+      const lastBatteryPercent = values.batteryPercent.value
+      const lastBatteryVoltage = values.batteryVoltage.value
       clearLiveMetricBuffer(buffer)
-      pushTick(EMPTY_TICK)
+      pushTick({
+        ...EMPTY_TICK,
+        batteryPercent: lastBatteryPercent,
+        batteryVoltage: lastBatteryVoltage,
+      })
       pendingSnapshot = false
       return publishSnapshot()
     },

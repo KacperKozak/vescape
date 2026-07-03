@@ -217,7 +217,7 @@ function applyLiveState(state: LiveStateEvent, set: BleSet): void {
       : liveTelemetryRuntime.getSnapshot()
   } else {
     liveTelemetryRuntime.syncConnectionSeq(state.board.connectionSeq)
-    useLiveSeriesStore.getState().clear()
+    preserveBatterySeries()
     live = liveTelemetryRuntime.clearBoardTelemetry()
   }
 
@@ -253,9 +253,22 @@ function sameRemoteTilt(a: RemoteTiltState | null, b: RemoteTiltState | null): b
   )
 }
 
+function preserveBatterySeries(): void {
+  const seriesStore = useLiveSeriesStore.getState()
+  const preserved: Record<string, number[]> = {}
+  for (const key of ['batteryPercent', 'batteryVoltage']) {
+    const existing = seriesStore.metrics[key]
+    if (existing?.length) preserved[key] = existing
+  }
+  seriesStore.clear()
+  if (Object.keys(preserved).length > 0) {
+    seriesStore.setSeries(preserved, seriesStore.generation)
+  }
+}
+
 function resetLivePresentation(set: BleSet): void {
   clearLiveHistoryPublishTimer()
-  useLiveSeriesStore.getState().clear()
+  preserveBatterySeries()
   const live = liveTelemetryRuntime.reset()
   set({
     liveLocationHistory: live.liveLocationHistory,
