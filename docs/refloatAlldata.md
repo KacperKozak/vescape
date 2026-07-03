@@ -98,13 +98,17 @@ Source: `buffer_get_float32_auto()` in `lukash/refloat/src/conf/buffer.c`.
 | 14    | CHARGING        |
 | 15    | DISABLED        |
 
-## Other read commands (not wired up yet)
+## Other read commands
 
 All Refloat read commands share the same outer frame: `[CUSTOM_APP_DATA=0x24] [magic=101] [command]`.
 
 ### GET_INFO (0) — Board identity + capabilities
 
 Request: `[101] [0] [version]`
+
+The tune config read sends version `1` for broad compatibility and displays the
+returned Refloat package version in the Tune screen. The parser also accepts
+version `2` responses when present.
 
 Response version 1:
 

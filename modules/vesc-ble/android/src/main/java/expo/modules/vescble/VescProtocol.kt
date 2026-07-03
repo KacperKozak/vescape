@@ -15,6 +15,7 @@ internal const val COMM_SET_CUSTOM_CONFIG = 95
 internal const val COMM_PING_CAN = 62
 internal const val COMM_SET_CHUCK_DATA = 35
 internal const val REFLOAT_MAGIC = 101
+internal const val REFLOAT_GET_INFO = 0
 internal const val REFLOAT_GET_ALLDATA = 10
 private const val REFLOAT_FAULT_MODE = 69
 

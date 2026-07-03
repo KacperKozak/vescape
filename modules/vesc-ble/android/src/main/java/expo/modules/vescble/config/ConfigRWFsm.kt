@@ -27,6 +27,7 @@ internal object ConfigRWFsm {
     ): Pair<ConfigRWState, List<ConfigRWEffect>> = when (event) {
         is ConfigRWEvent.StartRead -> onStartRead(state, event)
         is ConfigRWEvent.StartWrite -> onStartWrite(state, event)
+        is ConfigRWEvent.InfoPayloadReceived -> onInfo(state, event)
         is ConfigRWEvent.XmlPayloadReceived -> onXml(state, event)
         is ConfigRWEvent.ConfigBytesPayloadReceived -> onConfigBytes(state, event)
         is ConfigRWEvent.SetConfigResponseReceived -> onSetAck(state, event)
@@ -59,6 +60,7 @@ internal object ConfigRWFsm {
                 RefloatConfigErrorCode.CONFIG_SCHEMA_TIMEOUT,
                 CONFIG_SCHEMA_TIMEOUT_MS,
             ),
+            ConfigRWEffect.SendFrame(RefloatConfigProtocol.buildGetInfo(ctx.transport)),
             ConfigRWEffect.SendFrame(buildXmlRequest(ctx.transport, expected = null, nextOffset = 0)),
         )
     }
@@ -88,8 +90,29 @@ internal object ConfigRWFsm {
                 RefloatConfigErrorCode.CONFIG_SCHEMA_TIMEOUT,
                 CONFIG_SCHEMA_TIMEOUT_MS,
             ),
+            ConfigRWEffect.SendFrame(RefloatConfigProtocol.buildGetInfo(ctx.transport)),
             ConfigRWEffect.SendFrame(buildXmlRequest(ctx.transport, expected = null, nextOffset = 0)),
         )
+    }
+
+    private fun onInfo(
+        state: ConfigRWState,
+        event: ConfigRWEvent.InfoPayloadReceived,
+    ): Pair<ConfigRWState, List<ConfigRWEffect>> {
+        val info = when (val parsed = RefloatConfigProtocol.parseGetInfoResponse(event.payload)) {
+            is RefloatConfigProtocolResult.Success -> parsed.value.version
+            is RefloatConfigProtocolResult.Failure -> null
+        }
+        if (info == null) return state to emptyList()
+        return when (state) {
+            is ConfigRWState.ReadCollectingXml -> state.copy(ctx = state.ctx.copy(refloatVersion = info)) to emptyList()
+            is ConfigRWState.ReadAwaitingConfig -> state.copy(ctx = state.ctx.copy(refloatVersion = info)) to emptyList()
+            is ConfigRWState.WriteCollectingXml -> state.copy(ctx = state.ctx.copy(refloatVersion = info)) to emptyList()
+            is ConfigRWState.WriteAwaitingConfig -> state.copy(ctx = state.ctx.copy(refloatVersion = info)) to emptyList()
+            is ConfigRWState.WriteAwaitingSetAck -> state.copy(ctx = state.ctx.copy(refloatVersion = info)) to emptyList()
+            is ConfigRWState.WriteVerifying -> state.copy(ctx = state.ctx.copy(refloatVersion = info)) to emptyList()
+            ConfigRWState.Idle -> state to emptyList()
+        }
     }
 
     private fun onXml(
@@ -377,6 +400,7 @@ internal object ConfigRWFsm {
             canId = ctx.canId,
             capturedAt = capturedAtMs,
             fwVersion = ctx.fwVersion,
+            refloatVersion = ctx.refloatVersion,
         )
         ConfigRWState.Idle to listOf(
             ConfigRWEffect.CancelTimeout,
@@ -495,6 +519,7 @@ internal object ConfigRWFsm {
                 canId = state.ctx.canId,
                 capturedAt = capturedAtMs,
                 fwVersion = state.ctx.fwVersion,
+                refloatVersion = state.ctx.refloatVersion,
             )
             ConfigRWState.Idle to listOf(
                 ConfigRWEffect.CancelTimeout,

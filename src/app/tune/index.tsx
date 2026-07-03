@@ -260,6 +260,17 @@ export default function TuneScreen() {
                   }
                 />
               ) : null}
+              {boardSnapshot.refloatVersion ? (
+                <InfoBadge
+                  label={boardSnapshot.refloatVersion}
+                  onPress={() =>
+                    modals.showBadgeInfo(
+                      'Refloat',
+                      'Refloat package version reported by the connected controller.',
+                    )
+                  }
+                />
+              ) : null}
               <InfoBadge
                 label={`CAN ${boardSnapshot.canId}`}
                 onPress={() =>

@@ -7,6 +7,60 @@ import org.junit.Test
 
 class RefloatConfigProtocolTest {
   @Test
+  fun buildsForwardedGetInfoRequest() {
+    val payload = RefloatConfigProtocol.buildGetInfo(transport = BoardTransport.Can(7))
+
+    assertArrayEquals(
+      byteArrayOf(
+        COMM_FORWARD_CAN.toByte(),
+        7,
+        COMM_CUSTOM_APP_DATA.toByte(),
+        REFLOAT_MAGIC.toByte(),
+        REFLOAT_GET_INFO.toByte(),
+        1,
+      ),
+      payload,
+    )
+  }
+
+  @Test
+  fun parsesGetInfoV1Response() {
+    val payload = byteArrayOf(
+      COMM_CUSTOM_APP_DATA.toByte(),
+      REFLOAT_MAGIC.toByte(),
+      REFLOAT_GET_INFO.toByte(),
+      12,
+      1,
+      0,
+    )
+
+    val parsed = RefloatConfigProtocol.parseGetInfoResponse(payload).success()
+
+    assertEquals("Refloat 1.2", parsed.version)
+  }
+
+  @Test
+  fun parsesForwardedGetInfoV2Response() {
+    val payload = ByteArray(2 + 3 + 2 + 20 + 3 + 20)
+    payload[0] = COMM_FORWARD_CAN.toByte()
+    payload[1] = 7
+    payload[2] = COMM_CUSTOM_APP_DATA.toByte()
+    payload[3] = REFLOAT_MAGIC.toByte()
+    payload[4] = REFLOAT_GET_INFO.toByte()
+    payload[5] = 2
+    payload[6] = 0
+    "refloat".encodeToByteArray().copyInto(payload, destinationOffset = 7)
+    payload[27] = 1
+    payload[28] = 3
+    payload[29] = 0
+    "preview2".encodeToByteArray().copyInto(payload, destinationOffset = 30)
+
+    val parsed = RefloatConfigProtocol.parseGetInfoResponse(payload).success()
+
+    assertEquals("Refloat 1.3.0-preview2", parsed.version)
+  }
+
+  @Test
   fun buildsForwardedCustomConfigXmlRequest() {
     val payload = RefloatConfigProtocol.buildGetCustomConfigXml(
       transport = BoardTransport.Can(7),

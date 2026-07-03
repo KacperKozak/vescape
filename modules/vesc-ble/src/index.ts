@@ -539,6 +539,7 @@ export interface RefloatConfigSnapshot {
   groups: RefloatConfigGroup[]
   missingFieldIds: string[]
   fwVersion: string | null
+  refloatVersion?: string | null
 }
 
 export type TuneProfileFieldValue = number | boolean | string | null

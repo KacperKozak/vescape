@@ -16,6 +16,10 @@ internal data class RefloatConfigBytes(
   val config: ByteArray,
 )
 
+internal data class RefloatPackageInfo(
+  val version: String,
+)
+
 internal sealed class RefloatConfigProtocolResult<out T> {
   data class Success<T>(val value: T) : RefloatConfigProtocolResult<T>()
   data class Failure(val message: String) : RefloatConfigProtocolResult<Nothing>()
@@ -40,6 +44,59 @@ internal object RefloatConfigProtocol {
     }
     return RefloatConfigProtocolResult.Failure(
       "Unexpected Refloat config command $cmd, expected $expectedCommand",
+    )
+  }
+
+  private fun appCommandOffset(payload: ByteArray, expectedCommand: Int): RefloatConfigProtocolResult<Int> {
+    if (payload.size < 3) {
+      return RefloatConfigProtocolResult.Failure("Short Refloat app response")
+    }
+    val cmd = payload[0].toInt() and 0xff
+    if (cmd == COMM_CUSTOM_APP_DATA) {
+      val magic = payload[1].toInt() and 0xff
+      val appCommand = payload[2].toInt() and 0xff
+      if (magic != REFLOAT_MAGIC) {
+        return RefloatConfigProtocolResult.Failure("Unexpected Refloat magic $magic")
+      }
+      if (appCommand == expectedCommand) return RefloatConfigProtocolResult.Success(2)
+      return RefloatConfigProtocolResult.Failure(
+        "Unexpected Refloat app command $appCommand, expected $expectedCommand",
+      )
+    }
+    if (cmd == COMM_FORWARD_CAN) {
+      if (payload.size < 5) {
+        return RefloatConfigProtocolResult.Failure("Short forwarded Refloat app response")
+      }
+      val forwarded = payload[2].toInt() and 0xff
+      val magic = payload[3].toInt() and 0xff
+      val appCommand = payload[4].toInt() and 0xff
+      if (forwarded != COMM_CUSTOM_APP_DATA) {
+        return RefloatConfigProtocolResult.Failure(
+          "Unexpected forwarded Refloat command $forwarded, expected $COMM_CUSTOM_APP_DATA",
+        )
+      }
+      if (magic != REFLOAT_MAGIC) {
+        return RefloatConfigProtocolResult.Failure("Unexpected Refloat magic $magic")
+      }
+      if (appCommand == expectedCommand) return RefloatConfigProtocolResult.Success(4)
+      return RefloatConfigProtocolResult.Failure(
+        "Unexpected forwarded Refloat app command $appCommand, expected $expectedCommand",
+      )
+    }
+    return RefloatConfigProtocolResult.Failure(
+      "Unexpected Refloat app response command $cmd, expected $COMM_CUSTOM_APP_DATA",
+    )
+  }
+
+  fun buildGetInfo(transport: BoardTransport, version: Int = 1): ByteArray {
+    require(version in 0..255) { "version must fit uint8" }
+    return transport.frame(
+      byteArrayOf(
+        COMM_CUSTOM_APP_DATA.toByte(),
+        REFLOAT_MAGIC.toByte(),
+        REFLOAT_GET_INFO.toByte(),
+        version.toByte(),
+      ),
     )
   }
 
@@ -165,5 +222,71 @@ internal object RefloatConfigProtocol {
         config = payload.copyOfRange(offset + 6, payload.size),
       ),
     )
+  }
+
+  fun parseGetInfoResponse(payload: ByteArray): RefloatConfigProtocolResult<RefloatPackageInfo> {
+    val offset = when (val result = appCommandOffset(payload, REFLOAT_GET_INFO)) {
+      is RefloatConfigProtocolResult.Success -> result.value
+      is RefloatConfigProtocolResult.Failure -> return result
+    }
+    val dataOffset = offset + 1
+    if (payload.size <= dataOffset) {
+      return RefloatConfigProtocolResult.Failure("Short Refloat info response: 0 bytes")
+    }
+    val first = payload[dataOffset].toInt() and 0xff
+    if (first == 2) return parseGetInfoV2(payload, dataOffset)
+    return parseGetInfoV1(payload, dataOffset)
+  }
+
+  private fun parseGetInfoV1(
+    payload: ByteArray,
+    dataOffset: Int,
+  ): RefloatConfigProtocolResult<RefloatPackageInfo> {
+    if (payload.size < dataOffset + 3) {
+      return RefloatConfigProtocolResult.Failure(
+        "Short Refloat info v1 response: ${payload.size - dataOffset} bytes",
+      )
+    }
+    val versionCode = payload[dataOffset].toInt() and 0xff
+    val major = versionCode / 10
+    val minor = versionCode % 10
+    return RefloatConfigProtocolResult.Success(RefloatPackageInfo("Refloat $major.$minor"))
+  }
+
+  private fun parseGetInfoV2(
+    payload: ByteArray,
+    dataOffset: Int,
+  ): RefloatConfigProtocolResult<RefloatPackageInfo> {
+    val minLength = dataOffset + 2 + 20 + 3
+    if (payload.size < minLength) {
+      return RefloatConfigProtocolResult.Failure(
+        "Short Refloat info v2 response: ${payload.size - dataOffset} bytes",
+      )
+    }
+    val packageName = displayName(fixedString(payload, dataOffset + 2, 20))
+    val major = payload[dataOffset + 22].toInt() and 0xff
+    val minor = payload[dataOffset + 23].toInt() and 0xff
+    val patch = payload[dataOffset + 24].toInt() and 0xff
+    val suffix = if (payload.size >= dataOffset + 45) fixedString(payload, dataOffset + 25, 20) else ""
+    val suffixPart = when {
+      suffix.isBlank() -> ""
+      suffix.startsWith("-") -> suffix
+      else -> "-$suffix"
+    }
+    return RefloatConfigProtocolResult.Success(
+      RefloatPackageInfo("$packageName $major.$minor.$patch$suffixPart"),
+    )
+  }
+
+  private fun fixedString(payload: ByteArray, offset: Int, length: Int): String {
+    val end = (offset until (offset + length).coerceAtMost(payload.size))
+      .firstOrNull { payload[it] == 0.toByte() }
+      ?: (offset + length).coerceAtMost(payload.size)
+    return if (end <= offset) "" else String(payload, offset, end - offset, Charsets.UTF_8).trim()
+  }
+
+  private fun displayName(raw: String): String {
+    if (raw.isBlank()) return "Refloat"
+    return raw.substring(0, 1).uppercase() + raw.substring(1)
   }
 }

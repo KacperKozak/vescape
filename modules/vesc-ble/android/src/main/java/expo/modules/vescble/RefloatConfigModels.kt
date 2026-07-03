@@ -52,6 +52,7 @@ internal data class RefloatConfigSnapshot(
   val groups: List<RefloatConfigGroup>,
   val missingFieldIds: List<String>,
   val fwVersion: String?,
+  val refloatVersion: String? = null,
 ) {
   fun toMap(): Map<String, Any?> = mapOf(
     "capturedAt" to capturedAt,
@@ -63,6 +64,7 @@ internal data class RefloatConfigSnapshot(
     "groups" to groups.map { it.toMap() },
     "missingFieldIds" to missingFieldIds,
     "fwVersion" to fwVersion,
+    "refloatVersion" to refloatVersion,
   )
 }
 

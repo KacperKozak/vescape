@@ -10,6 +10,7 @@ internal data class ReadContext(
     val wasPolling: Boolean,
     val appBoardId: String?,
     val fwVersion: String?,
+    val refloatVersion: String? = null,
 )
 
 internal data class WriteContext(
@@ -20,6 +21,7 @@ internal data class WriteContext(
     val profileFields: Map<String, Any>,
     val appBoardId: String?,
     val fwVersion: String?,
+    val refloatVersion: String? = null,
 )
 
 internal sealed class ConfigRWState {
