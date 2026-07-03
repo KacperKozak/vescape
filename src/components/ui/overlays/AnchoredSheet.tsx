@@ -16,6 +16,7 @@ import {
   type ViewStyle,
 } from 'react-native'
 import { Canvas, LinearGradient, Rect, vec } from '@shopify/react-native-skia'
+import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import Reanimated, {
   FadeIn,
   Keyframe,
@@ -31,6 +32,7 @@ import {
   measureTrigger,
   type TriggerLayout,
 } from '@/components/ui/overlays/measureTrigger'
+import { NativeScrollGestureContext } from '@/components/ui/gestures/NativeScrollGestureContext'
 import { theme } from '@/constants/theme'
 
 const OPEN_DURATION = 260
@@ -295,6 +297,7 @@ function EdgeDrawer({
   const positionedRef = useRef(false)
   const scrollOffset = useSharedValue(0)
   const animatedDismissRange = useSharedValue(1)
+  const nativeScrollGesture = useMemo(() => Gesture.Native(), [])
 
   useEffect(() => {
     if (!visible) return
@@ -442,67 +445,73 @@ function EdgeDrawer({
       presentationStyle="overFullScreen"
       onRequestClose={close}
     >
-      <Reanimated.View entering={FadeIn.duration(DRAWER_OPEN_DURATION)} style={styles.drawer}>
-        <Reanimated.View style={[StyleSheet.absoluteFill, backdropStyle]}>
-          <Canvas style={StyleSheet.absoluteFill} pointerEvents="none">
-            <Rect x={0} y={0} width={width} height={height}>
-              <LinearGradient
-                start={vec(0, 0)}
-                end={vec(0, height)}
-                colors={gradientColors}
-                positions={[0, 0.7, 1]}
-              />
-            </Rect>
-          </Canvas>
-          <Pressable style={StyleSheet.absoluteFill} onPress={close} />
+      <GestureHandlerRootView style={styles.modalGestureRoot}>
+        <Reanimated.View entering={FadeIn.duration(DRAWER_OPEN_DURATION)} style={styles.drawer}>
+          <Reanimated.View style={[StyleSheet.absoluteFill, backdropStyle]}>
+            <Canvas style={StyleSheet.absoluteFill} pointerEvents="none">
+              <Rect x={0} y={0} width={width} height={height}>
+                <LinearGradient
+                  start={vec(0, 0)}
+                  end={vec(0, height)}
+                  colors={gradientColors}
+                  positions={[0, 0.7, 1]}
+                />
+              </Rect>
+            </Canvas>
+            <Pressable style={StyleSheet.absoluteFill} onPress={close} />
+          </Reanimated.View>
         </Reanimated.View>
-      </Reanimated.View>
-      <Reanimated.View
-        entering={opensFromTop ? DRAWER_ENTER_FROM_TOP : DRAWER_ENTER_FROM_BOTTOM}
-        style={styles.drawer}
-      >
-        <Reanimated.ScrollView
-          ref={scrollRef}
-          onContentSizeChange={handleContentSizeChange}
-          onScroll={scrollHandler}
-          onScrollEndDrag={handleScrollEndDrag}
-          onMomentumScrollEnd={handleScrollEnd}
-          scrollEventThrottle={16}
-          showsVerticalScrollIndicator={false}
-          bounces={false}
-          overScrollMode="never"
+        <Reanimated.View
+          entering={opensFromTop ? DRAWER_ENTER_FROM_TOP : DRAWER_ENTER_FROM_BOTTOM}
+          style={styles.drawer}
         >
-          {!opensFromTop ? emptyDismissArea : null}
-          <View
-            style={[
-              styles.drawerBody,
-              opensFromTop ? { paddingTop: edgePadding } : { paddingBottom: edgePadding },
-            ]}
-          >
-            {!opensFromTop ? <View style={styles.grabber} /> : null}
-            {title ? (
-              <Pressable
-                style={styles.drawerHeader}
-                onPress={close}
-                accessibilityRole="button"
-                accessibilityLabel={`Close ${title}`}
+          <NativeScrollGestureContext.Provider value={nativeScrollGesture}>
+            <GestureDetector gesture={nativeScrollGesture}>
+              <Reanimated.ScrollView
+                ref={scrollRef}
+                onContentSizeChange={handleContentSizeChange}
+                onScroll={scrollHandler}
+                onScrollEndDrag={handleScrollEndDrag}
+                onMomentumScrollEnd={handleScrollEnd}
+                scrollEventThrottle={16}
+                showsVerticalScrollIndicator={false}
+                bounces={false}
+                overScrollMode="never"
               >
-                {IconComponent ? (
-                  <IconComponent
-                    size={28}
-                    color={theme.palette.slate.textSecondary}
-                    weight="duotone"
-                  />
-                ) : null}
-                <Text style={styles.drawerTitle}>{title}</Text>
-              </Pressable>
-            ) : null}
-            <View style={styles.drawerContent}>{children}</View>
-            {opensFromTop ? <View style={styles.grabber} /> : null}
-          </View>
-          {opensFromTop ? emptyDismissArea : null}
-        </Reanimated.ScrollView>
-      </Reanimated.View>
+                {!opensFromTop ? emptyDismissArea : null}
+                <View
+                  style={[
+                    styles.drawerBody,
+                    opensFromTop ? { paddingTop: edgePadding } : { paddingBottom: edgePadding },
+                  ]}
+                >
+                  {!opensFromTop ? <View style={styles.grabber} /> : null}
+                  {title ? (
+                    <Pressable
+                      style={styles.drawerHeader}
+                      onPress={close}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Close ${title}`}
+                    >
+                      {IconComponent ? (
+                        <IconComponent
+                          size={28}
+                          color={theme.palette.slate.textSecondary}
+                          weight="duotone"
+                        />
+                      ) : null}
+                      <Text style={styles.drawerTitle}>{title}</Text>
+                    </Pressable>
+                  ) : null}
+                  <View style={styles.drawerContent}>{children}</View>
+                  {opensFromTop ? <View style={styles.grabber} /> : null}
+                </View>
+                {opensFromTop ? emptyDismissArea : null}
+              </Reanimated.ScrollView>
+            </GestureDetector>
+          </NativeScrollGestureContext.Provider>
+        </Reanimated.View>
+      </GestureHandlerRootView>
     </Modal>
   )
 }
@@ -574,6 +583,9 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
+  },
+  modalGestureRoot: {
+    flex: 1,
   },
   drawerBody: {
     paddingHorizontal: 12,

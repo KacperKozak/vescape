@@ -1,6 +1,6 @@
 /* eslint-disable react-hooks/immutability, react-hooks/refs */
 import * as Haptics from 'expo-haptics'
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { use, useCallback, useEffect, useMemo, useRef } from 'react'
 import { Platform, StyleSheet, Text, TextInput, View } from 'react-native'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import Animated, {
@@ -26,6 +26,7 @@ import {
   shouldApplyExternalTuneDialValue,
   shouldPlayTuneDialHaptic,
 } from '@/components/ui/tune/tuneDialPhysics'
+import { NativeScrollGestureContext } from '@/components/ui/gestures/NativeScrollGestureContext'
 import { theme } from '@/constants/theme'
 import { formatTuneValue } from '@/lib/tune/fields'
 
@@ -109,6 +110,7 @@ export function TuneDial({
   onValueChange,
 }: TuneDialProps) {
   'use no memo'
+  const nativeScrollGesture = use(NativeScrollGestureContext)
   const range = max - min
   const {
     totalSteps,
@@ -314,67 +316,68 @@ export function TuneDial({
     }
   }, [momentumFrame])
 
-  const panGesture = useMemo(
-    () =>
-      Gesture.Pan()
-        .activeOffsetX([-8, 8])
-        .failOffsetY([-15, 15])
-        .onTouchesDown(() => {
-          pauseThrow()
-        })
-        .onStart(() => {
-          pauseThrow()
-          interactionActive.value = true
-          dragStartX.value = translateX.value
-          lastStepIndex.value = Math.max(
+  const panGesture = useMemo(() => {
+    const gesture = Gesture.Pan()
+      .activeOffsetX([-8, 8])
+      .onTouchesDown(() => {
+        pauseThrow()
+      })
+      .onStart(() => {
+        pauseThrow()
+        interactionActive.value = true
+        dragStartX.value = translateX.value
+        lastStepIndex.value = Math.max(
+          0,
+          Math.min(totalSteps, Math.round(-translateX.value / stepPx)),
+        )
+      })
+      .onUpdate((e) => {
+        const raw = dragStartX.value + e.translationX * DRAG_RANGE_GAIN
+        const clamped = Math.max(-totalWidth, Math.min(0, raw))
+        translateX.value = clamped
+        const stepIndex = Math.max(0, Math.min(totalSteps, Math.round(-clamped / stepPx)))
+        emitStepIndex(stepIndex)
+        if (raw > 0 || raw < -totalWidth) {
+          emitEdgeHaptic(stepIndex)
+        }
+      })
+      .onEnd((e) => {
+        momentumVelocity.value = resolveTuneDialThrowVelocity(e.velocityX, e.translationX)
+        if (momentumVelocity.value === 0) {
+          settleOffsetToNearest(translateX.value)
+        } else {
+          scheduleOnRN(setMomentumFrameActive, true)
+          const stepIndex = Math.max(
             0,
             Math.min(totalSteps, Math.round(-translateX.value / stepPx)),
           )
-        })
-        .onUpdate((e) => {
-          const raw = dragStartX.value + e.translationX * DRAG_RANGE_GAIN
-          const clamped = Math.max(-totalWidth, Math.min(0, raw))
-          translateX.value = clamped
-          const stepIndex = Math.max(0, Math.min(totalSteps, Math.round(-clamped / stepPx)))
           emitStepIndex(stepIndex)
-          if (raw > 0 || raw < -totalWidth) {
-            emitEdgeHaptic(stepIndex)
-          }
-        })
-        .onEnd((e) => {
-          momentumVelocity.value = resolveTuneDialThrowVelocity(e.velocityX, e.translationX)
-          if (momentumVelocity.value === 0) {
-            settleOffsetToNearest(translateX.value)
-          } else {
-            scheduleOnRN(setMomentumFrameActive, true)
-            const stepIndex = Math.max(
-              0,
-              Math.min(totalSteps, Math.round(-translateX.value / stepPx)),
-            )
-            emitStepIndex(stepIndex)
-          }
-        })
-        .onFinalize((_e, success) => {
-          if (!success && interactionActive.value) {
-            settleOffsetToNearest(translateX.value)
-          }
-        }),
-    [
-      dragStartX,
-      emitStepIndex,
-      emitEdgeHaptic,
-      interactionActive,
-      momentumVelocity,
-      pauseThrow,
-      settleOffsetToNearest,
-      stepPx,
-      totalSteps,
-      totalWidth,
-      translateX,
-      lastStepIndex,
-      setMomentumFrameActive,
-    ],
-  )
+        }
+      })
+      .onFinalize((_e, success) => {
+        if (!success && interactionActive.value) {
+          settleOffsetToNearest(translateX.value)
+        }
+      })
+
+    if (nativeScrollGesture) gesture.blocksExternalGesture(nativeScrollGesture)
+    return gesture
+  }, [
+    dragStartX,
+    emitStepIndex,
+    emitEdgeHaptic,
+    interactionActive,
+    momentumVelocity,
+    pauseThrow,
+    settleOffsetToNearest,
+    stepPx,
+    totalSteps,
+    totalWidth,
+    translateX,
+    lastStepIndex,
+    nativeScrollGesture,
+    setMomentumFrameActive,
+  ])
 
   useEffect(() => {
     if (!shouldApplyExternalTuneDialValue(value, lastEmittedValue.value, interactionActive.value)) {
@@ -454,8 +457,8 @@ export function TuneDial({
     renderMidpointTicks,
   ])
 
-  return (
-    <GestureHandlerRootView style={styles.rootView}>
+  const dial = (
+    <View style={styles.rootView}>
       <View style={styles.container}>
         <GestureDetector gesture={panGesture}>
           <Animated.View style={styles.gestureArea}>
@@ -486,8 +489,10 @@ export function TuneDial({
           {unit ? <Text style={styles.valueBadgeUnit}>{unit}</Text> : null}
         </View>
       </View>
-    </GestureHandlerRootView>
+    </View>
   )
+
+  return nativeScrollGesture ? dial : <GestureHandlerRootView>{dial}</GestureHandlerRootView>
 }
 
 const styles = StyleSheet.create({
