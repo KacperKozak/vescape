@@ -35,6 +35,15 @@ const config: ExpoConfig = {
   plugins: [
     'expo-router',
     [
+      '@sentry/react-native/expo',
+      {
+        // Falls back to SENTRY_ORG / SENTRY_PROJECT env vars during builds;
+        // source-map upload additionally needs SENTRY_AUTH_TOKEN.
+        organization: process.env.SENTRY_ORG,
+        project: process.env.SENTRY_PROJECT,
+      },
+    ],
+    [
       'expo-dev-client',
       {
         toolsButton: false,
@@ -79,6 +88,7 @@ const config: ExpoConfig = {
     'expo-image',
     './plugins/withGradleJvmArgs',
     './plugins/withWearMirror',
+    './plugins/withSentryNativeInit',
   ],
   experiments: {
     typedRoutes: true,

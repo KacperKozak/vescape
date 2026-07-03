@@ -1,3 +1,4 @@
+import * as Sentry from '@sentry/react-native'
 import { Stack } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import { useEffect } from 'react'
@@ -5,6 +6,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler'
 
 import { DiagnosticErrorBoundary } from '@/components/domain/main/DiagnosticErrorBoundary'
 import { HeaderBackButton } from '@/components/ui/base/HeaderBackButton'
+import { initSentry } from '@/config/sentry'
 import { stackScreens } from '@/navigation/routes'
 import { useAlertsStore } from '@/store/alertsStore'
 import { useGroupRideStore } from '@/store/groupRideStore'
@@ -12,7 +14,9 @@ import { useRiderStore } from '@/store/riderStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { theme } from '@/constants/theme'
 
-export default function RootLayout() {
+initSentry()
+
+function RootLayout() {
   useEffect(() => {
     void useSettingsStore.getState().load()
     void useAlertsStore.getState().load()
@@ -83,3 +87,5 @@ export default function RootLayout() {
     </DiagnosticErrorBoundary>
   )
 }
+
+export default Sentry.wrap(RootLayout)
