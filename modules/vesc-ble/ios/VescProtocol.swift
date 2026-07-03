@@ -24,8 +24,8 @@ internal enum VescUartUUIDs {
 }
 
 /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardTransport.kt
-/// iOS stores boards as JSON in UserDefaults, so the transport rides inside the Board Link JSON —
-/// no separate persisted TEXT column to encode/decode like Android's board_settings.
+/// Persisted form (`boards.transport` TEXT scalar): `null` | `"direct"` | `"<canId>"`.
+/// Bridge form (JS): `null` | `"direct"` | Int.
 internal enum BoardTransport: Equatable {
   case direct
   case can(Int)
@@ -59,6 +59,29 @@ internal enum BoardTransport: Equatable {
       return (0...255).contains(canId) ? .can(canId) : nil
     default:
       return nil
+    }
+  }
+
+  /// Decode the persisted TEXT column. Junk decodes to `nil` (undetected).
+  /// Mirrors Android `BoardTransport.decode`.
+  static func decode(_ stored: String?) -> BoardTransport? {
+    switch stored {
+    case nil:
+      return nil
+    case "direct":
+      return .direct
+    case let text?:
+      guard let canId = Int(text), (0...255).contains(canId) else { return nil }
+      return .can(canId)
+    }
+  }
+
+  /// Encode to the persisted TEXT column. Mirrors Android `BoardTransport.encode`.
+  static func encode(_ transport: BoardTransport?) -> String? {
+    switch transport {
+    case nil: return nil
+    case .direct: return "direct"
+    case .can(let canId): return String(canId)
     }
   }
 }

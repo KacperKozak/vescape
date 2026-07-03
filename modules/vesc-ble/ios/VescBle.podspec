@@ -15,6 +15,8 @@ Pod::Spec.new do |s|
   s.source         = { :git => '' }
 
   s.dependency 'ExpoModulesCore'
+  # Single on-device database (mirrors Android Room). App data + telemetry live in one GRDB file.
+  s.dependency 'GRDB.swift', '~> 6.24.1'
 
   # Swift/Objective-C compatibility
   s.static_framework = true

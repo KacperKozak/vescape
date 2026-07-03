@@ -1,12 +1,752 @@
 import ExpoModulesCore
 import Foundation
+import GRDB
+
+/// Single on-device database for iOS. One GRDB file backs both app data (boards, alert rules,
+/// privacy zones, map points, settings) and telemetry tables — mirroring the single Android Room
+/// database. GRDB `DatabasePool` opens in WAL mode by default, matching Room's WAL concurrency.
+///
+/// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/TelemetryDatabase.kt
+/// @platform-diff iOS is greenfield, so the schema starts at a single `v1` migration that creates
+/// the final table shapes directly instead of replaying Android's incremental Room migrations. The
+/// telemetry tables are created schema-only here; their writers land in later slices (#60/#61/#63).
+enum TelemetryDatabase {
+  private static let databaseName = "telemetry.db"
+
+  private static let poolResult: Result<DatabasePool, Error> = {
+    do {
+      let support = try FileManager.default.url(
+        for: .applicationSupportDirectory,
+        in: .userDomainMask,
+        appropriateFor: nil,
+        create: true
+      )
+      let url = support.appendingPathComponent(databaseName)
+      let pool = try DatabasePool(path: url.path)
+      try migrator.migrate(pool)
+      return .success(pool)
+    } catch {
+      return .failure(error)
+    }
+  }()
+
+  /// The shared pool, or `nil` if the database could not be opened. Callers degrade gracefully
+  /// (reads return empty, writes no-op) rather than crashing the bridge.
+  static var pool: DatabasePool? {
+    if case let .success(pool) = poolResult { return pool }
+    return nil
+  }
+
+  private static var migrator: DatabaseMigrator {
+    var migrator = DatabaseMigrator()
+
+    migrator.registerMigration("v1") { db in
+      // MARK: App data
+
+      try db.execute(sql: """
+        CREATE TABLE boards (
+          id TEXT NOT NULL PRIMARY KEY,
+          name TEXT NOT NULL,
+          ble_id TEXT,
+          transport TEXT,
+          created_at INTEGER NOT NULL
+        )
+        """)
+      try db.execute(sql: "CREATE INDEX index_boards_created_at ON boards(created_at)")
+
+      try db.execute(sql: """
+        CREATE TABLE board_settings (
+          board_id TEXT NOT NULL,
+          key TEXT NOT NULL,
+          value_json TEXT NOT NULL,
+          updated_at INTEGER NOT NULL,
+          PRIMARY KEY (board_id, key)
+        )
+        """)
+      try db.execute(sql: "CREATE INDEX index_board_settings_board_id ON board_settings(board_id)")
+
+      try db.execute(sql: """
+        CREATE TABLE alerts (
+          id TEXT NOT NULL PRIMARY KEY,
+          control_id TEXT NOT NULL,
+          threshold REAL NOT NULL,
+          threshold_max REAL,
+          enabled INTEGER NOT NULL,
+          sound_type TEXT NOT NULL,
+          created_at INTEGER NOT NULL
+        )
+        """)
+      try db.execute(sql: "CREATE INDEX index_alerts_control_id ON alerts(control_id)")
+      try db.execute(sql: "CREATE INDEX index_alerts_enabled ON alerts(enabled)")
+      try db.execute(sql: "CREATE INDEX index_alerts_created_at ON alerts(created_at)")
+
+      try db.execute(sql: """
+        CREATE TABLE privacy_zones (
+          id TEXT NOT NULL PRIMARY KEY,
+          preset TEXT NOT NULL,
+          name TEXT NOT NULL,
+          enabled INTEGER NOT NULL,
+          center_latitude_e7 INTEGER NOT NULL,
+          center_longitude_e7 INTEGER NOT NULL,
+          radius_meters INTEGER NOT NULL,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        )
+        """)
+
+      try db.execute(sql: """
+        CREATE TABLE map_points (
+          id TEXT NOT NULL PRIMARY KEY,
+          kind TEXT NOT NULL,
+          latitude_e7 INTEGER NOT NULL,
+          longitude_e7 INTEGER NOT NULL,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+        )
+        """)
+      try db.execute(sql: "CREATE INDEX index_map_points_kind ON map_points(kind)")
+
+      try db.execute(sql: """
+        CREATE TABLE app_settings (
+          key TEXT NOT NULL PRIMARY KEY,
+          value_json TEXT NOT NULL,
+          updated_at INTEGER NOT NULL
+        )
+        """)
+
+      // MARK: Telemetry (schema only — populated by #60/#61/#63)
+
+      try db.execute(sql: """
+        CREATE TABLE telemetry_frames (
+          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+          captured_at_ms INTEGER NOT NULL,
+          elapsed_realtime_ms INTEGER NOT NULL,
+          device_id TEXT,
+          device_name TEXT,
+          can_id INTEGER,
+          flags INTEGER NOT NULL,
+          changed_mask_1 INTEGER NOT NULL,
+          changed_mask_2 INTEGER NOT NULL,
+          speed_centi_kmh INTEGER,
+          battery_voltage_mv INTEGER,
+          motor_current_ma INTEGER,
+          battery_current_ma INTEGER,
+          duty_permille INTEGER,
+          pitch_centi_deg INTEGER,
+          roll_centi_deg INTEGER,
+          balance_pitch_centi_deg INTEGER,
+          balance_current_ma INTEGER,
+          erpm INTEGER,
+          state INTEGER,
+          switch_state INTEGER,
+          adc1_milli INTEGER,
+          adc2_milli INTEGER,
+          odometer_cm INTEGER,
+          temp_mosfet_deci_c INTEGER,
+          temp_motor_deci_c INTEGER,
+          fault_code INTEGER,
+          latitude_e7 INTEGER,
+          longitude_e7 INTEGER,
+          gps_speed_centi_mps INTEGER,
+          bearing_centi_deg INTEGER,
+          accuracy_cm INTEGER,
+          altitude_cm INTEGER,
+          location_timestamp_ms INTEGER
+        )
+        """)
+      try db.execute(sql: "CREATE INDEX index_telemetry_frames_captured_at_ms ON telemetry_frames(captured_at_ms)")
+      try db.execute(sql: """
+        CREATE INDEX index_telemetry_frames_device_id_captured_at_ms
+        ON telemetry_frames(device_id, captured_at_ms)
+        """)
+      try db.execute(sql: """
+        CREATE INDEX index_telemetry_frames_fault
+        ON telemetry_frames(captured_at_ms)
+        WHERE fault_code IS NOT NULL AND fault_code != 0
+        """)
+
+      try db.execute(sql: """
+        CREATE TABLE telemetry_minute_buckets (
+          bucket_start_ms INTEGER NOT NULL,
+          device_id TEXT NOT NULL,
+          device_name TEXT,
+          sample_count INTEGER NOT NULL,
+          first_sample_at_ms INTEGER NOT NULL,
+          last_sample_at_ms INTEGER NOT NULL,
+          sum_abs_speed_centi_kmh INTEGER NOT NULL,
+          moving_speed_sample_count INTEGER,
+          sum_moving_abs_speed_centi_kmh INTEGER,
+          max_abs_speed_centi_kmh INTEGER NOT NULL,
+          min_battery_voltage_mv INTEGER,
+          max_motor_current_abs_ma INTEGER NOT NULL,
+          max_battery_current_abs_ma INTEGER NOT NULL,
+          battery_used_wh_milli INTEGER NOT NULL,
+          battery_regen_wh_milli INTEGER NOT NULL,
+          max_duty_abs_permille INTEGER NOT NULL,
+          fault_count INTEGER NOT NULL,
+          first_odometer_cm INTEGER,
+          last_odometer_cm INTEGER,
+          gps_point_count INTEGER NOT NULL,
+          precise_gps_point_count INTEGER NOT NULL,
+          gps_distance_cm INTEGER NOT NULL,
+          max_gps_speed_centi_mps INTEGER,
+          max_temp_mosfet_deci_c INTEGER,
+          max_temp_motor_deci_c INTEGER,
+          first_latitude_e7 INTEGER,
+          first_longitude_e7 INTEGER,
+          first_moving_at_ms INTEGER,
+          last_moving_at_ms INTEGER,
+          PRIMARY KEY (bucket_start_ms, device_id)
+        )
+        """)
+      try db.execute(sql: "CREATE INDEX index_telemetry_minute_buckets_bucket_start_ms ON telemetry_minute_buckets(bucket_start_ms)")
+
+      try db.execute(sql: """
+        CREATE TABLE telemetry_markers (
+          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+          occurred_at_ms INTEGER NOT NULL,
+          elapsed_realtime_ms INTEGER NOT NULL,
+          type TEXT NOT NULL,
+          device_id TEXT,
+          device_name TEXT,
+          message TEXT,
+          gap_ms INTEGER
+        )
+        """)
+      try db.execute(sql: "CREATE INDEX index_telemetry_markers_occurred_at_ms ON telemetry_markers(occurred_at_ms)")
+      try db.execute(sql: """
+        CREATE INDEX index_telemetry_markers_device_id_occurred_at_ms
+        ON telemetry_markers(device_id, occurred_at_ms)
+        """)
+
+      try db.execute(sql: """
+        CREATE TABLE metric_exclusion_ranges (
+          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+          device_id TEXT NOT NULL,
+          reason TEXT NOT NULL,
+          start_ms INTEGER NOT NULL,
+          end_ms INTEGER NOT NULL,
+          sample_count INTEGER NOT NULL
+        )
+        """)
+      try db.execute(sql: """
+        CREATE INDEX index_metric_exclusion_ranges_start_ms_end_ms
+        ON metric_exclusion_ranges(start_ms, end_ms)
+        """)
+      try db.execute(sql: """
+        CREATE INDEX index_metric_exclusion_ranges_device_id_start_ms_end_ms
+        ON metric_exclusion_ranges(device_id, start_ms, end_ms)
+        """)
+
+      try db.execute(sql: """
+        CREATE TABLE diagnostic_events (
+          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+          occurred_at_ms INTEGER NOT NULL,
+          elapsed_realtime_ms INTEGER NOT NULL,
+          event_name TEXT NOT NULL,
+          operation TEXT,
+          phase TEXT,
+          device_id TEXT,
+          device_name TEXT,
+          message TEXT,
+          properties_json TEXT NOT NULL
+        )
+        """)
+      try db.execute(sql: "CREATE INDEX index_diagnostic_events_occurred_at_ms ON diagnostic_events(occurred_at_ms)")
+      try db.execute(sql: "CREATE INDEX index_diagnostic_events_event_name ON diagnostic_events(event_name)")
+      try db.execute(sql: """
+        CREATE INDEX index_diagnostic_events_device_id_occurred_at_ms
+        ON diagnostic_events(device_id, occurred_at_ms)
+        """)
+    }
+
+    return migrator
+  }
+}
+
+/// CRUD over the single GRDB database for app data: boards (with Board Link), alert rules, privacy
+/// zones, map points and key-value settings. Values cross the bridge as `[String: Any?]` bags to
+/// mirror the JS contract; persistence uses the same column/table shapes as Android Room.
+///
+/// A Board Link is whole-or-nothing: it is composed only when a board has both a `ble_id` and a
+/// proven `transport`, and decomposed back into those two persisted columns on upsert. A partial
+/// `ble_id`-without-transport row reads as unlinked (`link == nil`).
+///
+/// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/AppDataRepository.kt
+final class AppDataRepository {
+  static let shared = AppDataRepository()
+
+  private var pool: DatabasePool? { TelemetryDatabase.pool }
+
+  private init() {}
+
+  private func read<T>(_ fallback: T, _ body: (Database) throws -> T) -> T {
+    guard let pool else { return fallback }
+    return (try? pool.read(body)) ?? fallback
+  }
+
+  private func write(_ body: @escaping (Database) throws -> Void) {
+    guard let pool else { return }
+    try? pool.write(body)
+  }
+
+  private func nowMs() -> Int64 { Int64(Date().timeIntervalSince1970 * 1000) }
+
+  // MARK: - Boards
+
+  func getBoards() -> [[String: Any?]] {
+    read([]) { db in
+      let boards = try Row.fetchAll(
+        db,
+        sql: "SELECT id, name, ble_id, transport, created_at FROM boards ORDER BY created_at ASC"
+      )
+      let settings = try Row.fetchAll(db, sql: "SELECT board_id, key, value_json FROM board_settings")
+      var byBoard: [String: [(String, String)]] = [:]
+      for row in settings {
+        let boardId: String = row["board_id"]
+        byBoard[boardId, default: []].append((row["key"], row["value_json"]))
+      }
+      return boards.map { Self.composeBoard($0, settings: byBoard[$0["id"]] ?? []) }
+    }
+  }
+
+  func getBoard(_ id: String) -> [String: Any?]? {
+    read(nil) { db in
+      guard let board = try Row.fetchOne(
+        db,
+        sql: "SELECT id, name, ble_id, transport, created_at FROM boards WHERE id = ? LIMIT 1",
+        arguments: [id]
+      ) else { return nil }
+      let settings = try Row.fetchAll(
+        db,
+        sql: "SELECT key, value_json FROM board_settings WHERE board_id = ?",
+        arguments: [id]
+      ).map { ($0["key"] as String, $0["value_json"] as String) }
+      return Self.composeBoard(board, settings: settings)
+    }
+  }
+
+  func upsertBoard(_ board: [String: Any?]) {
+    guard let id = board["id"] as? String else { return }
+    let name = board["name"] as? String ?? ""
+    let createdAt = Self.longValue(board["createdAt"] ?? nil) ?? nowMs()
+    let link = board["link"] as? [String: Any?]
+    let bleId = (link?["bleId"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+    let transport = bleId == nil ? nil : BoardTransport.encode(BoardTransport.fromBridge(link?["transport"] ?? nil))
+
+    // Other board-scoped settings. `nil` means the setting row is removed.
+    let settings: [(String, Any?)] = [
+      ("description", (board["description"] as? String).flatMap { $0.isEmpty ? nil : $0 }),
+      ("batteryConfig", Self.normalizeBatteryConfig(board["batteryConfig"] ?? nil)),
+      ("hasBms", link?["hasBms"] as? Bool),
+    ]
+    let updatedAt = nowMs()
+
+    write { db in
+      try db.execute(
+        sql: "INSERT OR REPLACE INTO boards (id, name, ble_id, transport, created_at) VALUES (?, ?, ?, ?, ?)",
+        arguments: [id, name, bleId, transport, createdAt]
+      )
+      for (key, value) in settings {
+        guard let value, let json = Self.encodeJson(value) else {
+          try db.execute(sql: "DELETE FROM board_settings WHERE board_id = ? AND key = ?", arguments: [id, key])
+          continue
+        }
+        try db.execute(
+          sql: "INSERT OR REPLACE INTO board_settings (board_id, key, value_json, updated_at) VALUES (?, ?, ?, ?)",
+          arguments: [id, key, json, updatedAt]
+        )
+      }
+    }
+  }
+
+  func deleteBoard(_ id: String) {
+    write { db in
+      try db.execute(sql: "DELETE FROM board_settings WHERE board_id = ?", arguments: [id])
+      try db.execute(sql: "DELETE FROM boards WHERE id = ?", arguments: [id])
+    }
+  }
+
+  private static func composeBoard(_ row: Row, settings: [(String, String)]) -> [String: Any?] {
+    var values: [String: Any] = [:]
+    for (key, json) in settings {
+      if let decoded = decodeBoardSetting(key: key, json: json) { values[key] = decoded }
+    }
+    let bleId: String? = row["ble_id"]
+    let storedTransport: String? = row["transport"]
+    let transport = BoardTransport.decode(storedTransport)?.bridgeValue
+    // A Board Link exists only when both a BLE peripheral and a proven transport are stored.
+    var link: [String: Any?]?
+    if let bleId, let transport {
+      var built: [String: Any?] = ["bleId": bleId, "transport": transport]
+      if let hasBms = values["hasBms"] as? Bool { built["hasBms"] = hasBms }
+      link = built
+    }
+    return [
+      "id": row["id"] as String,
+      "name": row["name"] as String,
+      "description": values["description"],
+      "createdAt": row["created_at"] as Int64,
+      "batteryConfig": values["batteryConfig"],
+      "lastBattery": values["lastBattery"],
+      "link": link,
+    ]
+  }
+
+  private static func decodeBoardSetting(key: String, json: String) -> Any? {
+    guard let raw = decodeJson(json) else { return nil }
+    switch key {
+    case "description":
+      return raw as? String
+    case "batteryConfig":
+      return normalizeBatteryConfig(raw)
+    case "hasBms":
+      return raw as? Bool
+    case "lastBattery":
+      return decodeLastBattery(raw)
+    default:
+      return nil
+    }
+  }
+
+  private static func decodeLastBattery(_ raw: Any?) -> [String: Any?]? {
+    guard
+      let map = raw as? [String: Any],
+      let percent = doubleValue(map["percent"]),
+      let at = longValue(map["at"])
+    else { return nil }
+    return ["percent": percent, "voltage": doubleValue(map["voltage"]), "at": at]
+  }
+
+  // MARK: - Alert rules
+
+  func getAlertRules() -> [[String: Any?]] {
+    read([]) { db in
+      try Row.fetchAll(db, sql: "SELECT * FROM alerts ORDER BY created_at ASC").map { row in
+        [
+          "id": row["id"] as String,
+          "controlId": row["control_id"] as String,
+          "threshold": row["threshold"] as Double,
+          "thresholdMax": row["threshold_max"] as Double?,
+          "enabled": (row["enabled"] as Int64) != 0,
+          "soundType": row["sound_type"] as String,
+          "createdAt": row["created_at"] as Int64,
+        ]
+      }
+    }
+  }
+
+  func upsertAlertRule(_ rule: [String: Any?]) {
+    guard let id = rule["id"] as? String, let controlId = rule["controlId"] as? String else { return }
+    let threshold = Self.doubleValue(rule["threshold"] ?? nil) ?? 0
+    let thresholdMax = Self.doubleValue(rule["thresholdMax"] ?? nil)
+    let enabled = (rule["enabled"] as? Bool) ?? false
+    let soundType = rule["soundType"] as? String ?? "default"
+    let createdAt = Self.longValue(rule["createdAt"] ?? nil) ?? nowMs()
+    write { db in
+      try db.execute(
+        sql: """
+          INSERT OR REPLACE INTO alerts (id, control_id, threshold, threshold_max, enabled, sound_type, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+          """,
+        arguments: [id, controlId, threshold, thresholdMax, enabled ? 1 : 0, soundType, createdAt]
+      )
+    }
+  }
+
+  func setAlertRuleEnabled(_ id: String, _ enabled: Bool) {
+    write { db in
+      try db.execute(sql: "UPDATE alerts SET enabled = ? WHERE id = ?", arguments: [enabled ? 1 : 0, id])
+    }
+  }
+
+  func deleteAlertRule(_ id: String) {
+    write { db in try db.execute(sql: "DELETE FROM alerts WHERE id = ?", arguments: [id]) }
+  }
+
+  // MARK: - Privacy zones
+
+  func getPrivacyZones() -> [[String: Any?]] {
+    read([]) { db in
+      try Row.fetchAll(db, sql: "SELECT * FROM privacy_zones ORDER BY created_at ASC").map { row in
+        [
+          "id": row["id"] as String,
+          "preset": row["preset"] as String,
+          "name": row["name"] as String,
+          "enabled": (row["enabled"] as Int64) != 0,
+          "centerLatitude": (row["center_latitude_e7"] as Int64).asE7Degrees,
+          "centerLongitude": (row["center_longitude_e7"] as Int64).asE7Degrees,
+          "radiusMeters": row["radius_meters"] as Int64,
+          "createdAt": row["created_at"] as Int64,
+          "updatedAt": row["updated_at"] as Int64,
+        ]
+      }
+    }
+  }
+
+  func upsertPrivacyZone(_ zone: [String: Any?]) {
+    guard
+      let id = zone["id"] as? String,
+      let name = zone["name"] as? String,
+      let latitude = Self.doubleValue(zone["centerLatitude"] ?? nil),
+      let longitude = Self.doubleValue(zone["centerLongitude"] ?? nil),
+      let radius = Self.longValue(zone["radiusMeters"] ?? nil)
+    else { return }
+    let preset = zone["preset"] as? String ?? "custom"
+    let enabled = (zone["enabled"] as? Bool) ?? false
+    let now = nowMs()
+    let createdAt = Self.longValue(zone["createdAt"] ?? nil) ?? now
+    let updatedAt = Self.longValue(zone["updatedAt"] ?? nil) ?? now
+    write { db in
+      try db.execute(
+        sql: """
+          INSERT OR REPLACE INTO privacy_zones
+            (id, preset, name, enabled, center_latitude_e7, center_longitude_e7, radius_meters, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          """,
+        arguments: [id, preset, name, enabled ? 1 : 0, latitude.toE7, longitude.toE7, radius, createdAt, updatedAt]
+      )
+    }
+  }
+
+  func setPrivacyZoneEnabled(_ id: String, _ enabled: Bool) {
+    let updatedAt = nowMs()
+    write { db in
+      try db.execute(
+        sql: "UPDATE privacy_zones SET enabled = ?, updated_at = ? WHERE id = ?",
+        arguments: [enabled ? 1 : 0, updatedAt, id]
+      )
+    }
+  }
+
+  func deletePrivacyZone(_ id: String) {
+    write { db in try db.execute(sql: "DELETE FROM privacy_zones WHERE id = ?", arguments: [id]) }
+  }
+
+  // MARK: - Map points
+
+  private static let validMapPointKinds: Set<String> = [
+    "direction", "drop", "bonk", "nose_slide", "trail_entry", "viewpoint", "charging", "charging_food",
+  ]
+
+  func getMapPoints() -> [[String: Any?]] {
+    read([]) { db in
+      try Row.fetchAll(db, sql: "SELECT * FROM map_points ORDER BY created_at ASC").map { row in
+        [
+          "id": row["id"] as String,
+          "kind": row["kind"] as String,
+          "latitude": (row["latitude_e7"] as Int64).asE7Degrees,
+          "longitude": (row["longitude_e7"] as Int64).asE7Degrees,
+          "createdAt": row["created_at"] as Int64,
+          "updatedAt": row["updated_at"] as Int64,
+        ]
+      }
+    }
+  }
+
+  func upsertMapPoint(_ point: [String: Any?]) {
+    guard let entity = Self.mapPointColumns(point) else { return }
+    write { db in try Self.insertMapPoint(db, entity) }
+  }
+
+  func replaceDirectionMapPoint(_ point: [String: Any?]) {
+    var forced = point
+    forced["kind"] = "direction"
+    guard let entity = Self.mapPointColumns(forced) else { return }
+    write { db in
+      try db.execute(sql: "DELETE FROM map_points WHERE kind = 'direction'")
+      try Self.insertMapPoint(db, entity)
+    }
+  }
+
+  func deleteMapPoint(_ id: String) {
+    write { db in try db.execute(sql: "DELETE FROM map_points WHERE id = ?", arguments: [id]) }
+  }
+
+  private static func insertMapPoint(_ db: Database, _ c: (String, String, Int64, Int64, Int64, Int64)) throws {
+    try db.execute(
+      sql: """
+        INSERT OR REPLACE INTO map_points (id, kind, latitude_e7, longitude_e7, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+        """,
+      arguments: [c.0, c.1, c.2, c.3, c.4, c.5]
+    )
+  }
+
+  private static func mapPointColumns(
+    _ point: [String: Any?]
+  ) -> (String, String, Int64, Int64, Int64, Int64)? {
+    guard
+      let id = point["id"] as? String,
+      let kind = (point["kind"] as? String), validMapPointKinds.contains(kind),
+      let latitude = doubleValue(point["latitude"] ?? nil), latitude.isFinite,
+      let longitude = doubleValue(point["longitude"] ?? nil), longitude.isFinite
+    else { return nil }
+    let now = Int64(Date().timeIntervalSince1970 * 1000)
+    let createdAt = longValue(point["createdAt"] ?? nil) ?? now
+    let updatedAt = longValue(point["updatedAt"] ?? nil) ?? now
+    return (id, kind, latitude.toE7, longitude.toE7, createdAt, updatedAt)
+  }
+
+  // MARK: - Settings
+
+  func getSettings() -> [String: Any?] {
+    let rows: [String: Any] = read([:]) { db in
+      var stored: [String: Any] = [:]
+      for row in try Row.fetchAll(db, sql: "SELECT key, value_json FROM app_settings") {
+        if let decoded = Self.decodeJson(row["value_json"]) { stored[row["key"]] = decoded }
+      }
+      return stored
+    }
+    var merged = Self.defaultSettings
+    for (key, value) in rows { merged[key] = value }
+    if merged["movingSpeedThresholdKmh"] == nil {
+      if let legacy = rows["avgSpeedCutoffKmh"] ?? rows["movingAvgSpeedThresholdKmh"] {
+        merged["movingSpeedThresholdKmh"] = legacy
+      }
+    }
+    return Self.normalizeSettings(merged)
+  }
+
+  func updateSetting(_ key: String, rawValue: Any?) {
+    let updatedAt = nowMs()
+    guard let rawValue, !(rawValue is NSNull) else {
+      write { db in try db.execute(sql: "DELETE FROM app_settings WHERE key = ?", arguments: [key]) }
+      return
+    }
+    let value: Any
+    if key == "liveHistoryLimit" {
+      guard let minutes = Self.liveHistoryLimitMinutes(rawValue) else { return }
+      value = minutes
+    } else {
+      value = rawValue
+    }
+    guard let json = Self.encodeJson(value) else { return }
+    write { db in
+      try db.execute(
+        sql: "INSERT OR REPLACE INTO app_settings (key, value_json, updated_at) VALUES (?, ?, ?)",
+        arguments: [key, json, updatedAt]
+      )
+    }
+  }
+
+  // MARK: - Shared pure helpers (also used by VescBleModule bridge glue)
+
+  static let defaultSettings: [String: Any] = [
+    "liveHistoryLimit": 5,
+    "autoConnect": true,
+    "autoRecording": false,
+    "companionPresenceEnabled": false,
+    "selectedBoardId": NSNull(),
+    "riderId": NSNull(),
+    "riderName": NSNull(),
+    "riderColor": NSNull(),
+    "lastGpsLatitude": NSNull(),
+    "lastGpsLongitude": NSNull(),
+    "movingSpeedThresholdKmh": 3,
+    "telemetryPollRateHz": 20,
+    "historyMetricGradientsEnabled": true,
+    "historyMetricHotRanges": [
+      "speed": ["start": 30, "end": 40],
+      "duty": ["start": 60, "end": 80],
+      "tempMotor": ["start": 70, "end": 90],
+      "tempController": ["start": 60, "end": 80],
+      "motorCurrent": ["start": 35, "end": 55],
+      "batteryCurrent": ["start": 25, "end": 45],
+    ],
+  ]
+
+  static func normalizeSettings(_ settings: [String: Any]) -> [String: Any] {
+    var normalized = settings
+    normalized["liveHistoryLimit"] =
+      liveHistoryLimitMinutes(settings["liveHistoryLimit"]) ?? defaultSettings["liveHistoryLimit"]
+    return normalized
+  }
+
+  static func liveHistoryLimitMinutes(_ value: Any?) -> Int? {
+    guard let minutes = intValue(value) else { return nil }
+    return min(50, max(1, minutes))
+  }
+
+  static func normalizeBatteryConfig(_ raw: Any?) -> [String: Any]? {
+    guard let config = raw as? [String: Any], let mode = config["mode"] as? String else { return nil }
+    switch mode {
+    case "preset":
+      guard
+        let cellPresetId = config["cellPresetId"] as? String, !cellPresetId.isEmpty,
+        let seriesCount = intValue(config["seriesCount"]), seriesCount > 0,
+        let parallelCount = intValue(config["parallelCount"]), parallelCount > 0
+      else { return nil }
+      return [
+        "mode": "preset",
+        "cellPresetId": cellPresetId,
+        "seriesCount": seriesCount,
+        "parallelCount": parallelCount,
+      ]
+    case "manual":
+      guard
+        let minVoltage = doubleValue(config["minVoltage"]),
+        let maxVoltage = doubleValue(config["maxVoltage"]),
+        minVoltage.isFinite, maxVoltage.isFinite, maxVoltage > minVoltage
+      else { return nil }
+      return ["mode": "manual", "minVoltage": minVoltage, "maxVoltage": maxVoltage]
+    default:
+      return nil
+    }
+  }
+
+  static func intValue(_ raw: Any?) -> Int? {
+    if let value = raw as? Int { return value }
+    if let value = raw as? NSNumber { return value.intValue }
+    return nil
+  }
+
+  static func doubleValue(_ raw: Any?) -> Double? {
+    if let value = raw as? Double { return value }
+    if let value = raw as? NSNumber { return value.doubleValue }
+    return nil
+  }
+
+  static func longValue(_ raw: Any?) -> Int64? {
+    if let value = raw as? Int64 { return value }
+    if let value = raw as? Int { return Int64(value) }
+    if let value = raw as? NSNumber { return value.int64Value }
+    return nil
+  }
+
+  private static func encodeJson(_ value: Any?) -> String? {
+    guard let value, !(value is NSNull) else { return nil }
+    guard let data = try? JSONSerialization.data(withJSONObject: value, options: [.fragmentsAllowed]) else {
+      return nil
+    }
+    return String(data: data, encoding: .utf8)
+  }
+
+  private static func decodeJson(_ text: String) -> Any? {
+    guard
+      let data = text.data(using: .utf8),
+      let object = try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed])
+    else { return nil }
+    return object is NSNull ? nil : object
+  }
+}
+
+private extension Int64 {
+  /// Convert an e7-scaled integer coordinate to decimal degrees.
+  var asE7Degrees: Double { Double(self) / 10_000_000.0 }
+}
+
+private extension Double {
+  /// Convert decimal degrees to an e7-scaled integer coordinate.
+  var toE7: Int64 { Int64(self * 10_000_000.0) }
+}
 
 // Thin JS bridge. Board scan/connect/telemetry delegate to the CoreBluetooth stack
-// (VescGattClient + ConnectionCoordinator); everything else is a persisted stub until the
-// matching iOS subsystem lands.
+// (VescGattClient + ConnectionCoordinator); app data delegates to GRDB, while later iOS
+// subsystems still keep bridge-shaped stubs.
 /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt
-/// TODO(iOS parity): port location, alerts, Group Ride, debug recording, and database
-/// subsystems to match Android API/events/errors (#58–#63).
+/// TODO(iOS parity): port location, alert evaluation/playback, Group Ride, debug recording,
+/// telemetry history, backup, and config subsystems to match Android API/events/errors (#60–#63).
 public class VescBleModule: Module {
 
   // MARK: - Session state
@@ -31,10 +771,7 @@ public class VescBleModule: Module {
 
   // MARK: - App data state
 
-  private var boards = VescBleModule.loadArray(key: "vesc_ble_boards")
-  private var alertRules = VescBleModule.loadArray(key: "vesc_ble_alert_rules")
-  private var privacyZones = VescBleModule.loadArray(key: "vesc_ble_privacy_zones")
-  private var mapPoints = VescBleModule.loadArray(key: "vesc_ble_map_points")
+  private let appData = AppDataRepository.shared
 
   // MARK: - Module definition
 
@@ -142,9 +879,7 @@ public class VescBleModule: Module {
 
     Function("setSelectedBoard") { (boardId: String?) in
       self.selectedBoardId = boardId
-      var settings = Self.loadSettings()
-      settings["selectedBoardId"] = boardId
-      Self.saveSettings(settings)
+      self.appData.updateSetting("selectedBoardId", rawValue: boardId)
     }
 
     AsyncFunction("setCompanionPresenceEnabled") { (enabled: Bool, promise: Promise) in
@@ -165,9 +900,7 @@ public class VescBleModule: Module {
 
     AsyncFunction("selectBoard") { (boardId: String, promise: Promise) in
       self.selectedBoardId = boardId
-      var settings = Self.loadSettings()
-      settings["selectedBoardId"] = boardId
-      Self.saveSettings(settings)
+      self.appData.updateSetting("selectedBoardId", rawValue: boardId)
       guard let config = self.connectConfig(boardId: boardId) else {
         promise.reject("NO_LINK", "Board has no Board Link: \(boardId)")
         return
@@ -292,123 +1025,88 @@ public class VescBleModule: Module {
     }
 
     AsyncFunction("getBoards") { (promise: Promise) in
-      promise.resolve(self.boards.map(Self.normalizeBoard).sorted(by: Self.sortBoards))
+      promise.resolve(self.appData.getBoards())
     }
 
     AsyncFunction("upsertBoard") { (board: [String: Any], promise: Promise) in
-      self.upsert(&self.boards, item: Self.normalizeBoard(board))
-      self.saveAppData()
+      self.appData.upsertBoard(board)
       promise.resolve(nil)
     }
 
     AsyncFunction("deleteBoard") { (id: String, promise: Promise) in
-      self.boards.removeAll { ($0["id"] as? String) == id }
-      self.saveAppData()
+      self.appData.deleteBoard(id)
       promise.resolve(nil)
     }
 
     AsyncFunction("getAlertRules") { (promise: Promise) in
-      promise.resolve(self.alertRules.sorted(by: Self.sortByCreatedAt))
+      promise.resolve(self.appData.getAlertRules())
     }
 
     AsyncFunction("upsertAlertRule") { (rule: [String: Any], promise: Promise) in
-      self.upsert(&self.alertRules, item: rule)
-      self.saveAppData()
+      self.appData.upsertAlertRule(rule)
       promise.resolve(nil)
     }
 
     AsyncFunction("setAlertRuleEnabled") { (id: String, enabled: Bool, promise: Promise) in
-      self.alertRules = self.alertRules.map { rule in
-        guard (rule["id"] as? String) == id else { return rule }
-        var next = rule
-        next["enabled"] = enabled
-        return next
-      }
-      self.saveAppData()
+      self.appData.setAlertRuleEnabled(id, enabled)
       promise.resolve(nil)
     }
 
     AsyncFunction("deleteAlertRule") { (id: String, promise: Promise) in
-      self.alertRules.removeAll { ($0["id"] as? String) == id }
-      self.saveAppData()
+      self.appData.deleteAlertRule(id)
       promise.resolve(nil)
     }
 
     AsyncFunction("getPrivacyZones") { (promise: Promise) in
-      promise.resolve(self.privacyZones.sorted(by: Self.sortByCreatedAt))
+      promise.resolve(self.appData.getPrivacyZones())
     }
 
     AsyncFunction("upsertPrivacyZone") { (zone: [String: Any], promise: Promise) in
-      self.upsert(&self.privacyZones, item: zone)
-      self.saveAppData()
+      self.appData.upsertPrivacyZone(zone)
       promise.resolve(nil)
     }
 
     AsyncFunction("setPrivacyZoneEnabled") { (id: String, enabled: Bool, promise: Promise) in
-      self.privacyZones = self.privacyZones.map { zone in
-        guard (zone["id"] as? String) == id else { return zone }
-        var next = zone
-        next["enabled"] = enabled
-        next["updatedAt"] = Date().timeIntervalSince1970 * 1000.0
-        return next
-      }
-      self.saveAppData()
+      self.appData.setPrivacyZoneEnabled(id, enabled)
       promise.resolve(nil)
     }
 
     AsyncFunction("deletePrivacyZone") { (id: String, promise: Promise) in
-      self.privacyZones.removeAll { ($0["id"] as? String) == id }
-      self.saveAppData()
+      self.appData.deletePrivacyZone(id)
       promise.resolve(nil)
     }
 
     AsyncFunction("getMapPoints") { (promise: Promise) in
-      promise.resolve(self.mapPoints.sorted(by: Self.sortByCreatedAt))
+      promise.resolve(self.appData.getMapPoints())
     }
 
     AsyncFunction("upsertMapPoint") { (point: [String: Any], promise: Promise) in
-      self.upsert(&self.mapPoints, item: point)
-      self.saveAppData()
+      self.appData.upsertMapPoint(point)
       promise.resolve(nil)
     }
 
     AsyncFunction("replaceDirectionMapPoint") { (point: [String: Any], promise: Promise) in
-      var directionPoint = point
-      directionPoint["kind"] = "direction"
-      self.mapPoints.removeAll { ($0["kind"] as? String) == "direction" }
-      self.upsert(&self.mapPoints, item: directionPoint)
-      self.saveAppData()
+      self.appData.replaceDirectionMapPoint(point)
       promise.resolve(nil)
     }
 
     AsyncFunction("deleteMapPoint") { (id: String, promise: Promise) in
-      self.mapPoints.removeAll { ($0["id"] as? String) == id }
-      self.saveAppData()
+      self.appData.deleteMapPoint(id)
       promise.resolve(nil)
     }
 
     AsyncFunction("getSettings") { (promise: Promise) in
-      promise.resolve(Self.loadSettings())
+      promise.resolve(self.appData.getSettings())
     }
 
     AsyncFunction("updateSetting") { (key: String, jsonValue: String?, promise: Promise) in
-      var settings = VescBleModule.loadSettings()
       if let jsonStr = jsonValue,
          let data = jsonStr.data(using: .utf8),
          let decoded = try? JSONSerialization.jsonObject(with: data, options: .allowFragments) {
-        if key == "liveHistoryLimit" {
-          guard let minutes = Self.liveHistoryLimitMinutes(decoded) else {
-            promise.resolve(nil)
-            return
-          }
-          settings[key] = minutes
-        } else {
-          settings[key] = decoded
-        }
+        self.appData.updateSetting(key, rawValue: decoded)
       } else {
-        settings.removeValue(forKey: key)
+        self.appData.updateSetting(key, rawValue: nil)
       }
-      VescBleModule.saveSettings(settings)
       promise.resolve(nil)
     }
   }
@@ -459,26 +1157,26 @@ public class VescBleModule: Module {
   /// board is unlinked (JS routes those to Board Probe instead). Dumb connect (ADR 0015): the
   /// transport is read straight from the link, never rediscovered.
   private func connectConfig(boardId: String) -> BoardConnectConfig? {
-    guard let board = boards.first(where: { ($0["id"] as? String) == boardId }) else { return nil }
+    guard let board = appData.getBoard(boardId) else { return nil }
     guard let link = board["link"] as? [String: Any?] else { return nil }
     guard let bleId = link["bleId"] as? String, !bleId.isEmpty else { return nil }
     let transport = BoardTransport.fromBridge(link["transport"] ?? nil) ?? .direct
     let name = board["name"] as? String ?? "VESC Board"
-    let settings = Self.loadSettings()
-    let hz = Self.intValue(settings["telemetryPollRateHz"]) ?? 0
+    let settings = appData.getSettings()
+    let hz = AppDataRepository.intValue(settings["telemetryPollRateHz"] ?? nil) ?? 0
     return BoardConnectConfig(
       appBoardId: boardId,
       bleId: bleId,
       name: name,
       transport: transport,
       pollIntervalMs: hz > 0 ? 1000 / hz : 0,
-      batteryConfig: Self.normalizeBatteryConfig(board["batteryConfig"] ?? nil),
-      liveHistoryLimitMinutes: Self.liveHistoryLimitMinutes(settings["liveHistoryLimit"]) ?? 5
+      batteryConfig: AppDataRepository.normalizeBatteryConfig(board["batteryConfig"] ?? nil),
+      liveHistoryLimitMinutes: AppDataRepository.liveHistoryLimitMinutes(settings["liveHistoryLimit"] ?? nil) ?? 5
     )
   }
 
   private func liveState() -> [String: Any?] {
-    let settings = Self.loadSettings()
+    let settings = appData.getSettings()
     return [
       "board": [
         "phase": coordinator.phase.rawValue,
@@ -517,176 +1215,6 @@ public class VescBleModule: Module {
 
   private func emitUnsupported(_ message: String) {
     sendEvent("onError", ["message": message])
-  }
-
-  private func saveAppData() {
-    Self.saveArray(boards, key: "vesc_ble_boards")
-    Self.saveArray(alertRules, key: "vesc_ble_alert_rules")
-    Self.saveArray(privacyZones, key: "vesc_ble_privacy_zones")
-    Self.saveArray(mapPoints, key: "vesc_ble_map_points")
-  }
-
-  private func upsert(_ array: inout [[String: Any?]], item: [String: Any?]) {
-    let normalized = item
-    guard let id = normalized["id"] as? String else { return }
-    if let index = array.firstIndex(where: { ($0["id"] as? String) == id }) {
-      array[index] = normalized
-    } else {
-      array.append(normalized)
-    }
-  }
-
-  private static func normalizeBoard(_ raw: [String: Any?]) -> [String: Any?] {
-    var board = raw
-    board.removeValue(forKey: "minVoltage")
-    board.removeValue(forKey: "maxVoltage")
-    board["batteryConfig"] = normalizeBatteryConfig(raw["batteryConfig"])
-    return board
-  }
-
-  private static func normalizeBatteryConfig(_ raw: Any?) -> [String: Any]? {
-    guard let config = raw as? [String: Any], let mode = config["mode"] as? String else {
-      return nil
-    }
-    switch mode {
-    case "preset":
-      guard
-        let cellPresetId = config["cellPresetId"] as? String,
-        !cellPresetId.isEmpty,
-        let seriesCount = intValue(config["seriesCount"]),
-        let parallelCount = intValue(config["parallelCount"]),
-        seriesCount > 0,
-        parallelCount > 0
-      else {
-        return nil
-      }
-      return [
-        "mode": "preset",
-        "cellPresetId": cellPresetId,
-        "seriesCount": seriesCount,
-        "parallelCount": parallelCount,
-      ]
-    case "manual":
-      guard
-        let minVoltage = doubleValue(config["minVoltage"]),
-        let maxVoltage = doubleValue(config["maxVoltage"]),
-        minVoltage.isFinite,
-        maxVoltage.isFinite,
-        maxVoltage > minVoltage
-      else {
-        return nil
-      }
-      return [
-        "mode": "manual",
-        "minVoltage": minVoltage,
-        "maxVoltage": maxVoltage,
-      ]
-    default:
-      return nil
-    }
-  }
-
-  private static func intValue(_ raw: Any?) -> Int? {
-    if let value = raw as? Int { return value }
-    if let value = raw as? NSNumber { return value.intValue }
-    return nil
-  }
-
-  private static func doubleValue(_ raw: Any?) -> Double? {
-    if let value = raw as? Double { return value }
-    if let value = raw as? NSNumber { return value.doubleValue }
-    return nil
-  }
-
-  private static func sortBoards(_ lhs: [String: Any?], _ rhs: [String: Any?]) -> Bool {
-    return createdAt(lhs) < createdAt(rhs)
-  }
-
-  private static func sortByCreatedAt(_ lhs: [String: Any?], _ rhs: [String: Any?]) -> Bool {
-    createdAt(lhs) < createdAt(rhs)
-  }
-
-  private static func createdAt(_ item: [String: Any?]) -> Double {
-    item["createdAt"] as? Double ?? Double(item["createdAt"] as? Int ?? 0)
-  }
-
-  private static func loadArray(key: String) -> [[String: Any?]] {
-    guard
-      let data = UserDefaults.standard.data(forKey: key),
-      let raw = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
-    else {
-      return []
-    }
-    return raw.map { item in item.reduce(into: [String: Any?]()) { $0[$1.key] = $1.value } }
-  }
-
-  private static func saveArray(_ array: [[String: Any?]], key: String) {
-    let normalized = array.map { item in item.compactMapValues { $0 } }
-    guard let data = try? JSONSerialization.data(withJSONObject: normalized) else { return }
-    UserDefaults.standard.set(data, forKey: key)
-  }
-
-  private static let defaultSettings: [String: Any] = [
-    "liveHistoryLimit": 5,
-    "autoConnect": true,
-    "autoRecording": false,
-    "companionPresenceEnabled": false,
-    "selectedBoardId": NSNull(),
-    "riderId": NSNull(),
-    "riderName": NSNull(),
-    "riderColor": NSNull(),
-    "lastGpsLatitude": NSNull(),
-    "lastGpsLongitude": NSNull(),
-    "movingSpeedThresholdKmh": 3,
-    "telemetryPollRateHz": 20,
-    "historyMetricGradientsEnabled": true,
-    "historyMetricHotRanges": [
-      "speed": ["start": 30, "end": 40],
-      "duty": ["start": 60, "end": 80],
-      "tempMotor": ["start": 70, "end": 90],
-      "tempController": ["start": 60, "end": 80],
-      "motorCurrent": ["start": 35, "end": 55],
-      "batteryCurrent": ["start": 25, "end": 45],
-    ],
-  ]
-
-  private static func liveHistoryLimitMinutes(_ value: Any?) -> Int? {
-    if let value = value as? Int {
-      return min(50, max(1, value))
-    }
-    if let value = value as? NSNumber {
-      return min(50, max(1, value.intValue))
-    }
-    return nil
-  }
-
-  private static func normalizeSettings(_ settings: [String: Any]) -> [String: Any] {
-    var normalized = settings
-    normalized["liveHistoryLimit"] =
-      liveHistoryLimitMinutes(settings["liveHistoryLimit"]) ?? defaultSettings["liveHistoryLimit"]
-    return normalized
-  }
-
-  private static func loadSettings() -> [String: Any] {
-    guard
-      let data = UserDefaults.standard.data(forKey: "vesc_ble_settings"),
-      let raw = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-    else {
-      return defaultSettings
-    }
-    var merged = defaultSettings
-    for (k, v) in raw { merged[k] = v }
-    if raw["movingSpeedThresholdKmh"] == nil {
-      if let oldValue = raw["avgSpeedCutoffKmh"] ?? raw["movingAvgSpeedThresholdKmh"] {
-        merged["movingSpeedThresholdKmh"] = oldValue
-      }
-    }
-    return normalizeSettings(merged)
-  }
-
-  private static func saveSettings(_ settings: [String: Any]) {
-    guard let data = try? JSONSerialization.data(withJSONObject: settings) else { return }
-    UserDefaults.standard.set(data, forKey: "vesc_ble_settings")
   }
 
   private static func emptyProfileStats() -> [String: Any?] {
