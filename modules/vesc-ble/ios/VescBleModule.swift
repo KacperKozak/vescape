@@ -781,13 +781,24 @@ public class VescBleModule: Module {
   /// the probe owns the single BLE link (see Android `probeBoardLink`).
   private var activeProbe: BoardTransportDetector?
 
+  /// Frontend liveness gate. False while the app is backgrounded so the high-frequency telemetry
+  /// firehose (`onLiveTick` at the board's poll rate, `onTelemetryHistory`, `onLiveSeries`) never
+  /// crosses to a JS thread iOS keeps alive under the BLE/`location` background modes — that flood
+  /// pegged the JS thread and tripped the OS CPU watchdog (fatal `cpu_resource` kill). Native keeps
+  /// polling, recording and firing alerts throughout; only the JS-facing emit sleeps.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt `frontendActive`
+  private var frontendActive = true
+  /// Events with at least one live JS listener, tracked via `OnStartObserving`/`OnStopObserving`.
+  private var observedEvents = Set<String>()
+
   private lazy var coordinator: ConnectionCoordinator = {
     let coordinator = ConnectionCoordinator(appData: self.appData)
     coordinator.emit = { [weak self] name, body in
-      self?.sendEvent(name, body)
+      guard let self, self.shouldEmitToFrontend(name) else { return }
+      self.sendEvent(name, body)
     }
     coordinator.onStateChanged = { [weak self] in
-      guard let self else { return }
+      guard let self, self.shouldEmitToFrontend("onLiveState") else { return }
       self.sendEvent("onLiveState", self.liveState())
     }
     return coordinator
@@ -809,7 +820,36 @@ public class VescBleModule: Module {
 
     Events("onDevice", "onError", "onLiveState", "onLiveTick", "onLiveSeries", "onTelemetryHistory", "onBms", "onLocation", "onTelemetryRebuildProgress", "onBoardProbeProgress", "onGroupRideConnection", "onGroupRideSnapshot", "onGroupRideCreated", "onGroupRideUpdated", "onGroupRideEnded", "onGroupRideJoined", "onGroupRideRoster", "onGroupRideError")
 
+    // Track per-event JS listeners so native skips emitting into the void, and gate the whole
+    // firehose on app foreground (see `frontendActive`). Mirrors Android's observing + lifecycle
+    // gate. @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt
+    OnStartObserving("onDevice") { self.observedEvents.insert("onDevice") }
+    OnStopObserving("onDevice") { self.observedEvents.remove("onDevice") }
+    OnStartObserving("onError") { self.observedEvents.insert("onError") }
+    OnStopObserving("onError") { self.observedEvents.remove("onError") }
+    OnStartObserving("onLiveState") { self.observedEvents.insert("onLiveState") }
+    OnStopObserving("onLiveState") { self.observedEvents.remove("onLiveState") }
+    OnStartObserving("onLiveTick") { self.observedEvents.insert("onLiveTick") }
+    OnStopObserving("onLiveTick") { self.observedEvents.remove("onLiveTick") }
+    OnStartObserving("onLiveSeries") { self.observedEvents.insert("onLiveSeries") }
+    OnStopObserving("onLiveSeries") { self.observedEvents.remove("onLiveSeries") }
+    OnStartObserving("onTelemetryHistory") { self.observedEvents.insert("onTelemetryHistory") }
+    OnStopObserving("onTelemetryHistory") { self.observedEvents.remove("onTelemetryHistory") }
+    OnStartObserving("onBms") { self.observedEvents.insert("onBms") }
+    OnStopObserving("onBms") { self.observedEvents.remove("onBms") }
+    OnStartObserving("onLocation") { self.observedEvents.insert("onLocation") }
+    OnStopObserving("onLocation") { self.observedEvents.remove("onLocation") }
+
+    OnAppEntersForeground {
+      self.frontendActive = true
+    }
+    OnAppEntersBackground {
+      self.frontendActive = false
+    }
+
     OnDestroy {
+      self.frontendActive = false
+      self.observedEvents.removeAll()
       self.activeProbe = nil
       self.coordinator.stopBoard()
       self.coordinator.stopScan()
@@ -1233,6 +1273,13 @@ public class VescBleModule: Module {
         "startedAt": coordinator.recordingStartedAt(),
       ] as [String: Any?],
     ]
+  }
+
+  /// True only when the app is foregrounded and JS is actively listening to `name`. Gates the
+  /// coordinator's JS-facing emits so the telemetry firehose sleeps in the background.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt `shouldEmitToFrontend`
+  private func shouldEmitToFrontend(_ name: String) -> Bool {
+    frontendActive && observedEvents.contains(name)
   }
 
   private func emitUnsupported(_ message: String) {
