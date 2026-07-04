@@ -84,6 +84,8 @@ internal final class ConnectionCoordinator: VescGattListener {
   private var config: BoardConnectConfig?
   private let reassembler = VescPacketReassembler()
   private let batteryEstimator = BatterySocEstimator()
+  /// Median window producing the Battery SoC Estimate for display + alerts (ADR-0016).
+  private let socWindow = SocMedianWindow()
   private let liveSeries = LiveSeriesEmitter()
   private let appData: AppDataRepository
   private lazy var recordingCoordinator = RecordingCoordinator(appData: appData)
@@ -246,6 +248,7 @@ internal final class ConnectionCoordinator: VescGattListener {
 
     sessionSequence += 1
     session = BoardSession(id: sessionSequence)
+    socWindow.reset()
     self.config = config
     recordingCoordinator.beginBoardSession(config: config)
     gpsError = gpsMonitor.start()
@@ -269,6 +272,7 @@ internal final class ConnectionCoordinator: VescGattListener {
     persistLastBattery(percent: latestBatterySoc, voltage: latestBatteryVoltage, now: nowMs(), force: true)
     latestBatterySoc = nil
     latestBatteryVoltage = nil
+    socWindow.reset()
     session?.invalidate()
     session = nil
     config = nil
@@ -364,6 +368,7 @@ internal final class ConnectionCoordinator: VescGattListener {
     )
     settleConnect(success: false, code: code, message: message)
     boardError = message
+    socWindow.reset()
     session?.invalidate()
     session = nil
     config = nil
@@ -406,6 +411,7 @@ internal final class ConnectionCoordinator: VescGattListener {
     session?.invalidate()
     stopPolling()
     reassembler.reset()
+    socWindow.reset()
 
     sessionSequence += 1
     session = BoardSession(id: sessionSequence)
@@ -557,10 +563,12 @@ internal final class ConnectionCoordinator: VescGattListener {
       config: config?.batteryConfig,
       batteryCurrentA: telemetry.batteryCurrent
     )
-    tick["batteryPercent"] = batteryPercent
-    latestBatterySoc = batteryPercent
+    // Smooth the IR-compensated % into the Battery SoC Estimate; display + alerts share it.
+    let batteryEstimate = batteryPercent.map { socWindow.median(percent: $0, nowMs: telemetry.lastPacketAt) }
+    tick["batteryPercent"] = batteryEstimate
+    latestBatterySoc = batteryEstimate
     latestBatteryVoltage = telemetry.batteryVoltage
-    persistLastBattery(percent: batteryPercent, voltage: telemetry.batteryVoltage, now: telemetry.lastPacketAt)
+    persistLastBattery(percent: batteryEstimate, voltage: telemetry.batteryVoltage, now: telemetry.lastPacketAt)
     tick["generation"] = connectionSeq
     tick["remoteTilt"] = nil
     if let latestPreciseLocation {
@@ -571,7 +579,7 @@ internal final class ConnectionCoordinator: VescGattListener {
     // fired alerts drive geiger loops + single/TTS playback and are attached to the event payload.
     let firedAlerts = alertCoordinator.evaluate(
       telemetry: telemetry,
-      batteryPercent: batteryPercent,
+      batteryPercent: batteryEstimate,
       onDiagnostic: { [weak self] name, props in self?.recordAlertDiagnostic(name, props) }
     )
     if !firedAlerts.isEmpty {
