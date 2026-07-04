@@ -130,6 +130,7 @@ internal final class TelemetryRepository {
   private var lastKeyframeAtMs: Int64?
   private var metricConfig = MetricSanitizerConfig()
   private var enabledPrivacyZones: [PrivacyZoneEntity] = []
+  private let batteryEstimator = BatterySocEstimator()
 
   func applySettings(_ settings: [String: Any?]) {
     queue.async { self.metricConfig = MetricSanitizerConfig.from(settings: settings) }
@@ -247,6 +248,10 @@ internal final class TelemetryRepository {
     let toMs = long(options["toMs"]) ?? nowMs()
     let limit = min(MAX_SAMPLE_LIMIT, max(1, int(options["limit"]) ?? DEFAULT_SAMPLE_LIMIT))
     let deviceId = options["deviceId"] as? String
+    // Battery configs and the smoothing window are read up front (each opens its own DB read) so
+    // the estimate stays a pure computation inside the frames read below.
+    let configs = batteryConfigByDevice()
+    let windowMs = socWindowMs()
     return (try? pool.read { db in
       let rows = try Row.fetchAll(
         db,
@@ -258,7 +263,8 @@ internal final class TelemetryRepository {
           """,
         arguments: [fromMs, toMs, deviceId, deviceId, limit]
       )
-      return rows.map(sampleMap)
+      let percents = self.batteryPercents(rows, configs: configs, windowMs: windowMs)
+      return zip(rows, percents).map { sampleMap($0.0, batteryPercent: $0.1) }
     }) ?? []
   }
 
@@ -268,6 +274,10 @@ internal final class TelemetryRepository {
     let limit = min(MAX_SAMPLE_LIMIT, max(1, int(options["limit"]) ?? DEFAULT_SAMPLE_LIMIT))
     let deviceId = options["deviceId"] as? String
     guard let pool else { return emptyRangePayload() }
+    // Battery configs and the smoothing window are read up front (each opens its own DB read) so
+    // the estimate stays a pure computation inside the range read below.
+    let configs = batteryConfigByDevice()
+    let windowMs = socWindowMs()
     return (try? pool.read { db -> [String: Any?] in
       let sampleRows = try Row.fetchAll(
         db,
@@ -289,12 +299,67 @@ internal final class TelemetryRepository {
         sql: "SELECT * FROM metric_exclusion_ranges WHERE end_ms >= ? AND start_ms <= ? AND (? IS NULL OR device_id = ?) ORDER BY start_ms ASC",
         arguments: [fromMs, toMs, deviceId, deviceId]
       ).map(exclusionMap)
-      return sampleColumns(sampleRows) + [
+      let percents = self.batteryPercents(sampleRows, configs: configs, windowMs: windowMs)
+      return sampleColumns(sampleRows, batteryPercents: percents) + [
         "gpsSamples": gpsMaps(sampleRows),
         "markers": markers.map(markerMap),
         "exclusions": exclusions,
       ]
     }) ?? emptyRangePayload()
+  }
+
+  // MARK: - Battery SoC on read (ADR-0016)
+
+  /// Per-sample Battery SoC Estimate for a run of frames (ordered by captured_at_ms): the
+  /// IR-compensated % from the board's stored battery config, smoothed by a per-device
+  /// `SocMedianWindow`. Returns one entry per row (nil where no config is known for the device).
+  /// Mirrors how the live path derives % per frame; approximate on read only because Android stores
+  /// delta-encoded frames.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/TelemetryRepository.kt `smoothedSampleMaps`
+  private func batteryPercents(_ rows: [Row], configs: [String: [String: Any]], windowMs: Int64) -> [Double?] {
+    var windows: [String: SocMedianWindow] = [:]
+    return rows.map { row in
+      let deviceId = row["device_id"] as String?
+      let voltageV = Double(row["battery_voltage_mv"] as Int? ?? 0) / 1000.0
+      let batteryCurrentA = Double(row["battery_current_ma"] as Int? ?? 0) / 1000.0
+      guard let deviceId, let raw = deriveBatteryPercent(deviceId: deviceId, voltageV: voltageV, batteryCurrentA: batteryCurrentA, configs: configs) else {
+        return nil
+      }
+      let window = windows[deviceId] ?? {
+        let w = SocMedianWindow(windowMs: windowMs)
+        windows[deviceId] = w
+        return w
+      }()
+      return window.median(percent: raw, nowMs: row["captured_at_ms"] as Int64)
+    }
+  }
+
+  /// Derive IR-compensated battery % for one sample, mirroring the live native path.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/TelemetryRepository.kt `deriveBatteryPercent`
+  private func deriveBatteryPercent(deviceId: String, voltageV: Double, batteryCurrentA: Double, configs: [String: [String: Any]]) -> Double? {
+    guard let config = configs[deviceId] else { return nil }
+    return batteryEstimator.estimateBatteryPercent(voltageV: voltageV, config: config, batteryCurrentA: batteryCurrentA)
+  }
+
+  /// bleId (telemetry deviceId) -> the board's normalized battery config.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/TelemetryRepository.kt `batteryConfigByDevice`
+  private func batteryConfigByDevice() -> [String: [String: Any]] {
+    batteryEstimator.ensureLoaded()
+    var result: [String: [String: Any]] = [:]
+    for board in AppDataRepository.shared.getBoards() {
+      guard
+        let link = board["link"] as? [String: Any?],
+        let bleId = link["bleId"] as? String,
+        let config = board["batteryConfig"] as? [String: Any]
+      else { continue }
+      result[bleId] = config
+    }
+    return result
+  }
+
+  /// SoC median window length from app settings (seconds → ms), defaulting to Android's 20 s.
+  private func socWindowMs() -> Int64 {
+    Int64(int(AppDataRepository.shared.getSettings()["socEstimateWindowSeconds"] ?? nil) ?? 20) * 1000
   }
 
   func deleteBefore(_ beforeMs: Int64) -> Int {
@@ -620,12 +685,12 @@ private func buildTelemetryBuckets(_ points: [BucketTelemetryPoint]) -> [Telemet
   return Array(buckets.values)
 }
 
-private func sampleColumns(_ rows: [Row]) -> [String: Any?] {
+private func sampleColumns(_ rows: [Row], batteryPercents: [Double?]) -> [String: Any?] {
   var data = Data(capacity: rows.count * SAMPLE_COLUMN_COUNT * MemoryLayout<Double>.size)
   var deviceIds: [String?] = []
   var deviceNames: [String] = []
   var deviceIndex: [String: Int] = [:]
-  for row in rows {
+  for (i, row) in rows.enumerated() {
     let id: Int64 = row["id"]
     let rawDeviceId = row["device_id"] as String?
     let key = rawDeviceId ?? ""
@@ -641,7 +706,7 @@ private func sampleColumns(_ rows: [Row]) -> [String: Any?] {
     appendDouble(&data, Double(index))
     appendDouble(&data, Double(row["speed_centi_kmh"] as Int? ?? 0) / 100.0)
     appendDouble(&data, Double(row["battery_voltage_mv"] as Int? ?? 0) / 1000.0)
-    appendDouble(&data, Double.nan)
+    appendNullableDouble(&data, batteryPercents[i])
     appendDouble(&data, Double(row["motor_current_ma"] as Int? ?? 0) / 1000.0)
     appendDouble(&data, Double(row["battery_current_ma"] as Int? ?? 0) / 1000.0)
     appendDouble(&data, Double(row["duty_permille"] as Int? ?? 0) / 1000.0)
@@ -821,7 +886,7 @@ private func historyMap(_ row: Row, markers: [Row]) -> [String: Any?] {
   ]
 }
 
-private func sampleMap(_ row: Row) -> [String: Any?] {
+private func sampleMap(_ row: Row, batteryPercent: Double?) -> [String: Any?] {
   [
     "id": row["id"] as Int64,
     "capturedAtMs": row["captured_at_ms"] as Int64,
@@ -829,7 +894,7 @@ private func sampleMap(_ row: Row) -> [String: Any?] {
     "deviceName": row["device_name"] as String? ?? "VESC Board",
     "speedKmh": Double(row["speed_centi_kmh"] as Int? ?? 0) / 100.0,
     "batteryVoltage": Double(row["battery_voltage_mv"] as Int? ?? 0) / 1000.0,
-    "batteryPercent": nil,
+    "batteryPercent": batteryPercent,
     "motorCurrent": Double(row["motor_current_ma"] as Int? ?? 0) / 1000.0,
     "batteryCurrent": Double(row["battery_current_ma"] as Int? ?? 0) / 1000.0,
     "dutyCycle": Double(row["duty_permille"] as Int? ?? 0) / 1000.0,
