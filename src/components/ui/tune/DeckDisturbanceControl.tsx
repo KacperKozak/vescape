@@ -3,7 +3,6 @@ import { useMemo } from 'react'
 import { StyleSheet, Text, TextInput, View, type LayoutChangeEvent } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, {
-  runOnJS,
   useAnimatedProps,
   useAnimatedStyle,
   useSharedValue,
@@ -11,17 +10,17 @@ import Animated, {
 } from 'react-native-reanimated'
 
 import { theme } from '@/constants/theme'
-import { MAX_SYNTHETIC_CURRENT_AMPS } from '@/lib/tune/tunePreview'
+import { MAX_DECK_DISTURBANCE_DEGREES } from '@/lib/tune/tunePreview'
 
-interface SyntheticLoadControlProps {
-  value: SharedValue<number>
-  onValueChangeEnd?: (value: number) => void
+interface DeckDisturbanceControlProps {
+  angleDegrees: SharedValue<number>
+  active: SharedValue<boolean>
 }
 
 const THUMB_SIZE = 18
 const AnimatedTextInput = Animated.createAnimatedComponent(TextInput)
 
-export function SyntheticLoadControl({ value, onValueChangeEnd }: SyntheticLoadControlProps) {
+export function DeckDisturbanceControl({ angleDegrees, active }: DeckDisturbanceControlProps) {
   const width = useSharedValue(0)
 
   const gesture = useMemo(() => {
@@ -29,25 +28,31 @@ export function SyntheticLoadControl({ value, onValueChangeEnd }: SyntheticLoadC
       'worklet'
       const travel = Math.max(width.value - THUMB_SIZE, 1)
       const thumbLeft = Math.max(0, Math.min(travel, x - THUMB_SIZE / 2))
-      value.value = Math.round((1 - (thumbLeft / travel) * 2) * 100) / 100
+      angleDegrees.value =
+        Math.round(((thumbLeft / travel) * 2 - 1) * MAX_DECK_DISTURBANCE_DEGREES * 10) / 10
     }
 
     return Gesture.Pan()
       .minDistance(0)
-      .onBegin((event) => updateFromX(event.x))
+      .onBegin((event) => {
+        active.value = true
+        updateFromX(event.x)
+      })
       .onUpdate((event) => updateFromX(event.x))
       .onFinalize(() => {
-        if (onValueChangeEnd) runOnJS(onValueChangeEnd)(value.value)
+        active.value = false
+        angleDegrees.value = 0
       })
-  }, [onValueChangeEnd, value, width])
+  }, [active, angleDegrees, width])
 
   const thumbStyle = useAnimatedStyle(() => {
     const travel = Math.max(width.value - THUMB_SIZE, 0)
-    return { transform: [{ translateX: ((1 - value.value) / 2) * travel }] }
+    const normalized = angleDegrees.value / MAX_DECK_DISTURBANCE_DEGREES
+    return { transform: [{ translateX: ((1 + normalized) / 2) * travel }] }
   })
-  const currentTextProps = useAnimatedProps(() => {
-    const current = value.value * MAX_SYNTHETIC_CURRENT_AMPS
-    const text = `${current > 0 ? '+' : ''}${current.toFixed(0)} A`
+  const angleTextProps = useAnimatedProps(() => {
+    const angle = angleDegrees.value
+    const text = `${angle > 0 ? '+' : ''}${angle.toFixed(1)}°`
     return { text, value: text }
   })
 
@@ -55,43 +60,34 @@ export function SyntheticLoadControl({ value, onValueChangeEnd }: SyntheticLoadC
     width.value = event.nativeEvent.layout.width
   }
 
-  const adjust = (delta: number) => {
-    value.value = Math.max(-1, Math.min(1, value.value + delta))
-    onValueChangeEnd?.(value.value)
-  }
-
   return (
     <View style={styles.container}>
       <View style={styles.labels}>
-        <Text style={styles.edgeLabel}>Drive</Text>
+        <Text style={styles.edgeLabel}>Nose</Text>
         <View style={styles.titleRow}>
-          <Text style={styles.title}>Synthetic load</Text>
+          <Text style={styles.title}>Deck disturbance</Text>
           <AnimatedTextInput
             editable={false}
-            defaultValue="0 A"
-            animatedProps={currentTextProps}
-            style={styles.current}
+            defaultValue="0.0°"
+            animatedProps={angleTextProps}
+            style={styles.angle}
           />
         </View>
-        <Text style={styles.edgeLabel}>Regen</Text>
+        <Text style={styles.edgeLabel}>Tail</Text>
       </View>
       <GestureDetector gesture={gesture}>
         <View
           style={styles.trackTouch}
           onLayout={handleLayout}
           accessible
-          accessibilityRole="adjustable"
-          accessibilityLabel="Synthetic load"
-          accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
-          onAccessibilityAction={(event) =>
-            adjust(event.nativeEvent.actionName === 'increment' ? 0.1 : -0.1)
-          }
+          accessibilityLabel="Hold and drag to disturb the deck angle, then release"
         >
           <View style={styles.track} />
           <View style={styles.centerMark} />
           <Animated.View style={[styles.thumb, thumbStyle]} />
         </View>
       </GestureDetector>
+      <Text style={styles.hint}>Hold to set Board angle · release to let the tune recover</Text>
     </View>
   )
 }
@@ -101,15 +97,21 @@ const styles = StyleSheet.create({
   labels: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   titleRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
   title: { color: theme.palette.slate.text, fontSize: 11, fontWeight: '800' },
-  current: {
-    width: 42,
+  angle: {
+    width: 43,
     padding: 0,
-    color: theme.telemetry.motorCurrent,
+    color: theme.telemetry.pitch,
     fontSize: 11,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
   },
   edgeLabel: { color: theme.palette.slate.textMuted, fontSize: 10, fontWeight: '700' },
+  hint: {
+    color: theme.palette.slate.textMuted,
+    fontSize: 9,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
   trackTouch: { height: 30, justifyContent: 'center' },
   track: { height: 3, borderRadius: 2, backgroundColor: theme.palette.slate.border },
   centerMark: {

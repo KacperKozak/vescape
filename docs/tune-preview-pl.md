@@ -36,8 +36,8 @@ Target nie jest drugą deską, przewidywaną trasą ani granicą bezpieczeństwa
 pytanie: **„Jaki kąt wynika teraz z ustawień tune i bieżącego scenariusza?”**
 
 Board nie pokazuje kąta prawdziwej, podłączonej deski. Jest odpowiedzią modelu na pytanie:
-**„Jak idealizowany deck próbowałby podążać za Target przy tych wartościach PID i takim nacisku
-ridera?”**
+**„Jak idealizowany deck wracałby do Target po ręcznym zaburzeniu kąta przy tych wartościach
+PID?”**
 
 ## 2. Dlaczego Board nie leży stale na Target
 
@@ -45,7 +45,7 @@ Gdyby Board zawsze idealnie pokrywał się z Target, podgląd nie pokazywałby c
 Różnica powstaje dlatego, że:
 
 - Target może się przesuwać;
-- rider stale wywiera syntetyczny moment na deck;
+- użytkownik może chwilowo przytrzymać deck pod zadanym kątem;
 - Board ma bezwładność kątową w modelu;
 - człon proporcjonalny potrzebuje błędu, aby wytworzyć korektę;
 - tłumienie przeciwdziała szybkiej zmianie kąta;
@@ -71,21 +71,19 @@ Na końcu wynik jest ograniczany w podglądzie do zakresu `-35°..+35°`.
 
 ### 3.1. Torque Tilt
 
-Torque Tilt zmienia Target w odpowiedzi na syntetyczny prąd silnika.
-
-Podgląd przelicza pozycję **Synthetic load** na zakres `-1..+1`, a następnie na syntetyczny prąd:
+Torque Tilt zmienia Target w odpowiedzi na syntetyczny prąd kontrolera. Prąd nie pochodzi już
+bezpośrednio z suwaka. Model wylicza go z błędu Board–Target, prędkości kątowej, błędu całkującego
+oraz parametrów PID tune:
 
 ```text
-syntheticCurrentAmps = syntheticLoad × 60 A
+prąd korekcyjny ≈
+  - sztywność × (Board - Target)
+  - tłumienie × prędkość kątowa
+  - korekta całkująca
 ```
 
-Przykłady:
-
-| Synthetic load  | Wartość | Syntetyczny prąd |
-| --------------- | ------: | ---------------: |
-| Drive, maksimum |  `+1.0` |          `+60 A` |
-| Środek          |   `0.0` |            `0 A` |
-| Regen, maksimum |  `-1.0` |          `-60 A` |
+Wynik jest ograniczony do `-60..60 A`. Gest zmienia wyłącznie kąt Board. To tune decyduje, jaki
+prąd korekcyjny wynika z tego zaburzenia.
 
 Torque Tilt zaczyna działać dopiero po przekroczeniu `torquetilt_start_current`. Nadwyżka prądu
 jest mnożona przez odpowiednią siłę i ograniczana przez `torquetilt_angle_limit`.
@@ -119,11 +117,11 @@ Brake Tilt działa przy obciążeniu w stronę Regen, jeśli:
 
 - `braketilt_strength` jest większe od zera;
 - syntetyczna prędkość przekracza `2000 ERPM`;
-- Synthetic load jest ujemny, czyli scenariusz symuluje regen/hamowanie.
+- wyliczony prąd kontrolera jest ujemny, czyli scenariusz wymaga regen/hamowania.
 
 Brake Tilt ma własne tempo narastania i wygaszania. `braketilt_lingering` wydłuża jego pozostawanie
 po zakończeniu hamowania. Dlatego Target może jeszcze przez chwilę pozostać przesunięty, mimo że
-Synthetic load wrócił do środka.
+prąd korekcyjny już osłabł.
 
 ### 3.3. ATR
 
@@ -138,10 +136,14 @@ Różnica jest filtrowana przez `atr_filter`, następnie mnożona przez `atr_str
 W uproszczeniu:
 
 ```text
-oczekiwane przyspieszenie ≈ (syntetyczny prąd - 8) / współczynnik ATR
+oczekiwane przyspieszenie ≈ syntetyczny prąd / współczynnik ATR
+zakłócenie od stoku = 9,80665 × nachylenie / √(1 + nachylenie²)
 różnica ATR = oczekiwane przyspieszenie + zakłócenie od stoku
 surowy ATR = siła ATR × filtrowana różnica ATR
 ```
+
+Nachylenie `0,1` oznacza podjazd 10% i daje około `0,98 m/s²` składowej grawitacji. Na płaskim
+terenie zerowy prąd daje zerową różnicę ATR — model nie dodaje żadnego ukrytego offsetu.
 
 ATR ma pamięć i ograniczoną prędkość zmiany. Nie powinien przeskakiwać natychmiast z pełnego
 podnoszenia nosa do pełnego opuszczania nosa.
@@ -193,8 +195,7 @@ kątowej, zbudowanej z czterech głównych elementów:
 błąd = Board - Target
 
 przyspieszenie kątowe ≈
-  (moment ridera
-   - sztywność × błąd
+  (- sztywność × błąd
    - tłumienie × prędkość kątowa
    - korekta całkująca)
   / miękkość filtra
@@ -202,7 +203,6 @@ przyspieszenie kątowe ≈
 
 Znaczenie składników:
 
-- **moment ridera** stale odchyla Board zgodnie z pozycją Synthetic load;
 - **sztywność** próbuje zmniejszyć bieżącą różnicę Board–Target;
 - **tłumienie** hamuje szybki ruch i ogranicza oscylacje;
 - **korekta całkująca** zbiera błąd w czasie i usuwa utrzymujące się odchylenie;
@@ -313,19 +313,25 @@ Zakres UI `0..15` zapisuje bezpośrednio `turntilt_strength`. Obecny Tune Previe
 wzdłużnym, więc nie symuluje skrętu ani przechyłu roll. Z tego powodu Carve tilt nie zmienia dwóch
 linii widocznych w tym podglądzie.
 
-## 7. Synthetic load
+## 7. Deck disturbance
 
-Synthetic load jest sztucznym, utrzymywanym wejściem scenariusza:
+Deck disturbance jest bezpośrednim, chwilowym zaburzeniem kąta Board w zakresie `-12..12°`:
 
-- przesunięcie do **Drive** daje wartość dodatnią;
-- środek daje zero;
-- przesunięcie do **Regen** daje wartość ujemną.
+- przesunięcie w stronę **Nose** opuszcza lewy koniec Board;
+- środek oznacza brak ręcznego zaburzenia;
+- przesunięcie w stronę **Tail** podnosi lewy koniec Board.
 
-To nie jest zadany kąt decku. To syntetyczny moment ridera oraz źródło syntetycznego prądu dla
-funkcji tune.
+Podczas trzymania gestu model traktuje Board jak przytrzymaną ręką: kąt jest wymuszony, a prędkość
+kątowa wynosi zero. Kontroler nadal oblicza błąd, prąd korekcyjny i Target.
 
-Dlatego dodatnie Synthetic load nie oznacza „ustaw Board na +X stopni”. Oznacza raczej:
-„utrzymuj dodatnie obciążenie ridera i pokaż, jak tune tworzy Target oraz jak Board na nie reaguje”.
+Po puszczeniu gestu wymuszenie znika. Suwak wizualnie wraca do środka, ale Board nie przeskakuje do
+zera. Zaczyna swobodną odpowiedź wynikającą z tune. Można wtedy obserwować:
+
+- szybkość powrotu;
+- tłumienie;
+- przestrzelenie Target;
+- oscylacje;
+- błąd pozostający po uspokojeniu.
 
 ## 8. Prędkość stała i dynamiczna
 
@@ -356,22 +362,15 @@ Board.
 
 ### Constant speed wyłączone
 
-Prędkość staje się dynamiczna. Ostatnia skonfigurowana prędkość jest punktem początkowym, a
-Synthetic load zmienia ją według jawnej skali porównawczej:
+Prędkość staje się dynamiczna. Ostatnia skonfigurowana prędkość jest punktem początkowym. Zmienia
+ją prąd korekcyjny wyliczony przez tune:
 
 ```text
-zmiana prędkości = syntheticLoad × 6 km/h/s × czas
+zmiana prędkości = (prąd korekcyjny / 60 A) × 6 km/h/s × czas
 ```
 
-Przykłady dla jednej sekundy:
-
-| Synthetic load | Zmiana syntetycznej prędkości |
-| -------------- | ----------------------------: |
-| Drive `+1.0`   |                     `+6 km/h` |
-| Drive `+0.5`   |                     `+3 km/h` |
-| Środek `0.0`   |                      `0 km/h` |
-| Regen `-0.5`   |                     `-3 km/h` |
-| Regen `-1.0`   |                     `-6 km/h` |
+Przykładowo `+30 A` daje `+3 km/h/s`, a `-60 A` daje `-6 km/h/s`. Kąt nie jest przeliczany
+bezpośrednio na prędkość. Najpierw tune musi wyliczyć prąd korekcyjny.
 
 Prędkość jest zawsze ograniczona do `0..40 km/h`. Model nie obsługuje jazdy do tyłu.
 
@@ -387,28 +386,12 @@ Dynamiczna prędkość zasila tę samą ścieżkę co prędkość stała:
 Ważne: domyślne `6 km/h/s` nie jest prognozą prawdziwego przyspieszenia Board. Nie uwzględnia masy,
 momentu silnika, napięcia, mocy, przyczepności, oporu powietrza ani nachylenia terenu.
 
-### Opcjonalny blok Reference physics
-
-Po włączeniu Reference physics stała skala `6 km/h/s` zostaje zastąpiona oszacowaniem:
-
-```text
-moment silnika = syntetyczny prąd × moment na amper × sprawność
-siła na kole = moment silnika / promień koła
-przyspieszenie = siła na kole / masa całkowita
-```
-
-Blok przyjmuje masę Rider + Board, średnicę koła, moment silnika na amper i sprawność napędu.
-Parametry są wyłącznie ustawieniem scenariusza i nie trafiają do Tune Profile ani Board.
-
-To nadal nie jest pełna fizyka. Obliczenie nie uwzględnia przyczepności, oporu toczenia i powietrza,
-limitów prądu/mocy, voltage sag, siły od stoku ani kontaktu decku z podłożem.
-
 ## 9. Wzgórza
 
 Wzgórza są sinusoidą przestrzenną:
 
-- **Height** kontroluje amplitudę;
-- **Spacing** kontroluje długość fali;
+- **Height** oznacza fizyczną różnicę wysokości dolina→szczyt;
+- **Spacing** oznacza odległość szczyt→szczyt;
 - prędkość przesuwa Board po tej fali;
 - lokalne nachylenie tworzy syntetyczne zakłócenie dla ATR.
 
@@ -416,8 +399,9 @@ Model celowo nie obraca Board automatycznie zgodnie z wizualnym stokiem. Gdyby t
 geometrię terenu z zachowaniem kontrolera. Stok wpływa na ATR jako zakłócenie obciążenia, ale nie
 ustawia bezpośrednio kąta decku.
 
-Wysokość jest ograniczona do `0..20 m`, a spacing do `2..100 m`. Wizualna amplituda jest
-kompresowana, aby bardzo duże wartości nie wypchnęły wykresu poza ekran.
+Wysokość jest ograniczona do `0..50 m`, a spacing do `2..1000 m`. Koło 11″ i teren używają tej
+samej skali pikseli na metr w pionie i poziomie. Duża góra wychodzi więc poza ekran; podgląd pokazuje
+lokalny fragment stoku zamiast sztucznie zmniejszać ją obok Board.
 
 ## 10. Przykładowe eksperymenty
 
@@ -425,9 +409,9 @@ kompresowana, aby bardzo duże wartości nie wypchnęły wykresu poza ekran.
 
 1. Włącz Constant speed i ustaw `15 km/h`.
 2. Wyłącz Hills.
-3. Ustaw Synthetic load dokładnie w środku.
-4. Porównaj Aggressiveness `-5`, `0` i `+10`.
-5. Następnie ustaw dodatnie Synthetic load o taką samą wartość.
+3. Przytrzymaj Deck disturbance na tym samym kącie, np. `+10°`.
+4. Puść gest i obserwuj powrót.
+5. Powtórz dla Aggressiveness `-5`, `0` i `+10`.
 
 Obserwuj nie tylko maksymalny odstęp Board–Target, ale też:
 
@@ -440,7 +424,7 @@ Obserwuj nie tylko maksymalny odstęp Board–Target, ale też:
 
 1. Ustaw ATR intensity na `0`.
 2. Ustaw stałe `15 km/h`.
-3. Ustaw dodatnie Synthetic load.
+3. Przytrzymaj ten sam dodatni kąt Deck disturbance i puść.
 4. Porównaj Nose stiffness `0`, `5`, `10`.
 
 Przy większej wartości przede wszystkim powinien przesuwać się Target, ponieważ rośnie składnik
@@ -448,7 +432,7 @@ Torque Tilt.
 
 ### Eksperyment C: próg Brake Tilt
 
-1. Ustaw ujemne Synthetic load w stronę Regen.
+1. Wymuś dodatni Nose-up Deck disturbance, aby kontroler wyliczył prąd regen.
 2. Porównaj `6.9 km/h` i `7.1 km/h`.
 
 Referencyjnie `7 km/h = 2000 ERPM`. Poniżej progu Brake Tilt jest wyłączony, a powyżej może zacząć
@@ -458,7 +442,7 @@ wpływać na Target.
 
 1. Najpierw przy Constant speed ustaw niską prędkość początkową.
 2. Wyłącz Constant speed.
-3. Ustaw dodatnie Synthetic load w stronę Drive.
+3. Wymuś Nose-down Deck disturbance i puść, aby tune wyliczył dodatni prąd korekcyjny.
 4. Obserwuj duży odczyt prędkości po prawej stronie Tune Preview.
 
 Gdy prędkość przekracza progi ERPM, do Target mogą dołączać Constant Tiltback, Variable Tiltback,
@@ -470,7 +454,7 @@ z prostego przeliczenia kąta Board na prędkość.
 1. Ustaw ATR intensity powyżej zera.
 2. Włącz Hills.
 3. Ustaw umiarkowane Height i Spacing.
-4. Utrzymuj stałe Synthetic load.
+4. Wykonuj takie samo zaburzenie kąta i puszczaj Board.
 
 Target powinien zmieniać się wraz z fazą terenu, ponieważ lokalny stok zmienia syntetyczną różnicę
 przyspieszenia ATR.
@@ -481,7 +465,7 @@ Aby porównanie miało sens:
 
 1. Użyj Constant speed.
 2. Ustaw identyczną prędkość.
-3. Ustaw identyczne Synthetic load.
+3. Przytrzymaj identyczny kąt Deck disturbance i puść go w tym samym momencie porównania.
 4. Użyj identycznego terenu albo wyłącz Hills.
 5. Porównuj ten sam fragment odpowiedzi: początek ruchu, przejście i stan po uspokojeniu.
 6. Nie wyciągaj wniosków z jednej losowej klatki animacji.

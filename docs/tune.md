@@ -2,12 +2,12 @@
 
 ## Tune Preview model
 
-The flat-response Tune Preview uses model version `refloat-bundled-legacy-v2`, tied to
+The flat-response Tune Preview uses model version `refloat-bundled-legacy-v3`, tied to
 `modules/vesc-ble/android/src/main/assets/refloat-settings.xml`. It is a deterministic,
-comparative ideal-drive model. Synthetic Load applies a sustained normalized pitch moment and a
-bounded `-60..60 A` reference motor current;
-it does not request an angle, speed, acceleration, or motor output. The model intentionally omits
-motor-power, traction, rider-mass, exact-geometry, and nosedive limits.
+comparative ideal-drive model. Deck Disturbance lets the rider hold Board at a temporary
+`-12..12°` angle. Releasing the gesture removes the constraint and lets the tune drive Board back
+toward Target. The model derives a bounded comparative controller current from angle error,
+angular rate, integral error, and the tune's PID fields; the gesture never commands current.
 
 Longitudinal preview speed uses the bundled schema's documented reference conversion for an
 11-inch tire on a 30-pole Hypercore motor: `3.5 km/h = 1000 ERPM`. This is a named comparative
@@ -19,23 +19,21 @@ Tune Profiles saved before the ERPM thresholds entered the app allowlist use the
 defaults (`500 ERPM` constant, `0 ERPM` variable). The preview labels this fallback; fresh profiles
 retain the decoded fields explicitly.
 
-Optional preview hills are a moving spatial sinusoid. Height controls amplitude, spacing controls
-wavelength, and scenario speed advances phase. Terrain slope feeds a synthetic measured-
-acceleration disturbance into the legacy ATR equations; it never forces Board pitch to the terrain
-tangent and does not model traction, suspension, or collision.
+Optional preview hills are a moving spatial sinusoid. Height is the physical valley-to-peak rise,
+spacing is the peak-to-peak distance, and scenario speed advances phase in real meters. Terrain and
+the reference 11-inch wheel share one pixel-per-meter scale; large hills therefore extend beyond
+the viewport instead of being visually compressed. Terrain slope feeds a synthetic measured-
+acceleration disturbance into the legacy ATR equations. The disturbance is gravity projected along
+the grade (`g * slope / sqrt(1 + slope²)`), so a 10% grade contributes about `0.98 m/s²`. It never
+forces Board pitch to the terrain tangent and does not model traction, suspension, or collision.
 
 `Hold speed` is enabled by default so tune comparisons keep an identical constant speed. When it
-is disabled, the configured speed is the starting speed and Synthetic Load changes a
-runtime-only synthetic speed at the model's named comparative acceleration scale. Speed is bounded
-to `0-40 km/h`, reverse is unsupported, and the evolving value drives the existing ERPM, tilt,
-ATR, terrain phase, and ground-travel paths. Switching modes restores the configured speed without
-changing the Tune Profile. Dynamic speed does not predict physical acceleration, braking distance,
-power, traction, or safety; absolute Board angle is never converted into acceleration.
-
-The optional Reference Physics scenario replaces the fixed comparative acceleration scale with a
-current-to-acceleration estimate using total Rider + Board mass, wheel diameter, motor torque per
-amp, and drivetrain efficiency. It remains a reference calculation: it does not model traction,
-drag, rolling resistance, power/current limits, voltage sag, terrain force, or safety.
+is disabled, the configured speed is the starting speed and tune-derived controller current drives
+a bounded comparative speed change. `60 A` maps to `6 km/h/s`; this is a named teaching scale, not
+a physical drivetrain estimate. Speed remains within `0-40 km/h`, reverse is unsupported, and the
+evolving value feeds the existing ERPM, tilt, ATR, terrain-phase, and ground-travel paths. The model
+does not predict physical acceleration, braking distance, power, traction, deck-ground contact, or
+safety, and it never converts absolute Board angle directly into acceleration.
 
 This document captures practical tune-screen behavior used by a Refloat-focused
 board app. It is intended as product and implementation reference for building a

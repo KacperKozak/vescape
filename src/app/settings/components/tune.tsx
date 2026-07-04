@@ -12,7 +12,7 @@ import { useTriggerRef } from '@/components/ui/forms/Dropdown'
 import { BasicSliderCell } from '@/components/ui/tune/BasicSliderCell'
 import { TuneDial } from '@/components/ui/tune/TuneDial'
 import { TunePreview } from '@/components/ui/tune/TunePreview'
-import { SyntheticLoadControl } from '@/components/ui/tune/SyntheticLoadControl'
+import { DeckDisturbanceControl } from '@/components/ui/tune/DeckDisturbanceControl'
 import { TunePreviewScenarioControls } from '@/components/ui/tune/TunePreviewScenarioControls'
 import { IconHero } from '@/components/ui/settings/IconHero'
 import { ShowcaseCard } from '@/components/ui/dev/ShowcaseCard'
@@ -20,7 +20,6 @@ import { ChipRow, ValueRow } from '@/components/ui/dev/ShowcaseControls'
 
 import { theme } from '@/constants/theme'
 import type { BasicSliderItem } from '@/lib/tune/sliderDefinitions'
-import { DEFAULT_TUNE_PREVIEW_REFERENCE_PHYSICS } from '@/lib/tune/tunePreview'
 
 const RANGE_CONFIGS = {
   tune: { min: -5, max: 5, step: 1 },
@@ -211,15 +210,14 @@ function BasicSliderCellShowcase() {
 }
 
 function TunePreviewShowcase() {
-  const [syntheticLoad, setSyntheticLoad] = useState(0.55)
-  const syntheticLoadValue = useSharedValue(syntheticLoad)
+  const deckDisturbanceDegrees = useSharedValue(0)
+  const deckDisturbanceActive = useSharedValue(false)
   const [speedKmh, setSpeedKmh] = useState(15)
   const [holdSpeed, setHoldSpeed] = useState(true)
-  const [referencePhysics, setReferencePhysics] = useState(DEFAULT_TUNE_PREVIEW_REFERENCE_PHYSICS)
-  const [scenario, setScenario] = useState('acceleration')
+  const [scenario, setScenario] = useState('fixed speed')
   const [hillsEnabled, setHillsEnabled] = useState(false)
-  const [hillHeightMeters, setHillHeightMeters] = useState(5)
-  const [hillSpacingMeters, setHillSpacingMeters] = useState(8)
+  const [hillHeightMeters, setHillHeightMeters] = useState(1)
+  const [hillSpacingMeters, setHillSpacingMeters] = useState(50)
   const fields = useMemo(
     () => ({
       kp: 20,
@@ -259,32 +257,24 @@ function TunePreviewShowcase() {
 
   const selectScenario = (next: string) => {
     setScenario(next)
-    if (next === 'acceleration') {
+    if (next === 'dynamic speed') {
       setHillsEnabled(false)
-      setSyntheticLoad(0.7)
-      syntheticLoadValue.value = 0.7
-      setSpeedKmh(15)
-      setHoldSpeed(false)
-    } else if (next === 'braking') {
-      setHillsEnabled(false)
-      setSyntheticLoad(-0.7)
-      syntheticLoadValue.value = -0.7
       setSpeedKmh(15)
       setHoldSpeed(false)
     } else if (next === 'high speed') {
       setHillsEnabled(false)
-      setSyntheticLoad(0)
-      syntheticLoadValue.value = 0
       setSpeedKmh(40)
       setHoldSpeed(true)
-    } else {
+    } else if (next === 'hills' || next === 'dense hills') {
       setHillsEnabled(true)
-      setSyntheticLoad(next === 'uphill' ? 0.6 : -0.6)
-      syntheticLoadValue.value = next === 'uphill' ? 0.6 : -0.6
       setSpeedKmh(15)
       setHoldSpeed(true)
-      setHillHeightMeters(next === 'dense hills' ? 1.2 : 0.6)
-      setHillSpacingMeters(next === 'dense hills' ? 4 : 8)
+      setHillHeightMeters(next === 'dense hills' ? 2 : 1)
+      setHillSpacingMeters(next === 'dense hills' ? 20 : 50)
+    } else {
+      setHillsEnabled(false)
+      setSpeedKmh(15)
+      setHoldSpeed(true)
     }
   }
 
@@ -295,33 +285,34 @@ function TunePreviewShowcase() {
         <>
           <ChipRow
             label="state"
-            options={['acceleration', 'braking', 'high speed', 'uphill', 'downhill', 'dense hills']}
+            options={['fixed speed', 'dynamic speed', 'high speed', 'hills', 'dense hills']}
             selected={scenario}
             onSelect={selectScenario}
           />
-          <ValueRow label="synthetic load" value={`${Math.round(syntheticLoad * 60)} A`} />
+          <ValueRow label="deck disturbance" value="hold and drag" />
         </>
       }
     >
       <TunePreview
         fields={fields}
-        syntheticLoad={syntheticLoadValue}
+        deckDisturbanceDegrees={deckDisturbanceDegrees}
+        deckDisturbanceActive={deckDisturbanceActive}
         speedKmh={speedKmh}
         holdSpeed={holdSpeed}
-        referencePhysics={referencePhysics}
         hillsEnabled={hillsEnabled}
         hillHeightMeters={hillHeightMeters}
         hillSpacingMeters={hillSpacingMeters}
         onHelp={() => {}}
       />
-      <SyntheticLoadControl value={syntheticLoadValue} onValueChangeEnd={setSyntheticLoad} />
+      <DeckDisturbanceControl
+        angleDegrees={deckDisturbanceDegrees}
+        active={deckDisturbanceActive}
+      />
       <TunePreviewScenarioControls
         speedKmh={speedKmh}
         onSpeedChange={setSpeedKmh}
         holdSpeed={holdSpeed}
         onHoldSpeedChange={setHoldSpeed}
-        referencePhysics={referencePhysics}
-        onReferencePhysicsChange={setReferencePhysics}
         hillsEnabled={hillsEnabled}
         onHillsChange={setHillsEnabled}
         hillHeightMeters={hillHeightMeters}
@@ -334,13 +325,15 @@ function TunePreviewShowcase() {
 }
 
 function UnsupportedTunePreviewShowcase() {
-  const syntheticLoad = useSharedValue(0)
+  const deckDisturbanceDegrees = useSharedValue(0)
+  const deckDisturbanceActive = useSharedValue(false)
 
   return (
     <ShowcaseCard name="Tune Preview — unsupported">
       <TunePreview
         fields={{ kp: 20 }}
-        syntheticLoad={syntheticLoad}
+        deckDisturbanceDegrees={deckDisturbanceDegrees}
+        deckDisturbanceActive={deckDisturbanceActive}
         speedKmh={15}
         active={false}
         onHelp={() => {}}

@@ -33,7 +33,7 @@ import { TuneConfigCell } from '@/components/domain/tune/TuneConfigCell'
 import { TuneGroupGrid } from '@/components/ui/tune/TuneGroupGrid'
 import { TuneSyncBar } from '@/components/ui/tune/TuneSyncBar'
 import { TunePreview } from '@/components/ui/tune/TunePreview'
-import { SyntheticLoadControl } from '@/components/ui/tune/SyntheticLoadControl'
+import { DeckDisturbanceControl } from '@/components/ui/tune/DeckDisturbanceControl'
 import { TunePreviewScenarioControls } from '@/components/ui/tune/TunePreviewScenarioControls'
 import { routes } from '@/navigation/routes'
 import { TextPromptModal } from '@/components/ui/modals/TextPromptModal'
@@ -41,7 +41,6 @@ import { BoardPickerModal } from '@/components/domain/tune/BoardPickerModal'
 import { InfoBadge } from '@/components/ui/base/InfoBadge'
 import { useTuneProfileStore } from '@/store/tuneProfileStore'
 import type { BasicSliderItem } from '@/lib/tune/sliderDefinitions'
-import { DEFAULT_TUNE_PREVIEW_REFERENCE_PHYSICS } from '@/lib/tune/tunePreview'
 import { useTuneScreenData } from '@/hooks/useTuneScreenData'
 import { theme } from '@/constants/theme'
 import { useTuneModals } from '@/hooks/useTuneModals'
@@ -53,13 +52,13 @@ export default function TuneScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const isFocused = useIsFocused()
-  const syntheticLoad = useSharedValue(0)
+  const deckDisturbanceDegrees = useSharedValue(0)
+  const deckDisturbanceActive = useSharedValue(false)
   const [previewSpeedKmh, setPreviewSpeedKmh] = useState(15)
   const [holdPreviewSpeed, setHoldPreviewSpeed] = useState(true)
-  const [referencePhysics, setReferencePhysics] = useState(DEFAULT_TUNE_PREVIEW_REFERENCE_PHYSICS)
   const [hillsEnabled, setHillsEnabled] = useState(false)
-  const [hillHeightMeters, setHillHeightMeters] = useState(5)
-  const [hillSpacingMeters, setHillSpacingMeters] = useState(8)
+  const [hillHeightMeters, setHillHeightMeters] = useState(1)
+  const [hillSpacingMeters, setHillSpacingMeters] = useState(50)
   const [previewHelpVisible, setPreviewHelpVisible] = useState(() => {
     if (previewHelpShownThisSession) return false
     previewHelpShownThisSession = true
@@ -233,10 +232,10 @@ export default function TuneScreen() {
           <View style={styles.previewPinned}>
             <TunePreview
               fields={profileFields ?? {}}
-              syntheticLoad={syntheticLoad}
+              deckDisturbanceDegrees={deckDisturbanceDegrees}
+              deckDisturbanceActive={deckDisturbanceActive}
               speedKmh={previewSpeedKmh}
               holdSpeed={holdPreviewSpeed}
-              referencePhysics={referencePhysics}
               hillsEnabled={hillsEnabled}
               hillHeightMeters={hillHeightMeters}
               hillSpacingMeters={hillSpacingMeters}
@@ -244,7 +243,10 @@ export default function TuneScreen() {
               onHelp={() => setPreviewHelpVisible(true)}
             />
             <View style={styles.balancePinned}>
-              <SyntheticLoadControl value={syntheticLoad} />
+              <DeckDisturbanceControl
+                angleDegrees={deckDisturbanceDegrees}
+                active={deckDisturbanceActive}
+              />
             </View>
           </View>
           <ScrollView
@@ -257,8 +259,6 @@ export default function TuneScreen() {
               onSpeedChange={setPreviewSpeedKmh}
               holdSpeed={holdPreviewSpeed}
               onHoldSpeedChange={setHoldPreviewSpeed}
-              referencePhysics={referencePhysics}
-              onReferencePhysicsChange={setReferencePhysics}
               hillsEnabled={hillsEnabled}
               onHillsChange={setHillsEnabled}
               hillHeightMeters={hillHeightMeters}
@@ -440,7 +440,7 @@ export default function TuneScreen() {
         visible={previewHelpVisible}
         variant="warning"
         title="Work in progress"
-        message="Tune editing and Tune Preview are experimental. Synthetic Load is a bounded reference motor current, not a measured or commanded Board current. Reference Physics estimates acceleration from user-provided scenario values but does not model traction, drag, power limits, voltage sag, terrain force, braking distance, or safety. Absolute deck angle is not converted into acceleration. Do not ride with these settings until you have verified them on the bench and confirmed safe behaviour."
+        message="Tune editing and Tune Preview are experimental. Hold Deck disturbance to impose a Board angle, then release it to compare how the tune returns Board toward Target. Controller current and optional dynamic speed are comparative outputs of that response. The preview does not model traction, drag, power limits, voltage sag, braking distance, deck-ground contact, or safety. Do not ride with these settings until you have verified them on the bench and confirmed safe behaviour."
         onDismiss={() => setPreviewHelpVisible(false)}
       />
 

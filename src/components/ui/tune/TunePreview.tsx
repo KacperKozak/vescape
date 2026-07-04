@@ -16,17 +16,22 @@ import {
   groundTravelToVisualOffset,
   resetTunePreviewSpeed,
   stepTunePreview,
-  terrainHeightRelativeToWheel,
   terrainSlopeToSyntheticAcceleration,
-  type TunePreviewReferencePhysics,
 } from '@/lib/tune/tunePreview'
+import {
+  GROUND_TICK_SPACING_METERS,
+  TUNE_PREVIEW_PIXELS_PER_METER,
+  TUNE_PREVIEW_WHEEL_RADIUS_PIXELS,
+  terrainHeightRelativeToWheel,
+  tunePreviewDeckLine,
+} from '@/lib/tune/tunePreviewGeometry'
 
 interface TunePreviewProps {
   fields: Record<string, TuneProfileFieldValue>
-  syntheticLoad: SharedValue<number>
+  deckDisturbanceDegrees: SharedValue<number>
+  deckDisturbanceActive: SharedValue<boolean>
   speedKmh: number
   holdSpeed?: boolean
-  referencePhysics?: TunePreviewReferencePhysics
   hillsEnabled?: boolean
   hillHeightMeters?: number
   hillSpacingMeters?: number
@@ -35,10 +40,12 @@ interface TunePreviewProps {
 }
 
 const GROUND_Y = 78
-const WHEEL_RADIUS = 25
+const WHEEL_RADIUS = TUNE_PREVIEW_WHEEL_RADIUS_PIXELS
 const DECK_HALF_LENGTH = 72
 const DECK_CENTER_Y = GROUND_Y - WHEEL_RADIUS
-const GROUND_TICK_SPACING = 30
+const ZERO_MARKER_GAP = 6
+const ZERO_MARKER_LENGTH = 12
+const GROUND_TICK_SPACING = GROUND_TICK_SPACING_METERS * TUNE_PREVIEW_PIXELS_PER_METER
 const AnimatedLine = Animated.createAnimatedComponent(Line)
 const AnimatedGroup = Animated.createAnimatedComponent(G)
 const AnimatedTextInput = Animated.createAnimatedComponent(TextInput)
@@ -46,13 +53,13 @@ const AnimatedPath = Animated.createAnimatedComponent(Path)
 
 export function TunePreview({
   fields,
-  syntheticLoad,
+  deckDisturbanceDegrees,
+  deckDisturbanceActive,
   speedKmh,
   holdSpeed = true,
-  referencePhysics,
   hillsEnabled = false,
-  hillHeightMeters = 5,
-  hillSpacingMeters = 8,
+  hillHeightMeters = 1,
+  hillSpacingMeters = 50,
   active = true,
   onHelp,
 }: TunePreviewProps) {
@@ -64,14 +71,19 @@ export function TunePreview({
   const angleDegrees = useSharedValue(0)
   const targetAngleDegrees = useSharedValue(0)
   const groundOffset = useSharedValue(0)
-  const groundTravel = useSharedValue(0)
   const terrainResistance = useSharedValue(0)
   const syntheticSpeed = useSharedValue(speedKmh)
+  const controllerCurrent = useSharedValue(0)
+  const terrainPathValue = useSharedValue(
+    terrainPath(canvasWidth, 0, hillHeightMeters, hillSpacingMeters),
+  )
   const centerX = canvasWidth / 2
 
-  const deckAnimatedProps = useAnimatedProps(() => lineForAngle(angleDegrees.value, centerX))
+  const deckAnimatedProps = useAnimatedProps(() =>
+    tunePreviewDeckLine(angleDegrees.value, centerX, DECK_CENTER_Y, DECK_HALF_LENGTH),
+  )
   const targetAnimatedProps = useAnimatedProps(() =>
-    lineForAngle(targetAngleDegrees.value, centerX),
+    tunePreviewDeckLine(targetAngleDegrees.value, centerX, DECK_CENTER_Y, DECK_HALF_LENGTH),
   )
   const groundAnimatedProps = useAnimatedProps(() => ({
     transform: [{ translateX: groundOffset.value }],
@@ -89,8 +101,13 @@ export function TunePreview({
     const value = syntheticSpeed.value.toFixed(1)
     return { text: value, value }
   })
+  const currentTextAnimatedProps = useAnimatedProps(() => {
+    const current = controllerCurrent.value
+    const value = `${current > 0 ? '+' : ''}${current.toFixed(0)} A`
+    return { text: value, value }
+  })
   const terrainAnimatedProps = useAnimatedProps(() => ({
-    d: terrainPath(canvasWidth, groundTravel.value, hillHeightMeters, hillSpacingMeters),
+    d: terrainPathValue.value,
   }))
 
   useEffect(() => {
@@ -117,10 +134,10 @@ export function TunePreview({
           stateRef.current,
           model.parameters,
           {
-            syntheticLoad: syntheticLoad.value,
+            deckDisturbanceDegrees: deckDisturbanceDegrees.value,
+            deckDisturbanceActive: deckDisturbanceActive.value,
             speedKmh,
             holdSpeed,
-            referencePhysics,
             hillsEnabled,
             hillHeightMeters,
             hillSpacingMeters,
@@ -131,9 +148,15 @@ export function TunePreview({
         angleDegrees.value = next.angleDegrees
         targetAngleDegrees.value = next.targetAngleDegrees
         groundOffset.value = groundTravelToVisualOffset(next.groundTravelMeters)
-        groundTravel.value = next.groundTravelMeters
+        terrainPathValue.value = terrainPath(
+          canvasWidth,
+          next.groundTravelMeters,
+          hillHeightMeters,
+          hillSpacingMeters,
+        )
         terrainResistance.value = terrainSlopeToSyntheticAcceleration(next.terrainSlope)
         syntheticSpeed.value = next.syntheticSpeedKmh
+        controllerCurrent.value = next.syntheticCurrentAmps
       }
       frame = requestAnimationFrame(tick)
     }
@@ -145,18 +168,20 @@ export function TunePreview({
   }, [
     active,
     angleDegrees,
+    canvasWidth,
+    controllerCurrent,
+    deckDisturbanceActive,
+    deckDisturbanceDegrees,
     groundOffset,
-    groundTravel,
     hillHeightMeters,
     hillSpacingMeters,
     hillsEnabled,
     holdSpeed,
     model,
-    referencePhysics,
-    syntheticLoad,
     speedKmh,
     syntheticSpeed,
     targetAngleDegrees,
+    terrainPathValue,
     terrainResistance,
   ])
 
@@ -193,6 +218,24 @@ export function TunePreview({
             viewBox={`0 0 ${canvasWidth} 122`}
             accessibilityLabel="Board angle preview"
           >
+            <Line
+              x1={centerX - DECK_HALF_LENGTH - ZERO_MARKER_GAP - ZERO_MARKER_LENGTH}
+              y1={DECK_CENTER_Y}
+              x2={centerX - DECK_HALF_LENGTH - ZERO_MARKER_GAP}
+              y2={DECK_CENTER_Y}
+              stroke={theme.palette.slate.textMuted}
+              strokeWidth={1.5}
+              strokeLinecap="round"
+            />
+            <Line
+              x1={centerX + DECK_HALF_LENGTH + ZERO_MARKER_GAP}
+              y1={DECK_CENTER_Y}
+              x2={centerX + DECK_HALF_LENGTH + ZERO_MARKER_GAP + ZERO_MARKER_LENGTH}
+              y2={DECK_CENTER_Y}
+              stroke={theme.palette.slate.textMuted}
+              strokeWidth={1.5}
+              strokeLinecap="round"
+            />
             <AnimatedLine
               animatedProps={targetAnimatedProps}
               stroke={theme.palette.purple.light}
@@ -267,6 +310,12 @@ export function TunePreview({
               animatedProps={angleTextAnimatedProps}
               style={styles.angle}
             />
+            <AnimatedTextInput
+              editable={false}
+              defaultValue="0 A"
+              animatedProps={currentTextAnimatedProps}
+              style={styles.current}
+            />
             {hillsEnabled ? (
               <AnimatedTextInput
                 editable={false}
@@ -282,14 +331,6 @@ export function TunePreview({
   )
 }
 
-function lineForAngle(angleDegrees: number, centerX: number) {
-  'worklet'
-  const radians = (-angleDegrees * Math.PI) / 180
-  const dx = Math.cos(radians) * DECK_HALF_LENGTH
-  const dy = Math.sin(radians) * DECK_HALF_LENGTH
-  return { x1: centerX - dx, y1: DECK_CENTER_Y - dy, x2: centerX + dx, y2: DECK_CENTER_Y + dy }
-}
-
 function groundTicks(canvasWidth: number): number[] {
   return Array.from(
     { length: Math.ceil(canvasWidth / GROUND_TICK_SPACING) + 1 },
@@ -298,7 +339,6 @@ function groundTicks(canvasWidth: number): number[] {
 }
 
 function terrainPath(width: number, travel: number, height: number, spacing: number): string {
-  'worklet'
   let path = ''
   for (let x = 0; x <= width; x += 6) {
     const y = GROUND_Y - terrainHeightRelativeToWheel(x - width / 2, travel, height, spacing)
@@ -344,6 +384,15 @@ const styles = StyleSheet.create({
     width: 112,
     padding: 0,
     color: theme.palette.amber.text,
+    fontSize: 10,
+    fontWeight: '800',
+    textAlign: 'right',
+    fontVariant: ['tabular-nums'],
+  },
+  current: {
+    width: 48,
+    padding: 0,
+    color: theme.telemetry.motorCurrent,
     fontSize: 10,
     fontWeight: '800',
     textAlign: 'right',

@@ -106,6 +106,18 @@ export function resolveTuneDialThrowVelocity(
   return Math.max(-MAX_THROW_VELOCITY, Math.min(MAX_THROW_VELOCITY, velocity))
 }
 
+export function resolveTuneDialThrowTargetOffset(
+  startOffset: number,
+  velocity: number,
+  totalWidth: number,
+): number {
+  'worklet'
+
+  const remainingSpeed = Math.max(0, Math.abs(velocity) - THROW_STOP_VELOCITY)
+  const remainingDistance = (Math.sign(velocity) * remainingSpeed) / THROW_FRICTION_PER_SECOND
+  return Math.max(-totalWidth, Math.min(0, startOffset + remainingDistance))
+}
+
 export function advanceTuneDialThrow(
   velocity: number,
   elapsedMs: number,

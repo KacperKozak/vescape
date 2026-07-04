@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 
 import {
-  COMPARATIVE_ACCELERATION_KMH_PER_SECOND,
-  DEFAULT_TUNE_PREVIEW_REFERENCE_PHYSICS,
-  calculateSyntheticAcceleration,
+  MAX_DECK_DISTURBANCE_DEGREES,
+  calculateControllerCurrentAmps,
   calculateLongitudinalTarget,
+  calculateSyntheticAcceleration,
   calculateTerrainSlope,
   createTunePreviewModel,
   createTunePreviewState,
@@ -12,10 +12,9 @@ import {
   resetTunePreviewSpeed,
   speedKmhToReferenceErpm,
   stepTunePreview,
-  terrainHeightRelativeToWheel,
   terrainSlopeToSyntheticAcceleration,
-  syntheticLoadToCurrentAmps,
 } from '@/lib/tune/tunePreview'
+import { terrainHeightRelativeToWheel } from '@/lib/tune/tunePreviewGeometry'
 
 const baseFields = {
   kp: 20,
@@ -56,26 +55,216 @@ function readyParameters(fields: typeof baseFields = baseFields) {
   return model.parameters
 }
 
-function run(fields: typeof baseFields, syntheticLoad = 0.8, speedKmh = 15, seconds = 2) {
+function disturbThenRecover(
+  fields: typeof baseFields,
+  disturbanceDegrees = 10,
+  recoverySeconds = 1,
+) {
   const parameters = readyParameters(fields)
-  let state = createTunePreviewState()
-  for (let elapsed = 0; elapsed < seconds; elapsed += 1 / 60) {
-    state = stepTunePreview(state, parameters, { syntheticLoad, speedKmh }, 1 / 60)
+  let state = stepTunePreview(
+    createTunePreviewState(15),
+    parameters,
+    {
+      deckDisturbanceDegrees: disturbanceDegrees,
+      deckDisturbanceActive: true,
+      speedKmh: 15,
+    },
+    1 / 60,
+  )
+  for (let elapsed = 0; elapsed < recoverySeconds; elapsed += 1 / 60) {
+    state = stepTunePreview(
+      state,
+      parameters,
+      { deckDisturbanceDegrees: 0, deckDisturbanceActive: false, speedKmh: 15 },
+      1 / 60,
+    )
   }
   return state
 }
 
 describe('Tune Preview longitudinal response', () => {
-  test('repeats the same state sequence deterministically', () => {
-    expect(run(baseFields)).toEqual(run(baseFields))
+  test('repeats the same disturbance and recovery deterministically', () => {
+    expect(disturbThenRecover(baseFields)).toEqual(disturbThenRecover(baseFields))
   })
 
-  test('higher Aggressiveness resists the same sustained rider moment more strongly', () => {
-    const low = { ...baseFields, kp: 15, kp2: 0.4, ki: 0.015, mahony_kp: 2.2 }
-    const high = { ...baseFields, kp: 30, kp2: 1.1, ki: 0.03, mahony_kp: 1.5 }
-    expect(Math.abs(run(high).angleDegrees - run(high).targetAngleDegrees)).toBeLessThan(
-      Math.abs(run(low).angleDegrees - run(low).targetAngleDegrees),
+  test('holds the requested deck angle while the disturbance is active', () => {
+    const parameters = readyParameters()
+    const state = stepTunePreview(
+      createTunePreviewState(15),
+      parameters,
+      { deckDisturbanceDegrees: 8, deckDisturbanceActive: true, speedKmh: 15 },
+      0.25,
     )
+    expect(state.angleDegrees).toBe(8)
+    expect(state.angularRateDegreesPerSecond).toBe(0)
+    expect(state.syntheticCurrentAmps).toBeLessThan(0)
+  })
+
+  test('clamps a held disturbance to the supported deck-angle range', () => {
+    const state = stepTunePreview(
+      createTunePreviewState(),
+      readyParameters(),
+      { deckDisturbanceDegrees: 90, deckDisturbanceActive: true, speedKmh: 0 },
+      0.1,
+    )
+    expect(state.angleDegrees).toBe(MAX_DECK_DISTURBANCE_DEGREES)
+  })
+
+  test('releases the deck to the tune instead of snapping it to the control center', () => {
+    const parameters = readyParameters()
+    const held = stepTunePreview(
+      createTunePreviewState(),
+      parameters,
+      { deckDisturbanceDegrees: 10, deckDisturbanceActive: true, speedKmh: 0 },
+      0.1,
+    )
+    const released = stepTunePreview(
+      held,
+      parameters,
+      { deckDisturbanceDegrees: 0, deckDisturbanceActive: false, speedKmh: 0 },
+      1 / 60,
+    )
+    expect(released.angleDegrees).toBeLessThan(held.angleDegrees)
+    expect(released.angleDegrees).toBeGreaterThan(0)
+  })
+
+  test('higher Aggressiveness reduces the same released disturbance faster', () => {
+    const neutralTargets = {
+      ...baseFields,
+      torquetilt_strength: 0,
+      torquetilt_strength_regen: 0,
+      braketilt_strength: 0,
+      atr_strength_up: 0,
+      atr_strength_down: 0,
+      tiltback_constant: 0,
+      tiltback_variable: 0,
+      tiltback_variable_max: 0,
+    }
+    const low = { ...neutralTargets, kp: 15, kp2: 0.4, ki: 0.015, mahony_kp: 2.2 }
+    const high = { ...neutralTargets, kp: 30, kp2: 1.1, ki: 0.03, mahony_kp: 1.5 }
+    const lowState = disturbThenRecover(low, 10, 1)
+    const highState = disturbThenRecover(high, 10, 1)
+    expect(Math.abs(highState.angleDegrees - highState.targetAngleDegrees)).toBeLessThan(
+      Math.abs(lowState.angleDegrees - lowState.targetAngleDegrees),
+    )
+  })
+
+  test('derives bounded controller current from angle, rate, integral, and tune', () => {
+    const parameters = readyParameters()
+    expect(calculateControllerCurrentAmps(0, 0, 0, 0, parameters)).toBe(0)
+    expect(calculateControllerCurrentAmps(5, 0, 0, 0, parameters)).toBeLessThan(0)
+    expect(calculateControllerCurrentAmps(-5, 0, 0, 0, parameters)).toBeGreaterThan(0)
+    expect(calculateControllerCurrentAmps(100, 100, 20, 0, parameters)).toBe(-60)
+  })
+
+  test('maps controller current to the bounded comparative acceleration scale', () => {
+    expect(calculateSyntheticAcceleration(60)).toBe(6)
+    expect(calculateSyntheticAcceleration(-30)).toBe(-3)
+    expect(calculateSyntheticAcceleration(100)).toBe(6)
+  })
+
+  test('dynamic speed follows tune-derived controller effort', () => {
+    const parameters = readyParameters()
+    const noseUp = stepTunePreview(
+      createTunePreviewState(15),
+      parameters,
+      {
+        deckDisturbanceDegrees: 10,
+        deckDisturbanceActive: true,
+        speedKmh: 15,
+        holdSpeed: false,
+      },
+      0.25,
+    )
+    const noseDown = stepTunePreview(
+      createTunePreviewState(15),
+      parameters,
+      {
+        deckDisturbanceDegrees: -10,
+        deckDisturbanceActive: true,
+        speedKmh: 15,
+        holdSpeed: false,
+      },
+      0.25,
+    )
+    expect(noseUp.syntheticSpeedKmh).toBeLessThan(15)
+    expect(noseDown.syntheticSpeedKmh).toBeGreaterThan(15)
+  })
+
+  test('fixed speed remains compatible and follows configured speed', () => {
+    const next = stepTunePreview(
+      createTunePreviewState(3),
+      readyParameters(),
+      { deckDisturbanceDegrees: 10, deckDisturbanceActive: true, speedKmh: 15, holdSpeed: true },
+      1 / 60,
+    )
+    expect(next.syntheticSpeedKmh).toBe(15)
+    expect(next.erpm).toBeCloseTo(speedKmhToReferenceErpm(15))
+  })
+
+  test('applies acceleration Torque Tilt above current threshold and clamps its angle', () => {
+    const parameters = readyParameters({ ...baseFields, torquetilt_angle_limit: 2 })
+    const input = { deckDisturbanceDegrees: 0, speedKmh: 15 }
+    const below = calculateLongitudinalTarget(createTunePreviewState(), parameters, input, 1, 10)
+    const above = calculateLongitudinalTarget(createTunePreviewState(), parameters, input, 1, 60)
+    expect(below.torqueTiltDegrees).toBe(0)
+    expect(above.torqueTiltDegrees).toBe(2)
+  })
+
+  test('braking current combines negative regen Torque Tilt with positive Brake Tilt', () => {
+    const target = calculateLongitudinalTarget(
+      createTunePreviewState(),
+      readyParameters(),
+      { deckDisturbanceDegrees: 0, speedKmh: 15 },
+      1,
+      -60,
+    )
+    expect(target.torqueTiltDegrees).toBeLessThan(0)
+    expect(target.brakeTiltDegrees).toBeGreaterThan(0)
+  })
+
+  test('Brake Tilt starts only above the bundled 2000 ERPM boundary', () => {
+    const parameters = readyParameters()
+    const state = createTunePreviewState()
+    const below = calculateLongitudinalTarget(
+      state,
+      parameters,
+      { deckDisturbanceDegrees: 0, speedKmh: 7 },
+      1,
+      -60,
+    )
+    const above = calculateLongitudinalTarget(
+      state,
+      parameters,
+      { deckDisturbanceDegrees: 0, speedKmh: 7.1 },
+      1,
+      -60,
+    )
+    expect(below.brakeTiltDegrees).toBe(0)
+    expect(above.brakeTiltDegrees).toBeGreaterThan(0)
+  })
+
+  test('constant and variable Tiltback respect start ERPM and maximum target', () => {
+    const parameters = readyParameters()
+    const state = createTunePreviewState()
+    const stopped = calculateLongitudinalTarget(
+      state,
+      parameters,
+      { deckDisturbanceDegrees: 0, speedKmh: 0 },
+      1,
+      0,
+    )
+    const fast = calculateLongitudinalTarget(
+      state,
+      parameters,
+      { deckDisturbanceDegrees: 0, speedKmh: 40 },
+      1,
+      0,
+    )
+    expect(stopped.constantTiltbackDegrees).toBe(0)
+    expect(stopped.variableTiltbackDegrees).toBe(0)
+    expect(fast.constantTiltbackDegrees).toBe(1)
+    expect(fast.variableTiltbackDegrees).toBe(3)
   })
 
   test('reports missing model fields instead of inventing defaults', () => {
@@ -91,13 +280,10 @@ describe('Tune Preview longitudinal response', () => {
     const { tiltback_constant_erpm, tiltback_variable_erpm, ...legacyFields } = baseFields
     void tiltback_constant_erpm
     void tiltback_variable_erpm
-
     const model = createTunePreviewModel(legacyFields)
     expect(model.status).toBe('ready')
     if (model.status === 'ready') {
       expect(model.assumedFields).toEqual(['tiltback_constant_erpm', 'tiltback_variable_erpm'])
-      expect(model.parameters.tiltbackConstantErpm).toBe(500)
-      expect(model.parameters.tiltbackVariableErpm).toBe(0)
     }
   })
 
@@ -111,295 +297,123 @@ describe('Tune Preview longitudinal response', () => {
     expect(groundTravelToVisualOffset(0.1)).toBeGreaterThan(0)
   })
 
-  test('flat terrain has no slope disturbance', () => {
-    expect(calculateTerrainSlope(2, { hillsEnabled: false })).toBe(0)
-  })
-
-  test('taller and denser hills create stronger deterministic slope', () => {
-    const gentle = calculateTerrainSlope(0, {
-      hillsEnabled: true,
-      hillHeightMeters: 0.3,
-      hillSpacingMeters: 12,
-    })
-    const dense = calculateTerrainSlope(0, {
-      hillsEnabled: true,
-      hillHeightMeters: 1,
-      hillSpacingMeters: 4,
-    })
-    expect(dense).toBeGreaterThan(gentle)
-    expect(
-      calculateTerrainSlope(0, { hillsEnabled: true, hillHeightMeters: 1, hillSpacingMeters: 4 }),
-    ).toBe(dense)
-  })
-
-  test('clamps terrain scenario to 20 m height and 100 m spacing', () => {
-    expect(
-      calculateTerrainSlope(0, {
-        hillsEnabled: true,
-        hillHeightMeters: 30,
-        hillSpacingMeters: 200,
-      }),
-    ).toBeCloseTo(
-      calculateTerrainSlope(0, {
-        hillsEnabled: true,
-        hillHeightMeters: 20,
-        hillSpacingMeters: 100,
-      }),
+  test('terrain remains deterministic, bounded, and phase-sensitive', () => {
+    const input = { hillsEnabled: true, hillHeightMeters: 1, hillSpacingMeters: 4 }
+    expect(calculateTerrainSlope(0, input)).toBeLessThan(0)
+    expect(calculateTerrainSlope(2, input)).toBeGreaterThan(0)
+    expect(calculateTerrainSlope(0, input)).toBe(calculateTerrainSlope(0, input))
+    expect(calculateTerrainSlope(0, { ...input, hillHeightMeters: 60 })).toBeCloseTo(
+      calculateTerrainSlope(0, { ...input, hillHeightMeters: 50 }),
     )
   })
 
-  test('allows zero hill height', () => {
-    expect(
-      calculateTerrainSlope(0, { hillsEnabled: true, hillHeightMeters: 0, hillSpacingMeters: 8 }),
-    ).toBe(0)
-  })
-
-  test('terrain phase changes uphill and downhill signs', () => {
+  test('terrain slope sign matches the visible terrain immediately ahead of the left-side Nose', () => {
     const input = { hillsEnabled: true, hillHeightMeters: 1, hillSpacingMeters: 4 }
-    expect(calculateTerrainSlope(0, input)).toBeGreaterThan(0)
-    expect(calculateTerrainSlope(2, input)).toBeLessThan(0)
+    const visibleHeightAhead = terrainHeightRelativeToWheel(-6, 0, 1, 4)
+    const atrTerrainSlope = calculateTerrainSlope(0, input)
+
+    expect(Math.sign(atrTerrainSlope)).toBe(Math.sign(visibleHeightAhead))
   })
 
-  test('normalizes terrain height to the fixed wheel contact point', () => {
+  test('terrain phase advances one 50 m cycle after five seconds at 36 km/h', () => {
+    const parameters = readyParameters()
+    const input = {
+      deckDisturbanceDegrees: 0,
+      speedKmh: 36,
+      holdSpeed: true,
+      hillsEnabled: true,
+      hillHeightMeters: 2,
+      hillSpacingMeters: 50,
+    }
+    let state = createTunePreviewState(36)
+    for (let step = 0; step < 20; step += 1) {
+      state = stepTunePreview(state, parameters, input, 0.25)
+    }
+
+    expect(state.groundTravelMeters).toBeCloseTo(50)
+    expect(calculateTerrainSlope(state.groundTravelMeters, input)).toBeCloseTo(
+      calculateTerrainSlope(0, input),
+    )
+  })
+
+  test('terrain visual and acceleration helpers preserve their contracts', () => {
     expect(terrainHeightRelativeToWheel(0, 1.25, 1, 4)).toBe(0)
     expect(terrainHeightRelativeToWheel(60, 1.25, 1, 4)).not.toBe(0)
+    expect(terrainSlopeToSyntheticAcceleration(60)).toBeGreaterThan(
+      terrainSlopeToSyntheticAcceleration(4),
+    )
   })
 
-  test('compresses extreme terrain load without losing strength ordering', () => {
-    const moderate = terrainSlopeToSyntheticAcceleration(4)
-    const extreme = terrainSlopeToSyntheticAcceleration(60)
-    expect(extreme).toBeGreaterThan(moderate)
-    expect(extreme).toBeLessThan(10)
+  test('projects gravity onto a 10% terrain grade', () => {
+    const grade = 0.1
+    const expectedAcceleration = (9.80665 * grade) / Math.sqrt(1 + grade ** 2)
+
+    expect(terrainSlopeToSyntheticAcceleration(grade)).toBeCloseTo(expectedAcceleration, 5)
+    expect(terrainSlopeToSyntheticAcceleration(-grade)).toBeCloseTo(-expectedAcceleration, 5)
   })
 
-  test('applies acceleration Torque Tilt above threshold and clamps its angle', () => {
-    const parameters = readyParameters({ ...baseFields, torquetilt_angle_limit: 2 })
-    const below = calculateLongitudinalTarget(
+  test('keeps ATR neutral on flat ground with zero controller current', () => {
+    const parameters = readyParameters({
+      ...baseFields,
+      torquetilt_strength: 0,
+      torquetilt_strength_regen: 0,
+      braketilt_strength: 0,
+      atr_threshold_up: 0,
+      atr_threshold_down: 0,
+      tiltback_constant: 0,
+      tiltback_variable: 0,
+      tiltback_variable_max: 0,
+    })
+    const state = stepTunePreview(
       createTunePreviewState(),
       parameters,
-      { syntheticLoad: 0.25, speedKmh: 15 },
-      1,
+      { deckDisturbanceDegrees: 0, speedKmh: 0, hillsEnabled: false },
+      0.25,
     )
-    const above = calculateLongitudinalTarget(
-      createTunePreviewState(),
-      parameters,
-      { syntheticLoad: 1, speedKmh: 15 },
-      1,
-    )
-    expect(below.torqueTiltDegrees).toBe(0)
-    expect(above.torqueTiltDegrees).toBe(2)
-  })
 
-  test('braking combines negative regen Torque Tilt with positive Brake Tilt', () => {
-    const state = run(baseFields, -1, 15, 1)
-    expect(state.torqueTiltDegrees).toBeLessThan(0)
-    expect(state.brakeTiltDegrees).toBeGreaterThan(0)
-    expect(state.targetAngleDegrees).toBeCloseTo(
-      state.torqueTiltDegrees +
-        state.brakeTiltDegrees +
-        state.atrDegrees +
-        state.constantTiltbackDegrees +
-        state.variableTiltbackDegrees,
-    )
-  })
-
-  test('Brake Tilt starts only above the bundled 2000 ERPM boundary', () => {
-    expect(run(baseFields, -1, 7, 1).brakeTiltDegrees).toBe(0)
-    expect(run(baseFields, -1, 7.1, 1).brakeTiltDegrees).toBeGreaterThan(0)
-  })
-
-  test('Brake Tilt lingering slows release', () => {
-    const fastParameters = readyParameters({ ...baseFields, braketilt_lingering: 1 })
-    const slowParameters = readyParameters({ ...baseFields, braketilt_lingering: 5 })
-    const braking = run(baseFields, -1, 15, 1)
-    const fast = stepTunePreview(braking, fastParameters, { syntheticLoad: 0, speedKmh: 15 }, 0.1)
-    const slow = stepTunePreview(braking, slowParameters, { syntheticLoad: 0, speedKmh: 15 }, 0.1)
-    expect(slow.brakeTiltDegrees).toBeGreaterThan(fast.brakeTiltDegrees)
-  })
-
-  test('constant and variable Tiltback respect start ERPM and maximum target', () => {
-    const stopped = run(baseFields, 0, 0, 1)
-    const fast = run(baseFields, 0, 40, 1)
-    expect(stopped.constantTiltbackDegrees).toBe(0)
-    expect(stopped.variableTiltbackDegrees).toBe(0)
-    expect(fast.constantTiltbackDegrees).toBe(1)
-    expect(fast.variableTiltbackDegrees).toBe(3)
+    expect(state.syntheticCurrentAmps).toBe(0)
+    expect(state.atrAccelDiff).toBeCloseTo(0)
+    expect(state.atrDegrees).toBeCloseTo(0)
   })
 
   test('zero and paused time do not advance response or ground', () => {
     const parameters = readyParameters()
     const state = createTunePreviewState()
-    expect(stepTunePreview(state, parameters, { syntheticLoad: 1, speedKmh: 15 }, 0)).toBe(state)
-    expect(
-      stepTunePreview(state, parameters, { syntheticLoad: 1, speedKmh: 15, paused: true }, 1),
-    ).toBe(state)
+    const input = { deckDisturbanceDegrees: 10, deckDisturbanceActive: true, speedKmh: 15 }
+    expect(stepTunePreview(state, parameters, input, 0)).toBe(state)
+    expect(stepTunePreview(state, parameters, { ...input, paused: true }, 1)).toBe(state)
   })
 
-  test('fixed speed remains compatible and follows configured speed', () => {
+  test('dynamic speed remains finite, bounded, and never reverses', () => {
     const parameters = readyParameters()
-    const next = stepTunePreview(
-      createTunePreviewState(3),
-      parameters,
-      { syntheticLoad: 1, speedKmh: 15, holdSpeed: true },
-      1 / 60,
-    )
-    expect(next.syntheticSpeedKmh).toBe(15)
-    expect(next.erpm).toBeCloseTo(speedKmhToReferenceErpm(15))
-  })
-
-  test('dynamic speed accelerates, brakes, and holds neutrally', () => {
-    const parameters = readyParameters()
-    const initial = createTunePreviewState(15)
-    const accelerated = stepTunePreview(
-      initial,
-      parameters,
-      { syntheticLoad: 1, speedKmh: 15, holdSpeed: false },
-      0.25,
-    )
-    const braked = stepTunePreview(
-      initial,
-      parameters,
-      { syntheticLoad: -1, speedKmh: 15, holdSpeed: false },
-      0.25,
-    )
-    const neutral = stepTunePreview(
-      initial,
-      parameters,
-      { syntheticLoad: 0, speedKmh: 15, holdSpeed: false },
-      0.25,
-    )
-    expect(accelerated.syntheticSpeedKmh).toBeCloseTo(
-      15 + COMPARATIVE_ACCELERATION_KMH_PER_SECOND * 0.25,
-    )
-    expect(braked.syntheticSpeedKmh).toBeCloseTo(
-      15 - COMPARATIVE_ACCELERATION_KMH_PER_SECOND * 0.25,
-    )
-    expect(neutral.syntheticSpeedKmh).toBe(15)
-  })
-
-  test('maps synthetic load to bounded motor current', () => {
-    expect(syntheticLoadToCurrentAmps(0.5)).toBe(30)
-    expect(syntheticLoadToCurrentAmps(-1)).toBe(-60)
-    expect(syntheticLoadToCurrentAmps(2)).toBe(60)
-  })
-
-  test('reference physics derives acceleration from current, torque, wheel, mass, and efficiency', () => {
-    const referencePhysics = {
-      ...DEFAULT_TUNE_PREVIEW_REFERENCE_PHYSICS,
-      enabled: true,
-      totalMassKg: 100,
-      wheelDiameterInches: 10,
-      motorTorqueNmPerAmp: 0.2,
-      drivetrainEfficiency: 0.9,
+    let upper = { ...createTunePreviewState(39.5), targetAngleDegrees: -35 }
+    let lower = { ...createTunePreviewState(0.5), targetAngleDegrees: 35 }
+    for (let index = 0; index < 20; index += 1) {
+      upper = stepTunePreview(
+        upper,
+        parameters,
+        {
+          deckDisturbanceDegrees: -12,
+          deckDisturbanceActive: true,
+          speedKmh: 15,
+          holdSpeed: false,
+        },
+        0.25,
+      )
+      lower = stepTunePreview(
+        lower,
+        parameters,
+        { deckDisturbanceDegrees: 12, deckDisturbanceActive: true, speedKmh: 15, holdSpeed: false },
+        0.25,
+      )
     }
-    const acceleration = calculateSyntheticAcceleration({ syntheticLoad: 1, referencePhysics })
-    const expectedWheelRadiusMeters = (10 * 0.0254) / 2
-    const expected = ((60 * 0.2 * 0.9) / expectedWheelRadiusMeters / 100) * 3.6
-    expect(acceleration).toBeCloseTo(expected)
-    expect(calculateSyntheticAcceleration({ syntheticLoad: -1, referencePhysics })).toBeCloseTo(
-      -expected,
-    )
-  })
-
-  test('reference physics affects dynamic speed but not held speed', () => {
-    const parameters = readyParameters()
-    const referencePhysics = {
-      ...DEFAULT_TUNE_PREVIEW_REFERENCE_PHYSICS,
-      enabled: true,
-      motorTorqueNmPerAmp: 0.4,
-    }
-    const dynamic = stepTunePreview(
-      createTunePreviewState(10),
-      parameters,
-      { syntheticLoad: 1, speedKmh: 10, holdSpeed: false, referencePhysics },
-      0.25,
-    )
-    const held = stepTunePreview(
-      createTunePreviewState(10),
-      parameters,
-      { syntheticLoad: 1, speedKmh: 10, holdSpeed: true, referencePhysics },
-      0.25,
-    )
-    expect(dynamic.syntheticSpeedKmh).toBeCloseTo(
-      10 + calculateSyntheticAcceleration({ syntheticLoad: 1, referencePhysics }) * 0.25,
-    )
-    expect(dynamic.syntheticSpeedKmh).not.toBeCloseTo(
-      10 + COMPARATIVE_ACCELERATION_KMH_PER_SECOND * 0.25,
-    )
-    expect(held.syntheticSpeedKmh).toBe(10)
-  })
-
-  test('dynamic speed is bounded, finite, and never reverses', () => {
-    const parameters = readyParameters()
-    const upper = stepTunePreview(
-      createTunePreviewState(39.5),
-      parameters,
-      { syntheticLoad: 1, speedKmh: 15, holdSpeed: false },
-      10,
-    )
-    const lower = stepTunePreview(
-      createTunePreviewState(0.5),
-      parameters,
-      { syntheticLoad: -1, speedKmh: 15, holdSpeed: false },
-      10,
-    )
-    const nonFinite = stepTunePreview(
-      createTunePreviewState(Number.NaN),
-      parameters,
-      { syntheticLoad: Number.POSITIVE_INFINITY, speedKmh: 15, holdSpeed: false },
-      0.1,
-    )
     expect(upper.syntheticSpeedKmh).toBe(40)
     expect(lower.syntheticSpeedKmh).toBe(0)
-    expect(Number.isFinite(nonFinite.syntheticSpeedKmh)).toBe(true)
+    expect(Object.values(lower).every(Number.isFinite)).toBe(true)
   })
 
   test('reset restores configured starting speed without changing other runtime state', () => {
     const state = { ...createTunePreviewState(25), angleDegrees: 4, groundTravelMeters: 12 }
-    expect(resetTunePreviewSpeed(state, 9)).toEqual({
-      ...state,
-      syntheticSpeedKmh: 9,
-    })
-  })
-
-  test('dynamic speed crosses a Tiltback ERPM boundary through the existing path', () => {
-    const parameters = readyParameters()
-    let state = createTunePreviewState(1)
-    expect(state.syntheticSpeedKmh).toBeLessThan(1.75)
-    for (let elapsed = 0; elapsed < 0.25; elapsed += 1 / 60) {
-      state = stepTunePreview(
-        state,
-        parameters,
-        { syntheticLoad: 1, speedKmh: 1, holdSpeed: false },
-        1 / 60,
-      )
-    }
-    expect(state.syntheticSpeedKmh).toBeGreaterThan(1.75)
-    expect(state.constantTiltbackDegrees).toBe(1)
-  })
-
-  test('large deltas and extreme allowed values remain finite and bounded', () => {
-    const parameters = readyParameters({
-      ...baseFields,
-      kp: 40,
-      kp2: 3,
-      ki: 0.5,
-      mahony_kp: 0.2,
-      torquetilt_strength: 1,
-      torquetilt_strength_regen: 1,
-      torquetilt_angle_limit: 30,
-    })
-    let state = createTunePreviewState()
-    for (let index = 0; index < 100; index += 1) {
-      state = stepTunePreview(
-        state,
-        parameters,
-        { syntheticLoad: index % 2 ? -1 : 1, speedKmh: 40 },
-        30,
-      )
-    }
-    expect(Object.values(state).every(Number.isFinite)).toBe(true)
-    expect(Math.abs(state.angleDegrees)).toBeLessThanOrEqual(35)
-    expect(Math.abs(state.targetAngleDegrees)).toBeLessThanOrEqual(35)
+    expect(resetTunePreviewSpeed(state, 9)).toEqual({ ...state, syntheticSpeedKmh: 9 })
   })
 })

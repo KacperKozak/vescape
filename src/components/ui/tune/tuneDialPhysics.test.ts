@@ -5,6 +5,7 @@ import {
   computeHapticStepSpacing,
   computeTuneDialLayout,
   isTuneDialEdgeStep,
+  resolveTuneDialThrowTargetOffset,
   resolveTuneDialThrowVelocity,
   shouldApplyExternalTuneDialValue,
   shouldPlayTuneDialHaptic,
@@ -106,5 +107,11 @@ describe('TuneDial physics', () => {
 
     expect(simulate(1000 / 30)).toBeCloseTo(simulate(1000 / 60), 6)
     expect(simulate(1000 / 60)).toBeCloseTo(simulate(1000 / 120), 6)
+  })
+
+  test('throw target is known before animation starts', () => {
+    expect(resolveTuneDialThrowTargetOffset(-400, -900, 1400)).toBe(-618.75)
+    expect(resolveTuneDialThrowTargetOffset(-1300, -900, 1400)).toBe(-1400)
+    expect(resolveTuneDialThrowTargetOffset(-100, 900, 1400)).toBe(0)
   })
 })

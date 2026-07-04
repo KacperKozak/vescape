@@ -23,6 +23,7 @@ import {
   computeHapticStepSpacing,
   computeTuneDialLayout,
   isTuneDialEdgeStep,
+  resolveTuneDialThrowTargetOffset,
   resolveTuneDialThrowVelocity,
   shouldApplyExternalTuneDialValue,
   shouldPlayTuneDialHaptic,
@@ -137,6 +138,7 @@ export function TuneDial({
   const dragStartX = useSharedValue(0)
   const interactionActive = useSharedValue(false)
   const momentumVelocity = useSharedValue(0)
+  const momentumTargetOffset = useSharedValue(0)
   const displayValue = useSharedValue(value)
   const lastEmittedValue = useSharedValue(value)
   const lastStepIndex = useSharedValue(initialStepIndex)
@@ -265,7 +267,7 @@ export function TuneDial({
       if (speed <= THROW_STOP_VELOCITY) {
         if (speed > 0) {
           momentumVelocity.value = 0
-          settleOffsetToNearest(translateX.value)
+          settleOffsetToNearest(momentumTargetOffset.value)
         }
         scheduleOnRN(setMomentumFrameActive, false)
         return
@@ -273,6 +275,16 @@ export function TuneDial({
 
       const nextThrow = advanceTuneDialThrow(momentumVelocity.value, rawDt)
       let nextOffset = translateX.value + nextThrow.distance
+      const reachedTarget =
+        momentumVelocity.value < 0
+          ? nextOffset <= momentumTargetOffset.value
+          : nextOffset >= momentumTargetOffset.value
+      if (reachedTarget) {
+        momentumVelocity.value = 0
+        settleOffsetToNearest(momentumTargetOffset.value)
+        scheduleOnRN(setMomentumFrameActive, false)
+        return
+      }
       if (nextOffset > 0 || nextOffset < -totalWidth) {
         nextOffset = Math.max(-totalWidth, Math.min(0, nextOffset))
         momentumVelocity.value = 0
@@ -296,6 +308,7 @@ export function TuneDial({
       emitStepIndex,
       commitStepIndex,
       interactionActive,
+      momentumTargetOffset,
       momentumVelocity,
       setMomentumFrameActive,
       settleOffsetToNearest,
@@ -347,6 +360,17 @@ export function TuneDial({
         if (momentumVelocity.value === 0) {
           settleOffsetToNearest(translateX.value)
         } else {
+          const rawTargetOffset = resolveTuneDialThrowTargetOffset(
+            translateX.value,
+            momentumVelocity.value,
+            totalWidth,
+          )
+          const targetStepIndex = Math.max(
+            0,
+            Math.min(totalSteps, Math.round(-rawTargetOffset / stepPx)),
+          )
+          momentumTargetOffset.value = -targetStepIndex * stepPx
+          if (!commitEveryChange) commitStepIndex(targetStepIndex)
           scheduleOnRN(setMomentumFrameActive, true)
           const stepIndex = Math.max(
             0,
@@ -368,6 +392,9 @@ export function TuneDial({
     emitStepIndex,
     emitEdgeHaptic,
     interactionActive,
+    commitEveryChange,
+    commitStepIndex,
+    momentumTargetOffset,
     momentumVelocity,
     pauseThrow,
     settleOffsetToNearest,
