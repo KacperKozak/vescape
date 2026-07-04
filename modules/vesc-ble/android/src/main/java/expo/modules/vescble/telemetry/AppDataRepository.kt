@@ -4,11 +4,18 @@ import android.content.Context
 import expo.modules.vescble.BoardTransport
 import expo.modules.vescble.DiagnosticReporter
 import expo.modules.vescble.RefloatConfigSnapshot
+import expo.modules.vescble.VescForegroundService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
+
+/** Scope of an `onAppDataChanged` emit; mirrors the JS `AppDataChangedEvent['scope']` union. */
+internal enum class AppDataScope(val wire: String) {
+  BOARDS("boards"),
+  SETTINGS("settings"),
+}
 
 internal fun validMapStyleKey(value: Any?): String? =
   (value as? String)?.takeIf { it in setOf("onedark", "outdoors", "satellite", "mapy") }
@@ -93,6 +100,14 @@ private fun validHistoryMetricHotRanges(value: Any?): Map<String, Map<String, Do
 class AppDataRepository private constructor(private val context: Context) {
   private val dao = TelemetryDatabase.get(context).telemetryDao()
 
+  /** Notify JS that persisted data in [scope] changed, so the matching store reloads and stays in
+   *  sync without an app restart. Every mutating method below funnels through here — new writes get
+   *  sync for free by tagging the right scope. Idempotent on the JS side, so emitting after a
+   *  JS-initiated write is harmless (the reload just confirms native truth). */
+  private fun notifyDataChanged(scope: AppDataScope) {
+    VescForegroundService.emitEvent?.invoke("onAppDataChanged", mapOf("scope" to scope.wire))
+  }
+
   suspend fun getBoards(): List<Map<String, Any?>> = withContext(Dispatchers.IO) {
     val boards = dao.getBoards()
     val settingsByBoard =
@@ -108,10 +123,12 @@ class AppDataRepository private constructor(private val context: Context) {
     val boardId = board.getString("id")
     val (settings, deletedKeys) = board.toBoardSettingEntities(boardId)
     dao.upsertBoardWithSettings(board.toBoardEntity(), settings, deletedKeys)
+    notifyDataChanged(AppDataScope.BOARDS)
   }
 
   suspend fun deleteBoard(id: String): Unit = withContext(Dispatchers.IO) {
     dao.deleteBoardWithSettings(id)
+    notifyDataChanged(AppDataScope.BOARDS)
   }
 
   suspend fun getAlertRules(): List<Map<String, Any?>> = withContext(Dispatchers.IO) {
@@ -278,12 +295,14 @@ class AppDataRepository private constructor(private val context: Context) {
         ),
       )
     }
+    notifyDataChanged(AppDataScope.SETTINGS)
   }
 
   suspend fun updateLastGpsLocation(latitude: Double, longitude: Double): Unit = withContext(Dispatchers.IO) {
     val now = System.currentTimeMillis()
     dao.upsertAppSetting(AppSettingEntity("lastGpsLatitude", encodeSettingJson(latitude), now))
     dao.upsertAppSetting(AppSettingEntity("lastGpsLongitude", encodeSettingJson(longitude), now))
+    notifyDataChanged(AppDataScope.SETTINGS)
   }
 
   suspend fun setSelectedBoardId(id: String?): Unit = updateSetting("selectedBoardId", id)
@@ -296,6 +315,7 @@ class AppDataRepository private constructor(private val context: Context) {
   ): Unit = withContext(Dispatchers.IO) {
     val value = mapOf("percent" to percent, "voltage" to voltage, "at" to atMs)
     dao.upsertBoardSetting(BoardSettingEntity(boardId, "lastBattery", encodeSettingJson(value), atMs))
+    notifyDataChanged(AppDataScope.BOARDS)
   }
 
   suspend fun getTuneProfiles(boardId: String): List<Map<String, Any?>> = withContext(Dispatchers.IO) {

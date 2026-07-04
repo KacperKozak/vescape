@@ -781,6 +781,16 @@ export interface GroupRideErrorEvent {
   message: string
 }
 
+/**
+ * Native persisted board/app data changed outside a JS-initiated write (e.g. the per-board
+ * `lastBattery` written on session end). JS owns no durable copy, so it must reload the matching
+ * store to stay fresh without an app restart. Emitted sparingly — only on meaningful changes,
+ * never per telemetry tick.
+ */
+export interface AppDataChangedEvent {
+  scope: 'boards' | 'settings'
+}
+
 type VescBleEvents = {
   onDevice: (event: DeviceFoundEvent) => void
   onError: (event: ErrorEvent) => void
@@ -805,6 +815,8 @@ type VescBleEvents = {
   onGroupRideJoined: (event: GroupRideJoinedEvent) => void
   onGroupRideRoster: (event: GroupRideRosterEvent) => void
   onGroupRideError: (event: GroupRideErrorEvent) => void
+  /** Persisted board/app data changed natively — reload the matching store. */
+  onAppDataChanged: (event: AppDataChangedEvent) => void
 }
 
 interface NativeEventEmitter<TEvents extends Record<string, (...args: never[]) => void>> {
@@ -1515,6 +1527,12 @@ export function addDeviceListener(cb: (event: DeviceFoundEvent) => void): EventS
 
 export function addErrorListener(cb: (event: ErrorEvent) => void): EventSubscription {
   return emitter.addListener('onError', cb)
+}
+
+export function addAppDataChangedListener(
+  cb: (event: AppDataChangedEvent) => void,
+): EventSubscription {
+  return emitter.addListener('onAppDataChanged', cb)
 }
 
 export function addLiveStateListener(cb: (event: LiveStateEvent) => void): EventSubscription {

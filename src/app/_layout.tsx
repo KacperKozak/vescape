@@ -9,6 +9,7 @@ import { HeaderBackButton } from '@/components/ui/base/HeaderBackButton'
 import { initSentry } from '@/config/sentry'
 import { stackScreens } from '@/navigation/routes'
 import { useAlertsStore } from '@/store/alertsStore'
+import { startAppDataSync } from '@/store/appDataSync'
 import { useGroupRideStore } from '@/store/groupRideStore'
 import { useRiderStore } from '@/store/riderStore'
 import { useSettingsStore } from '@/store/settingsStore'
@@ -22,7 +23,11 @@ function RootLayout() {
     void useAlertsStore.getState().load()
     void useRiderStore.getState().load()
     useGroupRideStore.getState().startObserving()
-    return () => useGroupRideStore.getState().stopObserving()
+    const stopAppDataSync = startAppDataSync()
+    return () => {
+      useGroupRideStore.getState().stopObserving()
+      stopAppDataSync()
+    }
   }, [])
 
   return (
@@ -48,7 +53,6 @@ function RootLayout() {
             options={{ title: 'Debug recordings' }}
           />
           <Stack.Screen name={stackScreens.settingsComponents} options={{ title: 'Components' }} />
-          <Stack.Screen name={stackScreens.settingsDiagnostic} options={{ title: 'Diagnostic' }} />
           <Stack.Screen
             name={stackScreens.settingsNavigationDiagnostic}
             options={{ title: 'Navigation diagnostics' }}
@@ -59,8 +63,8 @@ function RootLayout() {
           />
           <Stack.Screen name={stackScreens.settingsOther} options={{ title: 'Other' }} />
           <Stack.Screen
-            name={stackScreens.settingsSoundPlayground}
-            options={{ title: 'Sound Playground' }}
+            name={stackScreens.settingsRawSettings}
+            options={{ title: 'Raw settings' }}
           />
           <Stack.Screen
             name={stackScreens.settingsPrivacyZones}

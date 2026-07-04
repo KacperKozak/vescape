@@ -85,6 +85,7 @@ class VescBleModule : Module() {
       "onGroupRideJoined",
       "onGroupRideRoster",
       "onGroupRideError",
+      "onAppDataChanged",
     )
 
     OnStartObserving("onDevice") { startObserving("onDevice") }
