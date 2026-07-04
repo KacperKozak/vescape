@@ -1249,15 +1249,13 @@ public class VescBleModule: Module {
       promise.resolve(self.appData.getSettings())
     }
 
-    AsyncFunction("updateSetting") { (key: String, jsonValue: String?, promise: Promise) in
-      if let jsonStr = jsonValue,
-         let data = jsonStr.data(using: .utf8),
-         let decoded = try? JSONSerialization.jsonObject(with: data, options: .allowFragments) {
-        self.appData.updateSetting(key, rawValue: decoded)
-      } else {
-        self.appData.updateSetting(key, rawValue: nil)
-      }
-      promise.resolve(nil)
+    // JS sends the raw setting value (bool/number/string/object/null), matching Android's
+    // `Any?` param. `getAny()` recursively converts the JS value to native primitives; it must run
+    // on the JS thread, so this stays a synchronous `Function` (like `setSelectedBoard`) rather than
+    // an off-thread `AsyncFunction` that would touch a live `JavaScriptValue` on a worker queue.
+    // `appData.updateSetting` treats `NSNull` (JS null/undefined) as a delete.
+    Function("updateSetting") { (key: String, value: JavaScriptValue) in
+      self.appData.updateSetting(key, rawValue: value.getAny())
     }
   }
 
