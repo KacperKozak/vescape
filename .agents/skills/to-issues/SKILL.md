@@ -25,6 +25,8 @@ then implementation issue titles must use:
 [<Area>] <number> - <Short verb phrase>
 ```
 
+Only use numbered titles when publishing two or more related implementation slices from the same PRD or plan.
+
 Examples:
 
 ```text
@@ -38,24 +40,35 @@ If there is no PRD source/title, choose a regular feature tag instead:
 [<Feature Tag>] <number> - <Short verb phrase>
 ```
 
+For a single standalone issue, or for multiple unrelated issues being created in the same turn, omit the number:
+
+```text
+[<Feature Tag>] <Short verb phrase>
+```
+
 Examples:
 
 ```text
 [Privacy Zone] 1 - Store zones
 [Privacy Zone] 2 - Edit zones
+[History] Add empty state
+[Map] Fix style picker
 ```
 
 Rules:
 
 - Use the same `<Area>` prefix for all issues spawned from one PRD unless a slice clearly belongs elsewhere.
 - When there is no PRD, use the same `<Feature Tag>` prefix for all issues spawned from the same plan unless the user asks for separate tags.
+- Number issue titles only when the issues are related slices in one coherent sequence, such as a PRD implementation plan or a multi-step feature plan.
+- Do not number a single standalone issue.
+- Do not number issues that happen to be created in the same turn but are unrelated to each other. Use each issue's own confirmed prefix and short verb phrase.
 - If the user gives an explicit bracket tag/prefix, use it exactly after fixing only obvious typos.
 - If the user does not give a tag, infer a short domain tag from the plan using the project's glossary vocabulary. Prefer a noun phrase over an implementation layer.
 - Before publishing, ask the user to confirm the issue prefix. Propose the best inferred prefix, including whether it comes from the parent PRD, an existing app area, or a new feature tag.
 - If no existing app area fits, propose a new short prefix and ask whether to create/use it. Also propose the matching GitHub area label slug when it should become a tracked area, e.g. `[Firmware Profiles]` -> `area:firmware-profiles`.
 - Use the confirmed prefix for all issue titles unless a slice clearly needs a different confirmed prefix.
-- Use 2-5 meaningful words after the number.
-- Number from the approved slice order, not GitHub issue number.
+- Use 2-5 meaningful words after the prefix, or after the number when titles are numbered.
+- When titles are numbered, number from the approved slice order, not GitHub issue number.
 - Apply the matching GitHub area label, e.g. `area:sanitizers`, when one exists or when the user approves creating/using a new one.
 - If the user approves a new area label, update the App-area labels table in `docs/agents/issue-tracker.md` in the same turn. Add the area label, title prefix, and a short "Use for" description before or alongside publishing the issues.
 - If user types a typo for a known area, normalize it in issue metadata, e.g. `sanatizers` -> `sanitizers`.
