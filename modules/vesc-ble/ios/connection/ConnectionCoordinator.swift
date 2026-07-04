@@ -286,7 +286,17 @@ internal final class ConnectionCoordinator: VescGattListener {
     let token = session
     DispatchQueue.main.asyncAfter(deadline: .now() + connectTimeoutSeconds) { [weak self] in
       guard let self, let token, token === self.session, token.isActive else { return }
-      if self.phase == .connecting || self.phase == .discovering || self.phase == .subscribing {
+      let stuckPhase = self.phase
+      if stuckPhase == .connecting || stuckPhase == .discovering || stuckPhase == .subscribing {
+        self.recordConnectionDiagnostic(
+          "connect_phase_timeout",
+          operation: "connect",
+          message: "BLE connect phase timed out",
+          extra: [
+            "connect_phase": stuckPhase.rawValue,
+            "timeout_ms": Int(self.connectTimeoutSeconds * 1000),
+          ]
+        )
         self.fail(code: "TIMEOUT", message: "Board did not become ready in time")
       }
     }
@@ -299,6 +309,12 @@ internal final class ConnectionCoordinator: VescGattListener {
   }
 
   private func fail(code: String, message: String) {
+    recordConnectionDiagnostic(
+      "ble_connect_failed",
+      operation: "connect",
+      message: message,
+      extra: ["error_code": code]
+    )
     settleConnect(success: false, code: code, message: message)
     boardError = message
     session?.invalidate()
@@ -323,6 +339,15 @@ internal final class ConnectionCoordinator: VescGattListener {
   /// the live series keeps flowing once telemetry resumes (Android parity).
   private func beginReconnect() {
     guard config != nil else { return }
+    // Chime only on the loss of a *live* link (telemetry was flowing), matching Android's
+    // `Connected || Stale` gate — a drop while still waiting for telemetry stays silent.
+    let wasConnected = phase == .connected
+    recordConnectionDiagnostic(
+      "ble_disconnected_unexpectedly",
+      operation: "connect",
+      message: "Board disconnected unexpectedly"
+    )
+    if wasConnected && connectionSoundsEnabled { alertAudioPlayer.playDisconnect() }
     notifications.notifyDisconnected(deviceName: config?.name)
     session?.invalidate()
     stopPolling()
@@ -399,6 +424,7 @@ internal final class ConnectionCoordinator: VescGattListener {
       reconnecting = false
       gatt.stopReconnectScan()
     }
+    recordConnectionDiagnostic("gatt_connected", operation: "connect", message: "GATT connected")
     setPhase(.discovering)
   }
 
@@ -410,6 +436,7 @@ internal final class ConnectionCoordinator: VescGattListener {
   func onGattReady() {
     guard let session else { return }
     boardError = nil
+    recordConnectionDiagnostic("gatt_ready", operation: "connect", message: "GATT ready")
     setPhase(.waitingForTelemetry)
     settleConnect(success: true, code: nil, message: nil)
     startPolling(session: session)
@@ -462,9 +489,11 @@ internal final class ConnectionCoordinator: VescGattListener {
   private func markBoardReady() {
     guard phase == .waitingForTelemetry else { return }
     boardError = nil
+    recordConnectionDiagnostic("board_ready", operation: "connect", message: "Board telemetry received")
     if let config {
       recordingCoordinator.markBoardReady(config: config)
     }
+    if connectionSoundsEnabled { alertAudioPlayer.playConnect() }
     notifications.notifyConnected(deviceName: config?.name)
     setPhase(.connected)
   }
@@ -515,6 +544,36 @@ internal final class ConnectionCoordinator: VescGattListener {
 
   private func recordAlertDiagnostic(_ name: String, _ props: [String: Any?]) {
     DiagnosticsRecorder.shared.record(eventName: name, properties: props)
+  }
+
+  /// Whether connect/disconnect chimes are enabled. Read live from settings — connect/disconnect
+  /// are rare, so the read is always current without any settings-apply plumbing. Defaults to
+  /// `true` to match the JS + Android default when the key is unset.
+  private var connectionSoundsEnabled: Bool {
+    (appData.getSettings()["connectionSoundsEnabled"] as? Bool) ?? true
+  }
+
+  /// Persist a connection-lifecycle Local Diagnostic Event with the base session context (device,
+  /// phase, connection seq) so the iOS event log carries the same columns Android does. The store
+  /// keys `ble_id`/`board_nickname` into the `device_id`/`device_name` columns JS reads.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/diagnostics/DiagnosticsRecorder.kt `recordLocalDiagnostic`
+  private func recordConnectionDiagnostic(
+    _ eventName: String,
+    operation: String,
+    message: String,
+    extra: [String: Any?] = [:]
+  ) {
+    var props: [String: Any?] = [
+      "board_id": connectedBoardId ?? config?.appBoardId,
+      "ble_id": bleId ?? config?.bleId,
+      "board_nickname": boardName ?? config?.name,
+      "operation": operation,
+      "phase": phase.rawValue,
+      "connection_seq": connectionSeq,
+      "message": message,
+    ]
+    for (key, value) in extra { props[key] = value }
+    DiagnosticsRecorder.shared.record(eventName: eventName, properties: props)
   }
 
   /// Fire a single fault notification on the rising edge of a sustained fault, and re-arm once the
@@ -584,6 +643,18 @@ internal final class ConnectionCoordinator: VescGattListener {
     lastHistoryFlushAt = 0
     historyBuffer.removeAll(keepingCapacity: true)
     polling = true
+    let transport = config?.transport ?? .direct
+    let pollingMode: String
+    switch transport {
+    case .can: pollingMode = "can"
+    case .direct: pollingMode = "direct"
+    }
+    recordConnectionDiagnostic(
+      "telemetry_polling_started",
+      operation: "telemetry",
+      message: "Telemetry polling started",
+      extra: ["polling_mode": pollingMode, "poll_interval_ms": config?.pollIntervalMs]
+    )
     liveSeries.start()
     sendPoll(session: session)
   }
