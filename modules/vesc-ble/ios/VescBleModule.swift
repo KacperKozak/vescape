@@ -13,15 +13,13 @@ import GRDB
 enum TelemetryDatabase {
   private static let databaseName = "telemetry.db"
 
+  /// Pool installed by a database restore, replacing the originally opened `poolResult`. Callers
+  /// read `pool` on every access, so a swap is picked up transparently across the app.
+  private static var reopened: DatabasePool?
+
   private static let poolResult: Result<DatabasePool, Error> = {
     do {
-      let support = try FileManager.default.url(
-        for: .applicationSupportDirectory,
-        in: .userDomainMask,
-        appropriateFor: nil,
-        create: true
-      )
-      let url = support.appendingPathComponent(databaseName)
+      guard let url = databaseURL else { throw CocoaError(.fileNoSuchFile) }
       let pool = try DatabasePool(path: url.path)
       try migrator.migrate(pool)
       return .success(pool)
@@ -33,8 +31,66 @@ enum TelemetryDatabase {
   /// The shared pool, or `nil` if the database could not be opened. Callers degrade gracefully
   /// (reads return empty, writes no-op) rather than crashing the bridge.
   static var pool: DatabasePool? {
+    if let reopened { return reopened }
     if case let .success(pool) = poolResult { return pool }
     return nil
+  }
+
+  /// On-disk location of the single database file.
+  static var databaseURL: URL? {
+    guard let support = try? FileManager.default.url(
+      for: .applicationSupportDirectory,
+      in: .userDomainMask,
+      appropriateFor: nil,
+      create: true
+    ) else { return nil }
+    return support.appendingPathComponent(databaseName)
+  }
+
+  /// Size of the live database file in bytes, or 0 when it does not exist yet.
+  static var databaseSizeBytes: Int64 {
+    guard let path = databaseURL?.path,
+          let attrs = try? FileManager.default.attributesOfItem(atPath: path),
+          let size = attrs[.size] as? NSNumber else { return 0 }
+    return size.int64Value
+  }
+
+  /// Hot-swap the database file with a validated restore, closing the live pool so SQLite releases
+  /// the file + WAL sidecars, then reopening (and migrating) at the same path. On any failure the
+  /// previous file is rolled back so the app is never left without a database.
+  static func replaceDatabase(withFileAt source: URL) throws {
+    guard let target = databaseURL else { throw CocoaError(.fileNoSuchFile) }
+    let fm = FileManager.default
+    let sidecarSuffixes = ["", "-wal", "-shm"]
+
+    if let reopened { try? reopened.close() }
+    else if case let .success(pool) = poolResult { try? pool.close() }
+
+    let rollbackDir = fm.temporaryDirectory.appendingPathComponent("db-rollback-\(UUID().uuidString)", isDirectory: true)
+    try fm.createDirectory(at: rollbackDir, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: rollbackDir) }
+
+    var moved: [(original: URL, saved: URL)] = []
+    for suffix in sidecarSuffixes {
+      let file = URL(fileURLWithPath: target.path + suffix)
+      guard fm.fileExists(atPath: file.path) else { continue }
+      let saved = rollbackDir.appendingPathComponent(target.lastPathComponent + suffix)
+      try fm.moveItem(at: file, to: saved)
+      moved.append((file, saved))
+    }
+
+    do {
+      try fm.copyItem(at: source, to: target)
+      let pool = try DatabasePool(path: target.path)
+      try migrator.migrate(pool)
+      try pool.read { db in _ = try Int.fetchOne(db, sql: "SELECT 1") }
+      reopened = pool
+    } catch {
+      for suffix in sidecarSuffixes { try? fm.removeItem(at: URL(fileURLWithPath: target.path + suffix)) }
+      for entry in moved { try? fm.moveItem(at: entry.saved, to: entry.original) }
+      reopened = try? DatabasePool(path: target.path)
+      throw error
+    }
   }
 
   private static var migrator: DatabaseMigrator {
@@ -769,8 +825,9 @@ private extension Double {
 // (VescGattClient + ConnectionCoordinator); app data delegates to GRDB, while later iOS
 // subsystems still keep bridge-shaped stubs.
 /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt
-/// TODO(iOS parity): port alert evaluation/playback, Group Ride, debug recording, backup, and
-/// config subsystems to match Android API/events/errors (#61–#63).
+/// TODO(iOS parity): port Group Ride, debug recording, and Refloat config subsystems to match
+/// Android API/events/errors. Diagnostics/notifications/privacy/backup landed in #63; the
+/// `board_probe_*` Diagnostic Events await the Board Probe subsystem (#111).
 public class VescBleModule: Module {
 
   // MARK: - Session state
@@ -999,11 +1056,24 @@ public class VescBleModule: Module {
       promise.resolve(TelemetryRepository.shared.getRange(options))
     }
 
-    AsyncFunction("getDiagnosticEvents") { (_: [String: Any], promise: Promise) in
-      promise.resolve([] as [Any])
+    Function("reportUiError") { (message: String, source: String?, stack: String?) in
+      DiagnosticReporter.shared.reportUiError(message: message, source: source, stack: stack)
+    }
+
+    Function("reportDiagnosticTest") { () -> [String: Any?] in
+      DiagnosticReporter.shared.reportDiagnosticTest()
+    }
+
+    Function("getDiagnosticStatus") { () -> [String: Any?] in
+      DiagnosticReporter.shared.status()
+    }
+
+    AsyncFunction("getDiagnosticEvents") { (options: [String: Any], promise: Promise) in
+      promise.resolve(TelemetryRepository.shared.getDiagnosticEvents(options))
     }
 
     AsyncFunction("clearDiagnosticEvents") { (promise: Promise) in
+      TelemetryRepository.shared.clearDiagnosticEvents()
       promise.resolve(nil)
     }
 
@@ -1012,15 +1082,30 @@ public class VescBleModule: Module {
     }
 
     AsyncFunction("getDatabaseSizeBytes") { () -> Int in
-      return 0
+      Int(TelemetryDatabase.databaseSizeBytes)
     }
 
     AsyncFunction("backupDatabase") { (promise: Promise) in
-      promise.reject("UNSUPPORTED_PLATFORM", "Database backup is Android-only until iOS storage is implemented")
+      DispatchQueue.global(qos: .userInitiated).async {
+        do {
+          promise.resolve(try DatabaseBackupManager.createBackup())
+        } catch {
+          promise.reject("ERR_BACKUP_DATABASE", error.localizedDescription)
+        }
+      }
     }
 
-    AsyncFunction("restoreDatabase") { (_: String, promise: Promise) in
-      promise.reject("UNSUPPORTED_PLATFORM", "Database restore is Android-only until iOS storage is implemented")
+    AsyncFunction("restoreDatabase") { (uri: String, promise: Promise) in
+      // End any live session so the pool is idle and buffered telemetry is flushed before the swap.
+      self.coordinator.stopBoard()
+      DispatchQueue.global(qos: .userInitiated).async {
+        do {
+          try DatabaseBackupManager.restoreBackup(uriString: uri)
+          promise.resolve(nil)
+        } catch {
+          promise.reject("ERR_RESTORE_DATABASE", error.localizedDescription)
+        }
+      }
     }
 
     AsyncFunction("getRefloatConfigSnapshot") { (promise: Promise) in
@@ -1125,16 +1210,19 @@ public class VescBleModule: Module {
 
     AsyncFunction("upsertPrivacyZone") { (zone: [String: Any], promise: Promise) in
       self.appData.upsertPrivacyZone(zone)
+      self.reloadPrivacyZonesIntoRecorder()
       promise.resolve(nil)
     }
 
     AsyncFunction("setPrivacyZoneEnabled") { (id: String, enabled: Bool, promise: Promise) in
       self.appData.setPrivacyZoneEnabled(id, enabled)
+      self.reloadPrivacyZonesIntoRecorder()
       promise.resolve(nil)
     }
 
     AsyncFunction("deletePrivacyZone") { (id: String, promise: Promise) in
       self.appData.deletePrivacyZone(id)
+      self.reloadPrivacyZonesIntoRecorder()
       promise.resolve(nil)
     }
 
@@ -1280,6 +1368,12 @@ public class VescBleModule: Module {
   /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt `shouldEmitToFrontend`
   private func shouldEmitToFrontend(_ name: String) -> Bool {
     frontendActive && observedEvents.contains(name)
+  }
+
+  /// Push the current enabled Privacy Zones into the recording store so mid-ride edits take effect
+  /// immediately, not just on the next session. Mirrors Android `reloadPrivacyZonesIntoRecorder`.
+  private func reloadPrivacyZonesIntoRecorder() {
+    TelemetryRepository.shared.reloadPrivacyZones(appData.getEnabledPrivacyZoneEntities())
   }
 
   private func emitUnsupported(_ message: String) {

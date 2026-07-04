@@ -46,8 +46,8 @@ internal struct BoardConnectConfig {
 ///
 /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/connection/ConnectionCoordinator.kt
 /// @platform-diff iOS relies on CoreBluetooth persistent connect for retry timing instead of
-/// Android's backoff scheduler, and still defers the stale watchdog. Alerts are now ported
-/// (#62); the watchdog converges as the remaining iOS subsystem lands (#63).
+/// Android's backoff scheduler, and still defers the stale telemetry watchdog. Alerts (#62) and
+/// ride-status notifications / diagnostics (#63) are ported; the watchdog remains a TODO.
 internal final class ConnectionCoordinator: VescGattListener {
   /// Send a native event to JS. Set by the module.
   var emit: ((String, [String: Any?]) -> Void)?
@@ -78,6 +78,9 @@ internal final class ConnectionCoordinator: VescGattListener {
   private lazy var gpsMonitor = VescGpsMonitor { [weak self] location in self?.onLocationUpdated(location) }
   private lazy var alertAudioPlayer = AlertAudioPlayer()
   private lazy var alertCoordinator = AlertCoordinator(player: alertAudioPlayer)
+  private lazy var notifications = NotificationPresenter()
+  /// Edge-trigger guard so a sustained fault fires a single notification, not one per frame.
+  private var faultNotified = false
   private var latestLocation: TelemetryLocationCapture?
   private var latestPreciseLocation: TelemetryLocationCapture?
   private var recentLocations: [[String: Any?]] = []
@@ -240,6 +243,7 @@ internal final class ConnectionCoordinator: VescGattListener {
     pendingOnSuccess = onSuccess
     pendingOnError = onError
     connectSettled = false
+    faultNotified = false
     setPhase(.connecting)
   }
 
@@ -319,6 +323,7 @@ internal final class ConnectionCoordinator: VescGattListener {
   /// the live series keeps flowing once telemetry resumes (Android parity).
   private func beginReconnect() {
     guard config != nil else { return }
+    notifications.notifyDisconnected(deviceName: config?.name)
     session?.invalidate()
     stopPolling()
     reassembler.reset()
@@ -460,6 +465,7 @@ internal final class ConnectionCoordinator: VescGattListener {
     if let config {
       recordingCoordinator.markBoardReady(config: config)
     }
+    notifications.notifyConnected(deviceName: config?.name)
     setPhase(.connected)
   }
 
@@ -488,6 +494,7 @@ internal final class ConnectionCoordinator: VescGattListener {
     if !firedAlerts.isEmpty {
       tick["firedAlerts"] = firedAlerts
     }
+    notifyFaultIfNeeded(telemetry)
     emit?("onLiveTick", tick)
 
     if let capture = telemetryCapture(telemetry) {
@@ -507,9 +514,19 @@ internal final class ConnectionCoordinator: VescGattListener {
   }
 
   private func recordAlertDiagnostic(_ name: String, _ props: [String: Any?]) {
-    // Diagnostic event persistence lands in slice #63 (Android DiagnosticsRecorder). Until then,
-    // alert diagnostics degrade to a no-op on iOS rather than dropping alerts.
-    _ = props
+    DiagnosticsRecorder.shared.record(eventName: name, properties: props)
+  }
+
+  /// Fire a single fault notification on the rising edge of a sustained fault, and re-arm once the
+  /// board clears it. Mirrors Android surfacing faults through the ride notification.
+  private func notifyFaultIfNeeded(_ telemetry: RefloatTelemetry) {
+    if telemetry.hasFault {
+      guard !faultNotified else { return }
+      faultNotified = true
+      notifications.notifyFault(deviceName: config?.name, faultCode: telemetry.faultCode)
+    } else {
+      faultNotified = false
+    }
   }
 
   private func flushHistory() {

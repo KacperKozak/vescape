@@ -129,9 +129,18 @@ internal final class TelemetryRepository {
   private var lastHistoryAtMs: Int64?
   private var lastKeyframeAtMs: Int64?
   private var metricConfig = MetricSanitizerConfig()
+  private var enabledPrivacyZones: [PrivacyZoneEntity] = []
 
   func applySettings(_ settings: [String: Any?]) {
     queue.async { self.metricConfig = MetricSanitizerConfig.from(settings: settings) }
+  }
+
+  /// Replace the enabled Privacy Zones consulted while flushing recorded telemetry. Fixes whose
+  /// GPS location falls inside any zone are dropped (both the persisted frame and its bucket
+  /// contribution) so no location leaks into Ride History.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/TelemetryRepository.kt `reloadPrivacyZones`
+  func reloadPrivacyZones(_ zones: [PrivacyZoneEntity]) {
+    queue.async { self.enabledPrivacyZones = zones }
   }
 
   func recordTelemetry(_ capture: TelemetryCapture) {
@@ -387,12 +396,17 @@ internal final class TelemetryRepository {
 
   private func flushOnQueue() {
     guard let pool, (!pendingStates.isEmpty || !pendingPersisted.isEmpty || !pendingMarkers.isEmpty) else { return }
-    let states = pendingStates
-    let persisted = pendingPersisted
     let markers = pendingMarkers
+    // Drop any fix inside an enabled Privacy Zone before it reaches storage. Fixes without a
+    // location always pass. Bucket source (full rate) and persisted frames are filtered alike so
+    // aggregates and detail traces stay consistent.
+    let zones = enabledPrivacyZones
+    let states = zones.isEmpty ? pendingStates : pendingStates.filter { !Self.isInPrivacyZone($0, zones) }
+    let persisted = zones.isEmpty ? pendingPersisted : pendingPersisted.filter { !Self.isInPrivacyZone($0, zones) }
     pendingStates.removeAll(keepingCapacity: true)
     pendingPersisted.removeAll(keepingCapacity: true)
     pendingMarkers.removeAll(keepingCapacity: true)
+    guard !states.isEmpty || !persisted.isEmpty || !markers.isEmpty else { return }
 
     let telemetryPoints = states.map { $0.toBucketPoint() }
     let sanitization = sanitizeTelemetrySamples(telemetryPoints, config: metricConfig)
@@ -422,6 +436,98 @@ internal final class TelemetryRepository {
       "message": nil,
       "gapMs": gapMs,
     ]
+  }
+
+  private static func isInPrivacyZone(_ state: FullTelemetryState, _ zones: [PrivacyZoneEntity]) -> Bool {
+    guard let loc = state.location else { return false }
+    let latE7 = Int((loc.latitude * 10_000_000.0).rounded())
+    let lonE7 = Int((loc.longitude * 10_000_000.0).rounded())
+    return isInsideAnyPrivacyZone(latitudeE7: latE7, longitudeE7: lonE7, zones: zones)
+  }
+
+  // MARK: - Local Diagnostic Events (ADR 0007)
+
+  /// Persist one Local Diagnostic Event to GRDB. Debug-facing, low-volume connection/telemetry
+  /// breadcrumbs — the durable source of truth for field debugging even when remote transport
+  /// misses the exact path. Property values are sanitized to JSON scalars; `nil`s are dropped.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/TelemetryRepository.kt `recordDiagnosticEvent`
+  func recordDiagnosticEvent(eventName: String, properties: [String: Any?] = [:]) {
+    guard let pool else { return }
+    let occurredAtMs = nowMs()
+    let elapsed = elapsedMs()
+    let operation = properties["operation"] as? String
+    let phase = properties["phase"] as? String
+    let deviceId = properties["ble_id"] as? String
+    let deviceName = properties["board_nickname"] as? String
+    let message = properties["message"] as? String
+    let propertiesJson = Self.encodeDiagnosticProperties(properties)
+    queue.async {
+      try? pool.write { db in
+        try db.execute(
+          sql: """
+            INSERT INTO diagnostic_events
+              (occurred_at_ms, elapsed_realtime_ms, event_name, operation, phase, device_id, device_name, message, properties_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+          arguments: [occurredAtMs, elapsed, eventName, operation, phase, deviceId, deviceName, message, propertiesJson]
+        )
+      }
+    }
+  }
+
+  func getDiagnosticEvents(_ options: [String: Any]) -> [[String: Any?]] {
+    guard let pool else { return [] }
+    let fromMs = long(options["fromMs"]) ?? 0
+    let toMs = long(options["toMs"]) ?? nowMs()
+    let deviceId = options["deviceId"] as? String
+    let limit = min(1_000, max(1, int(options["limit"]) ?? 200))
+    return (try? pool.read { db in
+      try Row.fetchAll(
+        db,
+        sql: """
+          SELECT * FROM diagnostic_events
+          WHERE occurred_at_ms >= ? AND occurred_at_ms <= ? AND (? IS NULL OR device_id = ?)
+          ORDER BY occurred_at_ms DESC
+          LIMIT ?
+          """,
+        arguments: [fromMs, toMs, deviceId, deviceId, limit]
+      ).map { row in
+        [
+          "id": row["id"] as Int64,
+          "occurredAtMs": row["occurred_at_ms"] as Int64,
+          "eventName": row["event_name"] as String,
+          "operation": row["operation"] as String?,
+          "phase": row["phase"] as String?,
+          "deviceId": row["device_id"] as String?,
+          "deviceName": row["device_name"] as String?,
+          "message": row["message"] as String?,
+          "propertiesJson": row["properties_json"] as String,
+        ]
+      }
+    }) ?? []
+  }
+
+  func clearDiagnosticEvents() {
+    guard let pool else { return }
+    try? pool.write { db in try db.execute(sql: "DELETE FROM diagnostic_events") }
+  }
+
+  private static func encodeDiagnosticProperties(_ properties: [String: Any?]) -> String {
+    var sanitized: [String: Any] = [:]
+    for (key, value) in properties {
+      switch value {
+      case let value as String: sanitized[key] = value
+      // `Bool` bridges to `NSNumber` (as a CFBoolean) so booleans still serialize as true/false.
+      case let value as NSNumber: sanitized[key] = value
+      case nil, is NSNull: continue
+      case let value?: sanitized[key] = String(describing: value)
+      }
+    }
+    guard
+      let data = try? JSONSerialization.data(withJSONObject: sanitized),
+      let json = String(data: data, encoding: .utf8)
+    else { return "{}" }
+    return json
   }
 }
 

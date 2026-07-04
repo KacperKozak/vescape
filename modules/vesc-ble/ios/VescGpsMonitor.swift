@@ -1,8 +1,6 @@
 import CoreLocation
 import Foundation
 
-internal let MAX_RECORDING_ACCURACY_M = 20.0
-
 /// CLLocationManager-backed GPS monitor for live map state and Ride Recording.
 ///
 /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescGpsMonitor.kt
@@ -62,7 +60,7 @@ internal final class VescGpsMonitor: NSObject, CLLocationManagerDelegate {
         accuracyM: accuracy,
         altitudeM: altitude,
         timestamp: Int64(location.timestamp.timeIntervalSince1970 * 1000.0),
-        precise: (accuracy ?? Double.greatestFiniteMagnitude) <= MAX_RECORDING_ACCURACY_M
+        precise: isPreciseGpsFix(accuracyM: accuracy)
       )
     )
   }

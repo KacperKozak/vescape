@@ -24,6 +24,7 @@ internal final class RecordingCoordinator {
   func beginBoardSession(config: BoardConnectConfig) {
     activeConfig = config
     store.resetSessionState()
+    store.reloadPrivacyZones(appData.getEnabledPrivacyZoneEntities())
     let settings = appData.getSettings()
     store.applySettings(settings)
     let autoRecording = settings["autoRecording"] as? Bool ?? false
