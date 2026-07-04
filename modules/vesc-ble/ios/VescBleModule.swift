@@ -995,15 +995,15 @@ public class VescBleModule: Module {
     }
 
     AsyncFunction("getTotalProfileStats") { (promise: Promise) in
-      promise.resolve(Self.emptyProfileStats())
+      promise.resolve(ProfileStatsRepository.shared.getTotalProfileStats())
     }
 
-    AsyncFunction("getMonthlyProfileStats") { (_: [String: Any], promise: Promise) in
-      promise.resolve(Self.emptyProfileStats())
+    AsyncFunction("getMonthlyProfileStats") { (options: [String: Any], promise: Promise) in
+      promise.resolve(ProfileStatsRepository.shared.getMonthlyProfileStats(options))
     }
 
     AsyncFunction("getProfileStatMonths") { (promise: Promise) in
-      promise.resolve([] as [Any])
+      promise.resolve(ProfileStatsRepository.shared.getProfileStatMonths())
     }
 
     AsyncFunction("deleteTelemetryBefore") { (beforeMs: Double, promise: Promise) in
@@ -1012,6 +1012,13 @@ public class VescBleModule: Module {
 
     AsyncFunction("deleteTelemetryRange") { (options: [String: Any], promise: Promise) in
       promise.resolve(TelemetryRepository.shared.deleteRange(options))
+    }
+
+    AsyncFunction("rebuildTelemetryBuckets") { (promise: Promise) in
+      let count = TelemetryRepository.shared.rebuildBuckets { current, total in
+        self.sendEvent("onTelemetryRebuildProgress", ["current": current, "total": total])
+      }
+      promise.resolve(count)
     }
 
     AsyncFunction("clearTelemetryHistory") { (promise: Promise) in
@@ -1210,18 +1217,5 @@ public class VescBleModule: Module {
 
   private func emitUnsupported(_ message: String) {
     sendEvent("onError", ["message": message])
-  }
-
-  private static func emptyProfileStats() -> [String: Any?] {
-    [
-      "distanceM": nil,
-      "rideCount": 0,
-      "rideTimeMs": 0,
-      "topSpeedKmh": 0,
-      "avgSpeedKmh": 0,
-      "longestRideM": nil,
-      "batteryUsedWh": nil,
-      "batteryRegenWh": nil,
-    ]
   }
 }
