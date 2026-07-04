@@ -132,6 +132,11 @@ internal final class ConnectionCoordinator: VescGattListener {
   private var lastHistoryFlushAt: Int64 = 0
   private let historyFlushIntervalMs: Int64 = 300
 
+  // Latest Battery SoC Estimate + voltage, retained so the session-end persist writes fresh values.
+  private var latestBatterySoc: Double?
+  private var latestBatteryVoltage: Double?
+  private var lastBatteryPersistedAt: Int64 = 0
+
   init(appData: AppDataRepository = .shared) {
     self.appData = appData
   }
@@ -260,6 +265,10 @@ internal final class ConnectionCoordinator: VescGattListener {
   }
 
   private func endSession(phase: BoardPhase, error: String?) {
+    // Final write so the persisted last battery is fresh, not up to 30s stale (runs before config clears).
+    persistLastBattery(percent: latestBatterySoc, voltage: latestBatteryVoltage, now: nowMs(), force: true)
+    latestBatterySoc = nil
+    latestBatteryVoltage = nil
     session?.invalidate()
     session = nil
     config = nil
@@ -549,6 +558,9 @@ internal final class ConnectionCoordinator: VescGattListener {
       batteryCurrentA: telemetry.batteryCurrent
     )
     tick["batteryPercent"] = batteryPercent
+    latestBatterySoc = batteryPercent
+    latestBatteryVoltage = telemetry.batteryVoltage
+    persistLastBattery(percent: batteryPercent, voltage: telemetry.batteryVoltage, now: telemetry.lastPacketAt)
     tick["generation"] = connectionSeq
     tick["remoteTilt"] = nil
     if let latestPreciseLocation {
@@ -582,6 +594,17 @@ internal final class ConnectionCoordinator: VescGattListener {
     if lastHistoryFlushAt == 0 || now - lastHistoryFlushAt >= historyFlushIntervalMs {
       flushHistory()
     }
+  }
+
+  /// Persist the last Battery SoC Estimate per board so it survives full app kill (#152). Throttled
+  /// to 30s; `force` skips the gate on session end so the stored value is fresh, not up to 30s stale.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardSessionController.kt `persistLastBattery`
+  private func persistLastBattery(percent: Double?, voltage: Double?, now: Int64, force: Bool = false) {
+    guard let percent else { return }
+    guard let boardId = config?.appBoardId else { return }
+    if !force && now - lastBatteryPersistedAt < 30_000 { return }
+    lastBatteryPersistedAt = now
+    appData.updateLastBattery(boardId: boardId, percent: percent, voltage: voltage, atMs: now)
   }
 
   private func recordAlertDiagnostic(_ name: String, _ props: [String: Any?]) {

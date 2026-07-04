@@ -423,6 +423,20 @@ final class AppDataRepository {
     }
   }
 
+  /// Persist the last Battery SoC Estimate per board so it survives full app kill (#152). Written as
+  /// the `lastBattery` board setting; `upsertBoard` never touches this key, so board edits keep it.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/AppDataRepository.kt `updateLastBattery`
+  func updateLastBattery(boardId: String, percent: Double, voltage: Double?, atMs: Int64) {
+    let value: [String: Any] = ["percent": percent, "voltage": voltage ?? NSNull(), "at": atMs]
+    guard let json = Self.encodeJson(value) else { return }
+    write { db in
+      try db.execute(
+        sql: "INSERT OR REPLACE INTO board_settings (board_id, key, value_json, updated_at) VALUES (?, ?, ?, ?)",
+        arguments: [boardId, "lastBattery", json, atMs]
+      )
+    }
+  }
+
   private static func composeBoard(_ row: Row, settings: [(String, String)]) -> [String: Any?] {
     var values: [String: Any] = [:]
     for (key, json) in settings {
