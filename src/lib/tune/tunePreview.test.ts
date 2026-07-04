@@ -1,10 +1,15 @@
 import { describe, expect, test } from 'bun:test'
 
 import {
+  DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS,
   MAX_DECK_DISTURBANCE_DEGREES,
+  TUNE_PREVIEW_MOTOR_PRESETS,
   calculateControllerCurrentAmps,
   calculateLongitudinalTarget,
+  calculatePreviewAcceleration,
   calculateSyntheticAcceleration,
+  calculateTerrainAtrDisturbance,
+  calculateTerrainLoadCurrentAmps,
   calculateTerrainSlope,
   createTunePreviewModel,
   createTunePreviewState,
@@ -350,6 +355,99 @@ describe('Tune Preview longitudinal response', () => {
 
     expect(terrainSlopeToSyntheticAcceleration(grade)).toBeCloseTo(expectedAcceleration, 5)
     expect(terrainSlopeToSyntheticAcceleration(-grade)).toBeCloseTo(-expectedAcceleration, 5)
+  })
+
+  test('calculates hill-load current from rider, Board, wheel, motor, and efficiency', () => {
+    const grade = 0.1
+    const physics = { ...DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS, enabled: true }
+    const totalMassKg = 70 + 18
+    const wheelRadiusMeters = (11 * 0.0254) / 2
+    const motorTorqueNmPerAmp =
+      TUNE_PREVIEW_MOTOR_PRESETS[physics.motorPresetId].motorTorqueNmPerAmp
+    const expectedCurrent =
+      (((totalMassKg * 9.80665 * grade) / Math.sqrt(1 + grade ** 2)) * wheelRadiusMeters) /
+      (motorTorqueNmPerAmp * 0.85)
+
+    expect(calculateTerrainLoadCurrentAmps(grade, physics)).toBeCloseTo(expectedCurrent, 5)
+    expect(calculateTerrainLoadCurrentAmps(-grade, physics)).toBeCloseTo(-expectedCurrent, 5)
+  })
+
+  test('advanced physics converts physical hill current through the Tune ATR ratio', () => {
+    const grade = 0.1
+    const ratio = 8
+    const physics = { ...DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS, enabled: true }
+    const loadCurrent = calculateTerrainLoadCurrentAmps(grade, physics)
+
+    expect(calculateTerrainAtrDisturbance(grade, ratio, physics)).toBeCloseTo(
+      loadCurrent / ratio,
+      5,
+    )
+    expect(calculateTerrainAtrDisturbance(grade, ratio)).toBeCloseTo(
+      terrainSlopeToSyntheticAcceleration(grade),
+      5,
+    )
+  })
+
+  test('advanced hill-load current reaches Torque Tilt and cancels grade acceleration', () => {
+    const physics = { ...DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS, enabled: true }
+    const hillSpacingMeters = 50
+    const hillHeightMeters = (0.1 * hillSpacingMeters) / Math.PI
+    const state = {
+      ...createTunePreviewState(15),
+      groundTravelMeters: hillSpacingMeters / 2,
+    }
+    const input = {
+      deckDisturbanceDegrees: 0,
+      speedKmh: 15,
+      holdSpeed: true,
+      hillsEnabled: true,
+      hillHeightMeters,
+      hillSpacingMeters,
+      advancedPhysics: physics,
+    }
+    const slope = calculateTerrainSlope(state.groundTravelMeters, input)
+    const hillLoadCurrent = calculateTerrainLoadCurrentAmps(slope, physics)
+    const next = stepTunePreview(state, readyParameters(), input, 1 / 120)
+
+    expect(slope).toBeCloseTo(0.1, 5)
+    expect(next.syntheticCurrentAmps).toBeCloseTo(hillLoadCurrent, 5)
+    expect(next.torqueTiltDegrees).toBeGreaterThan(0)
+    expect(calculatePreviewAcceleration(hillLoadCurrent, slope, physics)).toBeCloseTo(0, 5)
+  })
+
+  test('hill load can move Target through Torque Tilt while ATR remains disabled', () => {
+    const parameters = readyParameters({
+      ...baseFields,
+      atr_strength_up: 0,
+      atr_strength_down: 0,
+      braketilt_strength: 0,
+      tiltback_constant: 0,
+      tiltback_variable: 0,
+      tiltback_variable_max: 0,
+    })
+    const hillSpacingMeters = 30
+    const state = {
+      ...createTunePreviewState(15),
+      groundTravelMeters: hillSpacingMeters / 2,
+    }
+    const next = stepTunePreview(
+      state,
+      parameters,
+      {
+        deckDisturbanceDegrees: 0,
+        speedKmh: 15,
+        holdSpeed: true,
+        hillsEnabled: true,
+        hillHeightMeters: 2.5,
+        hillSpacingMeters,
+        advancedPhysics: { ...DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS, enabled: true },
+      },
+      1 / 120,
+    )
+
+    expect(next.atrDegrees).toBe(0)
+    expect(next.torqueTiltDegrees).toBeGreaterThan(0)
+    expect(next.targetAngleDegrees).toBeGreaterThan(0)
   })
 
   test('keeps ATR neutral on flat ground with zero controller current', () => {

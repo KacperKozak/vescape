@@ -11,12 +11,14 @@ import type { TuneProfileFieldValue } from 'vesc-ble'
 
 import { theme } from '@/constants/theme'
 import {
+  DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS,
   createTunePreviewModel,
   createTunePreviewState,
   groundTravelToVisualOffset,
   resetTunePreviewSpeed,
   stepTunePreview,
   terrainSlopeToSyntheticAcceleration,
+  type TunePreviewAdvancedPhysics,
 } from '@/lib/tune/tunePreview'
 import {
   GROUND_TICK_SPACING_METERS,
@@ -35,6 +37,7 @@ interface TunePreviewProps {
   hillsEnabled?: boolean
   hillHeightMeters?: number
   hillSpacingMeters?: number
+  advancedPhysics?: TunePreviewAdvancedPhysics
   active?: boolean
   onHelp: () => void
 }
@@ -56,10 +59,11 @@ export function TunePreview({
   deckDisturbanceDegrees,
   deckDisturbanceActive,
   speedKmh,
-  holdSpeed = true,
+  holdSpeed = false,
   hillsEnabled = false,
-  hillHeightMeters = 1,
-  hillSpacingMeters = 50,
+  hillHeightMeters = 2.5,
+  hillSpacingMeters = 30,
+  advancedPhysics = DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS,
   active = true,
   onHelp,
 }: TunePreviewProps) {
@@ -127,6 +131,7 @@ export function TunePreview({
             hillsEnabled,
             hillHeightMeters,
             hillSpacingMeters,
+            advancedPhysics,
           },
           (timestamp - previous) / 1000,
         )
@@ -146,7 +151,9 @@ export function TunePreview({
           const current = next.syntheticCurrentAmps
           setReadouts({
             angle: `${next.angleDegrees.toFixed(1)}°`,
-            resistance: `Resistance ${resistance >= 0 ? '+' : ''}${resistance.toFixed(2)}`,
+            resistance: advancedPhysics.enabled
+              ? `Hill load ${next.terrainLoadCurrentAmps >= 0 ? '+' : ''}${next.terrainLoadCurrentAmps.toFixed(1)} A`
+              : `Resistance ${resistance >= 0 ? '+' : ''}${resistance.toFixed(2)} m/s²`,
             speed: next.syntheticSpeedKmh.toFixed(1),
             current: `${current > 0 ? '+' : ''}${current.toFixed(0)} A`,
           })
@@ -161,6 +168,7 @@ export function TunePreview({
     }
   }, [
     active,
+    advancedPhysics,
     angleDegrees,
     canvasWidth,
     deckDisturbanceActive,

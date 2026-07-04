@@ -399,6 +399,29 @@ Model celowo nie obraca Board automatycznie zgodnie z wizualnym stokiem. Gdyby t
 geometrię terenu z zachowaniem kontrolera. Stok wpływa na ATR jako zakłócenie obciążenia, ale nie
 ustawia bezpośrednio kąta decku.
 
+Opcjonalne **Advanced physics** zastępuje proste zakłócenie przyspieszenia oszacowaniem prądu
+potrzebnego do utrzymania Board na stoku. Użytkownik ustawia jedną łączną masę Rider + Board
+(domyślnie `88 kg`) oraz wybiera preset silnika. Koło pozostaje stałe `11″`, a sprawność `85%`.
+Dostępne presety to FM Hypercore
+`0,68 Nm/A`, SuperFlux HS `0,56`, SuperFlux HT `0,75`, CannonCore V2 `0,68` albo CannonCore V3
+`0,75`:
+
+```text
+masa całkowita = masa Ridera + masa Board
+siła stoku = masa całkowita × g × nachylenie / √(1 + nachylenie²)
+moment koła = siła stoku × promień koła
+prąd stoku = moment koła / (stała momentu × sprawność)
+wejście ATR = prąd stoku / współczynnik atr_amps_accel/decel_ratio
+```
+
+Oszacowany całkowity prąd silnika zasila również Torque Tilt i Brake Tilt. Przy wyłączonym Constant
+speed prąd jest przeliczany przez stałą momentu i masę na siłę, a następnie odejmowana jest
+grawitacja działająca wzdłuż stoku. Sama masa nie zmienia porównawczej odpowiedzi kątowej PID, bo do
+tego brakowałoby środka ciężkości Ridera i momentu bezwładności całego układu.
+
+Stałe momentu presetów nie pochodzą z Tune Profile. Są założeniami scenariusza, dlatego wynik służy
+do porównania zachowania tune, a nie jako skalibrowany pomiar prawdziwego prądu.
+
 Wysokość jest ograniczona do `0..50 m`, a spacing do `2..1000 m`. Koło 11″ i teren używają tej
 samej skali pikseli na metr w pionie i poziomie. Duża góra wychodzi więc poza ekran; podgląd pokazuje
 lokalny fragment stoku zamiast sztucznie zmniejszać ją obok Board.

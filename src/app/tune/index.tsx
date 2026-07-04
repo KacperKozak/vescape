@@ -44,6 +44,7 @@ import type { BasicSliderItem } from '@/lib/tune/sliderDefinitions'
 import { useTuneScreenData } from '@/hooks/useTuneScreenData'
 import { theme } from '@/constants/theme'
 import { useTuneModals } from '@/hooks/useTuneModals'
+import { DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS } from '@/lib/tune/tunePreview'
 
 let previewHelpShownThisSession = false
 
@@ -55,10 +56,11 @@ export default function TuneScreen() {
   const deckDisturbanceDegrees = useSharedValue(0)
   const deckDisturbanceActive = useSharedValue(false)
   const [previewSpeedKmh, setPreviewSpeedKmh] = useState(15)
-  const [holdPreviewSpeed, setHoldPreviewSpeed] = useState(true)
+  const [holdPreviewSpeed, setHoldPreviewSpeed] = useState(false)
   const [hillsEnabled, setHillsEnabled] = useState(false)
-  const [hillHeightMeters, setHillHeightMeters] = useState(1)
-  const [hillSpacingMeters, setHillSpacingMeters] = useState(50)
+  const [hillHeightMeters, setHillHeightMeters] = useState(2.5)
+  const [hillSpacingMeters, setHillSpacingMeters] = useState(30)
+  const [advancedPhysics, setAdvancedPhysics] = useState(DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS)
   const [previewHelpVisible, setPreviewHelpVisible] = useState(() => {
     if (previewHelpShownThisSession) return false
     previewHelpShownThisSession = true
@@ -239,6 +241,7 @@ export default function TuneScreen() {
               hillsEnabled={hillsEnabled}
               hillHeightMeters={hillHeightMeters}
               hillSpacingMeters={hillSpacingMeters}
+              advancedPhysics={advancedPhysics}
               active={isFocused}
               onHelp={() => setPreviewHelpVisible(true)}
             />
@@ -259,6 +262,8 @@ export default function TuneScreen() {
               onSpeedChange={setPreviewSpeedKmh}
               holdSpeed={holdPreviewSpeed}
               onHoldSpeedChange={setHoldPreviewSpeed}
+              advancedPhysics={advancedPhysics}
+              onAdvancedPhysicsChange={setAdvancedPhysics}
               hillsEnabled={hillsEnabled}
               onHillsChange={setHillsEnabled}
               hillHeightMeters={hillHeightMeters}

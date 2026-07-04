@@ -20,6 +20,7 @@ import { ChipRow, ValueRow } from '@/components/ui/dev/ShowcaseControls'
 
 import { theme } from '@/constants/theme'
 import type { BasicSliderItem } from '@/lib/tune/sliderDefinitions'
+import { DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS } from '@/lib/tune/tunePreview'
 
 const RANGE_CONFIGS = {
   tune: { min: -5, max: 5, step: 1 },
@@ -213,11 +214,12 @@ function TunePreviewShowcase() {
   const deckDisturbanceDegrees = useSharedValue(0)
   const deckDisturbanceActive = useSharedValue(false)
   const [speedKmh, setSpeedKmh] = useState(15)
-  const [holdSpeed, setHoldSpeed] = useState(true)
-  const [scenario, setScenario] = useState('fixed speed')
+  const [holdSpeed, setHoldSpeed] = useState(false)
+  const [scenario, setScenario] = useState('dynamic speed')
   const [hillsEnabled, setHillsEnabled] = useState(false)
-  const [hillHeightMeters, setHillHeightMeters] = useState(1)
-  const [hillSpacingMeters, setHillSpacingMeters] = useState(50)
+  const [hillHeightMeters, setHillHeightMeters] = useState(2.5)
+  const [hillSpacingMeters, setHillSpacingMeters] = useState(30)
+  const [advancedPhysics, setAdvancedPhysics] = useState(DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS)
   const fields = useMemo(
     () => ({
       kp: 20,
@@ -269,8 +271,8 @@ function TunePreviewShowcase() {
       setHillsEnabled(true)
       setSpeedKmh(15)
       setHoldSpeed(true)
-      setHillHeightMeters(next === 'dense hills' ? 2 : 1)
-      setHillSpacingMeters(next === 'dense hills' ? 20 : 50)
+      setHillHeightMeters(next === 'dense hills' ? 5 : 2.5)
+      setHillSpacingMeters(next === 'dense hills' ? 15 : 30)
     } else {
       setHillsEnabled(false)
       setSpeedKmh(15)
@@ -302,6 +304,7 @@ function TunePreviewShowcase() {
         hillsEnabled={hillsEnabled}
         hillHeightMeters={hillHeightMeters}
         hillSpacingMeters={hillSpacingMeters}
+        advancedPhysics={advancedPhysics}
         onHelp={() => {}}
       />
       <DeckDisturbanceControl
@@ -313,6 +316,8 @@ function TunePreviewShowcase() {
         onSpeedChange={setSpeedKmh}
         holdSpeed={holdSpeed}
         onHoldSpeedChange={setHoldSpeed}
+        advancedPhysics={advancedPhysics}
+        onAdvancedPhysicsChange={setAdvancedPhysics}
         hillsEnabled={hillsEnabled}
         onHillsChange={setHillsEnabled}
         hillHeightMeters={hillHeightMeters}

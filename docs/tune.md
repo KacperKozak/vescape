@@ -2,7 +2,7 @@
 
 ## Tune Preview model
 
-The flat-response Tune Preview uses model version `refloat-bundled-legacy-v3`, tied to
+The flat-response Tune Preview uses model version `refloat-bundled-legacy-v4`, tied to
 `modules/vesc-ble/android/src/main/assets/refloat-settings.xml`. It is a deterministic,
 comparative ideal-drive model. Deck Disturbance lets the rider hold Board at a temporary
 `-12..12°` angle. Releasing the gesture removes the constraint and lets the tune drive Board back
@@ -26,6 +26,29 @@ the viewport instead of being visually compressed. Terrain slope feeds a synthet
 acceleration disturbance into the legacy ATR equations. The disturbance is gravity projected along
 the grade (`g * slope / sqrt(1 + slope²)`), so a 10% grade contributes about `0.98 m/s²`. It never
 forces Board pitch to the terrain tangent and does not model traction, suspension, or collision.
+
+Optional Advanced physics replaces the direct terrain-acceleration ATR disturbance with an
+estimated hill-load motor current. Advanced settings expose one combined Rider + Board mass
+(default `88 kg`) and a motor preset. Wheel diameter stays fixed at `11 in` and drivetrain
+efficiency at `85%`. Available motors are FM Hypercore
+`0.68 Nm/A`, SuperFlux HS `0.56`, SuperFlux HT `0.75`, CannonCore V2 `0.68`, or CannonCore V3
+`0.75`. The estimate is:
+
+```text
+total mass = Rider mass + Board mass
+gravity force along grade = total mass * g * slope / sqrt(1 + slope²)
+wheel torque = gravity force * wheel radius
+hill-load current = wheel torque / (motor torque per amp * drivetrain efficiency)
+ATR disturbance = hill-load current / configured ATR amps-to-acceleration ratio
+```
+
+The estimated total motor current also feeds Torque Tilt and Brake Tilt. With dynamic speed, motor
+current is converted through the selected torque constant and total mass, then gravity along the
+grade is subtracted. Mass is not applied to the comparative angular PID response because total mass
+alone cannot determine rider center of mass or rotational inertia.
+
+The preset torque constants are scenario estimates, not known Tune Profile values. The result is
+therefore a comparison tool, not a calibrated prediction of real motor current.
 
 `Hold speed` is enabled by default so tune comparisons keep an identical constant speed. When it
 is disabled, the configured speed is the starting speed and tune-derived controller current drives

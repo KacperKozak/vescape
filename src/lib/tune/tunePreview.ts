@@ -8,11 +8,44 @@ import {
 // Longitudinal target equations and transition signs derive from Refloat v1.2.1
 // torque_tilt.c and brake_tilt.c (GPL-3.0-or-later), matching the bundled schema.
 
-export const TUNE_PREVIEW_MODEL_VERSION = 'refloat-bundled-legacy-v3' as const
+export const TUNE_PREVIEW_MODEL_VERSION = 'refloat-bundled-legacy-v4' as const
 export const REFERENCE_ERPM_PER_KMH = 1000 / 3.5
 export const COMPARATIVE_ACCELERATION_KMH_PER_SECOND = 6
 export const MAX_SYNTHETIC_CURRENT_AMPS = 60
 export const MAX_DECK_DISTURBANCE_DEGREES = 12
+
+export type TunePreviewMotorPresetId =
+  | 'hypercore'
+  | 'superflux-hs'
+  | 'superflux-ht'
+  | 'cannoncore-v2'
+  | 'cannoncore-v3'
+
+export interface TunePreviewAdvancedPhysics {
+  enabled: boolean
+  motorPresetId: TunePreviewMotorPresetId
+  totalMassKg: number
+}
+
+export const TUNE_PREVIEW_MOTOR_PRESETS: Record<
+  TunePreviewMotorPresetId,
+  { label: string; motorTorqueNmPerAmp: number }
+> = {
+  hypercore: { label: 'FM Hypercore', motorTorqueNmPerAmp: 0.68 },
+  'superflux-hs': { label: 'SuperFlux HS', motorTorqueNmPerAmp: 0.56 },
+  'superflux-ht': { label: 'SuperFlux HT', motorTorqueNmPerAmp: 0.75 },
+  'cannoncore-v2': { label: 'CannonCore V2', motorTorqueNmPerAmp: 0.68 },
+  'cannoncore-v3': { label: 'CannonCore V3', motorTorqueNmPerAmp: 0.75 },
+}
+
+export const DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS: TunePreviewAdvancedPhysics = {
+  enabled: false,
+  motorPresetId: 'hypercore',
+  totalMassKg: 88,
+}
+
+const ADVANCED_PHYSICS_WHEEL_DIAMETER_INCHES = 11
+const ADVANCED_PHYSICS_DRIVETRAIN_EFFICIENCY = 0.85
 
 const REQUIRED_FIELDS = [
   'kp',
@@ -125,6 +158,7 @@ export interface TunePreviewState {
   erpm: number
   groundTravelMeters: number
   terrainSlope: number
+  terrainLoadCurrentAmps: number
   atrAccelDiff: number
   atrTargetDegrees: number
 }
@@ -137,6 +171,7 @@ export interface TunePreviewInput {
   hillsEnabled?: boolean
   hillHeightMeters?: number
   hillSpacingMeters?: number
+  advancedPhysics?: TunePreviewAdvancedPhysics
   paused?: boolean
 }
 
@@ -220,6 +255,7 @@ export function createTunePreviewState(speedKmh = 0): TunePreviewState {
     erpm: 0,
     groundTravelMeters: 0,
     terrainSlope: 0,
+    terrainLoadCurrentAmps: 0,
     atrAccelDiff: 0,
     atrTargetDegrees: 0,
   }
@@ -328,17 +364,33 @@ function stepFixed(
   const controlledRateDegreesPerSecond = deckDisturbanceActive
     ? 0
     : state.angularRateDegreesPerSecond
-  const syntheticCurrentAmps = calculateControllerCurrentAmps(
+  const balanceCurrentAmps = calculateControllerCurrentAmps(
     controlledAngleDegrees,
     controlledRateDegreesPerSecond,
     state.integralError,
     state.targetAngleDegrees,
     parameters,
   )
+  const terrainSlope = calculateTerrainSlope(state.groundTravelMeters, input)
+  const terrainLoadCurrentAmps = calculateTerrainLoadCurrentAmps(
+    terrainSlope,
+    input.advancedPhysics,
+  )
+  const syntheticCurrentAmps = clamp(
+    balanceCurrentAmps + terrainLoadCurrentAmps,
+    -MAX_SYNTHETIC_CURRENT_AMPS,
+    MAX_SYNTHETIC_CURRENT_AMPS,
+  )
   const syntheticSpeedKmh =
     input.holdSpeed === false
       ? boundedSpeed(
-          state.syntheticSpeedKmh + calculateSyntheticAcceleration(syntheticCurrentAmps) * dt,
+          state.syntheticSpeedKmh +
+            calculatePreviewAcceleration(
+              syntheticCurrentAmps,
+              terrainSlope,
+              input.advancedPhysics,
+            ) *
+              dt,
         )
       : boundedSpeed(input.speedKmh)
   const effectiveInput = { ...input, speedKmh: syntheticSpeedKmh }
@@ -349,11 +401,12 @@ function stepFixed(
     dt,
     syntheticCurrentAmps,
   )
-  const terrainSlope = calculateTerrainSlope(state.groundTravelMeters, input)
   const braking = syntheticCurrentAmps < 0
   const ratio = Math.max(braking ? parameters.atrAmpsDecelRatio : parameters.atrAmpsAccelRatio, 0.1)
-  const expectedAcceleration = target.syntheticCurrentAmps / ratio
-  const rawAccelDiff = expectedAcceleration + terrainSlopeToSyntheticAcceleration(terrainSlope)
+  const expectedAcceleration = balanceCurrentAmps / ratio
+  const rawAccelDiff =
+    expectedAcceleration +
+    calculateTerrainAtrDisturbance(terrainSlope, ratio, input.advancedPhysics)
   const filterAlpha = clamp(dt * Math.max(parameters.atrFilter, 0.1), 0, 1)
   const atrAccelDiff = state.atrAccelDiff + (rawAccelDiff - state.atrAccelDiff) * filterAlpha
   let atrStrength = atrAccelDiff >= 0 ? parameters.atrStrengthUp : parameters.atrStrengthDown
@@ -433,6 +486,7 @@ function stepFixed(
     erpm: target.erpm,
     groundTravelMeters: state.groundTravelMeters + (syntheticSpeedKmh / 3.6) * dt,
     terrainSlope,
+    terrainLoadCurrentAmps,
     atrAccelDiff,
     atrTargetDegrees,
   }
@@ -443,8 +497,8 @@ export function calculateTerrainSlope(
   input: Pick<TunePreviewInput, 'hillsEnabled' | 'hillHeightMeters' | 'hillSpacingMeters'>,
 ): number {
   if (!input.hillsEnabled) return 0
-  const height = clamp(input.hillHeightMeters ?? 1, 0, 50)
-  const spacing = clamp(input.hillSpacingMeters ?? 50, 2, 1000)
+  const height = clamp(input.hillHeightMeters ?? 2.5, 0, 50)
+  const spacing = clamp(input.hillSpacingMeters ?? 30, 2, 1000)
   const wave = (2 * Math.PI) / spacing
   const amplitude = height / 2
   return -amplitude * wave * Math.cos(travelMeters * wave)
@@ -456,6 +510,51 @@ export function terrainSlopeToSyntheticAcceleration(slope: number): number {
     (STANDARD_GRAVITY_METERS_PER_SECOND_SQUARED * finiteSlope) /
     Math.sqrt(1 + finiteSlope * finiteSlope)
   )
+}
+
+export function calculateTerrainLoadCurrentAmps(
+  slope: number,
+  physics?: TunePreviewAdvancedPhysics,
+): number {
+  if (!physics?.enabled) return 0
+  const finiteSlope = finiteOrZero(slope)
+  const motorTorqueNmPerAmp =
+    TUNE_PREVIEW_MOTOR_PRESETS[physics.motorPresetId]?.motorTorqueNmPerAmp ??
+    TUNE_PREVIEW_MOTOR_PRESETS.hypercore.motorTorqueNmPerAmp
+  const gravityAlongSlope = terrainSlopeToSyntheticAcceleration(finiteSlope)
+  const wheelRadiusMeters = (ADVANCED_PHYSICS_WHEEL_DIAMETER_INCHES * 0.0254) / 2
+  const totalMassKg = clampFinite(physics.totalMassKg, 30, 250, 88)
+  const wheelTorqueNm = totalMassKg * gravityAlongSlope * wheelRadiusMeters
+  return wheelTorqueNm / (motorTorqueNmPerAmp * ADVANCED_PHYSICS_DRIVETRAIN_EFFICIENCY)
+}
+
+export function calculateTerrainAtrDisturbance(
+  slope: number,
+  ampsToAccelerationRatio: number,
+  physics?: TunePreviewAdvancedPhysics,
+): number {
+  if (!physics?.enabled) return terrainSlopeToSyntheticAcceleration(slope)
+  return calculateTerrainLoadCurrentAmps(slope, physics) / Math.max(ampsToAccelerationRatio, 0.1)
+}
+
+export function calculatePreviewAcceleration(
+  motorCurrentAmps: number,
+  terrainSlope: number,
+  physics?: TunePreviewAdvancedPhysics,
+): number {
+  if (!physics?.enabled) return calculateSyntheticAcceleration(motorCurrentAmps)
+  const preset =
+    TUNE_PREVIEW_MOTOR_PRESETS[physics.motorPresetId] ?? TUNE_PREVIEW_MOTOR_PRESETS.hypercore
+  const totalMassKg = clampFinite(physics.totalMassKg, 30, 250, 88)
+  const wheelRadiusMeters = (ADVANCED_PHYSICS_WHEEL_DIAMETER_INCHES * 0.0254) / 2
+  const wheelForceNewtons =
+    (clamp(motorCurrentAmps, -MAX_SYNTHETIC_CURRENT_AMPS, MAX_SYNTHETIC_CURRENT_AMPS) *
+      preset.motorTorqueNmPerAmp *
+      ADVANCED_PHYSICS_DRIVETRAIN_EFFICIENCY) /
+    wheelRadiusMeters
+  const motorAcceleration = wheelForceNewtons / totalMassKg
+  const gravityAcceleration = terrainSlopeToSyntheticAcceleration(terrainSlope)
+  return (motorAcceleration - gravityAcceleration) * 3.6
 }
 
 function torqueTiltTarget(parameters: TunePreviewParameters, currentAmps: number): number {

@@ -1,14 +1,28 @@
 import { StyleSheet, Switch, Text, View } from 'react-native'
-import { GaugeIcon, MountainsIcon } from 'phosphor-react-native'
+import { AtomIcon, GaugeIcon, MountainsIcon } from 'phosphor-react-native'
 
+import { Select, type SelectOption } from '@/components/ui/forms/Select'
 import { TuneDial } from '@/components/ui/tune/TuneDial'
 import { theme } from '@/constants/theme'
+import {
+  DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS,
+  TUNE_PREVIEW_MOTOR_PRESETS,
+  calculateTerrainLoadCurrentAmps,
+  type TunePreviewAdvancedPhysics,
+  type TunePreviewMotorPresetId,
+} from '@/lib/tune/tunePreview'
+
+const MOTOR_OPTIONS: SelectOption<TunePreviewMotorPresetId>[] = Object.entries(
+  TUNE_PREVIEW_MOTOR_PRESETS,
+).map(([value, preset]) => ({ value: value as TunePreviewMotorPresetId, label: preset.label }))
 
 interface TunePreviewScenarioControlsProps {
   speedKmh: number
   onSpeedChange: (speedKmh: number) => void
   holdSpeed: boolean
   onHoldSpeedChange: (holdSpeed: boolean) => void
+  advancedPhysics: TunePreviewAdvancedPhysics
+  onAdvancedPhysicsChange: (physics: TunePreviewAdvancedPhysics) => void
   hillsEnabled: boolean
   onHillsChange: (enabled: boolean) => void
   hillHeightMeters: number
@@ -22,6 +36,8 @@ export function TunePreviewScenarioControls({
   onSpeedChange,
   holdSpeed,
   onHoldSpeedChange,
+  advancedPhysics,
+  onAdvancedPhysicsChange,
   hillsEnabled,
   onHillsChange,
   hillHeightMeters,
@@ -29,6 +45,18 @@ export function TunePreviewScenarioControls({
   hillSpacingMeters,
   onHillSpacingChange,
 }: TunePreviewScenarioControlsProps) {
+  const motorPresetId =
+    advancedPhysics.motorPresetId ?? DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS.motorPresetId
+  const totalMassKg = Number.isFinite(advancedPhysics.totalMassKg)
+    ? advancedPhysics.totalMassKg
+    : DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS.totalMassKg
+  const tenPercentGradeCurrent = calculateTerrainLoadCurrentAmps(0.1, {
+    ...advancedPhysics,
+    enabled: true,
+    motorPresetId,
+    totalMassKg,
+  })
+
   return (
     <View style={styles.stack}>
       <View style={styles.container}>
@@ -54,6 +82,49 @@ export function TunePreviewScenarioControls({
             valueChangeMode="live"
             onValueChange={onSpeedChange}
           />
+        ) : null}
+      </View>
+
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <View style={styles.titleRow}>
+            <AtomIcon size={16} color={theme.palette.purple.color} weight="duotone" />
+            <Text style={styles.title}>Advanced physics</Text>
+          </View>
+          <Switch
+            value={advancedPhysics.enabled}
+            onValueChange={(enabled) => onAdvancedPhysicsChange({ ...advancedPhysics, enabled })}
+          />
+        </View>
+        <Text style={styles.description}>
+          Optional mass, wheel and motor estimate for hill-load current
+        </Text>
+        {advancedPhysics.enabled ? (
+          <View style={styles.physicsControls}>
+            <Text style={styles.valueSummary}>
+              10% grade requires approximately {tenPercentGradeCurrent.toFixed(1)} A
+            </Text>
+            <Select
+              options={MOTOR_OPTIONS}
+              value={motorPresetId}
+              onChange={(motorPresetId) =>
+                onAdvancedPhysicsChange({ ...advancedPhysics, motorPresetId })
+              }
+            />
+            <Text style={styles.description}>Rider + Board mass · {totalMassKg.toFixed(0)} kg</Text>
+            <TuneDial
+              value={totalMassKg}
+              min={30}
+              max={250}
+              step={1}
+              unit="kg"
+              valueChangeMode="live"
+              onValueChange={(totalMassKg) =>
+                onAdvancedPhysicsChange({ ...advancedPhysics, totalMassKg })
+              }
+            />
+            <Text style={styles.description}>11-inch wheel · 85% drivetrain efficiency</Text>
+          </View>
         ) : null}
       </View>
 
@@ -114,4 +185,11 @@ const styles = StyleSheet.create({
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   title: { color: theme.palette.slate.textPrimary, fontSize: 13, fontWeight: '900' },
   description: { color: theme.palette.slate.textMuted, fontSize: 10, fontWeight: '600' },
+  physicsControls: { gap: 4 },
+  valueSummary: {
+    color: theme.telemetry.motorCurrent,
+    fontSize: 11,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+  },
 })
