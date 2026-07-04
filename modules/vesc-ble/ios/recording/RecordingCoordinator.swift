@@ -48,6 +48,11 @@ internal final class RecordingCoordinator {
     }
   }
 
+  func updateBoardSessionConfig(_ config: BoardConnectConfig) {
+    guard activeConfig?.appBoardId == config.appBoardId else { return }
+    activeConfig = config
+  }
+
   func finishBoardSession(markerType: String) {
     if let config = activeConfig, enabled {
       recordMarker(markerType, config: config)

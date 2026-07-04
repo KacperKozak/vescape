@@ -15,6 +15,8 @@ import ActivityKit
 struct RideActivityAttributes: ActivityAttributes {
   /// Dynamic session state, mutated in place for the life of the activity.
   struct ContentState: Codable, Hashable {
+    /// Current board nickname. Lives in ContentState because ActivityKit attributes are immutable.
+    var deviceName: String
     /// `BoardPhase` wire value (e.g. `connecting`, `connected`, `reconnecting`, `error`).
     var phase: String
     /// Primary human-readable status line (phase text, battery segment, or fault message).
@@ -27,6 +29,4 @@ struct RideActivityAttributes: ActivityAttributes {
     var faultCode: Int?
   }
 
-  /// Board nickname, fixed for the session (set at `Activity.request`).
-  var deviceName: String
 }

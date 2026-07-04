@@ -24,10 +24,10 @@ final class RideLiveActivityController {
 
   /// Begin the session activity. No-op (after ending any stray prior activity) when disabled, so a
   /// single activity is guaranteed. Must be called while the app is foreground.
-  func start(deviceName: String?, state: RideActivityAttributes.ContentState) {
+  func start(state: RideActivityAttributes.ContentState) {
     end()
     guard enabled else { return }
-    let attributes = RideActivityAttributes(deviceName: boardLabel(deviceName))
+    let attributes = RideActivityAttributes()
     do {
       activity = try Activity.request(
         attributes: attributes,
@@ -53,8 +53,4 @@ final class RideLiveActivityController {
     Task { await activity.end(nil, dismissalPolicy: .immediate) }
   }
 
-  private func boardLabel(_ deviceName: String?) -> String {
-    guard let deviceName, !deviceName.isEmpty else { return "VESC" }
-    return deviceName
-  }
 }

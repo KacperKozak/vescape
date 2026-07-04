@@ -21,6 +21,7 @@ import expo.modules.vescble.connection.ConnectionCoordinator
 import expo.modules.vescble.diagnostics.DiagnosticContext
 import expo.modules.vescble.diagnostics.DiagnosticsRecorder
 import expo.modules.vescble.notification.NotificationPresenter
+import expo.modules.vescble.notification.NotificationUpdateGate
 import expo.modules.vescble.recording.RecordingCoordinator
 import expo.modules.vescble.reconnect.ReconnectListener
 import expo.modules.vescble.reconnect.ReconnectPolicy
@@ -53,6 +54,7 @@ private const val HISTORY_FLUSH_INTERVAL_MS = 300L
 private const val LIVE_SERIES_INTERVAL_MS = 1_000L
 private const val LIVE_SERIES_BUCKETS = 64
 private const val WATCH_FRAME_INTERVAL_MS = 500L
+private const val NOTIFICATION_TELEMETRY_INTERVAL_MS = 10_000L
 private const val GATT_CONNECT_TIMEOUT_MS = 6_000L
 private const val GATT_READY_TIMEOUT_MS = 6_000L
 
@@ -107,6 +109,7 @@ internal class BoardSessionController(private val service: VescForegroundService
             canConnect = { boardConfig == null && selectedBoardName != null },
         )
     }
+    private val notificationGate = NotificationUpdateGate(NOTIFICATION_TELEMETRY_INTERVAL_MS)
     private val alertFeedback by lazy { VescAlertFeedback(service, mainHandler) }
     private val alertCoordinator by lazy { AlertCoordinator { alertFeedback } }
     private val diagnosticsRecorder: DiagnosticsRecorder by lazy {
@@ -1162,7 +1165,7 @@ internal class BoardSessionController(private val service: VescForegroundService
         ) return
 
         transitionBoardPhase(BoardPhase.Stale)
-        refreshNotification()
+        refreshNotification(force = true)
         boardConfig?.takeIf { it.autoReconnect }?.let {
             scheduleAutoReconnect(it, null, "telemetry stale")
         }
@@ -1277,7 +1280,7 @@ internal class BoardSessionController(private val service: VescForegroundService
         stopPolling()
         gattClient.clear(markIntentional = true)
         setError(message)
-        refreshNotification(errorMessage = message)
+        refreshNotification(errorMessage = message, force = true)
         recordingCoordinator.failSession()
         start.onError(code, message)
     }
@@ -1337,10 +1340,13 @@ internal class BoardSessionController(private val service: VescForegroundService
             BatterySocEstimator.estimateBatteryPercent(it.batteryVoltage, batteryConfigCache, it.batteryCurrent)
         },
         errorMessage: String? = boardError,
+        force: Boolean = false,
     ) {
         if (isStoppingService) return
+        val phase = reportedBoardPhase()
+        if (!notificationGate.shouldPost(phase, System.currentTimeMillis(), force)) return
         presenter.show(
-            phase = reportedBoardPhase(),
+            phase = phase,
             telemetry = telemetry,
             batteryPercent = batteryPercent,
             errorMessage = errorMessage,
@@ -1501,8 +1507,38 @@ internal class BoardSessionController(private val service: VescForegroundService
         }
     }
 
-    fun reloadBatteryConfigForActiveBoard() {
-        loadBatteryConfig(boardConfig?.appBoardId)
+    /**
+     * @parity /modules/vesc-ble/ios/connection/ConnectionCoordinator.swift `reloadBoardDataForActiveBoard`
+     * @platform-diff Android also refreshes the selected-board idle notification title.
+     */
+    suspend fun reloadBoardDataForActiveBoard() {
+        val current = boardConfig
+        val repo = AppDataRepository.get(service.applicationContext)
+        val selectedBoardId = repo.getTypedSettings().selectedBoardId
+        val activeBoardId = current?.appBoardId
+        val boardId = activeBoardId ?: selectedBoardId ?: return
+        val board = try {
+            repo.getBoard(boardId)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(VESC_SESSION_TAG, "Failed to load board data: ${e.message}")
+            null
+        } ?: return
+        val name = (board["name"] as? String)?.takeIf { it.isNotEmpty() }
+            ?: current?.deviceName
+            ?: selectedBoardName
+            ?: DEFAULT_BOARD_NAME
+        if (selectedBoardId == boardId) selectedBoardName = name
+        if (current != null && activeBoardId == boardId) {
+            selectedBoardName = name
+            boardConfig = current.copy(deviceName = name)
+            batteryConfigCache = board["batteryConfig"] as? Map<String, Any?>
+        }
+        scheduler.post {
+            refreshNotification(force = true)
+            emitState()
+        }
     }
 
     private fun loadBatteryConfig(appBoardId: String?) {

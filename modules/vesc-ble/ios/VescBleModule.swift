@@ -1223,6 +1223,7 @@ public class VescBleModule: Module {
 
     AsyncFunction("upsertBoard") { (board: [String: Any], promise: Promise) in
       self.appData.upsertBoard(board)
+      self.coordinator.reloadBoardDataForActiveBoard()
       promise.resolve(nil)
     }
 
@@ -1237,16 +1238,19 @@ public class VescBleModule: Module {
 
     AsyncFunction("upsertAlertRule") { (rule: [String: Any], promise: Promise) in
       self.appData.upsertAlertRule(rule)
+      self.coordinator.reloadAlertRules()
       promise.resolve(nil)
     }
 
     AsyncFunction("setAlertRuleEnabled") { (id: String, enabled: Bool, promise: Promise) in
       self.appData.setAlertRuleEnabled(id, enabled)
+      self.coordinator.reloadAlertRules()
       promise.resolve(nil)
     }
 
     AsyncFunction("deleteAlertRule") { (id: String, promise: Promise) in
       self.appData.deleteAlertRule(id)
+      self.coordinator.reloadAlertRules()
       promise.resolve(nil)
     }
 
@@ -1302,6 +1306,18 @@ public class VescBleModule: Module {
     // `appData.updateSetting` treats `NSNull` (JS null/undefined) as a delete.
     Function("updateSetting") { (key: String, value: JavaScriptValue) in
       self.appData.updateSetting(key, rawValue: value.getAny())
+      if [
+        "liveHistoryLimit",
+        "movingSpeedThresholdKmh",
+        "avgSpeedCutoffKmh",
+        "movingAvgSpeedThresholdKmh",
+        "freeSpinMaxSpeedDeltaKmh",
+        "freeSpinStationaryBoardCapKmh",
+        "socEstimateWindowSeconds",
+        "telemetryPollRateHz",
+      ].contains(key) {
+        self.coordinator.reloadTelemetrySettings()
+      }
     }
   }
 

@@ -16,14 +16,14 @@ struct RideActivityBundle: WidgetBundle {
 struct RideActivityWidget: Widget {
   var body: some WidgetConfiguration {
     ActivityConfiguration(for: RideActivityAttributes.self) { context in
-      RideActivityLockScreenView(attributes: context.attributes, state: context.state)
+      RideActivityLockScreenView(state: context.state)
         .padding()
         .activityBackgroundTint(Color.black.opacity(0.55))
         .activitySystemActionForegroundColor(.white)
     } dynamicIsland: { context in
       DynamicIsland {
         DynamicIslandExpandedRegion(.leading) {
-          Label(context.attributes.deviceName, systemImage: boardSymbol(context.state))
+          Label(context.state.deviceName, systemImage: boardSymbol(context.state))
             .font(.caption)
             .lineLimit(1)
         }
@@ -51,13 +51,12 @@ struct RideActivityWidget: Widget {
 
 /// Full Lock Screen / banner presentation.
 private struct RideActivityLockScreenView: View {
-  let attributes: RideActivityAttributes
   let state: RideActivityAttributes.ContentState
 
   var body: some View {
     VStack(alignment: .leading, spacing: 8) {
       HStack {
-        Label(attributes.deviceName, systemImage: boardSymbol(state))
+        Label(state.deviceName, systemImage: boardSymbol(state))
           .font(.subheadline.weight(.semibold))
           .lineLimit(1)
         Spacer()

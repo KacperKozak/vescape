@@ -99,7 +99,15 @@ internal final class ConnectionCoordinator: VescGattListener {
   private lazy var liveActivity = RideLiveActivityController()
   /// Latest values reflected in the Live Activity; updates fire only on real change (throttle).
   private var liveBatteryPercent: Int?
+  /// Battery voltage rounded to the displayed 1-decimal resolution, so `"75.1V"` only refreshes the
+  /// activity when the shown value actually changes.
+  private var liveBatteryVoltage: Double?
   private var liveFaultCode: Int?
+  /// Rate-limit for voltage-driven Live Activity refreshes. Android updates its notification every
+  /// telemetry frame; iOS must respect the ActivityKit update budget, so frequent voltage jitter is
+  /// throttled while phase / percent / fault changes still refresh immediately.
+  private var lastLiveTelemetryRefreshAt: Int64 = 0
+  private let liveTelemetryRefreshMinMs: Int64 = 1000
   private var latestLocation: TelemetryLocationCapture?
   private var latestPreciseLocation: TelemetryLocationCapture?
   private var recentLocations: [[String: Any?]] = []
@@ -221,6 +229,54 @@ internal final class ConnectionCoordinator: VescGattListener {
     alertCoordinator.replaceRules(appData.getEnabledAlertRules())
   }
 
+  /// Re-read mutable board-scoped session data after JS edits the active board. The BLE endpoint
+  /// and transport stay fixed for the running session (ADR 0015); rider-facing name and battery
+  /// config are live like Android's foreground notification and alert/battery pipeline.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardSessionController.kt `reloadBoardDataForActiveBoard`
+  func reloadBoardDataForActiveBoard() {
+    guard let current = config else { return }
+    guard let board = appData.getBoard(current.appBoardId) else { return }
+    let name = (board["name"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? current.name
+    let updated = BoardConnectConfig(
+      appBoardId: current.appBoardId,
+      bleId: current.bleId,
+      name: name,
+      transport: current.transport,
+      pollIntervalMs: current.pollIntervalMs,
+      batteryConfig: AppDataRepository.normalizeBatteryConfig(board["batteryConfig"] ?? nil),
+      liveHistoryLimitMinutes: current.liveHistoryLimitMinutes
+    )
+    config = updated
+    recordingCoordinator.updateBoardSessionConfig(updated)
+    boardName = name
+    refreshLiveActivity()
+    onStateChanged?()
+  }
+
+  /// Re-read mutable app settings that affect live native work while a session is already running.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardSessionController.kt `loadTelemetrySettings`
+  func reloadTelemetrySettings() {
+    guard let current = config else { return }
+    let settings = appData.getSettings()
+    let hz = AppDataRepository.intValue(settings["telemetryPollRateHz"] ?? nil) ?? 0
+    let liveHistoryLimit = AppDataRepository.liveHistoryLimitMinutes(settings["liveHistoryLimit"] ?? nil)
+      ?? current.liveHistoryLimitMinutes
+    config = BoardConnectConfig(
+      appBoardId: current.appBoardId,
+      bleId: current.bleId,
+      name: current.name,
+      transport: current.transport,
+      pollIntervalMs: hz > 0 ? 1000 / hz : 0,
+      batteryConfig: current.batteryConfig,
+      liveHistoryLimitMinutes: liveHistoryLimit
+    )
+    floorMs = max(0, config?.pollIntervalMs ?? 0)
+    liveSeries.setWindowMinutes(liveHistoryLimit)
+    socWindow.windowMs = Int64(AppDataRepository.intValue(settings["socEstimateWindowSeconds"] ?? nil) ?? 20) * 1000
+    recordingCoordinator.applySettings(settings)
+    pruneRecentLocations(now: nowMs())
+  }
+
   /// Play a preset once for UI preview, or speak a `tts:` template. Mirrors Android
   /// `previewAlertSound`.
   /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardSessionController.kt `previewAlertSound`
@@ -269,12 +325,14 @@ internal final class ConnectionCoordinator: VescGattListener {
     pendingOnError = onError
     connectSettled = false
     liveBatteryPercent = nil
+    liveBatteryVoltage = nil
     liveFaultCode = nil
+    lastLiveTelemetryRefreshAt = 0
     setPhase(.connecting)
     // Start the Live Activity while foreground (connect is user-initiated); it then updates from
     // background BLE callbacks for the rest of the session. Mirrors Android showing the chip from
     // session start.
-    liveActivity.start(deviceName: config.name, state: currentLiveState())
+    liveActivity.start(state: currentLiveState())
   }
 
   private func endSession(phase: BoardPhase, error: String?) {
@@ -597,7 +655,7 @@ internal final class ConnectionCoordinator: VescGattListener {
     if !firedAlerts.isEmpty {
       tick["firedAlerts"] = firedAlerts
     }
-    updateLiveBattery(batteryEstimate)
+    updateLiveBattery(percent: batteryEstimate, voltage: telemetry.batteryVoltage, now: telemetry.lastPacketAt)
     updateLiveFault(telemetry)
     emit?("onLiveTick", tick)
 
@@ -666,7 +724,13 @@ internal final class ConnectionCoordinator: VescGattListener {
 
   /// Current session snapshot as Live Activity content. Single source for start + update.
   private func currentLiveState() -> RideActivityAttributes.ContentState {
-    RideActivityContent.state(phase: phase, batteryPercent: liveBatteryPercent, faultCode: liveFaultCode)
+    RideActivityContent.state(
+      deviceName: boardName ?? config?.name,
+      phase: phase,
+      batteryPercent: liveBatteryPercent,
+      batteryVoltage: liveBatteryVoltage,
+      faultCode: liveFaultCode
+    )
   }
 
   private func refreshLiveActivity() {
@@ -676,16 +740,27 @@ internal final class ConnectionCoordinator: VescGattListener {
   private func endLiveActivity() {
     liveActivity.end()
     liveBatteryPercent = nil
+    liveBatteryVoltage = nil
     liveFaultCode = nil
+    lastLiveTelemetryRefreshAt = 0
   }
 
-  /// Update the Live Activity battery only when the integer percent actually steps, so the hot
-  /// per-frame telemetry path does not spam ActivityKit updates.
-  private func updateLiveBattery(_ percent: Double?) {
-    let stepped = percent.map { Int($0.rounded()) }
-    guard stepped != liveBatteryPercent else { return }
-    liveBatteryPercent = stepped
-    refreshLiveActivity()
+  /// Update the Live Activity battery segment (`"45% (75.1V)"`). A stepped integer percent refreshes
+  /// immediately (rare, meaningful); voltage-only changes are rate-limited to `liveTelemetryRefreshMinMs`
+  /// so per-frame voltage jitter does not exhaust the ActivityKit update budget.
+  /// @platform-diff Android refreshes its notification every telemetry frame; iOS throttles voltage.
+  private func updateLiveBattery(percent: Double?, voltage: Double?, now: Int64) {
+    let steppedPercent = percent.map { Int($0.rounded()) }
+    let steppedVoltage = voltage.map { ($0 * 10).rounded() / 10 }
+    let percentChanged = steppedPercent != liveBatteryPercent
+    let voltageChanged = steppedVoltage != liveBatteryVoltage
+    guard percentChanged || voltageChanged else { return }
+    liveBatteryPercent = steppedPercent
+    liveBatteryVoltage = steppedVoltage
+    if percentChanged || now - lastLiveTelemetryRefreshAt >= liveTelemetryRefreshMinMs {
+      lastLiveTelemetryRefreshAt = now
+      refreshLiveActivity()
+    }
   }
 
   /// Reflect fault state in the Live Activity on the rising/falling edge of a sustained fault.
