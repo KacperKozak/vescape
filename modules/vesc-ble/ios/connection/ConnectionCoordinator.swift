@@ -141,6 +141,8 @@ internal final class ConnectionCoordinator: VescGattListener {
   private var lastPollAt: Int64 = 0
   private var smoothedPeriodMs = 0.0
   private var pollTick: Int64 = 0
+  private var pollWorkItem: DispatchWorkItem?
+  private var safetyWorkItem: DispatchWorkItem?
 
   // Batched history flush cadence (cold path); the hot `onLiveTick` fires every frame.
   private var historyBuffer: [[String: Any?]] = []
@@ -825,6 +827,7 @@ internal final class ConnectionCoordinator: VescGattListener {
   // MARK: - Polling (response-paced; ADR 0015 dumb connect)
 
   private func startPolling(session: BoardSession) {
+    stopScheduledPolls()
     floorMs = max(0, config?.pollIntervalMs ?? 0)
     lastPollAt = 0
     smoothedPeriodMs = 0
@@ -855,6 +858,7 @@ internal final class ConnectionCoordinator: VescGattListener {
 
   private func stopPolling() {
     polling = false
+    stopScheduledPolls()
     liveSeries.stop()
     flushHistory()
   }
@@ -871,6 +875,7 @@ internal final class ConnectionCoordinator: VescGattListener {
 
   private func sendPoll(session: BoardSession) {
     guard polling, session === self.session, session.isActive else { return }
+    pollWorkItem = nil
     let now = nowMs()
     if lastPollAt > 0 {
       let delta = Double(now - lastPollAt)
@@ -884,21 +889,42 @@ internal final class ConnectionCoordinator: VescGattListener {
 
   private func onPollResponse(session: BoardSession) {
     guard polling, session === self.session, session.isActive else { return }
+    cancelSafetyPoll()
     let elapsed = nowMs() - lastPollAt
     let delayMs = max(0, Int64(floorMs) - elapsed)
-    DispatchQueue.main.asyncAfter(deadline: .now() + Double(delayMs) / 1000.0) { [weak self] in
-      self?.sendPoll(session: session)
+    pollWorkItem?.cancel()
+    let work = DispatchWorkItem { [weak self] in
+      guard let self else { return }
+      self.pollWorkItem = nil
+      self.sendPoll(session: session)
     }
+    pollWorkItem = work
+    DispatchQueue.main.asyncAfter(deadline: .now() + Double(delayMs) / 1000.0, execute: work)
   }
 
   /// Safety re-poll: if no reply lands within the window, assume a dropped request/reply and
   /// re-poll so the loop self-heals instead of stalling.
   private func armSafety(session: BoardSession, tick: Int64) {
+    cancelSafetyPoll()
     let timeoutMs = max(Int64(floorMs) * 4, 1000)
-    DispatchQueue.main.asyncAfter(deadline: .now() + Double(timeoutMs) / 1000.0) { [weak self] in
+    let work = DispatchWorkItem { [weak self] in
       guard let self, self.polling, session === self.session, session.isActive, self.pollTick == tick else { return }
+      self.safetyWorkItem = nil
       self.sendPoll(session: session)
     }
+    safetyWorkItem = work
+    DispatchQueue.main.asyncAfter(deadline: .now() + Double(timeoutMs) / 1000.0, execute: work)
+  }
+
+  private func stopScheduledPolls() {
+    pollWorkItem?.cancel()
+    pollWorkItem = nil
+    cancelSafetyPoll()
+  }
+
+  private func cancelSafetyPoll() {
+    safetyWorkItem?.cancel()
+    safetyWorkItem = nil
   }
 
   private func measuredRateHz() -> Double? {
