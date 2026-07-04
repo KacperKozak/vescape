@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef } from 'react'
-import { Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
 import { QuestionIcon } from 'phosphor-react-native'
 import Svg, { Circle, G, Line, Path } from 'react-native-svg'
 import Animated, {
@@ -48,8 +48,8 @@ const ZERO_MARKER_LENGTH = 12
 const GROUND_TICK_SPACING = GROUND_TICK_SPACING_METERS * TUNE_PREVIEW_PIXELS_PER_METER
 const AnimatedLine = Animated.createAnimatedComponent(Line)
 const AnimatedGroup = Animated.createAnimatedComponent(G)
-const AnimatedTextInput = Animated.createAnimatedComponent(TextInput)
 const AnimatedPath = Animated.createAnimatedComponent(Path)
+const READOUT_INTERVAL_MS = 100
 
 export function TunePreview({
   fields,
@@ -68,12 +68,16 @@ export function TunePreview({
   const stateRef = useRef(createTunePreviewState(speedKmh))
   const configuredSpeedRef = useRef(speedKmh)
   const lastTimestampRef = useRef<number | null>(null)
+  const lastReadoutTimestampRef = useRef(0)
+  const [readouts, setReadouts] = useState({
+    angle: '0.0°',
+    resistance: 'Resistance +0.00',
+    speed: speedKmh.toFixed(1),
+    current: '0 A',
+  })
   const angleDegrees = useSharedValue(0)
   const targetAngleDegrees = useSharedValue(0)
   const groundOffset = useSharedValue(0)
-  const terrainResistance = useSharedValue(0)
-  const syntheticSpeed = useSharedValue(speedKmh)
-  const controllerCurrent = useSharedValue(0)
   const terrainPathValue = useSharedValue(
     terrainPath(canvasWidth, 0, hillHeightMeters, hillSpacingMeters),
   )
@@ -88,24 +92,6 @@ export function TunePreview({
   const groundAnimatedProps = useAnimatedProps(() => ({
     transform: [{ translateX: groundOffset.value }],
   }))
-  const angleTextAnimatedProps = useAnimatedProps(() => {
-    const value = `${angleDegrees.value.toFixed(1)}°`
-    return { text: value, value }
-  })
-  const resistanceTextAnimatedProps = useAnimatedProps(() => {
-    const resistance = terrainResistance.value
-    const value = `Resistance ${resistance >= 0 ? '+' : ''}${resistance.toFixed(2)}`
-    return { text: value, value }
-  })
-  const speedTextAnimatedProps = useAnimatedProps(() => {
-    const value = syntheticSpeed.value.toFixed(1)
-    return { text: value, value }
-  })
-  const currentTextAnimatedProps = useAnimatedProps(() => {
-    const current = controllerCurrent.value
-    const value = `${current > 0 ? '+' : ''}${current.toFixed(0)} A`
-    return { text: value, value }
-  })
   const terrainAnimatedProps = useAnimatedProps(() => ({
     d: terrainPathValue.value,
   }))
@@ -154,9 +140,17 @@ export function TunePreview({
           hillHeightMeters,
           hillSpacingMeters,
         )
-        terrainResistance.value = terrainSlopeToSyntheticAcceleration(next.terrainSlope)
-        syntheticSpeed.value = next.syntheticSpeedKmh
-        controllerCurrent.value = next.syntheticCurrentAmps
+        if (timestamp - lastReadoutTimestampRef.current >= READOUT_INTERVAL_MS) {
+          lastReadoutTimestampRef.current = timestamp
+          const resistance = terrainSlopeToSyntheticAcceleration(next.terrainSlope)
+          const current = next.syntheticCurrentAmps
+          setReadouts({
+            angle: `${next.angleDegrees.toFixed(1)}°`,
+            resistance: `Resistance ${resistance >= 0 ? '+' : ''}${resistance.toFixed(2)}`,
+            speed: next.syntheticSpeedKmh.toFixed(1),
+            current: `${current > 0 ? '+' : ''}${current.toFixed(0)} A`,
+          })
+        }
       }
       frame = requestAnimationFrame(tick)
     }
@@ -169,7 +163,6 @@ export function TunePreview({
     active,
     angleDegrees,
     canvasWidth,
-    controllerCurrent,
     deckDisturbanceActive,
     deckDisturbanceDegrees,
     groundOffset,
@@ -179,10 +172,8 @@ export function TunePreview({
     holdSpeed,
     model,
     speedKmh,
-    syntheticSpeed,
     targetAngleDegrees,
     terrainPathValue,
-    terrainResistance,
   ])
 
   return (
@@ -195,12 +186,7 @@ export function TunePreview({
           </Pressable>
         </View>
         <View style={styles.speedReadout}>
-          <AnimatedTextInput
-            editable={false}
-            defaultValue={speedKmh.toFixed(1)}
-            animatedProps={speedTextAnimatedProps}
-            style={styles.speedValue}
-          />
+          <Text style={styles.speedValue}>{readouts.speed}</Text>
           <Text style={styles.speedUnit}>km/h</Text>
         </View>
       </View>
@@ -304,26 +290,9 @@ export function TunePreview({
               <View style={styles.targetSwatch} />
               <Text style={styles.legendText}>Target</Text>
             </View>
-            <AnimatedTextInput
-              editable={false}
-              defaultValue="0.0°"
-              animatedProps={angleTextAnimatedProps}
-              style={styles.angle}
-            />
-            <AnimatedTextInput
-              editable={false}
-              defaultValue="0 A"
-              animatedProps={currentTextAnimatedProps}
-              style={styles.current}
-            />
-            {hillsEnabled ? (
-              <AnimatedTextInput
-                editable={false}
-                defaultValue="Resistance +0.00"
-                animatedProps={resistanceTextAnimatedProps}
-                style={styles.resistance}
-              />
-            ) : null}
+            <Text style={styles.angle}>{readouts.angle}</Text>
+            <Text style={styles.current}>{readouts.current}</Text>
+            {hillsEnabled ? <Text style={styles.resistance}>{readouts.resistance}</Text> : null}
           </View>
         </>
       )}

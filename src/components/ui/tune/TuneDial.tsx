@@ -1,12 +1,12 @@
 /* eslint-disable react-hooks/immutability, react-hooks/refs */
 import * as Haptics from 'expo-haptics'
-import { use, useCallback, useEffect, useMemo, useRef } from 'react'
-import { Platform, StyleSheet, TextInput, View } from 'react-native'
+import { use, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Platform, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/ui/base/Text'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import Animated, {
   cancelAnimation,
-  useAnimatedProps,
+  useAnimatedReaction,
   useAnimatedStyle,
   useFrameCallback,
   useSharedValue,
@@ -47,7 +47,6 @@ const MINOR_TICK_COLOR = theme.palette.slate.border
 const LABEL_COLOR = theme.palette.slate.textMuted
 
 const SNAP_SPRING = { damping: 18, stiffness: 700, mass: 0.8 }
-const AnimatedTextInput = Animated.createAnimatedComponent(TextInput)
 
 interface TuneDialProps {
   value: number
@@ -128,6 +127,7 @@ export function TuneDial({
   const initialStepIndex = Math.round((value - min) / step)
   const decimals = step < 1 ? Math.ceil(Math.abs(Math.log10(step))) : 0
   const commitEveryChange = valueChangeMode === 'live'
+  const [displayText, setDisplayText] = useState(() => formatDisplayValue(value, decimals))
 
   const valueToOffset = useCallback(
     (v: number) => ((v - min) / range) * totalWidth,
@@ -440,10 +440,12 @@ export function TuneDial({
 
   const prevMarkOffset = previousValue != null ? valueToOffset(previousValue) : null
   const previousValueLabel = previousValue != null ? formatTuneValue(previousValue) : null
-  const animatedValueProps = useAnimatedProps(() => ({
-    text: formatDisplayValue(displayValue.value, decimals),
-    value: formatDisplayValue(displayValue.value, decimals),
-  }))
+  useAnimatedReaction(
+    () => formatDisplayValue(displayValue.value, decimals),
+    (next, previous) => {
+      if (next !== previous) scheduleOnRN(setDisplayText, next)
+    },
+  )
 
   const ticks = useMemo(() => {
     const elements: React.ReactNode[] = []
@@ -508,12 +510,7 @@ export function TuneDial({
         {indicatorGlow ? <IndicatorGlow direction={indicatorGlow} /> : null}
         <View style={styles.indicatorTop} pointerEvents="none" />
         <View style={styles.valueBadgeAnchor} pointerEvents="none">
-          <AnimatedTextInput
-            editable={false}
-            defaultValue={formatDisplayValue(value, decimals)}
-            animatedProps={animatedValueProps}
-            style={styles.valueBadgeText}
-          />
+          <Text style={styles.valueBadgeText}>{displayText}</Text>
           {unit ? <Text style={styles.valueBadgeUnit}>{unit}</Text> : null}
         </View>
       </View>

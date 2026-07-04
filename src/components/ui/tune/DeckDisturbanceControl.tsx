@@ -1,13 +1,14 @@
 /* eslint-disable react-hooks/immutability */
-import { useMemo } from 'react'
-import { StyleSheet, Text, TextInput, View, type LayoutChangeEvent } from 'react-native'
+import { useMemo, useState } from 'react'
+import { StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, {
-  useAnimatedProps,
+  useAnimatedReaction,
   useAnimatedStyle,
   useSharedValue,
   type SharedValue,
 } from 'react-native-reanimated'
+import { scheduleOnRN } from 'react-native-worklets'
 
 import { theme } from '@/constants/theme'
 import { MAX_DECK_DISTURBANCE_DEGREES } from '@/lib/tune/tunePreview'
@@ -18,10 +19,10 @@ interface DeckDisturbanceControlProps {
 }
 
 const THUMB_SIZE = 18
-const AnimatedTextInput = Animated.createAnimatedComponent(TextInput)
 
 export function DeckDisturbanceControl({ angleDegrees, active }: DeckDisturbanceControlProps) {
   const width = useSharedValue(0)
+  const [angleText, setAngleText] = useState('0.0°')
 
   const gesture = useMemo(() => {
     const updateFromX = (x: number) => {
@@ -50,11 +51,15 @@ export function DeckDisturbanceControl({ angleDegrees, active }: DeckDisturbance
     const normalized = angleDegrees.value / MAX_DECK_DISTURBANCE_DEGREES
     return { transform: [{ translateX: ((1 + normalized) / 2) * travel }] }
   })
-  const angleTextProps = useAnimatedProps(() => {
-    const angle = angleDegrees.value
-    const text = `${angle > 0 ? '+' : ''}${angle.toFixed(1)}°`
-    return { text, value: text }
-  })
+  useAnimatedReaction(
+    () => {
+      const angle = angleDegrees.value
+      return `${angle > 0 ? '+' : ''}${angle.toFixed(1)}°`
+    },
+    (next, previous) => {
+      if (next !== previous) scheduleOnRN(setAngleText, next)
+    },
+  )
 
   const handleLayout = (event: LayoutChangeEvent) => {
     width.value = event.nativeEvent.layout.width
@@ -66,12 +71,7 @@ export function DeckDisturbanceControl({ angleDegrees, active }: DeckDisturbance
         <Text style={styles.edgeLabel}>Nose</Text>
         <View style={styles.titleRow}>
           <Text style={styles.title}>Deck disturbance</Text>
-          <AnimatedTextInput
-            editable={false}
-            defaultValue="0.0°"
-            animatedProps={angleTextProps}
-            style={styles.angle}
-          />
+          <Text style={styles.angle}>{angleText}</Text>
         </View>
         <Text style={styles.edgeLabel}>Tail</Text>
       </View>
