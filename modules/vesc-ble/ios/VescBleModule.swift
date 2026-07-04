@@ -897,6 +897,10 @@ public class VescBleModule: Module {
     OnStartObserving("onLocation") { self.observedEvents.insert("onLocation") }
     OnStopObserving("onLocation") { self.observedEvents.remove("onLocation") }
 
+    OnCreate {
+      self.autoConnectSelectedBoard()
+    }
+
     OnAppEntersForeground {
       self.frontendActive = true
     }
@@ -1300,6 +1304,22 @@ public class VescBleModule: Module {
   }
 
   // MARK: - Board session bridge
+
+  /// Auto-connect the selected board at app launch, native-driven and independent of JS. Mirrors
+  /// Android's `VescAutoConnectProvider` (fires at process start) → `autoConnectSelectedBoard`: JS
+  /// never triggers this, it only toggles the `autoConnect` setting. No-ops when auto-connect is
+  /// off, no board is selected, or the board is unlinked.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardSessionController.kt `autoConnectSelectedBoard`
+  private func autoConnectSelectedBoard() {
+    let settings = appData.getSettings()
+    guard settings["autoConnect"] as? Bool ?? true else { return }
+    guard let boardId = settings["selectedBoardId"] as? String, !boardId.isEmpty else { return }
+    DispatchQueue.main.async {
+      guard let config = self.connectConfig(boardId: boardId) else { return }
+      self.selectedBoardId = boardId
+      self.coordinator.connect(config: config, onSuccess: {}, onError: { _, _ in })
+    }
+  }
 
   /// Resolve a stored board's Board Link into a runtime connect config. Returns `nil` when the
   /// board is unlinked (JS routes those to Board Probe instead). Dumb connect (ADR 0015): the

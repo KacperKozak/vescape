@@ -22,7 +22,6 @@ import expo.modules.vescble.diagnostics.DiagnosticContext
 import expo.modules.vescble.diagnostics.DiagnosticsRecorder
 import expo.modules.vescble.notification.NotificationPresenter
 import expo.modules.vescble.recording.RecordingCoordinator
-import expo.modules.vescble.reconnect.RECONNECT_MAX_ATTEMPTS
 import expo.modules.vescble.reconnect.ReconnectListener
 import expo.modules.vescble.reconnect.ReconnectPolicy
 import expo.modules.vescble.reconnect.ReconnectScanMatch
@@ -390,20 +389,6 @@ internal class BoardSessionController(private val service: VescForegroundService
             setStatus(BoardPhase.Connecting)
             startBleSession(PendingStart(cfg, onSuccess = {}, onError = { _, _ -> }))
         }
-
-        override fun onMaxAttemptsReached(session: BoardSession, reason: String) {
-            recordLocalDiagnostic(
-                "reconnect_max_attempts",
-                boardConfig,
-                "connect",
-                mapOf(
-                    "message" to "Reconnect max attempts reached",
-                    "reason" to reason,
-                ),
-            )
-            setError("Reconnect failed after $RECONNECT_MAX_ATTEMPTS attempts")
-            recordingCoordinator.finishDebugRecording("error")
-        }
     }
 
     private val reconnectScheduler = ReconnectScheduler(
@@ -472,6 +457,7 @@ internal class BoardSessionController(private val service: VescForegroundService
         connectSelectedBoard(recordingEnabled = false)
     }
 
+    /** @parity /modules/vesc-ble/ios/VescBleModule.swift `autoConnectSelectedBoard` */
     fun autoConnectSelectedBoard() {
         VescForegroundService.appDataScope.launch {
             val settings = AppDataRepository.get(service.applicationContext).getTypedSettings()

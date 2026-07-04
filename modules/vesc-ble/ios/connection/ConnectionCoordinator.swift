@@ -44,9 +44,12 @@ internal struct BoardConnectConfig {
 /// rescan below only *supplements* that passive retry to accelerate rediscovery while the app is
 /// alive under the `location` background mode.
 ///
+/// Both platforms retry indefinitely; they differ only in *how* retries are paced — see the
+/// @platform-diff below.
+///
 /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/connection/ConnectionCoordinator.kt
 /// @platform-diff iOS relies on CoreBluetooth persistent connect for retry timing instead of
-/// Android's backoff scheduler. The board-ready watchdog (`armBoardReadyTimeout`) is ported; the
+/// Android's backoff scheduler (`ReconnectPolicy.nextRetry`). The board-ready watchdog (`armBoardReadyTimeout`) is ported; the
 /// post-connected *stale-telemetry* watchdog (Android `onTelemetryStaleFired`) remains a TODO.
 /// Alerts (#62) and ride-status notifications / diagnostics (#63) are ported.
 // TODO(iOS parity): port the stale-telemetry watchdog (Android onTelemetryStaleFired,
@@ -306,7 +309,11 @@ internal final class ConnectionCoordinator: VescGattListener {
             "timeout_ms": Int(self.connectTimeoutSeconds * 1000),
           ]
         )
-        self.fail(code: "TIMEOUT", message: "Board did not become ready in time")
+        // The board never became ready — most often it is simply powered off. Rather than
+        // surfacing "connection failed", hand off to the persistent reconnect loop so we keep
+        // retrying until it appears. Mirrors Android, whose connect-phase timeout routes through
+        // `failStart` → `scheduleAutoReconnect` (session `autoReconnect` is always on).
+        self.beginReconnect()
       }
     }
   }
@@ -370,6 +377,11 @@ internal final class ConnectionCoordinator: VescGattListener {
   /// the live series keeps flowing once telemetry resumes (Android parity).
   private func beginReconnect() {
     guard config != nil else { return }
+    // Settle a still-pending initial connect before dropping into the retry loop, mirroring Android
+    // `failStart`, which calls `start.onError(...)` even as it schedules the reconnect: the JS
+    // `connect()` promise resolves (its catch just re-syncs state) while native keeps retrying in
+    // the background. A no-op once the session already settled (mid-ride drop / board-ready timeout).
+    settleConnect(success: false, code: "RECONNECTING", message: "Board unavailable — retrying")
     // Chime only on the loss of a *live* link (telemetry was flowing), matching Android's
     // `Connected || Stale` gate — a drop while still waiting for telemetry stays silent.
     let wasConnected = phase == .connected
@@ -379,7 +391,9 @@ internal final class ConnectionCoordinator: VescGattListener {
       message: "Board disconnected unexpectedly"
     )
     if wasConnected && connectionSoundsEnabled { alertAudioPlayer.playDisconnect() }
-    notifications.notifyDisconnected(deviceName: config?.name)
+    // Only signal a *loss* when a live link actually existed. An initial-connect retry (board off
+    // at launch) never connected, so a "disconnected" chime/notification there would be misleading.
+    if wasConnected { notifications.notifyDisconnected(deviceName: config?.name) }
     session?.invalidate()
     stopPolling()
     reassembler.reset()
@@ -481,14 +495,11 @@ internal final class ConnectionCoordinator: VescGattListener {
   func onGattDisconnected(intentional: Bool, message: String) {
     if intentional { return }
     guard session != nil else { return }
-    if !connectSettled {
-      // Drop during the initial connect handshake stays a hard failure — the rider is actively
-      // trying to connect and wants feedback, not a silent retry loop.
-      fail(code: "DISCONNECTED", message: message)
-    } else {
-      // Established mid-ride link dropped: alerts are safety-critical, so recover automatically.
-      beginReconnect()
-    }
+    // Any unexpected drop — during the initial handshake or mid-ride — recovers via the persistent
+    // reconnect loop. Mirrors Android's always-on session `autoReconnect`: a drop while connecting
+    // schedules a reconnect (`wasConnecting.autoReconnect → scheduleAutoReconnect`) instead of
+    // surfacing "connection failed", so a board that is off at launch keeps being retried.
+    beginReconnect()
   }
 
   func onGattFrameChunk(_ chunk: [UInt8]) {

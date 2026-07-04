@@ -45,6 +45,13 @@ internal final class VescGattClient: NSObject {
   private var pendingConnectId: UUID?
   /// A persistent reconnect queued while the central was not yet `.poweredOn`.
   private var pendingReconnect = false
+  /// Target of the active connect session, retained across reconnects so a board that never
+  /// connected this session (e.g. powered off at launch) can still be re-resolved. Cleared only by
+  /// an intentional `disconnect()`.
+  private var lastConnectId: UUID?
+  /// True while a reconnect scans for its target without a retained peripheral, so the supplemental
+  /// rescan windows don't tear that scan down during their idle gaps.
+  private var reconnectTargetScan = false
 
   init(listener: VescGattListener) {
     self.listener = listener
@@ -83,6 +90,7 @@ internal final class VescGattClient: NSObject {
     clear(markIntentional: true)
     intentionalDisconnect = false
     readyResolved = false
+    lastConnectId = uuid
 
     guard central.state == .poweredOn else {
       pendingConnectId = uuid
@@ -108,12 +116,14 @@ internal final class VescGattClient: NSObject {
   }
 
   private func connectPeripheral(_ peripheral: CBPeripheral) {
+    reconnectTargetScan = false
     self.peripheral = peripheral
     peripheral.delegate = self
     central.connect(peripheral, options: nil)
   }
 
   func disconnect() {
+    lastConnectId = nil
     clear(markIntentional: true)
   }
 
@@ -127,10 +137,6 @@ internal final class VescGattClient: NSObject {
   /// one-shot and the `ReconnectScheduler` drives retries with a fresh connect each attempt. iOS
   /// leans on CoreBluetooth's built-in persistent connect instead (see `ConnectionCoordinator`).
   func reconnect() {
-    guard let peripheral else {
-      listener?.onGattFailure(code: "RECONNECT_FAILED", message: "No peripheral to reconnect")
-      return
-    }
     intentionalDisconnect = false
     readyResolved = false
     txChar = nil
@@ -139,7 +145,24 @@ internal final class VescGattClient: NSObject {
       pendingReconnect = true
       return
     }
+    guard let peripheral else {
+      reconnectViaTargetResolve()
+      return
+    }
     central.connect(peripheral, options: nil)
+  }
+
+  /// Reconnect variant for a board that never yielded a retained peripheral this session (powered
+  /// off since launch). Re-resolves from the stored target so a persistent connect or target scan
+  /// keeps retrying instead of dead-ending. The peripheral-backed `reconnect()` is preferred when
+  /// one exists; this is the fallback the coordinator's reconnect loop leans on otherwise.
+  private func reconnectViaTargetResolve() {
+    guard let target = lastConnectId else {
+      listener?.onGattFailure(code: "RECONNECT_FAILED", message: "No peripheral to reconnect")
+      return
+    }
+    reconnectTargetScan = true
+    connectResolved(target)
   }
 
   /// Open a supplemental scan window that reconnects the moment the retained peripheral advertises,
@@ -153,7 +176,9 @@ internal final class VescGattClient: NSObject {
   /// Close the supplemental scan window (persistent connect keeps running). A live JS `scan()`
   /// keeps the radio scanning.
   func stopReconnectScan() {
-    if !isDiscoveryScanning {
+    // Keep scanning if a live JS `scan()` needs it, or if a peripheral-less reconnect is still
+    // hunting for its target (tearing that down would abort the retry).
+    if !isDiscoveryScanning && !reconnectTargetScan {
       central.stopScan()
     }
   }
@@ -168,6 +193,7 @@ internal final class VescGattClient: NSObject {
 
   private func clear(markIntentional: Bool) {
     connectTargetId = nil
+    reconnectTargetScan = false
     pendingReconnect = false
     if !isDiscoveryScanning {
       central.stopScan()

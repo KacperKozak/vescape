@@ -15,14 +15,12 @@ internal interface ReconnectListener {
     fun onMissingTarget(session: BoardSession)
     fun onScannerUnavailable(session: BoardSession)
     fun startDirectReconnect(session: BoardSession, reason: String)
-    fun onMaxAttemptsReached(session: BoardSession, reason: String)
 }
 
 internal class ReconnectScheduler(
     private val scheduler: Scheduler,
     private val port: ReconnectBlePort,
     private val listener: ReconnectListener,
-    private val maxAttempts: Int = RECONNECT_MAX_ATTEMPTS,
 ) {
     private var attempt = 0
     private var backoffHandle: Cancellable? = null
@@ -44,17 +42,7 @@ internal class ReconnectScheduler(
     ) {
         if (!session.isActive) return
 
-        val decision = ReconnectPolicy.nextDecision(
-            currentAttempt = attempt,
-            maxAttempts = maxAttempts,
-        )
-        if (decision is ReconnectDecision.GiveUp) {
-            cancel()
-            listener.onMaxAttemptsReached(session, reason)
-            return
-        }
-
-        val retry = decision as ReconnectDecision.Retry
+        val retry = ReconnectPolicy.nextRetry(attempt)
         attempt = retry.attempt
         listener.onAttempt(session, reason, gattStatus, retry.attempt)
 

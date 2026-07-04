@@ -37,16 +37,13 @@ class ReconnectSchedulerTest {
     }
 
     @Test
-    fun `max attempts terminate without scheduling another scan`() {
-        val fixture = Fixture(maxAttempts = 2)
+    fun `attempts keep climbing without ever giving up`() {
+        val fixture = Fixture()
 
-        fixture.reconnect.schedule(fixture.session, TARGET_ID, "first", null)
-        fixture.reconnect.schedule(fixture.session, TARGET_ID, "second", null)
-        fixture.reconnect.schedule(fixture.session, TARGET_ID, "third", null)
+        repeat(100) { fixture.reconnect.schedule(fixture.session, TARGET_ID, "board disconnected", null) }
 
-        assertEquals(2, fixture.reconnect.currentAttempt)
-        assertEquals(listOf("third"), fixture.listener.maxAttemptReasons)
-        assertEquals(0, fixture.scheduler.pendingCount)
+        assertEquals(100, fixture.reconnect.currentAttempt)
+        assertTrue(fixture.scheduler.pendingCount > 0)
     }
 
     @Test
@@ -75,7 +72,7 @@ class ReconnectSchedulerTest {
         assertEquals(0, fixture.port.startCount)
     }
 
-    private class Fixture(maxAttempts: Int = RECONNECT_MAX_ATTEMPTS) {
+    private class Fixture {
         val scheduler = TestScheduler()
         val port = FakeReconnectBlePort()
         val listener = FakeReconnectListener()
@@ -84,7 +81,6 @@ class ReconnectSchedulerTest {
             scheduler = scheduler,
             port = port,
             listener = listener,
-            maxAttempts = maxAttempts,
         )
     }
 
@@ -117,7 +113,6 @@ class ReconnectSchedulerTest {
         var active = true
         val events = mutableListOf<String>()
         val directReconnectReasons = mutableListOf<String>()
-        val maxAttemptReasons = mutableListOf<String>()
 
         override fun isReconnectActive(session: BoardSession): Boolean = active
 
@@ -155,10 +150,6 @@ class ReconnectSchedulerTest {
 
         override fun startDirectReconnect(session: BoardSession, reason: String) {
             directReconnectReasons.add(reason)
-        }
-
-        override fun onMaxAttemptsReached(session: BoardSession, reason: String) {
-            maxAttemptReasons.add(reason)
         }
     }
 

@@ -25,10 +25,11 @@ internal final class RecordingCoordinator {
     activeConfig = config
     store.resetSessionState()
     store.reloadPrivacyZones(appData.getEnabledPrivacyZoneEntities())
-    let settings = appData.getSettings()
-    store.applySettings(settings)
-    let autoRecording = settings["autoRecording"] as? Bool ?? false
-    if autoRecording || requestedTelemetryRecordingEnabled {
+    store.applySettings(appData.getSettings())
+    // `autoRecording` is honored at board-ready, not here — mirrors Android, which only enables
+    // the telemetry store once the board is actually connected. Only an explicit JS request
+    // (`setTelemetryRecordingEnabled`) starts recording this early.
+    if requestedTelemetryRecordingEnabled {
       enableTelemetryRecording(config: config, emitConnectedMarker: false)
     } else {
       enabled = false
@@ -38,6 +39,10 @@ internal final class RecordingCoordinator {
 
   func markBoardReady(config: BoardConnectConfig) {
     activeConfig = config
+    let autoRecording = appData.getSettings()["autoRecording"] as? Bool ?? false
+    if autoRecording && !enabled {
+      enableTelemetryRecording(config: config, emitConnectedMarker: false)
+    }
     if enabled {
       recordMarker("connected", config: config)
     }
