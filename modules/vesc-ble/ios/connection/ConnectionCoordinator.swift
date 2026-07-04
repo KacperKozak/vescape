@@ -46,8 +46,11 @@ internal struct BoardConnectConfig {
 ///
 /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/connection/ConnectionCoordinator.kt
 /// @platform-diff iOS relies on CoreBluetooth persistent connect for retry timing instead of
-/// Android's backoff scheduler, and still defers the stale telemetry watchdog. Alerts (#62) and
-/// ride-status notifications / diagnostics (#63) are ported; the watchdog remains a TODO.
+/// Android's backoff scheduler. The board-ready watchdog (`armBoardReadyTimeout`) is ported; the
+/// post-connected *stale-telemetry* watchdog (Android `onTelemetryStaleFired`) remains a TODO.
+/// Alerts (#62) and ride-status notifications / diagnostics (#63) are ported.
+// TODO(iOS parity): port the stale-telemetry watchdog (Android onTelemetryStaleFired,
+// TELEMETRY_STALE_MS) — detect telemetry going stale after `connected` and reconnect.
 internal final class ConnectionCoordinator: VescGattListener {
   /// Send a native event to JS. Set by the module.
   var emit: ((String, [String: Any?]) -> Void)?
@@ -56,6 +59,12 @@ internal final class ConnectionCoordinator: VescGattListener {
 
   private lazy var gatt = VescGattClient(listener: self)
   private let connectTimeoutSeconds = 20.0
+  /// Board-ready watchdog: max time in `waitingForTelemetry` (GATT subscribed) before the board is
+  /// presumed silent and we self-heal via reconnect. Mirrors Android `armBoardReadyTimeout`.
+  /// @platform-diff Android scales this per reconnect attempt (base 4s → 15s cap via
+  /// `ReconnectPolicy.boardReadyTimeoutMs`); iOS relies on CoreBluetooth persistent connect and has
+  /// no per-attempt counter, so it uses a fixed value matching Android's base.
+  private let boardReadyTimeoutSeconds = 4.0
 
   // MARK: Board session state
 
@@ -299,6 +308,28 @@ internal final class ConnectionCoordinator: VescGattListener {
         )
         self.fail(code: "TIMEOUT", message: "Board did not become ready in time")
       }
+    }
+  }
+
+  /// Board-ready watchdog: armed when telemetry polling starts (entering `waitingForTelemetry`).
+  /// If the board stays subscribed but never streams a telemetry frame, presume it silent and
+  /// self-heal via `beginReconnect` instead of hanging on a spinner forever. Mirrors Android
+  /// `armBoardReadyTimeout` (`BoardSessionController.kt`). Like `armConnectTimeout`, it needs no
+  /// explicit cancel handle: the session-token guard is invalidated on endSession/fail/reconnect,
+  /// and `markBoardReady` flips the phase off `waitingForTelemetry` so the fire guard falls through.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardSessionController.kt `armBoardReadyTimeout`
+  private func armBoardReadyTimeout(session: BoardSession) {
+    let token = session
+    DispatchQueue.main.asyncAfter(deadline: .now() + boardReadyTimeoutSeconds) { [weak self] in
+      guard let self, token === self.session, token.isActive else { return }
+      guard self.phase == .waitingForTelemetry, self.lastTelemetryAt == nil else { return }
+      self.recordConnectionDiagnostic(
+        "board_ready_timeout",
+        operation: "connect",
+        message: "Board telemetry unavailable before ready timeout",
+        extra: ["timeout_ms": Int(self.boardReadyTimeoutSeconds * 1000)]
+      )
+      self.beginReconnect()
     }
   }
 
@@ -643,6 +674,11 @@ internal final class ConnectionCoordinator: VescGattListener {
     lastHistoryFlushAt = 0
     historyBuffer.removeAll(keepingCapacity: true)
     polling = true
+    // Arm the board-ready watchdog only once polling begins in `waitingForTelemetry`; a stale
+    // stored transport still reaches here and times out into reconnect (Android parity).
+    if phase == .waitingForTelemetry {
+      armBoardReadyTimeout(session: session)
+    }
     let transport = config?.transport ?? .direct
     let pollingMode: String
     switch transport {
