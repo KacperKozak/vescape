@@ -436,6 +436,28 @@ final class AppDataRepository {
     }
   }
 
+  /// Enabled rules materialized as `AlertRule` for the alert engine. Mirrors Android
+  /// `AppDataRepository.getEnabledAlertRuleEntities`.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/AppDataRepository.kt `getEnabledAlertRuleEntities`
+  func getEnabledAlertRules() -> [AlertRule] {
+    read([]) { db in
+      try Row.fetchAll(
+        db,
+        sql: "SELECT * FROM alerts WHERE enabled = 1 ORDER BY created_at ASC"
+      ).map { row in
+        AlertRule(
+          id: row["id"] as String,
+          controlId: row["control_id"] as String,
+          threshold: row["threshold"] as Double,
+          thresholdMax: row["threshold_max"] as Double?,
+          enabled: (row["enabled"] as Int64) != 0,
+          soundType: row["sound_type"] as String,
+          createdAt: row["created_at"] as Int64
+        )
+      }
+    }
+  }
+
   func upsertAlertRule(_ rule: [String: Any?]) {
     guard let id = rule["id"] as? String, let controlId = rule["controlId"] as? String else { return }
     let threshold = Self.doubleValue(rule["threshold"] ?? nil) ?? 0
@@ -775,6 +797,11 @@ public class VescBleModule: Module {
 
   private let appData = AppDataRepository.shared
 
+  /// Bundled alert presets surfaced to JS through `getAlertPresets`. Mirrors Android
+  /// `alertSoundPresetMaps()`.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescAlerts.kt `alertSoundPresetMaps`
+  private let alertPresets: [[String: Any]] = alertSoundPresetMaps()
+
   // MARK: - Module definition
 
   public func definition() -> ModuleDefinition {
@@ -845,30 +872,23 @@ public class VescBleModule: Module {
     }
 
     Function("reloadAlertRules") {
-      // no-op until iOS native alert evaluation lands
+      self.coordinator.reloadAlertRules()
     }
 
-    Function("previewAlertSound") { (_: String) in
-      // no-op until iOS native alert playback lands
+    Function("previewAlertSound") { (soundType: String) in
+      self.coordinator.previewAlertSound(soundType)
     }
 
     Function("getAlertPresets") {
-      [
-        ["name": "Beep", "uri": "preset:beep", "category": "single"],
-        ["name": "Urgent", "uri": "preset:urgent", "category": "single"],
-        ["name": "Notify", "uri": "preset:notify", "category": "single"],
-        ["name": "Tick", "uri": "preset:tick", "category": "geiger"],
-        ["name": "Hard Tick", "uri": "preset:tick_hard", "category": "geiger"],
-        ["name": "Gamma", "uri": "preset:gamma", "category": "geiger"],
-      ]
+      self.alertPresets
     }
 
-    Function("startGeigerSimulation") { (_: String, _: Double) in
-      // no-op until iOS native alert playback lands
+    Function("startGeigerSimulation") { (soundType: String, rangeDepth: Double) in
+      self.coordinator.startGeigerSimulation(soundType: soundType, rangeDepth: rangeDepth)
     }
 
     Function("stopGeigerSimulation") {
-      // no-op until iOS native alert playback lands
+      self.coordinator.stopGeigerSimulation()
     }
 
     // MARK: Board session

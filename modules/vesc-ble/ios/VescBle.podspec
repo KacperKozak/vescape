@@ -33,7 +33,7 @@ Pod::Spec.new do |s|
   # CocoaPods only copies resources under the pod root, and following the symlink keeps one source
   # of truth instead of a committed per-platform copy.
   s.resource_bundles = {
-    'VescBleAssets' => ['cell-presets.json']
+    'VescBleAssets' => ['cell-presets.json', 'alerts/*.wav']
   }
 
   s.test_spec 'Tests' do |test_spec|

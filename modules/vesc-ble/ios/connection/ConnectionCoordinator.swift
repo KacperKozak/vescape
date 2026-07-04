@@ -46,8 +46,8 @@ internal struct BoardConnectConfig {
 ///
 /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/connection/ConnectionCoordinator.kt
 /// @platform-diff iOS relies on CoreBluetooth persistent connect for retry timing instead of
-/// Android's backoff scheduler, and still defers stale watchdog and alerts. Peers converge as
-/// those iOS subsystems land (#61–#63).
+/// Android's backoff scheduler, and still defers the stale watchdog. Alerts are now ported
+/// (#62); the watchdog converges as the remaining iOS subsystem lands (#63).
 internal final class ConnectionCoordinator: VescGattListener {
   /// Send a native event to JS. Set by the module.
   var emit: ((String, [String: Any?]) -> Void)?
@@ -76,6 +76,8 @@ internal final class ConnectionCoordinator: VescGattListener {
   private let appData: AppDataRepository
   private lazy var recordingCoordinator = RecordingCoordinator(appData: appData)
   private lazy var gpsMonitor = VescGpsMonitor { [weak self] location in self?.onLocationUpdated(location) }
+  private lazy var alertAudioPlayer = AlertAudioPlayer()
+  private lazy var alertCoordinator = AlertCoordinator(player: alertAudioPlayer)
   private var latestLocation: TelemetryLocationCapture?
   private var latestPreciseLocation: TelemetryLocationCapture?
   private var recentLocations: [[String: Any?]] = []
@@ -183,6 +185,33 @@ internal final class ConnectionCoordinator: VescGattListener {
     return ok
   }
 
+  // MARK: - Alerts
+
+  /// Re-read enabled alert rules from GRDB and feed them to the alert engine. Mirrors Android
+  /// `BoardSessionController.loadAlertRules`. Called whenever JS changes rules.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardSessionController.kt `loadAlertRules`
+  func reloadAlertRules() {
+    alertCoordinator.replaceRules(appData.getEnabledAlertRules())
+  }
+
+  /// Play a preset once for UI preview, or speak a `tts:` template. Mirrors Android
+  /// `previewAlertSound`.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardSessionController.kt `previewAlertSound`
+  func previewAlertSound(_ soundType: String) {
+    alertAudioPlayer.preview(soundType: soundType)
+  }
+
+  /// Drive a geiger preview loop without a connected board — UI slider over `rangeDepth`.
+  func startGeigerSimulation(soundType: String, rangeDepth: Double) {
+    alertAudioPlayer.updateGeiger(ruleId: geigerSimulationId, soundType: soundType, rangeDepth: rangeDepth)
+  }
+
+  func stopGeigerSimulation() {
+    alertAudioPlayer.stopGeiger(ruleId: geigerSimulationId)
+  }
+
+  private let geigerSimulationId = "vescape.preview.geiger"
+
   // MARK: - Session lifecycle
 
   private func beginSession(
@@ -200,6 +229,8 @@ internal final class ConnectionCoordinator: VescGattListener {
     self.config = config
     recordingCoordinator.beginBoardSession(config: config)
     gpsError = gpsMonitor.start()
+    // Fresh rule set for this session's alert engine (mirrors Android loadAlertRules on connect).
+    alertCoordinator.replaceRules(appData.getEnabledAlertRules())
     connectionSeq = sessionSequence
     connectedBoardId = config.appBoardId
     bleId = config.bleId
@@ -220,6 +251,7 @@ internal final class ConnectionCoordinator: VescGattListener {
     gpsMonitor.stop()
     stopPolling()
     stopReconnect()
+    alertCoordinator.stopAllGeiger()
     gatt.disconnect()
     reassembler.reset()
     connectedBoardId = nil
@@ -272,6 +304,7 @@ internal final class ConnectionCoordinator: VescGattListener {
     gpsMonitor.stop()
     stopPolling()
     stopReconnect()
+    alertCoordinator.stopAllGeiger()
     gatt.disconnect()
     emit?("onError", ["message": message])
     setPhase(.error)
@@ -433,15 +466,27 @@ internal final class ConnectionCoordinator: VescGattListener {
   private func emitTelemetry(_ telemetry: RefloatTelemetry) {
     // Hot path: a scalar tick every frame drives the live gauges.
     var tick = telemetry.toMap()
-    tick["batteryPercent"] = batteryEstimator.estimateBatteryPercent(
+    let batteryPercent = batteryEstimator.estimateBatteryPercent(
       voltageV: telemetry.batteryVoltage,
       config: config?.batteryConfig,
       batteryCurrentA: telemetry.batteryCurrent
     )
+    tick["batteryPercent"] = batteryPercent
     tick["generation"] = connectionSeq
     tick["remoteTilt"] = nil
     if let latestPreciseLocation {
       tick["location"] = latestPreciseLocation.map
+    }
+
+    // Alert evaluation against live telemetry. Mirrors Android's per-frame evaluateAlerts path:
+    // fired alerts drive geiger loops + single/TTS playback and are attached to the event payload.
+    let firedAlerts = alertCoordinator.evaluate(
+      telemetry: telemetry,
+      batteryPercent: batteryPercent,
+      onDiagnostic: { [weak self] name, props in self?.recordAlertDiagnostic(name, props) }
+    )
+    if !firedAlerts.isEmpty {
+      tick["firedAlerts"] = firedAlerts
     }
     emit?("onLiveTick", tick)
 
@@ -452,12 +497,19 @@ internal final class ConnectionCoordinator: VescGattListener {
     // Decimated ~1Hz series for sparklines + battery gauge (native downsamples the live window).
     liveSeries.add(tick)
 
-    // Cold path: full samples batched a few times a second for history + charts.
+    // Cold path: full samples batched a few times a second for history + charts. Fired alerts ride
+    // the buffered sample so `onTelemetryHistory` carries them too.
     historyBuffer.append(tick)
     let now = telemetry.lastPacketAt
     if lastHistoryFlushAt == 0 || now - lastHistoryFlushAt >= historyFlushIntervalMs {
       flushHistory()
     }
+  }
+
+  private func recordAlertDiagnostic(_ name: String, _ props: [String: Any?]) {
+    // Diagnostic event persistence lands in slice #63 (Android DiagnosticsRecorder). Until then,
+    // alert diagnostics degrade to a no-op on iOS rather than dropping alerts.
+    _ = props
   }
 
   private func flushHistory() {

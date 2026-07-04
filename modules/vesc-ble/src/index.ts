@@ -51,6 +51,8 @@ export interface FiredAlert {
   threshold: number
   thresholdMax: number | null
   soundType: string
+  /** 0..1 depth into the threshold→thresholdMax range for geiger alerts; `null` for single. */
+  rangeDepth?: number | null
   firedAt: number
 }
 
