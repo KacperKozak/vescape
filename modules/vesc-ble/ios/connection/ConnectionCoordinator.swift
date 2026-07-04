@@ -51,7 +51,9 @@ internal struct BoardConnectConfig {
 /// @platform-diff iOS relies on CoreBluetooth persistent connect for retry timing instead of
 /// Android's backoff scheduler (`ReconnectPolicy.nextRetry`). The board-ready watchdog (`armBoardReadyTimeout`) is ported; the
 /// post-connected *stale-telemetry* watchdog (Android `onTelemetryStaleFired`) remains a TODO.
-/// Alerts (#62) and ride-status notifications / diagnostics (#63) are ported.
+/// Alerts (#62) and diagnostics (#63) are ported. Ride status is surfaced natively via a Live
+/// Activity (`RideLiveActivityController`) — the peer of Android's persistent foreground
+/// notification — driven entirely from this coordinator so it survives screen-off / dead JS.
 // TODO(iOS parity): port the stale-telemetry watchdog (Android onTelemetryStaleFired,
 // TELEMETRY_STALE_MS) — detect telemetry going stale after `connected` and reconnect.
 internal final class ConnectionCoordinator: VescGattListener {
@@ -92,9 +94,12 @@ internal final class ConnectionCoordinator: VescGattListener {
   private lazy var gpsMonitor = VescGpsMonitor { [weak self] location in self?.onLocationUpdated(location) }
   private lazy var alertAudioPlayer = AlertAudioPlayer()
   private lazy var alertCoordinator = AlertCoordinator(player: alertAudioPlayer)
-  private lazy var notifications = NotificationPresenter()
-  /// Edge-trigger guard so a sustained fault fires a single notification, not one per frame.
-  private var faultNotified = false
+  /// Persistent Board Session status surface (Live Activity) — the iOS peer of Android's foreground
+  /// notification. Native-driven so it survives screen-off and a dead JS runtime.
+  private lazy var liveActivity = RideLiveActivityController()
+  /// Latest values reflected in the Live Activity; updates fire only on real change (throttle).
+  private var liveBatteryPercent: Int?
+  private var liveFaultCode: Int?
   private var latestLocation: TelemetryLocationCapture?
   private var latestPreciseLocation: TelemetryLocationCapture?
   private var recentLocations: [[String: Any?]] = []
@@ -263,8 +268,13 @@ internal final class ConnectionCoordinator: VescGattListener {
     pendingOnSuccess = onSuccess
     pendingOnError = onError
     connectSettled = false
-    faultNotified = false
+    liveBatteryPercent = nil
+    liveFaultCode = nil
     setPhase(.connecting)
+    // Start the Live Activity while foreground (connect is user-initiated); it then updates from
+    // background BLE callbacks for the rest of the session. Mirrors Android showing the chip from
+    // session start.
+    liveActivity.start(deviceName: config.name, state: currentLiveState())
   }
 
   private func endSession(phase: BoardPhase, error: String?) {
@@ -291,6 +301,7 @@ internal final class ConnectionCoordinator: VescGattListener {
     latestLocation = nil
     latestPreciseLocation = nil
     recentLocations.removeAll(keepingCapacity: true)
+    endLiveActivity()
     settleConnect(success: false, code: error == nil ? nil : "DISCONNECTED", message: error)
     setPhase(phase)
   }
@@ -357,6 +368,7 @@ internal final class ConnectionCoordinator: VescGattListener {
     guard self.phase != phase else { return }
     self.phase = phase
     onStateChanged?()
+    refreshLiveActivity()
   }
 
   private func fail(code: String, message: String) {
@@ -378,6 +390,7 @@ internal final class ConnectionCoordinator: VescGattListener {
     stopReconnect()
     alertCoordinator.stopAllGeiger()
     gatt.disconnect()
+    endLiveActivity()
     emit?("onError", ["message": message])
     setPhase(.error)
   }
@@ -405,9 +418,8 @@ internal final class ConnectionCoordinator: VescGattListener {
       message: "Board disconnected unexpectedly"
     )
     if wasConnected && connectionSoundsEnabled { alertAudioPlayer.playDisconnect() }
-    // Only signal a *loss* when a live link actually existed. An initial-connect retry (board off
-    // at launch) never connected, so a "disconnected" chime/notification there would be misleading.
-    if wasConnected { notifications.notifyDisconnected(deviceName: config?.name) }
+    // The session survives the drop, so the Live Activity is *not* ended — setPhase(.reconnecting)
+    // below refreshes it to the reconnect state, mirroring Android mutating the persistent chip.
     session?.invalidate()
     stopPolling()
     reassembler.reset()
@@ -551,7 +563,7 @@ internal final class ConnectionCoordinator: VescGattListener {
       recordingCoordinator.markBoardReady(config: config)
     }
     if connectionSoundsEnabled { alertAudioPlayer.playConnect() }
-    notifications.notifyConnected(deviceName: config?.name)
+    // The Live Activity flips to "connected" via setPhase → refreshLiveActivity below.
     setPhase(.connected)
   }
 
@@ -585,7 +597,8 @@ internal final class ConnectionCoordinator: VescGattListener {
     if !firedAlerts.isEmpty {
       tick["firedAlerts"] = firedAlerts
     }
-    notifyFaultIfNeeded(telemetry)
+    updateLiveBattery(batteryEstimate)
+    updateLiveFault(telemetry)
     emit?("onLiveTick", tick)
 
     if let capture = telemetryCapture(telemetry) {
@@ -649,16 +662,44 @@ internal final class ConnectionCoordinator: VescGattListener {
     DiagnosticsRecorder.shared.record(eventName: eventName, properties: props)
   }
 
-  /// Fire a single fault notification on the rising edge of a sustained fault, and re-arm once the
-  /// board clears it. Mirrors Android surfacing faults through the ride notification.
-  private func notifyFaultIfNeeded(_ telemetry: RefloatTelemetry) {
+  // MARK: - Live Activity (Board Session status surface)
+
+  /// Current session snapshot as Live Activity content. Single source for start + update.
+  private func currentLiveState() -> RideActivityAttributes.ContentState {
+    RideActivityContent.state(phase: phase, batteryPercent: liveBatteryPercent, faultCode: liveFaultCode)
+  }
+
+  private func refreshLiveActivity() {
+    liveActivity.update(currentLiveState())
+  }
+
+  private func endLiveActivity() {
+    liveActivity.end()
+    liveBatteryPercent = nil
+    liveFaultCode = nil
+  }
+
+  /// Update the Live Activity battery only when the integer percent actually steps, so the hot
+  /// per-frame telemetry path does not spam ActivityKit updates.
+  private func updateLiveBattery(_ percent: Double?) {
+    let stepped = percent.map { Int($0.rounded()) }
+    guard stepped != liveBatteryPercent else { return }
+    liveBatteryPercent = stepped
+    refreshLiveActivity()
+  }
+
+  /// Reflect fault state in the Live Activity on the rising/falling edge of a sustained fault.
+  /// Mirrors Android surfacing faults through the persistent notification (edge-triggered, one
+  /// update per state change rather than one per frame).
+  private func updateLiveFault(_ telemetry: RefloatTelemetry) {
     if telemetry.hasFault {
-      guard !faultNotified else { return }
-      faultNotified = true
-      notifications.notifyFault(deviceName: config?.name, faultCode: telemetry.faultCode)
+      guard liveFaultCode != telemetry.faultCode else { return }
+      liveFaultCode = telemetry.faultCode
     } else {
-      faultNotified = false
+      guard liveFaultCode != nil else { return }
+      liveFaultCode = nil
     }
+    refreshLiveActivity()
   }
 
   private func flushHistory() {

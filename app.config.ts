@@ -13,6 +13,9 @@ const config: ExpoConfig = {
   ios: {
     supportsTablet: true,
     bundleIdentifier: 'app.vescape',
+    // Required by @bacons/apple-targets to sign the ride-activity widget extension. Account-specific
+    // 10-char Apple Developer team ID — set APPLE_TEAM_ID at prebuild/build time (EAS secret / .env).
+    appleTeamId: process.env.APPLE_TEAM_ID,
     infoPlist: {
       ITSAppUsesNonExemptEncryption: false,
       NSBluetoothAlwaysUsageDescription:
@@ -20,6 +23,9 @@ const config: ExpoConfig = {
       NSLocationWhenInUseUsageDescription:
         'Allow Vescape to use your location for live maps, ride recording, and reconnect support while you ride.',
       UIBackgroundModes: ['bluetooth-central', 'location', 'audio'],
+      // Board Session status surface — native-driven Live Activity (peer of Android's persistent
+      // foreground notification). See targets/ride-activity + plugins/withLiveActivityAttributes.
+      NSSupportsLiveActivities: true,
     },
   },
   android: {
@@ -79,6 +85,7 @@ const config: ExpoConfig = {
         },
       },
     ],
+    '@bacons/apple-targets',
     '@rnmapbox/maps',
     'expo-sharing',
     [

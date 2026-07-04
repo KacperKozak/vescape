@@ -1,0 +1,1 @@
+../../modules/vesc-ble/ios/notification/RideActivityAttributes.swift

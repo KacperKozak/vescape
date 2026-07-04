@@ -39,6 +39,7 @@
     "posthog:query": "bun run scripts/posthog.ts query"
   },
   "dependencies": {
+    "@bacons/apple-targets": "^4.0.7",
     "@rnmapbox/maps": "^10.3.0",
     "@sentry/react-native": "~7.11.0",
     "@shopify/react-native-skia": "2.6.2",

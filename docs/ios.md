@@ -1,5 +1,80 @@
 # iOS
 
+## Ride Status Live Activity
+
+The ride-status surface (connected / reconnecting / battery / fault) is a **Live Activity**
+(ActivityKit) — the iOS peer of Android's persistent foreground-service notification. It replaced an
+earlier approach that posted discrete one-shot local notifications per event, which stacked into a
+messy pile. A Live Activity is a single card that lives for the whole Board Session and mutates in
+place on the Lock Screen and Dynamic Island.
+
+It is driven **entirely from native** (`ConnectionCoordinator` → `RideLiveActivityController`), so it
+keeps updating while the screen is off and the JS runtime is dead — same ownership model as the
+Android foreground notification. JS never touches it.
+
+### Architecture
+
+- `RideActivityAttributes` (`modules/vesc-ble/ios/notification/`) — the ActivityKit contract:
+  static `deviceName` + a mutable `ContentState` (phase, status text, short-critical glyph, battery
+  percent, fault code).
+- `RideLiveActivityController` — thin ActivityKit wrapper: `start` / `update` / `end`, holds the one
+  `Activity<RideActivityAttributes>`.
+- `RideActivityContent` — pure formatter that builds `ContentState`; mirrors Android
+  `NotificationFormatter` + `BoardPhase.displayText` / `shortCriticalSymbol` wording.
+- `targets/ride-activity/` — the widget extension (SwiftUI Lock Screen + Dynamic Island views) that
+  renders the activity. It only reads `context.state`; it owns no logic.
+
+### Lifecycle (wired in `ConnectionCoordinator`)
+
+- **Start** in `beginSession` — iOS only allows _starting_ a Live Activity while the app is
+  foreground, and a session always begins from a user-initiated connect, so this is safe. (Starting
+  at `connected` would race a backgrounded app.)
+- **Update** from BLE callbacks via `setPhase` (every phase change), battery (only when the integer
+  percent steps, so the hot per-frame telemetry path does not spam ActivityKit), and fault
+  (edge-triggered). Updates are background-safe.
+- **End** in `endSession` / `fail`. A mid-ride drop does **not** end it — the session survives, so
+  `setPhase(.reconnecting)` just refreshes the same card.
+- Faults fold into the card's state (no separate banner), which is what killed the notification mess.
+
+### Cross-target type sharing
+
+A Live Activity's `ActivityAttributes` type must be compiled into **both** binaries: the `vesc-ble`
+module pod (drives it) and the widget extension (renders it). ActivityKit matches the two
+separately-compiled copies by unqualified type name.
+
+There is one canonical `RideActivityAttributes.swift` in the module (globbed into the pod by the
+podspec). `targets/ride-activity/RideActivityAttributes.swift` is a **symlink** to it, so the widget
+extension compiles the same source — no duplicated struct. This reuses the repo's existing symlink
+pattern (see `cell-presets.json`). Xcode's file-system-synchronized group for the target follows the
+symlink; this is verified to compile on device.
+
+### Build / config requirements
+
+- Widget target is created by `@bacons/apple-targets` (`targets/ride-activity/expo-target.config.js`,
+  `type: 'widget'` — which links WidgetKit/SwiftUI/ActivityKit/AppIntents by default). No hand-rolled
+  pbxproj plugin.
+- `app.config.ts`: `ios.infoPlist.NSSupportsLiveActivities = true`.
+- `ios.appleTeamId` (via `APPLE_TEAM_ID` env) is **required** — apple-targets needs it to sign the
+  extension. Set it in `.env` / EAS secrets or prebuild warns and device builds fail to sign.
+- `VescBle.podspec` platform is `16.4` (ActivityKit needs 16.1+; the app already ships 16.4, so
+  nothing runs below it). This is why no `@available` gating is needed in the ActivityKit code.
+- The `widget` target adds an App Group entitlement by default. It is unused (local `update`s pass
+  `ContentState` directly, no shared storage) but harmless; EAS auto-registers it.
+
+### Limits
+
+- **No action buttons.** Android's chip has Disconnect / Connect / Exit; the Live Activity is
+  tap-to-open only. Interactive buttons need App Intents (iOS 17+) and the deployment floor is 16.4.
+  Tracked as `TODO(iOS parity)` in `RideLiveActivityController`.
+- The user can disable Live Activities per-app in Settings; `RideLiveActivityController` checks
+  `ActivityAuthorizationInfo().areActivitiesEnabled` and no-ops silently when off.
+
+### References
+
+- Apple ActivityKit: https://developer.apple.com/documentation/activitykit
+- Displaying live data with Live Activities: https://developer.apple.com/documentation/activitykit/displaying-live-data-with-live-activities
+- `@bacons/apple-targets`: https://github.com/EvanBacon/expo-apple-targets
+
 ## Background Ride Recording
 
 iOS has no Android `ForegroundService` equivalent. A locked-screen ride cannot rely on a permanent BLE worker or notification. The implementable path for this app is native iOS ownership of the ride session, with background location used as the legitimate long-running activity and CoreBluetooth used for BLE event restoration.
