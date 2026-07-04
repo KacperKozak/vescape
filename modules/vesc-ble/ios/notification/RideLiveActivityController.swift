@@ -25,7 +25,9 @@ final class RideLiveActivityController {
   /// Begin the session activity. No-op (after ending any stray prior activity) when disabled, so a
   /// single activity is guaranteed. Must be called while the app is foreground.
   func start(state: RideActivityAttributes.ContentState) {
-    end()
+    let staleActivities = knownActivities()
+    activity = nil
+    end(staleActivities)
     guard enabled else { return }
     let attributes = RideActivityAttributes()
     do {
@@ -48,9 +50,25 @@ final class RideLiveActivityController {
 
   /// End and immediately dismiss the activity. Idempotent.
   func end() {
-    guard let activity else { return }
+    let activities = knownActivities()
     self.activity = nil
-    Task { await activity.end(nil, dismissalPolicy: .immediate) }
+    end(activities)
   }
 
+  private func knownActivities() -> [Activity<RideActivityAttributes>] {
+    var activities = Activity<RideActivityAttributes>.activities
+    if let activity, !activities.contains(where: { $0.id == activity.id }) {
+      activities.append(activity)
+    }
+    return activities
+  }
+
+  private func end(_ activities: [Activity<RideActivityAttributes>]) {
+    guard !activities.isEmpty else { return }
+    Task {
+      for activity in activities {
+        await activity.end(nil, dismissalPolicy: .immediate)
+      }
+    }
+  }
 }
