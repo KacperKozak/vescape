@@ -328,13 +328,34 @@ enum TelemetryDatabase {
 /// proven `transport`, and decomposed back into those two persisted columns on upsert. A partial
 /// `ble_id`-without-transport row reads as unlinked (`link == nil`).
 ///
+/// Scope of an `onAppDataChanged` emit; mirrors the JS `AppDataChangedEvent['scope']` union.
+/// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/AppDataRepository.kt `AppDataScope`
+enum AppDataScope: String {
+  case boards
+  case settings
+}
+
 /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/AppDataRepository.kt
 final class AppDataRepository {
   static let shared = AppDataRepository()
 
+  /// JS-sync hook, wired by `VescBleModule` on create. Called with a scope wire string after every
+  /// persisting write so the matching JS store reloads live. Mirrors Android's
+  /// `VescForegroundService.emitEvent` static — a module-owned emit the repo funnels through.
+  static var onDataChanged: ((String) -> Void)?
+
   private var pool: DatabasePool? { TelemetryDatabase.pool }
 
   private init() {}
+
+  /// Notify JS that persisted data in [scope] changed, so the matching store reloads and stays in
+  /// sync without an app restart. Every mutating method below funnels through here — new writes get
+  /// sync for free by tagging the right scope. Idempotent on the JS side, so emitting after a
+  /// JS-initiated write is harmless (the reload just confirms native truth).
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/AppDataRepository.kt `notifyDataChanged`
+  private func notifyDataChanged(_ scope: AppDataScope) {
+    Self.onDataChanged?(scope.rawValue)
+  }
 
   private func read<T>(_ fallback: T, _ body: (Database) throws -> T) -> T {
     guard let pool else { return fallback }
@@ -414,6 +435,7 @@ final class AppDataRepository {
         )
       }
     }
+    notifyDataChanged(.boards)
   }
 
   func deleteBoard(_ id: String) {
@@ -421,6 +443,7 @@ final class AppDataRepository {
       try db.execute(sql: "DELETE FROM board_settings WHERE board_id = ?", arguments: [id])
       try db.execute(sql: "DELETE FROM boards WHERE id = ?", arguments: [id])
     }
+    notifyDataChanged(.boards)
   }
 
   /// Persist the last Battery SoC Estimate per board so it survives full app kill (#152). Written as
@@ -435,6 +458,7 @@ final class AppDataRepository {
         arguments: [boardId, "lastBattery", json, atMs]
       )
     }
+    notifyDataChanged(.boards)
   }
 
   private static func composeBoard(_ row: Row, settings: [(String, String)]) -> [String: Any?] {
@@ -704,6 +728,7 @@ final class AppDataRepository {
     let updatedAt = nowMs()
     guard let rawValue, !(rawValue is NSNull) else {
       write { db in try db.execute(sql: "DELETE FROM app_settings WHERE key = ?", arguments: [key]) }
+      notifyDataChanged(.settings)
       return
     }
     let value: Any
@@ -720,6 +745,7 @@ final class AppDataRepository {
         arguments: [key, json, updatedAt]
       )
     }
+    notifyDataChanged(.settings)
   }
 
   // MARK: - Shared pure helpers (also used by VescBleModule bridge glue)
@@ -889,7 +915,7 @@ public class VescBleModule: Module {
   public func definition() -> ModuleDefinition {
     Name("VescBle")
 
-    Events("onDevice", "onError", "onLiveState", "onLiveTick", "onLiveSeries", "onTelemetryHistory", "onBms", "onLocation", "onTelemetryRebuildProgress", "onBoardProbeProgress", "onGroupRideConnection", "onGroupRideSnapshot", "onGroupRideCreated", "onGroupRideUpdated", "onGroupRideEnded", "onGroupRideJoined", "onGroupRideRoster", "onGroupRideError")
+    Events("onDevice", "onError", "onLiveState", "onLiveTick", "onLiveSeries", "onTelemetryHistory", "onBms", "onLocation", "onTelemetryRebuildProgress", "onBoardProbeProgress", "onAppDataChanged", "onGroupRideConnection", "onGroupRideSnapshot", "onGroupRideCreated", "onGroupRideUpdated", "onGroupRideEnded", "onGroupRideJoined", "onGroupRideRoster", "onGroupRideError")
 
     // Track per-event JS listeners so native skips emitting into the void, and gate the whole
     // firehose on app foreground (see `frontendActive`). Mirrors Android's observing + lifecycle
@@ -912,6 +938,7 @@ public class VescBleModule: Module {
     OnStopObserving("onLocation") { self.observedEvents.remove("onLocation") }
 
     OnCreate {
+      AppDataRepository.onDataChanged = { [weak self] scope in self?.sendAppDataChanged(scope) }
       self.autoConnectSelectedBoard()
     }
 
@@ -923,6 +950,7 @@ public class VescBleModule: Module {
     }
 
     OnDestroy {
+      AppDataRepository.onDataChanged = nil
       self.frontendActive = false
       self.observedEvents.removeAll()
       self.activeProbe = nil
@@ -1406,6 +1434,14 @@ public class VescBleModule: Module {
   /// immediately, not just on the next session. Mirrors Android `reloadPrivacyZonesIntoRecorder`.
   private func reloadPrivacyZonesIntoRecorder() {
     TelemetryRepository.shared.reloadPrivacyZones(appData.getEnabledPrivacyZoneEntities())
+  }
+
+  /// Emit `onAppDataChanged` so JS reloads the store for [scope]. Bypasses the `frontendActive`
+  /// firehose gate — these are low-rate config writes JS must not miss (Android emits regardless).
+  /// `sendEvent` must run on the main thread, so hop over from any background write closure.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/AppDataRepository.kt `notifyDataChanged`
+  private func sendAppDataChanged(_ scope: String) {
+    DispatchQueue.main.async { self.sendEvent("onAppDataChanged", ["scope": scope]) }
   }
 
   private func emitUnsupported(_ message: String) {
