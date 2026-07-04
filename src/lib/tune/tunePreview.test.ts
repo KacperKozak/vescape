@@ -4,6 +4,8 @@ import {
   DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS,
   MAX_DECK_DISTURBANCE_DEGREES,
   TUNE_PREVIEW_MOTOR_PRESETS,
+  aggregateTorqueAndAdaptiveTilt,
+  calculateAtrExpectedAcceleration,
   calculateControllerCurrentAmps,
   calculateLongitudinalTarget,
   calculatePreviewAcceleration,
@@ -25,6 +27,9 @@ const baseFields = {
   kp: 20,
   kp2: 0.6,
   ki: 0.02,
+  kp_brake: 1,
+  kp2_brake: 1,
+  ki_limit: 30,
   mahony_kp: 2,
   torquetilt_strength: 0.1,
   torquetilt_strength_regen: 0.12,
@@ -162,6 +167,24 @@ describe('Tune Preview longitudinal response', () => {
     expect(calculateControllerCurrentAmps(100, 100, 20, 0, parameters)).toBe(-60)
   })
 
+  test('uses Refloat braking multipliers and I term directly in motor amps', () => {
+    const parameters = readyParameters({ ...baseFields, kp_brake: 0.5, kp2_brake: 0.5 })
+    expect(calculateControllerCurrentAmps(2, 4, 3, 0, parameters)).toBeCloseTo(-18.2)
+    expect(calculateControllerCurrentAmps(-2, -4, 3, 0, parameters)).toBeCloseTo(45.4)
+  })
+
+  test('matches Refloat ATR offset and nonlinear current region', () => {
+    expect(calculateAtrExpectedAcceleration(0, 1, 8)).toBe(-1)
+    expect(calculateAtrExpectedAcceleration(16, 1, 8)).toBe(1)
+    expect(calculateAtrExpectedAcceleration(38, 1, 8)).toBeCloseTo(3.375)
+  })
+
+  test('uses max for same-direction TT and adaptive tilt, sum for opposite directions', () => {
+    expect(aggregateTorqueAndAdaptiveTilt(3, 5)).toBe(5)
+    expect(aggregateTorqueAndAdaptiveTilt(-6, -2)).toBe(-6)
+    expect(aggregateTorqueAndAdaptiveTilt(-3, 5)).toBe(2)
+  })
+
   test('maps controller current to the bounded comparative acceleration scale', () => {
     expect(calculateSyntheticAcceleration(60)).toBe(6)
     expect(calculateSyntheticAcceleration(-30)).toBe(-3)
@@ -194,6 +217,43 @@ describe('Tune Preview longitudinal response', () => {
     )
     expect(noseUp.syntheticSpeedKmh).toBeLessThan(15)
     expect(noseDown.syntheticSpeedKmh).toBeGreaterThan(15)
+  })
+
+  test('aggressive PID produces stronger physical braking for the same held angle', () => {
+    const physics = { ...DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS, enabled: true }
+    const neutralTilts = {
+      ...baseFields,
+      torquetilt_strength: 0,
+      torquetilt_strength_regen: 0,
+      braketilt_strength: 0,
+      atr_strength_up: 0,
+      atr_strength_down: 0,
+      tiltback_constant: 0,
+      tiltback_variable: 0,
+      tiltback_variable_max: 0,
+    }
+    const input = {
+      deckDisturbanceDegrees: 2,
+      deckDisturbanceActive: true,
+      speedKmh: 40,
+      holdSpeed: false,
+      advancedPhysics: physics,
+    }
+    const soft = stepTunePreview(
+      createTunePreviewState(40),
+      readyParameters({ ...neutralTilts, kp: 10 }),
+      input,
+      0.5,
+    )
+    const aggressive = stepTunePreview(
+      createTunePreviewState(40),
+      readyParameters({ ...neutralTilts, kp: 30 }),
+      input,
+      0.5,
+    )
+
+    expect(aggressive.syntheticSpeedKmh).toBeLessThan(soft.syntheticSpeedKmh)
+    expect(aggressive.syntheticCurrentAmps).toBeLessThan(soft.syntheticCurrentAmps)
   })
 
   test('fixed speed remains compatible and follows configured speed', () => {
@@ -407,10 +467,12 @@ describe('Tune Preview longitudinal response', () => {
     }
     const slope = calculateTerrainSlope(state.groundTravelMeters, input)
     const hillLoadCurrent = calculateTerrainLoadCurrentAmps(slope, physics)
-    const next = stepTunePreview(state, readyParameters(), input, 1 / 120)
+    const parameters = readyParameters()
+    const initial = stepTunePreview(state, parameters, input, 1 / 832)
+    const next = stepTunePreview(initial, parameters, input, 0.25)
 
     expect(slope).toBeCloseTo(0.1, 5)
-    expect(next.syntheticCurrentAmps).toBeCloseTo(hillLoadCurrent, 5)
+    expect(initial.syntheticCurrentAmps).toBeCloseTo(hillLoadCurrent, 5)
     expect(next.torqueTiltDegrees).toBeGreaterThan(0)
     expect(calculatePreviewAcceleration(hillLoadCurrent, slope, physics)).toBeCloseTo(0, 5)
   })
@@ -442,7 +504,7 @@ describe('Tune Preview longitudinal response', () => {
         hillSpacingMeters,
         advancedPhysics: { ...DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS, enabled: true },
       },
-      1 / 120,
+      0.25,
     )
 
     expect(next.atrDegrees).toBe(0)

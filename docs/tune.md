@@ -2,18 +2,19 @@
 
 ## Tune Preview model
 
-The flat-response Tune Preview uses model version `refloat-bundled-legacy-v4`, tied to
-`modules/vesc-ble/android/src/main/assets/refloat-settings.xml`. It is a deterministic,
-comparative ideal-drive model. Deck Disturbance lets the rider hold Board at a temporary
+The flat-response Tune Preview uses model version `refloat-bundled-legacy-v5`, tied to
+`modules/vesc-ble/android/src/main/assets/refloat-settings.xml`. It is a deterministic Refloat
+controller simulation around a simplified Board plant. Deck Disturbance lets the rider hold Board at a temporary
 `-12..12°` angle. Releasing the gesture removes the constraint and lets the tune drive Board back
-toward Target. The model derives a bounded comparative controller current from angle error,
-angular rate, integral error, and the tune's PID fields; the gesture never commands current.
+toward Target. The model applies Refloat's Angle P, Rate P, integral-current accumulation, and
+braking multipliers in motor-amp units; the gesture never commands current directly.
 
 Longitudinal preview speed uses the bundled schema's documented reference conversion for an
 11-inch tire on a 30-pole Hypercore motor: `3.5 km/h = 1000 ERPM`. This is a named comparative
-constant, not Board-specific wheel calibration. Torque Tilt and Brake Tilt transition behavior is
-derived from Refloat v1.2.1 `torque_tilt.c` and `brake_tilt.c` (GPL-3.0-or-later), matching the
-legacy field model bundled by the app rather than Refloat 1.3 smoothing.
+constant, not Board-specific wheel calibration. PID, Torque Tilt, ATR, and Brake Tilt behavior is
+derived from Refloat v1.2.1 `pid.c`, `torque_tilt.c`, `atr.c`, `brake_tilt.c`, and `main.c`
+(GPL-3.0-or-later). ATR includes Refloat's fixed `8 A` rolling offset and nonlinear response above
+`25 A`. Same-direction Torque Tilt and combined ATR/Brake Tilt use the larger offset, as in firmware.
 
 Tune Profiles saved before the ERPM thresholds entered the app allowlist use the bundled schema
 defaults (`500 ERPM` constant, `0 ERPM` variable). The preview labels this fallback; fresh profiles
@@ -42,21 +43,24 @@ hill-load current = wheel torque / (motor torque per amp * drivetrain efficiency
 ATR disturbance = hill-load current / configured ATR amps-to-acceleration ratio
 ```
 
-The estimated total motor current also feeds Torque Tilt and Brake Tilt. With dynamic speed, motor
+The estimated total motor current also feeds Torque Tilt and Brake Tilt through an ATR-frequency
+low-pass filter. With dynamic speed, motor
 current is converted through the selected torque constant and total mass, then gravity along the
-grade is subtracted. Mass is not applied to the comparative angular PID response because total mass
-alone cannot determine rider center of mass or rotational inertia.
+grade is subtracted. Released deck pitch uses a simplified inverted-pendulum response with an
+assumed `0.9 m` Rider + Board center-of-mass height. It cannot know the rider's stance, body
+movement, tire grip, or exact rotational inertia.
 
 The preset torque constants are scenario estimates, not known Tune Profile values. The result is
 therefore a comparison tool, not a calibrated prediction of real motor current.
 
-`Hold speed` is enabled by default so tune comparisons keep an identical constant speed. When it
-is disabled, the configured speed is the starting speed and tune-derived controller current drives
-a bounded comparative speed change. `60 A` maps to `6 km/h/s`; this is a named teaching scale, not
-a physical drivetrain estimate. Speed remains within `0-40 km/h`, reverse is unsupported, and the
+`Constant speed` is disabled by default. When enabled, tune comparisons keep an identical speed.
+Otherwise, the configured speed is the starting speed and tune-derived controller current changes
+speed. Advanced physics converts current using the selected motor, mass, wheel, and efficiency;
+the basic preview retains the bounded comparative mapping where `60 A = 6 km/h/s`. Speed remains
+within `0-40 km/h`, reverse is unsupported, and the
 evolving value feeds the existing ERPM, tilt, ATR, terrain-phase, and ground-travel paths. The model
-does not predict physical acceleration, braking distance, power, traction, deck-ground contact, or
-safety, and it never converts absolute Board angle directly into acceleration.
+does not predict an exact real braking distance, power, traction, deck-ground contact, rider body
+movement, or safety.
 
 This document captures practical tune-screen behavior used by a Refloat-focused
 board app. It is intended as product and implementation reference for building a

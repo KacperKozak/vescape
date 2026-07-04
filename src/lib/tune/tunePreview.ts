@@ -8,7 +8,7 @@ import {
 // Longitudinal target equations and transition signs derive from Refloat v1.2.1
 // torque_tilt.c and brake_tilt.c (GPL-3.0-or-later), matching the bundled schema.
 
-export const TUNE_PREVIEW_MODEL_VERSION = 'refloat-bundled-legacy-v4' as const
+export const TUNE_PREVIEW_MODEL_VERSION = 'refloat-bundled-legacy-v5' as const
 export const REFERENCE_ERPM_PER_KMH = 1000 / 3.5
 export const COMPARATIVE_ACCELERATION_KMH_PER_SECOND = 6
 export const MAX_SYNTHETIC_CURRENT_AMPS = 60
@@ -79,12 +79,16 @@ const REQUIRED_FIELDS = [
 ] as const
 
 const LEGACY_PROFILE_DEFAULTS = {
+  kp_brake: 1,
+  kp2_brake: 1,
+  ki_limit: 30,
   tiltback_constant_erpm: 500,
   tiltback_variable_erpm: 0,
 } as const
 
 const MAX_ELAPSED_SECONDS = 0.25
-const STEP_SECONDS = 1 / 120
+const REFLOAT_LOOP_HZ = 832
+const STEP_SECONDS = 1 / REFLOAT_LOOP_HZ
 const MAX_ANGLE_DEGREES = 35
 const MAX_RATE_DEGREES_PER_SECOND = 120
 const SYNTHETIC_BALANCE_OFFSET_DEGREES = 8
@@ -95,6 +99,9 @@ export interface TunePreviewParameters {
   kp: number
   kp2: number
   ki: number
+  kpBrake: number
+  kp2Brake: number
+  kiLimit: number
   mahonyKp: number
   torqueTiltStrength: number
   torqueTiltStrengthRegen: number
@@ -155,12 +162,14 @@ export interface TunePreviewState {
   constantTiltbackDegrees: number
   variableTiltbackDegrees: number
   syntheticCurrentAmps: number
+  filteredCurrentAmps: number
   erpm: number
   groundTravelMeters: number
   terrainSlope: number
   terrainLoadCurrentAmps: number
   atrAccelDiff: number
   atrTargetDegrees: number
+  measuredAccelerationErpmPerTick: number
 }
 
 export interface TunePreviewInput {
@@ -200,6 +209,9 @@ export function createTunePreviewModel(
       kp: numberField(fields, 'kp'),
       kp2: numberField(fields, 'kp2'),
       ki: numberField(fields, 'ki'),
+      kpBrake: numberFieldOrDefault(fields, 'kp_brake', LEGACY_PROFILE_DEFAULTS.kp_brake),
+      kp2Brake: numberFieldOrDefault(fields, 'kp2_brake', LEGACY_PROFILE_DEFAULTS.kp2_brake),
+      kiLimit: numberFieldOrDefault(fields, 'ki_limit', LEGACY_PROFILE_DEFAULTS.ki_limit),
       mahonyKp: numberField(fields, 'mahony_kp'),
       torqueTiltStrength: numberField(fields, 'torquetilt_strength'),
       torqueTiltStrengthRegen: numberField(fields, 'torquetilt_strength_regen'),
@@ -240,8 +252,9 @@ export function createTunePreviewModel(
 }
 
 export function createTunePreviewState(speedKmh = 0): TunePreviewState {
+  const syntheticSpeedKmh = boundedSpeed(speedKmh)
   return {
-    syntheticSpeedKmh: boundedSpeed(speedKmh),
+    syntheticSpeedKmh,
     angleDegrees: 0,
     angularRateDegreesPerSecond: 0,
     integralError: 0,
@@ -252,12 +265,14 @@ export function createTunePreviewState(speedKmh = 0): TunePreviewState {
     constantTiltbackDegrees: 0,
     variableTiltbackDegrees: 0,
     syntheticCurrentAmps: 0,
-    erpm: 0,
+    filteredCurrentAmps: 0,
+    erpm: speedKmhToReferenceErpm(syntheticSpeedKmh),
     groundTravelMeters: 0,
     terrainSlope: 0,
     terrainLoadCurrentAmps: 0,
     atrAccelDiff: 0,
     atrTargetDegrees: 0,
+    measuredAccelerationErpmPerTick: 0,
   }
 }
 
@@ -364,12 +379,14 @@ function stepFixed(
   const controlledRateDegreesPerSecond = deckDisturbanceActive
     ? 0
     : state.angularRateDegreesPerSecond
+  const currentLimit = MAX_SYNTHETIC_CURRENT_AMPS
   const balanceCurrentAmps = calculateControllerCurrentAmps(
     controlledAngleDegrees,
     controlledRateDegreesPerSecond,
     state.integralError,
     state.targetAngleDegrees,
     parameters,
+    currentLimit,
   )
   const terrainSlope = calculateTerrainSlope(state.groundTravelMeters, input)
   const terrainLoadCurrentAmps = calculateTerrainLoadCurrentAmps(
@@ -378,9 +395,13 @@ function stepFixed(
   )
   const syntheticCurrentAmps = clamp(
     balanceCurrentAmps + terrainLoadCurrentAmps,
-    -MAX_SYNTHETIC_CURRENT_AMPS,
-    MAX_SYNTHETIC_CURRENT_AMPS,
+    -currentLimit,
+    currentLimit,
   )
+  const currentFilterAlpha = 1 - Math.exp(-2 * Math.PI * Math.max(parameters.atrFilter, 0) * dt)
+  const filteredCurrentAmps =
+    state.filteredCurrentAmps +
+    (syntheticCurrentAmps - state.filteredCurrentAmps) * currentFilterAlpha
   const syntheticSpeedKmh =
     input.holdSpeed === false
       ? boundedSpeed(
@@ -399,16 +420,23 @@ function stepFixed(
     parameters,
     effectiveInput,
     dt,
-    syntheticCurrentAmps,
+    filteredCurrentAmps,
   )
-  const braking = syntheticCurrentAmps < 0
+  const braking = filteredCurrentAmps < 0
   const ratio = Math.max(braking ? parameters.atrAmpsDecelRatio : parameters.atrAmpsAccelRatio, 0.1)
-  const expectedAcceleration = balanceCurrentAmps / ratio
-  const rawAccelDiff =
-    expectedAcceleration +
-    calculateTerrainAtrDisturbance(terrainSlope, ratio, input.advancedPhysics)
-  const filterAlpha = clamp(dt * Math.max(parameters.atrFilter, 0.1), 0, 1)
-  const atrAccelDiff = state.atrAccelDiff + (rawAccelDiff - state.atrAccelDiff) * filterAlpha
+  const erpmSign = target.erpm === 0 ? 0 : Math.sign(syntheticSpeedKmh || 1)
+  const expectedAcceleration = calculateAtrExpectedAcceleration(
+    filteredCurrentAmps,
+    erpmSign,
+    ratio,
+  )
+  const rawAccelDiff = expectedAcceleration - state.measuredAccelerationErpmPerTick
+  const accelDiffAlpha =
+    target.erpm > 2000 ? 0.1 : target.erpm > 1000 ? 0.05 : target.erpm > 250 ? 0.02 : 1
+  const atrAccelDiff =
+    target.erpm > 250
+      ? state.atrAccelDiff + (rawAccelDiff - state.atrAccelDiff) * accelDiffAlpha
+      : 0
   let atrStrength = atrAccelDiff >= 0 ? parameters.atrStrengthUp : parameters.atrStrengthDown
   if (target.erpm > 3000 && !braking) {
     const span =
@@ -439,23 +467,34 @@ function stepFixed(
   if (target.erpm > 6000) atrRate *= parameters.atrResponseBoost
   const atrDegrees = moveTowards(state.atrDegrees, atrTargetDegrees, atrRate * dt)
   target.atrDegrees = atrDegrees
+  const adaptiveDegrees = atrDegrees + target.brakeTiltDegrees
+  const torqueAndAdaptiveDegrees = aggregateTorqueAndAdaptiveTilt(
+    target.torqueTiltDegrees,
+    adaptiveDegrees,
+  )
   target.totalDegrees = clamp(
-    target.totalDegrees + atrDegrees,
+    torqueAndAdaptiveDegrees + target.constantTiltbackDegrees + target.variableTiltbackDegrees,
     -MAX_ANGLE_DEGREES,
     MAX_ANGLE_DEGREES,
   )
-  const error = controlledAngleDegrees - target.totalDegrees
-  const integralError = clamp(state.integralError + error * dt, -20, 20)
+  const pidError = target.totalDegrees - controlledAngleDegrees
+  const integralLimit = parameters.kiLimit > 0 ? parameters.kiLimit : Number.POSITIVE_INFINITY
+  const integralError = clamp(
+    state.integralError + pidError * parameters.ki,
+    -integralLimit,
+    integralLimit,
+  )
 
-  // Comparative ideal-drive response. While the rider holds a disturbance, the deck angle is
-  // constrained by hand. On release the same normalized PID response drives it back to Target.
-  const stiffness = clamp(parameters.kp, 0, 40) * 0.32
-  const rateDamping = 1.6 + clamp(parameters.kp2, 0, 3) * 4.2
-  const filterSoftness = 0.7 + clamp(parameters.mahonyKp, 0.2, 3) * 0.35
-  const integralCorrection = clamp(parameters.ki, 0, 0.5) * integralError * 16
-  const angularAcceleration =
-    (-stiffness * error - rateDamping * controlledRateDegreesPerSecond - integralCorrection) /
-    filterSoftness
+  // The optional physical plant is an inverted-pendulum approximation. It deliberately keeps
+  // mass and motor torque in the same path as longitudinal speed instead of inventing a second
+  // tune-strength scale. The non-physical mode remains a bounded comparative preview.
+  const angularAcceleration = input.advancedPhysics?.enabled
+    ? calculatePhysicalPitchAcceleration(
+        controlledAngleDegrees,
+        calculatePreviewAcceleration(syntheticCurrentAmps, terrainSlope, input.advancedPhysics) /
+          3.6,
+      )
+    : balanceCurrentAmps * 0.8 - controlledRateDegreesPerSecond * 1.5
   const angularRateDegreesPerSecond = deckDisturbanceActive
     ? 0
     : clamp(
@@ -471,6 +510,11 @@ function stepFixed(
         MAX_ANGLE_DEGREES,
       )
 
+  const erpm = speedKmhToReferenceErpm(syntheticSpeedKmh)
+  const erpmDelta = erpm - state.erpm
+  const measuredAccelerationErpmPerTick =
+    state.measuredAccelerationErpmPerTick + (erpmDelta - state.measuredAccelerationErpmPerTick) / 40
+
   return {
     syntheticSpeedKmh,
     angleDegrees: finiteOrZero(angleDegrees),
@@ -482,13 +526,15 @@ function stepFixed(
     atrDegrees,
     constantTiltbackDegrees: target.constantTiltbackDegrees,
     variableTiltbackDegrees: target.variableTiltbackDegrees,
-    syntheticCurrentAmps: target.syntheticCurrentAmps,
-    erpm: target.erpm,
+    syntheticCurrentAmps: finiteOrZero(syntheticCurrentAmps),
+    filteredCurrentAmps: finiteOrZero(filteredCurrentAmps),
+    erpm,
     groundTravelMeters: state.groundTravelMeters + (syntheticSpeedKmh / 3.6) * dt,
     terrainSlope,
     terrainLoadCurrentAmps,
     atrAccelDiff,
     atrTargetDegrees,
+    measuredAccelerationErpmPerTick: finiteOrZero(measuredAccelerationErpmPerTick),
   }
 }
 
@@ -600,18 +646,64 @@ export function calculateControllerCurrentAmps(
   angularRateDegreesPerSecond: number,
   integralError: number,
   targetAngleDegrees: number,
-  parameters: Pick<TunePreviewParameters, 'kp' | 'kp2' | 'ki'>,
+  parameters: Pick<TunePreviewParameters, 'kp' | 'kp2' | 'kpBrake' | 'kp2Brake'>,
+  currentLimitAmps = MAX_SYNTHETIC_CURRENT_AMPS,
 ): number {
-  const error = angleDegrees - targetAngleDegrees
-  const stiffness = clamp(parameters.kp, 0, 40) * 0.32
-  const rateDamping = 1.6 + clamp(parameters.kp2, 0, 3) * 4.2
-  const integralCorrection = clamp(parameters.ki, 0, 0.5) * integralError * 16
+  const error = targetAngleDegrees - angleDegrees
+  const p = error * parameters.kp
+  const rateP = -angularRateDegreesPerSecond * parameters.kp2
+  const scaledP = p * (p > 0 ? 1 : parameters.kpBrake)
+  const scaledRateP = rateP * (rateP > 0 ? 1 : parameters.kp2Brake)
   const currentAmps = clamp(
-    -stiffness * error - rateDamping * angularRateDegreesPerSecond - integralCorrection,
-    -MAX_SYNTHETIC_CURRENT_AMPS,
-    MAX_SYNTHETIC_CURRENT_AMPS,
+    scaledP + integralError + scaledRateP,
+    -currentLimitAmps,
+    currentLimitAmps,
   )
   return currentAmps === 0 ? 0 : currentAmps
+}
+
+/** Refloat v1.2.1 ATR expected acceleration, including its fixed 8 A rolling offset. */
+export function calculateAtrExpectedAcceleration(
+  filteredCurrentAmps: number,
+  erpmSign: number,
+  ampsToAccelerationRatio: number,
+): number {
+  const ratio = Math.max(ampsToAccelerationRatio, 0.1)
+  const sign = Math.sign(filteredCurrentAmps)
+  const absCurrent = Math.abs(filteredCurrentAmps)
+  if (absCurrent < 25) return (filteredCurrentAmps - Math.sign(erpmSign) * 8) / ratio
+  return (sign * 25 - Math.sign(erpmSign) * 8) / ratio + (sign * (absCurrent - 25)) / (ratio * 1.3)
+}
+
+/** Refloat combines same-direction Torque Tilt and ATR/Brake Tilt using the larger value. */
+export function aggregateTorqueAndAdaptiveTilt(
+  torqueTiltDegrees: number,
+  adaptiveTiltDegrees: number,
+): number {
+  if (
+    torqueTiltDegrees !== 0 &&
+    adaptiveTiltDegrees !== 0 &&
+    Math.sign(torqueTiltDegrees) === Math.sign(adaptiveTiltDegrees)
+  ) {
+    return (
+      Math.sign(adaptiveTiltDegrees) *
+      Math.max(Math.abs(adaptiveTiltDegrees), Math.abs(torqueTiltDegrees))
+    )
+  }
+  return torqueTiltDegrees + adaptiveTiltDegrees
+}
+
+function calculatePhysicalPitchAcceleration(
+  angleDegrees: number,
+  longitudinalAccelerationMetersPerSecondSquared: number,
+): number {
+  const centerOfMassHeightMeters = 0.9
+  const angleRadians = (angleDegrees * Math.PI) / 180
+  const angularAccelerationRadians =
+    (STANDARD_GRAVITY_METERS_PER_SECOND_SQUARED * Math.sin(angleRadians) +
+      longitudinalAccelerationMetersPerSecondSquared * Math.cos(angleRadians)) /
+    centerOfMassHeightMeters
+  return (angularAccelerationRadians * 180) / Math.PI
 }
 
 export function calculateSyntheticAcceleration(syntheticCurrentAmps: number): number {
