@@ -48,6 +48,7 @@ let package = Package(
         "telemetry/LiveSeriesEmitter.swift",
         "telemetry/MetricSanitizer.swift",
         "telemetry/PrivacyZoneFilterTests.swift",
+        "telemetry/IdlePauseDetectorTests.swift",
         "telemetry/TelemetryRepository.swift",
         "telemetry/TuneProfileStore.swift",
         "telemetry/TuneProfileStoreTests.swift",
@@ -64,6 +65,7 @@ let package = Package(
         "alerts/AlertEngine.swift",
         "connection/TransportDetection.swift",
         "telemetry/BatterySocEstimator.swift",
+        "telemetry/IdlePauseDetector.swift",
         "telemetry/LiveSeriesDownsampler.swift",
         "telemetry/PrivacyZoneFilter.swift",
         "telemetry/SocMedianWindow.swift",
@@ -86,6 +88,7 @@ let package = Package(
       sources: [
         "alerts/AlertEngineTests.swift",
         "telemetry/PrivacyZoneFilterTests.swift",
+        "telemetry/IdlePauseDetectorTests.swift",
         "BatterySocEstimatorTests.swift",
         "LiveSeriesDownsamplerTests.swift",
         "RefloatConfigDecoderTests.swift",
