@@ -20,6 +20,25 @@ type ProfileState =
   | { phase: 'empty'; error: null }
   | { phase: 'error'; error: string }
 
+export async function refreshBoardSnapshotAndProfiles({
+  boardConnected,
+  selectedBoardId,
+  readBoardSnapshot,
+  loadProfiles,
+}: {
+  boardConnected: boolean
+  selectedBoardId: string | null
+  readBoardSnapshot: () => Promise<RefloatConfigSnapshot | null>
+  loadProfiles: (boardId: string) => Promise<unknown>
+}) {
+  if (!boardConnected) return
+  const snapshot = await readBoardSnapshot()
+  const boardId = snapshot?.boardId ?? selectedBoardId
+  if (boardId && boardId === selectedBoardId) {
+    await loadProfiles(boardId).catch(() => [])
+  }
+}
+
 function groupsFromProfileFields(
   fields: Record<string, TuneProfileFieldValue> | null,
 ): RefloatConfigGroup[] {
@@ -102,9 +121,13 @@ export function useTuneScreenData() {
   )
 
   const retryBoardSnapshot = useCallback(async () => {
-    if (!boardConnected) return
-    await readBoardSnapshot()
-  }, [boardConnected, readBoardSnapshot])
+    await refreshBoardSnapshotAndProfiles({
+      boardConnected,
+      selectedBoardId,
+      readBoardSnapshot,
+      loadProfiles,
+    })
+  }, [boardConnected, loadProfiles, readBoardSnapshot, selectedBoardId])
 
   useEffect(() => {
     if (!boardsLoaded) {
@@ -141,7 +164,13 @@ export function useTuneScreenData() {
 
   const profileState = useMemo<ProfileState>(() => {
     if (!selectedBoardId) return { phase: 'loading', error: null }
+    if (boardConnected && boardSnapshotStatus === 'loading' && !activeProfile) {
+      return { phase: 'loading', error: null }
+    }
     if (profileLoading && !activeProfile) return { phase: 'loading', error: null }
+    if (boardConnected && boardSnapshotError && !activeProfile) {
+      return { phase: 'error', error: boardSnapshotError }
+    }
     if (profileError && !activeProfile) return { phase: 'error', error: profileError }
     if (profileBoardId === selectedBoardId && profiles.length === 0) {
       return { phase: 'empty', error: null }
@@ -150,6 +179,9 @@ export function useTuneScreenData() {
     return { phase: 'loading', error: null }
   }, [
     activeProfile,
+    boardConnected,
+    boardSnapshotError,
+    boardSnapshotStatus,
     profileBoardId,
     profileError,
     profileLoading,
