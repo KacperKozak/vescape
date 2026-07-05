@@ -1505,6 +1505,7 @@ public class VescBleModule: Module {
       bleId: bleId,
       name: name,
       transport: transport,
+      hasBms: link["hasBms"] as? Bool,
       pollIntervalMs: hz > 0 ? 1000 / hz : 0,
       batteryConfig: AppDataRepository.normalizeBatteryConfig(board["batteryConfig"] ?? nil),
       liveHistoryLimitMinutes: AppDataRepository.liveHistoryLimitMinutes(settings["liveHistoryLimit"] ?? nil) ?? 5

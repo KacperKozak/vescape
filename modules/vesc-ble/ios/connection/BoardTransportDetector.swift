@@ -161,11 +161,12 @@ internal final class BoardTransportDetector: VescGattListener {
       }
     case COMM_BMS_GET_VALUES:
       // Direct smart-BMS reply.
-      if phase == .probing, current != nil, bmsValuesValid(payload) { markBms() }
+      if phase == .probing, current != nil, parseBmsValues(payload, packetAt: nowMs()) != nil { markBms() }
     case COMM_FORWARD_CAN:
       // CAN-forwarded smart-BMS reply (telemetry stays bare, but BMS comes wrapped).
       if phase == .probing, current != nil, payload.count >= 3,
-        Int(payload[2]) == COMM_BMS_GET_VALUES, bmsValuesValid(Array(payload[2...])) {
+        Int(payload[2]) == COMM_BMS_GET_VALUES,
+        parseBmsValues(Array(payload[2...]), packetAt: nowMs()) != nil {
         markBms()
       }
     default:

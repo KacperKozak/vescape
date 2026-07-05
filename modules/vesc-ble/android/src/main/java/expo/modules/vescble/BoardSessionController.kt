@@ -993,6 +993,7 @@ internal class BoardSessionController(private val service: VescForegroundService
             }
         }
 
+    // @parity /modules/vesc-ble/ios/connection/ConnectionCoordinator.swift (handleBms)
     private fun handleBmsPayload(payload: ByteArray) {
         val bms = parseBmsValues(payload, System.currentTimeMillis()) ?: return
         emitEvent("onBms", bms.toMap())

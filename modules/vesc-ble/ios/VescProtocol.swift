@@ -1,7 +1,7 @@
 import Foundation
 
 /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescProtocol.kt
-/// TODO(iOS parity): port Android config (Refloat) + BMS decoders as those subsystems land on iOS.
+/// TODO(iOS parity): port Android Refloat config (R/W) decoders as that subsystem lands on iOS.
 private let REFLOAT_FAULT_MODE = 69
 internal let COMM_FW_VERSION = 0
 internal let COMM_FORWARD_CAN = 34
@@ -367,22 +367,97 @@ internal func parseRefloatGetAllData(
   )
 }
 
-/// Validate a `COMM_BMS_GET_VALUES` reply enough to prove a smart BMS answered during a Board
-/// Probe. iOS has no BMS telemetry pipeline yet, so the probe needs only the capability bit, not a
-/// decoded sample — this mirrors the prefix checks in Android `parseBmsValues`:
-/// header + `v_tot,v_charge,i_in,i_in_ic` (4×float32) + `ah_cnt,wh_cnt` (2×float32) + `cell_num`
-/// (u8) + `v_cell[cell_num]` (float16). A plausible `cell_num` with room for its cell voltages is
-/// enough evidence a real BMS replied.
+/// One decoded smart-BMS `COMM_BMS_GET_VALUES` snapshot. Mirrors Android `BmsTelemetry`.
+internal struct BmsTelemetry {
+  let capturedAt: Int64
+  let voltageTotal: Double
+  let current: Double
+  let ampHours: Double
+  let wattHours: Double
+  let soc: Double?
+  let cellVoltages: [Double]
+  let balancing: [Bool]
+
+  /// Bridge shape matching the TS `BmsEvent`. Mirrors Android `BmsTelemetry.toMap`.
+  func toMap() -> [String: Any?] {
+    [
+      "capturedAt": capturedAt,
+      "voltageTotal": voltageTotal,
+      "current": current,
+      "ampHours": ampHours,
+      "wattHours": wattHours,
+      "soc": soc,
+      "cellVoltages": cellVoltages,
+      "balancing": balancing,
+    ]
+  }
+}
+
+/// Decode a `COMM_BMS_GET_VALUES` reply from a VESC-attached smart BMS.
+///
+/// The VESC firmware packs scaled big-endian integers (not IEEE floats): float32 fields are
+/// `int32 / scale`, float16 fields are `int16 / scale`. Layout mirrors `commands.c`:
+///   v_tot, v_charge, i_in, i_in_ic (float32 1e6) · ah_cnt, wh_cnt (float32 1e3) ·
+///   cell_num (u8) · v_cell[cell_num] (float16 1e3) · bal_state[cell_num] (u8) ·
+///   temp_adc_num (u8) · temps_adc[] (float16 1e2) · temp_ic/temp_hum/hum/temp_max_cell (float16 1e2) ·
+///   soc (u8 ×255) · soh (u8 ×255) · can_id (u8) ...
+///
+/// Only the stable prefix (voltages + balancing) is required; soc is best-effort so firmware
+/// variants with different trailing fields still yield cell data. A non-nil result also proves a
+/// real BMS answered — the Board Probe uses that as the `hasBms` capability signal.
 ///
 /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescProtocol.kt (parseBmsValues)
-/// @platform-diff Android decodes full `BmsTelemetry`; iOS returns only validity until the iOS BMS
-/// subsystem lands.
-internal func bmsValuesValid(_ payload: [UInt8]) -> Bool {
-  guard !payload.isEmpty, Int(payload[0]) == COMM_BMS_GET_VALUES else { return false }
-  guard payload.count >= 26 else { return false }
-  let cellNum = Int(payload[25])
-  guard cellNum > 0, cellNum <= 60 else { return false }
-  return payload.count >= 26 + cellNum * 2
+internal func parseBmsValues(_ payload: [UInt8], packetAt: Int64) -> BmsTelemetry? {
+  guard !payload.isEmpty else { return nil }
+  guard Int(payload[0]) == COMM_BMS_GET_VALUES else { return nil }
+  guard payload.count >= 26 else { return nil }
+
+  var ind = 1
+  let voltageTotal = Double(int32(payload, ind)) / 1e6; ind += 4
+  /* v_charge */ ind += 4
+  let current = Double(int32(payload, ind)) / 1e6; ind += 4
+  /* i_in_ic */ ind += 4
+  let ampHours = Double(int32(payload, ind)) / 1e3; ind += 4
+  let wattHours = Double(int32(payload, ind)) / 1e3; ind += 4
+
+  let cellNum = Int(payload[ind]); ind += 1
+  guard cellNum > 0, cellNum <= 60 else { return nil }
+  guard payload.count >= ind + cellNum * 2 else { return nil }
+
+  var cellVoltages = [Double](repeating: 0, count: cellNum)
+  for i in 0..<cellNum {
+    cellVoltages[i] = Double(int16(payload, ind)) / 1e3
+    ind += 2
+  }
+
+  var balancing = [Bool](repeating: false, count: cellNum)
+  if payload.count >= ind + cellNum {
+    for i in 0..<cellNum {
+      balancing[i] = payload[ind] != 0
+      ind += 1
+    }
+  }
+
+  var soc: Double?
+  if payload.count > ind {
+    let tempAdcNum = Int(payload[ind])
+    // temp_adc_num + temps_adc[] + temp_ic + temp_hum + hum + temp_max_cell
+    let socIndex = ind + 1 + tempAdcNum * 2 + 8
+    if socIndex < payload.count {
+      soc = Double(payload[socIndex]) / 255.0
+    }
+  }
+
+  return BmsTelemetry(
+    capturedAt: packetAt,
+    voltageTotal: voltageTotal,
+    current: current,
+    ampHours: ampHours,
+    wattHours: wattHours,
+    soc: soc,
+    cellVoltages: cellVoltages,
+    balancing: balancing
+  )
 }
 
 /// Refloat/Float package board state → wire label. Mirrors Android `stateName`.
@@ -410,6 +485,12 @@ internal func stateName(_ state: Int) -> String {
 private func int16(_ bytes: [UInt8], _ offset: Int) -> Int {
   let raw = (Int(bytes[offset]) << 8) | Int(bytes[offset + 1])
   return raw >= 0x8000 ? raw - 0x10000 : raw
+}
+
+private func int32(_ bytes: [UInt8], _ offset: Int) -> Int {
+  let raw = (UInt32(bytes[offset]) << 24) | (UInt32(bytes[offset + 1]) << 16)
+    | (UInt32(bytes[offset + 2]) << 8) | UInt32(bytes[offset + 3])
+  return Int(Int32(bitPattern: raw))
 }
 
 private func float32Auto(_ bytes: [UInt8], _ offset: Int) -> Double {

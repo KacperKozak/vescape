@@ -119,6 +119,7 @@ internal class PollingLoop(
         sendPayloadWithRetry(ctx.payload, ctx.session)
         // BMS values change slowly; poll them at 1/BMS_POLL_STRIDE of the telemetry rate
         // to avoid crowding the BLE link with large cell-voltage replies.
+        // @parity /modules/vesc-ble/ios/connection/ConnectionCoordinator.swift (sendPoll BMS interleave)
         if (ctx.bmsPayload != null && tick % BMS_POLL_STRIDE == 0L) {
             sendPayloadWithRetry(ctx.bmsPayload, ctx.session)
         }

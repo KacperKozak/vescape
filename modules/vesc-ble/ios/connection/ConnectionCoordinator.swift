@@ -25,6 +25,9 @@ internal struct BoardConnectConfig {
   let bleId: String
   let name: String
   let transport: BoardTransport
+  /// Probe-confirmed smart-BMS presence on `transport`. Gates the interleaved BMS poll; `nil`/false
+  /// (link saved before BMS detection, or none present) means no BMS poll.
+  let hasBms: Bool?
   let pollIntervalMs: Int
   /// Normalized Board `batteryConfig` used to estimate battery percent, or `nil` when the board
   /// has no battery config (the gauge then stays empty).
@@ -159,6 +162,9 @@ internal final class ConnectionCoordinator: VescGattListener {
   private var lastPollAt: Int64 = 0
   private var smoothedPeriodMs = 0.0
   private var pollTick: Int64 = 0
+  /// BMS values change slowly and their cell-voltage replies are large; poll them at 1/stride of the
+  /// telemetry rate to spare the BLE link. Mirrors Android `PollingLoop.BMS_POLL_STRIDE`.
+  private let bmsPollStride: Int64 = 8
   private var pollWorkItem: DispatchWorkItem?
   private var safetyWorkItem: DispatchWorkItem?
   private var staleWorkItem: DispatchWorkItem?
@@ -285,6 +291,7 @@ internal final class ConnectionCoordinator: VescGattListener {
       bleId: current.bleId,
       name: name,
       transport: current.transport,
+      hasBms: current.hasBms,
       pollIntervalMs: current.pollIntervalMs,
       batteryConfig: AppDataRepository.normalizeBatteryConfig(board["batteryConfig"] ?? nil),
       liveHistoryLimitMinutes: current.liveHistoryLimitMinutes
@@ -309,6 +316,7 @@ internal final class ConnectionCoordinator: VescGattListener {
       bleId: current.bleId,
       name: current.name,
       transport: current.transport,
+      hasBms: current.hasBms,
       pollIntervalMs: hz > 0 ? 1000 / hz : 0,
       batteryConfig: current.batteryConfig,
       liveHistoryLimitMinutes: liveHistoryLimit
@@ -695,7 +703,22 @@ internal final class ConnectionCoordinator: VescGattListener {
     if let config, configReadController.onPayload(payload, connection: configReadConnection(config)) {
       return
     }
-    guard !payload.isEmpty, Int(payload[0]) == COMM_CUSTOM_APP_DATA else { return }
+    guard !payload.isEmpty else { return }
+    switch Int(payload[0]) {
+    case COMM_CUSTOM_APP_DATA:
+      handleTelemetry(payload, session: session)
+    case COMM_BMS_GET_VALUES:
+      // Direct smart-BMS reply.
+      handleBms(payload)
+    case COMM_FORWARD_CAN where payload.count >= 3 && Int(payload[2]) == COMM_BMS_GET_VALUES:
+      // CAN-forwarded smart-BMS reply (telemetry stays bare, but BMS comes wrapped).
+      handleBms(Array(payload[2...]))
+    default:
+      break
+    }
+  }
+
+  private func handleTelemetry(_ payload: [UInt8], session: BoardSession) {
     let now = nowMs()
     guard let telemetry = parseRefloatGetAllData(
       payload: payload,
@@ -709,6 +732,14 @@ internal final class ConnectionCoordinator: VescGattListener {
     armStaleWatchdog(session: session)
     markBoardReady()
     emitTelemetry(telemetry)
+  }
+
+  /// Decode a smart-BMS reply and emit `onBms`. Routes through the same `emit` sink (and thus the
+  /// same foreground gate) as `onLiveTick`. Mirrors Android `BoardSessionController.handleBmsPayload`.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardSessionController.kt `handleBmsPayload`
+  private func handleBms(_ payload: [UInt8]) {
+    guard let bms = parseBmsValues(payload, packetAt: nowMs()) else { return }
+    emit?("onBms", bms.toMap())
   }
 
   private func markBoardReady() {
@@ -1053,6 +1084,11 @@ internal final class ConnectionCoordinator: VescGattListener {
     ])
   }
 
+  private func bmsPayload() -> [UInt8] {
+    let transport = config?.transport ?? .direct
+    return transport.frame([UInt8(COMM_BMS_GET_VALUES)])
+  }
+
   private func sendPoll(session: BoardSession) {
     guard polling, session === self.session, session.isActive else { return }
     pollWorkItem = nil
@@ -1063,6 +1099,12 @@ internal final class ConnectionCoordinator: VescGattListener {
     }
     lastPollAt = now
     _ = gatt.sendPayload(pollPayload())
+    // Interleave a BMS request every `bmsPollStride` ticks, only when the probe proved one present.
+    // Checked before the tick advances, matching Android.
+    // @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/PollingLoop.kt (sendNow BMS interleave)
+    if config?.hasBms == true, pollTick % bmsPollStride == 0 {
+      _ = gatt.sendPayload(bmsPayload())
+    }
     pollTick += 1
     armSafety(session: session, tick: pollTick)
   }
