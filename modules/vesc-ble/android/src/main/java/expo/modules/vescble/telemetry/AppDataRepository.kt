@@ -11,6 +11,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 
+// @parity /modules/vesc-ble/ios/VescBleModule.swift
 /** Scope of an `onAppDataChanged` emit; mirrors the JS `AppDataChangedEvent['scope']` union. */
 internal enum class AppDataScope(val wire: String) {
   BOARDS("boards"),

@@ -1603,8 +1603,4 @@ public class VescBleModule: Module {
   private func sendAppDataChanged(_ scope: String) {
     DispatchQueue.main.async { self.sendEvent("onAppDataChanged", ["scope": scope]) }
   }
-
-  private func emitUnsupported(_ message: String) {
-    sendEvent("onError", ["message": message])
-  }
 }

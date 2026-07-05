@@ -22,6 +22,7 @@ fun interface RemoteDiagnosticSink {
     fun capture(eventName: String, properties: Map<String, Any?>)
 }
 
+// @parity /modules/vesc-ble/ios/diagnostics/DiagnosticsRecorder.swift
 class DiagnosticsRecorder(
     private val local: LocalDiagnosticSink,
     private val remote: RemoteDiagnosticSink,

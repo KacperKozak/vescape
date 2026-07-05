@@ -7,6 +7,7 @@ import expo.modules.vescble.telemetry.sanitizers.MetricSanitizationContext
 import expo.modules.vescble.telemetry.sanitizers.buildPreciseGpsIndex
 import kotlin.math.roundToInt
 
+// @parity /modules/vesc-ble/ios/telemetry/MetricSanitizer.swift
 internal const val DEFAULT_MOVING_SPEED_THRESHOLD_CENTI_KMH = 300
 internal const val METRIC_AVG_SPEED = "avg_speed"
 internal const val METRIC_MAX_SPEED = "max_speed"

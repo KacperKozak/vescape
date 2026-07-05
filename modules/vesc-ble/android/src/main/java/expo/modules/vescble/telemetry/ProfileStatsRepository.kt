@@ -9,6 +9,7 @@ private val PROFILE_BREAK_BOUNDARIES = setOf("disconnected", "app_stop", "error"
 
 data class ProfileStatsMonth(val year: Int, val month: Int)
 
+// @parity /modules/vesc-ble/ios/telemetry/TelemetryRepository.swift
 class ProfileStatsRepository private constructor(context: Context) {
   private val dao = TelemetryDatabase.get(context).telemetryDao()
 

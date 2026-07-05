@@ -17,6 +17,7 @@ internal data class ConnectPhaseTimeout(
     val canId: Int?,
 )
 
+// @parity /modules/vesc-ble/ios/connection/ConnectionCoordinator.swift
 internal class ConnectionCoordinator(
     private val scheduler: Scheduler,
     private val isCurrentSession: (BoardSession) -> Boolean,

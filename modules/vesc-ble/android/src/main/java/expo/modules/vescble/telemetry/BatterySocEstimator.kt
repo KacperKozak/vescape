@@ -3,6 +3,7 @@ package expo.modules.vescble.telemetry
 import android.content.Context
 import org.json.JSONArray
 
+// @parity /modules/vesc-ble/ios/telemetry/BatterySocEstimator.swift
 object BatterySocEstimator {
 
     data class SocPoint(val voltage: Double, val soc: Double)
