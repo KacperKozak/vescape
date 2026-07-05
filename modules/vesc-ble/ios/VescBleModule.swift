@@ -1543,7 +1543,7 @@ public class VescBleModule: Module {
       ] as [String: Any?],
       "recording": [
         "enabled": coordinator.telemetryRecordingEnabled(),
-        "paused": false,
+        "paused": coordinator.recordingPaused(),
         "activeBoardId": coordinator.recordingActiveBoardId(),
         "startedAt": coordinator.recordingStartedAt(),
       ] as [String: Any?],

@@ -150,7 +150,12 @@ internal final class ConnectionCoordinator: VescGattListener {
   // MARK: Polling state
 
   private var polling = false
+  /// Effective poll-interval floor (ms). Widens to `IDLE_PAUSE_POLL_INTERVAL_MS` while idle-paused.
   private var floorMs = 0
+  /// Idle Pause state machine (ADR-0021): throttles polling and halts recording while stationary.
+  private let idlePauseDetector = IdlePauseDetector()
+  /// Cached moving threshold shared with the metric sanitizer; fed to the detector each frame.
+  private var movingThresholdCentiKmh = DEFAULT_MOVING_SPEED_THRESHOLD_CENTI_KMH
   private var lastPollAt: Int64 = 0
   private var smoothedPeriodMs = 0.0
   private var pollTick: Int64 = 0
@@ -237,6 +242,7 @@ internal final class ConnectionCoordinator: VescGattListener {
   func gpsRecentLocations() -> [[String: Any?]] { recentLocations }
   func gpsLastError() -> String? { gpsError }
   func telemetryRecordingEnabled() -> Bool { recordingCoordinator.telemetryRecordingEnabled }
+  func recordingPaused() -> Bool { idlePauseDetector.isPaused }
   func recordingStartedAt() -> Int64? { recordingCoordinator.recordingStartedAtMs }
   func recordingActiveBoardId() -> String? { recordingCoordinator.activeBoardId }
 
@@ -307,7 +313,8 @@ internal final class ConnectionCoordinator: VescGattListener {
       batteryConfig: current.batteryConfig,
       liveHistoryLimitMinutes: liveHistoryLimit
     )
-    floorMs = max(0, config?.pollIntervalMs ?? 0)
+    movingThresholdCentiKmh = MetricSanitizerConfig.from(settings: settings).movingSpeedThresholdCentiKmh
+    floorMs = effectivePollIntervalMs()
     liveSeries.setWindowMinutes(liveHistoryLimit)
     socWindow.windowMs = Int64(AppDataRepository.intValue(settings["socEstimateWindowSeconds"] ?? nil) ?? 20) * 1000
     recordingCoordinator.applySettings(settings)
@@ -348,6 +355,7 @@ internal final class ConnectionCoordinator: VescGattListener {
     session = BoardSession(id: sessionSequence)
     socWindow.reset()
     self.config = config
+    movingThresholdCentiKmh = MetricSanitizerConfig.from(settings: appData.getSettings()).movingSpeedThresholdCentiKmh
     recordingCoordinator.beginBoardSession(config: config)
     gpsError = gpsMonitor.start()
     // Fresh rule set for this session's alert engine (mirrors Android loadAlertRules on connect).
@@ -750,7 +758,12 @@ internal final class ConnectionCoordinator: VescGattListener {
     emit?("onLiveTick", tick)
 
     if let capture = telemetryCapture(telemetry) {
-      recordingCoordinator.recordTelemetry(capture)
+      updateIdlePause(capture)
+      // Skip persistence while idle-paused; the live tick, series, and Live Activity above keep
+      // running off the ~1 Hz keepalive. When recording is off, recordTelemetry is already a no-op.
+      if !idlePauseDetector.isPaused {
+        recordingCoordinator.recordTelemetry(capture)
+      }
     }
 
     // Decimated ~1Hz series for sparklines + battery gauge (native downsamples the live window).
@@ -916,7 +929,8 @@ internal final class ConnectionCoordinator: VescGattListener {
 
   private func startPolling(session: BoardSession) {
     stopScheduledPolls()
-    floorMs = max(0, config?.pollIntervalMs ?? 0)
+    idlePauseDetector.reset()
+    floorMs = effectivePollIntervalMs()
     lastPollAt = 0
     smoothedPeriodMs = 0
     pollTick = 0
@@ -952,8 +966,46 @@ internal final class ConnectionCoordinator: VescGattListener {
     polling = false
     stopScheduledPolls()
     cancelStaleWatchdog()
+    idlePauseDetector.reset()
     liveSeries.stop()
     flushHistory()
+  }
+
+  /// Poll spacing honoring an active Idle Pause: never faster than the configured rate.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardSessionController.kt `effectivePollIntervalMs`
+  private func effectivePollIntervalMs() -> Int {
+    let configured = max(0, config?.pollIntervalMs ?? 0)
+    return idlePauseDetector.isPaused ? max(IDLE_PAUSE_POLL_INTERVAL_MS, configured) : configured
+  }
+
+  /// Feeds each sample's speed to the Idle Pause detector and applies its transitions: writes the
+  /// `auto_pause` marker on pause, retunes the poll floor, and republishes live state (ADR-0021).
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardSessionController.kt `updateIdlePause`
+  private func updateIdlePause(_ capture: TelemetryCapture) {
+    guard recordingCoordinator.telemetryRecordingEnabled else {
+      // Recording turned off mid-pause: drop the pause and restore the configured poll rate.
+      if idlePauseDetector.isPaused {
+        resetIdlePause()
+        onStateChanged?()
+      }
+      return
+    }
+    let transition = idlePauseDetector.onSample(
+      speedCentiKmh: Int((capture.telemetry.speed * 100.0).rounded()),
+      movingThresholdCentiKmh: movingThresholdCentiKmh,
+      atMs: capture.capturedAtMs
+    )
+    guard let transition else { return }
+    if transition == .paused, let config {
+      recordingCoordinator.recordIdlePauseMarker(config: config)
+    }
+    floorMs = effectivePollIntervalMs()
+    onStateChanged?()
+  }
+
+  private func resetIdlePause() {
+    idlePauseDetector.reset()
+    floorMs = effectivePollIntervalMs()
   }
 
   private func restartPollingForConfigRead() {

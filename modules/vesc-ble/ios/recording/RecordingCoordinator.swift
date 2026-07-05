@@ -95,6 +95,11 @@ internal final class RecordingCoordinator {
     store.recordTelemetry(capture)
   }
 
+  /// Marks where a Ride Recording entered an Idle Pause so the resulting gap is explained (ADR-0021).
+  func recordIdlePauseMarker(config: BoardConnectConfig) {
+    recordMarker("auto_pause", config: config, message: "Recording paused — idle")
+  }
+
   func applySettings(_ settings: [String: Any?]) {
     store.applySettings(settings)
   }
