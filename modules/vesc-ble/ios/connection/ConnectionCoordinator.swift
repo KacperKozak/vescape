@@ -57,6 +57,13 @@ internal struct BoardConnectConfig {
 // TODO(iOS parity): port the stale-telemetry watchdog (Android onTelemetryStaleFired,
 // TELEMETRY_STALE_MS) — detect telemetry going stale after `connected` and reconnect.
 internal final class ConnectionCoordinator: VescGattListener {
+  /// App-level owner of the live Board Session, below Expo module lifetime (see `docs/ios.md`). A JS
+  /// runtime reload tears down `VescBleModule` and builds a fresh one; the session, recording, GPS
+  /// and Live Activity keep running on this singleton while each module only attaches/detaches its
+  /// JS event sinks. Mirrors Android's process-level `VescForegroundService`, whose session survives
+  /// module teardown.
+  static let shared = ConnectionCoordinator()
+
   /// Send a native event to JS. Set by the module.
   var emit: ((String, [String: Any?]) -> Void)?
   /// Called whenever board or scan phase changes so the module can recompose `onLiveState`.

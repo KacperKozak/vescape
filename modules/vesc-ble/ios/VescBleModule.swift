@@ -895,18 +895,14 @@ public class VescBleModule: Module {
   /// Events with at least one live JS listener, tracked via `OnStartObserving`/`OnStopObserving`.
   private var observedEvents = Set<String>()
 
-  private lazy var coordinator: ConnectionCoordinator = {
-    let coordinator = ConnectionCoordinator(appData: self.appData)
-    coordinator.emit = { [weak self] name, body in
-      guard let self, self.shouldEmitToFrontend(name) else { return }
-      self.sendEvent(name, body)
-    }
-    coordinator.onStateChanged = { [weak self] in
-      guard let self, self.shouldEmitToFrontend("onLiveState") else { return }
-      self.sendEvent("onLiveState", self.liveState())
-    }
-    return coordinator
-  }()
+  /// Shared, app-level Board Session owner that outlives this module instance. A JS runtime reload
+  /// (dev reload, OTA update, JS crash recovery) tears down this module and builds a fresh one; the
+  /// session, recording, GPS and Live Activity keep running on the singleton and the new module
+  /// re-attaches its JS sinks in `OnCreate` (see `attachToCoordinator`). Mirrors Android's
+  /// process-level `VescForegroundService`, whose session survives module teardown while `OnDestroy`
+  /// only detaches the emit sink.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt
+  private let coordinator = ConnectionCoordinator.shared
 
   // MARK: - App data state
 
@@ -945,6 +941,7 @@ public class VescBleModule: Module {
     OnStopObserving("onLocation") { self.observedEvents.remove("onLocation") }
 
     OnCreate {
+      self.attachToCoordinator()
       AppDataRepository.onDataChanged = { [weak self] scope in self?.sendAppDataChanged(scope) }
       self.autoConnectSelectedBoard()
     }
@@ -957,12 +954,16 @@ public class VescBleModule: Module {
     }
 
     OnDestroy {
+      // JS runtime is tearing down (dev reload, OTA update, JS crash recovery). Detach only the
+      // JS-facing sinks; the shared coordinator keeps the native Board Session, recording, GPS and
+      // Live Activity alive so a fresh module re-attaches to the live session. Must not call
+      // `stopBoard()` (see `docs/ios.md`). Mirrors Android nulling `VescForegroundService.emitEvent`.
+      // @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt
+      self.detachFromCoordinator()
       AppDataRepository.onDataChanged = nil
       self.frontendActive = false
       self.observedEvents.removeAll()
       self.activeProbe = nil
-      self.coordinator.stopBoard()
-      self.coordinator.stopScan()
     }
 
     // MARK: Scan
@@ -1443,6 +1444,29 @@ public class VescBleModule: Module {
     return ["outcome": outcome, "candidates": candidates]
   }
 
+  // MARK: - Coordinator sink attach/detach
+
+  /// Wire this module's JS-facing sinks into the shared coordinator. Runs on module create — including
+  /// the fresh module built after a JS reload — so events flow and `onLiveState` recomposes against
+  /// the still-running session. Mirrors Android setting `VescForegroundService.emitEvent`.
+  private func attachToCoordinator() {
+    coordinator.emit = { [weak self] name, body in
+      guard let self, self.shouldEmitToFrontend(name) else { return }
+      self.sendEvent(name, body)
+    }
+    coordinator.onStateChanged = { [weak self] in
+      guard let self, self.shouldEmitToFrontend("onLiveState") else { return }
+      self.sendEvent("onLiveState", self.liveState())
+    }
+  }
+
+  /// Drop the JS sinks so the coordinator emits into the void once this module dies, without ending
+  /// the native session. Mirrors Android nulling `VescForegroundService.emitEvent` in `OnDestroy`.
+  private func detachFromCoordinator() {
+    coordinator.emit = nil
+    coordinator.onStateChanged = nil
+  }
+
   // MARK: - Board session bridge
 
   /// Auto-connect the selected board at app launch, native-driven and independent of JS. Mirrors
@@ -1451,6 +1475,10 @@ public class VescBleModule: Module {
   /// off, no board is selected, or the board is unlinked.
   /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardSessionController.kt `autoConnectSelectedBoard`
   private func autoConnectSelectedBoard() {
+    // The shared coordinator already owns a live session (e.g. this module was rebuilt by a JS
+    // reload mid-ride) — never restart it; the new module only re-attached its sinks. Mirrors
+    // Android, where auto-connect fires once at process start, not on every module create.
+    guard coordinator.connectedBoardId == nil else { return }
     let settings = appData.getSettings()
     guard settings["autoConnect"] as? Bool ?? true else { return }
     guard let boardId = settings["selectedBoardId"] as? String, !boardId.isEmpty else { return }
