@@ -318,6 +318,8 @@ class AppDataRepository private constructor(private val context: Context) {
     notifyDataChanged(AppDataScope.BOARDS)
   }
 
+  // Tune Profiles: per-board VESC tune configs with reversible Tune History.
+  // @parity /modules/vesc-ble/ios/telemetry/TuneProfileStore.swift
   suspend fun getTuneProfiles(boardId: String): List<Map<String, Any?>> = withContext(Dispatchers.IO) {
     dao.getTuneProfilesByBoard(boardId).map { it.toMap() }
   }

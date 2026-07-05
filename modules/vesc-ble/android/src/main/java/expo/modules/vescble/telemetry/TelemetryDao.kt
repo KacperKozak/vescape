@@ -399,6 +399,8 @@ interface TelemetryDao {
   @Query("DELETE FROM app_settings WHERE key = :key")
   suspend fun deleteAppSetting(key: String)
 
+  // Tune Profile / Tune History DAO. Transactional bodies below are mirrored in Swift.
+  // @parity /modules/vesc-ble/ios/telemetry/TuneProfileStore.swift
   @Query("SELECT * FROM tune_profiles WHERE board_id = :boardId ORDER BY created_at ASC")
   suspend fun getTuneProfilesByBoard(boardId: String): List<TuneProfileEntity>
 

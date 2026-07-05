@@ -316,6 +316,13 @@ enum TelemetryDatabase {
         """)
     }
 
+    // MARK: Tune Profiles (#161)
+    // Per-board VESC tune configs with reversible Tune History. DDL lives on `TuneProfileStore` so
+    // the schema stays single-source with the tests that reuse it.
+    migrator.registerMigration("v2_tune_profiles") { db in
+      try TuneProfileStore.createTables(db)
+    }
+
     return migrator
   }
 }
@@ -1177,12 +1184,87 @@ public class VescBleModule: Module {
       false
     }
 
-    AsyncFunction("getTuneProfiles") { (_: String, promise: Promise) in
-      promise.resolve([] as [Any])
+    // MARK: - Tune Profiles (#161)
+    // DB-backed per-board VESC tune configs with Tune History, matching Android 1:1. `TuneProfileStore`
+    // owns the transactional semantics; mutations reject with Android's error vocabulary.
+
+    AsyncFunction("getTuneProfiles") { (boardId: String, promise: Promise) in
+      promise.resolve(TuneProfileStore.shared.getTuneProfiles(boardId))
     }
 
-    AsyncFunction("getTuneProfile") { (_: String, promise: Promise) in
-      promise.resolve(nil)
+    AsyncFunction("getTuneProfile") { (profileId: String, promise: Promise) in
+      promise.resolve(TuneProfileStore.shared.getTuneProfile(profileId))
+    }
+
+    AsyncFunction("createProfile") { (boardId: String, name: String, fields: [String: Any], promise: Promise) in
+      do {
+        promise.resolve(try TuneProfileStore.shared.createProfile(boardId: boardId, name: name, fields: fields))
+      } catch {
+        promise.reject(TuneProfileStore.errorCode, error.localizedDescription)
+      }
+    }
+
+    AsyncFunction("renameProfile") { (profileId: String, name: String, promise: Promise) in
+      do {
+        promise.resolve(try TuneProfileStore.shared.renameProfile(profileId: profileId, name: name))
+      } catch {
+        promise.reject(TuneProfileStore.errorCode, error.localizedDescription)
+      }
+    }
+
+    AsyncFunction("deleteProfile") { (profileId: String, promise: Promise) in
+      do {
+        try TuneProfileStore.shared.deleteProfile(profileId: profileId)
+        promise.resolve(nil)
+      } catch {
+        promise.reject(TuneProfileStore.errorCode, error.localizedDescription)
+      }
+    }
+
+    AsyncFunction("getProfileHistory") { (profileId: String, promise: Promise) in
+      promise.resolve(TuneProfileStore.shared.getProfileHistory(profileId))
+    }
+
+    AsyncFunction("rollbackProfile") { (profileId: String, historyEntryId: Double, promise: Promise) in
+      do {
+        promise.resolve(
+          try TuneProfileStore.shared.rollbackProfile(profileId: profileId, historyEntryId: Int64(historyEntryId))
+        )
+      } catch {
+        promise.reject(TuneProfileStore.errorCode, error.localizedDescription)
+      }
+    }
+
+    AsyncFunction("copyProfileToBoard") { (profileId: String, targetBoardId: String, newName: String, promise: Promise) in
+      do {
+        promise.resolve(
+          try TuneProfileStore.shared.copyProfileToBoard(
+            profileId: profileId,
+            targetBoardId: targetBoardId,
+            newName: newName
+          )
+        )
+      } catch {
+        promise.reject(TuneProfileStore.errorCode, error.localizedDescription)
+      }
+    }
+
+    AsyncFunction("saveProfile") { (profileId: String, fields: [String: Any], promise: Promise) in
+      do {
+        promise.resolve(try TuneProfileStore.shared.saveProfile(profileId: profileId, fields: fields))
+      } catch {
+        promise.reject(TuneProfileStore.errorCode, error.localizedDescription)
+      }
+    }
+
+    // TODO(iOS parity): `pushProfileToBoard` depends on the Refloat config-write subsystem
+    // (Android `VescForegroundService.pushProfileToBoard` -> pending-config-write), which is
+    // unported on iOS and deferred by ADR 0011. Reject with Android's error vocabulary until then.
+    AsyncFunction("pushProfileToBoard") { (_: String, promise: Promise) in
+      promise.reject(
+        "BOARD_NOT_CONNECTED",
+        "Tune Profile push to board is not yet supported on iOS (Refloat config write not ported)"
+      )
     }
 
     AsyncFunction("getTotalProfileStats") { (promise: Promise) in
