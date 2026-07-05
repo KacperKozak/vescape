@@ -19,6 +19,9 @@ internal final class LiveSeriesEmitter {
   var generation: () -> Int64 = { 0 }
 
   private var windowMs: Int64 = 5 * 60_000
+  /// Guards `samples`: appended/pruned on the main (BLE callback) queue, but read via
+  /// `recentSnapshot()` from the JS thread on `getLiveState`. All access holds `samplesLock`.
+  private let samplesLock = NSLock()
   private var samples: [[String: Any?]] = []
   private var active = false
   private var primed = false
@@ -27,7 +30,18 @@ internal final class LiveSeriesEmitter {
   /// Set the live-history window (minutes) from the `liveHistoryLimit` setting.
   func setWindowMinutes(_ minutes: Int) {
     windowMs = Int64(max(1, minutes)) * 60_000
+    samplesLock.lock()
     prune()
+    samplesLock.unlock()
+  }
+
+  /// Thread-safe copy of the recent raw-tick window backing `board.recentTelemetry`. Same buffer,
+  /// window, and ordering as the decimated `onLiveSeries` emit — no second buffer. Mirrors Android
+  /// `TelemetryPipeline.recentSnapshot`.
+  func recentSnapshot() -> [[String: Any?]] {
+    samplesLock.lock()
+    defer { samplesLock.unlock() }
+    return samples
   }
 
   func start() {
@@ -41,21 +55,26 @@ internal final class LiveSeriesEmitter {
     active = false
     primed = false
     tickSeq &+= 1
+    samplesLock.lock()
     samples.removeAll(keepingCapacity: true)
+    samplesLock.unlock()
   }
 
   /// Append a decoded tick (the same map emitted on `onLiveTick`, carrying `lastPacketAt` plus the
   /// metric fields). Emits immediately on the first sample of a session so gauges light up without
   /// waiting a full tick interval.
   func add(_ sample: [String: Any?]) {
+    samplesLock.lock()
     samples.append(sample)
     prune()
+    samplesLock.unlock()
     if active && !primed {
       primed = true
       emitSeries()
     }
   }
 
+  /// Caller must hold `samplesLock`.
   private func prune() {
     guard let newest = timestamp(samples.last) else { return }
     let oldest = newest - windowMs
@@ -77,6 +96,7 @@ internal final class LiveSeriesEmitter {
   }
 
   private func emitSeries() {
+    let samples = recentSnapshot()
     guard !samples.isEmpty else { return }
     var metrics: [String: Any?] = [:]
     for metric in Self.metrics {

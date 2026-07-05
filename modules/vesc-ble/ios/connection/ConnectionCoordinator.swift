@@ -246,6 +246,9 @@ internal final class ConnectionCoordinator: VescGattListener {
   func gpsLatestLocation() -> [String: Any?]? { latestLocation?.map }
   func gpsLatestPreciseLocation() -> [String: Any?]? { latestPreciseLocation?.map }
   func gpsRecentLocations() -> [[String: Any?]] { recentLocations }
+  /// Recent raw-tick window for JS live-chart rehydrate. Backed by the live-series buffer.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/TelemetryPipeline.kt `recentSnapshot`
+  func recentTelemetry() -> [[String: Any?]] { liveSeries.recentSnapshot() }
   func gpsLastError() -> String? { gpsError }
   func telemetryRecordingEnabled() -> Bool { recordingCoordinator.telemetryRecordingEnabled }
   func recordingPaused() -> Bool { idlePauseDetector.isPaused }

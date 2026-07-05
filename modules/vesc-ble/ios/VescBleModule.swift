@@ -1524,7 +1524,7 @@ public class VescBleModule: Module {
         "name": coordinator.boardName,
         "connectionSeq": coordinator.connectionSeq,
         "lastTelemetryAt": coordinator.lastTelemetryAt,
-        "recentTelemetry": [] as [Any],
+        "recentTelemetry": coordinator.recentTelemetry(),
         "error": coordinator.boardError,
         "autoConnect": settings["autoConnect"] as? Bool ?? true,
         "remoteTilt": coordinator.remoteTiltState(),
