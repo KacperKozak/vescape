@@ -1,5 +1,6 @@
 import ExpoModulesCore
 import Foundation
+import UserNotifications
 
 // Thin JS bridge. Board scan/connect/telemetry delegate to the CoreBluetooth stack
 // (VescGattClient + BoardSessionController); app data delegates to GRDB, while later iOS
@@ -175,6 +176,22 @@ public class VescBleModule: Module {
 
     Function("reloadAlertRules") {
       self.coordinator.reloadAlertRules()
+    }
+
+    AsyncFunction("getCriticalRideNotificationPermissionStatus") { (promise: Promise) in
+      UNUserNotificationCenter.current().getNotificationSettings { settings in
+        promise.resolve(Self.notificationPermissionStatus(settings.authorizationStatus))
+      }
+    }
+
+    AsyncFunction("requestCriticalRideNotificationPermission") { (promise: Promise) in
+      UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
+        if let error {
+          promise.reject("ERR_NOTIFICATION_PERMISSION", error.localizedDescription)
+          return
+        }
+        promise.resolve(granted ? "authorized" : "denied")
+      }
     }
 
     Function("previewAlertSound") { (soundType: String) in
@@ -742,5 +759,16 @@ public class VescBleModule: Module {
   /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/AppDataRepository.kt `notifyDataChanged`
   private func sendAppDataChanged(_ scope: String) {
     DispatchQueue.main.async { self.sendEvent("onAppDataChanged", ["scope": scope]) }
+  }
+
+  private static func notificationPermissionStatus(_ status: UNAuthorizationStatus) -> String {
+    switch status {
+    case .notDetermined: return "not-determined"
+    case .denied: return "denied"
+    case .authorized: return "authorized"
+    case .provisional: return "provisional"
+    case .ephemeral: return "ephemeral"
+    @unknown default: return "unknown"
+    }
   }
 }

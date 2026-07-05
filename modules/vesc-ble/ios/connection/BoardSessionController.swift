@@ -1,5 +1,6 @@
 import Foundation
 import UIKit
+import UserNotifications
 
 /// Rider-facing Board Session phase. Mirrors the Android `BoardPhase` wire contract the JS
 /// layer depends on: `idle → connecting → discovering → subscribing → waiting_for_telemetry →
@@ -116,6 +117,9 @@ internal final class BoardSessionController: VescGattListener {
   /// Persistent Board Session status surface (Live Activity) — the iOS peer of Android's foreground
   /// notification. Native-driven so it survives screen-off and a dead JS runtime.
   private lazy var liveActivity = RideLiveActivityController()
+  /// Critical local notifications are a narrow interruptive path only. Permission is explicit and
+  /// never requested from the telemetry/connect path.
+  private var criticalNotificationFaultCode: Int?
   /// Latest values reflected in the Live Activity; updates fire only on real change (throttle).
   private var liveBatteryPercent: Int?
   /// Battery voltage rounded to the displayed 1-decimal resolution, so `"75.1V"` only refreshes the
@@ -408,6 +412,7 @@ internal final class BoardSessionController: VescGattListener {
     liveBatteryPercent = nil
     liveBatteryVoltage = nil
     liveFaultCode = nil
+    criticalNotificationFaultCode = nil
     lastLiveTelemetryRefreshAt = 0
     setPhase(.connecting)
     // Start the Live Activity while foreground (connect is user-initiated); it then updates from
@@ -932,11 +937,57 @@ internal final class BoardSessionController: VescGattListener {
     if telemetry.hasFault {
       guard liveFaultCode != telemetry.faultCode else { return }
       liveFaultCode = telemetry.faultCode
+      presentCriticalFaultNotificationIfAllowed(faultCode: telemetry.faultCode)
     } else {
       guard liveFaultCode != nil else { return }
       liveFaultCode = nil
+      criticalNotificationFaultCode = nil
     }
     refreshLiveActivity()
+  }
+
+  private func presentCriticalFaultNotificationIfAllowed(faultCode: Int) {
+    guard !appIsForeground else {
+      criticalNotificationFaultCode = faultCode
+      return
+    }
+    guard criticalNotificationFaultCode != faultCode else { return }
+    criticalNotificationFaultCode = faultCode
+
+    let center = UNUserNotificationCenter.current()
+    center.getNotificationSettings { [weak self] settings in
+      guard Self.allowsCriticalNotificationDelivery(settings.authorizationStatus) else { return }
+      let displayName = self?.criticalNotificationBoardName() ?? "VESC"
+      let notification = UNMutableNotificationContent()
+      notification.title = "Ride fault detected"
+      notification.body = faultCode > 0
+        ? "\(displayName) reported fault code \(faultCode)."
+        : "\(displayName) reported a fault."
+      notification.sound = .default
+      notification.interruptionLevel = .timeSensitive
+      center.add(UNNotificationRequest(
+        identifier: "vescape.criticalRideFault.\(self?.connectionSeq ?? 0).\(faultCode)",
+        content: notification,
+        trigger: nil
+      ))
+    }
+  }
+
+  private func criticalNotificationBoardName() -> String {
+    let rawName = boardName ?? config?.name
+    let trimmed = rawName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    return trimmed.isEmpty ? "VESC" : trimmed
+  }
+
+  private static func allowsCriticalNotificationDelivery(_ status: UNAuthorizationStatus) -> Bool {
+    switch status {
+    case .authorized, .provisional, .ephemeral:
+      return true
+    case .notDetermined, .denied:
+      return false
+    @unknown default:
+      return false
+    }
   }
 
   private func flushHistory() {

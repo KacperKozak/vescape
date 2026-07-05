@@ -75,6 +75,23 @@ symlink; this is verified to compile on device.
 - Displaying live data with Live Activities: https://developer.apple.com/documentation/activitykit/displaying-live-data-with-live-activities
 - `@bacons/apple-targets`: https://github.com/EvanBacon/expo-apple-targets
 
+## Critical Ride Alert Notifications
+
+Local notifications are **critical-alert-only**. They are not Android foreground-service parity and
+they do not keep BLE, telemetry, or Ride Recording alive. Ongoing ride state remains owned by the
+Live Activity.
+
+- No notification is posted for normal `connected`, `reconnecting`, `rescanning`, `disconnected`, or
+  stale-status churn.
+- The current notification event is a Board Session fault detected while the app is backgrounded.
+- Fault notifications are edge-deduped per Board Session and fault code, so a sustained fault does
+  not post every telemetry frame. Clearing and re-entering the fault can post again.
+- `BoardSessionController` checks existing `UNUserNotificationCenter` authorization and never prompts
+  during connect or telemetry. Permission is exposed through explicit native APIs:
+  `requestCriticalRideNotificationPermission` and `getCriticalRideNotificationPermissionStatus`.
+- If notification permission is denied or not determined, the fault still updates the Live Activity
+  and no local notification is posted.
+
 ## Background Ride Recording
 
 iOS has no Android `ForegroundService` equivalent. A locked-screen ride cannot rely on a permanent BLE worker or notification. The implementable path for this app is native iOS ownership of the ride session, with background location used as the legitimate long-running activity and CoreBluetooth used for BLE event restoration.
