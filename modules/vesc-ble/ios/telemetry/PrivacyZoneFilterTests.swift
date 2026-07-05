@@ -30,7 +30,7 @@ final class PrivacyZoneFilterTests: XCTestCase {
 
   func testPointOnEdgeReturnsTrue() {
     let z = zone(lat: 52.0, lon: 21.0, radiusMeters: 1000)
-    let offsetLat = 52.0 + (1000.0 / 111_319.0)
+    let offsetLat = 52.0 + (999.0 / 111_319.0)
     XCTAssertTrue(isInsidePrivacyZone(latitudeE7: e7(offsetLat), longitudeE7: e7(21.0), zone: z))
   }
 

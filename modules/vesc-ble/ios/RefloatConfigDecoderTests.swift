@@ -24,8 +24,10 @@ final class RefloatConfigDecoderTests: XCTestCase {
 
     XCTAssertEqual("schema-hash", snapshot.schemaHash)
     XCTAssertEqual(12, snapshot.rawConfigLength)
-    XCTAssertEqual(26.0, snapshot.groups.first?.fields[0].value as? Double, accuracy: 0.001)
-    XCTAssertEqual(0.9, snapshot.groups.first?.fields[1].value as? Double, accuracy: 0.001)
+    let angleP = try XCTUnwrap(snapshot.groups.first?.fields[0].value as? Double)
+    let rateP = try XCTUnwrap(snapshot.groups.first?.fields[1].value as? Double)
+    XCTAssertEqual(26.0, angleP, accuracy: 0.001)
+    XCTAssertEqual(0.9, rateP, accuracy: 0.001)
     XCTAssertFalse(snapshot.rawConfigHash.isEmpty)
   }
 

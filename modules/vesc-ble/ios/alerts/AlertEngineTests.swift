@@ -284,7 +284,7 @@ final class AlertEngineTests: XCTestCase {
     ]
     let fired = engine.evaluate(
       rules: rules,
-      telemetry: telemetry(speed: 15.0, dutyCycle: 0.75)
+      telemetry: telemetry(dutyCycle: 0.75, speed: 15.0)
     )
     XCTAssertEqual(2, fired.count)
     XCTAssertEqual("duty", fired[0].ruleId)
