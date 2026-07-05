@@ -23,7 +23,7 @@ jobs:
       - run: bun install
       - run: bun run copy:shared
       - run: bun x expo prebuild --platform android --no-install
-      - run: bun run check
+      - run: bun run check:ci
 
   build:
     runs-on: ubuntu-latest
