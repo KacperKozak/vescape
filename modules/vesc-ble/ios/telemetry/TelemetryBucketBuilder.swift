@@ -1,5 +1,6 @@
 import Foundation
 
+/// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/TelemetryBucketBuilder.kt
 internal struct TelemetryBucket {
   let bucketStartMs: Int64
   let deviceId: String
@@ -76,6 +77,7 @@ internal struct TelemetryBucket {
   }
 }
 
+/// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/TelemetryBucketBuilder.kt `buildTelemetryBuckets`
 internal func buildTelemetryBuckets(_ points: [BucketTelemetryPoint]) -> [TelemetryBucket] {
   var buckets: [String: TelemetryBucket] = [:]
   for point in points.sorted(by: { $0.capturedAtMs < $1.capturedAtMs }) {
@@ -88,4 +90,3 @@ internal func buildTelemetryBuckets(_ points: [BucketTelemetryPoint]) -> [Teleme
   }
   return Array(buckets.values)
 }
-

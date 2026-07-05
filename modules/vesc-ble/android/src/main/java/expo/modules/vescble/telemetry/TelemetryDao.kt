@@ -7,6 +7,7 @@ import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
 
+// @parity /modules/vesc-ble/ios/telemetry/TelemetryDao.swift
 @Dao
 interface TelemetryDao {
   @Insert

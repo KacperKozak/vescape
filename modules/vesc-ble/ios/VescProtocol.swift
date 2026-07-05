@@ -1,7 +1,6 @@
 import Foundation
 
 /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescProtocol.kt
-/// TODO(iOS parity): port Android Refloat config (R/W) decoders as that subsystem lands on iOS.
 private let REFLOAT_FAULT_MODE = 69
 internal let COMM_FW_VERSION = 0
 internal let COMM_FORWARD_CAN = 34

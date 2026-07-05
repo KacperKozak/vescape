@@ -62,32 +62,38 @@ internal data class NotificationPresentation(
         ): NotificationPresentation {
             val visibleTelemetry = telemetry.takeIf { phase == BoardPhase.Connected }
             val visibleBatteryPercent = batteryPercent.takeIf { phase == BoardPhase.Connected }
+            val notificationState = phase.notificationState()
             return NotificationPresentation(
-                text = resolveText(phase, visibleTelemetry, visibleBatteryPercent, errorMessage),
+                text = resolveText(phase, visibleTelemetry, visibleBatteryPercent, errorMessage, notificationState),
                 shortCriticalText = NotificationFormatter.formatShortCriticalText(
                     phase,
                     visibleTelemetry,
                     visibleBatteryPercent,
                 ),
                 batteryProgressPercent = visibleBatteryPercent?.toInt(),
-                canDisconnect = phase.isNotificationSessionActive(),
+                canDisconnect = notificationState.canDisconnect,
             )
         }
     }
 }
 
-private fun BoardPhase.isNotificationSessionActive(): Boolean = when (this) {
+private data class NotificationPhaseState(
+    val canDisconnect: Boolean,
+    val showDisconnectedText: Boolean,
+)
+
+private fun BoardPhase.notificationState(): NotificationPhaseState = when (this) {
     BoardPhase.Connected,
     BoardPhase.Connecting,
     BoardPhase.Discovering,
     BoardPhase.Subscribing,
-    BoardPhase.WaitingForTelemetry -> true
+    BoardPhase.WaitingForTelemetry -> NotificationPhaseState(canDisconnect = true, showDisconnectedText = false)
     BoardPhase.Idle,
     BoardPhase.Stale,
     BoardPhase.Reconnecting,
     BoardPhase.Rescanning,
-    BoardPhase.Disconnecting,
-    BoardPhase.Error -> false
+    BoardPhase.Disconnecting -> NotificationPhaseState(canDisconnect = false, showDisconnectedText = true)
+    BoardPhase.Error -> NotificationPhaseState(canDisconnect = false, showDisconnectedText = false)
 }
 
 private fun resolveText(
@@ -95,24 +101,11 @@ private fun resolveText(
     telemetry: RefloatTelemetry?,
     batteryPercent: Double?,
     errorMessage: String?,
+    notificationState: NotificationPhaseState,
 ): String = when {
     phase == BoardPhase.Connected && telemetry != null ->
         NotificationFormatter.formatTelemetryText(telemetry, batteryPercent)
     phase == BoardPhase.Error && errorMessage != null -> errorMessage
-    phase.isNotificationDisconnected() -> BoardPhase.Idle.displayText()
+    notificationState.showDisconnectedText -> BoardPhase.Idle.displayText()
     else -> phase.displayText()
-}
-
-private fun BoardPhase.isNotificationDisconnected(): Boolean = when (this) {
-    BoardPhase.Idle,
-    BoardPhase.Stale,
-    BoardPhase.Reconnecting,
-    BoardPhase.Rescanning,
-    BoardPhase.Disconnecting -> true
-    BoardPhase.Connecting,
-    BoardPhase.Discovering,
-    BoardPhase.Subscribing,
-    BoardPhase.WaitingForTelemetry,
-    BoardPhase.Connected,
-    BoardPhase.Error -> false
 }

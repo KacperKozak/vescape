@@ -3,6 +3,7 @@ package expo.modules.vescble.telemetry
 import kotlin.math.abs
 import kotlin.math.roundToLong
 
+// @parity /modules/vesc-ble/ios/telemetry/TelemetryBucketBuilder.swift
 internal const val TELEMETRY_BUCKET_SIZE_MS = 60_000L
 internal const val UNKNOWN_TELEMETRY_DEVICE_ID = ""
 internal const val UNKNOWN_TELEMETRY_DEVICE_NAME = "VESC Board"
@@ -40,6 +41,7 @@ internal data class BucketLocationPoint(
   val longitudeE7: Int? = null,
 )
 
+// @parity /modules/vesc-ble/ios/telemetry/TelemetryBucketBuilder.swift `buildTelemetryBuckets`
 internal fun buildTelemetryBuckets(
   telemetryPoints: List<BucketTelemetryPoint>,
   locationPoints: List<BucketLocationPoint>,

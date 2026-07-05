@@ -2,6 +2,7 @@ import Foundation
 import ExpoModulesCore
 import GRDB
 
+/// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/TelemetryDao.kt
 internal func sampleColumns(_ rows: [Row], batteryPercents: [Double?]) -> [String: Any?] {
   var data = Data(capacity: rows.count * SAMPLE_COLUMN_COUNT * MemoryLayout<Double>.size)
   var deviceIds: [String?] = []
@@ -374,4 +375,3 @@ internal func telemetryLong(_ raw: Any?) -> Int64? {
   if let value = raw as? NSNumber { return value.int64Value }
   return nil
 }
-
