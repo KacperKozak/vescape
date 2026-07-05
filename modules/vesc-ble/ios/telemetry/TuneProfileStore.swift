@@ -253,6 +253,33 @@ struct TuneProfileStore {
     }
   }
 
+  /// Seed the first per-board Tune Profile from a freshly-read Tune Snapshot. Read-side only:
+  /// creates "Main" plus its initial Tune History entry when the board has no profiles yet.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/AppDataRepository.kt `createMainTuneProfileIfMissing`
+  func createMainTuneProfileIfMissing(_ snapshot: RefloatConfigSnapshot) throws -> [String: Any?]? {
+    guard let boardId = snapshot.boardId, !boardId.isEmpty else { return nil }
+    let now = Self.nowMs()
+    let profileId = Self.newId()
+    let fieldsJson = snapshot.fieldsJson()
+    return try inWrite { db in
+      let existing = try Int.fetchOne(
+        db,
+        sql: "SELECT COUNT(*) FROM tune_profiles WHERE board_id = ?",
+        arguments: [boardId]
+      ) ?? 0
+      if existing > 0 { return nil }
+      try db.execute(
+        sql: """
+          INSERT INTO tune_profiles (id, board_id, name, fields_json, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?)
+          """,
+        arguments: [profileId, boardId, "Main", fieldsJson, now, now]
+      )
+      try Self.insertHistory(db, profileId: profileId, fieldsJson: fieldsJson, createdAt: now)
+      return try Self.requireProfileMap(db, profileId)
+    }
+  }
+
   // MARK: - Private helpers
 
   private func inWrite<T>(_ body: @escaping (Database) throws -> T) throws -> T {

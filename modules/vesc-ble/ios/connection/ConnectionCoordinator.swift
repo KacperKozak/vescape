@@ -91,6 +91,7 @@ internal final class ConnectionCoordinator: VescGattListener {
   private let liveSeries = LiveSeriesEmitter()
   private let appData: AppDataRepository
   private lazy var recordingCoordinator = RecordingCoordinator(appData: appData)
+  private lazy var configReadController = ConfigReadController()
   private lazy var gpsMonitor = VescGpsMonitor { [weak self] location in self?.onLocationUpdated(location) }
   private lazy var alertAudioPlayer = AlertAudioPlayer()
   private lazy var alertCoordinator = AlertCoordinator(player: alertAudioPlayer)
@@ -191,6 +192,27 @@ internal final class ConnectionCoordinator: VescGattListener {
 
   func stopBoard() {
     endSession(phase: .idle, error: nil)
+  }
+
+  /// Read Refloat config from the connected Board and seed the first Tune Profile. Mirrors Android
+  /// `getRefloatConfigSnapshot` read path; write/push remains intentionally out of scope for #171.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/ConfigRWController.kt `consumeRead`
+  func getRefloatConfigSnapshot(
+    onSuccess: @escaping ([String: Any?]) -> Void,
+    onError: @escaping (String, String) -> Void
+  ) {
+    guard let config else {
+      onError(
+        RefloatConfigErrorCode.BOARD_NOT_CONNECTED.rawValue,
+        "Board must be connected before reading Refloat config"
+      )
+      return
+    }
+    configReadController.consumeRead(
+      connection: configReadConnection(config),
+      onSuccess: onSuccess,
+      onError: onError
+    )
   }
 
   // MARK: - Live-state snapshot
@@ -350,6 +372,7 @@ internal final class ConnectionCoordinator: VescGattListener {
     gpsMonitor.stop()
     stopPolling()
     stopReconnect()
+    configReadController.onSessionTerminated(error ?? "Board session ended", connection: fallbackConfigReadConnection())
     alertCoordinator.stopAllGeiger()
     gatt.disconnect()
     reassembler.reset()
@@ -448,6 +471,7 @@ internal final class ConnectionCoordinator: VescGattListener {
     gpsMonitor.stop()
     stopPolling()
     stopReconnect()
+    configReadController.onSessionTerminated(message, connection: fallbackConfigReadConnection())
     alertCoordinator.stopAllGeiger()
     gatt.disconnect()
     endLiveActivity()
@@ -600,6 +624,9 @@ internal final class ConnectionCoordinator: VescGattListener {
 
   private func handlePayload(_ payload: [UInt8]) {
     guard let session, session.isActive else { return }
+    if let config, configReadController.onPayload(payload, connection: configReadConnection(config)) {
+      return
+    }
     guard !payload.isEmpty, Int(payload[0]) == COMM_CUSTOM_APP_DATA else { return }
     let now = nowMs()
     guard let telemetry = parseRefloatGetAllData(
@@ -861,6 +888,41 @@ internal final class ConnectionCoordinator: VescGattListener {
     stopScheduledPolls()
     liveSeries.stop()
     flushHistory()
+  }
+
+  private func restartPollingForConfigRead() {
+    guard let session, session.isActive else { return }
+    startPolling(session: session)
+  }
+
+  private func configReadConnection(_ config: BoardConnectConfig) -> ConfigReadConnection {
+    ConfigReadConnection(
+      phase: phase,
+      appBoardId: config.appBoardId,
+      transport: config.transport,
+      fwVersion: nil,
+      isPollingActive: { [weak self] in self?.polling ?? false },
+      stopPolling: { [weak self] in self?.stopPolling() },
+      startPolling: { [weak self] in self?.restartPollingForConfigRead() },
+      sendPayload: { [weak self] payload in self?.gatt.sendPayload(payload) ?? false },
+      captureDiagnostic: { [weak self] name, properties in
+        self?.recordConnectionDiagnostic(name, operation: "config_read", message: properties["message"] as? String ?? name, extra: properties)
+      }
+    )
+  }
+
+  private func fallbackConfigReadConnection() -> ConfigReadConnection {
+    ConfigReadConnection(
+      phase: phase,
+      appBoardId: config?.appBoardId,
+      transport: config?.transport ?? .direct,
+      fwVersion: nil,
+      isPollingActive: { false },
+      stopPolling: {},
+      startPolling: {},
+      sendPayload: { _ in false },
+      captureDiagnostic: { _, _ in }
+    )
   }
 
   private func pollPayload() -> [UInt8] {

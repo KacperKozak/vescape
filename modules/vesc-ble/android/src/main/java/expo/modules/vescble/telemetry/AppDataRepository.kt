@@ -404,6 +404,7 @@ class AppDataRepository private constructor(private val context: Context) {
       ).toMap()
     }
 
+  // @parity /modules/vesc-ble/ios/telemetry/TuneProfileStore.swift `createMainTuneProfileIfMissing`
   internal suspend fun createMainTuneProfileIfMissing(snapshot: RefloatConfigSnapshot): Map<String, Any?>? =
     withContext(Dispatchers.IO) {
       val boardId = snapshot.boardId?.takeIf { it.isNotBlank() } ?: return@withContext null
