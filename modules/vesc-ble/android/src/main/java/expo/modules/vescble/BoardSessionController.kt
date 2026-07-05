@@ -1157,6 +1157,7 @@ internal class BoardSessionController(private val service: VescForegroundService
         transitionBoardPhase(BoardPhase.Connected)
     }
 
+    /** @parity /modules/vesc-ble/ios/connection/ConnectionCoordinator.swift `onTelemetryStaleFired` */
     private fun onTelemetryStaleFired() {
         val now = System.currentTimeMillis()
         if (

@@ -49,13 +49,14 @@ internal struct BoardConnectConfig {
 ///
 /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/connection/ConnectionCoordinator.kt
 /// @platform-diff iOS relies on CoreBluetooth persistent connect for retry timing instead of
-/// Android's backoff scheduler (`ReconnectPolicy.nextRetry`). The board-ready watchdog (`armBoardReadyTimeout`) is ported; the
-/// post-connected *stale-telemetry* watchdog (Android `onTelemetryStaleFired`) remains a TODO.
+/// Android's backoff scheduler (`ReconnectPolicy.nextRetry`). Both the board-ready watchdog
+/// (`armBoardReadyTimeout`) and the post-connected stale-telemetry watchdog (`armStaleWatchdog` /
+/// `onTelemetryStaleFired`) are ported. iOS has no distinct `Stale` phase: a stale trip routes
+/// straight into the shared reconnect path (`.reconnecting`), where Android first transitions
+/// through `BoardPhase.Stale`.
 /// Alerts (#62) and diagnostics (#63) are ported. Ride status is surfaced natively via a Live
 /// Activity (`RideLiveActivityController`) — the peer of Android's persistent foreground
 /// notification — driven entirely from this coordinator so it survives screen-off / dead JS.
-// TODO(iOS parity): port the stale-telemetry watchdog (Android onTelemetryStaleFired,
-// TELEMETRY_STALE_MS) — detect telemetry going stale after `connected` and reconnect.
 internal final class ConnectionCoordinator: VescGattListener {
   /// App-level owner of the live Board Session, below Expo module lifetime (see `docs/ios.md`). A JS
   /// runtime reload tears down `VescBleModule` and builds a fresh one; the session, recording, GPS
@@ -77,6 +78,10 @@ internal final class ConnectionCoordinator: VescGattListener {
   /// `ReconnectPolicy.boardReadyTimeoutMs`); iOS relies on CoreBluetooth persistent connect and has
   /// no per-attempt counter, so it uses a fixed value matching Android's base.
   private let boardReadyTimeoutSeconds = 4.0
+  /// Stale-telemetry watchdog window: max gap between telemetry frames while `connected` before the
+  /// board is presumed silent (GATT still up, no frames) and we self-heal via reconnect. Mirrors
+  /// Android `TELEMETRY_STALE_MS` (4s) — copied, not re-derived.
+  private let telemetryStaleSeconds = 4.0
 
   // MARK: Board session state
 
@@ -151,6 +156,7 @@ internal final class ConnectionCoordinator: VescGattListener {
   private var pollTick: Int64 = 0
   private var pollWorkItem: DispatchWorkItem?
   private var safetyWorkItem: DispatchWorkItem?
+  private var staleWorkItem: DispatchWorkItem?
 
   // Batched history flush cadence (cold path); the hot `onLiveTick` fires every frame.
   private var historyBuffer: [[String: Any?]] = []
@@ -454,6 +460,53 @@ internal final class ConnectionCoordinator: VescGattListener {
     }
   }
 
+  /// Stale-telemetry watchdog: re-armed on every telemetry frame while polling. If no frame lands
+  /// within `telemetryStaleSeconds` the link is presumed dead-but-open (GATT still up, board silent)
+  /// and, once `connected`, we self-heal through the same reconnect path as a link drop. Unlike the
+  /// connect / board-ready watchdogs it keeps an explicit cancel handle because it re-arms per frame
+  /// (cancel-and-rearm), matching the safety-poll timer.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/TelemetryPipeline.kt `armStaleWatchdog`
+  private func armStaleWatchdog(session: BoardSession) {
+    staleWorkItem?.cancel()
+    let token = session
+    let armedAt = lastTelemetryAt
+    let work = DispatchWorkItem { [weak self] in
+      guard let self, token === self.session, token.isActive else { return }
+      self.staleWorkItem = nil
+      self.onTelemetryStaleFired(armedAt: armedAt)
+    }
+    staleWorkItem = work
+    DispatchQueue.main.asyncAfter(deadline: .now() + telemetryStaleSeconds, execute: work)
+  }
+
+  private func cancelStaleWatchdog() {
+    staleWorkItem?.cancel()
+    staleWorkItem = nil
+  }
+
+  /// Stale window elapsed. Re-checks under the same guard as Android `onTelemetryStaleFired`: only a
+  /// live `connected` session whose telemetry is genuinely stale tears down; a frame that landed in
+  /// the meantime (or a phase change) makes this a no-op. Routes through `beginReconnect` so backoff /
+  /// rescan behavior stays aligned with a link drop. iOS has no `Stale` phase (see class @platform-diff).
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardSessionController.kt `onTelemetryStaleFired`
+  private func onTelemetryStaleFired(armedAt: Int64?) {
+    let now = nowMs()
+    let staleMs = Int64(telemetryStaleSeconds * 1000)
+    let stillStale = lastTelemetryAt == armedAt || (lastTelemetryAt.map { now - $0 >= staleMs } ?? true)
+    guard phase == .connected, stillStale else { return }
+    recordConnectionDiagnostic(
+      "telemetry_stale",
+      operation: "telemetry",
+      message: "telemetry stale",
+      extra: [
+        "reason": "telemetry stale",
+        "timeout_ms": Int(staleMs),
+        "last_telemetry_timestamp": lastTelemetryAt,
+      ]
+    )
+    beginReconnect()
+  }
+
   private func setPhase(_ phase: BoardPhase) {
     guard self.phase != phase else { return }
     self.phase = phase
@@ -645,6 +698,7 @@ internal final class ConnectionCoordinator: VescGattListener {
 
     onPollResponse(session: session)
     lastTelemetryAt = now
+    armStaleWatchdog(session: session)
     markBoardReady()
     emitTelemetry(telemetry)
   }
@@ -874,6 +928,10 @@ internal final class ConnectionCoordinator: VescGattListener {
     if phase == .waitingForTelemetry {
       armBoardReadyTimeout(session: session)
     }
+    // Arm the stale-telemetry watchdog alongside polling; it re-arms on every frame and only trips
+    // (into reconnect) once `connected`, so arming here while still waiting is a harmless no-op
+    // guarded by phase. Mirrors Android `startPolling` → `telemetryPipeline.armStaleWatchdog()`.
+    armStaleWatchdog(session: session)
     let transport = config?.transport ?? .direct
     let pollingMode: String
     switch transport {
@@ -893,6 +951,7 @@ internal final class ConnectionCoordinator: VescGattListener {
   private func stopPolling() {
     polling = false
     stopScheduledPolls()
+    cancelStaleWatchdog()
     liveSeries.stop()
     flushHistory()
   }
