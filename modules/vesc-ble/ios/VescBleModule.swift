@@ -939,6 +939,8 @@ public class VescBleModule: Module {
     OnStopObserving("onBms") { self.observedEvents.remove("onBms") }
     OnStartObserving("onLocation") { self.observedEvents.insert("onLocation") }
     OnStopObserving("onLocation") { self.observedEvents.remove("onLocation") }
+    OnStartObserving("onTelemetryRebuildProgress") { self.observedEvents.insert("onTelemetryRebuildProgress") }
+    OnStopObserving("onTelemetryRebuildProgress") { self.observedEvents.remove("onTelemetryRebuildProgress") }
 
     OnCreate {
       self.attachToCoordinator()
@@ -982,8 +984,24 @@ public class VescBleModule: Module {
       self.coordinator.startLocationUpdates()
     }
 
+    // Flush buffered telemetry after stopping GPS so no pending rows are lost on the way down.
+    // @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt `stopLocationUpdates`
     Function("stopLocationUpdates") {
       self.coordinator.stopLocationUpdates()
+      TelemetryRepository.shared.flushBlocking()
+    }
+
+    // MARK: App lifecycle
+
+    // Android kills its foreground service + process here. iOS has no sanctioned process-kill idiom
+    // (App Store rejects `exit()`), so this degrades to a graceful native teardown of all long-lived
+    // work; JS never crashes calling it.
+    // @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt `exitApp`
+    // @platform-diff iOS cannot terminate its own process; graceful shutdown instead of kill.
+    Function("exitApp") {
+      self.coordinator.stopBoard()
+      self.coordinator.stopLocationUpdates()
+      self.coordinator.stopScan()
     }
 
     // MARK: Group Ride (Android native implementation; iOS keeps bridge shape)
@@ -1016,10 +1034,11 @@ public class VescBleModule: Module {
 
     // MARK: Telemetry recording toggle
 
+    // Latch the request even before connect, silently — the coordinator replays it when a board
+    // connects. No error event on the pre-connect path: Android latches without emitting.
+    // @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt `setTelemetryRecordingEnabled`
     Function("setTelemetryRecordingEnabled") { (enabled: Bool) in
-      if !self.coordinator.setTelemetryRecordingEnabled(enabled), enabled {
-        self.sendEvent("onError", ["message": "Recording requires a connected board"])
-      }
+      _ = self.coordinator.setTelemetryRecordingEnabled(enabled)
     }
 
     Function("reloadAlertRules") {
@@ -1149,9 +1168,13 @@ public class VescBleModule: Module {
       }
     }
 
+    // Stop every writer touching the DB before the file swap: scan, board session (flushes buffered
+    // telemetry synchronously via `endSession`), and GPS. All are synchronous here, so the pool is
+    // idle before the async restore runs. @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt `stopNativeWorkForDatabaseRestore`
     AsyncFunction("restoreDatabase") { (uri: String, promise: Promise) in
-      // End any live session so the pool is idle and buffered telemetry is flushed before the swap.
+      self.coordinator.stopScan()
       self.coordinator.stopBoard()
+      self.coordinator.stopLocationUpdates()
       DispatchQueue.global(qos: .userInitiated).async {
         do {
           try DatabaseBackupManager.restoreBackup(uriString: uri)
@@ -1288,9 +1311,16 @@ public class VescBleModule: Module {
       promise.resolve(TelemetryRepository.shared.deleteRange(options))
     }
 
+    // Gate progress on foreground + active listener and hop to main, like every other JS emit. The
+    // rebuild callback fires from a background queue; skip the void when JS isn't listening.
+    // @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt `rebuildTelemetryBuckets`
     AsyncFunction("rebuildTelemetryBuckets") { (promise: Promise) in
       let count = TelemetryRepository.shared.rebuildBuckets { current, total in
-        self.sendEvent("onTelemetryRebuildProgress", ["current": current, "total": total])
+        guard self.shouldEmitToFrontend("onTelemetryRebuildProgress") else { return }
+        DispatchQueue.main.async {
+          guard self.shouldEmitToFrontend("onTelemetryRebuildProgress") else { return }
+          self.sendEvent("onTelemetryRebuildProgress", ["current": current, "total": total])
+        }
       }
       promise.resolve(count)
     }
@@ -1546,7 +1576,9 @@ public class VescBleModule: Module {
         "enabled": coordinator.telemetryRecordingEnabled(),
         "paused": coordinator.recordingPaused(),
         "activeBoardId": coordinator.recordingActiveBoardId(),
-        "startedAt": coordinator.recordingStartedAt(),
+        // Always null, matching Android's live-state mapper — JS never consumes a real timestamp.
+        // @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescLiveStateMapper.kt
+        "startedAt": nil,
       ] as [String: Any?],
     ]
   }

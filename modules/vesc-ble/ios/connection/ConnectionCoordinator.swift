@@ -252,7 +252,6 @@ internal final class ConnectionCoordinator: VescGattListener {
   func gpsLastError() -> String? { gpsError }
   func telemetryRecordingEnabled() -> Bool { recordingCoordinator.telemetryRecordingEnabled }
   func recordingPaused() -> Bool { idlePauseDetector.isPaused }
-  func recordingStartedAt() -> Int64? { recordingCoordinator.recordingStartedAtMs }
   func recordingActiveBoardId() -> String? { recordingCoordinator.activeBoardId }
 
   func startLocationUpdates() {

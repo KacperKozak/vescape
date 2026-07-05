@@ -18,7 +18,6 @@ internal final class RecordingCoordinator {
   }
 
   var telemetryRecordingEnabled: Bool { enabled }
-  var recordingStartedAtMs: Int64? { startedAtMs }
   var activeBoardId: String? { enabled ? activeConfig?.appBoardId : nil }
 
   func beginBoardSession(config: BoardConnectConfig) {
