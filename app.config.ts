@@ -4,7 +4,7 @@ import { androidVersionCode } from './src/helpers/version.ts'
 
 const config: ExpoConfig = {
   name: 'vescape',
-  slug: 'vibe-wheel',
+  slug: 'vescape',
   version: pkg.version,
   orientation: 'portrait',
   icon: './assets/images/icon.png',

@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "vibe-wheel",
+      "name": "vescape",
       "dependencies": {
         "@bacons/apple-targets": "^4.0.7",
         "@rnmapbox/maps": "^10.3.0",

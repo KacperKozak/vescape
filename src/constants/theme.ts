@@ -1,5 +1,5 @@
 /**
- * Semantic color tokens for VibeWheel.
+ * Semantic color tokens for Vescape.
  *
  * New structure:
  *   - palette: named hue swatches + mono + slate (surface/text scale + map buildings)

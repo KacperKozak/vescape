@@ -1,6 +1,6 @@
 # Design Language
 
-Visual design principles for the Vibe Wheel app. Follow these when building or modifying UI.
+Visual design principles for the Vescape app. Follow these when building or modifying UI.
 
 > **Every color in the app must come from the `theme` object in `src/constants/theme.ts`.**
 > Never hardcode a hex value (`#...`), rgba literal, or any color string directly in a component file.
