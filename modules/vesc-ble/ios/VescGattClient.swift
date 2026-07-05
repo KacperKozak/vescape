@@ -135,7 +135,7 @@ internal final class VescGattClient: NSObject {
   ///
   /// @platform-diff Android has no gatt-level peer: its `connectGatt(autoConnect = false)` is
   /// one-shot and the `ReconnectScheduler` drives retries with a fresh connect each attempt. iOS
-  /// leans on CoreBluetooth's built-in persistent connect instead (see `ConnectionCoordinator`).
+  /// leans on CoreBluetooth's built-in persistent connect instead (see `BoardSessionController`).
   func reconnect() {
     intentionalDisconnect = false
     readyResolved = false

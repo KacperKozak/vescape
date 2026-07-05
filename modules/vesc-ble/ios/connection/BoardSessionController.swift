@@ -50,7 +50,7 @@ internal struct BoardConnectConfig {
 /// Both platforms retry indefinitely; they differ only in *how* retries are paced — see the
 /// @platform-diff below.
 ///
-/// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/connection/ConnectionCoordinator.kt
+/// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardSessionController.kt
 /// @platform-diff iOS relies on CoreBluetooth persistent connect for retry timing instead of
 /// Android's backoff scheduler (`ReconnectPolicy.nextRetry`). Both the board-ready watchdog
 /// (`armBoardReadyTimeout`) and the post-connected stale-telemetry watchdog (`armStaleWatchdog` /
@@ -60,13 +60,13 @@ internal struct BoardConnectConfig {
 /// Alerts (#62) and diagnostics (#63) are ported. Ride status is surfaced natively via a Live
 /// Activity (`RideLiveActivityController`) — the peer of Android's persistent foreground
 /// notification — driven entirely from this coordinator so it survives screen-off / dead JS.
-internal final class ConnectionCoordinator: VescGattListener {
+internal final class BoardSessionController: VescGattListener {
   /// App-level owner of the live Board Session, below Expo module lifetime (see `docs/ios.md`). A JS
   /// runtime reload tears down `VescBleModule` and builds a fresh one; the session, recording, GPS
   /// and Live Activity keep running on this singleton while each module only attaches/detaches its
   /// JS event sinks. Mirrors Android's process-level `VescForegroundService`, whose session survives
   /// module teardown.
-  static let shared = ConnectionCoordinator()
+  static let shared = BoardSessionController()
 
   /// Send a native event to JS. Set by the module.
   var emit: ((String, [String: Any?]) -> Void)?

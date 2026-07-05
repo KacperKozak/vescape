@@ -993,7 +993,7 @@ internal class BoardSessionController(private val service: VescForegroundService
             }
         }
 
-    // @parity /modules/vesc-ble/ios/connection/ConnectionCoordinator.swift (handleBms)
+    // @parity /modules/vesc-ble/ios/connection/BoardSessionController.swift (handleBms)
     private fun handleBmsPayload(payload: ByteArray) {
         val bms = parseBmsValues(payload, System.currentTimeMillis()) ?: return
         emitEvent("onBms", bms.toMap())
@@ -1158,7 +1158,7 @@ internal class BoardSessionController(private val service: VescForegroundService
         transitionBoardPhase(BoardPhase.Connected)
     }
 
-    /** @parity /modules/vesc-ble/ios/connection/ConnectionCoordinator.swift `onTelemetryStaleFired` */
+    /** @parity /modules/vesc-ble/ios/connection/BoardSessionController.swift `onTelemetryStaleFired` */
     private fun onTelemetryStaleFired() {
         val now = System.currentTimeMillis()
         if (
@@ -1510,7 +1510,7 @@ internal class BoardSessionController(private val service: VescForegroundService
     }
 
     /**
-     * @parity /modules/vesc-ble/ios/connection/ConnectionCoordinator.swift `reloadBoardDataForActiveBoard`
+     * @parity /modules/vesc-ble/ios/connection/BoardSessionController.swift `reloadBoardDataForActiveBoard`
      * @platform-diff Android also refreshes the selected-board idle notification title.
      */
     suspend fun reloadBoardDataForActiveBoard() {

@@ -10,6 +10,7 @@ final class BatterySocEstimatorTests: XCTestCase {
     // Load the canonical curves straight from the shared source (single source of truth), located
     // relative to this test file so no resource bundling is needed for the pure unit under test.
     let root = URL(fileURLWithPath: #filePath)
+      .deletingLastPathComponent() // telemetry
       .deletingLastPathComponent() // ios
       .deletingLastPathComponent() // vesc-ble
       .deletingLastPathComponent() // modules

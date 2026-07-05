@@ -160,7 +160,7 @@ internal class TelemetryPipeline(
         return result
     }
 
-    /** @parity /modules/vesc-ble/ios/connection/ConnectionCoordinator.swift `armStaleWatchdog` */
+    /** @parity /modules/vesc-ble/ios/connection/BoardSessionController.swift `armStaleWatchdog` */
     fun armStaleWatchdog() {
         val armedAt = lastTelemetryAt
         staleHandle?.cancel()
