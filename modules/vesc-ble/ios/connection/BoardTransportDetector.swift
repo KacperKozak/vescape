@@ -25,13 +25,13 @@ private let PROBE_TRANSPORT_TIMEOUT_MS = 2_500
 /// timer here is single-threaded on main.
 ///
 /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardTransportDetector.kt
-/// @platform-diff iOS emits no Diagnostic Events (no telemetry store yet) and gets no BLE
-/// disconnect status code from CoreBluetooth, so connect-phase retries key off attempt count
-/// alone. Peers converge when the iOS diagnostics store lands.
+/// @platform-diff iOS gets no BLE disconnect status code from CoreBluetooth, so connect-phase
+/// retries key off attempt count alone.
 internal final class BoardTransportDetector: VescGattListener {
   private enum Phase { case connecting, pinging, probing }
 
   private let bleId: String
+  private let recordDiagnostic: (String, [String: Any?]) -> Void
   private let onProgress: ([String: Any?]) -> Void
   private let onComplete: (TransportDetection.Result) -> Void
   private let onError: (String, String) -> Void
@@ -54,12 +54,14 @@ internal final class BoardTransportDetector: VescGattListener {
 
   init(
     bleId: String,
+    recordDiagnostic: @escaping (String, [String: Any?]) -> Void,
     onProgress: @escaping ([String: Any?]) -> Void,
     onComplete: @escaping (TransportDetection.Result) -> Void,
     onError: @escaping (String, String) -> Void,
     nowMs: @escaping () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) }
   ) {
     self.bleId = bleId
+    self.recordDiagnostic = recordDiagnostic
     self.onProgress = onProgress
     self.onComplete = onComplete
     self.onError = onError
@@ -77,6 +79,10 @@ internal final class BoardTransportDetector: VescGattListener {
 
   func start() {
     startMs = nowMs()
+    recordDiagnostic(
+      "board_probe_started",
+      ["message": "Board Probe started", "ble_id": bleId]
+    )
     phase = .connecting
     attemptConnect(initial: true)
   }
@@ -101,12 +107,21 @@ internal final class BoardTransportDetector: VescGattListener {
 
   func onDeviceDiscovered(id: String, name: String, rssi: Int, serviceUUIDs: [String]) {}
   func onScanFailure(_ message: String) {}
-  func onGattConnected() {}
+  func onGattConnected() {
+    recordDiagnostic(
+      "board_probe_ble_connected",
+      ["message": "BLE connected", "ble_id": bleId, "elapsed_ms": elapsed()]
+    )
+  }
   func onGattSubscribing() {}
 
   func onGattReady() {
     if finished || phase != .connecting { return }
     cancelStep()
+    recordDiagnostic(
+      "board_probe_service_ready",
+      ["message": "VESC service ready", "elapsed_ms": elapsed()]
+    )
     emitProgress("handshake")
     phase = .pinging
     after(PROBE_FW_DELAY_MS) { [weak self] in
@@ -127,6 +142,14 @@ internal final class BoardTransportDetector: VescGattListener {
       // retry a bounded number of times before giving up.
       if connectAttempts < PROBE_CONNECT_MAX_ATTEMPTS {
         cancelStep()
+        recordDiagnostic(
+          "board_probe_connect_retry",
+          [
+            "message": "Connect attempt failed, retrying",
+            "attempt": connectAttempts,
+            "elapsed_ms": elapsed(),
+          ]
+        )
         attemptConnect(initial: false)
         return
       }
@@ -195,6 +218,14 @@ internal final class BoardTransportDetector: VescGattListener {
     }
     let transport = probeQueue.removeFirst()
     current = transport
+    recordDiagnostic(
+      "board_probe_transport_probe_started",
+      [
+        "message": "Probing transport",
+        "transport": transport.bridgeValue,
+        "elapsed_ms": elapsed(),
+      ]
+    )
     // Ask for telemetry (confirms the transport) and BMS values (capability) in one window. The
     // BMS reply is best-effort: absence within the window means no BMS.
     sendProbeBurst(transport)
@@ -241,6 +272,17 @@ internal final class BoardTransportDetector: VescGattListener {
     observations.append(
       TransportDetection.Probe(transport: transport, confirmed: currentConfirmed, hasBms: currentHasBms)
     )
+    if currentConfirmed {
+      recordDiagnostic(
+        "board_probe_transport_confirmed",
+        [
+          "message": "Transport confirmed by telemetry sample",
+          "transport": transport.bridgeValue,
+          "has_bms": currentHasBms,
+          "elapsed_ms": elapsed(),
+        ]
+      )
+    }
     current = nil
     probeNext()
   }
@@ -248,6 +290,21 @@ internal final class BoardTransportDetector: VescGattListener {
   private func finishResolved() {
     if finished { return }
     let result = TransportDetection.resolve(observations)
+    let outcome: String
+    switch result.outcome {
+    case .resolved: outcome = "resolved"
+    case .needsPick: outcome = "needs-pick"
+    case .none: outcome = "none"
+    }
+    recordDiagnostic(
+      "board_probe_completed",
+      [
+        "message": "Board Probe completed",
+        "candidate_count": result.candidates.count,
+        "outcome": outcome,
+        "elapsed_ms": elapsed(),
+      ]
+    )
     emitProgress("completed")
     cleanup()
     completeAfterGattRelease { [onComplete] in onComplete(result) }
@@ -255,6 +312,10 @@ internal final class BoardTransportDetector: VescGattListener {
 
   private func fail(code: String, message: String) {
     if finished { return }
+    recordDiagnostic(
+      "board_probe_failed",
+      ["message": message, "code": code, "elapsed_ms": elapsed()]
+    )
     emitProgress("failed")
     cleanup()
     completeAfterGattRelease { [onError] in onError(code, message) }

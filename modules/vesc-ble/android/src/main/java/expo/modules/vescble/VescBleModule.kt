@@ -650,7 +650,11 @@ class VescBleModule : Module() {
       is TransportDetection.Outcome.NeedsPick -> "needs-pick"
       TransportDetection.Outcome.None -> "none"
     }
-    return mapOf("outcome" to outcome, "candidates" to candidates)
+    return mapOf(
+      "outcome" to outcome,
+      "transport" to BoardTransport.toBridge(result.resolvedTransport),
+      "candidates" to candidates,
+    )
   }
 
   private fun stopLocationUpdates() {

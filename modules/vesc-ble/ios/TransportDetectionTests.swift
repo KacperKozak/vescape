@@ -34,6 +34,7 @@ final class TransportDetectionTests: XCTestCase {
     let result = TransportDetection.resolve([probe(.direct, confirmed: true)])
     XCTAssertEqual([.direct], result.candidates.map { $0.transport })
     XCTAssertEqual(.resolved(.direct), result.outcome)
+    XCTAssertEqual(.direct, result.resolvedTransport)
   }
 
   func testCanOnlyConfirmedResolvesToThatCanId() {
@@ -43,6 +44,7 @@ final class TransportDetectionTests: XCTestCase {
     ])
     XCTAssertEqual([.can(43)], result.candidates.map { $0.transport })
     XCTAssertEqual(.resolved(.can(43)), result.outcome)
+    XCTAssertEqual(.can(43), result.resolvedTransport)
   }
 
   func testMultipleValidCanIdsNeedPickInProbeOrder() {
@@ -53,6 +55,7 @@ final class TransportDetectionTests: XCTestCase {
     ])
     XCTAssertEqual([.can(12), .can(43)], result.candidates.map { $0.transport })
     XCTAssertEqual(.needsPick([.can(12), .can(43)]), result.outcome)
+    XCTAssertNil(result.resolvedTransport)
   }
 
   func testBothDirectAndCanValidNeedPickDirectFirst() {
@@ -71,6 +74,7 @@ final class TransportDetectionTests: XCTestCase {
     ])
     XCTAssertTrue(result.candidates.isEmpty)
     XCTAssertEqual(.none, result.outcome)
+    XCTAssertNil(result.resolvedTransport)
   }
 
   func testEmptyProbeSetYieldsNone() {

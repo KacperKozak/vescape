@@ -40,6 +40,15 @@ internal enum TransportDetection {
   struct Result: Equatable {
     let candidates: [Candidate]
     let outcome: Outcome
+
+    /// Single resolved Board Transport for the bridge contract. `nil` means no confirmed
+    /// transport or multiple confirmed transports requiring rider choice.
+    var resolvedTransport: BoardTransport? {
+      switch outcome {
+      case .resolved(let transport): return transport
+      case .needsPick, .none: return nil
+      }
+    }
   }
 
   /// Transports to probe given the CAN ids that answered the CAN ping.

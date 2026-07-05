@@ -6,8 +6,7 @@ import Foundation
 // subsystems still keep bridge-shaped stubs.
 /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt
 /// TODO(iOS parity): port Group Ride, debug recording, and Refloat config subsystems to match
-/// Android API/events/errors. Diagnostics/notifications/privacy/backup landed in #63; the
-/// `board_probe_*` Diagnostic Events await the Board Probe subsystem (#111).
+/// Android API/events/errors.
 public class VescBleModule: Module {
 
   // MARK: - Session state
@@ -579,10 +578,19 @@ public class VescBleModule: Module {
     coordinator.stopBoard()
     let detector = BoardTransportDetector(
       bleId: bleId,
+      recordDiagnostic: { name, props in
+        DiagnosticsRecorder.shared.record(eventName: name, properties: props)
+      },
       onProgress: { [weak self] progress in self?.sendEvent("onBoardProbeProgress", progress) },
       onComplete: { [weak self] result in
         self?.activeProbe = nil
-        promise.resolve(self?.probeResultToBridge(result) ?? ["outcome": "none", "candidates": [] as [Any]])
+        promise.resolve(
+          self?.probeResultToBridge(result) ?? [
+            "outcome": "none",
+            "transport": nil,
+            "candidates": [] as [Any],
+          ] as [String: Any?]
+        )
       },
       onError: { [weak self] code, message in
         self?.activeProbe = nil
@@ -603,7 +611,7 @@ public class VescBleModule: Module {
     case .needsPick: outcome = "needs-pick"
     case .none: outcome = "none"
     }
-    return ["outcome": outcome, "candidates": candidates]
+    return ["outcome": outcome, "transport": result.resolvedTransport?.bridgeValue, "candidates": candidates]
   }
 
   // MARK: - Coordinator sink attach/detach

@@ -74,6 +74,8 @@ export interface BoardCandidate {
 /** Result of a native Board Probe of a BLE peripheral. */
 export interface BoardProbeResult {
   outcome: BoardProbeOutcome
+  /** Resolved transport when exactly one candidate confirmed; otherwise `null`. */
+  transport: BoardTransport | null
   /** Every transport that produced a valid Telemetry Sample, in probe order. */
   candidates: BoardCandidate[]
 }

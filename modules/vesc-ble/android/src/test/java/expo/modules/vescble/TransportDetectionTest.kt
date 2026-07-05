@@ -1,6 +1,7 @@
 package expo.modules.vescble
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -46,6 +47,7 @@ class TransportDetectionTest {
     )
     assertEquals(listOf(BoardTransport.Direct), result.candidates.map { it.transport })
     assertEquals(TransportDetection.Outcome.Resolved(BoardTransport.Direct), result.outcome)
+    assertEquals(BoardTransport.Direct, result.resolvedTransport)
   }
 
   // --- resolve: CAN-only ---
@@ -60,6 +62,7 @@ class TransportDetectionTest {
     )
     assertEquals(listOf(BoardTransport.Can(43)), result.candidates.map { it.transport })
     assertEquals(TransportDetection.Outcome.Resolved(BoardTransport.Can(43)), result.outcome)
+    assertEquals(BoardTransport.Can(43), result.resolvedTransport)
   }
 
   // --- resolve: multi-node (multiple valid CAN ids) ---
@@ -83,6 +86,7 @@ class TransportDetectionTest {
       ),
       result.outcome,
     )
+    assertNull(result.resolvedTransport)
   }
 
   // --- resolve: both direct and CAN valid ---
@@ -119,6 +123,7 @@ class TransportDetectionTest {
     )
     assertTrue(result.candidates.isEmpty())
     assertEquals(TransportDetection.Outcome.None, result.outcome)
+    assertNull(result.resolvedTransport)
   }
 
   @Test
