@@ -1511,6 +1511,7 @@ public class VescBleModule: Module {
     )
   }
 
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescLiveStateMapper.kt `buildLiveState`
   private func liveState() -> [String: Any?] {
     let settings = appData.getSettings()
     return [
@@ -1529,7 +1530,7 @@ public class VescBleModule: Module {
       ] as [String: Any?],
       "gps": [
         "phase": coordinator.gpsActive() ? "active" : "idle",
-        "latestFix": coordinator.gpsLatestLocation(),
+        "latestFix": coordinator.gpsLatestPreciseLocation(),
         "latestApproximateFix": coordinator.gpsLatestLocation(),
         "latestPreciseFix": coordinator.gpsLatestPreciseLocation(),
         "recentLocations": coordinator.gpsRecentLocations(),
