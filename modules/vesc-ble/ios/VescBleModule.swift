@@ -1281,13 +1281,12 @@ public class VescBleModule: Module {
       }
     }
 
-    // TODO(iOS parity): `pushProfileToBoard` depends on the Refloat config-write subsystem
-    // (Android `VescForegroundService.pushProfileToBoard` -> pending-config-write), which is
-    // unported on iOS and deferred by ADR 0011. Reject with Android's error vocabulary until then.
-    AsyncFunction("pushProfileToBoard") { (_: String, promise: Promise) in
-      promise.reject(
-        "BOARD_NOT_CONNECTED",
-        "Tune Profile push to board is not yet supported on iOS (Refloat config write not ported)"
+    // @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt `pushProfileToBoard`
+    AsyncFunction("pushProfileToBoard") { (profileId: String, promise: Promise) in
+      self.coordinator.pushProfileToBoard(
+        profileId: profileId,
+        onSuccess: { snapshot in promise.resolve(snapshot) },
+        onError: { code, message in promise.reject(code, message) }
       )
     }
 

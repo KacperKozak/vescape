@@ -22,7 +22,7 @@ enum RefloatConfigProtocolResult<T> {
   case failure(String)
 }
 
-/// COMM_GET_CUSTOM_CONFIG_XML / COMM_GET_CUSTOM_CONFIG framing. Read-side parity with Android.
+/// COMM_GET_CUSTOM_CONFIG_XML / COMM_GET_CUSTOM_CONFIG / COMM_SET_CUSTOM_CONFIG framing, parity with Android.
 ///
 /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/RefloatConfigProtocol.kt
 enum RefloatConfigProtocol {
@@ -54,6 +54,41 @@ enum RefloatConfigProtocol {
   static func buildGetCustomConfig(transport: BoardTransport, confInd: Int) -> [UInt8] {
     precondition((0...255).contains(confInd), "confInd must fit uint8")
     return transport.frame([UInt8(COMM_GET_CUSTOM_CONFIG), UInt8(confInd)])
+  }
+
+  static func buildSetCustomConfig(
+    transport: BoardTransport,
+    confInd: Int,
+    packageSignature: UInt32,
+    configBytes: [UInt8]
+  ) -> [UInt8] {
+    precondition((0...255).contains(confInd), "confInd must fit uint8")
+    var frame: [UInt8] = [UInt8(COMM_SET_CUSTOM_CONFIG), UInt8(confInd)]
+    frame.append(UInt8((packageSignature >> 24) & 0xff))
+    frame.append(UInt8((packageSignature >> 16) & 0xff))
+    frame.append(UInt8((packageSignature >> 8) & 0xff))
+    frame.append(UInt8(packageSignature & 0xff))
+    frame.append(contentsOf: configBytes)
+    return transport.frame(frame)
+  }
+
+  static func parseSetCustomConfigResponse(
+    _ payload: [UInt8],
+    expectedConfInd: Int = 0
+  ) -> RefloatConfigProtocolResult<Int> {
+    let offset: Int
+    switch commandOffset(payload, expectedCommand: COMM_SET_CUSTOM_CONFIG) {
+    case .success(let value): offset = value
+    case .failure(let message): return .failure(message)
+    }
+    if payload.count == offset + 1 {
+      return .success(expectedConfInd)
+    }
+    let confInd = Int(payload[offset + 1])
+    if confInd != expectedConfInd {
+      return .failure("Unexpected Refloat set config index \(confInd)")
+    }
+    return .success(confInd)
   }
 
   static func parseCustomConfigXmlResponse(

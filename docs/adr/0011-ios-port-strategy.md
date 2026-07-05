@@ -18,7 +18,7 @@ The iOS `vesc-ble` implementation mirrors the Android folder structure one-to-on
 - Reconnect uses CoreBluetooth persistent connect plus active rescan while the app is alive via the `location` background mode. This is a risk area and needs thorough real-device testing.
 - Follow ADR 0015: a Board's reachability is resolved by Board Probe before connect and stored as a complete Board Link `{ bleId, transport }`, where transport is `direct` or `canId`. Runtime connect is dumb: it reads the stored Board Link and polls immediately, with no CAN-ping discovery or timeout.
 - Treat Board Probe as its own native subsystem with its own GATT detection session. Connect is gated on the Board Link.
-- Skip Tunes config read/write _to the board_ in the initial iOS port because the Android flow is not yet tested enough to be a stable source of truth. DB-backed Tune Profile storage (create/save/rename/delete/history/rollback/copy) is exempt from this cut and is ported in #161; only `pushProfileToBoard` — which needs the unported Refloat config-write subsystem — stays deferred.
+- Tunes config read/write _to the board_ was deferred in the initial iOS port until the Android flow had stronger device evidence. DB-backed Tune Profile storage (create/save/rename/delete/history/rollback/copy) ported in #161; Refloat config read (`getRefloatConfigSnapshot`) ported in #171; config write (`pushProfileToBoard`, `COMM_SET_CUSTOM_CONFIG` encode + verify) ported in #172. Read/write now run through the Swift `ConfigRWController` at parity with Android.
 - Keep Kotlin Multiplatform rejected per ADR 0010. The pure-Kotlin Android modules document a portable shape, but iOS reimplements the native services in Swift.
 
 ## Considered Options
@@ -35,7 +35,7 @@ The iOS `vesc-ble` implementation mirrors the Android folder structure one-to-on
 - The iOS native module surface stays aligned with Android by folder shape and TypeScript API, not by shared implementation language.
 - Reconnect behavior remains explicitly risky until proven with real-device tests covering background location, CoreBluetooth restoration/persistent connect, active rescans, and board power/range changes.
 - Board Link and Board Probe are hard architecture boundaries for iOS from the start. A Board without a Board Link cannot start a Board Session.
-- DB-backed Tune Profile storage is ported in #161 (GRDB `tune_profiles` / `tune_history_entries`, Android-matching payloads/errors/history semantics). Tune config push/read _to the board_ and Tune Snapshot work still come later, after Android config read/write has stronger device evidence and tests worth porting.
+- DB-backed Tune Profile storage is ported in #161 (GRDB `tune_profiles` / `tune_history_entries`, Android-matching payloads/errors/history semantics). Tune config read (#171) and write (#172) _to the board_ are ported via the Swift `ConfigRWController`; Tune Snapshot work still comes later.
 
 ## References
 

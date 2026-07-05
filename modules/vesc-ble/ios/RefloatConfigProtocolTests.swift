@@ -86,6 +86,29 @@ final class RefloatConfigProtocolTests: XCTestCase {
     XCTAssertEqual("Unexpected Refloat config command 93, expected 92", message)
   }
 
+  func testBuildsDirectAndForwardedSetCustomConfigRequests() {
+    let configBytes: [UInt8] = [0x01, 0x02, 0x03, 0x04]
+    XCTAssertEqual(
+      [UInt8(COMM_SET_CUSTOM_CONFIG), 0, 0x12, 0x34, 0x56, 0x78, 1, 2, 3, 4],
+      RefloatConfigProtocol.buildSetCustomConfig(transport: .direct, confInd: 0, packageSignature: 0x1234_5678, configBytes: configBytes)
+    )
+    XCTAssertEqual(
+      [UInt8(COMM_FORWARD_CAN), 7, UInt8(COMM_SET_CUSTOM_CONFIG), 0, 0x12, 0x34, 0x56, 0x78, 1, 2, 3, 4],
+      RefloatConfigProtocol.buildSetCustomConfig(transport: .can(7), confInd: 0, packageSignature: 0x1234_5678, configBytes: configBytes)
+    )
+  }
+
+  func testParsesSetCustomConfigResponses() throws {
+    XCTAssertEqual(0, try success(RefloatConfigProtocol.parseSetCustomConfigResponse([UInt8(COMM_SET_CUSTOM_CONFIG)])))
+    XCTAssertEqual(0, try success(RefloatConfigProtocol.parseSetCustomConfigResponse([UInt8(COMM_FORWARD_CAN), 7, UInt8(COMM_SET_CUSTOM_CONFIG)])))
+    XCTAssertEqual(0, try success(RefloatConfigProtocol.parseSetCustomConfigResponse([UInt8(COMM_SET_CUSTOM_CONFIG), 0])))
+  }
+
+  func testRejectsSetConfigResponseWithWrongIndex() throws {
+    let message = try failure(RefloatConfigProtocol.parseSetCustomConfigResponse([UInt8(COMM_SET_CUSTOM_CONFIG), 1]))
+    XCTAssertEqual("Unexpected Refloat set config index 1", message)
+  }
+
   private func success<T>(_ result: RefloatConfigProtocolResult<T>) throws -> T {
     switch result {
     case .success(let value): return value

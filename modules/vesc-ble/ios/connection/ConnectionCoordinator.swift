@@ -106,7 +106,7 @@ internal final class ConnectionCoordinator: VescGattListener {
   private let liveSeries = LiveSeriesEmitter()
   private let appData: AppDataRepository
   private lazy var recordingCoordinator = RecordingCoordinator(appData: appData)
-  private lazy var configReadController = ConfigReadController()
+  private lazy var configController = ConfigRWController()
   private lazy var gpsMonitor = VescGpsMonitor { [weak self] location in self?.onLocationUpdated(location) }
   private lazy var alertAudioPlayer = AlertAudioPlayer()
   private lazy var alertCoordinator = AlertCoordinator(player: alertAudioPlayer)
@@ -219,7 +219,7 @@ internal final class ConnectionCoordinator: VescGattListener {
   }
 
   /// Read Refloat config from the connected Board and seed the first Tune Profile. Mirrors Android
-  /// `getRefloatConfigSnapshot` read path; write/push remains intentionally out of scope for #171.
+  /// `getRefloatConfigSnapshot` read path.
   /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/ConfigRWController.kt `consumeRead`
   func getRefloatConfigSnapshot(
     onSuccess: @escaping ([String: Any?]) -> Void,
@@ -232,8 +232,31 @@ internal final class ConnectionCoordinator: VescGattListener {
       )
       return
     }
-    configReadController.consumeRead(
-      connection: configReadConnection(config),
+    configController.consumeRead(
+      connection: configConnection(config),
+      onSuccess: onSuccess,
+      onError: onError
+    )
+  }
+
+  /// Encode a saved Tune Profile onto the live Refloat config and write it back to the Board via
+  /// `COMM_SET_CUSTOM_CONFIG`, verifying the readback. Mirrors Android `pushProfileToBoard`.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/ConfigRWController.kt `consumeWrite`
+  func pushProfileToBoard(
+    profileId: String,
+    onSuccess: @escaping ([String: Any?]) -> Void,
+    onError: @escaping (String, String) -> Void
+  ) {
+    guard let config else {
+      onError(
+        RefloatConfigErrorCode.BOARD_NOT_CONNECTED.rawValue,
+        "Board must be connected before pushing config"
+      )
+      return
+    }
+    configController.consumeWrite(
+      profileId: profileId,
+      connection: configConnection(config),
       onSuccess: onSuccess,
       onError: onError
     )
@@ -403,7 +426,7 @@ internal final class ConnectionCoordinator: VescGattListener {
     gpsMonitor.stop()
     stopPolling()
     stopReconnect()
-    configReadController.onSessionTerminated(error ?? "Board session ended", connection: fallbackConfigReadConnection())
+    configController.onSessionTerminated(error ?? "Board session ended", connection: fallbackConfigRWConnection())
     alertCoordinator.stopAllGeiger()
     gatt.disconnect()
     reassembler.reset()
@@ -549,7 +572,7 @@ internal final class ConnectionCoordinator: VescGattListener {
     gpsMonitor.stop()
     stopPolling()
     stopReconnect()
-    configReadController.onSessionTerminated(message, connection: fallbackConfigReadConnection())
+    configController.onSessionTerminated(message, connection: fallbackConfigRWConnection())
     alertCoordinator.stopAllGeiger()
     gatt.disconnect()
     endLiveActivity()
@@ -702,7 +725,7 @@ internal final class ConnectionCoordinator: VescGattListener {
 
   private func handlePayload(_ payload: [UInt8]) {
     guard let session, session.isActive else { return }
-    if let config, configReadController.onPayload(payload, connection: configReadConnection(config)) {
+    if let config, configController.onPayload(payload, connection: configConnection(config)) {
       return
     }
     guard !payload.isEmpty else { return }
@@ -1046,8 +1069,8 @@ internal final class ConnectionCoordinator: VescGattListener {
     startPolling(session: session)
   }
 
-  private func configReadConnection(_ config: BoardConnectConfig) -> ConfigReadConnection {
-    ConfigReadConnection(
+  private func configConnection(_ config: BoardConnectConfig) -> ConfigRWConnection {
+    ConfigRWConnection(
       phase: phase,
       appBoardId: config.appBoardId,
       transport: config.transport,
@@ -1057,13 +1080,14 @@ internal final class ConnectionCoordinator: VescGattListener {
       startPolling: { [weak self] in self?.restartPollingForConfigRead() },
       sendPayload: { [weak self] payload in self?.gatt.sendPayload(payload) ?? false },
       captureDiagnostic: { [weak self] name, properties in
-        self?.recordConnectionDiagnostic(name, operation: "config_read", message: properties["message"] as? String ?? name, extra: properties)
-      }
+        self?.recordConnectionDiagnostic(name, operation: "config_rw", message: properties["message"] as? String ?? name, extra: properties)
+      },
+      loadProfile: { profileId in TuneProfileStore.shared.getTuneProfile(profileId) }
     )
   }
 
-  private func fallbackConfigReadConnection() -> ConfigReadConnection {
-    ConfigReadConnection(
+  private func fallbackConfigRWConnection() -> ConfigRWConnection {
+    ConfigRWConnection(
       phase: phase,
       appBoardId: config?.appBoardId,
       transport: config?.transport ?? .direct,
@@ -1072,7 +1096,8 @@ internal final class ConnectionCoordinator: VescGattListener {
       stopPolling: {},
       startPolling: {},
       sendPayload: { _ in false },
-      captureDiagnostic: { _, _ in }
+      captureDiagnostic: { _, _ in },
+      loadProfile: { _ in nil }
     )
   }
 
