@@ -271,6 +271,10 @@ class VescForegroundService : Service() {
             if (!enabled) TelemetryRepository.get(context.applicationContext).flushBlocking()
         }
 
+        fun setBmsSeriesFocused(focused: Boolean) {
+            instance?.controller?.setBmsSeriesFocused(focused)
+        }
+
         fun setLiveHistoryLimit(limit: Number?) {
             val minutes = (limit?.toInt() ?: DEFAULT_LIVE_HISTORY_LIMIT_MINUTES)
                 .coerceIn(MIN_LIVE_HISTORY_LIMIT_MINUTES, MAX_LIVE_HISTORY_LIMIT_MINUTES)

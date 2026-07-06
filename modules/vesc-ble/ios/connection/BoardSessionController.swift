@@ -108,6 +108,10 @@ internal final class BoardSessionController: VescGattListener {
   /// Median window producing the Battery SoC Estimate for display + alerts (ADR-0016).
   private let socWindow = SocMedianWindow()
   private let liveSeries = LiveSeriesEmitter()
+  /// Live BMS Series retention (window from `liveHistoryLimitMinutes`); push gated by `bmsSeriesFocused`.
+  private let bmsSeriesRing = BmsSeriesRing()
+  /// True while the battery-detail view is focused (JS intent); gates the `onBmsSeries` push only.
+  private var bmsSeriesFocused = false
   private let appData: AppDataRepository
   private lazy var recordingCoordinator = RecordingCoordinator(appData: appData)
   private lazy var configController = ConfigRWController()
@@ -394,6 +398,7 @@ internal final class BoardSessionController: VescGattListener {
     sessionSequence += 1
     session = BoardSession(id: sessionSequence)
     socWindow.reset()
+    bmsSeriesRing.clear()
     self.config = config
     movingThresholdCentiKmh = MetricSanitizerConfig.from(settings: appData.getSettings()).movingSpeedThresholdCentiKmh
     recordingCoordinator.beginBoardSession(config: config)
@@ -427,6 +432,7 @@ internal final class BoardSessionController: VescGattListener {
     latestBatterySoc = nil
     latestBatteryVoltage = nil
     socWindow.reset()
+    bmsSeriesRing.clear()
     session?.invalidate()
     session = nil
     config = nil
@@ -617,6 +623,9 @@ internal final class BoardSessionController: VescGattListener {
     stopPolling()
     reassembler.reset()
     socWindow.reset()
+    // Drop prior-connection BMS rows before reconnecting, mirroring Android's reconnect-path
+    // `bmsSeriesRing.clear()` next to `telemetryPipeline.clearLiveTelemetry()`.
+    bmsSeriesRing.clear()
 
     sessionSequence += 1
     session = BoardSession(id: sessionSequence)
@@ -773,6 +782,48 @@ internal final class BoardSessionController: VescGattListener {
   private func handleBms(_ payload: [UInt8]) {
     guard let bms = parseBmsValues(payload, packetAt: nowMs()) else { return }
     emit?("onBms", bms.toMap())
+    // Retention is unconditional (the frame already arrived); only the push below is gated.
+    let frame = bmsSeriesRing.append(
+      capturedAtMs: bms.capturedAt,
+      cellVoltages: bms.cellVoltages,
+      balancing: bms.balancing,
+      windowMs: bmsSeriesWindowMs()
+    )
+    if let frame, bmsSeriesFocused {
+      emitBmsSeries(mode: "append", frames: [frame])
+    }
+  }
+
+  /// Battery-detail focus/blur intent from JS. Focus flips the gate open and immediately pushes
+  /// the whole windowed Live BMS Series as one columnar buffer; while focused each new BMS frame
+  /// follows as a single-row `append`. Blur just closes the gate — retention keeps running.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardSessionController.kt `setBmsSeriesFocused`
+  func setBmsSeriesFocused(_ focused: Bool) {
+    bmsSeriesFocused = focused
+    guard focused else { return }
+    emitBmsSeries(
+      mode: "snapshot",
+      frames: bmsSeriesRing.snapshot(windowMs: bmsSeriesWindowMs(), nowMs: nowMs())
+    )
+  }
+
+  private func bmsSeriesWindowMs() -> Int64 {
+    Int64(max(1, config?.liveHistoryLimitMinutes ?? 5)) * 60_000
+  }
+
+  private func emitBmsSeries(mode: String, frames: [BmsSeriesFrame]) {
+    let cellCount = bmsSeriesRing.cellCount()
+    emit?(
+      "onBmsSeries",
+      [
+        "mode": mode,
+        "generation": connectionSeq,
+        "windowMs": bmsSeriesWindowMs(),
+        "cellCount": cellCount,
+        "count": frames.count,
+        "columns": encodeBmsSeriesColumns(frames, cellCount: cellCount),
+      ]
+    )
   }
 
   private func markBoardReady() {
