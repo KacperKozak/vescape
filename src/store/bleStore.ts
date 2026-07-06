@@ -16,14 +16,18 @@ import {
   addLiveSeriesListener,
   addTelemetryHistoryListener,
   addBmsListener,
+  addBmsSeriesListener,
   addLocationListener,
   getRemoteTiltState as nativeGetRemoteTiltState,
+  setBmsSeriesFocused as nativeSetBmsSeriesFocused,
   type BoardPhase,
   type GpsPhase,
   type ScanStatus,
   type LocationEvent,
   type LiveStateEvent,
   type BmsEvent,
+  type BmsSeriesFrame,
+  type BmsSeriesUpdate,
   type RemoteTiltState,
 } from 'vesc-ble'
 
@@ -65,6 +69,8 @@ interface BleState {
   telemetryRecordingPaused: boolean
   recordDebugSession: boolean
   latestBms: BmsEvent | null
+  bmsSeries: BmsSeriesFrame[]
+  bmsSeriesWindowMs: number | null
   /** Active remote-tilt command mirrored from native telemetry, or null when idle. */
   remoteTilt: RemoteTiltState | null
 }
@@ -93,10 +99,12 @@ let liveTickSub: EventSubscription | null = null
 let liveSeriesSub: EventSubscription | null = null
 let historySub: EventSubscription | null = null
 let bmsSub: EventSubscription | null = null
+let bmsSeriesSub: EventSubscription | null = null
 let locationSub: EventSubscription | null = null
 // The raw full-sample stream only runs while a detail chart is mounted. Ref-counted
 // so native stops emitting `onTelemetryHistory` whenever no chart needs it.
 let fullSampleStreamRefs = 0
+let bmsSeriesStreamRefs = 0
 let scanSub: EventSubscription | null = null
 let scanErrorSub: EventSubscription | null = null
 let settingsUnsubscribe: (() => void) | null = null
@@ -132,6 +140,7 @@ const EMPTY_LIVE_STATUS: LiveStatusSummary = {
 }
 
 function removeLiveSubscriptions(): void {
+  removeBmsSeriesStream(useBleStore.setState as BleSet)
   liveSub?.remove()
   liveTickSub?.remove()
   liveSeriesSub?.remove()
@@ -263,6 +272,8 @@ function resetLivePresentation(set: BleSet): void {
     liveStatus: live.liveStatus,
     metricVersion: liveTelemetryRuntime.getVersion(),
     latestBms: null,
+    bmsSeries: [],
+    bmsSeriesWindowMs: null,
   })
 }
 
@@ -291,6 +302,48 @@ function publishLiveSnapshot(set: BleSet): void {
 function acceptsBoardTelemetry(generation: number | null | undefined): boolean {
   const state = useBleStore.getState()
   return state.status === 'connected' && (generation == null || generation === state.connectionSeq)
+}
+
+function pruneBmsSeries(frames: BmsSeriesFrame[], windowMs: number): BmsSeriesFrame[] {
+  const newest = frames.at(-1)?.capturedAt
+  if (newest == null) return []
+  const oldest = newest - windowMs
+  return frames.filter((frame) => frame.capturedAt >= oldest)
+}
+
+function mergeBmsSeriesFrames(
+  current: BmsSeriesFrame[],
+  incoming: BmsSeriesFrame[],
+): BmsSeriesFrame[] {
+  if (incoming.length === 0) return current
+  const incomingTimes = new Set(incoming.map((frame) => frame.capturedAt))
+  return [...current.filter((frame) => !incomingTimes.has(frame.capturedAt)), ...incoming].sort(
+    (a, b) => a.capturedAt - b.capturedAt,
+  )
+}
+
+function applyBmsSeriesUpdate(update: BmsSeriesUpdate, set: BleSet): void {
+  if (!acceptsBoardTelemetry(update.generation)) return
+  set((state) => {
+    const frames =
+      update.mode === 'snapshot'
+        ? update.frames
+        : mergeBmsSeriesFrames(state.bmsSeries, update.frames)
+    return {
+      bmsSeries: pruneBmsSeries(frames, update.windowMs),
+      bmsSeriesWindowMs: update.windowMs,
+    }
+  })
+}
+
+function removeBmsSeriesStream(set: BleSet): void {
+  if (bmsSeriesStreamRefs > 0 || bmsSeriesSub) {
+    nativeSetBmsSeriesFocused(false)
+  }
+  bmsSeriesSub?.remove()
+  bmsSeriesSub = null
+  bmsSeriesStreamRefs = 0
+  set({ bmsSeries: [], bmsSeriesWindowMs: null })
 }
 
 function installLiveSubscriptions(set: BleSet): void {
@@ -377,6 +430,30 @@ export function releaseFullSampleStream(): void {
   historySub = null
 }
 
+/** Opens the focused Live BMS Series bridge stream for the battery detail view. */
+export function acquireBmsSeriesStream(): void {
+  bmsSeriesStreamRefs += 1
+  if (bmsSeriesStreamRefs > 1) return
+  const set = useBleStore.setState as BleSet
+  try {
+    applyLiveState(nativeGetLiveState(), set)
+  } catch {
+    // No live state yet (not connected) — focus intent still attaches for future samples.
+  }
+  if (!bmsSeriesSub) {
+    bmsSeriesSub = addBmsSeriesListener((update) => applyBmsSeriesUpdate(update, set))
+  }
+  nativeSetBmsSeriesFocused(true)
+}
+
+/** Closes the focused Live BMS Series bridge stream and clears its JS window. */
+export function releaseBmsSeriesStream(): void {
+  if (bmsSeriesStreamRefs === 0) return
+  bmsSeriesStreamRefs -= 1
+  if (bmsSeriesStreamRefs > 0) return
+  removeBmsSeriesStream(useBleStore.setState as BleSet)
+}
+
 export const useBleStore = create<BleState & BleActions>((set, get) => ({
   status: 'idle',
   gpsStatus: 'idle',
@@ -395,6 +472,8 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
   telemetryRecordingPaused: false,
   recordDebugSession: false,
   latestBms: null,
+  bmsSeries: [],
+  bmsSeriesWindowMs: null,
   remoteTilt: null,
 
   startScan() {
@@ -461,6 +540,9 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
     nativeSetSelectedBoard(boardId)
     try {
       await nativeSelectBoard(boardId)
+      if (bmsSeriesStreamRefs > 0) {
+        nativeSetBmsSeriesFocused(true)
+      }
     } catch {
       get().syncNativeState()
     }

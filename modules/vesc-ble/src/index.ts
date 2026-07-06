@@ -267,6 +267,19 @@ export interface BmsEvent {
   canId: number | null
 }
 
+export interface BmsSeriesFrame {
+  capturedAt: number
+  cellVoltages: number[]
+  balancing: boolean[]
+}
+
+export interface BmsSeriesUpdate {
+  mode: 'snapshot' | 'append'
+  generation: number
+  windowMs: number
+  frames: BmsSeriesFrame[]
+}
+
 export interface LiveMetricExclusionUpdate {
   lastPacketAt: number
   metricExclusions: Record<string, boolean>
@@ -470,6 +483,8 @@ export interface HistoryRange {
 
 /** Float64 lanes per sample in the columnar board payload. Must match the native encoder. */
 const SAMPLE_COLUMN_COUNT = 25
+const BMS_SERIES_FIXED_LANES = 3
+const BMS_SERIES_BALANCE_LANE_BITS = 30
 
 /**
  * Native `getHistoryRange` shape: board samples arrive as one columnar Float64 ArrayBuffer (25
@@ -527,6 +542,47 @@ function decodeBoardSamples(range: NativeHistoryRange): TelemetrySample[] {
     }
   }
   return samples
+}
+
+interface NativeBmsSeriesEvent {
+  mode: 'snapshot' | 'append'
+  generation: number
+  windowMs: number
+  cellCount: number
+  count: number
+  columns: ArrayBuffer
+}
+
+const hasLaneBit = (bits: number, bit: number): boolean => Math.floor(bits / 2 ** bit) % 2 === 1
+
+/** Decode the Live BMS Series columnar buffer from native into public domain frames. */
+function decodeBmsSeriesFrames(event: NativeBmsSeriesEvent): BmsSeriesFrame[] {
+  const { cellCount, count, columns } = event
+  if (!count || !cellCount || !columns) return []
+  const laneCount = BMS_SERIES_FIXED_LANES + cellCount
+  const lanes = new Float64Array(columns)
+  const frameCount = Math.min(count, Math.floor(lanes.length / laneCount))
+  const frames = new Array<BmsSeriesFrame>(frameCount)
+  for (let row = 0; row < frameCount; row++) {
+    const o = row * laneCount
+    const bitsLo = lanes[o + 1]
+    const bitsHi = lanes[o + 2]
+    const cellVoltages = new Array<number>(cellCount)
+    const balancing = new Array<boolean>(cellCount)
+    for (let cell = 0; cell < cellCount; cell++) {
+      cellVoltages[cell] = lanes[o + BMS_SERIES_FIXED_LANES + cell]
+      balancing[cell] =
+        cell < BMS_SERIES_BALANCE_LANE_BITS
+          ? hasLaneBit(bitsLo, cell)
+          : hasLaneBit(bitsHi, cell - BMS_SERIES_BALANCE_LANE_BITS)
+    }
+    frames[row] = {
+      capturedAt: lanes[o],
+      cellVoltages,
+      balancing,
+    }
+  }
+  return frames
 }
 
 export interface TelemetrySummary {
@@ -833,6 +889,7 @@ type VescBleEvents = {
   /** Batched full samples (~3Hz) for history buffer and detail charts. */
   onTelemetryHistory: (event: TelemetryHistoryEvent) => void
   onBms: (event: BmsEvent) => void
+  onBmsSeries: (event: NativeBmsSeriesEvent) => void
   onLocation: (event: LocationEvent) => void
   onTelemetryRebuildProgress: (event: TelemetryRebuildProgressEvent) => void
   onBoardProbeProgress: (event: BoardProbeProgressEvent) => void
@@ -882,6 +939,7 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
   leaveGroupRide(): void
   updateGroupRideIdentity(riderId: string, riderName: string, riderColor: string | null): void
   setTelemetryRecordingEnabled(enabled: boolean): void
+  setBmsSeriesFocused(focused: boolean): void
   reloadAlertRules(): void
   getCriticalRideNotificationPermissionStatus(): Promise<CriticalRideNotificationPermissionStatus>
   requestCriticalRideNotificationPermission(): Promise<CriticalRideNotificationPermissionStatus>
@@ -1106,6 +1164,11 @@ export function updateGroupRideIdentity({
 /** Enable or disable native SQLite telemetry history writes. */
 export function setTelemetryRecordingEnabled(enabled: boolean): void {
   native.setTelemetryRecordingEnabled(enabled)
+}
+
+/** Open/close native bridge pushes for the Live BMS Series. Native retention keeps running. */
+export function setBmsSeriesFocused(focused: boolean): void {
+  native.setBmsSeriesFocused(focused)
 }
 
 /** Tell the Android foreground service to re-read alert rules from native storage. */
@@ -1622,6 +1685,17 @@ export function addTelemetryHistoryListener(
 
 export function addBmsListener(cb: (event: BmsEvent) => void): EventSubscription {
   return emitter.addListener('onBms', cb)
+}
+
+export function addBmsSeriesListener(cb: (event: BmsSeriesUpdate) => void): EventSubscription {
+  return emitter.addListener('onBmsSeries', (event) => {
+    cb({
+      mode: event.mode,
+      generation: event.generation,
+      windowMs: event.windowMs,
+      frames: decodeBmsSeriesFrames(event),
+    })
+  })
 }
 
 export function addLocationListener(cb: (event: LocationEvent) => void): EventSubscription {

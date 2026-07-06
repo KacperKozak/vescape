@@ -15,6 +15,7 @@ import android.util.Log
 import java.io.File
 import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
+import expo.modules.kotlin.jni.NativeArrayBuffer
 import expo.modules.vescble.config.ConfigRWEvent
 import expo.modules.vescble.connection.ConnectPhaseTimeout
 import expo.modules.vescble.connection.ConnectionCoordinator
@@ -296,6 +297,7 @@ internal class BoardSessionController(private val service: VescForegroundService
             cancelBoardReadyTimeout()
             stopPolling()
             gattClient.clear(markIntentional = false)
+            bmsSeriesRing.clear()
             telemetryPipeline.clearLiveTelemetry()
             directConnection = false
             boardError = reason
@@ -408,6 +410,11 @@ internal class BoardSessionController(private val service: VescForegroundService
     private var batteryConfigCache: Map<String, Any?>? = null
     /** Median window producing the Battery SoC Estimate for display + alerts (ADR-0016). */
     private val socWindow = SocMedianWindow()
+    /** Live BMS Series retention (window shared with [telemetryPipeline]); push gated by [bmsSeriesFocused]. */
+    private val bmsSeriesRing = BmsSeriesRing()
+    /** True while the battery-detail view is focused (JS intent); gates the `onBmsSeries` push only. */
+    @Volatile
+    private var bmsSeriesFocused = false
     private var lastBatteryPersistedAt = 0L
     private var boardStatus: BoardPhase = BoardPhase.Idle
     private var boardError: String? = null
@@ -696,6 +703,7 @@ internal class BoardSessionController(private val service: VescForegroundService
         latestDutyExcluded = false
         loadBatteryConfig(start.boardConfig.appBoardId)
         socWindow.reset()
+        bmsSeriesRing.clear()
         telemetryPipeline.beginSession(session, start.boardConfig)
         // Tag telemetry frames with the CAN id resolved from the stored transport.
         telemetryPipeline.updateCanId(canId)
@@ -997,6 +1005,44 @@ internal class BoardSessionController(private val service: VescForegroundService
     private fun handleBmsPayload(payload: ByteArray) {
         val bms = parseBmsValues(payload, System.currentTimeMillis()) ?: return
         emitEvent("onBms", bms.toMap())
+        // Retention is unconditional (the frame already arrived); only the push below is gated.
+        val frame = bmsSeriesRing.append(
+            capturedAtMs = bms.capturedAt,
+            cellVoltages = bms.cellVoltages,
+            balancing = bms.balancing,
+            windowMs = telemetryPipeline.recentWindowMs(),
+        )
+        if (frame != null && bmsSeriesFocused) emitBmsSeries("append", listOf(frame))
+    }
+
+    /**
+     * Battery-detail focus/blur intent from JS. Focus flips the gate open and immediately pushes
+     * the whole windowed Live BMS Series as one columnar buffer; while focused each new BMS frame
+     * follows as a single-row `append`. Blur just closes the gate — retention keeps running.
+     * @parity /modules/vesc-ble/ios/connection/BoardSessionController.swift (setBmsSeriesFocused)
+     */
+    fun setBmsSeriesFocused(focused: Boolean) {
+        bmsSeriesFocused = focused
+        if (!focused) return
+        emitBmsSeries(
+            "snapshot",
+            bmsSeriesRing.snapshot(telemetryPipeline.recentWindowMs(), System.currentTimeMillis()),
+        )
+    }
+
+    private fun emitBmsSeries(mode: String, frames: List<BmsSeriesFrame>) {
+        val cellCount = bmsSeriesRing.cellCount()
+        emitEvent(
+            "onBmsSeries",
+            mapOf(
+                "mode" to mode,
+                "generation" to currentSessionId,
+                "windowMs" to telemetryPipeline.recentWindowMs(),
+                "cellCount" to cellCount,
+                "count" to frames.size,
+                "columns" to NativeArrayBuffer.wrap(encodeBmsSeriesColumns(frames, cellCount)),
+            ),
+        )
     }
 
     private fun handleFwVersionPayload(payload: ByteArray) {
@@ -1238,6 +1284,7 @@ internal class BoardSessionController(private val service: VescForegroundService
         telemetry = null
         boardSession?.invalidate()
         boardSession = null
+        bmsSeriesRing.clear()
         telemetryPipeline.endSession()
         sessionSequence += 1
         boardConfig = null

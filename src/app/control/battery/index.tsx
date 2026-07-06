@@ -1,5 +1,5 @@
-import { useLayoutEffect, useEffect, useMemo } from 'react'
-import { useNavigation, useRouter } from 'expo-router'
+import { useLayoutEffect, useEffect, useMemo, useCallback } from 'react'
+import { useNavigation, useRouter, useFocusEffect } from 'expo-router'
 import { BracketsCurlyIcon } from 'phosphor-react-native'
 import { useSharedValue } from 'react-native-reanimated'
 
@@ -15,6 +15,7 @@ import { theme } from '@/constants/theme'
 import { useLiveMetric, liveSelectors } from '@/hooks/useLiveMetric'
 import { deriveBatteryConfig } from '@/lib/battery'
 import { useBoardStore } from '@/store/boardStore'
+import { acquireBmsSeriesStream, releaseBmsSeriesStream } from '@/store/bleStore'
 import { routes } from '@/navigation/routes'
 import { useLiveWindowMs } from '@/store/settingsStore'
 
@@ -50,6 +51,13 @@ export default function BatteryScreen() {
       ),
     })
   }, [navigation, router])
+
+  useFocusEffect(
+    useCallback(() => {
+      acquireBmsSeriesStream()
+      return releaseBmsSeriesStream
+    }, []),
+  )
 
   const percentPoints = useMemo(() => toTelemetryChartPoints(batteryPercent), [batteryPercent])
   const voltagePoints = useMemo(() => toTelemetryChartPoints(batteryVoltage), [batteryVoltage])

@@ -51,7 +51,7 @@ public class VescBleModule: Module {
   public func definition() -> ModuleDefinition {
     Name("VescBle")
 
-    Events("onDevice", "onError", "onLiveState", "onLiveTick", "onLiveSeries", "onTelemetryHistory", "onBms", "onLocation", "onTelemetryRebuildProgress", "onBoardProbeProgress", "onAppDataChanged", "onGroupRideConnection", "onGroupRideSnapshot", "onGroupRideCreated", "onGroupRideUpdated", "onGroupRideEnded", "onGroupRideJoined", "onGroupRideRoster", "onGroupRideError")
+    Events("onDevice", "onError", "onLiveState", "onLiveTick", "onLiveSeries", "onTelemetryHistory", "onBms", "onBmsSeries", "onLocation", "onTelemetryRebuildProgress", "onBoardProbeProgress", "onAppDataChanged", "onGroupRideConnection", "onGroupRideSnapshot", "onGroupRideCreated", "onGroupRideUpdated", "onGroupRideEnded", "onGroupRideJoined", "onGroupRideRoster", "onGroupRideError")
 
     // Track per-event JS listeners so native skips emitting into the void, and gate the whole
     // firehose on app foreground (see `frontendActive`). Mirrors Android's observing + lifecycle
@@ -70,6 +70,8 @@ public class VescBleModule: Module {
     OnStopObserving("onTelemetryHistory") { self.observedEvents.remove("onTelemetryHistory") }
     OnStartObserving("onBms") { self.observedEvents.insert("onBms") }
     OnStopObserving("onBms") { self.observedEvents.remove("onBms") }
+    OnStartObserving("onBmsSeries") { self.observedEvents.insert("onBmsSeries") }
+    OnStopObserving("onBmsSeries") { self.observedEvents.remove("onBmsSeries") }
     OnStartObserving("onLocation") { self.observedEvents.insert("onLocation") }
     OnStopObserving("onLocation") { self.observedEvents.remove("onLocation") }
     OnStartObserving("onTelemetryRebuildProgress") { self.observedEvents.insert("onTelemetryRebuildProgress") }
@@ -176,6 +178,13 @@ public class VescBleModule: Module {
 
     Function("reloadAlertRules") {
       self.coordinator.reloadAlertRules()
+    }
+
+    // MARK: Live BMS Series focus gate
+
+    // @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt `setBmsSeriesFocused`
+    Function("setBmsSeriesFocused") { (focused: Bool) in
+      self.coordinator.setBmsSeriesFocused(focused)
     }
 
     AsyncFunction("getCriticalRideNotificationPermissionStatus") { (promise: Promise) in
