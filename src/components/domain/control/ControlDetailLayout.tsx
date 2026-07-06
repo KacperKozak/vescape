@@ -1,7 +1,8 @@
 import { useNavigation } from 'expo-router'
 import { BellRingingIcon } from 'phosphor-react-native'
 import { type ReactNode, useEffect } from 'react'
-import { ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ScrollView, StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 
 import { AlertsSection } from './AlertsSection'
 import { theme } from '@/constants/theme'

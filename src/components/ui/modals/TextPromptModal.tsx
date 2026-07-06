@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Modal, Pressable, Text, View, StyleSheet } from 'react-native'
+import { Modal, Pressable, View, StyleSheet } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { CheckIcon } from 'phosphor-react-native'
 import { theme } from '@/constants/theme'
 import { Input } from '@/components/ui/forms/Input'

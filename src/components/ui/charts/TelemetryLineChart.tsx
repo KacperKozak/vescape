@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { PanResponder, StyleSheet, Text, TextInput, View } from 'react-native'
+import { PanResponder, StyleSheet, TextInput, View } from 'react-native'
 import type { LayoutChangeEvent, StyleProp, TextStyle, ViewStyle } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import Animated, {
   useAnimatedProps,
   useAnimatedStyle,

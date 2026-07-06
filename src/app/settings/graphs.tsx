@@ -1,4 +1,5 @@
-import { View, Text, Switch, StyleSheet, ScrollView } from 'react-native'
+import { View, Switch, StyleSheet, ScrollView } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { GaugeIcon, ChartLineUpIcon } from 'phosphor-react-native'
 import { useShallow } from 'zustand/react/shallow'

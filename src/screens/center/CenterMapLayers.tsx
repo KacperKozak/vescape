@@ -11,7 +11,8 @@ import {
   SymbolLayer,
 } from '@rnmapbox/maps'
 import { useEffect, useMemo, useState } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import type { MapPoint, MapPointKind } from 'vesc-ble'
 
 import { MediaHistoryPin } from '@/components/domain/history/MediaHistoryPin'

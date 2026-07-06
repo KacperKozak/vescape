@@ -1,5 +1,6 @@
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, StyleSheet, View } from 'react-native'
 import type { StyleProp, ViewStyle } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import type { Icon } from 'phosphor-react-native'
 
 import { theme } from '@/constants/theme'

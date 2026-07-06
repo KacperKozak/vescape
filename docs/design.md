@@ -143,6 +143,18 @@ For screen headers showing metadata (version, OS, DB size), use centered text wi
 
 ## Typography
 
+The app's UI font is **Raleway** (Google Fonts variable), loaded in `src/app/_layout.tsx` via `expo-font`'s `useFonts` before the `Stack` mounts. The splash stays visible until the variable font is ready on cold start.
+
+Every `Text` instance renders through the wrapper at `src/components/ui/base/Text.tsx`, which injects `fontFamily: theme.font` by default. Import `Text` from `@/components/ui/base/Text` — never import `Text` from `react-native` directly for UI text.
+
+- `theme.font` (`'Raleway'`) in `src/constants/theme.ts` is the single source of truth for the font family string. Components reference `theme.font` (or rely on the wrapper); never inline `'Raleway'` in a component or style.
+- Raleway is a variable font, so numeric `fontWeight` (`'400'` … `'800'`) resolves to the right outline from one `.ttf` file at `assets/fonts/Raleway.ttf`.
+- Numeric readouts that use `fontFamily: 'monospace'` (event log, raw settings, IMU telemetry, BMS cells, gauges — search `fontFamily: 'monospace'`) **opt out** of Raleway. Pass an explicit `fontFamily: 'monospace'` on those `Text` styles to keep them monospace.
+- Stack header titles (and any style fed to a native component that bypasses the wrapper) must set `fontFamily: theme.font` explicitly — see `src/app/_layout.tsx` `headerTitleStyle`.
+- `fontVariant: ['tabular-nums']` still aligns numeric columns on Raleway.
+
+Typography roles:
+
 | Role          | Size  | Weight | Token                         |
 | ------------- | ----- | ------ | ----------------------------- |
 | Screen title  | 20    | 700    | `theme.neutral.textPrimary`   |
@@ -151,6 +163,8 @@ For screen headers showing metadata (version, OS, DB size), use centered text wi
 | Section title | 12–13 | 700    | `theme.neutral.textMuted`     |
 | Metadata      | 12    | 600    | `theme.neutral.textSecondary` |
 | Stepper value | 15    | 700    | `theme.neutral.textPrimary`   |
+
+Preview every role live under **Settings → Components → Typography** (`src/app/settings/components/typography.tsx`).
 
 ## Avoid
 

@@ -206,5 +206,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     fontSize: 13,
     fontWeight: '600',
+    fontFamily: theme.font,
   },
 })

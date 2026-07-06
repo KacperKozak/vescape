@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 import type { LayoutChangeEvent } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { Canvas } from '@shopify/react-native-skia'
 
 import {

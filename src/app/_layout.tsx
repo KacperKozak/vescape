@@ -1,5 +1,7 @@
 import * as Sentry from '@sentry/react-native'
+import { useFonts } from 'expo-font'
 import { Stack } from 'expo-router'
+import * as SplashScreen from 'expo-splash-screen'
 import { StatusBar } from 'expo-status-bar'
 import { useEffect } from 'react'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
@@ -15,9 +17,22 @@ import { useRiderStore } from '@/store/riderStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { theme } from '@/constants/theme'
 
+// Keep the native splash visible until Raleway loads so there is no font-flash
+// on cold start. `expo-router` already prevents auto-hide; this makes the gate
+// explicit and ties `hideAsync()` to font readiness.
+void SplashScreen.preventAutoHideAsync()
+
 initSentry()
 
 function RootLayout() {
+  const [fontsLoaded, fontError] = useFonts({
+    Raleway: require('../../assets/fonts/Raleway.ttf'),
+  })
+
+  useEffect(() => {
+    if (fontsLoaded || fontError) void SplashScreen.hideAsync()
+  }, [fontsLoaded, fontError])
+
   useEffect(() => {
     void useSettingsStore.getState().load()
     void useAlertsStore.getState().load()
@@ -30,6 +45,10 @@ function RootLayout() {
     }
   }, [])
 
+  // Hold the splash until Raleway is ready (or fails to load). Returning null
+  // keeps the native splash up without an unmount/mount churn.
+  if (!fontsLoaded && !fontError) return null
+
   return (
     <DiagnosticErrorBoundary>
       <GestureHandlerRootView style={{ flex: 1 }}>
@@ -37,7 +56,7 @@ function RootLayout() {
           screenOptions={{
             headerStyle: { backgroundColor: theme.palette.slate.bg },
             headerTintColor: theme.palette.slate.textPrimary,
-            headerTitleStyle: { fontWeight: '600', fontSize: 14 },
+            headerTitleStyle: { fontFamily: theme.font, fontWeight: '600', fontSize: 14 },
             headerTitleAlign: 'center',
             headerShadowVisible: false,
             headerLeft: () => <HeaderBackButton />,

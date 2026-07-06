@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useMemo } from 'react'
-import { StyleSheet, Text, View, type ViewStyle } from 'react-native'
+import { StyleSheet, View, type ViewStyle } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import Animated, {
   useAnimatedStyle,
   type AnimatedStyle,

@@ -12,6 +12,7 @@ import {
   GearSixIcon,
   SquaresFourIcon,
   StackIcon,
+  TextAaIcon,
 } from 'phosphor-react-native'
 
 import { SettingsCard } from '@/components/ui/settings/SettingsCard'
@@ -26,6 +27,12 @@ const sections = [
     hint: 'Buttons, banners, device rows, badges, and other everyday building blocks',
     route: '/settings/components/base',
     icon: CubeIcon,
+  },
+  {
+    label: 'Typography',
+    hint: 'Raleway variable font across every UI text role, with weight and tabular-nums parity',
+    route: '/settings/components/typography',
+    icon: TextAaIcon,
   },
   {
     label: 'Charts',

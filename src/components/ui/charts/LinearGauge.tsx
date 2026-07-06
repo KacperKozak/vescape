@@ -2,12 +2,12 @@ import { type ReactNode, useCallback, useState } from 'react'
 import {
   Pressable,
   StyleSheet,
-  Text,
   View,
   type LayoutChangeEvent,
   type StyleProp,
   type ViewStyle,
 } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { Canvas, LinearGradient, Rect, RoundedRect, vec } from '@shopify/react-native-skia'
 
 import { type DualGaugeAlert } from '@/components/ui/charts/DualGauge'

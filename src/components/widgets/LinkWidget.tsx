@@ -1,4 +1,5 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { CaretRightIcon, type Icon } from 'phosphor-react-native'
 
 import { widgetSurface, type WidgetSize } from '@/components/widgets/widgetSurface'

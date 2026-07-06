@@ -1,4 +1,5 @@
-import { StyleSheet, Text } from 'react-native'
+import { StyleSheet } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { theme } from '@/constants/theme'
 
 export type SettingsSectionTitleProps = {

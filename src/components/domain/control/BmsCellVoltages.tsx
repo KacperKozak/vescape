@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 
 import { summarizeBms, type BmsCellGroup } from '@/lib/battery'
 import { useBleStore } from '@/store/bleStore'

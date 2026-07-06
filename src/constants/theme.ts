@@ -211,6 +211,10 @@ export const interaction = {
   pressedOpacity: 0.55,
 } as const
 
+/** App-wide UI font. Load via `useFonts` in `src/app/_layout.tsx` before first render.
+ *  Monospace readouts (`fontFamily: 'monospace'`) bypass this token by inlining their value. */
+export const font = 'Raleway' as const
+
 export const theme = {
   palette,
   telemetry,
@@ -221,4 +225,5 @@ export const theme = {
   weather,
   zone,
   interaction,
+  font,
 } as const

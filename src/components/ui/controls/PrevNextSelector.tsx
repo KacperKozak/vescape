@@ -1,6 +1,7 @@
 import { CaretLeftIcon, CaretRightIcon } from 'phosphor-react-native'
 import type { ReactNode } from 'react'
-import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
+import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 
 import { interaction, theme } from '@/constants/theme'
 

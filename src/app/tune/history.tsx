@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
-import { FlatList, StyleSheet, Text, View } from 'react-native'
+import { FlatList, StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { useRouter } from 'expo-router'
 import { ArrowCounterClockwiseIcon } from 'phosphor-react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'

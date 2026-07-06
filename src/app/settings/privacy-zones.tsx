@@ -6,10 +6,10 @@ import {
   Platform,
   Pressable,
   StyleSheet,
-  Text,
   useWindowDimensions,
   View,
 } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation } from 'expo-router'
 import { theme } from '@/constants/theme'

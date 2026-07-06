@@ -1,4 +1,5 @@
-import { StyleSheet, Switch, Text, View } from 'react-native'
+import { StyleSheet, Switch, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import type { Icon } from 'phosphor-react-native'
 
 import { widgetSurface, type WidgetSize } from '@/components/widgets/widgetSurface'

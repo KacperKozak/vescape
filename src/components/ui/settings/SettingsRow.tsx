@@ -1,5 +1,6 @@
 import { type ReactNode } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { CaretRightIcon } from 'phosphor-react-native'
 import type { Icon, IconWeight } from 'phosphor-react-native'
 import { theme } from '@/constants/theme'

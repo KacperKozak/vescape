@@ -9,7 +9,8 @@ import {
   useState,
   type ElementRef,
 } from 'react'
-import { Animated, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
+import { Animated, StyleSheet, View, type LayoutChangeEvent } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import type { LocationEvent, MapPoint, MapPointKind } from 'vesc-ble'
 
 import { InfoModal } from '@/components/ui/modals/InfoModal'

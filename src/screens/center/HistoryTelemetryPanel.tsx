@@ -1,6 +1,7 @@
 import { CaretDownIcon, ImagesSquareIcon, CloudArrowUpIcon } from 'phosphor-react-native'
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { useSharedValue } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 

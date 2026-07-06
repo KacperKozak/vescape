@@ -1,7 +1,8 @@
 /* eslint-disable react-hooks/immutability, react-hooks/refs */
 import * as Haptics from 'expo-haptics'
 import { use, useCallback, useEffect, useMemo, useRef } from 'react'
-import { Platform, StyleSheet, Text, TextInput, View } from 'react-native'
+import { Platform, StyleSheet, TextInput, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import Animated, {
   cancelAnimation,
