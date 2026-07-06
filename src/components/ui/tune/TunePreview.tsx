@@ -13,6 +13,7 @@ import { interaction, theme } from '@/constants/theme'
 import {
   DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS,
   TUNE_PREVIEW_RESET_SPEED_KMH,
+  TUNE_PREVIEW_MODEL_VERSION,
   calculateGroundToBoardAngleDegrees,
   createTunePreviewModel,
   createTunePreviewState,
@@ -64,7 +65,12 @@ export function TunePreview({
   active = true,
   onHelp,
 }: TunePreviewProps) {
-  const model = useMemo(() => createTunePreviewModel(fields), [fields])
+  const model = useMemo(
+    () => createTunePreviewModel(fields),
+    // Restart the animation loop after a model hot reload instead of retaining its old closure.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [fields, TUNE_PREVIEW_MODEL_VERSION],
+  )
   const { width: canvasWidth } = useWindowDimensions()
   const stateRef = useRef(createTunePreviewState(TUNE_PREVIEW_RESET_SPEED_KMH))
   const lastTimestampRef = useRef<number | null>(null)

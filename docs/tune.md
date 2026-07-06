@@ -2,7 +2,7 @@
 
 ## Tune Preview model
 
-The flat-response Tune Preview uses model version `refloat-bundled-legacy-v17`, tied to
+The flat-response Tune Preview uses model version `refloat-bundled-legacy-v18`, tied to
 `modules/vesc-ble/android/src/main/assets/refloat-settings.xml`. It is a deterministic Refloat
 controller simulation around a simplified Board plant. Pitch Input adds a bounded pitch rate
 of up to `130°/s` while held. A symmetric quadratic ease-out makes the center more responsive:
@@ -69,7 +69,8 @@ therefore a comparison tool, not a calibrated prediction of real motor current.
 Preview speed is always dynamic: it starts at `15 km/h`, and tune-derived controller current changes
 it through the always-active physical model. The reset button beside the speed readout restores
 `15 km/h` and clears the measured-acceleration derivative so the reset does not create a false ATR
-impulse. Speed remains within `0-50 km/h`, reverse is unsupported, and the
+impulse. Speed remains within `-50..50 km/h`; signed ERPM preserves direction while Refloat speed
+thresholds use its magnitude. Pitch Input can therefore carry Board through zero into reverse. The
 evolving value feeds the existing ERPM, tilt, ATR, terrain-phase, and ground-travel paths. The model
 does not predict an exact real braking distance, power, traction, deck-ground contact, rider body
 movement, or safety.

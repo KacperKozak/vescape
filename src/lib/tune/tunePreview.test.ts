@@ -542,7 +542,7 @@ describe('Tune Preview longitudinal response', () => {
 
   test('maps the documented reference wheel speed to ERPM', () => {
     expect(speedKmhToReferenceErpm(3.5)).toBeCloseTo(1000)
-    expect(speedKmhToReferenceErpm(-5)).toBe(0)
+    expect(speedKmhToReferenceErpm(-3.5)).toBeCloseTo(-1000)
     expect(speedKmhToReferenceErpm(50)).toBeCloseTo(50_000 / 3.5)
     expect(speedKmhToReferenceErpm(60)).toBeCloseTo(50_000 / 3.5)
   })
@@ -856,7 +856,7 @@ describe('Tune Preview longitudinal response', () => {
     expect(stepTunePreview(state, parameters, { ...input, paused: true }, 1)).toBe(state)
   })
 
-  test('dynamic speed remains finite, bounded, and never reverses', () => {
+  test('dynamic speed remains finite and bounded in both directions', () => {
     const parameters = readyParameters()
     let upper = { ...createTunePreviewState(49.5), targetAngleDegrees: -35 }
     let lower = { ...createTunePreviewState(0.5), targetAngleDegrees: 35 }
@@ -878,15 +878,60 @@ describe('Tune Preview longitudinal response', () => {
         0.25,
       )
     }
-    expect(upper.syntheticSpeedKmh).toBeGreaterThanOrEqual(0)
+    expect(upper.syntheticSpeedKmh).toBeGreaterThanOrEqual(-MAX_TUNE_PREVIEW_SPEED_KMH)
     expect(upper.syntheticSpeedKmh).toBeLessThanOrEqual(MAX_TUNE_PREVIEW_SPEED_KMH)
-    expect(lower.syntheticSpeedKmh).toBeGreaterThanOrEqual(0)
+    expect(lower.syntheticSpeedKmh).toBeGreaterThanOrEqual(-MAX_TUNE_PREVIEW_SPEED_KMH)
     expect(lower.syntheticSpeedKmh).toBeLessThanOrEqual(MAX_TUNE_PREVIEW_SPEED_KMH)
     expect(
       Object.values(lower)
         .filter((value): value is number => typeof value === 'number')
         .every(Number.isFinite),
     ).toBe(true)
+  })
+
+  test('Pitch Input can carry speed through zero into reverse', () => {
+    const tunes = [
+      { kp: 15, kp2: 0.4, ki: 0.015 },
+      { kp: 20, kp2: 0.6, ki: 0.02 },
+      { kp: 30, kp2: 1.1, ki: 0.03 },
+    ]
+
+    for (const tune of tunes) {
+      const parameters = readyParameters({ ...baseFields, ...tune })
+      let state = createTunePreviewState(15)
+      let crossingFrame: number | null = null
+      for (let frame = 0; frame < 600; frame += 1) {
+        state = stepTunePreview(
+          state,
+          parameters,
+          {
+            pitchInputDegrees: MAX_PITCH_INPUT_DEGREES,
+            pitchInputActive: true,
+            speedKmh: state.syntheticSpeedKmh,
+          },
+          1 / 60,
+        )
+        if (crossingFrame == null && state.syntheticSpeedKmh < 0) crossingFrame = frame
+      }
+
+      expect(crossingFrame).not.toBeNull()
+      expect(crossingFrame as number).toBeLessThan(120)
+      expect(state.syntheticSpeedKmh).toBeLessThan(-1)
+      expect(state.erpm).toBeLessThan(0)
+      expect(state.groundTravelMeters).toBeLessThan(0)
+    }
+  })
+
+  test('Brake Tilt recognizes braking current while traveling in reverse', () => {
+    const target = calculateLongitudinalTarget(
+      { ...createTunePreviewState(-15), angleDegrees: -3 },
+      readyParameters(),
+      { pitchInputDegrees: 0, speedKmh: -15 },
+      1,
+      60,
+    )
+
+    expect(target.brakeTiltDegrees).toBeLessThan(0)
   })
 
   test('reset restores speed without creating a false measured-acceleration impulse', () => {

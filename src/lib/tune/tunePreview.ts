@@ -8,7 +8,7 @@ import {
 // Longitudinal target equations and transition signs derive from Refloat v1.2.1
 // torque_tilt.c and brake_tilt.c (GPL-3.0-or-later), matching the bundled schema.
 
-export const TUNE_PREVIEW_MODEL_VERSION = 'refloat-bundled-legacy-v17' as const
+export const TUNE_PREVIEW_MODEL_VERSION = 'refloat-bundled-legacy-v18' as const
 export const REFERENCE_ERPM_PER_KMH = 1000 / 3.5
 export const MAX_TUNE_PREVIEW_SPEED_KMH = 50
 export const TUNE_PREVIEW_RESET_SPEED_KMH = 15
@@ -307,7 +307,10 @@ export function resetTunePreviewSpeed(
 }
 
 export function speedKmhToReferenceErpm(speedKmh: number): number {
-  return clamp(speedKmh, 0, MAX_TUNE_PREVIEW_SPEED_KMH) * REFERENCE_ERPM_PER_KMH
+  return (
+    clamp(speedKmh, -MAX_TUNE_PREVIEW_SPEED_KMH, MAX_TUNE_PREVIEW_SPEED_KMH) *
+    REFERENCE_ERPM_PER_KMH
+  )
 }
 
 export function resolveTunePreviewPhysics(
@@ -376,7 +379,7 @@ export function speedKmhToErpm(
     REFERENCE_ERPM_PER_KMH *
     (resolved.motorPoleCount / DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS.motorPoleCount) *
     (DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS.wheelDiameterInches / resolved.wheelDiameterInches)
-  return clamp(speedKmh, 0, MAX_TUNE_PREVIEW_SPEED_KMH) * setupErpmPerKmh
+  return clamp(speedKmh, -MAX_TUNE_PREVIEW_SPEED_KMH, MAX_TUNE_PREVIEW_SPEED_KMH) * setupErpmPerKmh
 }
 
 export function groundTravelToVisualOffset(groundTravelMeters: number): number {
@@ -401,8 +404,14 @@ export function calculateLongitudinalTarget(
   syntheticCurrentAmps: number,
 ): TunePreviewTarget {
   const erpm = speedKmhToErpm(input.speedKmh, input.advancedPhysics)
+  const erpmMagnitude = Math.abs(erpm)
   const torqueTarget = torqueTiltTarget(parameters, syntheticCurrentAmps)
-  const torqueRate = torqueTiltRate(state.torqueTiltDegrees, torqueTarget, parameters, erpm)
+  const torqueRate = torqueTiltRate(
+    state.torqueTiltDegrees,
+    torqueTarget,
+    parameters,
+    erpmMagnitude,
+  )
   const torqueTiltDegrees = moveTowards(
     state.torqueTiltDegrees,
     torqueTarget,
@@ -410,8 +419,8 @@ export function calculateLongitudinalTarget(
   )
 
   const constantTiltbackDegrees =
-    erpm >= parameters.tiltbackConstantErpm ? parameters.tiltbackConstant : 0
-  const variableProgress = Math.max(erpm - parameters.tiltbackVariableErpm, 0) / 1000
+    erpmMagnitude >= parameters.tiltbackConstantErpm ? parameters.tiltbackConstant : 0
+  const variableProgress = Math.max(erpmMagnitude - parameters.tiltbackVariableErpm, 0) / 1000
   const variableMagnitude = Math.min(
     parameters.tiltbackVariable * variableProgress,
     Math.abs(parameters.tiltbackVariableMax),
@@ -425,11 +434,11 @@ export function calculateLongitudinalTarget(
   const brakeRate = brakeApplying
     ? parameters.atrOnSpeed * 1.5
     : parameters.atrOffSpeed / Math.max(parameters.brakeTiltLingering, 1)
-  const lowSpeedBrakeRate = erpm < 800 ? parameters.atrOnSpeed : brakeRate
+  const lowSpeedBrakeRate = erpmMagnitude < 800 ? parameters.atrOnSpeed : brakeRate
   const brakeTiltDegrees = moveTowards(
     state.brakeTiltDegrees,
     brakeTarget,
-    lowSpeedBrakeRate * (erpm < 500 ? 0.5 : 1) * elapsedSeconds,
+    lowSpeedBrakeRate * (erpmMagnitude < 500 ? 0.5 : 1) * elapsedSeconds,
   )
 
   const totalDegrees = clamp(
@@ -524,7 +533,8 @@ function stepFixed(
     dt,
     filteredCurrentAmps,
   )
-  const braking = filteredCurrentAmps < 0
+  const braking =
+    syntheticSpeedKmh === 0 ? filteredCurrentAmps < 0 : filteredCurrentAmps * syntheticSpeedKmh < 0
   const ratio = Math.max(braking ? parameters.atrAmpsDecelRatio : parameters.atrAmpsAccelRatio, 0.1)
   const erpmSign = target.erpm === 0 ? 0 : Math.sign(syntheticSpeedKmh || 1)
   const expectedAcceleration = calculateAtrExpectedAcceleration(
@@ -533,19 +543,26 @@ function stepFixed(
     ratio,
   )
   const rawAccelDiff = expectedAcceleration - state.measuredAccelerationErpmPerTick
+  const targetErpmMagnitude = Math.abs(target.erpm)
   const accelDiffAlpha =
-    target.erpm > 2000 ? 0.1 : target.erpm > 1000 ? 0.05 : target.erpm > 250 ? 0.02 : 1
+    targetErpmMagnitude > 2000
+      ? 0.1
+      : targetErpmMagnitude > 1000
+        ? 0.05
+        : targetErpmMagnitude > 250
+          ? 0.02
+          : 1
   const atrAccelDiff =
-    target.erpm > 250
+    targetErpmMagnitude > 250
       ? state.atrAccelDiff + (rawAccelDiff - state.atrAccelDiff) * accelDiffAlpha
       : 0
   let atrStrength = atrAccelDiff >= 0 ? parameters.atrStrengthUp : parameters.atrStrengthDown
-  if (target.erpm > 3000 && !braking) {
+  if (targetErpmMagnitude > 3000 && !braking) {
     const span =
       Math.abs(parameters.atrSpeedBoost) > 0.4
         ? (Math.abs(parameters.atrSpeedBoost) - 0.4) * 5000 + 3000
         : 3000
-    atrStrength *= 1 + Math.min(1, (target.erpm - 3000) / span) * parameters.atrSpeedBoost
+    atrStrength *= 1 + Math.min(1, (targetErpmMagnitude - 3000) / span) * parameters.atrSpeedBoost
   }
   const threshold = braking ? parameters.atrThresholdDown : parameters.atrThresholdUp
   const rawAtr = atrStrength * atrAccelDiff
@@ -565,8 +582,8 @@ function stepFixed(
   ) {
     atrRate *= parameters.atrTransitionBoost
   }
-  if (target.erpm > 2500) atrRate *= parameters.atrResponseBoost
-  if (target.erpm > 6000) atrRate *= parameters.atrResponseBoost
+  if (targetErpmMagnitude > 2500) atrRate *= parameters.atrResponseBoost
+  if (targetErpmMagnitude > 6000) atrRate *= parameters.atrResponseBoost
   const atrDegrees = moveTowards(state.atrDegrees, atrTargetDegrees, atrRate * dt)
   target.atrDegrees = atrDegrees
   const adaptiveDegrees = atrDegrees + target.brakeTiltDegrees
@@ -735,8 +752,8 @@ function brakeTiltTarget(
 ): number {
   if (
     parameters.brakeTiltStrength <= 0 ||
-    syntheticCurrentAmps >= 0 ||
-    erpm <= 2000 ||
+    syntheticCurrentAmps * Math.sign(erpm) >= 0 ||
+    Math.abs(erpm) <= 2000 ||
     Math.sign(balanceOffsetDegrees) === Math.sign(erpm)
   ) {
     return 0
@@ -848,7 +865,9 @@ function clampFinite(value: number, min: number, max: number, fallback: number):
 }
 
 function boundedSpeed(speedKmh: number): number {
-  return Number.isFinite(speedKmh) ? clamp(speedKmh, 0, MAX_TUNE_PREVIEW_SPEED_KMH) : 0
+  return Number.isFinite(speedKmh)
+    ? clamp(speedKmh, -MAX_TUNE_PREVIEW_SPEED_KMH, MAX_TUNE_PREVIEW_SPEED_KMH)
+    : 0
 }
 
 function finiteOrZero(value: number): number {

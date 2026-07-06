@@ -441,7 +441,7 @@ export default function TuneScreen() {
         visible={previewHelpVisible}
         variant="warning"
         title="Work in progress"
-        message="Tune editing and Tune Preview are experimental. Hold Pitch Input to add Board pitch rate over time; farther slider displacement adds angle error faster. Release it to compare how the tune recovers from the resulting state. Refloat PID current and dynamic speed are comparative outputs of that error. The preview does not model rider weight, traction, drag, power limits, voltage sag, braking distance, deck-ground contact, or safety. Do not ride with these settings until you have verified them on the bench and confirmed safe behaviour."
+        message="Tune editing and Tune Preview are experimental. Hold Pitch Input to add Board pitch rate over time; farther slider displacement adds angle error faster. Release it to compare how the tune recovers from the resulting state. Refloat PID current and dynamic speed are comparative outputs of that error. The speed is signed, so Pitch Input can carry Board through zero into reverse; Reflow speed thresholds use its magnitude while ERPM preserves direction. The preview does not model rider weight, traction, drag, power limits, voltage sag, braking distance, deck-ground contact, or safety. Do not ride with these settings until you have verified them on the bench and confirmed safe behaviour."
         onDismiss={() => setPreviewHelpVisible(false)}
       />
 
