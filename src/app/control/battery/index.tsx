@@ -133,7 +133,7 @@ export default function BatteryScreen() {
         scrubTimeMs={scrubTimeMs}
         height={80}
       />
-      <BmsCellVoltages />
+      <BmsCellVoltages scrubTimeMs={scrubTimeMs} windowMs={windowMs} />
     </ControlDetailLayout>
   )
 }

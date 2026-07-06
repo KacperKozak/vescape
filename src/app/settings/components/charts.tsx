@@ -11,7 +11,7 @@ import { computeAutoRange, type TelemetryChartPoint } from '@/components/ui/char
 import { SingleGauge } from '@/components/ui/charts/DualGauge'
 import { Sparkline, type SparklinePoint } from '@/components/ui/charts/Sparkline'
 import { BmsCellVoltagesView } from '@/components/domain/control/BmsCellVoltages'
-import { summarizeBms } from '@/lib/battery'
+import { summarizeBms, summarizeBmsWindow } from '@/lib/battery'
 import { ShowcaseCard } from '@/components/ui/dev/ShowcaseCard'
 import { ChipRow, ToggleRow } from '@/components/ui/dev/ShowcaseControls'
 import { theme } from '@/constants/theme'
@@ -323,6 +323,22 @@ function BmsCellVoltagesShowcase() {
       canId: null,
     })
   }, [scenario])
+  const windowStats = useMemo(() => {
+    const { cells } = CELL_SCENARIOS[scenario]
+    return summarizeBmsWindow([
+      {
+        capturedAt: 0,
+        cellVoltages: cells.map((v, index) => v - (index === 0 ? 0.006 : 0)),
+        balancing: [],
+      },
+      { capturedAt: 1000, cellVoltages: [...cells], balancing: [] },
+      {
+        capturedAt: 2000,
+        cellVoltages: cells.map((v, index) => v - (index === 2 ? 0.01 : 0)),
+        balancing: [],
+      },
+    ])
+  }, [scenario])
 
   return (
     <ShowcaseCard name="BmsCellVoltages / horizontal cell rows">
@@ -332,7 +348,9 @@ function BmsCellVoltagesShowcase() {
         selected={scenario}
         onSelect={(v) => setScenario(v as keyof typeof CELL_SCENARIOS)}
       />
-      {summary ? <BmsCellVoltagesView summary={summary} /> : null}
+      {summary ? (
+        <BmsCellVoltagesView summary={summary} windowStats={windowStats} windowMs={5 * 60_000} />
+      ) : null}
     </ShowcaseCard>
   )
 }

@@ -1,17 +1,57 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
+import { runOnJS, useAnimatedReaction, type SharedValue } from 'react-native-reanimated'
 import { Text } from '@/components/ui/base/Text'
 
-import { cellBarScale, summarizeBms, type BmsCellGroup, type BmsSummary } from '@/lib/battery'
+import {
+  cellBarScale,
+  nearestBmsFrameAtTime,
+  summarizeBms,
+  summarizeBmsWindow,
+  type BmsCellGroup,
+  type BmsSummary,
+  type BmsWindowStats,
+} from '@/lib/battery'
 import { useBleStore } from '@/store/bleStore'
 import { useBoardStore } from '@/store/boardStore'
 import { theme } from '@/constants/theme'
 
 const formatCell = (v: number) => `${v.toFixed(3)}V`
+const formatSpread = (v: number) => `${v.toFixed(3)}V`
 
-export function BmsCellVoltages() {
-  const bms = useBleStore((s) => s.latestBms)
+function formatWindowLabel(windowMs: number | null | undefined): string {
+  if (!windowMs) return 'WINDOW'
+  const minutes = Math.round(windowMs / 60_000)
+  if (minutes >= 1) return `${minutes} MIN`
+  return `${Math.round(windowMs / 1000)} SEC`
+}
+
+export function BmsCellVoltages({
+  scrubTimeMs,
+  windowMs,
+}: {
+  scrubTimeMs?: SharedValue<number | null>
+  windowMs?: number
+}) {
+  const latestBms = useBleStore((s) => s.latestBms)
+  const bmsSeries = useBleStore((s) => s.bmsSeries)
+  const bmsSeriesWindowMs = useBleStore((s) => s.bmsSeriesWindowMs)
+  const [cursorTimeMs, setCursorTimeMs] = useState<number | null>(null)
+  useAnimatedReaction(
+    () => scrubTimeMs?.value ?? null,
+    (next, prev) => {
+      if (next === prev) return
+      runOnJS(setCursorTimeMs)(next)
+    },
+    [scrubTimeMs],
+  )
+
+  const bms = useMemo(
+    () => (cursorTimeMs == null ? latestBms : nearestBmsFrameAtTime(bmsSeries, cursorTimeMs)),
+    [bmsSeries, cursorTimeMs, latestBms],
+  )
   const summary = useMemo(() => summarizeBms(bms), [bms])
+  const windowStats = useMemo(() => summarizeBmsWindow(bmsSeries), [bmsSeries])
   // BMS is polled only when the probe proved one (`hasBms === true`); anything else
   // is never polled, so the empty state is definitive, not an indefinite "waiting".
   const bmsLinked = useBoardStore(
@@ -31,12 +71,27 @@ export function BmsCellVoltages() {
     )
   }
 
-  return <BmsCellVoltagesView summary={summary} />
+  return (
+    <BmsCellVoltagesView
+      summary={summary}
+      windowStats={windowStats}
+      windowMs={bmsSeriesWindowMs ?? windowMs}
+    />
+  )
 }
 
 /** Presentational cell-group card, driven by a precomputed summary (showcase-friendly). */
-export function BmsCellVoltagesView({ summary }: { summary: BmsSummary }) {
+export function BmsCellVoltagesView({
+  summary,
+  windowStats,
+  windowMs,
+}: {
+  summary: BmsSummary
+  windowStats?: BmsWindowStats | null
+  windowMs?: number | null
+}) {
   const scale = cellBarScale(summary.minVoltage, summary.maxVoltage)
+  const windowLabel = formatWindowLabel(windowMs)
 
   return (
     <View style={styles.container}>
@@ -48,6 +103,20 @@ export function BmsCellVoltagesView({ summary }: { summary: BmsSummary }) {
         <Stat label="MIN" value={formatCell(summary.minVoltage)} tone="min" />
         <Stat label="AVG" value={formatCell(summary.average)} tone="neutral" />
         <Stat label="MAX" value={formatCell(summary.maxVoltage)} tone="max" />
+      </View>
+      <View style={styles.windowStatsRow}>
+        <Stat
+          label={`PEAK Δ (${windowLabel})`}
+          value={windowStats ? formatSpread(windowStats.peakSpread) : '--'}
+          tone="spread"
+        />
+        <Stat
+          label="WORST GROUP"
+          value={
+            windowStats?.worstGroupIndex == null ? '--' : `G${windowStats.worstGroupIndex + 1}`
+          }
+          tone="min"
+        />
       </View>
       <View style={styles.rows}>
         {summary.groups.map((group) => (
@@ -127,6 +196,10 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   summaryRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  windowStatsRow: {
     flexDirection: 'row',
     gap: 8,
   },
