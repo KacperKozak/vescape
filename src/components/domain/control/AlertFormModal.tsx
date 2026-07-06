@@ -1,13 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
-import {
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native'
+import { Modal, Pressable, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { ChatTextIcon, RadioactiveIcon, WaveformIcon } from 'phosphor-react-native'
 
 import { Input } from '@/components/ui/forms/Input'

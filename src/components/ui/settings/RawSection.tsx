@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
-import { Pressable, Share, StyleSheet, Text, View } from 'react-native'
+import { Pressable, Share, StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { ExportIcon } from 'phosphor-react-native'
 
 import { theme } from '@/constants/theme'

@@ -1,7 +1,8 @@
 import Mapbox, { Camera, MapView } from '@rnmapbox/maps'
 import { SlidersHorizontalIcon } from 'phosphor-react-native'
 import { useCallback, useRef, useState, type ElementRef } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import type { MapPoint } from 'vesc-ble'
 
 import { IconButton } from '@/components/ui/base/IconButton'

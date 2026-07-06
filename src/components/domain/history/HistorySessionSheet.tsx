@@ -6,10 +6,10 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
   useWindowDimensions,
 } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { CaretRightIcon } from 'phosphor-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Canvas, Circle, Path, Skia } from '@shopify/react-native-skia'

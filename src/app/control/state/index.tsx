@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 
 import { ControlDetailLayout } from '@/components/domain/control/ControlDetailLayout'
 import { useBleStore } from '@/store/bleStore'

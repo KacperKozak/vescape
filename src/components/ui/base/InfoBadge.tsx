@@ -1,4 +1,5 @@
-import { Pressable, Text, StyleSheet } from 'react-native'
+import { Pressable, StyleSheet } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { InfoIcon } from 'phosphor-react-native'
 import { theme } from '@/constants/theme'
 

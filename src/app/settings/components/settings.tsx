@@ -1,4 +1,4 @@
-import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native'
+import { ScrollView, StyleSheet, Switch, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useState } from 'react'
 import {

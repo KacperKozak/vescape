@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { StyleSheet, TouchableOpacity, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import {
   ChatTextIcon,
   PlusIcon,
@@ -219,7 +220,7 @@ const styles = StyleSheet.create({
   ruleTtsTemplate: {
     color: theme.palette.slate.textMuted,
     fontSize: 12,
-    fontWeight: '400',
+    fontWeight: '500',
     marginTop: 1,
   },
   ruleTextDisabled: {
@@ -235,6 +236,6 @@ const styles = StyleSheet.create({
   emptyHintText: {
     color: theme.palette.slate.textMuted,
     fontSize: 12,
-    fontWeight: '400',
+    fontWeight: '500',
   },
 })

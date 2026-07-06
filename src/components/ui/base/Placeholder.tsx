@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View, type ViewStyle } from 'react-native'
+import { StyleSheet, View, type ViewStyle } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import type { Icon } from 'phosphor-react-native'
 import { theme } from '@/constants/theme'
 

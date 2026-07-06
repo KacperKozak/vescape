@@ -1,13 +1,13 @@
 import {
   Pressable,
   StyleSheet,
-  Text,
   TextInput,
   View,
   type LayoutChangeEvent,
   type StyleProp,
   type ViewStyle,
 } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { type ReactNode, useCallback, useMemo, useState } from 'react'
 import Animated, {
   interpolateColor,

@@ -1,4 +1,5 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { MarkerView, PointAnnotation } from '@rnmapbox/maps'
 import { TrashIcon, type Icon } from 'phosphor-react-native'
 import { theme } from '@/constants/theme'

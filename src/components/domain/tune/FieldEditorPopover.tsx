@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { CheckIcon, FadersIcon } from 'phosphor-react-native'
 
 import { Input } from '@/components/ui/forms/Input'

@@ -1,5 +1,6 @@
 import { DropIcon } from 'phosphor-react-native'
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 
 import { WeatherIcon } from '@/components/ui/weather/WeatherIcon'
 import { theme } from '@/constants/theme'

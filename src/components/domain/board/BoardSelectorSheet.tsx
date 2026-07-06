@@ -1,4 +1,5 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { CheckCircleIcon, LightningIcon, PencilSimpleIcon, PlusIcon } from 'phosphor-react-native'
 import { router } from 'expo-router'
 import { routes } from '@/navigation/routes'

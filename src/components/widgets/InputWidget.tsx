@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { CheckIcon, PencilSimpleIcon } from 'phosphor-react-native'
 
 import { Input } from '@/components/ui/forms/Input'

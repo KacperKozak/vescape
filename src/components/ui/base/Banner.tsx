@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { InfoIcon, WarningIcon, WarningCircleIcon } from 'phosphor-react-native'
 
 import { theme } from '@/constants/theme'
@@ -70,7 +71,7 @@ const styles = StyleSheet.create({
   },
   message: {
     fontSize: 13,
-    fontWeight: '400',
+    fontWeight: '500',
     lineHeight: 19,
     color: theme.palette.slate.textSecondary,
   },

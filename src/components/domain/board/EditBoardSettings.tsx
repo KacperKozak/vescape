@@ -1,4 +1,5 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { BatteryChargingIcon, LightningIcon, LinkIcon, TrashIcon } from 'phosphor-react-native'
 import type { BoardLink } from 'vesc-ble'
 

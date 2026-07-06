@@ -1,4 +1,5 @@
-import { Modal, Pressable, Text, View, StyleSheet } from 'react-native'
+import { Modal, Pressable, View, StyleSheet } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { XIcon } from 'phosphor-react-native'
 import { type Board } from '@/store/boardStore'
 import { theme } from '@/constants/theme'

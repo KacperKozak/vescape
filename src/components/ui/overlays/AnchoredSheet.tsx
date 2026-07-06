@@ -7,7 +7,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   useWindowDimensions,
   View,
   type StyleProp,
@@ -15,6 +14,7 @@ import {
   type NativeSyntheticEvent,
   type ViewStyle,
 } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { Canvas, LinearGradient, Rect, vec } from '@shopify/react-native-skia'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import Reanimated, {
