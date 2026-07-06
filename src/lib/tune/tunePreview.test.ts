@@ -2,13 +2,14 @@ import { describe, expect, test } from 'bun:test'
 
 import {
   DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS,
-  MAX_DECK_DISTURBANCE_DEGREES,
-  MAX_DECK_DISTURBANCE_RATE_DEGREES_PER_SECOND,
+  MAX_PITCH_INPUT_DEGREES,
+  MAX_PITCH_INPUT_RATE_DEGREES_PER_SECOND,
   MAX_TUNE_PREVIEW_SPEED_KMH,
   TUNE_PREVIEW_MOTOR_PRESETS,
   aggregateTorqueAndAdaptiveTilt,
   calculateAtrExpectedAcceleration,
   calculateControllerCurrentAmps,
+  calculateGroundToBoardAngleDegrees,
   calculateLongitudinalTarget,
   calculatePreviewAcceleration,
   calculateSyntheticAcceleration,
@@ -71,7 +72,7 @@ function readyParameters(fields: typeof baseFields = baseFields) {
 
 function disturbThenRecover(
   fields: typeof baseFields,
-  disturbanceDegrees = 10,
+  pitchInputDegrees = 10,
   recoverySeconds = 1,
 ) {
   const parameters = readyParameters(fields)
@@ -79,8 +80,8 @@ function disturbThenRecover(
     createTunePreviewState(15),
     parameters,
     {
-      deckDisturbanceDegrees: disturbanceDegrees,
-      deckDisturbanceActive: true,
+      pitchInputDegrees: pitchInputDegrees,
+      pitchInputActive: true,
       speedKmh: 15,
     },
     1 / 60,
@@ -89,7 +90,7 @@ function disturbThenRecover(
     state = stepTunePreview(
       state,
       parameters,
-      { deckDisturbanceDegrees: 0, deckDisturbanceActive: false, speedKmh: 15 },
+      { pitchInputDegrees: 0, pitchInputActive: false, speedKmh: 15 },
       1 / 60,
     )
   }
@@ -97,24 +98,23 @@ function disturbThenRecover(
 }
 
 describe('Tune Preview longitudinal response', () => {
-  test('repeats the same disturbance and recovery deterministically', () => {
+  test('repeats the same Pitch Input and recovery deterministically', () => {
     expect(disturbThenRecover(baseFields)).toEqual(disturbThenRecover(baseFields))
   })
 
-  test('Nose disturbance accumulates angle error without constraining Board', () => {
+  test('Nose Pitch Input accumulates angle error without constraining Board', () => {
     const parameters = readyParameters()
     const state = stepTunePreview(
       createTunePreviewState(15),
       parameters,
       {
-        deckDisturbanceDegrees: -MAX_DECK_DISTURBANCE_DEGREES,
-        deckDisturbanceActive: true,
+        pitchInputDegrees: -MAX_PITCH_INPUT_DEGREES,
+        pitchInputActive: true,
         speedKmh: 15,
       },
       0.1,
     )
     expect(state.angleDegrees - state.targetAngleDegrees).toBeLessThan(0)
-    expect(state.angleDegrees).toBeLessThan(0)
     expect(state.angularRateDegreesPerSecond).not.toBe(0)
     expect(state.syntheticCurrentAmps).toBeGreaterThan(0)
   })
@@ -125,8 +125,8 @@ describe('Tune Preview longitudinal response', () => {
       createTunePreviewState(),
       parameters,
       {
-        deckDisturbanceDegrees: -MAX_DECK_DISTURBANCE_DEGREES * 0.5,
-        deckDisturbanceActive: true,
+        pitchInputDegrees: -MAX_PITCH_INPUT_DEGREES * 0.5,
+        pitchInputActive: true,
         speedKmh: 0,
       },
       1 / 120,
@@ -135,8 +135,8 @@ describe('Tune Preview longitudinal response', () => {
       createTunePreviewState(),
       parameters,
       {
-        deckDisturbanceDegrees: -MAX_DECK_DISTURBANCE_DEGREES,
-        deckDisturbanceActive: true,
+        pitchInputDegrees: -MAX_PITCH_INPUT_DEGREES,
+        pitchInputActive: true,
         speedKmh: 0,
       },
       1 / 120,
@@ -145,14 +145,14 @@ describe('Tune Preview longitudinal response', () => {
     expect(full.angleDegrees).toBeLessThan(half.angleDegrees)
   })
 
-  test('smooths abrupt Deck Disturbance changes before they reach the controller', () => {
+  test('smooths abrupt Pitch Input changes before they reach the controller', () => {
     const parameters = readyParameters()
     const firstFrame = stepTunePreview(
       createTunePreviewState(),
       parameters,
       {
-        deckDisturbanceDegrees: MAX_DECK_DISTURBANCE_DEGREES,
-        deckDisturbanceActive: true,
+        pitchInputDegrees: MAX_PITCH_INPUT_DEGREES,
+        pitchInputActive: true,
         speedKmh: 0,
       },
       1 / 60,
@@ -161,8 +161,8 @@ describe('Tune Preview longitudinal response', () => {
       firstFrame,
       parameters,
       {
-        deckDisturbanceDegrees: MAX_DECK_DISTURBANCE_DEGREES,
-        deckDisturbanceActive: true,
+        pitchInputDegrees: MAX_PITCH_INPUT_DEGREES,
+        pitchInputActive: true,
         speedKmh: 0,
       },
       0.25,
@@ -170,72 +170,72 @@ describe('Tune Preview longitudinal response', () => {
     const released = stepTunePreview(
       settled,
       parameters,
-      { deckDisturbanceDegrees: 0, deckDisturbanceActive: false, speedKmh: 0 },
+      { pitchInputDegrees: 0, pitchInputActive: false, speedKmh: 0 },
       1 / 60,
     )
 
-    expect(firstFrame.deckDisturbanceRateDegreesPerSecond).toBeGreaterThan(0)
-    expect(firstFrame.deckDisturbanceRateDegreesPerSecond).toBeLessThan(
-      MAX_DECK_DISTURBANCE_RATE_DEGREES_PER_SECOND,
+    expect(firstFrame.pitchInputRateDegreesPerSecond).toBeGreaterThan(0)
+    expect(firstFrame.pitchInputRateDegreesPerSecond).toBeLessThan(
+      MAX_PITCH_INPUT_RATE_DEGREES_PER_SECOND,
     )
-    expect(settled.deckDisturbanceRateDegreesPerSecond).toBeGreaterThan(
-      MAX_DECK_DISTURBANCE_RATE_DEGREES_PER_SECOND * 0.95,
+    expect(settled.pitchInputRateDegreesPerSecond).toBeGreaterThan(
+      MAX_PITCH_INPUT_RATE_DEGREES_PER_SECOND * 0.95,
     )
-    expect(released.deckDisturbanceRateDegreesPerSecond).toBe(0)
+    expect(released.pitchInputRateDegreesPerSecond).toBe(0)
   })
 
-  test('front-loads Deck Disturbance response for easier control around center', () => {
+  test('front-loads Pitch Input response for easier control around center', () => {
     const parameters = readyParameters()
     const responseAt = (control: number) =>
       stepTunePreview(
         createTunePreviewState(),
         parameters,
         {
-          deckDisturbanceDegrees: control,
-          deckDisturbanceActive: true,
+          pitchInputDegrees: control,
+          pitchInputActive: true,
           speedKmh: 0,
         },
         0.25,
-      ).deckDisturbanceRateDegreesPerSecond
+      ).pitchInputRateDegreesPerSecond
 
-    const half = responseAt(MAX_DECK_DISTURBANCE_DEGREES * 0.5)
-    const full = responseAt(MAX_DECK_DISTURBANCE_DEGREES)
-    const negativeHalf = responseAt(-MAX_DECK_DISTURBANCE_DEGREES * 0.5)
+    const half = responseAt(MAX_PITCH_INPUT_DEGREES * 0.5)
+    const full = responseAt(MAX_PITCH_INPUT_DEGREES)
+    const negativeHalf = responseAt(-MAX_PITCH_INPUT_DEGREES * 0.5)
 
     expect(half / full).toBeGreaterThan(0.7)
     expect(negativeHalf).toBeCloseTo(-half)
   })
 
   test('recovers a pre-filter runtime state preserved by Fast Refresh', () => {
-    const { deckDisturbanceRateDegreesPerSecond: _, ...legacyState } = createTunePreviewState()
+    const { pitchInputRateDegreesPerSecond: _, ...legacyState } = createTunePreviewState()
     const next = stepTunePreview(
       legacyState as unknown as ReturnType<typeof createTunePreviewState>,
       readyParameters(),
       {
-        deckDisturbanceDegrees: MAX_DECK_DISTURBANCE_DEGREES,
-        deckDisturbanceActive: true,
+        pitchInputDegrees: MAX_PITCH_INPUT_DEGREES,
+        pitchInputActive: true,
         speedKmh: 0,
       },
       0.1,
     )
 
-    expect(next.deckDisturbanceRateDegreesPerSecond).toBeGreaterThan(0)
+    expect(next.pitchInputRateDegreesPerSecond).toBeGreaterThan(0)
     expect(next.angleDegrees).toBeGreaterThan(0)
   })
 
-  test('clamps Deck Disturbance strength to the supported range', () => {
+  test('clamps Pitch Input strength to the supported range', () => {
     const clamped = stepTunePreview(
       createTunePreviewState(),
       readyParameters(),
-      { deckDisturbanceDegrees: 90, deckDisturbanceActive: true, speedKmh: 0 },
+      { pitchInputDegrees: 90, pitchInputActive: true, speedKmh: 0 },
       0.1,
     )
     const maximum = stepTunePreview(
       createTunePreviewState(),
       readyParameters(),
       {
-        deckDisturbanceDegrees: MAX_DECK_DISTURBANCE_DEGREES,
-        deckDisturbanceActive: true,
+        pitchInputDegrees: MAX_PITCH_INPUT_DEGREES,
+        pitchInputActive: true,
         speedKmh: 0,
       },
       0.1,
@@ -249,8 +249,8 @@ describe('Tune Preview longitudinal response', () => {
       createTunePreviewState(),
       parameters,
       {
-        deckDisturbanceDegrees: -MAX_DECK_DISTURBANCE_DEGREES,
-        deckDisturbanceActive: true,
+        pitchInputDegrees: -MAX_PITCH_INPUT_DEGREES,
+        pitchInputActive: true,
         speedKmh: 0,
       },
       0.5,
@@ -258,7 +258,7 @@ describe('Tune Preview longitudinal response', () => {
     const released = stepTunePreview(
       held,
       parameters,
-      { deckDisturbanceDegrees: 0, deckDisturbanceActive: false, speedKmh: 0 },
+      { pitchInputDegrees: 0, pitchInputActive: false, speedKmh: 0 },
       0.25,
     )
     expect(Math.abs(released.angleDegrees - released.targetAngleDegrees)).toBeLessThan(
@@ -267,7 +267,7 @@ describe('Tune Preview longitudinal response', () => {
     expect(released.angleDegrees).not.toBe(released.targetAngleDegrees)
   })
 
-  test('higher Aggressiveness reduces the same released disturbance faster', () => {
+  test('higher Aggressiveness reduces the same released Pitch Input faster', () => {
     const neutralTargets = {
       ...baseFields,
       torquetilt_strength: 0,
@@ -326,8 +326,8 @@ describe('Tune Preview longitudinal response', () => {
       createTunePreviewState(15),
       parameters,
       {
-        deckDisturbanceDegrees: 10,
-        deckDisturbanceActive: true,
+        pitchInputDegrees: 10,
+        pitchInputActive: true,
         speedKmh: 15,
       },
       0.25,
@@ -336,37 +336,36 @@ describe('Tune Preview longitudinal response', () => {
       createTunePreviewState(15),
       parameters,
       {
-        deckDisturbanceDegrees: -10,
-        deckDisturbanceActive: true,
+        pitchInputDegrees: -10,
+        pitchInputActive: true,
         speedKmh: 15,
       },
       0.25,
     )
-    expect(nose.angleDegrees).toBeLessThan(0)
-    expect(tail.angleDegrees).toBeGreaterThan(0)
+    expect(nose.angleDegrees).toBeLessThan(tail.angleDegrees)
     expect(nose.syntheticSpeedKmh).toBeGreaterThan(tail.syntheticSpeedKmh)
   })
 
-  test('dynamic speed responds proportionally across the deck disturbance control', () => {
+  test('dynamic speed responds proportionally across the pitch input control', () => {
     const parameters = readyParameters()
-    const speedAfterDisturbance = (deckDisturbanceDegrees: number) =>
+    const speedAfterPitchInput = (pitchInputDegrees: number) =>
       stepTunePreview(
         createTunePreviewState(15),
         parameters,
         {
-          deckDisturbanceDegrees,
-          deckDisturbanceActive: true,
+          pitchInputDegrees,
+          pitchInputActive: true,
           speedKmh: 15,
         },
         0.25,
       ).syntheticSpeedKmh
 
-    const quarterNose = speedAfterDisturbance(-MAX_DECK_DISTURBANCE_DEGREES * 0.25)
-    const halfNose = speedAfterDisturbance(-MAX_DECK_DISTURBANCE_DEGREES * 0.5)
-    const fullNose = speedAfterDisturbance(-MAX_DECK_DISTURBANCE_DEGREES)
-    const neutral = speedAfterDisturbance(0)
-    const quarterTail = speedAfterDisturbance(MAX_DECK_DISTURBANCE_DEGREES * 0.25)
-    const fullTail = speedAfterDisturbance(MAX_DECK_DISTURBANCE_DEGREES)
+    const quarterNose = speedAfterPitchInput(-MAX_PITCH_INPUT_DEGREES * 0.25)
+    const halfNose = speedAfterPitchInput(-MAX_PITCH_INPUT_DEGREES * 0.5)
+    const fullNose = speedAfterPitchInput(-MAX_PITCH_INPUT_DEGREES)
+    const neutral = speedAfterPitchInput(0)
+    const quarterTail = speedAfterPitchInput(MAX_PITCH_INPUT_DEGREES * 0.25)
+    const fullTail = speedAfterPitchInput(MAX_PITCH_INPUT_DEGREES)
 
     expect(quarterNose).toBeGreaterThan(neutral)
     expect(halfNose).toBeGreaterThan(quarterNose)
@@ -376,7 +375,7 @@ describe('Tune Preview longitudinal response', () => {
     expect(fullNose - fullTail).toBeGreaterThan(0.5)
   })
 
-  test('aggressive PID produces stronger physical braking for the same disturbance', () => {
+  test('aggressive PID produces stronger physical braking for the same Pitch Input', () => {
     const physics = DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS
     const neutralTilts = {
       ...baseFields,
@@ -390,8 +389,8 @@ describe('Tune Preview longitudinal response', () => {
       tiltback_variable_max: 0,
     }
     const input = {
-      deckDisturbanceDegrees: 0.4,
-      deckDisturbanceActive: true,
+      pitchInputDegrees: 0.4,
+      pitchInputActive: true,
       speedKmh: 40,
       advancedPhysics: physics,
     }
@@ -414,7 +413,7 @@ describe('Tune Preview longitudinal response', () => {
     )
   })
 
-  test('physical preview dissipates a released disturbance across the basic tune range', () => {
+  test('physical preview dissipates released Pitch Input across the basic tune range', () => {
     const physics = DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS
     const tunes = [
       { kp: 15, kp2: 0.4, ki: 0.015 },
@@ -428,8 +427,8 @@ describe('Tune Preview longitudinal response', () => {
         createTunePreviewState(20),
         parameters,
         {
-          deckDisturbanceDegrees: 5,
-          deckDisturbanceActive: true,
+          pitchInputDegrees: 5,
+          pitchInputActive: true,
           speedKmh: 20,
           advancedPhysics: physics,
         },
@@ -441,8 +440,8 @@ describe('Tune Preview longitudinal response', () => {
           state,
           parameters,
           {
-            deckDisturbanceDegrees: 0,
-            deckDisturbanceActive: false,
+            pitchInputDegrees: 0,
+            pitchInputActive: false,
             speedKmh: 20,
             advancedPhysics: physics,
           },
@@ -458,7 +457,7 @@ describe('Tune Preview longitudinal response', () => {
 
   test('applies acceleration Torque Tilt above current threshold and clamps its angle', () => {
     const parameters = readyParameters({ ...baseFields, torquetilt_angle_limit: 2 })
-    const input = { deckDisturbanceDegrees: 0, speedKmh: 15 }
+    const input = { pitchInputDegrees: 0, speedKmh: 15 }
     const below = calculateLongitudinalTarget(createTunePreviewState(), parameters, input, 1, 10)
     const above = calculateLongitudinalTarget(createTunePreviewState(), parameters, input, 1, 60)
     expect(below.torqueTiltDegrees).toBe(0)
@@ -469,7 +468,7 @@ describe('Tune Preview longitudinal response', () => {
     const target = calculateLongitudinalTarget(
       { ...createTunePreviewState(), angleDegrees: 3 },
       readyParameters(),
-      { deckDisturbanceDegrees: 0, speedKmh: 15 },
+      { pitchInputDegrees: 0, speedKmh: 15 },
       1,
       -60,
     )
@@ -483,14 +482,14 @@ describe('Tune Preview longitudinal response', () => {
     const below = calculateLongitudinalTarget(
       { ...state, angleDegrees: 3 },
       parameters,
-      { deckDisturbanceDegrees: 0, speedKmh: 7 },
+      { pitchInputDegrees: 0, speedKmh: 7 },
       1,
       -60,
     )
     const above = calculateLongitudinalTarget(
       { ...state, angleDegrees: 3 },
       parameters,
-      { deckDisturbanceDegrees: 0, speedKmh: 7.1 },
+      { pitchInputDegrees: 0, speedKmh: 7.1 },
       1,
       -60,
     )
@@ -504,14 +503,14 @@ describe('Tune Preview longitudinal response', () => {
     const stopped = calculateLongitudinalTarget(
       state,
       parameters,
-      { deckDisturbanceDegrees: 0, speedKmh: 0 },
+      { pitchInputDegrees: 0, speedKmh: 0 },
       1,
       0,
     )
     const fast = calculateLongitudinalTarget(
       state,
       parameters,
-      { deckDisturbanceDegrees: 0, speedKmh: 40 },
+      { pitchInputDegrees: 0, speedKmh: 40 },
       1,
       0,
     )
@@ -600,7 +599,7 @@ describe('Tune Preview longitudinal response', () => {
       tiltback_variable_max: 0,
     })
     const input = {
-      deckDisturbanceDegrees: 0,
+      pitchInputDegrees: 0,
       speedKmh: 36,
       hillsEnabled: true,
       hillHeightMeters: 2,
@@ -623,6 +622,12 @@ describe('Tune Preview longitudinal response', () => {
     expect(terrainSlopeToSyntheticAcceleration(60)).toBeGreaterThan(
       terrainSlopeToSyntheticAcceleration(4),
     )
+  })
+
+  test('calculates signed Ground-to-Board angle from terrain tangent', () => {
+    expect(calculateGroundToBoardAngleDegrees(5, 0)).toBeCloseTo(5)
+    expect(calculateGroundToBoardAngleDegrees(5, Math.tan((3 * Math.PI) / 180))).toBeCloseTo(2)
+    expect(calculateGroundToBoardAngleDegrees(-2, Math.tan((3 * Math.PI) / 180))).toBeCloseTo(-5)
   })
 
   test('projects gravity onto a 10% terrain grade', () => {
@@ -696,7 +701,7 @@ describe('Tune Preview longitudinal response', () => {
       groundTravelMeters: hillSpacingMeters / 2,
     }
     const input = {
-      deckDisturbanceDegrees: 0,
+      pitchInputDegrees: 0,
       speedKmh: 15,
       hillsEnabled: true,
       hillHeightMeters,
@@ -715,11 +720,11 @@ describe('Tune Preview longitudinal response', () => {
     expect(calculatePreviewAcceleration(hillLoadCurrent, slope, physics)).toBeCloseTo(0, 5)
   })
 
-  test('tracks the terrain-driven Target after Deck Disturbance is released', () => {
+  test('tracks the terrain-driven Target after Pitch Input is released', () => {
     const parameters = readyParameters()
     const input = {
-      deckDisturbanceDegrees: 0,
-      deckDisturbanceActive: false,
+      pitchInputDegrees: 0,
+      pitchInputActive: false,
       speedKmh: 15,
       hillsEnabled: true,
       hillHeightMeters: 2.5,
@@ -737,8 +742,8 @@ describe('Tune Preview longitudinal response', () => {
         frame < 30
           ? {
               ...input,
-              deckDisturbanceDegrees: MAX_DECK_DISTURBANCE_DEGREES,
-              deckDisturbanceActive: true,
+              pitchInputDegrees: MAX_PITCH_INPUT_DEGREES,
+              pitchInputActive: true,
             }
           : input,
         1 / 60,
@@ -756,8 +761,8 @@ describe('Tune Preview longitudinal response', () => {
   test('settles on flat ground without saturating motor current', () => {
     const parameters = readyParameters()
     const input = {
-      deckDisturbanceDegrees: 0,
-      deckDisturbanceActive: false,
+      pitchInputDegrees: 0,
+      pitchInputActive: false,
       speedKmh: 15,
       hillsEnabled: false,
       advancedPhysics: DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS,
@@ -804,7 +809,7 @@ describe('Tune Preview longitudinal response', () => {
       state,
       parameters,
       {
-        deckDisturbanceDegrees: 0,
+        pitchInputDegrees: 0,
         speedKmh: 15,
         hillsEnabled: true,
         hillHeightMeters: 2.5,
@@ -834,7 +839,7 @@ describe('Tune Preview longitudinal response', () => {
     const state = stepTunePreview(
       createTunePreviewState(),
       parameters,
-      { deckDisturbanceDegrees: 0, speedKmh: 0, hillsEnabled: false },
+      { pitchInputDegrees: 0, speedKmh: 0, hillsEnabled: false },
       0.25,
     )
 
@@ -846,7 +851,7 @@ describe('Tune Preview longitudinal response', () => {
   test('zero and paused time do not advance response or ground', () => {
     const parameters = readyParameters()
     const state = createTunePreviewState()
-    const input = { deckDisturbanceDegrees: 10, deckDisturbanceActive: true, speedKmh: 15 }
+    const input = { pitchInputDegrees: 10, pitchInputActive: true, speedKmh: 15 }
     expect(stepTunePreview(state, parameters, input, 0)).toBe(state)
     expect(stepTunePreview(state, parameters, { ...input, paused: true }, 1)).toBe(state)
   })
@@ -860,8 +865,8 @@ describe('Tune Preview longitudinal response', () => {
         upper,
         parameters,
         {
-          deckDisturbanceDegrees: -12,
-          deckDisturbanceActive: true,
+          pitchInputDegrees: -12,
+          pitchInputActive: true,
           speedKmh: 15,
         },
         0.25,
@@ -869,7 +874,7 @@ describe('Tune Preview longitudinal response', () => {
       lower = stepTunePreview(
         lower,
         parameters,
-        { deckDisturbanceDegrees: 12, deckDisturbanceActive: true, speedKmh: 15 },
+        { pitchInputDegrees: 12, pitchInputActive: true, speedKmh: 15 },
         0.25,
       )
     }

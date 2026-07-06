@@ -2,10 +2,10 @@
 
 ## Tune Preview model
 
-The flat-response Tune Preview uses model version `refloat-bundled-legacy-v15`, tied to
+The flat-response Tune Preview uses model version `refloat-bundled-legacy-v17`, tied to
 `modules/vesc-ble/android/src/main/assets/refloat-settings.xml`. It is a deterministic Refloat
-controller simulation around a simplified Board plant. Deck Disturbance adds a bounded pitch rate
-of up to `180°/s` while held. A symmetric quadratic ease-out makes the center more responsive:
+controller simulation around a simplified Board plant. Pitch Input adds a bounded pitch rate
+of up to `130°/s` while held. A symmetric quadratic ease-out makes the center more responsive:
 25% travel requests about 44% of maximum rate, 50% requests 75%, and the endpoints remain 100%.
 The control reports that requested rate in `°/s` instead of an abstract percentage. Changes are
 smoothed before reaching the controller so gesture input does not shake Board. It does not set,

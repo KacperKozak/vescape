@@ -33,7 +33,7 @@ import { TuneConfigCell } from '@/components/domain/tune/TuneConfigCell'
 import { TuneGroupGrid } from '@/components/ui/tune/TuneGroupGrid'
 import { TuneSyncBar } from '@/components/ui/tune/TuneSyncBar'
 import { TunePreview } from '@/components/ui/tune/TunePreview'
-import { DeckDisturbanceControl } from '@/components/ui/tune/DeckDisturbanceControl'
+import { PitchInputControl } from '@/components/ui/tune/PitchInputControl'
 import { TunePreviewScenarioControls } from '@/components/ui/tune/TunePreviewScenarioControls'
 import { routes } from '@/navigation/routes'
 import { TextPromptModal } from '@/components/ui/modals/TextPromptModal'
@@ -53,8 +53,8 @@ export default function TuneScreen() {
   const router = useRouter()
   const insets = useSafeAreaInsets()
   const isFocused = useIsFocused()
-  const deckDisturbanceDegrees = useSharedValue(0)
-  const deckDisturbanceActive = useSharedValue(false)
+  const pitchInputDegrees = useSharedValue(0)
+  const pitchInputActive = useSharedValue(false)
   const [hillsEnabled, setHillsEnabled] = useState(false)
   const [hillHeightMeters, setHillHeightMeters] = useState(2.5)
   const [hillSpacingMeters, setHillSpacingMeters] = useState(30)
@@ -232,8 +232,8 @@ export default function TuneScreen() {
           <View style={styles.previewPinned}>
             <TunePreview
               fields={profileFields ?? {}}
-              deckDisturbanceDegrees={deckDisturbanceDegrees}
-              deckDisturbanceActive={deckDisturbanceActive}
+              pitchInputDegrees={pitchInputDegrees}
+              pitchInputActive={pitchInputActive}
               hillsEnabled={hillsEnabled}
               hillHeightMeters={hillHeightMeters}
               hillSpacingMeters={hillSpacingMeters}
@@ -242,10 +242,7 @@ export default function TuneScreen() {
               onHelp={() => setPreviewHelpVisible(true)}
             />
             <View style={styles.balancePinned}>
-              <DeckDisturbanceControl
-                angleDegrees={deckDisturbanceDegrees}
-                active={deckDisturbanceActive}
-              />
+              <PitchInputControl angleDegrees={pitchInputDegrees} active={pitchInputActive} />
             </View>
           </View>
           <ScrollView
@@ -437,7 +434,7 @@ export default function TuneScreen() {
         visible={previewHelpVisible}
         variant="warning"
         title="Work in progress"
-        message="Tune editing and Tune Preview are experimental. Hold Deck disturbance to nudge Board angle over time; farther slider displacement adds angle error faster. Release it to compare how the tune recovers from the resulting state. Refloat PID current and optional dynamic speed are comparative outputs of that error. The preview does not model rider weight, traction, drag, power limits, voltage sag, braking distance, deck-ground contact, or safety. Do not ride with these settings until you have verified them on the bench and confirmed safe behaviour."
+        message="Tune editing and Tune Preview are experimental. Hold Pitch Input to add Board pitch rate over time; farther slider displacement adds angle error faster. Release it to compare how the tune recovers from the resulting state. Refloat PID current and dynamic speed are comparative outputs of that error. The preview does not model rider weight, traction, drag, power limits, voltage sag, braking distance, deck-ground contact, or safety. Do not ride with these settings until you have verified them on the bench and confirmed safe behaviour."
         onDismiss={() => setPreviewHelpVisible(false)}
       />
 

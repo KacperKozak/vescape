@@ -12,7 +12,7 @@ import { useTriggerRef } from '@/components/ui/forms/Dropdown'
 import { BasicSliderCell } from '@/components/ui/tune/BasicSliderCell'
 import { TuneDial } from '@/components/ui/tune/TuneDial'
 import { TunePreview } from '@/components/ui/tune/TunePreview'
-import { DeckDisturbanceControl } from '@/components/ui/tune/DeckDisturbanceControl'
+import { PitchInputControl } from '@/components/ui/tune/PitchInputControl'
 import { TunePreviewScenarioControls } from '@/components/ui/tune/TunePreviewScenarioControls'
 import { IconHero } from '@/components/ui/settings/IconHero'
 import { ShowcaseCard } from '@/components/ui/dev/ShowcaseCard'
@@ -211,8 +211,8 @@ function BasicSliderCellShowcase() {
 }
 
 function TunePreviewShowcase() {
-  const deckDisturbanceDegrees = useSharedValue(0)
-  const deckDisturbanceActive = useSharedValue(false)
+  const pitchInputDegrees = useSharedValue(0)
+  const pitchInputActive = useSharedValue(false)
   const [scenario, setScenario] = useState('flat')
   const [hillsEnabled, setHillsEnabled] = useState(false)
   const [hillHeightMeters, setHillHeightMeters] = useState(2.5)
@@ -277,24 +277,21 @@ function TunePreviewShowcase() {
             selected={scenario}
             onSelect={selectScenario}
           />
-          <ValueRow label="deck disturbance" value="hold and drag" />
+          <ValueRow label="pitch input" value="hold and drag" />
         </>
       }
     >
       <TunePreview
         fields={fields}
-        deckDisturbanceDegrees={deckDisturbanceDegrees}
-        deckDisturbanceActive={deckDisturbanceActive}
+        pitchInputDegrees={pitchInputDegrees}
+        pitchInputActive={pitchInputActive}
         hillsEnabled={hillsEnabled}
         hillHeightMeters={hillHeightMeters}
         hillSpacingMeters={hillSpacingMeters}
         advancedPhysics={advancedPhysics}
         onHelp={() => {}}
       />
-      <DeckDisturbanceControl
-        angleDegrees={deckDisturbanceDegrees}
-        active={deckDisturbanceActive}
-      />
+      <PitchInputControl angleDegrees={pitchInputDegrees} active={pitchInputActive} />
       <TunePreviewScenarioControls
         advancedPhysics={advancedPhysics}
         onAdvancedPhysicsChange={setAdvancedPhysics}
@@ -310,15 +307,15 @@ function TunePreviewShowcase() {
 }
 
 function UnsupportedTunePreviewShowcase() {
-  const deckDisturbanceDegrees = useSharedValue(0)
-  const deckDisturbanceActive = useSharedValue(false)
+  const pitchInputDegrees = useSharedValue(0)
+  const pitchInputActive = useSharedValue(false)
 
   return (
     <ShowcaseCard name="Tune Preview — unsupported">
       <TunePreview
         fields={{ kp: 20 }}
-        deckDisturbanceDegrees={deckDisturbanceDegrees}
-        deckDisturbanceActive={deckDisturbanceActive}
+        pitchInputDegrees={pitchInputDegrees}
+        pitchInputActive={pitchInputActive}
         active={false}
         onHelp={() => {}}
       />

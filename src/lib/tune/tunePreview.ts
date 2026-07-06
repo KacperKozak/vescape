@@ -8,7 +8,7 @@ import {
 // Longitudinal target equations and transition signs derive from Refloat v1.2.1
 // torque_tilt.c and brake_tilt.c (GPL-3.0-or-later), matching the bundled schema.
 
-export const TUNE_PREVIEW_MODEL_VERSION = 'refloat-bundled-legacy-v15' as const
+export const TUNE_PREVIEW_MODEL_VERSION = 'refloat-bundled-legacy-v17' as const
 export const REFERENCE_ERPM_PER_KMH = 1000 / 3.5
 export const MAX_TUNE_PREVIEW_SPEED_KMH = 50
 export const TUNE_PREVIEW_RESET_SPEED_KMH = 15
@@ -16,8 +16,8 @@ export const COMPARATIVE_ACCELERATION_KMH_PER_SECOND = 6
 export const MAX_SYNTHETIC_CURRENT_AMPS = 60
 // A typical Refloat kp of 20 reaches the 60 A preview limit at 3 degrees of error.
 // A wider gesture range makes most of the control indistinguishable current saturation.
-export const MAX_DECK_DISTURBANCE_DEGREES = 3
-export const MAX_DECK_DISTURBANCE_RATE_DEGREES_PER_SECOND = 180
+export const MAX_PITCH_INPUT_DEGREES = 3
+export const MAX_PITCH_INPUT_RATE_DEGREES_PER_SECOND = 130
 
 export type TunePreviewMotorPresetId =
   | 'hypercore'
@@ -106,7 +106,7 @@ const STEP_SECONDS = 1 / REFLOAT_LOOP_HZ
 const MAX_ANGLE_DEGREES = 35
 const MAX_RATE_DEGREES_PER_SECOND = 120
 const STANDARD_GRAVITY_METERS_PER_SECOND_SQUARED = 9.80665
-const DECK_DISTURBANCE_RESPONSE_PER_SECOND = 12
+const PITCH_INPUT_RESPONSE_PER_SECOND = 12
 const BALANCE_PITCH_AUTHORITY = 9
 
 export interface TunePreviewParameters {
@@ -169,7 +169,7 @@ export interface TunePreviewState {
   syntheticSpeedKmh: number
   angleDegrees: number
   angularRateDegreesPerSecond: number
-  deckDisturbanceRateDegreesPerSecond: number
+  pitchInputRateDegreesPerSecond: number
   integralError: number
   targetAngleDegrees: number
   torqueTiltDegrees: number
@@ -189,8 +189,8 @@ export interface TunePreviewState {
 }
 
 export interface TunePreviewInput {
-  deckDisturbanceDegrees: number
-  deckDisturbanceActive?: boolean
+  pitchInputDegrees: number
+  pitchInputActive?: boolean
   speedKmh: number
   hillsEnabled?: boolean
   hillHeightMeters?: number
@@ -272,7 +272,7 @@ export function createTunePreviewState(speedKmh = 0): TunePreviewState {
     syntheticSpeedKmh,
     angleDegrees: 0,
     angularRateDegreesPerSecond: 0,
-    deckDisturbanceRateDegreesPerSecond: 0,
+    pitchInputRateDegreesPerSecond: 0,
     integralError: 0,
     targetAngleDegrees: 0,
     torqueTiltDegrees: 0,
@@ -384,13 +384,13 @@ export function groundTravelToVisualOffset(groundTravelMeters: number): number {
   return (groundTravelMeters * TUNE_PREVIEW_PIXELS_PER_METER) % tickSpacingPixels
 }
 
-export function deckDisturbanceControlToRate(controlDegrees: number): number {
+export function pitchInputControlToRate(controlDegrees: number): number {
   const normalized =
-    clampFinite(controlDegrees, -MAX_DECK_DISTURBANCE_DEGREES, MAX_DECK_DISTURBANCE_DEGREES, 0) /
-    MAX_DECK_DISTURBANCE_DEGREES
+    clampFinite(controlDegrees, -MAX_PITCH_INPUT_DEGREES, MAX_PITCH_INPUT_DEGREES, 0) /
+    MAX_PITCH_INPUT_DEGREES
   const magnitude = Math.abs(normalized)
   const easedMagnitude = 1 - (1 - magnitude) ** 2
-  return Math.sign(normalized) * easedMagnitude * MAX_DECK_DISTURBANCE_RATE_DEGREES_PER_SECOND
+  return Math.sign(normalized) * easedMagnitude * MAX_PITCH_INPUT_RATE_DEGREES_PER_SECOND
 }
 
 export function calculateLongitudinalTarget(
@@ -475,23 +475,23 @@ function stepFixed(
   dt: number,
 ): TunePreviewState {
   const physics = resolveTunePreviewPhysics(input.advancedPhysics)
-  const deckDisturbanceActive = input.deckDisturbanceActive === true
-  const requestedDisturbanceRateDegreesPerSecond = deckDisturbanceActive
-    ? deckDisturbanceControlToRate(input.deckDisturbanceDegrees)
+  const pitchInputActive = input.pitchInputActive === true
+  const requestedPitchInputRateDegreesPerSecond = pitchInputActive
+    ? pitchInputControlToRate(input.pitchInputDegrees)
     : 0
-  const previousDisturbanceRateDegreesPerSecond = Number.isFinite(
-    state.deckDisturbanceRateDegreesPerSecond,
+  const previousPitchInputRateDegreesPerSecond = Number.isFinite(
+    state.pitchInputRateDegreesPerSecond,
   )
-    ? state.deckDisturbanceRateDegreesPerSecond
+    ? state.pitchInputRateDegreesPerSecond
     : 0
-  const disturbanceRateDegreesPerSecond = deckDisturbanceActive
-    ? previousDisturbanceRateDegreesPerSecond +
-      (requestedDisturbanceRateDegreesPerSecond - previousDisturbanceRateDegreesPerSecond) *
-        (1 - Math.exp(-DECK_DISTURBANCE_RESPONSE_PER_SECOND * dt))
+  const pitchInputRateDegreesPerSecond = pitchInputActive
+    ? previousPitchInputRateDegreesPerSecond +
+      (requestedPitchInputRateDegreesPerSecond - previousPitchInputRateDegreesPerSecond) *
+        (1 - Math.exp(-PITCH_INPUT_RESPONSE_PER_SECOND * dt))
     : 0
   const controlledAngleDegrees = state.angleDegrees
   const controlledRateDegreesPerSecond =
-    state.angularRateDegreesPerSecond + disturbanceRateDegreesPerSecond
+    state.angularRateDegreesPerSecond + pitchInputRateDegreesPerSecond
   const currentLimit = physics.maxMotorCurrentAmps
   const balanceCurrentAmps = calculateControllerCurrentAmps(
     controlledAngleDegrees,
@@ -587,7 +587,7 @@ function stepFixed(
     integralLimit,
   )
 
-  // Deck Disturbance adds a bounded pitch rate instead of imposing an angle. The tune reacts to
+  // Pitch Input adds a bounded pitch rate instead of imposing an angle. The tune reacts to
   // the growing error during the gesture and owns recovery after the gesture ends. Pitch response
   // uses PID balance effort; terrain-load current remains in total current and longitudinal speed.
   const angularAcceleration = calculatePhysicalPitchAcceleration(
@@ -601,7 +601,7 @@ function stepFixed(
     MAX_RATE_DEGREES_PER_SECOND,
   )
   const angleDegrees = clamp(
-    controlledAngleDegrees + (angularRateDegreesPerSecond + disturbanceRateDegreesPerSecond) * dt,
+    controlledAngleDegrees + (angularRateDegreesPerSecond + pitchInputRateDegreesPerSecond) * dt,
     -MAX_ANGLE_DEGREES,
     MAX_ANGLE_DEGREES,
   )
@@ -615,7 +615,7 @@ function stepFixed(
     syntheticSpeedKmh,
     angleDegrees: finiteOrZero(angleDegrees),
     angularRateDegreesPerSecond: finiteOrZero(angularRateDegreesPerSecond),
-    deckDisturbanceRateDegreesPerSecond: finiteOrZero(disturbanceRateDegreesPerSecond),
+    pitchInputRateDegreesPerSecond: finiteOrZero(pitchInputRateDegreesPerSecond),
     integralError: finiteOrZero(integralError),
     targetAngleDegrees: target.totalDegrees,
     torqueTiltDegrees: target.torqueTiltDegrees,
@@ -653,6 +653,14 @@ export function terrainSlopeToSyntheticAcceleration(slope: number): number {
     (STANDARD_GRAVITY_METERS_PER_SECOND_SQUARED * finiteSlope) /
     Math.sqrt(1 + finiteSlope * finiteSlope)
   )
+}
+
+export function calculateGroundToBoardAngleDegrees(
+  boardAngleDegrees: number,
+  terrainSlope: number,
+): number {
+  const terrainAngleDegrees = (Math.atan(finiteOrZero(terrainSlope)) * 180) / Math.PI
+  return finiteOrZero(boardAngleDegrees) - terrainAngleDegrees
 }
 
 export function calculateTerrainLoadCurrentAmps(

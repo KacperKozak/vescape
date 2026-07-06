@@ -11,16 +11,16 @@ import Animated, {
 import { scheduleOnRN } from 'react-native-worklets'
 
 import { theme } from '@/constants/theme'
-import { MAX_DECK_DISTURBANCE_DEGREES, deckDisturbanceControlToRate } from '@/lib/tune/tunePreview'
+import { MAX_PITCH_INPUT_DEGREES, pitchInputControlToRate } from '@/lib/tune/tunePreview'
 
-interface DeckDisturbanceControlProps {
+interface PitchInputControlProps {
   angleDegrees: SharedValue<number>
   active: SharedValue<boolean>
 }
 
 const THUMB_SIZE = 18
 
-export function DeckDisturbanceControl({ angleDegrees, active }: DeckDisturbanceControlProps) {
+export function PitchInputControl({ angleDegrees, active }: PitchInputControlProps) {
   const width = useSharedValue(0)
   const [rateText, setRateText] = useState('0°/s')
 
@@ -29,7 +29,7 @@ export function DeckDisturbanceControl({ angleDegrees, active }: DeckDisturbance
       'worklet'
       const travel = Math.max(width.value - THUMB_SIZE, 1)
       const thumbLeft = Math.max(0, Math.min(travel, x - THUMB_SIZE / 2))
-      angleDegrees.value = ((thumbLeft / travel) * 2 - 1) * MAX_DECK_DISTURBANCE_DEGREES
+      angleDegrees.value = ((thumbLeft / travel) * 2 - 1) * MAX_PITCH_INPUT_DEGREES
     }
 
     return Gesture.Pan()
@@ -47,11 +47,11 @@ export function DeckDisturbanceControl({ angleDegrees, active }: DeckDisturbance
 
   const thumbStyle = useAnimatedStyle(() => {
     const travel = Math.max(width.value - THUMB_SIZE, 0)
-    const normalized = angleDegrees.value / MAX_DECK_DISTURBANCE_DEGREES
+    const normalized = angleDegrees.value / MAX_PITCH_INPUT_DEGREES
     return { transform: [{ translateX: ((1 + normalized) / 2) * travel }] }
   })
   const updateRateText = useCallback((controlDegrees: number) => {
-    const rate = Math.round(deckDisturbanceControlToRate(controlDegrees))
+    const rate = Math.round(pitchInputControlToRate(controlDegrees))
     setRateText(`${rate > 0 ? '+' : ''}${rate}°/s`)
   }, [])
   useAnimatedReaction(
@@ -70,7 +70,7 @@ export function DeckDisturbanceControl({ angleDegrees, active }: DeckDisturbance
       <View style={styles.labels}>
         <Text style={styles.edgeLabel}>Nose</Text>
         <View style={styles.titleRow}>
-          <Text style={styles.title}>Deck disturbance</Text>
+          <Text style={styles.title}>Pitch Input</Text>
           <Text style={styles.angle}>{rateText}</Text>
         </View>
         <Text style={styles.edgeLabel}>Tail</Text>
@@ -80,14 +80,14 @@ export function DeckDisturbanceControl({ angleDegrees, active }: DeckDisturbance
           style={styles.trackTouch}
           onLayout={handleLayout}
           accessible
-          accessibilityLabel="Hold and drag to disturb the deck angle over time, then release"
+          accessibilityLabel="Hold and drag to apply pitch input, then release"
         >
           <View style={styles.track} />
           <View style={styles.centerMark} />
           <Animated.View style={[styles.thumb, thumbStyle]} />
         </View>
       </GestureDetector>
-      <Text style={styles.hint}>Hold to nudge Board angle · release to recover</Text>
+      <Text style={styles.hint}>Hold to add pitch rate · release to recover</Text>
     </View>
   )
 }

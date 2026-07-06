@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
 import { ArrowCounterClockwiseIcon, QuestionIcon } from 'phosphor-react-native'
-import Svg, { Circle, G, Line, Path } from 'react-native-svg'
+import Svg, { Circle, G, Line, Path, Text as SvgText } from 'react-native-svg'
 import Animated, {
   useAnimatedProps,
   useSharedValue,
@@ -14,12 +14,12 @@ import { IconButton } from '@/components/ui/base/IconButton'
 import {
   DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS,
   TUNE_PREVIEW_RESET_SPEED_KMH,
+  calculateGroundToBoardAngleDegrees,
   createTunePreviewModel,
   createTunePreviewState,
   groundTravelToVisualOffset,
   resetTunePreviewSpeed,
   stepTunePreview,
-  terrainSlopeToSyntheticAcceleration,
   type TunePreviewAdvancedPhysics,
 } from '@/lib/tune/tunePreview'
 import {
@@ -32,8 +32,8 @@ import {
 
 interface TunePreviewProps {
   fields: Record<string, TuneProfileFieldValue>
-  deckDisturbanceDegrees: SharedValue<number>
-  deckDisturbanceActive: SharedValue<boolean>
+  pitchInputDegrees: SharedValue<number>
+  pitchInputActive: SharedValue<boolean>
   hillsEnabled?: boolean
   hillHeightMeters?: number
   hillSpacingMeters?: number
@@ -56,8 +56,8 @@ const READOUT_INTERVAL_MS = 100
 
 export function TunePreview({
   fields,
-  deckDisturbanceDegrees,
-  deckDisturbanceActive,
+  pitchInputDegrees,
+  pitchInputActive,
   hillsEnabled = false,
   hillHeightMeters = 2.5,
   hillSpacingMeters = 30,
@@ -71,8 +71,10 @@ export function TunePreview({
   const lastTimestampRef = useRef<number | null>(null)
   const lastReadoutTimestampRef = useRef(0)
   const [readouts, setReadouts] = useState({
-    angle: '0.0°',
-    resistance: 'Resistance +0.00',
+    boardAngle: '0.0°',
+    targetAngle: '0.0°',
+    groundToBoardAngle: '0.0°',
+    hillLoad: 'Hill load +0.0 A',
     speed: TUNE_PREVIEW_RESET_SPEED_KMH.toFixed(1),
     current: 'Motor 0 A',
   })
@@ -124,8 +126,8 @@ export function TunePreview({
           stateRef.current,
           model.parameters,
           {
-            deckDisturbanceDegrees: deckDisturbanceDegrees.value,
-            deckDisturbanceActive: deckDisturbanceActive.value,
+            pitchInputDegrees: pitchInputDegrees.value,
+            pitchInputActive: pitchInputActive.value,
             speedKmh: stateRef.current.syntheticSpeedKmh,
             hillsEnabled,
             hillHeightMeters,
@@ -146,13 +148,14 @@ export function TunePreview({
         )
         if (timestamp - lastReadoutTimestampRef.current >= READOUT_INTERVAL_MS) {
           lastReadoutTimestampRef.current = timestamp
-          const resistance = terrainSlopeToSyntheticAcceleration(next.terrainSlope)
           const current = next.syntheticCurrentAmps
           setReadouts({
-            angle: `${next.angleDegrees.toFixed(1)}°`,
-            resistance: hillsEnabled
-              ? `Hill load ${next.terrainLoadCurrentAmps >= 0 ? '+' : ''}${next.terrainLoadCurrentAmps.toFixed(1)} A`
-              : `Resistance ${resistance >= 0 ? '+' : ''}${resistance.toFixed(2)} m/s²`,
+            boardAngle: formatSignedDegrees(next.angleDegrees),
+            targetAngle: formatSignedDegrees(next.targetAngleDegrees),
+            groundToBoardAngle: formatSignedDegrees(
+              calculateGroundToBoardAngleDegrees(next.angleDegrees, next.terrainSlope),
+            ),
+            hillLoad: `Hill load ${next.terrainLoadCurrentAmps >= 0 ? '+' : ''}${next.terrainLoadCurrentAmps.toFixed(1)} A`,
             speed: next.syntheticSpeedKmh.toFixed(1),
             current: `Motor ${current > 0 ? '+' : ''}${current.toFixed(0)} A`,
           })
@@ -170,8 +173,8 @@ export function TunePreview({
     advancedPhysics,
     angleDegrees,
     canvasWidth,
-    deckDisturbanceActive,
-    deckDisturbanceDegrees,
+    pitchInputActive,
+    pitchInputDegrees,
     groundOffset,
     hillHeightMeters,
     hillSpacingMeters,
@@ -184,23 +187,39 @@ export function TunePreview({
   return (
     <View style={styles.card}>
       <View style={styles.header}>
-        <View style={styles.titleRow}>
-          <Text style={styles.title}>Tune Preview</Text>
-          <Pressable hitSlop={8} onPress={onHelp}>
-            <QuestionIcon size={14} color={theme.palette.slate.textMuted} weight="bold" />
-          </Pressable>
-        </View>
-        <View style={styles.speedActions}>
-          <View style={styles.speedReadout}>
-            <Text style={styles.speedValue}>{readouts.speed}</Text>
-            <Text style={styles.speedUnit}>km/h</Text>
+        <View style={styles.titleBlock}>
+          <View style={styles.titleRow}>
+            <Text style={styles.title}>Tune Preview</Text>
+            <Pressable hitSlop={8} onPress={onHelp}>
+              <QuestionIcon size={14} color={theme.palette.slate.textMuted} weight="bold" />
+            </Pressable>
           </View>
-          <IconButton
-            icon={ArrowCounterClockwiseIcon}
-            onPress={handleResetSpeed}
-            accessibilityLabel="Reset preview speed to 15 kilometers per hour"
-            testID="tune-preview-reset-speed"
-          />
+          {hillsEnabled ? <Text style={styles.hillLoad}>{readouts.hillLoad}</Text> : null}
+          <View style={styles.legend}>
+            <View style={styles.legendItem}>
+              <View style={styles.boardSwatch} />
+              <Text style={styles.boardLegendText}>Board {readouts.boardAngle}</Text>
+            </View>
+            <View style={styles.legendItem}>
+              <View style={styles.targetSwatch} />
+              <Text style={styles.targetLegendText}>Target {readouts.targetAngle}</Text>
+            </View>
+          </View>
+        </View>
+        <View style={styles.headerMetrics}>
+          <View style={styles.speedActions}>
+            <View style={styles.speedReadout}>
+              <Text style={styles.speedValue}>{readouts.speed}</Text>
+              <Text style={styles.speedUnit}>km/h</Text>
+            </View>
+            <IconButton
+              icon={ArrowCounterClockwiseIcon}
+              onPress={handleResetSpeed}
+              accessibilityLabel="Reset preview speed to 15 kilometers per hour"
+              testID="tune-preview-reset-speed"
+            />
+          </View>
+          <Text style={styles.current}>{readouts.current}</Text>
         </View>
       </View>
 
@@ -293,20 +312,17 @@ export function TunePreview({
                 strokeWidth={1}
               />
             )}
+            <SvgText
+              x={centerX}
+              y={GROUND_Y + 21}
+              fill={theme.palette.amber.text}
+              fontSize={9}
+              fontWeight="700"
+              textAnchor="middle"
+            >
+              {`Ground / Board ${readouts.groundToBoardAngle}`}
+            </SvgText>
           </Svg>
-          <View style={styles.legend}>
-            <View style={styles.legendItem}>
-              <View style={styles.boardSwatch} />
-              <Text style={styles.legendText}>Board</Text>
-            </View>
-            <View style={styles.legendItem}>
-              <View style={styles.targetSwatch} />
-              <Text style={styles.legendText}>Target</Text>
-            </View>
-            <Text style={styles.angle}>{readouts.angle}</Text>
-            <Text style={styles.current}>{readouts.current}</Text>
-            {hillsEnabled ? <Text style={styles.resistance}>{readouts.resistance}</Text> : null}
-          </View>
         </>
       )}
     </View>
@@ -318,6 +334,10 @@ function groundTicks(canvasWidth: number): number[] {
     { length: Math.ceil(canvasWidth / GROUND_TICK_SPACING) + 1 },
     (_, index) => index * GROUND_TICK_SPACING,
   )
+}
+
+function formatSignedDegrees(value: number): string {
+  return `${value > 0 ? '+' : ''}${value.toFixed(1)}°`
 }
 
 function terrainPath(width: number, travel: number, height: number, spacing: number): string {
@@ -337,13 +357,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  titleBlock: { gap: 2 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   title: { color: theme.palette.slate.textPrimary, fontSize: 14, fontWeight: '900' },
+  hillLoad: {
+    color: theme.palette.amber.text,
+    fontSize: 10,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
+  },
+  headerMetrics: { alignItems: 'flex-end', gap: 1 },
 
   unsupported: { height: 122, alignItems: 'center', justifyContent: 'center', gap: 5 },
   unsupportedTitle: { color: theme.palette.slate.textPrimary, fontSize: 13, fontWeight: '800' },
   unsupportedText: { color: theme.palette.slate.textMuted, fontSize: 11 },
-  legend: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16 },
+  legend: { alignItems: 'flex-start', gap: 2 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   boardSwatch: { width: 18, height: 3, backgroundColor: theme.palette.sky.color },
   targetSwatch: {
@@ -353,22 +381,16 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     borderColor: theme.palette.purple.light,
   },
-  legendText: { color: theme.palette.slate.textMuted, fontSize: 10, fontWeight: '700' },
-  angle: {
-    marginLeft: 'auto',
-    padding: 0,
-    color: theme.palette.slate.text,
+  boardLegendText: {
+    color: theme.palette.sky.color,
     fontSize: 11,
     fontWeight: '800',
-    textAlign: 'right',
+    fontVariant: ['tabular-nums'],
   },
-  resistance: {
-    width: 112,
-    padding: 0,
-    color: theme.palette.amber.text,
-    fontSize: 10,
+  targetLegendText: {
+    color: theme.palette.purple.light,
+    fontSize: 11,
     fontWeight: '800',
-    textAlign: 'right',
     fontVariant: ['tabular-nums'],
   },
   current: {
