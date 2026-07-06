@@ -1,3 +1,4 @@
+import { AppState } from 'react-native'
 import { addAppDataChangedListener, type AppDataChangedEvent } from 'vesc-ble'
 
 import { useBoardStore } from '@/store/boardStore'
@@ -17,8 +18,28 @@ const RELOADERS: Record<AppDataChangedEvent['scope'], () => void> = {
   settings: () => void useSettingsStore.getState().load(),
 }
 
-/** Wire the single native->JS data listener. Call once at app root; returns an unsubscribe. */
+function reloadAll(): void {
+  for (const reload of Object.values(RELOADERS)) reload()
+}
+
+/**
+ * Wire the native->JS data sync. Call once at app root; returns an unsubscribe.
+ *
+ * Two channels feed the same idempotent reloaders:
+ * - **Push:** live `onAppDataChanged` emits while JS is listening.
+ * - **Pull:** a foreground catch-up. `onAppDataChanged` is fire-and-forget, so any emit made while
+ *   JS was backgrounded (or torn down while the native foreground service kept persisting) is lost
+ *   — leaving JS showing e.g. a stale `lastBattery` age after a ride (#174). Re-reading native truth
+ *   on `AppState -> active` picks those missed writes up, mirroring how `useBleAppLifecycle`
+ *   re-syncs BLE state on foreground.
+ */
 export function startAppDataSync(): () => void {
   const sub = addAppDataChangedListener((event) => RELOADERS[event.scope]?.())
-  return () => sub.remove()
+  const appStateSub = AppState.addEventListener('change', (nextState) => {
+    if (nextState === 'active') reloadAll()
+  })
+  return () => {
+    sub.remove()
+    appStateSub.remove()
+  }
 }
