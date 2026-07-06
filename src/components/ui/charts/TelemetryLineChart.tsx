@@ -231,6 +231,10 @@ interface TelemetryLineChartProps {
   secondary?: SecondaryChartSeries
   scrubTimeMs?: SharedValue<number | null>
   onScrubTimeChange?: (timeMs: number) => void
+  /** Enable scrub gestures even without selection callbacks (live charts). */
+  scrubbable?: boolean
+  /** Reserve the right-axis gutter so charts with and without a secondary axis align. */
+  reserveRightAxis?: boolean
 }
 
 interface ChartLineSegmentsProps {
@@ -334,6 +338,8 @@ export function TelemetryLineChart({
   secondary,
   scrubTimeMs,
   onScrubTimeChange,
+  scrubbable = false,
+  reserveRightAxis = false,
 }: TelemetryLineChartProps) {
   'use no memo'
   const [chartWidth, setChartWidth] = useState(0)
@@ -446,11 +452,11 @@ export function TelemetryLineChart({
         onStartShouldSetPanResponder: () =>
           points.length > 0 &&
           chartWidth > 0 &&
-          (!!onPointSelectedRef.current || !!onScrubTimeChangeRef.current),
+          (scrubbable || !!onPointSelectedRef.current || !!onScrubTimeChangeRef.current),
         onMoveShouldSetPanResponder: () =>
           points.length > 0 &&
           chartWidth > 0 &&
-          (!!onPointSelectedRef.current || !!onScrubTimeChangeRef.current),
+          (scrubbable || !!onPointSelectedRef.current || !!onScrubTimeChangeRef.current),
         onPanResponderGrant: (_event, gesture) => {
           setIsDragging(true)
           onGestureStartRef.current?.()
@@ -472,7 +478,7 @@ export function TelemetryLineChart({
           activeSelectionRef.current = null
         },
       }),
-    [activeScrubTimeMs, chartWidth, points.length, selectAtPageX],
+    [activeScrubTimeMs, chartWidth, points.length, scrubbable, selectAtPageX],
   )
 
   const yMid = (range.y.min + range.y.max) / 2
@@ -630,19 +636,24 @@ export function TelemetryLineChart({
           )}
         </View>
 
-        {secondary && (
+        {secondary ? (
           <View style={[styles.rightAxis, { height }]}>
             <Text style={styles.yLabel}>{formatAxisNumber(secondary.range.y.max)}</Text>
             <Text style={styles.yLabel}>{formatAxisNumber(secondaryYMid)}</Text>
             <Text style={styles.yLabel}>{formatAxisNumber(secondary.range.y.min)}</Text>
           </View>
-        )}
+        ) : reserveRightAxis ? (
+          <View style={[styles.rightAxis, { height }]} />
+        ) : null}
       </View>
 
       <View
         style={[
           styles.xAxis,
-          { marginLeft: Y_AXIS_WIDTH, marginRight: secondary ? Y_AXIS_WIDTH : 0 },
+          {
+            marginLeft: Y_AXIS_WIDTH,
+            marginRight: secondary || reserveRightAxis ? Y_AXIS_WIDTH : 0,
+          },
         ]}
       >
         <Text style={[styles.xLabel, !timeLabels && styles.xLabelHidden]}>

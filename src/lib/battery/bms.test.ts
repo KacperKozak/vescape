@@ -78,22 +78,29 @@ describe('summarizeBms', () => {
 })
 
 describe('cellBarScale', () => {
-  it('pads the pack min/max so extremes do not pin to the track edges', () => {
+  it('pads the pack min/max and snaps outward to the stability grid', () => {
     const scale = cellBarScale(3.9, 4.1)
-    expect(scale.low).toBeCloseTo(3.892)
-    expect(scale.high).toBeCloseTo(4.108)
+    expect(scale.low).toBeCloseTo(3.88)
+    expect(scale.high).toBeCloseTo(4.12)
   })
 
   it('floors the span for a balanced pack instead of dividing by zero', () => {
     const scale = cellBarScale(4.0, 4.0)
-    expect(scale.high - scale.low).toBeCloseTo(0.05)
+    expect(scale.high - scale.low).toBeCloseTo(0.12)
     expect((scale.low + scale.high) / 2).toBeCloseTo(4.0)
   })
 
   it('widens a barely-imbalanced pack to the floor span around its midpoint', () => {
     const scale = cellBarScale(3.99, 4.01)
-    expect(scale.high - scale.low).toBeCloseTo(0.05)
+    expect(scale.high - scale.low).toBeCloseTo(0.12)
     expect((scale.low + scale.high) / 2).toBeCloseTo(4.0)
+  })
+
+  it('holds bounds still under mV-level wiggle away from grid crossings', () => {
+    const a = cellBarScale(3.951, 3.956)
+    const b = cellBarScale(3.952, 3.957)
+    expect(a.low).toBeCloseTo(b.low)
+    expect(a.high).toBeCloseTo(b.high)
   })
 })
 

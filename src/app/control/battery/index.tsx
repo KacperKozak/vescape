@@ -114,6 +114,8 @@ export default function BatteryScreen() {
       unit={battVoltageCfg.unit}
       gauge={<MetricDetailGauge metric={battPercentCfg} value={percentValue} min={0} max={100} />}
     >
+      {/* Cell groups sit above the charts so a scrubbing thumb doesn't cover them. */}
+      <BmsCellVoltages scrubTimeMs={scrubTimeMs} windowMs={windowMs} />
       <MetricDetailChart
         metric={battPercentCfg}
         points={percentPoints}
@@ -131,9 +133,9 @@ export default function BatteryScreen() {
         range={currentRange}
         windowMs={windowMs}
         scrubTimeMs={scrubTimeMs}
+        reserveRightAxis
         height={80}
       />
-      <BmsCellVoltages scrubTimeMs={scrubTimeMs} windowMs={windowMs} />
     </ControlDetailLayout>
   )
 }

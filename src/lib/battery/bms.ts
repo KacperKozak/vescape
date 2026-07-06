@@ -40,22 +40,25 @@ export interface CellBarScale {
 
 // Padding around the pack's min/max so extremes don't pin to the track edges.
 const SCALE_PAD_V = 0.008
-// Minimum visual span so a balanced pack (spread ~0) doesn't amplify noise
-// into phantom ragged edges.
-const SCALE_MIN_SPAN_V = 0.05
+// Minimum visual span so mV-level noise doesn't read as dramatic imbalance:
+// a ~5mV spread stays a few percent of the track, not most of it.
+const SCALE_MIN_SPAN_V = 0.12
+// Bounds snap to this grid so the scale (and every bar) only shifts when the
+// pack actually crosses a step, instead of re-centering on each 1mV wiggle.
+const SCALE_STEP_V = 0.02
 const EXTREME_EPSILON_V = 0.0005
 
 /**
- * Auto-zoomed shared scale for cell bars: the pack's current [min, max] padded
- * slightly, widened around its midpoint to a floor span when nearly balanced.
+ * Shared scale for cell bars: the pack's [min, max] padded slightly, snapped
+ * outward to a coarse grid for stability, then widened symmetrically to a
+ * floor span so near-balanced packs don't amplify noise.
  */
 export function cellBarScale(minVoltage: number, maxVoltage: number): CellBarScale {
-  let low = minVoltage - SCALE_PAD_V
-  let high = maxVoltage + SCALE_PAD_V
-  if (high - low < SCALE_MIN_SPAN_V) {
-    const mid = (low + high) / 2
-    low = mid - SCALE_MIN_SPAN_V / 2
-    high = mid + SCALE_MIN_SPAN_V / 2
+  let low = Math.floor((minVoltage - SCALE_PAD_V) / SCALE_STEP_V) * SCALE_STEP_V
+  let high = Math.ceil((maxVoltage + SCALE_PAD_V) / SCALE_STEP_V) * SCALE_STEP_V
+  while (high - low < SCALE_MIN_SPAN_V - 1e-9) {
+    low -= SCALE_STEP_V
+    high += SCALE_STEP_V
   }
   return { low, high }
 }

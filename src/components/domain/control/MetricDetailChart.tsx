@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import type { SharedValue } from 'react-native-reanimated'
 
 import { TelemetryLineChart } from '@/components/ui/charts/TelemetryLineChart'
@@ -30,6 +30,8 @@ interface MetricDetailChartProps {
   /** Shared cursor: pass the same SharedValue to several charts to scrub them in lockstep. */
   scrubTimeMs?: SharedValue<number | null>
   onScrubTimeChange?: (timeMs: number) => void
+  /** Reserve the right-axis gutter so this chart lines up with a sibling that has a secondary axis. */
+  reserveRightAxis?: boolean
 }
 
 function valueAtTime(points: TelemetryChartPoint[], timeMs: number): TelemetryChartPoint | null {
@@ -58,9 +60,11 @@ export function MetricDetailChart({
   secondary,
   scrubTimeMs,
   onScrubTimeChange,
+  reserveRightAxis,
 }: MetricDetailChartProps) {
-  const [selected, setSelected] = useState<TelemetryChartPoint | null>(null)
-  const currentPoint = selected ?? points.at(-1) ?? null
+  // Live charts never persist a selection: while scrubbing the marker follows the
+  // cursor, on release it snaps back to the newest point to signal "live".
+  const currentPoint = points.at(-1) ?? null
   const displayValue = currentPoint ? formatValue(currentPoint.value) : DASH
 
   const secondarySeries = useMemo(() => {
@@ -86,14 +90,14 @@ export function MetricDetailChart({
       color={metric.color}
       range={range}
       height={height}
-      onPointSelected={setSelected}
-      onGestureStart={() => setSelected(null)}
+      scrubbable
       formatValue={formatValue}
       windowMs={windowMs}
       excludedRanges={excludedRanges}
       secondary={secondarySeries}
       scrubTimeMs={scrubTimeMs}
       onScrubTimeChange={onScrubTimeChange}
+      reserveRightAxis={reserveRightAxis}
     />
   )
 }
