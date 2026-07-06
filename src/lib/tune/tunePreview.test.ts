@@ -409,7 +409,9 @@ describe('Tune Preview longitudinal response', () => {
     )
 
     expect(aggressive.syntheticSpeedKmh).toBeLessThan(soft.syntheticSpeedKmh)
-    expect(aggressive.syntheticCurrentAmps).toBeLessThan(soft.syntheticCurrentAmps)
+    expect(Math.abs(aggressive.angleDegrees - aggressive.targetAngleDegrees)).toBeLessThan(
+      Math.abs(soft.angleDegrees - soft.targetAngleDegrees),
+    )
   })
 
   test('physical preview dissipates a released disturbance across the basic tune range', () => {
@@ -749,6 +751,38 @@ describe('Tune Preview longitudinal response', () => {
 
     const meanReleasedError = releasedErrorTotal / releasedSamples
     expect(meanReleasedError).toBeLessThan(2)
+  })
+
+  test('settles on flat ground without saturating motor current', () => {
+    const parameters = readyParameters()
+    const input = {
+      deckDisturbanceDegrees: 0,
+      deckDisturbanceActive: false,
+      speedKmh: 15,
+      hillsEnabled: false,
+      advancedPhysics: DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS,
+    }
+    let state = createTunePreviewState(15)
+    let minimumSpeed = Number.POSITIVE_INFINITY
+    let maximumSpeed = Number.NEGATIVE_INFINITY
+    let saturatedSamples = 0
+    let maximumAbsoluteCurrent = 0
+
+    for (let frame = 0; frame < 1800; frame += 1) {
+      state = stepTunePreview(state, parameters, input, 1 / 60)
+      if (frame < 1200) continue
+      minimumSpeed = Math.min(minimumSpeed, state.syntheticSpeedKmh)
+      maximumSpeed = Math.max(maximumSpeed, state.syntheticSpeedKmh)
+      if (Math.abs(state.syntheticCurrentAmps) >= 59) saturatedSamples += 1
+      maximumAbsoluteCurrent = Math.max(
+        maximumAbsoluteCurrent,
+        Math.abs(state.syntheticCurrentAmps),
+      )
+    }
+
+    expect(maximumSpeed - minimumSpeed).toBeLessThan(1)
+    expect(saturatedSamples).toBe(0)
+    expect(maximumAbsoluteCurrent).toBeLessThan(20)
   })
 
   test('hill load can move Target through Torque Tilt while ATR remains disabled', () => {

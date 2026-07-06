@@ -74,7 +74,7 @@ export function TunePreview({
     angle: '0.0°',
     resistance: 'Resistance +0.00',
     speed: TUNE_PREVIEW_RESET_SPEED_KMH.toFixed(1),
-    current: '0 A',
+    current: 'Motor 0 A',
   })
   const angleDegrees = useSharedValue(0)
   const targetAngleDegrees = useSharedValue(0)
@@ -154,7 +154,7 @@ export function TunePreview({
               ? `Hill load ${next.terrainLoadCurrentAmps >= 0 ? '+' : ''}${next.terrainLoadCurrentAmps.toFixed(1)} A`
               : `Resistance ${resistance >= 0 ? '+' : ''}${resistance.toFixed(2)} m/s²`,
             speed: next.syntheticSpeedKmh.toFixed(1),
-            current: `${current > 0 ? '+' : ''}${current.toFixed(0)} A`,
+            current: `Motor ${current > 0 ? '+' : ''}${current.toFixed(0)} A`,
           })
         }
       }
@@ -372,7 +372,7 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   current: {
-    width: 48,
+    width: 80,
     padding: 0,
     color: theme.telemetry.motorCurrent,
     fontSize: 10,

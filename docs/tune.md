@@ -2,7 +2,7 @@
 
 ## Tune Preview model
 
-The flat-response Tune Preview uses model version `refloat-bundled-legacy-v13`, tied to
+The flat-response Tune Preview uses model version `refloat-bundled-legacy-v15`, tied to
 `modules/vesc-ble/android/src/main/assets/refloat-settings.xml`. It is a deterministic Refloat
 controller simulation around a simplified Board plant. Deck Disturbance adds a bounded pitch rate
 of up to `180°/s` while held. A symmetric quadratic ease-out makes the center more responsive:
@@ -36,7 +36,7 @@ The physical model is always active and converts terrain and controller effort t
 Board setup values. Its collapsed `Advanced settings` accordion exposes combined Rider + Board
 mass, motor preset and torque constant, motor current limit, wheel diameter, motor pole count,
 drivetrain efficiency, Rider + Board center-of-mass height, and pitch damping. Defaults are
-`88 kg`, `60 A`, `11 in`, `30` poles, `85%`, `0.9 m`, and `14 /s`. Available motors are FM Hypercore
+`88 kg`, `60 A`, `11 in`, `30` poles, `85%`, `0.9 m`, and `30 /s`. Available motors are FM Hypercore
 `0.68 Nm/A`, SuperFlux HS `0.56`, SuperFlux HT `0.75`, CannonCore V2 `0.68`, or CannonCore V3
 `0.75`. The estimate is:
 
@@ -57,6 +57,11 @@ terrain feed-forward load from suppressing Board's correction toward Target. Rel
 the configured Rider + Board center-of-mass height and includes configurable passive pitch damping for the rider, tire, and
 drivetrain. It intentionally does not add free inverted-pendulum gravity: without a model of rider
 body position and ankle response, that term creates energy that does not represent a real Board.
+The pitch plant includes a calibrated balance-authority factor because translating wheel acceleration
+around center-of-mass height alone underestimates the fast rotational response of a balancing Board.
+This lets Board follow adaptive ATR/Torque Tilt targets without a flat-ground limit cycle at ±60 A.
+The right-side preview readout labels this value as `Motor ±… A`; it is the estimated total motor
+current, not battery current.
 
 The preset torque constants are scenario estimates, not known Tune Profile values. The result is
 therefore a comparison tool, not a calibrated prediction of real motor current.

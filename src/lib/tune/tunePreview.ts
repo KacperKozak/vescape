@@ -8,7 +8,7 @@ import {
 // Longitudinal target equations and transition signs derive from Refloat v1.2.1
 // torque_tilt.c and brake_tilt.c (GPL-3.0-or-later), matching the bundled schema.
 
-export const TUNE_PREVIEW_MODEL_VERSION = 'refloat-bundled-legacy-v14' as const
+export const TUNE_PREVIEW_MODEL_VERSION = 'refloat-bundled-legacy-v15' as const
 export const REFERENCE_ERPM_PER_KMH = 1000 / 3.5
 export const MAX_TUNE_PREVIEW_SPEED_KMH = 50
 export const TUNE_PREVIEW_RESET_SPEED_KMH = 15
@@ -57,7 +57,7 @@ export const DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS: TunePreviewAdvancedPhysics =
   motorPoleCount: 30,
   drivetrainEfficiency: 0.85,
   centerOfMassHeightMeters: 0.9,
-  pitchDampingPerSecond: 14,
+  pitchDampingPerSecond: 30,
   maxMotorCurrentAmps: 60,
 }
 
@@ -107,6 +107,7 @@ const MAX_ANGLE_DEGREES = 35
 const MAX_RATE_DEGREES_PER_SECOND = 120
 const STANDARD_GRAVITY_METERS_PER_SECOND_SQUARED = 9.80665
 const DECK_DISTURBANCE_RESPONSE_PER_SECOND = 12
+const BALANCE_PITCH_AUTHORITY = 9
 
 export interface TunePreviewParameters {
   modelVersion: typeof TUNE_PREVIEW_MODEL_VERSION
@@ -794,7 +795,8 @@ function calculatePhysicalPitchAcceleration(
   physics: TunePreviewAdvancedPhysics,
 ): number {
   const angularAccelerationRadians =
-    longitudinalAccelerationMetersPerSecondSquared / physics.centerOfMassHeightMeters
+    (longitudinalAccelerationMetersPerSecondSquared * BALANCE_PITCH_AUTHORITY) /
+    physics.centerOfMassHeightMeters
   return (
     (angularAccelerationRadians * 180) / Math.PI -
     physics.pitchDampingPerSecond * angularRateDegreesPerSecond
