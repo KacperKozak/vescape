@@ -14,6 +14,7 @@ import { telemetry } from '@/constants/telemetry'
 import { theme } from '@/constants/theme'
 import { useLiveMetric, liveSelectors } from '@/hooks/useLiveMetric'
 import { deriveBatteryConfig } from '@/lib/battery'
+import { useRenderRateWarning } from '@/hooks/useRenderRateWarning'
 import { useBoardStore } from '@/store/boardStore'
 import { acquireBmsSeriesStream, releaseBmsSeriesStream } from '@/store/bleStore'
 import { routes } from '@/navigation/routes'
@@ -30,6 +31,7 @@ const PERCENT_RANGE = { y: { min: 0, max: 100 } }
 const VOLTAGE_LINE_COLOR = theme.palette.slate.textMuted
 
 export default function BatteryScreen() {
+  useRenderRateWarning('BatteryScreen')
   const navigation = useNavigation()
   const router = useRouter()
   const batteryPercent = useLiveMetric(liveSelectors.batteryPercent)

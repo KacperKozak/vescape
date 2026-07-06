@@ -48,12 +48,16 @@ const SCALE_MIN_SPAN_V = 0.12
 const SCALE_STEP_V = 0.02
 const EXTREME_EPSILON_V = 0.0005
 
+// summarizeBms and cellBarScale are worklets: the live cell card rebuilds the
+// scrubbed summary on the UI thread, so scrubbing never re-renders React.
+
 /**
  * Shared scale for cell bars: the pack's [min, max] padded slightly, snapped
  * outward to a coarse grid for stability, then widened symmetrically to a
  * floor span so near-balanced packs don't amplify noise.
  */
 export function cellBarScale(minVoltage: number, maxVoltage: number): CellBarScale {
+  'worklet'
   let low = Math.floor((minVoltage - SCALE_PAD_V) / SCALE_STEP_V) * SCALE_STEP_V
   let high = Math.ceil((maxVoltage + SCALE_PAD_V) / SCALE_STEP_V) * SCALE_STEP_V
   while (high - low < SCALE_MIN_SPAN_V - 1e-9) {
@@ -68,6 +72,7 @@ export function cellBarScale(minVoltage: number, maxVoltage: number): CellBarSca
  * Returns null when the snapshot carries no usable cell voltages.
  */
 export function summarizeBms(bms: BmsSnapshot | null): BmsSummary | null {
+  'worklet'
   if (!bms) return null
   const cells = bms.cellVoltages.filter((v) => Number.isFinite(v) && v > 0)
   if (cells.length === 0) return null
