@@ -1,0 +1,57 @@
+default_platform(:android)
+
+platform :android do
+  desc "Build a signed AAB, ship to internal testers, and stage a production draft"
+  lane :release do
+    # Build a signed App Bundle. Signing props come from env vars set by the
+    # GitHub Actions workflow; the withAndroidSigningConfig plugin wires them
+    # into the generated android/app/build.gradle via Gradle project properties.
+    gradle(
+      project_dir: "android",
+      task: "bundle",       # bundleRelease → .aab (Play Store requires AAB, not APK)
+      build_type: "Release",
+      properties: {
+        "VESCAPE_UPLOAD_STORE_FILE"     => ENV["VESCAPE_UPLOAD_STORE_FILE"],
+        "VESCAPE_UPLOAD_STORE_PASSWORD" => ENV["VESCAPE_UPLOAD_STORE_PASSWORD"],
+        "VESCAPE_UPLOAD_KEY_ALIAS"      => ENV["VESCAPE_UPLOAD_KEY_ALIAS"],
+        "VESCAPE_UPLOAD_KEY_PASSWORD"   => ENV["VESCAPE_UPLOAD_KEY_PASSWORD"],
+      }
+    )
+
+    aab = "android/app/build/outputs/bundle/release/app-release.aab"
+
+    # Step 1: Upload to internal testing track and auto-roll to testers.
+    upload_to_play_store(
+      aab: aab,
+      track: "internal",
+      release_status: "completed",
+      skip_upload_apk: true,
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      skip_upload_changelogs: true
+    )
+
+    # Step 2: Create a production draft with the same build so you can review
+    # and manually promote in Play Console (no second AAB upload needed).
+    upload_to_play_store(
+      track: "production",
+      release_status: "draft",
+      version_codes: [ENV["VERSION_CODE"].to_i],
+      skip_upload_aab: true,
+      skip_upload_apk: true,
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      skip_upload_changelogs: true
+    )
+  end
+end
+
+# iOS — add below once ready:
+# platform :ios do
+#   lane :release do
+#     build_app(scheme: "vescape", workspace: "ios/vescape.xcworkspace")
+#     upload_to_app_store   # or `pilot` for TestFlight-only
+#   end
+# end
