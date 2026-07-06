@@ -1,11 +1,9 @@
 package expo.modules.vescble
 
 import android.annotation.SuppressLint
-import android.Manifest
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.os.IBinder
 import expo.modules.vescble.recording.RecordingCoordinator
 import expo.modules.vescble.telemetry.AppDataRepository
@@ -19,18 +17,18 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 internal const val VESC_SESSION_TAG = "VescSession"
-private const val ACTION_START_SESSION = "expo.modules.vescble.ACTION_START_SESSION"
+internal const val ACTION_START_SESSION = "expo.modules.vescble.ACTION_START_SESSION"
 private const val ACTION_STOP_SESSION = "expo.modules.vescble.ACTION_STOP_SESSION"
 internal const val ACTION_EXIT_FROM_NOTIFICATION = "expo.modules.vescble.ACTION_EXIT_FROM_NOTIFICATION"
 internal const val ACTION_CONNECT_FROM_NOTIFICATION = "expo.modules.vescble.ACTION_CONNECT_FROM_NOTIFICATION"
 internal const val ACTION_DISCONNECT_FROM_NOTIFICATION = "expo.modules.vescble.ACTION_DISCONNECT_FROM_NOTIFICATION"
-private const val ACTION_START_GPS_MONITORING = "expo.modules.vescble.ACTION_START_GPS_MONITORING"
+internal const val ACTION_START_GPS_MONITORING = "expo.modules.vescble.ACTION_START_GPS_MONITORING"
 private const val ACTION_STOP_GPS_MONITORING = "expo.modules.vescble.ACTION_STOP_GPS_MONITORING"
-private const val ACTION_START_GROUP_RIDE_OBSERVE = "expo.modules.vescble.ACTION_START_GROUP_RIDE_OBSERVE"
+internal const val ACTION_START_GROUP_RIDE_OBSERVE = "expo.modules.vescble.ACTION_START_GROUP_RIDE_OBSERVE"
 private const val ACTION_STOP_GROUP_RIDE_OBSERVE = "expo.modules.vescble.ACTION_STOP_GROUP_RIDE_OBSERVE"
-private const val ACTION_AUTO_CONNECT_SELECTED_BOARD = "expo.modules.vescble.ACTION_AUTO_CONNECT_SELECTED_BOARD"
-private const val ACTION_COMPANION_DEVICE_APPEARED = "expo.modules.vescble.ACTION_COMPANION_DEVICE_APPEARED"
-private const val EXTRA_COMPANION_ADDRESS = "expo.modules.vescble.EXTRA_COMPANION_ADDRESS"
+internal const val ACTION_AUTO_CONNECT_SELECTED_BOARD = "expo.modules.vescble.ACTION_AUTO_CONNECT_SELECTED_BOARD"
+internal const val ACTION_COMPANION_DEVICE_APPEARED = "expo.modules.vescble.ACTION_COMPANION_DEVICE_APPEARED"
+internal const val EXTRA_COMPANION_ADDRESS = "expo.modules.vescble.EXTRA_COMPANION_ADDRESS"
 internal const val TELEMETRY_STALE_MS = 4_000L
 
 data class SessionConfig(
@@ -99,15 +97,14 @@ class VescForegroundService : Service() {
             onSuccess: () -> Unit,
             onError: (String, String) -> Unit,
         ) {
-            if (!hasBluetoothConnectPermission(context)) {
-                onError("BLUETOOTH_PERMISSION", "Bluetooth permission not granted")
+            val result = VescForegroundServiceLauncher.startBoardSession(context) {
+                pendingStart = PendingStart(boardConfig, onSuccess, onError)
+            }
+            if (!result.started) {
+                pendingStart = null
+                onError(result.errorCode(), result.errorMessage("Board session service start skipped"))
                 return
             }
-            pendingStart = PendingStart(boardConfig, onSuccess, onError)
-            val intent = Intent(context, VescForegroundService::class.java).apply {
-                action = ACTION_START_SESSION
-            }
-            context.startForegroundService(intent)
             instance?.controller?.consumePendingStart()
         }
 
@@ -126,36 +123,21 @@ class VescForegroundService : Service() {
         }
 
         fun onCompanionDeviceAppeared(context: Context, address: String) {
-            if (!hasBluetoothConnectPermission(context)) {
-                android.util.Log.w(VESC_SESSION_TAG, "Companion service start skipped: Bluetooth permission not granted")
-                return
-            }
-            val intent = Intent(context, VescForegroundService::class.java).apply {
-                action = ACTION_COMPANION_DEVICE_APPEARED
-                putExtra(EXTRA_COMPANION_ADDRESS, address)
-            }
-            try {
-                context.startForegroundService(intent)
-            } catch (e: Exception) {
-                android.util.Log.w(VESC_SESSION_TAG, "Companion service start failed: ${e.message}")
-            }
+            VescForegroundServiceLauncher.onCompanionDeviceAppeared(context, address).logIfSkipped(
+                "Companion service start skipped",
+            )
         }
 
         fun autoConnectSelectedBoard(context: Context) {
             appDataScope.launch {
                 val settings = AppDataRepository.get(context.applicationContext).getTypedSettings()
-                if (!settings.autoConnect || settings.selectedBoardId == null) return@launch
-                if (!hasBluetoothConnectPermission(context)) {
-                    android.util.Log.w(VESC_SESSION_TAG, "Auto-connect service start skipped: Bluetooth permission not granted")
-                    return@launch
-                }
-                val intent = Intent(context, VescForegroundService::class.java).apply {
-                    action = ACTION_AUTO_CONNECT_SELECTED_BOARD
-                }
-                try {
-                    context.startForegroundService(intent)
-                } catch (e: Exception) {
-                    android.util.Log.w(VESC_SESSION_TAG, "Auto-connect service start ignored: ${e.message}")
+                val result = VescForegroundServiceLauncher.autoConnectSelectedBoard(
+                    context = context,
+                    autoConnectEnabled = settings.autoConnect,
+                    selectedBoardId = settings.selectedBoardId,
+                )
+                if (!result.started) {
+                    result.logIfSkipped("Auto-connect service start skipped")
                     return@launch
                 }
                 instance?.controller?.autoConnectSelectedBoard()
@@ -206,11 +188,14 @@ class VescForegroundService : Service() {
         }
 
         fun startGpsMonitoring(context: Context) {
-            pendingGpsStart = true
-            val intent = Intent(context, VescForegroundService::class.java).apply {
-                action = ACTION_START_GPS_MONITORING
+            val result = VescForegroundServiceLauncher.startGpsMonitoring(context) {
+                pendingGpsStart = true
             }
-            context.startForegroundService(intent)
+            if (!result.started) {
+                pendingGpsStart = false
+                result.logIfSkipped("GPS service start skipped")
+                return
+            }
             instance?.controller?.consumePendingGpsStart()
         }
 
@@ -224,11 +209,14 @@ class VescForegroundService : Service() {
         }
 
         fun startGroupRideObserve(context: Context, url: String) {
-            pendingGroupRideUrl = url
-            val intent = Intent(context, VescForegroundService::class.java).apply {
-                action = ACTION_START_GROUP_RIDE_OBSERVE
+            val result = VescForegroundServiceLauncher.startGroupRideObserve(context) {
+                pendingGroupRideUrl = url
             }
-            context.startForegroundService(intent)
+            if (!result.started) {
+                pendingGroupRideUrl = null
+                result.logIfSkipped("Group Ride observe service start skipped")
+                return
+            }
             instance?.controller?.consumePendingGroupRideObserve()
         }
 
@@ -369,9 +357,6 @@ class VescForegroundService : Service() {
                 ),
             )
         }
-
-        private fun hasBluetoothConnectPermission(context: Context): Boolean =
-            context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
     }
 
     internal lateinit var controller: BoardSessionController
