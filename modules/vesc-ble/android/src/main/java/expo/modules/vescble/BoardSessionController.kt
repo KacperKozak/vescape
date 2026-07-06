@@ -5,7 +5,6 @@ import android.app.Service
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.content.Context
-import android.content.pm.ServiceInfo
 import android.location.Location
 import android.os.BatteryManager
 import android.os.Build
@@ -437,10 +436,9 @@ internal class BoardSessionController(private val service: VescForegroundService
         DiagnosticReporter.initialize(service)
         notificationController.createChannel()
         refreshSelectedBoardName()
-        // startForegroundService() requires startForeground() to be called quickly; satisfy it
-        // immediately for every service creation, even when we later decide there's no board to
-        // auto-connect. The notification will be refreshed once the idle state/selected board is ready.
-        reassertForeground()
+        // startForegroundService() is satisfied by the first real action below. Calling
+        // startForeground() here would not know the intent yet and can assert a FGS type whose
+        // runtime permission has not been granted.
     }
 
     /** Caches the selected board name so the idle notification can title it + offer Connect. */
@@ -475,7 +473,6 @@ internal class BoardSessionController(private val service: VescForegroundService
     fun connectCompanionDevice(address: String) {
         if (boardConfig != null) return
         isStoppingService = false
-        reassertForeground()
         VescForegroundService.appDataScope.launch {
             val appCtx = service.applicationContext
             val boardId = selectedCompanionBoardId(AppDataRepository.get(appCtx), address)
@@ -555,7 +552,11 @@ internal class BoardSessionController(private val service: VescForegroundService
     val isStopping: Boolean get() = isStoppingService
 
     fun stopIfIdle() {
-        if (boardConfig == null && !gpsMonitor.active && !groupRideObserver.active) service.stopSelf()
+        if (boardConfig == null && !gpsMonitor.active && !groupRideObserver.active) {
+            isStoppingService = true
+            notificationController.cancel()
+            service.stopSelf()
+        }
     }
 
     fun consumePendingStart() {
@@ -712,23 +713,28 @@ internal class BoardSessionController(private val service: VescForegroundService
     }
 
     /**
-     * Foreground-service type for the *current* live state. Android 14+ withholds background
-     * location from a foreground service whose type omits [ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION],
-     * so the LOCATION bit must be present whenever GPS is running — including during a board
-     * session, where it sits alongside CONNECTED_DEVICE. A single hardcoded type silently starves
-     * GPS recording while the app is backgrounded, so every state change re-asserts this.
+     * Foreground-service type for the *current* live state. Android 14+ checks the runtime
+     * prerequisites for every asserted type, so idle service creation must not default to
+     * CONNECTED_DEVICE before Bluetooth permissions exist. LOCATION still rides alongside
+     * CONNECTED_DEVICE whenever GPS is active so background ride recording keeps location access.
      */
     private fun foregroundServiceType(): Int {
-        var type = 0
-        if (boardConfig != null) type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
-        if (gpsMonitor.active) type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
-        return if (type != 0) type else ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+        return foregroundServiceType(
+            boardActive = boardConfig != null,
+            gpsActive = gpsMonitor.active,
+            groupRideObserveActive = groupRideObserver.active,
+        )
     }
 
     private fun reassertForeground() {
         val notification = presenter.build(reportedBoardPhase())
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            service.startForeground(NOTIFICATION_ID, notification, foregroundServiceType())
+            val type = foregroundServiceType()
+            if (type == 0) {
+                stopIfIdle()
+                return
+            }
+            service.startForeground(NOTIFICATION_ID, notification, type)
         } else {
             service.startForeground(NOTIFICATION_ID, notification)
         }

@@ -13,6 +13,14 @@ Always use **bun** for all package management and script execution:
 
 Do **not** use `npm`, `yarn`, `npx`, or `pnpm`.
 
+## Git Branch Names
+
+Do **not** add generated prefixes to branch names, including agent/tool names like `codex/`,
+`claude/`, `agent/`, or similar.
+
+- Use clean feature branch names, e.g. `battery-bms-diagnostics`.
+- Only add a prefix when the user explicitly asks for that exact prefix.
+
 ## Environment Fixes
 
 Do not fix local machine, shell, PATH, Java, Android SDK, Maestro, or other CLI/tooling environment problems in project code, package scripts, Expo config, or source files.

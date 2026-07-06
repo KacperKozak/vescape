@@ -17,18 +17,18 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 internal const val VESC_SESSION_TAG = "VescSession"
-private const val ACTION_START_SESSION = "expo.modules.vescble.ACTION_START_SESSION"
+internal const val ACTION_START_SESSION = "expo.modules.vescble.ACTION_START_SESSION"
 private const val ACTION_STOP_SESSION = "expo.modules.vescble.ACTION_STOP_SESSION"
 internal const val ACTION_EXIT_FROM_NOTIFICATION = "expo.modules.vescble.ACTION_EXIT_FROM_NOTIFICATION"
 internal const val ACTION_CONNECT_FROM_NOTIFICATION = "expo.modules.vescble.ACTION_CONNECT_FROM_NOTIFICATION"
 internal const val ACTION_DISCONNECT_FROM_NOTIFICATION = "expo.modules.vescble.ACTION_DISCONNECT_FROM_NOTIFICATION"
-private const val ACTION_START_GPS_MONITORING = "expo.modules.vescble.ACTION_START_GPS_MONITORING"
+internal const val ACTION_START_GPS_MONITORING = "expo.modules.vescble.ACTION_START_GPS_MONITORING"
 private const val ACTION_STOP_GPS_MONITORING = "expo.modules.vescble.ACTION_STOP_GPS_MONITORING"
-private const val ACTION_START_GROUP_RIDE_OBSERVE = "expo.modules.vescble.ACTION_START_GROUP_RIDE_OBSERVE"
+internal const val ACTION_START_GROUP_RIDE_OBSERVE = "expo.modules.vescble.ACTION_START_GROUP_RIDE_OBSERVE"
 private const val ACTION_STOP_GROUP_RIDE_OBSERVE = "expo.modules.vescble.ACTION_STOP_GROUP_RIDE_OBSERVE"
-private const val ACTION_AUTO_CONNECT_SELECTED_BOARD = "expo.modules.vescble.ACTION_AUTO_CONNECT_SELECTED_BOARD"
-private const val ACTION_COMPANION_DEVICE_APPEARED = "expo.modules.vescble.ACTION_COMPANION_DEVICE_APPEARED"
-private const val EXTRA_COMPANION_ADDRESS = "expo.modules.vescble.EXTRA_COMPANION_ADDRESS"
+internal const val ACTION_AUTO_CONNECT_SELECTED_BOARD = "expo.modules.vescble.ACTION_AUTO_CONNECT_SELECTED_BOARD"
+internal const val ACTION_COMPANION_DEVICE_APPEARED = "expo.modules.vescble.ACTION_COMPANION_DEVICE_APPEARED"
+internal const val EXTRA_COMPANION_ADDRESS = "expo.modules.vescble.EXTRA_COMPANION_ADDRESS"
 internal const val TELEMETRY_STALE_MS = 4_000L
 
 data class SessionConfig(
@@ -97,11 +97,14 @@ class VescForegroundService : Service() {
             onSuccess: () -> Unit,
             onError: (String, String) -> Unit,
         ) {
-            pendingStart = PendingStart(boardConfig, onSuccess, onError)
-            val intent = Intent(context, VescForegroundService::class.java).apply {
-                action = ACTION_START_SESSION
+            val result = VescForegroundServiceLauncher.startBoardSession(context) {
+                pendingStart = PendingStart(boardConfig, onSuccess, onError)
             }
-            context.startForegroundService(intent)
+            if (!result.started) {
+                pendingStart = null
+                onError(result.errorCode(), result.errorMessage("Board session service start skipped"))
+                return
+            }
             instance?.controller?.consumePendingStart()
         }
 
@@ -120,28 +123,25 @@ class VescForegroundService : Service() {
         }
 
         fun onCompanionDeviceAppeared(context: Context, address: String) {
-            val intent = Intent(context, VescForegroundService::class.java).apply {
-                action = ACTION_COMPANION_DEVICE_APPEARED
-                putExtra(EXTRA_COMPANION_ADDRESS, address)
-            }
-            try {
-                context.startForegroundService(intent)
-            } catch (e: Exception) {
-                android.util.Log.w(VESC_SESSION_TAG, "Companion service start failed: ${e.message}")
-            }
+            VescForegroundServiceLauncher.onCompanionDeviceAppeared(context, address).logIfSkipped(
+                "Companion service start skipped",
+            )
         }
 
         fun autoConnectSelectedBoard(context: Context) {
-            val intent = Intent(context, VescForegroundService::class.java).apply {
-                action = ACTION_AUTO_CONNECT_SELECTED_BOARD
+            appDataScope.launch {
+                val settings = AppDataRepository.get(context.applicationContext).getTypedSettings()
+                val result = VescForegroundServiceLauncher.autoConnectSelectedBoard(
+                    context = context,
+                    autoConnectEnabled = settings.autoConnect,
+                    selectedBoardId = settings.selectedBoardId,
+                )
+                if (!result.started) {
+                    result.logIfSkipped("Auto-connect service start skipped")
+                    return@launch
+                }
+                instance?.controller?.autoConnectSelectedBoard()
             }
-            try {
-                context.startForegroundService(intent)
-            } catch (e: Exception) {
-                android.util.Log.w(VESC_SESSION_TAG, "Auto-connect service start ignored: ${e.message}")
-                return
-            }
-            instance?.controller?.autoConnectSelectedBoard()
         }
 
         fun getRefloatConfigSnapshot(
@@ -188,11 +188,14 @@ class VescForegroundService : Service() {
         }
 
         fun startGpsMonitoring(context: Context) {
-            pendingGpsStart = true
-            val intent = Intent(context, VescForegroundService::class.java).apply {
-                action = ACTION_START_GPS_MONITORING
+            val result = VescForegroundServiceLauncher.startGpsMonitoring(context) {
+                pendingGpsStart = true
             }
-            context.startForegroundService(intent)
+            if (!result.started) {
+                pendingGpsStart = false
+                result.logIfSkipped("GPS service start skipped")
+                return
+            }
             instance?.controller?.consumePendingGpsStart()
         }
 
@@ -206,11 +209,14 @@ class VescForegroundService : Service() {
         }
 
         fun startGroupRideObserve(context: Context, url: String) {
-            pendingGroupRideUrl = url
-            val intent = Intent(context, VescForegroundService::class.java).apply {
-                action = ACTION_START_GROUP_RIDE_OBSERVE
+            val result = VescForegroundServiceLauncher.startGroupRideObserve(context) {
+                pendingGroupRideUrl = url
             }
-            context.startForegroundService(intent)
+            if (!result.started) {
+                pendingGroupRideUrl = null
+                result.logIfSkipped("Group Ride observe service start skipped")
+                return
+            }
             instance?.controller?.consumePendingGroupRideObserve()
         }
 

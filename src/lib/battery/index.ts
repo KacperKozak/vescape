@@ -2,4 +2,4 @@ export { BATTERY_CELL_PRESETS, DEFAULT_BATTERY_CONFIG, getBatteryPreset } from '
 
 export { deriveBatteryConfig } from './config'
 
-export { summarizeBms, type BmsCellGroup } from './bms'
+export { summarizeBms, cellBarScale, type BmsCellGroup, type BmsSummary } from './bms'
