@@ -10,6 +10,8 @@ import { TelemetryLineChart } from '@/components/ui/charts/TelemetryLineChart'
 import { computeAutoRange, type TelemetryChartPoint } from '@/components/ui/charts/chartMath'
 import { SingleGauge } from '@/components/ui/charts/DualGauge'
 import { Sparkline, type SparklinePoint } from '@/components/ui/charts/Sparkline'
+import { BmsCellVoltagesView } from '@/components/domain/control/BmsCellVoltages'
+import { summarizeBms } from '@/lib/battery'
 import { ShowcaseCard } from '@/components/ui/dev/ShowcaseCard'
 import { ChipRow, ToggleRow } from '@/components/ui/dev/ShowcaseControls'
 import { theme } from '@/constants/theme'
@@ -282,18 +284,72 @@ function RandomLineChartsShowcase() {
   )
 }
 
+const CELL_SCENARIOS = {
+  'Small imbalance': {
+    cells: [4.012, 4.03, 4.028, 4.031, 4.019, 4.03, 4.027, 4.03, 4.025, 4.029],
+    balancing: [true, false, false, false, true, false, false, false, false, false],
+  },
+  Balanced: {
+    cells: [4.03, 4.03, 4.031, 4.03, 4.03, 4.029, 4.03, 4.03, 4.03, 4.03],
+    balancing: [],
+  },
+  'Dead group': {
+    cells: [4.03, 4.031, 3.62, 4.03, 4.029, 4.03, 4.028, 4.03, 4.031, 4.03],
+    balancing: [],
+  },
+} as const
+
+function BmsCellVoltagesShowcase() {
+  const [scenario, setScenario] = useState<keyof typeof CELL_SCENARIOS>('Small imbalance')
+  const summary = useMemo(() => {
+    const { cells, balancing } = CELL_SCENARIOS[scenario]
+    return summarizeBms({
+      capturedAt: 0,
+      voltageTotal: cells.reduce((s, v) => s + v, 0),
+      vCharge: 0,
+      current: 0,
+      currentIc: 0,
+      ampHours: 0,
+      wattHours: 0,
+      soc: null,
+      soh: null,
+      cellVoltages: [...cells],
+      balancing: [...balancing],
+      temps: [],
+      tempIc: null,
+      tempHum: null,
+      hum: null,
+      tempMaxCell: null,
+      canId: null,
+    })
+  }, [scenario])
+
+  return (
+    <ShowcaseCard name="BmsCellVoltages / horizontal cell rows">
+      <ChipRow
+        label="Scenario"
+        options={Object.keys(CELL_SCENARIOS)}
+        selected={scenario}
+        onSelect={(v) => setScenario(v as keyof typeof CELL_SCENARIOS)}
+      />
+      {summary ? <BmsCellVoltagesView summary={summary} /> : null}
+    </ShowcaseCard>
+  )
+}
+
 export default function ChartsPage() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
         <IconHero
           icon={ChartLineUpIcon}
-          description="Sparkline, LinearGauge, SingleGauge, TelemetryLineChart."
+          description="Sparkline, LinearGauge, SingleGauge, TelemetryLineChart, BmsCellVoltages."
         />
         <SparklineShowcase />
         <LinearGaugeShowcase />
         <AnimatedSingleGaugeShowcase />
         <RandomLineChartsShowcase />
+        <BmsCellVoltagesShowcase />
       </ScrollView>
     </SafeAreaView>
   )

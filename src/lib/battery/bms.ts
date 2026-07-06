@@ -20,6 +20,33 @@ export interface BmsSummary {
   voltageTotal: number
 }
 
+/** Voltage window that cell bars are drawn over. */
+export interface CellBarScale {
+  low: number
+  high: number
+}
+
+// Padding around the pack's min/max so extremes don't pin to the track edges.
+const SCALE_PAD_V = 0.008
+// Minimum visual span so a balanced pack (spread ~0) doesn't amplify noise
+// into phantom ragged edges.
+const SCALE_MIN_SPAN_V = 0.05
+
+/**
+ * Auto-zoomed shared scale for cell bars: the pack's current [min, max] padded
+ * slightly, widened around its midpoint to a floor span when nearly balanced.
+ */
+export function cellBarScale(minVoltage: number, maxVoltage: number): CellBarScale {
+  let low = minVoltage - SCALE_PAD_V
+  let high = maxVoltage + SCALE_PAD_V
+  if (high - low < SCALE_MIN_SPAN_V) {
+    const mid = (low + high) / 2
+    low = mid - SCALE_MIN_SPAN_V / 2
+    high = mid + SCALE_MIN_SPAN_V / 2
+  }
+  return { low, high }
+}
+
 /**
  * Reduce a raw BMS snapshot into per-group rows plus pack-level min/max/spread.
  * Returns null when the snapshot carries no usable cell voltages.

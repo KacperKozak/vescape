@@ -2,17 +2,12 @@ import { useMemo } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { Text } from '@/components/ui/base/Text'
 
-import { summarizeBms, type BmsCellGroup } from '@/lib/battery'
+import { cellBarScale, summarizeBms, type BmsCellGroup, type BmsSummary } from '@/lib/battery'
 import { useBleStore } from '@/store/bleStore'
 import { useBoardStore } from '@/store/boardStore'
 import { theme } from '@/constants/theme'
 
-// Per-group fill is mapped over a typical li-ion working window so a near-empty
-// group reads short and a full one reads tall, independent of pack chemistry config.
-const CELL_MIN_V = 3.0
-const CELL_MAX_V = 4.2
-
-const formatCell = (v: number) => `${v.toFixed(2)}V`
+const formatCell = (v: number) => `${v.toFixed(3)}V`
 
 export function BmsCellVoltages() {
   const bms = useBleStore((s) => s.latestBms)
@@ -36,48 +31,52 @@ export function BmsCellVoltages() {
     )
   }
 
+  return <BmsCellVoltagesView summary={summary} />
+}
+
+/** Presentational cell-group card, driven by a precomputed summary (showcase-friendly). */
+export function BmsCellVoltagesView({ summary }: { summary: BmsSummary }) {
+  const scale = cellBarScale(summary.minVoltage, summary.maxVoltage)
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>CELL GROUPS · {summary.cellCount}S</Text>
-        <Text style={styles.spread}>Δ {(summary.spread * 1000).toFixed(0)} mV</Text>
       </View>
       <View style={styles.summaryRow}>
+        <Stat label="Δ SPREAD" value={`${summary.spread.toFixed(3)}V`} tone="spread" />
         <Stat label="MIN" value={formatCell(summary.minVoltage)} tone="min" />
         <Stat label="AVG" value={formatCell(summary.average)} tone="neutral" />
         <Stat label="MAX" value={formatCell(summary.maxVoltage)} tone="max" />
       </View>
-      <View style={styles.grid}>
+      <View style={styles.rows}>
         {summary.groups.map((group) => (
-          <CellBar key={group.index} group={group} />
+          <CellRow key={group.index} group={group} low={scale.low} high={scale.high} />
         ))}
       </View>
     </View>
   )
 }
 
-function CellBar({ group }: { group: BmsCellGroup }) {
-  const fraction = Math.max(
-    0,
-    Math.min(1, (group.voltage - CELL_MIN_V) / (CELL_MAX_V - CELL_MIN_V)),
-  )
+function CellRow({ group, low, high }: { group: BmsCellGroup; low: number; high: number }) {
+  const fraction = Math.max(0, Math.min(1, (group.voltage - low) / (high - low)))
   const color =
     group.extreme === 'min'
       ? theme.status.warning.color
       : group.extreme === 'max'
         ? theme.palette.yellow.color
-        : theme.palette.sky.color
+        : theme.palette.green.color
 
   return (
-    <View style={styles.cell}>
+    <View style={styles.row}>
+      <Text style={styles.rowIndex}>{group.index + 1}</Text>
       <View style={styles.barTrack}>
-        <View style={[styles.barFill, { height: `${fraction * 100}%`, backgroundColor: color }]} />
+        <View style={[styles.barLine, { width: `${fraction * 100}%`, backgroundColor: color }]} />
         {group.balancing ? <View style={styles.balanceDot} /> : null}
       </View>
-      <Text style={[styles.cellValue, { color }]} numberOfLines={1}>
-        {group.voltage.toFixed(2)}
+      <Text style={[styles.rowValue, { color }]} numberOfLines={1}>
+        {formatCell(group.voltage)}
       </Text>
-      <Text style={styles.cellIndex}>{group.index + 1}</Text>
     </View>
   )
 }
@@ -89,14 +88,16 @@ function Stat({
 }: {
   label: string
   value: string
-  tone: 'min' | 'max' | 'neutral'
+  tone: 'min' | 'max' | 'neutral' | 'spread'
 }) {
   const color =
     tone === 'min'
       ? theme.status.warning.text
       : tone === 'max'
         ? theme.palette.yellow.text
-        : theme.palette.slate.textPrimary
+        : tone === 'spread'
+          ? theme.palette.green.text
+          : theme.palette.slate.textPrimary
   return (
     <View style={styles.stat}>
       <Text style={styles.statLabel}>{label}</Text>
@@ -107,9 +108,6 @@ function Stat({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: theme.palette.slate.surface,
-    borderRadius: 12,
-    padding: 14,
     gap: 12,
   },
   header: {
@@ -122,12 +120,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.5,
-  },
-  spread: {
-    color: theme.palette.slate.textSecondary,
-    fontSize: 11,
-    fontWeight: '800',
-    fontFamily: 'monospace',
   },
   empty: {
     color: theme.palette.slate.textSecondary,
@@ -154,45 +146,44 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontFamily: 'monospace',
   },
-  grid: {
+  rows: {
+    gap: 3,
+  },
+  row: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
     gap: 8,
   },
-  cell: {
-    alignItems: 'center',
-    gap: 3,
-    width: 40,
+  rowIndex: {
+    color: theme.palette.slate.textDim,
+    fontSize: 8,
+    fontWeight: '600',
+    fontFamily: 'monospace',
+    width: 14,
+    textAlign: 'right',
   },
   barTrack: {
-    width: 22,
-    height: 56,
-    borderRadius: 5,
-    backgroundColor: theme.palette.slate.surfaceDeep,
-    justifyContent: 'flex-end',
-    overflow: 'hidden',
+    flex: 1,
+    height: 9,
+    justifyContent: 'center',
   },
-  barFill: {
-    width: '100%',
-    borderRadius: 5,
+  barLine: {
+    height: 2,
+    borderRadius: 1,
   },
   balanceDot: {
     position: 'absolute',
-    top: 3,
-    alignSelf: 'center',
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    right: 0,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
     backgroundColor: theme.palette.green.color,
   },
-  cellValue: {
-    fontSize: 10,
-    fontWeight: '800',
-    fontFamily: 'monospace',
-  },
-  cellIndex: {
-    color: theme.palette.slate.textDim,
+  rowValue: {
     fontSize: 9,
     fontWeight: '700',
+    fontFamily: 'monospace',
+    width: 42,
+    textAlign: 'right',
   },
 })
