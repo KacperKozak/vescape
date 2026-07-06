@@ -59,3 +59,9 @@ modules/vesc-ble/android/src/test/resources/data/
 
 # perf harness output
 perf-results/
+
+# fastlane build reports (generated, not source)
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots/
+fastlane/test_output/
