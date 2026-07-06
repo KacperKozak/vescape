@@ -2,16 +2,20 @@
 
 ## Tune Preview model
 
-The flat-response Tune Preview uses model version `refloat-bundled-legacy-v5`, tied to
+The flat-response Tune Preview uses model version `refloat-bundled-legacy-v13`, tied to
 `modules/vesc-ble/android/src/main/assets/refloat-settings.xml`. It is a deterministic Refloat
-controller simulation around a simplified Board plant. Deck Disturbance lets the rider hold Board at a temporary
-`-12..12°` angle. Releasing the gesture removes the constraint and lets the tune drive Board back
-toward Target. The model applies Refloat's Angle P, Rate P, integral-current accumulation, and
-braking multipliers in motor-amp units; the gesture never commands current directly.
+controller simulation around a simplified Board plant. Deck Disturbance adds a bounded pitch rate
+of up to `180°/s` while held. A symmetric quadratic ease-out makes the center more responsive:
+25% travel requests about 44% of maximum rate, 50% requests 75%, and the endpoints remain 100%.
+The control reports that requested rate in `°/s` instead of an abstract percentage. Changes are
+smoothed before reaching the controller so gesture input does not shake Board. It does not set,
+anchor, or constrain Board angle and does not model rider weight or pressure. Refloat PID reacts to
+the accumulating Board/Target error, and its current changes optional dynamic speed. Releasing the
+gesture stops adding pitch error and lets the tune recover Board from its current state.
 
-Longitudinal preview speed uses the bundled schema's documented reference conversion for an
-11-inch tire on a 30-pole Hypercore motor: `3.5 km/h = 1000 ERPM`. This is a named comparative
-constant, not Board-specific wheel calibration. PID, Torque Tilt, ATR, and Brake Tilt behavior is
+Longitudinal preview speed uses the bundled schema's documented reference conversion for the
+default 11-inch tire and 30-pole Hypercore motor: `3.5 km/h = 1000 ERPM`. Advanced settings scale
+that conversion using the configured wheel diameter and motor pole count. PID, Torque Tilt, ATR, and Brake Tilt behavior is
 derived from Refloat v1.2.1 `pid.c`, `torque_tilt.c`, `atr.c`, `brake_tilt.c`, and `main.c`
 (GPL-3.0-or-later). ATR includes Refloat's fixed `8 A` rolling offset and nonlinear response above
 `25 A`. Same-direction Torque Tilt and combined ATR/Brake Tilt use the larger offset, as in firmware.
@@ -28,10 +32,11 @@ acceleration disturbance into the legacy ATR equations. The disturbance is gravi
 the grade (`g * slope / sqrt(1 + slope²)`), so a 10% grade contributes about `0.98 m/s²`. It never
 forces Board pitch to the terrain tangent and does not model traction, suspension, or collision.
 
-Optional Advanced physics replaces the direct terrain-acceleration ATR disturbance with an
-estimated hill-load motor current. Advanced settings expose one combined Rider + Board mass
-(default `88 kg`) and a motor preset. Wheel diameter stays fixed at `11 in` and drivetrain
-efficiency at `85%`. Available motors are FM Hypercore
+The physical model is always active and converts terrain and controller effort through estimated
+Board setup values. Its collapsed `Advanced settings` accordion exposes combined Rider + Board
+mass, motor preset and torque constant, motor current limit, wheel diameter, motor pole count,
+drivetrain efficiency, Rider + Board center-of-mass height, and pitch damping. Defaults are
+`88 kg`, `60 A`, `11 in`, `30` poles, `85%`, `0.9 m`, and `14 /s`. Available motors are FM Hypercore
 `0.68 Nm/A`, SuperFlux HS `0.56`, SuperFlux HT `0.75`, CannonCore V2 `0.68`, or CannonCore V3
 `0.75`. The estimate is:
 
@@ -45,22 +50,27 @@ ATR disturbance = hill-load current / configured ATR amps-to-acceleration ratio
 
 The estimated total motor current also feeds Torque Tilt and Brake Tilt through an ATR-frequency
 low-pass filter. With dynamic speed, motor
-current is converted through the selected torque constant and total mass, then gravity along the
-grade is subtracted. Released deck pitch uses a simplified inverted-pendulum response with an
-assumed `0.9 m` Rider + Board center-of-mass height. It cannot know the rider's stance, body
-movement, tire grip, or exact rotational inertia.
+current is converted through the configured torque constant, wheel, efficiency, and total mass,
+then gravity along the grade is subtracted. Board pitch uses the PID balance-current component,
+while hill-load current remains part of total motor current and longitudinal speed; this prevents
+terrain feed-forward load from suppressing Board's correction toward Target. Released deck pitch converts that acceleration around
+the configured Rider + Board center-of-mass height and includes configurable passive pitch damping for the rider, tire, and
+drivetrain. It intentionally does not add free inverted-pendulum gravity: without a model of rider
+body position and ankle response, that term creates energy that does not represent a real Board.
 
 The preset torque constants are scenario estimates, not known Tune Profile values. The result is
 therefore a comparison tool, not a calibrated prediction of real motor current.
 
-`Constant speed` is disabled by default. When enabled, tune comparisons keep an identical speed.
-Otherwise, the configured speed is the starting speed and tune-derived controller current changes
-speed. Advanced physics converts current using the selected motor, mass, wheel, and efficiency;
-the basic preview retains the bounded comparative mapping where `60 A = 6 km/h/s`. Speed remains
-within `0-40 km/h`, reverse is unsupported, and the
+Preview speed is always dynamic: it starts at `15 km/h`, and tune-derived controller current changes
+it through the always-active physical model. The reset button beside the speed readout restores
+`15 km/h` and clears the measured-acceleration derivative so the reset does not create a false ATR
+impulse. Speed remains within `0-50 km/h`, reverse is unsupported, and the
 evolving value feeds the existing ERPM, tilt, ATR, terrain-phase, and ground-travel paths. The model
 does not predict an exact real braking distance, power, traction, deck-ground contact, rider body
 movement, or safety.
+
+With Hills disabled, the flat-ground travel marks are spaced every `1 m`; this is four times less
+dense than the previous `0.25 m` marks so speed is easier to judge visually.
 
 This document captures practical tune-screen behavior used by a Refloat-focused
 board app. It is intended as product and implementation reference for building a

@@ -1,5 +1,5 @@
 /* eslint-disable react-hooks/immutability */
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, {
@@ -11,7 +11,7 @@ import Animated, {
 import { scheduleOnRN } from 'react-native-worklets'
 
 import { theme } from '@/constants/theme'
-import { MAX_DECK_DISTURBANCE_DEGREES } from '@/lib/tune/tunePreview'
+import { MAX_DECK_DISTURBANCE_DEGREES, deckDisturbanceControlToRate } from '@/lib/tune/tunePreview'
 
 interface DeckDisturbanceControlProps {
   angleDegrees: SharedValue<number>
@@ -22,15 +22,14 @@ const THUMB_SIZE = 18
 
 export function DeckDisturbanceControl({ angleDegrees, active }: DeckDisturbanceControlProps) {
   const width = useSharedValue(0)
-  const [angleText, setAngleText] = useState('0.0°')
+  const [rateText, setRateText] = useState('0°/s')
 
   const gesture = useMemo(() => {
     const updateFromX = (x: number) => {
       'worklet'
       const travel = Math.max(width.value - THUMB_SIZE, 1)
       const thumbLeft = Math.max(0, Math.min(travel, x - THUMB_SIZE / 2))
-      angleDegrees.value =
-        Math.round(((thumbLeft / travel) * 2 - 1) * MAX_DECK_DISTURBANCE_DEGREES * 10) / 10
+      angleDegrees.value = ((thumbLeft / travel) * 2 - 1) * MAX_DECK_DISTURBANCE_DEGREES
     }
 
     return Gesture.Pan()
@@ -51,13 +50,14 @@ export function DeckDisturbanceControl({ angleDegrees, active }: DeckDisturbance
     const normalized = angleDegrees.value / MAX_DECK_DISTURBANCE_DEGREES
     return { transform: [{ translateX: ((1 + normalized) / 2) * travel }] }
   })
+  const updateRateText = useCallback((controlDegrees: number) => {
+    const rate = Math.round(deckDisturbanceControlToRate(controlDegrees))
+    setRateText(`${rate > 0 ? '+' : ''}${rate}°/s`)
+  }, [])
   useAnimatedReaction(
-    () => {
-      const angle = angleDegrees.value
-      return `${angle > 0 ? '+' : ''}${angle.toFixed(1)}°`
-    },
+    () => angleDegrees.value,
     (next, previous) => {
-      if (next !== previous) scheduleOnRN(setAngleText, next)
+      if (next !== previous) scheduleOnRN(updateRateText, next)
     },
   )
 
@@ -71,7 +71,7 @@ export function DeckDisturbanceControl({ angleDegrees, active }: DeckDisturbance
         <Text style={styles.edgeLabel}>Nose</Text>
         <View style={styles.titleRow}>
           <Text style={styles.title}>Deck disturbance</Text>
-          <Text style={styles.angle}>{angleText}</Text>
+          <Text style={styles.angle}>{rateText}</Text>
         </View>
         <Text style={styles.edgeLabel}>Tail</Text>
       </View>
@@ -80,14 +80,14 @@ export function DeckDisturbanceControl({ angleDegrees, active }: DeckDisturbance
           style={styles.trackTouch}
           onLayout={handleLayout}
           accessible
-          accessibilityLabel="Hold and drag to disturb the deck angle, then release"
+          accessibilityLabel="Hold and drag to disturb the deck angle over time, then release"
         >
           <View style={styles.track} />
           <View style={styles.centerMark} />
           <Animated.View style={[styles.thumb, thumbStyle]} />
         </View>
       </GestureDetector>
-      <Text style={styles.hint}>Hold to set Board angle · release to let the tune recover</Text>
+      <Text style={styles.hint}>Hold to nudge Board angle · release to recover</Text>
     </View>
   )
 }
@@ -98,7 +98,7 @@ const styles = StyleSheet.create({
   titleRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
   title: { color: theme.palette.slate.text, fontSize: 11, fontWeight: '800' },
   angle: {
-    width: 43,
+    width: 55,
     padding: 0,
     color: theme.telemetry.pitch,
     fontSize: 11,

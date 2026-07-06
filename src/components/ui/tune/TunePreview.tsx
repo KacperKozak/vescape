@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
-import { QuestionIcon } from 'phosphor-react-native'
+import { ArrowCounterClockwiseIcon, QuestionIcon } from 'phosphor-react-native'
 import Svg, { Circle, G, Line, Path } from 'react-native-svg'
 import Animated, {
   useAnimatedProps,
@@ -10,8 +10,10 @@ import Animated, {
 import type { TuneProfileFieldValue } from 'vesc-ble'
 
 import { theme } from '@/constants/theme'
+import { IconButton } from '@/components/ui/base/IconButton'
 import {
   DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS,
+  TUNE_PREVIEW_RESET_SPEED_KMH,
   createTunePreviewModel,
   createTunePreviewState,
   groundTravelToVisualOffset,
@@ -32,8 +34,6 @@ interface TunePreviewProps {
   fields: Record<string, TuneProfileFieldValue>
   deckDisturbanceDegrees: SharedValue<number>
   deckDisturbanceActive: SharedValue<boolean>
-  speedKmh: number
-  holdSpeed?: boolean
   hillsEnabled?: boolean
   hillHeightMeters?: number
   hillSpacingMeters?: number
@@ -58,8 +58,6 @@ export function TunePreview({
   fields,
   deckDisturbanceDegrees,
   deckDisturbanceActive,
-  speedKmh,
-  holdSpeed = false,
   hillsEnabled = false,
   hillHeightMeters = 2.5,
   hillSpacingMeters = 30,
@@ -69,14 +67,13 @@ export function TunePreview({
 }: TunePreviewProps) {
   const model = useMemo(() => createTunePreviewModel(fields), [fields])
   const { width: canvasWidth } = useWindowDimensions()
-  const stateRef = useRef(createTunePreviewState(speedKmh))
-  const configuredSpeedRef = useRef(speedKmh)
+  const stateRef = useRef(createTunePreviewState(TUNE_PREVIEW_RESET_SPEED_KMH))
   const lastTimestampRef = useRef<number | null>(null)
   const lastReadoutTimestampRef = useRef(0)
   const [readouts, setReadouts] = useState({
     angle: '0.0°',
     resistance: 'Resistance +0.00',
-    speed: speedKmh.toFixed(1),
+    speed: TUNE_PREVIEW_RESET_SPEED_KMH.toFixed(1),
     current: '0 A',
   })
   const angleDegrees = useSharedValue(0)
@@ -100,14 +97,17 @@ export function TunePreview({
     d: terrainPathValue.value,
   }))
 
-  useEffect(() => {
-    configuredSpeedRef.current = speedKmh
-  }, [speedKmh])
-
-  useEffect(() => {
-    const configuredSpeed = configuredSpeedRef.current
-    stateRef.current = resetTunePreviewSpeed(stateRef.current, configuredSpeed)
-  }, [holdSpeed])
+  const handleResetSpeed = useCallback(() => {
+    stateRef.current = resetTunePreviewSpeed(
+      stateRef.current,
+      TUNE_PREVIEW_RESET_SPEED_KMH,
+      advancedPhysics,
+    )
+    setReadouts((current) => ({
+      ...current,
+      speed: TUNE_PREVIEW_RESET_SPEED_KMH.toFixed(1),
+    }))
+  }, [advancedPhysics])
 
   useEffect(() => {
     if (!active || model.status !== 'ready') {
@@ -126,8 +126,7 @@ export function TunePreview({
           {
             deckDisturbanceDegrees: deckDisturbanceDegrees.value,
             deckDisturbanceActive: deckDisturbanceActive.value,
-            speedKmh,
-            holdSpeed,
+            speedKmh: stateRef.current.syntheticSpeedKmh,
             hillsEnabled,
             hillHeightMeters,
             hillSpacingMeters,
@@ -151,7 +150,7 @@ export function TunePreview({
           const current = next.syntheticCurrentAmps
           setReadouts({
             angle: `${next.angleDegrees.toFixed(1)}°`,
-            resistance: advancedPhysics.enabled
+            resistance: hillsEnabled
               ? `Hill load ${next.terrainLoadCurrentAmps >= 0 ? '+' : ''}${next.terrainLoadCurrentAmps.toFixed(1)} A`
               : `Resistance ${resistance >= 0 ? '+' : ''}${resistance.toFixed(2)} m/s²`,
             speed: next.syntheticSpeedKmh.toFixed(1),
@@ -177,9 +176,7 @@ export function TunePreview({
     hillHeightMeters,
     hillSpacingMeters,
     hillsEnabled,
-    holdSpeed,
     model,
-    speedKmh,
     targetAngleDegrees,
     terrainPathValue,
   ])
@@ -193,9 +190,17 @@ export function TunePreview({
             <QuestionIcon size={14} color={theme.palette.slate.textMuted} weight="bold" />
           </Pressable>
         </View>
-        <View style={styles.speedReadout}>
-          <Text style={styles.speedValue}>{readouts.speed}</Text>
-          <Text style={styles.speedUnit}>km/h</Text>
+        <View style={styles.speedActions}>
+          <View style={styles.speedReadout}>
+            <Text style={styles.speedValue}>{readouts.speed}</Text>
+            <Text style={styles.speedUnit}>km/h</Text>
+          </View>
+          <IconButton
+            icon={ArrowCounterClockwiseIcon}
+            onPress={handleResetSpeed}
+            accessibilityLabel="Reset preview speed to 15 kilometers per hour"
+            testID="tune-preview-reset-speed"
+          />
         </View>
       </View>
 
@@ -379,6 +384,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'baseline',
     gap: 4,
+  },
+  speedActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   speedValue: {
     width: 64,

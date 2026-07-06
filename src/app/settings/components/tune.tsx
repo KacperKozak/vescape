@@ -213,9 +213,7 @@ function BasicSliderCellShowcase() {
 function TunePreviewShowcase() {
   const deckDisturbanceDegrees = useSharedValue(0)
   const deckDisturbanceActive = useSharedValue(false)
-  const [speedKmh, setSpeedKmh] = useState(15)
-  const [holdSpeed, setHoldSpeed] = useState(false)
-  const [scenario, setScenario] = useState('dynamic speed')
+  const [scenario, setScenario] = useState('flat')
   const [hillsEnabled, setHillsEnabled] = useState(false)
   const [hillHeightMeters, setHillHeightMeters] = useState(2.5)
   const [hillSpacingMeters, setHillSpacingMeters] = useState(30)
@@ -259,24 +257,12 @@ function TunePreviewShowcase() {
 
   const selectScenario = (next: string) => {
     setScenario(next)
-    if (next === 'dynamic speed') {
-      setHillsEnabled(false)
-      setSpeedKmh(15)
-      setHoldSpeed(false)
-    } else if (next === 'high speed') {
-      setHillsEnabled(false)
-      setSpeedKmh(40)
-      setHoldSpeed(true)
-    } else if (next === 'hills' || next === 'dense hills') {
+    if (next === 'hills' || next === 'dense hills') {
       setHillsEnabled(true)
-      setSpeedKmh(15)
-      setHoldSpeed(true)
       setHillHeightMeters(next === 'dense hills' ? 5 : 2.5)
       setHillSpacingMeters(next === 'dense hills' ? 15 : 30)
     } else {
       setHillsEnabled(false)
-      setSpeedKmh(15)
-      setHoldSpeed(true)
     }
   }
 
@@ -287,7 +273,7 @@ function TunePreviewShowcase() {
         <>
           <ChipRow
             label="state"
-            options={['fixed speed', 'dynamic speed', 'high speed', 'hills', 'dense hills']}
+            options={['flat', 'hills', 'dense hills']}
             selected={scenario}
             onSelect={selectScenario}
           />
@@ -299,8 +285,6 @@ function TunePreviewShowcase() {
         fields={fields}
         deckDisturbanceDegrees={deckDisturbanceDegrees}
         deckDisturbanceActive={deckDisturbanceActive}
-        speedKmh={speedKmh}
-        holdSpeed={holdSpeed}
         hillsEnabled={hillsEnabled}
         hillHeightMeters={hillHeightMeters}
         hillSpacingMeters={hillSpacingMeters}
@@ -312,10 +296,6 @@ function TunePreviewShowcase() {
         active={deckDisturbanceActive}
       />
       <TunePreviewScenarioControls
-        speedKmh={speedKmh}
-        onSpeedChange={setSpeedKmh}
-        holdSpeed={holdSpeed}
-        onHoldSpeedChange={setHoldSpeed}
         advancedPhysics={advancedPhysics}
         onAdvancedPhysicsChange={setAdvancedPhysics}
         hillsEnabled={hillsEnabled}
@@ -339,7 +319,6 @@ function UnsupportedTunePreviewShowcase() {
         fields={{ kp: 20 }}
         deckDisturbanceDegrees={deckDisturbanceDegrees}
         deckDisturbanceActive={deckDisturbanceActive}
-        speedKmh={15}
         active={false}
         onHelp={() => {}}
       />

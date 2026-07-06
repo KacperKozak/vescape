@@ -8,11 +8,16 @@ import {
 // Longitudinal target equations and transition signs derive from Refloat v1.2.1
 // torque_tilt.c and brake_tilt.c (GPL-3.0-or-later), matching the bundled schema.
 
-export const TUNE_PREVIEW_MODEL_VERSION = 'refloat-bundled-legacy-v5' as const
+export const TUNE_PREVIEW_MODEL_VERSION = 'refloat-bundled-legacy-v14' as const
 export const REFERENCE_ERPM_PER_KMH = 1000 / 3.5
+export const MAX_TUNE_PREVIEW_SPEED_KMH = 50
+export const TUNE_PREVIEW_RESET_SPEED_KMH = 15
 export const COMPARATIVE_ACCELERATION_KMH_PER_SECOND = 6
 export const MAX_SYNTHETIC_CURRENT_AMPS = 60
-export const MAX_DECK_DISTURBANCE_DEGREES = 12
+// A typical Refloat kp of 20 reaches the 60 A preview limit at 3 degrees of error.
+// A wider gesture range makes most of the control indistinguishable current saturation.
+export const MAX_DECK_DISTURBANCE_DEGREES = 3
+export const MAX_DECK_DISTURBANCE_RATE_DEGREES_PER_SECOND = 180
 
 export type TunePreviewMotorPresetId =
   | 'hypercore'
@@ -22,9 +27,15 @@ export type TunePreviewMotorPresetId =
   | 'cannoncore-v3'
 
 export interface TunePreviewAdvancedPhysics {
-  enabled: boolean
   motorPresetId: TunePreviewMotorPresetId
   totalMassKg: number
+  motorTorqueNmPerAmp: number
+  wheelDiameterInches: number
+  motorPoleCount: number
+  drivetrainEfficiency: number
+  centerOfMassHeightMeters: number
+  pitchDampingPerSecond: number
+  maxMotorCurrentAmps: number
 }
 
 export const TUNE_PREVIEW_MOTOR_PRESETS: Record<
@@ -39,13 +50,16 @@ export const TUNE_PREVIEW_MOTOR_PRESETS: Record<
 }
 
 export const DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS: TunePreviewAdvancedPhysics = {
-  enabled: false,
   motorPresetId: 'hypercore',
   totalMassKg: 88,
+  motorTorqueNmPerAmp: TUNE_PREVIEW_MOTOR_PRESETS.hypercore.motorTorqueNmPerAmp,
+  wheelDiameterInches: 11,
+  motorPoleCount: 30,
+  drivetrainEfficiency: 0.85,
+  centerOfMassHeightMeters: 0.9,
+  pitchDampingPerSecond: 14,
+  maxMotorCurrentAmps: 60,
 }
-
-const ADVANCED_PHYSICS_WHEEL_DIAMETER_INCHES = 11
-const ADVANCED_PHYSICS_DRIVETRAIN_EFFICIENCY = 0.85
 
 const REQUIRED_FIELDS = [
   'kp',
@@ -91,8 +105,8 @@ const REFLOAT_LOOP_HZ = 832
 const STEP_SECONDS = 1 / REFLOAT_LOOP_HZ
 const MAX_ANGLE_DEGREES = 35
 const MAX_RATE_DEGREES_PER_SECOND = 120
-const SYNTHETIC_BALANCE_OFFSET_DEGREES = 8
 const STANDARD_GRAVITY_METERS_PER_SECOND_SQUARED = 9.80665
+const DECK_DISTURBANCE_RESPONSE_PER_SECOND = 12
 
 export interface TunePreviewParameters {
   modelVersion: typeof TUNE_PREVIEW_MODEL_VERSION
@@ -154,6 +168,7 @@ export interface TunePreviewState {
   syntheticSpeedKmh: number
   angleDegrees: number
   angularRateDegreesPerSecond: number
+  deckDisturbanceRateDegreesPerSecond: number
   integralError: number
   targetAngleDegrees: number
   torqueTiltDegrees: number
@@ -176,7 +191,6 @@ export interface TunePreviewInput {
   deckDisturbanceDegrees: number
   deckDisturbanceActive?: boolean
   speedKmh: number
-  holdSpeed?: boolean
   hillsEnabled?: boolean
   hillHeightMeters?: number
   hillSpacingMeters?: number
@@ -257,6 +271,7 @@ export function createTunePreviewState(speedKmh = 0): TunePreviewState {
     syntheticSpeedKmh,
     angleDegrees: 0,
     angularRateDegreesPerSecond: 0,
+    deckDisturbanceRateDegreesPerSecond: 0,
     integralError: 0,
     targetAngleDegrees: 0,
     torqueTiltDegrees: 0,
@@ -276,12 +291,91 @@ export function createTunePreviewState(speedKmh = 0): TunePreviewState {
   }
 }
 
-export function resetTunePreviewSpeed(state: TunePreviewState, speedKmh: number): TunePreviewState {
-  return { ...state, syntheticSpeedKmh: boundedSpeed(speedKmh) }
+export function resetTunePreviewSpeed(
+  state: TunePreviewState,
+  speedKmh: number,
+  physics?: Partial<TunePreviewAdvancedPhysics>,
+): TunePreviewState {
+  const syntheticSpeedKmh = boundedSpeed(speedKmh)
+  return {
+    ...state,
+    syntheticSpeedKmh,
+    erpm: speedKmhToErpm(syntheticSpeedKmh, physics),
+    measuredAccelerationErpmPerTick: 0,
+  }
 }
 
 export function speedKmhToReferenceErpm(speedKmh: number): number {
-  return clamp(speedKmh, 0, 40) * REFERENCE_ERPM_PER_KMH
+  return clamp(speedKmh, 0, MAX_TUNE_PREVIEW_SPEED_KMH) * REFERENCE_ERPM_PER_KMH
+}
+
+export function resolveTunePreviewPhysics(
+  physics?: Partial<TunePreviewAdvancedPhysics>,
+): TunePreviewAdvancedPhysics {
+  const motorPresetId =
+    physics?.motorPresetId && physics.motorPresetId in TUNE_PREVIEW_MOTOR_PRESETS
+      ? physics.motorPresetId
+      : DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS.motorPresetId
+  return {
+    motorPresetId,
+    totalMassKg: clampFinite(physics?.totalMassKg ?? Number.NaN, 30, 250, 88),
+    motorTorqueNmPerAmp: clampFinite(
+      physics?.motorTorqueNmPerAmp ?? Number.NaN,
+      0.2,
+      1.5,
+      TUNE_PREVIEW_MOTOR_PRESETS[motorPresetId].motorTorqueNmPerAmp,
+    ),
+    wheelDiameterInches: clampFinite(
+      physics?.wheelDiameterInches ?? Number.NaN,
+      8,
+      20,
+      DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS.wheelDiameterInches,
+    ),
+    motorPoleCount: Math.round(
+      clampFinite(
+        physics?.motorPoleCount ?? Number.NaN,
+        2,
+        60,
+        DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS.motorPoleCount,
+      ),
+    ),
+    drivetrainEfficiency: clampFinite(
+      physics?.drivetrainEfficiency ?? Number.NaN,
+      0.5,
+      1,
+      DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS.drivetrainEfficiency,
+    ),
+    centerOfMassHeightMeters: clampFinite(
+      physics?.centerOfMassHeightMeters ?? Number.NaN,
+      0.4,
+      1.5,
+      DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS.centerOfMassHeightMeters,
+    ),
+    pitchDampingPerSecond: clampFinite(
+      physics?.pitchDampingPerSecond ?? Number.NaN,
+      0,
+      30,
+      DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS.pitchDampingPerSecond,
+    ),
+    maxMotorCurrentAmps: clampFinite(
+      physics?.maxMotorCurrentAmps ?? Number.NaN,
+      10,
+      150,
+      DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS.maxMotorCurrentAmps,
+    ),
+  }
+}
+
+export function speedKmhToErpm(
+  speedKmh: number,
+  physics?: Partial<TunePreviewAdvancedPhysics>,
+): number {
+  const resolved = resolveTunePreviewPhysics(physics)
+  const setupErpmPerKmh =
+    REFERENCE_ERPM_PER_KMH *
+    (resolved.motorPoleCount / DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS.motorPoleCount) *
+    (DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS.wheelDiameterInches / resolved.wheelDiameterInches)
+  return clamp(speedKmh, 0, MAX_TUNE_PREVIEW_SPEED_KMH) * setupErpmPerKmh
 }
 
 export function groundTravelToVisualOffset(groundTravelMeters: number): number {
@@ -289,14 +383,23 @@ export function groundTravelToVisualOffset(groundTravelMeters: number): number {
   return (groundTravelMeters * TUNE_PREVIEW_PIXELS_PER_METER) % tickSpacingPixels
 }
 
+export function deckDisturbanceControlToRate(controlDegrees: number): number {
+  const normalized =
+    clampFinite(controlDegrees, -MAX_DECK_DISTURBANCE_DEGREES, MAX_DECK_DISTURBANCE_DEGREES, 0) /
+    MAX_DECK_DISTURBANCE_DEGREES
+  const magnitude = Math.abs(normalized)
+  const easedMagnitude = 1 - (1 - magnitude) ** 2
+  return Math.sign(normalized) * easedMagnitude * MAX_DECK_DISTURBANCE_RATE_DEGREES_PER_SECOND
+}
+
 export function calculateLongitudinalTarget(
-  state: Pick<TunePreviewState, 'torqueTiltDegrees' | 'brakeTiltDegrees'>,
+  state: Pick<TunePreviewState, 'angleDegrees' | 'torqueTiltDegrees' | 'brakeTiltDegrees'>,
   parameters: TunePreviewParameters,
   input: TunePreviewInput,
   elapsedSeconds: number,
   syntheticCurrentAmps: number,
 ): TunePreviewTarget {
-  const erpm = speedKmhToReferenceErpm(input.speedKmh)
+  const erpm = speedKmhToErpm(input.speedKmh, input.advancedPhysics)
   const torqueTarget = torqueTiltTarget(parameters, syntheticCurrentAmps)
   const torqueRate = torqueTiltRate(state.torqueTiltDegrees, torqueTarget, parameters, erpm)
   const torqueTiltDegrees = moveTowards(
@@ -305,7 +408,18 @@ export function calculateLongitudinalTarget(
     torqueRate * elapsedSeconds,
   )
 
-  const brakeTarget = brakeTiltTarget(parameters, syntheticCurrentAmps, erpm)
+  const constantTiltbackDegrees =
+    erpm >= parameters.tiltbackConstantErpm ? parameters.tiltbackConstant : 0
+  const variableProgress = Math.max(erpm - parameters.tiltbackVariableErpm, 0) / 1000
+  const variableMagnitude = Math.min(
+    parameters.tiltbackVariable * variableProgress,
+    Math.abs(parameters.tiltbackVariableMax),
+  )
+  const variableTiltbackDegrees = Math.sign(parameters.tiltbackVariableMax) * variableMagnitude
+  // Refloat passes its base setpoint minus pitch into Brake Tilt before adding TT/ATR/Brake Tilt.
+  const balanceOffsetDegrees =
+    constantTiltbackDegrees + variableTiltbackDegrees - state.angleDegrees
+  const brakeTarget = brakeTiltTarget(parameters, syntheticCurrentAmps, balanceOffsetDegrees, erpm)
   const brakeApplying = Math.abs(brakeTarget) > Math.abs(state.brakeTiltDegrees)
   const brakeRate = brakeApplying
     ? parameters.atrOnSpeed * 1.5
@@ -317,14 +431,6 @@ export function calculateLongitudinalTarget(
     lowSpeedBrakeRate * (erpm < 500 ? 0.5 : 1) * elapsedSeconds,
   )
 
-  const constantTiltbackDegrees =
-    erpm >= parameters.tiltbackConstantErpm ? parameters.tiltbackConstant : 0
-  const variableProgress = Math.max(erpm - parameters.tiltbackVariableErpm, 0) / 1000
-  const variableMagnitude = Math.min(
-    parameters.tiltbackVariable * variableProgress,
-    Math.abs(parameters.tiltbackVariableMax),
-  )
-  const variableTiltbackDegrees = Math.sign(parameters.tiltbackVariableMax) * variableMagnitude
   const totalDegrees = clamp(
     torqueTiltDegrees + brakeTiltDegrees + constantTiltbackDegrees + variableTiltbackDegrees,
     -MAX_ANGLE_DEGREES,
@@ -367,19 +473,25 @@ function stepFixed(
   input: TunePreviewInput,
   dt: number,
 ): TunePreviewState {
+  const physics = resolveTunePreviewPhysics(input.advancedPhysics)
   const deckDisturbanceActive = input.deckDisturbanceActive === true
-  const controlledAngleDegrees = deckDisturbanceActive
-    ? clampFinite(
-        input.deckDisturbanceDegrees,
-        -MAX_DECK_DISTURBANCE_DEGREES,
-        MAX_DECK_DISTURBANCE_DEGREES,
-        0,
-      )
-    : state.angleDegrees
-  const controlledRateDegreesPerSecond = deckDisturbanceActive
-    ? 0
-    : state.angularRateDegreesPerSecond
-  const currentLimit = MAX_SYNTHETIC_CURRENT_AMPS
+  const requestedDisturbanceRateDegreesPerSecond = deckDisturbanceActive
+    ? deckDisturbanceControlToRate(input.deckDisturbanceDegrees)
+    : 0
+  const previousDisturbanceRateDegreesPerSecond = Number.isFinite(
+    state.deckDisturbanceRateDegreesPerSecond,
+  )
+    ? state.deckDisturbanceRateDegreesPerSecond
+    : 0
+  const disturbanceRateDegreesPerSecond = deckDisturbanceActive
+    ? previousDisturbanceRateDegreesPerSecond +
+      (requestedDisturbanceRateDegreesPerSecond - previousDisturbanceRateDegreesPerSecond) *
+        (1 - Math.exp(-DECK_DISTURBANCE_RESPONSE_PER_SECOND * dt))
+    : 0
+  const controlledAngleDegrees = state.angleDegrees
+  const controlledRateDegreesPerSecond =
+    state.angularRateDegreesPerSecond + disturbanceRateDegreesPerSecond
+  const currentLimit = physics.maxMotorCurrentAmps
   const balanceCurrentAmps = calculateControllerCurrentAmps(
     controlledAngleDegrees,
     controlledRateDegreesPerSecond,
@@ -389,10 +501,7 @@ function stepFixed(
     currentLimit,
   )
   const terrainSlope = calculateTerrainSlope(state.groundTravelMeters, input)
-  const terrainLoadCurrentAmps = calculateTerrainLoadCurrentAmps(
-    terrainSlope,
-    input.advancedPhysics,
-  )
+  const terrainLoadCurrentAmps = calculateTerrainLoadCurrentAmps(terrainSlope, physics)
   const syntheticCurrentAmps = clamp(
     balanceCurrentAmps + terrainLoadCurrentAmps,
     -currentLimit,
@@ -402,19 +511,11 @@ function stepFixed(
   const filteredCurrentAmps =
     state.filteredCurrentAmps +
     (syntheticCurrentAmps - state.filteredCurrentAmps) * currentFilterAlpha
-  const syntheticSpeedKmh =
-    input.holdSpeed === false
-      ? boundedSpeed(
-          state.syntheticSpeedKmh +
-            calculatePreviewAcceleration(
-              syntheticCurrentAmps,
-              terrainSlope,
-              input.advancedPhysics,
-            ) *
-              dt,
-        )
-      : boundedSpeed(input.speedKmh)
-  const effectiveInput = { ...input, speedKmh: syntheticSpeedKmh }
+  const syntheticSpeedKmh = boundedSpeed(
+    state.syntheticSpeedKmh +
+      calculatePreviewAcceleration(syntheticCurrentAmps, terrainSlope, physics) * dt,
+  )
+  const effectiveInput = { ...input, speedKmh: syntheticSpeedKmh, advancedPhysics: physics }
   const target = calculateLongitudinalTarget(
     state,
     parameters,
@@ -485,32 +586,26 @@ function stepFixed(
     integralLimit,
   )
 
-  // The optional physical plant is an inverted-pendulum approximation. It deliberately keeps
-  // mass and motor torque in the same path as longitudinal speed instead of inventing a second
-  // tune-strength scale. The non-physical mode remains a bounded comparative preview.
-  const angularAcceleration = input.advancedPhysics?.enabled
-    ? calculatePhysicalPitchAcceleration(
-        controlledAngleDegrees,
-        calculatePreviewAcceleration(syntheticCurrentAmps, terrainSlope, input.advancedPhysics) /
-          3.6,
-      )
-    : balanceCurrentAmps * 0.8 - controlledRateDegreesPerSecond * 1.5
-  const angularRateDegreesPerSecond = deckDisturbanceActive
-    ? 0
-    : clamp(
-        controlledRateDegreesPerSecond + angularAcceleration * dt,
-        -MAX_RATE_DEGREES_PER_SECOND,
-        MAX_RATE_DEGREES_PER_SECOND,
-      )
-  const angleDegrees = deckDisturbanceActive
-    ? controlledAngleDegrees
-    : clamp(
-        controlledAngleDegrees + angularRateDegreesPerSecond * dt,
-        -MAX_ANGLE_DEGREES,
-        MAX_ANGLE_DEGREES,
-      )
+  // Deck Disturbance adds a bounded pitch rate instead of imposing an angle. The tune reacts to
+  // the growing error during the gesture and owns recovery after the gesture ends. Pitch response
+  // uses PID balance effort; terrain-load current remains in total current and longitudinal speed.
+  const angularAcceleration = calculatePhysicalPitchAcceleration(
+    controlledRateDegreesPerSecond,
+    calculatePreviewAcceleration(balanceCurrentAmps, 0, physics) / 3.6,
+    physics,
+  )
+  const angularRateDegreesPerSecond = clamp(
+    state.angularRateDegreesPerSecond + angularAcceleration * dt,
+    -MAX_RATE_DEGREES_PER_SECOND,
+    MAX_RATE_DEGREES_PER_SECOND,
+  )
+  const angleDegrees = clamp(
+    controlledAngleDegrees + (angularRateDegreesPerSecond + disturbanceRateDegreesPerSecond) * dt,
+    -MAX_ANGLE_DEGREES,
+    MAX_ANGLE_DEGREES,
+  )
 
-  const erpm = speedKmhToReferenceErpm(syntheticSpeedKmh)
+  const erpm = speedKmhToErpm(syntheticSpeedKmh, physics)
   const erpmDelta = erpm - state.erpm
   const measuredAccelerationErpmPerTick =
     state.measuredAccelerationErpmPerTick + (erpmDelta - state.measuredAccelerationErpmPerTick) / 40
@@ -519,6 +614,7 @@ function stepFixed(
     syntheticSpeedKmh,
     angleDegrees: finiteOrZero(angleDegrees),
     angularRateDegreesPerSecond: finiteOrZero(angularRateDegreesPerSecond),
+    deckDisturbanceRateDegreesPerSecond: finiteOrZero(disturbanceRateDegreesPerSecond),
     integralError: finiteOrZero(integralError),
     targetAngleDegrees: target.totalDegrees,
     torqueTiltDegrees: target.torqueTiltDegrees,
@@ -562,16 +658,12 @@ export function calculateTerrainLoadCurrentAmps(
   slope: number,
   physics?: TunePreviewAdvancedPhysics,
 ): number {
-  if (!physics?.enabled) return 0
+  const resolved = resolveTunePreviewPhysics(physics)
   const finiteSlope = finiteOrZero(slope)
-  const motorTorqueNmPerAmp =
-    TUNE_PREVIEW_MOTOR_PRESETS[physics.motorPresetId]?.motorTorqueNmPerAmp ??
-    TUNE_PREVIEW_MOTOR_PRESETS.hypercore.motorTorqueNmPerAmp
   const gravityAlongSlope = terrainSlopeToSyntheticAcceleration(finiteSlope)
-  const wheelRadiusMeters = (ADVANCED_PHYSICS_WHEEL_DIAMETER_INCHES * 0.0254) / 2
-  const totalMassKg = clampFinite(physics.totalMassKg, 30, 250, 88)
-  const wheelTorqueNm = totalMassKg * gravityAlongSlope * wheelRadiusMeters
-  return wheelTorqueNm / (motorTorqueNmPerAmp * ADVANCED_PHYSICS_DRIVETRAIN_EFFICIENCY)
+  const wheelRadiusMeters = (resolved.wheelDiameterInches * 0.0254) / 2
+  const wheelTorqueNm = resolved.totalMassKg * gravityAlongSlope * wheelRadiusMeters
+  return wheelTorqueNm / (resolved.motorTorqueNmPerAmp * resolved.drivetrainEfficiency)
 }
 
 export function calculateTerrainAtrDisturbance(
@@ -579,7 +671,6 @@ export function calculateTerrainAtrDisturbance(
   ampsToAccelerationRatio: number,
   physics?: TunePreviewAdvancedPhysics,
 ): number {
-  if (!physics?.enabled) return terrainSlopeToSyntheticAcceleration(slope)
   return calculateTerrainLoadCurrentAmps(slope, physics) / Math.max(ampsToAccelerationRatio, 0.1)
 }
 
@@ -588,17 +679,14 @@ export function calculatePreviewAcceleration(
   terrainSlope: number,
   physics?: TunePreviewAdvancedPhysics,
 ): number {
-  if (!physics?.enabled) return calculateSyntheticAcceleration(motorCurrentAmps)
-  const preset =
-    TUNE_PREVIEW_MOTOR_PRESETS[physics.motorPresetId] ?? TUNE_PREVIEW_MOTOR_PRESETS.hypercore
-  const totalMassKg = clampFinite(physics.totalMassKg, 30, 250, 88)
-  const wheelRadiusMeters = (ADVANCED_PHYSICS_WHEEL_DIAMETER_INCHES * 0.0254) / 2
+  const resolved = resolveTunePreviewPhysics(physics)
+  const wheelRadiusMeters = (resolved.wheelDiameterInches * 0.0254) / 2
   const wheelForceNewtons =
-    (clamp(motorCurrentAmps, -MAX_SYNTHETIC_CURRENT_AMPS, MAX_SYNTHETIC_CURRENT_AMPS) *
-      preset.motorTorqueNmPerAmp *
-      ADVANCED_PHYSICS_DRIVETRAIN_EFFICIENCY) /
+    (clamp(motorCurrentAmps, -resolved.maxMotorCurrentAmps, resolved.maxMotorCurrentAmps) *
+      resolved.motorTorqueNmPerAmp *
+      resolved.drivetrainEfficiency) /
     wheelRadiusMeters
-  const motorAcceleration = wheelForceNewtons / totalMassKg
+  const motorAcceleration = wheelForceNewtons / resolved.totalMassKg
   const gravityAcceleration = terrainSlopeToSyntheticAcceleration(terrainSlope)
   return (motorAcceleration - gravityAcceleration) * 3.6
 }
@@ -633,12 +721,19 @@ function torqueTiltRate(
 function brakeTiltTarget(
   parameters: TunePreviewParameters,
   syntheticCurrentAmps: number,
+  balanceOffsetDegrees: number,
   erpm: number,
 ): number {
-  if (parameters.brakeTiltStrength <= 0 || syntheticCurrentAmps >= 0 || erpm <= 2000) return 0
+  if (
+    parameters.brakeTiltStrength <= 0 ||
+    syntheticCurrentAmps >= 0 ||
+    erpm <= 2000 ||
+    Math.sign(balanceOffsetDegrees) === Math.sign(erpm)
+  ) {
+    return 0
+  }
   const factor = -(0.5 + (20 - parameters.brakeTiltStrength) / 5)
-  const normalizedCurrent = syntheticCurrentAmps / MAX_SYNTHETIC_CURRENT_AMPS
-  return (normalizedCurrent * SYNTHETIC_BALANCE_OFFSET_DEGREES) / factor
+  return balanceOffsetDegrees / factor
 }
 
 export function calculateControllerCurrentAmps(
@@ -694,16 +789,16 @@ export function aggregateTorqueAndAdaptiveTilt(
 }
 
 function calculatePhysicalPitchAcceleration(
-  angleDegrees: number,
+  angularRateDegreesPerSecond: number,
   longitudinalAccelerationMetersPerSecondSquared: number,
+  physics: TunePreviewAdvancedPhysics,
 ): number {
-  const centerOfMassHeightMeters = 0.9
-  const angleRadians = (angleDegrees * Math.PI) / 180
   const angularAccelerationRadians =
-    (STANDARD_GRAVITY_METERS_PER_SECOND_SQUARED * Math.sin(angleRadians) +
-      longitudinalAccelerationMetersPerSecondSquared * Math.cos(angleRadians)) /
-    centerOfMassHeightMeters
-  return (angularAccelerationRadians * 180) / Math.PI
+    longitudinalAccelerationMetersPerSecondSquared / physics.centerOfMassHeightMeters
+  return (
+    (angularAccelerationRadians * 180) / Math.PI -
+    physics.pitchDampingPerSecond * angularRateDegreesPerSecond
+  )
 }
 
 export function calculateSyntheticAcceleration(syntheticCurrentAmps: number): number {
@@ -743,7 +838,7 @@ function clampFinite(value: number, min: number, max: number, fallback: number):
 }
 
 function boundedSpeed(speedKmh: number): number {
-  return Number.isFinite(speedKmh) ? clamp(speedKmh, 0, 40) : 0
+  return Number.isFinite(speedKmh) ? clamp(speedKmh, 0, MAX_TUNE_PREVIEW_SPEED_KMH) : 0
 }
 
 function finiteOrZero(value: number): number {

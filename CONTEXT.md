@@ -116,9 +116,9 @@ _Avoid_: Sync log, change event, audit trail
 A comparative read-only visualization of board-angle response derived from a Tune Profile, synthetic rider-load and terrain inputs, and an idealized board model without motor-power, traction, or nosedive limits.
 _Avoid_: Board simulator, ride simulator, physics simulation
 
-**Synthetic Rider Lean**:
-A Tune Preview input representing a normalized sustained rider pitch moment from -100% to +100%, with Board angle remaining a simulation output.
-_Avoid_: Foot pressure, throttle, acceleration command
+**Deck Disturbance**:
+A Tune Preview input representing a bounded pitch-rate disturbance applied to Board while the gesture is held. Its magnitude controls how quickly angle error is added; it never constrains Board angle. Target, controller current, and speed remain simulation outputs.
+_Avoid_: Rider lean, foot pressure, throttle, acceleration command
 
 **Alert Rule**:
 A user-defined telemetry threshold that can trigger board-riding feedback during a live connection. A rule with only a threshold fires a one-shot alert; a rule with both threshold and thresholdMax fires a geiger-style progressive alert that accelerates with range depth.
@@ -197,7 +197,7 @@ _Avoid_: Position update, presence ping, location share, group telemetry
 - A **Tune Profile** belongs to a **Board** and stores semantic field values independently of firmware schema.
 - A **Tune History Entry** captures the previous state of a **Tune Profile** before each explicit save.
 - A **Tune Preview** derives an idealized board-angle response from one **Tune Profile** and never predicts whether the **Board** can physically achieve it.
-- A **Synthetic Rider Lean** disturbs the angle response displayed by a **Tune Preview** without commanding speed or motor power.
+- A **Deck Disturbance** adds pitch error over time without directly commanding speed or motor power.
 - An **Alert Rule** evaluates against live **Telemetry Samples**.
 - An **Alert Message Template** belongs to one **Alert Rule**.
 - A **Watch Mirror** receives **Watch Frames** and **Watch Alerts** from the phone and never sends data back; it is not a **Board**, a **Board Session**, or a source of **Telemetry Samples**.

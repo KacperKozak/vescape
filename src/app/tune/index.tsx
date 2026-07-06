@@ -55,8 +55,6 @@ export default function TuneScreen() {
   const isFocused = useIsFocused()
   const deckDisturbanceDegrees = useSharedValue(0)
   const deckDisturbanceActive = useSharedValue(false)
-  const [previewSpeedKmh, setPreviewSpeedKmh] = useState(15)
-  const [holdPreviewSpeed, setHoldPreviewSpeed] = useState(false)
   const [hillsEnabled, setHillsEnabled] = useState(false)
   const [hillHeightMeters, setHillHeightMeters] = useState(2.5)
   const [hillSpacingMeters, setHillSpacingMeters] = useState(30)
@@ -236,8 +234,6 @@ export default function TuneScreen() {
               fields={profileFields ?? {}}
               deckDisturbanceDegrees={deckDisturbanceDegrees}
               deckDisturbanceActive={deckDisturbanceActive}
-              speedKmh={previewSpeedKmh}
-              holdSpeed={holdPreviewSpeed}
               hillsEnabled={hillsEnabled}
               hillHeightMeters={hillHeightMeters}
               hillSpacingMeters={hillSpacingMeters}
@@ -258,10 +254,6 @@ export default function TuneScreen() {
             contentInsetAdjustmentBehavior="automatic"
           >
             <TunePreviewScenarioControls
-              speedKmh={previewSpeedKmh}
-              onSpeedChange={setPreviewSpeedKmh}
-              holdSpeed={holdPreviewSpeed}
-              onHoldSpeedChange={setHoldPreviewSpeed}
               advancedPhysics={advancedPhysics}
               onAdvancedPhysicsChange={setAdvancedPhysics}
               hillsEnabled={hillsEnabled}
@@ -445,7 +437,7 @@ export default function TuneScreen() {
         visible={previewHelpVisible}
         variant="warning"
         title="Work in progress"
-        message="Tune editing and Tune Preview are experimental. Hold Deck disturbance to impose a Board angle, then release it to compare how the tune returns Board toward Target. Controller current and optional dynamic speed are comparative outputs of that response. The preview does not model traction, drag, power limits, voltage sag, braking distance, deck-ground contact, or safety. Do not ride with these settings until you have verified them on the bench and confirmed safe behaviour."
+        message="Tune editing and Tune Preview are experimental. Hold Deck disturbance to nudge Board angle over time; farther slider displacement adds angle error faster. Release it to compare how the tune recovers from the resulting state. Refloat PID current and optional dynamic speed are comparative outputs of that error. The preview does not model rider weight, traction, drag, power limits, voltage sag, braking distance, deck-ground contact, or safety. Do not ride with these settings until you have verified them on the bench and confirmed safe behaviour."
         onDismiss={() => setPreviewHelpVisible(false)}
       />
 
