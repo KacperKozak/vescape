@@ -123,7 +123,7 @@ export default function TypographyComponentsPage() {
           <Text style={styles.hint}>Raleway UI font with fontVariant tabular-nums.</Text>
         </ShowcaseCard>
 
-        <ShowcaseCard name="Monospace (untouched)">
+        <ShowcaseCard name="Monospace">
           <View style={styles.col}>
             <Text style={{ fontSize: 14, fontFamily: 'monospace' }}>event_log: boot ok</Text>
             <Text style={{ fontSize: 14, fontFamily: 'monospace' }}>imu: 0.0123 0.0045 1.0</Text>

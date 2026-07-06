@@ -143,7 +143,7 @@ For screen headers showing metadata (version, OS, DB size), use centered text wi
 
 ## Typography
 
-The app's UI font is **Raleway**, shipped as static per-weight instances (`assets/fonts/Raleway-300.ttf` … `Raleway-900.ttf`) and loaded in `src/app/_layout.tsx` via `expo-font`'s `useFonts` before the `Stack` mounts. The splash stays visible until the fonts are ready on cold start. Static instances are required because Android renders only the default instance of a custom variable font — `fontWeight` never moves the `wght` axis.
+The app's UI font is **Raleway**, shipped as static per-weight instances (`assets/fonts/Raleway-300.ttf` … `Raleway-900.ttf`) and loaded in `src/app/_layout.tsx` via `expo-font`'s `useFonts` before the `Stack` mounts. The splash stays visible until the fonts are ready on cold start. Static instances are required because Android renders only the default instance of a custom variable font — `fontWeight` never moves the `wght` axis. The files also have the OpenType `lnum` (lining numerals) feature frozen in via `pyftfeatfreeze` — Raleway defaults to old-style figures with uneven baselines; if the fonts are ever regenerated, re-freeze `lnum`.
 
 Every `Text` instance renders through the wrapper at `src/components/ui/base/Text.tsx`, which reads `fontWeight` from the style and resolves it to the matching family via `theme.font(weight)` (default `'500'` — Raleway 400 reads too thin on the dark surface). Import `Text` from `@/components/ui/base/Text` — never import `Text` from `react-native` directly for UI text.
 
