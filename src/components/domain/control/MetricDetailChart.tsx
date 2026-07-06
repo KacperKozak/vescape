@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import type { SharedValue } from 'react-native-reanimated'
 
 import { TelemetryLineChart } from '@/components/ui/charts/TelemetryLineChart'
 import type {
@@ -26,6 +27,9 @@ interface MetricDetailChartProps {
   label?: string
   excludedRanges?: ExcludedRange[]
   secondary?: SecondaryMetricSeries
+  /** Shared cursor: pass the same SharedValue to several charts to scrub them in lockstep. */
+  scrubTimeMs?: SharedValue<number | null>
+  onScrubTimeChange?: (timeMs: number) => void
 }
 
 function valueAtTime(points: TelemetryChartPoint[], timeMs: number): TelemetryChartPoint | null {
@@ -52,6 +56,8 @@ export function MetricDetailChart({
   label,
   excludedRanges,
   secondary,
+  scrubTimeMs,
+  onScrubTimeChange,
 }: MetricDetailChartProps) {
   const [selected, setSelected] = useState<TelemetryChartPoint | null>(null)
   const currentPoint = selected ?? points.at(-1) ?? null
@@ -86,6 +92,8 @@ export function MetricDetailChart({
       windowMs={windowMs}
       excludedRanges={excludedRanges}
       secondary={secondarySeries}
+      scrubTimeMs={scrubTimeMs}
+      onScrubTimeChange={onScrubTimeChange}
     />
   )
 }
