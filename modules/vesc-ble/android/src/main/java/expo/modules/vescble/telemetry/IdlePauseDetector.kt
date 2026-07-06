@@ -18,6 +18,8 @@ internal enum class IdlePauseTransition { Paused, Resumed }
  * is one definition of moving shared with the Moving Window. Asymmetric on purpose: pauses only
  * after [pauseAfterMs] of continuous non-moving samples, resumes on the first moving sample —
  * slow-to-pause / instant-to-resume prevents flapping at traffic lights.
+ *
+ * @parity /modules/vesc-ble/ios/telemetry/IdlePauseDetector.swift
  */
 internal class IdlePauseDetector(
   private val pauseAfterMs: Long = DEFAULT_IDLE_PAUSE_AFTER_MS,

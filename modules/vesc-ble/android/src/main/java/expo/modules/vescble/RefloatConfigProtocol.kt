@@ -3,6 +3,7 @@ package expo.modules.vescble
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
+// @parity /modules/vesc-ble/ios/RefloatConfigProtocol.swift
 internal data class RefloatConfigXmlChunk(
   val confInd: Int,
   val totalLength: Int,

@@ -51,6 +51,8 @@ export interface FiredAlert {
   threshold: number
   thresholdMax: number | null
   soundType: string
+  /** 0..1 depth into the threshold→thresholdMax range for geiger alerts; `null` for single. */
+  rangeDepth?: number | null
   firedAt: number
 }
 
@@ -72,6 +74,8 @@ export interface BoardCandidate {
 /** Result of a native Board Probe of a BLE peripheral. */
 export interface BoardProbeResult {
   outcome: BoardProbeOutcome
+  /** Resolved transport when exactly one candidate confirmed; otherwise `null`. */
+  transport: BoardTransport | null
   /** Every transport that produced a valid Telemetry Sample, in probe order. */
   candidates: BoardCandidate[]
 }
@@ -791,6 +795,14 @@ export interface AppDataChangedEvent {
   scope: 'boards' | 'settings'
 }
 
+export type CriticalRideNotificationPermissionStatus =
+  | 'not-determined'
+  | 'denied'
+  | 'authorized'
+  | 'provisional'
+  | 'ephemeral'
+  | 'unknown'
+
 type VescBleEvents = {
   onDevice: (event: DeviceFoundEvent) => void
   onError: (event: ErrorEvent) => void
@@ -852,6 +864,8 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
   updateGroupRideIdentity(riderId: string, riderName: string, riderColor: string | null): void
   setTelemetryRecordingEnabled(enabled: boolean): void
   reloadAlertRules(): void
+  getCriticalRideNotificationPermissionStatus(): Promise<CriticalRideNotificationPermissionStatus>
+  requestCriticalRideNotificationPermission(): Promise<CriticalRideNotificationPermissionStatus>
   getAlertPresets(): AlertPreset[]
   previewAlertSound(soundType: AlertSoundType): void
   startGeigerSimulation(soundType: string, rangeDepth: number): void
@@ -1078,6 +1092,24 @@ export function setTelemetryRecordingEnabled(enabled: boolean): void {
 /** Tell the Android foreground service to re-read alert rules from native storage. */
 export function reloadAlertRules(): void {
   native.reloadAlertRules()
+}
+
+/** Read iOS local-notification permission used only for critical ride alerts. */
+export async function getCriticalRideNotificationPermissionStatus(): Promise<CriticalRideNotificationPermissionStatus> {
+  try {
+    return await native.getCriticalRideNotificationPermissionStatus()
+  } catch {
+    return 'unknown'
+  }
+}
+
+/** Explicitly request iOS permission for critical ride alert notifications. Never called on connect. */
+export async function requestCriticalRideNotificationPermission(): Promise<CriticalRideNotificationPermissionStatus> {
+  try {
+    return await native.requestCriticalRideNotificationPermission()
+  } catch {
+    return 'unknown'
+  }
 }
 
 const FALLBACK_PRESETS: AlertPreset[] = [

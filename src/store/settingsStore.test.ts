@@ -36,8 +36,12 @@ mock.module('../../modules/vesc-ble/src/index', () => ({ ...actualVescBle, getSe
 beforeEach(async () => {
   settings = { ...BASE, historyMetricHotRanges: { battery: { start: 0, end: 1 } } }
   getSettings.mockClear()
+  ;(globalThis as { __vescBleStoreCleanup?: () => void }).__vescBleStoreCleanup?.()
   const { useSettingsStore } = await import('./settingsStore')
-  useSettingsStore.setState({ loaded: false })
+  useSettingsStore.setState({
+    loaded: false,
+    load: useSettingsStore.getInitialState().load,
+  })
 })
 
 test('reloading identical settings notifies no subscribers and keeps object refs', async () => {
@@ -60,7 +64,8 @@ test('reload applies only the keys that actually changed', async () => {
   await useSettingsStore.getState().load()
 
   const hotRangesRef = useSettingsStore.getState().historyMetricHotRanges
-  settings = { ...settings, liveHistoryLimit: 9 }
+  const nextLiveHistoryLimit = useSettingsStore.getState().liveHistoryLimit + 4
+  settings = { ...settings, liveHistoryLimit: nextLiveHistoryLimit }
 
   const changed: string[] = []
   const unsub = useSettingsStore.subscribe((next, prev) => {
@@ -72,7 +77,7 @@ test('reload applies only the keys that actually changed', async () => {
   unsub()
 
   expect(changed).toEqual(['liveHistoryLimit'])
-  expect(useSettingsStore.getState().liveHistoryLimit).toBe(9)
+  expect(useSettingsStore.getState().liveHistoryLimit).toBe(nextLiveHistoryLimit)
   // Untouched object field keeps identity, so its consumers don't re-render.
   expect(useSettingsStore.getState().historyMetricHotRanges).toBe(hotRangesRef)
 })

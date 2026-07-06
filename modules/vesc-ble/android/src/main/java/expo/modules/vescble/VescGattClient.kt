@@ -27,6 +27,7 @@ internal interface VescGattListener {
     fun onGattFrameChunk(chunk: ByteArray)
 }
 
+// @parity /modules/vesc-ble/ios/VescGattClient.swift
 @SuppressLint("MissingPermission")
 internal class VescGattClient(
     private val context: Context,

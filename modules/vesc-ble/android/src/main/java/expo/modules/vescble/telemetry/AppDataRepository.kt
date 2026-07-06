@@ -11,6 +11,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 
+// @parity /modules/vesc-ble/ios/VescBleModule.swift
 /** Scope of an `onAppDataChanged` emit; mirrors the JS `AppDataChangedEvent['scope']` union. */
 internal enum class AppDataScope(val wire: String) {
   BOARDS("boards"),
@@ -318,6 +319,8 @@ class AppDataRepository private constructor(private val context: Context) {
     notifyDataChanged(AppDataScope.BOARDS)
   }
 
+  // Tune Profiles: per-board VESC tune configs with reversible Tune History.
+  // @parity /modules/vesc-ble/ios/telemetry/TuneProfileStore.swift
   suspend fun getTuneProfiles(boardId: String): List<Map<String, Any?>> = withContext(Dispatchers.IO) {
     dao.getTuneProfilesByBoard(boardId).map { it.toMap() }
   }
@@ -402,6 +405,7 @@ class AppDataRepository private constructor(private val context: Context) {
       ).toMap()
     }
 
+  // @parity /modules/vesc-ble/ios/telemetry/TuneProfileStore.swift `createMainTuneProfileIfMissing`
   internal suspend fun createMainTuneProfileIfMissing(snapshot: RefloatConfigSnapshot): Map<String, Any?>? =
     withContext(Dispatchers.IO) {
       val boardId = snapshot.boardId?.takeIf { it.isNotBlank() } ?: return@withContext null

@@ -297,9 +297,9 @@ class VescForegroundService : Service() {
             }
         }
 
-        fun reloadBatteryConfig() {
+        fun reloadBoardData() {
             appDataScope.launch {
-                instance?.controller?.reloadBatteryConfigForActiveBoard()
+                instance?.controller?.reloadBoardDataForActiveBoard()
             }
         }
 

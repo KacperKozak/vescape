@@ -4,6 +4,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.security.MessageDigest
 
+// @parity /modules/vesc-ble/ios/RefloatConfigDecoder.swift
 internal class RefloatConfigDecodeException(message: String) : Exception(message)
 
 internal object RefloatConfigDecoder {

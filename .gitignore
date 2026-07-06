@@ -49,6 +49,7 @@ app-example
 modules/vesc-ble/android/src/main/res/raw/
 modules/vesc-ble/android/src/main/assets/data/
 modules/vesc-ble/android/src/test/resources/data/
+modules/vesc-ble/.build/
 
 # other stuff
 /reports/*

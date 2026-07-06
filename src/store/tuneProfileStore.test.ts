@@ -176,6 +176,72 @@ test('computes board diff against saved profile independently of draft edits', a
   expect(useTuneProfileStore.getState().draftFields).toEqual({ kp: 25 })
 })
 
+test('does not mark rounded-equivalent board values as changed', async () => {
+  const { useTuneProfileStore } = await import('./tuneProfileStore')
+
+  getTuneProfiles.mockImplementation(async (_boardId: string) => [
+    {
+      ...profile,
+      fields: {
+        ...profile.fields,
+        angle_p: 0.026000000536441803,
+      },
+    },
+  ])
+
+  await useTuneProfileStore.getState().loadProfiles('board-1')
+  useTuneProfileStore.getState().setBoardSnapshot({
+    capturedAt: 1000,
+    boardId: 'board-1',
+    canId: 0,
+    schemaHash: 'schema',
+    rawConfigHash: 'raw',
+    rawConfigLength: 2,
+    fwVersion: null,
+    missingFieldIds: [],
+    groups: [
+      {
+        id: 'general',
+        title: 'General',
+        fields: [
+          {
+            id: 'angle_p',
+            label: 'Angle P',
+            value: 0.026,
+            unit: null,
+            min: 0,
+            max: 1,
+          },
+        ],
+      },
+    ],
+  })
+
+  expect(useTuneProfileStore.getState().boardDiff).toEqual([])
+  expect(useTuneProfileStore.getState().hasBoardDiff).toBe(false)
+})
+
+test('does not keep rounded-equivalent draft values dirty', async () => {
+  const { useTuneProfileStore } = await import('./tuneProfileStore')
+
+  getTuneProfiles.mockImplementation(async (_boardId: string) => [
+    {
+      ...profile,
+      fields: {
+        ...profile.fields,
+        angle_p: 0.026000000536441803,
+      },
+    },
+  ])
+
+  await useTuneProfileStore.getState().loadProfiles('board-1')
+  useTuneProfileStore.getState().setDraftField('angle_p', 0.026)
+
+  expect(useTuneProfileStore.getState().draftFields).toEqual({})
+  expect(useTuneProfileStore.getState().hasDirtyFields).toBe(false)
+  expect(useTuneProfileStore.getState().getDirtyFields()).toEqual({})
+})
+
 test('accepts board values into draft and saves through normal profile flow', async () => {
   const { useTuneProfileStore } = await import('./tuneProfileStore')
 

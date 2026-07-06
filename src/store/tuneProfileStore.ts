@@ -17,6 +17,7 @@ import {
 } from 'vesc-ble'
 
 import { errorMessage } from '@/helpers/error'
+import { formatTuneValue } from '@/lib/tune/fields'
 import { useTuneSnapshotStore } from '@/store/tuneSnapshotStore'
 
 export type { TuneProfile, TuneProfileFieldValue } from 'vesc-ble'
@@ -72,7 +73,11 @@ function sameFieldValue(
   a: TuneProfileFieldValue | undefined,
   b: TuneProfileFieldValue | undefined,
 ): boolean {
-  return a === b || (typeof a === 'number' && typeof b === 'number' && Object.is(a, b))
+  if (a === b) return true
+  if (typeof a === 'number' && typeof b === 'number') {
+    return formatTuneValue(a) === formatTuneValue(b)
+  }
+  return false
 }
 
 function dirtyFields(

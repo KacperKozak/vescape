@@ -1,93 +1,143 @@
 import ExpoModulesCore
 import Foundation
+import UserNotifications
 
-// iOS simulator mock.
-// Emits realistic fake data so the UI can be explored without real BLE hardware.
-// A full CoreBluetooth implementation can replace this when needed.
+// Thin JS bridge. Board scan/connect/telemetry delegate to the CoreBluetooth stack
+// (VescGattClient + BoardSessionController); app data delegates to GRDB, while later iOS
+// subsystems still keep bridge-shaped stubs.
+/// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt
+/// TODO(iOS parity): port Group Ride, debug recording, and Refloat config subsystems to match
+/// Android API/events/errors.
 public class VescBleModule: Module {
 
   // MARK: - Session state
 
-  private var sessionStatus = "idle"
   private var selectedBoardId: String? = nil
-  private var sessionDeviceId: String? = nil
-  private var sessionDeviceName: String? = nil
-  private var sessionGeneration = 0
 
-  // MARK: - Timers
+  /// Retains the in-flight Board Probe across its async BLE lifecycle. Only one runs at a time —
+  /// the probe owns the single BLE link (see Android `probeBoardLink`).
+  private var activeProbe: BoardTransportDetector?
 
-  private var scanTimer: Timer?
-  private var telemetryTimer: Timer?
-  private var locationTimer: Timer?
-  private var lastGpsPersistedAt = Date.distantPast
+  /// Frontend liveness gate. False while the app is backgrounded so the high-frequency telemetry
+  /// firehose (`onLiveTick` at the board's poll rate, `onTelemetryHistory`, `onLiveSeries`) never
+  /// crosses to a JS thread iOS keeps alive under the BLE/`location` background modes — that flood
+  /// pegged the JS thread and tripped the OS CPU watchdog (fatal `cpu_resource` kill). Native keeps
+  /// polling, recording and firing alerts throughout; only the JS-facing emit sleeps.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt `frontendActive`
+  private var frontendActive = true
+  /// Events with at least one live JS listener, tracked via `OnStartObserving`/`OnStopObserving`.
+  private var observedEvents = Set<String>()
 
-  // MARK: - Mock data state
+  /// Shared, app-level Board Session owner that outlives this module instance. A JS runtime reload
+  /// (dev reload, OTA update, JS crash recovery) tears down this module and builds a fresh one; the
+  /// session, recording, GPS and Live Activity keep running on the singleton and the new module
+  /// re-attaches its JS sinks in `OnCreate` (see `attachToCoordinator`). Mirrors Android's
+  /// process-level `VescForegroundService`, whose session survives module teardown while `OnDestroy`
+  /// only detaches the emit sink.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt
+  private let coordinator = BoardSessionController.shared
 
-  private var tick = 0
-  private var mockOdometer = 0.0
-  private var mockLat = 52.2297
-  private var mockLon = 21.0122
-  private var scanDeviceIndex = 0
-  private var boards = VescBleModule.loadArray(key: "vesc_ble_boards")
-  private var alertRules = VescBleModule.loadArray(key: "vesc_ble_alert_rules")
-  private var privacyZones = VescBleModule.loadArray(key: "vesc_ble_privacy_zones")
-  private var mapPoints = VescBleModule.loadArray(key: "vesc_ble_map_points")
+  // MARK: - App data state
 
-  private let mockDevices: [[String: Any]] = [
-    [
-      "id": "AA:BB:CC:DD:EE:01",
-      "name": "FloatWheel ADV",
-      "rssi": -45,
-      "serviceUUIDs": ["6e400001-b5a3-f393-e0a9-e50e24dcca9e"],
-    ],
-    [
-      "id": "AA:BB:CC:DD:EE:02",
-      "name": "VESC Board Pro",
-      "rssi": -62,
-      "serviceUUIDs": ["6e400001-b5a3-f393-e0a9-e50e24dcca9e"],
-    ],
-    [
-      "id": "AA:BB:CC:DD:EE:03",
-      "name": "Refloat GT",
-      "rssi": -78,
-      "serviceUUIDs": ["6e400001-b5a3-f393-e0a9-e50e24dcca9e"],
-    ],
-  ]
+  private let appData = AppDataRepository.shared
+
+  /// Bundled alert presets surfaced to JS through `getAlertPresets`. Mirrors Android
+  /// `alertSoundPresetMaps()`.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescAlerts.kt `alertSoundPresetMaps`
+  private let alertPresets: [[String: Any]] = alertSoundPresetMaps()
 
   // MARK: - Module definition
 
   public func definition() -> ModuleDefinition {
     Name("VescBle")
 
-    Events("onDevice", "onError", "onLiveState", "onLiveTick", "onLiveSeries", "onTelemetryHistory", "onBms", "onLocation", "onTelemetryRebuildProgress", "onBoardProbeProgress", "onGroupRideConnection", "onGroupRideSnapshot", "onGroupRideCreated", "onGroupRideUpdated", "onGroupRideEnded", "onGroupRideJoined", "onGroupRideRoster", "onGroupRideError")
+    Events("onDevice", "onError", "onLiveState", "onLiveTick", "onLiveSeries", "onTelemetryHistory", "onBms", "onLocation", "onTelemetryRebuildProgress", "onBoardProbeProgress", "onAppDataChanged", "onGroupRideConnection", "onGroupRideSnapshot", "onGroupRideCreated", "onGroupRideUpdated", "onGroupRideEnded", "onGroupRideJoined", "onGroupRideRoster", "onGroupRideError")
+
+    // Track per-event JS listeners so native skips emitting into the void, and gate the whole
+    // firehose on app foreground (see `frontendActive`). Mirrors Android's observing + lifecycle
+    // gate. @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt
+    OnStartObserving("onDevice") { self.observedEvents.insert("onDevice") }
+    OnStopObserving("onDevice") { self.observedEvents.remove("onDevice") }
+    OnStartObserving("onError") { self.observedEvents.insert("onError") }
+    OnStopObserving("onError") { self.observedEvents.remove("onError") }
+    OnStartObserving("onLiveState") { self.observedEvents.insert("onLiveState") }
+    OnStopObserving("onLiveState") { self.observedEvents.remove("onLiveState") }
+    OnStartObserving("onLiveTick") { self.observedEvents.insert("onLiveTick") }
+    OnStopObserving("onLiveTick") { self.observedEvents.remove("onLiveTick") }
+    OnStartObserving("onLiveSeries") { self.observedEvents.insert("onLiveSeries") }
+    OnStopObserving("onLiveSeries") { self.observedEvents.remove("onLiveSeries") }
+    OnStartObserving("onTelemetryHistory") { self.observedEvents.insert("onTelemetryHistory") }
+    OnStopObserving("onTelemetryHistory") { self.observedEvents.remove("onTelemetryHistory") }
+    OnStartObserving("onBms") { self.observedEvents.insert("onBms") }
+    OnStopObserving("onBms") { self.observedEvents.remove("onBms") }
+    OnStartObserving("onLocation") { self.observedEvents.insert("onLocation") }
+    OnStopObserving("onLocation") { self.observedEvents.remove("onLocation") }
+    OnStartObserving("onTelemetryRebuildProgress") { self.observedEvents.insert("onTelemetryRebuildProgress") }
+    OnStopObserving("onTelemetryRebuildProgress") { self.observedEvents.remove("onTelemetryRebuildProgress") }
+
+    OnCreate {
+      self.attachToCoordinator()
+      AppDataRepository.onDataChanged = { [weak self] scope in self?.sendAppDataChanged(scope) }
+      self.autoConnectSelectedBoard()
+    }
+
+    OnAppEntersForeground {
+      self.frontendActive = true
+    }
+    OnAppEntersBackground {
+      self.frontendActive = false
+    }
 
     OnDestroy {
-      self.scanTimer?.invalidate()
-      self.telemetryTimer?.invalidate()
-      self.locationTimer?.invalidate()
+      // JS runtime is tearing down (dev reload, OTA update, JS crash recovery). Detach only the
+      // JS-facing sinks; the shared coordinator keeps the native Board Session, recording, GPS and
+      // Live Activity alive so a fresh module re-attaches to the live session. Must not call
+      // `stopBoard()` (see `docs/ios.md`). Mirrors Android nulling `VescForegroundService.emitEvent`.
+      // @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt
+      self.detachFromCoordinator()
+      AppDataRepository.onDataChanged = nil
+      self.frontendActive = false
+      self.observedEvents.removeAll()
+      self.activeProbe = nil
     }
 
     // MARK: Scan
 
     Function("scan") {
-      self.startMockScan()
+      self.coordinator.scan()
     }
 
     Function("stopScan") {
-      self.stopScan()
+      self.coordinator.stopScan()
     }
 
     // MARK: Location
 
     Function("startLocationUpdates") {
-      self.startMockLocation()
+      self.coordinator.startLocationUpdates()
     }
 
+    // Flush buffered telemetry after stopping GPS so no pending rows are lost on the way down.
+    // @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt `stopLocationUpdates`
     Function("stopLocationUpdates") {
-      self.stopLocation()
+      self.coordinator.stopLocationUpdates()
+      TelemetryRepository.shared.flushBlocking()
     }
 
-    // MARK: Group Ride (Android native implementation; iOS mock keeps bridge shape)
+    // MARK: App lifecycle
+
+    // Android kills its foreground service + process here. iOS has no sanctioned process-kill idiom
+    // (App Store rejects `exit()`), so this degrades to a graceful native teardown of all long-lived
+    // work; JS never crashes calling it.
+    // @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt `exitApp`
+    // @platform-diff iOS cannot terminate its own process; graceful shutdown instead of kill.
+    Function("exitApp") {
+      self.coordinator.stopBoard()
+      self.coordinator.stopLocationUpdates()
+      self.coordinator.stopScan()
+    }
+
+    // MARK: Group Ride (Android native implementation; iOS keeps bridge shape)
 
     Function("startGroupRideObserve") { (_: String) in
       self.sendEvent("onGroupRideConnection", ["state": "idle"])
@@ -99,11 +149,11 @@ public class VescBleModule: Module {
     }
 
     Function("createGroupRide") { (_: String, _: String, _: String?, _: String?, _: Double, _: Double) in
-      // no-op in iOS simulator mock
+      // no-op until iOS native Group Ride support lands
     }
 
     Function("joinGroupRide") { (_: String, _: String, _: String?, _: String) in
-      // no-op in iOS simulator mock
+      // no-op until iOS native Group Ride support lands
     }
 
     Function("leaveGroupRide") {
@@ -112,40 +162,52 @@ public class VescBleModule: Module {
     }
 
     Function("updateGroupRideIdentity") { (_: String, _: String, _: String?) in
-      // no-op in iOS simulator mock
+      // no-op until iOS native Group Ride support lands
     }
 
-    // MARK: Telemetry recording toggle (no-op on mock)
+    // MARK: Telemetry recording toggle
 
-    Function("setTelemetryRecordingEnabled") { (_: Bool) in
-      // No persistent storage in the iOS mock
+    // Latch the request even before connect, silently — the coordinator replays it when a board
+    // connects. No error event on the pre-connect path: Android latches without emitting.
+    // @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt `setTelemetryRecordingEnabled`
+    Function("setTelemetryRecordingEnabled") { (enabled: Bool) in
+      _ = self.coordinator.setTelemetryRecordingEnabled(enabled)
     }
 
     Function("reloadAlertRules") {
-      // no-op in iOS simulator mock
+      self.coordinator.reloadAlertRules()
     }
 
-    Function("previewAlertSound") { (_: String) in
-      // no-op in iOS simulator mock
+    AsyncFunction("getCriticalRideNotificationPermissionStatus") { (promise: Promise) in
+      UNUserNotificationCenter.current().getNotificationSettings { settings in
+        promise.resolve(Self.notificationPermissionStatus(settings.authorizationStatus))
+      }
+    }
+
+    AsyncFunction("requestCriticalRideNotificationPermission") { (promise: Promise) in
+      UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
+        if let error {
+          promise.reject("ERR_NOTIFICATION_PERMISSION", error.localizedDescription)
+          return
+        }
+        promise.resolve(granted ? "authorized" : "denied")
+      }
+    }
+
+    Function("previewAlertSound") { (soundType: String) in
+      self.coordinator.previewAlertSound(soundType)
     }
 
     Function("getAlertPresets") {
-      [
-        ["name": "Beep", "uri": "preset:beep", "category": "single"],
-        ["name": "Urgent", "uri": "preset:urgent", "category": "single"],
-        ["name": "Notify", "uri": "preset:notify", "category": "single"],
-        ["name": "Tick", "uri": "preset:tick", "category": "geiger"],
-        ["name": "Hard Tick", "uri": "preset:tick_hard", "category": "geiger"],
-        ["name": "Gamma", "uri": "preset:gamma", "category": "geiger"],
-      ]
+      self.alertPresets
     }
 
-    Function("startGeigerSimulation") { (_: String, _: Double) in
-      // no-op in iOS simulator mock
+    Function("startGeigerSimulation") { (soundType: String, rangeDepth: Double) in
+      self.coordinator.startGeigerSimulation(soundType: soundType, rangeDepth: rangeDepth)
     }
 
     Function("stopGeigerSimulation") {
-      // no-op in iOS simulator mock
+      self.coordinator.stopGeigerSimulation()
     }
 
     // MARK: Board session
@@ -160,9 +222,7 @@ public class VescBleModule: Module {
 
     Function("setSelectedBoard") { (boardId: String?) in
       self.selectedBoardId = boardId
-      var settings = Self.loadSettings()
-      settings["selectedBoardId"] = boardId
-      Self.saveSettings(settings)
+      self.appData.updateSetting("selectedBoardId", rawValue: boardId)
     }
 
     AsyncFunction("setCompanionPresenceEnabled") { (enabled: Bool, promise: Promise) in
@@ -183,84 +243,101 @@ public class VescBleModule: Module {
 
     AsyncFunction("selectBoard") { (boardId: String, promise: Promise) in
       self.selectedBoardId = boardId
-      var settings = Self.loadSettings()
-      settings["selectedBoardId"] = boardId
-      Self.saveSettings(settings)
-      let board = self.boards.first { ($0["id"] as? String) == boardId }
-      let link = board?["link"] as? [String: Any]
-      let deviceId = link?["bleId"] as? String ?? "MOCK-ID"
-      let deviceName = board?["name"] as? String ?? "Mock Board"
-      self.startMockBoard(deviceId: deviceId, deviceName: deviceName)
-      promise.resolve(nil)
+      self.appData.updateSetting("selectedBoardId", rawValue: boardId)
+      guard let config = self.connectConfig(boardId: boardId) else {
+        promise.reject("NO_LINK", "Board has no Board Link: \(boardId)")
+        return
+      }
+      self.coordinator.connect(
+        config: config,
+        onSuccess: { promise.resolve(nil) },
+        onError: { code, message in promise.reject(code, message) }
+      )
     }
 
     AsyncFunction("stopBoard") { (promise: Promise) in
-      DispatchQueue.main.async { [weak self] in self?.stopMockSession() }
+      self.coordinator.stopBoard()
       promise.resolve(nil)
     }
 
-    // Mock Board Probe: iOS BLE is not implemented, so confirm a Direct
-    // transport so the Add Board flow stays exercisable.
-    AsyncFunction("probeBoardLink") { (_: String, promise: Promise) in
-      DispatchQueue.main.async { [weak self] in self?.stopMockSession() }
-      promise.resolve([
-        "outcome": "resolved",
-        "candidates": [["transport": "direct", "hasBms": true]],
-      ])
+    AsyncFunction("probeBoardLink") { (bleId: String, promise: Promise) in
+      DispatchQueue.main.async { self.startProbe(bleId: bleId, promise: promise) }
     }
 
-    // MARK: Telemetry history (empty stubs)
+    // MARK: Telemetry history
 
-    AsyncFunction("getTelemetryHistory") { (_: [String: Any], promise: Promise) in
-      promise.resolve([] as [Any])
+    AsyncFunction("getTelemetryHistory") { (options: [String: Any], promise: Promise) in
+      promise.resolve(TelemetryRepository.shared.getHistory(options))
     }
 
-    AsyncFunction("getTelemetrySamples") { (_: [String: Any], promise: Promise) in
-      promise.resolve([] as [Any])
+    AsyncFunction("getTelemetrySamples") { (options: [String: Any], promise: Promise) in
+      promise.resolve(TelemetryRepository.shared.getSamples(options))
     }
 
-    AsyncFunction("getHistoryRange") { (_: [String: Any], promise: Promise) in
-      promise.resolve([
-        "boardSamples": [] as [Any],
-        "gpsSamples": [] as [Any],
-        "markers": [] as [Any],
-      ])
+    AsyncFunction("getHistoryRange") { (options: [String: Any], promise: Promise) in
+      promise.resolve(TelemetryRepository.shared.getRange(options))
     }
 
-    AsyncFunction("getDiagnosticEvents") { (_: [String: Any], promise: Promise) in
-      promise.resolve([] as [Any])
+    Function("reportUiError") { (message: String, source: String?, stack: String?) in
+      DiagnosticReporter.shared.reportUiError(message: message, source: source, stack: stack)
+    }
+
+    Function("reportDiagnosticTest") { () -> [String: Any?] in
+      DiagnosticReporter.shared.reportDiagnosticTest()
+    }
+
+    Function("getDiagnosticStatus") { () -> [String: Any?] in
+      DiagnosticReporter.shared.status()
+    }
+
+    AsyncFunction("getDiagnosticEvents") { (options: [String: Any], promise: Promise) in
+      promise.resolve(TelemetryRepository.shared.getDiagnosticEvents(options))
     }
 
     AsyncFunction("clearDiagnosticEvents") { (promise: Promise) in
+      TelemetryRepository.shared.clearDiagnosticEvents()
       promise.resolve(nil)
     }
 
     AsyncFunction("getTelemetrySummary") { (promise: Promise) in
-      promise.resolve([
-        "sampleCount": 0,
-        "gpsPointCount": 0,
-        "firstAtMs": nil,
-        "lastAtMs": nil,
-        "droppedPendingSamples": 0,
-      ] as [String: Any?])
+      promise.resolve(TelemetryRepository.shared.getSummary())
     }
 
     AsyncFunction("getDatabaseSizeBytes") { () -> Int in
-      return 0
+      Int(TelemetryDatabase.databaseSizeBytes)
     }
 
     AsyncFunction("backupDatabase") { (promise: Promise) in
-      promise.reject("UNSUPPORTED_PLATFORM", "Database backup is Android-only until iOS storage is implemented")
+      DispatchQueue.global(qos: .userInitiated).async {
+        do {
+          promise.resolve(try DatabaseBackupManager.createBackup())
+        } catch {
+          promise.reject("ERR_BACKUP_DATABASE", error.localizedDescription)
+        }
+      }
     }
 
-    AsyncFunction("restoreDatabase") { (_: String, promise: Promise) in
-      promise.reject("UNSUPPORTED_PLATFORM", "Database restore is Android-only until iOS storage is implemented")
+    // Stop every writer touching the DB before the file swap: scan, board session (flushes buffered
+    // telemetry synchronously via `endSession`), and GPS. All are synchronous here, so the pool is
+    // idle before the async restore runs. @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt `stopNativeWorkForDatabaseRestore`
+    AsyncFunction("restoreDatabase") { (uri: String, promise: Promise) in
+      self.coordinator.stopScan()
+      self.coordinator.stopBoard()
+      self.coordinator.stopLocationUpdates()
+      DispatchQueue.global(qos: .userInitiated).async {
+        do {
+          try DatabaseBackupManager.restoreBackup(uriString: uri)
+          promise.resolve(nil)
+        } catch {
+          promise.reject("ERR_RESTORE_DATABASE", error.localizedDescription)
+        }
+      }
     }
 
     AsyncFunction("getRefloatConfigSnapshot") { (promise: Promise) in
-      promise.reject(
-        "UNSUPPORTED_PLATFORM",
-        "Refloat config reading is Android-only until iOS BLE transport is implemented"
+      self.coordinator.getRefloatConfigSnapshot(
+        onSuccess: { snapshot in promise.resolve(snapshot) },
+        onError: { code, message in promise.reject(code, message) }
       )
     }
 
@@ -280,601 +357,418 @@ public class VescBleModule: Module {
       false
     }
 
-    Function("getRemoteTiltState") { () -> [String: Any]? in
-      nil
+    // MARK: - Tune Profiles (#161)
+    // DB-backed per-board VESC tune configs with Tune History, matching Android 1:1. `TuneProfileStore`
+    // owns the transactional semantics; mutations reject with Android's error vocabulary.
+
+    AsyncFunction("getTuneProfiles") { (boardId: String, promise: Promise) in
+      promise.resolve(TuneProfileStore.shared.getTuneProfiles(boardId))
     }
 
-    AsyncFunction("getTuneProfiles") { (_: String, promise: Promise) in
-      promise.resolve([] as [Any])
+    AsyncFunction("getTuneProfile") { (profileId: String, promise: Promise) in
+      promise.resolve(TuneProfileStore.shared.getTuneProfile(profileId))
     }
 
-    AsyncFunction("getTuneProfile") { (_: String, promise: Promise) in
-      promise.resolve(nil)
+    AsyncFunction("createProfile") { (boardId: String, name: String, fields: [String: Any], promise: Promise) in
+      do {
+        promise.resolve(try TuneProfileStore.shared.createProfile(boardId: boardId, name: name, fields: fields))
+      } catch {
+        promise.reject(TuneProfileStore.errorCode, error.localizedDescription)
+      }
+    }
+
+    AsyncFunction("renameProfile") { (profileId: String, name: String, promise: Promise) in
+      do {
+        promise.resolve(try TuneProfileStore.shared.renameProfile(profileId: profileId, name: name))
+      } catch {
+        promise.reject(TuneProfileStore.errorCode, error.localizedDescription)
+      }
+    }
+
+    AsyncFunction("deleteProfile") { (profileId: String, promise: Promise) in
+      do {
+        try TuneProfileStore.shared.deleteProfile(profileId: profileId)
+        promise.resolve(nil)
+      } catch {
+        promise.reject(TuneProfileStore.errorCode, error.localizedDescription)
+      }
+    }
+
+    AsyncFunction("getProfileHistory") { (profileId: String, promise: Promise) in
+      promise.resolve(TuneProfileStore.shared.getProfileHistory(profileId))
+    }
+
+    AsyncFunction("rollbackProfile") { (profileId: String, historyEntryId: Double, promise: Promise) in
+      do {
+        promise.resolve(
+          try TuneProfileStore.shared.rollbackProfile(profileId: profileId, historyEntryId: Int64(historyEntryId))
+        )
+      } catch {
+        promise.reject(TuneProfileStore.errorCode, error.localizedDescription)
+      }
+    }
+
+    AsyncFunction("copyProfileToBoard") { (profileId: String, targetBoardId: String, newName: String, promise: Promise) in
+      do {
+        promise.resolve(
+          try TuneProfileStore.shared.copyProfileToBoard(
+            profileId: profileId,
+            targetBoardId: targetBoardId,
+            newName: newName
+          )
+        )
+      } catch {
+        promise.reject(TuneProfileStore.errorCode, error.localizedDescription)
+      }
+    }
+
+    AsyncFunction("saveProfile") { (profileId: String, fields: [String: Any], promise: Promise) in
+      do {
+        promise.resolve(try TuneProfileStore.shared.saveProfile(profileId: profileId, fields: fields))
+      } catch {
+        promise.reject(TuneProfileStore.errorCode, error.localizedDescription)
+      }
+    }
+
+    // @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt `pushProfileToBoard`
+    AsyncFunction("pushProfileToBoard") { (profileId: String, promise: Promise) in
+      self.coordinator.pushProfileToBoard(
+        profileId: profileId,
+        onSuccess: { snapshot in promise.resolve(snapshot) },
+        onError: { code, message in promise.reject(code, message) }
+      )
     }
 
     AsyncFunction("getTotalProfileStats") { (promise: Promise) in
-      promise.resolve(Self.emptyProfileStats())
+      promise.resolve(ProfileStatsRepository.shared.getTotalProfileStats())
     }
 
-    AsyncFunction("getMonthlyProfileStats") { (_: [String: Any], promise: Promise) in
-      promise.resolve(Self.emptyProfileStats())
+    AsyncFunction("getMonthlyProfileStats") { (options: [String: Any], promise: Promise) in
+      promise.resolve(ProfileStatsRepository.shared.getMonthlyProfileStats(options))
     }
 
     AsyncFunction("getProfileStatMonths") { (promise: Promise) in
-      promise.resolve([] as [Any])
+      promise.resolve(ProfileStatsRepository.shared.getProfileStatMonths())
     }
 
-    AsyncFunction("deleteTelemetryBefore") { (_: Double, promise: Promise) in
-      promise.resolve(0)
+    AsyncFunction("deleteTelemetryBefore") { (beforeMs: Double, promise: Promise) in
+      promise.resolve(TelemetryRepository.shared.deleteBefore(Int64(beforeMs)))
     }
 
-    AsyncFunction("deleteTelemetryRange") { (_: [String: Any], promise: Promise) in
-      promise.resolve(0)
+    AsyncFunction("deleteTelemetryRange") { (options: [String: Any], promise: Promise) in
+      promise.resolve(TelemetryRepository.shared.deleteRange(options))
+    }
+
+    // Gate progress on foreground + active listener and hop to main, like every other JS emit. The
+    // rebuild callback fires from a background queue; skip the void when JS isn't listening.
+    // @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt `rebuildTelemetryBuckets`
+    AsyncFunction("rebuildTelemetryBuckets") { (promise: Promise) in
+      let count = TelemetryRepository.shared.rebuildBuckets { current, total in
+        guard self.shouldEmitToFrontend("onTelemetryRebuildProgress") else { return }
+        DispatchQueue.main.async {
+          guard self.shouldEmitToFrontend("onTelemetryRebuildProgress") else { return }
+          self.sendEvent("onTelemetryRebuildProgress", ["current": current, "total": total])
+        }
+      }
+      promise.resolve(count)
     }
 
     AsyncFunction("clearTelemetryHistory") { (promise: Promise) in
+      TelemetryRepository.shared.clearAll()
       promise.resolve(nil)
     }
 
     AsyncFunction("getBoards") { (promise: Promise) in
-      promise.resolve(self.boards.map(Self.normalizeBoard).sorted(by: Self.sortBoards))
+      promise.resolve(self.appData.getBoards())
     }
 
     AsyncFunction("upsertBoard") { (board: [String: Any], promise: Promise) in
-      self.upsert(&self.boards, item: Self.normalizeBoard(board))
-      self.saveAppData()
+      self.appData.upsertBoard(board)
+      self.coordinator.reloadBoardDataForActiveBoard()
       promise.resolve(nil)
     }
 
     AsyncFunction("deleteBoard") { (id: String, promise: Promise) in
-      self.boards.removeAll { ($0["id"] as? String) == id }
-      self.saveAppData()
+      self.appData.deleteBoard(id)
       promise.resolve(nil)
     }
 
     AsyncFunction("getAlertRules") { (promise: Promise) in
-      promise.resolve(self.alertRules.sorted(by: Self.sortByCreatedAt))
+      promise.resolve(self.appData.getAlertRules())
     }
 
     AsyncFunction("upsertAlertRule") { (rule: [String: Any], promise: Promise) in
-      self.upsert(&self.alertRules, item: rule)
-      self.saveAppData()
+      self.appData.upsertAlertRule(rule)
+      self.coordinator.reloadAlertRules()
       promise.resolve(nil)
     }
 
     AsyncFunction("setAlertRuleEnabled") { (id: String, enabled: Bool, promise: Promise) in
-      self.alertRules = self.alertRules.map { rule in
-        guard (rule["id"] as? String) == id else { return rule }
-        var next = rule
-        next["enabled"] = enabled
-        return next
-      }
-      self.saveAppData()
+      self.appData.setAlertRuleEnabled(id, enabled)
+      self.coordinator.reloadAlertRules()
       promise.resolve(nil)
     }
 
     AsyncFunction("deleteAlertRule") { (id: String, promise: Promise) in
-      self.alertRules.removeAll { ($0["id"] as? String) == id }
-      self.saveAppData()
+      self.appData.deleteAlertRule(id)
+      self.coordinator.reloadAlertRules()
       promise.resolve(nil)
     }
 
     AsyncFunction("getPrivacyZones") { (promise: Promise) in
-      promise.resolve(self.privacyZones.sorted(by: Self.sortByCreatedAt))
+      promise.resolve(self.appData.getPrivacyZones())
     }
 
     AsyncFunction("upsertPrivacyZone") { (zone: [String: Any], promise: Promise) in
-      self.upsert(&self.privacyZones, item: zone)
-      self.saveAppData()
+      self.appData.upsertPrivacyZone(zone)
+      self.reloadPrivacyZonesIntoRecorder()
       promise.resolve(nil)
     }
 
     AsyncFunction("setPrivacyZoneEnabled") { (id: String, enabled: Bool, promise: Promise) in
-      self.privacyZones = self.privacyZones.map { zone in
-        guard (zone["id"] as? String) == id else { return zone }
-        var next = zone
-        next["enabled"] = enabled
-        next["updatedAt"] = Date().timeIntervalSince1970 * 1000.0
-        return next
-      }
-      self.saveAppData()
+      self.appData.setPrivacyZoneEnabled(id, enabled)
+      self.reloadPrivacyZonesIntoRecorder()
       promise.resolve(nil)
     }
 
     AsyncFunction("deletePrivacyZone") { (id: String, promise: Promise) in
-      self.privacyZones.removeAll { ($0["id"] as? String) == id }
-      self.saveAppData()
+      self.appData.deletePrivacyZone(id)
+      self.reloadPrivacyZonesIntoRecorder()
       promise.resolve(nil)
     }
 
     AsyncFunction("getMapPoints") { (promise: Promise) in
-      promise.resolve(self.mapPoints.sorted(by: Self.sortByCreatedAt))
+      promise.resolve(self.appData.getMapPoints())
     }
 
     AsyncFunction("upsertMapPoint") { (point: [String: Any], promise: Promise) in
-      self.upsert(&self.mapPoints, item: point)
-      self.saveAppData()
+      self.appData.upsertMapPoint(point)
       promise.resolve(nil)
     }
 
     AsyncFunction("replaceDirectionMapPoint") { (point: [String: Any], promise: Promise) in
-      var directionPoint = point
-      directionPoint["kind"] = "direction"
-      self.mapPoints.removeAll { ($0["kind"] as? String) == "direction" }
-      self.upsert(&self.mapPoints, item: directionPoint)
-      self.saveAppData()
+      self.appData.replaceDirectionMapPoint(point)
       promise.resolve(nil)
     }
 
     AsyncFunction("deleteMapPoint") { (id: String, promise: Promise) in
-      self.mapPoints.removeAll { ($0["id"] as? String) == id }
-      self.saveAppData()
+      self.appData.deleteMapPoint(id)
       promise.resolve(nil)
     }
 
     AsyncFunction("getSettings") { (promise: Promise) in
-      promise.resolve(Self.loadSettings())
+      promise.resolve(self.appData.getSettings())
     }
 
-    AsyncFunction("updateSetting") { (key: String, jsonValue: String?, promise: Promise) in
-      var settings = VescBleModule.loadSettings()
-      if let jsonStr = jsonValue,
-         let data = jsonStr.data(using: .utf8),
-         let decoded = try? JSONSerialization.jsonObject(with: data, options: .allowFragments) {
-        if key == "liveHistoryLimit" {
-          guard let minutes = Self.liveHistoryLimitMinutes(decoded) else {
-            promise.resolve(nil)
-            return
-          }
-          settings[key] = minutes
-        } else {
-          settings[key] = decoded
-        }
-      } else {
-        settings.removeValue(forKey: key)
-      }
-      VescBleModule.saveSettings(settings)
-      promise.resolve(nil)
-    }
-  }
-
-  // MARK: - Scan
-
-  private func startMockScan() {
-    DispatchQueue.main.async { [weak self] in
-      guard let self = self else { return }
-      self.scanTimer?.invalidate()
-      self.scanDeviceIndex = 0
-      self.scanTimer = Timer.scheduledTimer(withTimeInterval: 0.7, repeats: true) { [weak self] _ in
-        guard let self = self else { return }
-        let device = self.mockDevices[self.scanDeviceIndex % self.mockDevices.count]
-        var event = device
-        event["rssi"] = (device["rssi"] as! Int) + Int.random(in: -5...5)
-        self.sendEvent("onDevice", event)
-        self.scanDeviceIndex += 1
+    // JS sends the raw setting value (bool/number/string/object/null), matching Android's
+    // `Any?` param. `getAny()` recursively converts the JS value to native primitives; it must run
+    // on the JS thread, so this stays a synchronous `Function` (like `setSelectedBoard`) rather than
+    // an off-thread `AsyncFunction` that would touch a live `JavaScriptValue` on a worker queue.
+    // `appData.updateSetting` treats `NSNull` (JS null/undefined) as a delete.
+    Function("updateSetting") { (key: String, value: JavaScriptValue) in
+      self.appData.updateSetting(key, rawValue: value.getAny())
+      if [
+        "liveHistoryLimit",
+        "movingSpeedThresholdKmh",
+        "avgSpeedCutoffKmh",
+        "movingAvgSpeedThresholdKmh",
+        "freeSpinMaxSpeedDeltaKmh",
+        "freeSpinStationaryBoardCapKmh",
+        "socEstimateWindowSeconds",
+        "telemetryPollRateHz",
+      ].contains(key) {
+        self.coordinator.reloadTelemetrySettings()
       }
     }
   }
 
-  private func stopScan() {
-    DispatchQueue.main.async { [weak self] in
-      self?.scanTimer?.invalidate()
-      self?.scanTimer = nil
+  // MARK: - Board Probe
+
+  /// Run a Board Probe of one BLE peripheral: end any live Board Session (the probe owns the
+  /// single BLE link), then drive `BoardTransportDetector` and resolve with the confirmed
+  /// candidate set. Mirrors Android `probeBoardLink`.
+  private func startProbe(bleId: String, promise: Promise) {
+    guard !bleId.isEmpty else {
+      promise.reject("INVALID_ARGUMENT", "Board Probe needs a BLE peripheral id")
+      return
     }
-  }
-
-  // MARK: - Location
-
-  private func startMockLocation() {
-    DispatchQueue.main.async { [weak self] in
-      guard let self = self else { return }
-      self.locationTimer?.invalidate()
-      self.locationTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
-        guard let self = self else { return }
-        self.mockLat += Double.random(in: -0.0001...0.0001)
-        self.mockLon += Double.random(in: -0.0001...0.0001)
-        self.persistMockLocationIfNeeded(latitude: self.mockLat, longitude: self.mockLon)
-        self.sendEvent("onLocation", [
-          "latitude": self.mockLat,
-          "longitude": self.mockLon,
-          "speedMps": Double.random(in: 0...5),
-          "bearingDeg": Double.random(in: 0...360),
-          "accuracyM": Double.random(in: 3...10),
-          "altitudeM": 120.0,
-          "timestamp": Date().timeIntervalSince1970 * 1000.0,
-          "precise": true,
-          "saved": false,
-        ] as [String: Any])
+    coordinator.stopBoard()
+    let detector = BoardTransportDetector(
+      bleId: bleId,
+      recordDiagnostic: { name, props in
+        DiagnosticsRecorder.shared.record(eventName: name, properties: props)
+      },
+      onProgress: { [weak self] progress in self?.sendEvent("onBoardProbeProgress", progress) },
+      onComplete: { [weak self] result in
+        self?.activeProbe = nil
+        promise.resolve(
+          self?.probeResultToBridge(result) ?? [
+            "outcome": "none",
+            "transport": nil,
+            "candidates": [] as [Any],
+          ] as [String: Any?]
+        )
+      },
+      onError: { [weak self] code, message in
+        self?.activeProbe = nil
+        promise.reject(code, message)
       }
+    )
+    activeProbe = detector
+    detector.start()
+  }
+
+  private func probeResultToBridge(_ result: TransportDetection.Result) -> [String: Any?] {
+    let candidates = result.candidates.map { candidate in
+      ["transport": candidate.transport.bridgeValue, "hasBms": candidate.hasBms] as [String: Any?]
     }
-  }
-
-  private func stopLocation() {
-    DispatchQueue.main.async { [weak self] in
-      self?.locationTimer?.invalidate()
-      self?.locationTimer = nil
+    let outcome: String
+    switch result.outcome {
+    case .resolved: outcome = "resolved"
+    case .needsPick: outcome = "needs-pick"
+    case .none: outcome = "none"
     }
+    return ["outcome": outcome, "transport": result.resolvedTransport?.bridgeValue, "candidates": candidates]
   }
 
-  private func persistMockLocationIfNeeded(latitude: Double, longitude: Double) {
-    let now = Date()
-    guard now.timeIntervalSince(lastGpsPersistedAt) >= 30 else { return }
-    lastGpsPersistedAt = now
-    var settings = Self.loadSettings()
-    settings["lastGpsLatitude"] = latitude
-    settings["lastGpsLongitude"] = longitude
-    Self.saveSettings(settings)
-  }
+  // MARK: - Coordinator sink attach/detach
 
-  // MARK: - Telemetry
-
-  private func startTelemetryTimer() {
-    telemetryTimer?.invalidate()
-    tick = 0
-    mockOdometer = 0.0
-    telemetryTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
-      guard let self = self else { return }
-      self.emitMockTelemetry()
-      if self.tick % 8 == 0 { self.emitMockBms() }
+  /// Wire this module's JS-facing sinks into the shared coordinator. Runs on module create — including
+  /// the fresh module built after a JS reload — so events flow and `onLiveState` recomposes against
+  /// the still-running session. Mirrors Android setting `VescForegroundService.emitEvent`.
+  private func attachToCoordinator() {
+    coordinator.emit = { [weak self] name, body in
+      guard let self, self.shouldEmitToFrontend(name) else { return }
+      self.sendEvent(name, body)
     }
-  }
-
-  private func startMockBoard(deviceId: String, deviceName: String) {
-    sessionGeneration += 1
-    sessionDeviceId = deviceId
-    sessionDeviceName = deviceName
-    sessionStatus = "connecting"
-    sendEvent("onLiveState", liveState())
-
-    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-      guard let self = self else { return }
-      self.sessionStatus = "connected"
+    coordinator.onStateChanged = { [weak self] in
+      guard let self, self.shouldEmitToFrontend("onLiveState") else { return }
       self.sendEvent("onLiveState", self.liveState())
-      self.startTelemetryTimer()
     }
   }
 
-  private func stopMockSession() {
-    telemetryTimer?.invalidate()
-    telemetryTimer = nil
-    sessionStatus = "idle"
-    sessionDeviceId = nil
-    sessionDeviceName = nil
-    sendEvent("onLiveState", liveState())
+  /// Drop the JS sinks so the coordinator emits into the void once this module dies, without ending
+  /// the native session. Mirrors Android nulling `VescForegroundService.emitEvent` in `OnDestroy`.
+  private func detachFromCoordinator() {
+    coordinator.emit = nil
+    coordinator.onStateChanged = nil
   }
 
+  // MARK: - Board session bridge
+
+  /// Auto-connect the selected board at app launch, native-driven and independent of JS. Mirrors
+  /// Android's `VescAutoConnectProvider` (fires at process start) → `autoConnectSelectedBoard`: JS
+  /// never triggers this, it only toggles the `autoConnect` setting. No-ops when auto-connect is
+  /// off, no board is selected, or the board is unlinked.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardSessionController.kt `autoConnectSelectedBoard`
+  private func autoConnectSelectedBoard() {
+    // The shared coordinator already owns a live session (e.g. this module was rebuilt by a JS
+    // reload mid-ride) — never restart it; the new module only re-attached its sinks. Mirrors
+    // Android, where auto-connect fires once at process start, not on every module create.
+    guard coordinator.connectedBoardId == nil else { return }
+    let settings = appData.getSettings()
+    guard settings["autoConnect"] as? Bool ?? true else { return }
+    guard let boardId = settings["selectedBoardId"] as? String, !boardId.isEmpty else { return }
+    DispatchQueue.main.async {
+      guard let config = self.connectConfig(boardId: boardId) else { return }
+      self.selectedBoardId = boardId
+      self.coordinator.connect(config: config, onSuccess: {}, onError: { _, _ in })
+    }
+  }
+
+  /// Resolve a stored board's Board Link into a runtime connect config. Returns `nil` when the
+  /// board is unlinked (JS routes those to Board Probe instead). Dumb connect (ADR 0015): the
+  /// transport is read straight from the link, never rediscovered.
+  private func connectConfig(boardId: String) -> BoardConnectConfig? {
+    guard let board = appData.getBoard(boardId) else { return nil }
+    guard let link = board["link"] as? [String: Any?] else { return nil }
+    guard let bleId = link["bleId"] as? String, !bleId.isEmpty else { return nil }
+    let transport = BoardTransport.fromBridge(link["transport"] ?? nil) ?? .direct
+    let name = board["name"] as? String ?? "VESC Board"
+    let settings = appData.getSettings()
+    let hz = AppDataRepository.intValue(settings["telemetryPollRateHz"] ?? nil) ?? 0
+    return BoardConnectConfig(
+      appBoardId: boardId,
+      bleId: bleId,
+      name: name,
+      transport: transport,
+      hasBms: link["hasBms"] as? Bool,
+      pollIntervalMs: hz > 0 ? 1000 / hz : 0,
+      batteryConfig: AppDataRepository.normalizeBatteryConfig(board["batteryConfig"] ?? nil),
+      liveHistoryLimitMinutes: AppDataRepository.liveHistoryLimitMinutes(settings["liveHistoryLimit"] ?? nil) ?? 5
+    )
+  }
+
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescLiveStateMapper.kt `buildLiveState`
   private func liveState() -> [String: Any?] {
-    let settings = Self.loadSettings()
-    let gpsActive = locationTimer != nil
+    let settings = appData.getSettings()
     return [
       "board": [
-        "phase": sessionStatus,
-        "selectedBoardId": selectedBoardId ?? settings["selectedBoardId"],
-        "connectedBoardId": sessionStatus == "idle" ? nil : selectedBoardId,
-        "bleId": sessionDeviceId,
-        "name": sessionDeviceName,
-        "connectionSeq": sessionGeneration,
-        "lastTelemetryAt": nil,
-        "recentTelemetry": [] as [Any],
-        "error": nil,
+        "phase": coordinator.phase.rawValue,
+        "selectedBoardId": selectedBoardId ?? (settings["selectedBoardId"] ?? nil),
+        "connectedBoardId": coordinator.connectedBoardId,
+        "bleId": coordinator.bleId,
+        "name": coordinator.boardName,
+        "connectionSeq": coordinator.connectionSeq,
+        "lastTelemetryAt": coordinator.lastTelemetryAt,
+        "recentTelemetry": coordinator.recentTelemetry(),
+        "error": coordinator.boardError,
         "autoConnect": settings["autoConnect"] as? Bool ?? true,
+        "remoteTilt": coordinator.remoteTiltState(),
       ] as [String: Any?],
       "gps": [
-        "phase": gpsActive ? "active" : "idle",
-        "latestFix": nil,
-        "recentLocations": [] as [Any],
-        "error": nil,
+        "phase": coordinator.gpsActive() ? "active" : "idle",
+        "latestFix": coordinator.gpsLatestPreciseLocation(),
+        "latestApproximateFix": coordinator.gpsLatestLocation(),
+        "latestPreciseFix": coordinator.gpsLatestPreciseLocation(),
+        "recentLocations": coordinator.gpsRecentLocations(),
+        "error": coordinator.gpsLastError(),
       ] as [String: Any?],
       "scan": [
-        "phase": scanTimer == nil ? "idle" : "scanning",
+        "phase": coordinator.scanPhase,
         "devices": [] as [Any],
-        "error": nil,
+        "error": coordinator.scanError,
       ] as [String: Any?],
       "recording": [
-        "enabled": false,
-        "activeBoardId": nil,
+        "enabled": coordinator.telemetryRecordingEnabled(),
+        "paused": coordinator.recordingPaused(),
+        "activeBoardId": coordinator.recordingActiveBoardId(),
+        // Always null, matching Android's live-state mapper — JS never consumes a real timestamp.
+        // @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescLiveStateMapper.kt
         "startedAt": nil,
       ] as [String: Any?],
     ]
   }
 
-  private func emitMockTelemetry() {
-    let t = Double(tick)
-    tick += 1
-
-    // Speed: 0–25 km/h sine wave with ~30 s period
-    let speed = 12.5 + 12.5 * sin(t * 0.1)
-    let erpm = speed * 300.0
-
-    // Attitude
-    let pitch = 3.0 * sin(t * 0.3)
-    let roll = 5.0 * sin(t * 0.17 + 1.0)
-    let balancePitch = 2.8 * sin(t * 0.3 - 0.1)
-    let balanceCurrent = 1.5 * sin(t * 0.4)
-
-    // Power
-    let dutyCycle = min(0.8, max(0.0, speed / 50.0))
-    let motorCurrent = 12.5 * cos(t * 0.1)
-    let batteryCurrent = motorCurrent * dutyCycle
-    let batteryVoltage = max(50.0, 58.0 - t * 0.002 + 0.3 * sin(t * 0.05))
-    let batteryPercent = min(100.0, max(0.0, (batteryVoltage - 50.0) / 8.0 * 100.0))
-
-    // Footpads — both pressed
-    let adc1 = 0.85 + 0.05 * sin(t * 0.2)
-    let adc2 = 0.88 + 0.04 * sin(t * 0.15)
-
-    // Temperatures — slowly rising
-    let tempMosfet = min(70.0, 35.0 + t * 0.02 + 2.0 * sin(t * 0.03))
-    let tempMotor = min(60.0, 28.0 + t * 0.015)
-
-    // Odometer: speed (km/h) → m/s × 0.5 s interval
-    mockOdometer += abs(speed) / 3.6 * 0.5
-
-    let telemetry: [String: Any?] = [
-      "hasFault": false,
-      "faultCode": 0,
-      "pitch": pitch,
-      "roll": roll,
-      "balancePitch": balancePitch,
-      "balanceCurrent": balanceCurrent,
-      "speed": speed,
-      "batteryVoltage": batteryVoltage,
-      "batteryPercent": batteryPercent,
-      "motorCurrent": motorCurrent,
-      "batteryCurrent": batteryCurrent,
-      "erpm": erpm,
-      "dutyCycle": dutyCycle,
-      "state": 1,
-      "stateName": "RUNNING",
-      "switchState": 2,
-      "adc1": adc1,
-      "adc2": adc2,
-      "odometer": mockOdometer,
-      "tempMosfet": tempMosfet,
-      "tempMotor": tempMotor,
-      "avgLatency": 12.0,
-      "pullRateHz": 20.0,
-      "lastPacketAt": Date().timeIntervalSince1970 * 1000.0,
-      "location": nil,
-      "generation": sessionGeneration,
-    ]
-    sendEvent("onLiveTick", telemetry)
-    sendEvent("onTelemetryHistory", ["samples": [telemetry]])
-    emitMockLiveSeries(telemetry)
+  /// True only when the app is foregrounded and JS is actively listening to `name`. Gates the
+  /// coordinator's JS-facing emits so the telemetry firehose sleeps in the background.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt `shouldEmitToFrontend`
+  private func shouldEmitToFrontend(_ name: String) -> Bool {
+    frontendActive && observedEvents.contains(name)
   }
 
-  private func emitMockLiveSeries(_ telemetry: [String: Any?]) {
-    guard let timestamp = telemetry["lastPacketAt"] as? Double else { return }
-    func point(_ value: Double?) -> [Double] {
-      guard let value, value.isFinite else { return [] }
-      return [timestamp, value]
+  /// Push the current enabled Privacy Zones into the recording store so mid-ride edits take effect
+  /// immediately, not just on the next session. Mirrors Android `reloadPrivacyZonesIntoRecorder`.
+  private func reloadPrivacyZonesIntoRecorder() {
+    TelemetryRepository.shared.reloadPrivacyZones(appData.getEnabledPrivacyZoneEntities())
+  }
+
+  /// Emit `onAppDataChanged` so JS reloads the store for [scope]. Bypasses the `frontendActive`
+  /// firehose gate — these are low-rate config writes JS must not miss (Android emits regardless).
+  /// `sendEvent` must run on the main thread, so hop over from any background write closure.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/AppDataRepository.kt `notifyDataChanged`
+  private func sendAppDataChanged(_ scope: String) {
+    DispatchQueue.main.async { self.sendEvent("onAppDataChanged", ["scope": scope]) }
+  }
+
+  private static func notificationPermissionStatus(_ status: UNAuthorizationStatus) -> String {
+    switch status {
+    case .notDetermined: return "not-determined"
+    case .denied: return "denied"
+    case .authorized: return "authorized"
+    case .provisional: return "provisional"
+    case .ephemeral: return "ephemeral"
+    @unknown default: return "unknown"
     }
-    func value(_ key: String) -> Double? { telemetry[key] as? Double }
-
-    let duty = value("dutyCycle").map { abs($0) * 100 }
-    let metrics: [String: [Double]] = [
-      "motorTemp": point(value("tempMotor").flatMap { $0 > 0 ? $0 : nil }),
-      "controllerTemp": point(value("tempMosfet")),
-      "motorCurrent": point(value("motorCurrent")),
-      "batteryCurrent": point(value("batteryCurrent")),
-      "batteryVoltage": point(value("batteryVoltage")),
-      "batteryPercent": point(value("batteryPercent")),
-      "speed": point(value("speed").map(abs)),
-      "duty": point(duty),
-      "pitch": point(value("pitch")),
-      "roll": point(value("roll")),
-      "balancePitch": point(value("balancePitch")),
-      "footpadAdc1": point(value("adc1")),
-      "footpadAdc2": point(value("adc2")),
-    ]
-    sendEvent("onLiveSeries", ["metrics": metrics, "generation": sessionGeneration])
-  }
-
-  private func emitMockBms() {
-    let t = Double(tick)
-    let cellCount = 20
-    let base = max(3.0, 4.05 - t * 0.00005)
-    var cells: [Double] = []
-    var balancing: [Bool] = []
-    for i in 0..<cellCount {
-      // Slight per-cell spread plus a small wandering imbalance so the UI shows variation.
-      let cell = base + 0.02 * sin(t * 0.05 + Double(i)) + Double(i % 3) * 0.004
-      cells.append(cell)
-      balancing.append(cell > base + 0.03)
-    }
-    let total = cells.reduce(0, +)
-    sendEvent("onBms", [
-      "capturedAt": Date().timeIntervalSince1970 * 1000.0,
-      "voltageTotal": total,
-      "current": 8.0 * cos(t * 0.1),
-      "ampHours": t * 0.01,
-      "wattHours": t * 0.4,
-      "soc": min(1.0, max(0.0, (base - 3.0) / 1.2)),
-      "cellVoltages": cells,
-      "balancing": balancing,
-    ] as [String: Any?])
-  }
-
-  private func saveAppData() {
-    Self.saveArray(boards, key: "vesc_ble_boards")
-    Self.saveArray(alertRules, key: "vesc_ble_alert_rules")
-    Self.saveArray(privacyZones, key: "vesc_ble_privacy_zones")
-    Self.saveArray(mapPoints, key: "vesc_ble_map_points")
-  }
-
-  private func upsert(_ array: inout [[String: Any?]], item: [String: Any?]) {
-    let normalized = item
-    guard let id = normalized["id"] as? String else { return }
-    if let index = array.firstIndex(where: { ($0["id"] as? String) == id }) {
-      array[index] = normalized
-    } else {
-      array.append(normalized)
-    }
-  }
-
-  private static func normalizeBoard(_ raw: [String: Any?]) -> [String: Any?] {
-    var board = raw
-    board.removeValue(forKey: "minVoltage")
-    board.removeValue(forKey: "maxVoltage")
-    board["batteryConfig"] = normalizeBatteryConfig(raw["batteryConfig"])
-    return board
-  }
-
-  private static func normalizeBatteryConfig(_ raw: Any?) -> [String: Any]? {
-    guard let config = raw as? [String: Any], let mode = config["mode"] as? String else {
-      return nil
-    }
-    switch mode {
-    case "preset":
-      guard
-        let cellPresetId = config["cellPresetId"] as? String,
-        !cellPresetId.isEmpty,
-        let seriesCount = intValue(config["seriesCount"]),
-        let parallelCount = intValue(config["parallelCount"]),
-        seriesCount > 0,
-        parallelCount > 0
-      else {
-        return nil
-      }
-      return [
-        "mode": "preset",
-        "cellPresetId": cellPresetId,
-        "seriesCount": seriesCount,
-        "parallelCount": parallelCount,
-      ]
-    case "manual":
-      guard
-        let minVoltage = doubleValue(config["minVoltage"]),
-        let maxVoltage = doubleValue(config["maxVoltage"]),
-        minVoltage.isFinite,
-        maxVoltage.isFinite,
-        maxVoltage > minVoltage
-      else {
-        return nil
-      }
-      return [
-        "mode": "manual",
-        "minVoltage": minVoltage,
-        "maxVoltage": maxVoltage,
-      ]
-    default:
-      return nil
-    }
-  }
-
-  private static func intValue(_ raw: Any?) -> Int? {
-    if let value = raw as? Int { return value }
-    if let value = raw as? NSNumber { return value.intValue }
-    return nil
-  }
-
-  private static func doubleValue(_ raw: Any?) -> Double? {
-    if let value = raw as? Double { return value }
-    if let value = raw as? NSNumber { return value.doubleValue }
-    return nil
-  }
-
-  private static func sortBoards(_ lhs: [String: Any?], _ rhs: [String: Any?]) -> Bool {
-    return createdAt(lhs) < createdAt(rhs)
-  }
-
-  private static func sortByCreatedAt(_ lhs: [String: Any?], _ rhs: [String: Any?]) -> Bool {
-    createdAt(lhs) < createdAt(rhs)
-  }
-
-  private static func createdAt(_ item: [String: Any?]) -> Double {
-    item["createdAt"] as? Double ?? Double(item["createdAt"] as? Int ?? 0)
-  }
-
-  private static func loadArray(key: String) -> [[String: Any?]] {
-    guard
-      let data = UserDefaults.standard.data(forKey: key),
-      let raw = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]]
-    else {
-      return []
-    }
-    return raw.map { item in item.reduce(into: [String: Any?]()) { $0[$1.key] = $1.value } }
-  }
-
-  private static func saveArray(_ array: [[String: Any?]], key: String) {
-    let normalized = array.map { item in item.compactMapValues { $0 } }
-    guard let data = try? JSONSerialization.data(withJSONObject: normalized) else { return }
-    UserDefaults.standard.set(data, forKey: key)
-  }
-
-  private static let defaultSettings: [String: Any] = [
-    "liveHistoryLimit": 5,
-    "autoConnect": true,
-    "autoRecording": false,
-    "companionPresenceEnabled": false,
-    "selectedBoardId": NSNull(),
-    "riderId": NSNull(),
-    "riderName": NSNull(),
-    "riderColor": NSNull(),
-    "lastGpsLatitude": NSNull(),
-    "lastGpsLongitude": NSNull(),
-    "movingSpeedThresholdKmh": 3,
-    "telemetryPollRateHz": 20,
-    "historyMetricGradientsEnabled": true,
-    "historyMetricHotRanges": [
-      "speed": ["start": 30, "end": 40],
-      "duty": ["start": 60, "end": 80],
-      "tempMotor": ["start": 70, "end": 90],
-      "tempController": ["start": 60, "end": 80],
-      "motorCurrent": ["start": 35, "end": 55],
-      "batteryCurrent": ["start": 25, "end": 45],
-    ],
-  ]
-
-  private static func liveHistoryLimitMinutes(_ value: Any?) -> Int? {
-    if let value = value as? Int {
-      return min(50, max(1, value))
-    }
-    if let value = value as? NSNumber {
-      return min(50, max(1, value.intValue))
-    }
-    return nil
-  }
-
-  private static func normalizeSettings(_ settings: [String: Any]) -> [String: Any] {
-    var normalized = settings
-    normalized["liveHistoryLimit"] =
-      liveHistoryLimitMinutes(settings["liveHistoryLimit"]) ?? defaultSettings["liveHistoryLimit"]
-    return normalized
-  }
-
-  private static func loadSettings() -> [String: Any] {
-    guard
-      let data = UserDefaults.standard.data(forKey: "vesc_ble_settings"),
-      let raw = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-    else {
-      return defaultSettings
-    }
-    var merged = defaultSettings
-    for (k, v) in raw { merged[k] = v }
-    if raw["movingSpeedThresholdKmh"] == nil {
-      if let oldValue = raw["avgSpeedCutoffKmh"] ?? raw["movingAvgSpeedThresholdKmh"] {
-        merged["movingSpeedThresholdKmh"] = oldValue
-      }
-    }
-    return normalizeSettings(merged)
-  }
-
-  private static func saveSettings(_ settings: [String: Any]) {
-    guard let data = try? JSONSerialization.data(withJSONObject: settings) else { return }
-    UserDefaults.standard.set(data, forKey: "vesc_ble_settings")
-  }
-
-  private static func emptyProfileStats() -> [String: Any?] {
-    [
-      "distanceM": nil,
-      "rideCount": 0,
-      "rideTimeMs": 0,
-      "topSpeedKmh": 0,
-      "avgSpeedKmh": 0,
-      "longestRideM": nil,
-      "batteryUsedWh": nil,
-      "batteryRegenWh": nil,
-    ]
   }
 }

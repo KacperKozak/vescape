@@ -1,5 +1,6 @@
 package expo.modules.vescble
 
+// @parity /modules/vesc-ble/ios/RefloatConfigModels.swift
 internal data class RefloatTuneFieldDefinition(
   val id: String,
   val label: String,
@@ -68,6 +69,7 @@ internal data class RefloatConfigSnapshot(
   )
 }
 
+// @parity /modules/vesc-ble/ios/RefloatConfigModels.swift
 internal enum class RefloatConfigErrorCode {
   BOARD_NOT_CONNECTED,
   CAN_ID_UNAVAILABLE,

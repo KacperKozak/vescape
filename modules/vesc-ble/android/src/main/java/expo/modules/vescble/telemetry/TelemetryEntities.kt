@@ -5,6 +5,7 @@ import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
+// @parity /modules/vesc-ble/ios/alerts/AlertEngine.swift
 const val TELEMETRY_FLAG_KEYFRAME = 1
 const val TELEMETRY_FLAG_HAS_FAULT = 1 shl 1
 const val TELEMETRY_FLAG_HAS_LOCATION = 1 shl 2

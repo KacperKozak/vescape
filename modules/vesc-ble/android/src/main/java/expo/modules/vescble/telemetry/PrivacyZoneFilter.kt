@@ -4,6 +4,7 @@ import kotlin.math.cos
 
 private const val METERS_PER_E7_LATITUDE = 0.0111319
 
+// @parity /modules/vesc-ble/ios/telemetry/PrivacyZoneFilter.swift
 internal fun isInsideAnyPrivacyZone(
   latitudeE7: Int,
   longitudeE7: Int,
