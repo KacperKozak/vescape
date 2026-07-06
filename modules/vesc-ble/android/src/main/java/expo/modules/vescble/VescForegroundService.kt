@@ -1,9 +1,11 @@
 package expo.modules.vescble
 
 import android.annotation.SuppressLint
+import android.Manifest
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.IBinder
 import expo.modules.vescble.recording.RecordingCoordinator
 import expo.modules.vescble.telemetry.AppDataRepository
@@ -97,6 +99,10 @@ class VescForegroundService : Service() {
             onSuccess: () -> Unit,
             onError: (String, String) -> Unit,
         ) {
+            if (!hasBluetoothConnectPermission(context)) {
+                onError("BLUETOOTH_PERMISSION", "Bluetooth permission not granted")
+                return
+            }
             pendingStart = PendingStart(boardConfig, onSuccess, onError)
             val intent = Intent(context, VescForegroundService::class.java).apply {
                 action = ACTION_START_SESSION
@@ -120,6 +126,10 @@ class VescForegroundService : Service() {
         }
 
         fun onCompanionDeviceAppeared(context: Context, address: String) {
+            if (!hasBluetoothConnectPermission(context)) {
+                android.util.Log.w(VESC_SESSION_TAG, "Companion service start skipped: Bluetooth permission not granted")
+                return
+            }
             val intent = Intent(context, VescForegroundService::class.java).apply {
                 action = ACTION_COMPANION_DEVICE_APPEARED
                 putExtra(EXTRA_COMPANION_ADDRESS, address)
@@ -132,16 +142,24 @@ class VescForegroundService : Service() {
         }
 
         fun autoConnectSelectedBoard(context: Context) {
-            val intent = Intent(context, VescForegroundService::class.java).apply {
-                action = ACTION_AUTO_CONNECT_SELECTED_BOARD
+            appDataScope.launch {
+                val settings = AppDataRepository.get(context.applicationContext).getTypedSettings()
+                if (!settings.autoConnect || settings.selectedBoardId == null) return@launch
+                if (!hasBluetoothConnectPermission(context)) {
+                    android.util.Log.w(VESC_SESSION_TAG, "Auto-connect service start skipped: Bluetooth permission not granted")
+                    return@launch
+                }
+                val intent = Intent(context, VescForegroundService::class.java).apply {
+                    action = ACTION_AUTO_CONNECT_SELECTED_BOARD
+                }
+                try {
+                    context.startForegroundService(intent)
+                } catch (e: Exception) {
+                    android.util.Log.w(VESC_SESSION_TAG, "Auto-connect service start ignored: ${e.message}")
+                    return@launch
+                }
+                instance?.controller?.autoConnectSelectedBoard()
             }
-            try {
-                context.startForegroundService(intent)
-            } catch (e: Exception) {
-                android.util.Log.w(VESC_SESSION_TAG, "Auto-connect service start ignored: ${e.message}")
-                return
-            }
-            instance?.controller?.autoConnectSelectedBoard()
         }
 
         fun getRefloatConfigSnapshot(
@@ -351,6 +369,9 @@ class VescForegroundService : Service() {
                 ),
             )
         }
+
+        private fun hasBluetoothConnectPermission(context: Context): Boolean =
+            context.checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
     }
 
     internal lateinit var controller: BoardSessionController
