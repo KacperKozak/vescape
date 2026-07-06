@@ -34,7 +34,10 @@ import { TuneGroupGrid } from '@/components/ui/tune/TuneGroupGrid'
 import { TuneSyncBar } from '@/components/ui/tune/TuneSyncBar'
 import { TunePreview } from '@/components/ui/tune/TunePreview'
 import { PitchInputControl } from '@/components/ui/tune/PitchInputControl'
-import { TunePreviewScenarioControls } from '@/components/ui/tune/TunePreviewScenarioControls'
+import {
+  TunePreviewScenarioControls,
+  type HillsPresetId,
+} from '@/components/ui/tune/TunePreviewScenarioControls'
 import { routes } from '@/navigation/routes'
 import { TextPromptModal } from '@/components/ui/modals/TextPromptModal'
 import { BoardPickerModal } from '@/components/domain/tune/BoardPickerModal'
@@ -55,9 +58,10 @@ export default function TuneScreen() {
   const isFocused = useIsFocused()
   const pitchInputDegrees = useSharedValue(0)
   const pitchInputActive = useSharedValue(false)
-  const [hillsEnabled, setHillsEnabled] = useState(false)
+  const [hillsPreset, setHillsPreset] = useState<HillsPresetId>('flat')
   const [hillHeightMeters, setHillHeightMeters] = useState(2.5)
   const [hillSpacingMeters, setHillSpacingMeters] = useState(30)
+  const hillsEnabled = hillsPreset !== 'flat'
   const [advancedPhysics, setAdvancedPhysics] = useState(DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS)
   const [previewHelpVisible, setPreviewHelpVisible] = useState(() => {
     if (previewHelpShownThisSession) return false
@@ -250,11 +254,14 @@ export default function TuneScreen() {
             contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 96 }]}
             contentInsetAdjustmentBehavior="automatic"
           >
+            <View style={styles.previewOptionsHeader}>
+              <Text style={styles.previewOptionsTitle}>Preview options</Text>
+            </View>
             <TunePreviewScenarioControls
               advancedPhysics={advancedPhysics}
               onAdvancedPhysicsChange={setAdvancedPhysics}
-              hillsEnabled={hillsEnabled}
-              onHillsChange={setHillsEnabled}
+              hillsPreset={hillsPreset}
+              onHillsPresetChange={setHillsPreset}
               hillHeightMeters={hillHeightMeters}
               onHillHeightChange={setHillHeightMeters}
               hillSpacingMeters={hillSpacingMeters}
@@ -632,6 +639,19 @@ const styles = StyleSheet.create({
     borderBottomColor: theme.palette.slate.border,
   },
   balancePinned: { paddingHorizontal: 16 },
+  previewOptionsHeader: {
+    paddingHorizontal: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  previewOptionsTitle: {
+    color: theme.palette.slate.textMuted,
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
   formScroll: { flex: 1 },
   content: {
     padding: 16,

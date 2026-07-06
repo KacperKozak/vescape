@@ -13,7 +13,10 @@ import { BasicSliderCell } from '@/components/ui/tune/BasicSliderCell'
 import { TuneDial } from '@/components/ui/tune/TuneDial'
 import { TunePreview } from '@/components/ui/tune/TunePreview'
 import { PitchInputControl } from '@/components/ui/tune/PitchInputControl'
-import { TunePreviewScenarioControls } from '@/components/ui/tune/TunePreviewScenarioControls'
+import {
+  TunePreviewScenarioControls,
+  type HillsPresetId,
+} from '@/components/ui/tune/TunePreviewScenarioControls'
 import { IconHero } from '@/components/ui/settings/IconHero'
 import { ShowcaseCard } from '@/components/ui/dev/ShowcaseCard'
 import { ChipRow, ValueRow } from '@/components/ui/dev/ShowcaseControls'
@@ -214,9 +217,10 @@ function TunePreviewShowcase() {
   const pitchInputDegrees = useSharedValue(0)
   const pitchInputActive = useSharedValue(false)
   const [scenario, setScenario] = useState('flat')
-  const [hillsEnabled, setHillsEnabled] = useState(false)
+  const [hillsPreset, setHillsPreset] = useState<HillsPresetId>('flat')
   const [hillHeightMeters, setHillHeightMeters] = useState(2.5)
   const [hillSpacingMeters, setHillSpacingMeters] = useState(30)
+  const hillsEnabled = hillsPreset !== 'flat'
   const [advancedPhysics, setAdvancedPhysics] = useState(DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS)
   const fields = useMemo(
     () => ({
@@ -258,11 +262,11 @@ function TunePreviewShowcase() {
   const selectScenario = (next: string) => {
     setScenario(next)
     if (next === 'hills' || next === 'dense hills') {
-      setHillsEnabled(true)
+      setHillsPreset('custom')
       setHillHeightMeters(next === 'dense hills' ? 5 : 2.5)
       setHillSpacingMeters(next === 'dense hills' ? 15 : 30)
     } else {
-      setHillsEnabled(false)
+      setHillsPreset('flat')
     }
   }
 
@@ -295,8 +299,8 @@ function TunePreviewShowcase() {
       <TunePreviewScenarioControls
         advancedPhysics={advancedPhysics}
         onAdvancedPhysicsChange={setAdvancedPhysics}
-        hillsEnabled={hillsEnabled}
-        onHillsChange={setHillsEnabled}
+        hillsPreset={hillsPreset}
+        onHillsPresetChange={setHillsPreset}
         hillHeightMeters={hillHeightMeters}
         onHillHeightChange={setHillHeightMeters}
         hillSpacingMeters={hillSpacingMeters}

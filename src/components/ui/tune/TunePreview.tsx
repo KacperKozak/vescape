@@ -9,8 +9,7 @@ import Animated, {
 } from 'react-native-reanimated'
 import type { TuneProfileFieldValue } from 'vesc-ble'
 
-import { theme } from '@/constants/theme'
-import { IconButton } from '@/components/ui/base/IconButton'
+import { interaction, theme } from '@/constants/theme'
 import {
   DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS,
   TUNE_PREVIEW_RESET_SPEED_KMH,
@@ -207,18 +206,26 @@ export function TunePreview({
           </View>
         </View>
         <View style={styles.headerMetrics}>
-          <View style={styles.speedActions}>
-            <View style={styles.speedReadout}>
+          <Pressable
+            onPress={handleResetSpeed}
+            accessibilityLabel="Reset preview speed to 15 kilometers per hour"
+            accessibilityRole="button"
+            testID="tune-preview-reset-speed"
+            style={({ pressed }) => [
+              styles.speedReadout,
+              pressed && { opacity: interaction.pressedOpacity },
+            ]}
+          >
+            <ArrowCounterClockwiseIcon
+              size={13}
+              color={theme.palette.slate.textMuted}
+              weight="bold"
+            />
+            <View style={styles.speedValueGroup}>
               <Text style={styles.speedValue}>{readouts.speed}</Text>
               <Text style={styles.speedUnit}>km/h</Text>
             </View>
-            <IconButton
-              icon={ArrowCounterClockwiseIcon}
-              onPress={handleResetSpeed}
-              accessibilityLabel="Reset preview speed to 15 kilometers per hour"
-              testID="tune-preview-reset-speed"
-            />
-          </View>
+          </Pressable>
           <Text style={styles.current}>{readouts.current}</Text>
         </View>
       </View>
@@ -315,7 +322,7 @@ export function TunePreview({
             <SvgText
               x={centerX}
               y={GROUND_Y + 21}
-              fill={theme.palette.amber.text}
+              fill={theme.palette.slate.textPrimary}
               fontSize={9}
               fontWeight="700"
               textAnchor="middle"
@@ -396,7 +403,7 @@ const styles = StyleSheet.create({
   current: {
     width: 80,
     padding: 0,
-    color: theme.telemetry.motorCurrent,
+    color: theme.palette.slate.textPrimary,
     fontSize: 10,
     fontWeight: '800',
     textAlign: 'right',
@@ -404,22 +411,20 @@ const styles = StyleSheet.create({
   },
   speedReadout: {
     flexDirection: 'row',
-    alignItems: 'baseline',
-    gap: 4,
-  },
-  speedActions: {
-    flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
+  speedValueGroup: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 4,
+  },
   speedValue: {
-    width: 64,
     padding: 0,
     color: theme.telemetry.speed,
     fontSize: 24,
     lineHeight: 28,
     fontWeight: '900',
-    textAlign: 'right',
     fontVariant: ['tabular-nums'],
   },
   speedUnit: {

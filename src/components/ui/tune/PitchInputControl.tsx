@@ -69,10 +69,7 @@ export function PitchInputControl({ angleDegrees, active }: PitchInputControlPro
     <View style={styles.container}>
       <View style={styles.labels}>
         <Text style={styles.edgeLabel}>Nose</Text>
-        <View style={styles.titleRow}>
-          <Text style={styles.title}>Pitch Input</Text>
-          <Text style={styles.angle}>{rateText}</Text>
-        </View>
+        <Text style={styles.angle}>{rateText}</Text>
         <Text style={styles.edgeLabel}>Tail</Text>
       </View>
       <GestureDetector gesture={gesture}>
@@ -95,12 +92,9 @@ export function PitchInputControl({ angleDegrees, active }: PitchInputControlPro
 const styles = StyleSheet.create({
   container: { gap: 5 },
   labels: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  titleRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6 },
-  title: { color: theme.palette.slate.text, fontSize: 11, fontWeight: '800' },
   angle: {
-    width: 55,
     padding: 0,
-    color: theme.telemetry.pitch,
+    color: theme.telemetry.speed,
     fontSize: 11,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],

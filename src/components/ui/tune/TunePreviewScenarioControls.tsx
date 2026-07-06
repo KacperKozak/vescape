@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Pressable, StyleSheet, Switch, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { AtomIcon, CaretDownIcon, MountainsIcon } from 'phosphor-react-native'
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated'
 
 import { Select, type SelectOption } from '@/components/ui/forms/Select'
+import { SelectCard } from '@/components/ui/forms/SelectCard'
 import { TuneDial } from '@/components/ui/tune/TuneDial'
 import { theme } from '@/constants/theme'
 import {
@@ -18,11 +19,31 @@ const MOTOR_OPTIONS: SelectOption<TunePreviewMotorPresetId>[] = Object.entries(
   TUNE_PREVIEW_MOTOR_PRESETS,
 ).map(([value, preset]) => ({ value: value as TunePreviewMotorPresetId, label: preset.label }))
 
+export type HillsPresetId = 'flat' | 'large' | 'small' | 'pumptrack' | 'custom'
+
+export const HILLS_PRESETS: Record<
+  Exclude<HillsPresetId, 'custom'>,
+  { label: string; heightMeters: number; spacingMeters: number }
+> = {
+  flat: { label: 'Flat road', heightMeters: 0, spacingMeters: 0 },
+  large: { label: 'Large hills · 8 m · 90 m', heightMeters: 8, spacingMeters: 90 },
+  small: { label: 'Small hills · 2 m · 24 m', heightMeters: 2, spacingMeters: 24 },
+  pumptrack: { label: 'Pumptrack · 0.5 m · 5 m', heightMeters: 0.5, spacingMeters: 5 },
+}
+
+const HILLS_OPTIONS: SelectOption<HillsPresetId>[] = [
+  ...Object.entries(HILLS_PRESETS).map(([value, preset]) => ({
+    value: value as HillsPresetId,
+    label: preset.label,
+  })),
+  { value: 'custom', label: 'Enter your own' },
+]
+
 interface TunePreviewScenarioControlsProps {
   advancedPhysics: TunePreviewAdvancedPhysics
   onAdvancedPhysicsChange: (physics: TunePreviewAdvancedPhysics) => void
-  hillsEnabled: boolean
-  onHillsChange: (enabled: boolean) => void
+  hillsPreset: HillsPresetId
+  onHillsPresetChange: (preset: HillsPresetId) => void
   hillHeightMeters: number
   onHillHeightChange: (value: number) => void
   hillSpacingMeters: number
@@ -32,8 +53,8 @@ interface TunePreviewScenarioControlsProps {
 export function TunePreviewScenarioControls({
   advancedPhysics,
   onAdvancedPhysicsChange,
-  hillsEnabled,
-  onHillsChange,
+  hillsPreset,
+  onHillsPresetChange,
   hillHeightMeters,
   onHillHeightChange,
   hillSpacingMeters,
@@ -45,8 +66,58 @@ export function TunePreviewScenarioControls({
   const updatePhysics = (patch: Partial<TunePreviewAdvancedPhysics>) =>
     onAdvancedPhysicsChange({ ...physics, ...patch })
 
+  const handlePresetChange = (preset: HillsPresetId) => {
+    onHillsPresetChange(preset)
+    if (preset !== 'custom' && preset !== 'flat') {
+      const values = HILLS_PRESETS[preset]
+      if (values) {
+        onHillHeightChange(values.heightMeters)
+        onHillSpacingChange(values.spacingMeters)
+      }
+    }
+  }
+
   return (
     <View style={styles.stack}>
+      <SelectCard
+        icon={MountainsIcon}
+        iconColor={theme.palette.green.color}
+        title="Terrain"
+        description="Simulates the slope the board rides over"
+        options={HILLS_OPTIONS}
+        value={hillsPreset}
+        onChange={handlePresetChange}
+      >
+        {hillsPreset === 'custom' ? (
+          <>
+            <Text style={styles.description}>
+              Valley-to-peak height · {hillHeightMeters.toFixed(1)} m
+            </Text>
+            <TuneDial
+              value={hillHeightMeters}
+              min={0}
+              max={50}
+              step={0.1}
+              unit="m"
+              valueChangeMode="live"
+              onValueChange={onHillHeightChange}
+            />
+            <Text style={styles.description}>
+              Peak-to-peak distance · {hillSpacingMeters.toFixed(0)} m
+            </Text>
+            <TuneDial
+              value={hillSpacingMeters}
+              min={2}
+              max={1000}
+              step={1}
+              unit="m"
+              valueChangeMode="live"
+              onValueChange={onHillSpacingChange}
+            />
+          </>
+        ) : null}
+      </SelectCard>
+
       <View style={styles.container}>
         <Pressable
           style={styles.header}
@@ -58,7 +129,7 @@ export function TunePreviewScenarioControls({
             <AtomIcon size={16} color={theme.palette.purple.color} weight="duotone" />
             <View>
               <Text style={styles.title}>Advanced settings</Text>
-              <Text style={styles.description}>Physical model is always active</Text>
+              <Text style={styles.description}>Physical model of the board</Text>
             </View>
           </View>
           <CaretDownIcon
@@ -186,44 +257,6 @@ export function TunePreviewScenarioControls({
               onValueChange={(pitchDampingPerSecond) => updatePhysics({ pitchDampingPerSecond })}
             />
           </Animated.View>
-        ) : null}
-      </View>
-
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <View style={styles.titleRow}>
-            <MountainsIcon size={16} color={theme.palette.green.color} weight="duotone" />
-            <Text style={styles.title}>Hills</Text>
-          </View>
-          <Switch value={hillsEnabled} onValueChange={onHillsChange} />
-        </View>
-        {hillsEnabled ? (
-          <>
-            <Text style={styles.description}>
-              Valley-to-peak height · {hillHeightMeters.toFixed(1)} m
-            </Text>
-            <TuneDial
-              value={hillHeightMeters}
-              min={0}
-              max={50}
-              step={0.1}
-              unit="m"
-              valueChangeMode="live"
-              onValueChange={onHillHeightChange}
-            />
-            <Text style={styles.description}>
-              Peak-to-peak distance · {hillSpacingMeters.toFixed(0)} m
-            </Text>
-            <TuneDial
-              value={hillSpacingMeters}
-              min={2}
-              max={1000}
-              step={1}
-              unit="m"
-              valueChangeMode="live"
-              onValueChange={onHillSpacingChange}
-            />
-          </>
         ) : null}
       </View>
     </View>
