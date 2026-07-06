@@ -7,12 +7,21 @@ function makeBms(cellVoltages: number[], balancing: boolean[] = []): BmsEvent {
   return {
     capturedAt: 1000,
     voltageTotal: cellVoltages.reduce((s, v) => s + v, 0),
+    vCharge: 0,
     current: 0,
+    currentIc: 0,
     ampHours: 0,
     wattHours: 0,
     soc: null,
+    soh: null,
     cellVoltages,
     balancing,
+    temps: [],
+    tempIc: null,
+    tempHum: null,
+    hum: null,
+    tempMaxCell: null,
+    canId: null,
   }
 }
 

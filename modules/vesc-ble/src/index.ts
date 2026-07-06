@@ -237,15 +237,34 @@ export interface BmsEvent {
   capturedAt: number
   /** Pack voltage as reported by the BMS (sum of cell groups). */
   voltageTotal: number
+  /** Charge-port voltage (`v_charge`); meaning is firmware/BMS-specific. */
+  vCharge: number
+  /** Pack current from the BMS shunt. */
   current: number
+  /** Second/internal current field (`i_in_ic`); compare against `current`. */
+  currentIc: number
   ampHours: number
   wattHours: number
   /** State of charge 0–1, or null when the firmware variant omits it. */
   soc: number | null
+  /** State of health 0–1, or null when the firmware variant omits it. */
+  soh: number | null
   /** Per cell-group voltage, index 0 = first group. */
   cellVoltages: number[]
   /** Per cell-group balancing flag, aligned with cellVoltages. */
   balancing: boolean[]
+  /** Per-sensor BMS temperatures in °C (`temps_adc`); empty when firmware omits them. */
+  temps: number[]
+  /** BMS IC temperature °C, or null when absent. */
+  tempIc: number | null
+  /** Humidity-sensor temperature °C, or null when absent. */
+  tempHum: number | null
+  /** Relative humidity %, or null when absent. */
+  hum: number | null
+  /** Hottest cell temperature °C, or null when absent. */
+  tempMaxCell: number | null
+  /** BMS CAN id, or null when absent. */
+  canId: number | null
 }
 
 export interface LiveMetricExclusionUpdate {

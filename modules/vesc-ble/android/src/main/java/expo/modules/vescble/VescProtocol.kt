@@ -232,9 +232,9 @@ internal fun parseBmsValues(payload: ByteArray, packetAt: Long): BmsTelemetry? {
 
     var ind = 1
     val voltageTotal = int32(payload, ind) / 1e6; ind += 4
-    /* v_charge */ ind += 4
+    val vCharge = int32(payload, ind) / 1e6; ind += 4
     val current = int32(payload, ind) / 1e6; ind += 4
-    /* i_in_ic */ ind += 4
+    val currentIc = int32(payload, ind) / 1e6; ind += 4
     val ampHours = int32(payload, ind) / 1e3; ind += 4
     val wattHours = int32(payload, ind) / 1e3; ind += 4
 
@@ -256,25 +256,56 @@ internal fun parseBmsValues(payload: ByteArray, packetAt: Long): BmsTelemetry? {
         }
     }
 
+    // Everything past balancing is firmware-variant dependent, so each trailing field is
+    // read best-effort behind a bounds check and stays null/empty when the variant omits it.
+    var temps: List<Double> = emptyList()
+    var tempIc: Double? = null
+    var tempHum: Double? = null
+    var humidity: Double? = null
+    var tempMaxCell: Double? = null
     var soc: Double? = null
+    var soh: Double? = null
+    var canId: Int? = null
+
     if (payload.size > ind) {
-        val tempAdcNum = payload[ind].toInt() and 0xff
-        // temp_adc_num + temps_adc[] + temp_ic + temp_hum + hum + temp_max_cell
-        val socIndex = ind + 1 + tempAdcNum * 2 + 8
-        if (socIndex < payload.size) {
-            soc = (payload[socIndex].toInt() and 0xff) / 255.0
+        val tempAdcNum = payload[ind].toInt() and 0xff; ind += 1
+        if (tempAdcNum in 0..30 && payload.size >= ind + tempAdcNum * 2) {
+            val t = DoubleArray(tempAdcNum)
+            for (i in 0 until tempAdcNum) {
+                t[i] = int16(payload, ind) / 1e2
+                ind += 2
+            }
+            temps = t.toList()
+            if (payload.size >= ind + 8) {
+                tempIc = int16(payload, ind) / 1e2; ind += 2
+                tempHum = int16(payload, ind) / 1e2; ind += 2
+                humidity = int16(payload, ind) / 1e2; ind += 2
+                tempMaxCell = int16(payload, ind) / 1e2; ind += 2
+            }
+            if (payload.size > ind) { soc = (payload[ind].toInt() and 0xff) / 255.0; ind += 1 }
+            if (payload.size > ind) { soh = (payload[ind].toInt() and 0xff) / 255.0; ind += 1 }
+            if (payload.size > ind) { canId = payload[ind].toInt() and 0xff; ind += 1 }
         }
     }
 
     return BmsTelemetry(
         capturedAt = packetAt,
         voltageTotal = voltageTotal,
+        vCharge = vCharge,
         current = current,
+        currentIc = currentIc,
         ampHours = ampHours,
         wattHours = wattHours,
         soc = soc,
+        soh = soh,
         cellVoltages = cellVoltages.toList(),
         balancing = balancing.toList(),
+        temps = temps,
+        tempIc = tempIc,
+        tempHum = tempHum,
+        humidity = humidity,
+        tempMaxCell = tempMaxCell,
+        canId = canId,
     )
 }
 

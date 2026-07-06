@@ -370,24 +370,42 @@ internal func parseRefloatGetAllData(
 internal struct BmsTelemetry {
   let capturedAt: Int64
   let voltageTotal: Double
+  let vCharge: Double
   let current: Double
+  let currentIc: Double
   let ampHours: Double
   let wattHours: Double
   let soc: Double?
+  let soh: Double?
   let cellVoltages: [Double]
   let balancing: [Bool]
+  let temps: [Double]
+  let tempIc: Double?
+  let tempHum: Double?
+  let humidity: Double?
+  let tempMaxCell: Double?
+  let canId: Int?
 
   /// Bridge shape matching the TS `BmsEvent`. Mirrors Android `BmsTelemetry.toMap`.
   func toMap() -> [String: Any?] {
     [
       "capturedAt": capturedAt,
       "voltageTotal": voltageTotal,
+      "vCharge": vCharge,
       "current": current,
+      "currentIc": currentIc,
       "ampHours": ampHours,
       "wattHours": wattHours,
       "soc": soc,
+      "soh": soh,
       "cellVoltages": cellVoltages,
       "balancing": balancing,
+      "temps": temps,
+      "tempIc": tempIc,
+      "tempHum": tempHum,
+      "hum": humidity,
+      "tempMaxCell": tempMaxCell,
+      "canId": canId,
     ]
   }
 }
@@ -413,9 +431,9 @@ internal func parseBmsValues(_ payload: [UInt8], packetAt: Int64) -> BmsTelemetr
 
   var ind = 1
   let voltageTotal = Double(int32(payload, ind)) / 1e6; ind += 4
-  /* v_charge */ ind += 4
+  let vCharge = Double(int32(payload, ind)) / 1e6; ind += 4
   let current = Double(int32(payload, ind)) / 1e6; ind += 4
-  /* i_in_ic */ ind += 4
+  let currentIc = Double(int32(payload, ind)) / 1e6; ind += 4
   let ampHours = Double(int32(payload, ind)) / 1e3; ind += 4
   let wattHours = Double(int32(payload, ind)) / 1e3; ind += 4
 
@@ -437,25 +455,54 @@ internal func parseBmsValues(_ payload: [UInt8], packetAt: Int64) -> BmsTelemetr
     }
   }
 
+  // Everything past balancing is firmware-variant dependent, so each trailing field is
+  // read best-effort behind a bounds check and stays nil/empty when the variant omits it.
+  var temps: [Double] = []
+  var tempIc: Double?
+  var tempHum: Double?
+  var humidity: Double?
+  var tempMaxCell: Double?
   var soc: Double?
+  var soh: Double?
+  var canId: Int?
+
   if payload.count > ind {
-    let tempAdcNum = Int(payload[ind])
-    // temp_adc_num + temps_adc[] + temp_ic + temp_hum + hum + temp_max_cell
-    let socIndex = ind + 1 + tempAdcNum * 2 + 8
-    if socIndex < payload.count {
-      soc = Double(payload[socIndex]) / 255.0
+    let tempAdcNum = Int(payload[ind]); ind += 1
+    if tempAdcNum >= 0, tempAdcNum <= 30, payload.count >= ind + tempAdcNum * 2 {
+      for _ in 0..<tempAdcNum {
+        temps.append(Double(int16(payload, ind)) / 1e2)
+        ind += 2
+      }
+      if payload.count >= ind + 8 {
+        tempIc = Double(int16(payload, ind)) / 1e2; ind += 2
+        tempHum = Double(int16(payload, ind)) / 1e2; ind += 2
+        humidity = Double(int16(payload, ind)) / 1e2; ind += 2
+        tempMaxCell = Double(int16(payload, ind)) / 1e2; ind += 2
+      }
+      if payload.count > ind { soc = Double(payload[ind]) / 255.0; ind += 1 }
+      if payload.count > ind { soh = Double(payload[ind]) / 255.0; ind += 1 }
+      if payload.count > ind { canId = Int(payload[ind]); ind += 1 }
     }
   }
 
   return BmsTelemetry(
     capturedAt: packetAt,
     voltageTotal: voltageTotal,
+    vCharge: vCharge,
     current: current,
+    currentIc: currentIc,
     ampHours: ampHours,
     wattHours: wattHours,
     soc: soc,
+    soh: soh,
     cellVoltages: cellVoltages,
-    balancing: balancing
+    balancing: balancing,
+    temps: temps,
+    tempIc: tempIc,
+    tempHum: tempHum,
+    humidity: humidity,
+    tempMaxCell: tempMaxCell,
+    canId: canId
   )
 }
 

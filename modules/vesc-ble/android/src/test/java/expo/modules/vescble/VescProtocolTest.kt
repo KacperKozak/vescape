@@ -139,7 +139,9 @@ class VescProtocolTest {
     val payload = ByteArray(45)
     payload[0] = COMM_BMS_GET_VALUES.toByte()
     putInt32(payload, 1, 60_000_000) // v_tot 60.0V (scale 1e6)
+    putInt32(payload, 5, 54_000_000) // v_charge 54.0V (scale 1e6)
     putInt32(payload, 9, 5_000_000) // i_in 5.0A (scale 1e6)
+    putInt32(payload, 13, -2_000_000) // i_in_ic -2.0A (scale 1e6)
     payload[25] = 3 // cell_num
     putInt16(payload, 26, 3650) // 3.650V
     putInt16(payload, 28, 3700) // 3.700V
@@ -154,10 +156,46 @@ class VescProtocolTest {
 
     assertEquals(555L, bms.capturedAt)
     assertEquals(60.0, bms.voltageTotal, 0.001)
+    assertEquals(54.0, bms.vCharge, 0.001)
     assertEquals(5.0, bms.current, 0.001)
+    assertEquals(-2.0, bms.currentIc, 0.001)
     assertEquals(listOf(3.65, 3.70, 3.68), bms.cellVoltages.map { (it * 1000).toInt() / 1000.0 })
     assertEquals(listOf(false, true, false), bms.balancing)
     assertEquals(216.0 / 255.0, bms.soc!!, 0.001)
+  }
+
+  @Test
+  fun parsesBmsTemperaturesSohAndCanId() {
+    // id + 6 float32 (25) + cell_num + 2 cells + 2 bal + temp_adc_num + 2 temps
+    // + temp_ic/hum/hum/max_cell (8) + soc + soh + can_id = 48 bytes.
+    val payload = ByteArray(48)
+    payload[0] = COMM_BMS_GET_VALUES.toByte()
+    payload[25] = 2 // cell_num
+    putInt16(payload, 26, 4100)
+    putInt16(payload, 28, 4050)
+    payload[30] = 0 // bal 0
+    payload[31] = 0 // bal 1
+    payload[32] = 2 // temp_adc_num
+    putInt16(payload, 33, 2530) // temps[0] 25.30°C (scale 1e2)
+    putInt16(payload, 35, -500) // temps[1] -5.00°C
+    putInt16(payload, 37, 4200) // temp_ic 42.0°C
+    putInt16(payload, 39, 2600) // temp_hum 26.0°C
+    putInt16(payload, 41, 5500) // hum 55.0%
+    putInt16(payload, 43, 4300) // temp_max_cell 43.0°C
+    payload[45] = 216.toByte() // soc ≈ 0.847
+    payload[46] = 240.toByte() // soh ≈ 0.941
+    payload[47] = 10 // can_id
+
+    val bms = parseBmsValues(payload, packetAt = 7L)!!
+
+    assertEquals(listOf(25.30, -5.00), bms.temps.map { (it * 100).toInt() / 100.0 })
+    assertEquals(42.0, bms.tempIc!!, 0.001)
+    assertEquals(26.0, bms.tempHum!!, 0.001)
+    assertEquals(55.0, bms.humidity!!, 0.001)
+    assertEquals(43.0, bms.tempMaxCell!!, 0.001)
+    assertEquals(216.0 / 255.0, bms.soc!!, 0.001)
+    assertEquals(240.0 / 255.0, bms.soh!!, 0.001)
+    assertEquals(10, bms.canId)
   }
 
   @Test
