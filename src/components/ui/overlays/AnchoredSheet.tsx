@@ -267,6 +267,8 @@ interface EdgeDrawerProps {
   title?: string
   /** Optional glyph shown left of a centred title. */
   icon?: Icon
+  /** Scroll newly expanded content into view when the drawer grows. */
+  autoScrollOnContentExpand?: boolean
   children: React.ReactNode
 }
 
@@ -284,6 +286,7 @@ export function EdgeDrawer({
   edge = 'auto',
   title,
   icon: IconComponent,
+  autoScrollOnContentExpand = false,
   children,
 }: EdgeDrawerProps) {
   const insets = useSafeAreaInsets()
@@ -294,6 +297,7 @@ export function EdgeDrawer({
   const scrollRef = useRef<ScrollView>(null)
   const positionedRef = useRef(false)
   const dismissRangeRef = useRef(0)
+  const previousContentHeightRef = useRef(0)
   const scrollOffset = useSharedValue(0)
   const animatedDismissRange = useSharedValue(1)
   const nativeScrollGesture = useMemo(() => Gesture.Native(), [])
@@ -307,6 +311,7 @@ export function EdgeDrawer({
       setDismissRange(0)
       dismissRangeRef.current = 0
       positionedRef.current = false
+      previousContentHeightRef.current = 0
       scrollOffset.value = 0
     }
 
@@ -358,6 +363,8 @@ export function EdgeDrawer({
     (_contentWidth: number, contentHeight: number) => {
       const previousRange = dismissRangeRef.current
       const range = Math.max(1, contentHeight - height)
+      const previousContentHeight = previousContentHeightRef.current
+      previousContentHeightRef.current = contentHeight
       setDismissRange(range)
       dismissRangeRef.current = range
       animatedDismissRange.value = range
@@ -377,9 +384,17 @@ export function EdgeDrawer({
         requestAnimationFrame(() => {
           scrollRef.current?.scrollTo({ y: range, animated: true })
         })
+      } else if (autoScrollOnContentExpand && contentHeight > previousContentHeight) {
+        const addedHeight = contentHeight - previousContentHeight
+        const targetOffset = opensFromTop
+          ? Math.min(range, scrollOffset.value + addedHeight)
+          : range
+        requestAnimationFrame(() => {
+          scrollRef.current?.scrollTo({ y: targetOffset, animated: true })
+        })
       }
     },
-    [animatedDismissRange, height, opensFromTop, scrollOffset],
+    [animatedDismissRange, autoScrollOnContentExpand, height, opensFromTop, scrollOffset],
   )
 
   const shouldAutoCloseAtOffset = useCallback(
