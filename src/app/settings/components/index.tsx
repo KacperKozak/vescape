@@ -30,7 +30,7 @@ const sections = [
   },
   {
     label: 'Typography',
-    hint: 'Raleway variable font across every UI text role, with weight and tabular-nums parity',
+    hint: 'Raleway across every UI text role, with weight and tabular-nums parity',
     route: '/settings/components/typography',
     icon: TextAaIcon,
   },

@@ -1,14 +1,25 @@
-import { Text as RNText, type TextProps } from 'react-native'
+import { Text as RNText, StyleSheet, type TextProps, type TextStyle } from 'react-native'
 
-import { font } from '@/constants/theme'
+import { font, type FontWeight } from '@/constants/theme'
+
+/** Map any RN `fontWeight` value to a shipped static Raleway weight.
+ *  Defaults to 500 — Raleway's 400 regular reads too thin against the dark surface. */
+const toFontWeight = (weight: TextStyle['fontWeight']): FontWeight => {
+  if (weight === undefined) return '500'
+  if (weight === 'bold') return '700'
+  if (weight === 'normal') return '400'
+  const n = Math.min(900, Math.max(300, Number(weight)))
+  return String(Math.round(n / 100) * 100) as FontWeight
+}
 
 /**
- * App-wide `Text` wrapper. Injects `fontFamily: theme.font` (Raleway) and a
- * default `fontWeight: '500'` (Raleway's 400 regular reads too thin against the
- * dark surface). Pass an explicit `fontWeight` or `fontFamily` in `style`
- * (`'monospace'` for readouts, `'400'` for deliberately thin labels) to override.
- * Wraps every UI text instance so the font token stays a single source of truth.
+ * App-wide `Text` wrapper. Resolves `fontWeight` from `style` to the matching
+ * static Raleway family (`theme.font(weight)`) — Android cannot vary a custom
+ * font's weight at render time, so each weight is a separate font file. Pass an
+ * explicit `fontFamily` in `style` (`'monospace'` for readouts) to opt out.
  */
 export function Text({ style, ...rest }: TextProps) {
-  return <RNText style={[{ fontFamily: font, fontWeight: '500' }, style]} {...rest} />
+  const flat = StyleSheet.flatten(style)
+  const fontFamily = flat?.fontFamily ?? font(toFontWeight(flat?.fontWeight))
+  return <RNText style={[style, { fontFamily, fontWeight: undefined }]} {...rest} />
 }

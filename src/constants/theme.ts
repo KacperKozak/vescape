@@ -211,9 +211,16 @@ export const interaction = {
   pressedOpacity: 0.55,
 } as const
 
-/** App-wide UI font. Load via `useFonts` in `src/app/_layout.tsx` before first render.
- *  Monospace readouts (`fontFamily: 'monospace'`) bypass this token by inlining their value. */
-export const font = 'Raleway' as const
+/** Weights shipped as static Raleway instances in `assets/fonts/`. Android ignores the
+ *  `wght` variation axis of a custom variable font (it renders the file's default
+ *  instance), so each weight is its own font file and family name. */
+export const fontWeights = ['300', '400', '500', '600', '700', '800', '900'] as const
+export type FontWeight = (typeof fontWeights)[number]
+
+/** App-wide UI font family for a given weight. Load via `useFonts` in
+ *  `src/app/_layout.tsx` before first render. Monospace readouts
+ *  (`fontFamily: 'monospace'`) bypass this token by inlining their value. */
+export const font = (weight: FontWeight = '500') => `Raleway-${weight}`
 
 export const theme = {
   palette,

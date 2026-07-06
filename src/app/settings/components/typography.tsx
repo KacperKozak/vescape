@@ -53,7 +53,7 @@ const ROLES = [
   },
 ] as const
 
-/** Variable-weight sweep to verify Raleway's variable font picks up numeric fontWeight. */
+/** Weight sweep to verify numeric fontWeight resolves to the static Raleway instances. */
 const WEIGHTS = [
   { label: '400', sample: 'The quick brown fox', weight: '400' },
   { label: '500', sample: 'The quick brown fox', weight: '500' },
@@ -71,7 +71,7 @@ export default function TypographyComponentsPage() {
       <ScrollView contentContainerStyle={styles.content}>
         <IconHero
           icon={TextAaIcon}
-          description="Raleway variable font across every UI text role. Weights, tokens, and tabular-nums sanity check."
+          description="Raleway across every UI text role. Weights, tokens, and tabular-nums sanity check."
         />
 
         <ShowcaseCard name="Typography roles">
@@ -93,7 +93,7 @@ export default function TypographyComponentsPage() {
           </View>
         </ShowcaseCard>
 
-        <ShowcaseCard name="Variable weights">
+        <ShowcaseCard name="Font weights">
           <View style={styles.col}>
             {WEIGHTS.map((w) => (
               <View key={w.label} style={styles.weightRow}>

@@ -26,7 +26,13 @@ initSentry()
 
 function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
-    Raleway: require('../../assets/fonts/Raleway.ttf'),
+    'Raleway-300': require('../../assets/fonts/Raleway-300.ttf'),
+    'Raleway-400': require('../../assets/fonts/Raleway-400.ttf'),
+    'Raleway-500': require('../../assets/fonts/Raleway-500.ttf'),
+    'Raleway-600': require('../../assets/fonts/Raleway-600.ttf'),
+    'Raleway-700': require('../../assets/fonts/Raleway-700.ttf'),
+    'Raleway-800': require('../../assets/fonts/Raleway-800.ttf'),
+    'Raleway-900': require('../../assets/fonts/Raleway-900.ttf'),
   })
 
   useEffect(() => {
@@ -56,7 +62,7 @@ function RootLayout() {
           screenOptions={{
             headerStyle: { backgroundColor: theme.palette.slate.bg },
             headerTintColor: theme.palette.slate.textPrimary,
-            headerTitleStyle: { fontFamily: theme.font, fontWeight: '600', fontSize: 14 },
+            headerTitleStyle: { fontFamily: theme.font('600'), fontSize: 14 },
             headerTitleAlign: 'center',
             headerShadowVisible: false,
             headerLeft: () => <HeaderBackButton />,

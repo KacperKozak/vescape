@@ -143,14 +143,13 @@ For screen headers showing metadata (version, OS, DB size), use centered text wi
 
 ## Typography
 
-The app's UI font is **Raleway** (Google Fonts variable), loaded in `src/app/_layout.tsx` via `expo-font`'s `useFonts` before the `Stack` mounts. The splash stays visible until the variable font is ready on cold start.
+The app's UI font is **Raleway**, shipped as static per-weight instances (`assets/fonts/Raleway-300.ttf` … `Raleway-900.ttf`) and loaded in `src/app/_layout.tsx` via `expo-font`'s `useFonts` before the `Stack` mounts. The splash stays visible until the fonts are ready on cold start. Static instances are required because Android renders only the default instance of a custom variable font — `fontWeight` never moves the `wght` axis.
 
-Every `Text` instance renders through the wrapper at `src/components/ui/base/Text.tsx`, which injects `fontFamily: theme.font` by default. Import `Text` from `@/components/ui/base/Text` — never import `Text` from `react-native` directly for UI text.
+Every `Text` instance renders through the wrapper at `src/components/ui/base/Text.tsx`, which reads `fontWeight` from the style and resolves it to the matching family via `theme.font(weight)` (default `'500'` — Raleway 400 reads too thin on the dark surface). Import `Text` from `@/components/ui/base/Text` — never import `Text` from `react-native` directly for UI text.
 
-- `theme.font` (`'Raleway'`) in `src/constants/theme.ts` is the single source of truth for the font family string. Components reference `theme.font` (or rely on the wrapper); never inline `'Raleway'` in a component or style.
-- Raleway is a variable font, so numeric `fontWeight` (`'400'` … `'800'`) resolves to the right outline from one `.ttf` file at `assets/fonts/Raleway.ttf`.
+- `theme.font(weight)` in `src/constants/theme.ts` is the single source of truth for family names (`'Raleway-500'` etc.). Components keep writing plain `fontWeight: '600'` and rely on the wrapper; never inline `'Raleway…'` in a component or style.
 - Numeric readouts that use `fontFamily: 'monospace'` (event log, raw settings, IMU telemetry, BMS cells, gauges — search `fontFamily: 'monospace'`) **opt out** of Raleway. Pass an explicit `fontFamily: 'monospace'` on those `Text` styles to keep them monospace.
-- Stack header titles (and any style fed to a native component that bypasses the wrapper) must set `fontFamily: theme.font` explicitly — see `src/app/_layout.tsx` `headerTitleStyle`.
+- Stack header titles (and any style fed to a native component that bypasses the wrapper) must set `fontFamily: theme.font('600')` explicitly — see `src/app/_layout.tsx` `headerTitleStyle` — and must not set `fontWeight`.
 - `fontVariant: ['tabular-nums']` still aligns numeric columns on Raleway.
 
 Typography roles:
