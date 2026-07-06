@@ -1,8 +1,8 @@
 # Native API
 
-JS bridge surface exposed by `VescBle` Expo module. Android: full impl. iOS: simulator mock (UserDefaults, no DB).
+JS bridge surface exposed by `VescBle` Expo module. Android: full impl. iOS: bridge stub until the native CoreBluetooth and storage subsystems land.
 
-Source of truth: `modules/vesc-ble/src/index.ts` (types), `VescBleModule.kt` (Android), `VescBleModule.swift` (iOS mock).
+Source of truth: `modules/vesc-ble/src/index.ts` (types), `VescBleModule.kt` (Android), `VescBleModule.swift` (iOS bridge stub).
 
 ## Term map
 
@@ -35,13 +35,13 @@ Source of truth: `modules/vesc-ble/src/index.ts` (types), `VescBleModule.kt` (An
 
 ## Board session
 
-| fn                                  | sync  | returns                                                                                                                                         |
-| ----------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `selectBoard(boardId)`              | async | void. Native reads the Board Link from DB, owns connect. Emits `onLiveState`, `onTelemetry`                                                     |
-| `stopBoard()`                       | async | void. GPS may continue independently                                                                                                            |
-| `probeBoardLink(bleId)`             | async | `BoardProbeResult`. Probes a peripheral, returns `BoardCandidate[]` (transport + `hasBms`) confirmed by telemetry. Emits `onBoardProbeProgress` |
-| `getLiveState()`                    | sync  | `LiveStateEvent`. UI should mirror, not invent state                                                                                            |
-| `setSelectedBoard(boardId \| null)` | sync  | void. Persists auto-connect target. Native uses while JS frozen                                                                                 |
+| fn                                  | sync  | returns                                                                                                                                                                               |
+| ----------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `selectBoard(boardId)`              | async | void. Native reads the Board Link from DB, owns connect. Emits `onLiveState`, `onTelemetry`                                                                                           |
+| `stopBoard()`                       | async | void. GPS may continue independently                                                                                                                                                  |
+| `probeBoardLink(bleId)`             | async | `BoardProbeResult`. Probes a peripheral, returns resolved `transport` when unique plus `BoardCandidate[]` (transport + `hasBms`) confirmed by telemetry. Emits `onBoardProbeProgress` |
+| `getLiveState()`                    | sync  | `LiveStateEvent`. UI should mirror, not invent state                                                                                                                                  |
+| `setSelectedBoard(boardId \| null)` | sync  | void. Persists auto-connect target. Native uses while JS frozen                                                                                                                       |
 
 ### LiveStateEvent shape
 

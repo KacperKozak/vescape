@@ -3,6 +3,7 @@ package expo.modules.vescble
 import expo.modules.vescble.telemetry.AlertRuleEntity
 
 internal class AlertCoordinator(private val feedback: () -> VescAlertFeedback) {
+    // @parity /modules/vesc-ble/ios/alerts/AlertCoordinator.swift
     private val engine = VescAlertEngine()
     private var rules: List<AlertRuleEntity> = emptyList()
     private var activeGeigerRuleIds: Set<String> = emptySet()

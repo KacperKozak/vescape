@@ -76,7 +76,11 @@ internal class VescNotificationController(
             .setOnlyAlertOnce(true)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .apply {
-                if (batteryPercent != null) setProgress(100, batteryPercent.coerceIn(0, 100), false)
+                if (batteryPercent != null) {
+                    setProgress(100, batteryPercent.coerceIn(0, 100), false)
+                } else {
+                    setProgress(0, 0, false)
+                }
                 when {
                     sessionActive -> addAction(
                         android.R.drawable.ic_menu_close_clear_cancel,

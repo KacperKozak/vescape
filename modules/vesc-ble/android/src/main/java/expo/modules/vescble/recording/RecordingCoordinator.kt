@@ -9,6 +9,7 @@ import expo.modules.vescble.telemetry.AppSettings
 import expo.modules.vescble.telemetry.TelemetryCapture
 import expo.modules.vescble.telemetry.TelemetryRepository
 
+// @parity /modules/vesc-ble/ios/recording/RecordingCoordinator.swift
 internal class RecordingCoordinator(
     private val context: Context,
     private val applyLiveSettings: (AppSettings) -> Unit,

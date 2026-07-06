@@ -8,6 +8,7 @@ import expo.modules.vescble.shortCriticalSymbol
 import expo.modules.vescble.telemetryMetricByControlId
 import kotlin.math.roundToInt
 
+// @parity /modules/vesc-ble/ios/notification/RideActivityContent.swift
 internal object NotificationFormatter {
     fun formatTelemetryText(values: RefloatTelemetry, batteryPercent: Double?): String =
         formatBatterySegment(values.batteryVoltage, batteryPercent)

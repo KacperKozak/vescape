@@ -36,6 +36,7 @@ import type { NearbyRide } from '@/lib/groupRide/nearby'
 import type { RosterRider } from '@/lib/groupRide/roster'
 import { routes } from '@/navigation/routes'
 import { useGroupRideStore } from '@/store/groupRideStore'
+import { useRenderRateWarning } from '@/hooks/useRenderRateWarning'
 import { useRiderStore } from '@/store/riderStore'
 import { theme } from '@/constants/theme'
 
@@ -110,6 +111,7 @@ function RiderNameWidget() {
 }
 
 function GroupRideWidget() {
+  useRenderRateWarning('GroupRideWidget')
   const activeRideId = useGroupRideStore((s) => s.activeRideId)
   const rides = useGroupRideStore((s) => s.rides)
   const nearby = useGroupRideStore((s) => s.nearby)

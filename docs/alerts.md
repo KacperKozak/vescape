@@ -110,4 +110,4 @@ Native alert mutations reload foreground-service rules after writing.
 
 ## iOS
 
-The current iOS module is still a simulator mock. It persists alert rules for UI parity but does not run real alert evaluation.
+iOS mirrors the Android native alert path: persisted rules feed a native evaluator, presets/TTS play without JS, and fired alerts are attached to telemetry payloads.

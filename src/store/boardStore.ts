@@ -1,3 +1,4 @@
+import { dequal } from 'dequal'
 import { create } from 'zustand'
 import {
   deleteBoard as nativeDeleteBoard,
@@ -44,7 +45,7 @@ export const useBoardStore = create<BoardState & BoardActions>((set, get) => ({
   async load() {
     const boards = await getBoards()
     const settings = await getSettings()
-    const { activeBoardId, hasLoaded } = get()
+    const { activeBoardId, hasLoaded, boards: prevBoards } = get()
     const activeBoardExists = boards.some((b) => b.id === activeBoardId)
     const selectedBoardExists = boards.some((b) => b.id === settings.selectedBoardId)
     const nextActiveBoardId =
@@ -53,11 +54,17 @@ export const useBoardStore = create<BoardState & BoardActions>((set, get) => ({
         : selectedBoardExists
           ? settings.selectedBoardId
           : (boards[0]?.id ?? null)
-    set({
-      boards,
-      hasLoaded: true,
-      activeBoardId: nextActiveBoardId,
-    })
+
+    // Reuse prior object refs for unchanged boards (and the whole array when nothing changed) so a
+    // reload — e.g. the session-end lastBattery refresh — only re-renders consumers of the board
+    // that actually changed, never the whole app.
+    const mergedBoards = mergeBoards(prevBoards, boards)
+    const patch: Partial<BoardState> = {}
+    if (mergedBoards !== prevBoards) patch.boards = mergedBoards
+    if (nextActiveBoardId !== activeBoardId) patch.activeBoardId = nextActiveBoardId
+    if (!hasLoaded) patch.hasLoaded = true
+    if (Object.keys(patch).length > 0) set(patch)
+
     if (nextActiveBoardId !== settings.selectedBoardId) {
       nativeSetSelectedBoard(nextActiveBoardId)
     }
@@ -104,3 +111,14 @@ export const useBoardStore = create<BoardState & BoardActions>((set, get) => ({
     nativeSetSelectedBoard(id)
   },
 }))
+
+/** Merge freshly-loaded boards into the prior array, keeping object identity for any board whose
+ *  contents are unchanged, and returning the prior array untouched when nothing changed at all. */
+function mergeBoards(prev: Board[], next: Board[]): Board[] {
+  const merged = next.map((n) => {
+    const old = prev.find((p) => p.id === n.id)
+    return old && dequal(old, n) ? old : n
+  })
+  const unchanged = merged.length === prev.length && merged.every((b, i) => b === prev[i])
+  return unchanged ? prev : merged
+}

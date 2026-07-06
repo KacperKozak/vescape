@@ -21,6 +21,7 @@ interface DiagnosticSink {
     fun flush()
 }
 
+// @parity /modules/vesc-ble/ios/DiagnosticReporter.swift
 class DiagnosticReporter private constructor(
     private val sink: DiagnosticSink,
     private val commonProperties: Map<String, Any?>,

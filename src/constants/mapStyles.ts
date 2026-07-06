@@ -55,3 +55,12 @@ export const MAP_NAVIGATION_MODES = [
 ] as const
 
 export type MapNavigationMode = (typeof MAP_NAVIGATION_MODES)[number]['key']
+
+// TEMP: 'phoneHeading' (Compass) is disabled. Its magnetometer stream re-rendered
+// the map at ~24Hz and overheated the device. Re-enable once the sensor path is
+// throttled/decoupled — see issue #183. Flip this list to restore.
+export const DISABLED_NAVIGATION_MODES: readonly MapNavigationMode[] = ['phoneHeading']
+
+export const AVAILABLE_NAVIGATION_MODES = MAP_NAVIGATION_MODES.filter(
+  (mode) => !DISABLED_NAVIGATION_MODES.includes(mode.key),
+)

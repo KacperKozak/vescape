@@ -63,6 +63,21 @@ Native events → liveTelemetryRuntime (mutable buffer + SharedValues)
 - **Don't iterate buffer per-component** — always use the shared projection cache.
 - **Don't trust dev-mode profiling numbers** — React DevTools adds 40-50% overhead. Always verify perf issues exist in production builds before optimizing.
 
+## General rule: high-frequency streams never drive React state
+
+The telemetry hot/cold split ([ADR 0013](adr/0013-fast-telemetry-hot-cold-split.md)) is a specific case of a rule that holds for **every** high-frequency source in the app — telemetry, GPS, magnetometer/heading, and Group Ride presence:
+
+- A source faster than ~a few Hz **must not** call `setState` / bump a Zustand slice per sample. Route the hot value to a Reanimated SharedValue (zero React render) and publish a coalesced cold snapshot at ~1Hz for anything that needs to re-render.
+- Rule of thumb: **nothing should re-render a screen subtree more than ~5×/second.** Sustained higher-rate rendering pins the JS thread + GPU and overheats the device.
+
+### Why this rule exists (regression that motivated it)
+
+The Compass (`phoneHeading`) map mode wired the ~30Hz `DeviceMotion` magnetometer straight into `setState` inside `CenterMap`, re-rendering the whole map subtree 1:1 (~24 renders/sec) even while parked. Result: device overheated fast → suspected iOS `WatchdogTermination`. Fixed by disabling the mode (see issue #183) and adding the guard below.
+
+### The guard: `useRenderRateWarning`
+
+`src/hooks/useRenderRateWarning.ts` is a dev-only canary — it `console.warn`s when a wired component commits more than 5 renders/second (no-op in production). Place it as a **tripwire at stream boundaries**, not on every component. Currently wired into `CenterMap`, `BottomTelemetryStrip`, and `GroupRideWidget` — the three roots that consume live streams. If a warning fires, a stream has leaked into React state; move it to a SharedValue / cold-path publish.
+
 ## Files
 
 | File                                    | Role                                                               |
@@ -71,3 +86,4 @@ Native events → liveTelemetryRuntime (mutable buffer + SharedValues)
 | `src/telemetry/liveMetricHistory.ts`    | Buffer ops: insert, prune, dedup, summarize                        |
 | `src/hooks/useLiveMetric.ts`            | React hook with module-level projection cache                      |
 | `src/store/bleStore.ts`                 | Zustand store, 1Hz publish timer, event subscriptions              |
+| `src/hooks/useRenderRateWarning.ts`     | Dev-only render-rate canary; tripwire at stream boundaries         |

@@ -1,4 +1,6 @@
-import { useEffect, useMemo } from 'react'
+import { useLayoutEffect, useEffect, useMemo } from 'react'
+import { useNavigation, useRouter } from 'expo-router'
+import { BracketsCurlyIcon } from 'phosphor-react-native'
 import { useSharedValue } from 'react-native-reanimated'
 
 import { BmsCellVoltages } from '@/components/domain/control/BmsCellVoltages'
@@ -6,8 +8,10 @@ import { ControlDetailLayout } from '@/components/domain/control/ControlDetailLa
 import { MetricDetailChart } from '@/components/domain/control/MetricDetailChart'
 import { MetricDetailGauge } from '@/components/domain/control/MetricDetailGauge'
 import { toTelemetryChartPoints } from '@/components/domain/control/metricDetailData'
+import { IconButton } from '@/components/ui/base/IconButton'
 import { telemetry } from '@/constants/telemetry'
 import { useLiveMetric, liveSelectors } from '@/hooks/useLiveMetric'
+import { routes } from '@/navigation/routes'
 import { useLiveWindowMs } from '@/store/settingsStore'
 
 const battVoltageCfg = telemetry.battVoltage
@@ -17,8 +21,22 @@ const formatPercent = (value: number) => `${Math.round(value)}%`
 const PERCENT_RANGE = { y: { min: 0, max: 100 } }
 
 export default function BatteryScreen() {
+  const navigation = useNavigation()
+  const router = useRouter()
   const batteryPercent = useLiveMetric(liveSelectors.batteryPercent)
   const windowMs = useLiveWindowMs()
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <IconButton
+          icon={BracketsCurlyIcon}
+          onPress={() => router.push(routes.controlBatteryRaw)}
+          accessibilityLabel="Raw BMS data"
+        />
+      ),
+    })
+  }, [navigation, router])
 
   const percentPoints = useMemo(() => toTelemetryChartPoints(batteryPercent), [batteryPercent])
 

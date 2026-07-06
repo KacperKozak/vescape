@@ -29,6 +29,9 @@ import kotlinx.coroutines.runBlocking
 private const val TAG = "VescBle"
 private const val SCAN_RETRY_LIMIT = 3
 
+/**
+ * @parity /modules/vesc-ble/ios/VescBleModule.swift
+ */
 @SuppressLint("MissingPermission") // permissions are requested at the JS/RN layer
 class VescBleModule : Module() {
   private var scanner: android.bluetooth.le.BluetoothLeScanner? = null
@@ -85,6 +88,7 @@ class VescBleModule : Module() {
       "onGroupRideJoined",
       "onGroupRideRoster",
       "onGroupRideError",
+      "onAppDataChanged",
     )
 
     OnStartObserving("onDevice") { startObserving("onDevice") }
@@ -389,7 +393,7 @@ class VescBleModule : Module() {
     }
     AsyncFunction("upsertBoard") Coroutine { board: Map<String, Any?> ->
       AppDataRepository.get(context.applicationContext).upsertBoard(board)
-      VescForegroundService.reloadBatteryConfig()
+      VescForegroundService.reloadBoardData()
     }
     AsyncFunction("deleteBoard") Coroutine { id: String ->
       AppDataRepository.get(context.applicationContext).deleteBoard(id)
@@ -646,7 +650,11 @@ class VescBleModule : Module() {
       is TransportDetection.Outcome.NeedsPick -> "needs-pick"
       TransportDetection.Outcome.None -> "none"
     }
-    return mapOf("outcome" to outcome, "candidates" to candidates)
+    return mapOf(
+      "outcome" to outcome,
+      "transport" to BoardTransport.toBridge(result.resolvedTransport),
+      "candidates" to candidates,
+    )
   }
 
   private fun stopLocationUpdates() {

@@ -26,6 +26,7 @@ internal fun renderAlertMessageTemplate(
     batteryPercent: Double?,
     onDiagnostic: ((String, Map<String, Any?>) -> Unit)? = null,
 ): String {
+    // @parity /modules/vesc-ble/ios/alerts/AlertEngine.swift `renderAlertMessageTemplate`
     val isBattery = alert.controlId == "battery"
     var text = template
     text = text.replace("{value}", formatAlertValue(alert.value, alert.controlId))
@@ -106,6 +107,7 @@ internal data class FiredAlert(
 }
 
 internal class VescAlertEngine {
+    // @parity /modules/vesc-ble/ios/alerts/AlertEngine.swift `VescAlertEngine`
     private val lastFiredAt = HashMap<String, Long>()
     private val armedState = HashMap<String, Boolean>()
 
@@ -219,6 +221,7 @@ internal class VescAlertFeedback(
     private val context: Context,
     private val handler: Handler,
 ) {
+    // @parity /modules/vesc-ble/ios/alerts/AlertAudioPlayer.swift
     private var tts: TextToSpeech? = null
     private var ttsReady = false
     private var ttsPendingText: String? = null

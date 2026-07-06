@@ -32,6 +32,8 @@ private const val DETECT_CONNECT_MAX_ATTEMPTS = 3
  * transport only once it yields a valid decoded Refloat Telemetry Sample →
  * resolve. Every callback is marshalled onto [handler] so the state machine is
  * single-threaded.
+ *
+ * @parity /modules/vesc-ble/ios/connection/BoardTransportDetector.swift
  */
 @SuppressLint("MissingPermission")
 internal class BoardTransportDetector(

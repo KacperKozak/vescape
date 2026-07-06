@@ -34,7 +34,14 @@ internal object TransportDetection {
     object None : Outcome
   }
 
-  data class Result(val candidates: List<Candidate>, val outcome: Outcome)
+  data class Result(val candidates: List<Candidate>, val outcome: Outcome) {
+    val resolvedTransport: BoardTransport?
+      get() = when (outcome) {
+        is Outcome.Resolved -> outcome.transport
+        is Outcome.NeedsPick,
+        Outcome.None -> null
+      }
+  }
 
   /**
    * Transports to probe given the CAN ids that answered the CAN ping.

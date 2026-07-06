@@ -7,6 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
+// @parity /modules/vesc-ble/ios/VescBleModule.swift
 internal const val TELEMETRY_DATABASE_NAME = "telemetry.db"
 internal const val TELEMETRY_DATABASE_VERSION = 22
 

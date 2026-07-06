@@ -11,6 +11,7 @@ import { interaction, theme } from '@/constants/theme'
 import { telemetry } from '@/constants/telemetry'
 import { routes } from '@/navigation/routes'
 import { useLiveSeries } from '@/hooks/useLiveMetric'
+import { useRenderRateWarning } from '@/hooks/useRenderRateWarning'
 import { useBleStore } from '@/store/bleStore'
 import { useLiveWindowMs } from '@/store/settingsStore'
 import { liveTelemetryRuntime } from '@/lib/telemetry/liveTelemetryRuntime'
@@ -52,6 +53,7 @@ interface BottomTelemetryStripProps {
 }
 
 export function BottomTelemetryStrip({ revealProgress }: BottomTelemetryStripProps) {
+  useRenderRateWarning('BottomTelemetryStrip')
   const insets = useSafeAreaInsets()
   const bleStatus = useBleStore((s) => s.status)
   const imuConnected = bleStatus === 'connected'

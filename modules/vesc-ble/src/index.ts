@@ -51,6 +51,8 @@ export interface FiredAlert {
   threshold: number
   thresholdMax: number | null
   soundType: string
+  /** 0..1 depth into the threshold→thresholdMax range for geiger alerts; `null` for single. */
+  rangeDepth?: number | null
   firedAt: number
 }
 
@@ -72,6 +74,8 @@ export interface BoardCandidate {
 /** Result of a native Board Probe of a BLE peripheral. */
 export interface BoardProbeResult {
   outcome: BoardProbeOutcome
+  /** Resolved transport when exactly one candidate confirmed; otherwise `null`. */
+  transport: BoardTransport | null
   /** Every transport that produced a valid Telemetry Sample, in probe order. */
   candidates: BoardCandidate[]
 }
@@ -233,15 +237,34 @@ export interface BmsEvent {
   capturedAt: number
   /** Pack voltage as reported by the BMS (sum of cell groups). */
   voltageTotal: number
+  /** Charge-port voltage (`v_charge`); meaning is firmware/BMS-specific. */
+  vCharge: number
+  /** Pack current from the BMS shunt. */
   current: number
+  /** Second/internal current field (`i_in_ic`); compare against `current`. */
+  currentIc: number
   ampHours: number
   wattHours: number
   /** State of charge 0–1, or null when the firmware variant omits it. */
   soc: number | null
+  /** State of health 0–1, or null when the firmware variant omits it. */
+  soh: number | null
   /** Per cell-group voltage, index 0 = first group. */
   cellVoltages: number[]
   /** Per cell-group balancing flag, aligned with cellVoltages. */
   balancing: boolean[]
+  /** Per-sensor BMS temperatures in °C (`temps_adc`); empty when firmware omits them. */
+  temps: number[]
+  /** BMS IC temperature °C, or null when absent. */
+  tempIc: number | null
+  /** Humidity-sensor temperature °C, or null when absent. */
+  tempHum: number | null
+  /** Relative humidity %, or null when absent. */
+  hum: number | null
+  /** Hottest cell temperature °C, or null when absent. */
+  tempMaxCell: number | null
+  /** BMS CAN id, or null when absent. */
+  canId: number | null
 }
 
 export interface LiveMetricExclusionUpdate {
@@ -781,6 +804,24 @@ export interface GroupRideErrorEvent {
   message: string
 }
 
+/**
+ * Native persisted board/app data changed outside a JS-initiated write (e.g. the per-board
+ * `lastBattery` written on session end). JS owns no durable copy, so it must reload the matching
+ * store to stay fresh without an app restart. Emitted sparingly — only on meaningful changes,
+ * never per telemetry tick.
+ */
+export interface AppDataChangedEvent {
+  scope: 'boards' | 'settings'
+}
+
+export type CriticalRideNotificationPermissionStatus =
+  | 'not-determined'
+  | 'denied'
+  | 'authorized'
+  | 'provisional'
+  | 'ephemeral'
+  | 'unknown'
+
 type VescBleEvents = {
   onDevice: (event: DeviceFoundEvent) => void
   onError: (event: ErrorEvent) => void
@@ -805,6 +846,8 @@ type VescBleEvents = {
   onGroupRideJoined: (event: GroupRideJoinedEvent) => void
   onGroupRideRoster: (event: GroupRideRosterEvent) => void
   onGroupRideError: (event: GroupRideErrorEvent) => void
+  /** Persisted board/app data changed natively — reload the matching store. */
+  onAppDataChanged: (event: AppDataChangedEvent) => void
 }
 
 interface NativeEventEmitter<TEvents extends Record<string, (...args: never[]) => void>> {
@@ -840,6 +883,8 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
   updateGroupRideIdentity(riderId: string, riderName: string, riderColor: string | null): void
   setTelemetryRecordingEnabled(enabled: boolean): void
   reloadAlertRules(): void
+  getCriticalRideNotificationPermissionStatus(): Promise<CriticalRideNotificationPermissionStatus>
+  requestCriticalRideNotificationPermission(): Promise<CriticalRideNotificationPermissionStatus>
   getAlertPresets(): AlertPreset[]
   previewAlertSound(soundType: AlertSoundType): void
   startGeigerSimulation(soundType: string, rangeDepth: number): void
@@ -1066,6 +1111,24 @@ export function setTelemetryRecordingEnabled(enabled: boolean): void {
 /** Tell the Android foreground service to re-read alert rules from native storage. */
 export function reloadAlertRules(): void {
   native.reloadAlertRules()
+}
+
+/** Read iOS local-notification permission used only for critical ride alerts. */
+export async function getCriticalRideNotificationPermissionStatus(): Promise<CriticalRideNotificationPermissionStatus> {
+  try {
+    return await native.getCriticalRideNotificationPermissionStatus()
+  } catch {
+    return 'unknown'
+  }
+}
+
+/** Explicitly request iOS permission for critical ride alert notifications. Never called on connect. */
+export async function requestCriticalRideNotificationPermission(): Promise<CriticalRideNotificationPermissionStatus> {
+  try {
+    return await native.requestCriticalRideNotificationPermission()
+  } catch {
+    return 'unknown'
+  }
 }
 
 const FALLBACK_PRESETS: AlertPreset[] = [
@@ -1515,6 +1578,12 @@ export function addDeviceListener(cb: (event: DeviceFoundEvent) => void): EventS
 
 export function addErrorListener(cb: (event: ErrorEvent) => void): EventSubscription {
   return emitter.addListener('onError', cb)
+}
+
+export function addAppDataChangedListener(
+  cb: (event: AppDataChangedEvent) => void,
+): EventSubscription {
+  return emitter.addListener('onAppDataChanged', cb)
 }
 
 export function addLiveStateListener(cb: (event: LiveStateEvent) => void): EventSubscription {

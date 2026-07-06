@@ -141,5 +141,5 @@ and payloads too short for the claimed cell count.
 ### Flow to UI
 
 `handleBmsPayload` → emit `onBms` → `bleStore.latestBms` → `summarizeBms` (min/max/spread/avg,
-extreme tagging) → `BmsCellVoltages` grid on the battery control screen. iOS is a mock-only
-module and emits a synthetic 20S `onBms` stream for parity in the simulator.
+extreme tagging) → `BmsCellVoltages` grid on the battery control screen. iOS BMS parsing waits
+for the CoreBluetooth protocol port and must use real board packets, not synthetic values.

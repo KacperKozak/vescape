@@ -1,21 +1,21 @@
 package expo.modules.vescble.reconnect
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ReconnectPolicyTest {
     @Test
     fun `backoff grows linearly then caps`() {
-        assertEquals(ReconnectDecision.Retry(attempt = 1, delayMs = 500L), ReconnectPolicy.nextDecision(0))
-        assertEquals(ReconnectDecision.Retry(attempt = 2, delayMs = 1_000L), ReconnectPolicy.nextDecision(1))
-        assertEquals(ReconnectDecision.Retry(attempt = 10, delayMs = 5_000L), ReconnectPolicy.nextDecision(9))
-        assertEquals(ReconnectDecision.Retry(attempt = 60, delayMs = 5_000L), ReconnectPolicy.nextDecision(59))
+        assertEquals(ReconnectRetry(attempt = 1, delayMs = 500L), ReconnectPolicy.nextRetry(0))
+        assertEquals(ReconnectRetry(attempt = 2, delayMs = 1_000L), ReconnectPolicy.nextRetry(1))
+        assertEquals(ReconnectRetry(attempt = 10, delayMs = 5_000L), ReconnectPolicy.nextRetry(9))
+        assertEquals(ReconnectRetry(attempt = 60, delayMs = 5_000L), ReconnectPolicy.nextRetry(59))
     }
 
     @Test
-    fun `max attempts gives up`() {
-        assertTrue(ReconnectPolicy.nextDecision(60) is ReconnectDecision.GiveUp)
+    fun `retries stay capped and never give up`() {
+        assertEquals(ReconnectRetry(attempt = 61, delayMs = 5_000L), ReconnectPolicy.nextRetry(60))
+        assertEquals(ReconnectRetry(attempt = 1_000, delayMs = 5_000L), ReconnectPolicy.nextRetry(999))
     }
 
     @Test

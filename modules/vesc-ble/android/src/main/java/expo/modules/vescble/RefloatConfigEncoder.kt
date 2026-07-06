@@ -9,6 +9,7 @@ import kotlin.math.roundToInt
 
 internal class RefloatConfigEncodeException(message: String) : Exception(message)
 
+// @parity /modules/vesc-ble/ios/RefloatConfigEncoder.swift
 internal object RefloatConfigEncoder {
   fun encode(
     schema: RefloatConfigSchema,

@@ -80,6 +80,7 @@ data class TelemetryCapture(
   val location: TelemetryLocationCapture?,
 )
 
+// @parity /modules/vesc-ble/ios/telemetry/TelemetryRepository.swift
 class TelemetryRepository private constructor(context: Context) {
   private val appContext = context.applicationContext
   private val db = TelemetryDatabase.get(context)

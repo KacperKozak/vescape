@@ -7,6 +7,8 @@ internal data class TelemetryMetricDef(
     val alertAbove: Boolean = true,
 )
 
+// @parity /modules/vesc-ble/ios/alerts/AlertEngine.swift `telemetryMetricDefs`
+
 internal val TELEMETRY_METRIC_DEFS = listOf(
     TelemetryMetricDef("speed",           "km/h", 0),
     TelemetryMetricDef("battery",         "V",    1, alertAbove = false),

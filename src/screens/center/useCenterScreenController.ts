@@ -20,6 +20,7 @@ import { useWeatherStore } from '@/store/weatherStore'
 import { useMediaHistory } from '@/hooks/useMediaHistory'
 import type { MediaHistoryAsset } from '@/lib/history/mediaHistory'
 import { getHistoryPreviewRoute } from '@/lib/history/previewRoute'
+import { DISABLED_NAVIGATION_MODES } from '@/constants/mapStyles'
 
 interface UseCenterScreenControllerArgs {
   mapRef: RefObject<CenterMapHandle | null>
@@ -74,7 +75,11 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
   const lastGpsLatitude = useSettingsStore((s) => s.lastGpsLatitude)
   const lastGpsLongitude = useSettingsStore((s) => s.lastGpsLongitude)
   const mapStyleKey = useSettingsStore((s) => s.mapStyleKey)
-  const mapNavigationMode = useSettingsStore((s) => s.mapNavigationMode)
+  const persistedMapNavigationMode = useSettingsStore((s) => s.mapNavigationMode)
+  // Coerce a persisted-but-disabled mode (e.g. Compass) back to a supported one.
+  const mapNavigationMode = DISABLED_NAVIGATION_MODES.includes(persistedMapNavigationMode)
+    ? 'northUp'
+    : persistedMapNavigationMode
   const setSetting = useSettingsStore((s) => s.set)
   const {
     blocks,

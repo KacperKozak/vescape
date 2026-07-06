@@ -15,6 +15,8 @@ package expo.modules.vescble.telemetry
  *
  * Output is a flat `[ts0, v0, ts1, v1, ...]` array — the most compact shape for
  * the bridge (timestamps are ms and fit exactly in a Double below 2^53).
+ *
+ * @parity /modules/vesc-ble/ios/telemetry/LiveSeriesDownsampler.swift
  */
 object LiveSeriesDownsampler {
     fun <T> downsampleMinMax(
