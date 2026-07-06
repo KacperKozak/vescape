@@ -57,7 +57,7 @@ const styles = StyleSheet.create({
   description: {
     color: theme.palette.slate.textMuted,
     fontSize: 14,
-    fontWeight: '400',
+    fontWeight: '500',
     textAlign: 'center',
     lineHeight: 20,
   },

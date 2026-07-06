@@ -71,7 +71,7 @@ const styles = StyleSheet.create({
   },
   message: {
     fontSize: 13,
-    fontWeight: '400',
+    fontWeight: '500',
     lineHeight: 19,
     color: theme.palette.slate.textSecondary,
   },

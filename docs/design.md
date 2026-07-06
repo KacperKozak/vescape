@@ -159,12 +159,14 @@ Typography roles:
 | ------------- | ----- | ------ | ----------------------------- |
 | Screen title  | 20    | 700    | `theme.neutral.textPrimary`   |
 | Row label     | 15    | 600    | `theme.neutral.textPrimary`   |
-| Row hint      | 12    | 400    | `theme.neutral.textMuted`     |
+| Row hint      | 12    | 500    | `theme.neutral.textMuted`     |
 | Section title | 12–13 | 700    | `theme.neutral.textMuted`     |
-| Metadata      | 12    | 600    | `theme.neutral.textSecondary` |
+| Metadata      | 12    | 500    | `theme.neutral.textSecondary` |
 | Stepper value | 15    | 700    | `theme.neutral.textPrimary`   |
 
 Preview every role live under **Settings → Components → Typography** (`src/app/settings/components/typography.tsx`).
+
+> Raleway reads thinner than the platform default font, so the design system starts body text at `500` (Medium). Any `Text` without an explicit `fontWeight` resolves to `500` — see the wrapper at `src/components/ui/base/Text.tsx`. Use `'400'` only when a deliberately thin label is intended (e.g. quiet chart axis ticks). Screens that need older behavior can pass `fontWeight: '400'` explicitly.
 
 ## Avoid
 

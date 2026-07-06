@@ -27,7 +27,7 @@ const ROLES = [
     role: 'Row hint',
     sample: 'Tap to edit',
     size: 12,
-    weight: '400',
+    weight: '500',
     color: theme.palette.slate.textMuted,
   },
   {
@@ -41,7 +41,7 @@ const ROLES = [
     role: 'Metadata',
     sample: 'v0.76.0',
     size: 12,
-    weight: '600',
+    weight: '500',
     color: theme.palette.slate.textSecondary,
   },
   {

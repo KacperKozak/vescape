@@ -103,5 +103,5 @@ const styles = StyleSheet.create({
   wrap: { width: '100%' },
   badgeRow: { height: BADGE_ROW_HEIGHT, flexDirection: 'row', alignItems: 'center' },
   maxBadge: { fontSize: 9, fontVariant: ['tabular-nums'] },
-  maxLabel: { color: theme.palette.slate.textMuted, fontWeight: '400' },
+  maxLabel: { color: theme.palette.slate.textMuted, fontWeight: '500' },
 })

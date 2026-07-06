@@ -92,5 +92,6 @@ const styles = StyleSheet.create({
   hint: {
     color: theme.palette.slate.textMuted,
     fontSize: 12,
+    fontWeight: '500',
   },
 })
