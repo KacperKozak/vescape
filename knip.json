@@ -1,9 +1,9 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "tags": ["-lintignore"],
-  "ignoreBinaries": ["maestro"],
-  "ignoreDependencies": ["sharp"],
-  "ignore": ["scripts/**/*", ".agents/**/*", ".claude/**/*", "app.config.ts"],
+  "ignoreBinaries": ["maestro", "adb", "awk"],
+  "ignoreDependencies": ["sharp", "expo-font"],
+  "ignore": ["scripts/**/*", ".agents/**/*", ".claude/**/*", "app.config.ts", "targets/**/*"],
   "ignoreExportsUsedInFile": true,
   "workspaces": {
     ".": {

@@ -1,5 +1,5 @@
 /**
- * Semantic color tokens for VibeWheel.
+ * Semantic color tokens for Vescape.
  *
  * New structure:
  *   - palette: named hue swatches + mono + slate (surface/text scale + map buildings)
@@ -13,7 +13,7 @@
  */
 
 /** Allowed opacity levels for every translucent color value. */
-export type AlphaLevel = 0 | 0.12 | 0.3 | 0.6 | 0.85
+export type AlphaLevel = 0 | 0.12 | 0.3 | 0.4 | 0.6 | 0.7 | 0.8 | 0.85 | 1
 
 function alpha(color: string, level: AlphaLevel): string {
   'worklet'
@@ -111,6 +111,8 @@ export const palette = {
   },
   // Secondary data / duty — original `teal`
   teal: hue('#14b8a6', '#2dd4bf', '#99f6e4', '#042f2e', '#0f766e'),
+  // Group rides — sea, pushed a touch greener
+  groupRide: hue('#10c69a', '#5eead4', '#7af0d6', '#04302a', '#0c8f74'),
   // Balance pitch alternate — kept for pink family completeness
   pink: hue('#ec4899', '#f472b6', '#fbcfe8', '#500724', '#be185d'),
 } as const
@@ -209,6 +211,16 @@ export const interaction = {
   pressedOpacity: 0.55,
 } as const
 
+/** Weights shipped as static Raleway instances in `assets/fonts/`. Android ignores the
+ *  `wght` variation axis of a custom variable font (it renders the file's default
+ *  instance), so each weight is its own font file and family name. */
+export type FontWeight = '300' | '400' | '500' | '600' | '700' | '800' | '900'
+
+/** App-wide UI font family for a given weight. Load via `useFonts` in
+ *  `src/app/_layout.tsx` before first render. Monospace readouts
+ *  (`fontFamily: 'monospace'`) bypass this token by inlining their value. */
+export const font = (weight: FontWeight = '500') => `Raleway-${weight}`
+
 export const theme = {
   palette,
   telemetry,
@@ -219,4 +231,5 @@ export const theme = {
   weather,
   zone,
   interaction,
+  font,
 } as const

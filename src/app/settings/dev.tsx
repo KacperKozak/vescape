@@ -2,11 +2,10 @@ import { ScrollView, StyleSheet } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import {
-  ChartLineUpIcon,
   RecordIcon,
   CompassIcon,
   ListIcon,
-  SpeakerHighIcon,
+  BracketsCurlyIcon,
   SwatchesIcon,
   ToolboxIcon,
   CodeIcon,
@@ -27,22 +26,16 @@ const devPages = [
     icon: SwatchesIcon,
   },
   {
-    label: 'Sound Playground',
-    hint: 'Preview alert presets and geiger simulation',
-    route: routes.settingsSoundPlayground,
-    icon: SpeakerHighIcon,
+    label: 'Raw settings',
+    hint: 'Inspect stored app settings and current board record',
+    route: routes.settingsRawSettings,
+    icon: BracketsCurlyIcon,
   },
   {
     label: 'Debug recordings',
     hint: 'Capture and export raw BLE sessions',
     route: routes.settingsDebugRecordings,
     icon: RecordIcon,
-  },
-  {
-    label: 'Diagnostic',
-    hint: 'PostHog status and manual events',
-    route: routes.settingsDiagnostic,
-    icon: ChartLineUpIcon,
   },
   {
     label: 'Navigation diagnostics',

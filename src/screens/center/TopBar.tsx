@@ -1,21 +1,26 @@
 import { useRef, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import {
+  BroadcastIcon,
   CaretDownIcon,
   GearSixIcon,
   PencilSimpleIcon,
   PowerIcon,
-  UserCircleIcon,
+  UsersThreeIcon,
 } from 'phosphor-react-native'
 import { router } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { BoardSelectorSheet } from '@/components/domain/board/BoardSelectorSheet'
+import { CornerSheet } from '@/components/ui/overlays/AnchoredSheet'
 import { IconButton } from '@/components/ui/base/IconButton'
 import { WeatherStat } from '@/components/ui/weather/WeatherStat'
+import { SocialSheet } from '@/screens/social/SocialSheet'
 import { isNightAtTime } from '@/lib/weather'
 import { routes } from '@/navigation/routes'
 import type { Board } from '@/store/boardStore'
+import { useGroupRideStore } from '@/store/groupRideStore'
 import { useWeatherStore } from '@/store/weatherStore'
 import { theme } from '@/constants/theme'
 
@@ -42,8 +47,12 @@ export function TopBar({
 }: TopBarProps) {
   const insets = useSafeAreaInsets()
   const pillRef = useRef<View>(null)
+  const socialRef = useRef<View>(null)
   const [selectorOpen, setSelectorOpen] = useState(false)
+  const [socialOpen, setSocialOpen] = useState(false)
 
+  const nearbyBadge = useGroupRideStore((s) => s.badge)
+  const rideActive = useGroupRideStore((s) => s.activeRideId !== null)
   const weatherCode = useWeatherStore((s) => s.weatherCode)
   const weatherTemp = useWeatherStore((s) => s.temperature)
   const weatherPrecip = useWeatherStore((s) => s.precipitationProbability)
@@ -70,11 +79,15 @@ export function TopBar({
   return (
     <View style={[styles.wrap, { paddingTop: Math.max(insets.top, 8) }]} pointerEvents="box-none">
       <View style={styles.row}>
-        <IconButton
-          icon={UserCircleIcon}
-          onPress={() => router.push(routes.profile)}
-          style={styles.iconLeft}
-        />
+        <View ref={socialRef} collapsable={false} style={styles.iconLeft}>
+          <IconButton
+            icon={rideActive ? BroadcastIcon : UsersThreeIcon}
+            onPress={() => setSocialOpen(true)}
+            accessibilityLabel="Social"
+            dot={nearbyBadge && !rideActive ? theme.palette.groupRide.color : undefined}
+            accent={rideActive ? theme.palette.groupRide.color : undefined}
+          />
+        </View>
         <View ref={pillRef} style={styles.pill}>
           <Pressable
             style={styles.boardButton}
@@ -135,11 +148,23 @@ export function TopBar({
         </Pressable>
       )}
 
+      <CornerSheet
+        visible={socialOpen}
+        triggerRef={socialRef}
+        anchor="left"
+        title="Social"
+        icon={UsersThreeIcon}
+        onClose={() => setSocialOpen(false)}
+      >
+        <SocialSheet onNavigate={() => setSocialOpen(false)} />
+      </CornerSheet>
+
       <BoardSelectorSheet
         visible={selectorOpen}
         triggerRef={pillRef}
         boards={boards}
         activeBoardId={activeBoardId}
+        activeBoardLive={bleStatus === 'connected' || bleStatus === 'stale'}
         onClose={() => setSelectorOpen(false)}
         onSelectBoard={(id) => {
           onSelectBoard(id)

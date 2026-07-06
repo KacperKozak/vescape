@@ -5,6 +5,7 @@ import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
+// @parity /modules/vesc-ble/ios/alerts/AlertEngine.swift
 const val TELEMETRY_FLAG_KEYFRAME = 1
 const val TELEMETRY_FLAG_HAS_FAULT = 1 shl 1
 const val TELEMETRY_FLAG_HAS_LOCATION = 1 shl 2
@@ -368,7 +369,11 @@ data class AppSettings(
   val socEstimateWindowSeconds: Int = 20,
   val connectionSoundsEnabled: Boolean = true,
   val telemetryPollRateHz: Int = 20,
+  val wearMirrorIntervalMs: Int = 500,
   val companionPresenceEnabled: Boolean = false,
+  val riderId: String? = null,
+  val riderName: String? = null,
+  val riderColor: String? = null,
 )
 
 @Entity(

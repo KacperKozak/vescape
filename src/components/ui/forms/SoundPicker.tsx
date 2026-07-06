@@ -1,4 +1,5 @@
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { StyleSheet, TouchableOpacity, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 
 import { theme } from '@/constants/theme'
 import { type AlertPreset, previewAlertSound } from 'vesc-ble'

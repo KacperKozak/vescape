@@ -4,6 +4,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.security.MessageDigest
 
+// @parity /modules/vesc-ble/ios/RefloatConfigDecoder.swift
 internal class RefloatConfigDecodeException(message: String) : Exception(message)
 
 internal object RefloatConfigDecoder {
@@ -14,6 +15,7 @@ internal object RefloatConfigDecoder {
     canId: Int?,
     capturedAt: Long,
     fwVersion: String?,
+    refloatVersion: String? = null,
   ): RefloatConfigSnapshot {
     val byId = schema.fields.associateBy { it.id }
     val requiredLength = schema.fields.maxOfOrNull { it.offset + it.type.byteSize } ?: 0
@@ -50,6 +52,7 @@ internal object RefloatConfigDecoder {
       groups = groups,
       missingFieldIds = missing,
       fwVersion = fwVersion,
+      refloatVersion = refloatVersion,
     )
   }
 

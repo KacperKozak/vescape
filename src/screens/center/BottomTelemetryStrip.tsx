@@ -1,5 +1,6 @@
 import { memo } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { router } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import Animated, { useAnimatedStyle, type SharedValue } from 'react-native-reanimated'
@@ -11,6 +12,7 @@ import { interaction, theme } from '@/constants/theme'
 import { telemetry } from '@/constants/telemetry'
 import { routes } from '@/navigation/routes'
 import { useLiveSeries } from '@/hooks/useLiveMetric'
+import { useRenderRateWarning } from '@/hooks/useRenderRateWarning'
 import { useBleStore } from '@/store/bleStore'
 import { useLiveWindowMs } from '@/store/settingsStore'
 import { liveTelemetryRuntime } from '@/lib/telemetry/liveTelemetryRuntime'
@@ -52,6 +54,7 @@ interface BottomTelemetryStripProps {
 }
 
 export function BottomTelemetryStrip({ revealProgress }: BottomTelemetryStripProps) {
+  useRenderRateWarning('BottomTelemetryStrip')
   const insets = useSafeAreaInsets()
   const bleStatus = useBleStore((s) => s.status)
   const imuConnected = bleStatus === 'connected'

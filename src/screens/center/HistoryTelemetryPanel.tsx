@@ -1,6 +1,8 @@
 import { CaretDownIcon, ImagesSquareIcon, CloudArrowUpIcon } from 'phosphor-react-native'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import { Pressable, StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
+import { useSharedValue } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import {
@@ -57,6 +59,7 @@ interface HistoryTelemetryPanelProps {
 
 const CHART_MAX_POINTS = 220
 const OPTIONAL_CHART_TAB_COUNT = OPTIONAL_CHART_METRICS.length
+const MAP_SEEK_THROTTLE_MS = 33
 
 function formatRideTime(startMs: number, endMs: number): string {
   const start = new Date(startMs)
@@ -124,8 +127,8 @@ export function HistoryTelemetryPanel({
   const [headTimeMs, setHeadTimeMs] = useState<number | null>(null)
   const [activeCharts, setActiveCharts] = useState<Set<OptionalChartMetric>>(new Set())
   const [shareInfoVisible, setShareInfoVisible] = useState(false)
-  const pendingSelectionRef = useRef<TelemetryChartPoint | null>(null)
-  const selectionFrameRef = useRef<number | null>(null)
+  const scrubTimeMs = useSharedValue<number | null>(null)
+  const lastMapSeekAtRef = useRef(0)
 
   const sortedSamples = useMemo(
     () => [...samples].sort((a, b) => a.capturedAtMs - b.capturedAtMs),
@@ -363,31 +366,23 @@ export function HistoryTelemetryPanel({
 
   const hasChartData = headSample != null && visibleSamples.length >= 2
 
-  useEffect(
-    () => () => {
-      if (selectionFrameRef.current != null) cancelAnimationFrame(selectionFrameRef.current)
+  const handleScrubTimeChange = useCallback(
+    (timeMs: number) => {
+      const now = Date.now()
+      if (now - lastMapSeekAtRef.current < MAP_SEEK_THROTTLE_MS) return
+      lastMapSeekAtRef.current = now
+      onSeek?.(timeMs)
     },
-    [],
+    [onSeek],
   )
 
-  const flushPendingSelection = useCallback(() => {
-    selectionFrameRef.current = null
-    const point = pendingSelectionRef.current
-    if (!point) return
-    pendingSelectionRef.current = null
-    const ms = point.date.getTime()
-    setHeadTimeMs(ms)
-    onSeek?.(ms)
-  }, [onSeek])
-
   const handlePointSelected = useCallback(
-    (metric: HistoryMetricKey, point: TelemetryChartPoint) => {
-      onMetricInteraction?.(metric)
-      pendingSelectionRef.current = point
-      if (selectionFrameRef.current != null) return
-      selectionFrameRef.current = requestAnimationFrame(flushPendingSelection)
+    (point: TelemetryChartPoint) => {
+      const ms = point.date.getTime()
+      setHeadTimeMs(ms)
+      onSeek?.(ms)
     },
-    [flushPendingSelection, onMetricInteraction],
+    [onSeek],
   )
 
   const headPoint: TelemetryChartPoint | null = headSample
@@ -427,6 +422,7 @@ export function HistoryTelemetryPanel({
                   range: batteryRange,
                   color: theme.palette.slate.textMuted,
                   value: telemetry.battVoltage.formatWithUnit(headSample.batteryVoltage),
+                  formatValue: telemetry.battVoltage.formatWithUnit,
                 },
               }
             : {
@@ -529,9 +525,12 @@ export function HistoryTelemetryPanel({
           nextDisabled={!canNext}
           onPrevious={onPrevious}
           onNext={onNext}
+          previousTestID="history-previous-ride"
+          nextTestID="history-next-ride"
           style={styles.navSelector}
           selectControl={
             <Pressable
+              testID="history-ride-list-button"
               style={({ pressed }) => [styles.titleButton, pressed && styles.titleButtonPressed]}
               android_ripple={interaction.ripple}
               onPress={onOpenList}
@@ -566,7 +565,9 @@ export function HistoryTelemetryPanel({
             formatValue={(v) => telemetry.speed.formatWithUnit(v)}
             getPointColor={speedPointColor}
             onGestureStart={() => onMetricInteraction?.('speed')}
-            onPointSelected={(point) => handlePointSelected('speed', point)}
+            onPointSelected={handlePointSelected}
+            scrubTimeMs={scrubTimeMs}
+            onScrubTimeChange={handleScrubTimeChange}
             excludedRanges={speedExcludedRanges}
           />
 
@@ -586,7 +587,9 @@ export function HistoryTelemetryPanel({
                 formatValue={cfg.formatValue}
                 getPointColor={cfg.getPointColor}
                 onGestureStart={() => onMetricInteraction?.(metric.key)}
-                onPointSelected={(point) => handlePointSelected(metric.key, point)}
+                onPointSelected={handlePointSelected}
+                scrubTimeMs={scrubTimeMs}
+                onScrubTimeChange={handleScrubTimeChange}
                 excludedRanges={
                   'excludedRanges' in cfg
                     ? (cfg.excludedRanges as ExcludedRange[] | undefined)
@@ -604,6 +607,7 @@ export function HistoryTelemetryPanel({
               return (
                 <Pressable
                   key={metric.key}
+                  testID={`history-metric-tab-${metric.key}`}
                   style={[
                     styles.metricTab,
                     index < OPTIONAL_CHART_METRICS.length - 1 && styles.metricTabDivider,

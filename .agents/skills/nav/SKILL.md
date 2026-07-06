@@ -10,8 +10,8 @@ Navigate the running app on a connected Android device. Combines Maestro deep li
 ## Rules
 
 - Always verify device connected (`adb devices`) before first command.
-- App package: `com.anonymous.vescpoc`
-- URL scheme: `vescpoc://`
+- App package: `app.vescape`
+- URL scheme: `vescape://`
 - Never force-stop or clear data unless user asks.
 - After navigation, take screenshot to confirm result.
 
@@ -21,9 +21,9 @@ Use Maestro deep link — fastest way to reach any screen:
 
 ```sh
 maestro test <(cat <<EOF
-appId: com.anonymous.vescpoc
+appId: app.vescape
 ---
-- openLink: "vescpoc://<route>"
+- openLink: "vescape://<route>"
 - waitForAnimationToEnd
 EOF
 )
@@ -104,7 +104,7 @@ For more reliable element-based interaction, use inline Maestro flows:
 
 ```sh
 maestro test <(cat <<EOF
-appId: com.anonymous.vescpoc
+appId: app.vescape
 ---
 - tapOn: "Button Text"
 EOF
@@ -113,7 +113,7 @@ EOF
 
 ```sh
 maestro test <(cat <<EOF
-appId: com.anonymous.vescpoc
+appId: app.vescape
 ---
 - scrollUntilVisible:
     element: "Target Text"

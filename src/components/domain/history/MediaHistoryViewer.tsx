@@ -11,7 +11,8 @@ import {
   type Icon,
 } from 'phosphor-react-native'
 import { useMemo, useState } from 'react'
-import { Modal, StyleSheet, Text, View } from 'react-native'
+import { Modal, StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { HistoryMarker, TelemetrySample } from 'vesc-ble'
 

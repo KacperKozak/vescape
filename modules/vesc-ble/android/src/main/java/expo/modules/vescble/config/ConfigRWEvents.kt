@@ -25,6 +25,8 @@ internal sealed class ConfigRWEvent {
 
     data class XmlPayloadReceived(val payload: ByteArray) : ConfigRWEvent()
 
+    data class InfoPayloadReceived(val payload: ByteArray) : ConfigRWEvent()
+
     data class ConfigBytesPayloadReceived(
         val payload: ByteArray,
         val capturedAtMs: Long,

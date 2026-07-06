@@ -67,6 +67,7 @@ export function MetricDetailChart({
       range: secondary.range,
       color: secondary.color,
       value: at ? secondary.formatValue(at.value) : DASH,
+      formatValue: secondary.formatValue,
     }
   }, [secondary, currentPoint])
 

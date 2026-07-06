@@ -1,5 +1,6 @@
 import { useCallback, useLayoutEffect, useRef } from 'react'
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { useNavigation, useRouter } from 'expo-router'
 import {
   ArrowsClockwiseIcon,
@@ -15,6 +16,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { type TuneProfile, type RefloatConfigField, type TuneProfileFieldValue } from 'vesc-ble'
 
 import { Banner } from '@/components/ui/base/Banner'
+import { Button } from '@/components/ui/base/Button'
 import { IconButton } from '@/components/ui/base/IconButton'
 import { ConfirmModal } from '@/components/ui/modals/ConfirmModal'
 import { InfoModal } from '@/components/ui/modals/InfoModal'
@@ -69,6 +71,7 @@ export default function TuneScreen() {
   const setActiveProfile = useTuneProfileStore((s) => s.setActiveProfile)
   const revertField = useTuneProfileStore((s) => s.revertField)
   const acceptBoardField = useTuneProfileStore((s) => s.acceptBoardField)
+  const acceptAllBoardValues = useTuneProfileStore((s) => s.acceptAllBoardValues)
   const discardAllEdits = useTuneProfileStore((s) => s.discardAllEdits)
   const saveActiveProfile = useTuneProfileStore((s) => s.saveActiveProfile)
   const syncToBoard = useTuneProfileStore((s) => s.syncToBoard)
@@ -145,12 +148,11 @@ export default function TuneScreen() {
         <View style={styles.centerState}>
           <WarningCircleIcon size={28} color={theme.status.error.text} />
           <Text style={styles.errorText}>{profileState.error}</Text>
-          <Pressable
-            style={styles.retryButton}
+          <Button
+            label="Retry"
+            icon={ArrowsClockwiseIcon}
             onPress={() => (selectedBoardId ? void loadOffline(selectedBoardId) : undefined)}
-          >
-            <Text style={styles.retryText}>Retry</Text>
-          </Pressable>
+          />
         </View>
       ) : null}
 
@@ -259,6 +261,17 @@ export default function TuneScreen() {
                   }
                 />
               ) : null}
+              {boardSnapshot.refloatVersion ? (
+                <InfoBadge
+                  label={boardSnapshot.refloatVersion}
+                  onPress={() =>
+                    modals.showBadgeInfo(
+                      'Refloat',
+                      'Refloat package version reported by the connected controller.',
+                    )
+                  }
+                />
+              ) : null}
               <InfoBadge
                 label={`CAN ${boardSnapshot.canId}`}
                 onPress={() =>
@@ -355,6 +368,7 @@ export default function TuneScreen() {
           onSave={handleSave}
           onSaveAndSync={handleSaveAndSync}
           onSync={handleSync}
+          onUpdateTune={acceptAllBoardValues}
           onDiscard={discardAllEdits}
           onRetryConfig={() => void retryBoardSnapshot()}
           bottomOffset={insets.bottom + 16}
@@ -552,16 +566,6 @@ const styles = StyleSheet.create({
     color: theme.status.error.text,
     fontSize: 15,
     textAlign: 'center',
-  },
-  retryButton: {
-    backgroundColor: theme.palette.sky.color,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 8,
-  },
-  retryText: {
-    color: theme.palette.slate.surfaceDeep,
-    fontWeight: '700',
   },
   errorBanner: {
     flexDirection: 'row',

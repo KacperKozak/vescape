@@ -51,6 +51,8 @@ export interface FiredAlert {
   threshold: number
   thresholdMax: number | null
   soundType: string
+  /** 0..1 depth into the threshold→thresholdMax range for geiger alerts; `null` for single. */
+  rangeDepth?: number | null
   firedAt: number
 }
 
@@ -72,6 +74,8 @@ export interface BoardCandidate {
 /** Result of a native Board Probe of a BLE peripheral. */
 export interface BoardProbeResult {
   outcome: BoardProbeOutcome
+  /** Resolved transport when exactly one candidate confirmed; otherwise `null`. */
+  transport: BoardTransport | null
   /** Every transport that produced a valid Telemetry Sample, in probe order. */
   candidates: BoardCandidate[]
 }
@@ -112,8 +116,17 @@ export interface Board {
   description: string | null
   createdAt: number
   batteryConfig: BatteryConfig | null
+  /** Last Battery SoC Estimate persisted natively; survives full app kill. `undefined` before first session. */
+  lastBattery?: LastBattery | null
   /** Probe-confirmed reachability. `null` means offline-only/unlinked. */
   link: BoardLink | null
+}
+
+export interface LastBattery {
+  percent: number
+  voltage: number | null
+  /** Epoch ms of the reading. */
+  at: number
 }
 
 export type BatteryConfig = BatteryPresetConfig | BatteryManualConfig
@@ -213,6 +226,8 @@ export interface TelemetryEvent {
   tempMosfet: number | null
   tempMotor: number | null
   avgLatency: number | null
+  /** Achieved telemetry pull rate in Hz (native-measured, smoothed), or null before it's known. */
+  pullRateHz: number | null
   lastPacketAt: number
   firedAlerts?: FiredAlert[]
 }
@@ -222,15 +237,34 @@ export interface BmsEvent {
   capturedAt: number
   /** Pack voltage as reported by the BMS (sum of cell groups). */
   voltageTotal: number
+  /** Charge-port voltage (`v_charge`); meaning is firmware/BMS-specific. */
+  vCharge: number
+  /** Pack current from the BMS shunt. */
   current: number
+  /** Second/internal current field (`i_in_ic`); compare against `current`. */
+  currentIc: number
   ampHours: number
   wattHours: number
   /** State of charge 0–1, or null when the firmware variant omits it. */
   soc: number | null
+  /** State of health 0–1, or null when the firmware variant omits it. */
+  soh: number | null
   /** Per cell-group voltage, index 0 = first group. */
   cellVoltages: number[]
   /** Per cell-group balancing flag, aligned with cellVoltages. */
   balancing: boolean[]
+  /** Per-sensor BMS temperatures in °C (`temps_adc`); empty when firmware omits them. */
+  temps: number[]
+  /** BMS IC temperature °C, or null when absent. */
+  tempIc: number | null
+  /** Humidity-sensor temperature °C, or null when absent. */
+  tempHum: number | null
+  /** Relative humidity %, or null when absent. */
+  hum: number | null
+  /** Hottest cell temperature °C, or null when absent. */
+  tempMaxCell: number | null
+  /** BMS CAN id, or null when absent. */
+  canId: number | null
 }
 
 export interface LiveMetricExclusionUpdate {
@@ -286,6 +320,7 @@ export interface LiveStateEvent {
   }
   recording: {
     enabled: boolean
+    paused: boolean
     activeBoardId: string | null
     startedAt: number | null
   }
@@ -402,7 +437,14 @@ export interface HistoryGpsSample {
 export interface HistoryMarker {
   id: number
   occurredAtMs: number
-  type: 'connected' | 'disconnected' | 'connection_lost' | 'error' | 'gap' | 'app_stop'
+  type:
+    | 'connected'
+    | 'disconnected'
+    | 'connection_lost'
+    | 'error'
+    | 'gap'
+    | 'app_stop'
+    | 'auto_pause'
   deviceId: string | null
   deviceName: string | null
   message: string | null
@@ -520,6 +562,7 @@ export interface RefloatConfigSnapshot {
   groups: RefloatConfigGroup[]
   missingFieldIds: string[]
   fwVersion: string | null
+  refloatVersion?: string | null
 }
 
 export type TuneProfileFieldValue = number | boolean | string | null
@@ -594,6 +637,22 @@ export interface AppSettings {
    * controller. 0 = unlimited (pure response-paced, the original behaviour).
    */
   telemetryPollRateHz: number
+  /**
+   * Watch Mirror push interval in ms — the cadence of the dedicated watch tick,
+   * independent of the board poll rate. Lower values increase wrist update rate
+   * for stress-testing the link. Floored at 50ms (20Hz), capped at 10s.
+   */
+  wearMirrorIntervalMs: number
+  /**
+   * Persistent device-scoped anonymous Group Ride Rider id. Generated once on
+   * first use and stored locally; sent to the relay server as the Rider's
+   * identity. See ADR-0020.
+   */
+  riderId: string | null
+  /** Rider-chosen display name shown to other Riders in a Group Ride. */
+  riderName: string | null
+  /** Rider-chosen marker color (hex) shown on other Riders' maps. Null when unset. */
+  riderColor: string | null
 }
 
 export interface DiagnosticStatus {
@@ -655,6 +714,114 @@ export interface LiveSeriesEvent {
   generation: number
 }
 
+// ---------------------------------------------------------------------------
+// Group Ride (observe) — wire protocol mirror of vescape-server
+// docs/group-ride/PROTOCOL.md. Observing only receives; it sends nothing.
+// ---------------------------------------------------------------------------
+
+/** Globally-broadcast ride view; identical in `snapshot` and `ride-created`. */
+export interface GroupRideSummary {
+  id: string
+  name: string
+  /** Epoch ms when the ride was created. */
+  createdAt: number
+  riderCount: number
+  /** Reference point = creator's latest location, for client-side distance filtering. */
+  location: { lat: number; lng: number }
+  creator: { id: string; name: string }
+}
+
+export interface RiderPresence {
+  lat: number
+  lng: number
+  heading?: number | null
+  /** Board-enriched speed in m/s. Null/omitted when no fresh Board Session is live. */
+  speed?: number | null
+  /** Battery SoC Estimate as a 0-1 fraction. Null/omitted when unavailable. */
+  soc?: number | null
+  /** Motor temperature in °C. Null/omitted when no fresh Board Session is live. */
+  motorTemp?: number | null
+  /** Controller/FET temperature in °C. Null/omitted when no fresh Board Session is live. */
+  ctrlTemp?: number | null
+  /** Device battery as a 0-1 fraction. Null/omitted when the platform can't report it. */
+  phoneBattery?: number | null
+  /** Connected board's display name. Null/omitted when no Board Session is live. */
+  boardName?: string | null
+  /** The Rider's shared map target (their direction point). Null/omitted when none is set. */
+  target?: { lat: number; lng: number } | null
+}
+
+/** One breadcrumb in a Rider's recent shared path. */
+export interface TrailPoint {
+  lat: number
+  lng: number
+}
+
+export interface GroupRideRider {
+  id: string
+  name: string
+  /** Rider-chosen marker color (hex), or null when unset. */
+  color: string | null
+  presence: RiderPresence | null
+  /** Recent path (oldest → newest), server-capped to ~30s. Null/omitted while empty. */
+  trail?: TrailPoint[] | null
+  stale: boolean
+  lastSeen: number
+}
+
+export type GroupRideConnectionState = 'idle' | 'connecting' | 'connected' | 'disconnected'
+
+export interface GroupRideConnectionEvent {
+  state: GroupRideConnectionState
+}
+
+export interface GroupRideSnapshotEvent {
+  rides: GroupRideSummary[]
+}
+
+export interface GroupRideCreatedEvent {
+  ride: GroupRideSummary
+}
+
+export interface GroupRideUpdatedEvent {
+  ride: GroupRideSummary
+}
+
+export interface GroupRideEndedEvent {
+  rideId: string
+}
+
+export interface GroupRideJoinedEvent {
+  rideId: string | null
+}
+
+export interface GroupRideRosterEvent {
+  rideId: string | null
+  riders: GroupRideRider[]
+}
+
+export interface GroupRideErrorEvent {
+  message: string
+}
+
+/**
+ * Native persisted board/app data changed outside a JS-initiated write (e.g. the per-board
+ * `lastBattery` written on session end). JS owns no durable copy, so it must reload the matching
+ * store to stay fresh without an app restart. Emitted sparingly — only on meaningful changes,
+ * never per telemetry tick.
+ */
+export interface AppDataChangedEvent {
+  scope: 'boards' | 'settings'
+}
+
+export type CriticalRideNotificationPermissionStatus =
+  | 'not-determined'
+  | 'denied'
+  | 'authorized'
+  | 'provisional'
+  | 'ephemeral'
+  | 'unknown'
+
 type VescBleEvents = {
   onDevice: (event: DeviceFoundEvent) => void
   onError: (event: ErrorEvent) => void
@@ -669,6 +836,18 @@ type VescBleEvents = {
   onLocation: (event: LocationEvent) => void
   onTelemetryRebuildProgress: (event: TelemetryRebuildProgressEvent) => void
   onBoardProbeProgress: (event: BoardProbeProgressEvent) => void
+  /** Observe WebSocket connection state to the Group Ride relay. */
+  onGroupRideConnection: (event: GroupRideConnectionEvent) => void
+  /** Full active-ride list, sent once on connect. */
+  onGroupRideSnapshot: (event: GroupRideSnapshotEvent) => void
+  onGroupRideCreated: (event: GroupRideCreatedEvent) => void
+  onGroupRideUpdated: (event: GroupRideUpdatedEvent) => void
+  onGroupRideEnded: (event: GroupRideEndedEvent) => void
+  onGroupRideJoined: (event: GroupRideJoinedEvent) => void
+  onGroupRideRoster: (event: GroupRideRosterEvent) => void
+  onGroupRideError: (event: GroupRideErrorEvent) => void
+  /** Persisted board/app data changed natively — reload the matching store. */
+  onAppDataChanged: (event: AppDataChangedEvent) => void
 }
 
 interface NativeEventEmitter<TEvents extends Record<string, (...args: never[]) => void>> {
@@ -689,8 +868,23 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
   exitApp(): void
   startLocationUpdates(): void
   stopLocationUpdates(): void
+  startGroupRideObserve(serverUrl: string): void
+  stopGroupRideObserve(): void
+  createGroupRide(
+    riderId: string,
+    riderName: string,
+    riderColor: string | null,
+    name: string | null,
+    lat: number,
+    lng: number,
+  ): void
+  joinGroupRide(riderId: string, riderName: string, riderColor: string | null, rideId: string): void
+  leaveGroupRide(): void
+  updateGroupRideIdentity(riderId: string, riderName: string, riderColor: string | null): void
   setTelemetryRecordingEnabled(enabled: boolean): void
   reloadAlertRules(): void
+  getCriticalRideNotificationPermissionStatus(): Promise<CriticalRideNotificationPermissionStatus>
+  requestCriticalRideNotificationPermission(): Promise<CriticalRideNotificationPermissionStatus>
   getAlertPresets(): AlertPreset[]
   previewAlertSound(soundType: AlertSoundType): void
   startGeigerSimulation(soundType: string, rangeDepth: number): void
@@ -820,6 +1014,95 @@ export function stopLocationUpdates(): void {
   native.stopLocationUpdates()
 }
 
+/**
+ * Start the native Group Ride observe WebSocket (lives in the foreground service).
+ * Observing only receives lifecycle events — it sends no location.
+ */
+export function startGroupRideObserve(serverUrl: string): void {
+  if (E2E_ENABLED) return
+  native.startGroupRideObserve(serverUrl)
+}
+
+/** Stop the native Group Ride observe WebSocket. */
+export function stopGroupRideObserve(): void {
+  if (E2E_ENABLED) return
+  native.stopGroupRideObserve()
+}
+
+export interface CreateGroupRideParams {
+  /** Persistent device-scoped Rider id. */
+  riderId: string
+  /** Rider display name bound to the connection (used for the auto-name fallback). */
+  riderName: string
+  /** Rider-chosen marker color (hex), bound to the connection. Null when unset. */
+  riderColor: string | null
+  /** Optional custom ride name; server auto-names `"<name>'s ride"` when blank/null. */
+  name: string | null
+  lat: number
+  lng: number
+}
+
+/**
+ * Create a Group Ride over the live observe socket. Sends the creator's location once — the
+ * only location egress while observing. The new ride arrives back via the `ride-created`
+ * fan-out, so callers update state from that event rather than optimistically.
+ */
+export function createGroupRide({
+  riderId,
+  riderName,
+  riderColor,
+  name,
+  lat,
+  lng,
+}: CreateGroupRideParams): void {
+  if (E2E_ENABLED) return
+  native.createGroupRide(riderId, riderName, riderColor, name, lat, lng)
+}
+
+export interface JoinGroupRideParams {
+  riderId: string
+  riderName: string
+  riderColor: string | null
+  rideId: string
+}
+
+/** Join a Group Ride by id. Native sends Rider Presence from the foreground GPS stream. */
+export function joinGroupRide({
+  riderId,
+  riderName,
+  riderColor,
+  rideId,
+}: JoinGroupRideParams): void {
+  if (E2E_ENABLED) return
+  native.joinGroupRide(riderId, riderName, riderColor, rideId)
+}
+
+/** Leave the current Group Ride. */
+export function leaveGroupRide(): void {
+  if (E2E_ENABLED) return
+  native.leaveGroupRide()
+}
+
+export interface UpdateGroupRideIdentityParams {
+  riderId: string
+  riderName: string
+  riderColor: string | null
+}
+
+/**
+ * Push a Rider name/color change to the live observe socket. While joined, the relay
+ * re-emits the roster so peers update without a rejoin; otherwise the new identity is
+ * applied on the next create/join. No-op when the observe socket is not connected.
+ */
+export function updateGroupRideIdentity({
+  riderId,
+  riderName,
+  riderColor,
+}: UpdateGroupRideIdentityParams): void {
+  if (E2E_ENABLED) return
+  native.updateGroupRideIdentity(riderId, riderName, riderColor)
+}
+
 /** Enable or disable native SQLite telemetry history writes. */
 export function setTelemetryRecordingEnabled(enabled: boolean): void {
   native.setTelemetryRecordingEnabled(enabled)
@@ -828,6 +1111,24 @@ export function setTelemetryRecordingEnabled(enabled: boolean): void {
 /** Tell the Android foreground service to re-read alert rules from native storage. */
 export function reloadAlertRules(): void {
   native.reloadAlertRules()
+}
+
+/** Read iOS local-notification permission used only for critical ride alerts. */
+export async function getCriticalRideNotificationPermissionStatus(): Promise<CriticalRideNotificationPermissionStatus> {
+  try {
+    return await native.getCriticalRideNotificationPermissionStatus()
+  } catch {
+    return 'unknown'
+  }
+}
+
+/** Explicitly request iOS permission for critical ride alert notifications. Never called on connect. */
+export async function requestCriticalRideNotificationPermission(): Promise<CriticalRideNotificationPermissionStatus> {
+  try {
+    return await native.requestCriticalRideNotificationPermission()
+  } catch {
+    return 'unknown'
+  }
 }
 
 const FALLBACK_PRESETS: AlertPreset[] = [
@@ -966,6 +1267,9 @@ export function setSelectedBoard(boardId: string | null): void {
 export async function getTelemetryHistory(
   options: TelemetryHistoryOptions = {},
 ): Promise<TelemetryMinuteBucket[]> {
+  if (E2E_ENABLED) {
+    return e2eFake.getTelemetryHistory(options)
+  }
   return native.getTelemetryHistory(options)
 }
 
@@ -975,6 +1279,10 @@ export async function getTelemetrySamples(options: {
   deviceId?: string
   limit?: number
 }): Promise<TelemetrySample[]> {
+  if (E2E_ENABLED) {
+    const range = await e2eFake.getHistoryRange(options)
+    return decodeBoardSamples(range)
+  }
   return native.getTelemetrySamples(options)
 }
 
@@ -984,7 +1292,9 @@ export async function getHistoryRange(options: {
   deviceId?: string
   limit?: number
 }): Promise<HistoryRange> {
-  const range = await native.getHistoryRange(options)
+  const range = E2E_ENABLED
+    ? e2eFake.getHistoryRange(options)
+    : await native.getHistoryRange(options)
   return {
     boardSamples: decodeBoardSamples(range),
     gpsSamples: range.gpsSamples,
@@ -994,6 +1304,9 @@ export async function getHistoryRange(options: {
 }
 
 export async function getTelemetrySummary(): Promise<TelemetrySummary> {
+  if (E2E_ENABLED) {
+    return e2eFake.getTelemetrySummary()
+  }
   return native.getTelemetrySummary()
 }
 
@@ -1132,6 +1445,10 @@ export async function deleteTelemetryRange(options: TelemetryDeleteRangeOptions)
 }
 
 export async function clearTelemetryHistory(): Promise<void> {
+  if (E2E_ENABLED) {
+    e2eFake.clearTelemetryHistory()
+    return
+  }
   return native.clearTelemetryHistory()
 }
 
@@ -1171,18 +1488,31 @@ export async function deleteAlertRule(id: string): Promise<void> {
 }
 
 export async function getPrivacyZones(): Promise<PrivacyZone[]> {
+  if (E2E_ENABLED) return e2eFake.getPrivacyZones()
   return native.getPrivacyZones()
 }
 
 export async function upsertPrivacyZone(zone: PrivacyZone): Promise<void> {
+  if (E2E_ENABLED) {
+    e2eFake.upsertPrivacyZone(zone)
+    return
+  }
   return native.upsertPrivacyZone(zone)
 }
 
 export async function setPrivacyZoneEnabled(id: string, enabled: boolean): Promise<void> {
+  if (E2E_ENABLED) {
+    e2eFake.setPrivacyZoneEnabled(id, enabled)
+    return
+  }
   return native.setPrivacyZoneEnabled(id, enabled)
 }
 
 export async function deletePrivacyZone(id: string): Promise<void> {
+  if (E2E_ENABLED) {
+    e2eFake.deletePrivacyZone(id)
+    return
+  }
   return native.deletePrivacyZone(id)
 }
 
@@ -1250,6 +1580,12 @@ export function addErrorListener(cb: (event: ErrorEvent) => void): EventSubscrip
   return emitter.addListener('onError', cb)
 }
 
+export function addAppDataChangedListener(
+  cb: (event: AppDataChangedEvent) => void,
+): EventSubscription {
+  return emitter.addListener('onAppDataChanged', cb)
+}
+
 export function addLiveStateListener(cb: (event: LiveStateEvent) => void): EventSubscription {
   if (E2E_ENABLED) {
     return e2eFake.addLiveStateListener(cb)
@@ -1306,4 +1642,52 @@ export function addBoardProbeProgressListener(
   }
 
   return emitter.addListener('onBoardProbeProgress', cb)
+}
+
+export function addGroupRideConnectionListener(
+  cb: (event: GroupRideConnectionEvent) => void,
+): EventSubscription {
+  return emitter.addListener('onGroupRideConnection', cb)
+}
+
+export function addGroupRideSnapshotListener(
+  cb: (event: GroupRideSnapshotEvent) => void,
+): EventSubscription {
+  return emitter.addListener('onGroupRideSnapshot', cb)
+}
+
+export function addGroupRideCreatedListener(
+  cb: (event: GroupRideCreatedEvent) => void,
+): EventSubscription {
+  return emitter.addListener('onGroupRideCreated', cb)
+}
+
+export function addGroupRideUpdatedListener(
+  cb: (event: GroupRideUpdatedEvent) => void,
+): EventSubscription {
+  return emitter.addListener('onGroupRideUpdated', cb)
+}
+
+export function addGroupRideEndedListener(
+  cb: (event: GroupRideEndedEvent) => void,
+): EventSubscription {
+  return emitter.addListener('onGroupRideEnded', cb)
+}
+
+export function addGroupRideJoinedListener(
+  cb: (event: GroupRideJoinedEvent) => void,
+): EventSubscription {
+  return emitter.addListener('onGroupRideJoined', cb)
+}
+
+export function addGroupRideRosterListener(
+  cb: (event: GroupRideRosterEvent) => void,
+): EventSubscription {
+  return emitter.addListener('onGroupRideRoster', cb)
+}
+
+export function addGroupRideErrorListener(
+  cb: (event: GroupRideErrorEvent) => void,
+): EventSubscription {
+  return emitter.addListener('onGroupRideError', cb)
 }

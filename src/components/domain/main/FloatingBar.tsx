@@ -1,5 +1,5 @@
 import { router } from 'expo-router'
-import { RecordIcon, StopIcon } from 'phosphor-react-native'
+import { PauseIcon, RecordIcon, StopIcon } from 'phosphor-react-native'
 import { useCallback } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 
@@ -163,9 +163,10 @@ export function FloatingBar({
   onRetryConnect,
   bottomOffset = 16,
 }: FloatingBarProps) {
-  const { recording, scanStatus, start, stop } = useBleStore(
+  const { recording, paused, scanStatus, start, stop } = useBleStore(
     useShallow((s) => ({
       recording: s.telemetryRecordingEnabled,
+      paused: s.telemetryRecordingPaused,
       scanStatus: s.scanStatus,
       start: s.startTelemetryRecording,
       stop: s.stopTelemetryRecording,
@@ -210,9 +211,10 @@ export function FloatingBar({
     <FloatingBarFrame bottomOffset={bottomOffset}>
       {uiPill ? <FloatingStatusPill pill={uiPill} /> : null}
       <FloatingActionPill
-        icon={recording ? StopIcon : RecordIcon}
-        label={recording ? 'STOP' : 'REC'}
+        icon={recording ? (paused ? PauseIcon : StopIcon) : RecordIcon}
+        label={recording ? (paused ? 'PAUSED' : 'STOP') : 'REC'}
         active={recording}
+        paused={paused}
         disabled={!recording && !canToggleRecording(bleStatus)}
         onPress={toggleRecord}
         testID="floating-bar-record"

@@ -1,9 +1,26 @@
-import { Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
-import { ToolboxIcon, VibrateIcon } from 'phosphor-react-native'
+import {
+  PlayIcon,
+  SpeakerHighIcon,
+  StopIcon,
+  ToolboxIcon,
+  VibrateIcon,
+} from 'phosphor-react-native'
+
+import { TuneDial } from '@/components/ui/tune/TuneDial'
 import { IconHero } from '@/components/ui/settings/IconHero'
 import { theme } from '@/constants/theme'
+import {
+  type AlertPreset,
+  getAlertPresets,
+  previewAlertSound,
+  startGeigerSimulation,
+  stopGeigerSimulation,
+} from 'vesc-ble'
 
 const androidHaptics = Object.values(Haptics.AndroidHaptics).map((type) => ({
   label: type
@@ -13,14 +30,84 @@ const androidHaptics = Object.values(Haptics.AndroidHaptics).map((type) => ({
   type,
 }))
 
+type PlaybackMode = 'single' | 'geiger'
+
+const TTS_EXAMPLES = [
+  'Battery {voltage} volts, {percent}%',
+  '{value} {unit}',
+  'Warning! {value} {unit}',
+]
+
 export default function OtherSettingsScreen() {
+  const presets = useMemo(() => getAlertPresets(), [])
+  const singlePresets = useMemo(
+    () => presets.filter((preset) => preset.category === 'single'),
+    [presets],
+  )
+  const geigerPresets = useMemo(
+    () => presets.filter((preset) => preset.category === 'geiger'),
+    [presets],
+  )
+  const [selectedUri, setSelectedUri] = useState<string>(singlePresets[0]?.uri ?? 'preset:beep')
+  const [mode, setMode] = useState<PlaybackMode>('single')
+  const [rangeDepth, setRangeDepth] = useState(0.5)
+  const [geigerActive, setGeigerActive] = useState(false)
+  const [ttsTemplate, setTtsTemplate] = useState('Battery {voltage} volts, {percent}%')
+
+  const visiblePresets = mode === 'single' ? singlePresets : geigerPresets
+  const selectedPreset = visiblePresets.find((p) => p.uri === selectedUri) ?? visiblePresets[0]
+
+  useEffect(() => {
+    return () => stopGeigerSimulation()
+  }, [])
+
+  const handlePlaySingle = useCallback(() => {
+    previewAlertSound(selectedUri)
+  }, [selectedUri])
+
+  const handleStopGeiger = useCallback(() => {
+    stopGeigerSimulation()
+    setGeigerActive(false)
+  }, [])
+
+  const handleToggleGeiger = useCallback(() => {
+    if (geigerActive) {
+      stopGeigerSimulation()
+      setGeigerActive(false)
+    } else {
+      startGeigerSimulation(selectedUri, rangeDepth)
+      setGeigerActive(true)
+    }
+  }, [geigerActive, selectedUri, rangeDepth])
+
+  const handleRangeDepthChange = useCallback(
+    (value: number) => {
+      setRangeDepth(value)
+      if (geigerActive) {
+        startGeigerSimulation(selectedUri, value)
+      }
+    },
+    [geigerActive, selectedUri],
+  )
+
+  const handleSpeakTts = useCallback(() => {
+    previewAlertSound(`tts:${ttsTemplate}`)
+  }, [ttsTemplate])
+
+  function selectMode(next: PlaybackMode) {
+    if (geigerActive) handleStopGeiger()
+    setMode(next)
+    const nextPresets = next === 'single' ? singlePresets : geigerPresets
+    setSelectedUri(nextPresets[0]?.uri ?? 'preset:beep')
+  }
+
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
         <IconHero icon={ToolboxIcon} description="Small platform probes and local experiments." />
-        <Text style={styles.sectionTitle}>Haptics</Text>
 
-        <View style={styles.card}>
+        <Text style={styles.sectionTitle}>Haptics</Text>
+        <View style={styles.plainCard}>
           {Platform.OS === 'android' ? (
             <View style={styles.controlGroup}>
               <View style={styles.controlHeader}>
@@ -54,8 +141,146 @@ export default function OtherSettingsScreen() {
             </View>
           )}
         </View>
+
+        <Text style={styles.sectionTitle}>Sound Preset</Text>
+        <View style={styles.card}>
+          <View style={styles.presetGrid}>
+            {visiblePresets.map((preset) => (
+              <PresetButton
+                key={preset.uri}
+                preset={preset}
+                selected={selectedUri === preset.uri}
+                onPress={() => {
+                  if (geigerActive) handleStopGeiger()
+                  setSelectedUri(preset.uri)
+                }}
+              />
+            ))}
+          </View>
+        </View>
+
+        <Text style={styles.sectionTitle}>Playback Mode</Text>
+        <View style={styles.card}>
+          <View style={styles.modeRow}>
+            <Pressable
+              style={[styles.modeButton, mode === 'single' && styles.modeButtonActive]}
+              onPress={() => selectMode('single')}
+            >
+              <Text style={[styles.modeText, mode === 'single' && styles.modeTextActive]}>
+                Single Play
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[styles.modeButton, mode === 'geiger' && styles.modeButtonActive]}
+              onPress={() => selectMode('geiger')}
+            >
+              <Text style={[styles.modeText, mode === 'geiger' && styles.modeTextActive]}>
+                Geiger Simulation
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+
+        {mode === 'single' ? (
+          <>
+            <Text style={styles.sectionTitle}>Play</Text>
+            <View style={styles.card}>
+              <Pressable style={styles.playButton} onPress={handlePlaySingle}>
+                <PlayIcon size={20} color={theme.palette.sky.bg} weight="fill" />
+                <Text style={styles.playButtonText}>
+                  Play {selectedPreset?.name ?? selectedUri}
+                </Text>
+              </Pressable>
+            </View>
+          </>
+        ) : (
+          <>
+            <Text style={styles.sectionTitle}>Geiger Simulation</Text>
+            <View style={styles.card}>
+              <View style={styles.dialSection}>
+                <View style={styles.dialHeader}>
+                  <Text style={styles.dialLabel}>Range Depth</Text>
+                  <Text style={styles.dialValue}>{rangeDepth.toFixed(2)}</Text>
+                </View>
+                <TuneDial
+                  value={rangeDepth}
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  onValueChange={handleRangeDepthChange}
+                />
+              </View>
+
+              <Pressable
+                style={[styles.playButton, geigerActive && styles.stopButton]}
+                onPress={handleToggleGeiger}
+              >
+                {geigerActive ? (
+                  <StopIcon size={20} color={theme.palette.slate.textPrimary} weight="fill" />
+                ) : (
+                  <PlayIcon size={20} color={theme.palette.sky.bg} weight="fill" />
+                )}
+                <Text style={[styles.playButtonText, geigerActive && styles.stopButtonText]}>
+                  {geigerActive ? 'Stop' : 'Start Geiger'}
+                </Text>
+              </Pressable>
+            </View>
+          </>
+        )}
+
+        <Text style={styles.sectionTitle}>Message Alert (TTS)</Text>
+        <View style={styles.card}>
+          <Text style={styles.ttsHint}>
+            Placeholders: {'{value}'} {'{threshold}'} {'{unit}'} — battery only: {'{voltage}'}{' '}
+            {'{percent}'}
+          </Text>
+          <View style={styles.ttsExamples}>
+            {TTS_EXAMPLES.map((ex) => (
+              <Pressable
+                key={ex}
+                style={[styles.ttsChip, ttsTemplate === ex && styles.ttsChipActive]}
+                onPress={() => setTtsTemplate(ex)}
+              >
+                <Text style={[styles.ttsChipText, ttsTemplate === ex && styles.ttsChipTextActive]}>
+                  {ex}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+          <TextInput
+            style={styles.ttsInput}
+            value={ttsTemplate}
+            onChangeText={setTtsTemplate}
+            placeholder="Enter template…"
+            placeholderTextColor={theme.palette.slate.textDim}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          <Pressable style={styles.playButton} onPress={handleSpeakTts}>
+            <SpeakerHighIcon size={20} color={theme.palette.sky.bg} weight="fill" />
+            <Text style={styles.playButtonText}>Speak</Text>
+          </Pressable>
+        </View>
       </ScrollView>
     </SafeAreaView>
+  )
+}
+
+interface PresetButtonProps {
+  preset: AlertPreset
+  selected: boolean
+  onPress: () => void
+}
+
+function PresetButton({ preset, selected, onPress }: PresetButtonProps) {
+  return (
+    <Pressable
+      style={[styles.presetButton, selected && styles.presetButtonActive]}
+      onPress={onPress}
+    >
+      <Text style={[styles.presetName, selected && styles.presetNameActive]}>{preset.name}</Text>
+      <Text style={styles.presetCategory}>{preset.category}</Text>
+    </Pressable>
   )
 }
 
@@ -78,12 +303,20 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     marginLeft: 4,
   },
+  plainCard: {
+    backgroundColor: theme.palette.slate.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.palette.slate.border,
+    overflow: 'hidden',
+  },
   card: {
     backgroundColor: theme.palette.slate.surface,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: theme.palette.slate.border,
     overflow: 'hidden',
+    padding: 14,
   },
   row: {
     flexDirection: 'row',
@@ -139,5 +372,146 @@ const styles = StyleSheet.create({
     color: theme.palette.slate.textSecondary,
     fontSize: 12,
     fontWeight: '700',
+  },
+  presetGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  presetButton: {
+    backgroundColor: theme.palette.slate.surfaceDeep,
+    borderWidth: 1,
+    borderColor: theme.palette.slate.border,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 2,
+  },
+  presetButtonActive: {
+    borderColor: theme.palette.sky.color,
+    backgroundColor: theme.palette.sky.bg,
+  },
+  presetName: {
+    color: theme.palette.slate.textSecondary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  presetNameActive: {
+    color: theme.palette.slate.textPrimary,
+  },
+  presetCategory: {
+    color: theme.palette.slate.textDim,
+    fontSize: 10,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  modeRow: {
+    flexDirection: 'row',
+    gap: 0,
+    borderRadius: 8,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: theme.palette.slate.border,
+  },
+  modeButton: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 10,
+    backgroundColor: theme.palette.slate.surfaceDeep,
+  },
+  modeButtonActive: {
+    backgroundColor: theme.palette.sky.bg,
+  },
+  modeText: {
+    color: theme.palette.slate.textMuted,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  modeTextActive: {
+    color: theme.palette.slate.textPrimary,
+  },
+  playButton: {
+    backgroundColor: theme.palette.sky.color,
+    borderRadius: 8,
+    paddingVertical: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  playButtonText: {
+    color: theme.palette.sky.bg,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  stopButton: {
+    backgroundColor: theme.status.error.color,
+  },
+  stopButtonText: {
+    color: theme.palette.slate.textPrimary,
+  },
+  ttsHint: {
+    color: theme.palette.slate.textDim,
+    fontSize: 11,
+    marginBottom: 10,
+    lineHeight: 16,
+  },
+  ttsExamples: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 10,
+  },
+  ttsChip: {
+    backgroundColor: theme.palette.slate.surfaceDeep,
+    borderWidth: 1,
+    borderColor: theme.palette.slate.border,
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  ttsChipActive: {
+    borderColor: theme.palette.sky.color,
+    backgroundColor: theme.palette.sky.bg,
+  },
+  ttsChipText: {
+    color: theme.palette.slate.textMuted,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  ttsChipTextActive: {
+    color: theme.palette.slate.textPrimary,
+  },
+  ttsInput: {
+    backgroundColor: theme.palette.slate.surfaceDeep,
+    borderWidth: 1,
+    borderColor: theme.palette.slate.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: theme.palette.slate.textPrimary,
+    fontSize: 13,
+    marginBottom: 12,
+    fontFamily: 'monospace',
+  },
+  dialSection: {
+    gap: 8,
+    marginBottom: 14,
+  },
+  dialHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  dialLabel: {
+    color: theme.palette.slate.textSecondary,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  dialValue: {
+    color: theme.palette.sky.text,
+    fontSize: 16,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
   },
 })

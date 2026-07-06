@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Animated, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Animated, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { InfoIcon, XIcon } from 'phosphor-react-native'
 import { theme } from '@/constants/theme'
 

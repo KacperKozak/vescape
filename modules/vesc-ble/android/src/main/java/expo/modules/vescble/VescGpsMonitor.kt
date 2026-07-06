@@ -10,6 +10,7 @@ import android.os.Looper
 import android.util.Log
 import androidx.core.content.ContextCompat
 
+// @parity /modules/vesc-ble/ios/VescGpsMonitor.swift
 internal class VescGpsMonitor(
     private val context: Context,
     private val looper: Looper,

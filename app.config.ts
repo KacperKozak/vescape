@@ -4,7 +4,7 @@ import { androidVersionCode } from './src/helpers/version.ts'
 
 const config: ExpoConfig = {
   name: 'vescape',
-  slug: 'vibe-wheel',
+  slug: 'vescape',
   version: pkg.version,
   orientation: 'portrait',
   icon: './assets/images/icon.png',
@@ -13,8 +13,19 @@ const config: ExpoConfig = {
   ios: {
     supportsTablet: true,
     bundleIdentifier: 'app.vescape',
+    // Required by @bacons/apple-targets to sign the ride-activity widget extension. Account-specific
+    // 10-char Apple Developer team ID — set APPLE_TEAM_ID at prebuild/build time (EAS secret / .env).
+    appleTeamId: process.env.APPLE_TEAM_ID,
     infoPlist: {
       ITSAppUsesNonExemptEncryption: false,
+      NSBluetoothAlwaysUsageDescription:
+        'Allow Vescape to connect to your board over Bluetooth for live telemetry, alerts, and ride recording.',
+      NSLocationWhenInUseUsageDescription:
+        'Allow Vescape to use your location for live maps, ride recording, and reconnect support while you ride.',
+      UIBackgroundModes: ['bluetooth-central', 'location', 'audio'],
+      // Board Session status surface — native-driven Live Activity (peer of Android's persistent
+      // foreground notification). See targets/ride-activity + plugins/withLiveActivityAttributes.
+      NSSupportsLiveActivities: true,
     },
   },
   android: {
@@ -34,6 +45,15 @@ const config: ExpoConfig = {
   },
   plugins: [
     'expo-router',
+    [
+      '@sentry/react-native/expo',
+      {
+        // Falls back to SENTRY_ORG / SENTRY_PROJECT env vars during builds;
+        // source-map upload additionally needs SENTRY_AUTH_TOKEN.
+        organization: process.env.SENTRY_ORG,
+        project: process.env.SENTRY_PROJECT,
+      },
+    ],
     [
       'expo-dev-client',
       {
@@ -65,6 +85,7 @@ const config: ExpoConfig = {
         },
       },
     ],
+    '@bacons/apple-targets',
     '@rnmapbox/maps',
     'expo-sharing',
     [
@@ -76,7 +97,10 @@ const config: ExpoConfig = {
       },
     ],
     'expo-video',
+    'expo-image',
     './plugins/withGradleJvmArgs',
+    './plugins/withWearMirror',
+    './plugins/withSentryNativeInit',
     './plugins/withAndroidSigningConfig',
   ],
   experiments: {

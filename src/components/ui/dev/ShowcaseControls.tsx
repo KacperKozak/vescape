@@ -1,4 +1,5 @@
-import { Pressable, StyleSheet, Switch, Text, View } from 'react-native'
+import { Pressable, StyleSheet, Switch, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 
 import { Button } from '@/components/ui/base/Button'
 import { theme } from '@/constants/theme'

@@ -1,4 +1,4 @@
-appId: com.anonymous.vescpoc
+appId: app.vescape
 ---
 - runFlow: _launch.yaml
 - runFlow: _setup-board-steps.yaml

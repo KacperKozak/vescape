@@ -1,4 +1,5 @@
-import { ScrollView, StyleSheet, Text, View } from 'react-native'
+import { ScrollView, StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useMemo, useState } from 'react'
 import {
@@ -11,6 +12,7 @@ import {
   LightningIcon,
   MapPinIcon,
   NavigationArrowIcon,
+  PauseIcon,
   PencilSimpleIcon,
   RecordIcon,
   StopIcon,
@@ -252,7 +254,9 @@ function FloatingBarShowcase() {
 }
 
 function FloatingActionPillShowcase() {
-  const [active, setActive] = useState(false)
+  const [state, setState] = useState<'REC' | 'STOP' | 'PAUSED'>('REC')
+  const recording = state !== 'REC'
+  const paused = state === 'PAUSED'
 
   return (
     <ShowcaseCard
@@ -260,18 +264,19 @@ function FloatingActionPillShowcase() {
       controls={
         <ChipRow
           label="state"
-          options={['REC', 'STOP']}
-          selected={active ? 'STOP' : 'REC'}
-          onSelect={(v) => setActive(v === 'STOP')}
+          options={['REC', 'STOP', 'PAUSED']}
+          selected={state}
+          onSelect={(v) => setState(v as typeof state)}
         />
       }
     >
       <View style={styles.centeredPreview}>
         <FloatingActionPill
-          icon={active ? StopIcon : RecordIcon}
-          label={active ? 'STOP' : 'REC'}
-          active={active}
-          onPress={() => setActive((v) => !v)}
+          icon={recording ? (paused ? PauseIcon : StopIcon) : RecordIcon}
+          label={state}
+          active={recording}
+          paused={paused}
+          onPress={() => undefined}
         />
       </View>
     </ShowcaseCard>

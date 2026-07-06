@@ -4,11 +4,19 @@ import android.content.Context
 import expo.modules.vescble.BoardTransport
 import expo.modules.vescble.DiagnosticReporter
 import expo.modules.vescble.RefloatConfigSnapshot
+import expo.modules.vescble.VescForegroundService
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
+
+// @parity /modules/vesc-ble/ios/VescBleModule.swift
+/** Scope of an `onAppDataChanged` emit; mirrors the JS `AppDataChangedEvent['scope']` union. */
+internal enum class AppDataScope(val wire: String) {
+  BOARDS("boards"),
+  SETTINGS("settings"),
+}
 
 internal fun validMapStyleKey(value: Any?): String? =
   (value as? String)?.takeIf { it in setOf("onedark", "outdoors", "satellite", "mapy") }
@@ -32,6 +40,12 @@ internal fun validTelemetryPollRateHz(value: Any?): Int? =
   (value as? Number)
     ?.toInt()
     ?.coerceIn(0, 100)
+
+/** Watch Mirror push interval in ms; floored at 50ms (20Hz), capped at 10s. */
+internal fun validWearMirrorIntervalMs(value: Any?): Int? =
+  (value as? Number)
+    ?.toInt()
+    ?.coerceIn(50, 10_000)
 
 val DEFAULT_HISTORY_METRIC_HOT_RANGES: Map<String, Map<String, Double>> = mapOf(
   "speed" to mapOf("start" to 30.0, "end" to 40.0),
@@ -87,6 +101,14 @@ private fun validHistoryMetricHotRanges(value: Any?): Map<String, Map<String, Do
 class AppDataRepository private constructor(private val context: Context) {
   private val dao = TelemetryDatabase.get(context).telemetryDao()
 
+  /** Notify JS that persisted data in [scope] changed, so the matching store reloads and stays in
+   *  sync without an app restart. Every mutating method below funnels through here — new writes get
+   *  sync for free by tagging the right scope. Idempotent on the JS side, so emitting after a
+   *  JS-initiated write is harmless (the reload just confirms native truth). */
+  private fun notifyDataChanged(scope: AppDataScope) {
+    VescForegroundService.emitEvent?.invoke("onAppDataChanged", mapOf("scope" to scope.wire))
+  }
+
   suspend fun getBoards(): List<Map<String, Any?>> = withContext(Dispatchers.IO) {
     val boards = dao.getBoards()
     val settingsByBoard =
@@ -102,10 +124,12 @@ class AppDataRepository private constructor(private val context: Context) {
     val boardId = board.getString("id")
     val (settings, deletedKeys) = board.toBoardSettingEntities(boardId)
     dao.upsertBoardWithSettings(board.toBoardEntity(), settings, deletedKeys)
+    notifyDataChanged(AppDataScope.BOARDS)
   }
 
   suspend fun deleteBoard(id: String): Unit = withContext(Dispatchers.IO) {
     dao.deleteBoardWithSettings(id)
+    notifyDataChanged(AppDataScope.BOARDS)
   }
 
   suspend fun getAlertRules(): List<Map<String, Any?>> = withContext(Dispatchers.IO) {
@@ -169,7 +193,11 @@ class AppDataRepository private constructor(private val context: Context) {
       socEstimateWindowSeconds = req("socEstimateWindowSeconds", 20, ::validSocEstimateWindowSeconds),
       connectionSoundsEnabled = req("connectionSoundsEnabled", true) { it as? Boolean },
       telemetryPollRateHz = req("telemetryPollRateHz", 20, ::validTelemetryPollRateHz),
+      wearMirrorIntervalMs = req("wearMirrorIntervalMs", 500, ::validWearMirrorIntervalMs),
       companionPresenceEnabled = req("companionPresenceEnabled", false) { it as? Boolean },
+      riderId = opt("riderId") { it as? String },
+      riderName = opt("riderName") { it as? String },
+      riderColor = opt("riderColor") { it as? String },
     )
 
     if (badKeys.isNotEmpty()) {
@@ -218,7 +246,10 @@ class AppDataRepository private constructor(private val context: Context) {
       "connectionSoundsEnabled" -> value as? Boolean ?: return@withContext
       "telemetryPollRateHz" ->
         validTelemetryPollRateHz(value) ?: return@withContext
+      "wearMirrorIntervalMs" ->
+        validWearMirrorIntervalMs(value) ?: return@withContext
       "companionPresenceEnabled" -> value as? Boolean ?: return@withContext
+      "riderId", "riderName", "riderColor" -> value as? String
       else -> return@withContext
     }
     val normalizedKey = when (key) {
@@ -246,7 +277,11 @@ class AppDataRepository private constructor(private val context: Context) {
         "socEstimateWindowSeconds" -> d.socEstimateWindowSeconds
         "connectionSoundsEnabled" -> d.connectionSoundsEnabled
         "telemetryPollRateHz" -> d.telemetryPollRateHz
+        "wearMirrorIntervalMs" -> d.wearMirrorIntervalMs
         "companionPresenceEnabled" -> d.companionPresenceEnabled
+        "riderId" -> d.riderId
+        "riderName" -> d.riderName
+        "riderColor" -> d.riderColor
         else -> null
       }
     }
@@ -261,16 +296,31 @@ class AppDataRepository private constructor(private val context: Context) {
         ),
       )
     }
+    notifyDataChanged(AppDataScope.SETTINGS)
   }
 
   suspend fun updateLastGpsLocation(latitude: Double, longitude: Double): Unit = withContext(Dispatchers.IO) {
     val now = System.currentTimeMillis()
     dao.upsertAppSetting(AppSettingEntity("lastGpsLatitude", encodeSettingJson(latitude), now))
     dao.upsertAppSetting(AppSettingEntity("lastGpsLongitude", encodeSettingJson(longitude), now))
+    notifyDataChanged(AppDataScope.SETTINGS)
   }
 
   suspend fun setSelectedBoardId(id: String?): Unit = updateSetting("selectedBoardId", id)
 
+  suspend fun updateLastBattery(
+    boardId: String,
+    percent: Double,
+    voltage: Double?,
+    atMs: Long,
+  ): Unit = withContext(Dispatchers.IO) {
+    val value = mapOf("percent" to percent, "voltage" to voltage, "at" to atMs)
+    dao.upsertBoardSetting(BoardSettingEntity(boardId, "lastBattery", encodeSettingJson(value), atMs))
+    notifyDataChanged(AppDataScope.BOARDS)
+  }
+
+  // Tune Profiles: per-board VESC tune configs with reversible Tune History.
+  // @parity /modules/vesc-ble/ios/telemetry/TuneProfileStore.swift
   suspend fun getTuneProfiles(boardId: String): List<Map<String, Any?>> = withContext(Dispatchers.IO) {
     dao.getTuneProfilesByBoard(boardId).map { it.toMap() }
   }
@@ -355,6 +405,7 @@ class AppDataRepository private constructor(private val context: Context) {
       ).toMap()
     }
 
+  // @parity /modules/vesc-ble/ios/telemetry/TuneProfileStore.swift `createMainTuneProfileIfMissing`
   internal suspend fun createMainTuneProfileIfMissing(snapshot: RefloatConfigSnapshot): Map<String, Any?>? =
     withContext(Dispatchers.IO) {
       val boardId = snapshot.boardId?.takeIf { it.isNotBlank() } ?: return@withContext null
@@ -402,6 +453,10 @@ class AppDataRepository private constructor(private val context: Context) {
 
   suspend fun upsertMapPoint(point: Map<String, Any?>): Unit = withContext(Dispatchers.IO) {
     dao.upsertMapPoint(point.toMapPointEntity())
+  }
+
+  suspend fun getDirectionMapPointEntity(): MapPointEntity? = withContext(Dispatchers.IO) {
+    dao.getDirectionMapPoint()
   }
 
   suspend fun replaceDirectionMapPoint(point: Map<String, Any?>): Unit = withContext(Dispatchers.IO) {
@@ -458,6 +513,7 @@ fun BoardEntity.toMap(settings: List<BoardSettingEntity>): Map<String, Any?> {
     "description" to values["description"],
     "createdAt" to createdAt,
     "batteryConfig" to values["batteryConfig"],
+    "lastBattery" to values["lastBattery"],
     "link" to link,
   )
 }
@@ -479,7 +535,11 @@ fun AppSettings.toMap(): Map<String, Any?> = mapOf(
   "socEstimateWindowSeconds" to socEstimateWindowSeconds,
   "connectionSoundsEnabled" to connectionSoundsEnabled,
   "telemetryPollRateHz" to telemetryPollRateHz,
+  "wearMirrorIntervalMs" to wearMirrorIntervalMs,
   "companionPresenceEnabled" to companionPresenceEnabled,
+  "riderId" to riderId,
+  "riderName" to riderName,
+  "riderColor" to riderColor,
 )
 
 internal fun encodeSettingJson(value: Any?): String {
@@ -701,8 +761,20 @@ private fun BoardSettingEntity.decodeBoardSetting(): Pair<String, Any?>? {
       key to BoardTransport.toBridge(BoardTransport.decode(it))
     }
     "hasBms" -> (raw as? Boolean)?.let { key to it }
+    "lastBattery" -> decodeLastBattery(raw)?.let { key to it }
     else -> null
   }
+}
+
+private fun decodeLastBattery(raw: Any?): Map<String, Any?>? {
+  val map = raw as? Map<*, *> ?: return null
+  val percent = (map["percent"] as? Number)?.toDouble() ?: return null
+  val at = (map["at"] as? Number)?.toLong() ?: return null
+  return mapOf(
+    "percent" to percent,
+    "voltage" to (map["voltage"] as? Number)?.toDouble(),
+    "at" to at,
+  )
 }
 
 internal fun encodeBatteryConfig(value: Any?): String? {

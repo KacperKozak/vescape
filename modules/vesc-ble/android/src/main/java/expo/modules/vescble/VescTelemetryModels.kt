@@ -21,6 +21,7 @@ data class RefloatTelemetry(
     val tempMosfet: Double?,
     val tempMotor: Double?,
     val avgLatency: Int?,
+    val pullRateHz: Double?,
     val lastPacketAt: Long,
     val location: LocationSnapshot?,
 ) {
@@ -46,6 +47,7 @@ data class RefloatTelemetry(
         "tempMosfet" to tempMosfet,
         "tempMotor" to tempMotor,
         "avgLatency" to avgLatency,
+        "pullRateHz" to pullRateHz,
         "lastPacketAt" to lastPacketAt,
         "location" to location?.toMap(),
     )
@@ -54,22 +56,40 @@ data class RefloatTelemetry(
 data class BmsTelemetry(
     val capturedAt: Long,
     val voltageTotal: Double,
+    val vCharge: Double,
     val current: Double,
+    val currentIc: Double,
     val ampHours: Double,
     val wattHours: Double,
     val soc: Double?,
+    val soh: Double?,
     val cellVoltages: List<Double>,
     val balancing: List<Boolean>,
+    val temps: List<Double>,
+    val tempIc: Double?,
+    val tempHum: Double?,
+    val humidity: Double?,
+    val tempMaxCell: Double?,
+    val canId: Int?,
 ) {
     fun toMap(): Map<String, Any?> = mapOf(
         "capturedAt" to capturedAt,
         "voltageTotal" to voltageTotal,
+        "vCharge" to vCharge,
         "current" to current,
+        "currentIc" to currentIc,
         "ampHours" to ampHours,
         "wattHours" to wattHours,
         "soc" to soc,
+        "soh" to soh,
         "cellVoltages" to cellVoltages,
         "balancing" to balancing,
+        "temps" to temps,
+        "tempIc" to tempIc,
+        "tempHum" to tempHum,
+        "hum" to humidity,
+        "tempMaxCell" to tempMaxCell,
+        "canId" to canId,
     )
 }
 

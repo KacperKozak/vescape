@@ -205,6 +205,6 @@ const styles = StyleSheet.create({
   selectedLabel: {
     overflow: 'hidden',
     fontSize: 13,
-    fontWeight: '600',
+    fontFamily: theme.font('600'),
   },
 })

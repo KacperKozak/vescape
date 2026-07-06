@@ -5,9 +5,9 @@ import {
   ScrollView,
   StyleSheet,
   Switch,
-  Text,
   View,
 } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { RecordIcon, WarningIcon } from 'phosphor-react-native'
 
 import { Button } from '@/components/ui/base/Button'

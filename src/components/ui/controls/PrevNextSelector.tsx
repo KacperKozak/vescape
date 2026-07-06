@@ -1,6 +1,7 @@
 import { CaretLeftIcon, CaretRightIcon } from 'phosphor-react-native'
 import type { ReactNode } from 'react'
-import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
+import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 
 import { interaction, theme } from '@/constants/theme'
 
@@ -14,6 +15,8 @@ interface PrevNextSelectorProps {
   nextDisabled?: boolean
   accessibilityLabel?: string
   style?: StyleProp<ViewStyle>
+  previousTestID?: string
+  nextTestID?: string
 }
 
 export function PrevNextSelector({
@@ -26,6 +29,8 @@ export function PrevNextSelector({
   nextDisabled = false,
   accessibilityLabel = 'Select item',
   style,
+  previousTestID,
+  nextTestID,
 }: PrevNextSelectorProps) {
   return (
     <View style={[styles.container, style]}>
@@ -33,6 +38,7 @@ export function PrevNextSelector({
         label="Previous"
         disabled={previousDisabled}
         onPress={onPrevious}
+        testID={previousTestID}
         icon={<CaretLeftIcon size={22} color={theme.palette.slate.textSecondary} weight="bold" />}
       />
       <View style={styles.divider} />
@@ -57,6 +63,7 @@ export function PrevNextSelector({
         label="Next"
         disabled={nextDisabled}
         onPress={onNext}
+        testID={nextTestID}
         icon={<CaretRightIcon size={22} color={theme.palette.slate.textSecondary} weight="bold" />}
       />
     </View>
@@ -68,14 +75,17 @@ function NavButton({
   icon,
   disabled,
   onPress,
+  testID,
 }: {
   label: string
   icon: ReactNode
   disabled: boolean
   onPress: () => void
+  testID?: string
 }) {
   return (
     <Pressable
+      testID={testID}
       accessibilityRole="button"
       accessibilityLabel={label}
       disabled={disabled}

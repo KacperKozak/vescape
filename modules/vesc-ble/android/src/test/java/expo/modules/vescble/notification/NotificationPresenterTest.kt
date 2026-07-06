@@ -104,6 +104,62 @@ class NotificationPresenterTest {
         assertEquals("—", NotificationFormatter.formatShortCriticalText(BoardPhase.Idle, null, null))
     }
 
+    @Test
+    fun `idle presentation ignores cached telemetry and battery percent`() {
+        val presentation = NotificationPresentation.resolve(
+            phase = BoardPhase.Idle,
+            telemetry = telemetry(batteryVoltage = 75.13),
+            batteryPercent = 45.0,
+        )
+
+        assertEquals("Board not connected", presentation.text)
+        assertEquals("—", presentation.shortCriticalText)
+        assertEquals(null, presentation.batteryProgressPercent)
+        assertEquals(false, presentation.canDisconnect)
+    }
+
+    @Test
+    fun `stale presentation ignores cached battery progress`() {
+        val presentation = NotificationPresentation.resolve(
+            phase = BoardPhase.Stale,
+            telemetry = telemetry(batteryVoltage = 75.13),
+            batteryPercent = 45.0,
+        )
+
+        assertEquals("Board not connected", presentation.text)
+        assertEquals("⚠", presentation.shortCriticalText)
+        assertEquals(null, presentation.batteryProgressPercent)
+        assertEquals(false, presentation.canDisconnect)
+    }
+
+    @Test
+    fun `reconnecting presentation is disconnected for notification`() {
+        val presentation = NotificationPresentation.resolve(
+            phase = BoardPhase.Reconnecting,
+            telemetry = telemetry(batteryVoltage = 75.13),
+            batteryPercent = 45.0,
+        )
+
+        assertEquals("Board not connected", presentation.text)
+        assertEquals("…", presentation.shortCriticalText)
+        assertEquals(null, presentation.batteryProgressPercent)
+        assertEquals(false, presentation.canDisconnect)
+    }
+
+    @Test
+    fun `connected presentation shows battery progress`() {
+        val presentation = NotificationPresentation.resolve(
+            phase = BoardPhase.Connected,
+            telemetry = telemetry(batteryVoltage = 75.13),
+            batteryPercent = 45.0,
+        )
+
+        assertEquals("45% (75.1V)", presentation.text)
+        assertEquals("45%", presentation.shortCriticalText)
+        assertEquals(45, presentation.batteryProgressPercent)
+        assertEquals(true, presentation.canDisconnect)
+    }
+
     private fun telemetry(
         speed: Double = 0.0,
         dutyCycle: Double = 0.0,
@@ -129,6 +185,7 @@ class NotificationPresenterTest {
         tempMosfet = null,
         tempMotor = null,
         avgLatency = null,
+        pullRateHz = null,
         lastPacketAt = 0L,
         location = null,
     )

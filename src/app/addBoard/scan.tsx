@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
-import { View, Text, FlatList, Pressable, ActivityIndicator, StyleSheet } from 'react-native'
+import { View, FlatList, Pressable, ActivityIndicator, StyleSheet } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, useLocalSearchParams } from 'expo-router'
 import { useShallow } from 'zustand/react/shallow'

@@ -185,6 +185,10 @@ function AnimatedSingleGaugeShowcase() {
 
 function LinearGaugeShowcase() {
   const [empty, setEmpty] = useState(false)
+  const [mode, setMode] = useState<'live' | 'stale' | 'stale old'>('live')
+
+  const stale = mode !== 'live'
+  const voltageText = telemetry.battVoltage.formatWithUnit(74.5)
 
   return (
     <ShowcaseCard
@@ -192,15 +196,21 @@ function LinearGaugeShowcase() {
       controls={
         <>
           <ToggleRow label="empty" value={empty} onToggle={setEmpty} />
+          <ChipRow
+            label="last battery"
+            options={['live', 'stale', 'stale old']}
+            selected={mode}
+            onSelect={(v) => setMode(v as typeof mode)}
+          />
         </>
       }
     >
       <LinearGauge
         value={empty ? null : 82}
         max={100}
-        color={telemetry.battVoltage.color}
+        color={stale ? theme.palette.slate.textSecondary : telemetry.battVoltage.color}
         unit="%"
-        aux={empty ? undefined : telemetry.battVoltage.formatWithUnit(74.5)}
+        aux={empty ? undefined : mode === 'stale old' ? `${voltageText} · 2h ago` : voltageText}
         alerts={[
           { id: 'low', threshold: 20, thresholdMax: null },
           { id: 'band', threshold: 40, thresholdMax: 60 },

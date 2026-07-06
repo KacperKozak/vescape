@@ -1,0 +1,71 @@
+appId: app.vescape
+---
+- runFlow: _launch.yaml
+- openLink: 'vescape://e2e-seed?flow=history'
+- extendedWaitUntil:
+    visible: E2E History Board
+    timeout: 15000
+
+- tapOn:
+    id: history-button
+- extendedWaitUntil:
+    visible: History
+    timeout: 15000
+
+# Newest ride stats (selected automatically).
+- assertVisible: Distance
+- assertVisible: Top Speed
+- assertVisible: '1.5 km'
+- assertVisible: '25 km/h'
+
+# Expand the stats panel to verify secondary stats are computed too.
+- tapOn:
+    id: history-stats-bar
+- assertVisible: Avg Speed
+- assertVisible: Time
+- assertVisible: Ctrl Max
+- assertVisible: Motor Max
+
+# Toggle optional charts on and off.
+- tapOn:
+    id: history-metric-tab-battery
+- extendedWaitUntil:
+    visible: Battery
+    timeout: 5000
+- tapOn:
+    id: history-metric-tab-duty
+- extendedWaitUntil:
+    visible: 'Duty Cycle'
+    timeout: 5000
+
+# Switch to the older ride with the prev button.
+- tapOn:
+    id: history-previous-ride
+- extendedWaitUntil:
+    visible: '800 m'
+    timeout: 5000
+- assertVisible: '20 km/h'
+
+# Charts should still be visible on the older ride.
+- assertVisible: Battery
+- assertVisible: 'Duty Cycle'
+
+# Switch back to the newest ride with the next button.
+- tapOn:
+    id: history-next-ride
+- extendedWaitUntil:
+    visible: '1.5 km'
+    timeout: 5000
+- assertVisible: '25 km/h'
+
+# Open the ride list sheet and verify it renders.
+- tapOn:
+    id: history-ride-list-button
+- extendedWaitUntil:
+    visible:
+      id: history-session-sheet
+    timeout: 5000
+
+# Close the sheet by tapping the backdrop.
+- tapOn:
+    id: history-session-sheet-backdrop

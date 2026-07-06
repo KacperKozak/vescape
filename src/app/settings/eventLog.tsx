@@ -4,10 +4,10 @@ import {
   FlatList,
   Pressable,
   StyleSheet,
-  Text,
   View,
   type ListRenderItemInfo,
 } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { useNavigation } from 'expo-router'
 import { ListIcon, TrashIcon } from 'phosphor-react-native'
 import { clearDiagnosticEvents, getDiagnosticEvents, type LocalDiagnosticEvent } from 'vesc-ble'

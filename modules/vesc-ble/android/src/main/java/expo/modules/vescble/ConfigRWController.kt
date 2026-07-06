@@ -40,6 +40,7 @@ internal interface ConfigRWControllerPort {
     fun dumpDebugBytes(xmlBytes: ByteArray, configBytes: ByteArray)
 }
 
+// @parity /modules/vesc-ble/ios/ConfigRWController.swift
 internal class ConfigRWController(
     private val scheduler: Scheduler,
     private val appDataScope: CoroutineScope,

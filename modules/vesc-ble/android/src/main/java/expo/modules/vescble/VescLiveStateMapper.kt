@@ -15,6 +15,7 @@ internal data class VescLiveStateSnapshot(
     val recentLocations: List<Map<String, Any?>>,
     val gpsError: String?,
     val recordingEnabled: Boolean,
+    val recordingPaused: Boolean,
     val remoteTiltValue: Int,
     val remoteTiltPhase: RemoteTiltPhase,
     val remoteTiltDecay: RemoteTiltDecayProgress?,
@@ -73,6 +74,7 @@ internal fun buildLiveState(snapshot: VescLiveStateSnapshot): Map<String, Any?> 
         ),
         "recording" to mapOf(
             "enabled" to snapshot.recordingEnabled,
+            "paused" to snapshot.recordingPaused,
             "activeBoardId" to if (snapshot.recordingEnabled) snapshot.boardConfig?.appBoardId else null,
             "startedAt" to null,
         ),

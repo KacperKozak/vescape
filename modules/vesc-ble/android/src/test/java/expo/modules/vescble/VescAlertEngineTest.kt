@@ -58,6 +58,7 @@ class VescAlertEngineTest {
         tempMosfet = tempMosfet,
         tempMotor = tempMotor,
         avgLatency = null,
+        pullRateHz = null,
         lastPacketAt = 0L,
         location = null,
     )

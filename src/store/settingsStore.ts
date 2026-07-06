@@ -1,3 +1,4 @@
+import { dequal } from 'dequal'
 import { create } from 'zustand'
 import { getSettings, setCompanionPresenceEnabled, updateSetting, type AppSettings } from 'vesc-ble'
 import { DEFAULT_HISTORY_METRIC_HOT_RANGES } from '@/lib/history/metricColorScale'
@@ -20,6 +21,10 @@ const DEFAULTS: AppSettings = {
   connectionSoundsEnabled: true,
   companionPresenceEnabled: false,
   telemetryPollRateHz: 20,
+  wearMirrorIntervalMs: 500,
+  riderId: null,
+  riderName: null,
+  riderColor: null,
 }
 
 interface SettingsState extends AppSettings {
@@ -44,13 +49,21 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   async load() {
     try {
       const s = await getSettings()
-      set({
+      const next: AppSettings = {
         ...s,
         autoConnect: s.companionPresenceEnabled ? true : s.autoConnect,
-        loaded: true,
-      })
+      }
+      // Reloads can fire often (e.g. the 30s GPS write emits `settings`). Set only the keys that
+      // actually changed so untouched selectors don't re-render, and bail entirely when nothing did.
+      const prev = get()
+      const patch: Partial<SettingsState> = {}
+      for (const key of Object.keys(next) as (keyof AppSettings)[]) {
+        if (!dequal(prev[key], next[key])) patch[key] = next[key] as never
+      }
+      if (!prev.loaded) patch.loaded = true
+      if (Object.keys(patch).length > 0) set(patch)
     } catch {
-      set({ loaded: true })
+      if (!get().loaded) set({ loaded: true })
     }
   },
 

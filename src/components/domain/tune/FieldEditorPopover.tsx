@@ -1,9 +1,11 @@
 import { useCallback, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
-import { CheckIcon, XIcon } from 'phosphor-react-native'
+import { StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
+import { CheckIcon, FadersIcon } from 'phosphor-react-native'
 
-import { Dropdown } from '@/components/ui/forms/Dropdown'
 import { Input } from '@/components/ui/forms/Input'
+import { Button } from '@/components/ui/base/Button'
+import { CornerSheet } from '@/components/ui/overlays/AnchoredSheet'
 import { TuneDial } from '@/components/ui/tune/TuneDial'
 import { theme } from '@/constants/theme'
 import { snapValue } from '@/lib/tune/sliderDefinitions'
@@ -58,129 +60,121 @@ function FieldEditorPopoverInner({ target, onCancel, onApply }: FieldEditorPopov
   }, [])
 
   return (
-    <Dropdown
+    <CornerSheet
       visible
       triggerRef={target.triggerRef}
       onClose={onCancel}
-      matchTriggerWidth={false}
-      minWidth={300}
-      maxHeight={380}
+      edge="auto"
+      title={target.label}
+      icon={FadersIcon}
     >
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.header}>
-          <View style={styles.titleWrap}>
-            <Text style={styles.title} numberOfLines={1}>
-              {target.label}
-            </Text>
+      <View style={styles.content}>
+        <View style={styles.panel}>
+          <Text style={styles.panelTitle}>Value</Text>
+          <Input
+            style={styles.input}
+            value={draftText}
+            keyboardType="numeric"
+            selectTextOnFocus
+            onChangeText={(text) => {
+              const parsed = Number.parseFloat(text)
+              setDraftText(text)
+              if (Number.isFinite(parsed)) {
+                setDraftValue(snapValue(parsed, target.min, target.max, target.step))
+              }
+            }}
+          />
+
+          <TuneDial
+            value={draftValue}
+            previousValue={target.value}
+            min={target.min}
+            max={target.max}
+            step={target.step}
+            unit={target.unit}
+            onValueChange={handleDialChange}
+          />
+        </View>
+
+        <View style={styles.panel}>
+          <Text style={styles.panelTitle}>Data</Text>
+          <Text style={styles.help}>{target.help}</Text>
+          <View style={styles.dataRow}>
+            <Text style={styles.dataLabel}>Field</Text>
             <Text style={styles.fieldId}>{target.fieldId}</Text>
           </View>
-          <Pressable style={styles.closeBtn} onPress={onCancel}>
-            <XIcon size={14} color={theme.palette.slate.textSecondary} weight="bold" />
-          </Pressable>
+          {target.linkedFields && target.linkedFields.length > 0 ? (
+            <View style={styles.linkedSection}>
+              <Text style={styles.linkedTitle}>Linked fields</Text>
+              {target.linkedFields.map((lf) => (
+                <View key={lf.id} style={styles.linkedRow}>
+                  <Text style={styles.linkedLabel} numberOfLines={1}>
+                    {lf.label}
+                  </Text>
+                  <Text style={styles.linkedValue}>
+                    {formatTuneValue(lf.computeValue(draftValue))}
+                    {lf.unit ? ` ${lf.unit}` : ''}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
         </View>
-
-        <Text style={styles.help} numberOfLines={2}>
-          {target.help}
-        </Text>
-
-        <Input
-          style={styles.input}
-          value={draftText}
-          keyboardType="numeric"
-          selectTextOnFocus
-          onChangeText={(text) => {
-            const parsed = Number.parseFloat(text)
-            setDraftText(text)
-            if (Number.isFinite(parsed)) {
-              setDraftValue(snapValue(parsed, target.min, target.max, target.step))
-            }
-          }}
-        />
-
-        <TuneDial
-          value={draftValue}
-          previousValue={target.value}
-          min={target.min}
-          max={target.max}
-          step={target.step}
-          unit={target.unit}
-          onValueChange={handleDialChange}
-        />
-
-        {target.linkedFields && target.linkedFields.length > 0 ? (
-          <View style={styles.linkedSection}>
-            <Text style={styles.linkedTitle}>Linked fields</Text>
-            {target.linkedFields.map((lf) => (
-              <View key={lf.id} style={styles.linkedRow}>
-                <Text style={styles.linkedLabel} numberOfLines={1}>
-                  {lf.label}
-                </Text>
-                <Text style={styles.linkedValue}>
-                  {formatTuneValue(lf.computeValue(draftValue))}
-                  {lf.unit ? ` ${lf.unit}` : ''}
-                </Text>
-              </View>
-            ))}
-          </View>
-        ) : null}
 
         <View style={styles.actions}>
-          <Pressable style={styles.cancelBtn} onPress={onCancel}>
-            <Text style={styles.cancelText}>Cancel</Text>
-          </Pressable>
-          <Pressable
-            style={styles.applyBtn}
+          <Button
+            label="Cancel"
+            variant="secondary"
+            style={styles.actionButton}
+            onPress={onCancel}
+          />
+          <Button
+            label="Apply"
+            icon={CheckIcon}
+            style={styles.actionButton}
             onPress={() => onApply(snapValue(draftValue, target.min, target.max, target.step))}
-          >
-            <CheckIcon size={14} color={theme.palette.slate.surfaceDeep} weight="bold" />
-            <Text style={styles.applyText}>Apply</Text>
-          </Pressable>
+          />
         </View>
-      </ScrollView>
-    </Dropdown>
+      </View>
+    </CornerSheet>
   )
 }
 
 const styles = StyleSheet.create({
-  scroll: {
-    maxHeight: 380,
-  },
   content: {
-    padding: 14,
     gap: 12,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: 10,
+  panel: {
+    padding: 14,
+    gap: 12,
+    borderRadius: 16,
+    borderCurve: 'continuous',
+    borderWidth: 1,
+    borderColor: theme.palette.slate.border,
+    backgroundColor: theme.palette.slate.surface,
   },
-  titleWrap: {
-    flex: 1,
-    gap: 2,
-  },
-  title: {
-    color: theme.palette.slate.textPrimary,
-    fontSize: 15,
+  panelTitle: {
+    color: theme.palette.slate.textMuted,
+    fontSize: 12,
     fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
   },
   fieldId: {
-    color: theme.palette.slate.textDim,
-    fontSize: 11,
+    color: theme.palette.slate.textSecondary,
+    fontSize: 12,
     fontWeight: '700',
   },
-  closeBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+  dataRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.palette.slate.surface,
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  dataLabel: {
+    color: theme.palette.slate.textMuted,
+    fontSize: 12,
+    fontWeight: '600',
   },
   help: {
     color: theme.palette.slate.textMuted,
@@ -196,7 +190,7 @@ const styles = StyleSheet.create({
   },
   linkedSection: {
     borderTopWidth: 1,
-    borderTopColor: theme.palette.slate.surface,
+    borderTopColor: theme.palette.slate.border,
     paddingTop: 10,
     gap: 6,
   },
@@ -227,37 +221,11 @@ const styles = StyleSheet.create({
   },
   actions: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 8,
-    paddingTop: 4,
-  },
-  cancelBtn: {
-    height: 38,
-    paddingHorizontal: 14,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: theme.palette.slate.border,
-    alignItems: 'center',
     justifyContent: 'center',
+    gap: 12,
+    paddingVertical: 6,
   },
-  cancelText: {
-    color: theme.palette.slate.textSecondary,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  applyBtn: {
-    height: 38,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    backgroundColor: theme.palette.sky.color,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  applyText: {
-    color: theme.palette.slate.surfaceDeep,
-    fontSize: 13,
-    fontWeight: '900',
+  actionButton: {
+    minWidth: 128,
   },
 })

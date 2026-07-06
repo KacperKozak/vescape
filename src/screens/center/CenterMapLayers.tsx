@@ -4,12 +4,15 @@ import {
   FillLayer,
   Images,
   LineLayer,
+  MarkerView,
   RasterLayer,
   RasterSource,
   ShapeSource,
   SymbolLayer,
 } from '@rnmapbox/maps'
 import { useEffect, useMemo, useState } from 'react'
+import { StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import type { MapPoint, MapPointKind } from 'vesc-ble'
 
 import { MediaHistoryPin } from '@/components/domain/history/MediaHistoryPin'
@@ -25,16 +28,19 @@ import {
 } from '@/constants/mapPoints'
 import { theme } from '@/constants/theme'
 import { makeCircleFeature, makeTrailLineString } from '@/helpers/mapGeometry'
+import { findNearestSampleIndexByTime } from '@/lib/history/playback'
 import { resolveMarkerRenderData } from '@/lib/history/markerOverlap'
 import {
   clusterMediaHistoryAssets,
   MEDIA_CLUSTER_DISTANCE_M,
   type MediaHistoryAsset,
 } from '@/lib/history/mediaHistory'
-import type { HistoryMetricKey } from '@/lib/history/metricColorScale'
+import type { HistoryMetricKey, HistoryMetricHotRanges } from '@/lib/history/metricColorScale'
 import { isMapPointKindVisible } from '@/lib/mapPointVisibility'
 import type { HistoryGpsSample, HistoryMarker, TelemetrySample } from '@/store/historyStore'
-import { useSettingsStore } from '@/store/settingsStore'
+import { useRiderStore } from '@/store/riderStore'
+import type { RosterRider } from '@/lib/groupRide/roster'
+import { useCenterScreenStore } from '@/screens/center/centerScreenStore'
 
 import {
   HISTORY_MARKER_COLORS,
@@ -57,6 +63,13 @@ const GPS_HEADING_ICON_ID = 'center-gps-heading'
 const GPS_HEADING_ICON = require('@rnmapbox/maps/src/assets/heading.png')
 const HISTORY_ROUTE_HIGHLIGHT_INTERVAL_MS = 50
 const HISTORY_ROUTE_HIGHLIGHT_DELAY_MS = 500
+const RIDER_COLORS = [
+  theme.palette.cyan.color,
+  theme.palette.green.color,
+  theme.palette.amber.color,
+  theme.palette.fuchsia.color,
+  theme.palette.sky.color,
+]
 
 interface CenterMapLayersProps {
   historyActive: boolean
@@ -74,14 +87,16 @@ interface CenterMapLayersProps {
   accuracyFix: { longitude: number; latitude: number } | null
   accuracyShape: ReturnType<typeof makeCircleFeature> | null
   gpsPuckBearingDeg: number | null
+  riders: RosterRider[]
   rideRoute: [number, number][]
-  seekPosition: HistoryGpsSample | null
   rideTelemetrySamples: TelemetrySample[]
   activeHistoryMapMetric: HistoryMetricKey
   rideMarkers: HistoryMarker[]
   rideGpsSamples: HistoryGpsSample[]
   mediaAssets: MediaHistoryAsset[]
   mapZoom: number
+  historyMetricGradientsEnabled: boolean
+  historyMetricHotRanges: HistoryMetricHotRanges
   directionPoint: MapPoint | null
   mapPoints: MapPoint[]
   selectedMapPointId: string | null
@@ -99,12 +114,37 @@ function LiveMapLayers({
   accuracyFix,
   accuracyShape,
   gpsPuckBearingDeg,
+  riders,
 }: {
   liveTrailShape: CenterMapLayersProps['liveTrailShape']
   accuracyFix: CenterMapLayersProps['accuracyFix']
   accuracyShape: CenterMapLayersProps['accuracyShape']
   gpsPuckBearingDeg: CenterMapLayersProps['gpsPuckBearingDeg']
+  riders: CenterMapLayersProps['riders']
 }) {
+  const riderColor = useRiderStore((state) => state.riderColor)
+  const gpsPointColor = riderColor ?? GPS_POINT_COLOR
+  const trailColor = riderColor ?? MAP_DEFAULTS.trailColor
+  const trailGradientStart = riderColor
+    ? theme.alpha(riderColor, 0)
+    : MAP_DEFAULTS.trailGradientStart
+  const trailGradientEnd = riderColor
+    ? theme.alpha(riderColor, 0.85)
+    : MAP_DEFAULTS.trailGradientEnd
+  const gpsPuckPositionShape = useMemo(
+    () =>
+      accuracyFix
+        ? ({
+            type: 'Feature',
+            geometry: {
+              type: 'Point',
+              coordinates: [accuracyFix.longitude, accuracyFix.latitude],
+            },
+            properties: {},
+          } as GeoJSON.Feature<GeoJSON.Point>)
+        : null,
+    [accuracyFix],
+  )
   const gpsPuckShape = useMemo(
     () =>
       accuracyFix && gpsPuckBearingDeg != null
@@ -132,7 +172,7 @@ function LiveMapLayers({
           <LineLayer
             id="center-live-trail-line"
             style={{
-              lineColor: MAP_DEFAULTS.trailColor,
+              lineColor: trailColor,
               lineWidth: MAP_DEFAULTS.trailWidth,
               lineCap: 'round',
               lineJoin: 'round',
@@ -141,9 +181,9 @@ function LiveMapLayers({
                 ['linear'],
                 ['line-progress'],
                 0,
-                MAP_DEFAULTS.trailGradientStart,
+                trailGradientStart,
                 1,
-                MAP_DEFAULTS.trailGradientEnd,
+                trailGradientEnd,
               ],
             }}
           />
@@ -159,19 +199,23 @@ function LiveMapLayers({
               />
             </ShapeSource>
           )}
-          {gpsPuckShape ? (
+          {gpsPuckPositionShape && (
+            <ShapeSource id="center-gps-puck-position-source" shape={gpsPuckPositionShape}>
+              <CircleLayer
+                id="center-gps-puck-core"
+                style={{
+                  circleRadius: 8,
+                  circleColor: gpsPointColor,
+                  circleStrokeColor: theme.palette.mono.white,
+                  circleStrokeWidth: 3,
+                }}
+              />
+            </ShapeSource>
+          )}
+          {gpsPuckShape && (
             <>
               <Images images={{ [GPS_HEADING_ICON_ID]: { image: GPS_HEADING_ICON, sdf: true } }} />
-              <ShapeSource id="center-gps-puck-source" shape={gpsPuckShape}>
-                <CircleLayer
-                  id="center-gps-puck-core"
-                  style={{
-                    circleRadius: 8,
-                    circleColor: GPS_POINT_COLOR,
-                    circleStrokeColor: theme.palette.mono.white,
-                    circleStrokeWidth: 3,
-                  }}
-                />
+              <ShapeSource id="center-gps-puck-heading-source" shape={gpsPuckShape}>
                 <SymbolLayer
                   id="center-gps-puck-heading-outline"
                   style={{
@@ -187,42 +231,135 @@ function LiveMapLayers({
                 />
               </ShapeSource>
             </>
-          ) : (
-            <MapPin
-              id="center-gps-position"
-              coordinate={[accuracyFix.longitude, accuracyFix.latitude]}
-              color={GPS_POINT_COLOR}
-            />
           )}
         </>
+      )}
+      {riders.map((rider, index) =>
+        rider.trail && rider.trail.length >= 2 ? (
+          <RiderTrail key={rider.id} rider={rider} index={index} />
+        ) : null,
+      )}
+      {riders.map((rider, index) =>
+        rider.presence ? <RiderPresencePin key={rider.id} rider={rider} index={index} /> : null,
       )}
     </>
   )
 }
 
-function HistoryMapLayers({
+/** Marker/trail tint for a Rider: their chosen color, a palette fallback, or muted when stale. */
+export function rosterRiderColor(rider: RosterRider, index: number): string {
+  return rider.stale
+    ? theme.palette.slate.textMuted
+    : (rider.color ?? RIDER_COLORS[index % RIDER_COLORS.length])
+}
+
+// A peer's recent path, tinted like their marker and fading out toward the tail —
+// the group-ride counterpart to the device's own live trail.
+function RiderTrail({ rider, index }: { rider: RosterRider; index: number }) {
+  const color = rosterRiderColor(rider, index)
+  const shape = useMemo(
+    () =>
+      rider.trail && rider.trail.length >= 2
+        ? makeTrailLineString(rider.trail.map((p) => ({ longitude: p.lng, latitude: p.lat })))
+        : null,
+    [rider.trail],
+  )
+  if (!shape) return null
+
+  return (
+    <ShapeSource id={`center-rider-trail-source-${rider.id}`} shape={shape} lineMetrics>
+      <LineLayer
+        id={`center-rider-trail-line-${rider.id}`}
+        style={{
+          lineColor: color,
+          lineWidth: MAP_DEFAULTS.trailWidth,
+          lineCap: 'round',
+          lineJoin: 'round',
+          lineGradient: [
+            'interpolate',
+            ['linear'],
+            ['line-progress'],
+            0,
+            theme.alpha(color, 0),
+            1,
+            theme.alpha(color, 0.85),
+          ],
+        }}
+      />
+    </ShapeSource>
+  )
+}
+
+function RiderPresencePin({ rider, index }: { rider: RosterRider; index: number }) {
+  const color = rosterRiderColor(rider, index)
+  const heading = rider.presence?.heading ?? null
+  if (!rider.presence) return null
+
+  return (
+    <MarkerView coordinate={[rider.presence.lng, rider.presence.lat]} allowOverlap>
+      <View style={styles.riderMarker}>
+        <View style={[styles.riderDot, { backgroundColor: color }]}>
+          {heading != null && (
+            // Rotating a ring centered on the dot keeps the arrow orbiting the dot;
+            // rotating the arrow itself would spin it in place at a fixed offset.
+            <View style={[styles.riderHeadingRing, { transform: [{ rotate: `${heading}deg` }] }]}>
+              <View style={[styles.riderHeadingArrow, { borderBottomColor: color }]} />
+            </View>
+          )}
+        </View>
+        <Text style={[styles.riderLabel, rider.stale && styles.riderLabelStale]} numberOfLines={1}>
+          {rider.name || 'Rider'}
+        </Text>
+      </View>
+    </MarkerView>
+  )
+}
+
+// Subscribes to the scrub head directly so dragging the telemetry chart only re-renders this pin,
+// not the whole map/overlay tree. rideGpsSamples is a stable prop (changes only on session switch).
+function SeekPositionPin({ rideGpsSamples }: { rideGpsSamples: HistoryGpsSample[] }) {
+  const seekTimeMs = useCenterScreenStore((s) => s.seekTimeMs)
+  const seekPosition = useMemo(() => {
+    if (seekTimeMs == null || rideGpsSamples.length === 0) return null
+    const idx = findNearestSampleIndexByTime(rideGpsSamples, seekTimeMs)
+    return idx >= 0 ? rideGpsSamples[idx] : null
+  }, [seekTimeMs, rideGpsSamples])
+
+  if (!seekPosition || seekPosition.latitude == null || seekPosition.longitude == null) return null
+  return (
+    <MapPin
+      id="center-seek-position"
+      coordinate={[seekPosition.longitude, seekPosition.latitude]}
+      color={MAP_DEFAULTS.markerColor}
+    />
+  )
+}
+
+export function HistoryMapLayers({
   rideRouteShape,
   rideRoute,
-  seekPosition,
   rideTelemetrySamples,
   activeHistoryMapMetric,
   rideMarkers,
   rideGpsSamples,
   mediaAssets,
   mapZoom,
+  historyMetricGradientsEnabled: gradientsEnabled,
+  historyMetricHotRanges: hotRanges,
   onSuppressNextMapPress,
   onSelectMarker,
   onOpenMedia,
 }: {
   rideRouteShape: CenterMapLayersProps['rideRouteShape']
   rideRoute: CenterMapLayersProps['rideRoute']
-  seekPosition: CenterMapLayersProps['seekPosition']
   rideTelemetrySamples: CenterMapLayersProps['rideTelemetrySamples']
   activeHistoryMapMetric: CenterMapLayersProps['activeHistoryMapMetric']
   rideMarkers: CenterMapLayersProps['rideMarkers']
   rideGpsSamples: CenterMapLayersProps['rideGpsSamples']
   mediaAssets: CenterMapLayersProps['mediaAssets']
   mapZoom: CenterMapLayersProps['mapZoom']
+  historyMetricGradientsEnabled: CenterMapLayersProps['historyMetricGradientsEnabled']
+  historyMetricHotRanges: CenterMapLayersProps['historyMetricHotRanges']
   onSuppressNextMapPress: CenterMapLayersProps['onSuppressNextMapPress']
   onSelectMarker: CenterMapLayersProps['onSelectMarker']
   onOpenMedia: CenterMapLayersProps['onOpenMedia']
@@ -256,8 +393,6 @@ function HistoryMapLayers({
     () => getHistoryRouteHighlightGradient(highlightProgress),
     [highlightProgress],
   )
-  const gradientsEnabled = useSettingsStore((s) => s.historyMetricGradientsEnabled)
-  const hotRanges = useSettingsStore((s) => s.historyMetricHotRanges)
   const routeMetricGradient = useMemo(
     () =>
       getHistoryRouteMetricGradient({
@@ -317,13 +452,8 @@ function HistoryMapLayers({
           color={theme.status.error.color}
         />
       )}
-      {seekPosition && seekPosition.latitude != null && seekPosition.longitude != null && (
-        <MapPin
-          id="center-seek-position"
-          coordinate={[seekPosition.longitude, seekPosition.latitude]}
-          color={MAP_DEFAULTS.markerColor}
-        />
-      )}
+      <SeekPositionPin rideGpsSamples={rideGpsSamples} />
+
       {resolveMarkerRenderData(rideMarkers, rideGpsSamples).map(
         ({ marker, gps, renderCoordinate }) => (
           <MapPin
@@ -365,14 +495,16 @@ export function CenterMapLayers({
   accuracyFix,
   accuracyShape,
   gpsPuckBearingDeg,
+  riders,
   rideRoute,
-  seekPosition,
   rideTelemetrySamples,
   activeHistoryMapMetric,
   rideMarkers,
   rideGpsSamples,
   mediaAssets,
   mapZoom,
+  historyMetricGradientsEnabled,
+  historyMetricHotRanges,
   directionPoint,
   mapPoints,
   selectedMapPointId,
@@ -384,6 +516,9 @@ export function CenterMapLayers({
   onSelectMarker,
   onOpenMedia,
 }: CenterMapLayersProps) {
+  const riderColor = useRiderStore((state) => state.riderColor)
+  const directionColor = riderColor ?? DESTINATION_POINT_COLOR
+  const directionTextColor = riderColor ?? DESTINATION_POINT_TEXT_COLOR
   const selectedMapPoint = useMemo(
     () =>
       mapPoints.find(
@@ -425,13 +560,14 @@ export function CenterMapLayers({
         <HistoryMapLayers
           rideRouteShape={rideRouteShape}
           rideRoute={rideRoute}
-          seekPosition={seekPosition}
           rideTelemetrySamples={rideTelemetrySamples}
           activeHistoryMapMetric={activeHistoryMapMetric}
           rideMarkers={rideMarkers}
           rideGpsSamples={rideGpsSamples}
           mediaAssets={mediaAssets}
           mapZoom={mapZoom}
+          historyMetricGradientsEnabled={historyMetricGradientsEnabled}
+          historyMetricHotRanges={historyMetricHotRanges}
           onSuppressNextMapPress={onSuppressNextMapPress}
           onSelectMarker={onSelectMarker}
           onOpenMedia={onOpenMedia}
@@ -442,21 +578,39 @@ export function CenterMapLayers({
           accuracyFix={accuracyFix}
           accuracyShape={accuracyShape}
           gpsPuckBearingDeg={gpsPuckBearingDeg}
+          riders={riders}
         />
       )}
       {directionPoint && !historyActive && (
         <MapPin
+          // Color in the key: PointAnnotation snapshots its children natively, so a
+          // rider-color change must remount the pin to re-render.
+          key={`center-direction-position-${directionColor}`}
           id="center-direction-position"
           coordinate={[directionPoint.longitude, directionPoint.latitude]}
-          color={DESTINATION_POINT_COLOR}
+          color={directionColor}
           icon={getMapPointKindIcon(directionPoint.kind)}
-          iconColor={DESTINATION_POINT_TEXT_COLOR}
+          iconColor={directionTextColor}
           onSelected={() => {
             onSuppressNextMapPress()
             onClearDirectionPoint()
           }}
         />
       )}
+      {!historyActive &&
+        riders.map((rider, index) =>
+          rider.presence?.target ? (
+            <MapPin
+              // Color in the key: PointAnnotation snapshots its children natively, so a
+              // color change must remount the pin to re-render.
+              key={`center-rider-target-${rider.id}-${rosterRiderColor(rider, index)}`}
+              id={`center-rider-target-${rider.id}`}
+              coordinate={[rider.presence.target.lng, rider.presence.target.lat]}
+              color={rosterRiderColor(rider, index)}
+              icon={getMapPointKindIcon('direction')}
+            />
+          ) : null,
+        )}
       {!historyActive &&
         mapPoints
           .filter(
@@ -487,3 +641,46 @@ export function CenterMapLayers({
     </>
   )
 }
+
+const styles = StyleSheet.create({
+  riderMarker: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  riderDot: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+  },
+  riderHeadingRing: {
+    position: 'absolute',
+    top: -8,
+    left: -8,
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+  },
+  riderHeadingArrow: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 4,
+    borderRightWidth: 4,
+    borderBottomWidth: 7,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+  },
+  riderLabel: {
+    maxWidth: 96,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+    overflow: 'hidden',
+    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
+    color: theme.palette.slate.textPrimary,
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  riderLabelStale: {
+    color: theme.palette.slate.textMuted,
+  },
+})

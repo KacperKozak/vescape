@@ -1,4 +1,5 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import {
   ArrowCounterClockwiseIcon,
   ArrowsClockwiseIcon,
@@ -6,6 +7,8 @@ import {
   CheckCircleIcon,
   CloudArrowUpIcon,
   CheckIcon,
+  DownloadSimpleIcon,
+  UploadSimpleIcon,
   WarningCircleIcon,
 } from 'phosphor-react-native'
 
@@ -17,6 +20,7 @@ interface TuneSyncBarProps {
   onSave: () => void
   onSaveAndSync: () => void
   onSync: () => void
+  onUpdateTune: () => void
   onDiscard: () => void
   onRetryConfig: () => void
   bottomOffset?: number
@@ -27,6 +31,7 @@ export function TuneSyncBar({
   onSave,
   onSaveAndSync,
   onSync,
+  onUpdateTune,
   onDiscard,
   onRetryConfig,
   bottomOffset = 16,
@@ -227,18 +232,32 @@ export function TuneSyncBar({
         }
       case 'sync_with_board':
         return {
-          borderColor: theme.palette.green.border,
-          textColor: theme.palette.green.text,
-          accentColor: theme.palette.green.text,
-          accentTextColor: theme.palette.green.bg,
+          borderColor: theme.palette.sky.border,
+          textColor: theme.palette.sky.text,
+          accentColor: theme.palette.sky.color,
+          accentTextColor: theme.palette.slate.surfaceDeep,
           text: `${s.diffCount} field${s.diffCount === 1 ? '' : 's'} differ from board`,
           detail: null,
-          icon: <ArrowsClockwiseIcon size={16} color={theme.palette.green.color} weight="bold" />,
+          icon: <ArrowsClockwiseIcon size={16} color={theme.palette.sky.color} weight="bold" />,
           actions: [
             {
-              label: 'Sync',
+              label: 'Update tune',
+              primary: false,
+              icon: (
+                <DownloadSimpleIcon
+                  size={12}
+                  color={theme.palette.slate.textSecondary}
+                  weight="bold"
+                />
+              ),
+              onPress: onUpdateTune,
+            },
+            {
+              label: 'Send to board',
               primary: true,
-              icon: <CheckIcon size={12} color={theme.palette.green.bg} weight="bold" />,
+              icon: (
+                <UploadSimpleIcon size={12} color={theme.palette.slate.surfaceDeep} weight="bold" />
+              ),
               onPress: onSync,
             },
           ],

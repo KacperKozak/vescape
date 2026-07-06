@@ -14,12 +14,13 @@ Caveman full style. Code/commands/paths/labels/PR titles exact.
 ## Invocation
 
 ```text
-/to-pr 123
+/to-pr 123          # code only: implement -> commit -> PR -> close issue
+/to-pr 123 /ss      # same + attach device screenshot to PR
 /to-pr #123
 /to-pr https://github.com/OWNER/REPO/issues/123
 ```
 
-Missing id -> ask.
+Missing id -> ask. `/ss` flag optional, opt-in only. No flag -> never screenshot.
 
 ## Preflight (stop on fail, ask user)
 
@@ -60,6 +61,31 @@ Follow `/pr` SKILL.md using the caller protocol. Pass:
 - **Issue ids**: for `Closes #<id>` lines.
 
 `/pr` handles: commit, push, PR create/update, report.
+
+## Step 4 — Screenshot (only if `/ss` flag passed)
+
+Skip entirely when no `/ss` flag. No auto-detect.
+
+`/ss` flag present:
+
+1. `adb devices` -> no device -> report "no device, skip screenshot", continue to Step 5.
+2. Determine changed screen from `git diff dev...HEAD --name-only`:
+   - `src/screens/<name>/` or `src/app/<route>.tsx` -> that route.
+   - `src/components/` only -> screen importing the component (grep).
+   - Multiple -> largest diff.
+3. Navigate via `/nav`, then run `/ss` upload mode against the PR number.
+
+## Step 5 — Close issue (full cycle)
+
+PR up -> close each issue:
+
+```bash
+gh issue close <id> --comment "Resolved in PR #<pr-number>."
+```
+
+PR body keeps `Closes #<id>` too (merge-time auto-close backup). Multiple issues -> close all in the feature group.
+
+Push rejected or PR step failed -> do NOT close. Stop, surface.
 
 ### PR body — new PR
 

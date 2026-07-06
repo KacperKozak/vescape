@@ -6,10 +6,18 @@ import type {
   BoardProbeProgressEvent,
   BoardProbeResult,
   DeviceFoundEvent,
+  HistoryGpsSample,
+  HistoryMarker,
   LiveSeriesEvent,
   LiveStateEvent,
+  MetricExclusion,
+  PrivacyZone,
   TelemetryEvent,
   TelemetryHistoryEvent,
+  TelemetryHistoryOptions,
+  TelemetryMinuteBucket,
+  TelemetrySample,
+  TelemetrySummary,
 } from './index'
 
 const E2E_BOARD_SCAN_RESULT: DeviceFoundEvent = {
@@ -56,6 +64,10 @@ const e2eSettings: AppSettings = {
   connectionSoundsEnabled: true,
   companionPresenceEnabled: false,
   telemetryPollRateHz: 20,
+  wearMirrorIntervalMs: 500,
+  riderId: null,
+  riderName: null,
+  riderColor: null,
 }
 
 function emitDevice(event: DeviceFoundEvent): void {
@@ -102,6 +114,7 @@ function makeTelemetry(): TelemetryEvent {
     tempMosfet: 36,
     tempMotor: 33,
     avgLatency: 18,
+    pullRateHz: 20,
     lastPacketAt: now,
   }
 }
@@ -138,6 +151,7 @@ function getLiveState(): LiveStateEvent {
     },
     recording: {
       enabled: false,
+      paused: false,
       activeBoardId: connected ? connectedBoardId : null,
       startedAt: null,
     },
@@ -231,6 +245,340 @@ function stopBoardSession(): void {
   emitLiveState()
 }
 
+// ---------------------------------------------------------------------------
+// Telemetry history fake storage
+// ---------------------------------------------------------------------------
+const SAMPLE_COLUMN_COUNT = 25
+
+let nextHistorySampleId = 1
+let nextHistoryGpsId = 1
+let nextHistoryMarkerId = 1
+let telemetryHistory: TelemetryMinuteBucket[] = []
+let historySamples: TelemetrySample[] = []
+let historyGps: HistoryGpsSample[] = []
+let historyMarkers: HistoryMarker[] = []
+let historyExclusions: MetricExclusion[] = []
+
+let e2ePrivacyZones: PrivacyZone[] = []
+
+function clearTelemetryHistory(): void {
+  telemetryHistory = []
+  historySamples = []
+  historyGps = []
+  historyMarkers = []
+  historyExclusions = []
+  nextHistorySampleId = 1
+  nextHistoryGpsId = 1
+  nextHistoryMarkerId = 1
+}
+
+function getTelemetryHistory(options: TelemetryHistoryOptions): TelemetryMinuteBucket[] {
+  let buckets = [...telemetryHistory].sort((a, b) => b.bucketStartMs - a.bucketStartMs)
+  if (options.fromMs != null) {
+    buckets = buckets.filter((b) => b.endAtMs >= options.fromMs!)
+  }
+  if (options.toMs != null) {
+    buckets = buckets.filter((b) => b.startAtMs <= options.toMs!)
+  }
+  if (options.deviceId != null) {
+    buckets = buckets.filter((b) => b.deviceId === options.deviceId)
+  }
+  if (options.cursorBeforeMs != null) {
+    buckets = buckets.filter((b) => b.bucketStartMs < options.cursorBeforeMs!)
+  }
+  if (options.limit != null && options.limit > 0) {
+    buckets = buckets.slice(0, options.limit)
+  }
+  return buckets
+}
+
+function encodeBoardSamples(samples: TelemetrySample[]): {
+  boardColumns: ArrayBuffer
+  boardCount: number
+  boardDevices: (string | null)[]
+  boardDeviceNames: string[]
+} {
+  const lanes = new Float64Array(samples.length * SAMPLE_COLUMN_COUNT)
+  const boardDevices: (string | null)[] = []
+  const boardDeviceNames: string[] = []
+  const deviceIndexMap = new Map<string | null, number>()
+  function deviceIndex(deviceId: string | null, deviceName: string): number {
+    const key = `${deviceId ?? ''}:${deviceName}`
+    let index = deviceIndexMap.get(key)
+    if (index == null) {
+      index = boardDevices.length
+      boardDevices.push(deviceId)
+      boardDeviceNames.push(deviceName)
+      deviceIndexMap.set(key, index)
+    }
+    return index
+  }
+
+  for (let i = 0; i < samples.length; i++) {
+    const s = samples[i]
+    const o = i * SAMPLE_COLUMN_COUNT
+    lanes[o + 0] = s.id
+    lanes[o + 1] = s.capturedAtMs
+    lanes[o + 2] = deviceIndex(s.deviceId, s.deviceName)
+    lanes[o + 3] = s.speedKmh
+    lanes[o + 4] = s.batteryVoltage
+    lanes[o + 5] = s.batteryPercent ?? NaN
+    lanes[o + 6] = s.motorCurrent
+    lanes[o + 7] = s.batteryCurrent
+    lanes[o + 8] = s.dutyCycle
+    lanes[o + 9] = s.pitch
+    lanes[o + 10] = s.roll
+    lanes[o + 11] = s.balancePitch
+    lanes[o + 12] = s.balanceCurrent
+    lanes[o + 13] = s.erpm
+    lanes[o + 14] = s.state
+    lanes[o + 15] = s.switchState
+    lanes[o + 16] = s.adc1
+    lanes[o + 17] = s.adc2
+    lanes[o + 18] = s.odometer ?? NaN
+    lanes[o + 19] = s.tempMosfet ?? NaN
+    lanes[o + 20] = s.tempMotor ?? NaN
+    lanes[o + 21] = s.hasFault ? 1 : 0
+    lanes[o + 22] = s.faultCode
+    lanes[o + 23] = s.latitude ?? NaN
+    lanes[o + 24] = s.longitude ?? NaN
+  }
+
+  return {
+    boardColumns: lanes.buffer,
+    boardCount: samples.length,
+    boardDevices,
+    boardDeviceNames,
+  }
+}
+
+function getHistoryRange(options: {
+  fromMs: number
+  toMs: number
+  deviceId?: string
+  limit?: number
+}): {
+  boardColumns: ArrayBuffer
+  boardCount: number
+  boardDevices: (string | null)[]
+  boardDeviceNames: string[]
+  gpsSamples: HistoryGpsSample[]
+  markers: HistoryMarker[]
+  exclusions: MetricExclusion[]
+} {
+  let samples = historySamples.filter(
+    (s) => s.capturedAtMs >= options.fromMs && s.capturedAtMs <= options.toMs,
+  )
+  if (options.deviceId != null) {
+    samples = samples.filter((s) => s.deviceId === options.deviceId)
+  }
+  if (options.limit != null && options.limit > 0) {
+    samples = samples.slice(0, options.limit)
+  }
+
+  let gps = historyGps.filter(
+    (g) => g.capturedAtMs >= options.fromMs && g.capturedAtMs <= options.toMs,
+  )
+  if (options.deviceId != null) {
+    gps = gps.filter((g) => g.deviceId === options.deviceId)
+  }
+
+  let markers = historyMarkers.filter(
+    (m) => m.occurredAtMs >= options.fromMs && m.occurredAtMs <= options.toMs,
+  )
+  if (options.deviceId != null) {
+    markers = markers.filter((m) => m.deviceId === options.deviceId)
+  }
+
+  const encoded = encodeBoardSamples(samples)
+  return {
+    ...encoded,
+    gpsSamples: gps,
+    markers,
+    exclusions: historyExclusions,
+  }
+}
+
+function getTelemetrySummary(): TelemetrySummary {
+  return {
+    sampleCount: historySamples.length,
+    gpsPointCount: historyGps.length,
+    firstAtMs: historySamples[0]?.capturedAtMs ?? null,
+    lastAtMs: historySamples.at(-1)?.capturedAtMs ?? null,
+    droppedPendingSamples: 0,
+  }
+}
+
+interface RideSeed {
+  startOffsetMs: number
+  durationMs: number
+  distanceM: number
+  maxSpeedKmh: number
+  avgSpeedKmh: number
+  maxTempMosfet: number
+  maxTempMotor: number
+  batteryUsedWh: number
+  batteryRegenWh: number
+  startLatitude: number
+  startLongitude: number
+}
+
+function seedHistoryData(deviceId: string, deviceName: string): void {
+  clearTelemetryHistory()
+  const now = Date.now()
+
+  const rides: RideSeed[] = [
+    {
+      // Older ride, selected by pressing "previous" from the newest ride.
+      startOffsetMs: -2 * 60 * 60_000,
+      durationMs: 5 * 60_000,
+      distanceM: 800,
+      maxSpeedKmh: 20,
+      avgSpeedKmh: 14,
+      maxTempMosfet: 34,
+      maxTempMotor: 32,
+      batteryUsedWh: 7,
+      batteryRegenWh: 0.5,
+      startLatitude: 51.0979,
+      startLongitude: 17.0285,
+    },
+    {
+      // Newest ride, selected automatically when entering history mode.
+      startOffsetMs: -60 * 60_000,
+      durationMs: 5 * 60_000,
+      distanceM: 1500,
+      maxSpeedKmh: 25,
+      avgSpeedKmh: 18,
+      maxTempMosfet: 38,
+      maxTempMotor: 35,
+      batteryUsedWh: 12,
+      batteryRegenWh: 1,
+      startLatitude: 51.1079,
+      startLongitude: 17.0385,
+    },
+  ]
+
+  for (const ride of rides) {
+    addHistoryRide(now + ride.startOffsetMs, ride.durationMs, ride, deviceId, deviceName)
+  }
+}
+
+function addHistoryRide(
+  rideStartMs: number,
+  durationMs: number,
+  ride: RideSeed,
+  deviceId: string,
+  deviceName: string,
+): void {
+  const rideEndMs = rideStartMs + durationMs
+  const sampleCount = 60
+  const gpsPointCount = 6
+
+  const bucket: TelemetryMinuteBucket = {
+    id: `e2e-bucket-${rideStartMs}`,
+    startAtMs: rideStartMs,
+    endAtMs: rideEndMs,
+    bucketStartMs: rideStartMs,
+    deviceId,
+    deviceName,
+    sampleCount,
+    gpsPointCount,
+    preciseGpsPointCount: gpsPointCount,
+    maxAbsSpeedKmh: ride.maxSpeedKmh,
+    maxGpsSpeedKmh: ride.maxSpeedKmh,
+    avgSpeedKmh: ride.avgSpeedKmh,
+    avgSpeedSampleCount: sampleCount,
+    minBatteryVoltage: 74,
+    maxMotorCurrent: 12,
+    maxBatteryCurrent: -5,
+    maxDuty: 0.25,
+    faultCount: 0,
+    distanceDeltaM: ride.distanceM,
+    gpsDistanceM: ride.distanceM,
+    maxTempMosfet: ride.maxTempMosfet,
+    maxTempMotor: ride.maxTempMotor,
+    batteryUsedWh: ride.batteryUsedWh,
+    batteryRegenWh: ride.batteryRegenWh,
+    firstLatitude: ride.startLatitude,
+    firstLongitude: ride.startLongitude,
+    firstMovingAtMs: rideStartMs + 5_000,
+    lastMovingAtMs: rideEndMs - 5_000,
+    boundaryBefore: 'none',
+  }
+  telemetryHistory.push(bucket)
+
+  for (let i = 0; i < sampleCount; i++) {
+    const t = rideStartMs + i * (durationMs / (sampleCount - 1))
+    const progress = i / (sampleCount - 1)
+    historySamples.push({
+      id: nextHistorySampleId++,
+      capturedAtMs: t,
+      deviceId,
+      deviceName,
+      speedKmh: ride.avgSpeedKmh * 0.6 + progress * (ride.maxSpeedKmh - ride.avgSpeedKmh * 0.6),
+      batteryVoltage: 75.6 - progress * 1.6,
+      batteryPercent: 75 - progress * 2,
+      motorCurrent: 5 + Math.sin(progress * Math.PI) * 7,
+      batteryCurrent: -2 - Math.sin(progress * Math.PI) * 3,
+      dutyCycle: 0.1 + progress * 0.15,
+      pitch: 0,
+      roll: 0,
+      balancePitch: 0,
+      balanceCurrent: 0.5,
+      erpm: 1000 + progress * 2000,
+      state: 0,
+      switchState: 0,
+      adc1: 1.2,
+      adc2: 1.1,
+      odometer: 1234 + progress * ride.distanceM,
+      tempMosfet: ride.maxTempMosfet - 2 + progress * 2,
+      tempMotor: ride.maxTempMotor - 2 + progress * 2,
+      hasFault: false,
+      faultCode: 0,
+      latitude: ride.startLatitude + progress * 0.01,
+      longitude: ride.startLongitude + progress * 0.01,
+    })
+  }
+
+  for (let i = 0; i < gpsPointCount; i++) {
+    const progress = i / (gpsPointCount - 1)
+    historyGps.push({
+      id: nextHistoryGpsId++,
+      capturedAtMs: rideStartMs + progress * durationMs,
+      deviceId,
+      deviceName,
+      latitude: ride.startLatitude + progress * 0.01,
+      longitude: ride.startLongitude + progress * 0.01,
+      speedMps: 5 + progress * 5,
+      bearingDeg: 45,
+      accuracyM: 3,
+      altitudeM: 120,
+      timestamp: rideStartMs + progress * durationMs,
+      precise: true,
+      distanceFromPreviousM: i === 0 ? null : ride.distanceM / (gpsPointCount - 1),
+    })
+  }
+
+  historyMarkers.push({
+    id: nextHistoryMarkerId++,
+    occurredAtMs: rideStartMs,
+    type: 'connected',
+    deviceId,
+    deviceName,
+    message: null,
+    gapMs: null,
+  })
+  historyMarkers.push({
+    id: nextHistoryMarkerId++,
+    occurredAtMs: rideEndMs,
+    type: 'disconnected',
+    deviceId,
+    deviceName,
+    message: null,
+    gapMs: null,
+  })
+}
+
 export const e2eFake = {
   scan(): void {
     scanActive = true
@@ -259,7 +607,11 @@ export const e2eFake = {
     for (const listener of boardProbeProgressListeners) {
       listener({ step: 'completed', elapsedMs: 0 })
     }
-    return { outcome: 'resolved', candidates: [{ transport: 'direct', hasBms: false }] }
+    return {
+      outcome: 'resolved',
+      transport: 'direct',
+      candidates: [{ transport: 'direct', hasBms: false }],
+    }
   },
 
   addBoardProbeProgressListener(cb: (event: BoardProbeProgressEvent) => void): EventSubscription {
@@ -352,5 +704,94 @@ export const e2eFake = {
       e2eSettings.selectedBoardId = boardId
       e2eSettings.autoConnect = false
     }
+
+    if (flow === 'history') {
+      const boardId = 'e2e-board-history'
+      const board: Board = {
+        id: boardId,
+        name: 'E2E History Board',
+        description: 'Seeded by Maestro',
+        createdAt: Date.now(),
+        batteryConfig: {
+          mode: 'preset',
+          cellPresetId: 'molicel:21700:p50b',
+          seriesCount: 21,
+          parallelCount: 2,
+        },
+        link: { bleId: 'E2:E2:E2:E2:E2:02', transport: 'direct' },
+      }
+      e2eBoards.length = 0
+      e2eBoards.push(board)
+      e2eSettings.selectedBoardId = boardId
+      e2eSettings.autoConnect = false
+      seedHistoryData(boardId, board.name)
+    }
+
+    if (flow === 'privacy-zones') {
+      const boardId = 'e2e-board-privacy'
+      const board: Board = {
+        id: boardId,
+        name: 'E2E Privacy Board',
+        description: 'Seeded by Maestro',
+        createdAt: Date.now(),
+        batteryConfig: {
+          mode: 'preset',
+          cellPresetId: 'molicel:21700:p50b',
+          seriesCount: 21,
+          parallelCount: 2,
+        },
+        link: { bleId: 'E2:E2:E2:E2:E2:03', transport: 'direct' },
+      }
+      e2eBoards.length = 0
+      e2eBoards.push(board)
+      e2eSettings.selectedBoardId = boardId
+      e2eSettings.autoConnect = false
+      const now = Date.now()
+      e2ePrivacyZones = [
+        {
+          id: 'e2e-office',
+          preset: 'custom',
+          name: 'Office',
+          enabled: false,
+          centerLatitude: 54.0,
+          centerLongitude: 15.0,
+          radiusMeters: 500,
+          createdAt: now,
+          updatedAt: now,
+        },
+      ]
+    }
+  },
+
+  getTelemetryHistory,
+
+  getHistoryRange,
+
+  getTelemetrySummary,
+
+  clearTelemetryHistory,
+
+  getPrivacyZones(): PrivacyZone[] {
+    return [...e2ePrivacyZones].sort((a, b) => a.createdAt - b.createdAt)
+  },
+
+  upsertPrivacyZone(zone: PrivacyZone): void {
+    const index = e2ePrivacyZones.findIndex((z) => z.id === zone.id)
+    if (index >= 0) {
+      e2ePrivacyZones[index] = zone
+    } else {
+      e2ePrivacyZones.push(zone)
+    }
+  },
+
+  setPrivacyZoneEnabled(id: string, enabled: boolean): void {
+    const index = e2ePrivacyZones.findIndex((z) => z.id === id)
+    if (index >= 0) {
+      e2ePrivacyZones[index] = { ...e2ePrivacyZones[index], enabled, updatedAt: Date.now() }
+    }
+  },
+
+  deletePrivacyZone(id: string): void {
+    e2ePrivacyZones = e2ePrivacyZones.filter((z) => z.id !== id)
   },
 }

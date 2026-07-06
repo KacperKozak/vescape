@@ -12,15 +12,8 @@ import {
   XIcon,
 } from 'phosphor-react-native'
 import { useCallback, useEffect, useLayoutEffect, useState, type RefObject } from 'react'
-import {
-  ActivityIndicator,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  TextInput,
-  View,
-} from 'react-native'
+import { ActivityIndicator, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import Animated, {
   cancelAnimation,
   FadeOut,
@@ -626,6 +619,8 @@ export function CenterOverlays({
       const actuallyRevealed = revealed || mode === 'map'
       if (!actuallyRevealed) {
         mapRef.current?.restorePreviewPan()
+      } else {
+        mapRef.current?.endPreviewPan()
       }
       setRevealGestureActive(false)
     },
@@ -693,6 +688,7 @@ export function CenterOverlays({
           icon={ClockCounterClockwiseIcon}
           size="lg"
           onPress={() => void history.enterHistoryMode()}
+          testID="history-button"
           style={[
             styles.historyButton,
             { bottom: aboveStripBottom - (HISTORY_BUTTON_SIZE - RECORD_BUTTON_HEIGHT) / 2 },

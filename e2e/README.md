@@ -60,7 +60,7 @@ maestro test e2e/flows/_perf-home.yaml
 `bun run e2e --all`. Its deep link is:
 
 ```text
-vescpoc://e2e-seed?flow=connect-board
+vescape://e2e-seed?flow=connect-board
 ```
 
 Do not use the deep link alone for perf baselines: it does not clear prior app state or select the

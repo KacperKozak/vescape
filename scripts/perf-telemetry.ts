@@ -23,7 +23,7 @@ import { join } from 'path'
 import { mkdirSync, writeFileSync, readFileSync } from 'fs'
 
 const ROOT = join(import.meta.dir, '..')
-const PKG = 'com.anonymous.vescpoc'
+const PKG = 'app.vescape'
 const PERF_FLOW = join(ROOT, 'e2e', 'flows', '_perf-home.yaml')
 const RESULTS_DIR = join(ROOT, 'perf-results')
 

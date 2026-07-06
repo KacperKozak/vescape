@@ -17,9 +17,10 @@ import { useHistoryStore, type HistorySession } from '@/store/historyStore'
 import { useMapStore } from '@/store/mapStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { useWeatherStore } from '@/store/weatherStore'
-import { findNearestSampleIndexByTime } from '@/lib/history/playback'
 import { useMediaHistory } from '@/hooks/useMediaHistory'
 import type { MediaHistoryAsset } from '@/lib/history/mediaHistory'
+import { getHistoryPreviewRoute } from '@/lib/history/previewRoute'
+import { DISABLED_NAVIGATION_MODES } from '@/constants/mapStyles'
 
 interface UseCenterScreenControllerArgs {
   mapRef: RefObject<CenterMapHandle | null>
@@ -37,7 +38,6 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
     historySheetVisible,
     mapSelector,
     perspectiveEnabled,
-    seekTimeMs,
     activeHistoryMapMetric,
     enterTelemetry,
     enterMap,
@@ -55,7 +55,6 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
       historySheetVisible: s.historySheetVisible,
       mapSelector: s.mapSelector,
       perspectiveEnabled: s.perspectiveEnabled,
-      seekTimeMs: s.seekTimeMs,
       activeHistoryMapMetric: s.activeHistoryMapMetric,
       enterTelemetry: s.enterTelemetry,
       enterMap: s.enterMap,
@@ -76,7 +75,11 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
   const lastGpsLatitude = useSettingsStore((s) => s.lastGpsLatitude)
   const lastGpsLongitude = useSettingsStore((s) => s.lastGpsLongitude)
   const mapStyleKey = useSettingsStore((s) => s.mapStyleKey)
-  const mapNavigationMode = useSettingsStore((s) => s.mapNavigationMode)
+  const persistedMapNavigationMode = useSettingsStore((s) => s.mapNavigationMode)
+  // Coerce a persisted-but-disabled mode (e.g. Compass) back to a supported one.
+  const mapNavigationMode = DISABLED_NAVIGATION_MODES.includes(persistedMapNavigationMode)
+    ? 'northUp'
+    : persistedMapNavigationMode
   const setSetting = useSettingsStore((s) => s.set)
   const {
     blocks,
@@ -156,12 +159,6 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
     setSeekTimeMs(null)
   }, [selectedSession, setSeekTimeMs])
 
-  const seekGpsPosition = useMemo(() => {
-    if (seekTimeMs == null || sessionGpsSamples.length === 0) return null
-    const idx = findNearestSampleIndexByTime(sessionGpsSamples, seekTimeMs)
-    return idx >= 0 ? sessionGpsSamples[idx] : null
-  }, [seekTimeMs, sessionGpsSamples])
-
   useEffect(() => {
     const loc = liveLocations.at(-1) ?? latestApproximateLocation
     const lat = loc?.latitude ?? lastGpsLatitude
@@ -195,6 +192,11 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
     }
   }, [loadingSession, selectedSession, sessionGpsSamples])
 
+  const historyPreviewRoute = useMemo(
+    () => (loadingSession ? getHistoryPreviewRoute(sessionSamples) : []),
+    [loadingSession, sessionSamples],
+  )
+
   const exitMapFocus = useCallback(() => {
     enterTelemetry()
     mapRef.current?.recenterLive()
@@ -202,7 +204,7 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
 
   const enterWeatherMode = useCallback(() => {
     enterWeather()
-    mapRef.current?.zoomToLevel(8)
+    mapRef.current?.focusWeather()
   }, [enterWeather, mapRef])
 
   const exitWeatherMode = useCallback(() => {
@@ -383,6 +385,7 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
     openMedia: (asset: MediaHistoryAsset) => setOpenMediaAssetId(asset.id),
     closeMedia: () => setOpenMediaAssetId(null),
     historyPreview,
+    historyPreviewRoute,
     previousRide,
     nextRide,
     canPreviousRide,
@@ -406,7 +409,6 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
     refreshWeather,
     handleMapFocus,
     exitMapFocus,
-    seekGpsPosition,
     onSeek: setSeekTimeMs,
     activeHistoryMapMetric,
     setActiveHistoryMapMetric,

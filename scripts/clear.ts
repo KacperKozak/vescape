@@ -52,4 +52,3 @@ for (const name of readdirSync(tmpdir())) {
 
 run(['./android/gradlew', '-p', 'android', '--stop'])
 run(['./android/gradlew', '-p', 'android', 'clean'])
-run(['bun', 'run', 'android'])

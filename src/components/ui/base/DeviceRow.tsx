@@ -1,5 +1,6 @@
 import React from 'react'
-import { Pressable, View, Text, StyleSheet } from 'react-native'
+import { Pressable, View, StyleSheet } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { theme, interaction } from '@/constants/theme'
 
 interface Props {

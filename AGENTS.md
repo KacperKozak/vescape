@@ -31,6 +31,17 @@ This is a PoC, but keep it sharp:
 - No duplicate code! We do not want to repeat ourselves.
 - Do not add tests for trivial predicates. Add tests for meaningful behavior, edge cases, contracts, or regressions.
 
+## Native Parity
+
+When Android and iOS implement the same native capability, keep both sides discoverable and behaviorally aligned.
+
+- Add `@parity /repo-root/path-to-peer` near the native module/class/function entry point on both platform implementations.
+- When editing code with `@parity`, inspect the peer file before finishing.
+- Keep native API, event names, payload shapes, errors, lifecycle, threading, persistence, and unsupported-platform behavior aligned.
+- Use `@platform-diff <reason>` next to the `@parity` tag only for intentional, accepted long-term platform differences.
+- Do not add `@parity` to Expo-generated `android/` or `ios/` root folders; use durable source under `modules/`, config plugins, or shared source inputs.
+- If parity cannot be completed now, leave a `TODO(<platform> parity): <reason>`, create/follow an issue, and call out the limitation in the final response.
+
 ## Dir layout
 
 - `android/`, `ios/` — Expo-generated native folders. They are gitignored and not durable source; do not make lasting changes there. Update Expo config, modules, plugins, or source inputs instead.
@@ -48,6 +59,9 @@ This is a PoC, but keep it sharp:
 React Native UI conventions, including icon usage, live in `docs/agents/react.md`.
 Visual design language (colors, layout, typography) lives in `docs/design.md`.
 PostHog agent debugging commands live in `docs/agents/posthog.md`.
+Mapbox dependency patches and their native camera semantics live in `docs/agents/mapbox-patches.md`.
+
+When adding or changing a reusable UI component (or a new visual variant/state of one), add or update its preview in the component showcase under `src/app/settings/components/` so every component stays browsable with live controls.
 
 ## Agent skills
 

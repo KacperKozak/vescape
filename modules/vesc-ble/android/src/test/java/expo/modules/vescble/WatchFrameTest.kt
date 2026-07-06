@@ -1,0 +1,114 @@
+package expo.modules.vescble
+
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+
+/**
+ * Round-trips the Watch Frame wire contract: build a frame, encode it, then decode it back. [decode]
+ * mirrors the wrist-side `app.vescape.wear.WatchFrameDecoder` lane-for-lane (ADR-0018) — the watch
+ * module is a separate Gradle app and cannot be imported here, so this copy is the executable proof
+ * that the two sides agree on field count, order, the `NaN` null sentinel, and the stale flag.
+ */
+class WatchFrameTest {
+
+    private fun decode(bytes: ByteArray): WatchFrame? {
+        if (bytes.size < WATCH_FRAME_BYTES) return null
+        val buf = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
+        if (buf.get().toInt() != WATCH_FRAME_FIELD_COUNT) return null
+        val stale = buf.get().toInt() != 0
+        fun lane(): Double? = buf.float.let { if (it.isNaN()) null else it.toDouble() }
+        return WatchFrame(buf.float.toDouble(), lane(), lane(), lane(), lane(), stale)
+    }
+
+    private fun roundTrip(frame: WatchFrame): WatchFrame? =
+        decode(WatchFrameBuilder.encode(frame))
+
+    @Test
+    fun `builds from snapshot with abs speed and duty scaled to percent`() {
+        val frame = WatchFrameBuilder.build(
+            WatchSnapshot(
+                speed = -12.5,
+                dutyCycle = -0.4,
+                dutyExcluded = false,
+                batterySoc = 78.0,
+                motorTemp = 42.0,
+                ctrlTemp = 38.0,
+            ),
+            stale = false,
+        )
+        assertEquals(12.5, frame.speed, 0.0)
+        assertEquals(40.0, frame.duty!!, 1e-3)
+    }
+
+    @Test
+    fun `excluded duty becomes null in the frame`() {
+        val frame = WatchFrameBuilder.build(
+            WatchSnapshot(
+                speed = 3.0,
+                dutyCycle = 0.9,
+                dutyExcluded = true,
+                batterySoc = 50.0,
+                motorTemp = null,
+                ctrlTemp = null,
+            ),
+            stale = false,
+        )
+        assertNull(frame.duty)
+    }
+
+    @Test
+    fun `round-trips all fields present`() {
+        val frame = WatchFrame(
+            speed = 21.3,
+            duty = 64.0,
+            battery = 73.0,
+            motorTemp = 51.0,
+            ctrlTemp = 47.0,
+            stale = false,
+        )
+        val decoded = roundTrip(frame)!!
+        assertEquals(frame.speed, decoded.speed, 1e-3)
+        assertEquals(frame.duty!!, decoded.duty!!, 1e-3)
+        assertEquals(frame.battery!!, decoded.battery!!, 1e-3)
+        assertEquals(frame.motorTemp!!, decoded.motorTemp!!, 1e-3)
+        assertEquals(frame.ctrlTemp!!, decoded.ctrlTemp!!, 1e-3)
+        assertEquals(false, decoded.stale)
+    }
+
+    @Test
+    fun `round-trips null sentinel lanes and stale flag`() {
+        val frame = WatchFrame(
+            speed = 0.0,
+            duty = null,
+            battery = null,
+            motorTemp = null,
+            ctrlTemp = null,
+            stale = true,
+        )
+        val decoded = roundTrip(frame)!!
+        assertEquals(0.0, decoded.speed, 0.0)
+        assertNull(decoded.duty)
+        assertNull(decoded.battery)
+        assertNull(decoded.motorTemp)
+        assertNull(decoded.ctrlTemp)
+        assertTrue(decoded.stale)
+    }
+
+    @Test
+    fun `decode rejects a short buffer`() {
+        assertNull(decode(ByteArray(WATCH_FRAME_BYTES - 1)))
+    }
+
+    @Test
+    fun `decode rejects a field-count mismatch`() {
+        val bytes = WatchFrameBuilder.encode(
+            WatchFrame(1.0, 2.0, 3.0, 4.0, 5.0, stale = false),
+        )
+        bytes[0] = (WATCH_FRAME_FIELD_COUNT + 1).toByte()
+        assertNull(decode(bytes))
+    }
+}

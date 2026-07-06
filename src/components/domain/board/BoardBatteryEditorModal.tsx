@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Modal, Pressable, StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import type { BatteryConfig } from 'vesc-ble'
 
 import { BoardBatteryForm } from '@/components/domain/board/BoardBatteryForm'

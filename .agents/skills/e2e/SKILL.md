@@ -42,7 +42,7 @@ zsh -lc 'bun run e2e --all'
 
 Public flows clear app state themselves through `_launch.yaml`.
 
-The expected installed app is Expo dev-client package `com.anonymous.vescpoc`. Flow selects local Metro server from the dev-client launcher, then exercises add-board happy path.
+The expected installed app is Expo dev-client package `app.vescape`. Flow selects local Metro server from the dev-client launcher, then exercises add-board happy path.
 
 Expected fake BLE board:
 

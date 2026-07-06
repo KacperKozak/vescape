@@ -6,10 +6,10 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
   useWindowDimensions,
 } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { CaretRightIcon } from 'phosphor-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Canvas, Circle, Path, Skia } from '@shopify/react-native-skia'
@@ -86,8 +86,15 @@ export function HistorySessionSheet({
 
   return (
     <>
-      <Pressable style={styles.backdrop} onPress={onClose} />
-      <View style={[styles.panel, { bottom: bottomOffset, maxHeight: panelMaxHeight }]}>
+      <Pressable
+        testID="history-session-sheet-backdrop"
+        style={styles.backdrop}
+        onPress={onClose}
+      />
+      <View
+        testID="history-session-sheet"
+        style={[styles.panel, { bottom: bottomOffset, maxHeight: panelMaxHeight }]}
+      >
         <ScrollView
           ref={scrollRef}
           style={styles.scroll}
@@ -105,6 +112,7 @@ export function HistorySessionSheet({
               return (
                 <Pressable
                   key={session.id}
+                  testID={`history-session-row-${session.id}`}
                   style={({ pressed }) => [
                     styles.row,
                     selected && styles.rowSelected,

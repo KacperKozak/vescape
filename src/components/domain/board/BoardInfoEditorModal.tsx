@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Modal, Pressable, StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 
 import { BoardInfoForm } from '@/components/domain/board/BoardInfoForm'
 import { Button } from '@/components/ui/base/Button'

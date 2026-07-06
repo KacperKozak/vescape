@@ -1,6 +1,8 @@
 package expo.modules.vescble
 
 /**
+ * @parity /modules/vesc-ble/ios/VescProtocol.swift
+ *
  * How a Board is reached. Resolved once by detection and stored on the Board.
  * A `null` transport means undetected — there is no persisted "unknown" state.
  *

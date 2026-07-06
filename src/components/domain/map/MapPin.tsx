@@ -1,4 +1,5 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { MarkerView, PointAnnotation } from '@rnmapbox/maps'
 import { TrashIcon, type Icon } from 'phosphor-react-native'
 import { theme } from '@/constants/theme'
@@ -61,7 +62,14 @@ export function MapPin({
 
     return (
       <PointAnnotation id={id} coordinate={coordinate} onSelected={onSelected}>
-        <View style={[styles.iconPin, { borderColor: color }, selected && styles.iconPinSelected]}>
+        {/* collapsable={false}: on iOS New Arch (Fabric) a layout-only wrapper is
+            flattened, hoisting its children as direct PointAnnotation subviews and
+            triggering "supports max 1 subview" + a broken snapshot (rnmapbox #3682,
+            fixed in 10.3.2). Remove once we bump past 10.3.1. */}
+        <View
+          collapsable={false}
+          style={[styles.iconPin, { borderColor: color }, selected && styles.iconPinSelected]}
+        >
           <IconComponent size={selected ? 24 : 15} color={iconColor ?? color} weight="bold" />
         </View>
       </PointAnnotation>
@@ -71,7 +79,8 @@ export function MapPin({
   if (bearingDeg != null) {
     return (
       <PointAnnotation id={id} coordinate={coordinate} onSelected={onSelected}>
-        <View style={[styles.pin, { borderColor: color }]}>
+        {/* collapsable={false}: see icon branch above (rnmapbox #3682). */}
+        <View collapsable={false} style={[styles.pin, { borderColor: color }]}>
           <View style={[styles.directionArrow, { transform: [{ rotate: `${bearingDeg}deg` }] }]}>
             <View
               style={[styles.directionWing, styles.directionWingOutline, styles.directionWingLeft]}
@@ -93,7 +102,8 @@ export function MapPin({
 
   return (
     <PointAnnotation id={id} coordinate={coordinate} onSelected={onSelected}>
-      <View style={[styles.pin, { borderColor: color }]}>
+      {/* collapsable={false}: see icon branch above (rnmapbox #3682). */}
+      <View collapsable={false} style={[styles.pin, { borderColor: color }]}>
         <View style={[styles.pinCore, { backgroundColor: color }]} />
       </View>
     </PointAnnotation>

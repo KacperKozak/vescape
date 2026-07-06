@@ -12,6 +12,8 @@ import kotlin.math.roundToInt
  * they never diverge; raw voltage stays the untouched Telemetry Sample.
  *
  * A [windowMs] of 0 disables smoothing: every call returns the latest percentage unchanged.
+ *
+ * @parity /modules/vesc-ble/ios/telemetry/SocMedianWindow.swift
  */
 class SocMedianWindow(@Volatile var windowMs: Long = 20_000L) {
     private data class Sample(val tMs: Long, val bucket: Int)

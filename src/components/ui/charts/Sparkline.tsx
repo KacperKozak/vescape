@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 import type { LayoutChangeEvent } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { Canvas } from '@shopify/react-native-skia'
 
 import {
@@ -102,5 +103,5 @@ const styles = StyleSheet.create({
   wrap: { width: '100%' },
   badgeRow: { height: BADGE_ROW_HEIGHT, flexDirection: 'row', alignItems: 'center' },
   maxBadge: { fontSize: 9, fontVariant: ['tabular-nums'] },
-  maxLabel: { color: theme.palette.slate.textMuted, fontWeight: '400' },
+  maxLabel: { color: theme.palette.slate.textMuted, fontWeight: '500' },
 })

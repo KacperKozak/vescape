@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { PlusIcon } from 'phosphor-react-native'
 import type { Icon } from 'phosphor-react-native'
 
@@ -88,6 +89,7 @@ interface PillSelectorItemProps {
   icon?: Icon
   badge?: ReactNode
   color?: ActiveTheme
+  testID?: string
   onPress: () => void
   children?: ReactNode
 }
@@ -98,6 +100,7 @@ export function PillSelectorItem({
   icon: IconComp,
   badge,
   color,
+  testID,
   onPress,
   children,
 }: PillSelectorItemProps) {
@@ -109,9 +112,11 @@ export function PillSelectorItem({
   const accentColor = color?.color ?? theme.palette.green.color
 
   const hasMenu = !!children
+  const longPressedRef = useRef(false)
 
   const handleLongPress = useCallback(() => {
     if (!hasMenu) return
+    longPressedRef.current = true
     const menuContent = <View style={styles.menu}>{children}</View>
     openMenu(id, pillRef, menuContent)
   }, [id, children, hasMenu, openMenu])
@@ -119,11 +124,16 @@ export function PillSelectorItem({
   return (
     <Pressable
       ref={pillRef}
+      testID={testID}
       style={[
         styles.pill,
         active ? { backgroundColor: accentBg, borderColor: accentBorder } : styles.pillInactive,
       ]}
       onPress={() => {
+        if (longPressedRef.current) {
+          longPressedRef.current = false
+          return
+        }
         closeMenu()
         onPress()
       }}
@@ -152,13 +162,14 @@ export function PillSelectorItem({
 }
 
 interface PillSelectorAddProps {
+  testID?: string
   onPress: () => void
 }
 
-export function PillSelectorAdd({ onPress }: PillSelectorAddProps) {
+export function PillSelectorAdd({ testID, onPress }: PillSelectorAddProps) {
   const { addRef } = usePillSelectorCtx()
   return (
-    <Pressable ref={addRef} style={styles.addPill} onPress={onPress}>
+    <Pressable ref={addRef} testID={testID} style={styles.addPill} onPress={onPress}>
       <PlusIcon size={14} color={theme.palette.slate.color} weight="bold" />
     </Pressable>
   )
@@ -167,6 +178,7 @@ export function PillSelectorAdd({ onPress }: PillSelectorAddProps) {
 interface PillSelectorMenuItemProps {
   icon: Icon
   label: string
+  testID?: string
   onPress: () => void
   danger?: boolean
   separator?: boolean
@@ -175,6 +187,7 @@ interface PillSelectorMenuItemProps {
 export function PillSelectorMenuItem({
   icon: IconComp,
   label,
+  testID,
   onPress,
   danger,
   separator,
@@ -182,6 +195,7 @@ export function PillSelectorMenuItem({
   const { closeMenu } = usePillSelectorCtx()
   return (
     <Pressable
+      testID={testID}
       style={[styles.menuItem, separator && styles.menuItemSeparator]}
       onPress={() => {
         closeMenu()

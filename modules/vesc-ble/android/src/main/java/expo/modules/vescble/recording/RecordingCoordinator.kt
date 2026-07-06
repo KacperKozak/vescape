@@ -9,6 +9,7 @@ import expo.modules.vescble.telemetry.AppSettings
 import expo.modules.vescble.telemetry.TelemetryCapture
 import expo.modules.vescble.telemetry.TelemetryRepository
 
+// @parity /modules/vesc-ble/ios/recording/RecordingCoordinator.swift
 internal class RecordingCoordinator(
     private val context: Context,
     private val applyLiveSettings: (AppSettings) -> Unit,
@@ -93,6 +94,11 @@ internal class RecordingCoordinator(
 
     fun recordTelemetry(capture: TelemetryCapture) {
         telemetryStore?.recordTelemetry(capture)
+    }
+
+    /** Marks where a Ride Recording entered an Idle Pause so the resulting gap is explained (ADR-0021). */
+    fun recordIdlePauseMarker(config: SessionConfig?) {
+        recordMarker("auto_pause", config, "Recording paused — idle")
     }
 
     fun recordError(config: SessionConfig?, message: String) {

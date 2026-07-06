@@ -1,6 +1,6 @@
 # Design Language
 
-Visual design principles for the Vibe Wheel app. Follow these when building or modifying UI.
+Visual design principles for the Vescape app. Follow these when building or modifying UI.
 
 > **Every color in the app must come from the `theme` object in `src/constants/theme.ts`.**
 > Never hardcode a hex value (`#...`), rgba literal, or any color string directly in a component file.
@@ -104,7 +104,7 @@ Semantic UI-state tokens. Each exposes `.color`, `.text`, `.bg`, and `.border`.
 Every translucent value (overlays, backdrops, zone tints, glow gradients, vignettes) must be created with `theme.alpha(color, level)` using one of the typed levels:
 
 ```ts
-type AlphaLevel = 0 | 0.12 | 0.3 | 0.6 | 0.85
+type AlphaLevel = 0 | 0.12 | 0.3 | 0.4 | 0.6 | 0.7 | 0.8 | 0.85 | 1
 ```
 
 Neutral row icons use `theme.palette.slate.textSecondary`.
@@ -143,14 +143,29 @@ For screen headers showing metadata (version, OS, DB size), use centered text wi
 
 ## Typography
 
+The app's UI font is **Raleway**, shipped as static per-weight instances (`assets/fonts/Raleway-300.ttf` … `Raleway-900.ttf`) and loaded in `src/app/_layout.tsx` via `expo-font`'s `useFonts` before the `Stack` mounts. The splash stays visible until the fonts are ready on cold start. Static instances are required because Android renders only the default instance of a custom variable font — `fontWeight` never moves the `wght` axis. The files also have the OpenType `lnum` (lining numerals) feature frozen in via `pyftfeatfreeze` — Raleway defaults to old-style figures with uneven baselines; if the fonts are ever regenerated, re-freeze `lnum`.
+
+Every `Text` instance renders through the wrapper at `src/components/ui/base/Text.tsx`, which reads `fontWeight` from the style and resolves it to the matching family via `theme.font(weight)` (default `'500'` — Raleway 400 reads too thin on the dark surface). Import `Text` from `@/components/ui/base/Text` — never import `Text` from `react-native` directly for UI text.
+
+- `theme.font(weight)` in `src/constants/theme.ts` is the single source of truth for family names (`'Raleway-500'` etc.). Components keep writing plain `fontWeight: '600'` and rely on the wrapper; never inline `'Raleway…'` in a component or style.
+- Numeric readouts that use `fontFamily: 'monospace'` (event log, raw settings, IMU telemetry, BMS cells, gauges — search `fontFamily: 'monospace'`) **opt out** of Raleway. Pass an explicit `fontFamily: 'monospace'` on those `Text` styles to keep them monospace.
+- Stack header titles (and any style fed to a native component that bypasses the wrapper) must set `fontFamily: theme.font('600')` explicitly — see `src/app/_layout.tsx` `headerTitleStyle` — and must not set `fontWeight`.
+- `fontVariant: ['tabular-nums']` still aligns numeric columns on Raleway.
+
+Typography roles:
+
 | Role          | Size  | Weight | Token                         |
 | ------------- | ----- | ------ | ----------------------------- |
 | Screen title  | 20    | 700    | `theme.neutral.textPrimary`   |
 | Row label     | 15    | 600    | `theme.neutral.textPrimary`   |
-| Row hint      | 12    | 400    | `theme.neutral.textMuted`     |
+| Row hint      | 12    | 500    | `theme.neutral.textMuted`     |
 | Section title | 12–13 | 700    | `theme.neutral.textMuted`     |
-| Metadata      | 12    | 600    | `theme.neutral.textSecondary` |
+| Metadata      | 12    | 500    | `theme.neutral.textSecondary` |
 | Stepper value | 15    | 700    | `theme.neutral.textPrimary`   |
+
+Preview every role live under **Settings → Components → Typography** (`src/app/settings/components/typography.tsx`).
+
+> Raleway reads thinner than the platform default font, so the design system starts body text at `500` (Medium). Any `Text` without an explicit `fontWeight` resolves to `500` — see the wrapper at `src/components/ui/base/Text.tsx`. Use `'400'` only when a deliberately thin label is intended (e.g. quiet chart axis ticks). Screens that need older behavior can pass `fontWeight: '400'` explicitly.
 
 ## Avoid
 

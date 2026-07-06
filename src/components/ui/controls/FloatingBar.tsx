@@ -1,8 +1,9 @@
 import type { Icon } from 'phosphor-react-native'
 import type { ReactNode } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 
-import { theme } from '@/constants/theme'
+import { interaction, theme } from '@/constants/theme'
 
 interface FloatingBarFrameProps {
   bottomOffset?: number
@@ -37,6 +38,7 @@ interface FloatingActionPillProps {
   label: string
   onPress: () => void
   active?: boolean
+  paused?: boolean
   disabled?: boolean
   testID?: string
 }
@@ -57,7 +59,12 @@ export function FloatingStatusPill({ pill }: { pill: FloatingStatusPillModel }) 
         <Text style={[styles.pillText, { color: pill.color }]} numberOfLines={1}>
           {pill.text}
         </Text>
-        <Pressable style={styles.pillButton} onPress={pill.onPress} testID={pill.cancelTestID}>
+        <Pressable
+          style={styles.pillButton}
+          android_ripple={interaction.ripple}
+          onPress={pill.onPress}
+          testID={pill.cancelTestID}
+        >
           <Text style={styles.pillButtonText}>Cancel</Text>
         </Pressable>
       </View>
@@ -67,6 +74,7 @@ export function FloatingStatusPill({ pill }: { pill: FloatingStatusPillModel }) 
   return (
     <Pressable
       style={[styles.pill, { backgroundColor: pill.bg, borderColor: pill.border }]}
+      android_ripple={interaction.ripple}
       onPress={pill.onPress}
       testID={pill.testID}
     >
@@ -85,22 +93,38 @@ export function FloatingActionPill({
   label,
   onPress,
   active = false,
+  paused = false,
   disabled = false,
   testID,
 }: FloatingActionPillProps) {
+  const iconColor = paused
+    ? theme.status.warning.color
+    : active
+      ? theme.palette.slate.textPrimary
+      : theme.status.error.color
   return (
     <Pressable
-      style={[styles.actionPill, active && styles.actionPillActive, disabled && styles.disabled]}
+      style={[
+        styles.actionPill,
+        active && styles.actionPillActive,
+        paused && styles.actionPillPaused,
+        disabled && styles.disabled,
+      ]}
+      android_ripple={interaction.ripple}
       disabled={disabled}
       onPress={onPress}
       testID={testID}
     >
-      <IconComp
-        size={22}
-        color={active ? theme.palette.slate.textPrimary : theme.status.error.color}
-        weight="fill"
-      />
-      <Text style={[styles.actionPillText, active && styles.actionPillTextActive]}>{label}</Text>
+      <IconComp size={22} color={iconColor} weight="fill" />
+      <Text
+        style={[
+          styles.actionPillText,
+          active && styles.actionPillTextActive,
+          paused && styles.actionPillTextPaused,
+        ]}
+      >
+        {label}
+      </Text>
     </Pressable>
   )
 }
@@ -123,6 +147,7 @@ const styles = StyleSheet.create({
     paddingRight: 4,
     borderRadius: 22,
     borderWidth: 1,
+    overflow: 'hidden',
     gap: 10,
     backgroundColor: theme.palette.slate.surfaceDeep,
     shadowColor: theme.palette.mono.black,
@@ -158,11 +183,19 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     borderWidth: 1,
     borderColor: theme.status.error.color,
+    overflow: 'hidden',
     gap: 8,
   },
   actionPillActive: {
     backgroundColor: theme.status.error.bg,
     borderColor: theme.status.error.color,
+  },
+  actionPillPaused: {
+    backgroundColor: theme.status.warning.bg,
+    borderColor: theme.status.warning.color,
+  },
+  actionPillTextPaused: {
+    color: theme.status.warning.color,
   },
   actionPillText: {
     color: theme.status.error.color,

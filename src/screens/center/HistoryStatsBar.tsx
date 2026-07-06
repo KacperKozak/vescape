@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import {
   BatteryChargingIcon,
   BatteryMediumIcon,
@@ -12,6 +13,7 @@ import {
   RoadHorizonIcon,
   ThermometerHotIcon,
   ThermometerSimpleIcon,
+  WaveformIcon,
 } from 'phosphor-react-native'
 import type { Icon } from 'phosphor-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -42,6 +44,7 @@ export function HistoryStatsBar({ session }: HistoryStatsBarProps) {
   return (
     <View style={[styles.wrap, { top: Math.max(insets.top, 8) + 46 }]} pointerEvents="box-none">
       <Pressable
+        testID="history-stats-bar"
         accessibilityRole="button"
         accessibilityState={{ expanded }}
         accessibilityLabel={expanded ? 'Collapse ride stats' : 'Expand ride stats'}
@@ -164,6 +167,13 @@ function sessionToStats(session: HistorySession | null): StatItem[] {
       accent: theme.palette.green.color,
     },
     {
+      key: 'samples',
+      label: 'Points',
+      value: session ? formatCount(session.sampleCount) : '',
+      icon: WaveformIcon,
+      accent: theme.palette.cyan.color,
+    },
+    {
       key: 'maxDuty',
       label: 'Max Duty',
       value: session ? formatDuty(session.maxDuty) : '',
@@ -171,6 +181,12 @@ function sessionToStats(session: HistorySession | null): StatItem[] {
       accent: theme.telemetry.duty,
     },
   ]
+}
+
+function formatCount(value: number): string {
+  if (value < 1000) return String(value)
+  if (value < 10_000) return `${(value / 1000).toFixed(1)}k`
+  return `${Math.round(value / 1000)}k`
 }
 
 function formatDistance(valueM: number | null): string {

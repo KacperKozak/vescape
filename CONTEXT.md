@@ -44,6 +44,10 @@ _Avoid_: Deleted value, hidden sample, rejected packet
 The processed battery charge percentage — IR-compensated then median-windowed over a configurable interval — that the app displays and evaluates battery **Alert Rules** against, while raw pack voltage stays the **Telemetry Sample**.
 _Avoid_: Battery level, voltage percent, smoothed battery (in raw-telemetry contexts)
 
+**Live BMS Series**:
+The native-retained, in-memory series of smart-BMS per-cell-group voltages and balancing state, held within the recent live-telemetry window (`liveHistoryLimit`, default 5 min) and never persisted. Native retains it continuously during a **Board Session** — the BMS is already polled, so retention is free — but it crosses the bridge to JS only on demand, while the battery-detail view is focused, so that view can scrub cells at any past moment in the window. The always-on cell **spread** (delta) is not part of the 30Hz telemetry frame nor persisted with telemetry history; it is derived from the latest smart-BMS frame on the BMS event pipe (`onBms`, ~4Hz), which flows continuously and independently of the battery-detail view. Used to watch battery sag and spot a cell group breaking away from the pack in real time, not to track battery health over the pack's life. Dies with the **Board Session** or as it rolls off the window.
+_Avoid_: Battery Diagnostic Snapshot, BMS telemetry sample, cell voltage log, battery ride sample, BMS history
+
 **GPS Fix**:
 A single phone location sample used for live map position or ride recording.
 _Avoid_: Location event, GPS point
@@ -68,6 +72,10 @@ _Avoid_: Telemetry marker, debug marker, log point
 The span of a Ride Recording from its first to its last moving Telemetry Sample — the part the rider treats as actual riding. A Telemetry Sample counts as moving when it is not excluded from speed metrics (so low-speed and free-spin samples do not count). Leading and trailing non-moving spans fall outside the Moving Window; internal stops (photos, cooldown) stay inside it. Drives history-timeline trimming and the moving ride time shown in stats. A Ride Recording with no moving samples has no Moving Window and is not shown in Ride History; legacy recordings with an unknown Moving Window fall back to their full wall-clock span.
 _Avoid_: Trim range, active range, ride duration
 
+**Idle Pause**:
+A temporary state of a Ride Recording in which sample persistence halts because the Board has produced no moving Telemetry Sample for a sustained interval, while the Board Session stays live at a reduced poll rate and auto-resumes on the next moving sample. Cuts battery, stored frames, and bucket sample counts together while the board is parked.
+_Avoid_: Stop recording, auto-stop, sleep, parked mode
+
 **Media History Asset**:
 A phone photo or video whose capture time falls inside a selected Ride Recording and which can be placed using a nearby recording-backed GPS fix. The asset remains owned by the OS photo library and is never copied into Ride History.
 _Avoid_: Ride photo, recording media, uploaded media
@@ -75,6 +83,22 @@ _Avoid_: Ride photo, recording media, uploaded media
 **Map Point**:
 A user-authored map-visible location that is independent from Ride Recording and Ride History. A Map Point may describe a direction target, trail feature, viewpoint, charging place, or similar location.
 _Avoid_: Marker, GPS point, telemetry marker
+
+**Map Camera Controller**:
+The app-owned volatile coordinator for map camera position, zoom, pitch, heading, padding, animation, and transitions between live follow, manual browse, and ride history framing.
+_Avoid_: Map manager, map state manager, camera helper
+
+**Map Camera Intent**:
+A user or app request for the Map Camera Controller to choose the next camera state, such as following live GPS, browsing manually, or framing ride history.
+_Avoid_: Camera command, map action, imperative camera call
+
+**History Camera Refinement**:
+The Map Camera Controller's in-flight adjustment from approximate Ride History framing to exact route framing for the same selected ride.
+_Avoid_: Second jump, route correction, recenter after load
+
+**Map Camera Profile**:
+A named camera behavior used by the Map Camera Controller to derive heading, zoom, pitch, padding, and animation policy for a view or navigation mode.
+_Avoid_: Tilt setting, view camera hack, mode special case
 
 **Tune Snapshot**:
 A read-only view of the board's current Refloat tuning configuration decoded from the board's schema and binary config.
@@ -100,6 +124,18 @@ _Avoid_: Sound effect, ringtone, tone
 A user-authored spoken phrase on a one-shot Alert Rule that may include current alert-value placeholders and is spoken by native text-to-speech when the rule fires.
 _Avoid_: TTS sound, voice preset, notification text
 
+**Watch Mirror**:
+The platform-neutral concept of the app on the rider's wrist that mirrors live board state and plays alert feedback. Display and playback only — it owns no durable truth, makes no alert decisions, and sends nothing back to the phone. A one-way reflection of phone truth. Has two concrete implementations: the **Wear OS Mirror** (Kotlin/Compose, Android) and the future **watchOS Mirror** (Apple Watch).
+_Avoid_: Wear Mirror (bakes in Google's Wear OS brand; use for the Android impl only), watch app, companion (Companion names the CompanionDeviceManager board-presence association, not the watch)
+
+**Watch Frame**:
+The compact, throttled telemetry snapshot the phone pushes to a **Watch Mirror** to drive its display. Distinct from a **Telemetry Sample** (raw, per-packet) and from **Live State** (the full app snapshot sent to JS).
+_Avoid_: Watch payload, wear message
+
+**Watch Alert**:
+A one-shot command the phone pushes to a **Watch Mirror** when the native alert engine fires, telling it to vibrate and/or sound. Carries no threshold logic — the alert decision already happened on the phone against an **Alert Rule**.
+_Avoid_: Wear alarm, watch notification
+
 **App Setting**:
 A user-controlled app preference that affects app behavior across boards unless explicitly scoped elsewhere.
 _Avoid_: Option, config
@@ -107,6 +143,18 @@ _Avoid_: Option, config
 **Diagnostic Event**:
 An app-observed abnormal condition that helps explain board connection, telemetry, tuning, recording, or UI failures.
 _Avoid_: Error log, debug session, crash report
+
+**Group Ride**:
+A live, ephemeral, server-relayed room of **Riders** sharing **Rider Presence** so they can see each other on the live map while riding together. It has no owner and lives only while at least one Rider is present; the server reaps it when empty. Network-backed and multi-device — the first app concept that is not local-only truth. Strictly distinct from a **Ride Recording** (each Rider may still make their own private Ride Recording during a Group Ride) and from **Ride History**.
+_Avoid_: Group session, room, party, ride session, group ride recording
+
+**Rider**:
+An anonymous participant in **Group Rides**, identified by a persistent device-generated id plus a rider-chosen display name. Carries no login, account, or server-side identity record, and is not a **Board**. The same person on two phones is two Riders.
+_Avoid_: User, account, member, profile, friend
+
+**Rider Presence**:
+A **Rider's** live shared snapshot within a **Group Ride**: location and heading from the phone **GPS Fix**, plus optional speed and **Battery SoC Estimate** when a **Board Session** is live. Ephemeral and server-relayed, never persisted on phone or server, suppressed while the Rider is inside a **Privacy Zone**. A Rider with no recent Rider Presence goes stale, then drops from the Group Ride.
+_Avoid_: Position update, presence ping, location share, group telemetry
 
 ## Relationships
 
@@ -117,22 +165,40 @@ _Avoid_: Error log, debug session, crash report
 - A **Board Probe** can resolve a **Board Transport** before a **Board** is created.
 - A **Board Session** owns one live BLE connection to a **Board**; only Telemetry Samples received during the active session count toward live state and Ride Recording.
 - A **Board** produces **Telemetry Samples** while connected.
+- A **Board Session** may produce a **Live BMS Series** when its **Board Link** includes BMS capability; native retains it continuously in the recent live-telemetry window (`liveHistoryLimit`) but pushes it across the bridge to JS only while the battery-detail view is focused. It is ephemeral, never persisted, and never written to **Ride Recording**. The cell **spread** scalar shown in main telemetry is not the series: it derives from the latest smart-BMS frame on the `onBms` pipe (~4Hz, always flowing), separate from the 30Hz telemetry frame.
 - A **Metric Sanitizer** may create **Metric Exclusions** for values derived from **Telemetry Samples** while preserving the original samples and current live board readout.
 - A **Metric Exclusion** belongs to one **Telemetry Sample** and one metric.
 - A **GPS Fix** may be associated with live map state, but only GPS fixes captured alongside **Telemetry Samples** contribute to a **Ride Recording**.
 - A **Map Point** is placed by the user on the live map and does not belong to **Ride Recording** or **Ride History**.
+- A **Map Camera Controller** may frame **Live State**, **Ride History**, **GPS Fixes**, or **Map Points**, but does not own those domain objects.
+- A **Map Camera Intent** is interpreted by the **Map Camera Controller**; outside components request camera behavior instead of mutating the map camera directly.
+- A **History Camera Refinement** belongs to one selected **Ride Recording** in **Ride History** and is ignored if the selected ride changes or the rider manually browses the map.
+- A **Map Camera Profile** belongs to the **Map Camera Controller** and keeps pitch zoom-derived, including removing map tilt at far zoom levels.
+- A **Map Camera Profile** for compass follow preserves live follow during zoom-only gestures near the followed GPS fix, matching GPS-heading follow behavior.
+- A **Map Camera Profile** for compass follow is applied only after a real compass heading is available; heading zero is not used as a placeholder for compass readiness.
+- A style reload is treated as a **Map Camera Intent** that preserves the current manual camera snapshot or recomputes the active logical target without resetting heading or pitch.
+- A weather view uses a **Map Camera Profile** rather than a direct zoom change; it keeps the current map center while applying a weather overview zoom and low or flat pitch.
+- A **Map Camera Controller** uses **App Settings** such as map style, navigation mode, and perspective mode, but those settings remain durable preferences outside the controller.
 - A **Privacy Zone** limits what **Ride Recording** data is retained without changing **Live State**.
 - A **Ride Recording** becomes part of **Ride History**.
 - A **Moving Window** belongs to one **Ride Recording** and is derived from which **Telemetry Samples** are excluded from speed metrics; a Ride Recording without one is excluded from **Ride History**.
 - A **Ride History Marker** belongs to **Ride History** and may explain where a **Ride Recording** lost or regained board data.
+- An **Idle Pause** belongs to one **Ride Recording**, begins after a sustained absence of moving **Telemetry Samples**, keeps the **Board Session** live at a reduced poll rate, and produces a **Ride History Marker**; its sample gap stays inside the **Moving Window** (and counts toward ride time) when it occurs between two moving spans.
 - A **Media History Asset** is a local-only view of an OS photo-library asset matched to one selected **Ride Recording** by capture time and placed from a nearby recording-backed **GPS Fix**.
 - A **Tune Snapshot** belongs to the currently connected **Board** and is read-only.
 - A **Tune Profile** belongs to a **Board** and stores semantic field values independently of firmware schema.
 - A **Tune History Entry** captures the previous state of a **Tune Profile** before each explicit save.
 - An **Alert Rule** evaluates against live **Telemetry Samples**.
 - An **Alert Message Template** belongs to one **Alert Rule**.
+- A **Watch Mirror** receives **Watch Frames** and **Watch Alerts** from the phone and never sends data back; it is not a **Board**, a **Board Session**, or a source of **Telemetry Samples**.
+- A **Watch Frame** is derived from **Live State** and is only pushed while a **Board Session** is producing **Telemetry Samples**.
+- A **Watch Alert** is pushed when an **Alert Rule** fires on the phone and does not re-evaluate any threshold on the **Watch Mirror**.
 - An **App Setting** affects app behavior and is not part of a **Tune Profile** or **Board** identity.
 - A **Diagnostic Event** may describe failures around a **Board**, **Live State**, **Telemetry Sample**, **Ride Recording**, or **Tune Profile** workflow.
+- A **Group Ride** contains zero or more **Riders** and exists only while at least one **Rider** is present; it owns no durable truth and is never written to **Ride History**.
+- A **Rider** may be in at most one **Group Ride** at a time and is identified independently of any **Board**.
+- A **Rider Presence** belongs to one **Rider** in one **Group Ride**, derives location from a **GPS Fix** and optional speed/**Battery SoC Estimate** from a live **Board Session**, and is not produced while the Rider is inside a **Privacy Zone**.
+- A **Group Ride** requires only a phone **GPS Fix** to join; a **Board Session** is optional and only enriches a **Rider Presence**, never gates it.
 
 ## Example Dialogue
 
@@ -155,6 +221,14 @@ _Avoid_: Error log, debug session, crash report
 - "error" may mean crash, handled failure, UI message, or diagnostic clue; resolved term: use **Diagnostic Event** for app-observed abnormal conditions worth reviewing.
 - "telemetry marker" names the storage table, but map-visible history annotations are **Ride History Markers**.
 - "point" may mean a GPS coordinate, route coordinate, history annotation, or user-authored map location; resolved term: use **Map Point** for user-authored map locations.
+- "map manager" may mean camera orchestration, map style selection, layer visibility, or map data ownership; resolved term: use **Map Camera Controller** for camera orchestration only.
+- "camera command" and direct method-style names obscure who chooses the final camera; resolved term: use **Map Camera Intent** for requests handled by the **Map Camera Controller**.
+- "route correction" sounds like changing Ride History data; resolved term: use **History Camera Refinement** for camera-only retargeting from approximate to exact ride framing.
+- "tilt setting" is too narrow because pitch depends on zoom, heading, padding, and view intent; resolved term: use **Map Camera Profile**.
 - "filter" may mean dropping samples, smoothing charts, or excluding implausible values from metrics; resolved term: use **Metric Sanitizer** for metric exclusion that preserves original samples.
 - "save area" or "safe area" may mean a privacy boundary around home or work; resolved term: use **Privacy Zone**.
 - "smoother" is avoided in the raw-telemetry layer (see **Metric Sanitizer**) but is legitimate for the **Battery SoC Estimate**, a processed derived value that smooths the percentage only — never the raw voltage **Telemetry Sample**.
+- "BMS telemetry" may mean live smart-BMS cell values or a durable battery-health archive; resolved: use **Live BMS Series** for the ephemeral in-memory cell-voltage window (retained by `liveHistoryLimit`, never persisted), distinct from scalar **Telemetry Samples**. No durable BMS/battery-health store exists; if one is ever added it needs its own term and a rest-normalized capture trigger.
+- "pause" may mean stopping the **Board Session** versus temporarily halting sample persistence; resolved: **Idle Pause** halts **Ride Recording** sample persistence only — the **Board Session** stays connected and live at a reduced poll rate.
+- "ride" may mean a personal persisted capture or a live shared room; resolved terms: use **Ride Recording** for the local persisted capture and **Group Ride** for the live shared room. The two are independent — a Rider can do either, both, or neither.
+- "presence" / "location share" may mean a one-off map dot or the live group feed; resolved term: use **Rider Presence** for what a **Rider** shares into a **Group Ride**.

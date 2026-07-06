@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Animated, Modal, Pressable, StyleSheet, Text, View } from 'react-native'
+import { Animated, Modal, Pressable, StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 
 import { Button } from '@/components/ui/base/Button'
 import { theme } from '@/constants/theme'

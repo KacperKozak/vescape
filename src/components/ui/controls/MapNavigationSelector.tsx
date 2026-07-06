@@ -8,7 +8,7 @@ import { type ReactNode } from 'react'
 import { StyleSheet, View } from 'react-native'
 
 import { MapOptionSelector } from '@/components/ui/controls/MapOptionSelector'
-import { MAP_NAVIGATION_MODES, type MapNavigationMode } from '@/constants/mapStyles'
+import { AVAILABLE_NAVIGATION_MODES, type MapNavigationMode } from '@/constants/mapStyles'
 import { theme } from '@/constants/theme'
 
 const COLLAPSED_ICON_COLOR = theme.palette.slate.textPrimary
@@ -29,7 +29,7 @@ export function MapNavigationSelector({
   onSelect,
 }: MapNavigationSelectorProps) {
   const options: { key: MapNavigationMode; label: string; icon: ReactNode }[] =
-    MAP_NAVIGATION_MODES.map((option) => ({
+    AVAILABLE_NAVIGATION_MODES.map((option) => ({
       ...option,
       icon: getNavigationIcon(option.key, activeMode),
     }))

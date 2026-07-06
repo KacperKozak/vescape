@@ -1,4 +1,5 @@
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { theme } from '@/constants/theme'
 import { Input } from '@/components/ui/forms/Input'
 

@@ -1,20 +1,59 @@
+import * as Sentry from '@sentry/react-native'
+import { useFonts } from 'expo-font'
 import { Stack } from 'expo-router'
+import * as SplashScreen from 'expo-splash-screen'
 import { StatusBar } from 'expo-status-bar'
 import { useEffect } from 'react'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 
 import { DiagnosticErrorBoundary } from '@/components/domain/main/DiagnosticErrorBoundary'
 import { HeaderBackButton } from '@/components/ui/base/HeaderBackButton'
+import { initSentry } from '@/config/sentry'
 import { stackScreens } from '@/navigation/routes'
 import { useAlertsStore } from '@/store/alertsStore'
+import { startAppDataSync } from '@/store/appDataSync'
+import { useGroupRideStore } from '@/store/groupRideStore'
+import { useRiderStore } from '@/store/riderStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { theme } from '@/constants/theme'
 
-export default function RootLayout() {
+// Keep the native splash visible until Raleway loads so there is no font-flash
+// on cold start. `expo-router` already prevents auto-hide; this makes the gate
+// explicit and ties `hideAsync()` to font readiness.
+void SplashScreen.preventAutoHideAsync()
+
+initSentry()
+
+function RootLayout() {
+  const [fontsLoaded, fontError] = useFonts({
+    'Raleway-300': require('../../assets/fonts/Raleway-300.ttf'),
+    'Raleway-400': require('../../assets/fonts/Raleway-400.ttf'),
+    'Raleway-500': require('../../assets/fonts/Raleway-500.ttf'),
+    'Raleway-600': require('../../assets/fonts/Raleway-600.ttf'),
+    'Raleway-700': require('../../assets/fonts/Raleway-700.ttf'),
+    'Raleway-800': require('../../assets/fonts/Raleway-800.ttf'),
+    'Raleway-900': require('../../assets/fonts/Raleway-900.ttf'),
+  })
+
+  useEffect(() => {
+    if (fontsLoaded || fontError) void SplashScreen.hideAsync()
+  }, [fontsLoaded, fontError])
+
   useEffect(() => {
     void useSettingsStore.getState().load()
     void useAlertsStore.getState().load()
+    void useRiderStore.getState().load()
+    useGroupRideStore.getState().startObserving()
+    const stopAppDataSync = startAppDataSync()
+    return () => {
+      useGroupRideStore.getState().stopObserving()
+      stopAppDataSync()
+    }
   }, [])
+
+  // Hold the splash until Raleway is ready (or fails to load). Returning null
+  // keeps the native splash up without an unmount/mount churn.
+  if (!fontsLoaded && !fontError) return null
 
   return (
     <DiagnosticErrorBoundary>
@@ -23,7 +62,7 @@ export default function RootLayout() {
           screenOptions={{
             headerStyle: { backgroundColor: theme.palette.slate.bg },
             headerTintColor: theme.palette.slate.textPrimary,
-            headerTitleStyle: { fontWeight: '600', fontSize: 14 },
+            headerTitleStyle: { fontFamily: theme.font('600'), fontSize: 14 },
             headerTitleAlign: 'center',
             headerShadowVisible: false,
             headerLeft: () => <HeaderBackButton />,
@@ -39,7 +78,6 @@ export default function RootLayout() {
             options={{ title: 'Debug recordings' }}
           />
           <Stack.Screen name={stackScreens.settingsComponents} options={{ title: 'Components' }} />
-          <Stack.Screen name={stackScreens.settingsDiagnostic} options={{ title: 'Diagnostic' }} />
           <Stack.Screen
             name={stackScreens.settingsNavigationDiagnostic}
             options={{ title: 'Navigation diagnostics' }}
@@ -50,8 +88,8 @@ export default function RootLayout() {
           />
           <Stack.Screen name={stackScreens.settingsOther} options={{ title: 'Other' }} />
           <Stack.Screen
-            name={stackScreens.settingsSoundPlayground}
-            options={{ title: 'Sound Playground' }}
+            name={stackScreens.settingsRawSettings}
+            options={{ title: 'Raw settings' }}
           />
           <Stack.Screen
             name={stackScreens.settingsPrivacyZones}
@@ -66,6 +104,7 @@ export default function RootLayout() {
           <Stack.Screen name={stackScreens.settingsGraphs} options={{ title: 'Graphs' }} />
           <Stack.Screen name={stackScreens.settingsDatabase} options={{ title: 'Database' }} />
           <Stack.Screen name={stackScreens.settingsAbout} options={{ title: 'About us' }} />
+          <Stack.Screen name={stackScreens.controlBatteryRaw} options={{ title: 'Raw BMS' }} />
           <Stack.Screen name={stackScreens.tune} options={{ title: 'Tune' }} />
           <Stack.Screen name={stackScreens.tuneHistory} options={{ title: 'Tune History' }} />
           <Stack.Screen name={stackScreens.addBoardScan} options={{ title: 'Pair Board' }} />
@@ -78,3 +117,5 @@ export default function RootLayout() {
     </DiagnosticErrorBoundary>
   )
 }
+
+export default Sentry.wrap(RootLayout)

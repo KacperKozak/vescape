@@ -7,6 +7,7 @@ import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
 
+// @parity /modules/vesc-ble/ios/telemetry/TelemetryDao.swift
 @Dao
 interface TelemetryDao {
   @Insert
@@ -69,6 +70,9 @@ interface TelemetryDao {
 
   @Query("SELECT * FROM map_points ORDER BY created_at ASC")
   suspend fun getMapPoints(): List<MapPointEntity>
+
+  @Query("SELECT * FROM map_points WHERE kind = 'direction' LIMIT 1")
+  suspend fun getDirectionMapPoint(): MapPointEntity?
 
   @Insert(onConflict = OnConflictStrategy.REPLACE)
   suspend fun upsertMapPoint(point: MapPointEntity)
@@ -396,6 +400,8 @@ interface TelemetryDao {
   @Query("DELETE FROM app_settings WHERE key = :key")
   suspend fun deleteAppSetting(key: String)
 
+  // Tune Profile / Tune History DAO. Transactional bodies below are mirrored in Swift.
+  // @parity /modules/vesc-ble/ios/telemetry/TuneProfileStore.swift
   @Query("SELECT * FROM tune_profiles WHERE board_id = :boardId ORDER BY created_at ASC")
   suspend fun getTuneProfilesByBoard(boardId: String): List<TuneProfileEntity>
 

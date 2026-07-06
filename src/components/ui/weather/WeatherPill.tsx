@@ -1,5 +1,6 @@
 import { ArrowDownIcon, ArrowUpIcon, DropIcon, SunHorizonIcon } from 'phosphor-react-native'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 
 import { WeatherIcon } from '@/components/ui/weather/WeatherIcon'
 import { WeatherStat } from '@/components/ui/weather/WeatherStat'

@@ -5,6 +5,7 @@ internal sealed class RefloatConfigWriteVerification {
   data class Failure(val message: String) : RefloatConfigWriteVerification()
 }
 
+// @parity /modules/vesc-ble/ios/RefloatConfigWriteVerifier.swift
 internal object RefloatConfigWriteVerifier {
   fun verifyExactBytes(expected: ByteArray, actual: ByteArray): RefloatConfigWriteVerification {
     if (expected.contentEquals(actual)) return RefloatConfigWriteVerification.Success

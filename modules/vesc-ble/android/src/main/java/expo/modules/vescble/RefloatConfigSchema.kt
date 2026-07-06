@@ -5,6 +5,7 @@ import java.security.MessageDigest
 import java.util.zip.InflaterInputStream
 import javax.xml.parsers.DocumentBuilderFactory
 
+// @parity /modules/vesc-ble/ios/RefloatConfigSchema.swift
 internal enum class RefloatConfigValueType(val byteSize: Int) {
   FLOAT32(4),
   FLOAT32_SCALED(4),

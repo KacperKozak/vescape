@@ -18,6 +18,7 @@ import java.util.zip.ZipOutputStream
 private const val MANIFEST_ENTRY = "manifest.json"
 private const val DATABASE_ENTRY = "db.sqlite"
 
+// @parity /modules/vesc-ble/ios/telemetry/DatabaseBackupManager.swift
 object DatabaseBackupManager {
   suspend fun createBackup(context: Context): Map<String, Any?> {
     val appContext = context.applicationContext

@@ -1,4 +1,4 @@
-appId: com.anonymous.vescpoc
+appId: app.vescape
 ---
 - tapOn:
     id: board-selector-trigger

@@ -1,6 +1,6 @@
 import { StyleSheet, ScrollView } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { ClockCountdownIcon, GaugeIcon, WaveformIcon } from 'phosphor-react-native'
+import { ClockCountdownIcon, GaugeIcon, WaveformIcon, WatchIcon } from 'phosphor-react-native'
 import { useShallow } from 'zustand/react/shallow'
 
 import { theme } from '@/constants/theme'
@@ -11,11 +11,18 @@ import { IconHero } from '@/components/ui/settings/IconHero'
 import { useSettingsStore } from '@/store/settingsStore'
 
 export default function LiveTelemetrySettingsScreen() {
-  const { liveHistoryLimit, telemetryPollRateHz, socEstimateWindowSeconds, set } = useSettingsStore(
+  const {
+    liveHistoryLimit,
+    telemetryPollRateHz,
+    socEstimateWindowSeconds,
+    wearMirrorIntervalMs,
+    set,
+  } = useSettingsStore(
     useShallow((s) => ({
       liveHistoryLimit: s.liveHistoryLimit,
       telemetryPollRateHz: s.telemetryPollRateHz,
       socEstimateWindowSeconds: s.socEstimateWindowSeconds,
+      wearMirrorIntervalMs: s.wearMirrorIntervalMs,
       set: s.set,
     })),
   )
@@ -84,6 +91,27 @@ export default function LiveTelemetrySettingsScreen() {
                   const clampedValue = Math.min(120, Math.max(0, nextValue))
                   if (clampedValue !== socEstimateWindowSeconds) {
                     void set('socEstimateWindowSeconds', clampedValue)
+                  }
+                }}
+              />
+            }
+          />
+          <SettingsRow
+            icon={WatchIcon}
+            iconColor={theme.palette.amber.color}
+            label="Watch push interval"
+            hint="Watch Mirror update cadence. Lower = faster wrist updates (stress test)"
+            right={
+              <Stepper
+                value={wearMirrorIntervalMs}
+                unit="ms"
+                min={50}
+                max={10000}
+                step={(v, dir) => (dir === 1 ? (v < 500 ? 50 : 100) : v <= 500 ? 50 : 100)}
+                onChange={(nextValue) => {
+                  const clampedValue = Math.min(10000, Math.max(50, nextValue))
+                  if (clampedValue !== wearMirrorIntervalMs) {
+                    void set('wearMirrorIntervalMs', clampedValue)
                   }
                 }}
               />
