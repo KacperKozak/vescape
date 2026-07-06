@@ -21,7 +21,7 @@ import {
 } from 'vesc-ble'
 
 import { nearbyRides, type NearbyRide } from '@/lib/groupRide/nearby'
-import { riderRoster, type RosterRider } from '@/lib/groupRide/roster'
+import { riderRoster, rosterRowsEqual, type RosterRider } from '@/lib/groupRide/roster'
 import { useRiderStore } from '@/store/riderStore'
 import { SERVER_WS_URL } from '@/config/server'
 
@@ -249,9 +249,12 @@ function deriveRoster(
   const activeRideId = patch.activeRideId ?? current.activeRideId
   const roster = patch.roster ?? current.roster
   const ownLocation = patch.ownLocation ?? current.ownLocation
+  const rows = riderRoster(roster, useRiderStore.getState().riderId, ownLocation)
   return {
     activeRideId,
     roster,
-    rosterRows: riderRoster(roster, useRiderStore.getState().riderId, ownLocation),
+    // Keep the previous reference when nothing visible changed, so the 1s
+    // freshness tick and GPS ticks don't fan out to selectors as new arrays.
+    rosterRows: rosterRowsEqual(rows, current.rosterRows) ? current.rosterRows : rows,
   }
 }

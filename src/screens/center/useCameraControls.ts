@@ -7,6 +7,7 @@ import type { MapNavigationMode } from '@/constants/mapStyles'
 import { distanceMeters, zoomLevelForDelta } from '@/helpers/mapGeometry'
 import {
   initialMapCameraControllerState,
+  mapCameraModesEqual,
   reduceMapCameraIntent,
   type MapCameraMode,
 } from '@/lib/map/cameraController'
@@ -179,7 +180,13 @@ export function useCameraControls({
     ((options?: { resetPadding?: boolean; animationDuration?: number }) => void) | null
   >(null)
   const controllerStateRef = useRef(initialMapCameraControllerState)
-  const [cameraMode, setCameraModeState] = useState<MapCameraMode>({ kind: 'liveFollow' })
+  const [cameraMode, setCameraModeRaw] = useState<MapCameraMode>({ kind: 'liveFollow' })
+  // Reducer intents return fresh mode objects even when the logical mode is
+  // unchanged (e.g. per-frame BrowseManually during pan) — keep the previous
+  // state reference in that case so React bails out of the re-render.
+  const setCameraModeState = useCallback((mode: MapCameraMode) => {
+    setCameraModeRaw((previous) => (mapCameraModesEqual(previous, mode) ? previous : mode))
+  }, [])
   const followGps = cameraMode.kind === 'liveFollow'
   const windowSize = Dimensions.get('window')
   const viewportHeight = windowSize.height

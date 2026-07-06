@@ -27,6 +27,14 @@ export type MapCameraMode =
       phase: 'preview' | 'route' | 'manualInspect'
     }
 
+/** True when both modes are the same logical camera mode (value equality). */
+export function mapCameraModesEqual(a: MapCameraMode, b: MapCameraMode): boolean {
+  if (a === b) return true
+  if (a.kind !== b.kind) return false
+  if (a.kind !== 'rideHistory' || b.kind !== 'rideHistory') return true
+  return a.selectionKey === b.selectionKey && a.phase === b.phase
+}
+
 export interface MapCameraControllerState {
   mode: MapCameraMode
   followZoomLevel: number | null

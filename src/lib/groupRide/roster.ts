@@ -20,6 +20,31 @@ export function clientFreshRoster(riders: GroupRideRider[], nowMs: number): Grou
     }))
 }
 
+/**
+ * True when both roster views are equivalent, so store updates can keep the
+ * previous array reference and downstream selectors/memos stay quiet.
+ * Rows are shallow-compared: `presence`/`trail` come from the same source
+ * rider objects, so reference equality covers them.
+ */
+export function rosterRowsEqual(a: RosterRider[], b: RosterRider[]): boolean {
+  if (a === b) return true
+  if (a.length !== b.length) return false
+  return a.every((row, index) => {
+    const other = b[index]
+    return (
+      row.id === other.id &&
+      row.name === other.name &&
+      row.color === other.color &&
+      row.presence === other.presence &&
+      row.trail === other.trail &&
+      row.stale === other.stale &&
+      row.lastSeen === other.lastSeen &&
+      row.distanceM === other.distanceM &&
+      row.isSelf === other.isSelf
+    )
+  })
+}
+
 export function riderRoster(
   riders: GroupRideRider[],
   ownRiderId: string | null,
