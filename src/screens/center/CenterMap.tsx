@@ -41,6 +41,7 @@ import { useGroupRideStore } from '@/store/groupRideStore'
 import { useNavigationDiagnosticsStore } from '@/store/navigationDiagnosticsStore'
 import { useRiderStore } from '@/store/riderStore'
 import { useSettingsStore } from '@/store/settingsStore'
+import { useRenderRateWarning } from '@/hooks/useRenderRateWarning'
 
 import type { CenterViewState } from './centerViewState'
 import {
@@ -306,8 +307,12 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
   const retainedGpsBearing = gpsPresentation.nextReliableBearing
   const gpsHeadingMode = mapNavigationMode === 'gpsHeading'
   const phoneHeadingMode = mapNavigationMode === 'phoneHeading'
-  const phoneHeading = usePhoneHeading(!historyActive && !gpsHeadingMode)
+  // Phone-heading (Compass) is disabled — its magnetometer stream re-rendered the
+  // map at ~24Hz and overheated the device. Restore alongside DISABLED_NAVIGATION_MODES
+  // (see issue #183). Original gate: usePhoneHeading(!historyActive && !gpsHeadingMode)
+  const phoneHeading = usePhoneHeading(false)
   const headingFollowMode = gpsHeadingMode || phoneHeadingMode
+  useRenderRateWarning('CenterMap')
   const phoneHeadingDeg = phoneHeading.headingDeg
   const phoneCameraHeadingDeg = phoneHeadingDeg
   const targetFollowHeadingDeg = gpsHeadingMode
