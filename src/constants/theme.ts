@@ -214,8 +214,7 @@ export const interaction = {
 /** Weights shipped as static Raleway instances in `assets/fonts/`. Android ignores the
  *  `wght` variation axis of a custom variable font (it renders the file's default
  *  instance), so each weight is its own font file and family name. */
-export const fontWeights = ['300', '400', '500', '600', '700', '800', '900'] as const
-export type FontWeight = (typeof fontWeights)[number]
+export type FontWeight = '300' | '400' | '500' | '600' | '700' | '800' | '900'
 
 /** App-wide UI font family for a given weight. Load via `useFonts` in
  *  `src/app/_layout.tsx` before first render. Monospace readouts

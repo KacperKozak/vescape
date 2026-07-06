@@ -16,17 +16,15 @@ const toFontWeight = (weight: TextStyle['fontWeight']): FontWeight => {
  * App-wide `Text` wrapper. Resolves `fontWeight` from `style` to the matching
  * static Raleway family (`theme.font(weight)`) — Android cannot vary a custom
  * font's weight at render time, so each weight is a separate font file. Pass an
- * explicit `fontFamily` in `style` (`'monospace'` for readouts) to opt out.
+ * explicit `fontFamily` in `style` (`'monospace'` for readouts) to opt out;
+ * opted-out styles keep their `fontWeight` untouched.
  * Defaults `color` to the primary text token so unstyled text never falls back
  * to RN's black on the dark surface.
  */
 export function Text({ style, ...rest }: TextProps) {
   const flat = StyleSheet.flatten(style)
-  const fontFamily = flat?.fontFamily ?? font(toFontWeight(flat?.fontWeight))
-  return (
-    <RNText
-      style={[{ color: palette.slate.textPrimary }, style, { fontFamily, fontWeight: undefined }]}
-      {...rest}
-    />
-  )
+  const raleway = flat?.fontFamily
+    ? null
+    : { fontFamily: font(toFontWeight(flat?.fontWeight)), fontWeight: undefined }
+  return <RNText style={[{ color: palette.slate.textPrimary }, style, raleway]} {...rest} />
 }

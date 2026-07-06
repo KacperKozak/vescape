@@ -83,7 +83,7 @@ export default function TypographyComponentsPage() {
                   style={{
                     color: r.color,
                     fontSize: r.size,
-                    fontWeight: r.weight as any,
+                    fontWeight: r.weight,
                   }}
                 >
                   {r.sample}
@@ -98,7 +98,7 @@ export default function TypographyComponentsPage() {
             {WEIGHTS.map((w) => (
               <View key={w.label} style={styles.weightRow}>
                 <Text style={styles.weightLabel}>{w.label}</Text>
-                <Text style={{ fontSize: 16, fontWeight: w.weight as any }}>{w.sample}</Text>
+                <Text style={{ fontSize: 16, fontWeight: w.weight }}>{w.sample}</Text>
               </View>
             ))}
           </View>

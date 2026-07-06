@@ -11,7 +11,8 @@ export const inputBase = {
   paddingVertical: 12,
   color: theme.palette.slate.textPrimary,
   fontSize: 15,
-  fontWeight: '600' as const,
+  // TextInput bypasses the Text wrapper, so the Raleway family is set directly.
+  fontFamily: theme.font('600'),
 }
 
 interface InputProps extends TextInputProps {}
