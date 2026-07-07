@@ -1,7 +1,9 @@
-const PHONE_HEADING_INTERVAL_MS = 33
-const PHONE_HEADING_MIN_SMOOTHING_ALPHA = 0.1
-const PHONE_HEADING_MAX_SMOOTHING_ALPHA = 0.45
+const PHONE_HEADING_INTERVAL_MS = 16
+const PHONE_HEADING_DEAD_BAND_DEG = 0.15
+const PHONE_HEADING_MIN_SMOOTHING_ALPHA = 0.04
+const PHONE_HEADING_MAX_SMOOTHING_ALPHA = 0.14
 const PHONE_HEADING_FULL_SPEED_DELTA_DEG = 90
+const PHONE_HEADING_MAX_STEP_DEG = 6
 
 export interface DeviceMotionMeasurement {
   rotation: { alpha: number; beta: number; gamma: number; timestamp: number }
@@ -35,7 +37,7 @@ function normalizeHeading(degrees: number): number {
   return ((degrees % 360) + 360) % 360
 }
 
-function headingDeltaDeg(from: number, to: number): number {
+export function headingDeltaDeg(from: number, to: number): number {
   return ((((to - from) % 360) + 540) % 360) - 180
 }
 
@@ -60,7 +62,23 @@ export function smoothPhoneHeading(
   const alpha =
     PHONE_HEADING_MIN_SMOOTHING_ALPHA +
     (PHONE_HEADING_MAX_SMOOTHING_ALPHA - PHONE_HEADING_MIN_SMOOTHING_ALPHA) * speedRatio
-  return normalizeHeading(previous + delta * alpha * responseScale)
+  const step = clamp(
+    delta * alpha * responseScale,
+    -PHONE_HEADING_MAX_STEP_DEG * responseScale,
+    PHONE_HEADING_MAX_STEP_DEG * responseScale,
+  )
+  return normalizeHeading(previous + step)
+}
+
+export function deadBandPhoneHeading(previous: number | null, next: number): number {
+  const smoothed = smoothPhoneHeading(previous, next)
+  if (
+    previous != null &&
+    Math.abs(headingDeltaDeg(previous, smoothed)) < PHONE_HEADING_DEAD_BAND_DEG
+  ) {
+    return previous
+  }
+  return smoothed
 }
 
 export function phoneHeadingAnimationDuration(): number {

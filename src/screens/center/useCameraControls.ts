@@ -130,8 +130,7 @@ interface UseCameraControlsParams {
   gpsHeadingMode: boolean
   phoneHeadingMode: boolean
   phoneHeadingReady: boolean
-  phoneHeadingOneShot: boolean
-  followHeadingDeg: number
+  getFollowHeadingDeg: () => number
   resetHeadingOnRecenter: boolean
   liveFollowUpdatesEnabled: boolean
   followAnimationDuration: number
@@ -155,8 +154,7 @@ export function useCameraControls({
   gpsHeadingMode,
   phoneHeadingMode,
   phoneHeadingReady,
-  phoneHeadingOneShot,
-  followHeadingDeg,
+  getFollowHeadingDeg,
   resetHeadingOnRecenter,
   liveFollowUpdatesEnabled,
   followAnimationDuration,
@@ -173,8 +171,6 @@ export function useCameraControls({
   const lastFollowKeyRef = useRef<string | null>(null)
   const followZoomLevelRef = useRef<number | null>(null)
   const previousGpsHeadingModeRef = useRef(gpsHeadingMode && !phoneHeadingMode)
-  const previousPhoneHeadingModeRef = useRef(phoneHeadingMode)
-  const phoneHeadingAppliedRef = useRef(false)
   const recenterLiveRef = useRef<
     ((options?: { resetPadding?: boolean; animationDuration?: number }) => void) | null
   >(null)
@@ -273,7 +269,7 @@ export function useCameraControls({
     const effect = reduceMapCameraIntent(controllerStateRef.current, {
       type: 'FollowLive',
       gpsCamera: { ...gpsCamera, zoomLevel: baseZoomLevel },
-      followHeadingDeg,
+      followHeadingDeg: getFollowHeadingDeg(),
       navigationMode: effectiveNavigationMode,
       perspectiveEnabled,
       viewportHeight,
@@ -287,7 +283,7 @@ export function useCameraControls({
       heading: currentCameraRef.current?.heading ?? followCamera.heading,
     }
   }, [
-    followHeadingDeg,
+    getFollowHeadingDeg,
     gpsCamera,
     mapNavigationMode,
     perspectiveEnabled,
@@ -559,14 +555,14 @@ export function useCameraControls({
             ? getLiveFollowCamera()
             : (currentCameraRef.current ?? {
                 ...gpsCamera,
-                heading: followHeadingDeg,
+                heading: getFollowHeadingDeg(),
                 pitch: getPitchForZoom(gpsCamera.zoomLevel, perspectiveEnabled),
               })
         previewPanBaseRef.current =
           followGps && gpsHeadingMode
             ? {
                 ...baseCamera,
-                heading: followHeadingDeg,
+                heading: getFollowHeadingDeg(),
               }
             : baseCamera
         setFollowGps(false)
@@ -700,7 +696,7 @@ export function useCameraControls({
       applyLiveFollowCamera,
       dispatchCameraIntent,
       followGps,
-      followHeadingDeg,
+      getFollowHeadingDeg,
       getLiveFollowCamera,
       getViewfinderCoordinateFromMap,
       gpsCamera,
@@ -768,31 +764,6 @@ export function useCameraControls({
     )
     return () => cancelAnimationFrame(frame)
   }, [gpsHeadingMode, historyActive, phoneHeadingMode])
-
-  useEffect(() => {
-    const wasPhoneHeadingMode = previousPhoneHeadingModeRef.current
-    previousPhoneHeadingModeRef.current = phoneHeadingMode
-    if (!phoneHeadingMode) {
-      phoneHeadingAppliedRef.current = false
-      return
-    }
-    if (
-      !phoneHeadingOneShot ||
-      historyActive ||
-      !phoneHeadingReady ||
-      phoneHeadingAppliedRef.current
-    )
-      return
-
-    phoneHeadingAppliedRef.current = true
-    const frame = requestAnimationFrame(() => {
-      recenterLiveRef.current?.({ resetPadding: true })
-    })
-    return () => {
-      if (!wasPhoneHeadingMode) phoneHeadingAppliedRef.current = false
-      cancelAnimationFrame(frame)
-    }
-  }, [historyActive, phoneHeadingMode, phoneHeadingOneShot, phoneHeadingReady])
 
   useEffect(() => {
     if (!historyActive || !historySelectionKey) return

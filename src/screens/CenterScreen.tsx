@@ -1,5 +1,6 @@
 import { useCallback, useRef, useState } from 'react'
 import { ActivityIndicator, View, StyleSheet } from 'react-native'
+import { useSharedValue } from 'react-native-reanimated'
 
 import { VescapeWordmark } from '@/components/ui/base/VescapeWordmark'
 import { CenterMap, type CenterMapHandle } from '@/screens/center/CenterMap'
@@ -33,15 +34,22 @@ export function CenterScreen({
   onAddBoard,
 }: CenterScreenProps) {
   const mapRef = useRef<CenterMapHandle>(null)
+  const mapHeading = useSharedValue(0)
+  const handleHeadingChange = useCallback(
+    (heading: number) => {
+      mapHeading.set(heading)
+    },
+    [mapHeading],
+  )
   const [offscreenMapIndicators, setOffscreenMapIndicators] = useState<
     OffscreenMapIndicatorState[]
   >([])
   const controller = useCenterScreenController({ mapRef })
   const dismissMapSelector = controller.dismissMapSelector
-  const [mapInteractionRevision, setMapInteractionRevision] = useState(0)
+  const mapInteractionHandlerRef = useRef<() => void>(() => {})
   const handleMapInteraction = useCallback(() => {
     dismissMapSelector()
-    setMapInteractionRevision((revision) => revision + 1)
+    mapInteractionHandlerRef.current()
   }, [dismissMapSelector])
   const handleOffscreenIndicatorPress = useCallback(
     (indicator: OffscreenMapIndicatorState) => {
@@ -89,7 +97,7 @@ export function CenterScreen({
         rotationLocked={controller.rotationLocked}
         perspectiveEnabled={controller.perspectiveEnabled}
         onPerspectiveChange={controller.setPerspectiveEnabled}
-        onHeadingChange={controller.setHeading}
+        onHeadingChange={handleHeadingChange}
         onLongPressTarget={(target) =>
           void controller.replaceDirectionPoint(target.latitude, target.longitude)
         }
@@ -112,7 +120,7 @@ export function CenterScreen({
       <CenterOverlays
         mode={controller.mode}
         mapRef={mapRef}
-        mapInteractionRevision={mapInteractionRevision}
+        mapInteractionHandlerRef={mapInteractionHandlerRef}
         board={{
           boards,
           activeBoardId,
@@ -124,7 +132,7 @@ export function CenterScreen({
           onAddBoard,
         }}
         map={{
-          heading: controller.heading,
+          heading: mapHeading,
           mapStyleKey: controller.mapStyleKey,
           setMapStyleKey: controller.setMapStyleKey,
           mapNavigationMode: controller.mapNavigationMode,

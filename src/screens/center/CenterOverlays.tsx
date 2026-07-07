@@ -20,6 +20,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withTiming,
+  type SharedValue,
 } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { HistoryMarker, MapPointKind } from 'vesc-ble'
@@ -77,7 +78,7 @@ interface CenterBoardOverlayProps {
 }
 
 interface CenterMapOverlayProps {
-  heading: number
+  heading: SharedValue<number>
   mapStyleKey: MapStyleKey
   setMapStyleKey: (key: MapStyleKey) => void
   mapNavigationMode: MapNavigationMode
@@ -142,7 +143,7 @@ interface CenterHistoryOverlayProps {
 interface CenterOverlaysProps {
   mode: CenterViewState
   mapRef: RefObject<CenterMapHandle | null>
-  mapInteractionRevision: number
+  mapInteractionHandlerRef: RefObject<() => void>
   board: CenterBoardOverlayProps
   map: CenterMapOverlayProps
   history: CenterHistoryOverlayProps
@@ -160,7 +161,7 @@ function isCompactMapPointKind(kind: MapPointKind) {
 interface FullMapControlsProps {
   mapRef: RefObject<CenterMapHandle | null>
   map: CenterMapOverlayProps
-  mapInteractionRevision: number
+  mapInteractionHandlerRef: RefObject<() => void>
   top: number
   bottom: number
 }
@@ -182,19 +183,17 @@ const centerPlacementPointerEntering = () => {
 function FullMapControls({
   mapRef,
   map,
-  mapInteractionRevision,
+  mapInteractionHandlerRef,
   top,
   bottom,
 }: FullMapControlsProps) {
-  const [searchOpenedAtRevision, setSearchOpenedAtRevision] = useState<number | null>(null)
+  const [searchOpen, setSearchOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [searchResults, setSearchResults] = useState<MapSearchResult[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
   const [searchError, setSearchError] = useState<string | null>(null)
   const [addMenuOpen, setAddMenuOpen] = useState(false)
   const [filterMenuOpen, setFilterMenuOpen] = useState(false)
-  const searchOpen = searchOpenedAtRevision === mapInteractionRevision
-
   useEffect(() => {
     const query = searchQuery.trim()
     if (!searchOpen || query.length < 2) {
@@ -227,16 +226,31 @@ function FullMapControls({
   }, [map.weatherLocation, searchOpen, searchQuery])
 
   const openSearch = useCallback(() => {
-    setSearchOpenedAtRevision(mapInteractionRevision)
-  }, [mapInteractionRevision])
+    setSearchOpen(true)
+  }, [])
 
   const closeSearch = useCallback(() => {
-    setSearchOpenedAtRevision(null)
+    setSearchOpen(false)
     setSearchQuery('')
     setSearchResults([])
     setSearchError(null)
     setSearchLoading(false)
   }, [])
+
+  useEffect(() => {
+    const dismissTransientControls = () => {
+      if (!searchOpen && !addMenuOpen && !filterMenuOpen) return
+      closeSearch()
+      setAddMenuOpen(false)
+      setFilterMenuOpen(false)
+    }
+    mapInteractionHandlerRef.current = dismissTransientControls
+    return () => {
+      if (mapInteractionHandlerRef.current === dismissTransientControls) {
+        mapInteractionHandlerRef.current = () => {}
+      }
+    }
+  }, [addMenuOpen, closeSearch, filterMenuOpen, mapInteractionHandlerRef, searchOpen])
 
   const handleSearchQueryChange = useCallback((query: string) => {
     setSearchQuery(query)
@@ -251,7 +265,7 @@ function FullMapControls({
 
   const handleSearchSelect = useCallback(
     (result: MapSearchResult) => {
-      setSearchOpenedAtRevision(null)
+      setSearchOpen(false)
       setSearchQuery(result.title)
       mapRef.current?.focusCoordinate([result.longitude, result.latitude])
       void map.replaceDirectionPoint(result.latitude, result.longitude)
@@ -544,7 +558,7 @@ function CenterPlacementPointer() {
 export function CenterOverlays({
   mode,
   mapRef,
-  mapInteractionRevision,
+  mapInteractionHandlerRef,
   board,
   map,
   history,
@@ -728,7 +742,7 @@ export function CenterOverlays({
           <FullMapControls
             mapRef={mapRef}
             map={map}
-            mapInteractionRevision={mapInteractionRevision}
+            mapInteractionHandlerRef={mapInteractionHandlerRef}
             top={Math.max(insets.top, 8)}
             bottom={aboveStripBottom - 112}
           />
