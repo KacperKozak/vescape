@@ -1,11 +1,13 @@
-import { ScrollView, StyleSheet, View } from 'react-native'
+import { Linking, ScrollView, StyleSheet, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { CrownIcon, PaletteIcon, UsersIcon } from 'phosphor-react-native'
+import { CrownIcon, PaletteIcon, ShieldCheckIcon, UsersIcon } from 'phosphor-react-native'
 
 import { IconHero } from '@/components/ui/settings/IconHero'
 import { SettingsCard } from '@/components/ui/settings/SettingsCard'
 import { SettingsRow } from '@/components/ui/settings/SettingsRow'
 import { theme } from '@/constants/theme'
+
+const PRIVACY_POLICY_URL = 'https://vescape.app/privacy'
 
 export default function AboutScreen() {
   return (
@@ -28,6 +30,13 @@ export default function AboutScreen() {
             iconColor={theme.palette.yellow.color}
             label="Bartosz Kozak"
             hint="One more feature, app will hold it."
+          />
+          <SettingsRow
+            icon={ShieldCheckIcon}
+            iconColor={theme.palette.cyan.color}
+            label="Privacy policy"
+            hint="Data, Group Ride sharing, and contact"
+            onPress={() => Linking.openURL(PRIVACY_POLICY_URL)}
           />
         </SettingsCard>
       </ScrollView>
