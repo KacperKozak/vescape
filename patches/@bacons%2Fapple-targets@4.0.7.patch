@@ -1,0 +1,32 @@
+diff --git a/build/with-xcode-changes.js b/build/with-xcode-changes.js
+index 343bcb93acde6926388ad54e309922d4962c2a38..04bae02024614c14e5c39dc9ec328f0a363ec426 100644
+--- a/build/with-xcode-changes.js
++++ b/build/with-xcode-changes.js
+@@ -208,19 +208,23 @@ async function applyXcodeChanges(config, project, props) {
+     }
+     if (targetToUpdate) {
+         // Remove existing build phases
+-        targetToUpdate.props.buildConfigurationList.props.buildConfigurations.forEach((config) => {
++        // Capture the list in a local before removing referrers: `targetToUpdate` is one of the
++        // list's referrers, so `removeReference` below sets `targetToUpdate.props.buildConfigurationList`
++        // to undefined. Using the local keeps the reference alive for `removeFromProject`.
++        const buildConfigurationList = targetToUpdate.props.buildConfigurationList;
++        buildConfigurationList.props.buildConfigurations.forEach((config) => {
+             config.getReferrers().forEach((ref) => {
+                 ref.removeReference(config.uuid);
+             });
+             config.removeFromProject();
+         });
+         // Remove existing build configuration list
+-        targetToUpdate.props.buildConfigurationList
++        buildConfigurationList
+             .getReferrers()
+             .forEach((ref) => {
+-            ref.removeReference(targetToUpdate.props.buildConfigurationList.uuid);
++            ref.removeReference(buildConfigurationList.uuid);
+         });
+-        targetToUpdate.props.buildConfigurationList.removeFromProject();
++        buildConfigurationList.removeFromProject();
+         // Create new build phases
+         targetToUpdate.props.buildConfigurationList =
+             (0, configuration_list_1.createConfigurationListForType)(project, props);
