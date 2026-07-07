@@ -1,4 +1,3 @@
-import { router } from 'expo-router'
 import * as Haptics from 'expo-haptics'
 import {
   ArrowLeftIcon,
@@ -11,7 +10,7 @@ import {
   SlidersHorizontalIcon,
   XIcon,
 } from 'phosphor-react-native'
-import { useCallback, useEffect, useLayoutEffect, useState, type RefObject } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import { ActivityIndicator, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native'
 import { Text } from '@/components/ui/base/Text'
 import Animated, {
@@ -25,6 +24,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { HistoryMarker, MapPointKind } from 'vesc-ble'
 
 import { ConfirmModal } from '@/components/ui/modals/ConfirmModal'
+import { EdgeDrawer } from '@/components/ui/overlays/AnchoredSheet'
 import { MediaHistoryViewer } from '@/components/domain/history/MediaHistoryViewer'
 import { FloatingBar } from '@/components/domain/main/FloatingBar'
 import { HistorySessionSheet } from '@/components/domain/history/HistorySessionSheet'
@@ -42,7 +42,6 @@ import {
 import { theme } from '@/constants/theme'
 import { searchMapResults, type MapSearchResult } from '@/lib/map/search'
 import type { HistoryMetricKey } from '@/lib/history/metricColorScale'
-import { routes } from '@/navigation/routes'
 import { BottomTelemetryStrip, STRIP_CONTENT_HEIGHT } from '@/screens/center/BottomTelemetryStrip'
 import { type CenterMapHandle } from '@/screens/center/CenterMap'
 import {
@@ -60,6 +59,7 @@ import { LiveHud } from '@/screens/center/LiveHud'
 import { MapRevealGesture } from '@/screens/center/MapRevealGesture'
 import { MapVignette } from '@/screens/center/MapVignette'
 import { TopBar } from '@/screens/center/TopBar'
+import { TuneDrawer } from '@/screens/center/TuneDrawer'
 import type { Board } from '@/store/boardStore'
 import type { HistorySession, TelemetryMinuteBucket, TelemetrySample } from '@/store/historyStore'
 import type { MediaHistoryAsset, MediaHistoryMatchDiagnostics } from '@/lib/history/mediaHistory'
@@ -555,6 +555,8 @@ export function CenterOverlays({
   const [panelHeight, setPanelHeight] = useState(0)
   const [removeConfirmVisible, setRemoveConfirmVisible] = useState(false)
   const [revealGestureActive, setRevealGestureActive] = useState(false)
+  const [tuneDrawerOpen, setTuneDrawerOpen] = useState(false)
+  const tuneButtonRef = useRef<View>(null)
   const revealProgress = useSharedValue(0)
   const dragOpacity = useSharedValue(0)
   const telemetryReturnOpacity = useSharedValue(mode === 'telemetry' ? 1 : 0)
@@ -694,15 +696,29 @@ export function CenterOverlays({
             { bottom: aboveStripBottom - (HISTORY_BUTTON_SIZE - RECORD_BUTTON_HEIGHT) / 2 },
           ]}
         />
-        <IconButton
-          icon={SlidersHorizontalIcon}
-          size="lg"
-          onPress={() => router.push(routes.tune)}
+        <View
+          ref={tuneButtonRef}
+          collapsable={false}
           style={[
             styles.tuneButton,
             { bottom: aboveStripBottom - (HISTORY_BUTTON_SIZE - RECORD_BUTTON_HEIGHT) / 2 },
           ]}
-        />
+        >
+          <IconButton
+            icon={SlidersHorizontalIcon}
+            size="lg"
+            onPress={() => setTuneDrawerOpen(true)}
+          />
+        </View>
+        <EdgeDrawer
+          visible={tuneDrawerOpen}
+          triggerRef={tuneButtonRef}
+          title="Tune"
+          icon={SlidersHorizontalIcon}
+          onClose={() => setTuneDrawerOpen(false)}
+        >
+          <TuneDrawer onNavigate={() => setTuneDrawerOpen(false)} />
+        </EdgeDrawer>
       </Animated.View>
 
       <View

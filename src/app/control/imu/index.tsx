@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useMemo } from 'react'
+import { type ReactNode, useMemo } from 'react'
 import { StyleSheet, View, type ViewStyle } from 'react-native'
 import { Text } from '@/components/ui/base/Text'
 import Animated, {
@@ -10,21 +10,14 @@ import Animated, {
 import { computeAutoRange } from '@/components/ui/charts/chartMath'
 import { ControlDetailLayout } from '@/components/domain/control/ControlDetailLayout'
 import { MetricDetailChart } from '@/components/domain/control/MetricDetailChart'
-import { RemoteTiltPad } from '@/components/domain/control/RemoteTiltPad'
+import { RemoteTiltControl } from '@/components/domain/control/RemoteTiltControl'
 import { toTelemetryChartPoints } from '@/components/domain/control/metricDetailData'
 import { TickText } from '@/components/ui/base/TickText'
 import { telemetry } from '@/constants/telemetry'
 import { useLiveMetric, liveSelectors } from '@/hooks/useLiveMetric'
 import { useLiveWindowMs } from '@/store/settingsStore'
-import { useBleStore } from '@/store/bleStore'
 import { theme } from '@/constants/theme'
 import { liveTelemetryRuntime } from '@/lib/telemetry/liveTelemetryRuntime'
-import {
-  lockRemoteTilt as lockRemoteTiltNative,
-  releaseRemoteTilt,
-  setRemoteTilt,
-  stopRemoteTilt,
-} from 'vesc-ble'
 
 const pitchCfg = telemetry.pitch
 const rollCfg = telemetry.roll
@@ -143,33 +136,7 @@ export default function ImuScreen() {
   const roll = useLiveMetric(liveSelectors.roll)
   const balancePitch = useLiveMetric(liveSelectors.balancePitch)
   const windowMs = useLiveWindowMs()
-  const boardConnected = useBleStore((state) => state.status === 'connected')
-  const syncRemoteTilt = useBleStore((state) => state.syncRemoteTilt)
   const hot = liveTelemetryRuntime.values
-
-  // Rehydrate the pad without reseeding native telemetry into chart history.
-  useEffect(() => {
-    syncRemoteTilt()
-  }, [syncRemoteTilt])
-
-  const updateRemoteTilt = (value: number) => {
-    void setRemoteTilt(value)
-  }
-
-  // On lift, native eases the held tilt back to neutral over the chosen time.
-  const easeRemoteTilt = (value: number, durationMs: number) => {
-    void releaseRemoteTilt(value, durationMs)
-  }
-
-  // Lock band: hold the tilt indefinitely (native keeps streaming until cancel).
-  const lockRemoteTilt = (value: number) => {
-    void lockRemoteTiltNative(value)
-  }
-
-  // Cancel: native snaps to neutral; the pad stops its own thumb glide.
-  const cancelRemoteTilt = () => {
-    void stopRemoteTilt()
-  }
 
   const pitchPoints = useMemo(() => toTelemetryChartPoints(pitch), [pitch])
 
@@ -224,22 +191,7 @@ export default function ImuScreen() {
         <HotAttitudeBars pitch={hot.pitch} roll={hot.roll} balancePitch={hot.balancePitch} />
       </View>
 
-      <View style={styles.remoteTiltControl}>
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionLabel}>REMOTE TILT</Text>
-        </View>
-        <Text style={styles.remoteTiltWarning}>Moves the setpoint live while riding.</Text>
-        <RemoteTiltPad
-          disabled={!boardConnected}
-          onChange={updateRemoteTilt}
-          onRelease={easeRemoteTilt}
-          onLock={lockRemoteTilt}
-          onCancel={cancelRemoteTilt}
-        />
-        {!boardConnected ? (
-          <Text style={styles.remoteTiltDisabled}>Connect board to control tilt.</Text>
-        ) : null}
-      </View>
+      <RemoteTiltControl />
 
       <MetricDetailChart
         metric={pitchCfg}
@@ -317,18 +269,6 @@ const styles = StyleSheet.create({
   attitudeGrid: {
     flexDirection: 'row',
     gap: 8,
-  },
-  remoteTiltControl: {
-    gap: 8,
-  },
-  remoteTiltDisabled: {
-    color: theme.palette.slate.textDim,
-    fontSize: 12,
-  },
-  remoteTiltWarning: {
-    color: theme.status.warning.text,
-    fontSize: 12,
-    fontWeight: '600',
   },
   attitudeView: {
     flex: 1,

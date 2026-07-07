@@ -14,6 +14,7 @@ interface SwitchWidgetProps {
   /** Accent for the icon and the active track/thumb. */
   accent?: string
   size?: WidgetSize
+  disabled?: boolean
   accessibilityLabel?: string
 }
 
@@ -26,6 +27,7 @@ export function SwitchWidget({
   hint,
   accent = theme.palette.sky.color,
   size = 'full',
+  disabled,
   accessibilityLabel,
 }: SwitchWidgetProps) {
   const square = size === 'square'
@@ -34,6 +36,7 @@ export function SwitchWidget({
     <Switch
       value={value}
       onValueChange={onValueChange}
+      disabled={disabled}
       trackColor={{ false: theme.palette.slate.border, true: theme.alpha(accent, 0.6) }}
       thumbColor={value ? accent : theme.palette.slate.textMuted}
       ios_backgroundColor={theme.palette.slate.border}
@@ -43,7 +46,7 @@ export function SwitchWidget({
 
   if (square) {
     return (
-      <View style={[styles.widget, styles.widgetSquare]}>
+      <View style={[styles.widget, styles.widgetSquare, disabled && styles.disabled]}>
         {IconComponent ? <IconComponent size={26} color={accent} weight="duotone" /> : null}
         <Text style={styles.label} numberOfLines={2}>
           {label}
@@ -54,7 +57,7 @@ export function SwitchWidget({
   }
 
   return (
-    <View style={[styles.widget, styles.widgetRow]}>
+    <View style={[styles.widget, styles.widgetRow, disabled && styles.disabled]}>
       {IconComponent ? <IconComponent size={22} color={accent} weight="duotone" /> : null}
       <View style={styles.text}>
         <Text style={styles.label}>{label}</Text>
@@ -85,6 +88,9 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     gap: 2,
+  },
+  disabled: {
+    opacity: 0.45,
   },
   label: {
     color: theme.palette.slate.textPrimary,
