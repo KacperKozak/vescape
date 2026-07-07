@@ -198,7 +198,7 @@ function StepperWidgetShowcase() {
       <StepperWidget
         icon={ArrowsDownUpIcon}
         label="Move board"
-        accent={theme.palette.purple.color}
+        accent={theme.palette.cyan.color}
         onPrevious={() => {}}
         onNext={() => {}}
       />
@@ -206,7 +206,7 @@ function StepperWidgetShowcase() {
       <StepperWidget
         icon={ArrowsDownUpIcon}
         label="Move board"
-        accent={theme.palette.purple.color}
+        accent={theme.palette.cyan.color}
         disabled
         onPrevious={() => {}}
         onNext={() => {}}
