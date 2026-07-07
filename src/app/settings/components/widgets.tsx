@@ -157,8 +157,8 @@ function SelectWidgetShowcase() {
           icon={FadersIcon}
           label="Tunes"
           value={value}
-          description="Profiles are saved in app. Editing opens Tune page for now."
-          accent={theme.palette.sky.color}
+          description="Pick how your board should feel."
+          accent={theme.palette.purple.color}
           onPress={() => {}}
           onSelectPress={() => setOpen(true)}
         />

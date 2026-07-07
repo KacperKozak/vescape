@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/ui/base/Text'
-import { CaretDownIcon, CaretUpIcon, CircleHalfTiltIcon } from 'phosphor-react-native'
+import { CaretDownIcon, CaretUpIcon, JoystickIcon } from 'phosphor-react-native'
 
 import { RemoteTiltPad } from '@/components/domain/control/RemoteTiltPad'
 import { theme } from '@/constants/theme'
@@ -36,13 +36,13 @@ export function RemoteTiltControl({
         accessibilityLabel="Remote tilt"
       >
         <View style={styles.sectionTitleRow}>
-          <CircleHalfTiltIcon size={22} color={theme.palette.sky.color} weight="duotone" />
+          <JoystickIcon size={22} color={theme.palette.sky.color} weight="duotone" />
           <View style={styles.sectionText}>
             <Text style={styles.sectionTitle} numberOfLines={1}>
-              Remote tilt
+              Tilt
             </Text>
             <Text style={styles.sectionDescription} numberOfLines={2}>
-              Moves the setpoint live while riding.
+              Adjust board tilt from your phone in real time.
             </Text>
           </View>
         </View>
@@ -79,7 +79,7 @@ const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: 12,
   },
   sectionHeaderPressable: {

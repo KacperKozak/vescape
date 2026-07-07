@@ -62,8 +62,8 @@ export function TuneDrawer({ onNavigate }: TuneDrawerProps) {
         icon={FadersIcon}
         label="Tunes"
         value={activeName}
-        description="Profiles are saved in app. Editing opens Tune page for now."
-        accent={theme.palette.sky.color}
+        description="Pick how your board should feel."
+        accent={theme.palette.purple.color}
         showSelect={hasProfiles}
         onPress={openTune}
         onSelectPress={() => setTuneSelectOpen((open) => !open)}

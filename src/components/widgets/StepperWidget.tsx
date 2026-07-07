@@ -35,15 +35,9 @@ export function StepperWidget({
   onNext,
 }: StepperWidgetProps) {
   return (
-    <View style={[styles.widget, size === 'half' && styles.half]}>
-      {IconComponent ? (
-        <IconComponent
-          size={22}
-          color={disabled ? theme.palette.slate.textDim : accent}
-          weight="duotone"
-        />
-      ) : null}
-      <Text style={[styles.label, disabled && styles.labelDisabled]} numberOfLines={1}>
+    <View style={[styles.widget, size === 'half' && styles.half, disabled && styles.disabled]}>
+      {IconComponent ? <IconComponent size={22} color={accent} weight="duotone" /> : null}
+      <Text style={styles.label} numberOfLines={1}>
         {label}
       </Text>
       <View style={styles.actions}>
@@ -75,15 +69,15 @@ const styles = StyleSheet.create({
   half: {
     minHeight: 64,
   },
+  disabled: {
+    opacity: 0.45,
+  },
   label: {
     flex: 1,
     minWidth: 0,
     color: theme.palette.slate.textPrimary,
     fontSize: 15,
     fontWeight: '700',
-  },
-  labelDisabled: {
-    color: theme.palette.slate.textDim,
   },
   actions: {
     flexDirection: 'row',

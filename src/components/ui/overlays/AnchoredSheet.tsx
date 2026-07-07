@@ -287,6 +287,7 @@ export function EdgeDrawer({
   const [dismissRange, setDismissRange] = useState(0)
   const scrollRef = useRef<ScrollView>(null)
   const positionedRef = useRef(false)
+  const dismissRangeRef = useRef(0)
   const scrollOffset = useSharedValue(0)
   const animatedDismissRange = useSharedValue(1)
   const nativeScrollGesture = useMemo(() => Gesture.Native(), [])
@@ -298,6 +299,7 @@ export function EdgeDrawer({
       setOpensFromTop(fromTop)
       setMounted(true)
       setDismissRange(0)
+      dismissRangeRef.current = 0
       positionedRef.current = false
       scrollOffset.value = 0
     }
@@ -348,8 +350,10 @@ export function EdgeDrawer({
 
   const handleContentSizeChange = useCallback(
     (_contentWidth: number, contentHeight: number) => {
+      const previousRange = dismissRangeRef.current
       const range = Math.max(1, contentHeight - height)
       setDismissRange(range)
+      dismissRangeRef.current = range
       animatedDismissRange.value = range
 
       if (!positionedRef.current) {
@@ -358,6 +362,14 @@ export function EdgeDrawer({
         scrollOffset.value = initialOffset
         requestAnimationFrame(() => {
           scrollRef.current?.scrollTo({ y: initialOffset, animated: false })
+        })
+        return
+      }
+
+      const bottomDrawerWasFullyOpen = !opensFromTop && scrollOffset.value >= previousRange - 1
+      if (bottomDrawerWasFullyOpen && range > previousRange) {
+        requestAnimationFrame(() => {
+          scrollRef.current?.scrollTo({ y: range, animated: true })
         })
       }
     },
