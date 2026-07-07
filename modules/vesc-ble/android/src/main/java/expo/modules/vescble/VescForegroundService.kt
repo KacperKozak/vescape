@@ -382,10 +382,15 @@ class VescForegroundService : Service() {
             ACTION_STOP_GPS_MONITORING -> controller.stopGpsMonitoring()
             ACTION_START_GROUP_RIDE_OBSERVE -> controller.consumePendingGroupRideObserve()
             ACTION_STOP_GROUP_RIDE_OBSERVE -> controller.stopGroupRideObserve()
-            ACTION_AUTO_CONNECT_SELECTED_BOARD -> controller.autoConnectSelectedBoard()
-            ACTION_COMPANION_DEVICE_APPEARED ->
+            ACTION_AUTO_CONNECT_SELECTED_BOARD -> {
+                controller.promoteConnectedDeviceForeground()
+                controller.autoConnectSelectedBoard()
+            }
+            ACTION_COMPANION_DEVICE_APPEARED -> {
+                controller.promoteConnectedDeviceForeground()
                 intent.getStringExtra(EXTRA_COMPANION_ADDRESS)?.let(controller::connectCompanionDevice)
                     ?: controller.stopIfIdle()
+            }
             else -> controller.stopIfIdle()
         }
         return if (controller.isStopping) START_NOT_STICKY else START_STICKY

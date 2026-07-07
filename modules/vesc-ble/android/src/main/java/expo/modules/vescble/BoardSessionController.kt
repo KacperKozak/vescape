@@ -458,6 +458,22 @@ internal class BoardSessionController(private val service: VescForegroundService
         connectSelectedBoard(recordingEnabled = false)
     }
 
+    /**
+     * Satisfy Android's startForegroundService() deadline for native BLE starts that must do async
+     * settings/DB work before a Board Session exists. The launcher already preflights
+     * BLUETOOTH_CONNECT for these starts, so CONNECTED_DEVICE is the narrow valid type here.
+     */
+    fun promoteConnectedDeviceForeground() {
+        isStoppingService = false
+        startForeground(
+            foregroundServiceTypeForConnectedDevicePromotion(
+                boardActive = boardConfig != null,
+                gpsActive = gpsMonitor.active,
+                groupRideObserveActive = groupRideObserver.active,
+            ),
+        )
+    }
+
     /** @parity /modules/vesc-ble/ios/VescBleModule.swift `autoConnectSelectedBoard` */
     fun autoConnectSelectedBoard() {
         VescForegroundService.appDataScope.launch {
@@ -727,13 +743,17 @@ internal class BoardSessionController(private val service: VescForegroundService
     }
 
     private fun reassertForeground() {
+        val type = foregroundServiceType()
+        if (type == 0) {
+            stopIfIdle()
+            return
+        }
+        startForeground(type)
+    }
+
+    private fun startForeground(type: Int) {
         val notification = presenter.build(reportedBoardPhase())
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            val type = foregroundServiceType()
-            if (type == 0) {
-                stopIfIdle()
-                return
-            }
             service.startForeground(NOTIFICATION_ID, notification, type)
         } else {
             service.startForeground(NOTIFICATION_ID, notification)
