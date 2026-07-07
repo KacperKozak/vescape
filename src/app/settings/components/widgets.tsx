@@ -9,11 +9,13 @@ import {
   ChartLineUpIcon,
   FadersIcon,
   GaugeIcon,
+  JoystickIcon,
   MapPinIcon,
   StackIcon,
   XIcon,
 } from 'phosphor-react-native'
 import { Button } from '@/components/ui/base/Button'
+import { CollapsibleWidget } from '@/components/widgets/CollapsibleWidget'
 import { Placeholder } from '@/components/ui/base/Placeholder'
 import { CanvasWidget } from '@/components/widgets/CanvasWidget'
 import { DialWidget } from '@/components/widgets/DialWidget'
@@ -215,6 +217,42 @@ function StepperWidgetShowcase() {
   )
 }
 
+function CollapsibleWidgetShowcase() {
+  return (
+    <ShowcaseCard name="CollapsibleWidget">
+      <SizeLabel>collapsed by default</SizeLabel>
+      <CollapsibleWidget
+        icon={JoystickIcon}
+        title="Tilt"
+        description="Adjust board tilt from your phone in real time."
+        accent={theme.palette.sky.color}
+        expandedHeight={130}
+      >
+        <Placeholder
+          icon={JoystickIcon}
+          description="Expanded control content goes here."
+          style={styles.collapsiblePreview}
+        />
+      </CollapsibleWidget>
+      <SizeLabel>expanded by default</SizeLabel>
+      <CollapsibleWidget
+        icon={JoystickIcon}
+        title="Tilt"
+        description="Adjust board tilt from your phone in real time."
+        accent={theme.palette.sky.color}
+        defaultExpanded
+        expandedHeight={130}
+      >
+        <Placeholder
+          icon={JoystickIcon}
+          description="Expanded control content goes here."
+          style={styles.collapsiblePreview}
+        />
+      </CollapsibleWidget>
+    </ShowcaseCard>
+  )
+}
+
 function SwitchWidgetShowcase() {
   const [full, setFull] = useState(true)
   const [a, setA] = useState(false)
@@ -412,6 +450,7 @@ export default function WidgetsPage() {
         <LinkWidgetShowcase />
         <SelectWidgetShowcase />
         <StepperWidgetShowcase />
+        <CollapsibleWidgetShowcase />
         <SwitchWidgetShowcase />
         <DialWidgetShowcase />
         <CanvasWidgetShowcase />
@@ -441,6 +480,7 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   meta: { color: theme.palette.slate.textSecondary, fontSize: 13 },
+  collapsiblePreview: { minHeight: 120 },
   optionList: { gap: 6 },
   optionRow: {
     paddingHorizontal: 12,

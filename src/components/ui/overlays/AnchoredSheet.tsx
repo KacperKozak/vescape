@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Animated,
   Dimensions,
@@ -55,6 +55,12 @@ const DRAWER_ENTER_FROM_BOTTOM = new Keyframe({
   0: { opacity: 0, transform: [{ translateY: DRAWER_OPEN_TRANSLATE_Y }] },
   100: { opacity: 1, transform: [{ translateY: 0 }] },
 }).duration(DRAWER_OPEN_DURATION)
+
+const EdgeDrawerScrollContext = createContext<(() => void) | null>(null)
+
+export function useEdgeDrawerScrollToOpenEdge() {
+  return useContext(EdgeDrawerScrollContext)
+}
 type SheetLayoutMode = {
   mode: 'floating'
   matchTriggerWidth: boolean
@@ -392,6 +398,13 @@ export function EdgeDrawer({
     })
   }, [dismissRange, opensFromTop])
 
+  const scrollToOpenEdge = useCallback(() => {
+    scrollRef.current?.scrollTo({
+      y: opensFromTop ? 0 : dismissRangeRef.current + height,
+      animated: true,
+    })
+  }, [height, opensFromTop])
+
   const handleScrollEnd = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const offset = event.nativeEvent.contentOffset.y
@@ -507,7 +520,9 @@ export function EdgeDrawer({
                       <Text style={styles.drawerTitle}>{title}</Text>
                     </Pressable>
                   ) : null}
-                  <View style={styles.drawerContent}>{children}</View>
+                  <EdgeDrawerScrollContext.Provider value={scrollToOpenEdge}>
+                    <View style={styles.drawerContent}>{children}</View>
+                  </EdgeDrawerScrollContext.Provider>
                   {opensFromTop ? <View style={styles.grabber} /> : null}
                 </View>
                 {opensFromTop ? emptyDismissArea : null}
