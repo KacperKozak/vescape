@@ -59,7 +59,7 @@ export function CenterScreen({
         return
       }
       controller.handleMapFocus()
-      mapRef.current?.focusCoordinate(indicator.coordinate)
+      mapRef.current?.focusCoordinate(indicator.coordinate.value)
     },
     [controller],
   )

@@ -608,7 +608,7 @@ export const CenterMap = forwardRef<CenterMapHandle, CenterMapProps>(function Ce
         centerCoordinate:
           indicator.type === 'direction' && directionPoint
             ? [directionPoint.longitude, directionPoint.latitude]
-            : indicator.coordinate,
+            : indicator.coordinate.value,
         zoomLevel: currentCamera?.zoomLevel,
         heading: currentCamera?.heading,
         pitch: currentCamera?.pitch,

@@ -8,6 +8,17 @@ describe('map camera controller', () => {
     zoomLevel: 13,
   }
 
+  test('preserves state identity when manual browsing is already active', () => {
+    const browsing = reduceMapCameraIntent(initialMapCameraControllerState, {
+      type: 'BrowseManually',
+    }).state
+
+    const repeated = reduceMapCameraIntent(browsing, { type: 'BrowseManually' })
+
+    expect(repeated.state).toBe(browsing)
+    expect(repeated.effect).toBeNull()
+  })
+
   test('routes live follow through the GPS heading profile', () => {
     const result = reduceMapCameraIntent(initialMapCameraControllerState, {
       type: 'FollowLive',
