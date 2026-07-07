@@ -1,5 +1,5 @@
 import type { ExpoConfig } from 'expo/config'
-import pkg from './package.json'
+import pkg from './package.json' with { type: 'json' }
 import { androidVersionCode } from './src/helpers/version.ts'
 
 const config: ExpoConfig = {
@@ -101,6 +101,7 @@ const config: ExpoConfig = {
     './plugins/withGradleJvmArgs',
     './plugins/withWearMirror',
     './plugins/withSentryNativeInit',
+    './plugins/withAndroidSigningConfig',
   ],
   experiments: {
     typedRoutes: true,

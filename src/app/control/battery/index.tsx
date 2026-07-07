@@ -9,22 +9,35 @@ import { MetricDetailChart } from '@/components/domain/control/MetricDetailChart
 import { MetricDetailGauge } from '@/components/domain/control/MetricDetailGauge'
 import { toTelemetryChartPoints } from '@/components/domain/control/metricDetailData'
 import { IconButton } from '@/components/ui/base/IconButton'
+import { computeAutoRange } from '@/components/ui/charts/chartMath'
 import { telemetry } from '@/constants/telemetry'
+import { theme } from '@/constants/theme'
 import { useLiveMetric, liveSelectors } from '@/hooks/useLiveMetric'
+import { deriveBatteryConfig } from '@/lib/battery'
+import { useBoardStore } from '@/store/boardStore'
 import { routes } from '@/navigation/routes'
 import { useLiveWindowMs } from '@/store/settingsStore'
 
 const battVoltageCfg = telemetry.battVoltage
+const battCurrentCfg = telemetry.battCurrent
 const battPercentCfg = { ...battVoltageCfg, unit: '%', decimals: 0 }
 const formatPercent = (value: number) => `${Math.round(value)}%`
+const formatVoltage = battVoltageCfg.formatWithUnit
 
 const PERCENT_RANGE = { y: { min: 0, max: 100 } }
+/** Battery % is the main line; voltage rides under it as a dim, de-emphasized gray. */
+const VOLTAGE_LINE_COLOR = theme.palette.slate.textMuted
 
 export default function BatteryScreen() {
   const navigation = useNavigation()
   const router = useRouter()
   const batteryPercent = useLiveMetric(liveSelectors.batteryPercent)
+  const batteryVoltage = useLiveMetric(liveSelectors.batteryVoltage)
+  const batteryCurrent = useLiveMetric(liveSelectors.batteryCurrent)
   const windowMs = useLiveWindowMs()
+
+  // One cursor shared by every chart on this screen — scrubbing any chart moves all of them.
+  const scrubTimeMs = useSharedValue<number | null>(null)
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -39,6 +52,43 @@ export default function BatteryScreen() {
   }, [navigation, router])
 
   const percentPoints = useMemo(() => toTelemetryChartPoints(batteryPercent), [batteryPercent])
+  const voltagePoints = useMemo(() => toTelemetryChartPoints(batteryVoltage), [batteryVoltage])
+  const currentPoints = useMemo(() => toTelemetryChartPoints(batteryCurrent), [batteryCurrent])
+
+  const board = useBoardStore((s) => s.boards.find((b) => b.id === s.activeBoardId))
+  const battery = useMemo(
+    () => deriveBatteryConfig(board?.batteryConfig ?? null),
+    [board?.batteryConfig],
+  )
+
+  // Pin the V axis to the pack's 0%..100% span so the V line plots at the same height as the
+  // % line and only sag under load separates them. Auto-ranging stretches noise to full height.
+  const voltageRange = useMemo(() => {
+    if (battery.warning == null) {
+      return { y: { min: battery.minVoltage, max: battery.maxVoltage } }
+    }
+    return computeAutoRange(voltagePoints, {
+      includeZero: false,
+      minSpan: 5,
+      paddingRatio: 0.1,
+      fallbackMin: 30,
+      fallbackMax: 60,
+    })
+  }, [battery, voltagePoints])
+  const currentRange = useMemo(
+    () => computeAutoRange(currentPoints, { baseline: battCurrentCfg.chartRange }),
+    [currentPoints],
+  )
+
+  const voltageSecondary = useMemo(
+    () => ({
+      points: voltagePoints,
+      range: voltageRange,
+      color: VOLTAGE_LINE_COLOR,
+      formatValue: formatVoltage,
+    }),
+    [voltagePoints, voltageRange],
+  )
 
   // Gauge reads the latest of the calm ~1Hz decimated series — the same SoC source/cadence the
   // center BatteryIndicator uses. The per-frame `liveTelemetryRuntime` tick carries the identical
@@ -62,6 +112,18 @@ export default function BatteryScreen() {
         range={PERCENT_RANGE}
         formatValue={formatPercent}
         windowMs={windowMs}
+        secondary={voltageSecondary}
+        scrubTimeMs={scrubTimeMs}
+        height={80}
+      />
+      <MetricDetailChart
+        label={battCurrentCfg.label}
+        metric={battCurrentCfg}
+        points={currentPoints}
+        range={currentRange}
+        windowMs={windowMs}
+        scrubTimeMs={scrubTimeMs}
+        height={80}
       />
       <BmsCellVoltages />
     </ControlDetailLayout>

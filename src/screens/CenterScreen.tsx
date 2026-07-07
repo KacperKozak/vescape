@@ -51,6 +51,25 @@ export function CenterScreen({
     dismissMapSelector()
     mapInteractionHandlerRef.current()
   }, [dismissMapSelector])
+  const { replaceDirectionPoint, clearSelectedMapPoints, removeMapPoint, clearDirectionPoint } =
+    controller
+  const handleLongPressTarget = useCallback(
+    (target: { latitude: number; longitude: number }) =>
+      void replaceDirectionPoint(target.latitude, target.longitude),
+    [replaceDirectionPoint],
+  )
+  const handleMapPress = useCallback(() => {
+    handleMapInteraction()
+    clearSelectedMapPoints()
+  }, [clearSelectedMapPoints, handleMapInteraction])
+  const handleRemoveMapPoint = useCallback(
+    (id: string) => void removeMapPoint(id),
+    [removeMapPoint],
+  )
+  const handleClearDirectionPoint = useCallback(
+    () => void clearDirectionPoint(),
+    [clearDirectionPoint],
+  )
   const handleOffscreenIndicatorPress = useCallback(
     (indicator: OffscreenMapIndicatorState) => {
       controller.dismissMapSelector()
@@ -98,14 +117,9 @@ export function CenterScreen({
         perspectiveEnabled={controller.perspectiveEnabled}
         onPerspectiveChange={controller.setPerspectiveEnabled}
         onHeadingChange={handleHeadingChange}
-        onLongPressTarget={(target) =>
-          void controller.replaceDirectionPoint(target.latitude, target.longitude)
-        }
+        onLongPressTarget={handleLongPressTarget}
         onMapInteraction={handleMapInteraction}
-        onMapPress={() => {
-          handleMapInteraction()
-          controller.clearSelectedMapPoints()
-        }}
+        onMapPress={handleMapPress}
         onEnterMapMode={controller.handleMapFocus}
         onOffscreenMapIndicatorsChange={setOffscreenMapIndicators}
         directionPoint={controller.directionPoint}
@@ -113,8 +127,8 @@ export function CenterScreen({
         selectedMapPointId={controller.selectedMapPointId}
         hiddenMapPointKinds={controller.hiddenMapPointKinds}
         onToggleMapPointSelection={controller.toggleMapPointSelection}
-        onRemoveMapPoint={(id) => void controller.removeMapPoint(id)}
-        onClearDirectionPoint={() => void controller.clearDirectionPoint()}
+        onRemoveMapPoint={handleRemoveMapPoint}
+        onClearDirectionPoint={handleClearDirectionPoint}
         weatherActive={controller.weatherActive}
       />
       <CenterOverlays

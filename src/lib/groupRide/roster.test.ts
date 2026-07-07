@@ -1,7 +1,13 @@
 import { describe, expect, test } from 'bun:test'
 import type { GroupRideRider } from 'vesc-ble'
 
-import { RIDER_DROP_AFTER_MS, RIDER_STALE_AFTER_MS, clientFreshRoster, riderRoster } from './roster'
+import {
+  RIDER_DROP_AFTER_MS,
+  RIDER_STALE_AFTER_MS,
+  clientFreshRoster,
+  riderRoster,
+  rosterRowsEqual,
+} from './roster'
 
 const OWN = { lat: 50.0619, lng: 19.9368 }
 
@@ -64,5 +70,29 @@ describe('riderRoster', () => {
     const dropped = { ...rider('dropped', OWN.lat), lastSeen: now - RIDER_DROP_AFTER_MS }
 
     expect(clientFreshRoster([fresh, dropped], now).map((r) => r.id)).toEqual(['fresh'])
+  })
+})
+
+describe('rosterRowsEqual', () => {
+  test('recomputed rows from identical inputs compare equal (freshness-tick no-op)', () => {
+    const riders = [rider('bob', OWN.lat), rider('me', OWN.lat)]
+    const a = riderRoster(riders, 'me', OWN, 0)
+    const b = riderRoster(riders, 'me', OWN, 100)
+    expect(a).not.toBe(b)
+    expect(rosterRowsEqual(a, b)).toBe(true)
+  })
+
+  test('detects a rider crossing the stale threshold', () => {
+    const riders = [rider('bob', OWN.lat)]
+    const before = riderRoster(riders, null, OWN, 0)
+    const after = riderRoster(riders, null, OWN, RIDER_STALE_AFTER_MS)
+    expect(rosterRowsEqual(before, after)).toBe(false)
+  })
+
+  test('detects a distance change from own-location movement', () => {
+    const riders = [rider('bob', OWN.lat + 0.01)]
+    const near = riderRoster(riders, null, OWN, 0)
+    const far = riderRoster(riders, null, { ...OWN, lat: OWN.lat - 0.01 }, 0)
+    expect(rosterRowsEqual(near, far)).toBe(false)
   })
 })

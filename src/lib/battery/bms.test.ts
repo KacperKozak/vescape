@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test'
 import type { BmsEvent } from 'vesc-ble'
 
-import { summarizeBms } from './bms'
+import { cellBarScale, summarizeBms } from './bms'
 
 function makeBms(cellVoltages: number[], balancing: boolean[] = []): BmsEvent {
   return {
@@ -70,5 +70,25 @@ describe('summarizeBms', () => {
     expect(summary.minVoltage).toBeCloseTo(3.8)
     expect(summary.maxVoltage).toBeCloseTo(4.0)
     expect(summary.groups).toHaveLength(3)
+  })
+})
+
+describe('cellBarScale', () => {
+  it('pads the pack min/max so extremes do not pin to the track edges', () => {
+    const scale = cellBarScale(3.9, 4.1)
+    expect(scale.low).toBeCloseTo(3.892)
+    expect(scale.high).toBeCloseTo(4.108)
+  })
+
+  it('floors the span for a balanced pack instead of dividing by zero', () => {
+    const scale = cellBarScale(4.0, 4.0)
+    expect(scale.high - scale.low).toBeCloseTo(0.05)
+    expect((scale.low + scale.high) / 2).toBeCloseTo(4.0)
+  })
+
+  it('widens a barely-imbalanced pack to the floor span around its midpoint', () => {
+    const scale = cellBarScale(3.99, 4.01)
+    expect(scale.high - scale.low).toBeCloseTo(0.05)
+    expect((scale.low + scale.high) / 2).toBeCloseTo(4.0)
   })
 })
