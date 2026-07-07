@@ -5,7 +5,7 @@ import { useState } from 'react'
 
 import { SquaresFourIcon, UsersThreeIcon } from 'phosphor-react-native'
 import { ConfirmModal } from '@/components/ui/modals/ConfirmModal'
-import { CornerSheet, FloatingSheet } from '@/components/ui/overlays/AnchoredSheet'
+import { EdgeDrawer, FloatingSheet } from '@/components/ui/overlays/AnchoredSheet'
 import { useTriggerRef } from '@/components/ui/overlays/measureTrigger'
 import { IconHero } from '@/components/ui/settings/IconHero'
 import { InfoModal } from '@/components/ui/modals/InfoModal'
@@ -82,17 +82,13 @@ function TextPromptModalShowcase() {
   )
 }
 
-interface CornerSheetPositionShowcaseProps {
+interface EdgeDrawerPositionShowcaseProps {
   edge: 'auto' | 'top' | 'bottom'
   name: string
   description: string
 }
 
-function CornerSheetPositionShowcase({
-  edge,
-  name,
-  description,
-}: CornerSheetPositionShowcaseProps) {
+function EdgeDrawerPositionShowcase({ edge, name, description }: EdgeDrawerPositionShowcaseProps) {
   const triggerRef = useTriggerRef()
   const [visible, setVisible] = useState(false)
   const dragInstruction =
@@ -112,7 +108,7 @@ function CornerSheetPositionShowcase({
       }
     >
       <Text style={styles.previewHint}>{description}</Text>
-      <CornerSheet
+      <EdgeDrawer
         visible={visible}
         triggerRef={triggerRef}
         edge={edge}
@@ -126,7 +122,7 @@ function CornerSheetPositionShowcase({
         <View style={styles.tile}>
           <Text style={styles.tileText}>Release early to test spring-back.</Text>
         </View>
-      </CornerSheet>
+      </EdgeDrawer>
     </ShowcaseCard>
   )
 }
@@ -158,13 +154,13 @@ const LONG_CONTENT_SECTIONS = [
   },
 ] as const
 
-function CornerSheetLongContentShowcase() {
+function EdgeDrawerLongContentShowcase() {
   const triggerRef = useTriggerRef()
   const [visible, setVisible] = useState(false)
 
   return (
     <ShowcaseCard
-      name="CornerSheet — long scrolling content"
+      name="EdgeDrawer — long scrolling content"
       controls={
         <View ref={triggerRef} collapsable={false} style={styles.trigger}>
           <OpenButton label="Open long content" onPress={() => setVisible(true)} />
@@ -174,7 +170,7 @@ function CornerSheetLongContentShowcase() {
       <Text style={styles.previewHint}>
         Regular text scrolls first; an upward drag at the end moves the complete drawer out.
       </Text>
-      <CornerSheet
+      <EdgeDrawer
         visible={visible}
         triggerRef={triggerRef}
         edge="top"
@@ -192,7 +188,7 @@ function CornerSheetLongContentShowcase() {
             </View>
           ))}
         </View>
-      </CornerSheet>
+      </EdgeDrawer>
     </ShowcaseCard>
   )
 }
@@ -235,27 +231,27 @@ export default function ModalsPage() {
       <ScrollView contentContainerStyle={styles.content}>
         <IconHero
           icon={SquaresFourIcon}
-          description="ConfirmModal, InfoModal, TextPromptModal, CornerSheet, FloatingSheet."
+          description="ConfirmModal, InfoModal, TextPromptModal, EdgeDrawer, FloatingSheet."
         />
         <ConfirmModalShowcase />
         <InfoModalShowcase />
         <TextPromptModalShowcase />
-        <CornerSheetPositionShowcase
+        <EdgeDrawerPositionShowcase
           edge="auto"
-          name="CornerSheet — automatic edge"
+          name="EdgeDrawer — automatic edge"
           description="Chooses top or bottom from the trigger's current screen position."
         />
-        <CornerSheetPositionShowcase
+        <EdgeDrawerPositionShowcase
           edge="top"
-          name="CornerSheet — top edge"
+          name="EdgeDrawer — top edge"
           description="Always opens from the top. The complete drawer follows an upward drag."
         />
-        <CornerSheetPositionShowcase
+        <EdgeDrawerPositionShowcase
           edge="bottom"
-          name="CornerSheet — bottom edge"
+          name="EdgeDrawer — bottom edge"
           description="Always opens from the bottom. The complete drawer follows a downward drag."
         />
-        <CornerSheetLongContentShowcase />
+        <EdgeDrawerLongContentShowcase />
         <FloatingSheetShowcase />
       </ScrollView>
     </SafeAreaView>

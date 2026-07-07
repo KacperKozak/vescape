@@ -139,7 +139,7 @@ interface SheetProps {
  * Shared chrome for popover-style "sheets": a translucent, dimmed-backdrop
  * panel that scales + slides in from the trigger that opened it. Positioning
  * (grow from a screen corner vs. float centered under the trigger) is picked
- * via `layout`; {@link CornerSheet} and {@link FloatingSheet} below wire up
+ * via `layout`; {@link FloatingSheet} below wires up
  * the two shapes callers actually need.
  */
 function Sheet({
@@ -252,12 +252,10 @@ function Sheet({
   )
 }
 
-interface CornerSheetProps {
+interface EdgeDrawerProps {
   visible: boolean
   triggerRef: React.RefObject<View | null>
   onClose: () => void
-  /** Retained for call-site compatibility; edge drawers span the available width. */
-  anchor?: 'left' | 'right'
   /** Override edge selection. `auto` chooses the edge nearest the trigger. */
   edge?: 'auto' | 'top' | 'bottom'
   title?: string
@@ -270,16 +268,10 @@ interface CornerSheetProps {
  * A full-width edge drawer. It opens from the edge nearest its trigger and can
  * be dragged back toward that edge to dismiss.
  */
-export function CornerSheet({ anchor: _anchor = 'left', ...props }: CornerSheetProps) {
-  return <EdgeDrawer {...props} />
-}
-
-type EdgeDrawerProps = Omit<CornerSheetProps, 'anchor'>
-
 // Reanimated shared values are mutable handles by design. React's immutability
 // lint cannot distinguish their UI-thread writes from React-owned state.
 /* eslint-disable react-hooks/immutability */
-function EdgeDrawer({
+export function EdgeDrawer({
   visible,
   triggerRef,
   onClose,
@@ -530,7 +522,7 @@ interface FloatingSheetProps {
 
 /**
  * A compact popover that floats centered under (or above, if short on space)
- * its trigger — same translucent/animated feel as {@link CornerSheet}, sized
+ * its trigger — same translucent/animated feel as {@link EdgeDrawer}, sized
  * to its content instead of growing from a screen corner.
  */
 export function FloatingSheet({
