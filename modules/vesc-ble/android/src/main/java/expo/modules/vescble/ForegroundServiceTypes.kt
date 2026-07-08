@@ -15,3 +15,14 @@ internal fun foregroundServiceType(
     }
     return type
 }
+
+internal fun foregroundServiceTypeForConnectedDevicePromotion(
+    boardActive: Boolean,
+    gpsActive: Boolean,
+    groupRideObserveActive: Boolean,
+): Int =
+    foregroundServiceType(
+        boardActive = boardActive,
+        gpsActive = gpsActive,
+        groupRideObserveActive = groupRideObserveActive,
+    ) or ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE

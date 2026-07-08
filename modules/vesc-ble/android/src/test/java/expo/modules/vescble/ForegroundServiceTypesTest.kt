@@ -53,4 +53,30 @@ class ForegroundServiceTypesTest {
             ),
         )
     }
+
+    @Test
+    fun `connected device promotion keeps active gps location type`() {
+        assertEquals(
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE or
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION,
+            foregroundServiceTypeForConnectedDevicePromotion(
+                boardActive = false,
+                gpsActive = true,
+                groupRideObserveActive = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `connected device promotion keeps active observe remote messaging type`() {
+        assertEquals(
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE or
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING,
+            foregroundServiceTypeForConnectedDevicePromotion(
+                boardActive = false,
+                gpsActive = false,
+                groupRideObserveActive = true,
+            ),
+        )
+    }
 }

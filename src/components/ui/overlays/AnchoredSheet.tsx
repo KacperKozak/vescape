@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Animated,
   Dimensions,
@@ -55,6 +55,12 @@ const DRAWER_ENTER_FROM_BOTTOM = new Keyframe({
   0: { opacity: 0, transform: [{ translateY: DRAWER_OPEN_TRANSLATE_Y }] },
   100: { opacity: 1, transform: [{ translateY: 0 }] },
 }).duration(DRAWER_OPEN_DURATION)
+
+const EdgeDrawerScrollContext = createContext<(() => void) | null>(null)
+
+export function useEdgeDrawerScrollToOpenEdge() {
+  return useContext(EdgeDrawerScrollContext)
+}
 type SheetLayoutMode = {
   mode: 'floating'
   matchTriggerWidth: boolean
@@ -139,7 +145,7 @@ interface SheetProps {
  * Shared chrome for popover-style "sheets": a translucent, dimmed-backdrop
  * panel that scales + slides in from the trigger that opened it. Positioning
  * (grow from a screen corner vs. float centered under the trigger) is picked
- * via `layout`; {@link CornerSheet} and {@link FloatingSheet} below wire up
+ * via `layout`; {@link FloatingSheet} below wires up
  * the two shapes callers actually need.
  */
 function Sheet({
@@ -252,12 +258,10 @@ function Sheet({
   )
 }
 
-interface CornerSheetProps {
+interface EdgeDrawerProps {
   visible: boolean
   triggerRef: React.RefObject<View | null>
   onClose: () => void
-  /** Retained for call-site compatibility; edge drawers span the available width. */
-  anchor?: 'left' | 'right'
   /** Override edge selection. `auto` chooses the edge nearest the trigger. */
   edge?: 'auto' | 'top' | 'bottom'
   title?: string
@@ -270,16 +274,10 @@ interface CornerSheetProps {
  * A full-width edge drawer. It opens from the edge nearest its trigger and can
  * be dragged back toward that edge to dismiss.
  */
-export function CornerSheet({ anchor: _anchor = 'left', ...props }: CornerSheetProps) {
-  return <EdgeDrawer {...props} />
-}
-
-type EdgeDrawerProps = Omit<CornerSheetProps, 'anchor'>
-
 // Reanimated shared values are mutable handles by design. React's immutability
 // lint cannot distinguish their UI-thread writes from React-owned state.
 /* eslint-disable react-hooks/immutability */
-function EdgeDrawer({
+export function EdgeDrawer({
   visible,
   triggerRef,
   onClose,
@@ -295,6 +293,7 @@ function EdgeDrawer({
   const [dismissRange, setDismissRange] = useState(0)
   const scrollRef = useRef<ScrollView>(null)
   const positionedRef = useRef(false)
+  const dismissRangeRef = useRef(0)
   const scrollOffset = useSharedValue(0)
   const animatedDismissRange = useSharedValue(1)
   const nativeScrollGesture = useMemo(() => Gesture.Native(), [])
@@ -306,6 +305,7 @@ function EdgeDrawer({
       setOpensFromTop(fromTop)
       setMounted(true)
       setDismissRange(0)
+      dismissRangeRef.current = 0
       positionedRef.current = false
       scrollOffset.value = 0
     }
@@ -356,8 +356,10 @@ function EdgeDrawer({
 
   const handleContentSizeChange = useCallback(
     (_contentWidth: number, contentHeight: number) => {
+      const previousRange = dismissRangeRef.current
       const range = Math.max(1, contentHeight - height)
       setDismissRange(range)
+      dismissRangeRef.current = range
       animatedDismissRange.value = range
 
       if (!positionedRef.current) {
@@ -366,6 +368,14 @@ function EdgeDrawer({
         scrollOffset.value = initialOffset
         requestAnimationFrame(() => {
           scrollRef.current?.scrollTo({ y: initialOffset, animated: false })
+        })
+        return
+      }
+
+      const bottomDrawerWasFullyOpen = !opensFromTop && scrollOffset.value >= previousRange - 1
+      if (bottomDrawerWasFullyOpen && range > previousRange) {
+        requestAnimationFrame(() => {
+          scrollRef.current?.scrollTo({ y: range, animated: true })
         })
       }
     },
@@ -387,6 +397,13 @@ function EdgeDrawer({
       animated: true,
     })
   }, [dismissRange, opensFromTop])
+
+  const scrollToOpenEdge = useCallback(() => {
+    scrollRef.current?.scrollTo({
+      y: opensFromTop ? 0 : dismissRangeRef.current + height,
+      animated: true,
+    })
+  }, [height, opensFromTop])
 
   const handleScrollEnd = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -503,7 +520,9 @@ function EdgeDrawer({
                       <Text style={styles.drawerTitle}>{title}</Text>
                     </Pressable>
                   ) : null}
-                  <View style={styles.drawerContent}>{children}</View>
+                  <EdgeDrawerScrollContext.Provider value={scrollToOpenEdge}>
+                    <View style={styles.drawerContent}>{children}</View>
+                  </EdgeDrawerScrollContext.Provider>
                   {opensFromTop ? <View style={styles.grabber} /> : null}
                 </View>
                 {opensFromTop ? emptyDismissArea : null}
@@ -530,7 +549,7 @@ interface FloatingSheetProps {
 
 /**
  * A compact popover that floats centered under (or above, if short on space)
- * its trigger — same translucent/animated feel as {@link CornerSheet}, sized
+ * its trigger — same translucent/animated feel as {@link EdgeDrawer}, sized
  * to its content instead of growing from a screen corner.
  */
 export function FloatingSheet({

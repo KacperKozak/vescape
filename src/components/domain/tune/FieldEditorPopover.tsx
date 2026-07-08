@@ -5,7 +5,7 @@ import { CheckIcon, FadersIcon } from 'phosphor-react-native'
 
 import { Input } from '@/components/ui/forms/Input'
 import { Button } from '@/components/ui/base/Button'
-import { CornerSheet } from '@/components/ui/overlays/AnchoredSheet'
+import { EdgeDrawer } from '@/components/ui/overlays/AnchoredSheet'
 import { TuneDial } from '@/components/ui/tune/TuneDial'
 import { theme } from '@/constants/theme'
 import { snapValue } from '@/lib/tune/sliderDefinitions'
@@ -60,7 +60,7 @@ function FieldEditorPopoverInner({ target, onCancel, onApply }: FieldEditorPopov
   }, [])
 
   return (
-    <CornerSheet
+    <EdgeDrawer
       visible
       triggerRef={target.triggerRef}
       onClose={onCancel}
@@ -136,7 +136,7 @@ function FieldEditorPopoverInner({ target, onCancel, onApply }: FieldEditorPopov
           />
         </View>
       </View>
-    </CornerSheet>
+    </EdgeDrawer>
   )
 }
 

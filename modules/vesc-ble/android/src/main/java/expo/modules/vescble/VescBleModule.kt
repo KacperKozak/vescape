@@ -77,6 +77,7 @@ class VescBleModule : Module() {
       "onLiveSeries",
       "onTelemetryHistory",
       "onBms",
+      "onBmsSeries",
       "onLocation",
       "onTelemetryRebuildProgress",
       "onBoardProbeProgress",
@@ -105,6 +106,8 @@ class VescBleModule : Module() {
     OnStopObserving("onTelemetryHistory") { stopObserving("onTelemetryHistory") }
     OnStartObserving("onBms") { startObserving("onBms") }
     OnStopObserving("onBms") { stopObserving("onBms") }
+    OnStartObserving("onBmsSeries") { startObserving("onBmsSeries") }
+    OnStopObserving("onBmsSeries") { stopObserving("onBmsSeries") }
     OnStartObserving("onLocation") { startObserving("onLocation") }
     OnStopObserving("onLocation") { stopObserving("onLocation") }
     OnStartObserving("onTelemetryRebuildProgress") { startObserving("onTelemetryRebuildProgress") }
@@ -171,6 +174,9 @@ class VescBleModule : Module() {
       VescForegroundService.updateGroupRideIdentity(context.applicationContext, riderId, riderName, riderColor)
     }
     Function("setTelemetryRecordingEnabled") { enabled: Boolean -> setTelemetryRecordingEnabled(enabled) }
+    Function("setBmsSeriesFocused") { focused: Boolean ->
+      VescForegroundService.setBmsSeriesFocused(focused)
+    }
     Function("reloadAlertRules") {
       VescForegroundService.reloadAlertRules(context.applicationContext)
     }

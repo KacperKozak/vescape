@@ -11,6 +11,7 @@ interface LinkWidgetProps {
   hint?: string
   accent?: string
   size?: WidgetSize
+  disabled?: boolean
   onPress: () => void
 }
 
@@ -21,6 +22,7 @@ export function LinkWidget({
   hint,
   accent = theme.palette.slate.textSecondary,
   size = 'full',
+  disabled,
   onPress,
 }: LinkWidgetProps) {
   const square = size === 'square'
@@ -31,8 +33,10 @@ export function LinkWidget({
       style={({ pressed }) => [
         styles.widget,
         square ? styles.widgetSquare : styles.widgetRow,
-        pressed && styles.pressed,
+        pressed && !disabled && styles.pressed,
+        disabled && styles.disabled,
       ]}
+      disabled={disabled}
       onPress={onPress}
       accessibilityLabel={label}
     >
@@ -68,6 +72,9 @@ const styles = StyleSheet.create({
   },
   pressed: {
     backgroundColor: theme.palette.slate.surface,
+  },
+  disabled: {
+    opacity: 0.45,
   },
   text: {
     flex: 1,

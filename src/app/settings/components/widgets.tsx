@@ -4,20 +4,28 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useState, type ReactNode } from 'react'
 
 import {
+  ArrowsDownUpIcon,
   BroadcastIcon,
   ChartLineUpIcon,
+  FadersIcon,
   GaugeIcon,
+  JoystickIcon,
   MapPinIcon,
   StackIcon,
   XIcon,
 } from 'phosphor-react-native'
 import { Button } from '@/components/ui/base/Button'
+import { CollapsibleWidget } from '@/components/widgets/CollapsibleWidget'
 import { Placeholder } from '@/components/ui/base/Placeholder'
 import { CanvasWidget } from '@/components/widgets/CanvasWidget'
 import { DialWidget } from '@/components/widgets/DialWidget'
 import { InputWidget } from '@/components/widgets/InputWidget'
 import { LinkWidget } from '@/components/widgets/LinkWidget'
+import { SelectWidget } from '@/components/widgets/SelectWidget'
+import { StepperWidget } from '@/components/widgets/StepperWidget'
 import { SwitchWidget } from '@/components/widgets/SwitchWidget'
+import { FloatingSheet } from '@/components/ui/overlays/AnchoredSheet'
+import { useTriggerRef } from '@/components/ui/overlays/measureTrigger'
 import { IconHero } from '@/components/ui/settings/IconHero'
 import { ShowcaseCard } from '@/components/ui/dev/ShowcaseCard'
 import { theme } from '@/constants/theme'
@@ -133,6 +141,114 @@ function LinkWidgetShowcase() {
         </Cell>
         <Cell />
       </Row>
+    </ShowcaseCard>
+  )
+}
+
+function SelectWidgetShowcase() {
+  const [value, setValue] = useState('Street')
+  const [open, setOpen] = useState(false)
+  const triggerRef = useTriggerRef()
+  const options = ['Street', 'Trail', 'Trick']
+
+  return (
+    <ShowcaseCard name="SelectWidget">
+      <SizeLabel>full (1×4)</SizeLabel>
+      <View ref={triggerRef} collapsable={false}>
+        <SelectWidget
+          icon={FadersIcon}
+          label="Tunes"
+          value={value}
+          description="Pick how your board should feel."
+          accent={theme.palette.purple.color}
+          onPress={() => {}}
+          onSelectPress={() => setOpen(true)}
+        />
+      </View>
+      <FloatingSheet
+        visible={open}
+        triggerRef={triggerRef}
+        matchTriggerWidth={false}
+        minWidth={220}
+        onClose={() => setOpen(false)}
+      >
+        <View style={styles.optionList}>
+          {options.map((option) => (
+            <Pressable
+              key={option}
+              style={[styles.optionRow, option === value && styles.optionRowActive]}
+              onPress={() => {
+                setValue(option)
+                setOpen(false)
+              }}
+            >
+              <Text style={[styles.optionText, option === value && styles.optionTextActive]}>
+                {option}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </FloatingSheet>
+    </ShowcaseCard>
+  )
+}
+
+function StepperWidgetShowcase() {
+  return (
+    <ShowcaseCard name="StepperWidget">
+      <SizeLabel>full (1×4)</SizeLabel>
+      <StepperWidget
+        icon={ArrowsDownUpIcon}
+        label="Move board"
+        accent={theme.palette.cyan.color}
+        onPrevious={() => {}}
+        onNext={() => {}}
+      />
+      <SizeLabel>disabled</SizeLabel>
+      <StepperWidget
+        icon={ArrowsDownUpIcon}
+        label="Move board"
+        accent={theme.palette.cyan.color}
+        disabled
+        onPrevious={() => {}}
+        onNext={() => {}}
+      />
+    </ShowcaseCard>
+  )
+}
+
+function CollapsibleWidgetShowcase() {
+  return (
+    <ShowcaseCard name="CollapsibleWidget">
+      <SizeLabel>collapsed by default</SizeLabel>
+      <CollapsibleWidget
+        icon={JoystickIcon}
+        title="Tilt"
+        description="Adjust board tilt from your phone in real time."
+        accent={theme.palette.sky.color}
+        expandedHeight={130}
+      >
+        <Placeholder
+          icon={JoystickIcon}
+          description="Expanded control content goes here."
+          style={styles.collapsiblePreview}
+        />
+      </CollapsibleWidget>
+      <SizeLabel>expanded by default</SizeLabel>
+      <CollapsibleWidget
+        icon={JoystickIcon}
+        title="Tilt"
+        description="Adjust board tilt from your phone in real time."
+        accent={theme.palette.sky.color}
+        defaultExpanded
+        expandedHeight={130}
+      >
+        <Placeholder
+          icon={JoystickIcon}
+          description="Expanded control content goes here."
+          style={styles.collapsiblePreview}
+        />
+      </CollapsibleWidget>
     </ShowcaseCard>
   )
 }
@@ -328,10 +444,13 @@ export default function WidgetsPage() {
       <ScrollView contentContainerStyle={styles.content}>
         <IconHero
           icon={StackIcon}
-          description="InputWidget, LinkWidget, SwitchWidget, DialWidget, CanvasWidget — each at full, half and square footprints."
+          description="Reusable dashboard widgets with full, half and square footprints where each control supports them."
         />
         <InputWidgetShowcase />
         <LinkWidgetShowcase />
+        <SelectWidgetShowcase />
+        <StepperWidgetShowcase />
+        <CollapsibleWidgetShowcase />
         <SwitchWidgetShowcase />
         <DialWidgetShowcase />
         <CanvasWidgetShowcase />
@@ -361,4 +480,22 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   meta: { color: theme.palette.slate.textSecondary, fontSize: 13 },
+  collapsiblePreview: { minHeight: 120 },
+  optionList: { gap: 6 },
+  optionRow: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  optionRowActive: {
+    backgroundColor: theme.palette.slate.surfaceDeep,
+  },
+  optionText: {
+    color: theme.palette.slate.textSecondary,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  optionTextActive: {
+    color: theme.palette.sky.text,
+  },
 })

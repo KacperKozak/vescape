@@ -6,7 +6,7 @@ import { Text } from '@/components/ui/base/Text'
 import type { MapPoint } from 'vesc-ble'
 
 import { IconButton } from '@/components/ui/base/IconButton'
-import { CornerSheet } from '@/components/ui/overlays/AnchoredSheet'
+import { EdgeDrawer } from '@/components/ui/overlays/AnchoredSheet'
 import { useTriggerRef } from '@/components/ui/overlays/measureTrigger'
 import { ChipRow, ToggleRow, ValueRow } from '@/components/ui/dev/ShowcaseControls'
 import { MapStyleSwitch } from '@/components/ui/controls/MapStyleSwitch'
@@ -170,10 +170,9 @@ export default function MapComponentsShowcase() {
         </View>
       </View>
 
-      <CornerSheet
+      <EdgeDrawer
         visible={sheetVisible}
         triggerRef={moreTriggerRef}
-        anchor="right"
         title="Map options"
         onClose={() => setSheetVisible(false)}
       >
@@ -194,7 +193,7 @@ export default function MapComponentsShowcase() {
           Tap a pin to expand its label + delete button. Buildings 3D follows the style (Outdoors,
           One Dark).
         </Text>
-      </CornerSheet>
+      </EdgeDrawer>
     </View>
   )
 }
