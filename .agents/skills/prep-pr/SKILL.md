@@ -12,6 +12,7 @@ Prepare a feature PR as the stable landing place for a PRD or issue group. This 
 - The PR title/body describe the **finished feature**, not the current diff.
 - Never write copy like "this PR sets up docs" unless the feature really is only docs. Use final-feature language such as "This PR adds..." or "This PR implements...".
 - If the branch has no changes or no commits ahead of base, create an empty commit so GitHub can host the PR.
+- New initial feature PRs start as draft PRs. Use `gh pr create --draft` unless the user explicitly asks for a ready PR.
 - If a PR already exists for the current branch, update that PR instead of creating a duplicate.
 - Keep the PR useful for navigation: link the PRD, all implementation issues, and any tracking parent issue.
 - Do not close or modify the PRD/issues unless the user explicitly asks.
@@ -46,7 +47,7 @@ If the user wants a PR prepared but there are no file changes and no commits ahe
    git commit --allow-empty -m "Prepare <feature-name> work"
    ```
 3. Push the branch.
-4. Create the PR with the future-facing feature title/body.
+4. Create the draft PR with the future-facing feature title/body.
 
 If there are staged or unstaged changes, commit the actual changes instead of making an empty commit.
 
@@ -88,23 +89,19 @@ What this lands:
 Navigation:
 
 - PRD: #<id>
-- #<issue>, <short issue title>
-- #<issue>, <short issue title>
-
-Notes:
-
-- <anything important for agents landing task branches here>
+- #<issue>, <what this task contributes beyond its title>
+- #<issue>, <what this task contributes beyond its title>
 ```
 
 Keep the body short. It should help future agents navigate, not duplicate the PRD.
 
 ## Issue links
 
-When implementation issues exist, include them in dependency order if known. Use bare GitHub refs plus short titles:
+When implementation issues exist, include them in dependency order if known. GitHub already renders issue titles for bare refs, so do not repeat the issue title after the ref. Add a short task description only when it helps explain the role of the task in the feature branch.
 
 ```md
-- #193, Normalize board links
-- #194, Capture probe identity
+- #193, durable Board Link v3 storage and old-link normalization
+- #194, probe-time controller identity for each selectable transport
 ```
 
 If the PR is a feature parent where all tasks will merge into it, say that explicitly:
@@ -130,5 +127,5 @@ Return the PR URL first, then one short summary of what was prepared:
 ```text
 PR ready: <url>
 
-Updated title/body for the full feature and linked PRD/issues.
+Updated the draft feature PR with linked PRD/issues.
 ```
