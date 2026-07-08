@@ -5,12 +5,6 @@ import Foundation
 internal enum BoardLinkPersistence {
   static let version = 3
 
-  private static let identityKeys = [
-    "hasBms",
-    "vescFirmwareVersion",
-    "refloatVersion",
-    "refloatBaseVersion",
-  ]
   private static let stringIdentityKeys = [
     "vescFirmwareVersion",
     "refloatVersion",
@@ -37,31 +31,20 @@ internal enum BoardLinkPersistence {
     for key in stringIdentityKeys {
       if let value = values[key] as? String { built[key] = value }
     }
-    built["linkIntegrity"] = normalizedLinkIntegrity(values)
     return built
   }
 
   static func settings(from rawLink: Any?) -> [(String, Any?)] {
     let link = normalized(rawLink)
     let transport = BoardTransport.encode(BoardTransport.fromBridge(link?["transport"] ?? nil))
-    let linkIntegrity = link.flatMap { $0["linkIntegrity"] as? String ?? "unknown" }
     return [
       ("linkVersion", (intValue(link?["linkVersion"] ?? nil) == version) ? version : nil),
       ("hasBms", link?["hasBms"] as? Bool),
       ("vescFirmwareVersion", (link?["vescFirmwareVersion"] as? String).flatMap { $0.isEmpty ? nil : $0 }),
       ("refloatVersion", (link?["refloatVersion"] as? String).flatMap { $0.isEmpty ? nil : $0 }),
       ("refloatBaseVersion", (link?["refloatBaseVersion"] as? String).flatMap { $0.isEmpty ? nil : $0 }),
-      ("linkIntegrity", linkIntegrity),
       ("transport", transport),
     ]
-  }
-
-  private static func normalizedLinkIntegrity(_ values: [String: Any]) -> String {
-    let version = values["linkVersion"] as? Int
-    if version == Self.version && identityKeys.allSatisfy({ values[$0] != nil }) {
-      return values["linkIntegrity"] as? String ?? "unknown"
-    }
-    return "outdated"
   }
 
   private static func intValue(_ raw: Any?) -> Int? {

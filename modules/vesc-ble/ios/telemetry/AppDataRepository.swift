@@ -174,9 +174,6 @@ final class AppDataRepository {
       return intValue(raw)
     case "vescFirmwareVersion", "refloatVersion", "refloatBaseVersion":
       return raw as? String
-    case "linkIntegrity":
-      guard let value = raw as? String else { return nil }
-      return ["unknown", "checking", "trusted", "outdated", "mismatched"].contains(value) ? value : nil
     case "lastBattery":
       return decodeLastBattery(raw)
     default:

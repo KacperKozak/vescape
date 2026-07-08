@@ -53,7 +53,7 @@ function canToggleRecording(status: string): boolean {
   return status === 'connected'
 }
 
-export function getStatusPill(
+function getStatusPill(
   status: string,
   scanStatus: string,
   linkIntegrity: LinkIntegrity,

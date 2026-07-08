@@ -118,7 +118,6 @@ export interface BoardLink {
   vescFirmwareVersion?: string
   refloatVersion?: string
   refloatBaseVersion?: string
-  linkIntegrity?: LinkIntegrity
 }
 
 export interface Board {

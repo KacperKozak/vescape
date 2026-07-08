@@ -756,7 +756,7 @@ internal class BoardSessionController(private val service: VescForegroundService
         connectionCoordinator.reset()
         reconnectScheduler.cancelAndReset()
         recordingCoordinator.beginBoardSession(start.boardConfig)
-        session.startLinkIntegrityCheck(start.boardConfig.linkIdentity())
+        lastEmittedLinkIntegrity = session.startLinkIntegrityCheck(start.boardConfig.linkIdentity())
         startLocationUpdates()
         setStatus(BoardPhase.Connecting)
         emitState()
@@ -1146,8 +1146,12 @@ internal class BoardSessionController(private val service: VescForegroundService
         }
     }
 
+    private var lastEmittedLinkIntegrity = LinkIntegrity.Unknown
+
     private fun updateLinkIntegrity(next: LinkIntegrity) {
-        if (next != LinkIntegrity.Unknown) emitState()
+        if (next == lastEmittedLinkIntegrity) return
+        lastEmittedLinkIntegrity = next
+        emitState()
     }
 
     private fun dumpRefloatConfigDebug(xmlBytes: ByteArray, configBytes: ByteArray) {

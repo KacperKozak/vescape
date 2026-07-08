@@ -35,12 +35,11 @@ class BoardLinkPersistenceTest {
   }
 
   @Test
-  fun legacyLinkWithoutHasBmsReadsAsOutdated() {
+  fun legacyLinkWithoutHasBmsSurvivesRoundTrip() {
     val link = roundTrip(mapOf("bleId" to "AA:BB", "transport" to 84))
 
     assertNotNull(link)
     assertNull(link?.get("hasBms"))
-    assertEquals("outdated", link?.get("linkIntegrity"))
   }
 
   @Test
@@ -53,7 +52,6 @@ class BoardLinkPersistenceTest {
       "vescFirmwareVersion" to "FW 6.05",
       "refloatVersion" to "2.1.0",
       "refloatBaseVersion" to "1.4.0",
-      "linkIntegrity" to "trusted",
       "futureField" to "ignored",
     ))
 
@@ -63,23 +61,7 @@ class BoardLinkPersistenceTest {
     assertEquals("FW 6.05", link?.get("vescFirmwareVersion"))
     assertEquals("2.1.0", link?.get("refloatVersion"))
     assertEquals("1.4.0", link?.get("refloatBaseVersion"))
-    assertEquals("trusted", link?.get("linkIntegrity"))
     assertNull(link?.get("futureField"))
-  }
-
-  @Test
-  fun v3WithoutIntegrityDefaultsUnknown() {
-    val link = roundTrip(mapOf(
-      "bleId" to "AA:BB",
-      "transport" to 84,
-      "linkVersion" to 3,
-      "hasBms" to false,
-      "vescFirmwareVersion" to "FW 6.05",
-      "refloatVersion" to "2.1.0",
-      "refloatBaseVersion" to "1.4.0",
-    ))
-
-    assertEquals("unknown", link?.get("linkIntegrity"))
   }
 
   @Test

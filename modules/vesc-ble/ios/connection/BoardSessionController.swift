@@ -394,7 +394,9 @@ internal final class BoardSessionController: VescGattListener {
     socWindow.reset()
     bmsSeriesRing.clear()
     self.config = config
-    session?.startLinkIntegrityCheck(expected: config.linkIdentity())
+    if let session {
+      lastEmittedLinkIntegrity = session.startLinkIntegrityCheck(expected: config.linkIdentity())
+    }
     movingThresholdCentiKmh = MetricSanitizerConfig.from(settings: appData.getSettings()).movingSpeedThresholdCentiKmh
     recordingCoordinator.beginBoardSession(config: config)
     gpsError = gpsMonitor.start()
@@ -863,8 +865,12 @@ internal final class BoardSessionController: VescGattListener {
     }
   }
 
+  private var lastEmittedLinkIntegrity: LinkIntegrity = .unknown
+
   private func updateLinkIntegrity(_ next: LinkIntegrity) {
-    if next != .unknown { onStateChanged?() }
+    guard next != lastEmittedLinkIntegrity else { return }
+    lastEmittedLinkIntegrity = next
+    onStateChanged?()
   }
 
   private func markBoardReady() {

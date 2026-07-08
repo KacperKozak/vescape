@@ -22,7 +22,6 @@ final class AppDataRepositoryBoardLinkTests: XCTestCase {
       "vescFirmwareVersion": "FW 6.05",
       "refloatVersion": "2.1.0",
       "refloatBaseVersion": "1.4.0",
-      "linkIntegrity": "trusted",
       "futureField": "ignored",
     ])
 
@@ -33,11 +32,10 @@ final class AppDataRepositoryBoardLinkTests: XCTestCase {
     XCTAssertEqual(link?["vescFirmwareVersion"] as? String, "FW 6.05")
     XCTAssertEqual(link?["refloatVersion"] as? String, "2.1.0")
     XCTAssertEqual(link?["refloatBaseVersion"] as? String, "1.4.0")
-    XCTAssertEqual(link?["linkIntegrity"] as? String, "trusted")
     XCTAssertNil(link?["futureField"] ?? nil)
   }
 
-  func testV3WithoutIntegrityDefaultsUnknown() {
+  func testHasBmsFalseSurvivesRoundTrip() {
     let link = roundTrip([
       "bleId": "AA:BB",
       "transport": 84,
@@ -48,11 +46,10 @@ final class AppDataRepositoryBoardLinkTests: XCTestCase {
       "refloatBaseVersion": "1.4.0",
     ])
 
-    XCTAssertEqual(link?["linkIntegrity"] as? String, "unknown")
     XCTAssertEqual(link?["hasBms"] as? Bool, false)
   }
 
-  func testLegacyBleIdAndTransportReadsAsOutdatedTelemetryCapableLink() {
+  func testLegacyBleIdAndTransportReadsAsTelemetryCapableLink() {
     let link = roundTrip([
       "bleId": "AA:BB",
       "transport": 84,
@@ -62,7 +59,6 @@ final class AppDataRepositoryBoardLinkTests: XCTestCase {
     XCTAssertEqual(link?["bleId"] as? String, "AA:BB")
     XCTAssertEqual(link?["transport"] as? Int, 84)
     XCTAssertNil(link?["hasBms"] ?? nil)
-    XCTAssertEqual(link?["linkIntegrity"] as? String, "outdated")
   }
 
   func testMalformedLinkIsIgnored() {

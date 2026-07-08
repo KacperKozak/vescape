@@ -503,13 +503,11 @@ class AppDataRepository private constructor(private val context: Context) {
 }
 
 private const val BOARD_LINK_VERSION = 3
-private val boardLinkIdentityKeys = listOf(
-  "hasBms",
+private val boardLinkStringIdentityKeys = listOf(
   "vescFirmwareVersion",
   "refloatVersion",
   "refloatBaseVersion",
 )
-private val boardLinkStringIdentityKeys = boardLinkIdentityKeys - "hasBms"
 
 // @parity /modules/vesc-ble/ios/telemetry/AppDataRepository.swift `composeBoard` / `upsertBoard`
 fun BoardEntity.toMap(settings: List<BoardSettingEntity>): Map<String, Any?> {
@@ -526,7 +524,6 @@ fun BoardEntity.toMap(settings: List<BoardSettingEntity>): Map<String, Any?> {
       boardLinkStringIdentityKeys.forEach { key ->
         (values[key] as? String)?.let { put(key, it) }
       }
-      put("linkIntegrity", normalizedLinkIntegrity(values))
     }
   } else {
     null
@@ -540,15 +537,6 @@ fun BoardEntity.toMap(settings: List<BoardSettingEntity>): Map<String, Any?> {
     "lastBattery" to values["lastBattery"],
     "link" to link,
   )
-}
-
-private fun normalizedLinkIntegrity(values: Map<String, Any?>): String {
-  val version = values["linkVersion"] as? Int
-  return if (version == BOARD_LINK_VERSION && boardLinkIdentityKeys.all { values[it] != null }) {
-    values["linkIntegrity"] as? String ?: "unknown"
-  } else {
-    "outdated"
-  }
 }
 
 fun AppSettings.toMap(): Map<String, Any?> = mapOf(
@@ -796,8 +784,6 @@ internal fun Map<String, Any?>.toBoardSettingEntities(boardId: String): Pair<Lis
   boardLinkStringIdentityKeys.forEach { key ->
     putOrDelete(key, (link?.get(key) as? String)?.takeIf { it.isNotBlank() })
   }
-  val linkIntegrity = if (link == null) null else link["linkIntegrity"] as? String ?: "unknown"
-  putOrDelete("linkIntegrity", linkIntegrity)
 
   return settings to deletedKeys
 }
@@ -817,9 +803,6 @@ private fun BoardSettingEntity.decodeBoardSetting(): Pair<String, Any?>? {
     "linkVersion" -> (raw as? Number)?.toInt()?.let { key to it }
     "hasBms" -> (raw as? Boolean)?.let { key to it }
     "vescFirmwareVersion", "refloatVersion", "refloatBaseVersion" -> (raw as? String)?.let { key to it }
-    "linkIntegrity" -> (raw as? String)
-      ?.takeIf { it in setOf("unknown", "checking", "trusted", "outdated", "mismatched") }
-      ?.let { key to it }
     "lastBattery" -> decodeLastBattery(raw)?.let { key to it }
     else -> null
   }

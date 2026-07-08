@@ -102,7 +102,6 @@ export function useBoardLink(bleId: string | null): UseBoardLink {
           vescFirmwareVersion: selected.vescFirmwareVersion ?? undefined,
           refloatVersion: selected.refloatVersion ?? undefined,
           refloatBaseVersion: selected.refloatBaseVersion ?? undefined,
-          linkIntegrity: 'unknown',
         }
       : null
 
