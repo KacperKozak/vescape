@@ -79,7 +79,7 @@ const styles = StyleSheet.create({
   widget: {
     ...widgetSurface,
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     gap: 12,
     padding: 14,
   },
