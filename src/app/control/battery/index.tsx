@@ -1,5 +1,5 @@
-import { useLayoutEffect, useEffect, useMemo } from 'react'
-import { useNavigation, useRouter } from 'expo-router'
+import { useLayoutEffect, useEffect, useMemo, useCallback } from 'react'
+import { useNavigation, useRouter, useFocusEffect } from 'expo-router'
 import { BracketsCurlyIcon } from 'phosphor-react-native'
 import { useSharedValue } from 'react-native-reanimated'
 
@@ -14,7 +14,9 @@ import { telemetry } from '@/constants/telemetry'
 import { theme } from '@/constants/theme'
 import { useLiveMetric, liveSelectors } from '@/hooks/useLiveMetric'
 import { deriveBatteryConfig } from '@/lib/battery'
+import { useRenderRateWarning } from '@/hooks/useRenderRateWarning'
 import { useBoardStore } from '@/store/boardStore'
+import { acquireBmsSeriesStream, releaseBmsSeriesStream } from '@/store/bleStore'
 import { routes } from '@/navigation/routes'
 import { useLiveWindowMs } from '@/store/settingsStore'
 
@@ -29,6 +31,7 @@ const PERCENT_RANGE = { y: { min: 0, max: 100 } }
 const VOLTAGE_LINE_COLOR = theme.palette.slate.textMuted
 
 export default function BatteryScreen() {
+  useRenderRateWarning('BatteryScreen')
   const navigation = useNavigation()
   const router = useRouter()
   const batteryPercent = useLiveMetric(liveSelectors.batteryPercent)
@@ -50,6 +53,13 @@ export default function BatteryScreen() {
       ),
     })
   }, [navigation, router])
+
+  useFocusEffect(
+    useCallback(() => {
+      acquireBmsSeriesStream()
+      return releaseBmsSeriesStream
+    }, []),
+  )
 
   const percentPoints = useMemo(() => toTelemetryChartPoints(batteryPercent), [batteryPercent])
   const voltagePoints = useMemo(() => toTelemetryChartPoints(batteryVoltage), [batteryVoltage])
@@ -106,6 +116,8 @@ export default function BatteryScreen() {
       unit={battVoltageCfg.unit}
       gauge={<MetricDetailGauge metric={battPercentCfg} value={percentValue} min={0} max={100} />}
     >
+      {/* Cell groups sit above the charts so a scrubbing thumb doesn't cover them. */}
+      <BmsCellVoltages scrubTimeMs={scrubTimeMs} windowMs={windowMs} />
       <MetricDetailChart
         metric={battPercentCfg}
         points={percentPoints}
@@ -123,9 +135,9 @@ export default function BatteryScreen() {
         range={currentRange}
         windowMs={windowMs}
         scrubTimeMs={scrubTimeMs}
+        reserveRightAxis
         height={80}
       />
-      <BmsCellVoltages />
     </ControlDetailLayout>
   )
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test'
-import type { BmsEvent } from 'vesc-ble'
+import type { BmsEvent, BmsSeriesFrame } from 'vesc-ble'
 
-import { cellBarScale, summarizeBms } from './bms'
+import { cellBarScale, nearestBmsFrameAtTime, summarizeBms, summarizeBmsWindow } from './bms'
 
 function makeBms(cellVoltages: number[], balancing: boolean[] = []): BmsEvent {
   return {
@@ -23,6 +23,10 @@ function makeBms(cellVoltages: number[], balancing: boolean[] = []): BmsEvent {
     tempMaxCell: null,
     canId: null,
   }
+}
+
+function makeFrame(capturedAt: number, cellVoltages: number[]): BmsSeriesFrame {
+  return { capturedAt, cellVoltages, balancing: [] }
 }
 
 describe('summarizeBms', () => {
@@ -74,21 +78,87 @@ describe('summarizeBms', () => {
 })
 
 describe('cellBarScale', () => {
-  it('pads the pack min/max so extremes do not pin to the track edges', () => {
+  it('pads the pack min/max and snaps outward to the stability grid', () => {
     const scale = cellBarScale(3.9, 4.1)
-    expect(scale.low).toBeCloseTo(3.892)
-    expect(scale.high).toBeCloseTo(4.108)
+    expect(scale.low).toBeCloseTo(3.88)
+    expect(scale.high).toBeCloseTo(4.12)
   })
 
   it('floors the span for a balanced pack instead of dividing by zero', () => {
     const scale = cellBarScale(4.0, 4.0)
-    expect(scale.high - scale.low).toBeCloseTo(0.05)
+    expect(scale.high - scale.low).toBeCloseTo(0.12)
     expect((scale.low + scale.high) / 2).toBeCloseTo(4.0)
   })
 
   it('widens a barely-imbalanced pack to the floor span around its midpoint', () => {
     const scale = cellBarScale(3.99, 4.01)
-    expect(scale.high - scale.low).toBeCloseTo(0.05)
+    expect(scale.high - scale.low).toBeCloseTo(0.12)
     expect((scale.low + scale.high) / 2).toBeCloseTo(4.0)
+  })
+
+  it('holds bounds still under mV-level wiggle away from grid crossings', () => {
+    const a = cellBarScale(3.951, 3.956)
+    const b = cellBarScale(3.952, 3.957)
+    expect(a.low).toBeCloseTo(b.low)
+    expect(a.high).toBeCloseTo(b.high)
+  })
+})
+
+describe('nearestBmsFrameAtTime', () => {
+  const frames = [makeFrame(1000, [4]), makeFrame(1200, [3.9]), makeFrame(1600, [3.8])]
+
+  it('returns the nearest retained frame without interpolation', () => {
+    expect(nearestBmsFrameAtTime(frames, 1180)).toBe(frames[1])
+    expect(nearestBmsFrameAtTime(frames, 1450)).toBe(frames[2])
+  })
+
+  it('clamps outside the retained window and chooses previous on exact ties', () => {
+    expect(nearestBmsFrameAtTime(frames, 0)).toBe(frames[0])
+    expect(nearestBmsFrameAtTime(frames, 3000)).toBe(frames[2])
+    expect(nearestBmsFrameAtTime(frames, 1100)).toBe(frames[0])
+  })
+
+  it('returns null without a cursor or frames', () => {
+    expect(nearestBmsFrameAtTime(frames, null)).toBeNull()
+    expect(nearestBmsFrameAtTime([], 1000)).toBeNull()
+  })
+})
+
+describe('summarizeBmsWindow', () => {
+  it('reports peak spread and the group lowest most often', () => {
+    const stats = summarizeBmsWindow([
+      makeFrame(1000, [4.0, 4.03, 4.02]),
+      makeFrame(1200, [3.98, 4.03, 4.02]),
+      makeFrame(1400, [4.02, 4.01, 4.04]),
+    ])
+
+    expect(stats).not.toBeNull()
+    expect(stats!.sampleCount).toBe(3)
+    expect(stats!.peakSpread).toBeCloseTo(0.05)
+    expect(stats!.worstGroupIndex).toBe(0)
+    expect(stats!.worstGroupSamples).toBe(2)
+  })
+
+  it('uses depth below average to break lowest-group count ties', () => {
+    const stats = summarizeBmsWindow([
+      makeFrame(1000, [3.9, 4.0, 4.0]),
+      makeFrame(1200, [4.0, 3.7, 4.0]),
+    ])
+
+    expect(stats!.worstGroupIndex).toBe(1)
+    expect(stats!.worstGroupSamples).toBe(1)
+    expect(stats!.worstGroupDepth).toBeGreaterThan(0.1)
+  })
+
+  it('keeps balanced windows from inventing a worst group', () => {
+    const stats = summarizeBmsWindow([makeFrame(1000, [4.0, 4.0, 4.0])])
+
+    expect(stats).not.toBeNull()
+    expect(stats!.peakSpread).toBeCloseTo(0)
+    expect(stats!.worstGroupIndex).toBeNull()
+  })
+
+  it('returns null when no frame has usable cell voltages', () => {
+    expect(summarizeBmsWindow([makeFrame(1000, [0, Number.NaN])])).toBeNull()
   })
 })
