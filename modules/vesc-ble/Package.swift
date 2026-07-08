@@ -4,7 +4,7 @@ import PackageDescription
 
 let package = Package(
   name: "VescBle",
-  platforms: [.iOS(.v16)],
+  platforms: [.iOS(.v16), .macOS(.v10_15)],
   products: [
     .library(name: "VescBle", targets: ["VescBle"]),
   ],
@@ -28,7 +28,6 @@ let package = Package(
         "alerts/AlertCoordinator.swift",
         "alerts/AlertEngineTests.swift",
         "telemetry/BatterySocEstimatorTests.swift",
-        "ConfigRWController.swift",
         "connection/BoardTransportDetector.swift",
         "connection/BoardSessionController.swift",
         "DiagnosticReporter.swift",
@@ -43,7 +42,7 @@ let package = Package(
         "RefloatConfigEncoderTests.swift",
         "RefloatConfigWriteVerifierTests.swift",
         "RideActivityContentTests.swift",
-        "runtime/BoardSession.swift",
+        "runtime/BoardSessionLinkIntegrityTests.swift",
         "telemetry/SocMedianWindowTests.swift",
         "telemetry/AppDataRepository+PrivacyZones.swift",
         "telemetry/AppDataRepository.swift",
@@ -71,8 +70,11 @@ let package = Package(
       ],
       sources: [
         "alerts/AlertEngine.swift",
+        "ConfigRWController.swift",
+        "connection/BoardPhase.swift",
         "connection/TransportDetection.swift",
         "telemetry/BatterySocEstimator.swift",
+        "telemetry/BoardLinkPersistence.swift",
         "telemetry/IdlePauseDetector.swift",
         "telemetry/LiveSeriesDownsampler.swift",
         "telemetry/LiveSeriesEmitter.swift",
@@ -84,6 +86,7 @@ let package = Package(
         "RefloatConfigProtocol.swift",
         "RefloatConfigSchema.swift",
         "RefloatConfigWriteVerifier.swift",
+        "runtime/BoardSession.swift",
         "RefloatXmlNode.swift",
         "VescGpsPrecision.swift",
         "VescProtocol.swift",
@@ -101,6 +104,7 @@ let package = Package(
         "telemetry/PrivacyZoneFilterTests.swift",
         "telemetry/IdlePauseDetectorTests.swift",
         "telemetry/BatterySocEstimatorTests.swift",
+        "telemetry/AppDataRepositoryBoardLinkTests.swift",
         "telemetry/LiveSeriesDownsamplerTests.swift",
         "telemetry/LiveSeriesEmitterTests.swift",
         "RefloatConfigDecoderTests.swift",
@@ -109,6 +113,8 @@ let package = Package(
         "RefloatConfigSchemaTests.swift",
         "RefloatConfigWriteVerifierTests.swift",
         "telemetry/SocMedianWindowTests.swift",
+        "runtime/BoardSessionLinkIntegrityTests.swift",
+        "ConfigRWControllerLinkIntegrityTests.swift",
         "TransportDetectionTests.swift",
         "VescProtocolTests.swift",
       ]

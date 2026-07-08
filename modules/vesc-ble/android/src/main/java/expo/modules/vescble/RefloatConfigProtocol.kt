@@ -27,6 +27,14 @@ internal sealed class RefloatConfigProtocolResult<out T> {
 }
 
 internal object RefloatConfigProtocol {
+  private val baseVersionPattern = Regex("""\b(\d+\.\d+\.\d+)\b""")
+
+  fun normalizeBaseVersion(version: String?): String? =
+    version
+      ?.trim()
+      ?.takeIf { it.isNotEmpty() }
+      ?.let { baseVersionPattern.find(it)?.groupValues?.get(1) }
+
   private fun commandOffset(payload: ByteArray, expectedCommand: Int): RefloatConfigProtocolResult<Int> {
     if (payload.isEmpty()) {
       return RefloatConfigProtocolResult.Failure("Empty Refloat config response")

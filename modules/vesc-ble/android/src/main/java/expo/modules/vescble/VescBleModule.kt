@@ -327,14 +327,14 @@ class VescBleModule : Module() {
         onError = { code, message -> promise.reject(code, message, null) },
       )
     }
-    AsyncFunction("getTuneProfiles") Coroutine { boardId: String ->
-      AppDataRepository.get(context.applicationContext).getTuneProfiles(boardId)
+    AsyncFunction("getTuneProfiles") Coroutine { boardId: String, refloatBaseVersion: String? ->
+      AppDataRepository.get(context.applicationContext).getTuneProfiles(boardId, refloatBaseVersion)
     }
     AsyncFunction("getTuneProfile") Coroutine { profileId: String ->
       AppDataRepository.get(context.applicationContext).getTuneProfile(profileId)
     }
-    AsyncFunction("createProfile") Coroutine { boardId: String, name: String, icon: String, color: String, fields: Map<String, Any?> ->
-      AppDataRepository.get(context.applicationContext).createProfile(boardId, name, icon, color, fields)
+    AsyncFunction("createProfile") Coroutine { boardId: String, name: String, icon: String, color: String, fields: Map<String, Any?>, refloatBaseVersion: String ->
+      AppDataRepository.get(context.applicationContext).createProfile(boardId, name, icon, color, fields, refloatBaseVersion)
     }
     AsyncFunction("renameProfile") Coroutine { profileId: String, name: String, icon: String, color: String ->
       AppDataRepository.get(context.applicationContext).renameProfile(profileId, name, icon, color)
@@ -651,7 +651,13 @@ class VescBleModule : Module() {
 
   private fun probeResultToBridge(result: TransportDetection.Result): Map<String, Any?> {
     val candidates = result.candidates.map {
-      mapOf("transport" to BoardTransport.toBridge(it.transport), "hasBms" to it.hasBms)
+      mapOf(
+        "transport" to BoardTransport.toBridge(it.transport),
+        "hasBms" to it.hasBms,
+        "vescFirmwareVersion" to it.vescFirmwareVersion,
+        "refloatVersion" to it.refloatVersion,
+        "refloatBaseVersion" to it.refloatBaseVersion,
+      )
     }
     val outcome = when (result.outcome) {
       is TransportDetection.Outcome.Resolved -> "resolved"

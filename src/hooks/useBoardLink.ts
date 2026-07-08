@@ -94,7 +94,16 @@ export function useBoardLink(bleId: string | null): UseBoardLink {
 
   const selectedLink: BoardLink | null =
     bleId != null && selected != null
-      ? { bleId, transport: selected.transport, hasBms: selected.hasBms }
+      ? {
+          linkVersion: 3,
+          bleId,
+          transport: selected.transport,
+          hasBms: selected.hasBms,
+          vescFirmwareVersion: selected.vescFirmwareVersion ?? undefined,
+          refloatVersion: selected.refloatVersion ?? undefined,
+          refloatBaseVersion: selected.refloatBaseVersion ?? undefined,
+          linkIntegrity: 'unknown',
+        }
       : null
 
   return { phase, candidates, selected, progress, selectedLink, select, retry }

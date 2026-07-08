@@ -17,6 +17,8 @@ private const val DETECT_GATT_RELEASE_DELAY_MS = 600L
 // before the first connect, then retry a bounded number of times with backoff on connect-phase
 // drops (133 and friends are transient).
 private const val DETECT_PROBE_BMS_DELAY_MS = 300L
+private const val DETECT_PROBE_FW_DELAY_MS = 600L
+private const val DETECT_PROBE_INFO_DELAY_MS = 900L
 private const val DETECT_CONNECT_SETTLE_MS = 500L
 private const val DETECT_CONNECT_RETRY_BACKOFF_MS = 400L
 private const val DETECT_CONNECT_MAX_ATTEMPTS = 3
@@ -58,6 +60,9 @@ internal class BoardTransportDetector(
   private var current: BoardTransport? = null
   private var currentConfirmed = false
   private var currentHasBms = false
+  private var currentVescFirmwareVersion: String? = null
+  private var currentRefloatVersion: String? = null
+  private var currentRefloatBaseVersion: String? = null
   private var connectAttempts = 0
   private var phase = Phase.Connecting
   private var stepTimeout: Runnable? = null
@@ -186,13 +191,20 @@ internal class BoardTransportDetector(
       COMM_CUSTOM_APP_DATA -> if (phase == Phase.Probing && current != null) {
         val sample = parseRefloatGetAllData(payload, avgLatency = null, packetAt = nowMs(), location = null)
         if (sample != null) markConfirmed()
+        if (current == BoardTransport.Direct) markRefloatInfo(payload)
       }
+      COMM_FW_VERSION -> if (phase == Phase.Probing && current == BoardTransport.Direct) markFwVersion(payload)
       // Direct smart-BMS reply.
       COMM_BMS_GET_VALUES -> if (phase == Phase.Probing && current != null) {
         if (parseBmsValues(payload, nowMs()) != null) markBms()
       }
       // CAN-forwarded smart-BMS reply (telemetry stays bare, but BMS comes wrapped).
       COMM_FORWARD_CAN -> if (phase == Phase.Probing && current != null && payload.size >= 3) {
+        if (!forwardedForCurrent(payload)) return
+        if ((payload[2].toInt() and 0xff) == COMM_FW_VERSION) {
+          markFwVersion(payload.copyOfRange(2, payload.size))
+        }
+        markRefloatInfo(payload)
         if ((payload[2].toInt() and 0xff) == COMM_BMS_GET_VALUES &&
           parseBmsValues(payload.copyOfRange(2, payload.size), nowMs()) != null
         ) {
@@ -217,6 +229,9 @@ internal class BoardTransportDetector(
     cancelStep()
     currentConfirmed = false
     currentHasBms = false
+    currentVescFirmwareVersion = null
+    currentRefloatVersion = null
+    currentRefloatBaseVersion = null
     current = probeQueue.removeFirstOrNull()
     val transport = current ?: return finishResolved()
     recordDiagnostic(
@@ -246,35 +261,50 @@ internal class BoardTransportDetector(
     handler.postDelayed({
       if (!finished && current === transport) gatt.sendPayload(bmsProbePayload(transport))
     }, DETECT_PROBE_BMS_DELAY_MS)
+    handler.postDelayed({
+      if (!finished && current === transport) gatt.sendPayload(fwVersionPayload(transport))
+    }, DETECT_PROBE_FW_DELAY_MS)
+    handler.postDelayed({
+      if (!finished && current === transport) gatt.sendPayload(RefloatConfigProtocol.buildGetInfo(transport))
+    }, DETECT_PROBE_INFO_DELAY_MS)
   }
 
-  /** Telemetry sample proves the transport works; mark and finish if BMS already seen. */
+  /** Telemetry sample proves the transport works. */
   private fun markConfirmed() {
     if (currentConfirmed) return
     currentConfirmed = true
-    maybeFinishProbe()
   }
 
   /** A smart-BMS answered on the current transport. */
   private fun markBms() {
     currentHasBms = true
-    maybeFinishProbe()
   }
 
-  /**
-   * Finish early only once both signals are in — telemetry confirms the transport and
-   * a BMS reply proves the capability. To assert "no BMS" we must wait the full window,
-   * so a confirmed-but-BMS-less transport rides the [armStep] timeout to [finalizeProbe].
-   */
-  private fun maybeFinishProbe() {
-    if (currentConfirmed && currentHasBms) finalizeProbe()
+  private fun markFwVersion(payload: ByteArray) {
+    currentVescFirmwareVersion = parseFwVersion(payload) ?: currentVescFirmwareVersion
+  }
+
+  private fun markRefloatInfo(payload: ByteArray) {
+    val version = when (val result = RefloatConfigProtocol.parseGetInfoResponse(payload)) {
+      is RefloatConfigProtocolResult.Success -> result.value.version
+      is RefloatConfigProtocolResult.Failure -> return
+    }
+    currentRefloatVersion = version
+    currentRefloatBaseVersion = RefloatConfigProtocol.normalizeBaseVersion(version)
   }
 
   private fun finalizeProbe() {
     val transport = current ?: return
     cancelStep()
     observations.add(
-      TransportDetection.Probe(transport, confirmed = currentConfirmed, hasBms = currentHasBms),
+      TransportDetection.Probe(
+        transport = transport,
+        confirmed = currentConfirmed,
+        hasBms = currentHasBms,
+        vescFirmwareVersion = currentVescFirmwareVersion,
+        refloatVersion = currentRefloatVersion,
+        refloatBaseVersion = currentRefloatBaseVersion,
+      ),
     )
     if (currentConfirmed) {
       recordDiagnostic(
@@ -283,6 +313,9 @@ internal class BoardTransportDetector(
           "message" to "Transport confirmed by telemetry sample",
           "transport" to BoardTransport.toBridge(transport),
           "has_bms" to currentHasBms,
+          "vesc_firmware_version" to currentVescFirmwareVersion,
+          "refloat_version" to currentRefloatVersion,
+          "refloat_base_version" to currentRefloatBaseVersion,
           "elapsed_ms" to elapsed(),
         ),
       )
@@ -375,5 +408,19 @@ internal class BoardTransportDetector(
       transport.canId.toByte(),
       COMM_BMS_GET_VALUES.toByte(),
     )
+  }
+
+  private fun fwVersionPayload(transport: BoardTransport): ByteArray = when (transport) {
+    BoardTransport.Direct -> byteArrayOf(COMM_FW_VERSION.toByte())
+    is BoardTransport.Can -> byteArrayOf(
+      COMM_FORWARD_CAN.toByte(),
+      transport.canId.toByte(),
+      COMM_FW_VERSION.toByte(),
+    )
+  }
+
+  private fun forwardedForCurrent(payload: ByteArray): Boolean {
+    val transport = current
+    return transport is BoardTransport.Can && payload.size >= 2 && (payload[1].toInt() and 0xff) == transport.canId
   }
 }

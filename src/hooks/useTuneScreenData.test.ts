@@ -12,13 +12,14 @@ const snapshot: RefloatConfigSnapshot = {
   rawConfigHash: 'raw',
   rawConfigLength: 8,
   fwVersion: 'FW 6.05',
+  refloatBaseVersion: '1.3.0',
   missingFieldIds: [],
   groups: [],
 }
 
-test('reloads profiles after board snapshot read seeds the first Tune Profile', async () => {
+test('reloads compatible profiles after board snapshot read', async () => {
   const readBoardSnapshot = mock(async () => snapshot)
-  const loadProfiles = mock(async (_boardId: string) => [])
+  const loadProfiles = mock(async (_boardId: string, _snapshot: RefloatConfigSnapshot | null) => [])
 
   await refreshBoardSnapshotAndProfiles({
     boardConnected: true,
@@ -28,7 +29,7 @@ test('reloads profiles after board snapshot read seeds the first Tune Profile', 
   })
 
   expect(readBoardSnapshot).toHaveBeenCalledTimes(1)
-  expect(loadProfiles).toHaveBeenCalledWith('board-1')
+  expect(loadProfiles).toHaveBeenCalledWith('board-1', snapshot)
 })
 
 test('does not reload profiles when the snapshot belongs to another board', async () => {
@@ -42,5 +43,21 @@ test('does not reload profiles when the snapshot belongs to another board', asyn
     loadProfiles,
   })
 
+  expect(loadProfiles).not.toHaveBeenCalled()
+})
+
+test('does not read board snapshot until firmware commands are trusted', async () => {
+  const readBoardSnapshot = mock(async () => snapshot)
+  const loadProfiles = mock(async (_boardId: string, _snapshot: RefloatConfigSnapshot | null) => [])
+
+  await refreshBoardSnapshotAndProfiles({
+    boardConnected: true,
+    firmwareCommandsTrusted: false,
+    selectedBoardId: 'board-1',
+    readBoardSnapshot,
+    loadProfiles,
+  })
+
+  expect(readBoardSnapshot).not.toHaveBeenCalled()
   expect(loadProfiles).not.toHaveBeenCalled()
 })

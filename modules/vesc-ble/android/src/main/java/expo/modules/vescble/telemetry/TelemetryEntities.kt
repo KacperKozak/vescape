@@ -381,6 +381,7 @@ data class AppSettings(
   tableName = "tune_profiles",
   indices = [
     Index(value = ["board_id"]),
+    Index(value = ["board_id", "refloat_base_version"]),
   ],
 )
 data class TuneProfileEntity(
@@ -388,6 +389,8 @@ data class TuneProfileEntity(
   val id: String,
   @ColumnInfo(name = "board_id")
   val boardId: String,
+  @ColumnInfo(name = "refloat_base_version")
+  val refloatBaseVersion: String,
   val name: String,
   val icon: String = "sliders-horizontal",
   val color: String = "purple",

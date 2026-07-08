@@ -25,8 +25,10 @@ import { SelectWidget } from '@/components/widgets/SelectWidget'
 import { StepperWidget } from '@/components/widgets/StepperWidget'
 import { SwitchWidget } from '@/components/widgets/SwitchWidget'
 import { widgetSurface } from '@/components/widgets/widgetSurface'
+import { canRunFirmwareCommand } from '@/lib/boardLinkIntegrity'
 import { routes } from '@/navigation/routes'
 import { theme } from '@/constants/theme'
+import { useBleStore } from '@/store/bleStore'
 import { useBoardStore } from '@/store/boardStore'
 import { useTuneProfileStore } from '@/store/tuneProfileStore'
 
@@ -42,23 +44,43 @@ const AnimatedText = Animated.createAnimatedComponent(Text)
 export function TuneDrawer({ onNavigate }: TuneDrawerProps) {
   const [tuneSelectOpen, setTuneSelectOpen] = useState(false)
   const activeBoardId = useBoardStore((state) => state.activeBoardId)
+  const tuneCompatibility = useBoardStore(
+    (state) =>
+      state.boards.find((board) => board.id === state.activeBoardId)?.link?.refloatBaseVersion ??
+      null,
+  )
   const activeProfile = useTuneProfileStore((state) => state.activeProfile)
   const profiles = useTuneProfileStore((state) => state.profiles)
   const profileLoading = useTuneProfileStore((state) => state.loading)
   const profileBoardId = useTuneProfileStore((state) => state.activeBoardId)
+  const profileCompatibility = useTuneProfileStore((state) => state.refloatBaseVersion)
   const loadProfiles = useTuneProfileStore((state) => state.loadProfiles)
   const setActiveProfile = useTuneProfileStore((state) => state.setActiveProfile)
-  const profilesLoadedForBoard = activeBoardId != null && profileBoardId === activeBoardId
+  const profilesLoadedForBoard =
+    activeBoardId != null &&
+    profileBoardId === activeBoardId &&
+    profileCompatibility === tuneCompatibility
+  const boardConnected = useBleStore((state) => state.status === 'connected')
+  const linkIntegrity = useBleStore((state) => state.linkIntegrity)
+  const quickControlsEnabled = boardConnected && canRunFirmwareCommand(linkIntegrity)
+  const waitingForTrustedLink = boardConnected && !quickControlsEnabled
   const profilesForBoard = profilesLoadedForBoard
-    ? profiles.filter((profile) => profile.boardId === activeBoardId)
+    ? profiles.filter(
+        (profile) =>
+          profile.boardId === activeBoardId && profile.refloatBaseVersion === tuneCompatibility,
+      )
     : []
   const activeProfileForBoard =
-    profilesLoadedForBoard && activeProfile?.boardId === activeBoardId ? activeProfile : null
+    profilesLoadedForBoard &&
+    activeProfile?.boardId === activeBoardId &&
+    activeProfile.refloatBaseVersion === tuneCompatibility
+      ? activeProfile
+      : null
   const hasProfiles = profilesForBoard.length > 0
 
   useEffect(() => {
-    if (activeBoardId) void loadProfiles(activeBoardId).catch(() => undefined)
-  }, [activeBoardId, loadProfiles])
+    if (activeBoardId) void loadProfiles(activeBoardId, tuneCompatibility).catch(() => undefined)
+  }, [activeBoardId, loadProfiles, tuneCompatibility])
 
   const openTune = () => {
     onNavigate()
@@ -129,6 +151,10 @@ export function TuneDrawer({ onNavigate }: TuneDrawerProps) {
         <RemoteTiltControl collapsible defaultExpanded={false} />
       </View>
 
+      {waitingForTrustedLink ? (
+        <Text style={styles.quickDisabledNote}>Quick controls waiting for trusted board link.</Text>
+      ) : null}
+
       <View style={styles.quickGrid}>
         <View style={styles.quickCell}>
           <SwitchWidget
@@ -138,7 +164,7 @@ export function TuneDrawer({ onNavigate }: TuneDrawerProps) {
             value={false}
             onValueChange={() => {}}
             accent={theme.palette.amber.color}
-            disabled
+            disabled={!quickControlsEnabled}
           />
         </View>
         <View style={styles.quickCell}>
@@ -149,7 +175,7 @@ export function TuneDrawer({ onNavigate }: TuneDrawerProps) {
             value={false}
             onValueChange={() => {}}
             accent={theme.palette.green.color}
-            disabled
+            disabled={!quickControlsEnabled}
           />
         </View>
         <View style={styles.wideCell}>
@@ -157,7 +183,7 @@ export function TuneDrawer({ onNavigate }: TuneDrawerProps) {
             icon={ArrowsDownUpIcon}
             label="Move board"
             accent={theme.palette.cyan.color}
-            disabled
+            disabled={!quickControlsEnabled}
             onPrevious={() => {}}
             onNext={() => {}}
           />
@@ -278,6 +304,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
+  },
+  quickDisabledNote: {
+    color: theme.palette.slate.textDim,
+    fontSize: 12,
+    fontWeight: '600',
   },
   quickCell: {
     width: '48%',

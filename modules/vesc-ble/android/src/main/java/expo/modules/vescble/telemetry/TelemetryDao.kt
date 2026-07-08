@@ -402,8 +402,8 @@ interface TelemetryDao {
 
   // Tune Profile / Tune History DAO. Transactional bodies below are mirrored in Swift.
   // @parity /modules/vesc-ble/ios/telemetry/TuneProfileStore.swift
-  @Query("SELECT * FROM tune_profiles WHERE board_id = :boardId ORDER BY created_at ASC")
-  suspend fun getTuneProfilesByBoard(boardId: String): List<TuneProfileEntity>
+  @Query("SELECT * FROM tune_profiles WHERE board_id = :boardId AND refloat_base_version = :refloatBaseVersion ORDER BY created_at ASC")
+  suspend fun getTuneProfilesByBoard(boardId: String, refloatBaseVersion: String): List<TuneProfileEntity>
 
   @Query("SELECT * FROM tune_profiles WHERE id = :id LIMIT 1")
   suspend fun getTuneProfile(id: String): TuneProfileEntity?
@@ -432,8 +432,8 @@ interface TelemetryDao {
   @Insert(onConflict = OnConflictStrategy.IGNORE)
   suspend fun insertTuneProfile(profile: TuneProfileEntity): Long
 
-  @Query("SELECT COUNT(*) FROM tune_profiles WHERE board_id = :boardId")
-  suspend fun countTuneProfilesForBoard(boardId: String): Int
+  @Query("SELECT COUNT(*) FROM tune_profiles WHERE board_id = :boardId AND refloat_base_version = :refloatBaseVersion")
+  suspend fun countTuneProfilesForBoard(boardId: String, refloatBaseVersion: String): Int
 
   @Insert
   suspend fun insertTuneHistoryEntry(entry: TuneHistoryEntryEntity): Long
@@ -461,7 +461,7 @@ interface TelemetryDao {
   @Transaction
   suspend fun deleteTuneProfileSafe(profileId: String) {
     val profile = getTuneProfile(profileId) ?: throw IllegalArgumentException("Tune Profile not found: $profileId")
-    if (countTuneProfilesForBoard(profile.boardId) <= 1) {
+    if (countTuneProfilesForBoard(profile.boardId, profile.refloatBaseVersion) <= 1) {
       throw IllegalStateException("Cannot delete the last profile for a board")
     }
     deleteTuneHistoryForProfile(profileId)
@@ -490,7 +490,7 @@ interface TelemetryDao {
     profile: TuneProfileEntity,
     historyEntry: TuneHistoryEntryEntity,
   ): TuneProfileEntity? {
-    if (countTuneProfilesForBoard(profile.boardId) > 0) return null
+    if (countTuneProfilesForBoard(profile.boardId, profile.refloatBaseVersion) > 0) return null
     val inserted = insertTuneProfile(profile)
     if (inserted == -1L) return null
     insertTuneHistoryEntry(historyEntry)

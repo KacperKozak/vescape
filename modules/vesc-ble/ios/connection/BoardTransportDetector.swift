@@ -4,10 +4,12 @@ import Foundation
 // releases the old connection asynchronously, so connecting too soon can fail. Settle before the
 // first connect, then retry a bounded number of times with backoff on connect-phase drops.
 private let PROBE_CONNECT_TIMEOUT_MS = 8_000
-private let PROBE_FW_DELAY_MS = 300
+private let PROBE_HANDSHAKE_FW_DELAY_MS = 300
 private let PROBE_PING_DELAY_MS = 600
 private let PROBE_GATT_RELEASE_DELAY_MS = 600
 private let PROBE_BMS_DELAY_MS = 300
+private let PROBE_IDENTITY_FW_DELAY_MS = 600
+private let PROBE_INFO_DELAY_MS = 900
 private let PROBE_CONNECT_SETTLE_MS = 500
 private let PROBE_CONNECT_RETRY_BACKOFF_MS = 400
 private let PROBE_CONNECT_MAX_ATTEMPTS = 3
@@ -46,6 +48,9 @@ internal final class BoardTransportDetector: VescGattListener {
   private var current: BoardTransport?
   private var currentConfirmed = false
   private var currentHasBms = false
+  private var currentVescFirmwareVersion: String?
+  private var currentRefloatVersion: String?
+  private var currentRefloatBaseVersion: String?
   private var connectAttempts = 0
   private var phase: Phase = .connecting
   private var stepWork: DispatchWorkItem?
@@ -124,7 +129,7 @@ internal final class BoardTransportDetector: VescGattListener {
     )
     emitProgress("handshake")
     phase = .pinging
-    after(PROBE_FW_DELAY_MS) { [weak self] in
+    after(PROBE_HANDSHAKE_FW_DELAY_MS) { [weak self] in
       guard let self, !self.finished else { return }
       _ = self.gatt.sendPayload([UInt8(COMM_FW_VERSION)])
     }
@@ -182,15 +187,23 @@ internal final class BoardTransportDetector: VescGattListener {
         parseRefloatGetAllData(payload: payload, avgLatency: nil, packetAt: nowMs(), pullRateHz: nil) != nil {
         markConfirmed()
       }
+      if phase == .probing, current == .direct { markRefloatInfo(payload) }
+    case COMM_FW_VERSION:
+      if phase == .probing, current == .direct { markFwVersion(payload) }
     case COMM_BMS_GET_VALUES:
       // Direct smart-BMS reply.
       if phase == .probing, current != nil, parseBmsValues(payload, packetAt: nowMs()) != nil { markBms() }
     case COMM_FORWARD_CAN:
       // CAN-forwarded smart-BMS reply (telemetry stays bare, but BMS comes wrapped).
-      if phase == .probing, current != nil, payload.count >= 3,
-        Int(payload[2]) == COMM_BMS_GET_VALUES,
-        parseBmsValues(Array(payload[2...]), packetAt: nowMs()) != nil {
-        markBms()
+      if phase == .probing, current != nil, payload.count >= 3, forwardedForCurrent(payload) {
+        if Int(payload[2]) == COMM_FW_VERSION {
+          markFwVersion(Array(payload[2...]))
+        }
+        markRefloatInfo(payload)
+        if Int(payload[2]) == COMM_BMS_GET_VALUES,
+          parseBmsValues(Array(payload[2...]), packetAt: nowMs()) != nil {
+          markBms()
+        }
       }
     default:
       break
@@ -211,6 +224,9 @@ internal final class BoardTransportDetector: VescGattListener {
     cancelStep()
     currentConfirmed = false
     currentHasBms = false
+    currentVescFirmwareVersion = nil
+    currentRefloatVersion = nil
+    currentRefloatBaseVersion = nil
     guard !probeQueue.isEmpty else {
       current = nil
       finishResolved()
@@ -245,32 +261,53 @@ internal final class BoardTransportDetector: VescGattListener {
       guard let self, !self.finished, self.current == transport else { return }
       _ = self.gatt.sendPayload(transport.frame([UInt8(COMM_BMS_GET_VALUES)]))
     }
+    after(PROBE_IDENTITY_FW_DELAY_MS) { [weak self] in
+      guard let self, !self.finished, self.current == transport else { return }
+      _ = self.gatt.sendPayload(transport.frame([UInt8(COMM_FW_VERSION)]))
+    }
+    after(PROBE_INFO_DELAY_MS) { [weak self] in
+      guard let self, !self.finished, self.current == transport else { return }
+      _ = self.gatt.sendPayload(RefloatConfigProtocol.buildGetInfo(transport: transport))
+    }
   }
 
-  /// Telemetry sample proves the transport works; mark and finish if BMS already seen.
+  /// Telemetry sample proves the transport works.
   private func markConfirmed() {
     if currentConfirmed { return }
     currentConfirmed = true
-    maybeFinishProbe()
   }
 
   /// A smart-BMS answered on the current transport.
   private func markBms() {
     currentHasBms = true
-    maybeFinishProbe()
   }
 
-  /// Finish early only once both signals are in. To assert "no BMS" we must wait the full window,
-  /// so a confirmed-but-BMS-less transport rides the step timeout to `finalizeProbe`.
-  private func maybeFinishProbe() {
-    if currentConfirmed && currentHasBms { finalizeProbe() }
+  private func markFwVersion(_ payload: [UInt8]) {
+    currentVescFirmwareVersion = parseFwVersion(payload: payload) ?? currentVescFirmwareVersion
+  }
+
+  private func markRefloatInfo(_ payload: [UInt8]) {
+    switch RefloatConfigProtocol.parseGetInfoResponse(payload) {
+    case .success(let info):
+      currentRefloatVersion = info.version
+      currentRefloatBaseVersion = RefloatConfigProtocol.normalizeBaseVersion(info.version)
+    case .failure:
+      break
+    }
   }
 
   private func finalizeProbe() {
     guard let transport = current else { return }
     cancelStep()
     observations.append(
-      TransportDetection.Probe(transport: transport, confirmed: currentConfirmed, hasBms: currentHasBms)
+      TransportDetection.Probe(
+        transport: transport,
+        confirmed: currentConfirmed,
+        hasBms: currentHasBms,
+        vescFirmwareVersion: currentVescFirmwareVersion,
+        refloatVersion: currentRefloatVersion,
+        refloatBaseVersion: currentRefloatBaseVersion
+      )
     )
     if currentConfirmed {
       recordDiagnostic(
@@ -279,6 +316,9 @@ internal final class BoardTransportDetector: VescGattListener {
           "message": "Transport confirmed by telemetry sample",
           "transport": transport.bridgeValue,
           "has_bms": currentHasBms,
+          "vesc_firmware_version": currentVescFirmwareVersion,
+          "refloat_version": currentRefloatVersion,
+          "refloat_base_version": currentRefloatBaseVersion,
           "elapsed_ms": elapsed(),
         ]
       )
@@ -354,5 +394,10 @@ internal final class BoardTransportDetector: VescGattListener {
       deadline: .now() + Double(PROBE_GATT_RELEASE_DELAY_MS) / 1000.0,
       execute: action
     )
+  }
+
+  private func forwardedForCurrent(_ payload: [UInt8]) -> Bool {
+    guard case .can(let canId) = current, payload.count >= 2 else { return false }
+    return Int(payload[1]) == canId
   }
 }

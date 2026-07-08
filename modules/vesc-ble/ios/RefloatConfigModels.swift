@@ -68,6 +68,7 @@ struct RefloatConfigSnapshot {
   let missingFieldIds: [String]
   let fwVersion: String?
   let refloatVersion: String?
+  let refloatBaseVersion: String?
 
   init(
     capturedAt: Int64,
@@ -79,7 +80,8 @@ struct RefloatConfigSnapshot {
     groups: [RefloatConfigGroup],
     missingFieldIds: [String],
     fwVersion: String?,
-    refloatVersion: String? = nil
+    refloatVersion: String? = nil,
+    refloatBaseVersion: String? = nil
   ) {
     self.capturedAt = capturedAt
     self.boardId = boardId
@@ -91,6 +93,7 @@ struct RefloatConfigSnapshot {
     self.missingFieldIds = missingFieldIds
     self.fwVersion = fwVersion
     self.refloatVersion = refloatVersion
+    self.refloatBaseVersion = refloatBaseVersion ?? RefloatConfigProtocol.normalizeBaseVersion(refloatVersion)
   }
 
   func toMap() -> [String: Any?] {
@@ -105,6 +108,7 @@ struct RefloatConfigSnapshot {
       "missingFieldIds": missingFieldIds,
       "fwVersion": fwVersion,
       "refloatVersion": refloatVersion,
+      "refloatBaseVersion": refloatBaseVersion,
     ]
   }
 
@@ -129,6 +133,7 @@ struct RefloatConfigSnapshot {
 /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/RefloatConfigModels.kt
 enum RefloatConfigErrorCode: String {
   case BOARD_NOT_CONNECTED
+  case LINK_NOT_TRUSTED
   case CAN_ID_UNAVAILABLE
   case GATT_NOT_WRITABLE
   case CONFIG_REQUEST_IN_FLIGHT

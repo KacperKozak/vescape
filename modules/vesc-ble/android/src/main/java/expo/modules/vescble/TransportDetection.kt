@@ -12,16 +12,26 @@ package expo.modules.vescble
 internal object TransportDetection {
   /**
    * One probed transport: whether it yielded ≥1 valid Telemetry Sample
-   * ([confirmed]) and whether a smart-BMS answered on it ([hasBms]).
+   * ([confirmed]), whether a smart-BMS answered on it ([hasBms]), and best-effort
+   * firmware identity read from that same transport.
    */
   data class Probe(
     val transport: BoardTransport,
     val confirmed: Boolean,
     val hasBms: Boolean = false,
+    val vescFirmwareVersion: String? = null,
+    val refloatVersion: String? = null,
+    val refloatBaseVersion: String? = null,
   )
 
   /** A confirmed transport plus the capabilities discovered while probing it. */
-  data class Candidate(val transport: BoardTransport, val hasBms: Boolean)
+  data class Candidate(
+    val transport: BoardTransport,
+    val hasBms: Boolean,
+    val vescFirmwareVersion: String? = null,
+    val refloatVersion: String? = null,
+    val refloatBaseVersion: String? = null,
+  )
 
   sealed interface Outcome {
     /** Exactly one transport confirmed — the Board can connect with it directly. */
@@ -64,7 +74,15 @@ internal object TransportDetection {
    * natural pre-selection for the needs-pick case.
    */
   fun resolve(probes: List<Probe>): Result {
-    val candidates = probes.filter { it.confirmed }.map { Candidate(it.transport, it.hasBms) }
+    val candidates = probes.filter { it.confirmed }.map {
+      Candidate(
+        transport = it.transport,
+        hasBms = it.hasBms,
+        vescFirmwareVersion = it.vescFirmwareVersion,
+        refloatVersion = it.refloatVersion,
+        refloatBaseVersion = it.refloatBaseVersion,
+      )
+    }
     val transports = candidates.map { it.transport }
     val outcome = when (transports.size) {
       0 -> Outcome.None

@@ -69,6 +69,9 @@ export interface BoardCandidate {
   transport: BoardTransport
   /** Whether a smart-BMS answered on this transport during the probe. */
   hasBms: boolean
+  vescFirmwareVersion?: string | null
+  refloatVersion?: string | null
+  refloatBaseVersion?: string | null
 }
 
 /** Result of a native Board Probe of a BLE peripheral. */
@@ -96,11 +99,15 @@ export interface BoardProbeProgressEvent {
   elapsedMs: number
 }
 
+export type LinkIntegrity = 'unknown' | 'checking' | 'trusted' | 'outdated' | 'mismatched'
+
 /**
  * Durable, probe-confirmed reachability for a Board. Saved whole or not at all:
  * a Board Link always carries a proven BLE peripheral id and Board Transport.
  */
 export interface BoardLink {
+  /** Durable Board Link schema version. Missing/lower versions are normalized as legacy links. */
+  linkVersion?: 3
   bleId: string
   transport: BoardTransport
   /**
@@ -108,6 +115,10 @@ export interface BoardLink {
    * saved before BMS detection existed — treated as unknown (still polled).
    */
   hasBms?: boolean
+  vescFirmwareVersion?: string
+  refloatVersion?: string
+  refloatBaseVersion?: string
+  linkIntegrity?: LinkIntegrity
 }
 
 export interface Board {
@@ -315,6 +326,7 @@ export interface LiveStateEvent {
     recentTelemetry: TelemetryEvent[]
     error: string | null
     autoConnect: boolean
+    linkIntegrity: LinkIntegrity
     /** Native-owned active remote-tilt command, or `null` when idle. */
     remoteTilt: RemoteTiltState | null
   }
@@ -619,6 +631,7 @@ export interface RefloatConfigSnapshot {
   missingFieldIds: string[]
   fwVersion: string | null
   refloatVersion?: string | null
+  refloatBaseVersion?: string | null
 }
 
 export type TuneProfileFieldValue = number | boolean | string | null
@@ -626,6 +639,7 @@ export type TuneProfileFieldValue = number | boolean | string | null
 export interface TuneProfile {
   id: string
   boardId: string
+  refloatBaseVersion: string
   name: string
   icon: string
   color: string
@@ -991,7 +1005,7 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
   lockRemoteTilt(value: number): Promise<boolean>
   releaseRemoteTilt(value: number, durationMs: number): Promise<boolean>
   stopRemoteTilt(): Promise<boolean>
-  getTuneProfiles(boardId: string): Promise<TuneProfile[]>
+  getTuneProfiles(boardId: string, refloatBaseVersion?: string | null): Promise<TuneProfile[]>
   getTuneProfile(profileId: string): Promise<TuneProfile | null>
   createProfile(
     boardId: string,
@@ -999,6 +1013,7 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
     icon: string,
     color: string,
     fields: Record<string, TuneProfileFieldValue>,
+    refloatBaseVersion: string,
   ): Promise<TuneProfile>
   renameProfile(profileId: string, name: string, icon: string, color: string): Promise<TuneProfile>
   deleteProfile(profileId: string): Promise<void>
@@ -1438,8 +1453,11 @@ export async function stopRemoteTilt(): Promise<boolean> {
   return native.stopRemoteTilt()
 }
 
-export async function getTuneProfiles(boardId: string): Promise<TuneProfile[]> {
-  return native.getTuneProfiles(boardId)
+export async function getTuneProfiles(
+  boardId: string,
+  refloatBaseVersion?: string | null,
+): Promise<TuneProfile[]> {
+  return native.getTuneProfiles(boardId, refloatBaseVersion)
 }
 
 export async function getTuneProfile(profileId: string): Promise<TuneProfile | null> {
@@ -1452,8 +1470,9 @@ export async function createProfile(
   icon: string,
   color: string,
   fields: Record<string, TuneProfileFieldValue>,
+  refloatBaseVersion: string,
 ): Promise<TuneProfile> {
-  return native.createProfile(boardId, name, icon, color, fields)
+  return native.createProfile(boardId, name, icon, color, fields, refloatBaseVersion)
 }
 
 export async function renameProfile(

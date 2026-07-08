@@ -370,17 +370,17 @@ public class VescBleModule: Module {
     // DB-backed per-board VESC tune configs with Tune History, matching Android 1:1. `TuneProfileStore`
     // owns the transactional semantics; mutations reject with Android's error vocabulary.
 
-    AsyncFunction("getTuneProfiles") { (boardId: String, promise: Promise) in
-      promise.resolve(TuneProfileStore.shared.getTuneProfiles(boardId))
+    AsyncFunction("getTuneProfiles") { (boardId: String, refloatBaseVersion: String?, promise: Promise) in
+      promise.resolve(TuneProfileStore.shared.getTuneProfiles(boardId, refloatBaseVersion: refloatBaseVersion))
     }
 
     AsyncFunction("getTuneProfile") { (profileId: String, promise: Promise) in
       promise.resolve(TuneProfileStore.shared.getTuneProfile(profileId))
     }
 
-    AsyncFunction("createProfile") { (boardId: String, name: String, icon: String, color: String, fields: [String: Any], promise: Promise) in
+    AsyncFunction("createProfile") { (boardId: String, name: String, icon: String, color: String, fields: [String: Any], refloatBaseVersion: String, promise: Promise) in
       do {
-        promise.resolve(try TuneProfileStore.shared.createProfile(boardId: boardId, name: name, icon: icon, color: color, fields: fields))
+        promise.resolve(try TuneProfileStore.shared.createProfile(boardId: boardId, name: name, icon: icon, color: color, fields: fields, refloatBaseVersion: refloatBaseVersion))
       } catch {
         promise.reject(TuneProfileStore.errorCode, error.localizedDescription)
       }
@@ -629,7 +629,13 @@ public class VescBleModule: Module {
 
   private func probeResultToBridge(_ result: TransportDetection.Result) -> [String: Any?] {
     let candidates = result.candidates.map { candidate in
-      ["transport": candidate.transport.bridgeValue, "hasBms": candidate.hasBms] as [String: Any?]
+      [
+        "transport": candidate.transport.bridgeValue,
+        "hasBms": candidate.hasBms,
+        "vescFirmwareVersion": candidate.vescFirmwareVersion,
+        "refloatVersion": candidate.refloatVersion,
+        "refloatBaseVersion": candidate.refloatBaseVersion,
+      ] as [String: Any?]
     }
     let outcome: String
     switch result.outcome {
@@ -701,7 +707,11 @@ public class VescBleModule: Module {
       bleId: bleId,
       name: name,
       transport: transport,
+      linkVersion: AppDataRepository.intValue(link["linkVersion"] ?? nil),
       hasBms: link["hasBms"] as? Bool,
+      vescFirmwareVersion: link["vescFirmwareVersion"] as? String,
+      refloatVersion: link["refloatVersion"] as? String,
+      refloatBaseVersion: link["refloatBaseVersion"] as? String,
       pollIntervalMs: hz > 0 ? 1000 / hz : 0,
       batteryConfig: AppDataRepository.normalizeBatteryConfig(board["batteryConfig"] ?? nil),
       liveHistoryLimitMinutes: AppDataRepository.liveHistoryLimitMinutes(settings["liveHistoryLimit"] ?? nil) ?? 5
@@ -723,6 +733,7 @@ public class VescBleModule: Module {
         "recentTelemetry": coordinator.recentTelemetry(),
         "error": coordinator.boardError,
         "autoConnect": settings["autoConnect"] as? Bool ?? true,
+        "linkIntegrity": coordinator.linkIntegrity.rawValue,
         "remoteTilt": coordinator.remoteTiltState(),
       ] as [String: Any?],
       "gps": [

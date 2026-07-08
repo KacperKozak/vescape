@@ -135,6 +135,7 @@ function getLiveState(): LiveStateEvent {
       recentTelemetry: lastTelemetry ? [lastTelemetry] : [],
       error: null,
       autoConnect: true,
+      linkIntegrity: connected ? 'trusted' : 'unknown',
       remoteTilt: null,
     },
     gps: {

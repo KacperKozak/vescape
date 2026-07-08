@@ -2,26 +2,6 @@ import Foundation
 import UIKit
 import UserNotifications
 
-/// Rider-facing Board Session phase. Mirrors the Android `BoardPhase` wire contract the JS
-/// layer depends on: `idle → connecting → discovering → subscribing → waiting_for_telemetry →
-/// connected`, plus the mid-ride reconnect states `reconnecting → rescanning` (#58).
-///
-/// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardPhase.kt
-/// @platform-diff Android also exposes `stale` and `disconnecting`. iOS immediately routes stale
-/// telemetry through `reconnecting`, and explicit stop transitions directly to `idle`/`error`
-/// because there is no foreground-service teardown window to surface.
-internal enum BoardPhase: String {
-  case idle
-  case connecting
-  case discovering
-  case subscribing
-  case waitingForTelemetry = "waiting_for_telemetry"
-  case connected
-  case reconnecting
-  case rescanning
-  case error
-}
-
 /// Everything a runtime connect needs, resolved from the stored Board Link before the session
 /// starts. The transport is already known (ADR 0015 / #108) — connect never discovers it.
 internal struct BoardConnectConfig {
@@ -31,7 +11,11 @@ internal struct BoardConnectConfig {
   let transport: BoardTransport
   /// Probe-confirmed smart-BMS presence on `transport`. Gates the interleaved BMS poll; `nil`/false
   /// (link saved before BMS detection, or none present) means no BMS poll.
+  let linkVersion: Int?
   let hasBms: Bool?
+  let vescFirmwareVersion: String?
+  let refloatVersion: String?
+  let refloatBaseVersion: String?
   let pollIntervalMs: Int
   /// Normalized Board `batteryConfig` used to estimate battery percent, or `nil` when the board
   /// has no battery config (the gauge then stays empty).
@@ -89,6 +73,7 @@ internal final class BoardSessionController: VescGattListener {
   /// board is presumed silent (GATT still up, no frames) and we self-heal via reconnect. Mirrors
   /// Android `TELEMETRY_STALE_MS` (4s) — copied, not re-derived.
   private let telemetryStaleSeconds = 4.0
+  private let linkIntegrityBmsTimeoutSeconds = 12.0
 
   // MARK: Board session state
 
@@ -99,6 +84,7 @@ internal final class BoardSessionController: VescGattListener {
   private(set) var connectionSeq: Int64 = 0
   private(set) var lastTelemetryAt: Int64?
   private(set) var boardError: String?
+  var linkIntegrity: LinkIntegrity { session?.linkIntegrity ?? .unknown }
 
   private var session: BoardSession?
   private var sessionSequence: Int64 = 0
@@ -327,7 +313,11 @@ internal final class BoardSessionController: VescGattListener {
       bleId: current.bleId,
       name: name,
       transport: current.transport,
+      linkVersion: current.linkVersion,
       hasBms: current.hasBms,
+      vescFirmwareVersion: current.vescFirmwareVersion,
+      refloatVersion: current.refloatVersion,
+      refloatBaseVersion: current.refloatBaseVersion,
       pollIntervalMs: current.pollIntervalMs,
       batteryConfig: AppDataRepository.normalizeBatteryConfig(board["batteryConfig"] ?? nil),
       liveHistoryLimitMinutes: current.liveHistoryLimitMinutes
@@ -352,7 +342,11 @@ internal final class BoardSessionController: VescGattListener {
       bleId: current.bleId,
       name: current.name,
       transport: current.transport,
+      linkVersion: current.linkVersion,
       hasBms: current.hasBms,
+      vescFirmwareVersion: current.vescFirmwareVersion,
+      refloatVersion: current.refloatVersion,
+      refloatBaseVersion: current.refloatBaseVersion,
       pollIntervalMs: hz > 0 ? 1000 / hz : 0,
       batteryConfig: current.batteryConfig,
       liveHistoryLimitMinutes: liveHistoryLimit
@@ -400,6 +394,7 @@ internal final class BoardSessionController: VescGattListener {
     socWindow.reset()
     bmsSeriesRing.clear()
     self.config = config
+    session?.startLinkIntegrityCheck(expected: config.linkIdentity())
     movingThresholdCentiKmh = MetricSanitizerConfig.from(settings: appData.getSettings()).movingSpeedThresholdCentiKmh
     recordingCoordinator.beginBoardSession(config: config)
     gpsError = gpsMonitor.start()
@@ -420,6 +415,9 @@ internal final class BoardSessionController: VescGattListener {
     criticalNotificationFaultCode = nil
     lastLiveTelemetryRefreshAt = 0
     setPhase(.connecting)
+    if let session {
+      updateLinkIntegrity(session.markOutdatedIfIncomplete(expected: config.linkIdentity()))
+    }
     // Start the Live Activity while foreground (connect is user-initiated); it then updates from
     // background BLE callbacks for the rest of the session. Mirrors Android showing the chip from
     // session start.
@@ -742,6 +740,7 @@ internal final class BoardSessionController: VescGattListener {
 
   private func handlePayload(_ payload: [UInt8]) {
     guard let session, session.isActive else { return }
+    _ = handleLinkIntegrityRefloat(payload)
     if let config, configController.onPayload(payload, connection: configConnection(config)) {
       return
     }
@@ -749,12 +748,16 @@ internal final class BoardSessionController: VescGattListener {
     switch Int(payload[0]) {
     case COMM_CUSTOM_APP_DATA:
       handleTelemetry(payload, session: session)
+    case COMM_FW_VERSION:
+      handleFwVersion(payload)
     case COMM_BMS_GET_VALUES:
       // Direct smart-BMS reply.
       handleBms(payload)
     case COMM_FORWARD_CAN where payload.count >= 3 && Int(payload[2]) == COMM_BMS_GET_VALUES:
       // CAN-forwarded smart-BMS reply (telemetry stays bare, but BMS comes wrapped).
       handleBms(Array(payload[2...]))
+    case COMM_FORWARD_CAN where payload.count >= 3 && Int(payload[2]) == COMM_FW_VERSION:
+      handleFwVersion(Array(payload[2...]))
     default:
       break
     }
@@ -773,6 +776,7 @@ internal final class BoardSessionController: VescGattListener {
     lastTelemetryAt = now
     armStaleWatchdog(session: session)
     markBoardReady()
+    startLinkIntegrityProbe(session: session)
     emitTelemetry(telemetry)
   }
 
@@ -781,6 +785,9 @@ internal final class BoardSessionController: VescGattListener {
   /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardSessionController.kt `handleBmsPayload`
   private func handleBms(_ payload: [UInt8]) {
     guard let bms = parseBmsValues(payload, packetAt: nowMs()) else { return }
+    if let session, let config {
+      updateLinkIntegrity(session.observeBms(expected: config.linkIdentity()))
+    }
     emit?("onBms", bms.toMap())
     // Retention is unconditional (the frame already arrived); only the push below is gated.
     let frame = bmsSeriesRing.append(
@@ -824,6 +831,40 @@ internal final class BoardSessionController: VescGattListener {
         "columns": encodeBmsSeriesColumns(frames, cellCount: cellCount),
       ]
     )
+  }
+
+  private func handleFwVersion(_ payload: [UInt8]) {
+    guard let firmware = parseFwVersion(payload), let session, let config else { return }
+    updateLinkIntegrity(session.observeFirmware(expected: config.linkIdentity(), firmware: firmware))
+  }
+
+  @discardableResult
+  private func handleLinkIntegrityRefloat(_ payload: [UInt8]) -> Bool {
+    guard let session, let config else { return false }
+    let version: String
+    switch RefloatConfigProtocol.parseGetInfoResponse(payload) {
+    case .success(let info): version = info.version
+    case .failure: return false
+    }
+    updateLinkIntegrity(session.observeRefloat(expected: config.linkIdentity(), refloatVersion: version))
+    return true
+  }
+
+  private func startLinkIntegrityProbe(session: BoardSession) {
+    guard session === self.session, session.isActive, session.linkIntegrity == .checking, let config else { return }
+    guard session.claimLinkIntegrityProbe() else { return }
+    _ = gatt.sendPayload(config.transport.frame([UInt8(COMM_FW_VERSION)]))
+    _ = gatt.sendPayload(RefloatConfigProtocol.buildGetInfo(transport: config.transport))
+    if config.hasBms == true {
+      DispatchQueue.main.asyncAfter(deadline: .now() + linkIntegrityBmsTimeoutSeconds) { [weak self, weak session] in
+        guard let self, let session, session === self.session, session.isActive, let config = self.config else { return }
+        self.updateLinkIntegrity(session.markBmsMissing(expected: config.linkIdentity()))
+      }
+    }
+  }
+
+  private func updateLinkIntegrity(_ next: LinkIntegrity) {
+    if next != .unknown { onStateChanged?() }
   }
 
   private func markBoardReady() {
@@ -1180,6 +1221,8 @@ internal final class BoardSessionController: VescGattListener {
       appBoardId: config.appBoardId,
       transport: config.transport,
       fwVersion: nil,
+      refloatBaseVersion: config.refloatBaseVersion,
+      linkIntegrity: linkIntegrity,
       isPollingActive: { [weak self] in self?.polling ?? false },
       stopPolling: { [weak self] in self?.stopPolling() },
       startPolling: { [weak self] in self?.restartPollingForConfigRead() },
@@ -1197,6 +1240,8 @@ internal final class BoardSessionController: VescGattListener {
       appBoardId: config?.appBoardId,
       transport: config?.transport ?? .direct,
       fwVersion: nil,
+      refloatBaseVersion: config?.refloatBaseVersion,
+      linkIntegrity: linkIntegrity,
       isPollingActive: { false },
       stopPolling: {},
       startPolling: {},
@@ -1291,4 +1336,16 @@ internal final class BoardSessionController: VescGattListener {
 
   private func nowMs() -> Int64 { Int64(Date().timeIntervalSince1970 * 1000) }
   private func elapsedMs() -> Int64 { Int64(ProcessInfo.processInfo.systemUptime * 1000.0) }
+}
+
+private extension BoardConnectConfig {
+  func linkIdentity() -> LinkIdentity {
+    LinkIdentity(
+      linkVersion: linkVersion,
+      hasBms: hasBms,
+      firmware: vescFirmwareVersion,
+      refloatVersion: refloatVersion,
+      refloatBaseVersion: refloatBaseVersion
+    )
+  }
 }

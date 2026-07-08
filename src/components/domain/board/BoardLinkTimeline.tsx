@@ -11,13 +11,14 @@ import {
   LinkIcon,
   PathIcon,
   PulseIcon,
+  WarningCircleIcon,
 } from 'phosphor-react-native'
 import type { BoardCandidate, BoardProbeProgressEvent, BoardProbeStep } from 'vesc-ble'
 
 import { IconHero } from '@/components/ui/settings/IconHero'
 import { StepTimeline, type StepState, type TimelineStep } from '@/components/ui/base/StepTimeline'
 import type { BoardLinkPhase } from '@/hooks/useBoardLink'
-import { formatBoardTransport } from '@/lib/boardTransport'
+import { formatCandidateTransport, formatRefloatIdentity } from '@/lib/boardTransport'
 import { interaction, theme } from '@/constants/theme'
 
 type StepKey = 'connect' | 'handshake' | 'transport' | 'telemetry' | 'bms'
@@ -102,7 +103,7 @@ export function BoardLinkTimeline({
   testIDPrefix,
 }: Props) {
   const steps = buildSteps(phase, progress, candidates, bleId)
-  const showPicker = phase === 'picking' && candidates.length > 1
+  const showPicker = phase === 'picking' && candidates.length > 0
 
   return (
     <View style={styles.container} testID={testIDPrefix}>
@@ -120,6 +121,7 @@ export function BoardLinkTimeline({
         <View style={styles.pickerCard}>
           {candidates.map((candidate, i) => {
             const isSelected = candidate.transport === selected?.transport
+            const refloatIdentity = formatRefloatIdentity(candidate)
             return (
               <Pressable
                 key={String(candidate.transport)}
@@ -133,7 +135,23 @@ export function BoardLinkTimeline({
                     <CheckIcon size={16} color={theme.palette.sky.color} weight="bold" />
                   ) : null}
                 </View>
-                <Text style={styles.pickerLabel}>{formatBoardTransport(candidate.transport)}</Text>
+                <View style={styles.pickerText}>
+                  <Text style={styles.pickerLabel}>
+                    {formatCandidateTransport(candidate.transport)}
+                  </Text>
+                  {refloatIdentity ? (
+                    <Text style={styles.identityText}>{refloatIdentity}</Text>
+                  ) : (
+                    <View style={styles.warningRow}>
+                      <WarningCircleIcon
+                        size={13}
+                        color={theme.status.warning.color}
+                        weight="fill"
+                      />
+                      <Text style={styles.warningText}>Refloat identity missing</Text>
+                    </View>
+                  )}
+                </View>
                 {candidate.hasBms ? <BmsChip /> : null}
               </Pressable>
             )
@@ -269,10 +287,28 @@ const styles = StyleSheet.create({
   radioOn: {
     borderColor: theme.palette.sky.color,
   },
-  pickerLabel: {
+  pickerText: {
     flex: 1,
+    gap: 3,
+  },
+  pickerLabel: {
     color: theme.palette.slate.textPrimary,
     fontSize: 15,
+    fontWeight: '700',
+  },
+  identityText: {
+    color: theme.palette.slate.textMuted,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  warningRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  warningText: {
+    color: theme.status.warning.text,
+    fontSize: 12,
     fontWeight: '700',
   },
   bmsChip: {

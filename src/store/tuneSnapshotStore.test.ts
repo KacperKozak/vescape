@@ -29,7 +29,9 @@ mock.module('../../modules/vesc-ble/src/index', () => vescBleMock)
 beforeEach(async () => {
   getRefloatConfigSnapshot.mockClear()
   getRefloatConfigSnapshot.mockImplementation(async () => snapshot)
+  const { useBleStore } = await import('./bleStore')
   const { useTuneSnapshotStore } = await import('./tuneSnapshotStore')
+  useBleStore.setState({ linkIntegrity: 'trusted' })
   useTuneSnapshotStore.setState({ status: 'idle', snapshot: null, error: null })
   useTuneSnapshotStore.getState().clear()
 })
@@ -117,4 +119,20 @@ test('setSnapshot stores a pushed board snapshot', async () => {
   expect(useTuneSnapshotStore.getState().status).toBe('ready')
   expect(useTuneSnapshotStore.getState().snapshot).toEqual(snapshot)
   expect(useTuneSnapshotStore.getState().error).toBeNull()
+})
+
+test.each([
+  ['checking', 'Checking trusted board link.'],
+  ['outdated', 'Re-link board before firmware commands.'],
+  ['mismatched', 'Connected board does not match saved link.'],
+] as const)('blocks board snapshot reads while link is %s', async (linkIntegrity, message) => {
+  const { useBleStore } = await import('./bleStore')
+  const { useTuneSnapshotStore } = await import('./tuneSnapshotStore')
+  useBleStore.setState({ linkIntegrity })
+
+  await useTuneSnapshotStore.getState().read()
+
+  expect(getRefloatConfigSnapshot).not.toHaveBeenCalled()
+  expect(useTuneSnapshotStore.getState().status).toBe('error')
+  expect(useTuneSnapshotStore.getState().error).toBe(message)
 })

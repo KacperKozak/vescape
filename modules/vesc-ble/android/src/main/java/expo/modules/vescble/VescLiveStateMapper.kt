@@ -1,6 +1,7 @@
 package expo.modules.vescble
 
 import expo.modules.vescble.telemetry.AppSettings
+import expo.modules.vescble.runtime.LinkIntegrity
 
 internal data class VescLiveStateSnapshot(
     val boardPhase: BoardPhase,
@@ -19,6 +20,7 @@ internal data class VescLiveStateSnapshot(
     val remoteTiltValue: Int,
     val remoteTiltPhase: RemoteTiltPhase,
     val remoteTiltDecay: RemoteTiltDecayProgress?,
+    val linkIntegrity: LinkIntegrity,
     val settings: AppSettings,
 )
 
@@ -53,6 +55,7 @@ internal fun buildLiveState(snapshot: VescLiveStateSnapshot): Map<String, Any?> 
             "recentTelemetry" to snapshot.recentTelemetry,
             "error" to snapshot.boardError,
             "autoConnect" to snapshot.settings.autoConnect,
+            "linkIntegrity" to snapshot.linkIntegrity.wireValue,
             "remoteTilt" to remoteTiltWire(
                 snapshot.remoteTiltValue,
                 snapshot.remoteTiltPhase,

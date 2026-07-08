@@ -1,6 +1,7 @@
 import { router } from 'expo-router'
 import { PauseIcon, RecordIcon, StopIcon } from 'phosphor-react-native'
 import { useCallback } from 'react'
+import type { LinkIntegrity } from 'vesc-ble'
 import { useShallow } from 'zustand/react/shallow'
 
 import {
@@ -12,6 +13,7 @@ import {
 import { routes } from '@/navigation/routes'
 import type { Board } from '@/store/boardStore'
 import { useBleStore } from '@/store/bleStore'
+import { getConnectedLinkIntegrityWarning } from '@/lib/boardLinkIntegrity'
 import { theme } from '@/constants/theme'
 
 interface FloatingBarProps {
@@ -51,9 +53,10 @@ function canToggleRecording(status: string): boolean {
   return status === 'connected'
 }
 
-function getStatusPill(
+export function getStatusPill(
   status: string,
   scanStatus: string,
+  linkIntegrity: LinkIntegrity,
   board: Board | undefined,
   onStopScan: () => void,
   onRetryConnect: () => void,
@@ -130,6 +133,15 @@ function getStatusPill(
       color: theme.palette.sky.color,
       onPress: onStopScan,
     }
+  const linkWarning = getConnectedLinkIntegrityWarning(status, linkIntegrity)
+  if (linkWarning)
+    return {
+      kind: 'action',
+      text: linkWarning.text,
+      buttonText: linkWarning.buttonText,
+      config: ALERT_CONFIG[linkWarning.severity],
+      onPress: () => router.push({ pathname: routes.addBoardScan, params: { boardId: board.id } }),
+    }
   if (status === 'stale')
     return {
       kind: 'spinner',
@@ -163,11 +175,12 @@ export function FloatingBar({
   onRetryConnect,
   bottomOffset = 16,
 }: FloatingBarProps) {
-  const { recording, paused, scanStatus, start, stop } = useBleStore(
+  const { recording, paused, scanStatus, linkIntegrity, start, stop } = useBleStore(
     useShallow((s) => ({
       recording: s.telemetryRecordingEnabled,
       paused: s.telemetryRecordingPaused,
       scanStatus: s.scanStatus,
+      linkIntegrity: s.linkIntegrity,
       start: s.startTelemetryRecording,
       stop: s.stopTelemetryRecording,
     })),
@@ -182,7 +195,14 @@ export function FloatingBar({
     }
   }, [bleStatus, recording, start, stop])
 
-  const pill = getStatusPill(bleStatus, scanStatus, activeBoard, onStopScan, onRetryConnect)
+  const pill = getStatusPill(
+    bleStatus,
+    scanStatus,
+    linkIntegrity,
+    activeBoard,
+    onStopScan,
+    onRetryConnect,
+  )
   const uiPill: FloatingStatusPillModel | null =
     pill?.kind === 'spinner'
       ? {
