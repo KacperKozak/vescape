@@ -2,9 +2,12 @@ name: Release Android
 
 # Triggered by a tag of the form `production-<version>` (e.g. production-0.65.0)
 # pushed on the main branch. The tag version must match package.json exactly.
+# Can also be run manually (workflow_dispatch) to produce a signed AAB artifact
+# without tagging; the version then comes straight from package.json.
 on:
   push:
     tags: ['production-*']
+  workflow_dispatch:
 
 jobs:
   release:
@@ -17,6 +20,7 @@ jobs:
 
       # ── Guard: tag must point at a commit on main ──────────────────────────
       - name: Verify tag is on main
+        if: github.event_name == 'push'
         run: |
           git fetch origin main
           if ! git merge-base --is-ancestor HEAD origin/main; then
@@ -28,11 +32,13 @@ jobs:
       # ── Guard: tag version must match package.json ─────────────────────────
       - name: Verify version matches package.json
         run: |
-          TAG_VERSION="${GITHUB_REF_NAME#production-}"
           PKG_VERSION=$(node -p "require('./package.json').version")
-          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
-            echo "✗ Tag version ($TAG_VERSION) does not match package.json ($PKG_VERSION). Aborting."
-            exit 1
+          if [ "${{ github.event_name }}" = "push" ]; then
+            TAG_VERSION="${GITHUB_REF_NAME#production-}"
+            if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+              echo "✗ Tag version ($TAG_VERSION) does not match package.json ($PKG_VERSION). Aborting."
+              exit 1
+            fi
           fi
           # Compute Android versionCode (major*10000 + minor*100 + patch)
           VERSION_CODE=$(node -e "
@@ -121,3 +127,13 @@ jobs:
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
           SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+
+      # Keep the signed AAB even when the Play upload fails (e.g. a new
+      # foreground-service permission needs a manual Console upload first).
+      - name: Upload AAB artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-${{ env.APP_VERSION }}
+          path: android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: ignore
