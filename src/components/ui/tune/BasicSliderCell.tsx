@@ -31,23 +31,24 @@ export const BasicSliderCell = forwardRef<View, BasicSliderCellProps>(function B
         ]}
         onPress={editable ? onPress : undefined}
       >
-        <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit>
-          {formatSliderValue(item)}
-        </Text>
+        <View style={styles.headerRow}>
+          <View style={styles.labelRow}>
+            {item.modifiedManually ? (
+              <Pressable onPress={onResetFormula} hitSlop={8}>
+                <WarningIcon size={10} color={theme.palette.yellow.color} weight="fill" />
+              </Pressable>
+            ) : null}
+            <Text style={styles.label} numberOfLines={1}>
+              {item.label}
+            </Text>
+          </View>
+          <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit>
+            {formatSliderValue(item)}
+          </Text>
+        </View>
 
         <View style={styles.miniTrack}>
           <View style={[styles.miniFill, { width: `${progress}%` }]} />
-        </View>
-
-        <View style={styles.labelRow}>
-          {item.modifiedManually ? (
-            <Pressable onPress={onResetFormula} hitSlop={8}>
-              <WarningIcon size={10} color={theme.palette.yellow.color} weight="fill" />
-            </Pressable>
-          ) : null}
-          <Text style={styles.label} numberOfLines={1}>
-            {item.label}
-          </Text>
         </View>
       </Pressable>
     </View>
@@ -59,8 +60,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   cell: {
-    minHeight: 92,
-    paddingVertical: 10,
+    minHeight: 60,
+    paddingTop: 7,
+    paddingBottom: 10,
     paddingHorizontal: 10,
     borderRadius: 10,
     borderWidth: 1,
@@ -73,17 +75,25 @@ const styles = StyleSheet.create({
   cellReadOnly: {
     borderColor: theme.palette.slate.border,
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
   value: {
     color: theme.palette.slate.textPrimary,
-    fontSize: 18,
-    fontWeight: '800',
+    fontSize: 22,
+    fontWeight: '500',
     fontVariant: ['tabular-nums'],
+    maxWidth: '48%',
+    textAlign: 'right',
   },
   miniTrack: {
     height: 6,
     borderRadius: 3,
     backgroundColor: theme.palette.slate.surfaceDeep,
-    marginTop: 6,
+    marginTop: 10,
     overflow: 'hidden',
   },
   miniFill: {
@@ -98,12 +108,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    marginTop: 6,
+    flex: 1,
+    minWidth: 0,
   },
   label: {
-    color: theme.palette.slate.textSecondary,
-    fontSize: 11,
-    fontWeight: '600',
+    color: theme.palette.slate.textPrimary,
+    fontSize: 13,
+    fontWeight: '800',
     flex: 1,
   },
 })

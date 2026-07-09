@@ -1,4 +1,4 @@
-import { Children, useState } from 'react'
+import { Children, isValidElement, useState } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/ui/base/Text'
 import { CaretDownIcon } from 'phosphor-react-native'
@@ -16,12 +16,54 @@ interface TuneGroupGridProps {
 const COLUMNS = 2
 const ROW_GAP = 8
 
-function chunk<T>(items: T[], size: number): T[][] {
-  const rows: T[][] = []
-  for (let i = 0; i < items.length; i += size) {
-    rows.push(items.slice(i, i + size))
+interface TuneGroupGridChildProps {
+  fullWidth?: boolean
+}
+
+function isFullWidthChild(child: React.ReactNode): boolean {
+  return isValidElement<TuneGroupGridChildProps>(child) && child.props.fullWidth === true
+}
+
+function chunkCells(items: React.ReactNode[]): React.ReactNode[][] {
+  const rows: React.ReactNode[][] = []
+  let pendingRow: React.ReactNode[] = []
+
+  for (const item of items) {
+    if (isFullWidthChild(item)) {
+      if (pendingRow.length > 0) {
+        rows.push(pendingRow)
+        pendingRow = []
+      }
+      rows.push([item])
+      continue
+    }
+
+    pendingRow.push(item)
+    if (pendingRow.length === COLUMNS) {
+      rows.push(pendingRow)
+      pendingRow = []
+    }
   }
+
+  if (pendingRow.length > 0) rows.push(pendingRow)
+
   return rows
+}
+
+function GridRows({ rows }: { rows: React.ReactNode[][] }) {
+  return (
+    <View style={styles.grid}>
+      {rows.map((row, rowIndex) => (
+        <View key={rowIndex} style={styles.row}>
+          {row.map((cell, cellIndex) => (
+            <View key={cellIndex} style={styles.cellSlot}>
+              {cell}
+            </View>
+          ))}
+        </View>
+      ))}
+    </View>
+  )
 }
 
 export function TuneGroupGrid({
@@ -33,7 +75,7 @@ export function TuneGroupGrid({
 }: TuneGroupGridProps) {
   const [collapsed, setCollapsed] = useState(collapsedByDefault)
   const cells = Children.toArray(children)
-  const rows = chunk(cells, COLUMNS)
+  const rows = chunkCells(cells)
 
   const header = (
     <View style={styles.groupHeader}>
@@ -57,19 +99,7 @@ export function TuneGroupGrid({
         <Pressable style={styles.groupHeaderPress} onPress={() => setCollapsed((value) => !value)}>
           {header}
         </Pressable>
-        {!collapsed ? (
-          <View style={styles.grid}>
-            {rows.map((row, rowIndex) => (
-              <View key={rowIndex} style={styles.row}>
-                {row.map((cell, cellIndex) => (
-                  <View key={cellIndex} style={styles.cellSlot}>
-                    {cell}
-                  </View>
-                ))}
-              </View>
-            ))}
-          </View>
-        ) : null}
+        {!collapsed ? <GridRows rows={rows} /> : null}
       </View>
     )
   }
@@ -77,17 +107,7 @@ export function TuneGroupGrid({
   return (
     <View style={styles.group}>
       {header}
-      <View style={styles.grid}>
-        {rows.map((row, rowIndex) => (
-          <View key={rowIndex} style={styles.row}>
-            {row.map((cell, cellIndex) => (
-              <View key={cellIndex} style={styles.cellSlot}>
-                {cell}
-              </View>
-            ))}
-          </View>
-        ))}
-      </View>
+      <GridRows rows={rows} />
     </View>
   )
 }

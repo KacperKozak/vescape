@@ -380,6 +380,7 @@ export default function TuneScreen() {
                   key={item.id}
                   item={item}
                   editable={activeProfile != null}
+                  fullWidth={item.id === 'aggressiveness' || item.id === 'atrIntensity'}
                   onPress={modals.openBasicSliderEditor}
                   onResetFormula={() => modals.handleBasicSliderReset(item.id)}
                 />
@@ -412,7 +413,6 @@ export default function TuneScreen() {
                     dirty={Object.prototype.hasOwnProperty.call(dirtyFields, field.id)}
                     boardChanged={boardDiffByField.has(field.id)}
                     onPress={modals.openFieldEditor}
-                    onInfo={() => modals.showFieldInfo(field)}
                     onRevert={() => revertField(field.id)}
                     onAcceptBoard={() => acceptBoardField(field.id)}
                   />
@@ -530,6 +530,7 @@ export default function TuneScreen() {
 interface BasicSliderItemCellProps {
   item: BasicSliderItem
   editable: boolean
+  fullWidth?: boolean
   onPress: (sliderId: string, ref: { current: View | null }) => void
   onResetFormula: () => void
 }
@@ -560,7 +561,6 @@ interface TuneFieldCellProps {
   dirty: boolean
   boardChanged: boolean
   onPress: (field: RefloatConfigField, ref: { current: View | null }) => void
-  onInfo: () => void
   onRevert: () => void
   onAcceptBoard: () => void
 }
@@ -573,7 +573,6 @@ function TuneFieldCell({
   dirty,
   boardChanged,
   onPress,
-  onInfo,
   onRevert,
   onAcceptBoard,
 }: TuneFieldCellProps) {
@@ -588,7 +587,6 @@ function TuneFieldCell({
       dirty={dirty}
       boardChanged={boardChanged}
       onPress={() => onPress(field, cellRef)}
-      onInfo={onInfo}
       onRevert={onRevert}
       onAcceptBoard={onAcceptBoard}
     />

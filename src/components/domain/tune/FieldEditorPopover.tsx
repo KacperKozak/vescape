@@ -102,6 +102,18 @@ function FieldEditorPopoverInner({ target, onCancel, onApply }: FieldEditorPopov
                 <Text style={styles.dataLabel}>Field</Text>
                 <Text style={styles.fieldId}>{target.fieldId}</Text>
               </View>
+              <View style={styles.dataRow}>
+                <Text style={styles.dataLabel}>Range</Text>
+                <Text style={styles.dataValue}>
+                  {formatTuneValue(target.min)} to {formatTuneValue(target.max)}
+                </Text>
+              </View>
+              {target.unit ? (
+                <View style={styles.dataRow}>
+                  <Text style={styles.dataLabel}>Unit</Text>
+                  <Text style={styles.dataValue}>{target.unit}</Text>
+                </View>
+              ) : null}
               {target.linkedFields && target.linkedFields.length > 0 ? (
                 <View style={styles.linkedSection}>
                   <Text style={styles.linkedTitle}>Linked fields</Text>
@@ -185,6 +197,12 @@ const styles = StyleSheet.create({
     color: theme.palette.slate.textSecondary,
     fontSize: 12,
     fontWeight: '700',
+  },
+  dataValue: {
+    color: theme.palette.slate.textSecondary,
+    fontSize: 12,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
   },
   dataRow: {
     flexDirection: 'row',
