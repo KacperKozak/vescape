@@ -75,7 +75,7 @@ export const TuneConfigCell = forwardRef<View, TuneConfigCellProps>(function Tun
           </Pressable>
         ) : null}
         <View style={styles.cellHeaderRow}>
-          <Text style={styles.cellLabel} numberOfLines={2}>
+          <Text style={[styles.cellLabel, dirty && styles.cellLabelWithRevert]} numberOfLines={2}>
             {field.label}
           </Text>
         </View>
@@ -130,12 +130,12 @@ const styles = StyleSheet.create({
   },
   cellRevertButton: {
     position: 'absolute',
-    top: 39,
-    right: 6,
+    top: 7,
+    right: 8,
     zIndex: 1,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: theme.palette.sky.bg,
@@ -153,7 +153,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.palette.green.bg,
   },
   cellAcceptButtonStacked: {
-    top: 67,
+    top: 39,
   },
   cellHeaderRow: {
     flexDirection: 'row',
@@ -199,5 +199,8 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     flex: 1,
     minWidth: 0,
+  },
+  cellLabelWithRevert: {
+    paddingRight: 26,
   },
 })

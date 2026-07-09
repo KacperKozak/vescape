@@ -35,14 +35,14 @@ export const BasicSliderCell = forwardRef<View, BasicSliderCellProps>(function B
         onPress={editable ? onPress : undefined}
       >
         <TuneTileFill fraction={progress / 100} color={color} />
+        {item.modifiedManually ? (
+          <Pressable style={styles.alertButton} onPress={onResetFormula} hitSlop={8}>
+            <WarningIcon size={16} color={theme.palette.yellow.color} weight="duotone" />
+          </Pressable>
+        ) : null}
         <View style={styles.headerRow}>
-          <View style={styles.labelRow}>
+          <View style={[styles.labelRow, item.modifiedManually && styles.labelRowWithAlert]}>
             <IconComponent size={15} color={color} weight="duotone" />
-            {item.modifiedManually ? (
-              <Pressable onPress={onResetFormula} hitSlop={8}>
-                <WarningIcon size={10} color={theme.palette.yellow.color} weight="fill" />
-              </Pressable>
-            ) : null}
             <Text style={styles.label} numberOfLines={1}>
               {item.label}
             </Text>
@@ -82,6 +82,16 @@ const styles = StyleSheet.create({
   cellReadOnly: {
     borderColor: theme.palette.slate.border,
   },
+  alertButton: {
+    position: 'absolute',
+    top: 7,
+    right: 8,
+    zIndex: 1,
+    width: 24,
+    height: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   headerRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -104,6 +114,9 @@ const styles = StyleSheet.create({
     gap: 3,
     flex: 1,
     minWidth: 0,
+  },
+  labelRowWithAlert: {
+    paddingRight: 26,
   },
   label: {
     color: theme.palette.slate.textPrimary,

@@ -190,7 +190,7 @@ function BasicSliderCellShowcase() {
       step: 0.5,
       source: 'Profile: Street',
       info: 'Sets the tilt angle for pushback notification.',
-      modifiedManually: false,
+      modifiedManually: true,
     }),
     [value],
   )
@@ -223,6 +223,7 @@ function BasicSliderCellShowcase() {
             color={basicSliderColor(mockItem.id)}
             editable
             onPress={() => setEditorOpen(true)}
+            onResetFormula={() => setValue(6.5)}
           />
         </View>
         <View style={styles.basicSliderShowcaseGrid}>
