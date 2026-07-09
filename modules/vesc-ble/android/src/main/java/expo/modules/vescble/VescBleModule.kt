@@ -333,11 +333,11 @@ class VescBleModule : Module() {
     AsyncFunction("getTuneProfile") Coroutine { profileId: String ->
       AppDataRepository.get(context.applicationContext).getTuneProfile(profileId)
     }
-    AsyncFunction("createProfile") Coroutine { boardId: String, name: String, fields: Map<String, Any?> ->
-      AppDataRepository.get(context.applicationContext).createProfile(boardId, name, fields)
+    AsyncFunction("createProfile") Coroutine { boardId: String, name: String, icon: String, color: String, fields: Map<String, Any?> ->
+      AppDataRepository.get(context.applicationContext).createProfile(boardId, name, icon, color, fields)
     }
-    AsyncFunction("renameProfile") Coroutine { profileId: String, name: String ->
-      AppDataRepository.get(context.applicationContext).renameProfile(profileId, name)
+    AsyncFunction("renameProfile") Coroutine { profileId: String, name: String, icon: String, color: String ->
+      AppDataRepository.get(context.applicationContext).renameProfile(profileId, name, icon, color)
     }
     AsyncFunction("deleteProfile") Coroutine { profileId: String ->
       AppDataRepository.get(context.applicationContext).deleteProfile(profileId)

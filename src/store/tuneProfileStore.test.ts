@@ -8,6 +8,8 @@ const profile: TuneProfile = {
   id: 'profile-1',
   boardId: 'board-1',
   name: 'Main',
+  icon: 'sliders-horizontal',
+  color: 'purple',
   fields: {
     kp: 20,
     atr_strength_up: 1.2,
@@ -20,6 +22,8 @@ const otherBoardProfile: TuneProfile = {
   id: 'profile-2',
   boardId: 'board-2',
   name: 'Other',
+  icon: 'faders',
+  color: 'sky',
   fields: {
     kp: 30,
   },
@@ -91,6 +95,10 @@ beforeEach(async () => {
   getTuneProfiles.mockImplementation(async (_boardId: string) => [profile])
   getTuneProfile.mockClear()
   saveProfile.mockClear()
+  createProfile.mockClear()
+  createProfile.mockImplementation(async () => profile)
+  renameProfile.mockClear()
+  renameProfile.mockImplementation(async () => profile)
   pushProfileToBoard.mockClear()
   pushProfileToBoard.mockImplementation(async () => boardSnapshot)
   const { useTuneProfileStore } = await import('./tuneProfileStore')
@@ -348,4 +356,43 @@ test('syncToBoard updates tune snapshot store with pushed board snapshot', async
   expect(useTuneProfileStore.getState().boardDiff).toEqual([
     { fieldId: 'kp', profileValue: 20, boardValue: 24 },
   ])
+})
+
+test('falls back to legacy native profile calls when the dev client has the old bridge', async () => {
+  const { useTuneProfileStore } = await import('./tuneProfileStore')
+  const legacyCreated = {
+    ...profile,
+    id: 'profile-legacy',
+    name: 'Trail',
+    icon: undefined,
+    color: undefined,
+  } as unknown as TuneProfile
+  const legacyRenamed = {
+    ...legacyCreated,
+    name: 'Trail 2',
+  }
+
+  createProfile.mockImplementation(async (...args: unknown[]) => {
+    if (args.length > 3) throw new Error('Expected 3 arguments')
+    return legacyCreated
+  })
+  renameProfile.mockImplementation(async (...args: unknown[]) => {
+    if (args.length > 2) throw new Error('Expected 2 arguments')
+    return legacyRenamed as TuneProfile
+  })
+
+  await useTuneProfileStore.getState().loadProfiles('board-1')
+  const created = await useTuneProfileStore.getState().createProfile('Trail', 'mountains', 'green')
+
+  expect(created?.id).toBe('profile-legacy')
+  expect(created?.icon).toBe('mountains')
+  expect(created?.color).toBe('green')
+
+  const renamed = await useTuneProfileStore
+    .getState()
+    .renameProfile('profile-legacy', 'Trail 2', 'rocket-launch', 'orange')
+
+  expect(renamed?.name).toBe('Trail 2')
+  expect(renamed?.icon).toBe('rocket-launch')
+  expect(renamed?.color).toBe('orange')
 })

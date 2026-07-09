@@ -1,4 +1,12 @@
-import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react'
 import {
   Pressable,
   ScrollView,
@@ -7,6 +15,12 @@ import {
   type StyleProp,
   type ViewStyle,
 } from 'react-native'
+import Animated, {
+  interpolateColor,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated'
 import { Text } from '@/components/ui/base/Text'
 import { PlusIcon } from 'phosphor-react-native'
 import type { Icon } from 'phosphor-react-native'
@@ -30,9 +44,14 @@ interface PillSelectorCtx {
   openMenu: (id: string, triggerRef: React.RefObject<View | null>, content: ReactNode) => void
   closeMenu: () => void
   addRef: React.RefObject<View | null>
+  contained: boolean
 }
 
 const PillSelectorContext = createContext<PillSelectorCtx | null>(null)
+const TUNE_OPTION_WIDTH = 38
+const TUNE_ACTIVE_WIDTH = 112
+const TUNE_ANIMATION = { duration: 180 } as const
+const AnimatedText = Animated.createAnimatedComponent(Text)
 
 function usePillSelectorCtx() {
   const ctx = useContext(PillSelectorContext)
@@ -43,6 +62,7 @@ function usePillSelectorCtx() {
 interface PillSelectorProps {
   activeId: string
   children: ReactNode
+  contained?: boolean
   style?: StyleProp<ViewStyle>
   contentContainerStyle?: StyleProp<ViewStyle>
 }
@@ -50,6 +70,7 @@ interface PillSelectorProps {
 export function PillSelector({
   activeId,
   children,
+  contained = false,
   style,
   contentContainerStyle,
 }: PillSelectorProps) {
@@ -72,13 +93,14 @@ export function PillSelector({
   })()
 
   return (
-    <PillSelectorContext.Provider value={{ activeId, openMenu, closeMenu, addRef }}>
-      <View style={[styles.container, style]}>
+    <PillSelectorContext.Provider value={{ activeId, openMenu, closeMenu, addRef, contained }}>
+      <View style={[styles.container, contained && styles.containedContainer, style]}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={[
             styles.scrollContent,
+            contained && styles.containedScrollContent,
             centered && styles.scrollContentCentered,
             contentContainerStyle,
           ]}
@@ -105,6 +127,7 @@ interface PillSelectorItemProps {
   id: string
   label: string
   icon?: Icon
+  activeLabelOnly?: boolean
   badge?: ReactNode
   color?: ActiveTheme
   testID?: string
@@ -116,18 +139,64 @@ export function PillSelectorItem({
   id,
   label,
   icon: IconComp,
+  activeLabelOnly,
   badge,
   color,
   testID,
   onPress,
   children,
 }: PillSelectorItemProps) {
-  const { activeId, openMenu, closeMenu } = usePillSelectorCtx()
+  const { activeId, contained, openMenu, closeMenu } = usePillSelectorCtx()
   const pillRef = useRef<View>(null)
   const active = id === activeId
+  const showLabel = !activeLabelOnly || active
   const accentBg = color?.bg ?? theme.palette.green.bg
   const accentBorder = color?.border ?? theme.palette.green.border
   const accentColor = color?.color ?? theme.palette.green.color
+  const inactiveAccent = theme.alpha(accentColor, 0.6)
+  const activeProgress = useSharedValue(active ? 1 : 0)
+  const labelProgress = useSharedValue(showLabel ? 1 : 0)
+
+  useEffect(() => {
+    activeProgress.value = withTiming(active ? 1 : 0, TUNE_ANIMATION)
+  }, [active, activeProgress])
+
+  useEffect(() => {
+    labelProgress.value = withTiming(showLabel ? 1 : 0, TUNE_ANIMATION)
+  }, [labelProgress, showLabel])
+
+  const frameStyle = useAnimatedStyle(
+    () => ({
+      width: activeLabelOnly
+        ? TUNE_OPTION_WIDTH + (TUNE_ACTIVE_WIDTH - TUNE_OPTION_WIDTH) * activeProgress.value
+        : undefined,
+      backgroundColor: interpolateColor(
+        activeProgress.value,
+        [0, 1],
+        [
+          contained ? theme.alpha(theme.palette.mono.black, 0) : theme.palette.slate.surface,
+          accentBg,
+        ],
+      ),
+      borderColor: interpolateColor(
+        activeProgress.value,
+        [0, 1],
+        [
+          contained ? theme.alpha(theme.palette.mono.black, 0) : theme.palette.slate.border,
+          accentBorder,
+        ],
+      ),
+    }),
+    [accentBg, accentBorder, activeLabelOnly, contained],
+  )
+  const labelStyle = useAnimatedStyle(
+    () => ({
+      opacity: labelProgress.value,
+      maxWidth: TUNE_ACTIVE_WIDTH * labelProgress.value,
+      marginLeft: (IconComp ? 6 : 0) * labelProgress.value,
+    }),
+    [IconComp],
+  )
 
   const hasMenu = !!children
   const longPressedRef = useRef(false)
@@ -140,42 +209,64 @@ export function PillSelectorItem({
   }, [id, children, hasMenu, openMenu])
 
   return (
-    <Pressable
+    <Animated.View
       ref={pillRef}
-      testID={testID}
       style={[
         styles.pill,
-        active ? { backgroundColor: accentBg, borderColor: accentBorder } : styles.pillInactive,
+        activeLabelOnly && styles.iconPill,
+        contained && styles.containedPill,
+        frameStyle,
       ]}
-      onPress={() => {
-        if (longPressedRef.current) {
-          longPressedRef.current = false
-          return
-        }
-        closeMenu()
-        onPress()
-      }}
-      onLongPress={hasMenu ? handleLongPress : undefined}
-      delayLongPress={400}
     >
-      {IconComp ? (
-        <IconComp
-          size={13}
-          color={active ? accentColor : theme.palette.slate.textMuted}
-          weight="fill"
-        />
-      ) : null}
-      <Text
-        style={[
-          styles.pillText,
-          active ? { color: accentColor, fontWeight: '800' } : styles.pillTextInactive,
-        ]}
-        numberOfLines={1}
+      <Pressable
+        testID={testID}
+        style={styles.pillPressable}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityState={{ selected: active }}
+        onPress={() => {
+          if (longPressedRef.current) {
+            longPressedRef.current = false
+            return
+          }
+          closeMenu()
+          onPress()
+        }}
+        onLongPress={hasMenu ? handleLongPress : undefined}
+        delayLongPress={400}
       >
-        {label}
-      </Text>
-      {badge ?? null}
-    </Pressable>
+        {IconComp ? (
+          <IconComp
+            size={activeLabelOnly ? 18 : 13}
+            color={active ? accentColor : inactiveAccent}
+            weight="duotone"
+          />
+        ) : null}
+        {activeLabelOnly ? (
+          <AnimatedText
+            style={[
+              styles.pillText,
+              active ? { color: accentColor, fontWeight: '800' } : { color: inactiveAccent },
+              labelStyle,
+            ]}
+            numberOfLines={1}
+          >
+            {label}
+          </AnimatedText>
+        ) : showLabel ? (
+          <Text
+            style={[
+              styles.pillText,
+              active ? { color: accentColor, fontWeight: '800' } : { color: inactiveAccent },
+            ]}
+            numberOfLines={1}
+          >
+            {label}
+          </Text>
+        ) : null}
+        {badge ?? null}
+      </Pressable>
+    </Animated.View>
   )
 }
 
@@ -185,9 +276,14 @@ interface PillSelectorAddProps {
 }
 
 export function PillSelectorAdd({ testID, onPress }: PillSelectorAddProps) {
-  const { addRef } = usePillSelectorCtx()
+  const { addRef, contained } = usePillSelectorCtx()
   return (
-    <Pressable ref={addRef} testID={testID} style={styles.addPill} onPress={onPress}>
+    <Pressable
+      ref={addRef}
+      testID={testID}
+      style={[styles.addPill, contained && styles.containedAddPill]}
+      onPress={onPress}
+    >
       <PlusIcon size={14} color={theme.palette.slate.color} weight="bold" />
     </Pressable>
   )
@@ -244,11 +340,26 @@ const styles = StyleSheet.create({
   container: {
     marginHorizontal: -16,
   },
+  containedContainer: {
+    height: 38,
+    marginHorizontal: 0,
+    borderRadius: 19,
+    overflow: 'hidden',
+    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
+    borderWidth: 1,
+    borderColor: theme.alpha(theme.palette.slate.light, 0.3),
+  },
   scrollContent: {
     paddingHorizontal: 16,
     gap: 8,
     alignItems: 'center',
     minWidth: '100%',
+  },
+  containedScrollContent: {
+    minWidth: 0,
+    height: 36,
+    paddingHorizontal: 1,
+    gap: 0,
   },
   scrollContentCentered: {
     justifyContent: 'center',
@@ -264,9 +375,26 @@ const styles = StyleSheet.create({
     gap: 6,
     maxWidth: 160,
   },
-  pillInactive: {
-    backgroundColor: theme.palette.slate.surface,
-    borderColor: theme.palette.slate.border,
+  iconPill: {
+    height: TUNE_OPTION_WIDTH,
+    width: TUNE_OPTION_WIDTH,
+    maxWidth: TUNE_ACTIVE_WIDTH,
+    paddingHorizontal: 0,
+    borderRadius: TUNE_OPTION_WIDTH / 2,
+    overflow: 'hidden',
+  },
+  containedPill: {
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 0,
+  },
+  pillPressable: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
   },
   pillText: {
     fontSize: 13,
@@ -284,6 +412,11 @@ const styles = StyleSheet.create({
     borderColor: theme.palette.slate.border,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  containedAddPill: {
+    borderWidth: 0,
+    borderStyle: 'solid',
+    backgroundColor: theme.alpha(theme.palette.mono.black, 0),
   },
   menu: {
     paddingVertical: 4,

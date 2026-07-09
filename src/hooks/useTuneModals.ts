@@ -14,6 +14,7 @@ import {
   isEditableNumberField,
   type BasicSliderItem,
 } from '@/lib/tune/sliderDefinitions'
+import { DEFAULT_TUNE_PROFILE_COLOR, DEFAULT_TUNE_PROFILE_ICON } from '@/lib/tune/profileMetadata'
 
 type InfoModalState = { title: string; message: string } | null
 type EditorKind = { kind: 'field'; fieldId: string } | { kind: 'basic'; sliderId: string }
@@ -34,7 +35,7 @@ export function useTuneModals(
   const [infoModal, setInfoModal] = useState<InfoModalState>(null)
   const [editor, setEditor] = useState<FieldEditorTarget | null>(null)
   const [editorKind, setEditorKind] = useState<EditorKind | null>(null)
-  const [renameModalProfile, setRenameModalProfile] = useState<TuneProfile | null>(null)
+  const [metadataModalProfile, setMetadataModalProfile] = useState<TuneProfile | null>(null)
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [createCloneFromId, setCreateCloneFromId] = useState<string | undefined>()
   const [copySourceProfile, setCopySourceProfile] = useState<TuneProfile | null>(null)
@@ -185,8 +186,8 @@ export function useTuneModals(
     setInfoModal,
     editor,
     editorKind,
-    renameModalProfile,
-    setRenameModalProfile,
+    metadataModalProfile,
+    setMetadataModalProfile,
     createModalOpen,
     setCreateModalOpen,
     createCloneFromId,
@@ -210,5 +211,7 @@ export function useTuneModals(
     storeCreateProfile,
     storeRenameProfile,
     storeDeleteProfile,
+    defaultTuneIcon: DEFAULT_TUNE_PROFILE_ICON,
+    defaultTuneColor: DEFAULT_TUNE_PROFILE_COLOR,
   }
 }

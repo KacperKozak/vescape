@@ -322,7 +322,17 @@ enum TelemetryDatabase {
       try TuneProfileStore.createTables(db)
     }
 
+    migrator.registerMigration("v23_tune_profile_metadata") { db in
+      let columns = try Row.fetchAll(db, sql: "PRAGMA table_info(tune_profiles)")
+        .compactMap { $0["name"] as String? }
+      if !columns.contains("icon") {
+        try db.execute(sql: "ALTER TABLE tune_profiles ADD COLUMN icon TEXT NOT NULL DEFAULT 'sliders-horizontal'")
+      }
+      if !columns.contains("color") {
+        try db.execute(sql: "ALTER TABLE tune_profiles ADD COLUMN color TEXT NOT NULL DEFAULT 'purple'")
+      }
+    }
+
     return migrator
   }
 }
-

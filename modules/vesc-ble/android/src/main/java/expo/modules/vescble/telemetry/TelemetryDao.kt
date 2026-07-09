@@ -414,8 +414,14 @@ interface TelemetryDao {
   @Query("DELETE FROM tune_history_entries WHERE profile_id = :profileId")
   suspend fun deleteTuneHistoryForProfile(profileId: String)
 
-  @Query("UPDATE tune_profiles SET name = :name, updated_at = :updatedAt WHERE id = :profileId")
-  suspend fun updateProfileName(profileId: String, name: String, updatedAt: Long): Int
+  @Query("UPDATE tune_profiles SET name = :name, icon = :icon, color = :color, updated_at = :updatedAt WHERE id = :profileId")
+  suspend fun updateProfileMetadata(
+    profileId: String,
+    name: String,
+    icon: String,
+    color: String,
+    updatedAt: Long,
+  ): Int
 
   @Query("SELECT * FROM tune_history_entries WHERE id = :id LIMIT 1")
   suspend fun getTuneHistoryEntry(id: Long): TuneHistoryEntryEntity?

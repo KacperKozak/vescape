@@ -14,7 +14,7 @@ import {
 } from 'phosphor-react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useSharedValue } from 'react-native-reanimated'
-import { type TuneProfile, type RefloatConfigField, type TuneProfileFieldValue } from 'vesc-ble'
+import { type RefloatConfigField, type TuneProfileFieldValue } from 'vesc-ble'
 
 import { Button } from '@/components/ui/base/Button'
 import { IconButton } from '@/components/ui/base/IconButton'
@@ -30,6 +30,11 @@ import {
   PillSelector,
 } from '@/components/ui/controls/PillSelector'
 import { TuneConfigCell } from '@/components/domain/tune/TuneConfigCell'
+import {
+  TuneProfileMetadataModal,
+  tuneProfileColorTheme,
+  tuneProfileIconComponent,
+} from '@/components/domain/tune/TuneProfileMetadataModal'
 import { TuneGroupGrid } from '@/components/ui/tune/TuneGroupGrid'
 import { TuneSyncBar } from '@/components/ui/tune/TuneSyncBar'
 import { TunePreview } from '@/components/ui/tune/TunePreview'
@@ -48,6 +53,7 @@ import { useTuneScreenData } from '@/hooks/useTuneScreenData'
 import { theme } from '@/constants/theme'
 import { useTuneModals } from '@/hooks/useTuneModals'
 import { DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS } from '@/lib/tune/tunePreview'
+import type { TuneProfileColorId, TuneProfileIconId } from '@/lib/tune/profileMetadata'
 
 let previewHelpShownThisSession = false
 
@@ -111,6 +117,7 @@ export default function TuneScreen() {
         profiles.length > 0 ? (
           <PillSelector
             activeId={activeProfile?.id ?? ''}
+            contained
             style={styles.headerPills}
             contentContainerStyle={styles.headerPillsContent}
           >
@@ -119,13 +126,15 @@ export default function TuneScreen() {
                 key={profile.id}
                 id={profile.id}
                 label={profile.name}
-                color={theme.palette.sky}
+                icon={tuneProfileIconComponent(profile.icon)}
+                activeLabelOnly
+                color={tuneProfileColorTheme(profile.color)}
                 onPress={() => setActiveProfile(profile.id)}
               >
                 <PillSelectorMenuItem
                   icon={PencilSimpleIcon}
-                  label="Rename"
-                  onPress={() => modals.setRenameModalProfile(profile)}
+                  label="Edit"
+                  onPress={() => modals.setMetadataModalProfile(profile)}
                 />
                 {modals.otherBoards.length > 0 ? (
                   <PillSelectorMenuItem
@@ -155,27 +164,10 @@ export default function TuneScreen() {
           {activeProfile ? (
             <IconButton icon={ClockCounterClockwiseIcon} onPress={() => void openHistory()} />
           ) : null}
-          {boardConnected ? (
-            <IconButton
-              icon={ArrowsClockwiseIcon}
-              onPress={() => void loadOnline()}
-              loading={boardSnapshotStatus === 'loading'}
-            />
-          ) : null}
         </View>
       ),
     })
-  }, [
-    activeProfile,
-    boardConnected,
-    boardSnapshotStatus,
-    openHistory,
-    loadOnline,
-    navigation,
-    profiles,
-    modals,
-    setActiveProfile,
-  ])
+  }, [activeProfile, openHistory, navigation, profiles, modals, setActiveProfile])
 
   const handleSave = () => {
     void saveActiveProfile().catch(() => undefined)
@@ -314,56 +306,65 @@ export default function TuneScreen() {
 
             {boardSnapshot ? (
               <View style={styles.metaRow}>
-                {boardSnapshot.fwVersion ? (
+                <View style={styles.metaBadges}>
+                  {boardSnapshot.fwVersion ? (
+                    <InfoBadge
+                      label={boardSnapshot.fwVersion}
+                      onPress={() =>
+                        modals.showBadgeInfo(
+                          'Firmware',
+                          'Firmware reported by the connected controller. This is useful diagnostic context, but the config decoder uses the board XML schema as the source of truth.',
+                        )
+                      }
+                    />
+                  ) : null}
+                  {boardSnapshot.refloatVersion ? (
+                    <InfoBadge
+                      label={boardSnapshot.refloatVersion}
+                      onPress={() =>
+                        modals.showBadgeInfo(
+                          'Refloat',
+                          'Refloat package version reported by the connected controller.',
+                        )
+                      }
+                    />
+                  ) : null}
                   <InfoBadge
-                    label={boardSnapshot.fwVersion}
+                    label={`CAN ${boardSnapshot.canId}`}
                     onPress={() =>
                       modals.showBadgeInfo(
-                        'Firmware',
-                        'Firmware reported by the connected controller. This is useful diagnostic context, but the config decoder uses the board XML schema as the source of truth.',
+                        'CAN ID',
+                        `Controller CAN ID ${boardSnapshot.canId}. Refloat config commands are forwarded to this controller before reading the schema and binary config.`,
                       )
                     }
                   />
-                ) : null}
-                {boardSnapshot.refloatVersion ? (
                   <InfoBadge
-                    label={boardSnapshot.refloatVersion}
+                    label={`${boardSnapshot.rawConfigLength} bytes`}
                     onPress={() =>
                       modals.showBadgeInfo(
-                        'Refloat',
-                        'Refloat package version reported by the connected controller.',
+                        'Config Size',
+                        `${boardSnapshot.rawConfigLength} bytes is the size of the raw Refloat custom config payload read from the controller. The app decodes only known tune fields from that binary struct.`,
                       )
                     }
                   />
-                ) : null}
-                <InfoBadge
-                  label={`CAN ${boardSnapshot.canId}`}
-                  onPress={() =>
-                    modals.showBadgeInfo(
-                      'CAN ID',
-                      `Controller CAN ID ${boardSnapshot.canId}. Refloat config commands are forwarded to this controller before reading the schema and binary config.`,
-                    )
-                  }
-                />
-                <InfoBadge
-                  label={`${boardSnapshot.rawConfigLength} bytes`}
-                  onPress={() =>
-                    modals.showBadgeInfo(
-                      'Config Size',
-                      `${boardSnapshot.rawConfigLength} bytes is the size of the raw Refloat custom config payload read from the controller. The app decodes only known tune fields from that binary struct.`,
-                    )
-                  }
-                />
-                {boardSnapshot.missingFieldIds.length > 0 ? (
-                  <InfoBadge
-                    label={`${boardSnapshot.missingFieldIds.length} missing`}
-                    danger
-                    onPress={() =>
-                      modals.showBadgeInfo(
-                        'Missing Fields',
-                        `These allowlisted fields were not present in the board schema: ${boardSnapshot.missingFieldIds.join(', ')}`,
-                      )
-                    }
+                  {boardSnapshot.missingFieldIds.length > 0 ? (
+                    <InfoBadge
+                      label={`${boardSnapshot.missingFieldIds.length} missing`}
+                      danger
+                      onPress={() =>
+                        modals.showBadgeInfo(
+                          'Missing Fields',
+                          `These allowlisted fields were not present in the board schema: ${boardSnapshot.missingFieldIds.join(', ')}`,
+                        )
+                      }
+                    />
+                  ) : null}
+                </View>
+                {boardConnected ? (
+                  <IconButton
+                    icon={ArrowsClockwiseIcon}
+                    onPress={() => void loadOnline()}
+                    loading={boardSnapshotStatus === 'loading'}
                   />
                 ) : null}
               </View>
@@ -458,27 +459,37 @@ export default function TuneScreen() {
         onApply={modals.handleEditorApply}
       />
 
-      <TextPromptModal
+      <TuneProfileMetadataModal
         visible={modals.createModalOpen}
         title="New Profile"
-        placeholder="Profile name"
-        initialValue=""
         confirmLabel="Create"
-        onConfirm={(name) => {
-          void modals.storeCreateProfile(name, modals.createCloneFromId)
+        initialValue={{
+          name: '',
+          icon: modals.defaultTuneIcon as TuneProfileIconId,
+          color: modals.defaultTuneColor as TuneProfileColorId,
+        }}
+        onConfirm={({ name, icon, color }) => {
+          void modals.storeCreateProfile(name, icon, color, modals.createCloneFromId)
           modals.setCreateModalOpen(false)
         }}
         onDismiss={() => modals.setCreateModalOpen(false)}
       />
 
-      <RenameProfileModal
-        profile={modals.renameModalProfile}
-        onRename={(name) => {
-          if (modals.renameModalProfile)
-            void modals.storeRenameProfile(modals.renameModalProfile.id, name)
-          modals.setRenameModalProfile(null)
+      <TuneProfileMetadataModal
+        visible={modals.metadataModalProfile != null}
+        title="Edit Profile"
+        confirmLabel="Save"
+        initialValue={{
+          name: modals.metadataModalProfile?.name ?? '',
+          icon: modals.metadataModalProfile?.icon as TuneProfileIconId | undefined,
+          color: modals.metadataModalProfile?.color as TuneProfileColorId | undefined,
         }}
-        onDismiss={() => modals.setRenameModalProfile(null)}
+        onConfirm={({ name, icon, color }) => {
+          if (modals.metadataModalProfile)
+            void modals.storeRenameProfile(modals.metadataModalProfile.id, name, icon, color)
+          modals.setMetadataModalProfile(null)
+        }}
+        onDismiss={() => modals.setMetadataModalProfile(null)}
       />
 
       <BoardPickerModal
@@ -589,25 +600,6 @@ function TuneFieldCell({
   )
 }
 
-interface RenameProfileModalProps {
-  profile: TuneProfile | null
-  onRename: (name: string) => void
-  onDismiss: () => void
-}
-
-function RenameProfileModal({ profile, onRename, onDismiss }: RenameProfileModalProps) {
-  return (
-    <TextPromptModal
-      visible={profile != null}
-      title="Rename Profile"
-      initialValue={profile?.name ?? ''}
-      confirmLabel="Rename"
-      onConfirm={onRename}
-      onDismiss={onDismiss}
-    />
-  )
-}
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -627,7 +619,7 @@ const styles = StyleSheet.create({
   },
   headerPillsContent: {
     minWidth: 0,
-    paddingHorizontal: 8,
+    paddingHorizontal: 0,
   },
   tuneView: { flex: 1 },
   previewPinned: {
@@ -712,6 +704,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   metaRow: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  metaBadges: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     gap: 8,
     flexWrap: 'wrap',

@@ -389,6 +389,8 @@ data class TuneProfileEntity(
   @ColumnInfo(name = "board_id")
   val boardId: String,
   val name: String,
+  val icon: String = "sliders-horizontal",
+  val color: String = "purple",
   @ColumnInfo(name = "fields_json")
   val fieldsJson: String,
   @ColumnInfo(name = "created_at")

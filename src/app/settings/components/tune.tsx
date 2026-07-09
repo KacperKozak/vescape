@@ -8,6 +8,12 @@ import {
   FieldEditorPopover,
   type FieldEditorTarget,
 } from '@/components/domain/tune/FieldEditorPopover'
+import {
+  TuneProfileIcon,
+  TuneProfileMetadataModal,
+  tuneProfileColorTheme,
+  type TuneProfileMetadataValue,
+} from '@/components/domain/tune/TuneProfileMetadataModal'
 import { useTriggerRef } from '@/components/ui/forms/Dropdown'
 import { BasicSliderCell } from '@/components/ui/tune/BasicSliderCell'
 import { TuneDial } from '@/components/ui/tune/TuneDial'
@@ -18,8 +24,9 @@ import {
   type HillsPresetId,
 } from '@/components/ui/tune/TunePreviewScenarioControls'
 import { IconHero } from '@/components/ui/settings/IconHero'
+import { Text } from '@/components/ui/base/Text'
 import { ShowcaseCard } from '@/components/ui/dev/ShowcaseCard'
-import { ChipRow, ValueRow } from '@/components/ui/dev/ShowcaseControls'
+import { ChipRow, OpenButton, ValueRow } from '@/components/ui/dev/ShowcaseControls'
 
 import { theme } from '@/constants/theme'
 import type { BasicSliderItem } from '@/lib/tune/sliderDefinitions'
@@ -327,6 +334,41 @@ function UnsupportedTunePreviewShowcase() {
   )
 }
 
+function TuneProfileMetadataModalShowcase() {
+  const [open, setOpen] = useState(false)
+  const [value, setValue] = useState<TuneProfileMetadataValue>({
+    name: 'Street',
+    icon: 'road-horizon',
+    color: 'sky',
+  })
+  const color = tuneProfileColorTheme(value.color)
+
+  return (
+    <ShowcaseCard
+      name="TuneProfileMetadataModal"
+      controls={<OpenButton label="Edit" onPress={() => setOpen(true)} />}
+    >
+      <View
+        style={[styles.profilePreview, { borderColor: color.border, backgroundColor: color.bg }]}
+      >
+        <TuneProfileIcon icon={value.icon} size={20} color={color.color} />
+        <Text style={[styles.profilePreviewText, { color: color.color }]}>{value.name}</Text>
+      </View>
+      <TuneProfileMetadataModal
+        visible={open}
+        title="Edit Profile"
+        confirmLabel="Save"
+        initialValue={value}
+        onConfirm={(next) => {
+          setValue(next)
+          setOpen(false)
+        }}
+        onDismiss={() => setOpen(false)}
+      />
+    </ShowcaseCard>
+  )
+}
+
 export default function TunePage() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -340,6 +382,7 @@ export default function TunePage() {
         <AlertPercentageTuneDialShowcase />
         <GeigerAlertTuneDialShowcase />
         <BasicSliderCellShowcase />
+        <TuneProfileMetadataModalShowcase />
         <TunePreviewShowcase />
         <UnsupportedTunePreviewShowcase />
       </ScrollView>
@@ -350,4 +393,18 @@ export default function TunePage() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.palette.slate.bg },
   content: { padding: 12, gap: 12, paddingBottom: 40 },
+  profilePreview: {
+    alignSelf: 'flex-start',
+    minHeight: 38,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 19,
+    borderWidth: 1,
+    paddingHorizontal: 14,
+  },
+  profilePreviewText: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
 })
