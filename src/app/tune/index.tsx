@@ -67,6 +67,7 @@ export default function TuneScreen() {
   const [hillsPreset, setHillsPreset] = useState<HillsPresetId>('flat')
   const [hillHeightMeters, setHillHeightMeters] = useState(2.5)
   const [hillSpacingMeters, setHillSpacingMeters] = useState(30)
+  const hillLoadAmps = useSharedValue(0)
   const hillsEnabled = hillsPreset !== 'flat'
   const [advancedPhysics, setAdvancedPhysics] = useState(DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS)
   const [previewHelpVisible, setPreviewHelpVisible] = useState(() => {
@@ -236,6 +237,7 @@ export default function TuneScreen() {
               advancedPhysics={advancedPhysics}
               active={isFocused}
               onHelp={() => setPreviewHelpVisible(true)}
+              hillLoadAmps={hillLoadAmps}
             />
             <View style={styles.balancePinned}>
               <PitchInputControl angleDegrees={pitchInputDegrees} active={pitchInputActive} />
@@ -258,6 +260,8 @@ export default function TuneScreen() {
               onHillHeightChange={setHillHeightMeters}
               hillSpacingMeters={hillSpacingMeters}
               onHillSpacingChange={setHillSpacingMeters}
+              hillsEnabled={hillsEnabled}
+              hillLoadAmps={hillLoadAmps}
             />
 
             {profileError ? (
@@ -442,7 +446,7 @@ export default function TuneScreen() {
         visible={previewHelpVisible}
         variant="warning"
         title="Work in progress"
-        message="Tune editing and Tune Preview are experimental. Hold Pitch Input to add Board pitch rate over time; farther slider displacement adds angle error faster. Release it to compare how the tune recovers from the resulting state. Refloat PID current and dynamic speed are comparative outputs of that error. The speed is signed, so Pitch Input can carry Board through zero into reverse; Reflow speed thresholds use its magnitude while ERPM preserves direction. The preview does not model rider weight, traction, drag, power limits, voltage sag, braking distance, deck-ground contact, or safety. Do not ride with these settings until you have verified them on the bench and confirmed safe behaviour."
+        message={`Tune Editor is a work in progress and is the only place in this app that can change your board's settings.\n\nTune Preview is not a real-world simulation and will never perfectly represent how your board will behave while riding. It is only a comparison tool to help you understand tune behavior and differences between settings.`}
         onDismiss={() => setPreviewHelpVisible(false)}
       />
 

@@ -228,6 +228,7 @@ function TunePreviewShowcase() {
   const [hillHeightMeters, setHillHeightMeters] = useState(2.5)
   const [hillSpacingMeters, setHillSpacingMeters] = useState(30)
   const hillsEnabled = hillsPreset !== 'flat'
+  const hillLoadAmps = useSharedValue(0)
   const [advancedPhysics, setAdvancedPhysics] = useState(DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS)
   const fields = useMemo(
     () => ({
@@ -301,6 +302,7 @@ function TunePreviewShowcase() {
         hillSpacingMeters={hillSpacingMeters}
         advancedPhysics={advancedPhysics}
         onHelp={() => {}}
+        hillLoadAmps={hillLoadAmps}
       />
       <PitchInputControl angleDegrees={pitchInputDegrees} active={pitchInputActive} />
       <TunePreviewScenarioControls
@@ -312,6 +314,8 @@ function TunePreviewShowcase() {
         onHillHeightChange={setHillHeightMeters}
         hillSpacingMeters={hillSpacingMeters}
         onHillSpacingChange={setHillSpacingMeters}
+        hillsEnabled={hillsEnabled}
+        hillLoadAmps={hillLoadAmps}
       />
     </ShowcaseCard>
   )

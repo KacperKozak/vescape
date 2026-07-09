@@ -71,7 +71,7 @@ export function SelectCard<T extends string = string>({
           >
             {selectedOption?.label ?? 'Select…'}
           </Text>
-          <CaretDownIcon size={14} color={theme.palette.slate.textMuted} weight="bold" />
+          <CaretDownIcon size={16} color={theme.palette.slate.textMuted} weight="bold" />
         </View>
       </Pressable>
       {children}
@@ -139,6 +139,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     flexShrink: 1,
+    paddingRight: 5,
   },
   placeholderText: { color: theme.palette.slate.textMuted },
   option: {

@@ -1,7 +1,13 @@
 import { useState } from 'react'
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, StyleSheet, TextInput, View } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { AtomIcon, CaretDownIcon, MountainsIcon } from 'phosphor-react-native'
-import Animated, { FadeIn, FadeOut } from 'react-native-reanimated'
+import Animated, {
+  FadeIn,
+  FadeOut,
+  useAnimatedProps,
+  type SharedValue,
+} from 'react-native-reanimated'
 
 import { Select, type SelectOption } from '@/components/ui/forms/Select'
 import { SelectCard } from '@/components/ui/forms/SelectCard'
@@ -14,6 +20,8 @@ import {
   type TunePreviewAdvancedPhysics,
   type TunePreviewMotorPresetId,
 } from '@/lib/tune/tunePreview'
+
+const AnimatedTextInput = Animated.createAnimatedComponent(TextInput)
 
 const MOTOR_OPTIONS: SelectOption<TunePreviewMotorPresetId>[] = Object.entries(
   TUNE_PREVIEW_MOTOR_PRESETS,
@@ -48,6 +56,8 @@ interface TunePreviewScenarioControlsProps {
   onHillHeightChange: (value: number) => void
   hillSpacingMeters: number
   onHillSpacingChange: (value: number) => void
+  hillsEnabled: boolean
+  hillLoadAmps: SharedValue<number>
 }
 
 export function TunePreviewScenarioControls({
@@ -59,6 +69,8 @@ export function TunePreviewScenarioControls({
   onHillHeightChange,
   hillSpacingMeters,
   onHillSpacingChange,
+  hillsEnabled,
+  hillLoadAmps,
 }: TunePreviewScenarioControlsProps) {
   const [advancedExpanded, setAdvancedExpanded] = useState(false)
   const physics = resolveTunePreviewPhysics(advancedPhysics)
@@ -148,6 +160,7 @@ export function TunePreviewScenarioControls({
             <Text style={styles.valueSummary}>
               10% grade requires approximately {tenPercentGradeCurrent.toFixed(1)} A
             </Text>
+            {hillsEnabled ? <HillLoadReadout value={hillLoadAmps} /> : null}
             <Text style={styles.description}>Motor preset</Text>
             <Select
               options={MOTOR_OPTIONS}
@@ -284,6 +297,28 @@ const styles = StyleSheet.create({
     color: theme.telemetry.motorCurrent,
     fontSize: 11,
     fontWeight: '800',
+    fontFamily: 'monospace',
+    padding: 0,
+    margin: 0,
     fontVariant: ['tabular-nums'],
   },
 })
+
+function HillLoadReadout({ value }: { value: SharedValue<number> }) {
+  const animatedProps = useAnimatedProps(() => {
+    'worklet'
+    const v = value.value
+    const text = `Hill load ${v >= 0 ? '+' : ''}${v.toFixed(1)} A`
+    return { text, defaultValue: text }
+  })
+  return (
+    <AnimatedTextInput
+      editable={false}
+      caretHidden
+      pointerEvents="none"
+      underlineColorAndroid="transparent"
+      animatedProps={animatedProps}
+      style={[styles.valueSummary]}
+    />
+  )
+}

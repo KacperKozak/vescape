@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native'
+/* eslint-disable react-hooks/immutability */
+import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { Pressable, StyleSheet, TextInput, View, useWindowDimensions } from 'react-native'
+import { Text } from '@/components/ui/base/Text'
 import { ArrowCounterClockwiseIcon, QuestionIcon } from 'phosphor-react-native'
-import Svg, { Circle, G, Line, Path, Text as SvgText } from 'react-native-svg'
+import Svg, { Circle, G, Line, Path } from 'react-native-svg'
 import Animated, {
   useAnimatedProps,
   useSharedValue,
@@ -40,6 +42,7 @@ interface TunePreviewProps {
   advancedPhysics?: TunePreviewAdvancedPhysics
   active?: boolean
   onHelp: () => void
+  hillLoadAmps?: SharedValue<number>
 }
 
 const GROUND_Y = 78
@@ -52,6 +55,7 @@ const GROUND_TICK_SPACING = GROUND_TICK_SPACING_METERS * TUNE_PREVIEW_PIXELS_PER
 const AnimatedLine = Animated.createAnimatedComponent(Line)
 const AnimatedGroup = Animated.createAnimatedComponent(G)
 const AnimatedPath = Animated.createAnimatedComponent(Path)
+const AnimatedTextInput = Animated.createAnimatedComponent(TextInput)
 const READOUT_INTERVAL_MS = 100
 
 export function TunePreview({
@@ -64,6 +68,7 @@ export function TunePreview({
   advancedPhysics = DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS,
   active = true,
   onHelp,
+  hillLoadAmps,
 }: TunePreviewProps) {
   const model = useMemo(
     () => createTunePreviewModel(fields),
@@ -75,20 +80,17 @@ export function TunePreview({
   const stateRef = useRef(createTunePreviewState(TUNE_PREVIEW_RESET_SPEED_KMH))
   const lastTimestampRef = useRef<number | null>(null)
   const lastReadoutTimestampRef = useRef(0)
-  const [readouts, setReadouts] = useState({
-    boardAngle: '0.0°',
-    targetAngle: '0.0°',
-    groundToBoardAngle: '0.0°',
-    hillLoad: 'Hill load +0.0 A',
-    speed: TUNE_PREVIEW_RESET_SPEED_KMH.toFixed(1),
-    current: 'Motor 0 A',
-  })
   const angleDegrees = useSharedValue(0)
   const targetAngleDegrees = useSharedValue(0)
   const groundOffset = useSharedValue(0)
   const terrainPathValue = useSharedValue(
     terrainPath(canvasWidth, 0, hillHeightMeters, hillSpacingMeters),
   )
+  const boardAngleStr = useSharedValue('0.0°')
+  const targetAngleStr = useSharedValue('0.0°')
+  const groundToBoardAngleStr = useSharedValue('0.0°')
+  const speedStr = useSharedValue(TUNE_PREVIEW_RESET_SPEED_KMH.toFixed(1))
+  const currentStr = useSharedValue('Motor 0 A')
   const centerX = canvasWidth / 2
 
   const deckAnimatedProps = useAnimatedProps(() =>
@@ -103,6 +105,26 @@ export function TunePreview({
   const terrainAnimatedProps = useAnimatedProps(() => ({
     d: terrainPathValue.value,
   }))
+  const boardAngleProps = useAnimatedProps(() => {
+    'worklet'
+    return { text: boardAngleStr.value, defaultValue: boardAngleStr.value }
+  })
+  const targetAngleProps = useAnimatedProps(() => {
+    'worklet'
+    return { text: targetAngleStr.value, defaultValue: targetAngleStr.value }
+  })
+  const groundToBoardAngleProps = useAnimatedProps(() => {
+    'worklet'
+    return { text: groundToBoardAngleStr.value, defaultValue: groundToBoardAngleStr.value }
+  })
+  const speedProps = useAnimatedProps(() => {
+    'worklet'
+    return { text: speedStr.value, defaultValue: speedStr.value }
+  })
+  const currentProps = useAnimatedProps(() => {
+    'worklet'
+    return { text: currentStr.value, defaultValue: currentStr.value }
+  })
 
   const handleResetSpeed = useCallback(() => {
     stateRef.current = resetTunePreviewSpeed(
@@ -110,11 +132,9 @@ export function TunePreview({
       TUNE_PREVIEW_RESET_SPEED_KMH,
       advancedPhysics,
     )
-    setReadouts((current) => ({
-      ...current,
-      speed: TUNE_PREVIEW_RESET_SPEED_KMH.toFixed(1),
-    }))
-  }, [advancedPhysics])
+    speedStr.value = TUNE_PREVIEW_RESET_SPEED_KMH.toFixed(1)
+    if (hillLoadAmps) hillLoadAmps.value = 0
+  }, [advancedPhysics, hillLoadAmps, speedStr])
 
   useEffect(() => {
     if (!active || model.status !== 'ready') {
@@ -154,16 +174,14 @@ export function TunePreview({
         if (timestamp - lastReadoutTimestampRef.current >= READOUT_INTERVAL_MS) {
           lastReadoutTimestampRef.current = timestamp
           const current = next.syntheticCurrentAmps
-          setReadouts({
-            boardAngle: formatSignedDegrees(next.angleDegrees),
-            targetAngle: formatSignedDegrees(next.targetAngleDegrees),
-            groundToBoardAngle: formatSignedDegrees(
-              calculateGroundToBoardAngleDegrees(next.angleDegrees, next.terrainSlope),
-            ),
-            hillLoad: `Hill load ${next.terrainLoadCurrentAmps >= 0 ? '+' : ''}${next.terrainLoadCurrentAmps.toFixed(1)} A`,
-            speed: next.syntheticSpeedKmh.toFixed(1),
-            current: `Motor ${current > 0 ? '+' : ''}${current.toFixed(0)} A`,
-          })
+          boardAngleStr.value = formatSignedDegrees(next.angleDegrees)
+          targetAngleStr.value = formatSignedDegrees(next.targetAngleDegrees)
+          groundToBoardAngleStr.value = formatSignedDegrees(
+            calculateGroundToBoardAngleDegrees(next.angleDegrees, next.terrainSlope),
+          )
+          speedStr.value = next.syntheticSpeedKmh.toFixed(1)
+          currentStr.value = `Motor ${current > 0 ? '+' : ''}${current.toFixed(0)} A`
+          if (hillLoadAmps) hillLoadAmps.value = next.terrainLoadCurrentAmps
         }
       }
       frame = requestAnimationFrame(tick)
@@ -177,15 +195,21 @@ export function TunePreview({
     active,
     advancedPhysics,
     angleDegrees,
+    boardAngleStr,
     canvasWidth,
-    pitchInputActive,
-    pitchInputDegrees,
+    currentStr,
     groundOffset,
+    groundToBoardAngleStr,
     hillHeightMeters,
     hillSpacingMeters,
     hillsEnabled,
+    hillLoadAmps,
     model,
+    pitchInputActive,
+    pitchInputDegrees,
+    speedStr,
     targetAngleDegrees,
+    targetAngleStr,
     terrainPathValue,
   ])
 
@@ -199,15 +223,30 @@ export function TunePreview({
               <QuestionIcon size={14} color={theme.palette.slate.textMuted} weight="bold" />
             </Pressable>
           </View>
-          {hillsEnabled ? <Text style={styles.hillLoad}>{readouts.hillLoad}</Text> : null}
           <View style={styles.legend}>
             <View style={styles.legendItem}>
               <View style={styles.boardSwatch} />
-              <Text style={styles.boardLegendText}>Board {readouts.boardAngle}</Text>
+              <Text style={styles.boardLegendText}>Board </Text>
+              <AnimatedTextInput
+                editable={false}
+                caretHidden
+                pointerEvents="none"
+                underlineColorAndroid="transparent"
+                animatedProps={boardAngleProps}
+                style={[styles.boardLegendValue]}
+              />
             </View>
             <View style={styles.legendItem}>
               <View style={styles.targetSwatch} />
-              <Text style={styles.targetLegendText}>Target {readouts.targetAngle}</Text>
+              <Text style={styles.targetLegendText}>Target </Text>
+              <AnimatedTextInput
+                editable={false}
+                caretHidden
+                pointerEvents="none"
+                underlineColorAndroid="transparent"
+                animatedProps={targetAngleProps}
+                style={[styles.targetLegendValue]}
+              />
             </View>
           </View>
         </View>
@@ -228,11 +267,25 @@ export function TunePreview({
               weight="bold"
             />
             <View style={styles.speedValueGroup}>
-              <Text style={styles.speedValue}>{readouts.speed}</Text>
+              <AnimatedTextInput
+                editable={false}
+                caretHidden
+                pointerEvents="none"
+                underlineColorAndroid="transparent"
+                animatedProps={speedProps}
+                style={[styles.speedValue]}
+              />
               <Text style={styles.speedUnit}>km/h</Text>
             </View>
           </Pressable>
-          <Text style={styles.current}>{readouts.current}</Text>
+          <AnimatedTextInput
+            editable={false}
+            caretHidden
+            pointerEvents="none"
+            underlineColorAndroid="transparent"
+            animatedProps={currentProps}
+            style={[styles.current]}
+          />
         </View>
       </View>
 
@@ -243,99 +296,101 @@ export function TunePreview({
         </View>
       ) : (
         <>
-          <Svg
-            width="100%"
-            height={122}
-            viewBox={`0 0 ${canvasWidth} 122`}
-            accessibilityLabel="Board angle preview"
-          >
-            <Line
-              x1={centerX - DECK_HALF_LENGTH - ZERO_MARKER_GAP - ZERO_MARKER_LENGTH}
-              y1={DECK_CENTER_Y}
-              x2={centerX - DECK_HALF_LENGTH - ZERO_MARKER_GAP}
-              y2={DECK_CENTER_Y}
-              stroke={theme.palette.slate.textMuted}
-              strokeWidth={1.5}
-              strokeLinecap="round"
-            />
-            <Line
-              x1={centerX + DECK_HALF_LENGTH + ZERO_MARKER_GAP}
-              y1={DECK_CENTER_Y}
-              x2={centerX + DECK_HALF_LENGTH + ZERO_MARKER_GAP + ZERO_MARKER_LENGTH}
-              y2={DECK_CENTER_Y}
-              stroke={theme.palette.slate.textMuted}
-              strokeWidth={1.5}
-              strokeLinecap="round"
-            />
-            <AnimatedLine
-              animatedProps={targetAnimatedProps}
-              stroke={theme.palette.purple.light}
-              strokeWidth={1}
-              strokeDasharray="6 5"
-            />
-            <AnimatedLine
-              animatedProps={deckAnimatedProps}
-              stroke={theme.palette.sky.color}
-              strokeWidth={1}
-              strokeLinecap="round"
-            />
-            <Circle
-              cx={centerX}
-              cy={GROUND_Y - WHEEL_RADIUS}
-              r={WHEEL_RADIUS}
-              fill={theme.palette.slate.surfaceDeep}
-              stroke={theme.palette.slate.textSecondary}
-              strokeWidth={1}
-            />
-            {!hillsEnabled ? (
-              <AnimatedGroup animatedProps={groundAnimatedProps}>
-                {groundTicks(canvasWidth).map((x, index) => (
-                  <Line
-                    key={index}
-                    x1={x}
-                    y1={GROUND_Y}
-                    x2={x - 4}
-                    y2={GROUND_Y + 6}
-                    stroke={theme.palette.slate.textMuted}
-                    strokeWidth={1}
-                  />
-                ))}
-              </AnimatedGroup>
-            ) : null}
-            <Circle
-              cx={centerX}
-              cy={GROUND_Y - WHEEL_RADIUS}
-              r={4}
-              fill={theme.palette.slate.textSecondary}
-            />
-            {hillsEnabled ? (
-              <AnimatedPath
-                animatedProps={terrainAnimatedProps}
-                fill="none"
-                stroke={theme.palette.slate.textMuted}
-                strokeWidth={1}
-              />
-            ) : (
-              <Line
-                x1={0}
-                y1={GROUND_Y}
-                x2={canvasWidth}
-                y2={GROUND_Y}
-                stroke={theme.palette.slate.textMuted}
-                strokeWidth={1}
-              />
-            )}
-            <SvgText
-              x={centerX}
-              y={GROUND_Y + 21}
-              fill={theme.palette.slate.textPrimary}
-              fontSize={9}
-              fontWeight="700"
-              textAnchor="middle"
+          <View style={styles.canvasWrap}>
+            <Svg
+              width="100%"
+              height={122}
+              viewBox={`0 0 ${canvasWidth} 122`}
+              accessibilityLabel="Board angle preview"
             >
-              {`Ground / Board ${readouts.groundToBoardAngle}`}
-            </SvgText>
-          </Svg>
+              <Line
+                x1={centerX - DECK_HALF_LENGTH - ZERO_MARKER_GAP - ZERO_MARKER_LENGTH}
+                y1={DECK_CENTER_Y}
+                x2={centerX - DECK_HALF_LENGTH - ZERO_MARKER_GAP}
+                y2={DECK_CENTER_Y}
+                stroke={theme.palette.slate.textMuted}
+                strokeWidth={1.5}
+                strokeLinecap="round"
+              />
+              <Line
+                x1={centerX + DECK_HALF_LENGTH + ZERO_MARKER_GAP}
+                y1={DECK_CENTER_Y}
+                x2={centerX + DECK_HALF_LENGTH + ZERO_MARKER_GAP + ZERO_MARKER_LENGTH}
+                y2={DECK_CENTER_Y}
+                stroke={theme.palette.slate.textMuted}
+                strokeWidth={1.5}
+                strokeLinecap="round"
+              />
+              <AnimatedLine
+                animatedProps={targetAnimatedProps}
+                stroke={theme.palette.purple.light}
+                strokeWidth={1}
+                strokeDasharray="6 5"
+              />
+              <AnimatedLine
+                animatedProps={deckAnimatedProps}
+                stroke={theme.palette.sky.color}
+                strokeWidth={1}
+                strokeLinecap="round"
+              />
+              <Circle
+                cx={centerX}
+                cy={GROUND_Y - WHEEL_RADIUS}
+                r={WHEEL_RADIUS}
+                fill={theme.palette.slate.bg}
+                stroke={theme.palette.slate.textSecondary}
+                strokeWidth={1}
+              />
+              {!hillsEnabled ? (
+                <AnimatedGroup animatedProps={groundAnimatedProps}>
+                  {groundTicks(canvasWidth).map((x, index) => (
+                    <Line
+                      key={index}
+                      x1={x}
+                      y1={GROUND_Y}
+                      x2={x - 4}
+                      y2={GROUND_Y + 6}
+                      stroke={theme.palette.slate.textMuted}
+                      strokeWidth={1}
+                    />
+                  ))}
+                </AnimatedGroup>
+              ) : null}
+              <Circle
+                cx={centerX}
+                cy={GROUND_Y - WHEEL_RADIUS}
+                r={4}
+                fill="none"
+                stroke={theme.palette.slate.border}
+                strokeWidth={1}
+              />
+              {hillsEnabled ? (
+                <AnimatedPath
+                  animatedProps={terrainAnimatedProps}
+                  fill="none"
+                  stroke={theme.palette.slate.textMuted}
+                  strokeWidth={1}
+                />
+              ) : (
+                <Line
+                  x1={0}
+                  y1={GROUND_Y}
+                  x2={canvasWidth}
+                  y2={GROUND_Y}
+                  stroke={theme.palette.slate.textMuted}
+                  strokeWidth={1}
+                />
+              )}
+            </Svg>
+            <AnimatedTextInput
+              editable={false}
+              caretHidden
+              pointerEvents="none"
+              underlineColorAndroid="transparent"
+              animatedProps={groundToBoardAngleProps}
+              style={[styles.groundToBoardAngle]}
+            />
+          </View>
         </>
       )}
     </View>
@@ -372,21 +427,21 @@ const styles = StyleSheet.create({
   },
   titleBlock: { gap: 2 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  title: { color: theme.palette.slate.textPrimary, fontSize: 14, fontWeight: '900' },
-  hillLoad: {
-    color: theme.palette.amber.text,
-    fontSize: 10,
-    fontWeight: '800',
-    fontVariant: ['tabular-nums'],
+  title: {
+    color: theme.palette.slate.textMuted,
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   headerMetrics: { alignItems: 'flex-end', gap: 1 },
 
   unsupported: { height: 122, alignItems: 'center', justifyContent: 'center', gap: 5 },
   unsupportedTitle: { color: theme.palette.slate.textPrimary, fontSize: 13, fontWeight: '800' },
   unsupportedText: { color: theme.palette.slate.textMuted, fontSize: 11 },
-  legend: { alignItems: 'flex-start', gap: 2 },
+  legend: { alignItems: 'flex-start', gap: 2, marginTop: 14 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  boardSwatch: { width: 18, height: 3, backgroundColor: theme.palette.sky.color },
+  boardSwatch: { width: 18, height: 1, backgroundColor: theme.palette.sky.color },
   targetSwatch: {
     width: 18,
     height: 1,
@@ -396,22 +451,18 @@ const styles = StyleSheet.create({
   },
   boardLegendText: {
     color: theme.palette.sky.color,
-    fontSize: 11,
-    fontWeight: '800',
-    fontVariant: ['tabular-nums'],
+    fontSize: 9,
   },
   targetLegendText: {
     color: theme.palette.purple.light,
-    fontSize: 11,
-    fontWeight: '800',
-    fontVariant: ['tabular-nums'],
+    fontSize: 9,
   },
   current: {
     width: 80,
     padding: 0,
-    color: theme.palette.slate.textPrimary,
-    fontSize: 10,
-    fontWeight: '800',
+    color: theme.palette.slate.textMuted,
+    fontSize: 9,
+    fontFamily: 'monospace',
     textAlign: 'right',
     fontVariant: ['tabular-nums'],
   },
@@ -428,14 +479,42 @@ const styles = StyleSheet.create({
   speedValue: {
     padding: 0,
     color: theme.telemetry.speed,
-    fontSize: 24,
-    lineHeight: 28,
-    fontWeight: '900',
-    fontVariant: ['tabular-nums'],
+    fontFamily: 'monospace',
+    fontSize: 28,
+    lineHeight: 32,
+    fontWeight: '700',
   },
   speedUnit: {
     color: theme.palette.slate.textMuted,
     fontSize: 10,
     fontWeight: '700',
+  },
+  boardLegendValue: {
+    color: theme.palette.sky.color,
+    fontSize: 9,
+    fontFamily: 'monospace',
+    padding: 0,
+    fontVariant: ['tabular-nums'],
+  },
+  targetLegendValue: {
+    color: theme.palette.purple.light,
+    fontSize: 9,
+    fontFamily: 'monospace',
+    padding: 0,
+    fontVariant: ['tabular-nums'],
+  },
+  canvasWrap: { position: 'relative', height: 122 },
+  groundToBoardAngle: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 10,
+    color: theme.palette.slate.textPrimary,
+    fontSize: 9,
+    fontFamily: 'monospace',
+    fontWeight: '700',
+    textAlign: 'center',
+    padding: 0,
+    fontVariant: ['tabular-nums'],
   },
 })
