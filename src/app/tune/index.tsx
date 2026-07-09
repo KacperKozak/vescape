@@ -35,6 +35,7 @@ import {
   tuneProfileColorTheme,
   tuneProfileIconComponent,
 } from '@/components/domain/tune/TuneProfileMetadataModal'
+import { basicSliderColor, basicSliderIcon } from '@/components/domain/tune/basicSliderIcons'
 import { TuneGroupGrid } from '@/components/ui/tune/TuneGroupGrid'
 import { TuneSyncBar } from '@/components/ui/tune/TuneSyncBar'
 import { TunePreview } from '@/components/ui/tune/TunePreview'
@@ -546,6 +547,8 @@ function BasicSliderItemCell({
     <BasicSliderCell
       ref={cellRef}
       item={item}
+      icon={basicSliderIcon(item.id)}
+      color={basicSliderColor(item.id)}
       editable={editable}
       onPress={() => onPress(item.id, cellRef)}
       onResetFormula={onResetFormula}

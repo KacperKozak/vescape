@@ -14,6 +14,7 @@ import {
   tuneProfileColorTheme,
   type TuneProfileMetadataValue,
 } from '@/components/domain/tune/TuneProfileMetadataModal'
+import { basicSliderColor, basicSliderIcon } from '@/components/domain/tune/basicSliderIcons'
 import { useTriggerRef } from '@/components/ui/forms/Dropdown'
 import { BasicSliderCell } from '@/components/ui/tune/BasicSliderCell'
 import { TuneDial } from '@/components/ui/tune/TuneDial'
@@ -189,6 +190,7 @@ function BasicSliderCellShowcase() {
         step: mockItem.step,
         unit: 'deg',
         help: mockItem.info,
+        icon: basicSliderIcon(mockItem.id),
       }
     : null
 
@@ -202,6 +204,8 @@ function BasicSliderCellShowcase() {
           <BasicSliderCell
             ref={triggerRef}
             item={mockItem}
+            icon={basicSliderIcon(mockItem.id)}
+            color={basicSliderColor(mockItem.id)}
             editable
             onPress={() => setEditorOpen(true)}
           />

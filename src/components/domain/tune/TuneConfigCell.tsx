@@ -7,6 +7,7 @@ import type { RefloatConfigField, TuneProfileFieldValue } from 'vesc-ble'
 import { isDisplayableFieldValue } from '@/lib/tune/fieldValues'
 import { formatProfileValue } from '@/lib/tune/sliderDefinitions'
 import { formatTuneValue } from '@/lib/tune/fields'
+import { TuneTileFill } from '@/components/ui/tune/TuneTileFill'
 import { theme } from '@/constants/theme'
 
 interface TuneConfigCellProps {
@@ -37,6 +38,21 @@ export const TuneConfigCell = forwardRef<View, TuneConfigCellProps>(function Tun
 ) {
   const canAcceptBoard = boardChanged && isDisplayableFieldValue(boardValue)
   const hasActions = dirty || canAcceptBoard
+  const progressFraction =
+    typeof field.value === 'number' &&
+    Number.isFinite(field.value) &&
+    field.min != null &&
+    field.max != null &&
+    Number.isFinite(field.min) &&
+    Number.isFinite(field.max) &&
+    field.max > field.min
+      ? (field.value - field.min) / (field.max - field.min)
+      : null
+  const progressColor = boardChanged
+    ? theme.palette.green.color
+    : dirty
+      ? theme.palette.sky.color
+      : theme.palette.sky.color
 
   return (
     <View ref={ref} style={styles.cellWrapper}>
@@ -44,6 +60,7 @@ export const TuneConfigCell = forwardRef<View, TuneConfigCellProps>(function Tun
         style={[styles.cell, dirty && styles.cellDirty, boardChanged && styles.cellBoardChanged]}
         onPress={onPress}
       >
+        <TuneTileFill fraction={progressFraction} color={progressColor} />
         {dirty ? (
           <Pressable style={styles.cellRevertButton} onPress={onRevert}>
             <ArrowCounterClockwiseIcon size={13} color={theme.palette.sky.text} weight="bold" />
@@ -93,7 +110,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   cell: {
-    minHeight: 60,
+    minHeight: 82,
     paddingTop: 7,
     paddingBottom: 10,
     paddingHorizontal: 10,
@@ -101,6 +118,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.palette.slate.border,
     backgroundColor: theme.palette.slate.surface,
+    overflow: 'hidden',
   },
   cellDirty: {
     backgroundColor: theme.palette.sky.bg,

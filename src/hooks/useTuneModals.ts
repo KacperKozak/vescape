@@ -3,6 +3,7 @@ import type { View } from 'react-native'
 import type { RefloatConfigField, TuneProfile, TuneProfileFieldValue } from 'vesc-ble'
 
 import type { FieldEditorTarget } from '@/components/domain/tune/FieldEditorPopover'
+import { basicSliderIcon } from '@/components/domain/tune/basicSliderIcons'
 import type { Board } from '@/store/boardStore'
 import { useTuneProfileStore } from '@/store/tuneProfileStore'
 import { formatTuneValue } from '@/lib/tune/fields'
@@ -106,6 +107,7 @@ export function useTuneModals(
         step: item.step,
         unit: null,
         help: `${item.info}\n\nSource: ${item.source}`,
+        icon: basicSliderIcon(item.id),
         linkedFields: getLinkedFieldPreviews(def),
       })
     },

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/ui/base/Text'
-import { CaretDownIcon, CheckIcon, FadersIcon } from 'phosphor-react-native'
+import { CaretDownIcon, CheckIcon, FadersIcon, type Icon } from 'phosphor-react-native'
 
 import { Button } from '@/components/ui/base/Button'
 import { EdgeDrawer } from '@/components/ui/overlays/AnchoredSheet'
@@ -21,6 +21,7 @@ export interface FieldEditorTarget {
   step: number
   unit: string | null
   help: string
+  icon?: Icon
   linkedFields?: LinkedFieldPreview[]
 }
 
@@ -60,7 +61,7 @@ function FieldEditorPopoverInner({ target, onCancel, onApply }: FieldEditorPopov
       onClose={onCancel}
       edge="bottom"
       title={target.label}
-      icon={FadersIcon}
+      icon={target.icon ?? FadersIcon}
       autoScrollOnContentExpand
     >
       <View style={styles.content}>
