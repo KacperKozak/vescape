@@ -12,6 +12,8 @@ interface TuneTileFillProps {
 
 const LINE_THICKNESS = 2
 const MARKER_WIDTH = 3
+const MARKER_Y_OFFSET = 1
+const TRACK_INSET = 0
 
 function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value))
@@ -31,16 +33,22 @@ export function TuneTileFill({
   const normalized = fraction == null ? 0 : clamp01(fraction)
   const fillHeight = size.height * clamp01(fillHeightRatio)
   const fillY = size.height - fillHeight
-  const fillWidth = size.width * normalized
-  const lineY = Math.max(0, size.height - LINE_THICKNESS)
+  const trackX = TRACK_INSET
+  const trackWidth = Math.max(0, size.width - TRACK_INSET * 2)
+  const fillWidth = trackWidth * normalized
+  const lineY = Math.max(0, size.height - LINE_THICKNESS - TRACK_INSET)
   const markerHeight = fillHeight
+  const markerX = Math.min(
+    trackX + trackWidth - MARKER_WIDTH,
+    Math.max(trackX, trackX + fillWidth - MARKER_WIDTH / 2),
+  )
 
   return (
     <View pointerEvents="none" style={StyleSheet.absoluteFill} onLayout={onLayout}>
       {size.width > 0 && size.height > 0 ? (
         <Canvas style={StyleSheet.absoluteFill}>
           {fillWidth > 0 ? (
-            <Rect x={0} y={fillY} width={fillWidth} height={fillHeight}>
+            <Rect x={trackX} y={fillY} width={fillWidth} height={fillHeight}>
               <LinearGradient
                 start={vec(0, fillY)}
                 end={vec(0, size.height)}
@@ -55,16 +63,16 @@ export function TuneTileFill({
             </Rect>
           ) : null}
           <RoundedRect
-            x={0}
+            x={trackX}
             y={lineY}
-            width={size.width}
+            width={trackWidth}
             height={LINE_THICKNESS}
             r={LINE_THICKNESS / 2}
             color={theme.palette.slate.border}
           />
           {fillWidth > 0 ? (
             <RoundedRect
-              x={0}
+              x={trackX}
               y={lineY}
               width={fillWidth}
               height={LINE_THICKNESS}
@@ -72,12 +80,12 @@ export function TuneTileFill({
               color={color}
             />
           ) : null}
-          {normalized > 0 && normalized < 1 ? (
+          {fraction != null ? (
             <Rect
-              x={fillWidth - MARKER_WIDTH / 2}
-              y={lineY - markerHeight}
+              x={markerX}
+              y={lineY - markerHeight + MARKER_Y_OFFSET}
               width={MARKER_WIDTH}
-              height={markerHeight + LINE_THICKNESS}
+              height={markerHeight + LINE_THICKNESS - MARKER_Y_OFFSET}
               color={color}
             />
           ) : null}

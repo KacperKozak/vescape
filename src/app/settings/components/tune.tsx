@@ -165,6 +165,21 @@ function BasicSliderCellShowcase() {
   const triggerRef = useTriggerRef()
   const [value, setValue] = useState(6.5)
   const [editorOpen, setEditorOpen] = useState(false)
+  const edgeItems: BasicSliderItem[] = useMemo(
+    () =>
+      [0, 100].map((edgeValue) => ({
+        id: `mock-aggressiveness-${edgeValue}`,
+        label: 'Aggressiveness',
+        value: edgeValue,
+        min: 0,
+        max: 100,
+        step: 1,
+        source: 'Profile: Street',
+        info: 'Shows progress fill at the range edge.',
+        modifiedManually: false,
+      })),
+    [],
+  )
   const mockItem: BasicSliderItem = useMemo(
     () => ({
       id: 'mock-angle',
@@ -200,7 +215,7 @@ function BasicSliderCellShowcase() {
         name="BasicSliderCell + automatic-edge tune editor"
         controls={<ValueRow label="applied value" value={value} />}
       >
-        <View style={{ maxWidth: 200 }}>
+        <View style={styles.basicSliderShowcaseSingle}>
           <BasicSliderCell
             ref={triggerRef}
             item={mockItem}
@@ -209,6 +224,18 @@ function BasicSliderCellShowcase() {
             editable
             onPress={() => setEditorOpen(true)}
           />
+        </View>
+        <View style={styles.basicSliderShowcaseGrid}>
+          {edgeItems.map((edgeItem) => (
+            <BasicSliderCell
+              key={edgeItem.id}
+              item={edgeItem}
+              icon={basicSliderIcon('aggressiveness')}
+              color={basicSliderColor('aggressiveness')}
+              editable={false}
+              onPress={() => {}}
+            />
+          ))}
         </View>
       </ShowcaseCard>
       <FieldEditorPopover
@@ -400,6 +427,13 @@ export default function TunePage() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.palette.slate.bg },
   content: { padding: 12, gap: 12, paddingBottom: 40 },
+  basicSliderShowcaseSingle: {
+    maxWidth: 200,
+  },
+  basicSliderShowcaseGrid: {
+    flexDirection: 'row',
+    gap: 8,
+  },
   profilePreview: {
     alignSelf: 'flex-start',
     minHeight: 38,
