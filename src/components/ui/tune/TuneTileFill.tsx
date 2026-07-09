@@ -20,7 +20,7 @@ function clamp01(value: number): number {
 export function TuneTileFill({
   fraction,
   color = theme.palette.sky.color,
-  fillHeightRatio = 0.5,
+  fillHeightRatio = 0.42,
 }: TuneTileFillProps) {
   const [size, setSize] = useState({ width: 0, height: 0 })
   const onLayout = useCallback((event: LayoutChangeEvent) => {

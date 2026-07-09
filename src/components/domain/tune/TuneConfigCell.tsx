@@ -78,10 +78,10 @@ export const TuneConfigCell = forwardRef<View, TuneConfigCellProps>(function Tun
           <Text style={styles.cellLabel} numberOfLines={2}>
             {field.label}
           </Text>
-          <Text style={styles.cellValue} numberOfLines={1} adjustsFontSizeToFit selectable>
-            {formatTuneValue(field.value)}
-          </Text>
         </View>
+        <Text style={styles.cellValue} numberOfLines={1} adjustsFontSizeToFit selectable>
+          {formatTuneValue(field.value)}
+        </Text>
         {dirty && isDisplayableFieldValue(savedValue) ? (
           <Text style={[styles.cellOldValue, styles.cellTextWithActions]} numberOfLines={1}>
             was {formatTuneValue(savedValue)}
@@ -162,11 +162,14 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   cellValue: {
+    position: 'absolute',
+    right: 10,
+    bottom: 4,
     color: theme.palette.slate.textPrimary,
     fontSize: 22,
     fontWeight: '500',
     fontVariant: ['tabular-nums'],
-    maxWidth: '48%',
+    maxWidth: '58%',
     textAlign: 'right',
   },
   cellTextWithActions: {

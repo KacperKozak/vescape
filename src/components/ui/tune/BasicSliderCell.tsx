@@ -47,10 +47,15 @@ export const BasicSliderCell = forwardRef<View, BasicSliderCellProps>(function B
               {item.label}
             </Text>
           </View>
-          <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit>
-            {formatSliderValue(item)}
-          </Text>
         </View>
+        <Text
+          style={[styles.value, { color }]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          pointerEvents="none"
+        >
+          {formatSliderValue(item)}
+        </Text>
       </Pressable>
     </View>
   )
@@ -84,11 +89,13 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   value: {
-    color: theme.palette.slate.textPrimary,
+    position: 'absolute',
+    right: 10,
+    bottom: 4,
     fontSize: 22,
     fontWeight: '500',
     fontVariant: ['tabular-nums'],
-    maxWidth: '48%',
+    maxWidth: '58%',
     textAlign: 'right',
   },
   labelRow: {
