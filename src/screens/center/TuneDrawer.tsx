@@ -76,21 +76,26 @@ export function TuneDrawer({ onNavigate }: TuneDrawerProps) {
       : profilesLoadedForBoard
         ? (activeProfileForBoard?.name ?? (profileLoading ? 'Loading...' : 'No profile'))
         : 'Loading...'
-  const ActiveIcon = activeProfileForBoard
+  const SelectIcon = activeProfileForBoard
     ? tuneProfileIconComponent(activeProfileForBoard.icon)
-    : FadersIcon
-  const activeColor = activeProfileForBoard
-    ? tuneProfileColorTheme(activeProfileForBoard.color).color
-    : theme.palette.purple.color
+    : undefined
+  const selectTheme = activeProfileForBoard
+    ? tuneProfileColorTheme(activeProfileForBoard.color)
+    : tuneProfileColorTheme('purple')
 
   return (
     <View style={styles.content}>
       <SelectWidget
-        icon={ActiveIcon}
+        icon={FadersIcon}
+        selectIcon={SelectIcon}
         label="Tunes"
         value={activeName}
         description="Pick how your board should feel."
-        accent={activeColor}
+        accent={theme.palette.purple.color}
+        selectAccent={selectTheme.color}
+        selectBackground={selectTheme.bg}
+        selectBorder={selectTheme.border}
+        selectOpen={tuneSelectOpen}
         showSelect={hasProfiles}
         onPress={openTune}
         onSelectPress={() => setTuneSelectOpen((open) => !open)}

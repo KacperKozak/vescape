@@ -157,10 +157,15 @@ function SelectWidgetShowcase() {
       <View ref={triggerRef} collapsable={false}>
         <SelectWidget
           icon={FadersIcon}
+          selectIcon={GaugeIcon}
           label="Tunes"
           value={value}
           description="Pick how your board should feel."
           accent={theme.palette.purple.color}
+          selectAccent={theme.palette.green.color}
+          selectBackground={theme.palette.green.bg}
+          selectBorder={theme.palette.green.border}
+          selectOpen={open}
           onPress={() => {}}
           onSelectPress={() => setOpen(true)}
         />

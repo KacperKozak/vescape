@@ -381,12 +381,6 @@ export default function TuneScreen() {
                   item={item}
                   editable={activeProfile != null}
                   onPress={modals.openBasicSliderEditor}
-                  onInfo={() =>
-                    modals.showBadgeInfo(
-                      item.label,
-                      `${item.info}\n\nSource: ${item.source}\nRange: ${item.min} to ${item.max}, step ${item.step}`,
-                    )
-                  }
                   onResetFormula={() => modals.handleBasicSliderReset(item.id)}
                 />
               ))}
@@ -537,7 +531,6 @@ interface BasicSliderItemCellProps {
   item: BasicSliderItem
   editable: boolean
   onPress: (sliderId: string, ref: { current: View | null }) => void
-  onInfo: () => void
   onResetFormula: () => void
 }
 
@@ -545,7 +538,6 @@ function BasicSliderItemCell({
   item,
   editable,
   onPress,
-  onInfo,
   onResetFormula,
 }: BasicSliderItemCellProps) {
   const cellRef = useRef<View | null>(null)
@@ -555,7 +547,6 @@ function BasicSliderItemCell({
       item={item}
       editable={editable}
       onPress={() => onPress(item.id, cellRef)}
-      onInfo={onInfo}
       onResetFormula={onResetFormula}
     />
   )

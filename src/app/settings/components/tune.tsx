@@ -204,7 +204,6 @@ function BasicSliderCellShowcase() {
             item={mockItem}
             editable
             onPress={() => setEditorOpen(true)}
-            onInfo={() => {}}
           />
         </View>
       </ShowcaseCard>

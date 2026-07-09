@@ -105,7 +105,7 @@ export function useTuneModals(
         max: item.max,
         step: item.step,
         unit: null,
-        help: item.info,
+        help: `${item.info}\n\nSource: ${item.source}`,
         linkedFields: getLinkedFieldPreviews(def),
       })
     },

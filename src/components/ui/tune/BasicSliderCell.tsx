@@ -1,7 +1,7 @@
 import { forwardRef } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/ui/base/Text'
-import { InfoIcon, WarningIcon } from 'phosphor-react-native'
+import { WarningIcon } from 'phosphor-react-native'
 
 import type { BasicSliderItem } from '@/lib/tune/sliderDefinitions'
 import { clamp, formatSliderValue } from '@/lib/tune/sliderDefinitions'
@@ -11,12 +11,11 @@ interface BasicSliderCellProps {
   item: BasicSliderItem
   editable: boolean
   onPress: () => void
-  onInfo: () => void
   onResetFormula?: () => void
 }
 
 export const BasicSliderCell = forwardRef<View, BasicSliderCellProps>(function BasicSliderCell(
-  { item, editable, onPress, onInfo, onResetFormula },
+  { item, editable, onPress, onResetFormula },
   ref,
 ) {
   const progress =
@@ -32,10 +31,6 @@ export const BasicSliderCell = forwardRef<View, BasicSliderCellProps>(function B
         ]}
         onPress={editable ? onPress : undefined}
       >
-        <Pressable style={styles.infoBtn} onPress={onInfo}>
-          <InfoIcon size={13} color={theme.palette.slate.textDim} weight="bold" />
-        </Pressable>
-
         <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit>
           {formatSliderValue(item)}
         </Text>
@@ -54,9 +49,6 @@ export const BasicSliderCell = forwardRef<View, BasicSliderCellProps>(function B
             {item.label}
           </Text>
         </View>
-        <Text style={styles.source} numberOfLines={1}>
-          {item.source}
-        </Text>
       </Pressable>
     </View>
   )
@@ -81,22 +73,10 @@ const styles = StyleSheet.create({
   cellReadOnly: {
     borderColor: theme.palette.slate.border,
   },
-  infoBtn: {
-    position: 'absolute',
-    top: 9,
-    right: 6,
-    zIndex: 1,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   value: {
     color: theme.palette.slate.textPrimary,
     fontSize: 18,
     fontWeight: '800',
-    paddingRight: 26,
     fontVariant: ['tabular-nums'],
   },
   miniTrack: {
@@ -104,7 +84,6 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: theme.palette.slate.surfaceDeep,
     marginTop: 6,
-    marginRight: 26,
     overflow: 'hidden',
   },
   miniFill: {
@@ -126,11 +105,5 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '600',
     flex: 1,
-  },
-  source: {
-    color: theme.palette.slate.textDim,
-    fontSize: 10,
-    fontWeight: '600',
-    marginTop: 1,
   },
 })
