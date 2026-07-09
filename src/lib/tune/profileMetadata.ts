@@ -12,6 +12,19 @@ export const TUNE_PROFILE_ICON_IDS = [
   'wave-sine',
   'snowflake',
   'sun-horizon',
+  'battery-charging',
+  'compass',
+  'fire',
+  'flag-checkered',
+  'gear-six',
+  'heartbeat',
+  'leaf',
+  'shield-check',
+  'sparkle',
+  'target',
+  'tire',
+  'wind',
+  'wrench',
 ] as const
 
 export const TUNE_PROFILE_COLOR_IDS = [

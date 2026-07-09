@@ -389,7 +389,11 @@ const styles = StyleSheet.create({
     borderWidth: 0,
   },
   pillPressable: {
-    flex: 1,
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',

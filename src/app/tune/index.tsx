@@ -619,11 +619,11 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   headerPills: {
-    marginHorizontal: 0,
+    marginHorizontal: 8,
   },
   headerPillsContent: {
     minWidth: 0,
-    paddingHorizontal: 0,
+    paddingHorizontal: 2,
   },
   tuneView: { flex: 1 },
   previewPinned: {
