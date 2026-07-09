@@ -91,7 +91,8 @@
     "typescript": "^6.0.3"
   },
   "patchedDependencies": {
-    "@rnmapbox/maps@10.3.1": "patches/@rnmapbox%2Fmaps@10.3.1.patch"
+    "@rnmapbox/maps@10.3.1": "patches/@rnmapbox%2Fmaps@10.3.1.patch",
+    "@bacons/apple-targets@4.0.7": "patches/@bacons%2Fapple-targets@4.0.7.patch"
   },
   "trustedDependencies": [
     "@shopify/react-native-skia"

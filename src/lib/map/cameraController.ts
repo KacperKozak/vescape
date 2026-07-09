@@ -154,17 +154,26 @@ export function reduceMapCameraIntent(
   intent: MapCameraIntent,
 ): { state: MapCameraControllerState; effect: MapCameraEffect | null } {
   if (intent.type === 'BrowseManually') {
+    const mode: MapCameraMode =
+      intent.historySelectionKey != null
+        ? {
+            kind: 'rideHistory',
+            selectionKey: intent.historySelectionKey,
+            phase: 'manualInspect',
+          }
+        : { kind: 'manualBrowse' }
+    const alreadyBrowsing =
+      state.mode.kind === mode.kind &&
+      (mode.kind !== 'rideHistory' ||
+        (state.mode.kind === 'rideHistory' &&
+          state.mode.selectionKey === mode.selectionKey &&
+          state.mode.phase === mode.phase))
+    if (alreadyBrowsing) return { state, effect: null }
+
     return {
       state: {
         ...state,
-        mode:
-          intent.historySelectionKey != null
-            ? {
-                kind: 'rideHistory',
-                selectionKey: intent.historySelectionKey,
-                phase: 'manualInspect',
-              }
-            : { kind: 'manualBrowse' },
+        mode,
       },
       effect: null,
     }

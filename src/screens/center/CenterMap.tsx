@@ -37,7 +37,6 @@ import { isMapPointKindVisible } from '@/lib/mapPointVisibility'
 import type { HistoryMetricKey } from '@/lib/history/metricColorScale'
 import { getNavigationFallbackReason } from '@/lib/map/navigationDiagnostics'
 import { getGpsPuckBearing } from '@/lib/map/gpsPuckHeading'
-import { normalizeHeading, smoothHeadingStep } from '@/lib/map/headingSmoothing'
 import type { HistoryGpsSample, HistoryMarker, TelemetrySample } from '@/store/historyStore'
 import { useGroupRideStore } from '@/store/groupRideStore'
 import { useNavigationDiagnosticsStore } from '@/store/navigationDiagnosticsStore'
@@ -53,8 +52,8 @@ import {
 } from './useCameraControls'
 import { getLiveFollowCameraProfile, getPitchForZoom } from '@/lib/map/cameraProfiles'
 import { shouldPreserveLiveFollowGesture } from './cameraGestureState'
-import { phoneHeadingAnimationDuration } from './phoneHeading'
-import { usePhoneHeading } from './usePhoneHeading'
+import { phoneHeadingAnimationDuration, type PhoneHeadingStatus } from './phoneHeading'
+import { PhoneHeadingMapLayer } from './PhoneHeadingMapLayer'
 import { CenterMapLayers, rosterRiderColor } from './CenterMapLayers'
 import {
   DESTINATION_POINT_COLOR,
@@ -98,10 +97,7 @@ export interface CenterMapHandle {
   zoomBy: (delta: number) => void
   focusCoordinate: (coordinate: [number, number]) => void
   focusWeather: () => void
-  getViewfinderCoordinate: () => Promise<{
-    latitude: number
-    longitude: number
-  }>
+  getViewfinderCoordinate: () => Promise<{ latitude: number; longitude: number }>
 }
 
 interface MapLayout {
@@ -163,8 +159,6 @@ interface CenterMapProps {
     | null
 }
 
-// memo: parent (CenterScreen) re-renders on controller/overlay state that never
-// reaches this component — bail out unless an actual prop changed.
 export const CenterMap = memo(
   forwardRef<CenterMapHandle, CenterMapProps>(function CenterMap(
     {
@@ -208,9 +202,6 @@ export const CenterMap = memo(
     const mapRevealedRef = useRef(false)
     const mapViewRef = useRef<ElementRef<typeof Mapbox.MapView> | null>(null)
     const offscreenProjectionRequestRef = useRef(0)
-    // Tracks gesture rising edge so map-interaction side effects fire once per gesture,
-    // not on every camera frame (~15Hz) — those redundant calls re-rendered the whole screen.
-    const gestureActiveRef = useRef(false)
     const suppressNextMapPressRef = useRef(false)
     const suppressNextMapPressTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const [mapOpacity] = useState(() => new Animated.Value(0))
@@ -220,10 +211,7 @@ export const CenterMap = memo(
     const [cameraHeading, setCameraHeading] = useState(0)
     const [cameraZoom, setCameraZoom] = useState<number>(MAP_DEFAULTS.fallbackZoom)
     const [initialApproximateFix, setInitialApproximateFix] = useState<LocationEvent | null>(null)
-    const [mapLayout, setMapLayout] = useState<MapLayout>({
-      width: 0,
-      height: 0,
-    })
+    const [mapLayout, setMapLayout] = useState<MapLayout>({ width: 0, height: 0 })
     const [offscreenMapIndicators, setOffscreenMapIndicators] = useState<
       OffscreenMapIndicatorState[]
     >([])
@@ -321,73 +309,30 @@ export const CenterMap = memo(
     const retainedGpsBearing = gpsPresentation.nextReliableBearing
     const gpsHeadingMode = mapNavigationMode === 'gpsHeading'
     const phoneHeadingMode = mapNavigationMode === 'phoneHeading'
-    // Phone-heading (Compass) is disabled — its magnetometer stream re-rendered the
-    // map at ~24Hz and overheated the device. Restore alongside DISABLED_NAVIGATION_MODES
-    // (see issue #183). Original gate: usePhoneHeading(!historyActive && !gpsHeadingMode)
-    const phoneHeading = usePhoneHeading(false)
+    const phoneHeadingDegRef = useRef<number | null>(null)
+    const [phoneHeadingStatus, setPhoneHeadingStatus] = useState<PhoneHeadingStatus | 'idle'>(
+      'idle',
+    )
+    const handlePhoneHeadingChange = useCallback((headingDeg: number | null) => {
+      phoneHeadingDegRef.current = headingDeg
+    }, [])
     const headingFollowMode = gpsHeadingMode || phoneHeadingMode
     useRenderRateWarning('CenterMap')
-    const phoneHeadingDeg = phoneHeading.headingDeg
-    const phoneCameraHeadingDeg = phoneHeadingDeg
     const targetFollowHeadingDeg = gpsHeadingMode
       ? (directionBearingDeg ?? 0)
       : phoneHeadingMode
-        ? (phoneCameraHeadingDeg ?? cameraHeading)
+        ? cameraHeading
         : 0
-    const [smoothedFollowHeadingDeg, setSmoothedFollowHeadingDeg] = useState(targetFollowHeadingDeg)
-    const smoothingFrameRef = useRef<number | null>(null)
-    const smoothingTimestampRef = useRef<number | null>(null)
-    const smoothingHeadingRef = useRef(targetFollowHeadingDeg)
-    const previousMapNavigationModeRef = useRef(mapNavigationMode)
-    const followHeadingDeg = headingFollowMode ? smoothedFollowHeadingDeg : targetFollowHeadingDeg
-
-    useEffect(() => {
-      const mapNavigationModeChanged = previousMapNavigationModeRef.current !== mapNavigationMode
-      previousMapNavigationModeRef.current = mapNavigationMode
-
-      if (mapNavigationModeChanged) {
-        if (smoothingFrameRef.current != null) cancelAnimationFrame(smoothingFrameRef.current)
-        smoothingFrameRef.current = null
-        smoothingTimestampRef.current = null
-        smoothingHeadingRef.current = targetFollowHeadingDeg
-        setSmoothedFollowHeadingDeg(targetFollowHeadingDeg)
-        return
-      }
-
-      if (!headingFollowMode || historyActive) {
-        smoothingHeadingRef.current = targetFollowHeadingDeg
-        const frame = requestAnimationFrame(() =>
-          setSmoothedFollowHeadingDeg(targetFollowHeadingDeg),
-        )
-        return () => cancelAnimationFrame(frame)
-      }
-
-      const tick = (timestamp: number) => {
-        const previousTimestamp = smoothingTimestampRef.current ?? timestamp
-        smoothingTimestampRef.current = timestamp
-        const nextHeading = smoothHeadingStep(
-          smoothingHeadingRef.current,
-          targetFollowHeadingDeg,
-          timestamp - previousTimestamp,
-        )
-        smoothingHeadingRef.current = nextHeading
-        setSmoothedFollowHeadingDeg(nextHeading)
-        if (nextHeading === normalizeHeading(targetFollowHeadingDeg)) {
-          smoothingFrameRef.current = null
-          smoothingTimestampRef.current = null
-          return
-        }
-        smoothingFrameRef.current = requestAnimationFrame(tick)
-      }
-
-      smoothingTimestampRef.current = null
-      smoothingFrameRef.current = requestAnimationFrame(tick)
-      return () => {
-        if (smoothingFrameRef.current != null) cancelAnimationFrame(smoothingFrameRef.current)
-        smoothingFrameRef.current = null
-        smoothingTimestampRef.current = null
-      }
-    }, [headingFollowMode, historyActive, mapNavigationMode, targetFollowHeadingDeg])
+    const followHeadingDeg = targetFollowHeadingDeg
+    const getFollowHeadingDeg = useCallback(
+      () =>
+        gpsHeadingMode
+          ? (directionBearingDeg ?? 0)
+          : phoneHeadingMode
+            ? (phoneHeadingDegRef.current ?? cameraHeading)
+            : 0,
+      [cameraHeading, directionBearingDeg, gpsHeadingMode, phoneHeadingMode],
+    )
 
     const rideRoute = useMemo(
       () => rideGpsSamples.map((point) => [point.longitude, point.latitude] as [number, number]),
@@ -433,9 +378,8 @@ export const CenterMap = memo(
       mapNavigationMode,
       gpsHeadingMode: headingFollowMode,
       phoneHeadingMode,
-      phoneHeadingReady: phoneHeadingDeg != null,
-      phoneHeadingOneShot: true,
-      followHeadingDeg,
+      phoneHeadingReady: phoneHeadingStatus === 'ready',
+      getFollowHeadingDeg,
       resetHeadingOnRecenter: mapNavigationMode !== 'freeRotate',
       liveFollowUpdatesEnabled: !(phoneHeadingMode && mode === 'map'),
       followAnimationDuration: headingFollowMode
@@ -445,14 +389,15 @@ export const CenterMap = memo(
       onHeadingChange,
       onPerspectiveChange,
     })
-    const targetGpsPuckBearingDeg = getGpsPuckBearing({
+    const gpsPuckBearingDeg = getGpsPuckBearing({
       navigationMode: mapNavigationMode,
       approximateFix: approximateGpsPuckActive,
-      phoneHeadingDeg,
+      phoneHeadingDeg: null,
       gpsBearingDeg: directionBearingDeg,
     })
-    const gpsPuckBearingDeg = targetGpsPuckBearingDeg
-    const gpsPinBearingDeg = gpsPuckBearingDeg == null ? null : gpsPuckBearingDeg - cameraHeading
+    const displayedCameraHeading = followGps && headingFollowMode ? followHeadingDeg : cameraHeading
+    const gpsPinBearingDeg =
+      gpsPuckBearingDeg == null ? null : gpsPuckBearingDeg - displayedCameraHeading
     const updateNavigationDiagnostics = useNavigationDiagnosticsStore((s) => s.update)
     const riderFocusRequest = useGroupRideStore((s) => s.focusRequest)
     const focusRider = useGroupRideStore((s) => s.focusRider)
@@ -678,7 +623,7 @@ export const CenterMap = memo(
           centerCoordinate:
             indicator.type === 'direction' && directionPoint
               ? [directionPoint.longitude, directionPoint.latitude]
-              : indicator.coordinate,
+              : indicator.coordinate.value,
           zoomLevel: currentCamera?.zoomLevel,
           heading: currentCamera?.heading,
           pitch: currentCamera?.pitch,
@@ -703,25 +648,24 @@ export const CenterMap = memo(
         gpsFix,
         retainedGpsBearingDeg: retainedGpsBearing?.bearingDeg ?? null,
         retainedGpsBearingAt: retainedGpsBearing?.sourceTimestamp ?? null,
-        phoneHeadingDeg,
-        phoneHeadingStatus: phoneHeading.status,
+        phoneHeadingDeg: phoneHeadingDegRef.current,
+        phoneHeadingStatus,
         activeDisplayHeadingDeg: gpsPinBearingDeg,
-        cameraHeadingDeg: cameraHeading,
+        cameraHeadingDeg: displayedCameraHeading,
         fallbackReason: getNavigationFallbackReason({
           mapNavigationMode,
           gpsFix,
           retainedGpsBearingDeg: retainedGpsBearing?.bearingDeg ?? null,
-          phoneHeadingDeg,
-          phoneHeadingStatus: phoneHeading.status,
+          phoneHeadingDeg: phoneHeadingDegRef.current,
+          phoneHeadingStatus,
         }),
       })
     }, [
-      cameraHeading,
+      displayedCameraHeading,
       gpsFix,
       gpsPinBearingDeg,
       mapNavigationMode,
-      phoneHeading.status,
-      phoneHeadingDeg,
+      phoneHeadingStatus,
       retainedGpsBearing?.bearingDeg,
       retainedGpsBearing?.sourceTimestamp,
       updateNavigationDiagnostics,
@@ -852,8 +796,10 @@ export const CenterMap = memo(
     }, [onMapPress])
 
     useEffect(() => {
-      onOffscreenMapIndicatorsChange(offscreenMapIndicators)
-    }, [offscreenMapIndicators, onOffscreenMapIndicatorsChange])
+      if (mode === 'telemetry') {
+        onOffscreenMapIndicatorsChange(offscreenMapIndicators)
+      }
+    }, [mode, offscreenMapIndicators, onOffscreenMapIndicatorsChange])
 
     useEffect(
       () => () => {
@@ -866,15 +812,12 @@ export const CenterMap = memo(
 
     const handleCameraChanged = useCallback(
       (state: {
-        properties: {
-          center: number[]
-          zoom: number
-          heading: number
-          pitch: number
-        }
+        properties: { center: number[]; zoom: number; heading: number; pitch: number }
         gestures: { isGestureActive: boolean }
       }) => {
         const [longitude, latitude] = state.properties.center
+        const automaticHeadingFollow =
+          followGps && headingFollowMode && !state.gestures.isGestureActive
         const camera = {
           centerCoordinate: [longitude, latitude],
           zoomLevel: state.properties.zoom,
@@ -904,11 +847,6 @@ export const CenterMap = memo(
           }
         }
         if (state.gestures.isGestureActive) {
-          // Fire interaction side effects (dismiss selectors, break follow) once at gesture
-          // start. Repeating them per frame churned React state and re-rendered the map ~15Hz.
-          const gestureJustStarted = !gestureActiveRef.current
-          gestureActiveRef.current = true
-          if (gestureJustStarted) onMapInteraction()
           const gestureCenterDistanceM = cameraFix
             ? distanceMeters({ longitude, latitude }, cameraFix)
             : Number.POSITIVE_INFINITY
@@ -934,27 +872,19 @@ export const CenterMap = memo(
             if (Math.abs(state.properties.pitch - followCamera.pitch) > 0.5) {
               cameraRef.current?.setCameraDirect({ pitch: followCamera.pitch })
             }
-          } else if (followGps) {
-            // Only break follow when actually following; avoids a redundant BrowseManually
-            // dispatch (new camera-mode object) on every frame while already browsing.
+          } else {
             setFollowGps(false)
           }
-        } else {
-          gestureActiveRef.current = false
         }
-        setCameraHeading((current) =>
-          Math.abs(current - state.properties.heading) > 0.5 ? state.properties.heading : current,
-        )
-        // Zoom state only drives media-cluster radius (2^(16-zoom)): skip it
-        // entirely without media markers, and quantize to half-levels so camera
-        // animations commit a handful of renders, not one per frame like the
-        // old 0.25-delta threshold.
-        if (mediaAssets.length > 0) {
-          const quantizedZoom = Math.round(state.properties.zoom * 2) / 2
-          setCameraZoom((current) => (current === quantizedZoom ? current : quantizedZoom))
+        if (!automaticHeadingFollow) {
+          onHeadingChange(state.properties.heading)
+          updateOffscreenMapIndicators()
         }
-        onHeadingChange(state.properties.heading)
-        updateOffscreenMapIndicators()
+        if (historyActive && mediaAssets.length > 0) {
+          setCameraZoom((current) =>
+            Math.abs(current - state.properties.zoom) > 0.25 ? state.properties.zoom : current,
+          )
+        }
       },
       [
         cameraRef,
@@ -966,10 +896,9 @@ export const CenterMap = memo(
         headingFollowMode,
         historyActive,
         mapLayout,
-        mediaAssets.length,
         mode,
         onHeadingChange,
-        onMapInteraction,
+        mediaAssets.length,
         perspectiveEnabled,
         phoneHeadingMode,
         publishOffscreenMapIndicators,
@@ -978,6 +907,11 @@ export const CenterMap = memo(
         updateOffscreenMapIndicators,
       ],
     )
+
+    const handleMapIdle = useCallback(() => {
+      const heading = currentCameraRef.current?.heading
+      if (heading != null) setCameraHeading(heading)
+    }, [currentCameraRef])
 
     useEffect(() => {
       const frame = requestAnimationFrame(updateOffscreenMapIndicators)
@@ -1019,6 +953,7 @@ export const CenterMap = memo(
           onDidFinishLoadingMap={handleMapLoaded}
           onPress={handleMapPress}
           onLongPress={handleLongPress}
+          onMapIdle={handleMapIdle}
           onCameraChanged={handleCameraChanged}
         >
           <Camera
@@ -1028,6 +963,16 @@ export const CenterMap = memo(
             }}
             maxZoomLevel={MAP_DEFAULTS.maxZoom}
             animationMode="easeTo"
+          />
+          <PhoneHeadingMapLayer
+            active={!historyActive && !gpsHeadingMode}
+            followCamera={phoneHeadingMode && followGps}
+            approximateFix={approximateGpsPuckActive}
+            coordinate={accuracyFix}
+            cameraRef={cameraRef}
+            currentCameraRef={currentCameraRef}
+            onHeadingChange={handlePhoneHeadingChange}
+            onStatusChange={setPhoneHeadingStatus}
           />
           <CenterMapLayers
             historyActive={historyActive}
