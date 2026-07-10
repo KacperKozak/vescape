@@ -1,3 +1,4 @@
+'worklet'
 import type { TuneProfileFieldValue } from 'vesc-ble'
 
 import {
@@ -199,6 +200,44 @@ export interface TunePreviewInput {
   paused?: boolean
 }
 
+function numberField(fields: Record<string, TuneProfileFieldValue>, id: string): number {
+  return fields[id] as number
+}
+
+function numberFieldOrDefault(
+  fields: Record<string, TuneProfileFieldValue>,
+  id: string,
+  fallback: number,
+): number {
+  const value = fields[id]
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value))
+}
+
+function clampFinite(value: number, min: number, max: number, fallback: number): number {
+  return Number.isFinite(value) ? clamp(value, min, max) : fallback
+}
+
+function boundedSpeed(speedKmh: number): number {
+  return Number.isFinite(speedKmh)
+    ? clamp(speedKmh, -MAX_TUNE_PREVIEW_SPEED_KMH, MAX_TUNE_PREVIEW_SPEED_KMH)
+    : 0
+}
+
+function finiteOrZero(value: number): number {
+  return Number.isFinite(value) ? value : 0
+}
+
+function moveTowards(current: number, target: number, maxDelta: number): number {
+  if (maxDelta <= 0 || current === target) return current
+  const delta = target - current
+  if (Math.abs(delta) <= maxDelta) return target
+  return current + Math.sign(delta) * maxDelta
+}
+
 export function createTunePreviewModel(
   fields: Record<string, TuneProfileFieldValue>,
 ): TunePreviewModel {
@@ -264,53 +303,6 @@ export function createTunePreviewModel(
       ),
     },
   }
-}
-
-export function createTunePreviewState(speedKmh = 0): TunePreviewState {
-  const syntheticSpeedKmh = boundedSpeed(speedKmh)
-  return {
-    syntheticSpeedKmh,
-    angleDegrees: 0,
-    angularRateDegreesPerSecond: 0,
-    pitchInputRateDegreesPerSecond: 0,
-    integralError: 0,
-    targetAngleDegrees: 0,
-    torqueTiltDegrees: 0,
-    brakeTiltDegrees: 0,
-    atrDegrees: 0,
-    constantTiltbackDegrees: 0,
-    variableTiltbackDegrees: 0,
-    syntheticCurrentAmps: 0,
-    filteredCurrentAmps: 0,
-    erpm: speedKmhToReferenceErpm(syntheticSpeedKmh),
-    groundTravelMeters: 0,
-    terrainSlope: 0,
-    terrainLoadCurrentAmps: 0,
-    atrAccelDiff: 0,
-    atrTargetDegrees: 0,
-    measuredAccelerationErpmPerTick: 0,
-  }
-}
-
-export function resetTunePreviewSpeed(
-  state: TunePreviewState,
-  speedKmh: number,
-  physics?: Partial<TunePreviewAdvancedPhysics>,
-): TunePreviewState {
-  const syntheticSpeedKmh = boundedSpeed(speedKmh)
-  return {
-    ...state,
-    syntheticSpeedKmh,
-    erpm: speedKmhToErpm(syntheticSpeedKmh, physics),
-    measuredAccelerationErpmPerTick: 0,
-  }
-}
-
-export function speedKmhToReferenceErpm(speedKmh: number): number {
-  return (
-    clamp(speedKmh, -MAX_TUNE_PREVIEW_SPEED_KMH, MAX_TUNE_PREVIEW_SPEED_KMH) *
-    REFERENCE_ERPM_PER_KMH
-  )
 }
 
 export function resolveTunePreviewPhysics(
@@ -382,6 +374,13 @@ export function speedKmhToErpm(
   return clamp(speedKmh, -MAX_TUNE_PREVIEW_SPEED_KMH, MAX_TUNE_PREVIEW_SPEED_KMH) * setupErpmPerKmh
 }
 
+export function speedKmhToReferenceErpm(speedKmh: number): number {
+  return (
+    clamp(speedKmh, -MAX_TUNE_PREVIEW_SPEED_KMH, MAX_TUNE_PREVIEW_SPEED_KMH) *
+    REFERENCE_ERPM_PER_KMH
+  )
+}
+
 export function groundTravelToVisualOffset(groundTravelMeters: number): number {
   const tickSpacingPixels = GROUND_TICK_SPACING_METERS * TUNE_PREVIEW_PIXELS_PER_METER
   return (groundTravelMeters * TUNE_PREVIEW_PIXELS_PER_METER) % tickSpacingPixels
@@ -407,6 +406,164 @@ export function pitchInputRateToControlDegrees(rateDegreesPerSecond: number): nu
   const magnitude = Math.abs(normalizedRate)
   const normalizedControl = 1 - Math.sqrt(1 - magnitude)
   return Math.sign(normalizedRate) * normalizedControl * MAX_PITCH_INPUT_DEGREES
+}
+
+export function createTunePreviewState(speedKmh = 0): TunePreviewState {
+  const syntheticSpeedKmh = boundedSpeed(speedKmh)
+  return {
+    syntheticSpeedKmh,
+    angleDegrees: 0,
+    angularRateDegreesPerSecond: 0,
+    pitchInputRateDegreesPerSecond: 0,
+    integralError: 0,
+    targetAngleDegrees: 0,
+    torqueTiltDegrees: 0,
+    brakeTiltDegrees: 0,
+    atrDegrees: 0,
+    constantTiltbackDegrees: 0,
+    variableTiltbackDegrees: 0,
+    syntheticCurrentAmps: 0,
+    filteredCurrentAmps: 0,
+    erpm: speedKmhToReferenceErpm(syntheticSpeedKmh),
+    groundTravelMeters: 0,
+    terrainSlope: 0,
+    terrainLoadCurrentAmps: 0,
+    atrAccelDiff: 0,
+    atrTargetDegrees: 0,
+    measuredAccelerationErpmPerTick: 0,
+  }
+}
+
+export function resetTunePreviewSpeed(
+  state: TunePreviewState,
+  speedKmh: number,
+  physics?: Partial<TunePreviewAdvancedPhysics>,
+): TunePreviewState {
+  const syntheticSpeedKmh = boundedSpeed(speedKmh)
+  return {
+    ...state,
+    syntheticSpeedKmh,
+    erpm: speedKmhToErpm(syntheticSpeedKmh, physics),
+    measuredAccelerationErpmPerTick: 0,
+  }
+}
+
+export function calculateSyntheticAcceleration(syntheticCurrentAmps: number): number {
+  return (
+    (clamp(syntheticCurrentAmps, -MAX_SYNTHETIC_CURRENT_AMPS, MAX_SYNTHETIC_CURRENT_AMPS) /
+      MAX_SYNTHETIC_CURRENT_AMPS) *
+    COMPARATIVE_ACCELERATION_KMH_PER_SECOND
+  )
+}
+
+export function terrainSlopeToSyntheticAcceleration(slope: number): number {
+  const finiteSlope = finiteOrZero(slope)
+  return (
+    (STANDARD_GRAVITY_METERS_PER_SECOND_SQUARED * finiteSlope) /
+    Math.sqrt(1 + finiteSlope * finiteSlope)
+  )
+}
+
+export function calculateTerrainSlope(
+  travelMeters: number,
+  input: Pick<TunePreviewInput, 'hillsEnabled' | 'hillHeightMeters' | 'hillSpacingMeters'>,
+): number {
+  if (!input.hillsEnabled) return 0
+  const height = clamp(input.hillHeightMeters ?? 2.5, 0, 50)
+  const spacing = clamp(input.hillSpacingMeters ?? 30, 2, 1000)
+  const wave = (2 * Math.PI) / spacing
+  const amplitude = height / 2
+  return -amplitude * wave * Math.cos(travelMeters * wave)
+}
+
+export function calculateGroundToBoardAngleDegrees(
+  boardAngleDegrees: number,
+  terrainSlope: number,
+): number {
+  const terrainAngleDegrees = (Math.atan(finiteOrZero(terrainSlope)) * 180) / Math.PI
+  return finiteOrZero(boardAngleDegrees) - terrainAngleDegrees
+}
+
+export function calculateTerrainLoadCurrentAmps(
+  slope: number,
+  physics?: TunePreviewAdvancedPhysics,
+): number {
+  const resolved = resolveTunePreviewPhysics(physics)
+  const finiteSlope = finiteOrZero(slope)
+  const gravityAlongSlope = terrainSlopeToSyntheticAcceleration(finiteSlope)
+  const wheelRadiusMeters = (resolved.wheelDiameterInches * 0.0254) / 2
+  const wheelTorqueNm = resolved.totalMassKg * gravityAlongSlope * wheelRadiusMeters
+  return wheelTorqueNm / (resolved.motorTorqueNmPerAmp * resolved.drivetrainEfficiency)
+}
+
+export function calculateTerrainAtrDisturbance(
+  slope: number,
+  ampsToAccelerationRatio: number,
+  physics?: TunePreviewAdvancedPhysics,
+): number {
+  return calculateTerrainLoadCurrentAmps(slope, physics) / Math.max(ampsToAccelerationRatio, 0.1)
+}
+
+export function calculatePreviewAcceleration(
+  motorCurrentAmps: number,
+  terrainSlope: number,
+  physics?: TunePreviewAdvancedPhysics,
+): number {
+  const resolved = resolveTunePreviewPhysics(physics)
+  const wheelRadiusMeters = (resolved.wheelDiameterInches * 0.0254) / 2
+  const wheelForceNewtons =
+    (clamp(motorCurrentAmps, -resolved.maxMotorCurrentAmps, resolved.maxMotorCurrentAmps) *
+      resolved.motorTorqueNmPerAmp *
+      resolved.drivetrainEfficiency) /
+    wheelRadiusMeters
+  const motorAcceleration = wheelForceNewtons / resolved.totalMassKg
+  const gravityAcceleration = terrainSlopeToSyntheticAcceleration(terrainSlope)
+  return (motorAcceleration - gravityAcceleration) * 3.6
+}
+
+function torqueTiltTarget(parameters: TunePreviewParameters, currentAmps: number): number {
+  const strength =
+    currentAmps < 0 ? parameters.torqueTiltStrengthRegen : parameters.torqueTiltStrength
+  const magnitude = Math.min(
+    Math.max(Math.abs(currentAmps) - parameters.torqueTiltStartCurrent, 0) * strength,
+    parameters.torqueTiltAngleLimit,
+  )
+  return Math.sign(currentAmps) * magnitude
+}
+
+function torqueTiltRate(
+  current: number,
+  target: number,
+  parameters: TunePreviewParameters,
+  erpm: number,
+): number {
+  let rate: number
+  if (current * target < 0) {
+    rate = Math.max(parameters.torqueTiltOffSpeed, parameters.torqueTiltOnSpeed)
+  } else if (Math.abs(current) > Math.abs(target)) {
+    rate = parameters.torqueTiltOffSpeed
+  } else {
+    rate = parameters.torqueTiltOnSpeed
+  }
+  return erpm < 500 ? rate / 2 : rate
+}
+
+function brakeTiltTarget(
+  parameters: TunePreviewParameters,
+  syntheticCurrentAmps: number,
+  balanceOffsetDegrees: number,
+  erpm: number,
+): number {
+  if (
+    parameters.brakeTiltStrength <= 0 ||
+    syntheticCurrentAmps * Math.sign(erpm) >= 0 ||
+    Math.abs(erpm) <= 2000 ||
+    Math.sign(balanceOffsetDegrees) === Math.sign(erpm)
+  ) {
+    return 0
+  }
+  const factor = -(0.5 + (20 - parameters.brakeTiltStrength) / 5)
+  return balanceOffsetDegrees / factor
 }
 
 export function calculateLongitudinalTarget(
@@ -472,22 +629,72 @@ export function calculateLongitudinalTarget(
   }
 }
 
-export function stepTunePreview(
-  state: TunePreviewState,
-  parameters: TunePreviewParameters,
-  input: TunePreviewInput,
-  elapsedSeconds: number,
-): TunePreviewState {
-  if (input.paused || !Number.isFinite(elapsedSeconds) || elapsedSeconds <= 0) return state
+export function calculateControllerCurrentAmps(
+  angleDegrees: number,
+  angularRateDegreesPerSecond: number,
+  integralError: number,
+  targetAngleDegrees: number,
+  parameters: Pick<TunePreviewParameters, 'kp' | 'kp2' | 'kpBrake' | 'kp2Brake'>,
+  currentLimitAmps = MAX_SYNTHETIC_CURRENT_AMPS,
+): number {
+  const error = targetAngleDegrees - angleDegrees
+  const p = error * parameters.kp
+  const rateP = -angularRateDegreesPerSecond * parameters.kp2
+  const scaledP = p * (p > 0 ? 1 : parameters.kpBrake)
+  const scaledRateP = rateP * (rateP > 0 ? 1 : parameters.kp2Brake)
+  const currentAmps = clamp(
+    scaledP + integralError + scaledRateP,
+    -currentLimitAmps,
+    currentLimitAmps,
+  )
+  return currentAmps === 0 ? 0 : currentAmps
+}
 
-  let next = state
-  let remaining = Math.min(elapsedSeconds, MAX_ELAPSED_SECONDS)
-  while (remaining > 0) {
-    const dt = Math.min(STEP_SECONDS, remaining)
-    next = stepFixed(next, parameters, input, dt)
-    remaining -= dt
+/** Refloat v1.2.1 ATR expected acceleration, including its fixed 8 A rolling offset. */
+
+export function calculateAtrExpectedAcceleration(
+  filteredCurrentAmps: number,
+  erpmSign: number,
+  ampsToAccelerationRatio: number,
+): number {
+  const ratio = Math.max(ampsToAccelerationRatio, 0.1)
+  const sign = Math.sign(filteredCurrentAmps)
+  const absCurrent = Math.abs(filteredCurrentAmps)
+  if (absCurrent < 25) return (filteredCurrentAmps - Math.sign(erpmSign) * 8) / ratio
+  return (sign * 25 - Math.sign(erpmSign) * 8) / ratio + (sign * (absCurrent - 25)) / (ratio * 1.3)
+}
+
+/** Refloat combines same-direction Torque Tilt and ATR/Brake Tilt using the larger value. */
+
+export function aggregateTorqueAndAdaptiveTilt(
+  torqueTiltDegrees: number,
+  adaptiveTiltDegrees: number,
+): number {
+  if (
+    torqueTiltDegrees !== 0 &&
+    adaptiveTiltDegrees !== 0 &&
+    Math.sign(torqueTiltDegrees) === Math.sign(adaptiveTiltDegrees)
+  ) {
+    return (
+      Math.sign(adaptiveTiltDegrees) *
+      Math.max(Math.abs(adaptiveTiltDegrees), Math.abs(torqueTiltDegrees))
+    )
   }
-  return next
+  return torqueTiltDegrees + adaptiveTiltDegrees
+}
+
+function calculatePhysicalPitchAcceleration(
+  angularRateDegreesPerSecond: number,
+  longitudinalAccelerationMetersPerSecondSquared: number,
+  physics: TunePreviewAdvancedPhysics,
+): number {
+  const angularAccelerationRadians =
+    (longitudinalAccelerationMetersPerSecondSquared * BALANCE_PITCH_AUTHORITY) /
+    physics.centerOfMassHeightMeters
+  return (
+    (angularAccelerationRadians * 180) / Math.PI -
+    physics.pitchDampingPerSecond * angularRateDegreesPerSecond
+  )
 }
 
 function stepFixed(
@@ -665,224 +872,20 @@ function stepFixed(
   }
 }
 
-export function calculateTerrainSlope(
-  travelMeters: number,
-  input: Pick<TunePreviewInput, 'hillsEnabled' | 'hillHeightMeters' | 'hillSpacingMeters'>,
-): number {
-  if (!input.hillsEnabled) return 0
-  const height = clamp(input.hillHeightMeters ?? 2.5, 0, 50)
-  const spacing = clamp(input.hillSpacingMeters ?? 30, 2, 1000)
-  const wave = (2 * Math.PI) / spacing
-  const amplitude = height / 2
-  return -amplitude * wave * Math.cos(travelMeters * wave)
-}
-
-export function terrainSlopeToSyntheticAcceleration(slope: number): number {
-  const finiteSlope = finiteOrZero(slope)
-  return (
-    (STANDARD_GRAVITY_METERS_PER_SECOND_SQUARED * finiteSlope) /
-    Math.sqrt(1 + finiteSlope * finiteSlope)
-  )
-}
-
-export function calculateGroundToBoardAngleDegrees(
-  boardAngleDegrees: number,
-  terrainSlope: number,
-): number {
-  const terrainAngleDegrees = (Math.atan(finiteOrZero(terrainSlope)) * 180) / Math.PI
-  return finiteOrZero(boardAngleDegrees) - terrainAngleDegrees
-}
-
-export function calculateTerrainLoadCurrentAmps(
-  slope: number,
-  physics?: TunePreviewAdvancedPhysics,
-): number {
-  const resolved = resolveTunePreviewPhysics(physics)
-  const finiteSlope = finiteOrZero(slope)
-  const gravityAlongSlope = terrainSlopeToSyntheticAcceleration(finiteSlope)
-  const wheelRadiusMeters = (resolved.wheelDiameterInches * 0.0254) / 2
-  const wheelTorqueNm = resolved.totalMassKg * gravityAlongSlope * wheelRadiusMeters
-  return wheelTorqueNm / (resolved.motorTorqueNmPerAmp * resolved.drivetrainEfficiency)
-}
-
-export function calculateTerrainAtrDisturbance(
-  slope: number,
-  ampsToAccelerationRatio: number,
-  physics?: TunePreviewAdvancedPhysics,
-): number {
-  return calculateTerrainLoadCurrentAmps(slope, physics) / Math.max(ampsToAccelerationRatio, 0.1)
-}
-
-export function calculatePreviewAcceleration(
-  motorCurrentAmps: number,
-  terrainSlope: number,
-  physics?: TunePreviewAdvancedPhysics,
-): number {
-  const resolved = resolveTunePreviewPhysics(physics)
-  const wheelRadiusMeters = (resolved.wheelDiameterInches * 0.0254) / 2
-  const wheelForceNewtons =
-    (clamp(motorCurrentAmps, -resolved.maxMotorCurrentAmps, resolved.maxMotorCurrentAmps) *
-      resolved.motorTorqueNmPerAmp *
-      resolved.drivetrainEfficiency) /
-    wheelRadiusMeters
-  const motorAcceleration = wheelForceNewtons / resolved.totalMassKg
-  const gravityAcceleration = terrainSlopeToSyntheticAcceleration(terrainSlope)
-  return (motorAcceleration - gravityAcceleration) * 3.6
-}
-
-function torqueTiltTarget(parameters: TunePreviewParameters, currentAmps: number): number {
-  const strength =
-    currentAmps < 0 ? parameters.torqueTiltStrengthRegen : parameters.torqueTiltStrength
-  const magnitude = Math.min(
-    Math.max(Math.abs(currentAmps) - parameters.torqueTiltStartCurrent, 0) * strength,
-    parameters.torqueTiltAngleLimit,
-  )
-  return Math.sign(currentAmps) * magnitude
-}
-
-function torqueTiltRate(
-  current: number,
-  target: number,
+export function stepTunePreview(
+  state: TunePreviewState,
   parameters: TunePreviewParameters,
-  erpm: number,
-): number {
-  let rate: number
-  if (current * target < 0) {
-    rate = Math.max(parameters.torqueTiltOffSpeed, parameters.torqueTiltOnSpeed)
-  } else if (Math.abs(current) > Math.abs(target)) {
-    rate = parameters.torqueTiltOffSpeed
-  } else {
-    rate = parameters.torqueTiltOnSpeed
+  input: TunePreviewInput,
+  elapsedSeconds: number,
+): TunePreviewState {
+  if (input.paused || !Number.isFinite(elapsedSeconds) || elapsedSeconds <= 0) return state
+
+  let next = state
+  let remaining = Math.min(elapsedSeconds, MAX_ELAPSED_SECONDS)
+  while (remaining > 0) {
+    const dt = Math.min(STEP_SECONDS, remaining)
+    next = stepFixed(next, parameters, input, dt)
+    remaining -= dt
   }
-  return erpm < 500 ? rate / 2 : rate
-}
-
-function brakeTiltTarget(
-  parameters: TunePreviewParameters,
-  syntheticCurrentAmps: number,
-  balanceOffsetDegrees: number,
-  erpm: number,
-): number {
-  if (
-    parameters.brakeTiltStrength <= 0 ||
-    syntheticCurrentAmps * Math.sign(erpm) >= 0 ||
-    Math.abs(erpm) <= 2000 ||
-    Math.sign(balanceOffsetDegrees) === Math.sign(erpm)
-  ) {
-    return 0
-  }
-  const factor = -(0.5 + (20 - parameters.brakeTiltStrength) / 5)
-  return balanceOffsetDegrees / factor
-}
-
-export function calculateControllerCurrentAmps(
-  angleDegrees: number,
-  angularRateDegreesPerSecond: number,
-  integralError: number,
-  targetAngleDegrees: number,
-  parameters: Pick<TunePreviewParameters, 'kp' | 'kp2' | 'kpBrake' | 'kp2Brake'>,
-  currentLimitAmps = MAX_SYNTHETIC_CURRENT_AMPS,
-): number {
-  const error = targetAngleDegrees - angleDegrees
-  const p = error * parameters.kp
-  const rateP = -angularRateDegreesPerSecond * parameters.kp2
-  const scaledP = p * (p > 0 ? 1 : parameters.kpBrake)
-  const scaledRateP = rateP * (rateP > 0 ? 1 : parameters.kp2Brake)
-  const currentAmps = clamp(
-    scaledP + integralError + scaledRateP,
-    -currentLimitAmps,
-    currentLimitAmps,
-  )
-  return currentAmps === 0 ? 0 : currentAmps
-}
-
-/** Refloat v1.2.1 ATR expected acceleration, including its fixed 8 A rolling offset. */
-export function calculateAtrExpectedAcceleration(
-  filteredCurrentAmps: number,
-  erpmSign: number,
-  ampsToAccelerationRatio: number,
-): number {
-  const ratio = Math.max(ampsToAccelerationRatio, 0.1)
-  const sign = Math.sign(filteredCurrentAmps)
-  const absCurrent = Math.abs(filteredCurrentAmps)
-  if (absCurrent < 25) return (filteredCurrentAmps - Math.sign(erpmSign) * 8) / ratio
-  return (sign * 25 - Math.sign(erpmSign) * 8) / ratio + (sign * (absCurrent - 25)) / (ratio * 1.3)
-}
-
-/** Refloat combines same-direction Torque Tilt and ATR/Brake Tilt using the larger value. */
-export function aggregateTorqueAndAdaptiveTilt(
-  torqueTiltDegrees: number,
-  adaptiveTiltDegrees: number,
-): number {
-  if (
-    torqueTiltDegrees !== 0 &&
-    adaptiveTiltDegrees !== 0 &&
-    Math.sign(torqueTiltDegrees) === Math.sign(adaptiveTiltDegrees)
-  ) {
-    return (
-      Math.sign(adaptiveTiltDegrees) *
-      Math.max(Math.abs(adaptiveTiltDegrees), Math.abs(torqueTiltDegrees))
-    )
-  }
-  return torqueTiltDegrees + adaptiveTiltDegrees
-}
-
-function calculatePhysicalPitchAcceleration(
-  angularRateDegreesPerSecond: number,
-  longitudinalAccelerationMetersPerSecondSquared: number,
-  physics: TunePreviewAdvancedPhysics,
-): number {
-  const angularAccelerationRadians =
-    (longitudinalAccelerationMetersPerSecondSquared * BALANCE_PITCH_AUTHORITY) /
-    physics.centerOfMassHeightMeters
-  return (
-    (angularAccelerationRadians * 180) / Math.PI -
-    physics.pitchDampingPerSecond * angularRateDegreesPerSecond
-  )
-}
-
-export function calculateSyntheticAcceleration(syntheticCurrentAmps: number): number {
-  return (
-    (clamp(syntheticCurrentAmps, -MAX_SYNTHETIC_CURRENT_AMPS, MAX_SYNTHETIC_CURRENT_AMPS) /
-      MAX_SYNTHETIC_CURRENT_AMPS) *
-    COMPARATIVE_ACCELERATION_KMH_PER_SECOND
-  )
-}
-
-function moveTowards(current: number, target: number, maxDelta: number): number {
-  if (maxDelta <= 0 || current === target) return current
-  const delta = target - current
-  if (Math.abs(delta) <= maxDelta) return target
-  return current + Math.sign(delta) * maxDelta
-}
-
-function numberField(fields: Record<string, TuneProfileFieldValue>, id: string): number {
-  return fields[id] as number
-}
-
-function numberFieldOrDefault(
-  fields: Record<string, TuneProfileFieldValue>,
-  id: string,
-  fallback: number,
-): number {
-  const value = fields[id]
-  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value))
-}
-
-function clampFinite(value: number, min: number, max: number, fallback: number): number {
-  return Number.isFinite(value) ? clamp(value, min, max) : fallback
-}
-
-function boundedSpeed(speedKmh: number): number {
-  return Number.isFinite(speedKmh)
-    ? clamp(speedKmh, -MAX_TUNE_PREVIEW_SPEED_KMH, MAX_TUNE_PREVIEW_SPEED_KMH)
-    : 0
-}
-
-function finiteOrZero(value: number): number {
-  return Number.isFinite(value) ? value : 0
+  return next
 }

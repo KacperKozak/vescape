@@ -1,11 +1,14 @@
 /* eslint-disable react-hooks/immutability */
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useEffect, useMemo } from 'react'
 import { Pressable, StyleSheet, TextInput, View, useWindowDimensions } from 'react-native'
 import { Text } from '@/components/ui/base/Text'
 import { ArrowCounterClockwiseIcon, QuestionIcon } from 'phosphor-react-native'
-import Svg, { Circle, G, Line, Path } from 'react-native-svg'
+import { Canvas, Circle, DashPathEffect, Line, Path, Skia, vec } from '@shopify/react-native-skia'
 import Animated, {
+  runOnUI,
   useAnimatedProps,
+  useDerivedValue,
+  useFrameCallback,
   useSharedValue,
   type SharedValue,
 } from 'react-native-reanimated'
@@ -25,6 +28,7 @@ import {
   resetTunePreviewSpeed,
   stepTunePreview,
   type TunePreviewAdvancedPhysics,
+  type TunePreviewParameters,
 } from '@/lib/tune/tunePreview'
 import {
   GROUND_TICK_SPACING_METERS,
@@ -49,6 +53,14 @@ interface TunePreviewProps {
   groundToBoardAngleDegrees?: SharedValue<number>
 }
 
+interface TunePreviewScenario {
+  parameters: TunePreviewParameters | null
+  hillsEnabled: boolean
+  hillHeightMeters: number
+  hillSpacingMeters: number
+  advancedPhysics: TunePreviewAdvancedPhysics
+}
+
 const GROUND_Y = 58
 const WHEEL_RADIUS = TUNE_PREVIEW_WHEEL_RADIUS_PIXELS
 const DECK_HALF_LENGTH = 72
@@ -61,11 +73,9 @@ const INPUT_ARROW_IDLE_GAP = 34
 const INPUT_ARROW_TRAVEL = 18
 const INPUT_ARROW_LENGTH = 16
 const INPUT_ARROW_HEAD = 4
-const AnimatedLine = Animated.createAnimatedComponent(Line)
-const AnimatedGroup = Animated.createAnimatedComponent(G)
-const AnimatedPath = Animated.createAnimatedComponent(Path)
 const AnimatedTextInput = Animated.createAnimatedComponent(TextInput)
 const READOUT_INTERVAL_MS = 100
+const CANVAS_HEIGHT = 122
 
 export function TunePreview({
   fields,
@@ -87,41 +97,158 @@ export function TunePreview({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [fields, TUNE_PREVIEW_MODEL_VERSION],
   )
+  const parameters = model.status === 'ready' ? model.parameters : null
   const { width: canvasWidth } = useWindowDimensions()
-  const stateRef = useRef(createTunePreviewState(TUNE_PREVIEW_RESET_SPEED_KMH))
-  const lastTimestampRef = useRef<number | null>(null)
-  const lastReadoutTimestampRef = useRef(0)
-  const angleDegrees = useSharedValue(0)
-  const targetAngleDegrees = useSharedValue(0)
-  const groundOffset = useSharedValue(0)
-  const terrainPathValue = useSharedValue(
-    terrainPath(canvasWidth, 0, hillHeightMeters, hillSpacingMeters),
-  )
+  const centerX = canvasWidth / 2
+
+  const state = useSharedValue(createTunePreviewState(TUNE_PREVIEW_RESET_SPEED_KMH))
+  const lastReadoutTimestamp = useSharedValue(0)
+  const scenario = useSharedValue<TunePreviewScenario>({
+    parameters,
+    hillsEnabled,
+    hillHeightMeters,
+    hillSpacingMeters,
+    advancedPhysics,
+  })
   const boardAngleStr = useSharedValue('0.0°')
   const targetAngleStr = useSharedValue('0.0°')
   const groundToBoardAngleStr = useSharedValue('0.0°')
   const speedStr = useSharedValue(TUNE_PREVIEW_RESET_SPEED_KMH.toFixed(1))
   const currentStr = useSharedValue('Motor 0 A')
-  const centerX = canvasWidth / 2
 
-  const deckAnimatedProps = useAnimatedProps(() =>
-    tunePreviewDeckLine(angleDegrees.value, centerX, DECK_CENTER_Y, DECK_HALF_LENGTH),
+  useEffect(() => {
+    scenario.value = {
+      parameters,
+      hillsEnabled,
+      hillHeightMeters,
+      hillSpacingMeters,
+      advancedPhysics,
+    }
+  }, [scenario, parameters, hillsEnabled, hillHeightMeters, hillSpacingMeters, advancedPhysics])
+
+  // Physics and readouts run entirely on the UI runtime; the JS thread only syncs scenario props.
+  const frameCallback = useFrameCallback((frame) => {
+    'worklet'
+    const { parameters: activeParameters, ...terrain } = scenario.value
+    if (!activeParameters) return
+    const dtSeconds = (frame.timeSincePreviousFrame ?? 0) / 1000
+    if (dtSeconds <= 0) return
+    const next = stepTunePreview(
+      state.value,
+      activeParameters,
+      {
+        pitchInputDegrees: pitchInputDegrees.value,
+        pitchInputActive: pitchInputActive.value,
+        speedKmh: state.value.syntheticSpeedKmh,
+        hillsEnabled: terrain.hillsEnabled,
+        hillHeightMeters: terrain.hillHeightMeters,
+        hillSpacingMeters: terrain.hillSpacingMeters,
+        advancedPhysics: terrain.advancedPhysics,
+      },
+      dtSeconds,
+    )
+    state.value = next
+    const groundToBoardAngle = calculateGroundToBoardAngleDegrees(
+      next.angleDegrees,
+      next.terrainSlope,
+    )
+    if (groundToBoardAngleDegrees) groundToBoardAngleDegrees.value = groundToBoardAngle
+    if (speedKmh) speedKmh.value = next.syntheticSpeedKmh
+    if (frame.timestamp - lastReadoutTimestamp.value >= READOUT_INTERVAL_MS) {
+      lastReadoutTimestamp.value = frame.timestamp
+      const current = next.syntheticCurrentAmps
+      boardAngleStr.value = formatSignedDegrees(next.angleDegrees)
+      targetAngleStr.value = formatSignedDegrees(next.targetAngleDegrees)
+      groundToBoardAngleStr.value = formatSignedDegrees(groundToBoardAngle)
+      speedStr.value = next.syntheticSpeedKmh.toFixed(1)
+      currentStr.value = `Motor ${current > 0 ? '+' : ''}${current.toFixed(0)} A`
+      if (hillLoadAmps) hillLoadAmps.value = next.terrainLoadCurrentAmps
+    }
+  }, false)
+
+  const running = active && parameters != null
+  useEffect(() => {
+    frameCallback.setActive(running)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running])
+
+  const handleResetSpeed = useCallback(() => {
+    runOnUI(() => {
+      state.value = resetTunePreviewSpeed(
+        state.value,
+        TUNE_PREVIEW_RESET_SPEED_KMH,
+        scenario.value.advancedPhysics,
+      )
+      speedStr.value = TUNE_PREVIEW_RESET_SPEED_KMH.toFixed(1)
+      if (hillLoadAmps) hillLoadAmps.value = 0
+      if (speedKmh) speedKmh.value = TUNE_PREVIEW_RESET_SPEED_KMH
+    })()
+  }, [state, scenario, speedStr, hillLoadAmps, speedKmh])
+
+  const deckPath = useDerivedValue(() => {
+    const line = tunePreviewDeckLine(
+      state.value.angleDegrees,
+      centerX,
+      DECK_CENTER_Y,
+      DECK_HALF_LENGTH,
+    )
+    const path = Skia.Path.Make()
+    path.moveTo(line.x1, line.y1)
+    path.lineTo(line.x2, line.y2)
+    return path
+  })
+  const targetPath = useDerivedValue(() => {
+    const line = tunePreviewDeckLine(
+      state.value.targetAngleDegrees,
+      centerX,
+      DECK_CENTER_Y,
+      DECK_HALF_LENGTH,
+    )
+    const path = Skia.Path.Make()
+    path.moveTo(line.x1, line.y1)
+    path.lineTo(line.x2, line.y2)
+    return path
+  })
+  const frontArrow = useDerivedValue(() =>
+    pitchInputArrow(state.value.angleDegrees, pitchInputDegrees.value, centerX, -FOOTPAD_OFFSET),
   )
-  const targetAnimatedProps = useAnimatedProps(() =>
-    tunePreviewDeckLine(targetAngleDegrees.value, centerX, DECK_CENTER_Y, DECK_HALF_LENGTH),
+  const rearArrow = useDerivedValue(() =>
+    pitchInputArrow(state.value.angleDegrees, pitchInputDegrees.value, centerX, FOOTPAD_OFFSET),
   )
-  const frontInputArrowProps = useAnimatedProps(() =>
-    pitchInputArrowProps(angleDegrees.value, pitchInputDegrees.value, centerX, -FOOTPAD_OFFSET),
-  )
-  const rearInputArrowProps = useAnimatedProps(() =>
-    pitchInputArrowProps(angleDegrees.value, pitchInputDegrees.value, centerX, FOOTPAD_OFFSET),
-  )
-  const groundAnimatedProps = useAnimatedProps(() => ({
-    transform: [{ translateX: groundOffset.value }],
-  }))
-  const terrainAnimatedProps = useAnimatedProps(() => ({
-    d: terrainPathValue.value,
-  }))
+  const frontArrowPath = useDerivedValue(() => frontArrow.value.path)
+  const frontArrowOpacity = useDerivedValue(() => frontArrow.value.opacity)
+  const rearArrowPath = useDerivedValue(() => rearArrow.value.path)
+  const rearArrowOpacity = useDerivedValue(() => rearArrow.value.opacity)
+  const ticksPath = useDerivedValue(() => {
+    const path = Skia.Path.Make()
+    if (scenario.value.hillsEnabled) return path
+    const offset = groundTravelToVisualOffset(state.value.groundTravelMeters)
+    const tickCount = Math.ceil(canvasWidth / GROUND_TICK_SPACING) + 1
+    for (let index = 0; index < tickCount; index += 1) {
+      const x = index * GROUND_TICK_SPACING + offset
+      path.moveTo(x, GROUND_Y)
+      path.lineTo(x - 4, GROUND_Y + 6)
+    }
+    return path
+  })
+  const terrainPath = useDerivedValue(() => {
+    const path = Skia.Path.Make()
+    const {
+      hillsEnabled: hills,
+      hillHeightMeters: height,
+      hillSpacingMeters: spacing,
+    } = scenario.value
+    if (!hills) return path
+    const travel = state.value.groundTravelMeters
+    for (let x = 0; x <= canvasWidth; x += 6) {
+      const y =
+        GROUND_Y - terrainHeightRelativeToWheel(x - canvasWidth / 2, travel, height, spacing)
+      if (x === 0) path.moveTo(x, y)
+      else path.lineTo(x, y)
+    }
+    return path
+  })
+
   const boardAngleProps = useAnimatedProps(() => {
     'worklet'
     return { text: boardAngleStr.value, defaultValue: boardAngleStr.value }
@@ -142,100 +269,6 @@ export function TunePreview({
     'worklet'
     return { text: currentStr.value, defaultValue: currentStr.value }
   })
-
-  const handleResetSpeed = useCallback(() => {
-    stateRef.current = resetTunePreviewSpeed(
-      stateRef.current,
-      TUNE_PREVIEW_RESET_SPEED_KMH,
-      advancedPhysics,
-    )
-    speedStr.value = TUNE_PREVIEW_RESET_SPEED_KMH.toFixed(1)
-    if (hillLoadAmps) hillLoadAmps.value = 0
-    if (speedKmh) speedKmh.value = TUNE_PREVIEW_RESET_SPEED_KMH
-  }, [advancedPhysics, hillLoadAmps, speedKmh, speedStr])
-
-  useEffect(() => {
-    if (!active || model.status !== 'ready') {
-      lastTimestampRef.current = null
-      return
-    }
-
-    let frame = 0
-    const tick = (timestamp: number) => {
-      const previous = lastTimestampRef.current
-      lastTimestampRef.current = timestamp
-      if (previous != null) {
-        const next = stepTunePreview(
-          stateRef.current,
-          model.parameters,
-          {
-            pitchInputDegrees: pitchInputDegrees.value,
-            pitchInputActive: pitchInputActive.value,
-            speedKmh: stateRef.current.syntheticSpeedKmh,
-            hillsEnabled,
-            hillHeightMeters,
-            hillSpacingMeters,
-            advancedPhysics,
-          },
-          (timestamp - previous) / 1000,
-        )
-        stateRef.current = next
-        angleDegrees.value = next.angleDegrees
-        targetAngleDegrees.value = next.targetAngleDegrees
-        groundOffset.value = groundTravelToVisualOffset(next.groundTravelMeters)
-        terrainPathValue.value = terrainPath(
-          canvasWidth,
-          next.groundTravelMeters,
-          hillHeightMeters,
-          hillSpacingMeters,
-        )
-        const groundToBoardAngle = calculateGroundToBoardAngleDegrees(
-          next.angleDegrees,
-          next.terrainSlope,
-        )
-        if (groundToBoardAngleDegrees) groundToBoardAngleDegrees.value = groundToBoardAngle
-        if (timestamp - lastReadoutTimestampRef.current >= READOUT_INTERVAL_MS) {
-          lastReadoutTimestampRef.current = timestamp
-          const current = next.syntheticCurrentAmps
-          boardAngleStr.value = formatSignedDegrees(next.angleDegrees)
-          targetAngleStr.value = formatSignedDegrees(next.targetAngleDegrees)
-          groundToBoardAngleStr.value = formatSignedDegrees(groundToBoardAngle)
-          speedStr.value = next.syntheticSpeedKmh.toFixed(1)
-          currentStr.value = `Motor ${current > 0 ? '+' : ''}${current.toFixed(0)} A`
-          if (hillLoadAmps) hillLoadAmps.value = next.terrainLoadCurrentAmps
-        }
-        if (speedKmh) speedKmh.value = next.syntheticSpeedKmh
-      }
-      frame = requestAnimationFrame(tick)
-    }
-    frame = requestAnimationFrame(tick)
-    return () => {
-      cancelAnimationFrame(frame)
-      lastTimestampRef.current = null
-    }
-  }, [
-    active,
-    advancedPhysics,
-    angleDegrees,
-    boardAngleStr,
-    canvasWidth,
-    currentStr,
-    groundToBoardAngleDegrees,
-    groundOffset,
-    groundToBoardAngleStr,
-    hillHeightMeters,
-    hillSpacingMeters,
-    hillsEnabled,
-    hillLoadAmps,
-    model,
-    pitchInputActive,
-    pitchInputDegrees,
-    speedKmh,
-    speedStr,
-    targetAngleDegrees,
-    targetAngleStr,
-    terrainPathValue,
-  ])
 
   return (
     <View style={styles.card}>
@@ -319,145 +352,125 @@ export function TunePreview({
           <Text style={styles.unsupportedText}>Missing: {model.missingFields.join(', ')}</Text>
         </View>
       ) : (
-        <>
-          <View style={styles.canvasWrap}>
-            <Svg
-              width="100%"
-              height={122}
-              viewBox={`0 0 ${canvasWidth} 122`}
-              accessibilityLabel="Board angle preview"
-            >
-              <Line
-                x1={centerX - DECK_HALF_LENGTH - ZERO_MARKER_GAP - ZERO_MARKER_LENGTH}
-                y1={DECK_CENTER_Y}
-                x2={centerX - DECK_HALF_LENGTH - ZERO_MARKER_GAP}
-                y2={DECK_CENTER_Y}
-                stroke={theme.palette.slate.textMuted}
-                strokeWidth={1.5}
-                strokeLinecap="round"
-              />
-              <Line
-                x1={centerX + DECK_HALF_LENGTH + ZERO_MARKER_GAP}
-                y1={DECK_CENTER_Y}
-                x2={centerX + DECK_HALF_LENGTH + ZERO_MARKER_GAP + ZERO_MARKER_LENGTH}
-                y2={DECK_CENTER_Y}
-                stroke={theme.palette.slate.textMuted}
-                strokeWidth={1.5}
-                strokeLinecap="round"
-              />
-              <AnimatedLine
-                animatedProps={targetAnimatedProps}
-                stroke={theme.palette.purple.light}
-                strokeWidth={1}
-                strokeDasharray="6 5"
-              />
-              <AnimatedLine
-                animatedProps={deckAnimatedProps}
-                stroke={theme.palette.sky.color}
-                strokeWidth={1}
-                strokeLinecap="round"
-              />
-              <AnimatedPath
-                animatedProps={frontInputArrowProps}
-                stroke={theme.palette.sky.color}
-                strokeWidth={1.5}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                fill="none"
-              />
-              <AnimatedPath
-                animatedProps={rearInputArrowProps}
-                stroke={theme.palette.sky.color}
-                strokeWidth={1.5}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                fill="none"
-              />
-              <Circle
-                cx={centerX}
-                cy={GROUND_Y - WHEEL_RADIUS}
-                r={WHEEL_RADIUS}
-                fill={theme.palette.slate.bg}
-                stroke={theme.palette.slate.textSecondary}
-                strokeWidth={1}
-              />
-              {!hillsEnabled ? (
-                <AnimatedGroup animatedProps={groundAnimatedProps}>
-                  {groundTicks(canvasWidth).map((x, index) => (
-                    <Line
-                      key={index}
-                      x1={x}
-                      y1={GROUND_Y}
-                      x2={x - 4}
-                      y2={GROUND_Y + 6}
-                      stroke={theme.palette.slate.textMuted}
-                      strokeWidth={1}
-                    />
-                  ))}
-                </AnimatedGroup>
-              ) : null}
-              <Circle
-                cx={centerX}
-                cy={GROUND_Y - WHEEL_RADIUS}
-                r={4}
-                fill="none"
-                stroke={theme.palette.slate.border}
-                strokeWidth={1}
-              />
-              {hillsEnabled ? (
-                <AnimatedPath
-                  animatedProps={terrainAnimatedProps}
-                  fill="none"
-                  stroke={theme.palette.slate.textMuted}
-                  strokeWidth={1}
-                />
-              ) : (
-                <Line
-                  x1={0}
-                  y1={GROUND_Y}
-                  x2={canvasWidth}
-                  y2={GROUND_Y}
-                  stroke={theme.palette.slate.textMuted}
-                  strokeWidth={1}
-                />
+        <View style={styles.canvasWrap}>
+          <Canvas style={styles.canvas} accessibilityLabel="Board angle preview">
+            <Line
+              p1={vec(
+                centerX - DECK_HALF_LENGTH - ZERO_MARKER_GAP - ZERO_MARKER_LENGTH,
+                DECK_CENTER_Y,
               )}
-            </Svg>
-            <AnimatedTextInput
-              editable={false}
-              caretHidden
-              pointerEvents="none"
-              underlineColorAndroid="transparent"
-              animatedProps={groundToBoardAngleProps}
-              style={[styles.groundToBoardAngle]}
+              p2={vec(centerX - DECK_HALF_LENGTH - ZERO_MARKER_GAP, DECK_CENTER_Y)}
+              color={theme.palette.slate.textMuted}
+              strokeWidth={1.5}
+              strokeCap="round"
             />
-          </View>
-        </>
+            <Line
+              p1={vec(centerX + DECK_HALF_LENGTH + ZERO_MARKER_GAP, DECK_CENTER_Y)}
+              p2={vec(
+                centerX + DECK_HALF_LENGTH + ZERO_MARKER_GAP + ZERO_MARKER_LENGTH,
+                DECK_CENTER_Y,
+              )}
+              color={theme.palette.slate.textMuted}
+              strokeWidth={1.5}
+              strokeCap="round"
+            />
+            <Path
+              path={targetPath}
+              style="stroke"
+              color={theme.palette.purple.light}
+              strokeWidth={1}
+            >
+              <DashPathEffect intervals={[6, 5]} />
+            </Path>
+            <Path
+              path={deckPath}
+              style="stroke"
+              color={theme.palette.sky.color}
+              strokeWidth={1}
+              strokeCap="round"
+            />
+            <Path
+              path={frontArrowPath}
+              opacity={frontArrowOpacity}
+              style="stroke"
+              color={theme.palette.sky.color}
+              strokeWidth={1.5}
+              strokeCap="round"
+              strokeJoin="round"
+            />
+            <Path
+              path={rearArrowPath}
+              opacity={rearArrowOpacity}
+              style="stroke"
+              color={theme.palette.sky.color}
+              strokeWidth={1.5}
+              strokeCap="round"
+              strokeJoin="round"
+            />
+            <Circle
+              cx={centerX}
+              cy={GROUND_Y - WHEEL_RADIUS}
+              r={WHEEL_RADIUS}
+              color={theme.palette.slate.bg}
+            />
+            <Circle
+              cx={centerX}
+              cy={GROUND_Y - WHEEL_RADIUS}
+              r={WHEEL_RADIUS}
+              style="stroke"
+              color={theme.palette.slate.textSecondary}
+              strokeWidth={1}
+            />
+            <Path
+              path={ticksPath}
+              style="stroke"
+              color={theme.palette.slate.textMuted}
+              strokeWidth={1}
+            />
+            <Circle
+              cx={centerX}
+              cy={GROUND_Y - WHEEL_RADIUS}
+              r={4}
+              style="stroke"
+              color={theme.palette.slate.border}
+              strokeWidth={1}
+            />
+            {hillsEnabled ? (
+              <Path
+                path={terrainPath}
+                style="stroke"
+                color={theme.palette.slate.textMuted}
+                strokeWidth={1}
+              />
+            ) : (
+              <Line
+                p1={vec(0, GROUND_Y)}
+                p2={vec(canvasWidth, GROUND_Y)}
+                color={theme.palette.slate.textMuted}
+                strokeWidth={1}
+              />
+            )}
+          </Canvas>
+          <AnimatedTextInput
+            editable={false}
+            caretHidden
+            pointerEvents="none"
+            underlineColorAndroid="transparent"
+            animatedProps={groundToBoardAngleProps}
+            style={[styles.groundToBoardAngle]}
+          />
+        </View>
       )}
     </View>
   )
 }
 
-function groundTicks(canvasWidth: number): number[] {
-  return Array.from(
-    { length: Math.ceil(canvasWidth / GROUND_TICK_SPACING) + 1 },
-    (_, index) => index * GROUND_TICK_SPACING,
-  )
-}
-
 function formatSignedDegrees(value: number): string {
+  'worklet'
   return `${value > 0 ? '+' : ''}${value.toFixed(1)}°`
 }
 
-function terrainPath(width: number, travel: number, height: number, spacing: number): string {
-  let path = ''
-  for (let x = 0; x <= width; x += 6) {
-    const y = GROUND_Y - terrainHeightRelativeToWheel(x - width / 2, travel, height, spacing)
-    path += `${x === 0 ? 'M' : 'L'}${x},${y} `
-  }
-  return path
-}
-
-function pitchInputArrowProps(
+function pitchInputArrow(
   angleDegrees: number,
   pitchInputDegreesValue: number,
   centerX: number,
@@ -480,10 +493,13 @@ function pitchInputArrowProps(
   const headY = arrowTip - INPUT_ARROW_HEAD
   const opacity = progress <= 0 ? 0 : 0.18 + progress * 0.82
 
-  return {
-    opacity,
-    d: `M${footpadX},${arrowTop} L${footpadX},${arrowTip} M${footpadX - INPUT_ARROW_HEAD},${headY} L${footpadX},${arrowTip} L${footpadX + INPUT_ARROW_HEAD},${headY}`,
-  }
+  const path = Skia.Path.Make()
+  path.moveTo(footpadX, arrowTop)
+  path.lineTo(footpadX, arrowTip)
+  path.moveTo(footpadX - INPUT_ARROW_HEAD, headY)
+  path.lineTo(footpadX, arrowTip)
+  path.lineTo(footpadX + INPUT_ARROW_HEAD, headY)
+  return { path, opacity }
 }
 
 const styles = StyleSheet.create({
@@ -505,7 +521,7 @@ const styles = StyleSheet.create({
   },
   headerMetrics: { alignItems: 'flex-end', gap: 1 },
 
-  unsupported: { height: 122, alignItems: 'center', justifyContent: 'center', gap: 5 },
+  unsupported: { height: CANVAS_HEIGHT, alignItems: 'center', justifyContent: 'center', gap: 5 },
   unsupportedTitle: { color: theme.palette.slate.textPrimary, fontSize: 13, fontWeight: '800' },
   unsupportedText: { color: theme.palette.slate.textMuted, fontSize: 11 },
   legend: { alignItems: 'flex-start', gap: 2, marginTop: 14 },
@@ -572,7 +588,8 @@ const styles = StyleSheet.create({
     padding: 0,
     fontVariant: ['tabular-nums'],
   },
-  canvasWrap: { position: 'relative', height: 122 },
+  canvasWrap: { position: 'relative', height: CANVAS_HEIGHT },
+  canvas: { width: '100%', height: CANVAS_HEIGHT },
   groundToBoardAngle: {
     position: 'absolute',
     left: 0,
