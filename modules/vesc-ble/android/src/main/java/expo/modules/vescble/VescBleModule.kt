@@ -133,6 +133,8 @@ class VescBleModule : Module() {
 
     OnActivityEntersForeground {
       frontendActive = true
+      // User opened the app again — re-arm companion auto start immediately.
+      CompanionRestartGate.clear(context.applicationContext)
     }
     OnActivityEntersBackground {
       frontendActive = false

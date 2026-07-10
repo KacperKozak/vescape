@@ -436,6 +436,7 @@ final class AppDataRepository {
     "autoConnect": true,
     "autoRecording": false,
     "companionPresenceEnabled": false,
+    "companionPresenceCooldownMinutes": 60,
     "selectedBoardId": NSNull(),
     "riderId": NSNull(),
     "riderName": NSNull(),

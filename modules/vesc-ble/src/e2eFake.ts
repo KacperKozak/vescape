@@ -63,6 +63,7 @@ const e2eSettings: AppSettings = {
   socEstimateWindowSeconds: 20,
   connectionSoundsEnabled: true,
   companionPresenceEnabled: false,
+  companionPresenceCooldownMinutes: 60,
   telemetryPollRateHz: 20,
   wearMirrorIntervalMs: 500,
   riderId: null,

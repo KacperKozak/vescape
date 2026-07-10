@@ -498,6 +498,11 @@ internal class BoardSessionController(private val service: VescForegroundService
         isStoppingService = false
         VescForegroundService.appDataScope.launch {
             val appCtx = service.applicationContext
+            if (CompanionRestartGate.isSuppressed(appCtx)) {
+                Log.i(VESC_SESSION_TAG, "Companion auto start suppressed after manual exit")
+                scheduler.post { stopIfIdle() }
+                return@launch
+            }
             val boardId = selectedCompanionBoardId(AppDataRepository.get(appCtx), address)
             if (boardId == null) {
                 scheduler.post { stopIfIdle() }
@@ -660,6 +665,7 @@ internal class BoardSessionController(private val service: VescForegroundService
     }
 
     fun exitFromNotification() {
+        armCompanionRestartGate()
         isStoppingService = true
         service.stopForeground(Service.STOP_FOREGROUND_REMOVE)
         notificationController.cancel()
@@ -667,6 +673,18 @@ internal class BoardSessionController(private val service: VescForegroundService
         stopLocationUpdates()
         closeAppTask()
         service.stopSelf()
+    }
+
+    // Manual exit means the user is done riding: pause companion auto start for the configured
+    // cooldown so the board reappearing doesn't immediately relaunch the app.
+    private fun armCompanionRestartGate() {
+        val appCtx = service.applicationContext
+        VescForegroundService.appDataScope.launch {
+            val settings = AppDataRepository.get(appCtx).getTypedSettings()
+            if (settings.companionPresenceEnabled) {
+                CompanionRestartGate.suppressFor(appCtx, settings.companionPresenceCooldownMinutes)
+            }
+        }
     }
 
     private fun startGpsMonitoring() {

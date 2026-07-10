@@ -41,6 +41,12 @@ internal fun validTelemetryPollRateHz(value: Any?): Int? =
     ?.toInt()
     ?.coerceIn(0, 100)
 
+/** Companion auto-start pause after manual app exit, minutes; 0 = off, capped at 24h. */
+internal fun validCompanionCooldownMinutes(value: Any?): Int? =
+  (value as? Number)
+    ?.toInt()
+    ?.coerceIn(0, 1440)
+
 /** Watch Mirror push interval in ms; floored at 50ms (20Hz), capped at 10s. */
 internal fun validWearMirrorIntervalMs(value: Any?): Int? =
   (value as? Number)
@@ -195,6 +201,7 @@ class AppDataRepository private constructor(private val context: Context) {
       telemetryPollRateHz = req("telemetryPollRateHz", 20, ::validTelemetryPollRateHz),
       wearMirrorIntervalMs = req("wearMirrorIntervalMs", 500, ::validWearMirrorIntervalMs),
       companionPresenceEnabled = req("companionPresenceEnabled", false) { it as? Boolean },
+      companionPresenceCooldownMinutes = req("companionPresenceCooldownMinutes", 60, ::validCompanionCooldownMinutes),
       riderId = opt("riderId") { it as? String },
       riderName = opt("riderName") { it as? String },
       riderColor = opt("riderColor") { it as? String },
@@ -249,6 +256,8 @@ class AppDataRepository private constructor(private val context: Context) {
       "wearMirrorIntervalMs" ->
         validWearMirrorIntervalMs(value) ?: return@withContext
       "companionPresenceEnabled" -> value as? Boolean ?: return@withContext
+      "companionPresenceCooldownMinutes" ->
+        validCompanionCooldownMinutes(value) ?: return@withContext
       "riderId", "riderName", "riderColor" -> value as? String
       else -> return@withContext
     }
@@ -279,6 +288,7 @@ class AppDataRepository private constructor(private val context: Context) {
         "telemetryPollRateHz" -> d.telemetryPollRateHz
         "wearMirrorIntervalMs" -> d.wearMirrorIntervalMs
         "companionPresenceEnabled" -> d.companionPresenceEnabled
+        "companionPresenceCooldownMinutes" -> d.companionPresenceCooldownMinutes
         "riderId" -> d.riderId
         "riderName" -> d.riderName
         "riderColor" -> d.riderColor
@@ -537,6 +547,7 @@ fun AppSettings.toMap(): Map<String, Any?> = mapOf(
   "telemetryPollRateHz" to telemetryPollRateHz,
   "wearMirrorIntervalMs" to wearMirrorIntervalMs,
   "companionPresenceEnabled" to companionPresenceEnabled,
+  "companionPresenceCooldownMinutes" to companionPresenceCooldownMinutes,
   "riderId" to riderId,
   "riderName" to riderName,
   "riderColor" to riderColor,

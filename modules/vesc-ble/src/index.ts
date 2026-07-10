@@ -687,6 +687,11 @@ export interface AppSettings {
   /** Android-only: use CompanionDeviceManager presence to connect selected board when nearby. */
   companionPresenceEnabled: boolean
   /**
+   * Android-only: minutes to pause companion auto start after the user exits the app
+   * manually, so the board reappearing doesn't immediately relaunch it. 0 = off.
+   */
+  companionPresenceCooldownMinutes: number
+  /**
    * Max telemetry poll rate in Hz, applied as a minimum spacing floor between
    * requests. Polling stays response-paced (the next request is only sent once
    * the previous reply lands), so this caps the rate without ever outrunning the
