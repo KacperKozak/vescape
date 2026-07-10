@@ -39,7 +39,6 @@ import { basicSliderColor, basicSliderIcon } from '@/components/domain/tune/basi
 import { TuneGroupGrid } from '@/components/ui/tune/TuneGroupGrid'
 import { TuneSyncBar } from '@/components/ui/tune/TuneSyncBar'
 import { TunePreview } from '@/components/ui/tune/TunePreview'
-import { PitchInputControl } from '@/components/ui/tune/PitchInputControl'
 import {
   TunePreviewScenarioControls,
   type HillsPresetId,
@@ -65,6 +64,8 @@ export default function TuneScreen() {
   const isFocused = useIsFocused()
   const pitchInputDegrees = useSharedValue(0)
   const pitchInputActive = useSharedValue(false)
+  const previewSpeedKmh = useSharedValue(15)
+  const groundToBoardAngleDegrees = useSharedValue(0)
   const [hillsPreset, setHillsPreset] = useState<HillsPresetId>('flat')
   const [hillHeightMeters, setHillHeightMeters] = useState(2.5)
   const [hillSpacingMeters, setHillSpacingMeters] = useState(30)
@@ -239,10 +240,9 @@ export default function TuneScreen() {
               active={isFocused}
               onHelp={() => setPreviewHelpVisible(true)}
               hillLoadAmps={hillLoadAmps}
+              speedKmh={previewSpeedKmh}
+              groundToBoardAngleDegrees={groundToBoardAngleDegrees}
             />
-            <View style={styles.balancePinned}>
-              <PitchInputControl angleDegrees={pitchInputDegrees} active={pitchInputActive} />
-            </View>
           </View>
           <ScrollView
             style={styles.formScroll}
@@ -263,6 +263,10 @@ export default function TuneScreen() {
               onHillSpacingChange={setHillSpacingMeters}
               hillsEnabled={hillsEnabled}
               hillLoadAmps={hillLoadAmps}
+              pitchInputDegrees={pitchInputDegrees}
+              pitchInputActive={pitchInputActive}
+              speedKmh={previewSpeedKmh}
+              groundToBoardAngleDegrees={groundToBoardAngleDegrees}
             />
 
             {profileError ? (
@@ -424,7 +428,7 @@ export default function TuneScreen() {
         </View>
       ) : null}
 
-      {hasTuneView ? (
+      {hasTuneView && !modals.editor ? (
         <TuneSyncBar
           state={syncBarState}
           onSave={handleSave}
@@ -433,7 +437,7 @@ export default function TuneScreen() {
           onUpdateTune={acceptAllBoardValues}
           onDiscard={discardAllEdits}
           onRetryConfig={() => void retryBoardSnapshot()}
-          bottomOffset={insets.bottom + 16}
+          bottomOffset={Math.max(insets.bottom, 24) + 16}
         />
       ) : null}
 
@@ -626,7 +630,6 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: theme.palette.slate.border,
   },
-  balancePinned: { paddingHorizontal: 16 },
   previewOptionsHeader: {
     paddingHorizontal: 4,
     flexDirection: 'row',

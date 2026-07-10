@@ -294,7 +294,7 @@ const styles = StyleSheet.create({
     left: 16,
     right: 16,
     zIndex: 30,
-    alignItems: 'stretch',
+    alignItems: 'center',
   },
   pill: {
     flexDirection: 'row',
@@ -315,7 +315,6 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   left: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
@@ -326,8 +325,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   message: {
-    flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
     gap: 2,
+    paddingRight: 10,
   },
   detailText: {
     color: theme.palette.slate.textSecondary,

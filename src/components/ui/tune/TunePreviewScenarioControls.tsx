@@ -1,21 +1,30 @@
-import { useState } from 'react'
+/* eslint-disable react-hooks/immutability */
+import { useCallback, useRef, useState } from 'react'
 import { Pressable, StyleSheet, TextInput, View } from 'react-native'
 import { Text } from '@/components/ui/base/Text'
-import { AtomIcon, CaretDownIcon, MountainsIcon } from 'phosphor-react-native'
+import { AtomIcon, CaretDownIcon, MountainsIcon, WaveSineIcon } from 'phosphor-react-native'
 import Animated, {
+  Easing,
   FadeIn,
   FadeOut,
+  cancelAnimation,
+  useAnimatedReaction,
   useAnimatedProps,
+  withTiming,
   type SharedValue,
 } from 'react-native-reanimated'
+import { scheduleOnRN } from 'react-native-worklets'
 
 import { Select, type SelectOption } from '@/components/ui/forms/Select'
 import { SelectCard } from '@/components/ui/forms/SelectCard'
+import { PitchInputControl } from '@/components/ui/tune/PitchInputControl'
 import { TuneDial } from '@/components/ui/tune/TuneDial'
 import { theme } from '@/constants/theme'
 import {
+  MAX_PITCH_INPUT_RATE_DEGREES_PER_SECOND,
   TUNE_PREVIEW_MOTOR_PRESETS,
   calculateTerrainLoadCurrentAmps,
+  pitchInputRateToControlDegrees,
   resolveTunePreviewPhysics,
   type TunePreviewAdvancedPhysics,
   type TunePreviewMotorPresetId,
@@ -47,6 +56,28 @@ const HILLS_OPTIONS: SelectOption<HillsPresetId>[] = [
   { value: 'custom', label: 'Enter your own' },
 ]
 
+type MovementPresetId = 'none' | 'manual' | 'slow' | 'rapid' | 'frontBack' | 'custom'
+type MovementDirection = 'nose' | 'tail'
+
+const RAPID_MOVEMENT_RATE_DEGREES_PER_SECOND = 125
+const SLOW_MOVEMENT_RATE_DEGREES_PER_SECOND = 128
+const FRONT_BACK_MOVEMENT_RATE_DEGREES_PER_SECOND = 125
+const FORWARD_MOVEMENT_LOW_SPEED_KMH = 15
+const FORWARD_MOVEMENT_HIGH_SPEED_KMH = 30
+const MOVEMENT_BOARD_FULL_POWER_GROUND_ANGLE_DEGREES = 7.5
+const MOVEMENT_BOARD_MAX_GROUND_ANGLE_DEGREES = 15
+const AUTO_MOVEMENT_SMOOTH_MS = 1400
+const AUTO_MOVEMENT_RELEASE_MS = 700
+
+const MOVEMENT_OPTIONS: SelectOption<MovementPresetId>[] = [
+  { value: 'none', label: 'Off' },
+  { value: 'slow', label: 'Wide speed range · 5-35 km/h' },
+  { value: 'rapid', label: 'Quick speed range · 15-30 km/h' },
+  { value: 'frontBack', label: 'Forward/back range · -10-10 km/h' },
+  { value: 'custom', label: 'Custom range' },
+  { value: 'manual', label: 'Manual pitch slider' },
+]
+
 interface TunePreviewScenarioControlsProps {
   advancedPhysics: TunePreviewAdvancedPhysics
   onAdvancedPhysicsChange: (physics: TunePreviewAdvancedPhysics) => void
@@ -58,6 +89,10 @@ interface TunePreviewScenarioControlsProps {
   onHillSpacingChange: (value: number) => void
   hillsEnabled: boolean
   hillLoadAmps: SharedValue<number>
+  pitchInputDegrees: SharedValue<number>
+  pitchInputActive: SharedValue<boolean>
+  speedKmh: SharedValue<number>
+  groundToBoardAngleDegrees: SharedValue<number>
 }
 
 export function TunePreviewScenarioControls({
@@ -71,8 +106,19 @@ export function TunePreviewScenarioControls({
   onHillSpacingChange,
   hillsEnabled,
   hillLoadAmps,
+  pitchInputDegrees,
+  pitchInputActive,
+  speedKmh,
+  groundToBoardAngleDegrees,
 }: TunePreviewScenarioControlsProps) {
   const [advancedExpanded, setAdvancedExpanded] = useState(false)
+  const [movementPreset, setMovementPreset] = useState<MovementPresetId>('slow')
+  const [customLowSpeedKmh, setCustomLowSpeedKmh] = useState(10)
+  const [customHighSpeedKmh, setCustomHighSpeedKmh] = useState(25)
+  const [customRateDegreesPerSecond, setCustomRateDegreesPerSecond] = useState(100)
+  const [movementSummary, setMovementSummary] = useState('Wide speed range · ±128°/s')
+  const movementDirectionRef = useRef<MovementDirection>('nose')
+  const movementPresetRef = useRef<MovementPresetId>('slow')
   const physics = resolveTunePreviewPhysics(advancedPhysics)
   const tenPercentGradeCurrent = calculateTerrainLoadCurrentAmps(0.1, physics)
   const updatePhysics = (patch: Partial<TunePreviewAdvancedPhysics>) =>
@@ -89,8 +135,162 @@ export function TunePreviewScenarioControls({
     }
   }
 
+  const applyMovementSample = useCallback(
+    (speed: number, groundAngleDegrees: number) => {
+      const activeMovementPreset = movementPresetRef.current
+      if (activeMovementPreset === 'manual' || activeMovementPreset === 'none') return
+
+      const groundAngleMagnitude = Math.abs(groundAngleDegrees)
+      if (groundAngleMagnitude >= MOVEMENT_BOARD_MAX_GROUND_ANGLE_DEGREES) {
+        pitchInputActive.value = true
+        pitchInputDegrees.value = withTiming(0, {
+          duration: AUTO_MOVEMENT_RELEASE_MS,
+          easing: Easing.out(Easing.cubic),
+        })
+        setMovementSummary(`Paused · board ${groundAngleDegrees.toFixed(1)}° to ground`)
+        return
+      }
+
+      const lowSpeed =
+        activeMovementPreset === 'frontBack'
+          ? -10
+          : activeMovementPreset === 'rapid'
+            ? FORWARD_MOVEMENT_LOW_SPEED_KMH
+            : activeMovementPreset === 'slow'
+              ? 5
+              : customLowSpeedKmh
+      const highSpeed =
+        activeMovementPreset === 'frontBack'
+          ? 10
+          : activeMovementPreset === 'rapid'
+            ? FORWARD_MOVEMENT_HIGH_SPEED_KMH
+            : activeMovementPreset === 'slow'
+              ? 35
+              : customHighSpeedKmh
+      const rate =
+        activeMovementPreset === 'rapid'
+          ? RAPID_MOVEMENT_RATE_DEGREES_PER_SECOND
+          : activeMovementPreset === 'slow'
+            ? SLOW_MOVEMENT_RATE_DEGREES_PER_SECOND
+            : activeMovementPreset === 'frontBack'
+              ? FRONT_BACK_MOVEMENT_RATE_DEGREES_PER_SECOND
+              : customRateDegreesPerSecond
+
+      const lowerBound = Math.min(lowSpeed, highSpeed)
+      const upperBound = Math.max(lowSpeed, highSpeed)
+
+      if (speed <= lowerBound) movementDirectionRef.current = 'nose'
+      if (speed >= upperBound) movementDirectionRef.current = 'tail'
+
+      const rateScale =
+        groundAngleMagnitude <= MOVEMENT_BOARD_FULL_POWER_GROUND_ANGLE_DEGREES
+          ? 1
+          : (MOVEMENT_BOARD_MAX_GROUND_ANGLE_DEGREES - groundAngleMagnitude) /
+            (MOVEMENT_BOARD_MAX_GROUND_ANGLE_DEGREES -
+              MOVEMENT_BOARD_FULL_POWER_GROUND_ANGLE_DEGREES)
+      const scaledRate = rate * rateScale
+      const signedRate = movementDirectionRef.current === 'nose' ? -scaledRate : scaledRate
+      pitchInputActive.value = true
+      pitchInputDegrees.value = withTiming(pitchInputRateToControlDegrees(signedRate), {
+        duration: AUTO_MOVEMENT_SMOOTH_MS,
+        easing: Easing.out(Easing.cubic),
+      })
+      setMovementSummary(
+        `${movementDirectionRef.current === 'nose' ? 'Nose' : 'Tail'} ${signedRate > 0 ? '+' : ''}${Math.round(signedRate)}°/s · ${Math.round(rateScale * 100)}%`,
+      )
+    },
+    [
+      customHighSpeedKmh,
+      customLowSpeedKmh,
+      customRateDegreesPerSecond,
+      pitchInputActive,
+      pitchInputDegrees,
+    ],
+  )
+
+  const handleMovementPresetChange = (preset: MovementPresetId) => {
+    movementPresetRef.current = preset
+    setMovementPreset(preset)
+    movementDirectionRef.current = 'nose'
+    if (preset === 'manual' || preset === 'none') {
+      cancelAnimation(pitchInputDegrees)
+      pitchInputActive.value = false
+      pitchInputDegrees.value = 0
+    }
+    if (preset === 'manual') setMovementSummary('Manual pitch slider')
+    if (preset === 'none') setMovementSummary('Off')
+  }
+
+  useAnimatedReaction(
+    () => ({
+      speed: speedKmh.value,
+      groundAngleDegrees: groundToBoardAngleDegrees.value,
+    }),
+    (next, previous) => {
+      if (
+        next.speed !== previous?.speed ||
+        next.groundAngleDegrees !== previous?.groundAngleDegrees
+      ) {
+        scheduleOnRN(applyMovementSample, next.speed, next.groundAngleDegrees)
+      }
+    },
+    [applyMovementSample],
+  )
+
   return (
     <View style={styles.stack}>
+      <SelectCard
+        icon={WaveSineIcon}
+        iconColor={theme.palette.cyan.color}
+        title="Balance Input"
+        description={movementSummary}
+        options={MOVEMENT_OPTIONS}
+        value={movementPreset}
+        onChange={handleMovementPresetChange}
+      >
+        {movementPreset === 'custom' ? (
+          <>
+            <Text style={styles.description}>Low speed · {customLowSpeedKmh.toFixed(0)} km/h</Text>
+            <TuneDial
+              value={customLowSpeedKmh}
+              min={-30}
+              max={45}
+              step={1}
+              unit="km/h"
+              valueChangeMode="live"
+              onValueChange={setCustomLowSpeedKmh}
+            />
+            <Text style={styles.description}>
+              High speed · {customHighSpeedKmh.toFixed(0)} km/h
+            </Text>
+            <TuneDial
+              value={customHighSpeedKmh}
+              min={-15}
+              max={50}
+              step={1}
+              unit="km/h"
+              valueChangeMode="live"
+              onValueChange={setCustomHighSpeedKmh}
+            />
+            <Text style={styles.description}>
+              Pitch rate · ±{customRateDegreesPerSecond.toFixed(0)}°/s
+            </Text>
+            <TuneDial
+              value={customRateDegreesPerSecond}
+              min={10}
+              max={MAX_PITCH_INPUT_RATE_DEGREES_PER_SECOND}
+              step={1}
+              unit="°/s"
+              valueChangeMode="live"
+              onValueChange={setCustomRateDegreesPerSecond}
+            />
+          </>
+        ) : null}
+        {movementPreset === 'manual' ? (
+          <PitchInputControl angleDegrees={pitchInputDegrees} active={pitchInputActive} />
+        ) : null}
+      </SelectCard>
+
       <SelectCard
         icon={MountainsIcon}
         iconColor={theme.palette.green.color}

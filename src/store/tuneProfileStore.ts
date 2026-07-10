@@ -120,7 +120,10 @@ function boardDiff(
 ): TuneProfileBoardDiff[] {
   if (!profile) return []
   return Object.entries(boardFields)
-    .filter(([, boardValue]) => boardValue !== null)
+    .filter(
+      ([fieldId, boardValue]) =>
+        boardValue !== null && Object.prototype.hasOwnProperty.call(profile.fields, fieldId),
+    )
     .flatMap(([fieldId, boardValue]) =>
       sameFieldValue(profile.fields[fieldId], boardValue)
         ? []
@@ -493,8 +496,8 @@ export const useTuneProfileStore = create<TuneProfileState & TuneProfileActions>
     set((state) => {
       const profile = state.activeProfile
       if (!profile) return state
-      const draftFields = Object.entries(state.boardFields).reduce(
-        (next, [fieldId, value]) => nextDraftWithField(profile, next, fieldId, value),
+      const draftFields = state.boardDiff.reduce(
+        (next, { fieldId, boardValue }) => nextDraftWithField(profile, next, fieldId, boardValue),
         { ...state.draftFields },
       )
       return {

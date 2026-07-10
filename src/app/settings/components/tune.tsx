@@ -19,7 +19,6 @@ import { useTriggerRef } from '@/components/ui/forms/Dropdown'
 import { BasicSliderCell } from '@/components/ui/tune/BasicSliderCell'
 import { TuneDial } from '@/components/ui/tune/TuneDial'
 import { TunePreview } from '@/components/ui/tune/TunePreview'
-import { PitchInputControl } from '@/components/ui/tune/PitchInputControl'
 import {
   TunePreviewScenarioControls,
   type HillsPresetId,
@@ -254,6 +253,8 @@ function BasicSliderCellShowcase() {
 function TunePreviewShowcase() {
   const pitchInputDegrees = useSharedValue(0)
   const pitchInputActive = useSharedValue(false)
+  const previewSpeedKmh = useSharedValue(15)
+  const groundToBoardAngleDegrees = useSharedValue(0)
   const [scenario, setScenario] = useState('flat')
   const [hillsPreset, setHillsPreset] = useState<HillsPresetId>('flat')
   const [hillHeightMeters, setHillHeightMeters] = useState(2.5)
@@ -334,8 +335,9 @@ function TunePreviewShowcase() {
         advancedPhysics={advancedPhysics}
         onHelp={() => {}}
         hillLoadAmps={hillLoadAmps}
+        speedKmh={previewSpeedKmh}
+        groundToBoardAngleDegrees={groundToBoardAngleDegrees}
       />
-      <PitchInputControl angleDegrees={pitchInputDegrees} active={pitchInputActive} />
       <TunePreviewScenarioControls
         advancedPhysics={advancedPhysics}
         onAdvancedPhysicsChange={setAdvancedPhysics}
@@ -347,6 +349,10 @@ function TunePreviewShowcase() {
         onHillSpacingChange={setHillSpacingMeters}
         hillsEnabled={hillsEnabled}
         hillLoadAmps={hillLoadAmps}
+        pitchInputDegrees={pitchInputDegrees}
+        pitchInputActive={pitchInputActive}
+        speedKmh={previewSpeedKmh}
+        groundToBoardAngleDegrees={groundToBoardAngleDegrees}
       />
     </ShowcaseCard>
   )
@@ -410,7 +416,7 @@ export default function TunePage() {
       <ScrollView contentContainerStyle={styles.content}>
         <IconHero
           icon={ToolboxIcon}
-          description="TuneDial, BasicSliderCell, Tune Preview, TuneSyncBar, TuneGroupGrid."
+          description="TuneDial, BasicSliderCell, Tune Preview, Movement Board Test, TuneSyncBar, TuneGroupGrid."
         />
         <TuneDialShowcase />
         <CompactTuneDialShowcase />

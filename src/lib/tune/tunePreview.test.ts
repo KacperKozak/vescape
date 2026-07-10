@@ -19,6 +19,8 @@ import {
   createTunePreviewModel,
   createTunePreviewState,
   groundTravelToVisualOffset,
+  pitchInputControlToRate,
+  pitchInputRateToControlDegrees,
   resetTunePreviewSpeed,
   resolveTunePreviewPhysics,
   speedKmhToErpm,
@@ -204,6 +206,24 @@ describe('Tune Preview longitudinal response', () => {
 
     expect(half / full).toBeGreaterThan(0.7)
     expect(negativeHalf).toBeCloseTo(-half)
+  })
+
+  test('maps requested Pitch Input rates back to slider control values', () => {
+    const controls = [
+      -MAX_PITCH_INPUT_RATE_DEGREES_PER_SECOND,
+      -125,
+      0,
+      125,
+      MAX_PITCH_INPUT_RATE_DEGREES_PER_SECOND,
+    ].map(pitchInputRateToControlDegrees)
+
+    expect(controls[0]).toBeCloseTo(-MAX_PITCH_INPUT_DEGREES)
+    expect(controls[2]).toBe(0)
+    expect(controls[4]).toBeCloseTo(MAX_PITCH_INPUT_DEGREES)
+    expect(controls[1]).toBeLessThan(0)
+    expect(controls[3]).toBeGreaterThan(0)
+    expect(pitchInputControlToRate(controls[1])).toBeCloseTo(-125)
+    expect(pitchInputControlToRate(controls[3])).toBeCloseTo(125)
   })
 
   test('recovers a pre-filter runtime state preserved by Fast Refresh', () => {

@@ -46,6 +46,14 @@ describe('TuneDial physics', () => {
     expect(layout.renderMidpointTicks).toBe(false)
   })
 
+  test('huge ERPM ranges use sparse rendered ticks', () => {
+    const layout = computeTuneDialLayout(0, 100000, 10)
+
+    expect(Math.ceil(layout.totalSteps / layout.majorEvery)).toBeLessThanOrEqual(41)
+    expect(Math.ceil(layout.totalSteps / layout.minorEvery)).toBeLessThanOrEqual(180)
+    expect(layout.labelEveryStep).toBe(false)
+  })
+
   test('haptic cadence follows every selectable value', () => {
     expect(computeHapticStepSpacing()).toBe(1)
   })

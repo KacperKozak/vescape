@@ -43,6 +43,8 @@ interface TunePreviewProps {
   active?: boolean
   onHelp: () => void
   hillLoadAmps?: SharedValue<number>
+  speedKmh?: SharedValue<number>
+  groundToBoardAngleDegrees?: SharedValue<number>
 }
 
 const GROUND_Y = 78
@@ -69,6 +71,8 @@ export function TunePreview({
   active = true,
   onHelp,
   hillLoadAmps,
+  speedKmh,
+  groundToBoardAngleDegrees,
 }: TunePreviewProps) {
   const model = useMemo(
     () => createTunePreviewModel(fields),
@@ -134,7 +138,8 @@ export function TunePreview({
     )
     speedStr.value = TUNE_PREVIEW_RESET_SPEED_KMH.toFixed(1)
     if (hillLoadAmps) hillLoadAmps.value = 0
-  }, [advancedPhysics, hillLoadAmps, speedStr])
+    if (speedKmh) speedKmh.value = TUNE_PREVIEW_RESET_SPEED_KMH
+  }, [advancedPhysics, hillLoadAmps, speedKmh, speedStr])
 
   useEffect(() => {
     if (!active || model.status !== 'ready') {
@@ -171,18 +176,22 @@ export function TunePreview({
           hillHeightMeters,
           hillSpacingMeters,
         )
+        const groundToBoardAngle = calculateGroundToBoardAngleDegrees(
+          next.angleDegrees,
+          next.terrainSlope,
+        )
+        if (groundToBoardAngleDegrees) groundToBoardAngleDegrees.value = groundToBoardAngle
         if (timestamp - lastReadoutTimestampRef.current >= READOUT_INTERVAL_MS) {
           lastReadoutTimestampRef.current = timestamp
           const current = next.syntheticCurrentAmps
           boardAngleStr.value = formatSignedDegrees(next.angleDegrees)
           targetAngleStr.value = formatSignedDegrees(next.targetAngleDegrees)
-          groundToBoardAngleStr.value = formatSignedDegrees(
-            calculateGroundToBoardAngleDegrees(next.angleDegrees, next.terrainSlope),
-          )
+          groundToBoardAngleStr.value = formatSignedDegrees(groundToBoardAngle)
           speedStr.value = next.syntheticSpeedKmh.toFixed(1)
           currentStr.value = `Motor ${current > 0 ? '+' : ''}${current.toFixed(0)} A`
           if (hillLoadAmps) hillLoadAmps.value = next.terrainLoadCurrentAmps
         }
+        if (speedKmh) speedKmh.value = next.syntheticSpeedKmh
       }
       frame = requestAnimationFrame(tick)
     }
@@ -198,6 +207,7 @@ export function TunePreview({
     boardAngleStr,
     canvasWidth,
     currentStr,
+    groundToBoardAngleDegrees,
     groundOffset,
     groundToBoardAngleStr,
     hillHeightMeters,
@@ -207,6 +217,7 @@ export function TunePreview({
     model,
     pitchInputActive,
     pitchInputDegrees,
+    speedKmh,
     speedStr,
     targetAngleDegrees,
     targetAngleStr,

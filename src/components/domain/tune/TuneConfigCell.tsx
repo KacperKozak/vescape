@@ -75,7 +75,10 @@ export const TuneConfigCell = forwardRef<View, TuneConfigCellProps>(function Tun
           </Pressable>
         ) : null}
         <View style={styles.cellHeaderRow}>
-          <Text style={[styles.cellLabel, dirty && styles.cellLabelWithRevert]} numberOfLines={2}>
+          <Text
+            style={[styles.cellLabel, hasActions && styles.cellLabelWithAction]}
+            numberOfLines={2}
+          >
             {field.label}
           </Text>
         </View>
@@ -142,12 +145,12 @@ const styles = StyleSheet.create({
   },
   cellAcceptButton: {
     position: 'absolute',
-    top: 39,
-    right: 6,
+    top: 7,
+    right: 8,
     zIndex: 1,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: theme.palette.green.bg,
@@ -200,7 +203,7 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
   },
-  cellLabelWithRevert: {
+  cellLabelWithAction: {
     paddingRight: 26,
   },
 })

@@ -229,6 +229,49 @@ test('does not mark rounded-equivalent board values as changed', async () => {
   expect(useTuneProfileStore.getState().hasBoardDiff).toBe(false)
 })
 
+test('does not mark board-only snapshot fields as board diffs', async () => {
+  const { useTuneProfileStore } = await import('./tuneProfileStore')
+
+  await useTuneProfileStore.getState().loadProfiles('board-1')
+  useTuneProfileStore.getState().setBoardSnapshot({
+    capturedAt: 1000,
+    boardId: 'board-1',
+    canId: 0,
+    schemaHash: 'schema',
+    rawConfigHash: 'raw',
+    rawConfigLength: 2,
+    fwVersion: null,
+    missingFieldIds: [],
+    groups: [
+      {
+        id: 'general',
+        title: 'General',
+        fields: [
+          {
+            id: 'kp',
+            label: 'Angle P',
+            value: 20,
+            unit: null,
+            min: 0,
+            max: 50,
+          },
+          {
+            id: 'new_board_field',
+            label: 'New Board Field',
+            value: 1,
+            unit: null,
+            min: 0,
+            max: 2,
+          },
+        ],
+      },
+    ],
+  })
+
+  expect(useTuneProfileStore.getState().boardDiff).toEqual([])
+  expect(useTuneProfileStore.getState().hasBoardDiff).toBe(false)
+})
+
 test('does not keep rounded-equivalent draft values dirty', async () => {
   const { useTuneProfileStore } = await import('./tuneProfileStore')
 
@@ -294,6 +337,51 @@ test('accepts board values into draft and saves through normal profile flow', as
   })
   expect(useTuneProfileStore.getState().boardDiff).toEqual([])
   expect(useTuneProfileStore.getState().hasBoardDiff).toBe(false)
+})
+
+test('accept all board values ignores board-only snapshot fields', async () => {
+  const { useTuneProfileStore } = await import('./tuneProfileStore')
+
+  await useTuneProfileStore.getState().loadProfiles('board-1')
+  useTuneProfileStore.getState().setBoardSnapshot({
+    capturedAt: 1000,
+    boardId: 'board-1',
+    canId: 0,
+    schemaHash: 'schema',
+    rawConfigHash: 'raw',
+    rawConfigLength: 2,
+    fwVersion: null,
+    missingFieldIds: [],
+    groups: [
+      {
+        id: 'general',
+        title: 'General',
+        fields: [
+          {
+            id: 'kp',
+            label: 'Angle P',
+            value: 22,
+            unit: null,
+            min: 0,
+            max: 50,
+          },
+          {
+            id: 'new_board_field',
+            label: 'New Board Field',
+            value: 1,
+            unit: null,
+            min: 0,
+            max: 2,
+          },
+        ],
+      },
+    ],
+  })
+
+  useTuneProfileStore.getState().acceptAllBoardValues()
+
+  expect(useTuneProfileStore.getState().draftFields).toEqual({ kp: 22 })
+  expect(useTuneProfileStore.getState().hasDirtyFields).toBe(true)
 })
 
 test('saves dirty fields through native saveProfile and clears the draft', async () => {

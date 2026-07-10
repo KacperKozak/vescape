@@ -396,6 +396,19 @@ export function pitchInputControlToRate(controlDegrees: number): number {
   return Math.sign(normalized) * easedMagnitude * MAX_PITCH_INPUT_RATE_DEGREES_PER_SECOND
 }
 
+export function pitchInputRateToControlDegrees(rateDegreesPerSecond: number): number {
+  const normalizedRate =
+    clampFinite(
+      rateDegreesPerSecond,
+      -MAX_PITCH_INPUT_RATE_DEGREES_PER_SECOND,
+      MAX_PITCH_INPUT_RATE_DEGREES_PER_SECOND,
+      0,
+    ) / MAX_PITCH_INPUT_RATE_DEGREES_PER_SECOND
+  const magnitude = Math.abs(normalizedRate)
+  const normalizedControl = 1 - Math.sqrt(1 - magnitude)
+  return Math.sign(normalizedRate) * normalizedControl * MAX_PITCH_INPUT_DEGREES
+}
+
 export function calculateLongitudinalTarget(
   state: Pick<TunePreviewState, 'angleDegrees' | 'torqueTiltDegrees' | 'brakeTiltDegrees'>,
   parameters: TunePreviewParameters,
