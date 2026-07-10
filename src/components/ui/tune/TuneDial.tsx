@@ -6,14 +6,24 @@ import { Text } from '@/components/ui/base/Text'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import Animated, {
   cancelAnimation,
-  useAnimatedReaction,
-  useAnimatedStyle,
+  useDerivedValue,
   useFrameCallback,
   useSharedValue,
   withSpring,
   type FrameCallback,
 } from 'react-native-reanimated'
-import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg'
+import {
+  Canvas,
+  DashPathEffect,
+  Group,
+  Line,
+  LinearGradient,
+  Path,
+  Rect,
+  Skia,
+  Text as SkiaText,
+  vec,
+} from '@shopify/react-native-skia'
 import { scheduleOnRN } from 'react-native-worklets'
 
 import {
@@ -29,6 +39,7 @@ import {
   shouldPlayTuneDialHaptic,
 } from '@/components/ui/tune/tuneDialPhysics'
 import { NativeScrollGestureContext } from '@/components/ui/gestures/NativeScrollGestureContext'
+import { useSkiaFont } from '@/hooks/useSkiaFont'
 import { theme } from '@/constants/theme'
 import { formatTuneValue } from '@/lib/tune/fields'
 
@@ -40,6 +51,12 @@ const VALUE_LABEL_WIDTH = 28
 const VALUE_LABEL_HEIGHT = 14
 const CURRENT_VALUE_TOP = 2
 const MARKER_LINE_WIDTH = 2.5
+const GLOW_WIDTH = 52
+const LABEL_FONT_SIZE = 9
+const BADGE_FONT_SIZE = 18
+const BADGE_WIDTH = 80
+const BADGE_BASELINE = 17
+const LABEL_BASELINE_Y = RULER_LABEL_BAND_TOP + (VALUE_LABEL_HEIGHT + LABEL_FONT_SIZE) / 2 - 1.5
 const PREV_MARK_COLOR = theme.palette.yellow.color
 const MAJOR_TICK_COLOR = theme.palette.slate.textMuted
 const MINOR_TICK_COLOR = theme.palette.slate.border
@@ -65,30 +82,6 @@ function formatDisplayValue(value: number, decimals: number): string {
 
   if (decimals <= 0) return String(Math.round(value))
   return value.toFixed(decimals)
-}
-
-function IndicatorGlow({ direction, color }: { direction: 'left' | 'right'; color: string }) {
-  const gradientId =
-    direction === 'left' ? 'tuneDialIndicatorGlowLeft' : 'tuneDialIndicatorGlowRight'
-
-  return (
-    <Svg
-      style={[
-        styles.indicatorGlow,
-        direction === 'left' ? styles.indicatorGlowLeft : styles.indicatorGlowRight,
-      ]}
-      pointerEvents="none"
-    >
-      <Defs>
-        <LinearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="0%">
-          <Stop offset="0%" stopColor={color} stopOpacity={direction === 'left' ? 0 : 0.1} />
-          <Stop offset="50%" stopColor={color} stopOpacity={0.07} />
-          <Stop offset="100%" stopColor={color} stopOpacity={direction === 'left' ? 0.1 : 0} />
-        </LinearGradient>
-      </Defs>
-      <Rect width="100%" height="100%" fill={`url(#${gradientId})`} />
-    </Svg>
-  )
 }
 
 export function TuneDial({
@@ -120,7 +113,6 @@ export function TuneDial({
   const initialStepIndex = Math.round((value - min) / step)
   const decimals = step < 1 ? Math.ceil(Math.abs(Math.log10(step))) : 0
   const commitEveryChange = valueChangeMode === 'live'
-  const [displayText, setDisplayText] = useState(() => formatDisplayValue(value, decimals))
 
   const valueToOffset = useCallback(
     (v: number) => ((v - min) / range) * totalWidth,
@@ -427,21 +419,27 @@ export function TuneDial({
     lastStepIndex,
   ])
 
-  const stripStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value }],
-  }))
+  const [canvasWidth, setCanvasWidth] = useState(0)
+  const centerX = canvasWidth / 2
+
+  const stripTransform = useDerivedValue(() => [{ translateX: centerX + translateX.value }])
 
   const prevMarkOffset = previousValue != null ? valueToOffset(previousValue) : null
   const previousValueLabel = previousValue != null ? formatTuneValue(previousValue) : null
-  useAnimatedReaction(
-    () => formatDisplayValue(displayValue.value, decimals),
-    (next, previous) => {
-      if (next !== previous) scheduleOnRN(setDisplayText, next)
-    },
+
+  const badgeFont = useSkiaFont('800', BADGE_FONT_SIZE)
+  const badgeText = useDerivedValue(() => formatDisplayValue(displayValue.value, decimals))
+  const badgeX = useDerivedValue(() =>
+    badgeFont ? BADGE_WIDTH - badgeFont.getTextWidth(badgeText.value) : 0,
   )
 
-  const ticks = useMemo(() => {
-    const elements: React.ReactNode[] = []
+  const labelFont = useSkiaFont('700', LABEL_FONT_SIZE)
+  const prevLabelFont = useSkiaFont('800', LABEL_FONT_SIZE)
+
+  const { majorTicksPath, minorTicksPath, labels } = useMemo(() => {
+    const majorPath = Skia.Path.Make()
+    const minorPath = Skia.Path.Make()
+    const labelList: { key: number; text: string; x: number }[] = []
 
     for (let i = 0; i <= totalSteps; i++) {
       const val = Number((min + i * step).toFixed(decimals))
@@ -450,23 +448,23 @@ export function TuneDial({
       const isMinor = !isMajor && renderMinor && i % minorEvery === 0
 
       if (isMajor) {
-        elements.push(
-          <View key={i} style={[styles.majorTick, { left: x }]}>
-            <View style={styles.majorTickLine} />
-            <Text style={styles.tickLabel}>{formatTuneValue(val)}</Text>
-          </View>,
-        )
+        majorPath.moveTo(x, MAJOR_TICK_TOP)
+        majorPath.lineTo(x, RULER_LABEL_BAND_TOP)
+        const text = formatTuneValue(val)
+        const textX = labelFont ? x - labelFont.getTextWidth(text) / 2 : x
+        labelList.push({ key: i, text, x: textX })
       } else if (isMinor) {
-        elements.push(<View key={i} style={[styles.minorTick, { left: x }]} />)
+        minorPath.moveTo(x, TOP_VALUE_BAND_HEIGHT + 9)
+        minorPath.lineTo(x, TOP_VALUE_BAND_HEIGHT + 9 + 36)
       }
 
       if (renderMidpointTicks && i < totalSteps) {
-        elements.push(
-          <View key={`${i}-mid`} style={[styles.midpointTick, { left: x + stepPx / 2 }]} />,
-        )
+        const midX = x + stepPx / 2
+        minorPath.moveTo(midX, TOP_VALUE_BAND_HEIGHT + 11)
+        minorPath.lineTo(midX, TOP_VALUE_BAND_HEIGHT + 11 + 26)
       }
     }
-    return elements
+    return { majorTicksPath: majorPath, minorTicksPath: minorPath, labels: labelList }
   }, [
     totalSteps,
     min,
@@ -478,35 +476,112 @@ export function TuneDial({
     renderMinor,
     labelEveryStep,
     renderMidpointTicks,
+    labelFont,
   ])
+
+  const prevLabelX =
+    prevMarkOffset != null && previousValueLabel != null && prevLabelFont
+      ? prevMarkOffset - prevLabelFont.getTextWidth(previousValueLabel) / 2
+      : null
 
   const dial = (
     <View style={styles.rootView}>
-      <View style={styles.container}>
+      <View style={styles.container} onLayout={(e) => setCanvasWidth(e.nativeEvent.layout.width)}>
         <GestureDetector gesture={panGesture}>
           <Animated.View style={styles.gestureArea}>
-            <Animated.View style={[styles.strip, { width: totalWidth + 1 }, stripStyle]}>
-              {ticks}
-              {prevMarkOffset != null && previousValueLabel != null && (
-                <>
-                  <View style={[styles.prevMarkTop, { left: prevMarkOffset }]}>
-                    <View style={styles.prevMarkDash} />
-                  </View>
-                  <View style={[styles.prevValueRing, { left: prevMarkOffset }]}>
-                    <Text style={styles.prevValueText}>{previousValueLabel}</Text>
-                  </View>
-                </>
-              )}
-            </Animated.View>
+            {canvasWidth > 0 && (
+              <Canvas style={styles.canvas}>
+                <Group transform={stripTransform}>
+                  <Path
+                    path={minorTicksPath}
+                    style="stroke"
+                    color={MINOR_TICK_COLOR}
+                    strokeWidth={1}
+                  />
+                  <Path
+                    path={majorTicksPath}
+                    style="stroke"
+                    color={MAJOR_TICK_COLOR}
+                    strokeWidth={1}
+                  />
+                  {labelFont &&
+                    labels.map((label) => (
+                      <SkiaText
+                        key={label.key}
+                        x={label.x}
+                        y={LABEL_BASELINE_Y}
+                        text={label.text}
+                        font={labelFont}
+                        color={LABEL_COLOR}
+                      />
+                    ))}
+                  {prevMarkOffset != null && (
+                    <>
+                      <Rect
+                        x={prevMarkOffset - 1.5}
+                        y={TOP_VALUE_BAND_HEIGHT}
+                        width={3}
+                        height={RULER_LABEL_BAND_TOP - TOP_VALUE_BAND_HEIGHT}
+                        color={theme.palette.slate.surface}
+                      />
+                      <Line
+                        p1={vec(prevMarkOffset, TOP_VALUE_BAND_HEIGHT)}
+                        p2={vec(prevMarkOffset, RULER_LABEL_BAND_TOP)}
+                        color={PREV_MARK_COLOR}
+                        strokeWidth={1}
+                      >
+                        <DashPathEffect intervals={[3, 3]} />
+                      </Line>
+                      {previousValueLabel != null && prevLabelX != null && prevLabelFont && (
+                        <SkiaText
+                          x={prevLabelX}
+                          y={LABEL_BASELINE_Y}
+                          text={previousValueLabel}
+                          font={prevLabelFont}
+                          color={PREV_MARK_COLOR}
+                        />
+                      )}
+                    </>
+                  )}
+                </Group>
+                {indicatorGlow && (
+                  <Rect
+                    x={indicatorGlow === 'left' ? centerX - GLOW_WIDTH : centerX}
+                    y={CURRENT_VALUE_TOP}
+                    width={GLOW_WIDTH}
+                    height={RULER_LABEL_BAND_TOP - CURRENT_VALUE_TOP}
+                  >
+                    <LinearGradient
+                      start={vec(indicatorGlow === 'left' ? centerX - GLOW_WIDTH : centerX, 0)}
+                      end={vec(indicatorGlow === 'left' ? centerX : centerX + GLOW_WIDTH, 0)}
+                      colors={
+                        indicatorGlow === 'left'
+                          ? [`${color}00`, `${color}12`, `${color}1A`]
+                          : [`${color}1A`, `${color}12`, `${color}00`]
+                      }
+                    />
+                  </Rect>
+                )}
+              </Canvas>
+            )}
           </Animated.View>
         </GestureDetector>
-        {indicatorGlow ? <IndicatorGlow direction={indicatorGlow} color={color} /> : null}
         <View
           style={[styles.indicatorTop, { backgroundColor: color, shadowColor: color }]}
           pointerEvents="none"
         />
         <View style={styles.valueBadgeAnchor} pointerEvents="none">
-          <Text style={[styles.valueBadgeText, { color }]}>{displayText}</Text>
+          <Canvas style={styles.valueBadgeCanvas}>
+            {badgeFont && (
+              <SkiaText
+                x={badgeX}
+                y={BADGE_BASELINE}
+                text={badgeText}
+                font={badgeFont}
+                color={color}
+              />
+            )}
+          </Canvas>
           {unit ? <Text style={styles.valueBadgeUnit}>{unit}</Text> : null}
         </View>
       </View>
@@ -527,102 +602,10 @@ const styles = StyleSheet.create({
   },
   gestureArea: {
     flex: 1,
-    justifyContent: 'center',
-    paddingLeft: '50%',
   },
-  strip: {
+  canvas: {
+    width: '100%',
     height: DIAL_HEIGHT,
-    position: 'relative',
-  },
-  majorTick: {
-    position: 'absolute',
-    top: MAJOR_TICK_TOP,
-    alignItems: 'center',
-    width: 0,
-  },
-  majorTickLine: {
-    width: 1,
-    height: RULER_LABEL_BAND_TOP - MAJOR_TICK_TOP,
-    backgroundColor: MAJOR_TICK_COLOR,
-    borderRadius: 0.5,
-  },
-  tickLabel: {
-    position: 'absolute',
-    top: RULER_LABEL_BAND_TOP - MAJOR_TICK_TOP,
-    color: LABEL_COLOR,
-    fontSize: 9,
-    fontWeight: '700',
-    fontVariant: ['tabular-nums'],
-    lineHeight: 11,
-    height: VALUE_LABEL_HEIGHT,
-    textAlignVertical: 'center',
-    width: 50,
-    textAlign: 'center',
-  },
-  minorTick: {
-    position: 'absolute',
-    top: TOP_VALUE_BAND_HEIGHT + 9,
-    width: 1,
-    height: 36,
-    backgroundColor: MINOR_TICK_COLOR,
-    borderRadius: 0.5,
-  },
-  midpointTick: {
-    position: 'absolute',
-    top: TOP_VALUE_BAND_HEIGHT + 11,
-    width: 1,
-    height: 26,
-    backgroundColor: MINOR_TICK_COLOR,
-    borderRadius: 0.5,
-  },
-  prevMarkTop: {
-    position: 'absolute',
-    top: TOP_VALUE_BAND_HEIGHT,
-    width: 3,
-    height: RULER_LABEL_BAND_TOP - TOP_VALUE_BAND_HEIGHT,
-    marginLeft: -1.5,
-    alignItems: 'center',
-    backgroundColor: theme.palette.slate.surface,
-  },
-  prevMarkDash: {
-    width: 1,
-    height: '100%',
-    borderLeftWidth: 1,
-    borderLeftColor: PREV_MARK_COLOR,
-    borderStyle: 'dashed',
-  },
-  prevValueRing: {
-    position: 'absolute',
-    top: RULER_LABEL_BAND_TOP,
-    width: VALUE_LABEL_WIDTH,
-    height: VALUE_LABEL_HEIGHT,
-    marginLeft: -VALUE_LABEL_WIDTH / 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 4,
-  },
-  prevValueText: {
-    color: PREV_MARK_COLOR,
-    fontSize: 9,
-    fontWeight: '800',
-    fontVariant: ['tabular-nums'],
-    lineHeight: 11,
-    height: VALUE_LABEL_HEIGHT,
-    textAlignVertical: 'center',
-    textAlign: 'center',
-  },
-  indicatorGlow: {
-    position: 'absolute',
-    top: CURRENT_VALUE_TOP,
-    left: '50%',
-    width: 52,
-    height: RULER_LABEL_BAND_TOP - CURRENT_VALUE_TOP,
-  },
-  indicatorGlowLeft: {
-    marginLeft: -52,
-  },
-  indicatorGlowRight: {
-    marginLeft: 0,
   },
   indicatorTop: {
     position: 'absolute',
@@ -644,19 +627,12 @@ const styles = StyleSheet.create({
     top: CURRENT_VALUE_TOP,
     height: TOP_VALUE_BAND_HEIGHT - CURRENT_VALUE_TOP,
   },
-  valueBadgeText: {
+  valueBadgeCanvas: {
     position: 'absolute',
     right: '50%',
     marginRight: 7,
-    minWidth: 80,
+    width: BADGE_WIDTH,
     height: 22,
-    padding: 0,
-    fontSize: 18,
-    fontWeight: '800',
-    fontVariant: ['tabular-nums'],
-    lineHeight: 20,
-    textAlign: 'right',
-    includeFontPadding: false,
   },
   valueBadgeUnit: {
     position: 'absolute',

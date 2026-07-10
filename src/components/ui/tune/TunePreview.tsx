@@ -1,12 +1,20 @@
 /* eslint-disable react-hooks/immutability */
 import { useCallback, useEffect, useMemo } from 'react'
-import { Pressable, StyleSheet, TextInput, View, useWindowDimensions } from 'react-native'
+import { Pressable, StyleSheet, View, useWindowDimensions } from 'react-native'
 import { Text } from '@/components/ui/base/Text'
 import { ArrowCounterClockwiseIcon, QuestionIcon } from 'phosphor-react-native'
-import { Canvas, Circle, DashPathEffect, Line, Path, Skia, vec } from '@shopify/react-native-skia'
-import Animated, {
+import {
+  Canvas,
+  Circle,
+  DashPathEffect,
+  Line,
+  Path,
+  Skia,
+  Text as SkiaText,
+  vec,
+} from '@shopify/react-native-skia'
+import {
   runOnUI,
-  useAnimatedProps,
   useDerivedValue,
   useFrameCallback,
   useSharedValue,
@@ -15,6 +23,7 @@ import Animated, {
 import type { TuneProfileFieldValue } from 'vesc-ble'
 
 import { interaction, theme } from '@/constants/theme'
+import { useSkiaFont } from '@/hooks/useSkiaFont'
 import {
   DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS,
   MAX_PITCH_INPUT_DEGREES,
@@ -73,9 +82,21 @@ const INPUT_ARROW_IDLE_GAP = 34
 const INPUT_ARROW_TRAVEL = 18
 const INPUT_ARROW_LENGTH = 16
 const INPUT_ARROW_HEAD = 4
-const AnimatedTextInput = Animated.createAnimatedComponent(TextInput)
-const READOUT_INTERVAL_MS = 100
 const CANVAS_HEIGHT = 122
+
+// TextInput-based readouts crashed the app: every animatedProps text update chains a new
+// AndroidTextInputState shadow state, and releasing the accumulated chain overflows the GC
+// thread stack. Skia text draws bypass the shadow tree entirely.
+const READOUT_FONT_SIZE = 9
+const READOUT_BASELINE = 9
+const READOUT_HEIGHT = 12
+const LEGEND_VALUE_WIDTH = 44
+const CURRENT_WIDTH = 80
+const SPEED_FONT_SIZE = 28
+const SPEED_BASELINE = 26
+const SPEED_HEIGHT = 32
+const SPEED_WIDTH = 70
+const GROUND_TO_BOARD_BASELINE_Y = CANVAS_HEIGHT - 32
 
 export function TunePreview({
   fields,
@@ -102,7 +123,6 @@ export function TunePreview({
   const centerX = canvasWidth / 2
 
   const state = useSharedValue(createTunePreviewState(TUNE_PREVIEW_RESET_SPEED_KMH))
-  const lastReadoutTimestamp = useSharedValue(0)
   const scenario = useSharedValue<TunePreviewScenario>({
     parameters,
     hillsEnabled,
@@ -154,16 +174,13 @@ export function TunePreview({
     )
     if (groundToBoardAngleDegrees) groundToBoardAngleDegrees.value = groundToBoardAngle
     if (speedKmh) speedKmh.value = next.syntheticSpeedKmh
-    if (frame.timestamp - lastReadoutTimestamp.value >= READOUT_INTERVAL_MS) {
-      lastReadoutTimestamp.value = frame.timestamp
-      const current = next.syntheticCurrentAmps
-      boardAngleStr.value = formatSignedDegrees(next.angleDegrees)
-      targetAngleStr.value = formatSignedDegrees(next.targetAngleDegrees)
-      groundToBoardAngleStr.value = formatSignedDegrees(groundToBoardAngle)
-      speedStr.value = next.syntheticSpeedKmh.toFixed(1)
-      currentStr.value = `Motor ${current > 0 ? '+' : ''}${current.toFixed(0)} A`
-      if (hillLoadAmps) hillLoadAmps.value = next.terrainLoadCurrentAmps
-    }
+    const current = next.syntheticCurrentAmps
+    boardAngleStr.value = formatSignedDegrees(next.angleDegrees)
+    targetAngleStr.value = formatSignedDegrees(next.targetAngleDegrees)
+    groundToBoardAngleStr.value = formatSignedDegrees(groundToBoardAngle)
+    speedStr.value = next.syntheticSpeedKmh.toFixed(1)
+    currentStr.value = `Motor ${current > 0 ? '+' : ''}${current.toFixed(0)} A`
+    if (hillLoadAmps) hillLoadAmps.value = next.terrainLoadCurrentAmps
   }, false)
 
   const running = active && parameters != null
@@ -249,26 +266,15 @@ export function TunePreview({
     return path
   })
 
-  const boardAngleProps = useAnimatedProps(() => {
-    'worklet'
-    return { text: boardAngleStr.value, defaultValue: boardAngleStr.value }
-  })
-  const targetAngleProps = useAnimatedProps(() => {
-    'worklet'
-    return { text: targetAngleStr.value, defaultValue: targetAngleStr.value }
-  })
-  const groundToBoardAngleProps = useAnimatedProps(() => {
-    'worklet'
-    return { text: groundToBoardAngleStr.value, defaultValue: groundToBoardAngleStr.value }
-  })
-  const speedProps = useAnimatedProps(() => {
-    'worklet'
-    return { text: speedStr.value, defaultValue: speedStr.value }
-  })
-  const currentProps = useAnimatedProps(() => {
-    'worklet'
-    return { text: currentStr.value, defaultValue: currentStr.value }
-  })
+  const readoutFont = useSkiaFont('500', READOUT_FONT_SIZE)
+  const readoutBoldFont = useSkiaFont('700', READOUT_FONT_SIZE)
+  const speedFont = useSkiaFont('700', SPEED_FONT_SIZE)
+  const currentX = useDerivedValue(() =>
+    readoutFont ? CURRENT_WIDTH - readoutFont.getTextWidth(currentStr.value) : 0,
+  )
+  const groundToBoardAngleX = useDerivedValue(() =>
+    readoutBoldFont ? centerX - readoutBoldFont.getTextWidth(groundToBoardAngleStr.value) / 2 : 0,
+  )
 
   return (
     <View style={styles.card}>
@@ -284,26 +290,32 @@ export function TunePreview({
             <View style={styles.legendItem}>
               <View style={styles.boardSwatch} />
               <Text style={styles.boardLegendText}>Board </Text>
-              <AnimatedTextInput
-                editable={false}
-                caretHidden
-                pointerEvents="none"
-                underlineColorAndroid="transparent"
-                animatedProps={boardAngleProps}
-                style={[styles.boardLegendValue]}
-              />
+              <Canvas style={styles.legendValueCanvas}>
+                {readoutFont && (
+                  <SkiaText
+                    x={0}
+                    y={READOUT_BASELINE}
+                    text={boardAngleStr}
+                    font={readoutFont}
+                    color={theme.palette.sky.color}
+                  />
+                )}
+              </Canvas>
             </View>
             <View style={styles.legendItem}>
               <View style={styles.targetSwatch} />
               <Text style={styles.targetLegendText}>Target </Text>
-              <AnimatedTextInput
-                editable={false}
-                caretHidden
-                pointerEvents="none"
-                underlineColorAndroid="transparent"
-                animatedProps={targetAngleProps}
-                style={[styles.targetLegendValue]}
-              />
+              <Canvas style={styles.legendValueCanvas}>
+                {readoutFont && (
+                  <SkiaText
+                    x={0}
+                    y={READOUT_BASELINE}
+                    text={targetAngleStr}
+                    font={readoutFont}
+                    color={theme.palette.purple.light}
+                  />
+                )}
+              </Canvas>
             </View>
           </View>
         </View>
@@ -324,25 +336,31 @@ export function TunePreview({
               weight="bold"
             />
             <View style={styles.speedValueGroup}>
-              <AnimatedTextInput
-                editable={false}
-                caretHidden
-                pointerEvents="none"
-                underlineColorAndroid="transparent"
-                animatedProps={speedProps}
-                style={[styles.speedValue]}
-              />
+              <Canvas style={styles.speedCanvas}>
+                {speedFont && (
+                  <SkiaText
+                    x={0}
+                    y={SPEED_BASELINE}
+                    text={speedStr}
+                    font={speedFont}
+                    color={theme.telemetry.speed}
+                  />
+                )}
+              </Canvas>
               <Text style={styles.speedUnit}>km/h</Text>
             </View>
           </Pressable>
-          <AnimatedTextInput
-            editable={false}
-            caretHidden
-            pointerEvents="none"
-            underlineColorAndroid="transparent"
-            animatedProps={currentProps}
-            style={[styles.current]}
-          />
+          <Canvas style={styles.currentCanvas}>
+            {readoutFont && (
+              <SkiaText
+                x={currentX}
+                y={READOUT_BASELINE}
+                text={currentStr}
+                font={readoutFont}
+                color={theme.palette.slate.textMuted}
+              />
+            )}
+          </Canvas>
         </View>
       </View>
 
@@ -450,15 +468,16 @@ export function TunePreview({
                 strokeWidth={1}
               />
             )}
+            {readoutBoldFont && (
+              <SkiaText
+                x={groundToBoardAngleX}
+                y={GROUND_TO_BOARD_BASELINE_Y}
+                text={groundToBoardAngleStr}
+                font={readoutBoldFont}
+                color={theme.palette.slate.textPrimary}
+              />
+            )}
           </Canvas>
-          <AnimatedTextInput
-            editable={false}
-            caretHidden
-            pointerEvents="none"
-            underlineColorAndroid="transparent"
-            animatedProps={groundToBoardAngleProps}
-            style={[styles.groundToBoardAngle]}
-          />
         </View>
       )}
     </View>
@@ -542,14 +561,9 @@ const styles = StyleSheet.create({
     color: theme.palette.purple.light,
     fontSize: 9,
   },
-  current: {
-    width: 80,
-    padding: 0,
-    color: theme.palette.slate.textMuted,
-    fontSize: 9,
-    fontFamily: 'monospace',
-    textAlign: 'right',
-    fontVariant: ['tabular-nums'],
+  currentCanvas: {
+    width: CURRENT_WIDTH,
+    height: READOUT_HEIGHT,
   },
   speedReadout: {
     flexDirection: 'row',
@@ -558,49 +572,23 @@ const styles = StyleSheet.create({
   },
   speedValueGroup: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'flex-end',
     gap: 4,
   },
-  speedValue: {
-    padding: 0,
-    color: theme.telemetry.speed,
-    fontFamily: 'monospace',
-    fontSize: 28,
-    lineHeight: 32,
-    fontWeight: '700',
+  speedCanvas: {
+    width: SPEED_WIDTH,
+    height: SPEED_HEIGHT,
   },
   speedUnit: {
     color: theme.palette.slate.textMuted,
     fontSize: 10,
     fontWeight: '700',
+    marginBottom: 4,
   },
-  boardLegendValue: {
-    color: theme.palette.sky.color,
-    fontSize: 9,
-    fontFamily: 'monospace',
-    padding: 0,
-    fontVariant: ['tabular-nums'],
-  },
-  targetLegendValue: {
-    color: theme.palette.purple.light,
-    fontSize: 9,
-    fontFamily: 'monospace',
-    padding: 0,
-    fontVariant: ['tabular-nums'],
+  legendValueCanvas: {
+    width: LEGEND_VALUE_WIDTH,
+    height: READOUT_HEIGHT,
   },
   canvasWrap: { position: 'relative', height: CANVAS_HEIGHT },
   canvas: { width: '100%', height: CANVAS_HEIGHT },
-  groundToBoardAngle: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 30,
-    color: theme.palette.slate.textPrimary,
-    fontSize: 9,
-    fontFamily: 'monospace',
-    fontWeight: '700',
-    textAlign: 'center',
-    padding: 0,
-    fontVariant: ['tabular-nums'],
-  },
 })
