@@ -140,7 +140,8 @@ function getStatusPill(
       text: linkWarning.text,
       buttonText: linkWarning.buttonText,
       config: ALERT_CONFIG[linkWarning.severity],
-      onPress: () => router.push({ pathname: routes.addBoardScan, params: { boardId: board.id } }),
+      onPress: () =>
+        router.push({ pathname: routes.editBoardLink, params: { boardId: board.id } }),
     }
   if (status === 'stale')
     return {

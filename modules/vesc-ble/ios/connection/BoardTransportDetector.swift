@@ -187,7 +187,10 @@ internal final class BoardTransportDetector: VescGattListener {
         parseRefloatGetAllData(payload: payload, avgLatency: nil, packetAt: nowMs(), pullRateHz: nil) != nil {
         markConfirmed()
       }
-      if phase == .probing, current == .direct { markRefloatInfo(payload) }
+      // Custom-app-data replies come back bare even over CAN (like telemetry
+      // above), and only one transport is probed at a time, so this reply
+      // belongs to the current candidate.
+      if phase == .probing, current != nil { markRefloatInfo(payload) }
     case COMM_FW_VERSION:
       if phase == .probing, current == .direct { markFwVersion(payload) }
     case COMM_BMS_GET_VALUES:

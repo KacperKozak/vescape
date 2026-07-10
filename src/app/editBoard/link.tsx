@@ -9,9 +9,7 @@ import { LinkIcon } from 'phosphor-react-native'
 import { BoardLinkTimeline } from '@/components/domain/board/BoardLinkTimeline'
 import { IconHero } from '@/components/ui/settings/IconHero'
 import { Button } from '@/components/ui/base/Button'
-import { Text } from '@/components/ui/base/Text'
 import { useBoardLink } from '@/hooks/useBoardLink'
-import { formatBoardLinkFacts } from '@/lib/boardTransport'
 import { routes } from '@/navigation/routes'
 import { useBoardStore } from '@/store/boardStore'
 import { theme } from '@/constants/theme'
@@ -67,12 +65,6 @@ export default function BoardLinkScreen() {
         description="Linking your board over Bluetooth"
       />
       <ScrollView contentContainerStyle={styles.content}>
-        {existingLink ? (
-          <View style={styles.currentLink}>
-            <Text style={styles.currentLinkLabel}>Current link</Text>
-            <Text style={styles.currentLinkFacts}>{formatBoardLinkFacts(existingLink)}</Text>
-          </View>
-        ) : null}
         {bleId != null ? (
           <BoardLinkTimeline
             phase={link.phase}
@@ -84,11 +76,7 @@ export default function BoardLinkScreen() {
             hideHeader
             bleId={bleId}
             testIDPrefix="board-link"
-            failureNote={
-              existingLink
-                ? `Existing link kept · ${formatBoardLinkFacts(existingLink)}`
-                : undefined
-            }
+            failureNote={existingLink ? 'Existing link kept — your board still works' : undefined}
           />
         ) : null}
       </ScrollView>
@@ -134,25 +122,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: 16,
     gap: 14,
-  },
-  currentLink: {
-    gap: 4,
-    borderWidth: 1,
-    borderColor: theme.palette.slate.border,
-    borderRadius: 8,
-    backgroundColor: theme.palette.slate.surface,
-    padding: 12,
-  },
-  currentLinkLabel: {
-    color: theme.palette.slate.textMuted,
-    fontSize: 11,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-  },
-  currentLinkFacts: {
-    color: theme.palette.slate.textSecondary,
-    fontSize: 12,
-    fontWeight: '600',
   },
   footer: {
     paddingHorizontal: 16,

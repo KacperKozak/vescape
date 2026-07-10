@@ -18,7 +18,11 @@ import type { BoardCandidate, BoardProbeProgressEvent, BoardProbeStep } from 've
 import { IconHero } from '@/components/ui/settings/IconHero'
 import { StepTimeline, type StepState, type TimelineStep } from '@/components/ui/base/StepTimeline'
 import type { BoardLinkPhase } from '@/hooks/useBoardLink'
-import { formatCandidateTransport, formatRefloatIdentity } from '@/lib/boardTransport'
+import {
+  formatBoardTransport,
+  formatCandidateTransport,
+  formatRefloatIdentity,
+} from '@/lib/boardTransport'
 import { interaction, theme } from '@/constants/theme'
 
 type StepKey = 'connect' | 'handshake' | 'transport' | 'telemetry' | 'bms'
@@ -86,8 +90,8 @@ interface Props {
 /**
  * One fixed linking checklist that fills in as the Board Probe advances. The
  * transport is a single step whose result is Direct or a CAN id; resolved steps
- * recolour in place rather than appending rows. The only card is the
- * multi-transport picker — an interactive group — shown below the checklist.
+ * recolour in place rather than appending rows. When several transports answer,
+ * the picker renders inline inside the Transport step.
  */
 export function BoardLinkTimeline({
   phase,
@@ -102,8 +106,11 @@ export function BoardLinkTimeline({
   failureNote,
   testIDPrefix,
 }: Props) {
-  const steps = buildSteps(phase, progress, candidates, bleId)
-  const showPicker = phase === 'picking' && candidates.length > 0
+  const steps = buildSteps(phase, progress, candidates, bleId, {
+    selected,
+    onSelect,
+    testIDPrefix,
+  })
 
   return (
     <View style={styles.container} testID={testIDPrefix}>
@@ -117,48 +124,6 @@ export function BoardLinkTimeline({
 
       <StepTimeline steps={steps} />
 
-      {showPicker ? (
-        <View style={styles.pickerCard}>
-          {candidates.map((candidate, i) => {
-            const isSelected = candidate.transport === selected?.transport
-            const refloatIdentity = formatRefloatIdentity(candidate)
-            return (
-              <Pressable
-                key={String(candidate.transport)}
-                style={[styles.pickerRow, i > 0 && styles.pickerRowDivider]}
-                android_ripple={interaction.ripple}
-                onPress={() => onSelect(candidate)}
-                testID={`${testIDPrefix}-option-${candidate.transport}`}
-              >
-                <View style={[styles.radio, isSelected && styles.radioOn]}>
-                  {isSelected ? (
-                    <CheckIcon size={16} color={theme.palette.sky.color} weight="bold" />
-                  ) : null}
-                </View>
-                <View style={styles.pickerText}>
-                  <Text style={styles.pickerLabel}>
-                    {formatCandidateTransport(candidate.transport)}
-                  </Text>
-                  {refloatIdentity ? (
-                    <Text style={styles.identityText}>{refloatIdentity}</Text>
-                  ) : (
-                    <View style={styles.warningRow}>
-                      <WarningCircleIcon
-                        size={13}
-                        color={theme.status.warning.color}
-                        weight="fill"
-                      />
-                      <Text style={styles.warningText}>Refloat identity missing</Text>
-                    </View>
-                  )}
-                </View>
-                {candidate.hasBms ? <BmsChip /> : null}
-              </Pressable>
-            )
-          })}
-        </View>
-      ) : null}
-
       {phase === 'failed' && failureNote ? (
         <Text style={styles.failureNote}>{failureNote}</Text>
       ) : null}
@@ -168,32 +133,29 @@ export function BoardLinkTimeline({
   )
 }
 
+interface PickerHandles {
+  selected: BoardCandidate | null
+  onSelect: (candidate: BoardCandidate) => void
+  testIDPrefix: string
+}
+
 /** Resolve the fixed checklist rows for the current phase. */
 function buildSteps(
   phase: BoardLinkPhase,
   progress: BoardProbeProgressEvent | null,
   candidates: BoardCandidate[],
-  bleId?: string | null,
+  bleId: string | null | undefined,
+  picker: PickerHandles,
 ): TimelineStep[] {
   const reach = progress ? STEP_REACH[progress.step] : 0
   const connected = `Connected to ${bleId ?? '…'}`
 
   if (phase === 'picking') {
-    const hasDirect = candidates.some((c) => c.transport === 'direct')
-    const canIds = candidates
-      .map((c) => c.transport)
-      .filter((t): t is number => typeof t === 'number')
     const anyBms = candidates.some((c) => c.hasBms)
-    const transportCaption = [
-      hasDirect ? 'Direct link' : null,
-      ...canIds.map((id) => `CAN id ${id}`),
-    ]
-      .filter(Boolean)
-      .join(' · ')
     return [
       row('connect', 'done', connected),
       row('handshake', 'done', 'VESC service ready'),
-      row('transport', 'done', transportCaption || 'Transport confirmed'),
+      transportResultRow(candidates, picker),
       row('telemetry', 'done', 'Valid telemetry sample decoded'),
       row('bms', anyBms ? 'done' : 'absent', anyBms ? 'Smart BMS answered on CAN' : 'No smart BMS'),
     ]
@@ -245,6 +207,83 @@ function row(key: StepKey, state: StepState, caption: string): TimelineStep {
   return { key, icon: STEP_ICON[key], label: STEP_LABEL[key], state, caption }
 }
 
+/**
+ * The Transport step's resolved form. One candidate shows its result (and Refloat
+ * identity) in place; several candidates put the picker inside the step.
+ */
+function transportResultRow(candidates: BoardCandidate[], picker: PickerHandles): TimelineStep {
+  const single = candidates.length === 1 ? candidates[0] : null
+  if (single) {
+    const identity = formatRefloatIdentity(single)
+    return {
+      ...row(
+        'transport',
+        'done',
+        identity
+          ? `${formatBoardTransport(single.transport)} · ${identity}`
+          : formatBoardTransport(single.transport),
+      ),
+      content: identity ? undefined : <RefloatIdentityWarning />,
+    }
+  }
+  return {
+    ...row('transport', 'done', 'Several transports answered — pick one'),
+    content: <TransportPicker candidates={candidates} picker={picker} />,
+  }
+}
+
+function TransportPicker({
+  candidates,
+  picker,
+}: {
+  candidates: BoardCandidate[]
+  picker: PickerHandles
+}) {
+  return (
+    <View style={styles.pickerCard}>
+      {candidates.map((candidate, i) => {
+        const isSelected = candidate.transport === picker.selected?.transport
+        const refloatIdentity = formatRefloatIdentity(candidate)
+        return (
+          <Pressable
+            key={String(candidate.transport)}
+            style={[styles.pickerRow, i > 0 && styles.pickerRowDivider]}
+            android_ripple={interaction.ripple}
+            onPress={() => picker.onSelect(candidate)}
+            testID={`${picker.testIDPrefix}-option-${candidate.transport}`}
+          >
+            <View style={[styles.radio, isSelected && styles.radioOn]}>
+              {isSelected ? (
+                <CheckIcon size={14} color={theme.palette.sky.color} weight="bold" />
+              ) : null}
+            </View>
+            <View style={styles.pickerText}>
+              <Text style={styles.pickerLabel}>
+                {formatCandidateTransport(candidate.transport)}
+              </Text>
+              {refloatIdentity ? (
+                <Text style={styles.identityText}>{refloatIdentity}</Text>
+              ) : (
+                <RefloatIdentityWarning />
+              )}
+            </View>
+            {candidate.hasBms ? <BmsChip /> : null}
+          </Pressable>
+        )
+      })}
+    </View>
+  )
+}
+
+function RefloatIdentityWarning() {
+  return (
+    <View style={styles.warningRow}>
+      <WarningCircleIcon size={13} color={theme.status.warning.color} weight="fill" />
+      <Text style={styles.warningText}>Refloat identity missing</Text>
+    </View>
+  )
+}
+
 function BmsChip() {
   return (
     <View style={styles.bmsChip}>
@@ -260,25 +299,25 @@ const styles = StyleSheet.create({
   },
   pickerCard: {
     backgroundColor: theme.palette.slate.surface,
-    borderRadius: 12,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: theme.palette.slate.border,
   },
   pickerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
   pickerRowDivider: {
     borderTopWidth: 1,
     borderTopColor: theme.palette.slate.border,
   },
   radio: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     borderWidth: 1.5,
     borderColor: theme.palette.slate.border,
     alignItems: 'center',
@@ -289,11 +328,11 @@ const styles = StyleSheet.create({
   },
   pickerText: {
     flex: 1,
-    gap: 3,
+    gap: 2,
   },
   pickerLabel: {
     color: theme.palette.slate.textPrimary,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
   },
   identityText: {

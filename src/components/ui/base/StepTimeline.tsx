@@ -1,4 +1,5 @@
 import { ActivityIndicator, StyleSheet, View } from 'react-native'
+import type { ReactNode } from 'react'
 import type { StyleProp, ViewStyle } from 'react-native'
 import { Text } from '@/components/ui/base/Text'
 import type { Icon } from 'phosphor-react-native'
@@ -18,6 +19,8 @@ export interface TimelineStep {
   label: string
   /** Optional subline — e.g. what the step is doing, or its result. */
   caption?: string
+  /** Optional block under the caption — e.g. an inline picker or warning. */
+  content?: ReactNode
   state: StepState
 }
 
@@ -87,6 +90,7 @@ function StepRow({
             {step.caption}
           </Text>
         ) : null}
+        {step.content ? <View style={styles.rowContent}>{step.content}</View> : null}
       </View>
     </View>
   )
@@ -164,5 +168,9 @@ const styles = StyleSheet.create({
   },
   rowCaptionError: {
     color: theme.status.error.text,
+  },
+  rowContent: {
+    marginTop: 6,
+    marginBottom: 8,
   },
 })

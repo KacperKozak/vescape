@@ -191,7 +191,10 @@ internal class BoardTransportDetector(
       COMM_CUSTOM_APP_DATA -> if (phase == Phase.Probing && current != null) {
         val sample = parseRefloatGetAllData(payload, avgLatency = null, packetAt = nowMs(), location = null)
         if (sample != null) markConfirmed()
-        if (current == BoardTransport.Direct) markRefloatInfo(payload)
+        // Custom-app-data replies come back bare even over CAN (like telemetry
+        // above), and only one transport is probed at a time, so this reply
+        // belongs to the current candidate.
+        markRefloatInfo(payload)
       }
       COMM_FW_VERSION -> if (phase == Phase.Probing && current == BoardTransport.Direct) markFwVersion(payload)
       // Direct smart-BMS reply.
