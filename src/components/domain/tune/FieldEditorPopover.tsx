@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/ui/base/Text'
 import { CaretDownIcon, CheckIcon, FadersIcon, type Icon } from 'phosphor-react-native'
 
 import { Button } from '@/components/ui/base/Button'
+import { Input } from '@/components/ui/forms/Input'
 import { EdgeDrawer } from '@/components/ui/overlays/AnchoredSheet'
 import { TuneDial } from '@/components/ui/tune/TuneDial'
 import { theme } from '@/constants/theme'
@@ -28,7 +29,7 @@ export interface FieldEditorTarget {
 interface FieldEditorPopoverProps {
   target: FieldEditorTarget | null
   onCancel: () => void
-  onApply: (value: number) => void
+  onApply: (value: number, linkedFieldValues?: Record<string, number>) => void
 }
 
 export function FieldEditorPopover({ target, onCancel, onApply }: FieldEditorPopoverProps) {
@@ -47,12 +48,50 @@ export function FieldEditorPopover({ target, onCancel, onApply }: FieldEditorPop
 interface FieldEditorPopoverInnerProps {
   target: FieldEditorTarget
   onCancel: () => void
-  onApply: (value: number) => void
+  onApply: (value: number, linkedFieldValues?: Record<string, number>) => void
 }
 
 function FieldEditorPopoverInner({ target, onCancel, onApply }: FieldEditorPopoverInnerProps) {
   const [draftValue, setDraftValue] = useState(target.value)
   const [detailsExpanded, setDetailsExpanded] = useState(false)
+  const [linkedExpanded, setLinkedExpanded] = useState(false)
+  const [editedLinkedFields, setEditedLinkedFields] = useState<Record<string, true>>({})
+  const linkedFields = useMemo(() => target.linkedFields ?? [], [target.linkedFields])
+  const [linkedDrafts, setLinkedDrafts] = useState<Record<string, string>>({})
+  const linkedInputValues = useMemo(
+    () =>
+      Object.fromEntries(
+        linkedFields.map((field) => [
+          field.id,
+          editedLinkedFields[field.id]
+            ? (linkedDrafts[field.id] ?? '')
+            : formatTuneValue(field.computeValue(draftValue)),
+        ]),
+      ) as Record<string, string>,
+    [draftValue, editedLinkedFields, linkedDrafts, linkedFields],
+  )
+  const computedLinkedValues = useMemo(
+    () =>
+      Object.fromEntries(
+        linkedFields.map((field) => [field.id, field.computeValue(draftValue)]),
+      ) as Record<string, number>,
+    [draftValue, linkedFields],
+  )
+
+  const applyEditor = () => {
+    const snappedValue = snapValue(draftValue, target.min, target.max, target.step)
+    const linkedValues = Object.fromEntries(
+      linkedFields.flatMap((field) => {
+        if (!editedLinkedFields[field.id]) return []
+        const parsed = Number.parseFloat(linkedDrafts[field.id] ?? '')
+        const value = Number.isFinite(parsed)
+          ? snapValue(parsed, field.min, field.max, field.step)
+          : computedLinkedValues[field.id]
+        return [[field.id, value]]
+      }),
+    )
+    onApply(snappedValue, Object.keys(linkedValues).length > 0 ? linkedValues : undefined)
+  }
 
   return (
     <EdgeDrawer
@@ -81,7 +120,82 @@ function FieldEditorPopoverInner({ target, onCancel, onApply }: FieldEditorPopov
           </View>
         </View>
 
-        <View style={styles.panel}>
+        {linkedFields.length > 0 ? (
+          <Pressable
+            style={styles.panel}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: linkedExpanded }}
+            onPress={() => {
+              if (!linkedExpanded) setLinkedExpanded(true)
+            }}
+          >
+            <Pressable
+              style={styles.detailsHeader}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: linkedExpanded }}
+              onPress={() => setLinkedExpanded((expanded) => !expanded)}
+            >
+              <Text style={styles.panelTitle}>Linked fields</Text>
+              <CaretDownIcon
+                size={16}
+                color={theme.palette.slate.textMuted}
+                weight="bold"
+                style={{ transform: [{ rotate: linkedExpanded ? '180deg' : '0deg' }] }}
+              />
+            </Pressable>
+            {linkedExpanded ? (
+              <View style={styles.linkedGrid}>
+                {linkedFields.map((field, index) => (
+                  <View
+                    key={field.id}
+                    style={[
+                      styles.linkedInputCell,
+                      linkedFields.length === 5 && index >= 3 && styles.linkedInputCellHalf,
+                    ]}
+                  >
+                    <Text style={styles.linkedLabel} numberOfLines={2}>
+                      {field.label}
+                    </Text>
+                    <Input
+                      style={styles.linkedInput}
+                      value={linkedInputValues[field.id] ?? ''}
+                      keyboardType="decimal-pad"
+                      selectTextOnFocus
+                      onChangeText={(text) => {
+                        setEditedLinkedFields((current) => ({ ...current, [field.id]: true }))
+                        setLinkedDrafts((current) => ({ ...current, [field.id]: text }))
+                      }}
+                      onBlur={() => {
+                        const parsed = Number.parseFloat(linkedInputValues[field.id] ?? '')
+                        const value = Number.isFinite(parsed)
+                          ? snapValue(parsed, field.min, field.max, field.step)
+                          : computedLinkedValues[field.id]
+                        setLinkedDrafts((current) => ({
+                          ...current,
+                          [field.id]: formatTuneValue(value),
+                        }))
+                      }}
+                    />
+                    {field.unit ? (
+                      <Text style={styles.linkedUnit} numberOfLines={1}>
+                        {field.unit}
+                      </Text>
+                    ) : null}
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </Pressable>
+        ) : null}
+
+        <Pressable
+          style={styles.panel}
+          accessibilityRole="button"
+          accessibilityState={{ expanded: detailsExpanded }}
+          onPress={() => {
+            if (!detailsExpanded) setDetailsExpanded(true)
+          }}
+        >
           <Pressable
             style={styles.detailsHeader}
             accessibilityRole="button"
@@ -115,25 +229,9 @@ function FieldEditorPopoverInner({ target, onCancel, onApply }: FieldEditorPopov
                   <Text style={styles.dataValue}>{target.unit}</Text>
                 </View>
               ) : null}
-              {target.linkedFields && target.linkedFields.length > 0 ? (
-                <View style={styles.linkedSection}>
-                  <Text style={styles.linkedTitle}>Linked fields</Text>
-                  {target.linkedFields.map((lf) => (
-                    <View key={lf.id} style={styles.linkedRow}>
-                      <Text style={styles.linkedLabel} numberOfLines={1}>
-                        {lf.label}
-                      </Text>
-                      <Text style={styles.linkedValue}>
-                        {formatTuneValue(lf.computeValue(draftValue))}
-                        {lf.unit ? ` ${lf.unit}` : ''}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              ) : null}
             </View>
           ) : null}
-        </View>
+        </Pressable>
 
         <View style={styles.actions}>
           <Button
@@ -146,7 +244,7 @@ function FieldEditorPopoverInner({ target, onCancel, onApply }: FieldEditorPopov
             label="Apply"
             icon={CheckIcon}
             style={styles.actionButton}
-            onPress={() => onApply(snapValue(draftValue, target.min, target.max, target.step))}
+            onPress={applyEditor}
           />
         </View>
       </View>
@@ -221,36 +319,39 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 17,
   },
-  linkedSection: {
-    borderTopWidth: 1,
-    borderTopColor: theme.palette.slate.border,
-    paddingTop: 10,
-    gap: 6,
-  },
-  linkedTitle: {
-    color: theme.palette.slate.textDim,
-    fontSize: 10,
-    fontWeight: '800',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: 2,
-  },
-  linkedRow: {
+  linkedGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  linkedInputCell: {
+    width: '31.7%',
+    minWidth: 82,
+    gap: 5,
+  },
+  linkedInputCellHalf: {
+    width: '48.8%',
   },
   linkedLabel: {
     color: theme.palette.slate.textMuted,
-    fontSize: 11,
-    fontWeight: '600',
-    flex: 1,
+    fontSize: 9,
+    fontWeight: '800',
+    lineHeight: 11,
   },
-  linkedValue: {
-    color: theme.palette.slate.textSecondary,
+  linkedInput: {
+    height: 36,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '800',
+    textAlign: 'center',
     fontVariant: ['tabular-nums'],
+  },
+  linkedUnit: {
+    color: theme.palette.slate.textDim,
+    fontSize: 8,
+    fontWeight: '700',
+    lineHeight: 9,
   },
   actions: {
     flexDirection: 'row',

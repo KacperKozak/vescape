@@ -115,14 +115,14 @@ export function useTuneModals(
   )
 
   const handleEditorApply = useCallback(
-    (value: number) => {
+    (value: number, linkedFieldValues?: Record<string, number>) => {
       if (!editorKind) return
       if (editorKind.kind === 'field') {
         setDraftField(editorKind.fieldId, value)
       } else {
         const def = BASIC_SLIDER_BY_ID.get(editorKind.sliderId)
         if (def) {
-          const fieldValues = def.computeFieldValues(value)
+          const fieldValues = { ...def.computeFieldValues(value), ...linkedFieldValues }
           for (const [id, v] of Object.entries(fieldValues)) {
             setDraftField(id, v)
           }

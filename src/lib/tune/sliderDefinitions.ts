@@ -312,6 +312,9 @@ export interface LinkedFieldPreview {
   id: string
   label: string
   unit: string | null
+  min: number
+  max: number
+  step: number
   computeValue: (sliderVal: number) => number
 }
 
@@ -322,6 +325,18 @@ export function getLinkedFieldPreviews(def: BasicSliderDefinition): LinkedFieldP
       id: fieldId,
       label: appField?.label ?? fieldId,
       unit: appField?.unit ?? null,
+      min: appField?.min ?? 0,
+      max: appField?.max ?? 100,
+      step: appField
+        ? fieldStep({
+            id: appField.id,
+            label: appField.label,
+            value: def.computeFieldValues(def.min)[fieldId],
+            min: appField.min,
+            max: appField.max,
+            unit: appField.unit,
+          })
+        : 0.1,
       computeValue: (sliderVal: number) => def.computeFieldValues(sliderVal)[fieldId],
     }
   })

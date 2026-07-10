@@ -3,6 +3,7 @@ import {
   Animated,
   Dimensions,
   Easing,
+  Keyboard,
   Modal,
   Pressable,
   ScrollView,
@@ -46,7 +47,7 @@ const DRAWER_AUTO_CLOSE_VISIBLE_PX = 200
 const DRAWER_FLING_PROJECTION_MS = 250
 const DRAWER_OPEN_TRANSLATE_Y = 42
 const DRAWER_OPEN_DURATION = 280
-const DRAWER_BOTTOM_CONTENT_PADDING = 16
+const DRAWER_BOTTOM_CONTENT_PADDING = 32
 const DRAWER_ENTER_FROM_TOP = new Keyframe({
   0: { opacity: 0, transform: [{ translateY: -DRAWER_OPEN_TRANSLATE_Y }] },
   100: { opacity: 1, transform: [{ translateY: 0 }] },
@@ -294,6 +295,7 @@ export function EdgeDrawer({
   const [mounted, setMounted] = useState(false)
   const [opensFromTop, setOpensFromTop] = useState(true)
   const [dismissRange, setDismissRange] = useState(0)
+  const [keyboardInset, setKeyboardInset] = useState(0)
   const scrollRef = useRef<ScrollView>(null)
   const positionedRef = useRef(false)
   const dismissRangeRef = useRef(0)
@@ -312,6 +314,7 @@ export function EdgeDrawer({
       dismissRangeRef.current = 0
       positionedRef.current = false
       previousContentHeightRef.current = 0
+      setKeyboardInset(0)
       scrollOffset.value = 0
     }
 
@@ -324,6 +327,20 @@ export function EdgeDrawer({
       openFrom(trigger.y + trigger.height / 2 < height / 2)
     })
   }, [edge, height, scrollOffset, triggerRef, visible])
+
+  useEffect(() => {
+    if (!mounted) return
+    const showSubscription = Keyboard.addListener('keyboardDidShow', (event) => {
+      setKeyboardInset(event.endCoordinates.height)
+    })
+    const hideSubscription = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardInset(0)
+    })
+    return () => {
+      showSubscription.remove()
+      hideSubscription.remove()
+    }
+  }, [mounted])
 
   const finishClose = useCallback(() => {
     setMounted(false)
@@ -452,7 +469,9 @@ export function EdgeDrawer({
 
   if (!mounted) return null
 
-  const edgePadding = opensFromTop ? insets.top : insets.bottom + DRAWER_BOTTOM_CONTENT_PADDING
+  const edgePadding = opensFromTop
+    ? insets.top
+    : insets.bottom + DRAWER_BOTTOM_CONTENT_PADDING + keyboardInset
   const vignetteColor = theme.palette.slate.surfaceDeep
   const gradientColors = opensFromTop
     ? [
