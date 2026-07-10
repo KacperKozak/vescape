@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { useEffect, useMemo, type ReactNode } from 'react'
+import { Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/ui/base/Text'
 import {
   BatteryChargingIcon,
@@ -34,8 +34,6 @@ import { interaction, theme } from '@/constants/theme'
 type StepKey = 'connect' | 'handshake' | 'scan' | 'transport' | 'bms' | 'identity'
 
 const STEP_KEYS: StepKey[] = ['connect', 'handshake', 'scan', 'transport', 'bms', 'identity']
-const STEP_ROW_HEIGHT = 76
-const TIMELINE_MAX_HEIGHT = 340
 
 const STEP_LABEL: Record<StepKey, string> = {
   connect: 'Connecting',
@@ -97,6 +95,8 @@ interface Props {
   actions?: ReactNode
   /** Muted note under a failed terminal, e.g. "Existing link kept". */
   failureNote?: string
+  /** Active row index while probing; -1 when terminal, so parent scroll can reset. */
+  onActiveStepIndexChange?: (index: number) => void
   testIDPrefix: string
 }
 
@@ -118,6 +118,7 @@ export function BoardLinkTimeline({
   bleId,
   actions,
   failureNote,
+  onActiveStepIndexChange,
   testIDPrefix,
 }: Props) {
   const steps = buildSteps(phase, progress, candidates, bleId, {
@@ -125,17 +126,11 @@ export function BoardLinkTimeline({
     onSelect,
     testIDPrefix,
   })
-  const scrollRef = useRef<ScrollView>(null)
-  const [timelineHeight, setTimelineHeight] = useState(TIMELINE_MAX_HEIGHT)
   const activeIndex = useMemo(() => steps.findIndex((step) => step.state === 'active'), [steps])
 
   useEffect(() => {
-    if (activeIndex < 0) return
-    scrollRef.current?.scrollTo({
-      y: Math.max(0, activeIndex * STEP_ROW_HEIGHT - timelineHeight / 2 + STEP_ROW_HEIGHT / 2),
-      animated: true,
-    })
-  }, [activeIndex, timelineHeight])
+    onActiveStepIndexChange?.(activeIndex)
+  }, [activeIndex, onActiveStepIndexChange])
 
   return (
     <View style={styles.container} testID={testIDPrefix}>
@@ -147,15 +142,7 @@ export function BoardLinkTimeline({
         />
       )}
 
-      <ScrollView
-        ref={scrollRef}
-        style={styles.timelineViewport}
-        contentContainerStyle={styles.timelineContent}
-        showsVerticalScrollIndicator={false}
-        onLayout={(event) => setTimelineHeight(event.nativeEvent.layout.height)}
-      >
-        <StepTimeline steps={steps} />
-      </ScrollView>
+      <StepTimeline steps={steps} />
 
       {phase === 'failed' && failureNote ? (
         <Text style={styles.failureNote}>{failureNote}</Text>
@@ -352,12 +339,6 @@ function BmsChip() {
 const styles = StyleSheet.create({
   container: {
     gap: 12,
-  },
-  timelineViewport: {
-    maxHeight: TIMELINE_MAX_HEIGHT,
-  },
-  timelineContent: {
-    paddingVertical: 2,
   },
   pickerCard: {
     backgroundColor: theme.palette.slate.surface,

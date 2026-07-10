@@ -35,13 +35,16 @@ const STEP_META: Record<WizardStepId, { label: string; icon: typeof Bluetooth; c
 
 interface Props {
   wizard: UseAddBoardWizard
+  onLinkActiveStepIndexChange?: (index: number) => void
 }
 
-export function AddBoardWizard({ wizard }: Props) {
+export function AddBoardWizard({ wizard, onLinkActiveStepIndexChange }: Props) {
   return (
     <>
       <ProgressBar step={wizard.step} />
-      {wizard.stepId === 'scan' && <ScanStep wizard={wizard} />}
+      {wizard.stepId === 'scan' && (
+        <ScanStep wizard={wizard} onLinkActiveStepIndexChange={onLinkActiveStepIndexChange} />
+      )}
       {wizard.stepId === 'name' && <NameStep wizard={wizard} />}
       {wizard.stepId === 'battery' && <BatteryStep wizard={wizard} />}
       {wizard.stepId === 'confirm' && <ConfirmStep wizard={wizard} />}
@@ -85,12 +88,14 @@ function ProgressBar({ step }: { step: number }) {
   )
 }
 
-function ScanStep({ wizard }: Props) {
-  if (wizard.pairPhase === 'probing') return <LinkStep wizard={wizard} />
+function ScanStep({ wizard, onLinkActiveStepIndexChange }: Props) {
+  if (wizard.pairPhase === 'probing') {
+    return <LinkStep wizard={wizard} onLinkActiveStepIndexChange={onLinkActiveStepIndexChange} />
+  }
   return <ScanSelectStep wizard={wizard} />
 }
 
-function LinkStep({ wizard }: Props) {
+function LinkStep({ wizard, onLinkActiveStepIndexChange }: Props) {
   const link = useBoardLink(wizard.bleId || null)
 
   return (
@@ -104,6 +109,7 @@ function LinkStep({ wizard }: Props) {
         deviceLabel={wizard.bleName || wizard.bleId}
         bleId={wizard.bleId}
         testIDPrefix="add-board-link"
+        onActiveStepIndexChange={onLinkActiveStepIndexChange}
         actions={
           link.phase === 'picking' ? (
             <Button

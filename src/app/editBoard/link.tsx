@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { ScrollView, StyleSheet, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, useLocalSearchParams } from 'expo-router'
@@ -13,6 +13,8 @@ import { useBoardLink } from '@/hooks/useBoardLink'
 import { routes } from '@/navigation/routes'
 import { useBoardStore } from '@/store/boardStore'
 import { theme } from '@/constants/theme'
+
+const LINK_STEP_ROW_HEIGHT = 76
 
 export default function BoardLinkScreen() {
   const {
@@ -39,6 +41,16 @@ export default function BoardLinkScreen() {
 
   const link = useBoardLink(bleId)
   const [saving, setSaving] = useState(false)
+  const scrollRef = useRef<ScrollView>(null)
+
+  const handleActiveStepIndexChange = useCallback((index: number) => {
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({
+        y: index < 0 ? 0 : Math.max(0, index * LINK_STEP_ROW_HEIGHT - LINK_STEP_ROW_HEIGHT),
+        animated: true,
+      })
+    })
+  }, [])
 
   const handleSave = async () => {
     if (!board || !link.selectedLink) return
@@ -66,7 +78,7 @@ export default function BoardLinkScreen() {
         title={deviceLabel}
         description="Linking your board over Bluetooth"
       />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.content}>
         {bleId != null ? (
           <BoardLinkTimeline
             phase={link.phase}
@@ -79,6 +91,7 @@ export default function BoardLinkScreen() {
             bleId={bleId}
             testIDPrefix="board-link"
             failureNote={existingLink ? 'Existing link kept — your board still works' : undefined}
+            onActiveStepIndexChange={handleActiveStepIndexChange}
           />
         ) : null}
       </ScrollView>
@@ -123,6 +136,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'center',
     padding: 16,
+    paddingBottom: 112,
     gap: 14,
   },
   footer: {
