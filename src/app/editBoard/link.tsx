@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/base/Button'
 import { useBoardLink } from '@/hooks/useBoardLink'
 import { routes } from '@/navigation/routes'
 import { useBoardStore } from '@/store/boardStore'
+import { useBleStore } from '@/store/bleStore'
 import { theme } from '@/constants/theme'
 
 export default function BoardLinkScreen() {
@@ -24,12 +25,14 @@ export default function BoardLinkScreen() {
     bleId?: string
     bleName?: string
   }>()
-  const { board, updateBoard } = useBoardStore(
+  const { activeBoardId, board, updateBoard } = useBoardStore(
     useShallow((s) => ({
+      activeBoardId: s.activeBoardId,
       board: s.boards.find((b) => b.id === boardId),
       updateBoard: s.updateBoard,
     })),
   )
+  const connect = useBleStore((s) => s.connect)
 
   // The peripheral to link: a freshly-scanned device, else the board's existing
   // link (re-link). The existing link is left intact until a new one is saved —
@@ -45,6 +48,9 @@ export default function BoardLinkScreen() {
     setSaving(true)
     try {
       await updateBoard({ ...board, link: link.selectedLink })
+      if (activeBoardId === board.id) {
+        void connect(board.id)
+      }
       router.back()
     } catch (err) {
       console.log('[board-link] save failed', err)
