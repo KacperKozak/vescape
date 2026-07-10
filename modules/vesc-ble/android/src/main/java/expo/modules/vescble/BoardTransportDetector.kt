@@ -85,7 +85,28 @@ internal class BoardTransportDetector(
     if (transport != null) payload["transport"] = BoardTransport.toBridge(transport)
     if (withCanIds) payload["canIds"] = responders.toList()
     Log.d(DETECT_TAG, "progress step=$step transport=$transport canIds=$responders elapsed=${elapsed()}ms")
+    recordProbeDiagnostic(
+      "board_probe_progress",
+      mapOf(
+        "message" to "Board Probe progress: $step",
+        "step" to step,
+        "transport" to BoardTransport.toBridge(transport),
+        "can_ids" to responders.toList().takeIf { withCanIds },
+      ),
+    )
     onProgress(payload)
+  }
+
+  private fun recordProbeDiagnostic(eventName: String, properties: Map<String, Any?> = emptyMap()) {
+    recordDiagnostic(
+      eventName,
+      mapOf(
+        "operation" to "board_probe",
+        "phase" to phase.name.lowercase(),
+        "ble_id" to device.address,
+        "elapsed_ms" to elapsed(),
+      ) + properties,
+    )
   }
 
   fun start() {
@@ -178,6 +199,17 @@ internal class BoardTransportDetector(
         // Connection dropped mid-detection: resolve with whatever was confirmed
         // so far rather than hanging.
         Log.w(DETECT_TAG, "disconnected mid-detection status=$status phase=$phase")
+        recordProbeDiagnostic(
+          "board_probe_disconnected_mid_detection",
+          mapOf(
+            "message" to "Board Probe disconnected mid-detection",
+            "status" to status,
+            "current_transport" to BoardTransport.toBridge(current),
+            "current_confirmed" to currentConfirmed,
+            "current_has_bms" to currentHasBms,
+            "confirmed_count" to observations.count { it.confirmed },
+          ),
+        )
         finishResolved()
       }
     }
@@ -199,7 +231,20 @@ internal class BoardTransportDetector(
     when (payload[0].toInt() and 0xff) {
       COMM_PING_CAN -> if (phase == Phase.Pinging) {
         // Collect EVERY responding CAN id, not just payload[1].
-        for (i in 1 until payload.size) responders.add(payload[i].toInt() and 0xff)
+        var changed = false
+        for (i in 1 until payload.size) {
+          changed = responders.add(payload[i].toInt() and 0xff) || changed
+        }
+        if (changed) {
+          recordProbeDiagnostic(
+            "board_probe_can_responders_updated",
+            mapOf(
+              "message" to "Board Probe CAN responders updated",
+              "can_ids" to responders.toList(),
+              "can_id_count" to responders.size,
+            ),
+          )
+        }
       }
       COMM_CUSTOM_APP_DATA -> if (phase == Phase.Probing && current != null) {
         val sample = parseRefloatGetAllData(payload, avgLatency = null, packetAt = nowMs(), location = null)
@@ -293,6 +338,14 @@ internal class BoardTransportDetector(
   private fun markConfirmed() {
     if (currentConfirmed) return
     currentConfirmed = true
+    recordProbeDiagnostic(
+      "board_probe_telemetry_confirmed",
+      mapOf(
+        "message" to "Board Probe telemetry confirmed transport",
+        "transport" to BoardTransport.toBridge(current),
+        "can_ids" to responders.toList(),
+      ),
+    )
     emitProgress(if (currentHasBms) "identity" else "bms", current, withCanIds = true)
   }
 
@@ -304,11 +357,27 @@ internal class BoardTransportDetector(
   private fun markBms() {
     if (currentHasBms) return
     currentHasBms = true
+    recordProbeDiagnostic(
+      "board_probe_bms_detected",
+      mapOf(
+        "message" to "Board Probe detected smart-BMS",
+        "transport" to BoardTransport.toBridge(current),
+      ),
+    )
     if (currentConfirmed) emitProgress("identity", current, withCanIds = true)
   }
 
   private fun markFwVersion(payload: ByteArray) {
-    currentVescFirmwareVersion = parseFwVersion(payload) ?: currentVescFirmwareVersion
+    val firmware = parseFwVersion(payload) ?: return
+    currentVescFirmwareVersion = firmware
+    recordProbeDiagnostic(
+      "board_probe_firmware_detected",
+      mapOf(
+        "message" to "Board Probe detected VESC firmware",
+        "transport" to BoardTransport.toBridge(current),
+        "vesc_firmware_version" to firmware,
+      ),
+    )
   }
 
   private fun markRefloatInfo(payload: ByteArray) {
@@ -318,6 +387,15 @@ internal class BoardTransportDetector(
     }
     currentRefloatVersion = version
     currentRefloatBaseVersion = RefloatConfigProtocol.normalizeBaseVersion(version)
+    recordProbeDiagnostic(
+      "board_probe_refloat_detected",
+      mapOf(
+        "message" to "Board Probe detected Refloat identity",
+        "transport" to BoardTransport.toBridge(current),
+        "refloat_version" to currentRefloatVersion,
+        "refloat_base_version" to currentRefloatBaseVersion,
+      ),
+    )
   }
 
   private fun finalizeProbe() {
@@ -331,6 +409,18 @@ internal class BoardTransportDetector(
         vescFirmwareVersion = currentVescFirmwareVersion,
         refloatVersion = currentRefloatVersion,
         refloatBaseVersion = currentRefloatBaseVersion,
+      ),
+    )
+    recordProbeDiagnostic(
+      "board_probe_transport_finished",
+      mapOf(
+        "message" to if (currentConfirmed) "Board Probe transport finished confirmed" else "Board Probe transport finished unconfirmed",
+        "transport" to BoardTransport.toBridge(transport),
+        "confirmed" to currentConfirmed,
+        "has_bms" to currentHasBms,
+        "vesc_firmware_version" to currentVescFirmwareVersion,
+        "refloat_version" to currentRefloatVersion,
+        "refloat_base_version" to currentRefloatBaseVersion,
       ),
     )
     if (currentConfirmed) {

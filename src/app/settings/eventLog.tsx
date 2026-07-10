@@ -21,15 +21,37 @@ const PAGE_SIZE = 50
 
 const GOOD_EVENTS = new Set([
   'board_ready',
+  'board_probe_ble_connected',
+  'board_probe_bms_detected',
+  'board_probe_completed',
+  'board_probe_firmware_detected',
+  'board_probe_refloat_detected',
+  'board_probe_service_ready',
+  'board_probe_telemetry_confirmed',
+  'board_probe_transport_confirmed',
   'gatt_connected',
   'gatt_ready',
   'reconnect_scan_found',
   'telemetry_polling_started',
 ])
 
+const INFO_EVENTS = new Set([
+  'board_probe_can_responders_updated',
+  'board_probe_progress',
+  'board_probe_started',
+  'board_probe_transport_finished',
+  'board_probe_transport_probe_started',
+])
+
+const WARNING_EVENTS = new Set([
+  'board_probe_connect_retry',
+  'board_probe_disconnected_mid_detection',
+])
+
 const BAD_EVENTS = new Set([
   'ble_connect_failed',
   'ble_disconnected_unexpectedly',
+  'board_probe_failed',
   'config_decode_failed',
   'profile_push_failed',
   'board_ready_timeout',
@@ -44,6 +66,8 @@ const BAD_EVENTS = new Set([
 
 function getEventColor(eventName: string): string {
   if (GOOD_EVENTS.has(eventName)) return theme.palette.green.color
+  if (INFO_EVENTS.has(eventName)) return theme.status.info.color
+  if (WARNING_EVENTS.has(eventName)) return theme.palette.yellow.color
   if (BAD_EVENTS.has(eventName)) return theme.status.error.color
   return theme.palette.yellow.color
 }
