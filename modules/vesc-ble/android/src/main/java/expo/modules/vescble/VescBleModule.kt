@@ -212,6 +212,7 @@ class VescBleModule : Module() {
       VescForegroundService.currentRemoteTiltState()
     }
     Function("setSelectedBoard") { boardId: String? ->
+      ManualDisconnectAutoStartGate.clear(context.applicationContext)
       runBlocking { AppDataRepository.get(context.applicationContext).setSelectedBoardId(boardId) }
       companionPresence.refreshForSelectedBoard()
     }
@@ -618,6 +619,7 @@ class VescBleModule : Module() {
 
   private suspend fun selectBoard(boardId: String) {
     val appCtx = context.applicationContext
+    ManualDisconnectAutoStartGate.clear(appCtx)
     AppDataRepository.get(appCtx).setSelectedBoardId(boardId)
     companionPresence.refreshForSelectedBoard()
     val config = buildSessionConfig(appCtx, boardId, requestedDebugRecordingEnabled)

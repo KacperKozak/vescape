@@ -25,6 +25,7 @@ public class VescBleModule: Module {
   // MARK: - Session state
 
   private var selectedBoardId: String? = nil
+  private let manualDisconnectSuppressedBoardKey = "vesc_manual_disconnect_auto_start_board_id"
 
   /// Retains the in-flight Board Probe across its async BLE lifecycle. Only one runs at a time —
   /// the probe owns the single BLE link (see Android `probeBoardLink`).
@@ -242,6 +243,7 @@ public class VescBleModule: Module {
     }
 
     Function("setSelectedBoard") { (boardId: String?) in
+      self.clearManualDisconnectAutoStartGate()
       self.selectedBoardId = boardId
       self.appData.updateSetting("selectedBoardId", rawValue: boardId)
     }
@@ -263,6 +265,7 @@ public class VescBleModule: Module {
     }
 
     AsyncFunction("selectBoard") { (boardId: String, promise: Promise) in
+      self.clearManualDisconnectAutoStartGate()
       self.selectedBoardId = boardId
       self.appData.updateSetting("selectedBoardId", rawValue: boardId)
       guard let config = self.connectConfig(boardId: boardId) else {
@@ -277,6 +280,7 @@ public class VescBleModule: Module {
     }
 
     AsyncFunction("stopBoard") { (promise: Promise) in
+      self.suppressAutoStartAfterManualDisconnect()
       self.coordinator.stopBoard()
       promise.resolve(nil)
     }
@@ -719,6 +723,7 @@ public class VescBleModule: Module {
     let settings = appData.getSettings()
     guard settings["autoConnect"] as? Bool ?? true else { return }
     guard let boardId = settings["selectedBoardId"] as? String, !boardId.isEmpty else { return }
+    guard !isAutoStartSuppressedAfterManualDisconnect(boardId: boardId) else { return }
     DispatchQueue.main.async {
       guard let config = self.connectConfig(boardId: boardId) else { return }
       self.selectedBoardId = boardId
@@ -751,6 +756,20 @@ public class VescBleModule: Module {
       batteryConfig: AppDataRepository.normalizeBatteryConfig(board["batteryConfig"] ?? nil),
       liveHistoryLimitMinutes: AppDataRepository.liveHistoryLimitMinutes(settings["liveHistoryLimit"] ?? nil) ?? 5
     )
+  }
+
+  private func suppressAutoStartAfterManualDisconnect() {
+    let boardId = selectedBoardId ?? (appData.getSettings()["selectedBoardId"] as? String)
+    guard let boardId, !boardId.isEmpty else { return }
+    UserDefaults.standard.set(boardId, forKey: manualDisconnectSuppressedBoardKey)
+  }
+
+  private func isAutoStartSuppressedAfterManualDisconnect(boardId: String) -> Bool {
+    UserDefaults.standard.string(forKey: manualDisconnectSuppressedBoardKey) == boardId
+  }
+
+  private func clearManualDisconnectAutoStartGate() {
+    UserDefaults.standard.removeObject(forKey: manualDisconnectSuppressedBoardKey)
   }
 
   /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescLiveStateMapper.kt `buildLiveState`

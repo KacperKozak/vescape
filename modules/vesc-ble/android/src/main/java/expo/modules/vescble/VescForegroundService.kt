@@ -139,6 +139,10 @@ class VescForegroundService : Service() {
             }
             appDataScope.launch {
                 val settings = AppDataRepository.get(context.applicationContext).getTypedSettings()
+                if (ManualDisconnectAutoStartGate.isSuppressed(context.applicationContext, settings.selectedBoardId)) {
+                    android.util.Log.i(VESC_SESSION_TAG, "Auto-connect service start skipped: manual disconnect")
+                    return@launch
+                }
                 val result = VescForegroundServiceLauncher.autoConnectSelectedBoard(
                     context = context,
                     autoConnectEnabled = settings.autoConnect,

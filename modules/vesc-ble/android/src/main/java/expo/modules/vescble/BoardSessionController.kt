@@ -503,6 +503,11 @@ internal class BoardSessionController(private val service: VescForegroundService
                 scheduler.post { stopIfIdle() }
                 return@launch
             }
+            if (ManualDisconnectAutoStartGate.isSuppressed(service.applicationContext, settings.selectedBoardId)) {
+                Log.i(VESC_SESSION_TAG, "Auto-connect suppressed after manual disconnect")
+                scheduler.post { stopIfIdle() }
+                return@launch
+            }
             scheduler.post { connectSelectedBoard(recordingEnabled = false) }
         }
     }
@@ -524,6 +529,11 @@ internal class BoardSessionController(private val service: VescForegroundService
             }
             val boardId = selectedCompanionBoardId(AppDataRepository.get(appCtx), address)
             if (boardId == null) {
+                scheduler.post { stopIfIdle() }
+                return@launch
+            }
+            if (ManualDisconnectAutoStartGate.isSuppressed(appCtx, boardId)) {
+                Log.i(VESC_SESSION_TAG, "Companion auto start suppressed after manual disconnect")
                 scheduler.post { stopIfIdle() }
                 return@launch
             }
@@ -563,6 +573,7 @@ internal class BoardSessionController(private val service: VescForegroundService
         VescForegroundService.appDataScope.launch {
             val appCtx = service.applicationContext
             val boardId = AppDataRepository.get(appCtx).getTypedSettings().selectedBoardId ?: return@launch
+            ManualDisconnectAutoStartGate.clear(appCtx)
             val config = try {
                 buildSessionConfig(appCtx, boardId, recordingEnabled = recordingEnabled)
             } catch (e: Exception) {
@@ -580,6 +591,7 @@ internal class BoardSessionController(private val service: VescForegroundService
     fun disconnectFromNotification() {
         if (boardConfig == null) return
         setStatus(BoardPhase.Disconnecting)
+        ManualDisconnectAutoStartGate.suppress(service.applicationContext, boardConfig?.appBoardId)
         // Always refresh: the notification stays visible after disconnect (idle + Connect), so it must
         // reflect the idle phase even while GPS keeps the service foregrounded.
         stopCurrentBoardSession(emitDisconnected = true, updateNotification = true)
@@ -615,6 +627,7 @@ internal class BoardSessionController(private val service: VescForegroundService
         val stop = VescForegroundService.claimPendingStop() ?: return
         if (boardConfig != null) {
             setStatus(BoardPhase.Disconnecting)
+            ManualDisconnectAutoStartGate.suppress(service.applicationContext, boardConfig?.appBoardId)
             stopCurrentBoardSession(
                 emitDisconnected = true,
                 updateNotification = !gpsMonitor.active,
