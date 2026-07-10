@@ -148,7 +148,7 @@ test('loads and creates profiles scoped to normalized Refloat base compatibility
 
   await useTuneProfileStore.getState().loadProfiles('board-1', '1.3.0')
   useTuneProfileStore.getState().setBoardSnapshot(boardSnapshot)
-  await useTuneProfileStore.getState().createProfile('Main')
+  await useTuneProfileStore.getState().createProfile('Main', '', '')
 
   expect(getTuneProfiles).toHaveBeenCalledWith('board-1', '1.3.0')
   expect(createProfile).toHaveBeenCalledWith(

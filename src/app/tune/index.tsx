@@ -260,7 +260,7 @@ export default function TuneScreen() {
             <Button
               label="Create tune"
               icon={FadersIcon}
-              onPress={() => void modals.storeCreateProfile('Main')}
+              onPress={() => void modals.storeCreateProfile('Main', '', '')}
             />
           ) : null}
         </View>
