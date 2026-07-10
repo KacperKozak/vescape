@@ -13,7 +13,7 @@
  */
 
 /** Allowed opacity levels for every translucent color value. */
-export type AlphaLevel = 0 | 0.12 | 0.3 | 0.4 | 0.6 | 0.7 | 0.8 | 0.85 | 1
+export type AlphaLevel = 0 | 0.03 | 0.1 | 0.12 | 0.3 | 0.4 | 0.6 | 0.7 | 0.75 | 0.8 | 0.85 | 1
 
 function alpha(color: string, level: AlphaLevel): string {
   'worklet'
@@ -170,6 +170,12 @@ export const status = {
     bg: palette.yellow.bg,
     border: palette.yellow.border,
   },
+  upgrade: {
+    color: palette.purple.color,
+    text: palette.purple.text,
+    bg: palette.purple.bg,
+    border: palette.purple.border,
+  },
 } as const
 
 /** Banner callouts — flat row, accent icon + neutral text. */
@@ -202,9 +208,17 @@ export const zone = {
 /** Shared press/touch interaction tokens. */
 export const interaction = {
   /** Android ripple for bounded pressables (cards, cells). */
-  ripple: { color: alpha(palette.slate.light, 0.12), borderless: false, foreground: true },
+  ripple: {
+    color: alpha(palette.slate.light, 0.12),
+    borderless: false,
+    foreground: true,
+  },
   /** Android ripple for icon-only pressables with no visible bounds. */
-  rippleBorderless: { color: alpha(palette.slate.light, 0.12), borderless: true, foreground: true },
+  rippleBorderless: {
+    color: alpha(palette.slate.light, 0.12),
+    borderless: true,
+    foreground: true,
+  },
   /** iOS/cross-platform pressed background for list rows and sheet items. */
   pressedBg: palette.slate.surface,
   /** iOS/cross-platform pressed opacity for metric cells and icon buttons. */

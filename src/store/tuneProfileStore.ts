@@ -17,7 +17,10 @@ import {
 } from 'vesc-ble'
 
 import { errorMessage } from '@/helpers/error'
+import { canRunFirmwareCommand, firmwareCommandBlockedMessage } from '@/lib/boardLinkIntegrity'
 import { formatTuneValue } from '@/lib/tune/fields'
+import { DEFAULT_TUNE_PROFILE_COLOR, DEFAULT_TUNE_PROFILE_ICON } from '@/lib/tune/profileMetadata'
+import { useBleStore } from '@/store/bleStore'
 import { useTuneSnapshotStore } from '@/store/tuneSnapshotStore'
 
 export type { TuneProfile, TuneProfileFieldValue } from 'vesc-ble'
@@ -32,6 +35,7 @@ interface TuneProfileState {
   profiles: TuneProfile[]
   activeProfile: TuneProfile | null
   activeBoardId: string | null
+  refloatBaseVersion: string | null
   draftFields: Record<string, TuneProfileFieldValue>
   hasDirtyFields: boolean
   boardFields: Record<string, TuneProfileFieldValue>
@@ -44,11 +48,21 @@ interface TuneProfileState {
 }
 
 interface TuneProfileActions {
-  loadProfiles: (boardId: string) => Promise<TuneProfile[]>
+  loadProfiles: (boardId: string, refloatBaseVersion: string | null) => Promise<TuneProfile[]>
   loadProfile: (profileId: string) => Promise<TuneProfile | null>
   setActiveProfile: (profileId: string) => void
-  createProfile: (name: string, cloneFromProfileId?: string) => Promise<TuneProfile | null>
-  renameProfile: (profileId: string, name: string) => Promise<TuneProfile | null>
+  createProfile: (
+    name: string,
+    icon: string,
+    color: string,
+    cloneFromProfileId?: string,
+  ) => Promise<TuneProfile | null>
+  renameProfile: (
+    profileId: string,
+    name: string,
+    icon: string,
+    color: string,
+  ) => Promise<TuneProfile | null>
   deleteProfile: (profileId: string) => Promise<void>
   loadHistory: (profileId: string) => Promise<TuneHistoryEntry[]>
   rollbackToHistory: (historyEntryId: number) => Promise<TuneProfile | null>
@@ -109,7 +123,10 @@ function boardDiff(
 ): TuneProfileBoardDiff[] {
   if (!profile) return []
   return Object.entries(boardFields)
-    .filter(([, boardValue]) => boardValue !== null)
+    .filter(
+      ([fieldId, boardValue]) =>
+        boardValue !== null && Object.prototype.hasOwnProperty.call(profile.fields, fieldId),
+    )
     .flatMap(([fieldId, boardValue]) =>
       sameFieldValue(profile.fields[fieldId], boardValue)
         ? []
@@ -133,12 +150,91 @@ function nextDraftWithField(
   return next
 }
 
+function isCompatibleProfile(
+  profile: TuneProfile,
+  boardId: string | null,
+  refloatBaseVersion: string | null,
+): boolean {
+  return profile.boardId === boardId && profile.refloatBaseVersion === refloatBaseVersion
+}
+
 let profileLoadRequestId = 0
+
+function withDefaultMetadata(profile: TuneProfile): TuneProfile {
+  return {
+    ...profile,
+    icon: profile.icon || DEFAULT_TUNE_PROFILE_ICON,
+    color: profile.color || DEFAULT_TUNE_PROFILE_COLOR,
+  }
+}
+
+function withMetadata(profile: TuneProfile, icon: string, color: string): TuneProfile {
+  return {
+    ...profile,
+    icon: icon || DEFAULT_TUNE_PROFILE_ICON,
+    color: color || DEFAULT_TUNE_PROFILE_COLOR,
+  }
+}
+
+function isLegacyTuneProfileBridgeError(error: unknown): boolean {
+  const message = errorMessage(error, '').toLowerCase()
+  return (
+    message.includes('argument') ||
+    message.includes('parameter') ||
+    message.includes('expected') ||
+    message.includes('cannot convert') ||
+    message.includes('signature')
+  )
+}
+
+async function createNativeProfileWithMetadata(
+  boardId: string,
+  name: string,
+  icon: string,
+  color: string,
+  fields: Record<string, TuneProfileFieldValue>,
+  refloatBaseVersion: string,
+): Promise<TuneProfile> {
+  try {
+    return withMetadata(
+      await nativeCreateProfile(boardId, name, icon, color, fields, refloatBaseVersion),
+      icon,
+      color,
+    )
+  } catch (error) {
+    if (!isLegacyTuneProfileBridgeError(error)) throw error
+    const legacyCreateProfile = nativeCreateProfile as unknown as (
+      boardId: string,
+      name: string,
+      fields: Record<string, TuneProfileFieldValue>,
+    ) => Promise<TuneProfile>
+    return withMetadata(await legacyCreateProfile(boardId, name, fields), icon, color)
+  }
+}
+
+async function renameNativeProfileWithMetadata(
+  profileId: string,
+  name: string,
+  icon: string,
+  color: string,
+): Promise<TuneProfile> {
+  try {
+    return withMetadata(await nativeRenameProfile(profileId, name, icon, color), icon, color)
+  } catch (error) {
+    if (!isLegacyTuneProfileBridgeError(error)) throw error
+    const legacyRenameProfile = nativeRenameProfile as unknown as (
+      profileId: string,
+      name: string,
+    ) => Promise<TuneProfile>
+    return withMetadata(await legacyRenameProfile(profileId, name), icon, color)
+  }
+}
 
 export const useTuneProfileStore = create<TuneProfileState & TuneProfileActions>((set, get) => ({
   profiles: [],
   activeProfile: null,
   activeBoardId: null,
+  refloatBaseVersion: null,
   draftFields: {},
   hasDirtyFields: false,
   boardFields: {},
@@ -149,21 +245,46 @@ export const useTuneProfileStore = create<TuneProfileState & TuneProfileActions>
   syncing: false,
   error: null,
 
-  async loadProfiles(boardId) {
+  async loadProfiles(boardId, refloatBaseVersion) {
     const requestId = ++profileLoadRequestId
-    const currentActive = get().activeProfile
+    const state = get()
+    const currentActive = state.activeProfile
+    const compatibilityChanged =
+      state.activeBoardId !== boardId || state.refloatBaseVersion !== refloatBaseVersion
     set({
       loading: true,
       error: null,
       activeBoardId: boardId,
+      refloatBaseVersion,
+      ...(compatibilityChanged
+        ? {
+            profiles: [],
+            activeProfile: null,
+            draftFields: {},
+            hasDirtyFields: false,
+            boardDiff: [],
+            hasBoardDiff: false,
+          }
+        : {}),
     })
     try {
-      const profiles = await nativeGetTuneProfiles(boardId)
-      if (requestId !== profileLoadRequestId || get().activeBoardId !== boardId) {
+      const loadedProfiles = (await nativeGetTuneProfiles(boardId, refloatBaseVersion)).map(
+        withDefaultMetadata,
+      )
+      if (
+        requestId !== profileLoadRequestId ||
+        get().activeBoardId !== boardId ||
+        get().refloatBaseVersion !== refloatBaseVersion
+      ) {
         return get().profiles
       }
+      const profiles = loadedProfiles.filter((profile) =>
+        isCompatibleProfile(profile, boardId, refloatBaseVersion),
+      )
       const activeProfile =
-        profiles.find((profile) => profile.id === currentActive?.id) ?? profiles[0] ?? null
+        currentActive && isCompatibleProfile(currentActive, boardId, refloatBaseVersion)
+          ? (profiles.find((profile) => profile.id === currentActive.id) ?? profiles[0] ?? null)
+          : (profiles[0] ?? null)
       const diff = boardDiff(activeProfile, get().boardFields)
       set({
         profiles,
@@ -177,7 +298,11 @@ export const useTuneProfileStore = create<TuneProfileState & TuneProfileActions>
       })
       return profiles
     } catch (error) {
-      if (requestId !== profileLoadRequestId || get().activeBoardId !== boardId) {
+      if (
+        requestId !== profileLoadRequestId ||
+        get().activeBoardId !== boardId ||
+        get().refloatBaseVersion !== refloatBaseVersion
+      ) {
         return get().profiles
       }
       set({ loading: false, error: errorMessage(error, 'Unable to load tune profiles.') })
@@ -189,17 +314,30 @@ export const useTuneProfileStore = create<TuneProfileState & TuneProfileActions>
     set({ loading: true, error: null })
     try {
       const profile = await nativeGetTuneProfile(profileId)
+      const current = get()
+      const compatible =
+        profile == null ||
+        current.activeBoardId == null ||
+        current.refloatBaseVersion == null ||
+        isCompatibleProfile(profile, current.activeBoardId, current.refloatBaseVersion)
+      if (!compatible) {
+        set({ loading: false, error: null })
+        return null
+      }
+      const normalizedProfile = profile ? withDefaultMetadata(profile) : null
       set((state) => {
-        const diff = boardDiff(profile, state.boardFields)
+        const diff = boardDiff(normalizedProfile, state.boardFields)
         return {
           profiles:
-            profile == null
+            normalizedProfile == null
               ? state.profiles
-              : state.profiles.some((item) => item.id === profile.id)
-                ? state.profiles.map((item) => (item.id === profile.id ? profile : item))
-                : [...state.profiles, profile],
-          activeProfile: profile,
-          activeBoardId: profile?.boardId ?? state.activeBoardId,
+              : state.profiles.some((item) => item.id === normalizedProfile.id)
+                ? state.profiles.map((item) =>
+                    item.id === normalizedProfile.id ? normalizedProfile : item,
+                  )
+                : [...state.profiles, normalizedProfile],
+          activeProfile: normalizedProfile,
+          activeBoardId: normalizedProfile?.boardId ?? state.activeBoardId,
           draftFields: {},
           hasDirtyFields: false,
           boardDiff: diff,
@@ -208,7 +346,7 @@ export const useTuneProfileStore = create<TuneProfileState & TuneProfileActions>
           error: null,
         }
       })
-      return profile
+      return normalizedProfile
     } catch (error) {
       set({ loading: false, error: errorMessage(error, 'Unable to load tune profiles.') })
       throw error
@@ -217,7 +355,12 @@ export const useTuneProfileStore = create<TuneProfileState & TuneProfileActions>
 
   setActiveProfile(profileId) {
     set((state) => {
-      const profile = state.profiles.find((p) => p.id === profileId) ?? null
+      const profile =
+        state.profiles.find(
+          (p) =>
+            p.id === profileId &&
+            isCompatibleProfile(p, state.activeBoardId, state.refloatBaseVersion),
+        ) ?? null
       if (!profile) return state
       const diff = boardDiff(profile, state.boardFields)
       return {
@@ -230,14 +373,25 @@ export const useTuneProfileStore = create<TuneProfileState & TuneProfileActions>
     })
   },
 
-  async createProfile(name, cloneFromProfileId) {
+  async createProfile(name, icon, color, cloneFromProfileId) {
     const state = get()
-    if (!state.activeBoardId) return null
+    if (!state.activeBoardId || !state.refloatBaseVersion) return null
     const sourceFields = cloneFromProfileId
-      ? (state.profiles.find((p) => p.id === cloneFromProfileId)?.fields ?? {})
-      : {}
+      ? (state.profiles.find(
+          (p) =>
+            p.id === cloneFromProfileId &&
+            isCompatibleProfile(p, state.activeBoardId, state.refloatBaseVersion),
+        )?.fields ?? {})
+      : state.boardFields
     try {
-      const profile = await nativeCreateProfile(state.activeBoardId, name, sourceFields)
+      const profile = await createNativeProfileWithMetadata(
+        state.activeBoardId,
+        name,
+        icon || DEFAULT_TUNE_PROFILE_ICON,
+        color || DEFAULT_TUNE_PROFILE_COLOR,
+        sourceFields,
+        state.refloatBaseVersion,
+      )
       set((prevState) => {
         const diff = boardDiff(profile, prevState.boardFields)
         return {
@@ -256,9 +410,14 @@ export const useTuneProfileStore = create<TuneProfileState & TuneProfileActions>
     }
   },
 
-  async renameProfile(profileId, name) {
+  async renameProfile(profileId, name, icon, color) {
     try {
-      const updated = await nativeRenameProfile(profileId, name)
+      const updated = await renameNativeProfileWithMetadata(
+        profileId,
+        name,
+        icon || DEFAULT_TUNE_PROFILE_ICON,
+        color || DEFAULT_TUNE_PROFILE_COLOR,
+      )
       set((state) => ({
         profiles: state.profiles.map((p) => (p.id === updated.id ? updated : p)),
         activeProfile: state.activeProfile?.id === updated.id ? updated : state.activeProfile,
@@ -356,6 +515,7 @@ export const useTuneProfileStore = create<TuneProfileState & TuneProfileActions>
       const diff = boardDiff(state.activeProfile, boardFields)
       return {
         boardFields,
+        refloatBaseVersion: snapshot?.refloatBaseVersion ?? state.refloatBaseVersion,
         boardDiff: diff,
         hasBoardDiff: diff.length > 0,
       }
@@ -403,8 +563,8 @@ export const useTuneProfileStore = create<TuneProfileState & TuneProfileActions>
     set((state) => {
       const profile = state.activeProfile
       if (!profile) return state
-      const draftFields = Object.entries(state.boardFields).reduce(
-        (next, [fieldId, value]) => nextDraftWithField(profile, next, fieldId, value),
+      const draftFields = state.boardDiff.reduce(
+        (next, { fieldId, boardValue }) => nextDraftWithField(profile, next, fieldId, boardValue),
         { ...state.draftFields },
       )
       return {
@@ -449,6 +609,11 @@ export const useTuneProfileStore = create<TuneProfileState & TuneProfileActions>
   async syncToBoard() {
     const profile = get().activeProfile
     if (!profile) return
+    const linkIntegrity = useBleStore.getState().linkIntegrity
+    if (!canRunFirmwareCommand(linkIntegrity)) {
+      set({ syncing: false, error: firmwareCommandBlockedMessage(linkIntegrity) })
+      return
+    }
     set({ syncing: true, error: null })
     try {
       const snapshot = await nativePushProfileToBoard(profile.id)
@@ -467,6 +632,7 @@ export const useTuneProfileStore = create<TuneProfileState & TuneProfileActions>
       profiles: [],
       activeProfile: null,
       activeBoardId: null,
+      refloatBaseVersion: null,
       draftFields: {},
       hasDirtyFields: false,
       boardFields: {},

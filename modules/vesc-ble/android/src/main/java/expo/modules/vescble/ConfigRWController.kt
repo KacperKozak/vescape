@@ -5,6 +5,7 @@ import expo.modules.vescble.config.ConfigRWEvent
 import expo.modules.vescble.config.ConfigRWFsm
 import expo.modules.vescble.config.ConfigRWState
 import expo.modules.vescble.runtime.Cancellable
+import expo.modules.vescble.runtime.LinkIntegrity
 import expo.modules.vescble.runtime.Scheduler
 import expo.modules.vescble.telemetry.AppDataRepository
 import kotlinx.coroutines.CoroutineScope
@@ -27,6 +28,7 @@ internal data class ConfigConnectionSnapshot(
     val canId: Int?,
     val directConnection: Boolean,
     val fwVersion: String?,
+    val linkIntegrity: LinkIntegrity,
 )
 
 internal interface ConfigRWControllerPort {
@@ -58,6 +60,7 @@ internal class ConfigRWController(
         if (isInFlight) return pending.inFlight()
         val connection = port.connection()
         if (!connection.connected()) return pending.notConnected()
+        if (!connection.trusted()) return pending.linkNotTrusted()
         val transport = boardTransport(connection.canId, connection.directConnection) ?: return pending.noCanId("read")
         val wasPolling = port.isPollingActive()
         port.stopPolling()
@@ -69,6 +72,7 @@ internal class ConfigRWController(
         if (isInFlight) return pending.inFlight()
         val initial = port.connection()
         if (!initial.connected()) return pending.notConnected()
+        if (!initial.trusted()) return pending.linkNotTrusted()
         if (boardTransport(initial.canId, initial.directConnection) == null) return pending.noCanId("push")
         appDataScope.launch {
             val profile = try { repository().getTuneProfile(pending.profileId) } catch (_: Exception) { null }
@@ -83,11 +87,17 @@ internal class ConfigRWController(
                 if (isInFlight) return@post pending.inFlight()
                 val connection = port.connection()
                 if (!connection.connected()) return@post pending.notConnected()
+                if (!connection.trusted()) return@post pending.linkNotTrusted()
                 val transport = boardTransport(connection.canId, connection.directConnection) ?: return@post pending.noCanId("push")
                 val profileBoardId = profile["boardId"] as? String
+                val profileRefloatBaseVersion = profile["refloatBaseVersion"] as? String
                 val connectedBoardId = connection.config?.appBoardId
                 if (profileBoardId.isNullOrBlank() || connectedBoardId.isNullOrBlank() || profileBoardId != connectedBoardId) {
                     return@post pending.onError(RefloatConfigErrorCode.PROFILE_BOARD_MISMATCH.name, "Tune profile does not belong to the connected board")
+                }
+                val connectedRefloatBaseVersion = connection.config?.refloatBaseVersion
+                if (profileRefloatBaseVersion.isNullOrBlank() || connectedRefloatBaseVersion.isNullOrBlank() || profileRefloatBaseVersion != connectedRefloatBaseVersion) {
+                    return@post pending.onError(RefloatConfigErrorCode.PROFILE_BOARD_MISMATCH.name, "Tune profile does not match the connected board Refloat Tune Compatibility")
                 }
                 val wasPolling = port.isPollingActive()
                 port.stopPolling()
@@ -132,7 +142,7 @@ internal class ConfigRWController(
     private fun completeRead(effect: ConfigRWEffect.EmitReadComplete) {
         val callbacks = readCallbacks.also { readCallbacks = null }
         resumePolling(effect.resumePolling)
-        persistProfile(effect.snapshot) { callbacks?.onSuccess?.invoke(effect.snapshot.toMap()) }
+        callbacks?.onSuccess?.invoke(effect.snapshot.toMap())
     }
     private fun failRead(effect: ConfigRWEffect.EmitReadFailure) {
         val callbacks = readCallbacks.also { readCallbacks = null }; resumePolling(effect.resumePolling)
@@ -142,23 +152,21 @@ internal class ConfigRWController(
     }
     private fun completeWrite(effect: ConfigRWEffect.EmitWriteComplete) {
         val callbacks = writeCallbacks.also { writeCallbacks = null }; resumePolling(effect.resumePolling)
-        persistProfile(effect.snapshot) { callbacks?.onSuccess?.invoke(effect.snapshot.toMap()) }
+        callbacks?.onSuccess?.invoke(effect.snapshot.toMap())
     }
     private fun failWrite(effect: ConfigRWEffect.EmitWriteFailure) {
         val callbacks = writeCallbacks.also { writeCallbacks = null }; resumePolling(effect.resumePolling)
         port.captureDiagnostic("profile_push_failed", port.diagnosticProperties(port.connection().config, "profile_push") + mapOf("operation_id" to effect.opId, "message" to effect.message, "error_code" to effect.code.name, "phase" to effect.phase.name, "firmware" to port.connection().fwVersion) + DiagnosticReporter.configBlobProperties(effect.rawConfig))
         callbacks?.onError?.invoke(effect.code.name, effect.message)
     }
-    private fun persistProfile(snapshot: RefloatConfigSnapshot, complete: () -> Unit) = appDataScope.launch {
-        try { repository().createMainTuneProfileIfMissing(snapshot) } catch (_: Exception) { }
-        scheduler.post(complete)
-    }
-
     private fun ConfigConnectionSnapshot.connected() = config != null && phase == BoardPhase.Connected
+    private fun ConfigConnectionSnapshot.trusted() = linkIntegrity == LinkIntegrity.Trusted
     private fun PendingConfigRead.inFlight() = onError(RefloatConfigErrorCode.CONFIG_REQUEST_IN_FLIGHT.name, "Config operation already in flight")
     private fun PendingConfigWrite.inFlight() = onError(RefloatConfigErrorCode.CONFIG_REQUEST_IN_FLIGHT.name, "Config operation already in flight")
     private fun PendingConfigRead.notConnected() = onError(RefloatConfigErrorCode.BOARD_NOT_CONNECTED.name, "Board must be connected before reading Refloat config")
     private fun PendingConfigWrite.notConnected() = onError(RefloatConfigErrorCode.BOARD_NOT_CONNECTED.name, "Board must be connected before pushing config")
+    private fun PendingConfigRead.linkNotTrusted() = onError(RefloatConfigErrorCode.LINK_NOT_TRUSTED.name, "Trusted board link required before reading Refloat config")
+    private fun PendingConfigWrite.linkNotTrusted() = onError(RefloatConfigErrorCode.LINK_NOT_TRUSTED.name, "Trusted board link required before pushing config")
     private fun PendingConfigRead.noCanId(operation: String) = onError(RefloatConfigErrorCode.CAN_ID_UNAVAILABLE.name, "Cannot $operation Refloat config before CAN id discovery")
     private fun PendingConfigWrite.noCanId(operation: String) = onError(RefloatConfigErrorCode.CAN_ID_UNAVAILABLE.name, "Cannot $operation config before CAN id discovery")
 }

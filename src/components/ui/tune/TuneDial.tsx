@@ -1,19 +1,29 @@
 /* eslint-disable react-hooks/immutability, react-hooks/refs */
 import * as Haptics from 'expo-haptics'
-import { use, useCallback, useEffect, useMemo, useRef } from 'react'
-import { Platform, StyleSheet, TextInput, View } from 'react-native'
+import { use, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Platform, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/ui/base/Text'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import Animated, {
   cancelAnimation,
-  useAnimatedProps,
-  useAnimatedStyle,
+  useDerivedValue,
   useFrameCallback,
   useSharedValue,
   withSpring,
   type FrameCallback,
 } from 'react-native-reanimated'
-import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg'
+import {
+  Canvas,
+  DashPathEffect,
+  Group,
+  Line,
+  LinearGradient,
+  Path,
+  Rect,
+  Skia,
+  Text as SkiaText,
+  vec,
+} from '@shopify/react-native-skia'
 import { scheduleOnRN } from 'react-native-worklets'
 
 import {
@@ -23,11 +33,13 @@ import {
   computeHapticStepSpacing,
   computeTuneDialLayout,
   isTuneDialEdgeStep,
+  resolveTuneDialThrowTargetOffset,
   resolveTuneDialThrowVelocity,
   shouldApplyExternalTuneDialValue,
   shouldPlayTuneDialHaptic,
 } from '@/components/ui/tune/tuneDialPhysics'
 import { NativeScrollGestureContext } from '@/components/ui/gestures/NativeScrollGestureContext'
+import { useSkiaFont } from '@/hooks/useSkiaFont'
 import { theme } from '@/constants/theme'
 import { formatTuneValue } from '@/lib/tune/fields'
 
@@ -39,14 +51,18 @@ const VALUE_LABEL_WIDTH = 28
 const VALUE_LABEL_HEIGHT = 14
 const CURRENT_VALUE_TOP = 2
 const MARKER_LINE_WIDTH = 2.5
-const INDICATOR_COLOR = theme.status.error.color
+const GLOW_WIDTH = 52
+const LABEL_FONT_SIZE = 9
+const BADGE_FONT_SIZE = 18
+const BADGE_WIDTH = 80
+const BADGE_BASELINE = 17
+const LABEL_BASELINE_Y = RULER_LABEL_BAND_TOP + (VALUE_LABEL_HEIGHT + LABEL_FONT_SIZE) / 2 - 1.5
 const PREV_MARK_COLOR = theme.palette.yellow.color
 const MAJOR_TICK_COLOR = theme.palette.slate.textMuted
 const MINOR_TICK_COLOR = theme.palette.slate.border
 const LABEL_COLOR = theme.palette.slate.textMuted
 
 const SNAP_SPRING = { damping: 18, stiffness: 700, mass: 0.8 }
-const AnimatedTextInput = Animated.createAnimatedComponent(TextInput)
 
 interface TuneDialProps {
   value: number
@@ -57,6 +73,7 @@ interface TuneDialProps {
   unit?: string | null
   indicatorGlow?: 'left' | 'right'
   valueChangeMode?: 'live' | 'commit'
+  color?: string
   onValueChange: (value: number) => void
 }
 
@@ -65,38 +82,6 @@ function formatDisplayValue(value: number, decimals: number): string {
 
   if (decimals <= 0) return String(Math.round(value))
   return value.toFixed(decimals)
-}
-
-function IndicatorGlow({ direction }: { direction: 'left' | 'right' }) {
-  const gradientId =
-    direction === 'left' ? 'tuneDialIndicatorGlowLeft' : 'tuneDialIndicatorGlowRight'
-
-  return (
-    <Svg
-      style={[
-        styles.indicatorGlow,
-        direction === 'left' ? styles.indicatorGlowLeft : styles.indicatorGlowRight,
-      ]}
-      pointerEvents="none"
-    >
-      <Defs>
-        <LinearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="0%">
-          <Stop
-            offset="0%"
-            stopColor={INDICATOR_COLOR}
-            stopOpacity={direction === 'left' ? 0 : 0.1}
-          />
-          <Stop offset="50%" stopColor={INDICATOR_COLOR} stopOpacity={0.07} />
-          <Stop
-            offset="100%"
-            stopColor={INDICATOR_COLOR}
-            stopOpacity={direction === 'left' ? 0.1 : 0}
-          />
-        </LinearGradient>
-      </Defs>
-      <Rect width="100%" height="100%" fill={`url(#${gradientId})`} />
-    </Svg>
-  )
 }
 
 export function TuneDial({
@@ -108,6 +93,7 @@ export function TuneDial({
   unit,
   indicatorGlow,
   valueChangeMode = 'commit',
+  color = theme.telemetry.speed,
   onValueChange,
 }: TuneDialProps) {
   'use no memo'
@@ -137,6 +123,7 @@ export function TuneDial({
   const dragStartX = useSharedValue(0)
   const interactionActive = useSharedValue(false)
   const momentumVelocity = useSharedValue(0)
+  const momentumTargetOffset = useSharedValue(0)
   const displayValue = useSharedValue(value)
   const lastEmittedValue = useSharedValue(value)
   const lastStepIndex = useSharedValue(initialStepIndex)
@@ -265,7 +252,7 @@ export function TuneDial({
       if (speed <= THROW_STOP_VELOCITY) {
         if (speed > 0) {
           momentumVelocity.value = 0
-          settleOffsetToNearest(translateX.value)
+          settleOffsetToNearest(momentumTargetOffset.value)
         }
         scheduleOnRN(setMomentumFrameActive, false)
         return
@@ -273,6 +260,16 @@ export function TuneDial({
 
       const nextThrow = advanceTuneDialThrow(momentumVelocity.value, rawDt)
       let nextOffset = translateX.value + nextThrow.distance
+      const reachedTarget =
+        momentumVelocity.value < 0
+          ? nextOffset <= momentumTargetOffset.value
+          : nextOffset >= momentumTargetOffset.value
+      if (reachedTarget) {
+        momentumVelocity.value = 0
+        settleOffsetToNearest(momentumTargetOffset.value)
+        scheduleOnRN(setMomentumFrameActive, false)
+        return
+      }
       if (nextOffset > 0 || nextOffset < -totalWidth) {
         nextOffset = Math.max(-totalWidth, Math.min(0, nextOffset))
         momentumVelocity.value = 0
@@ -296,6 +293,7 @@ export function TuneDial({
       emitStepIndex,
       commitStepIndex,
       interactionActive,
+      momentumTargetOffset,
       momentumVelocity,
       setMomentumFrameActive,
       settleOffsetToNearest,
@@ -347,6 +345,17 @@ export function TuneDial({
         if (momentumVelocity.value === 0) {
           settleOffsetToNearest(translateX.value)
         } else {
+          const rawTargetOffset = resolveTuneDialThrowTargetOffset(
+            translateX.value,
+            momentumVelocity.value,
+            totalWidth,
+          )
+          const targetStepIndex = Math.max(
+            0,
+            Math.min(totalSteps, Math.round(-rawTargetOffset / stepPx)),
+          )
+          momentumTargetOffset.value = -targetStepIndex * stepPx
+          if (!commitEveryChange) commitStepIndex(targetStepIndex)
           scheduleOnRN(setMomentumFrameActive, true)
           const stepIndex = Math.max(
             0,
@@ -368,6 +377,9 @@ export function TuneDial({
     emitStepIndex,
     emitEdgeHaptic,
     interactionActive,
+    commitEveryChange,
+    commitStepIndex,
+    momentumTargetOffset,
     momentumVelocity,
     pauseThrow,
     settleOffsetToNearest,
@@ -407,19 +419,27 @@ export function TuneDial({
     lastStepIndex,
   ])
 
-  const stripStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value }],
-  }))
+  const [canvasWidth, setCanvasWidth] = useState(0)
+  const centerX = canvasWidth / 2
+
+  const stripTransform = useDerivedValue(() => [{ translateX: centerX + translateX.value }])
 
   const prevMarkOffset = previousValue != null ? valueToOffset(previousValue) : null
   const previousValueLabel = previousValue != null ? formatTuneValue(previousValue) : null
-  const animatedValueProps = useAnimatedProps(() => ({
-    text: formatDisplayValue(displayValue.value, decimals),
-    value: formatDisplayValue(displayValue.value, decimals),
-  }))
 
-  const ticks = useMemo(() => {
-    const elements: React.ReactNode[] = []
+  const badgeFont = useSkiaFont('800', BADGE_FONT_SIZE)
+  const badgeText = useDerivedValue(() => formatDisplayValue(displayValue.value, decimals))
+  const badgeX = useDerivedValue(() =>
+    badgeFont ? BADGE_WIDTH - badgeFont.getTextWidth(badgeText.value) : 0,
+  )
+
+  const labelFont = useSkiaFont('700', LABEL_FONT_SIZE)
+  const prevLabelFont = useSkiaFont('800', LABEL_FONT_SIZE)
+
+  const { majorTicksPath, minorTicksPath, labels } = useMemo(() => {
+    const majorPath = Skia.Path.Make()
+    const minorPath = Skia.Path.Make()
+    const labelList: { key: number; text: string; x: number }[] = []
 
     for (let i = 0; i <= totalSteps; i++) {
       const val = Number((min + i * step).toFixed(decimals))
@@ -428,23 +448,23 @@ export function TuneDial({
       const isMinor = !isMajor && renderMinor && i % minorEvery === 0
 
       if (isMajor) {
-        elements.push(
-          <View key={i} style={[styles.majorTick, { left: x }]}>
-            <View style={styles.majorTickLine} />
-            <Text style={styles.tickLabel}>{formatTuneValue(val)}</Text>
-          </View>,
-        )
+        majorPath.moveTo(x, MAJOR_TICK_TOP)
+        majorPath.lineTo(x, RULER_LABEL_BAND_TOP)
+        const text = formatTuneValue(val)
+        const textX = labelFont ? x - labelFont.getTextWidth(text) / 2 : x
+        labelList.push({ key: i, text, x: textX })
       } else if (isMinor) {
-        elements.push(<View key={i} style={[styles.minorTick, { left: x }]} />)
+        minorPath.moveTo(x, TOP_VALUE_BAND_HEIGHT + 9)
+        minorPath.lineTo(x, TOP_VALUE_BAND_HEIGHT + 9 + 36)
       }
 
       if (renderMidpointTicks && i < totalSteps) {
-        elements.push(
-          <View key={`${i}-mid`} style={[styles.midpointTick, { left: x + stepPx / 2 }]} />,
-        )
+        const midX = x + stepPx / 2
+        minorPath.moveTo(midX, TOP_VALUE_BAND_HEIGHT + 11)
+        minorPath.lineTo(midX, TOP_VALUE_BAND_HEIGHT + 11 + 26)
       }
     }
-    return elements
+    return { majorTicksPath: majorPath, minorTicksPath: minorPath, labels: labelList }
   }, [
     totalSteps,
     min,
@@ -456,37 +476,112 @@ export function TuneDial({
     renderMinor,
     labelEveryStep,
     renderMidpointTicks,
+    labelFont,
   ])
+
+  const prevLabelX =
+    prevMarkOffset != null && previousValueLabel != null && prevLabelFont
+      ? prevMarkOffset - prevLabelFont.getTextWidth(previousValueLabel) / 2
+      : null
 
   const dial = (
     <View style={styles.rootView}>
-      <View style={styles.container}>
+      <View style={styles.container} onLayout={(e) => setCanvasWidth(e.nativeEvent.layout.width)}>
         <GestureDetector gesture={panGesture}>
           <Animated.View style={styles.gestureArea}>
-            <Animated.View style={[styles.strip, { width: totalWidth + 1 }, stripStyle]}>
-              {ticks}
-              {prevMarkOffset != null && previousValueLabel != null && (
-                <>
-                  <View style={[styles.prevMarkTop, { left: prevMarkOffset }]}>
-                    <View style={styles.prevMarkDash} />
-                  </View>
-                  <View style={[styles.prevValueRing, { left: prevMarkOffset }]}>
-                    <Text style={styles.prevValueText}>{previousValueLabel}</Text>
-                  </View>
-                </>
-              )}
-            </Animated.View>
+            {canvasWidth > 0 && (
+              <Canvas style={styles.canvas}>
+                <Group transform={stripTransform}>
+                  <Path
+                    path={minorTicksPath}
+                    style="stroke"
+                    color={MINOR_TICK_COLOR}
+                    strokeWidth={1}
+                  />
+                  <Path
+                    path={majorTicksPath}
+                    style="stroke"
+                    color={MAJOR_TICK_COLOR}
+                    strokeWidth={1}
+                  />
+                  {labelFont &&
+                    labels.map((label) => (
+                      <SkiaText
+                        key={label.key}
+                        x={label.x}
+                        y={LABEL_BASELINE_Y}
+                        text={label.text}
+                        font={labelFont}
+                        color={LABEL_COLOR}
+                      />
+                    ))}
+                  {prevMarkOffset != null && (
+                    <>
+                      <Rect
+                        x={prevMarkOffset - 1.5}
+                        y={TOP_VALUE_BAND_HEIGHT}
+                        width={3}
+                        height={RULER_LABEL_BAND_TOP - TOP_VALUE_BAND_HEIGHT}
+                        color={theme.palette.slate.surface}
+                      />
+                      <Line
+                        p1={vec(prevMarkOffset, TOP_VALUE_BAND_HEIGHT)}
+                        p2={vec(prevMarkOffset, RULER_LABEL_BAND_TOP)}
+                        color={PREV_MARK_COLOR}
+                        strokeWidth={1}
+                      >
+                        <DashPathEffect intervals={[3, 3]} />
+                      </Line>
+                      {previousValueLabel != null && prevLabelX != null && prevLabelFont && (
+                        <SkiaText
+                          x={prevLabelX}
+                          y={LABEL_BASELINE_Y}
+                          text={previousValueLabel}
+                          font={prevLabelFont}
+                          color={PREV_MARK_COLOR}
+                        />
+                      )}
+                    </>
+                  )}
+                </Group>
+                {indicatorGlow && (
+                  <Rect
+                    x={indicatorGlow === 'left' ? centerX - GLOW_WIDTH : centerX}
+                    y={CURRENT_VALUE_TOP}
+                    width={GLOW_WIDTH}
+                    height={RULER_LABEL_BAND_TOP - CURRENT_VALUE_TOP}
+                  >
+                    <LinearGradient
+                      start={vec(indicatorGlow === 'left' ? centerX - GLOW_WIDTH : centerX, 0)}
+                      end={vec(indicatorGlow === 'left' ? centerX : centerX + GLOW_WIDTH, 0)}
+                      colors={
+                        indicatorGlow === 'left'
+                          ? [`${color}00`, `${color}12`, `${color}1A`]
+                          : [`${color}1A`, `${color}12`, `${color}00`]
+                      }
+                    />
+                  </Rect>
+                )}
+              </Canvas>
+            )}
           </Animated.View>
         </GestureDetector>
-        {indicatorGlow ? <IndicatorGlow direction={indicatorGlow} /> : null}
-        <View style={styles.indicatorTop} pointerEvents="none" />
+        <View
+          style={[styles.indicatorTop, { backgroundColor: color, shadowColor: color }]}
+          pointerEvents="none"
+        />
         <View style={styles.valueBadgeAnchor} pointerEvents="none">
-          <AnimatedTextInput
-            editable={false}
-            defaultValue={formatDisplayValue(value, decimals)}
-            animatedProps={animatedValueProps}
-            style={styles.valueBadgeText}
-          />
+          <Canvas style={styles.valueBadgeCanvas}>
+            {badgeFont && (
+              <SkiaText
+                x={badgeX}
+                y={BADGE_BASELINE}
+                text={badgeText}
+                font={badgeFont}
+                color={color}
+              />
+            )}
+          </Canvas>
           {unit ? <Text style={styles.valueBadgeUnit}>{unit}</Text> : null}
         </View>
       </View>
@@ -507,102 +602,10 @@ const styles = StyleSheet.create({
   },
   gestureArea: {
     flex: 1,
-    justifyContent: 'center',
-    paddingLeft: '50%',
   },
-  strip: {
+  canvas: {
+    width: '100%',
     height: DIAL_HEIGHT,
-    position: 'relative',
-  },
-  majorTick: {
-    position: 'absolute',
-    top: MAJOR_TICK_TOP,
-    alignItems: 'center',
-    width: 0,
-  },
-  majorTickLine: {
-    width: 1,
-    height: RULER_LABEL_BAND_TOP - MAJOR_TICK_TOP,
-    backgroundColor: MAJOR_TICK_COLOR,
-    borderRadius: 0.5,
-  },
-  tickLabel: {
-    position: 'absolute',
-    top: RULER_LABEL_BAND_TOP - MAJOR_TICK_TOP,
-    color: LABEL_COLOR,
-    fontSize: 9,
-    fontWeight: '700',
-    fontVariant: ['tabular-nums'],
-    lineHeight: 11,
-    height: VALUE_LABEL_HEIGHT,
-    textAlignVertical: 'center',
-    width: 50,
-    textAlign: 'center',
-  },
-  minorTick: {
-    position: 'absolute',
-    top: TOP_VALUE_BAND_HEIGHT + 9,
-    width: 1,
-    height: 36,
-    backgroundColor: MINOR_TICK_COLOR,
-    borderRadius: 0.5,
-  },
-  midpointTick: {
-    position: 'absolute',
-    top: TOP_VALUE_BAND_HEIGHT + 11,
-    width: 1,
-    height: 26,
-    backgroundColor: MINOR_TICK_COLOR,
-    borderRadius: 0.5,
-  },
-  prevMarkTop: {
-    position: 'absolute',
-    top: TOP_VALUE_BAND_HEIGHT,
-    width: 3,
-    height: RULER_LABEL_BAND_TOP - TOP_VALUE_BAND_HEIGHT,
-    marginLeft: -1.5,
-    alignItems: 'center',
-    backgroundColor: theme.palette.slate.surface,
-  },
-  prevMarkDash: {
-    width: 1,
-    height: '100%',
-    borderLeftWidth: 1,
-    borderLeftColor: PREV_MARK_COLOR,
-    borderStyle: 'dashed',
-  },
-  prevValueRing: {
-    position: 'absolute',
-    top: RULER_LABEL_BAND_TOP,
-    width: VALUE_LABEL_WIDTH,
-    height: VALUE_LABEL_HEIGHT,
-    marginLeft: -VALUE_LABEL_WIDTH / 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 4,
-  },
-  prevValueText: {
-    color: PREV_MARK_COLOR,
-    fontSize: 9,
-    fontWeight: '800',
-    fontVariant: ['tabular-nums'],
-    lineHeight: 11,
-    height: VALUE_LABEL_HEIGHT,
-    textAlignVertical: 'center',
-    textAlign: 'center',
-  },
-  indicatorGlow: {
-    position: 'absolute',
-    top: CURRENT_VALUE_TOP,
-    left: '50%',
-    width: 52,
-    height: RULER_LABEL_BAND_TOP - CURRENT_VALUE_TOP,
-  },
-  indicatorGlowLeft: {
-    marginLeft: -52,
-  },
-  indicatorGlowRight: {
-    marginLeft: 0,
   },
   indicatorTop: {
     position: 'absolute',
@@ -611,9 +614,7 @@ const styles = StyleSheet.create({
     width: MARKER_LINE_WIDTH,
     height: RULER_LABEL_BAND_TOP - CURRENT_VALUE_TOP,
     marginLeft: -MARKER_LINE_WIDTH / 2,
-    backgroundColor: INDICATOR_COLOR,
     borderRadius: 2,
-    shadowColor: INDICATOR_COLOR,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.6,
     shadowRadius: 4,
@@ -626,20 +627,12 @@ const styles = StyleSheet.create({
     top: CURRENT_VALUE_TOP,
     height: TOP_VALUE_BAND_HEIGHT - CURRENT_VALUE_TOP,
   },
-  valueBadgeText: {
+  valueBadgeCanvas: {
     position: 'absolute',
     right: '50%',
     marginRight: 7,
-    minWidth: 80,
+    width: BADGE_WIDTH,
     height: 22,
-    padding: 0,
-    color: INDICATOR_COLOR,
-    fontSize: 18,
-    fontWeight: '800',
-    fontVariant: ['tabular-nums'],
-    lineHeight: 20,
-    textAlign: 'right',
-    includeFontPadding: false,
   },
   valueBadgeUnit: {
     position: 'absolute',

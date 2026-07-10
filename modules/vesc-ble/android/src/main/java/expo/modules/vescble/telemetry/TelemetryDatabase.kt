@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 // @parity /modules/vesc-ble/ios/VescBleModule.swift
 internal const val TELEMETRY_DATABASE_NAME = "telemetry.db"
-internal const val TELEMETRY_DATABASE_VERSION = 22
+internal const val TELEMETRY_DATABASE_VERSION = 24
 
 @Database(
   entities = [
@@ -90,6 +90,8 @@ abstract class TelemetryDatabase : RoomDatabase() {
             id TEXT NOT NULL PRIMARY KEY,
             board_id TEXT NOT NULL,
             name TEXT NOT NULL,
+            icon TEXT NOT NULL DEFAULT 'sliders-horizontal',
+            color TEXT NOT NULL DEFAULT 'purple',
             fields_json TEXT NOT NULL,
             created_at INTEGER NOT NULL,
             updated_at INTEGER NOT NULL
@@ -377,6 +379,20 @@ abstract class TelemetryDatabase : RoomDatabase() {
       }
     }
 
+    internal val MIGRATION_22_23 = object : Migration(22, 23) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE tune_profiles ADD COLUMN icon TEXT NOT NULL DEFAULT 'sliders-horizontal'")
+        db.execSQL("ALTER TABLE tune_profiles ADD COLUMN color TEXT NOT NULL DEFAULT 'purple'")
+      }
+    }
+
+    internal val MIGRATION_23_24 = object : Migration(23, 24) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE tune_profiles ADD COLUMN refloat_base_version TEXT NOT NULL DEFAULT ''")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_tune_profiles_board_id_refloat_base_version ON tune_profiles(board_id, refloat_base_version)")
+      }
+    }
+
     fun get(context: Context): TelemetryDatabase {
       return instance ?: synchronized(this) {
         instance ?: Room.databaseBuilder(
@@ -404,6 +420,8 @@ abstract class TelemetryDatabase : RoomDatabase() {
             MIGRATION_19_20,
             MIGRATION_20_21,
             MIGRATION_21_22,
+            MIGRATION_22_23,
+            MIGRATION_23_24,
           )
           .fallbackToDestructiveMigration(true)
           .addCallback(object : Callback() {

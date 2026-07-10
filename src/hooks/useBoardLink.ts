@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   addBoardProbeProgressListener,
+  cancelBoardProbe,
   probeBoardLink,
   type BoardCandidate,
   type BoardLink,
@@ -41,19 +42,27 @@ export function useBoardLink(bleId: string | null): UseBoardLink {
   const [selected, setSelected] = useState<BoardCandidate | null>(null)
   const [progress, setProgress] = useState<BoardProbeProgressEvent | null>(null)
   const runRef = useRef(0)
+  const activeProbeIdRef = useRef<string | null>(null)
 
   const runProbe = useCallback(() => {
     // A missing peripheral isn't probeable; callers handle the no-device case in
     // their UI, so there's nothing to run here.
     if (!bleId) return
     const run = ++runRef.current
+    const probeId = `${bleId}:${run}:${Date.now()}`
+    activeProbeIdRef.current = probeId
     // End any live Board Session before probing so the probe owns the BLE link.
     void useBleStore
       .getState()
       .disconnect()
-      .then(() => probeBoardLink(bleId))
+      .then(() => {
+        if (run !== runRef.current) throw new Error('Board probe superseded before start')
+        return probeBoardLink(bleId, probeId)
+      })
       .then((result) => {
         if (run !== runRef.current) return
+        activeProbeIdRef.current = null
+        console.log('[board-link] probe result', JSON.stringify(result))
         if (result.candidates.length === 0) {
           setPhase('failed')
           return
@@ -62,8 +71,10 @@ export function useBoardLink(bleId: string | null): UseBoardLink {
         setSelected(pickDefaultCandidate(result.candidates))
         setPhase('picking')
       })
-      .catch(() => {
+      .catch((err) => {
         if (run !== runRef.current) return
+        activeProbeIdRef.current = null
+        console.log('[board-link] probe failed', err)
         setCandidates([])
         setSelected(null)
         setPhase('failed')
@@ -71,7 +82,16 @@ export function useBoardLink(bleId: string | null): UseBoardLink {
   }, [bleId])
 
   useEffect(() => {
-    const subscription = addBoardProbeProgressListener((event) => setProgress(event))
+    const subscription = addBoardProbeProgressListener((event) => {
+      if (event.probeId !== activeProbeIdRef.current) return
+      console.log('[board-link] progress', JSON.stringify(event))
+      // Terminal events are not stored: the terminal render comes atomically
+      // from the probe promise (phase + candidates). Storing `completed` here
+      // would flash an all-done timeline with placeholder captions for a frame
+      // before the real result lands.
+      if (event.step === 'completed' || event.step === 'failed') return
+      setProgress(event)
+    })
     return () => subscription.remove()
   }, [])
 
@@ -79,12 +99,17 @@ export function useBoardLink(bleId: string | null): UseBoardLink {
     runProbe()
     return () => {
       runRef.current += 1
+      const probeId = activeProbeIdRef.current
+      activeProbeIdRef.current = null
+      if (probeId) cancelBoardProbe(probeId)
     }
   }, [runProbe])
 
   const select = useCallback((candidate: BoardCandidate) => setSelected(candidate), [])
 
   const retry = useCallback(() => {
+    const probeId = activeProbeIdRef.current
+    if (probeId) cancelBoardProbe(probeId)
     setPhase('linking')
     setCandidates([])
     setSelected(null)
@@ -92,9 +117,23 @@ export function useBoardLink(bleId: string | null): UseBoardLink {
     runProbe()
   }, [runProbe])
 
+  // Omit unknown identity fields entirely: the native bridge rejects maps
+  // holding `undefined` values ("Cannot convert ... Value is undefined").
   const selectedLink: BoardLink | null =
     bleId != null && selected != null
-      ? { bleId, transport: selected.transport, hasBms: selected.hasBms }
+      ? {
+          linkVersion: 3,
+          bleId,
+          transport: selected.transport,
+          hasBms: selected.hasBms,
+          ...(selected.vescFirmwareVersion != null && {
+            vescFirmwareVersion: selected.vescFirmwareVersion,
+          }),
+          ...(selected.refloatVersion != null && { refloatVersion: selected.refloatVersion }),
+          ...(selected.refloatBaseVersion != null && {
+            refloatBaseVersion: selected.refloatBaseVersion,
+          }),
+        }
       : null
 
   return { phase, candidates, selected, progress, selectedLink, select, retry }

@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 
+import { canRunFirmwareCommand } from '@/lib/boardLinkIntegrity'
 import { useBleStore } from '@/store/bleStore'
 import {
   lockRemoteTilt as lockRemoteTiltNative,
@@ -10,6 +11,8 @@ import {
 
 export function useRemoteTiltControl() {
   const boardConnected = useBleStore((state) => state.status === 'connected')
+  const linkIntegrity = useBleStore((state) => state.linkIntegrity)
+  const canCommand = boardConnected && canRunFirmwareCommand(linkIntegrity)
   const syncRemoteTilt = useBleStore((state) => state.syncRemoteTilt)
 
   useEffect(() => {
@@ -18,10 +21,17 @@ export function useRemoteTiltControl() {
 
   return {
     boardConnected,
-    setRemoteTilt: (value: number) => void setRemoteTilt(value),
+    canCommand,
+    setRemoteTilt: (value: number) => {
+      if (canCommand) void setRemoteTilt(value)
+    },
     releaseRemoteTilt: (value: number, durationMs: number) =>
-      void releaseRemoteTilt(value, durationMs),
-    lockRemoteTilt: (value: number) => void lockRemoteTiltNative(value),
-    stopRemoteTilt: () => void stopRemoteTilt(),
+      canCommand ? void releaseRemoteTilt(value, durationMs) : undefined,
+    lockRemoteTilt: (value: number) => {
+      if (canCommand) void lockRemoteTiltNative(value)
+    },
+    stopRemoteTilt: () => {
+      if (canCommand) void stopRemoteTilt()
+    },
   }
 }

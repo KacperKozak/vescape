@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 
 import {
+  deadBandPhoneHeading,
   type DeviceMotionMeasurement,
   phoneHeadingFromDeviceMotion,
   phoneHeadingAnimationDuration,
@@ -54,18 +55,24 @@ describe('phoneHeading', () => {
 
   test('smooths compass heading across the shortest wrap-around path', () => {
     expect(smoothPhoneHeading(null, 90)).toBe(90)
-    expect(smoothPhoneHeading(350, 10)).toBeCloseTo(353.56)
-    expect(smoothPhoneHeading(10, 350)).toBeCloseTo(6.44)
+    expect(smoothPhoneHeading(350, 10)).toBeCloseTo(351.244)
+    expect(smoothPhoneHeading(10, 350)).toBeCloseTo(8.756)
   })
 
   test('uses adaptive smoothing and no camera animation', () => {
     expect(phoneHeadingSmoothingAlphaForTest(0, 2)).toBeLessThan(
       phoneHeadingSmoothingAlphaForTest(0, 90),
     )
-    expect(smoothPhoneHeading(0, 90)).toBeCloseTo(40.5)
-    expect(smoothPhoneHeading(0, 90, 0.5)).toBeCloseTo(20.25)
-    expect(phoneHeadingUpdateIntervalMs()).toBe(33)
+    expect(smoothPhoneHeading(0, 90)).toBe(6)
+    expect(smoothPhoneHeading(0, 90, 0.5)).toBe(3)
+    expect(phoneHeadingUpdateIntervalMs()).toBe(16)
     expect(phoneHeadingAnimationDuration()).toBe(0)
+  })
+
+  test('suppresses stationary jitter after smoothing without blocking real movement', () => {
+    expect(deadBandPhoneHeading(100, 103)).toBe(100)
+    expect(deadBandPhoneHeading(100, 104)).toBeGreaterThan(100.15)
+    expect(deadBandPhoneHeading(359.8, 0.2)).toBe(359.8)
   })
 
   test('subscribes only after availability and permission checks', async () => {

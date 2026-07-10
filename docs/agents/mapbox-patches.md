@@ -6,17 +6,21 @@ This project carries a Bun patch for `@rnmapbox/maps@10.3.1`:
 - registered in `package.json#patchedDependencies`
 - applied automatically by `bun install`
 
-## Direct camera pitch updates
+## Direct camera property updates
 
-The patch adds this imperative camera method:
+The patch adds this imperative camera method for high-frequency camera properties:
 
 ```ts
 cameraRef.current?.setCameraDirect({ pitch })
+cameraRef.current?.setCameraDirect({ heading })
 ```
 
 It is used by `src/screens/center/CenterMap.tsx` to continuously derive pitch from zoom while the
 map camera is moving, including native deceleration after the user releases a pinch gesture. The
 pitch calculation remains pure in `src/lib/map/cameraProfiles.ts` (`getPitchForZoom`).
+
+It is also used by `src/screens/center/PhoneHeadingMapLayer.tsx` to apply the fused phone heading
+without starting and repeatedly cancelling Mapbox camera transitions for every sensor sample.
 
 ### Why normal `setCamera` is not used
 
@@ -35,8 +39,8 @@ Use `setCameraDirect` only for camera properties that must track an already-runn
 gesture or animation. Continue using normal `setCamera` for intentional app-driven camera moves,
 such as focus, mode changes, recentering, and animated perspective toggles.
 
-The current native bridge intentionally accepts only `pitch`. Do not broaden it to arbitrary camera
-options without a concrete use case and gesture-behavior verification.
+The current native bridge intentionally accepts only `pitch` and `heading`. Do not broaden it to
+arbitrary camera options without a concrete use case and gesture-behavior verification.
 
 ## Files changed inside `@rnmapbox/maps`
 

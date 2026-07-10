@@ -30,6 +30,8 @@ import expo.modules.vescble.reconnect.ReconnectScheduler
 import expo.modules.vescble.runtime.BoardSession
 import expo.modules.vescble.runtime.Cancellable
 import expo.modules.vescble.runtime.HandlerScheduler
+import expo.modules.vescble.runtime.LinkIdentity
+import expo.modules.vescble.runtime.LinkIntegrity
 import expo.modules.vescble.runtime.Scheduler
 import expo.modules.vescble.runtime.postDelayedForSession
 import expo.modules.vescble.telemetry.AppDataRepository
@@ -192,7 +194,14 @@ internal class BoardSessionController(private val service: VescForegroundService
             { AppDataRepository.get(service.applicationContext) },
             object : ConfigRWControllerPort {
                 override fun connection() =
-                    ConfigConnectionSnapshot(boardConfig, boardStatus, canId, directConnection, fwVersionString)
+                    ConfigConnectionSnapshot(
+                        boardConfig,
+                        boardStatus,
+                        canId,
+                        directConnection,
+                        fwVersionString,
+                        boardSession?.linkIntegrity ?: LinkIntegrity.Unknown,
+                    )
                 override fun isPollingActive() = pollingLoop.isActive
                 override fun stopPolling() = this@BoardSessionController.stopPolling()
                 override fun startPolling() = this@BoardSessionController.startPolling()
@@ -483,9 +492,19 @@ internal class BoardSessionController(private val service: VescForegroundService
 
     /** @parity /modules/vesc-ble/ios/VescBleModule.swift `autoConnectSelectedBoard` */
     fun autoConnectSelectedBoard() {
+        if (BoardProbeAutoStartGate.isActive()) {
+            Log.i(VESC_SESSION_TAG, "Auto-connect skipped: Board Probe active")
+            scheduler.post { stopIfIdle() }
+            return
+        }
         VescForegroundService.appDataScope.launch {
             val settings = AppDataRepository.get(service.applicationContext).getTypedSettings()
             if (!settings.autoConnect || settings.selectedBoardId == null) {
+                scheduler.post { stopIfIdle() }
+                return@launch
+            }
+            if (ManualDisconnectAutoStartGate.isSuppressed(service.applicationContext, settings.selectedBoardId)) {
+                Log.i(VESC_SESSION_TAG, "Auto-connect suppressed after manual disconnect")
                 scheduler.post { stopIfIdle() }
                 return@launch
             }
@@ -498,8 +517,23 @@ internal class BoardSessionController(private val service: VescForegroundService
         isStoppingService = false
         VescForegroundService.appDataScope.launch {
             val appCtx = service.applicationContext
+            if (BoardProbeAutoStartGate.isActive()) {
+                Log.i(VESC_SESSION_TAG, "Companion auto start skipped: Board Probe active")
+                scheduler.post { stopIfIdle() }
+                return@launch
+            }
+            if (CompanionRestartGate.isSuppressed(appCtx)) {
+                Log.i(VESC_SESSION_TAG, "Companion auto start suppressed after manual exit")
+                scheduler.post { stopIfIdle() }
+                return@launch
+            }
             val boardId = selectedCompanionBoardId(AppDataRepository.get(appCtx), address)
             if (boardId == null) {
+                scheduler.post { stopIfIdle() }
+                return@launch
+            }
+            if (ManualDisconnectAutoStartGate.isSuppressed(appCtx, boardId)) {
+                Log.i(VESC_SESSION_TAG, "Companion auto start suppressed after manual disconnect")
                 scheduler.post { stopIfIdle() }
                 return@launch
             }
@@ -539,6 +573,7 @@ internal class BoardSessionController(private val service: VescForegroundService
         VescForegroundService.appDataScope.launch {
             val appCtx = service.applicationContext
             val boardId = AppDataRepository.get(appCtx).getTypedSettings().selectedBoardId ?: return@launch
+            ManualDisconnectAutoStartGate.clear(appCtx)
             val config = try {
                 buildSessionConfig(appCtx, boardId, recordingEnabled = recordingEnabled)
             } catch (e: Exception) {
@@ -556,6 +591,7 @@ internal class BoardSessionController(private val service: VescForegroundService
     fun disconnectFromNotification() {
         if (boardConfig == null) return
         setStatus(BoardPhase.Disconnecting)
+        ManualDisconnectAutoStartGate.suppress(service.applicationContext, boardConfig?.appBoardId)
         // Always refresh: the notification stays visible after disconnect (idle + Connect), so it must
         // reflect the idle phase even while GPS keeps the service foregrounded.
         stopCurrentBoardSession(emitDisconnected = true, updateNotification = true)
@@ -591,6 +627,7 @@ internal class BoardSessionController(private val service: VescForegroundService
         val stop = VescForegroundService.claimPendingStop() ?: return
         if (boardConfig != null) {
             setStatus(BoardPhase.Disconnecting)
+            ManualDisconnectAutoStartGate.suppress(service.applicationContext, boardConfig?.appBoardId)
             stopCurrentBoardSession(
                 emitDisconnected = true,
                 updateNotification = !gpsMonitor.active,
@@ -660,6 +697,7 @@ internal class BoardSessionController(private val service: VescForegroundService
     }
 
     fun exitFromNotification() {
+        armCompanionRestartGate()
         isStoppingService = true
         service.stopForeground(Service.STOP_FOREGROUND_REMOVE)
         notificationController.cancel()
@@ -667,6 +705,18 @@ internal class BoardSessionController(private val service: VescForegroundService
         stopLocationUpdates()
         closeAppTask()
         service.stopSelf()
+    }
+
+    // Manual exit means the user is done riding: pause companion auto start for the configured
+    // cooldown so the board reappearing doesn't immediately relaunch the app.
+    private fun armCompanionRestartGate() {
+        val appCtx = service.applicationContext
+        VescForegroundService.appDataScope.launch {
+            val settings = AppDataRepository.get(appCtx).getTypedSettings()
+            if (settings.companionPresenceEnabled) {
+                CompanionRestartGate.suppressFor(appCtx, settings.companionPresenceCooldownMinutes)
+            }
+        }
     }
 
     private fun startGpsMonitoring() {
@@ -729,8 +779,11 @@ internal class BoardSessionController(private val service: VescForegroundService
         connectionCoordinator.reset()
         reconnectScheduler.cancelAndReset()
         recordingCoordinator.beginBoardSession(start.boardConfig)
+        lastEmittedLinkIntegrity = session.startLinkIntegrityCheck(start.boardConfig.linkIdentity())
         startLocationUpdates()
         setStatus(BoardPhase.Connecting)
+        emitState()
+        updateLinkIntegrity(session.markOutdatedIfIncomplete(start.boardConfig.linkIdentity()))
         reassertForeground()
 
         startBleSession(start)
@@ -962,6 +1015,7 @@ internal class BoardSessionController(private val service: VescForegroundService
             (payload[1].toInt() and 0xff) == REFLOAT_MAGIC &&
             (payload[2].toInt() and 0xff) == REFLOAT_GET_INFO
         ) {
+            handleLinkIntegrityRefloat(payload)
             configController.onPayload(ConfigRWEvent.InfoPayloadReceived(payload))
             return
         }
@@ -971,6 +1025,7 @@ internal class BoardSessionController(private val service: VescForegroundService
             (payload[3].toInt() and 0xff) == REFLOAT_MAGIC &&
             (payload[4].toInt() and 0xff) == REFLOAT_GET_INFO
         ) {
+            handleLinkIntegrityRefloat(payload)
             configController.onPayload(ConfigRWEvent.InfoPayloadReceived(payload))
             return
         }
@@ -990,6 +1045,7 @@ internal class BoardSessionController(private val service: VescForegroundService
             pollingLoop.onResponse()
             val processed = telemetryPipeline.process(parsed, sessionToken) ?: return
             markBoardReady()
+            startLinkIntegrityProbe(sessionToken)
             telemetry = parsed
             val batteryPct = BatterySocEstimator.estimateBatteryPercent(
                 parsed.batteryVoltage,
@@ -1030,6 +1086,11 @@ internal class BoardSessionController(private val service: VescForegroundService
     // @parity /modules/vesc-ble/ios/connection/BoardSessionController.swift (handleBms)
     private fun handleBmsPayload(payload: ByteArray) {
         val bms = parseBmsValues(payload, System.currentTimeMillis()) ?: return
+        val session = boardSession
+        val config = boardConfig
+        if (session != null && config != null) {
+            updateLinkIntegrity(session.observeBms(config.linkIdentity()))
+        }
         emitEvent("onBms", bms.toMap())
         // Retention is unconditional (the frame already arrived); only the push below is gated.
         val frame = bmsSeriesRing.append(
@@ -1075,7 +1136,45 @@ internal class BoardSessionController(private val service: VescForegroundService
         val hex = payload.joinToString(" ") { "%02x".format(it) }
         Log.d(VESC_SESSION_TAG, "FW version raw (${payload.size} bytes): $hex")
         fwVersionString = parseFwVersion(payload) ?: return
+        val session = boardSession
+        val config = boardConfig
+        val firmware = fwVersionString
+        if (session != null && config != null && firmware != null) {
+            updateLinkIntegrity(session.observeFirmware(config.linkIdentity(), firmware))
+        }
         Log.d(VESC_SESSION_TAG, "FW version: $fwVersionString")
+    }
+
+    private fun handleLinkIntegrityRefloat(payload: ByteArray) {
+        val session = boardSession ?: return
+        val config = boardConfig ?: return
+        val version = when (val result = RefloatConfigProtocol.parseGetInfoResponse(payload)) {
+            is RefloatConfigProtocolResult.Success -> result.value.version
+            is RefloatConfigProtocolResult.Failure -> return
+        }
+        updateLinkIntegrity(session.observeRefloat(config.linkIdentity(), version))
+    }
+
+    private fun startLinkIntegrityProbe(session: BoardSession) {
+        if (!isCurrentBoardSession(session) || session.linkIntegrity != LinkIntegrity.Checking) return
+        val config = boardConfig ?: return
+        val transport = currentBoardTransport() ?: return
+        if (!session.claimLinkIntegrityProbe()) return
+        sendPayloadWithRetry(transport.frame(byteArrayOf(COMM_FW_VERSION.toByte())), session)
+        sendPayloadWithRetry(RefloatConfigProtocol.buildGetInfo(transport), session)
+        if (config.hasBms == true) {
+            scheduler.postDelayedForSession(session, LINK_INTEGRITY_BMS_TIMEOUT_MS, ::isCurrentBoardSession) {
+                updateLinkIntegrity(session.markBmsMissing(config.linkIdentity()))
+            }
+        }
+    }
+
+    private var lastEmittedLinkIntegrity = LinkIntegrity.Unknown
+
+    private fun updateLinkIntegrity(next: LinkIntegrity) {
+        if (next == lastEmittedLinkIntegrity) return
+        lastEmittedLinkIntegrity = next
+        emitState()
     }
 
     private fun dumpRefloatConfigDebug(xmlBytes: ByteArray, configBytes: ByteArray) {
@@ -1250,14 +1349,20 @@ internal class BoardSessionController(private val service: VescForegroundService
         return gattClient.sendPayload(payload)
     }
 
-    fun setRemoteTilt(value: Int): Boolean = remoteTiltController.hold(value)
+    private fun firmwareCommandsTrusted(): Boolean =
+        boardStatus == BoardPhase.Connected && boardSession?.linkIntegrity == LinkIntegrity.Trusted
 
-    fun lockRemoteTilt(value: Int): Boolean = remoteTiltController.lock(value)
+    fun setRemoteTilt(value: Int): Boolean =
+        firmwareCommandsTrusted() && remoteTiltController.hold(value)
+
+    fun lockRemoteTilt(value: Int): Boolean =
+        firmwareCommandsTrusted() && remoteTiltController.lock(value)
 
     fun releaseRemoteTilt(value: Int, durationMs: Long): Boolean =
-        remoteTiltController.release(value, durationMs)
+        firmwareCommandsTrusted() && remoteTiltController.release(value, durationMs)
 
-    fun stopRemoteTilt(): Boolean = remoteTiltController.stop()
+    fun stopRemoteTilt(): Boolean =
+        firmwareCommandsTrusted() && remoteTiltController.stop()
 
     fun remoteTiltState(): Map<String, Any?>? =
         remoteTiltWire(
@@ -1566,6 +1671,7 @@ internal class BoardSessionController(private val service: VescForegroundService
                 remoteTiltValue = remoteTiltController.currentValue,
                 remoteTiltPhase = remoteTiltController.phase,
                 remoteTiltDecay = remoteTiltController.decayProgress,
+                linkIntegrity = boardSession?.linkIntegrity ?: LinkIntegrity.Unknown,
                 settings = settings,
             )
         )
@@ -1760,3 +1866,14 @@ internal class BoardSessionController(private val service: VescForegroundService
     private fun diagnosticProperties(session: SessionConfig?, operation: String): Map<String, Any?> =
         diagnosticsRecorder.diagnosticProperties(session, operation)
 }
+
+private const val LINK_INTEGRITY_BMS_TIMEOUT_MS = 12_000L
+
+private fun SessionConfig.linkIdentity(): LinkIdentity =
+    LinkIdentity(
+        linkVersion = linkVersion,
+        hasBms = hasBms,
+        firmware = vescFirmwareVersion,
+        refloatVersion = refloatVersion,
+        refloatBaseVersion = refloatBaseVersion,
+    )

@@ -47,6 +47,7 @@ function liveState(samples: TelemetryEvent[]): LiveStateEvent {
       recentTelemetry: samples,
       error: null,
       autoConnect: true,
+      linkIntegrity: 'trusted',
       remoteTilt: null,
     },
     gps: {

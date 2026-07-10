@@ -191,6 +191,15 @@ Footer:
 | LCM_DEVICE_INFO |  27 | LCM hardware/firmware info                                                                                       |
 | LCM_GET_BATTERY |  29 | Battery info from external light module                                                                          |
 
+### Board Move commands
+
+Refloat has changed the app-driven move command across protocol generations:
+
+| Generation      | Command |  ID | Payload                                                                                                    |
+| --------------- | ------- | --: | ---------------------------------------------------------------------------------------------------------- |
+| Refloat 1.0–1.2 | RC_MOVE |   7 | `[direction, current, time, current + time]`; firmware accepts only while disengaged/ready (`STATE_READY`) |
+| Refloat 1.3+    | REMOTE  |  15 | `[signedInput]`; `-127..127` maps to `-1..1`, `-128` is ignored; move torque is requested only in ready    |
+
 ### ALERTS_LIST (35)
 
 Returns the currently configured alert thresholds from the board's alert tracker.

@@ -9,8 +9,20 @@ A saved rideable device that can be connected over BLE and may expose one motor 
 _Avoid_: Device, controller, scooter
 
 **Board Link**:
-The saved, probe-confirmed reachability details for a Board, including BLE peripheral id, Board Transport, and optional auxiliary CAN targets such as BMS.
+The saved, probe-confirmed reachability details for a Board, including BLE peripheral id, selected Board Transport, and capabilities or firmware facts discovered for that transport.
 _Avoid_: Pairing, connection settings, device config
+
+**Board Link Version**:
+The app-defined version of which facts a Board Link was created to capture.
+_Avoid_: Link schema, probe schema, capability version
+
+**Stale Board Link**:
+A saved Board Link whose probe-confirmed facts no longer match the connected controller or stop being observed.
+_Avoid_: Broken link, invalid board, firmware error
+
+**Link Integrity Check**:
+A background live-session re-probe that compares saved Board Link facts with the connected controller before firmware-dependent commands are trusted.
+_Avoid_: Health check, version check, preflight
 
 **Board Session**:
 The lifecycle of a single live BLE-bound connection to a Board, from connect attempt through disconnect. Owns the in-flight identity used to discard stale callbacks across reconnects. Distinct from Ride Recording, which is the persisted ride capture.
@@ -19,6 +31,10 @@ _Avoid_: Session, connection, BLE session
 **Board Transport**:
 The resolved path used to reach a Board's telemetry: Direct (the BLE-connected controller is the data source) or CAN-forwarded to a specific CAN id. A durable per-Board fact, not per-session. Absence means the transport has not been detected yet.
 _Avoid_: Connection path, routing, channel
+
+**Board Firmware Identity**:
+The probe-confirmed firmware identity of a Board controller, including Refloat package version when available.
+_Avoid_: Refloat version, firmware string, fw version, tune version
 
 **Board Probe**:
 A pre-save check that a scanned BLE peripheral can produce telemetry over at least one Board Transport and produce a Board Link. The rider-facing UI calls running a Board Probe "linking" (and re-running it "re-linking") — the screen, buttons, and progress timeline say "link", while the domain and code keep "Board Probe" for the act and "Board Link" for the saved result.
@@ -31,6 +47,10 @@ _Avoid_: UI state, cached status
 **Telemetry Sample**:
 A single decoded board data point captured from the connected board.
 _Avoid_: Packet, frame, event
+
+**Telemetry Stale**:
+A live Board Session condition where expected telemetry samples stop arriving.
+_Avoid_: Stale Board Link, disconnected
 
 **Metric Sanitizer**:
 A rule that marks an implausible telemetry-derived value as excluded from ride metrics without changing the original sample.
@@ -108,9 +128,33 @@ _Avoid_: Tune cache, settings dump
 A user-authored, persisted set of all Refloat tune field values stored in semantic (human-meaningful) units, scoped to a Board.
 _Avoid_: Tune preset, config file, settings backup
 
+**Tune Compatibility**:
+The normalized base Refloat package version scope in which a Tune Profile is allowed to be used.
+_Avoid_: Tune migration, tune schema version, firmware conversion
+
 **Tune History Entry**:
 An immutable snapshot of a Tune Profile's field values captured immediately before an explicit save, enabling rollback to any prior state.
 _Avoid_: Sync log, change event, audit trail
+
+**Tune Preview**:
+A comparative read-only visualization of board-angle response derived from a Tune Profile, synthetic rider-load and terrain inputs, and an idealized board model without motor-power, traction, or nosedive limits.
+_Avoid_: Board simulator, ride simulator, physics simulation
+
+**Pitch Input**:
+A Tune Preview input representing a bounded pitch rate applied to Board while the gesture is held. Its magnitude controls how quickly angle error is added; it never constrains Board angle. Target, controller current, and speed remain simulation outputs.
+_Avoid_: Deck disturbance, rider lean, foot pressure, throttle, acceleration command
+
+**Posi Sensor**:
+A footpad sensor mode that treats both sensor zones as one engagement zone.
+_Avoid_: Posi switch, dual switch
+
+**Board Move**:
+A deliberate rider command that moves a disengaged Board from the app without starting a Ride Recording.
+_Avoid_: Move board, Remote Tilt, throttle
+
+**Firmware-Dependent Command**:
+A rider intent that depends on the connected controller's Refloat behavior rather than telemetry alone.
+_Avoid_: Runtime command, board action, unsafe command
 
 **Alert Rule**:
 A user-defined telemetry threshold that can trigger board-riding feedback during a live connection. A rule with only a threshold fires a one-shot alert; a rule with both threshold and thresholdMax fires a geiger-style progressive alert that accelerates with range depth.
@@ -160,11 +204,26 @@ _Avoid_: Position update, presence ping, location share, group telemetry
 
 - A **Board** has at most one **Board Link**; absence means the Board is offline-only or not yet linked.
 - A **Board Link** has exactly one **Board Transport**.
+- A **Board Link** has one **Board Link Version**.
 - A **Board Link** is only saved after a successful **Board Probe**.
+- An outdated **Board Link Version** keeps telemetry available but requires re-link before firmware-dependent commands.
+- A **Board Link** may include a **Board Firmware Identity** for the selected **Board Transport**.
+- A missing **Board Firmware Identity** does not invalidate a **Board Link**, but it is unusual and should be visible during linking.
+- A **Board Link** without **Board Firmware Identity** supports telemetry but not firmware-dependent commands.
+- A re-link is the rider-initiated durable refresh of a **Board Link**; it runs a full **Board Probe** and replaces the whole link.
+- A **Board Session** runs a background **Link Integrity Check** without delaying telemetry or changing the selected **Board Transport**.
+- A **Link Integrity Check** verifies saved capability facts but does not discover new hardware capabilities; new capabilities require a full re-link.
+- Native owns **Link Integrity Check** truth; app UI only displays the resulting state.
+- A **Tune Snapshot** requires a trusted **Board Link** because tune field identity depends on the connected controller.
+- A **Board Firmware Identity** may be rediscovered during a **Board Session**; any mismatch creates a **Stale Board Link**.
+- A **Stale Board Link** does not end a working **Board Session**, but only telemetry remains trusted until a fresh **Board Probe** replaces the link.
+- A **Stale Board Link** is latched for the current **Board Session** and is not persisted across app restarts.
+- A **Firmware-Dependent Command** requires a trusted **Board Link**.
 - A **Board Session** uses the stored **Board Link** and is not established for a Board without one.
 - A **Board Probe** can resolve a **Board Transport** before a **Board** is created.
 - A **Board Session** owns one live BLE connection to a **Board**; only Telemetry Samples received during the active session count toward live state and Ride Recording.
 - A **Board** produces **Telemetry Samples** while connected.
+- **Telemetry Stale** describes missing live data and is distinct from a **Stale Board Link**.
 - A **Board Session** may produce a **Live BMS Series** when its **Board Link** includes BMS capability; native retains it continuously in the recent live-telemetry window (`liveHistoryLimit`) but pushes it across the bridge to JS only while the battery-detail view is focused. It is ephemeral, never persisted, and never written to **Ride Recording**. The cell **spread** scalar shown in main telemetry is not the series: it derives from the latest smart-BMS frame on the `onBms` pipe (~4Hz, always flowing), separate from the 30Hz telemetry frame.
 - A **Metric Sanitizer** may create **Metric Exclusions** for values derived from **Telemetry Samples** while preserving the original samples and current live board readout.
 - A **Metric Exclusion** belongs to one **Telemetry Sample** and one metric.
@@ -187,7 +246,16 @@ _Avoid_: Position update, presence ping, location share, group telemetry
 - A **Media History Asset** is a local-only view of an OS photo-library asset matched to one selected **Ride Recording** by capture time and placed from a nearby recording-backed **GPS Fix**.
 - A **Tune Snapshot** belongs to the currently connected **Board** and is read-only.
 - A **Tune Profile** belongs to a **Board** and stores semantic field values independently of firmware schema.
+- A **Tune Profile** also belongs to one **Tune Compatibility**; profiles from other Refloat package versions are retained but not used for the current board state.
+- **Tune Compatibility** ignores Refloat suffixes or fork labels, while **Board Firmware Identity** keeps the exact reported version for link integrity.
+- The first **Tune Profile** for a **Tune Compatibility** is created only after an explicit rider action.
+- Offline tune editing may use the saved **Board Link** to choose the active **Tune Compatibility**, but board tune reads and writes require trusted link integrity.
 - A **Tune History Entry** captures the previous state of a **Tune Profile** before each explicit save.
+- A **Tune Preview** derives an idealized board-angle response from one **Tune Profile** and never predicts whether the **Board** can physically achieve it.
+- A **Pitch Input** adds pitch error over time without directly commanding speed or motor power.
+- A **Posi Sensor** setting belongs to a **Tune Profile** when the board firmware exposes that Refloat field.
+- A **Board Move** requires a live **Board Session** but must not be treated as riding.
+- **Board Move**, light controls, tune writes, and quick tune controls are **Firmware-Dependent Commands**.
 - An **Alert Rule** evaluates against live **Telemetry Samples**.
 - An **Alert Message Template** belongs to one **Alert Rule**.
 - A **Watch Mirror** receives **Watch Frames** and **Watch Alerts** from the phone and never sends data back; it is not a **Board**, a **Board Session**, or a source of **Telemetry Samples**.
@@ -217,6 +285,12 @@ _Avoid_: Position update, presence ping, location share, group telemetry
 - "scan" may mean BLE discovery or telemetry validation; resolved term: use **Board Probe** for the pre-save telemetry check after selecting a BLE peripheral. UI copy says "linking" for this; code/domain keep "Board Probe".
 - "paired" may mean a selected BLE peripheral or a Board that is ready to connect; resolved term: use **Board Link** for the saved, probed reachability details.
 - `bleId` without a **Board Transport** is an invalid partial **Board Link**; resolved: save the whole **Board Link** or none of it.
+- "firmware mismatch" may sound like a failed connection; resolved term: use **Stale Board Link** when telemetry still works but saved probe facts need re-linking.
+- "board hardware or firmware changed" is rider-facing copy for a **Stale Board Link**.
+- "board link needs update" is rider-facing copy for an outdated **Board Link Version**.
+- "stale" may mean missing telemetry or mismatched link facts; resolved terms: use **Telemetry Stale** for missing samples and **Stale Board Link** for a link integrity mismatch. Code may call the latter `mismatched`.
+- "Refloat version" may mean firmware version, package version, or tune schema version; resolved term: use **Board Firmware Identity** for probe-confirmed controller identity, with Refloat package version as one possible detail.
+- "fw version" is too vague for rider-facing language; resolved terms: use VESC firmware version for VESC identity and Refloat package version for Refloat identity.
 - "session" may mean a BLE connection, raw debug capture, or persisted ride; resolved terms: use **Board Session** for the live BLE connection lifecycle and **Ride Recording** for the persisted ride capture. Avoid bare "session".
 - "error" may mean crash, handled failure, UI message, or diagnostic clue; resolved term: use **Diagnostic Event** for app-observed abnormal conditions worth reviewing.
 - "telemetry marker" names the storage table, but map-visible history annotations are **Ride History Markers**.
@@ -232,3 +306,5 @@ _Avoid_: Position update, presence ping, location share, group telemetry
 - "pause" may mean stopping the **Board Session** versus temporarily halting sample persistence; resolved: **Idle Pause** halts **Ride Recording** sample persistence only — the **Board Session** stays connected and live at a reduced poll rate.
 - "ride" may mean a personal persisted capture or a live shared room; resolved terms: use **Ride Recording** for the local persisted capture and **Group Ride** for the live shared room. The two are independent — a Rider can do either, both, or neither.
 - "presence" / "location share" may mean a one-off map dot or the live group feed; resolved term: use **Rider Presence** for what a **Rider** shares into a **Group Ride**.
+- "posi switch" and "dual switch" refer to **Posi Sensor** mode in rider language; the firmware field name is an implementation detail.
+- "move board" may mean **Remote Tilt** or motor movement while disengaged; resolved term: use **Board Move** for deliberate app-driven movement of a disengaged Board.

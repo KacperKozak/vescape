@@ -3,6 +3,7 @@ import {
   Animated,
   Dimensions,
   Easing,
+  Keyboard,
   Modal,
   Pressable,
   ScrollView,
@@ -46,7 +47,7 @@ const DRAWER_AUTO_CLOSE_VISIBLE_PX = 200
 const DRAWER_FLING_PROJECTION_MS = 250
 const DRAWER_OPEN_TRANSLATE_Y = 42
 const DRAWER_OPEN_DURATION = 280
-const DRAWER_BOTTOM_CONTENT_PADDING = 16
+const DRAWER_BOTTOM_CONTENT_PADDING = 32
 const DRAWER_ENTER_FROM_TOP = new Keyframe({
   0: { opacity: 0, transform: [{ translateY: -DRAWER_OPEN_TRANSLATE_Y }] },
   100: { opacity: 1, transform: [{ translateY: 0 }] },
@@ -137,6 +138,7 @@ interface SheetProps {
   title?: string
   /** Optional glyph shown left of a centred title. */
   icon?: Icon
+  iconColor?: string
   contentContainerStyle?: StyleProp<ViewStyle>
   children: React.ReactNode
 }
@@ -155,6 +157,7 @@ function Sheet({
   layout,
   title,
   icon: IconComponent,
+  iconColor = theme.palette.slate.textSecondary,
   contentContainerStyle,
   children,
 }: SheetProps) {
@@ -240,9 +243,7 @@ function Sheet({
       >
         {title ? (
           <View style={styles.header}>
-            {IconComponent ? (
-              <IconComponent size={18} color={theme.palette.slate.textSecondary} weight="duotone" />
-            ) : null}
+            {IconComponent ? <IconComponent size={18} color={iconColor} weight="duotone" /> : null}
             <Text style={styles.title}>{title}</Text>
           </View>
         ) : null}
@@ -267,6 +268,9 @@ interface EdgeDrawerProps {
   title?: string
   /** Optional glyph shown left of a centred title. */
   icon?: Icon
+  iconColor?: string
+  /** Scroll newly expanded content into view when the drawer grows. */
+  autoScrollOnContentExpand?: boolean
   children: React.ReactNode
 }
 
@@ -284,6 +288,8 @@ export function EdgeDrawer({
   edge = 'auto',
   title,
   icon: IconComponent,
+  iconColor = theme.palette.slate.textSecondary,
+  autoScrollOnContentExpand = false,
   children,
 }: EdgeDrawerProps) {
   const insets = useSafeAreaInsets()
@@ -291,9 +297,11 @@ export function EdgeDrawer({
   const [mounted, setMounted] = useState(false)
   const [opensFromTop, setOpensFromTop] = useState(true)
   const [dismissRange, setDismissRange] = useState(0)
+  const [keyboardInset, setKeyboardInset] = useState(0)
   const scrollRef = useRef<ScrollView>(null)
   const positionedRef = useRef(false)
   const dismissRangeRef = useRef(0)
+  const previousContentHeightRef = useRef(0)
   const scrollOffset = useSharedValue(0)
   const animatedDismissRange = useSharedValue(1)
   const nativeScrollGesture = useMemo(() => Gesture.Native(), [])
@@ -307,6 +315,8 @@ export function EdgeDrawer({
       setDismissRange(0)
       dismissRangeRef.current = 0
       positionedRef.current = false
+      previousContentHeightRef.current = 0
+      setKeyboardInset(0)
       scrollOffset.value = 0
     }
 
@@ -319,6 +329,20 @@ export function EdgeDrawer({
       openFrom(trigger.y + trigger.height / 2 < height / 2)
     })
   }, [edge, height, scrollOffset, triggerRef, visible])
+
+  useEffect(() => {
+    if (!mounted) return
+    const showSubscription = Keyboard.addListener('keyboardDidShow', (event) => {
+      setKeyboardInset(event.endCoordinates.height)
+    })
+    const hideSubscription = Keyboard.addListener('keyboardDidHide', () => {
+      setKeyboardInset(0)
+    })
+    return () => {
+      showSubscription.remove()
+      hideSubscription.remove()
+    }
+  }, [mounted])
 
   const finishClose = useCallback(() => {
     setMounted(false)
@@ -358,6 +382,8 @@ export function EdgeDrawer({
     (_contentWidth: number, contentHeight: number) => {
       const previousRange = dismissRangeRef.current
       const range = Math.max(1, contentHeight - height)
+      const previousContentHeight = previousContentHeightRef.current
+      previousContentHeightRef.current = contentHeight
       setDismissRange(range)
       dismissRangeRef.current = range
       animatedDismissRange.value = range
@@ -377,9 +403,17 @@ export function EdgeDrawer({
         requestAnimationFrame(() => {
           scrollRef.current?.scrollTo({ y: range, animated: true })
         })
+      } else if (autoScrollOnContentExpand && contentHeight > previousContentHeight) {
+        const addedHeight = contentHeight - previousContentHeight
+        const targetOffset = opensFromTop
+          ? Math.min(range, scrollOffset.value + addedHeight)
+          : range
+        requestAnimationFrame(() => {
+          scrollRef.current?.scrollTo({ y: targetOffset, animated: true })
+        })
       }
     },
-    [animatedDismissRange, height, opensFromTop, scrollOffset],
+    [animatedDismissRange, autoScrollOnContentExpand, height, opensFromTop, scrollOffset],
   )
 
   const shouldAutoCloseAtOffset = useCallback(
@@ -437,7 +471,9 @@ export function EdgeDrawer({
 
   if (!mounted) return null
 
-  const edgePadding = opensFromTop ? insets.top : insets.bottom + DRAWER_BOTTOM_CONTENT_PADDING
+  const edgePadding = opensFromTop
+    ? insets.top
+    : insets.bottom + DRAWER_BOTTOM_CONTENT_PADDING + keyboardInset
   const vignetteColor = theme.palette.slate.surfaceDeep
   const gradientColors = opensFromTop
     ? [
@@ -511,11 +547,7 @@ export function EdgeDrawer({
                       accessibilityLabel={`Close ${title}`}
                     >
                       {IconComponent ? (
-                        <IconComponent
-                          size={28}
-                          color={theme.palette.slate.textSecondary}
-                          weight="duotone"
-                        />
+                        <IconComponent size={28} color={iconColor} weight="duotone" />
                       ) : null}
                       <Text style={styles.drawerTitle}>{title}</Text>
                     </Pressable>

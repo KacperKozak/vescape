@@ -1,22 +1,24 @@
 import { forwardRef } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/ui/base/Text'
-import { InfoIcon, WarningIcon } from 'phosphor-react-native'
+import { WarningIcon, type Icon } from 'phosphor-react-native'
 
 import type { BasicSliderItem } from '@/lib/tune/sliderDefinitions'
 import { clamp, formatSliderValue } from '@/lib/tune/sliderDefinitions'
+import { TuneTileFill } from '@/components/ui/tune/TuneTileFill'
 import { theme } from '@/constants/theme'
 
 interface BasicSliderCellProps {
   item: BasicSliderItem
+  icon: Icon
+  color: string
   editable: boolean
   onPress: () => void
-  onInfo: () => void
   onResetFormula?: () => void
 }
 
 export const BasicSliderCell = forwardRef<View, BasicSliderCellProps>(function BasicSliderCell(
-  { item, editable, onPress, onInfo, onResetFormula },
+  { item, icon: IconComponent, color, editable, onPress, onResetFormula },
   ref,
 ) {
   const progress =
@@ -32,30 +34,27 @@ export const BasicSliderCell = forwardRef<View, BasicSliderCellProps>(function B
         ]}
         onPress={editable ? onPress : undefined}
       >
-        <Pressable style={styles.infoBtn} onPress={onInfo}>
-          <InfoIcon size={13} color={theme.palette.slate.textDim} weight="bold" />
-        </Pressable>
-
-        <Text style={styles.value} numberOfLines={1} adjustsFontSizeToFit>
+        <TuneTileFill fraction={progress / 100} color={color} />
+        {item.modifiedManually ? (
+          <Pressable style={styles.alertButton} onPress={onResetFormula} hitSlop={8}>
+            <WarningIcon size={16} color={theme.palette.yellow.color} weight="duotone" />
+          </Pressable>
+        ) : null}
+        <View style={styles.headerRow}>
+          <View style={[styles.labelRow, item.modifiedManually && styles.labelRowWithAlert]}>
+            <IconComponent size={15} color={color} weight="duotone" />
+            <Text style={styles.label} numberOfLines={1}>
+              {item.label}
+            </Text>
+          </View>
+        </View>
+        <Text
+          style={[styles.value, { color }]}
+          numberOfLines={1}
+          adjustsFontSizeToFit
+          pointerEvents="none"
+        >
           {formatSliderValue(item)}
-        </Text>
-
-        <View style={styles.miniTrack}>
-          <View style={[styles.miniFill, { width: `${progress}%` }]} />
-        </View>
-
-        <View style={styles.labelRow}>
-          {item.modifiedManually ? (
-            <Pressable onPress={onResetFormula} hitSlop={8}>
-              <WarningIcon size={10} color={theme.palette.yellow.color} weight="fill" />
-            </Pressable>
-          ) : null}
-          <Text style={styles.label} numberOfLines={1}>
-            {item.label}
-          </Text>
-        </View>
-        <Text style={styles.source} numberOfLines={1}>
-          {item.source}
         </Text>
       </Pressable>
     </View>
@@ -64,73 +63,65 @@ export const BasicSliderCell = forwardRef<View, BasicSliderCellProps>(function B
 
 const styles = StyleSheet.create({
   wrapper: {
-    width: '50%',
+    flex: 1,
   },
   cell: {
-    minHeight: 92,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    paddingLeft: 11,
-    borderLeftWidth: 3,
-    borderLeftColor: theme.palette.sky.color,
+    minHeight: 82,
+    paddingTop: 7,
+    paddingBottom: 10,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: theme.palette.slate.border,
+    backgroundColor: theme.palette.slate.surface,
+    overflow: 'hidden',
   },
   cellMissing: {
     opacity: 0.58,
-    borderLeftColor: theme.palette.slate.border,
   },
   cellReadOnly: {
-    borderLeftColor: theme.palette.slate.border,
+    borderColor: theme.palette.slate.border,
   },
-  infoBtn: {
+  alertButton: {
     position: 'absolute',
-    top: 9,
-    right: 6,
+    top: 7,
+    right: 8,
     zIndex: 1,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 24,
+    height: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
   value: {
-    color: theme.palette.slate.textPrimary,
-    fontSize: 18,
-    fontWeight: '800',
-    paddingRight: 26,
-    fontVariant: ['tabular-nums'],
-  },
-  miniTrack: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: theme.palette.slate.surfaceDeep,
-    marginTop: 6,
-    marginRight: 26,
-    overflow: 'hidden',
-  },
-  miniFill: {
     position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    borderRadius: 3,
-    backgroundColor: theme.palette.sky.color,
+    right: 10,
+    bottom: 4,
+    fontSize: 22,
+    fontWeight: '500',
+    fontVariant: ['tabular-nums'],
+    maxWidth: '58%',
+    textAlign: 'right',
   },
   labelRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    marginTop: 6,
+    flex: 1,
+    minWidth: 0,
+  },
+  labelRowWithAlert: {
+    paddingRight: 26,
   },
   label: {
-    color: theme.palette.slate.textSecondary,
-    fontSize: 11,
-    fontWeight: '600',
+    color: theme.palette.slate.textPrimary,
+    fontSize: 13,
+    fontWeight: '800',
     flex: 1,
-  },
-  source: {
-    color: theme.palette.slate.textDim,
-    fontSize: 10,
-    fontWeight: '600',
-    marginTop: 1,
   },
 })

@@ -3,6 +3,7 @@ import { Alert, Linking, Platform, ScrollView, StyleSheet, Switch } from 'react-
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
   BluetoothConnectedIcon,
+  ClockCountdownIcon,
   RecordIcon,
   RocketLaunchIcon,
   SpeakerHighIcon,
@@ -12,6 +13,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { theme } from '@/constants/theme'
 import { SettingsCard } from '@/components/ui/settings/SettingsCard'
 import { SettingsRow } from '@/components/ui/settings/SettingsRow'
+import { Stepper } from '@/components/ui/forms/Stepper'
 import { IconHero } from '@/components/ui/settings/IconHero'
 import { ConfirmModal } from '@/components/ui/modals/ConfirmModal'
 import { useSettingsStore } from '@/store/settingsStore'
@@ -22,6 +24,7 @@ export default function ConnectionSettingsScreen() {
     autoConnect,
     autoRecording,
     companionPresenceEnabled,
+    companionPresenceCooldownMinutes,
     connectionSoundsEnabled,
     set,
     setCompanionPresence,
@@ -30,6 +33,7 @@ export default function ConnectionSettingsScreen() {
       autoConnect: s.autoConnect,
       autoRecording: s.autoRecording,
       companionPresenceEnabled: s.companionPresenceEnabled,
+      companionPresenceCooldownMinutes: s.companionPresenceCooldownMinutes,
       connectionSoundsEnabled: s.connectionSoundsEnabled,
       set: s.set,
       setCompanionPresence: s.setCompanionPresence,
@@ -95,6 +99,29 @@ export default function ConnectionSettingsScreen() {
                       ? theme.palette.sky.color
                       : theme.palette.slate.textMuted
                   }
+                />
+              }
+            />
+          ) : null}
+          {Platform.OS === 'android' && companionPresenceEnabled ? (
+            <SettingsRow
+              icon={ClockCountdownIcon}
+              iconColor={theme.palette.amber.color}
+              label="Auto start pause"
+              hint="After you exit the app, wait this long before auto starting again. 0 = off"
+              right={
+                <Stepper
+                  value={companionPresenceCooldownMinutes}
+                  unit="min"
+                  min={0}
+                  max={480}
+                  step={(v, dir) => (dir === 1 ? (v < 60 ? 15 : 30) : v <= 60 ? 15 : 30)}
+                  onChange={(nextValue) => {
+                    const clampedValue = Math.min(480, Math.max(0, nextValue))
+                    if (clampedValue !== companionPresenceCooldownMinutes) {
+                      void set('companionPresenceCooldownMinutes', clampedValue)
+                    }
+                  }}
                 />
               }
             />

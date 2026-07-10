@@ -322,7 +322,25 @@ enum TelemetryDatabase {
       try TuneProfileStore.createTables(db)
     }
 
+    migrator.registerMigration("v23_tune_profile_metadata") { db in
+      let columns = try Row.fetchAll(db, sql: "PRAGMA table_info(tune_profiles)")
+        .compactMap { $0["name"] as String? }
+      if !columns.contains("icon") {
+        try db.execute(sql: "ALTER TABLE tune_profiles ADD COLUMN icon TEXT NOT NULL DEFAULT 'sliders-horizontal'")
+      }
+      if !columns.contains("color") {
+        try db.execute(sql: "ALTER TABLE tune_profiles ADD COLUMN color TEXT NOT NULL DEFAULT 'purple'")
+      }
+    }
+
+    migrator.registerMigration("v24_tune_profile_refloat_base_version") { db in
+      let hasRefloatBaseVersion = try db.columns(in: "tune_profiles").contains { $0.name == "refloat_base_version" }
+      if !hasRefloatBaseVersion {
+        try db.execute(sql: "ALTER TABLE tune_profiles ADD COLUMN refloat_base_version TEXT NOT NULL DEFAULT ''")
+      }
+      try db.execute(sql: "CREATE INDEX IF NOT EXISTS index_tune_profiles_board_id_refloat_base_version ON tune_profiles(board_id, refloat_base_version)")
+    }
+
     return migrator
   }
 }
-

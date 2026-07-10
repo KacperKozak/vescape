@@ -37,7 +37,8 @@ const FIELD_INFO: Record<string, string> = {
   torquetilt_angle_limit: 'Maximum angle torque tiltback is allowed to apply.',
   torquetilt_on_speed: 'Maximum speed where torque tiltback can be applied.',
   torquetilt_off_speed: 'Maximum speed where torque tiltback can be released.',
-  turntilt_strength: 'Turn tiltback strength. The basic Carve tilt control writes this directly.',
+  turntilt_strength:
+    'Turn tiltback strength. The basic Carve tilt control writes this directly. Tune Preview does not show it because Carve Tilt requires a turn scenario.',
   turntilt_angle_limit: 'Maximum turn tiltback angle.',
   turntilt_start_angle: 'Turn aggregate threshold before turn tiltback response starts.',
   turntilt_start_erpm: 'ERPM threshold before turn tiltback response starts.',
@@ -48,13 +49,16 @@ const FIELD_INFO: Record<string, string> = {
   braketilt_strength: 'Brake tilt strength. The basic Brake tilt control writes this directly.',
   braketilt_lingering: 'Controls how brake tilt lingers or releases after braking.',
   tiltback_constant: 'Constant nose angle offset.',
+  tiltback_constant_erpm: 'Forward speed threshold where Constant Tiltback begins.',
   tiltback_variable: 'Variable tiltback amount per ERPM.',
   tiltback_variable_max: 'Maximum variable tiltback target.',
+  tiltback_variable_erpm: 'Forward speed threshold where Variable Tiltback begins.',
 }
 
 export interface BasicSliderItem {
   id: string
   label: string
+  description: string
   value: number | null
   min: number
   max: number
@@ -67,6 +71,7 @@ export interface BasicSliderItem {
 export interface BasicSliderDefinition {
   id: string
   label: string
+  description: string
   min: number
   max: number
   step: number
@@ -150,6 +155,7 @@ const BASIC_SLIDERS: BasicSliderDefinition[] = [
   {
     id: 'aggressiveness',
     label: 'Aggressiveness',
+    description: 'Controls how strongly the board stays balanced.',
     min: -5,
     max: 10,
     step: 1,
@@ -186,6 +192,7 @@ const BASIC_SLIDERS: BasicSliderDefinition[] = [
   {
     id: 'noseStiffness',
     label: 'Nose stiffness',
+    description: 'Lifts the nose when accelerating.',
     min: 0,
     max: 10,
     step: 1,
@@ -202,6 +209,7 @@ const BASIC_SLIDERS: BasicSliderDefinition[] = [
   {
     id: 'tailStiffness',
     label: 'Tail stiffness',
+    description: 'Lowers the nose when braking.',
     min: 0,
     max: 10,
     step: 1,
@@ -218,6 +226,7 @@ const BASIC_SLIDERS: BasicSliderDefinition[] = [
   {
     id: 'carveTilt',
     label: 'Carve tilt',
+    description: 'Adds extra lean when turning into a carve.',
     min: 0,
     max: 15,
     step: 1,
@@ -234,6 +243,7 @@ const BASIC_SLIDERS: BasicSliderDefinition[] = [
   {
     id: 'brakeTilt',
     label: 'Brake tilt',
+    description: 'Lifts the nose during hard braking.',
     min: 0,
     max: 5,
     step: 1,
@@ -250,6 +260,7 @@ const BASIC_SLIDERS: BasicSliderDefinition[] = [
   {
     id: 'atrIntensity',
     label: 'ATR intensity',
+    description: 'Automatically changes the board angle during climbs and descents.',
     min: 0,
     max: 15,
     step: 1,
@@ -295,6 +306,7 @@ export function basicSlidersFromGroups(
   return BASIC_SLIDERS.map((slider) => ({
     id: slider.id,
     label: slider.label,
+    description: slider.description,
     value: slider.deriveSliderValue(fieldMap),
     min: slider.min,
     max: slider.max,
@@ -309,6 +321,9 @@ export interface LinkedFieldPreview {
   id: string
   label: string
   unit: string | null
+  min: number
+  max: number
+  step: number
   computeValue: (sliderVal: number) => number
 }
 
@@ -319,6 +334,18 @@ export function getLinkedFieldPreviews(def: BasicSliderDefinition): LinkedFieldP
       id: fieldId,
       label: appField?.label ?? fieldId,
       unit: appField?.unit ?? null,
+      min: appField?.min ?? 0,
+      max: appField?.max ?? 100,
+      step: appField
+        ? fieldStep({
+            id: appField.id,
+            label: appField.label,
+            value: def.computeFieldValues(def.min)[fieldId],
+            min: appField.min,
+            max: appField.max,
+            unit: appField.unit,
+          })
+        : 0.1,
       computeValue: (sliderVal: number) => def.computeFieldValues(sliderVal)[fieldId],
     }
   })

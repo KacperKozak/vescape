@@ -1,6 +1,8 @@
 const TARGET_LABEL_PX = 70
 const MIN_STEP_PX = 14
 const ALL_STEP_LABEL_MIN_PX = 56
+const MAX_MAJOR_TICKS = 41
+const MAX_MINOR_TICKS = 180
 
 export const DRAG_RANGE_GAIN = 1
 export const THROW_STOP_VELOCITY = 25
@@ -36,12 +38,18 @@ export function computeTuneDialLayout(min: number, max: number, step: number): T
   const totalSteps = Math.round(range / step)
 
   const majorVal = niceMajorValue(range)
-  const majorEvery = Math.max(1, Math.round(majorVal / step))
+  const naturalMajorEvery = Math.max(1, Math.round(majorVal / step))
+  const cappedMajorEvery = Math.max(naturalMajorEvery, Math.ceil(totalSteps / MAX_MAJOR_TICKS))
+  const majorEvery = cappedMajorEvery
   const rawStepPx = TARGET_LABEL_PX / majorEvery
   const stepPx = Math.max(MIN_STEP_PX, rawStepPx)
   const totalWidth = totalSteps * stepPx
 
-  const minorEvery = Math.max(1, Math.round(majorEvery / 5))
+  const minorEvery = Math.max(
+    1,
+    Math.round(majorEvery / 5),
+    Math.ceil(totalSteps / MAX_MINOR_TICKS),
+  )
   const minMinorPx = 6
   const renderMinor = minorEvery * stepPx >= minMinorPx
   const labelEveryStep = stepPx >= ALL_STEP_LABEL_MIN_PX
@@ -104,6 +112,18 @@ export function resolveTuneDialThrowVelocity(
 
   const velocity = releaseVelocityX * THROW_POWER
   return Math.max(-MAX_THROW_VELOCITY, Math.min(MAX_THROW_VELOCITY, velocity))
+}
+
+export function resolveTuneDialThrowTargetOffset(
+  startOffset: number,
+  velocity: number,
+  totalWidth: number,
+): number {
+  'worklet'
+
+  const remainingSpeed = Math.max(0, Math.abs(velocity) - THROW_STOP_VELOCITY)
+  const remainingDistance = (Math.sign(velocity) * remainingSpeed) / THROW_FRICTION_PER_SECOND
+  return Math.max(-totalWidth, Math.min(0, startOffset + remainingDistance))
 }
 
 export function advanceTuneDialThrow(

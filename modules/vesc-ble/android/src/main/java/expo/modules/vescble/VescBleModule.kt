@@ -34,6 +34,13 @@ private const val SCAN_RETRY_LIMIT = 3
  */
 @SuppressLint("MissingPermission") // permissions are requested at the JS/RN layer
 class VescBleModule : Module() {
+  private class ActiveBoardProbe(
+    val id: String,
+    val result: CompletableDeferred<TransportDetection.Result>,
+  ) {
+    var detector: BoardTransportDetector? = null
+  }
+
   private var scanner: android.bluetooth.le.BluetoothLeScanner? = null
   private var scanCallback: ScanCallback? = null
   private var scanRetryCount = 0
@@ -44,6 +51,7 @@ class VescBleModule : Module() {
   private var frontendActive = true
   private val observedEvents = mutableSetOf<String>()
   private val mainHandler = Handler(Looper.getMainLooper())
+  private var activeProbe: ActiveBoardProbe? = null
   private var previewAlertFeedback: VescAlertFeedback? = null
   private val companionPresence by lazy {
     VescCompanionPresence(context.applicationContext, activityProvider = { appContext.currentActivity })
@@ -133,6 +141,8 @@ class VescBleModule : Module() {
 
     OnActivityEntersForeground {
       frontendActive = true
+      // User opened the app again — re-arm companion auto start immediately.
+      CompanionRestartGate.clear(context.applicationContext)
     }
     OnActivityEntersBackground {
       frontendActive = false
@@ -145,6 +155,7 @@ class VescBleModule : Module() {
       observedEvents.clear()
       previewAlertFeedback?.release()
       previewAlertFeedback = null
+      cancelActiveProbe(null, "module_destroyed")
       if (VescForegroundService.emitEvent != null) {
         VescForegroundService.emitEvent = null
       }
@@ -201,6 +212,7 @@ class VescBleModule : Module() {
       VescForegroundService.currentRemoteTiltState()
     }
     Function("setSelectedBoard") { boardId: String? ->
+      ManualDisconnectAutoStartGate.clear(context.applicationContext)
       runBlocking { AppDataRepository.get(context.applicationContext).setSelectedBoardId(boardId) }
       companionPresence.refreshForSelectedBoard()
     }
@@ -261,8 +273,11 @@ class VescBleModule : Module() {
     AsyncFunction("stopBoard") { promise: Promise ->
       stopBoardSession(promise)
     }
-    AsyncFunction("probeBoardLink") Coroutine { bleId: String ->
-      probeBoardLink(bleId)
+    AsyncFunction("probeBoardLink") Coroutine { bleId: String, probeId: String ->
+      probeBoardLink(bleId, probeId)
+    }
+    Function("cancelBoardProbe") { probeId: String ->
+      cancelActiveProbe(probeId, "js_cancelled")
     }
     AsyncFunction("getTelemetryHistory") Coroutine { options: Map<String, Any?> ->
       TelemetryRepository.get(context.applicationContext).getHistory(options)
@@ -325,17 +340,17 @@ class VescBleModule : Module() {
         onError = { code, message -> promise.reject(code, message, null) },
       )
     }
-    AsyncFunction("getTuneProfiles") Coroutine { boardId: String ->
-      AppDataRepository.get(context.applicationContext).getTuneProfiles(boardId)
+    AsyncFunction("getTuneProfiles") Coroutine { boardId: String, refloatBaseVersion: String? ->
+      AppDataRepository.get(context.applicationContext).getTuneProfiles(boardId, refloatBaseVersion)
     }
     AsyncFunction("getTuneProfile") Coroutine { profileId: String ->
       AppDataRepository.get(context.applicationContext).getTuneProfile(profileId)
     }
-    AsyncFunction("createProfile") Coroutine { boardId: String, name: String, fields: Map<String, Any?> ->
-      AppDataRepository.get(context.applicationContext).createProfile(boardId, name, fields)
+    AsyncFunction("createProfile") Coroutine { boardId: String, name: String, icon: String, color: String, fields: Map<String, Any?>, refloatBaseVersion: String ->
+      AppDataRepository.get(context.applicationContext).createProfile(boardId, name, icon, color, fields, refloatBaseVersion)
     }
-    AsyncFunction("renameProfile") Coroutine { profileId: String, name: String ->
-      AppDataRepository.get(context.applicationContext).renameProfile(profileId, name)
+    AsyncFunction("renameProfile") Coroutine { profileId: String, name: String, icon: String, color: String ->
+      AppDataRepository.get(context.applicationContext).renameProfile(profileId, name, icon, color)
     }
     AsyncFunction("deleteProfile") Coroutine { profileId: String ->
       AppDataRepository.get(context.applicationContext).deleteProfile(profileId)
@@ -604,6 +619,7 @@ class VescBleModule : Module() {
 
   private suspend fun selectBoard(boardId: String) {
     val appCtx = context.applicationContext
+    ManualDisconnectAutoStartGate.clear(appCtx)
     AppDataRepository.get(appCtx).setSelectedBoardId(boardId)
     companionPresence.refreshForSelectedBoard()
     val config = buildSessionConfig(appCtx, boardId, requestedDebugRecordingEnabled)
@@ -617,39 +633,81 @@ class VescBleModule : Module() {
     )
   }
 
-  private suspend fun probeBoardLink(bleId: String): Map<String, Any?> {
+  private suspend fun probeBoardLink(bleId: String, probeId: String): Map<String, Any?> {
     if (bleId.isBlank()) {
       throw IllegalArgumentException("Board Probe needs a BLE peripheral id")
     }
+    if (probeId.isBlank()) {
+      throw IllegalArgumentException("Board Probe needs a probe id")
+    }
     val appCtx = context.applicationContext
 
-    // A Board Probe owns the single BLE connection: tear down any live Board
-    // Session before probing so the probe isn't fighting an active session.
-    val stopped = CompletableDeferred<Unit>()
-    VescForegroundService.stopBoardSession(appCtx) { stopped.complete(Unit) }
-    stopped.await()
+    cancelActiveProbe(null, "replaced")
+    BoardProbeAutoStartGate.enter()
 
-    val device = btAdapter.getRemoteDevice(bleId)
-    val result = CompletableDeferred<TransportDetection.Result>()
-    mainHandler.post {
-      BoardTransportDetector(
-        context = appCtx,
-        handler = mainHandler,
-        device = device,
-        recordDiagnostic = { name, props ->
-          TelemetryRepository.get(appCtx).recordDiagnosticEvent(name, props)
-        },
-        onProgress = { progress -> sendEvent("onBoardProbeProgress", progress) },
-        onComplete = { result.complete(it) },
-        onError = { code, message -> result.completeExceptionally(IllegalStateException("$code: $message")) },
-      ).start()
+    try {
+      // A Board Probe owns the single BLE connection: tear down any live Board
+      // Session before probing so the probe isn't fighting an active session.
+      val stopped = CompletableDeferred<Unit>()
+      VescForegroundService.stopBoardSession(appCtx) { stopped.complete(Unit) }
+      stopped.await()
+
+      val device = btAdapter.getRemoteDevice(bleId)
+      val result = CompletableDeferred<TransportDetection.Result>()
+      val active = ActiveBoardProbe(probeId, result)
+      activeProbe = active
+      mainHandler.post {
+        if (activeProbe !== active) return@post
+        val detector = BoardTransportDetector(
+          context = appCtx,
+          handler = mainHandler,
+          probeId = probeId,
+          device = device,
+          recordDiagnostic = { name, props ->
+            TelemetryRepository.get(appCtx).recordDiagnosticEvent(name, props)
+          },
+          onProgress = { progress ->
+            if (activeProbe === active) sendEvent("onBoardProbeProgress", progress)
+          },
+          onComplete = {
+            if (activeProbe === active) {
+              activeProbe = null
+              result.complete(it)
+            }
+          },
+          onError = { code, message ->
+            if (activeProbe === active) {
+              activeProbe = null
+              result.completeExceptionally(IllegalStateException("$code: $message"))
+            }
+          },
+        )
+        active.detector = detector
+        detector.start()
+      }
+      return probeResultToBridge(result.await())
+    } finally {
+      BoardProbeAutoStartGate.leave()
     }
-    return probeResultToBridge(result.await())
+  }
+
+  private fun cancelActiveProbe(probeId: String?, reason: String) {
+    val active = activeProbe ?: return
+    if (probeId != null && active.id != probeId) return
+    activeProbe = null
+    active.detector?.cancel(reason)
+    active.result.completeExceptionally(IllegalStateException("PROBE_CANCELLED: Board Probe cancelled"))
   }
 
   private fun probeResultToBridge(result: TransportDetection.Result): Map<String, Any?> {
     val candidates = result.candidates.map {
-      mapOf("transport" to BoardTransport.toBridge(it.transport), "hasBms" to it.hasBms)
+      mapOf(
+        "transport" to BoardTransport.toBridge(it.transport),
+        "hasBms" to it.hasBms,
+        "vescFirmwareVersion" to it.vescFirmwareVersion,
+        "refloatVersion" to it.refloatVersion,
+        "refloatBaseVersion" to it.refloatBaseVersion,
+      )
     }
     val outcome = when (result.outcome) {
       is TransportDetection.Outcome.Resolved -> "resolved"

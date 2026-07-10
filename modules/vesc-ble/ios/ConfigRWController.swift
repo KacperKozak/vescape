@@ -85,6 +85,13 @@ internal final class ConfigRWController {
       )
       return
     }
+    guard connection.linkIntegrity == .trusted else {
+      onError(
+        RefloatConfigErrorCode.LINK_NOT_TRUSTED.rawValue,
+        "Trusted board link required before reading Refloat config"
+      )
+      return
+    }
     let wasPolling = connection.isPollingActive()
     connection.stopPolling()
     readCallbacks = PendingConfigRead(onSuccess: onSuccess, onError: onError)
@@ -117,6 +124,13 @@ internal final class ConfigRWController {
       onError(RefloatConfigErrorCode.BOARD_NOT_CONNECTED.rawValue, "Board must be connected before pushing config")
       return
     }
+    guard connection.linkIntegrity == .trusted else {
+      onError(
+        RefloatConfigErrorCode.LINK_NOT_TRUSTED.rawValue,
+        "Trusted board link required before pushing config"
+      )
+      return
+    }
     guard let profile = connection.loadProfile(profileId) else {
       onError(RefloatConfigErrorCode.PROFILE_NOT_FOUND.rawValue, "Tune profile not found: \(profileId)")
       return
@@ -124,6 +138,11 @@ internal final class ConfigRWController {
     let profileBoardId = (profile["boardId"] ?? nil) as? String
     if profileBoardId == nil || profileBoardId!.isEmpty || profileBoardId != connectedBoardId {
       onError(RefloatConfigErrorCode.PROFILE_BOARD_MISMATCH.rawValue, "Tune profile does not belong to the connected board")
+      return
+    }
+    let profileRefloatBaseVersion = (profile["refloatBaseVersion"] ?? nil) as? String
+    if profileRefloatBaseVersion == nil || profileRefloatBaseVersion!.isEmpty || profileRefloatBaseVersion != connection.refloatBaseVersion {
+      onError(RefloatConfigErrorCode.PROFILE_BOARD_MISMATCH.rawValue, "Tune profile does not match the connected board Refloat Tune Compatibility")
       return
     }
     let fields = ((profile["fields"] ?? nil) as? [String: Any]) ?? [:]
@@ -388,12 +407,7 @@ internal final class ConfigRWController {
     state = .idle
     cancelTimeout()
     if resume { connection.startPolling() }
-    DispatchQueue.global(qos: .utility).async {
-      _ = try? TuneProfileStore.shared.createMainTuneProfileIfMissing(snapshot)
-      DispatchQueue.main.async {
-        pending?.onSuccess(snapshot.toMap())
-      }
-    }
+    pending?.onSuccess(snapshot.toMap())
   }
 
   private func completeWrite(_ snapshot: RefloatConfigSnapshot, _ connection: ConfigRWConnection) {
@@ -403,12 +417,7 @@ internal final class ConfigRWController {
     state = .idle
     cancelTimeout()
     if resume { connection.startPolling() }
-    DispatchQueue.global(qos: .utility).async {
-      _ = try? TuneProfileStore.shared.createMainTuneProfileIfMissing(snapshot)
-      DispatchQueue.main.async {
-        pending?.onSuccess(snapshot.toMap())
-      }
-    }
+    pending?.onSuccess(snapshot.toMap())
   }
 
   private func fail(
@@ -566,6 +575,8 @@ internal struct ConfigRWConnection {
   let appBoardId: String?
   let transport: BoardTransport
   let fwVersion: String?
+  let refloatBaseVersion: String?
+  let linkIntegrity: LinkIntegrity
   let isPollingActive: () -> Bool
   let stopPolling: () -> Void
   let startPolling: () -> Void

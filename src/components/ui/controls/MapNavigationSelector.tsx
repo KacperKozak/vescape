@@ -6,16 +6,17 @@ import {
 } from 'phosphor-react-native'
 import { type ReactNode } from 'react'
 import { StyleSheet, View } from 'react-native'
+import Animated, { useAnimatedStyle, type SharedValue } from 'react-native-reanimated'
 
 import { MapOptionSelector } from '@/components/ui/controls/MapOptionSelector'
-import { AVAILABLE_NAVIGATION_MODES, type MapNavigationMode } from '@/constants/mapStyles'
+import { MAP_NAVIGATION_MODES, type MapNavigationMode } from '@/constants/mapStyles'
 import { theme } from '@/constants/theme'
 
 const COLLAPSED_ICON_COLOR = theme.palette.slate.textPrimary
 
 interface MapNavigationSelectorProps {
   activeMode: MapNavigationMode
-  heading: number
+  heading: SharedValue<number>
   expanded: boolean
   onToggle: () => void
   onSelect: (mode: MapNavigationMode) => void
@@ -29,25 +30,25 @@ export function MapNavigationSelector({
   onSelect,
 }: MapNavigationSelectorProps) {
   const options: { key: MapNavigationMode; label: string; icon: ReactNode }[] =
-    AVAILABLE_NAVIGATION_MODES.map((option) => ({
+    MAP_NAVIGATION_MODES.map((option) => ({
       ...option,
       icon: getNavigationIcon(option.key, activeMode),
     }))
   const activeIcon =
     activeMode === 'northUp' ? (
-      <NorthAwareIcon>
+      <NorthAwareIcon heading={heading}>
         <ArrowUpIcon size={21} color={COLLAPSED_ICON_COLOR} weight="bold" />
       </NorthAwareIcon>
     ) : activeMode === 'gpsHeading' ? (
-      <NorthAwareIcon northRotationDeg={-heading}>
+      <NorthAwareIcon heading={heading} rotateNorthDot>
         <ForwardNavigationIcon size={21} color={COLLAPSED_ICON_COLOR} />
       </NorthAwareIcon>
     ) : activeMode === 'phoneHeading' ? (
-      <NorthAwareIcon northRotationDeg={-heading}>
+      <NorthAwareIcon heading={heading} rotateNorthDot>
         <DeviceMobileIcon size={21} color={COLLAPSED_ICON_COLOR} weight="bold" />
       </NorthAwareIcon>
     ) : (
-      <NorthAwareIcon style={{ transform: [{ rotate: `${-heading}deg` }] }}>
+      <NorthAwareIcon heading={heading} rotateContainer>
         <ArrowUpIcon size={21} color={COLLAPSED_ICON_COLOR} weight="bold" />
       </NorthAwareIcon>
     )
@@ -81,24 +82,29 @@ function getNavigationIcon(mode: MapNavigationMode, activeMode: MapNavigationMod
 
 interface NorthAwareIconProps {
   children: ReactNode
+  heading: SharedValue<number>
   compact?: boolean
-  northRotationDeg?: number
-  style?: object
+  rotateContainer?: boolean
+  rotateNorthDot?: boolean
 }
 
 function NorthAwareIcon({
   children,
+  heading,
   compact = false,
-  northRotationDeg = 0,
-  style,
+  rotateContainer = false,
+  rotateNorthDot = false,
 }: NorthAwareIconProps) {
+  const headingRotationStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${-heading.value}deg` }],
+  }))
   return (
-    <View style={[styles.northAwareIcon, style]}>
-      <View style={[styles.northDotOrbit, { transform: [{ rotate: `${northRotationDeg}deg` }] }]}>
+    <Animated.View style={[styles.northAwareIcon, rotateContainer && headingRotationStyle]}>
+      <Animated.View style={[styles.northDotOrbit, rotateNorthDot && headingRotationStyle]}>
         <View style={[styles.northDot, compact && styles.northDotCompact]} />
-      </View>
+      </Animated.View>
       {children}
-    </View>
+    </Animated.View>
   )
 }
 

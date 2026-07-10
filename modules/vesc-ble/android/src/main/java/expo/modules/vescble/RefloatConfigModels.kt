@@ -54,6 +54,7 @@ internal data class RefloatConfigSnapshot(
   val missingFieldIds: List<String>,
   val fwVersion: String?,
   val refloatVersion: String? = null,
+  val refloatBaseVersion: String? = RefloatConfigProtocol.normalizeBaseVersion(refloatVersion),
 ) {
   fun toMap(): Map<String, Any?> = mapOf(
     "capturedAt" to capturedAt,
@@ -66,12 +67,14 @@ internal data class RefloatConfigSnapshot(
     "missingFieldIds" to missingFieldIds,
     "fwVersion" to fwVersion,
     "refloatVersion" to refloatVersion,
+    "refloatBaseVersion" to refloatBaseVersion,
   )
 }
 
 // @parity /modules/vesc-ble/ios/RefloatConfigModels.swift
 internal enum class RefloatConfigErrorCode {
   BOARD_NOT_CONNECTED,
+  LINK_NOT_TRUSTED,
   CAN_ID_UNAVAILABLE,
   GATT_NOT_WRITABLE,
   CONFIG_REQUEST_IN_FLIGHT,
@@ -162,8 +165,10 @@ internal val REFLOAT_TUNE_GROUPS = listOf(
     title = "Tiltback",
     fields = listOf(
       RefloatTuneFieldDefinition("tiltback_constant", "Constant Tiltback", "deg"),
+      RefloatTuneFieldDefinition("tiltback_constant_erpm", "Constant Tiltback ERPM", "ERPM"),
       RefloatTuneFieldDefinition("tiltback_variable", "Variable Tiltback Rate", "deg/1000 ERPM"),
       RefloatTuneFieldDefinition("tiltback_variable_max", "Variable Tiltback Target", "deg"),
+      RefloatTuneFieldDefinition("tiltback_variable_erpm", "Variable Tiltback Start ERPM", "ERPM"),
     ),
   ),
 )

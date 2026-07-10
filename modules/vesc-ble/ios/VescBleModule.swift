@@ -2,6 +2,18 @@ import ExpoModulesCore
 import Foundation
 import UserNotifications
 
+private final class ActiveBoardProbe {
+  let id: String
+  let detector: BoardTransportDetector
+  let promise: Promise
+
+  init(id: String, detector: BoardTransportDetector, promise: Promise) {
+    self.id = id
+    self.detector = detector
+    self.promise = promise
+  }
+}
+
 // Thin JS bridge. Board scan/connect/telemetry delegate to the CoreBluetooth stack
 // (VescGattClient + BoardSessionController); app data delegates to GRDB, while later iOS
 // subsystems still keep bridge-shaped stubs.
@@ -13,10 +25,11 @@ public class VescBleModule: Module {
   // MARK: - Session state
 
   private var selectedBoardId: String? = nil
+  private let manualDisconnectSuppressedBoardKey = "vesc_manual_disconnect_auto_start_board_id"
 
   /// Retains the in-flight Board Probe across its async BLE lifecycle. Only one runs at a time —
   /// the probe owns the single BLE link (see Android `probeBoardLink`).
-  private var activeProbe: BoardTransportDetector?
+  private var activeProbe: ActiveBoardProbe?
 
   /// Frontend liveness gate. False while the app is backgrounded so the high-frequency telemetry
   /// firehose (`onLiveTick` at the board's poll rate, `onTelemetryHistory`, `onLiveSeries`) never
@@ -100,7 +113,7 @@ public class VescBleModule: Module {
       AppDataRepository.onDataChanged = nil
       self.frontendActive = false
       self.observedEvents.removeAll()
-      self.activeProbe = nil
+      self.cancelActiveProbe(reason: "module_destroyed")
     }
 
     // MARK: Scan
@@ -230,6 +243,7 @@ public class VescBleModule: Module {
     }
 
     Function("setSelectedBoard") { (boardId: String?) in
+      self.clearManualDisconnectAutoStartGate()
       self.selectedBoardId = boardId
       self.appData.updateSetting("selectedBoardId", rawValue: boardId)
     }
@@ -251,6 +265,7 @@ public class VescBleModule: Module {
     }
 
     AsyncFunction("selectBoard") { (boardId: String, promise: Promise) in
+      self.clearManualDisconnectAutoStartGate()
       self.selectedBoardId = boardId
       self.appData.updateSetting("selectedBoardId", rawValue: boardId)
       guard let config = self.connectConfig(boardId: boardId) else {
@@ -265,12 +280,17 @@ public class VescBleModule: Module {
     }
 
     AsyncFunction("stopBoard") { (promise: Promise) in
+      self.suppressAutoStartAfterManualDisconnect()
       self.coordinator.stopBoard()
       promise.resolve(nil)
     }
 
-    AsyncFunction("probeBoardLink") { (bleId: String, promise: Promise) in
-      DispatchQueue.main.async { self.startProbe(bleId: bleId, promise: promise) }
+    AsyncFunction("probeBoardLink") { (bleId: String, probeId: String, promise: Promise) in
+      DispatchQueue.main.async { self.startProbe(bleId: bleId, probeId: probeId, promise: promise) }
+    }
+
+    Function("cancelBoardProbe") { (probeId: String) in
+      DispatchQueue.main.async { self.cancelActiveProbe(probeId: probeId, reason: "js_cancelled") }
     }
 
     // MARK: Telemetry history
@@ -370,25 +390,25 @@ public class VescBleModule: Module {
     // DB-backed per-board VESC tune configs with Tune History, matching Android 1:1. `TuneProfileStore`
     // owns the transactional semantics; mutations reject with Android's error vocabulary.
 
-    AsyncFunction("getTuneProfiles") { (boardId: String, promise: Promise) in
-      promise.resolve(TuneProfileStore.shared.getTuneProfiles(boardId))
+    AsyncFunction("getTuneProfiles") { (boardId: String, refloatBaseVersion: String?, promise: Promise) in
+      promise.resolve(TuneProfileStore.shared.getTuneProfiles(boardId, refloatBaseVersion: refloatBaseVersion))
     }
 
     AsyncFunction("getTuneProfile") { (profileId: String, promise: Promise) in
       promise.resolve(TuneProfileStore.shared.getTuneProfile(profileId))
     }
 
-    AsyncFunction("createProfile") { (boardId: String, name: String, fields: [String: Any], promise: Promise) in
+    AsyncFunction("createProfile") { (boardId: String, name: String, icon: String, color: String, fields: [String: Any], refloatBaseVersion: String, promise: Promise) in
       do {
-        promise.resolve(try TuneProfileStore.shared.createProfile(boardId: boardId, name: name, fields: fields))
+        promise.resolve(try TuneProfileStore.shared.createProfile(boardId: boardId, name: name, icon: icon, color: color, fields: fields, refloatBaseVersion: refloatBaseVersion))
       } catch {
         promise.reject(TuneProfileStore.errorCode, error.localizedDescription)
       }
     }
 
-    AsyncFunction("renameProfile") { (profileId: String, name: String, promise: Promise) in
+    AsyncFunction("renameProfile") { (profileId: String, name: String, icon: String, color: String, promise: Promise) in
       do {
-        promise.resolve(try TuneProfileStore.shared.renameProfile(profileId: profileId, name: name))
+        promise.resolve(try TuneProfileStore.shared.renameProfile(profileId: profileId, name: name, icon: icon, color: color))
       } catch {
         promise.reject(TuneProfileStore.errorCode, error.localizedDescription)
       }
@@ -596,19 +616,29 @@ public class VescBleModule: Module {
   /// Run a Board Probe of one BLE peripheral: end any live Board Session (the probe owns the
   /// single BLE link), then drive `BoardTransportDetector` and resolve with the confirmed
   /// candidate set. Mirrors Android `probeBoardLink`.
-  private func startProbe(bleId: String, promise: Promise) {
+  private func startProbe(bleId: String, probeId: String, promise: Promise) {
     guard !bleId.isEmpty else {
       promise.reject("INVALID_ARGUMENT", "Board Probe needs a BLE peripheral id")
       return
     }
+    guard !probeId.isEmpty else {
+      promise.reject("INVALID_ARGUMENT", "Board Probe needs a probe id")
+      return
+    }
+    cancelActiveProbe(reason: "replaced")
     coordinator.stopBoard()
     let detector = BoardTransportDetector(
+      probeId: probeId,
       bleId: bleId,
       recordDiagnostic: { name, props in
         DiagnosticsRecorder.shared.record(eventName: name, properties: props)
       },
-      onProgress: { [weak self] progress in self?.sendEvent("onBoardProbeProgress", progress) },
+      onProgress: { [weak self] progress in
+        guard self?.activeProbe?.id == probeId else { return }
+        self?.sendEvent("onBoardProbeProgress", progress)
+      },
       onComplete: { [weak self] result in
+        guard self?.activeProbe?.id == probeId else { return }
         self?.activeProbe = nil
         promise.resolve(
           self?.probeResultToBridge(result) ?? [
@@ -619,17 +649,32 @@ public class VescBleModule: Module {
         )
       },
       onError: { [weak self] code, message in
+        guard self?.activeProbe?.id == probeId else { return }
         self?.activeProbe = nil
         promise.reject(code, message)
       }
     )
-    activeProbe = detector
+    activeProbe = ActiveBoardProbe(id: probeId, detector: detector, promise: promise)
     detector.start()
+  }
+
+  private func cancelActiveProbe(probeId: String? = nil, reason: String) {
+    guard let activeProbe else { return }
+    if let probeId, activeProbe.id != probeId { return }
+    self.activeProbe = nil
+    activeProbe.detector.cancel(reason: reason)
+    activeProbe.promise.reject("PROBE_CANCELLED", "Board Probe cancelled")
   }
 
   private func probeResultToBridge(_ result: TransportDetection.Result) -> [String: Any?] {
     let candidates = result.candidates.map { candidate in
-      ["transport": candidate.transport.bridgeValue, "hasBms": candidate.hasBms] as [String: Any?]
+      [
+        "transport": candidate.transport.bridgeValue,
+        "hasBms": candidate.hasBms,
+        "vescFirmwareVersion": candidate.vescFirmwareVersion,
+        "refloatVersion": candidate.refloatVersion,
+        "refloatBaseVersion": candidate.refloatBaseVersion,
+      ] as [String: Any?]
     }
     let outcome: String
     switch result.outcome {
@@ -678,6 +723,7 @@ public class VescBleModule: Module {
     let settings = appData.getSettings()
     guard settings["autoConnect"] as? Bool ?? true else { return }
     guard let boardId = settings["selectedBoardId"] as? String, !boardId.isEmpty else { return }
+    guard !isAutoStartSuppressedAfterManualDisconnect(boardId: boardId) else { return }
     DispatchQueue.main.async {
       guard let config = self.connectConfig(boardId: boardId) else { return }
       self.selectedBoardId = boardId
@@ -701,11 +747,29 @@ public class VescBleModule: Module {
       bleId: bleId,
       name: name,
       transport: transport,
+      linkVersion: AppDataRepository.intValue(link["linkVersion"] ?? nil),
       hasBms: link["hasBms"] as? Bool,
+      vescFirmwareVersion: link["vescFirmwareVersion"] as? String,
+      refloatVersion: link["refloatVersion"] as? String,
+      refloatBaseVersion: link["refloatBaseVersion"] as? String,
       pollIntervalMs: hz > 0 ? 1000 / hz : 0,
       batteryConfig: AppDataRepository.normalizeBatteryConfig(board["batteryConfig"] ?? nil),
       liveHistoryLimitMinutes: AppDataRepository.liveHistoryLimitMinutes(settings["liveHistoryLimit"] ?? nil) ?? 5
     )
+  }
+
+  private func suppressAutoStartAfterManualDisconnect() {
+    let boardId = selectedBoardId ?? (appData.getSettings()["selectedBoardId"] as? String)
+    guard let boardId, !boardId.isEmpty else { return }
+    UserDefaults.standard.set(boardId, forKey: manualDisconnectSuppressedBoardKey)
+  }
+
+  private func isAutoStartSuppressedAfterManualDisconnect(boardId: String) -> Bool {
+    UserDefaults.standard.string(forKey: manualDisconnectSuppressedBoardKey) == boardId
+  }
+
+  private func clearManualDisconnectAutoStartGate() {
+    UserDefaults.standard.removeObject(forKey: manualDisconnectSuppressedBoardKey)
   }
 
   /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescLiveStateMapper.kt `buildLiveState`
@@ -723,6 +787,7 @@ public class VescBleModule: Module {
         "recentTelemetry": coordinator.recentTelemetry(),
         "error": coordinator.boardError,
         "autoConnect": settings["autoConnect"] as? Bool ?? true,
+        "linkIntegrity": coordinator.linkIntegrity.rawValue,
         "remoteTilt": coordinator.remoteTiltState(),
       ] as [String: Any?],
       "gps": [

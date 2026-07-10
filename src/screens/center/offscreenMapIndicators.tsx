@@ -29,7 +29,7 @@ interface MapLayout {
 export interface OffscreenMapIndicatorState {
   id: string
   type: 'gps' | 'direction' | 'mapPoint' | 'riderTarget' | 'rider'
-  coordinate: [number, number]
+  coordinate: SharedValue<[number, number]>
   color: string
   textColor: string
   icon: Icon
@@ -64,8 +64,6 @@ function sameIndicatorIdentity(
     return (
       currentIndicator?.id === nextIndicator.id &&
       currentIndicator.type === nextIndicator.type &&
-      currentIndicator.coordinate[0] === nextIndicator.coordinate[0] &&
-      currentIndicator.coordinate[1] === nextIndicator.coordinate[1] &&
       currentIndicator.color === nextIndicator.color &&
       currentIndicator.textColor === nextIndicator.textColor &&
       currentIndicator.icon === nextIndicator.icon
@@ -157,12 +155,24 @@ export function repositionOffscreenMapIndicators(
   layout: MapLayout,
 ): OffscreenMapIndicatorState[] {
   const next = current.flatMap((indicator) => {
+    const coordinate = indicator.coordinate.value
     const point = projectCoordinateToEdgePoint(
-      { longitude: indicator.coordinate[0], latitude: indicator.coordinate[1] },
+      { longitude: coordinate[0], latitude: coordinate[1] },
       camera,
       layout,
     )
-    const positioned = clampedEdgeIndicator(indicator, point, layout)
+    const positioned = clampedEdgeIndicator(
+      {
+        id: indicator.id,
+        type: indicator.type,
+        coordinate,
+        color: indicator.color,
+        textColor: indicator.textColor,
+        icon: indicator.icon,
+      },
+      point,
+      layout,
+    )
     return positioned ? [positioned] : []
   })
   return applyOffscreenIndicatorDrafts(current, next)
@@ -173,6 +183,7 @@ function createOffscreenMapIndicatorState(
 ): OffscreenMapIndicatorState {
   return {
     ...draft,
+    coordinate: makeMutable(draft.coordinate),
     x: makeMutable(draft.x),
     y: makeMutable(draft.y),
     angleDeg: makeMutable(draft.angleDeg),
@@ -190,9 +201,10 @@ export function applyOffscreenIndicatorDrafts(
   for (let index = 0; index < next.length; index += 1) {
     const currentIndicator = current[index]
     const nextIndicator = next[index]
-    currentIndicator.x.value = nextIndicator.x
-    currentIndicator.y.value = nextIndicator.y
-    currentIndicator.angleDeg.value = nextIndicator.angleDeg
+    currentIndicator.coordinate.set(nextIndicator.coordinate)
+    currentIndicator.x.set(nextIndicator.x)
+    currentIndicator.y.set(nextIndicator.y)
+    currentIndicator.angleDeg.set(nextIndicator.angleDeg)
   }
   return current
 }
@@ -205,12 +217,15 @@ export function OffscreenMapIndicator({
   onPress: () => void
 }) {
   const IconComponent = indicator.icon
+  const x = indicator.x
+  const y = indicator.y
+  const angleDeg = indicator.angleDeg
   const indicatorStyle = useAnimatedStyle(() => ({
-    left: indicator.x.value - OFFSCREEN_GPS_INDICATOR_SIZE / 2,
-    top: indicator.y.value - OFFSCREEN_GPS_INDICATOR_SIZE / 2,
+    left: x.value - OFFSCREEN_GPS_INDICATOR_SIZE / 2,
+    top: y.value - OFFSCREEN_GPS_INDICATOR_SIZE / 2,
   }))
   const arrowStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${indicator.angleDeg.value}deg` }],
+    transform: [{ rotate: `${angleDeg.value}deg` }],
   }))
 
   return (

@@ -86,17 +86,25 @@ A smart BMS (e.g. Smart BMS / ANT / JBD over CAN) reports per-cell-group voltage
 them with `COMM_BMS_GET_VALUES` (0x60) — the standard VESC BMS command, **not** anything from
 the Refloat `GET_ALLDATA` stream (that only carries pack-level voltage).
 
-### Capability detection (at probe, not runtime)
+### Capability detection (at probe and verified at runtime)
 
-Smart-BMS presence is discovered once, during the **Board Probe**, not re-sniffed every
-session. While probing each transport for telemetry, `BoardTransportDetector` also fires a
-`COMM_BMS_GET_VALUES` request; a valid reply within the probe window marks that candidate
-`hasBms = true`. The flag rides on the chosen `BoardCandidate` into the saved `BoardLink`
-(`link.hasBms`), so reachability and capability are proven together and stored together.
+Smart-BMS presence and firmware identity are discovered during the **Board Probe** for each
+candidate transport. While probing each transport for telemetry, `BoardTransportDetector` also
+fires a `COMM_BMS_GET_VALUES` request and firmware identity requests (`COMM_FW_VERSION` and
+Refloat `GET_INFO`) when available. The facts ride on the chosen `BoardCandidate` into the saved
+`BoardLink` as `linkVersion: 3`, so reachability, capability, exact identity, and normalized
+Refloat base version are proven together and stored together.
 
-The probe is authoritative: BMS is polled **only** when it proved one present
-(`hasBms === true`). Unknown (legacy `null`) or proven-absent (`false`) → never polled.
-A legacy link therefore needs a re-probe before cell data appears.
+Runtime connect still starts telemetry from the saved Board Transport without rediscovering CAN.
+After telemetry startup, a background Link Integrity Check lightly re-probes saved facts for the
+selected transport.
+If saved facts mismatch or expected BMS stops being observed for a debounce window, the link is
+treated as mismatched for that Board Session: telemetry can continue, but firmware-dependent
+commands are blocked until the rider re-links.
+
+BMS is polled only when the saved or freshly verified link says one is present. Unknown legacy
+links need a re-probe or successful Link Integrity Check before cell data and firmware-dependent
+capabilities are trusted.
 
 ### Polling
 

@@ -17,6 +17,8 @@ private const val DETECT_GATT_RELEASE_DELAY_MS = 600L
 // before the first connect, then retry a bounded number of times with backoff on connect-phase
 // drops (133 and friends are transient).
 private const val DETECT_PROBE_BMS_DELAY_MS = 300L
+private const val DETECT_PROBE_FW_DELAY_MS = 600L
+private const val DETECT_PROBE_INFO_DELAY_MS = 900L
 private const val DETECT_CONNECT_SETTLE_MS = 500L
 private const val DETECT_CONNECT_RETRY_BACKOFF_MS = 400L
 private const val DETECT_CONNECT_MAX_ATTEMPTS = 3
@@ -39,6 +41,7 @@ private const val DETECT_CONNECT_MAX_ATTEMPTS = 3
 internal class BoardTransportDetector(
   context: Context,
   private val handler: Handler,
+  private val probeId: String,
   private val device: BluetoothDevice,
   private val recordDiagnostic: (String, Map<String, Any?>) -> Unit,
   private val onProgress: (Map<String, Any?>) -> Unit,
@@ -58,6 +61,9 @@ internal class BoardTransportDetector(
   private var current: BoardTransport? = null
   private var currentConfirmed = false
   private var currentHasBms = false
+  private var currentVescFirmwareVersion: String? = null
+  private var currentRefloatVersion: String? = null
+  private var currentRefloatBaseVersion: String? = null
   private var connectAttempts = 0
   private var phase = Phase.Connecting
   private var stepTimeout: Runnable? = null
@@ -67,19 +73,49 @@ internal class BoardTransportDetector(
   private fun elapsed(): Long = nowMs() - startMs
 
   /**
-   * Surface the coarse, monotonic probe phase to JS. Per-transport detail
-   * (which transport, telemetry/BMS replies) stays in Diagnostic Events; the UI
-   * reads resolved transports from the returned candidates, not from here.
+   * Surface live probe milestones to JS, named for what the probe is doing right
+   * now: `connecting` → `handshake` (service discovery) → `pinging` (CAN scan) →
+   * per candidate `probing` (waiting for telemetry proof) → `bms` (transport
+   * confirmed, waiting for a BMS answer) → `identity` (BMS answered, waiting for
+   * the Refloat info reply). `transport` names the candidate being probed and
+   * `canIds` the CAN scan responders. The UI still reads final facts from the
+   * returned candidates; full detail stays in Diagnostic Events.
    */
-  private fun emitProgress(step: String) {
-    onProgress(mapOf("step" to step, "elapsedMs" to elapsed()))
+  private fun emitProgress(step: String, transport: BoardTransport? = null, withCanIds: Boolean = false) {
+    val payload = mutableMapOf<String, Any?>("probeId" to probeId, "step" to step, "elapsedMs" to elapsed())
+    if (transport != null) payload["transport"] = BoardTransport.toBridge(transport)
+    if (withCanIds) payload["canIds"] = responders.toList()
+    Log.d(DETECT_TAG, "progress step=$step transport=$transport canIds=$responders elapsed=${elapsed()}ms")
+    recordProbeDiagnostic(
+      "board_probe_progress",
+      mapOf(
+        "message" to "Board Probe progress: $step",
+        "step" to step,
+        "transport" to BoardTransport.toBridge(transport),
+        "can_ids" to responders.toList().takeIf { withCanIds },
+      ),
+    )
+    onProgress(payload)
+  }
+
+  private fun recordProbeDiagnostic(eventName: String, properties: Map<String, Any?> = emptyMap()) {
+    recordDiagnostic(
+      eventName,
+      mapOf(
+        "operation" to "board_probe",
+        "probe_id" to probeId,
+        "phase" to phase.name.lowercase(),
+        "ble_id" to device.address,
+        "elapsed_ms" to elapsed(),
+      ) + properties,
+    )
   }
 
   fun start() {
     startMs = nowMs()
     recordDiagnostic(
       "board_probe_started",
-      mapOf("message" to "Board Probe started", "ble_id" to device.address),
+      mapOf("message" to "Board Probe started", "probe_id" to probeId, "ble_id" to device.address),
     )
     phase = Phase.Connecting
     attemptConnect(initial = true)
@@ -112,12 +148,17 @@ internal class BoardTransportDetector(
       if (finished) return@post
       recordDiagnostic(
         "board_probe_ble_connected",
-        mapOf("message" to "BLE connected", "ble_id" to device.address, "elapsed_ms" to elapsed()),
+        mapOf("message" to "BLE connected", "probe_id" to probeId, "ble_id" to device.address, "elapsed_ms" to elapsed()),
       )
     }
   }
 
-  override fun onGattSubscribing() {}
+  override fun onGattSubscribing() {
+    handler.post {
+      if (finished || phase != Phase.Connecting) return@post
+      emitProgress("handshake")
+    }
+  }
 
   override fun onGattReady() {
     handler.post {
@@ -125,9 +166,9 @@ internal class BoardTransportDetector(
       cancelStep()
       recordDiagnostic(
         "board_probe_service_ready",
-        mapOf("message" to "VESC service ready", "elapsed_ms" to elapsed()),
+        mapOf("message" to "VESC service ready", "probe_id" to probeId, "elapsed_ms" to elapsed()),
       )
-      emitProgress("handshake")
+      emitProgress("pinging")
       phase = Phase.Pinging
       handler.postDelayed({ if (!finished) gatt.sendPayload(byteArrayOf(COMM_FW_VERSION.toByte())) }, DETECT_FW_DELAY_MS)
       handler.postDelayed({ if (!finished) gatt.sendPayload(byteArrayOf(COMM_PING_CAN.toByte())) }, DETECT_PING_DELAY_MS)
@@ -147,6 +188,7 @@ internal class BoardTransportDetector(
             "board_probe_connect_retry",
             mapOf(
               "message" to "Connect attempt failed, retrying",
+              "probe_id" to probeId,
               "status" to status,
               "attempt" to connectAttempts,
               "elapsed_ms" to elapsed(),
@@ -160,6 +202,18 @@ internal class BoardTransportDetector(
         // Connection dropped mid-detection: resolve with whatever was confirmed
         // so far rather than hanging.
         Log.w(DETECT_TAG, "disconnected mid-detection status=$status phase=$phase")
+        recordProbeDiagnostic(
+          "board_probe_disconnected_mid_detection",
+          mapOf(
+            "message" to "Board Probe disconnected mid-detection",
+            "status" to status,
+            "current_transport" to BoardTransport.toBridge(current),
+            "current_confirmed" to currentConfirmed,
+            "current_has_bms" to currentHasBms,
+            "confirmed_count" to observations.count { it.confirmed },
+          ),
+        )
+        finalizeCurrentObservation()
         finishResolved()
       }
     }
@@ -181,18 +235,42 @@ internal class BoardTransportDetector(
     when (payload[0].toInt() and 0xff) {
       COMM_PING_CAN -> if (phase == Phase.Pinging) {
         // Collect EVERY responding CAN id, not just payload[1].
-        for (i in 1 until payload.size) responders.add(payload[i].toInt() and 0xff)
+        var changed = false
+        for (i in 1 until payload.size) {
+          changed = responders.add(payload[i].toInt() and 0xff) || changed
+        }
+        if (changed) {
+          recordProbeDiagnostic(
+            "board_probe_can_responders_updated",
+            mapOf(
+              "message" to "Board Probe CAN responders updated",
+              "can_ids" to responders.toList(),
+              "can_id_count" to responders.size,
+            ),
+          )
+        }
       }
       COMM_CUSTOM_APP_DATA -> if (phase == Phase.Probing && current != null) {
         val sample = parseRefloatGetAllData(payload, avgLatency = null, packetAt = nowMs(), location = null)
         if (sample != null) markConfirmed()
+        // Custom-app-data replies come back bare even over CAN (like telemetry
+        // above), and only one transport is probed at a time, so this reply
+        // belongs to the current candidate.
+        markRefloatInfo(payload)
       }
+      // FW replies also come back bare over CAN, like custom app data above.
+      COMM_FW_VERSION -> if (phase == Phase.Probing && current != null) markFwVersion(payload)
       // Direct smart-BMS reply.
       COMM_BMS_GET_VALUES -> if (phase == Phase.Probing && current != null) {
         if (parseBmsValues(payload, nowMs()) != null) markBms()
       }
       // CAN-forwarded smart-BMS reply (telemetry stays bare, but BMS comes wrapped).
       COMM_FORWARD_CAN -> if (phase == Phase.Probing && current != null && payload.size >= 3) {
+        if (!forwardedForCurrent(payload)) return
+        if ((payload[2].toInt() and 0xff) == COMM_FW_VERSION) {
+          markFwVersion(payload.copyOfRange(2, payload.size))
+        }
+        markRefloatInfo(payload)
         if ((payload[2].toInt() and 0xff) == COMM_BMS_GET_VALUES &&
           parseBmsValues(payload.copyOfRange(2, payload.size), nowMs()) != null
         ) {
@@ -207,7 +285,6 @@ internal class BoardTransportDetector(
   private fun beginProbing() {
     if (finished) return
     phase = Phase.Probing
-    emitProgress("probing")
     probeQueue.clear()
     probeQueue.addAll(TransportDetection.candidatesToProbe(responders.toList()))
     probeNext()
@@ -217,12 +294,17 @@ internal class BoardTransportDetector(
     cancelStep()
     currentConfirmed = false
     currentHasBms = false
+    currentVescFirmwareVersion = null
+    currentRefloatVersion = null
+    currentRefloatBaseVersion = null
     current = probeQueue.removeFirstOrNull()
     val transport = current ?: return finishResolved()
+    emitProgress("probing", transport, withCanIds = true)
     recordDiagnostic(
       "board_probe_transport_probe_started",
       mapOf(
         "message" to "Probing transport",
+        "probe_id" to probeId,
         "transport" to BoardTransport.toBridge(transport),
         "elapsed_ms" to elapsed(),
       ),
@@ -246,49 +328,127 @@ internal class BoardTransportDetector(
     handler.postDelayed({
       if (!finished && current === transport) gatt.sendPayload(bmsProbePayload(transport))
     }, DETECT_PROBE_BMS_DELAY_MS)
-  }
-
-  /** Telemetry sample proves the transport works; mark and finish if BMS already seen. */
-  private fun markConfirmed() {
-    if (currentConfirmed) return
-    currentConfirmed = true
-    maybeFinishProbe()
-  }
-
-  /** A smart-BMS answered on the current transport. */
-  private fun markBms() {
-    currentHasBms = true
-    maybeFinishProbe()
+    handler.postDelayed({
+      if (!finished && current === transport) gatt.sendPayload(fwVersionPayload(transport))
+    }, DETECT_PROBE_FW_DELAY_MS)
+    handler.postDelayed({
+      if (!finished && current === transport) gatt.sendPayload(RefloatConfigProtocol.buildGetInfo(transport))
+    }, DETECT_PROBE_INFO_DELAY_MS)
   }
 
   /**
-   * Finish early only once both signals are in — telemetry confirms the transport and
-   * a BMS reply proves the capability. To assert "no BMS" we must wait the full window,
-   * so a confirmed-but-BMS-less transport rides the [armStep] timeout to [finalizeProbe].
+   * Telemetry sample proves the transport works; the window now waits on BMS —
+   * unless the BMS reply already raced in first, then it waits on identity.
    */
-  private fun maybeFinishProbe() {
-    if (currentConfirmed && currentHasBms) finalizeProbe()
+  private fun markConfirmed() {
+    if (currentConfirmed) return
+    currentConfirmed = true
+    recordProbeDiagnostic(
+      "board_probe_telemetry_confirmed",
+      mapOf(
+        "message" to "Board Probe telemetry confirmed transport",
+        "transport" to BoardTransport.toBridge(current),
+        "can_ids" to responders.toList(),
+      ),
+    )
+    emitProgress(if (currentHasBms) "identity" else "bms", current, withCanIds = true)
+  }
+
+  /**
+   * A smart-BMS answered on the current transport; the window now waits on
+   * identity. Burst replies race, so only advance once telemetry confirmed —
+   * an early BMS reply is recorded and reported when the confirm lands.
+   */
+  private fun markBms() {
+    if (currentHasBms) return
+    currentHasBms = true
+    recordProbeDiagnostic(
+      "board_probe_bms_detected",
+      mapOf(
+        "message" to "Board Probe detected smart-BMS",
+        "transport" to BoardTransport.toBridge(current),
+      ),
+    )
+    if (currentConfirmed) emitProgress("identity", current, withCanIds = true)
+  }
+
+  private fun markFwVersion(payload: ByteArray) {
+    val firmware = parseFwVersion(payload) ?: return
+    currentVescFirmwareVersion = firmware
+    recordProbeDiagnostic(
+      "board_probe_firmware_detected",
+      mapOf(
+        "message" to "Board Probe detected VESC firmware",
+        "transport" to BoardTransport.toBridge(current),
+        "vesc_firmware_version" to firmware,
+      ),
+    )
+  }
+
+  private fun markRefloatInfo(payload: ByteArray) {
+    val version = when (val result = RefloatConfigProtocol.parseGetInfoResponse(payload)) {
+      is RefloatConfigProtocolResult.Success -> result.value.version
+      is RefloatConfigProtocolResult.Failure -> return
+    }
+    currentRefloatVersion = version
+    currentRefloatBaseVersion = RefloatConfigProtocol.normalizeBaseVersion(version)
+    recordProbeDiagnostic(
+      "board_probe_refloat_detected",
+      mapOf(
+        "message" to "Board Probe detected Refloat identity",
+        "transport" to BoardTransport.toBridge(current),
+        "refloat_version" to currentRefloatVersion,
+        "refloat_base_version" to currentRefloatBaseVersion,
+      ),
+    )
   }
 
   private fun finalizeProbe() {
+    finalizeCurrentObservation()
+    probeNext()
+  }
+
+  private fun finalizeCurrentObservation() {
     val transport = current ?: return
     cancelStep()
     observations.add(
-      TransportDetection.Probe(transport, confirmed = currentConfirmed, hasBms = currentHasBms),
+      TransportDetection.Probe(
+        transport = transport,
+        confirmed = currentConfirmed,
+        hasBms = currentHasBms,
+        vescFirmwareVersion = currentVescFirmwareVersion,
+        refloatVersion = currentRefloatVersion,
+        refloatBaseVersion = currentRefloatBaseVersion,
+      ),
+    )
+    recordProbeDiagnostic(
+      "board_probe_transport_finished",
+      mapOf(
+        "message" to if (currentConfirmed) "Board Probe transport finished confirmed" else "Board Probe transport finished unconfirmed",
+        "transport" to BoardTransport.toBridge(transport),
+        "confirmed" to currentConfirmed,
+        "has_bms" to currentHasBms,
+        "vesc_firmware_version" to currentVescFirmwareVersion,
+        "refloat_version" to currentRefloatVersion,
+        "refloat_base_version" to currentRefloatBaseVersion,
+      ),
     )
     if (currentConfirmed) {
       recordDiagnostic(
         "board_probe_transport_confirmed",
         mapOf(
           "message" to "Transport confirmed by telemetry sample",
+          "probe_id" to probeId,
           "transport" to BoardTransport.toBridge(transport),
           "has_bms" to currentHasBms,
+          "vesc_firmware_version" to currentVescFirmwareVersion,
+          "refloat_version" to currentRefloatVersion,
+          "refloat_base_version" to currentRefloatBaseVersion,
           "elapsed_ms" to elapsed(),
         ),
       )
     }
     current = null
-    probeNext()
   }
 
   private fun finishResolved() {
@@ -303,6 +463,7 @@ internal class BoardTransportDetector(
       "board_probe_completed",
       mapOf(
         "message" to "Board Probe completed",
+        "probe_id" to probeId,
         "candidate_count" to result.candidates.size,
         "outcome" to outcome,
         "elapsed_ms" to elapsed(),
@@ -317,11 +478,25 @@ internal class BoardTransportDetector(
     if (finished) return
     recordDiagnostic(
       "board_probe_failed",
-      mapOf("message" to message, "code" to code, "elapsed_ms" to elapsed()),
+      mapOf("message" to message, "probe_id" to probeId, "code" to code, "elapsed_ms" to elapsed()),
     )
     emitProgress("failed")
     cleanup()
     completeAfterGattRelease { onError(code, message) }
+  }
+
+  fun cancel(reason: String = "cancelled") {
+    handler.post {
+      if (finished) return@post
+      recordProbeDiagnostic(
+        "board_probe_cancelled",
+        mapOf(
+          "message" to "Board Probe cancelled",
+          "reason" to reason,
+        ),
+      )
+      cleanup()
+    }
   }
 
   private fun cleanup() {
@@ -375,5 +550,19 @@ internal class BoardTransportDetector(
       transport.canId.toByte(),
       COMM_BMS_GET_VALUES.toByte(),
     )
+  }
+
+  private fun fwVersionPayload(transport: BoardTransport): ByteArray = when (transport) {
+    BoardTransport.Direct -> byteArrayOf(COMM_FW_VERSION.toByte())
+    is BoardTransport.Can -> byteArrayOf(
+      COMM_FORWARD_CAN.toByte(),
+      transport.canId.toByte(),
+      COMM_FW_VERSION.toByte(),
+    )
+  }
+
+  private fun forwardedForCurrent(payload: ByteArray): Boolean {
+    val transport = current
+    return transport is BoardTransport.Can && payload.size >= 2 && (payload[1].toInt() and 0xff) == transport.canId
   }
 }

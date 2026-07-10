@@ -3,6 +3,7 @@ export { BATTERY_CELL_PRESETS, DEFAULT_BATTERY_CONFIG, getBatteryPreset } from '
 export { deriveBatteryConfig } from './config'
 
 export {
+  isBmsCharging,
   summarizeBms,
   summarizeBmsWindow,
   nearestBmsFrameAtTime,

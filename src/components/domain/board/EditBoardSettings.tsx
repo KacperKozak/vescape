@@ -9,7 +9,7 @@ import { IconHero } from '@/components/ui/settings/IconHero'
 import { SettingsCard } from '@/components/ui/settings/SettingsCard'
 import { SettingsRow } from '@/components/ui/settings/SettingsRow'
 import { interaction, theme } from '@/constants/theme'
-import { formatBmsSuffix, formatBoardTransport } from '@/lib/boardTransport'
+import { formatBoardLinkFacts } from '@/lib/boardTransport'
 import type { BatterySummary } from '@/lib/boardSetup'
 
 interface EditBoardSettingsProps {
@@ -65,20 +65,16 @@ export function EditBoardSettings({
       <SettingsCard>
         <SettingsRow
           icon={LinkIcon}
-          iconColor={theme.palette.cyan.color}
+          iconColor={theme.status.upgrade.color}
           label="Board Link"
-          hint={
-            link
-              ? `${link.bleId} · ${formatBoardTransport(link.transport)}${formatBmsSuffix(link.hasBms)}`
-              : 'Not linked — probe a device to ride'
-          }
+          hint={link ? formatBoardLinkFacts(link) : 'Not linked — probe a device to ride'}
           right={
             <View style={styles.buttonGroup}>
               {link ? (
                 <>
                   <Button
+                    style={styles.upgradeButton}
                     label="Re-link"
-                    variant="secondary"
                     size="sm"
                     loading={linkSaving}
                     onPress={onRelink}
@@ -125,6 +121,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  upgradeButton: {
+    backgroundColor: theme.status.upgrade.color,
   },
   removeSection: {
     marginTop: 24,
