@@ -48,6 +48,15 @@ const SCALE_MIN_SPAN_V = 0.12
 const SCALE_STEP_V = 0.02
 const EXTREME_EPSILON_V = 0.0005
 
+// Charge-port voltage sits near pack voltage with a charger plugged in and near
+// zero otherwise; anything above this floor means a charger is present.
+const CHARGE_DETECT_MIN_V = 10
+
+/** True when the BMS charge-port voltage indicates a connected charger. */
+export function isBmsCharging(bms: Pick<BmsEvent, 'vCharge'> | null): boolean {
+  return bms != null && Number.isFinite(bms.vCharge) && bms.vCharge > CHARGE_DETECT_MIN_V
+}
+
 // summarizeBms and cellBarScale are worklets: the live cell card rebuilds the
 // scrubbed summary on the UI thread, so scrubbing never re-renders React.
 
@@ -168,5 +177,11 @@ export function summarizeBmsWindow(frames: BmsSeriesFrame[]): BmsWindowStats | n
     }
   }
 
-  return { sampleCount, peakSpread, worstGroupIndex, worstGroupSamples, worstGroupDepth }
+  return {
+    sampleCount,
+    peakSpread,
+    worstGroupIndex,
+    worstGroupSamples,
+    worstGroupDepth,
+  }
 }

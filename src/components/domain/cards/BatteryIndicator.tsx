@@ -8,7 +8,7 @@ import { type DualGaugeAlert } from '@/components/ui/charts/DualGauge'
 import { telemetry } from '@/constants/telemetry'
 import { TELEMETRY_THRESHOLDS } from '@/constants/telemetryThresholds'
 import { theme } from '@/constants/theme'
-import { deriveBatteryConfig } from '@/lib/battery'
+import { deriveBatteryConfig, isBmsCharging } from '@/lib/battery'
 import { fmtTimeAgo } from '@/helpers/format'
 import { useLiveSeries } from '@/hooks/useLiveMetric'
 import { useMinuteNow } from '@/hooks/useMinuteNow'
@@ -40,6 +40,7 @@ export function BatteryIndicator({ compact, transparent, containerStyle }: Batte
   const batterySeries = useLiveSeries('batteryPercent')
   const voltageSeries = useLiveSeries('batteryVoltage')
   const connected = useBleStore((s) => s.status === 'connected')
+  const charging = useBleStore((s) => s.status === 'connected' && isBmsCharging(s.latestBms))
   const { batteryConfig, hasBoard, lastBattery } = useBoardStore(
     useShallow((s) => {
       const board = s.boards.find((b) => b.id === s.activeBoardId)
@@ -103,6 +104,7 @@ export function BatteryIndicator({ compact, transparent, containerStyle }: Batte
       unit="%"
       alerts={alerts}
       aux={aux}
+      charging={charging}
       hint={
         !batteryConfigured && hasBoard && !stale
           ? 'Set battery config in board settings'

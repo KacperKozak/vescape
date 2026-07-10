@@ -71,7 +71,10 @@ function generateChartData({
   for (let i = 0; i < count; i += 1) {
     value += (random() - 0.5) * variance + drift
     if (spikeEvery > 0 && i % spikeEvery === 0) value += variance * (1.8 + random())
-    points.push({ date: new Date(now - (count - i) * 1000), value: Math.max(0, value) })
+    points.push({
+      date: new Date(now - (count - i) * 1000),
+      value: Math.max(0, value),
+    })
   }
   return points
 }
@@ -173,7 +176,11 @@ function AnimatedSingleGaugeShowcase() {
         label={metric.label.toUpperCase()}
         hotRange={hotRange}
         alerts={[
-          { id: 'warn', threshold: metric.chartRange.max * 0.75, thresholdMax: null },
+          {
+            id: 'warn',
+            threshold: metric.chartRange.max * 0.75,
+            thresholdMax: null,
+          },
           {
             id: 'range',
             threshold: metric.chartRange.max * 0.88,
@@ -187,10 +194,13 @@ function AnimatedSingleGaugeShowcase() {
 
 function LinearGaugeShowcase() {
   const [empty, setEmpty] = useState(false)
+  const [charging, setCharging] = useState(false)
+  const [percent, setPercent] = useState('82')
   const [mode, setMode] = useState<'live' | 'stale' | 'stale old'>('live')
 
   const stale = mode !== 'live'
   const voltageText = telemetry.battVoltage.formatWithUnit(74.5)
+  const value = Number(percent)
 
   return (
     <ShowcaseCard
@@ -198,6 +208,13 @@ function LinearGaugeShowcase() {
       controls={
         <>
           <ToggleRow label="empty" value={empty} onToggle={setEmpty} />
+          <ToggleRow label="charging" value={charging} onToggle={setCharging} />
+          <ChipRow
+            label="percent"
+            options={['5', '24', '62', '82', '98']}
+            selected={percent}
+            onSelect={setPercent}
+          />
           <ChipRow
             label="last battery"
             options={['live', 'stale', 'stale old']}
@@ -208,11 +225,12 @@ function LinearGaugeShowcase() {
       }
     >
       <LinearGauge
-        value={empty ? null : 82}
+        value={empty ? null : value}
         max={100}
         color={stale ? theme.palette.slate.textSecondary : telemetry.battVoltage.color}
         unit="%"
         aux={empty ? undefined : mode === 'stale old' ? `${voltageText} · 2h ago` : voltageText}
+        charging={charging}
         alerts={[
           { id: 'low', threshold: 20, thresholdMax: null },
           { id: 'band', threshold: 40, thresholdMax: 60 },
@@ -231,21 +249,39 @@ function RandomLineChartsShowcase() {
         metricKey: 'speed' as HistoryMetricKey,
         label: 'Speed / noisy ride',
         metric: telemetry.speed,
-        points: generateChartData({ count: 160, base: 18, variance: 5, seed: 21, spikeEvery: 29 }),
+        points: generateChartData({
+          count: 160,
+          base: 18,
+          variance: 5,
+          seed: 21,
+          spikeEvery: 29,
+        }),
       },
       {
         key: 'duty',
         metricKey: 'duty' as HistoryMetricKey,
         label: 'Duty / punchy acceleration',
         metric: telemetry.duty,
-        points: generateChartData({ count: 160, base: 40, variance: 8, seed: 37, spikeEvery: 17 }),
+        points: generateChartData({
+          count: 160,
+          base: 40,
+          variance: 8,
+          seed: 37,
+          spikeEvery: 17,
+        }),
       },
       {
         key: 'controller',
         metricKey: 'tempController' as HistoryMetricKey,
         label: 'Controller temp / slow climb',
         metric: telemetry.controllerTemp,
-        points: generateChartData({ count: 160, base: 32, variance: 1.8, seed: 53, drift: 0.16 }),
+        points: generateChartData({
+          count: 160,
+          base: 32,
+          variance: 1.8,
+          seed: 53,
+          drift: 0.16,
+        }),
       },
     ],
     [],

@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useState } from 'react'
+import { type ReactNode, useCallback, useMemo, useState } from 'react'
 import {
   Pressable,
   StyleSheet,
@@ -8,7 +8,16 @@ import {
   type ViewStyle,
 } from 'react-native'
 import { Text } from '@/components/ui/base/Text'
-import { Canvas, LinearGradient, Rect, RoundedRect, vec } from '@shopify/react-native-skia'
+import {
+  Canvas,
+  Circle,
+  LinearGradient,
+  Rect,
+  RoundedRect,
+  useClock,
+  vec,
+} from '@shopify/react-native-skia'
+import { useDerivedValue, type SharedValue } from 'react-native-reanimated'
 
 import { type DualGaugeAlert } from '@/components/ui/charts/DualGauge'
 import { interaction, theme } from '@/constants/theme'
@@ -44,6 +53,109 @@ function useBarWidth() {
   return { width, onLayout }
 }
 
+// Charging particles: tiny dots drifting left → right along the line, absorbed
+// at the head marker. Uniform size; wide speed spread + stratified phases keep
+// the stream desynced instead of clumping into one group. Count scales with
+// travel span so long bars don't look sparse and short ones don't crowd.
+const PARTICLE_SPACING_PX = 8
+const PARTICLE_COUNT_MIN = 6
+const PARTICLE_COUNT_MAX = 48
+const PARTICLE_R = 0.7
+const PARTICLE_FADE_IN_PX = 14
+// Short fade so particles visibly slam into the head marker instead of dissolving early.
+const PARTICLE_FADE_OUT_PX = 3
+
+interface ParticleSpec {
+  /** Travel speed in px/s. */
+  speed: number
+  /** Loop phase offset, 0–1 of the travel span. */
+  phase: number
+  /** Baseline height above the line, as a fraction of the marker length. */
+  yFrac: number
+  /** Sine-wobble amplitude, as a fraction of the marker length. */
+  waveAmpFrac: number
+  /** Sine-wobble angular speed in rad/s. */
+  waveFreq: number
+  wavePhase: number
+}
+
+function particleCountFor(headX: number): number {
+  return Math.min(
+    PARTICLE_COUNT_MAX,
+    Math.max(PARTICLE_COUNT_MIN, Math.round(headX / PARTICLE_SPACING_PX)),
+  )
+}
+
+function makeParticleSpecs(count: number): ParticleSpec[] {
+  return Array.from({ length: count }, (_, i) => {
+    // Amplitude spans from subtle jitter up to the full band height (0.5 of the
+    // marker length swings the dot from the line to the band top). Baseline is
+    // then confined so the swing never leaves the band.
+    const waveAmpFrac = 0.05 + Math.random() * 0.45
+    return {
+      speed: 80 + Math.random() * 180,
+      // Each particle starts in its own slice of the span, jittered within it.
+      phase: (i + Math.random()) / count,
+      yFrac: waveAmpFrac + Math.random() * (1 - 2 * waveAmpFrac),
+      waveAmpFrac,
+      waveFreq: 2 + Math.random() * 4,
+      wavePhase: Math.random() * Math.PI * 2,
+    }
+  })
+}
+
+interface ChargeParticleProps {
+  clock: SharedValue<number>
+  spec: ParticleSpec
+  /** X of the head marker — where particles get absorbed. */
+  headX: number
+  lineY: number
+  markerLen: number
+  color: string
+}
+
+function ChargeParticle({ clock, spec, headX, lineY, markerLen, color }: ChargeParticleProps) {
+  const cx = useDerivedValue(() => {
+    const travel = (clock.value / 1000) * spec.speed
+    return ((travel / headX + spec.phase) % 1) * headX
+  })
+  // Sine wobble around the baseline height makes the drift read organic.
+  const cy = useDerivedValue(() => {
+    const base = lineY - spec.yFrac * markerLen
+    const amp = spec.waveAmpFrac * markerLen
+    return base - amp * Math.sin((clock.value / 1000) * spec.waveFreq + spec.wavePhase)
+  })
+  // Fade in from the left edge, snuff out into the head marker.
+  const opacity = useDerivedValue(() => {
+    const x = cx.value
+    const fade = Math.min(x / PARTICLE_FADE_IN_PX, (headX - x) / PARTICLE_FADE_OUT_PX, 1)
+    return Math.max(0, fade) * 0.9
+  })
+  return <Circle cx={cx} cy={cy} r={PARTICLE_R} color={color} opacity={opacity} />
+}
+
+function ChargeParticles({
+  headX,
+  lineY,
+  markerLen,
+  color,
+}: Omit<ChargeParticleProps, 'clock' | 'spec'>) {
+  const clock = useClock()
+  const count = particleCountFor(headX)
+  const specs = useMemo(() => makeParticleSpecs(count), [count])
+  return specs.map((spec, i) => (
+    <ChargeParticle
+      key={i}
+      clock={clock}
+      spec={spec}
+      headX={headX}
+      lineY={lineY}
+      markerLen={markerLen}
+      color={color}
+    />
+  ))
+}
+
 interface GaugeBarProps {
   width: number
   height: number
@@ -52,9 +164,10 @@ interface GaugeBarProps {
   alerts: DualGaugeAlert[]
   min: number
   max: number
+  charging: boolean
 }
 
-function GaugeBar({ width, height, fraction, color, alerts, min, max }: GaugeBarProps) {
+function GaugeBar({ width, height, fraction, color, alerts, min, max, charging }: GaugeBarProps) {
   // Line sits at the bottom (the "rim", like the gauge arc). Ticks/glow rise from it.
   const lineY = height - LINE_THICK
   const fillW = width * fraction
@@ -71,11 +184,11 @@ function GaugeBar({ width, height, fraction, color, alerts, min, max }: GaugeBar
             end={vec(0, height)}
             colors={[
               theme.alpha(color, 0),
-              theme.alpha(color, 0.12),
-              theme.alpha(color, 0.12),
+              theme.alpha(color, 0.03),
+              theme.alpha(color, 0.1),
               theme.alpha(color, 0.3),
             ]}
-            positions={[0, 0.35, 0.75, 1]}
+            positions={[0, 0.35, 0.7, 1]}
           />
         </Rect>
       ) : null}
@@ -135,6 +248,12 @@ function GaugeBar({ width, height, fraction, color, alerts, min, max }: GaugeBar
         ))
       })}
 
+      {/* Charging particles streaming into the head marker. Mounted only while
+          charging so the animation clock doesn't run otherwise. */}
+      {charging && fillW > PARTICLE_FADE_IN_PX + PARTICLE_FADE_OUT_PX ? (
+        <ChargeParticles headX={fillW} lineY={lineY} markerLen={markerLen} color={color} />
+      ) : null}
+
       {/* Head marker at the current value — crosses the line, gauge marker proportions */}
       {fraction > 0 && fraction < 1 ? (
         <Rect
@@ -163,6 +282,8 @@ interface LinearGaugeProps {
   aux?: ReactNode
   /** Shown when value is null. */
   hint?: string
+  /** Animates particles flowing into the head marker while true. */
+  charging?: boolean
   compact?: boolean
   transparent?: boolean
   containerStyle?: StyleProp<ViewStyle>
@@ -180,6 +301,7 @@ export function LinearGauge({
   alerts = [],
   aux,
   hint,
+  charging = false,
   compact,
   transparent,
   containerStyle,
@@ -193,8 +315,12 @@ export function LinearGauge({
     value == null ? '—' : decimals === 0 ? Math.round(value).toString() : value.toFixed(decimals)
 
   // The value rides just left of the head, its top aligned with the head marker's top.
+  // Below 20% there's no room on the left, so it flips to the right of the head.
   const headX = width * fraction
-  const valueSlotW = Math.max(0, headX - VALUE_GAP)
+  const flipValue = fraction < 0.2
+  const valueSlotW = flipValue
+    ? Math.max(0, width - headX - VALUE_GAP)
+    : Math.max(0, headX - VALUE_GAP)
   const valueSlotTop = height - LINE_THICK - height * MARKER_RATIO
 
   const content = (
@@ -209,11 +335,19 @@ export function LinearGauge({
             alerts={alerts}
             min={min}
             max={max}
+            charging={charging && value != null}
           />
         ) : null}
         {value != null && width > 0 ? (
           <View
-            style={[styles.valueSlot, { width: valueSlotW, top: valueSlotTop }]}
+            style={[
+              styles.valueSlot,
+              { width: valueSlotW, top: valueSlotTop },
+              flipValue && {
+                left: headX + VALUE_GAP,
+                alignItems: 'flex-start',
+              },
+            ]}
             pointerEvents="none"
           >
             <Text
