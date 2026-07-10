@@ -169,6 +169,7 @@ function BasicSliderCellShowcase() {
       [0, 100].map((edgeValue) => ({
         id: `mock-aggressiveness-${edgeValue}`,
         label: 'Aggressiveness',
+        description: 'Controls how strongly the board stays balanced.',
         value: edgeValue,
         min: 0,
         max: 100,
@@ -183,6 +184,7 @@ function BasicSliderCellShowcase() {
     () => ({
       id: 'mock-angle',
       label: 'Pushback angle',
+      description: 'Sets how far the nose lifts during pushback.',
       value,
       min: 0,
       max: 15,

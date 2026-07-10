@@ -58,6 +58,7 @@ const FIELD_INFO: Record<string, string> = {
 export interface BasicSliderItem {
   id: string
   label: string
+  description: string
   value: number | null
   min: number
   max: number
@@ -70,6 +71,7 @@ export interface BasicSliderItem {
 export interface BasicSliderDefinition {
   id: string
   label: string
+  description: string
   min: number
   max: number
   step: number
@@ -153,6 +155,7 @@ const BASIC_SLIDERS: BasicSliderDefinition[] = [
   {
     id: 'aggressiveness',
     label: 'Aggressiveness',
+    description: 'Controls how strongly the board stays balanced.',
     min: -5,
     max: 10,
     step: 1,
@@ -189,6 +192,7 @@ const BASIC_SLIDERS: BasicSliderDefinition[] = [
   {
     id: 'noseStiffness',
     label: 'Nose stiffness',
+    description: 'Lifts the nose when accelerating.',
     min: 0,
     max: 10,
     step: 1,
@@ -205,6 +209,7 @@ const BASIC_SLIDERS: BasicSliderDefinition[] = [
   {
     id: 'tailStiffness',
     label: 'Tail stiffness',
+    description: 'Lowers the nose when braking.',
     min: 0,
     max: 10,
     step: 1,
@@ -221,6 +226,7 @@ const BASIC_SLIDERS: BasicSliderDefinition[] = [
   {
     id: 'carveTilt',
     label: 'Carve tilt',
+    description: 'Adds extra lean when turning into a carve.',
     min: 0,
     max: 15,
     step: 1,
@@ -237,6 +243,7 @@ const BASIC_SLIDERS: BasicSliderDefinition[] = [
   {
     id: 'brakeTilt',
     label: 'Brake tilt',
+    description: 'Lifts the nose during hard braking.',
     min: 0,
     max: 5,
     step: 1,
@@ -253,6 +260,7 @@ const BASIC_SLIDERS: BasicSliderDefinition[] = [
   {
     id: 'atrIntensity',
     label: 'ATR intensity',
+    description: 'Automatically changes the board angle during climbs and descents.',
     min: 0,
     max: 15,
     step: 1,
@@ -298,6 +306,7 @@ export function basicSlidersFromGroups(
   return BASIC_SLIDERS.map((slider) => ({
     id: slider.id,
     label: slider.label,
+    description: slider.description,
     value: slider.deriveSliderValue(fieldMap),
     min: slider.min,
     max: slider.max,

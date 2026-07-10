@@ -116,7 +116,6 @@ export function TunePreviewScenarioControls({
   const [customLowSpeedKmh, setCustomLowSpeedKmh] = useState(10)
   const [customHighSpeedKmh, setCustomHighSpeedKmh] = useState(25)
   const [customRateDegreesPerSecond, setCustomRateDegreesPerSecond] = useState(100)
-  const [movementSummary, setMovementSummary] = useState('Wide speed range · ±128°/s')
   const movementDirectionRef = useRef<MovementDirection>('nose')
   const movementPresetRef = useRef<MovementPresetId>('slow')
   const physics = resolveTunePreviewPhysics(advancedPhysics)
@@ -147,7 +146,6 @@ export function TunePreviewScenarioControls({
           duration: AUTO_MOVEMENT_RELEASE_MS,
           easing: Easing.out(Easing.cubic),
         })
-        setMovementSummary(`Paused · board ${groundAngleDegrees.toFixed(1)}° to ground`)
         return
       }
 
@@ -195,9 +193,6 @@ export function TunePreviewScenarioControls({
         duration: AUTO_MOVEMENT_SMOOTH_MS,
         easing: Easing.out(Easing.cubic),
       })
-      setMovementSummary(
-        `${movementDirectionRef.current === 'nose' ? 'Nose' : 'Tail'} ${signedRate > 0 ? '+' : ''}${Math.round(signedRate)}°/s`,
-      )
     },
     [
       customHighSpeedKmh,
@@ -217,8 +212,6 @@ export function TunePreviewScenarioControls({
       pitchInputActive.value = false
       pitchInputDegrees.value = 0
     }
-    if (preset === 'manual') setMovementSummary('Manual pitch slider')
-    if (preset === 'none') setMovementSummary('Off')
   }
 
   useAnimatedReaction(
@@ -243,7 +236,7 @@ export function TunePreviewScenarioControls({
         icon={WaveSineIcon}
         iconColor={theme.palette.cyan.color}
         title="Balance Input"
-        description={movementSummary}
+        description="Simulates rider lean"
         options={MOVEMENT_OPTIONS}
         value={movementPreset}
         onChange={handleMovementPresetChange}
@@ -295,7 +288,7 @@ export function TunePreviewScenarioControls({
         icon={MountainsIcon}
         iconColor={theme.palette.green.color}
         title="Terrain"
-        description="Simulates the slope the board rides over"
+        description="Simulates the slope"
         options={HILLS_OPTIONS}
         value={hillsPreset}
         onChange={handlePresetChange}

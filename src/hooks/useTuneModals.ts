@@ -101,6 +101,7 @@ export function useTuneModals(
       setEditor({
         triggerRef: ref as React.RefObject<View | null>,
         label: item.label,
+        description: item.description,
         fieldId: item.id,
         value: item.value ?? item.min,
         min: item.min,

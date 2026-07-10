@@ -15,6 +15,7 @@ import { formatTuneValue } from '@/lib/tune/fields'
 export interface FieldEditorTarget {
   triggerRef: React.RefObject<View | null>
   label: string
+  description?: string
   fieldId: string
   value: number
   min: number
@@ -106,6 +107,7 @@ function FieldEditorPopoverInner({ target, onCancel, onApply }: FieldEditorPopov
       autoScrollOnContentExpand
     >
       <View style={styles.content}>
+        {target.description ? <Text style={styles.description}>{target.description}</Text> : null}
         <View style={styles.panel}>
           <TuneDial
             value={draftValue}
@@ -316,6 +318,13 @@ const styles = StyleSheet.create({
     color: theme.palette.slate.textMuted,
     fontSize: 12,
     fontWeight: '600',
+  },
+  description: {
+    color: theme.palette.slate.textSecondary,
+    fontSize: 15,
+    fontWeight: '500',
+    lineHeight: 20,
+    textAlign: 'center',
   },
   help: {
     color: theme.palette.slate.textMuted,
