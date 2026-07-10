@@ -641,47 +641,52 @@ class VescBleModule : Module() {
     val appCtx = context.applicationContext
 
     cancelActiveProbe(null, "replaced")
+    BoardProbeAutoStartGate.enter()
 
-    // A Board Probe owns the single BLE connection: tear down any live Board
-    // Session before probing so the probe isn't fighting an active session.
-    val stopped = CompletableDeferred<Unit>()
-    VescForegroundService.stopBoardSession(appCtx) { stopped.complete(Unit) }
-    stopped.await()
+    try {
+      // A Board Probe owns the single BLE connection: tear down any live Board
+      // Session before probing so the probe isn't fighting an active session.
+      val stopped = CompletableDeferred<Unit>()
+      VescForegroundService.stopBoardSession(appCtx) { stopped.complete(Unit) }
+      stopped.await()
 
-    val device = btAdapter.getRemoteDevice(bleId)
-    val result = CompletableDeferred<TransportDetection.Result>()
-    val active = ActiveBoardProbe(probeId, result)
-    activeProbe = active
-    mainHandler.post {
-      if (activeProbe !== active) return@post
-      val detector = BoardTransportDetector(
-        context = appCtx,
-        handler = mainHandler,
-        probeId = probeId,
-        device = device,
-        recordDiagnostic = { name, props ->
-          TelemetryRepository.get(appCtx).recordDiagnosticEvent(name, props)
-        },
-        onProgress = { progress ->
-          if (activeProbe === active) sendEvent("onBoardProbeProgress", progress)
-        },
-        onComplete = {
-          if (activeProbe === active) {
-            activeProbe = null
-            result.complete(it)
-          }
-        },
-        onError = { code, message ->
-          if (activeProbe === active) {
-            activeProbe = null
-            result.completeExceptionally(IllegalStateException("$code: $message"))
-          }
-        },
-      )
-      active.detector = detector
-      detector.start()
+      val device = btAdapter.getRemoteDevice(bleId)
+      val result = CompletableDeferred<TransportDetection.Result>()
+      val active = ActiveBoardProbe(probeId, result)
+      activeProbe = active
+      mainHandler.post {
+        if (activeProbe !== active) return@post
+        val detector = BoardTransportDetector(
+          context = appCtx,
+          handler = mainHandler,
+          probeId = probeId,
+          device = device,
+          recordDiagnostic = { name, props ->
+            TelemetryRepository.get(appCtx).recordDiagnosticEvent(name, props)
+          },
+          onProgress = { progress ->
+            if (activeProbe === active) sendEvent("onBoardProbeProgress", progress)
+          },
+          onComplete = {
+            if (activeProbe === active) {
+              activeProbe = null
+              result.complete(it)
+            }
+          },
+          onError = { code, message ->
+            if (activeProbe === active) {
+              activeProbe = null
+              result.completeExceptionally(IllegalStateException("$code: $message"))
+            }
+          },
+        )
+        active.detector = detector
+        detector.start()
+      }
+      return probeResultToBridge(result.await())
+    } finally {
+      BoardProbeAutoStartGate.leave()
     }
-    return probeResultToBridge(result.await())
   }
 
   private fun cancelActiveProbe(probeId: String?, reason: String) {

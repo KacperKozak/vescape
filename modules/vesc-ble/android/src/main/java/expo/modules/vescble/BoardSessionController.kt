@@ -492,6 +492,11 @@ internal class BoardSessionController(private val service: VescForegroundService
 
     /** @parity /modules/vesc-ble/ios/VescBleModule.swift `autoConnectSelectedBoard` */
     fun autoConnectSelectedBoard() {
+        if (BoardProbeAutoStartGate.isActive()) {
+            Log.i(VESC_SESSION_TAG, "Auto-connect skipped: Board Probe active")
+            scheduler.post { stopIfIdle() }
+            return
+        }
         VescForegroundService.appDataScope.launch {
             val settings = AppDataRepository.get(service.applicationContext).getTypedSettings()
             if (!settings.autoConnect || settings.selectedBoardId == null) {
@@ -507,6 +512,11 @@ internal class BoardSessionController(private val service: VescForegroundService
         isStoppingService = false
         VescForegroundService.appDataScope.launch {
             val appCtx = service.applicationContext
+            if (BoardProbeAutoStartGate.isActive()) {
+                Log.i(VESC_SESSION_TAG, "Companion auto start skipped: Board Probe active")
+                scheduler.post { stopIfIdle() }
+                return@launch
+            }
             if (CompanionRestartGate.isSuppressed(appCtx)) {
                 Log.i(VESC_SESSION_TAG, "Companion auto start suppressed after manual exit")
                 scheduler.post { stopIfIdle() }

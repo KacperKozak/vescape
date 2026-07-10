@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { router } from 'expo-router'
-import { useShallow } from 'zustand/react/shallow'
 import type { BatteryConfig, BoardLink } from 'vesc-ble'
 
 import { DEFAULT_BATTERY_CONFIG, deriveBatteryConfig } from '@/lib/battery'
@@ -61,9 +60,7 @@ interface AddBoardWizardActions {
 export type UseAddBoardWizard = AddBoardWizardState & AddBoardWizardActions
 
 export function useAddBoardWizard(): UseAddBoardWizard {
-  const { addBoard, setActiveBoard } = useBoardStore(
-    useShallow((s) => ({ addBoard: s.addBoard, setActiveBoard: s.setActiveBoard })),
-  )
+  const addBoard = useBoardStore((s) => s.addBoard)
 
   const [step, setStep] = useState(0)
   const [pairPhase, setPairPhase] = useState<PairPhase>('select')
@@ -142,13 +139,12 @@ export function useAddBoardWizard(): UseAddBoardWizard {
       manualMinVoltage,
       manualMaxVoltage,
     )
-    const board = addBoard({
+    addBoard({
       name: name.trim(),
       description: description.trim() || undefined,
       link: draftLink,
       batteryConfig,
     })
-    setActiveBoard(board.id)
     router.dismissAll()
   }
 

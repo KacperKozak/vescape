@@ -133,6 +133,10 @@ class VescForegroundService : Service() {
         }
 
         fun autoConnectSelectedBoard(context: Context) {
+            if (BoardProbeAutoStartGate.isActive()) {
+                android.util.Log.i(VESC_SESSION_TAG, "Auto-connect skipped: Board Probe active")
+                return
+            }
             appDataScope.launch {
                 val settings = AppDataRepository.get(context.applicationContext).getTypedSettings()
                 val result = VescForegroundServiceLauncher.autoConnectSelectedBoard(
