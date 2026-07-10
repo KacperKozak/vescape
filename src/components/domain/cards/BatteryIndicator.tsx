@@ -8,7 +8,7 @@ import { type DualGaugeAlert } from '@/components/ui/charts/DualGauge'
 import { telemetry } from '@/constants/telemetry'
 import { TELEMETRY_THRESHOLDS } from '@/constants/telemetryThresholds'
 import { theme } from '@/constants/theme'
-import { deriveBatteryConfig, isBmsCharging } from '@/lib/battery'
+import { deriveBatteryConfig, isBmsCharging, summarizeBms } from '@/lib/battery'
 import { fmtTimeAgo } from '@/helpers/format'
 import { useLiveSeries } from '@/hooks/useLiveMetric'
 import { useMinuteNow } from '@/hooks/useMinuteNow'
@@ -41,6 +41,13 @@ export function BatteryIndicator({ compact, transparent, containerStyle }: Batte
   const voltageSeries = useLiveSeries('batteryVoltage')
   const connected = useBleStore((s) => s.status === 'connected')
   const charging = useBleStore((s) => s.status === 'connected' && isBmsCharging(s.latestBms))
+  // Cell spread rounded to display resolution (mV step) in the selector, so
+  // noise below it doesn't re-render the card on every BMS event.
+  const spreadV = useBleStore((s) => {
+    if (s.status !== 'connected') return null
+    const spread = summarizeBms(s.latestBms)?.spread
+    return spread == null ? null : Math.round(spread * 1000) / 1000
+  })
   const { batteryConfig, hasBoard, lastBattery } = useBoardStore(
     useShallow((s) => {
       const board = s.boards.find((b) => b.id === s.activeBoardId)
@@ -92,9 +99,12 @@ export function BatteryIndicator({ compact, transparent, containerStyle }: Batte
       ]
         .filter(Boolean)
         .join(' · ') || undefined
-    : voltage != null
-      ? telemetry.battVoltage.formatWithUnit(voltage)
-      : undefined
+    : [
+        voltage != null ? telemetry.battVoltage.formatWithUnit(voltage) : null,
+        spreadV != null ? `Δ ${spreadV.toFixed(3)}V` : null,
+      ]
+        .filter(Boolean)
+        .join(' · ') || undefined
 
   return (
     <LinearGauge
