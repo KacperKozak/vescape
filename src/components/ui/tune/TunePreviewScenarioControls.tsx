@@ -196,7 +196,7 @@ export function TunePreviewScenarioControls({
         easing: Easing.out(Easing.cubic),
       })
       setMovementSummary(
-        `${movementDirectionRef.current === 'nose' ? 'Nose' : 'Tail'} ${signedRate > 0 ? '+' : ''}${Math.round(signedRate)}°/s · ${Math.round(rateScale * 100)}%`,
+        `${movementDirectionRef.current === 'nose' ? 'Nose' : 'Tail'} ${signedRate > 0 ? '+' : ''}${Math.round(signedRate)}°/s`,
       )
     },
     [

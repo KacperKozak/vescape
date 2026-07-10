@@ -14,6 +14,8 @@ import type { TuneProfileFieldValue } from 'vesc-ble'
 import { interaction, theme } from '@/constants/theme'
 import {
   DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS,
+  MAX_PITCH_INPUT_DEGREES,
+  MAX_PITCH_INPUT_RATE_DEGREES_PER_SECOND,
   TUNE_PREVIEW_RESET_SPEED_KMH,
   TUNE_PREVIEW_MODEL_VERSION,
   calculateGroundToBoardAngleDegrees,
@@ -47,13 +49,18 @@ interface TunePreviewProps {
   groundToBoardAngleDegrees?: SharedValue<number>
 }
 
-const GROUND_Y = 78
+const GROUND_Y = 58
 const WHEEL_RADIUS = TUNE_PREVIEW_WHEEL_RADIUS_PIXELS
 const DECK_HALF_LENGTH = 72
 const DECK_CENTER_Y = GROUND_Y - WHEEL_RADIUS
 const ZERO_MARKER_GAP = 6
 const ZERO_MARKER_LENGTH = 12
 const GROUND_TICK_SPACING = GROUND_TICK_SPACING_METERS * TUNE_PREVIEW_PIXELS_PER_METER
+const FOOTPAD_OFFSET = 46
+const INPUT_ARROW_IDLE_GAP = 34
+const INPUT_ARROW_TRAVEL = 18
+const INPUT_ARROW_LENGTH = 16
+const INPUT_ARROW_HEAD = 4
 const AnimatedLine = Animated.createAnimatedComponent(Line)
 const AnimatedGroup = Animated.createAnimatedComponent(G)
 const AnimatedPath = Animated.createAnimatedComponent(Path)
@@ -102,6 +109,12 @@ export function TunePreview({
   )
   const targetAnimatedProps = useAnimatedProps(() =>
     tunePreviewDeckLine(targetAngleDegrees.value, centerX, DECK_CENTER_Y, DECK_HALF_LENGTH),
+  )
+  const frontInputArrowProps = useAnimatedProps(() =>
+    pitchInputArrowProps(angleDegrees.value, pitchInputDegrees.value, centerX, -FOOTPAD_OFFSET),
+  )
+  const rearInputArrowProps = useAnimatedProps(() =>
+    pitchInputArrowProps(angleDegrees.value, pitchInputDegrees.value, centerX, FOOTPAD_OFFSET),
   )
   const groundAnimatedProps = useAnimatedProps(() => ({
     transform: [{ translateX: groundOffset.value }],
@@ -344,6 +357,22 @@ export function TunePreview({
                 strokeWidth={1}
                 strokeLinecap="round"
               />
+              <AnimatedPath
+                animatedProps={frontInputArrowProps}
+                stroke={theme.palette.sky.color}
+                strokeWidth={1.5}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                fill="none"
+              />
+              <AnimatedPath
+                animatedProps={rearInputArrowProps}
+                stroke={theme.palette.sky.color}
+                strokeWidth={1.5}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                fill="none"
+              />
               <Circle
                 cx={centerX}
                 cy={GROUND_Y - WHEEL_RADIUS}
@@ -426,6 +455,35 @@ function terrainPath(width: number, travel: number, height: number, spacing: num
     path += `${x === 0 ? 'M' : 'L'}${x},${y} `
   }
   return path
+}
+
+function pitchInputArrowProps(
+  angleDegrees: number,
+  pitchInputDegreesValue: number,
+  centerX: number,
+  footpadOffset: number,
+) {
+  'worklet'
+  const normalized =
+    Math.min(MAX_PITCH_INPUT_DEGREES, Math.max(-MAX_PITCH_INPUT_DEGREES, pitchInputDegreesValue)) /
+    MAX_PITCH_INPUT_DEGREES
+  const magnitude = Math.abs(normalized)
+  const rate =
+    Math.sign(normalized) * (1 - (1 - magnitude) ** 2) * MAX_PITCH_INPUT_RATE_DEGREES_PER_SECOND
+  const sideRate = footpadOffset < 0 ? Math.max(-rate, 0) : Math.max(rate, 0)
+  const progress = Math.min(1, Math.max(0, sideRate / MAX_PITCH_INPUT_RATE_DEGREES_PER_SECOND))
+  const radians = (angleDegrees * Math.PI) / 180
+  const footpadX = centerX + Math.cos(radians) * footpadOffset
+  const footpadY = DECK_CENTER_Y + Math.sin(radians) * footpadOffset
+  const arrowTop = footpadY - INPUT_ARROW_IDLE_GAP + INPUT_ARROW_TRAVEL * progress
+  const arrowTip = arrowTop + INPUT_ARROW_LENGTH
+  const headY = arrowTip - INPUT_ARROW_HEAD
+  const opacity = progress <= 0 ? 0 : 0.18 + progress * 0.82
+
+  return {
+    opacity,
+    d: `M${footpadX},${arrowTop} L${footpadX},${arrowTip} M${footpadX - INPUT_ARROW_HEAD},${headY} L${footpadX},${arrowTip} L${footpadX + INPUT_ARROW_HEAD},${headY}`,
+  }
 }
 
 const styles = StyleSheet.create({
@@ -519,7 +577,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    bottom: 10,
+    bottom: 30,
     color: theme.palette.slate.textPrimary,
     fontSize: 9,
     fontFamily: 'monospace',
