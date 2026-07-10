@@ -40,7 +40,6 @@ const VALUE_LABEL_WIDTH = 28
 const VALUE_LABEL_HEIGHT = 14
 const CURRENT_VALUE_TOP = 2
 const MARKER_LINE_WIDTH = 2.5
-const INDICATOR_COLOR = theme.status.error.color
 const PREV_MARK_COLOR = theme.palette.yellow.color
 const MAJOR_TICK_COLOR = theme.palette.slate.textMuted
 const MINOR_TICK_COLOR = theme.palette.slate.border
@@ -57,6 +56,7 @@ interface TuneDialProps {
   unit?: string | null
   indicatorGlow?: 'left' | 'right'
   valueChangeMode?: 'live' | 'commit'
+  color?: string
   onValueChange: (value: number) => void
 }
 
@@ -67,7 +67,7 @@ function formatDisplayValue(value: number, decimals: number): string {
   return value.toFixed(decimals)
 }
 
-function IndicatorGlow({ direction }: { direction: 'left' | 'right' }) {
+function IndicatorGlow({ direction, color }: { direction: 'left' | 'right'; color: string }) {
   const gradientId =
     direction === 'left' ? 'tuneDialIndicatorGlowLeft' : 'tuneDialIndicatorGlowRight'
 
@@ -81,17 +81,9 @@ function IndicatorGlow({ direction }: { direction: 'left' | 'right' }) {
     >
       <Defs>
         <LinearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="0%">
-          <Stop
-            offset="0%"
-            stopColor={INDICATOR_COLOR}
-            stopOpacity={direction === 'left' ? 0 : 0.1}
-          />
-          <Stop offset="50%" stopColor={INDICATOR_COLOR} stopOpacity={0.07} />
-          <Stop
-            offset="100%"
-            stopColor={INDICATOR_COLOR}
-            stopOpacity={direction === 'left' ? 0.1 : 0}
-          />
+          <Stop offset="0%" stopColor={color} stopOpacity={direction === 'left' ? 0 : 0.1} />
+          <Stop offset="50%" stopColor={color} stopOpacity={0.07} />
+          <Stop offset="100%" stopColor={color} stopOpacity={direction === 'left' ? 0.1 : 0} />
         </LinearGradient>
       </Defs>
       <Rect width="100%" height="100%" fill={`url(#${gradientId})`} />
@@ -108,6 +100,7 @@ export function TuneDial({
   unit,
   indicatorGlow,
   valueChangeMode = 'commit',
+  color = theme.telemetry.speed,
   onValueChange,
 }: TuneDialProps) {
   'use no memo'
@@ -507,10 +500,13 @@ export function TuneDial({
             </Animated.View>
           </Animated.View>
         </GestureDetector>
-        {indicatorGlow ? <IndicatorGlow direction={indicatorGlow} /> : null}
-        <View style={styles.indicatorTop} pointerEvents="none" />
+        {indicatorGlow ? <IndicatorGlow direction={indicatorGlow} color={color} /> : null}
+        <View
+          style={[styles.indicatorTop, { backgroundColor: color, shadowColor: color }]}
+          pointerEvents="none"
+        />
         <View style={styles.valueBadgeAnchor} pointerEvents="none">
-          <Text style={styles.valueBadgeText}>{displayText}</Text>
+          <Text style={[styles.valueBadgeText, { color }]}>{displayText}</Text>
           {unit ? <Text style={styles.valueBadgeUnit}>{unit}</Text> : null}
         </View>
       </View>
@@ -635,9 +631,7 @@ const styles = StyleSheet.create({
     width: MARKER_LINE_WIDTH,
     height: RULER_LABEL_BAND_TOP - CURRENT_VALUE_TOP,
     marginLeft: -MARKER_LINE_WIDTH / 2,
-    backgroundColor: INDICATOR_COLOR,
     borderRadius: 2,
-    shadowColor: INDICATOR_COLOR,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.6,
     shadowRadius: 4,
@@ -657,7 +651,6 @@ const styles = StyleSheet.create({
     minWidth: 80,
     height: 22,
     padding: 0,
-    color: INDICATOR_COLOR,
     fontSize: 18,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],

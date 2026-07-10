@@ -138,6 +138,7 @@ interface SheetProps {
   title?: string
   /** Optional glyph shown left of a centred title. */
   icon?: Icon
+  iconColor?: string
   contentContainerStyle?: StyleProp<ViewStyle>
   children: React.ReactNode
 }
@@ -156,6 +157,7 @@ function Sheet({
   layout,
   title,
   icon: IconComponent,
+  iconColor = theme.palette.slate.textSecondary,
   contentContainerStyle,
   children,
 }: SheetProps) {
@@ -241,9 +243,7 @@ function Sheet({
       >
         {title ? (
           <View style={styles.header}>
-            {IconComponent ? (
-              <IconComponent size={18} color={theme.palette.slate.textSecondary} weight="duotone" />
-            ) : null}
+            {IconComponent ? <IconComponent size={18} color={iconColor} weight="duotone" /> : null}
             <Text style={styles.title}>{title}</Text>
           </View>
         ) : null}
@@ -268,6 +268,7 @@ interface EdgeDrawerProps {
   title?: string
   /** Optional glyph shown left of a centred title. */
   icon?: Icon
+  iconColor?: string
   /** Scroll newly expanded content into view when the drawer grows. */
   autoScrollOnContentExpand?: boolean
   children: React.ReactNode
@@ -287,6 +288,7 @@ export function EdgeDrawer({
   edge = 'auto',
   title,
   icon: IconComponent,
+  iconColor = theme.palette.slate.textSecondary,
   autoScrollOnContentExpand = false,
   children,
 }: EdgeDrawerProps) {
@@ -545,11 +547,7 @@ export function EdgeDrawer({
                       accessibilityLabel={`Close ${title}`}
                     >
                       {IconComponent ? (
-                        <IconComponent
-                          size={28}
-                          color={theme.palette.slate.textSecondary}
-                          weight="duotone"
-                        />
+                        <IconComponent size={28} color={iconColor} weight="duotone" />
                       ) : null}
                       <Text style={styles.drawerTitle}>{title}</Text>
                     </Pressable>

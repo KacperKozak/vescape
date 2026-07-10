@@ -94,6 +94,7 @@ function SquareDial({
         step,
         unit: unit ?? null,
         help,
+        color: accent,
       }
     : null
 

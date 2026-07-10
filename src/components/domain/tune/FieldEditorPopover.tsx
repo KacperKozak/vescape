@@ -23,6 +23,7 @@ export interface FieldEditorTarget {
   unit: string | null
   help: string
   icon?: Icon
+  color?: string
   linkedFields?: LinkedFieldPreview[]
 }
 
@@ -101,6 +102,7 @@ function FieldEditorPopoverInner({ target, onCancel, onApply }: FieldEditorPopov
       edge="bottom"
       title={target.label}
       icon={target.icon ?? FadersIcon}
+      iconColor={target.color}
       autoScrollOnContentExpand
     >
       <View style={styles.content}>
@@ -112,6 +114,7 @@ function FieldEditorPopoverInner({ target, onCancel, onApply }: FieldEditorPopov
             max={target.max}
             step={target.step}
             unit={target.unit}
+            color={target.color}
             onValueChange={setDraftValue}
           />
           <View style={styles.dialBounds}>

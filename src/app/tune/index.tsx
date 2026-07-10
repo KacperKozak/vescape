@@ -601,7 +601,7 @@ interface TuneFieldCellProps {
   profileValue: TuneProfileFieldValue | undefined
   dirty: boolean
   boardChanged: boolean
-  onPress: (field: RefloatConfigField, ref: { current: View | null }) => void
+  onPress: (field: RefloatConfigField, ref: { current: View | null }, color: string) => void
   onRevert: () => void
   onAcceptBoard: () => void
 }
@@ -618,6 +618,7 @@ function TuneFieldCell({
   onAcceptBoard,
 }: TuneFieldCellProps) {
   const cellRef = useRef<View | null>(null)
+  const color = boardChanged ? theme.palette.green.color : theme.palette.sky.color
   return (
     <TuneConfigCell
       ref={cellRef}
@@ -627,7 +628,8 @@ function TuneFieldCell({
       profileValue={profileValue}
       dirty={dirty}
       boardChanged={boardChanged}
-      onPress={() => onPress(field, cellRef)}
+      color={color}
+      onPress={() => onPress(field, cellRef, color)}
       onRevert={onRevert}
       onAcceptBoard={onAcceptBoard}
     />

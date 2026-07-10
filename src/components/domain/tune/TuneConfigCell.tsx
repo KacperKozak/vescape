@@ -17,6 +17,7 @@ interface TuneConfigCellProps {
   profileValue: TuneProfileFieldValue | undefined
   dirty: boolean
   boardChanged: boolean
+  color: string
   onPress: () => void
   onRevert: () => void
   onAcceptBoard: () => void
@@ -30,6 +31,7 @@ export const TuneConfigCell = forwardRef<View, TuneConfigCellProps>(function Tun
     profileValue,
     dirty,
     boardChanged,
+    color,
     onPress,
     onRevert,
     onAcceptBoard,
@@ -48,11 +50,6 @@ export const TuneConfigCell = forwardRef<View, TuneConfigCellProps>(function Tun
     field.max > field.min
       ? (field.value - field.min) / (field.max - field.min)
       : null
-  const progressColor = boardChanged
-    ? theme.palette.green.color
-    : dirty
-      ? theme.palette.sky.color
-      : theme.palette.sky.color
 
   return (
     <View ref={ref} style={styles.cellWrapper}>
@@ -60,7 +57,7 @@ export const TuneConfigCell = forwardRef<View, TuneConfigCellProps>(function Tun
         style={[styles.cell, dirty && styles.cellDirty, boardChanged && styles.cellBoardChanged]}
         onPress={onPress}
       >
-        <TuneTileFill fraction={progressFraction} color={progressColor} />
+        <TuneTileFill fraction={progressFraction} color={color} />
         {dirty ? (
           <Pressable style={styles.cellRevertButton} onPress={onRevert}>
             <ArrowCounterClockwiseIcon size={13} color={theme.palette.sky.text} weight="bold" />

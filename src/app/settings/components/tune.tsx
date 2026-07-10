@@ -205,6 +205,7 @@ function BasicSliderCellShowcase() {
         unit: 'deg',
         help: mockItem.info,
         icon: basicSliderIcon(mockItem.id),
+        color: basicSliderColor(mockItem.id),
       }
     : null
 
