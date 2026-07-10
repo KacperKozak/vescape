@@ -170,6 +170,12 @@ export const status = {
     bg: palette.yellow.bg,
     border: palette.yellow.border,
   },
+  upgrade: {
+    color: palette.purple.color,
+    text: palette.purple.text,
+    bg: palette.purple.bg,
+    border: palette.purple.border,
+  },
 } as const
 
 /** Banner callouts — flat row, accent icon + neutral text. */

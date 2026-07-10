@@ -37,6 +37,12 @@ const ALERT_CONFIG = {
     text: theme.status.error.text,
     btnBg: theme.status.error.color,
   },
+  upgrade: {
+    bg: theme.status.upgrade.bg,
+    border: theme.status.upgrade.border,
+    text: theme.status.upgrade.text,
+    btnBg: theme.status.upgrade.color,
+  },
 } as const
 
 type SpinnerPill = { kind: 'spinner'; text: string; color: string; onPress: () => void }
@@ -139,7 +145,7 @@ function getStatusPill(
       kind: 'action',
       text: linkWarning.text,
       buttonText: linkWarning.buttonText,
-      config: ALERT_CONFIG[linkWarning.severity],
+      config: ALERT_CONFIG.upgrade,
       onPress: () => router.push({ pathname: routes.editBoardLink, params: { boardId: board.id } }),
     }
   if (status === 'stale')

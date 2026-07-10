@@ -113,6 +113,7 @@ function LinkStep({ wizard, onLinkActiveStepIndexChange }: Props) {
         actions={
           link.phase === 'picking' ? (
             <Button
+              style={styles.upgradeButton}
               label="Save link"
               icon={CheckCircle}
               disabled={link.selectedLink == null}
@@ -124,6 +125,7 @@ function LinkStep({ wizard, onLinkActiveStepIndexChange }: Props) {
           ) : link.phase === 'failed' ? (
             <>
               <Button
+                style={styles.upgradeButton}
                 label="Retry"
                 icon={WifiHigh}
                 onPress={link.retry}
@@ -563,6 +565,9 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flex: 1,
+  },
+  upgradeButton: {
+    backgroundColor: theme.status.upgrade.color,
   },
   confirmCard: {
     backgroundColor: theme.palette.slate.surface,

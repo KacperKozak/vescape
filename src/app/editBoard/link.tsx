@@ -106,7 +106,7 @@ export default function BoardLinkScreen() {
             testID="board-link-choose-another"
           />
           <Button
-            style={styles.actionButton}
+            style={[styles.actionButton, styles.upgradeButton]}
             label="Retry"
             onPress={link.retry}
             testID="board-link-retry"
@@ -115,6 +115,7 @@ export default function BoardLinkScreen() {
       ) : (
         <View style={styles.footer}>
           <Button
+            style={styles.upgradeButton}
             label="Save link"
             onPress={handleSave}
             disabled={link.phase !== 'picking' || link.selectedLink == null}
@@ -150,5 +151,8 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flex: 1,
+  },
+  upgradeButton: {
+    backgroundColor: theme.status.upgrade.color,
   },
 })

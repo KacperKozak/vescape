@@ -102,7 +102,7 @@ function StepGlyph({ icon: StepIcon, state }: { icon: Icon; state: StepState }) 
   return (
     <View style={[styles.glyph, { borderColor: color }]}>
       {state === 'active' ? (
-        <ActivityIndicator size="small" color={theme.palette.sky.color} />
+        <ActivityIndicator size="small" color={theme.status.upgrade.color} />
       ) : (
         <StepIcon size={22} color={color} weight="duotone" />
       )}
@@ -112,7 +112,7 @@ function StepGlyph({ icon: StepIcon, state }: { icon: Icon; state: StepState }) 
 
 const GLYPH_COLOR: Record<StepState, string> = {
   done: theme.palette.green.color,
-  active: theme.palette.sky.color,
+  active: theme.status.upgrade.color,
   failed: theme.status.error.color,
   pending: theme.palette.slate.border,
   absent: theme.palette.slate.border,
