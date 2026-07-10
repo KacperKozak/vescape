@@ -6,9 +6,19 @@ final class TransportDetectionTests: XCTestCase {
   private func probe(
     _ transport: BoardTransport,
     confirmed: Bool,
-    hasBms: Bool = false
+    hasBms: Bool = false,
+    vescFirmwareVersion: String? = nil,
+    refloatVersion: String? = nil,
+    refloatBaseVersion: String? = nil
   ) -> TransportDetection.Probe {
-    TransportDetection.Probe(transport: transport, confirmed: confirmed, hasBms: hasBms)
+    TransportDetection.Probe(
+      transport: transport,
+      confirmed: confirmed,
+      hasBms: hasBms,
+      vescFirmwareVersion: vescFirmwareVersion,
+      refloatVersion: refloatVersion,
+      refloatBaseVersion: refloatBaseVersion
+    )
   }
 
   // MARK: candidatesToProbe — always probe Direct + every responder
@@ -110,5 +120,41 @@ final class TransportDetectionTests: XCTestCase {
       probe(.can(7), confirmed: true, hasBms: false),
     ])
     XCTAssertEqual([TransportDetection.Candidate(transport: .can(7), hasBms: false)], result.candidates)
+  }
+
+  func testFirmwareIdentityCarriedOntoConfirmedCandidates() {
+    let result = TransportDetection.resolve([
+      probe(
+        .can(7),
+        confirmed: true,
+        hasBms: true,
+        vescFirmwareVersion: "FW 6.05",
+        refloatVersion: "Refloat 1.3.0-preview2",
+        refloatBaseVersion: "1.3.0"
+      ),
+    ])
+
+    XCTAssertEqual(
+      [
+        TransportDetection.Candidate(
+          transport: .can(7),
+          hasBms: true,
+          vescFirmwareVersion: "FW 6.05",
+          refloatVersion: "Refloat 1.3.0-preview2",
+          refloatBaseVersion: "1.3.0"
+        ),
+      ],
+      result.candidates
+    )
+  }
+
+  func testMissingFirmwareIdentityDoesNotDropTelemetryConfirmedCandidate() {
+    let result = TransportDetection.resolve([probe(.direct, confirmed: true, hasBms: false)])
+
+    XCTAssertEqual(.resolved(.direct), result.outcome)
+    XCTAssertEqual(1, result.candidates.count)
+    XCTAssertNil(result.candidates[0].vescFirmwareVersion)
+    XCTAssertNil(result.candidates[0].refloatVersion)
+    XCTAssertNil(result.candidates[0].refloatBaseVersion)
   }
 }

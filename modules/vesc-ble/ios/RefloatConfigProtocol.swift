@@ -26,6 +26,16 @@ enum RefloatConfigProtocolResult<T> {
 ///
 /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/RefloatConfigProtocol.kt
 enum RefloatConfigProtocol {
+  static func normalizeBaseVersion(_ version: String?) -> String? {
+    guard let version = version?.trimmingCharacters(in: .whitespacesAndNewlines), !version.isEmpty else {
+      return nil
+    }
+    guard let match = version.range(of: #"\b\d+\.\d+\.\d+\b"#, options: .regularExpression) else {
+      return nil
+    }
+    return String(version[match])
+  }
+
   static func buildGetInfo(transport: BoardTransport, version: Int = 1) -> [UInt8] {
     precondition((0...255).contains(version), "version must fit uint8")
     return transport.frame([

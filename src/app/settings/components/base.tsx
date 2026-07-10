@@ -15,6 +15,7 @@ import {
 } from 'phosphor-react-native'
 
 import { Banner } from '@/components/ui/base/Banner'
+import { Text } from '@/components/ui/base/Text'
 import { IconHero } from '@/components/ui/settings/IconHero'
 import { Button } from '@/components/ui/base/Button'
 import { DeviceRow } from '@/components/ui/base/DeviceRow'
@@ -272,8 +273,9 @@ const TIMELINE_CAPTIONS = [
 
 /** Build a 4-step list where everything before `reach` is done, the step at
  *  `reach` is active, and the rest pending. A negative `reach` fails the last
- *  done step instead, to show the error state. */
-function buildDemoSteps(reach: number, failed: boolean): TimelineStep[] {
+ *  done step instead, to show the error state. `content` demos the inline block
+ *  slot under a done step's caption. */
+function buildDemoSteps(reach: number, failed: boolean, content: boolean): TimelineStep[] {
   return TIMELINE_LABELS.map((label, i): TimelineStep => {
     let state: StepState = i < reach ? 'done' : i === reach ? 'active' : 'pending'
     if (failed && i === reach) state = 'failed'
@@ -283,6 +285,12 @@ function buildDemoSteps(reach: number, failed: boolean): TimelineStep[] {
       icon: TIMELINE_ICONS[i],
       label,
       caption: state === 'done' ? 'Done' : TIMELINE_CAPTIONS[i],
+      content:
+        content && state === 'done' && i === 0 ? (
+          <View style={styles.timelineContentDemo}>
+            <Text style={styles.timelineContentDemoText}>Inline step content</Text>
+          </View>
+        ) : undefined,
       state,
     }
   })
@@ -291,6 +299,7 @@ function buildDemoSteps(reach: number, failed: boolean): TimelineStep[] {
 function StepTimelineShowcase() {
   const [reach, setReach] = useState('2')
   const [failed, setFailed] = useState(false)
+  const [content, setContent] = useState(false)
 
   return (
     <ShowcaseCard
@@ -304,10 +313,11 @@ function StepTimelineShowcase() {
             onSelect={setReach}
           />
           <ToggleRow label="failed" value={failed} onToggle={setFailed} />
+          <ToggleRow label="content" value={content} onToggle={setContent} />
         </>
       }
     >
-      <StepTimeline steps={buildDemoSteps(Number(reach), failed)} />
+      <StepTimeline steps={buildDemoSteps(Number(reach), failed, content)} />
     </ShowcaseCard>
   )
 }
@@ -344,4 +354,17 @@ export default function BaseComponentsPage() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.palette.slate.bg },
   content: { padding: 12, gap: 12, paddingBottom: 40 },
+  timelineContentDemo: {
+    backgroundColor: theme.palette.slate.surface,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: theme.palette.slate.border,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  timelineContentDemoText: {
+    color: theme.palette.slate.textSecondary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
 })

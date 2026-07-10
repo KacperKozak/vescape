@@ -1,5 +1,7 @@
 # Tune profiles store semantic values and sync via read-before-write
 
+Status: partially superseded by [ADR 0022](./0022-tune-profiles-scoped-by-refloat-package-version.md). Tune values remain semantic and writes still use read-before-write, but profiles no longer apply across Refloat package versions.
+
 Tune Profiles persist all ~50 Refloat tune fields as semantic (human-meaningful) values in Room DB, decoupled from the board's firmware schema. The XML schema is used only at the BLE boundary to encode/decode between semantic values and the board's binary config blob. Writing to the board always requires a fresh read of the full config blob first, patching only known tune fields and preserving all unknown bytes — this is safety-critical on a balance vehicle where corrupting non-tune fields could cause dangerous behavior.
 
 ## Considered Options

@@ -8,17 +8,31 @@ import Foundation
 ///
 /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/TransportDetection.kt
 internal enum TransportDetection {
-  /// One probed transport: whether it yielded ≥1 valid Telemetry Sample (`confirmed`) and
-  /// whether a smart-BMS answered on it (`hasBms`).
+  /// One probed transport: whether it yielded ≥1 valid Telemetry Sample (`confirmed`), whether a
+  /// smart-BMS answered on it (`hasBms`), and best-effort firmware identity read from that same
+  /// transport.
   struct Probe: Equatable {
     let transport: BoardTransport
     let confirmed: Bool
     let hasBms: Bool
+    let vescFirmwareVersion: String?
+    let refloatVersion: String?
+    let refloatBaseVersion: String?
 
-    init(transport: BoardTransport, confirmed: Bool, hasBms: Bool = false) {
+    init(
+      transport: BoardTransport,
+      confirmed: Bool,
+      hasBms: Bool = false,
+      vescFirmwareVersion: String? = nil,
+      refloatVersion: String? = nil,
+      refloatBaseVersion: String? = nil
+    ) {
       self.transport = transport
       self.confirmed = confirmed
       self.hasBms = hasBms
+      self.vescFirmwareVersion = vescFirmwareVersion
+      self.refloatVersion = refloatVersion
+      self.refloatBaseVersion = refloatBaseVersion
     }
   }
 
@@ -26,6 +40,23 @@ internal enum TransportDetection {
   struct Candidate: Equatable {
     let transport: BoardTransport
     let hasBms: Bool
+    let vescFirmwareVersion: String?
+    let refloatVersion: String?
+    let refloatBaseVersion: String?
+
+    init(
+      transport: BoardTransport,
+      hasBms: Bool,
+      vescFirmwareVersion: String? = nil,
+      refloatVersion: String? = nil,
+      refloatBaseVersion: String? = nil
+    ) {
+      self.transport = transport
+      self.hasBms = hasBms
+      self.vescFirmwareVersion = vescFirmwareVersion
+      self.refloatVersion = refloatVersion
+      self.refloatBaseVersion = refloatBaseVersion
+    }
   }
 
   enum Outcome: Equatable {
@@ -69,7 +100,15 @@ internal enum TransportDetection {
   static func resolve(_ probes: [Probe]) -> Result {
     let candidates = probes
       .filter { $0.confirmed }
-      .map { Candidate(transport: $0.transport, hasBms: $0.hasBms) }
+      .map {
+        Candidate(
+          transport: $0.transport,
+          hasBms: $0.hasBms,
+          vescFirmwareVersion: $0.vescFirmwareVersion,
+          refloatVersion: $0.refloatVersion,
+          refloatBaseVersion: $0.refloatBaseVersion
+        )
+      }
     let transports = candidates.map { $0.transport }
     let outcome: Outcome
     switch transports.count {

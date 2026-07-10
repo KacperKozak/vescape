@@ -88,16 +88,16 @@ final class AppDataRepository {
     guard let id = board["id"] as? String else { return }
     let name = board["name"] as? String ?? ""
     let createdAt = Self.longValue(board["createdAt"] ?? nil) ?? nowMs()
-    let link = board["link"] as? [String: Any?]
-    let bleId = (link?["bleId"] as? String).flatMap { $0.isEmpty ? nil : $0 }
-    let transport = bleId == nil ? nil : BoardTransport.encode(BoardTransport.fromBridge(link?["transport"] ?? nil))
+    let link = BoardLinkPersistence.normalized(board["link"] ?? nil)
+    let bleId = link?["bleId"] as? String
+    let linkSettings = BoardLinkPersistence.settings(from: board["link"] ?? nil)
 
     // Other board-scoped settings. `nil` means the setting row is removed.
     let settings: [(String, Any?)] = [
       ("description", (board["description"] as? String).flatMap { $0.isEmpty ? nil : $0 }),
       ("batteryConfig", Self.normalizeBatteryConfig(board["batteryConfig"] ?? nil)),
-      ("hasBms", link?["hasBms"] as? Bool),
-    ]
+    ] + linkSettings.filter { $0.0 != "transport" }
+    let transport = linkSettings.first { $0.0 == "transport" }?.1 as? String
     let updatedAt = nowMs()
 
     write { db in
@@ -149,14 +149,7 @@ final class AppDataRepository {
     }
     let bleId: String? = row["ble_id"]
     let storedTransport: String? = row["transport"]
-    let transport = BoardTransport.decode(storedTransport)?.bridgeValue
-    // A Board Link exists only when both a BLE peripheral and a proven transport are stored.
-    var link: [String: Any?]?
-    if let bleId, let transport {
-      var built: [String: Any?] = ["bleId": bleId, "transport": transport]
-      if let hasBms = values["hasBms"] as? Bool { built["hasBms"] = hasBms }
-      link = built
-    }
+    let link = BoardLinkPersistence.compose(bleId: bleId, storedTransport: storedTransport, values: values)
     return [
       "id": row["id"] as String,
       "name": row["name"] as String,
@@ -177,6 +170,10 @@ final class AppDataRepository {
       return normalizeBatteryConfig(raw)
     case "hasBms":
       return raw as? Bool
+    case "linkVersion":
+      return intValue(raw)
+    case "vescFirmwareVersion", "refloatVersion", "refloatBaseVersion":
+      return raw as? String
     case "lastBattery":
       return decodeLastBattery(raw)
     default:
@@ -542,4 +539,3 @@ private extension Double {
   /// Convert decimal degrees to an e7-scaled integer coordinate.
   var toE7: Int64 { Int64(self * 10_000_000.0) }
 }
-

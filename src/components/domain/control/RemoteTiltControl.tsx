@@ -17,8 +17,14 @@ export function RemoteTiltControl({
   collapsible = false,
   defaultExpanded = true,
 }: RemoteTiltControlProps) {
-  const { boardConnected, setRemoteTilt, releaseRemoteTilt, lockRemoteTilt, stopRemoteTilt } =
-    useRemoteTiltControl()
+  const {
+    boardConnected,
+    canCommand,
+    setRemoteTilt,
+    releaseRemoteTilt,
+    lockRemoteTilt,
+    stopRemoteTilt,
+  } = useRemoteTiltControl()
 
   return (
     <CollapsibleWidget
@@ -33,6 +39,7 @@ export function RemoteTiltControl({
     >
       <RemoteTiltBody
         boardConnected={boardConnected}
+        canCommand={canCommand}
         setRemoteTilt={setRemoteTilt}
         releaseRemoteTilt={releaseRemoteTilt}
         lockRemoteTilt={lockRemoteTilt}
@@ -44,12 +51,14 @@ export function RemoteTiltControl({
 
 function RemoteTiltBody({
   boardConnected,
+  canCommand,
   setRemoteTilt,
   releaseRemoteTilt,
   lockRemoteTilt,
   stopRemoteTilt,
 }: {
   boardConnected: boolean
+  canCommand: boolean
   setRemoteTilt: (value: number) => void
   releaseRemoteTilt: (value: number, durationMs: number) => void
   lockRemoteTilt: (value: number) => void
@@ -58,14 +67,16 @@ function RemoteTiltBody({
   return (
     <>
       <RemoteTiltPad
-        disabled={!boardConnected}
+        disabled={!canCommand}
         onChange={setRemoteTilt}
         onRelease={releaseRemoteTilt}
         onLock={lockRemoteTilt}
         onCancel={stopRemoteTilt}
       />
-      {!boardConnected ? (
-        <Text style={styles.remoteTiltDisabled}>Connect board to control tilt.</Text>
+      {!canCommand ? (
+        <Text style={styles.remoteTiltDisabled}>
+          {boardConnected ? 'Trusted board link required.' : 'Connect board to control tilt.'}
+        </Text>
       ) : null}
     </>
   )

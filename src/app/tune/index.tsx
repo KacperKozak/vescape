@@ -106,6 +106,8 @@ export default function TuneScreen() {
     dirtyFields,
     displayGroups,
     draftFields,
+    firmwareCommandsTrusted,
+    firmwareCommandBlockReason,
     loadOffline,
     loadOnline,
     profileError,
@@ -184,16 +186,36 @@ export default function TuneScreen() {
           {activeProfile ? (
             <IconButton icon={ClockCounterClockwiseIcon} onPress={() => void openHistory()} />
           ) : null}
+          {boardConnected ? (
+            <IconButton
+              icon={ArrowsClockwiseIcon}
+              onPress={() => void loadOnline()}
+              loading={boardSnapshotStatus === 'loading'}
+              disabled={!firmwareCommandsTrusted}
+            />
+          ) : null}
         </View>
       ),
     })
-  }, [activeProfile, openHistory, navigation, profiles, modals, setActiveProfile])
+  }, [
+    activeProfile,
+    boardConnected,
+    boardSnapshotStatus,
+    firmwareCommandsTrusted,
+    openHistory,
+    loadOnline,
+    navigation,
+    profiles,
+    modals,
+    setActiveProfile,
+  ])
 
   const handleSave = () => {
     void saveActiveProfile().catch(() => undefined)
   }
 
   const handleSaveAndSync = () => {
+    if (!firmwareCommandsTrusted) return
     void (async () => {
       await saveActiveProfile()
       await syncToBoard()
@@ -201,6 +223,7 @@ export default function TuneScreen() {
   }
 
   const handleSync = () => {
+    if (!firmwareCommandsTrusted) return
     void syncToBoard().catch(() => undefined)
   }
 
@@ -224,11 +247,23 @@ export default function TuneScreen() {
       ) : null}
 
       {profileState.phase === 'empty' ? (
-        <Placeholder
-          icon={FadersIcon}
-          title="No saved tunes"
-          description="Connect to your board to read its current configuration and create your first Tune Profile"
-        />
+        <View style={styles.centerState}>
+          <Placeholder
+            icon={FadersIcon}
+            title="Create tune based on board config"
+            description={
+              firmwareCommandBlockReason ??
+              'Connect to your board to read its current configuration and create your first Tune Profile'
+            }
+          />
+          {boardSnapshot?.refloatBaseVersion && firmwareCommandsTrusted ? (
+            <Button
+              label="Create tune"
+              icon={FadersIcon}
+              onPress={() => void modals.storeCreateProfile('Main', '', '')}
+            />
+          ) : null}
+        </View>
       ) : null}
 
       {profileState.phase === 'error' && !hasTuneView ? (

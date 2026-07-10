@@ -12,6 +12,7 @@ enum TuneProfileError: LocalizedError {
   case sourceProfileNotFound(String)
   case disappearedDuringRollback(String)
   case disappearedDuringSave(String)
+  case missingRefloatCompatibility
   case databaseUnavailable
 
   var errorDescription: String? {
@@ -23,6 +24,7 @@ enum TuneProfileError: LocalizedError {
     case .sourceProfileNotFound(let id): return "Source profile not found: \(id)"
     case .disappearedDuringRollback(let id): return "Tune Profile disappeared during rollback: \(id)"
     case .disappearedDuringSave(let id): return "Tune Profile disappeared during save: \(id)"
+    case .missingRefloatCompatibility: return "Missing Refloat Tune Compatibility"
     case .databaseUnavailable: return "Tune Profile database is unavailable"
     }
   }
@@ -70,6 +72,7 @@ struct TuneProfileStore {
       CREATE TABLE tune_profiles (
         id TEXT NOT NULL PRIMARY KEY,
         board_id TEXT NOT NULL,
+        refloat_base_version TEXT NOT NULL DEFAULT '',
         name TEXT NOT NULL,
         icon TEXT NOT NULL DEFAULT 'sliders-horizontal',
         color TEXT NOT NULL DEFAULT 'purple',
@@ -79,6 +82,7 @@ struct TuneProfileStore {
       )
       """)
     try db.execute(sql: "CREATE INDEX index_tune_profiles_board_id ON tune_profiles(board_id)")
+    try db.execute(sql: "CREATE INDEX index_tune_profiles_board_id_refloat_base_version ON tune_profiles(board_id, refloat_base_version)")
 
     try db.execute(sql: """
       CREATE TABLE tune_history_entries (
@@ -95,13 +99,14 @@ struct TuneProfileStore {
   // MARK: - Reads
 
   /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/AppDataRepository.kt `getTuneProfiles`
-  func getTuneProfiles(_ boardId: String) -> [[String: Any?]] {
+  func getTuneProfiles(_ boardId: String, refloatBaseVersion: String?) -> [[String: Any?]] {
+    guard let compatibility = Self.validRefloatBaseVersion(refloatBaseVersion) else { return [] }
     guard let writer = resolveWriter() else { return [] }
     return (try? writer.read { db in
       try Row.fetchAll(
         db,
-        sql: "SELECT * FROM tune_profiles WHERE board_id = ? ORDER BY created_at ASC",
-        arguments: [boardId]
+        sql: "SELECT * FROM tune_profiles WHERE board_id = ? AND refloat_base_version = ? ORDER BY created_at ASC",
+        arguments: [boardId, compatibility]
       ).map { Self.profileMap($0) }
     }) ?? []
   }
@@ -133,18 +138,22 @@ struct TuneProfileStore {
     name: String,
     icon: String = "sliders-horizontal",
     color: String = "purple",
-    fields: [String: Any]
+    fields: [String: Any],
+    refloatBaseVersion: String
   ) throws -> [String: Any?] {
+    guard let compatibility = Self.validRefloatBaseVersion(refloatBaseVersion) else {
+      throw TuneProfileError.missingRefloatCompatibility
+    }
     let now = Self.nowMs()
     let fieldsJson = Self.encodeFields(fields)
     let id = Self.newId()
     return try inWrite { db in
       try db.execute(
         sql: """
-          INSERT INTO tune_profiles (id, board_id, name, icon, color, fields_json, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO tune_profiles (id, board_id, refloat_base_version, name, icon, color, fields_json, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
           """,
-        arguments: [id, boardId, name, icon, color, fieldsJson, now, now]
+        arguments: [id, boardId, compatibility, name, icon, color, fieldsJson, now, now]
       )
       try Self.insertHistory(db, profileId: id, fieldsJson: fieldsJson, createdAt: now)
       return try Self.requireProfileMap(db, id)
@@ -181,8 +190,8 @@ struct TuneProfileStore {
       let boardId: String = row["board_id"]
       let count = try Int.fetchOne(
         db,
-        sql: "SELECT COUNT(*) FROM tune_profiles WHERE board_id = ?",
-        arguments: [boardId]
+        sql: "SELECT COUNT(*) FROM tune_profiles WHERE board_id = ? AND refloat_base_version = ?",
+        arguments: [boardId, row["refloat_base_version"] as String]
       ) ?? 0
       if count <= 1 { throw TuneProfileError.cannotDeleteLast }
       try db.execute(sql: "DELETE FROM tune_history_entries WHERE profile_id = ?", arguments: [profileId])
@@ -236,10 +245,10 @@ struct TuneProfileStore {
       let color: String = source["color"]
       try db.execute(
         sql: """
-          INSERT INTO tune_profiles (id, board_id, name, icon, color, fields_json, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO tune_profiles (id, board_id, refloat_base_version, name, icon, color, fields_json, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
           """,
-        arguments: [copyId, targetBoardId, newName, icon, color, fieldsJson, now, now]
+        arguments: [copyId, targetBoardId, source["refloat_base_version"] as String, newName, icon, color, fieldsJson, now, now]
       )
       try Self.insertHistory(db, profileId: copyId, fieldsJson: fieldsJson, createdAt: now)
       return try Self.requireProfileMap(db, copyId)
@@ -265,33 +274,6 @@ struct TuneProfileStore {
         throw TuneProfileError.disappearedDuringSave(profileId)
       }
       return map
-    }
-  }
-
-  /// Seed the first per-board Tune Profile from a freshly-read Tune Snapshot. Read-side only:
-  /// creates "Main" plus its initial Tune History entry when the board has no profiles yet.
-  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/AppDataRepository.kt `createMainTuneProfileIfMissing`
-  func createMainTuneProfileIfMissing(_ snapshot: RefloatConfigSnapshot) throws -> [String: Any?]? {
-    guard let boardId = snapshot.boardId, !boardId.isEmpty else { return nil }
-    let now = Self.nowMs()
-    let profileId = Self.newId()
-    let fieldsJson = snapshot.fieldsJson()
-    return try inWrite { db in
-      let existing = try Int.fetchOne(
-        db,
-        sql: "SELECT COUNT(*) FROM tune_profiles WHERE board_id = ?",
-        arguments: [boardId]
-      ) ?? 0
-      if existing > 0 { return nil }
-      try db.execute(
-        sql: """
-          INSERT INTO tune_profiles (id, board_id, name, fields_json, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?)
-          """,
-        arguments: [profileId, boardId, "Main", fieldsJson, now, now]
-      )
-      try Self.insertHistory(db, profileId: profileId, fieldsJson: fieldsJson, createdAt: now)
-      return try Self.requireProfileMap(db, profileId)
     }
   }
 
@@ -332,6 +314,7 @@ struct TuneProfileStore {
     [
       "id": row["id"] as String,
       "boardId": row["board_id"] as String,
+      "refloatBaseVersion": row["refloat_base_version"] as String,
       "name": row["name"] as String,
       "icon": row["icon"] as String,
       "color": row["color"] as String,
@@ -373,4 +356,11 @@ struct TuneProfileStore {
   private static func newId() -> String { UUID().uuidString.lowercased() }
 
   private static func nowMs() -> Int64 { Int64(Date().timeIntervalSince1970 * 1000) }
+
+  private static func validRefloatBaseVersion(_ value: String?) -> String? {
+    guard let value, value.range(of: #"^\d+\.\d+\.\d+$"#, options: .regularExpression) != nil else {
+      return nil
+    }
+    return value
+  }
 }

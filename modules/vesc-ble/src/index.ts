@@ -69,6 +69,9 @@ export interface BoardCandidate {
   transport: BoardTransport
   /** Whether a smart-BMS answered on this transport during the probe. */
   hasBms: boolean
+  vescFirmwareVersion?: string | null
+  refloatVersion?: string | null
+  refloatBaseVersion?: string | null
 }
 
 /** Result of a native Board Probe of a BLE peripheral. */
@@ -81,26 +84,46 @@ export interface BoardProbeResult {
 }
 
 /**
- * Coarse, monotonic probe phase surfaced live so UI can show progress. These are
- * the rider-facing phases, not the probe loop's per-transport internals: a probe
- * connects, handshakes the VESC service, then probes transports until one returns
- * telemetry. The resolved transport(s) and smart-BMS capability are read from the
- * returned {@link BoardCandidate}s, not from progress events. Detailed
- * per-transport milestones stay in Diagnostic Events for debugging.
+ * Live probe milestone, named for what the probe is doing right now:
+ * `connecting` → `handshake` (service discovery) → `pinging` (CAN scan) → per
+ * candidate transport `probing` (waiting for telemetry proof) → `bms` (transport
+ * confirmed, waiting for a BMS answer) → `identity` (BMS answered, waiting for
+ * the Refloat info reply). Steps whose reply never comes are skipped — the probe
+ * window closing resolves them. With several responding CAN ids the sequence
+ * revisits `probing` for the next candidate. Final facts are still read from the
+ * returned {@link BoardCandidate}s; detail stays in Diagnostic Events.
  */
-export type BoardProbeStep = 'connecting' | 'handshake' | 'probing' | 'completed' | 'failed'
+export type BoardProbeStep =
+  | 'connecting'
+  | 'handshake'
+  | 'pinging'
+  | 'probing'
+  | 'bms'
+  | 'identity'
+  | 'completed'
+  | 'failed'
 
 export interface BoardProbeProgressEvent {
+  /** Native probe operation id. Used to ignore stale progress from cancelled probes. */
+  probeId?: string
   step: BoardProbeStep
   /** Milliseconds elapsed since the probe started. */
   elapsedMs: number
+  /** Candidate transport the milestone is about; absent before `probing`. */
+  transport?: BoardTransport
+  /** CAN ids that answered the CAN scan; absent before `probing`. */
+  canIds?: number[]
 }
+
+export type LinkIntegrity = 'unknown' | 'checking' | 'trusted' | 'outdated' | 'mismatched'
 
 /**
  * Durable, probe-confirmed reachability for a Board. Saved whole or not at all:
  * a Board Link always carries a proven BLE peripheral id and Board Transport.
  */
 export interface BoardLink {
+  /** Durable Board Link schema version. Missing/lower versions are normalized as legacy links. */
+  linkVersion?: 3
   bleId: string
   transport: BoardTransport
   /**
@@ -108,6 +131,9 @@ export interface BoardLink {
    * saved before BMS detection existed — treated as unknown (still polled).
    */
   hasBms?: boolean
+  vescFirmwareVersion?: string
+  refloatVersion?: string
+  refloatBaseVersion?: string
 }
 
 export interface Board {
@@ -315,6 +341,7 @@ export interface LiveStateEvent {
     recentTelemetry: TelemetryEvent[]
     error: string | null
     autoConnect: boolean
+    linkIntegrity: LinkIntegrity
     /** Native-owned active remote-tilt command, or `null` when idle. */
     remoteTilt: RemoteTiltState | null
   }
@@ -619,6 +646,7 @@ export interface RefloatConfigSnapshot {
   missingFieldIds: string[]
   fwVersion: string | null
   refloatVersion?: string | null
+  refloatBaseVersion?: string | null
 }
 
 export type TuneProfileFieldValue = number | boolean | string | null
@@ -626,6 +654,7 @@ export type TuneProfileFieldValue = number | boolean | string | null
 export interface TuneProfile {
   id: string
   boardId: string
+  refloatBaseVersion: string
   name: string
   icon: string
   color: string
@@ -956,7 +985,8 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
   stopGeigerSimulation(): void
   selectBoard(boardId: string): Promise<void>
   stopBoard(): Promise<void>
-  probeBoardLink(bleId: string): Promise<BoardProbeResult>
+  probeBoardLink(bleId: string, probeId: string): Promise<BoardProbeResult>
+  cancelBoardProbe(probeId: string): void
   setDebugRecordingEnabled(enabled: boolean): void
   listDebugRecordings(): Promise<DebugRecording[]>
   exportDebugRecording(name: string): Promise<DatabaseBackupResult>
@@ -991,7 +1021,7 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
   lockRemoteTilt(value: number): Promise<boolean>
   releaseRemoteTilt(value: number, durationMs: number): Promise<boolean>
   stopRemoteTilt(): Promise<boolean>
-  getTuneProfiles(boardId: string): Promise<TuneProfile[]>
+  getTuneProfiles(boardId: string, refloatBaseVersion?: string | null): Promise<TuneProfile[]>
   getTuneProfile(profileId: string): Promise<TuneProfile | null>
   createProfile(
     boardId: string,
@@ -999,6 +1029,7 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
     icon: string,
     color: string,
     fields: Record<string, TuneProfileFieldValue>,
+    refloatBaseVersion: string,
   ): Promise<TuneProfile>
   renameProfile(profileId: string, name: string, icon: string, color: string): Promise<TuneProfile>
   deleteProfile(profileId: string): Promise<void>
@@ -1272,12 +1303,18 @@ export function exitApp(): void {
  * a Board necessarily exists and tears down any live Board Session first.
  * Emits `onBoardProbeProgress` events while it runs.
  */
-export async function probeBoardLink(bleId: string): Promise<BoardProbeResult> {
+export async function probeBoardLink(bleId: string, probeId: string): Promise<BoardProbeResult> {
   if (E2E_ENABLED) {
-    return e2eFake.probeBoardLink(bleId)
+    return e2eFake.probeBoardLink(bleId, probeId)
   }
 
-  return native.probeBoardLink(bleId)
+  return native.probeBoardLink(bleId, probeId)
+}
+
+/** Cancel an in-flight native Board Probe if it still matches the operation id. */
+export function cancelBoardProbe(probeId: string): void {
+  if (E2E_ENABLED) return
+  native.cancelBoardProbe(probeId)
 }
 
 /** Enable raw debug session recording for future native board sessions. */
@@ -1438,8 +1475,11 @@ export async function stopRemoteTilt(): Promise<boolean> {
   return native.stopRemoteTilt()
 }
 
-export async function getTuneProfiles(boardId: string): Promise<TuneProfile[]> {
-  return native.getTuneProfiles(boardId)
+export async function getTuneProfiles(
+  boardId: string,
+  refloatBaseVersion?: string | null,
+): Promise<TuneProfile[]> {
+  return native.getTuneProfiles(boardId, refloatBaseVersion)
 }
 
 export async function getTuneProfile(profileId: string): Promise<TuneProfile | null> {
@@ -1452,8 +1492,9 @@ export async function createProfile(
   icon: string,
   color: string,
   fields: Record<string, TuneProfileFieldValue>,
+  refloatBaseVersion: string,
 ): Promise<TuneProfile> {
-  return native.createProfile(boardId, name, icon, color, fields)
+  return native.createProfile(boardId, name, icon, color, fields, refloatBaseVersion)
 }
 
 export async function renameProfile(

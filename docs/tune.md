@@ -438,23 +438,24 @@ commands, live control commands, accessory controls, and read commands.
 
 Relevant package command IDs:
 
-| Command            |    ID | Purpose                                                            |
-| ------------------ | ----: | ------------------------------------------------------------------ |
-| `FLYWHEEL`         |  `22` | Apply flywheel-related runtime action.                             |
-| `LIGHT_INFO`       |  `25` | Read light controller/runtime light info.                          |
-| `LIGHT_CTRL`       |  `26` | Apply live light control values.                                   |
-| `LCM_INFO`         |  `27` | Read LCM-related info.                                             |
-| `GET_INFO`         |  `33` | Read package/device info.                                          |
-| `GET_RTDATA`       |  `34` | Read runtime data.                                                 |
-| `SET_TUNE`         |  `35` | Apply tune values at runtime.                                      |
-| `SET_DEFAULT_TUNE` |  `36` | Apply/reset default tune values.                                   |
-| `SAVE_TUNE`        |  `37` | Persist current tune state.                                        |
-| `RESTORE_TUNE`     |  `38` | Restore saved tune state.                                          |
-| `TUNE_OTHER`       |  `39` | Apply miscellaneous tune values.                                   |
-| `MOVE`             |   `7` | `FLOAT_COMMAND_RC_MOVE`: spin motor while board is idle. Not tilt. |
-| `BOOSTER`          |  `41` | Apply booster-related runtime action.                              |
-| `LOCK`             |  `45` | Toggle package-level lock state.                                   |
-| `TONE`             | `210` | Tone/horn/playback runtime channel.                                |
+| Command            |    ID | Purpose                                                                          |
+| ------------------ | ----: | -------------------------------------------------------------------------------- |
+| `FLYWHEEL`         |  `22` | Apply flywheel-related runtime action.                                           |
+| `LIGHT_INFO`       |  `25` | Read light controller/runtime light info.                                        |
+| `LIGHT_CTRL`       |  `26` | Apply live light control values.                                                 |
+| `LCM_INFO`         |  `27` | Read LCM-related info.                                                           |
+| `GET_INFO`         |  `33` | Read package/device info.                                                        |
+| `GET_RTDATA`       |  `34` | Read runtime data.                                                               |
+| `SET_TUNE`         |  `35` | Apply tune values at runtime.                                                    |
+| `SET_DEFAULT_TUNE` |  `36` | Apply/reset default tune values.                                                 |
+| `SAVE_TUNE`        |  `37` | Persist current tune state.                                                      |
+| `RESTORE_TUNE`     |  `38` | Restore saved tune state.                                                        |
+| `TUNE_OTHER`       |  `39` | Apply miscellaneous tune values.                                                 |
+| `RC_MOVE`          |   `7` | Refloat 1.0–1.2 app move command: spin motor while board is idle. Not tilt.      |
+| `REMOTE`           |  `15` | Refloat 1.3+ app remote input command; also drives app move while board is idle. |
+| `BOOSTER`          |  `41` | Apply booster-related runtime action.                                            |
+| `LOCK`             |  `45` | Toggle package-level lock state.                                                 |
+| `TONE`             | `210` | Tone/horn/playback runtime channel.                                              |
 
 This implies two possible edit strategies:
 
@@ -553,17 +554,37 @@ stream stops. The decay is owned natively (`RemoteTiltController`) and is
 tick-based, so JS only sends the intent (`value`, `durationMs`). A duration
 shorter than one tick snaps straight to neutral.
 
-Do not confuse this with the Refloat `MOVE` (`FLOAT_COMMAND_RC_MOVE`, id `7`)
-command. `MOVE` drives motor current to spin the wheel **while the board is
-idle/off** and has nothing to do with tilt — it is not used for Remote Tilt.
+Do not confuse this with **Board Move**. Board Move drives motor output while
+the board is disengaged/ready and has nothing to do with tilt — it is not used
+for Remote Tilt.
+
+There are two observed Refloat protocol generations:
+
+- Refloat 1.0–1.2 uses `RC_MOVE` (`7`). Payload:
+  `[direction, current, time, current + time]` after the package id and command.
+  `direction = 1` moves one way and `0` flips current negative. `current` is
+  tenths of amps and is clamped by firmware; `time` is in firmware steps of
+  roughly one second (`time * 100` loop steps). A stop-ish command is
+  `[1, 0, 1, 1]`.
+- Refloat 1.3+ uses `REMOTE` (`15`). Payload is one signed byte after the
+  package id and command. The firmware maps `-127..127` to `-1..1` remote input
+  (`-128` is ignored). It then derives move speed from configured
+  `remote.max_move_speed` (or defaults app remote control to 5 km/h when that
+  value is 0).
+
+Firmware-side safety differs by generation but both paths apply move output only
+from the disengaged/ready state: 1.0–1.2 `cmd_rc_move` ignores commands unless
+`state == STATE_READY`, and 1.3+ requests move torque only while
+`state == STATE_READY`.
 
 Moving the board forward/backward while disengaged is governed by the Remote
 Throttle config fields:
 
-| Field                          | Behavior                                                                                                                                                                                               |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `remote_throttle_current_max`  | Maximum current available for remote throttle when the board is disengaged. Actual current scales linearly with throttle percentage. Default is `0 A`; recommended values in the schema are `5..10 A`. |
-| `remote_throttle_grace_period` | Delay after disengagement before remote throttle is allowed. Default is `10 s`.                                                                                                                        |
+| Field                          | Behavior                                                                                                                                                                                                                                                     |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `remote_throttle_current_max`  | Refloat 1.0–1.2 maximum current available for physical remote throttle when the board is disengaged. `RC_MOVE` carries its own current byte, but firmware still gates it to `STATE_READY`. Default is `0 A`; recommended values in the schema are `5..10 A`. |
+| `remote.max_move_speed`        | Refloat 1.3+ maximum move speed for physical/app remote move. When set to `0`, app remote control defaults to 5 km/h.                                                                                                                                        |
+| `remote_throttle_grace_period` | Delay after disengagement before physical remote throttle is allowed. Refloat 1.3+ app remote input uses a fixed 2 second disengage grace in `remote_command_input`. Default config value is `10 s`.                                                         |
 
 Safety implication: this feature can spin the motor from the app. A production
 implementation should require an explicit arming state, show a hazard warning,
@@ -573,7 +594,7 @@ Tilt enabled after leaving the screen.
 
 ### Version Compatibility
 
-The robust compatibility model is schema-driven, not version-string-driven:
+The decoder remains schema-driven, but Tune Profile reuse is Refloat-version-scoped:
 
 - Read the board's custom config XML/schema before decoding raw config bytes.
 - Use the schema serialization order for binary offsets.
@@ -584,10 +605,16 @@ The robust compatibility model is schema-driven, not version-string-driven:
 - If the schema shape or field type is unsupported, fail closed instead of
   writing or displaying potentially wrong values.
 
-The firmware version string is still useful diagnostics, but it should not be
-the primary decoder. A board can expose a different schema on the same nominal
-firmware family, and the XML schema is the source of truth for field order and
-encoding.
+The firmware version string is useful diagnostics, but it is not the primary decoder. A board can
+expose a different schema on the same nominal firmware family, and the XML schema is the source of
+truth for field order and encoding.
+
+Tune Profiles are not migrated across normalized base Refloat package versions. A profile created
+under one base version is retained for that version and hidden from normal use when the board
+reports a different base version. Suffixes and fork labels stay in the exact Refloat version used
+for link integrity, but they do not split Tune Profile compatibility. If the board later returns to
+the old base version, those profiles can be shown again. When no profile exists for the current
+trusted base version, the rider explicitly creates one from the current board config.
 
 Known version-sensitive field semantics:
 
@@ -600,10 +627,10 @@ Known version-sensitive field semantics:
 | Parking brake             | `parking_brake_mode`                   | Firmware `6.05+` applies parking brake by shorting motor phases; older behavior may differ.                                                                                                             |
 | Audible feedback          | haptic/audible feedback fields         | Some generated tones rely on `foc_play_tone` behavior from firmware `6.05`; other modes use current modulation instead.                                                                                 |
 
-For our app, this means write support should be gated by schema validation and
-field presence, not just a displayed firmware version. If a value has changed
-meaning across versions, the UI should show version-aware helper text and avoid
-silently converting unless the cell count or old/new semantic can be proven.
+For our app, this means tune read/write support requires a trusted Board Link with known Refloat
+package version. Writes are still gated by schema validation and field presence, but profile
+visibility is gated by Refloat package version. The app does not silently convert old tune values
+to new Refloat versions.
 
 ### Basic and Advanced Values Must Stay in Sync
 

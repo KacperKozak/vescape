@@ -5,6 +5,8 @@ import {
 } from 'vesc-ble'
 
 import { errorMessage } from '@/helpers/error'
+import { canRunFirmwareCommand, firmwareCommandBlockedMessage } from '@/lib/boardLinkIntegrity'
+import { useBleStore } from '@/store/bleStore'
 
 type TuneSnapshotStatus = 'idle' | 'loading' | 'ready' | 'error'
 
@@ -29,6 +31,12 @@ export const useTuneSnapshotStore = create<TuneSnapshotState & TuneSnapshotActio
 
   read() {
     if (readInFlight) return readInFlight
+    const linkIntegrity = useBleStore.getState().linkIntegrity
+    if (!canRunFirmwareCommand(linkIntegrity)) {
+      const message = firmwareCommandBlockedMessage(linkIntegrity)
+      set({ status: 'error', snapshot: null, error: message })
+      return Promise.resolve(null)
+    }
 
     const readGeneration = ++generation
     set({ status: 'loading', snapshot: null, error: null })

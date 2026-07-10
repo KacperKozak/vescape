@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { ScrollView, StyleSheet, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, useLocalSearchParams } from 'expo-router'
@@ -10,10 +10,11 @@ import { BoardLinkTimeline } from '@/components/domain/board/BoardLinkTimeline'
 import { IconHero } from '@/components/ui/settings/IconHero'
 import { Button } from '@/components/ui/base/Button'
 import { useBoardLink } from '@/hooks/useBoardLink'
-import { formatBmsSuffix, formatBoardTransport } from '@/lib/boardTransport'
 import { routes } from '@/navigation/routes'
 import { useBoardStore } from '@/store/boardStore'
 import { theme } from '@/constants/theme'
+
+const LINK_STEP_ROW_HEIGHT = 76
 
 export default function BoardLinkScreen() {
   const {
@@ -40,6 +41,16 @@ export default function BoardLinkScreen() {
 
   const link = useBoardLink(bleId)
   const [saving, setSaving] = useState(false)
+  const scrollRef = useRef<ScrollView>(null)
+
+  const handleActiveStepIndexChange = useCallback((index: number) => {
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({
+        y: index < 0 ? 0 : Math.max(0, index * LINK_STEP_ROW_HEIGHT - LINK_STEP_ROW_HEIGHT),
+        animated: true,
+      })
+    })
+  }, [])
 
   const handleSave = async () => {
     if (!board || !link.selectedLink) return
@@ -47,6 +58,8 @@ export default function BoardLinkScreen() {
     try {
       await updateBoard({ ...board, link: link.selectedLink })
       router.back()
+    } catch (err) {
+      console.log('[board-link] save failed', err)
     } finally {
       setSaving(false)
     }
@@ -65,7 +78,7 @@ export default function BoardLinkScreen() {
         title={deviceLabel}
         description="Linking your board over Bluetooth"
       />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView ref={scrollRef} contentContainerStyle={styles.content}>
         {bleId != null ? (
           <BoardLinkTimeline
             phase={link.phase}
@@ -77,11 +90,8 @@ export default function BoardLinkScreen() {
             hideHeader
             bleId={bleId}
             testIDPrefix="board-link"
-            failureNote={
-              existingLink
-                ? `Existing link kept · ${formatBoardTransport(existingLink.transport)}${formatBmsSuffix(existingLink.hasBms)}`
-                : undefined
-            }
+            failureNote={existingLink ? 'Existing link kept — your board still works' : undefined}
+            onActiveStepIndexChange={handleActiveStepIndexChange}
           />
         ) : null}
       </ScrollView>
@@ -96,7 +106,7 @@ export default function BoardLinkScreen() {
             testID="board-link-choose-another"
           />
           <Button
-            style={styles.actionButton}
+            style={[styles.actionButton, styles.upgradeButton]}
             label="Retry"
             onPress={link.retry}
             testID="board-link-retry"
@@ -105,6 +115,7 @@ export default function BoardLinkScreen() {
       ) : (
         <View style={styles.footer}>
           <Button
+            style={styles.upgradeButton}
             label="Save link"
             onPress={handleSave}
             disabled={link.phase !== 'picking' || link.selectedLink == null}
@@ -126,6 +137,8 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'center',
     padding: 16,
+    paddingBottom: 112,
+    gap: 14,
   },
   footer: {
     paddingHorizontal: 16,
@@ -138,5 +151,8 @@ const styles = StyleSheet.create({
   },
   actionButton: {
     flex: 1,
+  },
+  upgradeButton: {
+    backgroundColor: theme.status.upgrade.color,
   },
 })

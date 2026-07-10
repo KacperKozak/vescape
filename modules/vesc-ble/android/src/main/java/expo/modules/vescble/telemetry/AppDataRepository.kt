@@ -331,8 +331,9 @@ class AppDataRepository private constructor(private val context: Context) {
 
   // Tune Profiles: per-board VESC tune configs with reversible Tune History.
   // @parity /modules/vesc-ble/ios/telemetry/TuneProfileStore.swift
-  suspend fun getTuneProfiles(boardId: String): List<Map<String, Any?>> = withContext(Dispatchers.IO) {
-    dao.getTuneProfilesByBoard(boardId).map { it.toMap() }
+  suspend fun getTuneProfiles(boardId: String, refloatBaseVersion: String?): List<Map<String, Any?>> = withContext(Dispatchers.IO) {
+    val compatibility = validRefloatBaseVersion(refloatBaseVersion) ?: return@withContext emptyList()
+    dao.getTuneProfilesByBoard(boardId, compatibility).map { it.toMap() }
   }
 
   suspend fun getTuneProfile(id: String): Map<String, Any?>? = withContext(Dispatchers.IO) {
@@ -345,13 +346,17 @@ class AppDataRepository private constructor(private val context: Context) {
     icon: String,
     color: String,
     fields: Map<String, Any?>,
+    refloatBaseVersion: String,
   ): Map<String, Any?> =
     withContext(Dispatchers.IO) {
+      val compatibility = validRefloatBaseVersion(refloatBaseVersion)
+        ?: throw IllegalArgumentException("Missing Refloat Tune Compatibility")
       val now = System.currentTimeMillis()
       val fieldsJson = fields.toJsonObject().toString()
       val profile = TuneProfileEntity(
         id = UUID.randomUUID().toString(),
         boardId = boardId,
+        refloatBaseVersion = compatibility,
         name = name,
         icon = icon,
         color = color,
@@ -403,6 +408,7 @@ class AppDataRepository private constructor(private val context: Context) {
       val copy = TuneProfileEntity(
         id = UUID.randomUUID().toString(),
         boardId = targetBoardId,
+        refloatBaseVersion = source.refloatBaseVersion,
         name = newName,
         icon = source.icon,
         color = source.color,
@@ -428,28 +434,6 @@ class AppDataRepository private constructor(private val context: Context) {
         fieldsJson = fields.toJsonObject().toString(),
         updatedAt = System.currentTimeMillis(),
       ).toMap()
-    }
-
-  // @parity /modules/vesc-ble/ios/telemetry/TuneProfileStore.swift `createMainTuneProfileIfMissing`
-  internal suspend fun createMainTuneProfileIfMissing(snapshot: RefloatConfigSnapshot): Map<String, Any?>? =
-    withContext(Dispatchers.IO) {
-      val boardId = snapshot.boardId?.takeIf { it.isNotBlank() } ?: return@withContext null
-      val fieldsJson = snapshot.fieldsJson()
-      val now = System.currentTimeMillis()
-      val profile = TuneProfileEntity(
-        id = UUID.randomUUID().toString(),
-        boardId = boardId,
-        name = "Main",
-        fieldsJson = fieldsJson,
-        createdAt = now,
-        updatedAt = now,
-      )
-      val history = TuneHistoryEntryEntity(
-        profileId = profile.id,
-        fieldsJson = fieldsJson,
-        createdAt = now,
-      )
-      dao.insertTuneProfileIfBoardHasNone(profile, history)?.toMap()
     }
 
   suspend fun getPrivacyZones(): List<Map<String, Any?>> = withContext(Dispatchers.IO) {
@@ -518,6 +502,14 @@ class AppDataRepository private constructor(private val context: Context) {
   }
 }
 
+private const val BOARD_LINK_VERSION = 3
+private val boardLinkStringIdentityKeys = listOf(
+  "vescFirmwareVersion",
+  "refloatVersion",
+  "refloatBaseVersion",
+)
+
+// @parity /modules/vesc-ble/ios/telemetry/AppDataRepository.swift `composeBoard` / `upsertBoard`
 fun BoardEntity.toMap(settings: List<BoardSettingEntity>): Map<String, Any?> {
   val values = settings.mapNotNull { it.decodeBoardSetting() }.toMap()
   // A Board Link exists only when both a BLE peripheral and a proven transport
@@ -527,7 +519,11 @@ fun BoardEntity.toMap(settings: List<BoardSettingEntity>): Map<String, Any?> {
     buildMap<String, Any?> {
       put("bleId", bleId)
       put("transport", transport)
+      put("linkVersion", (values["linkVersion"] as? Int) ?: BOARD_LINK_VERSION)
       (values["hasBms"] as? Boolean)?.let { put("hasBms", it) }
+      boardLinkStringIdentityKeys.forEach { key ->
+        (values[key] as? String)?.let { put(key, it) }
+      }
     }
   } else {
     null
@@ -594,6 +590,7 @@ fun AlertRuleEntity.toMap(): Map<String, Any?> = mapOf(
 fun TuneProfileEntity.toMap(): Map<String, Any?> = mapOf(
   "id" to id,
   "boardId" to boardId,
+  "refloatBaseVersion" to refloatBaseVersion,
   "name" to name,
   "icon" to icon,
   "color" to color,
@@ -601,6 +598,9 @@ fun TuneProfileEntity.toMap(): Map<String, Any?> = mapOf(
   "createdAt" to createdAt,
   "updatedAt" to updatedAt,
 )
+
+internal fun validRefloatBaseVersion(value: String?): String? =
+  value?.takeIf { it.matches(Regex("""\d+\.\d+\.\d+""")) }
 
 fun TuneHistoryEntryEntity.toMap(): Map<String, Any?> = mapOf(
   "id" to id,
@@ -745,10 +745,20 @@ private fun Map<String, Any?>.toPrivacyZoneEntity(): PrivacyZoneEntity {
 @Suppress("UNCHECKED_CAST")
 private fun Map<String, Any?>.boardLink(): Map<String, Any?>? = get("link") as? Map<String, Any?>
 
+private fun Map<String, Any?>.normalizedBoardLink(): Map<String, Any?>? {
+  val link = boardLink() ?: return null
+  val bleId = (link["bleId"] as? String)?.takeIf { it.isNotBlank() } ?: return null
+  val transport = BoardTransport.fromBridge(link["transport"]) ?: return null
+  return link + mapOf(
+    "bleId" to bleId,
+    "transport" to BoardTransport.toBridge(transport),
+  )
+}
+
 internal fun Map<String, Any?>.toBoardEntity(): BoardEntity = BoardEntity(
   id = getString("id"),
   name = getString("name"),
-  bleId = (boardLink()?.get("bleId") as? String)?.takeIf { it.isNotBlank() },
+  bleId = normalizedBoardLink()?.get("bleId") as? String,
   createdAt = getLong("createdAt"),
 )
 
@@ -767,11 +777,13 @@ internal fun Map<String, Any?>.toBoardSettingEntities(boardId: String): Pair<Lis
 
   putOrDelete("description", (get("description") as? String)?.takeIf { it.isNotBlank() })
   putOrDelete("batteryConfig", normalizeBatteryConfig(get("batteryConfig")))
-  putOrDelete(
-    "transport",
-    BoardTransport.encode(BoardTransport.fromBridge(boardLink()?.get("transport"))),
-  )
-  putOrDelete("hasBms", boardLink()?.get("hasBms") as? Boolean)
+  val link = normalizedBoardLink()
+  putOrDelete("transport", BoardTransport.encode(BoardTransport.fromBridge(link?.get("transport"))))
+  putOrDelete("linkVersion", (link?.get("linkVersion") as? Number)?.toInt()?.takeIf { it == BOARD_LINK_VERSION })
+  putOrDelete("hasBms", link?.get("hasBms") as? Boolean)
+  boardLinkStringIdentityKeys.forEach { key ->
+    putOrDelete(key, (link?.get(key) as? String)?.takeIf { it.isNotBlank() })
+  }
 
   return settings to deletedKeys
 }
@@ -788,7 +800,9 @@ private fun BoardSettingEntity.decodeBoardSetting(): Pair<String, Any?>? {
     "transport" -> (raw as? String)?.let {
       key to BoardTransport.toBridge(BoardTransport.decode(it))
     }
+    "linkVersion" -> (raw as? Number)?.toInt()?.let { key to it }
     "hasBms" -> (raw as? Boolean)?.let { key to it }
+    "vescFirmwareVersion", "refloatVersion", "refloatBaseVersion" -> (raw as? String)?.let { key to it }
     "lastBattery" -> decodeLastBattery(raw)?.let { key to it }
     else -> null
   }

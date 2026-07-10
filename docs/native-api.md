@@ -35,13 +35,13 @@ Source of truth: `modules/vesc-ble/src/index.ts` (types), `VescBleModule.kt` (An
 
 ## Board session
 
-| fn                                  | sync  | returns                                                                                                                                                                               |
-| ----------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `selectBoard(boardId)`              | async | void. Native reads the Board Link from DB, owns connect. Emits `onLiveState`, `onTelemetry`                                                                                           |
-| `stopBoard()`                       | async | void. GPS may continue independently                                                                                                                                                  |
-| `probeBoardLink(bleId)`             | async | `BoardProbeResult`. Probes a peripheral, returns resolved `transport` when unique plus `BoardCandidate[]` (transport + `hasBms`) confirmed by telemetry. Emits `onBoardProbeProgress` |
-| `getLiveState()`                    | sync  | `LiveStateEvent`. UI should mirror, not invent state                                                                                                                                  |
-| `setSelectedBoard(boardId \| null)` | sync  | void. Persists auto-connect target. Native uses while JS frozen                                                                                                                       |
+| fn                                  | sync  | returns                                                                                                                                                                                                                  |
+| ----------------------------------- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `selectBoard(boardId)`              | async | void. Native reads the Board Link from DB, owns connect. Emits `onLiveState`, `onTelemetry`                                                                                                                              |
+| `stopBoard()`                       | async | void. GPS may continue independently                                                                                                                                                                                     |
+| `probeBoardLink(bleId)`             | async | `BoardProbeResult`. Probes a peripheral, returns resolved `transport` when unique plus `BoardCandidate[]` (transport + `hasBms` + firmware identity when available) confirmed by telemetry. Emits `onBoardProbeProgress` |
+| `getLiveState()`                    | sync  | `LiveStateEvent`. UI should mirror, not invent state                                                                                                                                                                     |
+| `setSelectedBoard(boardId \| null)` | sync  | void. Persists auto-connect target. Native uses while JS frozen                                                                                                                                                          |
 
 ### LiveStateEvent shape
 
@@ -171,14 +171,26 @@ Rides computed from buckets + markers:
 ### Board shape
 
 ```ts
-{ id, name, description?, createdAt, batteryConfig?, link: { bleId, transport } | null }
+{ id, name, description?, createdAt, batteryConfig?,
+  link: { linkVersion: 3, bleId, transport, hasBms,
+          vescFirmwareVersion: string | null,
+          refloatVersion: string | null,
+          refloatBaseVersion: string | null } | null }
 ```
 
 A **Board Link** is saved whole or not at all: it always carries a proven BLE peripheral id
-plus a Board Transport (`'direct'` | CAN id). `link: null` means the board is unlinked
-(offline-only). Mutable per-board fields (`description`, `batteryConfig`, `transport`) live in
-the `board_settings` key-value table; the `boards` row holds only stable identity (`id`, `name`,
-`ble_id`, `created_at`).
+plus a selected Board Transport (`'direct'` | CAN id). Current links also carry
+`linkVersion: 3`, a required `hasBms` boolean, exact firmware identity keys, and normalized
+`refloatBaseVersion` for Tune Compatibility. Missing or null required identity values keep
+telemetry available but require re-link before firmware-dependent commands.
+
+Stored Board Links are normalized defensively: missing or malformed newer fields default to safe
+values, unknown old fields are ignored, and outdated or incomplete link facts keep telemetry
+available while forcing re-link before firmware-dependent commands. Malformed reachability
+(`bleId` or `transport`) is treated as unlinked rather than crashing. `link: null` means the board is unlinked
+(offline-only). Mutable per-board fields (`description`, `batteryConfig`, `transport`,
+probe-confirmed link facts) live in the `board_settings` key-value table; the `boards` row holds
+only stable identity (`id`, `name`, `ble_id`, `created_at`).
 
 ## Alert rules
 

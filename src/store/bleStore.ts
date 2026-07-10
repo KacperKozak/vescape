@@ -25,6 +25,7 @@ import {
   type ScanStatus,
   type LocationEvent,
   type LiveStateEvent,
+  type LinkIntegrity,
   type BmsEvent,
   type BmsSeriesFrame,
   type BmsSeriesUpdate,
@@ -71,6 +72,7 @@ interface BleState {
   latestBms: BmsEvent | null
   bmsSeries: BmsSeriesFrame[]
   bmsSeriesWindowMs: number | null
+  linkIntegrity: LinkIntegrity
   /** Active remote-tilt command mirrored from native telemetry, or null when idle. */
   remoteTilt: RemoteTiltState | null
 }
@@ -242,6 +244,7 @@ function applyLiveState(state: LiveStateEvent, set: BleSet): void {
     telemetryRecordingEnabled: state.recording.enabled,
     telemetryRecordingPaused: state.recording.paused,
     remoteTilt: state.board.remoteTilt,
+    linkIntegrity: state.board.linkIntegrity,
     ...(shouldSeedLiveState || !isBoardConnected
       ? {
           liveLocationHistory: live.liveLocationHistory,
@@ -474,6 +477,7 @@ export const useBleStore = create<BleState & BleActions>((set, get) => ({
   latestBms: null,
   bmsSeries: [],
   bmsSeriesWindowMs: null,
+  linkIntegrity: 'unknown',
   remoteTilt: null,
 
   startScan() {

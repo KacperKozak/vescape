@@ -7,8 +7,21 @@ import org.junit.Test
 
 class TransportDetectionTest {
 
-  private fun probe(transport: BoardTransport, confirmed: Boolean, hasBms: Boolean = false) =
-    TransportDetection.Probe(transport, confirmed, hasBms)
+  private fun probe(
+    transport: BoardTransport,
+    confirmed: Boolean,
+    hasBms: Boolean = false,
+    vescFirmwareVersion: String? = null,
+    refloatVersion: String? = null,
+    refloatBaseVersion: String? = null,
+  ) = TransportDetection.Probe(
+    transport = transport,
+    confirmed = confirmed,
+    hasBms = hasBms,
+    vescFirmwareVersion = vescFirmwareVersion,
+    refloatVersion = refloatVersion,
+    refloatBaseVersion = refloatBaseVersion,
+  )
 
   // --- candidatesToProbe: always probe Direct + every responder ---
 
@@ -177,5 +190,49 @@ class TransportDetectionTest {
       listOf(TransportDetection.Candidate(BoardTransport.Can(7), hasBms = false)),
       result.candidates,
     )
+  }
+
+  @Test
+  fun `firmware identity is carried onto confirmed candidates`() {
+    val result = TransportDetection.resolve(
+      listOf(
+        probe(
+          BoardTransport.Can(7),
+          confirmed = true,
+          hasBms = true,
+          vescFirmwareVersion = "FW 6.05",
+          refloatVersion = "Refloat 1.3.0-preview2",
+          refloatBaseVersion = "1.3.0",
+        ),
+      ),
+    )
+
+    assertEquals(
+      listOf(
+        TransportDetection.Candidate(
+          transport = BoardTransport.Can(7),
+          hasBms = true,
+          vescFirmwareVersion = "FW 6.05",
+          refloatVersion = "Refloat 1.3.0-preview2",
+          refloatBaseVersion = "1.3.0",
+        ),
+      ),
+      result.candidates,
+    )
+  }
+
+  @Test
+  fun `missing firmware identity does not drop telemetry confirmed candidate`() {
+    val result = TransportDetection.resolve(
+      listOf(
+        probe(BoardTransport.Direct, confirmed = true, hasBms = false),
+      ),
+    )
+
+    assertEquals(TransportDetection.Outcome.Resolved(BoardTransport.Direct), result.outcome)
+    assertEquals(1, result.candidates.size)
+    assertNull(result.candidates.single().vescFirmwareVersion)
+    assertNull(result.candidates.single().refloatVersion)
+    assertNull(result.candidates.single().refloatBaseVersion)
   }
 }
