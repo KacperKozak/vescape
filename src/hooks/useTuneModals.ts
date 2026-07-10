@@ -3,6 +3,7 @@ import type { View } from 'react-native'
 import type { RefloatConfigField, TuneProfile, TuneProfileFieldValue } from 'vesc-ble'
 
 import type { FieldEditorTarget } from '@/components/domain/tune/FieldEditorPopover'
+import { basicSliderColor, basicSliderIcon } from '@/components/domain/tune/basicSliderIcons'
 import type { Board } from '@/store/boardStore'
 import { useTuneProfileStore } from '@/store/tuneProfileStore'
 import { formatTuneValue } from '@/lib/tune/fields'
@@ -14,6 +15,7 @@ import {
   isEditableNumberField,
   type BasicSliderItem,
 } from '@/lib/tune/sliderDefinitions'
+import { DEFAULT_TUNE_PROFILE_COLOR, DEFAULT_TUNE_PROFILE_ICON } from '@/lib/tune/profileMetadata'
 
 type InfoModalState = { title: string; message: string } | null
 type EditorKind = { kind: 'field'; fieldId: string } | { kind: 'basic'; sliderId: string }
@@ -34,7 +36,7 @@ export function useTuneModals(
   const [infoModal, setInfoModal] = useState<InfoModalState>(null)
   const [editor, setEditor] = useState<FieldEditorTarget | null>(null)
   const [editorKind, setEditorKind] = useState<EditorKind | null>(null)
-  const [renameModalProfile, setRenameModalProfile] = useState<TuneProfile | null>(null)
+  const [metadataModalProfile, setMetadataModalProfile] = useState<TuneProfile | null>(null)
   const [createModalOpen, setCreateModalOpen] = useState(false)
   const [createCloneFromId, setCreateCloneFromId] = useState<string | undefined>()
   const [copySourceProfile, setCopySourceProfile] = useState<TuneProfile | null>(null)
@@ -60,7 +62,7 @@ export function useTuneModals(
   }, [])
 
   const openFieldEditor = useCallback(
-    (field: RefloatConfigField, ref: { current: View | null }) => {
+    (field: RefloatConfigField, ref: { current: View | null }, color?: string) => {
       if (!activeProfile) {
         showFieldInfo(field)
         return
@@ -83,6 +85,7 @@ export function useTuneModals(
         step: fieldStep(field),
         unit: field.unit,
         help: fieldHelp(field),
+        color,
       })
     },
     [activeProfile, showBadgeInfo, showFieldInfo],
@@ -98,13 +101,16 @@ export function useTuneModals(
       setEditor({
         triggerRef: ref as React.RefObject<View | null>,
         label: item.label,
+        description: item.description,
         fieldId: item.id,
         value: item.value ?? item.min,
         min: item.min,
         max: item.max,
         step: item.step,
         unit: null,
-        help: item.info,
+        help: `${item.info}\n\nSource: ${item.source}`,
+        icon: basicSliderIcon(item.id),
+        color: basicSliderColor(item.id),
         linkedFields: getLinkedFieldPreviews(def),
       })
     },
@@ -112,14 +118,14 @@ export function useTuneModals(
   )
 
   const handleEditorApply = useCallback(
-    (value: number) => {
+    (value: number, linkedFieldValues?: Record<string, number>) => {
       if (!editorKind) return
       if (editorKind.kind === 'field') {
         setDraftField(editorKind.fieldId, value)
       } else {
         const def = BASIC_SLIDER_BY_ID.get(editorKind.sliderId)
         if (def) {
-          const fieldValues = def.computeFieldValues(value)
+          const fieldValues = { ...def.computeFieldValues(value), ...linkedFieldValues }
           for (const [id, v] of Object.entries(fieldValues)) {
             setDraftField(id, v)
           }
@@ -185,8 +191,8 @@ export function useTuneModals(
     setInfoModal,
     editor,
     editorKind,
-    renameModalProfile,
-    setRenameModalProfile,
+    metadataModalProfile,
+    setMetadataModalProfile,
     createModalOpen,
     setCreateModalOpen,
     createCloneFromId,
@@ -210,5 +216,7 @@ export function useTuneModals(
     storeCreateProfile,
     storeRenameProfile,
     storeDeleteProfile,
+    defaultTuneIcon: DEFAULT_TUNE_PROFILE_ICON,
+    defaultTuneColor: DEFAULT_TUNE_PROFILE_COLOR,
   }
 }

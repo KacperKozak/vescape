@@ -339,7 +339,13 @@ class AppDataRepository private constructor(private val context: Context) {
     dao.getTuneProfile(id)?.toMap()
   }
 
-  suspend fun createProfile(boardId: String, name: String, fields: Map<String, Any?>): Map<String, Any?> =
+  suspend fun createProfile(
+    boardId: String,
+    name: String,
+    icon: String,
+    color: String,
+    fields: Map<String, Any?>,
+  ): Map<String, Any?> =
     withContext(Dispatchers.IO) {
       val now = System.currentTimeMillis()
       val fieldsJson = fields.toJsonObject().toString()
@@ -347,6 +353,8 @@ class AppDataRepository private constructor(private val context: Context) {
         id = UUID.randomUUID().toString(),
         boardId = boardId,
         name = name,
+        icon = icon,
+        color = color,
         fieldsJson = fieldsJson,
         createdAt = now,
         updatedAt = now,
@@ -362,9 +370,14 @@ class AppDataRepository private constructor(private val context: Context) {
       profile.toMap()
     }
 
-  suspend fun renameProfile(profileId: String, name: String): Map<String, Any?> =
+  suspend fun renameProfile(
+    profileId: String,
+    name: String,
+    icon: String,
+    color: String,
+  ): Map<String, Any?> =
     withContext(Dispatchers.IO) {
-      dao.updateProfileName(profileId, name, System.currentTimeMillis())
+      dao.updateProfileMetadata(profileId, name, icon, color, System.currentTimeMillis())
       dao.getTuneProfile(profileId)?.toMap()
         ?: throw IllegalArgumentException("Tune Profile not found: $profileId")
     }
@@ -391,6 +404,8 @@ class AppDataRepository private constructor(private val context: Context) {
         id = UUID.randomUUID().toString(),
         boardId = targetBoardId,
         name = newName,
+        icon = source.icon,
+        color = source.color,
         fieldsJson = source.fieldsJson,
         createdAt = now,
         updatedAt = now,
@@ -580,6 +595,8 @@ fun TuneProfileEntity.toMap(): Map<String, Any?> = mapOf(
   "id" to id,
   "boardId" to boardId,
   "name" to name,
+  "icon" to icon,
+  "color" to color,
   "fields" to fieldsJson.toJsonMap(),
   "createdAt" to createdAt,
   "updatedAt" to updatedAt,

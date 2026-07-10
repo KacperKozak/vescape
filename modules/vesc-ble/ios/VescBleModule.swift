@@ -378,17 +378,17 @@ public class VescBleModule: Module {
       promise.resolve(TuneProfileStore.shared.getTuneProfile(profileId))
     }
 
-    AsyncFunction("createProfile") { (boardId: String, name: String, fields: [String: Any], promise: Promise) in
+    AsyncFunction("createProfile") { (boardId: String, name: String, icon: String, color: String, fields: [String: Any], promise: Promise) in
       do {
-        promise.resolve(try TuneProfileStore.shared.createProfile(boardId: boardId, name: name, fields: fields))
+        promise.resolve(try TuneProfileStore.shared.createProfile(boardId: boardId, name: name, icon: icon, color: color, fields: fields))
       } catch {
         promise.reject(TuneProfileStore.errorCode, error.localizedDescription)
       }
     }
 
-    AsyncFunction("renameProfile") { (profileId: String, name: String, promise: Promise) in
+    AsyncFunction("renameProfile") { (profileId: String, name: String, icon: String, color: String, promise: Promise) in
       do {
-        promise.resolve(try TuneProfileStore.shared.renameProfile(profileId: profileId, name: name))
+        promise.resolve(try TuneProfileStore.shared.renameProfile(profileId: profileId, name: name, icon: icon, color: color))
       } catch {
         promise.reject(TuneProfileStore.errorCode, error.localizedDescription)
       }

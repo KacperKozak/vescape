@@ -1,7 +1,14 @@
-import { useCallback, useLayoutEffect, useRef } from 'react'
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { useCallback, useLayoutEffect, useRef, useState } from 'react'
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+} from 'react-native'
 import { Text } from '@/components/ui/base/Text'
-import { useNavigation, useRouter } from 'expo-router'
+import { useIsFocused, useNavigation, useRouter } from 'expo-router'
 import {
   ArrowsClockwiseIcon,
   BluetoothSlashIcon,
@@ -13,9 +20,10 @@ import {
   WarningCircleIcon,
 } from 'phosphor-react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { type TuneProfile, type RefloatConfigField, type TuneProfileFieldValue } from 'vesc-ble'
+import { useSharedValue } from 'react-native-reanimated'
+import { Canvas, LinearGradient, Rect, vec } from '@shopify/react-native-skia'
+import { type RefloatConfigField, type TuneProfileFieldValue } from 'vesc-ble'
 
-import { Banner } from '@/components/ui/base/Banner'
 import { Button } from '@/components/ui/base/Button'
 import { IconButton } from '@/components/ui/base/IconButton'
 import { ConfirmModal } from '@/components/ui/modals/ConfirmModal'
@@ -30,8 +38,19 @@ import {
   PillSelector,
 } from '@/components/ui/controls/PillSelector'
 import { TuneConfigCell } from '@/components/domain/tune/TuneConfigCell'
+import {
+  TuneProfileMetadataModal,
+  tuneProfileColorTheme,
+  tuneProfileIconComponent,
+} from '@/components/domain/tune/TuneProfileMetadataModal'
+import { basicSliderColor, basicSliderIcon } from '@/components/domain/tune/basicSliderIcons'
 import { TuneGroupGrid } from '@/components/ui/tune/TuneGroupGrid'
 import { TuneSyncBar } from '@/components/ui/tune/TuneSyncBar'
+import { TunePreview } from '@/components/ui/tune/TunePreview'
+import {
+  TunePreviewScenarioControls,
+  type HillsPresetId,
+} from '@/components/ui/tune/TunePreviewScenarioControls'
 import { routes } from '@/navigation/routes'
 import { TextPromptModal } from '@/components/ui/modals/TextPromptModal'
 import { BoardPickerModal } from '@/components/domain/tune/BoardPickerModal'
@@ -41,11 +60,40 @@ import type { BasicSliderItem } from '@/lib/tune/sliderDefinitions'
 import { useTuneScreenData } from '@/hooks/useTuneScreenData'
 import { theme } from '@/constants/theme'
 import { useTuneModals } from '@/hooks/useTuneModals'
+import { DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS } from '@/lib/tune/tunePreview'
+import type { TuneProfileColorId, TuneProfileIconId } from '@/lib/tune/profileMetadata'
+
+let previewHelpShownThisSession = false
+const PREVIEW_PINNED_GRADIENT_HEIGHT = 210
 
 export default function TuneScreen() {
   const navigation = useNavigation()
   const router = useRouter()
   const insets = useSafeAreaInsets()
+  const { width } = useWindowDimensions()
+  const isFocused = useIsFocused()
+  const pitchInputDegrees = useSharedValue(0)
+  const pitchInputActive = useSharedValue(false)
+  const previewSpeedKmh = useSharedValue(15)
+  const groundToBoardAngleDegrees = useSharedValue(0)
+  const previewGradientColor = theme.palette.slate.bg
+  const previewGradientColors = [
+    theme.alpha(previewGradientColor, 1),
+    theme.alpha(previewGradientColor, 0.75),
+    theme.alpha(previewGradientColor, 0),
+  ]
+  const [hillsPreset, setHillsPreset] = useState<HillsPresetId>('flat')
+  const [hillHeightMeters, setHillHeightMeters] = useState(2.5)
+  const [hillSpacingMeters, setHillSpacingMeters] = useState(30)
+  const [previewPinnedHeight, setPreviewPinnedHeight] = useState(PREVIEW_PINNED_GRADIENT_HEIGHT)
+  const hillLoadAmps = useSharedValue(0)
+  const hillsEnabled = hillsPreset !== 'flat'
+  const [advancedPhysics, setAdvancedPhysics] = useState(DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS)
+  const [previewHelpVisible, setPreviewHelpVisible] = useState(() => {
+    if (previewHelpShownThisSession) return false
+    previewHelpShownThisSession = true
+    return true
+  })
   const {
     activeProfile,
     allBoards,
@@ -61,6 +109,7 @@ export default function TuneScreen() {
     loadOffline,
     loadOnline,
     profileError,
+    profileFields,
     profileState,
     profiles,
     retryBoardSnapshot,
@@ -84,23 +133,61 @@ export default function TuneScreen() {
 
   useLayoutEffect(() => {
     navigation.setOptions({
-      title: 'Tune',
+      headerTitle: () =>
+        profiles.length > 0 ? (
+          <PillSelector
+            activeId={activeProfile?.id ?? ''}
+            contained
+            style={styles.headerPills}
+            contentContainerStyle={styles.headerPillsContent}
+          >
+            {profiles.map((profile) => (
+              <PillSelectorItem
+                key={profile.id}
+                id={profile.id}
+                label={profile.name}
+                icon={tuneProfileIconComponent(profile.icon)}
+                activeLabelOnly
+                color={tuneProfileColorTheme(profile.color)}
+                onPress={() => setActiveProfile(profile.id)}
+              >
+                <PillSelectorMenuItem
+                  icon={PencilSimpleIcon}
+                  label="Edit"
+                  onPress={() => modals.setMetadataModalProfile(profile)}
+                />
+                {modals.otherBoards.length > 0 ? (
+                  <PillSelectorMenuItem
+                    icon={CopyIcon}
+                    label="Copy to board"
+                    onPress={() => modals.setCopySourceProfile(profile)}
+                  />
+                ) : null}
+                {profiles.length > 1 ? (
+                  <PillSelectorMenuItem
+                    icon={TrashIcon}
+                    label="Delete"
+                    onPress={() => modals.setDeleteConfirmProfile(profile)}
+                    danger
+                    separator
+                  />
+                ) : null}
+              </PillSelectorItem>
+            ))}
+            <PillSelectorAdd onPress={() => modals.handleCreateProfile(activeProfile?.id)} />
+          </PillSelector>
+        ) : (
+          <Text style={styles.headerTitle}>Tune</Text>
+        ),
       headerRight: () => (
         <View style={styles.headerActions}>
           {activeProfile ? (
             <IconButton icon={ClockCounterClockwiseIcon} onPress={() => void openHistory()} />
           ) : null}
-          {boardConnected ? (
-            <IconButton
-              icon={ArrowsClockwiseIcon}
-              onPress={() => void loadOnline()}
-              loading={boardSnapshotStatus === 'loading'}
-            />
-          ) : null}
         </View>
       ),
     })
-  }, [activeProfile, boardConnected, boardSnapshotStatus, openHistory, loadOnline, navigation])
+  }, [activeProfile, openHistory, navigation, profiles, modals, setActiveProfile])
 
   const handleSave = () => {
     void saveActiveProfile().catch(() => undefined)
@@ -157,212 +244,225 @@ export default function TuneScreen() {
       ) : null}
 
       {hasTuneView ? (
-        <ScrollView
-          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 96 }]}
-          contentInsetAdjustmentBehavior="automatic"
-        >
-          <Banner
-            variant="warning"
-            title="Work in progress"
-            message="Tune editing is experimental. Do not sync changes to the board until this feature is stable."
-          />
-
-          {profileError ? (
-            <View style={styles.errorBanner}>
-              <WarningCircleIcon size={16} color={theme.status.error.color} />
-              <Text style={styles.errorBannerText}>{profileError}</Text>
-            </View>
-          ) : null}
-
-          {schemaMismatchFields ? (
-            <Pressable
-              style={styles.schemaMismatchBar}
-              onPress={() =>
-                modals.showBadgeInfo(
-                  'Schema Mismatch',
-                  `Profile and board have different field sets.${
-                    schemaMismatchFields.profileOnly.length > 0
-                      ? `\n\nIn profile but not board: ${schemaMismatchFields.profileOnly.join(', ')}`
-                      : ''
-                  }${
-                    schemaMismatchFields.boardOnly.length > 0
-                      ? `\n\nIn board but not profile: ${schemaMismatchFields.boardOnly.join(', ')}`
-                      : ''
-                  }`,
-                )
-              }
-            >
-              <WarningCircleIcon size={16} color={theme.palette.yellow.color} weight="fill" />
-              <View style={styles.schemaMismatchTextWrap}>
-                <Text style={styles.schemaMismatchTitle}>Schema mismatch</Text>
-                <Text style={styles.schemaMismatchText}>
-                  {schemaMismatchFields.profileOnly.length > 0
-                    ? `${schemaMismatchFields.profileOnly.length} field${schemaMismatchFields.profileOnly.length === 1 ? '' : 's'} in profile not on board`
-                    : ''}
-                  {schemaMismatchFields.profileOnly.length > 0 &&
-                  schemaMismatchFields.boardOnly.length > 0
-                    ? ' · '
-                    : ''}
-                  {schemaMismatchFields.boardOnly.length > 0
-                    ? `${schemaMismatchFields.boardOnly.length} new field${schemaMismatchFields.boardOnly.length === 1 ? '' : 's'} on board`
-                    : ''}
-                </Text>
-              </View>
-            </Pressable>
-          ) : null}
-
-          {profiles.length > 0 ? (
-            <PillSelector activeId={activeProfile?.id ?? ''}>
-              {profiles.map((profile) => (
-                <PillSelectorItem
-                  key={profile.id}
-                  id={profile.id}
-                  label={profile.name}
-                  color={theme.palette.sky}
-                  onPress={() => setActiveProfile(profile.id)}
-                >
-                  <PillSelectorMenuItem
-                    icon={PencilSimpleIcon}
-                    label="Rename"
-                    onPress={() => modals.setRenameModalProfile(profile)}
-                  />
-                  {modals.otherBoards.length > 0 ? (
-                    <PillSelectorMenuItem
-                      icon={CopyIcon}
-                      label="Copy to board"
-                      onPress={() => modals.setCopySourceProfile(profile)}
-                    />
-                  ) : null}
-                  {profiles.length > 1 ? (
-                    <PillSelectorMenuItem
-                      icon={TrashIcon}
-                      label="Delete"
-                      onPress={() => modals.setDeleteConfirmProfile(profile)}
-                      danger
-                      separator
-                    />
-                  ) : null}
-                </PillSelectorItem>
-              ))}
-              <PillSelectorAdd onPress={() => modals.handleCreateProfile(activeProfile?.id)} />
-            </PillSelector>
-          ) : null}
-
-          {boardSnapshot ? (
-            <View style={styles.metaRow}>
-              {boardSnapshot.fwVersion ? (
-                <InfoBadge
-                  label={boardSnapshot.fwVersion}
-                  onPress={() =>
-                    modals.showBadgeInfo(
-                      'Firmware',
-                      'Firmware reported by the connected controller. This is useful diagnostic context, but the config decoder uses the board XML schema as the source of truth.',
-                    )
-                  }
-                />
-              ) : null}
-              {boardSnapshot.refloatVersion ? (
-                <InfoBadge
-                  label={boardSnapshot.refloatVersion}
-                  onPress={() =>
-                    modals.showBadgeInfo(
-                      'Refloat',
-                      'Refloat package version reported by the connected controller.',
-                    )
-                  }
-                />
-              ) : null}
-              <InfoBadge
-                label={`CAN ${boardSnapshot.canId}`}
-                onPress={() =>
-                  modals.showBadgeInfo(
-                    'CAN ID',
-                    `Controller CAN ID ${boardSnapshot.canId}. Refloat config commands are forwarded to this controller before reading the schema and binary config.`,
-                  )
-                }
-              />
-              <InfoBadge
-                label={`${boardSnapshot.rawConfigLength} bytes`}
-                onPress={() =>
-                  modals.showBadgeInfo(
-                    'Config Size',
-                    `${boardSnapshot.rawConfigLength} bytes is the size of the raw Refloat custom config payload read from the controller. The app decodes only known tune fields from that binary struct.`,
-                  )
-                }
-              />
-              {boardSnapshot.missingFieldIds.length > 0 ? (
-                <InfoBadge
-                  label={`${boardSnapshot.missingFieldIds.length} missing`}
-                  danger
-                  onPress={() =>
-                    modals.showBadgeInfo(
-                      'Missing Fields',
-                      `These allowlisted fields were not present in the board schema: ${boardSnapshot.missingFieldIds.join(', ')}`,
-                    )
-                  }
-                />
-              ) : null}
-            </View>
-          ) : null}
-
-          <TuneGroupGrid
-            title="Basic"
-            subtitle={activeProfile ? 'tap to adjust' : 'derived preview'}
+        <View style={styles.tuneView}>
+          <ScrollView
+            style={styles.formScroll}
+            contentContainerStyle={{ paddingBottom: insets.bottom + 96 }}
+            contentInsetAdjustmentBehavior="automatic"
+            stickyHeaderIndices={[0]}
           >
-            {basicSliders.map((item) => (
-              <BasicSliderItemCell
-                key={item.id}
-                item={item}
-                editable={activeProfile != null}
-                onPress={modals.openBasicSliderEditor}
-                onInfo={() =>
-                  modals.showBadgeInfo(
-                    item.label,
-                    `${item.info}\n\nSource: ${item.source}\nRange: ${item.min} to ${item.max}, step ${item.step}`,
-                  )
-                }
-                onResetFormula={() => modals.handleBasicSliderReset(item.id)}
-              />
-            ))}
-          </TuneGroupGrid>
-
-          {displayGroups.map((group) => (
-            <TuneGroupGrid
-              key={group.id}
-              title={group.title}
-              subtitle={
-                activeProfile
-                  ? `${group.fields.length} profile values${
-                      group.fields.some((field) => boardDiffByField.has(field.id))
-                        ? ` - ${
-                            group.fields.filter((field) => boardDiffByField.has(field.id)).length
-                          } changed`
-                        : ''
-                    }`
-                  : `${group.fields.length} read-only values`
-              }
+            <View
+              style={styles.previewPinned}
+              onLayout={(event) => setPreviewPinnedHeight(event.nativeEvent.layout.height)}
             >
-              {group.fields.map((field) => (
-                <TuneFieldCell
-                  key={field.id}
-                  field={field}
-                  savedValue={activeProfile?.fields[field.id]}
-                  boardValue={boardDiffByField.get(field.id)?.boardValue}
-                  profileValue={boardDiffByField.get(field.id)?.profileValue}
-                  dirty={Object.prototype.hasOwnProperty.call(dirtyFields, field.id)}
-                  boardChanged={boardDiffByField.has(field.id)}
-                  onPress={modals.openFieldEditor}
-                  onInfo={() => modals.showFieldInfo(field)}
-                  onRevert={() => revertField(field.id)}
-                  onAcceptBoard={() => acceptBoardField(field.id)}
-                />
+              <Canvas style={styles.previewGradient} pointerEvents="none">
+                <Rect x={0} y={0} width={width} height={previewPinnedHeight}>
+                  <LinearGradient
+                    start={vec(0, 0)}
+                    end={vec(0, previewPinnedHeight)}
+                    colors={previewGradientColors}
+                    positions={[0, 0.7, 1]}
+                  />
+                </Rect>
+              </Canvas>
+              <TunePreview
+                fields={profileFields ?? {}}
+                pitchInputDegrees={pitchInputDegrees}
+                pitchInputActive={pitchInputActive}
+                hillsEnabled={hillsEnabled}
+                hillHeightMeters={hillHeightMeters}
+                hillSpacingMeters={hillSpacingMeters}
+                advancedPhysics={advancedPhysics}
+                active={isFocused}
+                onHelp={() => setPreviewHelpVisible(true)}
+                hillLoadAmps={hillLoadAmps}
+                speedKmh={previewSpeedKmh}
+                groundToBoardAngleDegrees={groundToBoardAngleDegrees}
+              />
+            </View>
+            <View style={styles.content}>
+              <View style={styles.previewOptionsHeader}>
+                <Text style={styles.previewOptionsTitle}>Preview options</Text>
+              </View>
+              <TunePreviewScenarioControls
+                advancedPhysics={advancedPhysics}
+                onAdvancedPhysicsChange={setAdvancedPhysics}
+                hillsPreset={hillsPreset}
+                onHillsPresetChange={setHillsPreset}
+                hillHeightMeters={hillHeightMeters}
+                onHillHeightChange={setHillHeightMeters}
+                hillSpacingMeters={hillSpacingMeters}
+                onHillSpacingChange={setHillSpacingMeters}
+                hillsEnabled={hillsEnabled}
+                hillLoadAmps={hillLoadAmps}
+                pitchInputDegrees={pitchInputDegrees}
+                pitchInputActive={pitchInputActive}
+                speedKmh={previewSpeedKmh}
+                groundToBoardAngleDegrees={groundToBoardAngleDegrees}
+              />
+
+              {profileError ? (
+                <View style={styles.errorBanner}>
+                  <WarningCircleIcon size={16} color={theme.status.error.color} />
+                  <Text style={styles.errorBannerText}>{profileError}</Text>
+                </View>
+              ) : null}
+
+              {schemaMismatchFields ? (
+                <Pressable
+                  style={styles.schemaMismatchBar}
+                  onPress={() =>
+                    modals.showBadgeInfo(
+                      'Schema Mismatch',
+                      `Profile and board have different field sets.${
+                        schemaMismatchFields.profileOnly.length > 0
+                          ? `\n\nIn profile but not board: ${schemaMismatchFields.profileOnly.join(', ')}`
+                          : ''
+                      }${
+                        schemaMismatchFields.boardOnly.length > 0
+                          ? `\n\nIn board but not profile: ${schemaMismatchFields.boardOnly.join(', ')}`
+                          : ''
+                      }`,
+                    )
+                  }
+                >
+                  <WarningCircleIcon size={16} color={theme.palette.yellow.color} weight="fill" />
+                  <View style={styles.schemaMismatchTextWrap}>
+                    <Text style={styles.schemaMismatchTitle}>Schema mismatch</Text>
+                    <Text style={styles.schemaMismatchText}>
+                      {schemaMismatchFields.profileOnly.length > 0
+                        ? `${schemaMismatchFields.profileOnly.length} field${schemaMismatchFields.profileOnly.length === 1 ? '' : 's'} in profile not on board`
+                        : ''}
+                      {schemaMismatchFields.profileOnly.length > 0 &&
+                      schemaMismatchFields.boardOnly.length > 0
+                        ? ' · '
+                        : ''}
+                      {schemaMismatchFields.boardOnly.length > 0
+                        ? `${schemaMismatchFields.boardOnly.length} new field${schemaMismatchFields.boardOnly.length === 1 ? '' : 's'} on board`
+                        : ''}
+                    </Text>
+                  </View>
+                </Pressable>
+              ) : null}
+
+              {boardSnapshot ? (
+                <View style={styles.metaRow}>
+                  <View style={styles.metaBadges}>
+                    {boardSnapshot.fwVersion ? (
+                      <InfoBadge
+                        label={boardSnapshot.fwVersion}
+                        onPress={() =>
+                          modals.showBadgeInfo(
+                            'Firmware',
+                            'Firmware reported by the connected controller. This is useful diagnostic context, but the config decoder uses the board XML schema as the source of truth.',
+                          )
+                        }
+                      />
+                    ) : null}
+                    {boardSnapshot.refloatVersion ? (
+                      <InfoBadge
+                        label={boardSnapshot.refloatVersion}
+                        onPress={() =>
+                          modals.showBadgeInfo(
+                            'Refloat',
+                            'Refloat package version reported by the connected controller.',
+                          )
+                        }
+                      />
+                    ) : null}
+                    <InfoBadge
+                      label={`CAN ${boardSnapshot.canId}`}
+                      onPress={() =>
+                        modals.showBadgeInfo(
+                          'CAN ID',
+                          `Controller CAN ID ${boardSnapshot.canId}. Refloat config commands are forwarded to this controller before reading the schema and binary config.`,
+                        )
+                      }
+                    />
+                    <InfoBadge
+                      label={`${boardSnapshot.rawConfigLength} bytes`}
+                      onPress={() =>
+                        modals.showBadgeInfo(
+                          'Config Size',
+                          `${boardSnapshot.rawConfigLength} bytes is the size of the raw Refloat custom config payload read from the controller. The app decodes only known tune fields from that binary struct.`,
+                        )
+                      }
+                    />
+                    {boardSnapshot.missingFieldIds.length > 0 ? (
+                      <InfoBadge
+                        label={`${boardSnapshot.missingFieldIds.length} missing`}
+                        danger
+                        onPress={() =>
+                          modals.showBadgeInfo(
+                            'Missing Fields',
+                            `These allowlisted fields were not present in the board schema: ${boardSnapshot.missingFieldIds.join(', ')}`,
+                          )
+                        }
+                      />
+                    ) : null}
+                  </View>
+                  {boardConnected ? (
+                    <IconButton
+                      icon={ArrowsClockwiseIcon}
+                      onPress={() => void loadOnline()}
+                      loading={boardSnapshotStatus === 'loading'}
+                    />
+                  ) : null}
+                </View>
+              ) : null}
+
+              <TuneGroupGrid title="Basic">
+                {basicSliders.map((item) => (
+                  <BasicSliderItemCell
+                    key={item.id}
+                    item={item}
+                    editable={activeProfile != null}
+                    fullWidth={item.id === 'aggressiveness' || item.id === 'atrIntensity'}
+                    onPress={modals.openBasicSliderEditor}
+                    onResetFormula={() => modals.handleBasicSliderReset(item.id)}
+                  />
+                ))}
+              </TuneGroupGrid>
+
+              {displayGroups.map((group) => (
+                <TuneGroupGrid
+                  key={group.id}
+                  title={group.title}
+                  subtitle={
+                    activeProfile
+                      ? `${group.fields.length} profile values${
+                          group.fields.some((field) => boardDiffByField.has(field.id))
+                            ? ` - ${
+                                group.fields.filter((field) => boardDiffByField.has(field.id))
+                                  .length
+                              } changed`
+                            : ''
+                        }`
+                      : `${group.fields.length} read-only values`
+                  }
+                >
+                  {group.fields.map((field) => (
+                    <TuneFieldCell
+                      key={field.id}
+                      field={field}
+                      savedValue={activeProfile?.fields[field.id]}
+                      boardValue={boardDiffByField.get(field.id)?.boardValue}
+                      profileValue={boardDiffByField.get(field.id)?.profileValue}
+                      dirty={Object.prototype.hasOwnProperty.call(dirtyFields, field.id)}
+                      boardChanged={boardDiffByField.has(field.id)}
+                      onPress={modals.openFieldEditor}
+                      onRevert={() => revertField(field.id)}
+                      onAcceptBoard={() => acceptBoardField(field.id)}
+                    />
+                  ))}
+                </TuneGroupGrid>
               ))}
-            </TuneGroupGrid>
-          ))}
-        </ScrollView>
+            </View>
+          </ScrollView>
+        </View>
       ) : null}
 
-      {hasTuneView ? (
+      {hasTuneView && !modals.editor ? (
         <TuneSyncBar
           state={syncBarState}
           onSave={handleSave}
@@ -371,9 +471,17 @@ export default function TuneScreen() {
           onUpdateTune={acceptAllBoardValues}
           onDiscard={discardAllEdits}
           onRetryConfig={() => void retryBoardSnapshot()}
-          bottomOffset={insets.bottom + 16}
+          bottomOffset={Math.max(insets.bottom, 24) + 16}
         />
       ) : null}
+
+      <InfoModal
+        visible={previewHelpVisible}
+        variant="warning"
+        title="Work in progress"
+        message={`Tune Editor is a work in progress and is the only place in this app that can change your board's settings.\n\nTune Preview is not a real-world simulation and will never perfectly represent how your board will behave while riding. It is only a comparison tool to help you understand tune behavior and differences between settings.`}
+        onDismiss={() => setPreviewHelpVisible(false)}
+      />
 
       <InfoModal
         visible={modals.infoModal != null}
@@ -388,27 +496,37 @@ export default function TuneScreen() {
         onApply={modals.handleEditorApply}
       />
 
-      <TextPromptModal
+      <TuneProfileMetadataModal
         visible={modals.createModalOpen}
         title="New Profile"
-        placeholder="Profile name"
-        initialValue=""
         confirmLabel="Create"
-        onConfirm={(name) => {
-          void modals.storeCreateProfile(name, modals.createCloneFromId)
+        initialValue={{
+          name: '',
+          icon: modals.defaultTuneIcon as TuneProfileIconId,
+          color: modals.defaultTuneColor as TuneProfileColorId,
+        }}
+        onConfirm={({ name, icon, color }) => {
+          void modals.storeCreateProfile(name, icon, color, modals.createCloneFromId)
           modals.setCreateModalOpen(false)
         }}
         onDismiss={() => modals.setCreateModalOpen(false)}
       />
 
-      <RenameProfileModal
-        profile={modals.renameModalProfile}
-        onRename={(name) => {
-          if (modals.renameModalProfile)
-            void modals.storeRenameProfile(modals.renameModalProfile.id, name)
-          modals.setRenameModalProfile(null)
+      <TuneProfileMetadataModal
+        visible={modals.metadataModalProfile != null}
+        title="Edit Profile"
+        confirmLabel="Save"
+        initialValue={{
+          name: modals.metadataModalProfile?.name ?? '',
+          icon: modals.metadataModalProfile?.icon as TuneProfileIconId | undefined,
+          color: modals.metadataModalProfile?.color as TuneProfileColorId | undefined,
         }}
-        onDismiss={() => modals.setRenameModalProfile(null)}
+        onConfirm={({ name, icon, color }) => {
+          if (modals.metadataModalProfile)
+            void modals.storeRenameProfile(modals.metadataModalProfile.id, name, icon, color)
+          modals.setMetadataModalProfile(null)
+        }}
+        onDismiss={() => modals.setMetadataModalProfile(null)}
       />
 
       <BoardPickerModal
@@ -451,8 +569,8 @@ export default function TuneScreen() {
 interface BasicSliderItemCellProps {
   item: BasicSliderItem
   editable: boolean
+  fullWidth?: boolean
   onPress: (sliderId: string, ref: { current: View | null }) => void
-  onInfo: () => void
   onResetFormula: () => void
 }
 
@@ -460,7 +578,6 @@ function BasicSliderItemCell({
   item,
   editable,
   onPress,
-  onInfo,
   onResetFormula,
 }: BasicSliderItemCellProps) {
   const cellRef = useRef<View | null>(null)
@@ -468,9 +585,10 @@ function BasicSliderItemCell({
     <BasicSliderCell
       ref={cellRef}
       item={item}
+      icon={basicSliderIcon(item.id)}
+      color={basicSliderColor(item.id)}
       editable={editable}
       onPress={() => onPress(item.id, cellRef)}
-      onInfo={onInfo}
       onResetFormula={onResetFormula}
     />
   )
@@ -483,8 +601,7 @@ interface TuneFieldCellProps {
   profileValue: TuneProfileFieldValue | undefined
   dirty: boolean
   boardChanged: boolean
-  onPress: (field: RefloatConfigField, ref: { current: View | null }) => void
-  onInfo: () => void
+  onPress: (field: RefloatConfigField, ref: { current: View | null }, color: string) => void
   onRevert: () => void
   onAcceptBoard: () => void
 }
@@ -497,11 +614,11 @@ function TuneFieldCell({
   dirty,
   boardChanged,
   onPress,
-  onInfo,
   onRevert,
   onAcceptBoard,
 }: TuneFieldCellProps) {
   const cellRef = useRef<View | null>(null)
+  const color = boardChanged ? theme.palette.green.color : theme.palette.sky.color
   return (
     <TuneConfigCell
       ref={cellRef}
@@ -511,29 +628,10 @@ function TuneFieldCell({
       profileValue={profileValue}
       dirty={dirty}
       boardChanged={boardChanged}
-      onPress={() => onPress(field, cellRef)}
-      onInfo={onInfo}
+      color={color}
+      onPress={() => onPress(field, cellRef, color)}
       onRevert={onRevert}
       onAcceptBoard={onAcceptBoard}
-    />
-  )
-}
-
-interface RenameProfileModalProps {
-  profile: TuneProfile | null
-  onRename: (name: string) => void
-  onDismiss: () => void
-}
-
-function RenameProfileModal({ profile, onRename, onDismiss }: RenameProfileModalProps) {
-  return (
-    <TextPromptModal
-      visible={profile != null}
-      title="Rename Profile"
-      initialValue={profile?.name ?? ''}
-      confirmLabel="Rename"
-      onConfirm={onRename}
-      onDismiss={onDismiss}
     />
   )
 }
@@ -547,6 +645,44 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
   },
+  headerTitle: {
+    color: theme.palette.slate.textPrimary,
+    fontSize: 17,
+    fontWeight: '900',
+  },
+  headerPills: {
+    marginHorizontal: 8,
+  },
+  headerPillsContent: {
+    minWidth: 0,
+    paddingHorizontal: 2,
+  },
+  tuneView: { flex: 1 },
+  previewPinned: {
+    paddingTop: 0,
+    paddingBottom: 0,
+    gap: 5,
+    overflow: 'hidden',
+    zIndex: 1,
+  },
+  previewGradient: {
+    position: 'absolute',
+    inset: 0,
+  },
+  previewOptionsHeader: {
+    paddingHorizontal: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  previewOptionsTitle: {
+    color: theme.palette.slate.textMuted,
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  formScroll: { flex: 1 },
   content: {
     padding: 16,
     gap: 16,
@@ -606,6 +742,14 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   metaRow: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  metaBadges: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     gap: 8,
     flexWrap: 'wrap',

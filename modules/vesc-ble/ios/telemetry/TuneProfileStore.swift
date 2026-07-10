@@ -71,6 +71,8 @@ struct TuneProfileStore {
         id TEXT NOT NULL PRIMARY KEY,
         board_id TEXT NOT NULL,
         name TEXT NOT NULL,
+        icon TEXT NOT NULL DEFAULT 'sliders-horizontal',
+        color TEXT NOT NULL DEFAULT 'purple',
         fields_json TEXT NOT NULL,
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL
@@ -126,17 +128,23 @@ struct TuneProfileStore {
 
   /// Create a Tune Profile plus its first Tune History entry.
   /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/AppDataRepository.kt `createProfile`
-  func createProfile(boardId: String, name: String, fields: [String: Any]) throws -> [String: Any?] {
+  func createProfile(
+    boardId: String,
+    name: String,
+    icon: String = "sliders-horizontal",
+    color: String = "purple",
+    fields: [String: Any]
+  ) throws -> [String: Any?] {
     let now = Self.nowMs()
     let fieldsJson = Self.encodeFields(fields)
     let id = Self.newId()
     return try inWrite { db in
       try db.execute(
         sql: """
-          INSERT INTO tune_profiles (id, board_id, name, fields_json, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?)
+          INSERT INTO tune_profiles (id, board_id, name, icon, color, fields_json, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
           """,
-        arguments: [id, boardId, name, fieldsJson, now, now]
+        arguments: [id, boardId, name, icon, color, fieldsJson, now, now]
       )
       try Self.insertHistory(db, profileId: id, fieldsJson: fieldsJson, createdAt: now)
       return try Self.requireProfileMap(db, id)
@@ -144,12 +152,17 @@ struct TuneProfileStore {
   }
 
   /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/AppDataRepository.kt `renameProfile`
-  func renameProfile(profileId: String, name: String) throws -> [String: Any?] {
+  func renameProfile(
+    profileId: String,
+    name: String,
+    icon: String = "sliders-horizontal",
+    color: String = "purple"
+  ) throws -> [String: Any?] {
     let now = Self.nowMs()
     return try inWrite { db in
       try db.execute(
-        sql: "UPDATE tune_profiles SET name = ?, updated_at = ? WHERE id = ?",
-        arguments: [name, now, profileId]
+        sql: "UPDATE tune_profiles SET name = ?, icon = ?, color = ?, updated_at = ? WHERE id = ?",
+        arguments: [name, icon, color, now, profileId]
       )
       guard let map = try Self.fetchProfileMap(db, profileId) else {
         throw TuneProfileError.profileNotFound(profileId)
@@ -219,12 +232,14 @@ struct TuneProfileStore {
         throw TuneProfileError.sourceProfileNotFound(profileId)
       }
       let fieldsJson: String = source["fields_json"]
+      let icon: String = source["icon"]
+      let color: String = source["color"]
       try db.execute(
         sql: """
-          INSERT INTO tune_profiles (id, board_id, name, fields_json, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?)
+          INSERT INTO tune_profiles (id, board_id, name, icon, color, fields_json, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
           """,
-        arguments: [copyId, targetBoardId, newName, fieldsJson, now, now]
+        arguments: [copyId, targetBoardId, newName, icon, color, fieldsJson, now, now]
       )
       try Self.insertHistory(db, profileId: copyId, fieldsJson: fieldsJson, createdAt: now)
       return try Self.requireProfileMap(db, copyId)
@@ -318,6 +333,8 @@ struct TuneProfileStore {
       "id": row["id"] as String,
       "boardId": row["board_id"] as String,
       "name": row["name"] as String,
+      "icon": row["icon"] as String,
+      "color": row["color"] as String,
       "fields": decodeFields(row["fields_json"]),
       "createdAt": row["created_at"] as Int64,
       "updatedAt": row["updated_at"] as Int64,

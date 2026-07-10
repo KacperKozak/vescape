@@ -112,6 +112,14 @@ _Avoid_: Tune preset, config file, settings backup
 An immutable snapshot of a Tune Profile's field values captured immediately before an explicit save, enabling rollback to any prior state.
 _Avoid_: Sync log, change event, audit trail
 
+**Tune Preview**:
+A comparative read-only visualization of board-angle response derived from a Tune Profile, synthetic rider-load and terrain inputs, and an idealized board model without motor-power, traction, or nosedive limits.
+_Avoid_: Board simulator, ride simulator, physics simulation
+
+**Pitch Input**:
+A Tune Preview input representing a bounded pitch rate applied to Board while the gesture is held. Its magnitude controls how quickly angle error is added; it never constrains Board angle. Target, controller current, and speed remain simulation outputs.
+_Avoid_: Deck disturbance, rider lean, foot pressure, throttle, acceleration command
+
 **Alert Rule**:
 A user-defined telemetry threshold that can trigger board-riding feedback during a live connection. A rule with only a threshold fires a one-shot alert; a rule with both threshold and thresholdMax fires a geiger-style progressive alert that accelerates with range depth.
 _Avoid_: Alarm, notification
@@ -188,6 +196,8 @@ _Avoid_: Position update, presence ping, location share, group telemetry
 - A **Tune Snapshot** belongs to the currently connected **Board** and is read-only.
 - A **Tune Profile** belongs to a **Board** and stores semantic field values independently of firmware schema.
 - A **Tune History Entry** captures the previous state of a **Tune Profile** before each explicit save.
+- A **Tune Preview** derives an idealized board-angle response from one **Tune Profile** and never predicts whether the **Board** can physically achieve it.
+- A **Pitch Input** adds pitch error over time without directly commanding speed or motor power.
 - An **Alert Rule** evaluates against live **Telemetry Samples**.
 - An **Alert Message Template** belongs to one **Alert Rule**.
 - A **Watch Mirror** receives **Watch Frames** and **Watch Alerts** from the phone and never sends data back; it is not a **Board**, a **Board Session**, or a source of **Telemetry Samples**.

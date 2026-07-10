@@ -627,6 +627,8 @@ export interface TuneProfile {
   id: string
   boardId: string
   name: string
+  icon: string
+  color: string
   fields: Record<string, TuneProfileFieldValue>
   createdAt: number
   updatedAt: number
@@ -994,9 +996,11 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
   createProfile(
     boardId: string,
     name: string,
+    icon: string,
+    color: string,
     fields: Record<string, TuneProfileFieldValue>,
   ): Promise<TuneProfile>
-  renameProfile(profileId: string, name: string): Promise<TuneProfile>
+  renameProfile(profileId: string, name: string, icon: string, color: string): Promise<TuneProfile>
   deleteProfile(profileId: string): Promise<void>
   getProfileHistory(profileId: string): Promise<TuneHistoryEntry[]>
   rollbackProfile(profileId: string, historyEntryId: number): Promise<TuneProfile>
@@ -1445,13 +1449,20 @@ export async function getTuneProfile(profileId: string): Promise<TuneProfile | n
 export async function createProfile(
   boardId: string,
   name: string,
+  icon: string,
+  color: string,
   fields: Record<string, TuneProfileFieldValue>,
 ): Promise<TuneProfile> {
-  return native.createProfile(boardId, name, fields)
+  return native.createProfile(boardId, name, icon, color, fields)
 }
 
-export async function renameProfile(profileId: string, name: string): Promise<TuneProfile> {
-  return native.renameProfile(profileId, name)
+export async function renameProfile(
+  profileId: string,
+  name: string,
+  icon: string,
+  color: string,
+): Promise<TuneProfile> {
+  return native.renameProfile(profileId, name, icon, color)
 }
 
 export async function deleteProfile(profileId: string): Promise<void> {

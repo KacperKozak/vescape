@@ -21,6 +21,7 @@ import { useDerivedValue, type SharedValue } from 'react-native-reanimated'
 
 import { type DualGaugeAlert } from '@/components/ui/charts/DualGauge'
 import { interaction, theme } from '@/constants/theme'
+import { getLinearGaugeValueSlot } from '@/lib/charts/linearGaugeLayout'
 
 const TRACK_COLOR = theme.palette.slate.border
 const LINE_THICK = 2
@@ -317,10 +318,7 @@ export function LinearGauge({
   // The value rides just left of the head, its top aligned with the head marker's top.
   // Below 20% there's no room on the left, so it flips to the right of the head.
   const headX = width * fraction
-  const flipValue = fraction < 0.2
-  const valueSlotW = flipValue
-    ? Math.max(0, width - headX - VALUE_GAP)
-    : Math.max(0, headX - VALUE_GAP)
+  const valueSlot = getLinearGaugeValueSlot({ width, headX, compact, gap: VALUE_GAP })
   const valueSlotTop = height - LINE_THICK - height * MARKER_RATIO
 
   const content = (
@@ -339,17 +337,7 @@ export function LinearGauge({
           />
         ) : null}
         {value != null && width > 0 ? (
-          <View
-            style={[
-              styles.valueSlot,
-              { width: valueSlotW, top: valueSlotTop },
-              flipValue && {
-                left: headX + VALUE_GAP,
-                alignItems: 'flex-start',
-              },
-            ]}
-            pointerEvents="none"
-          >
+          <View style={[styles.valueSlot, valueSlot, { top: valueSlotTop }]} pointerEvents="none">
             <Text
               style={[styles.value, compact && styles.valueCompact, { color }]}
               numberOfLines={1}

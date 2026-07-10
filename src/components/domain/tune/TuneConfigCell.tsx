@@ -1,12 +1,13 @@
 import { forwardRef } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/ui/base/Text'
-import { ArrowCounterClockwiseIcon, CheckIcon, InfoIcon } from 'phosphor-react-native'
+import { ArrowCounterClockwiseIcon, CheckIcon } from 'phosphor-react-native'
 import type { RefloatConfigField, TuneProfileFieldValue } from 'vesc-ble'
 
 import { isDisplayableFieldValue } from '@/lib/tune/fieldValues'
 import { formatProfileValue } from '@/lib/tune/sliderDefinitions'
 import { formatTuneValue } from '@/lib/tune/fields'
+import { TuneTileFill } from '@/components/ui/tune/TuneTileFill'
 import { theme } from '@/constants/theme'
 
 interface TuneConfigCellProps {
@@ -16,8 +17,8 @@ interface TuneConfigCellProps {
   profileValue: TuneProfileFieldValue | undefined
   dirty: boolean
   boardChanged: boolean
+  color: string
   onPress: () => void
-  onInfo: () => void
   onRevert: () => void
   onAcceptBoard: () => void
 }
@@ -30,58 +31,75 @@ export const TuneConfigCell = forwardRef<View, TuneConfigCellProps>(function Tun
     profileValue,
     dirty,
     boardChanged,
+    color,
     onPress,
-    onInfo,
     onRevert,
     onAcceptBoard,
   },
   ref,
 ) {
+  const canAcceptBoard = boardChanged && isDisplayableFieldValue(boardValue)
+  const hasActions = dirty || canAcceptBoard
+  const progressFraction =
+    typeof field.value === 'number' &&
+    Number.isFinite(field.value) &&
+    field.min != null &&
+    field.max != null &&
+    Number.isFinite(field.min) &&
+    Number.isFinite(field.max) &&
+    field.max > field.min
+      ? (field.value - field.min) / (field.max - field.min)
+      : null
+
   return (
     <View ref={ref} style={styles.cellWrapper}>
       <Pressable
         style={[styles.cell, dirty && styles.cellDirty, boardChanged && styles.cellBoardChanged]}
         onPress={onPress}
       >
-        <Pressable style={styles.cellInfoButton} onPress={onInfo}>
-          <InfoIcon size={13} color={theme.palette.slate.textDim} weight="bold" />
-        </Pressable>
+        <TuneTileFill fraction={progressFraction} color={color} />
         {dirty ? (
           <Pressable style={styles.cellRevertButton} onPress={onRevert}>
             <ArrowCounterClockwiseIcon size={13} color={theme.palette.sky.text} weight="bold" />
           </Pressable>
         ) : null}
-        {boardChanged && isDisplayableFieldValue(boardValue) ? (
-          <Pressable style={styles.cellAcceptButton} onPress={onAcceptBoard}>
+        {canAcceptBoard ? (
+          <Pressable
+            style={[styles.cellAcceptButton, dirty && styles.cellAcceptButtonStacked]}
+            onPress={onAcceptBoard}
+          >
             <CheckIcon size={13} color={theme.palette.green.text} weight="bold" />
           </Pressable>
         ) : null}
+        <View style={styles.cellHeaderRow}>
+          <Text
+            style={[styles.cellLabel, hasActions && styles.cellLabelWithAction]}
+            numberOfLines={2}
+          >
+            {field.label}
+          </Text>
+        </View>
         <Text style={styles.cellValue} numberOfLines={1} adjustsFontSizeToFit selectable>
           {formatTuneValue(field.value)}
         </Text>
         {dirty && isDisplayableFieldValue(savedValue) ? (
-          <Text style={styles.cellOldValue} numberOfLines={1}>
+          <Text style={[styles.cellOldValue, styles.cellTextWithActions]} numberOfLines={1}>
             was {formatTuneValue(savedValue)}
           </Text>
         ) : null}
         {boardChanged ? (
-          <Text style={styles.cellProfileValue} numberOfLines={1}>
+          <Text
+            style={[styles.cellProfileValue, hasActions && styles.cellTextWithActions]}
+            numberOfLines={1}
+          >
             profile {formatProfileValue(profileValue)}
           </Text>
         ) : null}
-        {boardChanged && isDisplayableFieldValue(boardValue) ? (
-          <Text style={styles.cellBoardValue} numberOfLines={1}>
+        {canAcceptBoard ? (
+          <Text style={[styles.cellBoardValue, styles.cellTextWithActions]} numberOfLines={1}>
             board {formatTuneValue(boardValue)}
           </Text>
         ) : null}
-        {field.unit ? (
-          <Text style={styles.cellUnit} numberOfLines={1} selectable>
-            {field.unit}
-          </Text>
-        ) : null}
-        <Text style={styles.cellLabel} numberOfLines={2}>
-          {field.label}
-        </Text>
       </Pressable>
     </View>
   )
@@ -89,94 +107,100 @@ export const TuneConfigCell = forwardRef<View, TuneConfigCellProps>(function Tun
 
 const styles = StyleSheet.create({
   cellWrapper: {
-    width: '50%',
+    flex: 1,
   },
   cell: {
-    minHeight: 92,
-    paddingVertical: 10,
-    paddingHorizontal: 6,
+    minHeight: 82,
+    paddingTop: 7,
+    paddingBottom: 10,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: theme.palette.slate.border,
+    backgroundColor: theme.palette.slate.surface,
+    overflow: 'hidden',
   },
   cellDirty: {
     backgroundColor: theme.palette.sky.bg,
-    borderRadius: 8,
+    borderColor: theme.palette.sky.border,
   },
   cellBoardChanged: {
     backgroundColor: theme.palette.green.bg,
-    borderRadius: 8,
-  },
-  cellInfoButton: {
-    position: 'absolute',
-    top: 9,
-    right: 6,
-    zIndex: 1,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: theme.palette.green.border,
   },
   cellRevertButton: {
     position: 'absolute',
-    top: 37,
-    right: 6,
+    top: 7,
+    right: 8,
     zIndex: 1,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: theme.palette.sky.bg,
   },
   cellAcceptButton: {
     position: 'absolute',
-    top: 65,
-    right: 6,
+    top: 7,
+    right: 8,
     zIndex: 1,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: theme.palette.green.bg,
   },
+  cellAcceptButtonStacked: {
+    top: 39,
+  },
+  cellHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
   cellValue: {
+    position: 'absolute',
+    right: 10,
+    bottom: 4,
     color: theme.palette.slate.textPrimary,
-    fontSize: 18,
-    fontWeight: '700',
-    paddingRight: 26,
+    fontSize: 22,
+    fontWeight: '500',
     fontVariant: ['tabular-nums'],
+    maxWidth: '58%',
+    textAlign: 'right',
+  },
+  cellTextWithActions: {
+    paddingRight: 26,
   },
   cellOldValue: {
     color: theme.palette.sky.text,
     fontSize: 10,
     fontWeight: '800',
     marginTop: 1,
-    paddingRight: 26,
   },
   cellProfileValue: {
     color: theme.palette.slate.textSecondary,
     fontSize: 10,
     fontWeight: '800',
     marginTop: 1,
-    paddingRight: 26,
   },
   cellBoardValue: {
     color: theme.palette.green.text,
     fontSize: 10,
     fontWeight: '900',
     marginTop: 1,
-    paddingRight: 26,
-  },
-  cellUnit: {
-    color: theme.palette.slate.textSecondary,
-    fontSize: 11,
-    fontWeight: '700',
-    marginTop: 1,
   },
   cellLabel: {
-    color: theme.palette.slate.textMuted,
-    fontSize: 11,
-    fontWeight: '600',
-    marginTop: 3,
+    color: theme.palette.slate.textPrimary,
+    fontSize: 13,
+    fontWeight: '800',
+    flex: 1,
+    minWidth: 0,
+  },
+  cellLabelWithAction: {
+    paddingRight: 26,
   },
 })

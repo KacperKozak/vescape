@@ -7,10 +7,15 @@ import { theme } from '@/constants/theme'
 
 interface SelectWidgetProps {
   icon: Icon
+  selectIcon?: Icon
   label: string
   value: string
   description?: string
   accent?: string
+  selectAccent?: string
+  selectBackground?: string
+  selectBorder?: string
+  selectOpen?: boolean
   disabled?: boolean
   showSelect?: boolean
   onPress: () => void
@@ -20,15 +25,30 @@ interface SelectWidgetProps {
 /** A compact 1×4 select-like widget: title + description with a current value pill. */
 export function SelectWidget({
   icon: IconComponent,
+  selectIcon: SelectIconComponent,
   label,
   value,
   description,
   accent = theme.palette.slate.textSecondary,
+  selectAccent,
+  selectBackground,
+  selectBorder,
+  selectOpen = false,
   disabled,
   showSelect = true,
   onPress,
   onSelectPress,
 }: SelectWidgetProps) {
+  const selectTextColor = selectAccent ?? theme.palette.slate.textSecondary
+  const selectControlColor = selectAccent ?? theme.palette.slate.textMuted
+  const valuePillStyle =
+    selectBackground || selectBorder
+      ? {
+          backgroundColor: selectBackground ?? theme.palette.slate.surfaceDeep,
+          borderColor: selectBorder ?? selectAccent ?? theme.palette.slate.border,
+        }
+      : null
+
   return (
     <Pressable
       style={({ pressed }) => [
@@ -55,7 +75,7 @@ export function SelectWidget({
         </View>
         {showSelect ? (
           <Pressable
-            style={styles.valuePill}
+            style={[styles.valuePill, valuePillStyle]}
             disabled={disabled || !onSelectPress}
             onPress={(event) => {
               event.stopPropagation()
@@ -64,10 +84,15 @@ export function SelectWidget({
             accessibilityRole="button"
             accessibilityLabel={`${label} options`}
           >
-            <Text style={styles.value} numberOfLines={1}>
+            {SelectIconComponent ? (
+              <SelectIconComponent size={17} color={selectControlColor} weight="duotone" />
+            ) : null}
+            <Text style={[styles.value, { color: selectTextColor }]} numberOfLines={1}>
               {value}
             </Text>
-            <CaretDownIcon size={13} color={theme.palette.slate.textMuted} weight="bold" />
+            <View style={[styles.caret, selectOpen && styles.caretOpen]}>
+              <CaretDownIcon size={15} color={selectControlColor} weight="bold" />
+            </View>
           </Pressable>
         ) : null}
       </View>
@@ -94,6 +119,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 10,
   },
   textColumn: {
@@ -108,11 +134,12 @@ const styles = StyleSheet.create({
   },
   valuePill: {
     maxWidth: '48%',
-    minHeight: 30,
+    minHeight: 36,
+    flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
+    gap: 8,
+    paddingHorizontal: 13,
     borderRadius: 999,
     borderWidth: 1,
     borderColor: theme.palette.slate.border,
@@ -121,8 +148,14 @@ const styles = StyleSheet.create({
   value: {
     flexShrink: 1,
     color: theme.palette.slate.textSecondary,
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
+  },
+  caret: {
+    transform: [{ rotate: '0deg' }],
+  },
+  caretOpen: {
+    transform: [{ rotate: '180deg' }],
   },
   description: {
     color: theme.palette.slate.textMuted,

@@ -162,8 +162,10 @@ internal val REFLOAT_TUNE_GROUPS = listOf(
     title = "Tiltback",
     fields = listOf(
       RefloatTuneFieldDefinition("tiltback_constant", "Constant Tiltback", "deg"),
+      RefloatTuneFieldDefinition("tiltback_constant_erpm", "Constant Tiltback ERPM", "ERPM"),
       RefloatTuneFieldDefinition("tiltback_variable", "Variable Tiltback Rate", "deg/1000 ERPM"),
       RefloatTuneFieldDefinition("tiltback_variable_max", "Variable Tiltback Target", "deg"),
+      RefloatTuneFieldDefinition("tiltback_variable_erpm", "Variable Tiltback Start ERPM", "ERPM"),
     ),
   ),
 )

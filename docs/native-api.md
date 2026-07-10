@@ -216,8 +216,8 @@ Presets: beep, urgent, notify (single); tick, tick_hard, gamma (geiger)
 | ----------------------------------------------------- | ---------------------------------------------------------- |
 | `getTuneProfiles(boardId)`                            | `TuneProfile[]`                                            |
 | `getTuneProfile(profileId)`                           | `TuneProfile?`                                             |
-| `createProfile(boardId,name,fields)`                  | `TuneProfile`                                              |
-| `renameProfile(profileId,name)`                       | `TuneProfile`                                              |
+| `createProfile(boardId,name,icon,color,fields)`       | `TuneProfile`                                              |
+| `renameProfile(profileId,name,icon,color)`            | `TuneProfile`                                              |
 | `deleteProfile(profileId)`                            | void. Fails if last profile for board                      |
 | `saveProfile(profileId,fields)`                       | `TuneProfile`. Creates history entry before save           |
 | `getProfileHistory(profileId)`                        | `TuneHistoryEntry[]` newest-first                          |
@@ -229,7 +229,7 @@ Presets: beep, urgent, notify (single); tick, tick_hard, gamma (geiger)
 ### TuneProfile shape
 
 ```ts
-{ id, boardId, name, fields: Record<string, number|boolean|string|null>, createdAt, updatedAt }
+{ id, boardId, name, icon, color, fields: Record<string, number|boolean|string|null>, createdAt, updatedAt }
 ```
 
 ### RefloatConfigSnapshot shape
