@@ -836,7 +836,7 @@ internal final class BoardSessionController: VescGattListener {
   }
 
   private func handleFwVersion(_ payload: [UInt8]) {
-    guard let firmware = parseFwVersion(payload), let session, let config else { return }
+    guard let firmware = parseFwVersion(payload: payload), let session, let config else { return }
     updateLinkIntegrity(session.observeFirmware(expected: config.linkIdentity(), firmware: firmware))
   }
 
