@@ -54,6 +54,7 @@ export function useBoardLink(bleId: string | null): UseBoardLink {
       .then(() => probeBoardLink(bleId))
       .then((result) => {
         if (run !== runRef.current) return
+        console.log('[board-link] probe result', JSON.stringify(result))
         if (result.candidates.length === 0) {
           setPhase('failed')
           return
@@ -62,8 +63,9 @@ export function useBoardLink(bleId: string | null): UseBoardLink {
         setSelected(pickDefaultCandidate(result.candidates))
         setPhase('picking')
       })
-      .catch(() => {
+      .catch((err) => {
         if (run !== runRef.current) return
+        console.log('[board-link] probe failed', err)
         setCandidates([])
         setSelected(null)
         setPhase('failed')
@@ -71,7 +73,15 @@ export function useBoardLink(bleId: string | null): UseBoardLink {
   }, [bleId])
 
   useEffect(() => {
-    const subscription = addBoardProbeProgressListener((event) => setProgress(event))
+    const subscription = addBoardProbeProgressListener((event) => {
+      console.log('[board-link] progress', JSON.stringify(event))
+      // Terminal events are not stored: the terminal render comes atomically
+      // from the probe promise (phase + candidates). Storing `completed` here
+      // would flash an all-done timeline with placeholder captions for a frame
+      // before the real result lands.
+      if (event.step === 'completed' || event.step === 'failed') return
+      setProgress(event)
+    })
     return () => subscription.remove()
   }, [])
 
@@ -92,6 +102,8 @@ export function useBoardLink(bleId: string | null): UseBoardLink {
     runProbe()
   }, [runProbe])
 
+  // Omit unknown identity fields entirely: the native bridge rejects maps
+  // holding `undefined` values ("Cannot convert ... Value is undefined").
   const selectedLink: BoardLink | null =
     bleId != null && selected != null
       ? {
@@ -99,9 +111,13 @@ export function useBoardLink(bleId: string | null): UseBoardLink {
           bleId,
           transport: selected.transport,
           hasBms: selected.hasBms,
-          vescFirmwareVersion: selected.vescFirmwareVersion ?? undefined,
-          refloatVersion: selected.refloatVersion ?? undefined,
-          refloatBaseVersion: selected.refloatBaseVersion ?? undefined,
+          ...(selected.vescFirmwareVersion != null && {
+            vescFirmwareVersion: selected.vescFirmwareVersion,
+          }),
+          ...(selected.refloatVersion != null && { refloatVersion: selected.refloatVersion }),
+          ...(selected.refloatBaseVersion != null && {
+            refloatBaseVersion: selected.refloatBaseVersion,
+          }),
         }
       : null
 

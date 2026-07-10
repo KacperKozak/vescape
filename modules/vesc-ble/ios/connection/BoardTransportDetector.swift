@@ -75,11 +75,19 @@ internal final class BoardTransportDetector: VescGattListener {
 
   private func elapsed() -> Int64 { nowMs() - startMs }
 
-  /// Surface the coarse, monotonic probe phase to JS. Per-transport detail (which transport,
-  /// telemetry/BMS replies) is intentionally not reported here — the UI reads resolved transports
-  /// from the returned candidates, not from progress.
-  private func emitProgress(_ step: String) {
-    onProgress(["step": step, "elapsedMs": elapsed()])
+  /// Surface live probe milestones to JS, named for what the probe is doing right now:
+  /// `connecting` → `handshake` (service discovery) → `pinging` (CAN scan) → per candidate
+  /// `probing` (waiting for telemetry proof) → `bms` (transport confirmed, waiting for a BMS
+  /// answer) → `identity` (BMS answered, waiting for the Refloat info reply). `transport` names
+  /// the candidate being probed and `canIds` the CAN scan responders. The UI still reads final
+  /// facts from the returned candidates; full detail stays in Diagnostic Events.
+  private func emitProgress(_ step: String, transport: BoardTransport? = nil, withCanIds: Bool = false) {
+    var payload: [String: Any?] = ["step": step, "elapsedMs": elapsed()]
+    if let transport { payload["transport"] = transport.bridgeValue }
+    if withCanIds { payload["canIds"] = Array(responders) }
+    NSLog("[VescDetect] progress step=%@ transport=%@ canIds=%@ elapsed=%dms",
+          step, String(describing: transport), String(describing: responders), Int(elapsed()))
+    onProgress(payload)
   }
 
   func start() {
@@ -118,7 +126,10 @@ internal final class BoardTransportDetector: VescGattListener {
       ["message": "BLE connected", "ble_id": bleId, "elapsed_ms": elapsed()]
     )
   }
-  func onGattSubscribing() {}
+  func onGattSubscribing() {
+    if finished || phase != .connecting { return }
+    emitProgress("handshake")
+  }
 
   func onGattReady() {
     if finished || phase != .connecting { return }
@@ -127,7 +138,7 @@ internal final class BoardTransportDetector: VescGattListener {
       "board_probe_service_ready",
       ["message": "VESC service ready", "elapsed_ms": elapsed()]
     )
-    emitProgress("handshake")
+    emitProgress("pinging")
     phase = .pinging
     after(PROBE_HANDSHAKE_FW_DELAY_MS) { [weak self] in
       guard let self, !self.finished else { return }
@@ -192,7 +203,8 @@ internal final class BoardTransportDetector: VescGattListener {
       // belongs to the current candidate.
       if phase == .probing, current != nil { markRefloatInfo(payload) }
     case COMM_FW_VERSION:
-      if phase == .probing, current == .direct { markFwVersion(payload) }
+      // FW replies also come back bare over CAN, like custom app data above.
+      if phase == .probing, current != nil { markFwVersion(payload) }
     case COMM_BMS_GET_VALUES:
       // Direct smart-BMS reply.
       if phase == .probing, current != nil, parseBmsValues(payload, packetAt: nowMs()) != nil { markBms() }
@@ -218,7 +230,6 @@ internal final class BoardTransportDetector: VescGattListener {
   private func beginProbing() {
     if finished { return }
     phase = .probing
-    emitProgress("probing")
     probeQueue = TransportDetection.candidatesToProbe(Array(responders))
     probeNext()
   }
@@ -237,6 +248,7 @@ internal final class BoardTransportDetector: VescGattListener {
     }
     let transport = probeQueue.removeFirst()
     current = transport
+    emitProgress("probing", transport: transport, withCanIds: true)
     recordDiagnostic(
       "board_probe_transport_probe_started",
       [
@@ -274,15 +286,21 @@ internal final class BoardTransportDetector: VescGattListener {
     }
   }
 
-  /// Telemetry sample proves the transport works.
+  /// Telemetry sample proves the transport works; the window now waits on BMS —
+  /// unless the BMS reply already raced in first, then it waits on identity.
   private func markConfirmed() {
     if currentConfirmed { return }
     currentConfirmed = true
+    emitProgress(currentHasBms ? "identity" : "bms", transport: current, withCanIds: true)
   }
 
-  /// A smart-BMS answered on the current transport.
+  /// A smart-BMS answered on the current transport; the window now waits on identity.
+  /// Burst replies race, so only advance once telemetry confirmed — an early BMS
+  /// reply is recorded and reported when the confirm lands.
   private func markBms() {
+    if currentHasBms { return }
     currentHasBms = true
+    if currentConfirmed { emitProgress("identity", transport: current, withCanIds: true) }
   }
 
   private func markFwVersion(_ payload: [UInt8]) {

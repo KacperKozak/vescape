@@ -72,12 +72,20 @@ internal class BoardTransportDetector(
   private fun elapsed(): Long = nowMs() - startMs
 
   /**
-   * Surface the coarse, monotonic probe phase to JS. Per-transport detail
-   * (which transport, telemetry/BMS replies) stays in Diagnostic Events; the UI
-   * reads resolved transports from the returned candidates, not from here.
+   * Surface live probe milestones to JS, named for what the probe is doing right
+   * now: `connecting` → `handshake` (service discovery) → `pinging` (CAN scan) →
+   * per candidate `probing` (waiting for telemetry proof) → `bms` (transport
+   * confirmed, waiting for a BMS answer) → `identity` (BMS answered, waiting for
+   * the Refloat info reply). `transport` names the candidate being probed and
+   * `canIds` the CAN scan responders. The UI still reads final facts from the
+   * returned candidates; full detail stays in Diagnostic Events.
    */
-  private fun emitProgress(step: String) {
-    onProgress(mapOf("step" to step, "elapsedMs" to elapsed()))
+  private fun emitProgress(step: String, transport: BoardTransport? = null, withCanIds: Boolean = false) {
+    val payload = mutableMapOf<String, Any?>("step" to step, "elapsedMs" to elapsed())
+    if (transport != null) payload["transport"] = BoardTransport.toBridge(transport)
+    if (withCanIds) payload["canIds"] = responders.toList()
+    Log.d(DETECT_TAG, "progress step=$step transport=$transport canIds=$responders elapsed=${elapsed()}ms")
+    onProgress(payload)
   }
 
   fun start() {
@@ -122,7 +130,12 @@ internal class BoardTransportDetector(
     }
   }
 
-  override fun onGattSubscribing() {}
+  override fun onGattSubscribing() {
+    handler.post {
+      if (finished || phase != Phase.Connecting) return@post
+      emitProgress("handshake")
+    }
+  }
 
   override fun onGattReady() {
     handler.post {
@@ -132,7 +145,7 @@ internal class BoardTransportDetector(
         "board_probe_service_ready",
         mapOf("message" to "VESC service ready", "elapsed_ms" to elapsed()),
       )
-      emitProgress("handshake")
+      emitProgress("pinging")
       phase = Phase.Pinging
       handler.postDelayed({ if (!finished) gatt.sendPayload(byteArrayOf(COMM_FW_VERSION.toByte())) }, DETECT_FW_DELAY_MS)
       handler.postDelayed({ if (!finished) gatt.sendPayload(byteArrayOf(COMM_PING_CAN.toByte())) }, DETECT_PING_DELAY_MS)
@@ -196,7 +209,8 @@ internal class BoardTransportDetector(
         // belongs to the current candidate.
         markRefloatInfo(payload)
       }
-      COMM_FW_VERSION -> if (phase == Phase.Probing && current == BoardTransport.Direct) markFwVersion(payload)
+      // FW replies also come back bare over CAN, like custom app data above.
+      COMM_FW_VERSION -> if (phase == Phase.Probing && current != null) markFwVersion(payload)
       // Direct smart-BMS reply.
       COMM_BMS_GET_VALUES -> if (phase == Phase.Probing && current != null) {
         if (parseBmsValues(payload, nowMs()) != null) markBms()
@@ -222,7 +236,6 @@ internal class BoardTransportDetector(
   private fun beginProbing() {
     if (finished) return
     phase = Phase.Probing
-    emitProgress("probing")
     probeQueue.clear()
     probeQueue.addAll(TransportDetection.candidatesToProbe(responders.toList()))
     probeNext()
@@ -237,6 +250,7 @@ internal class BoardTransportDetector(
     currentRefloatBaseVersion = null
     current = probeQueue.removeFirstOrNull()
     val transport = current ?: return finishResolved()
+    emitProgress("probing", transport, withCanIds = true)
     recordDiagnostic(
       "board_probe_transport_probe_started",
       mapOf(
@@ -272,15 +286,25 @@ internal class BoardTransportDetector(
     }, DETECT_PROBE_INFO_DELAY_MS)
   }
 
-  /** Telemetry sample proves the transport works. */
+  /**
+   * Telemetry sample proves the transport works; the window now waits on BMS —
+   * unless the BMS reply already raced in first, then it waits on identity.
+   */
   private fun markConfirmed() {
     if (currentConfirmed) return
     currentConfirmed = true
+    emitProgress(if (currentHasBms) "identity" else "bms", current, withCanIds = true)
   }
 
-  /** A smart-BMS answered on the current transport. */
+  /**
+   * A smart-BMS answered on the current transport; the window now waits on
+   * identity. Burst replies race, so only advance once telemetry confirmed —
+   * an early BMS reply is recorded and reported when the confirm lands.
+   */
   private fun markBms() {
+    if (currentHasBms) return
     currentHasBms = true
+    if (currentConfirmed) emitProgress("identity", current, withCanIds = true)
   }
 
   private fun markFwVersion(payload: ByteArray) {

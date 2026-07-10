@@ -45,7 +45,8 @@ export function formatBoardLinkFacts(link: BoardLink): string {
   ]
   const refloat = formatRefloatIdentity(link)
   if (refloat) facts.push(refloat)
-  if (link.vescFirmwareVersion) facts.push(`FW ${link.vescFirmwareVersion}`)
+  // vescFirmwareVersion is already self-labeled, e.g. "FW 6.05 · ADV500".
+  if (link.vescFirmwareVersion) facts.push(link.vescFirmwareVersion)
   if (link.hasBms != null) facts.push(link.hasBms ? 'BMS' : 'no BMS')
   return facts.join(' · ')
 }

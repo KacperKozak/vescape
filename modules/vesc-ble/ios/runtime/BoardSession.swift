@@ -96,12 +96,14 @@ struct LinkIdentity {
   var refloatVersion: String?
   var refloatBaseVersion: String?
 
+  // refloatBaseVersion is derived from refloatVersion and legitimately absent
+  // for two-part versions (e.g. "Refloat 1.1"), so it is not required here —
+  // matches/mismatches still compare it when present.
   var isComplete: Bool {
     linkVersion == 3 &&
       hasBms != nil &&
       !(firmware?.isEmpty ?? true) &&
-      !(refloatVersion?.isEmpty ?? true) &&
-      !(refloatBaseVersion?.isEmpty ?? true)
+      !(refloatVersion?.isEmpty ?? true)
   }
 
   func mismatches(_ observed: LinkIdentity) -> Bool {

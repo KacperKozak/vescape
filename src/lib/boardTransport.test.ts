@@ -54,12 +54,13 @@ describe('formatBoardLinkFacts', () => {
         bleId: 'AA:BB',
         transport: 84,
         hasBms: false,
-        vescFirmwareVersion: '6.05',
+        // Native reports the firmware self-labeled, e.g. "FW 6.05 · ADV500".
+        vescFirmwareVersion: 'FW 6.05 · ADV500',
         refloatVersion: 'Refloat 1.3.0-preview2',
         refloatBaseVersion: '1.3.0',
       }),
     ).toBe(
-      'Board Link v3 · AA:BB · CAN id 84 · Refloat 1.3.0-preview2 · base 1.3.0 · FW 6.05 · no BMS',
+      'Board Link v3 · AA:BB · CAN id 84 · Refloat 1.3.0-preview2 · base 1.3.0 · FW 6.05 · ADV500 · no BMS',
     )
   })
 })

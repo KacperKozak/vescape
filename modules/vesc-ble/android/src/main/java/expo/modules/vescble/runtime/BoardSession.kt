@@ -90,12 +90,14 @@ data class LinkIdentity(
     val refloatVersion: String? = null,
     val refloatBaseVersion: String? = null,
 ) {
+    // refloatBaseVersion is derived from refloatVersion and legitimately absent
+    // for two-part versions (e.g. "Refloat 1.1"), so it is not required here —
+    // matches/mismatches still compare it when present.
     val isComplete: Boolean
         get() = linkVersion == 3 &&
             hasBms != null &&
             !firmware.isNullOrBlank() &&
-            !refloatVersion.isNullOrBlank() &&
-            !refloatBaseVersion.isNullOrBlank()
+            !refloatVersion.isNullOrBlank()
 
     fun mismatches(observed: LinkIdentity): Boolean =
         (observed.firmware != null && observed.firmware != firmware) ||

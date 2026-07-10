@@ -84,19 +84,33 @@ export interface BoardProbeResult {
 }
 
 /**
- * Coarse, monotonic probe phase surfaced live so UI can show progress. These are
- * the rider-facing phases, not the probe loop's per-transport internals: a probe
- * connects, handshakes the VESC service, then probes transports until one returns
- * telemetry. The resolved transport(s) and smart-BMS capability are read from the
- * returned {@link BoardCandidate}s, not from progress events. Detailed
- * per-transport milestones stay in Diagnostic Events for debugging.
+ * Live probe milestone, named for what the probe is doing right now:
+ * `connecting` → `handshake` (service discovery) → `pinging` (CAN scan) → per
+ * candidate transport `probing` (waiting for telemetry proof) → `bms` (transport
+ * confirmed, waiting for a BMS answer) → `identity` (BMS answered, waiting for
+ * the Refloat info reply). Steps whose reply never comes are skipped — the probe
+ * window closing resolves them. With several responding CAN ids the sequence
+ * revisits `probing` for the next candidate. Final facts are still read from the
+ * returned {@link BoardCandidate}s; detail stays in Diagnostic Events.
  */
-export type BoardProbeStep = 'connecting' | 'handshake' | 'probing' | 'completed' | 'failed'
+export type BoardProbeStep =
+  | 'connecting'
+  | 'handshake'
+  | 'pinging'
+  | 'probing'
+  | 'bms'
+  | 'identity'
+  | 'completed'
+  | 'failed'
 
 export interface BoardProbeProgressEvent {
   step: BoardProbeStep
   /** Milliseconds elapsed since the probe started. */
   elapsedMs: number
+  /** Candidate transport the milestone is about; absent before `probing`. */
+  transport?: BoardTransport
+  /** CAN ids that answered the CAN scan; absent before `probing`. */
+  canIds?: number[]
 }
 
 export type LinkIntegrity = 'unknown' | 'checking' | 'trusted' | 'outdated' | 'mismatched'

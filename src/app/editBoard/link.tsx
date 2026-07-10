@@ -46,6 +46,8 @@ export default function BoardLinkScreen() {
     try {
       await updateBoard({ ...board, link: link.selectedLink })
       router.back()
+    } catch (err) {
+      console.log('[board-link] save failed', err)
     } finally {
       setSaving(false)
     }
