@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   addBoardProbeProgressListener,
+  cancelBoardProbe,
   probeBoardLink,
   type BoardCandidate,
   type BoardLink,
@@ -41,19 +42,26 @@ export function useBoardLink(bleId: string | null): UseBoardLink {
   const [selected, setSelected] = useState<BoardCandidate | null>(null)
   const [progress, setProgress] = useState<BoardProbeProgressEvent | null>(null)
   const runRef = useRef(0)
+  const activeProbeIdRef = useRef<string | null>(null)
 
   const runProbe = useCallback(() => {
     // A missing peripheral isn't probeable; callers handle the no-device case in
     // their UI, so there's nothing to run here.
     if (!bleId) return
     const run = ++runRef.current
+    const probeId = `${bleId}:${run}:${Date.now()}`
+    activeProbeIdRef.current = probeId
     // End any live Board Session before probing so the probe owns the BLE link.
     void useBleStore
       .getState()
       .disconnect()
-      .then(() => probeBoardLink(bleId))
+      .then(() => {
+        if (run !== runRef.current) throw new Error('Board probe superseded before start')
+        return probeBoardLink(bleId, probeId)
+      })
       .then((result) => {
         if (run !== runRef.current) return
+        activeProbeIdRef.current = null
         console.log('[board-link] probe result', JSON.stringify(result))
         if (result.candidates.length === 0) {
           setPhase('failed')
@@ -65,6 +73,7 @@ export function useBoardLink(bleId: string | null): UseBoardLink {
       })
       .catch((err) => {
         if (run !== runRef.current) return
+        activeProbeIdRef.current = null
         console.log('[board-link] probe failed', err)
         setCandidates([])
         setSelected(null)
@@ -74,6 +83,7 @@ export function useBoardLink(bleId: string | null): UseBoardLink {
 
   useEffect(() => {
     const subscription = addBoardProbeProgressListener((event) => {
+      if (event.probeId !== activeProbeIdRef.current) return
       console.log('[board-link] progress', JSON.stringify(event))
       // Terminal events are not stored: the terminal render comes atomically
       // from the probe promise (phase + candidates). Storing `completed` here
@@ -89,12 +99,17 @@ export function useBoardLink(bleId: string | null): UseBoardLink {
     runProbe()
     return () => {
       runRef.current += 1
+      const probeId = activeProbeIdRef.current
+      activeProbeIdRef.current = null
+      if (probeId) cancelBoardProbe(probeId)
     }
   }, [runProbe])
 
   const select = useCallback((candidate: BoardCandidate) => setSelected(candidate), [])
 
   const retry = useCallback(() => {
+    const probeId = activeProbeIdRef.current
+    if (probeId) cancelBoardProbe(probeId)
     setPhase('linking')
     setCandidates([])
     setSelected(null)

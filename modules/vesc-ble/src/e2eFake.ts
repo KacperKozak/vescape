@@ -604,10 +604,10 @@ export const e2eFake = {
     stopBoardSession()
   },
 
-  probeBoardLink(_bleId: string): BoardProbeResult {
+  probeBoardLink(_bleId: string, probeId?: string): BoardProbeResult {
     stopBoardSession()
     for (const listener of boardProbeProgressListeners) {
-      listener({ step: 'completed', elapsedMs: 0 })
+      listener({ probeId, step: 'completed', elapsedMs: 0 })
     }
     return {
       outcome: 'resolved',

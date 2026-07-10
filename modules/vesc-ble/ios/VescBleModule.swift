@@ -2,6 +2,18 @@ import ExpoModulesCore
 import Foundation
 import UserNotifications
 
+private final class ActiveBoardProbe {
+  let id: String
+  let detector: BoardTransportDetector
+  let promise: Promise
+
+  init(id: String, detector: BoardTransportDetector, promise: Promise) {
+    self.id = id
+    self.detector = detector
+    self.promise = promise
+  }
+}
+
 // Thin JS bridge. Board scan/connect/telemetry delegate to the CoreBluetooth stack
 // (VescGattClient + BoardSessionController); app data delegates to GRDB, while later iOS
 // subsystems still keep bridge-shaped stubs.
@@ -16,7 +28,7 @@ public class VescBleModule: Module {
 
   /// Retains the in-flight Board Probe across its async BLE lifecycle. Only one runs at a time —
   /// the probe owns the single BLE link (see Android `probeBoardLink`).
-  private var activeProbe: BoardTransportDetector?
+  private var activeProbe: ActiveBoardProbe?
 
   /// Frontend liveness gate. False while the app is backgrounded so the high-frequency telemetry
   /// firehose (`onLiveTick` at the board's poll rate, `onTelemetryHistory`, `onLiveSeries`) never
@@ -100,7 +112,7 @@ public class VescBleModule: Module {
       AppDataRepository.onDataChanged = nil
       self.frontendActive = false
       self.observedEvents.removeAll()
-      self.activeProbe = nil
+      self.cancelActiveProbe(reason: "module_destroyed")
     }
 
     // MARK: Scan
@@ -269,8 +281,12 @@ public class VescBleModule: Module {
       promise.resolve(nil)
     }
 
-    AsyncFunction("probeBoardLink") { (bleId: String, promise: Promise) in
-      DispatchQueue.main.async { self.startProbe(bleId: bleId, promise: promise) }
+    AsyncFunction("probeBoardLink") { (bleId: String, probeId: String, promise: Promise) in
+      DispatchQueue.main.async { self.startProbe(bleId: bleId, probeId: probeId, promise: promise) }
+    }
+
+    Function("cancelBoardProbe") { (probeId: String) in
+      DispatchQueue.main.async { self.cancelActiveProbe(probeId: probeId, reason: "js_cancelled") }
     }
 
     // MARK: Telemetry history
@@ -596,19 +612,29 @@ public class VescBleModule: Module {
   /// Run a Board Probe of one BLE peripheral: end any live Board Session (the probe owns the
   /// single BLE link), then drive `BoardTransportDetector` and resolve with the confirmed
   /// candidate set. Mirrors Android `probeBoardLink`.
-  private func startProbe(bleId: String, promise: Promise) {
+  private func startProbe(bleId: String, probeId: String, promise: Promise) {
     guard !bleId.isEmpty else {
       promise.reject("INVALID_ARGUMENT", "Board Probe needs a BLE peripheral id")
       return
     }
+    guard !probeId.isEmpty else {
+      promise.reject("INVALID_ARGUMENT", "Board Probe needs a probe id")
+      return
+    }
+    cancelActiveProbe(reason: "replaced")
     coordinator.stopBoard()
     let detector = BoardTransportDetector(
+      probeId: probeId,
       bleId: bleId,
       recordDiagnostic: { name, props in
         DiagnosticsRecorder.shared.record(eventName: name, properties: props)
       },
-      onProgress: { [weak self] progress in self?.sendEvent("onBoardProbeProgress", progress) },
+      onProgress: { [weak self] progress in
+        guard self?.activeProbe?.id == probeId else { return }
+        self?.sendEvent("onBoardProbeProgress", progress)
+      },
       onComplete: { [weak self] result in
+        guard self?.activeProbe?.id == probeId else { return }
         self?.activeProbe = nil
         promise.resolve(
           self?.probeResultToBridge(result) ?? [
@@ -619,12 +645,21 @@ public class VescBleModule: Module {
         )
       },
       onError: { [weak self] code, message in
+        guard self?.activeProbe?.id == probeId else { return }
         self?.activeProbe = nil
         promise.reject(code, message)
       }
     )
-    activeProbe = detector
+    activeProbe = ActiveBoardProbe(id: probeId, detector: detector, promise: promise)
     detector.start()
+  }
+
+  private func cancelActiveProbe(probeId: String? = nil, reason: String) {
+    guard let activeProbe else { return }
+    if let probeId, activeProbe.id != probeId { return }
+    self.activeProbe = nil
+    activeProbe.detector.cancel(reason: reason)
+    activeProbe.promise.reject("PROBE_CANCELLED", "Board Probe cancelled")
   }
 
   private func probeResultToBridge(_ result: TransportDetection.Result) -> [String: Any?] {

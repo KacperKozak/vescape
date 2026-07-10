@@ -32,6 +32,7 @@ private let PROBE_TRANSPORT_TIMEOUT_MS = 2_500
 internal final class BoardTransportDetector: VescGattListener {
   private enum Phase { case connecting, pinging, probing }
 
+  private let probeId: String
   private let bleId: String
   private let recordDiagnostic: (String, [String: Any?]) -> Void
   private let onProgress: ([String: Any?]) -> Void
@@ -58,6 +59,7 @@ internal final class BoardTransportDetector: VescGattListener {
   private var startMs: Int64 = 0
 
   init(
+    probeId: String,
     bleId: String,
     recordDiagnostic: @escaping (String, [String: Any?]) -> Void,
     onProgress: @escaping ([String: Any?]) -> Void,
@@ -65,6 +67,7 @@ internal final class BoardTransportDetector: VescGattListener {
     onError: @escaping (String, String) -> Void,
     nowMs: @escaping () -> Int64 = { Int64(Date().timeIntervalSince1970 * 1000) }
   ) {
+    self.probeId = probeId
     self.bleId = bleId
     self.recordDiagnostic = recordDiagnostic
     self.onProgress = onProgress
@@ -82,7 +85,7 @@ internal final class BoardTransportDetector: VescGattListener {
   /// the candidate being probed and `canIds` the CAN scan responders. The UI still reads final
   /// facts from the returned candidates; full detail stays in Diagnostic Events.
   private func emitProgress(_ step: String, transport: BoardTransport? = nil, withCanIds: Bool = false) {
-    var payload: [String: Any?] = ["step": step, "elapsedMs": elapsed()]
+    var payload: [String: Any?] = ["probeId": probeId, "step": step, "elapsedMs": elapsed()]
     if let transport { payload["transport"] = transport.bridgeValue }
     if withCanIds { payload["canIds"] = Array(responders) }
     NSLog("[VescDetect] progress step=%@ transport=%@ canIds=%@ elapsed=%dms",
@@ -104,6 +107,7 @@ internal final class BoardTransportDetector: VescGattListener {
       eventName,
       [
         "operation": "board_probe",
+        "probe_id": probeId,
         "phase": String(describing: phase),
         "ble_id": bleId,
         "elapsed_ms": elapsed(),
@@ -115,7 +119,7 @@ internal final class BoardTransportDetector: VescGattListener {
     startMs = nowMs()
     recordDiagnostic(
       "board_probe_started",
-      ["message": "Board Probe started", "ble_id": bleId]
+      ["message": "Board Probe started", "probe_id": probeId, "ble_id": bleId]
     )
     phase = .connecting
     attemptConnect(initial: true)
@@ -144,7 +148,7 @@ internal final class BoardTransportDetector: VescGattListener {
   func onGattConnected() {
     recordDiagnostic(
       "board_probe_ble_connected",
-      ["message": "BLE connected", "ble_id": bleId, "elapsed_ms": elapsed()]
+      ["message": "BLE connected", "probe_id": probeId, "ble_id": bleId, "elapsed_ms": elapsed()]
     )
   }
   func onGattSubscribing() {
@@ -157,7 +161,7 @@ internal final class BoardTransportDetector: VescGattListener {
     cancelStep()
     recordDiagnostic(
       "board_probe_service_ready",
-      ["message": "VESC service ready", "elapsed_ms": elapsed()]
+      ["message": "VESC service ready", "probe_id": probeId, "elapsed_ms": elapsed()]
     )
     emitProgress("pinging")
     phase = .pinging
@@ -183,6 +187,7 @@ internal final class BoardTransportDetector: VescGattListener {
           "board_probe_connect_retry",
           [
             "message": "Connect attempt failed, retrying",
+            "probe_id": probeId,
             "attempt": connectAttempts,
             "elapsed_ms": elapsed(),
           ]
@@ -203,6 +208,7 @@ internal final class BoardTransportDetector: VescGattListener {
           "confirmed_count": observations.filter { $0.confirmed }.count,
         ]
       )
+      finalizeCurrentObservation()
       finishResolved()
     }
   }
@@ -298,6 +304,7 @@ internal final class BoardTransportDetector: VescGattListener {
       "board_probe_transport_probe_started",
       [
         "message": "Probing transport",
+        "probe_id": probeId,
         "transport": transport.bridgeValue,
         "elapsed_ms": elapsed(),
       ]
@@ -396,6 +403,11 @@ internal final class BoardTransportDetector: VescGattListener {
   }
 
   private func finalizeProbe() {
+    finalizeCurrentObservation()
+    probeNext()
+  }
+
+  private func finalizeCurrentObservation() {
     guard let transport = current else { return }
     cancelStep()
     observations.append(
@@ -425,6 +437,7 @@ internal final class BoardTransportDetector: VescGattListener {
         "board_probe_transport_confirmed",
         [
           "message": "Transport confirmed by telemetry sample",
+          "probe_id": probeId,
           "transport": transport.bridgeValue,
           "has_bms": currentHasBms,
           "vesc_firmware_version": currentVescFirmwareVersion,
@@ -435,7 +448,6 @@ internal final class BoardTransportDetector: VescGattListener {
       )
     }
     current = nil
-    probeNext()
   }
 
   private func finishResolved() {
@@ -451,6 +463,7 @@ internal final class BoardTransportDetector: VescGattListener {
       "board_probe_completed",
       [
         "message": "Board Probe completed",
+        "probe_id": probeId,
         "candidate_count": result.candidates.count,
         "outcome": outcome,
         "elapsed_ms": elapsed(),
@@ -465,11 +478,23 @@ internal final class BoardTransportDetector: VescGattListener {
     if finished { return }
     recordDiagnostic(
       "board_probe_failed",
-      ["message": message, "code": code, "elapsed_ms": elapsed()]
+      ["message": message, "probe_id": probeId, "code": code, "elapsed_ms": elapsed()]
     )
     emitProgress("failed")
     cleanup()
     completeAfterGattRelease { [onError] in onError(code, message) }
+  }
+
+  func cancel(reason: String = "cancelled") {
+    if finished { return }
+    recordProbeDiagnostic(
+      "board_probe_cancelled",
+      [
+        "message": "Board Probe cancelled",
+        "reason": reason,
+      ]
+    )
+    cleanup()
   }
 
   private func cleanup() {

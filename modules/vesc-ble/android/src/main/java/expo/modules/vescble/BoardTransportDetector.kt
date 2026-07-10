@@ -41,6 +41,7 @@ private const val DETECT_CONNECT_MAX_ATTEMPTS = 3
 internal class BoardTransportDetector(
   context: Context,
   private val handler: Handler,
+  private val probeId: String,
   private val device: BluetoothDevice,
   private val recordDiagnostic: (String, Map<String, Any?>) -> Unit,
   private val onProgress: (Map<String, Any?>) -> Unit,
@@ -81,7 +82,7 @@ internal class BoardTransportDetector(
    * returned candidates; full detail stays in Diagnostic Events.
    */
   private fun emitProgress(step: String, transport: BoardTransport? = null, withCanIds: Boolean = false) {
-    val payload = mutableMapOf<String, Any?>("step" to step, "elapsedMs" to elapsed())
+    val payload = mutableMapOf<String, Any?>("probeId" to probeId, "step" to step, "elapsedMs" to elapsed())
     if (transport != null) payload["transport"] = BoardTransport.toBridge(transport)
     if (withCanIds) payload["canIds"] = responders.toList()
     Log.d(DETECT_TAG, "progress step=$step transport=$transport canIds=$responders elapsed=${elapsed()}ms")
@@ -102,6 +103,7 @@ internal class BoardTransportDetector(
       eventName,
       mapOf(
         "operation" to "board_probe",
+        "probe_id" to probeId,
         "phase" to phase.name.lowercase(),
         "ble_id" to device.address,
         "elapsed_ms" to elapsed(),
@@ -113,7 +115,7 @@ internal class BoardTransportDetector(
     startMs = nowMs()
     recordDiagnostic(
       "board_probe_started",
-      mapOf("message" to "Board Probe started", "ble_id" to device.address),
+      mapOf("message" to "Board Probe started", "probe_id" to probeId, "ble_id" to device.address),
     )
     phase = Phase.Connecting
     attemptConnect(initial = true)
@@ -146,7 +148,7 @@ internal class BoardTransportDetector(
       if (finished) return@post
       recordDiagnostic(
         "board_probe_ble_connected",
-        mapOf("message" to "BLE connected", "ble_id" to device.address, "elapsed_ms" to elapsed()),
+        mapOf("message" to "BLE connected", "probe_id" to probeId, "ble_id" to device.address, "elapsed_ms" to elapsed()),
       )
     }
   }
@@ -164,7 +166,7 @@ internal class BoardTransportDetector(
       cancelStep()
       recordDiagnostic(
         "board_probe_service_ready",
-        mapOf("message" to "VESC service ready", "elapsed_ms" to elapsed()),
+        mapOf("message" to "VESC service ready", "probe_id" to probeId, "elapsed_ms" to elapsed()),
       )
       emitProgress("pinging")
       phase = Phase.Pinging
@@ -186,6 +188,7 @@ internal class BoardTransportDetector(
             "board_probe_connect_retry",
             mapOf(
               "message" to "Connect attempt failed, retrying",
+              "probe_id" to probeId,
               "status" to status,
               "attempt" to connectAttempts,
               "elapsed_ms" to elapsed(),
@@ -210,6 +213,7 @@ internal class BoardTransportDetector(
             "confirmed_count" to observations.count { it.confirmed },
           ),
         )
+        finalizeCurrentObservation()
         finishResolved()
       }
     }
@@ -300,6 +304,7 @@ internal class BoardTransportDetector(
       "board_probe_transport_probe_started",
       mapOf(
         "message" to "Probing transport",
+        "probe_id" to probeId,
         "transport" to BoardTransport.toBridge(transport),
         "elapsed_ms" to elapsed(),
       ),
@@ -399,6 +404,11 @@ internal class BoardTransportDetector(
   }
 
   private fun finalizeProbe() {
+    finalizeCurrentObservation()
+    probeNext()
+  }
+
+  private fun finalizeCurrentObservation() {
     val transport = current ?: return
     cancelStep()
     observations.add(
@@ -428,6 +438,7 @@ internal class BoardTransportDetector(
         "board_probe_transport_confirmed",
         mapOf(
           "message" to "Transport confirmed by telemetry sample",
+          "probe_id" to probeId,
           "transport" to BoardTransport.toBridge(transport),
           "has_bms" to currentHasBms,
           "vesc_firmware_version" to currentVescFirmwareVersion,
@@ -438,7 +449,6 @@ internal class BoardTransportDetector(
       )
     }
     current = null
-    probeNext()
   }
 
   private fun finishResolved() {
@@ -453,6 +463,7 @@ internal class BoardTransportDetector(
       "board_probe_completed",
       mapOf(
         "message" to "Board Probe completed",
+        "probe_id" to probeId,
         "candidate_count" to result.candidates.size,
         "outcome" to outcome,
         "elapsed_ms" to elapsed(),
@@ -467,11 +478,25 @@ internal class BoardTransportDetector(
     if (finished) return
     recordDiagnostic(
       "board_probe_failed",
-      mapOf("message" to message, "code" to code, "elapsed_ms" to elapsed()),
+      mapOf("message" to message, "probe_id" to probeId, "code" to code, "elapsed_ms" to elapsed()),
     )
     emitProgress("failed")
     cleanup()
     completeAfterGattRelease { onError(code, message) }
+  }
+
+  fun cancel(reason: String = "cancelled") {
+    handler.post {
+      if (finished) return@post
+      recordProbeDiagnostic(
+        "board_probe_cancelled",
+        mapOf(
+          "message" to "Board Probe cancelled",
+          "reason" to reason,
+        ),
+      )
+      cleanup()
+    }
   }
 
   private fun cleanup() {

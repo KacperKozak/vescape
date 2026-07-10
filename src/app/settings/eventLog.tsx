@@ -44,6 +44,7 @@ const INFO_EVENTS = new Set([
 ])
 
 const WARNING_EVENTS = new Set([
+  'board_probe_cancelled',
   'board_probe_connect_retry',
   'board_probe_disconnected_mid_detection',
 ])

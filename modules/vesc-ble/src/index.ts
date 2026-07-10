@@ -104,6 +104,8 @@ export type BoardProbeStep =
   | 'failed'
 
 export interface BoardProbeProgressEvent {
+  /** Native probe operation id. Used to ignore stale progress from cancelled probes. */
+  probeId?: string
   step: BoardProbeStep
   /** Milliseconds elapsed since the probe started. */
   elapsedMs: number
@@ -983,7 +985,8 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
   stopGeigerSimulation(): void
   selectBoard(boardId: string): Promise<void>
   stopBoard(): Promise<void>
-  probeBoardLink(bleId: string): Promise<BoardProbeResult>
+  probeBoardLink(bleId: string, probeId: string): Promise<BoardProbeResult>
+  cancelBoardProbe(probeId: string): void
   setDebugRecordingEnabled(enabled: boolean): void
   listDebugRecordings(): Promise<DebugRecording[]>
   exportDebugRecording(name: string): Promise<DatabaseBackupResult>
@@ -1300,12 +1303,18 @@ export function exitApp(): void {
  * a Board necessarily exists and tears down any live Board Session first.
  * Emits `onBoardProbeProgress` events while it runs.
  */
-export async function probeBoardLink(bleId: string): Promise<BoardProbeResult> {
+export async function probeBoardLink(bleId: string, probeId: string): Promise<BoardProbeResult> {
   if (E2E_ENABLED) {
-    return e2eFake.probeBoardLink(bleId)
+    return e2eFake.probeBoardLink(bleId, probeId)
   }
 
-  return native.probeBoardLink(bleId)
+  return native.probeBoardLink(bleId, probeId)
+}
+
+/** Cancel an in-flight native Board Probe if it still matches the operation id. */
+export function cancelBoardProbe(probeId: string): void {
+  if (E2E_ENABLED) return
+  native.cancelBoardProbe(probeId)
 }
 
 /** Enable raw debug session recording for future native board sessions. */
