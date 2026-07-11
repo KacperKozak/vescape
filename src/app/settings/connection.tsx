@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import {
   BluetoothConnectedIcon,
   ClockCountdownIcon,
+  PowerIcon,
   RecordIcon,
   RocketLaunchIcon,
   SpeakerHighIcon,
@@ -26,6 +27,8 @@ export default function ConnectionSettingsScreen() {
     companionPresenceEnabled,
     companionPresenceCooldownMinutes,
     connectionSoundsEnabled,
+    autoCloseEnabled,
+    autoCloseDelayMinutes,
     set,
     setCompanionPresence,
   } = useSettingsStore(
@@ -35,6 +38,8 @@ export default function ConnectionSettingsScreen() {
       companionPresenceEnabled: s.companionPresenceEnabled,
       companionPresenceCooldownMinutes: s.companionPresenceCooldownMinutes,
       connectionSoundsEnabled: s.connectionSoundsEnabled,
+      autoCloseEnabled: s.autoCloseEnabled,
+      autoCloseDelayMinutes: s.autoCloseDelayMinutes,
       set: s.set,
       setCompanionPresence: s.setCompanionPresence,
     })),
@@ -171,6 +176,49 @@ export default function ConnectionSettingsScreen() {
               />
             }
           />
+          {Platform.OS === 'android' ? (
+            <SettingsRow
+              icon={PowerIcon}
+              iconColor={theme.palette.orange.color}
+              label="Auto close app"
+              hint="Close the app when the board stays disconnected"
+              right={
+                <Switch
+                  value={autoCloseEnabled}
+                  onValueChange={(v) => void set('autoCloseEnabled', v)}
+                  trackColor={{ false: theme.palette.slate.border, true: theme.palette.sky.border }}
+                  thumbColor={
+                    autoCloseEnabled ? theme.palette.sky.color : theme.palette.slate.textMuted
+                  }
+                />
+              }
+            />
+          ) : null}
+          {Platform.OS === 'android' && autoCloseEnabled ? (
+            <SettingsRow
+              icon={ClockCountdownIcon}
+              iconColor={theme.palette.orange.color}
+              label="Auto close after"
+              hint="Time without a board connection before the app closes itself"
+              right={
+                <Stepper
+                  value={autoCloseDelayMinutes}
+                  unit="min"
+                  min={1}
+                  max={480}
+                  step={(v, dir) =>
+                    dir === 1 ? (v < 15 ? 5 : v < 60 ? 15 : 30) : v <= 15 ? 5 : v <= 60 ? 15 : 30
+                  }
+                  onChange={(nextValue) => {
+                    const clampedValue = Math.min(480, Math.max(1, nextValue))
+                    if (clampedValue !== autoCloseDelayMinutes) {
+                      void set('autoCloseDelayMinutes', clampedValue)
+                    }
+                  }}
+                />
+              }
+            />
+          ) : null}
           <SettingsRow
             icon={SpeakerHighIcon}
             iconColor={theme.palette.cyan.color}
