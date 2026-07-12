@@ -21,9 +21,6 @@ export interface MediaAssetInput {
   filename: string
   mediaType: 'photo' | 'video'
   creationTime: number
-  duration: number
-  width: number
-  height: number
 }
 
 export interface MediaHistoryAsset extends MediaAssetInput {
@@ -36,13 +33,69 @@ export interface MediaHistoryCluster {
   assets: MediaHistoryAsset[]
 }
 
-export interface MediaHistoryMatchDiagnostics {
-  queried: number
-  matched: number
-  outsideRide: number
-  noRecordingGps: number
-  outsideTolerance: number
-  outsideGpsSpan: number
+// EXIF DateTime* values: "YYYY:MM:DD HH:MM:SS", local time without timezone.
+const EXIF_DATE_RE = /^(\d{4}):(\d{2}):(\d{2})[ T](\d{2}):(\d{2}):(\d{2})/
+// Camera filenames: VID_20240101_123456, PXL_20240101_123456789, 20240101_123456, IMG-20240101-WA…
+const FILENAME_DATE_RE = /(20\d{2})(\d{2})(\d{2})[_-](\d{2})(\d{2})(\d{2})/
+
+function toEpochMs(
+  [year, month, day, hour, minute, second]: number[],
+  utc: boolean,
+): number | null {
+  const ms = utc
+    ? Date.UTC(year, month - 1, day, hour, minute, second)
+    : new Date(year, month - 1, day, hour, minute, second).getTime()
+  return Number.isFinite(ms) ? ms : null
+}
+
+// The system photo picker exposes no asset creation time, so recover it from EXIF (photos)
+// or camera filename conventions (videos). Returns null when neither source yields a date.
+export function resolvePickedAssetCreationTime({
+  exif,
+  filename,
+}: {
+  exif?: Record<string, unknown> | null
+  filename: string
+}): number | null {
+  for (const key of ['DateTimeOriginal', 'DateTimeDigitized', 'DateTime']) {
+    const value = exif?.[key]
+    const match = typeof value === 'string' ? EXIF_DATE_RE.exec(value) : null
+    if (match) return toEpochMs(match.slice(1).map(Number), false)
+  }
+  const match = FILENAME_DATE_RE.exec(filename)
+  if (!match) return null
+  // Pixel camera filenames (PXL_*) encode UTC; other conventions use local time.
+  return toEpochMs(match.slice(1).map(Number), filename.startsWith('PXL_'))
+}
+
+// Ride media persists as plain files under rideMedia/<sessionId>/ with all metadata encoded
+// in the filename — there is no database record. `x` marks an unrecoverable creation time.
+const RIDE_MEDIA_FILENAME_RE = /^(\d+|x)_(photo|video)_[0-9a-z]+\.\w+$/
+
+function shortHash(value: string): string {
+  let hash = 5381
+  for (let index = 0; index < value.length; index += 1) {
+    hash = ((hash << 5) + hash + value.charCodeAt(index)) >>> 0
+  }
+  return hash.toString(36)
+}
+
+export function encodeRideMediaFilename(asset: MediaAssetInput): string {
+  const time = Number.isFinite(asset.creationTime) ? String(asset.creationTime) : 'x'
+  const extension =
+    /\.(\w+)$/.exec(asset.uri)?.[1]?.toLowerCase() ?? (asset.mediaType === 'video' ? 'mp4' : 'jpg')
+  return `${time}_${asset.mediaType}_${shortHash(asset.id)}.${extension}`
+}
+
+export function decodeRideMediaFilename(
+  filename: string,
+): { creationTime: number; mediaType: 'photo' | 'video' } | null {
+  const match = RIDE_MEDIA_FILENAME_RE.exec(filename)
+  if (!match) return null
+  return {
+    creationTime: match[1] === 'x' ? Number.NaN : Number(match[1]),
+    mediaType: match[2] as 'photo' | 'video',
+  }
 }
 
 function hasBreakBetween(markers: readonly HistoryMarker[], fromMs: number, toMs: number) {
@@ -82,38 +135,7 @@ export function matchMediaHistoryAssets({
   startAtMs: number
   endAtMs: number
 }): MediaHistoryAsset[] {
-  return matchMediaHistoryAssetsWithDiagnostics({
-    assets,
-    gpsSamples,
-    markers,
-    startAtMs,
-    endAtMs,
-  }).assets
-}
-
-export function matchMediaHistoryAssetsWithDiagnostics({
-  assets,
-  gpsSamples,
-  markers,
-  startAtMs,
-  endAtMs,
-}: {
-  assets: readonly MediaAssetInput[]
-  gpsSamples: readonly HistoryGpsSample[]
-  markers: readonly HistoryMarker[]
-  startAtMs: number
-  endAtMs: number
-}): { assets: MediaHistoryAsset[]; diagnostics: MediaHistoryMatchDiagnostics } {
-  const diagnostics: MediaHistoryMatchDiagnostics = {
-    queried: assets.length,
-    matched: 0,
-    outsideRide: 0,
-    noRecordingGps: 0,
-    outsideTolerance: 0,
-    outsideGpsSpan: 0,
-  }
   const matched: MediaHistoryAsset[] = []
-
   for (const asset of [...assets].sort(
     (a, b) => a.creationTime - b.creationTime || a.id.localeCompare(b.id),
   )) {
@@ -122,27 +144,16 @@ export function matchMediaHistoryAssetsWithDiagnostics({
       asset.creationTime < startAtMs ||
       asset.creationTime > endAtMs
     ) {
-      diagnostics.outsideRide += 1
       continue
     }
     const index = findNearestSampleIndexByTime(gpsSamples, asset.creationTime)
     const gps = index >= 0 ? gpsSamples[index] : null
-    if (!gps) {
-      diagnostics.noRecordingGps += 1
-      continue
-    }
-    if (Math.abs(gps.capturedAtMs - asset.creationTime) > MEDIA_GPS_TOLERANCE_MS) {
-      diagnostics.outsideTolerance += 1
-      continue
-    }
-    if (!belongsToGpsSpan(gpsSamples, index, asset.creationTime, markers)) {
-      diagnostics.outsideGpsSpan += 1
-      continue
-    }
+    if (!gps) continue
+    if (Math.abs(gps.capturedAtMs - asset.creationTime) > MEDIA_GPS_TOLERANCE_MS) continue
+    if (!belongsToGpsSpan(gpsSamples, index, asset.creationTime, markers)) continue
     matched.push({ ...asset, gps })
   }
-  diagnostics.matched = matched.length
-  return { assets: matched, diagnostics }
+  return matched
 }
 
 function distanceMeters(a: HistoryGpsSample, b: HistoryGpsSample) {

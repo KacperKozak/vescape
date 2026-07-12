@@ -5,8 +5,10 @@ import { makeSample } from '@/test-utils/factories'
 import {
   clusterMediaHistoryAssets,
   findVideoTelemetrySample,
+  decodeRideMediaFilename,
+  encodeRideMediaFilename,
   matchMediaHistoryAssets,
-  matchMediaHistoryAssetsWithDiagnostics,
+  resolvePickedAssetCreationTime,
   type MediaAssetInput,
   type MediaHistoryAsset,
 } from '@/lib/history/mediaHistory'
@@ -36,9 +38,6 @@ function asset(id: string, creationTime: number): MediaAssetInput {
     uri: `file://${id}.jpg`,
     filename: `${id}.jpg`,
     mediaType: 'photo',
-    duration: 0,
-    width: 100,
-    height: 100,
   }
 }
 
@@ -79,23 +78,15 @@ describe('matchMediaHistoryAssets', () => {
     ).toEqual([])
   })
 
-  test('explains why queried assets do not render', () => {
-    const result = matchMediaHistoryAssetsWithDiagnostics({
+  test('rejects assets outside the ride, tolerance, or marker-broken spans', () => {
+    const result = matchMediaHistoryAssets({
       assets: [asset('outside', 500), asset('too-far', 110_000), asset('gap', 75_000)],
       gpsSamples: [gps(1, 1_000), gps(2, 9_000), gps(3, 19_000), gps(4, 70_000), gps(5, 78_000)],
       markers: [marker(74_000, 'gap')],
       startAtMs: 1_000,
       endAtMs: 110_000,
     })
-    expect(result.assets).toEqual([])
-    expect(result.diagnostics).toEqual({
-      queried: 3,
-      matched: 0,
-      outsideRide: 1,
-      noRecordingGps: 0,
-      outsideTolerance: 1,
-      outsideGpsSpan: 1,
-    })
+    expect(result).toEqual([])
   })
 
   test('matches media across real-world recording-backed GPS cadence', () => {
@@ -137,4 +128,71 @@ test('video telemetry rejects stale or gap-crossing samples', () => {
       5,
     ),
   ).toBeNull()
+})
+
+describe('resolvePickedAssetCreationTime', () => {
+  test('prefers EXIF DateTimeOriginal parsed as local time', () => {
+    const result = resolvePickedAssetCreationTime({
+      exif: { DateTimeOriginal: '2024:06:01 14:30:05' },
+      filename: 'IMG_1234.jpg',
+    })
+    expect(result).toBe(new Date(2024, 5, 1, 14, 30, 5).getTime())
+  })
+
+  test('falls back to camera filename convention as local time', () => {
+    const result = resolvePickedAssetCreationTime({
+      filename: 'VID_20240601_143005.mp4',
+    })
+    expect(result).toBe(new Date(2024, 5, 1, 14, 30, 5).getTime())
+  })
+
+  test('parses Pixel PXL_ filenames as UTC', () => {
+    const result = resolvePickedAssetCreationTime({
+      filename: 'PXL_20240601_143005123.mp4',
+    })
+    expect(result).toBe(Date.UTC(2024, 5, 1, 14, 30, 5))
+  })
+
+  test('returns null when neither EXIF nor filename yields a date', () => {
+    expect(resolvePickedAssetCreationTime({ filename: 'IMG_1234.MOV' })).toBeNull()
+    expect(
+      resolvePickedAssetCreationTime({ exif: { DateTimeOriginal: 42 }, filename: 'a.jpg' }),
+    ).toBeNull()
+  })
+})
+
+describe('ride media filename codec', () => {
+  test('round-trips creation time and media type', () => {
+    const name = encodeRideMediaFilename({
+      id: 'asset-1',
+      uri: 'file:///cache/ImagePicker/abc.JPEG',
+      filename: '',
+      mediaType: 'photo',
+      creationTime: 1_717_249_805_000,
+    })
+    expect(name.endsWith('.jpeg')).toBe(true)
+    expect(decodeRideMediaFilename(name)).toEqual({
+      creationTime: 1_717_249_805_000,
+      mediaType: 'photo',
+    })
+  })
+
+  test('encodes unknown creation time as x and decodes it as NaN', () => {
+    const name = encodeRideMediaFilename({
+      id: 'asset-2',
+      uri: 'file:///cache/no-extension',
+      filename: '',
+      mediaType: 'video',
+      creationTime: Number.NaN,
+    })
+    expect(name.endsWith('.mp4')).toBe(true)
+    const decoded = decodeRideMediaFilename(name)
+    expect(decoded?.mediaType).toBe('video')
+    expect(Number.isNaN(decoded?.creationTime)).toBe(true)
+  })
+
+  test('rejects foreign filenames', () => {
+    expect(decodeRideMediaFilename('IMG_1234.jpg')).toBeNull()
+    expect(decodeRideMediaFilename('.nomedia')).toBeNull()
+  })
 })

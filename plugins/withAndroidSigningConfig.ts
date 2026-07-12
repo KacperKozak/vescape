@@ -48,7 +48,7 @@ const withAndroidSigningConfig: ConfigPlugin = (config) =>
     //    not the one inside `debug { }` which appears first in the file.
     contents = contents.replace(
       /(buildTypes\s*\{[\s\S]*?release\s*\{[\s\S]*?)signingConfig\s+signingConfigs\.debug/,
-      '$1signingConfig signingConfigs.release',
+      "$1signingConfig project.hasProperty('VESCAPE_UPLOAD_STORE_FILE') ? signingConfigs.release : signingConfigs.debug",
     )
 
     cfg.modResults.contents = contents

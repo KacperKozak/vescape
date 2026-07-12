@@ -10,7 +10,9 @@ import {
   toggleOptionalChartMetric,
   type OptionalChartMetric,
 } from '@/components/domain/history/historyChartMetrics'
+import { MediaHistoryGallery } from '@/components/domain/history/MediaHistoryGallery'
 import { IconButton } from '@/components/ui/base/IconButton'
+import { EdgeDrawer } from '@/components/ui/overlays/AnchoredSheet'
 import {
   computeAutoRange,
   toExcludedRanges,
@@ -31,6 +33,7 @@ import {
   getMetricRampColor,
   type HistoryMetricKey,
 } from '@/lib/history/metricColorScale'
+import type { MediaAssetInput, MediaHistoryAsset } from '@/lib/history/mediaHistory'
 import { downsampleTimeSeries, findNearestSampleIndexByTime } from '@/lib/history/playback'
 import { RIDE_TRIM_PADDING_MS, rideMovingWindow } from '@/lib/history/sessions'
 import { useHistoryStore, type TelemetrySample } from '@/store/historyStore'
@@ -45,13 +48,15 @@ interface HistoryTelemetryPanelProps {
   samples: TelemetrySample[]
   canPrevious: boolean
   canNext: boolean
-  mediaEnabled: boolean
+  mediaAssets: MediaHistoryAsset[]
+  mediaUnmatched: MediaAssetInput[]
   mediaLoading: boolean
-  mediaCount: number
+  mediaError: string | null
   onPrevious: () => void
   onNext: () => void
   onOpenList: () => void
-  onToggleMedia: () => void
+  onAddMedia: () => void
+  onOpenMedia: (asset: MediaAssetInput) => void
   onSeek?: (timeMs: number) => void
   onMetricInteraction?: (metric: HistoryMetricKey) => void
   onHeightChange?: (height: number) => void
@@ -112,13 +117,15 @@ export function HistoryTelemetryPanel({
   samples,
   canPrevious,
   canNext,
-  mediaEnabled,
+  mediaAssets,
+  mediaUnmatched,
   mediaLoading,
-  mediaCount,
+  mediaError,
   onPrevious,
   onNext,
   onOpenList,
-  onToggleMedia,
+  onAddMedia,
+  onOpenMedia,
   onSeek,
   onMetricInteraction,
   onHeightChange,
@@ -127,8 +134,11 @@ export function HistoryTelemetryPanel({
   const [headTimeMs, setHeadTimeMs] = useState<number | null>(null)
   const [activeCharts, setActiveCharts] = useState<Set<OptionalChartMetric>>(new Set())
   const [shareInfoVisible, setShareInfoVisible] = useState(false)
+  const [mediaDrawerVisible, setMediaDrawerVisible] = useState(false)
+  const mediaButtonRef = useRef<View>(null)
   const scrubTimeMs = useSharedValue<number | null>(null)
   const lastMapSeekAtRef = useRef(0)
+  const mediaCount = mediaAssets.length + mediaUnmatched.length
 
   const sortedSamples = useMemo(
     () => [...samples].sort((a, b) => a.capturedAtMs - b.capturedAtMs),
@@ -505,13 +515,13 @@ export function HistoryTelemetryPanel({
       onLayout={(e) => onHeightChange?.(e.nativeEvent.layout.height)}
     >
       <View style={styles.navControls}>
-        <View style={styles.navSide}>
+        <View ref={mediaButtonRef} style={styles.navSide}>
           <IconButton
             icon={ImagesSquareIcon}
-            onPress={onToggleMedia}
+            onPress={() => setMediaDrawerVisible(true)}
             loading={mediaLoading}
             size="lg"
-            style={mediaEnabled ? styles.mediaEnabled : undefined}
+            style={mediaCount > 0 ? styles.mediaEnabled : undefined}
           />
           {mediaCount > 0 ? (
             <View style={styles.mediaCountBadge} pointerEvents="none">
@@ -677,6 +687,25 @@ export function HistoryTelemetryPanel({
           </View>
         </>
       )}
+      <EdgeDrawer
+        visible={mediaDrawerVisible}
+        triggerRef={mediaButtonRef}
+        onClose={() => setMediaDrawerVisible(false)}
+        title="Ride Media"
+        icon={ImagesSquareIcon}
+      >
+        <MediaHistoryGallery
+          assets={mediaAssets}
+          unmatched={mediaUnmatched}
+          loading={mediaLoading}
+          error={mediaError}
+          onAdd={onAddMedia}
+          onOpenAsset={(asset) => {
+            setMediaDrawerVisible(false)
+            onOpenMedia(asset)
+          }}
+        />
+      </EdgeDrawer>
       <InfoModal
         visible={shareInfoVisible}
         title="Share Ride"

@@ -19,7 +19,7 @@ import type { HistoryMarker, TelemetrySample } from 'vesc-ble'
 import { IconButton } from '@/components/ui/base/IconButton'
 import { telemetry } from '@/constants/telemetry'
 import { dutyPercent } from '@/helpers/format'
-import { findVideoTelemetrySample, type MediaHistoryAsset } from '@/lib/history/mediaHistory'
+import { findVideoTelemetrySample, type MediaAssetInput } from '@/lib/history/mediaHistory'
 import { theme } from '@/constants/theme'
 
 function VideoAsset({
@@ -28,7 +28,7 @@ function VideoAsset({
   markers,
   top,
 }: {
-  asset: MediaHistoryAsset
+  asset: MediaAssetInput
   samples: TelemetrySample[]
   markers: HistoryMarker[]
   top: number
@@ -55,32 +55,28 @@ function VideoAsset({
         style={styles.media}
       />
       {unavailable ? <Text style={styles.mediaUnavailable}>Video unavailable</Text> : null}
-      <View style={[styles.telemetryRow, { top }]}>
-        {sample ? (
-          <>
-            <VideoTelemetryStat
-              label="Speed"
-              value={telemetry.speed.formatWithUnit(sample.speedKmh)}
-              icon={GaugeIcon}
-              accent={telemetry.speed.color}
-            />
-            <VideoTelemetryStat
-              label="Duty"
-              value={telemetry.duty.formatWithUnit(dutyPercent(sample.dutyCycle, false))}
-              icon={LightningIcon}
-              accent={telemetry.duty.color}
-            />
-            <VideoTelemetryStat
-              label="Battery"
-              value={telemetry.battVoltage.formatWithUnit(sample.batteryVoltage)}
-              icon={BatteryMediumIcon}
-              accent={telemetry.battVoltage.color}
-            />
-          </>
-        ) : (
-          <Text style={styles.unavailable}>Ride telemetry unavailable</Text>
-        )}
-      </View>
+      {sample ? (
+        <View style={[styles.telemetryRow, { top }]}>
+          <VideoTelemetryStat
+            label="Speed"
+            value={telemetry.speed.formatWithUnit(sample.speedKmh)}
+            icon={GaugeIcon}
+            accent={telemetry.speed.color}
+          />
+          <VideoTelemetryStat
+            label="Duty"
+            value={telemetry.duty.formatWithUnit(dutyPercent(sample.dutyCycle, false))}
+            icon={LightningIcon}
+            accent={telemetry.duty.color}
+          />
+          <VideoTelemetryStat
+            label="Battery"
+            value={telemetry.battVoltage.formatWithUnit(sample.batteryVoltage)}
+            icon={BatteryMediumIcon}
+            accent={telemetry.battVoltage.color}
+          />
+        </View>
+      ) : null}
     </>
   )
 }
@@ -107,7 +103,7 @@ function VideoTelemetryStat({
   )
 }
 
-function PhotoAsset({ asset }: { asset: MediaHistoryAsset }) {
+function PhotoAsset({ asset }: { asset: MediaAssetInput }) {
   const [unavailable, setUnavailable] = useState(false)
   return (
     <>
@@ -129,17 +125,19 @@ export function MediaHistoryViewer({
   markers,
   onClose,
 }: {
-  assets: MediaHistoryAsset[]
+  assets: MediaAssetInput[]
   initialAssetId: string
   samples: TelemetrySample[]
   markers: HistoryMarker[]
   onClose: () => void
 }) {
   const insets = useSafeAreaInsets()
-  const orderedAssets = useMemo(
-    () => [...assets].sort((a, b) => a.creationTime - b.creationTime || a.id.localeCompare(b.id)),
-    [assets],
-  )
+  // Assets without a recoverable creation time (NaN) sort to the end.
+  const orderedAssets = useMemo(() => {
+    const time = (asset: MediaAssetInput) =>
+      Number.isFinite(asset.creationTime) ? asset.creationTime : Number.POSITIVE_INFINITY
+    return [...assets].sort((a, b) => time(a) - time(b) || a.id.localeCompare(b.id))
+  }, [assets])
   const [index, setIndex] = useState(() => {
     const initialIndex = orderedAssets.findIndex((asset) => asset.id === initialAssetId)
     return initialIndex >= 0 ? initialIndex : 0
@@ -256,15 +254,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
-  },
-  unavailable: {
-    color: theme.palette.slate.textMuted,
-    fontSize: 12,
-    fontWeight: '700',
-    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
   },
   mediaUnavailable: {
     color: theme.status.error.text,

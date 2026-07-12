@@ -44,9 +44,14 @@ async function rollbackLocalRelease(state: {
   devSha?: string
   mainSha?: string
   branchSha?: string
+  releaseTag?: string
   published: boolean
 }) {
   if (state.published) return
+
+  if (state.releaseTag) {
+    await $`git tag -d ${state.releaseTag}`.cwd(root).nothrow()
+  }
 
   console.log('\n→ Rolling back local release changes')
   const mergeHead = join(root, '.git/MERGE_HEAD')
@@ -146,6 +151,7 @@ const state = {
   devSha: isDevBranch ? await branchSha('dev') : undefined,
   mainSha: isDevBranch ? await branchSha('main') : undefined,
   branchSha: isDevBranch ? undefined : await branchSha(branch),
+  releaseTag: undefined as string | undefined,
   published: false,
 }
 
@@ -190,12 +196,14 @@ try {
     )
     await run('Switch to main', 'git checkout main')
     await run('Merge dev → main', `git merge dev --no-ff -m "release: ${apkLabel.slice(1)}"`)
+    state.releaseTag = `production-${apkLabel.slice(1)}`
+    await run('Tag production release', `git tag ${state.releaseTag}`)
     await run('Switch back to dev', 'git checkout dev')
     // Advance dev to the release merge commit so dev and main never drift.
     // Without this the merge commit lives only on main, their common base goes
     // stale, and the next version bump conflicts on package.json's version line.
     await run('Fast-forward dev to main', 'git merge --ff-only main')
-    await run('Push dev and main', 'git push --atomic origin dev main')
+    await run('Push dev, main and tag', `git push --atomic origin dev main ${state.releaseTag}`)
     state.published = true
     console.log(`\n✓ Release ${apkLabel.slice(1)} complete`)
   } else {
