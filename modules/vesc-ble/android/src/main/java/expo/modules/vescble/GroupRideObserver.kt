@@ -277,7 +277,10 @@ internal class GroupRideObserver(
                 }
                 emit(
                     "onGroupRideRoster",
-                    mapOf("rideId" to json.optString("rideId").takeIf { it.isNotEmpty() }, "riders" to riders),
+                    mapOf(
+                        "rideId" to if (json.isNull("rideId")) null else json.optString("rideId").takeIf { it.isNotEmpty() },
+                        "riders" to riders,
+                    ),
                 )
             }
             "error" -> {
@@ -353,7 +356,8 @@ internal class GroupRideObserver(
         return mapOf(
             "id" to id,
             "name" to obj.optString("name"),
-            "color" to obj.optString("color").takeIf { it.isNotEmpty() },
+            // optString turns JSON null into the literal string "null" — guard with isNull.
+            "color" to if (obj.isNull("color")) null else obj.optString("color").takeIf { it.isNotEmpty() },
             "presence" to presenceMap(obj.optJSONObject("presence")),
             "trail" to trailList(obj.optJSONArray("trail")),
             "stale" to obj.optBoolean("stale"),
