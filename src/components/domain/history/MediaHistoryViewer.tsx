@@ -55,32 +55,28 @@ function VideoAsset({
         style={styles.media}
       />
       {unavailable ? <Text style={styles.mediaUnavailable}>Video unavailable</Text> : null}
-      <View style={[styles.telemetryRow, { top }]}>
-        {sample ? (
-          <>
-            <VideoTelemetryStat
-              label="Speed"
-              value={telemetry.speed.formatWithUnit(sample.speedKmh)}
-              icon={GaugeIcon}
-              accent={telemetry.speed.color}
-            />
-            <VideoTelemetryStat
-              label="Duty"
-              value={telemetry.duty.formatWithUnit(dutyPercent(sample.dutyCycle, false))}
-              icon={LightningIcon}
-              accent={telemetry.duty.color}
-            />
-            <VideoTelemetryStat
-              label="Battery"
-              value={telemetry.battVoltage.formatWithUnit(sample.batteryVoltage)}
-              icon={BatteryMediumIcon}
-              accent={telemetry.battVoltage.color}
-            />
-          </>
-        ) : (
-          <Text style={styles.unavailable}>Ride telemetry unavailable</Text>
-        )}
-      </View>
+      {sample ? (
+        <View style={[styles.telemetryRow, { top }]}>
+          <VideoTelemetryStat
+            label="Speed"
+            value={telemetry.speed.formatWithUnit(sample.speedKmh)}
+            icon={GaugeIcon}
+            accent={telemetry.speed.color}
+          />
+          <VideoTelemetryStat
+            label="Duty"
+            value={telemetry.duty.formatWithUnit(dutyPercent(sample.dutyCycle, false))}
+            icon={LightningIcon}
+            accent={telemetry.duty.color}
+          />
+          <VideoTelemetryStat
+            label="Battery"
+            value={telemetry.battVoltage.formatWithUnit(sample.batteryVoltage)}
+            icon={BatteryMediumIcon}
+            accent={telemetry.battVoltage.color}
+          />
+        </View>
+      ) : null}
     </>
   )
 }
@@ -258,15 +254,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
-  },
-  unavailable: {
-    color: theme.palette.slate.textMuted,
-    fontSize: 12,
-    fontWeight: '700',
-    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
   },
   mediaUnavailable: {
     color: theme.status.error.text,

@@ -19,6 +19,7 @@ import { useSettingsStore } from '@/store/settingsStore'
 import { useWeatherStore } from '@/store/weatherStore'
 import { useMediaHistory } from '@/hooks/useMediaHistory'
 import type { MediaAssetInput } from '@/lib/history/mediaHistory'
+import { deleteRideMediaAssets } from '@/store/rideMediaFiles'
 import { getHistoryPreviewRoute } from '@/lib/history/previewRoute'
 
 interface UseCenterScreenControllerArgs {
@@ -273,6 +274,14 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
   }, [selectSession])
 
   const removeSession = useCallback(() => {
+    const session = useHistoryStore.getState().selectedSession
+    if (session) {
+      try {
+        deleteRideMediaAssets(session.id)
+      } catch {
+        // Ride removal must not fail on media cleanup; orphaned folders are harmless.
+      }
+    }
     void removeSelectedSession()
   }, [removeSelectedSession])
 

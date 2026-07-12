@@ -5,6 +5,8 @@ import { makeSample } from '@/test-utils/factories'
 import {
   clusterMediaHistoryAssets,
   findVideoTelemetrySample,
+  decodeRideMediaFilename,
+  encodeRideMediaFilename,
   matchMediaHistoryAssets,
   resolvePickedAssetCreationTime,
   type MediaAssetInput,
@@ -36,9 +38,6 @@ function asset(id: string, creationTime: number): MediaAssetInput {
     uri: `file://${id}.jpg`,
     filename: `${id}.jpg`,
     mediaType: 'photo',
-    duration: 0,
-    width: 100,
-    height: 100,
   }
 }
 
@@ -159,5 +158,41 @@ describe('resolvePickedAssetCreationTime', () => {
     expect(
       resolvePickedAssetCreationTime({ exif: { DateTimeOriginal: 42 }, filename: 'a.jpg' }),
     ).toBeNull()
+  })
+})
+
+describe('ride media filename codec', () => {
+  test('round-trips creation time and media type', () => {
+    const name = encodeRideMediaFilename({
+      id: 'asset-1',
+      uri: 'file:///cache/ImagePicker/abc.JPEG',
+      filename: '',
+      mediaType: 'photo',
+      creationTime: 1_717_249_805_000,
+    })
+    expect(name.endsWith('.jpeg')).toBe(true)
+    expect(decodeRideMediaFilename(name)).toEqual({
+      creationTime: 1_717_249_805_000,
+      mediaType: 'photo',
+    })
+  })
+
+  test('encodes unknown creation time as x and decodes it as NaN', () => {
+    const name = encodeRideMediaFilename({
+      id: 'asset-2',
+      uri: 'file:///cache/no-extension',
+      filename: '',
+      mediaType: 'video',
+      creationTime: Number.NaN,
+    })
+    expect(name.endsWith('.mp4')).toBe(true)
+    const decoded = decodeRideMediaFilename(name)
+    expect(decoded?.mediaType).toBe('video')
+    expect(Number.isNaN(decoded?.creationTime)).toBe(true)
+  })
+
+  test('rejects foreign filenames', () => {
+    expect(decodeRideMediaFilename('IMG_1234.jpg')).toBeNull()
+    expect(decodeRideMediaFilename('.nomedia')).toBeNull()
   })
 })

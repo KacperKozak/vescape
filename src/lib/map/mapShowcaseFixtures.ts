@@ -147,9 +147,6 @@ export const FIXTURE_MEDIA_ASSETS: MediaHistoryAsset[] = [
     filename: 'fixture-photo.png',
     mediaType: 'photo',
     creationTime: FIXTURE_RIDE_GPS_SAMPLES[4].capturedAtMs,
-    duration: 0,
-    width: 480,
-    height: 480,
     gps: FIXTURE_RIDE_GPS_SAMPLES[4],
   },
   {
@@ -158,9 +155,6 @@ export const FIXTURE_MEDIA_ASSETS: MediaHistoryAsset[] = [
     filename: 'fixture-video.png',
     mediaType: 'video',
     creationTime: FIXTURE_RIDE_GPS_SAMPLES[9].capturedAtMs,
-    duration: 14,
-    width: 480,
-    height: 480,
     gps: FIXTURE_RIDE_GPS_SAMPLES[9],
   },
 ]
