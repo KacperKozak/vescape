@@ -18,7 +18,7 @@ import { useMapStore } from '@/store/mapStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { useWeatherStore } from '@/store/weatherStore'
 import { useMediaHistory } from '@/hooks/useMediaHistory'
-import type { MediaHistoryAsset } from '@/lib/history/mediaHistory'
+import type { MediaAssetInput } from '@/lib/history/mediaHistory'
 import { getHistoryPreviewRoute } from '@/lib/history/previewRoute'
 
 interface UseCenterScreenControllerArgs {
@@ -366,15 +366,9 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
     sessionSamples,
     sessionGpsSamples,
     sessionMarkers,
-    mediaHistory: {
-      ...mediaHistory,
-      toggle: () => {
-        setOpenMediaAssetId(null)
-        mediaHistory.toggle()
-      },
-    },
+    mediaHistory,
     openMediaAssetId,
-    openMedia: (asset: MediaHistoryAsset) => setOpenMediaAssetId(asset.id),
+    openMedia: (asset: MediaAssetInput) => setOpenMediaAssetId(asset.id),
     closeMedia: () => setOpenMediaAssetId(null),
     historyPreview,
     historyPreviewRoute,

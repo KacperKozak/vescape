@@ -38,6 +38,16 @@ const config: ExpoConfig = {
     },
     predictiveBackGestureEnabled: false,
     package: 'app.vescape',
+    // Play's Photo and Video Permissions policy rejected READ_MEDIA_*; ride media uses the
+    // permissionless system photo picker instead. The storage pair is minSdk<=32 only and
+    // this app's minSdk is 33, so all of these are stripped from the merged manifest.
+    blockedPermissions: [
+      'android.permission.READ_MEDIA_IMAGES',
+      'android.permission.READ_MEDIA_VIDEO',
+      'android.permission.READ_MEDIA_VISUAL_USER_SELECTED',
+      'android.permission.READ_EXTERNAL_STORAGE',
+      'android.permission.WRITE_EXTERNAL_STORAGE',
+    ],
   },
   web: {
     output: 'static',
@@ -89,11 +99,13 @@ const config: ExpoConfig = {
     '@rnmapbox/maps',
     'expo-sharing',
     [
-      'expo-media-library',
+      'expo-image-picker',
       {
-        photosPermission:
-          'Allow Vescape to show local photos and videos captured during selected rides.',
-        granularPermissions: ['photo', 'video'],
+        // System photo picker only — no camera/mic use, and no READ_MEDIA_* permissions on
+        // Android (Play Photo and Video Permissions policy).
+        photosPermission: 'Allow Vescape to attach local photos and videos to selected rides.',
+        cameraPermission: false,
+        microphonePermission: false,
       },
     ],
     'expo-video',

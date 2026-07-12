@@ -63,7 +63,7 @@ import { TopBar } from '@/screens/center/TopBar'
 import { TuneDrawer } from '@/screens/center/TuneDrawer'
 import type { Board } from '@/store/boardStore'
 import type { HistorySession, TelemetryMinuteBucket, TelemetrySample } from '@/store/historyStore'
-import type { MediaHistoryAsset, MediaHistoryMatchDiagnostics } from '@/lib/history/mediaHistory'
+import type { MediaAssetInput, MediaHistoryAsset } from '@/lib/history/mediaHistory'
 import { useWeatherStore } from '@/store/weatherStore'
 
 interface CenterBoardOverlayProps {
@@ -125,17 +125,13 @@ interface CenterHistoryOverlayProps {
   onSeek: (timeMs: number) => void
   setActiveHistoryMapMetric: (metric: HistoryMetricKey) => void
   mediaHistory: {
-    enabled: boolean
-    permission: 'unknown' | 'full' | 'limited' | 'denied'
     assets: MediaHistoryAsset[]
-    mediaCount: number
-    diagnostics: MediaHistoryMatchDiagnostics
+    unmatched: MediaAssetInput[]
     loading: boolean
     error: string | null
-    toggle: () => void
-    refresh: () => void
-    manageLimitedAccess: () => Promise<void>
+    add: () => Promise<void>
   }
+  openMedia: (asset: MediaAssetInput) => void
   openMediaAssetId: string | null
   closeMedia: () => void
 }
@@ -809,9 +805,10 @@ export function CenterOverlays({
             samples={history.sessionSamples}
             canPrevious={history.canPreviousRide}
             canNext={!!history.nextRide}
-            mediaEnabled={history.mediaHistory.enabled}
+            mediaAssets={history.mediaHistory.assets}
+            mediaUnmatched={history.mediaHistory.unmatched}
             mediaLoading={history.mediaHistory.loading}
-            mediaCount={history.mediaHistory.mediaCount}
+            mediaError={history.mediaHistory.error}
             onPrevious={() => {
               void history.selectPreviousRide()
             }}
@@ -819,7 +816,8 @@ export function CenterOverlays({
               void history.selectNextRide()
             }}
             onOpenList={() => history.setHistorySheetVisible(true)}
-            onToggleMedia={history.mediaHistory.toggle}
+            onAddMedia={() => void history.mediaHistory.add()}
+            onOpenMedia={history.openMedia}
             onSeek={history.onSeek}
             onMetricInteraction={history.setActiveHistoryMapMetric}
             onHeightChange={setPanelHeight}
@@ -850,13 +848,15 @@ export function CenterOverlays({
             samples={[]}
             canPrevious={false}
             canNext={false}
-            mediaEnabled={history.mediaHistory.enabled}
+            mediaAssets={history.mediaHistory.assets}
+            mediaUnmatched={history.mediaHistory.unmatched}
             mediaLoading={history.mediaHistory.loading}
-            mediaCount={history.mediaHistory.mediaCount}
+            mediaError={history.mediaHistory.error}
             onPrevious={() => undefined}
             onNext={() => undefined}
             onOpenList={() => history.setHistorySheetVisible(true)}
-            onToggleMedia={history.mediaHistory.toggle}
+            onAddMedia={() => void history.mediaHistory.add()}
+            onOpenMedia={history.openMedia}
             onSeek={history.onSeek}
             onMetricInteraction={history.setActiveHistoryMapMetric}
             onHeightChange={setPanelHeight}
@@ -900,7 +900,7 @@ export function CenterOverlays({
       {history.openMediaAssetId ? (
         <MediaHistoryViewer
           key={history.openMediaAssetId}
-          assets={history.mediaHistory.assets}
+          assets={[...history.mediaHistory.assets, ...history.mediaHistory.unmatched]}
           initialAssetId={history.openMediaAssetId}
           samples={history.sessionSamples}
           markers={history.sessionMarkers}
