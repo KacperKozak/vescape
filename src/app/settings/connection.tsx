@@ -207,7 +207,21 @@ export default function ConnectionSettingsScreen() {
                   min={1}
                   max={480}
                   step={(v, dir) =>
-                    dir === 1 ? (v < 15 ? 5 : v < 60 ? 15 : 30) : v <= 15 ? 5 : v <= 60 ? 15 : 30
+                    dir === 1
+                      ? v < 5
+                        ? 1
+                        : v < 20
+                          ? 5
+                          : v < 60
+                            ? 10
+                            : 30
+                      : v <= 5
+                        ? 1
+                        : v <= 20
+                          ? 5
+                          : v <= 60
+                            ? 10
+                            : 30
                   }
                   onChange={(nextValue) => {
                     const clampedValue = Math.min(480, Math.max(1, nextValue))
