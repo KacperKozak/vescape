@@ -1,6 +1,7 @@
 package expo.modules.vescble
 
 import android.annotation.SuppressLint
+import android.app.ActivityManager
 import android.app.Service
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
@@ -1507,10 +1508,25 @@ internal class BoardSessionController(private val service: VescForegroundService
     private fun isBoardLinked(): Boolean =
         boardStatus == BoardPhase.Connected || boardStatus == BoardPhase.Stale
 
+    /** True when our process hosts a visible activity (user is looking at the app). */
+    private fun isAppVisible(): Boolean {
+        val state = ActivityManager.RunningAppProcessInfo()
+        ActivityManager.getMyMemoryState(state)
+        return state.importance <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
+    }
+
     private fun onAutoCloseFired() {
         if (!autoCloseEnabled || isBoardLinked() || isStoppingService) return
-        // Watching a Group Ride is deliberate board-less use: push the countdown instead of closing.
-        if (groupRideObserver.active) {
+        // Auto close targets forgotten background sessions; never yank the app out from under an
+        // active user. Visible (or otherwise foreground-important) app pushes the countdown.
+        if (isAppVisible()) {
+            rescheduleAutoClose()
+            return
+        }
+        // Riding in a Group Ride is deliberate board-less use: push the countdown instead of
+        // closing. Lobby observing doesn't count — the app observes whenever it is open.
+        if (groupRideObserver.participating) {
+            Log.i(VESC_SESSION_TAG, "Auto close postponed: Group Ride participation active")
             rescheduleAutoClose()
             return
         }
