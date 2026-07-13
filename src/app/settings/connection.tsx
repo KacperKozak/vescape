@@ -16,6 +16,7 @@ import { SettingsCard } from '@/components/ui/settings/SettingsCard'
 import { SettingsRow } from '@/components/ui/settings/SettingsRow'
 import { Stepper } from '@/components/ui/forms/Stepper'
 import { IconHero } from '@/components/ui/settings/IconHero'
+import { SettingsSectionTitle } from '@/components/ui/settings/SettingsSectionTitle'
 import { ConfirmModal } from '@/components/ui/modals/ConfirmModal'
 import { useSettingsStore } from '@/store/settingsStore'
 import { ensureBackgroundLocation, hasBackgroundLocation } from '@/hooks/usePermissions'
@@ -87,50 +88,61 @@ export default function ConnectionSettingsScreen() {
           icon={BluetoothConnectedIcon}
           description="Choose how the app wakes up, connects to your board, and reacts when the board connects."
         />
-        <SettingsCard>
-          {Platform.OS === 'android' ? (
-            <SettingsRow
-              icon={RocketLaunchIcon}
-              iconColor={theme.palette.green.color}
-              label="Auto start app"
-              hint="When your phone finds your board, it will automatically start the app in the background"
-              right={
-                <Switch
-                  value={companionPresenceEnabled}
-                  onValueChange={(v) => void onCompanionToggle(v)}
-                  trackColor={{ false: theme.palette.slate.border, true: theme.palette.sky.border }}
-                  thumbColor={
-                    companionPresenceEnabled
-                      ? theme.palette.sky.color
-                      : theme.palette.slate.textMuted
+
+        {Platform.OS === 'android' ? (
+          <>
+            <SettingsSectionTitle>Wake up</SettingsSectionTitle>
+            <SettingsCard>
+              <SettingsRow
+                icon={RocketLaunchIcon}
+                iconColor={theme.palette.green.color}
+                label="Auto start app"
+                hint="When your phone finds your board, it will automatically start the app in the background"
+                right={
+                  <Switch
+                    value={companionPresenceEnabled}
+                    onValueChange={(v) => void onCompanionToggle(v)}
+                    trackColor={{
+                      false: theme.palette.slate.border,
+                      true: theme.palette.sky.border,
+                    }}
+                    thumbColor={
+                      companionPresenceEnabled
+                        ? theme.palette.sky.color
+                        : theme.palette.slate.textMuted
+                    }
+                  />
+                }
+              />
+              {companionPresenceEnabled ? (
+                <SettingsRow
+                  icon={ClockCountdownIcon}
+                  iconColor={theme.palette.amber.color}
+                  label="Don't restart for"
+                  hint="After you exit the app, wait this long before auto starting again. 0 = off"
+                  right={
+                    <Stepper
+                      value={companionPresenceCooldownMinutes}
+                      unit="min"
+                      min={0}
+                      max={480}
+                      step={(v, dir) => (dir === 1 ? (v < 60 ? 15 : 30) : v <= 60 ? 15 : 30)}
+                      onChange={(nextValue) => {
+                        const clampedValue = Math.min(480, Math.max(0, nextValue))
+                        if (clampedValue !== companionPresenceCooldownMinutes) {
+                          void set('companionPresenceCooldownMinutes', clampedValue)
+                        }
+                      }}
+                    />
                   }
                 />
-              }
-            />
-          ) : null}
-          {Platform.OS === 'android' && companionPresenceEnabled ? (
-            <SettingsRow
-              icon={ClockCountdownIcon}
-              iconColor={theme.palette.amber.color}
-              label="Auto start pause"
-              hint="After you exit the app, wait this long before auto starting again. 0 = off"
-              right={
-                <Stepper
-                  value={companionPresenceCooldownMinutes}
-                  unit="min"
-                  min={0}
-                  max={480}
-                  step={(v, dir) => (dir === 1 ? (v < 60 ? 15 : 30) : v <= 60 ? 15 : 30)}
-                  onChange={(nextValue) => {
-                    const clampedValue = Math.min(480, Math.max(0, nextValue))
-                    if (clampedValue !== companionPresenceCooldownMinutes) {
-                      void set('companionPresenceCooldownMinutes', clampedValue)
-                    }
-                  }}
-                />
-              }
-            />
-          ) : null}
+              ) : null}
+            </SettingsCard>
+          </>
+        ) : null}
+
+        <SettingsSectionTitle>Connection</SettingsSectionTitle>
+        <SettingsCard>
           <SettingsRow
             icon={BluetoothConnectedIcon}
             iconColor={theme.palette.cyan.color}
@@ -176,63 +188,6 @@ export default function ConnectionSettingsScreen() {
               />
             }
           />
-          {Platform.OS === 'android' ? (
-            <SettingsRow
-              icon={PowerIcon}
-              iconColor={theme.palette.orange.color}
-              label="Auto close app"
-              hint="Close the app when the board stays disconnected"
-              right={
-                <Switch
-                  value={autoCloseEnabled}
-                  onValueChange={(v) => void set('autoCloseEnabled', v)}
-                  trackColor={{ false: theme.palette.slate.border, true: theme.palette.sky.border }}
-                  thumbColor={
-                    autoCloseEnabled ? theme.palette.sky.color : theme.palette.slate.textMuted
-                  }
-                />
-              }
-            />
-          ) : null}
-          {Platform.OS === 'android' && autoCloseEnabled ? (
-            <SettingsRow
-              icon={ClockCountdownIcon}
-              iconColor={theme.palette.orange.color}
-              label="Auto close after"
-              hint="Time without a board connection before the app closes itself"
-              right={
-                <Stepper
-                  value={autoCloseDelayMinutes}
-                  unit="min"
-                  min={1}
-                  max={480}
-                  step={(v, dir) =>
-                    dir === 1
-                      ? v < 5
-                        ? 1
-                        : v < 20
-                          ? 5
-                          : v < 60
-                            ? 10
-                            : 30
-                      : v <= 5
-                        ? 1
-                        : v <= 20
-                          ? 5
-                          : v <= 60
-                            ? 10
-                            : 30
-                  }
-                  onChange={(nextValue) => {
-                    const clampedValue = Math.min(480, Math.max(1, nextValue))
-                    if (clampedValue !== autoCloseDelayMinutes) {
-                      void set('autoCloseDelayMinutes', clampedValue)
-                    }
-                  }}
-                />
-              }
-            />
-          ) : null}
           <SettingsRow
             icon={SpeakerHighIcon}
             iconColor={theme.palette.cyan.color}
@@ -250,6 +205,72 @@ export default function ConnectionSettingsScreen() {
             }
           />
         </SettingsCard>
+
+        {Platform.OS === 'android' ? (
+          <>
+            <SettingsSectionTitle>Shutdown</SettingsSectionTitle>
+            <SettingsCard>
+              <SettingsRow
+                icon={PowerIcon}
+                iconColor={theme.palette.orange.color}
+                label="Auto close app"
+                hint="Close the app when the board stays disconnected"
+                right={
+                  <Switch
+                    value={autoCloseEnabled}
+                    onValueChange={(v) => void set('autoCloseEnabled', v)}
+                    trackColor={{
+                      false: theme.palette.slate.border,
+                      true: theme.palette.sky.border,
+                    }}
+                    thumbColor={
+                      autoCloseEnabled ? theme.palette.sky.color : theme.palette.slate.textMuted
+                    }
+                  />
+                }
+              />
+              {autoCloseEnabled ? (
+                <SettingsRow
+                  icon={ClockCountdownIcon}
+                  iconColor={theme.palette.orange.color}
+                  label="Close after"
+                  hint="Time without a board connection before the app closes itself"
+                  right={
+                    <Stepper
+                      value={autoCloseDelayMinutes}
+                      unit="min"
+                      min={1}
+                      max={480}
+                      step={(v, dir) =>
+                        dir === 1
+                          ? v < 5
+                            ? 1
+                            : v < 20
+                              ? 5
+                              : v < 60
+                                ? 10
+                                : 30
+                          : v <= 5
+                            ? 1
+                            : v <= 20
+                              ? 5
+                              : v <= 60
+                                ? 10
+                                : 30
+                      }
+                      onChange={(nextValue) => {
+                        const clampedValue = Math.min(480, Math.max(1, nextValue))
+                        if (clampedValue !== autoCloseDelayMinutes) {
+                          void set('autoCloseDelayMinutes', clampedValue)
+                        }
+                      }}
+                    />
+                  }
+                />
+              ) : null}
+            </SettingsCard>
+          </>
+        ) : null}
       </ScrollView>
       <ConfirmModal
         visible={bgLocationPrompt}
