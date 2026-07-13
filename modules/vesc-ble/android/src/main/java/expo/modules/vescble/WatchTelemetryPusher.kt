@@ -1,6 +1,7 @@
 package expo.modules.vescble
 
 import android.content.Context
+import android.util.Log
 import com.google.android.gms.tasks.Tasks
 import com.google.android.gms.wearable.Wearable
 import kotlinx.coroutines.CoroutineScope
@@ -13,6 +14,9 @@ private const val WATCH_TELEMETRY_PATH = "/telemetry"
  * [com.google.android.gms.wearable.MessageClient] send of an already-encoded Watch Frame to every
  * connected node. Lives native (in vesc-ble, beside the telemetry truth) so it keeps pushing while
  * JS is backgrounded mid-ride. The frame is built and throttled by [WatchTick]; this only ships bytes.
+ *
+ * Send failures log once per failure streak (not per frame — frames flow at ~2 Hz), so silent
+ * delivery problems like a package/certificate mismatch between phone and watch builds leave a trace.
  */
 internal class WatchTelemetryPusher(
     private val context: Context,
@@ -21,11 +25,21 @@ internal class WatchTelemetryPusher(
     private val messageClient by lazy { Wearable.getMessageClient(context) }
     private val nodeClient by lazy { Wearable.getNodeClient(context) }
 
+    @Volatile
+    private var lastSendFailed = false
+
     fun pushFrame(frame: ByteArray) {
         scope.launch {
             val nodes = runCatching { Tasks.await(nodeClient.connectedNodes) }.getOrNull() ?: return@launch
             for (node in nodes) {
                 messageClient.sendMessage(node.id, WATCH_TELEMETRY_PATH, frame)
+                    .addOnSuccessListener { lastSendFailed = false }
+                    .addOnFailureListener { error ->
+                        if (!lastSendFailed) {
+                            Log.w(VESC_SESSION_TAG, "Watch frame send failed node=${node.id}: ${error.message}")
+                        }
+                        lastSendFailed = true
+                    }
             }
         }
     }

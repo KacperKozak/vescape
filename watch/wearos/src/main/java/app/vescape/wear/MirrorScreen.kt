@@ -104,6 +104,7 @@ fun MirrorScreen(
 private fun MirrorContent(state: MirrorState, isAmbient: Boolean) {
     when (state.status) {
         MirrorStatus.DISCONNECTED -> DisconnectedLayout(isAmbient)
+        MirrorStatus.WAITING -> WaitingLayout(isAmbient)
         MirrorStatus.STALE -> if (isAmbient) AmbientLayout(state.frame!!) else FrameLayout(state.frame!!, muted = true)
         MirrorStatus.LIVE -> if (isAmbient) AmbientLayout(state.frame!!) else FrameLayout(state.frame!!, muted = false)
     }
@@ -299,6 +300,11 @@ private fun AmbientLayout(frame: WatchFrame) {
     )
 }
 
+/**
+ * No fresh frames: name the reason from the watch-local [PhoneLink] instead of an anonymous
+ * spinner, so "Bluetooth to phone is down" and "phone app missing" and "app just isn't riding"
+ * are distinguishable at a glance.
+ */
 @Composable
 private fun DisconnectedLayout(isAmbient: Boolean) {
     if (isAmbient) {
@@ -308,13 +314,65 @@ private fun DisconnectedLayout(isAmbient: Boolean) {
             color = AmbientText,
             textAlign = TextAlign.Center,
         )
-    } else {
-        CircularProgressIndicator(
-            modifier = Modifier.fillMaxSize().padding(8.dp),
-            indicatorColor = SpeedColor,
-            trackColor = GuideColor,
-            strokeWidth = 4.dp,
+        return
+    }
+
+    val link by TelemetryState.phoneLink
+    val (title, caption) = when (link) {
+        PhoneLink.UNKNOWN -> "Connecting…" to ""
+        PhoneLink.NO_PHONE -> "No phone link" to "Check Bluetooth"
+        PhoneLink.PHONE_ONLY -> "Phone linked" to "Vescape app not found"
+        PhoneLink.APP_REACHABLE -> "Phone connected" to "No board session"
+    }
+    StatusLayout(title = title, caption = caption, spin = link != PhoneLink.NO_PHONE)
+}
+
+/** Phone session live, board telemetry not flowing yet. */
+@Composable
+private fun WaitingLayout(isAmbient: Boolean) {
+    if (isAmbient) {
+        Text(
+            text = "--",
+            style = MaterialTheme.typography.display1,
+            color = AmbientText,
+            textAlign = TextAlign.Center,
         )
+        return
+    }
+    StatusLayout(title = "Board connecting…", caption = "Waiting for telemetry", spin = true)
+}
+
+@Composable
+private fun StatusLayout(title: String, caption: String, spin: Boolean) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        if (spin) {
+            CircularProgressIndicator(
+                modifier = Modifier.fillMaxSize().padding(8.dp),
+                indicatorColor = SpeedColor,
+                trackColor = GuideColor,
+                strokeWidth = 4.dp,
+            )
+        }
+        Column(
+            modifier = Modifier.padding(horizontal = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.title3,
+                color = PrimaryText,
+                textAlign = TextAlign.Center,
+            )
+            if (caption.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = caption,
+                    style = MaterialTheme.typography.caption2,
+                    color = SecondaryText,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
     }
 }
 

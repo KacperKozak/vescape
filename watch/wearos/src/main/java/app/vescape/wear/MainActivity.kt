@@ -23,6 +23,7 @@ import com.google.android.gms.wearable.Wearable
  */
 class MainActivity : ComponentActivity() {
     private val messageClient by lazy { Wearable.getMessageClient(this) }
+    private val phoneLinkMonitor by lazy { PhoneLinkMonitor(this) }
     private val ongoingActivityController by lazy { OngoingActivityController(this) }
     private val isAmbient = mutableStateOf(false)
     private val ambientObserver = AmbientLifecycleObserver(this, AmbientCallback())
@@ -56,9 +57,11 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         messageClient.addListener(listener)
+        phoneLinkMonitor.start()
     }
 
     override fun onStop() {
+        phoneLinkMonitor.stop()
         messageClient.removeListener(listener)
         super.onStop()
     }
@@ -66,6 +69,7 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         lifecycle.removeObserver(ambientObserver)
         setKeepScreenAwake(false)
+        phoneLinkMonitor.shutdown()
         ongoingActivityController.stop()
         super.onDestroy()
     }

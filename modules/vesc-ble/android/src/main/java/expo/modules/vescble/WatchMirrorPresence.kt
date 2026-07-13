@@ -7,10 +7,16 @@ import com.google.android.gms.wearable.CapabilityClient
 import com.google.android.gms.wearable.Wearable
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /** Wear capability our Mirror app declares (watch/wearos res/values/wear.xml). Keep the two in sync. */
 internal const val WATCH_MIRROR_CAPABILITY = "vescape_watch_mirror"
+
+/** How often the cached presence flag is re-derived from a fresh capability/node query. */
+private const val PRESENCE_REFRESH_MS = 15_000L
 
 /**
  * Tracks whether a reachable Wear node actually runs our Watch Mirror, gating the phone push (ADR-0019).
@@ -18,8 +24,10 @@ internal const val WATCH_MIRROR_CAPABILITY = "vescape_watch_mirror"
  * installed and connected, so we never burn Bluetooth/battery pushing frames into the void.
  *
  * Reactive like [VescCompanionPresence] (note: that one tracks a CompanionDeviceManager BLE device —
- * unrelated concept, do not conflate): one initial query plus a [CapabilityClient] listener keep the
- * cached [present] flag fresh. The watch tick reads [present] each tick; it never does an async lookup.
+ * unrelated concept, do not conflate): a [CapabilityClient] listener gives the instant positive, and a
+ * slow periodic re-query keeps the cached [present] flag honest — a watch whose Bluetooth link was
+ * down at session start must start receiving frames once it comes back, not stay dark all session.
+ * The watch tick reads [present] each tick; it never does an async lookup.
  */
 internal class WatchMirrorPresence(
     private val context: Context,
@@ -32,25 +40,36 @@ internal class WatchMirrorPresence(
     var present: Boolean = false
         private set
 
+    private var refreshJob: Job? = null
+
     private val listener = CapabilityClient.OnCapabilityChangedListener { info ->
         present = info.nodes.isNotEmpty()
         Log.d(VESC_SESSION_TAG, "Watch mirror presence changed: $present")
     }
 
     fun start() {
+        if (refreshJob?.isActive == true) return
         capabilityClient.addListener(listener, WATCH_MIRROR_CAPABILITY)
-        scope.launch(Dispatchers.IO) {
-            val capabilityPresent = runCatching {
-                Tasks.await(
-                    capabilityClient.getCapability(WATCH_MIRROR_CAPABILITY, CapabilityClient.FILTER_REACHABLE),
-                )
-            }.getOrNull()?.nodes?.isNotEmpty() ?: false
-            present = capabilityPresent || debugReachableWearNode()
-            Log.d(VESC_SESSION_TAG, "Watch mirror presence initial: $present capability=$capabilityPresent")
+        refreshJob = scope.launch(Dispatchers.IO) {
+            while (isActive) {
+                val capabilityPresent = runCatching {
+                    Tasks.await(
+                        capabilityClient.getCapability(WATCH_MIRROR_CAPABILITY, CapabilityClient.FILTER_REACHABLE),
+                    )
+                }.getOrNull()?.nodes?.isNotEmpty() ?: false
+                val next = capabilityPresent || debugReachableWearNode()
+                if (next != present) {
+                    Log.d(VESC_SESSION_TAG, "Watch mirror presence refreshed: $next capability=$capabilityPresent")
+                }
+                present = next
+                delay(PRESENCE_REFRESH_MS)
+            }
         }
     }
 
     fun stop() {
+        refreshJob?.cancel()
+        refreshJob = null
         runCatching { capabilityClient.removeListener(listener, WATCH_MIRROR_CAPABILITY) }
         present = false
     }
@@ -59,8 +78,6 @@ internal class WatchMirrorPresence(
         if (!BuildConfig.DEBUG) return false
 
         val nodes = runCatching { Tasks.await(nodeClient.connectedNodes) }.getOrNull().orEmpty()
-        val fallback = nodes.isNotEmpty()
-        Log.d(VESC_SESSION_TAG, "Watch mirror debug node fallback: $fallback nodes=${nodes.size}")
-        return fallback
+        return nodes.isNotEmpty()
     }
 }
