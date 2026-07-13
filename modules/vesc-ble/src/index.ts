@@ -727,7 +727,7 @@ export interface AppSettings {
    * board connection. Does not pause companion auto start — the board reappearing relaunches.
    */
   autoCloseEnabled: boolean
-  /** Minutes without a board connection before auto close fires. 1–1440. */
+  /** Minutes without a board connection before auto close fires. UI offers 1–480; native accepts up to 1440. */
   autoCloseDelayMinutes: number
   /**
    * Max telemetry poll rate in Hz, applied as a minimum spacing floor between
