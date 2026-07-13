@@ -723,6 +723,13 @@ export interface AppSettings {
    */
   companionPresenceCooldownMinutes: number
   /**
+   * Android-only: close the whole app (task + service) after `autoCloseDelayMinutes` without a
+   * board connection. Does not pause companion auto start — the board reappearing relaunches.
+   */
+  autoCloseEnabled: boolean
+  /** Minutes without a board connection before auto close fires. UI offers 1–480; native accepts up to 1440. */
+  autoCloseDelayMinutes: number
+  /**
    * Max telemetry poll rate in Hz, applied as a minimum spacing floor between
    * requests. Polling stays response-paced (the next request is only sent once
    * the previous reply lands), so this caps the rate without ever outrunning the

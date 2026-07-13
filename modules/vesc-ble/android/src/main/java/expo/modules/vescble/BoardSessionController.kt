@@ -1,6 +1,7 @@
 package expo.modules.vescble
 
 import android.annotation.SuppressLint
+import android.app.ActivityManager
 import android.app.Service
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
@@ -437,6 +438,9 @@ internal class BoardSessionController(private val service: VescForegroundService
     private var gpsError: String? = null
     private var isStoppingService = false
     private var connectionSoundsEnabled = true
+    private var autoCloseEnabled = false
+    private var autoCloseDelayMinutes = 15
+    private var autoCloseHandle: Cancellable? = null
     private var lastSentCommand: Int? = null
     private var lastReceivedCommandByte: Int? = null
     private var boardSession: BoardSession? = null
@@ -452,6 +456,9 @@ internal class BoardSessionController(private val service: VescForegroundService
         DiagnosticReporter.initialize(service)
         notificationController.createChannel()
         refreshSelectedBoardName()
+        // Arm Auto close even when the service starts without a session (companion/GPS-only):
+        // applyTelemetrySettings caches the auto-close config and (re)schedules the countdown.
+        VescForegroundService.appDataScope.launch { loadTelemetrySettings(service.applicationContext) }
         // startForegroundService() is satisfied by the first real action below. Calling
         // startForeground() here would not know the intent yet and can assert a FGS type whose
         // runtime permission has not been granted.
@@ -598,6 +605,8 @@ internal class BoardSessionController(private val service: VescForegroundService
     }
 
     fun onServiceDestroy() {
+        autoCloseHandle?.cancel()
+        autoCloseHandle = null
         if (!isStoppingService) {
             stopCurrentBoardSession(emitDisconnected = false)
         }
@@ -1473,7 +1482,63 @@ internal class BoardSessionController(private val service: VescForegroundService
     ) {
         boardStatus = next
         recordName?.let { recordingCoordinator.recordState(it, recordProperties) }
+        rescheduleAutoClose()
         emitState()
+    }
+
+    /**
+     * Auto close (Connection settings): exit the whole app after the configured delay without a
+     * board link. The countdown arms when the phase leaves Connected/Stale and only cancels once a
+     * link is back, so reconnect-loop phase churn never resets it. Deliberately does NOT arm the
+     * companion restart gate: the board reappearing should be able to auto start the app again.
+     */
+    private fun rescheduleAutoClose() {
+        if (!autoCloseEnabled || isBoardLinked() || isStoppingService) {
+            autoCloseHandle?.cancel()
+            autoCloseHandle = null
+            return
+        }
+        if (autoCloseHandle != null) return
+        autoCloseHandle = scheduler.postDelayed(autoCloseDelayMinutes * 60_000L) {
+            autoCloseHandle = null
+            onAutoCloseFired()
+        }
+    }
+
+    private fun isBoardLinked(): Boolean =
+        boardStatus == BoardPhase.Connected || boardStatus == BoardPhase.Stale
+
+    /** True when our process hosts a visible activity (user is looking at the app). */
+    private fun isAppVisible(): Boolean {
+        val state = ActivityManager.RunningAppProcessInfo()
+        ActivityManager.getMyMemoryState(state)
+        return state.importance <= ActivityManager.RunningAppProcessInfo.IMPORTANCE_FOREGROUND
+    }
+
+    private fun onAutoCloseFired() {
+        if (!autoCloseEnabled || isBoardLinked() || isStoppingService) return
+        // Auto close targets forgotten background sessions; never yank the app out from under an
+        // active user. Visible (or otherwise foreground-important) app pushes the countdown.
+        if (isAppVisible()) {
+            rescheduleAutoClose()
+            return
+        }
+        // Riding in a Group Ride is deliberate board-less use: push the countdown instead of
+        // closing. Lobby observing doesn't count — the app observes whenever it is open.
+        if (groupRideObserver.participating) {
+            Log.i(VESC_SESSION_TAG, "Auto close postponed: Group Ride participation active")
+            rescheduleAutoClose()
+            return
+        }
+        Log.i(VESC_SESSION_TAG, "Auto close: no board link for ${autoCloseDelayMinutes}min, exiting app")
+        recordLocalDiagnostic("auto_close_app", boardConfig, "session", mapOf("delayMinutes" to autoCloseDelayMinutes))
+        isStoppingService = true
+        service.stopForeground(Service.STOP_FOREGROUND_REMOVE)
+        notificationController.cancel()
+        stopCurrentBoardSession(emitDisconnected = true)
+        stopLocationUpdates()
+        closeAppTask()
+        service.stopSelf()
     }
 
     private fun setStatus(next: BoardPhase) =
@@ -1771,6 +1836,10 @@ internal class BoardSessionController(private val service: VescForegroundService
         movingThresholdCentiKmh = settings.toMetricSanitizerConfig().movingSpeedThresholdCentiKmh
         pollingLoop.setPollIntervalMs(effectivePollIntervalMs())
         watchTick.setIntervalMs(settings.wearMirrorIntervalMs.toLong())
+        autoCloseEnabled = settings.autoCloseEnabled
+        autoCloseDelayMinutes = settings.autoCloseDelayMinutes
+        // May run off-main (appDataScope); the countdown state lives on the main-handler scheduler.
+        scheduler.post { rescheduleAutoClose() }
     }
 
     /** Poll spacing honoring an active Idle Pause: never faster than the configured rate. */

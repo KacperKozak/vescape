@@ -434,6 +434,10 @@ final class AppDataRepository {
     "autoRecording": false,
     "companionPresenceEnabled": false,
     "companionPresenceCooldownMinutes": 60,
+    // @platform-diff Auto close is Android-only behavior (iOS forbids programmatic app exit);
+    // the keys exist here only so getSettings() returns the full settings shape.
+    "autoCloseEnabled": false,
+    "autoCloseDelayMinutes": 15,
     "selectedBoardId": NSNull(),
     "riderId": NSNull(),
     "riderName": NSNull(),

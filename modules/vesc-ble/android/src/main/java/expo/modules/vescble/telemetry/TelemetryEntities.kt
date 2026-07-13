@@ -372,6 +372,8 @@ data class AppSettings(
   val wearMirrorIntervalMs: Int = 500,
   val companionPresenceEnabled: Boolean = false,
   val companionPresenceCooldownMinutes: Int = 60,
+  val autoCloseEnabled: Boolean = false,
+  val autoCloseDelayMinutes: Int = 15,
   val riderId: String? = null,
   val riderName: String? = null,
   val riderColor: String? = null,

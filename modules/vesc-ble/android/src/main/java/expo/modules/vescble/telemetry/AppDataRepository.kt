@@ -47,6 +47,12 @@ internal fun validCompanionCooldownMinutes(value: Any?): Int? =
     ?.toInt()
     ?.coerceIn(0, 1440)
 
+/** Auto close delay in minutes; at least 1 so a fired timer always had a real wait. */
+internal fun validAutoCloseDelayMinutes(value: Any?): Int? =
+  (value as? Number)
+    ?.toInt()
+    ?.coerceIn(1, 1440)
+
 /** Watch Mirror push interval in ms; floored at 50ms (20Hz), capped at 10s. */
 internal fun validWearMirrorIntervalMs(value: Any?): Int? =
   (value as? Number)
@@ -202,6 +208,8 @@ class AppDataRepository private constructor(private val context: Context) {
       wearMirrorIntervalMs = req("wearMirrorIntervalMs", 500, ::validWearMirrorIntervalMs),
       companionPresenceEnabled = req("companionPresenceEnabled", false) { it as? Boolean },
       companionPresenceCooldownMinutes = req("companionPresenceCooldownMinutes", 60, ::validCompanionCooldownMinutes),
+      autoCloseEnabled = req("autoCloseEnabled", false) { it as? Boolean },
+      autoCloseDelayMinutes = req("autoCloseDelayMinutes", 15, ::validAutoCloseDelayMinutes),
       riderId = opt("riderId") { it as? String },
       riderName = opt("riderName") { it as? String },
       riderColor = opt("riderColor") { it as? String },
@@ -258,6 +266,9 @@ class AppDataRepository private constructor(private val context: Context) {
       "companionPresenceEnabled" -> value as? Boolean ?: return@withContext
       "companionPresenceCooldownMinutes" ->
         validCompanionCooldownMinutes(value) ?: return@withContext
+      "autoCloseEnabled" -> value as? Boolean ?: return@withContext
+      "autoCloseDelayMinutes" ->
+        validAutoCloseDelayMinutes(value) ?: return@withContext
       "riderId", "riderName", "riderColor" -> value as? String
       else -> return@withContext
     }
@@ -289,6 +300,8 @@ class AppDataRepository private constructor(private val context: Context) {
         "wearMirrorIntervalMs" -> d.wearMirrorIntervalMs
         "companionPresenceEnabled" -> d.companionPresenceEnabled
         "companionPresenceCooldownMinutes" -> d.companionPresenceCooldownMinutes
+        "autoCloseEnabled" -> d.autoCloseEnabled
+        "autoCloseDelayMinutes" -> d.autoCloseDelayMinutes
         "riderId" -> d.riderId
         "riderName" -> d.riderName
         "riderColor" -> d.riderColor
@@ -559,6 +572,8 @@ fun AppSettings.toMap(): Map<String, Any?> = mapOf(
   "wearMirrorIntervalMs" to wearMirrorIntervalMs,
   "companionPresenceEnabled" to companionPresenceEnabled,
   "companionPresenceCooldownMinutes" to companionPresenceCooldownMinutes,
+  "autoCloseEnabled" to autoCloseEnabled,
+  "autoCloseDelayMinutes" to autoCloseDelayMinutes,
   "riderId" to riderId,
   "riderName" to riderName,
   "riderColor" to riderColor,
