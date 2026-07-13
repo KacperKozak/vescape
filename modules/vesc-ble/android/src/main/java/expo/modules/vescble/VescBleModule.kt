@@ -484,7 +484,8 @@ class VescBleModule : Module() {
         key == "freeSpinStationaryBoardCapKmh" ||
         key == "socEstimateWindowSeconds" ||
         key == "telemetryPollRateHz" ||
-        key == "wearMirrorIntervalMs"
+        key == "wearMirrorIntervalMs" ||
+        key == "wearAutoLaunchOnConnect"
       ) {
         VescForegroundService.reloadTelemetrySettings(context.applicationContext)
       }

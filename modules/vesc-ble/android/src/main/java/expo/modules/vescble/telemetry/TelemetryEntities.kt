@@ -370,6 +370,7 @@ data class AppSettings(
   val connectionSoundsEnabled: Boolean = true,
   val telemetryPollRateHz: Int = 20,
   val wearMirrorIntervalMs: Int = 500,
+  val wearAutoLaunchOnConnect: Boolean = true,
   val companionPresenceEnabled: Boolean = false,
   val companionPresenceCooldownMinutes: Int = 60,
   val autoCloseEnabled: Boolean = false,

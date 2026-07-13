@@ -743,6 +743,12 @@ export interface AppSettings {
    */
   wearMirrorIntervalMs: number
   /**
+   * Android-only: bring the Watch Mirror to the foreground on the paired watch when a fresh
+   * board session connects (never on mid-ride auto-reconnects). No-op unless the Mirror app
+   * is installed and reachable.
+   */
+  wearAutoLaunchOnConnect: boolean
+  /**
    * Persistent device-scoped anonymous Group Ride Rider id. Generated once on
    * first use and stored locally; sent to the relay server as the Rider's
    * identity. See ADR-0020.
