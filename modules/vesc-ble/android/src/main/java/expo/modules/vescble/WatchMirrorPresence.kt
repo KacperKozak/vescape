@@ -15,8 +15,13 @@ import kotlinx.coroutines.launch
 /** Wear capability our Mirror app declares (watch/wearos res/values/wear.xml). Keep the two in sync. */
 internal const val WATCH_MIRROR_CAPABILITY = "vescape_watch_mirror"
 
-/** How often the cached presence flag is re-derived from a fresh capability/node query. */
-private const val PRESENCE_REFRESH_MS = 15_000L
+/**
+ * Re-query cadence: a quick burst right after session start (the window where the watch link is
+ * most likely still settling), then a slow steady heartbeat. The CapabilityClient listener stays
+ * the instant path; this only backstops missed events.
+ */
+private val PRESENCE_REFRESH_BURST_MS = longArrayOf(1_000L, 2_000L, 5_000L)
+private const val PRESENCE_REFRESH_STEADY_MS = 15_000L
 
 /**
  * Tracks whether a reachable Wear node actually runs our Watch Mirror, gating the phone push (ADR-0019).
@@ -51,6 +56,7 @@ internal class WatchMirrorPresence(
         if (refreshJob?.isActive == true) return
         capabilityClient.addListener(listener, WATCH_MIRROR_CAPABILITY)
         refreshJob = scope.launch(Dispatchers.IO) {
+            var attempt = 0
             while (isActive) {
                 val capabilityPresent = runCatching {
                     Tasks.await(
@@ -62,7 +68,8 @@ internal class WatchMirrorPresence(
                     Log.d(VESC_SESSION_TAG, "Watch mirror presence refreshed: $next capability=$capabilityPresent")
                 }
                 present = next
-                delay(PRESENCE_REFRESH_MS)
+                delay(PRESENCE_REFRESH_BURST_MS.getOrElse(attempt) { PRESENCE_REFRESH_STEADY_MS })
+                attempt++
             }
         }
     }
