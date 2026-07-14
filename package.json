@@ -11,9 +11,10 @@
   "scripts": {
     "start": "expo start",
     "prebuild": "expo prebuild",
-    "android": "expo run:android --device",
+    "native:sync": "bun run scripts/native-sync.ts",
+    "android": "bun run native:sync android && expo run:android --device",
     "android:e2e": "EXPO_PUBLIC_E2E=1 bun run android",
-    "ios": "expo run:ios --device",
+    "ios": "bun run native:sync ios && expo run:ios --device",
     "relay:reverse": "adb devices | awk 'NR>1 && $2==\"device\" {print $1}' | xargs -I{} adb -s {} reverse tcp:3000 tcp:3000",
     "lint": "expo lint",
     "format": "oxfmt . '!.agents/skills/**'",
