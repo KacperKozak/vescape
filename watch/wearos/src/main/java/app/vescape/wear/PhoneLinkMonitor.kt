@@ -75,7 +75,9 @@ class PhoneLinkMonitor(context: Context) {
 
     private fun publish(link: PhoneLink) {
         mainHandler.post {
-            if (running) TelemetryState.phoneLink.value = link
+            if (!running) return@post
+            WatchDiagnostics.recordLinkChange(link)
+            TelemetryState.phoneLink.value = link
         }
     }
 }

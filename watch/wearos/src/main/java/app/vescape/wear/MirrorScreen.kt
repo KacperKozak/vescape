@@ -4,6 +4,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,9 +37,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.wear.compose.foundation.BasicSwipeToDismissBox
+import androidx.wear.compose.foundation.edgeSwipeToDismiss
+import androidx.wear.compose.foundation.rememberSwipeToDismissBoxState
 import androidx.wear.compose.material.CircularProgressIndicator
 import androidx.wear.compose.material.MaterialTheme
-import androidx.wear.compose.material.SwipeToDismissBox
 import androidx.wear.compose.material.Text
 import kotlinx.coroutines.delay
 import kotlin.math.cos
@@ -80,19 +84,39 @@ fun MirrorScreen(
     }
 
     MaterialTheme {
-        if (showClosePrompt) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        when {
+            showClosePrompt -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 ClosePrompt(onStay = { showClosePrompt = false }, onClose = onRequestClose)
             }
-        } else {
-            SwipeToDismissBox(
-                onDismissed = { showClosePrompt = true },
-            ) { isBackground ->
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    if (isBackground) {
-                        ClosePrompt(onStay = { showClosePrompt = false }, onClose = onRequestClose)
-                    } else {
-                        MirrorContent(state = state, isAmbient = isAmbient)
+            // Ambient bypasses the pager: always the dim hero, never the diagnostics page.
+            isAmbient -> Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                MirrorContent(state = state, isAmbient = true)
+            }
+            else -> {
+                // Page 0 = gauges, page 1 = diagnostics. Dismiss (close prompt) stays on the left
+                // edge via edgeSwipeToDismiss; interior swipes page between the two.
+                val dismissState = rememberSwipeToDismissBoxState()
+                val pagerState = rememberPagerState(pageCount = { 2 })
+                BasicSwipeToDismissBox(
+                    onDismissed = { showClosePrompt = true },
+                    state = dismissState,
+                ) { isBackground ->
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        if (isBackground) {
+                            ClosePrompt(onStay = { showClosePrompt = false }, onClose = onRequestClose)
+                        } else {
+                            HorizontalPager(
+                                state = pagerState,
+                                modifier = Modifier.fillMaxSize().edgeSwipeToDismiss(dismissState),
+                            ) { page ->
+                                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    when (page) {
+                                        0 -> MirrorContent(state = state, isAmbient = false)
+                                        else -> DiagnosticsScreen()
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -446,18 +470,5 @@ private data class GaugeStyle(
 private val DefaultGaugeStyle = GaugeStyle(GUIDE_W, HEAD_W, HEAD_LEN_RATIO)
 private val StrongGaugeStyle = GaugeStyle(2.dp, 4.dp, 0.18f)
 private val SoftGaugeStyle = GaugeStyle(1.dp, 2.dp, 0.10f)
-
-// Palette mirrors src/constants/theme.ts so the watch matches the phone app.
-private val PrimaryText = Color(0xFFF1F5F9) // slate.textPrimary
-private val SecondaryText = Color(0xFF94A3B8) // slate.textSecondary
-private val DimText = Color(0xFF64748B) // slate.textMuted
-private val GuideColor = Color(0xFF334155) // slate.border
-private val SpeedColor = Color(0xFF38BDF8) // sky.color
-private val DutyColor = Color(0xFF14B8A6) // teal.color
-private val MotorTempColor = Color(0xFFEF4444) // red.color (motorTemp)
-private val CtrlTempColor = Color(0xFFF97316) // orange.color (controllerTemp)
-private val BatteryColor = Color(0xFF22C55E) // green.color
-private val WarningColor = Color(0xFFF97316) // orange.color
-private val AmbientText = Color(0xFFB8C4CE)
 
 private const val AMBIENT_REFRESH_INTERVAL_MS = 60_000L

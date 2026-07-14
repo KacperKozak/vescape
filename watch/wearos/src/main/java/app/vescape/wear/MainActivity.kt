@@ -34,9 +34,18 @@ class MainActivity : ComponentActivity() {
     }
 
     private val listener = MessageClient.OnMessageReceivedListener { event ->
-        if (event.path != TELEMETRY_PATH) return@OnMessageReceivedListener
-        WatchFrameDecoder.decode(event.data)?.let { frame ->
-            runOnUiThread { TelemetryState.acceptFrame(frame, SystemClock.elapsedRealtime()) }
+        if (event.path != TELEMETRY_PATH) {
+            runOnUiThread { WatchDiagnostics.recordUnknownPath(event.path) }
+            return@OnMessageReceivedListener
+        }
+        val frame = WatchFrameDecoder.decode(event.data)
+        runOnUiThread {
+            if (frame != null) {
+                WatchDiagnostics.recordFrame()
+                TelemetryState.acceptFrame(frame, SystemClock.elapsedRealtime())
+            } else {
+                WatchDiagnostics.recordDecodeFailure(event.data)
+            }
         }
     }
 
@@ -58,9 +67,11 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         messageClient.addListener(listener)
         phoneLinkMonitor.start()
+        WatchDiagnostics.recordReceiver(active = true)
     }
 
     override fun onStop() {
+        WatchDiagnostics.recordReceiver(active = false)
         phoneLinkMonitor.stop()
         messageClient.removeListener(listener)
         super.onStop()
