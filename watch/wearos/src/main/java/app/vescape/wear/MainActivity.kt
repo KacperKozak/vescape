@@ -1,7 +1,6 @@
 package app.vescape.wear
 
 import android.Manifest
-import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
@@ -11,7 +10,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.mutableStateOf
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import androidx.core.content.ContextCompat
 import androidx.wear.ambient.AmbientLifecycleObserver
 import com.google.android.gms.wearable.MessageClient
 import com.google.android.gms.wearable.Wearable
@@ -86,7 +84,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun startOngoingActivityWhenAllowed() {
-        if (canPostNotifications()) {
+        if (ongoingActivityController.canPostNotifications()) {
             ongoingActivityController.start()
             return
         }
@@ -95,11 +93,6 @@ class MainActivity : ComponentActivity() {
             requestPostNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
-
-    private fun canPostNotifications(): Boolean =
-        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
-            PackageManager.PERMISSION_GRANTED
 
     private fun setKeepScreenAwake(keepAwake: Boolean) {
         if (keepAwake) {
