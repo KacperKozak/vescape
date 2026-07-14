@@ -19,12 +19,13 @@ private const val WATCH_MIRROR_URI = "vescape://mirror"
 /**
  * Phone -> watch app launch on board connect. Asks Wear OS to bring the Watch Mirror to the
  * foreground via [RemoteActivityHelper], targeting only nodes that declare
- * [WATCH_MIRROR_CAPABILITY] so a merely-paired watch is never poked. Fire-and-forget: failures
- * only log — the ride never depends on this.
+ * [WATCH_MIRROR_CAPABILITY] so a merely-paired watch is never poked. Fire-and-forget: the ride
+ * never depends on this — outcomes only [record] to the in-app diagnostic event log.
  */
 internal class WatchMirrorLauncher(
     private val context: Context,
     private val scope: CoroutineScope,
+    private val record: (String, Map<String, Any?>) -> Unit,
 ) {
     private val capabilityClient by lazy { Wearable.getCapabilityClient(context) }
     private val remoteActivityHelper by lazy { RemoteActivityHelper(context) }
@@ -38,6 +39,7 @@ internal class WatchMirrorLauncher(
             }.getOrNull().orEmpty()
             if (nodes.isEmpty()) {
                 Log.d(VESC_SESSION_TAG, "Watch mirror launch skipped: no capable node")
+                record("watch_mirror_launch_skipped", emptyMap())
                 return@launch
             }
             val intent = Intent(Intent.ACTION_VIEW)
@@ -47,8 +49,14 @@ internal class WatchMirrorLauncher(
                 val future = remoteActivityHelper.startRemoteActivity(intent, node.id)
                 future.addListener({
                     runCatching { future.get() }
-                        .onSuccess { Log.d(VESC_SESSION_TAG, "Watch mirror launched node=${node.id}") }
-                        .onFailure { Log.w(VESC_SESSION_TAG, "Watch mirror launch failed: ${it.message}") }
+                        .onSuccess {
+                            Log.d(VESC_SESSION_TAG, "Watch mirror launched node=${node.id}")
+                            record("watch_mirror_launched", mapOf("node" to node.id))
+                        }
+                        .onFailure {
+                            Log.w(VESC_SESSION_TAG, "Watch mirror launch failed: ${it.message}")
+                            record("watch_mirror_launch_failed", mapOf("node" to node.id, "error" to it.message))
+                        }
                 }, ContextCompat.getMainExecutor(context))
             }
         }

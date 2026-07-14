@@ -162,13 +162,13 @@ internal class BoardSessionController(private val service: VescForegroundService
         )
     }
     private val watchPusher by lazy {
-        WatchTelemetryPusher(service.applicationContext, VescForegroundService.appDataScope)
+        WatchTelemetryPusher(service.applicationContext, VescForegroundService.appDataScope, ::recordWatchDiagnostic)
     }
     private val watchMirrorPresence by lazy {
-        WatchMirrorPresence(service.applicationContext, VescForegroundService.appDataScope)
+        WatchMirrorPresence(service.applicationContext, VescForegroundService.appDataScope, ::recordWatchDiagnostic)
     }
     private val watchMirrorLauncher by lazy {
-        WatchMirrorLauncher(service.applicationContext, VescForegroundService.appDataScope)
+        WatchMirrorLauncher(service.applicationContext, VescForegroundService.appDataScope, ::recordWatchDiagnostic)
     }
     private val watchTick by lazy {
         WatchTick(
@@ -1950,6 +1950,9 @@ internal class BoardSessionController(private val service: VescForegroundService
         operation: String,
         properties: Map<String, Any?> = emptyMap(),
     ): Unit = diagnosticsRecorder.recordLocalDiagnostic(eventName, session, operation, properties)
+
+    private fun recordWatchDiagnostic(eventName: String, properties: Map<String, Any?>): Unit =
+        recordLocalDiagnostic(eventName, boardConfig, "watch", properties)
 
     private fun diagnosticProperties(session: SessionConfig?, operation: String): Map<String, Any?> =
         diagnosticsRecorder.diagnosticProperties(session, operation)
