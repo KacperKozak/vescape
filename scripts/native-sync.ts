@@ -13,7 +13,17 @@ export type Platform = (typeof PLATFORMS)[number]
  * Durable inputs that Expo prebuild turns into `ios/` and `android/`. Files or directories,
  * repo-relative. Anything generated (`ios/`, `android/`, Pods) is output, never input.
  */
-const PREBUILD_INPUTS = ['app.config.ts', 'package.json', 'bun.lock', 'plugins', 'patches']
+const PREBUILD_INPUTS = [
+  'app.config.ts',
+  'package.json',
+  'bun.lock',
+  'plugins',
+  'patches',
+  // Every file here is baked into the native projects by prebuild (launcher icon, adaptive icon
+  // layers, splash). Images the JS bundle loads at runtime live in `assets/logo` and
+  // `assets/map-points`, so this stays narrow enough not to prebuild on unrelated art edits.
+  'assets/images',
+]
 
 /** iOS-only prebuild inputs: `@bacons/apple-targets` copies these into the generated Xcode project. */
 const IOS_PREBUILD_INPUTS = ['targets']
@@ -247,9 +257,12 @@ function run(command: string[], options: { cwd?: string; env?: Record<string, st
     stdout: 'inherit',
   })
 
-  if (result.exitCode !== 0) {
-    console.error(`\nnative-sync failed: ${command.join(' ')} exited with ${result.exitCode}`)
-    process.exit(result.exitCode)
+  // `exitCode` is null when the child dies from a signal, and `process.exit(null)` exits 0 — which
+  // would let the `&&` in `bun run ios` launch the app on a half-generated native project.
+  if (!result.success) {
+    const status = result.exitCode ?? `signal ${result.signalCode}`
+    console.error(`\nnative-sync failed: ${command.join(' ')} exited with ${status}`)
+    process.exit(result.exitCode ?? 1)
   }
 }
 

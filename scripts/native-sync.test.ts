@@ -24,6 +24,7 @@ beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'native-sync-'))
   write('app.config.ts', 'export default {}')
   write('package.json', '{}')
+  write('assets/images/icon.png', 'icon')
   write('shared/alerts/alert_beep.wav', 'beep')
   write('shared/data/cell-presets.json', '{}')
   write('modules/vesc-ble/expo-module.config.json', '{}')
@@ -88,6 +89,21 @@ describe('prebuildFingerprint', () => {
 
     expect(prebuildFingerprint('ios', root)).toEqual(before)
   })
+
+  it('changes when the launcher icon changes, which prebuild bakes into the native projects', () => {
+    const before = prebuildFingerprint('android', root)
+    write('assets/images/icon.png', 'new icon')
+
+    expect(prebuildFingerprint('android', root)).not.toEqual(before)
+  })
+
+  it('ignores art the JS bundle loads at runtime', () => {
+    const before = prebuildFingerprint('android', root)
+    write('assets/logo/logo.png', 'logo')
+    write('assets/map-points/pin.png', 'pin')
+
+    expect(prebuildFingerprint('android', root)).toEqual(before)
+  })
 })
 
 describe('shared assets', () => {
@@ -112,6 +128,17 @@ describe('shared assets', () => {
     expect(missingSharedOutputs(root)).toEqual([
       'modules/vesc-ble/android/src/main/res/raw/alert_beep.wav',
     ])
+  })
+
+  it('copies sources whose extension is upper-case, since the copy is lower-cased anyway', () => {
+    write('shared/alerts/Alert_Loud.WAV', 'loud')
+
+    expect(missingSharedOutputs(root)).toContain(
+      'modules/vesc-ble/android/src/main/res/raw/alert_loud.wav',
+    )
+
+    copyShared(root, { quiet: true })
+    expect(missingSharedOutputs(root)).toEqual([])
   })
 
   it('fingerprints the shared source, not the generated copies', () => {

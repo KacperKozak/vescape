@@ -45,7 +45,7 @@ export function sharedTargets(root = ROOT): SharedTarget[] {
 export function sharedSources(target: SharedTarget): string[] {
   if (!existsSync(target.src)) return []
   return readdirSync(target.src)
-    .filter((file) => target.extensions.has(extname(file)))
+    .filter((file) => target.extensions.has(extname(file).toLowerCase()))
     .sort()
     .map((file) => join(target.src, file))
 }

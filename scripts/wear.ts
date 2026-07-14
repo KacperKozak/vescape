@@ -44,8 +44,9 @@ function run(command: string[], options: { cwd?: string; env?: Record<string, st
     stdout: 'inherit',
   })
 
-  if (result.exitCode !== 0) {
-    fail(`${command[0]} exited with ${result.exitCode}`)
+  // `exitCode` is null when the child dies from a signal, so report the signal rather than "null".
+  if (!result.success) {
+    fail(`${command[0]} exited with ${result.exitCode ?? `signal ${result.signalCode}`}`)
   }
 }
 
@@ -76,6 +77,8 @@ function buildTools() {
   if (!sdk) fail('ANDROID_HOME / ANDROID_SDK_ROOT not set')
 
   const dir = join(sdk, 'build-tools')
+  if (!existsSync(dir)) fail(`no build-tools installed under ${dir}`)
+
   const latest = readdirSync(dir).sort(Bun.semver.order).at(-1)
   if (!latest) fail(`no build-tools installed under ${dir}`)
 
@@ -167,13 +170,21 @@ function launch(serial: string) {
     PACKAGE,
     'android.permission.POST_NOTIFICATIONS',
   ])
-  run(['adb', '-s', serial, 'shell', 'am', 'start', '-n', ACTIVITY])
+
+  // The crash buffer is persistent, so anything already in it predates this install and would make
+  // the smoke check fail on a healthy app. Clear it here and everything it holds afterwards is ours.
+  run(['adb', '-s', serial, 'logcat', '-b', 'crash', '-c'])
+  run(['adb', '-s', serial, 'shell', 'am', 'start', '-W', '-n', ACTIVITY])
 }
 
 function smokeCheck(serial: string) {
-  const crashes = capture(['adb', '-s', serial, 'logcat', '-b', 'crash', '-d', '-t', '80'])
+  // `am start -W` returns once the activity is up, which is before a crash during first frame or
+  // Data Layer setup would land in the buffer.
+  Bun.sleepSync(3000)
+
+  const crashes = capture(['adb', '-s', serial, 'logcat', '-b', 'crash', '-d'])
     .split('\n')
-    .filter((line) => line.includes(PACKAGE) || line.includes('FATAL EXCEPTION'))
+    .filter((line) => line.trim().length > 0)
 
   if (crashes.length > 0) {
     console.error('\nwear: fresh crash in the watch log:\n')
