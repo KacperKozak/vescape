@@ -1,9 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs'
+import { mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { decideSync, podsFingerprint, prebuildFingerprint } from './native-sync.ts'
-import type { NativeState } from './native-sync.ts'
+import { copyShared } from './copy-shared.ts'
+import {
+  missingSharedOutputs,
+  planSync,
+  podsFingerprint,
+  prebuildFingerprint,
+  sharedFingerprint,
+} from './native-sync.ts'
+import type { NativeState, Platform } from './native-sync.ts'
 
 let root: string
 
@@ -17,6 +24,8 @@ beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'native-sync-'))
   write('app.config.ts', 'export default {}')
   write('package.json', '{}')
+  write('shared/alerts/alert_beep.wav', 'beep')
+  write('shared/data/cell-presets.json', '{}')
   write('modules/vesc-ble/expo-module.config.json', '{}')
   write('modules/vesc-ble/ios/VescBle.podspec', 'spec')
   write('modules/vesc-ble/ios/VescBleModule.swift', 'class VescBleModule {}')
@@ -37,13 +46,6 @@ describe('podsFingerprint', () => {
   it('changes when a Swift file is added, because Pods compile a globbed file list', () => {
     const before = podsFingerprint(root)
     write('modules/vesc-ble/ios/BoardPhase.swift', 'enum BoardPhase {}')
-
-    expect(podsFingerprint(root)).not.toEqual(before)
-  })
-
-  it('changes when a bundled resource is added', () => {
-    const before = podsFingerprint(root)
-    write('modules/vesc-ble/ios/alerts/beep.wav', 'wav')
 
     expect(podsFingerprint(root)).not.toEqual(before)
   })
@@ -88,86 +90,181 @@ describe('prebuildFingerprint', () => {
   })
 })
 
-describe('decideSync', () => {
-  const state = (): NativeState => ({
-    prebuild: prebuildFingerprint('ios', root),
+describe('shared assets', () => {
+  it('reports every copy as missing before copy:shared runs', () => {
+    expect(missingSharedOutputs(root)).toEqual([
+      'modules/vesc-ble/android/src/main/res/raw/alert_beep.wav',
+      'modules/vesc-ble/android/src/main/assets/data/cell-presets.json',
+      'modules/vesc-ble/android/src/test/resources/data/cell-presets.json',
+    ])
+  })
+
+  it('reports nothing missing once copy:shared has run', () => {
+    copyShared(root, { quiet: true })
+
+    expect(missingSharedOutputs(root)).toEqual([])
+  })
+
+  it('reports a deleted copy as missing', () => {
+    copyShared(root, { quiet: true })
+    unlinkSync(join(root, 'modules/vesc-ble/android/src/main/res/raw/alert_beep.wav'))
+
+    expect(missingSharedOutputs(root)).toEqual([
+      'modules/vesc-ble/android/src/main/res/raw/alert_beep.wav',
+    ])
+  })
+
+  it('fingerprints the shared source, not the generated copies', () => {
+    const before = sharedFingerprint(root)
+    copyShared(root, { quiet: true })
+
+    expect(sharedFingerprint(root)).toEqual(before)
+
+    write('shared/alerts/alert_beep.wav', 'louder beep')
+    expect(sharedFingerprint(root)).not.toEqual(before)
+  })
+})
+
+describe('planSync', () => {
+  const state = (platform: Platform): NativeState => ({
+    shared: sharedFingerprint(root),
+    prebuild: prebuildFingerprint(platform, root),
     pods: podsFingerprint(root),
   })
 
-  const synced = () => ({
-    platform: 'ios' as const,
-    nativeDirExists: true,
-    podsDirExists: true,
-    cached: state(),
-    next: state(),
-  })
+  const synced = (platform: Platform) => {
+    copyShared(root, { quiet: true })
+    return {
+      platform,
+      nativeDirExists: true,
+      podsDirExists: true,
+      missingSharedOutputs: missingSharedOutputs(root),
+      cached: state(platform),
+      next: state(platform),
+    }
+  }
 
-  it('does nothing when fingerprints match', () => {
-    expect(decideSync(synced())).toEqual({ action: 'none', reasons: [] })
+  it('does nothing when every scope matches', () => {
+    expect(planSync(synced('ios'))).toEqual([])
+    expect(planSync(synced('android'))).toEqual([])
   })
 
   it('prebuilds when the native folder is missing', () => {
-    const { action, reasons } = decideSync({ ...synced(), nativeDirExists: false })
+    const steps = planSync({ ...synced('android'), nativeDirExists: false })
 
-    expect(action).toBe('prebuild')
-    expect(reasons).toEqual(['ios/ is missing'])
+    expect(steps).toEqual([{ action: 'prebuild', reasons: ['android/ is missing'] }])
   })
 
-  it('prebuilds when no fingerprint was ever cached', () => {
-    const { action, reasons } = decideSync({ ...synced(), cached: null })
+  it('syncs everything when no fingerprint was ever cached', () => {
+    expect(planSync({ ...synced('ios'), cached: null })).toEqual([
+      { action: 'prebuild', reasons: ['no cached native fingerprint'] },
+      { action: 'pods', reasons: ['prebuild regenerates the Podfile'] },
+    ])
 
-    expect(action).toBe('prebuild')
-    expect(reasons).toEqual(['no cached native fingerprint'])
+    expect(planSync({ ...synced('android'), cached: null })).toEqual([
+      { action: 'shared', reasons: ['no cached shared-asset fingerprint'] },
+      { action: 'prebuild', reasons: ['no cached native fingerprint'] },
+    ])
+  })
+
+  it('does not list every shared file when only the shared scope has no cached fingerprint', () => {
+    const base = synced('android')
+    const steps = planSync({ ...base, cached: { ...base.cached, shared: {} } })
+
+    expect(steps).toEqual([{ action: 'shared', reasons: ['no cached shared-asset fingerprint'] }])
   })
 
   it('names the changed prebuild inputs', () => {
-    const cached = state()
+    const base = synced('android')
     write('app.config.ts', 'export default { name: "vescape" }')
     write('plugins/withThing.ts', 'export default {}')
 
-    const { action, reasons } = decideSync({ ...synced(), cached, next: state() })
+    const steps = planSync({ ...base, next: state('android') })
 
-    expect(action).toBe('prebuild')
-    expect(reasons).toEqual(['+ plugins/withThing.ts', '~ app.config.ts'])
+    expect(steps).toEqual([
+      { action: 'prebuild', reasons: ['+ plugins/withThing.ts', '~ app.config.ts'] },
+    ])
   })
 
-  it('prefers prebuild over pod install when both scopes drifted', () => {
-    const cached = state()
+  it('installs pods after an iOS prebuild, which regenerates the Podfile', () => {
+    const base = synced('ios')
     write('app.config.ts', 'export default { name: "vescape" }')
-    write('modules/vesc-ble/ios/BoardPhase.swift', 'enum BoardPhase {}')
 
-    expect(decideSync({ ...synced(), cached, next: state() }).action).toBe('prebuild')
+    const steps = planSync({ ...base, next: state('ios') })
+
+    expect(steps).toEqual([
+      { action: 'prebuild', reasons: ['~ app.config.ts'] },
+      { action: 'pods', reasons: ['prebuild regenerates the Podfile'] },
+    ])
   })
 
   it('installs pods when the module Swift file list changed', () => {
-    const cached = state()
+    const base = synced('ios')
     write('modules/vesc-ble/ios/BoardPhase.swift', 'enum BoardPhase {}')
 
-    const { action, reasons } = decideSync({ ...synced(), cached, next: state() })
+    const steps = planSync({ ...base, next: state('ios') })
 
-    expect(action).toBe('pods')
-    expect(reasons).toEqual(['~ modules/vesc-ble/ios#layout'])
+    expect(steps).toEqual([{ action: 'pods', reasons: ['~ modules/vesc-ble/ios#layout'] }])
   })
 
   it('installs pods when Pods/ is missing', () => {
-    const { action, reasons } = decideSync({ ...synced(), podsDirExists: false })
+    const steps = planSync({ ...synced('ios'), podsDirExists: false })
 
-    expect(action).toBe('pods')
-    expect(reasons).toEqual(['ios/Pods/ is missing'])
+    expect(steps).toEqual([{ action: 'pods', reasons: ['ios/Pods/ is missing'] }])
   })
 
   it('never installs pods for android', () => {
-    const cached = state()
+    const base = synced('android')
     write('modules/vesc-ble/ios/BoardPhase.swift', 'enum BoardPhase {}')
 
-    const decision = decideSync({
-      ...synced(),
-      platform: 'android',
-      podsDirExists: false,
-      cached,
-      next: state(),
+    const steps = planSync({ ...base, podsDirExists: false, next: state('android') })
+
+    expect(steps).toEqual([])
+  })
+
+  it('copies shared assets when the shared source changed', () => {
+    const base = synced('android')
+    write('shared/alerts/alert_beep.wav', 'louder beep')
+
+    const steps = planSync({ ...base, next: state('android') })
+
+    expect(steps).toEqual([{ action: 'shared', reasons: ['~ shared/alerts/alert_beep.wav'] }])
+  })
+
+  it('copies shared assets when a generated copy was deleted', () => {
+    const base = synced('android')
+    unlinkSync(join(root, 'modules/vesc-ble/android/src/main/res/raw/alert_beep.wav'))
+
+    const steps = planSync({ ...base, missingSharedOutputs: missingSharedOutputs(root) })
+
+    expect(steps).toEqual([
+      {
+        action: 'shared',
+        reasons: ['! modules/vesc-ble/android/src/main/res/raw/alert_beep.wav is missing'],
+      },
+    ])
+  })
+
+  it('does not copy shared assets for iOS, which symlinks them', () => {
+    const base = synced('ios')
+    write('shared/alerts/alert_beep.wav', 'louder beep')
+
+    const steps = planSync({
+      ...base,
+      missingSharedOutputs: ['modules/vesc-ble/android/src/main/res/raw/alert_beep.wav'],
+      next: state('ios'),
     })
 
-    expect(decision).toEqual({ action: 'none', reasons: [] })
+    expect(steps).toEqual([])
+  })
+
+  it('copies shared assets before prebuilding', () => {
+    const base = synced('android')
+    write('shared/alerts/alert_beep.wav', 'louder beep')
+    write('app.config.ts', 'export default { name: "vescape" }')
+
+    const steps = planSync({ ...base, next: state('android') })
+
+    expect(steps.map((step) => step.action)).toEqual(['shared', 'prebuild'])
   })
 })

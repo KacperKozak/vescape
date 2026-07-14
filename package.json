@@ -10,6 +10,7 @@
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
+    "postinstall": "bun run copy:shared",
     "prebuild": "expo prebuild",
     "native:sync": "bun run scripts/native-sync.ts",
     "android": "bun run native:sync android && expo run:android --device",

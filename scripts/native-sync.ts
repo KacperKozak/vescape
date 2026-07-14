@@ -1,6 +1,7 @@
 import { createHash } from 'crypto'
 import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'fs'
 import { join, relative } from 'path'
+import { copyShared, sharedOutput, sharedSources, sharedTargets } from './copy-shared.ts'
 
 const ROOT = join(import.meta.dir, '..')
 const CACHE_DIR = join(ROOT, '.expo', 'native-sync')
@@ -26,6 +27,7 @@ const IGNORED_ENTRIES = new Set(['.DS_Store', '.build', 'node_modules'])
 export type Fingerprint = Record<string, string>
 
 export interface NativeState {
+  shared: Fingerprint
   prebuild: Fingerprint
   pods: Fingerprint
 }
@@ -36,7 +38,12 @@ export interface Diff {
   changed: string[]
 }
 
-export type SyncAction = 'prebuild' | 'pods' | 'none'
+export type SyncAction = 'shared' | 'prebuild' | 'pods'
+
+export interface SyncStep {
+  action: SyncAction
+  reasons: string[]
+}
 
 function hash(value: string | Buffer) {
   return createHash('sha256').update(value).digest('hex').slice(0, 16)
@@ -111,11 +118,38 @@ export function podsFingerprint(root = ROOT): Fingerprint {
   return fingerprint
 }
 
+/**
+ * `shared/` is the single source of truth for alert audio and cell presets. Android needs real
+ * copies of it inside the module (Gradle cannot follow a symlink out of the module), so those copies
+ * are generated state that drifts whenever `shared/` changes — or whenever someone deletes them.
+ */
+export function sharedFingerprint(root = ROOT): Fingerprint {
+  const fingerprint: Fingerprint = {}
+
+  for (const target of sharedTargets(root)) {
+    hashFiles(sharedSources(target), root, fingerprint)
+  }
+
+  return fingerprint
+}
+
+/** Copies `copyShared()` should have produced but that are not on disk. */
+export function missingSharedOutputs(root = ROOT): string[] {
+  return sharedTargets(root)
+    .flatMap((target) => sharedSources(target).map((source) => sharedOutput(target, source)))
+    .filter((output) => !existsSync(output))
+    .map((output) => relative(root, output))
+}
+
 export function diffFingerprints(previous: Fingerprint, next: Fingerprint): Diff {
   const added = Object.keys(next).filter((key) => !(key in previous))
   const removed = Object.keys(previous).filter((key) => !(key in next))
   const changed = Object.keys(next).filter((key) => key in previous && previous[key] !== next[key])
   return { added, removed, changed }
+}
+
+function isEmpty(fingerprint: Fingerprint) {
+  return Object.keys(fingerprint).length === 0
 }
 
 function describe(diff: Diff) {
@@ -126,29 +160,51 @@ function describe(diff: Diff) {
   ]
 }
 
-export function decideSync(input: {
+export function planSync(input: {
   platform: Platform
   nativeDirExists: boolean
   podsDirExists: boolean
+  missingSharedOutputs: string[]
   cached: NativeState | null
   next: NativeState
-}): { action: SyncAction; reasons: string[] } {
-  const { platform, nativeDirExists, podsDirExists, cached, next } = input
+}): SyncStep[] {
+  const { platform, nativeDirExists, podsDirExists, missingSharedOutputs, cached, next } = input
+  const steps: SyncStep[] = []
 
-  if (!nativeDirExists) return { action: 'prebuild', reasons: [`${platform}/ is missing`] }
-  if (!cached) return { action: 'prebuild', reasons: ['no cached native fingerprint'] }
+  // Android compiles the copies under `modules/vesc-ble/android/src/`; iOS reads `shared/` through
+  // symlinks, so it has nothing to copy.
+  if (platform === 'android') {
+    const cachedShared = cached?.shared ?? {}
+    const shared = isEmpty(cachedShared)
+      ? ['no cached shared-asset fingerprint']
+      : [
+          ...missingSharedOutputs.map((path) => `! ${path} is missing`),
+          ...describe(diffFingerprints(cachedShared, next.shared)),
+        ]
 
-  const prebuild = describe(diffFingerprints(cached.prebuild, next.prebuild))
-  if (prebuild.length > 0) return { action: 'prebuild', reasons: prebuild }
+    if (shared.length > 0) steps.push({ action: 'shared', reasons: shared })
+  }
 
-  if (platform === 'android') return { action: 'none', reasons: [] }
+  const prebuild = !nativeDirExists
+    ? [`${platform}/ is missing`]
+    : !cached
+      ? ['no cached native fingerprint']
+      : describe(diffFingerprints(cached.prebuild, next.prebuild))
 
-  if (!podsDirExists) return { action: 'pods', reasons: ['ios/Pods/ is missing'] }
+  if (prebuild.length > 0) steps.push({ action: 'prebuild', reasons: prebuild })
 
-  const pods = describe(diffFingerprints(cached.pods, next.pods))
-  if (pods.length > 0) return { action: 'pods', reasons: pods }
+  if (platform === 'ios') {
+    const pods =
+      prebuild.length > 0
+        ? ['prebuild regenerates the Podfile']
+        : !podsDirExists
+          ? ['ios/Pods/ is missing']
+          : describe(diffFingerprints(cached?.pods ?? {}, next.pods))
 
-  return { action: 'none', reasons: [] }
+    if (pods.length > 0) steps.push({ action: 'pods', reasons: pods })
+  }
+
+  return steps
 }
 
 function readCache(platform: Platform): NativeState | null {
@@ -168,7 +224,11 @@ function writeCache(platform: Platform, state: NativeState) {
 }
 
 function readState(platform: Platform): NativeState {
-  return { prebuild: prebuildFingerprint(platform), pods: podsFingerprint() }
+  return {
+    shared: sharedFingerprint(),
+    prebuild: prebuildFingerprint(platform),
+    pods: podsFingerprint(),
+  }
 }
 
 function run(command: string[], options: { cwd?: string; env?: Record<string, string> } = {}) {
@@ -194,43 +254,45 @@ function main() {
     process.exit(1)
   }
 
-  const { action, reasons } = decideSync({
+  const steps = planSync({
     platform,
     nativeDirExists: existsSync(join(ROOT, platform)),
     podsDirExists: existsSync(join(ROOT, 'ios', 'Pods')),
+    missingSharedOutputs: missingSharedOutputs(),
     cached: readCache(platform),
     next: readState(platform),
   })
 
-  if (action === 'none') {
+  if (steps.length === 0) {
     console.log(`native-sync ${platform}: up to date`)
     return
   }
 
-  const intent =
-    action === 'prebuild'
-      ? 'expo prebuild regenerates the native project'
-      : 'pod install refreshes the Pods project'
-
-  console.log(`native-sync ${platform}: ${intent} because:`)
-  for (const reason of reasons) {
-    console.log(`  ${reason}`)
+  const intents: Record<SyncAction, string> = {
+    shared: 'copy:shared refreshes the generated Android assets',
+    prebuild: 'expo prebuild regenerates the native project',
+    pods: 'pod install refreshes the Pods project',
   }
 
-  if (action === 'prebuild') {
-    run(['bunx', 'expo', 'prebuild', '--platform', platform])
-  }
+  for (const { action, reasons } of steps) {
+    console.log(`\nnative-sync ${platform}: ${intents[action]} because:`)
+    for (const reason of reasons) {
+      console.log(`  ${reason}`)
+    }
 
-  // Prebuild regenerates the Podfile but does not reliably install from it, so iOS always finishes
-  // with `pod install` — a no-op when Pods already match. CocoaPods reads paths as ASCII-8BIT and
-  // crashes on `unicode_normalize` unless the locale is UTF-8, which non-interactive shells often
-  // lack; Expo's own CLI pins LANG for the same reason.
-  if (platform === 'ios') {
-    const lang = process.env.LANG ?? ''
-    run(['pod', 'install'], {
-      cwd: join(ROOT, 'ios'),
-      env: { LANG: lang.toUpperCase().includes('UTF-8') ? lang : 'en_US.UTF-8' },
-    })
+    if (action === 'shared') {
+      copyShared()
+    } else if (action === 'prebuild') {
+      run(['bunx', 'expo', 'prebuild', '--platform', platform])
+    } else {
+      // CocoaPods reads paths as ASCII-8BIT and crashes on `unicode_normalize` unless the locale is
+      // UTF-8, which non-interactive shells often lack; Expo's own CLI pins LANG for the same reason.
+      const lang = process.env.LANG ?? ''
+      run(['pod', 'install'], {
+        cwd: join(ROOT, 'ios'),
+        env: { LANG: lang.toUpperCase().includes('UTF-8') ? lang : 'en_US.UTF-8' },
+      })
+    }
   }
 
   // Fingerprint the post-sync tree: prebuild can rewrite its own inputs (lockfile, package.json).
