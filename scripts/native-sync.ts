@@ -18,6 +18,9 @@ const PREBUILD_INPUTS = ['app.config.ts', 'package.json', 'bun.lock', 'plugins',
 /** iOS-only prebuild inputs: `@bacons/apple-targets` copies these into the generated Xcode project. */
 const IOS_PREBUILD_INPUTS = ['targets']
 
+/** Android-only prebuild inputs: `withWearMirror` copies the Wear OS Mirror into `android/wearos/`. */
+const ANDROID_PREBUILD_INPUTS = ['watch']
+
 /** Per-Expo-module prebuild inputs: native registration and dependency declarations. */
 const MODULE_PREBUILD_INPUTS = ['expo-module.config.json', 'package.json']
 
@@ -75,7 +78,10 @@ function hashFiles(paths: string[], root: string, into: Fingerprint) {
 
 export function prebuildFingerprint(platform: Platform, root = ROOT): Fingerprint {
   const fingerprint: Fingerprint = {}
-  const inputs = [...PREBUILD_INPUTS, ...(platform === 'ios' ? IOS_PREBUILD_INPUTS : [])]
+  const inputs = [
+    ...PREBUILD_INPUTS,
+    ...(platform === 'ios' ? IOS_PREBUILD_INPUTS : ANDROID_PREBUILD_INPUTS),
+  ]
 
   for (const input of inputs) {
     hashFiles(walk(join(root, input)), root, fingerprint)

@@ -29,8 +29,13 @@ deleted copy re-runs `copyShared()`. Steps run in order, so this lands before an
 
 **Prebuild** (both platforms) — content hashes of `app.config.ts`, `package.json`, `bun.lock`,
 `plugins/`, `patches/`, every `modules/*/expo-module.config.json` and `modules/*/package.json`, plus
-`targets/` on iOS (`@bacons/apple-targets` copies those into the Xcode project). Any change here
-means the generated native project is stale, so the script runs `expo prebuild --platform <p>`.
+`targets/` on iOS (`@bacons/apple-targets` copies those into the Xcode project) and `watch/` on
+Android (`withWearMirror` copies the Wear OS Mirror into `android/wearos/`). Any change here means
+the generated native project is stale, so the script runs `expo prebuild --platform <p>`.
+
+Because `watch/` is a prebuild input, editing the Wear Mirror is enough: the next `bun run android`
+or `bun run wear:*` re-runs prebuild, and the plugin re-copies the source. Nothing hand-copies
+`android/wearos/`.
 
 **Pods** (iOS only) — content hashes of `modules/*/ios/*.podspec`, plus a hash of the sorted **file
 path list** under each `modules/*/ios/`. CocoaPods compiles whatever the podspec globbed at
