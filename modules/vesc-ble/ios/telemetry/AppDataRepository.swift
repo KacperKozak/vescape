@@ -435,6 +435,7 @@ final class AppDataRepository {
     "autoConnect": true,
     "autoRecording": false,
     "companionPresenceEnabled": false,
+    "boardWarningsEnabled": true,
     "companionPresenceCooldownMinutes": 60,
     // @platform-diff Auto close is Android-only behavior (iOS forbids programmatic app exit);
     // the keys exist here only so getSettings() returns the full settings shape.

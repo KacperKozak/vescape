@@ -474,8 +474,16 @@ internal class BoardSessionController(private val service: VescForegroundService
     private var gpsError: String? = null
     private var isStoppingService = false
     private var connectionSoundsEnabled = true
-    private var wearAutoLaunchOnConnect = true
+private var wearAutoLaunchOnConnect = true
     private var watchLaunchFiredSessionId = 0L
+    /**
+     * Board Warnings master switch (kill switch, #219). Off ⇒ no detector evaluation, no registry
+     * writes, no session-end clean pass. Cached from settings by [applyTelemetrySettings] so the
+     * BMS hot path never re-reads settings; @Volatile because evals run on BLE callbacks while
+     * updates land from appDataScope.
+     */
+    @Volatile
+    private var boardWarningsEnabled = true
     private var autoCloseEnabled = false
     private var autoCloseDelayMinutes = 15
     private var autoCloseHandle: Cancellable? = null
@@ -1205,6 +1213,7 @@ internal class BoardSessionController(private val service: VescForegroundService
      * @parity /modules/vesc-ble/ios/connection/BoardSessionController.swift `evaluateCellSpread`
      */
     private fun evaluateCellSpread(bms: BmsTelemetry) = guardWarningEval("cell_spread") {
+        if (!boardWarningsEnabled) return@guardWarningEval
         val boardId = boardConfig?.appBoardId ?: return@guardWarningEval
         val finding = cellSpreadDetector.onFrame(
             cellVoltages = bms.cellVoltages,
@@ -1225,6 +1234,7 @@ internal class BoardSessionController(private val service: VescForegroundService
      * @parity /modules/vesc-ble/ios/connection/BoardSessionController.swift `evaluateBatteryConfigMismatch`
      */
     private fun evaluateBatteryConfigMismatch(bms: BmsTelemetry) = guardWarningEval("battery_config_mismatch") {
+        if (!boardWarningsEnabled) return@guardWarningEval
         val boardId = boardConfig?.appBoardId ?: return@guardWarningEval
         val seriesCount = (batteryConfigCache?.get("seriesCount") as? Number)?.toInt()
         val payloadJson = batteryConfigMismatchDetector.onFrame(bms.cellVoltages.size, seriesCount)
@@ -1248,6 +1258,7 @@ internal class BoardSessionController(private val service: VescForegroundService
      * @parity /modules/vesc-ble/ios/connection/BoardSessionController.swift `evaluateConfigSafety`
      */
     private fun evaluateConfigSafety(values: ConfigSafetyValues) = guardWarningEval("config_safety") {
+        if (!boardWarningsEnabled) return@guardWarningEval
         val boardId = boardConfig?.appBoardId ?: return@guardWarningEval
         val seriesCount = (batteryConfigCache?.get("seriesCount") as? Number)?.toInt()
         val perCell = ConfigSafetyDetector.usesPerCellVoltage(fwVersionString)
@@ -1269,6 +1280,7 @@ internal class BoardSessionController(private val service: VescForegroundService
      * read path (pauses/resumes polling) and is skipped if a config op is already in flight.
      */
     private fun triggerConfigSafetyRead(session: BoardSession) {
+        if (!boardWarningsEnabled) return
         if (!isCurrentBoardSession(session)) return
         configController.consumeRead(PendingConfigRead(onSuccess = {}, onError = { _, _ -> }))
     }
@@ -1609,8 +1621,9 @@ internal class BoardSessionController(private val service: VescForegroundService
         boardSession?.invalidate()
         boardSession = null
         // A whole session with BMS data and no sustained spread auto-clears any stored cell-spread
-        // warning; a session with no BMS data reports nothing and leaves it untouched.
-        stoppedConfig?.appBoardId?.let { boardId ->
+        // warning; a session with no BMS data reports nothing and leaves it untouched. Skipped
+        // entirely when the Board Warnings kill switch is off (no evaluation, no registry writes).
+        if (boardWarningsEnabled) stoppedConfig?.appBoardId?.let { boardId ->
             val cellSpreadClean = cellSpreadDetector.sessionEndClean()
             val mismatchClean = batteryConfigMismatchDetector.sessionEndClean()
             if (cellSpreadClean || mismatchClean) {
@@ -2029,6 +2042,7 @@ internal class BoardSessionController(private val service: VescForegroundService
         recordingCoordinator.applySettings(settings)
         socWindow.windowMs = settings.socEstimateWindowSeconds * 1000L
         connectionSoundsEnabled = settings.connectionSoundsEnabled
+        boardWarningsEnabled = settings.boardWarningsEnabled
         configuredPollIntervalMs = pollIntervalMsForHz(settings.telemetryPollRateHz)
         movingThresholdCentiKmh = settings.toMetricSanitizerConfig().movingSpeedThresholdCentiKmh
         pollingLoop.setPollIntervalMs(effectivePollIntervalMs())

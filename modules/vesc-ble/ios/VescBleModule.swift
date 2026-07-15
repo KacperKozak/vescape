@@ -648,6 +648,7 @@ public class VescBleModule: Module {
         "freeSpinStationaryBoardCapKmh",
         "socEstimateWindowSeconds",
         "telemetryPollRateHz",
+        "boardWarningsEnabled",
       ].contains(key) {
         self.coordinator.reloadTelemetrySettings()
       }

@@ -372,6 +372,7 @@ data class AppSettings(
   val wearMirrorIntervalMs: Int = 500,
   val wearAutoLaunchOnConnect: Boolean = true,
   val companionPresenceEnabled: Boolean = false,
+  val boardWarningsEnabled: Boolean = true,
   val companionPresenceCooldownMinutes: Int = 60,
   val autoCloseEnabled: Boolean = false,
   val autoCloseDelayMinutes: Int = 15,

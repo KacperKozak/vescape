@@ -7,6 +7,7 @@ import { BoardWarningsSheet } from '@/screens/center/BoardWarningsSheet'
 import { severityStatus } from '@/constants/boardWarnings'
 import { worstSeverity } from '@/lib/boardWarnings'
 import { EMPTY_WARNINGS, useBoardWarningsStore } from '@/store/boardWarningsStore'
+import { useSettingsStore } from '@/store/settingsStore'
 import { theme } from '@/constants/theme'
 
 interface BoardWarningControlProps {
@@ -23,7 +24,11 @@ export function BoardWarningControl({ boardId }: BoardWarningControlProps) {
   const anchorRef = useRef<View>(null)
   const [open, setOpen] = useState(false)
   const warnings = useBoardWarningsStore((s) => s.warningsByBoard[boardId] ?? EMPTY_WARNINGS)
+  const boardWarningsEnabled = useSettingsStore((s) => s.boardWarningsEnabled)
   const worst = worstSeverity(warnings)
+
+  // Kill switch off hides the whole surface (defensive — native already stops emitting).
+  if (!boardWarningsEnabled) return null
 
   // Icon shows only when the board has warnings. The sheet stays mounted while open even after the
   // last warning is cleared from inside it, so it can show its empty state and animate closed rather

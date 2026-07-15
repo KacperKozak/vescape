@@ -56,6 +56,13 @@ weaker episode never downgrades a stored warning).
 - **Re-detection** — updates the existing warning in place (preserving `firstDetectedAtMs`) rather
   than creating a duplicate.
 
+## Kill switch
+
+`boardWarningsEnabled` in `AppSettings` (default `true`) is the feature's master switch. Off ⇒
+native runs no detector evaluation, no registry writes, and no session-end clean pass; JS hides the
+warning icon/sheet. Stored warnings are left untouched and reappear on re-enable (a kill switch is
+not a data reset — manual clear exists for that). Toggling takes effect live, no reconnect needed.
+
 ## Kinds
 
 | Slug                      | Title                          | Severity            | Scope                    | Detector                        | Trigger                                                                                                                                                                                                                                                                                                          |

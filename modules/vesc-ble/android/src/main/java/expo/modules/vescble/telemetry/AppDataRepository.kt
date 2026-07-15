@@ -208,6 +208,7 @@ class AppDataRepository private constructor(private val context: Context) {
       wearMirrorIntervalMs = req("wearMirrorIntervalMs", 500, ::validWearMirrorIntervalMs),
       wearAutoLaunchOnConnect = req("wearAutoLaunchOnConnect", true) { it as? Boolean },
       companionPresenceEnabled = req("companionPresenceEnabled", false) { it as? Boolean },
+      boardWarningsEnabled = req("boardWarningsEnabled", true) { it as? Boolean },
       companionPresenceCooldownMinutes = req("companionPresenceCooldownMinutes", 60, ::validCompanionCooldownMinutes),
       autoCloseEnabled = req("autoCloseEnabled", false) { it as? Boolean },
       autoCloseDelayMinutes = req("autoCloseDelayMinutes", 15, ::validAutoCloseDelayMinutes),
@@ -266,6 +267,7 @@ class AppDataRepository private constructor(private val context: Context) {
         validWearMirrorIntervalMs(value) ?: return@withContext
       "wearAutoLaunchOnConnect" -> value as? Boolean ?: return@withContext
       "companionPresenceEnabled" -> value as? Boolean ?: return@withContext
+      "boardWarningsEnabled" -> value as? Boolean ?: return@withContext
       "companionPresenceCooldownMinutes" ->
         validCompanionCooldownMinutes(value) ?: return@withContext
       "autoCloseEnabled" -> value as? Boolean ?: return@withContext
@@ -575,6 +577,7 @@ fun AppSettings.toMap(): Map<String, Any?> = mapOf(
   "wearMirrorIntervalMs" to wearMirrorIntervalMs,
   "wearAutoLaunchOnConnect" to wearAutoLaunchOnConnect,
   "companionPresenceEnabled" to companionPresenceEnabled,
+  "boardWarningsEnabled" to boardWarningsEnabled,
   "companionPresenceCooldownMinutes" to companionPresenceCooldownMinutes,
   "autoCloseEnabled" to autoCloseEnabled,
   "autoCloseDelayMinutes" to autoCloseDelayMinutes,

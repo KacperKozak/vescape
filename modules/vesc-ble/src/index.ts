@@ -788,6 +788,12 @@ export interface AppSettings {
   /** Android-only: use CompanionDeviceManager presence to connect selected board when nearby. */
   companionPresenceEnabled: boolean
   /**
+   * Board Warnings master switch (kill switch). Off ⇒ native runs no warning detector evaluation
+   * and no registry writes; JS hides the warning icon/sheet. Stored warnings are left untouched
+   * and reappear on re-enable. Takes effect live, no reconnect needed.
+   */
+  boardWarningsEnabled: boolean
+  /**
    * Android-only: minutes to pause companion auto start after the user exits the app
    * manually, so the board reappearing doesn't immediately relaunch it. 0 = off.
    */

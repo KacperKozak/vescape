@@ -63,6 +63,7 @@ const e2eSettings: AppSettings = {
   socEstimateWindowSeconds: 20,
   connectionSoundsEnabled: true,
   companionPresenceEnabled: false,
+  boardWarningsEnabled: true,
   companionPresenceCooldownMinutes: 60,
   autoCloseEnabled: false,
   autoCloseDelayMinutes: 15,

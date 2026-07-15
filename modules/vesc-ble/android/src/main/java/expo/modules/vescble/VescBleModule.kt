@@ -530,7 +530,8 @@ class VescBleModule : Module() {
         key == "socEstimateWindowSeconds" ||
         key == "telemetryPollRateHz" ||
         key == "wearMirrorIntervalMs" ||
-        key == "wearAutoLaunchOnConnect"
+key == "wearAutoLaunchOnConnect" ||
+        key == "boardWarningsEnabled"
       ) {
         VescForegroundService.reloadTelemetrySettings(context.applicationContext)
       }

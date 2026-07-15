@@ -162,6 +162,11 @@ internal final class BoardSessionController: VescGattListener {
   private let idlePauseDetector = IdlePauseDetector()
   /// Cached moving threshold shared with the metric sanitizer; fed to the detector each frame.
   private var movingThresholdCentiKmh = DEFAULT_MOVING_SPEED_THRESHOLD_CENTI_KMH
+  /// Board Warnings master switch (kill switch, #219). Off ⇒ no detector evaluation, no registry
+  /// writes, no session-end clean pass. Cached from settings in `beginSession` and
+  /// `reloadTelemetrySettings` so the BMS path never re-reads settings.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardSessionController.kt `boardWarningsEnabled`
+  private var boardWarningsEnabled = true
   private var lastPollAt: Int64 = 0
   private var smoothedPeriodMs = 0.0
   private var pollTick: Int64 = 0
@@ -358,6 +363,7 @@ internal final class BoardSessionController: VescGattListener {
       liveHistoryLimitMinutes: liveHistoryLimit
     )
     movingThresholdCentiKmh = MetricSanitizerConfig.from(settings: settings).movingSpeedThresholdCentiKmh
+    boardWarningsEnabled = settings["boardWarningsEnabled"] as? Bool ?? true
     floorMs = effectivePollIntervalMs()
     liveSeries.setWindowMinutes(liveHistoryLimit)
     socWindow.windowMs = Int64(AppDataRepository.intValue(settings["socEstimateWindowSeconds"] ?? nil) ?? 20) * 1000
@@ -403,7 +409,7 @@ internal final class BoardSessionController: VescGattListener {
     // replacing/reselecting a Board still auto-clears a clean prior session. Android funnels this
     // through `stopCurrentBoardSession` (called at the top of its `beginSession`); iOS `beginSession`
     // reaches here directly, so finalize here to keep parity.
-    if let previousBoardId = self.config?.appBoardId {
+    if boardWarningsEnabled, let previousBoardId = self.config?.appBoardId {
       if cellSpreadDetector.sessionEndClean() {
         BoardWarningRegistry.shared.reportCleanEvaluation(boardId: previousBoardId, kind: BoardWarningKind.cellSpread)
       }
@@ -419,7 +425,9 @@ internal final class BoardSessionController: VescGattListener {
     if let session {
       lastEmittedLinkIntegrity = session.startLinkIntegrityCheck(expected: config.linkIdentity())
     }
-    movingThresholdCentiKmh = MetricSanitizerConfig.from(settings: appData.getSettings()).movingSpeedThresholdCentiKmh
+    let sessionSettings = appData.getSettings()
+    movingThresholdCentiKmh = MetricSanitizerConfig.from(settings: sessionSettings).movingSpeedThresholdCentiKmh
+    boardWarningsEnabled = sessionSettings["boardWarningsEnabled"] as? Bool ?? true
     recordingCoordinator.beginBoardSession(config: config)
     // Reset per-session Board Warning breadcrumb bookkeeping (one Diagnostic Event per kind per
     // Board Session). Detectors that fire warnings this session land in later slices.
@@ -464,8 +472,9 @@ internal final class BoardSessionController: VescGattListener {
     socWindow.reset()
     bmsSeriesRing.clear()
     // A whole session with BMS data and no sustained spread auto-clears any stored cell-spread
-    // warning; a session with no BMS data reports nothing and leaves it untouched.
-    if let boardId = config?.appBoardId {
+    // warning; a session with no BMS data reports nothing and leaves it untouched. Skipped
+    // entirely when the Board Warnings kill switch is off (no evaluation, no registry writes).
+    if boardWarningsEnabled, let boardId = config?.appBoardId {
       if cellSpreadDetector.sessionEndClean() {
         BoardWarningRegistry.shared.reportCleanEvaluation(boardId: boardId, kind: BoardWarningKind.cellSpread)
       }
@@ -849,7 +858,7 @@ internal final class BoardSessionController: VescGattListener {
   /// Warning registry (telemetry-scoped detector; continuous evaluation during the Board Session).
   /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardSessionController.kt `evaluateCellSpread`
   private func evaluateCellSpread(_ bms: BmsTelemetry) {
-    guard let boardId = config?.appBoardId else { return }
+    guard boardWarningsEnabled, let boardId = config?.appBoardId else { return }
     guard let finding = cellSpreadDetector.onFrame(
       cellVoltages: bms.cellVoltages,
       balancing: bms.balancing,
@@ -869,7 +878,7 @@ internal final class BoardSessionController: VescGattListener {
   /// the SoC estimator and per-cell pushback bounds read; absent config is not evaluated.
   /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardSessionController.kt `evaluateBatteryConfigMismatch`
   private func evaluateBatteryConfigMismatch(_ bms: BmsTelemetry) {
-    guard let boardId = config?.appBoardId else { return }
+    guard boardWarningsEnabled, let boardId = config?.appBoardId else { return }
     let seriesCount = config?.batteryConfig?["seriesCount"] as? Int
     guard let payloadJson = batteryConfigMismatchDetector.onFrame(
       bmsCellCount: bms.cellVoltages.count,
@@ -889,7 +898,7 @@ internal final class BoardSessionController: VescGattListener {
   /// skipped when it is absent; skipped kinds report nothing so stored warnings stay untouched.
   /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardSessionController.kt `evaluateConfigSafety`
   private func evaluateConfigSafety(_ values: ConfigSafetyValues) {
-    guard let boardId = config?.appBoardId else { return }
+    guard boardWarningsEnabled, let boardId = config?.appBoardId else { return }
     let seriesCount = config?.batteryConfig?["seriesCount"] as? Int
     let perCell = ConfigSafetyDetector.usesPerCellVoltage(vescLiveFirmware)
     let report = ConfigSafetyDetector.evaluate(values, seriesCount: seriesCount, perCell: perCell)
@@ -911,7 +920,7 @@ internal final class BoardSessionController: VescGattListener {
   /// read path (pauses/resumes polling) and is skipped if a config op is already in flight.
   /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardSessionController.kt `triggerConfigSafetyRead`
   private func triggerConfigSafetyRead(_ session: BoardSession) {
-    guard session === self.session, session.isActive, let config else { return }
+    guard boardWarningsEnabled, session === self.session, session.isActive, let config else { return }
     configController.consumeRead(connection: configConnection(config), onSuccess: { _ in }, onError: { _, _ in })
   }
 
