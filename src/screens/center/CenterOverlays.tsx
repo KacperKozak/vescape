@@ -52,6 +52,7 @@ import {
 import type { MapSelector } from '@/screens/center/centerScreenStore'
 import type { CenterViewState } from '@/screens/center/centerViewState'
 import { HistoryControls } from '@/screens/center/HistoryControls'
+import { HistoryEmptyState } from '@/screens/center/HistoryEmptyState'
 import { WeatherHourlyStrip } from '@/screens/center/WeatherHourlyStrip'
 import { WeatherPill } from '@/screens/center/WeatherPill'
 import { HistoryStatsBar } from '@/screens/center/HistoryStatsBar'
@@ -655,7 +656,7 @@ export function CenterOverlays({
     <>
       <MapVignette
         mode={mode}
-        panelHeight={mode === 'history' ? panelHeight : 0}
+        panelHeight={mode === 'history' && history.selectedSession ? panelHeight : 0}
         visible={mode !== 'map'}
         fadeOutProgress={dragOpacity}
       />
@@ -834,34 +835,13 @@ export function CenterOverlays({
 
       {mode === 'history' && !history.selectedSession && (
         <>
-          {historyBusy && (
+          {historyBusy ? (
             <View pointerEvents="none" style={styles.mapLoading}>
               <ActivityIndicator size="small" color={theme.palette.sky.color} />
             </View>
+          ) : (
+            <HistoryEmptyState />
           )}
-          <HistoryTelemetryPanel
-            startAtMs={null}
-            endAtMs={null}
-            movingStartAtMs={null}
-            movingEndAtMs={null}
-            deviceName={null}
-            samples={[]}
-            canPrevious={false}
-            canNext={false}
-            mediaAssets={history.mediaHistory.assets}
-            mediaUnmatched={history.mediaHistory.unmatched}
-            mediaLoading={history.mediaHistory.loading}
-            mediaError={history.mediaHistory.error}
-            onPrevious={() => undefined}
-            onNext={() => undefined}
-            onOpenList={() => history.setHistorySheetVisible(true)}
-            onAddMedia={() => void history.mediaHistory.add()}
-            onOpenMedia={history.openMedia}
-            onSeek={history.onSeek}
-            onMetricInteraction={history.setActiveHistoryMapMetric}
-            onHeightChange={setPanelHeight}
-          />
-          <HistoryStatsBar session={null} />
           <HistoryControls
             loading={historyBusy}
             canRemove={false}

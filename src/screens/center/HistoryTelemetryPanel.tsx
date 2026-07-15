@@ -40,11 +40,11 @@ import { useHistoryStore, type TelemetrySample } from '@/store/historyStore'
 import { useSettingsStore } from '@/store/settingsStore'
 
 interface HistoryTelemetryPanelProps {
-  startAtMs: number | null
-  endAtMs: number | null
+  startAtMs: number
+  endAtMs: number
   movingStartAtMs: number | null
   movingEndAtMs: number | null
-  deviceName: string | null
+  deviceName: string
   samples: TelemetrySample[]
   canPrevious: boolean
   canNext: boolean
@@ -92,17 +92,7 @@ function formatRideDate(startMs: number, endMs: number): string {
   return `${s.getDate()} ${MONTHS[s.getMonth()]} – ${e.getDate()} ${MONTHS[e.getMonth()]} ${e.getFullYear()}`
 }
 
-function formatRideTitle(startAtMs: number | null, endAtMs: number | null): string {
-  if (startAtMs == null || endAtMs == null) return ''
-  return formatRideTime(startAtMs, endAtMs)
-}
-
-function formatRideMeta(
-  startAtMs: number | null,
-  endAtMs: number | null,
-  deviceName: string | null,
-): string {
-  if (startAtMs == null || endAtMs == null) return deviceName ?? ''
+function formatRideMeta(startAtMs: number, endAtMs: number, deviceName: string): string {
   return deviceName
     ? `${formatRideDate(startAtMs, endAtMs)} · ${deviceName}`
     : formatRideDate(startAtMs, endAtMs)
@@ -530,7 +520,7 @@ export function HistoryTelemetryPanel({
           ) : null}
         </View>
         <PrevNextSelector
-          label={formatRideTitle(titleStartMs, titleEndMs)}
+          label={formatRideTime(titleStartMs, titleEndMs)}
           previousDisabled={!canPrevious}
           nextDisabled={!canNext}
           onPrevious={onPrevious}
@@ -547,7 +537,7 @@ export function HistoryTelemetryPanel({
             >
               <View style={styles.titleContent}>
                 <Text style={styles.titleTime} numberOfLines={1}>
-                  {formatRideTitle(titleStartMs, titleEndMs)}
+                  {formatRideTime(titleStartMs, titleEndMs)}
                 </Text>
                 <Text style={styles.titleMeta} numberOfLines={1}>
                   {formatRideMeta(titleStartMs, titleEndMs, deviceName)}

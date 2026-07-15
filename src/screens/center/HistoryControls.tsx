@@ -21,18 +21,21 @@ export function HistoryControls({ loading, canRemove, onBack, onRemove }: Histor
         <View style={styles.titleWrap}>
           <ScreenTitle title="History" />
         </View>
-        <IconButton
-          icon={TrashIcon}
-          onPress={onRemove}
-          destructive
-          disabled={!canRemove || loading}
-        />
+        {canRemove ? (
+          <IconButton icon={TrashIcon} onPress={onRemove} destructive disabled={loading} />
+        ) : (
+          <View style={styles.actionSpacer} />
+        )}
       </View>
     </View>
   )
 }
 
 const styles = StyleSheet.create({
+  actionSpacer: {
+    width: 38,
+    height: 38,
+  },
   wrap: {
     position: 'absolute',
     top: 0,
