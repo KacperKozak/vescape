@@ -100,6 +100,46 @@ final class CellSpreadDetectorTests: XCTestCase {
     XCTAssertFalse(detector.sessionEndClean())
   }
 
+  func testSingleValidCellIsNotUsableData() {
+    let detector = CellSpreadDetector()
+    // Only one valid group: spread is undefined, so the frame is not usable data and never fires.
+    XCTAssertNil(detector.onFrame(cellVoltages: [3.80, 0.0], balancing: noBalance, vCharge: 0.0, atMs: 0))
+    XCTAssertNil(detector.onFrame(cellVoltages: [3.80, -1.0], balancing: noBalance, vCharge: 0.0, atMs: 3_000))
+    XCTAssertFalse(detector.sessionEndClean())
+  }
+
+  func testLongGapBreaksSustainContinuity() {
+    let detector = CellSpreadDetector()
+    // Over threshold, then a gap longer than the continuity tolerance (reconnect / interruption):
+    // the unobserved time must not count toward the sustain window.
+    XCTAssertNil(detector.onFrame(cellVoltages: [3.80, 3.92], balancing: noBalance, vCharge: 0.0, atMs: 0))
+    XCTAssertNil(detector.onFrame(cellVoltages: [3.80, 3.92], balancing: noBalance, vCharge: 0.0, atMs: 5_000))
+    // Sustain restarts at the post-gap frame, so it fires only 3 s after that.
+    let finding = detector.onFrame(cellVoltages: [3.80, 3.92], balancing: noBalance, vCharge: 0.0, atMs: 8_000)
+    XCTAssertNotNil(finding)
+    XCTAssertEqual(finding?.severity, .warn)
+  }
+
+  func testLaterWeakerEpisodeDoesNotDowngrade() {
+    let detector = CellSpreadDetector()
+    // Critical episode fires and then falls back under threshold.
+    XCTAssertNil(detector.onFrame(cellVoltages: [3.70, 3.98], balancing: noBalance, vCharge: 0.0, atMs: 0))
+    let critical = detector.onFrame(cellVoltages: [3.70, 3.98], balancing: noBalance, vCharge: 0.0, atMs: 3_000)
+    XCTAssertEqual(critical?.severity, .critical)
+    XCTAssertNil(detector.onFrame(cellVoltages: [3.90, 3.91], balancing: noBalance, vCharge: 0.0, atMs: 3_100))
+
+    // A later sustained warn episode must not overwrite the stored critical with weaker data.
+    XCTAssertNil(detector.onFrame(cellVoltages: [3.80, 3.92], balancing: noBalance, vCharge: 0.0, atMs: 4_000))
+    XCTAssertNil(detector.onFrame(cellVoltages: [3.80, 3.92], balancing: noBalance, vCharge: 0.0, atMs: 7_000))
+  }
+
+  func testInFlightEpisodeAtSessionEndBlocksClean() {
+    let detector = CellSpreadDetector()
+    // Session ends while spread is over threshold but before it sustained: not a clean session.
+    _ = detector.onFrame(cellVoltages: [3.80, 3.92], balancing: noBalance, vCharge: 0.0, atMs: 0)
+    XCTAssertFalse(detector.sessionEndClean())
+  }
+
   func testSessionEndCleanOnlyWhenDataFlowedAndNeverFired() {
     let quietData = CellSpreadDetector()
     _ = quietData.onFrame(cellVoltages: [3.90, 3.91], balancing: noBalance, vCharge: 0.0, atMs: 0)

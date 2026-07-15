@@ -121,6 +121,50 @@ class CellSpreadDetectorTest {
   }
 
   @Test
+  fun singleValidCellIsNotUsableData() {
+    val detector = CellSpreadDetector()
+    // Only one valid group: spread is undefined, so the frame is not usable data and never fires.
+    assertNull(detector.onFrame(listOf(3.80, 0.0), listOf(false, false), 0.0, 0L))
+    assertNull(detector.onFrame(listOf(3.80, -1.0), listOf(false, false), 0.0, 3_000L))
+    assertFalse(detector.sessionEndClean())
+  }
+
+  @Test
+  fun longGapBreaksSustainContinuity() {
+    val detector = CellSpreadDetector()
+    // Over threshold, then a gap longer than the continuity tolerance (reconnect / interruption):
+    // the unobserved time must not count toward the sustain window.
+    assertNull(detector.onFrame(listOf(3.80, 3.92), noBalance, 0.0, 0L))
+    assertNull(detector.onFrame(listOf(3.80, 3.92), noBalance, 0.0, 5_000L))
+    // Sustain restarts at the post-gap frame, so it fires only 3 s after that.
+    val finding = detector.onFrame(listOf(3.80, 3.92), noBalance, 0.0, 8_000L)
+    assertNotNull(finding)
+    assertEquals(CellSpreadSeverity.WARN, finding!!.severity)
+  }
+
+  @Test
+  fun laterWeakerEpisodeDoesNotDowngrade() {
+    val detector = CellSpreadDetector()
+    // Critical episode fires and then falls back under threshold.
+    assertNull(detector.onFrame(listOf(3.70, 3.98), noBalance, 0.0, 0L))
+    val critical = detector.onFrame(listOf(3.70, 3.98), noBalance, 0.0, 3_000L)
+    assertEquals(CellSpreadSeverity.CRITICAL, critical!!.severity)
+    assertNull(detector.onFrame(listOf(3.90, 3.91), noBalance, 0.0, 3_100L))
+
+    // A later sustained warn episode must not overwrite the stored critical with weaker data.
+    assertNull(detector.onFrame(listOf(3.80, 3.92), noBalance, 0.0, 4_000L))
+    assertNull(detector.onFrame(listOf(3.80, 3.92), noBalance, 0.0, 7_000L))
+  }
+
+  @Test
+  fun inFlightEpisodeAtSessionEndBlocksClean() {
+    val detector = CellSpreadDetector()
+    // Session ends while spread is over threshold but before it sustained: not a clean session.
+    detector.onFrame(listOf(3.80, 3.92), noBalance, 0.0, 0L)
+    assertFalse(detector.sessionEndClean())
+  }
+
+  @Test
   fun sessionEndCleanOnlyWhenDataFlowedAndNeverFired() {
     val quietData = CellSpreadDetector()
     quietData.onFrame(listOf(3.90, 3.91), noBalance, 0.0, 0L)

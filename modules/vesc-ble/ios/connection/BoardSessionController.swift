@@ -395,6 +395,13 @@ internal final class BoardSessionController: VescGattListener {
     session = BoardSession(id: sessionSequence)
     socWindow.reset()
     bmsSeriesRing.clear()
+    // Finalize the previous session's cell-spread evaluation before the detector resets, so
+    // replacing/reselecting a Board still auto-clears a clean prior session. Android funnels this
+    // through `stopCurrentBoardSession` (called at the top of its `beginSession`); iOS `beginSession`
+    // reaches here directly, so finalize here to keep parity.
+    if let previousBoardId = self.config?.appBoardId, cellSpreadDetector.sessionEndClean() {
+      BoardWarningRegistry.shared.reportCleanEvaluation(boardId: previousBoardId, kind: CellSpreadDetector.kind)
+    }
     cellSpreadDetector.reset()
     self.config = config
     if let session {
