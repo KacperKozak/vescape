@@ -25,6 +25,7 @@ import { Placeholder } from '@/components/ui/base/Placeholder'
 import { ScreenTitle } from '@/components/ui/base/ScreenTitle'
 import { StepTimeline, type StepState, type TimelineStep } from '@/components/ui/base/StepTimeline'
 import { ShowcaseCard } from '@/components/ui/dev/ShowcaseCard'
+import { BoardWarningRow } from '@/components/domain/warnings/BoardWarningRow'
 import { ChipRow, ToggleRow } from '@/components/ui/dev/ShowcaseControls'
 import { theme } from '@/constants/theme'
 
@@ -322,6 +323,38 @@ function StepTimelineShowcase() {
   )
 }
 
+function BoardWarningRowShowcase() {
+  const [now] = useState(() => Date.now())
+  return (
+    <ShowcaseCard name="BoardWarningRow">
+      <View style={{ gap: 10 }}>
+        <BoardWarningRow
+          warning={{
+            boardId: 'demo',
+            kind: 'cell-spread',
+            severity: 'critical',
+            firstDetectedAtMs: now - 3 * 60 * 60 * 1000,
+            lastDetectedAtMs: now - 90 * 1000,
+            payloadJson: '{"peakSpreadV":0.27,"worstCellGroup":4,"balancing":true}',
+          }}
+          onClear={() => {}}
+        />
+        <BoardWarningRow
+          warning={{
+            boardId: 'demo',
+            kind: 'duty-pushback-high',
+            severity: 'warn',
+            firstDetectedAtMs: now - 20 * 1000,
+            lastDetectedAtMs: now - 20 * 1000,
+            payloadJson: '{"value":0.9,"safeMax":0.85}',
+          }}
+          onClear={() => {}}
+        />
+      </View>
+    </ShowcaseCard>
+  )
+}
+
 function ScreenTitleShowcase() {
   return (
     <ShowcaseCard name="ScreenTitle">
@@ -336,7 +369,7 @@ export default function BaseComponentsPage() {
       <ScrollView contentContainerStyle={styles.content}>
         <IconHero
           icon={CubeIcon}
-          description="Button, IconButton, Banner, DeviceRow, InfoBadge, StepTimeline, Placeholder, ScreenTitle."
+          description="Button, IconButton, Banner, DeviceRow, InfoBadge, StepTimeline, BoardWarningRow, Placeholder, ScreenTitle."
         />
         <IconButtonShowcase />
         <ButtonShowcase />
@@ -345,6 +378,7 @@ export default function BaseComponentsPage() {
         <DeviceRowShowcase />
         <InfoBadgeShowcase />
         <StepTimelineShowcase />
+        <BoardWarningRowShowcase />
         <ScreenTitleShowcase />
       </ScrollView>
     </SafeAreaView>
