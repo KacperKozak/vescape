@@ -17,6 +17,17 @@ enum BoardWarningKind: String, CaseIterable {
   case movingFaultDisabled = "moving-fault-disabled"
 }
 
+/// Two-level severity, fixed at detection time. Unknown wire values normalize to `warn`. Lives here in
+/// the pure warning model (not on the GRDB-backed registry) so detectors and the pure-logic SPM target
+/// can reference it without pulling in the durable store.
+/// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/warnings/BoardWarningRegistry.kt `BoardWarningSeverity`
+enum BoardWarningSeverity: String {
+  case warn
+  case critical
+
+  static func fromWire(_ value: String) -> BoardWarningSeverity { BoardWarningSeverity(rawValue: value) ?? .warn }
+}
+
 /// Board Warning payload serialization: deterministic (sorted-key) JSON built via `JSONSerialization`,
 /// never hand-assembled strings. Doubles are rounded to 4 decimals before insertion so raw float noise
 /// (e.g. a `3.92 - 3.80` subtraction that lands on `0.11999999999999988`) never reaches the wire.

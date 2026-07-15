@@ -5,7 +5,7 @@ import XCTest
 /// the peak spread, charging/balancing payload context, peak tracking through re-reports, worst-group
 /// selection, and the session-end clean-evaluation contract. Payload assertions decode the JSON (its
 /// key order is serializer-dependent) and check each field, rather than matching an exact string.
-/// @parity /modules/vesc-ble/android/src/test/java/expo/modules/vescble/CellSpreadDetectorTest.kt
+/// @parity /modules/vesc-ble/android/src/test/java/expo/modules/vescble/warnings/CellSpreadDetectorTest.kt
 final class CellSpreadDetectorTests: XCTestCase {
   private let noBalance = [false, false]
 

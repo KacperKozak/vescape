@@ -65,8 +65,11 @@ internal object RefloatConfigDecoder {
     val byId = schema.fields.associateBy { it.id }
     fun fieldOrNull(id: String): RefloatConfigSchemaField? =
       byId[id]?.takeIf { rawConfig.size >= it.offset + it.type.byteSize }
+    // Treat a non-finite decode (NaN/Infinity from corrupt bytes) as missing, not as a real value:
+    // the safety rules skip a null field, whereas a NaN would compare false against every bound and
+    // wrongly count as a clean evaluation that clears a valid warning.
     fun number(id: String): Double? = when (val v = fieldOrNull(id)?.let { readValue(rawConfig, it) }) {
-      is Double -> v
+      is Double -> v.takeIf { it.isFinite() }
       is Boolean -> if (v) 1.0 else 0.0
       else -> null
     }

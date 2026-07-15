@@ -16,13 +16,9 @@ import Foundation
 ///
 /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/warnings/BoardWarningRegistry.kt
 final class BoardWarningRegistry {
-  /// Two-level severity, fixed at detection time. Unknown wire values normalize to `warn`.
-  enum Severity: String {
-    case warn
-    case critical
-
-    static func fromWire(_ value: String) -> Severity { Severity(rawValue: value) ?? .warn }
-  }
+  /// Severity lives in the pure warning model (`BoardWarningKind.swift`); kept as a nested alias so
+  /// existing `BoardWarningRegistry.Severity` call sites stay valid.
+  typealias Severity = BoardWarningSeverity
 
   static let shared = BoardWarningRegistry(
     store: .shared,

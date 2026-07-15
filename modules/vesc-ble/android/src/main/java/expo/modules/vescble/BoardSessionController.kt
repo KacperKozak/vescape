@@ -1174,9 +1174,15 @@ internal class BoardSessionController(private val service: VescForegroundService
         }
     }
 
-    /** Launch a Board Warning registry write crash-isolated by [warningWriteExceptionHandler]. */
+    /**
+     * Launch a Board Warning registry write crash-isolated by [warningWriteExceptionHandler] and
+     * serialized on [VescForegroundService.warningWriteDispatcher] so concurrent findings commit in
+     * submission order (preserving the monotonic-severity contract).
+     */
     private fun launchWarningWrite(block: suspend () -> Unit) {
-        VescForegroundService.appDataScope.launch(warningWriteExceptionHandler) { block() }
+        VescForegroundService.appDataScope.launch(
+            warningWriteExceptionHandler + VescForegroundService.warningWriteDispatcher,
+        ) { block() }
     }
 
     /** Capture the first Board Warning-path failure per (site, session); later ones are dropped. */

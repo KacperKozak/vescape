@@ -72,7 +72,10 @@ enum RefloatConfigDecoder {
     }
     func number(_ id: String) -> Double? {
       guard let field = fieldOrNull(id), let value = try? readValue(rawConfig, field) else { return nil }
-      if let d = value as? Double { return d }
+      // Treat a non-finite decode (NaN/Infinity from corrupt bytes) as missing, not as a real value:
+      // the safety rules skip a nil field, whereas a NaN would compare false against every bound and
+      // wrongly count as a clean evaluation that clears a valid warning.
+      if let d = value as? Double { return d.isFinite ? d : nil }
       if let b = value as? Bool { return b ? 1.0 : 0.0 }
       return nil
     }

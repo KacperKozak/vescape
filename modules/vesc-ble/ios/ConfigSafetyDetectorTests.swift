@@ -5,7 +5,7 @@ import XCTest
 /// setting is safe, per-cell rules skip (report nothing) when they cannot resolve their bound, and the
 /// pushback voltage rules follow the firmware's per-cell (6.05+) vs pack units. Payload assertions
 /// decode the JSON (its key order is serializer-dependent) rather than matching an exact string.
-/// @parity /modules/vesc-ble/android/src/test/java/expo/modules/vescble/ConfigSafetyDetectorTest.kt
+/// @parity /modules/vesc-ble/android/src/test/java/expo/modules/vescble/warnings/ConfigSafetyDetectorTest.kt
 final class ConfigSafetyDetectorTests: XCTestCase {
   private func values(
     faultAdc1: Double? = 2.0,

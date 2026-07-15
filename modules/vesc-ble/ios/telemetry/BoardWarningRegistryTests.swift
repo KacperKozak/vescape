@@ -6,7 +6,7 @@ import GRDB
 /// `firstDetectedAt`, clean-evaluation-with-data clears, no-data evaluations leave rows untouched,
 /// manual clear deletes and re-detection re-fires, and one Diagnostic Event fires per kind per Board
 /// Session. Runs against an in-memory GRDB database seeded with the app-data schema.
-/// @parity /modules/vesc-ble/android/src/test/java/expo/modules/vescble/BoardWarningRegistryTest.kt
+/// @parity /modules/vesc-ble/android/src/test/java/expo/modules/vescble/warnings/BoardWarningRegistryTest.kt
 final class BoardWarningRegistryTests: XCTestCase {
   private var queue: DatabaseQueue!
   private var store: BoardWarningStore!

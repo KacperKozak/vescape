@@ -5,7 +5,7 @@ import XCTest
 /// one warn payload carrying both counts, matching-count clean evaluation, and the no-data /
 /// no-config contracts that leave a stored warning untouched. Payload assertions decode the JSON (its
 /// key order is serializer-dependent) rather than matching an exact string.
-/// @parity /modules/vesc-ble/android/src/test/java/expo/modules/vescble/BatteryConfigMismatchDetectorTest.kt
+/// @parity /modules/vesc-ble/android/src/test/java/expo/modules/vescble/warnings/BatteryConfigMismatchDetectorTest.kt
 final class BatteryConfigMismatchDetectorTests: XCTestCase {
 
   private func assertPayload(

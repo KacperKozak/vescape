@@ -14,7 +14,7 @@ struct ConfigSafetyValues {
 /// One config-safety finding to report through the Board Warning registry.
 struct ConfigSafetyFinding {
   let kind: BoardWarningKind
-  let severity: BoardWarningRegistry.Severity
+  let severity: BoardWarningSeverity
   let payloadJson: String
 }
 
@@ -130,7 +130,7 @@ enum ConfigSafetyDetector {
 
   private static func finding(
     _ kind: BoardWarningKind,
-    _ severity: BoardWarningRegistry.Severity,
+    _ severity: BoardWarningSeverity,
     _ param: String,
     _ value: Double,
     _ bound: Double

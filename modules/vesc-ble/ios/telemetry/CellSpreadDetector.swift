@@ -2,7 +2,7 @@ import Foundation
 
 /// One cell-spread finding to report through the Board Warning registry.
 struct CellSpreadFinding {
-  let severity: BoardWarningRegistry.Severity
+  let severity: BoardWarningSeverity
   let payloadJson: String
 }
 
@@ -54,7 +54,7 @@ final class CellSpreadDetector {
   private var peakV = 0.0
   private var worstGroup = -1
   private var reportedPeakV = 0.0
-  private var reportedSeverity: BoardWarningRegistry.Severity?
+  private var reportedSeverity: BoardWarningSeverity?
 
   init(
     warnThresholdV: Double = CellSpreadDetector.warnThresholdV,
@@ -125,7 +125,7 @@ final class CellSpreadDetector {
       peakV = spread
       worstGroup = worstGroupIndex(cellVoltages, average: sum / Double(count))
     }
-    let severity: BoardWarningRegistry.Severity = peakV >= criticalThresholdV ? .critical : .warn
+    let severity: BoardWarningSeverity = peakV >= criticalThresholdV ? .critical : .warn
     let peakRose = peakV - reportedPeakV >= CellSpreadDetector.reportPeakEpsilonV
     if fired, severity == reportedSeverity, !peakRose { return nil }
 

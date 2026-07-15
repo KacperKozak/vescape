@@ -11,9 +11,11 @@ import expo.modules.vescble.telemetry.DEFAULT_LIVE_HISTORY_LIMIT_MINUTES
 import expo.modules.vescble.telemetry.MAX_LIVE_HISTORY_LIMIT_MINUTES
 import expo.modules.vescble.telemetry.MIN_LIVE_HISTORY_LIMIT_MINUTES
 import expo.modules.vescble.telemetry.TelemetryRepository
+import java.util.concurrent.Executors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.launch
 
 internal const val VESC_SESSION_TAG = "VescSession"
@@ -73,6 +75,14 @@ class VescForegroundService : Service() {
         internal var pendingGpsStart = false
         internal var pendingGroupRideUrl: String? = null
         internal val appDataScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+        // Board Warning registry writes run on a single thread so a burst of findings (e.g. a
+        // cell-spread warn then critical) commits its get-then-upsert pairs in submission order.
+        // On the multi-threaded IO pool they could reorder and let an older warn overwrite a newer
+        // critical, violating the monotonic-severity contract.
+        internal val warningWriteDispatcher =
+            Executors.newSingleThreadExecutor { runnable -> Thread(runnable, "vesc-warning-writes") }
+                .asCoroutineDispatcher()
 
         // start/stop/gps requests are dispatched twice: synchronously by the caller thread and
         // again on the main thread via onStartCommand. Claim atomically so only one path wins,

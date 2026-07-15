@@ -57,13 +57,20 @@ export const useBoardWarningsStore = create<BoardWarningsState>((set) => ({
  *   new warning and a warning that cleared while away.
  */
 export function startBoardWarningsSync(): () => void {
+  // A live push always reflects newer native truth than an in-flight pull snapshot. Bump a revision on
+  // every push and capture it when a pull starts; if a push landed while the async read was resolving,
+  // drop the now-stale `replaceAll` instead of clobbering the fresher per-board state.
+  let revision = 0
   const sub = addBoardWarningsListener((event) => {
+    revision += 1
     useBoardWarningsStore.getState().replaceBoard(event.boardId, event.warnings)
   })
   const pull = () => {
-    void getBoardWarnings().then((warnings) =>
-      useBoardWarningsStore.getState().replaceAll(warnings),
-    )
+    const startedAt = revision
+    void getBoardWarnings().then((warnings) => {
+      if (revision !== startedAt) return
+      useBoardWarningsStore.getState().replaceAll(warnings)
+    })
   }
   pull()
   const appStateSub = AppState.addEventListener('change', (nextState) => {
