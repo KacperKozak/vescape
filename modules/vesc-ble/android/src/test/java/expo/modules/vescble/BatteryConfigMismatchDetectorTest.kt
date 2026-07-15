@@ -28,6 +28,19 @@ class BatteryConfigMismatchDetectorTest {
   }
 
   @Test
+  fun liveConfigChangeReReportsWithNewSeries() {
+    val detector = BatteryConfigMismatchDetector()
+    // Stable 18 vs 15S fires once.
+    repeat(2) { assertNull(detector.onFrame(18, 15)) }
+    assertEquals("{\"bmsCellCount\":18,\"configuredSeries\":15}", detector.onFrame(18, 15))
+    // Config changes to 16S mid-session, BMS count unchanged — a different mismatch must re-report
+    // so the stored payload does not keep the stale series count.
+    assertEquals("{\"bmsCellCount\":18,\"configuredSeries\":16}", detector.onFrame(18, 16))
+    // Same pair again is deduped.
+    assertNull(detector.onFrame(18, 16))
+  }
+
+  @Test
   fun singleOddFrameDoesNotFire() {
     val detector = BatteryConfigMismatchDetector()
     // A one-off wrong count between matching frames never reaches stability, so it never fires.

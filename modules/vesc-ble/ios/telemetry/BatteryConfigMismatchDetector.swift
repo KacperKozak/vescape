@@ -32,6 +32,7 @@ final class BatteryConfigMismatchDetector {
   private var evaluated = false
   private var fired = false
   private var reportedCount = -1
+  private var reportedSeries = -1
 
   init(stableFrames: Int = BatteryConfigMismatchDetector.stableFrames) {
     self.stableFrames = stableFrames
@@ -44,12 +45,13 @@ final class BatteryConfigMismatchDetector {
     evaluated = false
     fired = false
     reportedCount = -1
+    reportedSeries = -1
   }
 
   /// Feed one smart-BMS frame's cell count and the currently configured series count. Returns the
   /// warning payload to report, or nil when nothing should be reported this frame (no cells, the
-  /// count is not yet stable, no configured series to compare against, the counts match, or the
-  /// mismatch was already reported).
+  /// count is not yet stable, no configured series to compare against, the counts match, or this
+  /// exact mismatch pair was already reported).
   func onFrame(bmsCellCount: Int, configuredSeries: Int?) -> String? {
     if bmsCellCount <= 0 { return nil }
     if bmsCellCount == runValue {
@@ -65,9 +67,12 @@ final class BatteryConfigMismatchDetector {
     guard let configuredSeries, configuredSeries > 0 else { return nil }
     evaluated = true
     if bmsCellCount == configuredSeries { return nil }
-    if fired, reportedCount == bmsCellCount { return nil }
+    // Dedupe on the full pair — a live config change (BMS count unchanged, series count moved) is a
+    // different mismatch and must re-report so the stored payload never goes stale.
+    if fired, reportedCount == bmsCellCount, reportedSeries == configuredSeries { return nil }
     fired = true
     reportedCount = bmsCellCount
+    reportedSeries = configuredSeries
     return payloadJson(bmsCellCount: bmsCellCount, configuredSeries: configuredSeries)
   }
 

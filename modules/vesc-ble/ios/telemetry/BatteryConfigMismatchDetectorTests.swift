@@ -21,6 +21,24 @@ final class BatteryConfigMismatchDetectorTests: XCTestCase {
     XCTAssertFalse(detector.sessionEndClean())
   }
 
+  func testLiveConfigChangeReReportsWithNewSeries() {
+    let detector = BatteryConfigMismatchDetector()
+    // Stable 18 vs 15S fires once.
+    for _ in 0..<2 { XCTAssertNil(detector.onFrame(bmsCellCount: 18, configuredSeries: 15)) }
+    XCTAssertEqual(
+      detector.onFrame(bmsCellCount: 18, configuredSeries: 15),
+      "{\"bmsCellCount\":18,\"configuredSeries\":15}"
+    )
+    // Config changes to 16S mid-session, BMS count unchanged — a different mismatch must re-report
+    // so the stored payload does not keep the stale series count.
+    XCTAssertEqual(
+      detector.onFrame(bmsCellCount: 18, configuredSeries: 16),
+      "{\"bmsCellCount\":18,\"configuredSeries\":16}"
+    )
+    // Same pair again is deduped.
+    XCTAssertNil(detector.onFrame(bmsCellCount: 18, configuredSeries: 16))
+  }
+
   func testSingleOddFrameDoesNotFire() {
     let detector = BatteryConfigMismatchDetector()
     // A one-off wrong count between matching frames never reaches stability, so it never fires.
