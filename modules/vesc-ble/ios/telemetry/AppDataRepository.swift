@@ -415,6 +415,11 @@ final class AppDataRepository {
     if key == "liveHistoryLimit" {
       guard let minutes = Self.liveHistoryLimitMinutes(rawValue) else { return }
       value = minutes
+    } else if key == "boardWarningsEnabled" {
+      // Kill switch must stay a strict Bool (Android rejects non-Boolean too) so JS state and the
+      // native detector gate can never diverge on a malformed value.
+      guard let enabled = rawValue as? Bool else { return }
+      value = enabled
     } else {
       value = rawValue
     }

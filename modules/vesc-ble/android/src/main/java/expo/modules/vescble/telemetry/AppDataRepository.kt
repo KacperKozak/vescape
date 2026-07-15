@@ -304,6 +304,7 @@ class AppDataRepository private constructor(private val context: Context) {
         "wearMirrorIntervalMs" -> d.wearMirrorIntervalMs
         "wearAutoLaunchOnConnect" -> d.wearAutoLaunchOnConnect
         "companionPresenceEnabled" -> d.companionPresenceEnabled
+        "boardWarningsEnabled" -> d.boardWarningsEnabled
         "companionPresenceCooldownMinutes" -> d.companionPresenceCooldownMinutes
         "autoCloseEnabled" -> d.autoCloseEnabled
         "autoCloseDelayMinutes" -> d.autoCloseDelayMinutes
