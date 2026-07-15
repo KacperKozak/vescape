@@ -1161,7 +1161,8 @@ internal class BoardSessionController(private val service: VescForegroundService
     private fun evaluateConfigSafety(values: ConfigSafetyValues) {
         val boardId = boardConfig?.appBoardId ?: return
         val seriesCount = (batteryConfigCache?.get("seriesCount") as? Number)?.toInt()
-        val report = ConfigSafetyDetector.evaluate(values, seriesCount)
+        val perCell = ConfigSafetyDetector.usesPerCellVoltage(fwVersionString)
+        val report = ConfigSafetyDetector.evaluate(values, seriesCount, perCell)
         val registry = BoardWarningRegistry.get(service.applicationContext)
         VescForegroundService.appDataScope.launch {
             for (finding in report.findings) {

@@ -37,10 +37,14 @@ struct ConfigSafetyReport {
 /// board's configured battery series count. Pure evaluation logic per the pure-native-logic ADR; the
 /// background config read, series-count lookup, and registry reporting stay in the session controller.
 ///
-/// Thresholds are native constants. Per-cell rules (`kindLv`, `kindHv`) need the configured series
-/// count and are skipped when it is absent; the other three still run. A rule whose config field is
-/// missing from the schema is likewise skipped. Every payload carries the offending parameter, its
-/// current value, and the safe bound so the UI can explain the finding.
+/// Thresholds are native constants. The pushback voltage rules (`kindLv`, `kindHv`) read `tiltback_lv`
+/// / `tiltback_hv` in whichever units the firmware uses: Refloat on VESC 6.05+ stores a **per-cell**
+/// value (compared directly against the per-cell bound), older firmware stores a **pack** value
+/// (compared against `bound × series`, so it needs the series count). `usesPerCellVoltage` resolves the
+/// mode from the firmware string; when it cannot (`perCell` nil) — or when pack mode lacks a series
+/// count — those two rules are skipped. A rule whose config field is missing from the schema is likewise
+/// skipped. Every payload carries the offending parameter, its current value, and the safe bound so the
+/// UI can explain the finding.
 ///
 /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/ConfigSafetyDetector.kt
 enum ConfigSafetyDetector {
@@ -50,14 +54,30 @@ enum ConfigSafetyDetector {
   static let kindDuty = "duty-pushback-high"
   static let kindMovingFault = "moving-fault-disabled"
 
-  /// Minimum safe low-voltage pushback per cell (V). LV pushback under `this × series` is unsafe.
+  /// Minimum safe low-voltage pushback per cell (V). Pack-mode bound is `this × series`.
   static let cellLvMinV = 3.0
-  /// Maximum safe high-voltage pushback per cell (V). HV pushback over `this × series` is unsafe.
+  /// Maximum safe high-voltage pushback per cell (V). Pack-mode bound is `this × series`.
   static let cellHvMaxV = 4.3
   /// Maximum safe duty-cycle pushback threshold (fraction). VESC max duty is 0.95.
   static let dutyMax = 0.85
 
-  static func evaluate(_ values: ConfigSafetyValues, seriesCount: Int?) -> ConfigSafetyReport {
+  /// First VESC firmware (major, minor) that stores `tiltback_lv`/`tiltback_hv` as per-cell values.
+  private static let perCellFwMajor = 6
+  private static let perCellFwMinor = 5
+
+  /// Whether the firmware stores the pushback voltages per-cell (VESC 6.05+) rather than as a pack
+  /// total. Returns nil when the firmware string is absent or unparseable, so the caller skips the
+  /// voltage rules rather than guessing the units.
+  static func usesPerCellVoltage(_ fwVersion: String?) -> Bool? {
+    guard let fwVersion,
+          let match = fwVersion.range(of: #"(\d+)\.(\d+)"#, options: .regularExpression)
+    else { return nil }
+    let parts = fwVersion[match].split(separator: ".")
+    guard parts.count == 2, let major = Int(parts[0]), let minor = Int(parts[1]) else { return nil }
+    return major > perCellFwMajor || (major == perCellFwMajor && minor >= perCellFwMinor)
+  }
+
+  static func evaluate(_ values: ConfigSafetyValues, seriesCount: Int?, perCell: Bool?) -> ConfigSafetyReport {
     var findings: [ConfigSafetyFinding] = []
     var clean: [String] = []
 
@@ -70,9 +90,8 @@ enum ConfigSafetyDetector {
       }
     }
 
-    // lv-pushback-low (critical): LV pushback below the safe per-cell minimum. Needs series count.
-    if let lv = values.tiltbackLv, let seriesCount {
-      let bound = cellLvMinV * Double(seriesCount)
+    // lv-pushback-low (critical): LV pushback below the safe minimum, in the firmware's voltage units.
+    if let lv = values.tiltbackLv, let bound = voltageBound(cellLvMinV, perCell, seriesCount) {
       if lv < bound {
         findings.append(finding(kindLv, .critical, "tiltback_lv", lv, bound))
       } else {
@@ -80,9 +99,8 @@ enum ConfigSafetyDetector {
       }
     }
 
-    // hv-pushback-high (warn): HV pushback above the safe per-cell maximum. Needs series count.
-    if let hv = values.tiltbackHv, let seriesCount {
-      let bound = cellHvMaxV * Double(seriesCount)
+    // hv-pushback-high (warn): HV pushback above the safe maximum, in the firmware's voltage units.
+    if let hv = values.tiltbackHv, let bound = voltageBound(cellHvMaxV, perCell, seriesCount) {
       if hv > bound {
         findings.append(finding(kindHv, .warn, "tiltback_hv", hv, bound))
       } else {
@@ -109,6 +127,17 @@ enum ConfigSafetyDetector {
     }
 
     return ConfigSafetyReport(findings: findings, cleanKinds: clean)
+  }
+
+  /// The safe voltage bound in the firmware's units: the per-cell constant directly (per-cell
+  /// firmware), or `× series` (pack firmware). Nil when the mode is unknown, or pack mode has no series
+  /// count — the caller then skips the rule.
+  private static func voltageBound(_ perCellBound: Double, _ perCell: Bool?, _ seriesCount: Int?) -> Double? {
+    switch perCell {
+    case .some(true): return perCellBound
+    case .some(false): return seriesCount.map { perCellBound * Double($0) }
+    case .none: return nil
+    }
   }
 
   private static func finding(

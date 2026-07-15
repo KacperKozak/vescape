@@ -406,6 +406,7 @@ internal final class BoardSessionController: VescGattListener {
     }
     cellSpreadDetector.reset()
     configSafetyReadScheduled = false
+    vescLiveFirmware = nil
     self.config = config
     if let session {
       lastEmittedLinkIntegrity = session.startLinkIntegrityCheck(expected: config.linkIdentity())
@@ -854,7 +855,8 @@ internal final class BoardSessionController: VescGattListener {
   private func evaluateConfigSafety(_ values: ConfigSafetyValues) {
     guard let boardId = config?.appBoardId else { return }
     let seriesCount = config?.batteryConfig?["seriesCount"] as? Int
-    let report = ConfigSafetyDetector.evaluate(values, seriesCount: seriesCount)
+    let perCell = ConfigSafetyDetector.usesPerCellVoltage(vescLiveFirmware)
+    let report = ConfigSafetyDetector.evaluate(values, seriesCount: seriesCount, perCell: perCell)
     for finding in report.findings {
       let severity: BoardWarningRegistry.Severity = finding.severity == .critical ? .critical : .warn
       BoardWarningRegistry.shared.reportFinding(
@@ -912,6 +914,7 @@ internal final class BoardSessionController: VescGattListener {
 
   private func handleFwVersion(_ payload: [UInt8]) {
     guard let firmware = parseFwVersion(payload: payload), let session, let config else { return }
+    vescLiveFirmware = firmware
     updateLinkIntegrity(session.observeFirmware(expected: config.linkIdentity(), firmware: firmware))
   }
 
@@ -942,6 +945,9 @@ internal final class BoardSessionController: VescGattListener {
 
   private var lastEmittedLinkIntegrity: LinkIntegrity = .unknown
   private var configSafetyReadScheduled = false
+  /// Live-parsed firmware string ("FW 6.05 · …"), used to resolve per-cell vs pack pushback units.
+  /// Mirrors Android `fwVersionString`.
+  private var vescLiveFirmware: String?
 
   private func updateLinkIntegrity(_ next: LinkIntegrity) {
     guard next != lastEmittedLinkIntegrity else { return }

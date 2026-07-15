@@ -21,6 +21,13 @@ pushback is itself hazardous — keep `_speed` conservative (HV/LV default `1 °
 `tiltback_lv`. LV pushback is the "stop now" notice; the voltage cutoffs are last-resort battery
 protection. If the cutoffs rise above LV pushback, the warning is defeated.
 
+**Voltage units (firmware-dependent):** since Refloat 1.2 on VESC **6.05+**, `tiltback_lv` /
+`tiltback_hv` are stored **per cell** (defaults `3.0` / `4.3`). On **6.02** they are a **pack total**
+(e.g. `3.0 × 15 = 45 V`). The config-safety detector (`ConfigSafetyDetector`) resolves the mode from
+the firmware version: per-cell → compare the raw value against `3.0` / `4.3`; pack → compare against
+`3.0 × series` / `4.3 × series` (needs the configured series count). When the firmware version is
+unknown/unparseable, or pack mode has no series count, the LV/HV rules are skipped rather than guessed.
+
 ## Fault disengagement (board turns off)
 
 | Fault                 | Param                       | Default | Trigger                                                             |
