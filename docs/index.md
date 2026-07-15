@@ -15,6 +15,7 @@
 - [chargingDetection.md](./chargingDetection.md) — charging indicator investigation & findings
 - [alerts.md](./alerts.md) — telemetry alerts: storage, native evaluation, Geiger mode
 - [safety.md](./safety.md) — safety warnings & thresholds: firmware pushbacks, faults, voltage cutoffs
+- [board-warnings.md](./board-warnings.md) — Board Warnings catalog: every kind's slug, title, severity, trigger, payload, clear semantics
 - [watch-mirror.md](./watch-mirror.md) — Wear OS Mirror local install and Data Layer troubleshooting
 
 ## Status

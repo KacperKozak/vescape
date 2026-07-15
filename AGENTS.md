@@ -38,6 +38,7 @@ This is a PoC, but keep it sharp:
 - Remove unused code! Not keep dead code for later.
 - No duplicate code! We do not want to repeat ourselves.
 - Do not add tests for trivial predicates. Add tests for meaningful behavior, edge cases, contracts, or regressions.
+- New Board Warning detectors must add their kind to `docs/board-warnings.md` (the kinds catalog) alongside the `BoardWarningKind` slug.
 
 ## Parity
 
