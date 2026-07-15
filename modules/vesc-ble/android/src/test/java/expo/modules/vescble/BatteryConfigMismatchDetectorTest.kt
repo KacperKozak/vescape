@@ -1,7 +1,9 @@
 package expo.modules.vescble
 
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -9,10 +11,18 @@ import org.junit.Test
 /**
  * Battery-config-mismatch detector behavior: stable-count gating (a single odd frame never fires),
  * one warn payload carrying both counts, matching-count clean evaluation, and the no-data /
- * no-config contracts that leave a stored warning untouched.
+ * no-config contracts that leave a stored warning untouched. Payload assertions decode the JSON (its
+ * key order is serializer-dependent) rather than matching an exact string.
  * @parity /modules/vesc-ble/ios/telemetry/BatteryConfigMismatchDetectorTests.swift
  */
 class BatteryConfigMismatchDetectorTest {
+
+  private fun assertPayload(payloadJson: String?, bmsCellCount: Int, configuredSeries: Int) {
+    assertNotNull(payloadJson)
+    val json = JSONObject(payloadJson!!)
+    assertEquals(bmsCellCount, json.getInt("bmsCellCount"))
+    assertEquals(configuredSeries, json.getInt("configuredSeries"))
+  }
 
   @Test
   fun stableMismatchFiresOneWarnWithBothCounts() {
@@ -20,8 +30,7 @@ class BatteryConfigMismatchDetectorTest {
     // First two stable frames are not yet stable enough to compare.
     assertNull(detector.onFrame(18, 15))
     assertNull(detector.onFrame(18, 15))
-    val payload = detector.onFrame(18, 15)
-    assertEquals("{\"bmsCellCount\":18,\"configuredSeries\":15}", payload)
+    assertPayload(detector.onFrame(18, 15), bmsCellCount = 18, configuredSeries = 15)
     // Already reported this mismatch — no repeat on later identical frames.
     assertNull(detector.onFrame(18, 15))
     assertFalse(detector.sessionEndClean())
@@ -32,10 +41,10 @@ class BatteryConfigMismatchDetectorTest {
     val detector = BatteryConfigMismatchDetector()
     // Stable 18 vs 15S fires once.
     repeat(2) { assertNull(detector.onFrame(18, 15)) }
-    assertEquals("{\"bmsCellCount\":18,\"configuredSeries\":15}", detector.onFrame(18, 15))
+    assertPayload(detector.onFrame(18, 15), bmsCellCount = 18, configuredSeries = 15)
     // Config changes to 16S mid-session, BMS count unchanged — a different mismatch must re-report
     // so the stored payload does not keep the stale series count.
-    assertEquals("{\"bmsCellCount\":18,\"configuredSeries\":16}", detector.onFrame(18, 16))
+    assertPayload(detector.onFrame(18, 16), bmsCellCount = 18, configuredSeries = 16)
     // Same pair again is deduped.
     assertNull(detector.onFrame(18, 16))
   }

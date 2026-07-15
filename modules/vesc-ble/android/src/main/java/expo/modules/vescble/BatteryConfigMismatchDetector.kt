@@ -73,12 +73,12 @@ class BatteryConfigMismatchDetector(
   fun sessionEndClean(): Boolean = evaluated && !fired
 
   private fun payloadJson(bmsCellCount: Int, configuredSeries: Int): String =
-    "{\"bmsCellCount\":$bmsCellCount,\"configuredSeries\":$configuredSeries}"
+    boardWarningPayload {
+      put("bmsCellCount", bmsCellCount)
+      put("configuredSeries", configuredSeries)
+    }
 
   companion object {
-    /** Registry warning kind this detector owns. */
-    const val KIND = "battery-config-mismatch"
-
     /** BMS cell count must repeat across this many consecutive frames before it is compared. */
     const val STABLE_FRAMES = 3
   }

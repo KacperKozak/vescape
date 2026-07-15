@@ -59,6 +59,12 @@ final class BoardWarningRegistry {
     lock.unlock()
   }
 
+  /// Typed detector path: a detector found a problem for a known `BoardWarningKind`.
+  func reportFinding(boardId: String, kind: BoardWarningKind, severity: Severity, payloadJson: String) {
+    reportFinding(boardId: boardId, kind: kind.rawValue, severity: severity, payloadJson: payloadJson)
+  }
+
+  /// Raw path: manual/dev injection of an arbitrary kind slug (including kinds JS may not know).
   func reportFinding(boardId: String, kind: String, severity: Severity, payloadJson: String) {
     let timestamp = now()
     let existing = store.get(boardId, kind)
@@ -82,6 +88,11 @@ final class BoardWarningRegistry {
       )
     }
     emit(boardId)
+  }
+
+  /// Typed detector path: the kind evaluated with real data and the condition was gone.
+  func reportCleanEvaluation(boardId: String, kind: BoardWarningKind) {
+    reportCleanEvaluation(boardId: boardId, kind: kind.rawValue)
   }
 
   func reportCleanEvaluation(boardId: String, kind: String) {

@@ -1,7 +1,5 @@
 package expo.modules.vescble
 
-import java.util.Locale
-
 /**
  * Decoded Refloat config values the safety rules evaluate. A `null` field means the schema did not
  * carry it (or the raw config was too short) — the rules that need it are skipped, never guessed.
@@ -15,13 +13,10 @@ data class ConfigSafetyValues(
   val movingFaultDisabled: Boolean?,
 )
 
-/** Two-level config-rule severity. Mapped to [BoardWarningSeverity] by the session controller. */
-enum class ConfigRuleSeverity { WARN, CRITICAL }
-
 /** One config-safety finding to report through the Board Warning registry. */
 data class ConfigSafetyFinding(
-  val kind: String,
-  val severity: ConfigRuleSeverity,
+  val kind: BoardWarningKind,
+  val severity: BoardWarningSeverity,
   val payloadJson: String,
 )
 
@@ -33,7 +28,7 @@ data class ConfigSafetyFinding(
  */
 data class ConfigSafetyReport(
   val findings: List<ConfigSafetyFinding>,
-  val cleanKinds: List<String>,
+  val cleanKinds: List<BoardWarningKind>,
 )
 
 /**
@@ -41,7 +36,7 @@ data class ConfigSafetyReport(
  * board's configured battery series count. Pure evaluation logic per the pure-native-logic ADR; the
  * background config read, series-count lookup, and registry reporting stay in the session controller.
  *
- * Thresholds are native constants. The pushback voltage rules ([KIND_LV], [KIND_HV]) read `tiltback_lv`
+ * Thresholds are native constants. The pushback voltage rules (LV/HV) read `tiltback_lv`
  * / `tiltback_hv` in whichever units the firmware uses: Refloat on VESC 6.05+ stores a **per-cell**
  * value (compared directly against the per-cell bound), older firmware stores a **pack** value
  * (compared against `bound × series`, so it needs the series count). [usesPerCellVoltage] resolves the
@@ -53,12 +48,6 @@ data class ConfigSafetyReport(
  * @parity /modules/vesc-ble/ios/ConfigSafetyDetector.swift
  */
 object ConfigSafetyDetector {
-  const val KIND_FOOTPAD = "footpad-disabled"
-  const val KIND_LV = "lv-pushback-low"
-  const val KIND_HV = "hv-pushback-high"
-  const val KIND_DUTY = "duty-pushback-high"
-  const val KIND_MOVING_FAULT = "moving-fault-disabled"
-
   /** Minimum safe low-voltage pushback per cell (V). Pack-mode bound is `this × series`. */
   const val CELL_LV_MIN_V = 3.0
 
@@ -88,16 +77,16 @@ object ConfigSafetyDetector {
 
   fun evaluate(values: ConfigSafetyValues, seriesCount: Int?, perCell: Boolean?): ConfigSafetyReport {
     val findings = mutableListOf<ConfigSafetyFinding>()
-    val clean = mutableListOf<String>()
+    val clean = mutableListOf<BoardWarningKind>()
 
     // footpad-disabled (critical): both ADC switch voltages 0 disables the footpad switch entirely.
     val adc1 = values.faultAdc1
     val adc2 = values.faultAdc2
     if (adc1 != null && adc2 != null) {
       if (adc1 == 0.0 && adc2 == 0.0) {
-        findings += finding(KIND_FOOTPAD, ConfigRuleSeverity.CRITICAL, "fault_adc1/fault_adc2", 0.0, 0.0)
+        findings += finding(BoardWarningKind.FOOTPAD_DISABLED, BoardWarningSeverity.CRITICAL, "fault_adc1/fault_adc2", 0.0, 0.0)
       } else {
-        clean += KIND_FOOTPAD
+        clean += BoardWarningKind.FOOTPAD_DISABLED
       }
     }
 
@@ -106,9 +95,9 @@ object ConfigSafetyDetector {
     val lvBound = voltageBound(CELL_LV_MIN_V, perCell, seriesCount)
     if (lv != null && lvBound != null) {
       if (lv < lvBound) {
-        findings += finding(KIND_LV, ConfigRuleSeverity.CRITICAL, "tiltback_lv", lv, lvBound)
+        findings += finding(BoardWarningKind.LV_PUSHBACK_LOW, BoardWarningSeverity.CRITICAL, "tiltback_lv", lv, lvBound)
       } else {
-        clean += KIND_LV
+        clean += BoardWarningKind.LV_PUSHBACK_LOW
       }
     }
 
@@ -117,9 +106,9 @@ object ConfigSafetyDetector {
     val hvBound = voltageBound(CELL_HV_MAX_V, perCell, seriesCount)
     if (hv != null && hvBound != null) {
       if (hv > hvBound) {
-        findings += finding(KIND_HV, ConfigRuleSeverity.WARN, "tiltback_hv", hv, hvBound)
+        findings += finding(BoardWarningKind.HV_PUSHBACK_HIGH, BoardWarningSeverity.WARN, "tiltback_hv", hv, hvBound)
       } else {
-        clean += KIND_HV
+        clean += BoardWarningKind.HV_PUSHBACK_HIGH
       }
     }
 
@@ -127,9 +116,9 @@ object ConfigSafetyDetector {
     val duty = values.tiltbackDuty
     if (duty != null) {
       if (duty > DUTY_MAX) {
-        findings += finding(KIND_DUTY, ConfigRuleSeverity.WARN, "tiltback_duty", duty, DUTY_MAX)
+        findings += finding(BoardWarningKind.DUTY_PUSHBACK_HIGH, BoardWarningSeverity.WARN, "tiltback_duty", duty, DUTY_MAX)
       } else {
-        clean += KIND_DUTY
+        clean += BoardWarningKind.DUTY_PUSHBACK_HIGH
       }
     }
 
@@ -137,9 +126,9 @@ object ConfigSafetyDetector {
     val movingFault = values.movingFaultDisabled
     if (movingFault != null) {
       if (movingFault) {
-        findings += finding(KIND_MOVING_FAULT, ConfigRuleSeverity.WARN, "fault_moving_fault_disabled", 1.0, 0.0)
+        findings += finding(BoardWarningKind.MOVING_FAULT_DISABLED, BoardWarningSeverity.WARN, "fault_moving_fault_disabled", 1.0, 0.0)
       } else {
-        clean += KIND_MOVING_FAULT
+        clean += BoardWarningKind.MOVING_FAULT_DISABLED
       }
     }
 
@@ -157,12 +146,13 @@ object ConfigSafetyDetector {
     null -> null
   }
 
-  private fun finding(kind: String, severity: ConfigRuleSeverity, param: String, value: Double, bound: Double) =
+  private fun finding(kind: BoardWarningKind, severity: BoardWarningSeverity, param: String, value: Double, bound: Double) =
     ConfigSafetyFinding(kind, severity, payloadJson(param, value, bound))
 
-  private fun payloadJson(param: String, value: Double, bound: Double): String {
-    val v = String.format(Locale.US, "%.4f", value)
-    val b = String.format(Locale.US, "%.4f", bound)
-    return "{\"param\":\"$param\",\"value\":$v,\"bound\":$b}"
-  }
+  private fun payloadJson(param: String, value: Double, bound: Double): String =
+    boardWarningPayload {
+      put("param", param)
+      put("value", boardWarningRound4(value))
+      put("bound", boardWarningRound4(bound))
+    }
 }

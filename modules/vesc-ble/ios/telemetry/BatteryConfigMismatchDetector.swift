@@ -19,9 +19,6 @@ import Foundation
 ///
 /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BatteryConfigMismatchDetector.kt
 final class BatteryConfigMismatchDetector {
-  /// Registry warning kind this detector owns.
-  static let kind = "battery-config-mismatch"
-
   /// BMS cell count must repeat across this many consecutive frames before it is compared.
   static let stableFrames = 3
 
@@ -82,6 +79,9 @@ final class BatteryConfigMismatchDetector {
   func sessionEndClean() -> Bool { evaluated && !fired }
 
   private func payloadJson(bmsCellCount: Int, configuredSeries: Int) -> String {
-    "{\"bmsCellCount\":\(bmsCellCount),\"configuredSeries\":\(configuredSeries)}"
+    BoardWarningPayload.json([
+      "bmsCellCount": bmsCellCount,
+      "configuredSeries": configuredSeries,
+    ])
   }
 }

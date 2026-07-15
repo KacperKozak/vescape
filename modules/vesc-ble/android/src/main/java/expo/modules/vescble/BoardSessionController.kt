@@ -1198,13 +1198,9 @@ internal class BoardSessionController(private val service: VescForegroundService
             vCharge = bms.vCharge,
             atMs = bms.capturedAt,
         ) ?: return@guardWarningEval
-        val severity = when (finding.severity) {
-            CellSpreadSeverity.WARN -> BoardWarningSeverity.WARN
-            CellSpreadSeverity.CRITICAL -> BoardWarningSeverity.CRITICAL
-        }
         val registry = BoardWarningRegistry.get(service.applicationContext)
         launchWarningWrite {
-            registry.reportFinding(boardId, CellSpreadDetector.KIND, severity, finding.payloadJson)
+            registry.reportFinding(boardId, BoardWarningKind.CELL_SPREAD, finding.severity, finding.payloadJson)
         }
     }
 
@@ -1223,7 +1219,7 @@ internal class BoardSessionController(private val service: VescForegroundService
         launchWarningWrite {
             registry.reportFinding(
                 boardId,
-                BatteryConfigMismatchDetector.KIND,
+                BoardWarningKind.BATTERY_CONFIG_MISMATCH,
                 BoardWarningSeverity.WARN,
                 payloadJson,
             )
@@ -1245,11 +1241,7 @@ internal class BoardSessionController(private val service: VescForegroundService
         val registry = BoardWarningRegistry.get(service.applicationContext)
         launchWarningWrite {
             for (finding in report.findings) {
-                val severity = when (finding.severity) {
-                    ConfigRuleSeverity.WARN -> BoardWarningSeverity.WARN
-                    ConfigRuleSeverity.CRITICAL -> BoardWarningSeverity.CRITICAL
-                }
-                registry.reportFinding(boardId, finding.kind, severity, finding.payloadJson)
+                registry.reportFinding(boardId, finding.kind, finding.severity, finding.payloadJson)
             }
             for (kind in report.cleanKinds) {
                 registry.reportCleanEvaluation(boardId, kind)
@@ -1610,8 +1602,8 @@ internal class BoardSessionController(private val service: VescForegroundService
             if (cellSpreadClean || mismatchClean) {
                 val registry = BoardWarningRegistry.get(service.applicationContext)
                 launchWarningWrite {
-                    if (cellSpreadClean) registry.reportCleanEvaluation(boardId, CellSpreadDetector.KIND)
-                    if (mismatchClean) registry.reportCleanEvaluation(boardId, BatteryConfigMismatchDetector.KIND)
+                    if (cellSpreadClean) registry.reportCleanEvaluation(boardId, BoardWarningKind.CELL_SPREAD)
+                    if (mismatchClean) registry.reportCleanEvaluation(boardId, BoardWarningKind.BATTERY_CONFIG_MISMATCH)
                 }
             }
         }

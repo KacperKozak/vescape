@@ -1,5 +1,6 @@
 package expo.modules.vescble
 
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -8,7 +9,8 @@ import org.junit.Test
 /**
  * Config-safety rule boundaries: each rule fires with the right severity + payload, clears when the
  * setting is safe, per-cell rules skip (report nothing) when they cannot resolve their bound, and the
- * pushback voltage rules follow the firmware's per-cell (6.05+) vs pack units.
+ * pushback voltage rules follow the firmware's per-cell (6.05+) vs pack units. Payload assertions
+ * decode the JSON (its key order is serializer-dependent) rather than matching an exact string.
  * @parity /modules/vesc-ble/ios/ConfigSafetyDetectorTests.swift
  */
 class ConfigSafetyDetectorTest {
@@ -25,8 +27,15 @@ class ConfigSafetyDetectorTest {
   // Per-cell-mode safe config (VESC 6.05+): LV 3.0 V, HV 4.3 V, series-independent.
   private val perCellSafe = safe.copy(tiltbackLv = 3.0, tiltbackHv = 4.3)
 
-  private fun ConfigSafetyReport.finding(kind: String): ConfigSafetyFinding? =
+  private fun ConfigSafetyReport.finding(kind: BoardWarningKind): ConfigSafetyFinding? =
     findings.firstOrNull { it.kind == kind }
+
+  private fun ConfigSafetyFinding.assertPayload(param: String, value: Double, bound: Double) {
+    val json = JSONObject(payloadJson)
+    assertEquals(param, json.getString("param"))
+    assertEquals(value, json.getDouble("value"), 0.0)
+    assertEquals(bound, json.getDouble("bound"), 0.0)
+  }
 
   @Test
   fun usesPerCellVoltageResolvesFromFirmware() {
@@ -45,11 +54,11 @@ class ConfigSafetyDetectorTest {
     assertTrue(report.findings.isEmpty())
     assertEquals(
       setOf(
-        ConfigSafetyDetector.KIND_FOOTPAD,
-        ConfigSafetyDetector.KIND_LV,
-        ConfigSafetyDetector.KIND_HV,
-        ConfigSafetyDetector.KIND_DUTY,
-        ConfigSafetyDetector.KIND_MOVING_FAULT,
+        BoardWarningKind.FOOTPAD_DISABLED,
+        BoardWarningKind.LV_PUSHBACK_LOW,
+        BoardWarningKind.HV_PUSHBACK_HIGH,
+        BoardWarningKind.DUTY_PUSHBACK_HIGH,
+        BoardWarningKind.MOVING_FAULT_DISABLED,
       ),
       report.cleanKinds.toSet(),
     )
@@ -58,66 +67,66 @@ class ConfigSafetyDetectorTest {
   @Test
   fun footpadDisabledWhenBothAdcZero() {
     val report = ConfigSafetyDetector.evaluate(safe.copy(faultAdc1 = 0.0, faultAdc2 = 0.0), seriesCount = 15, perCell = false)
-    val finding = report.finding(ConfigSafetyDetector.KIND_FOOTPAD)!!
-    assertEquals(ConfigRuleSeverity.CRITICAL, finding.severity)
-    assertEquals("{\"param\":\"fault_adc1/fault_adc2\",\"value\":0.0000,\"bound\":0.0000}", finding.payloadJson)
+    val finding = report.finding(BoardWarningKind.FOOTPAD_DISABLED)!!
+    assertEquals(BoardWarningSeverity.CRITICAL, finding.severity)
+    finding.assertPayload("fault_adc1/fault_adc2", 0.0, 0.0)
   }
 
   @Test
   fun footpadCleanWhenOneAdcNonZero() {
     val report = ConfigSafetyDetector.evaluate(safe.copy(faultAdc1 = 0.0, faultAdc2 = 2.0), seriesCount = 15, perCell = false)
-    assertNull(report.finding(ConfigSafetyDetector.KIND_FOOTPAD))
-    assertTrue(report.cleanKinds.contains(ConfigSafetyDetector.KIND_FOOTPAD))
+    assertNull(report.finding(BoardWarningKind.FOOTPAD_DISABLED))
+    assertTrue(report.cleanKinds.contains(BoardWarningKind.FOOTPAD_DISABLED))
   }
 
   @Test
   fun footpadSkippedWhenAdcFieldMissing() {
     val report = ConfigSafetyDetector.evaluate(safe.copy(faultAdc2 = null), seriesCount = 15, perCell = false)
-    assertNull(report.finding(ConfigSafetyDetector.KIND_FOOTPAD))
-    assertTrue(!report.cleanKinds.contains(ConfigSafetyDetector.KIND_FOOTPAD))
+    assertNull(report.finding(BoardWarningKind.FOOTPAD_DISABLED))
+    assertTrue(!report.cleanKinds.contains(BoardWarningKind.FOOTPAD_DISABLED))
   }
 
   @Test
   fun lvPushbackLowFiresBelowPackMinimum() {
     // Pack mode, 15s: safe minimum 45.0 V; 44.0 is unsafe.
     val report = ConfigSafetyDetector.evaluate(safe.copy(tiltbackLv = 44.0), seriesCount = 15, perCell = false)
-    val finding = report.finding(ConfigSafetyDetector.KIND_LV)!!
-    assertEquals(ConfigRuleSeverity.CRITICAL, finding.severity)
-    assertEquals("{\"param\":\"tiltback_lv\",\"value\":44.0000,\"bound\":45.0000}", finding.payloadJson)
+    val finding = report.finding(BoardWarningKind.LV_PUSHBACK_LOW)!!
+    assertEquals(BoardWarningSeverity.CRITICAL, finding.severity)
+    finding.assertPayload("tiltback_lv", 44.0, 45.0)
   }
 
   @Test
   fun lvPushbackAtBoundIsClean() {
     val report = ConfigSafetyDetector.evaluate(safe.copy(tiltbackLv = 45.0), seriesCount = 15, perCell = false)
-    assertNull(report.finding(ConfigSafetyDetector.KIND_LV))
-    assertTrue(report.cleanKinds.contains(ConfigSafetyDetector.KIND_LV))
+    assertNull(report.finding(BoardWarningKind.LV_PUSHBACK_LOW))
+    assertTrue(report.cleanKinds.contains(BoardWarningKind.LV_PUSHBACK_LOW))
   }
 
   @Test
   fun hvPushbackHighFiresAbovePackMaximum() {
     // Pack mode, 15s: safe maximum 64.5 V; 66.0 is unsafe.
     val report = ConfigSafetyDetector.evaluate(safe.copy(tiltbackHv = 66.0), seriesCount = 15, perCell = false)
-    val finding = report.finding(ConfigSafetyDetector.KIND_HV)!!
-    assertEquals(ConfigRuleSeverity.WARN, finding.severity)
-    assertEquals("{\"param\":\"tiltback_hv\",\"value\":66.0000,\"bound\":64.5000}", finding.payloadJson)
+    val finding = report.finding(BoardWarningKind.HV_PUSHBACK_HIGH)!!
+    assertEquals(BoardWarningSeverity.WARN, finding.severity)
+    finding.assertPayload("tiltback_hv", 66.0, 64.5)
   }
 
   @Test
   fun perCellFirmwareComparesRawVoltageWithoutSeries() {
     // Per-cell mode (6.05+): the bound is the per-cell constant directly; series count is irrelevant.
     val clean = ConfigSafetyDetector.evaluate(perCellSafe, seriesCount = null, perCell = true)
-    assertTrue(clean.cleanKinds.contains(ConfigSafetyDetector.KIND_LV))
-    assertTrue(clean.cleanKinds.contains(ConfigSafetyDetector.KIND_HV))
+    assertTrue(clean.cleanKinds.contains(BoardWarningKind.LV_PUSHBACK_LOW))
+    assertTrue(clean.cleanKinds.contains(BoardWarningKind.HV_PUSHBACK_HIGH))
 
     val lvLow = ConfigSafetyDetector.evaluate(perCellSafe.copy(tiltbackLv = 2.9), seriesCount = null, perCell = true)
-    val lv = lvLow.finding(ConfigSafetyDetector.KIND_LV)!!
-    assertEquals(ConfigRuleSeverity.CRITICAL, lv.severity)
-    assertEquals("{\"param\":\"tiltback_lv\",\"value\":2.9000,\"bound\":3.0000}", lv.payloadJson)
+    val lv = lvLow.finding(BoardWarningKind.LV_PUSHBACK_LOW)!!
+    assertEquals(BoardWarningSeverity.CRITICAL, lv.severity)
+    lv.assertPayload("tiltback_lv", 2.9, 3.0)
 
     val hvHigh = ConfigSafetyDetector.evaluate(perCellSafe.copy(tiltbackHv = 4.5), seriesCount = null, perCell = true)
-    val hv = hvHigh.finding(ConfigSafetyDetector.KIND_HV)!!
-    assertEquals(ConfigRuleSeverity.WARN, hv.severity)
-    assertEquals("{\"param\":\"tiltback_hv\",\"value\":4.5000,\"bound\":4.3000}", hv.payloadJson)
+    val hv = hvHigh.finding(BoardWarningKind.HV_PUSHBACK_HIGH)!!
+    assertEquals(BoardWarningSeverity.WARN, hv.severity)
+    hv.assertPayload("tiltback_hv", 4.5, 4.3)
   }
 
   @Test
@@ -128,40 +137,40 @@ class ConfigSafetyDetectorTest {
       seriesCount = null,
       perCell = false,
     )
-    assertNull(report.finding(ConfigSafetyDetector.KIND_LV))
-    assertNull(report.finding(ConfigSafetyDetector.KIND_HV))
-    assertTrue(!report.cleanKinds.contains(ConfigSafetyDetector.KIND_LV))
-    assertTrue(!report.cleanKinds.contains(ConfigSafetyDetector.KIND_HV))
+    assertNull(report.finding(BoardWarningKind.LV_PUSHBACK_LOW))
+    assertNull(report.finding(BoardWarningKind.HV_PUSHBACK_HIGH))
+    assertTrue(!report.cleanKinds.contains(BoardWarningKind.LV_PUSHBACK_LOW))
+    assertTrue(!report.cleanKinds.contains(BoardWarningKind.HV_PUSHBACK_HIGH))
     // The non-cell rules still evaluate.
-    assertTrue(report.cleanKinds.contains(ConfigSafetyDetector.KIND_DUTY))
+    assertTrue(report.cleanKinds.contains(BoardWarningKind.DUTY_PUSHBACK_HIGH))
   }
 
   @Test
   fun voltageRulesSkippedWhenFirmwareModeUnknown() {
     // perCell null (unparseable firmware): units are ambiguous, so LV/HV report nothing even with series.
     val report = ConfigSafetyDetector.evaluate(safe.copy(tiltbackLv = 10.0, tiltbackHv = 90.0), seriesCount = 15, perCell = null)
-    assertNull(report.finding(ConfigSafetyDetector.KIND_LV))
-    assertNull(report.finding(ConfigSafetyDetector.KIND_HV))
-    assertTrue(!report.cleanKinds.contains(ConfigSafetyDetector.KIND_LV))
-    assertTrue(!report.cleanKinds.contains(ConfigSafetyDetector.KIND_HV))
+    assertNull(report.finding(BoardWarningKind.LV_PUSHBACK_LOW))
+    assertNull(report.finding(BoardWarningKind.HV_PUSHBACK_HIGH))
+    assertTrue(!report.cleanKinds.contains(BoardWarningKind.LV_PUSHBACK_LOW))
+    assertTrue(!report.cleanKinds.contains(BoardWarningKind.HV_PUSHBACK_HIGH))
     // The firmware-agnostic rules still evaluate.
-    assertTrue(report.cleanKinds.contains(ConfigSafetyDetector.KIND_DUTY))
-    assertTrue(report.cleanKinds.contains(ConfigSafetyDetector.KIND_MOVING_FAULT))
+    assertTrue(report.cleanKinds.contains(BoardWarningKind.DUTY_PUSHBACK_HIGH))
+    assertTrue(report.cleanKinds.contains(BoardWarningKind.MOVING_FAULT_DISABLED))
   }
 
   @Test
   fun dutyPushbackHighFiresOverLimit() {
     val report = ConfigSafetyDetector.evaluate(safe.copy(tiltbackDuty = 0.90), seriesCount = 15, perCell = false)
-    val finding = report.finding(ConfigSafetyDetector.KIND_DUTY)!!
-    assertEquals(ConfigRuleSeverity.WARN, finding.severity)
-    assertEquals("{\"param\":\"tiltback_duty\",\"value\":0.9000,\"bound\":0.8500}", finding.payloadJson)
+    val finding = report.finding(BoardWarningKind.DUTY_PUSHBACK_HIGH)!!
+    assertEquals(BoardWarningSeverity.WARN, finding.severity)
+    finding.assertPayload("tiltback_duty", 0.9, 0.85)
   }
 
   @Test
   fun movingFaultDisabledFiresWhenOn() {
     val report = ConfigSafetyDetector.evaluate(safe.copy(movingFaultDisabled = true), seriesCount = 15, perCell = false)
-    val finding = report.finding(ConfigSafetyDetector.KIND_MOVING_FAULT)!!
-    assertEquals(ConfigRuleSeverity.WARN, finding.severity)
-    assertEquals("{\"param\":\"fault_moving_fault_disabled\",\"value\":1.0000,\"bound\":0.0000}", finding.payloadJson)
+    val finding = report.finding(BoardWarningKind.MOVING_FAULT_DISABLED)!!
+    assertEquals(BoardWarningSeverity.WARN, finding.severity)
+    finding.assertPayload("fault_moving_fault_disabled", 1.0, 0.0)
   }
 }

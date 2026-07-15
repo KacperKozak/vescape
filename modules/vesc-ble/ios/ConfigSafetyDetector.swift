@@ -11,16 +11,10 @@ struct ConfigSafetyValues {
   let movingFaultDisabled: Bool?
 }
 
-/// Two-level config-rule severity. Mapped to `BoardWarningRegistry.Severity` by the session controller.
-enum ConfigRuleSeverity {
-  case warn
-  case critical
-}
-
 /// One config-safety finding to report through the Board Warning registry.
 struct ConfigSafetyFinding {
-  let kind: String
-  let severity: ConfigRuleSeverity
+  let kind: BoardWarningKind
+  let severity: BoardWarningRegistry.Severity
   let payloadJson: String
 }
 
@@ -30,14 +24,14 @@ struct ConfigSafetyFinding {
 /// untouched.
 struct ConfigSafetyReport {
   let findings: [ConfigSafetyFinding]
-  let cleanKinds: [String]
+  let cleanKinds: [BoardWarningKind]
 }
 
 /// Config-scoped Board Warning detector: pure rules over the decoded Refloat safety config plus the
 /// board's configured battery series count. Pure evaluation logic per the pure-native-logic ADR; the
 /// background config read, series-count lookup, and registry reporting stay in the session controller.
 ///
-/// Thresholds are native constants. The pushback voltage rules (`kindLv`, `kindHv`) read `tiltback_lv`
+/// Thresholds are native constants. The pushback voltage rules (LV/HV) read `tiltback_lv`
 /// / `tiltback_hv` in whichever units the firmware uses: Refloat on VESC 6.05+ stores a **per-cell**
 /// value (compared directly against the per-cell bound), older firmware stores a **pack** value
 /// (compared against `bound × series`, so it needs the series count). `usesPerCellVoltage` resolves the
@@ -48,12 +42,6 @@ struct ConfigSafetyReport {
 ///
 /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/ConfigSafetyDetector.kt
 enum ConfigSafetyDetector {
-  static let kindFootpad = "footpad-disabled"
-  static let kindLv = "lv-pushback-low"
-  static let kindHv = "hv-pushback-high"
-  static let kindDuty = "duty-pushback-high"
-  static let kindMovingFault = "moving-fault-disabled"
-
   /// Minimum safe low-voltage pushback per cell (V). Pack-mode bound is `this × series`.
   static let cellLvMinV = 3.0
   /// Maximum safe high-voltage pushback per cell (V). Pack-mode bound is `this × series`.
@@ -79,50 +67,50 @@ enum ConfigSafetyDetector {
 
   static func evaluate(_ values: ConfigSafetyValues, seriesCount: Int?, perCell: Bool?) -> ConfigSafetyReport {
     var findings: [ConfigSafetyFinding] = []
-    var clean: [String] = []
+    var clean: [BoardWarningKind] = []
 
     // footpad-disabled (critical): both ADC switch voltages 0 disables the footpad switch entirely.
     if let adc1 = values.faultAdc1, let adc2 = values.faultAdc2 {
       if adc1 == 0.0, adc2 == 0.0 {
-        findings.append(finding(kindFootpad, .critical, "fault_adc1/fault_adc2", 0.0, 0.0))
+        findings.append(finding(.footpadDisabled, .critical, "fault_adc1/fault_adc2", 0.0, 0.0))
       } else {
-        clean.append(kindFootpad)
+        clean.append(.footpadDisabled)
       }
     }
 
     // lv-pushback-low (critical): LV pushback below the safe minimum, in the firmware's voltage units.
     if let lv = values.tiltbackLv, let bound = voltageBound(cellLvMinV, perCell, seriesCount) {
       if lv < bound {
-        findings.append(finding(kindLv, .critical, "tiltback_lv", lv, bound))
+        findings.append(finding(.lvPushbackLow, .critical, "tiltback_lv", lv, bound))
       } else {
-        clean.append(kindLv)
+        clean.append(.lvPushbackLow)
       }
     }
 
     // hv-pushback-high (warn): HV pushback above the safe maximum, in the firmware's voltage units.
     if let hv = values.tiltbackHv, let bound = voltageBound(cellHvMaxV, perCell, seriesCount) {
       if hv > bound {
-        findings.append(finding(kindHv, .warn, "tiltback_hv", hv, bound))
+        findings.append(finding(.hvPushbackHigh, .warn, "tiltback_hv", hv, bound))
       } else {
-        clean.append(kindHv)
+        clean.append(.hvPushbackHigh)
       }
     }
 
     // duty-pushback-high (warn): duty pushback threshold set dangerously close to the duty limit.
     if let duty = values.tiltbackDuty {
       if duty > dutyMax {
-        findings.append(finding(kindDuty, .warn, "tiltback_duty", duty, dutyMax))
+        findings.append(finding(.dutyPushbackHigh, .warn, "tiltback_duty", duty, dutyMax))
       } else {
-        clean.append(kindDuty)
+        clean.append(.dutyPushbackHigh)
       }
     }
 
     // moving-fault-disabled (warn): moving faults disabled weakens fault protection while riding.
     if let movingFault = values.movingFaultDisabled {
       if movingFault {
-        findings.append(finding(kindMovingFault, .warn, "fault_moving_fault_disabled", 1.0, 0.0))
+        findings.append(finding(.movingFaultDisabled, .warn, "fault_moving_fault_disabled", 1.0, 0.0))
       } else {
-        clean.append(kindMovingFault)
+        clean.append(.movingFaultDisabled)
       }
     }
 
@@ -141,8 +129,8 @@ enum ConfigSafetyDetector {
   }
 
   private static func finding(
-    _ kind: String,
-    _ severity: ConfigRuleSeverity,
+    _ kind: BoardWarningKind,
+    _ severity: BoardWarningRegistry.Severity,
     _ param: String,
     _ value: Double,
     _ bound: Double
@@ -151,8 +139,10 @@ enum ConfigSafetyDetector {
   }
 
   private static func payloadJson(_ param: String, _ value: Double, _ bound: Double) -> String {
-    let v = String(format: "%.4f", value)
-    let b = String(format: "%.4f", bound)
-    return "{\"param\":\"\(param)\",\"value\":\(v),\"bound\":\(b)}"
+    BoardWarningPayload.json([
+      "param": param,
+      "value": BoardWarningPayload.round4(value),
+      "bound": BoardWarningPayload.round4(bound),
+    ])
   }
 }

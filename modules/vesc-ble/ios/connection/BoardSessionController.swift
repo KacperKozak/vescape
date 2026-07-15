@@ -405,10 +405,10 @@ internal final class BoardSessionController: VescGattListener {
     // reaches here directly, so finalize here to keep parity.
     if let previousBoardId = self.config?.appBoardId {
       if cellSpreadDetector.sessionEndClean() {
-        BoardWarningRegistry.shared.reportCleanEvaluation(boardId: previousBoardId, kind: CellSpreadDetector.kind)
+        BoardWarningRegistry.shared.reportCleanEvaluation(boardId: previousBoardId, kind: BoardWarningKind.cellSpread)
       }
       if batteryConfigMismatchDetector.sessionEndClean() {
-        BoardWarningRegistry.shared.reportCleanEvaluation(boardId: previousBoardId, kind: BatteryConfigMismatchDetector.kind)
+        BoardWarningRegistry.shared.reportCleanEvaluation(boardId: previousBoardId, kind: BoardWarningKind.batteryConfigMismatch)
       }
     }
     cellSpreadDetector.reset()
@@ -467,10 +467,10 @@ internal final class BoardSessionController: VescGattListener {
     // warning; a session with no BMS data reports nothing and leaves it untouched.
     if let boardId = config?.appBoardId {
       if cellSpreadDetector.sessionEndClean() {
-        BoardWarningRegistry.shared.reportCleanEvaluation(boardId: boardId, kind: CellSpreadDetector.kind)
+        BoardWarningRegistry.shared.reportCleanEvaluation(boardId: boardId, kind: BoardWarningKind.cellSpread)
       }
       if batteryConfigMismatchDetector.sessionEndClean() {
-        BoardWarningRegistry.shared.reportCleanEvaluation(boardId: boardId, kind: BatteryConfigMismatchDetector.kind)
+        BoardWarningRegistry.shared.reportCleanEvaluation(boardId: boardId, kind: BoardWarningKind.batteryConfigMismatch)
       }
     }
     session?.invalidate()
@@ -856,11 +856,10 @@ internal final class BoardSessionController: VescGattListener {
       vCharge: bms.vCharge,
       atMs: bms.capturedAt
     ) else { return }
-    let severity: BoardWarningRegistry.Severity = finding.severity == .critical ? .critical : .warn
     BoardWarningRegistry.shared.reportFinding(
       boardId: boardId,
-      kind: CellSpreadDetector.kind,
-      severity: severity,
+      kind: BoardWarningKind.cellSpread,
+      severity: finding.severity,
       payloadJson: finding.payloadJson
     )
   }
@@ -878,7 +877,7 @@ internal final class BoardSessionController: VescGattListener {
     ) else { return }
     BoardWarningRegistry.shared.reportFinding(
       boardId: boardId,
-      kind: BatteryConfigMismatchDetector.kind,
+      kind: BoardWarningKind.batteryConfigMismatch,
       severity: .warn,
       payloadJson: payloadJson
     )
@@ -895,11 +894,10 @@ internal final class BoardSessionController: VescGattListener {
     let perCell = ConfigSafetyDetector.usesPerCellVoltage(vescLiveFirmware)
     let report = ConfigSafetyDetector.evaluate(values, seriesCount: seriesCount, perCell: perCell)
     for finding in report.findings {
-      let severity: BoardWarningRegistry.Severity = finding.severity == .critical ? .critical : .warn
       BoardWarningRegistry.shared.reportFinding(
         boardId: boardId,
         kind: finding.kind,
-        severity: severity,
+        severity: finding.severity,
         payloadJson: finding.payloadJson
       )
     }

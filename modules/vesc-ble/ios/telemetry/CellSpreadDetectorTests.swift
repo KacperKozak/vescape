@@ -3,10 +3,18 @@ import XCTest
 
 /// Cell-spread detector behavior: sustain gating (transient spikes never fire), warn/critical tiers on
 /// the peak spread, charging/balancing payload context, peak tracking through re-reports, worst-group
-/// selection, and the session-end clean-evaluation contract.
+/// selection, and the session-end clean-evaluation contract. Payload assertions decode the JSON (its
+/// key order is serializer-dependent) and check each field, rather than matching an exact string.
 /// @parity /modules/vesc-ble/android/src/test/java/expo/modules/vescble/CellSpreadDetectorTest.kt
 final class CellSpreadDetectorTests: XCTestCase {
   private let noBalance = [false, false]
+
+  private func payloadFields(_ json: String?) -> [String: Any] {
+    guard let json, let data = json.data(using: .utf8),
+          let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    else { return [:] }
+    return obj
+  }
 
   func testSingleFrameSpikeDoesNotFire() {
     let detector = CellSpreadDetector()
@@ -23,10 +31,11 @@ final class CellSpreadDetectorTests: XCTestCase {
     let finding = detector.onFrame(cellVoltages: [3.80, 3.92], balancing: noBalance, vCharge: 0.0, atMs: 3_000)
     XCTAssertNotNil(finding)
     XCTAssertEqual(finding?.severity, .warn)
-    XCTAssertEqual(
-      finding?.payloadJson,
-      "{\"peakSpread\":0.1200,\"worstGroup\":0,\"charging\":false,\"balancing\":false}"
-    )
+    let fields = payloadFields(finding?.payloadJson)
+    XCTAssertEqual(fields["peakSpread"] as? Double, 0.12)
+    XCTAssertEqual(fields["worstGroup"] as? Int, 0)
+    XCTAssertEqual(fields["charging"] as? Bool, false)
+    XCTAssertEqual(fields["balancing"] as? Bool, false)
   }
 
   func testSustainedSpreadOverCriticalFiresCritical() {
@@ -44,10 +53,11 @@ final class CellSpreadDetectorTests: XCTestCase {
     XCTAssertNil(detector.onFrame(cellVoltages: [3.80, 3.92], balancing: balancing, vCharge: 55.0, atMs: 0))
     let finding = detector.onFrame(cellVoltages: [3.80, 3.92], balancing: balancing, vCharge: 55.0, atMs: 3_000)
     XCTAssertNotNil(finding)
-    XCTAssertEqual(
-      finding?.payloadJson,
-      "{\"peakSpread\":0.1200,\"worstGroup\":0,\"charging\":true,\"balancing\":true}"
-    )
+    let fields = payloadFields(finding?.payloadJson)
+    XCTAssertEqual(fields["peakSpread"] as? Double, 0.12)
+    XCTAssertEqual(fields["worstGroup"] as? Int, 0)
+    XCTAssertEqual(fields["charging"] as? Bool, true)
+    XCTAssertEqual(fields["balancing"] as? Bool, true)
   }
 
   func testChargeDetectionMirrorsThreshold() {
@@ -55,18 +65,18 @@ final class CellSpreadDetectorTests: XCTestCase {
     // vCharge just under the 10 V floor is not charging.
     XCTAssertNil(detector.onFrame(cellVoltages: [3.80, 3.92], balancing: noBalance, vCharge: 9.5, atMs: 0))
     let finding = detector.onFrame(cellVoltages: [3.80, 3.92], balancing: noBalance, vCharge: 9.5, atMs: 3_000)
-    XCTAssertTrue(finding?.payloadJson.contains("\"charging\":false") ?? false)
+    XCTAssertEqual(payloadFields(finding?.payloadJson)["charging"] as? Bool, false)
   }
 
   func testRisingPeakReReportsAboveEpsilonOnly() {
     let detector = CellSpreadDetector()
     XCTAssertNil(detector.onFrame(cellVoltages: [3.80, 3.92], balancing: noBalance, vCharge: 0.0, atMs: 0))
     let first = detector.onFrame(cellVoltages: [3.80, 3.92], balancing: noBalance, vCharge: 0.0, atMs: 3_000)
-    XCTAssertTrue(first?.payloadJson.contains("\"peakSpread\":0.1200") ?? false)
+    XCTAssertEqual(payloadFields(first?.payloadJson)["peakSpread"] as? Double, 0.12)
 
     // Peak climbs to 0.20 V (still warn): re-report with the new peak.
     let second = detector.onFrame(cellVoltages: [3.80, 4.00], balancing: noBalance, vCharge: 0.0, atMs: 3_100)
-    XCTAssertTrue(second?.payloadJson.contains("\"peakSpread\":0.2000") ?? false)
+    XCTAssertEqual(payloadFields(second?.payloadJson)["peakSpread"] as? Double, 0.20)
 
     // A 2 mV further climb is below the report epsilon (5 mV): nothing new.
     XCTAssertNil(detector.onFrame(cellVoltages: [3.80, 4.002], balancing: noBalance, vCharge: 0.0, atMs: 3_200))
@@ -90,7 +100,7 @@ final class CellSpreadDetectorTests: XCTestCase {
     let balancing = [false, false, false]
     XCTAssertNil(detector.onFrame(cellVoltages: cells, balancing: balancing, vCharge: 0.0, atMs: 0))
     let finding = detector.onFrame(cellVoltages: cells, balancing: balancing, vCharge: 0.0, atMs: 3_000)
-    XCTAssertTrue(finding?.payloadJson.contains("\"worstGroup\":0") ?? false)
+    XCTAssertEqual(payloadFields(finding?.payloadJson)["worstGroup"] as? Int, 0)
   }
 
   func testInvalidCellsAreFilteredAndCountAsNoData() {

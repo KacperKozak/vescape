@@ -1,15 +1,8 @@
 import Foundation
 
-/// Two-tier cell-spread finding severity. Mapped to `BoardWarningRegistry.Severity` by the session
-/// controller — the detector stays decoupled from the registry so it is pure and unit-testable.
-enum CellSpreadSeverity {
-  case warn
-  case critical
-}
-
 /// One cell-spread finding to report through the Board Warning registry.
 struct CellSpreadFinding {
-  let severity: CellSpreadSeverity
+  let severity: BoardWarningRegistry.Severity
   let payloadJson: String
 }
 
@@ -37,9 +30,6 @@ struct CellSpreadFinding {
 ///
 /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/CellSpreadDetector.kt
 final class CellSpreadDetector {
-  /// Registry warning kind this detector owns.
-  static let kind = "cell-spread"
-
   /// Spread ≥ this (V), sustained, fires a warn-level cell-spread warning. Field-tuned constant.
   static let warnThresholdV = 0.10
   /// Peak sustained spread ≥ this (V) escalates the finding to critical.
@@ -64,7 +54,7 @@ final class CellSpreadDetector {
   private var peakV = 0.0
   private var worstGroup = -1
   private var reportedPeakV = 0.0
-  private var reportedSeverity: CellSpreadSeverity?
+  private var reportedSeverity: BoardWarningRegistry.Severity?
 
   init(
     warnThresholdV: Double = CellSpreadDetector.warnThresholdV,
@@ -135,7 +125,7 @@ final class CellSpreadDetector {
       peakV = spread
       worstGroup = worstGroupIndex(cellVoltages, average: sum / Double(count))
     }
-    let severity: CellSpreadSeverity = peakV >= criticalThresholdV ? .critical : .warn
+    let severity: BoardWarningRegistry.Severity = peakV >= criticalThresholdV ? .critical : .warn
     let peakRose = peakV - reportedPeakV >= CellSpreadDetector.reportPeakEpsilonV
     if fired, severity == reportedSeverity, !peakRose { return nil }
 
@@ -177,7 +167,11 @@ final class CellSpreadDetector {
   }
 
   private func payloadJson(peakV: Double, worstGroup: Int, charging: Bool, balancing: Bool) -> String {
-    let peak = String(format: "%.4f", peakV)
-    return "{\"peakSpread\":\(peak),\"worstGroup\":\(worstGroup),\"charging\":\(charging),\"balancing\":\(balancing)}"
+    BoardWarningPayload.json([
+      "peakSpread": BoardWarningPayload.round4(peakV),
+      "worstGroup": worstGroup,
+      "charging": charging,
+      "balancing": balancing,
+    ])
   }
 }

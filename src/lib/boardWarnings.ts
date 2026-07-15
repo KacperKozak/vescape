@@ -1,7 +1,10 @@
-import type { BoardWarning, BoardWarningSeverity } from 'vesc-ble'
+import type { BoardWarning, BoardWarningKind, BoardWarningSeverity } from 'vesc-ble'
 
-/** Rider-facing titles per Board Warning kind. Detector slices add kinds as they land. */
-const WARNING_TITLES: Record<string, string> = {
+/**
+ * Rider-facing titles per Board Warning kind. Keyed by the exhaustive `BoardWarningKind` union, so adding a
+ * native kind without a title here is a compile error rather than a warning that renders as a raw slug.
+ */
+const WARNING_TITLES: Record<BoardWarningKind, string> = {
   'cell-spread': 'Cell voltage spread',
   'battery-config-mismatch': 'Battery config mismatch',
   'footpad-disabled': 'Footpad sensor disabled',
@@ -11,9 +14,12 @@ const WARNING_TITLES: Record<string, string> = {
   'moving-fault-disabled': 'Moving-fault protection off',
 }
 
-/** Human title for a warning kind, falling back to the raw kind for unknown detectors. */
+/**
+ * Human title for a warning kind, falling back to the raw kind for unknown detectors (a newer native build
+ * may emit a kind this app version does not know).
+ */
 export function warningTitle(kind: string): string {
-  return WARNING_TITLES[kind] ?? kind
+  return WARNING_TITLES[kind as BoardWarningKind] ?? kind
 }
 
 /** Worst active severity across a board's warnings, or null when there are none. */

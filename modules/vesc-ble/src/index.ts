@@ -997,6 +997,20 @@ export interface AppDataChangedEvent {
 export type BoardWarningSeverity = 'warn' | 'critical'
 
 /**
+ * Every Board Warning kind slug the native detectors currently emit. Mirrors the native `BoardWarningKind`
+ * catalog on both platforms; a rider-facing title is required per kind (see `WARNING_TITLES`). A `BoardWarning`
+ * from a newer native build may carry a kind outside this union, so consumers still fall back to the raw slug.
+ */
+export type BoardWarningKind =
+  | 'cell-spread'
+  | 'battery-config-mismatch'
+  | 'footpad-disabled'
+  | 'lv-pushback-low'
+  | 'hv-pushback-high'
+  | 'duty-pushback-high'
+  | 'moving-fault-disabled'
+
+/**
  * One durable Board Warning — an app-detected abnormal Board condition, keyed one-per-problem-kind
  * per Board (automotive fault-code model). Detected natively; JS only renders. `payloadJson` carries
  * kind-specific detail (e.g. peak cell spread) as a JSON string the rendering side decodes per kind.

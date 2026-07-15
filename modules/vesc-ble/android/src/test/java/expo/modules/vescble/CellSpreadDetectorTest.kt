@@ -1,5 +1,6 @@
 package expo.modules.vescble
 
+import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -10,7 +11,8 @@ import org.junit.Test
 /**
  * Cell-spread detector behavior: sustain gating (transient spikes never fire), warn/critical tiers on
  * the peak spread, charging/balancing payload context, peak tracking through re-reports, worst-group
- * selection, and the session-end clean-evaluation contract.
+ * selection, and the session-end clean-evaluation contract. Payload assertions decode the JSON (its
+ * key order is serializer-dependent) and check each field, rather than matching an exact string.
  * @parity /modules/vesc-ble/ios/telemetry/CellSpreadDetectorTests.swift
  */
 class CellSpreadDetectorTest {
@@ -32,11 +34,12 @@ class CellSpreadDetectorTest {
     assertNull(detector.onFrame(listOf(3.80, 3.92), noBalance, 0.0, 0L))
     val finding = detector.onFrame(listOf(3.80, 3.92), noBalance, 0.0, 3_000L)
     assertNotNull(finding)
-    assertEquals(CellSpreadSeverity.WARN, finding!!.severity)
-    assertEquals(
-      "{\"peakSpread\":0.1200,\"worstGroup\":0,\"charging\":false,\"balancing\":false}",
-      finding.payloadJson,
-    )
+    assertEquals(BoardWarningSeverity.WARN, finding!!.severity)
+    val payload = JSONObject(finding.payloadJson)
+    assertEquals(0.12, payload.getDouble("peakSpread"), 0.0)
+    assertEquals(0, payload.getInt("worstGroup"))
+    assertFalse(payload.getBoolean("charging"))
+    assertFalse(payload.getBoolean("balancing"))
   }
 
   @Test
@@ -46,7 +49,7 @@ class CellSpreadDetectorTest {
     assertNull(detector.onFrame(listOf(3.70, 3.98), noBalance, 0.0, 0L))
     val finding = detector.onFrame(listOf(3.70, 3.98), noBalance, 0.0, 3_000L)
     assertNotNull(finding)
-    assertEquals(CellSpreadSeverity.CRITICAL, finding!!.severity)
+    assertEquals(BoardWarningSeverity.CRITICAL, finding!!.severity)
   }
 
   @Test
@@ -56,10 +59,11 @@ class CellSpreadDetectorTest {
     assertNull(detector.onFrame(listOf(3.80, 3.92), balancing, 55.0, 0L))
     val finding = detector.onFrame(listOf(3.80, 3.92), balancing, 55.0, 3_000L)
     assertNotNull(finding)
-    assertEquals(
-      "{\"peakSpread\":0.1200,\"worstGroup\":0,\"charging\":true,\"balancing\":true}",
-      finding!!.payloadJson,
-    )
+    val payload = JSONObject(finding!!.payloadJson)
+    assertEquals(0.12, payload.getDouble("peakSpread"), 0.0)
+    assertEquals(0, payload.getInt("worstGroup"))
+    assertTrue(payload.getBoolean("charging"))
+    assertTrue(payload.getBoolean("balancing"))
   }
 
   @Test
@@ -68,7 +72,7 @@ class CellSpreadDetectorTest {
     // vCharge just under the 10 V floor is not charging.
     assertNull(detector.onFrame(listOf(3.80, 3.92), noBalance, 9.5, 0L))
     val finding = detector.onFrame(listOf(3.80, 3.92), noBalance, 9.5, 3_000L)
-    assertTrue(finding!!.payloadJson.contains("\"charging\":false"))
+    assertFalse(JSONObject(finding!!.payloadJson).getBoolean("charging"))
   }
 
   @Test
@@ -77,12 +81,12 @@ class CellSpreadDetectorTest {
     assertNull(detector.onFrame(listOf(3.80, 3.92), noBalance, 0.0, 0L))
     val first = detector.onFrame(listOf(3.80, 3.92), noBalance, 0.0, 3_000L)
     assertNotNull(first)
-    assertTrue(first!!.payloadJson.contains("\"peakSpread\":0.1200"))
+    assertEquals(0.12, JSONObject(first!!.payloadJson).getDouble("peakSpread"), 0.0)
 
     // Peak climbs to 0.20 V (still warn): re-report with the new peak.
     val second = detector.onFrame(listOf(3.80, 4.00), noBalance, 0.0, 3_100L)
     assertNotNull(second)
-    assertTrue(second!!.payloadJson.contains("\"peakSpread\":0.2000"))
+    assertEquals(0.20, JSONObject(second!!.payloadJson).getDouble("peakSpread"), 0.0)
 
     // A 2 mV further climb is below the report epsilon (5 mV): nothing new.
     assertNull(detector.onFrame(listOf(3.80, 4.002), noBalance, 0.0, 3_200L))
@@ -93,11 +97,11 @@ class CellSpreadDetectorTest {
     val detector = CellSpreadDetector()
     assertNull(detector.onFrame(listOf(3.80, 3.92), noBalance, 0.0, 0L))
     val warn = detector.onFrame(listOf(3.80, 3.92), noBalance, 0.0, 3_000L)
-    assertEquals(CellSpreadSeverity.WARN, warn!!.severity)
+    assertEquals(BoardWarningSeverity.WARN, warn!!.severity)
 
     val critical = detector.onFrame(listOf(3.70, 3.98), noBalance, 0.0, 3_100L)
     assertNotNull(critical)
-    assertEquals(CellSpreadSeverity.CRITICAL, critical!!.severity)
+    assertEquals(BoardWarningSeverity.CRITICAL, critical!!.severity)
   }
 
   @Test
@@ -109,7 +113,7 @@ class CellSpreadDetectorTest {
     assertNull(detector.onFrame(cells, balancing, 0.0, 0L))
     val finding = detector.onFrame(cells, balancing, 0.0, 3_000L)
     assertNotNull(finding)
-    assertTrue(finding!!.payloadJson.contains("\"worstGroup\":0"))
+    assertEquals(0, JSONObject(finding!!.payloadJson).getInt("worstGroup"))
   }
 
   @Test
@@ -139,7 +143,7 @@ class CellSpreadDetectorTest {
     // Sustain restarts at the post-gap frame, so it fires only 3 s after that.
     val finding = detector.onFrame(listOf(3.80, 3.92), noBalance, 0.0, 8_000L)
     assertNotNull(finding)
-    assertEquals(CellSpreadSeverity.WARN, finding!!.severity)
+    assertEquals(BoardWarningSeverity.WARN, finding!!.severity)
   }
 
   @Test
@@ -148,7 +152,7 @@ class CellSpreadDetectorTest {
     // Critical episode fires and then falls back under threshold.
     assertNull(detector.onFrame(listOf(3.70, 3.98), noBalance, 0.0, 0L))
     val critical = detector.onFrame(listOf(3.70, 3.98), noBalance, 0.0, 3_000L)
-    assertEquals(CellSpreadSeverity.CRITICAL, critical!!.severity)
+    assertEquals(BoardWarningSeverity.CRITICAL, critical!!.severity)
     assertNull(detector.onFrame(listOf(3.90, 3.91), noBalance, 0.0, 3_100L))
 
     // A later sustained warn episode must not overwrite the stored critical with weaker data.

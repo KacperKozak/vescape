@@ -1,13 +1,9 @@
 package expo.modules.vescble
 
-import java.util.Locale
 import kotlin.math.abs
 
-/** Two-tier cell-spread finding severity. Mapped to [BoardWarningSeverity] by the session controller. */
-enum class CellSpreadSeverity { WARN, CRITICAL }
-
 /** One cell-spread finding to report through the Board Warning registry. */
-data class CellSpreadFinding(val severity: CellSpreadSeverity, val payloadJson: String)
+data class CellSpreadFinding(val severity: BoardWarningSeverity, val payloadJson: String)
 
 /**
  * Telemetry-scoped Board Warning detector for smart-BMS cell-voltage spread. Pure evaluation logic
@@ -46,7 +42,7 @@ class CellSpreadDetector(
   private var peakV = 0.0
   private var worstGroup = -1
   private var reportedPeakV = 0.0
-  private var reportedSeverity: CellSpreadSeverity? = null
+  private var reportedSeverity: BoardWarningSeverity? = null
 
   /** Reset all tracking for a fresh Board Session. */
   fun reset() {
@@ -110,7 +106,7 @@ class CellSpreadDetector(
       worstGroup = worstGroupIndex(cellVoltages, sum / count)
     }
     val severity =
-      if (peakV >= criticalThresholdV) CellSpreadSeverity.CRITICAL else CellSpreadSeverity.WARN
+      if (peakV >= criticalThresholdV) BoardWarningSeverity.CRITICAL else BoardWarningSeverity.WARN
     val peakRose = peakV - reportedPeakV >= REPORT_PEAK_EPSILON_V
     if (fired && severity == reportedSeverity && !peakRose) return null
 
@@ -145,15 +141,15 @@ class CellSpreadDetector(
     return worst
   }
 
-  private fun payloadJson(peakV: Double, worstGroup: Int, charging: Boolean, balancing: Boolean): String {
-    val peak = String.format(Locale.US, "%.4f", peakV)
-    return "{\"peakSpread\":$peak,\"worstGroup\":$worstGroup,\"charging\":$charging,\"balancing\":$balancing}"
-  }
+  private fun payloadJson(peakV: Double, worstGroup: Int, charging: Boolean, balancing: Boolean): String =
+    boardWarningPayload {
+      put("peakSpread", boardWarningRound4(peakV))
+      put("worstGroup", worstGroup)
+      put("charging", charging)
+      put("balancing", balancing)
+    }
 
   companion object {
-    /** Registry warning kind this detector owns. */
-    const val KIND = "cell-spread"
-
     /** Spread ≥ this (V), sustained, fires a warn-level cell-spread warning. Field-tuned constant. */
     const val WARN_THRESHOLD_V = 0.10
 
