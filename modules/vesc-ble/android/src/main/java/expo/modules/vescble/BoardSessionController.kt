@@ -216,6 +216,8 @@ internal class BoardSessionController(private val service: VescForegroundService
                     this@BoardSessionController.diagnosticProperties(config, category)
                 override fun dumpDebugBytes(xmlBytes: ByteArray, configBytes: ByteArray) =
                     this@BoardSessionController.dumpRefloatConfigDebug(xmlBytes, configBytes)
+                override fun evaluateConfigSafety(values: ConfigSafetyValues) =
+                    this@BoardSessionController.evaluateConfigSafety(values)
             },
         )
     }
@@ -788,6 +790,7 @@ internal class BoardSessionController(private val service: VescForegroundService
         socWindow.reset()
         bmsSeriesRing.clear()
         cellSpreadDetector.reset()
+        configSafetyReadScheduled = false
         telemetryPipeline.beginSession(session, start.boardConfig)
         // Tag telemetry frames with the CAN id resolved from the stored transport.
         telemetryPipeline.updateCanId(canId)
@@ -1149,6 +1152,42 @@ internal class BoardSessionController(private val service: VescForegroundService
     }
 
     /**
+     * Evaluate the config-safety rules against a freshly decoded config (background read after link
+     * trust, or the in-hand bytes from a tune write) and report findings / clean evaluations through
+     * the Board Warning registry. Per-cell rules use the configured battery series count and are
+     * skipped when it is absent; skipped kinds report nothing so stored warnings stay untouched.
+     * @parity /modules/vesc-ble/ios/connection/BoardSessionController.swift `evaluateConfigSafety`
+     */
+    private fun evaluateConfigSafety(values: ConfigSafetyValues) {
+        val boardId = boardConfig?.appBoardId ?: return
+        val seriesCount = (batteryConfigCache?.get("seriesCount") as? Number)?.toInt()
+        val report = ConfigSafetyDetector.evaluate(values, seriesCount)
+        val registry = BoardWarningRegistry.get(service.applicationContext)
+        VescForegroundService.appDataScope.launch {
+            for (finding in report.findings) {
+                val severity = when (finding.severity) {
+                    ConfigRuleSeverity.WARN -> BoardWarningSeverity.WARN
+                    ConfigRuleSeverity.CRITICAL -> BoardWarningSeverity.CRITICAL
+                }
+                registry.reportFinding(boardId, finding.kind, severity, finding.payloadJson)
+            }
+            for (kind in report.cleanKinds) {
+                registry.reportCleanEvaluation(boardId, kind)
+            }
+        }
+    }
+
+    /**
+     * Once per Board Session, after the link is trusted, kick off one background Refloat config read so
+     * the config-safety detectors can evaluate the decoded config. Read-only; reuses the normal config
+     * read path (pauses/resumes polling) and is skipped if a config op is already in flight.
+     */
+    private fun triggerConfigSafetyRead(session: BoardSession) {
+        if (!isCurrentBoardSession(session)) return
+        configController.consumeRead(PendingConfigRead(onSuccess = {}, onError = { _, _ -> }))
+    }
+
+    /**
      * Battery-detail focus/blur intent from JS. Focus flips the gate open and immediately pushes
      * the whole windowed Live BMS Series as one columnar buffer; while focused each new BMS frame
      * follows as a single-row `append`. Blur just closes the gate — retention keeps running.
@@ -1216,11 +1255,20 @@ internal class BoardSessionController(private val service: VescForegroundService
     }
 
     private var lastEmittedLinkIntegrity = LinkIntegrity.Unknown
+    private var configSafetyReadScheduled = false
 
     private fun updateLinkIntegrity(next: LinkIntegrity) {
         if (next == lastEmittedLinkIntegrity) return
         lastEmittedLinkIntegrity = next
         emitState()
+        // Link just became trusted — schedule the one background config-safety read for this session.
+        if (next == LinkIntegrity.Trusted && !configSafetyReadScheduled) {
+            configSafetyReadScheduled = true
+            val session = boardSession ?: return
+            scheduler.postDelayedForSession(session, CONFIG_SAFETY_READ_DELAY_MS, ::isCurrentBoardSession) {
+                triggerConfigSafetyRead(session)
+            }
+        }
     }
 
     private fun dumpRefloatConfigDebug(xmlBytes: ByteArray, configBytes: ByteArray) {
@@ -2001,6 +2049,9 @@ internal class BoardSessionController(private val service: VescForegroundService
 }
 
 private const val LINK_INTEGRITY_BMS_TIMEOUT_MS = 12_000L
+
+/** Idle delay after link trust before the one background config-safety read fires (lets telemetry settle). */
+private const val CONFIG_SAFETY_READ_DELAY_MS = 2_500L
 
 private fun SessionConfig.linkIdentity(): LinkIdentity =
     LinkIdentity(

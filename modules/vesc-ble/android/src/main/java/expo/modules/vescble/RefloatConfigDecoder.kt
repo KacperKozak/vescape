@@ -56,6 +56,30 @@ internal object RefloatConfigDecoder {
     )
   }
 
+  /**
+   * Decode just the fields the config-safety rules need. Each is `null` when the schema lacks it or
+   * the raw config is too short — the caller skips the rules that depend on a missing value.
+   */
+  fun decodeSafetyValues(schema: RefloatConfigSchema, rawConfig: ByteArray): ConfigSafetyValues {
+    val byId = schema.fields.associateBy { it.id }
+    fun fieldOrNull(id: String): RefloatConfigSchemaField? =
+      byId[id]?.takeIf { rawConfig.size >= it.offset + it.type.byteSize }
+    fun number(id: String): Double? = when (val v = fieldOrNull(id)?.let { readValue(rawConfig, it) }) {
+      is Double -> v
+      is Boolean -> if (v) 1.0 else 0.0
+      else -> null
+    }
+    fun boolean(id: String): Boolean? = fieldOrNull(id)?.let { readValue(rawConfig, it) as? Boolean }
+    return ConfigSafetyValues(
+      faultAdc1 = number("fault_adc1"),
+      faultAdc2 = number("fault_adc2"),
+      tiltbackLv = number("tiltback_lv"),
+      tiltbackHv = number("tiltback_hv"),
+      tiltbackDuty = number("tiltback_duty"),
+      movingFaultDisabled = boolean("fault_moving_fault_disabled"),
+    )
+  }
+
   private fun readValue(bytes: ByteArray, field: RefloatConfigSchemaField): Any {
     val view = ByteBuffer.wrap(bytes).order(ByteOrder.BIG_ENDIAN)
     view.position(field.offset)

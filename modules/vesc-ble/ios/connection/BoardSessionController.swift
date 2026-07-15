@@ -74,6 +74,8 @@ internal final class BoardSessionController: VescGattListener {
   /// Android `TELEMETRY_STALE_MS` (4s) — copied, not re-derived.
   private let telemetryStaleSeconds = 4.0
   private let linkIntegrityBmsTimeoutSeconds = 12.0
+  /// Idle delay after link trust before the one background config-safety read fires (lets telemetry settle).
+  private let configSafetyReadDelaySeconds = 2.5
 
   // MARK: Board session state
 
@@ -403,6 +405,7 @@ internal final class BoardSessionController: VescGattListener {
       BoardWarningRegistry.shared.reportCleanEvaluation(boardId: previousBoardId, kind: CellSpreadDetector.kind)
     }
     cellSpreadDetector.reset()
+    configSafetyReadScheduled = false
     self.config = config
     if let session {
       lastEmittedLinkIntegrity = session.startLinkIntegrityCheck(expected: config.linkIdentity())
@@ -843,6 +846,38 @@ internal final class BoardSessionController: VescGattListener {
     )
   }
 
+  /// Evaluate the config-safety rules against a freshly decoded config (background read after link
+  /// trust, or the in-hand bytes from a tune write) and report findings / clean evaluations through
+  /// the Board Warning registry. Per-cell rules use the configured battery series count and are
+  /// skipped when it is absent; skipped kinds report nothing so stored warnings stay untouched.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardSessionController.kt `evaluateConfigSafety`
+  private func evaluateConfigSafety(_ values: ConfigSafetyValues) {
+    guard let boardId = config?.appBoardId else { return }
+    let seriesCount = config?.batteryConfig?["seriesCount"] as? Int
+    let report = ConfigSafetyDetector.evaluate(values, seriesCount: seriesCount)
+    for finding in report.findings {
+      let severity: BoardWarningRegistry.Severity = finding.severity == .critical ? .critical : .warn
+      BoardWarningRegistry.shared.reportFinding(
+        boardId: boardId,
+        kind: finding.kind,
+        severity: severity,
+        payloadJson: finding.payloadJson
+      )
+    }
+    for kind in report.cleanKinds {
+      BoardWarningRegistry.shared.reportCleanEvaluation(boardId: boardId, kind: kind)
+    }
+  }
+
+  /// Once per Board Session, after the link is trusted, kick off one background Refloat config read so
+  /// the config-safety detectors can evaluate the decoded config. Read-only; reuses the normal config
+  /// read path (pauses/resumes polling) and is skipped if a config op is already in flight.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardSessionController.kt `triggerConfigSafetyRead`
+  private func triggerConfigSafetyRead(_ session: BoardSession) {
+    guard session === self.session, session.isActive, let config else { return }
+    configController.consumeRead(connection: configConnection(config), onSuccess: { _ in }, onError: { _, _ in })
+  }
+
   /// Battery-detail focus/blur intent from JS. Focus flips the gate open and immediately pushes
   /// the whole windowed Live BMS Series as one columnar buffer; while focused each new BMS frame
   /// follows as a single-row `append`. Blur just closes the gate — retention keeps running.
@@ -906,11 +941,20 @@ internal final class BoardSessionController: VescGattListener {
   }
 
   private var lastEmittedLinkIntegrity: LinkIntegrity = .unknown
+  private var configSafetyReadScheduled = false
 
   private func updateLinkIntegrity(_ next: LinkIntegrity) {
     guard next != lastEmittedLinkIntegrity else { return }
     lastEmittedLinkIntegrity = next
     onStateChanged?()
+    // Link just became trusted — schedule the one background config-safety read for this session.
+    if next == .trusted, !configSafetyReadScheduled, let session {
+      configSafetyReadScheduled = true
+      DispatchQueue.main.asyncAfter(deadline: .now() + configSafetyReadDelaySeconds) { [weak self, weak session] in
+        guard let self, let session else { return }
+        self.triggerConfigSafetyRead(session)
+      }
+    }
   }
 
   private func markBoardReady() {
@@ -1276,7 +1320,8 @@ internal final class BoardSessionController: VescGattListener {
       captureDiagnostic: { [weak self] name, properties in
         self?.recordConnectionDiagnostic(name, operation: "config_rw", message: properties["message"] as? String ?? name, extra: properties)
       },
-      loadProfile: { profileId in TuneProfileStore.shared.getTuneProfile(profileId) }
+      loadProfile: { profileId in TuneProfileStore.shared.getTuneProfile(profileId) },
+      evaluateConfigSafety: { [weak self] values in self?.evaluateConfigSafety(values) }
     )
   }
 
@@ -1293,7 +1338,8 @@ internal final class BoardSessionController: VescGattListener {
       startPolling: {},
       sendPayload: { _ in false },
       captureDiagnostic: { _, _ in },
-      loadProfile: { _ in nil }
+      loadProfile: { _ in nil },
+      evaluateConfigSafety: { _ in }
     )
   }
 

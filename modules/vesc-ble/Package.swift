@@ -71,6 +71,7 @@ let package = Package(
       sources: [
         "alerts/AlertEngine.swift",
         "ConfigRWController.swift",
+        "ConfigSafetyDetector.swift",
         "connection/BoardPhase.swift",
         "connection/TransportDetection.swift",
         "telemetry/BatterySocEstimator.swift",
@@ -103,6 +104,7 @@ let package = Package(
       sources: [
         "alerts/AlertEngineTests.swift",
         "telemetry/CellSpreadDetectorTests.swift",
+        "ConfigSafetyDetectorTests.swift",
         "telemetry/PrivacyZoneFilterTests.swift",
         "telemetry/IdlePauseDetectorTests.swift",
         "telemetry/BatterySocEstimatorTests.swift",

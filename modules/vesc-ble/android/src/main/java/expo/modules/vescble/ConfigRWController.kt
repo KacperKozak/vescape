@@ -40,6 +40,7 @@ internal interface ConfigRWControllerPort {
     fun captureDiagnostic(name: String, properties: Map<String, Any?>)
     fun diagnosticProperties(config: SessionConfig?, category: String): Map<String, Any?>
     fun dumpDebugBytes(xmlBytes: ByteArray, configBytes: ByteArray)
+    fun evaluateConfigSafety(values: ConfigSafetyValues)
 }
 
 // @parity /modules/vesc-ble/ios/ConfigRWController.swift
@@ -142,6 +143,7 @@ internal class ConfigRWController(
     private fun completeRead(effect: ConfigRWEffect.EmitReadComplete) {
         val callbacks = readCallbacks.also { readCallbacks = null }
         resumePolling(effect.resumePolling)
+        effect.safety?.let(port::evaluateConfigSafety)
         callbacks?.onSuccess?.invoke(effect.snapshot.toMap())
     }
     private fun failRead(effect: ConfigRWEffect.EmitReadFailure) {
@@ -152,6 +154,7 @@ internal class ConfigRWController(
     }
     private fun completeWrite(effect: ConfigRWEffect.EmitWriteComplete) {
         val callbacks = writeCallbacks.also { writeCallbacks = null }; resumePolling(effect.resumePolling)
+        effect.safety?.let(port::evaluateConfigSafety)
         callbacks?.onSuccess?.invoke(effect.snapshot.toMap())
     }
     private fun failWrite(effect: ConfigRWEffect.EmitWriteFailure) {
