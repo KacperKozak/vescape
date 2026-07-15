@@ -425,6 +425,10 @@ internal final class BoardSessionController: VescGattListener {
     // Board Session). Detectors that fire warnings this session land in later slices.
     // @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardSessionController.kt
     BoardWarningRegistry.shared.beginSession(config.appBoardId)
+    // Reset the Board Warning DB-failure throttle so each Board Session gets one breadcrumb per
+    // failing store site (mirrors Android clearing `warningFailuresReported`). Keeps warning-path
+    // failures non-fatal and reported without per-frame spam.
+    BoardWarningFailureReporter.shared.beginSession()
     gpsError = gpsMonitor.start()
     // Fresh rule set for this session's alert engine (mirrors Android loadAlertRules on connect).
     alertCoordinator.replaceRules(appData.getEnabledAlertRules())

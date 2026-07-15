@@ -14,6 +14,7 @@ import android.os.Looper
 import android.util.Log
 import java.io.File
 import kotlin.math.roundToInt
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.launch
 import expo.modules.kotlin.jni.NativeArrayBuffer
 import expo.modules.vescble.config.ConfigRWEvent
@@ -430,6 +431,24 @@ internal class BoardSessionController(private val service: VescForegroundService
     private val cellSpreadDetector = CellSpreadDetector()
     /** Telemetry-scoped BMS-vs-config cell-count mismatch detector; fed each BMS frame, reset per session. */
     private val batteryConfigMismatchDetector = BatteryConfigMismatchDetector()
+    /**
+     * Board Warning evaluation / registry-write sites that already captured a crash this Board Session.
+     * Board Warnings are secondary: a detector bug or a failed registry DB write must never crash the
+     * foreground service, and must not spam diagnostics per frame — so each site reports at most once
+     * per session. Touched from the BMS hot path (main scheduler) and the app-data IO scope, so kept
+     * thread-safe. Reset in [beginSession].
+     * @parity /modules/vesc-ble/ios/telemetry/BoardWarningStore.swift `BoardWarningFailureReporter`
+     */
+    private val warningFailuresReported = java.util.Collections.synchronizedSet(HashSet<String>())
+    /**
+     * Isolates Board Warning registry writes launched on [VescForegroundService.appDataScope]. A
+     * Room/SQLite failure there is otherwise an uncaught coroutine exception routed to the default
+     * handler → process crash (the scope's `SupervisorJob` isolates sibling jobs but does not swallow).
+     * Captures the first failure per session and drops the rest.
+     */
+    private val warningWriteExceptionHandler = CoroutineExceptionHandler { _, throwable ->
+        reportWarningFailure("registry_write", throwable)
+    }
     /** True while the battery-detail view is focused (JS intent); gates the `onBmsSeries` push only. */
     @Volatile
     private var bmsSeriesFocused = false
@@ -793,6 +812,7 @@ internal class BoardSessionController(private val service: VescForegroundService
         bmsSeriesRing.clear()
         cellSpreadDetector.reset()
         batteryConfigMismatchDetector.reset()
+        warningFailuresReported.clear()
         configSafetyReadScheduled = false
         telemetryPipeline.beginSession(session, start.boardConfig)
         // Tag telemetry frames with the CAN id resolved from the stored transport.
@@ -1133,24 +1153,57 @@ internal class BoardSessionController(private val service: VescForegroundService
     }
 
     /**
+     * Run one Board Warning evaluation site, swallowing any failure so a detector bug never crashes the
+     * BMS hot path / foreground service. The synchronous detector call runs inline here; registry writes
+     * are handed to [launchWarningWrite]. First crash per (site, session) is captured; the rest stay
+     * silent to avoid per-frame diagnostic spam. Detectors stay pure — the guard lives at this boundary.
+     */
+    private inline fun guardWarningEval(site: String, block: () -> Unit) {
+        try {
+            block()
+        } catch (throwable: Throwable) {
+            reportWarningFailure(site, throwable)
+        }
+    }
+
+    /** Launch a Board Warning registry write crash-isolated by [warningWriteExceptionHandler]. */
+    private fun launchWarningWrite(block: suspend () -> Unit) {
+        VescForegroundService.appDataScope.launch(warningWriteExceptionHandler) { block() }
+    }
+
+    /** Capture the first Board Warning-path failure per (site, session); later ones are dropped. */
+    private fun reportWarningFailure(site: String, throwable: Throwable) {
+        Log.e(VESC_SESSION_TAG, "Board Warning $site failed", throwable)
+        if (!warningFailuresReported.add(site)) return
+        captureDiagnostic(
+            "board_warning_failure",
+            diagnosticProperties(boardConfig, "board_warning") + mapOf(
+                "site" to site,
+                "message" to (throwable.message ?: throwable.javaClass.simpleName),
+                "error_type" to throwable.javaClass.name,
+            ),
+        )
+    }
+
+    /**
      * Feed one smart-BMS frame to the cell-spread detector and report any finding through the Board
      * Warning registry (telemetry-scoped detector; continuous evaluation during the Board Session).
      * @parity /modules/vesc-ble/ios/connection/BoardSessionController.swift `evaluateCellSpread`
      */
-    private fun evaluateCellSpread(bms: BmsTelemetry) {
-        val boardId = boardConfig?.appBoardId ?: return
+    private fun evaluateCellSpread(bms: BmsTelemetry) = guardWarningEval("cell_spread") {
+        val boardId = boardConfig?.appBoardId ?: return@guardWarningEval
         val finding = cellSpreadDetector.onFrame(
             cellVoltages = bms.cellVoltages,
             balancing = bms.balancing,
             vCharge = bms.vCharge,
             atMs = bms.capturedAt,
-        ) ?: return
+        ) ?: return@guardWarningEval
         val severity = when (finding.severity) {
             CellSpreadSeverity.WARN -> BoardWarningSeverity.WARN
             CellSpreadSeverity.CRITICAL -> BoardWarningSeverity.CRITICAL
         }
         val registry = BoardWarningRegistry.get(service.applicationContext)
-        VescForegroundService.appDataScope.launch {
+        launchWarningWrite {
             registry.reportFinding(boardId, CellSpreadDetector.KIND, severity, finding.payloadJson)
         }
     }
@@ -1161,12 +1214,13 @@ internal class BoardSessionController(private val service: VescForegroundService
      * the SoC estimator and per-cell pushback bounds read; absent config is not evaluated.
      * @parity /modules/vesc-ble/ios/connection/BoardSessionController.swift `evaluateBatteryConfigMismatch`
      */
-    private fun evaluateBatteryConfigMismatch(bms: BmsTelemetry) {
-        val boardId = boardConfig?.appBoardId ?: return
+    private fun evaluateBatteryConfigMismatch(bms: BmsTelemetry) = guardWarningEval("battery_config_mismatch") {
+        val boardId = boardConfig?.appBoardId ?: return@guardWarningEval
         val seriesCount = (batteryConfigCache?.get("seriesCount") as? Number)?.toInt()
-        val payloadJson = batteryConfigMismatchDetector.onFrame(bms.cellVoltages.size, seriesCount) ?: return
+        val payloadJson = batteryConfigMismatchDetector.onFrame(bms.cellVoltages.size, seriesCount)
+            ?: return@guardWarningEval
         val registry = BoardWarningRegistry.get(service.applicationContext)
-        VescForegroundService.appDataScope.launch {
+        launchWarningWrite {
             registry.reportFinding(
                 boardId,
                 BatteryConfigMismatchDetector.KIND,
@@ -1183,13 +1237,13 @@ internal class BoardSessionController(private val service: VescForegroundService
      * skipped when it is absent; skipped kinds report nothing so stored warnings stay untouched.
      * @parity /modules/vesc-ble/ios/connection/BoardSessionController.swift `evaluateConfigSafety`
      */
-    private fun evaluateConfigSafety(values: ConfigSafetyValues) {
-        val boardId = boardConfig?.appBoardId ?: return
+    private fun evaluateConfigSafety(values: ConfigSafetyValues) = guardWarningEval("config_safety") {
+        val boardId = boardConfig?.appBoardId ?: return@guardWarningEval
         val seriesCount = (batteryConfigCache?.get("seriesCount") as? Number)?.toInt()
         val perCell = ConfigSafetyDetector.usesPerCellVoltage(fwVersionString)
         val report = ConfigSafetyDetector.evaluate(values, seriesCount, perCell)
         val registry = BoardWarningRegistry.get(service.applicationContext)
-        VescForegroundService.appDataScope.launch {
+        launchWarningWrite {
             for (finding in report.findings) {
                 val severity = when (finding.severity) {
                     ConfigRuleSeverity.WARN -> BoardWarningSeverity.WARN
@@ -1555,7 +1609,7 @@ internal class BoardSessionController(private val service: VescForegroundService
             val mismatchClean = batteryConfigMismatchDetector.sessionEndClean()
             if (cellSpreadClean || mismatchClean) {
                 val registry = BoardWarningRegistry.get(service.applicationContext)
-                VescForegroundService.appDataScope.launch {
+                launchWarningWrite {
                     if (cellSpreadClean) registry.reportCleanEvaluation(boardId, CellSpreadDetector.KIND)
                     if (mismatchClean) registry.reportCleanEvaluation(boardId, BatteryConfigMismatchDetector.KIND)
                 }

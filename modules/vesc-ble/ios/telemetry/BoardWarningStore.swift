@@ -72,78 +72,107 @@ struct BoardWarningStore {
 
   func get(_ boardId: String, _ kind: String) -> BoardWarning? {
     guard let writer = resolveWriter() else { return nil }
-    return (try? writer.read { db in
-      try Row.fetchOne(
-        db,
-        sql: "SELECT * FROM board_warnings WHERE board_id = ? AND kind = ? LIMIT 1",
-        arguments: [boardId, kind]
-      ).map { Self.warning($0) }
-    }) ?? nil
+    do {
+      return try writer.read { db in
+        try Row.fetchOne(
+          db,
+          sql: "SELECT * FROM board_warnings WHERE board_id = ? AND kind = ? LIMIT 1",
+          arguments: [boardId, kind]
+        ).map { Self.warning($0) }
+      }
+    } catch {
+      BoardWarningFailureReporter.shared.report(site: "store_get", error: error)
+      return nil
+    }
   }
 
   func getForBoard(_ boardId: String) -> [BoardWarning] {
     guard let writer = resolveWriter() else { return [] }
-    return (try? writer.read { db in
-      try Row.fetchAll(
-        db,
-        sql: "SELECT * FROM board_warnings WHERE board_id = ? ORDER BY first_detected_at ASC",
-        arguments: [boardId]
-      ).map { Self.warning($0) }
-    }) ?? []
+    do {
+      return try writer.read { db in
+        try Row.fetchAll(
+          db,
+          sql: "SELECT * FROM board_warnings WHERE board_id = ? ORDER BY first_detected_at ASC",
+          arguments: [boardId]
+        ).map { Self.warning($0) }
+      }
+    } catch {
+      BoardWarningFailureReporter.shared.report(site: "store_get_for_board", error: error)
+      return []
+    }
   }
 
   func getAll() -> [BoardWarning] {
     guard let writer = resolveWriter() else { return [] }
-    return (try? writer.read { db in
-      try Row.fetchAll(
-        db,
-        sql: "SELECT * FROM board_warnings ORDER BY board_id ASC, first_detected_at ASC"
-      ).map { Self.warning($0) }
-    }) ?? []
+    do {
+      return try writer.read { db in
+        try Row.fetchAll(
+          db,
+          sql: "SELECT * FROM board_warnings ORDER BY board_id ASC, first_detected_at ASC"
+        ).map { Self.warning($0) }
+      }
+    } catch {
+      BoardWarningFailureReporter.shared.report(site: "store_get_all", error: error)
+      return []
+    }
   }
 
   // MARK: - Writes
 
   func upsert(_ warning: BoardWarning) {
     guard let writer = resolveWriter() else { return }
-    try? writer.write { db in
-      try db.execute(
-        sql: """
-          INSERT INTO board_warnings
-            (board_id, kind, severity, first_detected_at, last_detected_at, payload_json)
-          VALUES (?, ?, ?, ?, ?, ?)
-          ON CONFLICT(board_id, kind) DO UPDATE SET
-            severity = excluded.severity,
-            last_detected_at = excluded.last_detected_at,
-            payload_json = excluded.payload_json
-          """,
-        arguments: [
-          warning.boardId, warning.kind, warning.severity,
-          warning.firstDetectedAtMs, warning.lastDetectedAtMs, warning.payloadJson,
-        ]
-      )
+    do {
+      try writer.write { db in
+        try db.execute(
+          sql: """
+            INSERT INTO board_warnings
+              (board_id, kind, severity, first_detected_at, last_detected_at, payload_json)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(board_id, kind) DO UPDATE SET
+              severity = excluded.severity,
+              last_detected_at = excluded.last_detected_at,
+              payload_json = excluded.payload_json
+            """,
+          arguments: [
+            warning.boardId, warning.kind, warning.severity,
+            warning.firstDetectedAtMs, warning.lastDetectedAtMs, warning.payloadJson,
+          ]
+        )
+      }
+    } catch {
+      BoardWarningFailureReporter.shared.report(site: "store_upsert", error: error)
     }
   }
 
   @discardableResult
   func delete(_ boardId: String, _ kind: String) -> Bool {
     guard let writer = resolveWriter() else { return false }
-    return (try? writer.write { db in
-      try db.execute(
-        sql: "DELETE FROM board_warnings WHERE board_id = ? AND kind = ?",
-        arguments: [boardId, kind]
-      )
-      return db.changesCount > 0
-    }) ?? false
+    do {
+      return try writer.write { db in
+        try db.execute(
+          sql: "DELETE FROM board_warnings WHERE board_id = ? AND kind = ?",
+          arguments: [boardId, kind]
+        )
+        return db.changesCount > 0
+      }
+    } catch {
+      BoardWarningFailureReporter.shared.report(site: "store_delete", error: error)
+      return false
+    }
   }
 
   @discardableResult
   func deleteForBoard(_ boardId: String) -> Bool {
     guard let writer = resolveWriter() else { return false }
-    return (try? writer.write { db in
-      try db.execute(sql: "DELETE FROM board_warnings WHERE board_id = ?", arguments: [boardId])
-      return db.changesCount > 0
-    }) ?? false
+    do {
+      return try writer.write { db in
+        try db.execute(sql: "DELETE FROM board_warnings WHERE board_id = ?", arguments: [boardId])
+        return db.changesCount > 0
+      }
+    } catch {
+      BoardWarningFailureReporter.shared.report(site: "store_delete_for_board", error: error)
+      return false
+    }
   }
 
   private static func warning(_ row: Row) -> BoardWarning {
@@ -154,6 +183,52 @@ struct BoardWarningStore {
       firstDetectedAtMs: row["first_detected_at"] as Int64,
       lastDetectedAtMs: row["last_detected_at"] as Int64,
       payloadJson: row["payload_json"] as String
+    )
+  }
+}
+
+/// Reports Board Warning DB failures to diagnostics, throttled to once per (site, session). Board
+/// Warnings are a secondary feature: a failed GRDB read/write must stay non-fatal (never crash the
+/// app), but unlike the previous blanket `try?` it now leaves a breadcrumb so a broken pool is
+/// visible in the field. `beginSession` clears the throttle so every Board Session gets one report
+/// per failing site without per-frame spam. Mirrors the Android controller's `warningFailuresReported`
+/// throttle + `board_warning_failure` capture.
+/// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardSessionController.kt `reportWarningFailure`
+final class BoardWarningFailureReporter {
+  static let shared = BoardWarningFailureReporter()
+
+  private let record: (String, [String: Any?]) -> Void
+  private let lock = NSLock()
+  private var reportedSites = Set<String>()
+
+  init(
+    record: @escaping (String, [String: Any?]) -> Void = { name, props in
+      DiagnosticsRecorder.shared.record(eventName: name, properties: props)
+    }
+  ) {
+    self.record = record
+  }
+
+  /// Reset the per-session throttle when a new Board Session starts (mirrors Android clearing the
+  /// throttle set in `beginSession`).
+  func beginSession() {
+    lock.lock()
+    reportedSites.removeAll(keepingCapacity: true)
+    lock.unlock()
+  }
+
+  func report(site: String, error: Error) {
+    lock.lock()
+    let isFirst = reportedSites.insert(site).inserted
+    lock.unlock()
+    guard isFirst else { return }
+    record(
+      "board_warning_failure",
+      [
+        "site": site,
+        "message": error.localizedDescription,
+        "error_type": String(describing: type(of: error)),
+      ]
     )
   }
 }
