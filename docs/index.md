@@ -14,6 +14,7 @@
 - [tune.md](./tune.md) — Refloat tune screen behavior, basic slider formulas, field groups
 - [chargingDetection.md](./chargingDetection.md) — charging indicator investigation & findings
 - [alerts.md](./alerts.md) — telemetry alerts: storage, native evaluation, Geiger mode
+- [safety.md](./safety.md) — safety warnings & thresholds: firmware pushbacks, faults, voltage cutoffs
 - [watch-mirror.md](./watch-mirror.md) — Wear OS Mirror local install and Data Layer troubleshooting
 
 ## Status

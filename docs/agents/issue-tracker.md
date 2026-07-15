@@ -79,6 +79,7 @@ Use one or more app-area labels for filtering:
 | `area:watch`      | `[Watch]`      | Watch Mirror — live telemetry on the wrist and alert playback, Wear OS / watchOS companions   |
 | `area:group-ride` | `[GroupRide]`  | Group Rides — live shared rides, Rider presence, nearby discovery, relay server, social panel |
 | `area:legal-mode` | `[Legal Mode]` | Legal Mode UI, jurisdiction speed defaults, speed-warning alerts, and legal board constraints |
+| `area:warnings`   | `[Warnings]`   | Board Warnings — native fault-code detection, warning registry, rider-facing warning surface  |
 
 When a PRD or issue-planning skill creates or starts using a new app-area label, update this table in the same turn. Add the label, title prefix, and a short "Use for" description so future PRDs and implementation issues can reuse the prefix consistently.
 
