@@ -1,52 +1,91 @@
-import { copyFileSync, mkdirSync, readdirSync } from 'fs'
+import { copyFileSync, existsSync, mkdirSync, readdirSync } from 'fs'
 import { extname, join, parse, relative } from 'path'
 
 const ROOT = join(import.meta.dir, '..')
-const ANDROID_SRC = join(ROOT, 'modules', 'vesc-ble', 'android', 'src')
 
-const targets = [
-  {
-    src: join(ROOT, 'shared', 'alerts'),
-    dest: join(ANDROID_SRC, 'main', 'res', 'raw'),
-    extensions: new Set(['.ogg', '.wav']),
-    rename: (file: string) =>
-      `${parse(file).name}${extname(file)}`.toLowerCase().replace(/[^a-z0-9_.]/g, '_'),
-  },
-  {
-    src: join(ROOT, 'shared', 'data'),
-    dest: join(ANDROID_SRC, 'main', 'assets', 'data'),
-    extensions: new Set(['.json']),
-    rename: (file: string) => file,
-  },
-  {
-    src: join(ROOT, 'shared', 'data'),
-    dest: join(ANDROID_SRC, 'test', 'resources', 'data'),
-    extensions: new Set(['.json']),
-    rename: (file: string) => file,
-  },
-]
+export interface SharedTarget {
+  src: string
+  dest: string
+  extensions: Set<string>
+  rename: (file: string) => string
+}
 
-let totalCopied = 0
+/**
+ * Shared assets have exactly one source of truth: `shared/`. iOS reads it through symlinks committed
+ * under `modules/vesc-ble/ios/`, so only Android needs real copies — Gradle cannot follow a symlink
+ * out of the module. These copies are generated, gitignored, and refreshed by `copyShared()`.
+ */
+export function sharedTargets(root = ROOT): SharedTarget[] {
+  const androidSrc = join(root, 'modules', 'vesc-ble', 'android', 'src')
 
-for (const { src, dest, extensions, rename } of targets) {
-  mkdirSync(dest, { recursive: true })
+  return [
+    {
+      src: join(root, 'shared', 'alerts'),
+      dest: join(androidSrc, 'main', 'res', 'raw'),
+      extensions: new Set(['.ogg', '.wav']),
+      rename: (file: string) =>
+        `${parse(file).name}${extname(file)}`.toLowerCase().replace(/[^a-z0-9_.]/g, '_'),
+    },
+    {
+      src: join(root, 'shared', 'data'),
+      dest: join(androidSrc, 'main', 'assets', 'data'),
+      extensions: new Set(['.json']),
+      rename: (file: string) => file,
+    },
+    {
+      src: join(root, 'shared', 'data'),
+      dest: join(androidSrc, 'test', 'resources', 'data'),
+      extensions: new Set(['.json']),
+      rename: (file: string) => file,
+    },
+  ]
+}
 
-  const relSrc = relative(ROOT, src)
-  const relDest = relative(ROOT, dest)
-  console.log(`\n  ${relSrc} → ${relDest}`)
+/** Source files a target copies, absolute, sorted. */
+export function sharedSources(target: SharedTarget): string[] {
+  if (!existsSync(target.src)) return []
+  return readdirSync(target.src)
+    .filter((file) => target.extensions.has(extname(file).toLowerCase()))
+    .sort()
+    .map((file) => join(target.src, file))
+}
 
-  for (const file of readdirSync(src)) {
-    if (!extensions.has(extname(file))) continue
-    const outputName = rename(file)
-    copyFileSync(join(src, file), join(dest, outputName))
-    const renamed = outputName !== file ? ` (→ ${outputName})` : ''
-    console.log(`    ✓ ${file}${renamed}`)
-    totalCopied += 1
+/** Where a source file lands once copied. */
+export function sharedOutput(target: SharedTarget, source: string): string {
+  return join(target.dest, target.rename(parse(source).base))
+}
+
+export function copyShared(root = ROOT, { quiet = false } = {}) {
+  const log = (line: string) => {
+    if (!quiet) console.log(line)
   }
+  let totalCopied = 0
+
+  for (const target of sharedTargets(root)) {
+    mkdirSync(target.dest, { recursive: true })
+
+    log(`\n  ${relative(root, target.src)} → ${relative(root, target.dest)}`)
+
+    for (const source of sharedSources(target)) {
+      const output = sharedOutput(target, source)
+      copyFileSync(source, output)
+
+      const file = parse(source).base
+      const outputName = parse(output).base
+      const renamed = outputName !== file ? ` (→ ${outputName})` : ''
+      log(`    ✓ ${file}${renamed}`)
+      totalCopied += 1
+    }
+  }
+
+  if (totalCopied === 0) {
+    throw new Error('No shared files found to copy')
+  }
+
+  log(`\n✓ ${totalCopied} file${totalCopied !== 1 ? 's' : ''} copied`)
+  return totalCopied
 }
 
-if (totalCopied === 0) {
-  throw new Error('No shared files found to copy')
+if (import.meta.main) {
+  copyShared()
 }
-
-console.log(`\n✓ ${totalCopied} file${totalCopied !== 1 ? 's' : ''} copied`)
