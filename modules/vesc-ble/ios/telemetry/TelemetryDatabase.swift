@@ -341,6 +341,13 @@ enum TelemetryDatabase {
       try db.execute(sql: "CREATE INDEX IF NOT EXISTS index_tune_profiles_board_id_refloat_base_version ON tune_profiles(board_id, refloat_base_version)")
     }
 
+    // MARK: Board Warnings (#208)
+    // Durable one-row-per-(board, kind) warning store. DDL lives on `BoardWarningStore` so the schema
+    // stays single-source with the tests that reuse it. Mirrors Android Room migration 24→25.
+    migrator.registerMigration("v25_board_warnings") { db in
+      try BoardWarningStore.createTables(db)
+    }
+
     return migrator
   }
 }

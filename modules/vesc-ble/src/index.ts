@@ -993,6 +993,33 @@ export interface AppDataChangedEvent {
   scope: 'boards' | 'settings'
 }
 
+/** Two-level Board Warning severity, fixed at detection time. */
+export type BoardWarningSeverity = 'warn' | 'critical'
+
+/**
+ * One durable Board Warning — an app-detected abnormal Board condition, keyed one-per-problem-kind
+ * per Board (automotive fault-code model). Detected natively; JS only renders. `payloadJson` carries
+ * kind-specific detail (e.g. peak cell spread) as a JSON string the rendering side decodes per kind.
+ */
+export interface BoardWarning {
+  boardId: string
+  kind: string
+  severity: BoardWarningSeverity
+  firstDetectedAtMs: number
+  lastDetectedAtMs: number
+  payloadJson: string
+}
+
+/**
+ * Full current warning list for one Board, emitted on every registry change and on subscribe (late
+ * subscribers are immediately consistent). The JS mirror store replaces that board's slice on each
+ * emit — JS never detects, only displays.
+ */
+export interface BoardWarningsEvent {
+  boardId: string
+  warnings: BoardWarning[]
+}
+
 export type CriticalRideNotificationPermissionStatus =
   | 'not-determined'
   | 'denied'
@@ -1035,6 +1062,8 @@ type VescBleEvents = {
   onGroupRideError: (event: GroupRideErrorEvent) => void
   /** Persisted board/app data changed natively — reload the matching store. */
   onAppDataChanged: (event: AppDataChangedEvent) => void
+  /** Full current Board Warning list for a board, on every registry change and on subscribe. */
+  onBoardWarnings: (event: BoardWarningsEvent) => void
 }
 
 interface NativeEventEmitter<TEvents extends Record<string, (...args: never[]) => void>> {
@@ -1107,6 +1136,15 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
   getTelemetrySummary(): Promise<TelemetrySummary>
   getDiagnosticEvents(options: DiagnosticEventOptions): Promise<LocalDiagnosticEvent[]>
   clearDiagnosticEvents(): Promise<void>
+  clearBoardWarning(boardId: string, kind: string): Promise<void>
+  clearAllBoardWarnings(boardId: string): Promise<void>
+  devInjectBoardWarning(
+    boardId: string,
+    kind: string,
+    severity: BoardWarningSeverity,
+    payloadJson: string,
+  ): Promise<void>
+  devReportCleanBoardWarning(boardId: string, kind: string): Promise<void>
   getDatabaseSizeBytes(): Promise<number>
   backupDatabase(): Promise<DatabaseBackupResult>
   restoreDatabase(uri: string): Promise<void>
@@ -1523,6 +1561,35 @@ export async function clearDiagnosticEvents(): Promise<void> {
   return native.clearDiagnosticEvents()
 }
 
+// ---------------------------------------------------------------------------
+// Board Warnings
+// ---------------------------------------------------------------------------
+
+/** Manually clear a single Board Warning. A still-true condition simply re-fires on next evaluation. */
+export async function clearBoardWarning(boardId: string, kind: string): Promise<void> {
+  return native.clearBoardWarning(boardId, kind)
+}
+
+/** Manually clear every Board Warning for a board. Still-true conditions re-fire on next evaluation. */
+export async function clearAllBoardWarnings(boardId: string): Promise<void> {
+  return native.clearAllBoardWarnings(boardId)
+}
+
+/** Dev-only: inject a fake Board Warning to exercise the fire → persist → emit pipe without a detector. */
+export async function devInjectBoardWarning(
+  boardId: string,
+  kind: string,
+  severity: BoardWarningSeverity,
+  payloadJson: string,
+): Promise<void> {
+  return native.devInjectBoardWarning(boardId, kind, severity, payloadJson)
+}
+
+/** Dev-only: report a clean evaluation for a kind (evaluated with data, condition gone), auto-clearing it. */
+export async function devReportCleanBoardWarning(boardId: string, kind: string): Promise<void> {
+  return native.devReportCleanBoardWarning(boardId, kind)
+}
+
 export async function getDatabaseSizeBytes(): Promise<number> {
   return native.getDatabaseSizeBytes()
 }
@@ -1798,6 +1865,12 @@ export function addAppDataChangedListener(
   cb: (event: AppDataChangedEvent) => void,
 ): EventSubscription {
   return emitter.addListener('onAppDataChanged', cb)
+}
+
+export function addBoardWarningsListener(
+  cb: (event: BoardWarningsEvent) => void,
+): EventSubscription {
+  return emitter.addListener('onBoardWarnings', cb)
 }
 
 export function addLiveStateListener(cb: (event: LiveStateEvent) => void): EventSubscription {

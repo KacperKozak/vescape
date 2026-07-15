@@ -66,7 +66,7 @@ public class VescBleModule: Module {
 
     // @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt `Events`
     // @parity /modules/vesc-ble/src/index.ts `VescBleEvents`
-    Events("onDevice", "onError", "onLiveState", "onLiveTick", "onLiveSeries", "onTelemetryHistory", "onBms", "onBmsSeries", "onLocation", "onTelemetryRebuildProgress", "onBoardProbeProgress", "onAppDataChanged", "onGroupRideConnection", "onGroupRideSnapshot", "onGroupRideCreated", "onGroupRideUpdated", "onGroupRideEnded", "onGroupRideJoined", "onGroupRideRoster", "onGroupRideError")
+    Events("onDevice", "onError", "onLiveState", "onLiveTick", "onLiveSeries", "onTelemetryHistory", "onBms", "onBmsSeries", "onLocation", "onTelemetryRebuildProgress", "onBoardProbeProgress", "onAppDataChanged", "onGroupRideConnection", "onGroupRideSnapshot", "onGroupRideCreated", "onGroupRideUpdated", "onGroupRideEnded", "onGroupRideJoined", "onGroupRideRoster", "onGroupRideError", "onBoardWarnings")
 
     // Track per-event JS listeners so native skips emitting into the void, and gate the whole
     // firehose on app foreground (see `frontendActive`). Mirrors Android's observing + lifecycle
@@ -91,10 +91,21 @@ public class VescBleModule: Module {
     OnStopObserving("onLocation") { self.observedEvents.remove("onLocation") }
     OnStartObserving("onTelemetryRebuildProgress") { self.observedEvents.insert("onTelemetryRebuildProgress") }
     OnStopObserving("onTelemetryRebuildProgress") { self.observedEvents.remove("onTelemetryRebuildProgress") }
+    OnStartObserving("onBoardWarnings") {
+      self.observedEvents.insert("onBoardWarnings")
+      // Late subscriber: replay the current warnings for every board so JS is immediately consistent.
+      BoardWarningRegistry.shared.emitSnapshot()
+    }
+    OnStopObserving("onBoardWarnings") { self.observedEvents.remove("onBoardWarnings") }
 
     OnCreate {
       self.attachToCoordinator()
       AppDataRepository.onDataChanged = { [weak self] scope in self?.sendAppDataChanged(scope) }
+      // JS keeps a dumb mirror of the durable Board Warning registry; push the full board list on
+      // every registry change (late subscribers self-heal via the snapshot above).
+      BoardWarningRegistry.shared.onChange = { [weak self] boardId, warnings in
+        self?.sendBoardWarnings(boardId, warnings)
+      }
       self.autoConnectSelectedBoard()
     }
 
@@ -113,6 +124,7 @@ public class VescBleModule: Module {
       // @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt
       self.detachFromCoordinator()
       AppDataRepository.onDataChanged = nil
+      BoardWarningRegistry.shared.onChange = nil
       self.frontendActive = false
       self.observedEvents.removeAll()
       self.cancelActiveProbe(reason: "module_destroyed")
@@ -327,6 +339,31 @@ public class VescBleModule: Module {
 
     AsyncFunction("clearDiagnosticEvents") { (promise: Promise) in
       TelemetryRepository.shared.clearDiagnosticEvents()
+      promise.resolve(nil)
+    }
+
+    AsyncFunction("clearBoardWarning") { (boardId: String, kind: String, promise: Promise) in
+      BoardWarningRegistry.shared.clearWarning(boardId: boardId, kind: kind)
+      promise.resolve(nil)
+    }
+
+    AsyncFunction("clearAllBoardWarnings") { (boardId: String, promise: Promise) in
+      BoardWarningRegistry.shared.clearAllWarnings(boardId: boardId)
+      promise.resolve(nil)
+    }
+
+    AsyncFunction("devInjectBoardWarning") { (boardId: String, kind: String, severity: String, payloadJson: String, promise: Promise) in
+      BoardWarningRegistry.shared.reportFinding(
+        boardId: boardId,
+        kind: kind,
+        severity: BoardWarningRegistry.Severity.fromWire(severity),
+        payloadJson: payloadJson
+      )
+      promise.resolve(nil)
+    }
+
+    AsyncFunction("devReportCleanBoardWarning") { (boardId: String, kind: String, promise: Promise) in
+      BoardWarningRegistry.shared.reportCleanEvaluation(boardId: boardId, kind: kind)
       promise.resolve(nil)
     }
 
@@ -835,6 +872,17 @@ public class VescBleModule: Module {
   /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/AppDataRepository.kt `notifyDataChanged`
   private func sendAppDataChanged(_ scope: String) {
     DispatchQueue.main.async { self.sendEvent("onAppDataChanged", ["scope": scope]) }
+  }
+
+  /// Emit `onBoardWarnings` with the full current warning list for a Board. `sendEvent` must run on
+  /// the main thread; drop the emit when no JS listener is attached (the snapshot on subscribe and
+  /// the next registry change self-heal it).
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt
+  private func sendBoardWarnings(_ boardId: String, _ warnings: [BoardWarning]) {
+    DispatchQueue.main.async {
+      guard self.shouldEmitToFrontend("onBoardWarnings") else { return }
+      self.sendEvent("onBoardWarnings", ["boardId": boardId, "warnings": warnings.map { $0.toMap() }])
+    }
   }
 
   private static func notificationPermissionStatus(_ status: UNAuthorizationStatus) -> String {

@@ -100,7 +100,23 @@ class VescBleModule : Module() {
       "onGroupRideRoster",
       "onGroupRideError",
       "onAppDataChanged",
+      "onBoardWarnings",
     )
+
+    // JS keeps a dumb mirror of the durable Board Warning registry; push the full board list on
+    // every registry change so late subscribers self-heal on the next emit (and on subscribe below).
+    BoardWarningRegistry.get(context).onChange = { boardId, warnings ->
+      if (shouldEmitToFrontend("onBoardWarnings")) {
+        mainHandler.post {
+          if (shouldEmitToFrontend("onBoardWarnings")) {
+            sendEvent(
+              "onBoardWarnings",
+              mapOf("boardId" to boardId, "warnings" to warnings.map { it.toMap() }),
+            )
+          }
+        }
+      }
+    }
 
     OnStartObserving("onDevice") { startObserving("onDevice") }
     OnStopObserving("onDevice") { stopObserving("onDevice") }
@@ -140,6 +156,11 @@ class VescBleModule : Module() {
     OnStopObserving("onGroupRideRoster") { stopObserving("onGroupRideRoster") }
     OnStartObserving("onGroupRideError") { startObserving("onGroupRideError") }
     OnStopObserving("onGroupRideError") { stopObserving("onGroupRideError") }
+    OnStartObserving("onBoardWarnings") {
+      startObserving("onBoardWarnings")
+      CoroutineScope(Dispatchers.IO).launch { BoardWarningRegistry.get(context).emitSnapshot() }
+    }
+    OnStopObserving("onBoardWarnings") { stopObserving("onBoardWarnings") }
 
     OnActivityEntersForeground {
       frontendActive = true
@@ -295,6 +316,19 @@ class VescBleModule : Module() {
     }
     AsyncFunction("getDiagnosticEvents") Coroutine { options: Map<String, Any?> ->
       TelemetryRepository.get(context.applicationContext).getDiagnosticEvents(options)
+    }
+    AsyncFunction("clearBoardWarning") Coroutine { boardId: String, kind: String ->
+      BoardWarningRegistry.get(context).clearWarning(boardId, kind)
+    }
+    AsyncFunction("clearAllBoardWarnings") Coroutine { boardId: String ->
+      BoardWarningRegistry.get(context).clearAllWarnings(boardId)
+    }
+    AsyncFunction("devInjectBoardWarning") Coroutine { boardId: String, kind: String, severity: String, payloadJson: String ->
+      BoardWarningRegistry.get(context)
+        .reportFinding(boardId, kind, BoardWarningSeverity.fromWire(severity), payloadJson)
+    }
+    AsyncFunction("devReportCleanBoardWarning") Coroutine { boardId: String, kind: String ->
+      BoardWarningRegistry.get(context).reportCleanEvaluation(boardId, kind)
     }
     AsyncFunction("clearDiagnosticEvents") {
       runBlocking { TelemetryRepository.get(context.applicationContext).clearDiagnosticEvents() }

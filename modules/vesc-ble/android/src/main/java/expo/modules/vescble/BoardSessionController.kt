@@ -793,6 +793,11 @@ internal class BoardSessionController(private val service: VescForegroundService
         connectionCoordinator.reset()
         reconnectScheduler.cancelAndReset()
         recordingCoordinator.beginBoardSession(start.boardConfig)
+        // Reset per-session Board Warning breadcrumb bookkeeping (one Diagnostic Event per kind per
+        // Board Session). Detectors that fire warnings this session land in later slices.
+        start.boardConfig.appBoardId?.let {
+            BoardWarningRegistry.get(service.applicationContext).beginSession(it)
+        }
         lastEmittedLinkIntegrity = session.startLinkIntegrityCheck(start.boardConfig.linkIdentity())
         startLocationUpdates()
         setStatus(BoardPhase.Connecting)

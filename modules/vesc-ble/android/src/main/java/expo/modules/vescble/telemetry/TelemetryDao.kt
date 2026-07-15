@@ -496,6 +496,27 @@ interface TelemetryDao {
     insertTuneHistoryEntry(historyEntry)
     return profile
   }
+
+  // Board Warnings — see BoardWarningRegistry for lifecycle rules.
+  // @parity /modules/vesc-ble/ios/telemetry/BoardWarningStore.swift
+
+  @Query("SELECT * FROM board_warnings WHERE board_id = :boardId AND kind = :kind LIMIT 1")
+  suspend fun getBoardWarning(boardId: String, kind: String): BoardWarningEntity?
+
+  @Query("SELECT * FROM board_warnings WHERE board_id = :boardId ORDER BY first_detected_at ASC")
+  suspend fun getBoardWarnings(boardId: String): List<BoardWarningEntity>
+
+  @Query("SELECT * FROM board_warnings ORDER BY board_id ASC, first_detected_at ASC")
+  suspend fun getAllBoardWarnings(): List<BoardWarningEntity>
+
+  @Insert(onConflict = OnConflictStrategy.REPLACE)
+  suspend fun upsertBoardWarning(warning: BoardWarningEntity)
+
+  @Query("DELETE FROM board_warnings WHERE board_id = :boardId AND kind = :kind")
+  suspend fun deleteBoardWarning(boardId: String, kind: String): Int
+
+  @Query("DELETE FROM board_warnings WHERE board_id = :boardId")
+  suspend fun deleteBoardWarnings(boardId: String): Int
 }
 
 private fun TelemetryMinuteBucketEntity.merge(next: TelemetryMinuteBucketEntity): TelemetryMinuteBucketEntity {

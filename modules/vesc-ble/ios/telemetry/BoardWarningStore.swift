@@ -1,0 +1,159 @@
+import Foundation
+import GRDB
+
+/// One current Board Warning, as it crosses the bridge and lives in the durable store. Mirrors the
+/// Android `BoardWarning` model + `board_warnings` Room table.
+/// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardWarningRegistry.kt `BoardWarning`
+struct BoardWarning {
+  let boardId: String
+  let kind: String
+  /// Two-level severity, fixed at detection time: `warn` or `critical`.
+  let severity: String
+  let firstDetectedAtMs: Int64
+  let lastDetectedAtMs: Int64
+  let payloadJson: String
+
+  func toMap() -> [String: Any?] {
+    [
+      "boardId": boardId,
+      "kind": kind,
+      "severity": severity,
+      "firstDetectedAtMs": firstDetectedAtMs,
+      "lastDetectedAtMs": lastDetectedAtMs,
+      "payloadJson": payloadJson,
+    ]
+  }
+}
+
+/// DB-backed storage for Board Warnings, upsert-keyed by (board_id, kind). Not a time series — one
+/// row per active warning per Board. Lifecycle rules live on `BoardWarningRegistry`; this struct is
+/// pure CRUD. Mirrors the Android Room DAO methods behind `BoardWarningStore`.
+///
+/// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/TelemetryDao.kt
+struct BoardWarningStore {
+  /// Resolves the shared GRDB writer at call time so it always sees the current pool (swapped on
+  /// database restore). `nil` while the pool failed to open.
+  private let resolveWriter: () -> DatabaseWriter?
+
+  /// Bound to the single app-data database. Mirrors Android routing warning ops through the
+  /// singleton Room DAO.
+  static let shared = BoardWarningStore { TelemetryDatabase.pool }
+
+  init(_ resolveWriter: @escaping () -> DatabaseWriter?) {
+    self.resolveWriter = resolveWriter
+  }
+
+  /// Test seam: bind to an explicit writer (e.g. an in-memory `DatabaseQueue`).
+  init(dbWriter: DatabaseWriter) {
+    self.resolveWriter = { dbWriter }
+  }
+
+  // MARK: - Schema
+
+  /// Create the Board Warnings table. Called from the app-data `DatabaseMigrator` and reused by
+  /// tests so the schema stays single-source. Mirrors Android `BoardWarningEntity`.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/TelemetryEntities.kt
+  static func createTables(_ db: Database) throws {
+    try db.execute(sql: """
+      CREATE TABLE board_warnings (
+        board_id TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        severity TEXT NOT NULL,
+        first_detected_at INTEGER NOT NULL,
+        last_detected_at INTEGER NOT NULL,
+        payload_json TEXT NOT NULL,
+        PRIMARY KEY (board_id, kind)
+      )
+      """)
+    try db.execute(sql: "CREATE INDEX index_board_warnings_board_id ON board_warnings(board_id)")
+  }
+
+  // MARK: - Reads
+
+  func get(_ boardId: String, _ kind: String) -> BoardWarning? {
+    guard let writer = resolveWriter() else { return nil }
+    return (try? writer.read { db in
+      try Row.fetchOne(
+        db,
+        sql: "SELECT * FROM board_warnings WHERE board_id = ? AND kind = ? LIMIT 1",
+        arguments: [boardId, kind]
+      ).map { Self.warning($0) }
+    }) ?? nil
+  }
+
+  func getForBoard(_ boardId: String) -> [BoardWarning] {
+    guard let writer = resolveWriter() else { return [] }
+    return (try? writer.read { db in
+      try Row.fetchAll(
+        db,
+        sql: "SELECT * FROM board_warnings WHERE board_id = ? ORDER BY first_detected_at ASC",
+        arguments: [boardId]
+      ).map { Self.warning($0) }
+    }) ?? []
+  }
+
+  func getAll() -> [BoardWarning] {
+    guard let writer = resolveWriter() else { return [] }
+    return (try? writer.read { db in
+      try Row.fetchAll(
+        db,
+        sql: "SELECT * FROM board_warnings ORDER BY board_id ASC, first_detected_at ASC"
+      ).map { Self.warning($0) }
+    }) ?? []
+  }
+
+  // MARK: - Writes
+
+  func upsert(_ warning: BoardWarning) {
+    guard let writer = resolveWriter() else { return }
+    try? writer.write { db in
+      try db.execute(
+        sql: """
+          INSERT INTO board_warnings
+            (board_id, kind, severity, first_detected_at, last_detected_at, payload_json)
+          VALUES (?, ?, ?, ?, ?, ?)
+          ON CONFLICT(board_id, kind) DO UPDATE SET
+            severity = excluded.severity,
+            last_detected_at = excluded.last_detected_at,
+            payload_json = excluded.payload_json
+          """,
+        arguments: [
+          warning.boardId, warning.kind, warning.severity,
+          warning.firstDetectedAtMs, warning.lastDetectedAtMs, warning.payloadJson,
+        ]
+      )
+    }
+  }
+
+  @discardableResult
+  func delete(_ boardId: String, _ kind: String) -> Bool {
+    guard let writer = resolveWriter() else { return false }
+    return (try? writer.write { db in
+      try db.execute(
+        sql: "DELETE FROM board_warnings WHERE board_id = ? AND kind = ?",
+        arguments: [boardId, kind]
+      )
+      return db.changesCount > 0
+    }) ?? false
+  }
+
+  @discardableResult
+  func deleteForBoard(_ boardId: String) -> Bool {
+    guard let writer = resolveWriter() else { return false }
+    return (try? writer.write { db in
+      try db.execute(sql: "DELETE FROM board_warnings WHERE board_id = ?", arguments: [boardId])
+      return db.changesCount > 0
+    }) ?? false
+  }
+
+  private static func warning(_ row: Row) -> BoardWarning {
+    BoardWarning(
+      boardId: row["board_id"] as String,
+      kind: row["kind"] as String,
+      severity: row["severity"] as String,
+      firstDetectedAtMs: row["first_detected_at"] as Int64,
+      lastDetectedAtMs: row["last_detected_at"] as Int64,
+      payloadJson: row["payload_json"] as String
+    )
+  }
+}

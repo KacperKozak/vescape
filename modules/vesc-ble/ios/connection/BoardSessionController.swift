@@ -399,6 +399,10 @@ internal final class BoardSessionController: VescGattListener {
     }
     movingThresholdCentiKmh = MetricSanitizerConfig.from(settings: appData.getSettings()).movingSpeedThresholdCentiKmh
     recordingCoordinator.beginBoardSession(config: config)
+    // Reset per-session Board Warning breadcrumb bookkeeping (one Diagnostic Event per kind per
+    // Board Session). Detectors that fire warnings this session land in later slices.
+    // @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardSessionController.kt
+    BoardWarningRegistry.shared.beginSession(config.appBoardId)
     gpsError = gpsMonitor.start()
     // Fresh rule set for this session's alert engine (mirrors Android loadAlertRules on connect).
     alertCoordinator.replaceRules(appData.getEnabledAlertRules())
