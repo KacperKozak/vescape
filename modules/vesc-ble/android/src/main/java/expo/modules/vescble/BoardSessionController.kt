@@ -428,6 +428,8 @@ internal class BoardSessionController(private val service: VescForegroundService
     private val bmsSeriesRing = BmsSeriesRing()
     /** Telemetry-scoped cell-spread Board Warning detector; fed each BMS frame, reset per session. */
     private val cellSpreadDetector = CellSpreadDetector()
+    /** Telemetry-scoped BMS-vs-config cell-count mismatch detector; fed each BMS frame, reset per session. */
+    private val batteryConfigMismatchDetector = BatteryConfigMismatchDetector()
     /** True while the battery-detail view is focused (JS intent); gates the `onBmsSeries` push only. */
     @Volatile
     private var bmsSeriesFocused = false
@@ -790,6 +792,7 @@ internal class BoardSessionController(private val service: VescForegroundService
         socWindow.reset()
         bmsSeriesRing.clear()
         cellSpreadDetector.reset()
+        batteryConfigMismatchDetector.reset()
         configSafetyReadScheduled = false
         telemetryPipeline.beginSession(session, start.boardConfig)
         // Tag telemetry frames with the CAN id resolved from the stored transport.
@@ -1118,6 +1121,7 @@ internal class BoardSessionController(private val service: VescForegroundService
         }
         emitEvent("onBms", bms.toMap())
         evaluateCellSpread(bms)
+        evaluateBatteryConfigMismatch(bms)
         // Retention is unconditional (the frame already arrived); only the push below is gated.
         val frame = bmsSeriesRing.append(
             capturedAtMs = bms.capturedAt,
@@ -1148,6 +1152,27 @@ internal class BoardSessionController(private val service: VescForegroundService
         val registry = BoardWarningRegistry.get(service.applicationContext)
         VescForegroundService.appDataScope.launch {
             registry.reportFinding(boardId, CellSpreadDetector.KIND, severity, finding.payloadJson)
+        }
+    }
+
+    /**
+     * Feed one smart-BMS frame's cell count to the battery-config-mismatch detector and report any
+     * finding through the Board Warning registry. Compares against the same configured series count
+     * the SoC estimator and per-cell pushback bounds read; absent config is not evaluated.
+     * @parity /modules/vesc-ble/ios/connection/BoardSessionController.swift `evaluateBatteryConfigMismatch`
+     */
+    private fun evaluateBatteryConfigMismatch(bms: BmsTelemetry) {
+        val boardId = boardConfig?.appBoardId ?: return
+        val seriesCount = (batteryConfigCache?.get("seriesCount") as? Number)?.toInt()
+        val payloadJson = batteryConfigMismatchDetector.onFrame(bms.cellVoltages.size, seriesCount) ?: return
+        val registry = BoardWarningRegistry.get(service.applicationContext)
+        VescForegroundService.appDataScope.launch {
+            registry.reportFinding(
+                boardId,
+                BatteryConfigMismatchDetector.KIND,
+                BoardWarningSeverity.WARN,
+                payloadJson,
+            )
         }
     }
 
@@ -1526,10 +1551,13 @@ internal class BoardSessionController(private val service: VescForegroundService
         // A whole session with BMS data and no sustained spread auto-clears any stored cell-spread
         // warning; a session with no BMS data reports nothing and leaves it untouched.
         stoppedConfig?.appBoardId?.let { boardId ->
-            if (cellSpreadDetector.sessionEndClean()) {
+            val cellSpreadClean = cellSpreadDetector.sessionEndClean()
+            val mismatchClean = batteryConfigMismatchDetector.sessionEndClean()
+            if (cellSpreadClean || mismatchClean) {
                 val registry = BoardWarningRegistry.get(service.applicationContext)
                 VescForegroundService.appDataScope.launch {
-                    registry.reportCleanEvaluation(boardId, CellSpreadDetector.KIND)
+                    if (cellSpreadClean) registry.reportCleanEvaluation(boardId, CellSpreadDetector.KIND)
+                    if (mismatchClean) registry.reportCleanEvaluation(boardId, BatteryConfigMismatchDetector.KIND)
                 }
             }
         }

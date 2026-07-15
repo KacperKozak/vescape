@@ -100,6 +100,8 @@ internal final class BoardSessionController: VescGattListener {
   private let bmsSeriesRing = BmsSeriesRing()
   /// Telemetry-scoped cell-spread Board Warning detector; fed each BMS frame, reset per session.
   private let cellSpreadDetector = CellSpreadDetector()
+  /// Telemetry-scoped BMS-vs-config cell-count mismatch detector; fed each BMS frame, reset per session.
+  private let batteryConfigMismatchDetector = BatteryConfigMismatchDetector()
   /// True while the battery-detail view is focused (JS intent); gates the `onBmsSeries` push only.
   private var bmsSeriesFocused = false
   private let appData: AppDataRepository
@@ -401,10 +403,16 @@ internal final class BoardSessionController: VescGattListener {
     // replacing/reselecting a Board still auto-clears a clean prior session. Android funnels this
     // through `stopCurrentBoardSession` (called at the top of its `beginSession`); iOS `beginSession`
     // reaches here directly, so finalize here to keep parity.
-    if let previousBoardId = self.config?.appBoardId, cellSpreadDetector.sessionEndClean() {
-      BoardWarningRegistry.shared.reportCleanEvaluation(boardId: previousBoardId, kind: CellSpreadDetector.kind)
+    if let previousBoardId = self.config?.appBoardId {
+      if cellSpreadDetector.sessionEndClean() {
+        BoardWarningRegistry.shared.reportCleanEvaluation(boardId: previousBoardId, kind: CellSpreadDetector.kind)
+      }
+      if batteryConfigMismatchDetector.sessionEndClean() {
+        BoardWarningRegistry.shared.reportCleanEvaluation(boardId: previousBoardId, kind: BatteryConfigMismatchDetector.kind)
+      }
     }
     cellSpreadDetector.reset()
+    batteryConfigMismatchDetector.reset()
     configSafetyReadScheduled = false
     vescLiveFirmware = nil
     self.config = config
@@ -453,8 +461,13 @@ internal final class BoardSessionController: VescGattListener {
     bmsSeriesRing.clear()
     // A whole session with BMS data and no sustained spread auto-clears any stored cell-spread
     // warning; a session with no BMS data reports nothing and leaves it untouched.
-    if let boardId = config?.appBoardId, cellSpreadDetector.sessionEndClean() {
-      BoardWarningRegistry.shared.reportCleanEvaluation(boardId: boardId, kind: CellSpreadDetector.kind)
+    if let boardId = config?.appBoardId {
+      if cellSpreadDetector.sessionEndClean() {
+        BoardWarningRegistry.shared.reportCleanEvaluation(boardId: boardId, kind: CellSpreadDetector.kind)
+      }
+      if batteryConfigMismatchDetector.sessionEndClean() {
+        BoardWarningRegistry.shared.reportCleanEvaluation(boardId: boardId, kind: BatteryConfigMismatchDetector.kind)
+      }
     }
     session?.invalidate()
     session = nil
@@ -815,6 +828,7 @@ internal final class BoardSessionController: VescGattListener {
     }
     emit?("onBms", bms.toMap())
     evaluateCellSpread(bms)
+    evaluateBatteryConfigMismatch(bms)
     // Retention is unconditional (the frame already arrived); only the push below is gated.
     let frame = bmsSeriesRing.append(
       capturedAtMs: bms.capturedAt,
@@ -844,6 +858,25 @@ internal final class BoardSessionController: VescGattListener {
       kind: CellSpreadDetector.kind,
       severity: severity,
       payloadJson: finding.payloadJson
+    )
+  }
+
+  /// Feed one smart-BMS frame's cell count to the battery-config-mismatch detector and report any
+  /// finding through the Board Warning registry. Compares against the same configured series count
+  /// the SoC estimator and per-cell pushback bounds read; absent config is not evaluated.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardSessionController.kt `evaluateBatteryConfigMismatch`
+  private func evaluateBatteryConfigMismatch(_ bms: BmsTelemetry) {
+    guard let boardId = config?.appBoardId else { return }
+    let seriesCount = config?.batteryConfig?["seriesCount"] as? Int
+    guard let payloadJson = batteryConfigMismatchDetector.onFrame(
+      bmsCellCount: bms.cellVoltages.count,
+      configuredSeries: seriesCount
+    ) else { return }
+    BoardWarningRegistry.shared.reportFinding(
+      boardId: boardId,
+      kind: BatteryConfigMismatchDetector.kind,
+      severity: .warn,
+      payloadJson: payloadJson
     )
   }
 
