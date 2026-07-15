@@ -176,6 +176,10 @@ class VescBleModule : Module() {
     OnDestroy {
       frontendActive = false
       observedEvents.clear()
+      // Detach the JS-facing emit sink so the process-singleton registry doesn't keep the destroyed
+      // module reachable (mirrors iOS OnDestroy nulling `onChange`). A fresh module re-attaches in
+      // its own definition().
+      BoardWarningRegistry.get(context).onChange = null
       previewAlertFeedback?.release()
       previewAlertFeedback = null
       cancelActiveProbe(null, "module_destroyed")
@@ -316,6 +320,9 @@ class VescBleModule : Module() {
     }
     AsyncFunction("getDiagnosticEvents") Coroutine { options: Map<String, Any?> ->
       TelemetryRepository.get(context.applicationContext).getDiagnosticEvents(options)
+    }
+    AsyncFunction("getBoardWarnings") Coroutine { ->
+      BoardWarningRegistry.get(context).allWarnings().map { it.toMap() }
     }
     AsyncFunction("clearBoardWarning") Coroutine { boardId: String, kind: String ->
       BoardWarningRegistry.get(context).clearWarning(boardId, kind)

@@ -26,7 +26,7 @@ import {
 } from 'vesc-ble'
 
 import { useBoardStore } from '@/store/boardStore'
-import { useBoardWarningsStore } from '@/store/boardWarningsStore'
+import { EMPTY_WARNINGS, useBoardWarningsStore } from '@/store/boardWarningsStore'
 
 /** Fake kind used by the dev warning injector; real detector kinds land in later slices. */
 const DEV_WARNING_KIND = 'cell-spread'
@@ -106,7 +106,9 @@ export default function OtherSettingsScreen() {
   }, [ttsTemplate])
 
   const warningBoardId = useBoardStore((s) => s.activeBoardId) ?? DEV_WARNING_BOARD_ID
-  const boardWarnings = useBoardWarningsStore((s) => s.warningsByBoard[warningBoardId] ?? [])
+  const boardWarnings = useBoardWarningsStore(
+    (s) => s.warningsByBoard[warningBoardId] ?? EMPTY_WARNINGS,
+  )
 
   const injectWarning = useCallback(
     (severity: 'warn' | 'critical') => {

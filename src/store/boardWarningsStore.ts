@@ -1,5 +1,9 @@
+import { AppState } from 'react-native'
 import { create } from 'zustand'
-import { addBoardWarningsListener, type BoardWarning } from 'vesc-ble'
+import { addBoardWarningsListener, getBoardWarnings, type BoardWarning } from 'vesc-ble'
+
+/** Stable empty slice so `warningsByBoard[id] ?? EMPTY_WARNINGS` selectors don't churn references. */
+export const EMPTY_WARNINGS: BoardWarning[] = []
 
 /**
  * Dumb JS mirror of the durable native Board Warning registry. Native owns detection and truth; this
@@ -12,7 +16,17 @@ interface BoardWarningsState {
   /** Warnings keyed by boardId. A board with no warnings has no entry. */
   warningsByBoard: Record<string, BoardWarning[]>
   replaceBoard: (boardId: string, warnings: BoardWarning[]) => void
+  /** Replace the entire mirror from a native pull — heals boards whose warnings cleared while away. */
+  replaceAll: (warnings: BoardWarning[]) => void
   clear: () => void
+}
+
+function groupByBoard(warnings: BoardWarning[]): Record<string, BoardWarning[]> {
+  const byBoard: Record<string, BoardWarning[]> = {}
+  for (const warning of warnings) {
+    ;(byBoard[warning.boardId] ??= []).push(warning)
+  }
+  return byBoard
 }
 
 export const useBoardWarningsStore = create<BoardWarningsState>((set) => ({
@@ -27,17 +41,36 @@ export const useBoardWarningsStore = create<BoardWarningsState>((set) => ({
       }
       return { warningsByBoard: next }
     }),
+  replaceAll: (warnings) => set({ warningsByBoard: groupByBoard(warnings) }),
   clear: () => set({ warningsByBoard: {} }),
 }))
 
 /**
- * Wire the native → JS Board Warning mirror. Call once at app root; returns an unsubscribe. The
- * native side replays the current warnings for every board on subscribe, so no manual initial load
- * is needed.
+ * Wire the native → JS Board Warning mirror. Call once at app root; returns an unsubscribe.
+ *
+ * Two channels, mirroring `startAppDataSync`:
+ * - **Push:** live `onBoardWarnings` emits while JS is foregrounded and listening. Native replays a
+ *   per-board snapshot on subscribe, so a fresh listener starts consistent.
+ * - **Pull:** a foreground catch-up. Emits are dropped while the app is backgrounded (`frontendActive`
+ *   gates the native firehose), so a warning fired or auto-cleared during a headless ride would be
+ *   lost. Re-reading native truth on `AppState -> active` and replacing the whole store heals both a
+ *   new warning and a warning that cleared while away.
  */
 export function startBoardWarningsSync(): () => void {
   const sub = addBoardWarningsListener((event) => {
     useBoardWarningsStore.getState().replaceBoard(event.boardId, event.warnings)
   })
-  return () => sub.remove()
+  const pull = () => {
+    void getBoardWarnings().then((warnings) =>
+      useBoardWarningsStore.getState().replaceAll(warnings),
+    )
+  }
+  pull()
+  const appStateSub = AppState.addEventListener('change', (nextState) => {
+    if (nextState === 'active') pull()
+  })
+  return () => {
+    sub.remove()
+    appStateSub.remove()
+  }
 }

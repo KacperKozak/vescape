@@ -1136,6 +1136,7 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
   getTelemetrySummary(): Promise<TelemetrySummary>
   getDiagnosticEvents(options: DiagnosticEventOptions): Promise<LocalDiagnosticEvent[]>
   clearDiagnosticEvents(): Promise<void>
+  getBoardWarnings(): Promise<BoardWarning[]>
   clearBoardWarning(boardId: string, kind: string): Promise<void>
   clearAllBoardWarnings(boardId: string): Promise<void>
   devInjectBoardWarning(
@@ -1564,6 +1565,11 @@ export async function clearDiagnosticEvents(): Promise<void> {
 // ---------------------------------------------------------------------------
 // Board Warnings
 // ---------------------------------------------------------------------------
+
+/** Pull the full current Board Warning list across all boards — used for the foreground catch-up. */
+export async function getBoardWarnings(): Promise<BoardWarning[]> {
+  return native.getBoardWarnings()
+}
 
 /** Manually clear a single Board Warning. A still-true condition simply re-fires on next evaluation. */
 export async function clearBoardWarning(boardId: string, kind: string): Promise<void> {

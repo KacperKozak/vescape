@@ -342,6 +342,10 @@ public class VescBleModule: Module {
       promise.resolve(nil)
     }
 
+    AsyncFunction("getBoardWarnings") { (promise: Promise) in
+      promise.resolve(BoardWarningRegistry.shared.allWarnings().map { $0.toMap() })
+    }
+
     AsyncFunction("clearBoardWarning") { (boardId: String, kind: String, promise: Promise) in
       BoardWarningRegistry.shared.clearWarning(boardId: boardId, kind: kind)
       promise.resolve(nil)

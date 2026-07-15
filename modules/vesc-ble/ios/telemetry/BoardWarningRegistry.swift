@@ -98,6 +98,9 @@ final class BoardWarningRegistry {
 
   func warningsForBoard(_ boardId: String) -> [BoardWarning] { store.getForBoard(boardId) }
 
+  /// Every current warning across all boards — used for the JS foreground catch-up pull.
+  func allWarnings() -> [BoardWarning] { store.getAll() }
+
   /// Emit the current warnings for every board that has any — used on late subscribe.
   func emitSnapshot() {
     let byBoard = Dictionary(grouping: store.getAll(), by: { $0.boardId })
