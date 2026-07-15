@@ -1,5 +1,6 @@
 package expo.modules.vescble
 
+import expo.modules.vescble.warnings.ConfigSafetyValues
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.security.MessageDigest

@@ -28,7 +28,7 @@ struct CellSpreadFinding {
 /// absolute deviation from the pack average) at that peak; an already-fired warning keeps updating as
 /// the peak climbs, so the registry's upsert path preserves `firstDetectedAt`.
 ///
-/// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/CellSpreadDetector.kt
+/// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/warnings/CellSpreadDetector.kt
 final class CellSpreadDetector {
   /// Spread ≥ this (V), sustained, fires a warn-level cell-spread warning. Field-tuned constant.
   static let warnThresholdV = 0.10

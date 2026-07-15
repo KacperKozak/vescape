@@ -1,4 +1,4 @@
-package expo.modules.vescble
+package expo.modules.vescble.warnings
 
 /**
  * Decoded Refloat config values the safety rules evaluate. A `null` field means the schema did not

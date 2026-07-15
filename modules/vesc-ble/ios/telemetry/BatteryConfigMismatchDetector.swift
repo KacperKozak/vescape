@@ -17,7 +17,7 @@ import Foundation
 /// detector reports nothing and leaves any stored warning untouched (guarded via `sessionEndClean`).
 /// A session with no BMS data likewise reaches no stable count and reports nothing.
 ///
-/// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BatteryConfigMismatchDetector.kt
+/// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/warnings/BatteryConfigMismatchDetector.kt
 final class BatteryConfigMismatchDetector {
   /// BMS cell count must repeat across this many consecutive frames before it is compared.
   static let stableFrames = 3

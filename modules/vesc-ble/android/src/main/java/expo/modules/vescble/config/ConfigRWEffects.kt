@@ -1,6 +1,6 @@
 package expo.modules.vescble.config
 
-import expo.modules.vescble.ConfigSafetyValues
+import expo.modules.vescble.warnings.ConfigSafetyValues
 import expo.modules.vescble.RefloatConfigErrorCode
 import expo.modules.vescble.RefloatConfigSnapshot
 

@@ -1,4 +1,4 @@
-package expo.modules.vescble
+package expo.modules.vescble.warnings
 
 import org.json.JSONObject
 

@@ -6,7 +6,7 @@ import Foundation
 /// is what crosses the bridge and is stored durably; it must stay in lockstep with the JS
 /// `BoardWarningKind` union in `modules/vesc-ble/src/index.ts`.
 ///
-/// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardWarningKind.kt
+/// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/warnings/BoardWarningKind.kt
 enum BoardWarningKind: String, CaseIterable {
   case cellSpread = "cell-spread"
   case batteryConfigMismatch = "battery-config-mismatch"

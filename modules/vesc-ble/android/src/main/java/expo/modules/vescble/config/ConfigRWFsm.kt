@@ -1,7 +1,7 @@
 package expo.modules.vescble.config
 
 import expo.modules.vescble.BoardTransport
-import expo.modules.vescble.ConfigSafetyValues
+import expo.modules.vescble.warnings.ConfigSafetyValues
 import expo.modules.vescble.RefloatConfigBytes
 import expo.modules.vescble.RefloatConfigDecodeException
 import expo.modules.vescble.RefloatConfigDecoder

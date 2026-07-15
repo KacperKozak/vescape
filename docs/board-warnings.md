@@ -21,7 +21,7 @@ kind-specific JSON `payloadJson` blob the UI decodes.
 - **Rider-facing titles** — `WARNING_TITLES` in `src/lib/boardWarnings.ts` (keyed by the exhaustive
   union, so a missing title is a compile error).
 - **Detection logic** — the three detectors under
-  `modules/vesc-ble/android/src/main/java/expo/modules/vescble/` (iOS peers under
+  `modules/vesc-ble/android/src/main/java/expo/modules/vescble/warnings/` (iOS peers under
   `modules/vesc-ble/ios/telemetry/`): `CellSpreadDetector`, `BatteryConfigMismatchDetector`,
   `ConfigSafetyDetector`.
 - **Thresholds** — firmware pushback/fault defaults and the per-cell vs pack voltage-unit logic live

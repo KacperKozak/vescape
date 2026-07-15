@@ -1,5 +1,7 @@
 package expo.modules.vescble
 
+import expo.modules.vescble.warnings.BoardWarningRegistry
+import expo.modules.vescble.warnings.BoardWarningSeverity
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager

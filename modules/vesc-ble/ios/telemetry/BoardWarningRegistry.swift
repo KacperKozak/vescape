@@ -14,7 +14,7 @@ import Foundation
 /// existing reporter. `beginSession` resets that per-session bookkeeping so every future detector
 /// gets the breadcrumb for free.
 ///
-/// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardWarningRegistry.kt
+/// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/warnings/BoardWarningRegistry.kt
 final class BoardWarningRegistry {
   /// Two-level severity, fixed at detection time. Unknown wire values normalize to `warn`.
   enum Severity: String {

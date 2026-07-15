@@ -1,4 +1,4 @@
-package expo.modules.vescble
+package expo.modules.vescble.warnings
 
 /**
  * Telemetry-scoped Board Warning detector for a smart-BMS cell count that disagrees with the board's

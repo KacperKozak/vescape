@@ -1,5 +1,6 @@
 package expo.modules.vescble
 
+import expo.modules.vescble.warnings.ConfigSafetyValues
 import expo.modules.vescble.runtime.LinkIntegrity
 import expo.modules.vescble.runtime.TestScheduler
 import kotlinx.coroutines.CoroutineScope

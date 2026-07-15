@@ -1,5 +1,6 @@
 package expo.modules.vescble
 
+import expo.modules.vescble.warnings.ConfigSafetyValues
 import expo.modules.vescble.config.ConfigRWEffect
 import expo.modules.vescble.config.ConfigRWEvent
 import expo.modules.vescble.config.ConfigRWFsm

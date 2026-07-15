@@ -40,7 +40,7 @@ struct ConfigSafetyReport {
 /// skipped. Every payload carries the offending parameter, its current value, and the safe bound so the
 /// UI can explain the finding.
 ///
-/// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/ConfigSafetyDetector.kt
+/// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/warnings/ConfigSafetyDetector.kt
 enum ConfigSafetyDetector {
   /// Minimum safe low-voltage pushback per cell (V). Pack-mode bound is `this × series`.
   static let cellLvMinV = 3.0
