@@ -75,6 +75,7 @@ let package = Package(
         "connection/TransportDetection.swift",
         "telemetry/BatterySocEstimator.swift",
         "telemetry/BoardLinkPersistence.swift",
+        "telemetry/CellSpreadDetector.swift",
         "telemetry/IdlePauseDetector.swift",
         "telemetry/LiveSeriesDownsampler.swift",
         "telemetry/LiveSeriesEmitter.swift",
@@ -101,6 +102,7 @@ let package = Package(
       path: "ios",
       sources: [
         "alerts/AlertEngineTests.swift",
+        "telemetry/CellSpreadDetectorTests.swift",
         "telemetry/PrivacyZoneFilterTests.swift",
         "telemetry/IdlePauseDetectorTests.swift",
         "telemetry/BatterySocEstimatorTests.swift",

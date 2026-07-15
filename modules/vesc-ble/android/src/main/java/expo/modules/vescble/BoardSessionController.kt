@@ -424,6 +424,8 @@ internal class BoardSessionController(private val service: VescForegroundService
     private val socWindow = SocMedianWindow()
     /** Live BMS Series retention (window shared with [telemetryPipeline]); push gated by [bmsSeriesFocused]. */
     private val bmsSeriesRing = BmsSeriesRing()
+    /** Telemetry-scoped cell-spread Board Warning detector; fed each BMS frame, reset per session. */
+    private val cellSpreadDetector = CellSpreadDetector()
     /** True while the battery-detail view is focused (JS intent); gates the `onBmsSeries` push only. */
     @Volatile
     private var bmsSeriesFocused = false
@@ -785,6 +787,7 @@ internal class BoardSessionController(private val service: VescForegroundService
         loadBatteryConfig(start.boardConfig.appBoardId)
         socWindow.reset()
         bmsSeriesRing.clear()
+        cellSpreadDetector.reset()
         telemetryPipeline.beginSession(session, start.boardConfig)
         // Tag telemetry frames with the CAN id resolved from the stored transport.
         telemetryPipeline.updateCanId(canId)
@@ -1111,6 +1114,7 @@ internal class BoardSessionController(private val service: VescForegroundService
             updateLinkIntegrity(session.observeBms(config.linkIdentity()))
         }
         emitEvent("onBms", bms.toMap())
+        evaluateCellSpread(bms)
         // Retention is unconditional (the frame already arrived); only the push below is gated.
         val frame = bmsSeriesRing.append(
             capturedAtMs = bms.capturedAt,
@@ -1119,6 +1123,29 @@ internal class BoardSessionController(private val service: VescForegroundService
             windowMs = telemetryPipeline.recentWindowMs(),
         )
         if (frame != null && bmsSeriesFocused) emitBmsSeries("append", listOf(frame))
+    }
+
+    /**
+     * Feed one smart-BMS frame to the cell-spread detector and report any finding through the Board
+     * Warning registry (telemetry-scoped detector; continuous evaluation during the Board Session).
+     * @parity /modules/vesc-ble/ios/connection/BoardSessionController.swift `evaluateCellSpread`
+     */
+    private fun evaluateCellSpread(bms: BmsTelemetry) {
+        val boardId = boardConfig?.appBoardId ?: return
+        val finding = cellSpreadDetector.onFrame(
+            cellVoltages = bms.cellVoltages,
+            balancing = bms.balancing,
+            vCharge = bms.vCharge,
+            atMs = bms.capturedAt,
+        ) ?: return
+        val severity = when (finding.severity) {
+            CellSpreadSeverity.WARN -> BoardWarningSeverity.WARN
+            CellSpreadSeverity.CRITICAL -> BoardWarningSeverity.CRITICAL
+        }
+        val registry = BoardWarningRegistry.get(service.applicationContext)
+        VescForegroundService.appDataScope.launch {
+            registry.reportFinding(boardId, CellSpreadDetector.KIND, severity, finding.payloadJson)
+        }
     }
 
     /**
@@ -1447,6 +1474,16 @@ internal class BoardSessionController(private val service: VescForegroundService
         telemetry = null
         boardSession?.invalidate()
         boardSession = null
+        // A whole session with BMS data and no sustained spread auto-clears any stored cell-spread
+        // warning; a session with no BMS data reports nothing and leaves it untouched.
+        stoppedConfig?.appBoardId?.let { boardId ->
+            if (cellSpreadDetector.sessionEndClean()) {
+                val registry = BoardWarningRegistry.get(service.applicationContext)
+                VescForegroundService.appDataScope.launch {
+                    registry.reportCleanEvaluation(boardId, CellSpreadDetector.KIND)
+                }
+            }
+        }
         bmsSeriesRing.clear()
         telemetryPipeline.endSession()
         sessionSequence += 1

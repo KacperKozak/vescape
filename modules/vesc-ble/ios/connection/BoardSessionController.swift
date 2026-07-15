@@ -96,6 +96,8 @@ internal final class BoardSessionController: VescGattListener {
   private let liveSeries = LiveSeriesEmitter()
   /// Live BMS Series retention (window from `liveHistoryLimitMinutes`); push gated by `bmsSeriesFocused`.
   private let bmsSeriesRing = BmsSeriesRing()
+  /// Telemetry-scoped cell-spread Board Warning detector; fed each BMS frame, reset per session.
+  private let cellSpreadDetector = CellSpreadDetector()
   /// True while the battery-detail view is focused (JS intent); gates the `onBmsSeries` push only.
   private var bmsSeriesFocused = false
   private let appData: AppDataRepository
@@ -393,6 +395,7 @@ internal final class BoardSessionController: VescGattListener {
     session = BoardSession(id: sessionSequence)
     socWindow.reset()
     bmsSeriesRing.clear()
+    cellSpreadDetector.reset()
     self.config = config
     if let session {
       lastEmittedLinkIntegrity = session.startLinkIntegrityCheck(expected: config.linkIdentity())
@@ -437,6 +440,11 @@ internal final class BoardSessionController: VescGattListener {
     latestBatteryVoltage = nil
     socWindow.reset()
     bmsSeriesRing.clear()
+    // A whole session with BMS data and no sustained spread auto-clears any stored cell-spread
+    // warning; a session with no BMS data reports nothing and leaves it untouched.
+    if let boardId = config?.appBoardId, cellSpreadDetector.sessionEndClean() {
+      BoardWarningRegistry.shared.reportCleanEvaluation(boardId: boardId, kind: CellSpreadDetector.kind)
+    }
     session?.invalidate()
     session = nil
     config = nil
@@ -795,6 +803,7 @@ internal final class BoardSessionController: VescGattListener {
       updateLinkIntegrity(session.observeBms(expected: config.linkIdentity()))
     }
     emit?("onBms", bms.toMap())
+    evaluateCellSpread(bms)
     // Retention is unconditional (the frame already arrived); only the push below is gated.
     let frame = bmsSeriesRing.append(
       capturedAtMs: bms.capturedAt,
@@ -805,6 +814,26 @@ internal final class BoardSessionController: VescGattListener {
     if let frame, bmsSeriesFocused {
       emitBmsSeries(mode: "append", frames: [frame])
     }
+  }
+
+  /// Feed one smart-BMS frame to the cell-spread detector and report any finding through the Board
+  /// Warning registry (telemetry-scoped detector; continuous evaluation during the Board Session).
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardSessionController.kt `evaluateCellSpread`
+  private func evaluateCellSpread(_ bms: BmsTelemetry) {
+    guard let boardId = config?.appBoardId else { return }
+    guard let finding = cellSpreadDetector.onFrame(
+      cellVoltages: bms.cellVoltages,
+      balancing: bms.balancing,
+      vCharge: bms.vCharge,
+      atMs: bms.capturedAt
+    ) else { return }
+    let severity: BoardWarningRegistry.Severity = finding.severity == .critical ? .critical : .warn
+    BoardWarningRegistry.shared.reportFinding(
+      boardId: boardId,
+      kind: CellSpreadDetector.kind,
+      severity: severity,
+      payloadJson: finding.payloadJson
+    )
   }
 
   /// Battery-detail focus/blur intent from JS. Focus flips the gate open and immediately pushes
