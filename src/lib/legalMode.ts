@@ -124,6 +124,18 @@ export function legalModeAlertRule(settings: LegalModeSettings, createdAt: numbe
   }
 }
 
+export function buildLegalModeWarningAlertRule(
+  settings: LegalModeSettings,
+  createdAt: number,
+): AlertRule | null {
+  if (!settings.enabled) return null
+  return legalModeAlertRule(settings, createdAt)
+}
+
+export function isLegalModeAlertRule(rule: Pick<AlertRule, 'id'>) {
+  return rule.id === LEGAL_MODE_ALERT_RULE_ID
+}
+
 function positiveSpeed(value: unknown, fallback: number): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) return fallback
   return Math.max(1, Math.round(value))
@@ -147,13 +159,14 @@ function normalizeJurisdiction(raw: unknown): LegalJurisdictionResult | null {
   ) {
     return null
   }
+  const legalSpeedKmh = positiveSpeed(value.legalSpeedKmh, POLAND_LEGAL_MODE_DEFAULTS.legalSpeedKmh)
   return {
     countryCode: value.countryCode,
     countryName: value.countryName,
-    legalSpeedKmh: positiveSpeed(value.legalSpeedKmh, POLAND_LEGAL_MODE_DEFAULTS.legalSpeedKmh),
+    legalSpeedKmh,
     warningSpeedKmh: clampWarningSpeed(
       positiveSpeed(value.warningSpeedKmh, POLAND_LEGAL_MODE_DEFAULTS.warningSpeedKmh),
-      value.legalSpeedKmh,
+      legalSpeedKmh,
     ),
     legalRoadStatus: value.legalRoadStatus,
     warningText: typeof value.warningText === 'string' ? value.warningText : null,
