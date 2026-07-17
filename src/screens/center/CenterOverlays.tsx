@@ -724,7 +724,7 @@ export function CenterOverlays({
         <EdgeDrawer
           visible={tuneDrawerOpen}
           triggerRef={tuneButtonRef}
-          title="Tune"
+          title="Board Settings"
           icon={SlidersHorizontalIcon}
           onClose={() => setTuneDrawerOpen(false)}
         >
