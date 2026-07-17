@@ -72,6 +72,7 @@ import { HistoryControls } from '@/screens/center/HistoryControls'
 import { HistoryEmptyState } from '@/screens/center/HistoryEmptyState'
 import { WeatherHourlyStrip } from '@/screens/center/WeatherHourlyStrip'
 import { WeatherPill } from '@/screens/center/WeatherPill'
+import { WeatherRadarTimeline } from '@/screens/center/WeatherRadarTimeline'
 import { useMapWeather } from '@/screens/center/useMapWeather'
 import { HistoryStatsBar } from '@/screens/center/HistoryStatsBar'
 import { HistoryTelemetryPanel } from '@/screens/center/HistoryTelemetryPanel'
@@ -85,6 +86,7 @@ import type { Board } from '@/store/boardStore'
 import type { HistorySession, TelemetryMinuteBucket, TelemetrySample } from '@/store/historyStore'
 import type { MediaAssetInput, MediaHistoryAsset } from '@/lib/history/mediaHistory'
 import { useWeatherStore } from '@/store/weatherStore'
+import { useRainViewerRadarStore } from '@/store/rainViewerRadarStore'
 import { isNightAtTime, weatherCodeToColor } from '@/lib/weather'
 import { normalizeLegalModeSettings } from '@/lib/legalMode'
 import {
@@ -742,6 +744,8 @@ export function CenterOverlays({
   const dragOpacity = useSharedValue(0)
   const telemetryReturnOpacity = useSharedValue(mode === 'telemetry' ? 1 : 0)
   const weatherLoading = useWeatherStore((s) => s.loading)
+  const radarLoading = useRainViewerRadarStore((s) => s.loading)
+  const refreshRadar = useRainViewerRadarStore((s) => s.fetch)
   const legalModeActive = useSettingsStore((s) => normalizeLegalModeSettings(s.legalMode).enabled)
   const historyBusy = history.loadingSession || history.historyLoading
   const telemetryInteractive = mode === 'telemetry' && !revealGestureActive
@@ -977,8 +981,11 @@ export function CenterOverlays({
         />
         <IconButton
           icon={ArrowsClockwiseIcon}
-          onPress={map.refreshWeather}
-          loading={weatherLoading}
+          onPress={() => {
+            map.refreshWeather()
+            refreshRadar(true)
+          }}
+          loading={weatherLoading || radarLoading}
           style={[styles.weatherRefreshButton, { top: mapModeTabsTop }]}
         />
         <View
@@ -986,6 +993,14 @@ export function CenterOverlays({
           style={[styles.weatherExpandedPill, { top: belowMapModeTabsTop }]}
         >
           <WeatherPill location={map.weatherLocation} expanded onPress={() => undefined} />
+        </View>
+        <View
+          style={[
+            styles.weatherRadarTimelineContainer,
+            { bottom: Math.max(insets.bottom, 16) + 112 },
+          ]}
+        >
+          {mode === 'weather' ? <WeatherRadarTimeline /> : null}
         </View>
         <View
           style={[styles.weatherHourlyContainer, { paddingBottom: Math.max(insets.bottom, 16) }]}
@@ -1545,6 +1560,12 @@ const styles = StyleSheet.create({
     right: 0,
     alignItems: 'center',
     zIndex: 29,
+  },
+  weatherRadarTimelineContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    zIndex: 31,
   },
   weatherHourlyContainer: {
     position: 'absolute',

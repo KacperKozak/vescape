@@ -49,7 +49,7 @@ const RADIAL_POSITIONS = [0, 0.4, 0.68, 1]
 const TOP_POSITIONS = [0, 0.7, 1]
 const HISTORY_TOP_POSITIONS = [0, 0.52, 1]
 const HISTORY_BOTTOM_POSITIONS = [0, 0.5, 0.6, 1]
-const WEATHER_TOP_POSITIONS = [0, 0.55, 1]
+const WEATHER_TOP_POSITIONS = [0, 0.42, 0.78, 1]
 const WEATHER_BOTTOM_POSITIONS = [0, 0.55, 1]
 
 function vignetteOpacity(level: number) {
@@ -216,9 +216,9 @@ export function MapVignette({
               height={height}
               opacity={weatherLayerOpacity}
               radial={[0, 0.12, 0.3, 0.6]}
-              top={[0.85, 0.3, 0]}
+              top={[0.85, 0.6, 0.3, 0]}
               topPositions={WEATHER_TOP_POSITIONS}
-              topEnd={0.3}
+              topEnd={0.46}
               bottom={[0.85, 0.6, 0]}
               bottomPositions={WEATHER_BOTTOM_POSITIONS}
               bottomStart={0.78}
