@@ -1,7 +1,11 @@
 import { RasterLayer, RasterSource } from '@rnmapbox/maps'
-import { useEffect, useMemo } from 'react'
+import { useEffect } from 'react'
 
 import { buildRainViewerTileTemplate, useRainViewerRadarStore } from '@/store/rainViewerRadarStore'
+
+const RADAR_OPACITY = 0.55
+const AUTO_RADAR_FRAME_FADE_MS = 450
+const MANUAL_RADAR_FRAME_FADE_MS = 180
 
 interface RainViewerOverlayProps {
   visible: boolean
@@ -11,6 +15,7 @@ export function RainViewerOverlay({ visible }: RainViewerOverlayProps) {
   const host = useRainViewerRadarStore((state) => state.host)
   const frames = useRainViewerRadarStore((state) => state.frames)
   const selectedFrameIndex = useRainViewerRadarStore((state) => state.selectedFrameIndex)
+  const transitionMode = useRainViewerRadarStore((state) => state.transitionMode)
   const fetchRadar = useRainViewerRadarStore((state) => state.fetch)
 
   useEffect(() => {
@@ -23,26 +28,37 @@ export function RainViewerOverlay({ visible }: RainViewerOverlayProps) {
     }
   }, [fetchRadar, visible])
 
-  const selectedFrame = frames[selectedFrameIndex] ?? frames[frames.length - 1]
-  const tileTemplate = useMemo(() => {
-    if (!host || frames.length === 0) return null
-    return buildRainViewerTileTemplate(host, selectedFrame)
-  }, [frames.length, host, selectedFrame])
+  if (!host || frames.length === 0 || !visible) return null
 
-  if (!tileTemplate || !visible || !selectedFrame) return null
-
-  const sourceId = `center-rainviewer-radar-${selectedFrame.time}`
-  const layerId = `center-rainviewer-radar-layer-${selectedFrame.time}`
+  const fadeMs = transitionMode === 'auto' ? AUTO_RADAR_FRAME_FADE_MS : MANUAL_RADAR_FRAME_FADE_MS
 
   return (
-    <RasterSource
-      key={sourceId}
-      id={sourceId}
-      tileUrlTemplates={[tileTemplate]}
-      tileSize={256}
-      maxZoomLevel={6}
-    >
-      <RasterLayer id={layerId} sourceID={sourceId} style={{ rasterOpacity: 0.55 }} />
-    </RasterSource>
+    <>
+      {frames.map((frame, index) => {
+        const sourceId = `center-rainviewer-radar-${frame.time}`
+        const layerId = `center-rainviewer-radar-layer-${frame.time}`
+        const tileTemplate = buildRainViewerTileTemplate(host, frame)
+
+        return (
+          <RasterSource
+            key={sourceId}
+            id={sourceId}
+            tileUrlTemplates={[tileTemplate]}
+            tileSize={256}
+            maxZoomLevel={6}
+          >
+            <RasterLayer
+              id={layerId}
+              sourceID={sourceId}
+              style={{
+                rasterOpacity: index === selectedFrameIndex ? RADAR_OPACITY : 0,
+                rasterOpacityTransition: { duration: fadeMs, delay: 0 },
+                rasterFadeDuration: fadeMs,
+              }}
+            />
+          </RasterSource>
+        )
+      })}
+    </>
   )
 }

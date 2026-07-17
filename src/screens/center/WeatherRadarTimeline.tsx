@@ -133,7 +133,7 @@ export function WeatherRadarTimeline() {
       if (frameCount <= 1) return
       const nextIndex = (frameIndexRef.current + 1) % frameCount
       frameIndexRef.current = nextIndex
-      useRainViewerRadarStore.getState().setFrameIndex(nextIndex)
+      useRainViewerRadarStore.getState().setFrameIndex(nextIndex, 'auto')
     }, FRAME_INTERVAL_MS)
     return () => clearInterval(interval)
   }, [frames.length, playing])
