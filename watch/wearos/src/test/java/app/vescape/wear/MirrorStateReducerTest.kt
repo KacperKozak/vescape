@@ -32,6 +32,22 @@ class MirrorStateReducerTest {
     }
 
     @Test
+    fun `fresh waiting frame is WAITING without renderable frame, timed-out waiting is disconnected`() {
+        val waitingFrame = frame(stale = true).copy(waiting = true)
+
+        val waiting = MirrorStateReducer.reduce(waitingFrame, lastFrameAtMs = 1_000L, nowMs = 1_000L)
+        assertEquals(MirrorStatus.WAITING, waiting.status)
+        assertNull(waiting.frame)
+
+        val timedOut = MirrorStateReducer.reduce(
+            waitingFrame,
+            lastFrameAtMs = 1_000L,
+            nowMs = 1_000L + MIRROR_DISCONNECTED_TIMEOUT_MS + 1L,
+        )
+        assertEquals(MirrorStatus.DISCONNECTED, timedOut.status)
+    }
+
+    @Test
     fun `no frame is disconnected`() {
         val state = MirrorStateReducer.reduce(frame = null, lastFrameAtMs = null, nowMs = 0L)
 

@@ -1,7 +1,6 @@
 package app.vescape.wear
 
 import android.Manifest
-import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
@@ -11,7 +10,6 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.mutableStateOf
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import androidx.core.content.ContextCompat
 import androidx.wear.ambient.AmbientLifecycleObserver
 import com.google.android.gms.wearable.MessageClient
 import com.google.android.gms.wearable.Wearable
@@ -23,6 +21,7 @@ import com.google.android.gms.wearable.Wearable
  */
 class MainActivity : ComponentActivity() {
     private val messageClient by lazy { Wearable.getMessageClient(this) }
+    private val phoneLinkMonitor by lazy { PhoneLinkMonitor(this) }
     private val ongoingActivityController by lazy { OngoingActivityController(this) }
     private val isAmbient = mutableStateOf(false)
     private val ambientObserver = AmbientLifecycleObserver(this, AmbientCallback())
@@ -33,9 +32,18 @@ class MainActivity : ComponentActivity() {
     }
 
     private val listener = MessageClient.OnMessageReceivedListener { event ->
-        if (event.path != TELEMETRY_PATH) return@OnMessageReceivedListener
-        WatchFrameDecoder.decode(event.data)?.let { frame ->
-            runOnUiThread { TelemetryState.acceptFrame(frame, SystemClock.elapsedRealtime()) }
+        if (event.path != TELEMETRY_PATH) {
+            runOnUiThread { WatchDiagnostics.recordUnknownPath(event.path) }
+            return@OnMessageReceivedListener
+        }
+        val frame = WatchFrameDecoder.decode(event.data)
+        runOnUiThread {
+            if (frame != null) {
+                WatchDiagnostics.recordFrame()
+                TelemetryState.acceptFrame(frame, SystemClock.elapsedRealtime())
+            } else {
+                WatchDiagnostics.recordDecodeFailure(event.data)
+            }
         }
     }
 
@@ -56,9 +64,13 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         messageClient.addListener(listener)
+        phoneLinkMonitor.start()
+        WatchDiagnostics.recordReceiver(active = true)
     }
 
     override fun onStop() {
+        WatchDiagnostics.recordReceiver(active = false)
+        phoneLinkMonitor.stop()
         messageClient.removeListener(listener)
         super.onStop()
     }
@@ -66,12 +78,13 @@ class MainActivity : ComponentActivity() {
     override fun onDestroy() {
         lifecycle.removeObserver(ambientObserver)
         setKeepScreenAwake(false)
+        phoneLinkMonitor.shutdown()
         ongoingActivityController.stop()
         super.onDestroy()
     }
 
     private fun startOngoingActivityWhenAllowed() {
-        if (canPostNotifications()) {
+        if (ongoingActivityController.canPostNotifications()) {
             ongoingActivityController.start()
             return
         }
@@ -80,11 +93,6 @@ class MainActivity : ComponentActivity() {
             requestPostNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
         }
     }
-
-    private fun canPostNotifications(): Boolean =
-        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
-            PackageManager.PERMISSION_GRANTED
 
     private fun setKeepScreenAwake(keepAwake: Boolean) {
         if (keepAwake) {

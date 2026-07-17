@@ -68,6 +68,7 @@ const e2eSettings: AppSettings = {
   autoCloseDelayMinutes: 15,
   telemetryPollRateHz: 20,
   wearMirrorIntervalMs: 500,
+  wearAutoLaunchOnConnect: true,
   riderId: null,
   riderName: null,
   riderColor: null,

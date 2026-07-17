@@ -33,6 +33,9 @@ const GOOD_EVENTS = new Set([
   'gatt_ready',
   'reconnect_scan_found',
   'telemetry_polling_started',
+  'watch_mirror_present',
+  'watch_mirror_launched',
+  'watch_frame_send_recovered',
 ])
 
 const INFO_EVENTS = new Set([
@@ -47,6 +50,8 @@ const WARNING_EVENTS = new Set([
   'board_probe_cancelled',
   'board_probe_connect_retry',
   'board_probe_disconnected_mid_detection',
+  'watch_mirror_absent',
+  'watch_mirror_launch_skipped',
 ])
 
 const BAD_EVENTS = new Set([
@@ -63,6 +68,10 @@ const BAD_EVENTS = new Set([
   'telemetry_parse_failed',
   'telemetry_stale',
   'telemetry_unavailable',
+  'watch_frame_send_failed',
+  'watch_frame_no_nodes',
+  'watch_nodes_lookup_failed',
+  'watch_mirror_launch_failed',
 ])
 
 function getEventColor(eventName: string): string {

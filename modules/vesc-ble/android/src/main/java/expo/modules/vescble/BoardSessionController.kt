@@ -162,10 +162,13 @@ internal class BoardSessionController(private val service: VescForegroundService
         )
     }
     private val watchPusher by lazy {
-        WatchTelemetryPusher(service.applicationContext, VescForegroundService.appDataScope)
+        WatchTelemetryPusher(service.applicationContext, VescForegroundService.appDataScope, ::recordWatchDiagnostic)
     }
     private val watchMirrorPresence by lazy {
-        WatchMirrorPresence(service.applicationContext, VescForegroundService.appDataScope)
+        WatchMirrorPresence(service.applicationContext, VescForegroundService.appDataScope, ::recordWatchDiagnostic)
+    }
+    private val watchMirrorLauncher by lazy {
+        WatchMirrorLauncher(service.applicationContext, VescForegroundService.appDataScope, ::recordWatchDiagnostic)
     }
     private val watchTick by lazy {
         WatchTick(
@@ -438,6 +441,8 @@ internal class BoardSessionController(private val service: VescForegroundService
     private var gpsError: String? = null
     private var isStoppingService = false
     private var connectionSoundsEnabled = true
+    private var wearAutoLaunchOnConnect = true
+    private var watchLaunchFiredSessionId = 0L
     private var autoCloseEnabled = false
     private var autoCloseDelayMinutes = 15
     private var autoCloseHandle: Cancellable? = null
@@ -1335,7 +1340,20 @@ internal class BoardSessionController(private val service: VescForegroundService
         )
         boardConfig?.let { recordingCoordinator.markBoardReady(it) }
         if (connectionSoundsEnabled) alertFeedback.playConnect()
+        maybeLaunchWatchMirror()
         transitionBoardPhase(BoardPhase.Connected)
+    }
+
+    /**
+     * Fresh connects only: at most once per BoardSession, so mid-ride auto-reconnects and
+     * Stale -> Connected recoveries (same session id) never re-wake the watch.
+     */
+    private fun maybeLaunchWatchMirror() {
+        if (!wearAutoLaunchOnConnect || !watchMirrorPresence.present) return
+        val sessionId = currentSessionId
+        if (sessionId == watchLaunchFiredSessionId) return
+        watchLaunchFiredSessionId = sessionId
+        watchMirrorLauncher.launch()
     }
 
     /** @parity /modules/vesc-ble/ios/connection/BoardSessionController.swift `onTelemetryStaleFired` */
@@ -1836,6 +1854,7 @@ internal class BoardSessionController(private val service: VescForegroundService
         movingThresholdCentiKmh = settings.toMetricSanitizerConfig().movingSpeedThresholdCentiKmh
         pollingLoop.setPollIntervalMs(effectivePollIntervalMs())
         watchTick.setIntervalMs(settings.wearMirrorIntervalMs.toLong())
+        wearAutoLaunchOnConnect = settings.wearAutoLaunchOnConnect
         autoCloseEnabled = settings.autoCloseEnabled
         autoCloseDelayMinutes = settings.autoCloseDelayMinutes
         // May run off-main (appDataScope); the countdown state lives on the main-handler scheduler.
@@ -1931,6 +1950,9 @@ internal class BoardSessionController(private val service: VescForegroundService
         operation: String,
         properties: Map<String, Any?> = emptyMap(),
     ): Unit = diagnosticsRecorder.recordLocalDiagnostic(eventName, session, operation, properties)
+
+    private fun recordWatchDiagnostic(eventName: String, properties: Map<String, Any?>): Unit =
+        recordLocalDiagnostic(eventName, boardConfig, "watch", properties)
 
     private fun diagnosticProperties(session: SessionConfig?, operation: String): Map<String, Any?> =
         diagnosticsRecorder.diagnosticProperties(session, operation)

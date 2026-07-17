@@ -3,6 +3,7 @@ package expo.modules.vescble
 import expo.modules.vescble.runtime.BoardSession
 import expo.modules.vescble.runtime.TestScheduler
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -25,15 +26,16 @@ class WatchTickTest {
         scheduler: TestScheduler,
         session: BoardSession,
         intervalMs: Long,
-        onPush: () -> Unit,
+        snapshot: () -> WatchSnapshot? = { this.snapshot },
+        onPush: (ByteArray) -> Unit,
     ) = WatchTick(
         scheduler = scheduler,
         session = { session },
         isCurrentSession = { it === session },
-        snapshot = { snapshot },
+        snapshot = snapshot,
         isStale = { false },
         canPush = { true },
-        push = { onPush() },
+        push = onPush,
         intervalMs = intervalMs,
     )
 
@@ -67,6 +69,21 @@ class WatchTickTest {
 
         scheduler.advance(300)
         assertEquals(4, pushes)
+    }
+
+    @Test
+    fun `pushes a waiting frame while the session has no telemetry yet`() {
+        val scheduler = TestScheduler()
+        val session = BoardSession(1)
+        val pushed = mutableListOf<ByteArray>()
+        tick(scheduler, session, 500, snapshot = { null }) { pushed.add(it) }.start()
+
+        scheduler.advance(500)
+
+        assertEquals(1, pushed.size)
+        val flags = pushed.single()[1].toInt()
+        assertTrue(flags and WATCH_FRAME_FLAG_WAITING != 0)
+        assertTrue(flags and WATCH_FRAME_FLAG_STALE != 0)
     }
 
     @Test

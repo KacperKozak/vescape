@@ -14,7 +14,14 @@ import java.nio.ByteOrder
 private const val WATCH_FRAME_FIELD_COUNT = 5
 private const val WATCH_FRAME_BYTES = 2 + WATCH_FRAME_FIELD_COUNT * 4
 
-/** The decoded Watch Frame. Nullable lanes arrive as `NaN` over the wire (ADR-0018). */
+/** Flags-byte bits, mirroring the phone-side `WATCH_FRAME_FLAG_*` constants (ADR-0018). */
+private const val FLAG_STALE = 1
+private const val FLAG_WAITING = 2
+
+/**
+ * The decoded Watch Frame. Nullable lanes arrive as `NaN` over the wire (ADR-0018). [waiting] marks
+ * a "session live, no board telemetry yet" frame — the lanes carry no data and must not be rendered.
+ */
 data class WatchFrame(
     val speed: Double,
     val duty: Double?,
@@ -22,6 +29,7 @@ data class WatchFrame(
     val motorTemp: Double?,
     val ctrlTemp: Double?,
     val stale: Boolean,
+    val waiting: Boolean = false,
 )
 
 /** Pure bytes -> [WatchFrame] decoder. Returns null on a short buffer or a field-count mismatch. */
@@ -30,7 +38,7 @@ object WatchFrameDecoder {
         if (bytes.size < WATCH_FRAME_BYTES) return null
         val buf = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
         if (buf.get().toInt() != WATCH_FRAME_FIELD_COUNT) return null
-        val stale = buf.get().toInt() != 0
+        val flags = buf.get().toInt()
         val speed = buf.float.toDouble()
         return WatchFrame(
             speed = speed,
@@ -38,7 +46,8 @@ object WatchFrameDecoder {
             battery = buf.nullableLane(),
             motorTemp = buf.nullableLane(),
             ctrlTemp = buf.nullableLane(),
-            stale = stale,
+            stale = flags and FLAG_STALE != 0,
+            waiting = flags and FLAG_WAITING != 0,
         )
     }
 

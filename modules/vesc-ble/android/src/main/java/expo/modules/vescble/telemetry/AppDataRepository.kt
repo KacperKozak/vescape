@@ -206,6 +206,7 @@ class AppDataRepository private constructor(private val context: Context) {
       connectionSoundsEnabled = req("connectionSoundsEnabled", true) { it as? Boolean },
       telemetryPollRateHz = req("telemetryPollRateHz", 20, ::validTelemetryPollRateHz),
       wearMirrorIntervalMs = req("wearMirrorIntervalMs", 500, ::validWearMirrorIntervalMs),
+      wearAutoLaunchOnConnect = req("wearAutoLaunchOnConnect", true) { it as? Boolean },
       companionPresenceEnabled = req("companionPresenceEnabled", false) { it as? Boolean },
       companionPresenceCooldownMinutes = req("companionPresenceCooldownMinutes", 60, ::validCompanionCooldownMinutes),
       autoCloseEnabled = req("autoCloseEnabled", false) { it as? Boolean },
@@ -263,6 +264,7 @@ class AppDataRepository private constructor(private val context: Context) {
         validTelemetryPollRateHz(value) ?: return@withContext
       "wearMirrorIntervalMs" ->
         validWearMirrorIntervalMs(value) ?: return@withContext
+      "wearAutoLaunchOnConnect" -> value as? Boolean ?: return@withContext
       "companionPresenceEnabled" -> value as? Boolean ?: return@withContext
       "companionPresenceCooldownMinutes" ->
         validCompanionCooldownMinutes(value) ?: return@withContext
@@ -298,6 +300,7 @@ class AppDataRepository private constructor(private val context: Context) {
         "connectionSoundsEnabled" -> d.connectionSoundsEnabled
         "telemetryPollRateHz" -> d.telemetryPollRateHz
         "wearMirrorIntervalMs" -> d.wearMirrorIntervalMs
+        "wearAutoLaunchOnConnect" -> d.wearAutoLaunchOnConnect
         "companionPresenceEnabled" -> d.companionPresenceEnabled
         "companionPresenceCooldownMinutes" -> d.companionPresenceCooldownMinutes
         "autoCloseEnabled" -> d.autoCloseEnabled
@@ -570,6 +573,7 @@ fun AppSettings.toMap(): Map<String, Any?> = mapOf(
   "connectionSoundsEnabled" to connectionSoundsEnabled,
   "telemetryPollRateHz" to telemetryPollRateHz,
   "wearMirrorIntervalMs" to wearMirrorIntervalMs,
+  "wearAutoLaunchOnConnect" to wearAutoLaunchOnConnect,
   "companionPresenceEnabled" to companionPresenceEnabled,
   "companionPresenceCooldownMinutes" to companionPresenceCooldownMinutes,
   "autoCloseEnabled" to autoCloseEnabled,

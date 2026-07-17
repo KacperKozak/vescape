@@ -9,7 +9,9 @@ import expo.modules.vescble.runtime.postDelayedForSession
  * Dedicated watch tick (ADR-0013/0019): a session-scoped scheduler, independent of the board poll
  * rate, that reads the latest cold-path [WatchSnapshot] and pushes an encoded Watch Frame at a
  * configurable cadence (`wearMirrorIntervalMs` App Setting). Adds no hot-path cost — it only reads
- * already-sanitized cold-path state.
+ * already-sanitized cold-path state. While the session has no telemetry yet (connect phase) it
+ * pushes a waiting frame instead, so the wrist can show "connecting to board" rather than a bare
+ * spinner.
  *
  * Capability-gated: [canPush] is a cached flag ([WatchMirrorPresence]) checked before building the
  * frame, so when no Mirror is reachable the tick keeps spinning but skips both encode and send.
@@ -53,8 +55,11 @@ internal class WatchTick(
     private fun schedule() {
         val token = session() ?: return
         handle = scheduler.postDelayedForSession(token, intervalMs, isCurrentSession) {
-            val snap = snapshot()
-            if (snap != null && canPush()) push(WatchFrameBuilder.encode(WatchFrameBuilder.build(snap, isStale())))
+            if (canPush()) {
+                val snap = snapshot()
+                val frame = if (snap != null) WatchFrameBuilder.build(snap, isStale()) else WatchFrameBuilder.waitingFrame()
+                push(WatchFrameBuilder.encode(frame))
+            }
             schedule()
         }
     }
