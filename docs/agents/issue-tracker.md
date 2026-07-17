@@ -78,6 +78,7 @@ Use one or more app-area labels for filtering:
 | `area:ios`        | `[iOS]`        | iOS platform port and iOS-specific native code                                                |
 | `area:watch`      | `[Watch]`      | Watch Mirror — live telemetry on the wrist and alert playback, Wear OS / watchOS companions   |
 | `area:group-ride` | `[GroupRide]`  | Group Rides — live shared rides, Rider presence, nearby discovery, relay server, social panel |
+| `area:legal-mode` | `[Legal Mode]` | Legal Mode UI, jurisdiction speed defaults, speed-warning alerts, and legal board constraints |
 
 When a PRD or issue-planning skill creates or starts using a new app-area label, update this table in the same turn. Add the label, title prefix, and a short "Use for" description so future PRDs and implementation issues can reuse the prefix consistently.
 

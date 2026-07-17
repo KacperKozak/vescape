@@ -148,6 +148,22 @@ _Avoid_: Deck disturbance, rider lean, foot pressure, throttle, acceleration com
 A footpad sensor mode that treats both sensor zones as one engagement zone.
 _Avoid_: Posi switch, dual switch
 
+**Legal Mode**:
+A rider-selected mode that prepares a Board to meet a chosen legal limit through mandatory speed-warning feedback and optional board-enforced speed constraint.
+_Avoid_: Police mode, cop mode, inspection mode
+
+**Legal Speed Limit**:
+The target maximum riding speed used by Legal Mode, either rider-entered or suggested from a jurisdiction.
+_Avoid_: Max board speed, engine limit
+
+**Legal Warning Speed**:
+The speed at which Legal Mode starts audible warning feedback before the Legal Speed Limit is reached.
+_Avoid_: Alert threshold, warning threshold
+
+**Legal Road Status**:
+The jurisdiction-specific rider-facing status of whether this Board category appears road-legal, restricted, unknown, or not road-legal.
+_Avoid_: Legal yes/no, police status
+
 **Board Move**:
 A deliberate rider command that moves a disengaged Board from the app without starting a Ride Recording.
 _Avoid_: Move board, Remote Tilt, throttle
@@ -254,6 +270,10 @@ _Avoid_: Position update, presence ping, location share, group telemetry
 - A **Tune Preview** derives an idealized board-angle response from one **Tune Profile** and never predicts whether the **Board** can physically achieve it.
 - A **Pitch Input** adds pitch error over time without directly commanding speed or motor power.
 - A **Posi Sensor** setting belongs to a **Tune Profile** when the board firmware exposes that Refloat field.
+- **Legal Mode** applies to one **Board** and combines tune-level constraints with **Alert Rules** when activated.
+- **Legal Mode** has one **Legal Speed Limit** and one **Legal Warning Speed**.
+- A **Legal Warning Speed** must be lower than its **Legal Speed Limit**.
+- A **Legal Road Status** may warn the rider without removing **Legal Speed Limit** controls.
 - A **Board Move** requires a live **Board Session** but must not be treated as riding.
 - **Board Move**, light controls, tune writes, and quick tune controls are **Firmware-Dependent Commands**.
 - An **Alert Rule** evaluates against live **Telemetry Samples**.
