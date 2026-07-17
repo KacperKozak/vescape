@@ -58,6 +58,12 @@ weaker episode never downgrades a stored warning).
   persisting condition re-reports rather than staying silently gone until the next session.
 - **Re-detection** — updates the existing warning in place (preserving `firstDetectedAtMs`) rather
   than creating a duplicate.
+- **Dismissal (JS-only)** — the warnings sheet's per-row action is a _dismiss_, not a clear: the kind
+  is persisted in the board record's `dismissedWarnings` array (a `board_settings` row, like
+  `batteryConfig`). The warning stays in the native registry and renders grayed in the sheet, but
+  stops driving the board-bar warning indicator. Restoring removes the kind again. Native detection
+  and clear semantics are untouched; `clearBoardWarning`/`clearAllBoardWarnings` remain the actual
+  data reset.
 
 ## Kill switch
 

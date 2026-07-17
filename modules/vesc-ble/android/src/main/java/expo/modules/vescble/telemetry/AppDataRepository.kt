@@ -554,6 +554,7 @@ fun BoardEntity.toMap(settings: List<BoardSettingEntity>): Map<String, Any?> {
     "createdAt" to createdAt,
     "batteryConfig" to values["batteryConfig"],
     "lastBattery" to values["lastBattery"],
+    "dismissedWarnings" to values["dismissedWarnings"],
     "link" to link,
   )
 }
@@ -803,6 +804,7 @@ internal fun Map<String, Any?>.toBoardSettingEntities(boardId: String): Pair<Lis
 
   putOrDelete("description", (get("description") as? String)?.takeIf { it.isNotBlank() })
   putOrDelete("batteryConfig", normalizeBatteryConfig(get("batteryConfig")))
+  putOrDelete("dismissedWarnings", normalizeDismissedWarnings(get("dismissedWarnings")))
   val link = normalizedBoardLink()
   putOrDelete("transport", BoardTransport.encode(BoardTransport.fromBridge(link?.get("transport"))))
   putOrDelete("linkVersion", (link?.get("linkVersion") as? Number)?.toInt()?.takeIf { it == BOARD_LINK_VERSION })
@@ -830,8 +832,20 @@ private fun BoardSettingEntity.decodeBoardSetting(): Pair<String, Any?>? {
     "hasBms" -> (raw as? Boolean)?.let { key to it }
     "vescFirmwareVersion", "refloatVersion", "refloatBaseVersion" -> (raw as? String)?.let { key to it }
     "lastBattery" -> decodeLastBattery(raw)?.let { key to it }
+    "dismissedWarnings" -> normalizeDismissedWarnings(raw)?.let { key to it }
     else -> null
   }
+}
+
+/**
+ * Dismissed Board Warning kinds persisted as a board setting: a non-empty list of kind slugs, or
+ * null (row removed) when empty/invalid.
+ * @parity /modules/vesc-ble/ios/telemetry/AppDataRepository.swift `normalizeDismissedWarnings`
+ */
+private fun normalizeDismissedWarnings(raw: Any?): List<String>? {
+  val list = raw as? List<*> ?: return null
+  val kinds = list.filterIsInstance<String>().filter { it.isNotEmpty() }
+  return kinds.ifEmpty { null }
 }
 
 private fun decodeLastBattery(raw: Any?): Map<String, Any?>? {

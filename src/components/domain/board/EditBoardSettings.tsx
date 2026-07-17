@@ -1,6 +1,13 @@
+import type { RefObject } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/ui/base/Text'
-import { BatteryChargingIcon, LightningIcon, LinkIcon, TrashIcon } from 'phosphor-react-native'
+import {
+  BatteryChargingIcon,
+  LightningIcon,
+  LinkIcon,
+  TrashIcon,
+  WarningIcon,
+} from 'phosphor-react-native'
 import type { BoardLink } from 'vesc-ble'
 
 import { BoardSettingRow } from '@/components/domain/board/BoardSettingRow'
@@ -19,6 +26,11 @@ interface EditBoardSettingsProps {
   linkSaving?: boolean
   keepMissingBatteryConfig: boolean
   batterySummary: BatterySummary
+  /** Active/dismissed Board Warning counts; the row renders only when the board has any warnings. */
+  warningCounts: { active: number; dismissed: number }
+  /** Anchor for the warnings drawer, wrapped around the warnings row. */
+  warningsAnchorRef: RefObject<View | null>
+  onOpenWarnings: () => void
   onOpenBattery: () => void
   onLink: () => void
   onRelink: () => void
@@ -33,6 +45,9 @@ export function EditBoardSettings({
   linkSaving = false,
   keepMissingBatteryConfig,
   batterySummary,
+  warningCounts,
+  warningsAnchorRef,
+  onOpenWarnings,
   onOpenBattery,
   onLink,
   onRelink,
@@ -104,6 +119,21 @@ export function EditBoardSettings({
         />
       </SettingsCard>
 
+      {warningCounts.active + warningCounts.dismissed > 0 && (
+        <View ref={warningsAnchorRef} collapsable={false}>
+          <SettingsCard>
+            <BoardSettingRow
+              icon={WarningIcon}
+              iconColor={theme.status.caution.color}
+              label="Warnings"
+              value={formatWarningCounts(warningCounts)}
+              onPress={onOpenWarnings}
+              testID="edit-board-warnings-row"
+            />
+          </SettingsCard>
+        </View>
+      )}
+
       <Pressable
         style={({ pressed }) => [styles.removeSection, pressed && styles.removeSectionPressed]}
         android_ripple={interaction.ripple}
@@ -114,6 +144,13 @@ export function EditBoardSettings({
       </Pressable>
     </>
   )
+}
+
+function formatWarningCounts({ active, dismissed }: { active: number; dismissed: number }): string {
+  const parts: string[] = []
+  if (active > 0) parts.push(`${active} active`)
+  if (dismissed > 0) parts.push(`${dismissed} dismissed`)
+  return parts.join(' · ')
 }
 
 const styles = StyleSheet.create({

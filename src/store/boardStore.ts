@@ -33,6 +33,10 @@ interface BoardActions {
     batteryConfig?: BatteryConfig | null
   }) => Board
   updateBoard: (board: Board) => Promise<void>
+  /** Dismiss (acknowledge) or restore a Board Warning kind; persisted on the board record. */
+  setWarningDismissed: (boardId: string, kind: string, dismissed: boolean) => Promise<void>
+  /** Dismiss every given Board Warning kind at once (the sheet's "Dismiss all"). */
+  dismissAllWarnings: (boardId: string, kinds: string[]) => Promise<void>
   removeBoard: (id: string) => Promise<void>
   setActiveBoard: (id: string | null) => void
 }
@@ -92,6 +96,23 @@ export const useBoardStore = create<BoardState & BoardActions>((set, get) => ({
       boards: state.boards.map((b) => (b.id === board.id ? board : b)),
     }))
     await upsertBoard(board)
+  },
+
+  async setWarningDismissed(boardId, kind, dismissed) {
+    const board = get().boards.find((b) => b.id === boardId)
+    if (!board) return
+    const current = board.dismissedWarnings ?? []
+    if (dismissed === current.includes(kind)) return
+    const dismissedWarnings = dismissed ? [...current, kind] : current.filter((k) => k !== kind)
+    await get().updateBoard({ ...board, dismissedWarnings })
+  },
+
+  async dismissAllWarnings(boardId, kinds) {
+    const board = get().boards.find((b) => b.id === boardId)
+    if (!board) return
+    const dismissedWarnings = [...new Set([...(board.dismissedWarnings ?? []), ...kinds])]
+    if (dismissedWarnings.length === (board.dismissedWarnings ?? []).length) return
+    await get().updateBoard({ ...board, dismissedWarnings })
   },
 
   async removeBoard(id) {

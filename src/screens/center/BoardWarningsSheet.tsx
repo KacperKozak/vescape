@@ -1,10 +1,11 @@
 import { StyleSheet, View } from 'react-native'
 import { ShieldCheckIcon } from 'phosphor-react-native'
-import { clearAllBoardWarnings, clearBoardWarning, type BoardWarning } from 'vesc-ble'
+import type { BoardWarning } from 'vesc-ble'
 
 import { Button } from '@/components/ui/base/Button'
 import { Placeholder } from '@/components/ui/base/Placeholder'
 import { BoardWarningRow } from '@/components/domain/warnings/BoardWarningRow'
+import { useBoardStore } from '@/store/boardStore'
 import { theme } from '@/constants/theme'
 
 interface BoardWarningsSheetProps {
@@ -13,11 +14,17 @@ interface BoardWarningsSheetProps {
 }
 
 /**
- * Warnings sheet for the selected Board. Lists each Board Warning with a per-row clear, plus a
- * clear-all action — both call the native registry, and the mirror store updates from the resulting
- * `onBoardWarnings` emit, so this view never mutates local state itself.
+ * Warnings sheet for the selected Board. Active warnings list first, dismissed (acknowledged) ones
+ * grayed below — dismissing never deletes from the native registry, it only persists the kind on the
+ * board record, so the row stays visible here while the board warning indicator ignores it.
  */
 export function BoardWarningsSheet({ boardId, warnings }: BoardWarningsSheetProps) {
+  const dismissedKinds = useBoardStore(
+    (s) => s.boards.find((b) => b.id === boardId)?.dismissedWarnings ?? EMPTY_KINDS,
+  )
+  const setWarningDismissed = useBoardStore((s) => s.setWarningDismissed)
+  const dismissAllWarnings = useBoardStore((s) => s.dismissAllWarnings)
+
   if (warnings.length === 0) {
     return (
       <View style={styles.empty}>
@@ -31,23 +38,37 @@ export function BoardWarningsSheet({ boardId, warnings }: BoardWarningsSheetProp
     )
   }
 
+  const active = warnings.filter((w) => !dismissedKinds.includes(w.kind))
+  const dismissed = warnings.filter((w) => dismissedKinds.includes(w.kind))
+
   return (
     <View style={styles.list}>
-      {warnings.map((warning) => (
+      {[...active, ...dismissed].map((warning) => (
         <BoardWarningRow
           key={warning.kind}
           warning={warning}
-          onClear={(kind) => void clearBoardWarning(boardId, kind)}
+          dismissed={dismissedKinds.includes(warning.kind)}
+          onSetDismissed={(kind, value) => void setWarningDismissed(boardId, kind, value)}
         />
       ))}
-      <Button
-        label="Clear all"
-        variant="destructive"
-        onPress={() => void clearAllBoardWarnings(boardId)}
-      />
+      {active.length > 1 && (
+        <Button
+          label="Dismiss all"
+          variant="secondary"
+          onPress={() =>
+            void dismissAllWarnings(
+              boardId,
+              active.map((w) => w.kind),
+            )
+          }
+        />
+      )}
     </View>
   )
 }
+
+/** Stable empty array so the selector doesn't churn references for boards with nothing dismissed. */
+const EMPTY_KINDS: string[] = []
 
 const styles = StyleSheet.create({
   list: {

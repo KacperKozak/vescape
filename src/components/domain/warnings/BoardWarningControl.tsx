@@ -7,6 +7,7 @@ import { BoardWarningsSheet } from '@/screens/center/BoardWarningsSheet'
 import { severityStatus } from '@/constants/boardWarnings'
 import { worstSeverity } from '@/lib/boardWarnings'
 import { EMPTY_WARNINGS, useBoardWarningsStore } from '@/store/boardWarningsStore'
+import { useBoardStore } from '@/store/boardStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { theme } from '@/constants/theme'
 
@@ -24,8 +25,16 @@ export function BoardWarningControl({ boardId }: BoardWarningControlProps) {
   const anchorRef = useRef<View>(null)
   const [open, setOpen] = useState(false)
   const warnings = useBoardWarningsStore((s) => s.warningsByBoard[boardId] ?? EMPTY_WARNINGS)
+  const dismissedKinds = useBoardStore(
+    (s) => s.boards.find((b) => b.id === boardId)?.dismissedWarnings,
+  )
   const boardWarningsEnabled = useSettingsStore((s) => s.boardWarningsEnabled)
-  const worst = worstSeverity(warnings)
+  // Dismissed (acknowledged) warnings stay in the sheet but stop driving the indicator — a board
+  // whose every warning is dismissed shows no icon at all.
+  const activeWarnings = dismissedKinds?.length
+    ? warnings.filter((w) => !dismissedKinds.includes(w.kind))
+    : warnings
+  const worst = worstSeverity(activeWarnings)
 
   // Kill switch off hides the whole surface (defensive — native already stops emitting).
   if (!boardWarningsEnabled) return null

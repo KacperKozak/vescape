@@ -45,19 +45,64 @@ describe('warningTitle', () => {
 
 describe('parseWarningDetail', () => {
   test('returns [] for invalid JSON', () => {
-    expect(parseWarningDetail('not json')).toEqual([])
+    expect(parseWarningDetail('cell-spread', 'not json')).toEqual([])
   })
 
   test('returns [] for non-object payloads', () => {
-    expect(parseWarningDetail('42')).toEqual([])
-    expect(parseWarningDetail('[1,2]')).toEqual([])
+    expect(parseWarningDetail('cell-spread', '42')).toEqual([])
+    expect(parseWarningDetail('cell-spread', '[1,2]')).toEqual([])
   })
 
-  test('humanizes keys and formats values', () => {
-    expect(parseWarningDetail('{"peakSpreadV":0.27,"worstCellGroup":4,"balancing":true}')).toEqual([
+  test('humanizes keys and formats values for generic kinds', () => {
+    expect(
+      parseWarningDetail('cell-spread', '{"peakSpreadV":0.27,"worstCellGroup":4,"balancing":true}'),
+    ).toEqual([
       { label: 'Peak Spread V', value: '0.270' },
       { label: 'Worst Cell Group', value: '4' },
       { label: 'Balancing', value: 'yes' },
     ])
+  })
+
+  test('renders voltage pushback kinds as unit-labelled current vs safe limit', () => {
+    expect(
+      parseWarningDetail('hv-pushback-high', '{"param":"tiltback_hv","value":86,"bound":86.9}'),
+    ).toEqual([
+      { label: 'Current value', value: '86 V' },
+      { label: 'Safe maximum', value: '86.9 V' },
+    ])
+    expect(
+      parseWarningDetail('lv-pushback-low', '{"param":"tiltback_lv","value":2.8,"bound":3}'),
+    ).toEqual([
+      { label: 'Current value', value: '2.8 V' },
+      { label: 'Safe minimum', value: '3 V' },
+    ])
+  })
+
+  test('renders duty pushback as percent', () => {
+    expect(
+      parseWarningDetail('duty-pushback-high', '{"param":"tiltback_duty","value":1,"bound":0.85}'),
+    ).toEqual([
+      { label: 'Current value', value: '100%' },
+      { label: 'Safe maximum', value: '85%' },
+    ])
+  })
+
+  test('boolean config kinds render no numeric rows', () => {
+    expect(
+      parseWarningDetail(
+        'footpad-disabled',
+        '{"param":"fault_adc1/fault_adc2","value":1,"bound":0}',
+      ),
+    ).toEqual([])
+    expect(
+      parseWarningDetail(
+        'moving-fault-disabled',
+        '{"param":"fault_moving_fault_disabled","value":1,"bound":0}',
+      ),
+    ).toEqual([])
+  })
+
+  test('config kind with malformed payload renders no rows', () => {
+    expect(parseWarningDetail('hv-pushback-high', '{"param":"tiltback_hv"}')).toEqual([])
   })
 })

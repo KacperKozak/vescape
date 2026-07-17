@@ -1,31 +1,22 @@
 import { ScrollView, StyleSheet, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useCallback, useState } from 'react'
+import { useState } from 'react'
 import {
   ArrowLeftIcon,
-  CloudCheckIcon,
   CubeIcon,
-  DownloadSimpleIcon,
   GearSixIcon,
   GhostIcon,
-  PackageIcon,
-  PlugIcon,
   TrashIcon,
   UsersThreeIcon,
 } from 'phosphor-react-native'
 
 import { Banner } from '@/components/ui/base/Banner'
-import { Text } from '@/components/ui/base/Text'
 import { IconHero } from '@/components/ui/settings/IconHero'
 import { Button } from '@/components/ui/base/Button'
-import { DeviceRow } from '@/components/ui/base/DeviceRow'
 import { IconButton } from '@/components/ui/base/IconButton'
-import { InfoBadge } from '@/components/ui/base/InfoBadge'
 import { Placeholder } from '@/components/ui/base/Placeholder'
 import { ScreenTitle } from '@/components/ui/base/ScreenTitle'
-import { StepTimeline, type StepState, type TimelineStep } from '@/components/ui/base/StepTimeline'
 import { ShowcaseCard } from '@/components/ui/dev/ShowcaseCard'
-import { BoardWarningRow } from '@/components/domain/warnings/BoardWarningRow'
 import { ChipRow, ToggleRow } from '@/components/ui/dev/ShowcaseControls'
 import { theme } from '@/constants/theme'
 
@@ -232,149 +223,6 @@ function BannerShowcase() {
   )
 }
 
-function DeviceRowShowcase() {
-  const [rssi, setRssi] = useState('-65')
-
-  return (
-    <ShowcaseCard
-      name="DeviceRow"
-      controls={
-        <ChipRow label="rssi" options={['-45', '-65', '-80']} selected={rssi} onSelect={setRssi} />
-      }
-    >
-      <DeviceRow
-        id="AA:BB:CC:DD:EE:FF"
-        name="VESC Onewheel"
-        rssi={Number(rssi)}
-        onPress={() => {}}
-      />
-    </ShowcaseCard>
-  )
-}
-
-function InfoBadgeShowcase() {
-  return (
-    <ShowcaseCard name="InfoBadge">
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        <InfoBadge label="Motor temp" onPress={() => {}} />
-        <InfoBadge label="Overcurrent" danger onPress={() => {}} />
-      </View>
-    </ShowcaseCard>
-  )
-}
-
-const TIMELINE_ICONS = [PlugIcon, DownloadSimpleIcon, PackageIcon, CloudCheckIcon]
-const TIMELINE_LABELS = ['Connect', 'Download', 'Install', 'Verify']
-const TIMELINE_CAPTIONS = [
-  'Opening the connection',
-  'Fetching the payload',
-  'Writing files to disk',
-  'Checking the signature',
-]
-
-/** Build a 4-step list where everything before `reach` is done, the step at
- *  `reach` is active, and the rest pending. A negative `reach` fails the last
- *  done step instead, to show the error state. `content` demos the inline block
- *  slot under a done step's caption. */
-function buildDemoSteps(reach: number, failed: boolean, content: boolean): TimelineStep[] {
-  return TIMELINE_LABELS.map((label, i): TimelineStep => {
-    let state: StepState = i < reach ? 'done' : i === reach ? 'active' : 'pending'
-    if (failed && i === reach) state = 'failed'
-    else if (failed && i > reach) state = 'absent'
-    return {
-      key: label,
-      icon: TIMELINE_ICONS[i],
-      label,
-      caption: state === 'done' ? 'Done' : TIMELINE_CAPTIONS[i],
-      content:
-        content && state === 'done' && i === 0 ? (
-          <View style={styles.timelineContentDemo}>
-            <Text style={styles.timelineContentDemoText}>Inline step content</Text>
-          </View>
-        ) : undefined,
-      state,
-    }
-  })
-}
-
-function StepTimelineShowcase() {
-  const [reach, setReach] = useState('2')
-  const [failed, setFailed] = useState(false)
-  const [content, setContent] = useState(false)
-
-  return (
-    <ShowcaseCard
-      name="StepTimeline"
-      controls={
-        <>
-          <ChipRow
-            label="reach"
-            options={['0', '1', '2', '3', '4']}
-            selected={reach}
-            onSelect={setReach}
-          />
-          <ToggleRow label="failed" value={failed} onToggle={setFailed} />
-          <ToggleRow label="content" value={content} onToggle={setContent} />
-        </>
-      }
-    >
-      <StepTimeline steps={buildDemoSteps(Number(reach), failed, content)} />
-    </ShowcaseCard>
-  )
-}
-
-function BoardWarningRowShowcase() {
-  const [now] = useState(() => Date.now())
-  const [critical, setCritical] = useState(true)
-  const [clearedKinds, setClearedKinds] = useState<string[]>([])
-  const warnings = [
-    {
-      boardId: 'demo',
-      kind: 'cell-spread',
-      severity: critical ? ('critical' as const) : ('warn' as const),
-      firstDetectedAtMs: now - 3 * 60 * 60 * 1000,
-      lastDetectedAtMs: now - 90 * 1000,
-      payloadJson: '{"peakSpread":0.27,"worstGroup":4,"balancing":true}',
-    },
-    {
-      boardId: 'demo',
-      kind: 'duty-pushback-high',
-      severity: 'warn' as const,
-      firstDetectedAtMs: now - 20 * 1000,
-      lastDetectedAtMs: now - 20 * 1000,
-      payloadJson: '{"value":0.9,"safeMax":0.85}',
-    },
-  ].filter((w) => !clearedKinds.includes(w.kind))
-  return (
-    <ShowcaseCard
-      name="BoardWarningRow"
-      controls={
-        <>
-          <ToggleRow label="critical" value={critical} onToggle={setCritical} />
-          <ToggleRow
-            label="cleared"
-            value={clearedKinds.length > 0}
-            onToggle={(next) => setClearedKinds(next ? ['cell-spread', 'duty-pushback-high'] : [])}
-          />
-        </>
-      }
-    >
-      <View style={{ gap: 10 }}>
-        {warnings.length === 0 && (
-          <Text style={{ color: theme.palette.slate.textMuted }}>All warnings cleared</Text>
-        )}
-        {warnings.map((warning) => (
-          <BoardWarningRow
-            key={warning.kind}
-            warning={warning}
-            onClear={() => setClearedKinds((prev) => [...prev, warning.kind])}
-          />
-        ))}
-      </View>
-    </ShowcaseCard>
-  )
-}
-
 function ScreenTitleShowcase() {
   return (
     <ShowcaseCard name="ScreenTitle">
@@ -389,16 +237,12 @@ export default function BaseComponentsPage() {
       <ScrollView contentContainerStyle={styles.content}>
         <IconHero
           icon={CubeIcon}
-          description="Button, IconButton, Banner, DeviceRow, InfoBadge, StepTimeline, BoardWarningRow, Placeholder, ScreenTitle."
+          description="Button, IconButton, Banner, Placeholder, ScreenTitle."
         />
         <IconButtonShowcase />
         <ButtonShowcase />
         <PlaceholderShowcase />
         <BannerShowcase />
-        <DeviceRowShowcase />
-        <InfoBadgeShowcase />
-        <StepTimelineShowcase />
-        <BoardWarningRowShowcase />
         <ScreenTitleShowcase />
       </ScrollView>
     </SafeAreaView>
@@ -408,17 +252,4 @@ export default function BaseComponentsPage() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.palette.slate.bg },
   content: { padding: 12, gap: 12, paddingBottom: 40 },
-  timelineContentDemo: {
-    backgroundColor: theme.palette.slate.surface,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: theme.palette.slate.border,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-  },
-  timelineContentDemoText: {
-    color: theme.palette.slate.textSecondary,
-    fontSize: 12,
-    fontWeight: '600',
-  },
 })

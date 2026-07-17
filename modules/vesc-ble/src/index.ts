@@ -171,6 +171,14 @@ export interface Board {
   batteryConfig: BatteryConfig | null
   /** Last Battery SoC Estimate persisted natively; survives full app kill. `undefined` before first session. */
   lastBattery?: LastBattery | null
+  /**
+   * Board Warning kinds the rider dismissed (acknowledged). Dismissed warnings stay in the native
+   * registry and render grayed in the warnings sheet, but stop counting toward the board's warning
+   * indicator. Absent/empty means nothing dismissed.
+   * @parity /modules/vesc-ble/ios/telemetry/AppDataRepository.swift `normalizeDismissedWarnings`
+   * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/AppDataRepository.kt `normalizeDismissedWarnings`
+   */
+  dismissedWarnings?: string[]
   /** Probe-confirmed reachability. `null` means offline-only/unlinked. */
   link: BoardLink | null
 }
