@@ -1,5 +1,6 @@
 package expo.modules.vescble.config
 
+import expo.modules.vescble.warnings.ConfigSafetyValues
 import expo.modules.vescble.RefloatConfigErrorCode
 import expo.modules.vescble.RefloatConfigSnapshot
 
@@ -16,6 +17,7 @@ internal sealed class ConfigRWEffect {
     data class EmitReadComplete(
         val snapshot: RefloatConfigSnapshot,
         val resumePolling: Boolean,
+        val safety: ConfigSafetyValues?,
     ) : ConfigRWEffect()
 
     data class EmitReadFailure(
@@ -29,6 +31,7 @@ internal sealed class ConfigRWEffect {
     data class EmitWriteComplete(
         val snapshot: RefloatConfigSnapshot,
         val resumePolling: Boolean,
+        val safety: ConfigSafetyValues?,
     ) : ConfigRWEffect()
 
     data class EmitWriteFailure(

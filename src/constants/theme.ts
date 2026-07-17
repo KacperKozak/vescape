@@ -152,6 +152,12 @@ export const status = {
     bg: palette.green.bg,
     border: palette.green.border,
   },
+  caution: {
+    color: palette.yellow.color,
+    text: palette.yellow.text,
+    bg: palette.yellow.bg,
+    border: palette.yellow.border,
+  },
   warning: {
     color: palette.orange.color,
     text: palette.orange.text,

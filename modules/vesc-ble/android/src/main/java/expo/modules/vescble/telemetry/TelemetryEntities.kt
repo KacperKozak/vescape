@@ -372,6 +372,7 @@ data class AppSettings(
   val wearMirrorIntervalMs: Int = 500,
   val wearAutoLaunchOnConnect: Boolean = true,
   val companionPresenceEnabled: Boolean = false,
+  val boardWarningsEnabled: Boolean = true,
   val companionPresenceCooldownMinutes: Int = 60,
   val autoCloseEnabled: Boolean = false,
   val autoCloseDelayMinutes: Int = 15,
@@ -421,4 +422,31 @@ data class TuneHistoryEntryEntity(
   val fieldsJson: String,
   @ColumnInfo(name = "created_at")
   val createdAt: Long,
+)
+
+/**
+ * One durable Board Warning row, keyed one-per-problem-kind per Board (automotive fault-code model).
+ * Re-detection upserts the same row, preserving [firstDetectedAtMs] while refreshing severity,
+ * [lastDetectedAtMs], and [payloadJson]. Not a time series — a "current known warnings per Board".
+ *
+ * @parity /modules/vesc-ble/ios/telemetry/BoardWarningStore.swift
+ */
+@Entity(
+  tableName = "board_warnings",
+  primaryKeys = ["board_id", "kind"],
+  indices = [
+    Index(value = ["board_id"]),
+  ],
+)
+data class BoardWarningEntity(
+  @ColumnInfo(name = "board_id")
+  val boardId: String,
+  val kind: String,
+  val severity: String,
+  @ColumnInfo(name = "first_detected_at")
+  val firstDetectedAt: Long,
+  @ColumnInfo(name = "last_detected_at")
+  val lastDetectedAt: Long,
+  @ColumnInfo(name = "payload_json")
+  val payloadJson: String,
 )

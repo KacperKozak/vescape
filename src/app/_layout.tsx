@@ -12,6 +12,7 @@ import { initSentry } from '@/config/sentry'
 import { stackScreens } from '@/navigation/routes'
 import { useAlertsStore } from '@/store/alertsStore'
 import { startAppDataSync } from '@/store/appDataSync'
+import { startBoardWarningsSync } from '@/store/boardWarningsStore'
 import { useGroupRideStore } from '@/store/groupRideStore'
 import { useRiderStore } from '@/store/riderStore'
 import { useSettingsStore } from '@/store/settingsStore'
@@ -45,9 +46,11 @@ function RootLayout() {
     void useRiderStore.getState().load()
     useGroupRideStore.getState().startObserving()
     const stopAppDataSync = startAppDataSync()
+    const stopBoardWarningsSync = startBoardWarningsSync()
     return () => {
       useGroupRideStore.getState().stopObserving()
       stopAppDataSync()
+      stopBoardWarningsSync()
     }
   }, [])
 
@@ -96,6 +99,10 @@ function RootLayout() {
             options={{ title: 'Privacy Zones' }}
           />
           <Stack.Screen name={stackScreens.settingsConnection} options={{ title: 'Connection' }} />
+          <Stack.Screen
+            name={stackScreens.settingsDiagnostics}
+            options={{ title: 'Diagnostics' }}
+          />
           <Stack.Screen
             name={stackScreens.settingsLiveTelemetry}
             options={{ title: 'Live telemetry' }}

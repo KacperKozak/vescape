@@ -62,6 +62,37 @@ enum RefloatConfigDecoder {
     )
   }
 
+  /// Decode just the fields the config-safety rules need. Each is `nil` when the schema lacks it or
+  /// the raw config is too short — the caller skips the rules that depend on a missing value.
+  static func decodeSafetyValues(schema: RefloatConfigSchema, rawConfig: [UInt8]) -> ConfigSafetyValues {
+    let byId = Dictionary(uniqueKeysWithValues: schema.fields.map { ($0.id, $0) })
+    func fieldOrNull(_ id: String) -> RefloatConfigSchemaField? {
+      guard let field = byId[id], rawConfig.count >= field.offset + field.type.byteSize else { return nil }
+      return field
+    }
+    func number(_ id: String) -> Double? {
+      guard let field = fieldOrNull(id), let value = try? readValue(rawConfig, field) else { return nil }
+      // Treat a non-finite decode (NaN/Infinity from corrupt bytes) as missing, not as a real value:
+      // the safety rules skip a nil field, whereas a NaN would compare false against every bound and
+      // wrongly count as a clean evaluation that clears a valid warning.
+      if let d = value as? Double { return d.isFinite ? d : nil }
+      if let b = value as? Bool { return b ? 1.0 : 0.0 }
+      return nil
+    }
+    func boolean(_ id: String) -> Bool? {
+      guard let field = fieldOrNull(id), let value = try? readValue(rawConfig, field) else { return nil }
+      return value as? Bool
+    }
+    return ConfigSafetyValues(
+      faultAdc1: number("fault_adc1"),
+      faultAdc2: number("fault_adc2"),
+      tiltbackLv: number("tiltback_lv"),
+      tiltbackHv: number("tiltback_hv"),
+      tiltbackDuty: number("tiltback_duty"),
+      movingFaultDisabled: boolean("fault_moving_fault_disabled")
+    )
+  }
+
   private static func readValue(_ bytes: [UInt8], _ field: RefloatConfigSchemaField) throws -> Any {
     switch field.type {
     case .float32:

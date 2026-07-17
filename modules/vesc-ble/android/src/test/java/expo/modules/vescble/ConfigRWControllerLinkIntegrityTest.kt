@@ -1,5 +1,6 @@
 package expo.modules.vescble
 
+import expo.modules.vescble.warnings.ConfigSafetyValues
 import expo.modules.vescble.runtime.LinkIntegrity
 import expo.modules.vescble.runtime.TestScheduler
 import kotlinx.coroutines.CoroutineScope
@@ -49,6 +50,7 @@ class ConfigRWControllerLinkIntegrityTest {
             override fun captureDiagnostic(name: String, properties: Map<String, Any?>) = Unit
             override fun diagnosticProperties(config: SessionConfig?, category: String) = emptyMap<String, Any?>()
             override fun dumpDebugBytes(xmlBytes: ByteArray, configBytes: ByteArray) = Unit
+            override fun evaluateConfigSafety(values: ConfigSafetyValues) = Unit
         },
     )
 

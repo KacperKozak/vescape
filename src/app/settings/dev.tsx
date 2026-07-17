@@ -4,7 +4,6 @@ import { router } from 'expo-router'
 import {
   RecordIcon,
   CompassIcon,
-  ListIcon,
   BracketsCurlyIcon,
   SwatchesIcon,
   ToolboxIcon,
@@ -42,12 +41,6 @@ const devPages = [
     hint: 'Live map heading, GPS, and fallback evidence',
     route: routes.settingsNavigationDiagnostic,
     icon: CompassIcon,
-  },
-  {
-    label: 'Event log',
-    hint: 'Browse locally persisted diagnostic events',
-    route: routes.settingsDiagnosticEvents,
-    icon: ListIcon,
   },
   {
     label: 'Other',

@@ -171,6 +171,14 @@ export interface Board {
   batteryConfig: BatteryConfig | null
   /** Last Battery SoC Estimate persisted natively; survives full app kill. `undefined` before first session. */
   lastBattery?: LastBattery | null
+  /**
+   * Board Warning kinds the rider dismissed (acknowledged). Dismissed warnings stay in the native
+   * registry and render grayed in the warnings sheet, but stop counting toward the board's warning
+   * indicator. Absent/empty means nothing dismissed.
+   * @parity /modules/vesc-ble/ios/telemetry/AppDataRepository.swift `normalizeDismissedWarnings`
+   * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/AppDataRepository.kt `normalizeDismissedWarnings`
+   */
+  dismissedWarnings?: string[]
   /** Probe-confirmed reachability. `null` means offline-only/unlinked. */
   link: BoardLink | null
 }
@@ -788,6 +796,12 @@ export interface AppSettings {
   /** Android-only: use CompanionDeviceManager presence to connect selected board when nearby. */
   companionPresenceEnabled: boolean
   /**
+   * Board Warnings master switch (kill switch). Off ⇒ native runs no warning detector evaluation
+   * and no registry writes; JS hides the warning icon/sheet. Stored warnings are left untouched
+   * and reappear on re-enable. Takes effect live, no reconnect needed.
+   */
+  boardWarningsEnabled: boolean
+  /**
    * Android-only: minutes to pause companion auto start after the user exits the app
    * manually, so the board reappearing doesn't immediately relaunch it. 0 = off.
    */
@@ -993,6 +1007,57 @@ export interface AppDataChangedEvent {
   scope: 'boards' | 'settings'
 }
 
+/**
+ * Two-level Board Warning severity, fixed at detection time.
+ * @parity /modules/vesc-ble/ios/telemetry/BoardWarningKind.swift `BoardWarningSeverity`
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/warnings/BoardWarningRegistry.kt `BoardWarningSeverity`
+ */
+export type BoardWarningSeverity = 'warn' | 'critical'
+
+/**
+ * Every Board Warning kind slug the native detectors currently emit. Mirrors the native `BoardWarningKind`
+ * catalog on both platforms; a rider-facing title is required per kind (see `WARNING_TITLES`). A `BoardWarning`
+ * from a newer native build may carry a kind outside this union, so consumers still fall back to the raw slug.
+ * @parity /modules/vesc-ble/ios/telemetry/BoardWarningKind.swift `BoardWarningKind`
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/warnings/BoardWarningKind.kt `BoardWarningKind`
+ */
+export type BoardWarningKind =
+  | 'cell-spread'
+  | 'battery-config-mismatch'
+  | 'footpad-disabled'
+  | 'lv-pushback-low'
+  | 'hv-pushback-high'
+  | 'duty-pushback-high'
+  | 'moving-fault-disabled'
+
+/**
+ * One durable Board Warning — an app-detected abnormal Board condition, keyed one-per-problem-kind
+ * per Board (automotive fault-code model). Detected natively; JS only renders. `payloadJson` carries
+ * kind-specific detail (e.g. peak cell spread) as a JSON string the rendering side decodes per kind.
+ * @parity /modules/vesc-ble/ios/telemetry/BoardWarningStore.swift `BoardWarning`
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/warnings/BoardWarningRegistry.kt `BoardWarning`
+ */
+export interface BoardWarning {
+  boardId: string
+  kind: string
+  severity: BoardWarningSeverity
+  firstDetectedAtMs: number
+  lastDetectedAtMs: number
+  payloadJson: string
+}
+
+/**
+ * Full current warning list for one Board, emitted on every registry change and on subscribe (late
+ * subscribers are immediately consistent). The JS mirror store replaces that board's slice on each
+ * emit — JS never detects, only displays.
+ * @parity /modules/vesc-ble/ios/VescBleModule.swift `sendBoardWarnings`
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt `onBoardWarnings`
+ */
+export interface BoardWarningsEvent {
+  boardId: string
+  warnings: BoardWarning[]
+}
+
 export type CriticalRideNotificationPermissionStatus =
   | 'not-determined'
   | 'denied'
@@ -1035,6 +1100,8 @@ type VescBleEvents = {
   onGroupRideError: (event: GroupRideErrorEvent) => void
   /** Persisted board/app data changed natively — reload the matching store. */
   onAppDataChanged: (event: AppDataChangedEvent) => void
+  /** Full current Board Warning list for a board, on every registry change and on subscribe. */
+  onBoardWarnings: (event: BoardWarningsEvent) => void
 }
 
 interface NativeEventEmitter<TEvents extends Record<string, (...args: never[]) => void>> {
@@ -1107,6 +1174,16 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
   getTelemetrySummary(): Promise<TelemetrySummary>
   getDiagnosticEvents(options: DiagnosticEventOptions): Promise<LocalDiagnosticEvent[]>
   clearDiagnosticEvents(): Promise<void>
+  getBoardWarnings(): Promise<BoardWarning[]>
+  clearBoardWarning(boardId: string, kind: string): Promise<void>
+  clearAllBoardWarnings(boardId: string): Promise<void>
+  devInjectBoardWarning(
+    boardId: string,
+    kind: string,
+    severity: BoardWarningSeverity,
+    payloadJson: string,
+  ): Promise<void>
+  devReportCleanBoardWarning(boardId: string, kind: string): Promise<void>
   getDatabaseSizeBytes(): Promise<number>
   backupDatabase(): Promise<DatabaseBackupResult>
   restoreDatabase(uri: string): Promise<void>
@@ -1523,6 +1600,40 @@ export async function clearDiagnosticEvents(): Promise<void> {
   return native.clearDiagnosticEvents()
 }
 
+// ---------------------------------------------------------------------------
+// Board Warnings
+// ---------------------------------------------------------------------------
+
+/** Pull the full current Board Warning list across all boards — used for the foreground catch-up. */
+export async function getBoardWarnings(): Promise<BoardWarning[]> {
+  return native.getBoardWarnings()
+}
+
+/** Manually clear a single Board Warning. A still-true condition simply re-fires on next evaluation. */
+export async function clearBoardWarning(boardId: string, kind: string): Promise<void> {
+  return native.clearBoardWarning(boardId, kind)
+}
+
+/** Manually clear every Board Warning for a board. Still-true conditions re-fire on next evaluation. */
+export async function clearAllBoardWarnings(boardId: string): Promise<void> {
+  return native.clearAllBoardWarnings(boardId)
+}
+
+/** Dev-only: inject a fake Board Warning to exercise the fire → persist → emit pipe without a detector. */
+export async function devInjectBoardWarning(
+  boardId: string,
+  kind: string,
+  severity: BoardWarningSeverity,
+  payloadJson: string,
+): Promise<void> {
+  return native.devInjectBoardWarning(boardId, kind, severity, payloadJson)
+}
+
+/** Dev-only: report a clean evaluation for a kind (evaluated with data, condition gone), auto-clearing it. */
+export async function devReportCleanBoardWarning(boardId: string, kind: string): Promise<void> {
+  return native.devReportCleanBoardWarning(boardId, kind)
+}
+
 export async function getDatabaseSizeBytes(): Promise<number> {
   return native.getDatabaseSizeBytes()
 }
@@ -1798,6 +1909,12 @@ export function addAppDataChangedListener(
   cb: (event: AppDataChangedEvent) => void,
 ): EventSubscription {
   return emitter.addListener('onAppDataChanged', cb)
+}
+
+export function addBoardWarningsListener(
+  cb: (event: BoardWarningsEvent) => void,
+): EventSubscription {
+  return emitter.addListener('onBoardWarnings', cb)
 }
 
 export function addLiveStateListener(cb: (event: LiveStateEvent) => void): EventSubscription {

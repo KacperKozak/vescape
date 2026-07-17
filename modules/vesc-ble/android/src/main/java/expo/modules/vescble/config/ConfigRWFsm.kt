@@ -1,6 +1,7 @@
 package expo.modules.vescble.config
 
 import expo.modules.vescble.BoardTransport
+import expo.modules.vescble.warnings.ConfigSafetyValues
 import expo.modules.vescble.RefloatConfigBytes
 import expo.modules.vescble.RefloatConfigDecodeException
 import expo.modules.vescble.RefloatConfigDecoder
@@ -386,6 +387,17 @@ internal object ConfigRWFsm {
         }
     }
 
+    /**
+     * Decode the config-safety fields for the Board Warning config detectors. Best-effort: any failure
+     * yields null so a decode hiccup never breaks the read/write completion the rider actually asked for.
+     */
+    private fun decodeSafety(schema: RefloatConfigSchema, rawConfig: ByteArray): ConfigSafetyValues? =
+        try {
+            RefloatConfigDecoder.decodeSafetyValues(schema, rawConfig)
+        } catch (e: Exception) {
+            null
+        }
+
     private fun decodeAndCompleteRead(
         ctx: ReadContext,
         xmlBytes: ByteArray,
@@ -404,7 +416,7 @@ internal object ConfigRWFsm {
         )
         ConfigRWState.Idle to listOf(
             ConfigRWEffect.CancelTimeout,
-            ConfigRWEffect.EmitReadComplete(snapshot, ctx.wasPolling),
+            ConfigRWEffect.EmitReadComplete(snapshot, ctx.wasPolling, decodeSafety(schema, rawConfig)),
         )
     } catch (e: RefloatConfigSchemaException) {
         ConfigRWState.Idle to listOf(
@@ -523,7 +535,7 @@ internal object ConfigRWFsm {
             )
             ConfigRWState.Idle to listOf(
                 ConfigRWEffect.CancelTimeout,
-                ConfigRWEffect.EmitWriteComplete(snapshot, state.ctx.wasPolling),
+                ConfigRWEffect.EmitWriteComplete(snapshot, state.ctx.wasPolling, decodeSafety(state.schema, rawConfigFromBoard)),
             )
         } catch (e: RefloatConfigDecodeException) {
             writeFailure(
