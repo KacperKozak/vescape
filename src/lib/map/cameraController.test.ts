@@ -194,6 +194,22 @@ describe('map camera controller', () => {
     })
   })
 
+  test('legal limits view uses the supplied flat overview camera', () => {
+    const camera = {
+      centerCoordinate: [13, 53] as [number, number],
+      zoomLevel: 3.05,
+      heading: 0,
+      pitch: 0,
+    }
+    const result = reduceMapCameraIntent(initialMapCameraControllerState, {
+      type: 'EnterLegalLimitsView',
+      camera,
+    })
+
+    expect(result.state.mode).toEqual({ kind: 'manualBrowse' })
+    expect(result.effect?.camera).toBe(camera)
+  })
+
   test('map point focus recomputes pitch from profile and zoom', () => {
     const result = reduceMapCameraIntent(initialMapCameraControllerState, {
       type: 'FocusCoordinate',

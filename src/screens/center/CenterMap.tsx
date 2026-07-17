@@ -37,6 +37,7 @@ import { isMapPointKindVisible } from '@/lib/mapPointVisibility'
 import type { HistoryMetricKey } from '@/lib/history/metricColorScale'
 import { getNavigationFallbackReason } from '@/lib/map/navigationDiagnostics'
 import { getGpsPuckBearing } from '@/lib/map/gpsPuckHeading'
+import type { LegalLimitCountry } from '@/lib/legal/legalLimits'
 import type { HistoryGpsSample, HistoryMarker, TelemetrySample } from '@/store/historyStore'
 import { useGroupRideStore } from '@/store/groupRideStore'
 import { useNavigationDiagnosticsStore } from '@/store/navigationDiagnosticsStore'
@@ -55,6 +56,7 @@ import { shouldPreserveLiveFollowGesture } from './cameraGestureState'
 import { phoneHeadingAnimationDuration, type PhoneHeadingStatus } from './phoneHeading'
 import { PhoneHeadingMapLayer } from './PhoneHeadingMapLayer'
 import { CenterMapLayers, rosterRiderColor } from './CenterMapLayers'
+import { LegalLimitCountrySheet } from './LegalLimitCountrySheet'
 import {
   DESTINATION_POINT_COLOR,
   DESTINATION_POINT_TEXT_COLOR,
@@ -97,6 +99,7 @@ export interface CenterMapHandle {
   zoomBy: (delta: number) => void
   focusCoordinate: (coordinate: [number, number]) => void
   focusWeather: () => void
+  focusLegalLimits: () => void
   getViewfinderCoordinate: () => Promise<{ latitude: number; longitude: number }>
 }
 
@@ -152,6 +155,7 @@ interface CenterMapProps {
   onRemoveMapPoint: (id: string) => void
   onClearDirectionPoint: () => void
   weatherActive: boolean
+  legalLimitsActive: boolean
   historyPreview:
     | ({
         key: string
@@ -192,6 +196,7 @@ export const CenterMap = memo(
       onToggleMapPointSelection,
       onRemoveMapPoint,
       weatherActive,
+      legalLimitsActive,
       onClearDirectionPoint,
       historyPreview,
     },
@@ -208,6 +213,7 @@ export const CenterMap = memo(
     const [cameraReady, setCameraReady] = useState(false)
     const [selectedHistoryMarker, setSelectedHistoryMarker] =
       useState<SelectedHistoryMarker | null>(null)
+    const [selectedLegalCountry, setSelectedLegalCountry] = useState<LegalLimitCountry | null>(null)
     const [cameraHeading, setCameraHeading] = useState(0)
     const [cameraZoom, setCameraZoom] = useState<number>(MAP_DEFAULTS.fallbackZoom)
     const [initialApproximateFix, setInitialApproximateFix] = useState<LocationEvent | null>(null)
@@ -981,6 +987,7 @@ export const CenterMap = memo(
             isOneDark={isOneDark}
             showBuildings3d={showBuildings3d}
             weatherActive={weatherActive}
+            legalLimitsActive={legalLimitsActive}
             liveTrailShape={liveTrailShape}
             rideRouteShape={rideRouteShape}
             accuracyFix={accuracyFix}
@@ -1006,6 +1013,7 @@ export const CenterMap = memo(
             onSuppressNextMapPress={handleSuppressNextMapPress}
             onSelectMarker={setSelectedHistoryMarker}
             onOpenMedia={onOpenMedia}
+            onSelectLegalCountry={setSelectedLegalCountry}
           />
         </Mapbox.MapView>
         <InfoModal
@@ -1018,6 +1026,10 @@ export const CenterMap = memo(
           message={selectedHistoryMarker ? buildHistoryMarkerMessage(selectedHistoryMarker) : ''}
           dismissLabel="Close"
           onDismiss={() => setSelectedHistoryMarker(null)}
+        />
+        <LegalLimitCountrySheet
+          country={selectedLegalCountry}
+          onClose={() => setSelectedLegalCountry(null)}
         />
         {weatherActive ? (
           <Text style={styles.radarAttribution} pointerEvents="none">

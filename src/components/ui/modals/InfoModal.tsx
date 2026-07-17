@@ -11,7 +11,7 @@ interface InfoModalProps {
   visible: boolean
   title: string
   message: string
-  variant?: 'info' | 'warning'
+  variant?: 'info' | 'success' | 'warning' | 'danger'
   dismissLabel?: string
   onDismiss: () => void
 }
@@ -26,6 +26,16 @@ const WARNING_ACCENT = {
   color: theme.palette.amber.text,
 }
 
+const SUCCESS_ACCENT = {
+  Icon: InfoIcon,
+  color: theme.palette.green.color,
+}
+
+const DANGER_ACCENT = {
+  Icon: WarningCircleIcon,
+  color: theme.palette.red.color,
+}
+
 export function InfoModal({
   visible,
   title,
@@ -34,7 +44,14 @@ export function InfoModal({
   dismissLabel = 'Got it!',
   onDismiss,
 }: InfoModalProps) {
-  const accent = variant === 'warning' ? WARNING_ACCENT : INFO_ACCENT
+  const accent =
+    variant === 'danger'
+      ? DANGER_ACCENT
+      : variant === 'warning'
+        ? WARNING_ACCENT
+        : variant === 'success'
+          ? SUCCESS_ACCENT
+          : INFO_ACCENT
   const IconComp = accent.Icon
   const dismissLabelResolved = dismissLabel ?? 'Got it'
   const opacity = useMemo(() => new Animated.Value(0), [])

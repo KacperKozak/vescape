@@ -1,9 +1,9 @@
 import type { AlertRule, LocationEvent } from 'vesc-ble'
+import { getLegalLimitCountryByCode, type LegalLimitCountry } from '@/lib/legal/legalLimits'
+import type { LegalRoadStatus } from '@/lib/legal/types'
 
 export const LEGAL_MODE_ALERT_RULE_ID = 'legal-mode-speed-alert'
 export const LEGAL_MODE_ALERT_SOUND_TYPE = 'preset:tick'
-
-export type LegalRoadStatus = 'likelyLegal' | 'restricted' | 'notRoadLegal' | 'unknown'
 
 export interface LegalJurisdictionResult {
   countryCode: string
@@ -24,29 +24,9 @@ export interface LegalModeSettings {
   jurisdiction: LegalJurisdictionResult | null
 }
 
-export const POLAND_LEGAL_MODE_DEFAULTS: LegalJurisdictionResult = {
-  countryCode: 'PL',
-  countryName: 'Poland',
-  legalSpeedKmh: 20,
-  warningSpeedKmh: 15,
-  legalRoadStatus: 'likelyLegal',
-  warningText: null,
-  sourceUrl:
-    'https://www.gov.pl/web/infrastruktura/nowe-przepisy-dotyczace-hulajnog-elektrycznych-i-urzadzen-transportu-osobistego',
-  checkedAt: '2026-07-17',
-}
-
-const GERMANY_LEGAL_MODE_DEFAULTS: LegalJurisdictionResult = {
-  countryCode: 'DE',
-  countryName: 'Germany',
-  legalSpeedKmh: 25,
-  warningSpeedKmh: 20,
-  legalRoadStatus: 'notRoadLegal',
-  warningText:
-    'Germany: this board category appears not road-legal on public roads. eKFV applies to approved small electric vehicles with handlebars or holding bars, operating permits, insurance plates, and required equipment.',
-  sourceUrl: 'https://www.gesetze-im-internet.de/ekfv/',
-  checkedAt: '2026-07-17',
-}
+export const POLAND_LEGAL_MODE_DEFAULTS = legalJurisdictionResultFromCountry(
+  getLegalLimitCountryByCode('PL')!,
+)
 
 export const DEFAULT_LEGAL_MODE_SETTINGS: LegalModeSettings = {
   enabled: false,
@@ -77,13 +57,26 @@ export function resolveJurisdictionFromLocation(
   location: LocationEvent | null,
 ): LegalJurisdictionResult | null {
   if (!location) return null
+  if (insideBox(location, { minLat: 45.8, maxLat: 47.9, minLon: 5.9, maxLon: 10.6 })) {
+    return legalJurisdictionResultFromCountryCode('CH')
+  }
+  if (insideBox(location, { minLat: 46.3, maxLat: 49.2, minLon: 9.4, maxLon: 17.2 })) {
+    return legalJurisdictionResultFromCountryCode('AT')
+  }
   if (insideBox(location, { minLat: 49.0, maxLat: 55.1, minLon: 14.0, maxLon: 24.2 })) {
-    return POLAND_LEGAL_MODE_DEFAULTS
+    return legalJurisdictionResultFromCountryCode('PL')
   }
   if (insideBox(location, { minLat: 47.2, maxLat: 55.2, minLon: 5.8, maxLon: 15.1 })) {
-    return GERMANY_LEGAL_MODE_DEFAULTS
+    return legalJurisdictionResultFromCountryCode('DE')
   }
   return null
+}
+
+export function legalJurisdictionResultFromCountryCode(
+  countryCode: string,
+): LegalJurisdictionResult | null {
+  const country = getLegalLimitCountryByCode(countryCode)
+  return country ? legalJurisdictionResultFromCountry(country) : null
 }
 
 export function applyJurisdictionDefaults(
@@ -166,6 +159,19 @@ function normalizeJurisdiction(raw: unknown): LegalJurisdictionResult | null {
     warningText: typeof value.warningText === 'string' ? value.warningText : null,
     sourceUrl: value.sourceUrl,
     checkedAt: value.checkedAt,
+  }
+}
+
+function legalJurisdictionResultFromCountry(country: LegalLimitCountry): LegalJurisdictionResult {
+  return {
+    countryCode: country.code,
+    countryName: country.name,
+    legalSpeedKmh: country.legalSpeedKmh,
+    warningSpeedKmh: country.warningSpeedKmh,
+    legalRoadStatus: country.status,
+    warningText: country.warningText,
+    sourceUrl: country.sourceUrl,
+    checkedAt: country.checkedAt,
   }
 }
 

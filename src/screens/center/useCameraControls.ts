@@ -5,6 +5,7 @@ import { Dimensions } from 'react-native'
 import { MAP_DEFAULTS } from '@/constants/mapStyles'
 import type { MapNavigationMode } from '@/constants/mapStyles'
 import { distanceMeters, zoomLevelForDelta } from '@/helpers/mapGeometry'
+import { LEGAL_LIMIT_MAP_CAMERA } from '@/lib/legal/legalLimits'
 import {
   initialMapCameraControllerState,
   mapCameraModesEqual,
@@ -694,6 +695,17 @@ export function useCameraControls({
           currentCamera: currentCameraRef.current,
           fallbackCenterCoordinate: gpsCamera.centerCoordinate,
           perspectiveEnabled,
+        })
+        cameraRef.current?.setCamera({
+          ...effect?.camera,
+          animationDuration: MAP_DEFAULTS.animationDuration,
+          animationMode: 'easeTo',
+        })
+      },
+      focusLegalLimits() {
+        const effect = dispatchCameraIntent({
+          type: 'EnterLegalLimitsView',
+          camera: LEGAL_LIMIT_MAP_CAMERA,
         })
         cameraRef.current?.setCamera({
           ...effect?.camera,

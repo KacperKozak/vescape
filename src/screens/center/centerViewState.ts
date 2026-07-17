@@ -1,1 +1,1 @@
-export type CenterViewState = 'telemetry' | 'map' | 'weather' | 'history'
+export type CenterViewState = 'telemetry' | 'map' | 'weather' | 'legalLimits' | 'history'

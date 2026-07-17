@@ -103,6 +103,7 @@ export default function MapComponentsShowcase() {
           isOneDark={isOneDark}
           showBuildings3d={showBuildings3d}
           weatherActive={weatherActive}
+          legalLimitsActive={false}
           liveTrailShape={FIXTURE_LIVE_TRAIL_SHAPE}
           rideRouteShape={null}
           accuracyFix={FIXTURE_ACCURACY_FIX}
@@ -130,6 +131,7 @@ export default function MapComponentsShowcase() {
           onSuppressNextMapPress={() => {}}
           onSelectMarker={() => {}}
           onOpenMedia={() => {}}
+          onSelectLegalCountry={() => {}}
         />
         {/* Rendered alongside the live layer (not behind historyActive) so the ride route,
             markers and media pins are always visible together with everything above. */}

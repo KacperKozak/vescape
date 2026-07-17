@@ -65,6 +65,20 @@ describe('Legal Mode derivation', () => {
     })
   })
 
+  test('marks Austria and Switzerland as not road-legal for board-style vehicles', () => {
+    const austria = resolveJurisdictionFromLocation(location(48.2082, 16.3738))
+    const switzerland = resolveJurisdictionFromLocation(location(47.3769, 8.5417))
+
+    expect(austria).toMatchObject({
+      countryCode: 'AT',
+      legalRoadStatus: 'notRoadLegal',
+    })
+    expect(switzerland).toMatchObject({
+      countryCode: 'CH',
+      legalRoadStatus: 'notRoadLegal',
+    })
+  })
+
   test('builds stable generated alert ownership and range thresholds', () => {
     const rule = legalModeAlertRule({ ...DEFAULT_LEGAL_MODE_SETTINGS, enabled: true }, 123)
 

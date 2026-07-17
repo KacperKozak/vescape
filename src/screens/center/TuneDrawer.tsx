@@ -13,6 +13,7 @@ import {
   FootprintsIcon,
   GaugeIcon,
   LightbulbIcon,
+  MapTrifoldIcon,
   SirenIcon,
   WarningCircleIcon,
   type Icon,
@@ -50,6 +51,7 @@ import { useTuneProfileStore } from '@/store/tuneProfileStore'
 
 interface TuneDrawerProps {
   onNavigate: () => void
+  onOpenLegalLimits: () => void
 }
 
 const PROFILE_OPTION_WIDTH = 46
@@ -57,7 +59,7 @@ const PROFILE_ACTIVE_WIDTH = 126
 const PROFILE_ANIMATION = { duration: 180 } as const
 const AnimatedText = Animated.createAnimatedComponent(Text)
 
-export function TuneDrawer({ onNavigate }: TuneDrawerProps) {
+export function TuneDrawer({ onNavigate, onOpenLegalLimits }: TuneDrawerProps) {
   const [tuneSelectOpen, setTuneSelectOpen] = useState(false)
   const [legalWarningOpen, setLegalWarningOpen] = useState(false)
   const activeBoardId = useBoardStore((state) => state.activeBoardId)
@@ -346,6 +348,22 @@ export function TuneDrawer({ onNavigate }: TuneDrawerProps) {
                   />
                 </View>
               </View>
+              <View style={styles.legalSettingsDivider} />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Legal limits map"
+                style={({ pressed }) => [
+                  styles.legalMapButton,
+                  pressed && styles.legalMapButtonPressed,
+                ]}
+                onPress={onOpenLegalLimits}
+              >
+                <MapTrifoldIcon size={30} color={theme.palette.sky.color} weight="duotone" />
+                <View style={styles.legalMapButtonText}>
+                  <Text style={styles.legalMapButtonLabel}>Legal limits map</Text>
+                  <Text style={styles.legalMapButtonHint}>Country colors and speed defaults</Text>
+                </View>
+              </Pressable>
             </View>
           </View>
         ) : null}
@@ -496,6 +514,33 @@ const styles = StyleSheet.create({
     color: theme.palette.slate.textPrimary,
     fontSize: 14,
     fontWeight: '800',
+  },
+  legalMapButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    minHeight: 44,
+    paddingVertical: 2,
+    paddingHorizontal: 0,
+    borderRadius: 12,
+  },
+  legalMapButtonPressed: {
+    backgroundColor: theme.alpha(theme.palette.slate.light, 0.12),
+  },
+  legalMapButtonText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  legalMapButtonLabel: {
+    color: theme.palette.slate.textPrimary,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  legalMapButtonHint: {
+    color: theme.palette.slate.textMuted,
+    fontSize: 11,
+    fontWeight: '600',
   },
   legalInputRow: {
     flexDirection: 'row',

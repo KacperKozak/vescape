@@ -2,6 +2,8 @@ import * as Haptics from 'expo-haptics'
 import {
   ArrowLeftIcon,
   ArrowsClockwiseIcon,
+  CaretDownIcon,
+  CaretUpIcon,
   ClockCounterClockwiseIcon,
   MagnifyingGlassIcon,
   MapPinIcon,
@@ -12,7 +14,15 @@ import {
   XIcon,
 } from 'phosphor-react-native'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
-import { ActivityIndicator, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native'
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native'
 import { Text } from '@/components/ui/base/Text'
 import Animated, {
   cancelAnimation,
@@ -58,6 +68,7 @@ import { WeatherHourlyStrip } from '@/screens/center/WeatherHourlyStrip'
 import { WeatherPill } from '@/screens/center/WeatherPill'
 import { HistoryStatsBar } from '@/screens/center/HistoryStatsBar'
 import { HistoryTelemetryPanel } from '@/screens/center/HistoryTelemetryPanel'
+import { LegalLimitCountrySheet } from '@/screens/center/LegalLimitCountrySheet'
 import { LiveHud } from '@/screens/center/LiveHud'
 import { MapRevealGesture } from '@/screens/center/MapRevealGesture'
 import { MapVignette } from '@/screens/center/MapVignette'
@@ -68,6 +79,14 @@ import type { HistorySession, TelemetryMinuteBucket, TelemetrySample } from '@/s
 import type { MediaAssetInput, MediaHistoryAsset } from '@/lib/history/mediaHistory'
 import { useWeatherStore } from '@/store/weatherStore'
 import { normalizeLegalModeSettings } from '@/lib/legalMode'
+import {
+  LEGAL_LIMIT_COUNTRIES,
+  LEGAL_LIMIT_DATA_CHECKED_AT,
+  LEGAL_ROAD_STATUS_COLORS,
+  LEGAL_ROAD_STATUS_LEGEND,
+  LEGAL_ROAD_STATUS_LABELS,
+  type LegalLimitCountry,
+} from '@/lib/legal/legalLimits'
 import { useSettingsStore } from '@/store/settingsStore'
 
 interface CenterBoardOverlayProps {
@@ -93,6 +112,8 @@ interface CenterMapOverlayProps {
   exitMapFocus: () => void
   enterWeather: () => void
   exitWeather: () => void
+  enterLegalLimits: () => void
+  exitLegalLimits: () => void
   refreshWeather: () => void
   weatherLocation: { latitude: number; longitude: number } | null
   replaceDirectionPoint: (latitude: number, longitude: number) => Promise<unknown>
@@ -570,6 +591,8 @@ export function CenterOverlays({
   const [removeConfirmVisible, setRemoveConfirmVisible] = useState(false)
   const [revealGestureActive, setRevealGestureActive] = useState(false)
   const [tuneDrawerOpen, setTuneDrawerOpen] = useState(false)
+  const [legalListOpen, setLegalListOpen] = useState(true)
+  const [selectedLegalCountry, setSelectedLegalCountry] = useState<LegalLimitCountry | null>(null)
   const tuneButtonRef = useRef<View>(null)
   const revealProgress = useSharedValue(0)
   const dragOpacity = useSharedValue(0)
@@ -578,6 +601,7 @@ export function CenterOverlays({
   const legalModeActive = useSettingsStore((s) => normalizeLegalModeSettings(s.legalMode).enabled)
   const historyBusy = history.loadingSession || history.historyLoading
   const telemetryInteractive = mode === 'telemetry' && !revealGestureActive
+  const legalListVisible = mode === 'legalLimits' && legalListOpen
   const interfaceFadeStyle = useAnimatedStyle(() => ({
     opacity: (1 - dragOpacity.value) * telemetryReturnOpacity.value,
   }))
@@ -662,6 +686,7 @@ export function CenterOverlays({
         mode={mode}
         panelHeight={mode === 'history' && history.selectedSession ? panelHeight : 0}
         visible={mode !== 'map'}
+        topOnly={mode === 'legalLimits'}
         fadeOutProgress={dragOpacity}
       />
       {(mode === 'telemetry' || revealGestureActive) && (
@@ -737,7 +762,13 @@ export function CenterOverlays({
           icon={SlidersHorizontalIcon}
           onClose={() => setTuneDrawerOpen(false)}
         >
-          <TuneDrawer onNavigate={() => setTuneDrawerOpen(false)} />
+          <TuneDrawer
+            onNavigate={() => setTuneDrawerOpen(false)}
+            onOpenLegalLimits={() => {
+              setTuneDrawerOpen(false)
+              map.enterLegalLimits()
+            }}
+          />
         </EdgeDrawer>
       </Animated.View>
 
@@ -797,6 +828,107 @@ export function CenterOverlays({
         >
           <WeatherHourlyStrip />
         </View>
+      </View>
+
+      <View
+        pointerEvents={mode === 'legalLimits' ? 'box-none' : 'none'}
+        style={[
+          styles.legalLimitsInterface,
+          mode === 'legalLimits' ? styles.visible : styles.hidden,
+        ]}
+      >
+        <IconButton
+          icon={ArrowLeftIcon}
+          onPress={() => {
+            setLegalListOpen(true)
+            setSelectedLegalCountry(null)
+            map.exitLegalLimits()
+          }}
+          style={[styles.backButton, { top: Math.max(insets.top, 8) }]}
+        />
+        <View pointerEvents="none" style={[styles.legalHeader, { top: Math.max(insets.top, 8) }]}>
+          <Text style={styles.legalTitle}>Legal limits</Text>
+          <Text style={styles.legalUpdated}>Updated {LEGAL_LIMIT_DATA_CHECKED_AT}</Text>
+          <View style={styles.legalLegend}>
+            {LEGAL_ROAD_STATUS_LEGEND.map((status) => (
+              <View key={status} style={styles.legalLegendItem}>
+                <View
+                  style={[
+                    styles.legalLegendDot,
+                    { backgroundColor: LEGAL_ROAD_STATUS_COLORS[status] },
+                  ]}
+                />
+                <Text style={styles.legalLegendText}>{LEGAL_ROAD_STATUS_LABELS[status]}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={
+            legalListVisible ? 'Hide legal limits list' : 'Show legal limits list'
+          }
+          onPress={() => setLegalListOpen((open) => !open)}
+          style={({ pressed }) => [
+            styles.legalListToggle,
+            {
+              bottom: legalListVisible
+                ? Math.max(insets.bottom, 16) + 280
+                : Math.max(insets.bottom, 16),
+            },
+            pressed && styles.legalListTogglePressed,
+          ]}
+        >
+          {legalListVisible ? (
+            <CaretDownIcon size={18} color={theme.palette.slate.textSecondary} weight="bold" />
+          ) : (
+            <CaretUpIcon size={18} color={theme.palette.slate.textSecondary} weight="bold" />
+          )}
+          <Text style={styles.legalListToggleLabel}>
+            {legalListVisible ? 'HIDE LIST' : 'SHOW LIST'}
+          </Text>
+        </Pressable>
+        {legalListVisible ? (
+          <View style={[styles.legalListPanel, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.legalListContent}
+            >
+              {LEGAL_LIMIT_COUNTRIES.map((country) => (
+                <Pressable
+                  key={country.code}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${country.name} legal limits`}
+                  style={({ pressed }) => [
+                    styles.legalCountryRow,
+                    pressed && styles.legalCountryRowPressed,
+                  ]}
+                  onPress={() => setSelectedLegalCountry(country)}
+                >
+                  <View
+                    style={[
+                      styles.legalCountryDot,
+                      { backgroundColor: LEGAL_ROAD_STATUS_COLORS[country.status] },
+                    ]}
+                  />
+                  <Text style={styles.legalCountryName} numberOfLines={1}>
+                    {country.name}
+                  </Text>
+                  <Text style={styles.legalCountryStatus} numberOfLines={1}>
+                    {LEGAL_ROAD_STATUS_LABELS[country.status]}
+                  </Text>
+                  <Text style={styles.legalCountrySpeed}>
+                    {country.status === 'unknown' ? 'Unknown' : `${country.legalSpeedKmh} km/h`}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        ) : null}
+        <LegalLimitCountrySheet
+          country={selectedLegalCountry}
+          onClose={() => setSelectedLegalCountry(null)}
+        />
       </View>
 
       {mode === 'history' && history.selectedSession && (
@@ -1235,6 +1367,10 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
     zIndex: 8,
   },
+  legalLimitsInterface: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 9,
+  },
   weatherRefreshButton: {
     position: 'absolute',
     right: 10,
@@ -1253,6 +1389,127 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     zIndex: 30,
+  },
+  legalHeader: {
+    position: 'absolute',
+    left: 70,
+    right: 70,
+    alignItems: 'center',
+    zIndex: 28,
+  },
+  legalTitle: {
+    color: theme.palette.slate.textPrimary,
+    fontSize: 17,
+    fontWeight: '800',
+  },
+  legalUpdated: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+    marginTop: 2,
+    textShadowColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.6),
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+    textTransform: 'uppercase',
+  },
+  legalLegend: {
+    marginTop: 5,
+    flexDirection: 'row',
+    flexWrap: 'nowrap',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  legalLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  legalLegendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  legalLegendText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '800',
+    textShadowColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.6),
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  legalListToggle: {
+    position: 'absolute',
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minHeight: 42,
+    paddingHorizontal: 16,
+    borderRadius: 21,
+    borderWidth: 1,
+    borderColor: theme.palette.slate.border,
+    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
+    zIndex: 31,
+  },
+  legalListTogglePressed: {
+    backgroundColor: theme.palette.slate.surface,
+  },
+  legalListToggleLabel: {
+    color: theme.palette.slate.textSecondary,
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  legalListPanel: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    maxHeight: 280,
+    paddingTop: 14,
+    paddingHorizontal: 14,
+    gap: 8,
+    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
+    borderTopWidth: 1,
+    borderTopColor: theme.palette.slate.border,
+    zIndex: 30,
+  },
+  legalListContent: {
+    gap: 8,
+  },
+  legalCountryRow: {
+    minHeight: 28,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 8,
+    paddingHorizontal: 2,
+  },
+  legalCountryRowPressed: {
+    backgroundColor: theme.alpha(theme.palette.slate.light, 0.12),
+  },
+  legalCountryDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+  },
+  legalCountryName: {
+    flex: 1.1,
+    color: theme.palette.slate.textPrimary,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  legalCountryStatus: {
+    flex: 0.9,
+    color: theme.palette.slate.textMuted,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  legalCountrySpeed: {
+    width: 56,
+    color: theme.palette.slate.textPrimary,
+    fontSize: 12,
+    fontWeight: '900',
+    textAlign: 'right',
   },
   visible: {
     opacity: 1,

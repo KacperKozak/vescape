@@ -41,6 +41,7 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
     enterTelemetry,
     enterMap,
     enterWeather,
+    enterLegalLimits,
     enterHistory,
     setHistorySheetVisible,
     setMapSelector,
@@ -58,6 +59,7 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
       enterTelemetry: s.enterTelemetry,
       enterMap: s.enterMap,
       enterWeather: s.enterWeather,
+      enterLegalLimits: s.enterLegalLimits,
       enterHistory: s.enterHistory,
       setHistorySheetVisible: s.setHistorySheetVisible,
       setMapSelector: s.setMapSelector,
@@ -164,6 +166,7 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
   }, [liveLocations, latestApproximateLocation, lastGpsLatitude, lastGpsLongitude, fetchWeather])
 
   const weatherActive = mode === 'weather'
+  const legalLimitsActive = mode === 'legalLimits'
   const historyActive = mode === 'history'
   const rotationLocked = mapNavigationMode === 'northUp'
   const previousRide = getPreviousRideSession(sessions, selectedSession)
@@ -203,6 +206,16 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
   }, [enterWeather, mapRef])
 
   const exitWeatherMode = useCallback(() => {
+    enterTelemetry()
+    requestAnimationFrame(() => mapRef.current?.recenterLive())
+  }, [enterTelemetry, mapRef])
+
+  const enterLegalLimitsMode = useCallback(() => {
+    enterLegalLimits()
+    mapRef.current?.focusLegalLimits()
+  }, [enterLegalLimits, mapRef])
+
+  const exitLegalLimitsMode = useCallback(() => {
     enterTelemetry()
     requestAnimationFrame(() => mapRef.current?.recenterLive())
   }, [enterTelemetry, mapRef])
@@ -324,6 +337,10 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
           exitWeatherMode()
           return true
         }
+        if (mode === 'legalLimits') {
+          exitLegalLimitsMode()
+          return true
+        }
         if (mode === 'map') {
           exitMapFocus()
           return true
@@ -340,7 +357,7 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
         return true
       })
       return () => handler.remove()
-    }, [exitHistory, exitMapFocus, exitWeatherMode, mode]),
+    }, [exitHistory, exitLegalLimitsMode, exitMapFocus, exitWeatherMode, mode]),
   )
 
   return {
@@ -349,6 +366,7 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
     latestApproximateLocation,
     blocks,
     historyActive,
+    legalLimitsActive,
     mapStyleKey,
     setMapStyleKey,
     mapNavigationMode,
@@ -401,6 +419,8 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
     weatherActive,
     enterWeatherMode,
     exitWeatherMode,
+    enterLegalLimitsMode,
+    exitLegalLimitsMode,
     refreshWeather,
     handleMapFocus,
     exitMapFocus,

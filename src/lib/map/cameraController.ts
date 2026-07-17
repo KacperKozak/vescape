@@ -100,6 +100,10 @@ export type MapCameraIntent =
       fallbackCenterCoordinate: [number, number]
       perspectiveEnabled: boolean
     }
+  | {
+      type: 'EnterLegalLimitsView'
+      camera: MapCameraSnapshot
+    }
 
 export interface MapCameraEffect {
   camera: Partial<MapCameraSnapshot>
@@ -291,6 +295,16 @@ export function reduceMapCameraIntent(
           }),
         },
       },
+    }
+  }
+
+  if (intent.type === 'EnterLegalLimitsView') {
+    return {
+      state: {
+        ...state,
+        mode: { kind: 'manualBrowse' },
+      },
+      effect: { camera: intent.camera },
     }
   }
 
