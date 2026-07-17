@@ -5,6 +5,7 @@ import Foundation
 /// connected`, plus the mid-ride reconnect states `reconnecting → rescanning` (#58).
 ///
 /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardPhase.kt
+/// @parity /modules/vesc-ble/src/index.ts `SessionStatus`
 /// @platform-diff Android also exposes `stale` and `disconnecting`. iOS immediately routes stale
 /// telemetry through `reconnecting`, and explicit stop transitions directly to `idle`/`error`
 /// because there is no foreground-service teardown window to surface.

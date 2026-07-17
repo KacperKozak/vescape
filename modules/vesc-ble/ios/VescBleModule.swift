@@ -64,6 +64,8 @@ public class VescBleModule: Module {
   public func definition() -> ModuleDefinition {
     Name("VescBle")
 
+    // @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt `Events`
+    // @parity /modules/vesc-ble/src/index.ts `VescBleEvents`
     Events("onDevice", "onError", "onLiveState", "onLiveTick", "onLiveSeries", "onTelemetryHistory", "onBms", "onBmsSeries", "onLocation", "onTelemetryRebuildProgress", "onBoardProbeProgress", "onAppDataChanged", "onGroupRideConnection", "onGroupRideSnapshot", "onGroupRideCreated", "onGroupRideUpdated", "onGroupRideEnded", "onGroupRideJoined", "onGroupRideRoster", "onGroupRideError")
 
     // Track per-event JS listeners so native skips emitting into the void, and gate the whole

@@ -701,6 +701,9 @@ fun PrivacyZoneEntity.toMap(): Map<String, Any?> = mapOf(
 )
 
 internal const val MAP_POINT_KIND_DIRECTION = "direction"
+
+// @parity /modules/vesc-ble/ios/telemetry/AppDataRepository.swift `validMapPointKinds`
+// @parity /modules/vesc-ble/src/index.ts `MapPointKind`
 internal val VALID_MAP_POINT_KINDS = setOf(
   MAP_POINT_KIND_DIRECTION,
   "drop",

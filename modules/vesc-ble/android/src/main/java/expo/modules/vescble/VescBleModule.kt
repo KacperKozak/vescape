@@ -77,6 +77,8 @@ class VescBleModule : Module() {
       }
     }
 
+    // @parity /modules/vesc-ble/ios/VescBleModule.swift `Events`
+    // @parity /modules/vesc-ble/src/index.ts `VescBleEvents`
     Events(
       "onDevice",
       "onError",

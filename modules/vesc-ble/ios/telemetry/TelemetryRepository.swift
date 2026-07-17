@@ -13,6 +13,10 @@ internal let MAX_ENERGY_SAMPLE_GAP_MS: Int64 = 5_000
 internal let DEFAULT_HISTORY_LIMIT = 100
 internal let DEFAULT_SAMPLE_LIMIT = 2_000
 internal let MAX_SAMPLE_LIMIT = 20_000
+/// Float64 lanes per sample in the columnar history payload. Must match the JS decoder.
+///
+/// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/TelemetryRepository.kt `SAMPLE_COLUMN_COUNT`
+/// @parity /modules/vesc-ble/src/index.ts `SAMPLE_COLUMN_COUNT`
 internal let SAMPLE_COLUMN_COUNT = 25
 
 /// GRDB writer for iOS Ride Recording telemetry. Raw Telemetry Samples are preserved; Metric

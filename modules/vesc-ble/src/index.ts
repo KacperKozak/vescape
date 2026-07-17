@@ -1,3 +1,16 @@
+/**
+ * TS declaration of the VescBle native contract: every type here mirrors a native definition.
+ * Coverage is not uniform — parts of this surface are Android-only (Group Ride, Remote Tilt) and
+ * some shared states are platform-specific. Those gaps are marked in place below with
+ * `@platform-diff` or `TODO(iOS parity)`; the file-level tags point at the two module entry points.
+ *
+ * @parity /modules/vesc-ble/ios/VescBleModule.swift
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt
+ *
+ * Narrower `@parity` tags below mark the nodes that drift silently: columnar buffer layouts and
+ * enums native re-declares.
+ */
+
 import { requireNativeModule, type EventSubscription } from 'expo-modules-core'
 
 import { e2eFake } from './e2eFake'
@@ -28,6 +41,12 @@ export interface LocationEvent {
   precise: boolean
 }
 
+/**
+ * @parity /modules/vesc-ble/ios/connection/BoardPhase.swift `BoardPhase`
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardPhase.kt `BoardPhase`
+ * @platform-diff `stale` and `disconnecting` are Android-only. iOS routes stale telemetry through
+ * `reconnecting` and stops straight to `idle`/`error`, so JS must treat both as optional.
+ */
 export type SessionStatus =
   | 'idle'
   | 'connecting'
@@ -93,6 +112,10 @@ export interface BoardProbeResult {
  * revisits `probing` for the next candidate. Final facts are still read from the
  * returned {@link BoardCandidate}s; detail stays in Diagnostic Events.
  */
+/**
+ * @parity /modules/vesc-ble/ios/connection/BoardTransportDetector.swift `emitProgress`
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardTransportDetector.kt `emitProgress`
+ */
 export type BoardProbeStep =
   | 'connecting'
   | 'handshake'
@@ -115,6 +138,10 @@ export interface BoardProbeProgressEvent {
   canIds?: number[]
 }
 
+/**
+ * @parity /modules/vesc-ble/ios/runtime/BoardSession.swift `LinkIntegrity`
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/runtime/BoardSession.kt `LinkIntegrity`
+ */
 export type LinkIntegrity = 'unknown' | 'checking' | 'trusted' | 'outdated' | 'mismatched'
 
 /**
@@ -172,6 +199,10 @@ export interface BatteryManualConfig {
 
 export type AlertSoundType = string
 
+/**
+ * @parity /modules/vesc-ble/ios/alerts/AlertAudioPlayer.swift `alertCategorySingle`, `alertCategoryGeiger`
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescAlerts.kt `ALERT_CATEGORY_SINGLE`, `ALERT_CATEGORY_GEIGER`
+ */
 export type AlertPresetCategory = 'single' | 'geiger'
 
 export interface AlertPreset {
@@ -204,6 +235,13 @@ export interface PrivacyZone {
   updatedAt: number
 }
 
+/**
+ * Native validates incoming map points against its own copy of this list; a kind added here only
+ * is rejected at the bridge.
+ *
+ * @parity /modules/vesc-ble/ios/telemetry/AppDataRepository.swift
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/AppDataRepository.kt
+ */
 export type MapPointKind =
   | 'direction'
   | 'drop'
@@ -314,6 +352,10 @@ export interface LiveMetricExclusionUpdate {
 export type BoardPhase = SessionStatus
 export type GpsPhase = 'idle' | 'starting' | 'active' | 'error'
 export type ScanPhase = ScanStatus
+/**
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/RemoteTiltController.kt `RemoteTiltPhase`
+ * TODO(iOS parity): no iOS peer — Remote Tilt is not ported yet.
+ */
 export type RemoteTiltPhase = 'idle' | 'holding' | 'decaying' | 'locked'
 
 export interface RemoteTiltDecay {
@@ -508,9 +550,24 @@ export interface HistoryRange {
   exclusions: MetricExclusion[]
 }
 
-/** Float64 lanes per sample in the columnar board payload. Must match the native encoder. */
+/**
+ * Float64 lanes per sample in the columnar board payload. Must match the native encoder.
+ *
+ * @parity /modules/vesc-ble/ios/telemetry/TelemetryRepository.swift `SAMPLE_COLUMN_COUNT`
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/TelemetryRepository.kt `SAMPLE_COLUMN_COUNT`
+ */
 const SAMPLE_COLUMN_COUNT = 25
+
+/**
+ * @parity /modules/vesc-ble/ios/telemetry/BmsSeriesRing.swift `BMS_SERIES_FIXED_LANES`
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BmsSeriesRing.kt `BMS_SERIES_FIXED_LANES`
+ */
 const BMS_SERIES_FIXED_LANES = 3
+
+/**
+ * @parity /modules/vesc-ble/ios/telemetry/BmsSeriesRing.swift `BMS_SERIES_BALANCE_LANE_BITS`
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BmsSeriesRing.kt `BMS_SERIES_BALANCE_LANE_BITS`
+ */
 const BMS_SERIES_BALANCE_LANE_BITS = 30
 
 /**
@@ -530,7 +587,15 @@ interface NativeHistoryRange {
 
 const nullableLane = (value: number): number | null => (Number.isNaN(value) ? null : value)
 
-/** Rebuild TelemetrySample objects from the columnar buffer locally (no per-field bridge crossing). */
+/**
+ * Rebuild TelemetrySample objects from the columnar buffer locally (no per-field bridge crossing).
+ *
+ * Lane order is shared by convention with the native encoders and is not self-describing — a lane
+ * added on one side without the others shifts every field after it, silently.
+ *
+ * @parity /modules/vesc-ble/ios/telemetry/TelemetryRepository.swift
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/TelemetryRepository.kt
+ */
 function decodeBoardSamples(range: NativeHistoryRange): TelemetrySample[] {
   const { boardCount, boardDevices, boardDeviceNames } = range
   if (!boardCount || !range.boardColumns) return []
@@ -582,7 +647,12 @@ interface NativeBmsSeriesEvent {
 
 const hasLaneBit = (bits: number, bit: number): boolean => Math.floor(bits / 2 ** bit) % 2 === 1
 
-/** Decode the Live BMS Series columnar buffer from native into public domain frames. */
+/**
+ * Decode the Live BMS Series columnar buffer from native into public domain frames.
+ *
+ * @parity /modules/vesc-ble/ios/telemetry/BmsSeriesRing.swift `encodeBmsSeriesColumns`
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BmsSeriesRing.kt `encodeBmsSeriesColumns`
+ */
 function decodeBmsSeriesFrames(event: NativeBmsSeriesEvent): BmsSeriesFrame[] {
   const { cellCount, count, columns } = event
   if (!count || !cellCount || !columns) return []
@@ -868,6 +938,10 @@ export interface GroupRideRider {
   lastSeen: number
 }
 
+/**
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/GroupRideObserver.kt `emitConnection`
+ * TODO(iOS parity): no iOS peer — Group Ride is not ported yet.
+ */
 export type GroupRideConnectionState = 'idle' | 'connecting' | 'connected' | 'disconnected'
 
 export interface GroupRideConnectionEvent {
@@ -921,6 +995,13 @@ export type CriticalRideNotificationPermissionStatus =
   | 'ephemeral'
   | 'unknown'
 
+/**
+ * Event names must match the native `Events(...)` declarations exactly — a name only listed here
+ * yields a listener that never fires.
+ *
+ * @parity /modules/vesc-ble/ios/VescBleModule.swift `Events`
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt `Events`
+ */
 type VescBleEvents = {
   onDevice: (event: DeviceFoundEvent) => void
   onError: (event: ErrorEvent) => void

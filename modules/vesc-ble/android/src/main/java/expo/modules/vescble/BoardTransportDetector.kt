@@ -80,6 +80,9 @@ internal class BoardTransportDetector(
    * the Refloat info reply). `transport` names the candidate being probed and
    * `canIds` the CAN scan responders. The UI still reads final facts from the
    * returned candidates; full detail stays in Diagnostic Events.
+   *
+   * @parity /modules/vesc-ble/ios/connection/BoardTransportDetector.swift `emitProgress`
+   * @parity /modules/vesc-ble/src/index.ts `BoardProbeStep`
    */
   private fun emitProgress(step: String, transport: BoardTransport? = null, withCanIds: Boolean = false) {
     val payload = mutableMapOf<String, Any?>("probeId" to probeId, "step" to step, "elapsedMs" to elapsed())

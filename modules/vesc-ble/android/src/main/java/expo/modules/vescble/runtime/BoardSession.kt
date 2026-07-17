@@ -74,6 +74,7 @@ class BoardSession(val id: Long) {
 }
 
 // @parity /modules/vesc-ble/ios/runtime/BoardSession.swift
+// @parity /modules/vesc-ble/src/index.ts `LinkIntegrity`
 enum class LinkIntegrity(val wireValue: String) {
     Unknown("unknown"),
     Checking("checking"),
