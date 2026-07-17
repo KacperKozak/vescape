@@ -106,6 +106,7 @@ let package = Package(
       sources: [
         "alerts/AlertEngineTests.swift",
         "telemetry/BatteryConfigMismatchDetectorTests.swift",
+        "telemetry/BoardWarningPayloadTests.swift",
         "telemetry/CellSpreadDetectorTests.swift",
         "ConfigSafetyDetectorTests.swift",
         "telemetry/PrivacyZoneFilterTests.swift",

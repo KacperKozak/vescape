@@ -24,9 +24,11 @@ enum class BoardWarningKind(val wire: String) {
 /**
  * Round a payload number to 4 decimals before it is serialized, so raw float noise (e.g. a
  * `3.92 - 3.80` subtraction that lands on `0.11999999999999988`) never reaches the wire and the
- * emitted value stays stable across detections.
+ * emitted value stays stable across detections. Ties round half away from zero to match the iOS
+ * `BoardWarningPayload.round4` (`Math.round` alone would round negative ties toward +∞).
  */
-internal fun boardWarningRound4(value: Double): Double = Math.round(value * 10_000.0) / 10_000.0
+internal fun boardWarningRound4(value: Double): Double =
+  Math.copySign(Math.round(Math.abs(value) * 10_000.0) / 10_000.0, value)
 
 /** Build a Board Warning payload JSON string via [JSONObject], never hand-assembled strings. */
 internal fun boardWarningPayload(build: JSONObject.() -> Unit): String =
