@@ -41,7 +41,7 @@ export function LegalLimitCountryDetails({ country }: LegalLimitCountryDetailsPr
   const detail = getLegalLimitCountryDetail(country)
   const statusColor = LEGAL_ROAD_STATUS_COLORS[country.status]
   const StatusIcon = LEGAL_LIMIT_STATUS_ICONS[country.status]
-  const speedLabel = country.status === 'unknown' ? 'Unknown' : `${country.legalSpeedKmh} km/h`
+  const speedLabel = `${country.legalSpeedKmh} km/h`
 
   return (
     <View style={styles.container}>
@@ -62,6 +62,7 @@ export function LegalLimitCountryDetails({ country }: LegalLimitCountryDetailsPr
           <View style={styles.badgeText}>
             <Text style={styles.badgeLabel}>Top speed</Text>
             <Text style={styles.badgeValue}>{speedLabel}</Text>
+            <Text style={styles.badgeCaption}>{country.speedLimitBasis}</Text>
           </View>
         </View>
       </View>
@@ -133,7 +134,7 @@ const styles = StyleSheet.create({
   badge: {
     ...widgetSurface,
     flex: 1,
-    minHeight: 66,
+    minHeight: 82,
     padding: 10,
     gap: 8,
   },
@@ -158,6 +159,12 @@ const styles = StyleSheet.create({
     color: theme.palette.slate.textPrimary,
     fontSize: 13,
     fontWeight: '900',
+  },
+  badgeCaption: {
+    color: theme.palette.slate.textSecondary,
+    fontSize: 10,
+    fontWeight: '700',
+    lineHeight: 13,
   },
   alertRow: {
     ...widgetSurface,

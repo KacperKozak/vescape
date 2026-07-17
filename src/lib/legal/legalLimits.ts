@@ -10,6 +10,7 @@ export interface LegalLimitCountry {
   status: LegalRoadStatus
   confidence: 'high' | 'medium' | 'low'
   labelCoordinate: [number, number]
+  speedLimitBasis: string
   warningText: string | null
   sourceUrl: string
   checkedAt: string
@@ -28,17 +29,44 @@ const EVZ_SOURCE_URL =
 export const LEGAL_LIMIT_DATA_CHECKED_AT = '2026-07-17'
 
 function country(
-  input: Omit<LegalLimitCountry, 'checkedAt' | 'sourceUrl' | 'warningText'> & {
+  input: Omit<LegalLimitCountry, 'checkedAt' | 'sourceUrl' | 'warningText' | 'speedLimitBasis'> & {
     sourceUrl?: string
+    speedLimitBasis?: string
     warningText?: string | null
   },
 ): LegalLimitCountry {
   return {
     ...input,
     checkedAt: LEGAL_LIMIT_DATA_CHECKED_AT,
+    speedLimitBasis: input.speedLimitBasis ?? speedLimitBasisForCountry(input.code, input.status),
     sourceUrl: input.sourceUrl ?? EVZ_SOURCE_URL,
     warningText: input.warningText ?? null,
   }
+}
+
+function speedLimitBasisForCountry(countryCode: string, status: LegalRoadStatus): string {
+  const basisByCountry: Partial<Record<string, string>> = {
+    AT: 'Walking-pace play/sports-device rule',
+    CY: 'E-scooter reference limit',
+    CZ: 'E-scooter/bicycle-equivalent reference limit',
+    DE: 'eKFV small-electric-vehicle reference limit',
+    HU: 'E-scooter reference fallback',
+    IS: 'E-scooter reference fallback',
+    IE: 'E-scooter reference limit',
+    IT: 'E-scooter reference limit',
+    LV: 'E-scooter reference limit',
+    MT: 'E-kickscooter reference limit',
+    NL: 'Approved special-moped reference limit',
+    RO: 'E-scooter reference limit',
+    SI: 'E-scooter/light-motor-vehicle reference limit',
+    CH: 'E-scooter reference limit',
+    GB: 'Rental e-scooter trial reference limit',
+  }
+  const basis = basisByCountry[countryCode]
+  if (basis) return basis
+  if (status === 'likelyLegal') return 'One-wheel/self-balancing category limit'
+  if (status === 'restricted') return 'Restricted one-wheel/self-balancing category limit'
+  return 'Nearest regulated micromobility reference limit'
 }
 
 export const LEGAL_LIMIT_COUNTRIES: readonly LegalLimitCountry[] = [
@@ -97,8 +125,8 @@ export const LEGAL_LIMIT_COUNTRIES: readonly LegalLimitCountry[] = [
     name: 'Cyprus',
     code: 'CY',
     alpha3: 'CYP',
-    legalSpeedKmh: 25,
-    warningSpeedKmh: 20,
+    legalSpeedKmh: 20,
+    warningSpeedKmh: 15,
     status: 'notRoadLegal',
     confidence: 'medium',
     labelCoordinate: [33.2, 35.0],
@@ -173,8 +201,8 @@ export const LEGAL_LIMIT_COUNTRIES: readonly LegalLimitCountry[] = [
     name: 'Germany',
     code: 'DE',
     alpha3: 'DEU',
-    legalSpeedKmh: 25,
-    warningSpeedKmh: 20,
+    legalSpeedKmh: 20,
+    warningSpeedKmh: 15,
     status: 'notRoadLegal',
     confidence: 'high',
     labelCoordinate: [10.4, 51.1],
@@ -226,8 +254,8 @@ export const LEGAL_LIMIT_COUNTRIES: readonly LegalLimitCountry[] = [
     name: 'Ireland',
     code: 'IE',
     alpha3: 'IRL',
-    legalSpeedKmh: 25,
-    warningSpeedKmh: 20,
+    legalSpeedKmh: 20,
+    warningSpeedKmh: 15,
     status: 'notRoadLegal',
     confidence: 'high',
     labelCoordinate: [-8.2, 53.2],
@@ -239,8 +267,8 @@ export const LEGAL_LIMIT_COUNTRIES: readonly LegalLimitCountry[] = [
     name: 'Italy',
     code: 'IT',
     alpha3: 'ITA',
-    legalSpeedKmh: 25,
-    warningSpeedKmh: 20,
+    legalSpeedKmh: 20,
+    warningSpeedKmh: 15,
     status: 'notRoadLegal',
     confidence: 'medium',
     labelCoordinate: [12.6, 42.7],
@@ -290,8 +318,8 @@ export const LEGAL_LIMIT_COUNTRIES: readonly LegalLimitCountry[] = [
     name: 'Malta',
     code: 'MT',
     alpha3: 'MLT',
-    legalSpeedKmh: 25,
-    warningSpeedKmh: 20,
+    legalSpeedKmh: 20,
+    warningSpeedKmh: 15,
     status: 'notRoadLegal',
     confidence: 'medium',
     labelCoordinate: [14.4, 35.9],
@@ -409,8 +437,8 @@ export const LEGAL_LIMIT_COUNTRIES: readonly LegalLimitCountry[] = [
     name: 'Switzerland',
     code: 'CH',
     alpha3: 'CHE',
-    legalSpeedKmh: 25,
-    warningSpeedKmh: 20,
+    legalSpeedKmh: 20,
+    warningSpeedKmh: 15,
     status: 'notRoadLegal',
     confidence: 'high',
     labelCoordinate: [8.2, 46.8],
@@ -830,17 +858,16 @@ export function legalCountryFilterExpression() {
 export function legalLimitLabelShape(): GeoJSON.FeatureCollection<GeoJSON.Point> {
   return {
     type: 'FeatureCollection',
-    features: LEGAL_LIMIT_COUNTRIES.filter((country) => country.status !== 'unknown').map(
-      (country) => ({
-        type: 'Feature',
-        geometry: { type: 'Point', coordinates: country.labelCoordinate },
-        properties: {
-          code: country.code,
-          label: `${country.legalSpeedKmh}`,
-          subtitle: 'km/h',
-          status: LEGAL_ROAD_STATUS_LABELS[country.status],
-        },
-      }),
-    ),
+    features: LEGAL_LIMIT_COUNTRIES.map((country) => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: country.labelCoordinate },
+      properties: {
+        code: country.code,
+        label: `${country.legalSpeedKmh}`,
+        subtitle: 'km/h',
+        speedLimitBasis: country.speedLimitBasis,
+        status: LEGAL_ROAD_STATUS_LABELS[country.status],
+      },
+    })),
   }
 }

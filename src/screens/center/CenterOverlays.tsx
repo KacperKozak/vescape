@@ -591,7 +591,7 @@ export function CenterOverlays({
   const [removeConfirmVisible, setRemoveConfirmVisible] = useState(false)
   const [revealGestureActive, setRevealGestureActive] = useState(false)
   const [tuneDrawerOpen, setTuneDrawerOpen] = useState(false)
-  const [legalListOpen, setLegalListOpen] = useState(true)
+  const [legalListOpen, setLegalListOpen] = useState(false)
   const [selectedLegalCountry, setSelectedLegalCountry] = useState<LegalLimitCountry | null>(null)
   const tuneButtonRef = useRef<View>(null)
   const revealProgress = useSharedValue(0)
@@ -840,7 +840,7 @@ export function CenterOverlays({
         <IconButton
           icon={ArrowLeftIcon}
           onPress={() => {
-            setLegalListOpen(true)
+            setLegalListOpen(false)
             setSelectedLegalCountry(null)
             map.exitLegalLimits()
           }}
@@ -917,9 +917,7 @@ export function CenterOverlays({
                   <Text style={styles.legalCountryStatus} numberOfLines={1}>
                     {LEGAL_ROAD_STATUS_LABELS[country.status]}
                   </Text>
-                  <Text style={styles.legalCountrySpeed}>
-                    {country.status === 'unknown' ? 'Unknown' : `${country.legalSpeedKmh} km/h`}
-                  </Text>
+                  <Text style={styles.legalCountrySpeed}>{country.legalSpeedKmh} km/h</Text>
                 </Pressable>
               ))}
             </ScrollView>

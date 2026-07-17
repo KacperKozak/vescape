@@ -58,8 +58,8 @@ describe('Legal Mode derivation', () => {
     const next = applyJurisdictionDefaults(DEFAULT_LEGAL_MODE_SETTINGS, germany!)
 
     expect(next).toMatchObject({
-      legalSpeedKmh: 25,
-      warningSpeedKmh: 20,
+      legalSpeedKmh: 20,
+      warningSpeedKmh: 15,
       jurisdiction: {
         countryCode: 'DE',
         legalRoadStatus: 'notRoadLegal',
@@ -79,8 +79,8 @@ describe('Legal Mode derivation', () => {
     })
     expect(switzerland).toMatchObject({
       countryCode: 'CH',
-      legalSpeedKmh: 25,
-      warningSpeedKmh: 20,
+      legalSpeedKmh: 20,
+      warningSpeedKmh: 15,
       legalRoadStatus: 'notRoadLegal',
     })
   })
