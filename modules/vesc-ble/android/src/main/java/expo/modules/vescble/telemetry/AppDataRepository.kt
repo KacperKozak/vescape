@@ -110,6 +110,14 @@ private fun validHistoryMetricHotRanges(value: Any?): Map<String, Map<String, Do
   return ranges
 }
 
+private fun Any?.asStringKeyMap(): Map<String, Any?>? = when (this) {
+  is JSONObject -> keys().asSequence().associateWith { key -> opt(key).takeUnless { it == JSONObject.NULL } }
+  is Map<*, *> -> entries.associate { (key, value) ->
+    (key as? String ?: return null) to value
+  }
+  else -> null
+}
+
 class AppDataRepository private constructor(private val context: Context) {
   private val dao = TelemetryDatabase.get(context).telemetryDao()
 
@@ -213,6 +221,7 @@ class AppDataRepository private constructor(private val context: Context) {
       riderId = opt("riderId") { it as? String },
       riderName = opt("riderName") { it as? String },
       riderColor = opt("riderColor") { it as? String },
+      legalMode = opt("legalMode") { it.asStringKeyMap() },
     )
 
     if (badKeys.isNotEmpty()) {
@@ -270,6 +279,7 @@ class AppDataRepository private constructor(private val context: Context) {
       "autoCloseDelayMinutes" ->
         validAutoCloseDelayMinutes(value) ?: return@withContext
       "riderId", "riderName", "riderColor" -> value as? String
+      "legalMode" -> value.asStringKeyMap() ?: return@withContext
       else -> return@withContext
     }
     val normalizedKey = when (key) {
@@ -305,6 +315,7 @@ class AppDataRepository private constructor(private val context: Context) {
         "riderId" -> d.riderId
         "riderName" -> d.riderName
         "riderColor" -> d.riderColor
+        "legalMode" -> d.legalMode
         else -> null
       }
     }
@@ -577,6 +588,7 @@ fun AppSettings.toMap(): Map<String, Any?> = mapOf(
   "riderId" to riderId,
   "riderName" to riderName,
   "riderColor" to riderColor,
+  "legalMode" to legalMode,
 )
 
 internal fun encodeSettingJson(value: Any?): String {

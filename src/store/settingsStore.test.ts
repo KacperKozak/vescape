@@ -28,17 +28,32 @@ const BASE: AppSettings = {
   riderId: null,
   riderName: null,
   riderColor: null,
+  legalMode: null,
 }
 
 let settings: AppSettings = BASE
 const getSettings = mock(async () => settings)
+const updateSetting = mock(async () => undefined)
+const setCompanionPresenceEnabled = mock(async () => undefined)
 
-mock.module('vesc-ble', () => ({ ...actualVescBle, getSettings }))
-mock.module('../../modules/vesc-ble/src/index', () => ({ ...actualVescBle, getSettings }))
+mock.module('vesc-ble', () => ({
+  ...actualVescBle,
+  getSettings,
+  updateSetting,
+  setCompanionPresenceEnabled,
+}))
+mock.module('../../modules/vesc-ble/src/index', () => ({
+  ...actualVescBle,
+  getSettings,
+  updateSetting,
+  setCompanionPresenceEnabled,
+}))
 
 beforeEach(async () => {
   settings = { ...BASE, historyMetricHotRanges: { battery: { start: 0, end: 1 } } }
   getSettings.mockClear()
+  updateSetting.mockClear()
+  setCompanionPresenceEnabled.mockClear()
   ;(globalThis as { __vescBleStoreCleanup?: () => void }).__vescBleStoreCleanup?.()
   const { useSettingsStore } = await import('./settingsStore')
   useSettingsStore.setState({

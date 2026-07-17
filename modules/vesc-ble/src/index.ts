@@ -822,6 +822,8 @@ export interface AppSettings {
   riderName: string | null
   /** Rider-chosen marker color (hex) shown on other Riders' maps. Null when unset. */
   riderColor: string | null
+  /** Durable Legal Mode UI/default state. JS owns behavior; native only persists this bag. */
+  legalMode: Record<string, unknown> | null
 }
 
 export interface DiagnosticStatus {

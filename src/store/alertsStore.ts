@@ -7,10 +7,9 @@ import {
   type AlertSoundType,
   upsertAlertRule,
 } from 'vesc-ble'
+import { generateId } from '@/helpers/id'
 
 export type { AlertRule, AlertSoundType } from 'vesc-ble'
-
-import { generateId } from '@/helpers/id'
 
 interface AlertsState {
   rules: AlertRule[]
@@ -30,6 +29,8 @@ interface AlertsActions {
     thresholdMax: number | null,
     soundType: AlertSoundType,
   ): void
+  upsert(rule: AlertRule): Promise<void>
+  setEnabled(id: string, enabled: boolean): Promise<void>
   toggle(id: string): Promise<void>
   remove(id: string): Promise<void>
 }
@@ -61,6 +62,21 @@ export const useAlertsStore = create<AlertsState & AlertsActions>((set, get) => 
     const updated = { ...rule, threshold, thresholdMax, soundType }
     set((s) => ({ rules: s.rules.map((r) => (r.id === id ? updated : r)) }))
     void upsertAlertRule(updated)
+  },
+
+  async upsert(rule) {
+    set((s) => {
+      const exists = s.rules.some((r) => r.id === rule.id)
+      return {
+        rules: exists ? s.rules.map((r) => (r.id === rule.id ? rule : r)) : [...s.rules, rule],
+      }
+    })
+    await upsertAlertRule(rule)
+  },
+
+  async setEnabled(id, enabled) {
+    set((s) => ({ rules: s.rules.map((r) => (r.id === id ? { ...r, enabled } : r)) }))
+    await setAlertRuleEnabled(id, enabled)
   },
 
   async toggle(id) {

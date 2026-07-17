@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
+import { useEffect, useMemo, useState } from 'react'
+import { Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native'
 import Animated, {
   interpolateColor,
   useAnimatedStyle,
@@ -11,12 +11,17 @@ import {
   ArrowsDownUpIcon,
   FadersIcon,
   FootprintsIcon,
+  GaugeIcon,
   LightbulbIcon,
+  SirenIcon,
+  WarningCircleIcon,
   type Icon,
 } from 'phosphor-react-native'
 import { router } from 'expo-router'
 
 import { RemoteTiltControl } from '@/components/domain/control/RemoteTiltControl'
+import { Input } from '@/components/ui/forms/Input'
+import { InfoModal } from '@/components/ui/modals/InfoModal'
 import {
   tuneProfileColorTheme,
   tuneProfileIconComponent,
@@ -26,10 +31,21 @@ import { StepperWidget } from '@/components/widgets/StepperWidget'
 import { SwitchWidget } from '@/components/widgets/SwitchWidget'
 import { widgetSurface } from '@/components/widgets/widgetSurface'
 import { canRunFirmwareCommand } from '@/lib/boardLinkIntegrity'
+import {
+  LEGAL_MODE_ALERT_RULE_ID,
+  applyJurisdictionDefaults,
+  legalModeAlertRule,
+  normalizeLegalModeSettings,
+  resolveJurisdictionFromLocation,
+  setLegalSpeed,
+  setWarningSpeed,
+} from '@/lib/legalMode'
 import { routes } from '@/navigation/routes'
 import { theme } from '@/constants/theme'
+import { useAlertsStore } from '@/store/alertsStore'
 import { useBleStore } from '@/store/bleStore'
 import { useBoardStore } from '@/store/boardStore'
+import { useSettingsStore } from '@/store/settingsStore'
 import { useTuneProfileStore } from '@/store/tuneProfileStore'
 
 interface TuneDrawerProps {
@@ -43,6 +59,7 @@ const AnimatedText = Animated.createAnimatedComponent(Text)
 
 export function TuneDrawer({ onNavigate }: TuneDrawerProps) {
   const [tuneSelectOpen, setTuneSelectOpen] = useState(false)
+  const [legalWarningOpen, setLegalWarningOpen] = useState(false)
   const activeBoardId = useBoardStore((state) => state.activeBoardId)
   const tuneCompatibility = useBoardStore(
     (state) =>
@@ -56,6 +73,17 @@ export function TuneDrawer({ onNavigate }: TuneDrawerProps) {
   const profileCompatibility = useTuneProfileStore((state) => state.refloatBaseVersion)
   const loadProfiles = useTuneProfileStore((state) => state.loadProfiles)
   const setActiveProfile = useTuneProfileStore((state) => state.setActiveProfile)
+  const rawLegalMode = useSettingsStore((state) => state.legalMode)
+  const setLegalModeSetting = useSettingsStore((state) => state.setLegalMode)
+  const latestApproximateLocation = useBleStore((state) => state.latestApproximateLocation)
+  const upsertAlert = useAlertsStore((state) => state.upsert)
+  const setAlertEnabled = useAlertsStore((state) => state.setEnabled)
+  const alertRules = useAlertsStore((state) => state.rules)
+  const legalMode = useMemo(() => normalizeLegalModeSettings(rawLegalMode), [rawLegalMode])
+  const legalModeAlert = alertRules.find((rule) => rule.id === LEGAL_MODE_ALERT_RULE_ID)
+  const showLegalWarning =
+    legalMode.jurisdiction?.legalRoadStatus === 'restricted' ||
+    legalMode.jurisdiction?.legalRoadStatus === 'notRoadLegal'
   const profilesLoadedForBoard =
     activeBoardId != null &&
     profileBoardId === activeBoardId &&
@@ -82,6 +110,25 @@ export function TuneDrawer({ onNavigate }: TuneDrawerProps) {
     if (activeBoardId) void loadProfiles(activeBoardId, tuneCompatibility).catch(() => undefined)
   }, [activeBoardId, loadProfiles, tuneCompatibility])
 
+  useEffect(() => {
+    if (legalMode.jurisdiction || !latestApproximateLocation) return
+    const jurisdiction = resolveJurisdictionFromLocation(latestApproximateLocation)
+    if (!jurisdiction) return
+    void setLegalModeSetting(applyJurisdictionDefaults(legalMode, jurisdiction)).catch(
+      () => undefined,
+    )
+  }, [latestApproximateLocation, legalMode, setLegalModeSetting])
+
+  useEffect(() => {
+    if (legalMode.enabled) {
+      void upsertAlert(
+        legalModeAlertRule(legalMode, legalModeAlert?.createdAt ?? Date.now()),
+      ).catch(() => undefined)
+    } else if (legalModeAlert?.enabled) {
+      void setAlertEnabled(LEGAL_MODE_ALERT_RULE_ID, false).catch(() => undefined)
+    }
+  }, [legalMode, legalModeAlert?.createdAt, legalModeAlert?.enabled, setAlertEnabled, upsertAlert])
+
   const openTune = () => {
     onNavigate()
     router.push(routes.tune)
@@ -91,6 +138,19 @@ export function TuneDrawer({ onNavigate }: TuneDrawerProps) {
     setActiveProfile(profileId)
     openTune()
   }
+
+  const updateLegalMode = (next: typeof legalMode) => {
+    void setLegalModeSetting(next).catch(() => undefined)
+  }
+
+  const parseSpeed = (value: string, fallback: number) => {
+    const normalized = Number(value.replace(',', '.').replace(/[^\d.]/g, ''))
+    return Number.isFinite(normalized) ? normalized : fallback
+  }
+  const commitLegalSpeed = (value: string) =>
+    updateLegalMode(setLegalSpeed(legalMode, parseSpeed(value, legalMode.legalSpeedKmh)))
+  const commitWarningSpeed = (value: string) =>
+    updateLegalMode(setWarningSpeed(legalMode, parseSpeed(value, legalMode.warningSpeedKmh)))
 
   const activeName =
     activeBoardId == null
@@ -178,17 +238,127 @@ export function TuneDrawer({ onNavigate }: TuneDrawerProps) {
             disabled={!quickControlsEnabled}
           />
         </View>
-        <View style={styles.wideCell}>
-          <StepperWidget
-            icon={ArrowsDownUpIcon}
-            label="Move board"
-            accent={theme.palette.cyan.color}
-            disabled={!quickControlsEnabled}
-            onPrevious={() => {}}
-            onNext={() => {}}
-          />
+        <View style={styles.moveLegalRow}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.legalIconButton,
+              legalMode.enabled && styles.legalIconButtonActive,
+              showLegalWarning && styles.legalIconButtonWarning,
+              pressed && styles.legalIconButtonPressed,
+            ]}
+            accessibilityRole="switch"
+            accessibilityLabel="Legal Mode"
+            accessibilityState={{ checked: legalMode.enabled }}
+            onPress={() => updateLegalMode({ ...legalMode, enabled: !legalMode.enabled })}
+          >
+            <SirenIcon
+              size={24}
+              color={theme.status.error.color}
+              weight={legalMode.enabled ? 'fill' : 'duotone'}
+            />
+            {showLegalWarning ? (
+              <Pressable
+                style={styles.legalWarningButton}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="Legal road status warning"
+                onPress={(event) => {
+                  event.stopPropagation()
+                  setLegalWarningOpen(true)
+                }}
+              >
+                <WarningCircleIcon size={15} color={theme.status.error.color} weight="fill" />
+              </Pressable>
+            ) : null}
+          </Pressable>
+          <View style={styles.moveBoardCell}>
+            <StepperWidget
+              icon={ArrowsDownUpIcon}
+              label="Move board"
+              accent={theme.palette.cyan.color}
+              disabled={!quickControlsEnabled}
+              onPrevious={() => {}}
+              onNext={() => {}}
+            />
+          </View>
         </View>
+        {legalMode.enabled ? (
+          <View style={styles.wideCell}>
+            <View style={styles.legalSettingsBox}>
+              <Text style={styles.legalSettingsTitle}>Speed warning alert</Text>
+              <View style={styles.legalInputRow}>
+                <View style={styles.legalInputCell}>
+                  <Text style={styles.legalInputLabel}>Legal speed limit</Text>
+                  <View style={styles.legalInputWrap}>
+                    <Input
+                      key={`legal-speed-${legalMode.legalSpeedKmh}`}
+                      defaultValue={String(legalMode.legalSpeedKmh)}
+                      onEndEditing={(event) => commitLegalSpeed(event.nativeEvent.text)}
+                      onSubmitEditing={(event) => commitLegalSpeed(event.nativeEvent.text)}
+                      keyboardType="numeric"
+                      returnKeyType="done"
+                      maxLength={4}
+                      style={styles.legalInput}
+                      accessibilityLabel="Legal Speed Limit"
+                    />
+                    <Text style={styles.legalInputUnit}>km/h</Text>
+                  </View>
+                </View>
+                <View style={styles.legalInputCell}>
+                  <Text style={styles.legalInputLabel}>Alert starts</Text>
+                  <View style={styles.legalInputWrap}>
+                    <Input
+                      key={`warning-speed-${legalMode.warningSpeedKmh}`}
+                      defaultValue={String(legalMode.warningSpeedKmh)}
+                      onEndEditing={(event) => commitWarningSpeed(event.nativeEvent.text)}
+                      onSubmitEditing={(event) => commitWarningSpeed(event.nativeEvent.text)}
+                      keyboardType="numeric"
+                      returnKeyType="done"
+                      maxLength={4}
+                      style={styles.legalInput}
+                      accessibilityLabel="Legal Warning Speed"
+                    />
+                    <Text style={styles.legalInputUnit}>km/h</Text>
+                  </View>
+                </View>
+              </View>
+              <View style={styles.legalSettingsDivider} />
+              <View style={styles.legalMotorLimitColumn}>
+                <View style={styles.legalMotorLimitRow}>
+                  <GaugeIcon size={30} color={theme.palette.red.light} weight="duotone" />
+                  <View style={styles.legalMotorLimitText}>
+                    <Text style={styles.legalMotorLimitLabel}>Motor limit</Text>
+                    <Text style={styles.legalMotorLimitWarning}>
+                      Can cause nosedive. Disabled until tested.
+                    </Text>
+                  </View>
+                  <Switch
+                    value={false}
+                    disabled
+                    onValueChange={() => {}}
+                    trackColor={{
+                      false: theme.palette.slate.border,
+                      true: theme.alpha(theme.palette.slate.textMuted, 0.6),
+                    }}
+                    thumbColor={theme.palette.slate.textMuted}
+                    ios_backgroundColor={theme.palette.slate.border}
+                    accessibilityLabel="Motor limit"
+                  />
+                </View>
+              </View>
+            </View>
+          </View>
+        ) : null}
       </View>
+
+      <InfoModal
+        visible={legalWarningOpen}
+        title="Legal Road Status"
+        message={legalMode.jurisdiction?.warningText ?? 'This jurisdiction has restricted status.'}
+        variant="warning"
+        dismissLabel="Close"
+        onDismiss={() => setLegalWarningOpen(false)}
+      />
     </View>
   )
 }
@@ -316,5 +486,117 @@ const styles = StyleSheet.create({
   },
   wideCell: {
     width: '100%',
+  },
+  legalSettingsBox: {
+    ...widgetSurface,
+    gap: 12,
+    padding: 14,
+  },
+  legalSettingsTitle: {
+    color: theme.palette.slate.textPrimary,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  legalInputRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  legalInputCell: {
+    flex: 1,
+    minWidth: 0,
+    gap: 6,
+  },
+  legalSettingsDivider: {
+    height: 1,
+    marginHorizontal: -14,
+    backgroundColor: theme.palette.slate.border,
+  },
+  legalMotorLimitColumn: {
+    gap: 8,
+    opacity: 0.45,
+  },
+  legalInputLabel: {
+    color: theme.palette.slate.textMuted,
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  legalInputWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  legalInput: {
+    flex: 1,
+    minWidth: 0,
+    paddingHorizontal: 10,
+    paddingVertical: 9,
+    textAlign: 'center',
+  },
+  legalInputUnit: {
+    color: theme.palette.slate.textMuted,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  legalMotorLimitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  legalMotorLimitText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  legalMotorLimitLabel: {
+    color: theme.palette.slate.textPrimary,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  legalMotorLimitWarning: {
+    color: theme.status.error.text,
+    fontSize: 11,
+    fontWeight: '700',
+    lineHeight: 14,
+  },
+  moveLegalRow: {
+    width: '100%',
+    flexDirection: 'row',
+    gap: 10,
+  },
+  moveBoardCell: {
+    flex: 1,
+    minWidth: 0,
+  },
+  legalIconButton: {
+    ...widgetSurface,
+    width: 66,
+    height: 66,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 14,
+  },
+  legalIconButtonActive: {
+    backgroundColor: theme.status.error.bg,
+    borderColor: theme.status.error.border,
+  },
+  legalIconButtonWarning: {
+    borderColor: theme.status.error.border,
+  },
+  legalIconButtonPressed: {
+    backgroundColor: theme.palette.slate.surface,
+  },
+  legalWarningButton: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.palette.slate.surfaceDeep,
+    borderWidth: 1,
+    borderColor: theme.status.error.border,
   },
 })

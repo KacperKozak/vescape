@@ -8,6 +8,7 @@ import {
   FunnelIcon,
   PlusIcon,
   SlidersHorizontalIcon,
+  SirenIcon,
   XIcon,
 } from 'phosphor-react-native'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
@@ -66,6 +67,8 @@ import type { Board } from '@/store/boardStore'
 import type { HistorySession, TelemetryMinuteBucket, TelemetrySample } from '@/store/historyStore'
 import type { MediaAssetInput, MediaHistoryAsset } from '@/lib/history/mediaHistory'
 import { useWeatherStore } from '@/store/weatherStore'
+import { normalizeLegalModeSettings } from '@/lib/legalMode'
+import { useSettingsStore } from '@/store/settingsStore'
 
 interface CenterBoardOverlayProps {
   boards: Board[]
@@ -572,6 +575,7 @@ export function CenterOverlays({
   const dragOpacity = useSharedValue(0)
   const telemetryReturnOpacity = useSharedValue(mode === 'telemetry' ? 1 : 0)
   const weatherLoading = useWeatherStore((s) => s.loading)
+  const legalModeActive = useSettingsStore((s) => normalizeLegalModeSettings(s.legalMode).enabled)
   const historyBusy = history.loadingSession || history.historyLoading
   const telemetryInteractive = mode === 'telemetry' && !revealGestureActive
   const interfaceFadeStyle = useAnimatedStyle(() => ({
@@ -720,6 +724,11 @@ export function CenterOverlays({
             size="lg"
             onPress={() => setTuneDrawerOpen(true)}
           />
+          {legalModeActive ? (
+            <View style={styles.legalModeBadge}>
+              <SirenIcon size={13} color={theme.palette.mono.white} weight="fill" />
+            </View>
+          ) : null}
         </View>
         <EdgeDrawer
           visible={tuneDrawerOpen}
@@ -1260,6 +1269,19 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 12,
     zIndex: 20,
+  },
+  legalModeBadge: {
+    position: 'absolute',
+    top: -3,
+    right: -3,
+    width: 21,
+    height: 21,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.status.error.color,
+    borderWidth: 2,
+    borderColor: theme.palette.slate.surfaceDeep,
   },
   historyError: {
     position: 'absolute',
