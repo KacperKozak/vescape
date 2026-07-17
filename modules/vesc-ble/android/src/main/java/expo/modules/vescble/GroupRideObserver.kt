@@ -53,6 +53,13 @@ internal class GroupRideObserver(
     /** True while the observe connection should be kept alive (drives service idle checks). */
     val active: Boolean get() = !stopped
 
+    /**
+     * True while the rider is in (or rejoining) a specific ride. Distinct from [active]: the app
+     * observes the lobby whenever it is open, but only real ride participation should block
+     * board-less shutdown paths like Auto close.
+     */
+    val participating: Boolean get() = !stopped && (joinedRideId != null || desiredRideId != null)
+
     fun start(url: String) {
         if (!stopped && url == serverUrl) return
         stopped = false
@@ -393,6 +400,8 @@ internal class GroupRideObserver(
         )
     }
 
+    // @parity /modules/vesc-ble/src/index.ts `GroupRideConnectionState`
+    // TODO(iOS parity): no iOS peer — Group Ride is not ported yet.
     private fun emitConnection(state: String) {
         emit("onGroupRideConnection", mapOf("state" to state))
     }

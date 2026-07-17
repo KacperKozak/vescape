@@ -78,23 +78,11 @@ async function rollbackLocalRelease(state: {
   console.log('✓ Local release changes rolled back')
 }
 
-async function updateVersions(version: string) {
+async function updateVersion(version: string) {
   const pkgPath = join(root, 'package.json')
   const pkg = JSON.parse(await Bun.file(pkgPath).text())
   pkg.version = version
   await Bun.write(pkgPath, JSON.stringify(pkg, null, 2) + '\n')
-
-  const gradlePath = join(root, 'android/app/build.gradle')
-  const gradle = await Bun.file(gradlePath).text()
-  if (!/versionCode \d+/.test(gradle) || !/versionName "[^"]+"/.test(gradle)) {
-    throw new Error('Android version fields were not found')
-  }
-
-  const updatedGradle = gradle
-    .replace(/versionCode \d+/, `versionCode ${androidVersionCode(version)}`)
-    .replace(/versionName "[^"]+"/, `versionName "${version}"`)
-
-  await Bun.write(gradlePath, updatedGradle)
 }
 
 async function ensureOnlyExpectedChanges(expectedPaths: string[]) {
@@ -164,7 +152,7 @@ try {
 
   if (isDevBranch) {
     const newVersion = bumpVersion(baseVersion, isPatch)
-    await updateVersions(newVersion)
+    await updateVersion(newVersion)
     console.log(
       `\n→ Version bumped ${baseVersion} → ${newVersion} (Android versionCode ${androidVersionCode(newVersion)})`,
     )
@@ -181,6 +169,9 @@ try {
   // a permissive `Href`, so route strings aren't checked here; the live dev
   // server still enforces them day-to-day. Regenerated next time Metro runs.
   await run('Clear stale route types', 'rm -f .expo/types/router.d.ts')
+  // Regenerate android/ so config plugins and the bumped version are always
+  // applied — the generated folder is gitignored and otherwise goes stale.
+  await run('Prebuild android', 'bunx expo prebuild --platform android')
   await run('TypeScript check', 'bun run ts')
   await run('Lint', 'bun run lint')
   await run('Copy shared files', 'bun run copy:shared')

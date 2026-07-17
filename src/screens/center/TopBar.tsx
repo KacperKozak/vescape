@@ -17,6 +17,7 @@ import { EdgeDrawer } from '@/components/ui/overlays/AnchoredSheet'
 import { IconButton } from '@/components/ui/base/IconButton'
 import { WeatherStat } from '@/components/ui/weather/WeatherStat'
 import { SocialSheet } from '@/screens/social/SocialSheet'
+import { BoardWarningControl } from '@/components/domain/warnings/BoardWarningControl'
 import { isNightAtTime } from '@/lib/weather'
 import { routes } from '@/navigation/routes'
 import type { Board } from '@/store/boardStore'
@@ -117,16 +118,19 @@ export function TopBar({
               weight="bold"
             />
           </Pressable>
-          <View style={styles.divider} />
           {canDisconnect && (
-            <Pressable
-              style={styles.plugButton}
-              onPress={onDisconnect}
-              testID="board-disconnect-button"
-            >
-              <PowerIcon size={15} color={theme.status.error.color} weight="bold" />
-            </Pressable>
+            <>
+              <View style={styles.divider} />
+              <Pressable
+                style={styles.plugButton}
+                onPress={onDisconnect}
+                testID="board-disconnect-button"
+              >
+                <PowerIcon size={15} color={theme.status.error.color} weight="bold" />
+              </Pressable>
+            </>
           )}
+          {activeBoardId && <BoardWarningControl boardId={activeBoardId} />}
         </View>
         <IconButton
           icon={GearSixIcon}

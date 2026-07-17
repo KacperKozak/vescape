@@ -326,7 +326,7 @@ internal final class ConfigRWController {
         fwVersion: ctx.fwVersion,
         refloatVersion: ctx.refloatVersion
       )
-      complete(snapshot, connection)
+      complete(snapshot, RefloatConfigDecoder.decodeSafetyValues(schema: schema, rawConfig: configBytes), connection)
     } catch let error as RefloatConfigSchemaException {
       fail(code: .UNSUPPORTED_SCHEMA, message: error.message, rawConfig: configBytes, connection: connection)
     } catch let error as RefloatConfigDecodeException {
@@ -392,7 +392,7 @@ internal final class ConfigRWController {
         fwVersion: ctx.fwVersion,
         refloatVersion: ctx.refloatVersion
       )
-      completeWrite(snapshot, connection)
+      completeWrite(snapshot, RefloatConfigDecoder.decodeSafetyValues(schema: schema, rawConfig: boardConfig), connection)
     } catch let error as RefloatConfigDecodeException {
       failWrite(code: .CONFIG_VERIFY_FAILED, message: error.message, phase: .verifying, rawConfig: original, connection: connection)
     } catch {
@@ -400,23 +400,25 @@ internal final class ConfigRWController {
     }
   }
 
-  private func complete(_ snapshot: RefloatConfigSnapshot, _ connection: ConfigRWConnection) {
+  private func complete(_ snapshot: RefloatConfigSnapshot, _ safety: ConfigSafetyValues, _ connection: ConfigRWConnection) {
     let pending = readCallbacks
     readCallbacks = nil
     let resume = currentResumePolling
     state = .idle
     cancelTimeout()
     if resume { connection.startPolling() }
+    connection.evaluateConfigSafety(safety)
     pending?.onSuccess(snapshot.toMap())
   }
 
-  private func completeWrite(_ snapshot: RefloatConfigSnapshot, _ connection: ConfigRWConnection) {
+  private func completeWrite(_ snapshot: RefloatConfigSnapshot, _ safety: ConfigSafetyValues, _ connection: ConfigRWConnection) {
     let pending = writeCallbacks
     writeCallbacks = nil
     let resume = currentResumePolling
     state = .idle
     cancelTimeout()
     if resume { connection.startPolling() }
+    connection.evaluateConfigSafety(safety)
     pending?.onSuccess(snapshot.toMap())
   }
 
@@ -583,6 +585,7 @@ internal struct ConfigRWConnection {
   let sendPayload: ([UInt8]) -> Bool
   let captureDiagnostic: (String, [String: Any?]) -> Void
   let loadProfile: (String) -> [String: Any?]?
+  let evaluateConfigSafety: (ConfigSafetyValues) -> Void
 }
 
 private extension BoardTransport {

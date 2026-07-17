@@ -1,6 +1,7 @@
 package expo.modules.vescble
 
-// @parity /modules/vesc-ble/ios/connection/BoardSessionController.swift `BoardPhase`
+// @parity /modules/vesc-ble/ios/connection/BoardPhase.swift `BoardPhase`
+// @parity /modules/vesc-ble/src/index.ts `SessionStatus`
 // @platform-diff Android also exposes Stale/Disconnecting for foreground-service notification and
 // stale-telemetry reporting windows; iOS documents those as accepted wire differences on its enum.
 internal enum class BoardPhase(val wireValue: String) {

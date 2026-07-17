@@ -6,6 +6,8 @@ import kotlin.math.roundToInt
 
 private const val REMOTE_TILT_REPEAT_MS = 40L
 
+// @parity /modules/vesc-ble/src/index.ts `RemoteTiltPhase`
+// TODO(iOS parity): no iOS peer — Remote Tilt is not ported yet.
 internal enum class RemoteTiltPhase(val wireValue: String) {
     Idle("idle"),
     Holding("holding"),

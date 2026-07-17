@@ -148,6 +148,22 @@ _Avoid_: Deck disturbance, rider lean, foot pressure, throttle, acceleration com
 A footpad sensor mode that treats both sensor zones as one engagement zone.
 _Avoid_: Posi switch, dual switch
 
+**Legal Mode**:
+A rider-selected mode that prepares a Board to meet a chosen legal limit through mandatory speed-warning feedback and optional board-enforced speed constraint.
+_Avoid_: Police mode, cop mode, inspection mode
+
+**Legal Speed Limit**:
+The target maximum riding speed used by Legal Mode, either rider-entered or suggested from a jurisdiction.
+_Avoid_: Max board speed, engine limit
+
+**Legal Warning Speed**:
+The speed at which Legal Mode starts audible warning feedback before the Legal Speed Limit is reached.
+_Avoid_: Alert threshold, warning threshold
+
+**Legal Road Status**:
+The jurisdiction-specific rider-facing status of whether this Board category appears road-legal, restricted, unknown, or not road-legal.
+_Avoid_: Legal yes/no, police status
+
 **Board Move**:
 A deliberate rider command that moves a disengaged Board from the app without starting a Ride Recording.
 _Avoid_: Move board, Remote Tilt, throttle
@@ -179,6 +195,14 @@ _Avoid_: Watch payload, wear message
 **Watch Alert**:
 A one-shot command the phone pushes to a **Watch Mirror** when the native alert engine fires, telling it to vibrate and/or sound. Carries no threshold logic — the alert decision already happened on the phone against an **Alert Rule**.
 _Avoid_: Wear alarm, watch notification
+
+**Board Warning**:
+An app-detected abnormal Board condition worth the rider's attention — such as excessive cell-voltage spread, unstable telemetry readings, or a dangerous VESC/Refloat setting. Detected natively, keyed one-per-problem-kind per Board (re-detection updates the same warning rather than duplicating it), and carries a severity of warn or critical. Stored durably like automotive fault codes: it clears automatically when its detector re-evaluates with real data and the condition is gone, and the rider may clear it manually — but a still-true condition simply re-fires it. Detection logic is app-authored (unlike a rider-authored **Alert Rule**) and the finding is rider-facing (unlike a debug-facing **Diagnostic Event**).
+_Avoid_: Board alert (collides with Alert Rule), fault (reserved for VESC firmware fault codes), board issue, health event
+
+**Debug Recording**:
+A developer-facing `.jsonl` capture of one Board Session's raw BLE traffic, session-state transitions, and GPS fixes, recorded on-device and exportable for offline analysis or detector replay. Not a **Ride Recording** (no telemetry-sample persistence, not rider-facing) and not part of **Ride History**.
+_Avoid_: session log, BLE dump, trace
 
 **App Setting**:
 A user-controlled app preference that affects app behavior across boards unless explicitly scoped elsewhere.
@@ -254,8 +278,18 @@ _Avoid_: Position update, presence ping, location share, group telemetry
 - A **Tune Preview** derives an idealized board-angle response from one **Tune Profile** and never predicts whether the **Board** can physically achieve it.
 - A **Pitch Input** adds pitch error over time without directly commanding speed or motor power.
 - A **Posi Sensor** setting belongs to a **Tune Profile** when the board firmware exposes that Refloat field.
+- **Legal Mode** applies to one **Board** and combines tune-level constraints with **Alert Rules** when activated.
+- **Legal Mode** has one **Legal Speed Limit** and one **Legal Warning Speed**.
+- A **Legal Warning Speed** must be lower than its **Legal Speed Limit**.
+- A **Legal Road Status** may warn the rider without removing **Legal Speed Limit** controls.
 - A **Board Move** requires a live **Board Session** but must not be treated as riding.
 - **Board Move**, light controls, tune writes, and quick tune controls are **Firmware-Dependent Commands**.
+- A **Board Warning** belongs to one **Board** and one problem kind; re-detection updates the existing warning instead of creating another.
+- A **Board Warning** is detected natively: config-scoped detectors run once per **Board Session** after a passing **Link Integrity Check** (and after tune writes), telemetry-scoped detectors run continuously on live BMS/telemetry data.
+- A **Board Warning** outlives the **Board Session** and app restarts; it clears automatically only when its detector re-evaluated with real data and the condition was gone, or when the rider clears it manually — a still-true condition re-fires it.
+- A **Board Warning** firing for the first time in a **Board Session** also records one **Diagnostic Event**.
+- A **Board Warning** is not an **Alert Rule** (app-authored, not rider-authored) and produces no riding feedback; it is passive display only.
+- A **Board Warning** detector can be replayed offline against a **Debug Recording**'s BLE frames; a committed clean Debug Recording guards against false positives.
 - An **Alert Rule** evaluates against live **Telemetry Samples**.
 - An **Alert Message Template** belongs to one **Alert Rule**.
 - A **Watch Mirror** receives **Watch Frames** and **Watch Alerts** from the phone and never sends data back; it is not a **Board**, a **Board Session**, or a source of **Telemetry Samples**.

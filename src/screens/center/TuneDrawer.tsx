@@ -110,7 +110,7 @@ export function TuneDrawer({ onNavigate }: TuneDrawerProps) {
       <SelectWidget
         icon={FadersIcon}
         selectIcon={SelectIcon}
-        label="Tunes"
+        label="Tune profiles"
         value={activeName}
         description="Pick how your board should feel."
         accent={theme.palette.purple.color}

@@ -47,6 +47,12 @@ internal fun validCompanionCooldownMinutes(value: Any?): Int? =
     ?.toInt()
     ?.coerceIn(0, 1440)
 
+/** Auto close delay in minutes; at least 1 so a fired timer always had a real wait. */
+internal fun validAutoCloseDelayMinutes(value: Any?): Int? =
+  (value as? Number)
+    ?.toInt()
+    ?.coerceIn(1, 1440)
+
 /** Watch Mirror push interval in ms; floored at 50ms (20Hz), capped at 10s. */
 internal fun validWearMirrorIntervalMs(value: Any?): Int? =
   (value as? Number)
@@ -200,8 +206,12 @@ class AppDataRepository private constructor(private val context: Context) {
       connectionSoundsEnabled = req("connectionSoundsEnabled", true) { it as? Boolean },
       telemetryPollRateHz = req("telemetryPollRateHz", 20, ::validTelemetryPollRateHz),
       wearMirrorIntervalMs = req("wearMirrorIntervalMs", 500, ::validWearMirrorIntervalMs),
+      wearAutoLaunchOnConnect = req("wearAutoLaunchOnConnect", true) { it as? Boolean },
       companionPresenceEnabled = req("companionPresenceEnabled", false) { it as? Boolean },
+      boardWarningsEnabled = req("boardWarningsEnabled", true) { it as? Boolean },
       companionPresenceCooldownMinutes = req("companionPresenceCooldownMinutes", 60, ::validCompanionCooldownMinutes),
+      autoCloseEnabled = req("autoCloseEnabled", false) { it as? Boolean },
+      autoCloseDelayMinutes = req("autoCloseDelayMinutes", 15, ::validAutoCloseDelayMinutes),
       riderId = opt("riderId") { it as? String },
       riderName = opt("riderName") { it as? String },
       riderColor = opt("riderColor") { it as? String },
@@ -255,9 +265,14 @@ class AppDataRepository private constructor(private val context: Context) {
         validTelemetryPollRateHz(value) ?: return@withContext
       "wearMirrorIntervalMs" ->
         validWearMirrorIntervalMs(value) ?: return@withContext
+      "wearAutoLaunchOnConnect" -> value as? Boolean ?: return@withContext
       "companionPresenceEnabled" -> value as? Boolean ?: return@withContext
+      "boardWarningsEnabled" -> value as? Boolean ?: return@withContext
       "companionPresenceCooldownMinutes" ->
         validCompanionCooldownMinutes(value) ?: return@withContext
+      "autoCloseEnabled" -> value as? Boolean ?: return@withContext
+      "autoCloseDelayMinutes" ->
+        validAutoCloseDelayMinutes(value) ?: return@withContext
       "riderId", "riderName", "riderColor" -> value as? String
       else -> return@withContext
     }
@@ -287,8 +302,12 @@ class AppDataRepository private constructor(private val context: Context) {
         "connectionSoundsEnabled" -> d.connectionSoundsEnabled
         "telemetryPollRateHz" -> d.telemetryPollRateHz
         "wearMirrorIntervalMs" -> d.wearMirrorIntervalMs
+        "wearAutoLaunchOnConnect" -> d.wearAutoLaunchOnConnect
         "companionPresenceEnabled" -> d.companionPresenceEnabled
+        "boardWarningsEnabled" -> d.boardWarningsEnabled
         "companionPresenceCooldownMinutes" -> d.companionPresenceCooldownMinutes
+        "autoCloseEnabled" -> d.autoCloseEnabled
+        "autoCloseDelayMinutes" -> d.autoCloseDelayMinutes
         "riderId" -> d.riderId
         "riderName" -> d.riderName
         "riderColor" -> d.riderColor
@@ -535,6 +554,7 @@ fun BoardEntity.toMap(settings: List<BoardSettingEntity>): Map<String, Any?> {
     "createdAt" to createdAt,
     "batteryConfig" to values["batteryConfig"],
     "lastBattery" to values["lastBattery"],
+    "dismissedWarnings" to values["dismissedWarnings"],
     "link" to link,
   )
 }
@@ -557,8 +577,12 @@ fun AppSettings.toMap(): Map<String, Any?> = mapOf(
   "connectionSoundsEnabled" to connectionSoundsEnabled,
   "telemetryPollRateHz" to telemetryPollRateHz,
   "wearMirrorIntervalMs" to wearMirrorIntervalMs,
+  "wearAutoLaunchOnConnect" to wearAutoLaunchOnConnect,
   "companionPresenceEnabled" to companionPresenceEnabled,
+  "boardWarningsEnabled" to boardWarningsEnabled,
   "companionPresenceCooldownMinutes" to companionPresenceCooldownMinutes,
+  "autoCloseEnabled" to autoCloseEnabled,
+  "autoCloseDelayMinutes" to autoCloseDelayMinutes,
   "riderId" to riderId,
   "riderName" to riderName,
   "riderColor" to riderColor,
@@ -686,6 +710,9 @@ fun PrivacyZoneEntity.toMap(): Map<String, Any?> = mapOf(
 )
 
 internal const val MAP_POINT_KIND_DIRECTION = "direction"
+
+// @parity /modules/vesc-ble/ios/telemetry/AppDataRepository.swift `validMapPointKinds`
+// @parity /modules/vesc-ble/src/index.ts `MapPointKind`
 internal val VALID_MAP_POINT_KINDS = setOf(
   MAP_POINT_KIND_DIRECTION,
   "drop",
@@ -777,6 +804,7 @@ internal fun Map<String, Any?>.toBoardSettingEntities(boardId: String): Pair<Lis
 
   putOrDelete("description", (get("description") as? String)?.takeIf { it.isNotBlank() })
   putOrDelete("batteryConfig", normalizeBatteryConfig(get("batteryConfig")))
+  putOrDelete("dismissedWarnings", normalizeDismissedWarnings(get("dismissedWarnings")))
   val link = normalizedBoardLink()
   putOrDelete("transport", BoardTransport.encode(BoardTransport.fromBridge(link?.get("transport"))))
   putOrDelete("linkVersion", (link?.get("linkVersion") as? Number)?.toInt()?.takeIf { it == BOARD_LINK_VERSION })
@@ -804,8 +832,20 @@ private fun BoardSettingEntity.decodeBoardSetting(): Pair<String, Any?>? {
     "hasBms" -> (raw as? Boolean)?.let { key to it }
     "vescFirmwareVersion", "refloatVersion", "refloatBaseVersion" -> (raw as? String)?.let { key to it }
     "lastBattery" -> decodeLastBattery(raw)?.let { key to it }
+    "dismissedWarnings" -> normalizeDismissedWarnings(raw)?.let { key to it }
     else -> null
   }
+}
+
+/**
+ * Dismissed Board Warning kinds persisted as a board setting: a non-empty list of kind slugs, or
+ * null (row removed) when empty/invalid.
+ * @parity /modules/vesc-ble/ios/telemetry/AppDataRepository.swift `normalizeDismissedWarnings`
+ */
+private fun normalizeDismissedWarnings(raw: Any?): List<String>? {
+  val list = raw as? List<*> ?: return null
+  val kinds = list.filterIsInstance<String>().filter { it.isNotEmpty() }
+  return kinds.ifEmpty { null }
 }
 
 private fun decodeLastBattery(raw: Any?): Map<String, Any?>? {

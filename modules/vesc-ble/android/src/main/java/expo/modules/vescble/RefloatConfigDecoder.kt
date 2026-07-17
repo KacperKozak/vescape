@@ -1,5 +1,6 @@
 package expo.modules.vescble
 
+import expo.modules.vescble.warnings.ConfigSafetyValues
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.security.MessageDigest
@@ -53,6 +54,40 @@ internal object RefloatConfigDecoder {
       missingFieldIds = missing,
       fwVersion = fwVersion,
       refloatVersion = refloatVersion,
+    )
+  }
+
+  /**
+   * Decode just the fields the config-safety rules need. Each is `null` when the schema lacks it or
+   * the raw config is too short — the caller skips the rules that depend on a missing value.
+   */
+  fun decodeSafetyValues(schema: RefloatConfigSchema, rawConfig: ByteArray): ConfigSafetyValues {
+    val byId = schema.fields.associateBy { it.id }
+    fun fieldOrNull(id: String): RefloatConfigSchemaField? =
+      byId[id]?.takeIf { rawConfig.size >= it.offset + it.type.byteSize }
+    // Treat a non-finite decode (NaN/Infinity from corrupt bytes) as missing, not as a real value:
+    // the safety rules skip a null field, whereas a NaN would compare false against every bound and
+    // wrongly count as a clean evaluation that clears a valid warning.
+    // Contain a malformed field (e.g. a scaled type with a missing scale) to that one rule instead of
+    // letting one bad decode discard every other safety value.
+    fun decodedOrNull(id: String): Any? = try {
+      fieldOrNull(id)?.let { readValue(rawConfig, it) }
+    } catch (_: Exception) {
+      null
+    }
+    fun number(id: String): Double? = when (val v = decodedOrNull(id)) {
+      is Double -> v.takeIf { it.isFinite() }
+      is Boolean -> if (v) 1.0 else 0.0
+      else -> null
+    }
+    fun boolean(id: String): Boolean? = decodedOrNull(id) as? Boolean
+    return ConfigSafetyValues(
+      faultAdc1 = number("fault_adc1"),
+      faultAdc2 = number("fault_adc2"),
+      tiltbackLv = number("tiltback_lv"),
+      tiltbackHv = number("tiltback_hv"),
+      tiltbackDuty = number("tiltback_duty"),
+      movingFaultDisabled = boolean("fault_moving_fault_disabled"),
     )
   }
 

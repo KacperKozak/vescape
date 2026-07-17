@@ -1,3 +1,16 @@
+/**
+ * TS declaration of the VescBle native contract: every type here mirrors a native definition.
+ * Coverage is not uniform — parts of this surface are Android-only (Group Ride, Remote Tilt) and
+ * some shared states are platform-specific. Those gaps are marked in place below with
+ * `@platform-diff` or `TODO(iOS parity)`; the file-level tags point at the two module entry points.
+ *
+ * @parity /modules/vesc-ble/ios/VescBleModule.swift
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt
+ *
+ * Narrower `@parity` tags below mark the nodes that drift silently: columnar buffer layouts and
+ * enums native re-declares.
+ */
+
 import { requireNativeModule, type EventSubscription } from 'expo-modules-core'
 
 import { e2eFake } from './e2eFake'
@@ -28,6 +41,12 @@ export interface LocationEvent {
   precise: boolean
 }
 
+/**
+ * @parity /modules/vesc-ble/ios/connection/BoardPhase.swift `BoardPhase`
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardPhase.kt `BoardPhase`
+ * @platform-diff `stale` and `disconnecting` are Android-only. iOS routes stale telemetry through
+ * `reconnecting` and stops straight to `idle`/`error`, so JS must treat both as optional.
+ */
 export type SessionStatus =
   | 'idle'
   | 'connecting'
@@ -93,6 +112,10 @@ export interface BoardProbeResult {
  * revisits `probing` for the next candidate. Final facts are still read from the
  * returned {@link BoardCandidate}s; detail stays in Diagnostic Events.
  */
+/**
+ * @parity /modules/vesc-ble/ios/connection/BoardTransportDetector.swift `emitProgress`
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardTransportDetector.kt `emitProgress`
+ */
 export type BoardProbeStep =
   | 'connecting'
   | 'handshake'
@@ -115,6 +138,10 @@ export interface BoardProbeProgressEvent {
   canIds?: number[]
 }
 
+/**
+ * @parity /modules/vesc-ble/ios/runtime/BoardSession.swift `LinkIntegrity`
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/runtime/BoardSession.kt `LinkIntegrity`
+ */
 export type LinkIntegrity = 'unknown' | 'checking' | 'trusted' | 'outdated' | 'mismatched'
 
 /**
@@ -144,6 +171,14 @@ export interface Board {
   batteryConfig: BatteryConfig | null
   /** Last Battery SoC Estimate persisted natively; survives full app kill. `undefined` before first session. */
   lastBattery?: LastBattery | null
+  /**
+   * Board Warning kinds the rider dismissed (acknowledged). Dismissed warnings stay in the native
+   * registry and render grayed in the warnings sheet, but stop counting toward the board's warning
+   * indicator. Absent/empty means nothing dismissed.
+   * @parity /modules/vesc-ble/ios/telemetry/AppDataRepository.swift `normalizeDismissedWarnings`
+   * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/AppDataRepository.kt `normalizeDismissedWarnings`
+   */
+  dismissedWarnings?: string[]
   /** Probe-confirmed reachability. `null` means offline-only/unlinked. */
   link: BoardLink | null
 }
@@ -172,6 +207,10 @@ export interface BatteryManualConfig {
 
 export type AlertSoundType = string
 
+/**
+ * @parity /modules/vesc-ble/ios/alerts/AlertAudioPlayer.swift `alertCategorySingle`, `alertCategoryGeiger`
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescAlerts.kt `ALERT_CATEGORY_SINGLE`, `ALERT_CATEGORY_GEIGER`
+ */
 export type AlertPresetCategory = 'single' | 'geiger'
 
 export interface AlertPreset {
@@ -204,6 +243,13 @@ export interface PrivacyZone {
   updatedAt: number
 }
 
+/**
+ * Native validates incoming map points against its own copy of this list; a kind added here only
+ * is rejected at the bridge.
+ *
+ * @parity /modules/vesc-ble/ios/telemetry/AppDataRepository.swift
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/AppDataRepository.kt
+ */
 export type MapPointKind =
   | 'direction'
   | 'drop'
@@ -314,6 +360,10 @@ export interface LiveMetricExclusionUpdate {
 export type BoardPhase = SessionStatus
 export type GpsPhase = 'idle' | 'starting' | 'active' | 'error'
 export type ScanPhase = ScanStatus
+/**
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/RemoteTiltController.kt `RemoteTiltPhase`
+ * TODO(iOS parity): no iOS peer — Remote Tilt is not ported yet.
+ */
 export type RemoteTiltPhase = 'idle' | 'holding' | 'decaying' | 'locked'
 
 export interface RemoteTiltDecay {
@@ -508,9 +558,24 @@ export interface HistoryRange {
   exclusions: MetricExclusion[]
 }
 
-/** Float64 lanes per sample in the columnar board payload. Must match the native encoder. */
+/**
+ * Float64 lanes per sample in the columnar board payload. Must match the native encoder.
+ *
+ * @parity /modules/vesc-ble/ios/telemetry/TelemetryRepository.swift `SAMPLE_COLUMN_COUNT`
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/TelemetryRepository.kt `SAMPLE_COLUMN_COUNT`
+ */
 const SAMPLE_COLUMN_COUNT = 25
+
+/**
+ * @parity /modules/vesc-ble/ios/telemetry/BmsSeriesRing.swift `BMS_SERIES_FIXED_LANES`
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BmsSeriesRing.kt `BMS_SERIES_FIXED_LANES`
+ */
 const BMS_SERIES_FIXED_LANES = 3
+
+/**
+ * @parity /modules/vesc-ble/ios/telemetry/BmsSeriesRing.swift `BMS_SERIES_BALANCE_LANE_BITS`
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BmsSeriesRing.kt `BMS_SERIES_BALANCE_LANE_BITS`
+ */
 const BMS_SERIES_BALANCE_LANE_BITS = 30
 
 /**
@@ -530,7 +595,15 @@ interface NativeHistoryRange {
 
 const nullableLane = (value: number): number | null => (Number.isNaN(value) ? null : value)
 
-/** Rebuild TelemetrySample objects from the columnar buffer locally (no per-field bridge crossing). */
+/**
+ * Rebuild TelemetrySample objects from the columnar buffer locally (no per-field bridge crossing).
+ *
+ * Lane order is shared by convention with the native encoders and is not self-describing — a lane
+ * added on one side without the others shifts every field after it, silently.
+ *
+ * @parity /modules/vesc-ble/ios/telemetry/TelemetryRepository.swift
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/TelemetryRepository.kt
+ */
 function decodeBoardSamples(range: NativeHistoryRange): TelemetrySample[] {
   const { boardCount, boardDevices, boardDeviceNames } = range
   if (!boardCount || !range.boardColumns) return []
@@ -582,7 +655,12 @@ interface NativeBmsSeriesEvent {
 
 const hasLaneBit = (bits: number, bit: number): boolean => Math.floor(bits / 2 ** bit) % 2 === 1
 
-/** Decode the Live BMS Series columnar buffer from native into public domain frames. */
+/**
+ * Decode the Live BMS Series columnar buffer from native into public domain frames.
+ *
+ * @parity /modules/vesc-ble/ios/telemetry/BmsSeriesRing.swift `encodeBmsSeriesColumns`
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BmsSeriesRing.kt `encodeBmsSeriesColumns`
+ */
 function decodeBmsSeriesFrames(event: NativeBmsSeriesEvent): BmsSeriesFrame[] {
   const { cellCount, count, columns } = event
   if (!count || !cellCount || !columns) return []
@@ -718,10 +796,23 @@ export interface AppSettings {
   /** Android-only: use CompanionDeviceManager presence to connect selected board when nearby. */
   companionPresenceEnabled: boolean
   /**
+   * Board Warnings master switch (kill switch). Off ⇒ native runs no warning detector evaluation
+   * and no registry writes; JS hides the warning icon/sheet. Stored warnings are left untouched
+   * and reappear on re-enable. Takes effect live, no reconnect needed.
+   */
+  boardWarningsEnabled: boolean
+  /**
    * Android-only: minutes to pause companion auto start after the user exits the app
    * manually, so the board reappearing doesn't immediately relaunch it. 0 = off.
    */
   companionPresenceCooldownMinutes: number
+  /**
+   * Android-only: close the whole app (task + service) after `autoCloseDelayMinutes` without a
+   * board connection. Does not pause companion auto start — the board reappearing relaunches.
+   */
+  autoCloseEnabled: boolean
+  /** Minutes without a board connection before auto close fires. UI offers 1–480; native accepts up to 1440. */
+  autoCloseDelayMinutes: number
   /**
    * Max telemetry poll rate in Hz, applied as a minimum spacing floor between
    * requests. Polling stays response-paced (the next request is only sent once
@@ -735,6 +826,12 @@ export interface AppSettings {
    * for stress-testing the link. Floored at 50ms (20Hz), capped at 10s.
    */
   wearMirrorIntervalMs: number
+  /**
+   * Android-only: bring the Watch Mirror to the foreground on the paired watch when a fresh
+   * board session connects (never on mid-ride auto-reconnects). No-op unless the Mirror app
+   * is installed and reachable.
+   */
+  wearAutoLaunchOnConnect: boolean
   /**
    * Persistent device-scoped anonymous Group Ride Rider id. Generated once on
    * first use and stored locally; sent to the relay server as the Rider's
@@ -861,6 +958,10 @@ export interface GroupRideRider {
   lastSeen: number
 }
 
+/**
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/GroupRideObserver.kt `emitConnection`
+ * TODO(iOS parity): no iOS peer — Group Ride is not ported yet.
+ */
 export type GroupRideConnectionState = 'idle' | 'connecting' | 'connected' | 'disconnected'
 
 export interface GroupRideConnectionEvent {
@@ -906,6 +1007,57 @@ export interface AppDataChangedEvent {
   scope: 'boards' | 'settings'
 }
 
+/**
+ * Two-level Board Warning severity, fixed at detection time.
+ * @parity /modules/vesc-ble/ios/telemetry/BoardWarningKind.swift `BoardWarningSeverity`
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/warnings/BoardWarningRegistry.kt `BoardWarningSeverity`
+ */
+export type BoardWarningSeverity = 'warn' | 'critical'
+
+/**
+ * Every Board Warning kind slug the native detectors currently emit. Mirrors the native `BoardWarningKind`
+ * catalog on both platforms; a rider-facing title is required per kind (see `WARNING_TITLES`). A `BoardWarning`
+ * from a newer native build may carry a kind outside this union, so consumers still fall back to the raw slug.
+ * @parity /modules/vesc-ble/ios/telemetry/BoardWarningKind.swift `BoardWarningKind`
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/warnings/BoardWarningKind.kt `BoardWarningKind`
+ */
+export type BoardWarningKind =
+  | 'cell-spread'
+  | 'battery-config-mismatch'
+  | 'footpad-disabled'
+  | 'lv-pushback-low'
+  | 'hv-pushback-high'
+  | 'duty-pushback-high'
+  | 'moving-fault-disabled'
+
+/**
+ * One durable Board Warning — an app-detected abnormal Board condition, keyed one-per-problem-kind
+ * per Board (automotive fault-code model). Detected natively; JS only renders. `payloadJson` carries
+ * kind-specific detail (e.g. peak cell spread) as a JSON string the rendering side decodes per kind.
+ * @parity /modules/vesc-ble/ios/telemetry/BoardWarningStore.swift `BoardWarning`
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/warnings/BoardWarningRegistry.kt `BoardWarning`
+ */
+export interface BoardWarning {
+  boardId: string
+  kind: string
+  severity: BoardWarningSeverity
+  firstDetectedAtMs: number
+  lastDetectedAtMs: number
+  payloadJson: string
+}
+
+/**
+ * Full current warning list for one Board, emitted on every registry change and on subscribe (late
+ * subscribers are immediately consistent). The JS mirror store replaces that board's slice on each
+ * emit — JS never detects, only displays.
+ * @parity /modules/vesc-ble/ios/VescBleModule.swift `sendBoardWarnings`
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt `onBoardWarnings`
+ */
+export interface BoardWarningsEvent {
+  boardId: string
+  warnings: BoardWarning[]
+}
+
 export type CriticalRideNotificationPermissionStatus =
   | 'not-determined'
   | 'denied'
@@ -914,6 +1066,13 @@ export type CriticalRideNotificationPermissionStatus =
   | 'ephemeral'
   | 'unknown'
 
+/**
+ * Event names must match the native `Events(...)` declarations exactly — a name only listed here
+ * yields a listener that never fires.
+ *
+ * @parity /modules/vesc-ble/ios/VescBleModule.swift `Events`
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt `Events`
+ */
 type VescBleEvents = {
   onDevice: (event: DeviceFoundEvent) => void
   onError: (event: ErrorEvent) => void
@@ -941,6 +1100,8 @@ type VescBleEvents = {
   onGroupRideError: (event: GroupRideErrorEvent) => void
   /** Persisted board/app data changed natively — reload the matching store. */
   onAppDataChanged: (event: AppDataChangedEvent) => void
+  /** Full current Board Warning list for a board, on every registry change and on subscribe. */
+  onBoardWarnings: (event: BoardWarningsEvent) => void
 }
 
 interface NativeEventEmitter<TEvents extends Record<string, (...args: never[]) => void>> {
@@ -1013,6 +1174,16 @@ type VescBleNativeModule = NativeEventEmitter<VescBleEvents> & {
   getTelemetrySummary(): Promise<TelemetrySummary>
   getDiagnosticEvents(options: DiagnosticEventOptions): Promise<LocalDiagnosticEvent[]>
   clearDiagnosticEvents(): Promise<void>
+  getBoardWarnings(): Promise<BoardWarning[]>
+  clearBoardWarning(boardId: string, kind: string): Promise<void>
+  clearAllBoardWarnings(boardId: string): Promise<void>
+  devInjectBoardWarning(
+    boardId: string,
+    kind: string,
+    severity: BoardWarningSeverity,
+    payloadJson: string,
+  ): Promise<void>
+  devReportCleanBoardWarning(boardId: string, kind: string): Promise<void>
   getDatabaseSizeBytes(): Promise<number>
   backupDatabase(): Promise<DatabaseBackupResult>
   restoreDatabase(uri: string): Promise<void>
@@ -1429,6 +1600,40 @@ export async function clearDiagnosticEvents(): Promise<void> {
   return native.clearDiagnosticEvents()
 }
 
+// ---------------------------------------------------------------------------
+// Board Warnings
+// ---------------------------------------------------------------------------
+
+/** Pull the full current Board Warning list across all boards — used for the foreground catch-up. */
+export async function getBoardWarnings(): Promise<BoardWarning[]> {
+  return native.getBoardWarnings()
+}
+
+/** Manually clear a single Board Warning. A still-true condition simply re-fires on next evaluation. */
+export async function clearBoardWarning(boardId: string, kind: string): Promise<void> {
+  return native.clearBoardWarning(boardId, kind)
+}
+
+/** Manually clear every Board Warning for a board. Still-true conditions re-fire on next evaluation. */
+export async function clearAllBoardWarnings(boardId: string): Promise<void> {
+  return native.clearAllBoardWarnings(boardId)
+}
+
+/** Dev-only: inject a fake Board Warning to exercise the fire → persist → emit pipe without a detector. */
+export async function devInjectBoardWarning(
+  boardId: string,
+  kind: string,
+  severity: BoardWarningSeverity,
+  payloadJson: string,
+): Promise<void> {
+  return native.devInjectBoardWarning(boardId, kind, severity, payloadJson)
+}
+
+/** Dev-only: report a clean evaluation for a kind (evaluated with data, condition gone), auto-clearing it. */
+export async function devReportCleanBoardWarning(boardId: string, kind: string): Promise<void> {
+  return native.devReportCleanBoardWarning(boardId, kind)
+}
+
 export async function getDatabaseSizeBytes(): Promise<number> {
   return native.getDatabaseSizeBytes()
 }
@@ -1704,6 +1909,12 @@ export function addAppDataChangedListener(
   cb: (event: AppDataChangedEvent) => void,
 ): EventSubscription {
   return emitter.addListener('onAppDataChanged', cb)
+}
+
+export function addBoardWarningsListener(
+  cb: (event: BoardWarningsEvent) => void,
+): EventSubscription {
+  return emitter.addListener('onBoardWarnings', cb)
 }
 
 export function addLiveStateListener(cb: (event: LiveStateEvent) => void): EventSubscription {

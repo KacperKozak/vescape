@@ -19,9 +19,17 @@ class WatchFrameTest {
         if (bytes.size < WATCH_FRAME_BYTES) return null
         val buf = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
         if (buf.get().toInt() != WATCH_FRAME_FIELD_COUNT) return null
-        val stale = buf.get().toInt() != 0
+        val flags = buf.get().toInt()
         fun lane(): Double? = buf.float.let { if (it.isNaN()) null else it.toDouble() }
-        return WatchFrame(buf.float.toDouble(), lane(), lane(), lane(), lane(), stale)
+        return WatchFrame(
+            buf.float.toDouble(),
+            lane(),
+            lane(),
+            lane(),
+            lane(),
+            stale = flags and WATCH_FRAME_FLAG_STALE != 0,
+            waiting = flags and WATCH_FRAME_FLAG_WAITING != 0,
+        )
     }
 
     private fun roundTrip(frame: WatchFrame): WatchFrame? =
@@ -96,6 +104,25 @@ class WatchFrameTest {
         assertNull(decoded.motorTemp)
         assertNull(decoded.ctrlTemp)
         assertTrue(decoded.stale)
+    }
+
+    @Test
+    fun `waiting frame round-trips with empty lanes and degrades to stale for old decoders`() {
+        val decoded = roundTrip(WatchFrameBuilder.waitingFrame())!!
+        assertTrue(decoded.waiting)
+        // Stale is also set so a wrist decoder without the waiting bit dims instead of showing live.
+        assertTrue(decoded.stale)
+        assertEquals(0.0, decoded.speed, 0.0)
+        assertNull(decoded.duty)
+        assertNull(decoded.battery)
+        assertNull(decoded.motorTemp)
+        assertNull(decoded.ctrlTemp)
+    }
+
+    @Test
+    fun `live frame does not carry the waiting bit`() {
+        val decoded = roundTrip(WatchFrame(1.0, 2.0, 3.0, 4.0, 5.0, stale = false))!!
+        assertEquals(false, decoded.waiting)
     }
 
     @Test

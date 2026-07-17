@@ -1,10 +1,16 @@
 import Foundation
 
 /// Fixed lanes preceding the per-cell voltage lanes in the columnar BMS series payload.
+///
+/// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BmsSeriesRing.kt `BMS_SERIES_FIXED_LANES`
+/// @parity /modules/vesc-ble/src/index.ts `BMS_SERIES_FIXED_LANES`
 internal let BMS_SERIES_FIXED_LANES = 3
 
 /// Bits per balancing lane. Cell counts go up to 60 and a Float64 only holds 53 exact integer
 /// bits, so the balancing bitmask is split across two lanes of 30 bits each.
+///
+/// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BmsSeriesRing.kt `BMS_SERIES_BALANCE_LANE_BITS`
+/// @parity /modules/vesc-ble/src/index.ts `BMS_SERIES_BALANCE_LANE_BITS`
 internal let BMS_SERIES_BALANCE_LANE_BITS = 30
 
 internal struct BmsSeriesFrame {
@@ -83,6 +89,9 @@ internal final class BmsSeriesRing {
 /// `BMS_SERIES_FIXED_LANES + cellCount` little-endian Float64 lanes, row-major —
 /// `[capturedAtMs, balanceBitsLo, balanceBitsHi, v0..v{cellCount-1}]`. Decoded by
 /// `decodeBmsSeriesFrames` in `modules/vesc-ble/src/index.ts`; lane order is shared by convention.
+///
+/// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BmsSeriesRing.kt `encodeBmsSeriesColumns`
+/// @parity /modules/vesc-ble/src/index.ts `decodeBmsSeriesFrames`
 internal func encodeBmsSeriesColumns(_ frames: [BmsSeriesFrame], cellCount: Int) -> Data {
   let laneCount = BMS_SERIES_FIXED_LANES + cellCount
   var data = Data(capacity: frames.count * laneCount * MemoryLayout<Double>.size)

@@ -22,6 +22,14 @@
         <action android:name="android.intent.action.MAIN"/>
         <category android:name="android.intent.category.LAUNCHER"/>
       </intent-filter>
+      <!-- Phone-initiated launch on board connect: RemoteActivityHelper requires VIEW + BROWSABLE
+           with a data URI. Must match WATCH_MIRROR_URI in the phone-side WatchMirrorLauncher. -->
+      <intent-filter>
+        <action android:name="android.intent.action.VIEW"/>
+        <category android:name="android.intent.category.DEFAULT"/>
+        <category android:name="android.intent.category.BROWSABLE"/>
+        <data android:scheme="vescape" android:host="mirror"/>
+      </intent-filter>
     </activity>
   </application>
 </manifest>

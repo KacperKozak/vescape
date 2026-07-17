@@ -5,7 +5,12 @@ import UIKit
 #endif
 
 private let ttsPrefix = "tts:"
+/// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescAlerts.kt `ALERT_CATEGORY_SINGLE`
+/// @parity /modules/vesc-ble/src/index.ts `AlertPresetCategory`
 internal let alertCategorySingle = "single"
+
+/// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescAlerts.kt `ALERT_CATEGORY_GEIGER`
+/// @parity /modules/vesc-ble/src/index.ts `AlertPresetCategory`
 internal let alertCategoryGeiger = "geiger"
 
 /// Bundled alert sound preset. Mirrors Android `AlertSoundPreset`.

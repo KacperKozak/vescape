@@ -80,6 +80,7 @@ final class BoardSession {
 }
 
 /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/runtime/BoardSession.kt
+/// @parity /modules/vesc-ble/src/index.ts `LinkIntegrity`
 enum LinkIntegrity: String {
   case unknown
   case checking
