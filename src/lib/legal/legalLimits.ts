@@ -25,8 +25,6 @@ export interface LegalLimitCountryDetail {
 
 const EVZ_SOURCE_URL =
   'https://www.evz.de/en/topics/transport/e-mobility/two-wheelers/e-scooter-rules/'
-const ASTRA_SOURCE_URL = 'https://blog.astra.admin.ch/elektrische-trendfahrzeuge/'
-const AUSTRIA_SOURCE_URL = 'https://www.bmimi.gv.at/en/topics/mobility/walkcyc/escooter.html'
 export const LEGAL_LIMIT_DATA_CHECKED_AT = '2026-07-17'
 
 function country(
@@ -48,12 +46,14 @@ export const LEGAL_LIMIT_COUNTRIES: readonly LegalLimitCountry[] = [
     name: 'Austria',
     code: 'AT',
     alpha3: 'AUT',
-    legalSpeedKmh: 25,
-    warningSpeedKmh: 20,
-    status: 'notRoadLegal',
-    confidence: 'medium',
+    legalSpeedKmh: 5,
+    warningSpeedKmh: 4,
+    status: 'restricted',
+    confidence: 'high',
     labelCoordinate: [14.4, 47.6],
-    sourceUrl: AUSTRIA_SOURCE_URL,
+    sourceUrl: 'https://www.oesterreich.gv.at/de/themen/mobilitaet/spielen_auf_der_strasse',
+    warningText:
+      'Walking pace only (shown as 5 km/h because the rule has no fixed numeric value); not a road or cycle-lane vehicle.',
   }),
   country({
     name: 'Belgium',
@@ -61,9 +61,11 @@ export const LEGAL_LIMIT_COUNTRIES: readonly LegalLimitCountry[] = [
     alpha3: 'BEL',
     legalSpeedKmh: 25,
     warningSpeedKmh: 20,
-    status: 'unknown',
-    confidence: 'medium',
+    status: 'likelyLegal',
+    confidence: 'high',
     labelCoordinate: [4.7, 50.7],
+    sourceUrl: 'https://mobilit.belgium.be/fr/mobilite-durable/trottinettes-et-monoroues',
+    warningText: null,
   }),
   country({
     name: 'Bulgaria',
@@ -72,8 +74,12 @@ export const LEGAL_LIMIT_COUNTRIES: readonly LegalLimitCountry[] = [
     legalSpeedKmh: 25,
     warningSpeedKmh: 20,
     status: 'unknown',
-    confidence: 'medium',
+    confidence: 'low',
     labelCoordinate: [25.2, 42.7],
+    sourceUrl:
+      'https://www.evz.de/en/travelling-motor-vehicles/e-mobility/two-wheelers/e-scooter-regulations-in-europe.html',
+    warningText:
+      'No authoritative rule explicitly covering handlebarless one-wheel devices was located.',
   }),
   country({
     name: 'Croatia',
@@ -81,19 +87,23 @@ export const LEGAL_LIMIT_COUNTRIES: readonly LegalLimitCountry[] = [
     alpha3: 'HRV',
     legalSpeedKmh: 25,
     warningSpeedKmh: 20,
-    status: 'unknown',
-    confidence: 'medium',
+    status: 'likelyLegal',
+    confidence: 'high',
     labelCoordinate: [16.4, 45.1],
+    sourceUrl: 'https://mup.gov.hr/u-modi-su-nova-pravila/288945',
+    warningText: 'Only devices with continuous rated power up to 600 W qualify.',
   }),
   country({
     name: 'Cyprus',
     code: 'CY',
     alpha3: 'CYP',
-    legalSpeedKmh: 20,
-    warningSpeedKmh: 15,
-    status: 'unknown',
+    legalSpeedKmh: 25,
+    warningSpeedKmh: 20,
+    status: 'notRoadLegal',
     confidence: 'medium',
     labelCoordinate: [33.2, 35.0],
+    sourceUrl: 'https://www.mcw.gov.cy/mtcw/pwd/pwd.nsf/all/F7C5047A7194BB0FC2258B4E002650DD',
+    warningText: 'The legal e-scooter category requires handlebars and at least two wheels.',
   }),
   country({
     name: 'Czech Republic',
@@ -101,9 +111,13 @@ export const LEGAL_LIMIT_COUNTRIES: readonly LegalLimitCountry[] = [
     alpha3: 'CZE',
     legalSpeedKmh: 25,
     warningSpeedKmh: 20,
-    status: 'likelyLegal',
+    status: 'notRoadLegal',
     confidence: 'medium',
     labelCoordinate: [15.5, 49.8],
+    sourceUrl:
+      'https://md.gov.cz/Media/Na-pravou-miru/Elektricka-vozitka-Pravidla-a-regulace?returl=%2FZajimave-stranky',
+    warningText:
+      'Ordinary consumer OneWheels/EUCs lack the technical approval required for this vehicle form.',
   }),
   country({
     name: 'Denmark',
@@ -111,9 +125,11 @@ export const LEGAL_LIMIT_COUNTRIES: readonly LegalLimitCountry[] = [
     alpha3: 'DNK',
     legalSpeedKmh: 20,
     warningSpeedKmh: 15,
-    status: 'unknown',
-    confidence: 'medium',
+    status: 'likelyLegal',
+    confidence: 'high',
     labelCoordinate: [10.0, 56.1],
+    sourceUrl: 'https://www.retsinformation.dk/eli/lta/2019/40',
+    warningText: null,
   }),
   country({
     name: 'Estonia',
@@ -121,9 +137,11 @@ export const LEGAL_LIMIT_COUNTRIES: readonly LegalLimitCountry[] = [
     alpha3: 'EST',
     legalSpeedKmh: 25,
     warningSpeedKmh: 20,
-    status: 'unknown',
-    confidence: 'medium',
+    status: 'likelyLegal',
+    confidence: 'high',
     labelCoordinate: [25.0, 58.7],
+    sourceUrl: 'https://www.riigiteataja.ee/en/eli/ee/502012026001/consolide/current',
+    warningText: null,
   }),
   country({
     name: 'Finland',
@@ -131,9 +149,12 @@ export const LEGAL_LIMIT_COUNTRIES: readonly LegalLimitCountry[] = [
     alpha3: 'FIN',
     legalSpeedKmh: 25,
     warningSpeedKmh: 20,
-    status: 'unknown',
-    confidence: 'medium',
+    status: 'likelyLegal',
+    confidence: 'high',
     labelCoordinate: [26.0, 64.6],
+    sourceUrl: 'https://traficom.fi/en/transport/road/electric-personal-transportation-devices',
+    warningText:
+      'Maximum rated power is 1 kW; faster or more powerful devices need another approval category.',
   }),
   country({
     name: 'France',
@@ -144,6 +165,8 @@ export const LEGAL_LIMIT_COUNTRIES: readonly LegalLimitCountry[] = [
     status: 'likelyLegal',
     confidence: 'high',
     labelCoordinate: [2.2, 46.6],
+    sourceUrl:
+      'https://www.masecurite.interieur.gouv.fr/fr/fiches-pratiques/securite-routiere-et-transport/regles-route',
     warningText: null,
   }),
   country({
@@ -156,6 +179,8 @@ export const LEGAL_LIMIT_COUNTRIES: readonly LegalLimitCountry[] = [
     confidence: 'high',
     labelCoordinate: [10.4, 51.1],
     sourceUrl: 'https://www.gesetze-im-internet.de/ekfv/',
+    warningText:
+      'The eKFV approval route requires a steering or holding bar and therefore excludes ordinary monowheels/OneWheels.',
   }),
   country({
     name: 'Greece',
@@ -163,9 +188,12 @@ export const LEGAL_LIMIT_COUNTRIES: readonly LegalLimitCountry[] = [
     alpha3: 'GRC',
     legalSpeedKmh: 25,
     warningSpeedKmh: 20,
-    status: 'unknown',
+    status: 'likelyLegal',
     confidence: 'medium',
     labelCoordinate: [22.9, 39.0],
+    sourceUrl:
+      'https://europa.eu/youreurope/citizens/vehicles/cars/road-rules-and-safety/index_en.htm',
+    warningText: null,
   }),
   country({
     name: 'Hungary',
@@ -176,6 +204,9 @@ export const LEGAL_LIMIT_COUNTRIES: readonly LegalLimitCountry[] = [
     status: 'unknown',
     confidence: 'low',
     labelCoordinate: [19.4, 47.1],
+    sourceUrl: 'https://net.jogtar.hu/jogszabaly?docid=97500001.KPM',
+    warningText:
+      'A 2026 draft traffic code is not yet the law; the current national classification remains unclear.',
   }),
   country({
     name: 'Iceland',
@@ -183,29 +214,40 @@ export const LEGAL_LIMIT_COUNTRIES: readonly LegalLimitCountry[] = [
     alpha3: 'ISL',
     legalSpeedKmh: 25,
     warningSpeedKmh: 20,
-    status: 'restricted',
-    confidence: 'medium',
+    status: 'unknown',
+    confidence: 'low',
     labelCoordinate: [-18.8, 64.9],
+    sourceUrl:
+      'https://www.evz.de/en/travelling-motor-vehicles/e-mobility/two-wheelers/e-scooter-regulations-in-europe.html',
+    warningText:
+      'The official guidance located covers electric scooters but does not clearly include handlebarless one-wheel devices.',
   }),
   country({
     name: 'Ireland',
     code: 'IE',
     alpha3: 'IRL',
-    legalSpeedKmh: 20,
-    warningSpeedKmh: 15,
-    status: 'unknown',
-    confidence: 'medium',
+    legalSpeedKmh: 25,
+    warningSpeedKmh: 20,
+    status: 'notRoadLegal',
+    confidence: 'high',
     labelCoordinate: [-8.2, 53.2],
+    sourceUrl: 'https://www.irishstatutebook.ie/eli/2024/si/199/made/en/print',
+    warningText:
+      'Public use of powered personal transporters is prohibited except for compliant two-or-more-wheel e-scooters.',
   }),
   country({
     name: 'Italy',
     code: 'IT',
     alpha3: 'ITA',
-    legalSpeedKmh: 20,
-    warningSpeedKmh: 15,
-    status: 'unknown',
+    legalSpeedKmh: 25,
+    warningSpeedKmh: 20,
+    status: 'notRoadLegal',
     confidence: 'medium',
     labelCoordinate: [12.6, 42.7],
+    sourceUrl:
+      'https://www.normattiva.it/uri-res/N2Ls?urn%3Anir%3Astato%3Adecreto.legge%3A2019-12-30%3B162~art33bis=',
+    warningText:
+      'Historic municipal experimentation for monowheels should not be treated as current nationwide permission.',
   }),
   country({
     name: 'Latvia',
@@ -213,9 +255,11 @@ export const LEGAL_LIMIT_COUNTRIES: readonly LegalLimitCountry[] = [
     alpha3: 'LVA',
     legalSpeedKmh: 25,
     warningSpeedKmh: 20,
-    status: 'unknown',
+    status: 'notRoadLegal',
     confidence: 'medium',
     labelCoordinate: [24.9, 56.9],
+    sourceUrl: 'https://likumi.lv/ta/en/en/id/45467-road-traffic-law',
+    warningText: 'The statutory electric-scooter category requires two wheels and handlebars.',
   }),
   country({
     name: 'Lithuania',
@@ -223,9 +267,11 @@ export const LEGAL_LIMIT_COUNTRIES: readonly LegalLimitCountry[] = [
     alpha3: 'LTU',
     legalSpeedKmh: 20,
     warningSpeedKmh: 15,
-    status: 'unknown',
-    confidence: 'medium',
+    status: 'likelyLegal',
+    confidence: 'high',
     labelCoordinate: [23.9, 55.2],
+    sourceUrl: 'https://e-seimas.lrs.lt/portal/legalAct/lt/TAD/TAIS.111999/asr',
+    warningText: 'The device must be no more than 1 kW and no more than 25 km/h by design.',
   }),
   country({
     name: 'Luxembourg',
@@ -233,9 +279,12 @@ export const LEGAL_LIMIT_COUNTRIES: readonly LegalLimitCountry[] = [
     alpha3: 'LUX',
     legalSpeedKmh: 25,
     warningSpeedKmh: 20,
-    status: 'unknown',
-    confidence: 'medium',
+    status: 'likelyLegal',
+    confidence: 'high',
     labelCoordinate: [6.1, 49.8],
+    sourceUrl:
+      'https://police.public.lu/en/legislation/code-de-la-route/micro-vehicules-electriques.html',
+    warningText: 'The category is limited to 1 kW and a design speed of 6–25 km/h.',
   }),
   country({
     name: 'Malta',
@@ -243,9 +292,12 @@ export const LEGAL_LIMIT_COUNTRIES: readonly LegalLimitCountry[] = [
     alpha3: 'MLT',
     legalSpeedKmh: 25,
     warningSpeedKmh: 20,
-    status: 'restricted',
+    status: 'notRoadLegal',
     confidence: 'medium',
     labelCoordinate: [14.4, 35.9],
+    sourceUrl: 'https://www.transport.gov.mt/land/roadsafety/e-kickscooters-4704',
+    warningText:
+      'The registration scheme located is for e-kickscooters; no public-road approval path for ordinary one-wheel devices was identified.',
   }),
   country({
     name: 'Netherlands',
@@ -253,9 +305,13 @@ export const LEGAL_LIMIT_COUNTRIES: readonly LegalLimitCountry[] = [
     alpha3: 'NLD',
     legalSpeedKmh: 25,
     warningSpeedKmh: 20,
-    status: 'restricted',
-    confidence: 'medium',
+    status: 'notRoadLegal',
+    confidence: 'high',
     labelCoordinate: [5.3, 52.2],
+    sourceUrl:
+      'https://www.rijksoverheid.nl/themas/verkeer-en-vervoer/voertuigen-op-de-weg/verboden-voertuigen-op-de-weg',
+    warningText:
+      'The Dutch government expressly lists monowheels and Onewheels among vehicles prohibited on roads and pavements.',
   }),
   country({
     name: 'Norway',
@@ -263,9 +319,12 @@ export const LEGAL_LIMIT_COUNTRIES: readonly LegalLimitCountry[] = [
     alpha3: 'NOR',
     legalSpeedKmh: 20,
     warningSpeedKmh: 15,
-    status: 'unknown',
-    confidence: 'medium',
+    status: 'likelyLegal',
+    confidence: 'high',
     labelCoordinate: [8.5, 61.4],
+    sourceUrl: 'https://lovdata.no/dokument/SF/forskrift/2022-05-25-918',
+    warningText:
+      'The device must be permanently design-limited to 20 km/h and meet size/weight limits.',
   }),
   country({
     name: 'Poland',
@@ -277,8 +336,9 @@ export const LEGAL_LIMIT_COUNTRIES: readonly LegalLimitCountry[] = [
     confidence: 'high',
     labelCoordinate: [19.1, 52.1],
     sourceUrl:
-      'https://www.gov.pl/web/infrastruktura/nowe-przepisy-dotyczace-hulajnog-elektrycznych-i-urzadzen-transportu-osobistego',
-    warningText: null,
+      'https://www.gov.pl/web/infrastruktura/nowe-przepisy-dotyczace-hulajnog-elektrycznych-i-urzadzen-transportu-osobistego2',
+    warningText:
+      'UTO devices may not use the carriageway; this differs from the rule for e-scooters.',
   }),
   country({
     name: 'Portugal',
@@ -286,9 +346,12 @@ export const LEGAL_LIMIT_COUNTRIES: readonly LegalLimitCountry[] = [
     alpha3: 'PRT',
     legalSpeedKmh: 25,
     warningSpeedKmh: 20,
-    status: 'unknown',
-    confidence: 'medium',
+    status: 'restricted',
+    confidence: 'high',
     labelCoordinate: [-8.0, 39.6],
+    sourceUrl: 'https://diariodarepublica.pt/dr/legislacao-consolidada/decreto-lei/2013-116041830',
+    warningText:
+      'Only self-balancing devices up to 250 W continuous power and 25 km/h are bicycle-equivalent.',
   }),
   country({
     name: 'Romania',
@@ -296,9 +359,11 @@ export const LEGAL_LIMIT_COUNTRIES: readonly LegalLimitCountry[] = [
     alpha3: 'ROU',
     legalSpeedKmh: 25,
     warningSpeedKmh: 20,
-    status: 'unknown',
+    status: 'notRoadLegal',
     confidence: 'medium',
     labelCoordinate: [24.9, 45.9],
+    sourceUrl: 'https://legislatie.just.ro/Public/DetaliiDocument/74028',
+    warningText: 'The statutory e-scooter definition requires two or three wheels and handlebars.',
   }),
   country({
     name: 'Slovakia',
@@ -307,8 +372,11 @@ export const LEGAL_LIMIT_COUNTRIES: readonly LegalLimitCountry[] = [
     legalSpeedKmh: 25,
     warningSpeedKmh: 20,
     status: 'likelyLegal',
-    confidence: 'medium',
+    confidence: 'high',
     labelCoordinate: [19.5, 48.7],
+    sourceUrl: 'https://static.slov-lex.sk/static/SK/ZZ/2009/8/20260101.print.html',
+    warningText:
+      'Current rules explicitly cover self-balancing vehicles; a revised small-electric-vehicle regime starts 1 September 2026.',
   }),
   country({
     name: 'Slovenia',
@@ -316,9 +384,12 @@ export const LEGAL_LIMIT_COUNTRIES: readonly LegalLimitCountry[] = [
     alpha3: 'SVN',
     legalSpeedKmh: 25,
     warningSpeedKmh: 20,
-    status: 'unknown',
-    confidence: 'medium',
+    status: 'notRoadLegal',
+    confidence: 'high',
     labelCoordinate: [14.9, 46.1],
+    sourceUrl:
+      'https://www.policija.si/eng/prevention/traffic-safety/traffic-safety-advice-for-users-of-electric-scooters',
+    warningText: 'Light motor vehicles without handlebars are not permitted in road traffic.',
   }),
   country({
     name: 'Spain',
@@ -326,20 +397,27 @@ export const LEGAL_LIMIT_COUNTRIES: readonly LegalLimitCountry[] = [
     alpha3: 'ESP',
     legalSpeedKmh: 25,
     warningSpeedKmh: 20,
-    status: 'unknown',
-    confidence: 'medium',
+    status: 'restricted',
+    confidence: 'high',
     labelCoordinate: [-3.6, 40.2],
+    sourceUrl:
+      'https://www.dgt.es/nuestros-servicios/tu-vehiculo/vehiculos-de-movilidad-personal-vmp/',
+    warningText:
+      'Registration, an identifying label and compulsory insurance are required; non-certified legacy VMPs may circulate only until 22 January 2027.',
   }),
   country({
     name: 'Switzerland',
     code: 'CH',
     alpha3: 'CHE',
-    legalSpeedKmh: 20,
-    warningSpeedKmh: 15,
+    legalSpeedKmh: 25,
+    warningSpeedKmh: 20,
     status: 'notRoadLegal',
     confidence: 'high',
     labelCoordinate: [8.2, 46.8],
-    sourceUrl: ASTRA_SOURCE_URL,
+    sourceUrl:
+      'https://www.astra.admin.ch/astra/en/home/topics/vehicles/vehicles-without-type-approval.html',
+    warningText:
+      'ASTRA states mono-wheel/smart-wheel devices may be used only on private property.',
   }),
   country({
     name: 'Sweden',
@@ -347,9 +425,13 @@ export const LEGAL_LIMIT_COUNTRIES: readonly LegalLimitCountry[] = [
     alpha3: 'SWE',
     legalSpeedKmh: 20,
     warningSpeedKmh: 15,
-    status: 'unknown',
-    confidence: 'medium',
+    status: 'likelyLegal',
+    confidence: 'high',
     labelCoordinate: [15.0, 62.0],
+    sourceUrl:
+      'https://www.transportstyrelsen.se/sv/vagtrafik/fordon/fordonsregler/regler-for-olika-fordonsslag/cykel/',
+    warningText:
+      'A self-balancing device qualifies as a bicycle only when designed for no more than 20 km/h.',
   }),
   country({
     name: 'United Kingdom',
@@ -358,260 +440,333 @@ export const LEGAL_LIMIT_COUNTRIES: readonly LegalLimitCountry[] = [
     legalSpeedKmh: 25,
     warningSpeedKmh: 20,
     status: 'notRoadLegal',
-    confidence: 'medium',
+    confidence: 'high',
     labelCoordinate: [-2.6, 54.3],
+    sourceUrl:
+      'https://www.gov.uk/government/publications/powered-transporters/information-sheet-guidance-on-powered-transporters',
+    warningText:
+      'Powered unicycles and similar devices are motor vehicles but cannot ordinarily meet public-road licensing, registration and insurance requirements.',
   }),
 ]
 
 const LEGAL_LIMIT_COUNTRY_DETAILS: Record<string, LegalLimitCountryDetail> = {
   AT: {
-    vehicleScope: 'Austrian e-scooter guidance covers scooter-style e-scooters.',
-    where: 'E-scooters use cycle lanes and bicycle rules.',
-    equipment: 'E-scooters need bicycle-style road equipment.',
+    vehicleScope:
+      'Monorovers, hoverboards and comparable small electric self-balancing devices are treated like wheeled play/sports devices, not like e-scooters.',
+    where:
+      'Only at walking pace on pavements/footpaths and in residential or play streets when pedestrians are not endangered or obstructed; not on carriageways or cycle facilities.',
+    equipment:
+      'No public-road equipment route applies; the rider must maintain walking pace and yield to pedestrians.',
     insurance:
-      'No ordinary e-scooter liability insurance requirement found in the Austrian guidance.',
-    notes: 'Confirm the vehicle category with local authority guidance.',
+      'The cited guidance does not establish a motor-liability requirement for this limited pedestrian-area use.',
+    notes: 'Do not apply Austria’s bicycle-style e-scooter rules to a handlebarless OneWheel/EUC.',
   },
   BE: {
     vehicleScope:
-      'EVZ notes Belgian rules also cover motorised mobility devices without handlebars, including monowheels.',
+      'Motorised monowheels are expressly included as motorised mobility devices when design-limited to 25 km/h.',
     where:
-      'Cycle infrastructure and road use generally follow bicycle-like rules; pavements are not allowed.',
+      'At no more than walking pace, pedestrian rules apply; above walking pace, cyclist rules apply, including use of cycle facilities where required.',
     equipment:
-      'Lights, brakes/reflectors, and audible warning rules depend on the exact device type.',
-    insurance: 'No compulsory third-party insurance for ordinary e-scooters noted by EVZ.',
-    notes: 'City and rental rules can be stricter.',
+      'The device must be limited by construction to 25 km/h; lighting and visibility rules apply when riding in darkness or poor visibility.',
+    insurance:
+      'No compulsory motor insurance is generally required for a compliant 25 km/h mobility device; personal liability cover remains prudent.',
+    notes: 'A device capable by design of more than 25 km/h falls outside this category.',
   },
   BG: {
-    vehicleScope: 'EVZ gives e-scooter rules.',
-    where:
-      'Cycle paths, or roads up to 50 km/h when no cycle path exists; pavements and bus lanes are forbidden.',
-    equipment: 'Lights; reflective clothing in the dark.',
-    insurance: 'No compulsory insurance for private e-scooters noted by EVZ.',
-    notes: 'Check local authority guidance before riding.',
+    vehicleScope:
+      'Authoritative material located describes handlebar e-scooters, not OneWheel-style boards or electric unicycles.',
+    where: 'No reliable national route rule for a handlebarless one-wheel device was confirmed.',
+    equipment: 'Not confirmed.',
+    insurance: 'Not confirmed.',
+    notes: 'Status is intentionally unknown rather than borrowing scooter rules.',
   },
   HR: {
-    vehicleScope: 'EVZ gives e-scooter rules.',
+    vehicleScope:
+      'Electric monocyles and self-balancing vehicles are expressly included as personal transport devices if they have no seat, continuous rated power no more than 0.6 kW and design speed no more than 25 km/h.',
     where:
-      'Cycle paths; roads up to 50 km/h if no cycle path exists; pedestrian areas only at walking speed.',
-    equipment: 'Helmet required; reflective clothing in poor visibility.',
-    insurance: 'No ordinary e-scooter insurance requirement highlighted by EVZ.',
-    notes: 'Check local authority guidance before riding.',
+      'Use cycle paths/lanes; where none exists, use roads with a speed limit up to 50 km/h as allowed by the traffic rules. Pedestrian areas require pedestrian-safe speed.',
+    equipment:
+      'Minimum age 14; helmet is mandatory; visibility requirements apply at night or in poor visibility.',
+    insurance:
+      'No registration or compulsory liability-insurance requirement was identified for a compliant personal transport device.',
+    notes:
+      'Most high-powered EUCs and some Onewheel models exceed the 600 W continuous-power ceiling.',
   },
   CY: {
-    vehicleScope: 'EVZ gives e-scooter rules.',
-    where:
-      'Cycle paths/lanes and roads up to 30 km/h; pavements, footpaths, and squares are forbidden unless signs allow it.',
-    equipment: 'Brake system, lights, bell, and reflective clothing in the dark.',
-    insurance: 'No ordinary e-scooter insurance requirement highlighted by EVZ.',
-    notes: 'Check local authority guidance before riding.',
+    vehicleScope:
+      'Cyprus defines its regulated personal mobility/e-scooter device as having handlebars and at least two wheels.',
+    where: 'No public-road category was identified for an ordinary handlebarless one-wheel device.',
+    equipment: 'Not applicable without a recognised road category.',
+    insurance: 'No insurance route was identified for this excluded device form.',
+    notes:
+      'Use should be limited to private property unless the transport authority confirms a different classification.',
   },
   CZ: {
     vehicleScope:
-      'EVZ and Czech Transport Ministry reporting describe 25 km/h e-scooter-class rules.',
+      'A powered vehicle must retain the normal character of a bicycle or scooter to use the simplified 25 km/h category. A OneWheel/EUC does not.',
     where:
-      'Cycle paths, or built-up-area roads when no cycle path exists; pavements are forbidden.',
-    equipment: 'Lights, reflectors, bell; helmet required under 18.',
-    insurance: 'No compulsory e-scooter insurance noted by EVZ.',
-    notes: 'Local signs and city rules can still be stricter.',
+      'Ordinary public-road use requires the vehicle to fit an approved motor-vehicle or category-Z route; typical consumer devices do not have that approval.',
+    equipment:
+      'Technical approval and, depending on classification, registration, licence and insurance would be required.',
+    insurance: 'Insurance does not itself legalise an unapproved device.',
+    notes: 'Only a specifically technically approved model could have a different result.',
   },
   DK: {
-    vehicleScope: 'EVZ gives e-scooter rules.',
+    vehicleScope:
+      'The self-balancing-vehicle and motorised-skateboard scheme expressly covers one-person, self-balancing or board-type electric devices without conventional steering.',
     where:
-      'Cycle lanes where available; pavements, footpaths, and pedestrian crossings are forbidden.',
-    equipment: 'Helmet required; lights day and night; reflectors; CE and size/weight limits.',
-    insurance: 'No compulsory e-scooter insurance noted by EVZ.',
-    notes: 'Designed speed over 20 km/h is not allowed on roads.',
+      'Use bicycle infrastructure and bicycle traffic rules; pavements and pedestrian crossings are not riding areas.',
+    equipment: 'Maximum design speed 20 km/h; helmet and required lights/reflectors apply.',
+    insurance:
+      'No general compulsory third-party insurance requirement was identified for a compliant device.',
+    notes: 'The 20 km/h limit is a design requirement, not merely the speed selected in an app.',
   },
   EE: {
-    vehicleScope: 'EVZ gives e-scooter rules.',
+    vehicleScope:
+      'A personal light electric vehicle expressly includes a self-balancing vehicle and may be handlebarless; maximum design speed is 25 km/h.',
     where:
-      'Cycle paths/lanes and pavements; road use in urban areas when no cycle lane or footpath exists.',
-    equipment: 'Brakes, bell, front/rear lights, reflectors or side lights.',
-    insurance: 'No ordinary e-scooter insurance requirement highlighted by EVZ.',
-    notes: 'Check local authority guidance before riding.',
+      'Use cycle/pedestrian infrastructure under the statutory priority and speed rules; road use is allowed where the Act permits it when suitable paths are absent.',
+    equipment:
+      'Brakes, audible warning and visibility equipment apply; helmet rules apply to younger riders.',
+    insurance:
+      'Motor liability insurance can be required when the device weighs over 25 kg and has a design speed over 14 km/h.',
+    notes:
+      'The ordinary 1 kW cap has a specific exception for self-balancing vehicles, but the 25 km/h design limit remains.',
   },
   FI: {
-    vehicleScope: 'EVZ gives e-scooter rules.',
+    vehicleScope:
+      'Self-balancing devices are light electric vehicles when rated power is at most 1 kW and design speed at most 25 km/h.',
     where:
-      'Cycle paths/lanes, roads, or dirt tracks if no cycle facility exists; pavements forbidden except children under 12 at 15 km/h.',
-    equipment: 'Front light, rear reflector, bell; helmet recommended.',
-    insurance: 'No compulsory e-scooter insurance noted by EVZ.',
-    notes: 'Check local authority guidance before riding.',
+      'Bicycle rules and cycle facilities apply; a self-balancing device ridden at walking pace may use a pavement under pedestrian-safe conditions.',
+    equipment:
+      'Minimum age 15; brakes/controls and required lighting/reflectors apply; a helmet is strongly recommended.',
+    insurance:
+      'Motor liability insurance is required where the statutory speed/weight thresholds are met, including many devices over 25 kg.',
+    notes:
+      'A device over 1 kW or over 25 km/h is not roadworthy in this category without another approval.',
   },
   FR: {
     vehicleScope:
-      'EVZ explicitly says French EDPM rules also apply to Segways, monowheels, and hoverboards.',
+      'EDPM rules expressly include monowheels, hoverboards and other motorised personal mobility devices limited to 25 km/h.',
     where:
-      'Urban cycle paths/lanes; roads up to 50 km/h if no cycle facility; pedestrian areas at walking speed if pedestrians are not obstructed.',
-    equipment: 'Design-limited to 25 km/h; lights/reflectors and other EDPM equipment apply.',
+      'Use urban cycle lanes/paths; where none exists, roads normally limited to 50 km/h. Pedestrian areas may be used only at walking pace without obstructing pedestrians.',
+    equipment:
+      'Minimum age 14; brakes, audible warning, lights and reflectors are required; only one rider.',
     insurance:
-      'French EDPM liability requirements can apply; riders should confirm local insurance.',
-    notes: 'Monowheels are explicitly in scope, with normal EDPM restrictions.',
+      'Third-party civil-liability insurance for motorised personal mobility use is compulsory.',
+    notes: 'A device capable by design of more than 25 km/h is not a compliant EDPM.',
   },
   DE: {
     vehicleScope:
-      'German eKFV applies to approved small electric vehicles with handlebars/holding bars; EVZ says it does not apply to monowheels, hoverboards, or electric skateboards.',
-    where: 'Approved e-scooters use cycle infrastructure or the road where allowed.',
-    equipment:
-      'Approved category needs lights, brakes, reflectors, operating permit, and insurance plate.',
-    insurance: 'Mandatory insurance for approved e-scooters.',
-    notes: 'Public-road use outside approved categories is not allowed.',
+      'The eKFV category requires a steering or holding bar, national operating approval and an insurance plate. Ordinary monowheels and Onewheels are excluded.',
+    where:
+      'No ordinary public-road or cycle-path use; private property only with the owner’s permission.',
+    equipment: 'There is no standard public-road approval equipment route for this device form.',
+    insurance: 'Buying insurance cannot cure the lack of vehicle approval.',
+    notes: 'This is different from an approved German e-scooter.',
   },
   GR: {
-    vehicleScope: 'EVZ gives e-scooter rules.',
-    where: 'E-scooter use is regulated by speed class; pavement exception for very slow devices.',
-    equipment: 'Local equipment and visibility rules apply.',
-    insurance: 'No ordinary e-scooter insurance requirement highlighted by EVZ.',
-    notes: 'Check local authority guidance before riding.',
+    vehicleScope:
+      'Greek light personal electric-vehicle rules include electric skateboards and self-balancing personal vehicles with one or two wheels.',
+    where:
+      'Very slow devices follow pedestrian-type rules; devices up to 25 km/h use bicycle facilities and permitted urban roads, subject to local restrictions.',
+    equipment: 'Helmet and prescribed lighting/visibility equipment apply.',
+    insurance:
+      'No general compulsory insurance requirement was confirmed for an ordinary compliant device.',
+    notes: 'Municipal restrictions and signs may narrow where the device can be used.',
   },
   HU: {
-    vehicleScope: 'EVZ reports unclear/no clear national e-scooter legislation.',
-    where: 'No stable national route rule in this dataset.',
-    equipment: 'Unknown.',
-    insurance: 'Unknown.',
-    notes: 'Low confidence; rider should check local authority guidance.',
+    vehicleScope:
+      'The current KRESZ does not provide a sufficiently clear, stable national category for ordinary OneWheel/EUC use.',
+    where: 'No reliable nationwide route rule was confirmed as of 17 July 2026.',
+    equipment: 'Not confirmed.',
+    insurance: 'Not confirmed.',
+    notes:
+      'The February 2026 new-KRESZ proposal remains a draft and must not be presented as current law.',
   },
   IS: {
-    vehicleScope: 'EVZ gives e-scooter rules.',
-    where: 'E-scooter road riding is restricted; local rules should be checked.',
-    equipment: 'Standard e-scooter equipment rules apply where allowed.',
-    insurance: 'No ordinary e-scooter insurance requirement highlighted by EVZ.',
-    notes: 'Road riding is limited; check local rules before riding.',
+    vehicleScope:
+      'Official guidance located clearly regulates electric scooters/small vehicles but does not clearly state that handlebarless one-wheel devices are included.',
+    where: 'No reliable public-road route rule for a OneWheel/EUC was confirmed.',
+    equipment: 'Not confirmed for this device form.',
+    insurance: 'Not confirmed for this device form.',
+    notes: 'Status remains unknown rather than importing the e-scooter rules.',
   },
   IE: {
-    vehicleScope: 'EVZ covers e-scooters legal since 2024-05-20.',
-    where:
-      'Bicycle and bus lanes plus local, regional, and national roads; sidewalks, pedestrian zones, and highways forbidden.',
-    equipment: 'Brakes, front/rear lights, reflectors; motor power cap applies.',
-    insurance: 'No compulsory e-scooter insurance noted by EVZ.',
-    notes: 'Check local authority guidance before riding.',
+    vehicleScope:
+      'A legal electric scooter must have two or more wheels and handlebars. Irish law prohibits other powered personal transporters in a public place.',
+    where: 'Private property only with the owner’s permission.',
+    equipment: 'No public-road equipment route applies to an ordinary OneWheel/EUC.',
+    insurance: 'Not applicable as a route to public-road legality.',
+    notes:
+      'The legalisation of e-scooters on 20 May 2024 did not legalise electric unicycles or Onewheel-style boards.',
   },
   IT: {
-    vehicleScope: 'EVZ gives e-scooter rules after 2024 changes.',
+    vehicleScope:
+      'Current nationwide rules regulate electric scooters. Monowheels, hoverboards and similar devices appeared only in the earlier municipal experimentation framework.',
     where:
-      'Inner-city roads up to 50 km/h; pavements, bicycle lanes, pedestrian areas, and outside built-up areas forbidden.',
+      'No current nationwide public-road permission for ordinary monowheels/OneWheels was confirmed.',
     equipment:
-      'Helmet, insurance, plate, lights, brakes, reflectors, indicators, and reflective clothing rules apply.',
-    insurance: 'Liability insurance with license plate is mandatory for e-scooters.',
-    notes: 'Check local authority guidance before riding.',
+      'Scooter plate, helmet and equipment rules should not be copied onto a device that is outside the scooter category.',
+    insurance:
+      'Scooter insurance/plate requirements do not create a legal approval route for a monowheel.',
+    notes:
+      'Do not treat the expired/time-limited experimentation rules as current nationwide permission.',
   },
   LV: {
-    vehicleScope: 'EVZ covers approved registered e-scooters.',
-    where: 'Cycle paths, pavements at walking speed, and roads up to 50 km/h.',
-    equipment: 'Brakes, front/rear lights; registration sticker required for approved e-scooters.',
-    insurance: 'Registration/approval required; insurance not highlighted by EVZ.',
-    notes: 'Check local authority guidance before riding.',
+    vehicleScope:
+      'The Road Traffic Law defines an electric scooter as a two-wheel vehicle with handlebars; a OneWheel/EUC does not meet that definition.',
+    where:
+      'No alternative public-road category was identified for an ordinary handlebarless one-wheel device.',
+    equipment: 'Not applicable without an approved category.',
+    insurance: 'No insurance or registration route was identified for this device form.',
+    notes: 'Private-property use is the prudent interpretation.',
   },
   LT: {
-    vehicleScope: 'EVZ gives e-scooter rules.',
-    where: 'E-scooter route rules apply; 7 km/h when overtaking pedestrians.',
-    equipment: 'Power/design-speed caps and helmet rules apply.',
-    insurance: 'No ordinary e-scooter insurance requirement highlighted by EVZ.',
-    notes: 'Check local authority guidance before riding.',
+    vehicleScope:
+      'The electric micromobility category expressly includes electric skateboards and electric balancing unicycles, with power no more than 1 kW and design speed no more than 25 km/h.',
+    where:
+      'Use cycle infrastructure and permitted road areas under micromobility rules; operating speed is generally limited to 20 km/h and to 7 km/h near or while passing pedestrians.',
+    equipment:
+      'Helmet and lighting/visibility requirements apply, with stricter duties for minors.',
+    insurance:
+      'No general compulsory motor-insurance requirement was identified for an ordinary compliant device.',
+    notes: 'Both the 1 kW power ceiling and 25 km/h construction ceiling matter.',
   },
   LU: {
-    vehicleScope: 'EVZ gives e-scooter rules.',
+    vehicleScope:
+      'A micro electric vehicle may have one or more wheels, be solely electric, have no more than 1 kW and a design speed above 6 but no more than 25 km/h; hoverboard-type devices are included.',
     where:
-      'E-scooter use follows local route rules; walking speed can apply in pedestrian contexts.',
-    equipment: 'Standard lighting/braking visibility rules apply.',
-    insurance: 'No ordinary e-scooter insurance requirement highlighted by EVZ.',
-    notes: 'Check local authority guidance before riding.',
+      'Bicycle-oriented route rules apply, with pedestrian-speed duties in pedestrian contexts.',
+    equipment: 'Required braking, warning, lighting and reflector equipment applies.',
+    insurance:
+      'No registration or compulsory motor-insurance requirement was identified for the compliant category; civil-liability cover is advisable.',
+    notes: 'Devices over 1 kW or 25 km/h fall outside the category.',
   },
   MT: {
-    vehicleScope: 'EVZ notes approval-dependent e-scooter use.',
-    where: 'Use depends on authority approval and local rules.',
-    equipment: 'Approved-vehicle equipment rules apply.',
-    insurance: 'Approval/registration context should be checked.',
-    notes: 'Use depends on approval and local rules.',
+    vehicleScope:
+      'The Maltese approval, registration and licensing scheme located is for e-kickscooters, not ordinary handlebarless one-wheel devices.',
+    where: 'No public-road approval route for a OneWheel/EUC was confirmed.',
+    equipment: 'Not applicable without approval and registration.',
+    insurance:
+      'The e-kickscooter insurance framework should not be assumed to cover an unapproved device form.',
+    notes: 'Treat as private-property only unless Transport Malta issues model-specific approval.',
   },
   NL: {
     vehicleScope:
-      'EVZ says most e-scooters need national RDW type approval before public-road use.',
-    where: 'Only approved vehicles may use public roads under the approved-category rules.',
-    equipment: 'Approved vehicle requirements apply.',
-    insurance: 'Approval/registration requirements apply; rider should confirm insurance.',
-    notes: 'Most unapproved devices are not road-legal.',
+      'The Dutch government expressly identifies monowheels and Onewheels as vehicles that may not be used on public roads or pavements.',
+    where:
+      'Private property only. Public use would require an RDW-approved special-moped category, which ordinary listed devices do not have.',
+    equipment: 'No equipment modification alone makes an unapproved device road-legal.',
+    insurance:
+      'Insurance and registration apply only after an eligible vehicle approval; they do not legalise an unapproved Onewheel.',
+    notes: 'This is a clear prohibition, not merely an uncertain approval status.',
   },
   NO: {
-    vehicleScope: 'EVZ gives e-scooter rules.',
-    where: 'E-scooter route rules apply; rider should check local restrictions.',
-    equipment: 'Standard e-scooter equipment rules apply.',
-    insurance: 'Liability insurance is required since 2023 according to the source notes.',
-    notes: 'Check local authority guidance before riding.',
+    vehicleScope:
+      'A one-person small electric motor vehicle can include standing/self-balancing and board-type devices when it is permanently limited to 20 km/h and meets the 70 kg and dimensional limits.',
+    where:
+      'Bicycle traffic rules apply; cycle facilities are used where required and pavements only at pedestrian-safe speed.',
+    equipment:
+      'Minimum age 12; helmet mandatory under 15; lights/reflectors and braking requirements apply.',
+    insurance:
+      'Compulsory liability insurance has applied to small electric motor vehicles since 1 January 2023.',
+    notes:
+      'A software riding mode is insufficient if the vehicle is constructed to exceed 20 km/h.',
   },
   PL: {
-    vehicleScope: 'Polish UTO/e-scooter rules cover personal transport devices.',
+    vehicleScope:
+      'An urządzenie transportu osobistego (UTO) expressly covers electric skateboards and self-balancing devices without a seat or pedals, with maximum design speed 20 km/h.',
     where:
-      'Cycle lanes/paths; road only when no cycle facility exists and road speed limit is not over 30 km/h; pavement exception at pedestrian speed.',
-    equipment: 'Country UTO/e-scooter rules apply.',
-    insurance: 'No compulsory e-scooter insurance noted by EVZ.',
-    notes: 'Cities and local road signs can still be stricter.',
+      'Use bicycle paths/lanes. If none is available, a pavement/footpath may be used at pedestrian speed while yielding to pedestrians. UTO riding on the carriageway is prohibited.',
+    equipment:
+      'The device must meet the UTO construction limits; a helmet is recommended but not generally mandatory.',
+    insurance:
+      'No compulsory third-party motor insurance is required for an ordinary compliant UTO.',
+    notes: 'The road-up-to-30-km/h exception applies to e-scooters, not to UTO devices.',
   },
   PT: {
-    vehicleScope: 'EVZ gives e-scooter rules.',
-    where: 'Cycle lanes/paths; city-centre roads if no cycle facility exists.',
-    equipment: 'Helmet recommended; local rental caps may apply.',
-    insurance: 'No ordinary e-scooter insurance requirement highlighted by EVZ.',
-    notes: 'Lisbon rentals can be capped to 20 km/h.',
+    vehicleScope:
+      'Self-balancing and similar motor devices are bicycle-equivalent only when continuous rated power is no more than 0.25 kW and design speed no more than 25 km/h.',
+    where: 'Compliant devices follow bicycle route rules, subject to local traffic restrictions.',
+    equipment: 'Bicycle-equivalent lighting/visibility and safety duties apply.',
+    insurance:
+      'No compulsory motor insurance was identified for a device that remains within the bicycle-equivalent limits.',
+    notes:
+      'Most consumer Onewheels/EUCs exceed 250 W and therefore do not qualify even if speed-limited.',
   },
   RO: {
-    vehicleScope: 'EVZ gives e-scooter rules.',
-    where: 'E-scooter road/cycle rules apply by local conditions.',
-    equipment: 'Standard e-scooter equipment rules apply.',
-    insurance: 'No ordinary e-scooter insurance requirement highlighted by EVZ.',
-    notes: 'Check local authority guidance before riding.',
+    vehicleScope:
+      'Romania’s electric-scooter category requires two or three wheels and handlebars; ordinary one-wheel devices are outside it.',
+    where: 'No public-road category for an ordinary OneWheel/EUC was confirmed.',
+    equipment: 'Not applicable without a recognised category.',
+    insurance: 'No insurance route was identified that would make the device road-legal.',
+    notes: 'Do not import Romania’s e-scooter route and speed rules into this device type.',
   },
   SK: {
-    vehicleScope: 'EVZ describes 25 km/h e-scooter-class rules.',
+    vehicleScope:
+      'Current law expressly defines and regulates self-balancing vehicles, which must not be capable of more than 25 km/h.',
     where:
-      'E-scooter route rules apply; pavement riding is at walking speed, with a 6 km/h sidewalk reference in force from 2026.',
-    equipment: 'Standard e-scooter equipment rules apply.',
-    insurance: 'No ordinary e-scooter insurance requirement highlighted by EVZ.',
-    notes: 'Local signs and conflict situations can still make the practical limit stricter.',
+      'Use the right side of pavements/footways at no more than walking speed (6 km/h) without endangering pedestrians, and the right side of cycle lanes/paths without endangering cyclists. Other road use is age-restricted.',
+    equipment:
+      'One rider only; applicable safety and visibility rules apply. Some older wording assumes handlebars, so model-specific enforcement can be imperfect.',
+    insurance:
+      'No general compulsory motor-insurance requirement was identified under the current non-motor-vehicle classification.',
+    notes:
+      'Law 131/2026 changes the category to “small electric vehicle” from 1 September 2026 and applies cyclist-style rules with a 25 km/h construction limit.',
   },
   SI: {
-    vehicleScope: 'EVZ gives e-scooter rules.',
-    where: 'Cycle infrastructure and road rules apply; local restrictions possible.',
-    equipment: 'Standard e-scooter equipment rules apply.',
-    insurance: 'No ordinary e-scooter insurance requirement highlighted by EVZ.',
-    notes: 'Check local authority guidance before riding.',
+    vehicleScope:
+      'Slovenian police guidance states that light motor vehicles without handlebars are not permitted in road traffic.',
+    where: 'Private property only with the owner’s permission.',
+    equipment: 'No public-road equipment route exists for an ordinary handlebarless device.',
+    insurance: 'Insurance does not create public-road legality.',
+    notes:
+      'This directly excludes ordinary OneWheel/EUC devices even though e-scooters are regulated.',
   },
   ES: {
-    vehicleScope: 'EVZ gives e-scooter/VMP rules.',
-    where: 'VMP route rules vary by city; city rules can be stricter.',
-    equipment: 'Design speed cap and city equipment rules apply.',
-    insurance: 'Insurance can depend on municipality and vehicle category.',
-    notes: 'Check local authority guidance before riding.',
+    vehicleScope:
+      'A VMP may have one or more wheels, one seat/place and electric propulsion, with design speed 6–25 km/h; a OneWheel/EUC can fit only if it satisfies the VMP technical regime.',
+    where:
+      'Urban use only under national prohibitions and municipal route rules; pavements and interurban roads are prohibited.',
+    equipment:
+      'Registration and identifying label are required. Certified models must meet the DGT technical manual; older non-certified VMPs have a transition only until 22 January 2027.',
+    insurance: 'Compulsory insurance applies through the 2026 national registration system.',
+    notes:
+      'From 1 October 2026, national rules add minimum age 15, helmet and night/low-visibility reflective requirements; local rules apply before then.',
   },
   CH: {
     vehicleScope:
-      'ASTRA lists mono wheel / smart wheel separately from approved e-scooters and says it may be used only on private property.',
-    where: 'Private property only for mono wheel / smart wheel.',
-    equipment: 'No public-road equipment path for this category in ASTRA guidance.',
-    insurance: 'No public-road approval path for this category in ASTRA guidance.',
-    notes: 'Public-road use outside approved categories is not allowed.',
+      'ASTRA lists mono-wheel/smart-wheel devices separately from approved e-scooters and allows them only on private property.',
+    where: 'Private property only.',
+    equipment: 'No public-road equipment or approval path is provided for this category.',
+    insurance:
+      'No public-road insurance route applies because the vehicle is not admitted to public traffic.',
+    notes: 'Public-road, cycle-path and pavement use are not permitted.',
   },
   SE: {
     vehicleScope:
-      'EVZ says e-scooters can be classified as bicycles when speed/power limits are met.',
+      'A self-balancing electric vehicle without pedals can be classified as a bicycle when designed for one rider and no more than 20 km/h; unlike ordinary e-scooters, the self-balancing branch is not subject to the 250 W ceiling.',
     where:
-      'Cycle paths should be used; road use up to 50 km/h roads for riders at least 15; pavements forbidden.',
-    equipment: 'Brakes, bell, lights/reflectors in the dark.',
+      'Bicycle rules apply: use cycle paths normally; eligible riders may use suitable roads under the stated bicycle rules. At walking pace, a self-balancing rider can be treated as a pedestrian.',
+    equipment:
+      'Brake and bell are required; lights and reflectors are required in darkness. Helmet required for riders under 15.',
     insurance:
-      'Motor vehicle liability insurance can be required when design speed/weight thresholds are exceeded.',
-    notes: 'Check local authority guidance before riding.',
+      'Motor liability insurance can be required if the device exceeds the statutory weight/speed threshold, notably over 25 kg and over 14 km/h.',
+    notes: 'A device designed for more than 20 km/h does not qualify as a bicycle.',
   },
   GB: {
     vehicleScope:
-      'EVZ says private e-scooters are not permitted on public roads; rental trials exist in some places.',
-    where: 'Private e-scooters are limited to private land, except authorised rental trials.',
-    equipment: 'Trial rental rules apply where available.',
-    insurance: 'Rental trial operators handle permitted-vehicle requirements.',
-    notes: 'Private e-scooters are not permitted on public roads outside authorised rental trials.',
+      'Powered transporters expressly include powered unicycles, U-wheels and similar self-balancing devices and are treated as motor vehicles.',
+    where:
+      'Ordinary use is limited to private land with the owner’s permission; rental e-scooter trials do not authorise private OneWheels/EUCs.',
+    equipment:
+      'Public-road use would require vehicle approval, registration, licensing and compliant construction that ordinary devices do not have.',
+    insurance:
+      'Motor insurance would be required for public use, but insurance alone cannot overcome the lack of approval/registration.',
+    notes: 'The e-scooter trial exception does not apply to privately owned one-wheel devices.',
   },
 }
-
 export const LEGAL_LIMIT_MAP_CAMERA = {
   centerCoordinate: [13, 53] as [number, number],
   zoomLevel: 3.05,

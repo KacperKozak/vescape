@@ -65,16 +65,20 @@ describe('Legal Mode derivation', () => {
     })
   })
 
-  test('marks Austria and Switzerland as not road-legal for board-style vehicles', () => {
+  test('resolves Austria as walking-pace restricted and Switzerland as not road-legal', () => {
     const austria = resolveJurisdictionFromLocation(location(48.2082, 16.3738))
     const switzerland = resolveJurisdictionFromLocation(location(47.3769, 8.5417))
 
     expect(austria).toMatchObject({
       countryCode: 'AT',
-      legalRoadStatus: 'notRoadLegal',
+      legalSpeedKmh: 5,
+      warningSpeedKmh: 4,
+      legalRoadStatus: 'restricted',
     })
     expect(switzerland).toMatchObject({
       countryCode: 'CH',
+      legalSpeedKmh: 25,
+      warningSpeedKmh: 20,
       legalRoadStatus: 'notRoadLegal',
     })
   })
