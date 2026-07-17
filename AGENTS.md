@@ -44,8 +44,13 @@ This is a PoC, but keep it sharp:
 `@parity` links code that must stay in sync across implementations. It is a navigation contract: a tag is a
 promise that the peer is inspected before the edit is finished.
 
-Format: `@parity /repo-root/path-to-peer` — optionally suffixed with a backtick symbol name when the link is
-narrower than the whole file, e.g. `@parity /modules/vesc-ble/android/.../VescBleModule.kt `frontendActive``.
+Format: `@parity /repo-root/path-to-peer`, optionally suffixed with a backtick-quoted symbol name when the
+link is narrower than the whole file:
+
+```
+@parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt
+@parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt `frontendActive`
+```
 
 ### Native ↔ native (iOS ↔ Android)
 

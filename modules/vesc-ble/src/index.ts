@@ -1,12 +1,14 @@
 /**
- * TS declaration of the VescBle native contract. Every type here mirrors a native definition —
- * the module surface as a whole is a parity peer of both platform modules.
+ * TS declaration of the VescBle native contract: every type here mirrors a native definition.
+ * Coverage is not uniform — parts of this surface are Android-only (Group Ride, Remote Tilt) and
+ * some shared states are platform-specific. Those gaps are marked in place below with
+ * `@platform-diff` or `TODO(iOS parity)`; the file-level tags point at the two module entry points.
  *
  * @parity /modules/vesc-ble/ios/VescBleModule.swift
  * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt
  *
- * File-level tags cover the shape of the bridge. Narrower `@parity` tags below mark the nodes that
- * drift silently: columnar buffer layouts and enums native re-declares.
+ * Narrower `@parity` tags below mark the nodes that drift silently: columnar buffer layouts and
+ * enums native re-declares.
  */
 
 import { requireNativeModule, type EventSubscription } from 'expo-modules-core'
@@ -198,8 +200,8 @@ export interface BatteryManualConfig {
 export type AlertSoundType = string
 
 /**
- * @parity /modules/vesc-ble/ios/alerts/AlertAudioPlayer.swift `alertCategoryGeiger`
- * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescAlerts.kt `ALERT_CATEGORY_GEIGER`
+ * @parity /modules/vesc-ble/ios/alerts/AlertAudioPlayer.swift `alertCategorySingle`, `alertCategoryGeiger`
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescAlerts.kt `ALERT_CATEGORY_SINGLE`, `ALERT_CATEGORY_GEIGER`
  */
 export type AlertPresetCategory = 'single' | 'geiger'
 
