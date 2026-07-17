@@ -37,7 +37,12 @@ private const val MAX_SAMPLE_LIMIT = 20_000
 // live series stream are also separate full-rate paths.
 private const val MIN_PERSIST_INTERVAL_MS = 500L
 
-/** Float64 lanes per sample in the columnar history payload. Must match the JS decoder. */
+/**
+ * Float64 lanes per sample in the columnar history payload. Must match the JS decoder.
+ *
+ * @parity /modules/vesc-ble/ios/telemetry/TelemetryRepository.swift `SAMPLE_COLUMN_COUNT`
+ * @parity /modules/vesc-ble/src/index.ts `SAMPLE_COLUMN_COUNT`
+ */
 private const val SAMPLE_COLUMN_COUNT = 25
 
 data class TelemetryLocationCapture(

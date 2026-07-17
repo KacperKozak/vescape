@@ -319,6 +319,8 @@ final class AppDataRepository {
 
   // MARK: - Map points
 
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/AppDataRepository.kt `VALID_MAP_POINT_KINDS`
+  /// @parity /modules/vesc-ble/src/index.ts `MapPointKind`
   private static let validMapPointKinds: Set<String> = [
     "direction", "drop", "bonk", "nose_slide", "trail_entry", "viewpoint", "charging", "charging_food",
   ]

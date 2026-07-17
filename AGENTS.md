@@ -39,19 +39,46 @@ This is a PoC, but keep it sharp:
 - No duplicate code! We do not want to repeat ourselves.
 - Do not add tests for trivial predicates. Add tests for meaningful behavior, edge cases, contracts, or regressions.
 
-## Native Parity
+## Parity
 
-When Android and iOS implement the same native capability, keep both sides discoverable and behaviorally aligned.
+`@parity` links code that must stay in sync across implementations. It is a navigation contract: a tag is a
+promise that the peer is inspected before the edit is finished.
 
-- Add `@parity /repo-root/path-to-peer` near the native module/class/function entry point on both platform implementations.
-- When editing code with `@parity`, inspect the peer file before finishing.
+Format: `@parity /repo-root/path-to-peer` — optionally suffixed with a backtick symbol name when the link is
+narrower than the whole file, e.g. `@parity /modules/vesc-ble/android/.../VescBleModule.kt `frontendActive``.
+
+### Native ↔ native (iOS ↔ Android)
+
+When both platforms implement the same capability, tag both sides — the pair is bidirectional.
+
+- Tag near the module/class/function entry point on both platform implementations.
 - Keep native API, event names, payload shapes, errors, lifecycle, threading, persistence, and unsupported-platform behavior aligned.
 - Use `@platform-diff <reason>` next to the `@parity` tag only for intentional, accepted long-term platform differences.
 - Do not add `@parity` to Expo-generated `android/` or `ios/` root folders; use durable source under `modules/`, config plugins, or shared source inputs.
 - If parity cannot be completed now, leave a `TODO(<platform> parity): <reason>`, create/follow an issue, and call out the limitation in the final response.
 
+### TS ↔ native
+
+TS that mirrors a native contract carries the same tag. This makes the link a triangle: TS points to both
+platforms, and each platform points back to the TS peer.
+
+Tag TS when it duplicates a native definition:
+
+- Enums and union types mirroring native enums.
+- Event names and payload/prop types crossing the bridge.
+- Contract constants (keys, limits, defaults, thresholds) that native also hardcodes.
+- Small logic that native re-implements (formatting, thresholds, derivations).
+
+Rules:
+
+- A TS node mirroring both platforms carries two `@parity` lines — one per platform.
+- Back-pointers to TS belong only on the native nodes the TS actually mirrors. Do not tag native implementation internals with a TS pointer; they have no TS peer.
+- If TS is the only source of truth (native reads it, does not redefine it), no tag — there is nothing to drift.
+- `@platform-diff` and `TODO(<platform> parity)` apply here identically.
+
 ## Dir layout
 
+- `modules/vesc-ble/` — the core of the app: ~50% of all code (Swift + Kotlin, roughly equal to all of `src/`). Durable native source, owns BLE transport, board session, telemetry, recording, alerts, and Refloat config. `ios/` and `android/` subtrees are peer implementations linked by `@parity`. Treat it as a first-class part of the codebase, not a native detail hanging off the JS app.
 - `android/`, `ios/` — Expo-generated native folders. They are gitignored and not durable source; do not make lasting changes there. Update Expo config, modules, plugins, or source inputs instead.
 - `src/app/` — Expo Router routes only. No hooks, components, logic.
 - `src/lib/` — Pure domain logic. No React, no native calls.

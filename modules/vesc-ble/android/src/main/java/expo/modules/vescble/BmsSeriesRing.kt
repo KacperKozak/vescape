@@ -3,11 +3,20 @@ package expo.modules.vescble
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
-/** Fixed lanes preceding the per-cell voltage lanes in the columnar BMS series payload. */
+/**
+ * Fixed lanes preceding the per-cell voltage lanes in the columnar BMS series payload.
+ *
+ * @parity /modules/vesc-ble/ios/telemetry/BmsSeriesRing.swift `BMS_SERIES_FIXED_LANES`
+ * @parity /modules/vesc-ble/src/index.ts `BMS_SERIES_FIXED_LANES`
+ */
 internal const val BMS_SERIES_FIXED_LANES = 3
 
 /** Bits per balancing lane. Cell counts go up to 60 and a Float64 only holds 53 exact integer
- *  bits, so the balancing bitmask is split across two lanes of 30 bits each. */
+ *  bits, so the balancing bitmask is split across two lanes of 30 bits each.
+ *
+ * @parity /modules/vesc-ble/ios/telemetry/BmsSeriesRing.swift `BMS_SERIES_BALANCE_LANE_BITS`
+ * @parity /modules/vesc-ble/src/index.ts `BMS_SERIES_BALANCE_LANE_BITS`
+ */
 internal const val BMS_SERIES_BALANCE_LANE_BITS = 30
 
 internal class BmsSeriesFrame(
@@ -83,6 +92,9 @@ internal class BmsSeriesRing {
  * `BMS_SERIES_FIXED_LANES + cellCount` little-endian Float64 lanes, row-major —
  * `[capturedAtMs, balanceBitsLo, balanceBitsHi, v0..v{cellCount-1}]`. Decoded by
  * `decodeBmsSeriesFrames` in `modules/vesc-ble/src/index.ts`; lane order is shared by convention.
+ *
+ * @parity /modules/vesc-ble/ios/telemetry/BmsSeriesRing.swift `encodeBmsSeriesColumns`
+ * @parity /modules/vesc-ble/src/index.ts `decodeBmsSeriesFrames`
  */
 internal fun encodeBmsSeriesColumns(frames: List<BmsSeriesFrame>, cellCount: Int): ByteBuffer {
     val laneCount = BMS_SERIES_FIXED_LANES + cellCount

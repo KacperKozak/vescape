@@ -84,6 +84,9 @@ internal final class BoardTransportDetector: VescGattListener {
   /// answer) → `identity` (BMS answered, waiting for the Refloat info reply). `transport` names
   /// the candidate being probed and `canIds` the CAN scan responders. The UI still reads final
   /// facts from the returned candidates; full detail stays in Diagnostic Events.
+  ///
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardTransportDetector.kt `emitProgress`
+  /// @parity /modules/vesc-ble/src/index.ts `BoardProbeStep`
   private func emitProgress(_ step: String, transport: BoardTransport? = nil, withCanIds: Bool = false) {
     var payload: [String: Any?] = ["probeId": probeId, "step": step, "elapsedMs": elapsed()]
     if let transport { payload["transport"] = transport.bridgeValue }

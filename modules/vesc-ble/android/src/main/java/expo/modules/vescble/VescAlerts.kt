@@ -450,7 +450,12 @@ internal fun alertSoundPresetMaps(): List<Map<String, Any>> =
         .filter { it.uri != "preset:sustained" }
         .map { it.toMap() }
 
+// @parity /modules/vesc-ble/ios/alerts/AlertAudioPlayer.swift `alertCategorySingle`
+// @parity /modules/vesc-ble/src/index.ts `AlertPresetCategory`
 private const val ALERT_CATEGORY_SINGLE = "single"
+
+// @parity /modules/vesc-ble/ios/alerts/AlertAudioPlayer.swift `alertCategoryGeiger`
+// @parity /modules/vesc-ble/src/index.ts `AlertPresetCategory`
 private const val ALERT_CATEGORY_GEIGER = "geiger"
 
 private val ALERT_SOUND_PRESETS = listOf(

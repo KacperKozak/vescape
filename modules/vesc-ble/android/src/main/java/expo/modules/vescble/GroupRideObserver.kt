@@ -400,6 +400,8 @@ internal class GroupRideObserver(
         )
     }
 
+    // @parity /modules/vesc-ble/src/index.ts `GroupRideConnectionState`
+    // TODO(iOS parity): no iOS peer — Group Ride is not ported yet.
     private fun emitConnection(state: String) {
         emit("onGroupRideConnection", mapOf("state" to state))
     }
