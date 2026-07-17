@@ -214,6 +214,51 @@ export function TuneDrawer({ onNavigate, onOpenLegalLimits }: TuneDrawerProps) {
         </ScrollView>
       ) : null}
 
+      <View style={styles.remoteTiltBox}>
+        <RemoteTiltControl collapsible defaultExpanded={false} />
+      </View>
+
+      {waitingForTrustedLink ? (
+        <Text style={styles.quickDisabledNote}>Quick controls waiting for trusted board link.</Text>
+      ) : null}
+
+      <View style={styles.quickGrid}>
+        <View style={styles.quickCell}>
+          <SwitchWidget
+            icon={LightbulbIcon}
+            label="Lights"
+            size="half"
+            value={false}
+            onValueChange={() => {}}
+            accent={theme.palette.amber.color}
+            disabled={!quickControlsEnabled}
+          />
+        </View>
+        <View style={styles.quickCell}>
+          <SwitchWidget
+            icon={FootprintsIcon}
+            label="Posi"
+            size="half"
+            value={false}
+            onValueChange={() => {}}
+            accent={theme.palette.green.color}
+            disabled={!quickControlsEnabled}
+          />
+        </View>
+        <View style={styles.wideCell}>
+          <StepperWidget
+            icon={ArrowsDownUpIcon}
+            label="Move board"
+            accent={theme.palette.cyan.color}
+            disabled={!quickControlsEnabled}
+            previousAccessibilityLabel="Move board down"
+            nextAccessibilityLabel="Move board up"
+            onPrevious={() => {}}
+            onNext={() => {}}
+          />
+        </View>
+      </View>
+
       <View style={styles.legalGroup}>
         <View style={styles.legalRow}>
           <LegalModeWidget
@@ -298,51 +343,6 @@ export function TuneDrawer({ onNavigate, onOpenLegalLimits }: TuneDrawerProps) {
             </View>
           </View>
         ) : null}
-      </View>
-
-      <View style={styles.remoteTiltBox}>
-        <RemoteTiltControl collapsible defaultExpanded={false} />
-      </View>
-
-      {waitingForTrustedLink ? (
-        <Text style={styles.quickDisabledNote}>Quick controls waiting for trusted board link.</Text>
-      ) : null}
-
-      <View style={styles.quickGrid}>
-        <View style={styles.quickCell}>
-          <SwitchWidget
-            icon={LightbulbIcon}
-            label="Lights"
-            size="half"
-            value={false}
-            onValueChange={() => {}}
-            accent={theme.palette.amber.color}
-            disabled={!quickControlsEnabled}
-          />
-        </View>
-        <View style={styles.quickCell}>
-          <SwitchWidget
-            icon={FootprintsIcon}
-            label="Posi"
-            size="half"
-            value={false}
-            onValueChange={() => {}}
-            accent={theme.palette.green.color}
-            disabled={!quickControlsEnabled}
-          />
-        </View>
-        <View style={styles.wideCell}>
-          <StepperWidget
-            icon={ArrowsDownUpIcon}
-            label="Move board"
-            accent={theme.palette.cyan.color}
-            disabled={!quickControlsEnabled}
-            previousAccessibilityLabel="Move board down"
-            nextAccessibilityLabel="Move board up"
-            onPrevious={() => {}}
-            onNext={() => {}}
-          />
-        </View>
       </View>
 
       <InfoModal
