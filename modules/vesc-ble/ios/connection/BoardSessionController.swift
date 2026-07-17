@@ -439,6 +439,9 @@ internal final class BoardSessionController: VescGattListener {
     // Board Session). Detectors that fire warnings this session land in later slices.
     // @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardSessionController.kt
     BoardWarningRegistry.shared.beginSession(config.appBoardId)
+    BoardWarningRegistry.shared.onManualClear = { [weak self] boardId, kind in
+      DispatchQueue.main.async { self?.onWarningManuallyCleared(boardId: boardId, kind: kind) }
+    }
     // Reset the Board Warning DB-failure throttle so each Board Session gets one breadcrumb per
     // failing store site (mirrors Android clearing `warningFailuresReported`). Keeps warning-path
     // failures non-fatal and reported without per-frame spam.
@@ -918,6 +921,18 @@ internal final class BoardSessionController: VescGattListener {
     }
     for kind in report.cleanKinds {
       BoardWarningRegistry.shared.reportCleanEvaluation(boardId: boardId, kind: kind)
+    }
+  }
+
+  /// Manual clear from JS: reset the matching telemetry detector's dedupe so a still-true condition
+  /// re-fires within this Board Session (`kind == nil` means all kinds). Runs on main, where the
+  /// detectors live.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardSessionController.kt `onWarningManuallyCleared`
+  private func onWarningManuallyCleared(boardId: String, kind: String?) {
+    guard config?.appBoardId == boardId else { return }
+    if kind == nil || kind == BoardWarningKind.cellSpread.rawValue { cellSpreadDetector.reset() }
+    if kind == nil || kind == BoardWarningKind.batteryConfigMismatch.rawValue {
+      batteryConfigMismatchDetector.reset()
     }
   }
 

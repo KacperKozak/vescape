@@ -89,6 +89,28 @@ class BoardWarningRegistryTest {
   }
 
   @Test
+  fun manualClearInvokesOnManualClearEvenWithoutRow() = runBlocking {
+    val registry = registry()
+    val clears = mutableListOf<Pair<String, String?>>()
+    registry.onManualClear = { boardId, kind -> clears.add(boardId to kind) }
+
+    registry.reportFinding("board-a", "cell-spread", BoardWarningSeverity.WARN, "{}")
+    registry.clearWarning("board-a", "cell-spread")
+    // No row (e.g. lost to a swallowed write) still re-arms the detector.
+    registry.clearWarning("board-a", "battery-config-mismatch")
+    registry.clearAllWarnings("board-a")
+
+    assertEquals(
+      listOf<Pair<String, String?>>(
+        "board-a" to "cell-spread",
+        "board-a" to "battery-config-mismatch",
+        "board-a" to null,
+      ),
+      clears,
+    )
+  }
+
+  @Test
   fun clearAllRemovesEveryWarningForBoardOnly() = runBlocking {
     val registry = registry()
     registry.reportFinding("board-a", "cell-spread", BoardWarningSeverity.WARN, "{}")

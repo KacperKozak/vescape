@@ -841,7 +841,9 @@ private var wearAutoLaunchOnConnect = true
         // Reset per-session Board Warning breadcrumb bookkeeping (one Diagnostic Event per kind per
         // Board Session). Detectors that fire warnings this session land in later slices.
         start.boardConfig.appBoardId?.let {
-            BoardWarningRegistry.get(service.applicationContext).beginSession(it)
+            val registry = BoardWarningRegistry.get(service.applicationContext)
+            registry.beginSession(it)
+            registry.onManualClear = ::onWarningManuallyCleared
         }
         lastEmittedLinkIntegrity = session.startLinkIntegrityCheck(start.boardConfig.linkIdentity())
         startLocationUpdates()
@@ -1191,6 +1193,22 @@ private var wearAutoLaunchOnConnect = true
         VescForegroundService.appDataScope.launch(
             warningWriteExceptionHandler + VescForegroundService.warningWriteDispatcher,
         ) { block() }
+    }
+
+    /**
+     * Manual clear from JS: reset the matching telemetry detector's dedupe so a still-true condition
+     * re-fires within this Board Session (`kind == null` means all kinds). Detectors are not
+     * thread-safe, so hop to the main scheduler like [beginSession].
+     * @parity /modules/vesc-ble/ios/connection/BoardSessionController.swift `onWarningManuallyCleared`
+     */
+    private fun onWarningManuallyCleared(boardId: String, kind: String?) {
+        scheduler.post {
+            if (boardConfig?.appBoardId != boardId) return@post
+            if (kind == null || kind == BoardWarningKind.CELL_SPREAD.wire) cellSpreadDetector.reset()
+            if (kind == null || kind == BoardWarningKind.BATTERY_CONFIG_MISMATCH.wire) {
+                batteryConfigMismatchDetector.reset()
+            }
+        }
     }
 
     /** Capture the first Board Warning-path failure per (site, session); later ones are dropped. */

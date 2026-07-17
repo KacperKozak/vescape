@@ -36,6 +36,11 @@ final class BoardWarningRegistry {
   /// Set by the bridge to push the full board list to JS on every change.
   var onChange: ((String, [BoardWarning]) -> Void)?
 
+  /// Set by the session controller: a manual clear resets the matching telemetry detector's dedupe so
+  /// a still-true condition re-fires within the same Board Session (`kind == nil` means all kinds).
+  /// Invoked even when no row was deleted, so a warning lost to a swallowed write is also re-armed.
+  var onManualClear: ((String, String?) -> Void)?
+
   init(
     store: BoardWarningStore,
     recordDiagnostic: @escaping (String, [String: Any?]) -> Void,
@@ -97,10 +102,12 @@ final class BoardWarningRegistry {
 
   func clearWarning(boardId: String, kind: String) {
     if store.delete(boardId, kind) { emit(boardId) }
+    onManualClear?(boardId, kind)
   }
 
   func clearAllWarnings(boardId: String) {
     if store.deleteForBoard(boardId) { emit(boardId) }
+    onManualClear?(boardId, nil)
   }
 
   func warningsForBoard(_ boardId: String) -> [BoardWarning] { store.getForBoard(boardId) }

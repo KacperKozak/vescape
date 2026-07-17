@@ -83,6 +83,21 @@ final class BoardWarningRegistryTests: XCTestCase {
     XCTAssertEqual(registry.warningsForBoard("board-a").count, 1)
   }
 
+  func testManualClearInvokesOnManualClearEvenWithoutRow() {
+    let registry = makeRegistry()
+    var clears: [(String, String?)] = []
+    registry.onManualClear = { boardId, kind in clears.append((boardId, kind)) }
+
+    registry.reportFinding(boardId: "board-a", kind: "cell-spread", severity: .warn, payloadJson: "{}")
+    registry.clearWarning(boardId: "board-a", kind: "cell-spread")
+    // No row (e.g. lost to a swallowed write) still re-arms the detector.
+    registry.clearWarning(boardId: "board-a", kind: "battery-config-mismatch")
+    registry.clearAllWarnings(boardId: "board-a")
+
+    XCTAssertEqual(clears.map(\.0), ["board-a", "board-a", "board-a"])
+    XCTAssertEqual(clears.map(\.1), ["cell-spread", "battery-config-mismatch", nil])
+  }
+
   func testClearAllRemovesEveryWarningForBoardOnly() {
     let registry = makeRegistry()
     registry.reportFinding(boardId: "board-a", kind: "cell-spread", severity: .warn, payloadJson: "{}")

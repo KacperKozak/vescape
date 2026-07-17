@@ -52,7 +52,10 @@ weaker episode never downgrades a stored warning).
   (`sessionEndClean`); config-scoped kinds report it inline whenever the rule evaluates fine
   (`cleanKinds`). No data / a skipped rule is **not** a clean evaluation — the stored warning stays.
 - **Manual clear** — the rider can clear a single warning (`clearBoardWarning`) or all of a board's
-  (`clearAllBoardWarnings`). A still-true condition simply re-fires on the next evaluation.
+  (`clearAllBoardWarnings`). A still-true condition simply re-fires on the next evaluation — including
+  within the same Board Session: a manual clear resets the matching telemetry detector's dedupe
+  (registry `onManualClear` → session controller), so the detector's sustain window restarts and a
+  persisting condition re-reports rather than staying silently gone until the next session.
 - **Re-detection** — updates the existing warning in place (preserving `firstDetectedAtMs`) rather
   than creating a duplicate.
 
