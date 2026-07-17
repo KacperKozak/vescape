@@ -16,11 +16,22 @@ import { IconHero } from '@/components/ui/settings/IconHero'
 import { theme } from '@/constants/theme'
 import {
   type AlertPreset,
+  clearAllBoardWarnings,
+  devInjectBoardWarning,
+  devReportCleanBoardWarning,
   getAlertPresets,
   previewAlertSound,
   startGeigerSimulation,
   stopGeigerSimulation,
 } from 'vesc-ble'
+
+import { useBoardStore } from '@/store/boardStore'
+import { EMPTY_WARNINGS, useBoardWarningsStore } from '@/store/boardWarningsStore'
+
+/** Fake kind used by the dev warning injector; real detector kinds land in later slices. */
+const DEV_WARNING_KIND = 'cell-spread'
+/** Board id used when no board is selected, so the pipe is demoable without a saved board. */
+const DEV_WARNING_BOARD_ID = 'dev-board'
 
 const androidHaptics = Object.values(Haptics.AndroidHaptics).map((type) => ({
   label: type
@@ -94,6 +105,31 @@ export default function OtherSettingsScreen() {
     previewAlertSound(`tts:${ttsTemplate}`)
   }, [ttsTemplate])
 
+  const warningBoardId = useBoardStore((s) => s.activeBoardId) ?? DEV_WARNING_BOARD_ID
+  const boardWarnings = useBoardWarningsStore(
+    (s) => s.warningsByBoard[warningBoardId] ?? EMPTY_WARNINGS,
+  )
+
+  const injectWarning = useCallback(
+    (severity: 'warn' | 'critical') => {
+      const payload = JSON.stringify({
+        peakSpread: severity === 'critical' ? 0.27 : 0.12,
+        worstGroup: 4,
+        injectedAt: Date.now(),
+      })
+      void devInjectBoardWarning(warningBoardId, DEV_WARNING_KIND, severity, payload)
+    },
+    [warningBoardId],
+  )
+
+  const reportClean = useCallback(() => {
+    void devReportCleanBoardWarning(warningBoardId, DEV_WARNING_KIND)
+  }, [warningBoardId])
+
+  const clearWarnings = useCallback(() => {
+    void clearAllBoardWarnings(warningBoardId)
+  }, [warningBoardId])
+
   function selectMode(next: PlaybackMode) {
     if (geigerActive) handleStopGeiger()
     setMode(next)
@@ -105,6 +141,50 @@ export default function OtherSettingsScreen() {
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
         <IconHero icon={ToolboxIcon} description="Small platform probes and local experiments." />
+
+        <Text style={styles.sectionTitle}>Board Warnings</Text>
+        <View style={styles.card}>
+          <Text style={styles.ttsHint}>
+            Injects a fake warning through the native registry (fire → persist → emit). Target
+            board: {warningBoardId}
+          </Text>
+          <View style={styles.warningButtonRow}>
+            <Pressable
+              style={[styles.warningButton, styles.warningButtonWarn]}
+              onPress={() => injectWarning('warn')}
+            >
+              <Text style={styles.warningButtonText}>Inject warn</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.warningButton, styles.warningButtonCritical]}
+              onPress={() => injectWarning('critical')}
+            >
+              <Text style={styles.warningButtonText}>Inject critical</Text>
+            </Pressable>
+          </View>
+          <View style={styles.warningButtonRow}>
+            <Pressable style={styles.warningButton} onPress={reportClean}>
+              <Text style={styles.warningButtonText}>Report clean</Text>
+            </Pressable>
+            <Pressable style={styles.warningButton} onPress={clearWarnings}>
+              <Text style={styles.warningButtonText}>Clear all</Text>
+            </Pressable>
+          </View>
+          {boardWarnings.length === 0 ? (
+            <Text style={styles.warningEmpty}>No warnings (mirror store empty)</Text>
+          ) : (
+            boardWarnings.map((warning) => (
+              <View key={warning.kind} style={styles.warningRow}>
+                <Text style={styles.warningRowKind}>
+                  {warning.kind} · {warning.severity}
+                </Text>
+                <Text style={styles.warningRowPayload} numberOfLines={1}>
+                  {warning.payloadJson}
+                </Text>
+              </View>
+            ))
+          )}
+        </View>
 
         <Text style={styles.sectionTitle}>Haptics</Text>
         <View style={styles.plainCard}>
@@ -507,6 +587,50 @@ const styles = StyleSheet.create({
     color: theme.palette.slate.textSecondary,
     fontSize: 13,
     fontWeight: '600',
+  },
+  warningButtonRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 10,
+  },
+  warningButton: {
+    flex: 1,
+    alignItems: 'center',
+    backgroundColor: theme.palette.slate.surfaceDeep,
+    borderWidth: 1,
+    borderColor: theme.palette.slate.border,
+    borderRadius: 8,
+    paddingVertical: 12,
+  },
+  warningButtonWarn: {
+    borderColor: theme.status.warning.color,
+  },
+  warningButtonCritical: {
+    borderColor: theme.status.error.color,
+  },
+  warningButtonText: {
+    color: theme.palette.slate.textPrimary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  warningEmpty: {
+    color: theme.palette.slate.textDim,
+    fontSize: 12,
+    marginTop: 12,
+  },
+  warningRow: {
+    marginTop: 12,
+    gap: 2,
+  },
+  warningRowKind: {
+    color: theme.palette.slate.textPrimary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  warningRowPayload: {
+    color: theme.palette.slate.textDim,
+    fontSize: 11,
+    fontFamily: 'monospace',
   },
   dialValue: {
     color: theme.palette.sky.text,

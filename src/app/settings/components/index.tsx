@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import { ScrollView, StyleSheet } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
@@ -10,6 +11,7 @@ import {
   CloudMoonIcon,
   CubeIcon,
   GearSixIcon,
+  LightningIcon,
   SquaresFourIcon,
   StackIcon,
   TextAaIcon,
@@ -21,72 +23,105 @@ import { SettingsSectionTitle } from '@/components/ui/settings/SettingsSectionTi
 import { IconHero } from '@/components/ui/settings/IconHero'
 import { theme } from '@/constants/theme'
 
-const sections = [
+const groups = [
   {
-    label: 'Base',
-    hint: 'Buttons, banners, device rows, badges, and other everyday building blocks',
-    route: '/settings/components/base',
-    icon: CubeIcon,
+    title: 'Foundations',
+    sections: [
+      {
+        label: 'Base',
+        hint: 'Buttons, banners, placeholders, and other everyday building blocks',
+        route: '/settings/components/base',
+        icon: CubeIcon,
+        color: theme.palette.cyan.color,
+      },
+      {
+        label: 'Typography',
+        hint: 'Raleway across every UI text role, with weight and tabular-nums parity',
+        route: '/settings/components/typography',
+        icon: TextAaIcon,
+        color: theme.palette.slate.textSecondary,
+      },
+    ],
   },
   {
-    label: 'Typography',
-    hint: 'Raleway across every UI text role, with weight and tabular-nums parity',
-    route: '/settings/components/typography',
-    icon: TextAaIcon,
+    title: 'General use',
+    sections: [
+      {
+        label: 'Charts',
+        hint: 'Sparklines and gauges for showing telemetry over time',
+        route: '/settings/components/charts',
+        icon: ChartLineUpIcon,
+        color: theme.palette.green.color,
+      },
+      {
+        label: 'Forms',
+        hint: 'Inputs, dropdowns, pickers, and steppers for entering data',
+        route: '/settings/components/forms',
+        icon: ListIcon,
+        color: theme.palette.blue.color,
+      },
+      {
+        label: 'Modals',
+        hint: 'Popups, confirmations, and sheets that float above the screen',
+        route: '/settings/components/modals',
+        icon: SquaresFourIcon,
+        color: theme.status.upgrade.color,
+      },
+      {
+        label: 'Controls',
+        hint: 'Buttons and selectors for switching between options or views',
+        route: '/settings/components/controls',
+        icon: SwatchesIcon,
+        color: theme.palette.orange.color,
+      },
+      {
+        label: 'Settings',
+        hint: 'Cards and rows used to build settings screens',
+        route: '/settings/components/settings',
+        icon: GearSixIcon,
+        color: theme.palette.slate.light,
+      },
+    ],
   },
   {
-    label: 'Charts',
-    hint: 'Sparklines and gauges for showing telemetry over time',
-    route: '/settings/components/charts',
-    icon: ChartLineUpIcon,
-  },
-  {
-    label: 'Forms',
-    hint: 'Inputs, dropdowns, pickers, and steppers for entering data',
-    route: '/settings/components/forms',
-    icon: ListIcon,
-  },
-  {
-    label: 'Modals',
-    hint: 'Popups, confirmations, and sheets that float above the screen',
-    route: '/settings/components/modals',
-    icon: SquaresFourIcon,
-  },
-  {
-    label: 'Controls',
-    hint: 'Buttons and selectors for switching between options or views',
-    route: '/settings/components/controls',
-    icon: SwatchesIcon,
-  },
-  {
-    label: 'Widgets',
-    hint: 'Dashboard tiles for showing and editing live board data',
-    route: '/settings/components/widgets',
-    icon: StackIcon,
-  },
-  {
-    label: 'Settings',
-    hint: 'Cards and rows used to build settings screens',
-    route: '/settings/components/settings',
-    icon: GearSixIcon,
-  },
-  {
-    label: 'Tune',
-    hint: 'Dials, sliders, and grids for adjusting board tuning',
-    route: '/settings/components/tune',
-    icon: ToolboxIcon,
-  },
-  {
-    label: 'Weather',
-    hint: 'Icons and strips for showing weather conditions and forecasts',
-    route: '/settings/components/weather',
-    icon: CloudMoonIcon,
-  },
-  {
-    label: 'Map',
-    hint: 'Map pins, routes, riders, weather radar, buildings — all layers, live controls',
-    route: '/settings/components/map',
-    icon: MapTrifoldIcon,
+    title: 'Domain',
+    sections: [
+      {
+        label: 'Board',
+        hint: 'Device rows, badges, link timelines, and warnings tied to the board domain',
+        route: '/settings/components/board',
+        icon: LightningIcon,
+        color: theme.palette.sky.color,
+      },
+      {
+        label: 'Widgets',
+        hint: 'Dashboard tiles for showing and editing live board data',
+        route: '/settings/components/widgets',
+        icon: StackIcon,
+        color: theme.palette.yellow.color,
+      },
+      {
+        label: 'Tune',
+        hint: 'Dials, sliders, and grids for adjusting board tuning',
+        route: '/settings/components/tune',
+        icon: ToolboxIcon,
+        color: theme.palette.amber.color,
+      },
+      {
+        label: 'Weather',
+        hint: 'Icons and strips for showing weather conditions and forecasts',
+        route: '/settings/components/weather',
+        icon: CloudMoonIcon,
+        color: theme.palette.blue.light,
+      },
+      {
+        label: 'Map',
+        hint: 'Map pins, routes, riders, weather radar, buildings — all layers, live controls',
+        route: '/settings/components/map',
+        icon: MapTrifoldIcon,
+        color: theme.palette.green.light,
+      },
+    ],
   },
 ]
 
@@ -98,18 +133,23 @@ export default function ComponentsIndex() {
           icon={SwatchesIcon}
           description="Browse and preview all UI components with live controls."
         />
-        <SettingsSectionTitle>Component groups</SettingsSectionTitle>
-        <SettingsCard>
-          {sections.map((s) => (
-            <SettingsRow
-              key={s.label}
-              icon={s.icon}
-              label={s.label}
-              hint={s.hint}
-              onPress={() => router.push(s.route as any)}
-            />
-          ))}
-        </SettingsCard>
+        {groups.map((group) => (
+          <Fragment key={group.title}>
+            <SettingsSectionTitle>{group.title}</SettingsSectionTitle>
+            <SettingsCard>
+              {group.sections.map((s) => (
+                <SettingsRow
+                  key={s.label}
+                  icon={s.icon}
+                  iconColor={s.color}
+                  label={s.label}
+                  hint={s.hint}
+                  onPress={() => router.push(s.route as any)}
+                />
+              ))}
+            </SettingsCard>
+          </Fragment>
+        ))}
       </ScrollView>
     </SafeAreaView>
   )

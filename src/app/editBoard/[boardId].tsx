@@ -1,17 +1,28 @@
-import { useCallback, useLayoutEffect, useState } from 'react'
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet } from 'react-native'
+import { useCallback, useLayoutEffect, useRef, useState } from 'react'
+import {
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+} from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, useLocalSearchParams, useNavigation } from 'expo-router'
-import { PencilSimpleIcon } from 'phosphor-react-native'
+import { PencilSimpleIcon, WarningIcon } from 'phosphor-react-native'
 import { useShallow } from 'zustand/react/shallow'
 
 import { BoardBatteryEditorModal } from '@/components/domain/board/BoardBatteryEditorModal'
 import { BoardInfoEditorModal } from '@/components/domain/board/BoardInfoEditorModal'
 import { ConfirmModal } from '@/components/ui/modals/ConfirmModal'
 import { EditBoardSettings } from '@/components/domain/board/EditBoardSettings'
+import { EdgeDrawer } from '@/components/ui/overlays/AnchoredSheet'
+import { BoardWarningsSheet } from '@/screens/center/BoardWarningsSheet'
 import { useEditBoardForm } from '@/hooks/useEditBoardForm'
 import { routes } from '@/navigation/routes'
 import { useBoardStore } from '@/store/boardStore'
+import { EMPTY_WARNINGS, useBoardWarningsStore } from '@/store/boardWarningsStore'
+import { useSettingsStore } from '@/store/settingsStore'
 import { theme } from '@/constants/theme'
 
 export default function EditBoardScreen() {
@@ -26,6 +37,12 @@ export default function EditBoardScreen() {
   const navigation = useNavigation()
 
   const editingBoard = boards.find((b) => b.id === boardId)
+  // Kill switch off hides the whole Board Warnings surface, matching BoardWarningControl.
+  const boardWarningsEnabled = useSettingsStore((s) => s.boardWarningsEnabled)
+  const storedWarnings = useBoardWarningsStore((s) => s.warningsByBoard[boardId] ?? EMPTY_WARNINGS)
+  const warnings = boardWarningsEnabled ? storedWarnings : EMPTY_WARNINGS
+  const warningsAnchorRef = useRef<View>(null)
+  const [warningsOpen, setWarningsOpen] = useState(false)
   const [infoModalVisible, setInfoModalVisible] = useState(false)
   const [batteryModalVisible, setBatteryModalVisible] = useState(false)
   const [removeConfirmVisible, setRemoveConfirmVisible] = useState(false)
@@ -80,6 +97,10 @@ export default function EditBoardScreen() {
 
   if (!editingBoard) return null
 
+  const dismissedKinds = editingBoard.dismissedWarnings ?? []
+  const dismissedCount = warnings.filter((w) => dismissedKinds.includes(w.kind)).length
+  const warningCounts = { active: warnings.length - dismissedCount, dismissed: dismissedCount }
+
   return (
     <KeyboardAvoidingView
       style={styles.flex}
@@ -94,6 +115,9 @@ export default function EditBoardScreen() {
             linkSaving={form.saving === 'link'}
             keepMissingBatteryConfig={form.keepMissingBatteryConfig}
             batterySummary={form.batterySummary}
+            warningCounts={warningCounts}
+            warningsAnchorRef={warningsAnchorRef}
+            onOpenWarnings={() => setWarningsOpen(true)}
             onOpenBattery={() => setBatteryModalVisible(true)}
             onLink={handleLink}
             onRelink={handleRelink}
@@ -102,6 +126,17 @@ export default function EditBoardScreen() {
           />
         </ScrollView>
       </SafeAreaView>
+
+      <EdgeDrawer
+        visible={warningsOpen}
+        triggerRef={warningsAnchorRef}
+        title="Warnings"
+        icon={WarningIcon}
+        iconColor={theme.status.caution.color}
+        onClose={() => setWarningsOpen(false)}
+      >
+        <BoardWarningsSheet boardId={editingBoard.id} warnings={warnings} />
+      </EdgeDrawer>
 
       <BoardInfoEditorModal
         visible={infoModalVisible}

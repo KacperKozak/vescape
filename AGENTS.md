@@ -38,6 +38,7 @@ This is a PoC, but keep it sharp:
 - Remove unused code! Not keep dead code for later.
 - No duplicate code! We do not want to repeat ourselves.
 - Do not add tests for trivial predicates. Add tests for meaningful behavior, edge cases, contracts, or regressions.
+- New Board Warning detectors must add their kind to `docs/board-warnings.md` (the kinds catalog) alongside the `BoardWarningKind` slug.
 
 ## Parity
 
@@ -78,7 +79,8 @@ Rules:
 
 - A TS node mirroring both platforms carries two `@parity` lines — one per platform.
 - Back-pointers to TS belong only on the native nodes the TS actually mirrors. Do not tag native implementation internals with a TS pointer; they have no TS peer.
-- If TS is the only source of truth (native reads it, does not redefine it), no tag — there is nothing to drift.
+- No tag when there is only one definition: values passed to native at runtime, or JS-only presentation (titles, colors, formatting) native never defines. Tag the shape/keys of what crosses the bridge, not the values.
+- Shared key constants (settings keys, payload keys) are covered by the container-level tag on the type/interface/file that defines them — do not tag individual string literals.
 - `@platform-diff` and `TODO(<platform> parity)` apply here identically.
 
 ## Dir layout

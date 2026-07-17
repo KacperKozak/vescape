@@ -1,5 +1,7 @@
 package expo.modules.vescble
 
+import expo.modules.vescble.warnings.BoardWarningRegistry
+import expo.modules.vescble.warnings.BoardWarningSeverity
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
@@ -100,7 +102,25 @@ class VescBleModule : Module() {
       "onGroupRideRoster",
       "onGroupRideError",
       "onAppDataChanged",
+      "onBoardWarnings",
     )
+
+    // JS keeps a dumb mirror of the durable Board Warning registry; push the full board list on
+    // every registry change so late subscribers self-heal on the next emit (and on subscribe below).
+    // @parity /modules/vesc-ble/ios/VescBleModule.swift `sendBoardWarnings`
+    // @parity /modules/vesc-ble/src/index.ts `BoardWarningsEvent`
+    BoardWarningRegistry.get(context).onChange = { boardId, warnings ->
+      if (shouldEmitToFrontend("onBoardWarnings")) {
+        mainHandler.post {
+          if (shouldEmitToFrontend("onBoardWarnings")) {
+            sendEvent(
+              "onBoardWarnings",
+              mapOf("boardId" to boardId, "warnings" to warnings.map { it.toMap() }),
+            )
+          }
+        }
+      }
+    }
 
     OnStartObserving("onDevice") { startObserving("onDevice") }
     OnStopObserving("onDevice") { stopObserving("onDevice") }
@@ -140,6 +160,11 @@ class VescBleModule : Module() {
     OnStopObserving("onGroupRideRoster") { stopObserving("onGroupRideRoster") }
     OnStartObserving("onGroupRideError") { startObserving("onGroupRideError") }
     OnStopObserving("onGroupRideError") { stopObserving("onGroupRideError") }
+    OnStartObserving("onBoardWarnings") {
+      startObserving("onBoardWarnings")
+      CoroutineScope(Dispatchers.IO).launch { BoardWarningRegistry.get(context).emitSnapshot() }
+    }
+    OnStopObserving("onBoardWarnings") { stopObserving("onBoardWarnings") }
 
     OnActivityEntersForeground {
       frontendActive = true
@@ -155,6 +180,10 @@ class VescBleModule : Module() {
     OnDestroy {
       frontendActive = false
       observedEvents.clear()
+      // Detach the JS-facing emit sink so the process-singleton registry doesn't keep the destroyed
+      // module reachable (mirrors iOS OnDestroy nulling `onChange`). A fresh module re-attaches in
+      // its own definition().
+      BoardWarningRegistry.get(context).onChange = null
       previewAlertFeedback?.release()
       previewAlertFeedback = null
       cancelActiveProbe(null, "module_destroyed")
@@ -295,6 +324,22 @@ class VescBleModule : Module() {
     }
     AsyncFunction("getDiagnosticEvents") Coroutine { options: Map<String, Any?> ->
       TelemetryRepository.get(context.applicationContext).getDiagnosticEvents(options)
+    }
+    AsyncFunction("getBoardWarnings") Coroutine { ->
+      BoardWarningRegistry.get(context).allWarnings().map { it.toMap() }
+    }
+    AsyncFunction("clearBoardWarning") Coroutine { boardId: String, kind: String ->
+      BoardWarningRegistry.get(context).clearWarning(boardId, kind)
+    }
+    AsyncFunction("clearAllBoardWarnings") Coroutine { boardId: String ->
+      BoardWarningRegistry.get(context).clearAllWarnings(boardId)
+    }
+    AsyncFunction("devInjectBoardWarning") Coroutine { boardId: String, kind: String, severity: String, payloadJson: String ->
+      BoardWarningRegistry.get(context)
+        .reportFinding(boardId, kind, BoardWarningSeverity.fromWire(severity), payloadJson)
+    }
+    AsyncFunction("devReportCleanBoardWarning") Coroutine { boardId: String, kind: String ->
+      BoardWarningRegistry.get(context).reportCleanEvaluation(boardId, kind)
     }
     AsyncFunction("clearDiagnosticEvents") {
       runBlocking { TelemetryRepository.get(context.applicationContext).clearDiagnosticEvents() }
@@ -486,7 +531,9 @@ class VescBleModule : Module() {
         key == "freeSpinStationaryBoardCapKmh" ||
         key == "socEstimateWindowSeconds" ||
         key == "telemetryPollRateHz" ||
-        key == "wearMirrorIntervalMs"
+        key == "wearMirrorIntervalMs" ||
+key == "wearAutoLaunchOnConnect" ||
+        key == "boardWarningsEnabled"
       ) {
         VescForegroundService.reloadTelemetrySettings(context.applicationContext)
       }

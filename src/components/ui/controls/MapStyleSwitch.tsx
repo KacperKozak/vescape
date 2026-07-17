@@ -1,4 +1,7 @@
-import { MapOptionSelector } from '@/components/ui/controls/MapOptionSelector'
+import {
+  MapOptionSelector,
+  type MapOptionSelectorSize,
+} from '@/components/ui/controls/MapOptionSelector'
 import { IS_MAPY_CONFIGURED } from '@/config/mapy'
 import { MAP_STYLES, type MapStyleKey } from '@/constants/mapStyles'
 import { theme } from '@/constants/theme'
@@ -6,11 +9,19 @@ import { theme } from '@/constants/theme'
 interface MapStyleSwitchProps {
   activeKey: MapStyleKey
   expanded: boolean
+  size?: MapOptionSelectorSize
   onToggle: () => void
   onSelect: (key: MapStyleKey) => void
 }
 
-export function MapStyleSwitch({ activeKey, expanded, onToggle, onSelect }: MapStyleSwitchProps) {
+export function MapStyleSwitch({
+  activeKey,
+  expanded,
+  size = 'md',
+  onToggle,
+  onSelect,
+}: MapStyleSwitchProps) {
+  const iconSize = size === 'sm' ? 18 : 21
   const availableStyles = IS_MAPY_CONFIGURED
     ? MAP_STYLES
     : MAP_STYLES.filter((style) => style.key !== 'mapy')
@@ -23,7 +34,7 @@ export function MapStyleSwitch({ activeKey, expanded, onToggle, onSelect }: MapS
     label: style.label,
     icon: (
       <style.Icon
-        size={21}
+        size={iconSize}
         color={
           effectiveActiveKey === style.key
             ? theme.palette.sky.text
@@ -37,11 +48,12 @@ export function MapStyleSwitch({ activeKey, expanded, onToggle, onSelect }: MapS
   return (
     <MapOptionSelector
       activeKey={effectiveActiveKey}
-      activeIcon={<activeStyle.Icon size={21} color={theme.palette.sky.text} weight="fill" />}
+      activeIcon={<activeStyle.Icon size={iconSize} color={theme.palette.sky.text} weight="fill" />}
       activeColor={theme.palette.sky.text}
       activeBackground={`${theme.palette.sky.color}1f`}
       collapsedAccessibilityLabel={`Basemap: ${activeStyle.label}`}
       expanded={expanded}
+      size={size}
       options={options}
       onToggle={onToggle}
       onSelect={onSelect}

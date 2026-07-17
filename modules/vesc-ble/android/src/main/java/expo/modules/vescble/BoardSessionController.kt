@@ -1,5 +1,13 @@
 package expo.modules.vescble
 
+import expo.modules.vescble.warnings.BatteryConfigMismatchDetector
+import expo.modules.vescble.warnings.BoardWarningKind
+import expo.modules.vescble.warnings.BoardWarningRegistry
+import expo.modules.vescble.warnings.BoardWarningSeverity
+import expo.modules.vescble.warnings.BoardWarningStore
+import expo.modules.vescble.warnings.CellSpreadDetector
+import expo.modules.vescble.warnings.ConfigSafetyDetector
+import expo.modules.vescble.warnings.ConfigSafetyValues
 import android.annotation.SuppressLint
 import android.app.ActivityManager
 import android.app.Service
@@ -14,6 +22,7 @@ import android.os.Looper
 import android.util.Log
 import java.io.File
 import kotlin.math.roundToInt
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.launch
 import expo.modules.kotlin.jni.NativeArrayBuffer
 import expo.modules.vescble.config.ConfigRWEvent
@@ -162,10 +171,13 @@ internal class BoardSessionController(private val service: VescForegroundService
         )
     }
     private val watchPusher by lazy {
-        WatchTelemetryPusher(service.applicationContext, VescForegroundService.appDataScope)
+        WatchTelemetryPusher(service.applicationContext, VescForegroundService.appDataScope, ::recordWatchDiagnostic)
     }
     private val watchMirrorPresence by lazy {
-        WatchMirrorPresence(service.applicationContext, VescForegroundService.appDataScope)
+        WatchMirrorPresence(service.applicationContext, VescForegroundService.appDataScope, ::recordWatchDiagnostic)
+    }
+    private val watchMirrorLauncher by lazy {
+        WatchMirrorLauncher(service.applicationContext, VescForegroundService.appDataScope, ::recordWatchDiagnostic)
     }
     private val watchTick by lazy {
         WatchTick(
@@ -213,6 +225,8 @@ internal class BoardSessionController(private val service: VescForegroundService
                     this@BoardSessionController.diagnosticProperties(config, category)
                 override fun dumpDebugBytes(xmlBytes: ByteArray, configBytes: ByteArray) =
                     this@BoardSessionController.dumpRefloatConfigDebug(xmlBytes, configBytes)
+                override fun evaluateConfigSafety(values: ConfigSafetyValues) =
+                    this@BoardSessionController.evaluateConfigSafety(values)
             },
         )
     }
@@ -421,6 +435,28 @@ internal class BoardSessionController(private val service: VescForegroundService
     private val socWindow = SocMedianWindow()
     /** Live BMS Series retention (window shared with [telemetryPipeline]); push gated by [bmsSeriesFocused]. */
     private val bmsSeriesRing = BmsSeriesRing()
+    /** Telemetry-scoped cell-spread Board Warning detector; fed each BMS frame, reset per session. */
+    private val cellSpreadDetector = CellSpreadDetector()
+    /** Telemetry-scoped BMS-vs-config cell-count mismatch detector; fed each BMS frame, reset per session. */
+    private val batteryConfigMismatchDetector = BatteryConfigMismatchDetector()
+    /**
+     * Board Warning evaluation / registry-write sites that already captured a crash this Board Session.
+     * Board Warnings are secondary: a detector bug or a failed registry DB write must never crash the
+     * foreground service, and must not spam diagnostics per frame — so each site reports at most once
+     * per session. Touched from the BMS hot path (main scheduler) and the app-data IO scope, so kept
+     * thread-safe. Reset in [beginSession].
+     * @parity /modules/vesc-ble/ios/telemetry/BoardWarningStore.swift `BoardWarningFailureReporter`
+     */
+    private val warningFailuresReported = java.util.Collections.synchronizedSet(HashSet<String>())
+    /**
+     * Isolates Board Warning registry writes launched on [VescForegroundService.appDataScope]. A
+     * Room/SQLite failure there is otherwise an uncaught coroutine exception routed to the default
+     * handler → process crash (the scope's `SupervisorJob` isolates sibling jobs but does not swallow).
+     * Captures the first failure per session and drops the rest.
+     */
+    private val warningWriteExceptionHandler = CoroutineExceptionHandler { _, throwable ->
+        reportWarningFailure("registry_write", throwable)
+    }
     /** True while the battery-detail view is focused (JS intent); gates the `onBmsSeries` push only. */
     @Volatile
     private var bmsSeriesFocused = false
@@ -438,6 +474,16 @@ internal class BoardSessionController(private val service: VescForegroundService
     private var gpsError: String? = null
     private var isStoppingService = false
     private var connectionSoundsEnabled = true
+private var wearAutoLaunchOnConnect = true
+    private var watchLaunchFiredSessionId = 0L
+    /**
+     * Board Warnings master switch (kill switch, #219). Off ⇒ no detector evaluation, no registry
+     * writes, no session-end clean pass. Cached from settings by [applyTelemetrySettings] so the
+     * BMS hot path never re-reads settings; @Volatile because evals run on BLE callbacks while
+     * updates land from appDataScope.
+     */
+    @Volatile
+    private var boardWarningsEnabled = true
     private var autoCloseEnabled = false
     private var autoCloseDelayMinutes = 15
     private var autoCloseHandle: Cancellable? = null
@@ -780,6 +826,10 @@ internal class BoardSessionController(private val service: VescForegroundService
         loadBatteryConfig(start.boardConfig.appBoardId)
         socWindow.reset()
         bmsSeriesRing.clear()
+        cellSpreadDetector.reset()
+        batteryConfigMismatchDetector.reset()
+        warningFailuresReported.clear()
+        configSafetyReadScheduled = false
         telemetryPipeline.beginSession(session, start.boardConfig)
         // Tag telemetry frames with the CAN id resolved from the stored transport.
         telemetryPipeline.updateCanId(canId)
@@ -788,6 +838,13 @@ internal class BoardSessionController(private val service: VescForegroundService
         connectionCoordinator.reset()
         reconnectScheduler.cancelAndReset()
         recordingCoordinator.beginBoardSession(start.boardConfig)
+        // Reset per-session Board Warning breadcrumb bookkeeping (one Diagnostic Event per kind per
+        // Board Session). Detectors that fire warnings this session land in later slices.
+        start.boardConfig.appBoardId?.let {
+            val registry = BoardWarningRegistry.get(service.applicationContext)
+            registry.beginSession(it)
+            registry.onManualClear = ::onWarningManuallyCleared
+        }
         lastEmittedLinkIntegrity = session.startLinkIntegrityCheck(start.boardConfig.linkIdentity())
         startLocationUpdates()
         setStatus(BoardPhase.Connecting)
@@ -1101,6 +1158,8 @@ internal class BoardSessionController(private val service: VescForegroundService
             updateLinkIntegrity(session.observeBms(config.linkIdentity()))
         }
         emitEvent("onBms", bms.toMap())
+        evaluateCellSpread(bms)
+        evaluateBatteryConfigMismatch(bms)
         // Retention is unconditional (the frame already arrived); only the push below is gated.
         val frame = bmsSeriesRing.append(
             capturedAtMs = bms.capturedAt,
@@ -1109,6 +1168,143 @@ internal class BoardSessionController(private val service: VescForegroundService
             windowMs = telemetryPipeline.recentWindowMs(),
         )
         if (frame != null && bmsSeriesFocused) emitBmsSeries("append", listOf(frame))
+    }
+
+    /**
+     * Run one Board Warning evaluation site, swallowing any failure so a detector bug never crashes the
+     * BMS hot path / foreground service. The synchronous detector call runs inline here; registry writes
+     * are handed to [launchWarningWrite]. First crash per (site, session) is captured; the rest stay
+     * silent to avoid per-frame diagnostic spam. Detectors stay pure — the guard lives at this boundary.
+     */
+    private inline fun guardWarningEval(site: String, block: () -> Unit) {
+        try {
+            block()
+        } catch (throwable: Throwable) {
+            reportWarningFailure(site, throwable)
+        }
+    }
+
+    /**
+     * Launch a Board Warning registry write crash-isolated by [warningWriteExceptionHandler] and
+     * serialized on [VescForegroundService.warningWriteDispatcher] so concurrent findings commit in
+     * submission order (preserving the monotonic-severity contract).
+     */
+    private fun launchWarningWrite(block: suspend () -> Unit) {
+        VescForegroundService.appDataScope.launch(
+            warningWriteExceptionHandler + VescForegroundService.warningWriteDispatcher,
+        ) { block() }
+    }
+
+    /**
+     * Manual clear from JS: reset the matching telemetry detector's dedupe so a still-true condition
+     * re-fires within this Board Session (`kind == null` means all kinds). Detectors are not
+     * thread-safe, so hop to the main scheduler like [beginSession].
+     * @parity /modules/vesc-ble/ios/connection/BoardSessionController.swift `onWarningManuallyCleared`
+     */
+    private fun onWarningManuallyCleared(boardId: String, kind: String?) {
+        scheduler.post {
+            if (boardConfig?.appBoardId != boardId) return@post
+            if (kind == null || kind == BoardWarningKind.CELL_SPREAD.wire) cellSpreadDetector.reset()
+            if (kind == null || kind == BoardWarningKind.BATTERY_CONFIG_MISMATCH.wire) {
+                batteryConfigMismatchDetector.reset()
+            }
+        }
+    }
+
+    /** Capture the first Board Warning-path failure per (site, session); later ones are dropped. */
+    private fun reportWarningFailure(site: String, throwable: Throwable) {
+        if (!warningFailuresReported.add(site)) return
+        Log.e(VESC_SESSION_TAG, "Board Warning $site failed", throwable)
+        captureDiagnostic(
+            "board_warning_failure",
+            diagnosticProperties(boardConfig, "board_warning") + mapOf(
+                "site" to site,
+                "message" to (throwable.message ?: throwable.javaClass.simpleName),
+                "error_type" to throwable.javaClass.name,
+            ),
+        )
+    }
+
+    /**
+     * Feed one smart-BMS frame to the cell-spread detector and report any finding through the Board
+     * Warning registry (telemetry-scoped detector; continuous evaluation during the Board Session).
+     * @parity /modules/vesc-ble/ios/connection/BoardSessionController.swift `evaluateCellSpread`
+     */
+    private fun evaluateCellSpread(bms: BmsTelemetry) = guardWarningEval("cell_spread") {
+        if (!boardWarningsEnabled) return@guardWarningEval
+        val boardId = boardConfig?.appBoardId ?: return@guardWarningEval
+        val finding = cellSpreadDetector.onFrame(
+            cellVoltages = bms.cellVoltages,
+            balancing = bms.balancing,
+            vCharge = bms.vCharge,
+            atMs = bms.capturedAt,
+        ) ?: return@guardWarningEval
+        val registry = BoardWarningRegistry.get(service.applicationContext)
+        launchWarningWrite {
+            registry.reportFinding(boardId, BoardWarningKind.CELL_SPREAD, finding.severity, finding.payloadJson)
+        }
+    }
+
+    /**
+     * Feed one smart-BMS frame's cell count to the battery-config-mismatch detector and report any
+     * finding through the Board Warning registry. Compares against the same configured series count
+     * the SoC estimator and per-cell pushback bounds read; absent config is not evaluated.
+     * @parity /modules/vesc-ble/ios/connection/BoardSessionController.swift `evaluateBatteryConfigMismatch`
+     */
+    private fun evaluateBatteryConfigMismatch(bms: BmsTelemetry) = guardWarningEval("battery_config_mismatch") {
+        if (!boardWarningsEnabled) return@guardWarningEval
+        val boardId = boardConfig?.appBoardId ?: return@guardWarningEval
+        val seriesCount = (batteryConfigCache?.get("seriesCount") as? Number)?.toInt()
+        val payloadJson = batteryConfigMismatchDetector.onFrame(bms.cellVoltages.size, seriesCount)
+            ?: return@guardWarningEval
+        val registry = BoardWarningRegistry.get(service.applicationContext)
+        launchWarningWrite {
+            registry.reportFinding(
+                boardId,
+                BoardWarningKind.BATTERY_CONFIG_MISMATCH,
+                BoardWarningSeverity.WARN,
+                payloadJson,
+            )
+        }
+    }
+
+    /**
+     * Evaluate the config-safety rules against a freshly decoded config (background read after link
+     * trust, or the in-hand bytes from a tune write) and report findings / clean evaluations through
+     * the Board Warning registry. Per-cell rules use the configured battery series count and are
+     * skipped when it is absent; skipped kinds report nothing so stored warnings stay untouched.
+     * @parity /modules/vesc-ble/ios/connection/BoardSessionController.swift `evaluateConfigSafety`
+     */
+    private fun evaluateConfigSafety(values: ConfigSafetyValues) = guardWarningEval("config_safety") {
+        if (!boardWarningsEnabled) return@guardWarningEval
+        val boardId = boardConfig?.appBoardId ?: return@guardWarningEval
+        val seriesCount = (batteryConfigCache?.get("seriesCount") as? Number)?.toInt()
+        val perCell = ConfigSafetyDetector.usesPerCellVoltage(fwVersionString)
+        val report = ConfigSafetyDetector.evaluate(values, seriesCount, perCell)
+        val registry = BoardWarningRegistry.get(service.applicationContext)
+        launchWarningWrite {
+            for (finding in report.findings) {
+                registry.reportFinding(boardId, finding.kind, finding.severity, finding.payloadJson)
+            }
+            for (kind in report.cleanKinds) {
+                registry.reportCleanEvaluation(boardId, kind)
+            }
+        }
+    }
+
+    /**
+     * Once per Board Session, after the link is trusted, kick off one background Refloat config read so
+     * the config-safety detectors can evaluate the decoded config. Read-only; reuses the normal config
+     * read path (pauses/resumes polling) and is skipped if a config op is already in flight.
+     */
+    private fun triggerConfigSafetyRead(session: BoardSession) {
+        if (!boardWarningsEnabled) {
+            // Re-arm so re-enabling Board Warnings mid-session can schedule the read again.
+            configSafetyReadScheduled = false
+            return
+        }
+        if (!isCurrentBoardSession(session)) return
+        configController.consumeRead(PendingConfigRead(onSuccess = {}, onError = { _, _ -> }))
     }
 
     /**
@@ -1179,11 +1375,23 @@ internal class BoardSessionController(private val service: VescForegroundService
     }
 
     private var lastEmittedLinkIntegrity = LinkIntegrity.Unknown
+    private var configSafetyReadScheduled = false
 
     private fun updateLinkIntegrity(next: LinkIntegrity) {
         if (next == lastEmittedLinkIntegrity) return
         lastEmittedLinkIntegrity = next
         emitState()
+        // Link just became trusted — schedule the one background config-safety read for this session.
+        if (next == LinkIntegrity.Trusted) scheduleConfigSafetyRead()
+    }
+
+    private fun scheduleConfigSafetyRead() {
+        if (configSafetyReadScheduled) return
+        configSafetyReadScheduled = true
+        val session = boardSession ?: return
+        scheduler.postDelayedForSession(session, CONFIG_SAFETY_READ_DELAY_MS, ::isCurrentBoardSession) {
+            triggerConfigSafetyRead(session)
+        }
     }
 
     private fun dumpRefloatConfigDebug(xmlBytes: ByteArray, configBytes: ByteArray) {
@@ -1335,7 +1543,20 @@ internal class BoardSessionController(private val service: VescForegroundService
         )
         boardConfig?.let { recordingCoordinator.markBoardReady(it) }
         if (connectionSoundsEnabled) alertFeedback.playConnect()
+        maybeLaunchWatchMirror()
         transitionBoardPhase(BoardPhase.Connected)
+    }
+
+    /**
+     * Fresh connects only: at most once per BoardSession, so mid-ride auto-reconnects and
+     * Stale -> Connected recoveries (same session id) never re-wake the watch.
+     */
+    private fun maybeLaunchWatchMirror() {
+        if (!wearAutoLaunchOnConnect || !watchMirrorPresence.present) return
+        val sessionId = currentSessionId
+        if (sessionId == watchLaunchFiredSessionId) return
+        watchLaunchFiredSessionId = sessionId
+        watchMirrorLauncher.launch()
     }
 
     /** @parity /modules/vesc-ble/ios/connection/BoardSessionController.swift `onTelemetryStaleFired` */
@@ -1424,6 +1645,20 @@ internal class BoardSessionController(private val service: VescForegroundService
         telemetry = null
         boardSession?.invalidate()
         boardSession = null
+        // A whole session with BMS data and no sustained spread auto-clears any stored cell-spread
+        // warning; a session with no BMS data reports nothing and leaves it untouched. Skipped
+        // entirely when the Board Warnings kill switch is off (no evaluation, no registry writes).
+        if (boardWarningsEnabled) stoppedConfig?.appBoardId?.let { boardId ->
+            val cellSpreadClean = cellSpreadDetector.sessionEndClean()
+            val mismatchClean = batteryConfigMismatchDetector.sessionEndClean()
+            if (cellSpreadClean || mismatchClean) {
+                val registry = BoardWarningRegistry.get(service.applicationContext)
+                launchWarningWrite {
+                    if (cellSpreadClean) registry.reportCleanEvaluation(boardId, BoardWarningKind.CELL_SPREAD)
+                    if (mismatchClean) registry.reportCleanEvaluation(boardId, BoardWarningKind.BATTERY_CONFIG_MISMATCH)
+                }
+            }
+        }
         bmsSeriesRing.clear()
         telemetryPipeline.endSession()
         sessionSequence += 1
@@ -1832,10 +2067,20 @@ internal class BoardSessionController(private val service: VescForegroundService
         recordingCoordinator.applySettings(settings)
         socWindow.windowMs = settings.socEstimateWindowSeconds * 1000L
         connectionSoundsEnabled = settings.connectionSoundsEnabled
+        val warningsWereEnabled = boardWarningsEnabled
+        boardWarningsEnabled = settings.boardWarningsEnabled
+        // Disabled→enabled with an already-trusted link: link integrity won't transition again, so
+        // schedule the config-safety read here (main-scheduler, like the rest of the one-shot state).
+        if (!warningsWereEnabled && boardWarningsEnabled) {
+            scheduler.post {
+                if (lastEmittedLinkIntegrity == LinkIntegrity.Trusted) scheduleConfigSafetyRead()
+            }
+        }
         configuredPollIntervalMs = pollIntervalMsForHz(settings.telemetryPollRateHz)
         movingThresholdCentiKmh = settings.toMetricSanitizerConfig().movingSpeedThresholdCentiKmh
         pollingLoop.setPollIntervalMs(effectivePollIntervalMs())
         watchTick.setIntervalMs(settings.wearMirrorIntervalMs.toLong())
+        wearAutoLaunchOnConnect = settings.wearAutoLaunchOnConnect
         autoCloseEnabled = settings.autoCloseEnabled
         autoCloseDelayMinutes = settings.autoCloseDelayMinutes
         // May run off-main (appDataScope); the countdown state lives on the main-handler scheduler.
@@ -1932,11 +2177,17 @@ internal class BoardSessionController(private val service: VescForegroundService
         properties: Map<String, Any?> = emptyMap(),
     ): Unit = diagnosticsRecorder.recordLocalDiagnostic(eventName, session, operation, properties)
 
+    private fun recordWatchDiagnostic(eventName: String, properties: Map<String, Any?>): Unit =
+        recordLocalDiagnostic(eventName, boardConfig, "watch", properties)
+
     private fun diagnosticProperties(session: SessionConfig?, operation: String): Map<String, Any?> =
         diagnosticsRecorder.diagnosticProperties(session, operation)
 }
 
 private const val LINK_INTEGRITY_BMS_TIMEOUT_MS = 12_000L
+
+/** Idle delay after link trust before the one background config-safety read fires (lets telemetry settle). */
+private const val CONFIG_SAFETY_READ_DELAY_MS = 2_500L
 
 private fun SessionConfig.linkIdentity(): LinkIdentity =
     LinkIdentity(

@@ -96,6 +96,7 @@ final class AppDataRepository {
     let settings: [(String, Any?)] = [
       ("description", (board["description"] as? String).flatMap { $0.isEmpty ? nil : $0 }),
       ("batteryConfig", Self.normalizeBatteryConfig(board["batteryConfig"] ?? nil)),
+      ("dismissedWarnings", Self.normalizeDismissedWarnings(board["dismissedWarnings"] ?? nil)),
     ] + linkSettings.filter { $0.0 != "transport" }
     let transport = linkSettings.first { $0.0 == "transport" }?.1 as? String
     let updatedAt = nowMs()
@@ -157,6 +158,7 @@ final class AppDataRepository {
       "createdAt": row["created_at"] as Int64,
       "batteryConfig": values["batteryConfig"],
       "lastBattery": values["lastBattery"],
+      "dismissedWarnings": values["dismissedWarnings"],
       "link": link,
     ]
   }
@@ -176,9 +178,20 @@ final class AppDataRepository {
       return raw as? String
     case "lastBattery":
       return decodeLastBattery(raw)
+    case "dismissedWarnings":
+      return normalizeDismissedWarnings(raw)
     default:
       return nil
     }
+  }
+
+  /// Dismissed Board Warning kinds persisted as a board setting: a non-empty array of kind slugs, or
+  /// nil (row removed) when empty/invalid.
+  /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/AppDataRepository.kt `normalizeDismissedWarnings`
+  private static func normalizeDismissedWarnings(_ raw: Any?) -> [String]? {
+    guard let list = raw as? [Any] else { return nil }
+    let kinds = list.compactMap { $0 as? String }.filter { !$0.isEmpty }
+    return kinds.isEmpty ? nil : kinds
   }
 
   private static func decodeLastBattery(_ raw: Any?) -> [String: Any?]? {
@@ -418,6 +431,11 @@ final class AppDataRepository {
     if key == "liveHistoryLimit" {
       guard let minutes = Self.liveHistoryLimitMinutes(rawValue) else { return }
       value = minutes
+    } else if key == "boardWarningsEnabled" {
+      // Kill switch must stay a strict Bool (Android rejects non-Boolean too) so JS state and the
+      // native detector gate can never diverge on a malformed value.
+      guard let enabled = rawValue as? Bool else { return }
+      value = enabled
     } else {
       value = rawValue
     }
@@ -438,6 +456,7 @@ final class AppDataRepository {
     "autoConnect": true,
     "autoRecording": false,
     "companionPresenceEnabled": false,
+    "boardWarningsEnabled": true,
     "companionPresenceCooldownMinutes": 60,
     // @platform-diff Auto close is Android-only behavior (iOS forbids programmatic app exit);
     // the keys exist here only so getSettings() returns the full settings shape.

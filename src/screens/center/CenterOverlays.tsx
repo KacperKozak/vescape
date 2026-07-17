@@ -187,6 +187,12 @@ interface FullMapControlsProps {
   bottom: number
 }
 
+interface MapControlsProps {
+  mode: CenterViewState
+  mapRef: RefObject<CenterMapHandle | null>
+  map: CenterMapOverlayProps
+}
+
 const centerPlacementPointerEntering = () => {
   'worklet'
   return {
@@ -335,6 +341,12 @@ function FullMapControls({
     <>
       {addMenuOpen ? <CenterPlacementPointer /> : null}
       {searchOpen ? <MapVignette mode="map" idPrefix="search-map-vignette" topOnly /> : null}
+      <IconButton
+        icon={ArrowLeftIcon}
+        size="sm"
+        onPress={map.exitMapFocus}
+        style={[styles.mapTopBackButton, { top }]}
+      />
       {searchOpen ? (
         <View style={[styles.mapSearchSheet, { top }]}>
           <View style={styles.mapSearchBar}>
@@ -416,7 +428,7 @@ function FullMapControls({
       ) : (
         <IconButton
           icon={MagnifyingGlassIcon}
-          size="md"
+          size="sm"
           onPress={openSearch}
           style={[styles.mapSearchButton, { top }]}
         />
@@ -424,30 +436,6 @@ function FullMapControls({
       <View pointerEvents="box-none" style={[styles.weatherPillContainer, { top }]}>
         <WeatherPill location={map.weatherLocation} onPress={map.enterWeather} />
       </View>
-      <View style={[styles.mapSelectors, { top }]}>
-        <MapNavigationSelector
-          activeMode={map.mapNavigationMode}
-          heading={map.heading}
-          expanded={map.mapSelector === 'navigation'}
-          onToggle={() =>
-            map.setMapSelector(map.mapSelector === 'navigation' ? null : 'navigation')
-          }
-          onSelect={(nextMode) => {
-            if (nextMode === 'northUp') mapRef.current?.resetRotation()
-            map.setMapNavigationMode(nextMode)
-          }}
-        />
-        <MapStyleSwitch
-          activeKey={map.mapStyleKey}
-          expanded={map.mapSelector === 'style'}
-          onToggle={() => map.setMapSelector(map.mapSelector === 'style' ? null : 'style')}
-          onSelect={map.setMapStyleKey}
-        />
-      </View>
-      <Pressable style={[styles.mapBackAction, { bottom }]} onPress={map.exitMapFocus}>
-        <ArrowLeftIcon size={20} color={theme.palette.slate.textSecondary} weight="bold" />
-        <Text style={styles.mapBackLabel}>GO BACK</Text>
-      </Pressable>
       <View style={[styles.mapFilterAction, { bottom }]}>
         {filterMenuOpen ? (
           <View style={[styles.mapFilterMenu, styles.mapFilterMenuAttached]}>
@@ -559,6 +547,55 @@ function FullMapControls({
         </Animated.View>
       </View>
     </>
+  )
+}
+
+function MapControls({ mode, mapRef, map }: MapControlsProps) {
+  const visible = mode === 'telemetry' || mode === 'map' || mode === 'history'
+  const showNavigationSelector = mode !== 'history'
+  const navigationExpanded = showNavigationSelector && map.mapSelector === 'navigation'
+  const styleExpanded = map.mapSelector === 'style'
+  const selectorOpen = navigationExpanded || styleExpanded
+
+  if (!visible) return null
+
+  return (
+    <View pointerEvents="box-none" style={styles.mapControlsLayer}>
+      {selectorOpen ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Close map selector"
+          style={styles.mapSelectorDismissLayer}
+          onPress={() => map.setMapSelector(null)}
+        />
+      ) : null}
+      <View pointerEvents="box-none" style={styles.mapSelectors}>
+        {showNavigationSelector ? (
+          <MapNavigationSelector
+            activeMode={map.mapNavigationMode}
+            heading={map.heading}
+            expanded={navigationExpanded}
+            size="sm"
+            onToggle={() =>
+              map.setMapSelector(map.mapSelector === 'navigation' ? null : 'navigation')
+            }
+            onSelect={(nextMode) => {
+              if (map.mapNavigationMode === 'freeRotate' && nextMode !== 'freeRotate') {
+                mapRef.current?.resetRotation()
+              }
+              map.setMapNavigationMode(nextMode)
+            }}
+          />
+        ) : null}
+        <MapStyleSwitch
+          activeKey={map.mapStyleKey}
+          expanded={styleExpanded}
+          size="sm"
+          onToggle={() => map.setMapSelector(map.mapSelector === 'style' ? null : 'style')}
+          onSelect={map.setMapStyleKey}
+        />
+      </View>
+    </View>
   )
 }
 
@@ -801,6 +838,8 @@ export function CenterOverlays({
           />
         ) : null}
       </View>
+
+      <MapControls mode={mode} mapRef={mapRef} map={map} />
 
       <View
         pointerEvents={mode === 'weather' ? 'box-none' : 'none'}
@@ -1054,9 +1093,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 30,
   },
-  mapSearchButton: {
+  mapTopBackButton: {
     position: 'absolute',
     left: 12,
+    zIndex: 32,
+    borderColor: theme.alpha(theme.palette.slate.light, 0.3),
+    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
+  },
+  mapSearchButton: {
+    position: 'absolute',
+    right: 12,
     zIndex: 32,
     borderColor: theme.alpha(theme.palette.slate.light, 0.3),
     backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
@@ -1168,31 +1214,12 @@ const styles = StyleSheet.create({
   },
   mapSelectors: {
     position: 'absolute',
-    right: 12,
+    left: 12,
+    top: '50%',
+    marginTop: -42,
     zIndex: 30,
-    alignItems: 'flex-end',
+    alignItems: 'flex-start',
     gap: 8,
-  },
-  mapBackAction: {
-    position: 'absolute',
-    alignSelf: 'center',
-    zIndex: 30,
-    height: 48,
-    paddingHorizontal: 18,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: theme.palette.slate.border,
-    backgroundColor: theme.palette.slate.surfaceDeep,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  mapBackLabel: {
-    color: theme.palette.slate.textSecondary,
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 1,
   },
   mapAddAction: {
     position: 'absolute',
@@ -1360,6 +1387,14 @@ const styles = StyleSheet.create({
   mapInterface: {
     ...StyleSheet.absoluteFill,
     zIndex: 7,
+  },
+  mapControlsLayer: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 41,
+  },
+  mapSelectorDismissLayer: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 1,
   },
   weatherInterface: {
     ...StyleSheet.absoluteFill,

@@ -342,7 +342,14 @@ enum TelemetryDatabase {
       try db.execute(sql: "CREATE INDEX IF NOT EXISTS index_tune_profiles_board_id_refloat_base_version ON tune_profiles(board_id, refloat_base_version)")
     }
 
-    migrator.registerMigration("v25_alert_source") { db in
+    // MARK: Board Warnings (#208)
+    // Durable one-row-per-(board, kind) warning store. DDL lives on `BoardWarningStore` so the schema
+    // stays single-source with the tests that reuse it. Mirrors Android Room migration 24→25.
+    migrator.registerMigration("v25_board_warnings") { db in
+      try BoardWarningStore.createTables(db)
+    }
+
+    migrator.registerMigration("v26_alert_source") { db in
       let hasSource = try db.columns(in: "alerts").contains { $0.name == "source" }
       if !hasSource {
         try db.execute(sql: "ALTER TABLE alerts ADD COLUMN source TEXT")

@@ -13,6 +13,9 @@ const val TELEMETRY_PATH = "/telemetry"
 object TelemetryState {
     val mirrorState = mutableStateOf(MirrorStateReducer.reduce(null, null, nowMs()))
 
+    /** Watch-local phone-link view, kept fresh by [PhoneLinkMonitor] while the activity is started. */
+    val phoneLink = mutableStateOf(PhoneLink.UNKNOWN)
+
     private var latestFrame: WatchFrame? = null
     private var lastFrameAtMs: Long? = null
 
