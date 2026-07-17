@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, View, StyleSheet } from 'react-native'
 import { useSharedValue } from 'react-native-reanimated'
 
@@ -34,17 +34,34 @@ export function CenterScreen({
   onAddBoard,
 }: CenterScreenProps) {
   const mapRef = useRef<CenterMapHandle>(null)
-  const mapHeading = useSharedValue(0)
+  const cameraHeading = useSharedValue(0)
+  const selectorHeading = useSharedValue(0)
+  const controller = useCenterScreenController({ mapRef })
   const handleHeadingChange = useCallback(
     (heading: number) => {
-      mapHeading.set(heading)
+      cameraHeading.set(heading)
+      if (!(controller.mode === 'telemetry' && controller.mapNavigationMode === 'phoneHeading')) {
+        selectorHeading.set(heading)
+      }
     },
-    [mapHeading],
+    [cameraHeading, controller.mapNavigationMode, controller.mode, selectorHeading],
   )
+  const handlePhoneHeadingChange = useCallback(
+    (heading: number | null) => {
+      if (heading == null) return
+      if (controller.mode === 'telemetry' && controller.mapNavigationMode === 'phoneHeading') {
+        selectorHeading.set(heading)
+      }
+    },
+    [controller.mapNavigationMode, controller.mode, selectorHeading],
+  )
+  useEffect(() => {
+    if (controller.mode === 'telemetry' && controller.mapNavigationMode === 'phoneHeading') return
+    selectorHeading.set(cameraHeading.value)
+  }, [cameraHeading, controller.mapNavigationMode, controller.mode, selectorHeading])
   const [offscreenMapIndicators, setOffscreenMapIndicators] = useState<
     OffscreenMapIndicatorState[]
   >([])
-  const controller = useCenterScreenController({ mapRef })
   const dismissMapSelector = controller.dismissMapSelector
   const mapInteractionHandlerRef = useRef<() => void>(() => {})
   const handleMapInteraction = useCallback(() => {
@@ -117,6 +134,7 @@ export function CenterScreen({
         perspectiveEnabled={controller.perspectiveEnabled}
         onPerspectiveChange={controller.setPerspectiveEnabled}
         onHeadingChange={handleHeadingChange}
+        onPhoneHeadingChange={handlePhoneHeadingChange}
         onLongPressTarget={handleLongPressTarget}
         onMapInteraction={handleMapInteraction}
         onMapPress={handleMapPress}
@@ -146,7 +164,7 @@ export function CenterScreen({
           onAddBoard,
         }}
         map={{
-          heading: mapHeading,
+          heading: selectorHeading,
           mapStyleKey: controller.mapStyleKey,
           setMapStyleKey: controller.setMapStyleKey,
           mapNavigationMode: controller.mapNavigationMode,

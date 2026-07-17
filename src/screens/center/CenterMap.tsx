@@ -139,6 +139,7 @@ interface CenterMapProps {
   perspectiveEnabled: boolean
   onPerspectiveChange: (enabled: boolean) => void
   onHeadingChange: (heading: number) => void
+  onPhoneHeadingChange: (heading: number | null) => void
   onLongPressTarget: (target: { latitude: number; longitude: number }) => void
   onMapInteraction: () => void
   onMapPress: () => void
@@ -180,6 +181,7 @@ export const CenterMap = memo(
       perspectiveEnabled,
       onPerspectiveChange,
       onHeadingChange,
+      onPhoneHeadingChange,
       onLongPressTarget,
       onMapInteraction,
       onMapPress,
@@ -313,9 +315,13 @@ export const CenterMap = memo(
     const [phoneHeadingStatus, setPhoneHeadingStatus] = useState<PhoneHeadingStatus | 'idle'>(
       'idle',
     )
-    const handlePhoneHeadingChange = useCallback((headingDeg: number | null) => {
-      phoneHeadingDegRef.current = headingDeg
-    }, [])
+    const handlePhoneHeadingChange = useCallback(
+      (headingDeg: number | null) => {
+        phoneHeadingDegRef.current = headingDeg
+        onPhoneHeadingChange(headingDeg)
+      },
+      [onPhoneHeadingChange],
+    )
     const headingFollowMode = gpsHeadingMode || phoneHeadingMode
     useRenderRateWarning('CenterMap')
     const targetFollowHeadingDeg = gpsHeadingMode
