@@ -118,7 +118,9 @@ interface CenterMapOverlayProps {
   enterMapFocus: () => void
   exitMapFocus: () => void
   enterWeather: () => void
+  exitWeather: () => void
   enterLegalLimits: () => void
+  exitLegalLimits: () => void
   refreshWeather: () => void
   weatherLocation: { latitude: number; longitude: number } | null
   replaceDirectionPoint: (latitude: number, longitude: number) => Promise<unknown>
@@ -967,6 +969,13 @@ export function CenterOverlays({
         style={[styles.weatherInterface, mode === 'weather' ? styles.visible : styles.hidden]}
       >
         <IconButton
+          icon={ArrowLeftIcon}
+          size="sm"
+          accessibilityLabel="Back from weather"
+          onPress={map.exitWeather}
+          style={[styles.mapTopBackButton, { top: mapModeTabsTop }]}
+        />
+        <IconButton
           icon={ArrowsClockwiseIcon}
           onPress={map.refreshWeather}
           loading={weatherLoading}
@@ -992,6 +1001,13 @@ export function CenterOverlays({
           mode === 'legalLimits' ? styles.visible : styles.hidden,
         ]}
       >
+        <IconButton
+          icon={ArrowLeftIcon}
+          size="sm"
+          accessibilityLabel="Back from legal limits"
+          onPress={map.exitLegalLimits}
+          style={[styles.mapTopBackButton, { top: mapModeTabsTop }]}
+        />
         <View pointerEvents="none" style={[styles.legalLegend, { top: belowMapModeTabsTop }]}>
           {LEGAL_ROAD_STATUS_LEGEND.map((status) => (
             <View key={status} style={styles.legalLegendItem}>

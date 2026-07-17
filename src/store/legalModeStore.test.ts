@@ -1,7 +1,10 @@
 import { beforeEach, expect, mock, test } from 'bun:test'
 import type { AppSettings } from 'vesc-ble'
 
-import { DEFAULT_LEGAL_MODE_SETTINGS } from '@/lib/legalMode'
+import {
+  DEFAULT_LEGAL_MODE_SETTINGS,
+  legalJurisdictionResultFromCountryCode,
+} from '@/lib/legalMode'
 
 const actualVescBle = await import('../../modules/vesc-ble/src/index')
 
@@ -79,6 +82,96 @@ test('enabling legal mode materializes a managed native speed warning alert', as
       thresholdMax: 20,
       enabled: true,
       source: 'legal-mode',
+    }),
+  )
+})
+
+test('editing legal mode speeds persists settings and updates the managed alert thresholds', async () => {
+  const { useLegalModeStore } = await import('./legalModeStore')
+
+  await useLegalModeStore.getState().setEnabled(true)
+  await useLegalModeStore.getState().setSpeeds(30, 24)
+
+  expect(updateSetting).toHaveBeenLastCalledWith(
+    'legalMode',
+    expect.objectContaining({
+      enabled: true,
+      legalSpeedKmh: 30,
+      warningSpeedKmh: 24,
+      warningManuallyEdited: true,
+    }),
+  )
+  expect(upsertAlertRule).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      id: 'legal-mode-speed-alert',
+      controlId: 'speed',
+      threshold: 24,
+      thresholdMax: 30,
+      enabled: true,
+      source: 'legal-mode',
+    }),
+  )
+})
+
+test('editing only the legal warning speed updates the managed alert threshold', async () => {
+  const { useLegalModeStore } = await import('./legalModeStore')
+
+  await useLegalModeStore.getState().setEnabled(true)
+  await useLegalModeStore.getState().setWarningSpeed(18)
+
+  expect(updateSetting).toHaveBeenLastCalledWith(
+    'legalMode',
+    expect.objectContaining({
+      enabled: true,
+      legalSpeedKmh: 20,
+      warningSpeedKmh: 18,
+      warningManuallyEdited: true,
+    }),
+  )
+  expect(upsertAlertRule).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      id: 'legal-mode-speed-alert',
+      threshold: 18,
+      thresholdMax: 20,
+      enabled: true,
+    }),
+  )
+})
+
+test('re-enabling legal mode resets speeds to the current jurisdiction defaults', async () => {
+  const { useLegalModeStore } = await import('./legalModeStore')
+  const { useSettingsStore } = await import('./settingsStore')
+
+  useSettingsStore.setState({
+    legalMode: {
+      ...DEFAULT_LEGAL_MODE_SETTINGS,
+      enabled: true,
+      legalSpeedKmh: 30,
+      warningSpeedKmh: 24,
+      warningManuallyEdited: true,
+      jurisdiction: legalJurisdictionResultFromCountryCode('DE'),
+    } as unknown as Record<string, unknown>,
+  })
+
+  await useLegalModeStore.getState().setEnabled(false)
+  await useLegalModeStore.getState().setEnabled(true)
+
+  expect(updateSetting).toHaveBeenLastCalledWith(
+    'legalMode',
+    expect.objectContaining({
+      enabled: true,
+      legalSpeedKmh: 20,
+      warningSpeedKmh: 15,
+      warningManuallyEdited: false,
+      jurisdiction: expect.objectContaining({ countryCode: 'DE' }),
+    }),
+  )
+  expect(upsertAlertRule).toHaveBeenLastCalledWith(
+    expect.objectContaining({
+      id: 'legal-mode-speed-alert',
+      threshold: 15,
+      thresholdMax: 20,
+      enabled: true,
     }),
   )
 })

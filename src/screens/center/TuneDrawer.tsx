@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native'
 import Animated, {
   interpolateColor,
@@ -34,19 +34,15 @@ import { SwitchWidget } from '@/components/widgets/SwitchWidget'
 import { widgetSurface } from '@/components/widgets/widgetSurface'
 import { canRunFirmwareCommand } from '@/lib/boardLinkIntegrity'
 import {
-  LEGAL_MODE_ALERT_RULE_ID,
   applyJurisdictionDefaults,
-  legalModeAlertRule,
   normalizeLegalModeSettings,
   resolveJurisdictionFromLocation,
-  setLegalSpeed,
-  setWarningSpeed,
 } from '@/lib/legalMode'
 import { routes } from '@/navigation/routes'
 import { theme } from '@/constants/theme'
-import { useAlertsStore } from '@/store/alertsStore'
 import { useBleStore } from '@/store/bleStore'
 import { useBoardStore } from '@/store/boardStore'
+import { useLegalModeStore } from '@/store/legalModeStore'
 import { useSettingsStore } from '@/store/settingsStore'
 import { useTuneProfileStore } from '@/store/tuneProfileStore'
 
@@ -58,11 +54,24 @@ interface TuneDrawerProps {
 const PROFILE_OPTION_WIDTH = 46
 const PROFILE_ACTIVE_WIDTH = 126
 const PROFILE_ANIMATION = { duration: 180 } as const
+const LEGAL_SPEED_DRAFT_COMMIT_DELAY_MS = 350
 const AnimatedText = Animated.createAnimatedComponent(Text)
 
 export function TuneDrawer({ onNavigate, onOpenLegalLimits }: TuneDrawerProps) {
   const [tuneSelectOpen, setTuneSelectOpen] = useState(false)
   const [legalWarningOpen, setLegalWarningOpen] = useState(false)
+  const [legalSpeedDraft, setLegalSpeedDraft] = useState('')
+  const [warningSpeedDraft, setWarningSpeedDraft] = useState('')
+  const [editingLegalField, setEditingLegalField] = useState<'legal' | 'warning' | null>(null)
+  const legalDraftRef = useRef({
+    editingField: null as 'legal' | 'warning' | null,
+    legalSpeedDraft: '',
+    warningSpeedDraft: '',
+    legalSpeedKmh: 0,
+    warningSpeedKmh: 0,
+    setLegalSpeed: (_speedKmh: number) => Promise.resolve(),
+    setWarningSpeed: (_speedKmh: number) => Promise.resolve(),
+  })
   const activeBoardId = useBoardStore((state) => state.activeBoardId)
   const tuneCompatibility = useBoardStore(
     (state) =>
@@ -78,12 +87,11 @@ export function TuneDrawer({ onNavigate, onOpenLegalLimits }: TuneDrawerProps) {
   const setActiveProfile = useTuneProfileStore((state) => state.setActiveProfile)
   const rawLegalMode = useSettingsStore((state) => state.legalMode)
   const setLegalModeSetting = useSettingsStore((state) => state.setLegalMode)
+  const setLegalModeEnabled = useLegalModeStore((state) => state.setEnabled)
+  const setLegalModeLegalSpeed = useLegalModeStore((state) => state.setLegalSpeed)
+  const setLegalModeWarningSpeed = useLegalModeStore((state) => state.setWarningSpeed)
   const latestApproximateLocation = useBleStore((state) => state.latestApproximateLocation)
-  const upsertAlert = useAlertsStore((state) => state.upsert)
-  const setAlertEnabled = useAlertsStore((state) => state.setEnabled)
-  const alertRules = useAlertsStore((state) => state.rules)
   const legalMode = useMemo(() => normalizeLegalModeSettings(rawLegalMode), [rawLegalMode])
-  const legalModeAlert = alertRules.find((rule) => rule.id === LEGAL_MODE_ALERT_RULE_ID)
   const showLegalWarning =
     legalMode.jurisdiction?.legalRoadStatus === 'restricted' ||
     legalMode.jurisdiction?.legalRoadStatus === 'notRoadLegal'
@@ -123,14 +131,60 @@ export function TuneDrawer({ onNavigate, onOpenLegalLimits }: TuneDrawerProps) {
   }, [latestApproximateLocation, legalMode, setLegalModeSetting])
 
   useEffect(() => {
-    if (legalMode.enabled) {
-      void upsertAlert(
-        legalModeAlertRule(legalMode, legalModeAlert?.createdAt ?? Date.now()),
-      ).catch(() => undefined)
-    } else if (legalModeAlert?.enabled) {
-      void setAlertEnabled(LEGAL_MODE_ALERT_RULE_ID, false).catch(() => undefined)
+    legalDraftRef.current = {
+      editingField: editingLegalField,
+      legalSpeedDraft,
+      warningSpeedDraft,
+      legalSpeedKmh: legalMode.legalSpeedKmh,
+      warningSpeedKmh: legalMode.warningSpeedKmh,
+      setLegalSpeed: setLegalModeLegalSpeed,
+      setWarningSpeed: setLegalModeWarningSpeed,
     }
-  }, [legalMode, legalModeAlert?.createdAt, legalModeAlert?.enabled, setAlertEnabled, upsertAlert])
+  }, [
+    editingLegalField,
+    legalMode.legalSpeedKmh,
+    legalMode.warningSpeedKmh,
+    legalSpeedDraft,
+    setLegalModeLegalSpeed,
+    setLegalModeWarningSpeed,
+    warningSpeedDraft,
+  ])
+
+  useEffect(() => {
+    if (editingLegalField !== 'legal' || !hasSpeedDraftValue(legalSpeedDraft)) return
+    const nextSpeed = parseSpeed(legalSpeedDraft, legalMode.legalSpeedKmh)
+    if (nextSpeed === legalMode.legalSpeedKmh) return
+    const timer = setTimeout(() => {
+      void setLegalModeLegalSpeed(nextSpeed).catch(() => undefined)
+    }, LEGAL_SPEED_DRAFT_COMMIT_DELAY_MS)
+    return () => clearTimeout(timer)
+  }, [editingLegalField, legalMode.legalSpeedKmh, legalSpeedDraft, setLegalModeLegalSpeed])
+
+  useEffect(() => {
+    if (editingLegalField !== 'warning' || !hasSpeedDraftValue(warningSpeedDraft)) return
+    const nextSpeed = parseSpeed(warningSpeedDraft, legalMode.warningSpeedKmh)
+    if (nextSpeed === legalMode.warningSpeedKmh) return
+    const timer = setTimeout(() => {
+      void setLegalModeWarningSpeed(nextSpeed).catch(() => undefined)
+    }, LEGAL_SPEED_DRAFT_COMMIT_DELAY_MS)
+    return () => clearTimeout(timer)
+  }, [editingLegalField, legalMode.warningSpeedKmh, setLegalModeWarningSpeed, warningSpeedDraft])
+
+  useEffect(() => {
+    return () => {
+      const draft = legalDraftRef.current
+      if (draft.editingField === 'legal' && hasSpeedDraftValue(draft.legalSpeedDraft)) {
+        void draft
+          .setLegalSpeed(parseSpeed(draft.legalSpeedDraft, draft.legalSpeedKmh))
+          .catch(() => undefined)
+      }
+      if (draft.editingField === 'warning' && hasSpeedDraftValue(draft.warningSpeedDraft)) {
+        void draft
+          .setWarningSpeed(parseSpeed(draft.warningSpeedDraft, draft.warningSpeedKmh))
+          .catch(() => undefined)
+      }
+    }
+  }, [])
 
   const openTune = () => {
     onNavigate()
@@ -142,21 +196,20 @@ export function TuneDrawer({ onNavigate, onOpenLegalLimits }: TuneDrawerProps) {
     openTune()
   }
 
-  const updateLegalMode = (next: typeof legalMode) => {
-    void setLegalModeSetting(next).catch(() => undefined)
-  }
   const toggleLegalMode = (enabled: boolean) => {
-    updateLegalMode({ ...legalMode, enabled })
+    void setLegalModeEnabled(enabled).catch(() => undefined)
   }
 
-  const parseSpeed = (value: string, fallback: number) => {
-    const normalized = Number(value.replace(',', '.').replace(/[^\d.]/g, ''))
-    return Number.isFinite(normalized) ? normalized : fallback
+  const commitLegalSpeed = (value: string) => {
+    setEditingLegalField(null)
+    void setLegalModeLegalSpeed(parseSpeed(value, legalMode.legalSpeedKmh)).catch(() => undefined)
   }
-  const commitLegalSpeed = (value: string) =>
-    updateLegalMode(setLegalSpeed(legalMode, parseSpeed(value, legalMode.legalSpeedKmh)))
-  const commitWarningSpeed = (value: string) =>
-    updateLegalMode(setWarningSpeed(legalMode, parseSpeed(value, legalMode.warningSpeedKmh)))
+  const commitWarningSpeed = (value: string) => {
+    setEditingLegalField(null)
+    void setLegalModeWarningSpeed(parseSpeed(value, legalMode.warningSpeedKmh)).catch(
+      () => undefined,
+    )
+  }
 
   const activeName =
     activeBoardId == null
@@ -285,9 +338,17 @@ export function TuneDrawer({ onNavigate, onOpenLegalLimits }: TuneDrawerProps) {
                   <Text style={styles.legalInputLabel}>Legal limit</Text>
                   <View style={styles.legalInputWrap}>
                     <Input
-                      key={`legal-speed-${legalMode.legalSpeedKmh}`}
-                      defaultValue={String(legalMode.legalSpeedKmh)}
-                      onEndEditing={(event) => commitLegalSpeed(event.nativeEvent.text)}
+                      value={
+                        editingLegalField === 'legal'
+                          ? legalSpeedDraft
+                          : String(legalMode.legalSpeedKmh)
+                      }
+                      onChangeText={setLegalSpeedDraft}
+                      onFocus={() => {
+                        setLegalSpeedDraft(String(legalMode.legalSpeedKmh))
+                        setEditingLegalField('legal')
+                      }}
+                      onBlur={() => commitLegalSpeed(legalSpeedDraft)}
                       onSubmitEditing={(event) => commitLegalSpeed(event.nativeEvent.text)}
                       keyboardType="numeric"
                       returnKeyType="done"
@@ -302,9 +363,17 @@ export function TuneDrawer({ onNavigate, onOpenLegalLimits }: TuneDrawerProps) {
                   <Text style={styles.legalInputLabel}>Alert starts</Text>
                   <View style={styles.legalInputWrap}>
                     <Input
-                      key={`warning-speed-${legalMode.warningSpeedKmh}`}
-                      defaultValue={String(legalMode.warningSpeedKmh)}
-                      onEndEditing={(event) => commitWarningSpeed(event.nativeEvent.text)}
+                      value={
+                        editingLegalField === 'warning'
+                          ? warningSpeedDraft
+                          : String(legalMode.warningSpeedKmh)
+                      }
+                      onChangeText={setWarningSpeedDraft}
+                      onFocus={() => {
+                        setWarningSpeedDraft(String(legalMode.warningSpeedKmh))
+                        setEditingLegalField('warning')
+                      }}
+                      onBlur={() => commitWarningSpeed(warningSpeedDraft)}
                       onSubmitEditing={(event) => commitWarningSpeed(event.nativeEvent.text)}
                       keyboardType="numeric"
                       returnKeyType="done"
@@ -516,6 +585,15 @@ function LegalMapWidget({ onPress }: { onPress: () => void }) {
       </View>
     </Pressable>
   )
+}
+
+function hasSpeedDraftValue(value: string): boolean {
+  return /\d/.test(value)
+}
+
+function parseSpeed(value: string, fallback: number): number {
+  const normalized = Number(value.replace(',', '.').replace(/[^\d.]/g, ''))
+  return Number.isFinite(normalized) ? normalized : fallback
 }
 
 const styles = StyleSheet.create({
