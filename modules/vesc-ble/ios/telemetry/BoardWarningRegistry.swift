@@ -85,7 +85,13 @@ final class BoardWarningRegistry {
     if isFirstFireThisSession {
       recordDiagnostic(
         "board_warning_detected",
-        ["board_id": boardId, "kind": kind, "severity": severity.rawValue]
+        [
+          "operation": "warning",
+          "board_id": boardId,
+          "kind": kind,
+          "severity": severity.rawValue,
+          "message": "Board warning: \(kind) (\(severity.rawValue))",
+        ]
       )
     }
     emit(boardId)
