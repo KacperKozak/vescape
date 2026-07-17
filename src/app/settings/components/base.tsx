@@ -325,31 +325,51 @@ function StepTimelineShowcase() {
 
 function BoardWarningRowShowcase() {
   const [now] = useState(() => Date.now())
+  const [critical, setCritical] = useState(true)
+  const [clearedKinds, setClearedKinds] = useState<string[]>([])
+  const warnings = [
+    {
+      boardId: 'demo',
+      kind: 'cell-spread',
+      severity: critical ? ('critical' as const) : ('warn' as const),
+      firstDetectedAtMs: now - 3 * 60 * 60 * 1000,
+      lastDetectedAtMs: now - 90 * 1000,
+      payloadJson: '{"peakSpread":0.27,"worstGroup":4,"balancing":true}',
+    },
+    {
+      boardId: 'demo',
+      kind: 'duty-pushback-high',
+      severity: 'warn' as const,
+      firstDetectedAtMs: now - 20 * 1000,
+      lastDetectedAtMs: now - 20 * 1000,
+      payloadJson: '{"value":0.9,"safeMax":0.85}',
+    },
+  ].filter((w) => !clearedKinds.includes(w.kind))
   return (
-    <ShowcaseCard name="BoardWarningRow">
+    <ShowcaseCard
+      name="BoardWarningRow"
+      controls={
+        <>
+          <ToggleRow label="critical" value={critical} onToggle={setCritical} />
+          <ToggleRow
+            label="cleared"
+            value={clearedKinds.length > 0}
+            onToggle={(next) => setClearedKinds(next ? ['cell-spread', 'duty-pushback-high'] : [])}
+          />
+        </>
+      }
+    >
       <View style={{ gap: 10 }}>
-        <BoardWarningRow
-          warning={{
-            boardId: 'demo',
-            kind: 'cell-spread',
-            severity: 'critical',
-            firstDetectedAtMs: now - 3 * 60 * 60 * 1000,
-            lastDetectedAtMs: now - 90 * 1000,
-            payloadJson: '{"peakSpreadV":0.27,"worstCellGroup":4,"balancing":true}',
-          }}
-          onClear={() => {}}
-        />
-        <BoardWarningRow
-          warning={{
-            boardId: 'demo',
-            kind: 'duty-pushback-high',
-            severity: 'warn',
-            firstDetectedAtMs: now - 20 * 1000,
-            lastDetectedAtMs: now - 20 * 1000,
-            payloadJson: '{"value":0.9,"safeMax":0.85}',
-          }}
-          onClear={() => {}}
-        />
+        {warnings.length === 0 && (
+          <Text style={{ color: theme.palette.slate.textMuted }}>All warnings cleared</Text>
+        )}
+        {warnings.map((warning) => (
+          <BoardWarningRow
+            key={warning.kind}
+            warning={warning}
+            onClear={() => setClearedKinds((prev) => [...prev, warning.kind])}
+          />
+        ))}
       </View>
     </ShowcaseCard>
   )

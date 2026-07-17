@@ -370,6 +370,7 @@ interface TelemetryDao {
   @Transaction
   suspend fun deleteBoardWithSettings(id: String) {
     deleteBoardSettings(id)
+    deleteBoardWarnings(id)
     deleteBoard(id)
   }
 

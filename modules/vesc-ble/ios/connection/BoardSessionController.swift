@@ -363,7 +363,13 @@ internal final class BoardSessionController: VescGattListener {
       liveHistoryLimitMinutes: liveHistoryLimit
     )
     movingThresholdCentiKmh = MetricSanitizerConfig.from(settings: settings).movingSpeedThresholdCentiKmh
+    let warningsWereEnabled = boardWarningsEnabled
     boardWarningsEnabled = settings["boardWarningsEnabled"] as? Bool ?? true
+    // Disabled→enabled with an already-trusted link: link integrity won't transition again, so
+    // schedule the config-safety read here.
+    if !warningsWereEnabled, boardWarningsEnabled, lastEmittedLinkIntegrity == .trusted {
+      scheduleConfigSafetyRead()
+    }
     floorMs = effectivePollIntervalMs()
     liveSeries.setWindowMinutes(liveHistoryLimit)
     socWindow.windowMs = Int64(AppDataRepository.intValue(settings["socEstimateWindowSeconds"] ?? nil) ?? 20) * 1000
@@ -920,7 +926,12 @@ internal final class BoardSessionController: VescGattListener {
   /// read path (pauses/resumes polling) and is skipped if a config op is already in flight.
   /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/BoardSessionController.kt `triggerConfigSafetyRead`
   private func triggerConfigSafetyRead(_ session: BoardSession) {
-    guard boardWarningsEnabled, session === self.session, session.isActive, let config else { return }
+    guard boardWarningsEnabled else {
+      // Re-arm so re-enabling Board Warnings mid-session can schedule the read again.
+      configSafetyReadScheduled = false
+      return
+    }
+    guard session === self.session, session.isActive, let config else { return }
     configController.consumeRead(connection: configConnection(config), onSuccess: { _ in }, onError: { _, _ in })
   }
 
@@ -998,12 +1009,15 @@ internal final class BoardSessionController: VescGattListener {
     lastEmittedLinkIntegrity = next
     onStateChanged?()
     // Link just became trusted — schedule the one background config-safety read for this session.
-    if next == .trusted, !configSafetyReadScheduled, let session {
-      configSafetyReadScheduled = true
-      DispatchQueue.main.asyncAfter(deadline: .now() + configSafetyReadDelaySeconds) { [weak self, weak session] in
-        guard let self, let session else { return }
-        self.triggerConfigSafetyRead(session)
-      }
+    if next == .trusted { scheduleConfigSafetyRead() }
+  }
+
+  private func scheduleConfigSafetyRead() {
+    guard !configSafetyReadScheduled, let session else { return }
+    configSafetyReadScheduled = true
+    DispatchQueue.main.asyncAfter(deadline: .now() + configSafetyReadDelaySeconds) { [weak self, weak session] in
+      guard let self, let session else { return }
+      self.triggerConfigSafetyRead(session)
     }
   }
 

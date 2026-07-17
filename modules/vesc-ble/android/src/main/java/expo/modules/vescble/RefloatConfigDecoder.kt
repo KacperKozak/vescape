@@ -68,12 +68,19 @@ internal object RefloatConfigDecoder {
     // Treat a non-finite decode (NaN/Infinity from corrupt bytes) as missing, not as a real value:
     // the safety rules skip a null field, whereas a NaN would compare false against every bound and
     // wrongly count as a clean evaluation that clears a valid warning.
-    fun number(id: String): Double? = when (val v = fieldOrNull(id)?.let { readValue(rawConfig, it) }) {
+    // Contain a malformed field (e.g. a scaled type with a missing scale) to that one rule instead of
+    // letting one bad decode discard every other safety value.
+    fun decodedOrNull(id: String): Any? = try {
+      fieldOrNull(id)?.let { readValue(rawConfig, it) }
+    } catch (_: Exception) {
+      null
+    }
+    fun number(id: String): Double? = when (val v = decodedOrNull(id)) {
       is Double -> v.takeIf { it.isFinite() }
       is Boolean -> if (v) 1.0 else 0.0
       else -> null
     }
-    fun boolean(id: String): Boolean? = fieldOrNull(id)?.let { readValue(rawConfig, it) as? Boolean }
+    fun boolean(id: String): Boolean? = decodedOrNull(id) as? Boolean
     return ConfigSafetyValues(
       faultAdc1 = number("fault_adc1"),
       faultAdc2 = number("fault_adc2"),

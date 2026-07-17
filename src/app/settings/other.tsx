@@ -119,8 +119,8 @@ export default function OtherSettingsScreen() {
   const injectWarning = useCallback(
     (severity: 'warn' | 'critical') => {
       const payload = JSON.stringify({
-        peakSpreadV: severity === 'critical' ? 0.27 : 0.12,
-        worstCellGroup: 4,
+        peakSpread: severity === 'critical' ? 0.27 : 0.12,
+        worstGroup: 4,
         injectedAt: Date.now(),
       })
       void devInjectBoardWarning(warningBoardId, DEV_WARNING_KIND, severity, payload)

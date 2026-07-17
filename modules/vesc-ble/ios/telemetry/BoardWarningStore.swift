@@ -68,10 +68,23 @@ struct BoardWarningStore {
     try db.execute(sql: "CREATE INDEX index_board_warnings_board_id ON board_warnings(board_id)")
   }
 
+  /// The shared pool failed to open — findings are dropped / reads come back empty, so leave the
+  /// same `board_warning_failure` breadcrumb a throwing GRDB call would.
+  private struct WriterUnavailableError: Error, LocalizedError {
+    var errorDescription: String? { "database writer unavailable" }
+  }
+
+  private func reportWriterUnavailable(_ site: String) {
+    BoardWarningFailureReporter.shared.report(site: site, error: WriterUnavailableError())
+  }
+
   // MARK: - Reads
 
   func get(_ boardId: String, _ kind: String) -> BoardWarning? {
-    guard let writer = resolveWriter() else { return nil }
+    guard let writer = resolveWriter() else {
+      reportWriterUnavailable("store_get")
+      return nil
+    }
     do {
       return try writer.read { db in
         try Row.fetchOne(
@@ -87,7 +100,10 @@ struct BoardWarningStore {
   }
 
   func getForBoard(_ boardId: String) -> [BoardWarning] {
-    guard let writer = resolveWriter() else { return [] }
+    guard let writer = resolveWriter() else {
+      reportWriterUnavailable("store_get_for_board")
+      return []
+    }
     do {
       return try writer.read { db in
         try Row.fetchAll(
@@ -103,7 +119,10 @@ struct BoardWarningStore {
   }
 
   func getAll() -> [BoardWarning] {
-    guard let writer = resolveWriter() else { return [] }
+    guard let writer = resolveWriter() else {
+      reportWriterUnavailable("store_get_all")
+      return []
+    }
     do {
       return try writer.read { db in
         try Row.fetchAll(
@@ -120,7 +139,10 @@ struct BoardWarningStore {
   // MARK: - Writes
 
   func upsert(_ warning: BoardWarning) {
-    guard let writer = resolveWriter() else { return }
+    guard let writer = resolveWriter() else {
+      reportWriterUnavailable("store_upsert")
+      return
+    }
     do {
       try writer.write { db in
         try db.execute(
@@ -146,7 +168,10 @@ struct BoardWarningStore {
 
   @discardableResult
   func delete(_ boardId: String, _ kind: String) -> Bool {
-    guard let writer = resolveWriter() else { return false }
+    guard let writer = resolveWriter() else {
+      reportWriterUnavailable("store_delete")
+      return false
+    }
     do {
       return try writer.write { db in
         try db.execute(
@@ -163,7 +188,10 @@ struct BoardWarningStore {
 
   @discardableResult
   func deleteForBoard(_ boardId: String) -> Bool {
-    guard let writer = resolveWriter() else { return false }
+    guard let writer = resolveWriter() else {
+      reportWriterUnavailable("store_delete_for_board")
+      return false
+    }
     do {
       return try writer.write { db in
         try db.execute(sql: "DELETE FROM board_warnings WHERE board_id = ?", arguments: [boardId])

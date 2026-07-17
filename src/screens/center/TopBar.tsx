@@ -118,15 +118,17 @@ export function TopBar({
               weight="bold"
             />
           </Pressable>
-          <View style={styles.divider} />
           {canDisconnect && (
-            <Pressable
-              style={styles.plugButton}
-              onPress={onDisconnect}
-              testID="board-disconnect-button"
-            >
-              <PowerIcon size={15} color={theme.status.error.color} weight="bold" />
-            </Pressable>
+            <>
+              <View style={styles.divider} />
+              <Pressable
+                style={styles.plugButton}
+                onPress={onDisconnect}
+                testID="board-disconnect-button"
+              >
+                <PowerIcon size={15} color={theme.status.error.color} weight="bold" />
+              </Pressable>
+            </>
           )}
           {activeBoardId && <BoardWarningControl boardId={activeBoardId} />}
         </View>

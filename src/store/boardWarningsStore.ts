@@ -67,10 +67,13 @@ export function startBoardWarningsSync(): () => void {
   })
   const pull = () => {
     const startedAt = revision
-    void getBoardWarnings().then((warnings) => {
-      if (revision !== startedAt) return
-      useBoardWarningsStore.getState().replaceAll(warnings)
-    })
+    void getBoardWarnings()
+      .then((warnings) => {
+        if (revision !== startedAt) return
+        useBoardWarningsStore.getState().replaceAll(warnings)
+      })
+      // A failed pull keeps the last known mirror; the next foreground or push heals it.
+      .catch(() => undefined)
   }
   pull()
   const appStateSub = AppState.addEventListener('change', (nextState) => {

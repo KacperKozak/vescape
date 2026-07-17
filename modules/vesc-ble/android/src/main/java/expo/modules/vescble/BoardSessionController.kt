@@ -1195,8 +1195,8 @@ private var wearAutoLaunchOnConnect = true
 
     /** Capture the first Board Warning-path failure per (site, session); later ones are dropped. */
     private fun reportWarningFailure(site: String, throwable: Throwable) {
-        Log.e(VESC_SESSION_TAG, "Board Warning $site failed", throwable)
         if (!warningFailuresReported.add(site)) return
+        Log.e(VESC_SESSION_TAG, "Board Warning $site failed", throwable)
         captureDiagnostic(
             "board_warning_failure",
             diagnosticProperties(boardConfig, "board_warning") + mapOf(
@@ -1280,7 +1280,11 @@ private var wearAutoLaunchOnConnect = true
      * read path (pauses/resumes polling) and is skipped if a config op is already in flight.
      */
     private fun triggerConfigSafetyRead(session: BoardSession) {
-        if (!boardWarningsEnabled) return
+        if (!boardWarningsEnabled) {
+            // Re-arm so re-enabling Board Warnings mid-session can schedule the read again.
+            configSafetyReadScheduled = false
+            return
+        }
         if (!isCurrentBoardSession(session)) return
         configController.consumeRead(PendingConfigRead(onSuccess = {}, onError = { _, _ -> }))
     }
@@ -1360,12 +1364,15 @@ private var wearAutoLaunchOnConnect = true
         lastEmittedLinkIntegrity = next
         emitState()
         // Link just became trusted — schedule the one background config-safety read for this session.
-        if (next == LinkIntegrity.Trusted && !configSafetyReadScheduled) {
-            configSafetyReadScheduled = true
-            val session = boardSession ?: return
-            scheduler.postDelayedForSession(session, CONFIG_SAFETY_READ_DELAY_MS, ::isCurrentBoardSession) {
-                triggerConfigSafetyRead(session)
-            }
+        if (next == LinkIntegrity.Trusted) scheduleConfigSafetyRead()
+    }
+
+    private fun scheduleConfigSafetyRead() {
+        if (configSafetyReadScheduled) return
+        configSafetyReadScheduled = true
+        val session = boardSession ?: return
+        scheduler.postDelayedForSession(session, CONFIG_SAFETY_READ_DELAY_MS, ::isCurrentBoardSession) {
+            triggerConfigSafetyRead(session)
         }
     }
 
@@ -2042,7 +2049,15 @@ private var wearAutoLaunchOnConnect = true
         recordingCoordinator.applySettings(settings)
         socWindow.windowMs = settings.socEstimateWindowSeconds * 1000L
         connectionSoundsEnabled = settings.connectionSoundsEnabled
+        val warningsWereEnabled = boardWarningsEnabled
         boardWarningsEnabled = settings.boardWarningsEnabled
+        // Disabled→enabled with an already-trusted link: link integrity won't transition again, so
+        // schedule the config-safety read here (main-scheduler, like the rest of the one-shot state).
+        if (!warningsWereEnabled && boardWarningsEnabled) {
+            scheduler.post {
+                if (lastEmittedLinkIntegrity == LinkIntegrity.Trusted) scheduleConfigSafetyRead()
+            }
+        }
         configuredPollIntervalMs = pollIntervalMsForHz(settings.telemetryPollRateHz)
         movingThresholdCentiKmh = settings.toMetricSanitizerConfig().movingSpeedThresholdCentiKmh
         pollingLoop.setPollIntervalMs(effectivePollIntervalMs())
