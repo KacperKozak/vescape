@@ -309,8 +309,12 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
   )
 
   const handleMapFocus = useCallback(() => {
-    if (mode === 'telemetry') enterMap()
-  }, [enterMap, mode])
+    if (mode === 'map') return
+    enterMap()
+    if (mode === 'weather' || mode === 'legalLimits') {
+      requestAnimationFrame(() => mapRef.current?.recenterLive())
+    }
+  }, [enterMap, mapRef, mode])
 
   const setMapStyleKey = useCallback(
     (key: typeof mapStyleKey) => {

@@ -7,14 +7,17 @@ import {
   ArrowsClockwiseIcon,
   BriefcaseIcon,
   CameraIcon,
+  CloudSunIcon,
   HeartIcon,
   HouseIcon,
   LightningIcon,
   MapPinIcon,
+  MapTrifoldIcon,
   NavigationArrowIcon,
   PauseIcon,
   PencilSimpleIcon,
   RecordIcon,
+  SpeedometerIcon,
   StopIcon,
   SwatchesIcon,
   TrashIcon,
@@ -137,6 +140,41 @@ function ZonePillsShowcase() {
         <View style={styles.selectorVariant}>
           <Text style={styles.selectorCaption}>constrained width, horizontal scroll</Text>
           <View style={styles.narrowPreview}>{renderIconOptions(true)}</View>
+        </View>
+
+        <View style={styles.selectorVariant}>
+          <Text style={styles.selectorCaption}>map mode tabs, active label only</Text>
+          <PillSelector activeId="weather" contained fitContent style={styles.mapModeTabsPreview}>
+            <PillSelectorItem
+              id="map"
+              label="Explore"
+              icon={MapTrifoldIcon}
+              activeLabelOnly
+              color={theme.palette.violet}
+              activeWidth={116}
+              onPress={() => undefined}
+            />
+            <PillSelectorItem
+              id="weather"
+              label="Weather"
+              icon={CloudSunIcon}
+              activeLabelOnly
+              color={theme.palette.sky}
+              activeWidth={142}
+              inactiveWidth={58}
+              onPress={() => undefined}
+            />
+            <PillSelectorItem
+              id="legalLimits"
+              label="Legal limits"
+              icon={SpeedometerIcon}
+              activeLabelOnly
+              color={theme.palette.green}
+              activeWidth={136}
+              inactiveWidth={44}
+              onPress={() => undefined}
+            />
+          </PillSelector>
         </View>
       </View>
     </ShowcaseCard>
@@ -444,5 +482,8 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     overflow: 'hidden',
     paddingVertical: 10,
+  },
+  mapModeTabsPreview: {
+    alignSelf: 'center',
   },
 })

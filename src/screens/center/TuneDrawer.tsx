@@ -14,8 +14,8 @@ import {
   FootprintsIcon,
   GaugeIcon,
   LightbulbIcon,
-  MapTrifoldIcon,
   SirenIcon,
+  SpeedometerIcon,
   WarningCircleIcon,
   type Icon,
 } from 'phosphor-react-native'
@@ -505,7 +505,7 @@ function LegalMapWidget({ onPress }: { onPress: () => void }) {
       accessibilityLabel="Legal limits map"
       onPress={onPress}
     >
-      <MapTrifoldIcon size={24} color={theme.palette.sky.color} weight="duotone" />
+      <SpeedometerIcon size={24} color={theme.palette.green.color} weight="duotone" />
       <View style={styles.legalMapText}>
         <Text style={styles.legalMapLabel} numberOfLines={1}>
           Map
