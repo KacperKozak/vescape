@@ -55,10 +55,10 @@ describe('parseWarningDetail', () => {
 
   test('humanizes keys and formats values for generic kinds', () => {
     expect(
-      parseWarningDetail('cell-spread', '{"peakSpreadV":0.27,"worstCellGroup":4,"balancing":true}'),
+      parseWarningDetail('cell-spread', '{"peakSpread":0.27,"worstGroup":4,"balancing":true}'),
     ).toEqual([
-      { label: 'Peak Spread V', value: '0.270' },
-      { label: 'Worst Cell Group', value: '4' },
+      { label: 'Peak Spread', value: '0.270' },
+      { label: 'Worst Group', value: '4' },
       { label: 'Balancing', value: 'yes' },
     ])
   })
