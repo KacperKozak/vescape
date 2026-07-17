@@ -107,6 +107,8 @@ class VescBleModule : Module() {
 
     // JS keeps a dumb mirror of the durable Board Warning registry; push the full board list on
     // every registry change so late subscribers self-heal on the next emit (and on subscribe below).
+    // @parity /modules/vesc-ble/ios/VescBleModule.swift `sendBoardWarnings`
+    // @parity /modules/vesc-ble/src/index.ts `BoardWarningsEvent`
     BoardWarningRegistry.get(context).onChange = { boardId, warnings ->
       if (shouldEmitToFrontend("onBoardWarnings")) {
         mainHandler.post {

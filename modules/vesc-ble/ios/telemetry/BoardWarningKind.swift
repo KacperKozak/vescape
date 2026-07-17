@@ -7,6 +7,7 @@ import Foundation
 /// `BoardWarningKind` union in `modules/vesc-ble/src/index.ts`.
 ///
 /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/warnings/BoardWarningKind.kt
+/// @parity /modules/vesc-ble/src/index.ts `BoardWarningKind`
 enum BoardWarningKind: String, CaseIterable {
   case cellSpread = "cell-spread"
   case batteryConfigMismatch = "battery-config-mismatch"
@@ -21,6 +22,7 @@ enum BoardWarningKind: String, CaseIterable {
 /// the pure warning model (not on the GRDB-backed registry) so detectors and the pure-logic SPM target
 /// can reference it without pulling in the durable store.
 /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/warnings/BoardWarningRegistry.kt `BoardWarningSeverity`
+/// @parity /modules/vesc-ble/src/index.ts `BoardWarningSeverity`
 enum BoardWarningSeverity: String {
   case warn
   case critical

@@ -4,6 +4,7 @@ import GRDB
 /// One current Board Warning, as it crosses the bridge and lives in the durable store. Mirrors the
 /// Android `BoardWarning` model + `board_warnings` Room table.
 /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/warnings/BoardWarningRegistry.kt `BoardWarning`
+/// @parity /modules/vesc-ble/src/index.ts `BoardWarning`
 struct BoardWarning {
   let boardId: String
   let kind: String

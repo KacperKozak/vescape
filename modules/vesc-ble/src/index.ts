@@ -999,13 +999,19 @@ export interface AppDataChangedEvent {
   scope: 'boards' | 'settings'
 }
 
-/** Two-level Board Warning severity, fixed at detection time. */
+/**
+ * Two-level Board Warning severity, fixed at detection time.
+ * @parity /modules/vesc-ble/ios/telemetry/BoardWarningKind.swift `BoardWarningSeverity`
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/warnings/BoardWarningRegistry.kt `BoardWarningSeverity`
+ */
 export type BoardWarningSeverity = 'warn' | 'critical'
 
 /**
  * Every Board Warning kind slug the native detectors currently emit. Mirrors the native `BoardWarningKind`
  * catalog on both platforms; a rider-facing title is required per kind (see `WARNING_TITLES`). A `BoardWarning`
  * from a newer native build may carry a kind outside this union, so consumers still fall back to the raw slug.
+ * @parity /modules/vesc-ble/ios/telemetry/BoardWarningKind.swift `BoardWarningKind`
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/warnings/BoardWarningKind.kt `BoardWarningKind`
  */
 export type BoardWarningKind =
   | 'cell-spread'
@@ -1020,6 +1026,8 @@ export type BoardWarningKind =
  * One durable Board Warning — an app-detected abnormal Board condition, keyed one-per-problem-kind
  * per Board (automotive fault-code model). Detected natively; JS only renders. `payloadJson` carries
  * kind-specific detail (e.g. peak cell spread) as a JSON string the rendering side decodes per kind.
+ * @parity /modules/vesc-ble/ios/telemetry/BoardWarningStore.swift `BoardWarning`
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/warnings/BoardWarningRegistry.kt `BoardWarning`
  */
 export interface BoardWarning {
   boardId: string
@@ -1034,6 +1042,8 @@ export interface BoardWarning {
  * Full current warning list for one Board, emitted on every registry change and on subscribe (late
  * subscribers are immediately consistent). The JS mirror store replaces that board's slice on each
  * emit — JS never detects, only displays.
+ * @parity /modules/vesc-ble/ios/VescBleModule.swift `sendBoardWarnings`
+ * @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt `onBoardWarnings`
  */
 export interface BoardWarningsEvent {
   boardId: string

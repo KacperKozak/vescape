@@ -883,6 +883,7 @@ public class VescBleModule: Module {
   /// the main thread; drop the emit when no JS listener is attached (the snapshot on subscribe and
   /// the next registry change self-heal it).
   /// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt
+  /// @parity /modules/vesc-ble/src/index.ts `BoardWarningsEvent`
   private func sendBoardWarnings(_ boardId: String, _ warnings: [BoardWarning]) {
     DispatchQueue.main.async {
       guard self.shouldEmitToFrontend("onBoardWarnings") else { return }

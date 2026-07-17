@@ -10,6 +10,7 @@ import org.json.JSONObject
  * union in `modules/vesc-ble/src/index.ts`.
  *
  * @parity /modules/vesc-ble/ios/telemetry/BoardWarningKind.swift
+ * @parity /modules/vesc-ble/src/index.ts `BoardWarningKind`
  */
 enum class BoardWarningKind(val wire: String) {
   CELL_SPREAD("cell-spread"),
