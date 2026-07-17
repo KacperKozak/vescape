@@ -200,6 +200,10 @@ _Avoid_: Wear alarm, watch notification
 An app-detected abnormal Board condition worth the rider's attention — such as excessive cell-voltage spread, unstable telemetry readings, or a dangerous VESC/Refloat setting. Detected natively, keyed one-per-problem-kind per Board (re-detection updates the same warning rather than duplicating it), and carries a severity of warn or critical. Stored durably like automotive fault codes: it clears automatically when its detector re-evaluates with real data and the condition is gone, and the rider may clear it manually — but a still-true condition simply re-fires it. Detection logic is app-authored (unlike a rider-authored **Alert Rule**) and the finding is rider-facing (unlike a debug-facing **Diagnostic Event**).
 _Avoid_: Board alert (collides with Alert Rule), fault (reserved for VESC firmware fault codes), board issue, health event
 
+**Debug Recording**:
+A developer-facing `.jsonl` capture of one Board Session's raw BLE traffic, session-state transitions, and GPS fixes, recorded on-device and exportable for offline analysis or detector replay. Not a **Ride Recording** (no telemetry-sample persistence, not rider-facing) and not part of **Ride History**.
+_Avoid_: session log, BLE dump, trace
+
 **App Setting**:
 A user-controlled app preference that affects app behavior across boards unless explicitly scoped elsewhere.
 _Avoid_: Option, config
@@ -285,6 +289,7 @@ _Avoid_: Position update, presence ping, location share, group telemetry
 - A **Board Warning** outlives the **Board Session** and app restarts; it clears automatically only when its detector re-evaluated with real data and the condition was gone, or when the rider clears it manually — a still-true condition re-fires it.
 - A **Board Warning** firing for the first time in a **Board Session** also records one **Diagnostic Event**.
 - A **Board Warning** is not an **Alert Rule** (app-authored, not rider-authored) and produces no riding feedback; it is passive display only.
+- A **Board Warning** detector can be replayed offline against a **Debug Recording**'s BLE frames; a committed clean Debug Recording guards against false positives.
 - An **Alert Rule** evaluates against live **Telemetry Samples**.
 - An **Alert Message Template** belongs to one **Alert Rule**.
 - A **Watch Mirror** receives **Watch Frames** and **Watch Alerts** from the phone and never sends data back; it is not a **Board**, a **Board Session**, or a source of **Telemetry Samples**.
