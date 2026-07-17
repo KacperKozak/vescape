@@ -19,7 +19,8 @@ final class AlertEngineTests: XCTestCase {
       thresholdMax: thresholdMax,
       enabled: true,
       soundType: soundType,
-      createdAt: 0
+      createdAt: 0,
+      source: nil
     )
   }
 

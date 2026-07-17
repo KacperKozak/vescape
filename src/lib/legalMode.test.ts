@@ -4,7 +4,9 @@ import type { LocationEvent } from 'vesc-ble'
 import {
   DEFAULT_LEGAL_MODE_SETTINGS,
   LEGAL_MODE_ALERT_RULE_ID,
+  LEGAL_MODE_ALERT_SOURCE,
   applyJurisdictionDefaults,
+  isLegalModeAlertRule,
   legalModeAlertRule,
   resolveJurisdictionFromLocation,
   setLegalSpeed,
@@ -94,6 +96,13 @@ describe('Legal Mode derivation', () => {
       enabled: true,
       soundType: 'preset:tick',
       createdAt: 123,
+      source: LEGAL_MODE_ALERT_SOURCE,
     })
+  })
+
+  test('recognizes generated alerts by source with legacy id fallback', () => {
+    expect(isLegalModeAlertRule({ id: 'manual', source: LEGAL_MODE_ALERT_SOURCE })).toBe(true)
+    expect(isLegalModeAlertRule({ id: LEGAL_MODE_ALERT_RULE_ID })).toBe(true)
+    expect(isLegalModeAlertRule({ id: 'manual' })).toBe(false)
   })
 })

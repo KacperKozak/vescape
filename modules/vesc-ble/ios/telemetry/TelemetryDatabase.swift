@@ -128,7 +128,8 @@ enum TelemetryDatabase {
           threshold_max REAL,
           enabled INTEGER NOT NULL,
           sound_type TEXT NOT NULL,
-          created_at INTEGER NOT NULL
+          created_at INTEGER NOT NULL,
+          source TEXT
         )
         """)
       try db.execute(sql: "CREATE INDEX index_alerts_control_id ON alerts(control_id)")
@@ -339,6 +340,13 @@ enum TelemetryDatabase {
         try db.execute(sql: "ALTER TABLE tune_profiles ADD COLUMN refloat_base_version TEXT NOT NULL DEFAULT ''")
       }
       try db.execute(sql: "CREATE INDEX IF NOT EXISTS index_tune_profiles_board_id_refloat_base_version ON tune_profiles(board_id, refloat_base_version)")
+    }
+
+    migrator.registerMigration("v25_alert_source") { db in
+      let hasSource = try db.columns(in: "alerts").contains { $0.name == "source" }
+      if !hasSource {
+        try db.execute(sql: "ALTER TABLE alerts ADD COLUMN source TEXT")
+      }
     }
 
     return migrator

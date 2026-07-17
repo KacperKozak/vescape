@@ -76,6 +76,7 @@ test('enabling legal mode materializes a managed native speed warning alert', as
       threshold: 15,
       thresholdMax: 20,
       enabled: true,
+      source: 'legal-mode',
     }),
   )
 })

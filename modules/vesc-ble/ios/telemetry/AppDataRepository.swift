@@ -203,6 +203,7 @@ final class AppDataRepository {
           "enabled": (row["enabled"] as Int64) != 0,
           "soundType": row["sound_type"] as String,
           "createdAt": row["created_at"] as Int64,
+          "source": row["source"] as String?,
         ]
       }
     }
@@ -224,7 +225,8 @@ final class AppDataRepository {
           thresholdMax: row["threshold_max"] as Double?,
           enabled: (row["enabled"] as Int64) != 0,
           soundType: row["sound_type"] as String,
-          createdAt: row["created_at"] as Int64
+          createdAt: row["created_at"] as Int64,
+          source: row["source"] as String?
         )
       }
     }
@@ -237,13 +239,14 @@ final class AppDataRepository {
     let enabled = (rule["enabled"] as? Bool) ?? false
     let soundType = rule["soundType"] as? String ?? "default"
     let createdAt = Self.longValue(rule["createdAt"] ?? nil) ?? nowMs()
+    let source = rule["source"] as? String
     write { db in
       try db.execute(
         sql: """
-          INSERT OR REPLACE INTO alerts (id, control_id, threshold, threshold_max, enabled, sound_type, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
+          INSERT OR REPLACE INTO alerts (id, control_id, threshold, threshold_max, enabled, sound_type, created_at, source)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
           """,
-        arguments: [id, controlId, threshold, thresholdMax, enabled ? 1 : 0, soundType, createdAt]
+        arguments: [id, controlId, threshold, thresholdMax, enabled ? 1 : 0, soundType, createdAt, source]
       )
     }
   }

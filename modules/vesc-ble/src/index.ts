@@ -211,6 +211,8 @@ export interface AlertPreset {
   category: AlertPresetCategory
 }
 
+// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/TelemetryEntities.kt `AlertRuleEntity`
+// @parity /modules/vesc-ble/ios/alerts/AlertEngine.swift `AlertRule`
 export interface AlertRule {
   id: string
   controlId: string
@@ -219,6 +221,7 @@ export interface AlertRule {
   enabled: boolean
   soundType: AlertSoundType
   createdAt: number
+  source?: 'manual' | 'legal-mode'
 }
 
 export type PrivacyZonePreset = 'home' | 'work' | 'custom'

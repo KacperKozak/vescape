@@ -63,6 +63,7 @@ describe('alertsStore generated Legal Mode rule', () => {
       threshold: 20,
       thresholdMax: 25,
       enabled: true,
+      source: 'legal-mode',
     })
     expect(upsertAlertRule).toHaveBeenCalledTimes(2)
   })

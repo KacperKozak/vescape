@@ -612,6 +612,7 @@ fun AlertRuleEntity.toMap(): Map<String, Any?> = mapOf(
   "enabled" to enabled,
   "soundType" to soundType,
   "createdAt" to createdAt,
+  "source" to source,
 )
 
 fun TuneProfileEntity.toMap(): Map<String, Any?> = mapOf(
@@ -910,6 +911,7 @@ private fun Map<String, Any?>.toAlertRuleEntity(): AlertRuleEntity = AlertRuleEn
   enabled = getBoolean("enabled"),
   soundType = get("soundType") as? String ?: "default",
   createdAt = getLong("createdAt"),
+  source = get("source") as? String,
 )
 
 private fun Map<String, Any?>.getString(key: String): String =

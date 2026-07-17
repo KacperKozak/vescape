@@ -278,6 +278,7 @@ data class AlertRuleEntity(
   val soundType: String,
   @ColumnInfo(name = "created_at")
   val createdAt: Long,
+  val source: String?,
 )
 
 @Entity(

@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 // @parity /modules/vesc-ble/ios/VescBleModule.swift
 internal const val TELEMETRY_DATABASE_NAME = "telemetry.db"
-internal const val TELEMETRY_DATABASE_VERSION = 24
+internal const val TELEMETRY_DATABASE_VERSION = 25
 
 @Database(
   entities = [
@@ -393,6 +393,12 @@ abstract class TelemetryDatabase : RoomDatabase() {
       }
     }
 
+    internal val MIGRATION_24_25 = object : Migration(24, 25) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE alerts ADD COLUMN source TEXT")
+      }
+    }
+
     fun get(context: Context): TelemetryDatabase {
       return instance ?: synchronized(this) {
         instance ?: Room.databaseBuilder(
@@ -422,6 +428,7 @@ abstract class TelemetryDatabase : RoomDatabase() {
             MIGRATION_21_22,
             MIGRATION_22_23,
             MIGRATION_23_24,
+            MIGRATION_24_25,
           )
           .fallbackToDestructiveMigration(true)
           .addCallback(object : Callback() {
