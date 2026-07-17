@@ -17,7 +17,15 @@ import {
   XIcon,
   type Icon,
 } from 'phosphor-react-native'
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+} from 'react'
 import {
   ActivityIndicator,
   Platform,
@@ -209,6 +217,109 @@ interface MapModeTabsProps {
   onResetLegalSelection: () => void
 }
 
+function useMapSearch({
+  searchOpen,
+  weatherLocation,
+}: {
+  searchOpen: boolean
+  weatherLocation: CenterMapOverlayProps['weatherLocation']
+}) {
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<MapSearchResult[]>([])
+  const [searchLoading, setSearchLoading] = useState(false)
+  const [searchError, setSearchError] = useState<string | null>(null)
+  const searchCacheRef = useRef<Map<string, MapSearchResult[]>>(new Map())
+  const searchRequestIdRef = useRef(0)
+  const normalizedSearchQuery = searchQuery.trim()
+  const weatherLatitude = weatherLocation?.latitude ?? null
+  const weatherLongitude = weatherLocation?.longitude ?? null
+  const searchProximity = useMemo(
+    () =>
+      weatherLatitude == null || weatherLongitude == null
+        ? null
+        : { latitude: weatherLatitude, longitude: weatherLongitude },
+    [weatherLatitude, weatherLongitude],
+  )
+  const searchProximityKey =
+    weatherLatitude == null || weatherLongitude == null
+      ? 'none'
+      : `${weatherLatitude.toFixed(4)},${weatherLongitude.toFixed(4)}`
+
+  useEffect(() => {
+    if (!searchOpen || normalizedSearchQuery.length < 2) {
+      searchRequestIdRef.current += 1
+      return
+    }
+
+    const cacheKey = `${normalizedSearchQuery}|${searchProximityKey}`
+    const cached = searchCacheRef.current.get(cacheKey)
+    if (cached) {
+      setSearchResults(cached)
+      setSearchLoading(false)
+      setSearchError(null)
+      return
+    }
+
+    const controller = new AbortController()
+    const requestId = searchRequestIdRef.current + 1
+    searchRequestIdRef.current = requestId
+    const timeout = setTimeout(() => {
+      setSearchLoading(true)
+      void searchMapResults(normalizedSearchQuery, {
+        proximity: searchProximity,
+        signal: controller.signal,
+      })
+        .then((results) => {
+          if (requestId !== searchRequestIdRef.current) return
+          searchCacheRef.current.set(cacheKey, results)
+          setSearchResults(results)
+          setSearchError(null)
+          setSearchLoading(false)
+        })
+        .catch((error: unknown) => {
+          if (controller.signal.aborted) return
+          if (requestId !== searchRequestIdRef.current) return
+          setSearchResults([])
+          setSearchError(error instanceof Error ? error.message : 'Mapbox search failed')
+          setSearchLoading(false)
+        })
+    }, 260)
+
+    return () => {
+      clearTimeout(timeout)
+      controller.abort()
+    }
+  }, [normalizedSearchQuery, searchOpen, searchProximity, searchProximityKey])
+
+  const handleSearchQueryChange = useCallback((query: string) => {
+    setSearchQuery(query)
+    setSearchError(null)
+    if (query.trim().length < 2) {
+      searchRequestIdRef.current += 1
+      setSearchResults([])
+      setSearchLoading(false)
+    }
+  }, [])
+
+  const resetSearch = useCallback(() => {
+    searchRequestIdRef.current += 1
+    setSearchQuery('')
+    setSearchResults([])
+    setSearchError(null)
+    setSearchLoading(false)
+  }, [])
+
+  return {
+    searchQuery,
+    setSearchQuery,
+    searchResults,
+    searchLoading,
+    searchError,
+    handleSearchQueryChange,
+    resetSearch,
+  }
+}
+
 const centerPlacementPointerEntering = () => {
   'worklet'
   return {
@@ -231,42 +342,17 @@ function FullMapControls({
   bottom,
 }: FullMapControlsProps) {
   const [searchOpen, setSearchOpen] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [searchResults, setSearchResults] = useState<MapSearchResult[]>([])
-  const [searchLoading, setSearchLoading] = useState(false)
-  const [searchError, setSearchError] = useState<string | null>(null)
   const [addMenuOpen, setAddMenuOpen] = useState(false)
   const [filterMenuOpen, setFilterMenuOpen] = useState(false)
-  useEffect(() => {
-    const query = searchQuery.trim()
-    if (!searchOpen || query.length < 2) {
-      return
-    }
-
-    const controller = new AbortController()
-    const timeout = setTimeout(() => {
-      setSearchLoading(true)
-      void searchMapResults(query, {
-        proximity: map.weatherLocation,
-        signal: controller.signal,
-      })
-        .then((results) => {
-          setSearchResults(results)
-          setSearchLoading(false)
-        })
-        .catch((error: unknown) => {
-          if (controller.signal.aborted) return
-          setSearchResults([])
-          setSearchError(error instanceof Error ? error.message : 'Mapbox search failed')
-          setSearchLoading(false)
-        })
-    }, 260)
-
-    return () => {
-      clearTimeout(timeout)
-      controller.abort()
-    }
-  }, [map.weatherLocation, searchOpen, searchQuery])
+  const {
+    searchQuery,
+    setSearchQuery,
+    searchResults,
+    searchLoading,
+    searchError,
+    handleSearchQueryChange,
+    resetSearch,
+  } = useMapSearch({ searchOpen, weatherLocation: map.weatherLocation })
 
   const openSearch = useCallback(() => {
     setSearchOpen(true)
@@ -274,11 +360,8 @@ function FullMapControls({
 
   const closeSearch = useCallback(() => {
     setSearchOpen(false)
-    setSearchQuery('')
-    setSearchResults([])
-    setSearchError(null)
-    setSearchLoading(false)
-  }, [])
+    resetSearch()
+  }, [resetSearch])
 
   useEffect(() => {
     const dismissTransientControls = () => {
@@ -295,17 +378,6 @@ function FullMapControls({
     }
   }, [addMenuOpen, closeSearch, filterMenuOpen, mapInteractionHandlerRef, searchOpen])
 
-  const handleSearchQueryChange = useCallback((query: string) => {
-    setSearchQuery(query)
-    setSearchError(null)
-    setSearchResults([])
-    if (query.trim().length < 2) {
-      setSearchLoading(false)
-    } else {
-      setSearchLoading(true)
-    }
-  }, [])
-
   const handleSearchSelect = useCallback(
     (result: MapSearchResult) => {
       setSearchOpen(false)
@@ -313,7 +385,7 @@ function FullMapControls({
       mapRef.current?.focusCoordinate([result.longitude, result.latitude])
       void map.replaceDirectionPoint(result.latitude, result.longitude)
     },
-    [map, mapRef],
+    [map, mapRef, setSearchQuery],
   )
 
   const handleSearchSubmit = useCallback(() => {
@@ -1248,7 +1320,7 @@ const styles = StyleSheet.create({
   mapSearchButton: {
     position: 'absolute',
     right: 12,
-    zIndex: 32,
+    zIndex: 44,
     borderColor: theme.alpha(theme.palette.slate.light, 0.3),
     backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
   },
@@ -1256,7 +1328,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 12,
     right: 12,
-    zIndex: 36,
+    zIndex: 44,
     gap: 8,
   },
   mapSearchBar: {
@@ -1531,7 +1603,7 @@ const styles = StyleSheet.create({
   },
   mapInterface: {
     ...StyleSheet.absoluteFill,
-    zIndex: 7,
+    zIndex: 44,
   },
   mapControlsLayer: {
     ...StyleSheet.absoluteFill,

@@ -44,7 +44,7 @@ export function RainViewerOverlay({ visible }: RainViewerOverlayProps) {
             key={sourceId}
             id={sourceId}
             tileUrlTemplates={[tileTemplate]}
-            tileSize={256}
+            tileSize={512}
             maxZoomLevel={6}
           >
             <RasterLayer

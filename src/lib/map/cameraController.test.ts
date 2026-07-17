@@ -173,7 +173,7 @@ describe('map camera controller', () => {
     expect(route.effect).toBeNull()
   })
 
-  test('weather view keeps current center and uses flat weather profile', () => {
+  test('weather view centers on current GPS fallback and uses flat weather profile', () => {
     const result = reduceMapCameraIntent(initialMapCameraControllerState, {
       type: 'EnterWeatherView',
       currentCamera: {
@@ -187,7 +187,7 @@ describe('map camera controller', () => {
     })
 
     expect(result.effect?.camera).toEqual({
-      centerCoordinate: [19, 50],
+      centerCoordinate: [15, 54],
       zoomLevel: 8,
       heading: 0,
       pitch: 0,

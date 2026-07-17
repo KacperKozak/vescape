@@ -38,7 +38,7 @@ function clampFrameIndex(index: number, frameCount: number): number {
 }
 
 export function buildRainViewerTileTemplate(host: string, frame: RainViewerRadarFrame): string {
-  return `${host}${frame.path}/256/{z}/{x}/{y}/2/1_1.png`
+  return `${host}${frame.path}/512/{z}/{x}/{y}/2/1_1.png`
 }
 
 export function formatRainViewerFrameTime(time: number): string {

@@ -283,8 +283,7 @@ export function reduceMapCameraIntent(
       },
       effect: {
         camera: {
-          centerCoordinate:
-            intent.currentCamera?.centerCoordinate ?? intent.fallbackCenterCoordinate,
+          centerCoordinate: intent.fallbackCenterCoordinate,
           zoomLevel,
           heading: 0,
           pitch: getPitchForProfileZoom({
