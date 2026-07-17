@@ -16,6 +16,7 @@ import {
   ChartLineUpIcon,
   GaugeIcon,
   WatchIcon,
+  WarningIcon,
 } from 'phosphor-react-native'
 
 import { routes } from '@/navigation/routes'
@@ -77,6 +78,13 @@ export default function SettingsScreen() {
             label="Live telemetry"
             hint="Graphs, update rate, and battery smoothing"
             onPress={() => router.push(routes.settingsLiveTelemetry)}
+          />
+          <SettingsRow
+            icon={WarningIcon}
+            iconColor={theme.status.warning.color}
+            label="Diagnostics"
+            hint="Board warnings and health checks"
+            onPress={() => router.push(routes.settingsDiagnostics)}
           />
         </SettingsCard>
 

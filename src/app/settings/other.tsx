@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Platform, Pressable, ScrollView, StyleSheet, Switch, TextInput, View } from 'react-native'
+import { Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native'
 import { Text } from '@/components/ui/base/Text'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
@@ -9,13 +9,10 @@ import {
   StopIcon,
   ToolboxIcon,
   VibrateIcon,
-  WarningIcon,
 } from 'phosphor-react-native'
 
 import { TuneDial } from '@/components/ui/tune/TuneDial'
 import { IconHero } from '@/components/ui/settings/IconHero'
-import { SettingsCard } from '@/components/ui/settings/SettingsCard'
-import { SettingsRow } from '@/components/ui/settings/SettingsRow'
 import { theme } from '@/constants/theme'
 import {
   type AlertPreset,
@@ -30,7 +27,6 @@ import {
 
 import { useBoardStore } from '@/store/boardStore'
 import { EMPTY_WARNINGS, useBoardWarningsStore } from '@/store/boardWarningsStore'
-import { useSettingsStore } from '@/store/settingsStore'
 
 /** Fake kind used by the dev warning injector; real detector kinds land in later slices. */
 const DEV_WARNING_KIND = 'cell-spread'
@@ -109,8 +105,6 @@ export default function OtherSettingsScreen() {
     previewAlertSound(`tts:${ttsTemplate}`)
   }, [ttsTemplate])
 
-  const boardWarningsEnabled = useSettingsStore((s) => s.boardWarningsEnabled)
-  const set = useSettingsStore((s) => s.set)
   const warningBoardId = useBoardStore((s) => s.activeBoardId) ?? DEV_WARNING_BOARD_ID
   const boardWarnings = useBoardWarningsStore(
     (s) => s.warningsByBoard[warningBoardId] ?? EMPTY_WARNINGS,
@@ -149,24 +143,6 @@ export default function OtherSettingsScreen() {
         <IconHero icon={ToolboxIcon} description="Small platform probes and local experiments." />
 
         <Text style={styles.sectionTitle}>Board Warnings</Text>
-        <SettingsCard>
-          <SettingsRow
-            icon={WarningIcon}
-            iconColor={theme.status.warning.color}
-            label="Board warnings"
-            hint="Master switch — off stops all detection and hides warnings"
-            right={
-              <Switch
-                value={boardWarningsEnabled}
-                onValueChange={(v) => void set('boardWarningsEnabled', v)}
-                trackColor={{ false: theme.palette.slate.border, true: theme.palette.sky.border }}
-                thumbColor={
-                  boardWarningsEnabled ? theme.palette.sky.color : theme.palette.slate.textMuted
-                }
-              />
-            }
-          />
-        </SettingsCard>
         <View style={styles.card}>
           <Text style={styles.ttsHint}>
             Injects a fake warning through the native registry (fire → persist → emit). Target

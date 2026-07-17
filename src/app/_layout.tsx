@@ -100,6 +100,10 @@ function RootLayout() {
           />
           <Stack.Screen name={stackScreens.settingsConnection} options={{ title: 'Connection' }} />
           <Stack.Screen
+            name={stackScreens.settingsDiagnostics}
+            options={{ title: 'Diagnostics' }}
+          />
+          <Stack.Screen
             name={stackScreens.settingsLiveTelemetry}
             options={{ title: 'Live telemetry' }}
           />
