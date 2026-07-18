@@ -54,7 +54,7 @@ beforeEach(async () => {
 afterEach(() => restore())
 
 test('boards scope reloads only the board store', async () => {
-  const { startAppDataSync } = await import('@/screens/appDataSync')
+  const { startAppDataSync } = await import('@/bootstrap/appDataSync')
   startAppDataSync()
 
   capturedCb?.({ scope: 'boards' })
@@ -64,7 +64,7 @@ test('boards scope reloads only the board store', async () => {
 })
 
 test('settings scope reloads only the settings store', async () => {
-  const { startAppDataSync } = await import('@/screens/appDataSync')
+  const { startAppDataSync } = await import('@/bootstrap/appDataSync')
   startAppDataSync()
 
   capturedCb?.({ scope: 'settings' })
@@ -74,7 +74,7 @@ test('settings scope reloads only the settings store', async () => {
 })
 
 test('returning to the foreground reloads every store (missed-push catch-up, #174)', async () => {
-  const { startAppDataSync } = await import('@/screens/appDataSync')
+  const { startAppDataSync } = await import('@/bootstrap/appDataSync')
   startAppDataSync()
 
   capturedAppStateCb?.('active')
@@ -84,7 +84,7 @@ test('returning to the foreground reloads every store (missed-push catch-up, #17
 })
 
 test('non-active app state transitions do not reload', async () => {
-  const { startAppDataSync } = await import('@/screens/appDataSync')
+  const { startAppDataSync } = await import('@/bootstrap/appDataSync')
   startAppDataSync()
 
   capturedAppStateCb?.('background')
@@ -95,7 +95,7 @@ test('non-active app state transitions do not reload', async () => {
 })
 
 test('stop unsubscribes both the native and app-state listeners', async () => {
-  const { startAppDataSync } = await import('@/screens/appDataSync')
+  const { startAppDataSync } = await import('@/bootstrap/appDataSync')
   const stop = startAppDataSync()
 
   stop()

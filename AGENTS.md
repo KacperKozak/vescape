@@ -91,7 +91,8 @@ Rules:
 - `src/components/` — domain-less UI kit only (`base`, `forms`, `modals`, `charts`, `controls`, `gestures`, `overlays`, `settings` primitives, `dev`, `widgets`). If a component imports domain code, it belongs in a module.
 - `src/helpers/` — Single-source pure utilities (finite, id, error, format).
 - `src/hooks/` — Generic React hooks only (no domain imports).
-- `src/screens/` — Multi-module composition (center screen wiring, app-data sync). No single-domain screens, no pure domain logic.
+- `src/screens/` — Multi-module screen composition. No single-domain screens, no pure domain logic.
+- `src/bootstrap/` — App-root wiring run once at startup (native→JS data sync).
 - `src/app/` — Expo Router routes only. Thin re-exports from modules/screens.
 - `src/constants/` — `theme.ts` only. `src/config/`, `src/navigation/` — static defs.
 
