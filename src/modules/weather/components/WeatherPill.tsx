@@ -1,6 +1,6 @@
 import { WeatherPill as WeatherPillView } from '@/modules/weather/components/WeatherPillView'
 import { isNightAtTime } from '@/modules/weather/lib/weather'
-import { useMapWeather } from '@/screens/main/map/useMapWeather'
+import { useMapWeather } from '@/modules/weather/hooks/useMapWeather'
 import { useWeatherStore } from '@/modules/weather/store/weatherStore'
 
 interface WeatherPillProps {

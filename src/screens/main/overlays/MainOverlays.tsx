@@ -86,7 +86,7 @@ import { HistoryEmptyState } from '@/modules/history/components/HistoryEmptyStat
 import { WeatherHourlyStrip } from '@/modules/weather/components/WeatherHourlyStrip'
 import { WeatherPill } from '@/modules/weather/components/WeatherPill'
 import { WeatherRadarTimeline } from '@/modules/weather/components/WeatherRadarTimeline'
-import { useMapWeather } from '@/screens/main/map/useMapWeather'
+import { useMapWeather } from '@/modules/weather/hooks/useMapWeather'
 import { HistoryStatsBar } from '@/screens/main/history/HistoryStatsBar'
 import { HistoryTelemetryPanel } from '@/screens/main/history/HistoryTelemetryPanel'
 import { LegalLimitCountrySheet } from '@/modules/legal/components/LegalLimitCountrySheet'

@@ -60,6 +60,10 @@ describe('module boundaries', () => {
           violations.push(`${rel}: ${from} -> ${to}`)
         }
       }
+      // modules sit below the composition layer and must never reach up into it
+      if (/['"]@\/(screens|app|bootstrap)\//.test(source)) {
+        violations.push(`${rel}: ${from} -> composition layer (screens/app/bootstrap)`)
+      }
     }
     expect(violations).toEqual([])
   })
