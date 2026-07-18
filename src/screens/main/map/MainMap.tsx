@@ -898,12 +898,12 @@ export const MainMap = memo(
 
     const handleLongPress = useCallback(
       (feature: { geometry: { coordinates: number[] } }) => {
-        if (historyActive) return
+        if (mode !== 'map' || historyActive) return
         onMapInteraction()
         const [longitude, latitude] = feature.geometry.coordinates
         onLongPressTarget({ latitude, longitude })
       },
-      [historyActive, onLongPressTarget, onMapInteraction],
+      [historyActive, mode, onLongPressTarget, onMapInteraction],
     )
 
     const handleSuppressNextMapPress = useCallback(() => {
@@ -932,7 +932,7 @@ export const MainMap = memo(
           }
           return
         }
-        if (historyActive) return
+        if (mode !== 'map' || historyActive) return
         const coordinates = feature.geometry?.coordinates
         const [longitude, latitude] = coordinates ?? []
         if (typeof longitude !== 'number' || typeof latitude !== 'number') return
@@ -1010,7 +1010,7 @@ export const MainMap = memo(
             onMapPress(fallbackSelection)
           })
       },
-      [historyActive, onMapPress, onRawMapPress],
+      [historyActive, mode, onMapPress, onRawMapPress],
     )
 
     useEffect(() => {

@@ -532,6 +532,7 @@ export function MainMapLayers({
     activeNavigationTarget?.type === 'mapPoint' ? activeNavigationTarget.point.id : null
   const showDirectionPoint =
     directionPoint != null && activeNavigationTarget?.type !== 'mapPoint' && !historyActive
+  const mapObjectsInteractive = !weatherActive && !legalLimitsActive && !historyActive
 
   return (
     <>
@@ -561,7 +562,9 @@ export function MainMapLayers({
         </RasterSource>
       ) : null}
       <RainViewerOverlay visible={weatherActive} />
-      {legalLimitsActive ? <LegalLimitsMapLayer onSelectCountry={onSelectLegalCountry} /> : null}
+      {legalLimitsActive ? (
+        <LegalLimitsMapLayer interactive={false} onSelectCountry={onSelectLegalCountry} />
+      ) : null}
       {historyActive ? (
         <HistoryMapLayers
           rideRouteShape={rideRouteShape}
@@ -646,10 +649,14 @@ export function MainMapLayers({
               navigationActive={activeNavigationMapPointId === point.id}
               expandSelected={expandSelectedMapPoints && selectedMapPoint?.id === point.id}
               label={getMapPointKindLabel(point.kind)}
-              onSelected={() => {
-                onSuppressNextMapPress()
-                onToggleMapPointSelection(point.id)
-              }}
+              onSelected={
+                mapObjectsInteractive
+                  ? () => {
+                      onSuppressNextMapPress()
+                      onToggleMapPointSelection(point.id)
+                    }
+                  : undefined
+              }
             />
           ))}
     </>
