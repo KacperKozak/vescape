@@ -4,11 +4,11 @@ import { ClockCountdownIcon, WatchIcon } from 'phosphor-react-native'
 import { useShallow } from 'zustand/react/shallow'
 
 import { theme } from '@/constants/theme'
-import { SettingsCard } from '@/components/ui/settings/SettingsCard'
-import { SettingsRow } from '@/components/ui/settings/SettingsRow'
-import { Stepper } from '@/components/ui/forms/Stepper'
-import { IconHero } from '@/components/ui/settings/IconHero'
-import { useSettingsStore } from '@/store/settingsStore'
+import { SettingsCard } from '@/components/settings/SettingsCard'
+import { SettingsRow } from '@/components/settings/SettingsRow'
+import { Stepper } from '@/components/forms/Stepper'
+import { IconHero } from '@/components/settings/IconHero'
+import { useSettingsStore } from '@/modules/settings/store/settingsStore'
 
 export default function WatchSettingsScreen() {
   const { wearAutoLaunchOnConnect, wearMirrorIntervalMs, set } = useSettingsStore(

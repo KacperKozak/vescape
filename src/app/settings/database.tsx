@@ -1,5 +1,5 @@
 import { View, StyleSheet, ScrollView, Pressable } from 'react-native'
-import { Text } from '@/components/ui/base/Text'
+import { Text } from '@/components/base/Text'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
   ClockCounterClockwiseIcon,
@@ -10,12 +10,12 @@ import {
 } from 'phosphor-react-native'
 
 import { theme } from '@/constants/theme'
-import { SettingsCard } from '@/components/ui/settings/SettingsCard'
-import { SettingsRow } from '@/components/ui/settings/SettingsRow'
-import { Button } from '@/components/ui/base/Button'
-import { ConfirmModal } from '@/components/ui/modals/ConfirmModal'
-import { useSettingsDatabaseOps } from '@/hooks/useSettingsDatabaseOps'
-import { IconHero } from '@/components/ui/settings/IconHero'
+import { SettingsCard } from '@/components/settings/SettingsCard'
+import { SettingsRow } from '@/components/settings/SettingsRow'
+import { Button } from '@/components/base/Button'
+import { ConfirmModal } from '@/components/modals/ConfirmModal'
+import { useSettingsDatabaseOps } from '@/modules/settings/hooks/useSettingsDatabaseOps'
+import { IconHero } from '@/components/settings/IconHero'
 
 export default function DatabaseSettingsScreen() {
   const db = useSettingsDatabaseOps()

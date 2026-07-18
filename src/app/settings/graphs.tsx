@@ -1,20 +1,20 @@
 import { View, Switch, StyleSheet, ScrollView } from 'react-native'
-import { Text } from '@/components/ui/base/Text'
+import { Text } from '@/components/base/Text'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { GaugeIcon, ChartLineUpIcon } from 'phosphor-react-native'
 import { useShallow } from 'zustand/react/shallow'
 
-import { useSettingsStore } from '@/store/settingsStore'
+import { useSettingsStore } from '@/modules/settings/store/settingsStore'
 import { theme } from '@/constants/theme'
 import {
   DEFAULT_HISTORY_METRIC_HOT_RANGES,
   type HistoryMetricHotRanges,
   type HistoryMetricKey,
-} from '@/lib/history/metricColorScale'
-import { SettingsCard } from '@/components/ui/settings/SettingsCard'
-import { SettingsRow } from '@/components/ui/settings/SettingsRow'
-import { Stepper } from '@/components/ui/forms/Stepper'
-import { IconHero } from '@/components/ui/settings/IconHero'
+} from '@/modules/history/lib/metricColorScale'
+import { SettingsCard } from '@/components/settings/SettingsCard'
+import { SettingsRow } from '@/components/settings/SettingsRow'
+import { Stepper } from '@/components/forms/Stepper'
+import { IconHero } from '@/components/settings/IconHero'
 
 const HOT_RANGE_METRICS: {
   key: Exclude<HistoryMetricKey, 'battery'>

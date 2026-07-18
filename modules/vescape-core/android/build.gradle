@@ -1,0 +1,62 @@
+buildscript {
+  repositories {
+    google()
+    mavenCentral()
+  }
+  dependencies {
+    classpath "com.google.devtools.ksp:com.google.devtools.ksp.gradle.plugin:2.1.20-2.0.1"
+  }
+}
+
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+apply plugin: 'com.google.devtools.ksp'
+
+def safeExtGet(prop, fallback) {
+  rootProject.ext.has(prop) ? rootProject.ext.get(prop) : fallback
+}
+
+android {
+  compileSdkVersion safeExtGet("compileSdkVersion", 35)
+
+  namespace "expo.modules.vescapecore"
+
+  defaultConfig {
+    minSdkVersion safeExtGet("minSdkVersion", 26)
+    targetSdkVersion safeExtGet("targetSdkVersion", 35)
+  }
+
+  buildTypes {
+    release {
+      minifyEnabled false
+    }
+  }
+
+  compileOptions {
+    sourceCompatibility JavaVersion.VERSION_17
+    targetCompatibility JavaVersion.VERSION_17
+  }
+
+  kotlinOptions {
+    jvmTarget = "17"
+  }
+}
+
+repositories {
+  mavenCentral()
+  google()
+}
+
+dependencies {
+  implementation project(':expo-modules-core')
+  implementation "com.posthog:posthog-android:3.44.2"
+  implementation "com.squareup.okhttp3:okhttp:4.12.0"
+  implementation "com.google.android.gms:play-services-wearable:18.2.0"
+  implementation "androidx.wear:wear-remote-interactions:1.1.0"
+  implementation "androidx.room:room-runtime:2.8.4"
+  implementation "androidx.room:room-ktx:2.8.4"
+  ksp "androidx.room:room-compiler:2.8.4"
+  testImplementation "junit:junit:4.13.2"
+  testImplementation "org.json:json:20231013"
+  testImplementation "androidx.room:room-testing:2.8.4"
+}

@@ -1,15 +1,15 @@
 import { useEffect } from 'react'
 import { StyleSheet, View } from 'react-native'
 
-import { useBoardStore } from '@/store/boardStore'
-import { useBleStore } from '@/store/bleStore'
-import { usePermissions } from '@/hooks/usePermissions'
-import { useBleAppLifecycle } from '@/hooks/useBleAppLifecycle'
-import { useBoardConnection } from '@/hooks/useBoardConnection'
-import { CenterScreen } from '@/screens/CenterScreen'
+import { useBoardStore } from '@/modules/board/store/boardStore'
+import { useBleStore } from '@/modules/board/store/bleStore'
+import { usePermissions } from '@/modules/settings/hooks/usePermissions'
+import { useBleAppLifecycle } from '@/modules/board/hooks/useBleAppLifecycle'
+import { useBoardConnection } from '@/modules/board/hooks/useBoardConnection'
+import { MainScreen } from '@/screens/main/MainScreen'
 import { theme } from '@/constants/theme'
 
-export default function MainScreen() {
+export default function IndexRoute() {
   const load = useBoardStore((s) => s.load)
   const boardsLoaded = useBoardStore((s) => s.hasLoaded)
   const startGpsTracking = useBleStore((s) => s.startGpsTracking)
@@ -35,7 +35,7 @@ export default function MainScreen() {
 
   return (
     <View style={styles.container}>
-      <CenterScreen
+      <MainScreen
         activeBoard={connection.activeBoard}
         activeBoardId={connection.activeBoardId}
         boards={connection.boards}

@@ -1,4 +1,4 @@
-import type { TelemetryMinuteBucket, TelemetrySample } from 'vesc-ble'
+import type { TelemetryMinuteBucket, TelemetrySample } from 'vescape-core'
 
 const BLOCK_DEFAULTS: TelemetryMinuteBucket = {
   id: 'b-0',

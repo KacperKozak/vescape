@@ -12,12 +12,12 @@ Native owns durable history truth.
 
 Main files:
 
-- Native repository: `modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/TelemetryRepository.kt`
-- Native DAO: `modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/TelemetryDao.kt`
-- Native tables: `modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/TelemetryEntities.kt`
-- JS store: `src/store/historyStore.ts`
+- Native repository: `modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryRepository.kt`
+- Native DAO: `modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDao.kt`
+- Native tables: `modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryEntities.kt`
+- JS store: `src/modules/history/store/historyStore.ts`
 - Session grouping: `src/history/sessions.ts`
-- Map rendering: `src/screens/center/CenterMap.tsx`
+- Map rendering: `src/screens/main/MainMap.tsx`
 
 ## Persisted Data
 
@@ -123,13 +123,13 @@ Previously observed Android history entry from `2026-05-06` before standalone hi
 
 User-visible symptom: apparent double trail and four yellow points.
 
-Cause: yellow points were marker pins, not duplicate GPS points. Quick stop/start or reconnect markers stayed in one selected session, and `CenterMap` painted non-error markers yellow. Standalone history GPS has since been removed from Ride History; routes now come from telemetry-associated GPS only.
+Cause: yellow points were marker pins, not duplicate GPS points. Quick stop/start or reconnect markers stayed in one selected session, and `MainMap` painted non-error markers yellow. Standalone history GPS has since been removed from Ride History; routes now come from telemetry-associated GPS only.
 
 ## Investigation Checklist
 
 When history map looks wrong:
 
-1. Pull `telemetry.db`, `telemetry.db-wal`, and `telemetry.db-shm` from device.
+1. Pull `vescape.db`, `vescape.db-wal`, and `vescape.db-shm` from device.
 2. Check selected range in `telemetry_minute_buckets`.
 3. Check `telemetry_markers` inside selected range.
 4. Compare telemetry sample range against telemetry-associated GPS range.

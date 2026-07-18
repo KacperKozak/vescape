@@ -9,13 +9,13 @@ import {
 } from 'phosphor-react-native'
 import { useShallow } from 'zustand/react/shallow'
 
-import { IconHero } from '@/components/ui/settings/IconHero'
-import { SettingsCard } from '@/components/ui/settings/SettingsCard'
-import { SettingsRow } from '@/components/ui/settings/SettingsRow'
-import { SettingsSectionTitle } from '@/components/ui/settings/SettingsSectionTitle'
-import { Stepper } from '@/components/ui/forms/Stepper'
+import { IconHero } from '@/components/settings/IconHero'
+import { SettingsCard } from '@/components/settings/SettingsCard'
+import { SettingsRow } from '@/components/settings/SettingsRow'
+import { SettingsSectionTitle } from '@/components/settings/SettingsSectionTitle'
+import { Stepper } from '@/components/forms/Stepper'
 import { theme } from '@/constants/theme'
-import { useSettingsStore } from '@/store/settingsStore'
+import { useSettingsStore } from '@/modules/settings/store/settingsStore'
 
 export default function MapVisualsSettingsScreen() {
   const {

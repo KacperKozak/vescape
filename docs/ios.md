@@ -14,7 +14,7 @@ Android foreground notification. JS never touches it.
 
 ### Architecture
 
-- `RideActivityAttributes` (`modules/vesc-ble/ios/notification/`) — the ActivityKit contract:
+- `RideActivityAttributes` (`modules/vescape-core/ios/notification/`) — the ActivityKit contract:
   static `deviceName` + a mutable `ContentState` (phase, status text, short-critical glyph, battery
   percent, fault code).
 - `RideLiveActivityController` — thin ActivityKit wrapper: `start` / `update` / `end`, holds the one
@@ -38,7 +38,7 @@ Android foreground notification. JS never touches it.
 
 ### Cross-target type sharing
 
-A Live Activity's `ActivityAttributes` type must be compiled into **both** binaries: the `vesc-ble`
+A Live Activity's `ActivityAttributes` type must be compiled into **both** binaries: the `vescape-core`
 module pod (drives it) and the widget extension (renders it). ActivityKit matches the two
 separately-compiled copies by unqualified type name.
 
@@ -56,7 +56,7 @@ symlink; this is verified to compile on device.
 - `app.config.ts`: `ios.infoPlist.NSSupportsLiveActivities = true`.
 - `ios.appleTeamId` (via `APPLE_TEAM_ID` env) is **required** — apple-targets needs it to sign the
   extension. Set it in `.env` / EAS secrets or prebuild warns and device builds fail to sign.
-- `VescBle.podspec` platform is `16.4` (ActivityKit needs 16.1+; the app already ships 16.4, so
+- `VescapeCore.podspec` platform is `16.4` (ActivityKit needs 16.1+; the app already ships 16.4, so
   nothing runs below it). This is why no `@available` gating is needed in the ActivityKit code.
 - The `widget` target adds an App Group entitlement by default. It is unused (local `update`s pass
   `ContentState` directly, no shared storage) but harmless; EAS auto-registers it.
@@ -111,7 +111,7 @@ iOS has no Android `ForegroundService` equivalent. A locked-screen ride cannot r
   - implement `centralManager(_:willRestoreState:)`;
   - restore retained peripherals, subscriptions, and pending connects into the native session runtime.
 - Move live session ownership below Expo module lifetime:
-  - use a native singleton/runtime, e.g. `VescBleRuntime.shared`, to own `ConnectionCoordinator`;
+  - use a native singleton/runtime, e.g. `VescapeCoreRuntime.shared`, to own `ConnectionCoordinator`;
   - Expo module attaches/detaches event sinks only;
   - `OnDestroy` must not call `stopBoard()`;
   - explicit user `stopBoard()` remains the disconnect path.

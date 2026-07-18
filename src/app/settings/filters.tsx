@@ -8,12 +8,12 @@ import {
 } from 'phosphor-react-native'
 import { useShallow } from 'zustand/react/shallow'
 
-import { useSettingsStore } from '@/store/settingsStore'
+import { useSettingsStore } from '@/modules/settings/store/settingsStore'
 import { theme } from '@/constants/theme'
-import { SettingsCard } from '@/components/ui/settings/SettingsCard'
-import { SettingsRow } from '@/components/ui/settings/SettingsRow'
-import { Stepper } from '@/components/ui/forms/Stepper'
-import { IconHero } from '@/components/ui/settings/IconHero'
+import { SettingsCard } from '@/components/settings/SettingsCard'
+import { SettingsRow } from '@/components/settings/SettingsRow'
+import { Stepper } from '@/components/forms/Stepper'
+import { IconHero } from '@/components/settings/IconHero'
 
 export default function FiltersSettingsScreen() {
   const { movingSpeedThresholdKmh, freeSpinMaxSpeedDeltaKmh, freeSpinStationaryBoardCapKmh, set } =

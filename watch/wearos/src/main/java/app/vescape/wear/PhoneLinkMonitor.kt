@@ -10,7 +10,7 @@ import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 
-/** Capability the Vescape phone app advertises (vesc-ble res/values/wear.xml). Keep the two in sync. */
+/** Capability the Vescape phone app advertises (vescape-core res/values/wear.xml). Keep the two in sync. */
 private const val PHONE_APP_CAPABILITY = "vescape_phone_app"
 private const val PHONE_LINK_REFRESH_MS = 5_000L
 

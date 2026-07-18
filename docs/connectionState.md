@@ -71,7 +71,7 @@ Board connect/disconnect must not clear GPS fixes. GPS is app-level map data.
 
 ## JS role
 
-`src/store/bleStore.ts` mirrors native state:
+`src/modules/board/store/bleStore.ts` mirrors native state:
 
 - `syncNativeState()` reads `getLiveState()`
 - `onLiveState` replaces lifecycle status

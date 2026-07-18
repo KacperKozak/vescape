@@ -15,14 +15,14 @@ kind-specific JSON `payloadJson` blob the UI decodes.
 ## Where each part lives
 
 - **Kind slugs** — `BoardWarningKind` catalog, mirrored on all three surfaces:
-  `modules/vesc-ble/android/.../BoardWarningKind.kt`,
-  `modules/vesc-ble/ios/telemetry/BoardWarningKind.swift`, and the JS union in
-  `modules/vesc-ble/src/index.ts`.
-- **Rider-facing titles** — `WARNING_TITLES` in `src/lib/boardWarnings.ts` (keyed by the exhaustive
+  `modules/vescape-core/android/.../BoardWarningKind.kt`,
+  `modules/vescape-core/ios/telemetry/BoardWarningKind.swift`, and the JS union in
+  `modules/vescape-core/src/index.ts`.
+- **Rider-facing titles** — `WARNING_TITLES` in `src/modules/board/lib/boardWarnings.ts` (keyed by the exhaustive
   union, so a missing title is a compile error).
 - **Detection logic** — the three detectors under
-  `modules/vesc-ble/android/src/main/java/expo/modules/vescble/warnings/` (iOS peers under
-  `modules/vesc-ble/ios/telemetry/`): `CellSpreadDetector`, `BatteryConfigMismatchDetector`,
+  `modules/vescape-core/android/src/main/java/expo/modules/vescapecore/warnings/` (iOS peers under
+  `modules/vescape-core/ios/telemetry/`): `CellSpreadDetector`, `BatteryConfigMismatchDetector`,
   `ConfigSafetyDetector`.
 - **Thresholds** — firmware pushback/fault defaults and the per-cell vs pack voltage-unit logic live
   in [safety.md](./safety.md). This doc references those values rather than restating them.
@@ -88,7 +88,7 @@ not a data reset — manual clear exists for that). Toggling takes effect live, 
 
 `payloadJson` is a JSON object string, built natively via `JSONObject` / `JSONSerialization` (never
 hand-assembled). Numeric fields are rounded to 4 decimals before serialization
-(`boardWarningRound4`). JS decodes it generically in `parseWarningDetail` (`src/lib/boardWarnings.ts`)
+(`boardWarningRound4`). JS decodes it generically in `parseWarningDetail` (`src/modules/board/lib/boardWarnings.ts`)
 until a kind opts into bespoke detail text.
 
 ### `cell-spread`

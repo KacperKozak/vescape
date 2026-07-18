@@ -72,18 +72,18 @@ The telemetry hot/cold split ([ADR 0013](adr/0013-fast-telemetry-hot-cold-split.
 
 ### Why this rule exists (regression that motivated it)
 
-The Compass (`phoneHeading`) map mode wired the ~30Hz `DeviceMotion` magnetometer straight into `setState` inside `CenterMap`, re-rendering the whole map subtree 1:1 (~24 renders/sec) even while parked. Result: device overheated fast → suspected iOS `WatchdogTermination`. Fixed by disabling the mode (see issue #183) and adding the guard below.
+The Compass (`phoneHeading`) map mode wired the ~30Hz `DeviceMotion` magnetometer straight into `setState` inside `MainMap`, re-rendering the whole map subtree 1:1 (~24 renders/sec) even while parked. Result: device overheated fast → suspected iOS `WatchdogTermination`. Fixed by disabling the mode (see issue #183) and adding the guard below.
 
 ### The guard: `useRenderRateWarning`
 
-`src/hooks/useRenderRateWarning.ts` is a dev-only canary — it `console.warn`s when a wired component commits more than 5 renders/second (no-op in production). Place it as a **tripwire at stream boundaries**, not on every component. Currently wired into `CenterMap`, `BottomTelemetryStrip`, and `GroupRideWidget` — the three roots that consume live streams. If a warning fires, a stream has leaked into React state; move it to a SharedValue / cold-path publish.
+`src/hooks/useRenderRateWarning.ts` is a dev-only canary — it `console.warn`s when a wired component commits more than 5 renders/second (no-op in production). Place it as a **tripwire at stream boundaries**, not on every component. Currently wired into `MainMap`, `BottomTelemetryStrip`, and `GroupRideWidget` — the three roots that consume live streams. If a warning fires, a stream has leaked into React state; move it to a SharedValue / cold-path publish.
 
 ## Files
 
-| File                                    | Role                                                               |
-| --------------------------------------- | ------------------------------------------------------------------ |
-| `src/telemetry/liveTelemetryRuntime.ts` | Mutable buffer, SharedValues, version counter, snapshot publishing |
-| `src/telemetry/liveMetricHistory.ts`    | Buffer ops: insert, prune, dedup, summarize                        |
-| `src/hooks/useLiveMetric.ts`            | React hook with module-level projection cache                      |
-| `src/store/bleStore.ts`                 | Zustand store, 1Hz publish timer, event subscriptions              |
-| `src/hooks/useRenderRateWarning.ts`     | Dev-only render-rate canary; tripwire at stream boundaries         |
+| File                                       | Role                                                               |
+| ------------------------------------------ | ------------------------------------------------------------------ |
+| `src/telemetry/liveTelemetryRuntime.ts`    | Mutable buffer, SharedValues, version counter, snapshot publishing |
+| `src/telemetry/liveMetricHistory.ts`       | Buffer ops: insert, prune, dedup, summarize                        |
+| `src/modules/board/hooks/useLiveMetric.ts` | React hook with module-level projection cache                      |
+| `src/modules/board/store/bleStore.ts`      | Zustand store, 1Hz publish timer, event subscriptions              |
+| `src/hooks/useRenderRateWarning.ts`        | Dev-only render-rate canary; tripwire at stream boundaries         |

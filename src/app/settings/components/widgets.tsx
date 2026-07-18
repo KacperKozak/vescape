@@ -1,5 +1,5 @@
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native'
-import { Text } from '@/components/ui/base/Text'
+import { Text } from '@/components/base/Text'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useState, type ReactNode } from 'react'
 
@@ -14,20 +14,20 @@ import {
   StackIcon,
   XIcon,
 } from 'phosphor-react-native'
-import { Button } from '@/components/ui/base/Button'
+import { Button } from '@/components/base/Button'
 import { CollapsibleWidget } from '@/components/widgets/CollapsibleWidget'
-import { Placeholder } from '@/components/ui/base/Placeholder'
+import { Placeholder } from '@/components/base/Placeholder'
 import { CanvasWidget } from '@/components/widgets/CanvasWidget'
-import { DialWidget } from '@/components/widgets/DialWidget'
+import { DialWidget } from '@/modules/tune/components/DialWidget'
 import { InputWidget } from '@/components/widgets/InputWidget'
 import { LinkWidget } from '@/components/widgets/LinkWidget'
 import { SelectWidget } from '@/components/widgets/SelectWidget'
 import { StepperWidget } from '@/components/widgets/StepperWidget'
 import { SwitchWidget } from '@/components/widgets/SwitchWidget'
-import { FloatingSheet } from '@/components/ui/overlays/AnchoredSheet'
-import { useTriggerRef } from '@/components/ui/overlays/measureTrigger'
-import { IconHero } from '@/components/ui/settings/IconHero'
-import { ShowcaseCard } from '@/components/ui/dev/ShowcaseCard'
+import { FloatingSheet } from '@/components/overlays/AnchoredSheet'
+import { useTriggerRef } from '@/components/overlays/measureTrigger'
+import { IconHero } from '@/components/settings/IconHero'
+import { ShowcaseCard } from '@/components/dev/ShowcaseCard'
 import { theme } from '@/constants/theme'
 
 /** A horizontal grid row — each `Cell` child takes an equal fraction of the width. */

@@ -17,7 +17,7 @@ Raw voltage remains unchanged in telemetry output — only the % calculation (di
 ## Consequences
 
 - `BatterySocEstimator.estimateBatteryPercent()` takes an optional `batteryCurrentA` parameter (default 0.0, backward compatible).
-- Both call sites in `VescForegroundService` pass `parsed.batteryCurrent` / `it.batteryCurrent`.
+- Both call sites in `CoreForegroundService` pass `parsed.batteryCurrent` / `it.batteryCurrent`.
 - `CellPreset` Kotlin data class gains `internalResistanceMilliOhm: Int`. JS `BatteryCellPreset` type mirrors it.
 - At zero current, behavior is identical to pre-compensation code path.
 - Correction is instantaneous (no smoothing, no hysteresis). Displayed % will track load in real time — this is intentional; riders prefer responsive readings over artificially stable ones.

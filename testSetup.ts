@@ -4,7 +4,7 @@
  * - react-native: uses Flow `import typeof` syntax bun cannot parse
  * - react-native-reanimated: imports React Native native/runtime APIs during module init
  * - expo-modules-core: calls requireNativeModule() which needs the Android runtime
- * - vesc-ble: our custom Expo module, also needs Android runtime
+ * - vescape-core: our custom Expo module, also needs Android runtime
  */
 
 import { mock } from 'bun:test'

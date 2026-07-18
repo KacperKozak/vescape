@@ -2,9 +2,9 @@ import { useCallback, useRef } from 'react'
 import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
-import { AddBoardWizard } from '@/components/domain/board/AddBoardWizard'
+import { AddBoardWizard } from '@/modules/board/components/AddBoardWizard'
 import { theme } from '@/constants/theme'
-import { useAddBoardWizard } from '@/hooks/useAddBoardWizard'
+import { useAddBoardWizard } from '@/modules/board/hooks/useAddBoardWizard'
 
 const LINK_STEP_ROW_HEIGHT = 76
 

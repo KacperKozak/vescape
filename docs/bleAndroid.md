@@ -26,7 +26,7 @@ Three independent bugs blocked BLE notifications. All three had to be fixed to g
 
 **Cause**: Android 13 (API 33) split `BluetoothGattCallback.onCharacteristicChanged` into a new 3-parameter signature `(gatt, characteristic, value: ByteArray)`. Code that only handles the deprecated 2-parameter callback will miss notifications entirely on newer Android versions.
 
-**Fix**: the custom native Expo module in `modules/vesc-ble/` owns `BluetoothGattCallback` directly and overrides **both** signatures:
+**Fix**: the custom native Expo module in `modules/vescape-core/` owns `BluetoothGattCallback` directly and overrides **both** signatures:
 
 ```kotlin
 // API 33+ (3-param) — this is what Android 13+ calls

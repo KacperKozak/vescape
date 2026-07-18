@@ -7,7 +7,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native'
-import { Text } from '@/components/ui/base/Text'
+import { Text } from '@/components/base/Text'
 import { useIsFocused, useNavigation, useRouter } from 'expo-router'
 import {
   ArrowsClockwiseIcon,
@@ -22,46 +22,46 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useSharedValue } from 'react-native-reanimated'
 import { Canvas, LinearGradient, Rect, vec } from '@shopify/react-native-skia'
-import { type RefloatConfigField, type TuneProfileFieldValue } from 'vesc-ble'
+import { type RefloatConfigField, type TuneProfileFieldValue } from 'vescape-core'
 
-import { Button } from '@/components/ui/base/Button'
-import { IconButton } from '@/components/ui/base/IconButton'
-import { ConfirmModal } from '@/components/ui/modals/ConfirmModal'
-import { InfoModal } from '@/components/ui/modals/InfoModal'
-import { Placeholder } from '@/components/ui/base/Placeholder'
-import { BasicSliderCell } from '@/components/ui/tune/BasicSliderCell'
-import { FieldEditorPopover } from '@/components/domain/tune/FieldEditorPopover'
+import { Button } from '@/components/base/Button'
+import { IconButton } from '@/components/base/IconButton'
+import { ConfirmModal } from '@/components/modals/ConfirmModal'
+import { InfoModal } from '@/components/modals/InfoModal'
+import { Placeholder } from '@/components/base/Placeholder'
+import { BasicSliderCell } from '@/modules/tune/components/BasicSliderCell'
+import { FieldEditorPopover } from '@/modules/tune/components/FieldEditorPopover'
 import {
   PillSelectorItem,
   PillSelectorAdd,
   PillSelectorMenuItem,
   PillSelector,
-} from '@/components/ui/controls/PillSelector'
-import { TuneConfigCell } from '@/components/domain/tune/TuneConfigCell'
+} from '@/components/controls/PillSelector'
+import { TuneConfigCell } from '@/modules/tune/components/TuneConfigCell'
 import {
   TuneProfileMetadataModal,
   tuneProfileColorTheme,
   tuneProfileIconComponent,
-} from '@/components/domain/tune/TuneProfileMetadataModal'
-import { basicSliderColor, basicSliderIcon } from '@/components/domain/tune/basicSliderIcons'
-import { TuneGroupGrid } from '@/components/ui/tune/TuneGroupGrid'
-import { TuneSyncBar } from '@/components/ui/tune/TuneSyncBar'
-import { TunePreview } from '@/components/ui/tune/TunePreview'
+} from '@/modules/tune/components/TuneProfileMetadataModal'
+import { basicSliderColor, basicSliderIcon } from '@/modules/tune/components/basicSliderIcons'
+import { TuneGroupGrid } from '@/modules/tune/components/TuneGroupGrid'
+import { TuneSyncBar } from '@/modules/tune/components/TuneSyncBar'
+import { TunePreview } from '@/modules/tune/components/TunePreview'
 import {
   TunePreviewScenarioControls,
   type HillsPresetId,
-} from '@/components/ui/tune/TunePreviewScenarioControls'
+} from '@/modules/tune/components/TunePreviewScenarioControls'
 import { routes } from '@/navigation/routes'
-import { TextPromptModal } from '@/components/ui/modals/TextPromptModal'
-import { BoardPickerModal } from '@/components/domain/tune/BoardPickerModal'
-import { InfoBadge } from '@/components/ui/base/InfoBadge'
-import { useTuneProfileStore } from '@/store/tuneProfileStore'
-import type { BasicSliderItem } from '@/lib/tune/sliderDefinitions'
-import { useTuneScreenData } from '@/hooks/useTuneScreenData'
+import { TextPromptModal } from '@/components/modals/TextPromptModal'
+import { BoardPickerModal } from '@/modules/tune/components/BoardPickerModal'
+import { InfoBadge } from '@/components/base/InfoBadge'
+import { useTuneProfileStore } from '@/modules/tune/store/tuneProfileStore'
+import type { BasicSliderItem } from '@/modules/tune/lib/sliderDefinitions'
+import { useTuneScreenData } from '@/modules/tune/hooks/useTuneScreenData'
 import { theme } from '@/constants/theme'
-import { useTuneModals } from '@/hooks/useTuneModals'
-import { DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS } from '@/lib/tune/tunePreview'
-import type { TuneProfileColorId, TuneProfileIconId } from '@/lib/tune/profileMetadata'
+import { useTuneModals } from '@/modules/tune/hooks/useTuneModals'
+import { DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS } from '@/modules/tune/lib/tunePreview'
+import type { TuneProfileColorId, TuneProfileIconId } from '@/modules/tune/lib/profileMetadata'
 
 let previewHelpShownThisSession = false
 const PREVIEW_PINNED_GRADIENT_HEIGHT = 210
@@ -240,14 +240,14 @@ export default function TuneScreen() {
       ) : null}
 
       {profileState.phase === 'loading' && !hasTuneView && selectedBoardId ? (
-        <View style={styles.centerState}>
+        <View style={styles.mainState}>
           <ActivityIndicator color={theme.palette.sky.color} />
           <Text style={styles.stateText}>Loading saved tune profile...</Text>
         </View>
       ) : null}
 
       {profileState.phase === 'empty' ? (
-        <View style={styles.centerState}>
+        <View style={styles.mainState}>
           <Placeholder
             icon={FadersIcon}
             title="Create tune based on board config"
@@ -267,7 +267,7 @@ export default function TuneScreen() {
       ) : null}
 
       {profileState.phase === 'error' && !hasTuneView ? (
-        <View style={styles.centerState}>
+        <View style={styles.mainState}>
           <WarningCircleIcon size={28} color={theme.status.error.text} />
           <Text style={styles.errorText}>{profileState.error}</Text>
           <Button
@@ -722,7 +722,7 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 16,
   },
-  centerState: {
+  mainState: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',

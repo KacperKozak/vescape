@@ -5,7 +5,7 @@ buildscript {
   }
   dependencies {
     // Keep in sync with rootProject ext.kotlinVersion (Expo version catalog "kotlin"), like
-    // vesc-ble pins ksp. The Compose compiler plugin is Kotlin-version-locked.
+    // vescape-core pins ksp. The Compose compiler plugin is Kotlin-version-locked.
     classpath "org.jetbrains.kotlin.plugin.compose:org.jetbrains.kotlin.plugin.compose.gradle.plugin:2.1.20"
   }
 }

@@ -2,9 +2,9 @@ import { ScrollView, StyleSheet, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { TextAaIcon } from 'phosphor-react-native'
 
-import { IconHero } from '@/components/ui/settings/IconHero'
-import { ShowcaseCard } from '@/components/ui/dev/ShowcaseCard'
-import { Text } from '@/components/ui/base/Text'
+import { IconHero } from '@/components/settings/IconHero'
+import { ShowcaseCard } from '@/components/dev/ShowcaseCard'
+import { Text } from '@/components/base/Text'
 import { theme } from '@/constants/theme'
 
 /** Design-system typography roles (mirrors `docs/design.md` Typography table). */

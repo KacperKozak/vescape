@@ -3,7 +3,7 @@
 ## Tune Preview model
 
 The flat-response Tune Preview uses model version `refloat-bundled-legacy-v18`, tied to
-`modules/vesc-ble/android/src/main/assets/refloat-settings.xml`. It is a deterministic Refloat
+`modules/vescape-core/android/src/main/assets/refloat-settings.xml`. It is a deterministic Refloat
 controller simulation around a simplified Board plant. Pitch Input adds a bounded pitch rate
 of up to `130°/s` while held. A symmetric quadratic ease-out makes the center more responsive:
 25% travel requests about 44% of maximum rate, 50% requests 75%, and the endpoints remain 100%.
@@ -679,7 +679,7 @@ and tested.
 Current local read-only field groups live in:
 
 ```text
-modules/vesc-ble/android/src/main/java/expo/modules/vescble/RefloatConfigModels.kt
+modules/vescape-core/android/src/main/java/expo/modules/vescapecore/RefloatConfigModels.kt
 ```
 
 Before implementing writes, keep field IDs aligned with the serialized struct
