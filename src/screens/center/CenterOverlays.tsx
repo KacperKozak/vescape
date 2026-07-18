@@ -813,6 +813,7 @@ export function CenterOverlays({
   const [panelHeight, setPanelHeight] = useState(0)
   const [removeConfirmVisible, setRemoveConfirmVisible] = useState(false)
   const [revealGestureActive, setRevealGestureActive] = useState(false)
+  const revealCommittedRef = useRef(false)
   const [tuneDrawerOpen, setTuneDrawerOpen] = useState(false)
   const [legalListOpen, setLegalListOpen] = useState(false)
   const [selectedLegalCountry, setSelectedLegalCountry] = useState<LegalLimitCountry | null>(null)
@@ -892,18 +893,20 @@ export function CenterOverlays({
     } else if (Platform.OS === 'android') {
       void Haptics.performAndroidHapticsAsync(Haptics.AndroidHaptics.Confirm)
     }
+    revealCommittedRef.current = true
     setRevealGestureActive(true)
     map.enterMapFocus()
   }, [map])
 
   const handleRevealFinish = useCallback(
     (revealed: boolean) => {
-      const actuallyRevealed = revealed || mode === 'map'
+      const actuallyRevealed = revealed || revealCommittedRef.current || mode === 'map'
       if (!actuallyRevealed) {
         mapRef.current?.restorePreviewPan()
       } else {
         mapRef.current?.endPreviewPan()
       }
+      revealCommittedRef.current = false
       setRevealGestureActive(false)
     },
     [mapRef, mode],
@@ -912,6 +915,7 @@ export function CenterOverlays({
   useLayoutEffect(() => {
     cancelAnimation(telemetryReturnOpacity)
     if (mode === 'telemetry') {
+      revealCommittedRef.current = false
       revealProgress.value = 0
       dragOpacity.value = withTiming(0, TELEMETRY_FADE_TIMING)
       telemetryReturnOpacity.value = 0

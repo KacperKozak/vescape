@@ -9,6 +9,21 @@ const SATELLITE_HALO = 'hsl(0, 5%, 0%)'
 const SATELLITE_SOFT_HALO = 'hsla(0, 5%, 0%, 0.75)'
 const SATELLITE_ROAD = theme.palette.mono.white
 const SATELLITE_PATH = theme.palette.mono.white
+const FULL_IMAGERY_OPACITY = 1
+
+export function getSatelliteImageryPaint(
+  imageryOpacity = DEFAULT_SATELLITE_IMAGERY_OPACITY,
+  imagerySaturation = DEFAULT_SATELLITE_IMAGERY_SATURATION,
+) {
+  const clampedImageryOpacity = Math.max(0.1, Math.min(1, imageryOpacity))
+  const clampedImagerySaturation = Math.max(-1, Math.min(1, imagerySaturation))
+  const toneSatelliteImage = clampedImageryOpacity < FULL_IMAGERY_OPACITY
+  return {
+    rasterOpacity: clampedImageryOpacity,
+    rasterSaturation: toneSatelliteImage ? clampedImagerySaturation : 0,
+    rasterContrast: toneSatelliteImage ? -0.25 : 0,
+  }
+}
 
 export function getSatelliteDarkMapStyle(
   imageryOpacity = DEFAULT_SATELLITE_IMAGERY_OPACITY,
@@ -18,9 +33,7 @@ export function getSatelliteDarkMapStyle(
   showStreetLines = false,
   imagerySaturation = DEFAULT_SATELLITE_IMAGERY_SATURATION,
 ) {
-  const clampedImageryOpacity = Math.max(0.1, Math.min(1, imageryOpacity))
-  const clampedImagerySaturation = Math.max(-1, Math.min(1, imagerySaturation))
-  const toneSatelliteImage = clampedImageryOpacity < 1
+  const satelliteImageryPaint = getSatelliteImageryPaint(imageryOpacity, imagerySaturation)
 
   return JSON.stringify({
     version: 8,
@@ -49,9 +62,9 @@ export function getSatelliteDarkMapStyle(
         type: 'raster',
         source: 'satellite',
         paint: {
-          'raster-opacity': clampedImageryOpacity,
-          'raster-saturation': toneSatelliteImage ? clampedImagerySaturation : 0,
-          'raster-contrast': toneSatelliteImage ? -0.25 : 0,
+          'raster-opacity': satelliteImageryPaint.rasterOpacity,
+          'raster-saturation': satelliteImageryPaint.rasterSaturation,
+          'raster-contrast': satelliteImageryPaint.rasterContrast,
         },
       },
       ...(showStreetLines

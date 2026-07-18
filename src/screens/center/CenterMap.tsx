@@ -1,4 +1,4 @@
-import Mapbox, { Camera, SymbolLayer } from '@rnmapbox/maps'
+import Mapbox, { Camera, RasterLayer, SymbolLayer } from '@rnmapbox/maps'
 import { CrosshairSimpleIcon, type Icon } from 'phosphor-react-native'
 import {
   forwardRef,
@@ -23,7 +23,10 @@ import {
   type MapNavigationMode,
   type MapStyleKey,
 } from '@/constants/mapStyles'
-import { getSatelliteDarkMapStyle } from '@/constants/satelliteDarkMapStyle'
+import {
+  getSatelliteDarkMapStyle,
+  getSatelliteImageryPaint,
+} from '@/constants/satelliteDarkMapStyle'
 import { getMapPointKindIcon } from '@/constants/mapPointIcons'
 import { getMapPointKindColor, getMapPointKindTextColor } from '@/constants/mapPoints'
 import { getOneDarkMapStyle } from '@/constants/oneDarkMapStyle'
@@ -295,11 +298,19 @@ export const CenterMap = memo(
     const satelliteStyleJSON = useMemo(
       () =>
         getSatelliteDarkMapStyle(
-          effectiveSatelliteImageryOpacity,
+          satelliteImageryOpacity,
           true,
           true,
           false,
           true,
+          satelliteImagerySaturation,
+        ),
+      [satelliteImageryOpacity, satelliteImagerySaturation],
+    )
+    const satelliteImageryPaint = useMemo(
+      () =>
+        getSatelliteImageryPaint(
+          effectiveSatelliteImageryOpacity,
           effectiveSatelliteImagerySaturation,
         ),
       [effectiveSatelliteImageryOpacity, effectiveSatelliteImagerySaturation],
@@ -1024,6 +1035,16 @@ export const CenterMap = memo(
           />
           {isSatelliteOverlay ? (
             <>
+              <RasterLayer
+                id="satellite"
+                existing
+                style={{
+                  ...satelliteImageryPaint,
+                  rasterOpacityTransition: { duration: 260, delay: 0 },
+                  rasterSaturationTransition: { duration: 260, delay: 0 },
+                  rasterContrastTransition: { duration: 260, delay: 0 },
+                }}
+              />
               {[
                 'road-path',
                 'road-track',

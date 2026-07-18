@@ -148,7 +148,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   speedBadgeMain: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 8,
     flex: 1,
     minWidth: 0,
