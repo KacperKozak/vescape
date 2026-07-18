@@ -48,6 +48,7 @@
   },
   "dependencies": {
     "@bacons/apple-targets": "^4.0.7",
+    "@clerk/expo": "^3.7.8",
     "@rnmapbox/maps": "^10.3.2",
     "@sentry/react-native": "~7.11.0",
     "@shopify/react-native-skia": "2.9.0",
@@ -63,6 +64,7 @@
     "expo-image-picker": "~57.0.5",
     "expo-linking": "~57.0.3",
     "expo-router": "~57.0.7",
+    "expo-secure-store": "~57.0.1",
     "expo-sensors": "~57.0.2",
     "expo-sharing": "~57.0.6",
     "expo-splash-screen": "~57.0.4",

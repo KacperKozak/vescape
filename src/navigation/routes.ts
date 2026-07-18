@@ -3,6 +3,8 @@ import type { Href } from 'expo-router'
 export const routes = {
   home: '/',
   profile: '/profile',
+  signIn: '/sign-in',
+  account: '/account',
   settings: '/settings',
   settingsDev: '/settings/dev',
   settingsDebugRecordings: '/settings/debug-recordings' as Href,
@@ -43,6 +45,8 @@ export const routes = {
 export const stackScreens = {
   home: 'index',
   profile: 'profile',
+  signIn: 'sign-in',
+  account: 'account',
   settings: 'settings',
   settingsDev: 'settings/dev',
   settingsDebugRecordings: 'settings/debug-recordings',
