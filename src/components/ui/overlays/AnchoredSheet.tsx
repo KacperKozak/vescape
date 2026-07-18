@@ -303,8 +303,10 @@ export function EdgeDrawer({
   const positionedRef = useRef(false)
   const dismissRangeRef = useRef(0)
   const previousContentHeightRef = useRef(0)
+  const scrollOffsetRef = useRef(0)
   const scrollOffset = useSharedValue(0)
   const animatedDismissRange = useSharedValue(1)
+  const animatedGradientFullStrengthRange = useSharedValue(1)
   const nativeScrollGesture = useMemo(() => Gesture.Native(), [])
 
   useEffect(() => {
@@ -318,7 +320,9 @@ export function EdgeDrawer({
       positionedRef.current = false
       previousContentHeightRef.current = 0
       setKeyboardInset(0)
+      scrollOffsetRef.current = 0
       scrollOffset.value = 0
+      animatedGradientFullStrengthRange.value = Math.max(1, height * DRAWER_INITIAL_OPEN_FRACTION)
     }
 
     if (edge !== 'auto') {
@@ -329,7 +333,7 @@ export function EdgeDrawer({
     void measureTrigger(triggerRef).then((trigger) => {
       openFrom(trigger.y + trigger.height / 2 < height / 2)
     })
-  }, [edge, height, scrollOffset, triggerRef, visible])
+  }, [animatedGradientFullStrengthRange, edge, height, scrollOffset, triggerRef, visible])
 
   useEffect(() => {
     if (!mounted) return
@@ -373,8 +377,11 @@ export function EdgeDrawer({
   })
 
   const backdropStyle = useAnimatedStyle(() => {
-    const fullStrengthRange = Math.max(1, height * DRAWER_INITIAL_OPEN_FRACTION)
-    const screenDismissRange = Math.min(animatedDismissRange.value, fullStrengthRange)
+    'worklet'
+    const screenDismissRange = Math.min(
+      animatedDismissRange.value,
+      animatedGradientFullStrengthRange.value,
+    )
     const visibleFraction = opensFromTop
       ? 1 - scrollOffset.value / screenDismissRange
       : scrollOffset.value / screenDismissRange
@@ -390,11 +397,13 @@ export function EdgeDrawer({
       setDismissRange(range)
       dismissRangeRef.current = range
       animatedDismissRange.value = range
+      animatedGradientFullStrengthRange.value = Math.max(1, height * DRAWER_INITIAL_OPEN_FRACTION)
 
       if (!positionedRef.current) {
         positionedRef.current = true
         const initialOpenOffset = Math.min(range, height * DRAWER_INITIAL_OPEN_FRACTION)
         const initialOffset = opensFromTop ? 0 : initialOpenOffset
+        scrollOffsetRef.current = initialOffset
         scrollOffset.value = initialOffset
         requestAnimationFrame(() => {
           scrollRef.current?.scrollTo({ y: initialOffset, animated: false })
@@ -402,7 +411,7 @@ export function EdgeDrawer({
         return
       }
 
-      const bottomDrawerWasFullyOpen = !opensFromTop && scrollOffset.value >= previousRange - 1
+      const bottomDrawerWasFullyOpen = !opensFromTop && scrollOffsetRef.current >= previousRange - 1
       if (bottomDrawerWasFullyOpen && range > previousRange) {
         requestAnimationFrame(() => {
           scrollRef.current?.scrollTo({ y: range, animated: true })
@@ -410,14 +419,21 @@ export function EdgeDrawer({
       } else if (autoScrollOnContentExpand && contentHeight > previousContentHeight) {
         const addedHeight = contentHeight - previousContentHeight
         const targetOffset = opensFromTop
-          ? Math.min(range, scrollOffset.value + addedHeight)
+          ? Math.min(range, scrollOffsetRef.current + addedHeight)
           : range
         requestAnimationFrame(() => {
           scrollRef.current?.scrollTo({ y: targetOffset, animated: true })
         })
       }
     },
-    [animatedDismissRange, autoScrollOnContentExpand, height, opensFromTop, scrollOffset],
+    [
+      animatedDismissRange,
+      animatedGradientFullStrengthRange,
+      autoScrollOnContentExpand,
+      height,
+      opensFromTop,
+      scrollOffset,
+    ],
   )
 
   const shouldAutoCloseAtOffset = useCallback(
@@ -446,6 +462,7 @@ export function EdgeDrawer({
   const handleScrollEnd = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const offset = event.nativeEvent.contentOffset.y
+      scrollOffsetRef.current = offset
       const fullyHidden = opensFromTop ? offset >= dismissRange - 1 : offset <= 1
       if (fullyHidden) {
         finishClose()
@@ -460,6 +477,7 @@ export function EdgeDrawer({
   const handleScrollEndDrag = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const { contentOffset, targetContentOffset, velocity } = event.nativeEvent
+      scrollOffsetRef.current = contentOffset.y
       const projectedOffset =
         targetContentOffset?.y ?? contentOffset.y - (velocity?.y ?? 0) * DRAWER_FLING_PROJECTION_MS
 
