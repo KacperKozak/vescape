@@ -1773,12 +1773,12 @@ const styles = StyleSheet.create({
   },
   historyButton: {
     position: 'absolute',
-    right: 12,
+    left: 12,
     zIndex: 20,
   },
   tuneButton: {
     position: 'absolute',
-    left: 12,
+    right: 12,
     zIndex: 20,
   },
   legalModeBadge: {

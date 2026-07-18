@@ -173,11 +173,13 @@ export function useCameraControls({
   const lastFollowKeyRef = useRef<string | null>(null)
   const followZoomLevelRef = useRef<number | null>(null)
   const previousGpsHeadingModeRef = useRef(gpsHeadingMode && !phoneHeadingMode)
+  const phoneHeadingCameraSuspensionTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const recenterLiveRef = useRef<
     ((options?: { resetPadding?: boolean; animationDuration?: number }) => void) | null
   >(null)
   const controllerStateRef = useRef(initialMapCameraControllerState)
   const [cameraMode, setCameraModeRaw] = useState<MapCameraMode>({ kind: 'liveFollow' })
+  const [phoneHeadingCameraSuspended, setPhoneHeadingCameraSuspended] = useState(false)
   // Reducer intents return fresh mode objects even when the logical mode is
   // unchanged (e.g. per-frame BrowseManually during pan) — keep the previous
   // state reference in that case so React bails out of the re-render.
@@ -215,6 +217,26 @@ export function useCameraControls({
       return result.effect
     },
     [setCameraModeState],
+  )
+
+  const suspendPhoneHeadingCamera = useCallback(
+    (animationDuration: number) => {
+      if (!phoneHeadingMode) return
+      if (phoneHeadingCameraSuspensionTimeoutRef.current) {
+        clearTimeout(phoneHeadingCameraSuspensionTimeoutRef.current)
+        phoneHeadingCameraSuspensionTimeoutRef.current = null
+      }
+      if (animationDuration <= 0) {
+        setPhoneHeadingCameraSuspended(false)
+        return
+      }
+      setPhoneHeadingCameraSuspended(true)
+      phoneHeadingCameraSuspensionTimeoutRef.current = setTimeout(() => {
+        phoneHeadingCameraSuspensionTimeoutRef.current = null
+        setPhoneHeadingCameraSuspended(false)
+      }, animationDuration)
+    },
+    [phoneHeadingMode],
   )
 
   const setFollowGps = useCallback(
@@ -355,6 +377,7 @@ export function useCameraControls({
           cameraDistanceTo(currentCameraRef.current, cameraFix),
           MAP_DEFAULTS.animationDuration,
         )
+      suspendPhoneHeadingCamera(duration)
       currentCameraRef.current = followCamera
       cameraRef.current?.setCamera({
         ...followCamera,
@@ -373,12 +396,21 @@ export function useCameraControls({
       })
       onHeadingChange(followCamera.heading)
     },
-    [cameraFix, enterCameraMode, getLiveFollowCamera, onHeadingChange],
+    [cameraFix, enterCameraMode, getLiveFollowCamera, onHeadingChange, suspendPhoneHeadingCamera],
   )
 
   useEffect(() => {
     recenterLiveRef.current = recenterLive
   }, [recenterLive])
+
+  useEffect(
+    () => () => {
+      if (phoneHeadingCameraSuspensionTimeoutRef.current) {
+        clearTimeout(phoneHeadingCameraSuspensionTimeoutRef.current)
+      }
+    },
+    [],
+  )
 
   const fitRide = useCallback(
     (selectionKey: string | null) => {
@@ -524,20 +556,22 @@ export function useCameraControls({
     if (cameraFix) {
       lastFollowKeyRef.current = liveFollowKey(cameraFix.timestamp, restoreCamera)
     }
+    const duration = cameraMoveDuration(
+      cameraDistanceTo(currentCameraRef.current, {
+        longitude: restoreCamera.centerCoordinate[0],
+        latitude: restoreCamera.centerCoordinate[1],
+      }),
+      MAP_DEFAULTS.followAnimationDuration,
+    )
+    suspendPhoneHeadingCamera(duration)
     cameraRef.current?.setCamera({
       ...restoreCamera,
       heading: restoreCamera.heading,
       pitch: restoreCamera.pitch,
-      animationDuration: cameraMoveDuration(
-        cameraDistanceTo(currentCameraRef.current, {
-          longitude: restoreCamera.centerCoordinate[0],
-          latitude: restoreCamera.centerCoordinate[1],
-        }),
-        MAP_DEFAULTS.followAnimationDuration,
-      ),
+      animationDuration: duration,
       animationMode: 'easeTo',
     })
-  }, [cameraFix, enterCameraMode, getLiveFollowCamera])
+  }, [cameraFix, enterCameraMode, getLiveFollowCamera, suspendPhoneHeadingCamera])
 
   const setFreeMapZoom = useCallback(
     (zoomLevel: number) => {
@@ -837,5 +871,6 @@ export function useCameraControls({
     recenterLive,
     getLiveFollowCamera,
     getHistoryPreviewCamera,
+    phoneHeadingCameraSuspended,
   }
 }

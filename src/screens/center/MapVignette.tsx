@@ -54,9 +54,9 @@ const HISTORY_BOTTOM_POSITIONS = [0, 0.5, 0.6, 1]
 function mapEdgeVignetteSpace(mode: CenterViewState) {
   if (mode === 'weather') {
     return {
-      levels: [0.65, 0.26, 0],
-      topEnd: 0.24,
-      bottomStart: 0.76,
+      levels: [0.78, 0.36, 0],
+      topEnd: 0.3,
+      bottomStart: 0.7,
     }
   }
 

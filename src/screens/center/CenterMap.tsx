@@ -402,6 +402,7 @@ export const CenterMap = memo(
       recenterLive,
       getLiveFollowCamera,
       getHistoryPreviewCamera,
+      phoneHeadingCameraSuspended,
     } = useCameraControls({
       ref,
       cameraFix,
@@ -1114,7 +1115,7 @@ export const CenterMap = memo(
           )}
           <PhoneHeadingMapLayer
             active={!historyActive && !gpsHeadingMode}
-            followCamera={phoneHeadingMode && followGps}
+            followCamera={phoneHeadingMode && followGps && !phoneHeadingCameraSuspended}
             approximateFix={approximateGpsPuckActive}
             coordinate={accuracyFix}
             cameraRef={cameraRef}
