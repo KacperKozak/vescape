@@ -24,6 +24,12 @@ internal fun validMapStyleKey(value: Any?): String? =
 internal fun validMapNavigationMode(value: Any?): String? =
   (value as? String)?.takeIf { it in setOf("northUp", "gpsHeading", "phoneHeading", "freeRotate") }
 
+internal fun validSatelliteImageryOpacity(value: Any?): Double? =
+  (value as? Number)
+    ?.toDouble()
+    ?.takeIf { it.isFinite() }
+    ?.coerceIn(0.1, 1.0)
+
 internal fun validLiveHistoryLimitMinutes(value: Any?): Int? =
   (value as? Number)
     ?.toInt()
@@ -118,6 +124,7 @@ private fun Any?.asStringKeyMap(): Map<String, Any?>? = when (this) {
   else -> null
 }
 
+// @parity /modules/vesc-ble/ios/telemetry/AppDataRepository.swift
 class AppDataRepository private constructor(private val context: Context) {
   private val dao = TelemetryDatabase.get(context).telemetryDao()
 
@@ -207,6 +214,8 @@ class AppDataRepository private constructor(private val context: Context) {
       freeSpinMaxSpeedDeltaKmh = req("freeSpinMaxSpeedDeltaKmh", DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH) { (it as? Number)?.toDouble() },
       freeSpinStationaryBoardCapKmh = req("freeSpinStationaryBoardCapKmh", DEFAULT_FREE_SPIN_STATIONARY_BOARD_CAP_KMH) { (it as? Number)?.toDouble() },
       mapStyleKey = req("mapStyleKey", "onedark", ::validMapStyleKey),
+      satelliteImageryOpacity = req("satelliteImageryOpacity", 0.35, ::validSatelliteImageryOpacity),
+      satelliteOverlayStreetLinesEnabled = req("satelliteOverlayStreetLinesEnabled", false) { it as? Boolean },
       mapNavigationMode = req("mapNavigationMode", "northUp", ::validMapNavigationMode),
       historyMetricGradientsEnabled = req("historyMetricGradientsEnabled", true) { it as? Boolean },
       historyMetricHotRanges = req("historyMetricHotRanges", DEFAULT_HISTORY_METRIC_HOT_RANGES, ::validHistoryMetricHotRanges),
@@ -262,6 +271,9 @@ class AppDataRepository private constructor(private val context: Context) {
         ((value as? Number)?.toDouble() ?: return@withContext).coerceAtLeast(0.0)
       "mapStyleKey" ->
         validMapStyleKey(value) ?: return@withContext
+      "satelliteImageryOpacity" ->
+        validSatelliteImageryOpacity(value) ?: return@withContext
+      "satelliteOverlayStreetLinesEnabled" -> value as? Boolean ?: return@withContext
       "mapNavigationMode" ->
         validMapNavigationMode(value) ?: return@withContext
       "historyMetricGradientsEnabled" -> value as? Boolean ?: return@withContext
@@ -283,7 +295,9 @@ class AppDataRepository private constructor(private val context: Context) {
       "autoCloseDelayMinutes" ->
         validAutoCloseDelayMinutes(value) ?: return@withContext
       "riderId", "riderName", "riderColor" -> value as? String
-      "legalMode" -> value.asStringKeyMap() ?: return@withContext
+      "legalMode" ->
+        if (value == null || value == JSONObject.NULL) null
+        else value.asStringKeyMap() ?: return@withContext
       else -> return@withContext
     }
     val normalizedKey = when (key) {
@@ -305,6 +319,8 @@ class AppDataRepository private constructor(private val context: Context) {
         "freeSpinMaxSpeedDeltaKmh" -> d.freeSpinMaxSpeedDeltaKmh
         "freeSpinStationaryBoardCapKmh" -> d.freeSpinStationaryBoardCapKmh
         "mapStyleKey" -> d.mapStyleKey
+        "satelliteImageryOpacity" -> d.satelliteImageryOpacity
+        "satelliteOverlayStreetLinesEnabled" -> d.satelliteOverlayStreetLinesEnabled
         "mapNavigationMode" -> d.mapNavigationMode
         "historyMetricGradientsEnabled" -> d.historyMetricGradientsEnabled
         "historyMetricHotRanges" -> d.historyMetricHotRanges
@@ -581,6 +597,8 @@ fun AppSettings.toMap(): Map<String, Any?> = mapOf(
   "freeSpinMaxSpeedDeltaKmh" to freeSpinMaxSpeedDeltaKmh,
   "freeSpinStationaryBoardCapKmh" to freeSpinStationaryBoardCapKmh,
   "mapStyleKey" to mapStyleKey,
+  "satelliteImageryOpacity" to satelliteImageryOpacity,
+  "satelliteOverlayStreetLinesEnabled" to satelliteOverlayStreetLinesEnabled,
   "mapNavigationMode" to mapNavigationMode,
   "historyMetricGradientsEnabled" to historyMetricGradientsEnabled,
   "historyMetricHotRanges" to historyMetricHotRanges,

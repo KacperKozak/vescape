@@ -129,6 +129,8 @@ export function CenterScreen({
         historyPreviewRoute={controller.historyPreviewRoute}
         historyActive={controller.historyActive}
         mapStyleKey={controller.mapStyleKey}
+        satelliteImageryOpacity={controller.satelliteImageryOpacity}
+        satelliteOverlayStreetLinesEnabled={controller.satelliteOverlayStreetLinesEnabled}
         mapNavigationMode={controller.mapNavigationMode}
         rotationLocked={controller.rotationLocked}
         perspectiveEnabled={controller.perspectiveEnabled}

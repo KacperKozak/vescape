@@ -173,6 +173,7 @@ interface CenterMapLayersProps {
   expandSelectedMapPoints: boolean
   isMapy: boolean
   isOneDark: boolean
+  isSatellite: boolean
   showBuildings3d: boolean
   weatherActive: boolean
   legalLimitsActive: boolean
@@ -214,12 +215,14 @@ function LiveMapLayers({
   accuracyShape,
   gpsPuckBearingDeg,
   riders,
+  highContrastRoutes,
 }: {
   liveTrailShape: CenterMapLayersProps['liveTrailShape']
   accuracyFix: CenterMapLayersProps['accuracyFix']
   accuracyShape: CenterMapLayersProps['accuracyShape']
   gpsPuckBearingDeg: CenterMapLayersProps['gpsPuckBearingDeg']
   riders: CenterMapLayersProps['riders']
+  highContrastRoutes: boolean
 }) {
   const riderColor = useRiderStore((state) => state.riderColor)
   const gpsPointColor = riderColor ?? GPS_POINT_COLOR
@@ -268,6 +271,15 @@ function LiveMapLayers({
     <>
       {liveTrailShape && (
         <ShapeSource id="center-live-trail-source" shape={liveTrailShape} lineMetrics>
+          <LineLayer
+            id="center-live-trail-casing"
+            style={{
+              lineColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
+              lineWidth: highContrastRoutes ? MAP_DEFAULTS.trailWidth + 4 : 0,
+              lineCap: 'round',
+              lineJoin: 'round',
+            }}
+          />
           <LineLayer
             id="center-live-trail-line"
             style={{
@@ -335,7 +347,12 @@ function LiveMapLayers({
       )}
       {riders.map((rider, index) =>
         rider.trail && rider.trail.length >= 2 ? (
-          <RiderTrail key={rider.id} rider={rider} index={index} />
+          <RiderTrail
+            key={rider.id}
+            rider={rider}
+            index={index}
+            highContrastRoutes={highContrastRoutes}
+          />
         ) : null,
       )}
       {riders.map((rider, index) =>
@@ -354,7 +371,15 @@ export function rosterRiderColor(rider: RosterRider, index: number): string {
 
 // A peer's recent path, tinted like their marker and fading out toward the tail —
 // the group-ride counterpart to the device's own live trail.
-function RiderTrail({ rider, index }: { rider: RosterRider; index: number }) {
+function RiderTrail({
+  rider,
+  index,
+  highContrastRoutes,
+}: {
+  rider: RosterRider
+  index: number
+  highContrastRoutes: boolean
+}) {
   const color = rosterRiderColor(rider, index)
   const shape = useMemo(
     () =>
@@ -367,6 +392,15 @@ function RiderTrail({ rider, index }: { rider: RosterRider; index: number }) {
 
   return (
     <ShapeSource id={`center-rider-trail-source-${rider.id}`} shape={shape} lineMetrics>
+      <LineLayer
+        id={`center-rider-trail-casing-${rider.id}`}
+        style={{
+          lineColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
+          lineWidth: highContrastRoutes ? MAP_DEFAULTS.trailWidth + 4 : 0,
+          lineCap: 'round',
+          lineJoin: 'round',
+        }}
+      />
       <LineLayer
         id={`center-rider-trail-line-${rider.id}`}
         style={{
@@ -448,6 +482,7 @@ export function HistoryMapLayers({
   onSuppressNextMapPress,
   onSelectMarker,
   onOpenMedia,
+  highContrastRoutes,
 }: {
   rideRouteShape: CenterMapLayersProps['rideRouteShape']
   rideRoute: CenterMapLayersProps['rideRoute']
@@ -462,6 +497,7 @@ export function HistoryMapLayers({
   onSuppressNextMapPress: CenterMapLayersProps['onSuppressNextMapPress']
   onSelectMarker: CenterMapLayersProps['onSelectMarker']
   onOpenMedia: CenterMapLayersProps['onOpenMedia']
+  highContrastRoutes: boolean
 }) {
   const [highlightProgress, setHighlightProgress] = useState(0)
   const highlightDurationMs = useMemo(
@@ -517,10 +553,19 @@ export function HistoryMapLayers({
       {rideRouteShape && (
         <ShapeSource id="center-ride-route-source" shape={rideRouteShape} lineMetrics>
           <LineLayer
+            id="center-ride-route-casing"
+            style={{
+              lineColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
+              lineWidth: highContrastRoutes ? 8 : 0,
+              lineCap: 'round',
+              lineJoin: 'round',
+            }}
+          />
+          <LineLayer
             id="center-ride-route-line"
             style={{
               lineColor: getHistoryMetricBaseColor(activeHistoryMapMetric),
-              lineWidth: 4,
+              lineWidth: highContrastRoutes ? 5 : 4,
               lineCap: 'round',
               lineJoin: 'round',
               ...(routeMetricGradient ? { lineGradient: routeMetricGradient } : {}),
@@ -530,7 +575,7 @@ export function HistoryMapLayers({
             id="center-ride-route-highlight"
             style={{
               lineGradient: routeHighlightGradient,
-              lineWidth: 4,
+              lineWidth: highContrastRoutes ? 5 : 4,
               lineCap: 'round',
               lineJoin: 'round',
             }}
@@ -587,6 +632,7 @@ export function CenterMapLayers({
   expandSelectedMapPoints,
   isMapy,
   isOneDark,
+  isSatellite,
   showBuildings3d,
   weatherActive,
   legalLimitsActive,
@@ -673,6 +719,7 @@ export function CenterMapLayers({
           onSuppressNextMapPress={onSuppressNextMapPress}
           onSelectMarker={onSelectMarker}
           onOpenMedia={onOpenMedia}
+          highContrastRoutes={isSatellite}
         />
       ) : (
         <LiveMapLayers
@@ -681,6 +728,7 @@ export function CenterMapLayers({
           accuracyShape={accuracyShape}
           gpsPuckBearingDeg={gpsPuckBearingDeg}
           riders={riders}
+          highContrastRoutes={isSatellite}
         />
       )}
       {directionPoint && !historyActive && (

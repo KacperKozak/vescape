@@ -25,9 +25,7 @@ export interface LegalModeSettings {
   jurisdiction: LegalJurisdictionResult | null
 }
 
-export const POLAND_LEGAL_MODE_DEFAULTS = legalJurisdictionResultFromCountry(
-  getLegalLimitCountryByCode('PL')!,
-)
+export const POLAND_LEGAL_MODE_DEFAULTS = legalJurisdictionResultFromCountryCode('PL')!
 
 export const DEFAULT_LEGAL_MODE_SETTINGS: LegalModeSettings = {
   enabled: false,
@@ -77,7 +75,8 @@ export function legalJurisdictionResultFromCountryCode(
   countryCode: string,
 ): LegalJurisdictionResult | null {
   const country = getLegalLimitCountryByCode(countryCode)
-  return country ? legalJurisdictionResultFromCountry(country) : null
+  if (!country || !hasApplicableLegalLimits(country)) return null
+  return legalJurisdictionResultFromCountry(country)
 }
 
 export function applyJurisdictionDefaults(
@@ -177,7 +176,15 @@ function normalizeJurisdiction(raw: unknown): LegalJurisdictionResult | null {
   }
 }
 
-function legalJurisdictionResultFromCountry(country: LegalLimitCountry): LegalJurisdictionResult {
+function hasApplicableLegalLimits(
+  country: LegalLimitCountry,
+): country is LegalLimitCountry & { legalSpeedKmh: number; warningSpeedKmh: number } {
+  return country.legalSpeedKmh != null && country.warningSpeedKmh != null
+}
+
+function legalJurisdictionResultFromCountry(
+  country: LegalLimitCountry & { legalSpeedKmh: number; warningSpeedKmh: number },
+): LegalJurisdictionResult {
   return {
     countryCode: country.code,
     countryName: country.name,

@@ -28,6 +28,8 @@ interface LegalModeActions {
   syncWarningAlert(): Promise<void>
 }
 
+let alertSyncQueue: Promise<void> = Promise.resolve()
+
 export const useLegalModeStore = create<LegalModeState & LegalModeActions>((set, get) => ({
   syncing: false,
 
@@ -63,26 +65,30 @@ export const useLegalModeStore = create<LegalModeState & LegalModeActions>((set,
   },
 
   async syncWarningAlert() {
-    set({ syncing: true })
-    try {
-      const currentRule = useAlertsStore
-        .getState()
-        .rules.find((candidate) => candidate.id === LEGAL_MODE_ALERT_RULE_ID)
-      const rule = buildLegalModeWarningAlertRule(
-        getLegalModeSettings(),
-        currentRule?.createdAt ?? Date.now(),
-      )
-      if (rule) {
-        await useAlertsStore.getState().upsert(rule)
-      } else {
-        useAlertsStore.setState((state) => ({
-          rules: state.rules.filter((candidate) => candidate.id !== LEGAL_MODE_ALERT_RULE_ID),
-        }))
-        await deleteAlertRule(LEGAL_MODE_ALERT_RULE_ID)
+    const run = alertSyncQueue.then(async () => {
+      set({ syncing: true })
+      try {
+        const currentRule = useAlertsStore
+          .getState()
+          .rules.find((candidate) => candidate.id === LEGAL_MODE_ALERT_RULE_ID)
+        const rule = buildLegalModeWarningAlertRule(
+          getLegalModeSettings(),
+          currentRule?.createdAt ?? Date.now(),
+        )
+        if (rule) {
+          await useAlertsStore.getState().upsert(rule)
+        } else {
+          useAlertsStore.setState((state) => ({
+            rules: state.rules.filter((candidate) => candidate.id !== LEGAL_MODE_ALERT_RULE_ID),
+          }))
+          await deleteAlertRule(LEGAL_MODE_ALERT_RULE_ID)
+        }
+      } finally {
+        set({ syncing: false })
       }
-    } finally {
-      set({ syncing: false })
-    }
+    })
+    alertSyncQueue = run.catch(() => undefined)
+    await run
   },
 }))
 

@@ -5,7 +5,6 @@ import {
   DEFAULT_LEGAL_MODE_SETTINGS,
   LEGAL_MODE_ALERT_RULE_ID,
   LEGAL_MODE_ALERT_SOURCE,
-  applyJurisdictionDefaults,
   isLegalModeAlertRule,
   legalModeAlertRule,
   resolveJurisdictionFromLocation,
@@ -53,21 +52,13 @@ describe('Legal Mode derivation', () => {
     expect(next.warningSpeedKmh).toBe(20)
   })
 
-  test('applies Germany warned road status but keeps speed controls', () => {
+  test('skips not-road-legal countries when deriving Legal Mode jurisdiction', () => {
     const germany = resolveJurisdictionFromLocation(location(52.52, 13.405))
-    const next = applyJurisdictionDefaults(DEFAULT_LEGAL_MODE_SETTINGS, germany!)
 
-    expect(next).toMatchObject({
-      legalSpeedKmh: 20,
-      warningSpeedKmh: 15,
-      jurisdiction: {
-        countryCode: 'DE',
-        legalRoadStatus: 'notRoadLegal',
-      },
-    })
+    expect(germany).toBeNull()
   })
 
-  test('resolves Austria as walking-pace restricted and Switzerland as not road-legal', () => {
+  test('resolves Austria as walking-pace restricted but skips Switzerland as not road-legal', () => {
     const austria = resolveJurisdictionFromLocation(location(48.2082, 16.3738))
     const switzerland = resolveJurisdictionFromLocation(location(47.3769, 8.5417))
 
@@ -77,12 +68,7 @@ describe('Legal Mode derivation', () => {
       warningSpeedKmh: 4,
       legalRoadStatus: 'restricted',
     })
-    expect(switzerland).toMatchObject({
-      countryCode: 'CH',
-      legalSpeedKmh: 20,
-      warningSpeedKmh: 15,
-      legalRoadStatus: 'notRoadLegal',
-    })
+    expect(switzerland).toBeNull()
   })
 
   test('builds stable generated alert ownership and range thresholds', () => {

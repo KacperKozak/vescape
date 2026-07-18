@@ -19,6 +19,8 @@ const BASE: AppSettings = {
   freeSpinMaxSpeedDeltaKmh: 12,
   freeSpinStationaryBoardCapKmh: 15,
   mapStyleKey: 'onedark',
+  satelliteImageryOpacity: 0.35,
+  satelliteOverlayStreetLinesEnabled: false,
   mapNavigationMode: 'northUp',
   historyMetricGradientsEnabled: true,
   historyMetricHotRanges: {},
@@ -138,7 +140,7 @@ test('editing only the legal warning speed updates the managed alert threshold',
   )
 })
 
-test('re-enabling legal mode resets speeds to the current jurisdiction defaults', async () => {
+test('re-enabling legal mode resets speeds to defaults when current jurisdiction is not applicable', async () => {
   const { useLegalModeStore } = await import('./legalModeStore')
   const { useSettingsStore } = await import('./settingsStore')
 
@@ -163,7 +165,7 @@ test('re-enabling legal mode resets speeds to the current jurisdiction defaults'
       legalSpeedKmh: 20,
       warningSpeedKmh: 15,
       warningManuallyEdited: false,
-      jurisdiction: expect.objectContaining({ countryCode: 'DE' }),
+      jurisdiction: null,
     }),
   )
   expect(upsertAlertRule).toHaveBeenLastCalledWith(
@@ -182,4 +184,6 @@ test('disabling legal mode deletes only the managed native warning alert', async
   await useLegalModeStore.getState().setEnabled(false)
 
   expect(deleteAlertRule).toHaveBeenCalledWith('legal-mode-speed-alert')
+  expect(deleteAlertRule).toHaveBeenCalledTimes(1)
+  expect(upsertAlertRule).not.toHaveBeenCalled()
 })

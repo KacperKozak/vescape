@@ -431,6 +431,9 @@ final class AppDataRepository {
     if key == "liveHistoryLimit" {
       guard let minutes = Self.liveHistoryLimitMinutes(rawValue) else { return }
       value = minutes
+    } else if key == "satelliteImageryOpacity" {
+      guard let opacity = Self.satelliteImageryOpacity(rawValue) else { return }
+      value = opacity
     } else if key == "boardWarningsEnabled" {
       // Kill switch must stay a strict Bool (Android rejects non-Boolean too) so JS state and the
       // native detector gate can never diverge on a malformed value.
@@ -472,6 +475,8 @@ final class AppDataRepository {
     "movingSpeedThresholdKmh": 3,
     "freeSpinMaxSpeedDeltaKmh": DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH,
     "freeSpinStationaryBoardCapKmh": DEFAULT_FREE_SPIN_STATIONARY_BOARD_CAP_KMH,
+    "satelliteImageryOpacity": 0.35,
+    "satelliteOverlayStreetLinesEnabled": false,
     "telemetryPollRateHz": 20,
     "historyMetricGradientsEnabled": true,
     "historyMetricHotRanges": [
@@ -488,7 +493,14 @@ final class AppDataRepository {
     var normalized = settings
     normalized["liveHistoryLimit"] =
       liveHistoryLimitMinutes(settings["liveHistoryLimit"]) ?? defaultSettings["liveHistoryLimit"]
+    normalized["satelliteImageryOpacity"] =
+      satelliteImageryOpacity(settings["satelliteImageryOpacity"]) ?? defaultSettings["satelliteImageryOpacity"]
     return normalized
+  }
+
+  static func satelliteImageryOpacity(_ value: Any?) -> Double? {
+    guard let opacity = doubleValue(value), opacity.isFinite else { return nil }
+    return min(1, max(0.1, opacity))
   }
 
   static func liveHistoryLimitMinutes(_ value: Any?) -> Int? {

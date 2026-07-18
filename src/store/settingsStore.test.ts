@@ -14,6 +14,8 @@ const BASE: AppSettings = {
   freeSpinMaxSpeedDeltaKmh: 12,
   freeSpinStationaryBoardCapKmh: 15,
   mapStyleKey: 'onedark',
+  satelliteImageryOpacity: 0.35,
+  satelliteOverlayStreetLinesEnabled: false,
   mapNavigationMode: 'northUp',
   historyMetricGradientsEnabled: true,
   historyMetricHotRanges: { battery: { start: 0, end: 1 } },

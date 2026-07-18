@@ -57,6 +57,8 @@ const e2eSettings: AppSettings = {
   freeSpinMaxSpeedDeltaKmh: 3,
   freeSpinStationaryBoardCapKmh: 1,
   mapStyleKey: 'onedark',
+  satelliteImageryOpacity: 0.35,
+  satelliteOverlayStreetLinesEnabled: false,
   mapNavigationMode: 'gpsHeading',
   historyMetricGradientsEnabled: true,
   historyMetricHotRanges: {},

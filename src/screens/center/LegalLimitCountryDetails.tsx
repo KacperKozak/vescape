@@ -41,7 +41,7 @@ export function LegalLimitCountryDetails({ country }: LegalLimitCountryDetailsPr
   const detail = getLegalLimitCountryDetail(country)
   const statusColor = LEGAL_ROAD_STATUS_COLORS[country.status]
   const StatusIcon = LEGAL_LIMIT_STATUS_ICONS[country.status]
-  const speedLabel = `${country.legalSpeedKmh} km/h`
+  const speedLabel = country.referenceSpeedKmh == null ? 'N/A' : `${country.referenceSpeedKmh} km/h`
 
   return (
     <View style={styles.container}>
@@ -55,15 +55,17 @@ export function LegalLimitCountryDetails({ country }: LegalLimitCountryDetailsPr
             <Text style={styles.badgeValue}>{LEGAL_ROAD_STATUS_LABELS[country.status]}</Text>
           </View>
         </View>
-        <View style={styles.badge}>
-          <View style={styles.badgeIcon}>
-            <GaugeIcon size={17} color={theme.palette.sky.text} weight="fill" />
+        <View style={[styles.badge, styles.speedBadge]}>
+          <View style={styles.speedBadgeMain}>
+            <View style={styles.badgeIcon}>
+              <GaugeIcon size={17} color={theme.palette.sky.text} weight="fill" />
+            </View>
+            <View style={styles.badgeText}>
+              <Text style={styles.badgeLabel}>Top speed</Text>
+              <Text style={styles.badgeValue}>{speedLabel}</Text>
+            </View>
           </View>
-          <View style={styles.badgeText}>
-            <Text style={styles.badgeLabel}>Top speed</Text>
-            <Text style={styles.badgeValue}>{speedLabel}</Text>
-            <Text style={styles.badgeCaption}>{country.speedLimitBasis}</Text>
-          </View>
+          <Text style={styles.badgeCaption}>{country.speedLimitBasis}</Text>
         </View>
       </View>
 
@@ -138,6 +140,16 @@ const styles = StyleSheet.create({
     padding: 10,
     gap: 8,
   },
+  speedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  speedBadgeMain: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexShrink: 0,
+  },
   badgeIcon: {
     width: 28,
     height: 28,
@@ -147,6 +159,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.alpha(theme.palette.sky.color, 0.12),
   },
   badgeText: {
+    flex: 1,
     gap: 2,
   },
   badgeLabel: {
@@ -161,10 +174,12 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   badgeCaption: {
+    flex: 1,
     color: theme.palette.slate.textSecondary,
     fontSize: 10,
     fontWeight: '700',
     lineHeight: 13,
+    textAlign: 'right',
   },
   alertRow: {
     ...widgetSurface,

@@ -12,6 +12,7 @@ import { ChipRow, ToggleRow, ValueRow } from '@/components/ui/dev/ShowcaseContro
 import { MapStyleSwitch } from '@/components/ui/controls/MapStyleSwitch'
 import { MAPBOX_ACCESS_TOKEN } from '@/config/mapy'
 import { BLANK_STYLE, MAP_STYLES, type MapStyleKey } from '@/constants/mapStyles'
+import { getSatelliteDarkMapStyle } from '@/constants/satelliteDarkMapStyle'
 import { ONE_DARK_MAP_STYLE } from '@/constants/oneDarkMapStyle'
 import { theme } from '@/constants/theme'
 import type { HistoryMetricKey } from '@/lib/history/metricColorScale'
@@ -51,6 +52,7 @@ export default function MapComponentsShowcase() {
   const [styleKey, setStyleKey] = useState<MapStyleKey>('onedark')
   const [styleExpanded, setStyleExpanded] = useState(false)
   const [weatherActive, setWeatherActive] = useState(false)
+  const [legalLimitsActive, setLegalLimitsActive] = useState(false)
   const [mapPoints, setMapPoints] = useState<MapPoint[]>(FIXTURE_MAP_POINTS)
   const [selectedMapPointId, setSelectedMapPointId] = useState<string | null>(null)
   const [activeHistoryMapMetric, setActiveHistoryMapMetric] = useState<HistoryMetricKey>('speed')
@@ -70,7 +72,8 @@ export default function MapComponentsShowcase() {
   const selectedStyle = MAP_STYLES.find((s) => s.key === styleKey) ?? MAP_STYLES[0]
   const isMapy = selectedStyle.key === 'mapy'
   const isOneDark = selectedStyle.key === 'onedark'
-  const useCustomJSON = isMapy || isOneDark
+  const isSatellite = selectedStyle.key === 'satellite'
+  const useCustomJSON = isMapy || isOneDark || isSatellite
   const showBuildings3d = selectedStyle.key === 'outdoors' || selectedStyle.key === 'onedark'
 
   return (
@@ -78,7 +81,15 @@ export default function MapComponentsShowcase() {
       <MapView
         style={StyleSheet.absoluteFill}
         styleURL={useCustomJSON ? undefined : selectedStyle.styleURL}
-        styleJSON={isOneDark ? ONE_DARK_MAP_STYLE : isMapy ? BLANK_STYLE : undefined}
+        styleJSON={
+          isOneDark
+            ? ONE_DARK_MAP_STYLE
+            : isMapy
+              ? BLANK_STYLE
+              : isSatellite
+                ? getSatelliteDarkMapStyle()
+                : undefined
+        }
         pitchEnabled={false}
         rotateEnabled={false}
         compassEnabled={false}
@@ -101,9 +112,10 @@ export default function MapComponentsShowcase() {
           expandSelectedMapPoints
           isMapy={isMapy}
           isOneDark={isOneDark}
+          isSatellite={isSatellite}
           showBuildings3d={showBuildings3d}
           weatherActive={weatherActive}
-          legalLimitsActive={false}
+          legalLimitsActive={legalLimitsActive}
           liveTrailShape={FIXTURE_LIVE_TRAIL_SHAPE}
           rideRouteShape={null}
           accuracyFix={FIXTURE_ACCURACY_FIX}
@@ -149,6 +161,7 @@ export default function MapComponentsShowcase() {
           onSuppressNextMapPress={() => {}}
           onSelectMarker={(selection) => setLastEvent(`Marker: ${selection.marker.type}`)}
           onOpenMedia={(asset) => setLastEvent(`Media: ${asset.filename}`)}
+          highContrastRoutes={isSatellite}
         />
       </MapView>
 
@@ -179,6 +192,7 @@ export default function MapComponentsShowcase() {
         onClose={() => setSheetVisible(false)}
       >
         <ToggleRow label="Weather radar" value={weatherActive} onToggle={setWeatherActive} />
+        <ToggleRow label="Legal limits" value={legalLimitsActive} onToggle={setLegalLimitsActive} />
         <ChipRow
           label="Route metric"
           options={HISTORY_METRIC_OPTIONS.map((m) => m.label)}

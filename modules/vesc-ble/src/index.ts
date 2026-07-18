@@ -778,6 +778,10 @@ export interface AppSettings {
   freeSpinMaxSpeedDeltaKmh: number
   freeSpinStationaryBoardCapKmh: number
   mapStyleKey: 'onedark' | 'outdoors' | 'satellite' | 'mapy'
+  /** Satellite basemap imagery opacity, 0.1-1.0. Labels and app overlays stay full opacity. */
+  satelliteImageryOpacity: number
+  /** Show vector street lines over the toned satellite overlay. */
+  satelliteOverlayStreetLinesEnabled: boolean
   mapNavigationMode: 'northUp' | 'gpsHeading' | 'phoneHeading' | 'freeRotate'
   historyMetricGradientsEnabled: boolean
   historyMetricHotRanges: Partial<

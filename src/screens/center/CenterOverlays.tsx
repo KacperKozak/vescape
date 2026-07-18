@@ -699,7 +699,11 @@ function MapModeTabs({ mode, top, map, onResetLegalSelection }: MapModeTabsProps
   const weatherColor = weather
     ? weatherCodeToColor(weather.weatherCode, hour, isNight)
     : theme.palette.sky.color
-  const weatherTabColor = theme.palette.sky
+  const weatherSelection = {
+    bg: theme.alpha(weatherColor, 0.12),
+    border: theme.alpha(weatherColor, 0.4),
+    color: weatherColor,
+  }
   const weatherLabel = 'Weather'
   const activeId = mode === 'legalLimits' ? 'legalLimits' : mode === 'weather' ? 'weather' : 'map'
 
@@ -747,11 +751,7 @@ function MapModeTabs({ mode, top, map, onResetLegalSelection }: MapModeTabsProps
           label={weatherLabel}
           icon={WeatherModeIcon}
           activeLabelOnly
-          color={{
-            bg: weatherTabColor.bg,
-            border: weatherTabColor.border,
-            color: weatherColor,
-          }}
+          color={weatherSelection}
           activeWidth={142}
           inactiveWidth={58}
           badge={
@@ -841,6 +841,12 @@ export function CenterOverlays({
     setRemoveConfirmVisible(false)
   }, [])
 
+  useEffect(() => {
+    if (mode === 'legalLimits') return
+    const frame = requestAnimationFrame(() => setSelectedLegalCountry(null))
+    return () => cancelAnimationFrame(frame)
+  }, [mode])
+
   const resetLegalSelection = useCallback(() => {
     setLegalListOpen(false)
     setSelectedLegalCountry(null)
@@ -912,8 +918,7 @@ export function CenterOverlays({
       <MapVignette
         mode={mode}
         panelHeight={mode === 'history' && history.selectedSession ? panelHeight : 0}
-        visible={mode !== 'map'}
-        topOnly={mode === 'legalLimits'}
+        visible
         fadeOutProgress={dragOpacity}
       />
       {(mode === 'telemetry' || revealGestureActive) && (
@@ -1091,23 +1096,10 @@ export function CenterOverlays({
         <IconButton
           icon={ArrowLeftIcon}
           size="sm"
-          accessibilityLabel="Back from legal limits"
+          accessibilityLabel="Exit legal limits"
           onPress={map.exitLegalLimits}
           style={[styles.mapTopBackButton, { top: mapModeTabsTop }]}
         />
-        <View pointerEvents="none" style={[styles.legalLegend, { top: belowMapModeTabsTop }]}>
-          {LEGAL_ROAD_STATUS_LEGEND.map((status) => (
-            <View key={status} style={styles.legalLegendItem}>
-              <View
-                style={[
-                  styles.legalLegendDot,
-                  { backgroundColor: LEGAL_ROAD_STATUS_COLORS[status] },
-                ]}
-              />
-              <Text style={styles.legalLegendText}>{LEGAL_ROAD_STATUS_LABELS[status]}</Text>
-            </View>
-          ))}
-        </View>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={
@@ -1133,6 +1125,27 @@ export function CenterOverlays({
             {legalListVisible ? 'HIDE LIST' : 'SHOW LIST'}
           </Text>
         </Pressable>
+        <View
+          pointerEvents="none"
+          style={[
+            styles.legalLegend,
+            {
+              bottom: legalListVisible ? 282 : Math.max(insets.bottom, 16) - 4,
+            },
+          ]}
+        >
+          {LEGAL_ROAD_STATUS_LEGEND.map((status) => (
+            <View key={status} style={styles.legalLegendItem}>
+              <View
+                style={[
+                  styles.legalLegendDot,
+                  { backgroundColor: LEGAL_ROAD_STATUS_COLORS[status] },
+                ]}
+              />
+              <Text style={styles.legalLegendText}>{LEGAL_ROAD_STATUS_LABELS[status]}</Text>
+            </View>
+          ))}
+        </View>
         {legalListVisible ? (
           <View style={[styles.legalListPanel, { paddingBottom: Math.max(insets.bottom, 16) }]}>
             <ScrollView
@@ -1162,14 +1175,18 @@ export function CenterOverlays({
                   <Text style={styles.legalCountryStatus} numberOfLines={1}>
                     {LEGAL_ROAD_STATUS_LABELS[country.status]}
                   </Text>
-                  <Text style={styles.legalCountrySpeed}>{country.legalSpeedKmh} km/h</Text>
+                  <Text style={styles.legalCountrySpeed}>
+                    {country.referenceSpeedKmh == null
+                      ? 'N/A'
+                      : `${country.referenceSpeedKmh} km/h`}
+                  </Text>
                 </Pressable>
               ))}
             </ScrollView>
           </View>
         ) : null}
         <LegalLimitCountrySheet
-          country={selectedLegalCountry}
+          country={mode === 'legalLimits' ? selectedLegalCountry : null}
           onClose={() => setSelectedLegalCountry(null)}
         />
       </View>

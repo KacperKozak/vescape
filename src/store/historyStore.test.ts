@@ -47,6 +47,8 @@ const getSettings = mock(async () => ({
   freeSpinMaxSpeedDeltaKmh: 10,
   freeSpinStationaryBoardCapKmh: 15,
   mapStyleKey: 'onedark',
+  satelliteImageryOpacity: 0.35,
+  satelliteOverlayStreetLinesEnabled: false,
   mapNavigationMode: 'northUp',
   historyMetricGradientsEnabled: true,
   historyMetricHotRanges: {},

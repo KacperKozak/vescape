@@ -122,9 +122,9 @@ export function TuneDrawer({ onNavigate, onOpenLegalLimits }: TuneDrawerProps) {
   }, [activeBoardId, loadProfiles, tuneCompatibility])
 
   useEffect(() => {
-    if (legalMode.jurisdiction || !latestApproximateLocation) return
+    if (!latestApproximateLocation) return
     const jurisdiction = resolveJurisdictionFromLocation(latestApproximateLocation)
-    if (!jurisdiction) return
+    if (!jurisdiction || legalMode.jurisdiction?.countryCode === jurisdiction.countryCode) return
     void setLegalModeSetting(applyJurisdictionDefaults(legalMode, jurisdiction)).catch(
       () => undefined,
     )

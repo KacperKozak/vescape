@@ -364,6 +364,8 @@ data class AppSettings(
   val freeSpinMaxSpeedDeltaKmh: Double = DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH,
   val freeSpinStationaryBoardCapKmh: Double = DEFAULT_FREE_SPIN_STATIONARY_BOARD_CAP_KMH,
   val mapStyleKey: String = "onedark",
+  val satelliteImageryOpacity: Double = 0.35,
+  val satelliteOverlayStreetLinesEnabled: Boolean = false,
   val mapNavigationMode: String = "northUp",
   val historyMetricGradientsEnabled: Boolean = true,
   val historyMetricHotRanges: Map<String, Map<String, Double>> = DEFAULT_HISTORY_METRIC_HOT_RANGES,

@@ -47,10 +47,25 @@ interface VignetteLayerProps {
 const DARK = theme.palette.slate.surfaceDeep
 const RADIAL_POSITIONS = [0, 0.4, 0.68, 1]
 const TOP_POSITIONS = [0, 0.7, 1]
+const MAP_EDGE_POSITIONS = [0, 0.55, 1]
 const HISTORY_TOP_POSITIONS = [0, 0.52, 1]
 const HISTORY_BOTTOM_POSITIONS = [0, 0.5, 0.6, 1]
-const WEATHER_TOP_POSITIONS = [0, 0.42, 0.78, 1]
-const WEATHER_BOTTOM_POSITIONS = [0, 0.55, 1]
+
+function mapEdgeVignetteSpace(mode: CenterViewState) {
+  if (mode === 'weather') {
+    return {
+      levels: [0.65, 0.26, 0],
+      topEnd: 0.24,
+      bottomStart: 0.76,
+    }
+  }
+
+  return {
+    levels: [0.45, 0.18, 0],
+    topEnd: 0.18,
+    bottomStart: 0.82,
+  }
+}
 
 function vignetteOpacity(level: number) {
   return theme.alpha(DARK, level as 0 | 0.12 | 0.3 | 0.6 | 0.85)
@@ -144,33 +159,31 @@ export function MapVignette({
   fadeOutProgress,
 }: MapVignetteProps) {
   const { width, height } = useWindowDimensions()
-  const standardOpacity = useSharedValue(
-    visible && mode !== 'history' && mode !== 'weather' ? 1 : 0,
-  )
-  const historyOpacity = useSharedValue(visible && mode === 'history' ? 1 : 0)
-  const weatherOpacity = useSharedValue(visible && mode === 'weather' ? 1 : 0)
+  const mapSurfaceVisible = mode === 'map' || mode === 'weather' || mode === 'legalLimits'
+  const mapEdgeSpace = mapEdgeVignetteSpace(mode === 'telemetry' ? 'map' : mode)
+  const homeOpacity = useSharedValue(visible && mode === 'telemetry' ? 1 : 0)
+  const mapSurfaceOpacity = useSharedValue(visible && mapSurfaceVisible ? 1 : 0)
   const panelTop = panelHeight > 0 ? Math.max(0.2, 1 - panelHeight / height) : 0.55
   const historyBottomStart = Math.max(0.05, panelTop - 0.28)
   const historyBottomStartValue = useSharedValue(historyBottomStart)
-  const standardLayerOpacity = useDerivedValue(
-    () => standardOpacity.value * (1 - (fadeOutProgress?.value ?? 0)),
+  const homeLayerOpacity = useDerivedValue(
+    () => homeOpacity.value * (1 - (fadeOutProgress?.value ?? 0)),
   )
-  const historyLayerOpacity = useDerivedValue(
-    () => historyOpacity.value * (1 - (fadeOutProgress?.value ?? 0)),
+  const mapSurfaceLayerOpacity = useDerivedValue(() =>
+    Math.min(1, mapSurfaceOpacity.value + homeOpacity.value * (fadeOutProgress?.value ?? 0)),
   )
-  const weatherLayerOpacity = useDerivedValue(
-    () => weatherOpacity.value * (1 - (fadeOutProgress?.value ?? 0)),
+  const historyLayerOpacity = useDerivedValue(() =>
+    withTiming(visible && mode === 'history' ? 1 : 0, {
+      duration: 280,
+      easing: Easing.out(Easing.cubic),
+    }),
   )
 
   useEffect(() => {
     const transition = { duration: 280, easing: Easing.out(Easing.cubic) }
-    standardOpacity.value = withTiming(
-      visible && mode !== 'history' && mode !== 'weather' ? 1 : 0,
-      transition,
-    )
-    historyOpacity.value = withTiming(visible && mode === 'history' ? 1 : 0, transition)
-    weatherOpacity.value = withTiming(visible && mode === 'weather' ? 1 : 0, transition)
-  }, [historyOpacity, mode, standardOpacity, visible, weatherOpacity])
+    homeOpacity.value = withTiming(visible && mode === 'telemetry' ? 1 : 0, transition)
+    mapSurfaceOpacity.value = withTiming(visible && mapSurfaceVisible ? 1 : 0, transition)
+  }, [homeOpacity, mapSurfaceOpacity, mapSurfaceVisible, mode, visible])
 
   useEffect(() => {
     historyBottomStartValue.value = withTiming(historyBottomStart, {
@@ -185,45 +198,42 @@ export function MapVignette({
         <VignetteLayer
           width={width}
           height={height}
-          opacity={standardLayerOpacity}
+          opacity={homeLayerOpacity}
           radial={topOnly ? undefined : [0, 0.12, 0.3, 0.6]}
           top={[0.85, 0.3, 0]}
           topPositions={TOP_POSITIONS}
           topEnd={0.34}
-          bottom={topOnly ? undefined : [0.85, 0.6, 0]}
+          bottom={topOnly ? undefined : [0.85, 0.3, 0]}
           bottomPositions={TOP_POSITIONS}
-          bottomStart={topOnly ? undefined : 0.6}
+          bottomStart={topOnly ? undefined : 0.66}
+        />
+        <VignetteLayer
+          width={width}
+          height={height}
+          opacity={mapSurfaceLayerOpacity}
+          top={mapEdgeSpace.levels}
+          topPositions={MAP_EDGE_POSITIONS}
+          topEnd={mapEdgeSpace.topEnd}
+          bottom={topOnly ? undefined : mapEdgeSpace.levels}
+          bottomPositions={MAP_EDGE_POSITIONS}
+          bottomStart={topOnly ? undefined : mapEdgeSpace.bottomStart}
         />
         {!topOnly ? (
-          <>
-            <VignetteLayer
+          <VignetteLayer
+            width={width}
+            height={height}
+            opacity={historyLayerOpacity}
+            radial={[0, 0.12, 0.3, 0.6]}
+            top={[0.85, 0.6, 0]}
+            topPositions={HISTORY_TOP_POSITIONS}
+            topEnd={0.38}
+          >
+            <AnimatedHistoryBottomGradient
               width={width}
               height={height}
-              opacity={historyLayerOpacity}
-              radial={[0, 0.12, 0.3, 0.6]}
-              top={[0.85, 0.6, 0]}
-              topPositions={HISTORY_TOP_POSITIONS}
-              topEnd={0.38}
-            >
-              <AnimatedHistoryBottomGradient
-                width={width}
-                height={height}
-                bottomStart={historyBottomStartValue}
-              />
-            </VignetteLayer>
-            <VignetteLayer
-              width={width}
-              height={height}
-              opacity={weatherLayerOpacity}
-              radial={[0, 0.12, 0.3, 0.6]}
-              top={[0.85, 0.6, 0.3, 0]}
-              topPositions={WEATHER_TOP_POSITIONS}
-              topEnd={0.46}
-              bottom={[0.85, 0.6, 0]}
-              bottomPositions={WEATHER_BOTTOM_POSITIONS}
-              bottomStart={0.78}
+              bottomStart={historyBottomStartValue}
             />
-          </>
+          </VignetteLayer>
         ) : null}
       </Canvas>
     </View>
