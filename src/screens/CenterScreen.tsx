@@ -9,6 +9,9 @@ import { CenterOverlays } from '@/screens/center/CenterOverlays'
 import { useCenterScreenController } from '@/screens/center/useCenterScreenController'
 import type { Board } from '@/store/boardStore'
 import { theme } from '@/constants/theme'
+import { getMapPointKindLabel } from '@/constants/mapPoints'
+import type { MapSelection } from '@/lib/map/mapSelection'
+import { reverseGeocodeMapCoordinate } from '@/lib/map/search'
 
 interface CenterScreenProps {
   activeBoard: Board | undefined
@@ -62,34 +65,95 @@ export function CenterScreen({
   const [offscreenMapIndicators, setOffscreenMapIndicators] = useState<
     OffscreenMapIndicatorState[]
   >([])
+  const [selectedNavigationTarget, setSelectedNavigationTarget] = useState<MapSelection | null>(
+    null,
+  )
+  const [activeNavigationTarget, setActiveNavigationTarget] = useState<MapSelection | null>(null)
   const dismissMapSelector = controller.dismissMapSelector
   const mapInteractionHandlerRef = useRef<() => void>(() => {})
   const handleMapInteraction = useCallback(() => {
     dismissMapSelector()
     mapInteractionHandlerRef.current()
   }, [dismissMapSelector])
-  const { replaceDirectionPoint, clearSelectedMapPoints, removeMapPoint, clearDirectionPoint } =
-    controller
+  const {
+    replaceDirectionPoint,
+    clearSelectedMapPoints,
+    removeMapPoint,
+    clearDirectionPoint,
+    toggleMapPointSelection,
+  } = controller
   const handleLongPressTarget = useCallback(
-    (target: { latitude: number; longitude: number }) =>
-      void replaceDirectionPoint(target.latitude, target.longitude),
+    (target: { latitude: number; longitude: number }) => {
+      void replaceDirectionPoint(target.latitude, target.longitude)
+      setActiveNavigationTarget({
+        type: 'coordinate',
+        id: `direction-${target.longitude.toFixed(6)}-${target.latitude.toFixed(6)}`,
+        latitude: target.latitude,
+        longitude: target.longitude,
+        title: 'Direction point',
+        subtitle: null,
+        loadingDetails: true,
+      })
+    },
     [replaceDirectionPoint],
   )
-  const handleMapPress = useCallback(() => {
-    handleMapInteraction()
-    clearSelectedMapPoints()
-  }, [clearSelectedMapPoints, handleMapInteraction])
+  const handleMapPress = useCallback(
+    (selection: MapSelection) => {
+      handleMapInteraction()
+      clearSelectedMapPoints()
+      setSelectedNavigationTarget(selection)
+    },
+    [clearSelectedMapPoints, handleMapInteraction],
+  )
+  const handleSelectNavigationTarget = useCallback(
+    (selection: MapSelection) => {
+      clearSelectedMapPoints()
+      setSelectedNavigationTarget(selection)
+    },
+    [clearSelectedMapPoints],
+  )
+  const handleToggleMapPointSelection = useCallback(
+    (id: string) => {
+      const selected = controller.selectedMapPointId !== id
+      const point = controller.mapPoints.find((candidate) => candidate.id === id)
+      toggleMapPointSelection(id)
+      if (!selected || !point) {
+        setSelectedNavigationTarget(null)
+        return
+      }
+      setSelectedNavigationTarget({
+        type: 'mapPoint',
+        id: point.id,
+        latitude: point.latitude,
+        longitude: point.longitude,
+        title: getMapPointKindLabel(point.kind),
+        subtitle: null,
+        point,
+      })
+    },
+    [controller.mapPoints, controller.selectedMapPointId, toggleMapPointSelection],
+  )
   const handleRemoveMapPoint = useCallback(
-    (id: string) => void removeMapPoint(id),
+    (id: string) => {
+      setSelectedNavigationTarget((current) =>
+        current?.type === 'mapPoint' && current.id === id ? null : current,
+      )
+      void removeMapPoint(id)
+    },
     [removeMapPoint],
   )
-  const handleClearDirectionPoint = useCallback(
-    () => void clearDirectionPoint(),
-    [clearDirectionPoint],
-  )
+  const handleClearDirectionPoint = useCallback(() => {
+    setActiveNavigationTarget(null)
+    void clearDirectionPoint()
+  }, [clearDirectionPoint])
+  const handleDismissSelectedTarget = useCallback(() => {
+    clearSelectedMapPoints()
+    setSelectedNavigationTarget(null)
+  }, [clearSelectedMapPoints])
   const handleOffscreenIndicatorPress = useCallback(
     (indicator: OffscreenMapIndicatorState) => {
       controller.dismissMapSelector()
+      setSelectedNavigationTarget(null)
       if (indicator.type === 'gps') {
         mapRef.current?.recenterLive({ resetPadding: true })
         return
@@ -99,6 +163,87 @@ export function CenterScreen({
     },
     [controller],
   )
+  const handleNavigateSelectedTarget = useCallback(async () => {
+    if (!selectedNavigationTarget) return
+    await replaceDirectionPoint(
+      selectedNavigationTarget.latitude,
+      selectedNavigationTarget.longitude,
+    )
+    setActiveNavigationTarget({
+      ...selectedNavigationTarget,
+      id: `direction-${selectedNavigationTarget.id}`,
+      title:
+        selectedNavigationTarget.type === 'coordinate'
+          ? 'Direction point'
+          : selectedNavigationTarget.title,
+    })
+    clearSelectedMapPoints()
+    setSelectedNavigationTarget(null)
+    controller.exitMapFocus()
+  }, [clearSelectedMapPoints, controller, replaceDirectionPoint, selectedNavigationTarget])
+
+  useEffect(() => {
+    if (!selectedNavigationTarget?.loadingDetails) return
+    const abortController = new AbortController()
+    const { id, latitude, longitude, type } = selectedNavigationTarget
+    void reverseGeocodeMapCoordinate(latitude, longitude, { signal: abortController.signal })
+      .then((details) => {
+        if (!details) {
+          setSelectedNavigationTarget((current) =>
+            current?.id === id && current.type === type
+              ? { ...current, loadingDetails: false }
+              : current,
+          )
+          return
+        }
+        setSelectedNavigationTarget((current) =>
+          current?.id === id && current.type === type
+            ? {
+                ...current,
+                title: current.type === 'coordinate' ? details.title : current.title,
+                subtitle: current.subtitle ?? details.subtitle,
+                loadingDetails: false,
+              }
+            : current,
+        )
+      })
+      .catch(() => {
+        if (abortController.signal.aborted) return
+        setSelectedNavigationTarget((current) =>
+          current?.id === id && current.type === type
+            ? { ...current, loadingDetails: false }
+            : current,
+        )
+      })
+    return () => abortController.abort()
+  }, [selectedNavigationTarget])
+
+  useEffect(() => {
+    if (!activeNavigationTarget?.loadingDetails) return
+    const abortController = new AbortController()
+    const { id, latitude, longitude, type } = activeNavigationTarget
+    void reverseGeocodeMapCoordinate(latitude, longitude, { signal: abortController.signal })
+      .then((details) => {
+        setActiveNavigationTarget((current) =>
+          current?.id === id && current.type === type
+            ? {
+                ...current,
+                subtitle: current.subtitle ?? details?.subtitle ?? null,
+                loadingDetails: false,
+              }
+            : current,
+        )
+      })
+      .catch(() => {
+        if (abortController.signal.aborted) return
+        setActiveNavigationTarget((current) =>
+          current?.id === id && current.type === type
+            ? { ...current, loadingDetails: false }
+            : current,
+        )
+      })
+    return () => abortController.abort()
+  }, [activeNavigationTarget])
 
   if (!boardsLoaded) {
     return (
@@ -146,10 +291,11 @@ export function CenterScreen({
         onEnterMapMode={controller.handleMapFocus}
         onOffscreenMapIndicatorsChange={setOffscreenMapIndicators}
         directionPoint={controller.directionPoint}
+        selectedNavigationTarget={selectedNavigationTarget}
         mapPoints={controller.mapPoints}
         selectedMapPointId={controller.selectedMapPointId}
         hiddenMapPointKinds={controller.hiddenMapPointKinds}
-        onToggleMapPointSelection={controller.toggleMapPointSelection}
+        onToggleMapPointSelection={handleToggleMapPointSelection}
         onRemoveMapPoint={handleRemoveMapPoint}
         onClearDirectionPoint={handleClearDirectionPoint}
         weatherActive={controller.weatherActive}
@@ -173,6 +319,8 @@ export function CenterScreen({
           heading: selectorHeading,
           mapStyleKey: controller.mapStyleKey,
           setMapStyleKey: controller.setMapStyleKey,
+          satelliteMapImageryOpacity: controller.satelliteMapImageryOpacity,
+          setSatelliteMapImageryOpacity: controller.setSatelliteMapImageryOpacity,
           mapNavigationMode: controller.mapNavigationMode,
           setMapNavigationMode: controller.setMapNavigationMode,
           mapSelector: controller.mapSelector,
@@ -185,7 +333,13 @@ export function CenterScreen({
           exitLegalLimits: controller.exitLegalLimitsMode,
           refreshWeather: controller.refreshWeather,
           weatherLocation: controller.liveLocations.at(-1) ?? controller.latestApproximateLocation,
-          replaceDirectionPoint: controller.replaceDirectionPoint,
+          directionPoint: controller.directionPoint,
+          activeNavigationTarget,
+          selectedNavigationTarget,
+          onSelectNavigationTarget: handleSelectNavigationTarget,
+          onNavigateSelectedTarget: handleNavigateSelectedTarget,
+          onCancelNavigation: handleClearDirectionPoint,
+          onDismissSelectedTarget: handleDismissSelectedTarget,
           addMapPoint: controller.saveMapPoint,
           hiddenMapPointKinds: controller.hiddenMapPointKinds,
           toggleMapPointKindVisibility: controller.toggleMapPointKindVisibility,

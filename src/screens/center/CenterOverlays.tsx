@@ -6,9 +6,11 @@ import {
   CaretUpIcon,
   CloudSunIcon,
   ClockCounterClockwiseIcon,
+  ImageSquareIcon,
   MagnifyingGlassIcon,
   MapTrifoldIcon,
   MapPinIcon,
+  NavigationArrowIcon,
   FunnelIcon,
   PlusIcon,
   SlidersHorizontalIcon,
@@ -24,6 +26,7 @@ import {
   useMemo,
   useRef,
   useState,
+  createElement,
   type RefObject,
 } from 'react'
 import {
@@ -45,7 +48,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import type { HistoryMarker, MapPointKind } from 'vesc-ble'
+import type { HistoryMarker, MapPoint, MapPointKind } from 'vesc-ble'
 
 import { ConfirmModal } from '@/components/ui/modals/ConfirmModal'
 import { EdgeDrawer } from '@/components/ui/overlays/AnchoredSheet'
@@ -66,6 +69,7 @@ import {
   MAP_POINT_KIND_OPTIONS,
 } from '@/constants/mapPoints'
 import { theme } from '@/constants/theme'
+import type { MapSelection } from '@/lib/map/mapSelection'
 import { searchMapResults, type MapSearchResult } from '@/lib/map/search'
 import type { HistoryMetricKey } from '@/lib/history/metricColorScale'
 import { BottomTelemetryStrip, STRIP_CONTENT_HEIGHT } from '@/screens/center/BottomTelemetryStrip'
@@ -105,6 +109,7 @@ import {
   type LegalLimitCountry,
 } from '@/lib/legal/legalLimits'
 import { useSettingsStore } from '@/store/settingsStore'
+import { useRiderStore } from '@/store/riderStore'
 
 const LEGAL_LIST_PANEL_HEIGHT = 280
 const LEGAL_OVERLAY_GAP = 8
@@ -126,6 +131,8 @@ interface CenterMapOverlayProps {
   heading: SharedValue<number>
   mapStyleKey: MapStyleKey
   setMapStyleKey: (key: MapStyleKey) => void
+  satelliteMapImageryOpacity: number
+  setSatelliteMapImageryOpacity: (opacity: number) => void
   mapNavigationMode: MapNavigationMode
   setMapNavigationMode: (mode: MapNavigationMode) => void
   mapSelector: MapSelector
@@ -138,7 +145,13 @@ interface CenterMapOverlayProps {
   exitLegalLimits: () => void
   refreshWeather: () => void
   weatherLocation: { latitude: number; longitude: number } | null
-  replaceDirectionPoint: (latitude: number, longitude: number) => Promise<unknown>
+  directionPoint: MapPoint | null
+  activeNavigationTarget: MapSelection | null
+  selectedNavigationTarget: MapSelection | null
+  onSelectNavigationTarget: (selection: MapSelection) => void
+  onNavigateSelectedTarget: () => Promise<void>
+  onCancelNavigation: () => void
+  onDismissSelectedTarget: () => void
   addMapPoint: (kind: MapPointKind, latitude: number, longitude: number) => Promise<unknown>
   hiddenMapPointKinds: MapPointKind[]
   toggleMapPointKindVisibility: (kind: MapPointKind) => void
@@ -339,6 +352,20 @@ const centerPlacementPointerEntering = () => {
   }
 }
 
+const centerPlacementPulseEntering = () => {
+  'worklet'
+  return {
+    initialValues: {
+      opacity: 0.75,
+      transform: [{ scale: 0.7 }],
+    },
+    animations: {
+      opacity: withTiming(0, { duration: 320 }),
+      transform: [{ scale: withTiming(2.35, { duration: 320 }) }],
+    },
+  }
+}
+
 function FullMapControls({
   mapRef,
   map,
@@ -346,9 +373,12 @@ function FullMapControls({
   top,
   bottom,
 }: FullMapControlsProps) {
+  const riderColor = useRiderStore((s) => s.riderColor)
   const [searchOpen, setSearchOpen] = useState(false)
   const [addMenuOpen, setAddMenuOpen] = useState(false)
+  const [placementPulseKey, setPlacementPulseKey] = useState(0)
   const [filterMenuOpen, setFilterMenuOpen] = useState(false)
+  const placementTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const {
     searchQuery,
     setSearchQuery,
@@ -370,9 +400,8 @@ function FullMapControls({
 
   useEffect(() => {
     const dismissTransientControls = () => {
-      if (!searchOpen && !addMenuOpen && !filterMenuOpen) return
+      if (!searchOpen && !filterMenuOpen) return
       closeSearch()
-      setAddMenuOpen(false)
       setFilterMenuOpen(false)
     }
     mapInteractionHandlerRef.current = dismissTransientControls
@@ -381,14 +410,29 @@ function FullMapControls({
         mapInteractionHandlerRef.current = () => {}
       }
     }
-  }, [addMenuOpen, closeSearch, filterMenuOpen, mapInteractionHandlerRef, searchOpen])
+  }, [closeSearch, filterMenuOpen, mapInteractionHandlerRef, searchOpen])
+
+  useEffect(
+    () => () => {
+      if (placementTimeoutRef.current) clearTimeout(placementTimeoutRef.current)
+    },
+    [],
+  )
 
   const handleSearchSelect = useCallback(
     (result: MapSearchResult) => {
       setSearchOpen(false)
       setSearchQuery(result.title)
       mapRef.current?.focusCoordinate([result.longitude, result.latitude])
-      void map.replaceDirectionPoint(result.latitude, result.longitude)
+      map.onSelectNavigationTarget({
+        type: 'place',
+        id: result.id,
+        latitude: result.latitude,
+        longitude: result.longitude,
+        title: result.title,
+        subtitle: result.subtitle,
+        category: null,
+      })
     },
     [map, mapRef, setSearchQuery],
   )
@@ -417,9 +461,15 @@ function FullMapControls({
     async (kind: MapPointKind) => {
       const center = await mapRef.current?.getViewfinderCoordinate()
       if (!center) return
-      mapRef.current?.zoomBy(-0.45)
-      setAddMenuOpen(false)
-      void map.addMapPoint(kind, center.latitude, center.longitude)
+      await Haptics.selectionAsync()
+      setPlacementPulseKey((key) => key + 1)
+      if (placementTimeoutRef.current) clearTimeout(placementTimeoutRef.current)
+      placementTimeoutRef.current = setTimeout(() => {
+        mapRef.current?.zoomBy(-0.45)
+        setAddMenuOpen(false)
+        void map.addMapPoint(kind, center.latitude, center.longitude)
+        placementTimeoutRef.current = null
+      }, 180)
     },
     [map, mapRef],
   )
@@ -432,7 +482,12 @@ function FullMapControls({
 
   return (
     <>
-      {addMenuOpen ? <CenterPlacementPointer /> : null}
+      {addMenuOpen ? (
+        <CenterPlacementPointer
+          color={riderColor ?? theme.palette.green.color}
+          pulseKey={placementPulseKey}
+        />
+      ) : null}
       {searchOpen ? <MapVignette mode="map" idPrefix="search-map-vignette" topOnly /> : null}
       <IconButton
         icon={ArrowLeftIcon}
@@ -785,7 +840,7 @@ function MapModeTabs({ mode, top, map, onResetLegalSelection }: MapModeTabsProps
   )
 }
 
-function CenterPlacementPointer() {
+function CenterPlacementPointer({ color, pulseKey }: { color: string; pulseKey: number }) {
   return (
     <Animated.View
       pointerEvents="none"
@@ -793,9 +848,124 @@ function CenterPlacementPointer() {
       exiting={FadeOut.duration(140)}
       style={styles.centerPlacementPointer}
     >
-      <View style={styles.centerPlacementBall} />
-      <View style={styles.centerPlacementDot} />
+      {pulseKey > 0 ? (
+        <Animated.View
+          key={pulseKey}
+          entering={centerPlacementPulseEntering}
+          style={[styles.centerPlacementPulse, { borderColor: color }]}
+        />
+      ) : null}
+      <View style={[styles.centerPlacementBall, { borderColor: color }]}>
+        <View style={[styles.centerPlacementDot, { backgroundColor: color }]} />
+      </View>
     </Animated.View>
+  )
+}
+
+function MapTargetSheet({
+  target,
+  bottom,
+  action,
+  onDismiss,
+}: {
+  target: MapSelection
+  bottom: number
+  action: {
+    label: string
+    accessibilityLabel: string
+    color: string
+    textColor: string
+    borderColor: string
+    bgColor: string
+    Icon: Icon
+    onPress: () => void
+  }
+  onDismiss?: () => void
+}) {
+  const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
+  const isMapPoint = target.type === 'mapPoint'
+  const color = target.type === 'mapPoint' ? getMapPointKindColor(target.point.kind) : action.color
+  const textColor =
+    target.type === 'mapPoint' ? getMapPointKindTextColor(target.point.kind) : action.textColor
+  const icon = createElement(isMapPoint ? getMapPointKindIcon(target.point.kind) : MapPinIcon, {
+    size: 18,
+    color: textColor,
+    weight: 'duotone',
+  })
+
+  return (
+    <View style={[styles.mapTargetSheet, { bottom }]}>
+      <View style={styles.mapTargetHeader}>
+        <View style={[styles.mapTargetIcon, { borderColor: color }]}>{icon}</View>
+        <View style={styles.mapTargetTitleBlock}>
+          <Text style={styles.mapTargetTitle} numberOfLines={1}>
+            {isMapPoint && name.trim() ? name.trim() : target.title}
+          </Text>
+          <Text style={styles.mapTargetSubtitle} numberOfLines={2}>
+            {target.loadingDetails
+              ? 'Loading details'
+              : target.subtitle || `${target.latitude.toFixed(5)}, ${target.longitude.toFixed(5)}`}
+          </Text>
+        </View>
+        {onDismiss ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Close target"
+            onPress={onDismiss}
+            style={({ pressed }) => [
+              styles.mapTargetClose,
+              pressed && styles.mapTargetClosePressed,
+            ]}
+          >
+            <XIcon size={20} color={theme.palette.slate.textSecondary} weight="bold" />
+          </Pressable>
+        ) : null}
+      </View>
+
+      {isMapPoint ? (
+        <View style={styles.mapTargetDraftFields}>
+          <TextInput
+            value={name}
+            onChangeText={setName}
+            placeholder="Name"
+            placeholderTextColor={theme.palette.slate.textMuted}
+            style={styles.mapTargetInput}
+          />
+          <TextInput
+            value={description}
+            onChangeText={setDescription}
+            placeholder="Description"
+            placeholderTextColor={theme.palette.slate.textMuted}
+            multiline
+            style={[styles.mapTargetInput, styles.mapTargetDescriptionInput]}
+          />
+          <View style={styles.mapTargetPhotoPlaceholder}>
+            <ImageSquareIcon size={18} color={theme.palette.slate.textSecondary} weight="duotone" />
+            <Text style={styles.mapTargetPhotoText}>Photo</Text>
+          </View>
+        </View>
+      ) : null}
+
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={action.accessibilityLabel}
+        onPress={action.onPress}
+        style={({ pressed }) => [
+          styles.mapTargetNavigate,
+          {
+            backgroundColor: action.bgColor,
+            borderColor: action.borderColor,
+          },
+          pressed && styles.mapTargetNavigatePressed,
+        ]}
+      >
+        <action.Icon size={18} color={action.textColor} weight="bold" />
+        <Text style={[styles.mapTargetNavigateText, { color: action.textColor }]}>
+          {action.label}
+        </Text>
+      </Pressable>
+    </View>
   )
 }
 
@@ -824,6 +994,7 @@ export function CenterOverlays({
   const weatherLoading = useWeatherStore((s) => s.loading)
   const radarLoading = useRainViewerRadarStore((s) => s.loading)
   const refreshRadar = useRainViewerRadarStore((s) => s.fetch)
+  const riderColor = useRiderStore((s) => s.riderColor)
   const legalModeActive = useSettingsStore((s) => normalizeLegalModeSettings(s.legalMode).enabled)
   const historyBusy = history.loadingSession || history.historyLoading
   const telemetryInteractive = mode === 'telemetry' && !revealGestureActive
@@ -833,6 +1004,22 @@ export function CenterOverlays({
   const legalListToggleBottom = legalLegendBottom + LEGAL_LEGEND_HEIGHT + LEGAL_OVERLAY_GAP
   const mapModeTabsTop = Math.max(insets.top, 8)
   const belowMapModeTabsTop = mapModeTabsTop + 48
+  const mapTargetBottom = Math.max(insets.bottom, 16) + 16
+  const activeNavigationTarget =
+    map.activeNavigationTarget ??
+    (map.directionPoint
+      ? ({
+          type: 'coordinate',
+          id: map.directionPoint.id,
+          latitude: map.directionPoint.latitude,
+          longitude: map.directionPoint.longitude,
+          title: 'Direction point',
+          subtitle: null,
+        } satisfies MapSelection)
+      : null)
+  const navigationActionColor = riderColor ?? theme.palette.green.color
+  const navigationActionTextColor = riderColor ?? theme.palette.green.text
+  const targetSheetVisible = map.selectedNavigationTarget != null || activeNavigationTarget != null
   const interfaceFadeStyle = useAnimatedStyle(() => ({
     opacity: (1 - dragOpacity.value) * telemetryReturnOpacity.value,
   }))
@@ -1044,13 +1231,48 @@ export function CenterOverlays({
         pointerEvents={mode === 'map' ? 'box-none' : 'none'}
         style={[styles.mapInterface, mode === 'map' ? styles.visible : styles.hidden]}
       >
-        {mode === 'map' ? (
+        {mode === 'map' && !targetSheetVisible ? (
           <FullMapControls
             mapRef={mapRef}
             map={map}
             mapInteractionHandlerRef={mapInteractionHandlerRef}
             top={mapModeTabsTop}
             bottom={aboveStripBottom - 112}
+          />
+        ) : null}
+        {mode === 'map' && map.selectedNavigationTarget ? (
+          <MapTargetSheet
+            key={map.selectedNavigationTarget.id}
+            target={map.selectedNavigationTarget}
+            bottom={mapTargetBottom}
+            action={{
+              label: 'Navigate',
+              accessibilityLabel: 'Navigate to target',
+              color: navigationActionColor,
+              textColor: navigationActionTextColor,
+              borderColor: navigationActionColor,
+              bgColor: theme.alpha(navigationActionColor, 0.12),
+              Icon: NavigationArrowIcon,
+              onPress: () => void map.onNavigateSelectedTarget(),
+            }}
+            onDismiss={map.onDismissSelectedTarget}
+          />
+        ) : null}
+        {mode === 'map' && !map.selectedNavigationTarget && activeNavigationTarget ? (
+          <MapTargetSheet
+            key={activeNavigationTarget.id}
+            target={activeNavigationTarget}
+            bottom={mapTargetBottom}
+            action={{
+              label: 'Cancel navigation',
+              accessibilityLabel: 'Cancel navigation',
+              color: navigationActionColor,
+              textColor: navigationActionTextColor,
+              borderColor: navigationActionColor,
+              bgColor: theme.alpha(navigationActionColor, 0.12),
+              Icon: XIcon,
+              onPress: map.onCancelNavigation,
+            }}
           />
         ) : null}
       </View>
@@ -1606,19 +1828,135 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   centerPlacementBall: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     borderWidth: 2,
-    borderColor: theme.palette.slate.textPrimary,
-    backgroundColor: theme.alpha(theme.palette.mono.black, 0),
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.4),
+  },
+  centerPlacementPulse: {
+    position: 'absolute',
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 2,
+    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.3),
   },
   centerPlacementDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  mapTargetSheet: {
     position: 'absolute',
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: theme.palette.slate.textPrimary,
+    left: 12,
+    right: 12,
+    zIndex: 45,
+    gap: 12,
+    padding: 12,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: theme.alpha(theme.palette.slate.light, 0.3),
+    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
+  },
+  mapTargetHeader: {
+    minHeight: 46,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  mapTargetIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.palette.slate.surfaceDeep,
+  },
+  mapTargetTitleBlock: {
+    flex: 1,
+    minWidth: 0,
+  },
+  mapTargetTitle: {
+    color: theme.palette.slate.textPrimary,
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  mapTargetSubtitle: {
+    marginTop: 2,
+    color: theme.palette.slate.textSecondary,
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 16,
+  },
+  mapTargetClose: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapTargetClosePressed: {
+    opacity: 0.55,
+  },
+  mapTargetDraftFields: {
+    gap: 8,
+  },
+  mapTargetInput: {
+    minHeight: 42,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.alpha(theme.palette.slate.light, 0.3),
+    backgroundColor: theme.alpha(theme.palette.slate.bg, 0.75),
+    paddingHorizontal: 12,
+    color: theme.palette.slate.textPrimary,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  mapTargetDescriptionInput: {
+    minHeight: 72,
+    paddingTop: 10,
+    textAlignVertical: 'top',
+  },
+  mapTargetPhotoPlaceholder: {
+    height: 46,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: theme.alpha(theme.palette.slate.light, 0.3),
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: theme.alpha(theme.palette.slate.bg, 0.4),
+  },
+  mapTargetPhotoText: {
+    color: theme.palette.slate.textSecondary,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  mapTargetNavigate: {
+    height: 46,
+    borderRadius: 23,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: theme.palette.green.bg,
+    borderWidth: 1,
+    borderColor: theme.palette.green.border,
+  },
+  mapTargetNavigatePressed: {
+    opacity: 0.55,
+  },
+  mapTargetNavigateText: {
+    color: theme.palette.green.text,
+    fontSize: 13,
+    fontWeight: '900',
   },
   telemetryInterface: {
     ...StyleSheet.absoluteFill,

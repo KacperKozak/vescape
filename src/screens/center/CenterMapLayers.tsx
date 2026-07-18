@@ -13,6 +13,7 @@ import {
 } from '@rnmapbox/maps'
 import { useEffect, useMemo, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
+import Animated, { withTiming } from 'react-native-reanimated'
 import { Text } from '@/components/ui/base/Text'
 import type { MapPoint, MapPointKind } from 'vesc-ble'
 
@@ -30,6 +31,7 @@ import {
 import { theme } from '@/constants/theme'
 import { makeCircleFeature, makeTrailLineString } from '@/helpers/mapGeometry'
 import { findNearestSampleIndexByTime } from '@/lib/history/playback'
+import type { MapSelection } from '@/lib/map/mapSelection'
 import { resolveMarkerRenderData } from '@/lib/history/markerOverlap'
 import {
   clusterMediaHistoryAssets,
@@ -197,6 +199,7 @@ interface CenterMapLayersProps {
   historyMetricGradientsEnabled: boolean
   historyMetricHotRanges: HistoryMetricHotRanges
   directionPoint: MapPoint | null
+  selectedNavigationTarget: MapSelection | null
   mapPoints: MapPoint[]
   selectedMapPointId: string | null
   hiddenMapPointKinds: MapPointKind[]
@@ -468,6 +471,39 @@ function SeekPositionPin({ rideGpsSamples }: { rideGpsSamples: HistoryGpsSample[
   )
 }
 
+function PendingNavigationTargetPin({
+  coordinate,
+  color,
+}: {
+  coordinate: [number, number]
+  color: string
+}) {
+  return (
+    <MarkerView coordinate={coordinate} allowOverlap>
+      <Animated.View
+        entering={pendingNavigationTargetEntering}
+        style={[styles.pendingNavigationTarget, { borderColor: color }]}
+      >
+        <View style={[styles.pendingNavigationTargetCore, { backgroundColor: color }]} />
+      </Animated.View>
+    </MarkerView>
+  )
+}
+
+const pendingNavigationTargetEntering = () => {
+  'worklet'
+  return {
+    initialValues: {
+      opacity: 0,
+      transform: [{ scale: 1.8 }],
+    },
+    animations: {
+      opacity: withTiming(1, { duration: 260 }),
+      transform: [{ scale: withTiming(1, { duration: 260 }) }],
+    },
+  }
+}
+
 export function HistoryMapLayers({
   rideRouteShape,
   rideRoute,
@@ -652,6 +688,7 @@ export function CenterMapLayers({
   historyMetricGradientsEnabled,
   historyMetricHotRanges,
   directionPoint,
+  selectedNavigationTarget,
   mapPoints,
   selectedMapPointId,
   hiddenMapPointKinds,
@@ -741,12 +778,22 @@ export function CenterMapLayers({
           color={directionColor}
           icon={getMapPointKindIcon(directionPoint.kind)}
           iconColor={directionTextColor}
+          selected
           onSelected={() => {
             onSuppressNextMapPress()
             onClearDirectionPoint()
           }}
         />
       )}
+      {selectedNavigationTarget &&
+      selectedNavigationTarget.type !== 'mapPoint' &&
+      !historyActive ? (
+        <PendingNavigationTargetPin
+          key={`center-selected-navigation-target-${selectedNavigationTarget.id}`}
+          coordinate={[selectedNavigationTarget.longitude, selectedNavigationTarget.latitude]}
+          color={directionColor}
+        />
+      ) : null}
       {!historyActive &&
         riders.map((rider, index) =>
           rider.presence?.target ? (
@@ -832,5 +879,20 @@ const styles = StyleSheet.create({
   },
   riderLabelStale: {
     color: theme.palette.slate.textMuted,
+  },
+  pendingNavigationTarget: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.4),
+  },
+  pendingNavigationTargetCore: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
 })

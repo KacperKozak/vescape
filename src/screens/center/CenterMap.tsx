@@ -37,6 +37,7 @@ import {
 } from '@/helpers/liveGpsPresentation'
 import { distanceMeters, makeCircleFeature, makeTrailLineString } from '@/helpers/mapGeometry'
 import type { MediaHistoryAsset } from '@/lib/history/mediaHistory'
+import type { MapSelection } from '@/lib/map/mapSelection'
 import { isMapPointKindVisible } from '@/lib/mapPointVisibility'
 import type { HistoryMetricKey } from '@/lib/history/metricColorScale'
 import { getNavigationFallbackReason } from '@/lib/map/navigationDiagnostics'
@@ -117,6 +118,13 @@ const RiderDotIcon: Icon = ({ color }) => (
   <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: color }} />
 )
 
+const SELECTABLE_BASE_MAP_LAYER_IDS = [
+  'poi-label',
+  'poi-icon',
+  'transit-label',
+  'transit-stop-icon',
+] as const
+
 function usableCoordinate(location: { longitude: number; latitude: number } | null | undefined) {
   if (!location) return null
   if (!Number.isFinite(location.longitude) || !Number.isFinite(location.latitude)) return null
@@ -124,6 +132,17 @@ function usableCoordinate(location: { longitude: number; latitude: number } | nu
     longitude: location.longitude,
     latitude: location.latitude,
   }
+}
+
+function formatMapboxCategory(value: string | null) {
+  if (!value) return null
+  const words = value
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s*,\s*/g, ' and ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!words) return null
+  return words.charAt(0).toUpperCase() + words.slice(1).toLowerCase()
 }
 
 interface CenterMapProps {
@@ -153,10 +172,11 @@ interface CenterMapProps {
   onPhoneHeadingChange: (heading: number | null) => void
   onLongPressTarget: (target: { latitude: number; longitude: number }) => void
   onMapInteraction: () => void
-  onMapPress: () => void
+  onMapPress: (selection: MapSelection) => void
   onEnterMapMode: () => void
   onOffscreenMapIndicatorsChange: (indicators: OffscreenMapIndicatorState[]) => void
   directionPoint: MapPoint | null
+  selectedNavigationTarget: MapSelection | null
   mapPoints: MapPoint[]
   selectedMapPointId: string | null
   hiddenMapPointKinds: MapPointKind[]
@@ -205,6 +225,7 @@ export const CenterMap = memo(
       onEnterMapMode,
       onOffscreenMapIndicatorsChange,
       directionPoint,
+      selectedNavigationTarget,
       mapPoints,
       selectedMapPointId,
       hiddenMapPointKinds,
@@ -233,6 +254,9 @@ export const CenterMap = memo(
     const [cameraHeading, setCameraHeading] = useState(0)
     const [cameraZoom, setCameraZoom] = useState<number>(MAP_DEFAULTS.fallbackZoom)
     const [initialApproximateFix, setInitialApproximateFix] = useState<LocationEvent | null>(null)
+    const [loadedSatelliteOverlayStyleJSON, setLoadedSatelliteOverlayStyleJSON] = useState<
+      string | null
+    >(null)
     const [mapLayout, setMapLayout] = useState<MapLayout>({ width: 0, height: 0 })
     const [offscreenMapIndicators, setOffscreenMapIndicators] = useState<
       OffscreenMapIndicatorState[]
@@ -741,6 +765,13 @@ export const CenterMap = memo(
 
     useEffect(() => {
       const frame = requestAnimationFrame(() => {
+        setLoadedSatelliteOverlayStyleJSON(null)
+      })
+      return () => cancelAnimationFrame(frame)
+    }, [isSatelliteOverlay, satelliteStyleJSON])
+
+    useEffect(() => {
+      const frame = requestAnimationFrame(() => {
         setInitialApproximateFix(gpsPresentation.nextInitialApproximateFix)
       })
       return () => cancelAnimationFrame(frame)
@@ -820,6 +851,14 @@ export const CenterMap = memo(
       perspectiveEnabled,
     ])
 
+    const handleMapStyleLoaded = useCallback(() => {
+      setLoadedSatelliteOverlayStyleJSON(isSatelliteOverlay ? satelliteStyleJSON : null)
+    }, [isSatelliteOverlay, satelliteStyleJSON])
+
+    const handleMapStyleLoading = useCallback(() => {
+      setLoadedSatelliteOverlayStyleJSON(null)
+    }, [])
+
     const handleLongPress = useCallback(
       (feature: { geometry: { coordinates: number[] } }) => {
         if (historyActive) return
@@ -846,17 +885,94 @@ export const CenterMap = memo(
       stopCameraAnimation()
     }, [onMapInteraction, stopCameraAnimation])
 
-    const handleMapPress = useCallback(() => {
-      if (suppressNextMapPressRef.current) {
-        suppressNextMapPressRef.current = false
-        if (suppressNextMapPressTimeoutRef.current) {
-          clearTimeout(suppressNextMapPressTimeoutRef.current)
-          suppressNextMapPressTimeoutRef.current = null
+    const handleMapPress = useCallback(
+      (feature: GeoJSON.Feature<GeoJSON.Point, { screenPointX: number; screenPointY: number }>) => {
+        if (suppressNextMapPressRef.current) {
+          suppressNextMapPressRef.current = false
+          if (suppressNextMapPressTimeoutRef.current) {
+            clearTimeout(suppressNextMapPressTimeoutRef.current)
+            suppressNextMapPressTimeoutRef.current = null
+          }
+          return
         }
-        return
-      }
-      onMapPress()
-    }, [onMapPress])
+        if (historyActive) return
+        const coordinates = feature.geometry?.coordinates
+        const [longitude, latitude] = coordinates ?? []
+        if (typeof longitude !== 'number' || typeof latitude !== 'number') return
+        if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) return
+
+        const screenPointX = feature.properties?.screenPointX
+        const screenPointY = feature.properties?.screenPointY
+        const fallbackSelection: MapSelection = {
+          type: 'coordinate',
+          id: `coordinate-${longitude.toFixed(6)}-${latitude.toFixed(6)}`,
+          latitude,
+          longitude,
+          title: 'Dropped pin',
+          subtitle: null,
+          loadingDetails: true,
+        }
+
+        if (typeof screenPointX !== 'number' || typeof screenPointY !== 'number') {
+          onMapPress(fallbackSelection)
+          return
+        }
+
+        void mapViewRef.current
+          ?.queryRenderedFeaturesAtPoint(
+            [screenPointX, screenPointY],
+            [],
+            [...SELECTABLE_BASE_MAP_LAYER_IDS],
+          )
+          .then((features) => {
+            const place = features?.features.find((candidate) => {
+              const name = candidate.properties?.name
+              return typeof name === 'string' && name.trim().length > 0
+            })
+            if (!place) {
+              onMapPress(fallbackSelection)
+              return
+            }
+            const placeCoordinates =
+              place.geometry.type === 'Point' ? place.geometry.coordinates : null
+            const placeLongitude =
+              typeof placeCoordinates?.[0] === 'number' ? placeCoordinates[0] : longitude
+            const placeLatitude =
+              typeof placeCoordinates?.[1] === 'number' ? placeCoordinates[1] : latitude
+            const title =
+              typeof place.properties?.name === 'string' ? place.properties.name : 'Map place'
+            const category =
+              typeof place.properties?.category === 'string'
+                ? formatMapboxCategory(place.properties.category)
+                : typeof place.properties?.class === 'string'
+                  ? formatMapboxCategory(place.properties.class)
+                  : null
+            const subtitle =
+              typeof place.properties?.full_address === 'string'
+                ? place.properties.full_address
+                : typeof place.properties?.address === 'string'
+                  ? place.properties.address
+                  : category
+            onMapPress({
+              type: 'place',
+              id:
+                typeof place.id === 'string'
+                  ? place.id
+                  : `place-${placeLongitude.toFixed(6)}-${placeLatitude.toFixed(6)}`,
+              latitude: placeLatitude,
+              longitude: placeLongitude,
+              title,
+              subtitle,
+              category,
+              loadingDetails: subtitle == null,
+            })
+          })
+          .catch(() => {
+            onMapPress(fallbackSelection)
+          })
+      },
+      [historyActive, onMapPress],
+    )
 
     useEffect(() => {
       if (mode === 'telemetry') {
@@ -1022,7 +1138,9 @@ export const CenterMap = memo(
           scaleBarEnabled={false}
           logoEnabled={false}
           attributionEnabled={false}
+          onWillStartLoadingMap={handleMapStyleLoading}
           onDidFinishLoadingMap={handleMapLoaded}
+          onDidFinishLoadingStyle={handleMapStyleLoaded}
           onPress={handleMapPress}
           onLongPress={handleLongPress}
           onMapIdle={handleMapIdle}
@@ -1036,7 +1154,7 @@ export const CenterMap = memo(
             maxZoomLevel={MAP_DEFAULTS.maxZoom}
             animationMode="easeTo"
           />
-          {isSatelliteOverlay ? (
+          {isSatelliteOverlay && loadedSatelliteOverlayStyleJSON === satelliteStyleJSON ? (
             <>
               <RasterLayer
                 id="satellite"
@@ -1166,6 +1284,7 @@ export const CenterMap = memo(
             historyMetricGradientsEnabled={historyMetricGradientsEnabled}
             historyMetricHotRanges={historyMetricHotRanges}
             directionPoint={directionPoint}
+            selectedNavigationTarget={selectedNavigationTarget}
             mapPoints={mapPoints}
             selectedMapPointId={selectedMapPointId}
             hiddenMapPointKinds={hiddenMapPointKinds}

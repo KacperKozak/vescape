@@ -8,8 +8,15 @@ export interface MapSearchResult {
   longitude: number
 }
 
+export interface MapReverseGeocodeResult {
+  title: string
+  subtitle: string
+}
+
 interface MapboxGeocodingFeature {
   id?: string
+  text?: string
+  place_name?: string
   geometry?: {
     coordinates?: unknown
   }
@@ -38,13 +45,15 @@ function getFeatureCoordinates(feature: MapboxGeocodingFeature) {
 }
 
 function getFeatureTitle(feature: MapboxGeocodingFeature) {
-  return feature.properties?.name ?? 'Unnamed place'
+  return feature.properties?.name ?? feature.text ?? 'Unnamed place'
 }
 
 function getFeatureSubtitle(feature: MapboxGeocodingFeature) {
   const fullAddress = feature.properties?.full_address
   const place = feature.properties?.place_formatted
-  return fullAddress && place ? fullAddress : fullAddress || place || 'Mapbox result'
+  return fullAddress && place
+    ? fullAddress
+    : fullAddress || place || feature.place_name || 'Mapbox result'
 }
 
 function toMapSearchResult(feature: MapboxGeocodingFeature): MapSearchResult | null {
@@ -91,4 +100,32 @@ export async function searchMapResults(query: string, options: SearchMapResultsO
 
   const data = (await response.json()) as MapboxGeocodingResponse
   return (data.features ?? []).map(toMapSearchResult).filter((result) => result != null)
+}
+
+export async function reverseGeocodeMapCoordinate(
+  latitude: number,
+  longitude: number,
+  options: { signal?: AbortSignal } = {},
+): Promise<MapReverseGeocodeResult | null> {
+  if (!MAPBOX_ACCESS_TOKEN) throw new Error('Mapbox access token missing')
+
+  const params = new URLSearchParams({
+    access_token: MAPBOX_ACCESS_TOKEN,
+    limit: '1',
+  })
+  const response = await fetch(
+    `https://api.mapbox.com/geocoding/v5/mapbox.places/${longitude},${latitude}.json?${params}`,
+    { signal: options.signal },
+  )
+  if (!response.ok) {
+    throw new Error(`Mapbox reverse geocoding failed: ${response.status}`)
+  }
+
+  const data = (await response.json()) as MapboxGeocodingResponse
+  const feature = data.features?.[0]
+  if (!feature) return null
+  return {
+    title: getFeatureTitle(feature),
+    subtitle: getFeatureSubtitle(feature),
+  }
 }

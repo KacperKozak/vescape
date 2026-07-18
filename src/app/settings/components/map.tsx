@@ -132,6 +132,7 @@ export default function MapComponentsShowcase() {
           historyMetricGradientsEnabled
           historyMetricHotRanges={FIXTURE_HISTORY_METRIC_HOT_RANGES}
           directionPoint={FIXTURE_DIRECTION_POINT}
+          selectedNavigationTarget={null}
           mapPoints={mapPoints}
           selectedMapPointId={selectedMapPointId}
           hiddenMapPointKinds={[]}
