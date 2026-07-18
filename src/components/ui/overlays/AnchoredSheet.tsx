@@ -40,7 +40,7 @@ const OPEN_DURATION = 260
 const CLOSE_DURATION = 180
 const SCREEN_EDGE_PADDING = 10
 /** Fraction of the screen height a sheet is allowed to occupy. */
-const HEIGHT_FRACTION = 0.6
+const HEIGHT_FRACTION = 0.75
 /** Continue closing automatically once this many pixels of the drawer remain visible. */
 const DRAWER_AUTO_CLOSE_VISIBLE_PX = 200
 /** Approximate native fling travel from Android's release velocity in points/ms. */

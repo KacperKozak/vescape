@@ -106,6 +106,11 @@ import {
 } from '@/lib/legal/legalLimits'
 import { useSettingsStore } from '@/store/settingsStore'
 
+const LEGAL_LIST_PANEL_HEIGHT = 280
+const LEGAL_OVERLAY_GAP = 8
+const LEGAL_LEGEND_HEIGHT = 12
+const LEGAL_LIST_TOGGLE_HEIGHT = 42
+
 interface CenterBoardOverlayProps {
   boards: Board[]
   activeBoardId: string | null
@@ -822,6 +827,9 @@ export function CenterOverlays({
   const historyBusy = history.loadingSession || history.historyLoading
   const telemetryInteractive = mode === 'telemetry' && !revealGestureActive
   const legalListVisible = mode === 'legalLimits' && legalListOpen
+  const legalBaseBottom = legalListVisible ? LEGAL_LIST_PANEL_HEIGHT : Math.max(insets.bottom, 16)
+  const legalLegendBottom = legalBaseBottom + LEGAL_OVERLAY_GAP
+  const legalListToggleBottom = legalLegendBottom + LEGAL_LEGEND_HEIGHT + LEGAL_OVERLAY_GAP
   const mapModeTabsTop = Math.max(insets.top, 8)
   const belowMapModeTabsTop = mapModeTabsTop + 48
   const interfaceFadeStyle = useAnimatedStyle(() => ({
@@ -1109,9 +1117,7 @@ export function CenterOverlays({
           style={({ pressed }) => [
             styles.legalListToggle,
             {
-              bottom: legalListVisible
-                ? Math.max(insets.bottom, 16) + 280
-                : Math.max(insets.bottom, 16),
+              bottom: legalListToggleBottom,
             },
             pressed && styles.legalListTogglePressed,
           ]}
@@ -1130,7 +1136,7 @@ export function CenterOverlays({
           style={[
             styles.legalLegend,
             {
-              bottom: legalListVisible ? 282 : Math.max(insets.bottom, 16) - 4,
+              bottom: legalLegendBottom,
             },
           ]}
         >
@@ -1697,7 +1703,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    minHeight: 42,
+    minHeight: LEGAL_LIST_TOGGLE_HEIGHT,
     paddingHorizontal: 16,
     borderRadius: 21,
     borderWidth: 1,
@@ -1718,7 +1724,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    maxHeight: 280,
+    maxHeight: LEGAL_LIST_PANEL_HEIGHT,
     paddingTop: 14,
     paddingHorizontal: 14,
     gap: 8,

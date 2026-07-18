@@ -60,6 +60,14 @@ function mapEdgeVignetteSpace(mode: CenterViewState) {
     }
   }
 
+  if (mode === 'legalLimits') {
+    return {
+      levels: [0.6, 0.3, 0],
+      topEnd: 0.18,
+      bottomStart: 0.82,
+    }
+  }
+
   return {
     levels: [0.45, 0.18, 0],
     topEnd: 0.18,

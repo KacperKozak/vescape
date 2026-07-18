@@ -65,7 +65,9 @@ export function LegalLimitCountryDetails({ country }: LegalLimitCountryDetailsPr
               <Text style={styles.badgeValue}>{speedLabel}</Text>
             </View>
           </View>
-          <Text style={styles.badgeCaption}>{country.speedLimitBasis}</Text>
+          <Text style={styles.badgeCaption} numberOfLines={3}>
+            {country.speedLimitBasis}
+          </Text>
         </View>
       </View>
 
@@ -136,19 +138,20 @@ const styles = StyleSheet.create({
   badge: {
     ...widgetSurface,
     flex: 1,
-    minHeight: 82,
+    minHeight: 70,
     padding: 10,
     gap: 8,
   },
   speedBadge: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    gap: 8,
   },
   speedBadgeMain: {
-    flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    flexShrink: 0,
+    flex: 1,
+    minWidth: 0,
   },
   badgeIcon: {
     width: 28,
@@ -175,6 +178,7 @@ const styles = StyleSheet.create({
   },
   badgeCaption: {
     flex: 1,
+    minWidth: 0,
     color: theme.palette.slate.textSecondary,
     fontSize: 10,
     fontWeight: '700',
