@@ -70,7 +70,7 @@ export function MapNavigationSelector({
       activeKey={activeMode}
       activeIcon={activeIcon}
       activeColor={theme.palette.green.text}
-      activeBackground={`${theme.palette.green.color}1f`}
+      activeBackground={theme.alpha(theme.palette.green.color, 0.12)}
       collapsedAccessibilityLabel={`Navigation: ${activeMode === 'northUp' ? 'North up' : activeMode === 'gpsHeading' ? 'GPS heading' : activeMode === 'phoneHeading' ? 'Compass' : 'Free rotate'}`}
       expanded={expanded}
       size={size}

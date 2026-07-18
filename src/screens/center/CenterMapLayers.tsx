@@ -199,13 +199,12 @@ interface CenterMapLayersProps {
   historyMetricGradientsEnabled: boolean
   historyMetricHotRanges: HistoryMetricHotRanges
   directionPoint: MapPoint | null
+  activeNavigationTarget: MapSelection | null
   selectedNavigationTarget: MapSelection | null
   mapPoints: MapPoint[]
   selectedMapPointId: string | null
   hiddenMapPointKinds: MapPointKind[]
-  onClearDirectionPoint: () => void
   onToggleMapPointSelection: (id: string) => void
-  onRemoveMapPoint: (id: string) => void
   onSuppressNextMapPress: () => void
   onSelectMarker: (selection: SelectedHistoryMarker) => void
   onOpenMedia: (asset: MediaHistoryAsset) => void
@@ -688,13 +687,12 @@ export function CenterMapLayers({
   historyMetricGradientsEnabled,
   historyMetricHotRanges,
   directionPoint,
+  activeNavigationTarget,
   selectedNavigationTarget,
   mapPoints,
   selectedMapPointId,
   hiddenMapPointKinds,
-  onClearDirectionPoint,
   onToggleMapPointSelection,
-  onRemoveMapPoint,
   onSuppressNextMapPress,
   onSelectMarker,
   onOpenMedia,
@@ -711,6 +709,10 @@ export function CenterMapLayers({
       ) ?? null,
     [hiddenMapPointKinds, mapPoints, selectedMapPointId],
   )
+  const activeNavigationMapPointId =
+    activeNavigationTarget?.type === 'mapPoint' ? activeNavigationTarget.point.id : null
+  const showDirectionPoint =
+    directionPoint != null && activeNavigationTarget?.type !== 'mapPoint' && !historyActive
 
   return (
     <>
@@ -768,7 +770,7 @@ export function CenterMapLayers({
           highContrastRoutes={isSatellite}
         />
       )}
-      {directionPoint && !historyActive && (
+      {showDirectionPoint && (
         <MapPin
           // Color in the key: PointAnnotation snapshots its children natively, so a
           // rider-color change must remount the pin to re-render.
@@ -779,10 +781,7 @@ export function CenterMapLayers({
           icon={getMapPointKindIcon(directionPoint.kind)}
           iconColor={directionTextColor}
           selected
-          onSelected={() => {
-            onSuppressNextMapPress()
-            onClearDirectionPoint()
-          }}
+          navigationActive
         />
       )}
       {selectedNavigationTarget &&
@@ -822,16 +821,15 @@ export function CenterMapLayers({
               color={getMapPointKindColor(point.kind)}
               icon={getMapPointKindIcon(point.kind)}
               iconColor={getMapPointKindTextColor(point.kind)}
-              selected={selectedMapPoint?.id === point.id}
-              expandSelected={expandSelectedMapPoints}
+              selected={
+                selectedMapPoint?.id === point.id || activeNavigationMapPointId === point.id
+              }
+              navigationActive={activeNavigationMapPointId === point.id}
+              expandSelected={expandSelectedMapPoints && selectedMapPoint?.id === point.id}
               label={getMapPointKindLabel(point.kind)}
               onSelected={() => {
                 onSuppressNextMapPress()
                 onToggleMapPointSelection(point.id)
-              }}
-              onRemove={() => {
-                onSuppressNextMapPress()
-                onRemoveMapPoint(point.id)
               }}
             />
           ))}

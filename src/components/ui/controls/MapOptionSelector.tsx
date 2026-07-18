@@ -1,5 +1,5 @@
 import { type ReactNode } from 'react'
-import { Pressable, StyleSheet } from 'react-native'
+import { Pressable, StyleSheet, View } from 'react-native'
 import Animated, { useAnimatedStyle, withTiming } from 'react-native-reanimated'
 import { theme } from '@/constants/theme'
 
@@ -29,14 +29,15 @@ const SELECTOR_METRICS = {
     height: 38,
     collapsedWidth: 38,
     collapsedButton: 36,
-    optionWidth: 36,
+    optionWidth: 40,
     optionHeight: 34,
     activeWidth: 112,
     radius: 19,
     optionRadius: 17,
+    iconBoxSize: 26,
     labelFontSize: 12,
     labelMarginLeft: 7,
-    paddingHorizontal: 10,
+    paddingHorizontal: 7,
   },
   md: {
     height: 50,
@@ -47,12 +48,14 @@ const SELECTOR_METRICS = {
     activeWidth: 126,
     radius: 25,
     optionRadius: 23,
+    iconBoxSize: 32,
     labelFontSize: 13,
     labelMarginLeft: 8,
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
   },
 } as const
 const ANIMATION = { duration: 180 } as const
+const TRANSPARENT_OPTION_COLOR = theme.alpha(theme.palette.mono.black, 0)
 
 export function MapOptionSelector<Key extends string>({
   activeKey,
@@ -69,14 +72,9 @@ export function MapOptionSelector<Key extends string>({
   const metrics = SELECTOR_METRICS[size]
   const shellStyle = useAnimatedStyle(
     () => ({
-      width: withTiming(
-        expanded
-          ? metrics.activeWidth + metrics.optionWidth * (options.length - 1) + 2
-          : metrics.collapsedWidth,
-        ANIMATION,
-      ),
+      width: withTiming(getSelectorWidth(metrics, options.length, expanded), ANIMATION),
     }),
-    [expanded, metrics.activeWidth, metrics.collapsedWidth, metrics.optionWidth, options.length],
+    [expanded, metrics, options.length],
   )
   const optionsStyle = useAnimatedStyle(
     () => ({
@@ -114,6 +112,7 @@ export function MapOptionSelector<Key extends string>({
             expanded={expanded}
             activeColor={activeColor}
             activeBackground={activeBackground}
+            activeBorder={theme.alpha(activeColor, 0.6)}
             metrics={metrics}
             onPress={() => {
               if (activeKey === option.key) {
@@ -159,6 +158,7 @@ interface MapOptionButtonProps {
   expanded: boolean
   activeColor: string
   activeBackground: string
+  activeBorder: string
   metrics: (typeof SELECTOR_METRICS)[MapOptionSelectorSize]
   onPress: () => void
 }
@@ -170,29 +170,28 @@ function MapOptionButton({
   expanded,
   activeColor,
   activeBackground,
+  activeBorder,
   metrics,
   onPress,
 }: MapOptionButtonProps) {
   const style = useAnimatedStyle(
     () => ({
-      width: withTiming(
-        expanded && selected ? metrics.activeWidth : metrics.optionWidth,
-        ANIMATION,
-      ),
+      width: withTiming(getOptionWidth(metrics, expanded, selected), ANIMATION),
       backgroundColor: withTiming(
-        expanded && selected ? activeBackground : theme.alpha(theme.palette.mono.black, 0),
+        getOptionBackground(activeBackground, expanded, selected),
         ANIMATION,
       ),
+      borderColor: withTiming(getOptionBorder(activeBorder, expanded, selected), ANIMATION),
     }),
-    [activeBackground, expanded, metrics.activeWidth, metrics.optionWidth, selected],
+    [activeBackground, activeBorder, expanded, metrics, selected],
   )
   const labelStyle = useAnimatedStyle(
     () => ({
       opacity: withTiming(expanded && selected ? 1 : 0, ANIMATION),
-      maxWidth: withTiming(expanded && selected ? metrics.activeWidth : 0, ANIMATION),
+      maxWidth: withTiming(getLabelMaxWidth(metrics, expanded, selected), ANIMATION),
       marginLeft: withTiming(expanded && selected ? metrics.labelMarginLeft : 0, ANIMATION),
     }),
-    [expanded, metrics.activeWidth, metrics.labelMarginLeft, selected],
+    [expanded, metrics, selected],
   )
 
   return (
@@ -210,7 +209,9 @@ function MapOptionButton({
         style={[styles.optionPressable, { paddingHorizontal: metrics.paddingHorizontal }]}
         onPress={onPress}
       >
-        {icon}
+        <View style={[styles.iconBox, { width: metrics.iconBoxSize, height: metrics.iconBoxSize }]}>
+          {icon}
+        </View>
         <Animated.Text
           numberOfLines={1}
           style={[
@@ -224,6 +225,50 @@ function MapOptionButton({
       </Pressable>
     </Animated.View>
   )
+}
+
+function getSelectorWidth(
+  metrics: (typeof SELECTOR_METRICS)[MapOptionSelectorSize],
+  optionCount: number,
+  expanded: boolean,
+) {
+  'worklet'
+  if (!expanded) return metrics.collapsedWidth
+  return metrics.activeWidth + metrics.optionWidth * (optionCount - 1) + 2
+}
+
+function getOptionWidth(
+  metrics: (typeof SELECTOR_METRICS)[MapOptionSelectorSize],
+  expanded: boolean,
+  selected: boolean,
+) {
+  'worklet'
+  return expanded && selected ? metrics.activeWidth : metrics.optionWidth
+}
+
+function getLabelMaxWidth(
+  metrics: (typeof SELECTOR_METRICS)[MapOptionSelectorSize],
+  expanded: boolean,
+  selected: boolean,
+) {
+  'worklet'
+  if (!expanded || !selected) return 0
+  return (
+    metrics.activeWidth -
+    metrics.iconBoxSize -
+    metrics.labelMarginLeft -
+    metrics.paddingHorizontal * 2
+  )
+}
+
+function getOptionBackground(activeBackground: string, expanded: boolean, selected: boolean) {
+  'worklet'
+  return expanded && selected ? activeBackground : TRANSPARENT_OPTION_COLOR
+}
+
+function getOptionBorder(activeBorder: string, expanded: boolean, selected: boolean) {
+  'worklet'
+  return expanded && selected ? activeBorder : TRANSPARENT_OPTION_COLOR
 }
 
 const styles = StyleSheet.create({
@@ -255,6 +300,7 @@ const styles = StyleSheet.create({
   },
   option: {
     overflow: 'hidden',
+    borderWidth: 1,
   },
   optionPressable: {
     flex: 1,
@@ -262,6 +308,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 12,
+  },
+  iconBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
   selectedLabel: {
     overflow: 'hidden',

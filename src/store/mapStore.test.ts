@@ -206,6 +206,39 @@ test('toggles one non-direction Map Point selection at a time', async () => {
   expect(useMapStore.getState().selectedMapPointId).toBe(null)
 })
 
+test('selects one non-direction Map Point without toggling it off', async () => {
+  const { useMapStore } = await import('./mapStore')
+  const first: MapPoint = {
+    id: 'drop-1',
+    kind: 'drop',
+    latitude: 52.1,
+    longitude: 21.1,
+    createdAt: 1000,
+    updatedAt: 1000,
+  }
+  const second: MapPoint = {
+    id: 'bonk-1',
+    kind: 'bonk',
+    latitude: 52.2,
+    longitude: 21.2,
+    createdAt: 1100,
+    updatedAt: 1100,
+  }
+  useMapStore.setState({ mapPoints: [first, second], selectedMapPointId: null, loaded: true })
+
+  useMapStore.getState().selectMapPoint(first.id)
+
+  expect(useMapStore.getState().selectedMapPointId).toBe(first.id)
+
+  useMapStore.getState().selectMapPoint(first.id)
+
+  expect(useMapStore.getState().selectedMapPointId).toBe(first.id)
+
+  useMapStore.getState().selectMapPoint(second.id)
+
+  expect(useMapStore.getState().selectedMapPointId).toBe(second.id)
+})
+
 test('ignores direction point selection', async () => {
   const { useMapStore } = await import('./mapStore')
   const direction: MapPoint = {
@@ -219,6 +252,23 @@ test('ignores direction point selection', async () => {
   useMapStore.setState({ mapPoints: [direction], selectedMapPointId: null, loaded: true })
 
   useMapStore.getState().toggleMapPointSelection(direction.id)
+
+  expect(useMapStore.getState().selectedMapPointId).toBe(null)
+})
+
+test('ignores direction point explicit selection', async () => {
+  const { useMapStore } = await import('./mapStore')
+  const direction: MapPoint = {
+    id: 'direction-1',
+    kind: 'direction',
+    latitude: 52.2,
+    longitude: 21.2,
+    createdAt: 1100,
+    updatedAt: 1100,
+  }
+  useMapStore.setState({ mapPoints: [direction], selectedMapPointId: null, loaded: true })
+
+  useMapStore.getState().selectMapPoint(direction.id)
 
   expect(useMapStore.getState().selectedMapPointId).toBe(null)
 })

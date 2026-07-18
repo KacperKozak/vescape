@@ -50,7 +50,7 @@ export function MapStyleSwitch({
       activeKey={effectiveActiveKey}
       activeIcon={<activeStyle.Icon size={iconSize} color={theme.palette.sky.text} weight="fill" />}
       activeColor={theme.palette.sky.text}
-      activeBackground={`${theme.palette.sky.color}1f`}
+      activeBackground={theme.alpha(theme.palette.sky.color, 0.12)}
       collapsedAccessibilityLabel={`Basemap: ${activeStyle.label}`}
       expanded={expanded}
       size={size}

@@ -1,7 +1,7 @@
 import { Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/ui/base/Text'
 import { MarkerView, PointAnnotation } from '@rnmapbox/maps'
-import { TrashIcon, type Icon } from 'phosphor-react-native'
+import { type Icon } from 'phosphor-react-native'
 import { theme } from '@/constants/theme'
 
 interface MapPinProps {
@@ -12,11 +12,42 @@ interface MapPinProps {
   iconColor?: string
   bearingDeg?: number | null
   selected?: boolean
+  navigationActive?: boolean
   expandSelected?: boolean
   label?: string
   onSelected?: () => void
-  onRemove?: () => void
 }
+
+const MAP_PIN_ICON_METRICS = {
+  default: {
+    size: 22,
+    radius: 11,
+    borderWidth: 1.5,
+    iconSize: 12,
+    opacity: 0.78,
+  },
+  selected: {
+    size: 32,
+    radius: 16,
+    borderWidth: 2.5,
+    iconSize: 18,
+    opacity: 1,
+  },
+  navigation: {
+    size: 40,
+    radius: 20,
+    borderWidth: 3,
+    iconSize: 23,
+    opacity: 1,
+  },
+  expanded: {
+    size: 42,
+    radius: 21,
+    borderWidth: 2.5,
+    iconSize: 22,
+    opacity: 1,
+  },
+} as const
 
 export function MapPin({
   id,
@@ -26,51 +57,55 @@ export function MapPin({
   iconColor,
   bearingDeg,
   selected = false,
+  navigationActive = false,
   expandSelected = false,
   label,
   onSelected,
-  onRemove,
 }: MapPinProps) {
   if (IconComponent) {
-    if (selected && expandSelected && label && onRemove) {
+    if (selected && expandSelected && label) {
+      const metrics = MAP_PIN_ICON_METRICS.expanded
       return (
         <MarkerView coordinate={coordinate} allowOverlap>
           <View style={styles.selectedMapPoint}>
             <Pressable
-              style={[styles.iconPin, styles.iconPinSelected, { borderColor: color }]}
+              style={[styles.iconPin, iconPinStyle(metrics, color), styles.iconPinExpanded]}
               onPress={onSelected}
             >
-              <IconComponent size={24} color={iconColor ?? color} weight="bold" />
+              <IconComponent size={metrics.iconSize} color={iconColor ?? color} weight="bold" />
             </Pressable>
             <View style={styles.selectedMapPointExtension}>
               <Text numberOfLines={1} style={styles.selectedMapPointLabel}>
                 {label}
               </Text>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`Delete ${label}`}
-                style={styles.selectedMapPointDelete}
-                onPress={onRemove}
-              >
-                <TrashIcon size={16} color={theme.status.error.text} weight="bold" />
-              </Pressable>
             </View>
           </View>
         </MarkerView>
       )
     }
 
+    const metrics = navigationActive
+      ? MAP_PIN_ICON_METRICS.navigation
+      : selected
+        ? MAP_PIN_ICON_METRICS.selected
+        : MAP_PIN_ICON_METRICS.default
+    const annotationKey = getIconAnnotationKey(id, selected, navigationActive, color, iconColor)
     return (
-      <PointAnnotation id={id} coordinate={coordinate} onSelected={onSelected}>
+      <PointAnnotation key={annotationKey} id={id} coordinate={coordinate} onSelected={onSelected}>
         {/* collapsable={false}: on iOS New Arch (Fabric) a layout-only wrapper is
             flattened, hoisting its children as direct PointAnnotation subviews and
             triggering "supports max 1 subview" + a broken snapshot (rnmapbox #3682,
             fixed in 10.3.2). Remove once we bump past 10.3.1. */}
-        <View
-          collapsable={false}
-          style={[styles.iconPin, { borderColor: color }, selected && styles.iconPinSelected]}
-        >
-          <IconComponent size={selected ? 24 : 15} color={iconColor ?? color} weight="bold" />
+        <View collapsable={false} style={styles.iconPinFrame}>
+          <View
+            style={[
+              styles.iconPin,
+              iconPinStyle(metrics, color),
+              selected && styles.iconPinSelected,
+            ]}
+          >
+            <IconComponent size={metrics.iconSize} color={iconColor ?? color} weight="bold" />
+          </View>
         </View>
       </PointAnnotation>
     )
@@ -110,6 +145,30 @@ export function MapPin({
   )
 }
 
+function getIconAnnotationKey(
+  id: string,
+  selected: boolean,
+  navigationActive: boolean,
+  color: string,
+  iconColor: string | undefined,
+) {
+  return `${id}-${navigationActive ? 'navigation' : selected ? 'selected' : 'default'}-${color}-${iconColor ?? color}`
+}
+
+function iconPinStyle(
+  metrics: (typeof MAP_PIN_ICON_METRICS)[keyof typeof MAP_PIN_ICON_METRICS],
+  color: string,
+) {
+  return {
+    width: metrics.size,
+    height: metrics.size,
+    borderRadius: metrics.radius,
+    borderWidth: metrics.borderWidth,
+    borderColor: color,
+    opacity: metrics.opacity,
+  }
+}
+
 const styles = StyleSheet.create({
   pin: {
     width: 32,
@@ -121,46 +180,46 @@ const styles = StyleSheet.create({
     backgroundColor: theme.palette.slate.textPrimary,
   },
   iconPin: {
-    width: 22,
-    height: 22,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 11,
-    borderWidth: 2,
     backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.6),
-    opacity: 0.78,
     shadowColor: theme.palette.slate.surfaceDeep,
     shadowOpacity: 0.22,
     shadowRadius: 3,
     shadowOffset: { width: 0, height: 2 },
     elevation: 4,
   },
+  iconPinFrame: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   iconPinSelected: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 3,
     backgroundColor: theme.palette.slate.surfaceDeep,
-    opacity: 1,
     shadowOpacity: 0.36,
-    shadowRadius: 7,
-    elevation: 8,
+    shadowRadius: 5,
+    elevation: 6,
     zIndex: 2,
   },
+  iconPinExpanded: {
+    shadowRadius: 7,
+    elevation: 8,
+  },
   selectedMapPoint: {
-    height: 44,
-    flexDirection: 'row',
+    width: 42,
+    height: 42,
     alignItems: 'center',
-    justifyContent: 'flex-start',
-    transform: [{ translateX: 58 }],
+    justifyContent: 'center',
   },
   selectedMapPointExtension: {
+    position: 'absolute',
+    left: 40,
     minWidth: 88,
     maxWidth: 174,
-    height: 36,
-    marginLeft: -2,
+    height: 34,
     paddingLeft: 14,
-    paddingRight: 4,
+    paddingRight: 12,
     flexDirection: 'row',
     alignItems: 'center',
     borderTopLeftRadius: 6,
@@ -175,12 +234,6 @@ const styles = StyleSheet.create({
     color: theme.palette.slate.textPrimary,
     fontSize: 12,
     fontWeight: '800',
-  },
-  selectedMapPointDelete: {
-    width: 38,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   pinCore: {
     width: 11,

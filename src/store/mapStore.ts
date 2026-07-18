@@ -29,6 +29,7 @@ interface MapActions {
   clearDirectionPoint(): Promise<void>
   removeMapPoint(id: string): Promise<void>
   getDirectionPoint(): MapPoint | null
+  selectMapPoint(id: string): void
   toggleMapPointSelection(id: string): void
   clearSelectedMapPoints(): void
   toggleMapPointKindVisibility(kind: MapPointKind): void
@@ -117,6 +118,14 @@ export const useMapStore = create<MapState & MapActions>((set, get) => ({
 
   getDirectionPoint() {
     return get().mapPoints.find((point) => point.kind === DIRECTION_MAP_POINT_KIND) ?? null
+  },
+
+  selectMapPoint(id) {
+    set((s) => {
+      const point = s.mapPoints.find((candidate) => candidate.id === id)
+      if (!point || !isSelectableMapPoint(point)) return s
+      return { selectedMapPointId: id }
+    })
   },
 
   toggleMapPointSelection(id) {

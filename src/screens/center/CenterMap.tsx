@@ -176,13 +176,12 @@ interface CenterMapProps {
   onEnterMapMode: () => void
   onOffscreenMapIndicatorsChange: (indicators: OffscreenMapIndicatorState[]) => void
   directionPoint: MapPoint | null
+  activeNavigationTarget: MapSelection | null
   selectedNavigationTarget: MapSelection | null
   mapPoints: MapPoint[]
   selectedMapPointId: string | null
   hiddenMapPointKinds: MapPointKind[]
   onToggleMapPointSelection: (id: string) => void
-  onRemoveMapPoint: (id: string) => void
-  onClearDirectionPoint: () => void
   weatherActive: boolean
   legalLimitsActive: boolean
   historyPreview:
@@ -225,15 +224,14 @@ export const CenterMap = memo(
       onEnterMapMode,
       onOffscreenMapIndicatorsChange,
       directionPoint,
+      activeNavigationTarget,
       selectedNavigationTarget,
       mapPoints,
       selectedMapPointId,
       hiddenMapPointKinds,
       onToggleMapPointSelection,
-      onRemoveMapPoint,
       weatherActive,
       legalLimitsActive,
-      onClearDirectionPoint,
       historyPreview,
     },
     ref,
@@ -511,6 +509,43 @@ export const CenterMap = memo(
         }),
       [mapRiders],
     )
+    const activeNavigationPoint = useMemo(() => {
+      if (!activeNavigationTarget) {
+        if (!directionPoint) return null
+        return {
+          id: 'direction',
+          type: 'direction' as const,
+          coordinate: [directionPoint.longitude, directionPoint.latitude] as [number, number],
+          color: riderColor ?? DESTINATION_POINT_COLOR,
+          textColor: riderColor ?? DESTINATION_POINT_TEXT_COLOR,
+          icon: getMapPointKindIcon('direction'),
+        }
+      }
+      if (activeNavigationTarget.type === 'mapPoint') {
+        const point =
+          mapPoints.find((candidate) => candidate.id === activeNavigationTarget.id) ??
+          activeNavigationTarget.point
+        return {
+          id: `navigation-map-point-${point.id}`,
+          type: 'mapPoint' as const,
+          coordinate: [point.longitude, point.latitude] as [number, number],
+          color: getMapPointKindColor(point.kind),
+          textColor: getMapPointKindTextColor(point.kind),
+          icon: getMapPointKindIcon(point.kind),
+        }
+      }
+      return {
+        id: 'direction',
+        type: 'direction' as const,
+        coordinate: [activeNavigationTarget.longitude, activeNavigationTarget.latitude] as [
+          number,
+          number,
+        ],
+        color: riderColor ?? DESTINATION_POINT_COLOR,
+        textColor: riderColor ?? DESTINATION_POINT_TEXT_COLOR,
+        icon: getMapPointKindIcon('direction'),
+      }
+    }, [activeNavigationTarget, directionPoint, mapPoints, riderColor])
     // Peers themselves, same shape and index-aligned tint as their map pins.
     const riderPoints = useMemo(
       () =>
@@ -575,7 +610,7 @@ export const CenterMap = memo(
         mapView == null ||
         historyActive ||
         (offscreenMapGpsCoordinate == null &&
-          directionPoint == null &&
+          activeNavigationPoint == null &&
           selectedMapPoint == null &&
           riderTargetPoints.length === 0 &&
           riderPoints.length === 0) ||
@@ -606,19 +641,9 @@ export const CenterMap = memo(
               },
             ]
           : []),
-        ...(directionPoint
-          ? [
-              {
-                id: 'direction',
-                type: 'direction' as const,
-                coordinate: [directionPoint.longitude, directionPoint.latitude] as [number, number],
-                color: riderColor ?? DESTINATION_POINT_COLOR,
-                textColor: riderColor ?? DESTINATION_POINT_TEXT_COLOR,
-                icon: getMapPointKindIcon('direction'),
-              },
-            ]
-          : []),
-        ...(selectedMapPoint
+        ...(activeNavigationPoint ? [activeNavigationPoint] : []),
+        ...(selectedMapPoint &&
+        activeNavigationPoint?.id !== `navigation-map-point-${selectedMapPoint.id}`
           ? [
               {
                 id: `map-point-${selectedMapPoint.id}`,
@@ -677,8 +702,8 @@ export const CenterMap = memo(
     }, [
       applyOffscreenMapIndicatorDrafts,
       clearOffscreenMapIndicators,
+      activeNavigationPoint,
       currentCameraRef,
-      directionPoint,
       historyActive,
       mapLayout,
       offscreenMapGpsCoordinate,
@@ -1284,13 +1309,12 @@ export const CenterMap = memo(
             historyMetricGradientsEnabled={historyMetricGradientsEnabled}
             historyMetricHotRanges={historyMetricHotRanges}
             directionPoint={directionPoint}
+            activeNavigationTarget={activeNavigationTarget}
             selectedNavigationTarget={selectedNavigationTarget}
             mapPoints={mapPoints}
             selectedMapPointId={selectedMapPointId}
             hiddenMapPointKinds={hiddenMapPointKinds}
-            onClearDirectionPoint={onClearDirectionPoint}
             onToggleMapPointSelection={onToggleMapPointSelection}
-            onRemoveMapPoint={onRemoveMapPoint}
             onSuppressNextMapPress={handleSuppressNextMapPress}
             onSelectMarker={setSelectedHistoryMarker}
             onOpenMedia={onOpenMedia}
