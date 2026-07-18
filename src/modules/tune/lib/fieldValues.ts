@@ -1,4 +1,4 @@
-import type { TuneProfileFieldValue } from 'vesc-ble'
+import type { TuneProfileFieldValue } from 'vescape-core'
 
 export function isDisplayableFieldValue(
   value: TuneProfileFieldValue | undefined,

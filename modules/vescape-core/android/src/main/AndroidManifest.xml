@@ -1,0 +1,43 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30"/>
+  <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30"/>
+  <uses-permission android:name="android.permission.BLUETOOTH_SCAN"/>
+  <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
+  <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+  <!--
+    Required for the companion auto-start path: when the board is detected nearby the OS starts the
+    foreground service from the background, and Android withholds while-in-use location/camera/mic
+    from a background-started FGS. Only "Allow all the time" lets hands-off rides record GPS.
+  -->
+  <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION"/>
+  <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+  <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS"/>
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"/>
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING"/>
+  <uses-permission android:name="android.permission.REQUEST_OBSERVE_COMPANION_DEVICE_PRESENCE"/>
+  <uses-permission android:name="android.permission.REQUEST_COMPANION_START_FOREGROUND_SERVICES_FROM_BACKGROUND"/>
+  <uses-permission android:name="android.permission.VIBRATE"/>
+  <uses-feature android:name="android.software.companion_device_setup" android:required="false"/>
+
+  <application>
+    <service
+      android:name=".service.CoreForegroundService"
+      android:exported="false"
+      android:foregroundServiceType="connectedDevice|location|remoteMessaging"/>
+    <service
+      android:name=".service.BoardCompanionDeviceService"
+      android:exported="true"
+      android:permission="android.permission.BIND_COMPANION_DEVICE_SERVICE">
+      <intent-filter>
+        <action android:name="android.companion.CompanionDeviceService"/>
+      </intent-filter>
+    </service>
+    <provider
+      android:name=".service.AutoConnectProvider"
+      android:authorities="${applicationId}.auto-connect"
+      android:exported="false"
+      android:initOrder="100"/>
+  </application>
+</manifest>

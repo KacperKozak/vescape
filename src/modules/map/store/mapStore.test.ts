@@ -1,7 +1,7 @@
 import { beforeEach, expect, mock, test } from 'bun:test'
-import type { MapPoint } from 'vesc-ble'
+import type { MapPoint } from 'vescape-core'
 
-const actualVescBle = await import('@/../modules/vesc-ble/src/index')
+const actualVescapeCore = await import('@/../modules/vescape-core/src/index')
 
 let persistedMapPoints: MapPoint[] = []
 
@@ -23,15 +23,15 @@ const deleteMapPoint = mock(async (id: string) => {
 })
 
 const vescBleMock = {
-  ...actualVescBle,
+  ...actualVescapeCore,
   getMapPoints,
   upsertMapPoint,
   replaceDirectionMapPoint,
   deleteMapPoint,
 }
 
-mock.module('vesc-ble', () => vescBleMock)
-mock.module('../../modules/vesc-ble/src/index', () => vescBleMock)
+mock.module('vescape-core', () => vescBleMock)
+mock.module('../../modules/vescape-core/src/index', () => vescBleMock)
 
 beforeEach(async () => {
   persistedMapPoints = []

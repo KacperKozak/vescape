@@ -14,7 +14,7 @@ import {
   PathIcon,
   WarningCircleIcon,
 } from 'phosphor-react-native'
-import type { BoardCandidate, BoardProbeProgressEvent, BoardProbeStep } from 'vesc-ble'
+import type { BoardCandidate, BoardProbeProgressEvent, BoardProbeStep } from 'vescape-core'
 
 import { IconHero } from '@/components/settings/IconHero'
 import { StepTimeline, type StepState, type TimelineStep } from '@/components/base/StepTimeline'

@@ -15,7 +15,7 @@ import { OpenButton } from '@/components/dev/ShowcaseControls'
 
 import { riderColorOptions } from '@/modules/group-ride/constants/riderColors'
 import { theme } from '@/constants/theme'
-import type { AlertPreset } from 'vesc-ble'
+import type { AlertPreset } from 'vescape-core'
 
 function SelectShowcase() {
   const options: SelectOption[] = useMemo(

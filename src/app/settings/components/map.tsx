@@ -3,7 +3,7 @@ import { SlidersHorizontalIcon } from 'phosphor-react-native'
 import { useCallback, useRef, useState, type ElementRef } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { Text } from '@/components/base/Text'
-import type { MapPoint } from 'vesc-ble'
+import type { MapPoint } from 'vescape-core'
 
 import { IconButton } from '@/components/base/IconButton'
 import { EdgeDrawer } from '@/components/overlays/AnchoredSheet'

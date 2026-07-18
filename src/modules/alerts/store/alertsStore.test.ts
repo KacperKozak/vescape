@@ -22,7 +22,7 @@ const setAlertRuleEnabled = mock(async (id: string, enabled: boolean) => {
   if (rule) rule.enabled = enabled
 })
 
-mock.module('vesc-ble', () => ({
+mock.module('vescape-core', () => ({
   getAlertRules: async () => [...nativeRules],
   upsertAlertRule,
   setAlertRuleEnabled,

@@ -1,4 +1,4 @@
-import type { HistoryGpsSample, HistoryMarker, TelemetrySample } from 'vesc-ble'
+import type { HistoryGpsSample, HistoryMarker, TelemetrySample } from 'vescape-core'
 
 import { findNearestSampleIndexByTime } from '@/modules/history/lib/playback'
 

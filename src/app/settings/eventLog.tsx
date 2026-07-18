@@ -10,7 +10,7 @@ import {
 import { Text } from '@/components/base/Text'
 import { useNavigation } from 'expo-router'
 import { ListIcon, TrashIcon } from 'phosphor-react-native'
-import { clearDiagnosticEvents, getDiagnosticEvents, type LocalDiagnosticEvent } from 'vesc-ble'
+import { clearDiagnosticEvents, getDiagnosticEvents, type LocalDiagnosticEvent } from 'vescape-core'
 
 import { ConfirmModal } from '@/components/modals/ConfirmModal'
 import { IconButton } from '@/components/base/IconButton'

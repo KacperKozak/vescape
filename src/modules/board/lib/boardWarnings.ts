@@ -1,4 +1,4 @@
-import type { BoardWarning, BoardWarningKind, BoardWarningSeverity } from 'vesc-ble'
+import type { BoardWarning, BoardWarningKind, BoardWarningSeverity } from 'vescape-core'
 
 /**
  * Rider-facing titles per Board Warning kind. Keyed by the exhaustive `BoardWarningKind` union, so adding a

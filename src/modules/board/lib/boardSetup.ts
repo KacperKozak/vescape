@@ -1,4 +1,4 @@
-import type { BatteryConfig } from 'vesc-ble'
+import type { BatteryConfig } from 'vescape-core'
 
 import { BATTERY_CELL_PRESETS, deriveBatteryConfig } from '@/modules/battery/lib'
 import { fmtVoltageRange } from '@/helpers/format'

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { resolveMarkerRenderData, type MarkerRenderData } from '@/modules/history/lib/markerOverlap'
-import type { HistoryGpsSample, HistoryMarker } from 'vesc-ble'
+import type { HistoryGpsSample, HistoryMarker } from 'vescape-core'
 
 function makeGps(id: number, capturedAtMs: number, lat: number, lng: number): HistoryGpsSample {
   return {

@@ -11,7 +11,7 @@ import {
   type TelemetryMinuteBucket,
   type TelemetrySample,
   type TelemetrySummary,
-} from 'vesc-ble'
+} from 'vescape-core'
 import { groupHistorySessions, type HistorySession } from '@/modules/history/lib/sessions'
 import { wait } from '@/helpers/wait'
 import { useSettingsStore } from '@/modules/settings/store/settingsStore'

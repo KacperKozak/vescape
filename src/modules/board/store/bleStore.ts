@@ -30,7 +30,7 @@ import {
   type BmsSeriesFrame,
   type BmsSeriesUpdate,
   type RemoteTiltState,
-} from 'vesc-ble'
+} from 'vescape-core'
 
 import { useSettingsStore } from '@/modules/settings/store/settingsStore'
 import { useLiveSeriesStore } from '@/modules/board/store/liveSeriesStore'

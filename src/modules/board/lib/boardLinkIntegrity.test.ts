@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test'
 
-import type { LinkIntegrity } from 'vesc-ble'
+import type { LinkIntegrity } from 'vescape-core'
 
 import {
   canRunFirmwareCommand,

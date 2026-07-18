@@ -1,5 +1,5 @@
 'worklet'
-import type { TuneProfileFieldValue } from 'vesc-ble'
+import type { TuneProfileFieldValue } from 'vescape-core'
 
 import {
   GROUND_TICK_SPACING_METERS,

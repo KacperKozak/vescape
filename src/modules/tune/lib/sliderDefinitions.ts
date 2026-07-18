@@ -1,4 +1,4 @@
-import type { RefloatConfigField, RefloatConfigGroup, TuneProfileFieldValue } from 'vesc-ble'
+import type { RefloatConfigField, RefloatConfigGroup, TuneProfileFieldValue } from 'vescape-core'
 
 import { APP_TUNE_FIELD_BY_ID, formatTuneValue } from '@/modules/tune/lib/fields'
 import { isDisplayableFieldValue } from '@/modules/tune/lib/fieldValues'

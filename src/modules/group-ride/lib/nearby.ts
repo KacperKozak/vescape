@@ -1,4 +1,4 @@
-import type { GroupRideSummary } from 'vesc-ble'
+import type { GroupRideSummary } from 'vescape-core'
 
 import { distanceMeters } from '@/helpers/mapGeometry'
 

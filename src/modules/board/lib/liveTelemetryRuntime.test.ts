@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { LiveStateEvent, LocationEvent, TelemetryEvent } from 'vesc-ble'
+import type { LiveStateEvent, LocationEvent, TelemetryEvent } from 'vescape-core'
 
 import { createLiveTelemetryRuntime } from '@/modules/board/lib/liveTelemetryRuntime'
 

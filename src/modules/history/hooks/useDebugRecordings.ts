@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import * as Sharing from 'expo-sharing'
-import { exportDebugRecording, listDebugRecordings, type DebugRecording } from 'vesc-ble'
+import { exportDebugRecording, listDebugRecordings, type DebugRecording } from 'vescape-core'
 
 import { useBleStore } from '@/modules/board/store/bleStore'
 

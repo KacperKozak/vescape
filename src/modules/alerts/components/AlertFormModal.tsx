@@ -20,7 +20,7 @@ import {
   type AlertPresetCategory,
   getAlertPresets,
   previewAlertSound,
-} from 'vesc-ble'
+} from 'vescape-core'
 
 function getPresetsForCategory(category: AlertPresetCategory): AlertPreset[] {
   return getAlertPresets().filter((p) => p.category === category)

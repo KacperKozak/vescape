@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { GroupRideSummary } from 'vesc-ble'
+import type { GroupRideSummary } from 'vescape-core'
 
 import { NEARBY_RADIUS_M, nearbyRides } from '@/modules/group-ride/lib/nearby'
 

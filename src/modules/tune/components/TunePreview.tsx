@@ -20,7 +20,7 @@ import {
   useSharedValue,
   type SharedValue,
 } from 'react-native-reanimated'
-import type { TuneProfileFieldValue } from 'vesc-ble'
+import type { TuneProfileFieldValue } from 'vescape-core'
 
 import { interaction, theme } from '@/constants/theme'
 import { useSkiaFont } from '@/hooks/useSkiaFont'

@@ -1,8 +1,8 @@
 import { beforeEach, expect, mock, test } from 'bun:test'
 
-import type { RefloatConfigSnapshot, TuneProfile } from 'vesc-ble'
+import type { RefloatConfigSnapshot, TuneProfile } from 'vescape-core'
 
-const actualVescBle = await import('@/../modules/vesc-ble/src/index')
+const actualVescapeCore = await import('@/../modules/vescape-core/src/index')
 
 const profile: TuneProfile = {
   id: 'profile-1',
@@ -77,7 +77,7 @@ const copyProfileToBoard = mock(async () => profile)
 const pushProfileToBoard = mock(async () => boardSnapshot)
 
 const vescBleMock = {
-  ...actualVescBle,
+  ...actualVescapeCore,
   getTuneProfiles,
   getTuneProfile,
   saveProfile,
@@ -90,8 +90,8 @@ const vescBleMock = {
   pushProfileToBoard,
 }
 
-mock.module('vesc-ble', () => vescBleMock)
-mock.module('../../modules/vesc-ble/src/index', () => vescBleMock)
+mock.module('vescape-core', () => vescBleMock)
+mock.module('../../modules/vescape-core/src/index', () => vescBleMock)
 
 beforeEach(async () => {
   getTuneProfiles.mockClear()

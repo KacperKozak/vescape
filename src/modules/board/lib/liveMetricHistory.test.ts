@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { LocationEvent, TelemetryEvent } from 'vesc-ble'
+import type { LocationEvent, TelemetryEvent } from 'vescape-core'
 
 import {
   appendLocationSample,

@@ -3,7 +3,7 @@ import {
   type RefloatConfigGroup,
   type RefloatConfigSnapshot,
   type TuneProfileFieldValue,
-} from 'vesc-ble'
+} from 'vescape-core'
 
 import { useBoardStore } from '@/modules/board/store/boardStore'
 import { useBleStore } from '@/modules/board/store/bleStore'

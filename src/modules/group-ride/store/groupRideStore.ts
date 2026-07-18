@@ -18,7 +18,7 @@ import {
   type GroupRideConnectionState,
   type GroupRideRider,
   type GroupRideSummary,
-} from 'vesc-ble'
+} from 'vescape-core'
 
 import { nearbyRides, type NearbyRide } from '@/modules/group-ride/lib/nearby'
 import { riderRoster, rosterRowsEqual, type RosterRider } from '@/modules/group-ride/lib/roster'

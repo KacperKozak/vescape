@@ -6,9 +6,9 @@ import {
   upsertPrivacyZone,
   type PrivacyZone,
   type PrivacyZonePreset,
-} from 'vesc-ble'
+} from 'vescape-core'
 
-export type { PrivacyZone } from 'vesc-ble'
+export type { PrivacyZone } from 'vescape-core'
 
 import { generateId } from '@/helpers/id'
 

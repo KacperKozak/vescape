@@ -11,7 +11,7 @@ import { Text } from '@/components/base/Text'
 import { Button } from '@/components/base/Button'
 import { theme } from '@/constants/theme'
 import { useBleStore } from '@/modules/board/store/bleStore'
-import type { RemoteTiltPhase, RemoteTiltState } from 'vesc-ble'
+import type { RemoteTiltPhase, RemoteTiltState } from 'vescape-core'
 
 /** Neutral tilt (0..255), matching native `REMOTE_TILT_CENTER`. */
 const TILT_CENTER = 128

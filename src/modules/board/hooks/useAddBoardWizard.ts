@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { router } from 'expo-router'
 import { useShallow } from 'zustand/react/shallow'
-import type { BatteryConfig, BoardLink } from 'vesc-ble'
+import type { BatteryConfig, BoardLink } from 'vescape-core'
 
 import { DEFAULT_BATTERY_CONFIG, deriveBatteryConfig } from '@/modules/battery/lib'
 import {

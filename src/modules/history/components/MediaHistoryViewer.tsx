@@ -14,7 +14,7 @@ import { useMemo, useState } from 'react'
 import { Modal, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/base/Text'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import type { HistoryMarker, TelemetrySample } from 'vesc-ble'
+import type { HistoryMarker, TelemetrySample } from 'vescape-core'
 
 import { IconButton } from '@/components/base/IconButton'
 import { telemetry } from '@/modules/board/constants/telemetry'

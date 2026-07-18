@@ -6,7 +6,7 @@ import {
   type BoardCandidate,
   type BoardLink,
   type BoardProbeProgressEvent,
-} from 'vesc-ble'
+} from 'vescape-core'
 
 import { pickDefaultCandidate } from '@/modules/board/lib/boardTransport'
 import { useBleStore } from '@/modules/board/store/bleStore'

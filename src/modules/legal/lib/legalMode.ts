@@ -1,4 +1,4 @@
-import type { AlertRule, LocationEvent } from 'vesc-ble'
+import type { AlertRule, LocationEvent } from 'vescape-core'
 import { getLegalLimitCountryByCode, type LegalLimitCountry } from '@/modules/legal/lib/legalLimits'
 import type { LegalRoadStatus } from '@/modules/legal/lib/types'
 

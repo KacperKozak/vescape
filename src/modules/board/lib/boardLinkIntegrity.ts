@@ -1,4 +1,4 @@
-import type { LinkIntegrity } from 'vesc-ble'
+import type { LinkIntegrity } from 'vescape-core'
 
 export type LinkIntegrityWarning = {
   text: string

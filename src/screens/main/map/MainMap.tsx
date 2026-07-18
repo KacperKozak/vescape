@@ -12,7 +12,7 @@ import {
 } from 'react'
 import { Animated, StyleSheet, View, type LayoutChangeEvent } from 'react-native'
 import { Text } from '@/components/base/Text'
-import type { LocationEvent, MapPoint, MapPointKind } from 'vesc-ble'
+import type { LocationEvent, MapPoint, MapPointKind } from 'vescape-core'
 
 import { InfoModal } from '@/components/modals/InfoModal'
 import { IS_MAPY_CONFIGURED, MAPBOX_ACCESS_TOKEN } from '@/config/mapy'

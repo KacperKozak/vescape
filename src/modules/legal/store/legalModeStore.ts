@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { deleteAlertRule } from 'vesc-ble'
+import { deleteAlertRule } from 'vescape-core'
 
 import {
   DEFAULT_LEGAL_MODE_SETTINGS,

@@ -3,7 +3,7 @@ import { BackHandler, ToastAndroid } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import { useShallow } from 'zustand/react/shallow'
 
-import { exitApp } from 'vesc-ble'
+import { exitApp } from 'vescape-core'
 
 import type { MainMapHandle } from '@/screens/main/map/MainMap'
 import { useMainScreenStore } from '@/screens/main/mainScreenStore'

@@ -1,6 +1,11 @@
 import { dequal } from 'dequal'
 import { create } from 'zustand'
-import { getSettings, setCompanionPresenceEnabled, updateSetting, type AppSettings } from 'vesc-ble'
+import {
+  getSettings,
+  setCompanionPresenceEnabled,
+  updateSetting,
+  type AppSettings,
+} from 'vescape-core'
 import { DEFAULT_HISTORY_METRIC_HOT_RANGES } from '@/modules/history/lib/metricColorScale'
 import { DEFAULT_LEGAL_MODE_SETTINGS, type LegalModeSettings } from '@/modules/legal/lib/legalMode'
 import {

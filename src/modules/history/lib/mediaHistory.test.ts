@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { HistoryGpsSample, HistoryMarker } from 'vesc-ble'
+import type { HistoryGpsSample, HistoryMarker } from 'vescape-core'
 
 import { makeSample } from '@/test-utils/factories'
 import {

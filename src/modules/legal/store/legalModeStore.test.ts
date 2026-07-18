@@ -1,12 +1,12 @@
 import { beforeEach, expect, mock, test } from 'bun:test'
-import type { AppSettings } from 'vesc-ble'
+import type { AppSettings } from 'vescape-core'
 
 import {
   DEFAULT_LEGAL_MODE_SETTINGS,
   legalJurisdictionResultFromCountryCode,
 } from '@/modules/legal/lib/legalMode'
 
-const actualVescBle = await import('@/../modules/vesc-ble/src/index')
+const actualVescapeCore = await import('@/../modules/vescape-core/src/index')
 
 const BASE: AppSettings = {
   liveHistoryLimit: 5,
@@ -47,8 +47,8 @@ const updateSetting = mock(async () => {})
 const upsertAlertRule = mock(async () => {})
 const deleteAlertRule = mock(async () => {})
 
-mock.module('vesc-ble', () => ({
-  ...actualVescBle,
+mock.module('vescape-core', () => ({
+  ...actualVescapeCore,
   updateSetting,
   upsertAlertRule,
   deleteAlertRule,

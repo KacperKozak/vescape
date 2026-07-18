@@ -1,4 +1,4 @@
-import { reportUiError as nativeReportUiError } from 'vesc-ble'
+import { reportUiError as nativeReportUiError } from 'vescape-core'
 
 interface UiDiagnosticError {
   message?: string

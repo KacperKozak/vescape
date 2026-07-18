@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import {
   getRefloatConfigSnapshot as nativeGetRefloatConfigSnapshot,
   type RefloatConfigSnapshot,
-} from 'vesc-ble'
+} from 'vescape-core'
 
 import { errorMessage } from '@/helpers/error'
 import {

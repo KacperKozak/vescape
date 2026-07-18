@@ -1,4 +1,4 @@
-import type { HistoryGpsSample, HistoryMarker, MapPoint, TelemetrySample } from 'vesc-ble'
+import type { HistoryGpsSample, HistoryMarker, MapPoint, TelemetrySample } from 'vescape-core'
 
 import { makeCircleFeature, makeTrailLineString } from '@/helpers/mapGeometry'
 import type { MediaHistoryAsset } from '@/modules/history/lib/mediaHistory'

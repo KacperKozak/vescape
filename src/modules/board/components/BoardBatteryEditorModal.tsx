@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Modal, Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/base/Text'
-import type { BatteryConfig } from 'vesc-ble'
+import type { BatteryConfig } from 'vescape-core'
 
 import { BoardBatteryForm } from '@/modules/board/components/BoardBatteryForm'
 import { Button } from '@/components/base/Button'

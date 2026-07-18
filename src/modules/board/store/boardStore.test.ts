@@ -1,7 +1,7 @@
 import { beforeEach, expect, mock, test } from 'bun:test'
-import type { Board } from 'vesc-ble'
+import type { Board } from 'vescape-core'
 
-const actualVescBle = await import('@/../modules/vesc-ble/src/index')
+const actualVescapeCore = await import('@/../modules/vescape-core/src/index')
 
 let persistedBoards: Board[] = []
 
@@ -35,7 +35,7 @@ const deleteBoard = mock(async (id: string) => {
 })
 
 const vescBleMock = {
-  ...actualVescBle,
+  ...actualVescapeCore,
   getBoards,
   getSettings,
   setSelectedBoard,
@@ -43,8 +43,8 @@ const vescBleMock = {
   deleteBoard,
 }
 
-mock.module('vesc-ble', () => vescBleMock)
-mock.module('../../modules/vesc-ble/src/index', () => vescBleMock)
+mock.module('vescape-core', () => vescBleMock)
+mock.module('../../modules/vescape-core/src/index', () => vescBleMock)
 
 beforeEach(async () => {
   persistedBoards = []

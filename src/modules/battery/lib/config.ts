@@ -1,4 +1,4 @@
-import type { BatteryConfig } from 'vesc-ble'
+import type { BatteryConfig } from 'vescape-core'
 
 import type { DerivedBatteryConfig } from '@/modules/battery/lib/types'
 import { getBatteryPreset } from '@/modules/battery/lib/data'

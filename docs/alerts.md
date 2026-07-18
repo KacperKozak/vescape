@@ -5,8 +5,8 @@ JS layer may be suspended during a ride. Alerts are evaluated natively so they f
 ## Data flow
 
 ```
-JS calls VescBle alert CRUD → native Room storage updates → VescForegroundService reloads rules
-VescForegroundService: each BLE packet → evaluateAlerts() → SoundPool/TextToSpeech + Vibrator
+JS calls VescapeCore alert CRUD → native Room storage updates → CoreForegroundService reloads rules
+CoreForegroundService: each BLE packet → evaluateAlerts() → SoundPool/TextToSpeech + Vibrator
 Fired alerts embedded in that packet's telemetry map → visible in recentTelemetry
 ```
 
@@ -96,7 +96,7 @@ Runtime behavior:
 ## JS side
 
 ```ts
-// store — backed by native VescBle APIs
+// store — backed by native VescapeCore APIs
 useAlertsStore.getState().load()        // on app mount
 store.add(controlId, threshold, thresholdMax?)
 store.toggle(id)

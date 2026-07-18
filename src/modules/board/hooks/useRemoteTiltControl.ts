@@ -7,7 +7,7 @@ import {
   releaseRemoteTilt,
   setRemoteTilt,
   stopRemoteTilt,
-} from 'vesc-ble'
+} from 'vescape-core'
 
 export function useRemoteTiltControl() {
   const boardConnected = useBleStore((state) => state.status === 'connected')

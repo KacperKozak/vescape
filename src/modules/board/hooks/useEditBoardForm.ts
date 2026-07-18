@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { BatteryConfig } from 'vesc-ble'
+import type { BatteryConfig } from 'vescape-core'
 
 import {
   type BatteryMode,

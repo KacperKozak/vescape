@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import type { BmsEvent, BmsSeriesFrame } from 'vesc-ble'
+import type { BmsEvent, BmsSeriesFrame } from 'vescape-core'
 
 import {
   cellBarScale,

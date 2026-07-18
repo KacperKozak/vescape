@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/base/Text'
-import type { BatteryConfig } from 'vesc-ble'
+import type { BatteryConfig } from 'vescape-core'
 
 import { Select, type SelectOption } from '@/components/forms/Select'
 import { Stepper } from '@/components/forms/Stepper'

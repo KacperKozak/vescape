@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { LocationEvent } from 'vesc-ble'
+import type { LocationEvent } from 'vescape-core'
 
 import { getLiveGpsPresentation, getReliableGpsBearingFromFixes } from './liveGpsPresentation'
 

@@ -22,7 +22,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useSharedValue } from 'react-native-reanimated'
 import { Canvas, LinearGradient, Rect, vec } from '@shopify/react-native-skia'
-import { type RefloatConfigField, type TuneProfileFieldValue } from 'vesc-ble'
+import { type RefloatConfigField, type TuneProfileFieldValue } from 'vescape-core'
 
 import { Button } from '@/components/base/Button'
 import { IconButton } from '@/components/base/IconButton'

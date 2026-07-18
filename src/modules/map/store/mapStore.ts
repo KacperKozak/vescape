@@ -6,12 +6,12 @@ import {
   upsertMapPoint,
   type MapPoint,
   type MapPointKind,
-} from 'vesc-ble'
+} from 'vescape-core'
 
 import { generateId } from '@/helpers/id'
 import { isFilterableMapPointKind } from '@/modules/map/lib/mapPointVisibility'
 
-export type { MapPoint } from 'vesc-ble'
+export type { MapPoint } from 'vescape-core'
 
 const DIRECTION_MAP_POINT_KIND: MapPointKind = 'direction'
 

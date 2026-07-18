@@ -10,7 +10,7 @@ import {
   SymbolLayer,
 } from '@rnmapbox/maps'
 import { useEffect, useMemo, useState } from 'react'
-import type { MapPoint, MapPointKind } from 'vesc-ble'
+import type { MapPoint, MapPointKind } from 'vescape-core'
 
 import { MediaHistoryPin } from '@/modules/history/components/MediaHistoryPin'
 import { MapPin } from '@/modules/map/components/MapPin'

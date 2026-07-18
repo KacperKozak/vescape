@@ -14,7 +14,7 @@ import {
   type TuneProfile,
   type TuneProfileFieldValue,
   type TuneHistoryEntry,
-} from 'vesc-ble'
+} from 'vescape-core'
 
 import { errorMessage } from '@/helpers/error'
 import {
@@ -29,7 +29,7 @@ import {
 import { useBleStore } from '@/modules/board/store/bleStore'
 import { useTuneSnapshotStore } from '@/modules/tune/store/tuneSnapshotStore'
 
-export type { TuneProfile, TuneProfileFieldValue } from 'vesc-ble'
+export type { TuneProfile, TuneProfileFieldValue } from 'vescape-core'
 
 export interface TuneProfileBoardDiff {
   fieldId: string

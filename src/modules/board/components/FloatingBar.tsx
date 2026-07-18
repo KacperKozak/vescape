@@ -1,7 +1,7 @@
 import { router } from 'expo-router'
 import { PauseIcon, RecordIcon, StopIcon } from 'phosphor-react-native'
 import { useCallback } from 'react'
-import type { LinkIntegrity } from 'vesc-ble'
+import type { LinkIntegrity } from 'vescape-core'
 import { useShallow } from 'zustand/react/shallow'
 
 import {

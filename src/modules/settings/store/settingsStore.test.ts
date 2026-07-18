@@ -1,7 +1,7 @@
 import { beforeEach, expect, mock, test } from 'bun:test'
-import type { AppSettings } from 'vesc-ble'
+import type { AppSettings } from 'vescape-core'
 
-const actualVescBle = await import('@/../modules/vesc-ble/src/index')
+const actualVescapeCore = await import('@/../modules/vescape-core/src/index')
 
 const BASE: AppSettings = {
   liveHistoryLimit: 5,
@@ -43,14 +43,14 @@ const getSettings = mock(async () => settings)
 const updateSetting = mock(async () => undefined)
 const setCompanionPresenceEnabled = mock(async () => undefined)
 
-mock.module('vesc-ble', () => ({
-  ...actualVescBle,
+mock.module('vescape-core', () => ({
+  ...actualVescapeCore,
   getSettings,
   updateSetting,
   setCompanionPresenceEnabled,
 }))
-mock.module('../../modules/vesc-ble/src/index', () => ({
-  ...actualVescBle,
+mock.module('../../modules/vescape-core/src/index', () => ({
+  ...actualVescapeCore,
   getSettings,
   updateSetting,
   setCompanionPresenceEnabled,

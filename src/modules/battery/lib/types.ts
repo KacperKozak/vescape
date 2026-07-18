@@ -1,4 +1,4 @@
-import type { BatteryConfig, BatteryPresetConfig } from 'vesc-ble'
+import type { BatteryConfig, BatteryPresetConfig } from 'vescape-core'
 
 export interface BatteryCellPreset {
   id: string

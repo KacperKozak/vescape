@@ -1,8 +1,8 @@
 import { beforeEach, expect, mock, test } from 'bun:test'
 
-import type { RefloatConfigSnapshot } from 'vesc-ble'
+import type { RefloatConfigSnapshot } from 'vescape-core'
 
-const actualVescBle = await import('@/../modules/vesc-ble/src/index')
+const actualVescapeCore = await import('@/../modules/vescape-core/src/index')
 
 const snapshot: RefloatConfigSnapshot = {
   capturedAt: 1000,
@@ -19,12 +19,12 @@ const snapshot: RefloatConfigSnapshot = {
 const getRefloatConfigSnapshot = mock(async () => snapshot)
 
 const vescBleMock = {
-  ...actualVescBle,
+  ...actualVescapeCore,
   getRefloatConfigSnapshot,
 }
 
-mock.module('vesc-ble', () => vescBleMock)
-mock.module('../../modules/vesc-ble/src/index', () => vescBleMock)
+mock.module('vescape-core', () => vescBleMock)
+mock.module('../../modules/vescape-core/src/index', () => vescBleMock)
 
 beforeEach(async () => {
   getRefloatConfigSnapshot.mockClear()

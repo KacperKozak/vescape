@@ -1,4 +1,4 @@
-import type { MapPointKind } from 'vesc-ble'
+import type { MapPointKind } from 'vescape-core'
 
 import { theme } from '@/constants/theme'
 

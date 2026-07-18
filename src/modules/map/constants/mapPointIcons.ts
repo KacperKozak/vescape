@@ -5,7 +5,7 @@ import {
   FlagIcon,
   type Icon,
 } from 'phosphor-react-native'
-import type { MapPointKind } from 'vesc-ble'
+import type { MapPointKind } from 'vescape-core'
 
 import {
   BonkMapPointIcon,

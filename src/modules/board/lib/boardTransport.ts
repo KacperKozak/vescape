@@ -1,4 +1,4 @@
-import type { Board, BoardCandidate, BoardLink, BoardTransport } from 'vesc-ble'
+import type { Board, BoardCandidate, BoardLink, BoardTransport } from 'vescape-core'
 
 /** Human-readable label for a Board Transport, including the undetected case. */
 export function formatBoardTransport(transport: BoardTransport | null): string {

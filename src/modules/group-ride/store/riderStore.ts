@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { getSettings, updateSetting } from 'vesc-ble'
+import { getSettings, updateSetting } from 'vescape-core'
 
 import { generateId } from '@/helpers/id'
 

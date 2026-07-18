@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react'
-import type { TelemetryEvent } from 'vesc-ble'
+import type { TelemetryEvent } from 'vescape-core'
 
 import {
   acquireFullSampleStream,

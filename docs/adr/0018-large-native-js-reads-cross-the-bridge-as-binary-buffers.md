@@ -13,7 +13,7 @@ When a native→JS read's size scales with row/sample count, it crosses the brid
 3. Use a sentinel for nullable numeric lanes (`NaN` for floats).
 4. Decode back into the domain object shape in the JS module wrapper, so the public API and all consumers stay unchanged.
 
-The instantiating case is `smoothedSampleColumns` in `TelemetryRepository.kt` (25 `Float64` lanes/sample, deviceId/deviceName dictionary) decoded by `decodeBoardSamples` in `vesc-ble/src/index.ts`. The same per-row work as before — SoC median smoothing (ADR-0016), unit scaling — only the transport changed.
+The instantiating case is `smoothedSampleColumns` in `TelemetryRepository.kt` (25 `Float64` lanes/sample, deviceId/deviceName dictionary) decoded by `decodeBoardSamples` in `vescape-core/src/index.ts`. The same per-row work as before — SoC median smoothing (ADR-0016), unit scaling — only the transport changed.
 
 Small, bounded results stay as object maps. In the same range read, GPS Samples, markers, and exclusions (hundreds of rows) are left as maps; only the count-scaling payload goes binary. Reach for a buffer when size tracks row count, not by default.
 

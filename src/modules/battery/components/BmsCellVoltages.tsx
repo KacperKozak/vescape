@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { StyleSheet, View } from 'react-native'
-import type { BmsEvent, BmsSeriesFrame } from 'vesc-ble'
+import type { BmsEvent, BmsSeriesFrame } from 'vescape-core'
 import Animated, {
   useAnimatedStyle,
   useDerivedValue,

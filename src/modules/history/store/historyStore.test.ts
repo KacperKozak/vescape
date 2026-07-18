@@ -6,10 +6,10 @@ import type {
   TelemetryMinuteBucket,
   TelemetrySample,
   TelemetrySummary,
-} from 'vesc-ble'
+} from 'vescape-core'
 import { makeBlock as block, makeSample as sample } from '@/test-utils/factories'
 
-const actualVescBle = await import('@/../modules/vesc-ble/src/index')
+const actualVescapeCore = await import('@/../modules/vescape-core/src/index')
 
 const summary: TelemetrySummary = {
   sampleCount: 0,
@@ -60,7 +60,7 @@ const updateSetting = mock(async () => {})
 const wait = mock(async () => {})
 
 const vescBleMock = {
-  ...actualVescBle,
+  ...actualVescapeCore,
   getTelemetryHistory,
   getHistoryRange,
   getTelemetrySummary,
@@ -70,8 +70,8 @@ const vescBleMock = {
   updateSetting,
 }
 
-mock.module('vesc-ble', () => vescBleMock)
-mock.module('../../modules/vesc-ble/src/index', () => vescBleMock)
+mock.module('vescape-core', () => vescBleMock)
+mock.module('../../modules/vescape-core/src/index', () => vescBleMock)
 mock.module('@/helpers/wait', () => ({ wait }))
 
 beforeEach(async () => {

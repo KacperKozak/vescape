@@ -1,4 +1,4 @@
-import type { MapPointKind } from 'vesc-ble'
+import type { MapPointKind } from 'vescape-core'
 
 const ALWAYS_VISIBLE_MAP_POINT_KIND: MapPointKind = 'direction'
 

@@ -1,6 +1,6 @@
 import { StyleSheet, View } from 'react-native'
 import { ArrowCounterClockwiseIcon, EyeSlashIcon } from 'phosphor-react-native'
-import type { BoardWarning } from 'vesc-ble'
+import type { BoardWarning } from 'vescape-core'
 
 import { Text } from '@/components/base/Text'
 import { IconButton } from '@/components/base/IconButton'

@@ -1,4 +1,4 @@
-import type { BmsEvent, BmsSeriesFrame } from 'vesc-ble'
+import type { BmsEvent, BmsSeriesFrame } from 'vescape-core'
 
 type BmsSnapshot = Pick<BmsEvent, 'cellVoltages' | 'balancing'> & Partial<BmsEvent>
 

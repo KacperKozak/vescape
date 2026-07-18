@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, mock, test } from 'bun:test'
-import type { AppDataChangedEvent } from 'vesc-ble'
+import type { AppDataChangedEvent } from 'vescape-core'
 
-const actualVescBle = await import('@/../modules/vesc-ble/src/index')
+const actualVescapeCore = await import('@/../modules/vescape-core/src/index')
 
 let capturedCb: ((event: AppDataChangedEvent) => void) | null = null
 const remove = mock(() => {})
@@ -10,9 +10,9 @@ const addAppDataChangedListener = mock((cb: (event: AppDataChangedEvent) => void
   return { remove }
 })
 
-mock.module('vesc-ble', () => ({ ...actualVescBle, addAppDataChangedListener }))
-mock.module('../../modules/vesc-ble/src/index', () => ({
-  ...actualVescBle,
+mock.module('vescape-core', () => ({ ...actualVescapeCore, addAppDataChangedListener }))
+mock.module('../../modules/vescape-core/src/index', () => ({
+  ...actualVescapeCore,
   addAppDataChangedListener,
 }))
 

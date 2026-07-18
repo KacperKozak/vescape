@@ -23,7 +23,7 @@ import {
   previewAlertSound,
   startGeigerSimulation,
   stopGeigerSimulation,
-} from 'vesc-ble'
+} from 'vescape-core'
 
 import { useBoardStore } from '@/modules/board/store/boardStore'
 import { EMPTY_WARNINGS, useBoardWarningsStore } from '@/modules/board/store/boardWarningsStore'

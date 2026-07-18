@@ -2,7 +2,7 @@ import { forwardRef } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/base/Text'
 import { ArrowCounterClockwiseIcon, CheckIcon } from 'phosphor-react-native'
-import type { RefloatConfigField, TuneProfileFieldValue } from 'vesc-ble'
+import type { RefloatConfigField, TuneProfileFieldValue } from 'vescape-core'
 
 import { isDisplayableFieldValue } from '@/modules/tune/lib/fieldValues'
 import { formatProfileValue } from '@/modules/tune/lib/sliderDefinitions'

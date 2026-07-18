@@ -1,4 +1,4 @@
-import type { BatteryPresetConfig } from 'vesc-ble'
+import type { BatteryPresetConfig } from 'vescape-core'
 
 import type { BatteryCellPreset } from '@/modules/battery/lib/types'
 

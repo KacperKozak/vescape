@@ -12,9 +12,9 @@ Native owns durable history truth.
 
 Main files:
 
-- Native repository: `modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/TelemetryRepository.kt`
-- Native DAO: `modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/TelemetryDao.kt`
-- Native tables: `modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/TelemetryEntities.kt`
+- Native repository: `modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryRepository.kt`
+- Native DAO: `modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDao.kt`
+- Native tables: `modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryEntities.kt`
 - JS store: `src/modules/history/store/historyStore.ts`
 - Session grouping: `src/history/sessions.ts`
 - Map rendering: `src/screens/main/MainMap.tsx`
@@ -129,7 +129,7 @@ Cause: yellow points were marker pins, not duplicate GPS points. Quick stop/star
 
 When history map looks wrong:
 
-1. Pull `telemetry.db`, `telemetry.db-wal`, and `telemetry.db-shm` from device.
+1. Pull `vescape.db`, `vescape.db-wal`, and `vescape.db-shm` from device.
 2. Check selected range in `telemetry_minute_buckets`.
 3. Check `telemetry_markers` inside selected range.
 4. Compare telemetry sample range against telemetry-associated GPS range.

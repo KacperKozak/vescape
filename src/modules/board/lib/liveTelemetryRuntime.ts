@@ -1,6 +1,6 @@
 import { makeMutable, type SharedValue } from 'react-native-reanimated'
 import { scheduleOnUI } from 'react-native-worklets'
-import type { LiveStateEvent, LocationEvent, TelemetryEvent } from 'vesc-ble'
+import type { LiveStateEvent, LocationEvent, TelemetryEvent } from 'vescape-core'
 
 import {
   appendLocationSample,

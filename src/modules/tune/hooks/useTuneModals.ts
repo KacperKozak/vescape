@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import type { View } from 'react-native'
-import type { RefloatConfigField, TuneProfile, TuneProfileFieldValue } from 'vesc-ble'
+import type { RefloatConfigField, TuneProfile, TuneProfileFieldValue } from 'vescape-core'
 
 import type { FieldEditorTarget } from '@/modules/tune/components/FieldEditorPopover'
 import { basicSliderColor, basicSliderIcon } from '@/modules/tune/components/basicSliderIcons'

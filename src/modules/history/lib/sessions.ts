@@ -1,4 +1,4 @@
-import type { TelemetryMinuteBucket } from 'vesc-ble'
+import type { TelemetryMinuteBucket } from 'vescape-core'
 
 const DEFAULT_GAP_MS = 10 * 60_000
 const SESSION_BREAK_BOUNDARIES = new Set(['disconnected', 'app_stop', 'error'])

@@ -6,10 +6,10 @@ import {
   type AlertRule,
   type AlertSoundType,
   upsertAlertRule,
-} from 'vesc-ble'
+} from 'vescape-core'
 import { generateId } from '@/helpers/id'
 
-export type { AlertRule, AlertSoundType } from 'vesc-ble'
+export type { AlertRule, AlertSoundType } from 'vescape-core'
 
 interface AlertsState {
   rules: AlertRule[]

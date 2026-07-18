@@ -1,6 +1,6 @@
 import { AppState } from 'react-native'
 import { create } from 'zustand'
-import { addBoardWarningsListener, getBoardWarnings, type BoardWarning } from 'vesc-ble'
+import { addBoardWarningsListener, getBoardWarnings, type BoardWarning } from 'vescape-core'
 
 /** Stable empty slice so `warningsByBoard[id] ?? EMPTY_WARNINGS` selectors don't churn references. */
 export const EMPTY_WARNINGS: BoardWarning[] = []

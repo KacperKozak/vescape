@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { GroupRideRider } from 'vesc-ble'
+import type { GroupRideRider } from 'vescape-core'
 
 import {
   RIDER_DROP_AFTER_MS,

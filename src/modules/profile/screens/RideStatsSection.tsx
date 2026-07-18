@@ -18,7 +18,7 @@ import {
   getTotalProfileStats,
   type ProfileStats,
   type ProfileStatsMonth,
-} from 'vesc-ble'
+} from 'vescape-core'
 
 import {
   formatDistance,

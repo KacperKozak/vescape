@@ -9,11 +9,11 @@ import {
   type Board,
   type BoardLink,
   upsertBoard,
-} from 'vesc-ble'
+} from 'vescape-core'
 
 import { DEFAULT_BATTERY_CONFIG } from '@/modules/battery/lib'
 
-export type { Board } from 'vesc-ble'
+export type { Board } from 'vescape-core'
 export { DEFAULT_BATTERY_CONFIG } from '@/modules/battery/lib'
 
 import { generateId } from '@/helpers/id'

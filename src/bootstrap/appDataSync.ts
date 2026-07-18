@@ -1,5 +1,5 @@
 import { AppState } from 'react-native'
-import { addAppDataChangedListener, type AppDataChangedEvent } from 'vesc-ble'
+import { addAppDataChangedListener, type AppDataChangedEvent } from 'vescape-core'
 
 import { useBoardStore } from '@/modules/board/store/boardStore'
 import { useSettingsStore } from '@/modules/settings/store/settingsStore'

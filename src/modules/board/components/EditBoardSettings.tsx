@@ -8,7 +8,7 @@ import {
   TrashIcon,
   WarningIcon,
 } from 'phosphor-react-native'
-import type { BoardLink } from 'vesc-ble'
+import type { BoardLink } from 'vescape-core'
 
 import { BoardSettingRow } from '@/modules/board/components/BoardSettingRow'
 import { Button } from '@/components/base/Button'

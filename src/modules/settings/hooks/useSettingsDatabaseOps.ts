@@ -9,7 +9,7 @@ import {
   getDatabaseSizeBytes,
   rebuildTelemetryBuckets,
   restoreDatabase,
-} from 'vesc-ble'
+} from 'vescape-core'
 
 import { formatBytes } from '@/helpers/format'
 

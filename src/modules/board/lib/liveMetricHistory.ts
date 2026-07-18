@@ -1,4 +1,4 @@
-import type { LocationEvent, TelemetryEvent } from 'vesc-ble'
+import type { LocationEvent, TelemetryEvent } from 'vescape-core'
 
 export interface LiveStatusSummary {
   boardSampleCount: number

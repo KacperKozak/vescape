@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { BoardWarning } from 'vesc-ble'
+import type { BoardWarning } from 'vescape-core'
 
 import { parseWarningDetail, warningTitle, worstSeverity } from '@/modules/board/lib/boardWarnings'
 

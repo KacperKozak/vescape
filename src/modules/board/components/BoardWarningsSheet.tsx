@@ -1,6 +1,6 @@
 import { StyleSheet, View } from 'react-native'
 import { ShieldCheckIcon } from 'phosphor-react-native'
-import type { BoardWarning } from 'vesc-ble'
+import type { BoardWarning } from 'vescape-core'
 
 import { Button } from '@/components/base/Button'
 import { Placeholder } from '@/components/base/Placeholder'

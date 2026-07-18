@@ -1,4 +1,4 @@
-import type { ProfileStatsMonth } from 'vesc-ble'
+import type { ProfileStatsMonth } from 'vescape-core'
 
 export type ProfileMonth = ProfileStatsMonth
 

@@ -1,6 +1,6 @@
 import { expect, mock, test } from 'bun:test'
 
-import type { RefloatConfigSnapshot } from 'vesc-ble'
+import type { RefloatConfigSnapshot } from 'vescape-core'
 
 import { refreshBoardSnapshotAndProfiles } from '@/modules/tune/hooks/useTuneScreenData'
 

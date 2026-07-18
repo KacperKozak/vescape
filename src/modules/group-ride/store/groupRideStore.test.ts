@@ -31,7 +31,7 @@ function subscribe<T>(listeners: Listener<T>[], listener: Listener<T>) {
   }
 }
 
-mock.module('vesc-ble', () => ({
+mock.module('vescape-core', () => ({
   addGroupRideConnectionListener: (listener: Listener<{ state: string }>) =>
     subscribe(connectionListeners, listener),
   addGroupRideSnapshotListener: (listener: Listener<{ rides: any[] }>) =>

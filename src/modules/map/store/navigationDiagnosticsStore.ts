@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { LocationEvent } from 'vesc-ble'
+import type { LocationEvent } from 'vescape-core'
 
 export interface NavigationDiagnosticsState {
   gpsFix: LocationEvent | null

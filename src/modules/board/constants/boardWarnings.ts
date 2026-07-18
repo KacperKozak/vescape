@@ -1,4 +1,4 @@
-import type { BoardWarningSeverity } from 'vesc-ble'
+import type { BoardWarningSeverity } from 'vescape-core'
 
 import { theme } from '@/constants/theme'
 
