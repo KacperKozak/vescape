@@ -189,7 +189,7 @@ export function WeatherRadarTimeline() {
         <View style={styles.timelineHeader}>
           <AnimatedTextInput
             animatedProps={frameLabelProps}
-            defaultValue={frameLabel.value}
+            defaultValue="Radar"
             editable={false}
             pointerEvents="none"
             style={styles.timeText}
