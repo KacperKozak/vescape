@@ -1,6 +1,7 @@
 import { theme } from '@/constants/theme'
 
 export const DEFAULT_SATELLITE_IMAGERY_OPACITY = 0.2
+export const DEFAULT_SATELLITE_MAP_IMAGERY_OPACITY = 1
 export const DEFAULT_SATELLITE_IMAGERY_SATURATION = -0.35
 
 const SATELLITE_TEXT = theme.palette.mono.white

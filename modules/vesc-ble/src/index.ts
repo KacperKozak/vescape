@@ -782,6 +782,8 @@ export interface AppSettings {
   satelliteOverlayEnabled: boolean
   /** Satellite basemap imagery opacity, 0.1-1.0. Labels and app overlays stay full opacity. */
   satelliteImageryOpacity: number
+  /** Satellite basemap imagery opacity for Explore/map mode, 0.1-1.0. */
+  satelliteMapImageryOpacity: number
   /** Satellite basemap saturation for the telemetry/home map, -1.0 to 1.0. */
   satelliteImagerySaturation: number
   /** Hide POI names and icons on the telemetry/home map. Explore keeps map details visible. */

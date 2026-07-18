@@ -142,6 +142,7 @@ interface CenterMapProps {
   mapStyleKey: MapStyleKey
   satelliteOverlayEnabled: boolean
   satelliteImageryOpacity: number
+  satelliteMapImageryOpacity: number
   satelliteImagerySaturation: number
   hideTelemetryMapDetails: boolean
   mapNavigationMode: MapNavigationMode
@@ -189,6 +190,7 @@ export const CenterMap = memo(
       mapStyleKey,
       satelliteOverlayEnabled,
       satelliteImageryOpacity,
+      satelliteMapImageryOpacity,
       satelliteImagerySaturation,
       hideTelemetryMapDetails,
       mapNavigationMode,
@@ -291,21 +293,22 @@ export const CenterMap = memo(
     const isSatellite = selectedMapStyle.key === 'satellite'
     const mapDetailsVisible = mode === 'map' || (mode === 'telemetry' && !hideTelemetryMapDetails)
     const isSatelliteOverlay = isSatellite && satelliteOverlayEnabled
-    const effectiveSatelliteImageryOpacity = mode === 'telemetry' ? satelliteImageryOpacity : 1
+    const effectiveSatelliteImageryOpacity =
+      mode === 'telemetry' ? satelliteImageryOpacity : satelliteMapImageryOpacity
     const effectiveSatelliteImagerySaturation =
       mode === 'telemetry' ? satelliteImagerySaturation : 0
     const useCustomJSON = isMapy || isOneDark || isSatelliteOverlay
     const satelliteStyleJSON = useMemo(
       () =>
         getSatelliteDarkMapStyle(
-          satelliteImageryOpacity,
+          effectiveSatelliteImageryOpacity,
           true,
           true,
           false,
           true,
-          satelliteImagerySaturation,
+          effectiveSatelliteImagerySaturation,
         ),
-      [satelliteImageryOpacity, satelliteImagerySaturation],
+      [effectiveSatelliteImageryOpacity, effectiveSatelliteImagerySaturation],
     )
     const satelliteImageryPaint = useMemo(
       () =>

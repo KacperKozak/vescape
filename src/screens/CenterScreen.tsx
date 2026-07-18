@@ -131,6 +131,7 @@ export function CenterScreen({
         mapStyleKey={controller.mapStyleKey}
         satelliteOverlayEnabled={controller.satelliteOverlayEnabled}
         satelliteImageryOpacity={controller.satelliteImageryOpacity}
+        satelliteMapImageryOpacity={controller.satelliteMapImageryOpacity}
         satelliteImagerySaturation={controller.satelliteImagerySaturation}
         hideTelemetryMapDetails={controller.hideTelemetryMapDetails}
         mapNavigationMode={controller.mapNavigationMode}

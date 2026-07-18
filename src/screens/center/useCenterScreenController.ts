@@ -78,6 +78,7 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
   const mapStyleKey = useSettingsStore((s) => s.mapStyleKey)
   const satelliteOverlayEnabled = useSettingsStore((s) => s.satelliteOverlayEnabled)
   const satelliteImageryOpacity = useSettingsStore((s) => s.satelliteImageryOpacity)
+  const satelliteMapImageryOpacity = useSettingsStore((s) => s.satelliteMapImageryOpacity)
   const satelliteImagerySaturation = useSettingsStore((s) => s.satelliteImagerySaturation)
   const hideTelemetryMapDetails = useSettingsStore((s) => s.hideTelemetryMapDetails)
   const mapNavigationMode = useSettingsStore((s) => s.mapNavigationMode)
@@ -334,6 +335,13 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
     [setSetting],
   )
 
+  const setSatelliteMapImageryOpacity = useCallback(
+    (nextOpacity: number) => {
+      void setSetting('satelliteMapImageryOpacity', nextOpacity)
+    },
+    [setSetting],
+  )
+
   useFocusEffect(
     useCallback(() => {
       const handler = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -378,6 +386,8 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
     mapStyleKey,
     satelliteOverlayEnabled,
     satelliteImageryOpacity,
+    satelliteMapImageryOpacity,
+    setSatelliteMapImageryOpacity,
     satelliteImagerySaturation,
     hideTelemetryMapDetails,
     setMapStyleKey,

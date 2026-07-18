@@ -19,6 +19,7 @@ const getSettings = mock(async () => ({
   mapStyleKey: 'onedark',
   satelliteOverlayEnabled: true,
   satelliteImageryOpacity: 0.2,
+  satelliteMapImageryOpacity: 1,
   satelliteImagerySaturation: -0.35,
   hideTelemetryMapDetails: true,
   mapNavigationMode: 'northUp',

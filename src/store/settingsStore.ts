@@ -5,6 +5,7 @@ import { DEFAULT_HISTORY_METRIC_HOT_RANGES } from '@/lib/history/metricColorScal
 import { DEFAULT_LEGAL_MODE_SETTINGS, type LegalModeSettings } from '@/lib/legalMode'
 import {
   DEFAULT_SATELLITE_IMAGERY_OPACITY,
+  DEFAULT_SATELLITE_MAP_IMAGERY_OPACITY,
   DEFAULT_SATELLITE_IMAGERY_SATURATION,
 } from '@/constants/satelliteDarkMapStyle'
 
@@ -21,6 +22,7 @@ const DEFAULTS: AppSettings = {
   mapStyleKey: 'onedark',
   satelliteOverlayEnabled: true,
   satelliteImageryOpacity: DEFAULT_SATELLITE_IMAGERY_OPACITY,
+  satelliteMapImageryOpacity: DEFAULT_SATELLITE_MAP_IMAGERY_OPACITY,
   satelliteImagerySaturation: DEFAULT_SATELLITE_IMAGERY_SATURATION,
   hideTelemetryMapDetails: true,
   mapNavigationMode: 'northUp',

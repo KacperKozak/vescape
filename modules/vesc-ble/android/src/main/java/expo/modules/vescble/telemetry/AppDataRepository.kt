@@ -222,6 +222,7 @@ class AppDataRepository private constructor(private val context: Context) {
       mapStyleKey = req("mapStyleKey", "onedark", ::validMapStyleKey),
       satelliteOverlayEnabled = req("satelliteOverlayEnabled", true) { it as? Boolean },
       satelliteImageryOpacity = req("satelliteImageryOpacity", 0.2, ::validSatelliteImageryOpacity),
+      satelliteMapImageryOpacity = req("satelliteMapImageryOpacity", 1.0, ::validSatelliteImageryOpacity),
       satelliteImagerySaturation = req("satelliteImagerySaturation", -0.35, ::validSatelliteImagerySaturation),
       hideTelemetryMapDetails = req("hideTelemetryMapDetails", true) { it as? Boolean },
       mapNavigationMode = req("mapNavigationMode", "northUp", ::validMapNavigationMode),
@@ -282,6 +283,8 @@ class AppDataRepository private constructor(private val context: Context) {
       "satelliteOverlayEnabled" -> value as? Boolean ?: return@withContext
       "satelliteImageryOpacity" ->
         validSatelliteImageryOpacity(value) ?: return@withContext
+      "satelliteMapImageryOpacity" ->
+        validSatelliteImageryOpacity(value) ?: return@withContext
       "satelliteImagerySaturation" ->
         validSatelliteImagerySaturation(value) ?: return@withContext
       "hideTelemetryMapDetails" -> value as? Boolean ?: return@withContext
@@ -332,6 +335,7 @@ class AppDataRepository private constructor(private val context: Context) {
         "mapStyleKey" -> d.mapStyleKey
         "satelliteOverlayEnabled" -> d.satelliteOverlayEnabled
         "satelliteImageryOpacity" -> d.satelliteImageryOpacity
+        "satelliteMapImageryOpacity" -> d.satelliteMapImageryOpacity
         "satelliteImagerySaturation" -> d.satelliteImagerySaturation
         "hideTelemetryMapDetails" -> d.hideTelemetryMapDetails
         "mapNavigationMode" -> d.mapNavigationMode
@@ -612,6 +616,7 @@ fun AppSettings.toMap(): Map<String, Any?> = mapOf(
   "mapStyleKey" to mapStyleKey,
   "satelliteOverlayEnabled" to satelliteOverlayEnabled,
   "satelliteImageryOpacity" to satelliteImageryOpacity,
+  "satelliteMapImageryOpacity" to satelliteMapImageryOpacity,
   "satelliteImagerySaturation" to satelliteImagerySaturation,
   "hideTelemetryMapDetails" to hideTelemetryMapDetails,
   "mapNavigationMode" to mapNavigationMode,

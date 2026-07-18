@@ -434,6 +434,9 @@ final class AppDataRepository {
     } else if key == "satelliteImageryOpacity" {
       guard let opacity = Self.satelliteImageryOpacity(rawValue) else { return }
       value = opacity
+    } else if key == "satelliteMapImageryOpacity" {
+      guard let opacity = Self.satelliteImageryOpacity(rawValue) else { return }
+      value = opacity
     } else if key == "satelliteImagerySaturation" {
       guard let saturation = Self.satelliteImagerySaturation(rawValue) else { return }
       value = saturation
@@ -480,6 +483,7 @@ final class AppDataRepository {
     "freeSpinStationaryBoardCapKmh": DEFAULT_FREE_SPIN_STATIONARY_BOARD_CAP_KMH,
     "satelliteOverlayEnabled": true,
     "satelliteImageryOpacity": 0.2,
+    "satelliteMapImageryOpacity": 1.0,
     "satelliteImagerySaturation": -0.35,
     "hideTelemetryMapDetails": true,
     "telemetryPollRateHz": 20,
@@ -500,6 +504,8 @@ final class AppDataRepository {
       liveHistoryLimitMinutes(settings["liveHistoryLimit"]) ?? defaultSettings["liveHistoryLimit"]
     normalized["satelliteImageryOpacity"] =
       satelliteImageryOpacity(settings["satelliteImageryOpacity"]) ?? defaultSettings["satelliteImageryOpacity"]
+    normalized["satelliteMapImageryOpacity"] =
+      satelliteImageryOpacity(settings["satelliteMapImageryOpacity"]) ?? defaultSettings["satelliteMapImageryOpacity"]
     normalized["satelliteImagerySaturation"] =
       satelliteImagerySaturation(settings["satelliteImagerySaturation"]) ?? defaultSettings["satelliteImagerySaturation"]
     return normalized

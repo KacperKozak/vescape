@@ -366,6 +366,7 @@ data class AppSettings(
   val mapStyleKey: String = "onedark",
   val satelliteOverlayEnabled: Boolean = true,
   val satelliteImageryOpacity: Double = 0.2,
+  val satelliteMapImageryOpacity: Double = 1.0,
   val satelliteImagerySaturation: Double = -0.35,
   val hideTelemetryMapDetails: Boolean = true,
   val mapNavigationMode: String = "northUp",

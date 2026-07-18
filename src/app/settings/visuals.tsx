@@ -1,6 +1,12 @@
 import { ScrollView, StyleSheet, Switch } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { ImageSquareIcon, MapPinIcon, SlidersHorizontalIcon } from 'phosphor-react-native'
+import {
+  ImageSquareIcon,
+  MapPinIcon,
+  MapTrifoldIcon,
+  PaletteIcon,
+  SlidersHorizontalIcon,
+} from 'phosphor-react-native'
 import { useShallow } from 'zustand/react/shallow'
 
 import { IconHero } from '@/components/ui/settings/IconHero'
@@ -15,6 +21,7 @@ export default function MapVisualsSettingsScreen() {
   const {
     satelliteOverlayEnabled,
     satelliteImageryOpacity,
+    satelliteMapImageryOpacity,
     satelliteImagerySaturation,
     hideTelemetryMapDetails,
     set,
@@ -22,12 +29,14 @@ export default function MapVisualsSettingsScreen() {
     useShallow((s) => ({
       satelliteOverlayEnabled: s.satelliteOverlayEnabled,
       satelliteImageryOpacity: s.satelliteImageryOpacity,
+      satelliteMapImageryOpacity: s.satelliteMapImageryOpacity,
       satelliteImagerySaturation: s.satelliteImagerySaturation,
       hideTelemetryMapDetails: s.hideTelemetryMapDetails,
       set: s.set,
     })),
   )
   const satelliteOpacityPercent = Math.round(satelliteImageryOpacity * 100)
+  const satelliteMapOpacityPercent = Math.round(satelliteMapImageryOpacity * 100)
   const satelliteDesaturationPercent = Math.round(-satelliteImagerySaturation * 100)
 
   return (
@@ -64,7 +73,7 @@ export default function MapVisualsSettingsScreen() {
         <SettingsSectionTitle>Satellite view</SettingsSectionTitle>
         <SettingsCard>
           <SettingsRow
-            icon={SlidersHorizontalIcon}
+            icon={ImageSquareIcon}
             iconColor={theme.palette.sky.color}
             label="Satellite overlay"
             hint="Use the toned satellite image with One Dark labels"
@@ -85,9 +94,9 @@ export default function MapVisualsSettingsScreen() {
           {satelliteOverlayEnabled ? (
             <>
               <SettingsRow
-                icon={ImageSquareIcon}
+                icon={SlidersHorizontalIcon}
                 iconColor={theme.palette.cyan.color}
-                label="Satellite image opacity"
+                label="Home image opacity"
                 hint="Applies on the home telemetry map; Explore uses a clearer satellite overlay"
                 right={
                   <Stepper
@@ -104,7 +113,26 @@ export default function MapVisualsSettingsScreen() {
                 }
               />
               <SettingsRow
-                icon={SlidersHorizontalIcon}
+                icon={MapTrifoldIcon}
+                iconColor={theme.palette.violet.color}
+                label="Explore image opacity"
+                hint="Applies inside the full map Satellite view"
+                right={
+                  <Stepper
+                    value={satelliteMapOpacityPercent}
+                    unit="%"
+                    min={10}
+                    max={100}
+                    step={5}
+                    onChange={(nextPercent) => {
+                      const percent = Math.min(100, Math.max(10, nextPercent))
+                      void set('satelliteMapImageryOpacity', percent / 100)
+                    }}
+                  />
+                }
+              />
+              <SettingsRow
+                icon={PaletteIcon}
                 iconColor={theme.palette.purple.color}
                 label="Satellite desaturation"
                 hint="Applies on the home telemetry map; 0% keeps the original colors"
