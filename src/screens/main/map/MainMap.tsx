@@ -267,7 +267,7 @@ export const MainMap = memo(
     const suppressNextMapPressTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const [mapOpacity] = useState(() => new Animated.Value(0))
     const [cameraReady, setCameraReady] = useState(false)
-    const [styleLoaded, setStyleLoaded] = useState(false)
+    const [loadedStyleSignature, setLoadedStyleSignature] = useState<string | null>(null)
     const [selectedHistoryMarker, setSelectedHistoryMarker] =
       useState<SelectedHistoryMarker | null>(null)
     const [selectedLegalCountry, setSelectedLegalCountry] = useState<LegalLimitCountry | null>(null)
@@ -364,7 +364,10 @@ export const MainMap = memo(
     const oneDarkStyleJSON = useMemo(() => getOneDarkMapStyle(true, true, false), [])
     const showBuildings3d =
       selectedMapStyle.key === 'outdoors' || selectedMapStyle.key === 'onedark'
-    const canUpdateExistingStyleLayers = styleLoaded && !isMapy
+    const styleSignature = isSatelliteOverlay
+      ? `${selectedMapStyle.key}:${satelliteImageryOpacity}:${satelliteImagerySaturation}`
+      : `${selectedMapStyle.key}:${useCustomJSON ? 'json' : selectedMapStyle.styleURL}`
+    const canUpdateExistingStyleLayers = loadedStyleSignature === styleSignature && !isMapy
 
     const gpsPresentation = useMemo(
       () =>
@@ -860,7 +863,7 @@ export const MainMap = memo(
     )
 
     const handleMapLoaded = useCallback(() => {
-      setStyleLoaded(true)
+      setLoadedStyleSignature(styleSignature)
       const styleReloadCamera = styleReloadCameraRef.current
       styleReloadCameraRef.current = null
       if (styleReloadCamera && gestureActiveRef.current) return
@@ -890,14 +893,8 @@ export const MainMap = memo(
       historyActive,
       historyPreview,
       perspectiveEnabled,
+      styleSignature,
     ])
-
-    useEffect(() => {
-      const frame = requestAnimationFrame(() => {
-        setStyleLoaded(false)
-      })
-      return () => cancelAnimationFrame(frame)
-    }, [selectedMapStyle.key, useCustomJSON, satelliteStyleJSON, oneDarkStyleJSON])
 
     const handleLongPress = useCallback(
       (feature: { geometry: { coordinates: number[] } }) => {
