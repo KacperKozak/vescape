@@ -33,7 +33,7 @@ import {
   FIXTURE_RIDE_ROUTE_SHAPE,
   FIXTURE_RIDE_TELEMETRY_SAMPLES,
   FIXTURE_RIDERS,
-} from '@/app/settings/components/mapShowcaseFixtures'
+} from '@/screens/showcase/mapShowcaseFixtures'
 import { MainMapLayers, HistoryMapLayers } from '@/screens/main/map/MainMapLayers'
 
 Mapbox.setAccessToken(MAPBOX_ACCESS_TOKEN)

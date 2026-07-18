@@ -55,6 +55,7 @@ const config: ExpoConfig = {
   },
   plugins: [
     'expo-router',
+    'expo-status-bar',
     [
       '@sentry/react-native/expo',
       {
