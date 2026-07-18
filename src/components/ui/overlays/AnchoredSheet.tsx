@@ -48,6 +48,7 @@ const DRAWER_FLING_PROJECTION_MS = 250
 const DRAWER_OPEN_TRANSLATE_Y = 42
 const DRAWER_OPEN_DURATION = 280
 const DRAWER_BOTTOM_CONTENT_PADDING = 32
+const DRAWER_INITIAL_OPEN_FRACTION = 0.75
 const DRAWER_ENTER_FROM_TOP = new Keyframe({
   0: { opacity: 0, transform: [{ translateY: -DRAWER_OPEN_TRANSLATE_Y }] },
   100: { opacity: 1, transform: [{ translateY: 0 }] },
@@ -372,9 +373,11 @@ export function EdgeDrawer({
   })
 
   const backdropStyle = useAnimatedStyle(() => {
+    const fullStrengthRange = Math.max(1, height * DRAWER_INITIAL_OPEN_FRACTION)
+    const screenDismissRange = Math.min(animatedDismissRange.value, fullStrengthRange)
     const visibleFraction = opensFromTop
-      ? 1 - scrollOffset.value / animatedDismissRange.value
-      : scrollOffset.value / animatedDismissRange.value
+      ? 1 - scrollOffset.value / screenDismissRange
+      : scrollOffset.value / screenDismissRange
     return { opacity: Math.max(0, Math.min(1, visibleFraction)) }
   })
 
@@ -390,7 +393,8 @@ export function EdgeDrawer({
 
       if (!positionedRef.current) {
         positionedRef.current = true
-        const initialOffset = opensFromTop ? 0 : range
+        const initialOpenOffset = Math.min(range, height * DRAWER_INITIAL_OPEN_FRACTION)
+        const initialOffset = opensFromTop ? 0 : initialOpenOffset
         scrollOffset.value = initialOffset
         requestAnimationFrame(() => {
           scrollRef.current?.scrollTo({ y: initialOffset, animated: false })
@@ -474,18 +478,25 @@ export function EdgeDrawer({
   const edgePadding = opensFromTop
     ? insets.top
     : insets.bottom + DRAWER_BOTTOM_CONTENT_PADDING + keyboardInset
+  const gradientFullStrengthPoint =
+    height > 0
+      ? Math.min(DRAWER_INITIAL_OPEN_FRACTION, Math.max(0, dismissRange / height))
+      : DRAWER_INITIAL_OPEN_FRACTION
   const vignetteColor = theme.palette.slate.surfaceDeep
   const gradientColors = opensFromTop
     ? [
         theme.alpha(vignetteColor, 1),
-        theme.alpha(vignetteColor, 0.8),
+        theme.alpha(vignetteColor, 1),
         theme.alpha(vignetteColor, 0.6),
       ]
     : [
         theme.alpha(vignetteColor, 0.6),
-        theme.alpha(vignetteColor, 0.8),
+        theme.alpha(vignetteColor, 1),
         theme.alpha(vignetteColor, 1),
       ]
+  const gradientPositions = opensFromTop
+    ? [0, gradientFullStrengthPoint, 1]
+    : [0, 1 - gradientFullStrengthPoint, 1]
   const emptyDismissArea = <Pressable style={{ height }} onPress={close} accessible={false} />
 
   return (
@@ -507,7 +518,7 @@ export function EdgeDrawer({
                   start={vec(0, 0)}
                   end={vec(0, height)}
                   colors={gradientColors}
-                  positions={[0, 0.7, 1]}
+                  positions={gradientPositions}
                 />
               </Rect>
             </Canvas>
