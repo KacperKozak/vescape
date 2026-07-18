@@ -5,6 +5,7 @@ import * as SplashScreen from 'expo-splash-screen'
 import { StatusBar } from 'expo-status-bar'
 import { useEffect } from 'react'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
+import { configureReanimatedLogger } from 'react-native-reanimated'
 
 import { DiagnosticErrorBoundary } from '@/modules/diagnostics/DiagnosticErrorBoundary'
 import { HeaderBackButton } from '@/components/base/HeaderBackButton'
@@ -22,6 +23,10 @@ import { theme } from '@/constants/theme'
 // on cold start. `expo-router` already prevents auto-hide; this makes the gate
 // explicit and ties `hideAsync()` to font readiness.
 void SplashScreen.preventAutoHideAsync()
+
+// Reanimated 4.5.0 strict mode false-positives on useAnimatedStyle's initial
+// render evaluation; drop this once the Expo SDK pin reaches reanimated >=4.5.1.
+configureReanimatedLogger({ strict: false })
 
 initSentry()
 

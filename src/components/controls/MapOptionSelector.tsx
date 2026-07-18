@@ -70,11 +70,12 @@ export function MapOptionSelector<Key extends string>({
   onSelect,
 }: MapOptionSelectorProps<Key>) {
   const metrics = SELECTOR_METRICS[size]
+  const optionCount = options.length
   const shellStyle = useAnimatedStyle(
     () => ({
-      width: withTiming(getSelectorWidth(metrics, options.length, expanded), ANIMATION),
+      width: withTiming(getSelectorWidth(metrics, optionCount, expanded), ANIMATION),
     }),
-    [expanded, metrics, options.length],
+    [expanded, metrics, optionCount],
   )
   const optionsStyle = useAnimatedStyle(
     () => ({
