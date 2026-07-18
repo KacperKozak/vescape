@@ -33,8 +33,10 @@ export function getSatelliteDarkMapStyle(
   showDistrictLabels = true,
   showStreetLines = false,
   imagerySaturation = DEFAULT_SATELLITE_IMAGERY_SATURATION,
+  streetLineOpacity = 0.8,
 ) {
   const satelliteImageryPaint = getSatelliteImageryPaint(imageryOpacity, imagerySaturation)
+  const clampedStreetLineOpacity = Math.max(0, Math.min(1, streetLineOpacity))
 
   return JSON.stringify({
     version: 8,
@@ -80,7 +82,7 @@ export function getSatelliteDarkMapStyle(
                 'line-color': SATELLITE_PATH,
                 'line-width': ['interpolate', ['linear'], ['zoom'], 14, 0.45, 18, 1.2],
                 'line-dasharray': [2, 1.5],
-                'line-opacity': 0.8,
+                'line-opacity': clampedStreetLineOpacity,
               },
             },
             {
@@ -93,7 +95,7 @@ export function getSatelliteDarkMapStyle(
                 'line-color': SATELLITE_PATH,
                 'line-width': ['interpolate', ['linear'], ['zoom'], 12, 0.4, 16, 1.4, 18, 2],
                 'line-dasharray': [3, 1.5],
-                'line-opacity': 0.85,
+                'line-opacity': clampedStreetLineOpacity,
               },
             },
             {
@@ -105,6 +107,7 @@ export function getSatelliteDarkMapStyle(
               paint: {
                 'line-color': SATELLITE_ROAD,
                 'line-width': ['interpolate', ['linear'], ['zoom'], 14, 0.45, 18, 2],
+                'line-opacity': clampedStreetLineOpacity,
               },
             },
             {
@@ -120,6 +123,7 @@ export function getSatelliteDarkMapStyle(
               paint: {
                 'line-color': SATELLITE_ROAD,
                 'line-width': ['interpolate', ['linear'], ['zoom'], 12, 0.35, 16, 1.8, 18, 3.4],
+                'line-opacity': clampedStreetLineOpacity,
               },
             },
             {
@@ -135,6 +139,7 @@ export function getSatelliteDarkMapStyle(
               paint: {
                 'line-color': SATELLITE_ROAD,
                 'line-width': ['interpolate', ['linear'], ['zoom'], 10, 0.5, 14, 1.8, 18, 4.5],
+                'line-opacity': clampedStreetLineOpacity,
               },
             },
             {
@@ -146,6 +151,7 @@ export function getSatelliteDarkMapStyle(
               paint: {
                 'line-color': SATELLITE_ROAD,
                 'line-width': ['interpolate', ['linear'], ['zoom'], 8, 0.55, 14, 2.2, 18, 5.5],
+                'line-opacity': clampedStreetLineOpacity,
               },
             },
             {
@@ -157,6 +163,7 @@ export function getSatelliteDarkMapStyle(
               paint: {
                 'line-color': SATELLITE_ROAD,
                 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 0.4, 12, 1.8, 18, 6],
+                'line-opacity': clampedStreetLineOpacity,
               },
             },
             {
@@ -168,6 +175,7 @@ export function getSatelliteDarkMapStyle(
               paint: {
                 'line-color': SATELLITE_ROAD,
                 'line-width': ['interpolate', ['linear'], ['zoom'], 6, 0.55, 12, 2.4, 18, 7],
+                'line-opacity': clampedStreetLineOpacity,
               },
             },
           ]

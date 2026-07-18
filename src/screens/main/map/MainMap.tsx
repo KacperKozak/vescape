@@ -1,4 +1,4 @@
-import Mapbox, { Camera, RasterLayer, SymbolLayer } from '@rnmapbox/maps'
+import Mapbox, { Camera, SymbolLayer } from '@rnmapbox/maps'
 import { CrosshairSimpleIcon, type Icon } from 'phosphor-react-native'
 import {
   forwardRef,
@@ -23,10 +23,7 @@ import {
   type MapNavigationMode,
   type MapStyleKey,
 } from '@/modules/map/constants/mapStyles'
-import {
-  getSatelliteDarkMapStyle,
-  getSatelliteImageryPaint,
-} from '@/modules/map/constants/satelliteDarkMapStyle'
+import { getSatelliteDarkMapStyle } from '@/modules/map/constants/satelliteDarkMapStyle'
 import { getMapPointKindIcon } from '@/modules/map/constants/mapPointIcons'
 import { getMapPointKindColor, getMapPointKindTextColor } from '@/modules/map/constants/mapPoints'
 import { getOneDarkMapStyle } from '@/modules/map/constants/oneDarkMapStyle'
@@ -310,21 +307,19 @@ export const MainMap = memo(
       () =>
         getSatelliteDarkMapStyle(
           effectiveSatelliteImageryOpacity,
-          true,
-          true,
+          mapDetailsVisible,
+          mapDetailsVisible,
           false,
           true,
           effectiveSatelliteImagerySaturation,
+          mode === 'telemetry' ? 0.35 : 0.75,
         ),
-      [effectiveSatelliteImageryOpacity, effectiveSatelliteImagerySaturation],
-    )
-    const satelliteImageryPaint = useMemo(
-      () =>
-        getSatelliteImageryPaint(
-          effectiveSatelliteImageryOpacity,
-          effectiveSatelliteImagerySaturation,
-        ),
-      [effectiveSatelliteImageryOpacity, effectiveSatelliteImagerySaturation],
+      [
+        effectiveSatelliteImageryOpacity,
+        effectiveSatelliteImagerySaturation,
+        mapDetailsVisible,
+        mode,
+      ],
     )
     const oneDarkStyleJSON = useMemo(() => getOneDarkMapStyle(true, true, false), [])
     const showBuildings3d =
@@ -1044,40 +1039,6 @@ export const MainMap = memo(
             maxZoomLevel={MAP_DEFAULTS.maxZoom}
             animationMode="easeTo"
           />
-          {isSatelliteOverlay ? (
-            <>
-              <RasterLayer
-                id="satellite"
-                existing
-                style={{
-                  ...satelliteImageryPaint,
-                  rasterOpacityTransition: { duration: 260, delay: 0 },
-                  rasterSaturationTransition: { duration: 260, delay: 0 },
-                  rasterContrastTransition: { duration: 260, delay: 0 },
-                }}
-              />
-              {[
-                'road-path',
-                'road-track',
-                'road-service',
-                'road-street',
-                'road-secondary-tertiary',
-                'road-primary',
-                'road-trunk',
-                'road-motorway',
-              ].map((id) => (
-                <Mapbox.LineLayer
-                  key={id}
-                  id={id}
-                  existing
-                  style={{
-                    lineOpacity: mode === 'telemetry' ? 0.35 : 0.75,
-                    lineOpacityTransition: { duration: 260, delay: 0 },
-                  }}
-                />
-              ))}
-            </>
-          ) : null}
           {isOneDark ? (
             <>
               <SymbolLayer
@@ -1104,20 +1065,6 @@ export const MainMap = memo(
                   iconHaloWidth: 0.5,
                   iconOpacity: 0.48,
                 }}
-              />
-            </>
-          ) : null}
-          {isSatelliteOverlay ? (
-            <>
-              <SymbolLayer
-                id="poi-label"
-                existing
-                style={{ visibility: mapDetailsVisible ? 'visible' : 'none' }}
-              />
-              <SymbolLayer
-                id="transit-label"
-                existing
-                style={{ visibility: mapDetailsVisible ? 'visible' : 'none' }}
               />
             </>
           ) : null}
