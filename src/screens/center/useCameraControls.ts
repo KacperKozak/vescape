@@ -635,6 +635,7 @@ export function useCameraControls({
         })
       },
       endPreviewPan() {
+        setFollowGps(false)
         previewPanActiveRef.current = false
         previewPanBaseRef.current = null
       },
