@@ -335,6 +335,7 @@ function FullMapControls({
         mapRef.current?.zoomBy(-0.45)
       }
       addMenuZoomedRef.current = false
+      setPlacementPulseKey(0)
       setAddMenuOpen(false)
       onAddMenuVisibilityChange(false)
     },
@@ -401,6 +402,7 @@ function FullMapControls({
     }
     mapRef.current?.zoomBy(0.45)
     addMenuZoomedRef.current = true
+    setPlacementPulseKey(0)
     onAddMenuVisibilityChange(true)
     setAddMenuOpen(true)
   }, [addMenuOpen, closeAddMenu, mapRef, onAddMenuVisibilityChange])
@@ -411,6 +413,7 @@ function FullMapControls({
     setFilterMenuOpen(false)
     closeSearch()
     onAddMenuVisibilityChange(true)
+    setPlacementPulseKey(0)
     setAddMenuOpen((open) => {
       if (!open) addMenuZoomedRef.current = false
       return true
