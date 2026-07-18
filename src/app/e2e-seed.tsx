@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 
-import { seedE2EData } from 'vesc-ble'
+import { seedE2EData } from 'vescape-core'
 
 export default function E2ESeedScreen() {
   const { flow } = useLocalSearchParams<{ flow: string }>()

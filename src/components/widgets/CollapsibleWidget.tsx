@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
-import { Text } from '@/components/ui/base/Text'
+import { Text } from '@/components/base/Text'
 import { CaretDownIcon, CaretUpIcon, type Icon } from 'phosphor-react-native'
 import Animated, {
   Easing,
@@ -9,7 +9,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated'
 
-import { useEdgeDrawerScrollToOpenEdge } from '@/components/ui/overlays/AnchoredSheet'
+import { useEdgeDrawerScrollToOpenEdge } from '@/components/overlays/AnchoredSheet'
 import { widgetSurface } from '@/components/widgets/widgetSurface'
 import { theme } from '@/constants/theme'
 

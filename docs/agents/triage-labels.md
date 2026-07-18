@@ -19,10 +19,10 @@ Edit the right-hand column to match whatever vocabulary the repo actually uses.
 Area labels (`area:*`) tag the part of the system an issue touches. Apply as
 many as fit. Two are flagged red because they signal extra implementation risk:
 
-| Label         | Meaning                                                |
-| ------------- | ------------------------------------------------------ |
-| `area:native` | Touches native side (`modules/vesc-ble`, Swift/Kotlin) |
-| `area:db`     | Touches database / persistent storage                  |
+| Label         | Meaning                                                    |
+| ------------- | ---------------------------------------------------------- |
+| `area:native` | Touches native side (`modules/vescape-core`, Swift/Kotlin) |
+| `area:db`     | Touches database / persistent storage                      |
 
 When an issue carries `area:native` or `area:db`, expect native rebuilds and/or
 storage migrations — factor that into the agent brief and complexity rating.

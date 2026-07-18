@@ -187,7 +187,7 @@ export function planSync(input: {
   const { platform, nativeDirExists, podsDirExists, missingSharedOutputs, cached, next } = input
   const steps: SyncStep[] = []
 
-  // Android compiles the copies under `modules/vesc-ble/android/src/`; iOS reads `shared/` through
+  // Android compiles the copies under `modules/vescape-core/android/src/`; iOS reads `shared/` through
   // symlinks, so it has nothing to copy.
   if (platform === 'android') {
     const cachedShared = cached?.shared ?? {}

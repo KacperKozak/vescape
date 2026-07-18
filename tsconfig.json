@@ -6,7 +6,7 @@
     "types": ["bun-types"],
     "paths": {
       "@/*": ["./src/*"],
-      "vesc-ble": ["./modules/vesc-ble/src/index.ts"]
+      "vescape-core": ["./modules/vescape-core/src/index.ts"]
     }
   },
   "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"]

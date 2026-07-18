@@ -1,4 +1,4 @@
-import { ProfilePanel } from '@/screens/profile/ProfilePanel'
+import { ProfilePanel } from '@/modules/profile/screens/ProfilePanel'
 
 export default function ProfileScreen() {
   return <ProfilePanel />

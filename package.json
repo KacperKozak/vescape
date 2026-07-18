@@ -32,7 +32,7 @@
     "test": "bun run copy:shared && bun run test:bun && bun run test:android && bun run test:ios",
     "test:ci": "bun run copy:shared && bun run test:bun && bun run test:android",
     "test:bun": "bun test",
-    "test:android": "export NODE_BINARY=$(command -v node); export PATH=$(dirname \"$NODE_BINARY\"):$PATH; cd android && ./gradlew :vesc-ble:testDebugUnitTest",
+    "test:android": "export NODE_BINARY=$(command -v node); export PATH=$(dirname \"$NODE_BINARY\"):$PATH; cd android && ./gradlew :vescape-core:testDebugUnitTest",
     "test:ios": "bun run scripts/test-ios.ts",
     "ts": "tsc --noEmit",
     "build:release": "bun run copy:shared && export NODE_BINARY=$(command -v node); export PATH=$(dirname \"$NODE_BINARY\"):$PATH; export EXPO_PUBLIC_SERVER_URL=https://vescape.app; cd android && ./gradlew assembleRelease",
@@ -81,7 +81,7 @@
     "react-native-svg": "15.15.4",
     "react-native-web": "~0.21.2",
     "react-native-worklets": "0.8.3",
-    "vesc-ble": "workspace:*",
+    "vescape-core": "workspace:*",
     "zustand": "5.0.14"
   },
   "devDependencies": {

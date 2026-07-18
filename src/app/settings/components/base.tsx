@@ -10,14 +10,14 @@ import {
   UsersThreeIcon,
 } from 'phosphor-react-native'
 
-import { Banner } from '@/components/ui/base/Banner'
-import { IconHero } from '@/components/ui/settings/IconHero'
-import { Button } from '@/components/ui/base/Button'
-import { IconButton } from '@/components/ui/base/IconButton'
-import { Placeholder } from '@/components/ui/base/Placeholder'
-import { ScreenTitle } from '@/components/ui/base/ScreenTitle'
-import { ShowcaseCard } from '@/components/ui/dev/ShowcaseCard'
-import { ChipRow, ToggleRow } from '@/components/ui/dev/ShowcaseControls'
+import { Banner } from '@/components/base/Banner'
+import { IconHero } from '@/components/settings/IconHero'
+import { Button } from '@/components/base/Button'
+import { IconButton } from '@/components/base/IconButton'
+import { Placeholder } from '@/components/base/Placeholder'
+import { ScreenTitle } from '@/components/base/ScreenTitle'
+import { ShowcaseCard } from '@/components/dev/ShowcaseCard'
+import { ChipRow, ToggleRow } from '@/components/dev/ShowcaseControls'
 import { theme } from '@/constants/theme'
 
 function IconButtonShowcase() {

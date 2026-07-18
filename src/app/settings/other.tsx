@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native'
-import { Text } from '@/components/ui/base/Text'
+import { Text } from '@/components/base/Text'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
 import {
@@ -11,8 +11,8 @@ import {
   VibrateIcon,
 } from 'phosphor-react-native'
 
-import { TuneDial } from '@/components/ui/tune/TuneDial'
-import { IconHero } from '@/components/ui/settings/IconHero'
+import { TuneDial } from '@/modules/tune/components/TuneDial'
+import { IconHero } from '@/components/settings/IconHero'
 import { theme } from '@/constants/theme'
 import {
   type AlertPreset,
@@ -23,10 +23,10 @@ import {
   previewAlertSound,
   startGeigerSimulation,
   stopGeigerSimulation,
-} from 'vesc-ble'
+} from 'vescape-core'
 
-import { useBoardStore } from '@/store/boardStore'
-import { EMPTY_WARNINGS, useBoardWarningsStore } from '@/store/boardWarningsStore'
+import { useBoardStore } from '@/modules/board/store/boardStore'
+import { EMPTY_WARNINGS, useBoardWarningsStore } from '@/modules/board/store/boardWarningsStore'
 
 /** Fake kind used by the dev warning injector; real detector kinds land in later slices. */
 const DEV_WARNING_KIND = 'cell-spread'

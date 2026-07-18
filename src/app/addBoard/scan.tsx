@@ -1,15 +1,15 @@
 import { useEffect } from 'react'
 import { View, FlatList, Pressable, ActivityIndicator, StyleSheet } from 'react-native'
-import { Text } from '@/components/ui/base/Text'
+import { Text } from '@/components/base/Text'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, useLocalSearchParams } from 'expo-router'
 import { useShallow } from 'zustand/react/shallow'
 
-import { useBleStore } from '@/store/bleStore'
-import { usePermissions } from '@/hooks/usePermissions'
-import { DeviceRow } from '@/components/ui/base/DeviceRow'
+import { useBleStore } from '@/modules/board/store/bleStore'
+import { usePermissions } from '@/modules/settings/hooks/usePermissions'
+import { DeviceRow } from '@/components/base/DeviceRow'
 import { routes } from '@/navigation/routes'
-import type { ScannedDevice } from '@/store/bleStore'
+import type { ScannedDevice } from '@/modules/board/store/bleStore'
 import { theme } from '@/constants/theme'
 
 export default function AddBoardScanScreen() {

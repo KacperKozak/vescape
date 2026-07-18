@@ -6,12 +6,12 @@ import { useShallow } from 'zustand/react/shallow'
 
 import { LinkIcon } from 'phosphor-react-native'
 
-import { BoardLinkTimeline } from '@/components/domain/board/BoardLinkTimeline'
-import { IconHero } from '@/components/ui/settings/IconHero'
-import { Button } from '@/components/ui/base/Button'
-import { useBoardLink } from '@/hooks/useBoardLink'
+import { BoardLinkTimeline } from '@/modules/board/components/BoardLinkTimeline'
+import { IconHero } from '@/components/settings/IconHero'
+import { Button } from '@/components/base/Button'
+import { useBoardLink } from '@/modules/board/hooks/useBoardLink'
 import { routes } from '@/navigation/routes'
-import { useBoardStore } from '@/store/boardStore'
+import { useBoardStore } from '@/modules/board/store/boardStore'
 import { theme } from '@/constants/theme'
 
 const LINK_STEP_ROW_HEIGHT = 76

@@ -92,7 +92,7 @@ If you have not already explored the codebase, do so to understand the current s
 
 When publishing implementation issues, identify likely starting-point files while exploring. Prefer files that are already part of the behavior being changed, nearby tests, domain docs, native bridge/module entrypoints, route files, and established shared utilities. Keep this list small and useful: usually 3-8 paths, enough to give an AFK agent a head start without pretending the list is exhaustive.
 
-For this app, include JS/TS route or domain files plus native Android/iOS module entrypoints when the slice crosses the bridge. Useful starting areas include `src/tune/`, `src/components/`, `src/hooks/`, `modules/vesc-ble/`, `modules/vesc-native/`, `docs/tune.md`, `CONTEXT.md`, and relevant ADRs under `docs/adr/`.
+For this app, include JS/TS route or domain files plus native Android/iOS module entrypoints when the slice crosses the bridge. Useful starting areas include `src/tune/`, `src/components/`, `src/hooks/`, `modules/vescape-core/`, `modules/vesc-native/`, `docs/tune.md`, `CONTEXT.md`, and relevant ADRs under `docs/adr/`.
 
 ### 3. Draft vertical slices
 

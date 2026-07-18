@@ -12,14 +12,17 @@ import {
 import { useShallow } from 'zustand/react/shallow'
 
 import { theme } from '@/constants/theme'
-import { SettingsCard } from '@/components/ui/settings/SettingsCard'
-import { SettingsRow } from '@/components/ui/settings/SettingsRow'
-import { Stepper } from '@/components/ui/forms/Stepper'
-import { IconHero } from '@/components/ui/settings/IconHero'
-import { SettingsSectionTitle } from '@/components/ui/settings/SettingsSectionTitle'
-import { ConfirmModal } from '@/components/ui/modals/ConfirmModal'
-import { useSettingsStore } from '@/store/settingsStore'
-import { ensureBackgroundLocation, hasBackgroundLocation } from '@/hooks/usePermissions'
+import { SettingsCard } from '@/components/settings/SettingsCard'
+import { SettingsRow } from '@/components/settings/SettingsRow'
+import { Stepper } from '@/components/forms/Stepper'
+import { IconHero } from '@/components/settings/IconHero'
+import { SettingsSectionTitle } from '@/components/settings/SettingsSectionTitle'
+import { ConfirmModal } from '@/components/modals/ConfirmModal'
+import { useSettingsStore } from '@/modules/settings/store/settingsStore'
+import {
+  ensureBackgroundLocation,
+  hasBackgroundLocation,
+} from '@/modules/settings/hooks/usePermissions'
 
 export default function ConnectionSettingsScreen() {
   const {

@@ -6,7 +6,7 @@ const resultBundle = `/tmp/vesc-ios-tests-${Date.now()}.xcresult`
 const args = [
   'test',
   '-scheme',
-  'VescBle',
+  'VescapeCore',
   '-destination',
   destination,
   '-resultBundlePath',
@@ -16,7 +16,7 @@ const args = [
 
 const decoder = new TextDecoder()
 const proc = Bun.spawn(['xcodebuild', ...args], {
-  cwd: 'modules/vesc-ble',
+  cwd: 'modules/vescape-core',
   stdout: 'pipe',
   stderr: 'pipe',
 })

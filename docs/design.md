@@ -145,7 +145,7 @@ For screen headers showing metadata (version, OS, DB size), use centered text wi
 
 The app's UI font is **Raleway**, shipped as official static per-weight files (`assets/fonts/Raleway-300.ttf` … `Raleway-900.ttf`) and loaded in `src/app/_layout.tsx` via `expo-font`'s `useFonts` before the `Stack` mounts. The splash stays visible until the fonts are ready on cold start. Static files with correct embedded family, style, and PostScript names are required: Android does not move a custom variable font's `wght` axis, while iOS relies on the embedded names to distinguish registered faces. Raleway defaults to old-style figures, so the shared `Text` wrapper enforces the OpenType `lining-nums` variant.
 
-Every `Text` instance renders through the wrapper at `src/components/ui/base/Text.tsx`, which reads `fontWeight` from the style and resolves it to the matching family via `theme.font(weight)` (default `'500'` — Raleway 400 reads too thin on the dark surface). Import `Text` from `@/components/ui/base/Text` — never import `Text` from `react-native` directly for UI text.
+Every `Text` instance renders through the wrapper at `src/components/base/Text.tsx`, which reads `fontWeight` from the style and resolves it to the matching family via `theme.font(weight)` (default `'500'` — Raleway 400 reads too thin on the dark surface). Import `Text` from `@/components/base/Text` — never import `Text` from `react-native` directly for UI text.
 
 - `theme.font(weight)` in `src/constants/theme.ts` is the single source of truth for per-file aliases (`'Raleway-500'` etc.). Components keep writing plain `fontWeight: '600'` and rely on the wrapper; never inline `'Raleway…'` in a component or style.
 - Numeric readouts that use `fontFamily: 'monospace'` (event log, raw settings, IMU telemetry, BMS cells, gauges — search `fontFamily: 'monospace'`) **opt out** of Raleway. Pass an explicit `fontFamily: 'monospace'` on those `Text` styles to keep them monospace.
@@ -165,7 +165,7 @@ Typography roles:
 
 Preview every role live under **Settings → Components → Typography** (`src/app/settings/components/typography.tsx`).
 
-> Raleway reads thinner than the platform default font, so the design system starts body text at `500` (Medium). Any `Text` without an explicit `fontWeight` resolves to `500` — see the wrapper at `src/components/ui/base/Text.tsx`. Use `'400'` only when a deliberately thin label is intended (e.g. quiet chart axis ticks). Screens that need older behavior can pass `fontWeight: '400'` explicitly.
+> Raleway reads thinner than the platform default font, so the design system starts body text at `500` (Medium). Any `Text` without an explicit `fontWeight` resolves to `500` — see the wrapper at `src/components/base/Text.tsx`. Use `'400'` only when a deliberately thin label is intended (e.g. quiet chart axis ticks). Screens that need older behavior can pass `fontWeight: '400'` explicitly.
 
 ## Avoid
 
