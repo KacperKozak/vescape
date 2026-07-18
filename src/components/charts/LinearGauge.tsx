@@ -19,7 +19,7 @@ import {
 } from '@shopify/react-native-skia'
 import { useDerivedValue, type SharedValue } from 'react-native-reanimated'
 
-import { type DualGaugeAlert } from '@/components/charts/DualGauge'
+import { type DualGaugeAlert } from '@/components/charts/gaugeAlert'
 import { interaction, theme } from '@/constants/theme'
 import { getLinearGaugeValueSlot } from '@/components/charts/linearGaugeLayout'
 

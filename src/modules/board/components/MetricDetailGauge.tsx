@@ -2,7 +2,8 @@ import { useMemo } from 'react'
 import { StyleSheet } from 'react-native'
 import type { SharedValue } from 'react-native-reanimated'
 
-import { SingleGauge, type DualGaugeAlert } from '@/components/charts/DualGauge'
+import { type DualGaugeAlert } from '@/components/charts/gaugeAlert'
+import { SingleGauge } from '@/modules/board/components/DualGauge'
 import type { TelemetryMetricConfig } from '@/modules/board/constants/telemetry'
 import {
   getHistoryMetricHotRange,

@@ -1,3 +1,4 @@
+import { type DualGaugeAlert } from '@/components/charts/gaugeAlert'
 import {
   Pressable,
   StyleSheet,
@@ -36,12 +37,6 @@ import {
   type MetricHotRange,
 } from '@/modules/history/lib/metricColorScale'
 import { routes } from '@/navigation/routes'
-
-export interface DualGaugeAlert {
-  id: string
-  threshold: number
-  thresholdMax: number | null
-}
 
 interface DualGaugeProps {
   speedValue: SharedValue<number | null>

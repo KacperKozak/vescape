@@ -67,4 +67,18 @@ describe('module boundaries', () => {
     }
     expect(violations).toEqual([])
   })
+
+  test('flat kit stays domain-less', () => {
+    const srcDir = join(modulesDir, '..')
+    const violations: string[] = []
+    for (const flat of ['components', 'hooks', 'helpers']) {
+      for (const file of listFiles(join(srcDir, flat))) {
+        const source = readFileSync(file, 'utf8')
+        if (/['"]@\/(modules|screens|app|bootstrap)\//.test(source)) {
+          violations.push(relative(srcDir, file))
+        }
+      }
+    }
+    expect(violations).toEqual([])
+  })
 })

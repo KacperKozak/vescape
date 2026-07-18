@@ -1,7 +1,7 @@
 import { useMemo, type ReactNode } from 'react'
 import type { StyleProp, ViewStyle } from 'react-native'
 
-import { DualGauge } from '@/components/charts/DualGauge'
+import { DualGauge } from '@/modules/board/components/DualGauge'
 import { useAlertsStore } from '@/modules/alerts/store/alertsStore'
 import { useLiveSeries } from '@/modules/board/hooks/useLiveMetric'
 import { useLiveWindowMs, useSettingsStore } from '@/modules/settings/store/settingsStore'
