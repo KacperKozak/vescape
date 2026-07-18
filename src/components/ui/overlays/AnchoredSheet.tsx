@@ -324,9 +324,8 @@ export function EdgeDrawer({
       positionedRef.current = false
       previousContentHeightRef.current = 0
       setKeyboardInset(0)
-      const openingOffset = fromTop ? 0 : height * DRAWER_INITIAL_OPEN_FRACTION
-      scrollOffsetRef.current = openingOffset
-      scrollOffset.value = openingOffset
+      scrollOffsetRef.current = 0
+      scrollOffset.value = 0
       animatedGradientFullStrengthRange.value = Math.max(1, height * DRAWER_INITIAL_OPEN_FRACTION)
       pendingAutoClose.value = false
       animatedOpensFromTop.value = fromTop ? 1 : 0
