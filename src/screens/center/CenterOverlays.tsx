@@ -2,16 +2,39 @@ import * as Haptics from 'expo-haptics'
 import {
   ArrowLeftIcon,
   ArrowsClockwiseIcon,
+  CaretDownIcon,
+  CaretUpIcon,
+  CloudSunIcon,
   ClockCounterClockwiseIcon,
   MagnifyingGlassIcon,
+  MapTrifoldIcon,
   MapPinIcon,
   FunnelIcon,
   PlusIcon,
   SlidersHorizontalIcon,
+  SirenIcon,
+  SpeedometerIcon,
   XIcon,
+  type Icon,
 } from 'phosphor-react-native'
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
-import { ActivityIndicator, Platform, Pressable, StyleSheet, TextInput, View } from 'react-native'
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+} from 'react'
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  TextInput,
+  View,
+} from 'react-native'
 import { Text } from '@/components/ui/base/Text'
 import Animated, {
   cancelAnimation,
@@ -32,6 +55,8 @@ import { HistorySessionSheet } from '@/components/domain/history/HistorySessionS
 import { IconButton } from '@/components/ui/base/IconButton'
 import { MapNavigationSelector } from '@/components/ui/controls/MapNavigationSelector'
 import { MapStyleSwitch } from '@/components/ui/controls/MapStyleSwitch'
+import { PillSelector, PillSelectorItem } from '@/components/ui/controls/PillSelector'
+import { WeatherIcon } from '@/components/ui/weather/WeatherIcon'
 import type { MapNavigationMode, MapStyleKey } from '@/constants/mapStyles'
 import { getMapPointKindIcon } from '@/constants/mapPointIcons'
 import {
@@ -55,8 +80,11 @@ import { HistoryControls } from '@/screens/center/HistoryControls'
 import { HistoryEmptyState } from '@/screens/center/HistoryEmptyState'
 import { WeatherHourlyStrip } from '@/screens/center/WeatherHourlyStrip'
 import { WeatherPill } from '@/screens/center/WeatherPill'
+import { WeatherRadarTimeline } from '@/screens/center/WeatherRadarTimeline'
+import { useMapWeather } from '@/screens/center/useMapWeather'
 import { HistoryStatsBar } from '@/screens/center/HistoryStatsBar'
 import { HistoryTelemetryPanel } from '@/screens/center/HistoryTelemetryPanel'
+import { LegalLimitCountrySheet } from '@/screens/center/LegalLimitCountrySheet'
 import { LiveHud } from '@/screens/center/LiveHud'
 import { MapRevealGesture } from '@/screens/center/MapRevealGesture'
 import { MapVignette } from '@/screens/center/MapVignette'
@@ -66,6 +94,22 @@ import type { Board } from '@/store/boardStore'
 import type { HistorySession, TelemetryMinuteBucket, TelemetrySample } from '@/store/historyStore'
 import type { MediaAssetInput, MediaHistoryAsset } from '@/lib/history/mediaHistory'
 import { useWeatherStore } from '@/store/weatherStore'
+import { useRainViewerRadarStore } from '@/store/rainViewerRadarStore'
+import { isNightAtTime, weatherCodeToColor } from '@/lib/weather'
+import { normalizeLegalModeSettings } from '@/lib/legalMode'
+import {
+  LEGAL_LIMIT_COUNTRIES,
+  LEGAL_ROAD_STATUS_COLORS,
+  LEGAL_ROAD_STATUS_LEGEND,
+  LEGAL_ROAD_STATUS_LABELS,
+  type LegalLimitCountry,
+} from '@/lib/legal/legalLimits'
+import { useSettingsStore } from '@/store/settingsStore'
+
+const LEGAL_LIST_PANEL_HEIGHT = 280
+const LEGAL_OVERLAY_GAP = 8
+const LEGAL_LEGEND_HEIGHT = 12
+const LEGAL_LIST_TOGGLE_HEIGHT = 42
 
 interface CenterBoardOverlayProps {
   boards: Board[]
@@ -90,6 +134,8 @@ interface CenterMapOverlayProps {
   exitMapFocus: () => void
   enterWeather: () => void
   exitWeather: () => void
+  enterLegalLimits: () => void
+  exitLegalLimits: () => void
   refreshWeather: () => void
   weatherLocation: { latitude: number; longitude: number } | null
   replaceDirectionPoint: (latitude: number, longitude: number) => Promise<unknown>
@@ -169,6 +215,116 @@ interface MapControlsProps {
   map: CenterMapOverlayProps
 }
 
+interface MapModeTabsProps {
+  mode: CenterViewState
+  top: number
+  map: CenterMapOverlayProps
+  onResetLegalSelection: () => void
+}
+
+function useMapSearch({
+  searchOpen,
+  weatherLocation,
+}: {
+  searchOpen: boolean
+  weatherLocation: CenterMapOverlayProps['weatherLocation']
+}) {
+  const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<MapSearchResult[]>([])
+  const [searchLoading, setSearchLoading] = useState(false)
+  const [searchError, setSearchError] = useState<string | null>(null)
+  const searchCacheRef = useRef<Map<string, MapSearchResult[]>>(new Map())
+  const searchRequestIdRef = useRef(0)
+  const normalizedSearchQuery = searchQuery.trim()
+  const weatherLatitude = weatherLocation?.latitude ?? null
+  const weatherLongitude = weatherLocation?.longitude ?? null
+  const searchProximity = useMemo(
+    () =>
+      weatherLatitude == null || weatherLongitude == null
+        ? null
+        : { latitude: weatherLatitude, longitude: weatherLongitude },
+    [weatherLatitude, weatherLongitude],
+  )
+  const searchProximityKey =
+    weatherLatitude == null || weatherLongitude == null
+      ? 'none'
+      : `${weatherLatitude.toFixed(4)},${weatherLongitude.toFixed(4)}`
+
+  useEffect(() => {
+    if (!searchOpen || normalizedSearchQuery.length < 2) {
+      searchRequestIdRef.current += 1
+      return
+    }
+
+    const cacheKey = `${normalizedSearchQuery}|${searchProximityKey}`
+    const cached = searchCacheRef.current.get(cacheKey)
+    if (cached) {
+      setSearchResults(cached)
+      setSearchLoading(false)
+      setSearchError(null)
+      return
+    }
+
+    const controller = new AbortController()
+    const requestId = searchRequestIdRef.current + 1
+    searchRequestIdRef.current = requestId
+    const timeout = setTimeout(() => {
+      setSearchLoading(true)
+      void searchMapResults(normalizedSearchQuery, {
+        proximity: searchProximity,
+        signal: controller.signal,
+      })
+        .then((results) => {
+          if (requestId !== searchRequestIdRef.current) return
+          searchCacheRef.current.set(cacheKey, results)
+          setSearchResults(results)
+          setSearchError(null)
+          setSearchLoading(false)
+        })
+        .catch((error: unknown) => {
+          if (controller.signal.aborted) return
+          if (requestId !== searchRequestIdRef.current) return
+          setSearchResults([])
+          setSearchError(error instanceof Error ? error.message : 'Mapbox search failed')
+          setSearchLoading(false)
+        })
+    }, 260)
+
+    return () => {
+      clearTimeout(timeout)
+      controller.abort()
+    }
+  }, [normalizedSearchQuery, searchOpen, searchProximity, searchProximityKey])
+
+  const handleSearchQueryChange = useCallback((query: string) => {
+    setSearchQuery(query)
+    setSearchError(null)
+    if (query.trim().length < 2) {
+      searchRequestIdRef.current += 1
+      setSearchResults([])
+      setSearchLoading(false)
+    }
+  }, [])
+
+  const resetSearch = useCallback(() => {
+    searchRequestIdRef.current += 1
+    setSearchQuery('')
+    setSearchResults([])
+    setSearchError(null)
+    setSearchLoading(false)
+  }, [])
+
+  return {
+    searchQuery,
+    setSearchQuery,
+    searchResults,
+    searchLoading,
+    searchError,
+    handleSearchQueryChange,
+    resetSearch,
+  }
+}
+
 const centerPlacementPointerEntering = () => {
   'worklet'
   return {
@@ -191,42 +347,17 @@ function FullMapControls({
   bottom,
 }: FullMapControlsProps) {
   const [searchOpen, setSearchOpen] = useState(false)
-  const [searchQuery, setSearchQuery] = useState('')
-  const [searchResults, setSearchResults] = useState<MapSearchResult[]>([])
-  const [searchLoading, setSearchLoading] = useState(false)
-  const [searchError, setSearchError] = useState<string | null>(null)
   const [addMenuOpen, setAddMenuOpen] = useState(false)
   const [filterMenuOpen, setFilterMenuOpen] = useState(false)
-  useEffect(() => {
-    const query = searchQuery.trim()
-    if (!searchOpen || query.length < 2) {
-      return
-    }
-
-    const controller = new AbortController()
-    const timeout = setTimeout(() => {
-      setSearchLoading(true)
-      void searchMapResults(query, {
-        proximity: map.weatherLocation,
-        signal: controller.signal,
-      })
-        .then((results) => {
-          setSearchResults(results)
-          setSearchLoading(false)
-        })
-        .catch((error: unknown) => {
-          if (controller.signal.aborted) return
-          setSearchResults([])
-          setSearchError(error instanceof Error ? error.message : 'Mapbox search failed')
-          setSearchLoading(false)
-        })
-    }, 260)
-
-    return () => {
-      clearTimeout(timeout)
-      controller.abort()
-    }
-  }, [map.weatherLocation, searchOpen, searchQuery])
+  const {
+    searchQuery,
+    setSearchQuery,
+    searchResults,
+    searchLoading,
+    searchError,
+    handleSearchQueryChange,
+    resetSearch,
+  } = useMapSearch({ searchOpen, weatherLocation: map.weatherLocation })
 
   const openSearch = useCallback(() => {
     setSearchOpen(true)
@@ -234,11 +365,8 @@ function FullMapControls({
 
   const closeSearch = useCallback(() => {
     setSearchOpen(false)
-    setSearchQuery('')
-    setSearchResults([])
-    setSearchError(null)
-    setSearchLoading(false)
-  }, [])
+    resetSearch()
+  }, [resetSearch])
 
   useEffect(() => {
     const dismissTransientControls = () => {
@@ -255,17 +383,6 @@ function FullMapControls({
     }
   }, [addMenuOpen, closeSearch, filterMenuOpen, mapInteractionHandlerRef, searchOpen])
 
-  const handleSearchQueryChange = useCallback((query: string) => {
-    setSearchQuery(query)
-    setSearchError(null)
-    setSearchResults([])
-    if (query.trim().length < 2) {
-      setSearchLoading(false)
-    } else {
-      setSearchLoading(true)
-    }
-  }, [])
-
   const handleSearchSelect = useCallback(
     (result: MapSearchResult) => {
       setSearchOpen(false)
@@ -273,7 +390,7 @@ function FullMapControls({
       mapRef.current?.focusCoordinate([result.longitude, result.latitude])
       void map.replaceDirectionPoint(result.latitude, result.longitude)
     },
-    [map, mapRef],
+    [map, mapRef, setSearchQuery],
   )
 
   const handleSearchSubmit = useCallback(() => {
@@ -409,9 +526,6 @@ function FullMapControls({
           style={[styles.mapSearchButton, { top }]}
         />
       )}
-      <View pointerEvents="box-none" style={[styles.weatherPillContainer, { top }]}>
-        <WeatherPill location={map.weatherLocation} onPress={map.enterWeather} />
-      </View>
       <View style={[styles.mapFilterAction, { bottom }]}>
         {filterMenuOpen ? (
           <View style={[styles.mapFilterMenu, styles.mapFilterMenuAttached]}>
@@ -527,8 +641,13 @@ function FullMapControls({
 }
 
 function MapControls({ mode, mapRef, map }: MapControlsProps) {
-  const visible = mode === 'telemetry' || mode === 'map' || mode === 'history'
-  const showNavigationSelector = mode !== 'history'
+  const visible =
+    mode === 'telemetry' ||
+    mode === 'map' ||
+    mode === 'weather' ||
+    mode === 'legalLimits' ||
+    mode === 'history'
+  const showNavigationSelector = mode !== 'history' && mode !== 'weather' && mode !== 'legalLimits'
   const navigationExpanded = showNavigationSelector && map.mapSelector === 'navigation'
   const styleExpanded = map.mapSelector === 'style'
   const selectorOpen = navigationExpanded || styleExpanded
@@ -575,6 +694,97 @@ function MapControls({ mode, mapRef, map }: MapControlsProps) {
   )
 }
 
+function MapModeTabs({ mode, top, map, onResetLegalSelection }: MapModeTabsProps) {
+  const weather = useMapWeather(map.weatherLocation)
+  const sunrise = useWeatherStore((s) => s.sunrise)
+  const sunset = useWeatherStore((s) => s.sunset)
+  const now = new Date()
+  const hour = now.getHours()
+  const isNight = isNightAtTime(hour, now.getMinutes(), sunrise, sunset)
+  const weatherColor = weather
+    ? weatherCodeToColor(weather.weatherCode, hour, isNight)
+    : theme.palette.sky.color
+  const weatherSelection = {
+    bg: theme.alpha(weatherColor, 0.12),
+    border: theme.alpha(weatherColor, 0.4),
+    color: weatherColor,
+  }
+  const weatherLabel = 'Weather'
+  const activeId = mode === 'legalLimits' ? 'legalLimits' : mode === 'weather' ? 'weather' : 'map'
+
+  const WeatherModeIcon: Icon = ({ color, size, weight }) => {
+    const iconSize = typeof size === 'number' ? size : 18
+    return weather ? (
+      <WeatherIcon
+        code={weather.weatherCode}
+        hour={hour}
+        isNight={isNight}
+        size={iconSize}
+        color={weatherColor}
+        weight={weight}
+      />
+    ) : (
+      <CloudSunIcon size={size} color={color} weight={weight} />
+    )
+  }
+
+  return (
+    <View pointerEvents="box-none" style={[styles.mapModeTabs, { top }]}>
+      <PillSelector
+        activeId={activeId}
+        contained
+        fitContent
+        style={styles.mapModePills}
+        contentContainerStyle={styles.mapModePillsContent}
+      >
+        <PillSelectorItem
+          id="map"
+          label="Explore"
+          icon={MapTrifoldIcon}
+          activeLabelOnly
+          color={theme.palette.violet}
+          activeWidth={116}
+          onPress={() => {
+            if (mode !== 'map') {
+              onResetLegalSelection()
+              map.enterMapFocus()
+            }
+          }}
+        />
+        <PillSelectorItem
+          id="weather"
+          label={weatherLabel}
+          icon={WeatherModeIcon}
+          activeLabelOnly
+          color={weatherSelection}
+          activeWidth={142}
+          inactiveWidth={58}
+          badge={
+            weather && activeId !== 'weather' ? (
+              <View style={styles.mapModeBadge}>
+                <Text style={[styles.mapModeBadgeText, { color: weatherColor }]}>
+                  {weather.temperature}°
+                </Text>
+              </View>
+            ) : null
+          }
+          onPress={map.enterWeather}
+        />
+        <PillSelectorItem
+          id="legalLimits"
+          label="Legal limits"
+          icon={SpeedometerIcon}
+          activeLabelOnly
+          color={theme.palette.green}
+          activeWidth={136}
+          inactiveWidth={44}
+          onPress={map.enterLegalLimits}
+        />
+      </PillSelector>
+    </View>
+  )
+}
+
 function CenterPlacementPointer() {
   return (
     <Animated.View
@@ -603,14 +813,26 @@ export function CenterOverlays({
   const [panelHeight, setPanelHeight] = useState(0)
   const [removeConfirmVisible, setRemoveConfirmVisible] = useState(false)
   const [revealGestureActive, setRevealGestureActive] = useState(false)
+  const revealCommittedRef = useRef(false)
   const [tuneDrawerOpen, setTuneDrawerOpen] = useState(false)
+  const [legalListOpen, setLegalListOpen] = useState(false)
+  const [selectedLegalCountry, setSelectedLegalCountry] = useState<LegalLimitCountry | null>(null)
   const tuneButtonRef = useRef<View>(null)
   const revealProgress = useSharedValue(0)
   const dragOpacity = useSharedValue(0)
   const telemetryReturnOpacity = useSharedValue(mode === 'telemetry' ? 1 : 0)
   const weatherLoading = useWeatherStore((s) => s.loading)
+  const radarLoading = useRainViewerRadarStore((s) => s.loading)
+  const refreshRadar = useRainViewerRadarStore((s) => s.fetch)
+  const legalModeActive = useSettingsStore((s) => normalizeLegalModeSettings(s.legalMode).enabled)
   const historyBusy = history.loadingSession || history.historyLoading
   const telemetryInteractive = mode === 'telemetry' && !revealGestureActive
+  const legalListVisible = mode === 'legalLimits' && legalListOpen
+  const legalBaseBottom = legalListVisible ? LEGAL_LIST_PANEL_HEIGHT : Math.max(insets.bottom, 16)
+  const legalLegendBottom = legalBaseBottom + LEGAL_OVERLAY_GAP
+  const legalListToggleBottom = legalLegendBottom + LEGAL_LEGEND_HEIGHT + LEGAL_OVERLAY_GAP
+  const mapModeTabsTop = Math.max(insets.top, 8)
+  const belowMapModeTabsTop = mapModeTabsTop + 48
   const interfaceFadeStyle = useAnimatedStyle(() => ({
     opacity: (1 - dragOpacity.value) * telemetryReturnOpacity.value,
   }))
@@ -626,6 +848,17 @@ export function CenterOverlays({
 
   const handleRemoveCancel = useCallback(() => {
     setRemoveConfirmVisible(false)
+  }, [])
+
+  useEffect(() => {
+    if (mode === 'legalLimits') return
+    const frame = requestAnimationFrame(() => setSelectedLegalCountry(null))
+    return () => cancelAnimationFrame(frame)
+  }, [mode])
+
+  const resetLegalSelection = useCallback(() => {
+    setLegalListOpen(false)
+    setSelectedLegalCountry(null)
   }, [])
 
   const handleRevealPan = useCallback(
@@ -660,18 +893,20 @@ export function CenterOverlays({
     } else if (Platform.OS === 'android') {
       void Haptics.performAndroidHapticsAsync(Haptics.AndroidHaptics.Confirm)
     }
+    revealCommittedRef.current = true
     setRevealGestureActive(true)
     map.enterMapFocus()
   }, [map])
 
   const handleRevealFinish = useCallback(
     (revealed: boolean) => {
-      const actuallyRevealed = revealed || mode === 'map'
+      const actuallyRevealed = revealed || revealCommittedRef.current || mode === 'map'
       if (!actuallyRevealed) {
         mapRef.current?.restorePreviewPan()
       } else {
         mapRef.current?.endPreviewPan()
       }
+      revealCommittedRef.current = false
       setRevealGestureActive(false)
     },
     [mapRef, mode],
@@ -680,6 +915,7 @@ export function CenterOverlays({
   useLayoutEffect(() => {
     cancelAnimation(telemetryReturnOpacity)
     if (mode === 'telemetry') {
+      revealCommittedRef.current = false
       revealProgress.value = 0
       dragOpacity.value = withTiming(0, TELEMETRY_FADE_TIMING)
       telemetryReturnOpacity.value = 0
@@ -694,7 +930,7 @@ export function CenterOverlays({
       <MapVignette
         mode={mode}
         panelHeight={mode === 'history' && history.selectedSession ? panelHeight : 0}
-        visible={mode !== 'map'}
+        visible
         fadeOutProgress={dragOpacity}
       />
       {(mode === 'telemetry' || revealGestureActive) && (
@@ -710,6 +946,15 @@ export function CenterOverlays({
           onFinish={handleRevealFinish}
         />
       )}
+
+      {mode === 'map' || mode === 'weather' || mode === 'legalLimits' ? (
+        <MapModeTabs
+          mode={mode}
+          top={mapModeTabsTop}
+          map={map}
+          onResetLegalSelection={resetLegalSelection}
+        />
+      ) : null}
 
       <Animated.View
         pointerEvents={telemetryInteractive ? 'box-none' : 'none'}
@@ -757,6 +1002,11 @@ export function CenterOverlays({
             size="lg"
             onPress={() => setTuneDrawerOpen(true)}
           />
+          {legalModeActive ? (
+            <View style={styles.legalModeBadge}>
+              <SirenIcon size={13} color={theme.palette.mono.white} weight="fill" />
+            </View>
+          ) : null}
         </View>
         <EdgeDrawer
           visible={tuneDrawerOpen}
@@ -765,7 +1015,13 @@ export function CenterOverlays({
           icon={SlidersHorizontalIcon}
           onClose={() => setTuneDrawerOpen(false)}
         >
-          <TuneDrawer onNavigate={() => setTuneDrawerOpen(false)} />
+          <TuneDrawer
+            onNavigate={() => setTuneDrawerOpen(false)}
+            onOpenLegalLimits={() => {
+              setTuneDrawerOpen(false)
+              map.enterLegalLimits()
+            }}
+          />
         </EdgeDrawer>
       </Animated.View>
 
@@ -793,7 +1049,7 @@ export function CenterOverlays({
             mapRef={mapRef}
             map={map}
             mapInteractionHandlerRef={mapInteractionHandlerRef}
-            top={Math.max(insets.top, 8)}
+            top={mapModeTabsTop}
             bottom={aboveStripBottom - 112}
           />
         ) : null}
@@ -807,26 +1063,142 @@ export function CenterOverlays({
       >
         <IconButton
           icon={ArrowLeftIcon}
+          size="sm"
+          accessibilityLabel="Back from weather"
           onPress={map.exitWeather}
-          style={[styles.backButton, { top: Math.max(insets.top, 8) }]}
+          style={[styles.mapTopBackButton, { top: mapModeTabsTop }]}
         />
         <IconButton
           icon={ArrowsClockwiseIcon}
-          onPress={map.refreshWeather}
-          loading={weatherLoading}
-          style={[styles.weatherRefreshButton, { top: Math.max(insets.top, 8) }]}
+          onPress={() => {
+            map.refreshWeather()
+            refreshRadar(true)
+          }}
+          loading={weatherLoading || radarLoading}
+          style={[styles.weatherRefreshButton, { top: mapModeTabsTop }]}
         />
         <View
           pointerEvents="none"
-          style={[styles.weatherExpandedPill, { top: Math.max(insets.top, 8) }]}
+          style={[styles.weatherExpandedPill, { top: belowMapModeTabsTop }]}
         >
           <WeatherPill location={map.weatherLocation} expanded onPress={() => undefined} />
+        </View>
+        <View
+          style={[
+            styles.weatherRadarTimelineContainer,
+            { bottom: Math.max(insets.bottom, 16) + 112 },
+          ]}
+        >
+          {mode === 'weather' ? <WeatherRadarTimeline /> : null}
         </View>
         <View
           style={[styles.weatherHourlyContainer, { paddingBottom: Math.max(insets.bottom, 16) }]}
         >
           <WeatherHourlyStrip />
         </View>
+      </View>
+
+      <View
+        pointerEvents={mode === 'legalLimits' ? 'box-none' : 'none'}
+        style={[
+          styles.legalLimitsInterface,
+          mode === 'legalLimits' ? styles.visible : styles.hidden,
+        ]}
+      >
+        <IconButton
+          icon={ArrowLeftIcon}
+          size="sm"
+          accessibilityLabel="Exit legal limits"
+          onPress={map.exitLegalLimits}
+          style={[styles.mapTopBackButton, { top: mapModeTabsTop }]}
+        />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={
+            legalListVisible ? 'Hide legal limits list' : 'Show legal limits list'
+          }
+          onPress={() => setLegalListOpen((open) => !open)}
+          style={({ pressed }) => [
+            styles.legalListToggle,
+            {
+              bottom: legalListToggleBottom,
+            },
+            pressed && styles.legalListTogglePressed,
+          ]}
+        >
+          {legalListVisible ? (
+            <CaretDownIcon size={18} color={theme.palette.slate.textSecondary} weight="bold" />
+          ) : (
+            <CaretUpIcon size={18} color={theme.palette.slate.textSecondary} weight="bold" />
+          )}
+          <Text style={styles.legalListToggleLabel}>
+            {legalListVisible ? 'HIDE LIST' : 'SHOW LIST'}
+          </Text>
+        </Pressable>
+        <View
+          pointerEvents="none"
+          style={[
+            styles.legalLegend,
+            {
+              bottom: legalLegendBottom,
+            },
+          ]}
+        >
+          {LEGAL_ROAD_STATUS_LEGEND.map((status) => (
+            <View key={status} style={styles.legalLegendItem}>
+              <View
+                style={[
+                  styles.legalLegendDot,
+                  { backgroundColor: LEGAL_ROAD_STATUS_COLORS[status] },
+                ]}
+              />
+              <Text style={styles.legalLegendText}>{LEGAL_ROAD_STATUS_LABELS[status]}</Text>
+            </View>
+          ))}
+        </View>
+        {legalListVisible ? (
+          <View style={[styles.legalListPanel, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.legalListContent}
+            >
+              {LEGAL_LIMIT_COUNTRIES.map((country) => (
+                <Pressable
+                  key={country.code}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${country.name} legal limits`}
+                  style={({ pressed }) => [
+                    styles.legalCountryRow,
+                    pressed && styles.legalCountryRowPressed,
+                  ]}
+                  onPress={() => setSelectedLegalCountry(country)}
+                >
+                  <View
+                    style={[
+                      styles.legalCountryDot,
+                      { backgroundColor: LEGAL_ROAD_STATUS_COLORS[country.status] },
+                    ]}
+                  />
+                  <Text style={styles.legalCountryName} numberOfLines={1}>
+                    {country.name}
+                  </Text>
+                  <Text style={styles.legalCountryStatus} numberOfLines={1}>
+                    {LEGAL_ROAD_STATUS_LABELS[country.status]}
+                  </Text>
+                  <Text style={styles.legalCountrySpeed}>
+                    {country.referenceSpeedKmh == null
+                      ? 'N/A'
+                      : `${country.referenceSpeedKmh} km/h`}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        ) : null}
+        <LegalLimitCountrySheet
+          country={mode === 'legalLimits' ? selectedLegalCountry : null}
+          onClose={() => setSelectedLegalCountry(null)}
+        />
       </View>
 
       {mode === 'history' && history.selectedSession && (
@@ -942,17 +1314,28 @@ export function CenterOverlays({
 }
 
 const styles = StyleSheet.create({
-  backButton: {
-    position: 'absolute',
-    left: 10,
-    zIndex: 30,
-  },
-  weatherPillContainer: {
+  mapModeTabs: {
     position: 'absolute',
     left: 0,
     right: 0,
     alignItems: 'center',
-    zIndex: 30,
+    zIndex: 43,
+  },
+  mapModePills: {
+    alignSelf: 'center',
+  },
+  mapModePillsContent: {
+    justifyContent: 'center',
+  },
+  mapModeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  mapModeBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
   },
   mapTopBackButton: {
     position: 'absolute',
@@ -964,7 +1347,7 @@ const styles = StyleSheet.create({
   mapSearchButton: {
     position: 'absolute',
     right: 12,
-    zIndex: 32,
+    zIndex: 44,
     borderColor: theme.alpha(theme.palette.slate.light, 0.3),
     backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
   },
@@ -972,7 +1355,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 12,
     right: 12,
-    zIndex: 36,
+    zIndex: 44,
     gap: 8,
   },
   mapSearchBar: {
@@ -1247,7 +1630,7 @@ const styles = StyleSheet.create({
   },
   mapInterface: {
     ...StyleSheet.absoluteFill,
-    zIndex: 7,
+    zIndex: 44,
   },
   mapControlsLayer: {
     ...StyleSheet.absoluteFill,
@@ -1261,6 +1644,10 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
     zIndex: 8,
   },
+  legalLimitsInterface: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 9,
+  },
   weatherRefreshButton: {
     position: 'absolute',
     right: 10,
@@ -1273,12 +1660,120 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 29,
   },
+  weatherRadarTimelineContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    zIndex: 31,
+  },
   weatherHourlyContainer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
     zIndex: 30,
+  },
+  legalLegend: {
+    position: 'absolute',
+    left: 54,
+    right: 54,
+    zIndex: 28,
+    flexDirection: 'row',
+    flexWrap: 'nowrap',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  legalLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  legalLegendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  legalLegendText: {
+    color: theme.palette.mono.white,
+    fontSize: 9,
+    fontWeight: '800',
+    textShadowColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.6),
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  legalListToggle: {
+    position: 'absolute',
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minHeight: LEGAL_LIST_TOGGLE_HEIGHT,
+    paddingHorizontal: 16,
+    borderRadius: 21,
+    borderWidth: 1,
+    borderColor: theme.palette.slate.border,
+    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
+    zIndex: 31,
+  },
+  legalListTogglePressed: {
+    backgroundColor: theme.palette.slate.surface,
+  },
+  legalListToggleLabel: {
+    color: theme.palette.slate.textSecondary,
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  legalListPanel: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    maxHeight: LEGAL_LIST_PANEL_HEIGHT,
+    paddingTop: 14,
+    paddingHorizontal: 14,
+    gap: 8,
+    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
+    borderTopWidth: 1,
+    borderTopColor: theme.palette.slate.border,
+    zIndex: 30,
+  },
+  legalListContent: {
+    gap: 8,
+  },
+  legalCountryRow: {
+    minHeight: 28,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 8,
+    paddingHorizontal: 2,
+  },
+  legalCountryRowPressed: {
+    backgroundColor: theme.alpha(theme.palette.slate.light, 0.12),
+  },
+  legalCountryDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+  },
+  legalCountryName: {
+    flex: 1.1,
+    color: theme.palette.slate.textPrimary,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  legalCountryStatus: {
+    flex: 0.9,
+    color: theme.palette.slate.textMuted,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  legalCountrySpeed: {
+    width: 56,
+    color: theme.palette.slate.textPrimary,
+    fontSize: 12,
+    fontWeight: '900',
+    textAlign: 'right',
   },
   visible: {
     opacity: 1,
@@ -1288,13 +1783,26 @@ const styles = StyleSheet.create({
   },
   historyButton: {
     position: 'absolute',
-    right: 12,
+    left: 12,
     zIndex: 20,
   },
   tuneButton: {
     position: 'absolute',
-    left: 12,
+    right: 12,
     zIndex: 20,
+  },
+  legalModeBadge: {
+    position: 'absolute',
+    top: -3,
+    right: -3,
+    width: 21,
+    height: 21,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.status.error.color,
+    borderWidth: 2,
+    borderColor: theme.palette.slate.surfaceDeep,
   },
   historyError: {
     position: 'absolute',

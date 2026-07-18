@@ -219,6 +219,8 @@ export interface AlertPreset {
   category: AlertPresetCategory
 }
 
+// @parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/TelemetryEntities.kt `AlertRuleEntity`
+// @parity /modules/vesc-ble/ios/alerts/AlertEngine.swift `AlertRule`
 export interface AlertRule {
   id: string
   controlId: string
@@ -227,6 +229,7 @@ export interface AlertRule {
   enabled: boolean
   soundType: AlertSoundType
   createdAt: number
+  source?: 'manual' | 'legal-mode'
 }
 
 export type PrivacyZonePreset = 'home' | 'work' | 'custom'
@@ -775,6 +778,16 @@ export interface AppSettings {
   freeSpinMaxSpeedDeltaKmh: number
   freeSpinStationaryBoardCapKmh: number
   mapStyleKey: 'onedark' | 'outdoors' | 'satellite' | 'mapy'
+  /** Use the custom satellite overlay style instead of the stock satellite style. */
+  satelliteOverlayEnabled: boolean
+  /** Satellite basemap imagery opacity, 0.1-1.0. Labels and app overlays stay full opacity. */
+  satelliteImageryOpacity: number
+  /** Satellite basemap imagery opacity for Explore/map mode, 0.1-1.0. */
+  satelliteMapImageryOpacity: number
+  /** Satellite basemap saturation for the telemetry/home map, -1.0 to 1.0. */
+  satelliteImagerySaturation: number
+  /** Hide POI names and icons on the telemetry/home map. Explore keeps map details visible. */
+  hideTelemetryMapDetails: boolean
   mapNavigationMode: 'northUp' | 'gpsHeading' | 'phoneHeading' | 'freeRotate'
   historyMetricGradientsEnabled: boolean
   historyMetricHotRanges: Partial<
@@ -842,6 +855,8 @@ export interface AppSettings {
   riderName: string | null
   /** Rider-chosen marker color (hex) shown on other Riders' maps. Null when unset. */
   riderColor: string | null
+  /** Durable Legal Mode UI/default state. JS owns behavior; native only persists this bag. */
+  legalMode: Record<string, unknown> | null
 }
 
 export interface DiagnosticStatus {

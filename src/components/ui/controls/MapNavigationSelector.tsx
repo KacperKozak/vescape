@@ -58,9 +58,11 @@ export function MapNavigationSelector({
         <DeviceMobileIcon size={iconSize} color={COLLAPSED_ICON_COLOR} weight="bold" />
       </NorthAwareIcon>
     ) : (
-      <Animated.View style={freeRotateIconStyle}>
-        <ArrowUpIcon size={iconSize} color={COLLAPSED_ICON_COLOR} weight="bold" />
-      </Animated.View>
+      <NorthAwareIcon heading={heading} rotateNorthDot>
+        <Animated.View style={freeRotateIconStyle}>
+          <ArrowUpIcon size={iconSize} color={COLLAPSED_ICON_COLOR} weight="bold" />
+        </Animated.View>
+      </NorthAwareIcon>
     )
 
   return (
@@ -111,11 +113,11 @@ function NorthAwareIcon({
   rotateNorthDot = false,
 }: NorthAwareIconProps) {
   const headingRotationStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${-heading.value}deg` }],
+    transform: [{ rotate: `${rotateNorthDot ? -heading.value : 0}deg` }],
   }))
   return (
     <Animated.View style={styles.northAwareIcon}>
-      <Animated.View style={[styles.northDotOrbit, rotateNorthDot && headingRotationStyle]}>
+      <Animated.View style={[styles.northDotOrbit, headingRotationStyle]}>
         <View style={[styles.northDot, compact && styles.northDotCompact]} />
       </Animated.View>
       {children}

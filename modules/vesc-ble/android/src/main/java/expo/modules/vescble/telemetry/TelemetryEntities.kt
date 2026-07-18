@@ -278,6 +278,7 @@ data class AlertRuleEntity(
   val soundType: String,
   @ColumnInfo(name = "created_at")
   val createdAt: Long,
+  val source: String?,
 )
 
 @Entity(
@@ -363,6 +364,11 @@ data class AppSettings(
   val freeSpinMaxSpeedDeltaKmh: Double = DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH,
   val freeSpinStationaryBoardCapKmh: Double = DEFAULT_FREE_SPIN_STATIONARY_BOARD_CAP_KMH,
   val mapStyleKey: String = "onedark",
+  val satelliteOverlayEnabled: Boolean = true,
+  val satelliteImageryOpacity: Double = 0.2,
+  val satelliteMapImageryOpacity: Double = 1.0,
+  val satelliteImagerySaturation: Double = -0.35,
+  val hideTelemetryMapDetails: Boolean = true,
   val mapNavigationMode: String = "northUp",
   val historyMetricGradientsEnabled: Boolean = true,
   val historyMetricHotRanges: Map<String, Map<String, Double>> = DEFAULT_HISTORY_METRIC_HOT_RANGES,
@@ -379,6 +385,7 @@ data class AppSettings(
   val riderId: String? = null,
   val riderName: String? = null,
   val riderColor: String? = null,
+  val legalMode: Map<String, Any?>? = null,
 )
 
 @Entity(

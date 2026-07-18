@@ -18,6 +18,7 @@ import { ConfirmModal } from '@/components/ui/modals/ConfirmModal'
 import { theme } from '@/constants/theme'
 import { deriveBatteryConfig } from '@/lib/battery'
 import { type DerivedBatteryConfig } from '@/lib/battery/types'
+import { isLegalModeAlertRule } from '@/lib/legalMode'
 import { type AlertRule, type AlertSoundType, useAlertsStore } from '@/store/alertsStore'
 import { useBoardStore } from '@/store/boardStore'
 
@@ -29,7 +30,7 @@ interface AlertsSectionProps {
 export function AlertsSection({ controlId, unit }: AlertsSectionProps) {
   const allRules = useAlertsStore((s) => s.rules)
   const rules = useMemo(
-    () => allRules.filter((rule) => rule.controlId === controlId),
+    () => allRules.filter((rule) => rule.controlId === controlId && !isLegalModeAlertRule(rule)),
     [allRules, controlId],
   )
   const add = useAlertsStore((s) => s.add)

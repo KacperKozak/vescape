@@ -1,4 +1,4 @@
-import Mapbox, { Camera } from '@rnmapbox/maps'
+import Mapbox, { Camera, RasterLayer, SymbolLayer } from '@rnmapbox/maps'
 import { CrosshairSimpleIcon, type Icon } from 'phosphor-react-native'
 import {
   forwardRef,
@@ -23,9 +23,13 @@ import {
   type MapNavigationMode,
   type MapStyleKey,
 } from '@/constants/mapStyles'
+import {
+  getSatelliteDarkMapStyle,
+  getSatelliteImageryPaint,
+} from '@/constants/satelliteDarkMapStyle'
 import { getMapPointKindIcon } from '@/constants/mapPointIcons'
 import { getMapPointKindColor, getMapPointKindTextColor } from '@/constants/mapPoints'
-import { ONE_DARK_MAP_STYLE } from '@/constants/oneDarkMapStyle'
+import { getOneDarkMapStyle } from '@/constants/oneDarkMapStyle'
 import { theme } from '@/constants/theme'
 import {
   getLiveGpsPresentation,
@@ -37,6 +41,7 @@ import { isMapPointKindVisible } from '@/lib/mapPointVisibility'
 import type { HistoryMetricKey } from '@/lib/history/metricColorScale'
 import { getNavigationFallbackReason } from '@/lib/map/navigationDiagnostics'
 import { getGpsPuckBearing } from '@/lib/map/gpsPuckHeading'
+import type { LegalLimitCountry } from '@/lib/legal/legalLimits'
 import type { HistoryGpsSample, HistoryMarker, TelemetrySample } from '@/store/historyStore'
 import { useGroupRideStore } from '@/store/groupRideStore'
 import { useNavigationDiagnosticsStore } from '@/store/navigationDiagnosticsStore'
@@ -55,11 +60,11 @@ import { shouldPreserveLiveFollowGesture } from './cameraGestureState'
 import { phoneHeadingAnimationDuration, type PhoneHeadingStatus } from './phoneHeading'
 import { PhoneHeadingMapLayer } from './PhoneHeadingMapLayer'
 import { CenterMapLayers, rosterRiderColor } from './CenterMapLayers'
+import { LegalLimitCountrySheet } from './LegalLimitCountrySheet'
 import {
   DESTINATION_POINT_COLOR,
   DESTINATION_POINT_TEXT_COLOR,
   GPS_POINT_COLOR,
-  GPS_POINT_TEXT_COLOR,
   OffscreenMapIndicator,
   applyOffscreenIndicatorDrafts,
   clampedEdgeIndicator,
@@ -97,6 +102,7 @@ export interface CenterMapHandle {
   zoomBy: (delta: number) => void
   focusCoordinate: (coordinate: [number, number]) => void
   focusWeather: () => void
+  focusLegalLimits: () => void
   getViewfinderCoordinate: () => Promise<{ latitude: number; longitude: number }>
 }
 
@@ -134,6 +140,11 @@ interface CenterMapProps {
   historySelectionKey: string | null
   historyPreviewRoute: [number, number][]
   mapStyleKey: MapStyleKey
+  satelliteOverlayEnabled: boolean
+  satelliteImageryOpacity: number
+  satelliteMapImageryOpacity: number
+  satelliteImagerySaturation: number
+  hideTelemetryMapDetails: boolean
   mapNavigationMode: MapNavigationMode
   rotationLocked: boolean
   perspectiveEnabled: boolean
@@ -153,6 +164,7 @@ interface CenterMapProps {
   onRemoveMapPoint: (id: string) => void
   onClearDirectionPoint: () => void
   weatherActive: boolean
+  legalLimitsActive: boolean
   historyPreview:
     | ({
         key: string
@@ -176,6 +188,11 @@ export const CenterMap = memo(
       historySelectionKey,
       historyPreviewRoute,
       mapStyleKey,
+      satelliteOverlayEnabled,
+      satelliteImageryOpacity,
+      satelliteMapImageryOpacity,
+      satelliteImagerySaturation,
+      hideTelemetryMapDetails,
       mapNavigationMode,
       rotationLocked,
       perspectiveEnabled,
@@ -194,6 +211,7 @@ export const CenterMap = memo(
       onToggleMapPointSelection,
       onRemoveMapPoint,
       weatherActive,
+      legalLimitsActive,
       onClearDirectionPoint,
       historyPreview,
     },
@@ -203,6 +221,7 @@ export const CenterMap = memo(
     const previousMapStyleKeyRef = useRef(mapStyleKey)
     const mapRevealedRef = useRef(false)
     const mapViewRef = useRef<ElementRef<typeof Mapbox.MapView> | null>(null)
+    const gestureActiveRef = useRef(false)
     const offscreenProjectionRequestRef = useRef(0)
     const suppressNextMapPressRef = useRef(false)
     const suppressNextMapPressTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -210,6 +229,7 @@ export const CenterMap = memo(
     const [cameraReady, setCameraReady] = useState(false)
     const [selectedHistoryMarker, setSelectedHistoryMarker] =
       useState<SelectedHistoryMarker | null>(null)
+    const [selectedLegalCountry, setSelectedLegalCountry] = useState<LegalLimitCountry | null>(null)
     const [cameraHeading, setCameraHeading] = useState(0)
     const [cameraZoom, setCameraZoom] = useState<number>(MAP_DEFAULTS.fallbackZoom)
     const [initialApproximateFix, setInitialApproximateFix] = useState<LocationEvent | null>(null)
@@ -223,6 +243,12 @@ export const CenterMap = memo(
       offscreenMapIndicatorsRef.current = next
       setOffscreenMapIndicators(next)
     }, [])
+
+    useEffect(() => {
+      if (legalLimitsActive) return
+      const frame = requestAnimationFrame(() => setSelectedLegalCountry(null))
+      return () => cancelAnimationFrame(frame)
+    }, [legalLimitsActive])
 
     const applyOffscreenMapIndicatorDrafts = useCallback(
       (drafts: OffscreenMapIndicatorDraft[]) => {
@@ -264,7 +290,35 @@ export const CenterMap = memo(
       requestedMapStyle.key === 'mapy' && !IS_MAPY_CONFIGURED ? MAP_STYLES[0] : requestedMapStyle
     const isMapy = selectedMapStyle.key === 'mapy'
     const isOneDark = selectedMapStyle.key === 'onedark'
-    const useCustomJSON = isMapy || isOneDark
+    const isSatellite = selectedMapStyle.key === 'satellite'
+    const mapDetailsVisible = mode === 'map' || (mode === 'telemetry' && !hideTelemetryMapDetails)
+    const isSatelliteOverlay = isSatellite && satelliteOverlayEnabled
+    const effectiveSatelliteImageryOpacity =
+      mode === 'telemetry' ? satelliteImageryOpacity : satelliteMapImageryOpacity
+    const effectiveSatelliteImagerySaturation =
+      mode === 'telemetry' ? satelliteImagerySaturation : 0
+    const useCustomJSON = isMapy || isOneDark || isSatelliteOverlay
+    const satelliteStyleJSON = useMemo(
+      () =>
+        getSatelliteDarkMapStyle(
+          effectiveSatelliteImageryOpacity,
+          true,
+          true,
+          false,
+          true,
+          effectiveSatelliteImagerySaturation,
+        ),
+      [effectiveSatelliteImageryOpacity, effectiveSatelliteImagerySaturation],
+    )
+    const satelliteImageryPaint = useMemo(
+      () =>
+        getSatelliteImageryPaint(
+          effectiveSatelliteImageryOpacity,
+          effectiveSatelliteImagerySaturation,
+        ),
+      [effectiveSatelliteImageryOpacity, effectiveSatelliteImagerySaturation],
+    )
+    const oneDarkStyleJSON = useMemo(() => getOneDarkMapStyle(true, true, false), [])
     const showBuildings3d =
       selectedMapStyle.key === 'outdoors' || selectedMapStyle.key === 'onedark'
 
@@ -370,6 +424,7 @@ export const CenterMap = memo(
       recenterLive,
       getLiveFollowCamera,
       getHistoryPreviewCamera,
+      phoneHeadingCameraSuspended,
     } = useCameraControls({
       ref,
       cameraFix,
@@ -510,6 +565,7 @@ export const CenterMap = memo(
 
       const requestId = offscreenProjectionRequestRef.current + 1
       offscreenProjectionRequestRef.current = requestId
+      const ownRiderMapColor = riderColor ?? GPS_POINT_COLOR
       const trackedPoints = [
         ...(offscreenMapGpsCoordinate
           ? [
@@ -520,8 +576,8 @@ export const CenterMap = memo(
                   offscreenMapGpsCoordinate.longitude,
                   offscreenMapGpsCoordinate.latitude,
                 ] as [number, number],
-                color: GPS_POINT_COLOR,
-                textColor: GPS_POINT_TEXT_COLOR,
+                color: ownRiderMapColor,
+                textColor: ownRiderMapColor,
                 icon: CrosshairSimpleIcon,
               },
             ]
@@ -735,6 +791,7 @@ export const CenterMap = memo(
     const handleMapLoaded = useCallback(() => {
       const styleReloadCamera = styleReloadCameraRef.current
       styleReloadCameraRef.current = null
+      if (styleReloadCamera && gestureActiveRef.current) return
       const camera =
         historyActive && historyPreview
           ? getHistoryPreviewCamera(historyPreview)
@@ -821,6 +878,7 @@ export const CenterMap = memo(
         properties: { center: number[]; zoom: number; heading: number; pitch: number }
         gestures: { isGestureActive: boolean }
       }) => {
+        gestureActiveRef.current = state.gestures.isGestureActive
         const [longitude, latitude] = state.properties.center
         const automaticHeadingFollow =
           followGps && headingFollowMode && !state.gestures.isGestureActive
@@ -949,7 +1007,15 @@ export const CenterMap = memo(
           ref={mapViewRef}
           style={styles.map}
           styleURL={useCustomJSON ? undefined : selectedMapStyle.styleURL}
-          styleJSON={isOneDark ? ONE_DARK_MAP_STYLE : isMapy ? BLANK_STYLE : undefined}
+          styleJSON={
+            isOneDark
+              ? oneDarkStyleJSON
+              : isMapy
+                ? BLANK_STYLE
+                : isSatelliteOverlay
+                  ? satelliteStyleJSON
+                  : undefined
+          }
           pitchEnabled={false}
           rotateEnabled={!rotationLocked}
           compassEnabled={false}
@@ -970,9 +1036,104 @@ export const CenterMap = memo(
             maxZoomLevel={MAP_DEFAULTS.maxZoom}
             animationMode="easeTo"
           />
+          {isSatelliteOverlay ? (
+            <>
+              <RasterLayer
+                id="satellite"
+                existing
+                style={{
+                  ...satelliteImageryPaint,
+                  rasterOpacityTransition: { duration: 260, delay: 0 },
+                  rasterSaturationTransition: { duration: 260, delay: 0 },
+                  rasterContrastTransition: { duration: 260, delay: 0 },
+                }}
+              />
+              {[
+                'road-path',
+                'road-track',
+                'road-service',
+                'road-street',
+                'road-secondary-tertiary',
+                'road-primary',
+                'road-trunk',
+                'road-motorway',
+              ].map((id) => (
+                <Mapbox.LineLayer
+                  key={id}
+                  id={id}
+                  existing
+                  style={{
+                    lineOpacity: mode === 'telemetry' ? 0.35 : 0.75,
+                    lineOpacityTransition: { duration: 260, delay: 0 },
+                  }}
+                />
+              ))}
+            </>
+          ) : null}
+          {isOneDark ? (
+            <>
+              <SymbolLayer
+                id="poi-label"
+                existing
+                style={{ visibility: mapDetailsVisible ? 'visible' : 'none' }}
+              />
+              <SymbolLayer
+                id="poi-icon"
+                existing
+                style={{
+                  visibility: mapDetailsVisible ? 'visible' : 'none',
+                  iconColor: '#74859a',
+                  iconHaloWidth: 0.5,
+                  iconOpacity: 0.48,
+                }}
+              />
+              <SymbolLayer
+                id="transit-stop-icon"
+                existing
+                style={{
+                  visibility: mapDetailsVisible ? 'visible' : 'none',
+                  iconColor: '#74859a',
+                  iconHaloWidth: 0.5,
+                  iconOpacity: 0.48,
+                }}
+              />
+            </>
+          ) : null}
+          {isSatelliteOverlay ? (
+            <>
+              <SymbolLayer
+                id="poi-label"
+                existing
+                style={{ visibility: mapDetailsVisible ? 'visible' : 'none' }}
+              />
+              <SymbolLayer
+                id="transit-label"
+                existing
+                style={{ visibility: mapDetailsVisible ? 'visible' : 'none' }}
+              />
+            </>
+          ) : null}
+          {(selectedMapStyle.key === 'outdoors' || (isSatellite && !isSatelliteOverlay)) && (
+            <>
+              <SymbolLayer
+                id="poi-label"
+                existing
+                style={{
+                  visibility: mapDetailsVisible ? 'visible' : 'none',
+                }}
+              />
+              <SymbolLayer
+                id="transit-label"
+                existing
+                style={{
+                  visibility: mapDetailsVisible ? 'visible' : 'none',
+                }}
+              />
+            </>
+          )}
           <PhoneHeadingMapLayer
             active={!historyActive && !gpsHeadingMode}
-            followCamera={phoneHeadingMode && followGps}
+            followCamera={phoneHeadingMode && followGps && !phoneHeadingCameraSuspended}
             approximateFix={approximateGpsPuckActive}
             coordinate={accuracyFix}
             cameraRef={cameraRef}
@@ -985,8 +1146,10 @@ export const CenterMap = memo(
             expandSelectedMapPoints={mode === 'map'}
             isMapy={isMapy}
             isOneDark={isOneDark}
+            isSatellite={isSatelliteOverlay}
             showBuildings3d={showBuildings3d}
             weatherActive={weatherActive}
+            legalLimitsActive={legalLimitsActive}
             liveTrailShape={liveTrailShape}
             rideRouteShape={rideRouteShape}
             accuracyFix={accuracyFix}
@@ -1012,6 +1175,9 @@ export const CenterMap = memo(
             onSuppressNextMapPress={handleSuppressNextMapPress}
             onSelectMarker={setSelectedHistoryMarker}
             onOpenMedia={onOpenMedia}
+            onSelectLegalCountry={(country) => {
+              if (legalLimitsActive) setSelectedLegalCountry(country)
+            }}
           />
         </Mapbox.MapView>
         <InfoModal
@@ -1024,6 +1190,10 @@ export const CenterMap = memo(
           message={selectedHistoryMarker ? buildHistoryMarkerMessage(selectedHistoryMarker) : ''}
           dismissLabel="Close"
           onDismiss={() => setSelectedHistoryMarker(null)}
+        />
+        <LegalLimitCountrySheet
+          country={legalLimitsActive ? selectedLegalCountry : null}
+          onClose={() => setSelectedLegalCountry(null)}
         />
         {weatherActive ? (
           <Text style={styles.radarAttribution} pointerEvents="none">

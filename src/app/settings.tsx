@@ -17,6 +17,7 @@ import {
   GaugeIcon,
   WatchIcon,
   WarningIcon,
+  ImageSquareIcon,
 } from 'phosphor-react-native'
 
 import { routes } from '@/navigation/routes'
@@ -85,6 +86,13 @@ export default function SettingsScreen() {
             label="Diagnostics"
             hint="Board warnings and health checks"
             onPress={() => router.push(routes.settingsDiagnostics)}
+          />
+          <SettingsRow
+            icon={ImageSquareIcon}
+            iconColor={theme.palette.sky.color}
+            label="Map visuals"
+            hint="Map appearance and satellite imagery"
+            onPress={() => router.push(routes.settingsVisuals)}
           />
         </SettingsCard>
 

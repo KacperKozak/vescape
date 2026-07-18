@@ -1,52 +1,64 @@
 import { RasterLayer, RasterSource } from '@rnmapbox/maps'
-import { useEffect, useState } from 'react'
+import { useEffect } from 'react'
+
+import { buildRainViewerTileTemplate, useRainViewerRadarStore } from '@/store/rainViewerRadarStore'
+
+const RADAR_OPACITY = 0.55
+const AUTO_RADAR_FRAME_FADE_MS = 450
+const MANUAL_RADAR_FRAME_FADE_MS = 180
 
 interface RainViewerOverlayProps {
   visible: boolean
 }
 
 export function RainViewerOverlay({ visible }: RainViewerOverlayProps) {
-  const [tileTemplate, setTileTemplate] = useState<string | null>(null)
+  const host = useRainViewerRadarStore((state) => state.host)
+  const frames = useRainViewerRadarStore((state) => state.frames)
+  const selectedFrameIndex = useRainViewerRadarStore((state) => state.selectedFrameIndex)
+  const transitionMode = useRainViewerRadarStore((state) => state.transitionMode)
+  const fetchRadar = useRainViewerRadarStore((state) => state.fetch)
 
   useEffect(() => {
-    let cancelled = false
+    if (!visible) return undefined
 
-    async function fetchRadarFrame() {
-      try {
-        const res = await fetch('https://api.rainviewer.com/public/weather-maps.json')
-        if (!res.ok || cancelled) return
-        const meta = await res.json()
-        const frames: { path: string }[] = meta.radar?.past ?? []
-        if (!frames.length || cancelled) return
-        const latest = frames[frames.length - 1]
-        setTileTemplate(`${meta.host}${latest.path}/256/{z}/{x}/{y}/2/1_1.png`)
-      } catch {
-        // network errors ignored in prototype
-      }
-    }
-
-    fetchRadarFrame()
-    const interval = setInterval(fetchRadarFrame, 5 * 60 * 1_000)
+    fetchRadar()
+    const interval = setInterval(() => fetchRadar(true), 5 * 60 * 1_000)
     return () => {
-      cancelled = true
       clearInterval(interval)
     }
-  }, [])
+  }, [fetchRadar, visible])
 
-  if (!tileTemplate || !visible) return null
+  if (!host || frames.length === 0 || !visible) return null
+
+  const fadeMs = transitionMode === 'auto' ? AUTO_RADAR_FRAME_FADE_MS : MANUAL_RADAR_FRAME_FADE_MS
 
   return (
-    <RasterSource
-      id="center-rainviewer-radar"
-      tileUrlTemplates={[tileTemplate]}
-      tileSize={256}
-      maxZoomLevel={6}
-    >
-      <RasterLayer
-        id="center-rainviewer-radar-layer"
-        sourceID="center-rainviewer-radar"
-        style={{ rasterOpacity: 0.55 }}
-      />
-    </RasterSource>
+    <>
+      {frames.map((frame, index) => {
+        const sourceId = `center-rainviewer-radar-${frame.time}`
+        const layerId = `center-rainviewer-radar-layer-${frame.time}`
+        const tileTemplate = buildRainViewerTileTemplate(host, frame)
+
+        return (
+          <RasterSource
+            key={sourceId}
+            id={sourceId}
+            tileUrlTemplates={[tileTemplate]}
+            tileSize={512}
+            maxZoomLevel={6}
+          >
+            <RasterLayer
+              id={layerId}
+              sourceID={sourceId}
+              style={{
+                rasterOpacity: index === selectedFrameIndex ? RADAR_OPACITY : 0,
+                rasterOpacityTransition: { duration: fadeMs, delay: 0 },
+                rasterFadeDuration: fadeMs,
+              }}
+            />
+          </RasterSource>
+        )
+      })}
+    </>
   )
 }

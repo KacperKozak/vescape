@@ -9,6 +9,7 @@ import {
   RasterSource,
   ShapeSource,
   SymbolLayer,
+  VectorSource,
 } from '@rnmapbox/maps'
 import { useEffect, useMemo, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
@@ -58,6 +59,13 @@ import {
   getHistoryRouteHighlightGradient,
   getHistoryRouteMetricGradient,
 } from './historyRouteGradient'
+import {
+  getLegalLimitCountryByCode,
+  legalCountryFilterExpression,
+  legalLimitLabelShape,
+  legalStatusColorExpression,
+  type LegalLimitCountry,
+} from '@/lib/legal/legalLimits'
 
 const GPS_HEADING_ICON_ID = 'center-gps-heading'
 const GPS_HEADING_ICON = require('@rnmapbox/maps/src/assets/heading.png')
@@ -70,14 +78,105 @@ const RIDER_COLORS = [
   theme.palette.fuchsia.color,
   theme.palette.sky.color,
 ]
+const LEGAL_LIMIT_LABEL_SHAPE = legalLimitLabelShape()
+
+function LegalLimitsMapLayer({
+  onSelectCountry,
+}: {
+  onSelectCountry: (country: LegalLimitCountry) => void
+}) {
+  const handlePress = (event: { features: GeoJSON.Feature[] }) => {
+    const alpha3 = event.features
+      .map((feature) => feature.properties?.iso_3166_1_alpha_3)
+      .find((value): value is string => typeof value === 'string')
+    if (!alpha3) return
+    const country = getLegalLimitCountryByCode(alpha3)
+    if (country) onSelectCountry(country)
+  }
+  const handleLabelPress = (event: { features: GeoJSON.Feature[] }) => {
+    const code = event.features
+      .map((feature) => feature.properties?.code)
+      .find((value): value is string => typeof value === 'string')
+    if (!code) return
+    const country = getLegalLimitCountryByCode(code)
+    if (country) onSelectCountry(country)
+  }
+
+  return (
+    <>
+      <VectorSource
+        id="legal-country-boundaries"
+        url="mapbox://mapbox.country-boundaries-v1"
+        hitbox={{ width: 44, height: 44 }}
+        onPress={handlePress}
+      >
+        <FillLayer
+          id="legal-country-fill"
+          sourceLayerID="country_boundaries"
+          filter={legalCountryFilterExpression() as never}
+          style={{
+            fillColor: legalStatusColorExpression() as never,
+            fillOpacity: 0.48,
+            fillOutlineColor: theme.alpha(theme.palette.mono.white, 0.7),
+          }}
+        />
+        <LineLayer
+          id="legal-country-outline"
+          sourceLayerID="country_boundaries"
+          filter={legalCountryFilterExpression() as never}
+          style={{
+            lineColor: theme.alpha(theme.palette.mono.white, 0.85),
+            lineWidth: ['interpolate', ['linear'], ['zoom'], 3, 0.75, 6, 1.6],
+          }}
+        />
+      </VectorSource>
+      <ShapeSource
+        id="legal-speed-labels"
+        shape={LEGAL_LIMIT_LABEL_SHAPE}
+        hitbox={{ width: 44, height: 44 }}
+        onPress={handleLabelPress}
+      >
+        <SymbolLayer
+          id="legal-speed-label"
+          style={{
+            textField: ['get', 'label'],
+            textSize: ['interpolate', ['linear'], ['zoom'], 3, 18, 5, 28],
+            textColor: theme.palette.mono.white,
+            textHaloColor: theme.alpha(theme.palette.slate.surfaceDeep, 1),
+            textHaloWidth: 2,
+            textFont: ['Open Sans Bold', 'Arial Unicode MS Bold'],
+            textAllowOverlap: true,
+            textIgnorePlacement: true,
+          }}
+        />
+        <SymbolLayer
+          id="legal-speed-unit-label"
+          style={{
+            textField: ['get', 'subtitle'],
+            textSize: ['interpolate', ['linear'], ['zoom'], 3, 8, 5, 11],
+            textColor: theme.alpha(theme.palette.mono.white, 0.8),
+            textHaloColor: theme.alpha(theme.palette.slate.surfaceDeep, 1),
+            textHaloWidth: 1.5,
+            textOffset: [0, 1.65],
+            textFont: ['Open Sans Semibold', 'Arial Unicode MS Regular'],
+            textAllowOverlap: true,
+            textIgnorePlacement: true,
+          }}
+        />
+      </ShapeSource>
+    </>
+  )
+}
 
 interface CenterMapLayersProps {
   historyActive: boolean
   expandSelectedMapPoints: boolean
   isMapy: boolean
   isOneDark: boolean
+  isSatellite: boolean
   showBuildings3d: boolean
   weatherActive: boolean
+  legalLimitsActive: boolean
   liveTrailShape: ReturnType<typeof makeTrailLineString> | null
   rideRouteShape: {
     type: 'Feature'
@@ -107,6 +206,7 @@ interface CenterMapLayersProps {
   onSuppressNextMapPress: () => void
   onSelectMarker: (selection: SelectedHistoryMarker) => void
   onOpenMedia: (asset: MediaHistoryAsset) => void
+  onSelectLegalCountry: (country: LegalLimitCountry) => void
 }
 
 function LiveMapLayers({
@@ -115,12 +215,14 @@ function LiveMapLayers({
   accuracyShape,
   gpsPuckBearingDeg,
   riders,
+  highContrastRoutes,
 }: {
   liveTrailShape: CenterMapLayersProps['liveTrailShape']
   accuracyFix: CenterMapLayersProps['accuracyFix']
   accuracyShape: CenterMapLayersProps['accuracyShape']
   gpsPuckBearingDeg: CenterMapLayersProps['gpsPuckBearingDeg']
   riders: CenterMapLayersProps['riders']
+  highContrastRoutes: boolean
 }) {
   const riderColor = useRiderStore((state) => state.riderColor)
   const gpsPointColor = riderColor ?? GPS_POINT_COLOR
@@ -169,6 +271,15 @@ function LiveMapLayers({
     <>
       {liveTrailShape && (
         <ShapeSource id="center-live-trail-source" shape={liveTrailShape} lineMetrics>
+          <LineLayer
+            id="center-live-trail-casing"
+            style={{
+              lineColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
+              lineWidth: highContrastRoutes ? MAP_DEFAULTS.trailWidth + 4 : 0,
+              lineCap: 'round',
+              lineJoin: 'round',
+            }}
+          />
           <LineLayer
             id="center-live-trail-line"
             style={{
@@ -236,7 +347,12 @@ function LiveMapLayers({
       )}
       {riders.map((rider, index) =>
         rider.trail && rider.trail.length >= 2 ? (
-          <RiderTrail key={rider.id} rider={rider} index={index} />
+          <RiderTrail
+            key={rider.id}
+            rider={rider}
+            index={index}
+            highContrastRoutes={highContrastRoutes}
+          />
         ) : null,
       )}
       {riders.map((rider, index) =>
@@ -255,7 +371,15 @@ export function rosterRiderColor(rider: RosterRider, index: number): string {
 
 // A peer's recent path, tinted like their marker and fading out toward the tail —
 // the group-ride counterpart to the device's own live trail.
-function RiderTrail({ rider, index }: { rider: RosterRider; index: number }) {
+function RiderTrail({
+  rider,
+  index,
+  highContrastRoutes,
+}: {
+  rider: RosterRider
+  index: number
+  highContrastRoutes: boolean
+}) {
   const color = rosterRiderColor(rider, index)
   const shape = useMemo(
     () =>
@@ -268,6 +392,15 @@ function RiderTrail({ rider, index }: { rider: RosterRider; index: number }) {
 
   return (
     <ShapeSource id={`center-rider-trail-source-${rider.id}`} shape={shape} lineMetrics>
+      <LineLayer
+        id={`center-rider-trail-casing-${rider.id}`}
+        style={{
+          lineColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
+          lineWidth: highContrastRoutes ? MAP_DEFAULTS.trailWidth + 4 : 0,
+          lineCap: 'round',
+          lineJoin: 'round',
+        }}
+      />
       <LineLayer
         id={`center-rider-trail-line-${rider.id}`}
         style={{
@@ -349,6 +482,7 @@ export function HistoryMapLayers({
   onSuppressNextMapPress,
   onSelectMarker,
   onOpenMedia,
+  highContrastRoutes,
 }: {
   rideRouteShape: CenterMapLayersProps['rideRouteShape']
   rideRoute: CenterMapLayersProps['rideRoute']
@@ -363,6 +497,7 @@ export function HistoryMapLayers({
   onSuppressNextMapPress: CenterMapLayersProps['onSuppressNextMapPress']
   onSelectMarker: CenterMapLayersProps['onSelectMarker']
   onOpenMedia: CenterMapLayersProps['onOpenMedia']
+  highContrastRoutes: boolean
 }) {
   const [highlightProgress, setHighlightProgress] = useState(0)
   const highlightDurationMs = useMemo(
@@ -418,10 +553,19 @@ export function HistoryMapLayers({
       {rideRouteShape && (
         <ShapeSource id="center-ride-route-source" shape={rideRouteShape} lineMetrics>
           <LineLayer
+            id="center-ride-route-casing"
+            style={{
+              lineColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
+              lineWidth: highContrastRoutes ? 8 : 0,
+              lineCap: 'round',
+              lineJoin: 'round',
+            }}
+          />
+          <LineLayer
             id="center-ride-route-line"
             style={{
               lineColor: getHistoryMetricBaseColor(activeHistoryMapMetric),
-              lineWidth: 4,
+              lineWidth: highContrastRoutes ? 5 : 4,
               lineCap: 'round',
               lineJoin: 'round',
               ...(routeMetricGradient ? { lineGradient: routeMetricGradient } : {}),
@@ -431,7 +575,7 @@ export function HistoryMapLayers({
             id="center-ride-route-highlight"
             style={{
               lineGradient: routeHighlightGradient,
-              lineWidth: 4,
+              lineWidth: highContrastRoutes ? 5 : 4,
               lineCap: 'round',
               lineJoin: 'round',
             }}
@@ -488,8 +632,10 @@ export function CenterMapLayers({
   expandSelectedMapPoints,
   isMapy,
   isOneDark,
+  isSatellite,
   showBuildings3d,
   weatherActive,
+  legalLimitsActive,
   liveTrailShape,
   rideRouteShape,
   accuracyFix,
@@ -515,6 +661,7 @@ export function CenterMapLayers({
   onSuppressNextMapPress,
   onSelectMarker,
   onOpenMedia,
+  onSelectLegalCountry,
 }: CenterMapLayersProps) {
   const riderColor = useRiderStore((state) => state.riderColor)
   const directionColor = riderColor ?? DESTINATION_POINT_COLOR
@@ -556,6 +703,7 @@ export function CenterMapLayers({
         </RasterSource>
       ) : null}
       <RainViewerOverlay visible={weatherActive} />
+      {legalLimitsActive ? <LegalLimitsMapLayer onSelectCountry={onSelectLegalCountry} /> : null}
       {historyActive ? (
         <HistoryMapLayers
           rideRouteShape={rideRouteShape}
@@ -571,6 +719,7 @@ export function CenterMapLayers({
           onSuppressNextMapPress={onSuppressNextMapPress}
           onSelectMarker={onSelectMarker}
           onOpenMedia={onOpenMedia}
+          highContrastRoutes={isSatellite}
         />
       ) : (
         <LiveMapLayers
@@ -579,6 +728,7 @@ export function CenterMapLayers({
           accuracyShape={accuracyShape}
           gpsPuckBearingDeg={gpsPuckBearingDeg}
           riders={riders}
+          highContrastRoutes={isSatellite}
         />
       )}
       {directionPoint && !historyActive && (

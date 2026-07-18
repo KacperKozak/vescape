@@ -173,7 +173,7 @@ describe('map camera controller', () => {
     expect(route.effect).toBeNull()
   })
 
-  test('weather view keeps current center and uses flat weather profile', () => {
+  test('weather view centers on current GPS fallback and uses flat weather profile', () => {
     const result = reduceMapCameraIntent(initialMapCameraControllerState, {
       type: 'EnterWeatherView',
       currentCamera: {
@@ -187,11 +187,27 @@ describe('map camera controller', () => {
     })
 
     expect(result.effect?.camera).toEqual({
-      centerCoordinate: [19, 50],
+      centerCoordinate: [15, 54],
       zoomLevel: 8,
       heading: 0,
       pitch: 0,
     })
+  })
+
+  test('legal limits view uses the supplied flat overview camera', () => {
+    const camera = {
+      centerCoordinate: [13, 53] as [number, number],
+      zoomLevel: 3.05,
+      heading: 0,
+      pitch: 0,
+    }
+    const result = reduceMapCameraIntent(initialMapCameraControllerState, {
+      type: 'EnterLegalLimitsView',
+      camera,
+    })
+
+    expect(result.state.mode).toEqual({ kind: 'manualBrowse' })
+    expect(result.effect?.camera).toBe(camera)
   })
 
   test('map point focus recomputes pitch from profile and zoom', () => {

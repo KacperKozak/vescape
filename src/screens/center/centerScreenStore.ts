@@ -19,6 +19,7 @@ interface CenterScreenActions {
   enterTelemetry: () => void
   enterMap: () => void
   enterWeather: () => void
+  enterLegalLimits: () => void
   enterHistory: () => void
   setHistorySheetVisible: (visible: boolean) => void
   setMapSelector: (selector: MapSelector) => void
@@ -54,6 +55,10 @@ export const useCenterScreenStore = create<CenterScreenState & CenterScreenActio
 
   enterWeather() {
     set({ mode: 'weather', mapSelector: null })
+  },
+
+  enterLegalLimits() {
+    set({ mode: 'legalLimits', mapSelector: null })
   },
 
   enterHistory() {

@@ -129,6 +129,11 @@ export function CenterScreen({
         historyPreviewRoute={controller.historyPreviewRoute}
         historyActive={controller.historyActive}
         mapStyleKey={controller.mapStyleKey}
+        satelliteOverlayEnabled={controller.satelliteOverlayEnabled}
+        satelliteImageryOpacity={controller.satelliteImageryOpacity}
+        satelliteMapImageryOpacity={controller.satelliteMapImageryOpacity}
+        satelliteImagerySaturation={controller.satelliteImagerySaturation}
+        hideTelemetryMapDetails={controller.hideTelemetryMapDetails}
         mapNavigationMode={controller.mapNavigationMode}
         rotationLocked={controller.rotationLocked}
         perspectiveEnabled={controller.perspectiveEnabled}
@@ -148,6 +153,7 @@ export function CenterScreen({
         onRemoveMapPoint={handleRemoveMapPoint}
         onClearDirectionPoint={handleClearDirectionPoint}
         weatherActive={controller.weatherActive}
+        legalLimitsActive={controller.legalLimitsActive}
       />
       <CenterOverlays
         mode={controller.mode}
@@ -175,6 +181,8 @@ export function CenterScreen({
           exitMapFocus: controller.exitMapFocus,
           enterWeather: controller.enterWeatherMode,
           exitWeather: controller.exitWeatherMode,
+          enterLegalLimits: controller.enterLegalLimitsMode,
+          exitLegalLimits: controller.exitLegalLimitsMode,
           refreshWeather: controller.refreshWeather,
           weatherLocation: controller.liveLocations.at(-1) ?? controller.latestApproximateLocation,
           replaceDirectionPoint: controller.replaceDirectionPoint,

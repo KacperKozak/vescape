@@ -2,6 +2,12 @@ import { dequal } from 'dequal'
 import { create } from 'zustand'
 import { getSettings, setCompanionPresenceEnabled, updateSetting, type AppSettings } from 'vesc-ble'
 import { DEFAULT_HISTORY_METRIC_HOT_RANGES } from '@/lib/history/metricColorScale'
+import { DEFAULT_LEGAL_MODE_SETTINGS, type LegalModeSettings } from '@/lib/legalMode'
+import {
+  DEFAULT_SATELLITE_IMAGERY_OPACITY,
+  DEFAULT_SATELLITE_MAP_IMAGERY_OPACITY,
+  DEFAULT_SATELLITE_IMAGERY_SATURATION,
+} from '@/constants/satelliteDarkMapStyle'
 
 const DEFAULTS: AppSettings = {
   liveHistoryLimit: 5,
@@ -14,6 +20,11 @@ const DEFAULTS: AppSettings = {
   freeSpinMaxSpeedDeltaKmh: 12,
   freeSpinStationaryBoardCapKmh: 15,
   mapStyleKey: 'onedark',
+  satelliteOverlayEnabled: true,
+  satelliteImageryOpacity: DEFAULT_SATELLITE_IMAGERY_OPACITY,
+  satelliteMapImageryOpacity: DEFAULT_SATELLITE_MAP_IMAGERY_OPACITY,
+  satelliteImagerySaturation: DEFAULT_SATELLITE_IMAGERY_SATURATION,
+  hideTelemetryMapDetails: true,
   mapNavigationMode: 'northUp',
   historyMetricGradientsEnabled: true,
   historyMetricHotRanges: DEFAULT_HISTORY_METRIC_HOT_RANGES,
@@ -30,12 +41,14 @@ const DEFAULTS: AppSettings = {
   riderId: null,
   riderName: null,
   riderColor: null,
+  legalMode: DEFAULT_LEGAL_MODE_SETTINGS as unknown as Record<string, unknown>,
 }
 
 interface SettingsState extends AppSettings {
   loaded: boolean
   load: () => Promise<void>
   set: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => Promise<void>
+  setLegalMode: (value: LegalModeSettings) => Promise<void>
   setCompanionPresence: (enabled: boolean) => Promise<void>
 }
 
@@ -76,6 +89,11 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     if (key === 'autoConnect' && value === false && get().companionPresenceEnabled) return
     set({ [key]: value })
     await updateSetting(key, value)
+  },
+
+  async setLegalMode(value) {
+    set({ legalMode: value as unknown as Record<string, unknown> })
+    await updateSetting('legalMode', value as unknown as Record<string, unknown>)
   },
 
   async setCompanionPresence(enabled) {

@@ -216,6 +216,7 @@ final class AppDataRepository {
           "enabled": (row["enabled"] as Int64) != 0,
           "soundType": row["sound_type"] as String,
           "createdAt": row["created_at"] as Int64,
+          "source": row["source"] as String?,
         ]
       }
     }
@@ -237,7 +238,8 @@ final class AppDataRepository {
           thresholdMax: row["threshold_max"] as Double?,
           enabled: (row["enabled"] as Int64) != 0,
           soundType: row["sound_type"] as String,
-          createdAt: row["created_at"] as Int64
+          createdAt: row["created_at"] as Int64,
+          source: row["source"] as String?
         )
       }
     }
@@ -250,13 +252,14 @@ final class AppDataRepository {
     let enabled = (rule["enabled"] as? Bool) ?? false
     let soundType = rule["soundType"] as? String ?? "default"
     let createdAt = Self.longValue(rule["createdAt"] ?? nil) ?? nowMs()
+    let source = rule["source"] as? String
     write { db in
       try db.execute(
         sql: """
-          INSERT OR REPLACE INTO alerts (id, control_id, threshold, threshold_max, enabled, sound_type, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
+          INSERT OR REPLACE INTO alerts (id, control_id, threshold, threshold_max, enabled, sound_type, created_at, source)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
           """,
-        arguments: [id, controlId, threshold, thresholdMax, enabled ? 1 : 0, soundType, createdAt]
+        arguments: [id, controlId, threshold, thresholdMax, enabled ? 1 : 0, soundType, createdAt, source]
       )
     }
   }
@@ -428,6 +431,15 @@ final class AppDataRepository {
     if key == "liveHistoryLimit" {
       guard let minutes = Self.liveHistoryLimitMinutes(rawValue) else { return }
       value = minutes
+    } else if key == "satelliteImageryOpacity" {
+      guard let opacity = Self.satelliteImageryOpacity(rawValue) else { return }
+      value = opacity
+    } else if key == "satelliteMapImageryOpacity" {
+      guard let opacity = Self.satelliteImageryOpacity(rawValue) else { return }
+      value = opacity
+    } else if key == "satelliteImagerySaturation" {
+      guard let saturation = Self.satelliteImagerySaturation(rawValue) else { return }
+      value = saturation
     } else if key == "boardWarningsEnabled" {
       // Kill switch must stay a strict Bool (Android rejects non-Boolean too) so JS state and the
       // native detector gate can never diverge on a malformed value.
@@ -465,9 +477,15 @@ final class AppDataRepository {
     "riderColor": NSNull(),
     "lastGpsLatitude": NSNull(),
     "lastGpsLongitude": NSNull(),
+    "legalMode": NSNull(),
     "movingSpeedThresholdKmh": 3,
     "freeSpinMaxSpeedDeltaKmh": DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH,
     "freeSpinStationaryBoardCapKmh": DEFAULT_FREE_SPIN_STATIONARY_BOARD_CAP_KMH,
+    "satelliteOverlayEnabled": true,
+    "satelliteImageryOpacity": 0.2,
+    "satelliteMapImageryOpacity": 1.0,
+    "satelliteImagerySaturation": -0.35,
+    "hideTelemetryMapDetails": true,
     "telemetryPollRateHz": 20,
     "historyMetricGradientsEnabled": true,
     "historyMetricHotRanges": [
@@ -484,7 +502,23 @@ final class AppDataRepository {
     var normalized = settings
     normalized["liveHistoryLimit"] =
       liveHistoryLimitMinutes(settings["liveHistoryLimit"]) ?? defaultSettings["liveHistoryLimit"]
+    normalized["satelliteImageryOpacity"] =
+      satelliteImageryOpacity(settings["satelliteImageryOpacity"]) ?? defaultSettings["satelliteImageryOpacity"]
+    normalized["satelliteMapImageryOpacity"] =
+      satelliteImageryOpacity(settings["satelliteMapImageryOpacity"]) ?? defaultSettings["satelliteMapImageryOpacity"]
+    normalized["satelliteImagerySaturation"] =
+      satelliteImagerySaturation(settings["satelliteImagerySaturation"]) ?? defaultSettings["satelliteImagerySaturation"]
     return normalized
+  }
+
+  static func satelliteImageryOpacity(_ value: Any?) -> Double? {
+    guard let opacity = doubleValue(value), opacity.isFinite else { return nil }
+    return min(1, max(0.1, opacity))
+  }
+
+  static func satelliteImagerySaturation(_ value: Any?) -> Double? {
+    guard let saturation = doubleValue(value), saturation.isFinite else { return nil }
+    return min(1, max(-1, saturation))
   }
 
   static func liveHistoryLimitMinutes(_ value: Any?) -> Int? {

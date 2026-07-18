@@ -24,6 +24,18 @@ internal fun validMapStyleKey(value: Any?): String? =
 internal fun validMapNavigationMode(value: Any?): String? =
   (value as? String)?.takeIf { it in setOf("northUp", "gpsHeading", "phoneHeading", "freeRotate") }
 
+internal fun validSatelliteImageryOpacity(value: Any?): Double? =
+  (value as? Number)
+    ?.toDouble()
+    ?.takeIf { it.isFinite() }
+    ?.coerceIn(0.1, 1.0)
+
+internal fun validSatelliteImagerySaturation(value: Any?): Double? =
+  (value as? Number)
+    ?.toDouble()
+    ?.takeIf { it.isFinite() }
+    ?.coerceIn(-1.0, 1.0)
+
 internal fun validLiveHistoryLimitMinutes(value: Any?): Int? =
   (value as? Number)
     ?.toInt()
@@ -110,6 +122,15 @@ private fun validHistoryMetricHotRanges(value: Any?): Map<String, Map<String, Do
   return ranges
 }
 
+private fun Any?.asStringKeyMap(): Map<String, Any?>? = when (this) {
+  is JSONObject -> keys().asSequence().associateWith { key -> opt(key).takeUnless { it == JSONObject.NULL } }
+  is Map<*, *> -> entries.associate { (key, value) ->
+    (key as? String ?: return null) to value
+  }
+  else -> null
+}
+
+// @parity /modules/vesc-ble/ios/telemetry/AppDataRepository.swift
 class AppDataRepository private constructor(private val context: Context) {
   private val dao = TelemetryDatabase.get(context).telemetryDao()
 
@@ -199,6 +220,11 @@ class AppDataRepository private constructor(private val context: Context) {
       freeSpinMaxSpeedDeltaKmh = req("freeSpinMaxSpeedDeltaKmh", DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH) { (it as? Number)?.toDouble() },
       freeSpinStationaryBoardCapKmh = req("freeSpinStationaryBoardCapKmh", DEFAULT_FREE_SPIN_STATIONARY_BOARD_CAP_KMH) { (it as? Number)?.toDouble() },
       mapStyleKey = req("mapStyleKey", "onedark", ::validMapStyleKey),
+      satelliteOverlayEnabled = req("satelliteOverlayEnabled", true) { it as? Boolean },
+      satelliteImageryOpacity = req("satelliteImageryOpacity", 0.2, ::validSatelliteImageryOpacity),
+      satelliteMapImageryOpacity = req("satelliteMapImageryOpacity", 1.0, ::validSatelliteImageryOpacity),
+      satelliteImagerySaturation = req("satelliteImagerySaturation", -0.35, ::validSatelliteImagerySaturation),
+      hideTelemetryMapDetails = req("hideTelemetryMapDetails", true) { it as? Boolean },
       mapNavigationMode = req("mapNavigationMode", "northUp", ::validMapNavigationMode),
       historyMetricGradientsEnabled = req("historyMetricGradientsEnabled", true) { it as? Boolean },
       historyMetricHotRanges = req("historyMetricHotRanges", DEFAULT_HISTORY_METRIC_HOT_RANGES, ::validHistoryMetricHotRanges),
@@ -215,6 +241,7 @@ class AppDataRepository private constructor(private val context: Context) {
       riderId = opt("riderId") { it as? String },
       riderName = opt("riderName") { it as? String },
       riderColor = opt("riderColor") { it as? String },
+      legalMode = opt("legalMode") { it.asStringKeyMap() },
     )
 
     if (badKeys.isNotEmpty()) {
@@ -253,6 +280,14 @@ class AppDataRepository private constructor(private val context: Context) {
         ((value as? Number)?.toDouble() ?: return@withContext).coerceAtLeast(0.0)
       "mapStyleKey" ->
         validMapStyleKey(value) ?: return@withContext
+      "satelliteOverlayEnabled" -> value as? Boolean ?: return@withContext
+      "satelliteImageryOpacity" ->
+        validSatelliteImageryOpacity(value) ?: return@withContext
+      "satelliteMapImageryOpacity" ->
+        validSatelliteImageryOpacity(value) ?: return@withContext
+      "satelliteImagerySaturation" ->
+        validSatelliteImagerySaturation(value) ?: return@withContext
+      "hideTelemetryMapDetails" -> value as? Boolean ?: return@withContext
       "mapNavigationMode" ->
         validMapNavigationMode(value) ?: return@withContext
       "historyMetricGradientsEnabled" -> value as? Boolean ?: return@withContext
@@ -274,6 +309,9 @@ class AppDataRepository private constructor(private val context: Context) {
       "autoCloseDelayMinutes" ->
         validAutoCloseDelayMinutes(value) ?: return@withContext
       "riderId", "riderName", "riderColor" -> value as? String
+      "legalMode" ->
+        if (value == null || value == JSONObject.NULL) null
+        else value.asStringKeyMap() ?: return@withContext
       else -> return@withContext
     }
     val normalizedKey = when (key) {
@@ -295,6 +333,11 @@ class AppDataRepository private constructor(private val context: Context) {
         "freeSpinMaxSpeedDeltaKmh" -> d.freeSpinMaxSpeedDeltaKmh
         "freeSpinStationaryBoardCapKmh" -> d.freeSpinStationaryBoardCapKmh
         "mapStyleKey" -> d.mapStyleKey
+        "satelliteOverlayEnabled" -> d.satelliteOverlayEnabled
+        "satelliteImageryOpacity" -> d.satelliteImageryOpacity
+        "satelliteMapImageryOpacity" -> d.satelliteMapImageryOpacity
+        "satelliteImagerySaturation" -> d.satelliteImagerySaturation
+        "hideTelemetryMapDetails" -> d.hideTelemetryMapDetails
         "mapNavigationMode" -> d.mapNavigationMode
         "historyMetricGradientsEnabled" -> d.historyMetricGradientsEnabled
         "historyMetricHotRanges" -> d.historyMetricHotRanges
@@ -311,6 +354,7 @@ class AppDataRepository private constructor(private val context: Context) {
         "riderId" -> d.riderId
         "riderName" -> d.riderName
         "riderColor" -> d.riderColor
+        "legalMode" -> d.legalMode
         else -> null
       }
     }
@@ -570,6 +614,11 @@ fun AppSettings.toMap(): Map<String, Any?> = mapOf(
   "freeSpinMaxSpeedDeltaKmh" to freeSpinMaxSpeedDeltaKmh,
   "freeSpinStationaryBoardCapKmh" to freeSpinStationaryBoardCapKmh,
   "mapStyleKey" to mapStyleKey,
+  "satelliteOverlayEnabled" to satelliteOverlayEnabled,
+  "satelliteImageryOpacity" to satelliteImageryOpacity,
+  "satelliteMapImageryOpacity" to satelliteMapImageryOpacity,
+  "satelliteImagerySaturation" to satelliteImagerySaturation,
+  "hideTelemetryMapDetails" to hideTelemetryMapDetails,
   "mapNavigationMode" to mapNavigationMode,
   "historyMetricGradientsEnabled" to historyMetricGradientsEnabled,
   "historyMetricHotRanges" to historyMetricHotRanges,
@@ -586,6 +635,7 @@ fun AppSettings.toMap(): Map<String, Any?> = mapOf(
   "riderId" to riderId,
   "riderName" to riderName,
   "riderColor" to riderColor,
+  "legalMode" to legalMode,
 )
 
 internal fun encodeSettingJson(value: Any?): String {
@@ -609,6 +659,7 @@ fun AlertRuleEntity.toMap(): Map<String, Any?> = mapOf(
   "enabled" to enabled,
   "soundType" to soundType,
   "createdAt" to createdAt,
+  "source" to source,
 )
 
 fun TuneProfileEntity.toMap(): Map<String, Any?> = mapOf(
@@ -920,6 +971,7 @@ private fun Map<String, Any?>.toAlertRuleEntity(): AlertRuleEntity = AlertRuleEn
   enabled = getBoolean("enabled"),
   soundType = get("soundType") as? String ?: "default",
   createdAt = getLong("createdAt"),
+  source = get("source") as? String,
 )
 
 private fun Map<String, Any?>.getString(key: String): String =

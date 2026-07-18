@@ -128,7 +128,8 @@ enum TelemetryDatabase {
           threshold_max REAL,
           enabled INTEGER NOT NULL,
           sound_type TEXT NOT NULL,
-          created_at INTEGER NOT NULL
+          created_at INTEGER NOT NULL,
+          source TEXT
         )
         """)
       try db.execute(sql: "CREATE INDEX index_alerts_control_id ON alerts(control_id)")
@@ -346,6 +347,13 @@ enum TelemetryDatabase {
     // stays single-source with the tests that reuse it. Mirrors Android Room migration 24→25.
     migrator.registerMigration("v25_board_warnings") { db in
       try BoardWarningStore.createTables(db)
+    }
+
+    migrator.registerMigration("v26_alert_source") { db in
+      let hasSource = try db.columns(in: "alerts").contains { $0.name == "source" }
+      if !hasSource {
+        try db.execute(sql: "ALTER TABLE alerts ADD COLUMN source TEXT")
+      }
     }
 
     return migrator

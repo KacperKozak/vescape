@@ -9,7 +9,7 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 // @parity /modules/vesc-ble/ios/VescBleModule.swift
 internal const val TELEMETRY_DATABASE_NAME = "telemetry.db"
-internal const val TELEMETRY_DATABASE_VERSION = 25
+internal const val TELEMETRY_DATABASE_VERSION = 26
 
 @Database(
   entities = [
@@ -37,6 +37,16 @@ abstract class TelemetryDatabase : RoomDatabase() {
   companion object {
     @Volatile
     private var instance: TelemetryDatabase? = null
+
+    private fun hasColumn(db: SupportSQLiteDatabase, tableName: String, columnName: String): Boolean {
+      db.query("PRAGMA table_info($tableName)").use { cursor ->
+        val nameIndex = cursor.getColumnIndex("name")
+        while (cursor.moveToNext()) {
+          if (cursor.getString(nameIndex) == columnName) return true
+        }
+      }
+      return false
+    }
 
     private val MIGRATION_3_4 = object : Migration(3, 4) {
       override fun migrate(db: SupportSQLiteDatabase) {
@@ -413,6 +423,14 @@ abstract class TelemetryDatabase : RoomDatabase() {
       }
     }
 
+    internal val MIGRATION_25_26 = object : Migration(25, 26) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        if (!hasColumn(db, "alerts", "source")) {
+          db.execSQL("ALTER TABLE alerts ADD COLUMN source TEXT")
+        }
+      }
+    }
+
     fun get(context: Context): TelemetryDatabase {
       return instance ?: synchronized(this) {
         instance ?: Room.databaseBuilder(
@@ -443,6 +461,7 @@ abstract class TelemetryDatabase : RoomDatabase() {
             MIGRATION_22_23,
             MIGRATION_23_24,
             MIGRATION_24_25,
+            MIGRATION_25_26,
           )
           .fallbackToDestructiveMigration(true)
           .addCallback(object : Callback() {

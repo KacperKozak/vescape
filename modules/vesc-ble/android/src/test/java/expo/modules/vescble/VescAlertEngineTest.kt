@@ -25,6 +25,7 @@ class VescAlertEngineTest {
         enabled = true,
         soundType = soundType,
         createdAt = 0L,
+        source = null,
     )
 
     private fun telemetry(

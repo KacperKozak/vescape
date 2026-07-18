@@ -41,6 +41,7 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
     enterTelemetry,
     enterMap,
     enterWeather,
+    enterLegalLimits,
     enterHistory,
     setHistorySheetVisible,
     setMapSelector,
@@ -58,6 +59,7 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
       enterTelemetry: s.enterTelemetry,
       enterMap: s.enterMap,
       enterWeather: s.enterWeather,
+      enterLegalLimits: s.enterLegalLimits,
       enterHistory: s.enterHistory,
       setHistorySheetVisible: s.setHistorySheetVisible,
       setMapSelector: s.setMapSelector,
@@ -74,6 +76,11 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
   const lastGpsLatitude = useSettingsStore((s) => s.lastGpsLatitude)
   const lastGpsLongitude = useSettingsStore((s) => s.lastGpsLongitude)
   const mapStyleKey = useSettingsStore((s) => s.mapStyleKey)
+  const satelliteOverlayEnabled = useSettingsStore((s) => s.satelliteOverlayEnabled)
+  const satelliteImageryOpacity = useSettingsStore((s) => s.satelliteImageryOpacity)
+  const satelliteMapImageryOpacity = useSettingsStore((s) => s.satelliteMapImageryOpacity)
+  const satelliteImagerySaturation = useSettingsStore((s) => s.satelliteImagerySaturation)
+  const hideTelemetryMapDetails = useSettingsStore((s) => s.hideTelemetryMapDetails)
   const mapNavigationMode = useSettingsStore((s) => s.mapNavigationMode)
   const setSetting = useSettingsStore((s) => s.set)
   const {
@@ -164,6 +171,7 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
   }, [liveLocations, latestApproximateLocation, lastGpsLatitude, lastGpsLongitude, fetchWeather])
 
   const weatherActive = mode === 'weather'
+  const legalLimitsActive = mode === 'legalLimits'
   const historyActive = mode === 'history'
   const rotationLocked = mapNavigationMode === 'northUp'
   const previousRide = getPreviousRideSession(sessions, selectedSession)
@@ -203,6 +211,16 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
   }, [enterWeather, mapRef])
 
   const exitWeatherMode = useCallback(() => {
+    enterTelemetry()
+    requestAnimationFrame(() => mapRef.current?.recenterLive())
+  }, [enterTelemetry, mapRef])
+
+  const enterLegalLimitsMode = useCallback(() => {
+    enterLegalLimits()
+    mapRef.current?.focusLegalLimits()
+  }, [enterLegalLimits, mapRef])
+
+  const exitLegalLimitsMode = useCallback(() => {
     enterTelemetry()
     requestAnimationFrame(() => mapRef.current?.recenterLive())
   }, [enterTelemetry, mapRef])
@@ -296,8 +314,12 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
   )
 
   const handleMapFocus = useCallback(() => {
-    if (mode === 'telemetry') enterMap()
-  }, [enterMap, mode])
+    if (mode === 'map') return
+    enterMap()
+    if (mode === 'weather' || mode === 'legalLimits') {
+      requestAnimationFrame(() => mapRef.current?.recenterLive())
+    }
+  }, [enterMap, mapRef, mode])
 
   const setMapStyleKey = useCallback(
     (key: typeof mapStyleKey) => {
@@ -313,6 +335,13 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
     [setSetting],
   )
 
+  const setSatelliteMapImageryOpacity = useCallback(
+    (nextOpacity: number) => {
+      void setSetting('satelliteMapImageryOpacity', nextOpacity)
+    },
+    [setSetting],
+  )
+
   useFocusEffect(
     useCallback(() => {
       const handler = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -322,6 +351,10 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
         }
         if (mode === 'weather') {
           exitWeatherMode()
+          return true
+        }
+        if (mode === 'legalLimits') {
+          exitLegalLimitsMode()
           return true
         }
         if (mode === 'map') {
@@ -340,7 +373,7 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
         return true
       })
       return () => handler.remove()
-    }, [exitHistory, exitMapFocus, exitWeatherMode, mode]),
+    }, [exitHistory, exitLegalLimitsMode, exitMapFocus, exitWeatherMode, mode]),
   )
 
   return {
@@ -349,7 +382,14 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
     latestApproximateLocation,
     blocks,
     historyActive,
+    legalLimitsActive,
     mapStyleKey,
+    satelliteOverlayEnabled,
+    satelliteImageryOpacity,
+    satelliteMapImageryOpacity,
+    setSatelliteMapImageryOpacity,
+    satelliteImagerySaturation,
+    hideTelemetryMapDetails,
     setMapStyleKey,
     mapNavigationMode,
     setMapNavigationMode,
@@ -401,6 +441,8 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
     weatherActive,
     enterWeatherMode,
     exitWeatherMode,
+    enterLegalLimitsMode,
+    exitLegalLimitsMode,
     refreshWeather,
     handleMapFocus,
     exitMapFocus,

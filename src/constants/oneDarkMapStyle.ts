@@ -3,6 +3,7 @@ import { theme } from '@/constants/theme'
 export const ONE_DARK_MAP_STYLE = JSON.stringify({
   version: 8,
   name: 'One Dark',
+  sprite: 'mapbox://sprites/mapbox/streets-v12',
   sources: {
     composite: {
       url: 'mapbox://mapbox.mapbox-streets-v8',
@@ -369,6 +370,49 @@ export const ONE_DARK_MAP_STYLE = JSON.stringify({
       },
     },
     {
+      id: 'poi-icon',
+      type: 'symbol',
+      source: 'composite',
+      'source-layer': 'poi_label',
+      minzoom: 6,
+      layout: {
+        'icon-image': [
+          'case',
+          ['has', 'maki_beta'],
+          ['coalesce', ['image', ['get', 'maki_beta']], ['image', ['get', 'maki']]],
+          ['image', ['get', 'maki']],
+        ],
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 14, 0.56, 18, 0.76],
+        'icon-allow-overlap': false,
+        'icon-padding': 3,
+      },
+      paint: {
+        'icon-color': '#74859a',
+        'icon-halo-color': '#172033',
+        'icon-halo-width': 0.5,
+        'icon-opacity': 0.48,
+      },
+    },
+    {
+      id: 'transit-stop-icon',
+      type: 'symbol',
+      source: 'composite',
+      'source-layer': 'transit_stop_label',
+      minzoom: 13,
+      layout: {
+        'icon-image': ['get', 'network'],
+        'icon-size': ['interpolate', ['linear'], ['zoom'], 13, 0.58, 18, 0.8],
+        'icon-allow-overlap': false,
+        'icon-padding': 3,
+      },
+      paint: {
+        'icon-color': '#74859a',
+        'icon-halo-color': '#172033',
+        'icon-halo-width': 0.5,
+        'icon-opacity': 0.48,
+      },
+    },
+    {
       id: 'poi-label',
       type: 'symbol',
       source: 'composite',
@@ -383,6 +427,63 @@ export const ONE_DARK_MAP_STYLE = JSON.stringify({
         'text-color': '#7890a8',
         'text-halo-color': '#172033',
         'text-halo-width': 1,
+      },
+    },
+    {
+      id: 'place-label-region',
+      type: 'symbol',
+      source: 'composite',
+      'source-layer': 'place_label',
+      minzoom: 3,
+      maxzoom: 9,
+      filter: [
+        'any',
+        ['==', ['get', 'class'], 'state'],
+        ['==', ['get', 'class'], 'province'],
+        ['==', ['get', 'type'], 'state'],
+        ['==', ['get', 'type'], 'province'],
+      ],
+      layout: {
+        'text-field': ['get', 'name'],
+        'text-font': ['DIN Pro Medium', 'Arial Unicode MS Regular'],
+        'text-size': ['interpolate', ['linear'], ['zoom'], 3, 9, 7, 13, 9, 15],
+        'text-transform': 'uppercase',
+        'text-letter-spacing': 0.08,
+        'text-padding': 16,
+      },
+      paint: {
+        'text-color': '#718096',
+        'text-halo-color': '#172033',
+        'text-halo-width': 1.5,
+        'text-opacity': ['interpolate', ['linear'], ['zoom'], 3, 0.5, 6, 0.72, 9, 0.4],
+      },
+    },
+    {
+      id: 'place-label-subdivision',
+      type: 'symbol',
+      source: 'composite',
+      'source-layer': 'place_label',
+      minzoom: 8,
+      filter: [
+        'any',
+        ['==', ['get', 'class'], 'settlement_subdivision'],
+        ['==', ['get', 'type'], 'settlement_subdivision'],
+        ['==', ['get', 'type'], 'suburb'],
+        ['==', ['get', 'type'], 'neighbourhood'],
+        ['==', ['get', 'type'], 'neighborhood'],
+        ['==', ['get', 'type'], 'quarter'],
+      ],
+      layout: {
+        'text-field': ['get', 'name'],
+        'text-font': ['DIN Pro Regular', 'Arial Unicode MS Regular'],
+        'text-size': ['interpolate', ['linear'], ['zoom'], 8, 8, 12, 11, 15, 13],
+        'text-padding': 18,
+      },
+      paint: {
+        'text-color': '#6f8197',
+        'text-halo-color': '#172033',
+        'text-halo-width': 1.2,
+        'text-opacity': ['interpolate', ['linear'], ['zoom'], 8, 0.4, 12, 0.68, 15, 0.78],
       },
     },
     {
@@ -483,3 +584,49 @@ export const ONE_DARK_MAP_STYLE = JSON.stringify({
     },
   ],
 } as const)
+
+const ONE_DARK_MAP_STYLE_OBJECT = JSON.parse(ONE_DARK_MAP_STYLE) as {
+  layers?: { id?: string }[]
+}
+
+const ONE_DARK_MAP_STYLE_WITHOUT_POI = JSON.stringify({
+  ...ONE_DARK_MAP_STYLE_OBJECT,
+  layers: ONE_DARK_MAP_STYLE_OBJECT.layers?.filter((layer) => layer.id !== 'poi-label') ?? [],
+})
+
+const DISTRICT_LABEL_LAYER_IDS = new Set([
+  'place-label-region',
+  'place-label-subdivision',
+  'place-label-town',
+  'place-label-village',
+  'place-label-hamlet',
+])
+
+const POI_ICON_LAYER_IDS = new Set(['poi-icon', 'transit-stop-icon'])
+
+function filterOneDarkLabels(
+  showPoiLabels: boolean,
+  showPoiIcons: boolean,
+  showDistrictLabels: boolean,
+) {
+  return JSON.stringify({
+    ...ONE_DARK_MAP_STYLE_OBJECT,
+    layers:
+      ONE_DARK_MAP_STYLE_OBJECT.layers?.filter((layer) => {
+        if (!showPoiLabels && layer.id === 'poi-label') return false
+        if (!showPoiIcons && layer.id && POI_ICON_LAYER_IDS.has(layer.id)) return false
+        if (!showDistrictLabels && layer.id && DISTRICT_LABEL_LAYER_IDS.has(layer.id)) return false
+        return true
+      }) ?? [],
+  })
+}
+
+export function getOneDarkMapStyle(
+  showPoiLabels = true,
+  showPoiIcons = true,
+  showDistrictLabels = true,
+) {
+  if (showPoiLabels && showPoiIcons && showDistrictLabels) return ONE_DARK_MAP_STYLE
+  if (!showPoiLabels && showPoiIcons && showDistrictLabels) return ONE_DARK_MAP_STYLE_WITHOUT_POI
+  return filterOneDarkLabels(showPoiLabels, showPoiIcons, showDistrictLabels)
+}

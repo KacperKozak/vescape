@@ -1,10 +1,12 @@
 import {
+  Children,
   createContext,
   useCallback,
   useContext,
   useEffect,
   useRef,
   useState,
+  isValidElement,
   type ReactNode,
 } from 'react'
 import {
@@ -49,7 +51,7 @@ interface PillSelectorCtx {
 
 const PillSelectorContext = createContext<PillSelectorCtx | null>(null)
 const TUNE_OPTION_WIDTH = 38
-const TUNE_ACTIVE_WIDTH = 112
+const TUNE_DEFAULT_ACTIVE_WIDTH = 112
 const TUNE_ANIMATION = { duration: 180 } as const
 const AnimatedText = Animated.createAnimatedComponent(Text)
 
@@ -63,14 +65,34 @@ interface PillSelectorProps {
   activeId: string
   children: ReactNode
   contained?: boolean
+  fitContent?: boolean
   style?: StyleProp<ViewStyle>
   contentContainerStyle?: StyleProp<ViewStyle>
+}
+
+function getFitContentWidth(children: ReactNode, activeId: string) {
+  const items = Children.toArray(children).filter(Boolean)
+  return items.reduce<number>((width, child) => {
+    if (!isValidElement<PillSelectorItemProps>(child)) return width
+    const { id, activeLabelOnly, activeWidth, inactiveWidth } = child.props
+    if (!id) return width + 36
+    if (activeLabelOnly) {
+      return (
+        width +
+        (id === activeId
+          ? (activeWidth ?? TUNE_DEFAULT_ACTIVE_WIDTH)
+          : (inactiveWidth ?? TUNE_OPTION_WIDTH))
+      )
+    }
+    return width + 160
+  }, 2)
 }
 
 export function PillSelector({
   activeId,
   children,
   contained = false,
+  fitContent = false,
   style,
   contentContainerStyle,
 }: PillSelectorProps) {
@@ -87,14 +109,15 @@ export function PillSelector({
 
   const closeMenu = useCallback(() => setMenu(null), [])
 
-  const centered = (() => {
-    const count = Array.isArray(children) ? children.filter(Boolean).length : children ? 1 : 0
-    return count <= 3
-  })()
+  const count = Children.toArray(children).filter(Boolean).length
+  const centered = count <= 3
+  const fitContentStyle = fitContent ? { width: getFitContentWidth(children, activeId) } : null
 
   return (
     <PillSelectorContext.Provider value={{ activeId, openMenu, closeMenu, addRef, contained }}>
-      <View style={[styles.container, contained && styles.containedContainer, style]}>
+      <View
+        style={[styles.container, contained && styles.containedContainer, fitContentStyle, style]}
+      >
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -130,6 +153,8 @@ interface PillSelectorItemProps {
   activeLabelOnly?: boolean
   badge?: ReactNode
   color?: ActiveTheme
+  activeWidth?: number
+  inactiveWidth?: number
   testID?: string
   onPress: () => void
   children?: ReactNode
@@ -142,6 +167,8 @@ export function PillSelectorItem({
   activeLabelOnly,
   badge,
   color,
+  activeWidth = TUNE_DEFAULT_ACTIVE_WIDTH,
+  inactiveWidth = TUNE_OPTION_WIDTH,
   testID,
   onPress,
   children,
@@ -168,7 +195,7 @@ export function PillSelectorItem({
   const frameStyle = useAnimatedStyle(
     () => ({
       width: activeLabelOnly
-        ? TUNE_OPTION_WIDTH + (TUNE_ACTIVE_WIDTH - TUNE_OPTION_WIDTH) * activeProgress.value
+        ? inactiveWidth + (activeWidth - inactiveWidth) * activeProgress.value
         : undefined,
       backgroundColor: interpolateColor(
         activeProgress.value,
@@ -187,15 +214,15 @@ export function PillSelectorItem({
         ],
       ),
     }),
-    [accentBg, accentBorder, activeLabelOnly, contained],
+    [accentBg, accentBorder, activeLabelOnly, activeWidth, contained, inactiveWidth],
   )
   const labelStyle = useAnimatedStyle(
     () => ({
       opacity: labelProgress.value,
-      maxWidth: TUNE_ACTIVE_WIDTH * labelProgress.value,
+      maxWidth: activeWidth * labelProgress.value,
       marginLeft: (IconComp ? 6 : 0) * labelProgress.value,
     }),
-    [IconComp],
+    [IconComp, activeWidth],
   )
 
   const hasMenu = !!children
@@ -214,6 +241,7 @@ export function PillSelectorItem({
       style={[
         styles.pill,
         activeLabelOnly && styles.iconPill,
+        activeLabelOnly && { maxWidth: activeWidth },
         contained && styles.containedPill,
         frameStyle,
       ]}
@@ -378,7 +406,7 @@ const styles = StyleSheet.create({
   iconPill: {
     height: TUNE_OPTION_WIDTH,
     width: TUNE_OPTION_WIDTH,
-    maxWidth: TUNE_ACTIVE_WIDTH,
+    maxWidth: TUNE_DEFAULT_ACTIVE_WIDTH,
     paddingHorizontal: 0,
     borderRadius: TUNE_OPTION_WIDTH / 2,
     overflow: 'hidden',

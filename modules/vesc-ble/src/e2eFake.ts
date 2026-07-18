@@ -57,6 +57,11 @@ const e2eSettings: AppSettings = {
   freeSpinMaxSpeedDeltaKmh: 3,
   freeSpinStationaryBoardCapKmh: 1,
   mapStyleKey: 'onedark',
+  satelliteOverlayEnabled: true,
+  satelliteImageryOpacity: 0.2,
+  satelliteMapImageryOpacity: 1,
+  satelliteImagerySaturation: -0.35,
+  hideTelemetryMapDetails: true,
   mapNavigationMode: 'gpsHeading',
   historyMetricGradientsEnabled: true,
   historyMetricHotRanges: {},
@@ -73,6 +78,7 @@ const e2eSettings: AppSettings = {
   riderId: null,
   riderName: null,
   riderColor: null,
+  legalMode: null,
 }
 
 function emitDevice(event: DeviceFoundEvent): void {

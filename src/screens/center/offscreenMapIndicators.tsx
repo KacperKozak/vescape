@@ -12,7 +12,6 @@ import { isPointOutsideVisibleMapArea } from '@/helpers/mapGeometry'
 import type { CameraSnapshot } from './useCameraControls'
 
 export const GPS_POINT_COLOR = theme.map.user
-export const GPS_POINT_TEXT_COLOR = theme.palette.purple.text
 export const DESTINATION_POINT_COLOR = theme.map.target
 export const DESTINATION_POINT_TEXT_COLOR = theme.palette.green.text
 

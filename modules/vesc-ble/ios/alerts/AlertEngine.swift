@@ -10,6 +10,7 @@ internal struct AlertRule {
   let enabled: Bool
   let soundType: String
   let createdAt: Int64
+  let source: String?
 }
 
 /// One fired alert surfaced to JS through the telemetry event payload.

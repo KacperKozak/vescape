@@ -40,7 +40,7 @@ const OPEN_DURATION = 260
 const CLOSE_DURATION = 180
 const SCREEN_EDGE_PADDING = 10
 /** Fraction of the screen height a sheet is allowed to occupy. */
-const HEIGHT_FRACTION = 0.6
+const HEIGHT_FRACTION = 0.75
 /** Continue closing automatically once this many pixels of the drawer remain visible. */
 const DRAWER_AUTO_CLOSE_VISIBLE_PX = 200
 /** Approximate native fling travel from Android's release velocity in points/ms. */
@@ -48,6 +48,7 @@ const DRAWER_FLING_PROJECTION_MS = 250
 const DRAWER_OPEN_TRANSLATE_Y = 42
 const DRAWER_OPEN_DURATION = 280
 const DRAWER_BOTTOM_CONTENT_PADDING = 32
+const DRAWER_INITIAL_OPEN_FRACTION = 0.75
 const DRAWER_ENTER_FROM_TOP = new Keyframe({
   0: { opacity: 0, transform: [{ translateY: -DRAWER_OPEN_TRANSLATE_Y }] },
   100: { opacity: 1, transform: [{ translateY: 0 }] },
@@ -302,8 +303,10 @@ export function EdgeDrawer({
   const positionedRef = useRef(false)
   const dismissRangeRef = useRef(0)
   const previousContentHeightRef = useRef(0)
+  const scrollOffsetRef = useRef(0)
   const scrollOffset = useSharedValue(0)
   const animatedDismissRange = useSharedValue(1)
+  const animatedGradientFullStrengthRange = useSharedValue(1)
   const nativeScrollGesture = useMemo(() => Gesture.Native(), [])
 
   useEffect(() => {
@@ -317,7 +320,9 @@ export function EdgeDrawer({
       positionedRef.current = false
       previousContentHeightRef.current = 0
       setKeyboardInset(0)
+      scrollOffsetRef.current = 0
       scrollOffset.value = 0
+      animatedGradientFullStrengthRange.value = Math.max(1, height * DRAWER_INITIAL_OPEN_FRACTION)
     }
 
     if (edge !== 'auto') {
@@ -328,7 +333,7 @@ export function EdgeDrawer({
     void measureTrigger(triggerRef).then((trigger) => {
       openFrom(trigger.y + trigger.height / 2 < height / 2)
     })
-  }, [edge, height, scrollOffset, triggerRef, visible])
+  }, [animatedGradientFullStrengthRange, edge, height, scrollOffset, triggerRef, visible])
 
   useEffect(() => {
     if (!mounted) return
@@ -372,9 +377,14 @@ export function EdgeDrawer({
   })
 
   const backdropStyle = useAnimatedStyle(() => {
+    'worklet'
+    const screenDismissRange = Math.min(
+      animatedDismissRange.value,
+      animatedGradientFullStrengthRange.value,
+    )
     const visibleFraction = opensFromTop
-      ? 1 - scrollOffset.value / animatedDismissRange.value
-      : scrollOffset.value / animatedDismissRange.value
+      ? 1 - scrollOffset.value / screenDismissRange
+      : scrollOffset.value / screenDismissRange
     return { opacity: Math.max(0, Math.min(1, visibleFraction)) }
   })
 
@@ -387,10 +397,13 @@ export function EdgeDrawer({
       setDismissRange(range)
       dismissRangeRef.current = range
       animatedDismissRange.value = range
+      animatedGradientFullStrengthRange.value = Math.max(1, height * DRAWER_INITIAL_OPEN_FRACTION)
 
       if (!positionedRef.current) {
         positionedRef.current = true
-        const initialOffset = opensFromTop ? 0 : range
+        const initialOpenOffset = Math.min(range, height * DRAWER_INITIAL_OPEN_FRACTION)
+        const initialOffset = opensFromTop ? 0 : initialOpenOffset
+        scrollOffsetRef.current = initialOffset
         scrollOffset.value = initialOffset
         requestAnimationFrame(() => {
           scrollRef.current?.scrollTo({ y: initialOffset, animated: false })
@@ -398,7 +411,7 @@ export function EdgeDrawer({
         return
       }
 
-      const bottomDrawerWasFullyOpen = !opensFromTop && scrollOffset.value >= previousRange - 1
+      const bottomDrawerWasFullyOpen = !opensFromTop && scrollOffsetRef.current >= previousRange - 1
       if (bottomDrawerWasFullyOpen && range > previousRange) {
         requestAnimationFrame(() => {
           scrollRef.current?.scrollTo({ y: range, animated: true })
@@ -406,14 +419,21 @@ export function EdgeDrawer({
       } else if (autoScrollOnContentExpand && contentHeight > previousContentHeight) {
         const addedHeight = contentHeight - previousContentHeight
         const targetOffset = opensFromTop
-          ? Math.min(range, scrollOffset.value + addedHeight)
+          ? Math.min(range, scrollOffsetRef.current + addedHeight)
           : range
         requestAnimationFrame(() => {
           scrollRef.current?.scrollTo({ y: targetOffset, animated: true })
         })
       }
     },
-    [animatedDismissRange, autoScrollOnContentExpand, height, opensFromTop, scrollOffset],
+    [
+      animatedDismissRange,
+      animatedGradientFullStrengthRange,
+      autoScrollOnContentExpand,
+      height,
+      opensFromTop,
+      scrollOffset,
+    ],
   )
 
   const shouldAutoCloseAtOffset = useCallback(
@@ -442,6 +462,7 @@ export function EdgeDrawer({
   const handleScrollEnd = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const offset = event.nativeEvent.contentOffset.y
+      scrollOffsetRef.current = offset
       const fullyHidden = opensFromTop ? offset >= dismissRange - 1 : offset <= 1
       if (fullyHidden) {
         finishClose()
@@ -456,6 +477,7 @@ export function EdgeDrawer({
   const handleScrollEndDrag = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const { contentOffset, targetContentOffset, velocity } = event.nativeEvent
+      scrollOffsetRef.current = contentOffset.y
       const projectedOffset =
         targetContentOffset?.y ?? contentOffset.y - (velocity?.y ?? 0) * DRAWER_FLING_PROJECTION_MS
 
@@ -474,18 +496,25 @@ export function EdgeDrawer({
   const edgePadding = opensFromTop
     ? insets.top
     : insets.bottom + DRAWER_BOTTOM_CONTENT_PADDING + keyboardInset
+  const gradientFullStrengthPoint =
+    height > 0
+      ? Math.min(DRAWER_INITIAL_OPEN_FRACTION, Math.max(0, dismissRange / height))
+      : DRAWER_INITIAL_OPEN_FRACTION
   const vignetteColor = theme.palette.slate.surfaceDeep
   const gradientColors = opensFromTop
     ? [
         theme.alpha(vignetteColor, 1),
-        theme.alpha(vignetteColor, 0.8),
+        theme.alpha(vignetteColor, 1),
         theme.alpha(vignetteColor, 0.6),
       ]
     : [
         theme.alpha(vignetteColor, 0.6),
-        theme.alpha(vignetteColor, 0.8),
+        theme.alpha(vignetteColor, 1),
         theme.alpha(vignetteColor, 1),
       ]
+  const gradientPositions = opensFromTop
+    ? [0, gradientFullStrengthPoint, 1]
+    : [0, 1 - gradientFullStrengthPoint, 1]
   const emptyDismissArea = <Pressable style={{ height }} onPress={close} accessible={false} />
 
   return (
@@ -507,7 +536,7 @@ export function EdgeDrawer({
                   start={vec(0, 0)}
                   end={vec(0, height)}
                   colors={gradientColors}
-                  positions={[0, 0.7, 1]}
+                  positions={gradientPositions}
                 />
               </Rect>
             </Canvas>
