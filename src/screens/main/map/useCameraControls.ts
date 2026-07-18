@@ -92,6 +92,7 @@ export function useCameraControls({
 }: UseCameraControlsParams) {
   const cameraRef = useRef<CameraRef>(null)
   const previewPanBaseRef = useRef<CameraSnapshot | null>(null)
+  const previewPanCameraRef = useRef<CameraSnapshot | null>(null)
   const previewZoomBaseRef = useRef<CameraSnapshot | null>(null)
   const previewPanActiveRef = useRef(false)
   const currentCameraRef = useRef<CameraSnapshot | null>(null)
@@ -479,6 +480,7 @@ export function useCameraControls({
     enterCameraMode({ kind: 'liveFollow' })
     const restoreCamera = previewPanBaseRef.current ?? getLiveFollowCamera()
     previewPanBaseRef.current = null
+    previewPanCameraRef.current = null
     if (cameraFix) {
       lastFollowKeyRef.current = liveFollowKey(cameraFix.timestamp, restoreCamera)
     }
@@ -521,6 +523,7 @@ export function useCameraControls({
       previewHistorySession,
       beginPreviewPan() {
         previewPanActiveRef.current = true
+        previewPanCameraRef.current = null
         const baseCamera =
           followGps && !historyActive
             ? getLiveFollowCamera()
@@ -547,7 +550,7 @@ export function useCameraControls({
           MIN_ZOOM,
           MAP_DEFAULTS.maxZoom,
         )
-        cameraRef.current?.setCamera({
+        const previewCamera = {
           ...getCameraAfterScreenDrag(baseCamera, deltaX, deltaY),
           zoomLevel,
           pitch: getMapRevealPitch({
@@ -556,6 +559,11 @@ export function useCameraControls({
             revealProgress,
             perspectiveEnabled,
           }),
+        }
+        previewPanCameraRef.current = previewCamera
+        currentCameraRef.current = previewCamera
+        cameraRef.current?.setCamera({
+          ...previewCamera,
           animationMode: 'linearTo',
           animationDuration,
         })
@@ -564,6 +572,7 @@ export function useCameraControls({
         setFollowGps(false)
         previewPanActiveRef.current = false
         previewPanBaseRef.current = null
+        previewPanCameraRef.current = null
       },
       beginPreviewZoom() {
         previewZoomBaseRef.current =
