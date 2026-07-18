@@ -1,4 +1,4 @@
-import Mapbox, { Camera, RasterLayer, SymbolLayer } from '@rnmapbox/maps'
+import Mapbox, { Camera, SymbolLayer } from '@rnmapbox/maps'
 import { CrosshairSimpleIcon, type Icon } from 'phosphor-react-native'
 import {
   forwardRef,
@@ -293,8 +293,16 @@ export const CenterMap = memo(
       mode === 'telemetry' ? satelliteImagerySaturation : 0
     const useCustomJSON = isMapy || isOneDark || isSatelliteOverlay
     const satelliteStyleJSON = useMemo(
-      () => getSatelliteDarkMapStyle(1, true, true, false, true),
-      [],
+      () =>
+        getSatelliteDarkMapStyle(
+          effectiveSatelliteImageryOpacity,
+          true,
+          true,
+          false,
+          true,
+          effectiveSatelliteImagerySaturation,
+        ),
+      [effectiveSatelliteImageryOpacity, effectiveSatelliteImagerySaturation],
     )
     const oneDarkStyleJSON = useMemo(() => getOneDarkMapStyle(true, true, false), [])
     const showBuildings3d =
@@ -1014,20 +1022,6 @@ export const CenterMap = memo(
             maxZoomLevel={MAP_DEFAULTS.maxZoom}
             animationMode="easeTo"
           />
-          {isSatelliteOverlay ? (
-            <RasterLayer
-              id="satellite"
-              existing
-              style={{
-                rasterOpacity: effectiveSatelliteImageryOpacity,
-                rasterSaturation: effectiveSatelliteImagerySaturation,
-                rasterContrast: 0,
-                rasterOpacityTransition: { duration: 260, delay: 0 },
-                rasterSaturationTransition: { duration: 260, delay: 0 },
-                rasterContrastTransition: { duration: 260, delay: 0 },
-              }}
-            />
-          ) : null}
           {isSatelliteOverlay ? (
             <>
               {[

@@ -16,8 +16,10 @@ export function getSatelliteDarkMapStyle(
   showPoiIcons = true,
   showDistrictLabels = true,
   showStreetLines = false,
+  imagerySaturation = DEFAULT_SATELLITE_IMAGERY_SATURATION,
 ) {
   const clampedImageryOpacity = Math.max(0.1, Math.min(1, imageryOpacity))
+  const clampedImagerySaturation = Math.max(-1, Math.min(1, imagerySaturation))
   const toneSatelliteImage = clampedImageryOpacity < 1
 
   return JSON.stringify({
@@ -48,7 +50,7 @@ export function getSatelliteDarkMapStyle(
         source: 'satellite',
         paint: {
           'raster-opacity': clampedImageryOpacity,
-          'raster-saturation': toneSatelliteImage ? -0.45 : 0,
+          'raster-saturation': toneSatelliteImage ? clampedImagerySaturation : 0,
           'raster-contrast': toneSatelliteImage ? -0.25 : 0,
         },
       },
