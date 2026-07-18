@@ -783,6 +783,9 @@ fun MapPointEntity.toMap(): Map<String, Any?> = mapOf(
   "kind" to kind,
   "latitude" to latitudeE7 / 10_000_000.0,
   "longitude" to longitudeE7 / 10_000_000.0,
+  "name" to name,
+  "description" to description,
+  "media" to (mediaJson?.let(::decodeSettingJson).takeIf { it is List<*> } ?: emptyList<Map<String, Any?>>()),
   "createdAt" to createdAt,
   "updatedAt" to updatedAt,
 )
@@ -799,6 +802,9 @@ internal fun Map<String, Any?>.toMapPointEntity(): MapPointEntity {
     kind = kind,
     latitudeE7 = (latitude * 10_000_000.0).toInt(),
     longitudeE7 = (longitude * 10_000_000.0).toInt(),
+    name = getOptionalString("name"),
+    description = getOptionalString("description"),
+    mediaJson = encodeSettingJson(get("media") ?: emptyList<Map<String, Any?>>()),
     createdAt = (get("createdAt") as? Number)?.toLong() ?: now,
     updatedAt = (get("updatedAt") as? Number)?.toLong() ?: now,
   )
@@ -979,6 +985,9 @@ private fun Map<String, Any?>.toAlertRuleEntity(): AlertRuleEntity = AlertRuleEn
 
 private fun Map<String, Any?>.getString(key: String): String =
   get(key) as? String ?: throw IllegalArgumentException("Missing string field: $key")
+
+private fun Map<String, Any?>.getOptionalString(key: String): String? =
+  (get(key) as? String)?.trim()?.takeIf { it.isNotEmpty() }
 
 private fun Map<String, Any?>.getBoolean(key: String): Boolean = when (val value = get(key)) {
   is Boolean -> value

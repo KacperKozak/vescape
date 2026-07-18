@@ -179,6 +179,9 @@ enum TelemetryDatabase {
           kind TEXT NOT NULL,
           latitude_e7 INTEGER NOT NULL,
           longitude_e7 INTEGER NOT NULL,
+          name TEXT,
+          description TEXT,
+          media_json TEXT,
           created_at INTEGER NOT NULL,
           updated_at INTEGER NOT NULL
         )
@@ -376,6 +379,19 @@ enum TelemetryDatabase {
       let hasSource = try db.columns(in: "alerts").contains { $0.name == "source" }
       if !hasSource {
         try db.execute(sql: "ALTER TABLE alerts ADD COLUMN source TEXT")
+      }
+    }
+
+    migrator.registerMigration("v27_map_point_metadata") { db in
+      let columns = try db.columns(in: "map_points").map(\.name)
+      if !columns.contains("name") {
+        try db.execute(sql: "ALTER TABLE map_points ADD COLUMN name TEXT")
+      }
+      if !columns.contains("description") {
+        try db.execute(sql: "ALTER TABLE map_points ADD COLUMN description TEXT")
+      }
+      if !columns.contains("media_json") {
+        try db.execute(sql: "ALTER TABLE map_points ADD COLUMN media_json TEXT")
       }
     }
 

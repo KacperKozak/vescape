@@ -349,6 +349,9 @@ final class AppDataRepository {
           "kind": row["kind"] as String,
           "latitude": (row["latitude_e7"] as Int64).asE7Degrees,
           "longitude": (row["longitude_e7"] as Int64).asE7Degrees,
+          "name": row["name"] as String?,
+          "description": row["description"] as String?,
+          "media": Self.decodeJson((row["media_json"] as? String) ?? "[]") as? [[String: Any?]] ?? [],
           "createdAt": row["created_at"] as Int64,
           "updatedAt": row["updated_at"] as Int64,
         ]
@@ -375,19 +378,24 @@ final class AppDataRepository {
     write { db in try db.execute(sql: "DELETE FROM map_points WHERE id = ?", arguments: [id]) }
   }
 
-  private static func insertMapPoint(_ db: Database, _ c: (String, String, Int64, Int64, Int64, Int64)) throws {
+  private static func insertMapPoint(
+    _ db: Database,
+    _ c: (String, String, Int64, Int64, String?, String?, String?, Int64, Int64)
+  ) throws {
     try db.execute(
       sql: """
-        INSERT OR REPLACE INTO map_points (id, kind, latitude_e7, longitude_e7, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT OR REPLACE INTO map_points (
+          id, kind, latitude_e7, longitude_e7, name, description, media_json, created_at, updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-      arguments: [c.0, c.1, c.2, c.3, c.4, c.5]
+      arguments: [c.0, c.1, c.2, c.3, c.4, c.5, c.6, c.7, c.8]
     )
   }
 
   private static func mapPointColumns(
     _ point: [String: Any?]
-  ) -> (String, String, Int64, Int64, Int64, Int64)? {
+  ) -> (String, String, Int64, Int64, String?, String?, String?, Int64, Int64)? {
     guard
       let id = point["id"] as? String,
       let kind = (point["kind"] as? String), validMapPointKinds.contains(kind),
@@ -397,7 +405,17 @@ final class AppDataRepository {
     let now = Int64(Date().timeIntervalSince1970 * 1000)
     let createdAt = longValue(point["createdAt"] ?? nil) ?? now
     let updatedAt = longValue(point["updatedAt"] ?? nil) ?? now
-    return (id, kind, latitude.toE7, longitude.toE7, createdAt, updatedAt)
+    return (
+      id,
+      kind,
+      latitude.toE7,
+      longitude.toE7,
+      optionalString(point["name"] ?? nil),
+      optionalString(point["description"] ?? nil),
+      encodeJson(point["media"] ?? []),
+      createdAt,
+      updatedAt
+    )
   }
 
   // MARK: - Settings
@@ -570,6 +588,12 @@ final class AppDataRepository {
     if let value = raw as? Int { return Int64(value) }
     if let value = raw as? NSNumber { return value.int64Value }
     return nil
+  }
+
+  static func optionalString(_ raw: Any?) -> String? {
+    guard let value = raw as? String else { return nil }
+    let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.isEmpty ? nil : trimmed
   }
 
   private static func encodeJson(_ value: Any?) -> String? {

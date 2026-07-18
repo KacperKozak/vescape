@@ -5,6 +5,33 @@ const actualVescapeCore = await import('@/../modules/vescape-core/src/index')
 
 let persistedMapPoints: MapPoint[] = []
 
+class MockFile {
+  uri: string
+  exists = false
+
+  constructor(...parts: unknown[]) {
+    this.uri = parts.map(String).join('/')
+  }
+
+  delete() {
+    this.exists = false
+  }
+
+  async copy() {}
+}
+
+class MockDirectory {
+  exists = true
+
+  constructor(..._parts: unknown[]) {}
+
+  create() {}
+
+  delete() {
+    this.exists = false
+  }
+}
+
 const getMapPoints = mock(async () => persistedMapPoints)
 const upsertMapPoint = mock(async (point: MapPoint) => {
   persistedMapPoints = [
@@ -32,6 +59,11 @@ const vescBleMock = {
 
 mock.module('vescape-core', () => vescBleMock)
 mock.module('../../modules/vescape-core/src/index', () => vescBleMock)
+mock.module('expo-file-system', () => ({
+  Directory: MockDirectory,
+  File: MockFile,
+  Paths: { document: 'file:///document' },
+}))
 
 beforeEach(async () => {
   persistedMapPoints = []
@@ -90,6 +122,56 @@ test('saves and removes non-direction Map Points through native storage', async 
 
   expect(useMapStore.getState().mapPoints).toEqual([])
   expect(deleteMapPoint).toHaveBeenCalledWith(point.id)
+})
+
+test('updates non-direction Map Point metadata through native storage', async () => {
+  const { useMapStore } = await import('@/modules/map/store/mapStore')
+
+  const point = await useMapStore.getState().saveMapPoint('viewpoint', 52.1, 21.1)
+  const updated = await useMapStore.getState().updateMapPoint(point.id, {
+    name: 'Hill Lookout',
+    description: 'Sunset line',
+    media: [
+      {
+        id: 'media-1',
+        uri: 'file:///mapPointMedia/viewpoint-1/photo.jpg',
+        filename: 'photo.jpg',
+        mediaType: 'photo',
+      },
+      {
+        id: 'media-2',
+        uri: 'file:///mapPointMedia/viewpoint-1/video.mp4',
+        filename: 'video.mp4',
+        mediaType: 'video',
+      },
+    ],
+  })
+  if (!updated) throw new Error('Expected Map Point metadata update')
+
+  expect(updated).toEqual(
+    expect.objectContaining({
+      id: point.id,
+      kind: 'viewpoint',
+      name: 'Hill Lookout',
+      description: 'Sunset line',
+      media: [
+        {
+          id: 'media-1',
+          uri: 'file:///mapPointMedia/viewpoint-1/photo.jpg',
+          filename: 'photo.jpg',
+          mediaType: 'photo',
+        },
+        {
+          id: 'media-2',
+          uri: 'file:///mapPointMedia/viewpoint-1/video.mp4',
+          filename: 'video.mp4',
+          mediaType: 'video',
+        },
+      ],
+    }),
+  )
+  expect(useMapStore.getState().mapPoints[0]).toEqual(updated)
+  expect(upsertMapPoint).toHaveBeenLastCalledWith(updated)
 })
 
 test('replacing direction point leaves non-direction points intact', async () => {

@@ -10,6 +10,7 @@ import {
 
 import { generateId } from '@/helpers/id'
 import { isFilterableMapPointKind } from '@/modules/map/lib/mapPointVisibility'
+import { deleteMapPointMedia } from '@/modules/map/store/mapPointPhotoFiles'
 
 export type { MapPoint } from 'vescape-core'
 
@@ -25,6 +26,7 @@ interface MapState {
 interface MapActions {
   load(): Promise<void>
   saveMapPoint(kind: MapPointKind, latitude: number, longitude: number): Promise<MapPoint>
+  updateMapPoint(id: string, patch: MapPointMetadataPatch): Promise<MapPoint | null>
   replaceDirectionPoint(latitude: number, longitude: number): Promise<MapPoint>
   clearDirectionPoint(): Promise<void>
   removeMapPoint(id: string): Promise<void>
@@ -37,6 +39,23 @@ interface MapActions {
 
 const byCreatedAt = (a: MapPoint, b: MapPoint) => a.createdAt - b.createdAt
 const isSelectableMapPoint = (point: MapPoint) => point.kind !== DIRECTION_MAP_POINT_KIND
+type MapPointMetadataPatch = Partial<Pick<MapPoint, 'name' | 'description' | 'media'>>
+
+function compactText(value: string | null | undefined) {
+  const trimmed = value?.trim()
+  return trimmed ? trimmed : null
+}
+
+function applyMapPointMetadata(point: MapPoint, patch: MapPointMetadataPatch): MapPoint {
+  return {
+    ...point,
+    name: 'name' in patch ? compactText(patch.name) : (point.name ?? null),
+    description:
+      'description' in patch ? compactText(patch.description) : (point.description ?? null),
+    media: patch.media ?? point.media ?? [],
+    updatedAt: Date.now(),
+  }
+}
 
 function pruneSelectedMapPointId(selectedId: string | null, mapPoints: MapPoint[]) {
   if (!selectedId) return null
@@ -78,6 +97,17 @@ export const useMapStore = create<MapState & MapActions>((set, get) => ({
     return point
   },
 
+  async updateMapPoint(id, patch) {
+    const existing = get().mapPoints.find((point) => point.id === id)
+    if (!existing || !isSelectableMapPoint(existing)) return null
+    const updated = applyMapPointMetadata(existing, patch)
+    set((s) => ({
+      mapPoints: s.mapPoints.map((point) => (point.id === id ? updated : point)).sort(byCreatedAt),
+    }))
+    await upsertMapPoint(updated)
+    return updated
+  },
+
   async replaceDirectionPoint(latitude, longitude) {
     const now = Date.now()
     const existing = get().getDirectionPoint()
@@ -109,11 +139,13 @@ export const useMapStore = create<MapState & MapActions>((set, get) => ({
   },
 
   async removeMapPoint(id) {
+    const existing = get().mapPoints.find((point) => point.id === id)
     set((s) => ({
       mapPoints: s.mapPoints.filter((point) => point.id !== id),
       selectedMapPointId: s.selectedMapPointId === id ? null : s.selectedMapPointId,
     }))
     await deleteMapPoint(id)
+    if (existing) deleteMapPointMedia(existing.id)
   },
 
   getDirectionPoint() {

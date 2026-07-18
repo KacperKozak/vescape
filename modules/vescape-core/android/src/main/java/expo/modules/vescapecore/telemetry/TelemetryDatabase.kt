@@ -12,7 +12,7 @@ import java.io.File
 // @parity /modules/vescape-core/ios/VescapeCoreModule.swift
 internal const val TELEMETRY_DATABASE_NAME = "vescape.db"
 internal const val LEGACY_TELEMETRY_DATABASE_NAME = "telemetry.db"
-internal const val TELEMETRY_DATABASE_VERSION = 26
+internal const val TELEMETRY_DATABASE_VERSION = 27
 
 @Database(
   entities = [
@@ -322,6 +322,9 @@ abstract class TelemetryDatabase : RoomDatabase() {
             kind TEXT NOT NULL,
             latitude_e7 INTEGER NOT NULL,
             longitude_e7 INTEGER NOT NULL,
+            name TEXT,
+            description TEXT,
+            media_json TEXT,
             created_at INTEGER NOT NULL,
             updated_at INTEGER NOT NULL
           )
@@ -434,6 +437,20 @@ abstract class TelemetryDatabase : RoomDatabase() {
       }
     }
 
+    internal val MIGRATION_26_27 = object : Migration(26, 27) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        if (!hasColumn(db, "map_points", "name")) {
+          db.execSQL("ALTER TABLE map_points ADD COLUMN name TEXT")
+        }
+        if (!hasColumn(db, "map_points", "description")) {
+          db.execSQL("ALTER TABLE map_points ADD COLUMN description TEXT")
+        }
+        if (!hasColumn(db, "map_points", "media_json")) {
+          db.execSQL("ALTER TABLE map_points ADD COLUMN media_json TEXT")
+        }
+      }
+    }
+
     /**
      * One-time file rename from the pre-release "telemetry.db" name. Checkpoints the legacy WAL so
      * the whole database lives in the main file, then renames it in place. Idempotent: once the new
@@ -487,6 +504,7 @@ abstract class TelemetryDatabase : RoomDatabase() {
             MIGRATION_23_24,
             MIGRATION_24_25,
             MIGRATION_25_26,
+            MIGRATION_26_27,
           )
           .fallbackToDestructiveMigration(true)
           .addCallback(object : Callback() {

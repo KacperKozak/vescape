@@ -337,6 +337,10 @@ data class MapPointEntity(
   val latitudeE7: Int,
   @ColumnInfo(name = "longitude_e7")
   val longitudeE7: Int,
+  val name: String?,
+  val description: String?,
+  @ColumnInfo(name = "media_json")
+  val mediaJson: String?,
   @ColumnInfo(name = "created_at")
   val createdAt: Long,
   @ColumnInfo(name = "updated_at")

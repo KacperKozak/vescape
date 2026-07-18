@@ -648,7 +648,7 @@ export function MainMapLayers({
               }
               navigationActive={activeNavigationMapPointId === point.id}
               expandSelected={expandSelectedMapPoints && selectedMapPoint?.id === point.id}
-              label={getMapPointKindLabel(point.kind)}
+              label={point.name?.trim() || getMapPointKindLabel(point.kind)}
               onSelected={
                 mapObjectsInteractive
                   ? () => {

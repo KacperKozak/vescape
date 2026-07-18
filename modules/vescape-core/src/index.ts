@@ -268,8 +268,18 @@ export interface MapPoint {
   kind: MapPointKind
   latitude: number
   longitude: number
+  name?: string | null
+  description?: string | null
+  media?: MapPointMediaAsset[]
   createdAt: number
   updatedAt: number
+}
+
+export interface MapPointMediaAsset {
+  id: string
+  uri: string
+  filename: string
+  mediaType: 'photo' | 'video'
 }
 
 export interface TelemetryEvent {

@@ -1,4 +1,5 @@
 import * as Haptics from 'expo-haptics'
+import * as ImagePicker from 'expo-image-picker'
 import {
   ArrowLeftIcon,
   ArrowsClockwiseIcon,
@@ -6,7 +7,6 @@ import {
   CaretUpIcon,
   CloudSunIcon,
   ClockCounterClockwiseIcon,
-  ImageSquareIcon,
   MagnifyingGlassIcon,
   MapTrifoldIcon,
   MapPinIcon,
@@ -32,12 +32,14 @@ import {
 } from 'react'
 import {
   ActivityIndicator,
+  Keyboard,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   TextInput,
   View,
+  type KeyboardEvent,
 } from 'react-native'
 import { Text } from '@/components/base/Text'
 import Animated, {
@@ -49,7 +51,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import type { HistoryMarker, MapPoint, MapPointKind } from 'vescape-core'
+import type { HistoryMarker, MapPoint, MapPointKind, MapPointMediaAsset } from 'vescape-core'
 
 import { ConfirmModal } from '@/components/modals/ConfirmModal'
 import { EdgeDrawer } from '@/components/overlays/AnchoredSheet'
@@ -58,6 +60,8 @@ import { FloatingBar } from '@/modules/board/components/FloatingBar'
 import { HistorySessionSheet } from '@/modules/history/components/HistorySessionSheet'
 import { IconButton } from '@/components/base/IconButton'
 import { MapNavigationSelector } from '@/modules/map/components/MapNavigationSelector'
+import { MapPointMediaActions } from '@/modules/map/components/MapPointMediaAddButton'
+import { MapPointMediaPreview } from '@/modules/map/components/MapPointMediaPreview'
 import { MapStyleSwitch } from '@/modules/map/components/MapStyleSwitch'
 import { PillSelector, PillSelectorItem } from '@/components/controls/PillSelector'
 import { WeatherIcon } from '@/modules/weather/components/WeatherIcon'
@@ -75,6 +79,11 @@ import type { MapSelection } from '@/modules/map/lib/mapSelection'
 import { type MapSearchResult } from '@/modules/map/lib/search'
 import { useMapSearch } from '@/modules/map/hooks/useMapSearch'
 import { isCompactMapPointKind } from '@/modules/map/lib/mapPointVisibility'
+import {
+  deleteMapPointMediaAsset,
+  saveMapPointMediaAssets,
+  type PickedMapPointMediaAsset,
+} from '@/modules/map/store/mapPointPhotoFiles'
 import type { HistoryMetricKey } from '@/modules/history/lib/metricColorScale'
 import {
   BottomTelemetryStrip,
@@ -165,6 +174,10 @@ interface MainMapOverlayProps {
   onCancelNavigation: () => void
   onDismissSelectedTarget: () => void
   addMapPoint: (kind: MapPointKind, latitude: number, longitude: number) => Promise<MapPoint>
+  updateMapPoint: (
+    id: string,
+    patch: Partial<Pick<MapPoint, 'name' | 'description' | 'media'>>,
+  ) => Promise<MapPoint | null>
   onRemoveMapPoint: (id: string) => void
   hiddenMapPointKinds: MapPointKind[]
   toggleMapPointKindVisibility: (kind: MapPointKind) => void
@@ -446,7 +459,7 @@ function FullMapControls({
             id: point.id,
             latitude: point.latitude,
             longitude: point.longitude,
-            title: getMapPointKindLabel(point.kind),
+            title: point.name?.trim() || getMapPointKindLabel(point.kind),
             subtitle: null,
             point,
           })
@@ -919,6 +932,28 @@ function CenterPlacementPointer({ color, pulseKey }: { color: string; pulseKey: 
   )
 }
 
+function useKeyboardLift(enabled: boolean) {
+  const [keyboardHeight, setKeyboardHeight] = useState(0)
+
+  useEffect(() => {
+    if (!enabled) return
+
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
+    const show = Keyboard.addListener(showEvent, (event: KeyboardEvent) => {
+      setKeyboardHeight(event.endCoordinates.height)
+    })
+    const hide = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0))
+
+    return () => {
+      show.remove()
+      hide.remove()
+    }
+  }, [enabled])
+
+  return enabled ? keyboardHeight : 0
+}
+
 function MapTargetSheet({
   target,
   bottom,
@@ -927,6 +962,7 @@ function MapTargetSheet({
   onAddFeature,
   onEdit,
   onSave,
+  onSaveMapPoint,
   onDelete,
   onDismiss,
 }: {
@@ -946,12 +982,21 @@ function MapTargetSheet({
   onAddFeature?: () => void
   onEdit?: () => void
   onSave?: () => void
+  onSaveMapPoint?: (
+    id: string,
+    patch: Partial<Pick<MapPoint, 'name' | 'description' | 'media'>>,
+  ) => Promise<MapPoint | null>
   onDelete?: () => void
   onDismiss?: () => void
 }) {
-  const [name, setName] = useState('')
-  const [description, setDescription] = useState('')
   const isMapPoint = target.type === 'mapPoint'
+  const point = isMapPoint ? target.point : null
+  const [name, setName] = useState(point?.name ?? '')
+  const [description, setDescription] = useState(point?.description ?? '')
+  const [media, setMedia] = useState(point?.media ?? [])
+  const [mediaSaving, setMediaSaving] = useState(false)
+  const keyboardLift = useKeyboardLift(mode === 'edit')
+  const sheetBottom = mode === 'edit' ? Math.max(bottom, keyboardLift + 12) : bottom
   const color = target.type === 'mapPoint' ? getMapPointKindColor(target.point.kind) : action.color
   const textColor =
     target.type === 'mapPoint' ? getMapPointKindTextColor(target.point.kind) : action.textColor
@@ -960,20 +1005,105 @@ function MapTargetSheet({
     color: textColor,
     weight: 'duotone',
   })
+  const headerTitle = isMapPoint
+    ? point?.name?.trim() || getMapPointKindLabel(point?.kind ?? 'drop')
+    : target.title
+  const detailText =
+    isMapPoint && mode !== 'edit'
+      ? point?.description?.trim() || null
+      : target.loadingDetails
+        ? 'Loading details'
+        : target.subtitle ||
+          (!isMapPoint ? `${target.latitude.toFixed(5)}, ${target.longitude.toFixed(5)}` : null)
+  const handlePickMedia = useCallback(async () => {
+    if (!point) return
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images', 'videos'],
+      allowsMultipleSelection: true,
+      quality: 0.9,
+    })
+    if (result.canceled || !result.assets[0]?.uri) return
+    setMediaSaving(true)
+    try {
+      const picked: PickedMapPointMediaAsset[] = result.assets.map((asset) => ({
+        id: asset.assetId ?? asset.uri,
+        uri: asset.uri,
+        filename: asset.fileName ?? '',
+        mediaType: asset.type === 'video' ? 'video' : 'photo',
+      }))
+      const saved = await saveMapPointMediaAssets(point.id, picked)
+      setMedia((current) => {
+        const existingUris = new Set(current.map((asset) => asset.uri))
+        return [...current, ...saved.filter((asset) => !existingUris.has(asset.uri))]
+      })
+    } finally {
+      setMediaSaving(false)
+    }
+  }, [point])
+  const handleCaptureMedia = useCallback(async () => {
+    if (!point) return
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images', 'videos'],
+      quality: 0.9,
+      videoQuality: ImagePicker.UIImagePickerControllerQualityType.High,
+    })
+    if (result.canceled || !result.assets[0]?.uri) return
+    setMediaSaving(true)
+    try {
+      const picked: PickedMapPointMediaAsset[] = result.assets.map((asset) => ({
+        id: asset.assetId ?? asset.uri,
+        uri: asset.uri,
+        filename: asset.fileName ?? '',
+        mediaType: asset.type === 'video' ? 'video' : 'photo',
+      }))
+      const saved = await saveMapPointMediaAssets(point.id, picked)
+      setMedia((current) => {
+        const existingUris = new Set(current.map((asset) => asset.uri))
+        return [...current, ...saved.filter((asset) => !existingUris.has(asset.uri))]
+      })
+    } finally {
+      setMediaSaving(false)
+    }
+  }, [point])
+  const handleSave = useCallback(async () => {
+    if (point && onSaveMapPoint) {
+      await onSaveMapPoint(point.id, {
+        name,
+        description,
+        media,
+      })
+    }
+    onSave?.()
+  }, [description, media, name, onSave, onSaveMapPoint, point])
+  const handleRemoveMedia = useCallback((asset: MapPointMediaAsset) => {
+    setMedia((current) => current.filter((candidate) => candidate.uri !== asset.uri))
+    deleteMapPointMediaAsset(asset.uri)
+  }, [])
 
   return (
-    <View style={[styles.mapTargetSheet, { bottom }]}>
+    <View style={[styles.mapTargetSheet, { bottom: sheetBottom }]}>
       <View style={styles.mapTargetHeader}>
         <View style={[styles.mapTargetIcon, { borderColor: color }]}>{icon}</View>
         <View style={styles.mapTargetTitleBlock}>
-          <Text style={styles.mapTargetTitle} numberOfLines={1}>
-            {isMapPoint && name.trim() ? name.trim() : target.title}
-          </Text>
-          <Text style={styles.mapTargetSubtitle} numberOfLines={2}>
-            {target.loadingDetails
-              ? 'Loading details'
-              : target.subtitle || `${target.latitude.toFixed(5)}, ${target.longitude.toFixed(5)}`}
-          </Text>
+          {isMapPoint && mode === 'edit' ? (
+            <TextInput
+              value={name}
+              onChangeText={setName}
+              placeholder={getMapPointKindLabel(point?.kind ?? 'drop')}
+              placeholderTextColor={theme.palette.slate.textMuted}
+              style={[styles.mapTargetInput, styles.mapTargetNameInput]}
+              accessibilityLabel="Map feature name"
+            />
+          ) : (
+            <Text style={styles.mapTargetTitle} numberOfLines={1}>
+              {headerTitle}
+            </Text>
+          )}
+          {detailText ? (
+            <Text style={styles.mapTargetSubtitle} numberOfLines={2}>
+              {detailText}
+            </Text>
+          ) : null}
         </View>
         {onDismiss ? (
           <Pressable
@@ -993,24 +1123,27 @@ function MapTargetSheet({
       {isMapPoint && mode === 'edit' ? (
         <View style={styles.mapTargetDraftFields}>
           <TextInput
-            value={name}
-            onChangeText={setName}
-            placeholder="Name"
-            placeholderTextColor={theme.palette.slate.textMuted}
-            style={styles.mapTargetInput}
-          />
-          <TextInput
             value={description}
             onChangeText={setDescription}
             placeholder="Description"
             placeholderTextColor={theme.palette.slate.textMuted}
             multiline
             style={[styles.mapTargetInput, styles.mapTargetDescriptionInput]}
+            accessibilityLabel="Map feature description"
           />
-          <View style={styles.mapTargetPhotoPlaceholder}>
-            <ImageSquareIcon size={18} color={theme.palette.slate.textSecondary} weight="duotone" />
-            <Text style={styles.mapTargetPhotoText}>Photo</Text>
+          <View style={styles.mapTargetMediaBox}>
+            <MapPointMediaPreview assets={media} onRemove={handleRemoveMedia} />
+            <MapPointMediaActions
+              loading={mediaSaving}
+              onAdd={handlePickMedia}
+              onCapture={handleCaptureMedia}
+            />
           </View>
+        </View>
+      ) : null}
+      {isMapPoint && mode !== 'edit' && media.length > 0 ? (
+        <View style={styles.mapTargetMediaBox}>
+          <MapPointMediaPreview assets={media} />
         </View>
       ) : null}
 
@@ -1033,7 +1166,7 @@ function MapTargetSheet({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Save map feature"
-            onPress={onSave}
+            onPress={handleSave}
             style={({ pressed }) => [
               styles.mapTargetActionButton,
               styles.mapTargetSaveButton,
@@ -1439,6 +1572,7 @@ export function MainOverlays({
                 : undefined
             }
             onSave={() => setEditingMapPointId(null)}
+            onSaveMapPoint={map.updateMapPoint}
             onDelete={
               map.selectedNavigationTarget.type === 'mapPoint'
                 ? () => {
@@ -2128,27 +2262,19 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
+  mapTargetNameInput: {
+    minHeight: 38,
+    paddingHorizontal: 10,
+    fontSize: 15,
+    fontWeight: '900',
+  },
   mapTargetDescriptionInput: {
     minHeight: 72,
     paddingTop: 10,
     textAlignVertical: 'top',
   },
-  mapTargetPhotoPlaceholder: {
-    height: 46,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderStyle: 'dashed',
-    borderColor: theme.alpha(theme.palette.slate.light, 0.3),
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: theme.alpha(theme.palette.slate.bg, 0.4),
-  },
-  mapTargetPhotoText: {
-    color: theme.palette.slate.textSecondary,
-    fontSize: 12,
-    fontWeight: '800',
+  mapTargetMediaBox: {
+    gap: 12,
   },
   mapTargetActionRow: {
     flexDirection: 'row',

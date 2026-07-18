@@ -80,6 +80,7 @@ export function MainScreen({
     clearSelectedMapPoints,
     removeMapPoint,
     clearDirectionPoint,
+    updateMapPoint,
     selectMapPoint,
     toggleMapPointSelection,
   } = controller
@@ -134,8 +135,8 @@ export function MainScreen({
         id: point.id,
         latitude: point.latitude,
         longitude: point.longitude,
-        title: getMapPointKindLabel(point.kind),
-        subtitle: null,
+        title: point.name?.trim() || getMapPointKindLabel(point.kind),
+        subtitle: point.description ?? null,
         point,
       })
     },
@@ -152,6 +153,44 @@ export function MainScreen({
       void removeMapPoint(id)
     },
     [removeMapPoint],
+  )
+  const handleUpdateMapPoint = useCallback(
+    async (
+      id: string,
+      patch: Partial<
+        Pick<
+          NonNullable<Extract<MapSelection, { type: 'mapPoint' }>['point']>,
+          'name' | 'description' | 'media'
+        >
+      >,
+    ) => {
+      const point = await updateMapPoint(id, patch)
+      if (!point) return null
+      const nextSelection: MapSelection = {
+        type: 'mapPoint',
+        id: point.id,
+        latitude: point.latitude,
+        longitude: point.longitude,
+        title: point.name || getMapPointKindLabel(point.kind),
+        subtitle: point.description ?? null,
+        point,
+      }
+      setSelectedNavigationTarget((current) =>
+        current?.type === 'mapPoint' && current.id === id ? nextSelection : current,
+      )
+      setActiveNavigationTarget((current) =>
+        current?.type === 'mapPoint' && current.point.id === id
+          ? {
+              ...current,
+              title: nextSelection.title,
+              subtitle: nextSelection.subtitle,
+              point,
+            }
+          : current,
+      )
+      return point
+    },
+    [updateMapPoint],
   )
   const handleClearDirectionPoint = useCallback(() => {
     setActiveNavigationTarget(null)
@@ -369,6 +408,7 @@ export function MainScreen({
           onCancelNavigation: handleClearDirectionPoint,
           onDismissSelectedTarget: handleDismissSelectedTarget,
           addMapPoint: controller.saveMapPoint,
+          updateMapPoint: handleUpdateMapPoint,
           onRemoveMapPoint: handleRemoveMapPoint,
           hiddenMapPointKinds: controller.hiddenMapPointKinds,
           toggleMapPointKindVisibility: controller.toggleMapPointKindVisibility,

@@ -15,6 +15,16 @@ class MapPointEntityTest {
       "kind" to "charging_food",
       "latitude" to 52.2297,
       "longitude" to 21.0122,
+      "name" to "Hill Lookout",
+      "description" to "Sunset line",
+      "media" to listOf(
+        mapOf(
+          "id" to "media-1",
+          "uri" to "file:///mapPointMedia/point-1/photo.jpg",
+          "filename" to "photo.jpg",
+          "mediaType" to "photo",
+        ),
+      ),
       "createdAt" to 1000L,
       "updatedAt" to 2000L,
     ).toMapPointEntity()
@@ -23,6 +33,9 @@ class MapPointEntityTest {
     assertEquals("charging_food", entity.kind)
     assertEquals(522297000, entity.latitudeE7)
     assertEquals(210122000, entity.longitudeE7)
+    assertEquals("Hill Lookout", entity.name)
+    assertEquals("Sunset line", entity.description)
+    assertTrue(entity.mediaJson?.contains("media-1") == true)
     assertEquals(1000L, entity.createdAt)
     assertEquals(2000L, entity.updatedAt)
     assertEquals(
@@ -31,6 +44,16 @@ class MapPointEntityTest {
         "kind" to "charging_food",
         "latitude" to 52.2297,
         "longitude" to 21.0122,
+        "name" to "Hill Lookout",
+        "description" to "Sunset line",
+        "media" to listOf(
+          mapOf(
+            "id" to "media-1",
+            "uri" to "file:///mapPointMedia/point-1/photo.jpg",
+            "filename" to "photo.jpg",
+            "mediaType" to "photo",
+          ),
+        ),
         "createdAt" to 1000L,
         "updatedAt" to 2000L,
       ),
@@ -103,6 +126,9 @@ class MapPointEntityTest {
     assertTrue(sql.any { it.contains("kind TEXT NOT NULL") })
     assertTrue(sql.any { it.contains("latitude_e7 INTEGER NOT NULL") })
     assertTrue(sql.any { it.contains("longitude_e7 INTEGER NOT NULL") })
+    assertTrue(sql.any { it.contains("name TEXT") })
+    assertTrue(sql.any { it.contains("description TEXT") })
+    assertTrue(sql.any { it.contains("media_json TEXT") })
     assertTrue(
       sql.any {
         it == "CREATE INDEX IF NOT EXISTS index_map_points_kind ON map_points(kind)"
