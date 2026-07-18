@@ -320,4 +320,4 @@ Live event has `stateName` + `avgLatency` + `firedAlerts`. History `TelemetrySam
 ```
 
 Not persisted to history and not fed into alerts. `bleStore` keeps only the latest
-snapshot (`latestBms`); UI derives min/max/spread via `summarizeBms` in `src/lib/battery/bms.ts`.
+snapshot (`latestBms`); UI derives min/max/spread via `summarizeBms` in `src/modules/battery/lib/bms.ts`.

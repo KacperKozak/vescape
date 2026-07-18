@@ -36,7 +36,7 @@ modules/vesc-ble/android/.../VescBleModule.kt
                            Expo module bridge — scan and live-state API
 modules/vesc-ble/android/.../VescForegroundService.kt
                            native board BLE + GPS runtime owner
-src/store/bleStore.ts      Zustand store — mirrors native live state
+src/modules/board/store/bleStore.ts      Zustand store — mirrors native live state
 src/vesc/commands.ts       COMM_* enum + request builders
 src/vesc/packet.ts         VESC packet framing (encode/decode)
 src/vesc/reassembler.ts    reassemble multi-chunk BLE→VESC packets

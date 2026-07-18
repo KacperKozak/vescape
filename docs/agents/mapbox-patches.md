@@ -17,7 +17,7 @@ cameraRef.current?.setCameraDirect({ heading })
 
 It is used by `src/screens/main/MainMap.tsx` to continuously derive pitch from zoom while the
 map camera is moving, including native deceleration after the user releases a pinch gesture. The
-pitch calculation remains pure in `src/lib/map/cameraProfiles.ts` (`getPitchForZoom`).
+pitch calculation remains pure in `src/modules/map/lib/cameraProfiles.ts` (`getPitchForZoom`).
 
 It is also used by `src/screens/main/PhoneHeadingMapLayer.tsx` to apply the fused phone heading
 without starting and repeatedly cancelling Mapbox camera transitions for every sensor sample.
@@ -71,7 +71,7 @@ Minimum verification:
 
 ```sh
 bun run ts
-bun test src/lib/map/cameraProfiles.test.ts
+bun test src/modules/map/lib/cameraProfiles.test.ts
 cd android && ./gradlew :app:compileDebugKotlin
 ```
 

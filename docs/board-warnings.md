@@ -18,7 +18,7 @@ kind-specific JSON `payloadJson` blob the UI decodes.
   `modules/vesc-ble/android/.../BoardWarningKind.kt`,
   `modules/vesc-ble/ios/telemetry/BoardWarningKind.swift`, and the JS union in
   `modules/vesc-ble/src/index.ts`.
-- **Rider-facing titles** — `WARNING_TITLES` in `src/lib/boardWarnings.ts` (keyed by the exhaustive
+- **Rider-facing titles** — `WARNING_TITLES` in `src/modules/board/lib/boardWarnings.ts` (keyed by the exhaustive
   union, so a missing title is a compile error).
 - **Detection logic** — the three detectors under
   `modules/vesc-ble/android/src/main/java/expo/modules/vescble/warnings/` (iOS peers under
@@ -88,7 +88,7 @@ not a data reset — manual clear exists for that). Toggling takes effect live, 
 
 `payloadJson` is a JSON object string, built natively via `JSONObject` / `JSONSerialization` (never
 hand-assembled). Numeric fields are rounded to 4 decimals before serialization
-(`boardWarningRound4`). JS decodes it generically in `parseWarningDetail` (`src/lib/boardWarnings.ts`)
+(`boardWarningRound4`). JS decodes it generically in `parseWarningDetail` (`src/modules/board/lib/boardWarnings.ts`)
 until a kind opts into bespoke detail text.
 
 ### `cell-spread`

@@ -15,7 +15,7 @@ Main files:
 - Native repository: `modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/TelemetryRepository.kt`
 - Native DAO: `modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/TelemetryDao.kt`
 - Native tables: `modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/TelemetryEntities.kt`
-- JS store: `src/store/historyStore.ts`
+- JS store: `src/modules/history/store/historyStore.ts`
 - Session grouping: `src/history/sessions.ts`
 - Map rendering: `src/screens/main/MainMap.tsx`
 

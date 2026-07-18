@@ -80,10 +80,10 @@ The Compass (`phoneHeading`) map mode wired the ~30Hz `DeviceMotion` magnetomete
 
 ## Files
 
-| File                                    | Role                                                               |
-| --------------------------------------- | ------------------------------------------------------------------ |
-| `src/telemetry/liveTelemetryRuntime.ts` | Mutable buffer, SharedValues, version counter, snapshot publishing |
-| `src/telemetry/liveMetricHistory.ts`    | Buffer ops: insert, prune, dedup, summarize                        |
-| `src/hooks/useLiveMetric.ts`            | React hook with module-level projection cache                      |
-| `src/store/bleStore.ts`                 | Zustand store, 1Hz publish timer, event subscriptions              |
-| `src/hooks/useRenderRateWarning.ts`     | Dev-only render-rate canary; tripwire at stream boundaries         |
+| File                                       | Role                                                               |
+| ------------------------------------------ | ------------------------------------------------------------------ |
+| `src/telemetry/liveTelemetryRuntime.ts`    | Mutable buffer, SharedValues, version counter, snapshot publishing |
+| `src/telemetry/liveMetricHistory.ts`       | Buffer ops: insert, prune, dedup, summarize                        |
+| `src/modules/board/hooks/useLiveMetric.ts` | React hook with module-level projection cache                      |
+| `src/modules/board/store/bleStore.ts`      | Zustand store, 1Hz publish timer, event subscriptions              |
+| `src/hooks/useRenderRateWarning.ts`        | Dev-only render-rate canary; tripwire at stream boundaries         |

@@ -77,11 +77,13 @@ already-running session when it opens.
 
 ```text
 src/app/                     Expo Router routes only (no logic)
-src/lib/                     Pure domain logic (battery, tune, history, map, telemetry)
-src/store/                   Zustand stores mirroring native session + app state
-src/components/              React components (ui/ + domain/)
-src/screens/                 Screen-level component subtrees
-src/hooks/                   React hooks bridging store and UI
+src/modules/<feature>/       Domain modules (board, battery, tune, map, history, alerts,
+                             weather, group-ride, settings, diagnostics, profile, legal) —
+                             each colocates its lib/ store/ hooks/ components/ constants/
+src/components/              Domain-less UI kit (base, forms, charts, controls, widgets, ...)
+src/screens/main/            Main screen composition (map/, overlays/, history/)
+src/hooks/                   Generic React hooks (no domain imports)
+src/bootstrap/               App-root wiring (native -> JS data sync)
 src/constants/theme.ts       Design tokens (single source of color/typography)
 shared/                      Pure JS shared with native (copied in via copy:shared)
 modules/vesc-ble/            Custom Expo native BLE/session module
