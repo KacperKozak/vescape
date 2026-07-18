@@ -3,7 +3,10 @@ import { create } from 'zustand'
 import { getSettings, setCompanionPresenceEnabled, updateSetting, type AppSettings } from 'vesc-ble'
 import { DEFAULT_HISTORY_METRIC_HOT_RANGES } from '@/lib/history/metricColorScale'
 import { DEFAULT_LEGAL_MODE_SETTINGS, type LegalModeSettings } from '@/lib/legalMode'
-import { DEFAULT_SATELLITE_IMAGERY_OPACITY } from '@/constants/satelliteDarkMapStyle'
+import {
+  DEFAULT_SATELLITE_IMAGERY_OPACITY,
+  DEFAULT_SATELLITE_IMAGERY_SATURATION,
+} from '@/constants/satelliteDarkMapStyle'
 
 const DEFAULTS: AppSettings = {
   liveHistoryLimit: 5,
@@ -16,8 +19,10 @@ const DEFAULTS: AppSettings = {
   freeSpinMaxSpeedDeltaKmh: 12,
   freeSpinStationaryBoardCapKmh: 15,
   mapStyleKey: 'onedark',
+  satelliteOverlayEnabled: true,
   satelliteImageryOpacity: DEFAULT_SATELLITE_IMAGERY_OPACITY,
-  satelliteOverlayStreetLinesEnabled: false,
+  satelliteImagerySaturation: DEFAULT_SATELLITE_IMAGERY_SATURATION,
+  hideTelemetryMapDetails: true,
   mapNavigationMode: 'northUp',
   historyMetricGradientsEnabled: true,
   historyMetricHotRanges: DEFAULT_HISTORY_METRIC_HOT_RANGES,

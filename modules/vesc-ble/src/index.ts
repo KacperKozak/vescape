@@ -778,10 +778,14 @@ export interface AppSettings {
   freeSpinMaxSpeedDeltaKmh: number
   freeSpinStationaryBoardCapKmh: number
   mapStyleKey: 'onedark' | 'outdoors' | 'satellite' | 'mapy'
+  /** Use the custom satellite overlay style instead of the stock satellite style. */
+  satelliteOverlayEnabled: boolean
   /** Satellite basemap imagery opacity, 0.1-1.0. Labels and app overlays stay full opacity. */
   satelliteImageryOpacity: number
-  /** Show vector street lines over the toned satellite overlay. */
-  satelliteOverlayStreetLinesEnabled: boolean
+  /** Satellite basemap saturation for the telemetry/home map, -1.0 to 1.0. */
+  satelliteImagerySaturation: number
+  /** Hide POI names and icons on the telemetry/home map. Explore keeps map details visible. */
+  hideTelemetryMapDetails: boolean
   mapNavigationMode: 'northUp' | 'gpsHeading' | 'phoneHeading' | 'freeRotate'
   historyMetricGradientsEnabled: boolean
   historyMetricHotRanges: Partial<

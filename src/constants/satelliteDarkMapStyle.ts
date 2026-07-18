@@ -1,9 +1,10 @@
 import { theme } from '@/constants/theme'
 
-export const DEFAULT_SATELLITE_IMAGERY_OPACITY = 0.35
+export const DEFAULT_SATELLITE_IMAGERY_OPACITY = 0.2
+export const DEFAULT_SATELLITE_IMAGERY_SATURATION = -0.35
 
-const SATELLITE_TEXT = theme.palette.slate.textSecondary
-const SATELLITE_MUTED_TEXT = theme.palette.slate.light
+const SATELLITE_TEXT = theme.palette.mono.white
+const SATELLITE_MUTED_TEXT = theme.palette.mono.white
 const SATELLITE_HALO = 'hsl(0, 5%, 0%)'
 const SATELLITE_SOFT_HALO = 'hsla(0, 5%, 0%, 0.75)'
 const SATELLITE_ROAD = theme.palette.mono.white
@@ -22,7 +23,7 @@ export function getSatelliteDarkMapStyle(
   return JSON.stringify({
     version: 8,
     name: 'Satellite Dark',
-    sprite: 'mapbox://sprites/mapbox/streets-v12',
+    sprite: 'mapbox://sprites/mapbox/satellite-streets-v12',
     glyphs: 'mapbox://fonts/mapbox/{fontstack}/{range}.pbf',
     sources: {
       satellite: {
@@ -193,71 +194,126 @@ export function getSatelliteDarkMapStyle(
           'text-halo-blur': 1,
         },
       },
-      ...(showPoiIcons
-        ? [
-            {
-              id: 'poi-icon',
-              type: 'symbol',
-              source: 'composite',
-              'source-layer': 'poi_label',
-              minzoom: 6,
-              layout: {
-                'icon-image': [
-                  'case',
-                  ['has', 'maki_beta'],
-                  ['coalesce', ['image', ['get', 'maki_beta']], ['image', ['get', 'maki']]],
-                  ['image', ['get', 'maki']],
-                ],
-                'icon-size': ['interpolate', ['linear'], ['zoom'], 14, 0.65, 18, 0.9],
-                'icon-allow-overlap': false,
-                'icon-padding': 3,
-              },
-              paint: {
-                'icon-color': SATELLITE_TEXT,
-                'icon-halo-color': SATELLITE_HALO,
-                'icon-halo-width': 1,
-                'icon-opacity': 0.9,
-              },
-            },
-            {
-              id: 'transit-stop-icon',
-              type: 'symbol',
-              source: 'composite',
-              'source-layer': 'transit_stop_label',
-              minzoom: 13,
-              layout: {
-                'icon-image': ['get', 'network'],
-                'icon-size': ['interpolate', ['linear'], ['zoom'], 13, 0.7, 18, 0.95],
-                'icon-allow-overlap': false,
-                'icon-padding': 3,
-              },
-              paint: {
-                'icon-color': SATELLITE_TEXT,
-                'icon-halo-color': SATELLITE_HALO,
-                'icon-halo-width': 1,
-                'icon-opacity': 0.9,
-              },
-            },
-          ]
-        : []),
-      ...(showPoiLabels
+      ...(showPoiLabels || showPoiIcons
         ? [
             {
               id: 'poi-label',
               type: 'symbol',
               source: 'composite',
               'source-layer': 'poi_label',
-              minzoom: 14,
+              minzoom: 6,
+              filter: ['<=', ['get', 'filterrank'], ['+', ['step', ['zoom'], 0, 16, 1, 17, 2], 3]],
               layout: {
-                'text-field': ['get', 'name'],
-                'text-font': ['DIN Pro Regular', 'Arial Unicode MS Regular'],
-                'text-size': 11,
+                'text-size': [
+                  'step',
+                  ['zoom'],
+                  ['step', ['get', 'sizerank'], 18, 5, 12],
+                  17,
+                  ['step', ['get', 'sizerank'], 18, 13, 12],
+                ],
+                'icon-image': showPoiIcons
+                  ? [
+                      'case',
+                      ['has', 'maki_beta'],
+                      ['coalesce', ['image', ['get', 'maki_beta']], ['image', ['get', 'maki']]],
+                      ['image', ['get', 'maki']],
+                    ]
+                  : '',
+                'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'],
+                'text-offset': [
+                  'step',
+                  ['zoom'],
+                  ['step', ['get', 'sizerank'], ['literal', [0, 0]], 5, ['literal', [0, 0.8]]],
+                  17,
+                  ['step', ['get', 'sizerank'], ['literal', [0, 0]], 13, ['literal', [0, 0.8]]],
+                ],
+                'text-anchor': [
+                  'step',
+                  ['zoom'],
+                  ['step', ['get', 'sizerank'], 'center', 5, 'top'],
+                  17,
+                  ['step', ['get', 'sizerank'], 'center', 13, 'top'],
+                ],
+                'text-field': showPoiLabels
+                  ? ['coalesce', ['get', 'name_en'], ['get', 'name']]
+                  : '',
               },
               paint: {
-                'text-color': SATELLITE_TEXT,
-                'text-halo-color': SATELLITE_HALO,
+                'icon-opacity': [
+                  'step',
+                  ['zoom'],
+                  ['step', ['get', 'sizerank'], 0, 5, 1],
+                  17,
+                  ['step', ['get', 'sizerank'], 0, 13, 1],
+                ],
+                'text-halo-color': 'hsl(0, 0%, 0%)',
                 'text-halo-width': 0.5,
                 'text-halo-blur': 0.5,
+                'text-color': [
+                  'match',
+                  ['get', 'class'],
+                  'park_like',
+                  'hsl(110, 100%, 85%)',
+                  'education',
+                  'hsl(30, 100%, 85%)',
+                  'medical',
+                  'hsl(0, 100%, 85%)',
+                  SATELLITE_TEXT,
+                ],
+              },
+            },
+            {
+              id: 'transit-label',
+              type: 'symbol',
+              source: 'composite',
+              'source-layer': 'transit_stop_label',
+              minzoom: 13,
+              layout: {
+                'text-size': 12,
+                'icon-image': showPoiIcons ? ['get', 'network'] : '',
+                'text-font': ['DIN Pro Bold', 'Arial Unicode MS Bold'],
+                'text-justify': ['match', ['get', 'stop_type'], 'entrance', 'left', 'center'],
+                'text-offset': [
+                  'match',
+                  ['get', 'stop_type'],
+                  'entrance',
+                  ['literal', [1, 0]],
+                  ['literal', [0, 0.8]],
+                ],
+                'text-anchor': ['match', ['get', 'stop_type'], 'entrance', 'left', 'top'],
+                'text-field': showPoiLabels
+                  ? [
+                      'step',
+                      ['zoom'],
+                      '',
+                      13,
+                      [
+                        'match',
+                        ['get', 'mode'],
+                        ['literal', ['rail', 'metro_rail']],
+                        ['coalesce', ['get', 'name_en'], ['get', 'name']],
+                        '',
+                      ],
+                      14,
+                      [
+                        'match',
+                        ['get', 'mode'],
+                        ['literal', ['bus', 'bicycle']],
+                        '',
+                        ['coalesce', ['get', 'name_en'], ['get', 'name']],
+                      ],
+                      18,
+                      ['coalesce', ['get', 'name_en'], ['get', 'name']],
+                    ]
+                  : '',
+                'text-letter-spacing': 0.01,
+                'text-max-width': ['match', ['get', 'stop_type'], 'entrance', 15, 9],
+              },
+              paint: {
+                'text-halo-color': 'hsl(0, 0%, 0%)',
+                'text-color': 'hsl(204, 100%, 80%)',
+                'text-halo-blur': 0.5,
+                'text-halo-width': 0.5,
               },
             },
           ]

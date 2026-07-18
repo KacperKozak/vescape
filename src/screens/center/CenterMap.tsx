@@ -137,8 +137,10 @@ interface CenterMapProps {
   historySelectionKey: string | null
   historyPreviewRoute: [number, number][]
   mapStyleKey: MapStyleKey
+  satelliteOverlayEnabled: boolean
   satelliteImageryOpacity: number
-  satelliteOverlayStreetLinesEnabled: boolean
+  satelliteImagerySaturation: number
+  hideTelemetryMapDetails: boolean
   mapNavigationMode: MapNavigationMode
   rotationLocked: boolean
   perspectiveEnabled: boolean
@@ -182,8 +184,10 @@ export const CenterMap = memo(
       historySelectionKey,
       historyPreviewRoute,
       mapStyleKey,
+      satelliteOverlayEnabled,
       satelliteImageryOpacity,
-      satelliteOverlayStreetLinesEnabled,
+      satelliteImagerySaturation,
+      hideTelemetryMapDetails,
       mapNavigationMode,
       rotationLocked,
       perspectiveEnabled,
@@ -282,16 +286,15 @@ export const CenterMap = memo(
     const isMapy = selectedMapStyle.key === 'mapy'
     const isOneDark = selectedMapStyle.key === 'onedark'
     const isSatellite = selectedMapStyle.key === 'satellite'
-    const mapDetailsVisible = mode === 'map'
-    const satelliteOverlayEnabled = isSatellite && satelliteImageryOpacity < 1
-    const effectiveSatelliteImageryOpacity =
-      mode === 'telemetry' || satelliteImageryOpacity >= 1 ? satelliteImageryOpacity : 1
-    const toneSatelliteImage = effectiveSatelliteImageryOpacity < 1
-    const isSatelliteOverlay = satelliteOverlayEnabled
+    const mapDetailsVisible = mode === 'map' || (mode === 'telemetry' && !hideTelemetryMapDetails)
+    const isSatelliteOverlay = isSatellite && satelliteOverlayEnabled
+    const effectiveSatelliteImageryOpacity = mode === 'telemetry' ? satelliteImageryOpacity : 1
+    const effectiveSatelliteImagerySaturation =
+      mode === 'telemetry' ? satelliteImagerySaturation : 0
     const useCustomJSON = isMapy || isOneDark || isSatelliteOverlay
     const satelliteStyleJSON = useMemo(
-      () => getSatelliteDarkMapStyle(1, true, true, false, satelliteOverlayStreetLinesEnabled),
-      [satelliteOverlayStreetLinesEnabled],
+      () => getSatelliteDarkMapStyle(1, true, true, false, true),
+      [],
     )
     const oneDarkStyleJSON = useMemo(() => getOneDarkMapStyle(true, true, false), [])
     const showBuildings3d =
@@ -1016,15 +1019,15 @@ export const CenterMap = memo(
               existing
               style={{
                 rasterOpacity: effectiveSatelliteImageryOpacity,
-                rasterSaturation: 0,
-                rasterContrast: toneSatelliteImage ? -0.25 : 0,
+                rasterSaturation: effectiveSatelliteImagerySaturation,
+                rasterContrast: 0,
                 rasterOpacityTransition: { duration: 260, delay: 0 },
                 rasterSaturationTransition: { duration: 260, delay: 0 },
                 rasterContrastTransition: { duration: 260, delay: 0 },
               }}
             />
           ) : null}
-          {isSatelliteOverlay && satelliteOverlayStreetLinesEnabled ? (
+          {isSatelliteOverlay ? (
             <>
               {[
                 'road-path',
@@ -1048,7 +1051,7 @@ export const CenterMap = memo(
               ))}
             </>
           ) : null}
-          {isOneDark || isSatelliteOverlay ? (
+          {isOneDark ? (
             <>
               <SymbolLayer
                 id="poi-label"
@@ -1058,10 +1061,34 @@ export const CenterMap = memo(
               <SymbolLayer
                 id="poi-icon"
                 existing
-                style={{ visibility: mapDetailsVisible ? 'visible' : 'none' }}
+                style={{
+                  visibility: mapDetailsVisible ? 'visible' : 'none',
+                  iconColor: '#74859a',
+                  iconHaloWidth: 0.5,
+                  iconOpacity: 0.48,
+                }}
               />
               <SymbolLayer
                 id="transit-stop-icon"
+                existing
+                style={{
+                  visibility: mapDetailsVisible ? 'visible' : 'none',
+                  iconColor: '#74859a',
+                  iconHaloWidth: 0.5,
+                  iconOpacity: 0.48,
+                }}
+              />
+            </>
+          ) : null}
+          {isSatelliteOverlay ? (
+            <>
+              <SymbolLayer
+                id="poi-label"
+                existing
+                style={{ visibility: mapDetailsVisible ? 'visible' : 'none' }}
+              />
+              <SymbolLayer
+                id="transit-label"
                 existing
                 style={{ visibility: mapDetailsVisible ? 'visible' : 'none' }}
               />

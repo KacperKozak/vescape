@@ -76,10 +76,10 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
   const lastGpsLatitude = useSettingsStore((s) => s.lastGpsLatitude)
   const lastGpsLongitude = useSettingsStore((s) => s.lastGpsLongitude)
   const mapStyleKey = useSettingsStore((s) => s.mapStyleKey)
+  const satelliteOverlayEnabled = useSettingsStore((s) => s.satelliteOverlayEnabled)
   const satelliteImageryOpacity = useSettingsStore((s) => s.satelliteImageryOpacity)
-  const satelliteOverlayStreetLinesEnabled = useSettingsStore(
-    (s) => s.satelliteOverlayStreetLinesEnabled,
-  )
+  const satelliteImagerySaturation = useSettingsStore((s) => s.satelliteImagerySaturation)
+  const hideTelemetryMapDetails = useSettingsStore((s) => s.hideTelemetryMapDetails)
   const mapNavigationMode = useSettingsStore((s) => s.mapNavigationMode)
   const setSetting = useSettingsStore((s) => s.set)
   const {
@@ -376,8 +376,10 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
     historyActive,
     legalLimitsActive,
     mapStyleKey,
+    satelliteOverlayEnabled,
     satelliteImageryOpacity,
-    satelliteOverlayStreetLinesEnabled,
+    satelliteImagerySaturation,
+    hideTelemetryMapDetails,
     setMapStyleKey,
     mapNavigationMode,
     setMapNavigationMode,

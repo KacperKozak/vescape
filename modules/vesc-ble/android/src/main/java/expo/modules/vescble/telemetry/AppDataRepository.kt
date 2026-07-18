@@ -30,6 +30,12 @@ internal fun validSatelliteImageryOpacity(value: Any?): Double? =
     ?.takeIf { it.isFinite() }
     ?.coerceIn(0.1, 1.0)
 
+internal fun validSatelliteImagerySaturation(value: Any?): Double? =
+  (value as? Number)
+    ?.toDouble()
+    ?.takeIf { it.isFinite() }
+    ?.coerceIn(-1.0, 1.0)
+
 internal fun validLiveHistoryLimitMinutes(value: Any?): Int? =
   (value as? Number)
     ?.toInt()
@@ -214,8 +220,10 @@ class AppDataRepository private constructor(private val context: Context) {
       freeSpinMaxSpeedDeltaKmh = req("freeSpinMaxSpeedDeltaKmh", DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH) { (it as? Number)?.toDouble() },
       freeSpinStationaryBoardCapKmh = req("freeSpinStationaryBoardCapKmh", DEFAULT_FREE_SPIN_STATIONARY_BOARD_CAP_KMH) { (it as? Number)?.toDouble() },
       mapStyleKey = req("mapStyleKey", "onedark", ::validMapStyleKey),
-      satelliteImageryOpacity = req("satelliteImageryOpacity", 0.35, ::validSatelliteImageryOpacity),
-      satelliteOverlayStreetLinesEnabled = req("satelliteOverlayStreetLinesEnabled", false) { it as? Boolean },
+      satelliteOverlayEnabled = req("satelliteOverlayEnabled", true) { it as? Boolean },
+      satelliteImageryOpacity = req("satelliteImageryOpacity", 0.2, ::validSatelliteImageryOpacity),
+      satelliteImagerySaturation = req("satelliteImagerySaturation", -0.35, ::validSatelliteImagerySaturation),
+      hideTelemetryMapDetails = req("hideTelemetryMapDetails", true) { it as? Boolean },
       mapNavigationMode = req("mapNavigationMode", "northUp", ::validMapNavigationMode),
       historyMetricGradientsEnabled = req("historyMetricGradientsEnabled", true) { it as? Boolean },
       historyMetricHotRanges = req("historyMetricHotRanges", DEFAULT_HISTORY_METRIC_HOT_RANGES, ::validHistoryMetricHotRanges),
@@ -271,9 +279,12 @@ class AppDataRepository private constructor(private val context: Context) {
         ((value as? Number)?.toDouble() ?: return@withContext).coerceAtLeast(0.0)
       "mapStyleKey" ->
         validMapStyleKey(value) ?: return@withContext
+      "satelliteOverlayEnabled" -> value as? Boolean ?: return@withContext
       "satelliteImageryOpacity" ->
         validSatelliteImageryOpacity(value) ?: return@withContext
-      "satelliteOverlayStreetLinesEnabled" -> value as? Boolean ?: return@withContext
+      "satelliteImagerySaturation" ->
+        validSatelliteImagerySaturation(value) ?: return@withContext
+      "hideTelemetryMapDetails" -> value as? Boolean ?: return@withContext
       "mapNavigationMode" ->
         validMapNavigationMode(value) ?: return@withContext
       "historyMetricGradientsEnabled" -> value as? Boolean ?: return@withContext
@@ -319,8 +330,10 @@ class AppDataRepository private constructor(private val context: Context) {
         "freeSpinMaxSpeedDeltaKmh" -> d.freeSpinMaxSpeedDeltaKmh
         "freeSpinStationaryBoardCapKmh" -> d.freeSpinStationaryBoardCapKmh
         "mapStyleKey" -> d.mapStyleKey
+        "satelliteOverlayEnabled" -> d.satelliteOverlayEnabled
         "satelliteImageryOpacity" -> d.satelliteImageryOpacity
-        "satelliteOverlayStreetLinesEnabled" -> d.satelliteOverlayStreetLinesEnabled
+        "satelliteImagerySaturation" -> d.satelliteImagerySaturation
+        "hideTelemetryMapDetails" -> d.hideTelemetryMapDetails
         "mapNavigationMode" -> d.mapNavigationMode
         "historyMetricGradientsEnabled" -> d.historyMetricGradientsEnabled
         "historyMetricHotRanges" -> d.historyMetricHotRanges
@@ -597,8 +610,10 @@ fun AppSettings.toMap(): Map<String, Any?> = mapOf(
   "freeSpinMaxSpeedDeltaKmh" to freeSpinMaxSpeedDeltaKmh,
   "freeSpinStationaryBoardCapKmh" to freeSpinStationaryBoardCapKmh,
   "mapStyleKey" to mapStyleKey,
+  "satelliteOverlayEnabled" to satelliteOverlayEnabled,
   "satelliteImageryOpacity" to satelliteImageryOpacity,
-  "satelliteOverlayStreetLinesEnabled" to satelliteOverlayStreetLinesEnabled,
+  "satelliteImagerySaturation" to satelliteImagerySaturation,
+  "hideTelemetryMapDetails" to hideTelemetryMapDetails,
   "mapNavigationMode" to mapNavigationMode,
   "historyMetricGradientsEnabled" to historyMetricGradientsEnabled,
   "historyMetricHotRanges" to historyMetricHotRanges,
