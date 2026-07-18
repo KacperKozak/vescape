@@ -1,4 +1,4 @@
-import Mapbox, { Camera, RasterLayer, SymbolLayer } from '@rnmapbox/maps'
+import Mapbox, { Camera, SymbolLayer } from '@rnmapbox/maps'
 import { CrosshairSimpleIcon, type Icon } from 'phosphor-react-native'
 import {
   forwardRef,
@@ -23,10 +23,7 @@ import {
   type MapNavigationMode,
   type MapStyleKey,
 } from '@/constants/mapStyles'
-import {
-  getSatelliteDarkMapStyle,
-  getSatelliteImageryPaint,
-} from '@/constants/satelliteDarkMapStyle'
+import { getSatelliteDarkMapStyle } from '@/constants/satelliteDarkMapStyle'
 import { getMapPointKindIcon } from '@/constants/mapPointIcons'
 import { getMapPointKindColor, getMapPointKindTextColor } from '@/constants/mapPoints'
 import { getOneDarkMapStyle } from '@/constants/oneDarkMapStyle'
@@ -252,9 +249,6 @@ export const CenterMap = memo(
     const [cameraHeading, setCameraHeading] = useState(0)
     const [cameraZoom, setCameraZoom] = useState<number>(MAP_DEFAULTS.fallbackZoom)
     const [initialApproximateFix, setInitialApproximateFix] = useState<LocationEvent | null>(null)
-    const [loadedSatelliteOverlayStyleJSON, setLoadedSatelliteOverlayStyleJSON] = useState<
-      string | null
-    >(null)
     const [mapLayout, setMapLayout] = useState<MapLayout>({ width: 0, height: 0 })
     const [offscreenMapIndicators, setOffscreenMapIndicators] = useState<
       OffscreenMapIndicatorState[]
@@ -324,21 +318,19 @@ export const CenterMap = memo(
       () =>
         getSatelliteDarkMapStyle(
           effectiveSatelliteImageryOpacity,
-          true,
-          true,
+          mapDetailsVisible,
+          mapDetailsVisible,
           false,
           true,
           effectiveSatelliteImagerySaturation,
+          mode === 'telemetry' ? 0.35 : 0.75,
         ),
-      [effectiveSatelliteImageryOpacity, effectiveSatelliteImagerySaturation],
-    )
-    const satelliteImageryPaint = useMemo(
-      () =>
-        getSatelliteImageryPaint(
-          effectiveSatelliteImageryOpacity,
-          effectiveSatelliteImagerySaturation,
-        ),
-      [effectiveSatelliteImageryOpacity, effectiveSatelliteImagerySaturation],
+      [
+        effectiveSatelliteImageryOpacity,
+        effectiveSatelliteImagerySaturation,
+        mapDetailsVisible,
+        mode,
+      ],
     )
     const oneDarkStyleJSON = useMemo(() => getOneDarkMapStyle(true, true, false), [])
     const showBuildings3d =
@@ -790,13 +782,6 @@ export const CenterMap = memo(
 
     useEffect(() => {
       const frame = requestAnimationFrame(() => {
-        setLoadedSatelliteOverlayStyleJSON(null)
-      })
-      return () => cancelAnimationFrame(frame)
-    }, [isSatelliteOverlay, satelliteStyleJSON])
-
-    useEffect(() => {
-      const frame = requestAnimationFrame(() => {
         setInitialApproximateFix(gpsPresentation.nextInitialApproximateFix)
       })
       return () => cancelAnimationFrame(frame)
@@ -875,14 +860,6 @@ export const CenterMap = memo(
       historyPreview,
       perspectiveEnabled,
     ])
-
-    const handleMapStyleLoaded = useCallback(() => {
-      setLoadedSatelliteOverlayStyleJSON(isSatelliteOverlay ? satelliteStyleJSON : null)
-    }, [isSatelliteOverlay, satelliteStyleJSON])
-
-    const handleMapStyleLoading = useCallback(() => {
-      setLoadedSatelliteOverlayStyleJSON(null)
-    }, [])
 
     const handleLongPress = useCallback(
       (feature: { geometry: { coordinates: number[] } }) => {
@@ -1163,9 +1140,7 @@ export const CenterMap = memo(
           scaleBarEnabled={false}
           logoEnabled={false}
           attributionEnabled={false}
-          onWillStartLoadingMap={handleMapStyleLoading}
           onDidFinishLoadingMap={handleMapLoaded}
-          onDidFinishLoadingStyle={handleMapStyleLoaded}
           onPress={handleMapPress}
           onLongPress={handleLongPress}
           onMapIdle={handleMapIdle}
@@ -1179,40 +1154,6 @@ export const CenterMap = memo(
             maxZoomLevel={MAP_DEFAULTS.maxZoom}
             animationMode="easeTo"
           />
-          {isSatelliteOverlay && loadedSatelliteOverlayStyleJSON === satelliteStyleJSON ? (
-            <>
-              <RasterLayer
-                id="satellite"
-                existing
-                style={{
-                  ...satelliteImageryPaint,
-                  rasterOpacityTransition: { duration: 260, delay: 0 },
-                  rasterSaturationTransition: { duration: 260, delay: 0 },
-                  rasterContrastTransition: { duration: 260, delay: 0 },
-                }}
-              />
-              {[
-                'road-path',
-                'road-track',
-                'road-service',
-                'road-street',
-                'road-secondary-tertiary',
-                'road-primary',
-                'road-trunk',
-                'road-motorway',
-              ].map((id) => (
-                <Mapbox.LineLayer
-                  key={id}
-                  id={id}
-                  existing
-                  style={{
-                    lineOpacity: mode === 'telemetry' ? 0.35 : 0.75,
-                    lineOpacityTransition: { duration: 260, delay: 0 },
-                  }}
-                />
-              ))}
-            </>
-          ) : null}
           {isOneDark ? (
             <>
               <SymbolLayer
@@ -1239,20 +1180,6 @@ export const CenterMap = memo(
                   iconHaloWidth: 0.5,
                   iconOpacity: 0.48,
                 }}
-              />
-            </>
-          ) : null}
-          {isSatelliteOverlay ? (
-            <>
-              <SymbolLayer
-                id="poi-label"
-                existing
-                style={{ visibility: mapDetailsVisible ? 'visible' : 'none' }}
-              />
-              <SymbolLayer
-                id="transit-label"
-                existing
-                style={{ visibility: mapDetailsVisible ? 'visible' : 'none' }}
               />
             </>
           ) : null}
