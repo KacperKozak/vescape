@@ -23,7 +23,6 @@ import Reanimated, {
   Keyframe,
   useAnimatedScrollHandler,
   useAnimatedStyle,
-  runOnJS,
   useSharedValue,
 } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -308,9 +307,6 @@ export function EdgeDrawer({
   const scrollOffset = useSharedValue(0)
   const animatedDismissRange = useSharedValue(1)
   const animatedGradientFullStrengthRange = useSharedValue(1)
-  const pendingAutoClose = useSharedValue(false)
-  const animatedAutoCloseThreshold = useSharedValue(1)
-  const animatedOpensFromTop = useSharedValue(1)
   const nativeScrollGesture = useMemo(() => Gesture.Native(), [])
 
   useEffect(() => {
@@ -327,8 +323,6 @@ export function EdgeDrawer({
       scrollOffsetRef.current = 0
       scrollOffset.value = 0
       animatedGradientFullStrengthRange.value = Math.max(1, height * DRAWER_INITIAL_OPEN_FRACTION)
-      pendingAutoClose.value = false
-      animatedOpensFromTop.value = fromTop ? 1 : 0
     }
 
     if (edge !== 'auto') {
@@ -339,16 +333,7 @@ export function EdgeDrawer({
     void measureTrigger(triggerRef).then((trigger) => {
       openFrom(trigger.y + trigger.height / 2 < height / 2)
     })
-  }, [
-    animatedGradientFullStrengthRange,
-    animatedOpensFromTop,
-    edge,
-    height,
-    pendingAutoClose,
-    scrollOffset,
-    triggerRef,
-    visible,
-  ])
+  }, [animatedGradientFullStrengthRange, edge, height, scrollOffset, triggerRef, visible])
 
   useEffect(() => {
     if (!mounted) return
@@ -385,26 +370,9 @@ export function EdgeDrawer({
     if (!visible && mounted) close()
   }, [close, mounted, visible])
 
-  const scrollFullyOut = useCallback(() => {
-    scrollRef.current?.scrollTo({
-      y: opensFromTop ? dismissRange : 0,
-      animated: true,
-    })
-  }, [dismissRange, opensFromTop])
-
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (event) => {
       scrollOffset.value = event.contentOffset.y
-      if (!pendingAutoClose.value) return
-
-      const visiblePixels =
-        animatedOpensFromTop.value === 1
-          ? animatedDismissRange.value - event.contentOffset.y
-          : event.contentOffset.y
-      if (visiblePixels <= animatedAutoCloseThreshold.value) {
-        pendingAutoClose.value = false
-        runOnJS(scrollFullyOut)()
-      }
     },
   })
 
@@ -430,7 +398,6 @@ export function EdgeDrawer({
       dismissRangeRef.current = range
       animatedDismissRange.value = range
       animatedGradientFullStrengthRange.value = Math.max(1, height * DRAWER_INITIAL_OPEN_FRACTION)
-      animatedAutoCloseThreshold.value = Math.min(DRAWER_AUTO_CLOSE_VISIBLE_PX, range / 2)
 
       if (!positionedRef.current) {
         positionedRef.current = true
@@ -461,7 +428,6 @@ export function EdgeDrawer({
     },
     [
       animatedDismissRange,
-      animatedAutoCloseThreshold,
       animatedGradientFullStrengthRange,
       autoScrollOnContentExpand,
       height,
@@ -478,6 +444,13 @@ export function EdgeDrawer({
     },
     [dismissRange, opensFromTop],
   )
+
+  const scrollFullyOut = useCallback(() => {
+    scrollRef.current?.scrollTo({
+      y: opensFromTop ? dismissRange : 0,
+      animated: true,
+    })
+  }, [dismissRange, opensFromTop])
 
   const scrollToOpenEdge = useCallback(() => {
     scrollRef.current?.scrollTo({
@@ -509,14 +482,13 @@ export function EdgeDrawer({
         targetContentOffset?.y ?? contentOffset.y - (velocity?.y ?? 0) * DRAWER_FLING_PROJECTION_MS
 
       if (shouldAutoCloseAtOffset(projectedOffset)) {
-        pendingAutoClose.value = true
+        scrollFullyOut()
         return
       }
 
-      pendingAutoClose.value = false
       handleScrollEnd(event)
     },
-    [handleScrollEnd, pendingAutoClose, shouldAutoCloseAtOffset],
+    [handleScrollEnd, scrollFullyOut, shouldAutoCloseAtOffset],
   )
 
   if (!mounted) return null
