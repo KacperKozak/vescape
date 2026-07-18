@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-import type { HistoryMetricKey } from '@/lib/history/metricColorScale'
+import type { HistoryMetricKey } from '@/modules/history/lib/metricColorScale'
 import type { CenterViewState } from '@/screens/center/centerViewState'
 
 export type MapSelector = 'navigation' | 'style' | null

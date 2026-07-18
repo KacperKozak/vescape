@@ -1,8 +1,8 @@
 import { StyleSheet, View } from 'react-native'
-import { Text } from '@/components/ui/base/Text'
+import { Text } from '@/components/base/Text'
 import { CaretDownIcon, CaretUpIcon, type Icon } from 'phosphor-react-native'
 
-import { IconButton } from '@/components/ui/base/IconButton'
+import { IconButton } from '@/components/base/IconButton'
 import { widgetSurface, type WidgetSize } from '@/components/widgets/widgetSurface'
 import { theme } from '@/constants/theme'
 

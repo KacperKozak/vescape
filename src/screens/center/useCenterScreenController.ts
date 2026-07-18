@@ -12,15 +12,15 @@ import {
   getNextRideSession,
   getPreviousRideSession,
 } from '@/screens/center/centerState'
-import { useBleStore } from '@/store/bleStore'
-import { useHistoryStore, type HistorySession } from '@/store/historyStore'
-import { useMapStore } from '@/store/mapStore'
-import { useSettingsStore } from '@/store/settingsStore'
-import { useWeatherStore } from '@/store/weatherStore'
-import { useMediaHistory } from '@/hooks/useMediaHistory'
-import type { MediaAssetInput } from '@/lib/history/mediaHistory'
-import { deleteRideMediaAssets } from '@/store/rideMediaFiles'
-import { getHistoryPreviewRoute } from '@/lib/history/previewRoute'
+import { useBleStore } from '@/modules/board/store/bleStore'
+import { useHistoryStore, type HistorySession } from '@/modules/history/store/historyStore'
+import { useMapStore } from '@/modules/map/store/mapStore'
+import { useSettingsStore } from '@/modules/settings/store/settingsStore'
+import { useWeatherStore } from '@/modules/weather/store/weatherStore'
+import { useMediaHistory } from '@/modules/history/hooks/useMediaHistory'
+import type { MediaAssetInput } from '@/modules/history/lib/mediaHistory'
+import { deleteRideMediaAssets } from '@/modules/history/store/rideMediaFiles'
+import { getHistoryPreviewRoute } from '@/modules/history/lib/previewRoute'
 
 interface UseCenterScreenControllerArgs {
   mapRef: RefObject<CenterMapHandle | null>

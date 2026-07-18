@@ -1,11 +1,11 @@
 import { useEffect } from 'react'
 import { StyleSheet, View } from 'react-native'
 
-import { useBoardStore } from '@/store/boardStore'
-import { useBleStore } from '@/store/bleStore'
-import { usePermissions } from '@/hooks/usePermissions'
-import { useBleAppLifecycle } from '@/hooks/useBleAppLifecycle'
-import { useBoardConnection } from '@/hooks/useBoardConnection'
+import { useBoardStore } from '@/modules/board/store/boardStore'
+import { useBleStore } from '@/modules/board/store/bleStore'
+import { usePermissions } from '@/modules/settings/hooks/usePermissions'
+import { useBleAppLifecycle } from '@/modules/board/hooks/useBleAppLifecycle'
+import { useBoardConnection } from '@/modules/board/hooks/useBoardConnection'
 import { CenterScreen } from '@/screens/CenterScreen'
 import { theme } from '@/constants/theme'
 

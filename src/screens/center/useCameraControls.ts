@@ -2,19 +2,19 @@ import type { Camera as CameraRef } from '@rnmapbox/maps'
 import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
 import { Dimensions } from 'react-native'
 
-import { MAP_DEFAULTS } from '@/constants/mapStyles'
-import type { MapNavigationMode } from '@/constants/mapStyles'
+import { MAP_DEFAULTS } from '@/modules/map/constants/mapStyles'
+import type { MapNavigationMode } from '@/modules/map/constants/mapStyles'
 import { distanceMeters, zoomLevelForDelta } from '@/helpers/mapGeometry'
-import { LEGAL_LIMIT_MAP_CAMERA } from '@/lib/legal/legalLimits'
+import { LEGAL_LIMIT_MAP_CAMERA } from '@/modules/legal/lib/legalLimits'
 import {
   initialMapCameraControllerState,
   mapCameraModesEqual,
   reduceMapCameraIntent,
   type MapCameraMode,
-} from '@/lib/map/cameraController'
-import { getMapRevealPitch, getPitchForZoom } from '@/lib/map/cameraProfiles'
-import { getCameraAfterScreenDrag } from '@/screens/center/cameraPanProjection'
-import { getHistoryRouteCamera, type HistoryCameraViewport } from '@/screens/center/historyCamera'
+} from '@/modules/map/lib/cameraController'
+import { getMapRevealPitch, getPitchForZoom } from '@/modules/map/lib/cameraProfiles'
+import { getCameraAfterScreenDrag } from '@/modules/map/lib/cameraPanProjection'
+import { getHistoryRouteCamera, type HistoryCameraViewport } from '@/modules/map/lib/historyCamera'
 
 const MIN_ZOOM = 0
 const MAP_REVEAL_ZOOM_OUT_DELTA = 0.65

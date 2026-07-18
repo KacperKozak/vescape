@@ -10,12 +10,12 @@ import {
   WifiHighIcon,
 } from 'phosphor-react-native'
 
-import { SettingsCard } from '@/components/ui/settings/SettingsCard'
-import { SettingsRow } from '@/components/ui/settings/SettingsRow'
-import { SettingsSectionTitle } from '@/components/ui/settings/SettingsSectionTitle'
-import { Stepper } from '@/components/ui/forms/Stepper'
-import { ShowcaseCard } from '@/components/ui/dev/ShowcaseCard'
-import { IconHero } from '@/components/ui/settings/IconHero'
+import { SettingsCard } from '@/components/settings/SettingsCard'
+import { SettingsRow } from '@/components/settings/SettingsRow'
+import { SettingsSectionTitle } from '@/components/settings/SettingsSectionTitle'
+import { Stepper } from '@/components/forms/Stepper'
+import { ShowcaseCard } from '@/components/dev/ShowcaseCard'
+import { IconHero } from '@/components/settings/IconHero'
 import { theme } from '@/constants/theme'
 
 export default function SettingsPage() {

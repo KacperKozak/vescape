@@ -1,18 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
 import { ScrollView, StyleSheet, View } from 'react-native'
-import { Text } from '@/components/ui/base/Text'
+import { Text } from '@/components/base/Text'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { CompassIcon } from 'phosphor-react-native'
 import { useShallow } from 'zustand/react/shallow'
 
 import { theme } from '@/constants/theme'
-import { IconHero } from '@/components/ui/settings/IconHero'
+import { IconHero } from '@/components/settings/IconHero'
 import {
   buildNavigationDiagnosticsViewModel,
   type DiagnosticRow,
-} from '@/lib/map/navigationDiagnostics'
-import { useNavigationDiagnosticsStore } from '@/store/navigationDiagnosticsStore'
-import { useSettingsStore } from '@/store/settingsStore'
+} from '@/modules/map/lib/navigationDiagnostics'
+import { useNavigationDiagnosticsStore } from '@/modules/map/store/navigationDiagnosticsStore'
+import { useSettingsStore } from '@/modules/settings/store/settingsStore'
 
 export default function NavigationDiagnosticScreen() {
   const mapNavigationMode = useSettingsStore((s) => s.mapNavigationMode)

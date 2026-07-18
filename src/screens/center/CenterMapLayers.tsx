@@ -13,41 +13,48 @@ import {
 } from '@rnmapbox/maps'
 import { useEffect, useMemo, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
-import { Text } from '@/components/ui/base/Text'
+import { Text } from '@/components/base/Text'
 import type { MapPoint, MapPointKind } from 'vesc-ble'
 
-import { MediaHistoryPin } from '@/components/domain/history/MediaHistoryPin'
-import { MapPin } from '@/components/domain/map/MapPin'
-import { RainViewerOverlay } from '@/components/domain/map/RainViewerOverlay'
+import { MediaHistoryPin } from '@/modules/history/components/MediaHistoryPin'
+import { MapPin } from '@/modules/map/components/MapPin'
+import { RainViewerOverlay } from '@/modules/weather/components/RainViewerOverlay'
 import { MAPY_TILE_URL_TEMPLATE } from '@/config/mapy'
-import { MAP_DEFAULTS } from '@/constants/mapStyles'
-import { getMapPointKindIcon } from '@/constants/mapPointIcons'
+import { MAP_DEFAULTS } from '@/modules/map/constants/mapStyles'
+import { getMapPointKindIcon } from '@/modules/map/constants/mapPointIcons'
 import {
   getMapPointKindColor,
   getMapPointKindLabel,
   getMapPointKindTextColor,
-} from '@/constants/mapPoints'
+} from '@/modules/map/constants/mapPoints'
 import { theme } from '@/constants/theme'
 import { makeCircleFeature, makeTrailLineString } from '@/helpers/mapGeometry'
-import { findNearestSampleIndexByTime } from '@/lib/history/playback'
-import { resolveMarkerRenderData } from '@/lib/history/markerOverlap'
+import { findNearestSampleIndexByTime } from '@/modules/history/lib/playback'
+import { resolveMarkerRenderData } from '@/modules/history/lib/markerOverlap'
 import {
   clusterMediaHistoryAssets,
   MEDIA_CLUSTER_DISTANCE_M,
   type MediaHistoryAsset,
-} from '@/lib/history/mediaHistory'
-import type { HistoryMetricKey, HistoryMetricHotRanges } from '@/lib/history/metricColorScale'
-import { isMapPointKindVisible } from '@/lib/mapPointVisibility'
-import type { HistoryGpsSample, HistoryMarker, TelemetrySample } from '@/store/historyStore'
-import { useRiderStore } from '@/store/riderStore'
-import type { RosterRider } from '@/lib/groupRide/roster'
+} from '@/modules/history/lib/mediaHistory'
+import type {
+  HistoryMetricKey,
+  HistoryMetricHotRanges,
+} from '@/modules/history/lib/metricColorScale'
+import { isMapPointKindVisible } from '@/modules/map/lib/mapPointVisibility'
+import type {
+  HistoryGpsSample,
+  HistoryMarker,
+  TelemetrySample,
+} from '@/modules/history/store/historyStore'
+import { useRiderStore } from '@/modules/group-ride/store/riderStore'
+import type { RosterRider } from '@/modules/group-ride/lib/roster'
 import { useCenterScreenStore } from '@/screens/center/centerScreenStore'
 
 import {
   HISTORY_MARKER_COLORS,
   HISTORY_MARKER_ICONS,
   type SelectedHistoryMarker,
-} from './historyMapMarkerInfo'
+} from '@/modules/history/lib/historyMapMarkerInfo'
 import {
   DESTINATION_POINT_COLOR,
   DESTINATION_POINT_TEXT_COLOR,
@@ -58,14 +65,14 @@ import {
   getHistoryRouteHighlightDurationMs,
   getHistoryRouteHighlightGradient,
   getHistoryRouteMetricGradient,
-} from './historyRouteGradient'
+} from '@/modules/history/lib/historyRouteGradient'
 import {
   getLegalLimitCountryByCode,
   legalCountryFilterExpression,
   legalLimitLabelShape,
   legalStatusColorExpression,
   type LegalLimitCountry,
-} from '@/lib/legal/legalLimits'
+} from '@/modules/legal/lib/legalLimits'
 
 const GPS_HEADING_ICON_ID = 'center-gps-heading'
 const GPS_HEADING_ICON = require('@rnmapbox/maps/src/assets/heading.png')

@@ -1,13 +1,17 @@
 import { useMemo } from 'react'
 
-import { ControlDetailLayout } from '@/components/domain/control/ControlDetailLayout'
-import { MetricDetailChart } from '@/components/domain/control/MetricDetailChart'
-import { MetricDetailGauge } from '@/components/domain/control/MetricDetailGauge'
-import { toTelemetryChartPoints } from '@/components/domain/control/metricDetailData'
-import { telemetry } from '@/constants/telemetry'
-import { useLiveMetric, useLiveExcludedRanges, liveSelectors } from '@/hooks/useLiveMetric'
-import { useLiveWindowMs } from '@/store/settingsStore'
-import { liveTelemetryRuntime } from '@/lib/telemetry/liveTelemetryRuntime'
+import { ControlDetailLayout } from '@/modules/board/components/ControlDetailLayout'
+import { MetricDetailChart } from '@/modules/board/components/MetricDetailChart'
+import { MetricDetailGauge } from '@/modules/board/components/MetricDetailGauge'
+import { toTelemetryChartPoints } from '@/modules/board/components/metricDetailData'
+import { telemetry } from '@/modules/board/constants/telemetry'
+import {
+  useLiveMetric,
+  useLiveExcludedRanges,
+  liveSelectors,
+} from '@/modules/board/hooks/useLiveMetric'
+import { useLiveWindowMs } from '@/modules/settings/store/settingsStore'
+import { liveTelemetryRuntime } from '@/modules/board/lib/liveTelemetryRuntime'
 
 const cfg = telemetry.duty
 const RANGE = { y: cfg.chartRange }

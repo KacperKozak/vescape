@@ -1,4 +1,4 @@
-import type { HistorySession } from '@/store/historyStore'
+import type { HistorySession } from '@/modules/history/store/historyStore'
 
 export function getLatestSession(sessions: HistorySession[]): HistorySession | null {
   return sessions[0] ?? null

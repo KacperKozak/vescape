@@ -1,12 +1,12 @@
 import { useMemo } from 'react'
 
-import { computeAutoRange } from '@/components/ui/charts/chartMath'
-import { ControlDetailLayout } from '@/components/domain/control/ControlDetailLayout'
-import { MetricDetailChart } from '@/components/domain/control/MetricDetailChart'
-import { toTelemetryChartPoints } from '@/components/domain/control/metricDetailData'
-import { telemetry } from '@/constants/telemetry'
-import { useLiveMetric, liveSelectors } from '@/hooks/useLiveMetric'
-import { useLiveWindowMs } from '@/store/settingsStore'
+import { computeAutoRange } from '@/components/charts/chartMath'
+import { ControlDetailLayout } from '@/modules/board/components/ControlDetailLayout'
+import { MetricDetailChart } from '@/modules/board/components/MetricDetailChart'
+import { toTelemetryChartPoints } from '@/modules/board/components/metricDetailData'
+import { telemetry } from '@/modules/board/constants/telemetry'
+import { useLiveMetric, liveSelectors } from '@/modules/board/hooks/useLiveMetric'
+import { useLiveWindowMs } from '@/modules/settings/store/settingsStore'
 
 const adc1 = telemetry.footpadAdc1
 const adc2 = telemetry.footpadAdc2

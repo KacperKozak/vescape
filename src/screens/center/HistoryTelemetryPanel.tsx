@@ -1,7 +1,7 @@
 import { CaretDownIcon, ImagesSquareIcon, CloudArrowUpIcon } from 'phosphor-react-native'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
-import { Text } from '@/components/ui/base/Text'
+import { Text } from '@/components/base/Text'
 import { useSharedValue } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
@@ -9,35 +9,35 @@ import {
   OPTIONAL_CHART_METRICS,
   toggleOptionalChartMetric,
   type OptionalChartMetric,
-} from '@/components/domain/history/historyChartMetrics'
-import { MediaHistoryGallery } from '@/components/domain/history/MediaHistoryGallery'
-import { IconButton } from '@/components/ui/base/IconButton'
-import { EdgeDrawer } from '@/components/ui/overlays/AnchoredSheet'
+} from '@/modules/history/components/historyChartMetrics'
+import { MediaHistoryGallery } from '@/modules/history/components/MediaHistoryGallery'
+import { IconButton } from '@/components/base/IconButton'
+import { EdgeDrawer } from '@/components/overlays/AnchoredSheet'
 import {
   computeAutoRange,
   toExcludedRanges,
   type ExcludedRange,
   type TelemetryChartPoint,
-} from '@/components/ui/charts/chartMath'
+} from '@/components/charts/chartMath'
 import {
   TelemetryLineChart,
   type SecondaryChartSeries,
-} from '@/components/ui/charts/TelemetryLineChart'
-import { PrevNextSelector } from '@/components/ui/controls/PrevNextSelector'
-import { InfoModal } from '@/components/ui/modals/InfoModal'
-import { telemetry } from '@/constants/telemetry'
+} from '@/components/charts/TelemetryLineChart'
+import { PrevNextSelector } from '@/components/controls/PrevNextSelector'
+import { InfoModal } from '@/components/modals/InfoModal'
+import { telemetry } from '@/modules/board/constants/telemetry'
 import { interaction, theme } from '@/constants/theme'
 import { dutyPercent, fmtDutyPercent } from '@/helpers/format'
 import {
   getHistoryMetricColorRange,
   getMetricRampColor,
   type HistoryMetricKey,
-} from '@/lib/history/metricColorScale'
-import type { MediaAssetInput, MediaHistoryAsset } from '@/lib/history/mediaHistory'
-import { downsampleTimeSeries, findNearestSampleIndexByTime } from '@/lib/history/playback'
-import { RIDE_TRIM_PADDING_MS, rideMovingWindow } from '@/lib/history/sessions'
-import { useHistoryStore, type TelemetrySample } from '@/store/historyStore'
-import { useSettingsStore } from '@/store/settingsStore'
+} from '@/modules/history/lib/metricColorScale'
+import type { MediaAssetInput, MediaHistoryAsset } from '@/modules/history/lib/mediaHistory'
+import { downsampleTimeSeries, findNearestSampleIndexByTime } from '@/modules/history/lib/playback'
+import { RIDE_TRIM_PADDING_MS, rideMovingWindow } from '@/modules/history/lib/sessions'
+import { useHistoryStore, type TelemetrySample } from '@/modules/history/store/historyStore'
+import { useSettingsStore } from '@/modules/settings/store/settingsStore'
 
 interface HistoryTelemetryPanelProps {
   startAtMs: number

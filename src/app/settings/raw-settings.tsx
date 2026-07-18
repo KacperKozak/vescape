@@ -3,11 +3,11 @@ import { ScrollView, StyleSheet } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { BracketsCurlyIcon } from 'phosphor-react-native'
 
-import { IconHero } from '@/components/ui/settings/IconHero'
-import { RawSection } from '@/components/ui/settings/RawSection'
+import { IconHero } from '@/components/settings/IconHero'
+import { RawSection } from '@/components/settings/RawSection'
 import { theme } from '@/constants/theme'
-import { useBoardStore } from '@/store/boardStore'
-import { useSettingsStore } from '@/store/settingsStore'
+import { useBoardStore } from '@/modules/board/store/boardStore'
+import { useSettingsStore } from '@/modules/settings/store/settingsStore'
 
 // Store keys that are actions/flags, not persisted setting data.
 const APP_STORE_OMIT = new Set(['loaded', 'load', 'set', 'setCompanionPresence'])

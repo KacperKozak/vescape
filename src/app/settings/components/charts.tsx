@@ -4,24 +4,24 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Easing, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated'
 
 import { ChartLineUpIcon } from 'phosphor-react-native'
-import { LinearGauge } from '@/components/ui/charts/LinearGauge'
-import { IconHero } from '@/components/ui/settings/IconHero'
-import { TelemetryLineChart } from '@/components/ui/charts/TelemetryLineChart'
-import { computeAutoRange, type TelemetryChartPoint } from '@/components/ui/charts/chartMath'
-import { SingleGauge } from '@/components/ui/charts/DualGauge'
-import { Sparkline, type SparklinePoint } from '@/components/ui/charts/Sparkline'
-import { BmsCellVoltagesView } from '@/components/domain/control/BmsCellVoltages'
-import { summarizeBms, summarizeBmsWindow } from '@/lib/battery'
-import { ShowcaseCard } from '@/components/ui/dev/ShowcaseCard'
-import { ChipRow, ToggleRow } from '@/components/ui/dev/ShowcaseControls'
+import { LinearGauge } from '@/components/charts/LinearGauge'
+import { IconHero } from '@/components/settings/IconHero'
+import { TelemetryLineChart } from '@/components/charts/TelemetryLineChart'
+import { computeAutoRange, type TelemetryChartPoint } from '@/components/charts/chartMath'
+import { SingleGauge } from '@/components/charts/DualGauge'
+import { Sparkline, type SparklinePoint } from '@/components/charts/Sparkline'
+import { BmsCellVoltagesView } from '@/modules/battery/components/BmsCellVoltages'
+import { summarizeBms, summarizeBmsWindow } from '@/modules/battery/lib'
+import { ShowcaseCard } from '@/components/dev/ShowcaseCard'
+import { ChipRow, ToggleRow } from '@/components/dev/ShowcaseControls'
 import { theme } from '@/constants/theme'
-import { telemetry } from '@/constants/telemetry'
+import { telemetry } from '@/modules/board/constants/telemetry'
 import {
   getHistoryMetricHotRange,
   getHistoryMetricColorRange,
   getMetricRampColor,
   type HistoryMetricKey,
-} from '@/lib/history/metricColorScale'
+} from '@/modules/history/lib/metricColorScale'
 
 function seededRandom(seed: number) {
   let state = seed

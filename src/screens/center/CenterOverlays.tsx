@@ -35,7 +35,7 @@ import {
   TextInput,
   View,
 } from 'react-native'
-import { Text } from '@/components/ui/base/Text'
+import { Text } from '@/components/base/Text'
 import Animated, {
   cancelAnimation,
   FadeOut,
@@ -47,27 +47,27 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { HistoryMarker, MapPointKind } from 'vesc-ble'
 
-import { ConfirmModal } from '@/components/ui/modals/ConfirmModal'
-import { EdgeDrawer } from '@/components/ui/overlays/AnchoredSheet'
-import { MediaHistoryViewer } from '@/components/domain/history/MediaHistoryViewer'
-import { FloatingBar } from '@/components/domain/main/FloatingBar'
-import { HistorySessionSheet } from '@/components/domain/history/HistorySessionSheet'
-import { IconButton } from '@/components/ui/base/IconButton'
-import { MapNavigationSelector } from '@/components/ui/controls/MapNavigationSelector'
-import { MapStyleSwitch } from '@/components/ui/controls/MapStyleSwitch'
-import { PillSelector, PillSelectorItem } from '@/components/ui/controls/PillSelector'
-import { WeatherIcon } from '@/components/ui/weather/WeatherIcon'
-import type { MapNavigationMode, MapStyleKey } from '@/constants/mapStyles'
-import { getMapPointKindIcon } from '@/constants/mapPointIcons'
+import { ConfirmModal } from '@/components/modals/ConfirmModal'
+import { EdgeDrawer } from '@/components/overlays/AnchoredSheet'
+import { MediaHistoryViewer } from '@/modules/history/components/MediaHistoryViewer'
+import { FloatingBar } from '@/modules/board/components/FloatingBar'
+import { HistorySessionSheet } from '@/modules/history/components/HistorySessionSheet'
+import { IconButton } from '@/components/base/IconButton'
+import { MapNavigationSelector } from '@/components/controls/MapNavigationSelector'
+import { MapStyleSwitch } from '@/components/controls/MapStyleSwitch'
+import { PillSelector, PillSelectorItem } from '@/components/controls/PillSelector'
+import { WeatherIcon } from '@/modules/weather/components/WeatherIcon'
+import type { MapNavigationMode, MapStyleKey } from '@/modules/map/constants/mapStyles'
+import { getMapPointKindIcon } from '@/modules/map/constants/mapPointIcons'
 import {
   FILTERABLE_MAP_POINT_KIND_OPTIONS,
   getMapPointKindColor,
   getMapPointKindTextColor,
   MAP_POINT_KIND_OPTIONS,
-} from '@/constants/mapPoints'
+} from '@/modules/map/constants/mapPoints'
 import { theme } from '@/constants/theme'
-import { searchMapResults, type MapSearchResult } from '@/lib/map/search'
-import type { HistoryMetricKey } from '@/lib/history/metricColorScale'
+import { searchMapResults, type MapSearchResult } from '@/modules/map/lib/search'
+import type { HistoryMetricKey } from '@/modules/history/lib/metricColorScale'
 import { BottomTelemetryStrip, STRIP_CONTENT_HEIGHT } from '@/screens/center/BottomTelemetryStrip'
 import { type CenterMapHandle } from '@/screens/center/CenterMap'
 import {
@@ -77,34 +77,38 @@ import {
 import type { MapSelector } from '@/screens/center/centerScreenStore'
 import type { CenterViewState } from '@/screens/center/centerViewState'
 import { HistoryControls } from '@/screens/center/HistoryControls'
-import { HistoryEmptyState } from '@/screens/center/HistoryEmptyState'
-import { WeatherHourlyStrip } from '@/screens/center/WeatherHourlyStrip'
-import { WeatherPill } from '@/screens/center/WeatherPill'
-import { WeatherRadarTimeline } from '@/screens/center/WeatherRadarTimeline'
+import { HistoryEmptyState } from '@/modules/history/components/HistoryEmptyState'
+import { WeatherHourlyStrip } from '@/modules/weather/components/WeatherHourlyStrip'
+import { WeatherPill } from '@/modules/weather/components/WeatherPill'
+import { WeatherRadarTimeline } from '@/modules/weather/components/WeatherRadarTimeline'
 import { useMapWeather } from '@/screens/center/useMapWeather'
 import { HistoryStatsBar } from '@/screens/center/HistoryStatsBar'
 import { HistoryTelemetryPanel } from '@/screens/center/HistoryTelemetryPanel'
-import { LegalLimitCountrySheet } from '@/screens/center/LegalLimitCountrySheet'
+import { LegalLimitCountrySheet } from '@/modules/legal/components/LegalLimitCountrySheet'
 import { LiveHud } from '@/screens/center/LiveHud'
 import { MapRevealGesture } from '@/screens/center/MapRevealGesture'
 import { MapVignette } from '@/screens/center/MapVignette'
 import { TopBar } from '@/screens/center/TopBar'
 import { TuneDrawer } from '@/screens/center/TuneDrawer'
-import type { Board } from '@/store/boardStore'
-import type { HistorySession, TelemetryMinuteBucket, TelemetrySample } from '@/store/historyStore'
-import type { MediaAssetInput, MediaHistoryAsset } from '@/lib/history/mediaHistory'
-import { useWeatherStore } from '@/store/weatherStore'
-import { useRainViewerRadarStore } from '@/store/rainViewerRadarStore'
-import { isNightAtTime, weatherCodeToColor } from '@/lib/weather'
-import { normalizeLegalModeSettings } from '@/lib/legalMode'
+import type { Board } from '@/modules/board/store/boardStore'
+import type {
+  HistorySession,
+  TelemetryMinuteBucket,
+  TelemetrySample,
+} from '@/modules/history/store/historyStore'
+import type { MediaAssetInput, MediaHistoryAsset } from '@/modules/history/lib/mediaHistory'
+import { useWeatherStore } from '@/modules/weather/store/weatherStore'
+import { useRainViewerRadarStore } from '@/modules/weather/store/rainViewerRadarStore'
+import { isNightAtTime, weatherCodeToColor } from '@/modules/weather/lib/weather'
+import { normalizeLegalModeSettings } from '@/modules/legal/lib/legalMode'
 import {
   LEGAL_LIMIT_COUNTRIES,
   LEGAL_ROAD_STATUS_COLORS,
   LEGAL_ROAD_STATUS_LEGEND,
   LEGAL_ROAD_STATUS_LABELS,
   type LegalLimitCountry,
-} from '@/lib/legal/legalLimits'
-import { useSettingsStore } from '@/store/settingsStore'
+} from '@/modules/legal/lib/legalLimits'
+import { useSettingsStore } from '@/modules/settings/store/settingsStore'
 
 const LEGAL_LIST_PANEL_HEIGHT = 280
 const LEGAL_OVERLAY_GAP = 8

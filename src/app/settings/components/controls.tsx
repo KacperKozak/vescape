@@ -1,5 +1,5 @@
 import { ScrollView, StyleSheet, View } from 'react-native'
-import { Text } from '@/components/ui/base/Text'
+import { Text } from '@/components/base/Text'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useMemo, useState } from 'react'
 import {
@@ -23,25 +23,25 @@ import {
   TrashIcon,
 } from 'phosphor-react-native'
 
-import { IconHero } from '@/components/ui/settings/IconHero'
-import { CircleButton } from '@/components/ui/controls/CircleButton'
+import { IconHero } from '@/components/settings/IconHero'
+import { CircleButton } from '@/components/controls/CircleButton'
 import {
   FloatingActionPill,
   FloatingBarFrame,
   FloatingStatusPill,
   type FloatingStatusPillModel,
-} from '@/components/ui/controls/FloatingBar'
-import { PrevNextSelector } from '@/components/ui/controls/PrevNextSelector'
+} from '@/components/controls/FloatingBar'
+import { PrevNextSelector } from '@/components/controls/PrevNextSelector'
 import {
   PillSelectorItem,
   PillSelectorAdd,
   PillSelectorDot,
   PillSelectorMenuItem,
   PillSelector,
-} from '@/components/ui/controls/PillSelector'
-import { MapOptionSelector } from '@/components/ui/controls/MapOptionSelector'
-import { ShowcaseCard } from '@/components/ui/dev/ShowcaseCard'
-import { ChipRow } from '@/components/ui/dev/ShowcaseControls'
+} from '@/components/controls/PillSelector'
+import { MapOptionSelector } from '@/components/controls/MapOptionSelector'
+import { ShowcaseCard } from '@/components/dev/ShowcaseCard'
+import { ChipRow } from '@/components/dev/ShowcaseControls'
 import { theme } from '@/constants/theme'
 
 function ZonePillsShowcase() {

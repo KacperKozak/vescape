@@ -9,17 +9,17 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native'
-import { Text } from '@/components/ui/base/Text'
+import { Text } from '@/components/base/Text'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useNavigation } from 'expo-router'
 import { theme } from '@/constants/theme'
-import { Input } from '@/components/ui/forms/Input'
+import { Input } from '@/components/forms/Input'
 
-import { Button } from '@/components/ui/base/Button'
-import { ConfirmModal } from '@/components/ui/modals/ConfirmModal'
+import { Button } from '@/components/base/Button'
+import { ConfirmModal } from '@/components/modals/ConfirmModal'
 import { MAPBOX_ACCESS_TOKEN } from '@/config/mapy'
-import { MAP_DEFAULTS } from '@/constants/mapStyles'
-import { ONE_DARK_MAP_STYLE } from '@/constants/oneDarkMapStyle'
+import { MAP_DEFAULTS } from '@/modules/map/constants/mapStyles'
+import { ONE_DARK_MAP_STYLE } from '@/modules/map/constants/oneDarkMapStyle'
 import { BriefcaseIcon, HouseIcon, PencilSimpleIcon, TrashIcon } from 'phosphor-react-native'
 import type { Icon } from 'phosphor-react-native'
 import {
@@ -28,9 +28,13 @@ import {
   PillSelectorDot,
   PillSelectorMenuItem,
   PillSelector,
-} from '@/components/ui/controls/PillSelector'
-import { generateZoneId, usePrivacyZoneStore, type PrivacyZone } from '@/store/privacyZoneStore'
-import { liveTelemetryRuntime } from '@/lib/telemetry/liveTelemetryRuntime'
+} from '@/components/controls/PillSelector'
+import {
+  generateZoneId,
+  usePrivacyZoneStore,
+  type PrivacyZone,
+} from '@/modules/history/store/privacyZoneStore'
+import { liveTelemetryRuntime } from '@/modules/board/lib/liveTelemetryRuntime'
 
 Mapbox.setAccessToken(MAPBOX_ACCESS_TOKEN)
 

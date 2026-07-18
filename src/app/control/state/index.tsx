@@ -1,8 +1,8 @@
 import { StyleSheet, View } from 'react-native'
-import { Text } from '@/components/ui/base/Text'
+import { Text } from '@/components/base/Text'
 
-import { ControlDetailLayout } from '@/components/domain/control/ControlDetailLayout'
-import { useBleStore } from '@/store/bleStore'
+import { ControlDetailLayout } from '@/modules/board/components/ControlDetailLayout'
+import { useBleStore } from '@/modules/board/store/bleStore'
 import { theme } from '@/constants/theme'
 
 export default function StateScreen() {

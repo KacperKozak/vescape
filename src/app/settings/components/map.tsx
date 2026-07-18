@@ -2,20 +2,20 @@ import Mapbox, { Camera, MapView } from '@rnmapbox/maps'
 import { SlidersHorizontalIcon } from 'phosphor-react-native'
 import { useCallback, useRef, useState, type ElementRef } from 'react'
 import { StyleSheet, View } from 'react-native'
-import { Text } from '@/components/ui/base/Text'
+import { Text } from '@/components/base/Text'
 import type { MapPoint } from 'vesc-ble'
 
-import { IconButton } from '@/components/ui/base/IconButton'
-import { EdgeDrawer } from '@/components/ui/overlays/AnchoredSheet'
-import { useTriggerRef } from '@/components/ui/overlays/measureTrigger'
-import { ChipRow, ToggleRow, ValueRow } from '@/components/ui/dev/ShowcaseControls'
-import { MapStyleSwitch } from '@/components/ui/controls/MapStyleSwitch'
+import { IconButton } from '@/components/base/IconButton'
+import { EdgeDrawer } from '@/components/overlays/AnchoredSheet'
+import { useTriggerRef } from '@/components/overlays/measureTrigger'
+import { ChipRow, ToggleRow, ValueRow } from '@/components/dev/ShowcaseControls'
+import { MapStyleSwitch } from '@/components/controls/MapStyleSwitch'
 import { MAPBOX_ACCESS_TOKEN } from '@/config/mapy'
-import { BLANK_STYLE, MAP_STYLES, type MapStyleKey } from '@/constants/mapStyles'
-import { getSatelliteDarkMapStyle } from '@/constants/satelliteDarkMapStyle'
-import { ONE_DARK_MAP_STYLE } from '@/constants/oneDarkMapStyle'
+import { BLANK_STYLE, MAP_STYLES, type MapStyleKey } from '@/modules/map/constants/mapStyles'
+import { getSatelliteDarkMapStyle } from '@/modules/map/constants/satelliteDarkMapStyle'
+import { ONE_DARK_MAP_STYLE } from '@/modules/map/constants/oneDarkMapStyle'
 import { theme } from '@/constants/theme'
-import type { HistoryMetricKey } from '@/lib/history/metricColorScale'
+import type { HistoryMetricKey } from '@/modules/history/lib/metricColorScale'
 import {
   FIXTURE_ACCURACY_FIX,
   FIXTURE_ACCURACY_SHAPE,
@@ -33,7 +33,7 @@ import {
   FIXTURE_RIDE_ROUTE_SHAPE,
   FIXTURE_RIDE_TELEMETRY_SAMPLES,
   FIXTURE_RIDERS,
-} from '@/lib/map/mapShowcaseFixtures'
+} from '@/app/settings/components/mapShowcaseFixtures'
 import { CenterMapLayers, HistoryMapLayers } from '@/screens/center/CenterMapLayers'
 
 Mapbox.setAccessToken(MAPBOX_ACCESS_TOKEN)

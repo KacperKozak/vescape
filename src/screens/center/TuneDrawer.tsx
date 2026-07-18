@@ -6,7 +6,7 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated'
-import { Text } from '@/components/ui/base/Text'
+import { Text } from '@/components/base/Text'
 import {
   ArrowsDownUpIcon,
   BellRingingIcon,
@@ -21,30 +21,30 @@ import {
 } from 'phosphor-react-native'
 import { router } from 'expo-router'
 
-import { RemoteTiltControl } from '@/components/domain/control/RemoteTiltControl'
-import { Input } from '@/components/ui/forms/Input'
-import { InfoModal } from '@/components/ui/modals/InfoModal'
+import { RemoteTiltControl } from '@/modules/board/components/RemoteTiltControl'
+import { Input } from '@/components/forms/Input'
+import { InfoModal } from '@/components/modals/InfoModal'
 import {
   tuneProfileColorTheme,
   tuneProfileIconComponent,
-} from '@/components/domain/tune/TuneProfileMetadataModal'
+} from '@/modules/tune/components/TuneProfileMetadataModal'
 import { SelectWidget } from '@/components/widgets/SelectWidget'
 import { StepperWidget } from '@/components/widgets/StepperWidget'
 import { SwitchWidget } from '@/components/widgets/SwitchWidget'
 import { widgetSurface } from '@/components/widgets/widgetSurface'
-import { canRunFirmwareCommand } from '@/lib/boardLinkIntegrity'
+import { canRunFirmwareCommand } from '@/modules/board/lib/boardLinkIntegrity'
 import {
   applyJurisdictionDefaults,
   normalizeLegalModeSettings,
   resolveJurisdictionFromLocation,
-} from '@/lib/legalMode'
+} from '@/modules/legal/lib/legalMode'
 import { routes } from '@/navigation/routes'
 import { theme } from '@/constants/theme'
-import { useBleStore } from '@/store/bleStore'
-import { useBoardStore } from '@/store/boardStore'
-import { useLegalModeStore } from '@/store/legalModeStore'
-import { useSettingsStore } from '@/store/settingsStore'
-import { useTuneProfileStore } from '@/store/tuneProfileStore'
+import { useBleStore } from '@/modules/board/store/bleStore'
+import { useBoardStore } from '@/modules/board/store/boardStore'
+import { useLegalModeStore } from '@/modules/legal/store/legalModeStore'
+import { useSettingsStore } from '@/modules/settings/store/settingsStore'
+import { useTuneProfileStore } from '@/modules/tune/store/tuneProfileStore'
 
 interface TuneDrawerProps {
   onNavigate: () => void

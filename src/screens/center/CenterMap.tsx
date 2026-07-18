@@ -11,10 +11,10 @@ import {
   type ElementRef,
 } from 'react'
 import { Animated, StyleSheet, View, type LayoutChangeEvent } from 'react-native'
-import { Text } from '@/components/ui/base/Text'
+import { Text } from '@/components/base/Text'
 import type { LocationEvent, MapPoint, MapPointKind } from 'vesc-ble'
 
-import { InfoModal } from '@/components/ui/modals/InfoModal'
+import { InfoModal } from '@/components/modals/InfoModal'
 import { IS_MAPY_CONFIGURED, MAPBOX_ACCESS_TOKEN } from '@/config/mapy'
 import {
   BLANK_STYLE,
@@ -22,31 +22,35 @@ import {
   MAP_STYLES,
   type MapNavigationMode,
   type MapStyleKey,
-} from '@/constants/mapStyles'
+} from '@/modules/map/constants/mapStyles'
 import {
   getSatelliteDarkMapStyle,
   getSatelliteImageryPaint,
-} from '@/constants/satelliteDarkMapStyle'
-import { getMapPointKindIcon } from '@/constants/mapPointIcons'
-import { getMapPointKindColor, getMapPointKindTextColor } from '@/constants/mapPoints'
-import { getOneDarkMapStyle } from '@/constants/oneDarkMapStyle'
+} from '@/modules/map/constants/satelliteDarkMapStyle'
+import { getMapPointKindIcon } from '@/modules/map/constants/mapPointIcons'
+import { getMapPointKindColor, getMapPointKindTextColor } from '@/modules/map/constants/mapPoints'
+import { getOneDarkMapStyle } from '@/modules/map/constants/oneDarkMapStyle'
 import { theme } from '@/constants/theme'
 import {
   getLiveGpsPresentation,
   getReliableGpsBearingFromFixes,
 } from '@/helpers/liveGpsPresentation'
 import { distanceMeters, makeCircleFeature, makeTrailLineString } from '@/helpers/mapGeometry'
-import type { MediaHistoryAsset } from '@/lib/history/mediaHistory'
-import { isMapPointKindVisible } from '@/lib/mapPointVisibility'
-import type { HistoryMetricKey } from '@/lib/history/metricColorScale'
-import { getNavigationFallbackReason } from '@/lib/map/navigationDiagnostics'
-import { getGpsPuckBearing } from '@/lib/map/gpsPuckHeading'
-import type { LegalLimitCountry } from '@/lib/legal/legalLimits'
-import type { HistoryGpsSample, HistoryMarker, TelemetrySample } from '@/store/historyStore'
-import { useGroupRideStore } from '@/store/groupRideStore'
-import { useNavigationDiagnosticsStore } from '@/store/navigationDiagnosticsStore'
-import { useRiderStore } from '@/store/riderStore'
-import { useSettingsStore } from '@/store/settingsStore'
+import type { MediaHistoryAsset } from '@/modules/history/lib/mediaHistory'
+import { isMapPointKindVisible } from '@/modules/map/lib/mapPointVisibility'
+import type { HistoryMetricKey } from '@/modules/history/lib/metricColorScale'
+import { getNavigationFallbackReason } from '@/modules/map/lib/navigationDiagnostics'
+import { getGpsPuckBearing } from '@/modules/map/lib/gpsPuckHeading'
+import type { LegalLimitCountry } from '@/modules/legal/lib/legalLimits'
+import type {
+  HistoryGpsSample,
+  HistoryMarker,
+  TelemetrySample,
+} from '@/modules/history/store/historyStore'
+import { useGroupRideStore } from '@/modules/group-ride/store/groupRideStore'
+import { useNavigationDiagnosticsStore } from '@/modules/map/store/navigationDiagnosticsStore'
+import { useRiderStore } from '@/modules/group-ride/store/riderStore'
+import { useSettingsStore } from '@/modules/settings/store/settingsStore'
 import { useRenderRateWarning } from '@/hooks/useRenderRateWarning'
 
 import type { CenterViewState } from './centerViewState'
@@ -55,12 +59,15 @@ import {
   type HistoryPreviewTarget,
   useCameraControls,
 } from './useCameraControls'
-import { getLiveFollowCameraProfile, getPitchForZoom } from '@/lib/map/cameraProfiles'
-import { shouldPreserveLiveFollowGesture } from './cameraGestureState'
-import { phoneHeadingAnimationDuration, type PhoneHeadingStatus } from './phoneHeading'
-import { PhoneHeadingMapLayer } from './PhoneHeadingMapLayer'
+import { getLiveFollowCameraProfile, getPitchForZoom } from '@/modules/map/lib/cameraProfiles'
+import { shouldPreserveLiveFollowGesture } from '@/modules/map/lib/cameraGestureState'
+import {
+  phoneHeadingAnimationDuration,
+  type PhoneHeadingStatus,
+} from '@/modules/map/lib/phoneHeading'
+import { PhoneHeadingMapLayer } from '@/modules/map/components/PhoneHeadingMapLayer'
 import { CenterMapLayers, rosterRiderColor } from './CenterMapLayers'
-import { LegalLimitCountrySheet } from './LegalLimitCountrySheet'
+import { LegalLimitCountrySheet } from '@/modules/legal/components/LegalLimitCountrySheet'
 import {
   DESTINATION_POINT_COLOR,
   DESTINATION_POINT_TEXT_COLOR,
@@ -77,7 +84,7 @@ import {
   HISTORY_MARKER_LABELS,
   buildHistoryMarkerMessage,
   type SelectedHistoryMarker,
-} from './historyMapMarkerInfo'
+} from '@/modules/history/lib/historyMapMarkerInfo'
 
 Mapbox.setAccessToken(MAPBOX_ACCESS_TOKEN)
 

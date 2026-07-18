@@ -2,12 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { ActivityIndicator, View, StyleSheet } from 'react-native'
 import { useSharedValue } from 'react-native-reanimated'
 
-import { VescapeWordmark } from '@/components/ui/base/VescapeWordmark'
+import { VescapeWordmark } from '@/components/base/VescapeWordmark'
 import { CenterMap, type CenterMapHandle } from '@/screens/center/CenterMap'
 import type { OffscreenMapIndicatorState } from '@/screens/center/offscreenMapIndicators'
 import { CenterOverlays } from '@/screens/center/CenterOverlays'
 import { useCenterScreenController } from '@/screens/center/useCenterScreenController'
-import type { Board } from '@/store/boardStore'
+import type { Board } from '@/modules/board/store/boardStore'
 import { theme } from '@/constants/theme'
 
 interface CenterScreenProps {

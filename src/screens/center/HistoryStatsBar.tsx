@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
-import { Text } from '@/components/ui/base/Text'
+import { Text } from '@/components/base/Text'
 import {
   BatteryChargingIcon,
   BatteryMediumIcon,
@@ -18,8 +18,8 @@ import {
 import type { Icon } from 'phosphor-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
-import type { HistorySession } from '@/store/historyStore'
-import { rideDurationMs } from '@/lib/history/sessions'
+import type { HistorySession } from '@/modules/history/store/historyStore'
+import { rideDurationMs } from '@/modules/history/lib/sessions'
 import { interaction, theme } from '@/constants/theme'
 
 interface HistoryStatsBarProps {

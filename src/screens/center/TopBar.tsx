@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
-import { Text } from '@/components/ui/base/Text'
+import { Text } from '@/components/base/Text'
 import {
   BroadcastIcon,
   CaretDownIcon,
@@ -12,17 +12,17 @@ import {
 import { router } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
-import { BoardSelectorSheet } from '@/components/domain/board/BoardSelectorSheet'
-import { EdgeDrawer } from '@/components/ui/overlays/AnchoredSheet'
-import { IconButton } from '@/components/ui/base/IconButton'
-import { WeatherStat } from '@/components/ui/weather/WeatherStat'
-import { SocialSheet } from '@/screens/social/SocialSheet'
-import { BoardWarningControl } from '@/components/domain/warnings/BoardWarningControl'
-import { isNightAtTime } from '@/lib/weather'
+import { BoardSelectorSheet } from '@/modules/board/components/BoardSelectorSheet'
+import { EdgeDrawer } from '@/components/overlays/AnchoredSheet'
+import { IconButton } from '@/components/base/IconButton'
+import { WeatherStat } from '@/modules/weather/components/WeatherStat'
+import { SocialSheet } from '@/modules/group-ride/components/SocialSheet'
+import { BoardWarningControl } from '@/modules/board/components/BoardWarningControl'
+import { isNightAtTime } from '@/modules/weather/lib/weather'
 import { routes } from '@/navigation/routes'
-import type { Board } from '@/store/boardStore'
-import { useGroupRideStore } from '@/store/groupRideStore'
-import { useWeatherStore } from '@/store/weatherStore'
+import type { Board } from '@/modules/board/store/boardStore'
+import { useGroupRideStore } from '@/modules/group-ride/store/groupRideStore'
+import { useWeatherStore } from '@/modules/weather/store/weatherStore'
 import { theme } from '@/constants/theme'
 
 interface TopBarProps {

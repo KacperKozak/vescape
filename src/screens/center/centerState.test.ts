@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { HistorySession } from '@/store/historyStore'
+import type { HistorySession } from '@/modules/history/store/historyStore'
 
 import {
   findSessionIndex,

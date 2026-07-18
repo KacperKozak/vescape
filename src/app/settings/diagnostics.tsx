@@ -5,10 +5,10 @@ import { ListIcon, WarningIcon } from 'phosphor-react-native'
 
 import { routes } from '@/navigation/routes'
 import { theme } from '@/constants/theme'
-import { SettingsCard } from '@/components/ui/settings/SettingsCard'
-import { SettingsRow } from '@/components/ui/settings/SettingsRow'
-import { IconHero } from '@/components/ui/settings/IconHero'
-import { useSettingsStore } from '@/store/settingsStore'
+import { SettingsCard } from '@/components/settings/SettingsCard'
+import { SettingsRow } from '@/components/settings/SettingsRow'
+import { IconHero } from '@/components/settings/IconHero'
+import { useSettingsStore } from '@/modules/settings/store/settingsStore'
 
 export default function DiagnosticsSettingsScreen() {
   const boardWarningsEnabled = useSettingsStore((s) => s.boardWarningsEnabled)

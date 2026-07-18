@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 
-import { useWeatherStore } from '@/store/weatherStore'
+import { useWeatherStore } from '@/modules/weather/store/weatherStore'
 
 interface WeatherData {
   temperature: number

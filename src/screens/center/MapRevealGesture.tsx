@@ -4,7 +4,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { withSpring, withTiming, type SharedValue } from 'react-native-reanimated'
 
 import { theme } from '@/constants/theme'
-import { getBreakoutReleasePan, getResistedRevealPan } from '@/screens/center/mapRevealMotion'
+import { getBreakoutReleasePan, getResistedRevealPan } from '@/modules/map/lib/mapRevealMotion'
 
 interface MapRevealGestureProps {
   progress: SharedValue<number>

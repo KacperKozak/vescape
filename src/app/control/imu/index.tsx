@@ -1,23 +1,23 @@
 import { type ReactNode, useMemo } from 'react'
 import { StyleSheet, View, type ViewStyle } from 'react-native'
-import { Text } from '@/components/ui/base/Text'
+import { Text } from '@/components/base/Text'
 import Animated, {
   useAnimatedStyle,
   type AnimatedStyle,
   type SharedValue,
 } from 'react-native-reanimated'
 
-import { computeAutoRange } from '@/components/ui/charts/chartMath'
-import { ControlDetailLayout } from '@/components/domain/control/ControlDetailLayout'
-import { MetricDetailChart } from '@/components/domain/control/MetricDetailChart'
-import { RemoteTiltControl } from '@/components/domain/control/RemoteTiltControl'
-import { toTelemetryChartPoints } from '@/components/domain/control/metricDetailData'
-import { TickText } from '@/components/ui/base/TickText'
-import { telemetry } from '@/constants/telemetry'
-import { useLiveMetric, liveSelectors } from '@/hooks/useLiveMetric'
-import { useLiveWindowMs } from '@/store/settingsStore'
+import { computeAutoRange } from '@/components/charts/chartMath'
+import { ControlDetailLayout } from '@/modules/board/components/ControlDetailLayout'
+import { MetricDetailChart } from '@/modules/board/components/MetricDetailChart'
+import { RemoteTiltControl } from '@/modules/board/components/RemoteTiltControl'
+import { toTelemetryChartPoints } from '@/modules/board/components/metricDetailData'
+import { TickText } from '@/components/base/TickText'
+import { telemetry } from '@/modules/board/constants/telemetry'
+import { useLiveMetric, liveSelectors } from '@/modules/board/hooks/useLiveMetric'
+import { useLiveWindowMs } from '@/modules/settings/store/settingsStore'
 import { theme } from '@/constants/theme'
-import { liveTelemetryRuntime } from '@/lib/telemetry/liveTelemetryRuntime'
+import { liveTelemetryRuntime } from '@/modules/board/lib/liveTelemetryRuntime'
 
 const pitchCfg = telemetry.pitch
 const rollCfg = telemetry.roll
