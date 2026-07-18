@@ -16,6 +16,7 @@ import {
   type ViewStyle,
 } from 'react-native'
 import { Text } from '@/components/ui/base/Text'
+import { Canvas, LinearGradient, Rect, vec } from '@shopify/react-native-skia'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import Reanimated, {
   FadeIn,
@@ -49,7 +50,6 @@ const DRAWER_OPEN_TRANSLATE_Y = 42
 const DRAWER_OPEN_DURATION = 280
 const DRAWER_BOTTOM_CONTENT_PADDING = 32
 const DRAWER_INITIAL_OPEN_FRACTION = 0.75
-const DRAWER_GRADIENT_FADE_ALPHA_STEPS = [0.4, 0.3, 0.12, 0.1, 0.03, 0] as const
 const DRAWER_ENTER_FROM_TOP = new Keyframe({
   0: { opacity: 0, transform: [{ translateY: -DRAWER_OPEN_TRANSLATE_Y }] },
   100: { opacity: 1, transform: [{ translateY: 0 }] },
@@ -295,7 +295,7 @@ export function EdgeDrawer({
   children,
 }: EdgeDrawerProps) {
   const insets = useSafeAreaInsets()
-  const { height } = useWindowDimensions()
+  const { width, height } = useWindowDimensions()
   const [mounted, setMounted] = useState(false)
   const [opensFromTop, setOpensFromTop] = useState(true)
   const [dismissRange, setDismissRange] = useState(0)
@@ -529,8 +529,20 @@ export function EdgeDrawer({
       ? Math.min(DRAWER_INITIAL_OPEN_FRACTION, Math.max(0, dismissRange / height))
       : DRAWER_INITIAL_OPEN_FRACTION
   const vignetteColor = theme.palette.slate.surfaceDeep
-  const fullStrengthSize = Math.max(0, height * gradientFullStrengthPoint)
-  const fadeSize = Math.max(0, height - fullStrengthSize)
+  const gradientColors = opensFromTop
+    ? [
+        theme.alpha(vignetteColor, 1),
+        theme.alpha(vignetteColor, 1),
+        theme.alpha(vignetteColor, 0.6),
+      ]
+    : [
+        theme.alpha(vignetteColor, 0.6),
+        theme.alpha(vignetteColor, 1),
+        theme.alpha(vignetteColor, 1),
+      ]
+  const gradientPositions = opensFromTop
+    ? [0, gradientFullStrengthPoint, 1]
+    : [0, 1 - gradientFullStrengthPoint, 1]
   const emptyDismissArea = <Pressable style={{ height }} onPress={close} accessible={false} />
 
   return (
@@ -546,39 +558,16 @@ export function EdgeDrawer({
       <GestureHandlerRootView style={styles.modalGestureRoot}>
         <Reanimated.View entering={FadeIn.duration(DRAWER_OPEN_DURATION)} style={styles.drawer}>
           <Reanimated.View style={[StyleSheet.absoluteFill, backdropStyle]}>
-            <View
-              pointerEvents="none"
-              style={[
-                StyleSheet.absoluteFill,
-                { backgroundColor: theme.alpha(vignetteColor, 0.6) },
-              ]}
-            />
-            <View
-              pointerEvents="none"
-              style={[
-                styles.drawerVignetteStrong,
-                opensFromTop ? { top: 0 } : { bottom: 0 },
-                { height: fullStrengthSize, backgroundColor: theme.alpha(vignetteColor, 0.4) },
-              ]}
-            />
-            {DRAWER_GRADIENT_FADE_ALPHA_STEPS.map((stepAlpha, index) => {
-              const stepHeight = fadeSize / DRAWER_GRADIENT_FADE_ALPHA_STEPS.length
-              const stepOffset = fullStrengthSize + index * stepHeight
-              return (
-                <View
-                  key={index}
-                  pointerEvents="none"
-                  style={[
-                    styles.drawerVignetteStrong,
-                    opensFromTop ? { top: stepOffset } : { bottom: stepOffset },
-                    {
-                      height: stepHeight,
-                      backgroundColor: theme.alpha(vignetteColor, stepAlpha),
-                    },
-                  ]}
+            <Canvas style={StyleSheet.absoluteFill} pointerEvents="none">
+              <Rect x={0} y={0} width={width} height={height}>
+                <LinearGradient
+                  start={vec(0, 0)}
+                  end={vec(0, height)}
+                  colors={gradientColors}
+                  positions={gradientPositions}
                 />
-              )
-            })}
+              </Rect>
+            </Canvas>
             <Pressable style={StyleSheet.absoluteFill} onPress={close} />
           </Reanimated.View>
         </Reanimated.View>
@@ -700,11 +689,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     bottom: 0,
-    left: 0,
-    right: 0,
-  },
-  drawerVignetteStrong: {
-    position: 'absolute',
     left: 0,
     right: 0,
   },
