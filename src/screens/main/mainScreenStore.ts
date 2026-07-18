@@ -1,12 +1,12 @@
 import { create } from 'zustand'
 
 import type { HistoryMetricKey } from '@/modules/history/lib/metricColorScale'
-import type { CenterViewState } from '@/screens/center/centerViewState'
+import type { MainViewState } from '@/screens/main/mainViewState'
 
 export type MapSelector = 'navigation' | 'style' | null
 
-interface CenterScreenState {
-  mode: CenterViewState
+interface MainScreenState {
+  mode: MainViewState
   historySheetVisible: boolean
   mapSelector: MapSelector
   perspectiveEnabled: boolean
@@ -14,7 +14,7 @@ interface CenterScreenState {
   activeHistoryMapMetric: HistoryMetricKey
 }
 
-interface CenterScreenActions {
+interface MainScreenActions {
   reset: () => void
   enterTelemetry: () => void
   enterMap: () => void
@@ -29,7 +29,7 @@ interface CenterScreenActions {
   setActiveHistoryMapMetric: (metric: HistoryMetricKey) => void
 }
 
-const initialState: CenterScreenState = {
+const initialState: MainScreenState = {
   mode: 'telemetry',
   historySheetVisible: false,
   mapSelector: null,
@@ -38,7 +38,7 @@ const initialState: CenterScreenState = {
   activeHistoryMapMetric: 'speed',
 }
 
-export const useCenterScreenStore = create<CenterScreenState & CenterScreenActions>((set) => ({
+export const useMainScreenStore = create<MainScreenState & MainScreenActions>((set) => ({
   ...initialState,
 
   reset() {

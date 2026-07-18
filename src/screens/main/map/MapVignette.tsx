@@ -18,10 +18,10 @@ import {
   type SharedValue,
 } from 'react-native-reanimated'
 
-import type { CenterViewState } from '@/screens/center/centerViewState'
+import type { MainViewState } from '@/screens/main/mainViewState'
 
 interface MapVignetteProps {
-  mode: CenterViewState
+  mode: MainViewState
   panelHeight?: number
   /** Kept for call-site compatibility; Skia gradients have no global IDs. */
   idPrefix?: string
@@ -51,7 +51,7 @@ const MAP_EDGE_POSITIONS = [0, 0.55, 1]
 const HISTORY_TOP_POSITIONS = [0, 0.52, 1]
 const HISTORY_BOTTOM_POSITIONS = [0, 0.5, 0.6, 1]
 
-function mapEdgeVignetteSpace(mode: CenterViewState) {
+function mapEdgeVignetteSpace(mode: MainViewState) {
   if (mode === 'weather') {
     return {
       levels: [0.78, 0.36, 0],

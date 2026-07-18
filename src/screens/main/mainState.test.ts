@@ -6,7 +6,7 @@ import {
   getLatestSession,
   getNextRideSession,
   getPreviousRideSession,
-} from './centerState'
+} from '@/screens/main/mainState'
 
 const sessions = [session('newest', 3000), session('middle', 2000), session('oldest', 1000)]
 
@@ -45,7 +45,7 @@ function session(id: string, startAtMs: number): HistorySession {
   }
 }
 
-describe('centerState', () => {
+describe('mainState', () => {
   test('getLatestSession returns first session from store order', () => {
     expect(getLatestSession(sessions)?.id).toBe('newest')
     expect(getLatestSession([])).toBeNull()

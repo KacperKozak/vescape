@@ -17,7 +17,7 @@ Main files:
 - Native tables: `modules/vesc-ble/android/src/main/java/expo/modules/vescble/telemetry/TelemetryEntities.kt`
 - JS store: `src/store/historyStore.ts`
 - Session grouping: `src/history/sessions.ts`
-- Map rendering: `src/screens/center/CenterMap.tsx`
+- Map rendering: `src/screens/main/MainMap.tsx`
 
 ## Persisted Data
 
@@ -123,7 +123,7 @@ Previously observed Android history entry from `2026-05-06` before standalone hi
 
 User-visible symptom: apparent double trail and four yellow points.
 
-Cause: yellow points were marker pins, not duplicate GPS points. Quick stop/start or reconnect markers stayed in one selected session, and `CenterMap` painted non-error markers yellow. Standalone history GPS has since been removed from Ride History; routes now come from telemetry-associated GPS only.
+Cause: yellow points were marker pins, not duplicate GPS points. Quick stop/start or reconnect markers stayed in one selected session, and `MainMap` painted non-error markers yellow. Standalone history GPS has since been removed from Ride History; routes now come from telemetry-associated GPS only.
 
 ## Investigation Checklist
 

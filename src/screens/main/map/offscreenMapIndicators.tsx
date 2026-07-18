@@ -9,7 +9,7 @@ import Reanimated, {
 import { theme } from '@/constants/theme'
 import { isPointOutsideVisibleMapArea } from '@/helpers/mapGeometry'
 
-import type { CameraSnapshot } from './useCameraControls'
+import type { CameraSnapshot } from '@/screens/main/map/useCameraControls'
 
 export const GPS_POINT_COLOR = theme.map.user
 export const DESTINATION_POINT_COLOR = theme.map.target

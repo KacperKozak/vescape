@@ -3,14 +3,14 @@ import { ActivityIndicator, View, StyleSheet } from 'react-native'
 import { useSharedValue } from 'react-native-reanimated'
 
 import { VescapeWordmark } from '@/components/base/VescapeWordmark'
-import { CenterMap, type CenterMapHandle } from '@/screens/center/CenterMap'
-import type { OffscreenMapIndicatorState } from '@/screens/center/offscreenMapIndicators'
-import { CenterOverlays } from '@/screens/center/CenterOverlays'
-import { useCenterScreenController } from '@/screens/center/useCenterScreenController'
+import { MainMap, type MainMapHandle } from '@/screens/main/map/MainMap'
+import type { OffscreenMapIndicatorState } from '@/screens/main/map/offscreenMapIndicators'
+import { MainOverlays } from '@/screens/main/overlays/MainOverlays'
+import { useMainScreenController } from '@/screens/main/useMainScreenController'
 import type { Board } from '@/modules/board/store/boardStore'
 import { theme } from '@/constants/theme'
 
-interface CenterScreenProps {
+interface MainScreenProps {
   activeBoard: Board | undefined
   activeBoardId: string | null
   boards: Board[]
@@ -22,7 +22,7 @@ interface CenterScreenProps {
   onAddBoard: () => void
 }
 
-export function CenterScreen({
+export function MainScreen({
   activeBoard,
   activeBoardId,
   boards,
@@ -32,11 +32,11 @@ export function CenterScreen({
   onRetryConnect,
   onSelectBoard,
   onAddBoard,
-}: CenterScreenProps) {
-  const mapRef = useRef<CenterMapHandle>(null)
+}: MainScreenProps) {
+  const mapRef = useRef<MainMapHandle>(null)
   const cameraHeading = useSharedValue(0)
   const selectorHeading = useSharedValue(0)
-  const controller = useCenterScreenController({ mapRef })
+  const controller = useMainScreenController({ mapRef })
   const handleHeadingChange = useCallback(
     (heading: number) => {
       cameraHeading.set(heading)
@@ -113,7 +113,7 @@ export function CenterScreen({
 
   return (
     <View style={styles.container}>
-      <CenterMap
+      <MainMap
         ref={mapRef}
         mode={controller.mode}
         liveLocations={controller.liveLocations}
@@ -155,7 +155,7 @@ export function CenterScreen({
         weatherActive={controller.weatherActive}
         legalLimitsActive={controller.legalLimitsActive}
       />
-      <CenterOverlays
+      <MainOverlays
         mode={controller.mode}
         mapRef={mapRef}
         mapInteractionHandlerRef={mapInteractionHandlerRef}

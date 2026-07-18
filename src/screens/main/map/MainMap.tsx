@@ -53,12 +53,12 @@ import { useRiderStore } from '@/modules/group-ride/store/riderStore'
 import { useSettingsStore } from '@/modules/settings/store/settingsStore'
 import { useRenderRateWarning } from '@/hooks/useRenderRateWarning'
 
-import type { CenterViewState } from './centerViewState'
+import type { MainViewState } from '@/screens/main/mainViewState'
 import {
   type CameraSnapshot,
   type HistoryPreviewTarget,
   useCameraControls,
-} from './useCameraControls'
+} from '@/screens/main/map/useCameraControls'
 import { getLiveFollowCameraProfile, getPitchForZoom } from '@/modules/map/lib/cameraProfiles'
 import { shouldPreserveLiveFollowGesture } from '@/modules/map/lib/cameraGestureState'
 import {
@@ -67,7 +67,7 @@ import {
 } from '@/modules/map/lib/phoneHeading'
 import { PhoneHeadingMapLayer } from '@/modules/map/components/PhoneHeadingMapLayer'
 import { rosterRiderColor } from '@/modules/group-ride/lib/riderColor'
-import { CenterMapLayers } from './CenterMapLayers'
+import { MainMapLayers } from '@/screens/main/map/MainMapLayers'
 import { LegalLimitCountrySheet } from '@/modules/legal/components/LegalLimitCountrySheet'
 import {
   DESTINATION_POINT_COLOR,
@@ -80,7 +80,7 @@ import {
   repositionOffscreenMapIndicators,
   type OffscreenMapIndicatorDraft,
   type OffscreenMapIndicatorState,
-} from './offscreenMapIndicators'
+} from '@/screens/main/map/offscreenMapIndicators'
 import {
   HISTORY_MARKER_LABELS,
   buildHistoryMarkerMessage,
@@ -89,7 +89,7 @@ import {
 
 Mapbox.setAccessToken(MAPBOX_ACCESS_TOKEN)
 
-export interface CenterMapHandle {
+export interface MainMapHandle {
   recenterLive: (options?: { resetPadding?: boolean; animationDuration?: number }) => void
   previewHistorySession: (preview: HistoryPreviewTarget) => void
   beginPreviewPan: () => void
@@ -134,8 +134,8 @@ function usableCoordinate(location: { longitude: number; latitude: number } | nu
   }
 }
 
-interface CenterMapProps {
-  mode: CenterViewState
+interface MainMapProps {
+  mode: MainViewState
   liveLocations: LocationEvent[]
   latestApproximateLocation: LocationEvent | null
   rideGpsSamples: HistoryGpsSample[]
@@ -180,8 +180,8 @@ interface CenterMapProps {
     | null
 }
 
-export const CenterMap = memo(
-  forwardRef<CenterMapHandle, CenterMapProps>(function CenterMap(
+export const MainMap = memo(
+  forwardRef<MainMapHandle, MainMapProps>(function MainMap(
     {
       mode,
       liveLocations,
@@ -385,7 +385,7 @@ export const CenterMap = memo(
       [onPhoneHeadingChange],
     )
     const headingFollowMode = gpsHeadingMode || phoneHeadingMode
-    useRenderRateWarning('CenterMap')
+    useRenderRateWarning('MainMap')
     const targetFollowHeadingDeg = gpsHeadingMode
       ? (directionBearingDeg ?? 0)
       : phoneHeadingMode
@@ -475,7 +475,7 @@ export const CenterMap = memo(
     // Own Rider is drawn by the GPS puck, so keep it out of the roster map pins.
     const mapRiders = useMemo(() => riderFocusRows.filter((row) => !row.isSelf), [riderFocusRows])
     // Peers' shared targets, pre-shaped as offscreen-indicator tracked points. Index-aligned
-    // with the `riders` prop of CenterMapLayers so pin and edge indicator share one tint.
+    // with the `riders` prop of MainMapLayers so pin and edge indicator share one tint.
     const riderTargetPoints = useMemo(
       () =>
         mapRiders.flatMap((rider, index) => {
@@ -1149,7 +1149,7 @@ export const CenterMap = memo(
             onHeadingChange={handlePhoneHeadingChange}
             onStatusChange={setPhoneHeadingStatus}
           />
-          <CenterMapLayers
+          <MainMapLayers
             historyActive={historyActive}
             expandSelectedMapPoints={mode === 'map'}
             isMapy={isMapy}

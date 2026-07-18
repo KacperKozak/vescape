@@ -5,13 +5,13 @@ import { useShallow } from 'zustand/react/shallow'
 
 import { exitApp } from 'vesc-ble'
 
-import type { CenterMapHandle } from '@/screens/center/CenterMap'
-import { useCenterScreenStore } from '@/screens/center/centerScreenStore'
+import type { MainMapHandle } from '@/screens/main/map/MainMap'
+import { useMainScreenStore } from '@/screens/main/mainScreenStore'
 import {
   getLatestSession,
   getNextRideSession,
   getPreviousRideSession,
-} from '@/screens/center/centerState'
+} from '@/screens/main/mainState'
 import { useBleStore } from '@/modules/board/store/bleStore'
 import { useHistoryStore, type HistorySession } from '@/modules/history/store/historyStore'
 import { useMapStore } from '@/modules/map/store/mapStore'
@@ -22,14 +22,14 @@ import type { MediaAssetInput } from '@/modules/history/lib/mediaHistory'
 import { deleteRideMediaAssets } from '@/modules/history/store/rideMediaFiles'
 import { getHistoryPreviewRoute } from '@/modules/history/lib/previewRoute'
 
-interface UseCenterScreenControllerArgs {
-  mapRef: RefObject<CenterMapHandle | null>
+interface UseMainScreenControllerArgs {
+  mapRef: RefObject<MainMapHandle | null>
 }
 
 const TARGET_INITIAL_HISTORY_SESSIONS = 12
 const MAX_HISTORY_PREFETCH_PAGES = 8
 
-export function useCenterScreenController({ mapRef }: UseCenterScreenControllerArgs) {
+export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs) {
   const backPressedOnce = useRef(false)
   const [openMediaAssetId, setOpenMediaAssetId] = useState<string | null>(null)
   const {
@@ -49,7 +49,7 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
     setPerspectiveEnabled,
     setSeekTimeMs,
     setActiveHistoryMapMetric,
-  } = useCenterScreenStore(
+  } = useMainScreenStore(
     useShallow((s) => ({
       mode: s.mode,
       historySheetVisible: s.historySheetVisible,
@@ -253,7 +253,7 @@ export function useCenterScreenController({ mapRef }: UseCenterScreenControllerA
     enterHistory()
     await loadInitial()
     await loadOlderHistoryPages()
-    if (useCenterScreenStore.getState().mode !== 'history') return
+    if (useMainScreenStore.getState().mode !== 'history') return
     const latest = getLatestSession(useHistoryStore.getState().sessions)
     if (latest) {
       await selectSession(latest)

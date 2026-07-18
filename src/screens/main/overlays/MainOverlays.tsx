@@ -70,28 +70,31 @@ import { type MapSearchResult } from '@/modules/map/lib/search'
 import { useMapSearch } from '@/modules/map/hooks/useMapSearch'
 import { isCompactMapPointKind } from '@/modules/map/lib/mapPointVisibility'
 import type { HistoryMetricKey } from '@/modules/history/lib/metricColorScale'
-import { BottomTelemetryStrip, STRIP_CONTENT_HEIGHT } from '@/screens/center/BottomTelemetryStrip'
-import { type CenterMapHandle } from '@/screens/center/CenterMap'
+import {
+  BottomTelemetryStrip,
+  STRIP_CONTENT_HEIGHT,
+} from '@/screens/main/overlays/BottomTelemetryStrip'
+import { type MainMapHandle } from '@/screens/main/map/MainMap'
 import {
   OffscreenMapIndicator,
   type OffscreenMapIndicatorState,
-} from '@/screens/center/offscreenMapIndicators'
-import type { MapSelector } from '@/screens/center/centerScreenStore'
-import type { CenterViewState } from '@/screens/center/centerViewState'
-import { HistoryControls } from '@/screens/center/HistoryControls'
+} from '@/screens/main/map/offscreenMapIndicators'
+import type { MapSelector } from '@/screens/main/mainScreenStore'
+import type { MainViewState } from '@/screens/main/mainViewState'
+import { HistoryControls } from '@/screens/main/history/HistoryControls'
 import { HistoryEmptyState } from '@/modules/history/components/HistoryEmptyState'
 import { WeatherHourlyStrip } from '@/modules/weather/components/WeatherHourlyStrip'
 import { WeatherPill } from '@/modules/weather/components/WeatherPill'
 import { WeatherRadarTimeline } from '@/modules/weather/components/WeatherRadarTimeline'
-import { useMapWeather } from '@/screens/center/useMapWeather'
-import { HistoryStatsBar } from '@/screens/center/HistoryStatsBar'
-import { HistoryTelemetryPanel } from '@/screens/center/HistoryTelemetryPanel'
+import { useMapWeather } from '@/screens/main/map/useMapWeather'
+import { HistoryStatsBar } from '@/screens/main/history/HistoryStatsBar'
+import { HistoryTelemetryPanel } from '@/screens/main/history/HistoryTelemetryPanel'
 import { LegalLimitCountrySheet } from '@/modules/legal/components/LegalLimitCountrySheet'
-import { LiveHud } from '@/screens/center/LiveHud'
-import { MapRevealGesture } from '@/screens/center/MapRevealGesture'
-import { MapVignette } from '@/screens/center/MapVignette'
-import { TopBar } from '@/screens/center/TopBar'
-import { TuneDrawer } from '@/screens/center/TuneDrawer'
+import { LiveHud } from '@/screens/main/overlays/LiveHud'
+import { MapRevealGesture } from '@/screens/main/map/MapRevealGesture'
+import { MapVignette } from '@/screens/main/map/MapVignette'
+import { TopBar } from '@/screens/main/overlays/TopBar'
+import { TuneDrawer } from '@/screens/main/overlays/TuneDrawer'
 import type { Board } from '@/modules/board/store/boardStore'
 import type {
   HistorySession,
@@ -117,7 +120,7 @@ const LEGAL_OVERLAY_GAP = 8
 const LEGAL_LEGEND_HEIGHT = 12
 const LEGAL_LIST_TOGGLE_HEIGHT = 42
 
-interface CenterBoardOverlayProps {
+interface MainBoardOverlayProps {
   boards: Board[]
   activeBoardId: string | null
   activeBoard: Board | undefined
@@ -128,7 +131,7 @@ interface CenterBoardOverlayProps {
   onAddBoard: () => void
 }
 
-interface CenterMapOverlayProps {
+interface MainMapOverlayProps {
   heading: SharedValue<number>
   mapStyleKey: MapStyleKey
   setMapStyleKey: (key: MapStyleKey) => void
@@ -152,7 +155,7 @@ interface CenterMapOverlayProps {
   onOffscreenIndicatorPress: (indicator: OffscreenMapIndicatorState) => void
 }
 
-interface CenterHistoryOverlayProps {
+interface MainHistoryOverlayProps {
   enterHistoryMode: () => void
   selectedSession: HistorySession | null
   sessionSamples: TelemetrySample[]
@@ -189,36 +192,36 @@ interface CenterHistoryOverlayProps {
   closeMedia: () => void
 }
 
-interface CenterOverlaysProps {
-  mode: CenterViewState
-  mapRef: RefObject<CenterMapHandle | null>
+interface MainOverlaysProps {
+  mode: MainViewState
+  mapRef: RefObject<MainMapHandle | null>
   mapInteractionHandlerRef: RefObject<() => void>
-  board: CenterBoardOverlayProps
-  map: CenterMapOverlayProps
-  history: CenterHistoryOverlayProps
+  board: MainBoardOverlayProps
+  map: MainMapOverlayProps
+  history: MainHistoryOverlayProps
 }
 
 const RECORD_BUTTON_HEIGHT = 48
 const HISTORY_BUTTON_SIZE = 54
 const TELEMETRY_FADE_TIMING = { duration: 260 } as const
 interface FullMapControlsProps {
-  mapRef: RefObject<CenterMapHandle | null>
-  map: CenterMapOverlayProps
+  mapRef: RefObject<MainMapHandle | null>
+  map: MainMapOverlayProps
   mapInteractionHandlerRef: RefObject<() => void>
   top: number
   bottom: number
 }
 
 interface MapControlsProps {
-  mode: CenterViewState
-  mapRef: RefObject<CenterMapHandle | null>
-  map: CenterMapOverlayProps
+  mode: MainViewState
+  mapRef: RefObject<MainMapHandle | null>
+  map: MainMapOverlayProps
 }
 
 interface MapModeTabsProps {
-  mode: CenterViewState
+  mode: MainViewState
   top: number
-  map: CenterMapOverlayProps
+  map: MainMapOverlayProps
   onResetLegalSelection: () => void
 }
 
@@ -696,14 +699,14 @@ function CenterPlacementPointer() {
   )
 }
 
-export function CenterOverlays({
+export function MainOverlays({
   mode,
   mapRef,
   mapInteractionHandlerRef,
   board,
   map,
   history,
-}: CenterOverlaysProps) {
+}: MainOverlaysProps) {
   const insets = useSafeAreaInsets()
   const aboveStripBottom = STRIP_CONTENT_HEIGHT + Math.max(insets.bottom * 0.5, 8) + 8
   const historyPanelBottom = Math.max(insets.bottom, 16) + 8

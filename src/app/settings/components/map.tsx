@@ -34,7 +34,7 @@ import {
   FIXTURE_RIDE_TELEMETRY_SAMPLES,
   FIXTURE_RIDERS,
 } from '@/app/settings/components/mapShowcaseFixtures'
-import { CenterMapLayers, HistoryMapLayers } from '@/screens/center/CenterMapLayers'
+import { MainMapLayers, HistoryMapLayers } from '@/screens/main/map/MainMapLayers'
 
 Mapbox.setAccessToken(MAPBOX_ACCESS_TOKEN)
 
@@ -107,7 +107,7 @@ export default function MapComponentsShowcase() {
           animationMode="none"
         />
         {/* historyActive=false renders buildings/raster/weather + live pins/GPS puck/riders */}
-        <CenterMapLayers
+        <MainMapLayers
           historyActive={false}
           expandSelectedMapPoints
           isMapy={isMapy}

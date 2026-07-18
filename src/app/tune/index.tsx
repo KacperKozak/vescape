@@ -240,14 +240,14 @@ export default function TuneScreen() {
       ) : null}
 
       {profileState.phase === 'loading' && !hasTuneView && selectedBoardId ? (
-        <View style={styles.centerState}>
+        <View style={styles.mainState}>
           <ActivityIndicator color={theme.palette.sky.color} />
           <Text style={styles.stateText}>Loading saved tune profile...</Text>
         </View>
       ) : null}
 
       {profileState.phase === 'empty' ? (
-        <View style={styles.centerState}>
+        <View style={styles.mainState}>
           <Placeholder
             icon={FadersIcon}
             title="Create tune based on board config"
@@ -267,7 +267,7 @@ export default function TuneScreen() {
       ) : null}
 
       {profileState.phase === 'error' && !hasTuneView ? (
-        <View style={styles.centerState}>
+        <View style={styles.mainState}>
           <WarningCircleIcon size={28} color={theme.status.error.text} />
           <Text style={styles.errorText}>{profileState.error}</Text>
           <Button
@@ -722,7 +722,7 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 16,
   },
-  centerState: {
+  mainState: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',

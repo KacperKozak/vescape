@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 
-import { useCenterScreenStore } from './centerScreenStore'
+import { useMainScreenStore } from '@/screens/main/mainScreenStore'
 
 beforeEach(() => {
-  useCenterScreenStore.getState().reset()
+  useMainScreenStore.getState().reset()
 })
 
-describe('centerScreenStore', () => {
+describe('mainScreenStore', () => {
   test('starts in live telemetry mode with collapsed map selectors', () => {
-    const state = useCenterScreenStore.getState()
+    const state = useMainScreenStore.getState()
 
     expect(state.mode).toBe('telemetry')
     expect(state.historySheetVisible).toBe(false)
@@ -18,23 +18,23 @@ describe('centerScreenStore', () => {
   })
 
   test('keeps only one compact map selector open', () => {
-    const store = useCenterScreenStore.getState()
+    const store = useMainScreenStore.getState()
 
     store.enterMap()
     store.setMapSelector('navigation')
-    expect(useCenterScreenStore.getState().mapSelector).toBe('navigation')
+    expect(useMainScreenStore.getState().mapSelector).toBe('navigation')
 
     store.setMapSelector('style')
-    expect(useCenterScreenStore.getState().mapSelector).toBe('style')
+    expect(useMainScreenStore.getState().mapSelector).toBe('style')
 
     store.enterTelemetry()
-    expect(useCenterScreenStore.getState().mapSelector).toBe(null)
+    expect(useMainScreenStore.getState().mapSelector).toBe(null)
   })
 
   test('clears map selectors on map interaction and when leaving map mode', () => {
-    const store = useCenterScreenStore.getState()
+    const store = useMainScreenStore.getState()
     let changes = 0
-    const unsubscribe = useCenterScreenStore.subscribe(() => {
+    const unsubscribe = useMainScreenStore.subscribe(() => {
       changes += 1
     })
 
@@ -45,39 +45,39 @@ describe('centerScreenStore', () => {
     store.enterMap()
     store.setMapSelector('style')
     store.dismissMapSelector()
-    expect(useCenterScreenStore.getState().mapSelector).toBe(null)
+    expect(useMainScreenStore.getState().mapSelector).toBe(null)
 
     store.setMapSelector('navigation')
     store.enterWeather()
-    expect(useCenterScreenStore.getState().mapSelector).toBe(null)
+    expect(useMainScreenStore.getState().mapSelector).toBe(null)
 
     store.enterMap()
     store.setMapSelector('style')
     store.enterHistory()
-    expect(useCenterScreenStore.getState().mapSelector).toBe(null)
+    expect(useMainScreenStore.getState().mapSelector).toBe(null)
   })
 
   test('transitions between center screen modes', () => {
-    const store = useCenterScreenStore.getState()
+    const store = useMainScreenStore.getState()
 
     store.enterMap()
-    expect(useCenterScreenStore.getState().mode).toBe('map')
+    expect(useMainScreenStore.getState().mode).toBe('map')
 
     store.enterHistory()
-    expect(useCenterScreenStore.getState().mode).toBe('history')
+    expect(useMainScreenStore.getState().mode).toBe('history')
 
     store.enterTelemetry()
-    expect(useCenterScreenStore.getState().mode).toBe('telemetry')
+    expect(useMainScreenStore.getState().mode).toBe('telemetry')
   })
 
   test('clears ride review UI state when returning to telemetry', () => {
-    const store = useCenterScreenStore.getState()
+    const store = useMainScreenStore.getState()
 
     store.setHistorySheetVisible(true)
     store.setSeekTimeMs(1234)
     store.enterTelemetry()
 
-    const state = useCenterScreenStore.getState()
+    const state = useMainScreenStore.getState()
     expect(state.mode).toBe('telemetry')
     expect(state.historySheetVisible).toBe(false)
     expect(state.seekTimeMs).toBe(null)

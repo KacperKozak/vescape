@@ -15,11 +15,11 @@ cameraRef.current?.setCameraDirect({ pitch })
 cameraRef.current?.setCameraDirect({ heading })
 ```
 
-It is used by `src/screens/center/CenterMap.tsx` to continuously derive pitch from zoom while the
+It is used by `src/screens/main/MainMap.tsx` to continuously derive pitch from zoom while the
 map camera is moving, including native deceleration after the user releases a pinch gesture. The
 pitch calculation remains pure in `src/lib/map/cameraProfiles.ts` (`getPitchForZoom`).
 
-It is also used by `src/screens/center/PhoneHeadingMapLayer.tsx` to apply the fused phone heading
+It is also used by `src/screens/main/PhoneHeadingMapLayer.tsx` to apply the fused phone heading
 without starting and repeatedly cancelling Mapbox camera transitions for every sensor sample.
 
 ### Why normal `setCamera` is not used
@@ -59,7 +59,7 @@ Do not edit `node_modules` directly and leave it uncommitted. Update the durable
 When changing the dependency version:
 
 1. Check whether upstream now provides a non-transitioning camera-property API.
-2. If it does, migrate `CenterMap` to that API and remove this patch.
+2. If it does, migrate `MainMap` to that API and remove this patch.
 3. Otherwise recreate the patch against the new version with `bun patch @rnmapbox/maps`.
 4. Reapply the direct setter to source, compiled output, declarations, TurboModule spec, Android, and
    iOS.

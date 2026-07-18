@@ -44,7 +44,7 @@ import type {
 } from '@/modules/history/store/historyStore'
 import { useRiderStore } from '@/modules/group-ride/store/riderStore'
 import type { RosterRider } from '@/modules/group-ride/lib/roster'
-import { useCenterScreenStore } from '@/screens/center/centerScreenStore'
+import { useMainScreenStore } from '@/screens/main/mainScreenStore'
 
 import {
   HISTORY_MARKER_COLORS,
@@ -55,7 +55,7 @@ import {
   DESTINATION_POINT_COLOR,
   DESTINATION_POINT_TEXT_COLOR,
   GPS_POINT_COLOR,
-} from './offscreenMapIndicators'
+} from '@/screens/main/map/offscreenMapIndicators'
 import {
   getHistoryMetricBaseColor,
   getHistoryRouteHighlightDurationMs,
@@ -71,7 +71,7 @@ const GPS_HEADING_ICON_ID = 'center-gps-heading'
 const GPS_HEADING_ICON = require('@rnmapbox/maps/src/assets/heading.png')
 const HISTORY_ROUTE_HIGHLIGHT_INTERVAL_MS = 50
 const HISTORY_ROUTE_HIGHLIGHT_DELAY_MS = 500
-interface CenterMapLayersProps {
+interface MainMapLayersProps {
   historyActive: boolean
   expandSelectedMapPoints: boolean
   isMapy: boolean
@@ -120,11 +120,11 @@ function LiveMapLayers({
   riders,
   highContrastRoutes,
 }: {
-  liveTrailShape: CenterMapLayersProps['liveTrailShape']
-  accuracyFix: CenterMapLayersProps['accuracyFix']
-  accuracyShape: CenterMapLayersProps['accuracyShape']
-  gpsPuckBearingDeg: CenterMapLayersProps['gpsPuckBearingDeg']
-  riders: CenterMapLayersProps['riders']
+  liveTrailShape: MainMapLayersProps['liveTrailShape']
+  accuracyFix: MainMapLayersProps['accuracyFix']
+  accuracyShape: MainMapLayersProps['accuracyShape']
+  gpsPuckBearingDeg: MainMapLayersProps['gpsPuckBearingDeg']
+  riders: MainMapLayersProps['riders']
   highContrastRoutes: boolean
 }) {
   const riderColor = useRiderStore((state) => state.riderColor)
@@ -268,7 +268,7 @@ function LiveMapLayers({
 // Subscribes to the scrub head directly so dragging the telemetry chart only re-renders this pin,
 // not the whole map/overlay tree. rideGpsSamples is a stable prop (changes only on session switch).
 function SeekPositionPin({ rideGpsSamples }: { rideGpsSamples: HistoryGpsSample[] }) {
-  const seekTimeMs = useCenterScreenStore((s) => s.seekTimeMs)
+  const seekTimeMs = useMainScreenStore((s) => s.seekTimeMs)
   const seekPosition = useMemo(() => {
     if (seekTimeMs == null || rideGpsSamples.length === 0) return null
     const idx = findNearestSampleIndexByTime(rideGpsSamples, seekTimeMs)
@@ -301,19 +301,19 @@ export function HistoryMapLayers({
   onOpenMedia,
   highContrastRoutes,
 }: {
-  rideRouteShape: CenterMapLayersProps['rideRouteShape']
-  rideRoute: CenterMapLayersProps['rideRoute']
-  rideTelemetrySamples: CenterMapLayersProps['rideTelemetrySamples']
-  activeHistoryMapMetric: CenterMapLayersProps['activeHistoryMapMetric']
-  rideMarkers: CenterMapLayersProps['rideMarkers']
-  rideGpsSamples: CenterMapLayersProps['rideGpsSamples']
-  mediaAssets: CenterMapLayersProps['mediaAssets']
-  mapZoom: CenterMapLayersProps['mapZoom']
-  historyMetricGradientsEnabled: CenterMapLayersProps['historyMetricGradientsEnabled']
-  historyMetricHotRanges: CenterMapLayersProps['historyMetricHotRanges']
-  onSuppressNextMapPress: CenterMapLayersProps['onSuppressNextMapPress']
-  onSelectMarker: CenterMapLayersProps['onSelectMarker']
-  onOpenMedia: CenterMapLayersProps['onOpenMedia']
+  rideRouteShape: MainMapLayersProps['rideRouteShape']
+  rideRoute: MainMapLayersProps['rideRoute']
+  rideTelemetrySamples: MainMapLayersProps['rideTelemetrySamples']
+  activeHistoryMapMetric: MainMapLayersProps['activeHistoryMapMetric']
+  rideMarkers: MainMapLayersProps['rideMarkers']
+  rideGpsSamples: MainMapLayersProps['rideGpsSamples']
+  mediaAssets: MainMapLayersProps['mediaAssets']
+  mapZoom: MainMapLayersProps['mapZoom']
+  historyMetricGradientsEnabled: MainMapLayersProps['historyMetricGradientsEnabled']
+  historyMetricHotRanges: MainMapLayersProps['historyMetricHotRanges']
+  onSuppressNextMapPress: MainMapLayersProps['onSuppressNextMapPress']
+  onSelectMarker: MainMapLayersProps['onSelectMarker']
+  onOpenMedia: MainMapLayersProps['onOpenMedia']
   highContrastRoutes: boolean
 }) {
   const [highlightProgress, setHighlightProgress] = useState(0)
@@ -444,7 +444,7 @@ export function HistoryMapLayers({
   )
 }
 
-export function CenterMapLayers({
+export function MainMapLayers({
   historyActive,
   expandSelectedMapPoints,
   isMapy,
@@ -479,7 +479,7 @@ export function CenterMapLayers({
   onSelectMarker,
   onOpenMedia,
   onSelectLegalCountry,
-}: CenterMapLayersProps) {
+}: MainMapLayersProps) {
   const riderColor = useRiderStore((state) => state.riderColor)
   const directionColor = riderColor ?? DESTINATION_POINT_COLOR
   const directionTextColor = riderColor ?? DESTINATION_POINT_TEXT_COLOR
