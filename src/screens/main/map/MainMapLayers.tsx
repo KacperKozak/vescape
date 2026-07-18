@@ -114,6 +114,7 @@ interface MainMapLayersProps {
   onSelectMarker: (selection: SelectedHistoryMarker) => void
   onOpenMedia: (asset: MediaHistoryAsset) => void
   onSelectLegalCountry: (country: LegalLimitCountry) => void
+  onFocusDirectionPoint: () => void
 }
 
 function LiveMapLayers({
@@ -516,6 +517,7 @@ export function MainMapLayers({
   onSelectMarker,
   onOpenMedia,
   onSelectLegalCountry,
+  onFocusDirectionPoint,
 }: MainMapLayersProps) {
   const riderColor = useRiderStore((state) => state.riderColor)
   const directionColor = riderColor ?? DESTINATION_POINT_COLOR
@@ -532,6 +534,9 @@ export function MainMapLayers({
     activeNavigationTarget?.type === 'mapPoint' ? activeNavigationTarget.point.id : null
   const showDirectionPoint =
     directionPoint != null && activeNavigationTarget?.type !== 'mapPoint' && !historyActive
+  const directionPointIconKind = activeNavigationTarget
+    ? 'direction'
+    : (directionPoint?.kind ?? 'direction')
   const mapObjectsInteractive = !weatherActive && !legalLimitsActive && !historyActive
 
   return (
@@ -562,9 +567,7 @@ export function MainMapLayers({
         </RasterSource>
       ) : null}
       <RainViewerOverlay visible={weatherActive} />
-      {legalLimitsActive ? (
-        <LegalLimitsMapLayer interactive={false} onSelectCountry={onSelectLegalCountry} />
-      ) : null}
+      {legalLimitsActive ? <LegalLimitsMapLayer onSelectCountry={onSelectLegalCountry} /> : null}
       {historyActive ? (
         <HistoryMapLayers
           rideRouteShape={rideRouteShape}
@@ -595,15 +598,16 @@ export function MainMapLayers({
       {showDirectionPoint && (
         <MapPin
           // Color in the key: PointAnnotation snapshots its children natively, so a
-          // rider-color change must remount the pin to re-render.
-          key={`center-direction-position-${directionColor}`}
+          // rider-color or icon change must remount the pin to re-render.
+          key={`center-direction-position-${directionColor}-${directionPointIconKind}`}
           id="center-direction-position"
           coordinate={[directionPoint.longitude, directionPoint.latitude]}
           color={directionColor}
-          icon={getMapPointKindIcon(directionPoint.kind)}
+          icon={getMapPointKindIcon(directionPointIconKind)}
           iconColor={directionTextColor}
           selected
           navigationActive
+          onSelected={onFocusDirectionPoint}
         />
       )}
       {selectedNavigationTarget &&

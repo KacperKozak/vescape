@@ -965,6 +965,7 @@ function MapTargetSheet({
   onSaveMapPoint,
   onDelete,
   onDismiss,
+  onFocusTarget,
 }: {
   target: MapSelection
   bottom: number
@@ -988,6 +989,7 @@ function MapTargetSheet({
   ) => Promise<MapPoint | null>
   onDelete?: () => void
   onDismiss?: () => void
+  onFocusTarget?: () => void
 }) {
   const isMapPoint = target.type === 'mapPoint'
   const point = isMapPoint ? target.point : null
@@ -1079,32 +1081,51 @@ function MapTargetSheet({
     setMedia((current) => current.filter((candidate) => candidate.uri !== asset.uri))
     deleteMapPointMediaAsset(asset.uri)
   }, [])
+  const headerTargetContent = (
+    <>
+      <View style={[styles.mapTargetIcon, { borderColor: color }]}>{icon}</View>
+      <View style={styles.mapTargetTitleBlock}>
+        {isMapPoint && mode === 'edit' ? (
+          <TextInput
+            value={name}
+            onChangeText={setName}
+            placeholder={getMapPointKindLabel(point?.kind ?? 'drop')}
+            placeholderTextColor={theme.palette.slate.textMuted}
+            style={[styles.mapTargetInput, styles.mapTargetNameInput]}
+            accessibilityLabel="Map feature name"
+          />
+        ) : (
+          <Text style={styles.mapTargetTitle} numberOfLines={1}>
+            {headerTitle}
+          </Text>
+        )}
+        {detailText ? (
+          <Text style={styles.mapTargetSubtitle} numberOfLines={2}>
+            {detailText}
+          </Text>
+        ) : null}
+      </View>
+    </>
+  )
 
   return (
     <View style={[styles.mapTargetSheet, { bottom: sheetBottom }]}>
       <View style={styles.mapTargetHeader}>
-        <View style={[styles.mapTargetIcon, { borderColor: color }]}>{icon}</View>
-        <View style={styles.mapTargetTitleBlock}>
-          {isMapPoint && mode === 'edit' ? (
-            <TextInput
-              value={name}
-              onChangeText={setName}
-              placeholder={getMapPointKindLabel(point?.kind ?? 'drop')}
-              placeholderTextColor={theme.palette.slate.textMuted}
-              style={[styles.mapTargetInput, styles.mapTargetNameInput]}
-              accessibilityLabel="Map feature name"
-            />
-          ) : (
-            <Text style={styles.mapTargetTitle} numberOfLines={1}>
-              {headerTitle}
-            </Text>
-          )}
-          {detailText ? (
-            <Text style={styles.mapTargetSubtitle} numberOfLines={2}>
-              {detailText}
-            </Text>
-          ) : null}
-        </View>
+        {onFocusTarget ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Center map on target"
+            onPress={onFocusTarget}
+            style={({ pressed }) => [
+              styles.mapTargetFocusArea,
+              pressed && styles.mapTargetFocusAreaPressed,
+            ]}
+          >
+            {headerTargetContent}
+          </Pressable>
+        ) : (
+          <View style={styles.mapTargetFocusArea}>{headerTargetContent}</View>
+        )}
         {onDismiss ? (
           <Pressable
             accessibilityRole="button"
@@ -1281,6 +1302,12 @@ export function MainOverlays({
   const navigationActionTextColor = riderColor ?? theme.palette.green.text
   const targetSheetVisible =
     map.selectedNavigationTarget != null || (activeNavigationTarget != null && !targetAddMenuOpen)
+  const focusTargetOnMap = useCallback(
+    (target: MapSelection) => {
+      mapRef.current?.centerCoordinatePreservingCamera([target.longitude, target.latitude])
+    },
+    [mapRef],
+  )
   const interfaceFadeStyle = useAnimatedStyle(() => ({
     opacity: (1 - dragOpacity.value) * telemetryReturnOpacity.value,
   }))
@@ -1573,6 +1600,9 @@ export function MainOverlays({
             }
             onSave={() => setEditingMapPointId(null)}
             onSaveMapPoint={map.updateMapPoint}
+            onFocusTarget={() => {
+              if (map.selectedNavigationTarget) focusTargetOnMap(map.selectedNavigationTarget)
+            }}
             onDelete={
               map.selectedNavigationTarget.type === 'mapPoint'
                 ? () => {
@@ -1609,6 +1639,7 @@ export function MainOverlays({
               Icon: XIcon,
               onPress: map.onCancelNavigation,
             }}
+            onFocusTarget={() => focusTargetOnMap(activeNavigationTarget)}
           />
         ) : null}
       </View>
@@ -2212,6 +2243,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  mapTargetFocusArea: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 18,
+  },
+  mapTargetFocusAreaPressed: {
+    opacity: 0.65,
   },
   mapTargetIcon: {
     width: 38,

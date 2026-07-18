@@ -144,6 +144,7 @@ export default function MapComponentsShowcase() {
           onSelectMarker={() => {}}
           onOpenMedia={() => {}}
           onSelectLegalCountry={() => {}}
+          onFocusDirectionPoint={() => {}}
         />
         {/* Rendered alongside the live layer (not behind historyActive) so the ride route,
             markers and media pins are always visible together with everything above. */}

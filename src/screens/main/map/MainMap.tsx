@@ -779,6 +779,21 @@ export const MainMap = memo(
       ],
     )
 
+    const handleFocusDirectionPoint = useCallback(() => {
+      if (!directionPoint) return
+      onMapInteraction()
+      setFollowGps(false)
+      const currentCamera = currentCameraRef.current
+      cameraRef.current?.setCamera({
+        centerCoordinate: [directionPoint.longitude, directionPoint.latitude],
+        zoomLevel: currentCamera?.zoomLevel,
+        heading: currentCamera?.heading,
+        pitch: currentCamera?.pitch,
+        animationDuration: MAP_DEFAULTS.animationDuration,
+        animationMode: 'easeTo',
+      })
+    }, [cameraRef, currentCameraRef, directionPoint, onMapInteraction, setFollowGps])
+
     useEffect(() => {
       updateNavigationDiagnostics({
         gpsFix,
@@ -1321,6 +1336,7 @@ export const MainMap = memo(
             onSelectLegalCountry={(country) => {
               if (legalLimitsActive) setSelectedLegalCountry(country)
             }}
+            onFocusDirectionPoint={handleFocusDirectionPoint}
           />
         </Mapbox.MapView>
         <InfoModal
