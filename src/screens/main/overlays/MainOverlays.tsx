@@ -212,7 +212,7 @@ interface MainHistoryOverlayProps {
 interface MainOverlaysProps {
   mode: MainViewState
   mapRef: RefObject<MainMapHandle | null>
-  mapInteractionHandlerRef: RefObject<() => void>
+  mapInteractionHandlerRef: RefObject<(selection?: MapSelection) => boolean | void>
   board: MainBoardOverlayProps
   map: MainMapOverlayProps
   history: MainHistoryOverlayProps
@@ -236,11 +236,14 @@ function navigationActionColors(riderColor: string | null) {
 interface FullMapControlsProps {
   mapRef: RefObject<MainMapHandle | null>
   map: MainMapOverlayProps
-  mapInteractionHandlerRef: RefObject<() => void>
+  mapInteractionHandlerRef: RefObject<(selection?: MapSelection) => boolean | void>
   top: number
   bottom: number
   sheetBottom: number
+  bottomControlsVisible: boolean
   openAddMenuKey: number
+  onOpenAddMenuHandled: () => void
+  onAddMenuVisibilityChange: (visible: boolean) => void
   onBeginEditMapPoint: (id: string) => void
 }
 
@@ -292,7 +295,10 @@ function FullMapControls({
   top,
   bottom,
   sheetBottom,
+  bottomControlsVisible,
   openAddMenuKey,
+  onOpenAddMenuHandled,
+  onAddMenuVisibilityChange,
   onBeginEditMapPoint,
 }: FullMapControlsProps) {
   const riderColor = useRiderStore((s) => s.riderColor)
@@ -301,7 +307,8 @@ function FullMapControls({
   const [placementPulseKey, setPlacementPulseKey] = useState(0)
   const [filterMenuOpen, setFilterMenuOpen] = useState(false)
   const placementTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const handledOpenAddMenuKeyRef = useRef(openAddMenuKey)
+  const handledOpenAddMenuKeyRef = useRef(0)
+  const addMenuZoomedRef = useRef(false)
   const {
     searchQuery,
     setSearchQuery,
@@ -324,17 +331,26 @@ function FullMapControls({
   const closeAddMenu = useCallback(
     (restoreZoom = true) => {
       clearPlacementTimeoutRef(placementTimeoutRef)
-      if (addMenuOpen && restoreZoom) mapRef.current?.zoomBy(-0.45)
+      if (addMenuOpen && restoreZoom && addMenuZoomedRef.current) {
+        mapRef.current?.zoomBy(-0.45)
+      }
+      addMenuZoomedRef.current = false
       setAddMenuOpen(false)
+      onAddMenuVisibilityChange(false)
     },
-    [addMenuOpen, mapRef],
+    [addMenuOpen, mapRef, onAddMenuVisibilityChange],
   )
 
   useEffect(() => {
-    const dismissTransientControls = () => {
-      if (!searchOpen && !filterMenuOpen) return
+    const dismissTransientControls = (selection?: MapSelection) => {
+      if (addMenuOpen && selection) {
+        mapRef.current?.centerCoordinatePreservingCamera([selection.longitude, selection.latitude])
+        return true
+      }
+      if (!searchOpen && !filterMenuOpen) return false
       closeSearch()
       setFilterMenuOpen(false)
+      return false
     }
     mapInteractionHandlerRef.current = dismissTransientControls
     return () => {
@@ -342,7 +358,7 @@ function FullMapControls({
         mapInteractionHandlerRef.current = () => {}
       }
     }
-  }, [closeSearch, filterMenuOpen, mapInteractionHandlerRef, searchOpen])
+  }, [addMenuOpen, closeSearch, filterMenuOpen, mapInteractionHandlerRef, mapRef, searchOpen])
 
   useEffect(
     () => () => {
@@ -384,24 +400,33 @@ function FullMapControls({
       return
     }
     mapRef.current?.zoomBy(0.45)
+    addMenuZoomedRef.current = true
+    onAddMenuVisibilityChange(true)
     setAddMenuOpen(true)
-  }, [addMenuOpen, closeAddMenu, mapRef])
+  }, [addMenuOpen, closeAddMenu, mapRef, onAddMenuVisibilityChange])
 
   useEffect(() => {
     if (openAddMenuKey === 0 || handledOpenAddMenuKeyRef.current === openAddMenuKey) return
     handledOpenAddMenuKeyRef.current = openAddMenuKey
     setFilterMenuOpen(false)
     closeSearch()
+    onAddMenuVisibilityChange(true)
     setAddMenuOpen((open) => {
-      if (!open) mapRef.current?.zoomBy(0.45)
+      if (!open) addMenuZoomedRef.current = false
       return true
     })
-  }, [closeSearch, mapRef, openAddMenuKey])
+    onOpenAddMenuHandled()
+  }, [closeSearch, onAddMenuVisibilityChange, onOpenAddMenuHandled, openAddMenuKey])
 
   const toggleFilterMenu = useCallback(() => {
     closeAddMenu()
     setFilterMenuOpen((open) => !open)
   }, [closeAddMenu])
+
+  const handleExitMapFocus = useCallback(() => {
+    closeAddMenu()
+    map.exitMapFocus()
+  }, [closeAddMenu, map])
 
   const handleSelectMapPoint = useCallback(
     async (kind: MapPointKind) => {
@@ -464,7 +489,7 @@ function FullMapControls({
       <IconButton
         icon={ArrowLeftIcon}
         size="sm"
-        onPress={map.exitMapFocus}
+        onPress={handleExitMapFocus}
         style={[styles.mapTopBackButton, { top }]}
       />
       {searchOpen ? (
@@ -553,7 +578,7 @@ function FullMapControls({
           style={[styles.mapSearchButton, { top }]}
         />
       )}
-      {!addMenuOpen ? (
+      {bottomControlsVisible && !addMenuOpen ? (
         <View style={[styles.mapFilterAction, { bottom }]}>
           {filterMenuOpen ? (
             <View style={[styles.mapFilterMenu, styles.mapFilterMenuAttached]}>
@@ -598,7 +623,7 @@ function FullMapControls({
           />
         </View>
       ) : null}
-      {addMenuOpen ? (
+      {bottomControlsVisible && addMenuOpen ? (
         <View style={[styles.mapAddSheet, { bottom: sheetBottom }]}>
           <View style={styles.mapAddSheetHeader}>
             <View style={[styles.mapTargetIcon, { borderColor: theme.palette.cyan.color }]}>
@@ -713,13 +738,13 @@ function FullMapControls({
             </View>
           </View>
         </View>
-      ) : (
+      ) : bottomControlsVisible ? (
         <View style={[styles.mapAddAction, { bottom }]}>
           <Animated.View>
             <IconButton icon={PlusIcon} size="lg" onPress={toggleAddMenu} />
           </Animated.View>
         </View>
-      )}
+      ) : null}
     </>
   )
 }
@@ -1084,6 +1109,7 @@ export function MainOverlays({
   const [legalListOpen, setLegalListOpen] = useState(false)
   const [editingMapPointId, setEditingMapPointId] = useState<string | null>(null)
   const [openAddMenuKey, setOpenAddMenuKey] = useState(0)
+  const [targetAddMenuOpen, setTargetAddMenuOpen] = useState(false)
   const [selectedLegalCountry, setSelectedLegalCountry] = useState<LegalLimitCountry | null>(null)
   const tuneButtonRef = useRef<View>(null)
   const revealProgress = useSharedValue(0)
@@ -1117,7 +1143,8 @@ export function MainOverlays({
       : null)
   const navigationActionColor = riderColor ?? theme.palette.green.color
   const navigationActionTextColor = riderColor ?? theme.palette.green.text
-  const targetSheetVisible = map.selectedNavigationTarget != null || activeNavigationTarget != null
+  const targetSheetVisible =
+    map.selectedNavigationTarget != null || (activeNavigationTarget != null && !targetAddMenuOpen)
   const interfaceFadeStyle = useAnimatedStyle(() => ({
     opacity: (1 - dragOpacity.value) * telemetryReturnOpacity.value,
   }))
@@ -1147,11 +1174,21 @@ export function MainOverlays({
     return () => cancelAnimationFrame(frame)
   }, [map.selectedNavigationTarget])
 
+  useEffect(() => {
+    if (mode === 'map') return
+    const frame = requestAnimationFrame(() => {
+      setOpenAddMenuKey(0)
+      setTargetAddMenuOpen(false)
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [mode])
+
   const handleOpenAddFeatureAtSelectedTarget = useCallback(() => {
     const target = map.selectedNavigationTarget
     if (!target || target.type === 'mapPoint') return
-    mapRef.current?.focusCoordinate([target.longitude, target.latitude])
+    mapRef.current?.centerCoordinatePreservingCamera([target.longitude, target.latitude])
     setEditingMapPointId(null)
+    setTargetAddMenuOpen(true)
     map.onDismissSelectedTarget()
     setOpenAddMenuKey((key) => key + 1)
   }, [map, mapRef])
@@ -1344,7 +1381,7 @@ export function MainOverlays({
         pointerEvents={mode === 'map' ? 'box-none' : 'none'}
         style={[styles.mapInterface, mode === 'map' ? styles.visible : styles.hidden]}
       >
-        {mode === 'map' && !targetSheetVisible ? (
+        {mode === 'map' ? (
           <FullMapControls
             mapRef={mapRef}
             map={map}
@@ -1352,7 +1389,10 @@ export function MainOverlays({
             top={mapModeTabsTop}
             bottom={aboveStripBottom - 112}
             sheetBottom={mapTargetBottom}
+            bottomControlsVisible={!targetSheetVisible}
             openAddMenuKey={openAddMenuKey}
+            onOpenAddMenuHandled={() => setOpenAddMenuKey(0)}
+            onAddMenuVisibilityChange={setTargetAddMenuOpen}
             onBeginEditMapPoint={setEditingMapPointId}
           />
         ) : null}
@@ -1408,11 +1448,15 @@ export function MainOverlays({
             }
             onDismiss={() => {
               setEditingMapPointId(null)
+              setTargetAddMenuOpen(false)
               map.onDismissSelectedTarget()
             }}
           />
         ) : null}
-        {mode === 'map' && !map.selectedNavigationTarget && activeNavigationTarget ? (
+        {mode === 'map' &&
+        !targetAddMenuOpen &&
+        !map.selectedNavigationTarget &&
+        activeNavigationTarget ? (
           <MapTargetSheet
             key={activeNavigationTarget.id}
             target={activeNavigationTarget}

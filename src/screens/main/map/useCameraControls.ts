@@ -659,6 +659,23 @@ export function useCameraControls({
           animationMode: 'easeTo',
         })
       },
+      centerCoordinatePreservingCamera(coordinate: [number, number]) {
+        setFollowGps(false)
+        const current = currentCameraRef.current
+        const camera = {
+          centerCoordinate: coordinate,
+          zoomLevel: current?.zoomLevel ?? gpsCamera.zoomLevel,
+          heading: current?.heading ?? getFollowHeadingDeg(),
+          pitch: current?.pitch ?? getPitchForZoom(gpsCamera.zoomLevel, perspectiveEnabled),
+          padding: { paddingBottom: 0, paddingTop: 0, paddingLeft: 0, paddingRight: 0 },
+        }
+        currentCameraRef.current = camera
+        cameraRef.current?.setCamera({
+          ...camera,
+          animationDuration: MAP_DEFAULTS.animationDuration,
+          animationMode: 'easeTo',
+        })
+      },
       focusWeather() {
         const effect = dispatchCameraIntent({
           type: 'EnterWeatherView',

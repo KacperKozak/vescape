@@ -70,7 +70,7 @@ export function MainScreen({
   )
   const [activeNavigationTarget, setActiveNavigationTarget] = useState<MapSelection | null>(null)
   const dismissMapSelector = controller.dismissMapSelector
-  const mapInteractionHandlerRef = useRef<() => void>(() => {})
+  const mapInteractionHandlerRef = useRef<(selection?: MapSelection) => boolean | void>(() => {})
   const handleMapInteraction = useCallback(() => {
     dismissMapSelector()
     mapInteractionHandlerRef.current()
@@ -98,6 +98,9 @@ export function MainScreen({
     },
     [clearSelectedMapPoints],
   )
+  const handleRawMapPress = useCallback((selection: MapSelection) => {
+    return mapInteractionHandlerRef.current(selection) === true
+  }, [])
   const handleMapPress = useCallback(
     (selection: MapSelection) => {
       handleMapInteraction()
@@ -158,6 +161,16 @@ export function MainScreen({
     clearSelectedMapPoints()
     setSelectedNavigationTarget(null)
   }, [clearSelectedMapPoints])
+
+  useEffect(() => {
+    if (controller.mode !== 'telemetry') return
+    const frame = requestAnimationFrame(() => {
+      clearSelectedMapPoints()
+      setSelectedNavigationTarget(null)
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [clearSelectedMapPoints, controller.mode])
+
   const handleOffscreenIndicatorPress = useCallback(
     (indicator: OffscreenMapIndicatorState) => {
       controller.dismissMapSelector()
@@ -301,6 +314,7 @@ export function MainScreen({
         onPhoneHeadingChange={handlePhoneHeadingChange}
         onLongPressTarget={handleLongPressTarget}
         onMapInteraction={handleMapInteraction}
+        onRawMapPress={handleRawMapPress}
         onMapPress={handleMapPress}
         onEnterMapMode={controller.handleMapFocus}
         onOffscreenMapIndicatorsChange={setOffscreenMapIndicators}

@@ -110,6 +110,7 @@ export interface MainMapHandle {
   setPadding: (bottom: number) => void
   zoomBy: (delta: number) => void
   focusCoordinate: (coordinate: [number, number]) => void
+  centerCoordinatePreservingCamera: (coordinate: [number, number]) => void
   focusWeather: () => void
   focusLegalLimits: () => void
   getViewfinderCoordinate: () => Promise<{ latitude: number; longitude: number }>
@@ -190,6 +191,7 @@ interface MainMapProps {
   onPhoneHeadingChange: (heading: number | null) => void
   onLongPressTarget: (target: { latitude: number; longitude: number }) => void
   onMapInteraction: () => void
+  onRawMapPress: (selection: MapSelection) => boolean | void
   onMapPress: (selection: MapSelection) => void
   onEnterMapMode: () => void
   onOffscreenMapIndicatorsChange: (indicators: OffscreenMapIndicatorState[]) => void
@@ -238,6 +240,7 @@ export const MainMap = memo(
       onPhoneHeadingChange,
       onLongPressTarget,
       onMapInteraction,
+      onRawMapPress,
       onMapPress,
       onEnterMapMode,
       onOffscreenMapIndicatorsChange,
@@ -264,6 +267,7 @@ export const MainMap = memo(
     const suppressNextMapPressTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const [mapOpacity] = useState(() => new Animated.Value(0))
     const [cameraReady, setCameraReady] = useState(false)
+    const [styleLoaded, setStyleLoaded] = useState(false)
     const [selectedHistoryMarker, setSelectedHistoryMarker] =
       useState<SelectedHistoryMarker | null>(null)
     const [selectedLegalCountry, setSelectedLegalCountry] = useState<LegalLimitCountry | null>(null)
@@ -360,6 +364,7 @@ export const MainMap = memo(
     const oneDarkStyleJSON = useMemo(() => getOneDarkMapStyle(true, true, false), [])
     const showBuildings3d =
       selectedMapStyle.key === 'outdoors' || selectedMapStyle.key === 'onedark'
+    const canUpdateExistingStyleLayers = styleLoaded && !isMapy
 
     const gpsPresentation = useMemo(
       () =>
@@ -855,6 +860,7 @@ export const MainMap = memo(
     )
 
     const handleMapLoaded = useCallback(() => {
+      setStyleLoaded(true)
       const styleReloadCamera = styleReloadCameraRef.current
       styleReloadCameraRef.current = null
       if (styleReloadCamera && gestureActiveRef.current) return
@@ -885,6 +891,13 @@ export const MainMap = memo(
       historyPreview,
       perspectiveEnabled,
     ])
+
+    useEffect(() => {
+      const frame = requestAnimationFrame(() => {
+        setStyleLoaded(false)
+      })
+      return () => cancelAnimationFrame(frame)
+    }, [selectedMapStyle.key, useCustomJSON, satelliteStyleJSON, oneDarkStyleJSON])
 
     const handleLongPress = useCallback(
       (feature: { geometry: { coordinates: number[] } }) => {
@@ -939,6 +952,8 @@ export const MainMap = memo(
           subtitle: null,
           loadingDetails: true,
         }
+
+        if (onRawMapPress(fallbackSelection)) return
 
         if (typeof screenPointX !== 'number' || typeof screenPointY !== 'number') {
           onMapPress(fallbackSelection)
@@ -998,7 +1013,7 @@ export const MainMap = memo(
             onMapPress(fallbackSelection)
           })
       },
-      [historyActive, onMapPress],
+      [historyActive, onMapPress, onRawMapPress],
     )
 
     useEffect(() => {
@@ -1179,7 +1194,7 @@ export const MainMap = memo(
             maxZoomLevel={MAP_DEFAULTS.maxZoom}
             animationMode="easeTo"
           />
-          {isSatelliteOverlay ? (
+          {canUpdateExistingStyleLayers && isSatelliteOverlay ? (
             <>
               <RasterLayer
                 id="satellite"
@@ -1214,7 +1229,7 @@ export const MainMap = memo(
               />
             </>
           ) : null}
-          {isOneDark ? (
+          {canUpdateExistingStyleLayers && isOneDark ? (
             <>
               <SymbolLayer
                 id="poi-label"
@@ -1243,7 +1258,8 @@ export const MainMap = memo(
               />
             </>
           ) : null}
-          {(selectedMapStyle.key === 'outdoors' || (isSatellite && !isSatelliteOverlay)) && (
+          {canUpdateExistingStyleLayers &&
+          (selectedMapStyle.key === 'outdoors' || (isSatellite && !isSatelliteOverlay)) ? (
             <>
               <SymbolLayer
                 id="poi-label"
@@ -1260,7 +1276,7 @@ export const MainMap = memo(
                 }}
               />
             </>
-          )}
+          ) : null}
           <PhoneHeadingMapLayer
             active={!historyActive && !gpsHeadingMode}
             followCamera={phoneHeadingMode && followGps && !phoneHeadingCameraSuspended}
