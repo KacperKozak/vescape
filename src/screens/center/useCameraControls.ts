@@ -16,99 +16,25 @@ import { getMapRevealPitch, getPitchForZoom } from '@/modules/map/lib/cameraProf
 import { getCameraAfterScreenDrag } from '@/modules/map/lib/cameraPanProjection'
 import { getHistoryRouteCamera, type HistoryCameraViewport } from '@/modules/map/lib/historyCamera'
 
-const MIN_ZOOM = 0
-const MAP_REVEAL_ZOOM_OUT_DELTA = 0.65
-const HISTORY_PREVIEW_ZOOM_OUT_DELTA = 0.8
-const HISTORY_BUCKET_PREVIEW_ZOOM_OUT_DELTA = 0.35
-const HISTORY_DYNAMIC_FULL_DISTANCE_M = 80_000
-const HISTORY_DYNAMIC_MAX_EXTRA_DURATION_MS = 450
-const HISTORY_BUCKET_PREVIEW_MIN_DURATION_MS = 600
-const HISTORY_BUCKET_PREVIEW_MAX_DURATION_MS = 800
-const HISTORY_ROUTE_REFINEMENT_DURATION_MS = 500
-const INSTANT_JUMP_DISTANCE_M = 10_000
+import {
+  HISTORY_BUCKET_PREVIEW_ZOOM_OUT_DELTA,
+  HISTORY_ROUTE_REFINEMENT_DURATION_MS,
+  INSTANT_JUMP_DISTANCE_M,
+  MAP_REVEAL_ZOOM_OUT_DELTA,
+  MIN_ZOOM,
+  cameraDistanceTo,
+  cameraMoveDuration,
+  clamp,
+  getHistoryPreviewBounds,
+  getHistoryPreviewZoom,
+  historyBucketPreviewDuration,
+  historyMoveDuration,
+  liveFollowKey,
+  type CameraSnapshot,
+  type HistoryPreviewTarget,
+} from '@/modules/map/lib/cameraMotion'
 
-export interface CameraSnapshot {
-  centerCoordinate: [number, number]
-  zoomLevel: number
-  heading: number
-  pitch: number
-  padding?: {
-    paddingTop: number
-    paddingRight: number
-    paddingBottom: number
-    paddingLeft: number
-  }
-}
-
-export interface HistoryPreviewTarget {
-  latitude: number
-  longitude: number
-  minLatitude: number | null
-  maxLatitude: number | null
-  minLongitude: number | null
-  maxLongitude: number | null
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value))
-}
-
-function getHistoryPreviewBounds(preview: HistoryPreviewTarget) {
-  if (
-    preview.minLatitude == null ||
-    preview.maxLatitude == null ||
-    preview.minLongitude == null ||
-    preview.maxLongitude == null ||
-    (preview.minLatitude === preview.maxLatitude && preview.minLongitude === preview.maxLongitude)
-  ) {
-    return null
-  }
-  return {
-    ne: [preview.maxLongitude, preview.maxLatitude] as [number, number],
-    sw: [preview.minLongitude, preview.minLatitude] as [number, number],
-  }
-}
-
-function cameraDistanceTo(
-  camera: CameraSnapshot | null,
-  target: { latitude: number; longitude: number },
-) {
-  if (!camera) return 0
-  return distanceMeters(
-    {
-      longitude: camera.centerCoordinate[0],
-      latitude: camera.centerCoordinate[1],
-    },
-    target,
-  )
-}
-
-function historyMoveDuration(distanceM: number) {
-  if (distanceM > INSTANT_JUMP_DISTANCE_M) return 0
-  const progress = clamp(distanceM / HISTORY_DYNAMIC_FULL_DISTANCE_M, 0, 1)
-  return MAP_DEFAULTS.animationDuration + HISTORY_DYNAMIC_MAX_EXTRA_DURATION_MS * progress
-}
-
-function historyBucketPreviewDuration(distanceM: number) {
-  if (distanceM > INSTANT_JUMP_DISTANCE_M) return 0
-  const progress = clamp(distanceM / HISTORY_DYNAMIC_FULL_DISTANCE_M, 0, 1)
-  return (
-    HISTORY_BUCKET_PREVIEW_MIN_DURATION_MS +
-    (HISTORY_BUCKET_PREVIEW_MAX_DURATION_MS - HISTORY_BUCKET_PREVIEW_MIN_DURATION_MS) * progress
-  )
-}
-
-function cameraMoveDuration(distanceM: number, smoothDuration: number) {
-  return distanceM > INSTANT_JUMP_DISTANCE_M ? 0 : smoothDuration
-}
-
-function getHistoryPreviewZoom(zoomLevel: number) {
-  return clamp(zoomLevel - HISTORY_PREVIEW_ZOOM_OUT_DELTA, MIN_ZOOM, MAP_DEFAULTS.maxZoom)
-}
-
-function liveFollowKey(timestamp: number, camera: Pick<CameraSnapshot, 'heading' | 'zoomLevel'>) {
-  return `${timestamp}:${camera.heading.toFixed(2)}:${camera.zoomLevel.toFixed(2)}`
-}
+export type { CameraSnapshot, HistoryPreviewTarget }
 
 interface GpsFix {
   latitude: number

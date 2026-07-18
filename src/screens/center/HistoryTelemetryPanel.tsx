@@ -35,6 +35,7 @@ import {
 } from '@/modules/history/lib/metricColorScale'
 import type { MediaAssetInput, MediaHistoryAsset } from '@/modules/history/lib/mediaHistory'
 import { downsampleTimeSeries, findNearestSampleIndexByTime } from '@/modules/history/lib/playback'
+import { formatRideMeta, formatRideTime } from '@/modules/history/lib/rideFormat'
 import { RIDE_TRIM_PADDING_MS, rideMovingWindow } from '@/modules/history/lib/sessions'
 import { useHistoryStore, type TelemetrySample } from '@/modules/history/store/historyStore'
 import { useSettingsStore } from '@/modules/settings/store/settingsStore'
@@ -65,38 +66,6 @@ interface HistoryTelemetryPanelProps {
 const CHART_MAX_POINTS = 220
 const OPTIONAL_CHART_TAB_COUNT = OPTIONAL_CHART_METRICS.length
 const MAP_SEEK_THROTTLE_MS = 33
-
-function formatRideTime(startMs: number, endMs: number): string {
-  const start = new Date(startMs)
-  const end = new Date(endMs)
-  const h = (d: Date) => d.getHours().toString().padStart(2, '0')
-  const m = (d: Date) => d.getMinutes().toString().padStart(2, '0')
-  return `${h(start)}:${m(start)} – ${h(end)}:${m(end)}`
-}
-
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-
-function formatRideDate(startMs: number, endMs: number): string {
-  const s = new Date(startMs)
-  const e = new Date(endMs)
-  const sameDay =
-    s.getFullYear() === e.getFullYear() &&
-    s.getMonth() === e.getMonth() &&
-    s.getDate() === e.getDate()
-  if (sameDay) {
-    return `${s.getDate()} ${MONTHS[s.getMonth()]} ${s.getFullYear()}`
-  }
-  if (s.getMonth() === e.getMonth() && s.getFullYear() === e.getFullYear()) {
-    return `${s.getDate()}–${e.getDate()} ${MONTHS[s.getMonth()]} ${s.getFullYear()}`
-  }
-  return `${s.getDate()} ${MONTHS[s.getMonth()]} – ${e.getDate()} ${MONTHS[e.getMonth()]} ${e.getFullYear()}`
-}
-
-function formatRideMeta(startAtMs: number, endAtMs: number, deviceName: string): string {
-  return deviceName
-    ? `${formatRideDate(startAtMs, endAtMs)} · ${deviceName}`
-    : formatRideDate(startAtMs, endAtMs)
-}
 
 export function HistoryTelemetryPanel({
   startAtMs,

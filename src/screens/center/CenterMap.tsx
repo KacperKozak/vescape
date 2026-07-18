@@ -66,7 +66,8 @@ import {
   type PhoneHeadingStatus,
 } from '@/modules/map/lib/phoneHeading'
 import { PhoneHeadingMapLayer } from '@/modules/map/components/PhoneHeadingMapLayer'
-import { CenterMapLayers, rosterRiderColor } from './CenterMapLayers'
+import { rosterRiderColor } from '@/modules/group-ride/lib/riderColor'
+import { CenterMapLayers } from './CenterMapLayers'
 import { LegalLimitCountrySheet } from '@/modules/legal/components/LegalLimitCountrySheet'
 import {
   DESTINATION_POINT_COLOR,

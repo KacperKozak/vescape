@@ -3,7 +3,7 @@ import { memo, useEffect, useRef, type RefObject } from 'react'
 
 import { theme } from '@/constants/theme'
 
-import type { CameraSnapshot } from '@/screens/center/useCameraControls'
+import type { CameraSnapshot } from '@/modules/map/lib/cameraMotion'
 import {
   deadBandPhoneHeading,
   startPhoneHeadingUpdates,

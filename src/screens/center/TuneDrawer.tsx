@@ -45,6 +45,11 @@ import { useBoardStore } from '@/modules/board/store/boardStore'
 import { useLegalModeStore } from '@/modules/legal/store/legalModeStore'
 import { useSettingsStore } from '@/modules/settings/store/settingsStore'
 import { useTuneProfileStore } from '@/modules/tune/store/tuneProfileStore'
+import {
+  LEGAL_SPEED_DRAFT_COMMIT_DELAY_MS,
+  hasSpeedDraftValue,
+  parseSpeed,
+} from '@/modules/legal/lib/speedDraft'
 
 interface TuneDrawerProps {
   onNavigate: () => void
@@ -54,7 +59,6 @@ interface TuneDrawerProps {
 const PROFILE_OPTION_WIDTH = 46
 const PROFILE_ACTIVE_WIDTH = 126
 const PROFILE_ANIMATION = { duration: 180 } as const
-const LEGAL_SPEED_DRAFT_COMMIT_DELAY_MS = 350
 const AnimatedText = Animated.createAnimatedComponent(Text)
 
 export function TuneDrawer({ onNavigate, onOpenLegalLimits }: TuneDrawerProps) {
@@ -585,15 +589,6 @@ function LegalMapWidget({ onPress }: { onPress: () => void }) {
       </View>
     </Pressable>
   )
-}
-
-function hasSpeedDraftValue(value: string): boolean {
-  return /\d/.test(value)
-}
-
-function parseSpeed(value: string, fallback: number): number {
-  const normalized = Number(value.replace(',', '.').replace(/[^\d.]/g, ''))
-  return Number.isFinite(normalized) ? normalized : fallback
 }
 
 const styles = StyleSheet.create({
