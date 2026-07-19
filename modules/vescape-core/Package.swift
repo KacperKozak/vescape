@@ -127,6 +127,7 @@ let package = Package(
         "connection/TransportDetectionTests.swift",
         "protocol/VescProtocolTests.swift",
         "replay/WarningReplayHarnessTests.swift",
+        "replay/WarningReplayScenarioTests.swift",
       ]
     ),
   ]
