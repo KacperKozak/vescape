@@ -1,12 +1,4 @@
-import {
-  ActivityIndicator,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  View,
-} from 'react-native'
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native'
 import { Text } from '@/components/base/Text'
 import { RecordIcon, WarningIcon } from 'phosphor-react-native'
 
@@ -25,17 +17,6 @@ function formatCreatedAt(createdAt: number): string {
 
 export function DebugRecordingsScreen() {
   const debug = useDebugRecordings()
-
-  if (Platform.OS !== 'android') {
-    return (
-      <ScrollView contentContainerStyle={styles.content}>
-        <IconHero
-          icon={RecordIcon}
-          description="Raw BLE debug recording is available on Android only."
-        />
-      </ScrollView>
-    )
-  }
 
   return (
     <ScrollView contentContainerStyle={styles.content}>

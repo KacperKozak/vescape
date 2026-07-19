@@ -26,12 +26,13 @@ internal final class RecordingCoordinator {
     activeConfig = config
     recorder?.finish(status: "stopped")
     recorder = nil
-    if config.recordingEnabled {
+    if config.recordingEnabled,
       let recorder = SessionRecorder(
         deviceName: config.name,
         deviceId: config.bleId,
         pollIntervalMs: config.pollIntervalMs
       )
+    {
       recorder.start()
       self.recorder = recorder
     }

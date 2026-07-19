@@ -273,15 +273,19 @@ public class VescapeCoreModule: Module {
       self.requestedDebugRecordingEnabled = enabled
     }
 
-    AsyncFunction("listDebugRecordings") { () -> [[String: Any]] in
-      DebugRecordingStore().list()
+    AsyncFunction("listDebugRecordings") { (promise: Promise) in
+      do {
+        promise.resolve(try DebugRecordingStore().list())
+      } catch {
+        promise.reject("ERR_LIST_DEBUG_RECORDINGS", error.localizedDescription)
+      }
     }
 
     AsyncFunction("exportDebugRecording") { (name: String, promise: Promise) in
       do {
         promise.resolve(try DebugRecordingStore().export(name: name))
       } catch {
-        promise.reject("EXPORT_FAILED", error.localizedDescription)
+        promise.reject("ERR_EXPORT_DEBUG_RECORDING", error.localizedDescription)
       }
     }
 

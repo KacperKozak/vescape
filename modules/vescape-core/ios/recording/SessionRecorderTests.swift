@@ -17,18 +17,17 @@ final class SessionRecorderTests: XCTestCase {
     try? FileManager.default.removeItem(at: directory)
   }
 
-  private func record(_ body: (SessionRecorder) -> Void) throws -> [[String: Any]] {
-    let store = DebugRecordingStore(directory: directory)
-    let recorder = SessionRecorder(
+  private func record(_ body: (SessionRecorder) -> Void) throws -> [[String: Any]] {    let store = DebugRecordingStore(directory: directory)
+    let recorder = try XCTUnwrap(SessionRecorder(
       store: store,
       deviceName: "Funwheel S/2",
       deviceId: "AA:BB",
       pollIntervalMs: 100
-    )
+    ))
     recorder.start()
     body(recorder)
     recorder.finish(status: "stopped")
-    let url = try XCTUnwrap(recorder.fileURL)
+    let url = recorder.fileURL
     let content = try String(contentsOf: url, encoding: .utf8)
     return content.split(separator: "\n").map { line in
       let data = Data(line.utf8)
@@ -111,7 +110,7 @@ final class SessionRecorderTests: XCTestCase {
     let second = try XCTUnwrap(store.createFile(deviceName: "two"))
     try Data("bb".utf8).write(to: second)
 
-    let listed = store.list()
+    let listed = try store.list()
     XCTAssertEqual(listed.map { $0["name"] as? String }, [second.lastPathComponent, first.lastPathComponent])
     XCTAssertEqual(listed[0]["sizeBytes"] as? Int64, 2)
 

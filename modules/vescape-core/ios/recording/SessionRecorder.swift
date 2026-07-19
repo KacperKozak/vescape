@@ -15,9 +15,11 @@ internal final class SessionRecorder {
   private let pollIntervalMs: Int
   private let startedAt: Int64
   private var handle: FileHandle?
-  let fileURL: URL?
+  let fileURL: URL
 
-  init(
+  /// Fails (returns nil) when the recording file cannot be created or opened, so callers never
+  /// install a recorder that silently drops every line.
+  init?(
     store: DebugRecordingStore = DebugRecordingStore(),
     deviceName: String,
     deviceId: String,
@@ -28,9 +30,14 @@ internal final class SessionRecorder {
     self.deviceId = deviceId
     self.pollIntervalMs = pollIntervalMs
     self.startedAt = Int64(Date().timeIntervalSince1970 * 1000)
-    let url = store.createFile(deviceName: deviceName)
+    guard let url = store.createFile(deviceName: deviceName),
+      let handle = try? FileHandle(forWritingTo: url)
+    else {
+      NSLog("[vescape] Debug recording file creation failed for \(deviceName)")
+      return nil
+    }
     self.fileURL = url
-    self.handle = url.flatMap { try? FileHandle(forWritingTo: $0) }
+    self.handle = handle
   }
 
   func start() {
@@ -188,11 +195,12 @@ internal final class DebugRecordingStore {
     return url
   }
 
-  func list() -> [[String: Any]] {
-    let files = (try? FileManager.default.contentsOfDirectory(
+  func list() throws -> [[String: Any]] {
+    guard FileManager.default.fileExists(atPath: directory.path) else { return [] }
+    let files = try FileManager.default.contentsOfDirectory(
       at: directory,
       includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey, .isRegularFileKey]
-    )) ?? []
+    )
     return files
       .filter { $0.pathExtension == "jsonl" }
       .compactMap { url -> (URL, Int64, Int64)? in
