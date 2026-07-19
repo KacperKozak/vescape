@@ -31,7 +31,7 @@ internal final class ReplayTransport: SessionTransport {
     DispatchQueue.global(qos: .userInitiated).async { [weak self] in
       guard let self else { return }
       guard
-        let url = DebugRecordingStore.recordingURL(name: self.recordingName),
+        let url = ReplayRecordings.url(name: self.recordingName),
         let jsonl = try? String(contentsOf: url, encoding: .utf8)
       else {
         DispatchQueue.main.async {

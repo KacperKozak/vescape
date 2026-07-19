@@ -281,6 +281,10 @@ public class VescapeCoreModule: Module {
       }
     }
 
+    AsyncFunction("listBundledDebugFixtures") { () -> [[String: Any]] in
+      ReplayRecordings.listBundled()
+    }
+
     AsyncFunction("exportDebugRecording") { (name: String, promise: Promise) in
       do {
         promise.resolve(try DebugRecordingStore().export(name: name))

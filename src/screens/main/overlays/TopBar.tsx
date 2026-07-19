@@ -19,6 +19,9 @@ import { WeatherStat } from '@/modules/weather/components/WeatherStat'
 import { SocialSheet } from '@/modules/group-ride/components/SocialSheet'
 import { AccountWidget } from '@/modules/profile/components/AccountWidget'
 import { BoardWarningControl } from '@/modules/board/components/BoardWarningControl'
+import { ReplayBadge } from '@/modules/board/components/ReplayBadge'
+import { useBleStore } from '@/modules/board/store/bleStore'
+import { isReplayBoardId } from 'vescape-core'
 import { isNightAtTime } from '@/modules/weather/lib/weather'
 import { routes } from '@/navigation/routes'
 import type { Board } from '@/modules/board/store/boardStore'
@@ -53,6 +56,7 @@ export function TopBar({
   const [selectorOpen, setSelectorOpen] = useState(false)
   const [socialOpen, setSocialOpen] = useState(false)
 
+  const isReplay = useBleStore((s) => isReplayBoardId(s.connectedId))
   const nearbyBadge = useGroupRideStore((s) => s.badge)
   const rideActive = useGroupRideStore((s) => s.activeRideId !== null)
   const weatherCode = useWeatherStore((s) => s.weatherCode)
@@ -98,6 +102,7 @@ export function TopBar({
             accessibilityLabel="Board selector"
           >
             <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
+            {isReplay && <ReplayBadge />}
             <Text style={styles.boardText} numberOfLines={1}>
               {name}
             </Text>

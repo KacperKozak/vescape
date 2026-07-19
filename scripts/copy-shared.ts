@@ -38,10 +38,17 @@ export function sharedTargets(root = ROOT): SharedTarget[] {
       extensions: new Set(['.json']),
       rename: (file: string) => file,
     },
-    // Test-only replay fixtures (Debug Recordings); deliberately not copied into production assets.
+    // Replay fixtures (Debug Recordings): test resources for the CI harness, plus app assets so
+    // the dev-mode Replay UI can play bundled fixtures on-device (dev-only shipping, #230).
     {
       src: join(root, 'shared', 'fixtures'),
       dest: join(androidSrc, 'test', 'resources', 'fixtures'),
+      extensions: new Set(['.jsonl']),
+      rename: (file: string) => file,
+    },
+    {
+      src: join(root, 'shared', 'fixtures'),
+      dest: join(androidSrc, 'main', 'assets', 'fixtures'),
       extensions: new Set(['.jsonl']),
       rename: (file: string) => file,
     },

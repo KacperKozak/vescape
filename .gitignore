@@ -50,6 +50,7 @@ modules/vescape-core/android/src/main/res/raw/
 modules/vescape-core/android/src/main/assets/data/
 modules/vescape-core/android/src/test/resources/data/
 modules/vescape-core/android/src/test/resources/fixtures/
+modules/vescape-core/android/src/main/assets/fixtures/
 modules/vescape-core/.build/
 
 # other stuff

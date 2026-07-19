@@ -2,7 +2,6 @@ package expo.modules.vescapecore.replay
 
 import expo.modules.vescapecore.protocol.SessionTransport
 import expo.modules.vescapecore.protocol.VescGattListener
-import expo.modules.vescapecore.recording.DebugRecordingStore
 import expo.modules.vescapecore.service.VESC_SESSION_TAG
 
 import android.content.Context
@@ -38,7 +37,7 @@ internal class ReplayTransport(
         // Decode off-main (a ride recording can be megabytes); playback runs on the handler.
         Thread({
             val chunks = try {
-                ReplayChunkDecoder.rxChunks(DebugRecordingStore(context).read(recordingName))
+                ReplayChunkDecoder.rxChunks(ReplayRecordings.read(context, recordingName))
             } catch (e: Exception) {
                 Log.w(VESC_SESSION_TAG, "replay load failed: ${e.message}")
                 dispatchListener { listener.onGattFailure("REPLAY_LOAD_FAILED", e.message ?: "Recording unreadable") }

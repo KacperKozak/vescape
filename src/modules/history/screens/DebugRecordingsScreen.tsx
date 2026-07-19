@@ -1,6 +1,7 @@
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native'
 import { Text } from '@/components/base/Text'
-import { RecordIcon, WarningIcon } from 'phosphor-react-native'
+import { PackageIcon, RecordIcon, WarningIcon } from 'phosphor-react-native'
+import { router } from 'expo-router'
 
 import { Button } from '@/components/base/Button'
 import { IconHero } from '@/components/settings/IconHero'
@@ -17,6 +18,23 @@ function formatCreatedAt(createdAt: number): string {
 
 export function DebugRecordingsScreen() {
   const debug = useDebugRecordings()
+
+  const startReplay = async (name: string) => {
+    const started = await debug.replayRecording(name)
+    // Replay drives the normal live UI — jump back to the main screen to watch it.
+    if (started) router.dismissAll()
+  }
+
+  const replayButton = (name: string) => (
+    <Button
+      label={debug.replayingName === name ? 'Starting...' : 'Replay'}
+      size="sm"
+      variant="secondary"
+      loading={debug.replayingName === name}
+      disabled={debug.replayingName != null || debug.exportingName != null}
+      onPress={() => void startReplay(name)}
+    />
+  )
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
@@ -75,20 +93,41 @@ export function DebugRecordingsScreen() {
               icon={RecordIcon}
               iconColor={theme.palette.sky.color}
               label={recording.name}
-              hint={`${formatCreatedAt(recording.createdAt)} · ${formatBytes(recording.sizeBytes)}`}
+              hint={`device · ${formatCreatedAt(recording.createdAt)} · ${formatBytes(recording.sizeBytes)}`}
               right={
-                <Button
-                  label={debug.exportingName === recording.name ? 'Exporting...' : 'Export'}
-                  size="sm"
-                  variant="secondary"
-                  loading={debug.exportingName === recording.name}
-                  disabled={debug.exportingName != null}
-                  onPress={() => void debug.exportRecording(recording)}
-                />
+                <View style={styles.rowActions}>
+                  {replayButton(recording.name)}
+                  <Button
+                    label={debug.exportingName === recording.name ? 'Exporting...' : 'Export'}
+                    size="sm"
+                    variant="secondary"
+                    loading={debug.exportingName === recording.name}
+                    disabled={debug.exportingName != null || debug.replayingName != null}
+                    onPress={() => void debug.exportRecording(recording)}
+                  />
+                </View>
               }
             />
           ))}
         </SettingsCard>
+      )}
+
+      {debug.fixtures.length > 0 && (
+        <>
+          <SettingsSectionTitle>Bundled fixtures</SettingsSectionTitle>
+          <SettingsCard>
+            {debug.fixtures.map((fixture) => (
+              <SettingsRow
+                key={fixture.name}
+                icon={PackageIcon}
+                iconColor={theme.palette.slate.textSecondary}
+                label={fixture.name}
+                hint={`bundled · ${formatBytes(fixture.sizeBytes)}`}
+                right={replayButton(fixture.name)}
+              />
+            ))}
+          </SettingsCard>
+        </>
       )}
     </ScrollView>
   )
@@ -113,6 +152,10 @@ const styles = StyleSheet.create({
     color: theme.status.warning.text,
     fontSize: 12,
     lineHeight: 17,
+  },
+  rowActions: {
+    flexDirection: 'row',
+    gap: 6,
   },
   recordingsHeading: {
     flexDirection: 'row',

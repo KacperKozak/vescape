@@ -124,6 +124,10 @@ internal class DebugRecordingStore(private val context: Context) {
     /** Full `.jsonl` content of a stored recording, for replay. */
     fun read(name: String): String = resolve(name).readText()
 
+    /** Whether a valid recording name resolves to a stored file (no throw on absence). */
+    fun exists(name: String): Boolean =
+        File(name).name == name && name.endsWith(".jsonl") && File(dir, name).isFile
+
     /** The recording's `meta` first line, or null when missing/malformed (truncated capture). */
     fun readMeta(name: String): JSONObject? =
         resolve(name).useLines { lines ->

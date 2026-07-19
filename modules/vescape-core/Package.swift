@@ -65,6 +65,8 @@ let package = Package(
         "VescapeCore.podspec",
         "protocol/VescGattClient.swift",
         "replay/ReplayTransport.swift",
+        "replay/ReplayRecordings.swift",
+        "fixtures",
         "location/GpsMonitor.swift",
         "protocol/VescProtocolTests.swift",
         "notification/RideLiveActivityController.swift",

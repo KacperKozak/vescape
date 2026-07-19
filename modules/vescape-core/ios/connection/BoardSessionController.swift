@@ -250,7 +250,7 @@ internal final class BoardSessionController: VescGattListener {
     onError: @escaping (String, String) -> Void
   ) {
     guard
-      let url = DebugRecordingStore.recordingURL(name: recordingName),
+      let url = ReplayRecordings.url(name: recordingName),
       let jsonl = try? String(contentsOf: url, encoding: .utf8)
     else {
       onError("REPLAY_NOT_FOUND", "Debug recording not found: \(recordingName)")

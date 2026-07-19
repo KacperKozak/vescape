@@ -8,6 +8,7 @@ import expo.modules.vescapecore.service.CompanionPresence
 import expo.modules.vescapecore.service.CompanionRestartGate
 import expo.modules.vescapecore.service.CoreForegroundService
 import expo.modules.vescapecore.recording.DebugRecordingStore
+import expo.modules.vescapecore.replay.ReplayRecordings
 import expo.modules.vescapecore.diagnostics.DiagnosticReporter
 import expo.modules.vescapecore.service.ManualDisconnectAutoStartGate
 import expo.modules.vescapecore.service.SessionConfig
@@ -271,6 +272,15 @@ class VescapeCoreModule : Module() {
           promise.resolve(DebugRecordingStore(context.applicationContext).list())
         } catch (e: Exception) {
           promise.reject("ERR_LIST_DEBUG_RECORDINGS", e.message, e)
+        }
+      }
+    }
+    AsyncFunction("listBundledDebugFixtures") { promise: Promise ->
+      CoroutineScope(Dispatchers.IO).launch {
+        try {
+          promise.resolve(ReplayRecordings.listBundled(context.applicationContext))
+        } catch (e: Exception) {
+          promise.reject("ERR_LIST_BUNDLED_FIXTURES", e.message, e)
         }
       }
     }
@@ -716,7 +726,7 @@ key == "wearAutoLaunchOnConnect" ||
    */
   private fun startDebugReplay(name: String, promise: Promise) {
     val appCtx = context.applicationContext
-    val meta = DebugRecordingStore(appCtx).readMeta(name)
+    val meta = ReplayRecordings.readMeta(appCtx, name)
     val replayBoardId = "replay:" + name.removeSuffix(".jsonl")
     val config = SessionConfig(
       appBoardId = replayBoardId,
