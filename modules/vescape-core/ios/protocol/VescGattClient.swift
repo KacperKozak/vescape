@@ -17,6 +17,23 @@ internal protocol VescGattListener: AnyObject {
   func onGattFrameChunk(_ chunk: [UInt8])
 }
 
+/// Transport seam under `BoardSessionController` (ADR 0024): everything the controller calls on
+/// the board link beyond the `VescGattListener` callbacks. The real `VescGattClient` speaks
+/// CoreBluetooth; the dev-mode `ReplayTransport` plays a Debug Recording through the same surface.
+/// `supportsReconnect` gates the reconnect loop: a replay ending is terminal, not recoverable.
+///
+/// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/protocol/VescGattClient.kt `SessionTransport`
+internal protocol SessionTransport: AnyObject {
+  var supportsReconnect: Bool { get }
+  func connect(peripheralId: String)
+  func disconnect()
+  func reconnect()
+  func startReconnectScan()
+  func stopReconnectScan()
+  @discardableResult
+  func sendPayload(_ payload: [UInt8]) -> Bool
+}
+
 /// CoreBluetooth wrapper around a single VESC board connection plus BLE scanning. Owns one
 /// `CBCentralManager` shared by scan and connect; the coordinator drives phases through the
 /// listener. Deliberately dumb: it exposes a persistent `reconnect()` (re-issuing CoreBluetooth's
@@ -24,7 +41,8 @@ internal protocol VescGattListener: AnyObject {
 /// up, phase transitions, session identity — lives one layer up.
 ///
 /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/protocol/VescGattClient.kt
-internal final class VescGattClient: NSObject {
+internal final class VescGattClient: NSObject, SessionTransport {
+  var supportsReconnect: Bool { true }
   private weak var listener: VescGattListener?
   private lazy var central = CBCentralManager(delegate: self, queue: nil)
 

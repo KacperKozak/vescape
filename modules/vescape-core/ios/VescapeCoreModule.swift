@@ -278,6 +278,19 @@ public class VescapeCoreModule: Module {
       promise.reject("UNSUPPORTED_PLATFORM", "Debug recording export is Android-only")
     }
 
+    AsyncFunction("startDebugReplay") { (name: String, promise: Promise) in
+      self.coordinator.startReplay(
+        recordingName: name,
+        onSuccess: { promise.resolve(nil) },
+        onError: { code, message in promise.reject(code, message) }
+      )
+    }
+
+    AsyncFunction("stopDebugReplay") { (promise: Promise) in
+      self.coordinator.stopBoard()
+      promise.resolve(nil)
+    }
+
     AsyncFunction("selectBoard") { (boardId: String, promise: Promise) in
       self.clearManualDisconnectAutoStartGate()
       self.selectedBoardId = boardId

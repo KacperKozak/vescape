@@ -1166,6 +1166,8 @@ type VescapeCoreNativeModule = NativeEventEmitter<VescapeCoreEvents> & {
   setDebugRecordingEnabled(enabled: boolean): void
   listDebugRecordings(): Promise<DebugRecording[]>
   exportDebugRecording(name: string): Promise<DatabaseBackupResult>
+  startDebugReplay(name: string): Promise<void>
+  stopDebugReplay(): Promise<void>
   reportUiError(message: string, source?: string | null, stack?: string | null): void
   reportDiagnosticTest(): DiagnosticStatus
   getDiagnosticStatus(): DiagnosticStatus
@@ -1516,6 +1518,19 @@ export async function listDebugRecordings(): Promise<DebugRecording[]> {
 /** Copy a raw BLE debug capture to cache storage for sharing. Android only. */
 export async function exportDebugRecording(name: string): Promise<DatabaseBackupResult> {
   return native.exportDebugRecording(name)
+}
+
+/**
+ * Dev mode: replay a Debug Recording through the real native session stack under a synthetic
+ * `replay:<name>` board id (ADR 0024). Ends like a disconnect when the recording runs out.
+ */
+export async function startDebugReplay(name: string): Promise<void> {
+  return native.startDebugReplay(name)
+}
+
+/** Dev mode: stop an active Debug Recording replay session (normal disconnect). */
+export async function stopDebugReplay(): Promise<void> {
+  return native.stopDebugReplay()
 }
 
 /** Report a JS view-layer failure. Native failures are reported at their own operation boundary. */

@@ -57,6 +57,12 @@ data class SessionConfig(
     val recordingEnabled: Boolean,
     val telemetryRecordingEnabled: Boolean,
     val autoReconnect: Boolean = false,
+    /**
+     * Debug Recording name driving this session through a ReplayTransport instead of the real GATT
+     * client (ADR 0024). Replay sessions run under a synthetic `replay:` board id with
+     * `recordingEnabled = false` and `autoReconnect = false`.
+     */
+    val replayRecordingName: String? = null,
 )
 
 internal data class PendingStart(

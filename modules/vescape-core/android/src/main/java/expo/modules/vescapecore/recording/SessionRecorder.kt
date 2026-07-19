@@ -119,10 +119,30 @@ internal class DebugRecordingStore(private val context: Context) {
             ?.toList()
             ?: emptyList()
 
-    fun export(name: String): Map<String, Any> {
+    /** Full `.jsonl` content of a stored recording, for replay. */
+    fun read(name: String): String = resolve(name).readText()
+
+    /** The recording's `meta` first line, or null when missing/malformed (truncated capture). */
+    fun readMeta(name: String): JSONObject? =
+        resolve(name).useLines { lines ->
+            lines.firstOrNull()?.let { line ->
+                try {
+                    JSONObject(line).takeIf { it.optString("kind") == "meta" }
+                } catch (e: Exception) {
+                    null
+                }
+            }
+        }
+
+    private fun resolve(name: String): File {
         require(File(name).name == name && name.endsWith(".jsonl")) { "Invalid debug recording name" }
         val source = File(dir, name)
         require(source.isFile) { "Debug recording not found" }
+        return source
+    }
+
+    fun export(name: String): Map<String, Any> {
+        val source = resolve(name)
 
         val exportDir = File(context.cacheDir, "debug-recording-exports").also { it.mkdirs() }
         val export = File(exportDir, name)
