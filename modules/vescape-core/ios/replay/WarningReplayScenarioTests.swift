@@ -78,6 +78,9 @@ final class WarningReplayScenarioTests: XCTestCase {
     XCTAssertGreaterThanOrEqual(result.cellSpreadFindings.count, 2)
     XCTAssertEqual(result.cellSpreadFindings.first?.severity, .warn)
     XCTAssertEqual(result.cellSpreadFindings.last?.severity, .critical)
+    // Severity is monotonic: once critical, no later finding may downgrade back to warn.
+    let firstCritical = result.cellSpreadFindings.firstIndex { $0.severity == .critical } ?? 0
+    XCTAssertTrue(result.cellSpreadFindings[firstCritical...].allSatisfy { $0.severity == .critical })
     let peaks = result.cellSpreadFindings.map { payloadFields($0.payloadJson)["peakSpread"] as? Double ?? 0 }
     XCTAssertTrue(zip(peaks, peaks.dropFirst()).allSatisfy { $1 >= $0 }, "peak must only rise")
     XCTAssertGreaterThanOrEqual(peaks.last ?? 0, 0.30)
@@ -107,7 +110,10 @@ final class WarningReplayScenarioTests: XCTestCase {
     let result = WarningReplayHarness.run(
       jsonl, configuredSeries: 15,
       transform: { bms, _ in
-        bms.with(cellVoltages: bms.cellVoltages + Array(repeating: bms.cellVoltages.last ?? 0, count: 2))
+        bms.with(
+          cellVoltages: bms.cellVoltages + Array(repeating: bms.cellVoltages.last ?? 0, count: 2),
+          balancing: bms.balancing + Array(repeating: false, count: 2)
+        )
       }
     )
     XCTAssertEqual(result.mismatchFindings.count, 1)
@@ -152,7 +158,7 @@ final class WarningReplayScenarioTests: XCTestCase {
 
 private extension BmsTelemetry {
   /// Scenario copy helper — Kotlin's `data class copy` peer for the fields transforms touch.
-  func with(cellVoltages: [Double]? = nil, vCharge: Double? = nil) -> BmsTelemetry {
+  func with(cellVoltages: [Double]? = nil, balancing: [Bool]? = nil, vCharge: Double? = nil) -> BmsTelemetry {
     BmsTelemetry(
       capturedAt: capturedAt,
       voltageTotal: voltageTotal,
@@ -164,7 +170,7 @@ private extension BmsTelemetry {
       soc: soc,
       soh: soh,
       cellVoltages: cellVoltages ?? self.cellVoltages,
-      balancing: balancing,
+      balancing: balancing ?? self.balancing,
       temps: temps,
       tempIc: tempIc,
       tempHum: tempHum,

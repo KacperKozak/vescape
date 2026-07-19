@@ -67,6 +67,11 @@ class WarningReplayScenarioTest {
     assertTrue(result.cellSpreadFindings.size >= 2)
     assertEquals(BoardWarningSeverity.WARN, result.cellSpreadFindings.first().severity)
     assertEquals(BoardWarningSeverity.CRITICAL, result.cellSpreadFindings.last().severity)
+    // Severity is monotonic: once critical, no later finding may downgrade back to warn.
+    val firstCritical = result.cellSpreadFindings.indexOfFirst { it.severity == BoardWarningSeverity.CRITICAL }
+    assertTrue(
+      result.cellSpreadFindings.drop(firstCritical).all { it.severity == BoardWarningSeverity.CRITICAL },
+    )
     val peaks = result.cellSpreadFindings.map { JSONObject(it.payloadJson).getDouble("peakSpread") }
     assertTrue("peak must only rise", peaks.zipWithNext().all { (a, b) -> b >= a })
     assertTrue(peaks.last() >= 0.30)
@@ -98,7 +103,10 @@ class WarningReplayScenarioTest {
     val result = WarningReplayHarness.run(
       jsonl, configuredSeries = 15,
       transform = { bms, _ ->
-        bms.copy(cellVoltages = bms.cellVoltages + List(2) { bms.cellVoltages.last() })
+        bms.copy(
+          cellVoltages = bms.cellVoltages + List(2) { bms.cellVoltages.last() },
+          balancing = bms.balancing + List(2) { false },
+        )
       },
     )
     assertEquals(1, result.mismatchFindings.size)
