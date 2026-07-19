@@ -17,6 +17,7 @@ import { EdgeDrawer } from '@/components/overlays/AnchoredSheet'
 import { IconButton } from '@/components/base/IconButton'
 import { WeatherStat } from '@/modules/weather/components/WeatherStat'
 import { SocialSheet } from '@/modules/group-ride/components/SocialSheet'
+import { AccountWidget } from '@/modules/profile/components/AccountWidget'
 import { BoardWarningControl } from '@/modules/board/components/BoardWarningControl'
 import { isNightAtTime } from '@/modules/weather/lib/weather'
 import { routes } from '@/navigation/routes'
@@ -159,7 +160,10 @@ export function TopBar({
         icon={UsersThreeIcon}
         onClose={() => setSocialOpen(false)}
       >
-        <SocialSheet onNavigate={() => setSocialOpen(false)} />
+        <SocialSheet
+          accountWidget={<AccountWidget onNavigate={() => setSocialOpen(false)} />}
+          onNavigate={() => setSocialOpen(false)}
+        />
       </EdgeDrawer>
 
       <BoardSelectorSheet

@@ -1,6 +1,7 @@
 import * as Sentry from '@sentry/react-native'
 import { ClerkProvider } from '@clerk/expo'
 import { tokenCache } from '@clerk/expo/token-cache'
+import { resourceCache } from '@clerk/expo/resource-cache'
 import { useFonts } from 'expo-font'
 import { Stack } from 'expo-router'
 import * as SplashScreen from 'expo-splash-screen'
@@ -74,7 +75,13 @@ function RootLayout() {
   if (!fontsLoaded && !fontError) return null
 
   return (
-    <ClerkProvider publishableKey={clerkPublishableKey} tokenCache={tokenCache}>
+    <ClerkProvider
+      publishableKey={clerkPublishableKey}
+      tokenCache={tokenCache}
+      // Keeps the signed-in identity readable offline — losing connectivity must not
+      // blank the account UI or look like a sign-out.
+      __experimental_resourceCache={resourceCache}
+    >
       <DiagnosticErrorBoundary>
         <GestureHandlerRootView style={{ flex: 1 }}>
           <Stack
@@ -89,9 +96,11 @@ function RootLayout() {
             }}
           >
             <Stack.Screen name={stackScreens.home} options={{ headerShown: false }} />
-            <Stack.Screen name={stackScreens.profile} options={{ title: 'Profile' }} />
-            <Stack.Screen name={stackScreens.signIn} options={{ title: 'Vescape account' }} />
-            <Stack.Screen name={stackScreens.account} options={{ title: 'Account' }} />
+            <Stack.Screen name={stackScreens.profileStats} options={{ title: 'Profile stats' }} />
+            {/* Clerk's native views render their own header — a second Expo header
+                would duplicate the back/dismiss layer. */}
+            <Stack.Screen name={stackScreens.signIn} options={{ headerShown: false }} />
+            <Stack.Screen name={stackScreens.account} options={{ headerShown: false }} />
             <Stack.Screen name={stackScreens.settings} options={{ title: 'Settings' }} />
             <Stack.Screen name={stackScreens.settingsDev} options={{ title: 'Dev' }} />
             <Stack.Screen

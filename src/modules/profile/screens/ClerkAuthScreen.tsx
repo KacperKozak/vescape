@@ -17,7 +17,7 @@ export function ClerkAuthScreen() {
     didLeaveAuth.current = true
 
     if (router.canGoBack()) router.back()
-    else router.replace(routes.profile)
+    else router.replace(routes.profileStats)
   }, [router])
 
   useEffect(() => {
@@ -26,7 +26,9 @@ export function ClerkAuthScreen() {
 
   return (
     <View style={styles.container}>
-      <AuthView mode="signInOrUp" isDismissible={false} onDismiss={leaveAuth} />
+      {/* Clerk owns the only visible dismiss control — the Expo header is hidden
+          for this route in src/app/_layout.tsx. */}
+      <AuthView mode="signInOrUp" isDismissible onDismiss={leaveAuth} />
     </View>
   )
 }

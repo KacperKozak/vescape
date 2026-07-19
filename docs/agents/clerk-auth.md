@@ -26,10 +26,41 @@ The integration is owned by these durable files:
 - `src/app/_layout.tsx` creates `ClerkProvider` with the publishable key and Clerk token cache.
 - `src/modules/profile/screens/ClerkAuthScreen.tsx` renders the native `AuthView`.
 - `src/modules/profile/screens/ClerkAccountScreen.tsx` renders the native account profile.
-- `src/modules/profile/screens/AccountSection.tsx` exposes sign-in and account management.
+- `src/modules/profile/components/AccountWidget.tsx` exposes sign-in and account management in the
+  Social sheet.
 
 Do not fix Clerk integration in generated `android/` or `ios/` folders. Plugin or dependency changes
 require a fresh native sync/build through `bun run android`.
+
+## Native theme
+
+Clerk's native views are themed by the checked-in `clerk-theme.json` at the repo root, wired through
+the `@clerk/expo` config plugin's `theme` option in `app.config.ts`. The file mirrors the Vescape
+palette from `src/constants/theme.ts` (slate surfaces, cyan brand accent, semantic status colors,
+12dp corners) and sets `colors` and `darkColors` to the same values so the views are always dark.
+
+- The plugin consumes the JSON during prebuild — Android gets `assets/clerk_theme.json`, iOS gets a
+  `ClerkTheme` Info.plist entry. Theme changes require a regenerated native build via
+  `bun run android`; Metro reload alone is not enough.
+- Clerk's native views use the system font. Do not patch generated native code to force Raleway.
+- Both Clerk routes hide the Expo header (`src/app/_layout.tsx`); the Clerk views render their own
+  single back/dismiss control (`isDismissible`) and route dismissal back into Expo Router.
+
+## Hosted Account Portal branding
+
+Clerk's production Account Portal owns the browser page that completes an email-link verification
+and offers **Return to app**. Its dashboard configuration should stay aligned with the native theme:
+
+- Application name: `Vescape`
+- Logo: `assets/images/splashIcon.png`
+- Appearance: `Dark`
+- Dark primary color: `#06B6D4`
+- Dark background color: `#111827`
+
+The Account Portal dashboard currently exposes only appearance plus primary and background colors
+for each color mode. It does not expose completion-page-specific copy, typography, or layout. The
+application name and logo are shared across Clerk-hosted components. Removing **Secured by Clerk**
+is a Pro-plan setting and is not required for the mobile callback flow.
 
 ## Production domains and DNS
 

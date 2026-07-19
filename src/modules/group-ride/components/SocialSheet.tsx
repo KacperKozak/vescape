@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/base/Text'
 import {
@@ -42,13 +42,15 @@ import { useRiderStore } from '@/modules/group-ride/store/riderStore'
 import { theme } from '@/constants/theme'
 
 interface SocialSheetProps {
+  accountWidget: ReactNode
   /** Called before navigating away so the host can dismiss the sheet. */
   onNavigate: () => void
 }
 
-export function SocialSheet({ onNavigate }: SocialSheetProps) {
+export function SocialSheet({ accountWidget, onNavigate }: SocialSheetProps) {
   return (
     <View style={styles.list}>
+      {accountWidget}
       <RiderNameWidget />
       <GroupRideWidget />
       <LinkWidget
@@ -58,7 +60,7 @@ export function SocialSheet({ onNavigate }: SocialSheetProps) {
         hint="All-time & monthly riding totals"
         onPress={() => {
           onNavigate()
-          router.push(routes.profile)
+          router.push(routes.profileStats)
         }}
       />
     </View>
