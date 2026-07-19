@@ -43,6 +43,10 @@ internal protocol SessionTransport: AnyObject {
 /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/protocol/VescGattClient.kt
 internal final class VescGattClient: NSObject, SessionTransport {
   var supportsReconnect: Bool { true }
+  /// Active raw debug Session Recorder resolver, set by the session controller. Records `tx`
+  /// chunks at the write site (the peer of Android taping `tx` in its `VescGattClient`).
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/protocol/VescGattClient.kt `recorder`
+  var recorder: (() -> SessionRecorder?)?
   private weak var listener: VescGattListener?
   private lazy var central = CBCentralManager(delegate: self, queue: nil)
 
@@ -203,7 +207,9 @@ internal final class VescGattClient: NSObject, SessionTransport {
 
   func sendPayload(_ payload: [UInt8]) -> Bool {
     guard let peripheral, let txChar else { return false }
-    peripheral.writeValue(Data(VescPacketCodec.encode(payload)), for: txChar, type: writeType)
+    let bytes = VescPacketCodec.encode(payload)
+    peripheral.writeValue(Data(bytes), for: txChar, type: writeType)
+    recorder?()?.recordChunk(direction: "tx", bytes: bytes)
     return true
   }
 

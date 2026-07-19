@@ -1510,12 +1510,12 @@ export function setDebugRecordingEnabled(enabled: boolean): void {
   native.setDebugRecordingEnabled(enabled)
 }
 
-/** List locally retained raw BLE debug captures. Android only. */
+/** List locally retained raw BLE debug captures. */
 export async function listDebugRecordings(): Promise<DebugRecording[]> {
   return native.listDebugRecordings()
 }
 
-/** Copy a raw BLE debug capture to cache storage for sharing. Android only. */
+/** Copy a raw BLE debug capture to cache storage for sharing. */
 export async function exportDebugRecording(name: string): Promise<DatabaseBackupResult> {
   return native.exportDebugRecording(name)
 }

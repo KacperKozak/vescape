@@ -1,13 +1,13 @@
 import Foundation
 
-/// Starts/stops iOS Ride Recording storage for the active Board Session.
+/// Starts/stops iOS Ride Recording storage and the raw debug `SessionRecorder` for the active
+/// Board Session.
 ///
 /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/recording/RecordingCoordinator.kt
-/// @platform-diff iOS has no raw debug `SessionRecorder`; this coordinator owns only durable
-/// telemetry recording until the debug-recording slice is ported.
 internal final class RecordingCoordinator {
   private let store = TelemetryRepository.shared
   private let appData: AppDataRepository
+  private var recorder: SessionRecorder?
   private var activeConfig: BoardConnectConfig?
   private var enabled = false
   private var startedAtMs: Int64?
@@ -20,8 +20,21 @@ internal final class RecordingCoordinator {
   var telemetryRecordingEnabled: Bool { enabled }
   var activeBoardId: String? { enabled ? activeConfig?.appBoardId : nil }
 
+  func currentRecorder() -> SessionRecorder? { recorder }
+
   func beginBoardSession(config: BoardConnectConfig) {
     activeConfig = config
+    recorder?.finish(status: "stopped")
+    recorder = nil
+    if config.recordingEnabled {
+      let recorder = SessionRecorder(
+        deviceName: config.name,
+        deviceId: config.bleId,
+        pollIntervalMs: config.pollIntervalMs
+      )
+      recorder.start()
+      self.recorder = recorder
+    }
     store.resetSessionState()
     store.reloadPrivacyZones(appData.getEnabledPrivacyZoneEntities())
     store.applySettings(appData.getSettings())
@@ -52,7 +65,8 @@ internal final class RecordingCoordinator {
     activeConfig = config
   }
 
-  func finishBoardSession(markerType: String) {
+  func finishBoardSession(status: String, markerType: String) {
+    finishDebugRecording(status: status)
     if let config = activeConfig, enabled {
       recordMarker(markerType, config: config)
     }
@@ -63,6 +77,7 @@ internal final class RecordingCoordinator {
   }
 
   func failSession() {
+    finishDebugRecording(status: "error")
     store.flushBlocking()
     activeConfig = nil
     enabled = false
@@ -92,6 +107,33 @@ internal final class RecordingCoordinator {
   func recordTelemetry(_ capture: TelemetryCapture) {
     guard enabled else { return }
     store.recordTelemetry(capture)
+  }
+
+  // MARK: Raw debug Session Recorder passthroughs
+
+  func recordState(_ status: String, extra: [(String, Any?)] = []) {
+    recorder?.recordState(status, extra: extra)
+  }
+
+  func recordChunk(direction: String, bytes: [UInt8]) {
+    recorder?.recordChunk(direction: direction, bytes: bytes)
+  }
+
+  func recordLocation(_ location: TelemetryLocationCapture) {
+    recorder?.recordLocation(
+      latitude: location.latitude,
+      longitude: location.longitude,
+      speedMps: location.speedMps,
+      bearingDeg: location.bearingDeg,
+      accuracyM: location.accuracyM,
+      altitudeM: location.altitudeM,
+      timestamp: location.timestamp
+    )
+  }
+
+  private func finishDebugRecording(status: String) {
+    recorder?.finish(status: status)
+    recorder = nil
   }
 
   /// Marks where a Ride Recording entered an Idle Pause so the resulting gap is explained (ADR-0021).

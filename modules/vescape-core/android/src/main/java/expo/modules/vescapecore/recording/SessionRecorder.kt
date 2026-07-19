@@ -13,6 +13,7 @@ import org.json.JSONObject
 import java.io.File
 import java.io.FileWriter
 
+// @parity /modules/vescape-core/ios/recording/SessionRecorder.swift `SessionRecorder`
 internal class SessionRecorder(context: Context, private val boardConfig: SessionConfig) {
     private val store = DebugRecordingStore(context)
     private val startedAt = System.currentTimeMillis()
@@ -95,6 +96,7 @@ internal class SessionRecorder(context: Context, private val boardConfig: Sessio
     }
 }
 
+// @parity /modules/vescape-core/ios/recording/SessionRecorder.swift `DebugRecordingStore`
 internal class DebugRecordingStore(private val context: Context) {
     private val dir: File
         get() = File(context.filesDir, "vesc-recordings").also { it.mkdirs() }

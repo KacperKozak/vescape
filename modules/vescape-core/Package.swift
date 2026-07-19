@@ -96,6 +96,7 @@ let package = Package(
         "location/GpsPrecision.swift",
         "protocol/VescProtocol.swift",
         "replay/ReplayChunkDecoder.swift",
+        "recording/SessionRecorder.swift",
       ],
       resources: [
         .process("cell-presets.json"),
@@ -129,6 +130,7 @@ let package = Package(
         "protocol/VescProtocolTests.swift",
         "replay/WarningReplayHarnessTests.swift",
         "replay/WarningReplayScenarioTests.swift",
+        "recording/SessionRecorderTests.swift",
       ]
     ),
   ]

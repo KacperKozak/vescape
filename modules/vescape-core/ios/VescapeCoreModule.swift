@@ -25,6 +25,9 @@ public class VescapeCoreModule: Module {
   // MARK: - Session state
 
   private var selectedBoardId: String? = nil
+  /// Dev-setting request: capture a raw debug Session Recorder for the next Board Session.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `requestedDebugRecordingEnabled`
+  private var requestedDebugRecordingEnabled = false
   private let manualDisconnectSuppressedBoardKey = "vesc_manual_disconnect_auto_start_board_id"
 
   /// Retains the in-flight Board Probe across its async BLE lifecycle. Only one runs at a time —
@@ -266,16 +269,20 @@ public class VescapeCoreModule: Module {
       promise.reject("UNSUPPORTED_PLATFORM", "Companion presence is Android-only")
     }
 
-    Function("setDebugRecordingEnabled") { (_: Bool) in
-      // Debug raw BLE recording is Android-only.
+    Function("setDebugRecordingEnabled") { (enabled: Bool) in
+      self.requestedDebugRecordingEnabled = enabled
     }
 
     AsyncFunction("listDebugRecordings") { () -> [[String: Any]] in
-      []
+      DebugRecordingStore().list()
     }
 
-    AsyncFunction("exportDebugRecording") { (_: String, promise: Promise) in
-      promise.reject("UNSUPPORTED_PLATFORM", "Debug recording export is Android-only")
+    AsyncFunction("exportDebugRecording") { (name: String, promise: Promise) in
+      do {
+        promise.resolve(try DebugRecordingStore().export(name: name))
+      } catch {
+        promise.reject("EXPORT_FAILED", error.localizedDescription)
+      }
     }
 
     AsyncFunction("startDebugReplay") { (name: String, promise: Promise) in
@@ -811,7 +818,8 @@ public class VescapeCoreModule: Module {
       refloatBaseVersion: link["refloatBaseVersion"] as? String,
       pollIntervalMs: hz > 0 ? 1000 / hz : 0,
       batteryConfig: AppDataRepository.normalizeBatteryConfig(board["batteryConfig"] ?? nil),
-      liveHistoryLimitMinutes: AppDataRepository.liveHistoryLimitMinutes(settings["liveHistoryLimit"] ?? nil) ?? 5
+      liveHistoryLimitMinutes: AppDataRepository.liveHistoryLimitMinutes(settings["liveHistoryLimit"] ?? nil) ?? 5,
+      recordingEnabled: requestedDebugRecordingEnabled
     )
   }
 

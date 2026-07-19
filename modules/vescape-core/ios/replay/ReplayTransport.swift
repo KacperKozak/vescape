@@ -9,8 +9,8 @@ private let replayEndTailSeconds = 0.25
 /// disconnect when the recording runs out. `supportsReconnect == false` keeps the controller's
 /// reconnect loop out of replay: the recording ending is terminal.
 ///
-/// Recordings are read from the on-device Debug Recording store dir (`vesc-recordings` under
-/// Documents — the location iOS capture (#229) writes to).
+/// Recordings are read from the on-device Debug Recording store dir (`DebugRecordingStore`, the
+/// location iOS capture writes to).
 ///
 /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/replay/ReplayTransport.kt
 internal final class ReplayTransport: SessionTransport {
@@ -26,26 +26,12 @@ internal final class ReplayTransport: SessionTransport {
     self.listener = listener
   }
 
-  /// Directory holding on-device Debug Recordings, mirroring Android's `DebugRecordingStore` dir.
-  static func recordingsDirectory() -> URL {
-    FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-      .appendingPathComponent("vesc-recordings", isDirectory: true)
-  }
-
-  /// Resolve a recording by name with the same validation as Android's store: no path traversal,
-  /// `.jsonl` only. Returns nil when invalid or missing.
-  static func recordingURL(name: String) -> URL? {
-    guard (name as NSString).lastPathComponent == name, name.hasSuffix(".jsonl") else { return nil }
-    let url = recordingsDirectory().appendingPathComponent(name)
-    return FileManager.default.fileExists(atPath: url.path) ? url : nil
-  }
-
   func connect(peripheralId: String) {
     // Decode off-main (a ride recording can be megabytes); playback runs on the main queue.
     DispatchQueue.global(qos: .userInitiated).async { [weak self] in
       guard let self else { return }
       guard
-        let url = Self.recordingURL(name: self.recordingName),
+        let url = DebugRecordingStore.recordingURL(name: self.recordingName),
         let jsonl = try? String(contentsOf: url, encoding: .utf8)
       else {
         DispatchQueue.main.async {

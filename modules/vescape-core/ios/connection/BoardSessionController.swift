@@ -22,6 +22,9 @@ internal struct BoardConnectConfig {
   let batteryConfig: [String: Any]?
   /// Live-history window (minutes) for the decimated `onLiveSeries` series.
   let liveHistoryLimitMinutes: Int
+  /// Raw debug Session Recorder gate (dev setting, `setDebugRecordingEnabled`). Replay sessions
+  /// always run with `false` so a replay never re-records itself.
+  var recordingEnabled = false
 }
 
 /// Owns the live Board Session: drives connect phases off GATT callbacks, seeds the stored
@@ -226,6 +229,7 @@ internal final class BoardSessionController: VescGattListener {
     // no such step — `gatt.connect` clears its own previous peripheral.
     if replay != nil { gatt.disconnect() }
     replayTransport = replay
+    gatt.recorder = { [weak self] in self?.recordingCoordinator.currentRecorder() }
     batteryEstimator.ensureLoaded()
     liveSeries.emit = { [weak self] name, body in self?.emit?(name, body) }
     liveSeries.generation = { [weak self] in self?.connectionSeq ?? 0 }
@@ -246,7 +250,7 @@ internal final class BoardSessionController: VescGattListener {
     onError: @escaping (String, String) -> Void
   ) {
     guard
-      let url = ReplayTransport.recordingURL(name: recordingName),
+      let url = DebugRecordingStore.recordingURL(name: recordingName),
       let jsonl = try? String(contentsOf: url, encoding: .utf8)
     else {
       onError("REPLAY_NOT_FOUND", "Debug recording not found: \(recordingName)")
@@ -389,7 +393,8 @@ internal final class BoardSessionController: VescGattListener {
       refloatBaseVersion: current.refloatBaseVersion,
       pollIntervalMs: current.pollIntervalMs,
       batteryConfig: AppDataRepository.normalizeBatteryConfig(board["batteryConfig"] ?? nil),
-      liveHistoryLimitMinutes: current.liveHistoryLimitMinutes
+      liveHistoryLimitMinutes: current.liveHistoryLimitMinutes,
+      recordingEnabled: current.recordingEnabled
     )
     config = updated
     recordingCoordinator.updateBoardSessionConfig(updated)
@@ -418,7 +423,8 @@ internal final class BoardSessionController: VescGattListener {
       refloatBaseVersion: current.refloatBaseVersion,
       pollIntervalMs: hz > 0 ? 1000 / hz : 0,
       batteryConfig: current.batteryConfig,
-      liveHistoryLimitMinutes: liveHistoryLimit
+      liveHistoryLimitMinutes: liveHistoryLimit,
+      recordingEnabled: current.recordingEnabled
     )
     movingThresholdCentiKmh = MetricSanitizerConfig.from(settings: settings).movingSpeedThresholdCentiKmh
     let warningsWereEnabled = boardWarningsEnabled
@@ -552,7 +558,10 @@ internal final class BoardSessionController: VescGattListener {
     session?.invalidate()
     session = nil
     config = nil
-    recordingCoordinator.finishBoardSession(markerType: error == nil ? "disconnect" : "error")
+    recordingCoordinator.finishBoardSession(
+      status: error == nil ? "stopped" : "disconnected",
+      markerType: error == nil ? "disconnect" : "error"
+    )
     gpsMonitor.stop()
     stopPolling()
     stopReconnect()
@@ -682,6 +691,7 @@ internal final class BoardSessionController: VescGattListener {
   private func setPhase(_ phase: BoardPhase) {
     guard self.phase != phase else { return }
     self.phase = phase
+    recordingCoordinator.recordState(phase.rawValue)
     onStateChanged?()
     refreshLiveActivity()
   }
@@ -695,6 +705,7 @@ internal final class BoardSessionController: VescGattListener {
     )
     settleConnect(success: false, code: code, message: message)
     boardError = message
+    recordingCoordinator.recordState("error", extra: [("message", message)])
     socWindow.reset()
     session?.invalidate()
     session = nil
@@ -861,6 +872,7 @@ internal final class BoardSessionController: VescGattListener {
 
   func onGattFrameChunk(_ chunk: [UInt8]) {
     guard session != nil else { return }
+    recordingCoordinator.recordChunk(direction: "rx", bytes: chunk)
     for payload in reassembler.feed(chunk) {
       handlePayload(payload)
     }
@@ -1348,6 +1360,7 @@ internal final class BoardSessionController: VescGattListener {
   }
 
   private func onLocationUpdated(_ location: TelemetryLocationCapture) {
+    recordingCoordinator.recordLocation(location)
     latestLocation = location
     if location.precise {
       latestPreciseLocation = location
