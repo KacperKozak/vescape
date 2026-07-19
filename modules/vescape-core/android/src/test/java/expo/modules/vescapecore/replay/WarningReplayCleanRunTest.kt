@@ -27,9 +27,12 @@ class WarningReplayCleanRunTest {
     // No vacuous green: a fixture that decodes to nothing must fail loudly.
     assertTrue("fixture yielded zero BMS frames", frames.isNotEmpty())
     assertEquals(fixtureSeries, frames.first().cellVoltages.size)
-    // Timestamps are the recorded offsets, strictly increasing at the recorded pacing.
-    assertTrue(frames.zipWithNext().all { (a, b) -> a.capturedAt < b.capturedAt })
+    // Every recorded frame survives the reassembler at the recorded 4 Hz pacing — a decoder that
+    // silently drops frames must fail here, not stay vacuously green on the clean run.
+    assertEquals(480, frames.size)
     assertEquals(250L, frames.first().capturedAt)
+    assertEquals(120_000L, frames.last().capturedAt)
+    assertTrue(frames.zipWithNext().all { (a, b) -> b.capturedAt - a.capturedAt == 250L })
   }
 
   @Test

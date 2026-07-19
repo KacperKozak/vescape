@@ -86,9 +86,12 @@ final class WarningReplayHarnessTests: XCTestCase {
     // No vacuous green: a fixture that decodes to nothing must fail loudly.
     XCTAssertFalse(frames.isEmpty, "fixture yielded zero BMS frames")
     XCTAssertEqual(frames.first?.cellVoltages.count, fixtureSeries)
-    // Timestamps are the recorded offsets, strictly increasing at the recorded pacing.
-    XCTAssertTrue(zip(frames, frames.dropFirst()).allSatisfy { $0.capturedAt < $1.capturedAt })
+    // Every recorded frame survives the reassembler at the recorded 4 Hz pacing — a decoder that
+    // silently drops frames must fail here, not stay vacuously green on the clean run.
+    XCTAssertEqual(frames.count, 480)
     XCTAssertEqual(frames.first?.capturedAt, 250)
+    XCTAssertEqual(frames.last?.capturedAt, 120_000)
+    XCTAssertTrue(zip(frames, frames.dropFirst()).allSatisfy { $1.capturedAt - $0.capturedAt == 250 })
   }
 
   func testCleanFixtureProducesZeroFindingsAndCleanSessionEnd() {
