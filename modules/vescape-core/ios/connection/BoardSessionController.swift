@@ -221,6 +221,10 @@ internal final class BoardSessionController: VescGattListener {
     onError: @escaping (String, String) -> Void
   ) {
     replayTransport?.disconnect()
+    // Starting a replay while a live board is connected: tear the live GATT link down first, or
+    // its callbacks keep feeding real frames into the replay session. A live→live connect needs
+    // no such step — `gatt.connect` clears its own previous peripheral.
+    if replay != nil { gatt.disconnect() }
     replayTransport = replay
     batteryEstimator.ensureLoaded()
     liveSeries.emit = { [weak self] name, body in self?.emit?(name, body) }

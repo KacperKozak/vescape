@@ -30,7 +30,8 @@ internal class ReplayTransport(
 ) : SessionTransport {
     @Volatile
     private var cancelled = false
-    private val posted = mutableListOf<Runnable>()
+    private var pending: Runnable? = null
+    private var playbackStartedAt = 0L
 
     override fun connect(deviceId: String) {
         Log.d(VESC_SESSION_TAG, "replay connect recording=$recordingName")
@@ -52,21 +53,36 @@ internal class ReplayTransport(
         dispatchListener { listener.onGattConnected() }
         dispatchListener { listener.onGattSubscribing() }
         dispatchListener { listener.onGattReady() }
-        // Recorded `t` is relative to recording start; keeping the absolute offsets preserves the
-        // original pacing (including the recorded connect handshake gap) at 1× real time.
-        for (chunk in chunks) {
-            postAt(chunk.t) { dispatchListener { listener.onGattFrameChunk(chunk.bytes) } }
+        playbackStartedAt = System.currentTimeMillis()
+        scheduleNext(chunks, 0)
+    }
+
+    /**
+     * Cursor-based pacing: only the next chunk is ever scheduled, so an hour-long recording never
+     * floods the handler with queued callbacks. Recorded `t` is relative to recording start;
+     * scheduling against `playbackStartedAt` preserves the original absolute pacing (including the
+     * recorded connect handshake gap) at 1× real time.
+     */
+    private fun scheduleNext(chunks: List<ReplayChunk>, index: Int) {
+        if (cancelled) return
+        if (index >= chunks.size) {
+            postAt((chunks.lastOrNull()?.t ?: 0L) + REPLAY_END_TAIL_MS) {
+                Log.d(VESC_SESSION_TAG, "replay finished recording=$recordingName chunks=${chunks.size}")
+                dispatchListener { listener.onGattDisconnected(status = 0, intentional = false) }
+            }
+            return
         }
-        val endAt = (chunks.lastOrNull()?.t ?: 0L) + REPLAY_END_TAIL_MS
-        postAt(endAt) {
-            Log.d(VESC_SESSION_TAG, "replay finished recording=$recordingName chunks=${chunks.size}")
-            dispatchListener { listener.onGattDisconnected(status = 0, intentional = false) }
+        val chunk = chunks[index]
+        postAt(chunk.t) {
+            dispatchListener { listener.onGattFrameChunk(chunk.bytes) }
+            scheduleNext(chunks, index + 1)
         }
     }
 
-    private fun postAt(delayMs: Long, block: () -> Unit) {
-        val runnable = Runnable { if (!cancelled) block() }
-        posted += runnable
+    private fun postAt(recordedT: Long, block: () -> Unit) {
+        val delayMs = (playbackStartedAt + recordedT - System.currentTimeMillis()).coerceAtLeast(0L)
+        val runnable = Runnable { if (!cancelled) { pending = null; block() } }
+        pending = runnable
         handler.postDelayed(runnable, delayMs)
     }
 
@@ -77,7 +93,7 @@ internal class ReplayTransport(
 
     override fun clear(markIntentional: Boolean) {
         cancelled = true
-        posted.forEach(handler::removeCallbacks)
-        posted.clear()
+        pending?.let(handler::removeCallbacks)
+        pending = null
     }
 }

@@ -17,6 +17,7 @@ internal final class ReplayTransport: SessionTransport {
   private weak var listener: VescGattListener?
   private let recordingName: String
   private var cancelled = false
+  private var playbackStartedAt = DispatchTime.now()
 
   var supportsReconnect: Bool { false }
 
@@ -62,21 +63,33 @@ internal final class ReplayTransport: SessionTransport {
     listener?.onGattConnected()
     listener?.onGattSubscribing()
     listener?.onGattReady()
-    // Recorded `t` is relative to recording start; keeping the absolute offsets preserves the
-    // original pacing (including the recorded connect handshake gap) at 1× real time.
-    for chunk in chunks {
-      schedule(afterMs: chunk.t) { [weak self] in
-        self?.listener?.onGattFrameChunk(chunk.bytes)
+    playbackStartedAt = DispatchTime.now()
+    scheduleNext(chunks, index: 0)
+  }
+
+  /// Cursor-based pacing: only the next chunk is ever scheduled, so an hour-long recording never
+  /// floods the main queue with queued callbacks. Recorded `t` is relative to recording start;
+  /// scheduling against `playbackStartedAt` preserves the original absolute pacing (including the
+  /// recorded connect handshake gap) at 1× real time.
+  private func scheduleNext(_ chunks: [ReplayChunk], index: Int) {
+    guard !cancelled else { return }
+    guard index < chunks.count else {
+      let endMs = (chunks.last?.t ?? 0) + Int64(replayEndTailSeconds * 1000)
+      schedule(atRecordedMs: endMs) { [weak self] in
+        self?.listener?.onGattDisconnected(intentional: false, message: "Replay ended")
       }
+      return
     }
-    let endMs = chunks.last?.t ?? 0
-    schedule(afterMs: endMs + Int64(replayEndTailSeconds * 1000)) { [weak self] in
-      self?.listener?.onGattDisconnected(intentional: false, message: "Replay ended")
+    let chunk = chunks[index]
+    schedule(atRecordedMs: chunk.t) { [weak self] in
+      self?.listener?.onGattFrameChunk(chunk.bytes)
+      self?.scheduleNext(chunks, index: index + 1)
     }
   }
 
-  private func schedule(afterMs: Int64, _ block: @escaping () -> Void) {
-    DispatchQueue.main.asyncAfter(deadline: .now() + Double(afterMs) / 1000.0) { [weak self] in
+  private func schedule(atRecordedMs recordedMs: Int64, _ block: @escaping () -> Void) {
+    let deadline = playbackStartedAt + Double(recordedMs) / 1000.0
+    DispatchQueue.main.asyncAfter(deadline: max(deadline, .now())) { [weak self] in
       guard let self, !self.cancelled else { return }
       block()
     }
