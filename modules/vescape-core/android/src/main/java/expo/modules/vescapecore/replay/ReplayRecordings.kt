@@ -5,6 +5,7 @@ import expo.modules.vescapecore.recording.DebugRecordingStore
 import android.content.Context
 import org.json.JSONObject
 import java.io.File
+import java.io.InputStream
 
 /**
  * Resolves a replayable Debug Recording by name: the on-device store first, then the bundled
@@ -16,22 +17,27 @@ import java.io.File
 internal object ReplayRecordings {
     private const val ASSETS_DIR = "fixtures"
 
-    fun read(context: Context, name: String): String {
-        val store = DebugRecordingStore(context)
-        if (store.exists(name)) return store.read(name)
-        requireValidName(name)
-        return context.assets.open("$ASSETS_DIR/$name").bufferedReader().readText()
-    }
+    fun read(context: Context, name: String): String =
+        open(context, name).bufferedReader().use { it.readText() }
 
     /** The recording's `meta` first line, or null when missing/malformed (truncated capture). */
     fun readMeta(context: Context, name: String): JSONObject? =
-        read(context, name).lineSequence().firstOrNull()?.let { line ->
-            try {
-                JSONObject(line).takeIf { it.optString("kind") == "meta" }
-            } catch (e: Exception) {
-                null
+        open(context, name).bufferedReader().useLines { lines ->
+            lines.firstOrNull()?.let { line ->
+                try {
+                    JSONObject(line).takeIf { it.optString("kind") == "meta" }
+                } catch (e: Exception) {
+                    null
+                }
             }
         }
+
+    private fun open(context: Context, name: String): InputStream {
+        val store = DebugRecordingStore(context)
+        if (store.exists(name)) return store.openStream(name)
+        requireValidName(name)
+        return context.assets.open("$ASSETS_DIR/$name")
+    }
 
     /** Bundled fixture names + sizes, sorted by name (assets have no timestamps). */
     fun listBundled(context: Context): List<Map<String, Any>> =

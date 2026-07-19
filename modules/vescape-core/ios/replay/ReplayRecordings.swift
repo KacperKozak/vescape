@@ -23,13 +23,14 @@ internal enum ReplayRecordings {
       }
   }
 
-  /// Fixture `.jsonl` files, whether they landed in the CocoaPods resource bundle
-  /// (`VescapeCoreAssets`) or directly in the module bundle (same lookup as `cell-presets.json`).
+  /// Fixture `.jsonl` files. The dedicated `VescapeCoreAssets` resource bundle is authoritative
+  /// (only fixtures glob `.jsonl` there); the bare module bundle is a fallback for builds without
+  /// the CocoaPods bundle step, checked second so stray `.jsonl` files can never shadow fixtures.
   private static func bundledFixtureURLs() -> [URL] {
     let moduleBundle = Bundle(for: DebugRecordingStore.self)
     let bundles = [
-      moduleBundle,
       moduleBundle.url(forResource: "VescapeCoreAssets", withExtension: "bundle").flatMap { Bundle(url: $0) },
+      moduleBundle,
     ]
     for case let bundle? in bundles {
       let urls = bundle.urls(forResourcesWithExtension: "jsonl", subdirectory: nil) ?? []
