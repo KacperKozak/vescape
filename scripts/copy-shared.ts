@@ -38,6 +38,13 @@ export function sharedTargets(root = ROOT): SharedTarget[] {
       extensions: new Set(['.json']),
       rename: (file: string) => file,
     },
+    // Test-only replay fixtures (Debug Recordings); deliberately not copied into production assets.
+    {
+      src: join(root, 'shared', 'fixtures'),
+      dest: join(androidSrc, 'test', 'resources', 'fixtures'),
+      extensions: new Set(['.jsonl']),
+      rename: (file: string) => file,
+    },
   ]
 }
 

@@ -94,6 +94,7 @@ let package = Package(
         "config/RefloatXmlNode.swift",
         "location/GpsPrecision.swift",
         "protocol/VescProtocol.swift",
+        "replay/ReplayChunkDecoder.swift",
       ],
       resources: [
         .process("cell-presets.json"),
@@ -125,6 +126,7 @@ let package = Package(
         "config/ConfigRWControllerLinkIntegrityTests.swift",
         "connection/TransportDetectionTests.swift",
         "protocol/VescProtocolTests.swift",
+        "replay/WarningReplayHarnessTests.swift",
       ]
     ),
   ]
