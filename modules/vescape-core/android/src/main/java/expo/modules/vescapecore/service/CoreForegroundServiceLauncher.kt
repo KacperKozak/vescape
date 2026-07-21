@@ -150,13 +150,18 @@ internal object CoreForegroundServiceLauncher {
         )
     }
 
-    fun startGroupRideObserve(context: Context, beforeStart: () -> Unit): ForegroundServiceLaunchResult =
-        startForegroundService(
-            context = context,
-            intentAction = ACTION_START_GROUP_RIDE_OBSERVE,
-            failurePrefix = "Group Ride observe service start",
-            beforeStart = beforeStart,
-        )
+    fun startGroupRideObserve(context: Context, beforeStart: () -> Unit): ForegroundServiceLaunchResult {
+        val intent = Intent(context, CoreForegroundService::class.java).apply {
+            action = ACTION_START_GROUP_RIDE_OBSERVE
+        }
+        beforeStart()
+        return try {
+            context.startService(intent)
+            ForegroundServiceLaunchResult(started = true)
+        } catch (e: Exception) {
+            ForegroundServiceLaunchResult(started = false, failureMessage = "Group Ride observe service start failed: ${e.message}")
+        }
+    }
 
     private fun startConnectedDevice(
         context: Context,

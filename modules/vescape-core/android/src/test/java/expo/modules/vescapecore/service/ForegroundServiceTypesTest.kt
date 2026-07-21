@@ -9,11 +9,7 @@ class ForegroundServiceTypesTest {
     fun `idle service has no foreground type`() {
         assertEquals(
             0,
-            foregroundServiceType(
-                boardActive = false,
-                gpsActive = false,
-                groupRideObserveActive = false,
-            ),
+            foregroundServiceType(boardActive = false, gpsActive = false),
         )
     }
 
@@ -21,11 +17,7 @@ class ForegroundServiceTypesTest {
     fun `board session uses connected device type`() {
         assertEquals(
             ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
-            foregroundServiceType(
-                boardActive = true,
-                gpsActive = false,
-                groupRideObserveActive = false,
-            ),
+            foregroundServiceType(boardActive = true, gpsActive = false),
         )
     }
 
@@ -34,23 +26,15 @@ class ForegroundServiceTypesTest {
         assertEquals(
             ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE or
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION,
-            foregroundServiceType(
-                boardActive = true,
-                gpsActive = true,
-                groupRideObserveActive = false,
-            ),
+            foregroundServiceType(boardActive = true, gpsActive = true),
         )
     }
 
     @Test
-    fun `observe-only group ride uses remote messaging without bluetooth runtime permission`() {
+    fun `gps alone uses location type`() {
         assertEquals(
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING,
-            foregroundServiceType(
-                boardActive = false,
-                gpsActive = false,
-                groupRideObserveActive = true,
-            ),
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION,
+            foregroundServiceType(boardActive = false, gpsActive = true),
         )
     }
 
@@ -59,24 +43,15 @@ class ForegroundServiceTypesTest {
         assertEquals(
             ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE or
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION,
-            foregroundServiceTypeForConnectedDevicePromotion(
-                boardActive = false,
-                gpsActive = true,
-                groupRideObserveActive = false,
-            ),
+            foregroundServiceTypeForConnectedDevicePromotion(boardActive = false, gpsActive = true),
         )
     }
 
     @Test
-    fun `connected device promotion keeps active observe remote messaging type`() {
+    fun `connected device promotion without gps yields connected device type`() {
         assertEquals(
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE or
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_REMOTE_MESSAGING,
-            foregroundServiceTypeForConnectedDevicePromotion(
-                boardActive = false,
-                gpsActive = false,
-                groupRideObserveActive = true,
-            ),
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE,
+            foregroundServiceTypeForConnectedDevicePromotion(boardActive = false, gpsActive = false),
         )
     }
 }

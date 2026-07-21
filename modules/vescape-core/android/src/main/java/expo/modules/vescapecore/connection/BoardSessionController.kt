@@ -599,7 +599,6 @@ private var wearAutoLaunchOnConnect = true
             foregroundServiceTypeForConnectedDevicePromotion(
                 boardActive = boardConfig != null,
                 gpsActive = gpsMonitor.active,
-                groupRideObserveActive = groupRideObserver.active,
             ),
         )
     }
@@ -926,13 +925,13 @@ private var wearAutoLaunchOnConnect = true
         return foregroundServiceType(
             boardActive = boardConfig != null,
             gpsActive = gpsMonitor.active,
-            groupRideObserveActive = groupRideObserver.active,
         )
     }
 
     private fun reassertForeground() {
         val type = foregroundServiceType()
         if (type == 0) {
+            service.stopForeground(Service.STOP_FOREGROUND_REMOVE)
             stopIfIdle()
             return
         }

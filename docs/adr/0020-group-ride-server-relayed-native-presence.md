@@ -24,7 +24,7 @@ The durable, long-lived work (the WebSocket connection and the location pushes t
 
 ## Consequences
 
-- The app gains its first server dependency and its first always-on socket (the observe connection lives in the foreground service and stays connected to receive lifecycle pushes). The persistent foreground-service notification is now shown for Group Ride observing, not only for a **Board Session**.
+- The app gains its first server dependency and its first always-on socket. The observe connection lives in the native service and receives lifecycle pushes (ride-created/updated/ended). Observing runs as a plain (non-foreground) service — Android's `remoteMessaging` foreground-service type was not appropriate (it is reserved for VoIP/SMS handover) and `FOREGROUND_SERVICE_REMOTE_MESSAGING` was rejected by Play Store policy. The persistent foreground-service notification is shown only when a **Board Session** is active or GPS ride recording is running, not for pure observing.
 - No new runtime permission is required: the location-type foreground service already obtains screen-off location without `ACCESS_BACKGROUND_LOCATION`, because it is started while the app is foregrounded. Auto-share without opening the app (background-initiated) would need that permission and is explicitly out of scope.
 - In-memory server state means a Railway restart drops all rooms; clients recover by reconnecting and re-announcing. Acceptable for the ephemeral model.
 - Global fan-out of lifecycle events to all connected clients is simple and fine at PoC scale; if it grows, the fan-out must be geo-sharded. Group Ride locations are visible to all observers — accepted, since creating a Group Ride is an explicit opt-in to be discovered.
