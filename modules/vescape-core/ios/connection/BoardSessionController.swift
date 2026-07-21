@@ -857,10 +857,12 @@ internal final class BoardSessionController: VescGattListener {
   func onGattDisconnected(intentional: Bool, message: String) {
     if intentional { return }
     guard session != nil else { return }
-    // A replay link cannot come back: the recording ran out, so end the session like a terminal
-    // disconnect (Android parity: replay sessions run with `autoReconnect = false`).
+    // A replay link cannot come back: the recording ran out. Reaching the end of a recording is
+    // not a failure — tear the session down cleanly to idle (same as a user Stop) so no
+    // "Connection failed" pill shows and the REPLAY badge/name clear, instead of stranding the UI
+    // in the error phase with a stale session (Android parity: replay-end idle teardown).
     guard transport.supportsReconnect else {
-      fail(code: "DISCONNECTED", message: message)
+      endSession(phase: .idle, error: nil)
       return
     }
     // Any unexpected drop — during the initial handshake or mid-ride — recovers via the persistent

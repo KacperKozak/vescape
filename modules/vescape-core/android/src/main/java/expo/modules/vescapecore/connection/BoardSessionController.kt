@@ -1025,6 +1025,13 @@ private var wearAutoLaunchOnConnect = true
             if (!intentional) configController.onSessionTerminated("Board disconnected during Refloat config op")
             if (intentional) {
                 return
+            } else if (replayTransport != null) {
+                // A replay link cannot come back: the recording ran out. Reaching the end of a
+                // recording is not a failure — tear the session down cleanly to idle (same as a
+                // user Stop) so no "Board disconnected" error shows and the REPLAY badge/name
+                // clear, instead of stranding the UI in the error phase with a stale session
+                // (iOS parity: BoardSessionController.onGattDisconnected).
+                stopCurrentBoardSession(emitDisconnected = false)
             } else if (wasConnecting != null) {
                 if (
                     connectionCoordinator.retryStatus133Once(
