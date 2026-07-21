@@ -17,7 +17,7 @@ import org.junit.Test
  */
 class WarningReplayScenarioTest {
   private val jsonl =
-    javaClass.classLoader!!.getResourceAsStream("fixtures/replay-clean.jsonl")!!
+    javaClass.classLoader!!.getResourceAsStream("fixtures/replay-synthetic-bms.jsonl")!!
       .bufferedReader().readText()
 
   /** The fixture's known cell-group count; scenario counts are chosen distinct from it. */

@@ -76,7 +76,7 @@ final class WarningReplayHarnessTests: XCTestCase {
       .deletingLastPathComponent() // modules
       .deletingLastPathComponent() // repo root
     jsonl = try String(
-      contentsOf: root.appendingPathComponent("shared/fixtures/replay-clean.jsonl"),
+      contentsOf: root.appendingPathComponent("shared/fixtures/replay-synthetic-bms.jsonl"),
       encoding: .utf8
     )
   }

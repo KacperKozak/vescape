@@ -2,8 +2,8 @@ import { mkdirSync, writeFileSync } from 'fs'
 import { join } from 'path'
 
 /**
- * Regenerates the synthetic clean Debug Recording fixture at `shared/fixtures/replay-clean.jsonl`.
- * Placeholder until a real clean ride recording lands (issue #231): two minutes of healthy 16s BMS
+ * Regenerates the synthetic BMS Debug Recording fixture at `shared/fixtures/replay-synthetic-bms.jsonl`.
+ * Stand-in for a real smart-BMS clean ride: two minutes of healthy 16s BMS
  * frames encoded as real framed VESC packets (start byte, length, payload, CRC16, 0x03), split into
  * MTU-sized `rx` chunks so replay exercises the packet reassembler. Deterministic (seeded PRNG) so
  * reruns are diff-stable. Includes `tx` chunks, location lines, and one malformed line the replay
@@ -159,6 +159,6 @@ lines.push(line({ t: DURATION_MS, kind: 'session-state', status: 'disconnected' 
 
 const dir = join(ROOT, 'shared', 'fixtures')
 mkdirSync(dir, { recursive: true })
-const file = join(dir, 'replay-clean.jsonl')
+const file = join(dir, 'replay-synthetic-bms.jsonl')
 writeFileSync(file, lines.join('\n') + '\n')
 console.log(`✓ ${file} (${lines.length} lines)`)
