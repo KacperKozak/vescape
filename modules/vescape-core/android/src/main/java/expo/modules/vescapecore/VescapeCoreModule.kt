@@ -8,8 +8,10 @@ import expo.modules.vescapecore.service.CompanionPresence
 import expo.modules.vescapecore.service.CompanionRestartGate
 import expo.modules.vescapecore.service.CoreForegroundService
 import expo.modules.vescapecore.recording.DebugRecordingStore
+import expo.modules.vescapecore.replay.ReplayRecordings
 import expo.modules.vescapecore.diagnostics.DiagnosticReporter
 import expo.modules.vescapecore.service.ManualDisconnectAutoStartGate
+import expo.modules.vescapecore.service.SessionConfig
 import expo.modules.vescapecore.connection.TransportDetection
 import expo.modules.vescapecore.connection.buildSessionConfig
 
@@ -273,6 +275,15 @@ class VescapeCoreModule : Module() {
         }
       }
     }
+    AsyncFunction("listBundledDebugFixtures") { promise: Promise ->
+      CoroutineScope(Dispatchers.IO).launch {
+        try {
+          promise.resolve(ReplayRecordings.listBundled(context.applicationContext))
+        } catch (e: Exception) {
+          promise.reject("ERR_LIST_BUNDLED_FIXTURES", e.message, e)
+        }
+      }
+    }
     AsyncFunction("exportDebugRecording") { name: String, promise: Promise ->
       CoroutineScope(Dispatchers.IO).launch {
         try {
@@ -281,6 +292,28 @@ class VescapeCoreModule : Module() {
           promise.reject("ERR_EXPORT_DEBUG_RECORDING", e.message, e)
         }
       }
+    }
+    AsyncFunction("deleteDebugRecording") { name: String, promise: Promise ->
+      CoroutineScope(Dispatchers.IO).launch {
+        try {
+          DebugRecordingStore(context.applicationContext).delete(name)
+          promise.resolve(null)
+        } catch (e: Exception) {
+          promise.reject("ERR_DELETE_DEBUG_RECORDING", e.message, e)
+        }
+      }
+    }
+    AsyncFunction("startDebugReplay") { name: String, promise: Promise ->
+      CoroutineScope(Dispatchers.IO).launch {
+        try {
+          startDebugReplay(name, promise)
+        } catch (e: Exception) {
+          promise.reject("ERR_START_DEBUG_REPLAY", e.message, e)
+        }
+      }
+    }
+    AsyncFunction("stopDebugReplay") { promise: Promise ->
+      CoreForegroundService.stopBoardSession(context.applicationContext) { promise.resolve(null) }
     }
     Function("reportUiError") { message: String, source: String?, stack: String? ->
       DiagnosticReporter.get(context.applicationContext).capture(
@@ -693,6 +726,34 @@ key == "wearAutoLaunchOnConnect" ||
       onError = { _, message ->
         sendEvent("onError", mapOf("message" to message))
       },
+    )
+  }
+
+  /**
+   * Start a dev-mode replay session (ADR 0024): a Debug Recording played through the real session
+   * stack via ReplayTransport, keyed under a synthetic `replay:` board id so durable writes stay
+   * isolated from real boards. Stop = normal disconnect (`stopDebugReplay` / `stopBoard`).
+   */
+  private fun startDebugReplay(name: String, promise: Promise) {
+    val appCtx = context.applicationContext
+    val meta = ReplayRecordings.readMeta(appCtx, name)
+    val replayBoardId = "replay:" + name.removeSuffix(".jsonl")
+    val config = SessionConfig(
+      appBoardId = replayBoardId,
+      deviceId = replayBoardId,
+      deviceName = meta?.optString("deviceName")?.takeIf { it.isNotBlank() } ?: name,
+      transport = BoardTransport.Direct,
+      pollIntervalMs = meta?.optLong("pollIntervalMs") ?: 0L,
+      recordingEnabled = false,
+      telemetryRecordingEnabled = false,
+      autoReconnect = false,
+      replayRecordingName = name,
+    )
+    CoreForegroundService.startBoardSession(
+      appCtx,
+      config,
+      onSuccess = { promise.resolve(null) },
+      onError = { code, message -> promise.reject(code, message, null) },
     )
   }
 

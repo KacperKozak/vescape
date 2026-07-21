@@ -6,6 +6,7 @@ import expo.modules.vescapecore.service.VESC_SESSION_TAG
 import android.annotation.SuppressLint
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothGatt
+import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothGattCallback
 import android.bluetooth.BluetoothGattCharacteristic
 import android.bluetooth.BluetoothGattDescriptor
@@ -30,6 +31,19 @@ internal interface VescGattListener {
     fun onGattFrameChunk(chunk: ByteArray)
 }
 
+/**
+ * Transport seam under [BoardSessionController] (ADR 0024): everything the controller calls on the
+ * board link beyond the [VescGattListener] callbacks. The real [VescGattClient] speaks GATT; the
+ * dev-mode ReplayTransport plays a Debug Recording through the same surface.
+ * @parity /modules/vescape-core/ios/protocol/VescGattClient.swift `SessionTransport`
+ */
+internal interface SessionTransport {
+    fun connect(deviceId: String)
+    fun sendPayload(payload: ByteArray): Boolean
+    fun sendRemoteTilt(payload: ByteArray, urgent: Boolean = false): Boolean
+    fun clear(markIntentional: Boolean = true)
+}
+
 // @parity /modules/vescape-core/ios/protocol/VescGattClient.swift
 @SuppressLint("MissingPermission")
 internal class VescGattClient(
@@ -38,7 +52,7 @@ internal class VescGattClient(
     private val recorder: () -> SessionRecorder?,
     private val listener: VescGattListener,
     private val dispatchListener: ((() -> Unit) -> Unit) = { it() },
-) {
+) : SessionTransport {
     private var gatt: BluetoothGatt? = null
     private var txChar: BluetoothGattCharacteristic? = null
     private var pendingCccdWrites = 0
@@ -47,7 +61,9 @@ internal class VescGattClient(
     private var intentionalDisconnect = false
     private val writeQueue = VescWriteQueue()
 
-    fun connect(device: BluetoothDevice) {
+    override fun connect(deviceId: String) {
+        val adapter = (context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter
+        val device = adapter.getRemoteDevice(deviceId)
         Log.d(VESC_SESSION_TAG, "gatt connect request device=${device.address}")
         // A lingering gatt from a previous attempt keeps delivering callbacks on the
         // shared callback object and would race this connection; tear it down first.
@@ -58,7 +74,7 @@ internal class VescGattClient(
         gatt = device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
     }
 
-    fun sendPayload(payload: ByteArray): Boolean {
+    override fun sendPayload(payload: ByteArray): Boolean {
         if (gatt == null || txChar == null) return false
         writeQueue.enqueueNormal(VescPacketCodec.encode(payload))
         return drainWriteQueue()
@@ -68,13 +84,13 @@ internal class VescGattClient(
      * Enqueue transient remote tilt. Only latest unsent value survives, so an
      * emergency neutral command cannot sit behind stale tilt commands.
      */
-    fun sendRemoteTilt(payload: ByteArray, urgent: Boolean = false): Boolean {
+    override fun sendRemoteTilt(payload: ByteArray, urgent: Boolean): Boolean {
         if (gatt == null || txChar == null) return false
         writeQueue.replaceRemoteTilt(VescPacketCodec.encode(payload), urgent)
         return drainWriteQueue()
     }
 
-    fun clear(markIntentional: Boolean = true) {
+    override fun clear(markIntentional: Boolean) {
         try {
             cancelCccdTimeout()
             writeRetry?.let { handler.removeCallbacks(it) }

@@ -50,3 +50,10 @@ so both platforms record and replay.
   occasional timeouts during replay are accepted dev-tool behavior.
 - Committed clean fixtures make real-ride false positives CI failures: a detector change that fires
   on a healthy recorded ride must be investigated, not snapshotted away.
+- Config-scoped detection is replayable too (the v1 "telemetry-only" cut was lifted): a harness
+  drives the **real** `ConfigRW` controller/FSM with the recording's reassembled `rx` packets to
+  reconstruct the Refloat config read, then feeds the decoded `ConfigSafetyValues` to
+  `ConfigSafetyDetector`. No FSM re-implementation — the same schema parser and config decoder the
+  live session uses run in the harness; only request sending and side effects are stubbed. Fault
+  scenarios transform the decoded config values (never bytes). The one real-recording caveat: the
+  fixture must contain a completed config read (Thor301 does).
