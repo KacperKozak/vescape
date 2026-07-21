@@ -4,7 +4,7 @@ The default 500 ms poll interval limits alert reaction time and gauge responsive
 
 ## Decision
 
-Split the per-packet telemetry flow into two paths inside `VescForegroundService`:
+Split the per-packet telemetry flow into two paths inside `CoreForegroundService`:
 
 **Hot path** — runs on every BLE response at the configured poll rate (default 100 ms, configurable per-board).
 

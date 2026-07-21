@@ -49,8 +49,8 @@ Format: `@parity /repo-root/path-to-peer`, optionally suffixed with a backtick-q
 link is narrower than the whole file:
 
 ```
-@parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt
-@parity /modules/vesc-ble/android/src/main/java/expo/modules/vescble/VescBleModule.kt `frontendActive`
+@parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt
+@parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `frontendActive`
 ```
 
 ### Native ↔ native (iOS ↔ Android)
@@ -85,22 +85,23 @@ Rules:
 
 ## Dir layout
 
-- `modules/vesc-ble/` — the core of the app: ~50% of all code (Swift + Kotlin, roughly equal to all of `src/`). Durable native source, owns BLE transport, board session, telemetry, recording, alerts, and Refloat config. `ios/` and `android/` subtrees are peer implementations linked by `@parity`. Treat it as a first-class part of the codebase, not a native detail hanging off the JS app.
+- `modules/vescape-core/` — the core of the app: ~50% of all code (Swift + Kotlin, roughly equal to all of `src/`). Durable native source, owns BLE transport, board session, telemetry, recording, alerts, and Refloat config. `ios/` and `android/` subtrees are peer implementations linked by `@parity`. Treat it as a first-class part of the codebase, not a native detail hanging off the JS app.
 - `android/`, `ios/` — Expo-generated native folders. They are gitignored and not durable source; do not make lasting changes there. Update Expo config, modules, plugins, or source inputs instead.
-- `src/app/` — Expo Router routes only. No hooks, components, logic.
-- `src/lib/` — Pure domain logic. No React, no native calls.
+- `src/modules/<feature>/` — domain code, one folder per bounded context (`board`, `battery`, `tune`, `map`, `history`, `alerts`, `weather`, `group-ride`, `settings`, `diagnostics`, `profile`, `legal`). Each module colocates its own `lib/` (pure logic), `store/` (Zustand), `hooks/`, `components/`, `constants/`, and optionally `screens/`. If code names a domain concept, it lives here. Cross-module imports are restricted to the allowlist ratchet in `src/modules/moduleBoundaries.test.ts` — do not add edges without strong reason; multi-module cooperation belongs in `src/screens/` or `src/app/` composition.
+- `src/components/` — domain-less UI kit only (`base`, `forms`, `modals`, `charts`, `controls`, `gestures`, `overlays`, `settings` primitives, `dev`, `widgets`). If a component imports domain code, it belongs in a module.
 - `src/helpers/` — Single-source pure utilities (finite, id, error, format).
-- `src/store/` — Zustand stores. Plain data only, no React elements.
-- `src/components/` — React components only. No pure logic, no native calls.
-- `src/hooks/` — React hooks only. Bridge between store & UI.
-- `src/screens/` — Screen-level component subtrees (center screen).
-- `src/constants/`, `src/config/`, `src/navigation/` — Static defs.
+- `src/hooks/` — Generic React hooks only (no domain imports).
+- `src/screens/` — Multi-module screen composition. No single-domain screens, no pure domain logic.
+- `src/bootstrap/` — App-root wiring run once at startup (native→JS data sync).
+- `src/app/` — Expo Router routes only. Thin re-exports from modules/screens.
+- `src/constants/` — `theme.ts` only. `src/config/`, `src/navigation/` — static defs.
 
 ## React Native
 
 React Native UI conventions, including icon usage, live in `docs/agents/react.md`.
 Visual design language (colors, layout, typography) lives in `docs/design.md`.
 PostHog agent debugging commands live in `docs/agents/posthog.md`.
+Clerk production authentication setup and Android email-link debugging live in `docs/agents/clerk-auth.md`.
 Mapbox dependency patches and their native camera semantics live in `docs/agents/mapbox-patches.md`.
 Generated native state (`ios/`, `android/`, Pods) is kept in sync by `bun run ios` / `bun run android`; see `docs/agents/native-sync.md`.
 

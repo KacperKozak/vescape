@@ -7,14 +7,14 @@ import {
   View,
   type ListRenderItemInfo,
 } from 'react-native'
-import { Text } from '@/components/ui/base/Text'
+import { Text } from '@/components/base/Text'
 import { useNavigation } from 'expo-router'
 import { ListIcon, TrashIcon } from 'phosphor-react-native'
-import { clearDiagnosticEvents, getDiagnosticEvents, type LocalDiagnosticEvent } from 'vesc-ble'
+import { clearDiagnosticEvents, getDiagnosticEvents, type LocalDiagnosticEvent } from 'vescape-core'
 
-import { ConfirmModal } from '@/components/ui/modals/ConfirmModal'
-import { IconButton } from '@/components/ui/base/IconButton'
-import { IconHero } from '@/components/ui/settings/IconHero'
+import { ConfirmModal } from '@/components/modals/ConfirmModal'
+import { IconButton } from '@/components/base/IconButton'
+import { IconHero } from '@/components/settings/IconHero'
 import { theme } from '@/constants/theme'
 
 const PAGE_SIZE = 50

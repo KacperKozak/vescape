@@ -1,21 +1,21 @@
 import { ScrollView, StyleSheet, View } from 'react-native'
-import { Text } from '@/components/ui/base/Text'
+import { Text } from '@/components/base/Text'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useCallback, useMemo, useState } from 'react'
 
 import { ListIcon } from 'phosphor-react-native'
-import { ColorPicker } from '@/components/ui/forms/ColorPicker'
-import { Dropdown, useTriggerRef } from '@/components/ui/forms/Dropdown'
-import { IconHero } from '@/components/ui/settings/IconHero'
-import { Input } from '@/components/ui/forms/Input'
-import { Select, type SelectOption } from '@/components/ui/forms/Select'
-import { SoundPicker } from '@/components/ui/forms/SoundPicker'
-import { ShowcaseCard } from '@/components/ui/dev/ShowcaseCard'
-import { OpenButton } from '@/components/ui/dev/ShowcaseControls'
+import { ColorPicker } from '@/components/forms/ColorPicker'
+import { Dropdown, useTriggerRef } from '@/components/forms/Dropdown'
+import { IconHero } from '@/components/settings/IconHero'
+import { Input } from '@/components/forms/Input'
+import { Select, type SelectOption } from '@/components/forms/Select'
+import { SoundPicker } from '@/components/forms/SoundPicker'
+import { ShowcaseCard } from '@/components/dev/ShowcaseCard'
+import { OpenButton } from '@/components/dev/ShowcaseControls'
 
-import { riderColorOptions } from '@/constants/riderColors'
+import { riderColorOptions } from '@/modules/group-ride/constants/riderColors'
 import { theme } from '@/constants/theme'
-import type { AlertPreset } from 'vesc-ble'
+import type { AlertPreset } from 'vescape-core'
 
 function SelectShowcase() {
   const options: SelectOption[] = useMemo(

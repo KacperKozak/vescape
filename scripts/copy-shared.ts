@@ -12,11 +12,11 @@ export interface SharedTarget {
 
 /**
  * Shared assets have exactly one source of truth: `shared/`. iOS reads it through symlinks committed
- * under `modules/vesc-ble/ios/`, so only Android needs real copies — Gradle cannot follow a symlink
+ * under `modules/vescape-core/ios/`, so only Android needs real copies — Gradle cannot follow a symlink
  * out of the module. These copies are generated, gitignored, and refreshed by `copyShared()`.
  */
 export function sharedTargets(root = ROOT): SharedTarget[] {
-  const androidSrc = join(root, 'modules', 'vesc-ble', 'android', 'src')
+  const androidSrc = join(root, 'modules', 'vescape-core', 'android', 'src')
 
   return [
     {

@@ -3,11 +3,11 @@ import { ScrollView, StyleSheet } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { BatteryChargingIcon } from 'phosphor-react-native'
 
-import { IconHero } from '@/components/ui/settings/IconHero'
-import { RawSection } from '@/components/ui/settings/RawSection'
-import { summarizeBms } from '@/lib/battery'
-import { useBleStore } from '@/store/bleStore'
-import { useBoardStore } from '@/store/boardStore'
+import { IconHero } from '@/components/settings/IconHero'
+import { RawSection } from '@/components/settings/RawSection'
+import { summarizeBms } from '@/modules/battery/lib'
+import { useBleStore } from '@/modules/board/store/bleStore'
+import { useBoardStore } from '@/modules/board/store/boardStore'
 import { theme } from '@/constants/theme'
 
 export default function BatteryRawScreen() {

@@ -9,14 +9,14 @@ import {
   PlugIcon,
 } from 'phosphor-react-native'
 
-import { Text } from '@/components/ui/base/Text'
-import { IconHero } from '@/components/ui/settings/IconHero'
-import { DeviceRow } from '@/components/ui/base/DeviceRow'
-import { InfoBadge } from '@/components/ui/base/InfoBadge'
-import { StepTimeline, type StepState, type TimelineStep } from '@/components/ui/base/StepTimeline'
-import { ShowcaseCard } from '@/components/ui/dev/ShowcaseCard'
-import { BoardWarningRow } from '@/components/domain/warnings/BoardWarningRow'
-import { ChipRow, ToggleRow } from '@/components/ui/dev/ShowcaseControls'
+import { Text } from '@/components/base/Text'
+import { IconHero } from '@/components/settings/IconHero'
+import { DeviceRow } from '@/components/base/DeviceRow'
+import { InfoBadge } from '@/components/base/InfoBadge'
+import { StepTimeline, type StepState, type TimelineStep } from '@/components/base/StepTimeline'
+import { ShowcaseCard } from '@/components/dev/ShowcaseCard'
+import { BoardWarningRow } from '@/modules/board/components/BoardWarningRow'
+import { ChipRow, ToggleRow } from '@/components/dev/ShowcaseControls'
 import { theme } from '@/constants/theme'
 
 function DeviceRowShowcase() {

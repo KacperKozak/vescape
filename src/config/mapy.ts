@@ -1,4 +1,4 @@
-import { buildMapyTileUrlTemplate, getMapyApiKey } from '@/lib/map/mapyTiles'
+import { buildMapyTileUrlTemplate, getMapyApiKey } from '@/modules/map/lib/mapyTiles'
 
 const MAPY_API_KEY = getMapyApiKey(process.env.EXPO_PUBLIC_MAPY_API_KEY)
 

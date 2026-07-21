@@ -1,6 +1,6 @@
 # Pure-logic modules in native services
 
-`VescForegroundService` had grown to ~2200 LOC, mixing Android lifecycle, BLE protocol state machines, telemetry pipelines, alert evaluation, reconnect policy, notification formatting, and diagnostics. We are extracting the platform-agnostic logic into standalone Kotlin modules with no Android imports, so the Service becomes a thin coordinator that owns lifecycle and wires collaborators.
+`CoreForegroundService` had grown to ~2200 LOC, mixing Android lifecycle, BLE protocol state machines, telemetry pipelines, alert evaluation, reconnect policy, notification formatting, and diagnostics. We are extracting the platform-agnostic logic into standalone Kotlin modules with no Android imports, so the Service becomes a thin coordinator that owns lifecycle and wires collaborators.
 
 Modules follow a **pragmatic-pure** stance: idiomatic Kotlin classes with their own state, no Android dependencies, side effects only through injected ports (`Scheduler`, `BleSender`, `EventEmitter`). The Refloat config read/write controller is the one **strict** exception — modelled as `fn(state, event) -> (state', List<Effect>)` because its many transitions collapse better as a pure FSM with effect interpretation than as a stateful class.
 

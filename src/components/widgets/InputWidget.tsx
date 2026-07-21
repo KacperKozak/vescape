@@ -1,10 +1,10 @@
 import { useState, type ReactNode } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
-import { Text } from '@/components/ui/base/Text'
+import { Text } from '@/components/base/Text'
 import { CheckIcon, PencilSimpleIcon } from 'phosphor-react-native'
 
-import { Input } from '@/components/ui/forms/Input'
-import { TextPromptModal } from '@/components/ui/modals/TextPromptModal'
+import { Input } from '@/components/forms/Input'
+import { TextPromptModal } from '@/components/modals/TextPromptModal'
 import { widgetSurface, type WidgetSize } from '@/components/widgets/widgetSurface'
 import { theme } from '@/constants/theme'
 

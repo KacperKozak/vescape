@@ -2,19 +2,20 @@ import Mapbox, { Camera, MapView } from '@rnmapbox/maps'
 import { SlidersHorizontalIcon } from 'phosphor-react-native'
 import { useCallback, useRef, useState, type ElementRef } from 'react'
 import { StyleSheet, View } from 'react-native'
-import { Text } from '@/components/ui/base/Text'
-import type { MapPoint } from 'vesc-ble'
+import { Text } from '@/components/base/Text'
+import type { MapPoint } from 'vescape-core'
 
-import { IconButton } from '@/components/ui/base/IconButton'
-import { EdgeDrawer } from '@/components/ui/overlays/AnchoredSheet'
-import { useTriggerRef } from '@/components/ui/overlays/measureTrigger'
-import { ChipRow, ToggleRow, ValueRow } from '@/components/ui/dev/ShowcaseControls'
-import { MapStyleSwitch } from '@/components/ui/controls/MapStyleSwitch'
+import { IconButton } from '@/components/base/IconButton'
+import { EdgeDrawer } from '@/components/overlays/AnchoredSheet'
+import { useTriggerRef } from '@/components/overlays/measureTrigger'
+import { ChipRow, ToggleRow, ValueRow } from '@/components/dev/ShowcaseControls'
+import { MapStyleSwitch } from '@/modules/map/components/MapStyleSwitch'
 import { MAPBOX_ACCESS_TOKEN } from '@/config/mapy'
-import { BLANK_STYLE, MAP_STYLES, type MapStyleKey } from '@/constants/mapStyles'
-import { ONE_DARK_MAP_STYLE } from '@/constants/oneDarkMapStyle'
+import { BLANK_STYLE, MAP_STYLES, type MapStyleKey } from '@/modules/map/constants/mapStyles'
+import { getSatelliteDarkMapStyle } from '@/modules/map/constants/satelliteDarkMapStyle'
+import { ONE_DARK_MAP_STYLE } from '@/modules/map/constants/oneDarkMapStyle'
 import { theme } from '@/constants/theme'
-import type { HistoryMetricKey } from '@/lib/history/metricColorScale'
+import type { HistoryMetricKey } from '@/modules/history/lib/metricColorScale'
 import {
   FIXTURE_ACCURACY_FIX,
   FIXTURE_ACCURACY_SHAPE,
@@ -32,8 +33,8 @@ import {
   FIXTURE_RIDE_ROUTE_SHAPE,
   FIXTURE_RIDE_TELEMETRY_SAMPLES,
   FIXTURE_RIDERS,
-} from '@/lib/map/mapShowcaseFixtures'
-import { CenterMapLayers, HistoryMapLayers } from '@/screens/center/CenterMapLayers'
+} from '@/screens/showcase/mapShowcaseFixtures'
+import { MainMapLayers, HistoryMapLayers } from '@/screens/main/map/MainMapLayers'
 
 Mapbox.setAccessToken(MAPBOX_ACCESS_TOKEN)
 
@@ -51,6 +52,7 @@ export default function MapComponentsShowcase() {
   const [styleKey, setStyleKey] = useState<MapStyleKey>('onedark')
   const [styleExpanded, setStyleExpanded] = useState(false)
   const [weatherActive, setWeatherActive] = useState(false)
+  const [legalLimitsActive, setLegalLimitsActive] = useState(false)
   const [mapPoints, setMapPoints] = useState<MapPoint[]>(FIXTURE_MAP_POINTS)
   const [selectedMapPointId, setSelectedMapPointId] = useState<string | null>(null)
   const [activeHistoryMapMetric, setActiveHistoryMapMetric] = useState<HistoryMetricKey>('speed')
@@ -70,7 +72,8 @@ export default function MapComponentsShowcase() {
   const selectedStyle = MAP_STYLES.find((s) => s.key === styleKey) ?? MAP_STYLES[0]
   const isMapy = selectedStyle.key === 'mapy'
   const isOneDark = selectedStyle.key === 'onedark'
-  const useCustomJSON = isMapy || isOneDark
+  const isSatellite = selectedStyle.key === 'satellite'
+  const useCustomJSON = isMapy || isOneDark || isSatellite
   const showBuildings3d = selectedStyle.key === 'outdoors' || selectedStyle.key === 'onedark'
 
   return (
@@ -78,7 +81,15 @@ export default function MapComponentsShowcase() {
       <MapView
         style={StyleSheet.absoluteFill}
         styleURL={useCustomJSON ? undefined : selectedStyle.styleURL}
-        styleJSON={isOneDark ? ONE_DARK_MAP_STYLE : isMapy ? BLANK_STYLE : undefined}
+        styleJSON={
+          isOneDark
+            ? ONE_DARK_MAP_STYLE
+            : isMapy
+              ? BLANK_STYLE
+              : isSatellite
+                ? getSatelliteDarkMapStyle()
+                : undefined
+        }
         pitchEnabled={false}
         rotateEnabled={false}
         compassEnabled={false}
@@ -96,13 +107,15 @@ export default function MapComponentsShowcase() {
           animationMode="none"
         />
         {/* historyActive=false renders buildings/raster/weather + live pins/GPS puck/riders */}
-        <CenterMapLayers
+        <MainMapLayers
           historyActive={false}
           expandSelectedMapPoints
           isMapy={isMapy}
           isOneDark={isOneDark}
+          isSatellite={isSatellite}
           showBuildings3d={showBuildings3d}
           weatherActive={weatherActive}
+          legalLimitsActive={legalLimitsActive}
           liveTrailShape={FIXTURE_LIVE_TRAIL_SHAPE}
           rideRouteShape={null}
           accuracyFix={FIXTURE_ACCURACY_FIX}
@@ -130,6 +143,7 @@ export default function MapComponentsShowcase() {
           onSuppressNextMapPress={() => {}}
           onSelectMarker={() => {}}
           onOpenMedia={() => {}}
+          onSelectLegalCountry={() => {}}
         />
         {/* Rendered alongside the live layer (not behind historyActive) so the ride route,
             markers and media pins are always visible together with everything above. */}
@@ -147,6 +161,7 @@ export default function MapComponentsShowcase() {
           onSuppressNextMapPress={() => {}}
           onSelectMarker={(selection) => setLastEvent(`Marker: ${selection.marker.type}`)}
           onOpenMedia={(asset) => setLastEvent(`Media: ${asset.filename}`)}
+          highContrastRoutes={isSatellite}
         />
       </MapView>
 
@@ -177,6 +192,7 @@ export default function MapComponentsShowcase() {
         onClose={() => setSheetVisible(false)}
       >
         <ToggleRow label="Weather radar" value={weatherActive} onToggle={setWeatherActive} />
+        <ToggleRow label="Legal limits" value={legalLimitsActive} onToggle={setLegalLimitsActive} />
         <ChipRow
           label="Route metric"
           options={HISTORY_METRIC_OPTIONS.map((m) => m.label)}

@@ -7,30 +7,30 @@ import { ToolboxIcon } from 'phosphor-react-native'
 import {
   FieldEditorPopover,
   type FieldEditorTarget,
-} from '@/components/domain/tune/FieldEditorPopover'
+} from '@/modules/tune/components/FieldEditorPopover'
 import {
   TuneProfileIcon,
   TuneProfileMetadataModal,
   tuneProfileColorTheme,
   type TuneProfileMetadataValue,
-} from '@/components/domain/tune/TuneProfileMetadataModal'
-import { basicSliderColor, basicSliderIcon } from '@/components/domain/tune/basicSliderIcons'
-import { useTriggerRef } from '@/components/ui/forms/Dropdown'
-import { BasicSliderCell } from '@/components/ui/tune/BasicSliderCell'
-import { TuneDial } from '@/components/ui/tune/TuneDial'
-import { TunePreview } from '@/components/ui/tune/TunePreview'
+} from '@/modules/tune/components/TuneProfileMetadataModal'
+import { basicSliderColor, basicSliderIcon } from '@/modules/tune/components/basicSliderIcons'
+import { useTriggerRef } from '@/components/forms/Dropdown'
+import { BasicSliderCell } from '@/modules/tune/components/BasicSliderCell'
+import { TuneDial } from '@/modules/tune/components/TuneDial'
+import { TunePreview } from '@/modules/tune/components/TunePreview'
 import {
   TunePreviewScenarioControls,
   type HillsPresetId,
-} from '@/components/ui/tune/TunePreviewScenarioControls'
-import { IconHero } from '@/components/ui/settings/IconHero'
-import { Text } from '@/components/ui/base/Text'
-import { ShowcaseCard } from '@/components/ui/dev/ShowcaseCard'
-import { ChipRow, OpenButton, ValueRow } from '@/components/ui/dev/ShowcaseControls'
+} from '@/modules/tune/components/TunePreviewScenarioControls'
+import { IconHero } from '@/components/settings/IconHero'
+import { Text } from '@/components/base/Text'
+import { ShowcaseCard } from '@/components/dev/ShowcaseCard'
+import { ChipRow, OpenButton, ValueRow } from '@/components/dev/ShowcaseControls'
 
 import { theme } from '@/constants/theme'
-import type { BasicSliderItem } from '@/lib/tune/sliderDefinitions'
-import { DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS } from '@/lib/tune/tunePreview'
+import type { BasicSliderItem } from '@/modules/tune/lib/sliderDefinitions'
+import { DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS } from '@/modules/tune/lib/tunePreview'
 
 const RANGE_CONFIGS = {
   tune: { min: -5, max: 5, step: 1 },

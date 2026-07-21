@@ -27,9 +27,9 @@ beforeEach(() => {
   write('assets/images/icon.png', 'icon')
   write('shared/alerts/alert_beep.wav', 'beep')
   write('shared/data/cell-presets.json', '{}')
-  write('modules/vesc-ble/expo-module.config.json', '{}')
-  write('modules/vesc-ble/ios/VescBle.podspec', 'spec')
-  write('modules/vesc-ble/ios/VescBleModule.swift', 'class VescBleModule {}')
+  write('modules/vescape-core/expo-module.config.json', '{}')
+  write('modules/vescape-core/ios/VescapeCore.podspec', 'spec')
+  write('modules/vescape-core/ios/VescapeCoreModule.swift', 'class VescapeCoreModule {}')
 })
 
 afterEach(() => {
@@ -39,21 +39,24 @@ afterEach(() => {
 describe('podsFingerprint', () => {
   it('ignores edits to existing Swift files', () => {
     const before = podsFingerprint(root)
-    write('modules/vesc-ble/ios/VescBleModule.swift', 'class VescBleModule { func added() {} }')
+    write(
+      'modules/vescape-core/ios/VescapeCoreModule.swift',
+      'class VescapeCoreModule { func added() {} }',
+    )
 
     expect(podsFingerprint(root)).toEqual(before)
   })
 
   it('changes when a Swift file is added, because Pods compile a globbed file list', () => {
     const before = podsFingerprint(root)
-    write('modules/vesc-ble/ios/BoardPhase.swift', 'enum BoardPhase {}')
+    write('modules/vescape-core/ios/BoardPhase.swift', 'enum BoardPhase {}')
 
     expect(podsFingerprint(root)).not.toEqual(before)
   })
 
   it('changes when the podspec changes', () => {
     const before = podsFingerprint(root)
-    write('modules/vesc-ble/ios/VescBle.podspec', 'spec with new dependency')
+    write('modules/vescape-core/ios/VescapeCore.podspec', 'spec with new dependency')
 
     expect(podsFingerprint(root)).not.toEqual(before)
   })
@@ -69,7 +72,7 @@ describe('prebuildFingerprint', () => {
 
   it('changes when Expo module native registration changes', () => {
     const before = prebuildFingerprint('ios', root)
-    write('modules/vesc-ble/expo-module.config.json', '{"platforms":["ios"]}')
+    write('modules/vescape-core/expo-module.config.json', '{"platforms":["ios"]}')
 
     expect(prebuildFingerprint('ios', root)).not.toEqual(before)
   })
@@ -85,7 +88,7 @@ describe('prebuildFingerprint', () => {
 
   it('ignores Swift edits, which prebuild does not regenerate', () => {
     const before = prebuildFingerprint('ios', root)
-    write('modules/vesc-ble/ios/BoardPhase.swift', 'enum BoardPhase {}')
+    write('modules/vescape-core/ios/BoardPhase.swift', 'enum BoardPhase {}')
 
     expect(prebuildFingerprint('ios', root)).toEqual(before)
   })
@@ -109,9 +112,9 @@ describe('prebuildFingerprint', () => {
 describe('shared assets', () => {
   it('reports every copy as missing before copy:shared runs', () => {
     expect(missingSharedOutputs(root)).toEqual([
-      'modules/vesc-ble/android/src/main/res/raw/alert_beep.wav',
-      'modules/vesc-ble/android/src/main/assets/data/cell-presets.json',
-      'modules/vesc-ble/android/src/test/resources/data/cell-presets.json',
+      'modules/vescape-core/android/src/main/res/raw/alert_beep.wav',
+      'modules/vescape-core/android/src/main/assets/data/cell-presets.json',
+      'modules/vescape-core/android/src/test/resources/data/cell-presets.json',
     ])
   })
 
@@ -123,10 +126,10 @@ describe('shared assets', () => {
 
   it('reports a deleted copy as missing', () => {
     copyShared(root, { quiet: true })
-    unlinkSync(join(root, 'modules/vesc-ble/android/src/main/res/raw/alert_beep.wav'))
+    unlinkSync(join(root, 'modules/vescape-core/android/src/main/res/raw/alert_beep.wav'))
 
     expect(missingSharedOutputs(root)).toEqual([
-      'modules/vesc-ble/android/src/main/res/raw/alert_beep.wav',
+      'modules/vescape-core/android/src/main/res/raw/alert_beep.wav',
     ])
   })
 
@@ -134,7 +137,7 @@ describe('shared assets', () => {
     write('shared/alerts/Alert_Loud.WAV', 'loud')
 
     expect(missingSharedOutputs(root)).toContain(
-      'modules/vesc-ble/android/src/main/res/raw/alert_loud.wav',
+      'modules/vescape-core/android/src/main/res/raw/alert_loud.wav',
     )
 
     copyShared(root, { quiet: true })
@@ -227,11 +230,11 @@ describe('planSync', () => {
 
   it('installs pods when the module Swift file list changed', () => {
     const base = synced('ios')
-    write('modules/vesc-ble/ios/BoardPhase.swift', 'enum BoardPhase {}')
+    write('modules/vescape-core/ios/BoardPhase.swift', 'enum BoardPhase {}')
 
     const steps = planSync({ ...base, next: state('ios') })
 
-    expect(steps).toEqual([{ action: 'pods', reasons: ['~ modules/vesc-ble/ios#layout'] }])
+    expect(steps).toEqual([{ action: 'pods', reasons: ['~ modules/vescape-core/ios#layout'] }])
   })
 
   it('installs pods when Pods/ is missing', () => {
@@ -242,7 +245,7 @@ describe('planSync', () => {
 
   it('never installs pods for android', () => {
     const base = synced('android')
-    write('modules/vesc-ble/ios/BoardPhase.swift', 'enum BoardPhase {}')
+    write('modules/vescape-core/ios/BoardPhase.swift', 'enum BoardPhase {}')
 
     const steps = planSync({ ...base, podsDirExists: false, next: state('android') })
 
@@ -260,14 +263,14 @@ describe('planSync', () => {
 
   it('copies shared assets when a generated copy was deleted', () => {
     const base = synced('android')
-    unlinkSync(join(root, 'modules/vesc-ble/android/src/main/res/raw/alert_beep.wav'))
+    unlinkSync(join(root, 'modules/vescape-core/android/src/main/res/raw/alert_beep.wav'))
 
     const steps = planSync({ ...base, missingSharedOutputs: missingSharedOutputs(root) })
 
     expect(steps).toEqual([
       {
         action: 'shared',
-        reasons: ['! modules/vesc-ble/android/src/main/res/raw/alert_beep.wav is missing'],
+        reasons: ['! modules/vescape-core/android/src/main/res/raw/alert_beep.wav is missing'],
       },
     ])
   })
@@ -278,7 +281,7 @@ describe('planSync', () => {
 
     const steps = planSync({
       ...base,
-      missingSharedOutputs: ['modules/vesc-ble/android/src/main/res/raw/alert_beep.wav'],
+      missingSharedOutputs: ['modules/vescape-core/android/src/main/res/raw/alert_beep.wav'],
       next: state('ios'),
     })
 

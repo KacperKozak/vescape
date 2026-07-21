@@ -7,7 +7,7 @@ import java.nio.ByteOrder
  * Float32 lane count + order of a Watch Frame:
  *   0 speed, 1 duty, 2 battery, 3 motorTemp, 4 ctrlTemp.
  *
- * Mirrors the phone-side builder (`expo.modules.vescble.WatchFrameBuilder`, `WATCH_FRAME_FIELD_COUNT`)
+ * Mirrors the phone-side builder (`expo.modules.vescapecore.WatchFrameBuilder`, `WATCH_FRAME_FIELD_COUNT`)
  * by convention (ADR-0018). Adding or reordering a lane means editing both sides in the same order,
  * or the decode silently misreads. Keep the two lists adjacent in review.
  */

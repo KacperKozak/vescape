@@ -2,9 +2,9 @@ import { Linking, ScrollView, StyleSheet, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { CrownIcon, PaletteIcon, ShieldCheckIcon, UsersIcon } from 'phosphor-react-native'
 
-import { IconHero } from '@/components/ui/settings/IconHero'
-import { SettingsCard } from '@/components/ui/settings/SettingsCard'
-import { SettingsRow } from '@/components/ui/settings/SettingsRow'
+import { IconHero } from '@/components/settings/IconHero'
+import { SettingsCard } from '@/components/settings/SettingsCard'
+import { SettingsRow } from '@/components/settings/SettingsRow'
 import { theme } from '@/constants/theme'
 
 const PRIVACY_POLICY_URL = 'https://vescape.app/privacy'

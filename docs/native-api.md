@@ -1,8 +1,8 @@
 # Native API
 
-JS bridge surface exposed by `VescBle` Expo module. Android: full impl. iOS: bridge stub until the native CoreBluetooth and storage subsystems land.
+JS bridge surface exposed by `VescapeCore` Expo module. Android: full impl. iOS: bridge stub until the native CoreBluetooth and storage subsystems land.
 
-Source of truth: `modules/vesc-ble/src/index.ts` (types), `VescBleModule.kt` (Android), `VescBleModule.swift` (iOS bridge stub).
+Source of truth: `modules/vescape-core/src/index.ts` (types), `VescapeCoreModule.kt` (Android), `VescapeCoreModule.swift` (iOS bridge stub).
 
 ## Term map
 
@@ -98,7 +98,7 @@ Field omitted (null) when change < threshold from previous:
 | `getTelemetrySamples({fromMs,toMs,deviceId?,limit?})` | `TelemetrySample[]`                                                        | Decoded from compressed frames. Reconstructs state from nearest keyframe. Default 2000, max 10000 |
 | `getHistoryRange({fromMs,toMs,deviceId?,limit?})`     | `{boardSamples, gpsSamples, markers}`                                      | Combined query: decoded samples + GPS points + session markers                                    |
 | `getTelemetrySummary()`                               | `{sampleCount, gpsPointCount, firstAtMs, lastAtMs, droppedPendingSamples}` | DB-wide stats                                                                                     |
-| `getDatabaseSizeBytes()`                              | number                                                                     | File size of telemetry.db                                                                         |
+| `getDatabaseSizeBytes()`                              | number                                                                     | File size of vescape.db                                                                           |
 
 ### TelemetryMinuteBucket (bucket shape)
 
@@ -320,4 +320,4 @@ Live event has `stateName` + `avgLatency` + `firedAlerts`. History `TelemetrySam
 ```
 
 Not persisted to history and not fed into alerts. `bleStore` keeps only the latest
-snapshot (`latestBms`); UI derives min/max/spread via `summarizeBms` in `src/lib/battery/bms.ts`.
+snapshot (`latestBms`); UI derives min/max/spread via `summarizeBms` in `src/modules/battery/lib/bms.ts`.

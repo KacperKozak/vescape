@@ -1,5 +1,5 @@
 import { ScrollView, StyleSheet, View } from 'react-native'
-import { Text } from '@/components/ui/base/Text'
+import { Text } from '@/components/base/Text'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useMemo, useState } from 'react'
 import {
@@ -7,38 +7,41 @@ import {
   ArrowsClockwiseIcon,
   BriefcaseIcon,
   CameraIcon,
+  CloudSunIcon,
   HeartIcon,
   HouseIcon,
   LightningIcon,
   MapPinIcon,
+  MapTrifoldIcon,
   NavigationArrowIcon,
   PauseIcon,
   PencilSimpleIcon,
   RecordIcon,
+  SpeedometerIcon,
   StopIcon,
   SwatchesIcon,
   TrashIcon,
 } from 'phosphor-react-native'
 
-import { IconHero } from '@/components/ui/settings/IconHero'
-import { CircleButton } from '@/components/ui/controls/CircleButton'
+import { IconHero } from '@/components/settings/IconHero'
+import { CircleButton } from '@/components/controls/CircleButton'
 import {
   FloatingActionPill,
   FloatingBarFrame,
   FloatingStatusPill,
   type FloatingStatusPillModel,
-} from '@/components/ui/controls/FloatingBar'
-import { PrevNextSelector } from '@/components/ui/controls/PrevNextSelector'
+} from '@/components/controls/FloatingBar'
+import { PrevNextSelector } from '@/components/controls/PrevNextSelector'
 import {
   PillSelectorItem,
   PillSelectorAdd,
   PillSelectorDot,
   PillSelectorMenuItem,
   PillSelector,
-} from '@/components/ui/controls/PillSelector'
-import { MapOptionSelector } from '@/components/ui/controls/MapOptionSelector'
-import { ShowcaseCard } from '@/components/ui/dev/ShowcaseCard'
-import { ChipRow } from '@/components/ui/dev/ShowcaseControls'
+} from '@/components/controls/PillSelector'
+import { MapOptionSelector } from '@/components/controls/MapOptionSelector'
+import { ShowcaseCard } from '@/components/dev/ShowcaseCard'
+import { ChipRow } from '@/components/dev/ShowcaseControls'
 import { theme } from '@/constants/theme'
 
 function ZonePillsShowcase() {
@@ -137,6 +140,41 @@ function ZonePillsShowcase() {
         <View style={styles.selectorVariant}>
           <Text style={styles.selectorCaption}>constrained width, horizontal scroll</Text>
           <View style={styles.narrowPreview}>{renderIconOptions(true)}</View>
+        </View>
+
+        <View style={styles.selectorVariant}>
+          <Text style={styles.selectorCaption}>map mode tabs, active label only</Text>
+          <PillSelector activeId="weather" contained fitContent style={styles.mapModeTabsPreview}>
+            <PillSelectorItem
+              id="map"
+              label="Explore"
+              icon={MapTrifoldIcon}
+              activeLabelOnly
+              color={theme.palette.violet}
+              activeWidth={116}
+              onPress={() => undefined}
+            />
+            <PillSelectorItem
+              id="weather"
+              label="Weather"
+              icon={CloudSunIcon}
+              activeLabelOnly
+              color={theme.palette.sky}
+              activeWidth={142}
+              inactiveWidth={58}
+              onPress={() => undefined}
+            />
+            <PillSelectorItem
+              id="legalLimits"
+              label="Legal limits"
+              icon={SpeedometerIcon}
+              activeLabelOnly
+              color={theme.palette.green}
+              activeWidth={136}
+              inactiveWidth={44}
+              onPress={() => undefined}
+            />
+          </PillSelector>
         </View>
       </View>
     </ShowcaseCard>
@@ -444,5 +482,8 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     overflow: 'hidden',
     paddingVertical: 10,
+  },
+  mapModeTabsPreview: {
+    alignSelf: 'center',
   },
 })

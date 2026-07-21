@@ -1,5 +1,5 @@
 import { View, StyleSheet, ScrollView, Platform } from 'react-native'
-import { Text } from '@/components/ui/base/Text'
+import { Text } from '@/components/base/Text'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import Constants from 'expo-constants'
@@ -17,17 +17,18 @@ import {
   GaugeIcon,
   WatchIcon,
   WarningIcon,
+  ImageSquareIcon,
 } from 'phosphor-react-native'
 
 import { routes } from '@/navigation/routes'
 import { theme } from '@/constants/theme'
 import { formatBytes } from '@/helpers/format'
-import { SettingsCard } from '@/components/ui/settings/SettingsCard'
-import { SettingsRow } from '@/components/ui/settings/SettingsRow'
-import { SettingsSectionTitle } from '@/components/ui/settings/SettingsSectionTitle'
-import { IconHero } from '@/components/ui/settings/IconHero'
-import { VescapeWordmark } from '@/components/ui/base/VescapeWordmark'
-import { useSettingsDatabaseOps } from '@/hooks/useSettingsDatabaseOps'
+import { SettingsCard } from '@/components/settings/SettingsCard'
+import { SettingsRow } from '@/components/settings/SettingsRow'
+import { SettingsSectionTitle } from '@/components/settings/SettingsSectionTitle'
+import { IconHero } from '@/components/settings/IconHero'
+import { VescapeWordmark } from '@/components/base/VescapeWordmark'
+import { useSettingsDatabaseOps } from '@/modules/settings/hooks/useSettingsDatabaseOps'
 
 const appVersion = Constants.expoConfig?.version ?? '–'
 
@@ -85,6 +86,13 @@ export default function SettingsScreen() {
             label="Diagnostics"
             hint="Board warnings and health checks"
             onPress={() => router.push(routes.settingsDiagnostics)}
+          />
+          <SettingsRow
+            icon={ImageSquareIcon}
+            iconColor={theme.palette.sky.color}
+            label="Map visuals"
+            hint="Map appearance and satellite imagery"
+            onPress={() => router.push(routes.settingsVisuals)}
           />
         </SettingsCard>
 

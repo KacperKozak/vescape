@@ -1,9 +1,0 @@
-{
-  "platforms": ["android", "ios"],
-  "android": {
-    "modules": ["expo.modules.vescble.VescBleModule"]
-  },
-  "ios": {
-    "modules": ["VescBleModule"]
-  }
-}

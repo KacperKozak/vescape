@@ -17,10 +17,10 @@ import {
   TextAaIcon,
 } from 'phosphor-react-native'
 
-import { SettingsCard } from '@/components/ui/settings/SettingsCard'
-import { SettingsRow } from '@/components/ui/settings/SettingsRow'
-import { SettingsSectionTitle } from '@/components/ui/settings/SettingsSectionTitle'
-import { IconHero } from '@/components/ui/settings/IconHero'
+import { SettingsCard } from '@/components/settings/SettingsCard'
+import { SettingsRow } from '@/components/settings/SettingsRow'
+import { SettingsSectionTitle } from '@/components/settings/SettingsSectionTitle'
+import { IconHero } from '@/components/settings/IconHero'
 import { theme } from '@/constants/theme'
 
 const groups = [

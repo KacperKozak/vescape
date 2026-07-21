@@ -43,13 +43,13 @@ Current development targets Android. iOS has a native module stub only.
 - `phosphor-react-native` icons
 - Styling via `StyleSheet` + design tokens in `src/constants/theme.ts` (no NativeWind/Tailwind)
 - Bun
-- Custom Expo native module for BLE: `modules/vesc-ble`
+- Custom Expo native module for BLE: `modules/vescape-core`
 
 ## How It Works
 
 ```text
 React Native UI                 Companion device / auto-connect provider
-  -> vesc-ble JS session API      -> (wakes service without JS)
+  -> vescape-core JS session API      -> (wakes service without JS)
         \                        /
          -> Android foreground service
               -> BLE / Nordic UART Service
@@ -77,16 +77,18 @@ already-running session when it opens.
 
 ```text
 src/app/                     Expo Router routes only (no logic)
-src/lib/                     Pure domain logic (battery, tune, history, map, telemetry)
-src/store/                   Zustand stores mirroring native session + app state
-src/components/              React components (ui/ + domain/)
-src/screens/                 Screen-level component subtrees
-src/hooks/                   React hooks bridging store and UI
+src/modules/<feature>/       Domain modules (board, battery, tune, map, history, alerts,
+                             weather, group-ride, settings, diagnostics, profile, legal) —
+                             each colocates its lib/ store/ hooks/ components/ constants/
+src/components/              Domain-less UI kit (base, forms, charts, controls, widgets, ...)
+src/screens/main/            Main screen composition (map/, overlays/, history/)
+src/hooks/                   Generic React hooks (no domain imports)
+src/bootstrap/               App-root wiring (native -> JS data sync)
 src/constants/theme.ts       Design tokens (single source of color/typography)
 shared/                      Pure JS shared with native (copied in via copy:shared)
-modules/vesc-ble/            Custom Expo native BLE/session module
-modules/vesc-ble/android/    Kotlin: Expo bridge, foreground service, polling, protocol
-modules/vesc-ble/ios/        Swift module stub (iOS not yet functional)
+modules/vescape-core/            Custom Expo native BLE/session module
+modules/vescape-core/android/    Kotlin: Expo bridge, foreground service, polling, protocol
+modules/vescape-core/ios/        Swift module stub (iOS not yet functional)
 docs/                        Protocol, architecture, ADRs, and agent notes
 CONTEXT.md                   Shared domain language
 ```
@@ -147,7 +149,7 @@ Compile only the Android native BLE module:
 
 ```bash
 cd android
-./gradlew :vesc-ble:compileDebugKotlin
+./gradlew :vescape-core:compileDebugKotlin
 ```
 
 Build the full Android debug app:

@@ -4,13 +4,13 @@ The iOS port is built subsystem-by-subsystem. Each subsystem must be verified on
 
 We do not keep an iOS mock and we do not support the simulator for board features. CoreBluetooth is the only iOS BLE path, and device verification is required because the critical behavior is native radio, background execution, and reconnect behavior.
 
-The iOS `vesc-ble` implementation mirrors the Android folder structure one-to-one inside `modules/vesc-ble/ios/` so the platform ports stay comparable while remaining native-first. The TypeScript interface at `modules/vesc-ble/src/index.ts` is the API parity contract between RN and both native implementations.
+The iOS `vescape-core` implementation mirrors the Android folder structure one-to-one inside `modules/vescape-core/ios/` so the platform ports stay comparable while remaining native-first. The TypeScript interface at `modules/vescape-core/src/index.ts` is the API parity contract between RN and both native implementations.
 
 ## Decisions
 
 - Port one subsystem at a time and verify each on a real iOS device before starting the next durable subsystem.
 - Delete the iOS mock path. Use real CoreBluetooth only; simulator support is out of scope for board features.
-- Mirror the Android module shape one-to-one in `modules/vesc-ble/ios/`.
+- Mirror the Android module shape one-to-one in `modules/vescape-core/ios/`.
 - Use GRDB.swift for all iOS storage, including telemetry and app data, in one SQLite database. This matches the Android Room boundary: native owns durable truth, JS renders state and sends intents.
 - Add `UIBackgroundModes` values `bluetooth-central`, `location`, and `audio` through Expo config so generated `Info.plist` gets the required background modes.
 - Request GPS as When In Use and pair it with the `location` background mode. Location background execution is part of the reconnect strategy, not a separate source of durable truth.

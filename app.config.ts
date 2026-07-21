@@ -55,6 +55,16 @@ const config: ExpoConfig = {
   },
   plugins: [
     'expo-router',
+    'expo-status-bar',
+    [
+      '@clerk/expo',
+      {
+        // Always-dark Vescape palette for Clerk's native auth/account views. Consumed at
+        // prebuild (Android asset / iOS Info.plist) — changes need a fresh `bun run android`.
+        theme: './clerk-theme.json',
+      },
+    ],
+    'expo-secure-store',
     [
       '@sentry/react-native/expo',
       {

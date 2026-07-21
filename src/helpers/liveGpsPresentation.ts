@@ -1,4 +1,4 @@
-import type { LocationEvent } from 'vesc-ble'
+import type { LocationEvent } from 'vescape-core'
 
 import { distanceMeters } from './mapGeometry'
 
