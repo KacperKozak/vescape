@@ -34,7 +34,8 @@ internal final class ReplayTransport: SessionTransport {
         let url = ReplayRecordings.url(name: self.recordingName),
         let jsonl = try? String(contentsOf: url, encoding: .utf8)
       else {
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak self] in
+          guard let self, !self.cancelled else { return }
           self.listener?.onGattFailure(code: "REPLAY_LOAD_FAILED", message: "Recording unreadable: \(self.recordingName)")
         }
         return

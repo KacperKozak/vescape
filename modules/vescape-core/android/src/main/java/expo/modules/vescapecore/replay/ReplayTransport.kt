@@ -40,7 +40,8 @@ internal class ReplayTransport(
                 ReplayChunkDecoder.rxChunks(ReplayRecordings.read(context, recordingName))
             } catch (e: Exception) {
                 Log.w(VESC_SESSION_TAG, "replay load failed: ${e.message}")
-                dispatchListener { listener.onGattFailure("REPLAY_LOAD_FAILED", e.message ?: "Recording unreadable") }
+                // A stop during background load must not surface as a session failure.
+                if (!cancelled) dispatchListener { listener.onGattFailure("REPLAY_LOAD_FAILED", e.message ?: "Recording unreadable") }
                 return@Thread
             }
             handler.post { startPlayback(chunks) }

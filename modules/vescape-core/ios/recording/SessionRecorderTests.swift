@@ -106,9 +106,12 @@ final class SessionRecorderTests: XCTestCase {
     let store = DebugRecordingStore(directory: directory)
     let first = try XCTUnwrap(store.createFile(deviceName: "one"))
     try Data("a".utf8).write(to: first)
-    Thread.sleep(forTimeInterval: 0.05)
     let second = try XCTUnwrap(store.createFile(deviceName: "two"))
     try Data("bb".utf8).write(to: second)
+    // Deterministic modification dates: `list()` sorts newest-first, so avoid depending on
+    // filesystem timestamp resolution between two rapid writes.
+    try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSince1970: 1_000)], ofItemAtPath: first.path)
+    try FileManager.default.setAttributes([.modificationDate: Date(timeIntervalSince1970: 2_000)], ofItemAtPath: second.path)
 
     let listed = try store.list()
     XCTAssertEqual(listed.map { $0["name"] as? String }, [second.lastPathComponent, first.lastPathComponent])
