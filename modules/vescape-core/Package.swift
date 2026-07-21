@@ -133,6 +133,8 @@ let package = Package(
         "replay/WarningReplayHarnessTests.swift",
         "replay/WarningReplayScenarioTests.swift",
         "replay/NoBmsRideReplayTests.swift",
+        "replay/ConfigReplayHarness.swift",
+        "replay/ConfigReplayHarnessTests.swift",
         "recording/SessionRecorderTests.swift",
       ]
     ),
