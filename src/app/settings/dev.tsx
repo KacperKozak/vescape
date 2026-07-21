@@ -4,10 +4,10 @@ import { router } from 'expo-router'
 import {
   RecordIcon,
   CompassIcon,
-  BracketsCurlyIcon,
   SwatchesIcon,
   ToolboxIcon,
   CodeIcon,
+  DatabaseIcon,
 } from 'phosphor-react-native'
 
 import { routes } from '@/navigation/routes'
@@ -23,30 +23,35 @@ const devPages = [
     hint: 'Browse all UI components with live props',
     route: routes.settingsComponents,
     icon: SwatchesIcon,
-  },
-  {
-    label: 'Raw settings',
-    hint: 'Inspect stored app settings and current board record',
-    route: routes.settingsRawSettings,
-    icon: BracketsCurlyIcon,
+    iconColor: theme.palette.purple.color,
   },
   {
     label: 'Debug recordings',
     hint: 'Capture and export raw BLE sessions',
     route: routes.settingsDebugRecordings,
     icon: RecordIcon,
+    iconColor: theme.palette.red.color,
   },
   {
     label: 'Navigation diagnostics',
     hint: 'Live map heading, GPS, and fallback evidence',
     route: routes.settingsNavigationDiagnostic,
     icon: CompassIcon,
+    iconColor: theme.palette.sky.color,
+  },
+  {
+    label: 'Database',
+    hint: 'Back up, restore, and rebuild history',
+    route: routes.settingsDatabase,
+    icon: DatabaseIcon,
+    iconColor: theme.status.warning.color,
   },
   {
     label: 'Other',
     hint: 'Small platform probes and local experiments',
     route: routes.settingsOther,
     icon: ToolboxIcon,
+    iconColor: theme.palette.amber.color,
   },
 ]
 
@@ -63,6 +68,7 @@ export default function DevSettingsScreen() {
             <SettingsRow
               key={page.label}
               icon={page.icon}
+              iconColor={page.iconColor}
               label={page.label}
               hint={page.hint}
               onPress={() => router.push(page.route)}
