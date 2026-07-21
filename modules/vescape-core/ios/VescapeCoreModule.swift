@@ -293,6 +293,15 @@ public class VescapeCoreModule: Module {
       }
     }
 
+    AsyncFunction("deleteDebugRecording") { (name: String, promise: Promise) in
+      do {
+        try DebugRecordingStore().delete(name: name)
+        promise.resolve(nil)
+      } catch {
+        promise.reject("ERR_DELETE_DEBUG_RECORDING", error.localizedDescription)
+      }
+    }
+
     AsyncFunction("startDebugReplay") { (name: String, promise: Promise) in
       self.coordinator.startReplay(
         recordingName: name,

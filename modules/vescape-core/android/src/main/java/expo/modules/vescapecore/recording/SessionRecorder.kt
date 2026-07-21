@@ -149,4 +149,8 @@ internal class DebugRecordingStore(private val context: Context) {
             "sizeBytes" to export.length(),
         )
     }
+
+    fun delete(name: String) {
+        resolve(name).delete()
+    }
 }

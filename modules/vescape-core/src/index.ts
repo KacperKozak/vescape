@@ -1191,6 +1191,7 @@ type VescapeCoreNativeModule = NativeEventEmitter<VescapeCoreEvents> & {
   listDebugRecordings(): Promise<DebugRecording[]>
   listBundledDebugFixtures(): Promise<DebugFixture[]>
   exportDebugRecording(name: string): Promise<DatabaseBackupResult>
+  deleteDebugRecording(name: string): Promise<void>
   startDebugReplay(name: string): Promise<void>
   stopDebugReplay(): Promise<void>
   reportUiError(message: string, source?: string | null, stack?: string | null): void
@@ -1548,6 +1549,11 @@ export async function listBundledDebugFixtures(): Promise<DebugFixture[]> {
 /** Copy a raw BLE debug capture to cache storage for sharing. */
 export async function exportDebugRecording(name: string): Promise<DatabaseBackupResult> {
   return native.exportDebugRecording(name)
+}
+
+/** Permanently delete a locally retained raw BLE debug capture. */
+export async function deleteDebugRecording(name: string): Promise<void> {
+  return native.deleteDebugRecording(name)
 }
 
 /**

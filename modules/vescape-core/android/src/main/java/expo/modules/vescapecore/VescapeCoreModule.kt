@@ -293,6 +293,16 @@ class VescapeCoreModule : Module() {
         }
       }
     }
+    AsyncFunction("deleteDebugRecording") { name: String, promise: Promise ->
+      CoroutineScope(Dispatchers.IO).launch {
+        try {
+          DebugRecordingStore(context.applicationContext).delete(name)
+          promise.resolve(null)
+        } catch (e: Exception) {
+          promise.reject("ERR_DELETE_DEBUG_RECORDING", e.message, e)
+        }
+      }
+    }
     AsyncFunction("startDebugReplay") { name: String, promise: Promise ->
       CoroutineScope(Dispatchers.IO).launch {
         try {

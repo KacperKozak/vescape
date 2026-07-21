@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import * as Sharing from 'expo-sharing'
 import {
+  deleteDebugRecording,
   exportDebugRecording,
   listBundledDebugFixtures,
   listDebugRecordings,
@@ -20,6 +21,7 @@ export function useDebugRecordings() {
   const [error, setError] = useState<string | null>(null)
   const [exportingName, setExportingName] = useState<string | null>(null)
   const [replayingName, setReplayingName] = useState<string | null>(null)
+  const [deletingName, setDeletingName] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -59,6 +61,19 @@ export function useDebugRecordings() {
     }
   }, [])
 
+  const deleteRecording = useCallback(async (name: string) => {
+    setDeletingName(name)
+    setError(null)
+    try {
+      await deleteDebugRecording(name)
+      setRecordings((prev) => prev.filter((r) => r.name !== name))
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Could not delete debug recording')
+    } finally {
+      setDeletingName(null)
+    }
+  }, [])
+
   /** Start a native replay session; the normal live UI takes over (REPLAY badge, disconnect to stop). */
   const replayRecording = useCallback(async (name: string): Promise<boolean> => {
     setReplayingName(name)
@@ -83,8 +98,10 @@ export function useDebugRecordings() {
     error,
     exportingName,
     replayingName,
+    deletingName,
     refresh,
     exportRecording,
     replayRecording,
+    deleteRecording,
   }
 }

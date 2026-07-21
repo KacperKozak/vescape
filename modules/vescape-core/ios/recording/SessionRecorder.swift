@@ -245,4 +245,19 @@ internal final class DebugRecordingStore {
       "sizeBytes": sizeBytes,
     ]
   }
+
+  func delete(name: String) throws {
+    guard
+      (name as NSString).lastPathComponent == name,
+      name.hasSuffix(".jsonl"),
+      FileManager.default.fileExists(atPath: directory.appendingPathComponent(name).path)
+    else {
+      throw NSError(
+        domain: "VescapeCore",
+        code: 1,
+        userInfo: [NSLocalizedDescriptionKey: "Debug recording not found"]
+      )
+    }
+    try FileManager.default.removeItem(at: directory.appendingPathComponent(name))
+  }
 }
