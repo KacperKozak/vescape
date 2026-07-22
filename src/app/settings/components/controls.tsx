@@ -2,7 +2,13 @@ import { ScrollView, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/base/Text'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useEffect, useMemo, useState } from 'react'
-import { Easing, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated'
+import {
+  cancelAnimation,
+  Easing,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated'
 import {
   ArrowUpIcon,
   ArrowsClockwiseIcon,
@@ -464,6 +470,7 @@ function AlertPresetControlShowcase() {
       -1,
       true,
     )
+    return () => cancelAnimation(liveValue)
   }, [live, metric, liveValue])
 
   return (

@@ -497,7 +497,9 @@ function HalfArc({
     svgPath(halfWedgePath(normalizeFraction(value.value ?? min, min, max))),
   )
   const markerPath = useDerivedValue(() => {
-    const fraction = normalizeFraction(value.value ?? min, min, max)
+    // No live value → no needle: a zero-position needle next to a "—" readout reads as a real 0.
+    if (value.value == null) return Skia.Path.Make()
+    const fraction = normalizeFraction(value.value, min, max)
     const inner = polarHalf(HALF_R - MARKER_INSET, fraction)
     const outer = polarHalf(HALF_R + STROKE / 2, fraction)
     return segmentPath(inner.x, inner.y, outer.x, outer.y)
