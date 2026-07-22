@@ -481,6 +481,7 @@ final class AppDataRepository {
     "lastGpsLatitude": NSNull(),
     "lastGpsLongitude": NSNull(),
     "legalMode": NSNull(),
+    "alertPreset": NSNull(),
     "movingSpeedThresholdKmh": 3,
     "riderTopSpeedKmh": 50,
     "freeSpinMaxSpeedDeltaKmh": DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH,

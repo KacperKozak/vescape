@@ -19,6 +19,7 @@ import { theme } from '@/constants/theme'
 import { deriveBatteryConfig } from '@/modules/battery/lib'
 import { type DerivedBatteryConfig } from '@/modules/battery/lib/types'
 import { isLegalModeAlertRule } from '@/modules/legal/lib/legalMode'
+import { isPresetAlertRule } from '@/modules/alerts/lib/alertPresets'
 import {
   type AlertRule,
   type AlertSoundType,
@@ -34,7 +35,11 @@ interface AlertsSectionProps {
 export function AlertsSection({ controlId, unit }: AlertsSectionProps) {
   const allRules = useAlertsStore((s) => s.rules)
   const rules = useMemo(
-    () => allRules.filter((rule) => rule.controlId === controlId && !isLegalModeAlertRule(rule)),
+    () =>
+      allRules.filter(
+        (rule) =>
+          rule.controlId === controlId && !isLegalModeAlertRule(rule) && !isPresetAlertRule(rule),
+      ),
     [allRules, controlId],
   )
   const add = useAlertsStore((s) => s.add)

@@ -253,6 +253,7 @@ class AppDataRepository private constructor(private val context: Context) {
       riderName = opt("riderName") { it as? String },
       riderColor = opt("riderColor") { it as? String },
       legalMode = opt("legalMode") { it.asStringKeyMap() },
+      alertPreset = opt("alertPreset") { it.asStringKeyMap() },
     )
 
     if (badKeys.isNotEmpty()) {
@@ -321,7 +322,7 @@ class AppDataRepository private constructor(private val context: Context) {
       "autoCloseDelayMinutes" ->
         validAutoCloseDelayMinutes(value) ?: return@withContext
       "riderId", "riderName", "riderColor" -> value as? String
-      "legalMode" ->
+      "legalMode", "alertPreset" ->
         if (value == null || value == JSONObject.NULL) null
         else value.asStringKeyMap() ?: return@withContext
       else -> return@withContext
@@ -368,6 +369,7 @@ class AppDataRepository private constructor(private val context: Context) {
         "riderName" -> d.riderName
         "riderColor" -> d.riderColor
         "legalMode" -> d.legalMode
+        "alertPreset" -> d.alertPreset
         else -> null
       }
     }
@@ -650,6 +652,7 @@ fun AppSettings.toMap(): Map<String, Any?> = mapOf(
   "riderName" to riderName,
   "riderColor" to riderColor,
   "legalMode" to legalMode,
+  "alertPreset" to alertPreset,
 )
 
 internal fun encodeSettingJson(value: Any?): String {

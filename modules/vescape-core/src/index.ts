@@ -229,7 +229,12 @@ export interface AlertRule {
   enabled: boolean
   soundType: AlertSoundType
   createdAt: number
-  source?: 'manual' | 'legal-mode'
+  /**
+   * Provenance tag. `manual` (or absent) = rider-authored. `legal-mode` and `preset` are
+   * generated + owned by JS orchestration and regenerated wholesale; native persists the
+   * string opaquely (free-text column, no enum) and never authors these values.
+   */
+  source?: 'manual' | 'legal-mode' | 'preset'
 }
 
 export type PrivacyZonePreset = 'home' | 'work' | 'custom'
@@ -863,6 +868,8 @@ export interface AppSettings {
   riderColor: string | null
   /** Durable Legal Mode UI/default state. JS owns behavior; native only persists this bag. */
   legalMode: Record<string, unknown> | null
+  /** Durable Alert Preset per-metric level selection. JS owns behavior; native only persists this bag. */
+  alertPreset: Record<string, unknown> | null
 }
 
 export interface DiagnosticStatus {

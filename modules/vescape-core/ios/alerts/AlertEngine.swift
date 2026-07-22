@@ -10,6 +10,8 @@ internal struct AlertRule {
   let enabled: Bool
   let soundType: String
   let createdAt: Int64
+  /// Free-text provenance tag mirroring TS `AlertRule.source`: `manual` (or nil), `legal-mode`,
+  /// or `preset`. JS authors and regenerates the generated ones; native only persists the string.
   let source: String?
 }
 

@@ -9,6 +9,7 @@ import { SettingsRow } from '@/components/settings/SettingsRow'
 import { Stepper } from '@/components/forms/Stepper'
 import { IconHero } from '@/components/settings/IconHero'
 import { useSettingsStore } from '@/modules/settings/store/settingsStore'
+import { useAlertPresetStore } from '@/modules/alerts/store/alertPresetStore'
 
 export default function LiveTelemetrySettingsScreen() {
   const { liveHistoryLimit, telemetryPollRateHz, socEstimateWindowSeconds, riderTopSpeedKmh, set } =
@@ -45,7 +46,9 @@ export default function LiveTelemetrySettingsScreen() {
                 onChange={(nextValue) => {
                   const clampedValue = Math.min(150, Math.max(5, nextValue))
                   if (clampedValue !== riderTopSpeedKmh) {
-                    void set('riderTopSpeedKmh', clampedValue)
+                    void set('riderTopSpeedKmh', clampedValue).then(() =>
+                      useAlertPresetStore.getState().regenerateSpeed(),
+                    )
                   }
                 }}
               />

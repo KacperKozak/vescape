@@ -123,6 +123,21 @@ describe('generateAlertPresetRules — speed / duty (geiger)', () => {
     expect(at50[0].thresholdMax).toBeGreaterThan(at50[0].threshold)
   })
 
+  test('speed levels stay distinct at the lowest Rider Top Speed', () => {
+    // Regression: whole-km/h rounding collapsed adjacent levels at low top speed
+    // (0.72×5 and 0.82×5 both rounded to 4) and pushed the ceiling to 100%.
+    const topSpeed = 5 // clamp floor
+    const safe = generateAlertPresetRules('speed', 'safe', { riderTopSpeedKmh: topSpeed })
+    const normal = generateAlertPresetRules('speed', 'normal', { riderTopSpeedKmh: topSpeed })
+    const pro = generateAlertPresetRules('speed', 'pro', { riderTopSpeedKmh: topSpeed })
+
+    expect(safe[0].threshold).toBeLessThan(normal[0].threshold)
+    expect(normal[0].threshold).toBeLessThan(pro[0].threshold)
+    // Ceiling stays at the configured 90% fraction, not rounded up to 100%.
+    expect(normal[0].thresholdMax).toBe(4.5)
+    expect(pro[0].threshold).toBeLessThan(normal[0].thresholdMax ?? 0)
+  })
+
   test('speed with missing or zero top speed produces no rules', () => {
     expect(generateAlertPresetRules('speed', 'normal')).toEqual([])
     expect(generateAlertPresetRules('speed', 'normal', { riderTopSpeedKmh: 0 })).toEqual([])

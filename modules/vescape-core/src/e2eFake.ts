@@ -80,6 +80,7 @@ const e2eSettings: AppSettings = {
   riderName: null,
   riderColor: null,
   legalMode: null,
+  alertPreset: null,
 }
 
 function emitDevice(event: DeviceFoundEvent): void {

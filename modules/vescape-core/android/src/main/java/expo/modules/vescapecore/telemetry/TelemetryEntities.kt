@@ -278,6 +278,10 @@ data class AlertRuleEntity(
   val soundType: String,
   @ColumnInfo(name = "created_at")
   val createdAt: Long,
+  /**
+   * Free-text provenance tag mirroring TS `AlertRule.source`: `manual` (or null), `legal-mode`,
+   * or `preset`. JS authors and regenerates the generated ones; native only persists the string.
+   */
   val source: String?,
 )
 
@@ -387,6 +391,7 @@ data class AppSettings(
   val riderName: String? = null,
   val riderColor: String? = null,
   val legalMode: Map<String, Any?>? = null,
+  val alertPreset: Map<String, Any?>? = null,
 )
 
 @Entity(
