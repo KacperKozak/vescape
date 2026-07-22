@@ -440,6 +440,9 @@ final class AppDataRepository {
     } else if key == "satelliteImagerySaturation" {
       guard let saturation = Self.satelliteImagerySaturation(rawValue) else { return }
       value = saturation
+    } else if key == "riderTopSpeedKmh" {
+      guard let topSpeed = Self.riderTopSpeedKmh(rawValue) else { return }
+      value = topSpeed
     } else if key == "boardWarningsEnabled" {
       // Kill switch must stay a strict Bool (Android rejects non-Boolean too) so JS state and the
       // native detector gate can never diverge on a malformed value.
@@ -479,6 +482,7 @@ final class AppDataRepository {
     "lastGpsLongitude": NSNull(),
     "legalMode": NSNull(),
     "movingSpeedThresholdKmh": 3,
+    "riderTopSpeedKmh": 40,
     "freeSpinMaxSpeedDeltaKmh": DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH,
     "freeSpinStationaryBoardCapKmh": DEFAULT_FREE_SPIN_STATIONARY_BOARD_CAP_KMH,
     "satelliteOverlayEnabled": true,
@@ -508,7 +512,15 @@ final class AppDataRepository {
       satelliteImageryOpacity(settings["satelliteMapImageryOpacity"]) ?? defaultSettings["satelliteMapImageryOpacity"]
     normalized["satelliteImagerySaturation"] =
       satelliteImagerySaturation(settings["satelliteImagerySaturation"]) ?? defaultSettings["satelliteImagerySaturation"]
+    normalized["riderTopSpeedKmh"] =
+      riderTopSpeedKmh(settings["riderTopSpeedKmh"]) ?? defaultSettings["riderTopSpeedKmh"]
     return normalized
+  }
+
+  /// Rider Top Speed in km/h; the speed gauge full-scale. Clamped to a sane 5–150 km/h band.
+  static func riderTopSpeedKmh(_ value: Any?) -> Double? {
+    guard let topSpeed = doubleValue(value), topSpeed.isFinite else { return nil }
+    return min(150, max(5, topSpeed))
   }
 
   static func satelliteImageryOpacity(_ value: Any?) -> Double? {

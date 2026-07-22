@@ -10,7 +10,7 @@ import {
   useLiveExcludedRanges,
   liveSelectors,
 } from '@/modules/board/hooks/useLiveMetric'
-import { useLiveWindowMs } from '@/modules/settings/store/settingsStore'
+import { useLiveWindowMs, useSettingsStore } from '@/modules/settings/store/settingsStore'
 import { liveTelemetryRuntime } from '@/modules/board/lib/liveTelemetryRuntime'
 
 const cfg = telemetry.speed
@@ -18,6 +18,7 @@ const RANGE = { y: cfg.chartRange }
 
 export default function SpeedScreen() {
   const speed = useLiveMetric(liveSelectors.speed)
+  const riderTopSpeedKmh = useSettingsStore((s) => s.riderTopSpeedKmh)
   const windowMs = useLiveWindowMs()
   const points = useMemo(() => toTelemetryChartPoints(speed), [speed])
   const excludedRanges = useLiveExcludedRanges('avg_speed', 'max_speed')
@@ -27,7 +28,13 @@ export default function SpeedScreen() {
       title={cfg.label}
       controlId={cfg.controlId}
       unit={cfg.unit}
-      gauge={<MetricDetailGauge metric={cfg} value={liveTelemetryRuntime.values.speedKmh} />}
+      gauge={
+        <MetricDetailGauge
+          metric={cfg}
+          value={liveTelemetryRuntime.values.speedKmh}
+          max={riderTopSpeedKmh}
+        />
+      }
     >
       <MetricDetailChart
         metric={cfg}

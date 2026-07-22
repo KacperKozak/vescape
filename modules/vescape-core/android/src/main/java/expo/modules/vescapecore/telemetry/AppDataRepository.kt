@@ -68,6 +68,13 @@ internal fun validAutoCloseDelayMinutes(value: Any?): Int? =
     ?.toInt()
     ?.coerceIn(1, 1440)
 
+/** Rider Top Speed in km/h; the speed gauge full-scale. Clamped to a sane 5–150 km/h band. */
+internal fun validRiderTopSpeedKmh(value: Any?): Double? =
+  (value as? Number)
+    ?.toDouble()
+    ?.takeIf { it.isFinite() }
+    ?.coerceIn(5.0, 150.0)
+
 /** Watch Mirror push interval in ms; floored at 50ms (20Hz), capped at 10s. */
 internal fun validWearMirrorIntervalMs(value: Any?): Int? =
   (value as? Number)
@@ -220,6 +227,7 @@ class AppDataRepository private constructor(private val context: Context) {
       lastGpsLatitude = opt("lastGpsLatitude") { (it as? Number)?.toDouble() },
       lastGpsLongitude = opt("lastGpsLongitude") { (it as? Number)?.toDouble() },
       movingSpeedThresholdKmh = req("movingSpeedThresholdKmh", 3.0) { (it as? Number)?.toDouble() },
+      riderTopSpeedKmh = req("riderTopSpeedKmh", 40.0, ::validRiderTopSpeedKmh),
       freeSpinMaxSpeedDeltaKmh = req("freeSpinMaxSpeedDeltaKmh", DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH) { (it as? Number)?.toDouble() },
       freeSpinStationaryBoardCapKmh = req("freeSpinStationaryBoardCapKmh", DEFAULT_FREE_SPIN_STATIONARY_BOARD_CAP_KMH) { (it as? Number)?.toDouble() },
       mapStyleKey = req("mapStyleKey", "onedark", ::validMapStyleKey),
@@ -279,6 +287,7 @@ class AppDataRepository private constructor(private val context: Context) {
       "lastGpsLongitude" -> (value as? Number)?.toDouble()
       "movingSpeedThresholdKmh", "avgSpeedCutoffKmh", "movingAvgSpeedThresholdKmh" ->
         ((value as? Number)?.toDouble() ?: return@withContext).coerceAtLeast(0.0)
+      "riderTopSpeedKmh" -> validRiderTopSpeedKmh(value) ?: return@withContext
       "freeSpinMaxSpeedDeltaKmh", "freeSpinStationaryBoardCapKmh" ->
         ((value as? Number)?.toDouble() ?: return@withContext).coerceAtLeast(0.0)
       "mapStyleKey" ->
@@ -333,6 +342,7 @@ class AppDataRepository private constructor(private val context: Context) {
         "lastGpsLatitude" -> d.lastGpsLatitude
         "lastGpsLongitude" -> d.lastGpsLongitude
         "movingSpeedThresholdKmh" -> d.movingSpeedThresholdKmh
+        "riderTopSpeedKmh" -> d.riderTopSpeedKmh
         "freeSpinMaxSpeedDeltaKmh" -> d.freeSpinMaxSpeedDeltaKmh
         "freeSpinStationaryBoardCapKmh" -> d.freeSpinStationaryBoardCapKmh
         "mapStyleKey" -> d.mapStyleKey
@@ -614,6 +624,7 @@ fun AppSettings.toMap(): Map<String, Any?> = mapOf(
   "lastGpsLatitude" to lastGpsLatitude,
   "lastGpsLongitude" to lastGpsLongitude,
   "movingSpeedThresholdKmh" to movingSpeedThresholdKmh,
+  "riderTopSpeedKmh" to riderTopSpeedKmh,
   "freeSpinMaxSpeedDeltaKmh" to freeSpinMaxSpeedDeltaKmh,
   "freeSpinStationaryBoardCapKmh" to freeSpinStationaryBoardCapKmh,
   "mapStyleKey" to mapStyleKey,

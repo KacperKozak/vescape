@@ -361,6 +361,7 @@ data class AppSettings(
   val lastGpsLatitude: Double? = null,
   val lastGpsLongitude: Double? = null,
   val movingSpeedThresholdKmh: Double = 3.0,
+  val riderTopSpeedKmh: Double = 40.0,
   val freeSpinMaxSpeedDeltaKmh: Double = DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH,
   val freeSpinStationaryBoardCapKmh: Double = DEFAULT_FREE_SPIN_STATIONARY_BOARD_CAP_KMH,
   val mapStyleKey: String = "onedark",

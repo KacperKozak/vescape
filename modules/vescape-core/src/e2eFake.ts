@@ -54,6 +54,7 @@ const e2eSettings: AppSettings = {
   lastGpsLatitude: null,
   lastGpsLongitude: null,
   movingSpeedThresholdKmh: 5,
+  riderTopSpeedKmh: 40,
   freeSpinMaxSpeedDeltaKmh: 3,
   freeSpinStationaryBoardCapKmh: 1,
   mapStyleKey: 'onedark',

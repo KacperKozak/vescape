@@ -775,6 +775,12 @@ export interface AppSettings {
   lastGpsLatitude: number | null
   lastGpsLongitude: number | null
   movingSpeedThresholdKmh: number
+  /**
+   * Rider Top Speed: the rider-entered max speed they consider themselves capable of, held once at
+   * the profile level for all Boards. Drives the speed gauge full-scale and the km/h thresholds a
+   * speed Alert Preset resolves to. Not a legal or firmware limit — see the CONTEXT.md glossary.
+   */
+  riderTopSpeedKmh: number
   freeSpinMaxSpeedDeltaKmh: number
   freeSpinStationaryBoardCapKmh: number
   mapStyleKey: 'onedark' | 'outdoors' | 'satellite' | 'mapy'

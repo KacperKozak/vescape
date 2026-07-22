@@ -11,6 +11,7 @@ const BASE: AppSettings = {
   lastGpsLatitude: null,
   lastGpsLongitude: null,
   movingSpeedThresholdKmh: 3,
+  riderTopSpeedKmh: 40,
   freeSpinMaxSpeedDeltaKmh: 12,
   freeSpinStationaryBoardCapKmh: 15,
   mapStyleKey: 'onedark',
