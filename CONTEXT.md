@@ -156,6 +156,10 @@ _Avoid_: Police mode, cop mode, inspection mode
 The target maximum riding speed used by Legal Mode, either rider-entered or suggested from a jurisdiction.
 _Avoid_: Max board speed, engine limit
 
+**Rider Top Speed**:
+The rider-entered maximum speed the rider considers themselves capable of, held once at the profile level for all **Boards**. Drives the speed gauge full-scale and the km/h thresholds a speed **Alert Preset** level resolves to (a level is a percentage of this value). Not a legal or firmware limit — a personal capability figure. Distinct from **Legal Speed Limit** (a legal target) and from any controller top-speed setting.
+_Avoid_: Legal Speed Limit, board top speed, max board speed, speed cap
+
 **Legal Warning Speed**:
 The speed at which Legal Mode starts audible warning feedback before the Legal Speed Limit is reached.
 _Avoid_: Alert threshold, warning threshold
@@ -176,9 +180,13 @@ _Avoid_: Runtime command, board action, unsafe command
 A user-defined telemetry threshold that can trigger board-riding feedback during a live connection. A rule with only a threshold fires a one-shot alert; a rule with both threshold and thresholdMax fires a geiger-style progressive alert that accelerates with range depth.
 _Avoid_: Alarm, notification
 
+**Alert Sound**:
+A bundled audio asset used for alert feedback, belonging to exactly one category: single (one-threshold alerts) or geiger (range alerts with progressive ticking). Selected on an **Alert Rule** via its sound type.
+_Avoid_: Alert Preset (now the rider's intensity concept), sound effect, ringtone, tone
+
 **Alert Preset**:
-A bundled audio asset used for alert feedback, belonging to exactly one category: single (one-threshold alerts) or geiger (range alerts with progressive ticking).
-_Avoid_: Sound effect, ringtone, tone
+A rider-selected intensity level for one telemetry metric (battery, speed, duty, temperature) that expands into a set of **Alert Rules** at once. Profile-level, not per-**Board**. The level is durable truth; the rules it produces are virtual — derived from the level, tagged by source, and regenerated as a whole when the level changes, never hand-edited one by one. Manual **Alert Rules** may coexist alongside a preset's rules for the same metric. A metric with the preset disabled has no preset-sourced rules.
+_Avoid_: Alert Sound (the audio asset), Alert Level as a rules concept, warning pack
 
 **Alert Message Template**:
 A user-authored spoken phrase on a one-shot Alert Rule that may include current alert-value placeholders and is spoken by native text-to-speech when the rule fires.
@@ -295,6 +303,8 @@ _Avoid_: Position update, presence ping, location share, group telemetry
 - A **Board Warning** is not an **Alert Rule** (app-authored, not rider-authored) and produces no riding feedback; it is passive display only.
 - A **Board Warning** detector can be replayed offline against a **Debug Recording**'s BLE frames; a committed clean Debug Recording guards against false positives.
 - An **Alert Rule** evaluates against live **Telemetry Samples**.
+- An **Alert Preset** is set per metric and produces zero or more **Alert Rules** for that metric; those rules are regenerated wholesale when its level changes and coexist with the rider's manual **Alert Rules**.
+- A speed **Alert Preset** resolves its km/h thresholds from **Rider Top Speed**; changing **Rider Top Speed** regenerates the speed preset's **Alert Rules**.
 - An **Alert Message Template** belongs to one **Alert Rule**.
 - A **Watch Mirror** receives **Watch Frames** and **Watch Alerts** from the phone and never sends data back; it is not a **Board**, a **Board Session**, or a source of **Telemetry Samples**.
 - A **Watch Frame** is derived from **Live State** and is only pushed while a **Board Session** is producing **Telemetry Samples**.
