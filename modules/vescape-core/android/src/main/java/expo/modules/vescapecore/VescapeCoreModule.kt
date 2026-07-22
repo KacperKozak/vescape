@@ -241,7 +241,7 @@ class VescapeCoreModule : Module() {
     Function("previewAlertSound") { soundType: String ->
       CoreForegroundService.previewAlertSound(context.applicationContext, soundType)
     }
-    Function("getAlertPresets") {
+    Function("getAlertSounds") {
       CoreForegroundService.alertSoundPresets()
     }
     Function("startGeigerSimulation") { soundType: String, rangeDepth: Double ->

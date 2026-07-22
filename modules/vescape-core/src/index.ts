@@ -211,12 +211,12 @@ export type AlertSoundType = string
  * @parity /modules/vescape-core/ios/alerts/AlertAudioPlayer.swift `alertCategorySingle`, `alertCategoryGeiger`
  * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/alerts/AlertEngine.kt `ALERT_CATEGORY_SINGLE`, `ALERT_CATEGORY_GEIGER`
  */
-export type AlertPresetCategory = 'single' | 'geiger'
+export type AlertSoundCategory = 'single' | 'geiger'
 
-export interface AlertPreset {
+export interface AlertSound {
   name: string
   uri: string
-  category: AlertPresetCategory
+  category: AlertSoundCategory
 }
 
 // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryEntities.kt `AlertRuleEntity`
@@ -1179,7 +1179,7 @@ type VescapeCoreNativeModule = NativeEventEmitter<VescapeCoreEvents> & {
   reloadAlertRules(): void
   getCriticalRideNotificationPermissionStatus(): Promise<CriticalRideNotificationPermissionStatus>
   requestCriticalRideNotificationPermission(): Promise<CriticalRideNotificationPermissionStatus>
-  getAlertPresets(): AlertPreset[]
+  getAlertSounds(): AlertSound[]
   previewAlertSound(soundType: AlertSoundType): void
   startGeigerSimulation(soundType: string, rangeDepth: number): void
   stopGeigerSimulation(): void
@@ -1448,7 +1448,7 @@ export async function requestCriticalRideNotificationPermission(): Promise<Criti
   }
 }
 
-const FALLBACK_PRESETS: AlertPreset[] = [
+const FALLBACK_PRESETS: AlertSound[] = [
   { name: 'Beep', uri: 'preset:beep', category: 'single' },
   { name: 'Urgent', uri: 'preset:urgent', category: 'single' },
   { name: 'Notify', uri: 'preset:notify', category: 'single' },
@@ -1457,9 +1457,9 @@ const FALLBACK_PRESETS: AlertPreset[] = [
   { name: 'Gamma', uri: 'preset:gamma', category: 'geiger' },
 ]
 
-export function getAlertPresets(): AlertPreset[] {
+export function getAlertSounds(): AlertSound[] {
   try {
-    return native.getAlertPresets()
+    return native.getAlertSounds()
   } catch {
     return FALLBACK_PRESETS
   }

@@ -57,7 +57,7 @@ public class VescapeCoreModule: Module {
 
   private let appData = AppDataRepository.shared
 
-  /// Bundled alert presets surfaced to JS through `getAlertPresets`. Mirrors Android
+  /// Bundled alert sounds surfaced to JS through `getAlertSounds`. Mirrors Android
   /// `alertSoundPresetMaps()`.
   /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/alerts/AlertEngine.kt `alertSoundPresetMaps`
   private let alertPresets: [[String: Any]] = alertSoundPresetMaps()
@@ -237,7 +237,7 @@ public class VescapeCoreModule: Module {
       self.coordinator.previewAlertSound(soundType)
     }
 
-    Function("getAlertPresets") {
+    Function("getAlertSounds") {
       self.alertPresets
     }
 
