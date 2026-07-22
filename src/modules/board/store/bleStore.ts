@@ -234,6 +234,7 @@ function applyLiveState(state: LiveStateEvent, set: BleSet): void {
   } else {
     liveTelemetryRuntime.syncConnectionSeq(state.board.connectionSeq)
     useLiveSeriesStore.getState().clear()
+    useFocusedSeriesStore.getState().clear()
     live = liveTelemetryRuntime.clearBoardTelemetry()
   }
 
@@ -273,6 +274,7 @@ function sameRemoteTilt(a: RemoteTiltState | null, b: RemoteTiltState | null): b
 function resetLivePresentation(set: BleSet): void {
   clearLiveHistoryPublishTimer()
   useLiveSeriesStore.getState().clear()
+  useFocusedSeriesStore.getState().clear()
   const live = liveTelemetryRuntime.reset()
   set({
     liveLocationHistory: live.liveLocationHistory,
@@ -403,6 +405,8 @@ function ensureFocusedSeriesSub(): void {
   if (focusedSeriesSub) return
   focusedSeriesSub = addFocusedSeriesListener((event) => {
     if (!acceptsBoardTelemetry(event.generation)) return
+    // Drop a late event for a metric already released — it must not restore stale series.
+    if (!focusedSeriesRefs.has(event.metric)) return
     useFocusedSeriesStore.getState().apply(event)
   })
 }
