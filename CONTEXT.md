@@ -185,7 +185,7 @@ A bundled audio asset used for alert feedback, belonging to exactly one category
 _Avoid_: Alert Preset (now the rider's intensity concept), sound effect, ringtone, tone
 
 **Alert Preset**:
-A rider-selected intensity level for one telemetry metric (battery, speed, duty, temperature) that expands into a set of **Alert Rules** at once. Profile-level, not per-**Board**. The level is durable truth; the rules it produces are virtual — derived from the level, tagged by source, and regenerated as a whole when the level changes, never hand-edited one by one. Manual **Alert Rules** may coexist alongside a preset's rules for the same metric. A metric with the preset disabled has no preset-sourced rules.
+A rider-selected intensity level for one telemetry metric (battery, speed, duty, motor temperature, controller temperature) that expands into a set of **Alert Rules** at once. Motor and controller temperature are independent presets. Profile-level, not per-**Board**. The level is durable truth; the rules it produces are virtual — derived from the level, tagged by source, and regenerated as a whole when the level changes, never hand-edited one by one. Manual **Alert Rules** may coexist alongside a preset's rules for the same metric. A metric with the preset disabled has no preset-sourced rules.
 _Avoid_: Alert Sound (the audio asset), Alert Level as a rules concept, warning pack
 
 **Alert Message Template**:
