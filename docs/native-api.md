@@ -266,7 +266,7 @@ Presets: beep, urgent, notify (single); tick, tick_hard, gamma (geiger)
   lastGpsLatitude?, lastGpsLongitude?, movingSpeedThresholdKmh, riderTopSpeedKmh }
 ```
 
-Valid keys: `liveHistoryLimit`, `autoConnect`, `autoRecording`, `selectedBoardId`, `lastGpsLatitude`, `lastGpsLongitude`, `movingSpeedThresholdKmh` (aliases: `avgSpeedCutoffKmh`, `movingAvgSpeedThresholdKmh`), `riderTopSpeedKmh` (Rider Top Speed, km/h; speed gauge full-scale, clamped 5–150, default 40)
+Valid keys: `liveHistoryLimit`, `autoConnect`, `autoRecording`, `selectedBoardId`, `lastGpsLatitude`, `lastGpsLongitude`, `movingSpeedThresholdKmh` (aliases: `avgSpeedCutoffKmh`, `movingAvgSpeedThresholdKmh`), `riderTopSpeedKmh` (Rider Top Speed, km/h; speed gauge full-scale, clamped 5–150, default 50)
 
 Writing default-equivalent value deletes the override row. Unknown keys and type mismatches are silently ignored.
 

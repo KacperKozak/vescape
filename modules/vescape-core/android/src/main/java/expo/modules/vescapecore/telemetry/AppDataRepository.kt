@@ -227,7 +227,7 @@ class AppDataRepository private constructor(private val context: Context) {
       lastGpsLatitude = opt("lastGpsLatitude") { (it as? Number)?.toDouble() },
       lastGpsLongitude = opt("lastGpsLongitude") { (it as? Number)?.toDouble() },
       movingSpeedThresholdKmh = req("movingSpeedThresholdKmh", 3.0) { (it as? Number)?.toDouble() },
-      riderTopSpeedKmh = req("riderTopSpeedKmh", 40.0, ::validRiderTopSpeedKmh),
+      riderTopSpeedKmh = req("riderTopSpeedKmh", 50.0, ::validRiderTopSpeedKmh),
       freeSpinMaxSpeedDeltaKmh = req("freeSpinMaxSpeedDeltaKmh", DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH) { (it as? Number)?.toDouble() },
       freeSpinStationaryBoardCapKmh = req("freeSpinStationaryBoardCapKmh", DEFAULT_FREE_SPIN_STATIONARY_BOARD_CAP_KMH) { (it as? Number)?.toDouble() },
       mapStyleKey = req("mapStyleKey", "onedark", ::validMapStyleKey),
