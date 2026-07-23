@@ -4,17 +4,14 @@ import { BellRingingIcon } from 'phosphor-react-native'
 
 import { theme } from '@/constants/theme'
 import { IconHero } from '@/components/settings/IconHero'
-import { AlertPresetSetup } from '@/modules/alerts/components/AlertPresetSetup'
+import { RiderTopSpeedCard } from '@/modules/alerts/components/RiderTopSpeedCard'
 
 export default function AlertsSettingsScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
-        <IconHero
-          icon={BellRingingIcon}
-          description="Set your Rider Top Speed and pick how loudly each metric warns you — Off, Safe, Normal, or Pro."
-        />
-        <AlertPresetSetup />
+        <IconHero icon={BellRingingIcon} description="Adjust your alert settings." />
+        <RiderTopSpeedCard />
       </ScrollView>
     </SafeAreaView>
   )

@@ -101,7 +101,7 @@ export default function SettingsScreen() {
             icon={BellRingingIcon}
             iconColor={theme.palette.amber.color}
             label="Alerts"
-            hint="Rider top speed and per-metric alert presets"
+            hint="Rider top speed and default alert presets"
             onPress={() => router.push(routes.settingsAlerts)}
           />
           <SettingsRow

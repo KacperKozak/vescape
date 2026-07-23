@@ -202,6 +202,38 @@ export function generateAlertPresetRules(
   ]
 }
 
+/** Per-metric unit suffix appended to a threshold value in a summary (JS-only presentation). */
+const ALERT_PRESET_UNIT: Record<AlertPresetMetric, string> = {
+  battery: '%',
+  duty: '%',
+  speed: ' km/h',
+  'motor-temp': '°',
+  'controller-temp': '°',
+}
+
+/**
+ * Human-readable summary of a metric's active preset thresholds (e.g. `10%, 20%, 30%`
+ * for discrete battery, `80–90%` for a geiger range). Built straight from
+ * {@link generateAlertPresetRules} so it always mirrors the rules actually applied.
+ * Returns `null` when the level is `off` or guarded away (no rules to describe).
+ */
+export function formatAlertPresetSummary(
+  metric: AlertPresetMetric,
+  level: AlertPresetLevel,
+  options: GenerateAlertPresetRulesOptions = {},
+): string | null {
+  const specs = generateAlertPresetRules(metric, level, options)
+  if (specs.length === 0) return null
+  const unit = ALERT_PRESET_UNIT[metric]
+  return specs
+    .map((spec) =>
+      spec.thresholdMax == null
+        ? `${Math.round(spec.threshold)}${unit}`
+        : `${Math.round(spec.threshold)}–${Math.round(spec.thresholdMax)}${unit}`,
+    )
+    .join(', ')
+}
+
 // --- Provenance + persistence (the store's contract) ---
 //
 // @parity /modules/vescape-core/src/index.ts `AlertRule.source`
