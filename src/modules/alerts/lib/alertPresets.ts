@@ -45,7 +45,7 @@ export interface AlertRuleSpec {
 }
 
 interface GeigerRange {
-  /** Range start; a fraction of Rider Top Speed when `scaledByTopSpeed`, else absolute. */
+  /** Range start; a fraction of Board Top Speed when `scaledByTopSpeed`, else absolute. */
   start: number
   /** Fixed range ceiling; same units as {@link start}. */
   ceiling: number
@@ -65,7 +65,7 @@ interface GeigerMetricConfig {
   family: 'geiger'
   /** Geiger tick preset for the range loop. */
   soundType: string
-  /** Only speed today: {@link GeigerRange} values are fractions of Rider Top Speed. */
+  /** Only speed today: {@link GeigerRange} values are fractions of Board Top Speed. */
   scaledByTopSpeed?: boolean
   levels: Record<ActiveLevel, GeigerRange>
 }
@@ -92,7 +92,7 @@ const TEMP_LEVELS: Record<ActiveLevel, number[]> = {
 /**
  * Declarative safe/normal/pro definition for every preset metric. Battery points
  * are in percent (native compares battery single-threshold rules against SoC %
- * directly); temperatures in °C; duty in %; speed as a fraction of Rider Top Speed.
+ * directly); temperatures in °C; duty in %; speed as a fraction of Board Top Speed.
  */
 export const ALERT_PRESET_LEVELS: Record<AlertPresetMetric, AlertPresetMetricConfig> = {
   battery: {
@@ -137,8 +137,8 @@ export const ALERT_PRESET_LEVELS: Record<AlertPresetMetric, AlertPresetMetricCon
 }
 
 export interface GenerateAlertPresetRulesOptions {
-  /** Rider Top Speed in km/h; required to resolve speed thresholds. */
-  riderTopSpeedKmh?: number | null
+  /** Board Top Speed in km/h; required to resolve speed thresholds. */
+  boardTopSpeedKmh?: number | null
   /** Whether the active board has a valid battery config (battery presets need one). */
   hasBatteryConfig?: boolean
 }
@@ -156,7 +156,7 @@ function roundTenth(value: number): number {
  * Deterministically expand a preset selection into concrete rule specs.
  *
  * `off` — and any guard failure (battery without a valid config, speed without a
- * usable Rider Top Speed) — yields `[]` rather than garbage rules. Discrete metrics
+ * usable Board Top Speed) — yields `[]` rather than garbage rules. Discrete metrics
  * emit one single-threshold rule per configured point in config order; geiger
  * metrics emit a single range rule.
  */
@@ -182,9 +182,9 @@ export function generateAlertPresetRules(
   const range = config.levels[level]
   let { start, ceiling } = range
   if (config.scaledByTopSpeed) {
-    const topSpeed = options.riderTopSpeedKmh
+    const topSpeed = options.boardTopSpeedKmh
     if (typeof topSpeed !== 'number' || !Number.isFinite(topSpeed) || topSpeed <= 0) return []
-    // Round to 0.1 km/h, not whole km/h: at the low end of Rider Top Speed
+    // Round to 0.1 km/h, not whole km/h: at the low end of Board Top Speed
     // (clamp floor 5) whole-km/h rounding collapses adjacent levels to identical
     // ranges (0.72×5 and 0.82×5 both → 4) and inflates the ceiling past its
     // configured fraction (0.9×5 → 5, i.e. 100%). Native stores thresholds as REAL.

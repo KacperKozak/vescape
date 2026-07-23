@@ -506,7 +506,7 @@ function AlertPresetControlShowcase() {
         level={level}
         onLevelChange={setLevel}
         liveValue={live ? liveValue : undefined}
-        riderTopSpeedKmh={50}
+        boardTopSpeedKmh={50}
         hasBatteryConfig
         customAlerts={
           custom

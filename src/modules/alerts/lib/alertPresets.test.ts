@@ -32,7 +32,7 @@ describe('generateAlertPresetRules — off', () => {
     for (const metric of ALL_METRICS) {
       expect(
         generateAlertPresetRules(metric, 'off', {
-          riderTopSpeedKmh: 50,
+          boardTopSpeedKmh: 50,
           hasBatteryConfig: true,
         }),
       ).toEqual([])
@@ -111,9 +111,9 @@ describe('generateAlertPresetRules — speed / duty (geiger)', () => {
     expect(normal[0].threshold).toBeLessThan(pro[0].threshold)
   })
 
-  test('speed thresholds resolve as a percentage of Rider Top Speed', () => {
-    const at50 = generateAlertPresetRules('speed', 'normal', { riderTopSpeedKmh: 50 })
-    const at100 = generateAlertPresetRules('speed', 'normal', { riderTopSpeedKmh: 100 })
+  test('speed thresholds resolve as a percentage of Board Top Speed', () => {
+    const at50 = generateAlertPresetRules('speed', 'normal', { boardTopSpeedKmh: 50 })
+    const at100 = generateAlertPresetRules('speed', 'normal', { boardTopSpeedKmh: 100 })
 
     expect(at50).toHaveLength(1)
     expect(at100).toHaveLength(1)
@@ -123,13 +123,13 @@ describe('generateAlertPresetRules — speed / duty (geiger)', () => {
     expect(at50[0].thresholdMax).toBeGreaterThan(at50[0].threshold)
   })
 
-  test('speed levels stay distinct at the lowest Rider Top Speed', () => {
+  test('speed levels stay distinct at the lowest Board Top Speed', () => {
     // Regression: whole-km/h rounding collapsed adjacent levels at low top speed
     // (0.72×5 and 0.82×5 both rounded to 4) and pushed the ceiling to 100%.
     const topSpeed = 5 // clamp floor
-    const safe = generateAlertPresetRules('speed', 'safe', { riderTopSpeedKmh: topSpeed })
-    const normal = generateAlertPresetRules('speed', 'normal', { riderTopSpeedKmh: topSpeed })
-    const pro = generateAlertPresetRules('speed', 'pro', { riderTopSpeedKmh: topSpeed })
+    const safe = generateAlertPresetRules('speed', 'safe', { boardTopSpeedKmh: topSpeed })
+    const normal = generateAlertPresetRules('speed', 'normal', { boardTopSpeedKmh: topSpeed })
+    const pro = generateAlertPresetRules('speed', 'pro', { boardTopSpeedKmh: topSpeed })
 
     expect(safe[0].threshold).toBeLessThan(normal[0].threshold)
     expect(normal[0].threshold).toBeLessThan(pro[0].threshold)
@@ -140,8 +140,8 @@ describe('generateAlertPresetRules — speed / duty (geiger)', () => {
 
   test('speed with missing or zero top speed produces no rules', () => {
     expect(generateAlertPresetRules('speed', 'normal')).toEqual([])
-    expect(generateAlertPresetRules('speed', 'normal', { riderTopSpeedKmh: 0 })).toEqual([])
-    expect(generateAlertPresetRules('speed', 'normal', { riderTopSpeedKmh: null })).toEqual([])
-    expect(generateAlertPresetRules('speed', 'normal', { riderTopSpeedKmh: NaN })).toEqual([])
+    expect(generateAlertPresetRules('speed', 'normal', { boardTopSpeedKmh: 0 })).toEqual([])
+    expect(generateAlertPresetRules('speed', 'normal', { boardTopSpeedKmh: null })).toEqual([])
+    expect(generateAlertPresetRules('speed', 'normal', { boardTopSpeedKmh: NaN })).toEqual([])
   })
 })

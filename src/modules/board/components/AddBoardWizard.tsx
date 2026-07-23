@@ -20,7 +20,10 @@ import {
 } from 'phosphor-react-native'
 import { useShallow } from 'zustand/react/shallow'
 
-import { AlertPresetMetricSetup } from '@/modules/alerts/components/AlertPresetMetricSetup'
+import {
+  ALERT_PRESET_METRIC_LABELS,
+  AlertPresetMetricSetup,
+} from '@/modules/alerts/components/AlertPresetMetricSetup'
 import { BoardTopSpeedCard } from '@/modules/alerts/components/BoardTopSpeedCard'
 import {
   ALERT_PRESET_METRICS,
@@ -58,11 +61,14 @@ interface AlertSubstep {
 // used elsewhere (e.g. the history stats bar), all tinted the shared alert amber below.
 // `name` labels the review-summary row; the sub-step header uses "<name> alerts".
 const ALERT_METRIC_META: Record<AlertPresetMetric, { name: string; icon: typeof Bluetooth }> = {
-  battery: { name: 'Battery', icon: BatteryMedium },
-  'motor-temp': { name: 'Motor temp', icon: ThermometerSimple },
-  'controller-temp': { name: 'Controller temp', icon: ThermometerHot },
-  speed: { name: 'Speed', icon: Speedometer },
-  duty: { name: 'Duty', icon: Lightning },
+  battery: { name: ALERT_PRESET_METRIC_LABELS.battery, icon: BatteryMedium },
+  'motor-temp': { name: ALERT_PRESET_METRIC_LABELS['motor-temp'], icon: ThermometerSimple },
+  'controller-temp': {
+    name: ALERT_PRESET_METRIC_LABELS['controller-temp'],
+    icon: ThermometerHot,
+  },
+  speed: { name: ALERT_PRESET_METRIC_LABELS.speed, icon: Speedometer },
+  duty: { name: ALERT_PRESET_METRIC_LABELS.duty, icon: Lightning },
 }
 
 /** Ordered Alert sub-steps: Board Top Speed first, then one page per preset metric. */
@@ -468,7 +474,7 @@ function ConfirmStep({ wizard }: Props) {
     return ALERT_PRESET_METRICS.map((metric) => ({
       metric,
       summary: formatAlertPresetSummary(metric, selection[metric], {
-        riderTopSpeedKmh: wizard.topSpeedKmh,
+        boardTopSpeedKmh: wizard.topSpeedKmh,
         hasBatteryConfig: wizard.hasBatteryConfig,
       }),
     })).filter((row): row is { metric: AlertPresetMetric; summary: string } => row.summary != null)

@@ -27,7 +27,7 @@ import { theme } from '@/constants/theme'
  * the needle + readout overlay the static markers.
  *
  * Presentational + controlled: it owns no store. Callers bind `level`/`onLevelChange`
- * to the Alert Preset store and pass `riderTopSpeedKmh`/`hasBatteryConfig` from
+ * to the Alert Preset store and pass `boardTopSpeedKmh`/`hasBatteryConfig` from
  * settings + the active board.
  */
 
@@ -38,7 +38,7 @@ interface PresetGaugeDescriptor {
   unit: string
   decimals: number
   min: number
-  /** Full-scale value; speed overrides this with Rider Top Speed. */
+  /** Full-scale value; speed overrides this with Board Top Speed. */
   defaultMax: number
   /** Compact label drawn at a threshold marker (e.g. `20%`, `70°`, `38 km/h`). */
   formatMarker: (value: number) => string
@@ -112,8 +112,8 @@ interface AlertPresetControlProps {
   onLevelChange: (level: AlertPresetLevel) => void
   /** Live telemetry value; when supplied the gauge overlays a moving needle + readout. */
   liveValue?: SharedValue<number | null>
-  /** Rider Top Speed (km/h) — resolves speed thresholds and the speed gauge full-scale. */
-  riderTopSpeedKmh?: number | null
+  /** Board Top Speed (km/h) — resolves speed thresholds and the speed gauge full-scale. */
+  boardTopSpeedKmh?: number | null
   /** Whether the active board has a valid battery config (battery markers need one). */
   hasBatteryConfig?: boolean
   /** Custom (non-preset) alert markers layered onto the same gauge alongside the preset markers. */
@@ -129,7 +129,7 @@ export function AlertPresetControl({
   level,
   onLevelChange,
   liveValue,
-  riderTopSpeedKmh,
+  boardTopSpeedKmh,
   hasBatteryConfig,
   customAlerts,
   hotRange,
@@ -137,13 +137,13 @@ export function AlertPresetControl({
 }: AlertPresetControlProps) {
   const gauge = PRESET_GAUGE[metric]
   const max =
-    metric === 'speed' && riderTopSpeedKmh && riderTopSpeedKmh > 0
-      ? riderTopSpeedKmh
+    metric === 'speed' && boardTopSpeedKmh && boardTopSpeedKmh > 0
+      ? boardTopSpeedKmh
       : gauge.defaultMax
 
   const alerts = useMemo<DualGaugeAlert[]>(() => {
     const specs = generateAlertPresetRules(metric, level, {
-      riderTopSpeedKmh,
+      boardTopSpeedKmh,
       hasBatteryConfig,
     })
     // Preset markers come straight from the pure generator (instant + atomic as the slider
@@ -156,7 +156,7 @@ export function AlertPresetControl({
       labelMax: spec.thresholdMax == null ? undefined : gauge.formatMarker(spec.thresholdMax),
     }))
     return customAlerts ? [...presetMarkers, ...customAlerts] : presetMarkers
-  }, [metric, level, riderTopSpeedKmh, hasBatteryConfig, gauge, customAlerts])
+  }, [metric, level, boardTopSpeedKmh, hasBatteryConfig, gauge, customAlerts])
 
   // A stable null placeholder so the gauge always has a SharedValue; the needle is hidden offline.
   const placeholder = useSharedValue<number | null>(null)

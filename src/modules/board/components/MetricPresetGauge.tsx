@@ -24,7 +24,6 @@ import {
 } from '@/modules/history/lib/metricColorScale'
 import { useSettingsStore } from '@/modules/settings/store/settingsStore'
 import { useBoardStore } from '@/modules/board/store/boardStore'
-import { routes } from '@/navigation/routes'
 
 interface MetricPresetGaugeProps {
   /** Preset metric — equal to the telemetry/alert `controlId` for this detail view. */
@@ -48,7 +47,7 @@ export function MetricPresetGauge({ metric, value }: MetricPresetGaugeProps) {
   const board = useBoardStore((s) => s.boards.find((b) => b.id === s.activeBoardId))
 
   const level = boardAlertPresetSelection(board)[metric]
-  const riderTopSpeedKmh = boardTopSpeedKmh(board)
+  const topSpeedKmh = boardTopSpeedKmh(board)
   const hasBatteryConfig = useMemo(() => boardHasBatteryConfig(board), [board])
 
   const hotMetric = getHistoryMetricKeyForControlId(metric)
@@ -87,7 +86,7 @@ export function MetricPresetGauge({ metric, value }: MetricPresetGaugeProps) {
         level={level}
         onLevelChange={handleLevelChange}
         liveValue={value}
-        riderTopSpeedKmh={riderTopSpeedKmh}
+        boardTopSpeedKmh={topSpeedKmh}
         hasBatteryConfig={hasBatteryConfig}
         customAlerts={customAlerts}
         hotRange={hotRange}

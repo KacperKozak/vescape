@@ -3,10 +3,10 @@ import type { AlertRule, BatteryConfig, Board } from 'vescape-core'
 
 const actualVescapeCore = await import('@/../modules/vescape-core/src/index')
 
-const upsertBoard = mock(async () => {})
-const upsertAlertRule = mock(async () => {})
-const deleteAlertRule = mock(async () => {})
-const getAlertRules = mock(async () => [] as AlertRule[])
+const upsertBoard = mock(async (_board: Board) => {})
+const upsertAlertRule = mock(async (_rule: AlertRule) => {})
+const deleteAlertRule = mock(async (_boardId: string, _id: string) => {})
+const getAlertRules = mock(async (_boardId: string) => [] as AlertRule[])
 
 mock.module('vescape-core', () => ({
   ...actualVescapeCore,
@@ -68,6 +68,7 @@ beforeEach(() => {
   upsertBoard.mockClear()
   upsertAlertRule.mockClear()
   deleteAlertRule.mockClear()
+  getAlertRules.mockClear()
 })
 
 test('setting a level persists the selection on the board and generates deterministically-ided preset rules', async () => {
@@ -168,4 +169,36 @@ test('battery preset generates nothing without a valid board battery config', as
   await useAlertPresetStore.getState().setLevel('battery', 'normal')
 
   expect(presetRules(useAlertsStore.getState().rules, 'battery')).toHaveLength(0)
+})
+
+test('editing an inactive board regenerates only that board rules', async () => {
+  const { useAlertsStore, useBoardStore, useAlertPresetStore } = await setup()
+  const inactiveBoard = { ...makeBoard({ topSpeedKmh: 60 }), id: 'board-2', name: 'Other' }
+  useBoardStore.setState((state) => ({ boards: [...state.boards, inactiveBoard] }))
+
+  const staleRule: AlertRule = {
+    boardId: inactiveBoard.id,
+    id: 'preset:speed:0',
+    controlId: 'speed',
+    threshold: 30,
+    thresholdMax: 40,
+    enabled: true,
+    soundType: 'preset:tick',
+    createdAt: 1,
+    source: 'preset',
+  }
+  getAlertRules.mockImplementation(async (boardId: string) =>
+    boardId === inactiveBoard.id ? [staleRule] : [],
+  )
+
+  await useAlertPresetStore.getState().setLevel('speed', 'normal', inactiveBoard.id)
+
+  expect(useBoardStore.getState().activeBoardId).toBe(BOARD_ID)
+  expect(
+    boardSelection(useBoardStore.getState().boards.find((b) => b.id === inactiveBoard.id)),
+  ).toMatchObject({ speed: 'normal' })
+  expect(deleteAlertRule).toHaveBeenCalledWith(inactiveBoard.id, staleRule.id)
+  expect(upsertAlertRule.mock.calls.every(([rule]) => rule.boardId === inactiveBoard.id)).toBe(true)
+  expect(useAlertsStore.getState().boardId).toBe(BOARD_ID)
+  expect(useAlertsStore.getState().rules).toHaveLength(0)
 })

@@ -5,6 +5,14 @@ import { theme } from '@/constants/theme'
 import { AlertPresetControl } from '@/modules/alerts/components/AlertPresetControl'
 import { type AlertPresetLevel, type AlertPresetMetric } from '@/modules/alerts/lib/alertPresets'
 
+export const ALERT_PRESET_METRIC_LABELS: Record<AlertPresetMetric, string> = {
+  battery: 'Battery',
+  speed: 'Speed',
+  duty: 'Duty',
+  'motor-temp': 'Motor temperature',
+  'controller-temp': 'Controller temperature',
+}
+
 /**
  * A single metric's Alert Preset control (labeled gauge preview + Off/Safe/Normal/Pro slider),
  * controlled by its caller so it works both against the active Board (Settings) and a draft (the
@@ -33,7 +41,7 @@ export function AlertPresetMetricSetup({
         metric={metric}
         level={level}
         onLevelChange={onLevelChange}
-        riderTopSpeedKmh={topSpeedKmh}
+        boardTopSpeedKmh={topSpeedKmh}
         hasBatteryConfig={hasBatteryConfig}
         disabled={batteryBlocked}
       />
