@@ -156,9 +156,9 @@ _Avoid_: Police mode, cop mode, inspection mode
 The target maximum riding speed used by Legal Mode, either rider-entered or suggested from a jurisdiction.
 _Avoid_: Max board speed, engine limit
 
-**Rider Top Speed**:
-The rider-entered maximum speed the rider considers themselves capable of, held once at the profile level for all **Boards**. Drives the speed gauge full-scale and the km/h thresholds a speed **Alert Preset** level resolves to (a level is a percentage of this value). Not a legal or firmware limit — a personal capability figure. Distinct from **Legal Speed Limit** (a legal target) and from any controller top-speed setting.
-_Avoid_: Legal Speed Limit, board top speed, max board speed, speed cap
+**Board Top Speed**:
+The rider-entered maximum speed the rider rides a specific **Board** at, held per-Board as a **Board Setting**. Drives that Board's speed gauge full-scale and the km/h thresholds a speed **Alert Preset** level resolves to (a level is a percentage of this value). Not a legal or firmware limit — a personal figure for this Board. Distinct from **Legal Speed Limit** (a legal target) and from any controller top-speed setting.
+_Avoid_: Rider Top Speed (former profile-level name), Legal Speed Limit, max board speed, speed cap
 
 **Legal Warning Speed**:
 The speed at which Legal Mode starts audible warning feedback before the Legal Speed Limit is reached.
@@ -177,7 +177,7 @@ A rider intent that depends on the connected controller's Refloat behavior rathe
 _Avoid_: Runtime command, board action, unsafe command
 
 **Alert Rule**:
-A user-defined telemetry threshold that can trigger board-riding feedback during a live connection. A rule with only a threshold fires a one-shot alert; a rule with both threshold and thresholdMax fires a geiger-style progressive alert that accelerates with range depth.
+A user-defined telemetry threshold, owned by one **Board**, that can trigger board-riding feedback during a live connection to that Board. A rule with only a threshold fires a one-shot alert; a rule with both threshold and thresholdMax fires a geiger-style progressive alert that accelerates with range depth.
 _Avoid_: Alarm, notification
 
 **Alert Sound**:
@@ -185,7 +185,7 @@ A bundled audio asset used for alert feedback, belonging to exactly one category
 _Avoid_: Alert Preset (now the rider's intensity concept), sound effect, ringtone, tone
 
 **Alert Preset**:
-A rider-selected intensity level for one telemetry metric (battery, speed, duty, motor temperature, controller temperature) that expands into a set of **Alert Rules** at once. Motor and controller temperature are independent presets. Profile-level, not per-**Board**. The level is durable truth; the rules it produces are virtual — derived from the level, tagged by source, and regenerated as a whole when the level changes, never hand-edited one by one. Manual **Alert Rules** may coexist alongside a preset's rules for the same metric. A metric with the preset disabled has no preset-sourced rules.
+A rider-selected intensity level for one telemetry metric (battery, speed, duty, motor temperature, controller temperature) that expands into a set of **Alert Rules** at once. Motor and controller temperature are independent presets. Held per-**Board** as a **Board Setting** — each Board carries its own levels. The level is durable truth; the rules it produces are virtual — derived from the level, tagged by source, and regenerated as a whole when the level changes, never hand-edited one by one. Manual **Alert Rules** may coexist alongside a preset's rules for the same metric. A metric with the preset disabled has no preset-sourced rules.
 _Avoid_: Alert Sound (the audio asset), Alert Level as a rules concept, warning pack
 
 **Alert Message Template**:
@@ -215,6 +215,10 @@ _Avoid_: session log, BLE dump, trace
 **App Setting**:
 A user-controlled app preference that affects app behavior across boards unless explicitly scoped elsewhere.
 _Avoid_: Option, config
+
+**Board Setting**:
+A rider-adjustable preference or soft state scoped to one **Board**, stored schemalessly per Board (key-value). Distinct from Board identity and probe-confirmed facts (name, **Board Link**), which are structured Board fields. Examples: battery configuration, **Alert Preset** levels, **Board Top Speed**.
+_Avoid_: Board config, per-board App Setting
 
 **Diagnostic Event**:
 An app-observed abnormal condition that helps explain board connection, telemetry, tuning, recording, or UI failures.
