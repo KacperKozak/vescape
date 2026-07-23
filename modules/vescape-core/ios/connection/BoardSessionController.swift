@@ -374,7 +374,11 @@ internal final class BoardSessionController: VescGattListener {
       alertCoordinator.replaceRules([])
       return
     }
-    alertCoordinator.replaceRules(appData.getEnabledAlertRules(boardId))
+    alertCoordinator.replaceRules(withLegalModeOverlay(
+      appData.getEnabledAlertRules(boardId),
+      boardId: boardId,
+      rawSettings: appData.getSettings()["legalMode"]
+    ))
   }
 
   /// Re-read mutable board-scoped session data after JS edits the active board. The BLE endpoint
@@ -517,7 +521,11 @@ internal final class BoardSessionController: VescGattListener {
     gpsError = gpsMonitor.start()
     // Fresh rule set for this session's alert engine — only the connected Board's enabled rules
     // (mirrors Android loadAlertRules on connect).
-    alertCoordinator.replaceRules(appData.getEnabledAlertRules(config.appBoardId))
+    alertCoordinator.replaceRules(withLegalModeOverlay(
+      appData.getEnabledAlertRules(config.appBoardId),
+      boardId: config.appBoardId,
+      rawSettings: sessionSettings["legalMode"]
+    ))
     connectionSeq = sessionSequence
     connectedBoardId = config.appBoardId
     bleId = config.bleId

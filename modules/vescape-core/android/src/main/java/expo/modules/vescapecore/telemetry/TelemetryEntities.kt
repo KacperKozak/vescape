@@ -282,8 +282,8 @@ data class AlertRuleEntity(
   @ColumnInfo(name = "created_at")
   val createdAt: Long,
   /**
-   * Free-text provenance tag mirroring TS `AlertRule.source`: `manual` (or null), `legal-mode`,
-   * or `preset`. JS authors and regenerates the generated ones; native only persists the string.
+   * Free-text provenance tag mirroring TS `AlertRule.source`: `manual` (or null) or `preset`.
+   * JS authors and regenerates preset rules; native only persists the string.
    */
   val source: String?,
 )

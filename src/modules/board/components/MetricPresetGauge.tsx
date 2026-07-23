@@ -56,8 +56,8 @@ export function MetricPresetGauge({ metric, value }: MetricPresetGaugeProps) {
     ? getHistoryMetricHotRange(hotMetric, hotRanges, gradientsEnabled)
     : null
 
-  // Every enabled non-preset rule (custom + legal-mode) drawn as a marker, matching the markers the
-  // old detail gauge showed. Preset rules are excluded here — they render from the generator instead.
+  // Every enabled custom rule is drawn as a marker. Preset rules render from the generator, while
+  // the native Legal Mode overlay is intentionally absent from JS-owned rule state.
   const customAlerts = useMemo<DualGaugeAlert[]>(
     () =>
       rules

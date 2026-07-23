@@ -570,6 +570,9 @@ class VescapeCoreModule : Module() {
       if (key == "liveHistoryLimit") {
         CoreForegroundService.setLiveHistoryLimit(value as? Number)
       }
+      if (key == "legalMode") {
+        CoreForegroundService.reloadAlertRules(context.applicationContext)
+      }
       if (
         key == "movingSpeedThresholdKmh" ||
         key == "avgSpeedCutoffKmh" ||

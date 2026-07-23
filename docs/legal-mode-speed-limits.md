@@ -74,8 +74,8 @@ Sources checked on 2026-07-17:
 
 ## Implementation Notes
 
-- Keep Legal Mode out of map internals. The map may show Legal Mode controls or badges, but jurisdiction data, saved Legal Mode settings, and speed-warning Alert Rule materialization live under `src/modules/legal/lib/legalMode.ts` and `src/modules/legal/store/legalModeStore.ts`.
-- The Legal Mode warning is a managed native Alert Rule with the stable id `legal-mode-speed-alert`. Generic alert editing hides that rule; gauges may still render its speed marker.
+- Keep Legal Mode out of map internals. The map may show Legal Mode controls or badges, but jurisdiction data and saved Legal Mode settings live under `src/modules/legal/lib/legalMode.ts` and `src/modules/legal/store/legalModeStore.ts`.
+- Native reads the durable Legal Mode App Setting and synthesizes its geiger speed rule in memory. It does not materialize a row in `alerts`, so the overlay applies to every connected Board and continues with JS suspended.
 - Treat `legalRoadStatus` separately from numeric speed defaults. A `notRoadLegal` status still gets editable speed controls.
 - Use country-level GPS only as a suggestion. The rider must be able to override values because city rules can be stricter.
 - Start with country code lookup. Avoid municipality-level geofencing until there is a sourced city-rule dataset and a privacy review.

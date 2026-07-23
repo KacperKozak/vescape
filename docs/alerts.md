@@ -5,7 +5,7 @@ JS layer may be suspended during a ride. Alerts are evaluated natively so they f
 ## Data flow
 
 ```
-JS calls VescapeCore alert CRUD → native Room storage updates → CoreForegroundService reloads rules
+JS calls VescapeCore alert CRUD / updates Legal Mode → native storage updates → native reloads rules
 CoreForegroundService: each BLE packet → evaluateAlerts() → SoundPool/TextToSpeech + Vibrator
 Fired alerts embedded in that packet's telemetry map → visible in recentTelemetry
 ```
@@ -22,12 +22,16 @@ evaluate.
 Preset rule ids (`preset:<metric>:<index>`) repeat across Boards; uniqueness is per Board via the
 composite primary key `(board_id, id)`.
 
+Legal Mode is independent of Board-owned rows. Native reads its persisted App Setting and adds a
+virtual geiger speed rule to the in-memory set whenever rules load. Nothing is written to `alerts`;
+the overlay therefore applies to whichever Board is connected and survives with JS suspended.
+
 ## Schema — `alerts` table
 
 | column          | type          | notes                                                          |
 | --------------- | ------------- | -------------------------------------------------------------- |
 | `board_id`      | TEXT          | owning Board; PK is `(board_id, id)`                           |
-| `id`            | TEXT          | UUID (or `preset:<metric>:<index>` / `legal-mode-speed-alert`) |
+| `id`            | TEXT          | UUID or `preset:<metric>:<index>`                              |
 | `control_id`    | TEXT          | see Control IDs below                                          |
 | `threshold`     | REAL          | trigger point                                                  |
 | `threshold_max` | REAL nullable | range upper bound (Geiger mode)                                |

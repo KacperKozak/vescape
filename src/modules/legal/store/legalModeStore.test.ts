@@ -44,20 +44,14 @@ const BASE: AppSettings = {
 }
 
 const updateSetting = mock(async () => {})
-const upsertAlertRule = mock(async () => {})
-const deleteAlertRule = mock(async () => {})
 
 mock.module('vescape-core', () => ({
   ...actualVescapeCore,
   updateSetting,
-  upsertAlertRule,
-  deleteAlertRule,
 }))
 
 beforeEach(async () => {
   updateSetting.mockClear()
-  upsertAlertRule.mockClear()
-  deleteAlertRule.mockClear()
 
   const { useSettingsStore } = await import('@/modules/settings/store/settingsStore')
   useSettingsStore.setState({
@@ -68,14 +62,9 @@ beforeEach(async () => {
     setLegalMode: useSettingsStore.getInitialState().setLegalMode,
     setCompanionPresence: useSettingsStore.getInitialState().setCompanionPresence,
   })
-
-  // Alert Rules are Board-owned (#254): Legal Mode syncs its warning rule onto the active Board, so
-  // bind the alerts store to a Board for these tests.
-  const { useAlertsStore } = await import('@/modules/alerts/store/alertsStore')
-  useAlertsStore.setState({ boardId: 'board-1', rules: [] })
 })
 
-test('enabling legal mode materializes a managed native speed warning alert', async () => {
+test('enabling legal mode only persists its native App Setting', async () => {
   const { useLegalModeStore } = await import('@/modules/legal/store/legalModeStore')
 
   await useLegalModeStore.getState().setEnabled(true)
@@ -84,19 +73,9 @@ test('enabling legal mode materializes a managed native speed warning alert', as
     'legalMode',
     expect.objectContaining({ enabled: true }),
   )
-  expect(upsertAlertRule).toHaveBeenCalledWith(
-    expect.objectContaining({
-      id: 'legal-mode-speed-alert',
-      controlId: 'speed',
-      threshold: 15,
-      thresholdMax: 20,
-      enabled: true,
-      source: 'legal-mode',
-    }),
-  )
 })
 
-test('editing legal mode speeds persists settings and updates the managed alert thresholds', async () => {
+test('editing legal mode speeds persists the native overlay thresholds', async () => {
   const { useLegalModeStore } = await import('@/modules/legal/store/legalModeStore')
 
   await useLegalModeStore.getState().setEnabled(true)
@@ -111,19 +90,9 @@ test('editing legal mode speeds persists settings and updates the managed alert 
       warningManuallyEdited: true,
     }),
   )
-  expect(upsertAlertRule).toHaveBeenLastCalledWith(
-    expect.objectContaining({
-      id: 'legal-mode-speed-alert',
-      controlId: 'speed',
-      threshold: 24,
-      thresholdMax: 30,
-      enabled: true,
-      source: 'legal-mode',
-    }),
-  )
 })
 
-test('editing only the legal warning speed updates the managed alert threshold', async () => {
+test('editing only the legal warning speed persists the native overlay threshold', async () => {
   const { useLegalModeStore } = await import('@/modules/legal/store/legalModeStore')
 
   await useLegalModeStore.getState().setEnabled(true)
@@ -136,14 +105,6 @@ test('editing only the legal warning speed updates the managed alert threshold',
       legalSpeedKmh: 20,
       warningSpeedKmh: 18,
       warningManuallyEdited: true,
-    }),
-  )
-  expect(upsertAlertRule).toHaveBeenLastCalledWith(
-    expect.objectContaining({
-      id: 'legal-mode-speed-alert',
-      threshold: 18,
-      thresholdMax: 20,
-      enabled: true,
     }),
   )
 })
@@ -176,22 +137,15 @@ test('re-enabling legal mode resets speeds to defaults when current jurisdiction
       jurisdiction: null,
     }),
   )
-  expect(upsertAlertRule).toHaveBeenLastCalledWith(
-    expect.objectContaining({
-      id: 'legal-mode-speed-alert',
-      threshold: 15,
-      thresholdMax: 20,
-      enabled: true,
-    }),
-  )
 })
 
-test('disabling legal mode deletes only the managed native warning alert', async () => {
+test('disabling legal mode persists the disabled App Setting', async () => {
   const { useLegalModeStore } = await import('@/modules/legal/store/legalModeStore')
 
   await useLegalModeStore.getState().setEnabled(false)
 
-  expect(deleteAlertRule).toHaveBeenCalledWith('board-1', 'legal-mode-speed-alert')
-  expect(deleteAlertRule).toHaveBeenCalledTimes(1)
-  expect(upsertAlertRule).not.toHaveBeenCalled()
+  expect(updateSetting).toHaveBeenCalledWith(
+    'legalMode',
+    expect.objectContaining({ enabled: false }),
+  )
 })

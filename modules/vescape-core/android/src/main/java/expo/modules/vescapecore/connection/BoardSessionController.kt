@@ -8,6 +8,7 @@ import expo.modules.vescapecore.service.ACTION_DISCONNECT_FROM_NOTIFICATION
 import expo.modules.vescapecore.service.ACTION_EXIT_FROM_NOTIFICATION
 import expo.modules.vescapecore.alerts.AlertCoordinator
 import expo.modules.vescapecore.alerts.AlertFeedback
+import expo.modules.vescapecore.alerts.withLegalModeOverlay
 import expo.modules.vescapecore.telemetry.BmsSeriesFrame
 import expo.modules.vescapecore.telemetry.BmsSeriesRing
 import expo.modules.vescapecore.protocol.BmsTelemetry
@@ -2072,7 +2073,12 @@ private var wearAutoLaunchOnConnect = true
             return
         }
         try {
-            val rules = AppDataRepository.get(context).getEnabledAlertRuleEntities(boardId)
+            val repo = AppDataRepository.get(context)
+            val rules = withLegalModeOverlay(
+                repo.getEnabledAlertRuleEntities(boardId),
+                boardId,
+                repo.getTypedSettings().legalMode,
+            )
             alertCoordinator.replaceRules(rules)
             Log.d(VESC_SESSION_TAG, "Loaded ${rules.size} alert rule(s)")
         } catch (e: Exception) {

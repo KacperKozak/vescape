@@ -249,11 +249,10 @@ export interface AlertRule {
   soundType: AlertSoundType
   createdAt: number
   /**
-   * Provenance tag. `manual` (or absent) = rider-authored. `legal-mode` and `preset` are
-   * generated + owned by JS orchestration and regenerated wholesale; native persists the
-   * string opaquely (free-text column, no enum) and never authors these values.
+   * Provenance tag. `manual` (or absent) = rider-authored. `preset` rules are generated + owned
+   * by JS orchestration and regenerated wholesale; native persists the string opaquely.
    */
-  source?: 'manual' | 'legal-mode' | 'preset'
+  source?: 'manual' | 'preset'
 }
 
 export type PrivacyZonePreset = 'home' | 'work' | 'custom'

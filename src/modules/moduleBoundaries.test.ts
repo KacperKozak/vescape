@@ -29,9 +29,6 @@ const ALLOWED_EDGES = new Set([
   'settings -> map',
   // rider trails/pins are map layers and share map rendering defaults
   'group-ride -> map',
-  // legal mode drives alert rules; alerts render the legal-mode rule
-  'alerts -> legal',
-  'legal -> alerts',
   // TODO(decouple): board components read alertsStore + history color scale
   'board -> alerts',
   'board -> history',

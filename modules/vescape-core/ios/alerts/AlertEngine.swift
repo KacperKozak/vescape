@@ -11,9 +11,45 @@ internal struct AlertRule {
   let enabled: Bool
   let soundType: String
   let createdAt: Int64
-  /// Free-text provenance tag mirroring TS `AlertRule.source`: `manual` (or nil), `legal-mode`,
-  /// or `preset`. JS authors and regenerates the generated ones; native only persists the string.
+  /// Free-text provenance tag mirroring TS `AlertRule.source`: `manual` (or nil) or `preset`.
+  /// JS authors and regenerates preset rules; native only persists the string.
   let source: String?
+}
+
+/// Adds Legal Mode's Board-agnostic speed warning to the in-memory rules. The App Setting is
+/// durable native truth; no Alert Rule row is materialized.
+/// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/alerts/AlertEngine.kt `withLegalModeOverlay`
+internal func withLegalModeOverlay(
+  _ rules: [AlertRule],
+  boardId: String,
+  rawSettings: Any?
+) -> [AlertRule] {
+  guard
+    let settings = rawSettings as? [String: Any],
+    settings["enabled"] as? Bool == true,
+    let warningSpeedKmh = legalModeNumber(settings["warningSpeedKmh"]),
+    let legalSpeedKmh = legalModeNumber(settings["legalSpeedKmh"]),
+    warningSpeedKmh > 0,
+    legalSpeedKmh > warningSpeedKmh
+  else { return rules }
+
+  return rules + [
+    AlertRule(
+      boardId: boardId,
+      id: "native:legal-mode:speed",
+      controlId: "speed",
+      threshold: warningSpeedKmh,
+      thresholdMax: legalSpeedKmh,
+      enabled: true,
+      soundType: "preset:tick",
+      createdAt: 0,
+      source: nil
+    ),
+  ]
+}
+
+private func legalModeNumber(_ value: Any?) -> Double? {
+  (value as? NSNumber)?.doubleValue
 }
 
 /// One fired alert surfaced to JS through the telemetry event payload.

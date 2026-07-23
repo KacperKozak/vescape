@@ -3,10 +3,6 @@ import type { LocationEvent } from 'vescape-core'
 
 import {
   DEFAULT_LEGAL_MODE_SETTINGS,
-  LEGAL_MODE_ALERT_RULE_ID,
-  LEGAL_MODE_ALERT_SOURCE,
-  isLegalModeAlertRule,
-  legalModeAlertRule,
   resolveJurisdictionFromLocation,
   setLegalSpeed,
   setWarningSpeed,
@@ -69,26 +65,5 @@ describe('Legal Mode derivation', () => {
       legalRoadStatus: 'restricted',
     })
     expect(switzerland).toBeNull()
-  })
-
-  test('builds stable generated alert ownership and range thresholds', () => {
-    const rule = legalModeAlertRule({ ...DEFAULT_LEGAL_MODE_SETTINGS, enabled: true }, 123)
-
-    expect(rule).toMatchObject({
-      id: LEGAL_MODE_ALERT_RULE_ID,
-      controlId: 'speed',
-      threshold: 15,
-      thresholdMax: 20,
-      enabled: true,
-      soundType: 'preset:tick',
-      createdAt: 123,
-      source: LEGAL_MODE_ALERT_SOURCE,
-    })
-  })
-
-  test('recognizes generated alerts by source with legacy id fallback', () => {
-    expect(isLegalModeAlertRule({ id: 'manual', source: LEGAL_MODE_ALERT_SOURCE })).toBe(true)
-    expect(isLegalModeAlertRule({ id: LEGAL_MODE_ALERT_RULE_ID })).toBe(true)
-    expect(isLegalModeAlertRule({ id: 'manual' })).toBe(false)
   })
 })

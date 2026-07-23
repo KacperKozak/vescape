@@ -1,10 +1,6 @@
-import type { AlertRule, LocationEvent } from 'vescape-core'
+import type { LocationEvent } from 'vescape-core'
 import { getLegalLimitCountryByCode, type LegalLimitCountry } from '@/modules/legal/lib/legalLimits'
 import type { LegalRoadStatus } from '@/modules/legal/lib/types'
-
-export const LEGAL_MODE_ALERT_RULE_ID = 'legal-mode-speed-alert'
-export const LEGAL_MODE_ALERT_SOUND_TYPE = 'preset:tick'
-export const LEGAL_MODE_ALERT_SOURCE = 'legal-mode'
 
 export interface LegalJurisdictionResult {
   countryCode: string
@@ -110,36 +106,6 @@ export function setWarningSpeed(settings: LegalModeSettings, speedKmh: number): 
     warningSpeedKmh: clampWarningSpeed(speedKmh, settings.legalSpeedKmh),
     warningManuallyEdited: true,
   }
-}
-
-// The owning `boardId` is stamped by the caller — Legal Mode is profile-level, so this pure builder
-// stays Board-agnostic and the store injects the active Board (#254).
-export function legalModeAlertRule(
-  settings: LegalModeSettings,
-  createdAt: number,
-): Omit<AlertRule, 'boardId'> {
-  return {
-    id: LEGAL_MODE_ALERT_RULE_ID,
-    controlId: 'speed',
-    threshold: settings.warningSpeedKmh,
-    thresholdMax: settings.legalSpeedKmh,
-    enabled: settings.enabled,
-    soundType: LEGAL_MODE_ALERT_SOUND_TYPE,
-    createdAt,
-    source: LEGAL_MODE_ALERT_SOURCE,
-  }
-}
-
-export function buildLegalModeWarningAlertRule(
-  settings: LegalModeSettings,
-  createdAt: number,
-): Omit<AlertRule, 'boardId'> | null {
-  if (!settings.enabled) return null
-  return legalModeAlertRule(settings, createdAt)
-}
-
-export function isLegalModeAlertRule(rule: Pick<AlertRule, 'id' | 'source'>) {
-  return rule.source === LEGAL_MODE_ALERT_SOURCE || rule.id === LEGAL_MODE_ALERT_RULE_ID
 }
 
 function positiveSpeed(value: unknown, fallback: number): number {

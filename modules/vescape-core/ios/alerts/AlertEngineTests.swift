@@ -62,6 +62,43 @@ final class AlertEngineTests: XCTestCase {
     )
   }
 
+  func testLegalModeOverlayStaysAbsentWhenDisabled() {
+    let rules = withLegalModeOverlay(
+      [rule()],
+      boardId: "board-2",
+      rawSettings: ["enabled": false, "warningSpeedKmh": 15, "legalSpeedKmh": 20]
+    )
+
+    XCTAssertEqual(1, rules.count)
+  }
+
+  func testLegalModeOverlaySynthesizesBoardAgnosticGeigerRule() {
+    let rules = withLegalModeOverlay(
+      [],
+      boardId: "board-2",
+      rawSettings: ["enabled": true, "warningSpeedKmh": 15, "legalSpeedKmh": 20]
+    )
+
+    XCTAssertEqual(1, rules.count)
+    XCTAssertEqual("board-2", rules[0].boardId)
+    XCTAssertEqual("speed", rules[0].controlId)
+    XCTAssertEqual(15, rules[0].threshold)
+    XCTAssertEqual(20, rules[0].thresholdMax)
+    XCTAssertEqual("preset:tick", rules[0].soundType)
+    XCTAssertNil(rules[0].source)
+  }
+
+  func testLegalModeOverlayUsesLatestSpeedSettings() {
+    let rules = withLegalModeOverlay(
+      [],
+      boardId: "board-1",
+      rawSettings: ["enabled": true, "warningSpeedKmh": 24, "legalSpeedKmh": 30]
+    )
+
+    XCTAssertEqual(24, rules[0].threshold)
+    XCTAssertEqual(30, rules[0].thresholdMax)
+  }
+
   // MARK: - Basic firing
 
   func testSingleAlertFiresWhenAboveThreshold() {

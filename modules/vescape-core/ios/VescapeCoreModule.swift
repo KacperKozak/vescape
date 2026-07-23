@@ -676,6 +676,9 @@ public class VescapeCoreModule: Module {
     // `appData.updateSetting` treats `NSNull` (JS null/undefined) as a delete.
     Function("updateSetting") { (key: String, value: JavaScriptValue) in
       self.appData.updateSetting(key, rawValue: value.getAny())
+      if key == "legalMode" {
+        self.coordinator.reloadAlertRules()
+      }
       if [
         "liveHistoryLimit",
         "movingSpeedThresholdKmh",

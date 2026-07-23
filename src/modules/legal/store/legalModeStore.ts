@@ -2,21 +2,14 @@ import { create } from 'zustand'
 
 import {
   DEFAULT_LEGAL_MODE_SETTINGS,
-  LEGAL_MODE_ALERT_RULE_ID,
   applyJurisdictionDefaults,
-  buildLegalModeWarningAlertRule,
   legalJurisdictionResultFromCountryCode,
   normalizeLegalModeSettings,
   setLegalSpeed as deriveLegalSpeed,
   setWarningSpeed as deriveWarningSpeed,
   type LegalModeSettings,
 } from '@/modules/legal/lib/legalMode'
-import { useAlertsStore } from '@/modules/alerts/store/alertsStore'
 import { useSettingsStore } from '@/modules/settings/store/settingsStore'
-
-interface LegalModeState {
-  syncing: boolean
-}
 
 interface LegalModeActions {
   setEnabled(enabled: boolean): Promise<void>
@@ -24,72 +17,33 @@ interface LegalModeActions {
   setLegalSpeed(speedKmh: number): Promise<void>
   setWarningSpeed(speedKmh: number): Promise<void>
   setSpeeds(legalSpeedKmh: number, warningSpeedKmh: number): Promise<void>
-  syncWarningAlert(): Promise<void>
 }
 
-let alertSyncQueue: Promise<void> = Promise.resolve()
-
-export const useLegalModeStore = create<LegalModeState & LegalModeActions>((set, get) => ({
-  syncing: false,
-
+export const useLegalModeStore = create<LegalModeActions>(() => ({
   async setEnabled(enabled) {
     const settings = getLegalModeSettings()
     await saveLegalMode(
       enabled ? resetSpeedsForCurrentJurisdiction(settings) : { ...settings, enabled },
     )
-    await get().syncWarningAlert()
   },
 
   async applyJurisdiction(countryCode) {
     const jurisdiction = legalJurisdictionResultFromCountryCode(countryCode)
     if (!jurisdiction) return
     await saveLegalMode(applyJurisdictionDefaults(getLegalModeSettings(), jurisdiction))
-    await get().syncWarningAlert()
   },
 
   async setLegalSpeed(speedKmh) {
     await saveLegalMode(deriveLegalSpeed(getLegalModeSettings(), speedKmh))
-    await get().syncWarningAlert()
   },
 
   async setWarningSpeed(speedKmh) {
     await saveLegalMode(deriveWarningSpeed(getLegalModeSettings(), speedKmh))
-    await get().syncWarningAlert()
   },
 
   async setSpeeds(legalSpeedKmh, warningSpeedKmh) {
     const withLegalSpeed = deriveLegalSpeed(getLegalModeSettings(), legalSpeedKmh)
     await saveLegalMode(deriveWarningSpeed(withLegalSpeed, warningSpeedKmh))
-    await get().syncWarningAlert()
-  },
-
-  async syncWarningAlert() {
-    const run = alertSyncQueue.then(async () => {
-      set({ syncing: true })
-      try {
-        // Legal Mode is profile-level but Alert Rules are Board-owned (#254), so the synthesized
-        // warning rule targets the active Board. No active Board ⇒ nothing to sync (slice 9 removes
-        // this mechanism entirely).
-        const boardId = useAlertsStore.getState().boardId
-        if (!boardId) return
-        const currentRule = useAlertsStore
-          .getState()
-          .rules.find((candidate) => candidate.id === LEGAL_MODE_ALERT_RULE_ID)
-        const rule = buildLegalModeWarningAlertRule(
-          getLegalModeSettings(),
-          currentRule?.createdAt ?? Date.now(),
-        )
-        if (rule) {
-          await useAlertsStore.getState().upsert({ ...rule, boardId })
-        } else {
-          await useAlertsStore.getState().remove(LEGAL_MODE_ALERT_RULE_ID)
-        }
-      } finally {
-        set({ syncing: false })
-      }
-    })
-    alertSyncQueue = run.catch(() => undefined)
-    await run
   },
 }))
 
