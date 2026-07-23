@@ -3,6 +3,7 @@ import Foundation
 /// Alert rule persisted in GRDB (`alerts` table). Mirrors Android `AlertRuleEntity`.
 /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryEntities.kt
 internal struct AlertRule {
+  let boardId: String
   let id: String
   let controlId: String
   let threshold: Double

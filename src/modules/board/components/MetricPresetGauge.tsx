@@ -1,10 +1,7 @@
 import { useCallback, useMemo } from 'react'
-import { useRouter } from 'expo-router'
-import { SpeedometerIcon } from 'phosphor-react-native'
 import { StyleSheet, View } from 'react-native'
 import type { SharedValue } from 'react-native-reanimated'
 
-import { Button } from '@/components/base/Button'
 import { Text } from '@/components/base/Text'
 import { type DualGaugeAlert } from '@/components/charts/gaugeAlert'
 import { theme } from '@/constants/theme'
@@ -13,11 +10,14 @@ import {
   type AlertPresetLevel,
   type AlertPresetMetric,
   isPresetAlertRule,
-  normalizeAlertPresetSelection,
 } from '@/modules/alerts/lib/alertPresets'
+import {
+  boardAlertPresetSelection,
+  boardHasBatteryConfig,
+  boardTopSpeedKmh,
+} from '@/modules/alerts/lib/boardAlertSettings'
 import { useAlertPresetStore } from '@/modules/alerts/store/alertPresetStore'
 import { useAlertsStore } from '@/modules/alerts/store/alertsStore'
-import { deriveBatteryConfig } from '@/modules/battery/lib'
 import {
   getHistoryMetricHotRange,
   getHistoryMetricKeyForControlId,
@@ -42,18 +42,14 @@ interface MetricPresetGaugeProps {
  * rather than in each per-metric route.
  */
 export function MetricPresetGauge({ metric, value }: MetricPresetGaugeProps) {
-  const router = useRouter()
-  const level = useSettingsStore((s) => normalizeAlertPresetSelection(s.alertPreset)[metric])
-  const riderTopSpeedKmh = useSettingsStore((s) => s.riderTopSpeedKmh)
   const gradientsEnabled = useSettingsStore((s) => s.historyMetricGradientsEnabled)
   const hotRanges = useSettingsStore((s) => s.historyMetricHotRanges)
   const rules = useAlertsStore((s) => s.rules)
   const board = useBoardStore((s) => s.boards.find((b) => b.id === s.activeBoardId))
 
-  const hasBatteryConfig = useMemo(
-    () => deriveBatteryConfig(board?.batteryConfig ?? null).warning == null,
-    [board?.batteryConfig],
-  )
+  const level = boardAlertPresetSelection(board)[metric]
+  const riderTopSpeedKmh = boardTopSpeedKmh(board)
+  const hasBatteryConfig = useMemo(() => boardHasBatteryConfig(board), [board])
 
   const hotMetric = getHistoryMetricKeyForControlId(metric)
   const hotRange = hotMetric
@@ -83,8 +79,6 @@ export function MetricPresetGauge({ metric, value }: MetricPresetGaugeProps) {
 
   // Battery presets are SoC %-based — a hard block, not just a prompt, without a valid battery config.
   const batteryBlocked = metric === 'battery' && !hasBatteryConfig
-  // Speed thresholds scale off Rider Top Speed; without a usable value the preset can't resolve.
-  const speedMissing = metric === 'speed' && !(riderTopSpeedKmh > 0)
 
   return (
     <View style={styles.container}>
@@ -97,7 +91,7 @@ export function MetricPresetGauge({ metric, value }: MetricPresetGaugeProps) {
         hasBatteryConfig={hasBatteryConfig}
         customAlerts={customAlerts}
         hotRange={hotRange}
-        disabled={batteryBlocked || speedMissing}
+        disabled={batteryBlocked}
       />
 
       {batteryBlocked ? (
@@ -105,22 +99,6 @@ export function MetricPresetGauge({ metric, value }: MetricPresetGaugeProps) {
           Battery presets need a valid battery configuration — they alert on state-of-charge %. Set
           up this board&apos;s battery to enable them.
         </Text>
-      ) : null}
-
-      {speedMissing ? (
-        <View style={styles.prompt}>
-          <Text style={styles.note}>
-            Set your Rider Top Speed to enable speed presets — thresholds scale off it.
-          </Text>
-          <Button
-            label="Set rider top speed"
-            icon={SpeedometerIcon}
-            variant="secondary"
-            size="sm"
-            onPress={() => router.push(routes.settingsLiveTelemetry)}
-            style={styles.promptButton}
-          />
-        </View>
       ) : null}
     </View>
   )
@@ -130,16 +108,10 @@ const styles = StyleSheet.create({
   container: {
     gap: 10,
   },
-  prompt: {
-    gap: 8,
-  },
   note: {
     color: theme.palette.slate.textMuted,
     fontSize: 12,
     fontWeight: '500',
     lineHeight: 16,
-  },
-  promptButton: {
-    alignSelf: 'flex-start',
   },
 })

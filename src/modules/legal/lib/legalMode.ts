@@ -112,7 +112,12 @@ export function setWarningSpeed(settings: LegalModeSettings, speedKmh: number): 
   }
 }
 
-export function legalModeAlertRule(settings: LegalModeSettings, createdAt: number): AlertRule {
+// The owning `boardId` is stamped by the caller — Legal Mode is profile-level, so this pure builder
+// stays Board-agnostic and the store injects the active Board (#254).
+export function legalModeAlertRule(
+  settings: LegalModeSettings,
+  createdAt: number,
+): Omit<AlertRule, 'boardId'> {
   return {
     id: LEGAL_MODE_ALERT_RULE_ID,
     controlId: 'speed',
@@ -128,7 +133,7 @@ export function legalModeAlertRule(settings: LegalModeSettings, createdAt: numbe
 export function buildLegalModeWarningAlertRule(
   settings: LegalModeSettings,
   createdAt: number,
-): AlertRule | null {
+): Omit<AlertRule, 'boardId'> | null {
   if (!settings.enabled) return null
   return legalModeAlertRule(settings, createdAt)
 }

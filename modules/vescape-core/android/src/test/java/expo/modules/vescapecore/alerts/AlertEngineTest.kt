@@ -20,6 +20,7 @@ class AlertEngineTest {
         thresholdMax: Double? = null,
         soundType: String = "default",
     ) = AlertRuleEntity(
+        boardId = "board-1",
         id = id,
         controlId = controlId,
         threshold = threshold,

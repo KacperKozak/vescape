@@ -1,61 +1,82 @@
 import { beforeEach, expect, mock, test } from 'bun:test'
-import type { AlertRule, Board } from 'vescape-core'
+import type { AlertRule, BatteryConfig, Board } from 'vescape-core'
 
 const actualVescapeCore = await import('@/../modules/vescape-core/src/index')
 
-const updateSetting = mock(async () => {})
+const upsertBoard = mock(async () => {})
 const upsertAlertRule = mock(async () => {})
 const deleteAlertRule = mock(async () => {})
 const getAlertRules = mock(async () => [] as AlertRule[])
 
 mock.module('vescape-core', () => ({
   ...actualVescapeCore,
-  updateSetting,
+  upsertBoard,
   upsertAlertRule,
   deleteAlertRule,
   getAlertRules,
 }))
 
-const BATTERY_BOARD = {
-  id: 'board-1',
-  batteryConfig: { mode: 'manual', minVoltage: 40, maxVoltage: 50 },
-} as unknown as Board
+const BOARD_ID = 'board-1'
+const VALID_BATTERY: BatteryConfig = { mode: 'manual', minVoltage: 40, maxVoltage: 50 }
 
-async function setup(overrides?: { riderTopSpeedKmh?: number; seedRules?: AlertRule[] }) {
-  const { useSettingsStore } = await import('@/modules/settings/store/settingsStore')
+function makeBoard(overrides?: {
+  topSpeedKmh?: number
+  batteryConfig?: BatteryConfig | null
+}): Board {
+  return {
+    id: BOARD_ID,
+    name: 'Board',
+    description: null,
+    createdAt: 1,
+    // Honor an explicit `null` (invalid config) — `??` would swallow it back to the valid default.
+    batteryConfig:
+      overrides && 'batteryConfig' in overrides ? (overrides.batteryConfig ?? null) : VALID_BATTERY,
+    topSpeedKmh: overrides?.topSpeedKmh ?? 40,
+    alertPreset: null,
+    alertPresetsOnboarded: false,
+    link: null,
+  }
+}
+
+async function setup(overrides?: {
+  topSpeedKmh?: number
+  batteryConfig?: BatteryConfig | null
+  seedRules?: AlertRule[]
+}) {
   const { useAlertsStore } = await import('@/modules/alerts/store/alertsStore')
   const { useBoardStore } = await import('@/modules/board/store/boardStore')
   const { useAlertPresetStore } = await import('@/modules/alerts/store/alertPresetStore')
 
-  useSettingsStore.setState({
-    riderTopSpeedKmh: overrides?.riderTopSpeedKmh ?? 40,
-    alertPreset: null,
-    setAlertPreset: useSettingsStore.getInitialState().setAlertPreset,
+  // Alert Rules are Board-owned (#254); bind the alerts store to the board under test.
+  useAlertsStore.setState({ boardId: BOARD_ID, rules: overrides?.seedRules ?? [] })
+  useBoardStore.setState({
+    boards: [makeBoard(overrides)],
+    activeBoardId: BOARD_ID,
+    updateBoard: useBoardStore.getInitialState().updateBoard,
   })
-  useAlertsStore.setState({ rules: overrides?.seedRules ?? [] })
-  useBoardStore.setState({ boards: [BATTERY_BOARD], activeBoardId: 'board-1' })
 
-  return { useSettingsStore, useAlertsStore, useAlertPresetStore }
+  return { useAlertsStore, useBoardStore, useAlertPresetStore }
 }
 
 const presetRules = (rules: AlertRule[], controlId: string) =>
   rules.filter((rule) => rule.source === 'preset' && rule.controlId === controlId)
 
+const boardSelection = (board: Board | undefined) =>
+  board?.alertPreset as Record<string, unknown> | null | undefined
+
 beforeEach(() => {
-  updateSetting.mockClear()
+  upsertBoard.mockClear()
   upsertAlertRule.mockClear()
   deleteAlertRule.mockClear()
 })
 
-test('setting a level persists the selection and generates deterministically-ided preset rules', async () => {
-  const { useAlertsStore, useAlertPresetStore } = await setup()
+test('setting a level persists the selection on the board and generates deterministically-ided preset rules', async () => {
+  const { useAlertsStore, useBoardStore, useAlertPresetStore } = await setup()
 
   await useAlertPresetStore.getState().setLevel('battery', 'normal')
 
-  expect(updateSetting).toHaveBeenCalledWith(
-    'alertPreset',
-    expect.objectContaining({ battery: 'normal' }),
-  )
+  const board = useBoardStore.getState().boards.find((b) => b.id === BOARD_ID)
+  expect(boardSelection(board)).toMatchObject({ battery: 'normal' })
 
   const rules = presetRules(useAlertsStore.getState().rules, 'battery')
   expect(rules.length).toBeGreaterThan(0)
@@ -63,6 +84,7 @@ test('setting a level persists the selection and generates deterministically-ide
   for (const rule of rules) {
     expect(rule.source).toBe('preset')
     expect(rule.enabled).toBe(true)
+    expect(rule.boardId).toBe(BOARD_ID)
   }
 })
 
@@ -95,6 +117,7 @@ test('off removes a metric preset rules entirely', async () => {
 
 test('manual rules and other metrics survive a preset regeneration', async () => {
   const manual: AlertRule = {
+    boardId: BOARD_ID,
     id: 'manual-1',
     controlId: 'battery',
     threshold: 33,
@@ -105,6 +128,7 @@ test('manual rules and other metrics survive a preset regeneration', async () =>
     source: 'manual',
   }
   const otherPreset: AlertRule = {
+    boardId: BOARD_ID,
     id: 'preset:duty:0',
     controlId: 'duty',
     threshold: 70,
@@ -123,15 +147,14 @@ test('manual rules and other metrics survive a preset regeneration', async () =>
   expect(rules.find((rule) => rule.id === 'preset:duty:0')).toEqual(otherPreset)
 })
 
-test('changing Rider Top Speed regenerates the speed preset thresholds', async () => {
-  const { useSettingsStore, useAlertsStore, useAlertPresetStore } = await setup({
-    riderTopSpeedKmh: 40,
-  })
+test('changing Board Top Speed regenerates the speed preset thresholds', async () => {
+  const { useAlertsStore, useBoardStore, useAlertPresetStore } = await setup({ topSpeedKmh: 40 })
 
   await useAlertPresetStore.getState().setLevel('speed', 'normal')
   const at40 = presetRules(useAlertsStore.getState().rules, 'speed')[0]!
 
-  useSettingsStore.setState({ riderTopSpeedKmh: 100 })
+  const board = useBoardStore.getState().boards.find((b) => b.id === BOARD_ID)!
+  useBoardStore.setState({ boards: [{ ...board, topSpeedKmh: 100 }] })
   await useAlertPresetStore.getState().regenerateSpeed()
   const at100 = presetRules(useAlertsStore.getState().rules, 'speed')[0]!
 
@@ -140,9 +163,7 @@ test('changing Rider Top Speed regenerates the speed preset thresholds', async (
 })
 
 test('battery preset generates nothing without a valid board battery config', async () => {
-  const { useAlertsStore, useAlertPresetStore } = await setup()
-  const { useBoardStore } = await import('@/modules/board/store/boardStore')
-  useBoardStore.setState({ boards: [], activeBoardId: null })
+  const { useAlertsStore, useAlertPresetStore } = await setup({ batteryConfig: null })
 
   await useAlertPresetStore.getState().setLevel('battery', 'normal')
 

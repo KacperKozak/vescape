@@ -21,14 +21,13 @@ import {
 import { useShallow } from 'zustand/react/shallow'
 
 import { AlertPresetMetricSetup } from '@/modules/alerts/components/AlertPresetMetricSetup'
-import { RiderTopSpeedCard } from '@/modules/alerts/components/RiderTopSpeedCard'
+import { BoardTopSpeedCard } from '@/modules/alerts/components/BoardTopSpeedCard'
 import {
   ALERT_PRESET_METRICS,
   formatAlertPresetSummary,
   normalizeAlertPresetSelection,
   type AlertPresetMetric,
 } from '@/modules/alerts/lib/alertPresets'
-import { deriveBatteryConfig } from '@/modules/battery/lib'
 import { BoardBatteryForm } from '@/modules/board/components/BoardBatteryForm'
 import { BoardInfoForm } from '@/modules/board/components/BoardInfoForm'
 import { BoardLinkTimeline } from '@/modules/board/components/BoardLinkTimeline'
@@ -39,9 +38,7 @@ import { type UseAddBoardWizard, type WizardStepId } from '@/modules/board/hooks
 import { useBoardLink } from '@/modules/board/hooks/useBoardLink'
 import { formatBmsSuffix, formatBoardTransport } from '@/modules/board/lib/boardTransport'
 import { useBleStore, NUS_SERVICE_UUID } from '@/modules/board/store/bleStore'
-import { useBoardStore } from '@/modules/board/store/boardStore'
 import { usePermissions } from '@/modules/settings/hooks/usePermissions'
-import { useSettingsStore } from '@/modules/settings/store/settingsStore'
 
 const STEP_META: Record<WizardStepId, { label: string; icon: typeof Bluetooth; color: string }> = {
   scan: { label: 'Pair', icon: Bluetooth, color: theme.palette.sky.color },
@@ -52,7 +49,7 @@ const STEP_META: Record<WizardStepId, { label: string; icon: typeof Bluetooth; c
 }
 
 interface AlertSubstep {
-  key: 'rider-top-speed' | AlertPresetMetric
+  key: 'board-top-speed' | AlertPresetMetric
   title: string
   icon: typeof Bluetooth
 }
@@ -68,9 +65,9 @@ const ALERT_METRIC_META: Record<AlertPresetMetric, { name: string; icon: typeof 
   duty: { name: 'Duty', icon: Lightning },
 }
 
-/** Ordered Alert sub-steps: Rider Top Speed first, then one page per preset metric. */
+/** Ordered Alert sub-steps: Board Top Speed first, then one page per preset metric. */
 const ALERT_SUBSTEPS: AlertSubstep[] = [
-  { key: 'rider-top-speed', title: 'Rider top speed', icon: BellRinging },
+  { key: 'board-top-speed', title: 'Board top speed', icon: BellRinging },
   ...ALERT_PRESET_METRICS.map((metric) => ({
     key: metric,
     title: `${ALERT_METRIC_META[metric].name} alerts`,
@@ -442,7 +439,7 @@ function PresetsStep({ wizard }: Props) {
           <Text style={styles.presetsHint}>
             The fastest you consider yourself capable of riding. Scales the speed gauge and alerts.
           </Text>
-          <RiderTopSpeedCard />
+          <BoardTopSpeedCard value={wizard.topSpeedKmh} onChange={wizard.setTopSpeedKmh} />
         </>
       ) : (
         <>
@@ -450,7 +447,15 @@ function PresetsStep({ wizard }: Props) {
             Pick how loudly this metric warns you. Adjust it any time from its control on the main
             screen.
           </Text>
-          <AlertPresetMetricSetup metric={substep.key as AlertPresetMetric} />
+          <AlertPresetMetricSetup
+            metric={substep.key as AlertPresetMetric}
+            level={
+              normalizeAlertPresetSelection(wizard.alertPreset)[substep.key as AlertPresetMetric]
+            }
+            onLevelChange={(level) => wizard.setAlertLevel(substep.key as AlertPresetMetric, level)}
+            topSpeedKmh={wizard.topSpeedKmh}
+            hasBatteryConfig={wizard.hasBatteryConfig}
+          />
         </>
       )}
     </StepContainer>
@@ -458,21 +463,16 @@ function PresetsStep({ wizard }: Props) {
 }
 
 function ConfirmStep({ wizard }: Props) {
-  const riderTopSpeedKmh = useSettingsStore((s) => s.riderTopSpeedKmh)
-  const alertPreset = useSettingsStore((s) => s.alertPreset)
-  const board = useBoardStore((s) => s.boards.find((b) => b.id === s.activeBoardId))
-
   const alertSummaries = useMemo(() => {
-    const selection = normalizeAlertPresetSelection(alertPreset)
-    const hasBatteryConfig = deriveBatteryConfig(board?.batteryConfig ?? null).warning == null
+    const selection = normalizeAlertPresetSelection(wizard.alertPreset)
     return ALERT_PRESET_METRICS.map((metric) => ({
       metric,
       summary: formatAlertPresetSummary(metric, selection[metric], {
-        riderTopSpeedKmh,
-        hasBatteryConfig,
+        riderTopSpeedKmh: wizard.topSpeedKmh,
+        hasBatteryConfig: wizard.hasBatteryConfig,
       }),
     })).filter((row): row is { metric: AlertPresetMetric; summary: string } => row.summary != null)
-  }, [alertPreset, board?.batteryConfig, riderTopSpeedKmh])
+  }, [wizard.alertPreset, wizard.hasBatteryConfig, wizard.topSpeedKmh])
 
   return (
     <StepContainer

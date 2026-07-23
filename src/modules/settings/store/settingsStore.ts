@@ -6,10 +6,6 @@ import {
   updateSetting,
   type AppSettings,
 } from 'vescape-core'
-import {
-  DEFAULT_ALERT_PRESET_SELECTION,
-  type AlertPresetSelection,
-} from '@/modules/alerts/lib/alertPresets'
 import { DEFAULT_HISTORY_METRIC_HOT_RANGES } from '@/modules/history/lib/metricColorScale'
 import { DEFAULT_LEGAL_MODE_SETTINGS, type LegalModeSettings } from '@/modules/legal/lib/legalMode'
 import {
@@ -26,7 +22,6 @@ const DEFAULTS: AppSettings = {
   lastGpsLatitude: null,
   lastGpsLongitude: null,
   movingSpeedThresholdKmh: 3,
-  riderTopSpeedKmh: 50,
   freeSpinMaxSpeedDeltaKmh: 12,
   freeSpinStationaryBoardCapKmh: 15,
   mapStyleKey: 'onedark',
@@ -52,8 +47,6 @@ const DEFAULTS: AppSettings = {
   riderName: null,
   riderColor: null,
   legalMode: DEFAULT_LEGAL_MODE_SETTINGS as unknown as Record<string, unknown>,
-  alertPreset: DEFAULT_ALERT_PRESET_SELECTION as unknown as Record<string, unknown>,
-  alertPresetsOnboarded: false,
 }
 
 interface SettingsState extends AppSettings {
@@ -61,7 +54,6 @@ interface SettingsState extends AppSettings {
   load: () => Promise<void>
   set: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => Promise<void>
   setLegalMode: (value: LegalModeSettings) => Promise<void>
-  setAlertPreset: (value: AlertPresetSelection) => Promise<void>
   setCompanionPresence: (enabled: boolean) => Promise<void>
 }
 
@@ -107,11 +99,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
   async setLegalMode(value) {
     set({ legalMode: value as unknown as Record<string, unknown> })
     await updateSetting('legalMode', value as unknown as Record<string, unknown>)
-  },
-
-  async setAlertPreset(value) {
-    set({ alertPreset: value as unknown as Record<string, unknown> })
-    await updateSetting('alertPreset', value as unknown as Record<string, unknown>)
   },
 
   async setCompanionPresence(enabled) {

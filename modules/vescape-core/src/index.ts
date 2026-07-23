@@ -179,6 +179,23 @@ export interface Board {
    * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/AppDataRepository.kt `normalizeDismissedWarnings`
    */
   dismissedWarnings?: string[]
+  /**
+   * Board Top Speed in km/h (renamed from the former profile-level Rider Top Speed): the rider's
+   * self-assessed max on this Board. Drives the speed gauge full-scale and the km/h thresholds a
+   * speed Alert Preset resolves to. Not a legal or firmware limit. Absent ⇒ display default 50.
+   */
+  topSpeedKmh?: number
+  /**
+   * Durable per-metric Alert Preset level selection for this Board. JS owns behavior; native only
+   * persists this bag. Absent ⇒ all metrics Off (no preset rules until the rider touches setup).
+   */
+  alertPreset?: Record<string, unknown> | null
+  /**
+   * One-time gate for the guided Alert Preset step in the add-board wizard, per Board. False until
+   * the rider completes that step for this Board. The durable setup home is the Alerts settings
+   * entry regardless of this flag.
+   */
+  alertPresetsOnboarded?: boolean
   /** Probe-confirmed reachability. `null` means offline-only/unlinked. */
   link: BoardLink | null
 }
@@ -222,6 +239,8 @@ export interface AlertSound {
 // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryEntities.kt `AlertRuleEntity`
 // @parity /modules/vescape-core/ios/alerts/AlertEngine.swift `AlertRule`
 export interface AlertRule {
+  /** Owning Board. The alert engine evaluates only the connected Board's rules (see docs/alerts.md). */
+  boardId: string
   id: string
   controlId: string
   threshold: number
@@ -780,12 +799,6 @@ export interface AppSettings {
   lastGpsLatitude: number | null
   lastGpsLongitude: number | null
   movingSpeedThresholdKmh: number
-  /**
-   * Rider Top Speed: the rider-entered max speed they consider themselves capable of, held once at
-   * the profile level for all Boards. Drives the speed gauge full-scale and the km/h thresholds a
-   * speed Alert Preset resolves to. Not a legal or firmware limit — see the CONTEXT.md glossary.
-   */
-  riderTopSpeedKmh: number
   freeSpinMaxSpeedDeltaKmh: number
   freeSpinStationaryBoardCapKmh: number
   mapStyleKey: 'onedark' | 'outdoors' | 'satellite' | 'mapy'
@@ -868,14 +881,6 @@ export interface AppSettings {
   riderColor: string | null
   /** Durable Legal Mode UI/default state. JS owns behavior; native only persists this bag. */
   legalMode: Record<string, unknown> | null
-  /** Durable Alert Preset per-metric level selection. JS owns behavior; native only persists this bag. */
-  alertPreset: Record<string, unknown> | null
-  /**
-   * One-time gate for the guided Alert Preset step in the add-board wizard. False until the rider
-   * completes that step once (profile-level, across all boards); later board adds then skip it. The
-   * durable setup home is the Alerts settings entry regardless of this flag.
-   */
-  alertPresetsOnboarded: boolean
 }
 
 export interface DiagnosticStatus {
@@ -1288,10 +1293,10 @@ type VescapeCoreNativeModule = NativeEventEmitter<VescapeCoreEvents> & {
   getBoards(): Promise<Board[]>
   upsertBoard(board: Board): Promise<void>
   deleteBoard(id: string): Promise<void>
-  getAlertRules(): Promise<AlertRule[]>
+  getAlertRules(boardId: string): Promise<AlertRule[]>
   upsertAlertRule(rule: AlertRule): Promise<void>
-  setAlertRuleEnabled(id: string, enabled: boolean): Promise<void>
-  deleteAlertRule(id: string): Promise<void>
+  setAlertRuleEnabled(boardId: string, id: string, enabled: boolean): Promise<void>
+  deleteAlertRule(boardId: string, id: string): Promise<void>
   getPrivacyZones(): Promise<PrivacyZone[]>
   upsertPrivacyZone(zone: PrivacyZone): Promise<void>
   setPrivacyZoneEnabled(id: string, enabled: boolean): Promise<void>
@@ -1881,20 +1886,24 @@ export async function deleteBoard(id: string): Promise<void> {
   return native.deleteBoard(id)
 }
 
-export async function getAlertRules(): Promise<AlertRule[]> {
-  return native.getAlertRules()
+export async function getAlertRules(boardId: string): Promise<AlertRule[]> {
+  return native.getAlertRules(boardId)
 }
 
 export async function upsertAlertRule(rule: AlertRule): Promise<void> {
   return native.upsertAlertRule(rule)
 }
 
-export async function setAlertRuleEnabled(id: string, enabled: boolean): Promise<void> {
-  return native.setAlertRuleEnabled(id, enabled)
+export async function setAlertRuleEnabled(
+  boardId: string,
+  id: string,
+  enabled: boolean,
+): Promise<void> {
+  return native.setAlertRuleEnabled(boardId, id, enabled)
 }
 
-export async function deleteAlertRule(id: string): Promise<void> {
-  return native.deleteAlertRule(id)
+export async function deleteAlertRule(boardId: string, id: string): Promise<void> {
+  return native.deleteAlertRule(boardId, id)
 }
 
 export async function getPrivacyZones(): Promise<PrivacyZone[]> {

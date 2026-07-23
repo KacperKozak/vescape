@@ -16,7 +16,6 @@ const BASE: AppSettings = {
   lastGpsLatitude: null,
   lastGpsLongitude: null,
   movingSpeedThresholdKmh: 3,
-  riderTopSpeedKmh: 40,
   freeSpinMaxSpeedDeltaKmh: 12,
   freeSpinStationaryBoardCapKmh: 15,
   mapStyleKey: 'onedark',
@@ -42,8 +41,6 @@ const BASE: AppSettings = {
   riderName: null,
   riderColor: null,
   legalMode: DEFAULT_LEGAL_MODE_SETTINGS as unknown as Record<string, unknown>,
-  alertPreset: null,
-  alertPresetsOnboarded: false,
 }
 
 const updateSetting = mock(async () => {})
@@ -71,6 +68,11 @@ beforeEach(async () => {
     setLegalMode: useSettingsStore.getInitialState().setLegalMode,
     setCompanionPresence: useSettingsStore.getInitialState().setCompanionPresence,
   })
+
+  // Alert Rules are Board-owned (#254): Legal Mode syncs its warning rule onto the active Board, so
+  // bind the alerts store to a Board for these tests.
+  const { useAlertsStore } = await import('@/modules/alerts/store/alertsStore')
+  useAlertsStore.setState({ boardId: 'board-1', rules: [] })
 })
 
 test('enabling legal mode materializes a managed native speed warning alert', async () => {
@@ -189,7 +191,7 @@ test('disabling legal mode deletes only the managed native warning alert', async
 
   await useLegalModeStore.getState().setEnabled(false)
 
-  expect(deleteAlertRule).toHaveBeenCalledWith('legal-mode-speed-alert')
+  expect(deleteAlertRule).toHaveBeenCalledWith('board-1', 'legal-mode-speed-alert')
   expect(deleteAlertRule).toHaveBeenCalledTimes(1)
   expect(upsertAlertRule).not.toHaveBeenCalled()
 })

@@ -1,6 +1,6 @@
 import { StyleSheet, ScrollView } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { ClockCountdownIcon, GaugeIcon, SpeedometerIcon, WaveformIcon } from 'phosphor-react-native'
+import { ClockCountdownIcon, GaugeIcon, WaveformIcon } from 'phosphor-react-native'
 import { useShallow } from 'zustand/react/shallow'
 
 import { theme } from '@/constants/theme'
@@ -9,51 +9,25 @@ import { SettingsRow } from '@/components/settings/SettingsRow'
 import { Stepper } from '@/components/forms/Stepper'
 import { IconHero } from '@/components/settings/IconHero'
 import { useSettingsStore } from '@/modules/settings/store/settingsStore'
-import { useAlertPresetStore } from '@/modules/alerts/store/alertPresetStore'
 
 export default function LiveTelemetrySettingsScreen() {
-  const { liveHistoryLimit, telemetryPollRateHz, socEstimateWindowSeconds, riderTopSpeedKmh, set } =
-    useSettingsStore(
-      useShallow((s) => ({
-        liveHistoryLimit: s.liveHistoryLimit,
-        telemetryPollRateHz: s.telemetryPollRateHz,
-        socEstimateWindowSeconds: s.socEstimateWindowSeconds,
-        riderTopSpeedKmh: s.riderTopSpeedKmh,
-        set: s.set,
-      })),
-    )
+  const { liveHistoryLimit, telemetryPollRateHz, socEstimateWindowSeconds, set } = useSettingsStore(
+    useShallow((s) => ({
+      liveHistoryLimit: s.liveHistoryLimit,
+      telemetryPollRateHz: s.telemetryPollRateHz,
+      socEstimateWindowSeconds: s.socEstimateWindowSeconds,
+      set: s.set,
+    })),
+  )
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
         <IconHero
           icon={GaugeIcon}
-          description="Control live graph history, telemetry request rate, battery display smoothing, and the speed gauge scale."
+          description="Control live graph history, telemetry request rate, and battery display smoothing."
         />
         <SettingsCard>
-          <SettingsRow
-            icon={SpeedometerIcon}
-            iconColor={theme.palette.orange.color}
-            label="Rider top speed"
-            hint="Speed you consider yourself capable of. Sets the speed gauge full-scale"
-            right={
-              <Stepper
-                value={riderTopSpeedKmh}
-                unit="km/h"
-                min={5}
-                max={150}
-                step={5}
-                onChange={(nextValue) => {
-                  const clampedValue = Math.min(150, Math.max(5, nextValue))
-                  if (clampedValue !== riderTopSpeedKmh) {
-                    void set('riderTopSpeedKmh', clampedValue).then(() =>
-                      useAlertPresetStore.getState().regenerateSpeed(),
-                    )
-                  }
-                }}
-              />
-            }
-          />
           <SettingsRow
             icon={ClockCountdownIcon}
             iconColor={theme.palette.sky.color}

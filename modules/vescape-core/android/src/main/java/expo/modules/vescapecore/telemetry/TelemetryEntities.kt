@@ -259,14 +259,17 @@ data class BoardSettingEntity(
 
 @Entity(
   tableName = "alerts",
+  primaryKeys = ["board_id", "id"],
   indices = [
+    Index(value = ["board_id"]),
     Index(value = ["control_id"]),
     Index(value = ["enabled"]),
     Index(value = ["created_at"]),
   ],
 )
 data class AlertRuleEntity(
-  @PrimaryKey
+  @ColumnInfo(name = "board_id")
+  val boardId: String,
   val id: String,
   @ColumnInfo(name = "control_id")
   val controlId: String,
@@ -365,7 +368,6 @@ data class AppSettings(
   val lastGpsLatitude: Double? = null,
   val lastGpsLongitude: Double? = null,
   val movingSpeedThresholdKmh: Double = 3.0,
-  val riderTopSpeedKmh: Double = 50.0,
   val freeSpinMaxSpeedDeltaKmh: Double = DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH,
   val freeSpinStationaryBoardCapKmh: Double = DEFAULT_FREE_SPIN_STATIONARY_BOARD_CAP_KMH,
   val mapStyleKey: String = "onedark",
@@ -391,8 +393,6 @@ data class AppSettings(
   val riderName: String? = null,
   val riderColor: String? = null,
   val legalMode: Map<String, Any?>? = null,
-  val alertPreset: Map<String, Any?>? = null,
-  val alertPresetsOnboarded: Boolean = false,
 )
 
 @Entity(

@@ -54,7 +54,6 @@ const e2eSettings: AppSettings = {
   lastGpsLatitude: null,
   lastGpsLongitude: null,
   movingSpeedThresholdKmh: 5,
-  riderTopSpeedKmh: 40,
   freeSpinMaxSpeedDeltaKmh: 3,
   freeSpinStationaryBoardCapKmh: 1,
   mapStyleKey: 'onedark',
@@ -80,8 +79,6 @@ const e2eSettings: AppSettings = {
   riderName: null,
   riderColor: null,
   legalMode: null,
-  alertPreset: null,
-  alertPresetsOnboarded: false,
 }
 
 function emitDevice(event: DeviceFoundEvent): void {

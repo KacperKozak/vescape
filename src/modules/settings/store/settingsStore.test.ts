@@ -11,7 +11,6 @@ const BASE: AppSettings = {
   lastGpsLatitude: null,
   lastGpsLongitude: null,
   movingSpeedThresholdKmh: 3,
-  riderTopSpeedKmh: 40,
   freeSpinMaxSpeedDeltaKmh: 12,
   freeSpinStationaryBoardCapKmh: 15,
   mapStyleKey: 'onedark',
@@ -37,8 +36,6 @@ const BASE: AppSettings = {
   riderName: null,
   riderColor: null,
   legalMode: null,
-  alertPreset: null,
-  alertPresetsOnboarded: false,
 }
 
 let settings: AppSettings = BASE

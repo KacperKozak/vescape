@@ -602,8 +602,8 @@ public class VescapeCoreModule: Module {
       promise.resolve(nil)
     }
 
-    AsyncFunction("getAlertRules") { (promise: Promise) in
-      promise.resolve(self.appData.getAlertRules())
+    AsyncFunction("getAlertRules") { (boardId: String, promise: Promise) in
+      promise.resolve(self.appData.getAlertRules(boardId))
     }
 
     AsyncFunction("upsertAlertRule") { (rule: [String: Any], promise: Promise) in
@@ -612,14 +612,14 @@ public class VescapeCoreModule: Module {
       promise.resolve(nil)
     }
 
-    AsyncFunction("setAlertRuleEnabled") { (id: String, enabled: Bool, promise: Promise) in
-      self.appData.setAlertRuleEnabled(id, enabled)
+    AsyncFunction("setAlertRuleEnabled") { (boardId: String, id: String, enabled: Bool, promise: Promise) in
+      self.appData.setAlertRuleEnabled(boardId, id, enabled)
       self.coordinator.reloadAlertRules()
       promise.resolve(nil)
     }
 
-    AsyncFunction("deleteAlertRule") { (id: String, promise: Promise) in
-      self.appData.deleteAlertRule(id)
+    AsyncFunction("deleteAlertRule") { (boardId: String, id: String, promise: Promise) in
+      self.appData.deleteAlertRule(boardId, id)
       self.coordinator.reloadAlertRules()
       promise.resolve(nil)
     }

@@ -1,5 +1,4 @@
 import { create } from 'zustand'
-import { deleteAlertRule } from 'vescape-core'
 
 import {
   DEFAULT_LEGAL_MODE_SETTINGS,
@@ -68,6 +67,11 @@ export const useLegalModeStore = create<LegalModeState & LegalModeActions>((set,
     const run = alertSyncQueue.then(async () => {
       set({ syncing: true })
       try {
+        // Legal Mode is profile-level but Alert Rules are Board-owned (#254), so the synthesized
+        // warning rule targets the active Board. No active Board ⇒ nothing to sync (slice 9 removes
+        // this mechanism entirely).
+        const boardId = useAlertsStore.getState().boardId
+        if (!boardId) return
         const currentRule = useAlertsStore
           .getState()
           .rules.find((candidate) => candidate.id === LEGAL_MODE_ALERT_RULE_ID)
@@ -76,12 +80,9 @@ export const useLegalModeStore = create<LegalModeState & LegalModeActions>((set,
           currentRule?.createdAt ?? Date.now(),
         )
         if (rule) {
-          await useAlertsStore.getState().upsert(rule)
+          await useAlertsStore.getState().upsert({ ...rule, boardId })
         } else {
-          useAlertsStore.setState((state) => ({
-            rules: state.rules.filter((candidate) => candidate.id !== LEGAL_MODE_ALERT_RULE_ID),
-          }))
-          await deleteAlertRule(LEGAL_MODE_ALERT_RULE_ID)
+          await useAlertsStore.getState().remove(LEGAL_MODE_ALERT_RULE_ID)
         }
       } finally {
         set({ syncing: false })

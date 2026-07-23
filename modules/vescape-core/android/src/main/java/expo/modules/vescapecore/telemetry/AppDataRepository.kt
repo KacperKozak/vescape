@@ -68,8 +68,14 @@ internal fun validAutoCloseDelayMinutes(value: Any?): Int? =
     ?.toInt()
     ?.coerceIn(1, 1440)
 
-/** Rider Top Speed in km/h; the speed gauge full-scale. Clamped to a sane 5–150 km/h band. */
-internal fun validRiderTopSpeedKmh(value: Any?): Double? =
+/** Display default Board Top Speed in km/h, applied when a Board has no `topSpeedKmh` setting. */
+internal const val DEFAULT_TOP_SPEED_KMH = 50.0
+
+/**
+ * Board Top Speed in km/h; the speed gauge full-scale. Clamped to a sane 5–150 km/h band.
+ * @parity /modules/vescape-core/ios/telemetry/AppDataRepository.swift `topSpeedKmh`
+ */
+internal fun validTopSpeedKmh(value: Any?): Double? =
   (value as? Number)
     ?.toDouble()
     ?.takeIf { it.isFinite() }
@@ -175,24 +181,27 @@ class AppDataRepository private constructor(private val context: Context) {
     notifyDataChanged(AppDataScope.BOARDS)
   }
 
-  suspend fun getAlertRules(): List<Map<String, Any?>> = withContext(Dispatchers.IO) {
-    dao.getAlertRules().map { it.toMap() }
+  suspend fun getAlertRules(boardId: String): List<Map<String, Any?>> = withContext(Dispatchers.IO) {
+    dao.getAlertRules(boardId).map { it.toMap() }
   }
 
-  suspend fun getEnabledAlertRuleEntities(): List<AlertRuleEntity> = withContext(Dispatchers.IO) {
-    dao.getEnabledAlertRules()
-  }
+  /** The given Board's enabled rules — the alert engine evaluates only the connected Board's rules. */
+  suspend fun getEnabledAlertRuleEntities(boardId: String): List<AlertRuleEntity> =
+    withContext(Dispatchers.IO) {
+      dao.getEnabledAlertRules(boardId)
+    }
 
   suspend fun upsertAlertRule(rule: Map<String, Any?>): Unit = withContext(Dispatchers.IO) {
     dao.upsertAlertRule(rule.toAlertRuleEntity())
   }
 
-  suspend fun setAlertRuleEnabled(id: String, enabled: Boolean): Unit = withContext(Dispatchers.IO) {
-    dao.setAlertRuleEnabled(id, enabled)
-  }
+  suspend fun setAlertRuleEnabled(boardId: String, id: String, enabled: Boolean): Unit =
+    withContext(Dispatchers.IO) {
+      dao.setAlertRuleEnabled(boardId, id, enabled)
+    }
 
-  suspend fun deleteAlertRule(id: String): Unit = withContext(Dispatchers.IO) {
-    dao.deleteAlertRule(id)
+  suspend fun deleteAlertRule(boardId: String, id: String): Unit = withContext(Dispatchers.IO) {
+    dao.deleteAlertRule(boardId, id)
   }
 
   suspend fun getSettings(): Map<String, Any?> = withContext(Dispatchers.IO) {
@@ -227,7 +236,6 @@ class AppDataRepository private constructor(private val context: Context) {
       lastGpsLatitude = opt("lastGpsLatitude") { (it as? Number)?.toDouble() },
       lastGpsLongitude = opt("lastGpsLongitude") { (it as? Number)?.toDouble() },
       movingSpeedThresholdKmh = req("movingSpeedThresholdKmh", 3.0) { (it as? Number)?.toDouble() },
-      riderTopSpeedKmh = req("riderTopSpeedKmh", 50.0, ::validRiderTopSpeedKmh),
       freeSpinMaxSpeedDeltaKmh = req("freeSpinMaxSpeedDeltaKmh", DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH) { (it as? Number)?.toDouble() },
       freeSpinStationaryBoardCapKmh = req("freeSpinStationaryBoardCapKmh", DEFAULT_FREE_SPIN_STATIONARY_BOARD_CAP_KMH) { (it as? Number)?.toDouble() },
       mapStyleKey = req("mapStyleKey", "onedark", ::validMapStyleKey),
@@ -253,8 +261,6 @@ class AppDataRepository private constructor(private val context: Context) {
       riderName = opt("riderName") { it as? String },
       riderColor = opt("riderColor") { it as? String },
       legalMode = opt("legalMode") { it.asStringKeyMap() },
-      alertPreset = opt("alertPreset") { it.asStringKeyMap() },
-      alertPresetsOnboarded = req("alertPresetsOnboarded", false) { it as? Boolean },
     )
 
     if (badKeys.isNotEmpty()) {
@@ -289,7 +295,6 @@ class AppDataRepository private constructor(private val context: Context) {
       "lastGpsLongitude" -> (value as? Number)?.toDouble()
       "movingSpeedThresholdKmh", "avgSpeedCutoffKmh", "movingAvgSpeedThresholdKmh" ->
         ((value as? Number)?.toDouble() ?: return@withContext).coerceAtLeast(0.0)
-      "riderTopSpeedKmh" -> validRiderTopSpeedKmh(value) ?: return@withContext
       "freeSpinMaxSpeedDeltaKmh", "freeSpinStationaryBoardCapKmh" ->
         ((value as? Number)?.toDouble() ?: return@withContext).coerceAtLeast(0.0)
       "mapStyleKey" ->
@@ -323,10 +328,9 @@ class AppDataRepository private constructor(private val context: Context) {
       "autoCloseDelayMinutes" ->
         validAutoCloseDelayMinutes(value) ?: return@withContext
       "riderId", "riderName", "riderColor" -> value as? String
-      "legalMode", "alertPreset" ->
+      "legalMode" ->
         if (value == null || value == JSONObject.NULL) null
         else value.asStringKeyMap() ?: return@withContext
-      "alertPresetsOnboarded" -> value as? Boolean ?: return@withContext
       else -> return@withContext
     }
     val normalizedKey = when (key) {
@@ -345,7 +349,6 @@ class AppDataRepository private constructor(private val context: Context) {
         "lastGpsLatitude" -> d.lastGpsLatitude
         "lastGpsLongitude" -> d.lastGpsLongitude
         "movingSpeedThresholdKmh" -> d.movingSpeedThresholdKmh
-        "riderTopSpeedKmh" -> d.riderTopSpeedKmh
         "freeSpinMaxSpeedDeltaKmh" -> d.freeSpinMaxSpeedDeltaKmh
         "freeSpinStationaryBoardCapKmh" -> d.freeSpinStationaryBoardCapKmh
         "mapStyleKey" -> d.mapStyleKey
@@ -371,8 +374,6 @@ class AppDataRepository private constructor(private val context: Context) {
         "riderName" -> d.riderName
         "riderColor" -> d.riderColor
         "legalMode" -> d.legalMode
-        "alertPreset" -> d.alertPreset
-        "alertPresetsOnboarded" -> d.alertPresetsOnboarded
         else -> null
       }
     }
@@ -617,6 +618,12 @@ fun BoardEntity.toMap(settings: List<BoardSettingEntity>): Map<String, Any?> {
     "batteryConfig" to values["batteryConfig"],
     "lastBattery" to values["lastBattery"],
     "dismissedWarnings" to values["dismissedWarnings"],
+    // Alert Preset board settings, normalized to display defaults when the row is absent so JS
+    // always reads a concrete Board Top Speed / onboarded flag. `alertPreset` stays null until the
+    // rider touches setup — no preset rules generate before then.
+    "topSpeedKmh" to (values["topSpeedKmh"] ?: DEFAULT_TOP_SPEED_KMH),
+    "alertPreset" to values["alertPreset"],
+    "alertPresetsOnboarded" to (values["alertPresetsOnboarded"] ?: false),
     "link" to link,
   )
 }
@@ -629,7 +636,6 @@ fun AppSettings.toMap(): Map<String, Any?> = mapOf(
   "lastGpsLatitude" to lastGpsLatitude,
   "lastGpsLongitude" to lastGpsLongitude,
   "movingSpeedThresholdKmh" to movingSpeedThresholdKmh,
-  "riderTopSpeedKmh" to riderTopSpeedKmh,
   "freeSpinMaxSpeedDeltaKmh" to freeSpinMaxSpeedDeltaKmh,
   "freeSpinStationaryBoardCapKmh" to freeSpinStationaryBoardCapKmh,
   "mapStyleKey" to mapStyleKey,
@@ -655,8 +661,6 @@ fun AppSettings.toMap(): Map<String, Any?> = mapOf(
   "riderName" to riderName,
   "riderColor" to riderColor,
   "legalMode" to legalMode,
-  "alertPreset" to alertPreset,
-  "alertPresetsOnboarded" to alertPresetsOnboarded,
 )
 
 internal fun encodeSettingJson(value: Any?): String {
@@ -673,6 +677,7 @@ internal fun decodeSettingJson(json: String): Any? {
 }
 
 fun AlertRuleEntity.toMap(): Map<String, Any?> = mapOf(
+  "boardId" to boardId,
   "id" to id,
   "controlId" to controlId,
   "threshold" to threshold,
@@ -877,6 +882,9 @@ internal fun Map<String, Any?>.toBoardSettingEntities(boardId: String): Pair<Lis
   putOrDelete("description", (get("description") as? String)?.takeIf { it.isNotBlank() })
   putOrDelete("batteryConfig", normalizeBatteryConfig(get("batteryConfig")))
   putOrDelete("dismissedWarnings", normalizeDismissedWarnings(get("dismissedWarnings")))
+  putOrDelete("topSpeedKmh", validTopSpeedKmh(get("topSpeedKmh")))
+  putOrDelete("alertPreset", normalizeAlertPreset(get("alertPreset")))
+  putOrDelete("alertPresetsOnboarded", get("alertPresetsOnboarded") as? Boolean)
   val link = normalizedBoardLink()
   putOrDelete("transport", BoardTransport.encode(BoardTransport.fromBridge(link?.get("transport"))))
   putOrDelete("linkVersion", (link?.get("linkVersion") as? Number)?.toInt()?.takeIf { it == BOARD_LINK_VERSION })
@@ -905,8 +913,21 @@ private fun BoardSettingEntity.decodeBoardSetting(): Pair<String, Any?>? {
     "vescFirmwareVersion", "refloatVersion", "refloatBaseVersion" -> (raw as? String)?.let { key to it }
     "lastBattery" -> decodeLastBattery(raw)?.let { key to it }
     "dismissedWarnings" -> normalizeDismissedWarnings(raw)?.let { key to it }
+    "topSpeedKmh" -> validTopSpeedKmh(raw)?.let { key to it }
+    "alertPreset" -> normalizeAlertPreset(raw)?.let { key to it }
+    "alertPresetsOnboarded" -> (raw as? Boolean)?.let { key to it }
     else -> null
   }
+}
+
+/**
+ * Durable Alert Preset per-metric level selection bag. JS owns behavior; native persists it as an
+ * opaque object. Non-object/empty payloads normalize away (row removed).
+ * @parity /modules/vescape-core/ios/telemetry/AppDataRepository.swift `normalizeAlertPreset`
+ */
+private fun normalizeAlertPreset(raw: Any?): Map<String, Any?>? {
+  val map = raw.asStringKeyMap() ?: return null
+  return map.ifEmpty { null }
 }
 
 /**
@@ -985,6 +1006,7 @@ private fun parseLegacyMapString(value: String): Map<String, Any?>? {
 }
 
 private fun Map<String, Any?>.toAlertRuleEntity(): AlertRuleEntity = AlertRuleEntity(
+  boardId = getString("boardId"),
   id = getString("id"),
   controlId = getString("controlId"),
   threshold = getDouble("threshold"),

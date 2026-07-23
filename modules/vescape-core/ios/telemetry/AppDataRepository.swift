@@ -97,6 +97,9 @@ final class AppDataRepository {
       ("description", (board["description"] as? String).flatMap { $0.isEmpty ? nil : $0 }),
       ("batteryConfig", Self.normalizeBatteryConfig(board["batteryConfig"] ?? nil)),
       ("dismissedWarnings", Self.normalizeDismissedWarnings(board["dismissedWarnings"] ?? nil)),
+      ("topSpeedKmh", Self.topSpeedKmh(board["topSpeedKmh"] ?? nil)),
+      ("alertPreset", Self.normalizeAlertPreset(board["alertPreset"] ?? nil)),
+      ("alertPresetsOnboarded", board["alertPresetsOnboarded"] as? Bool),
     ] + linkSettings.filter { $0.0 != "transport" }
     let transport = linkSettings.first { $0.0 == "transport" }?.1 as? String
     let updatedAt = nowMs()
@@ -123,6 +126,8 @@ final class AppDataRepository {
   func deleteBoard(_ id: String) {
     write { db in
       try db.execute(sql: "DELETE FROM board_settings WHERE board_id = ?", arguments: [id])
+      // Alert Rules are Board-owned (#254) — drop them with the Board so no orphan rows survive.
+      try db.execute(sql: "DELETE FROM alerts WHERE board_id = ?", arguments: [id])
       try db.execute(sql: "DELETE FROM boards WHERE id = ?", arguments: [id])
     }
     notifyDataChanged(.boards)
@@ -159,6 +164,12 @@ final class AppDataRepository {
       "batteryConfig": values["batteryConfig"],
       "lastBattery": values["lastBattery"],
       "dismissedWarnings": values["dismissedWarnings"],
+      // Alert Preset board settings, normalized to display defaults when the row is absent so JS
+      // always reads a concrete Board Top Speed / onboarded flag. `alertPreset` stays nil until the
+      // rider touches setup — no preset rules generate before then.
+      "topSpeedKmh": values["topSpeedKmh"] ?? defaultTopSpeedKmh,
+      "alertPreset": values["alertPreset"],
+      "alertPresetsOnboarded": values["alertPresetsOnboarded"] ?? false,
       "link": link,
     ]
   }
@@ -180,9 +191,23 @@ final class AppDataRepository {
       return decodeLastBattery(raw)
     case "dismissedWarnings":
       return normalizeDismissedWarnings(raw)
+    case "topSpeedKmh":
+      return topSpeedKmh(raw)
+    case "alertPreset":
+      return normalizeAlertPreset(raw)
+    case "alertPresetsOnboarded":
+      return raw as? Bool
     default:
       return nil
     }
+  }
+
+  /// Durable Alert Preset per-metric level selection bag. JS owns behavior; native persists it as an
+  /// opaque object. Non-object/empty payloads normalize away (row removed).
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/AppDataRepository.kt `normalizeAlertPreset`
+  private static func normalizeAlertPreset(_ raw: Any?) -> [String: Any]? {
+    guard let map = raw as? [String: Any], !map.isEmpty else { return nil }
+    return map
   }
 
   /// Dismissed Board Warning kinds persisted as a board setting: a non-empty array of kind slugs, or
@@ -205,10 +230,15 @@ final class AppDataRepository {
 
   // MARK: - Alert rules
 
-  func getAlertRules() -> [[String: Any?]] {
+  func getAlertRules(_ boardId: String) -> [[String: Any?]] {
     read([]) { db in
-      try Row.fetchAll(db, sql: "SELECT * FROM alerts ORDER BY created_at ASC").map { row in
+      try Row.fetchAll(
+        db,
+        sql: "SELECT * FROM alerts WHERE board_id = ? ORDER BY created_at ASC",
+        arguments: [boardId]
+      ).map { row in
         [
+          "boardId": row["board_id"] as String,
           "id": row["id"] as String,
           "controlId": row["control_id"] as String,
           "threshold": row["threshold"] as Double,
@@ -222,16 +252,19 @@ final class AppDataRepository {
     }
   }
 
-  /// Enabled rules materialized as `AlertRule` for the alert engine. Mirrors Android
+  /// The given Board's enabled rules materialized as `AlertRule` for the alert engine. The engine
+  /// evaluates only the connected Board's rules. Mirrors Android
   /// `AppDataRepository.getEnabledAlertRuleEntities`.
   /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/AppDataRepository.kt `getEnabledAlertRuleEntities`
-  func getEnabledAlertRules() -> [AlertRule] {
+  func getEnabledAlertRules(_ boardId: String) -> [AlertRule] {
     read([]) { db in
       try Row.fetchAll(
         db,
-        sql: "SELECT * FROM alerts WHERE enabled = 1 ORDER BY created_at ASC"
+        sql: "SELECT * FROM alerts WHERE board_id = ? AND enabled = 1 ORDER BY created_at ASC",
+        arguments: [boardId]
       ).map { row in
         AlertRule(
+          boardId: row["board_id"] as String,
           id: row["id"] as String,
           controlId: row["control_id"] as String,
           threshold: row["threshold"] as Double,
@@ -246,7 +279,11 @@ final class AppDataRepository {
   }
 
   func upsertAlertRule(_ rule: [String: Any?]) {
-    guard let id = rule["id"] as? String, let controlId = rule["controlId"] as? String else { return }
+    guard
+      let boardId = rule["boardId"] as? String,
+      let id = rule["id"] as? String,
+      let controlId = rule["controlId"] as? String
+    else { return }
     let threshold = Self.doubleValue(rule["threshold"] ?? nil) ?? 0
     let thresholdMax = Self.doubleValue(rule["thresholdMax"] ?? nil)
     let enabled = (rule["enabled"] as? Bool) ?? false
@@ -256,22 +293,27 @@ final class AppDataRepository {
     write { db in
       try db.execute(
         sql: """
-          INSERT OR REPLACE INTO alerts (id, control_id, threshold, threshold_max, enabled, sound_type, created_at, source)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT OR REPLACE INTO alerts (board_id, id, control_id, threshold, threshold_max, enabled, sound_type, created_at, source)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
           """,
-        arguments: [id, controlId, threshold, thresholdMax, enabled ? 1 : 0, soundType, createdAt, source]
+        arguments: [boardId, id, controlId, threshold, thresholdMax, enabled ? 1 : 0, soundType, createdAt, source]
       )
     }
   }
 
-  func setAlertRuleEnabled(_ id: String, _ enabled: Bool) {
+  func setAlertRuleEnabled(_ boardId: String, _ id: String, _ enabled: Bool) {
     write { db in
-      try db.execute(sql: "UPDATE alerts SET enabled = ? WHERE id = ?", arguments: [enabled ? 1 : 0, id])
+      try db.execute(
+        sql: "UPDATE alerts SET enabled = ? WHERE board_id = ? AND id = ?",
+        arguments: [enabled ? 1 : 0, boardId, id]
+      )
     }
   }
 
-  func deleteAlertRule(_ id: String) {
-    write { db in try db.execute(sql: "DELETE FROM alerts WHERE id = ?", arguments: [id]) }
+  func deleteAlertRule(_ boardId: String, _ id: String) {
+    write { db in
+      try db.execute(sql: "DELETE FROM alerts WHERE board_id = ? AND id = ?", arguments: [boardId, id])
+    }
   }
 
   // MARK: - Privacy zones
@@ -440,12 +482,9 @@ final class AppDataRepository {
     } else if key == "satelliteImagerySaturation" {
       guard let saturation = Self.satelliteImagerySaturation(rawValue) else { return }
       value = saturation
-    } else if key == "riderTopSpeedKmh" {
-      guard let topSpeed = Self.riderTopSpeedKmh(rawValue) else { return }
-      value = topSpeed
-    } else if key == "boardWarningsEnabled" || key == "alertPresetsOnboarded" {
-      // Strict Bool (Android rejects non-Boolean too): the board-warnings kill switch and the
-      // one-time preset onboarding gate must never persist a malformed value that reads back truthy.
+    } else if key == "boardWarningsEnabled" {
+      // Strict Bool (Android rejects non-Boolean too): the board-warnings kill switch must never
+      // persist a malformed value that reads back truthy.
       guard let flag = rawValue as? Bool else { return }
       value = flag
     } else {
@@ -481,10 +520,7 @@ final class AppDataRepository {
     "lastGpsLatitude": NSNull(),
     "lastGpsLongitude": NSNull(),
     "legalMode": NSNull(),
-    "alertPreset": NSNull(),
-    "alertPresetsOnboarded": false,
     "movingSpeedThresholdKmh": 3,
-    "riderTopSpeedKmh": 50,
     "freeSpinMaxSpeedDeltaKmh": DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH,
     "freeSpinStationaryBoardCapKmh": DEFAULT_FREE_SPIN_STATIONARY_BOARD_CAP_KMH,
     "satelliteOverlayEnabled": true,
@@ -514,13 +550,16 @@ final class AppDataRepository {
       satelliteImageryOpacity(settings["satelliteMapImageryOpacity"]) ?? defaultSettings["satelliteMapImageryOpacity"]
     normalized["satelliteImagerySaturation"] =
       satelliteImagerySaturation(settings["satelliteImagerySaturation"]) ?? defaultSettings["satelliteImagerySaturation"]
-    normalized["riderTopSpeedKmh"] =
-      riderTopSpeedKmh(settings["riderTopSpeedKmh"]) ?? defaultSettings["riderTopSpeedKmh"]
     return normalized
   }
 
-  /// Rider Top Speed in km/h; the speed gauge full-scale. Clamped to a sane 5–150 km/h band.
-  static func riderTopSpeedKmh(_ value: Any?) -> Double? {
+  /// Display default Board Top Speed in km/h, applied when a Board has no `topSpeedKmh` setting.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/AppDataRepository.kt `DEFAULT_TOP_SPEED_KMH`
+  static let defaultTopSpeedKmh: Double = 50
+
+  /// Board Top Speed in km/h; the speed gauge full-scale. Clamped to a sane 5–150 km/h band.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/AppDataRepository.kt `normalizeTopSpeedKmh`
+  static func topSpeedKmh(_ value: Any?) -> Double? {
     guard let topSpeed = doubleValue(value), topSpeed.isFinite else { return nil }
     return min(150, max(5, topSpeed))
   }

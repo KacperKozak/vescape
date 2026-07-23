@@ -31,6 +31,9 @@ interface BoardActions {
     description?: string
     link?: BoardLink | null
     batteryConfig?: BatteryConfig | null
+    topSpeedKmh?: number
+    alertPreset?: Record<string, unknown> | null
+    alertPresetsOnboarded?: boolean
   }) => Board
   updateBoard: (board: Board) => Promise<void>
   /** Dismiss (acknowledge) or restore a Board Warning kind; persisted on the board record. */
@@ -74,13 +77,24 @@ export const useBoardStore = create<BoardState & BoardActions>((set, get) => ({
     }
   },
 
-  addBoard({ name, description, link, batteryConfig }) {
+  addBoard({
+    name,
+    description,
+    link,
+    batteryConfig,
+    topSpeedKmh,
+    alertPreset,
+    alertPresetsOnboarded,
+  }) {
     const board: Board = {
       id: generateId(),
       name,
       description: description ?? null,
       createdAt: Date.now(),
       batteryConfig: batteryConfig ?? DEFAULT_BATTERY_CONFIG,
+      topSpeedKmh,
+      alertPreset: alertPreset ?? null,
+      alertPresetsOnboarded: alertPresetsOnboarded ?? false,
       link: link ?? null,
     }
     set((state) => ({

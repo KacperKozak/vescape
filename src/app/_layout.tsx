@@ -14,7 +14,7 @@ import { DiagnosticErrorBoundary } from '@/modules/diagnostics/DiagnosticErrorBo
 import { HeaderBackButton } from '@/components/base/HeaderBackButton'
 import { initSentry } from '@/config/sentry'
 import { stackScreens } from '@/navigation/routes'
-import { useAlertsStore } from '@/modules/alerts/store/alertsStore'
+import { startAlertsBoardSync } from '@/bootstrap/alertsBoardSync'
 import { startAppDataSync } from '@/bootstrap/appDataSync'
 import { startBoardWarningsSync } from '@/modules/board/store/boardWarningsStore'
 import { useGroupRideStore } from '@/modules/group-ride/store/groupRideStore'
@@ -58,15 +58,16 @@ function RootLayout() {
 
   useEffect(() => {
     void useSettingsStore.getState().load()
-    void useAlertsStore.getState().load()
     void useRiderStore.getState().load()
     useGroupRideStore.getState().startObserving()
     const stopAppDataSync = startAppDataSync()
     const stopBoardWarningsSync = startBoardWarningsSync()
+    const stopAlertsBoardSync = startAlertsBoardSync()
     return () => {
       useGroupRideStore.getState().stopObserving()
       stopAppDataSync()
       stopBoardWarningsSync()
+      stopAlertsBoardSync()
     }
   }, [])
 

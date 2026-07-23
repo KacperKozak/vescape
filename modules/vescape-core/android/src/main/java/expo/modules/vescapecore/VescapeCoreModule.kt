@@ -513,19 +513,19 @@ class VescapeCoreModule : Module() {
     AsyncFunction("deleteBoard") Coroutine { id: String ->
       AppDataRepository.get(context.applicationContext).deleteBoard(id)
     }
-    AsyncFunction("getAlertRules") {
-      runBlocking { AppDataRepository.get(context.applicationContext).getAlertRules() }
+    AsyncFunction("getAlertRules") { boardId: String ->
+      runBlocking { AppDataRepository.get(context.applicationContext).getAlertRules(boardId) }
     }
     AsyncFunction("upsertAlertRule") Coroutine { rule: Map<String, Any?> ->
       AppDataRepository.get(context.applicationContext).upsertAlertRule(rule)
       CoreForegroundService.reloadAlertRules(context.applicationContext)
     }
-    AsyncFunction("setAlertRuleEnabled") Coroutine { id: String, enabled: Boolean ->
-      AppDataRepository.get(context.applicationContext).setAlertRuleEnabled(id, enabled)
+    AsyncFunction("setAlertRuleEnabled") Coroutine { boardId: String, id: String, enabled: Boolean ->
+      AppDataRepository.get(context.applicationContext).setAlertRuleEnabled(boardId, id, enabled)
       CoreForegroundService.reloadAlertRules(context.applicationContext)
     }
-    AsyncFunction("deleteAlertRule") Coroutine { id: String ->
-      AppDataRepository.get(context.applicationContext).deleteAlertRule(id)
+    AsyncFunction("deleteAlertRule") Coroutine { boardId: String, id: String ->
+      AppDataRepository.get(context.applicationContext).deleteAlertRule(boardId, id)
       CoreForegroundService.reloadAlertRules(context.applicationContext)
     }
     AsyncFunction("getPrivacyZones") {

@@ -1,36 +1,29 @@
-import { useMemo } from 'react'
 import { StyleSheet, View } from 'react-native'
 
 import { Text } from '@/components/base/Text'
 import { theme } from '@/constants/theme'
 import { AlertPresetControl } from '@/modules/alerts/components/AlertPresetControl'
-import {
-  normalizeAlertPresetSelection,
-  type AlertPresetMetric,
-} from '@/modules/alerts/lib/alertPresets'
-import { useAlertPresetStore } from '@/modules/alerts/store/alertPresetStore'
-import { deriveBatteryConfig } from '@/modules/battery/lib'
-import { useBoardStore } from '@/modules/board/store/boardStore'
-import { useSettingsStore } from '@/modules/settings/store/settingsStore'
+import { type AlertPresetLevel, type AlertPresetMetric } from '@/modules/alerts/lib/alertPresets'
 
 /**
- * A single metric's Alert Preset control (labeled gauge preview + Off/Safe/Normal/Pro
- * slider), wired straight to the Alert Preset store, settings, and the active board.
- * Offline preview — no live telemetry needle — so it works before a board session exists.
- *
- * One metric per instance so the add-board wizard can page through them one at a time.
+ * A single metric's Alert Preset control (labeled gauge preview + Off/Safe/Normal/Pro slider),
+ * controlled by its caller so it works both against the active Board (Settings) and a draft (the
+ * add-board wizard). Offline preview — no live telemetry needle — so it works before a board
+ * session exists. One metric per instance so the wizard can page through them one at a time.
  */
-export function AlertPresetMetricSetup({ metric }: { metric: AlertPresetMetric }) {
-  const riderTopSpeedKmh = useSettingsStore((s) => s.riderTopSpeedKmh)
-  const alertPreset = useSettingsStore((s) => s.alertPreset)
-  const board = useBoardStore((s) => s.boards.find((b) => b.id === s.activeBoardId))
-
-  const selection = useMemo(() => normalizeAlertPresetSelection(alertPreset), [alertPreset])
-  const hasBatteryConfig = useMemo(
-    () => deriveBatteryConfig(board?.batteryConfig ?? null).warning == null,
-    [board?.batteryConfig],
-  )
-
+export function AlertPresetMetricSetup({
+  metric,
+  level,
+  onLevelChange,
+  topSpeedKmh,
+  hasBatteryConfig,
+}: {
+  metric: AlertPresetMetric
+  level: AlertPresetLevel
+  onLevelChange: (level: AlertPresetLevel) => void
+  topSpeedKmh: number
+  hasBatteryConfig: boolean
+}) {
   // Battery presets are SoC %-based — a hard block, not a prompt, without a valid battery config.
   const batteryBlocked = metric === 'battery' && !hasBatteryConfig
 
@@ -38,9 +31,9 @@ export function AlertPresetMetricSetup({ metric }: { metric: AlertPresetMetric }
     <View style={styles.metric}>
       <AlertPresetControl
         metric={metric}
-        level={selection[metric]}
-        onLevelChange={(level) => void useAlertPresetStore.getState().setLevel(metric, level)}
-        riderTopSpeedKmh={riderTopSpeedKmh}
+        level={level}
+        onLevelChange={onLevelChange}
+        riderTopSpeedKmh={topSpeedKmh}
         hasBatteryConfig={hasBatteryConfig}
         disabled={batteryBlocked}
       />

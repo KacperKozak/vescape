@@ -370,7 +370,11 @@ internal final class BoardSessionController: VescGattListener {
   /// `BoardSessionController.loadAlertRules`. Called whenever JS changes rules.
   /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/connection/BoardSessionController.kt `loadAlertRules`
   func reloadAlertRules() {
-    alertCoordinator.replaceRules(appData.getEnabledAlertRules())
+    guard let boardId = config?.appBoardId else {
+      alertCoordinator.replaceRules([])
+      return
+    }
+    alertCoordinator.replaceRules(appData.getEnabledAlertRules(boardId))
   }
 
   /// Re-read mutable board-scoped session data after JS edits the active board. The BLE endpoint
@@ -511,8 +515,9 @@ internal final class BoardSessionController: VescGattListener {
     // failures non-fatal and reported without per-frame spam.
     BoardWarningFailureReporter.shared.beginSession()
     gpsError = gpsMonitor.start()
-    // Fresh rule set for this session's alert engine (mirrors Android loadAlertRules on connect).
-    alertCoordinator.replaceRules(appData.getEnabledAlertRules())
+    // Fresh rule set for this session's alert engine — only the connected Board's enabled rules
+    // (mirrors Android loadAlertRules on connect).
+    alertCoordinator.replaceRules(appData.getEnabledAlertRules(config.appBoardId))
     connectionSeq = sessionSequence
     connectedBoardId = config.appBoardId
     bleId = config.bleId

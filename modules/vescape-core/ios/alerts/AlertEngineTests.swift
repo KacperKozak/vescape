@@ -13,6 +13,7 @@ final class AlertEngineTests: XCTestCase {
     soundType: String = "default"
   ) -> AlertRule {
     AlertRule(
+      boardId: "board-1",
       id: id,
       controlId: controlId,
       threshold: threshold,

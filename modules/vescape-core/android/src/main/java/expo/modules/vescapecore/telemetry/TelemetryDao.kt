@@ -371,23 +371,28 @@ interface TelemetryDao {
   suspend fun deleteBoardWithSettings(id: String) {
     deleteBoardSettings(id)
     deleteBoardWarnings(id)
+    // Alert Rules are Board-owned (#254) — drop them with the Board so no orphan rows survive.
+    deleteAlertRules(id)
     deleteBoard(id)
   }
 
-  @Query("SELECT * FROM alerts ORDER BY created_at ASC")
-  suspend fun getAlertRules(): List<AlertRuleEntity>
+  @Query("SELECT * FROM alerts WHERE board_id = :boardId ORDER BY created_at ASC")
+  suspend fun getAlertRules(boardId: String): List<AlertRuleEntity>
 
-  @Query("SELECT * FROM alerts WHERE enabled = 1 ORDER BY created_at ASC")
-  suspend fun getEnabledAlertRules(): List<AlertRuleEntity>
+  @Query("SELECT * FROM alerts WHERE board_id = :boardId AND enabled = 1 ORDER BY created_at ASC")
+  suspend fun getEnabledAlertRules(boardId: String): List<AlertRuleEntity>
 
   @Insert(onConflict = OnConflictStrategy.REPLACE)
   suspend fun upsertAlertRule(rule: AlertRuleEntity)
 
-  @Query("UPDATE alerts SET enabled = :enabled WHERE id = :id")
-  suspend fun setAlertRuleEnabled(id: String, enabled: Boolean)
+  @Query("UPDATE alerts SET enabled = :enabled WHERE board_id = :boardId AND id = :id")
+  suspend fun setAlertRuleEnabled(boardId: String, id: String, enabled: Boolean)
 
-  @Query("DELETE FROM alerts WHERE id = :id")
-  suspend fun deleteAlertRule(id: String)
+  @Query("DELETE FROM alerts WHERE board_id = :boardId AND id = :id")
+  suspend fun deleteAlertRule(boardId: String, id: String)
+
+  @Query("DELETE FROM alerts WHERE board_id = :boardId")
+  suspend fun deleteAlertRules(boardId: String)
 
   @Query("SELECT * FROM app_settings")
   suspend fun getAllAppSettings(): List<AppSettingEntity>

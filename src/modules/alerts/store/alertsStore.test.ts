@@ -13,7 +13,7 @@ const upsertAlertRule = mock(async (rule: unknown) => {
   if (existing >= 0) nativeRules[existing] = rule
   else nativeRules.push(rule)
 })
-const setAlertRuleEnabled = mock(async (id: string, enabled: boolean) => {
+const setAlertRuleEnabled = mock(async (_boardId: string, id: string, enabled: boolean) => {
   const rule = nativeRules.find((candidate) => {
     return (
       candidate != null && typeof candidate === 'object' && 'id' in candidate && candidate.id === id
@@ -36,29 +36,31 @@ const { useAlertsStore } = await import('@/modules/alerts/store/alertsStore')
 const { LEGAL_MODE_ALERT_RULE_ID, legalModeAlertRule, DEFAULT_LEGAL_MODE_SETTINGS } =
   await import('@/modules/legal/lib/legalMode')
 
+const BOARD_ID = 'board-1'
+
+// Legal Mode is Board-agnostic; the store stamps the active Board (#254). Mirror that here.
+function legalRule(overrides: { legalSpeedKmh?: number; warningSpeedKmh?: number } = {}) {
+  return {
+    ...legalModeAlertRule({ ...DEFAULT_LEGAL_MODE_SETTINGS, enabled: true, ...overrides }, 100),
+    boardId: BOARD_ID,
+  }
+}
+
 describe('alertsStore generated Legal Mode rule', () => {
   beforeEach(() => {
     nativeRules.length = 0
     upsertAlertRule.mockClear()
     setAlertRuleEnabled.mockClear()
-    useAlertsStore.setState({ rules: [] })
+    useAlertsStore.setState({ boardId: BOARD_ID, rules: [] })
   })
 
   test('upserts one stable Legal Mode alert rule and updates thresholds', async () => {
-    await useAlertsStore
-      .getState()
-      .upsert(legalModeAlertRule({ ...DEFAULT_LEGAL_MODE_SETTINGS, enabled: true }, 100))
-    await useAlertsStore
-      .getState()
-      .upsert(
-        legalModeAlertRule(
-          { ...DEFAULT_LEGAL_MODE_SETTINGS, enabled: true, legalSpeedKmh: 25, warningSpeedKmh: 20 },
-          100,
-        ),
-      )
+    await useAlertsStore.getState().upsert(legalRule())
+    await useAlertsStore.getState().upsert(legalRule({ legalSpeedKmh: 25, warningSpeedKmh: 20 }))
 
     expect(useAlertsStore.getState().rules).toHaveLength(1)
     expect(useAlertsStore.getState().rules[0]).toMatchObject({
+      boardId: BOARD_ID,
       id: LEGAL_MODE_ALERT_RULE_ID,
       threshold: 20,
       thresholdMax: 25,
@@ -69,15 +71,13 @@ describe('alertsStore generated Legal Mode rule', () => {
   })
 
   test('disables generated alert without deleting it', async () => {
-    await useAlertsStore
-      .getState()
-      .upsert(legalModeAlertRule({ ...DEFAULT_LEGAL_MODE_SETTINGS, enabled: true }, 100))
+    await useAlertsStore.getState().upsert(legalRule())
     await useAlertsStore.getState().setEnabled(LEGAL_MODE_ALERT_RULE_ID, false)
 
     expect(useAlertsStore.getState().rules[0]).toMatchObject({
       id: LEGAL_MODE_ALERT_RULE_ID,
       enabled: false,
     })
-    expect(setAlertRuleEnabled).toHaveBeenCalledWith(LEGAL_MODE_ALERT_RULE_ID, false)
+    expect(setAlertRuleEnabled).toHaveBeenCalledWith(BOARD_ID, LEGAL_MODE_ALERT_RULE_ID, false)
   })
 })

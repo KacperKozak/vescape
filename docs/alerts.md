@@ -12,11 +12,22 @@ Fired alerts embedded in that packet's telemetry map → visible in recentTeleme
 
 No separate event. No JS-side audio. Native storage is the source of truth.
 
+## Per-board ownership
+
+Alert Rules are owned by one Board. The native alert engine loads **only the connected Board's**
+enabled rules at session start (and on any rule edit), so switching Boards switches the effective rule
+set — engine and UI both. Deleting a Board deletes its rules. Rules for a non-connected Board never
+evaluate.
+
+Preset rule ids (`preset:<metric>:<index>`) repeat across Boards; uniqueness is per Board via the
+composite primary key `(board_id, id)`.
+
 ## Schema — `alerts` table
 
 | column          | type          | notes                                                          |
 | --------------- | ------------- | -------------------------------------------------------------- |
-| `id`            | TEXT PK       | UUID                                                           |
+| `board_id`      | TEXT          | owning Board; PK is `(board_id, id)`                           |
+| `id`            | TEXT          | UUID (or `preset:<metric>:<index>` / `legal-mode-speed-alert`) |
 | `control_id`    | TEXT          | see Control IDs below                                          |
 | `threshold`     | REAL          | trigger point                                                  |
 | `threshold_max` | REAL nullable | range upper bound (Geiger mode)                                |
@@ -128,39 +139,59 @@ tiers. Tune counts/values only in `alertPresets.ts` — never in native or compo
 ### Provenance & regeneration
 
 Preset rules carry `source = "preset"` (`ALERT_PRESET_SOURCE`) with deterministic ids
-(`presetAlertRuleId(metric, index)`). Changing a level regenerates that one metric wholesale
-(delete-then-upsert scoped to its preset rules) — manual rules and other metrics' preset rules survive.
-The per-metric level selection is the durable `alertPreset` settings bag; regeneration reads it back plus
-Rider Top Speed and the active board's battery config.
+(`presetAlertRuleId(metric, index)`) and the active Board's `board_id`. Changing a level regenerates
+that one metric wholesale (delete-then-upsert scoped to its preset rules on that Board) — manual rules
+and other metrics' preset rules survive. The per-metric level selection is the durable `alertPreset`
+**Board Settings** bag; regeneration reads it back plus that Board's Board Top Speed and battery config.
 
-### Rider Top Speed
+### Board Top Speed
 
-`riderTopSpeedKmh` (profile-level setting) scales the speed preset's thresholds and the speed gauge
-full-scale — it is the rider's self-assessed top speed, not a legal or firmware limit. Changing it
-regenerates the speed preset. Speed presets generate nothing when it is unset/≤0.
+`topSpeedKmh` (a **Board Settings** key, renamed from the former profile-level Rider Top Speed) scales
+the speed preset's thresholds and the speed gauge full-scale — it is the rider's self-assessed top speed
+for that Board, not a legal or firmware limit. Changing it regenerates the speed preset. Missing ⇒
+display default 50 km/h.
+
+### Board Settings keys
+
+Three per-Board keys drive Alert Presets, backed by the `board_settings` table and composed onto the
+`Board` object (like `batteryConfig`). Missing keys normalize to display defaults; no preset rules are
+generated until the rider touches setup:
+
+| key                     | default | meaning                                         |
+| ----------------------- | ------- | ----------------------------------------------- |
+| `alertPreset`           | null    | per-metric level selection bag (null ⇒ all Off) |
+| `topSpeedKmh`           | 50      | Board Top Speed (km/h)                          |
+| `alertPresetsOnboarded` | false   | one-time guided-setup gate for this Board       |
 
 ### Setup surfaces
 
-The same setup (Rider Top Speed + all five sliders, `AlertPresetSetup`) is reached two ways:
+The same setup (Board Top Speed + all five sliders, `AlertPresetSetup`) is reached two ways:
 
-- **Add-board wizard** — a one-time `presets` step shown on the first board add, gated by the
-  `alertPresetsOnboarded` profile flag; set when the wizard completes, so later adds skip it.
-- **Settings › Alerts** — the durable home, always available regardless of the flag.
+- **Add-board wizard** — a `presets` step shown for every new Board (each Board gets its own guided
+  setup). The step edits a draft; on save the draft is persisted onto the new Board and its preset rules
+  are generated. Completing sets that Board's `alertPresetsOnboarded`.
+- **Settings › Alerts** — the durable home for the active Board, always available.
 
 ## JS side
 
 ```ts
-// store — backed by native VescapeCore APIs
-useAlertsStore.getState().load()        // on app mount
-store.add(controlId, threshold, thresholdMax?)
+// store — backed by native VescapeCore APIs, bound to the active Board (#254)
+store.load(boardId)                     // `startAlertsBoardSync` calls this on every active-board change
+store.add(controlId, threshold, thresholdMax?)   // stamps the bound boardId
 store.toggle(id)
 store.remove(id)
+
+// native API is board-scoped
+getAlertRules(boardId)
+upsertAlertRule(rule)                    // rule carries boardId
+setAlertRuleEnabled(boardId, id, enabled)
+deleteAlertRule(boardId, id)
 
 // fired alerts arrive on every matching telemetry packet
 onTelemetry: (e) => e.firedAlerts?.forEach(a => ...)
 ```
 
-Native alert mutations reload foreground-service rules after writing.
+Native alert mutations reload the connected Board's foreground-service rules after writing.
 
 ## iOS
 

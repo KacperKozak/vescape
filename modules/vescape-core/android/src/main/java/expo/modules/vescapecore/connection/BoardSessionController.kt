@@ -868,8 +868,10 @@ private var wearAutoLaunchOnConnect = true
         isStoppingService = false
         stopCurrentBoardSession(emitDisconnected = false, updateNotification = false)
         refreshLiveHistoryLimit()
-        CoreForegroundService.reloadAlertRules(service.applicationContext)
         boardConfig = start.boardConfig
+        // Load rules only after boardConfig is assigned — the engine scopes to the connected Board's
+        // rules (#254), so reading before assignment would install the wrong Board's (or no) rules.
+        CoreForegroundService.reloadAlertRules(service.applicationContext)
         replayTransport = start.boardConfig.replayRecordingName?.let {
             ReplayTransport(
                 context = service,
@@ -2063,8 +2065,14 @@ private var wearAutoLaunchOnConnect = true
     }
 
     suspend fun loadAlertRules(context: Context) {
+        // The alert engine evaluates only the connected Board's rules. No connected Board ⇒ no rules.
+        val boardId = boardConfig?.appBoardId
+        if (boardId == null) {
+            alertCoordinator.replaceRules(emptyList())
+            return
+        }
         try {
-            val rules = AppDataRepository.get(context).getEnabledAlertRuleEntities()
+            val rules = AppDataRepository.get(context).getEnabledAlertRuleEntities(boardId)
             alertCoordinator.replaceRules(rules)
             Log.d(VESC_SESSION_TAG, "Loaded ${rules.size} alert rule(s)")
         } catch (e: Exception) {
