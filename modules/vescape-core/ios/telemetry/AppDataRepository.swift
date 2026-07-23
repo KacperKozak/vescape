@@ -443,11 +443,11 @@ final class AppDataRepository {
     } else if key == "riderTopSpeedKmh" {
       guard let topSpeed = Self.riderTopSpeedKmh(rawValue) else { return }
       value = topSpeed
-    } else if key == "boardWarningsEnabled" {
-      // Kill switch must stay a strict Bool (Android rejects non-Boolean too) so JS state and the
-      // native detector gate can never diverge on a malformed value.
-      guard let enabled = rawValue as? Bool else { return }
-      value = enabled
+    } else if key == "boardWarningsEnabled" || key == "alertPresetsOnboarded" {
+      // Strict Bool (Android rejects non-Boolean too): the board-warnings kill switch and the
+      // one-time preset onboarding gate must never persist a malformed value that reads back truthy.
+      guard let flag = rawValue as? Bool else { return }
+      value = flag
     } else {
       value = rawValue
     }
@@ -482,6 +482,7 @@ final class AppDataRepository {
     "lastGpsLongitude": NSNull(),
     "legalMode": NSNull(),
     "alertPreset": NSNull(),
+    "alertPresetsOnboarded": false,
     "movingSpeedThresholdKmh": 3,
     "riderTopSpeedKmh": 50,
     "freeSpinMaxSpeedDeltaKmh": DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH,

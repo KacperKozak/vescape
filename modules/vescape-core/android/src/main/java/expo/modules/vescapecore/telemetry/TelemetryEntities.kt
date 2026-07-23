@@ -392,6 +392,7 @@ data class AppSettings(
   val riderColor: String? = null,
   val legalMode: Map<String, Any?>? = null,
   val alertPreset: Map<String, Any?>? = null,
+  val alertPresetsOnboarded: Boolean = false,
 )
 
 @Entity(

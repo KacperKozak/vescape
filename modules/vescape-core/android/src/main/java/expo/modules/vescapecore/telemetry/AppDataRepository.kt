@@ -254,6 +254,7 @@ class AppDataRepository private constructor(private val context: Context) {
       riderColor = opt("riderColor") { it as? String },
       legalMode = opt("legalMode") { it.asStringKeyMap() },
       alertPreset = opt("alertPreset") { it.asStringKeyMap() },
+      alertPresetsOnboarded = req("alertPresetsOnboarded", false) { it as? Boolean },
     )
 
     if (badKeys.isNotEmpty()) {
@@ -325,6 +326,7 @@ class AppDataRepository private constructor(private val context: Context) {
       "legalMode", "alertPreset" ->
         if (value == null || value == JSONObject.NULL) null
         else value.asStringKeyMap() ?: return@withContext
+      "alertPresetsOnboarded" -> value as? Boolean ?: return@withContext
       else -> return@withContext
     }
     val normalizedKey = when (key) {
@@ -370,6 +372,7 @@ class AppDataRepository private constructor(private val context: Context) {
         "riderColor" -> d.riderColor
         "legalMode" -> d.legalMode
         "alertPreset" -> d.alertPreset
+        "alertPresetsOnboarded" -> d.alertPresetsOnboarded
         else -> null
       }
     }
@@ -653,6 +656,7 @@ fun AppSettings.toMap(): Map<String, Any?> = mapOf(
   "riderColor" to riderColor,
   "legalMode" to legalMode,
   "alertPreset" to alertPreset,
+  "alertPresetsOnboarded" to alertPresetsOnboarded,
 )
 
 internal fun encodeSettingJson(value: Any?): String {

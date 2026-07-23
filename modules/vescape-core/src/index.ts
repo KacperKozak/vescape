@@ -870,6 +870,12 @@ export interface AppSettings {
   legalMode: Record<string, unknown> | null
   /** Durable Alert Preset per-metric level selection. JS owns behavior; native only persists this bag. */
   alertPreset: Record<string, unknown> | null
+  /**
+   * One-time gate for the guided Alert Preset step in the add-board wizard. False until the rider
+   * completes that step once (profile-level, across all boards); later board adds then skip it. The
+   * durable setup home is the Alerts settings entry regardless of this flag.
+   */
+  alertPresetsOnboarded: boolean
 }
 
 export interface DiagnosticStatus {

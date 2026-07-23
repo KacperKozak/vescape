@@ -43,6 +43,7 @@ const BASE: AppSettings = {
   riderColor: null,
   legalMode: DEFAULT_LEGAL_MODE_SETTINGS as unknown as Record<string, unknown>,
   alertPreset: null,
+  alertPresetsOnboarded: false,
 }
 
 const updateSetting = mock(async () => {})

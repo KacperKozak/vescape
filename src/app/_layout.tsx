@@ -140,6 +140,7 @@ function RootLayout() {
               name={stackScreens.settingsLiveTelemetry}
               options={{ title: 'Live telemetry' }}
             />
+            <Stack.Screen name={stackScreens.settingsAlerts} options={{ title: 'Alerts' }} />
             <Stack.Screen name={stackScreens.settingsMap} options={{ title: 'Map' }} />
             <Stack.Screen name={stackScreens.settingsWatch} options={{ title: 'Watch' }} />
             <Stack.Screen name={stackScreens.settingsFilters} options={{ title: 'Filters' }} />

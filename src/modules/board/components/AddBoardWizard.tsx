@@ -11,20 +11,18 @@ import {
   WifiSlash,
   CaretDown,
   CaretRight,
+  SlidersHorizontal,
 } from 'phosphor-react-native'
 import { useShallow } from 'zustand/react/shallow'
 
+import { AlertPresetSetup } from '@/modules/alerts/components/AlertPresetSetup'
 import { BoardBatteryForm } from '@/modules/board/components/BoardBatteryForm'
 import { BoardInfoForm } from '@/modules/board/components/BoardInfoForm'
 import { BoardLinkTimeline } from '@/modules/board/components/BoardLinkTimeline'
 import { Button } from '@/components/base/Button'
 import { DeviceRow } from '@/components/base/DeviceRow'
 import { theme } from '@/constants/theme'
-import {
-  type UseAddBoardWizard,
-  WIZARD_STEPS,
-  type WizardStepId,
-} from '@/modules/board/hooks/useAddBoardWizard'
+import { type UseAddBoardWizard, type WizardStepId } from '@/modules/board/hooks/useAddBoardWizard'
 import { useBoardLink } from '@/modules/board/hooks/useBoardLink'
 import { formatBmsSuffix, formatBoardTransport } from '@/modules/board/lib/boardTransport'
 import { useBleStore, NUS_SERVICE_UUID } from '@/modules/board/store/bleStore'
@@ -34,6 +32,7 @@ const STEP_META: Record<WizardStepId, { label: string; icon: typeof Bluetooth; c
   scan: { label: 'Pair', icon: Bluetooth, color: theme.palette.sky.color },
   name: { label: 'Name', icon: TextT, color: theme.palette.yellow.color },
   battery: { label: 'Battery', icon: BatteryFull, color: theme.palette.green.color },
+  presets: { label: 'Alerts', icon: SlidersHorizontal, color: theme.palette.amber.color },
   confirm: { label: 'Confirm', icon: CheckCircle, color: theme.palette.purple.color },
 }
 
@@ -45,22 +44,23 @@ interface Props {
 export function AddBoardWizard({ wizard, onLinkActiveStepIndexChange }: Props) {
   return (
     <>
-      <ProgressBar step={wizard.step} />
+      <ProgressBar steps={wizard.steps} step={wizard.step} />
       {wizard.stepId === 'scan' && (
         <ScanStep wizard={wizard} onLinkActiveStepIndexChange={onLinkActiveStepIndexChange} />
       )}
       {wizard.stepId === 'name' && <NameStep wizard={wizard} />}
       {wizard.stepId === 'battery' && <BatteryStep wizard={wizard} />}
+      {wizard.stepId === 'presets' && <PresetsStep wizard={wizard} />}
       {wizard.stepId === 'confirm' && <ConfirmStep wizard={wizard} />}
     </>
   )
 }
 
-function ProgressBar({ step }: { step: number }) {
+function ProgressBar({ steps, step }: { steps: readonly WizardStepId[]; step: number }) {
   return (
     <View style={styles.progressContainer}>
       <View style={styles.progressBar}>
-        {WIZARD_STEPS.map((id, index) => (
+        {steps.map((id, index) => (
           <View
             key={id}
             style={[
@@ -71,7 +71,7 @@ function ProgressBar({ step }: { step: number }) {
         ))}
       </View>
       <View style={styles.progressLabels}>
-        {WIZARD_STEPS.map((id, index) => {
+        {steps.map((id, index) => {
           const meta = STEP_META[id]
           const active = index <= step
           return (
@@ -339,6 +339,23 @@ function BatteryStep({ wizard }: Props) {
   )
 }
 
+function PresetsStep({ wizard }: Props) {
+  return (
+    <StepContainer title="Alert presets" icon={SlidersHorizontal} color={theme.palette.amber.color}>
+      <Text style={styles.presetsHint}>
+        Pick how loudly each metric warns you. Tune it any time from Settings › Alerts.
+      </Text>
+      <AlertPresetSetup />
+      <NavActions
+        canContinue
+        onBack={wizard.back}
+        onNext={wizard.next}
+        testIDPrefix="add-board-presets"
+      />
+    </StepContainer>
+  )
+}
+
 function ConfirmStep({ wizard }: Props) {
   return (
     <StepContainer title="Review & save" icon={CheckCircle} color={theme.palette.purple.color}>
@@ -518,6 +535,12 @@ const styles = StyleSheet.create({
     color: theme.palette.slate.textPrimary,
     fontSize: 20,
     fontWeight: '800',
+  },
+  presetsHint: {
+    color: theme.palette.slate.textSecondary,
+    fontSize: 13,
+    fontWeight: '500',
+    lineHeight: 18,
   },
   scanHeader: {
     flexDirection: 'row',

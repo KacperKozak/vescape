@@ -53,6 +53,7 @@ const DEFAULTS: AppSettings = {
   riderColor: null,
   legalMode: DEFAULT_LEGAL_MODE_SETTINGS as unknown as Record<string, unknown>,
   alertPreset: DEFAULT_ALERT_PRESET_SELECTION as unknown as Record<string, unknown>,
+  alertPresetsOnboarded: false,
 }
 
 interface SettingsState extends AppSettings {

@@ -38,6 +38,7 @@ const BASE: AppSettings = {
   riderColor: null,
   legalMode: null,
   alertPreset: null,
+  alertPresetsOnboarded: false,
 }
 
 let settings: AppSettings = BASE

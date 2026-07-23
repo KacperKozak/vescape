@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { router, useNavigation } from 'expo-router'
 import Constants from 'expo-constants'
 import {
+  BellRingingIcon,
   BluetoothConnectedIcon,
   BracketsCurlyIcon,
   CodeIcon,
@@ -95,6 +96,13 @@ export default function SettingsScreen() {
             label="Live telemetry"
             hint="Graphs, update rate, and battery smoothing"
             onPress={() => router.push(routes.settingsLiveTelemetry)}
+          />
+          <SettingsRow
+            icon={BellRingingIcon}
+            iconColor={theme.palette.amber.color}
+            label="Alerts"
+            hint="Rider top speed and per-metric alert presets"
+            onPress={() => router.push(routes.settingsAlerts)}
           />
           <SettingsRow
             icon={WarningIcon}

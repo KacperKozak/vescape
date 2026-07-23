@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { router } from 'expo-router'
 import { useShallow } from 'zustand/react/shallow'
 import type { BatteryConfig, BoardLink } from 'vescape-core'
@@ -12,8 +12,10 @@ import {
   parseVoltage,
 } from '@/modules/board/lib/boardSetup'
 import { useBoardStore } from '@/modules/board/store/boardStore'
+import { useSettingsStore } from '@/modules/settings/store/settingsStore'
 
-export const WIZARD_STEPS = ['scan', 'name', 'battery', 'confirm'] as const
+/** Canonical step order. `presets` is the one-time Alert Preset onboarding step (see below). */
+export const WIZARD_STEPS = ['scan', 'name', 'battery', 'presets', 'confirm'] as const
 export type WizardStepId = (typeof WIZARD_STEPS)[number]
 
 /** Sub-phase of the Pair step: choosing a peripheral, or probing the chosen one. */
@@ -22,6 +24,8 @@ type PairPhase = 'select' | 'probing'
 interface AddBoardWizardState {
   step: number
   stepId: WizardStepId
+  /** Active steps for this run — the `presets` step is dropped once the rider has onboarded. */
+  steps: readonly WizardStepId[]
   pairPhase: PairPhase
   bleId: string
   bleName: string
@@ -64,6 +68,13 @@ export function useAddBoardWizard(): UseAddBoardWizard {
   const { addBoard, setActiveBoard } = useBoardStore(
     useShallow((s) => ({ addBoard: s.addBoard, setActiveBoard: s.setActiveBoard })),
   )
+  const alertPresetsOnboarded = useSettingsStore((s) => s.alertPresetsOnboarded)
+
+  // The guided Alert Preset step shows once, on the first board add; later adds skip it.
+  const steps = useMemo<readonly WizardStepId[]>(
+    () => WIZARD_STEPS.filter((id) => id !== 'presets' || !alertPresetsOnboarded),
+    [alertPresetsOnboarded],
+  )
 
   const [step, setStep] = useState(0)
   const [pairPhase, setPairPhase] = useState<PairPhase>('select')
@@ -99,7 +110,7 @@ export function useAddBoardWizard(): UseAddBoardWizard {
     parallelCount,
   )
 
-  const next = () => setStep((s) => Math.min(s + 1, WIZARD_STEPS.length - 1))
+  const next = () => setStep((s) => Math.min(s + 1, steps.length - 1))
   const back = () => setStep((s) => Math.max(s - 1, 0))
 
   // Selecting a peripheral starts a Board Probe before the rest of the wizard.
@@ -149,12 +160,17 @@ export function useAddBoardWizard(): UseAddBoardWizard {
       batteryConfig,
     })
     setActiveBoard(board.id)
+    // Completing the wizard retires the one-time preset step for every future board add.
+    if (!alertPresetsOnboarded) {
+      void useSettingsStore.getState().set('alertPresetsOnboarded', true)
+    }
     router.dismissAll()
   }
 
   return {
     step,
-    stepId: WIZARD_STEPS[step],
+    stepId: steps[step] ?? steps[steps.length - 1]!,
+    steps,
     pairPhase,
     bleId,
     bleName,
