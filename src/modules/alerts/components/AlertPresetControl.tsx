@@ -96,6 +96,16 @@ const PRESET_GAUGE: Record<AlertPresetMetric, PresetGaugeDescriptor> = {
   },
 }
 
+/**
+ * Structural mirror of the gauge hot-range span. Kept local so this alerts-module
+ * component never imports the history module (no `alerts → history` edge); it is
+ * assignable to {@link SingleGauge}'s `MetricHotRange` prop.
+ */
+interface PresetGaugeHotRange {
+  start: number
+  end: number
+}
+
 interface AlertPresetControlProps {
   metric: AlertPresetMetric
   level: AlertPresetLevel
@@ -106,6 +116,12 @@ interface AlertPresetControlProps {
   riderTopSpeedKmh?: number | null
   /** Whether the active board has a valid battery config (battery markers need one). */
   hasBatteryConfig?: boolean
+  /** Custom (non-preset) alert markers layered onto the same gauge alongside the preset markers. */
+  customAlerts?: DualGaugeAlert[]
+  /** History hot-range gradient for the gauge arc (kept in sync with the detail gauge). */
+  hotRange?: PresetGaugeHotRange | null
+  /** Blocks slider interaction and dims it (e.g. battery without a valid config). */
+  disabled?: boolean
 }
 
 export function AlertPresetControl({
@@ -115,6 +131,9 @@ export function AlertPresetControl({
   liveValue,
   riderTopSpeedKmh,
   hasBatteryConfig,
+  customAlerts,
+  hotRange,
+  disabled,
 }: AlertPresetControlProps) {
   const gauge = PRESET_GAUGE[metric]
   const max =
@@ -127,14 +146,17 @@ export function AlertPresetControl({
       riderTopSpeedKmh,
       hasBatteryConfig,
     })
-    return specs.map((spec, index) => ({
+    // Preset markers come straight from the pure generator (instant + atomic as the slider
+    // moves, no store round-trip flicker); custom markers layer on top from the caller.
+    const presetMarkers = specs.map((spec, index) => ({
       id: `${metric}-${index}`,
       threshold: spec.threshold,
       thresholdMax: spec.thresholdMax,
       label: gauge.formatMarker(spec.threshold),
       labelMax: spec.thresholdMax == null ? undefined : gauge.formatMarker(spec.thresholdMax),
     }))
-  }, [metric, level, riderTopSpeedKmh, hasBatteryConfig, gauge])
+    return customAlerts ? [...presetMarkers, ...customAlerts] : presetMarkers
+  }, [metric, level, riderTopSpeedKmh, hasBatteryConfig, gauge, customAlerts])
 
   // A stable null placeholder so the gauge always has a SharedValue; the needle is hidden offline.
   const placeholder = useSharedValue<number | null>(null)
@@ -150,10 +172,11 @@ export function AlertPresetControl({
         decimals={gauge.decimals}
         label={gauge.title.toUpperCase()}
         alerts={alerts}
+        hotRange={hotRange}
         showValue={liveValue != null}
         containerStyle={styles.gauge}
       />
-      <LevelSlider value={level} onChange={onLevelChange} />
+      <LevelSlider value={level} onChange={onLevelChange} disabled={disabled} />
     </View>
   )
 }
@@ -185,9 +208,10 @@ const SLIDER_ANIMATION = { duration: 180 } as const
 interface LevelSliderProps {
   value: AlertPresetLevel
   onChange: (level: AlertPresetLevel) => void
+  disabled?: boolean
 }
 
-function LevelSlider({ value, onChange }: LevelSliderProps) {
+function LevelSlider({ value, onChange, disabled }: LevelSliderProps) {
   const activeIndex = Math.max(0, ALL_LEVELS.indexOf(value))
   const tone = LEVEL_OPTIONS[activeIndex]!.tone
   const progress = useSharedValue(activeIndex)
@@ -206,7 +230,7 @@ function LevelSlider({ value, onChange }: LevelSliderProps) {
   )
 
   return (
-    <View style={styles.slider}>
+    <View style={[styles.slider, disabled && styles.sliderDisabled]}>
       <Animated.View style={[styles.sliderHighlight, highlightStyle]} />
       {LEVEL_OPTIONS.map((option) => {
         const active = option.id === value
@@ -215,8 +239,9 @@ function LevelSlider({ value, onChange }: LevelSliderProps) {
             key={option.id}
             style={styles.sliderSegment}
             accessibilityRole="button"
-            accessibilityState={{ selected: active }}
+            accessibilityState={{ selected: active, disabled }}
             accessibilityLabel={option.label}
+            disabled={disabled}
             onPress={() => onChange(option.id)}
           >
             <Text
@@ -250,6 +275,9 @@ const styles = StyleSheet.create({
     backgroundColor: theme.palette.slate.surfaceDeep,
     position: 'relative',
     overflow: 'hidden',
+  },
+  sliderDisabled: {
+    opacity: 0.45,
   },
   sliderHighlight: {
     position: 'absolute',

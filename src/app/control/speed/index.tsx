@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 
 import { ControlDetailLayout } from '@/modules/board/components/ControlDetailLayout'
 import { MetricDetailChart } from '@/modules/board/components/MetricDetailChart'
-import { MetricDetailGauge } from '@/modules/board/components/MetricDetailGauge'
+import { MetricPresetGauge } from '@/modules/board/components/MetricPresetGauge'
 import { toTelemetryChartPoints } from '@/modules/board/components/metricDetailData'
 import { telemetry } from '@/modules/board/constants/telemetry'
 import {
@@ -10,7 +10,7 @@ import {
   useLiveExcludedRanges,
   liveSelectors,
 } from '@/modules/board/hooks/useLiveMetric'
-import { useLiveWindowMs, useSettingsStore } from '@/modules/settings/store/settingsStore'
+import { useLiveWindowMs } from '@/modules/settings/store/settingsStore'
 import { liveTelemetryRuntime } from '@/modules/board/lib/liveTelemetryRuntime'
 
 const cfg = telemetry.speed
@@ -18,7 +18,6 @@ const RANGE = { y: cfg.chartRange }
 
 export default function SpeedScreen() {
   const speed = useLiveMetric(liveSelectors.speed)
-  const riderTopSpeedKmh = useSettingsStore((s) => s.riderTopSpeedKmh)
   const windowMs = useLiveWindowMs()
   const points = useMemo(() => toTelemetryChartPoints(speed), [speed])
   const excludedRanges = useLiveExcludedRanges('avg_speed', 'max_speed')
@@ -28,13 +27,7 @@ export default function SpeedScreen() {
       title={cfg.label}
       controlId={cfg.controlId}
       unit={cfg.unit}
-      gauge={
-        <MetricDetailGauge
-          metric={cfg}
-          value={liveTelemetryRuntime.values.speedKmh}
-          max={riderTopSpeedKmh}
-        />
-      }
+      gauge={<MetricPresetGauge metric="speed" value={liveTelemetryRuntime.values.speedKmh} />}
     >
       <MetricDetailChart
         metric={cfg}

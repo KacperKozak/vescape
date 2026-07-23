@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 
 import { ControlDetailLayout } from '@/modules/board/components/ControlDetailLayout'
 import { MetricDetailChart } from '@/modules/board/components/MetricDetailChart'
-import { MetricDetailGauge } from '@/modules/board/components/MetricDetailGauge'
+import { MetricPresetGauge } from '@/modules/board/components/MetricPresetGauge'
 import { toTelemetryChartPoints } from '@/modules/board/components/metricDetailData'
 import { telemetry } from '@/modules/board/constants/telemetry'
 import {
@@ -27,7 +27,7 @@ export default function DutyScreen() {
       title={cfg.label}
       controlId={cfg.controlId}
       unit={cfg.unit}
-      gauge={<MetricDetailGauge metric={cfg} value={liveTelemetryRuntime.values.dutyPercent} />}
+      gauge={<MetricPresetGauge metric="duty" value={liveTelemetryRuntime.values.dutyPercent} />}
     >
       <MetricDetailChart
         metric={cfg}

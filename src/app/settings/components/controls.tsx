@@ -453,10 +453,21 @@ const PRESET_DEMO_MAX: Record<AlertPresetMetric, number> = {
   'controller-temp': 80,
 }
 
+// A couple of custom (non-preset) markers so the showcase demonstrates preset + custom layering.
+const PRESET_DEMO_CUSTOM_ALERTS: Record<AlertPresetMetric, { id: string; threshold: number }[]> = {
+  speed: [{ id: 'demo-speed', threshold: 45 }],
+  duty: [{ id: 'demo-duty', threshold: 92 }],
+  battery: [{ id: 'demo-battery', threshold: 10 }],
+  'motor-temp': [{ id: 'demo-motor', threshold: 78 }],
+  'controller-temp': [{ id: 'demo-controller', threshold: 78 }],
+}
+
 function AlertPresetControlShowcase() {
   const [metric, setMetric] = useState<AlertPresetMetric>('speed')
   const [level, setLevel] = useState<AlertPresetLevel>('normal')
   const [live, setLive] = useState(false)
+  const [custom, setCustom] = useState(false)
+  const [disabled, setDisabled] = useState(false)
   const liveValue = useSharedValue<number | null>(null)
 
   useEffect(() => {
@@ -485,6 +496,8 @@ function AlertPresetControlShowcase() {
             onSelect={(v) => setMetric(v as AlertPresetMetric)}
           />
           <ToggleRow label="live session" value={live} onToggle={setLive} />
+          <ToggleRow label="custom markers" value={custom} onToggle={setCustom} />
+          <ToggleRow label="disabled" value={disabled} onToggle={setDisabled} />
         </>
       }
     >
@@ -495,6 +508,12 @@ function AlertPresetControlShowcase() {
         liveValue={live ? liveValue : undefined}
         riderTopSpeedKmh={50}
         hasBatteryConfig
+        customAlerts={
+          custom
+            ? PRESET_DEMO_CUSTOM_ALERTS[metric].map((a) => ({ ...a, thresholdMax: null }))
+            : undefined
+        }
+        disabled={disabled}
       />
     </ShowcaseCard>
   )
