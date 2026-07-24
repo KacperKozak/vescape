@@ -2,6 +2,7 @@ import { AppState } from 'react-native'
 import { addAppDataChangedListener, type AppDataChangedEvent } from 'vescape-core'
 
 import { useBoardStore } from '@/modules/board/store/boardStore'
+import { useMapStore } from '@/modules/map/store/mapStore'
 import { useSettingsStore } from '@/modules/settings/store/settingsStore'
 
 /**
@@ -16,6 +17,7 @@ import { useSettingsStore } from '@/modules/settings/store/settingsStore'
 const RELOADERS: Record<AppDataChangedEvent['scope'], () => void> = {
   boards: () => void useBoardStore.getState().load(),
   settings: () => void useSettingsStore.getState().load(),
+  mapPoints: () => void useMapStore.getState().load(),
 }
 
 function reloadAll(): void {

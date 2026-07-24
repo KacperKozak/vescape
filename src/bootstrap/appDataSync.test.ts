@@ -24,9 +24,31 @@ const appStateAdd = mock((_event: string, cb: (state: string) => void) => {
 })
 
 mock.module('react-native', () => ({ AppState: { addEventListener: appStateAdd } }))
+mock.module('expo-file-system', () => ({
+  Directory: class {
+    exists = true
+    create() {}
+    delete() {
+      this.exists = false
+    }
+  },
+  File: class {
+    uri = ''
+    exists = false
+    constructor(...parts: unknown[]) {
+      this.uri = parts.map(String).join('/')
+    }
+    delete() {
+      this.exists = false
+    }
+    async copy() {}
+  },
+  Paths: { document: 'file:///document' },
+}))
 
 const boardLoad = mock(async () => {})
 const settingsLoad = mock(async () => {})
+const mapPointsLoad = mock(async () => {})
 
 // The stores are module singletons shared across test files, so any `load` override must be undone
 // afterwards or it leaks into other suites (e.g. settingsStore.test) as a silent no-op.
@@ -39,16 +61,21 @@ beforeEach(async () => {
   appStateRemove.mockClear()
   boardLoad.mockClear()
   settingsLoad.mockClear()
+  mapPointsLoad.mockClear()
   const { useBoardStore } = await import('@/modules/board/store/boardStore')
   const { useSettingsStore } = await import('@/modules/settings/store/settingsStore')
+  const { useMapStore } = await import('@/modules/map/store/mapStore')
   const origBoardLoad = useBoardStore.getState().load
   const origSettingsLoad = useSettingsStore.getState().load
+  const origMapPointsLoad = useMapStore.getState().load
   restore = () => {
     useBoardStore.setState({ load: origBoardLoad })
     useSettingsStore.setState({ load: origSettingsLoad })
+    useMapStore.setState({ load: origMapPointsLoad })
   }
   useBoardStore.setState({ load: boardLoad })
   useSettingsStore.setState({ load: settingsLoad })
+  useMapStore.setState({ load: mapPointsLoad })
 })
 
 afterEach(() => restore())
@@ -61,6 +88,7 @@ test('boards scope reloads only the board store', async () => {
 
   expect(boardLoad).toHaveBeenCalledTimes(1)
   expect(settingsLoad).not.toHaveBeenCalled()
+  expect(mapPointsLoad).not.toHaveBeenCalled()
 })
 
 test('settings scope reloads only the settings store', async () => {
@@ -71,6 +99,18 @@ test('settings scope reloads only the settings store', async () => {
 
   expect(settingsLoad).toHaveBeenCalledTimes(1)
   expect(boardLoad).not.toHaveBeenCalled()
+  expect(mapPointsLoad).not.toHaveBeenCalled()
+})
+
+test('mapPoints scope reloads only the map store', async () => {
+  const { startAppDataSync } = await import('@/bootstrap/appDataSync')
+  startAppDataSync()
+
+  capturedCb?.({ scope: 'mapPoints' })
+
+  expect(mapPointsLoad).toHaveBeenCalledTimes(1)
+  expect(boardLoad).not.toHaveBeenCalled()
+  expect(settingsLoad).not.toHaveBeenCalled()
 })
 
 test('returning to the foreground reloads every store (missed-push catch-up, #174)', async () => {
@@ -81,6 +121,7 @@ test('returning to the foreground reloads every store (missed-push catch-up, #17
 
   expect(boardLoad).toHaveBeenCalledTimes(1)
   expect(settingsLoad).toHaveBeenCalledTimes(1)
+  expect(mapPointsLoad).toHaveBeenCalledTimes(1)
 })
 
 test('non-active app state transitions do not reload', async () => {
@@ -92,6 +133,7 @@ test('non-active app state transitions do not reload', async () => {
 
   expect(boardLoad).not.toHaveBeenCalled()
   expect(settingsLoad).not.toHaveBeenCalled()
+  expect(mapPointsLoad).not.toHaveBeenCalled()
 })
 
 test('stop unsubscribes both the native and app-state listeners', async () => {

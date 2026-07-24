@@ -14,11 +14,13 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 
-// @parity /modules/vescape-core/ios/VescapeCoreModule.swift
+// @parity /modules/vescape-core/ios/telemetry/AppDataRepository.swift `AppDataScope`
+// @parity /modules/vescape-core/src/index.ts `AppDataChangedEvent`
 /** Scope of an `onAppDataChanged` emit; mirrors the JS `AppDataChangedEvent['scope']` union. */
 internal enum class AppDataScope(val wire: String) {
   BOARDS("boards"),
   SETTINGS("settings"),
+  MAP_POINTS("mapPoints"),
 }
 
 internal fun validMapStyleKey(value: Any?): String? =
@@ -528,6 +530,7 @@ class AppDataRepository private constructor(private val context: Context) {
 
   suspend fun upsertMapPoint(point: Map<String, Any?>): Unit = withContext(Dispatchers.IO) {
     dao.upsertMapPoint(point.toMapPointEntity())
+    notifyDataChanged(AppDataScope.MAP_POINTS)
   }
 
   suspend fun getDirectionMapPointEntity(): MapPointEntity? = withContext(Dispatchers.IO) {
@@ -536,10 +539,12 @@ class AppDataRepository private constructor(private val context: Context) {
 
   suspend fun replaceDirectionMapPoint(point: Map<String, Any?>): Unit = withContext(Dispatchers.IO) {
     dao.replaceDirectionMapPoint(point.toDirectionMapPointEntity())
+    notifyDataChanged(AppDataScope.MAP_POINTS)
   }
 
   suspend fun deleteMapPoint(id: String): Unit = withContext(Dispatchers.IO) {
     dao.deleteMapPoint(id)
+    notifyDataChanged(AppDataScope.MAP_POINTS)
   }
 
   suspend fun getAutoConnectBoard(): Map<String, Any?>? = withContext(Dispatchers.IO) {

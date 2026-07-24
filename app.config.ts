@@ -102,11 +102,11 @@ const config: ExpoConfig = {
     [
       'expo-image-picker',
       {
-        // System photo picker only — no camera/mic use, and no READ_MEDIA_* permissions on
-        // Android (Play Photo and Video Permissions policy).
+        // Media library uses the permissionless system photo picker, so no READ_MEDIA_* permissions
+        // on Android. Map feature capture still needs camera/microphone permission strings.
         photosPermission: 'Allow Vescape to attach local photos and videos to selected rides.',
-        cameraPermission: false,
-        microphonePermission: false,
+        cameraPermission: 'Allow Vescape to take photos and videos for map features.',
+        microphonePermission: 'Allow Vescape to record audio with map feature videos.',
       },
     ],
     'expo-video',

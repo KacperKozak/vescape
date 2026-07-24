@@ -11,9 +11,11 @@ import GRDB
 ///
 /// Scope of an `onAppDataChanged` emit; mirrors the JS `AppDataChangedEvent['scope']` union.
 /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/AppDataRepository.kt `AppDataScope`
+/// @parity /modules/vescape-core/src/index.ts `AppDataChangedEvent`
 enum AppDataScope: String {
   case boards
   case settings
+  case mapPoints
 }
 
 /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/AppDataRepository.kt
@@ -362,6 +364,7 @@ final class AppDataRepository {
   func upsertMapPoint(_ point: [String: Any?]) {
     guard let entity = Self.mapPointColumns(point) else { return }
     write { db in try Self.insertMapPoint(db, entity) }
+    notifyDataChanged(.mapPoints)
   }
 
   func replaceDirectionMapPoint(_ point: [String: Any?]) {
@@ -372,10 +375,12 @@ final class AppDataRepository {
       try db.execute(sql: "DELETE FROM map_points WHERE kind = 'direction'")
       try Self.insertMapPoint(db, entity)
     }
+    notifyDataChanged(.mapPoints)
   }
 
   func deleteMapPoint(_ id: String) {
     write { db in try db.execute(sql: "DELETE FROM map_points WHERE id = ?", arguments: [id]) }
+    notifyDataChanged(.mapPoints)
   }
 
   private static func insertMapPoint(

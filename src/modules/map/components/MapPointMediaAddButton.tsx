@@ -1,16 +1,20 @@
-import { CameraIcon, PlusIcon } from 'phosphor-react-native'
+import { CameraIcon, PlusIcon, VideoCameraIcon } from 'phosphor-react-native'
 import { StyleSheet, View } from 'react-native'
 
 import { Button } from '@/components/base/Button'
+import { IconButton } from '@/components/base/IconButton'
+import { theme } from '@/constants/theme'
 
 export function MapPointMediaActions({
   loading,
   onAdd,
-  onCapture,
+  onCapturePhoto,
+  onCaptureVideo,
 }: {
   loading: boolean
   onAdd: () => void
-  onCapture: () => void
+  onCapturePhoto: () => void
+  onCaptureVideo: () => void
 }) {
   return (
     <View style={styles.row}>
@@ -20,15 +24,21 @@ export function MapPointMediaActions({
         variant="secondary"
         loading={loading}
         onPress={onAdd}
-        style={styles.button}
+        style={styles.addButton}
       />
-      <Button
-        label="Take Photo or Video"
+      <IconButton
         icon={CameraIcon}
-        variant="secondary"
         loading={loading}
-        onPress={onCapture}
-        style={styles.button}
+        onPress={onCapturePhoto}
+        accessibilityLabel="Take photo"
+        style={styles.iconButton}
+      />
+      <IconButton
+        icon={VideoCameraIcon}
+        loading={loading}
+        onPress={onCaptureVideo}
+        accessibilityLabel="Record video"
+        style={styles.iconButton}
       />
     </View>
   )
@@ -37,10 +47,18 @@ export function MapPointMediaActions({
 const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
   },
-  button: {
+  addButton: {
     flex: 1,
     minWidth: 0,
+  },
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: theme.palette.slate.surface,
+    borderColor: theme.palette.slate.border,
   },
 })

@@ -1027,9 +1027,11 @@ export interface GroupRideErrorEvent {
  * `lastBattery` written on session end). JS owns no durable copy, so it must reload the matching
  * store to stay fresh without an app restart. Emitted sparingly — only on meaningful changes,
  * never per telemetry tick.
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/AppDataRepository.kt `AppDataScope`
+ * @parity /modules/vescape-core/ios/telemetry/AppDataRepository.swift `AppDataScope`
  */
 export interface AppDataChangedEvent {
-  scope: 'boards' | 'settings'
+  scope: 'boards' | 'settings' | 'mapPoints'
 }
 
 /**

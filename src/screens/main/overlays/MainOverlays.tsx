@@ -1042,31 +1042,40 @@ function MapTargetSheet({
       setMediaSaving(false)
     }
   }, [point])
-  const handleCaptureMedia = useCallback(async () => {
-    if (!point) return
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ['images', 'videos'],
-      quality: 0.9,
-      videoQuality: ImagePicker.UIImagePickerControllerQualityType.High,
-    })
-    if (result.canceled || !result.assets[0]?.uri) return
-    setMediaSaving(true)
-    try {
-      const picked: PickedMapPointMediaAsset[] = result.assets.map((asset) => ({
-        id: asset.assetId ?? asset.uri,
-        uri: asset.uri,
-        filename: asset.fileName ?? '',
-        mediaType: asset.type === 'video' ? 'video' : 'photo',
-      }))
-      const saved = await saveMapPointMediaAssets(point.id, picked)
-      setMedia((current) => {
-        const existingUris = new Set(current.map((asset) => asset.uri))
-        return [...current, ...saved.filter((asset) => !existingUris.has(asset.uri))]
+  const handleCaptureMedia = useCallback(
+    async (mediaTypes: ['images'] | ['videos']) => {
+      if (!point) return
+      const permission = await ImagePicker.getCameraPermissionsAsync()
+      const granted = permission.granted
+        ? true
+        : (await ImagePicker.requestCameraPermissionsAsync()).granted
+      if (!granted) return
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes,
+        quality: 0.9,
+        videoQuality: ImagePicker.UIImagePickerControllerQualityType.High,
       })
-    } finally {
-      setMediaSaving(false)
-    }
-  }, [point])
+      if (result.canceled || !result.assets[0]?.uri) return
+      setMediaSaving(true)
+      try {
+        const picked: PickedMapPointMediaAsset[] = result.assets.map((asset) => ({
+          id: asset.assetId ?? asset.uri,
+          uri: asset.uri,
+          filename: asset.fileName ?? '',
+          mediaType: asset.type === 'video' ? 'video' : 'photo',
+        }))
+        const saved = await saveMapPointMediaAssets(point.id, picked)
+        setMedia((current) => {
+          const existingUris = new Set(current.map((asset) => asset.uri))
+          return [...current, ...saved.filter((asset) => !existingUris.has(asset.uri))]
+        })
+      } finally {
+        setMediaSaving(false)
+      }
+    },
+    [point],
+  )
   const handleSave = useCallback(async () => {
     if (point && onSaveMapPoint) {
       await onSaveMapPoint(point.id, {
@@ -1157,7 +1166,8 @@ function MapTargetSheet({
             <MapPointMediaActions
               loading={mediaSaving}
               onAdd={handlePickMedia}
-              onCapture={handleCaptureMedia}
+              onCapturePhoto={() => void handleCaptureMedia(['images'])}
+              onCaptureVideo={() => void handleCaptureMedia(['videos'])}
             />
           </View>
         </View>
