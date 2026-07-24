@@ -19,6 +19,7 @@ import { startAppDataSync } from '@/bootstrap/appDataSync'
 import { startBoardWarningsSync } from '@/modules/board/store/boardWarningsStore'
 import { useGroupRideStore } from '@/modules/group-ride/store/groupRideStore'
 import { useRiderStore } from '@/modules/group-ride/store/riderStore'
+import { AppBlockGate } from '@/modules/release/components/AppBlockGate'
 import { UpdateWarningGate } from '@/modules/release/components/UpdateWarningGate'
 import { startAppStatusSync } from '@/modules/release/store/appStatusStore'
 import { useSettingsStore } from '@/modules/settings/store/settingsStore'
@@ -159,6 +160,8 @@ function RootLayout() {
             <Stack.Screen name={stackScreens.editBoardLink} options={{ title: 'Board Link' }} />
           </Stack>
           <UpdateWarningGate />
+          {/* Last child: the App Block shell covers every screen, including the Update Warning. */}
+          <AppBlockGate />
           <StatusBar style="light" />
         </GestureHandlerRootView>
       </DiagnosticErrorBoundary>

@@ -11,9 +11,11 @@ import { IconHero } from '@/components/settings/IconHero'
 import { InfoModal } from '@/components/modals/InfoModal'
 import { TextPromptModal } from '@/components/modals/TextPromptModal'
 import { UpdateWarningModal } from '@/modules/release/components/UpdateWarningModal'
+import { AppBlockScreen } from '@/modules/release/components/AppBlockScreen'
 import { ShowcaseCard } from '@/components/dev/ShowcaseCard'
 import { OpenButton, ToggleRow } from '@/components/dev/ShowcaseControls'
 import { DEFAULT_UPDATE_WARNING_MESSAGE } from '@/modules/release/constants/updateWarning'
+import { DEFAULT_APP_BLOCK_MESSAGE } from '@/modules/release/constants/appBlock'
 import { theme } from '@/constants/theme'
 
 function ConfirmModalShowcase() {
@@ -92,6 +94,41 @@ function UpdateWarningModalShowcase() {
         visible={visible}
         message={serverMessage ? SERVER_UPDATE_MESSAGE : DEFAULT_UPDATE_WARNING_MESSAGE}
         onDismiss={() => setVisible(false)}
+      />
+    </ShowcaseCard>
+  )
+}
+
+const SERVER_APP_BLOCK_MESSAGE = [
+  '## This version is blocked',
+  '',
+  'A critical problem was found in this build. Update to keep using Vescape.',
+  '',
+  '- An active ride keeps recording',
+  '- Your board stays connected',
+].join('\n')
+
+function AppBlockScreenShowcase() {
+  const [visible, setVisible] = useState(false)
+  const [serverMessage, setServerMessage] = useState(true)
+
+  return (
+    <ShowcaseCard
+      name="AppBlockScreen"
+      controls={
+        <>
+          <ToggleRow label="server message" value={serverMessage} onToggle={setServerMessage} />
+          <OpenButton onPress={() => setVisible(true)} />
+        </>
+      }
+    >
+      <Text style={styles.previewHint}>
+        Full-screen, non-dismissible update-only shell. In this preview the update action closes it.
+      </Text>
+      <AppBlockScreen
+        visible={visible}
+        message={serverMessage ? SERVER_APP_BLOCK_MESSAGE : DEFAULT_APP_BLOCK_MESSAGE}
+        onUpdate={() => setVisible(false)}
       />
     </ShowcaseCard>
   )
@@ -268,11 +305,12 @@ export default function ModalsPage() {
       <ScrollView contentContainerStyle={styles.content}>
         <IconHero
           icon={SquaresFourIcon}
-          description="ConfirmModal, InfoModal, UpdateWarningModal, TextPromptModal, EdgeDrawer, FloatingSheet."
+          description="ConfirmModal, InfoModal, UpdateWarningModal, AppBlockScreen, TextPromptModal, EdgeDrawer, FloatingSheet."
         />
         <ConfirmModalShowcase />
         <InfoModalShowcase />
         <UpdateWarningModalShowcase />
+        <AppBlockScreenShowcase />
         <TextPromptModalShowcase />
         <EdgeDrawerPositionShowcase
           edge="auto"
