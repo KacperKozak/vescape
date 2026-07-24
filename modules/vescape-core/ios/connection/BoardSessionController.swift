@@ -119,6 +119,7 @@ internal final class BoardSessionController: VescGattListener {
   private lazy var gpsMonitor = GpsMonitor { [weak self] location in self?.onLocationUpdated(location) }
   private lazy var alertAudioPlayer = AlertAudioPlayer()
   private lazy var alertCoordinator = AlertCoordinator(player: alertAudioPlayer)
+  private let legalPolicyCatalog = LegalPolicyCatalog()
   /// Persistent Board Session status surface (Live Activity) — the iOS peer of Android's foreground
   /// notification. Native-driven so it survives screen-off and a dead JS runtime.
   private lazy var liveActivity = RideLiveActivityController()
@@ -374,11 +375,27 @@ internal final class BoardSessionController: VescGattListener {
       alertCoordinator.replaceRules([])
       return
     }
+    let board = appData.getBoard(boardId)
+    let enabled = ((board?["legalMode"] ?? nil) as? [String: Any])?["enabled"] as? Bool ?? false
+    let jurisdictionCode =
+      ((appData.getSettings()["legalPolicy"] ?? nil) as? [String: Any])?["jurisdictionCode"] as? String
+    let speeds = jurisdictionCode.flatMap(legalPolicyCatalog.speeds)
     alertCoordinator.replaceRules(withLegalModeOverlay(
       appData.getEnabledAlertRules(boardId),
       boardId: boardId,
-      rawSettings: appData.getSettings()["legalMode"]
+      enabled: enabled,
+      warningSpeedKmh: speeds?.warningSpeedKmh,
+      limitSpeedKmh: speeds?.limitSpeedKmh
     ))
+  }
+
+  func legalModeEnableError(boardId: String) -> (String, String)? {
+    legalModeEnableError(
+      phase: phase,
+      activeBoardId: connectedBoardId,
+      linkIntegrity: linkIntegrity,
+      requestedBoardId: boardId
+    )
   }
 
   /// Re-read mutable board-scoped session data after JS edits the active board. The BLE endpoint
@@ -521,10 +538,17 @@ internal final class BoardSessionController: VescGattListener {
     gpsError = gpsMonitor.start()
     // Fresh rule set for this session's alert engine — only the connected Board's enabled rules
     // (mirrors Android loadAlertRules on connect).
+    let board = appData.getBoard(config.appBoardId)
+    let legalModeEnabled = ((board?["legalMode"] ?? nil) as? [String: Any])?["enabled"] as? Bool ?? false
+    let jurisdictionCode =
+      ((sessionSettings["legalPolicy"] ?? nil) as? [String: Any])?["jurisdictionCode"] as? String
+    let legalSpeeds = jurisdictionCode.flatMap(legalPolicyCatalog.speeds)
     alertCoordinator.replaceRules(withLegalModeOverlay(
       appData.getEnabledAlertRules(config.appBoardId),
       boardId: config.appBoardId,
-      rawSettings: sessionSettings["legalMode"]
+      enabled: legalModeEnabled,
+      warningSpeedKmh: legalSpeeds?.warningSpeedKmh,
+      limitSpeedKmh: legalSpeeds?.limitSpeedKmh
     ))
     connectionSeq = sessionSequence
     connectedBoardId = config.appBoardId

@@ -17,6 +17,8 @@ internal final class AlertCoordinator {
   }
 
   func replaceRules(_ value: [AlertRule]) {
+    // Rule removal must stop a running geiger now, not on the next telemetry sample.
+    stopAllGeiger()
     rules = value
     engine.resetDebounce()
   }

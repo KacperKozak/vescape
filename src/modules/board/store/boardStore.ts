@@ -95,6 +95,7 @@ export const useBoardStore = create<BoardState & BoardActions>((set, get) => ({
       topSpeedKmh,
       alertPreset: alertPreset ?? null,
       alertPresetsOnboarded: alertPresetsOnboarded ?? false,
+      legalMode: { enabled: false },
       link: link ?? null,
     }
     set((state) => ({

@@ -2,7 +2,6 @@ import { describe, expect, test } from 'bun:test'
 
 import {
   legalPolicyFromReference,
-  normalizeLegalModeSettings,
   normalizeLegalPolicyReference,
 } from '@/modules/legal/lib/legalMode'
 import { LEGAL_LIMIT_COUNTRIES } from '@/modules/legal/lib/legalLimits'
@@ -33,16 +32,5 @@ describe('Legal Policy derivation', () => {
         expect(country.warningSpeedKmh).toBeLessThan(country.legalSpeedKmh)
       }
     }
-  })
-
-  test('legacy Legal Mode bags retain only enabled state', () => {
-    expect(
-      normalizeLegalModeSettings({
-        enabled: true,
-        legalSpeedKmh: 30,
-        warningSpeedKmh: 24,
-        warningManuallyEdited: true,
-      }),
-    ).toEqual({ enabled: true })
   })
 })

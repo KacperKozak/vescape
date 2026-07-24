@@ -57,6 +57,7 @@ public class VescapeCoreModule: Module {
 
   private let appData = AppDataRepository.shared
   private let legalPolicyResolver = LegalPolicyResolver()
+  private let legalPolicyCatalog = LegalPolicyCatalog()
 
   /// Bundled alert sounds surfaced to JS through `getAlertSounds`. Mirrors Android
   /// `alertSoundPresetMaps()`.
@@ -683,8 +684,34 @@ public class VescapeCoreModule: Module {
           nil
         }
         self.appData.updateLegalPolicy(jurisdictionCode: countryCode)
+        self.coordinator.reloadAlertRules()
         promise.resolve(nil)
       }
+    }
+
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `setLegalMode`
+    // @parity /modules/vescape-core/src/index.ts `setLegalMode`
+    AsyncFunction("setLegalMode") { (boardId: String, enabled: Bool, promise: Promise) in
+      guard self.appData.getBoard(boardId) != nil else {
+        promise.reject("BOARD_NOT_FOUND", "Board not found: \(boardId)")
+        return
+      }
+      if enabled {
+        if let (code, message) = self.coordinator.legalModeEnableError(boardId: boardId) {
+          promise.reject(code, message)
+          return
+        }
+        let settings = self.appData.getSettings()
+        let jurisdictionCode =
+          ((settings["legalPolicy"] ?? nil) as? [String: Any])?["jurisdictionCode"] as? String
+        guard let jurisdictionCode, self.legalPolicyCatalog.speeds(countryCode: jurisdictionCode) != nil else {
+          promise.reject("LEGAL_POLICY_UNRESOLVED", "Resolved Legal Policy required")
+          return
+        }
+      }
+      self.appData.updateLegalMode(boardId: boardId, enabled: enabled)
+      self.coordinator.reloadAlertRules()
+      promise.resolve(nil)
     }
 
     // JS sends the raw setting value (bool/number/string/object/null), matching Android's
@@ -694,9 +721,6 @@ public class VescapeCoreModule: Module {
     // `appData.updateSetting` treats `NSNull` (JS null/undefined) as a delete.
     Function("updateSetting") { (key: String, value: JavaScriptValue) in
       self.appData.updateSetting(key, rawValue: value.getAny())
-      if key == "legalMode" {
-        self.coordinator.reloadAlertRules()
-      }
       if [
         "liveHistoryLimit",
         "movingSpeedThresholdKmh",

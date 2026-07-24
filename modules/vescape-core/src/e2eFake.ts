@@ -79,7 +79,6 @@ const e2eSettings: AppSettings = {
   riderName: null,
   riderColor: null,
   legalPolicy: null,
-  legalMode: null,
 }
 
 function emitDevice(event: DeviceFoundEvent): void {
@@ -694,6 +693,11 @@ export const e2eFake = {
 
   updateSetting(key: string, value: unknown): void {
     ;(e2eSettings as unknown as Record<string, unknown>)[key] = value
+  },
+
+  setLegalMode(boardId: string, enabled: boolean): void {
+    const board = e2eBoards.find((value) => value.id === boardId)
+    if (board) board.legalMode = { enabled }
   },
 
   seedE2EData(flow: string): void {

@@ -72,7 +72,9 @@ class AlertEngineTest {
         val rules = withLegalModeOverlay(
             listOf(rule()),
             "board-2",
-            mapOf("enabled" to false, "warningSpeedKmh" to 15, "legalSpeedKmh" to 20),
+            false,
+            15.0,
+            20.0,
         )
 
         assertEquals(1, rules.size)
@@ -83,7 +85,9 @@ class AlertEngineTest {
         val rules = withLegalModeOverlay(
             emptyList(),
             "board-2",
-            mapOf("enabled" to true, "warningSpeedKmh" to 15, "legalSpeedKmh" to 20),
+            true,
+            15.0,
+            20.0,
         )
 
         assertEquals(1, rules.size)
@@ -100,7 +104,9 @@ class AlertEngineTest {
         val rules = withLegalModeOverlay(
             emptyList(),
             "board-1",
-            mapOf("enabled" to true, "warningSpeedKmh" to 24, "legalSpeedKmh" to 30),
+            true,
+            24.0,
+            30.0,
         )
 
         assertEquals(24.0, rules[0].threshold, 0.0)

@@ -473,20 +473,6 @@ abstract class TelemetryDatabase : RoomDatabase() {
     }
 
     /**
-     * Legal Mode is now a native in-memory overlay (#255). Remove rows materialized by the legacy
-     * JS orchestration; the current schema keeps `board_id NOT NULL` for real Board-owned rules.
-     *
-     * @parity /modules/vescape-core/ios/telemetry/TelemetryDatabase.swift `v28_legal_mode_overlay`
-     */
-    internal val MIGRATION_27_28 = object : Migration(27, 28) {
-      override fun migrate(db: SupportSQLiteDatabase) {
-        db.execSQL(
-          "DELETE FROM alerts WHERE id = 'legal-mode-speed-alert' OR source = 'legal-mode'",
-        )
-      }
-    }
-
-    /**
      * One-time file rename from the pre-release "telemetry.db" name. Checkpoints the legacy WAL so
      * the whole database lives in the main file, then renames it in place. Idempotent: once the new
      * file exists (or no legacy file is present) this is a no-op.
@@ -540,7 +526,6 @@ abstract class TelemetryDatabase : RoomDatabase() {
             MIGRATION_24_25,
             MIGRATION_25_26,
             MIGRATION_26_27,
-            MIGRATION_27_28,
           )
           .fallbackToDestructiveMigration(true)
           .addCallback(object : Callback() {

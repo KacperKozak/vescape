@@ -196,6 +196,13 @@ export interface Board {
    * entry regardless of this flag.
    */
   alertPresetsOnboarded?: boolean
+  /**
+   * Durable per-Board Legal Mode activation. Native owns behavior and persists this setting;
+   * JS reads it and sends the dedicated activation intent. Absent ⇒ disabled.
+   * @parity /modules/vescape-core/ios/telemetry/AppDataRepository.swift `composeBoard`
+   * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/AppDataRepository.kt `toMap`
+   */
+  legalMode?: { enabled: boolean }
   /** Probe-confirmed reachability. `null` means offline-only/unlinked. */
   link: BoardLink | null
 }
@@ -884,8 +891,6 @@ export interface AppSettings {
   riderColor: string | null
   /** Native-resolved app-wide jurisdiction reference. Policy values live in shared catalog data. */
   legalPolicy: LegalPolicyReference | null
-  /** Durable Legal Mode UI/default state. JS owns behavior; native only persists this bag. */
-  legalMode: Record<string, unknown> | null
 }
 
 export interface DiagnosticStatus {
@@ -1312,6 +1317,7 @@ type VescapeCoreNativeModule = NativeEventEmitter<VescapeCoreEvents> & {
   deleteMapPoint(id: string): Promise<void>
   getSettings(): Promise<AppSettings>
   refreshLegalPolicy(): Promise<void>
+  setLegalMode(boardId: string, enabled: boolean): Promise<void>
   updateSetting(
     key: string,
     value: number | boolean | string | Record<string, unknown> | null,
@@ -1971,6 +1977,18 @@ export async function getSettings(): Promise<AppSettings> {
 export async function refreshLegalPolicy(): Promise<void> {
   if (E2E_ENABLED) return
   return native.refreshLegalPolicy()
+}
+
+/**
+ * @parity /modules/vescape-core/ios/VescapeCoreModule.swift `setLegalMode`
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `setLegalMode`
+ */
+export async function setLegalMode(boardId: string, enabled: boolean): Promise<void> {
+  if (E2E_ENABLED) {
+    e2eFake.setLegalMode(boardId, enabled)
+    return
+  }
+  return native.setLegalMode(boardId, enabled)
 }
 
 export async function updateSetting(

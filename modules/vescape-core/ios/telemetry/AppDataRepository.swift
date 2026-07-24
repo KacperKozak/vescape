@@ -100,6 +100,7 @@ final class AppDataRepository {
       ("topSpeedKmh", Self.topSpeedKmh(board["topSpeedKmh"] ?? nil)),
       ("alertPreset", Self.normalizeAlertPreset(board["alertPreset"] ?? nil)),
       ("alertPresetsOnboarded", board["alertPresetsOnboarded"] as? Bool),
+      // Legal Mode changes only through the dedicated native intent.
     ] + linkSettings.filter { $0.0 != "transport" }
     let transport = linkSettings.first { $0.0 == "transport" }?.1 as? String
     let updatedAt = nowMs()
@@ -148,6 +149,19 @@ final class AppDataRepository {
     notifyDataChanged(.boards)
   }
 
+  /// Dedicated native Legal Mode write; generic Board upserts cannot bypass enable validation.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/AppDataRepository.kt `updateLegalMode`
+  func updateLegalMode(boardId: String, enabled: Bool) {
+    guard let json = Self.encodeJson(["enabled": enabled]) else { return }
+    write { db in
+      try db.execute(
+        sql: "INSERT OR REPLACE INTO board_settings (board_id, key, value_json, updated_at) VALUES (?, ?, ?, ?)",
+        arguments: [boardId, "legalMode", json, self.nowMs()]
+      )
+    }
+    notifyDataChanged(.boards)
+  }
+
   private static func composeBoard(_ row: Row, settings: [(String, String)]) -> [String: Any?] {
     var values: [String: Any] = [:]
     for (key, json) in settings {
@@ -170,6 +184,7 @@ final class AppDataRepository {
       "topSpeedKmh": values["topSpeedKmh"] ?? defaultTopSpeedKmh,
       "alertPreset": values["alertPreset"],
       "alertPresetsOnboarded": values["alertPresetsOnboarded"] ?? false,
+      "legalMode": values["legalMode"] ?? ["enabled": false],
       "link": link,
     ]
   }
@@ -197,6 +212,8 @@ final class AppDataRepository {
       return normalizeAlertPreset(raw)
     case "alertPresetsOnboarded":
       return raw as? Bool
+    case "legalMode":
+      return normalizeLegalMode(raw)
     default:
       return nil
     }
@@ -208,6 +225,11 @@ final class AppDataRepository {
   private static func normalizeAlertPreset(_ raw: Any?) -> [String: Any]? {
     guard let map = raw as? [String: Any], !map.isEmpty else { return nil }
     return map
+  }
+
+  private static func normalizeLegalMode(_ raw: Any?) -> [String: Bool]? {
+    guard let map = raw as? [String: Any], let enabled = map["enabled"] as? Bool else { return nil }
+    return ["enabled": enabled]
   }
 
   /// Dismissed Board Warning kinds persisted as a board setting: a non-empty array of kind slugs, or
@@ -464,7 +486,7 @@ final class AppDataRepository {
 
   func updateSetting(_ key: String, rawValue: Any?) {
     // Legal Policy is native-owned. JS can request refresh through the dedicated intent.
-    guard key != "legalPolicy" else { return }
+    guard key != "legalPolicy", key != "legalMode" else { return }
     let updatedAt = nowMs()
     guard let rawValue, !(rawValue is NSNull) else {
       write { db in try db.execute(sql: "DELETE FROM app_settings WHERE key = ?", arguments: [key]) }
@@ -540,7 +562,6 @@ final class AppDataRepository {
     "lastGpsLatitude": NSNull(),
     "lastGpsLongitude": NSNull(),
     "legalPolicy": NSNull(),
-    "legalMode": NSNull(),
     "movingSpeedThresholdKmh": 3,
     "freeSpinMaxSpeedDeltaKmh": DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH,
     "freeSpinStationaryBoardCapKmh": DEFAULT_FREE_SPIN_STATIONARY_BOARD_CAP_KMH,

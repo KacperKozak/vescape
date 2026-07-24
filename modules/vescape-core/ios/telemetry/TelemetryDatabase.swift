@@ -416,15 +416,6 @@ enum TelemetryDatabase {
         """)
     }
 
-    // MARK: Legal Mode native overlay (#255)
-    // Remove rows materialized by the legacy JS orchestration. Real Alert Rules remain Board-owned.
-    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `MIGRATION_27_28`
-    migrator.registerMigration("v28_legal_mode_overlay") { db in
-      try db.execute(sql: """
-        DELETE FROM alerts WHERE id = 'legal-mode-speed-alert' OR source = 'legal-mode'
-        """)
-    }
-
     return migrator
   }
 }

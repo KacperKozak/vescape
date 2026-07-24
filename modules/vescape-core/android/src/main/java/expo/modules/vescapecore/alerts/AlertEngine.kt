@@ -115,26 +115,25 @@ internal data class FiredAlert(
 }
 
 /**
- * Adds Legal Mode's Board-agnostic speed warning to the in-memory rules. The App Setting is
- * durable native truth; no Alert Rule row is materialized.
+ * Adds Legal Mode's per-Board speed warning to in-memory rules. No Alert Rule row is materialized.
  * @parity /modules/vescape-core/ios/alerts/AlertEngine.swift `withLegalModeOverlay`
  */
 internal fun withLegalModeOverlay(
     rules: List<AlertRuleEntity>,
     boardId: String,
-    rawSettings: Map<String, Any?>?,
+    enabled: Boolean,
+    warningSpeedKmh: Double?,
+    limitSpeedKmh: Double?,
 ): List<AlertRuleEntity> {
-    if (rawSettings?.get("enabled") != true) return rules
-    val warningSpeedKmh = (rawSettings["warningSpeedKmh"] as? Number)?.toDouble() ?: return rules
-    val legalSpeedKmh = (rawSettings["legalSpeedKmh"] as? Number)?.toDouble() ?: return rules
-    if (warningSpeedKmh <= 0.0 || legalSpeedKmh <= warningSpeedKmh) return rules
+    if (!enabled || warningSpeedKmh == null || limitSpeedKmh == null) return rules
+    if (warningSpeedKmh <= 0.0 || limitSpeedKmh <= warningSpeedKmh) return rules
 
     return rules + AlertRuleEntity(
         boardId = boardId,
         id = "native:legal-mode:speed",
         controlId = "speed",
         threshold = warningSpeedKmh,
-        thresholdMax = legalSpeedKmh,
+        thresholdMax = limitSpeedKmh,
         enabled = true,
         soundType = "preset:tick",
         createdAt = 0L,

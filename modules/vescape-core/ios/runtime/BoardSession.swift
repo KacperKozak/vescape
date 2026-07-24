@@ -89,6 +89,22 @@ enum LinkIntegrity: String {
   case mismatched
 }
 
+/// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/connection/BoardSessionController.kt `legalModeEnableError`
+func legalModeEnableError(
+  phase: BoardPhase,
+  activeBoardId: String?,
+  linkIntegrity: LinkIntegrity,
+  requestedBoardId: String
+) -> (String, String)? {
+  guard phase == .connected, activeBoardId == requestedBoardId else {
+    return ("LEGAL_MODE_BOARD_NOT_CONNECTED", "Matching active Board Session required")
+  }
+  guard linkIntegrity == .trusted else {
+    return ("LINK_NOT_TRUSTED", "Trusted Board Link required to enable Legal Mode")
+  }
+  return nil
+}
+
 /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/runtime/BoardSession.kt
 struct LinkIdentity {
   var linkVersion: Int?

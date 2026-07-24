@@ -10,7 +10,7 @@ class LegalPolicyResolverTest {
     fun canonicalCatalogAcceptsSupportedCountriesAndRejectsUnsupportedCountries() {
         val json = File(requireNotNull(javaClass.classLoader).getResource("data/legal-policies.json").toURI())
             .readText()
-        val supported = supportedCountryCodes(json)
+        val supported = parseLegalPolicies(json).keys
 
         assertEquals("PL", normalizeCountryCode("pl", supported))
         assertNull(normalizeCountryCode("US", supported))

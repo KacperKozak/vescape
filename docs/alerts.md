@@ -5,7 +5,7 @@ JS layer may be suspended during a ride. Alerts are evaluated natively so they f
 ## Data flow
 
 ```
-JS calls VescapeCore alert CRUD / updates Legal Mode → native storage updates → native reloads rules
+JS calls VescapeCore alert CRUD / Legal Mode intent → native storage updates → native reloads rules
 CoreForegroundService: each BLE packet → evaluateAlerts() → SoundPool/TextToSpeech + Vibrator
 Fired alerts embedded in that packet's telemetry map → visible in recentTelemetry
 ```
@@ -22,9 +22,9 @@ evaluate.
 Preset rule ids (`preset:<metric>:<index>`) repeat across Boards; uniqueness is per Board via the
 composite primary key `(board_id, id)`.
 
-Legal Mode is independent of Board-owned rows. Native reads its persisted App Setting and adds a
-virtual geiger speed rule to the in-memory set whenever rules load. Nothing is written to `alerts`;
-the overlay therefore applies to whichever Board is connected and survives with JS suspended.
+Legal Mode is durable per-Board state in `board_settings`, independent of Board-owned Alert Rule
+rows. Native combines that Board's `legalMode.enabled` with the app-wide Legal Policy jurisdiction
+and adds a virtual geiger speed rule whenever rules load. Nothing is written to `alerts`.
 
 ## Schema — `alerts` table
 
@@ -157,15 +157,16 @@ display default 50 km/h.
 
 ### Board Settings keys
 
-Three per-Board keys drive Alert Presets, backed by the `board_settings` table and composed onto the
+Four per-Board keys drive Alert Presets and Legal Mode, backed by the `board_settings` table and composed onto the
 `Board` object (like `batteryConfig`). Missing keys normalize to display defaults; no preset rules are
 generated until the rider touches setup:
 
-| key                     | default | meaning                                         |
-| ----------------------- | ------- | ----------------------------------------------- |
-| `alertPreset`           | null    | per-metric level selection bag (null ⇒ all Off) |
-| `topSpeedKmh`           | 50      | Board Top Speed (km/h)                          |
-| `alertPresetsOnboarded` | false   | one-time guided-setup gate for this Board       |
+| key                     | default  | meaning                                          |
+| ----------------------- | -------- | ------------------------------------------------ |
+| `alertPreset`           | null     | per-metric level selection bag (null ⇒ all Off)  |
+| `topSpeedKmh`           | 50       | Board Top Speed (km/h)                           |
+| `alertPresetsOnboarded` | false    | one-time guided-setup gate for this Board        |
+| `legalMode`             | disabled | native-owned `{ enabled }` Legal Mode activation |
 
 ### Setup surfaces
 

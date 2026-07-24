@@ -1,18 +1,12 @@
 import { create } from 'zustand'
-
-import { type LegalModeSettings } from '@/modules/legal/lib/legalMode'
-import { useSettingsStore } from '@/modules/settings/store/settingsStore'
+import { setLegalMode } from 'vescape-core'
 
 interface LegalModeActions {
-  setEnabled(enabled: boolean): Promise<void>
+  setEnabled(boardId: string, enabled: boolean): Promise<void>
 }
 
 export const useLegalModeStore = create<LegalModeActions>(() => ({
-  async setEnabled(enabled) {
-    await saveLegalMode({ enabled })
+  async setEnabled(boardId, enabled) {
+    await setLegalMode(boardId, enabled)
   },
 }))
-
-async function saveLegalMode(settings: LegalModeSettings) {
-  await useSettingsStore.getState().setLegalMode(settings)
-}

@@ -261,7 +261,6 @@ class AppDataRepository private constructor(private val context: Context) {
       riderName = opt("riderName") { it as? String },
       riderColor = opt("riderColor") { it as? String },
       legalPolicy = opt("legalPolicy", ::normalizeLegalPolicy),
-      legalMode = opt("legalMode") { it.asStringKeyMap() },
     )
 
     if (badKeys.isNotEmpty()) {
@@ -331,9 +330,6 @@ class AppDataRepository private constructor(private val context: Context) {
       "riderId", "riderName", "riderColor" -> value as? String
       // Legal Policy is native-owned. JS can request refresh through the dedicated intent.
       "legalPolicy" -> return@withContext
-      "legalMode" ->
-        if (value == null || value == JSONObject.NULL) null
-        else value.asStringKeyMap() ?: return@withContext
       else -> return@withContext
     }
     val normalizedKey = when (key) {
@@ -377,7 +373,6 @@ class AppDataRepository private constructor(private val context: Context) {
         "riderName" -> d.riderName
         "riderColor" -> d.riderColor
         "legalPolicy" -> d.legalPolicy
-        "legalMode" -> d.legalMode
         else -> null
       }
     }
@@ -433,6 +428,22 @@ class AppDataRepository private constructor(private val context: Context) {
   ): Unit = withContext(Dispatchers.IO) {
     val value = mapOf("percent" to percent, "voltage" to voltage, "at" to atMs)
     dao.upsertBoardSetting(BoardSettingEntity(boardId, "lastBattery", encodeSettingJson(value), atMs))
+    notifyDataChanged(AppDataScope.BOARDS)
+  }
+
+  /**
+   * Dedicated native Legal Mode write; generic Board upserts cannot bypass enable validation.
+   * @parity /modules/vescape-core/ios/telemetry/AppDataRepository.swift `updateLegalMode`
+   */
+  suspend fun updateLegalMode(boardId: String, enabled: Boolean): Unit = withContext(Dispatchers.IO) {
+    dao.upsertBoardSetting(
+      BoardSettingEntity(
+        boardId = boardId,
+        key = "legalMode",
+        valueJson = encodeSettingJson(mapOf("enabled" to enabled)),
+        updatedAt = System.currentTimeMillis(),
+      ),
+    )
     notifyDataChanged(AppDataScope.BOARDS)
   }
 
@@ -649,6 +660,7 @@ fun BoardEntity.toMap(settings: List<BoardSettingEntity>): Map<String, Any?> {
     "topSpeedKmh" to (values["topSpeedKmh"] ?: DEFAULT_TOP_SPEED_KMH),
     "alertPreset" to values["alertPreset"],
     "alertPresetsOnboarded" to (values["alertPresetsOnboarded"] ?: false),
+    "legalMode" to (values["legalMode"] ?: mapOf("enabled" to false)),
     "link" to link,
   )
 }
@@ -686,7 +698,6 @@ fun AppSettings.toMap(): Map<String, Any?> = mapOf(
   "riderName" to riderName,
   "riderColor" to riderColor,
   "legalPolicy" to legalPolicy,
-  "legalMode" to legalMode,
 )
 
 private fun normalizeLegalPolicy(raw: Any): Map<String, String>? {
@@ -920,6 +931,7 @@ internal fun Map<String, Any?>.toBoardSettingEntities(boardId: String): Pair<Lis
   putOrDelete("topSpeedKmh", validTopSpeedKmh(get("topSpeedKmh")))
   putOrDelete("alertPreset", normalizeAlertPreset(get("alertPreset")))
   putOrDelete("alertPresetsOnboarded", get("alertPresetsOnboarded") as? Boolean)
+  // Legal Mode changes only through the dedicated native intent.
   val link = normalizedBoardLink()
   putOrDelete("transport", BoardTransport.encode(BoardTransport.fromBridge(link?.get("transport"))))
   putOrDelete("linkVersion", (link?.get("linkVersion") as? Number)?.toInt()?.takeIf { it == BOARD_LINK_VERSION })
@@ -951,9 +963,13 @@ private fun BoardSettingEntity.decodeBoardSetting(): Pair<String, Any?>? {
     "topSpeedKmh" -> validTopSpeedKmh(raw)?.let { key to it }
     "alertPreset" -> normalizeAlertPreset(raw)?.let { key to it }
     "alertPresetsOnboarded" -> (raw as? Boolean)?.let { key to it }
+    "legalMode" -> normalizeLegalMode(raw)?.let { key to it }
     else -> null
   }
 }
+
+private fun normalizeLegalMode(raw: Any?): Map<String, Boolean>? =
+  (raw.asStringKeyMap()?.get("enabled") as? Boolean)?.let { mapOf("enabled" to it) }
 
 /**
  * Durable Alert Preset per-metric level selection bag. JS owns behavior; native persists it as an

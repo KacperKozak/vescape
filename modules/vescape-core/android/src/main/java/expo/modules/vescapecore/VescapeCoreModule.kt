@@ -39,6 +39,7 @@ import expo.modules.vescapecore.telemetry.ProfileStatsRepository
 import expo.modules.vescapecore.telemetry.TELEMETRY_DATABASE_NAME
 import expo.modules.vescapecore.telemetry.TelemetryRepository
 import expo.modules.vescapecore.location.LegalPolicyResolver
+import expo.modules.vescapecore.location.LegalPolicyCatalog
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -76,6 +77,7 @@ class VescapeCoreModule : Module() {
     CompanionPresence(context.applicationContext, activityProvider = { appContext.currentActivity })
   }
   private val legalPolicyResolver by lazy { LegalPolicyResolver(context.applicationContext) }
+  private val legalPolicyCatalog by lazy { LegalPolicyCatalog(context.applicationContext) }
 
   private val context: Context get() = appContext.reactContext
     ?: throw IllegalStateException("No React context")
@@ -580,14 +582,37 @@ class VescapeCoreModule : Module() {
         null
       }
       repository.updateLegalPolicy(countryCode)
+      CoreForegroundService.reloadAlertRules(context.applicationContext)
+    }
+    // @parity /modules/vescape-core/ios/VescapeCoreModule.swift `setLegalMode`
+    // @parity /modules/vescape-core/src/index.ts `setLegalMode`
+    AsyncFunction("setLegalMode") { boardId: String, enabled: Boolean, promise: Promise ->
+      CoroutineScope(Dispatchers.IO).launch {
+        val repository = AppDataRepository.get(context.applicationContext)
+        if (repository.getBoard(boardId) == null) {
+          promise.reject("BOARD_NOT_FOUND", "Board not found: $boardId", null)
+          return@launch
+        }
+        if (enabled) {
+          CoreForegroundService.legalModeEnableError(boardId)?.let { (code, message) ->
+            promise.reject(code, message, null)
+            return@launch
+          }
+          val jurisdictionCode = repository.getTypedSettings().legalPolicy?.get("jurisdictionCode")
+          if (jurisdictionCode == null || legalPolicyCatalog.speeds(jurisdictionCode) == null) {
+            promise.reject("LEGAL_POLICY_UNRESOLVED", "Resolved Legal Policy required", null)
+            return@launch
+          }
+        }
+        repository.updateLegalMode(boardId, enabled)
+        CoreForegroundService.reloadAlertRules(context.applicationContext)
+        promise.resolve(null)
+      }
     }
     AsyncFunction("updateSetting") Coroutine { key: String, value: Any? ->
       AppDataRepository.get(context.applicationContext).updateSetting(key, value)
       if (key == "liveHistoryLimit") {
         CoreForegroundService.setLiveHistoryLimit(value as? Number)
-      }
-      if (key == "legalMode") {
-        CoreForegroundService.reloadAlertRules(context.applicationContext)
       }
       if (
         key == "movingSpeedThresholdKmh" ||

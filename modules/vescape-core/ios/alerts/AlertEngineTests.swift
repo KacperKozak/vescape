@@ -66,7 +66,9 @@ final class AlertEngineTests: XCTestCase {
     let rules = withLegalModeOverlay(
       [rule()],
       boardId: "board-2",
-      rawSettings: ["enabled": false, "warningSpeedKmh": 15, "legalSpeedKmh": 20]
+      enabled: false,
+      warningSpeedKmh: 15,
+      limitSpeedKmh: 20
     )
 
     XCTAssertEqual(1, rules.count)
@@ -76,7 +78,9 @@ final class AlertEngineTests: XCTestCase {
     let rules = withLegalModeOverlay(
       [],
       boardId: "board-2",
-      rawSettings: ["enabled": true, "warningSpeedKmh": 15, "legalSpeedKmh": 20]
+      enabled: true,
+      warningSpeedKmh: 15,
+      limitSpeedKmh: 20
     )
 
     XCTAssertEqual(1, rules.count)
@@ -92,7 +96,9 @@ final class AlertEngineTests: XCTestCase {
     let rules = withLegalModeOverlay(
       [],
       boardId: "board-1",
-      rawSettings: ["enabled": true, "warningSpeedKmh": 24, "legalSpeedKmh": 30]
+      enabled: true,
+      warningSpeedKmh: 24,
+      limitSpeedKmh: 30
     )
 
     XCTAssertEqual(24, rules[0].threshold)

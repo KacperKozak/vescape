@@ -30,7 +30,7 @@ import { StepperWidget } from '@/components/widgets/StepperWidget'
 import { SwitchWidget } from '@/components/widgets/SwitchWidget'
 import { widgetSurface } from '@/components/widgets/widgetSurface'
 import { canRunFirmwareCommand } from '@/modules/board/lib/boardLinkIntegrity'
-import { legalPolicyFromReference, normalizeLegalModeSettings } from '@/modules/legal/lib/legalMode'
+import { legalPolicyFromReference } from '@/modules/legal/lib/legalMode'
 import { routes } from '@/navigation/routes'
 import { theme } from '@/constants/theme'
 import { useBleStore } from '@/modules/board/store/bleStore'
@@ -65,10 +65,12 @@ export function TuneDrawer({ onNavigate, onOpenLegalLimits }: TuneDrawerProps) {
   const profileCompatibility = useTuneProfileStore((state) => state.refloatBaseVersion)
   const loadProfiles = useTuneProfileStore((state) => state.loadProfiles)
   const setActiveProfile = useTuneProfileStore((state) => state.setActiveProfile)
-  const rawLegalMode = useSettingsStore((state) => state.legalMode)
+  const legalModeEnabled = useBoardStore(
+    (state) =>
+      state.boards.find((board) => board.id === state.activeBoardId)?.legalMode?.enabled ?? false,
+  )
   const legalPolicyReference = useSettingsStore((state) => state.legalPolicy)
   const setLegalModeEnabled = useLegalModeStore((state) => state.setEnabled)
-  const legalMode = useMemo(() => normalizeLegalModeSettings(rawLegalMode), [rawLegalMode])
   const legalPolicy = useMemo(
     () => legalPolicyFromReference(legalPolicyReference),
     [legalPolicyReference],
@@ -112,7 +114,7 @@ export function TuneDrawer({ onNavigate, onOpenLegalLimits }: TuneDrawerProps) {
   }
 
   const toggleLegalMode = (enabled: boolean) => {
-    void setLegalModeEnabled(enabled).catch(() => undefined)
+    if (activeBoardId) void setLegalModeEnabled(activeBoardId, enabled).catch(() => undefined)
   }
 
   const activeName =
@@ -221,7 +223,7 @@ export function TuneDrawer({ onNavigate, onOpenLegalLimits }: TuneDrawerProps) {
       <View style={styles.legalGroup}>
         <View style={styles.legalRow}>
           <LegalModeWidget
-            value={legalMode.enabled}
+            value={legalModeEnabled}
             description={legalModeDescription}
             warning={showLegalWarning}
             onValueChange={toggleLegalMode}
@@ -339,6 +341,7 @@ function LegalModeWidget({
       style={({ pressed }) => [
         styles.legalModeCell,
         styles.legalModeWidget,
+        value && styles.legalModeWidgetActive,
         pressed && styles.legalModeWidgetPressed,
       ]}
       accessibilityRole="switch"
@@ -488,6 +491,10 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 14,
     paddingHorizontal: 14,
+  },
+  legalModeWidgetActive: {
+    borderWidth: 1,
+    borderColor: theme.status.error.border,
   },
   legalModeWidgetPressed: {
     backgroundColor: theme.palette.slate.surface,
