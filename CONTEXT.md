@@ -208,6 +208,30 @@ _Avoid_: session log, BLE dump, trace
 A user-controlled app preference that affects app behavior across boards unless explicitly scoped elsewhere.
 _Avoid_: Option, config
 
+**Release Policy**:
+The app-version compatibility boundary that may identify the latest release, issue an Update Warning, impose an Online Block, or exceptionally impose an App Block.
+_Avoid_: Force Update, minimum version, version warning
+
+**Update Warning**:
+A Release Policy outcome that urges an affected app version to update without changing capability availability.
+_Avoid_: Online Block, update available, soft block
+
+**Online Block**:
+A Release Policy outcome that denies Online Capabilities for an affected app version while leaving local capabilities available.
+_Avoid_: Warning, soft block, server block
+
+**App Block**:
+An exceptional Release Policy outcome that requires an update before normal app UI continues without ending already-running Board work.
+_Avoid_: Force Update, hard block, kill switch
+
+**Community Message**:
+A server-authored, rider-facing communication that may inform, warn, or announce without changing capability availability.
+_Avoid_: Release warning, push notification, server error
+
+**Online Capability**:
+An app capability that depends on the Vescape server and remains separate from local Board, recording, history, and tuning capabilities.
+_Avoid_: Server feature, cloud feature, online mode
+
 **Diagnostic Event**:
 An app-observed abnormal condition that helps explain board connection, telemetry, tuning, recording, or UI failures.
 _Avoid_: Error log, debug session, crash report
@@ -300,6 +324,12 @@ _Avoid_: Position update, presence ping, location share, group telemetry
 - A **Watch Frame** is derived from **Live State** and is only pushed while a **Board Session** is producing **Telemetry Samples**.
 - A **Watch Alert** is pushed when an **Alert Rule** fires on the phone and does not re-evaluate any threshold on the **Watch Mirror**.
 - An **App Setting** affects app behavior and is not part of a **Tune Profile** or **Board** identity.
+- A **Release Policy** may issue an **Update Warning**, impose an **Online Block**, or impose an **App Block** for affected app versions.
+- An **Update Warning** does not change local or online capability availability.
+- An **Online Block** denies every **Online Capability** while preserving local app capabilities.
+- An **App Block** also denies every **Online Capability**, but does not end an already-running **Board Session** or **Ride Recording**.
+- A **Community Message** never changes whether an **Online Capability** is available.
+- A **Group Ride** is an **Online Capability**; a **Board Session**, **Ride Recording**, **Ride History**, and tuning are not.
 - A **Diagnostic Event** may describe failures around a **Board**, **Live State**, **Telemetry Sample**, **Ride Recording**, or **Tune Profile** workflow.
 - A **Group Ride** contains zero or more **Riders** and exists only while at least one **Rider** is present; it owns no durable truth and is never written to **Ride History**.
 - A **Rider** may be in at most one **Group Ride** at a time and is identified independently of any **Board**.
@@ -320,6 +350,9 @@ _Avoid_: Position update, presence ping, location share, group telemetry
 
 > **Dev:** "Does someone need to sign in before connecting a Board or recording a ride?"
 > **Domain expert:** "No. A Vescape Account is optional; local board and ride features remain available offline."
+
+> **Dev:** "If an Online Block applies to this app version, does the rider lose access to their Board?"
+> **Domain expert:** "No. Only Online Capabilities such as Group Ride are unavailable; local Board and ride capabilities remain available. An exceptional App Block may hide normal app UI, but it still does not end already-running Board work."
 
 ## Flagged Ambiguities
 
@@ -349,5 +382,8 @@ _Avoid_: Position update, presence ping, location share, group telemetry
 - "ride" may mean a personal persisted capture or a live shared room; resolved terms: use **Ride Recording** for the local persisted capture and **Group Ride** for the live shared room. The two are independent — a Rider can do either, both, or neither.
 - "presence" / "location share" may mean a one-off map dot or the live group feed; resolved term: use **Rider Presence** for what a **Rider** shares into a **Group Ride**.
 - "account", "profile", and "Rider" were used interchangeably; resolved: a **Vescape Account** is optional online identity, while a **Rider** remains an anonymous device-local Group Ride participant.
+- "force update" was used to mean both denying server compatibility and locking app UI; resolved terms: use **Online Block** for denying **Online Capabilities** and **App Block** for the exceptional update-only UI state.
+- "version warning" was used for both an update prompt and denial of server features; resolved terms: use **Update Warning** for the non-blocking prompt and **Online Block** when **Online Capabilities** are denied.
+- "message" may mean version compatibility or general communication; resolved: compatibility belongs to the **Release Policy**, while a **Community Message** never changes capability availability.
 - "posi switch" and "dual switch" refer to **Posi Sensor** mode in rider language; the firmware field name is an implementation detail.
 - "move board" may mean **Remote Tilt** or motor movement while disengaged; resolved term: use **Board Move** for deliberate app-driven movement of a disengaged Board.
