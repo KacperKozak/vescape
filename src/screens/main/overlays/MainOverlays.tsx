@@ -888,15 +888,11 @@ export function MainOverlays({
           ]}
         >
           <IconButton
-            icon={SlidersHorizontalIcon}
+            icon={legalModeActive ? SirenIcon : SlidersHorizontalIcon}
             size="lg"
+            accent={legalModeActive ? theme.status.error.color : undefined}
             onPress={() => setTuneDrawerOpen(true)}
           />
-          {legalModeActive ? (
-            <View style={styles.legalModeBadge}>
-              <SirenIcon size={13} color={theme.palette.mono.white} weight="fill" />
-            </View>
-          ) : null}
         </View>
         <EdgeDrawer
           visible={tuneDrawerOpen}
@@ -1680,19 +1676,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 12,
     zIndex: 20,
-  },
-  legalModeBadge: {
-    position: 'absolute',
-    top: -3,
-    right: -3,
-    width: 21,
-    height: 21,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.status.error.color,
-    borderWidth: 2,
-    borderColor: theme.palette.slate.surfaceDeep,
   },
   historyError: {
     position: 'absolute',
