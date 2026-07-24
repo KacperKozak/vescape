@@ -1097,6 +1097,85 @@ export interface BoardWarningsEvent {
   warnings: BoardWarning[]
 }
 
+/**
+ * Release Policy outcome for the installed marketing version, resolved **by the server**. Native
+ * never evaluates SemVer ranges and JS never sees one — both only carry the resolved slug.
+ * @parity /modules/vescape-core/ios/appstatus/AppStatus.swift `AppVersionStatus`
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/appstatus/AppStatus.kt `AppVersionStatus`
+ */
+export type AppVersionStatus = 'current' | 'update-warning' | 'online-blocked' | 'app-blocked'
+
+/**
+ * @parity /modules/vescape-core/ios/appstatus/AppStatus.swift `CommunityMessageType`
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/appstatus/AppStatus.kt `CommunityMessageType`
+ */
+export type CommunityMessageType = 'info' | 'warning' | 'critical'
+
+/**
+ * @parity /modules/vescape-core/ios/appstatus/AppStatus.swift `CommunityMessageActionType`
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/appstatus/AppStatus.kt `CommunityMessageActionType`
+ */
+export type CommunityMessageActionType = 'primary' | 'secondary'
+
+/**
+ * @parity /modules/vescape-core/ios/appstatus/AppStatus.swift `CommunityMessageAction`
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/appstatus/AppStatus.kt `CommunityMessageAction`
+ */
+export interface CommunityMessageAction {
+  type: CommunityMessageActionType
+  label: string
+  url: string
+}
+
+/**
+ * A server-authored announcement. Independent from Release Policy: a Community Message never
+ * changes whether a capability is available.
+ * @parity /modules/vescape-core/ios/appstatus/AppStatus.swift `CommunityMessage`
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/appstatus/AppStatus.kt `CommunityMessage`
+ */
+export interface CommunityMessage {
+  id: string
+  type: CommunityMessageType
+  /** Markdown body, rendered by `Markdown`. */
+  body: string
+  action: CommunityMessageAction | null
+}
+
+/**
+ * @parity /modules/vescape-core/ios/appstatus/AppStatus.swift `AppStatusVersion`
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/appstatus/AppStatus.kt `AppStatusVersion`
+ */
+export interface AppStatusVersion {
+  /** Installed marketing version the server resolved this status from. */
+  installed: string
+  /** Latest shared Android/iOS marketing version the server advertises. */
+  latest: string
+  status: AppVersionStatus
+  /** Server-authored Markdown for the matched rule; `null` when the rule carries none. */
+  message: string | null
+}
+
+/**
+ * One resolved App Status snapshot. Native holds it in memory for the running process only — it is
+ * never persisted, so a fresh process starts unknown (`null`) and fails open until a fetch lands.
+ * @parity /modules/vescape-core/ios/appstatus/AppStatus.swift `AppStatus`
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/appstatus/AppStatus.kt `AppStatus`
+ */
+export interface AppStatus {
+  version: AppStatusVersion
+  messages: CommunityMessage[]
+}
+
+/**
+ * Native App Status changed. Emitted on every successful refresh and replayed on subscribe, so a
+ * late listener is immediately consistent. `null` means no successful fetch in this process yet.
+ * @parity /modules/vescape-core/ios/VescapeCoreModule.swift `sendAppStatus`
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `onAppStatus`
+ */
+export interface AppStatusEvent {
+  status: AppStatus | null
+}
+
 export type CriticalRideNotificationPermissionStatus =
   | 'not-determined'
   | 'denied'
@@ -1141,6 +1220,8 @@ type VescapeCoreEvents = {
   onAppDataChanged: (event: AppDataChangedEvent) => void
   /** Full current Board Warning list for a board, on every registry change and on subscribe. */
   onBoardWarnings: (event: BoardWarningsEvent) => void
+  /** Native App Status, on every successful refresh and on subscribe. */
+  onAppStatus: (event: AppStatusEvent) => void
 }
 
 interface NativeEventEmitter<TEvents extends Record<string, (...args: never[]) => void>> {
@@ -1198,6 +1279,7 @@ type VescapeCoreNativeModule = NativeEventEmitter<VescapeCoreEvents> & {
   reportDiagnosticTest(): DiagnosticStatus
   getDiagnosticStatus(): DiagnosticStatus
   getLiveState(): LiveStateEvent
+  getAppStatus(): AppStatus | null
   getRemoteTiltState(): RemoteTiltState | null
   setSelectedBoard(boardId: string | null): void
   setCompanionPresenceEnabled(enabled: boolean): Promise<void>
@@ -1594,6 +1676,15 @@ export function getLiveState(): LiveStateEvent {
   return native.getLiveState()
 }
 
+/**
+ * Read the process's current App Status. `null` while no successful fetch has landed — the app
+ * fails open and behaves as `current`.
+ */
+export function getAppStatus(): AppStatus | null {
+  if (E2E_ENABLED) return null
+  return native.getAppStatus()
+}
+
 /** Read remote tilt without reseeding native telemetry into the JS history buffer. */
 export function getRemoteTiltState(): RemoteTiltState | null {
   if (E2E_ENABLED) return null
@@ -1981,6 +2072,10 @@ export function addBoardWarningsListener(
   cb: (event: BoardWarningsEvent) => void,
 ): EventSubscription {
   return emitter.addListener('onBoardWarnings', cb)
+}
+
+export function addAppStatusListener(cb: (event: AppStatusEvent) => void): EventSubscription {
+  return emitter.addListener('onAppStatus', cb)
 }
 
 export function addLiveStateListener(cb: (event: LiveStateEvent) => void): EventSubscription {

@@ -10,8 +10,10 @@ import { useTriggerRef } from '@/components/overlays/measureTrigger'
 import { IconHero } from '@/components/settings/IconHero'
 import { InfoModal } from '@/components/modals/InfoModal'
 import { TextPromptModal } from '@/components/modals/TextPromptModal'
+import { UpdateWarningModal } from '@/modules/release/components/UpdateWarningModal'
 import { ShowcaseCard } from '@/components/dev/ShowcaseCard'
 import { OpenButton, ToggleRow } from '@/components/dev/ShowcaseControls'
+import { DEFAULT_UPDATE_WARNING_MESSAGE } from '@/modules/release/constants/updateWarning'
 import { theme } from '@/constants/theme'
 
 function ConfirmModalShowcase() {
@@ -54,6 +56,41 @@ function InfoModalShowcase() {
         visible={visible}
         title="Motor Temperature"
         message="Measures heat at the motor stator. High temperatures reduce magnet strength and can damage winding insulation. Keep below 150°C for longevity."
+        onDismiss={() => setVisible(false)}
+      />
+    </ShowcaseCard>
+  )
+}
+
+const SERVER_UPDATE_MESSAGE = [
+  '## Update recommended',
+  '',
+  'A newer Vescape build is available with **improved BLE reconnect** and fresh Refloat presets.',
+  '',
+  '- Keeps you compatible with online features',
+  '- Fixes reported ride-history gaps',
+].join('\n')
+
+function UpdateWarningModalShowcase() {
+  const [visible, setVisible] = useState(false)
+  const [serverMessage, setServerMessage] = useState(true)
+
+  return (
+    <ShowcaseCard
+      name="UpdateWarningModal"
+      controls={
+        <>
+          <ToggleRow label="server message" value={serverMessage} onToggle={setServerMessage} />
+          <OpenButton onPress={() => setVisible(true)} />
+        </>
+      }
+    >
+      <Text style={styles.previewHint}>
+        Server Markdown, or the bundled default when the rule carries none
+      </Text>
+      <UpdateWarningModal
+        visible={visible}
+        message={serverMessage ? SERVER_UPDATE_MESSAGE : DEFAULT_UPDATE_WARNING_MESSAGE}
         onDismiss={() => setVisible(false)}
       />
     </ShowcaseCard>
@@ -231,10 +268,11 @@ export default function ModalsPage() {
       <ScrollView contentContainerStyle={styles.content}>
         <IconHero
           icon={SquaresFourIcon}
-          description="ConfirmModal, InfoModal, TextPromptModal, EdgeDrawer, FloatingSheet."
+          description="ConfirmModal, InfoModal, UpdateWarningModal, TextPromptModal, EdgeDrawer, FloatingSheet."
         />
         <ConfirmModalShowcase />
         <InfoModalShowcase />
+        <UpdateWarningModalShowcase />
         <TextPromptModalShowcase />
         <EdgeDrawerPositionShowcase
           edge="auto"

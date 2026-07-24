@@ -1,6 +1,7 @@
 package expo.modules.vescapecore
 
 import expo.modules.vescapecore.alerts.AlertFeedback
+import expo.modules.vescapecore.appstatus.AppStatusCoordinator
 import expo.modules.vescapecore.service.BoardProbeAutoStartGate
 import expo.modules.vescapecore.connection.BoardTransport
 import expo.modules.vescapecore.connection.BoardTransportDetector
@@ -119,7 +120,22 @@ class VescapeCoreModule : Module() {
       "onGroupRideError",
       "onAppDataChanged",
       "onBoardWarnings",
+      "onAppStatus",
     )
+
+    // Native owns App Status truth; JS mirrors it. Push every successful refresh (late subscribers
+    // pull the current snapshot below and through `getAppStatus`).
+    // @parity /modules/vescape-core/ios/VescapeCoreModule.swift `sendAppStatus`
+    // @parity /modules/vescape-core/src/index.ts `AppStatusEvent`
+    AppStatusCoordinator.get(context).onChange = { status ->
+      if (shouldEmitToFrontend("onAppStatus")) {
+        mainHandler.post {
+          if (shouldEmitToFrontend("onAppStatus")) {
+            sendEvent("onAppStatus", mapOf("status" to status?.toMap()))
+          }
+        }
+      }
+    }
 
     // JS keeps a dumb mirror of the durable Board Warning registry; push the full board list on
     // every registry change so late subscribers self-heal on the next emit (and on subscribe below).
@@ -181,11 +197,23 @@ class VescapeCoreModule : Module() {
       CoroutineScope(Dispatchers.IO).launch { BoardWarningRegistry.get(context).emitSnapshot() }
     }
     OnStopObserving("onBoardWarnings") { stopObserving("onBoardWarnings") }
+    OnStartObserving("onAppStatus") {
+      startObserving("onAppStatus")
+      sendEvent("onAppStatus", mapOf("status" to AppStatusCoordinator.get(context).current?.toMap()))
+    }
+    OnStopObserving("onAppStatus") { stopObserving("onAppStatus") }
+
+    OnCreate {
+      // Cold start: fetch App Status before JS asks. A foreground event arriving right after is
+      // coalesced into this request.
+      AppStatusCoordinator.get(context).refresh()
+    }
 
     OnActivityEntersForeground {
       frontendActive = true
       // User opened the app again — re-arm companion auto start immediately.
       CompanionRestartGate.clear(context.applicationContext)
+      AppStatusCoordinator.get(context).refresh()
     }
     OnActivityEntersBackground {
       frontendActive = false
@@ -200,6 +228,7 @@ class VescapeCoreModule : Module() {
       // module reachable (mirrors iOS OnDestroy nulling `onChange`). A fresh module re-attaches in
       // its own definition().
       BoardWarningRegistry.get(context).onChange = null
+      AppStatusCoordinator.get(context).onChange = null
       previewAlertFeedback?.release()
       previewAlertFeedback = null
       cancelActiveProbe(null, "module_destroyed")
@@ -254,6 +283,11 @@ class VescapeCoreModule : Module() {
     }
     Function("getLiveState") {
       liveStateWithScan(CoreForegroundService.currentLiveState(context.applicationContext))
+    }
+    // Last successful App Status for this process, or null while none has been fetched (fail-open).
+    // @parity /modules/vescape-core/ios/VescapeCoreModule.swift `getAppStatus`
+    Function("getAppStatus") {
+      AppStatusCoordinator.get(context).current?.toMap()
     }
     Function("getRemoteTiltState") {
       CoreForegroundService.currentRemoteTiltState()
