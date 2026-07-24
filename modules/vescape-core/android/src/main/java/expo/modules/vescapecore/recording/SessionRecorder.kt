@@ -12,7 +12,9 @@ import android.util.Log
 import org.json.JSONObject
 import java.io.File
 import java.io.FileWriter
+import java.io.InputStream
 
+// @parity /modules/vescape-core/ios/recording/SessionRecorder.swift `SessionRecorder`
 internal class SessionRecorder(context: Context, private val boardConfig: SessionConfig) {
     private val store = DebugRecordingStore(context)
     private val startedAt = System.currentTimeMillis()
@@ -95,6 +97,7 @@ internal class SessionRecorder(context: Context, private val boardConfig: Sessio
     }
 }
 
+// @parity /modules/vescape-core/ios/recording/SessionRecorder.swift `DebugRecordingStore`
 internal class DebugRecordingStore(private val context: Context) {
     private val dir: File
         get() = File(context.filesDir, "vesc-recordings").also { it.mkdirs() }
@@ -119,10 +122,22 @@ internal class DebugRecordingStore(private val context: Context) {
             ?.toList()
             ?: emptyList()
 
-    fun export(name: String): Map<String, Any> {
+    /** Stream a stored recording's `.jsonl` content, for replay (see `ReplayRecordings`). */
+    fun openStream(name: String): InputStream = resolve(name).inputStream()
+
+    /** Whether a valid recording name resolves to a stored file (no throw on absence). */
+    fun exists(name: String): Boolean =
+        File(name).name == name && name.endsWith(".jsonl") && File(dir, name).isFile
+
+    private fun resolve(name: String): File {
         require(File(name).name == name && name.endsWith(".jsonl")) { "Invalid debug recording name" }
         val source = File(dir, name)
         require(source.isFile) { "Debug recording not found" }
+        return source
+    }
+
+    fun export(name: String): Map<String, Any> {
+        val source = resolve(name)
 
         val exportDir = File(context.cacheDir, "debug-recording-exports").also { it.mkdirs() }
         val export = File(exportDir, name)
@@ -133,5 +148,9 @@ internal class DebugRecordingStore(private val context: Context) {
             "name" to export.name,
             "sizeBytes" to export.length(),
         )
+    }
+
+    fun delete(name: String) {
+        resolve(name).delete()
     }
 }

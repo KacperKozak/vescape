@@ -15,7 +15,6 @@
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE"/>
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
-  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING"/>
   <uses-permission android:name="android.permission.REQUEST_OBSERVE_COMPANION_DEVICE_PRESENCE"/>
   <uses-permission android:name="android.permission.REQUEST_COMPANION_START_FOREGROUND_SERVICES_FROM_BACKGROUND"/>
   <uses-permission android:name="android.permission.VIBRATE"/>
@@ -25,7 +24,7 @@
     <service
       android:name=".service.CoreForegroundService"
       android:exported="false"
-      android:foregroundServiceType="connectedDevice|location|remoteMessaging"/>
+      android:foregroundServiceType="connectedDevice|location"/>
     <service
       android:name=".service.BoardCompanionDeviceService"
       android:exported="true"

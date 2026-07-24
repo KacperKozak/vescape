@@ -20,6 +20,15 @@ export default function AboutScreen() {
         />
         <SettingsCard>
           <SettingsRow
+            icon={ShieldCheckIcon}
+            iconColor={theme.palette.cyan.color}
+            label="Privacy policy"
+            hint="Data, Group Ride sharing, and contact"
+            onPress={() => Linking.openURL(PRIVACY_POLICY_URL)}
+          />
+        </SettingsCard>
+        <SettingsCard>
+          <SettingsRow
             icon={CrownIcon}
             iconColor={theme.palette.sky.color}
             label="Kacper Kozak"
@@ -30,13 +39,6 @@ export default function AboutScreen() {
             iconColor={theme.palette.yellow.color}
             label="Bartosz Kozak"
             hint="One more feature, app will hold it."
-          />
-          <SettingsRow
-            icon={ShieldCheckIcon}
-            iconColor={theme.palette.cyan.color}
-            label="Privacy policy"
-            hint="Data, Group Ride sharing, and contact"
-            onPress={() => Linking.openURL(PRIVACY_POLICY_URL)}
           />
         </SettingsCard>
       </ScrollView>

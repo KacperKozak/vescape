@@ -220,6 +220,10 @@ _Avoid_: Group session, room, party, ride session, group ride recording
 An anonymous participant in **Group Rides**, identified by a persistent device-generated id plus a rider-chosen display name. Carries no login, account, or server-side identity record, and is not a **Board**. The same person on two phones is two Riders.
 _Avoid_: User, account, member, profile, friend
 
+**Vescape Account**:
+An optional online identity that never gates the app's local, offline-first capabilities or ownership of local data.
+_Avoid_: Rider profile, User, Profile
+
 **Rider Presence**:
 A **Rider's** live shared snapshot within a **Group Ride**: location and heading from the phone **GPS Fix**, plus optional speed and **Battery SoC Estimate** when a **Board Session** is live. Ephemeral and server-relayed, never persisted on phone or server, suppressed while the Rider is inside a **Privacy Zone**. A Rider with no recent Rider Presence goes stale, then drops from the Group Ride.
 _Avoid_: Position update, presence ping, location share, group telemetry
@@ -299,6 +303,7 @@ _Avoid_: Position update, presence ping, location share, group telemetry
 - A **Diagnostic Event** may describe failures around a **Board**, **Live State**, **Telemetry Sample**, **Ride Recording**, or **Tune Profile** workflow.
 - A **Group Ride** contains zero or more **Riders** and exists only while at least one **Rider** is present; it owns no durable truth and is never written to **Ride History**.
 - A **Rider** may be in at most one **Group Ride** at a time and is identified independently of any **Board**.
+- A **Vescape Account** is independent of a **Rider** and may enable optional online services such as backup, sync, or paid entitlements, but is not required to use local Boards, Ride Recording, Ride History, or tuning.
 - A **Rider Presence** belongs to one **Rider** in one **Group Ride**, derives location from a **GPS Fix** and optional speed/**Battery SoC Estimate** from a live **Board Session**, and is not produced while the Rider is inside a **Privacy Zone**.
 - A **Group Ride** requires only a phone **GPS Fix** to join; a **Board Session** is optional and only enriches a **Rider Presence**, never gates it.
 
@@ -312,6 +317,9 @@ _Avoid_: Position update, presence ping, location share, group telemetry
 
 > **Dev:** "Can I edit a Tune Profile without a connected board?"
 > **Domain expert:** "Yes. Editing and saving is local. Pushing to a board requires a live connection — the app must read the full config blob first to preserve unknown fields."
+
+> **Dev:** "Does someone need to sign in before connecting a Board or recording a ride?"
+> **Domain expert:** "No. A Vescape Account is optional; local board and ride features remain available offline."
 
 ## Flagged Ambiguities
 
@@ -340,5 +348,6 @@ _Avoid_: Position update, presence ping, location share, group telemetry
 - "pause" may mean stopping the **Board Session** versus temporarily halting sample persistence; resolved: **Idle Pause** halts **Ride Recording** sample persistence only — the **Board Session** stays connected and live at a reduced poll rate.
 - "ride" may mean a personal persisted capture or a live shared room; resolved terms: use **Ride Recording** for the local persisted capture and **Group Ride** for the live shared room. The two are independent — a Rider can do either, both, or neither.
 - "presence" / "location share" may mean a one-off map dot or the live group feed; resolved term: use **Rider Presence** for what a **Rider** shares into a **Group Ride**.
+- "account", "profile", and "Rider" were used interchangeably; resolved: a **Vescape Account** is optional online identity, while a **Rider** remains an anonymous device-local Group Ride participant.
 - "posi switch" and "dual switch" refer to **Posi Sensor** mode in rider language; the firmware field name is an implementation detail.
 - "move board" may mean **Remote Tilt** or motor movement while disengaged; resolved term: use **Board Move** for deliberate app-driven movement of a disengaged Board.

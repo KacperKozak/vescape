@@ -101,6 +101,7 @@ Rules:
 React Native UI conventions, including icon usage, live in `docs/agents/react.md`.
 Visual design language (colors, layout, typography) lives in `docs/design.md`.
 PostHog agent debugging commands live in `docs/agents/posthog.md`.
+Clerk production authentication setup and Android email-link debugging live in `docs/agents/clerk-auth.md`.
 Mapbox dependency patches and their native camera semantics live in `docs/agents/mapbox-patches.md`.
 Generated native state (`ios/`, `android/`, Pods) is kept in sync by `bun run ios` / `bun run android`; see `docs/agents/native-sync.md`.
 

@@ -34,8 +34,10 @@ Pod::Spec.new do |s|
   # percent. `cell-presets.json` is a symlink to the single shared source (../../../shared/data);
   # CocoaPods only copies resources under the pod root, and following the symlink keeps one source
   # of truth instead of a committed per-platform copy.
+  # `fixtures` is a symlink to `../../shared/fixtures` — bundled replay fixtures for the dev-mode
+  # Replay UI (#230), same single-source pattern as `cell-presets.json`.
   s.resource_bundles = {
-    'VescapeCoreAssets' => ['cell-presets.json', 'alerts/*.wav']
+    'VescapeCoreAssets' => ['cell-presets.json', 'alerts/*.wav', 'fixtures/*.jsonl']
   }
 
   s.test_spec 'Tests' do |test_spec|

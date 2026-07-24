@@ -47,8 +47,10 @@ import expo.modules.vescapecore.service.SessionConfig
 import expo.modules.vescapecore.service.TELEMETRY_STALE_MS
 import expo.modules.vescapecore.TargetPoint
 import expo.modules.vescapecore.service.VESC_SESSION_TAG
+import expo.modules.vescapecore.protocol.SessionTransport
 import expo.modules.vescapecore.protocol.VescGattClient
 import expo.modules.vescapecore.protocol.VescGattListener
+import expo.modules.vescapecore.replay.ReplayTransport
 import expo.modules.vescapecore.VescLiveStateSnapshot
 import expo.modules.vescapecore.protocol.VescPacketReassembler
 import expo.modules.vescapecore.watch.WatchMirrorLauncher
@@ -161,7 +163,7 @@ internal class BoardSessionController(private val service: CoreForegroundService
         transport = {
             if (boardStatus == BoardPhase.Connected && boardConfig != null) currentBoardTransport() else null
         },
-        send = { payload, urgent -> gattClient.sendRemoteTilt(payload, urgent) },
+        send = { payload, urgent -> transport.sendRemoteTilt(payload, urgent) },
     )
     private val notificationController by lazy {
         NotificationController(
@@ -326,6 +328,13 @@ internal class BoardSessionController(private val service: CoreForegroundService
             listener = gattListener,
         )
     }
+    /**
+     * Transport seam (ADR 0024): a replay session swaps in a [ReplayTransport] for its lifetime;
+     * everything else drives the real GATT client. Set in [beginSession], cleared in
+     * [stopCurrentBoardSession]. All controller↔link traffic goes through [transport].
+     */
+    private var replayTransport: ReplayTransport? = null
+    private val transport: SessionTransport get() = replayTransport ?: gattClient
 
     private val reconnectBlePort = ReconnectBleScanner(
         scanner = { bluetoothAdapter.bluetoothLeScanner },
@@ -380,7 +389,7 @@ internal class BoardSessionController(private val service: CoreForegroundService
             connectionCoordinator.clearPending()
             cancelBoardReadyTimeout()
             stopPolling()
-            gattClient.clear(markIntentional = false)
+            transport.clear(markIntentional = false)
             bmsSeriesRing.clear()
             telemetryPipeline.clearLiveTelemetry()
             directConnection = false
@@ -599,7 +608,6 @@ private var wearAutoLaunchOnConnect = true
             foregroundServiceTypeForConnectedDevicePromotion(
                 boardActive = boardConfig != null,
                 gpsActive = gpsMonitor.active,
-                groupRideObserveActive = groupRideObserver.active,
             ),
         )
     }
@@ -862,6 +870,15 @@ private var wearAutoLaunchOnConnect = true
         refreshLiveHistoryLimit()
         CoreForegroundService.reloadAlertRules(service.applicationContext)
         boardConfig = start.boardConfig
+        replayTransport = start.boardConfig.replayRecordingName?.let {
+            ReplayTransport(
+                context = service,
+                handler = mainHandler,
+                recordingName = it,
+                listener = gattListener,
+                dispatchListener = ::dispatchGattEvent,
+            )
+        }
         selectedBoardName = start.boardConfig.deviceName
         sessionSequence += 1
         val session = BoardSession(id = sessionSequence)
@@ -926,13 +943,13 @@ private var wearAutoLaunchOnConnect = true
         return foregroundServiceType(
             boardActive = boardConfig != null,
             gpsActive = gpsMonitor.active,
-            groupRideObserveActive = groupRideObserver.active,
         )
     }
 
     private fun reassertForeground() {
         val type = foregroundServiceType()
         if (type == 0) {
+            service.stopForeground(Service.STOP_FOREGROUND_REMOVE)
             stopIfIdle()
             return
         }
@@ -956,8 +973,7 @@ private var wearAutoLaunchOnConnect = true
         }
         val attempt = connectionCoordinator.markConnectStarting(start)
         reconnectScheduler.stopScan()
-        val device = bluetoothAdapter.getRemoteDevice(deviceId)
-        gattClient.connect(device)
+        transport.connect(deviceId)
         armConnectPhaseTimeout(start, "gatt_connect", GATT_CONNECT_TIMEOUT_MS)
         Log.d(
             VESC_SESSION_TAG,
@@ -1008,6 +1024,13 @@ private var wearAutoLaunchOnConnect = true
             if (!intentional) configController.onSessionTerminated("Board disconnected during Refloat config op")
             if (intentional) {
                 return
+            } else if (replayTransport != null) {
+                // A replay link cannot come back: the recording ran out. Reaching the end of a
+                // recording is not a failure — tear the session down cleanly to idle (same as a
+                // user Stop) so no "Board disconnected" error shows and the REPLAY badge/name
+                // clear, instead of stranding the UI in the error phase with a stale session
+                // (iOS parity: BoardSessionController.onGattDisconnected).
+                stopCurrentBoardSession(emitDisconnected = false)
             } else if (wasConnecting != null) {
                 if (
                     connectionCoordinator.retryStatus133Once(
@@ -1637,7 +1660,7 @@ private var wearAutoLaunchOnConnect = true
 
     private fun sendPayload(payload: ByteArray): Boolean {
         lastSentCommand = payload.getOrNull(0)?.toInt()?.and(0xff)
-        return gattClient.sendPayload(payload)
+        return transport.sendPayload(payload)
     }
 
     private fun firmwareCommandsTrusted(): Boolean =
@@ -1692,7 +1715,8 @@ private var wearAutoLaunchOnConnect = true
         reconnectScheduler.cancelAndReset()
         cancelBoardReadyTimeout()
         stopPolling()
-        gattClient.clear(markIntentional = true)
+        transport.clear(markIntentional = true)
+        replayTransport = null
         alertCoordinator.stopAllGeiger()
         recordingCoordinator.finishBoardSession(
             status = if (emitDisconnected) "disconnected" else "stopped",
@@ -1763,7 +1787,7 @@ private var wearAutoLaunchOnConnect = true
         connectionCoordinator.clearPending()
         cancelBoardReadyTimeout()
         stopPolling()
-        gattClient.clear(markIntentional = true)
+        transport.clear(markIntentional = true)
         setError(message)
         refreshNotification(errorMessage = message, force = true)
         recordingCoordinator.failSession()

@@ -901,11 +901,35 @@ export interface DatabaseBackupResult {
   sizeBytes: number
 }
 
-/** Raw BLE debug capture stored by the Android native module. */
+/** Raw BLE debug capture stored on-device by the native module. */
 export interface DebugRecording {
   name: string
   createdAt: number
   sizeBytes: number
+}
+
+/**
+ * Replay fixture bundled into app assets from `shared/fixtures/` (no capture timestamp).
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/replay/ReplayRecordings.kt `listBundled`
+ * @parity /modules/vescape-core/ios/replay/ReplayRecordings.swift `listBundled`
+ */
+export interface DebugFixture {
+  name: string
+  sizeBytes: number
+}
+
+/**
+ * Board-id prefix marking a native replay session (ADR 0024). The synthetic replay board id is
+ * `replay:<recording-name>`; JS derives all replay presentation (REPLAY badge) from this prefix
+ * instead of a parallel state flag.
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `startDebugReplay`
+ * @parity /modules/vescape-core/ios/connection/BoardSessionController.swift `startReplay`
+ */
+export const REPLAY_BOARD_ID_PREFIX = 'replay:'
+
+/** Whether a connected board id belongs to a dev-mode replay session. */
+export function isReplayBoardId(boardId: string | null | undefined): boolean {
+  return boardId?.startsWith(REPLAY_BOARD_ID_PREFIX) ?? false
 }
 
 // ---------------------------------------------------------------------------
@@ -1177,7 +1201,11 @@ type VescapeCoreNativeModule = NativeEventEmitter<VescapeCoreEvents> & {
   cancelBoardProbe(probeId: string): void
   setDebugRecordingEnabled(enabled: boolean): void
   listDebugRecordings(): Promise<DebugRecording[]>
+  listBundledDebugFixtures(): Promise<DebugFixture[]>
   exportDebugRecording(name: string): Promise<DatabaseBackupResult>
+  deleteDebugRecording(name: string): Promise<void>
+  startDebugReplay(name: string): Promise<void>
+  stopDebugReplay(): Promise<void>
   reportUiError(message: string, source?: string | null, stack?: string | null): void
   reportDiagnosticTest(): DiagnosticStatus
   getDiagnosticStatus(): DiagnosticStatus
@@ -1520,14 +1548,37 @@ export function setDebugRecordingEnabled(enabled: boolean): void {
   native.setDebugRecordingEnabled(enabled)
 }
 
-/** List locally retained raw BLE debug captures. Android only. */
+/** List locally retained raw BLE debug captures. */
 export async function listDebugRecordings(): Promise<DebugRecording[]> {
   return native.listDebugRecordings()
 }
 
-/** Copy a raw BLE debug capture to cache storage for sharing. Android only. */
+/** List replay fixtures bundled into app assets from `shared/fixtures/`. */
+export async function listBundledDebugFixtures(): Promise<DebugFixture[]> {
+  return native.listBundledDebugFixtures()
+}
+
+/** Copy a raw BLE debug capture to cache storage for sharing. */
 export async function exportDebugRecording(name: string): Promise<DatabaseBackupResult> {
   return native.exportDebugRecording(name)
+}
+
+/** Permanently delete a locally retained raw BLE debug capture. */
+export async function deleteDebugRecording(name: string): Promise<void> {
+  return native.deleteDebugRecording(name)
+}
+
+/**
+ * Dev mode: replay a Debug Recording through the real native session stack under a synthetic
+ * `replay:<name>` board id (ADR 0024). Ends like a disconnect when the recording runs out.
+ */
+export async function startDebugReplay(name: string): Promise<void> {
+  return native.startDebugReplay(name)
+}
+
+/** Dev mode: stop an active Debug Recording replay session (normal disconnect). */
+export async function stopDebugReplay(): Promise<void> {
+  return native.stopDebugReplay()
 }
 
 /** Report a JS view-layer failure. Native failures are reported at their own operation boundary. */

@@ -64,6 +64,9 @@ let package = Package(
         "VescapeCoreModule.swift",
         "VescapeCore.podspec",
         "protocol/VescGattClient.swift",
+        "replay/ReplayTransport.swift",
+        "replay/ReplayRecordings.swift",
+        "fixtures",
         "location/GpsMonitor.swift",
         "protocol/VescProtocolTests.swift",
         "notification/RideLiveActivityController.swift",
@@ -94,6 +97,8 @@ let package = Package(
         "config/RefloatXmlNode.swift",
         "location/GpsPrecision.swift",
         "protocol/VescProtocol.swift",
+        "replay/ReplayChunkDecoder.swift",
+        "recording/SessionRecorder.swift",
       ],
       resources: [
         .process("cell-presets.json"),
@@ -125,6 +130,12 @@ let package = Package(
         "config/ConfigRWControllerLinkIntegrityTests.swift",
         "connection/TransportDetectionTests.swift",
         "protocol/VescProtocolTests.swift",
+        "replay/WarningReplayHarnessTests.swift",
+        "replay/WarningReplayScenarioTests.swift",
+        "replay/NoBmsRideReplayTests.swift",
+        "replay/ConfigReplayHarness.swift",
+        "replay/ConfigReplayHarnessTests.swift",
+        "recording/SessionRecorderTests.swift",
       ]
     ),
   ]

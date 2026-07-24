@@ -1,10 +1,12 @@
+import { useLayoutEffect } from 'react'
 import { View, StyleSheet, ScrollView, Platform } from 'react-native'
 import { Text } from '@/components/base/Text'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { router } from 'expo-router'
+import { router, useNavigation } from 'expo-router'
 import Constants from 'expo-constants'
 import {
   BluetoothConnectedIcon,
+  BracketsCurlyIcon,
   CodeIcon,
   DatabaseIcon,
   InfoIcon,
@@ -17,12 +19,13 @@ import {
   GaugeIcon,
   WatchIcon,
   WarningIcon,
-  ImageSquareIcon,
+  MapTrifoldIcon,
 } from 'phosphor-react-native'
 
 import { routes } from '@/navigation/routes'
 import { theme } from '@/constants/theme'
 import { formatBytes } from '@/helpers/format'
+import { IconButton } from '@/components/base/IconButton'
 import { SettingsCard } from '@/components/settings/SettingsCard'
 import { SettingsRow } from '@/components/settings/SettingsRow'
 import { SettingsSectionTitle } from '@/components/settings/SettingsSectionTitle'
@@ -34,6 +37,19 @@ const appVersion = Constants.expoConfig?.version ?? '–'
 
 export default function SettingsScreen() {
   const db = useSettingsDatabaseOps()
+  const navigation = useNavigation()
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <IconButton
+          icon={BracketsCurlyIcon}
+          onPress={() => router.push(routes.settingsRawSettings)}
+          accessibilityLabel="Raw settings"
+        />
+      ),
+    })
+  }, [navigation])
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -88,11 +104,11 @@ export default function SettingsScreen() {
             onPress={() => router.push(routes.settingsDiagnostics)}
           />
           <SettingsRow
-            icon={ImageSquareIcon}
+            icon={MapTrifoldIcon}
             iconColor={theme.palette.sky.color}
-            label="Map visuals"
+            label="Map"
             hint="Map appearance and satellite imagery"
-            onPress={() => router.push(routes.settingsVisuals)}
+            onPress={() => router.push(routes.settingsMap)}
           />
         </SettingsCard>
 
@@ -147,13 +163,6 @@ export default function SettingsScreen() {
             label="Dev tools"
             hint="Diagnostics and local verification"
             onPress={() => router.push(routes.settingsDev)}
-          />
-          <SettingsRow
-            icon={DatabaseIcon}
-            iconColor={theme.status.warning.color}
-            label="Database"
-            hint="Back up, restore, and rebuild history"
-            onPress={() => router.push(routes.settingsDatabase)}
           />
           <SettingsRow
             icon={InfoIcon}

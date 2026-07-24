@@ -2,7 +2,9 @@ import type { Href } from 'expo-router'
 
 export const routes = {
   home: '/',
-  profile: '/profile',
+  profileStats: '/profile-stats',
+  signIn: '/sign-in',
+  account: '/account',
   settings: '/settings',
   settingsDev: '/settings/dev',
   settingsDebugRecordings: '/settings/debug-recordings' as Href,
@@ -32,7 +34,7 @@ export const routes = {
   settingsConnection: '/settings/connection' as Href,
   settingsDiagnostics: '/settings/diagnostics' as Href,
   settingsLiveTelemetry: '/settings/live-telemetry' as Href,
-  settingsVisuals: '/settings/visuals' as Href,
+  settingsMap: '/settings/map' as Href,
   settingsWatch: '/settings/watch' as Href,
   settingsFilters: '/settings/filters' as Href,
   settingsGraphs: '/settings/graphs' as Href,
@@ -42,7 +44,9 @@ export const routes = {
 
 export const stackScreens = {
   home: 'index',
-  profile: 'profile',
+  profileStats: 'profile-stats',
+  signIn: 'sign-in',
+  account: 'account',
   settings: 'settings',
   settingsDev: 'settings/dev',
   settingsDebugRecordings: 'settings/debug-recordings',
@@ -62,7 +66,7 @@ export const stackScreens = {
   settingsConnection: 'settings/connection',
   settingsDiagnostics: 'settings/diagnostics',
   settingsLiveTelemetry: 'settings/live-telemetry',
-  settingsVisuals: 'settings/visuals',
+  settingsMap: 'settings/map',
   settingsWatch: 'settings/watch',
   settingsFilters: 'settings/filters',
   settingsGraphs: 'settings/graphs',

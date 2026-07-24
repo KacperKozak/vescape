@@ -153,7 +153,7 @@ internal class BoardTransportDetector(
     handler.postDelayed({
       if (finished) return@postDelayed
       gatt.clear(markIntentional = true)
-      gatt.connect(device)
+      gatt.connect(device.address)
       armStep(DETECT_CONNECT_TIMEOUT_MS) {
         fail("PROBE_CONNECT_TIMEOUT", "Probe could not connect to the board")
       }
