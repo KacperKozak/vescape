@@ -11,8 +11,14 @@ internal class AlertCoordinator(private val feedback: () -> AlertFeedback) {
     private var activeGeigerRuleIds: Set<String> = emptySet()
 
     fun replaceRules(value: List<AlertRuleEntity>) {
-        // Rule removal must stop a running geiger now, not on the next telemetry sample.
-        stopAllGeiger()
+        val geigerRuleIds = value
+            .asSequence()
+            .filter { it.thresholdMax != null }
+            .mapTo(mutableSetOf()) { it.id }
+        for (ruleId in activeGeigerRuleIds - geigerRuleIds) {
+            feedback().stopGeiger(ruleId)
+        }
+        activeGeigerRuleIds = activeGeigerRuleIds.intersect(geigerRuleIds)
         rules = value
         engine.resetDebounce()
     }

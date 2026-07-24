@@ -27,6 +27,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 internal const val VESC_SESSION_TAG = "VescSession"
 internal const val ACTION_START_SESSION = "expo.modules.vescapecore.ACTION_START_SESSION"
@@ -92,6 +94,7 @@ class CoreForegroundService : Service() {
         internal var pendingGroupRideUrl: String? = null
         internal val appDataScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         private val alertRulesGeneration = AtomicLong(0)
+        private val alertRulesReloadMutex = Mutex()
 
         // Board Warning registry writes run on a single thread so a burst of findings (e.g. a
         // cell-spread warn then critical) commits its get-then-upsert pairs in submission order.
@@ -329,7 +332,9 @@ class CoreForegroundService : Service() {
         fun reloadAlertRules(context: Context) {
             val generation = alertRulesGeneration.incrementAndGet()
             appDataScope.launch {
-                instance?.controller?.loadAlertRules(context.applicationContext, generation)
+                alertRulesReloadMutex.withLock {
+                    instance?.controller?.loadAlertRules(context.applicationContext, generation)
+                }
             }
         }
 

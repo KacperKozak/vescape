@@ -33,6 +33,7 @@ import { canRunFirmwareCommand } from '@/modules/board/lib/boardLinkIntegrity'
 import { legalPolicyFromReference } from '@/modules/legal/lib/legalMode'
 import { routes } from '@/navigation/routes'
 import { theme } from '@/constants/theme'
+import { errorMessage } from '@/helpers/error'
 import { useBleStore } from '@/modules/board/store/bleStore'
 import { useBoardStore } from '@/modules/board/store/boardStore'
 import { useLegalModeStore } from '@/modules/legal/store/legalModeStore'
@@ -52,6 +53,7 @@ const AnimatedText = Animated.createAnimatedComponent(Text)
 export function TuneDrawer({ onNavigate, onOpenLegalLimits }: TuneDrawerProps) {
   const [tuneSelectOpen, setTuneSelectOpen] = useState(false)
   const [legalWarningOpen, setLegalWarningOpen] = useState(false)
+  const [legalModeError, setLegalModeError] = useState<string | null>(null)
   const activeBoardId = useBoardStore((state) => state.activeBoardId)
   const tuneCompatibility = useBoardStore(
     (state) =>
@@ -114,7 +116,10 @@ export function TuneDrawer({ onNavigate, onOpenLegalLimits }: TuneDrawerProps) {
   }
 
   const toggleLegalMode = (enabled: boolean) => {
-    if (activeBoardId) void setLegalModeEnabled(activeBoardId, enabled).catch(() => undefined)
+    if (!activeBoardId) return
+    void setLegalModeEnabled(activeBoardId, enabled).catch((error: unknown) => {
+      setLegalModeError(errorMessage(error, 'Could not change Legal Mode.'))
+    })
   }
 
   const activeName =
@@ -243,6 +248,14 @@ export function TuneDrawer({ onNavigate, onOpenLegalLimits }: TuneDrawerProps) {
         variant="warning"
         dismissLabel="Close"
         onDismiss={() => setLegalWarningOpen(false)}
+      />
+      <InfoModal
+        visible={legalModeError != null}
+        title="Legal Mode unavailable"
+        message={legalModeError ?? ''}
+        variant="danger"
+        dismissLabel="Close"
+        onDismiss={() => setLegalModeError(null)}
       />
     </View>
   )
