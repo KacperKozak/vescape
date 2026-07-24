@@ -46,7 +46,11 @@ export function UpdateWarningModal({ visible, message, onDismiss }: UpdateWarnin
       Animated.parallel([
         Animated.timing(opacity, { toValue: 0, duration: FADE_DURATION, useNativeDriver: true }),
         Animated.timing(scale, { toValue: 0.92, duration: FADE_DURATION, useNativeDriver: true }),
-      ]).start(() => setMounted(false))
+        // Ignore a cancelled fade-out: if `visible` flips back true mid-exit, the reopen animation
+        // stops this one with `finished: false` — unmounting then would hide the reopened modal.
+      ]).start(({ finished }) => {
+        if (finished) setMounted(false)
+      })
     }
   }, [visible, mounted, opacity, scale])
 
