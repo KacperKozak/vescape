@@ -10,5 +10,9 @@
  */
 export const SERVER_URL = process.env.EXPO_PUBLIC_SERVER_URL ?? 'https://vescape.app'
 
-/** The backend base as a WebSocket origin: `http`→`ws`, `https`→`wss`. */
-export const SERVER_WS_URL = SERVER_URL.replace(/^http/, 'ws')
+/** Build the dedicated Group Ride WebSocket endpoint from the backend origin. */
+export function toGroupRideWebSocketUrl(serverUrl: string) {
+  return `${serverUrl.replace(/^http/, 'ws').replace(/\/+$/, '')}/ws/group-rides`
+}
+
+export const SERVER_WS_URL = toGroupRideWebSocketUrl(SERVER_URL)
