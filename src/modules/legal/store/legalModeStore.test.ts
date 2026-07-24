@@ -1,10 +1,7 @@
 import { beforeEach, expect, mock, test } from 'bun:test'
 import type { AppSettings } from 'vescape-core'
 
-import {
-  DEFAULT_LEGAL_MODE_SETTINGS,
-  legalJurisdictionResultFromCountryCode,
-} from '@/modules/legal/lib/legalMode'
+import { DEFAULT_LEGAL_MODE_SETTINGS } from '@/modules/legal/lib/legalMode'
 
 const actualVescapeCore = await import('@/../modules/vescape-core/src/index')
 
@@ -40,6 +37,7 @@ const BASE: AppSettings = {
   riderId: null,
   riderName: null,
   riderColor: null,
+  legalPolicy: null,
   legalMode: DEFAULT_LEGAL_MODE_SETTINGS as unknown as Record<string, unknown>,
 }
 
@@ -69,74 +67,7 @@ test('enabling legal mode only persists its native App Setting', async () => {
 
   await useLegalModeStore.getState().setEnabled(true)
 
-  expect(updateSetting).toHaveBeenCalledWith(
-    'legalMode',
-    expect.objectContaining({ enabled: true }),
-  )
-})
-
-test('editing legal mode speeds persists the native overlay thresholds', async () => {
-  const { useLegalModeStore } = await import('@/modules/legal/store/legalModeStore')
-
-  await useLegalModeStore.getState().setEnabled(true)
-  await useLegalModeStore.getState().setSpeeds(30, 24)
-
-  expect(updateSetting).toHaveBeenLastCalledWith(
-    'legalMode',
-    expect.objectContaining({
-      enabled: true,
-      legalSpeedKmh: 30,
-      warningSpeedKmh: 24,
-      warningManuallyEdited: true,
-    }),
-  )
-})
-
-test('editing only the legal warning speed persists the native overlay threshold', async () => {
-  const { useLegalModeStore } = await import('@/modules/legal/store/legalModeStore')
-
-  await useLegalModeStore.getState().setEnabled(true)
-  await useLegalModeStore.getState().setWarningSpeed(18)
-
-  expect(updateSetting).toHaveBeenLastCalledWith(
-    'legalMode',
-    expect.objectContaining({
-      enabled: true,
-      legalSpeedKmh: 20,
-      warningSpeedKmh: 18,
-      warningManuallyEdited: true,
-    }),
-  )
-})
-
-test('re-enabling legal mode resets speeds to defaults when current jurisdiction is not applicable', async () => {
-  const { useLegalModeStore } = await import('@/modules/legal/store/legalModeStore')
-  const { useSettingsStore } = await import('@/modules/settings/store/settingsStore')
-
-  useSettingsStore.setState({
-    legalMode: {
-      ...DEFAULT_LEGAL_MODE_SETTINGS,
-      enabled: true,
-      legalSpeedKmh: 30,
-      warningSpeedKmh: 24,
-      warningManuallyEdited: true,
-      jurisdiction: legalJurisdictionResultFromCountryCode('DE'),
-    } as unknown as Record<string, unknown>,
-  })
-
-  await useLegalModeStore.getState().setEnabled(false)
-  await useLegalModeStore.getState().setEnabled(true)
-
-  expect(updateSetting).toHaveBeenLastCalledWith(
-    'legalMode',
-    expect.objectContaining({
-      enabled: true,
-      legalSpeedKmh: 20,
-      warningSpeedKmh: 15,
-      warningManuallyEdited: false,
-      jurisdiction: null,
-    }),
-  )
+  expect(updateSetting).toHaveBeenCalledWith('legalMode', { enabled: true })
 })
 
 test('disabling legal mode persists the disabled App Setting', async () => {
@@ -144,8 +75,5 @@ test('disabling legal mode persists the disabled App Setting', async () => {
 
   await useLegalModeStore.getState().setEnabled(false)
 
-  expect(updateSetting).toHaveBeenCalledWith(
-    'legalMode',
-    expect.objectContaining({ enabled: false }),
-  )
+  expect(updateSetting).toHaveBeenCalledWith('legalMode', { enabled: false })
 })

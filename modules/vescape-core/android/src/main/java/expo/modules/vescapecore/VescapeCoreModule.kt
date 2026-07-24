@@ -38,6 +38,7 @@ import expo.modules.vescapecore.telemetry.DatabaseBackupManager
 import expo.modules.vescapecore.telemetry.ProfileStatsRepository
 import expo.modules.vescapecore.telemetry.TELEMETRY_DATABASE_NAME
 import expo.modules.vescapecore.telemetry.TelemetryRepository
+import expo.modules.vescapecore.location.LegalPolicyResolver
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -74,6 +75,7 @@ class VescapeCoreModule : Module() {
   private val companionPresence by lazy {
     CompanionPresence(context.applicationContext, activityProvider = { appContext.currentActivity })
   }
+  private val legalPolicyResolver by lazy { LegalPolicyResolver(context.applicationContext) }
 
   private val context: Context get() = appContext.reactContext
     ?: throw IllegalStateException("No React context")
@@ -564,6 +566,20 @@ class VescapeCoreModule : Module() {
     }
     AsyncFunction("getSettings") {
       runBlocking { AppDataRepository.get(context.applicationContext).getSettings() }
+    }
+    // @parity /modules/vescape-core/ios/VescapeCoreModule.swift `refreshLegalPolicy`
+    // @parity /modules/vescape-core/src/index.ts `refreshLegalPolicy`
+    AsyncFunction("refreshLegalPolicy") Coroutine { ->
+      val repository = AppDataRepository.get(context.applicationContext)
+      val settings = repository.getTypedSettings()
+      val latitude = settings.lastGpsLatitude
+      val longitude = settings.lastGpsLongitude
+      val countryCode = if (latitude != null && longitude != null) {
+        legalPolicyResolver.resolve(latitude, longitude)
+      } else {
+        null
+      }
+      repository.updateLegalPolicy(countryCode)
     }
     AsyncFunction("updateSetting") Coroutine { key: String, value: Any? ->
       AppDataRepository.get(context.applicationContext).updateSetting(key, value)

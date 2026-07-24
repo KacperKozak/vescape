@@ -2,14 +2,14 @@
 
 Seed reference for Legal Mode jurisdiction defaults.
 
-This is not legal advice. Micromobility categories differ by country: Poland has **UTO**, France uses EDPM, Germany's eKFV covers e-scooters and Segways but not monowheels/hoverboards/electric skateboards, and some countries let cities add stricter rules. Use these values only as app defaults that the rider can edit.
+This is not legal advice. Micromobility categories differ by country: Poland has **UTO**, France uses EDPM, Germany's eKFV covers e-scooters and Segways but not monowheels/hoverboards/electric skateboards, and some countries let cities add stricter rules. These values are bundled Legal Policy catalog data, not rider-editable settings.
 
 Legal Mode needs two separate ideas:
 
 - **Legal Speed Limit**: the speed value used by the app for warning/limit controls.
 - **Legal Road Status**: whether the board category appears road-legal in that jurisdiction.
 
-A country can have a useful speed default while still being not road-legal for this board category. In that case, keep the speed controls visible and show a warning badge on the Legal Mode icon.
+A country can have a useful speed reference while still being not road-legal for this board category. Show that status without treating the speed as permission to ride.
 
 Sources checked on 2026-07-17:
 
@@ -22,9 +22,8 @@ Sources checked on 2026-07-17:
 
 - If `legalRoadStatus` is `notRoadLegal` or `restricted`, show a red warning mark on the Legal Mode icon.
 - Tapping the warning opens a short explanation of why the status is risky or not road-legal.
-- Do not hide the speed controls when status is warned. Riders still need warning/limit tools even where the vehicle category is not fully legal.
-- For not-road-legal or unknown countries, use the nearest regulated micromobility limit (for example, e-scooters or the local small-electric-vehicle class) as the editable safety-control speed while showing the warning/status clearly.
-- For numeric legal speed countries, default warning speed remains `legalSpeedKmh - 5`.
+- For not-road-legal or unknown countries, show the nearest regulated micromobility reference speed with the warning/status clearly.
+- For numeric legal speed countries, warning speed remains `legalSpeedKmh - 5`.
 
 ## GPS Lookup Rules
 
@@ -32,7 +31,7 @@ Sources checked on 2026-07-17:
 - Run jurisdiction lookup only once when the app has a usable GPS/country signal and no saved Legal Mode jurisdiction result exists.
 - Persist the resolved jurisdiction result so app restart reuses it without another lookup.
 - A later explicit rider action may refresh jurisdiction, but passive UI rendering must not poll GPS or re-run lookup.
-- Legal Mode UI should re-render only when the saved jurisdiction result changes or the rider edits Legal Mode values.
+- Legal Mode UI should re-render when the saved jurisdiction reference changes.
 
 ## Seed Table
 
@@ -74,10 +73,9 @@ Sources checked on 2026-07-17:
 
 ## Implementation Notes
 
-- Keep Legal Mode out of map internals. The map may show Legal Mode controls or badges, but jurisdiction data and saved Legal Mode settings live under `src/modules/legal/lib/legalMode.ts` and `src/modules/legal/store/legalModeStore.ts`.
-- Native reads the durable Legal Mode App Setting and synthesizes its geiger speed rule in memory. It does not materialize a row in `alerts`, so the overlay applies to every connected Board and continues with JS suspended.
-- Treat `legalRoadStatus` separately from numeric speed defaults. A `notRoadLegal` status still gets editable speed controls.
-- Use country-level GPS only as a suggestion. The rider must be able to override values because city rules can be stricter.
+- `shared/data/legal-policies.json` is the single catalog consumed by JS, Android, and iOS.
+- Native reverse geocodes the first usable GPS fix when no jurisdiction is stored and persists only `legalPolicy: { jurisdictionCode }` in App Settings.
+- JS reads that reference plus the shared catalog for presentation and can request an explicit native refresh; it does not resolve or persist jurisdiction.
+- Treat `legalRoadStatus` separately from numeric speed references.
 - Start with country code lookup. Avoid municipality-level geofencing until there is a sourced city-rule dataset and a privacy review.
-- Keep source URL and checked date with each record if this table becomes code data.
-- Persist the chosen jurisdiction/default result with enough metadata to avoid repeat lookups on every render/startup.
+- Keep source URL and checked date with each catalog record.

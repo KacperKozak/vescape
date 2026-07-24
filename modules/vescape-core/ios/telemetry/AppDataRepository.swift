@@ -463,6 +463,8 @@ final class AppDataRepository {
   }
 
   func updateSetting(_ key: String, rawValue: Any?) {
+    // Legal Policy is native-owned. JS can request refresh through the dedicated intent.
+    guard key != "legalPolicy" else { return }
     let updatedAt = nowMs()
     guard let rawValue, !(rawValue is NSNull) else {
       write { db in try db.execute(sql: "DELETE FROM app_settings WHERE key = ?", arguments: [key]) }
@@ -500,6 +502,24 @@ final class AppDataRepository {
     notifyDataChanged(.settings)
   }
 
+  /// Persist only the resolved jurisdiction reference; policy values stay in the shared catalog.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/AppDataRepository.kt `updateLegalPolicy`
+  func updateLegalPolicy(jurisdictionCode: String?) {
+    let code = jurisdictionCode?.trimmingCharacters(in: .whitespaces).uppercased()
+    let value = code.flatMap { $0.count == 2 ? ["jurisdictionCode": $0] : nil }
+    write { db in
+      guard let value, let json = Self.encodeJson(value) else {
+        try db.execute(sql: "DELETE FROM app_settings WHERE key = 'legalPolicy'")
+        return
+      }
+      try db.execute(
+        sql: "INSERT OR REPLACE INTO app_settings (key, value_json, updated_at) VALUES (?, ?, ?)",
+        arguments: ["legalPolicy", json, self.nowMs()]
+      )
+    }
+    notifyDataChanged(.settings)
+  }
+
   // MARK: - Shared pure helpers (also used by VescapeCoreModule bridge glue)
 
   static let defaultSettings: [String: Any] = [
@@ -519,6 +539,7 @@ final class AppDataRepository {
     "riderColor": NSNull(),
     "lastGpsLatitude": NSNull(),
     "lastGpsLongitude": NSNull(),
+    "legalPolicy": NSNull(),
     "legalMode": NSNull(),
     "movingSpeedThresholdKmh": 3,
     "freeSpinMaxSpeedDeltaKmh": DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH,
@@ -550,7 +571,17 @@ final class AppDataRepository {
       satelliteImageryOpacity(settings["satelliteMapImageryOpacity"]) ?? defaultSettings["satelliteMapImageryOpacity"]
     normalized["satelliteImagerySaturation"] =
       satelliteImagerySaturation(settings["satelliteImagerySaturation"]) ?? defaultSettings["satelliteImagerySaturation"]
+    normalized["legalPolicy"] = normalizeLegalPolicy(settings["legalPolicy"]) ?? NSNull()
     return normalized
+  }
+
+  private static func normalizeLegalPolicy(_ raw: Any?) -> [String: String]? {
+    guard
+      let value = raw as? [String: Any],
+      let rawCode = value["jurisdictionCode"] as? String
+    else { return nil }
+    let code = rawCode.trimmingCharacters(in: .whitespaces).uppercased()
+    return code.count == 2 ? ["jurisdictionCode": code] : nil
   }
 
   /// Display default Board Top Speed in km/h, applied when a Board has no `topSpeedKmh` setting.

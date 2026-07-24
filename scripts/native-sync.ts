@@ -135,7 +135,7 @@ export function podsFingerprint(root = ROOT): Fingerprint {
 }
 
 /**
- * `shared/` is the single source of truth for alert audio and cell presets. Android needs real
+ * `shared/` is the single source of truth for alert audio and shared data catalogs. Android needs real
  * copies of it inside the module (Gradle cannot follow a symlink out of the module), so those copies
  * are generated state that drifts whenever `shared/` changes — or whenever someone deletes them.
  */

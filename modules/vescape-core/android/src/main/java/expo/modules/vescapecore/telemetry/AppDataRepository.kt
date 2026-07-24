@@ -260,6 +260,7 @@ class AppDataRepository private constructor(private val context: Context) {
       riderId = opt("riderId") { it as? String },
       riderName = opt("riderName") { it as? String },
       riderColor = opt("riderColor") { it as? String },
+      legalPolicy = opt("legalPolicy", ::normalizeLegalPolicy),
       legalMode = opt("legalMode") { it.asStringKeyMap() },
     )
 
@@ -328,6 +329,8 @@ class AppDataRepository private constructor(private val context: Context) {
       "autoCloseDelayMinutes" ->
         validAutoCloseDelayMinutes(value) ?: return@withContext
       "riderId", "riderName", "riderColor" -> value as? String
+      // Legal Policy is native-owned. JS can request refresh through the dedicated intent.
+      "legalPolicy" -> return@withContext
       "legalMode" ->
         if (value == null || value == JSONObject.NULL) null
         else value.asStringKeyMap() ?: return@withContext
@@ -373,6 +376,7 @@ class AppDataRepository private constructor(private val context: Context) {
         "riderId" -> d.riderId
         "riderName" -> d.riderName
         "riderColor" -> d.riderColor
+        "legalPolicy" -> d.legalPolicy
         "legalMode" -> d.legalMode
         else -> null
       }
@@ -395,6 +399,27 @@ class AppDataRepository private constructor(private val context: Context) {
     val now = System.currentTimeMillis()
     dao.upsertAppSetting(AppSettingEntity("lastGpsLatitude", encodeSettingJson(latitude), now))
     dao.upsertAppSetting(AppSettingEntity("lastGpsLongitude", encodeSettingJson(longitude), now))
+    notifyDataChanged(AppDataScope.SETTINGS)
+  }
+
+  /**
+   * Persist only the resolved jurisdiction reference; policy values stay in the shared catalog.
+   *
+   * @parity /modules/vescape-core/ios/telemetry/AppDataRepository.swift `updateLegalPolicy`
+   */
+  suspend fun updateLegalPolicy(jurisdictionCode: String?): Unit = withContext(Dispatchers.IO) {
+    val normalized = jurisdictionCode?.trim()?.uppercase()?.takeIf { it.length == 2 }
+    if (normalized == null) {
+      dao.deleteAppSetting("legalPolicy")
+    } else {
+      dao.upsertAppSetting(
+        AppSettingEntity(
+          key = "legalPolicy",
+          valueJson = encodeSettingJson(mapOf("jurisdictionCode" to normalized)),
+          updatedAt = System.currentTimeMillis(),
+        ),
+      )
+    }
     notifyDataChanged(AppDataScope.SETTINGS)
   }
 
@@ -660,8 +685,18 @@ fun AppSettings.toMap(): Map<String, Any?> = mapOf(
   "riderId" to riderId,
   "riderName" to riderName,
   "riderColor" to riderColor,
+  "legalPolicy" to legalPolicy,
   "legalMode" to legalMode,
 )
+
+private fun normalizeLegalPolicy(raw: Any): Map<String, String>? {
+  val code = (raw.asStringKeyMap()?.get("jurisdictionCode") as? String)
+    ?.trim()
+    ?.uppercase()
+    ?.takeIf { it.length == 2 }
+    ?: return null
+  return mapOf("jurisdictionCode" to code)
+}
 
 internal fun encodeSettingJson(value: Any?): String {
   val arr = JSONArray()

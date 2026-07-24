@@ -46,13 +46,17 @@ const DEFAULTS: AppSettings = {
   riderId: null,
   riderName: null,
   riderColor: null,
+  legalPolicy: null,
   legalMode: DEFAULT_LEGAL_MODE_SETTINGS as unknown as Record<string, unknown>,
 }
 
 interface SettingsState extends AppSettings {
   loaded: boolean
   load: () => Promise<void>
-  set: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => Promise<void>
+  set: <K extends Exclude<keyof AppSettings, 'legalPolicy'>>(
+    key: K,
+    value: AppSettings[K],
+  ) => Promise<void>
   setLegalMode: (value: LegalModeSettings) => Promise<void>
   setCompanionPresence: (enabled: boolean) => Promise<void>
 }

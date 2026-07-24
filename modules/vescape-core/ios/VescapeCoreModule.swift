@@ -56,6 +56,7 @@ public class VescapeCoreModule: Module {
   // MARK: - App data state
 
   private let appData = AppDataRepository.shared
+  private let legalPolicyResolver = LegalPolicyResolver()
 
   /// Bundled alert sounds surfaced to JS through `getAlertSounds`. Mirrors Android
   /// `alertSoundPresetMaps()`.
@@ -667,6 +668,23 @@ public class VescapeCoreModule: Module {
 
     AsyncFunction("getSettings") { (promise: Promise) in
       promise.resolve(self.appData.getSettings())
+    }
+
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `refreshLegalPolicy`
+    // @parity /modules/vescape-core/src/index.ts `refreshLegalPolicy`
+    AsyncFunction("refreshLegalPolicy") { (promise: Promise) in
+      let settings = self.appData.getSettings()
+      let latitude = settings["lastGpsLatitude"] as? Double
+      let longitude = settings["lastGpsLongitude"] as? Double
+      Task {
+        let countryCode = if let latitude, let longitude {
+          await self.legalPolicyResolver.resolve(latitude: latitude, longitude: longitude)
+        } else {
+          nil
+        }
+        self.appData.updateLegalPolicy(jurisdictionCode: countryCode)
+        promise.resolve(nil)
+      }
     }
 
     // JS sends the raw setting value (bool/number/string/object/null), matching Android's

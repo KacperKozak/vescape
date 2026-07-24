@@ -790,6 +790,10 @@ export interface ProfileStatsMonth {
   month: number
 }
 
+export interface LegalPolicyReference {
+  jurisdictionCode: string
+}
+
 export interface AppSettings {
   liveHistoryLimit: number
   autoConnect: boolean
@@ -878,6 +882,8 @@ export interface AppSettings {
   riderName: string | null
   /** Rider-chosen marker color (hex) shown on other Riders' maps. Null when unset. */
   riderColor: string | null
+  /** Native-resolved app-wide jurisdiction reference. Policy values live in shared catalog data. */
+  legalPolicy: LegalPolicyReference | null
   /** Durable Legal Mode UI/default state. JS owns behavior; native only persists this bag. */
   legalMode: Record<string, unknown> | null
 }
@@ -1305,6 +1311,7 @@ type VescapeCoreNativeModule = NativeEventEmitter<VescapeCoreEvents> & {
   replaceDirectionMapPoint(point: MapPoint): Promise<void>
   deleteMapPoint(id: string): Promise<void>
   getSettings(): Promise<AppSettings>
+  refreshLegalPolicy(): Promise<void>
   updateSetting(
     key: string,
     value: number | boolean | string | Record<string, unknown> | null,
@@ -1955,6 +1962,15 @@ export async function getSettings(): Promise<AppSettings> {
     return e2eFake.getSettings()
   }
   return native.getSettings()
+}
+
+/**
+ * @parity /modules/vescape-core/ios/VescapeCoreModule.swift `refreshLegalPolicy`
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `refreshLegalPolicy`
+ */
+export async function refreshLegalPolicy(): Promise<void> {
+  if (E2E_ENABLED) return
+  return native.refreshLegalPolicy()
 }
 
 export async function updateSetting(

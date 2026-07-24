@@ -78,6 +78,7 @@ const e2eSettings: AppSettings = {
   riderId: null,
   riderName: null,
   riderColor: null,
+  legalPolicy: null,
   legalMode: null,
 }
 

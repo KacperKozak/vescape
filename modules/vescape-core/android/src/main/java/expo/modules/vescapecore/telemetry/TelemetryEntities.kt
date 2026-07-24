@@ -392,6 +392,7 @@ data class AppSettings(
   val riderId: String? = null,
   val riderName: String? = null,
   val riderColor: String? = null,
+  val legalPolicy: Map<String, String>? = null,
   val legalMode: Map<String, Any?>? = null,
 )
 
