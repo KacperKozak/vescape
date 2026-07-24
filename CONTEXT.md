@@ -148,12 +148,16 @@ _Avoid_: Deck disturbance, rider lean, foot pressure, throttle, acceleration com
 A footpad sensor mode that treats both sensor zones as one engagement zone.
 _Avoid_: Posi switch, dual switch
 
+**Legal Policy**:
+The jurisdiction rules currently applicable across Boards, including the Legal Speed Limit, Legal Warning Speed, and Legal Road Status.
+_Avoid_: Legal Mode policy, legal settings
+
 **Legal Mode**:
-A rider-selected mode that prepares a Board to meet a chosen legal limit through mandatory speed-warning feedback and optional board-enforced speed constraint.
-_Avoid_: Police mode, cop mode, inspection mode
+A durable per-Board choice to apply the current Legal Policy through mandatory speed warnings and board-enforced constraints.
+_Avoid_: Legal Policy, Police mode, cop mode, inspection mode
 
 **Legal Speed Limit**:
-The target maximum riding speed used by Legal Mode, either rider-entered or suggested from a jurisdiction.
+The jurisdiction-defined target maximum riding speed in the current Legal Policy.
 _Avoid_: Max board speed, engine limit
 
 **Board Top Speed**:
@@ -161,7 +165,7 @@ The rider-entered maximum speed the rider rides a specific **Board** at, held pe
 _Avoid_: Rider Top Speed (former profile-level name), Legal Speed Limit, max board speed, speed cap
 
 **Legal Warning Speed**:
-The speed at which Legal Mode starts audible warning feedback before the Legal Speed Limit is reached.
+The jurisdiction-defined speed in the current Legal Policy at which Legal Mode starts audible warning feedback before the Legal Speed Limit is reached.
 _Avoid_: Alert threshold, warning threshold
 
 **Legal Road Status**:
@@ -294,10 +298,10 @@ _Avoid_: Position update, presence ping, location share, group telemetry
 - A **Tune Preview** derives an idealized board-angle response from one **Tune Profile** and never predicts whether the **Board** can physically achieve it.
 - A **Pitch Input** adds pitch error over time without directly commanding speed or motor power.
 - A **Posi Sensor** setting belongs to a **Tune Profile** when the board firmware exposes that Refloat field.
-- **Legal Mode** applies to one **Board** and combines tune-level constraints with **Alert Rules** when activated.
-- **Legal Mode** has one **Legal Speed Limit** and one **Legal Warning Speed**.
-- A **Legal Warning Speed** must be lower than its **Legal Speed Limit**.
-- A **Legal Road Status** may warn the rider without removing **Legal Speed Limit** controls.
+- One current **Legal Policy** is selected automatically from the first resolvable GPS Fix, changes only on explicit refresh, and applies to every Board without per-Board snapshots.
+- **Legal Mode** belongs to one **Board**, requires a resolved **Legal Policy** plus a live **Board Session** with trusted link integrity to enable, and remains enabled until explicitly disabled.
+- **Legal Mode** can always be disabled, even when its Board is disconnected or no **Legal Policy** is available.
+- A **Legal Warning Speed** is lower than its **Legal Speed Limit**; **Legal Road Status** may warn without removing Legal Mode.
 - A **Board Move** requires a live **Board Session** but must not be treated as riding.
 - **Board Move**, light controls, tune writes, and quick tune controls are **Firmware-Dependent Commands**.
 - A **Board Warning** belongs to one **Board** and one problem kind; re-detection updates the existing warning instead of creating another.
