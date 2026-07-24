@@ -1,5 +1,6 @@
 import ExpoModulesCore
 import Foundation
+import UIKit
 import UserNotifications
 
 private final class ActiveBoardProbe {
@@ -269,6 +270,17 @@ public class VescapeCoreModule: Module {
     // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `getAppStatus`
     Function("getAppStatus") { () -> [String: Any?]? in
       AppStatusCoordinator.shared.current?.toMap()
+    }
+
+    // Stable Vescape route keeps the app decoupled from the final store destination.
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `openAppUpdate`
+    // @platform-diff iOS uses the stable iOS download route.
+    // @parity /modules/vescape-core/src/index.ts `openAppUpdate`
+    Function("openAppUpdate") {
+      guard let url = URL(string: "https://vescape.app/download/ios") else { return }
+      DispatchQueue.main.async {
+        UIApplication.shared.open(url)
+      }
     }
 
     // MARK: Board session

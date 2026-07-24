@@ -5,6 +5,7 @@ import {
   BroadcastIcon,
   CaretDownIcon,
   GearSixIcon,
+  GiftIcon,
   PencilSimpleIcon,
   PowerIcon,
   UsersThreeIcon,
@@ -21,13 +22,15 @@ import { AccountWidget } from '@/modules/profile/components/AccountWidget'
 import { BoardWarningControl } from '@/modules/board/components/BoardWarningControl'
 import { ReplayBadge } from '@/modules/board/components/ReplayBadge'
 import { useBleStore } from '@/modules/board/store/bleStore'
-import { isReplayBoardId } from 'vescape-core'
+import { isReplayBoardId, openAppUpdate } from 'vescape-core'
 import { isNightAtTime } from '@/modules/weather/lib/weather'
 import { routes } from '@/navigation/routes'
 import type { Board } from '@/modules/board/store/boardStore'
 import { useGroupRideStore } from '@/modules/group-ride/store/groupRideStore'
 import { useWeatherStore } from '@/modules/weather/store/weatherStore'
 import { theme } from '@/constants/theme'
+import { selectAvailableUpdate } from '@/modules/release/lib/availableUpdate'
+import { useAppStatusStore } from '@/modules/release/store/appStatusStore'
 
 interface TopBarProps {
   boards: Board[]
@@ -62,6 +65,8 @@ export function TopBar({
   const weatherCode = useWeatherStore((s) => s.weatherCode)
   const weatherTemp = useWeatherStore((s) => s.temperature)
   const weatherPrecip = useWeatherStore((s) => s.precipitationProbability)
+  const appStatus = useAppStatusStore((s) => s.status)
+  const availableUpdate = selectAvailableUpdate(appStatus)
   const sunrise = useWeatherStore((s) => s.sunrise)
   const sunset = useWeatherStore((s) => s.sunset)
   const hasWeather = weatherCode != null && weatherTemp != null
@@ -139,9 +144,11 @@ export function TopBar({
           {activeBoardId && <BoardWarningControl boardId={activeBoardId} />}
         </View>
         <IconButton
-          icon={GearSixIcon}
-          onPress={() => router.push(routes.settings)}
+          icon={availableUpdate ? GiftIcon : GearSixIcon}
+          onPress={() => (availableUpdate ? openAppUpdate() : router.push(routes.settings))}
           onLongPress={() => router.push(routes.settingsComponents)}
+          accent={availableUpdate ? theme.status.upgrade.color : undefined}
+          accessibilityLabel={availableUpdate ? 'Update Vescape' : 'Settings'}
           style={styles.iconRight}
         />
       </View>

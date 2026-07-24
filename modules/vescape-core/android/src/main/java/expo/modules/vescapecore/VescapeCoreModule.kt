@@ -25,7 +25,9 @@ import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -288,6 +290,16 @@ class VescapeCoreModule : Module() {
     // @parity /modules/vescape-core/ios/VescapeCoreModule.swift `getAppStatus`
     Function("getAppStatus") {
       AppStatusCoordinator.get(context).current?.toMap()
+    }
+    // Stable Vescape route keeps the app decoupled from the final store destination.
+    // @parity /modules/vescape-core/ios/VescapeCoreModule.swift `openAppUpdate`
+    // @platform-diff Android uses the stable Android download route.
+    // @parity /modules/vescape-core/src/index.ts `openAppUpdate`
+    Function("openAppUpdate") {
+      context.startActivity(
+        Intent(Intent.ACTION_VIEW, Uri.parse("https://vescape.app/download/android"))
+          .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+      )
     }
     Function("getRemoteTiltState") {
       CoreForegroundService.currentRemoteTiltState()

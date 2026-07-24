@@ -32,12 +32,18 @@ import { SettingsSectionTitle } from '@/components/settings/SettingsSectionTitle
 import { IconHero } from '@/components/settings/IconHero'
 import { VescapeWordmark } from '@/components/base/VescapeWordmark'
 import { useSettingsDatabaseOps } from '@/modules/settings/hooks/useSettingsDatabaseOps'
+import { UpdateAvailablePill } from '@/modules/release/components/UpdateAvailablePill'
+import { selectAvailableUpdate } from '@/modules/release/lib/availableUpdate'
+import { useAppStatusStore } from '@/modules/release/store/appStatusStore'
+import { openAppUpdate } from 'vescape-core'
 
 const appVersion = Constants.expoConfig?.version ?? '–'
 
 export default function SettingsScreen() {
   const db = useSettingsDatabaseOps()
   const navigation = useNavigation()
+  const appStatus = useAppStatusStore((state) => state.status)
+  const availableUpdate = selectAvailableUpdate(appStatus)
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -55,6 +61,12 @@ export default function SettingsScreen() {
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
         <IconHero media={<VescapeWordmark width={200} />}>
+          {availableUpdate ? (
+            <UpdateAvailablePill
+              latestVersion={availableUpdate.latestVersion}
+              onPress={openAppUpdate}
+            />
+          ) : null}
           <View style={styles.headerStats}>
             <View style={styles.headerItem}>
               <TagIcon size={14} color={theme.palette.sky.color} weight="duotone" />

@@ -1280,6 +1280,7 @@ type VescapeCoreNativeModule = NativeEventEmitter<VescapeCoreEvents> & {
   getDiagnosticStatus(): DiagnosticStatus
   getLiveState(): LiveStateEvent
   getAppStatus(): AppStatus | null
+  openAppUpdate(): void
   getRemoteTiltState(): RemoteTiltState | null
   setSelectedBoard(boardId: string | null): void
   setCompanionPresenceEnabled(enabled: boolean): Promise<void>
@@ -1683,6 +1684,15 @@ export function getLiveState(): LiveStateEvent {
 export function getAppStatus(): AppStatus | null {
   if (E2E_ENABLED) return null
   return native.getAppStatus()
+}
+
+/**
+ * Open the stable Vescape download route for this platform. Native owns platform selection.
+ * @parity /modules/vescape-core/ios/VescapeCoreModule.swift `openAppUpdate`
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `openAppUpdate`
+ */
+export function openAppUpdate(): void {
+  native.openAppUpdate()
 }
 
 /** Read remote tilt without reseeding native telemetry into the JS history buffer. */
