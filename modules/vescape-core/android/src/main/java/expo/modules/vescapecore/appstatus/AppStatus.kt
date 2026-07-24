@@ -154,11 +154,17 @@ private fun parseVersion(json: JSONObject): AppStatusVersion? {
   return AppStatusVersion(installed = installed, latest = latest, status = status, message = message)
 }
 
+/**
+ * Decode the message array. A missing or non-array `messages` field is a malformed response
+ * (`null`), but an individual invalid entry is skipped so one bad message never hides the valid
+ * ones — nor the resolved version status alongside them.
+ */
 private fun parseMessages(value: Any?): List<CommunityMessage>? {
   val array = value as? JSONArray ?: return null
   val messages = mutableListOf<CommunityMessage>()
   for (i in 0 until array.length()) {
-    messages.add(parseMessage(array.optJSONObject(i) ?: return null) ?: return null)
+    val obj = array.optJSONObject(i) ?: continue
+    parseMessage(obj)?.let { messages.add(it) }
   }
   return messages
 }

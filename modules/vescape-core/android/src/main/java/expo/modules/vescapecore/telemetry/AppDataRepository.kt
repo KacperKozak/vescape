@@ -62,6 +62,16 @@ internal fun validCompanionCooldownMinutes(value: Any?): Int? =
     ?.toInt()
     ?.coerceIn(0, 1440)
 
+/**
+ * Acknowledged Community Message IDs: a de-duplicated list of non-empty ID strings, or `null` when
+ * the raw value is not a list at all. An empty or all-invalid list normalizes to `[]` (not `null`)
+ * so a legitimately-empty stored value is never treated as corrupt.
+ */
+internal fun validDismissedCommunityMessageIds(value: Any?): List<String>? {
+  val list = value as? List<*> ?: return null
+  return list.filterIsInstance<String>().filter { it.isNotEmpty() }.distinct()
+}
+
 /** Auto close delay in minutes; at least 1 so a fired timer always had a real wait. */
 internal fun validAutoCloseDelayMinutes(value: Any?): Int? =
   (value as? Number)
@@ -245,6 +255,8 @@ class AppDataRepository private constructor(private val context: Context) {
       riderName = opt("riderName") { it as? String },
       riderColor = opt("riderColor") { it as? String },
       legalMode = opt("legalMode") { it.asStringKeyMap() },
+      dismissedCommunityMessageIds =
+        req("dismissedCommunityMessageIds", emptyList(), ::validDismissedCommunityMessageIds),
     )
 
     if (badKeys.isNotEmpty()) {
@@ -315,6 +327,8 @@ class AppDataRepository private constructor(private val context: Context) {
       "legalMode" ->
         if (value == null || value == JSONObject.NULL) null
         else value.asStringKeyMap() ?: return@withContext
+      "dismissedCommunityMessageIds" ->
+        validDismissedCommunityMessageIds(value) ?: return@withContext
       else -> return@withContext
     }
     val normalizedKey = when (key) {
@@ -358,6 +372,7 @@ class AppDataRepository private constructor(private val context: Context) {
         "riderName" -> d.riderName
         "riderColor" -> d.riderColor
         "legalMode" -> d.legalMode
+        "dismissedCommunityMessageIds" -> d.dismissedCommunityMessageIds
         else -> null
       }
     }
@@ -639,6 +654,7 @@ fun AppSettings.toMap(): Map<String, Any?> = mapOf(
   "riderName" to riderName,
   "riderColor" to riderColor,
   "legalMode" to legalMode,
+  "dismissedCommunityMessageIds" to dismissedCommunityMessageIds,
 )
 
 internal fun encodeSettingJson(value: Any?): String {

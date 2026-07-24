@@ -86,10 +86,9 @@ func decodeAppStatus(_ body: Data) -> AppStatus? {
   else { return nil }
   guard let versionJson = root["version"] as? [String: Any],
         let version = decodeVersion(versionJson),
-        let messagesJson = root["messages"] as? [Any],
-        let messages = decodeMessages(messagesJson)
+        let messagesJson = root["messages"] as? [Any]
   else { return nil }
-  return AppStatus(version: version, messages: messages)
+  return AppStatus(version: version, messages: decodeMessages(messagesJson))
 }
 
 private func decodeVersion(_ json: [String: Any]) -> AppStatusVersion? {
@@ -107,10 +106,13 @@ private func decodeVersion(_ json: [String: Any]) -> AppStatusVersion? {
   return AppStatusVersion(installed: installed, latest: latest, status: status, message: message)
 }
 
-private func decodeMessages(_ json: [Any]) -> [CommunityMessage]? {
+/// Decode the message array. A missing or non-array `messages` field is a malformed response
+/// (handled by the caller); an individual invalid entry is skipped so one bad message never hides
+/// the valid ones — nor the resolved version status alongside them.
+private func decodeMessages(_ json: [Any]) -> [CommunityMessage] {
   var messages: [CommunityMessage] = []
   for entry in json {
-    guard let object = entry as? [String: Any], let message = decodeMessage(object) else { return nil }
+    guard let object = entry as? [String: Any], let message = decodeMessage(object) else { continue }
     messages.append(message)
   }
   return messages

@@ -11,9 +11,11 @@ import { IconHero } from '@/components/settings/IconHero'
 import { InfoModal } from '@/components/modals/InfoModal'
 import { TextPromptModal } from '@/components/modals/TextPromptModal'
 import { UpdateWarningModal } from '@/modules/release/components/UpdateWarningModal'
+import { CommunityMessageModal } from '@/modules/release/components/CommunityMessageModal'
 import { AppBlockScreen } from '@/modules/release/components/AppBlockScreen'
+import type { CommunityMessage, CommunityMessageType } from 'vescape-core'
 import { ShowcaseCard } from '@/components/dev/ShowcaseCard'
-import { OpenButton, ToggleRow } from '@/components/dev/ShowcaseControls'
+import { ChipRow, OpenButton, ToggleRow } from '@/components/dev/ShowcaseControls'
 import { DEFAULT_UPDATE_WARNING_MESSAGE } from '@/modules/release/constants/updateWarning'
 import { DEFAULT_APP_BLOCK_MESSAGE } from '@/modules/release/constants/appBlock'
 import { theme } from '@/constants/theme'
@@ -129,6 +131,63 @@ function AppBlockScreenShowcase() {
         visible={visible}
         message={serverMessage ? SERVER_APP_BLOCK_MESSAGE : DEFAULT_APP_BLOCK_MESSAGE}
         onUpdate={() => setVisible(false)}
+      />
+    </ShowcaseCard>
+  )
+}
+
+const COMMUNITY_MESSAGE_BODY = [
+  '## Weekend group ride',
+  '',
+  'Join the **Sunday coastal loop** — casual pace, all boards welcome.',
+  '',
+  '- Meet 10:00 at the pier',
+  '- ~18 km, one charge stop',
+].join('\n')
+
+function communityMessage(type: CommunityMessageType, withAction: boolean): CommunityMessage {
+  return {
+    id: `showcase-${type}`,
+    type,
+    body: COMMUNITY_MESSAGE_BODY,
+    action: withAction
+      ? {
+          type: type === 'critical' ? 'primary' : 'secondary',
+          label: 'Learn more',
+          url: 'https://vescape.app',
+        }
+      : null,
+  }
+}
+
+function CommunityMessageModalShowcase() {
+  const [visible, setVisible] = useState(false)
+  const [type, setType] = useState<CommunityMessageType>('info')
+  const [withAction, setWithAction] = useState(true)
+
+  return (
+    <ShowcaseCard
+      name="CommunityMessageModal"
+      controls={
+        <>
+          <ChipRow
+            label="type"
+            options={['info', 'warning', 'critical']}
+            selected={type}
+            onSelect={(v) => setType(v as CommunityMessageType)}
+          />
+          <ToggleRow label="action" value={withAction} onToggle={setWithAction} />
+          <OpenButton onPress={() => setVisible(true)} />
+        </>
+      }
+    >
+      <Text style={styles.previewHint}>
+        Info / warning / critical styling, with an optional primary/secondary action
+      </Text>
+      <CommunityMessageModal
+        message={visible ? communityMessage(type, withAction) : null}
+        onDismiss={() => setVisible(false)}
+        onAction={() => setVisible(false)}
       />
     </ShowcaseCard>
   )
@@ -305,11 +364,12 @@ export default function ModalsPage() {
       <ScrollView contentContainerStyle={styles.content}>
         <IconHero
           icon={SquaresFourIcon}
-          description="ConfirmModal, InfoModal, UpdateWarningModal, AppBlockScreen, TextPromptModal, EdgeDrawer, FloatingSheet."
+          description="ConfirmModal, InfoModal, UpdateWarningModal, CommunityMessageModal, AppBlockScreen, TextPromptModal, EdgeDrawer, FloatingSheet."
         />
         <ConfirmModalShowcase />
         <InfoModalShowcase />
         <UpdateWarningModalShowcase />
+        <CommunityMessageModalShowcase />
         <AppBlockScreenShowcase />
         <TextPromptModalShowcase />
         <EdgeDrawerPositionShowcase

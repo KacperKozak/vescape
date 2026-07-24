@@ -445,6 +445,9 @@ final class AppDataRepository {
       // native detector gate can never diverge on a malformed value.
       guard let enabled = rawValue as? Bool else { return }
       value = enabled
+    } else if key == "dismissedCommunityMessageIds" {
+      guard let ids = Self.dismissedCommunityMessageIds(rawValue) else { return }
+      value = ids
     } else {
       value = rawValue
     }
@@ -460,6 +463,10 @@ final class AppDataRepository {
 
   // MARK: - Shared pure helpers (also used by VescapeCoreModule bridge glue)
 
+  /// Durable app-scoped settings shape. A TS/Android/iOS parity triangle — the container tag covers
+  /// every key; individual literals are not tagged separately (see AGENTS.md).
+  /// @parity /modules/vescape-core/src/index.ts `AppSettings`
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryEntities.kt `AppSettings`
   static let defaultSettings: [String: Any] = [
     "liveHistoryLimit": 5,
     "autoConnect": true,
@@ -496,6 +503,7 @@ final class AppDataRepository {
       "motorCurrent": ["start": 35, "end": 55],
       "batteryCurrent": ["start": 25, "end": 45],
     ],
+    "dismissedCommunityMessageIds": [String](),
   ]
 
   static func normalizeSettings(_ settings: [String: Any]) -> [String: Any] {
@@ -508,7 +516,22 @@ final class AppDataRepository {
       satelliteImageryOpacity(settings["satelliteMapImageryOpacity"]) ?? defaultSettings["satelliteMapImageryOpacity"]
     normalized["satelliteImagerySaturation"] =
       satelliteImagerySaturation(settings["satelliteImagerySaturation"]) ?? defaultSettings["satelliteImagerySaturation"]
+    normalized["dismissedCommunityMessageIds"] =
+      dismissedCommunityMessageIds(settings["dismissedCommunityMessageIds"]) ?? [String]()
     return normalized
+  }
+
+  /// Acknowledged Community Message IDs: a de-duplicated list of non-empty ID strings, or `nil` when
+  /// the raw value is not an array at all. An empty or all-invalid array normalizes to `[]`.
+  static func dismissedCommunityMessageIds(_ value: Any?) -> [String]? {
+    guard let array = value as? [Any] else { return nil }
+    var seen = Set<String>()
+    var result: [String] = []
+    for entry in array {
+      guard let id = entry as? String, !id.isEmpty, seen.insert(id).inserted else { continue }
+      result.append(id)
+    }
+    return result
   }
 
   static func satelliteImageryOpacity(_ value: Any?) -> Double? {

@@ -32,4 +32,20 @@ class AppSettingsMapPreferencesTest {
     assertNull(validMapNavigationMode("bearing"))
     assertNull(validMapNavigationMode(false))
   }
+
+  @Test
+  fun dismissedCommunityMessageIdsKeepsNonEmptyStringsAndDedupes() {
+    assertEquals(listOf("a", "b"), validDismissedCommunityMessageIds(listOf("a", "b", "a")))
+    assertEquals(listOf("a"), validDismissedCommunityMessageIds(listOf("a", "", 3, null)))
+  }
+
+  @Test
+  fun dismissedCommunityMessageIdsDefaultsToEmptyForValidButEmptyAndRejectsNonLists() {
+    // An empty or all-invalid list normalizes to [] (not null) so it is never flagged as corrupt.
+    assertEquals(emptyList<String>(), validDismissedCommunityMessageIds(emptyList<Any?>()))
+    assertEquals(emptyList<String>(), validDismissedCommunityMessageIds(listOf("", 1)))
+    // A non-list is malformed input (null) and falls back to the default.
+    assertNull(validDismissedCommunityMessageIds("a"))
+    assertNull(validDismissedCommunityMessageIds(42))
+  }
 }

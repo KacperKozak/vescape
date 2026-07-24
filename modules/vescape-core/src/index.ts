@@ -767,6 +767,13 @@ export interface ProfileStatsMonth {
   month: number
 }
 
+/**
+ * Durable app-scoped settings. The keys here are a TS/Android/iOS parity triangle — every field is
+ * persisted natively and projected back through {@link getSettings}/{@link updateSetting}. The
+ * container tag covers all keys; individual literals are not tagged separately (see AGENTS.md).
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryEntities.kt `AppSettings`
+ * @parity /modules/vescape-core/ios/telemetry/AppDataRepository.swift `defaultSettings`
+ */
 export interface AppSettings {
   liveHistoryLimit: number
   autoConnect: boolean
@@ -857,6 +864,12 @@ export interface AppSettings {
   riderColor: string | null
   /** Durable Legal Mode UI/default state. JS owns behavior; native only persists this bag. */
   legalMode: Record<string, unknown> | null
+  /**
+   * Community Message IDs the rider permanently acknowledged (dismissed or acted on). A dismissed
+   * ID stays hidden across launches; a revised message re-appears only under a new ID. Native stores
+   * only the IDs — never the server messages themselves. Absent/empty means nothing acknowledged.
+   */
+  dismissedCommunityMessageIds: string[]
 }
 
 export interface DiagnosticStatus {
@@ -1375,7 +1388,7 @@ type VescapeCoreNativeModule = NativeEventEmitter<VescapeCoreEvents> & {
   getSettings(): Promise<AppSettings>
   updateSetting(
     key: string,
-    value: number | boolean | string | Record<string, unknown> | null,
+    value: number | boolean | string | string[] | Record<string, unknown> | null,
   ): Promise<void>
 }
 
@@ -2041,7 +2054,7 @@ export async function getSettings(): Promise<AppSettings> {
 
 export async function updateSetting(
   key: string,
-  value: number | boolean | string | Record<string, unknown> | null,
+  value: number | boolean | string | string[] | Record<string, unknown> | null,
 ): Promise<void> {
   if (E2E_ENABLED) {
     e2eFake.updateSetting(key, value)

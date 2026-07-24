@@ -91,16 +91,30 @@ class AppStatusTest {
       body("""{"installed":"0.80.2","latest":"0.80.2","status":"current","message":42}"""),
       """{"version":$currentVersion}""",
       body(currentVersion, """{"m1":"Hi"}"""),
-      body(currentVersion, """[{"type":"info","body":"Hi"}]"""),
-      body(currentVersion, """[{"id":"m1","type":"shout","body":"Hi"}]"""),
-      body(currentVersion, """[{"id":"m1","type":"info","body":"Hi","action":{"type":"primary"}}]"""),
-      body(
-        currentVersion,
-        """[{"id":"m1","type":"info","body":"Hi","action":{"type":"tertiary","label":"a","url":"b"}}]""",
-      ),
     )
 
     for (json in invalid) assertNull("expected null for: $json", parseAppStatus(json))
+  }
+
+  @Test
+  fun `skips invalid individual messages without failing the whole status`() {
+    val status = parseAppStatus(
+      body(
+        currentVersion,
+        """[
+          {"type":"info","body":"no id"},
+          {"id":"ok","type":"warning","body":"valid"},
+          {"id":"bad-type","type":"shout","body":"Hi"},
+          {"id":"bad-action","type":"info","body":"Hi","action":{"type":"primary"}},
+          {"id":"tertiary","type":"info","body":"Hi","action":{"type":"tertiary","label":"a","url":"b"}},
+          "notAnObject"
+        ]""",
+      ),
+    )
+
+    // The version status still resolves and the one valid message survives.
+    assertEquals(AppVersionStatus.CURRENT, status?.version?.status)
+    assertEquals(listOf("ok"), status?.messages?.map { it.id })
   }
 
   @Test

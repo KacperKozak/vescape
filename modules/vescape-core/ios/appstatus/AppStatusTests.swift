@@ -85,18 +85,33 @@ final class AppStatusTests: XCTestCase {
       body(#"{"installed":"0.80.2","latest":"0.80.2","status":"current","message":42}"#),
       Data(#"{"version":\#(currentVersion)}"#.utf8),
       body(currentVersion, messages: #"{"m1":"Hi"}"#),
-      body(currentVersion, messages: #"[{"type":"info","body":"Hi"}]"#),
-      body(currentVersion, messages: #"[{"id":"m1","type":"shout","body":"Hi"}]"#),
-      body(currentVersion, messages: #"[{"id":"m1","type":"info","body":"Hi","action":{"type":"primary"}}]"#),
-      body(
-        currentVersion,
-        messages: #"[{"id":"m1","type":"info","body":"Hi","action":{"type":"tertiary","label":"a","url":"b"}}]"#
-      ),
     ]
 
     for json in invalid {
       XCTAssertNil(decodeAppStatus(json), String(decoding: json, as: UTF8.self))
     }
+  }
+
+  func testSkipsInvalidIndividualMessagesWithoutFailingTheWholeStatus() {
+    let status = decodeAppStatus(
+      body(
+        currentVersion,
+        messages: """
+        [
+          {"type":"info","body":"no id"},
+          {"id":"ok","type":"warning","body":"valid"},
+          {"id":"bad-type","type":"shout","body":"Hi"},
+          {"id":"bad-action","type":"info","body":"Hi","action":{"type":"primary"}},
+          {"id":"tertiary","type":"info","body":"Hi","action":{"type":"tertiary","label":"a","url":"b"}},
+          "notAnObject"
+        ]
+        """
+      )
+    )
+
+    // The version status still resolves and the one valid message survives.
+    XCTAssertEqual(status?.version.status, .current)
+    XCTAssertEqual(status?.messages.map { $0.id }, ["ok"])
   }
 
   func testMapsTheBridgePayload() {
