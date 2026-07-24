@@ -6,6 +6,7 @@ import {
   ChartLineUpIcon,
   CrosshairIcon,
   DeviceMobileIcon,
+  DownloadSimpleIcon,
   GaugeIcon,
   BatteryMediumIcon,
   PaletteIcon,
@@ -13,10 +14,12 @@ import {
   SignOutIcon,
   ThermometerSimpleIcon,
   UsersIcon,
+  WarningIcon,
   XIcon,
   type Icon,
 } from 'phosphor-react-native'
 import { router } from 'expo-router'
+import { openAppUpdate } from 'vescape-core'
 
 import { Button } from '@/components/base/Button'
 import { Placeholder } from '@/components/base/Placeholder'
@@ -130,9 +133,36 @@ function GroupRideWidget() {
   const activeRide = rides.find((r) => r.id === activeRideId)
   const active = activeRideId != null
   const connected = connection === 'connected'
+  // Native gates the relay socket when the installed version is Online/App Blocked and reports it
+  // as `blocked`; Group Ride is unusable until the app updates, so replace the live UI entirely.
+  const blocked = connection === 'blocked'
   const showNearby = !active && nearby.length > 0 && !nearbyDismissed
   const accent = theme.palette.groupRide.color
   const rideName = activeRide?.name?.trim() || 'Your group ride'
+
+  if (blocked) {
+    return (
+      <CanvasWidget
+        icon={BroadcastIcon}
+        title="Group Ride"
+        accent={accent}
+        footer={
+          <Button
+            label="Update Vescape"
+            icon={DownloadSimpleIcon}
+            onPress={() => openAppUpdate()}
+            style={styles.fill}
+            accessibilityLabel="Update Vescape"
+          />
+        }
+      >
+        <Placeholder
+          icon={WarningIcon}
+          description="Update Vescape to use Group Ride. Your board, recording, and history keep working."
+        />
+      </CanvasWidget>
+    )
+  }
 
   const footer = active ? (
     <Button

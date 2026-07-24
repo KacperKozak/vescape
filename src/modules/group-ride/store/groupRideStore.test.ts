@@ -127,6 +127,34 @@ test('snapshot clears active ride when server no longer has it', async () => {
   expect(useGroupRideStore.getState().rosterRows).toEqual([])
 })
 
+test('online block clears stale ride state and marks the connection blocked', async () => {
+  const { useGroupRideStore } = await import('@/modules/group-ride/store/groupRideStore')
+
+  useGroupRideStore.getState().startObserving()
+  useGroupRideStore.setState({
+    connection: 'connected',
+    rides: [ride('r1')],
+    nearby: [{ ride: ride('r1'), distanceM: 10 }] as any,
+    badge: true,
+    activeRideId: 'r1',
+    roster: [{ id: 'x', name: 'X', color: null, presence: null, stale: false, lastSeen: 1 }],
+    rosterRows: [{ id: 'x' }] as any,
+    error: 'boom',
+  })
+
+  connectionListeners.forEach((listener) => listener({ state: 'blocked' }))
+
+  const s = useGroupRideStore.getState()
+  expect(s.connection).toBe('blocked')
+  expect(s.rides).toEqual([])
+  expect(s.nearby).toEqual([])
+  expect(s.badge).toBe(false)
+  expect(s.activeRideId).toBeNull()
+  expect(s.roster).toEqual([])
+  expect(s.rosterRows).toEqual([])
+  expect(s.error).toBeNull()
+})
+
 test('successful join clears stale relay error', async () => {
   const { useGroupRideStore } = await import('@/modules/group-ride/store/groupRideStore')
 

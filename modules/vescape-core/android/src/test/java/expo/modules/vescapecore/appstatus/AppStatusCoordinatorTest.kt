@@ -1,6 +1,7 @@
 package expo.modules.vescapecore.appstatus
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -77,7 +78,7 @@ class AppStatusCoordinatorTest {
     val transport = RecordingTransport()
     val coordinator = coordinator(transport)
     var changes = 0
-    coordinator.onChange = { changes += 1 }
+    coordinator.addChangeListener { changes += 1 }
 
     assertNull(coordinator.current)
     coordinator.refresh()
@@ -103,7 +104,7 @@ class AppStatusCoordinatorTest {
     val transport = RecordingTransport()
     val coordinator = coordinator(transport)
     val seen = mutableListOf<AppVersionStatus?>()
-    coordinator.onChange = { seen.add(it?.version?.status) }
+    coordinator.addChangeListener { seen.add(it?.version?.status) }
 
     coordinator.refresh()
     transport.resolveAll(statusBody("online-blocked"))
@@ -127,6 +128,23 @@ class AppStatusCoordinatorTest {
 
     assertEquals(AppVersionStatus.CURRENT, coordinator.current?.version?.status)
     assertEquals("0.81.0", coordinator.current?.version?.latest)
+  }
+
+  @Test
+  fun `online capability fails open until a block lands`() {
+    val transport = RecordingTransport()
+    val coordinator = coordinator(transport)
+
+    // Unknown startup: online work is permitted (fail open).
+    assertFalse(coordinator.onlineBlocked)
+
+    coordinator.refresh()
+    transport.resolveAll(statusBody("app-blocked"))
+    assertTrue(coordinator.onlineBlocked)
+
+    coordinator.refresh()
+    transport.resolveAll(statusBody("current"))
+    assertFalse(coordinator.onlineBlocked)
   }
 
   @Test

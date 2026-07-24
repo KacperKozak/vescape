@@ -185,6 +185,10 @@ public class VescapeCoreModule: Module {
     }
 
     // MARK: Group Ride (Android native implementation; iOS keeps bridge shape)
+    // @platform-diff Group Ride networking is Android-only, so the Online Capability gate (refuse/
+    // tear down the relay socket while App Status is Online/App Blocked, `blocked` connection state,
+    // `Vescape-App-Version` upgrade header, 426 handling) has no iOS peer. These stubs never open a
+    // socket, so there is nothing to gate; iOS AppStatusCoordinator keeps its single `onChange` sink.
 
     Function("startGroupRideObserve") { (_: String) in
       self.sendEvent("onGroupRideConnection", ["state": "idle"])

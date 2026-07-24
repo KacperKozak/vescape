@@ -10,6 +10,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import java.io.IOException
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
 
 private const val TAG = "AppStatusCoordinator"
@@ -17,6 +18,27 @@ private const val TAG = "AppStatusCoordinator"
 /** One App Status fetch attempt. `null` body means "no usable response" (transport or HTTP error). */
 fun interface AppStatusTransport {
   fun fetch(url: String, appVersion: String, onResult: (String?) -> Unit)
+}
+
+/**
+ * Online Capability signal the Group Ride observer gates on, backed by [AppStatusCoordinator]. Kept
+ * as a narrow interface so the observer can be unit-tested with a fake instead of a live fetcher.
+ *
+ * @platform-diff Android-only: Group Ride networking is the sole Online Capability consumer and has
+ * no iOS peer, so the iOS [AppStatusCoordinator] keeps a single `onChange` sink with none of this.
+ */
+interface OnlineCapability {
+  /** True while online work (Group Ride) is denied — Online Block or App Block. Unknown fails open. */
+  val onlineBlocked: Boolean
+
+  /** Installed marketing version to stamp on app-originated requests (WebSocket upgrades included). */
+  val appVersion: String
+
+  /** Ask for a fresh App Status now — e.g. after a server version rejection (426). */
+  fun refresh()
+
+  /** Observe App Status changes; returns a remover. Invoked on the main thread. */
+  fun addListener(listener: () -> Unit): () -> Unit
 }
 
 /**
@@ -39,14 +61,31 @@ class AppStatusCoordinator internal constructor(
   private val installedVersion: String,
   private val baseUrl: String,
   private val transport: AppStatusTransport,
-) {
+) : OnlineCapability {
   /** Last successful App Status for this process, or `null` while none has been fetched. */
   @Volatile
   var current: AppStatus? = null
     private set
 
-  /** Notified on every state change so the module can mirror it to JS. */
-  var onChange: ((AppStatus?) -> Unit)? = null
+  /**
+   * Notified on every state change so multiple process-scoped consumers stay in sync — the JS mirror
+   * (module) and the Group Ride online gate ([OnlineCapability]). Unlike the JS module, the gate can
+   * outlive the foreground runtime, so it subscribes here rather than through JS.
+   */
+  private val listeners = CopyOnWriteArrayList<(AppStatus?) -> Unit>()
+
+  override val onlineBlocked: Boolean
+    get() = current?.version?.status?.blocksOnline ?: false
+
+  override val appVersion: String get() = installedVersion
+
+  /** Register a full-status listener (used by the JS mirror); returns a remover. */
+  fun addChangeListener(listener: (AppStatus?) -> Unit): () -> Unit {
+    listeners.add(listener)
+    return { listeners.remove(listener) }
+  }
+
+  override fun addListener(listener: () -> Unit): () -> Unit = addChangeListener { listener() }
 
   private var refreshing = false
 
@@ -55,7 +94,7 @@ class AppStatusCoordinator internal constructor(
    * and foreground), so a refresh started while one is in flight shares that request instead of
    * duplicating it.
    */
-  fun refresh() {
+  override fun refresh() {
     if (refreshing || installedVersion.isEmpty()) return
     refreshing = true
     transport.fetch("$baseUrl$APP_STATUS_PATH", installedVersion, ::onFetched)
@@ -70,7 +109,7 @@ class AppStatusCoordinator internal constructor(
       return
     }
     current = status
-    onChange?.invoke(status)
+    listeners.forEach { it(status) }
   }
 
   companion object {

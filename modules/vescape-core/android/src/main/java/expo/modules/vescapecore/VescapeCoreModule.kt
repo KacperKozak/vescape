@@ -74,6 +74,8 @@ class VescapeCoreModule : Module() {
   private val mainHandler = Handler(Looper.getMainLooper())
   private var activeProbe: ActiveBoardProbe? = null
   private var previewAlertFeedback: AlertFeedback? = null
+  /** Remover for this module's App Status mirror listener; cleared in OnDestroy. */
+  private var appStatusUnsub: (() -> Unit)? = null
   private val companionPresence by lazy {
     CompanionPresence(context.applicationContext, activityProvider = { appContext.currentActivity })
   }
@@ -129,7 +131,8 @@ class VescapeCoreModule : Module() {
     // pull the current snapshot below and through `getAppStatus`).
     // @parity /modules/vescape-core/ios/VescapeCoreModule.swift `sendAppStatus`
     // @parity /modules/vescape-core/src/index.ts `AppStatusEvent`
-    AppStatusCoordinator.get(context).onChange = { status ->
+    appStatusUnsub?.invoke()
+    appStatusUnsub = AppStatusCoordinator.get(context).addChangeListener { status ->
       if (shouldEmitToFrontend("onAppStatus")) {
         mainHandler.post {
           if (shouldEmitToFrontend("onAppStatus")) {
@@ -230,7 +233,8 @@ class VescapeCoreModule : Module() {
       // module reachable (mirrors iOS OnDestroy nulling `onChange`). A fresh module re-attaches in
       // its own definition().
       BoardWarningRegistry.get(context).onChange = null
-      AppStatusCoordinator.get(context).onChange = null
+      appStatusUnsub?.invoke()
+      appStatusUnsub = null
       previewAlertFeedback?.release()
       previewAlertFeedback = null
       cancelActiveProbe(null, "module_destroyed")

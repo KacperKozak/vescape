@@ -2,8 +2,8 @@ package expo.modules.vescapecore
 
 import android.os.Handler
 import android.util.Log
+import expo.modules.vescapecore.appstatus.OnlineCapability
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
@@ -24,6 +24,7 @@ import java.util.concurrent.TimeUnit
 internal class GroupRideObserver(
     private val handler: Handler,
     private val emit: (String, Map<String, Any?>) -> Unit,
+    private val online: OnlineCapability,
 ) {
     private val client = OkHttpClient.Builder()
         .pingInterval(PING_INTERVAL_SECONDS, TimeUnit.SECONDS)
@@ -39,6 +40,8 @@ internal class GroupRideObserver(
     private var joinedRideId: String? = null
     private var desiredRideId: String? = null
     private var lastPresence: RiderPresence? = null
+    /** Remover for the App Status listener; non-null only while observing. */
+    private var onlineUnsub: (() -> Unit)? = null
     private val reconnectRunnable = Runnable { connect() }
     private val heartbeatRunnable = object : Runnable {
         override fun run() {
@@ -65,12 +68,18 @@ internal class GroupRideObserver(
         stopped = false
         serverUrl = url
         reconnectAttempt = 0
+        onlineUnsub?.invoke()
+        // The gate can outlive the JS runtime, so the observe socket reacts to App Status changes
+        // directly rather than through JS — tearing down on a block, resuming when it clears.
+        onlineUnsub = online.addListener(::onOnlineChanged)
         connect()
     }
 
     fun stop() {
         stopped = true
         handler.removeCallbacks(reconnectRunnable)
+        onlineUnsub?.invoke()
+        onlineUnsub = null
         webSocket?.close(NORMAL_CLOSURE, "client stop")
         webSocket = null
         joinedRideId = null
@@ -78,6 +87,40 @@ internal class GroupRideObserver(
         lastPresence = null
         stopHeartbeat()
         emitConnection("idle")
+    }
+
+    /**
+     * React to an App Status change while observing: tear down the moment online work is blocked,
+     * or reconnect once a block clears. Runs on the main thread (the coordinator fetch posts there).
+     */
+    private fun onOnlineChanged() {
+        if (stopped) return
+        if (GroupRideOnlineGate.mustTearDown(online.onlineBlocked, active = true)) {
+            tearDownForBlock()
+        } else if (
+            GroupRideOnlineGate.shouldResume(online.onlineBlocked, active = true, connected = webSocket != null)
+        ) {
+            connect()
+        }
+    }
+
+    /**
+     * Drop an active/reconnecting observe socket because online work is now blocked: cancel
+     * reconnect, close the socket, clear ride/roster state, and surface the distinct `blocked`
+     * connection state instead of a disconnect loop. Board Session, Recording, and History are
+     * untouched — this only gates Group Ride.
+     */
+    private fun tearDownForBlock() {
+        handler.removeCallbacks(reconnectRunnable)
+        webSocket?.close(NORMAL_CLOSURE, "online blocked")
+        webSocket = null
+        reconnectAttempt = 0
+        joinedRideId = null
+        desiredRideId = null
+        stopHeartbeat()
+        emit("onGroupRideJoined", mapOf("rideId" to null))
+        emit("onGroupRideRoster", mapOf("rideId" to null, "riders" to emptyList<Map<String, Any?>>()))
+        emitConnection("blocked")
     }
 
     /**
@@ -179,9 +222,14 @@ internal class GroupRideObserver(
     private fun connect() {
         val url = serverUrl ?: return
         if (stopped) return
+        // Native owns the gate: refuse the upgrade (fresh start or scheduled reconnect) while online
+        // work is blocked, surfacing `blocked` instead of hammering the relay.
+        if (!GroupRideOnlineGate.mayConnect(online.onlineBlocked)) {
+            emitConnection("blocked")
+            return
+        }
         emitConnection("connecting")
-        val request = Request.Builder().url(url).build()
-        webSocket = client.newWebSocket(request, listener)
+        webSocket = client.newWebSocket(GroupRideOnlineGate.buildObserveRequest(url, online.appVersion), listener)
     }
 
     private val listener = object : WebSocketListener() {
@@ -212,7 +260,21 @@ internal class GroupRideObserver(
 
         override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
             Log.w(TAG, "Group Ride observe WS failure: ${t.message}")
-            handler.post { scheduleReconnect() }
+            val code = response?.code
+            handler.post {
+                if (GroupRideOnlineGate.isVersionRejection(code)) {
+                    // Server refused the upgrade for this app version — refresh App Status so the
+                    // gate learns the block, and surface `blocked` rather than reconnect-looping.
+                    online.refresh()
+                    handler.removeCallbacks(reconnectRunnable)
+                    webSocket = null
+                    joinedRideId = null
+                    stopHeartbeat()
+                    emitConnection("blocked")
+                    return@post
+                }
+                scheduleReconnect()
+            }
         }
     }
 

@@ -27,6 +27,7 @@ import expo.modules.vescapecore.service.CoreForegroundService
 import expo.modules.vescapecore.diagnostics.DiagnosticReporter
 import expo.modules.vescapecore.location.GpsMonitor
 import expo.modules.vescapecore.GroupRideObserver
+import expo.modules.vescapecore.appstatus.AppStatusCoordinator
 import expo.modules.vescapecore.telemetry.LiveSeriesEmitter
 import expo.modules.vescapecore.protocol.LocationSnapshot
 import expo.modules.vescapecore.location.LocationTracker
@@ -301,7 +302,11 @@ internal class BoardSessionController(private val service: CoreForegroundService
         )
     }
     private val groupRideObserver by lazy {
-        GroupRideObserver(handler = mainHandler, emit = ::emitEvent)
+        GroupRideObserver(
+            handler = mainHandler,
+            emit = ::emitEvent,
+            online = AppStatusCoordinator.get(service.applicationContext),
+        )
     }
 
     /**

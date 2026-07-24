@@ -17,6 +17,14 @@ enum class AppVersionStatus(val slug: String) {
   APP_BLOCKED("app-blocked"),
   ;
 
+  /**
+   * Whether this outcome denies online work (Group Ride and future backup/sync). Online Block and
+   * App Block both deny it; `current` and `update-warning` permit it. No TS/iOS peer: only the
+   * Android Group Ride gate consumes it, and JS learns of a block via the `blocked` observe state.
+   */
+  val blocksOnline: Boolean
+    get() = this == ONLINE_BLOCKED || this == APP_BLOCKED
+
   companion object {
     fun fromSlug(slug: String): AppVersionStatus? = entries.firstOrNull { it.slug == slug }
   }
