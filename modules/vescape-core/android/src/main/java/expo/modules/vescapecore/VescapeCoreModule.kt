@@ -24,6 +24,7 @@ import android.bluetooth.BluetoothManager
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -131,14 +132,10 @@ class VescapeCoreModule : Module() {
     // pull the current snapshot below and through `getAppStatus`).
     // @parity /modules/vescape-core/ios/VescapeCoreModule.swift `sendAppStatus`
     // @parity /modules/vescape-core/src/index.ts `AppStatusEvent`
-    appStatusUnsub?.invoke()
+    // The coordinator already notifies on the main thread, so emit straight from the callback.
     appStatusUnsub = AppStatusCoordinator.get(context).addChangeListener { status ->
       if (shouldEmitToFrontend("onAppStatus")) {
-        mainHandler.post {
-          if (shouldEmitToFrontend("onAppStatus")) {
-            sendEvent("onAppStatus", mapOf("status" to status?.toMap()))
-          }
-        }
+        sendEvent("onAppStatus", mapOf("status" to status?.toMap()))
       }
     }
 
@@ -300,10 +297,15 @@ class VescapeCoreModule : Module() {
     // @platform-diff Android uses the stable Android download route.
     // @parity /modules/vescape-core/src/index.ts `openAppUpdate`
     Function("openAppUpdate") {
-      context.startActivity(
-        Intent(Intent.ACTION_VIEW, Uri.parse("https://vescape.app/download/android"))
-          .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
-      )
+      val intent = Intent(Intent.ACTION_VIEW, Uri.parse(AppStatusCoordinator.androidDownloadUrl()))
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      try {
+        context.startActivity(intent)
+      } catch (e: ActivityNotFoundException) {
+        // No browser to take the link. This is the App Block's only action, so failing loudly here
+        // would crash the one screen the rider can still see.
+        Log.w(TAG, "Cannot open the download route: ${e.message}")
+      }
     }
     Function("getRemoteTiltState") {
       CoreForegroundService.currentRemoteTiltState()

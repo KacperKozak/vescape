@@ -91,8 +91,8 @@ class AppStatusCoordinator internal constructor(
 
   /**
    * Fetch App Status now. Foreground events arrive repeatedly (and a cold start fires both create
-   * and foreground), so a refresh started while one is in flight shares that request instead of
-   * duplicating it.
+   * and foreground), so a refresh asked for while one is already in flight is dropped — the
+   * in-flight request answers it, and the next foreground picks up anything newer.
    */
   override fun refresh() {
     if (refreshing || installedVersion.isEmpty()) return
@@ -133,6 +133,13 @@ class AppStatusCoordinator internal constructor(
      * @parity /src/config/server.ts `SERVER_URL`
      */
     const val SERVER_BASE_URL = "https://vescape.app"
+
+    /**
+     * Stable Android download route. Server-owned redirect, so the app never hardcodes the final
+     * store destination.
+     * @parity /modules/vescape-core/ios/appstatus/AppStatusCoordinator.swift `iosDownloadUrl`
+     */
+    fun androidDownloadUrl(): String = "$SERVER_BASE_URL/download/android"
 
     @Volatile
     private var instance: AppStatusCoordinator? = null

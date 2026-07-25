@@ -5,6 +5,7 @@ import {
   acknowledgeCommunityMessage,
   communityMessageQueue,
   currentCommunityMessage,
+  MAX_DISMISSED_IDS,
 } from '@/modules/release/lib/communityMessages'
 
 function message(overrides: Partial<CommunityMessage> & { id: string }): CommunityMessage {
@@ -91,5 +92,14 @@ describe('acknowledgeCommunityMessage', () => {
   test('is idempotent and keeps the same reference for a known ID', () => {
     const ids = ['a', 'b']
     expect(acknowledgeCommunityMessage(ids, 'a')).toBe(ids)
+  })
+
+  test('drops the oldest ID past the cap', () => {
+    const full = Array.from({ length: MAX_DISMISSED_IDS }, (_, index) => `id-${index}`)
+    const next = acknowledgeCommunityMessage(full, 'newest')
+
+    expect(next).toHaveLength(MAX_DISMISSED_IDS)
+    expect(next[0]).toBe('id-1')
+    expect(next.at(-1)).toBe('newest')
   })
 })

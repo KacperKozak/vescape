@@ -3,7 +3,9 @@ import { Text } from '@/components/base/Text'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useState } from 'react'
 
-import { SquaresFourIcon, UsersThreeIcon } from 'phosphor-react-native'
+import { InfoIcon, SquaresFourIcon, UsersThreeIcon } from 'phosphor-react-native'
+import { Button } from '@/components/base/Button'
+import { FadeCardModal } from '@/components/modals/FadeCardModal'
 import { ConfirmModal } from '@/components/modals/ConfirmModal'
 import { EdgeDrawer, FloatingSheet } from '@/components/overlays/AnchoredSheet'
 import { useTriggerRef } from '@/components/overlays/measureTrigger'
@@ -19,6 +21,40 @@ import { ChipRow, OpenButton, ToggleRow } from '@/components/dev/ShowcaseControl
 import { DEFAULT_UPDATE_WARNING_MESSAGE } from '@/modules/release/constants/updateWarning'
 import { DEFAULT_APP_BLOCK_MESSAGE } from '@/modules/release/constants/appBlock'
 import { theme } from '@/constants/theme'
+
+function FadeCardModalShowcase() {
+  const [visible, setVisible] = useState(false)
+  const [dismissible, setDismissible] = useState(true)
+
+  return (
+    <ShowcaseCard
+      name="FadeCardModal"
+      controls={
+        <>
+          <ToggleRow label="dismissible" value={dismissible} onToggle={setDismissible} />
+          <OpenButton onPress={() => setVisible(true)} />
+        </>
+      }
+    >
+      <Text style={styles.previewHint}>
+        The shared card shell behind ConfirmModal, InfoModal and the Release surfaces
+      </Text>
+      <FadeCardModal
+        visible={visible}
+        onDismiss={dismissible ? () => setVisible(false) : undefined}
+        title="Card title"
+        titleIcon={InfoIcon}
+        titleIconColor={theme.palette.sky.color}
+        footer={<Button label="Close" onPress={() => setVisible(false)} />}
+      >
+        <Text style={styles.previewHint}>
+          Fade + scale in, dim backdrop, optional header and close button, scrollable body, footer
+          action row. Non-dismissible drops the backdrop tap, the close button and Android back.
+        </Text>
+      </FadeCardModal>
+    </ShowcaseCard>
+  )
+}
 
 function ConfirmModalShowcase() {
   const [visible, setVisible] = useState(false)
@@ -127,11 +163,12 @@ function AppBlockScreenShowcase() {
       <Text style={styles.previewHint}>
         Full-screen, non-dismissible update-only shell. In this preview the update action closes it.
       </Text>
-      <AppBlockScreen
-        visible={visible}
-        message={serverMessage ? SERVER_APP_BLOCK_MESSAGE : DEFAULT_APP_BLOCK_MESSAGE}
-        onUpdate={() => setVisible(false)}
-      />
+      {visible ? (
+        <AppBlockScreen
+          message={serverMessage ? SERVER_APP_BLOCK_MESSAGE : DEFAULT_APP_BLOCK_MESSAGE}
+          onUpdate={() => setVisible(false)}
+        />
+      ) : null}
     </ShowcaseCard>
   )
 }
@@ -364,8 +401,9 @@ export default function ModalsPage() {
       <ScrollView contentContainerStyle={styles.content}>
         <IconHero
           icon={SquaresFourIcon}
-          description="ConfirmModal, InfoModal, UpdateWarningModal, CommunityMessageModal, AppBlockScreen, TextPromptModal, EdgeDrawer, FloatingSheet."
+          description="FadeCardModal, ConfirmModal, InfoModal, UpdateWarningModal, CommunityMessageModal, AppBlockScreen, TextPromptModal, EdgeDrawer, FloatingSheet."
         />
+        <FadeCardModalShowcase />
         <ConfirmModalShowcase />
         <InfoModalShowcase />
         <UpdateWarningModalShowcase />

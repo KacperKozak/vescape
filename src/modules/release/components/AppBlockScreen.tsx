@@ -8,7 +8,6 @@ import { Text } from '@/components/base/Text'
 import { theme } from '@/constants/theme'
 
 interface AppBlockScreenProps {
-  visible: boolean
   /** Markdown body — the server message or a bundled default. */
   message: string
   /** Open the stable platform download route. The only action App Block offers. */
@@ -18,16 +17,16 @@ interface AppBlockScreenProps {
 /**
  * The exceptional App Block presentation: a full-screen, non-dismissible update-only shell that
  * covers normal navigation. Its single action opens the stable platform download route; there is no
- * close, backdrop-dismiss, or hardware-back exit. Presentational only — {@link AppBlockGate} decides
- * when it appears.
+ * close, backdrop-dismiss, or hardware-back exit. Presentational only — {@link ReleaseSurfaces}
+ * mounts it, and only while nothing else is presented.
  *
  * This shell issues no Board Session or Ride Recording command: already-running native work keeps
  * going underneath it (PRD story 9).
  */
-export function AppBlockScreen({ visible, message, onUpdate }: AppBlockScreenProps) {
+export function AppBlockScreen({ message, onUpdate }: AppBlockScreenProps) {
   return (
     <Modal
-      visible={visible}
+      visible
       transparent={false}
       animationType="fade"
       statusBarTranslucent

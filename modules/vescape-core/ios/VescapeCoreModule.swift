@@ -281,7 +281,7 @@ public class VescapeCoreModule: Module {
     // @platform-diff iOS uses the stable iOS download route.
     // @parity /modules/vescape-core/src/index.ts `openAppUpdate`
     Function("openAppUpdate") {
-      guard let url = URL(string: "https://vescape.app/download/ios") else { return }
+      guard let url = URL(string: AppStatusCoordinator.iosDownloadUrl) else { return }
       DispatchQueue.main.async {
         UIApplication.shared.open(url)
       }

@@ -19,9 +19,7 @@ import { startAppDataSync } from '@/bootstrap/appDataSync'
 import { startBoardWarningsSync } from '@/modules/board/store/boardWarningsStore'
 import { useGroupRideStore } from '@/modules/group-ride/store/groupRideStore'
 import { useRiderStore } from '@/modules/group-ride/store/riderStore'
-import { AppBlockGate } from '@/modules/release/components/AppBlockGate'
-import { CommunityMessageGate } from '@/modules/release/components/CommunityMessageGate'
-import { UpdateWarningGate } from '@/modules/release/components/UpdateWarningGate'
+import { ReleaseSurfaces } from '@/modules/release/components/ReleaseSurfaces'
 import { startAppStatusSync } from '@/modules/release/store/appStatusStore'
 import { useSettingsStore } from '@/modules/settings/store/settingsStore'
 import { theme } from '@/constants/theme'
@@ -160,10 +158,8 @@ function RootLayout() {
             <Stack.Screen name={stackScreens.editBoard} options={{ title: 'Edit Board' }} />
             <Stack.Screen name={stackScreens.editBoardLink} options={{ title: 'Board Link' }} />
           </Stack>
-          <UpdateWarningGate />
-          <CommunityMessageGate />
-          {/* Last child: the App Block shell covers every screen, including the message surfaces. */}
-          <AppBlockGate />
+          {/* Above navigation so a Release surface covers every screen. Only ever one at a time. */}
+          <ReleaseSurfaces />
           <StatusBar style="light" />
         </GestureHandlerRootView>
       </DiagnosticErrorBoundary>

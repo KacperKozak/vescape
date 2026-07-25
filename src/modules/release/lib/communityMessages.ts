@@ -51,9 +51,18 @@ export function currentCommunityMessage(
 }
 
 /**
+ * How many acknowledgements stay durable. The server only ever serves a handful of live messages,
+ * so the oldest IDs past this cap can no longer match anything worth hiding — dropping them keeps
+ * the persisted list from growing for the life of the install.
+ */
+export const MAX_DISMISSED_IDS = 10
+
+/**
  * Acknowledge a message ID — the durable list to persist after a dismiss or a completed action.
- * Idempotent: re-acknowledging an already-present ID returns the same list unchanged.
+ * Idempotent: re-acknowledging an already-present ID returns the same list unchanged. Oldest-first,
+ * capped at {@link MAX_DISMISSED_IDS}: acknowledging past the cap drops the oldest ID.
  */
 export function acknowledgeCommunityMessage(dismissedIds: string[], id: string): string[] {
-  return dismissedIds.includes(id) ? dismissedIds : [...dismissedIds, id]
+  if (dismissedIds.includes(id)) return dismissedIds
+  return [...dismissedIds, id].slice(-MAX_DISMISSED_IDS)
 }

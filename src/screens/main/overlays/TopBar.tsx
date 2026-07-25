@@ -5,7 +5,6 @@ import {
   BroadcastIcon,
   CaretDownIcon,
   GearSixIcon,
-  GiftIcon,
   PencilSimpleIcon,
   PowerIcon,
   UsersThreeIcon,
@@ -22,7 +21,7 @@ import { AccountWidget } from '@/modules/profile/components/AccountWidget'
 import { BoardWarningControl } from '@/modules/board/components/BoardWarningControl'
 import { ReplayBadge } from '@/modules/board/components/ReplayBadge'
 import { useBleStore } from '@/modules/board/store/bleStore'
-import { isReplayBoardId, openAppUpdate } from 'vescape-core'
+import { isReplayBoardId } from 'vescape-core'
 import { isNightAtTime } from '@/modules/weather/lib/weather'
 import { routes } from '@/navigation/routes'
 import type { Board } from '@/modules/board/store/boardStore'
@@ -143,12 +142,14 @@ export function TopBar({
           )}
           {activeBoardId && <BoardWarningControl boardId={activeBoardId} />}
         </View>
+        {/* An available update only badges the gear — Settings stays this button's one destination,
+            and the update itself is started from the pill inside Settings. */}
         <IconButton
-          icon={availableUpdate ? GiftIcon : GearSixIcon}
-          onPress={() => (availableUpdate ? openAppUpdate() : router.push(routes.settings))}
+          icon={GearSixIcon}
+          onPress={() => router.push(routes.settings)}
           onLongPress={() => router.push(routes.settingsComponents)}
-          accent={availableUpdate ? theme.status.upgrade.color : undefined}
-          accessibilityLabel={availableUpdate ? 'Update Vescape' : 'Settings'}
+          dot={availableUpdate ? theme.status.upgrade.color : undefined}
+          accessibilityLabel={availableUpdate ? 'Settings, update available' : 'Settings'}
           style={styles.iconRight}
         />
       </View>

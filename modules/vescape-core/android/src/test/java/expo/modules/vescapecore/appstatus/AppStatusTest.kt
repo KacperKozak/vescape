@@ -89,11 +89,25 @@ class AppStatusTest {
       body("""{"installed":"","latest":"0.80.2","status":"current"}"""),
       body("""{"installed":1,"latest":"0.80.2","status":"current"}"""),
       body("""{"installed":"0.80.2","latest":"0.80.2","status":"current","message":42}"""),
-      """{"version":$currentVersion}""",
-      body(currentVersion, """{"m1":"Hi"}"""),
     )
 
     for (json in invalid) assertNull("expected null for: $json", parseAppStatus(json))
+  }
+
+  @Test
+  fun `an unusable messages field means no messages, never a failed status`() {
+    // Community Messages are independent of Release Policy: they can never hide the version status.
+    val withoutMessages = listOf(
+      """{"version":$currentVersion}""",
+      body(currentVersion, "null"),
+      body(currentVersion, """{"m1":"Hi"}"""),
+    )
+
+    for (json in withoutMessages) {
+      val status = parseAppStatus(json)
+      assertEquals("expected a resolved status for: $json", AppVersionStatus.CURRENT, status?.version?.status)
+      assertEquals(emptyList<CommunityMessage>(), status?.messages)
+    }
   }
 
   @Test

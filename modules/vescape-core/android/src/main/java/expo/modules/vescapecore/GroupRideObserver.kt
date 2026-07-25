@@ -95,13 +95,10 @@ internal class GroupRideObserver(
      */
     private fun onOnlineChanged() {
         if (stopped) return
-        if (GroupRideOnlineGate.mustTearDown(online.onlineBlocked, active = true)) {
-            tearDownForBlock()
-        } else if (
-            GroupRideOnlineGate.shouldResume(online.onlineBlocked, active = true, connected = webSocket != null)
-        ) {
-            connect()
-        }
+        if (online.onlineBlocked) tearDownForBlock()
+        // Block cleared while observing with no socket (torn down by an earlier block, or refused
+        // at start): resume. A change arriving while connected leaves the live socket alone.
+        else if (webSocket == null) connect()
     }
 
     /**
@@ -224,7 +221,7 @@ internal class GroupRideObserver(
         if (stopped) return
         // Native owns the gate: refuse the upgrade (fresh start or scheduled reconnect) while online
         // work is blocked, surfacing `blocked` instead of hammering the relay.
-        if (!GroupRideOnlineGate.mayConnect(online.onlineBlocked)) {
+        if (online.onlineBlocked) {
             emitConnection("blocked")
             return
         }
@@ -262,7 +259,7 @@ internal class GroupRideObserver(
             Log.w(TAG, "Group Ride observe WS failure: ${t.message}")
             val code = response?.code
             handler.post {
-                if (GroupRideOnlineGate.isVersionRejection(code)) {
+                if (code == GroupRideOnlineGate.VERSION_REJECTION_CODE) {
                     // Server refused the upgrade for this app version — refresh App Status so the
                     // gate learns the block, and surface `blocked` rather than reconnect-looping.
                     online.refresh()

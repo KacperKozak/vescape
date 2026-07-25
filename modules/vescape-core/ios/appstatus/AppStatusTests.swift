@@ -83,12 +83,25 @@ final class AppStatusTests: XCTestCase {
       body(#"{"installed":"","latest":"0.80.2","status":"current"}"#),
       body(#"{"installed":1,"latest":"0.80.2","status":"current"}"#),
       body(#"{"installed":"0.80.2","latest":"0.80.2","status":"current","message":42}"#),
-      Data(#"{"version":\#(currentVersion)}"#.utf8),
-      body(currentVersion, messages: #"{"m1":"Hi"}"#),
     ]
 
     for json in invalid {
       XCTAssertNil(decodeAppStatus(json), String(decoding: json, as: UTF8.self))
+    }
+  }
+
+  func testAnUnusableMessagesFieldMeansNoMessagesNeverAFailedStatus() {
+    // Community Messages are independent of Release Policy: they can never hide the version status.
+    let withoutMessages: [Data] = [
+      Data(#"{"version":\#(currentVersion)}"#.utf8),
+      body(currentVersion, messages: "null"),
+      body(currentVersion, messages: #"{"m1":"Hi"}"#),
+    ]
+
+    for json in withoutMessages {
+      let status = decodeAppStatus(json)
+      XCTAssertEqual(status?.version.status, .current, String(decoding: json, as: UTF8.self))
+      XCTAssertEqual(status?.messages, [CommunityMessage]())
     }
   }
 

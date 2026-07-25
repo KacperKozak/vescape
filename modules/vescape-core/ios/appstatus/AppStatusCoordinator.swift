@@ -33,6 +33,11 @@ final class AppStatusCoordinator {
   /// @parity /src/config/server.ts `SERVER_URL`
   static let serverBaseUrl = "https://vescape.app"
 
+  /// Stable iOS download route. Server-owned redirect, so the app never hardcodes the final store
+  /// destination.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/appstatus/AppStatusCoordinator.kt `androidDownloadUrl`
+  static let iosDownloadUrl = "\(serverBaseUrl)/download/ios"
+
   private static let callTimeoutSeconds: TimeInterval = 10
 
   /// Process singleton — its in-memory state must outlive JS runtime reloads.
@@ -60,8 +65,8 @@ final class AppStatusCoordinator {
   }
 
   /// Fetch App Status now. Foreground events arrive repeatedly (and a cold start fires both create
-  /// and foreground), so a refresh started while one is in flight shares that request instead of
-  /// duplicating it.
+  /// and foreground), so a refresh asked for while one is already in flight is dropped — the
+  /// in-flight request answers it, and the next foreground picks up anything newer.
   func refresh() {
     guard !refreshing, !installedVersion.isEmpty else { return }
     refreshing = true

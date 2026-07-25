@@ -137,8 +137,7 @@ fun parseAppStatus(body: String): AppStatus? {
     return null
   }
   val version = parseVersion(root.optJSONObject("version") ?: return null) ?: return null
-  val messages = parseMessages(root.opt("messages")) ?: return null
-  return AppStatus(version = version, messages = messages)
+  return AppStatus(version = version, messages = parseMessages(root.opt("messages")))
 }
 
 private fun parseVersion(json: JSONObject): AppStatusVersion? {
@@ -155,12 +154,13 @@ private fun parseVersion(json: JSONObject): AppStatusVersion? {
 }
 
 /**
- * Decode the message array. A missing or non-array `messages` field is a malformed response
- * (`null`), but an individual invalid entry is skipped so one bad message never hides the valid
- * ones — nor the resolved version status alongside them.
+ * Decode the message array. Community Messages are independent of Release Policy, so nothing here
+ * can invalidate the resolved version status: an absent, null or non-array `messages` field means
+ * "no messages", and an individual invalid entry is skipped so one bad message never hides the
+ * valid ones.
  */
-private fun parseMessages(value: Any?): List<CommunityMessage>? {
-  val array = value as? JSONArray ?: return null
+private fun parseMessages(value: Any?): List<CommunityMessage> {
+  val array = value as? JSONArray ?: return emptyList()
   val messages = mutableListOf<CommunityMessage>()
   for (i in 0 until array.length()) {
     val obj = array.optJSONObject(i) ?: continue

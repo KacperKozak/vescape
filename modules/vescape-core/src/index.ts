@@ -1713,6 +1713,8 @@ export function getAppStatus(): AppStatus | null {
  * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `openAppUpdate`
  */
 export function openAppUpdate(): void {
+  // Never bounce an E2E run out to the browser — App Status is stubbed off in E2E anyway.
+  if (E2E_ENABLED) return
   native.openAppUpdate()
 }
 

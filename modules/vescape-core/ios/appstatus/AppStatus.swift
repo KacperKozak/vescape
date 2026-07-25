@@ -85,10 +85,9 @@ func decodeAppStatus(_ body: Data) -> AppStatus? {
         let root = object as? [String: Any]
   else { return nil }
   guard let versionJson = root["version"] as? [String: Any],
-        let version = decodeVersion(versionJson),
-        let messagesJson = root["messages"] as? [Any]
+        let version = decodeVersion(versionJson)
   else { return nil }
-  return AppStatus(version: version, messages: decodeMessages(messagesJson))
+  return AppStatus(version: version, messages: decodeMessages(root["messages"]))
 }
 
 private func decodeVersion(_ json: [String: Any]) -> AppStatusVersion? {
@@ -106,10 +105,12 @@ private func decodeVersion(_ json: [String: Any]) -> AppStatusVersion? {
   return AppStatusVersion(installed: installed, latest: latest, status: status, message: message)
 }
 
-/// Decode the message array. A missing or non-array `messages` field is a malformed response
-/// (handled by the caller); an individual invalid entry is skipped so one bad message never hides
-/// the valid ones — nor the resolved version status alongside them.
-private func decodeMessages(_ json: [Any]) -> [CommunityMessage] {
+/// Decode the message array. Community Messages are independent of Release Policy, so nothing here
+/// can invalidate the resolved version status: an absent, null or non-array `messages` field means
+/// "no messages", and an individual invalid entry is skipped so one bad message never hides the
+/// valid ones.
+private func decodeMessages(_ value: Any?) -> [CommunityMessage] {
+  guard let json = value as? [Any] else { return [] }
   var messages: [CommunityMessage] = []
   for entry in json {
     guard let object = entry as? [String: Any], let message = decodeMessage(object) else { continue }

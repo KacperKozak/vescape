@@ -3,12 +3,6 @@ import { create } from 'zustand'
 
 import { addAppStatusListener, getAppStatus, type AppStatus } from 'vescape-core'
 
-export {
-  shouldShowUpdateWarning,
-  updateWarningMessage,
-  type UpdateWarningInputs,
-} from '@/modules/release/lib/updateWarning'
-
 /**
  * JS mirror of native App Status. Native owns the truth — it fetches on foreground, coalesces
  * refreshes, and keeps the last success for the process; this store only projects that state and
