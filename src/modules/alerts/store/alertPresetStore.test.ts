@@ -95,10 +95,10 @@ test('changing a level regenerates that metric wholesale', async () => {
   await useAlertPresetStore.getState().setLevel('battery', 'safe')
   const safeCount = presetRules(useAlertsStore.getState().rules, 'battery').length
 
-  await useAlertPresetStore.getState().setLevel('battery', 'pro')
+  await useAlertPresetStore.getState().setLevel('battery', 'minimal')
   const proRules = presetRules(useAlertsStore.getState().rules, 'battery')
 
-  // safe declares more points than pro, so regeneration must shrink the set, not append.
+  // safe declares more points than minimal, so regeneration must shrink the set, not append.
   expect(safeCount).toBeGreaterThan(proRules.length)
   expect(proRules.map((rule) => rule.id)).toEqual(
     proRules.map((_, index) => `preset:battery:${index}`),

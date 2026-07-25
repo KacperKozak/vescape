@@ -24,12 +24,12 @@ import { TELEMETRY_THRESHOLDS } from '@/modules/board/constants/telemetryThresho
  * counts/values here — never in native or in components.
  */
 
-export type AlertPresetLevel = 'off' | 'safe' | 'normal' | 'pro'
+export type AlertPresetLevel = 'off' | 'safe' | 'normal' | 'minimal'
 
 export type AlertPresetMetric = 'battery' | 'speed' | 'duty' | 'motor-temp' | 'controller-temp'
 
 /** Ordered intensity levels excluding `off`, safest first. */
-export const ALERT_PRESET_ACTIVE_LEVELS = ['safe', 'normal', 'pro'] as const
+export const ALERT_PRESET_ACTIVE_LEVELS = ['safe', 'normal', 'minimal'] as const
 
 type ActiveLevel = (typeof ALERT_PRESET_ACTIVE_LEVELS)[number]
 
@@ -86,11 +86,11 @@ export const ALERT_PRESET_GEIGER_SOUND_TYPE = 'preset:tick'
 const TEMP_LEVELS: Record<ActiveLevel, number[]> = {
   safe: [55, 60, 65, temp.warning, 75, temp.critical],
   normal: [temp.warning, 75, temp.critical],
-  pro: [temp.critical],
+  minimal: [temp.critical],
 }
 
 /**
- * Declarative safe/normal/pro definition for every preset metric. Battery points
+ * Declarative safe/normal/minimal definition for every preset metric. Battery points
  * are in percent (native compares battery single-threshold rules against SoC %
  * directly); temperatures in °C; duty in %; speed as a fraction of Board Top Speed.
  */
@@ -102,7 +102,7 @@ export const ALERT_PRESET_LEVELS: Record<AlertPresetMetric, AlertPresetMetricCon
     levels: {
       safe: [50, 40, batteryWarningPct, 20, 15, batteryCriticalPct, 5],
       normal: [batteryWarningPct, 20, batteryCriticalPct],
-      pro: [15, 5],
+      minimal: [15, 5],
     },
   },
   'motor-temp': {
@@ -122,7 +122,7 @@ export const ALERT_PRESET_LEVELS: Record<AlertPresetMetric, AlertPresetMetricCon
     levels: {
       safe: { start: 0.6, ceiling: 0.9 },
       normal: { start: 0.72, ceiling: 0.9 },
-      pro: { start: 0.82, ceiling: 0.9 },
+      minimal: { start: 0.82, ceiling: 0.9 },
     },
   },
   duty: {
@@ -131,7 +131,7 @@ export const ALERT_PRESET_LEVELS: Record<AlertPresetMetric, AlertPresetMetricCon
     levels: {
       safe: { start: 65, ceiling: duty.critical },
       normal: { start: duty.warning, ceiling: duty.critical },
-      pro: { start: 88, ceiling: duty.critical },
+      minimal: { start: 88, ceiling: duty.critical },
     },
   },
 }
@@ -252,6 +252,15 @@ const ALERT_PRESET_LEVEL_VALUES: AlertPresetLevel[] = ['off', ...ALERT_PRESET_AC
 /** Every metric `off` — the default before a rider touches any preset. */
 export const DEFAULT_ALERT_PRESET_SELECTION: AlertPresetSelection = Object.fromEntries(
   ALERT_PRESET_METRICS.map((metric) => [metric, 'off']),
+) as AlertPresetSelection
+
+/**
+ * Every metric `normal` — the starting point a new Board's setup opens on. Distinct from
+ * {@link DEFAULT_ALERT_PRESET_SELECTION}, which is the fallback for a Board that has no
+ * persisted selection at all and must stay `off` so existing Boards never self-arm.
+ */
+export const NEW_BOARD_ALERT_PRESET_SELECTION: AlertPresetSelection = Object.fromEntries(
+  ALERT_PRESET_METRICS.map((metric) => [metric, 'normal']),
 ) as AlertPresetSelection
 
 /** Coerce a persisted bag back into a full, valid selection; unknown/garbage levels fall to `off`. */

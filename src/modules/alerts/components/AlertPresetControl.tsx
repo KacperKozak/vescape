@@ -20,7 +20,7 @@ import {
 import { theme } from '@/constants/theme'
 
 /**
- * The shared preset control: an Off/Safe/Normal/Pro level slider over an enlarged,
+ * The shared preset control: an Off/Safe/Normal/Minimal level slider over an enlarged,
  * labeled gauge preview. The markers are derived straight from the pure generator
  * (`generateAlertPresetRules`), so the preview renders offline — no board, no
  * persisted rules required. When a live telemetry {@link SharedValue} is supplied
@@ -197,9 +197,11 @@ const LEVEL_OPTIONS: { id: AlertPresetLevel; label: string; tone: LevelTone }[] 
       color: theme.palette.slate.textSecondary,
     },
   },
-  { id: 'safe', label: 'Safe', tone: theme.palette.green },
-  { id: 'normal', label: 'Normal', tone: theme.palette.amber },
-  { id: 'pro', label: 'Pro', tone: theme.palette.red },
+  // Cautiousness ramp, not an alarm ramp: careful (blue) → balanced (green) → risky (orange).
+  // Green marks the recommended default; red stays reserved for real alerts.
+  { id: 'safe', label: 'Safe', tone: theme.palette.blue },
+  { id: 'normal', label: 'Normal', tone: theme.palette.green },
+  { id: 'minimal', label: 'Minimal', tone: theme.palette.orange },
 ]
 
 const ALL_LEVELS: AlertPresetLevel[] = ['off', ...ALERT_PRESET_ACTIVE_LEVELS]

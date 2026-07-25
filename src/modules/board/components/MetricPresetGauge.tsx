@@ -35,7 +35,7 @@ interface MetricPresetGaugeProps {
 /**
  * The detail-view preset block: an {@link AlertPresetControl} wired to the Alert
  * Preset store, settings, and the active board. It renders the enlarged live gauge
- * (preset markers + custom markers layered onto one arc) with the Off/Safe/Normal/Pro
+ * (preset markers + custom markers layered onto one arc) with the Off/Safe/Normal/Minimal
  * slider, sitting above the custom `AlertsSection`. Board is the telemetry hub that
  * already reads the alerts/history/settings stores, so the store wiring lives here
  * rather than in each per-metric route.

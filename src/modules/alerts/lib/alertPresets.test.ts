@@ -17,7 +17,7 @@ const ALL_METRICS: AlertPresetMetric[] = [
 ]
 
 describe('ALERT_PRESET_LEVELS config', () => {
-  test('declares safe/normal/pro for every metric', () => {
+  test('declares safe/normal/minimal for every metric', () => {
     for (const metric of ALL_METRICS) {
       const config = ALERT_PRESET_LEVELS[metric]
       for (const level of ALERT_PRESET_ACTIVE_LEVELS) {
@@ -57,19 +57,19 @@ describe('generateAlertPresetRules — battery / temperature (discrete)', () => 
     // Battery direction is "below": earlier protection == a higher percentage.
     const safe = generateAlertPresetRules('battery', 'safe', { hasBatteryConfig: true })
     const normal = generateAlertPresetRules('battery', 'normal', { hasBatteryConfig: true })
-    const pro = generateAlertPresetRules('battery', 'pro', { hasBatteryConfig: true })
+    const minimal = generateAlertPresetRules('battery', 'minimal', { hasBatteryConfig: true })
 
     expect(safe.length).toBeGreaterThan(normal.length)
-    expect(normal.length).toBeGreaterThan(pro.length)
+    expect(normal.length).toBeGreaterThan(minimal.length)
 
     const firstPoint = (rules: { threshold: number }[]) => rules[0].threshold
-    expect(firstPoint(safe)).toBeGreaterThan(firstPoint(pro))
+    expect(firstPoint(safe)).toBeGreaterThan(firstPoint(minimal))
 
     // Temperature direction is "above": earlier protection == a lower temperature.
     const safeTemp = generateAlertPresetRules('motor-temp', 'safe')
-    const proTemp = generateAlertPresetRules('motor-temp', 'pro')
-    expect(safeTemp.length).toBeGreaterThan(proTemp.length)
-    expect(safeTemp[0].threshold).toBeLessThan(proTemp[0].threshold)
+    const minimalTemp = generateAlertPresetRules('motor-temp', 'minimal')
+    expect(safeTemp.length).toBeGreaterThan(minimalTemp.length)
+    expect(safeTemp[0].threshold).toBeLessThan(minimalTemp[0].threshold)
   })
 
   test('battery with no valid config produces no rules', () => {
@@ -96,9 +96,9 @@ describe('generateAlertPresetRules — speed / duty (geiger)', () => {
   test('duty emits a single fixed-ceiling range whose start drops with protection', () => {
     const safe = generateAlertPresetRules('duty', 'safe')
     const normal = generateAlertPresetRules('duty', 'normal')
-    const pro = generateAlertPresetRules('duty', 'pro')
+    const minimal = generateAlertPresetRules('duty', 'minimal')
 
-    for (const rules of [safe, normal, pro]) {
+    for (const rules of [safe, normal, minimal]) {
       expect(rules).toHaveLength(1)
       expect(rules[0].thresholdMax).not.toBeNull()
       expect(rules[0].soundType).toBe(ALERT_PRESET_GEIGER_SOUND_TYPE)
@@ -106,9 +106,9 @@ describe('generateAlertPresetRules — speed / duty (geiger)', () => {
 
     // Fixed ceiling across levels; start drops as protection increases.
     expect(safe[0].thresholdMax).toBe(normal[0].thresholdMax)
-    expect(normal[0].thresholdMax).toBe(pro[0].thresholdMax)
+    expect(normal[0].thresholdMax).toBe(minimal[0].thresholdMax)
     expect(safe[0].threshold).toBeLessThan(normal[0].threshold)
-    expect(normal[0].threshold).toBeLessThan(pro[0].threshold)
+    expect(normal[0].threshold).toBeLessThan(minimal[0].threshold)
   })
 
   test('speed thresholds resolve as a percentage of Board Top Speed', () => {
@@ -129,13 +129,13 @@ describe('generateAlertPresetRules — speed / duty (geiger)', () => {
     const topSpeed = 5 // clamp floor
     const safe = generateAlertPresetRules('speed', 'safe', { boardTopSpeedKmh: topSpeed })
     const normal = generateAlertPresetRules('speed', 'normal', { boardTopSpeedKmh: topSpeed })
-    const pro = generateAlertPresetRules('speed', 'pro', { boardTopSpeedKmh: topSpeed })
+    const minimal = generateAlertPresetRules('speed', 'minimal', { boardTopSpeedKmh: topSpeed })
 
     expect(safe[0].threshold).toBeLessThan(normal[0].threshold)
-    expect(normal[0].threshold).toBeLessThan(pro[0].threshold)
+    expect(normal[0].threshold).toBeLessThan(minimal[0].threshold)
     // Ceiling stays at the configured 90% fraction, not rounded up to 100%.
     expect(normal[0].thresholdMax).toBe(4.5)
-    expect(pro[0].threshold).toBeLessThan(normal[0].thresholdMax ?? 0)
+    expect(minimal[0].threshold).toBeLessThan(normal[0].thresholdMax ?? 0)
   })
 
   test('speed with missing or zero top speed produces no rules', () => {

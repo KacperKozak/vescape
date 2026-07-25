@@ -14,7 +14,7 @@ export const ALERT_PRESET_METRIC_LABELS: Record<AlertPresetMetric, string> = {
 }
 
 /**
- * A single metric's Alert Preset control (labeled gauge preview + Off/Safe/Normal/Pro slider),
+ * A single metric's Alert Preset control (labeled gauge preview + Off/Safe/Normal/Minimal slider),
  * controlled by its caller so it works both against the active Board (Settings) and a draft (the
  * add-board wizard). Offline preview — no live telemetry needle — so it works before a board
  * session exists. One metric per instance so the wizard can page through them one at a time.

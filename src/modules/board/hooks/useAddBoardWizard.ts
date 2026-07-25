@@ -4,7 +4,7 @@ import { useShallow } from 'zustand/react/shallow'
 import type { BatteryConfig, BoardLink } from 'vescape-core'
 
 import {
-  DEFAULT_ALERT_PRESET_SELECTION,
+  NEW_BOARD_ALERT_PRESET_SELECTION,
   normalizeAlertPresetSelection,
   type AlertPresetLevel,
   type AlertPresetMetric,
@@ -103,7 +103,7 @@ export function useAddBoardWizard(): UseAddBoardWizard {
   const [manualMaxVoltage, setManualMaxVoltage] = useState('84')
   const [topSpeedKmh, setTopSpeedKmh] = useState(DEFAULT_BOARD_TOP_SPEED_KMH)
   const [alertPreset, setAlertPreset] = useState<AlertPresetSelection>(
-    DEFAULT_ALERT_PRESET_SELECTION,
+    NEW_BOARD_ALERT_PRESET_SELECTION,
   )
 
   const setAlertLevel = (metric: AlertPresetMetric, level: AlertPresetLevel) =>
