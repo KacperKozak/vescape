@@ -46,6 +46,7 @@ const DEFAULTS: AppSettings = {
   riderName: null,
   riderColor: null,
   legalPolicy: null,
+  dismissedCommunityMessageIds: [],
 }
 
 interface SettingsState extends AppSettings {

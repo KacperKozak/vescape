@@ -4,7 +4,7 @@ output:
 post-merge:
   commands:
     install:
-      glob: 'bun.lockb'
+      glob: 'bun.lock'
       run: bun install
 
 pre-commit:

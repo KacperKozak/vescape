@@ -79,6 +79,7 @@ const e2eSettings: AppSettings = {
   riderName: null,
   riderColor: null,
   legalPolicy: null,
+  dismissedCommunityMessageIds: [],
 }
 
 function emitDevice(event: DeviceFoundEvent): void {
