@@ -791,6 +791,11 @@ fun MapPointEntity.toMap(): Map<String, Any?> = mapOf(
   "name" to name,
   "description" to description,
   "media" to (mediaJson?.let(::decodeSettingJson).takeIf { it is List<*> } ?: emptyList<Map<String, Any?>>()),
+  "authorId" to authorId,
+  "authorName" to authorName,
+  "likesCount" to likesCount,
+  "likedByCurrentUser" to likedByCurrentUser,
+  "userReaction" to userReaction,
   "createdAt" to createdAt,
   "updatedAt" to updatedAt,
 )
@@ -810,6 +815,11 @@ internal fun Map<String, Any?>.toMapPointEntity(): MapPointEntity {
     name = getOptionalString("name"),
     description = getOptionalString("description"),
     mediaJson = encodeSettingJson(get("media") ?: emptyList<Map<String, Any?>>()),
+    authorId = getOptionalString("authorId"),
+    authorName = getOptionalString("authorName"),
+    likesCount = (get("likesCount") as? Number)?.toInt() ?: 0,
+    likedByCurrentUser = get("likedByCurrentUser") as? Boolean ?: false,
+    userReaction = (get("userReaction") as? String)?.takeIf { it == "up" || it == "down" },
     createdAt = (get("createdAt") as? Number)?.toLong() ?: now,
     updatedAt = (get("updatedAt") as? Number)?.toLong() ?: now,
   )

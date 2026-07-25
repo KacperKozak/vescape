@@ -20,7 +20,8 @@ function mediaExtension(uri: string, mediaType: PickedMapPointMediaAsset['mediaT
 
 function safeFilename(index: number, asset: PickedMapPointMediaAsset): string {
   const extension = mediaExtension(asset.uri, asset.mediaType)
-  return `${index + 1}_${asset.mediaType}_${asset.id.replace(/[^a-zA-Z0-9_-]/g, '').slice(-12) || 'asset'}.${extension}`
+  const identity = `${asset.id}_${asset.uri}`.replace(/[^a-zA-Z0-9_-]/g, '').slice(-24) || 'asset'
+  return `${Date.now()}_${index + 1}_${asset.mediaType}_${identity}.${extension}`
 }
 
 export async function saveMapPointMediaAssets(

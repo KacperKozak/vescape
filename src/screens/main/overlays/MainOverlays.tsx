@@ -12,6 +12,8 @@ import {
   MapPinIcon,
   NavigationArrowIcon,
   PencilSimpleIcon,
+  ThumbsDownIcon,
+  ThumbsUpIcon,
   FunnelIcon,
   PlusIcon,
   SlidersHorizontalIcon,
@@ -176,8 +178,11 @@ interface MainMapOverlayProps {
   addMapPoint: (kind: MapPointKind, latitude: number, longitude: number) => Promise<MapPoint>
   updateMapPoint: (
     id: string,
-    patch: Partial<Pick<MapPoint, 'name' | 'description' | 'media'>>,
+    patch: Partial<
+      Pick<MapPoint, 'name' | 'description' | 'media' | 'likesCount' | 'likedByCurrentUser'>
+    >,
   ) => Promise<MapPoint | null>
+  setMapPointReaction: (id: string, reaction: 'up' | 'down' | null) => void
   onRemoveMapPoint: (id: string) => void
   hiddenMapPointKinds: MapPointKind[]
   toggleMapPointKindVisibility: (kind: MapPointKind) => void
@@ -963,6 +968,7 @@ function MapTargetSheet({
   onEdit,
   onSave,
   onSaveMapPoint,
+  onLikeMapPoint,
   onDelete,
   onDismiss,
   onFocusTarget,
@@ -987,15 +993,20 @@ function MapTargetSheet({
     id: string,
     patch: Partial<Pick<MapPoint, 'name' | 'description' | 'media'>>,
   ) => Promise<MapPoint | null>
+  onLikeMapPoint?: (id: string, reaction: 'up' | 'down' | null) => void
   onDelete?: () => void
   onDismiss?: () => void
   onFocusTarget?: () => void
 }) {
   const isMapPoint = target.type === 'mapPoint'
   const point = isMapPoint ? target.point : null
+  const selectedPoint = point as MapPoint | null
   const [name, setName] = useState(point?.name ?? '')
   const [description, setDescription] = useState(point?.description ?? '')
   const [media, setMedia] = useState(point?.media ?? [])
+  const [reaction, setReaction] = useState<'up' | 'down' | null>(
+    point?.userReaction ?? (point?.likedByCurrentUser ? 'up' : null),
+  )
   const [mediaSaving, setMediaSaving] = useState(false)
   const keyboardLift = useKeyboardLift(mode === 'edit')
   const sheetBottom = mode === 'edit' ? Math.max(bottom, keyboardLift + 12) : bottom
@@ -1017,6 +1028,7 @@ function MapTargetSheet({
         ? 'Loading details'
         : target.subtitle ||
           (!isMapPoint ? `${target.latitude.toFixed(5)}, ${target.longitude.toFixed(5)}` : null)
+  const pointCreatedText = point ? new Date(point.createdAt).toLocaleDateString() : null
   const handlePickMedia = useCallback(async () => {
     if (!point) return
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -1036,12 +1048,14 @@ function MapTargetSheet({
       const saved = await saveMapPointMediaAssets(point.id, picked)
       setMedia((current) => {
         const existingUris = new Set(current.map((asset) => asset.uri))
-        return [...current, ...saved.filter((asset) => !existingUris.has(asset.uri))]
+        const nextMedia = [...current, ...saved.filter((asset) => !existingUris.has(asset.uri))]
+        void onSaveMapPoint?.(point.id, { media: nextMedia })
+        return nextMedia
       })
     } finally {
       setMediaSaving(false)
     }
-  }, [point])
+  }, [onSaveMapPoint, point])
   const handleCaptureMedia = useCallback(
     async (mediaTypes: ['images'] | ['videos']) => {
       if (!point) return
@@ -1068,13 +1082,15 @@ function MapTargetSheet({
         const saved = await saveMapPointMediaAssets(point.id, picked)
         setMedia((current) => {
           const existingUris = new Set(current.map((asset) => asset.uri))
-          return [...current, ...saved.filter((asset) => !existingUris.has(asset.uri))]
+          const nextMedia = [...current, ...saved.filter((asset) => !existingUris.has(asset.uri))]
+          void onSaveMapPoint?.(point.id, { media: nextMedia })
+          return nextMedia
         })
       } finally {
         setMediaSaving(false)
       }
     },
-    [point],
+    [onSaveMapPoint, point],
   )
   const handleSave = useCallback(async () => {
     if (point && onSaveMapPoint) {
@@ -1086,10 +1102,17 @@ function MapTargetSheet({
     }
     onSave?.()
   }, [description, media, name, onSave, onSaveMapPoint, point])
-  const handleRemoveMedia = useCallback((asset: MapPointMediaAsset) => {
-    setMedia((current) => current.filter((candidate) => candidate.uri !== asset.uri))
-    deleteMapPointMediaAsset(asset.uri)
-  }, [])
+  const handleRemoveMedia = useCallback(
+    (asset: MapPointMediaAsset) => {
+      setMedia((current) => {
+        const nextMedia = current.filter((candidate) => candidate.uri !== asset.uri)
+        void onSaveMapPoint?.(point?.id ?? '', { media: nextMedia })
+        return nextMedia
+      })
+      deleteMapPointMediaAsset(asset.uri)
+    },
+    [onSaveMapPoint, point?.id],
+  )
   const headerTargetContent = (
     <>
       <View style={[styles.mapTargetIcon, { borderColor: color }]}>{icon}</View>
@@ -1108,7 +1131,11 @@ function MapTargetSheet({
             {headerTitle}
           </Text>
         )}
-        {detailText ? (
+        {isMapPoint && mode !== 'edit' ? (
+          <Text style={styles.mapTargetMetaText} numberOfLines={1}>
+            {selectedPoint?.authorName ?? 'Local rider'} · {pointCreatedText ?? 'Unknown date'}
+          </Text>
+        ) : detailText ? (
           <Text style={styles.mapTargetSubtitle} numberOfLines={2}>
             {detailText}
           </Text>
@@ -1150,6 +1177,12 @@ function MapTargetSheet({
         ) : null}
       </View>
 
+      {isMapPoint && mode !== 'edit' && detailText ? (
+        <View style={styles.mapTargetDescriptionBlock}>
+          <Text style={styles.mapTargetSubtitle}>{detailText}</Text>
+        </View>
+      ) : null}
+
       {isMapPoint && mode === 'edit' ? (
         <View style={styles.mapTargetDraftFields}>
           <TextInput
@@ -1175,6 +1208,16 @@ function MapTargetSheet({
       {isMapPoint && mode !== 'edit' && media.length > 0 ? (
         <View style={styles.mapTargetMediaBox}>
           <MapPointMediaPreview assets={media} />
+        </View>
+      ) : null}
+      {isMapPoint && mode !== 'edit' ? (
+        <View style={styles.mapTargetLikeCount}>
+          {(point?.likesCount ?? 0) < 0 ? (
+            <ThumbsDownIcon size={14} color={theme.status.error.text} weight="fill" />
+          ) : (
+            <ThumbsUpIcon size={14} color={theme.palette.cyan.text} weight="fill" />
+          )}
+          <Text style={styles.mapTargetMetaText}>{selectedPoint?.likesCount ?? 0}</Text>
         </View>
       ) : null}
 
@@ -1216,13 +1259,60 @@ function MapTargetSheet({
               onPress={onEdit}
               style={({ pressed }) => [
                 styles.mapTargetEditButton,
-                styles.mapTargetSaveButton,
                 pressed && styles.mapTargetNavigatePressed,
               ]}
             >
               <PencilSimpleIcon size={18} color={theme.palette.slate.textPrimary} weight="bold" />
               <Text style={[styles.mapTargetNavigateText, styles.mapTargetSaveText]}>Edit</Text>
             </Pressable>
+          ) : null}
+          {isMapPoint && mode === 'select' && onLikeMapPoint && selectedPoint ? (
+            <View style={styles.mapTargetVoteGroup}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Like map feature"
+                onPress={() => {
+                  const nextReaction = reaction === 'up' ? null : 'up'
+                  setReaction(nextReaction)
+                  onLikeMapPoint(selectedPoint.id, nextReaction)
+                }}
+                style={({ pressed }) => [
+                  styles.mapTargetVoteButton,
+                  reaction === 'up' && styles.mapTargetUpButtonActive,
+                  pressed && styles.mapTargetNavigatePressed,
+                ]}
+              >
+                <ThumbsUpIcon
+                  size={18}
+                  color={
+                    reaction === 'up' ? theme.palette.cyan.text : theme.palette.slate.textPrimary
+                  }
+                  weight={reaction === 'up' ? 'fill' : 'bold'}
+                />
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Remove like from map feature"
+                onPress={() => {
+                  const nextReaction = reaction === 'down' ? null : 'down'
+                  setReaction(nextReaction)
+                  onLikeMapPoint(selectedPoint.id, nextReaction)
+                }}
+                style={({ pressed }) => [
+                  styles.mapTargetVoteButton,
+                  reaction === 'down' && styles.mapTargetDownButtonActive,
+                  pressed && styles.mapTargetNavigatePressed,
+                ]}
+              >
+                <ThumbsDownIcon
+                  size={18}
+                  color={
+                    reaction === 'down' ? theme.status.error.text : theme.palette.slate.textPrimary
+                  }
+                  weight={reaction === 'down' ? 'fill' : 'bold'}
+                />
+              </Pressable>
+            </View>
           ) : null}
           <Pressable
             accessibilityRole="button"
@@ -1610,6 +1700,9 @@ export function MainOverlays({
             }
             onSave={() => setEditingMapPointId(null)}
             onSaveMapPoint={map.updateMapPoint}
+            onLikeMapPoint={(id, nextReaction) => {
+              map.setMapPointReaction(id, nextReaction)
+            }}
             onFocusTarget={() => {
               if (map.selectedNavigationTarget) focusTargetOnMap(map.selectedNavigationTarget)
             }}
@@ -2328,6 +2421,19 @@ const styles = StyleSheet.create({
   mapTargetMediaBox: {
     gap: 12,
   },
+  mapTargetDescriptionBlock: {
+    paddingRight: 36,
+  },
+  mapTargetMetaText: {
+    color: theme.palette.slate.textSecondary,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  mapTargetLikeCount: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
   mapTargetActionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2358,6 +2464,30 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.alpha(theme.palette.slate.light, 0.3),
     backgroundColor: theme.alpha(theme.palette.slate.bg, 0.75),
+  },
+  mapTargetVoteGroup: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  mapTargetVoteButton: {
+    width: 46,
+    height: 46,
+    paddingHorizontal: 0,
+    borderRadius: 23,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: theme.alpha(theme.palette.slate.light, 0.3),
+    backgroundColor: theme.alpha(theme.palette.slate.bg, 0.75),
+  },
+  mapTargetUpButtonActive: {
+    borderColor: theme.palette.cyan.border,
+    backgroundColor: theme.palette.cyan.bg,
+  },
+  mapTargetDownButtonActive: {
+    borderColor: theme.status.error.border,
+    backgroundColor: theme.status.error.bg,
   },
   mapTargetDeleteButton: {
     backgroundColor: theme.status.error.bg,

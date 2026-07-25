@@ -341,6 +341,16 @@ data class MapPointEntity(
   val description: String?,
   @ColumnInfo(name = "media_json")
   val mediaJson: String?,
+  @ColumnInfo(name = "author_id")
+  val authorId: String?,
+  @ColumnInfo(name = "author_name")
+  val authorName: String?,
+  @ColumnInfo(name = "likes_count")
+  val likesCount: Int,
+  @ColumnInfo(name = "liked_by_current_user")
+  val likedByCurrentUser: Boolean,
+  @ColumnInfo(name = "user_reaction")
+  val userReaction: String?,
   @ColumnInfo(name = "created_at")
   val createdAt: Long,
   @ColumnInfo(name = "updated_at")

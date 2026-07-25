@@ -27,6 +27,7 @@ interface MapActions {
   load(): Promise<void>
   saveMapPoint(kind: MapPointKind, latitude: number, longitude: number): Promise<MapPoint>
   updateMapPoint(id: string, patch: MapPointMetadataPatch): Promise<MapPoint | null>
+  setMapPointReaction(id: string, reaction: 'up' | 'down' | null): Promise<MapPoint | null>
   replaceDirectionPoint(latitude: number, longitude: number): Promise<MapPoint>
   clearDirectionPoint(): Promise<void>
   removeMapPoint(id: string): Promise<void>
@@ -39,7 +40,19 @@ interface MapActions {
 
 const byCreatedAt = (a: MapPoint, b: MapPoint) => a.createdAt - b.createdAt
 const isSelectableMapPoint = (point: MapPoint) => point.kind !== DIRECTION_MAP_POINT_KIND
-type MapPointMetadataPatch = Partial<Pick<MapPoint, 'name' | 'description' | 'media'>>
+type MapPointMetadataPatch = Partial<
+  Pick<
+    MapPoint,
+    | 'name'
+    | 'description'
+    | 'media'
+    | 'authorId'
+    | 'authorName'
+    | 'likesCount'
+    | 'likedByCurrentUser'
+    | 'userReaction'
+  >
+>
 
 function compactText(value: string | null | undefined) {
   const trimmed = value?.trim()
@@ -53,6 +66,12 @@ function applyMapPointMetadata(point: MapPoint, patch: MapPointMetadataPatch): M
     description:
       'description' in patch ? compactText(patch.description) : (point.description ?? null),
     media: patch.media ?? point.media ?? [],
+    authorId: 'authorId' in patch ? (patch.authorId ?? null) : (point.authorId ?? null),
+    authorName: 'authorName' in patch ? (patch.authorName ?? null) : (point.authorName ?? null),
+    likesCount: patch.likesCount ?? point.likesCount ?? 0,
+    likedByCurrentUser: patch.likedByCurrentUser ?? point.likedByCurrentUser ?? false,
+    userReaction:
+      'userReaction' in patch ? (patch.userReaction ?? null) : (point.userReaction ?? null),
     updatedAt: Date.now(),
   }
 }
@@ -91,6 +110,11 @@ export const useMapStore = create<MapState & MapActions>((set, get) => ({
       longitude,
       createdAt: now,
       updatedAt: now,
+      authorId: 'local-user',
+      authorName: 'You',
+      likesCount: 0,
+      likedByCurrentUser: false,
+      userReaction: null,
     }
     set((s) => ({ mapPoints: [...s.mapPoints, point].sort(byCreatedAt) }))
     await upsertMapPoint(point)
@@ -108,6 +132,19 @@ export const useMapStore = create<MapState & MapActions>((set, get) => ({
     return updated
   },
 
+  async setMapPointReaction(id, reaction) {
+    const point = get().mapPoints.find((candidate) => candidate.id === id)
+    if (!point || !isSelectableMapPoint(point)) return null
+    const currentReaction = point.userReaction ?? (point.likedByCurrentUser ? 'up' : null)
+    if (currentReaction === reaction) return point
+    const score = (value: 'up' | 'down' | null) => (value === 'up' ? 1 : value === 'down' ? -1 : 0)
+    return get().updateMapPoint(id, {
+      userReaction: reaction,
+      likedByCurrentUser: reaction === 'up',
+      likesCount: (point.likesCount ?? 0) - score(currentReaction) + score(reaction),
+    })
+  },
+
   async replaceDirectionPoint(latitude, longitude) {
     const now = Date.now()
     const existing = get().getDirectionPoint()
@@ -118,6 +155,11 @@ export const useMapStore = create<MapState & MapActions>((set, get) => ({
       longitude,
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
+      authorId: existing?.authorId ?? 'local-user',
+      authorName: existing?.authorName ?? 'You',
+      likesCount: existing?.likesCount ?? 0,
+      likedByCurrentUser: existing?.likedByCurrentUser ?? false,
+      userReaction: existing?.userReaction ?? null,
     }
     set((s) => ({
       mapPoints: [

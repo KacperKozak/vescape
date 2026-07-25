@@ -81,6 +81,7 @@ export function MainScreen({
     removeMapPoint,
     clearDirectionPoint,
     updateMapPoint,
+    setMapPointReaction,
     selectMapPoint,
     toggleMapPointSelection,
   } = controller
@@ -153,6 +154,24 @@ export function MainScreen({
       void removeMapPoint(id)
     },
     [removeMapPoint],
+  )
+  const handleSetMapPointReaction = useCallback(
+    (id: string, reaction: 'up' | 'down' | null) => {
+      void setMapPointReaction(id, reaction).then((point) => {
+        if (!point) return
+        setSelectedNavigationTarget((current) =>
+          current?.type === 'mapPoint' && current.id === id
+            ? {
+                ...current,
+                point,
+                title: point.name || getMapPointKindLabel(point.kind),
+                subtitle: point.description ?? null,
+              }
+            : current,
+        )
+      })
+    },
+    [setMapPointReaction],
   )
   const handleUpdateMapPoint = useCallback(
     async (
@@ -409,6 +428,7 @@ export function MainScreen({
           onDismissSelectedTarget: handleDismissSelectedTarget,
           addMapPoint: controller.saveMapPoint,
           updateMapPoint: handleUpdateMapPoint,
+          setMapPointReaction: handleSetMapPointReaction,
           onRemoveMapPoint: handleRemoveMapPoint,
           hiddenMapPointKinds: controller.hiddenMapPointKinds,
           toggleMapPointKindVisibility: controller.toggleMapPointKindVisibility,

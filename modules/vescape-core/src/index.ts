@@ -271,6 +271,11 @@ export interface MapPoint {
   name?: string | null
   description?: string | null
   media?: MapPointMediaAsset[]
+  authorId?: string | null
+  authorName?: string | null
+  likesCount?: number
+  likedByCurrentUser?: boolean
+  userReaction?: 'up' | 'down' | null
   createdAt: number
   updatedAt: number
 }

@@ -182,6 +182,11 @@ enum TelemetryDatabase {
           name TEXT,
           description TEXT,
           media_json TEXT,
+          author_id TEXT,
+          author_name TEXT,
+          likes_count INTEGER NOT NULL DEFAULT 0,
+          liked_by_current_user INTEGER NOT NULL DEFAULT 0,
+          user_reaction TEXT,
           created_at INTEGER NOT NULL,
           updated_at INTEGER NOT NULL
         )
@@ -393,6 +398,11 @@ enum TelemetryDatabase {
       if !columns.contains("media_json") {
         try db.execute(sql: "ALTER TABLE map_points ADD COLUMN media_json TEXT")
       }
+      if !columns.contains("author_id") { try db.execute(sql: "ALTER TABLE map_points ADD COLUMN author_id TEXT") }
+      if !columns.contains("author_name") { try db.execute(sql: "ALTER TABLE map_points ADD COLUMN author_name TEXT") }
+      if !columns.contains("likes_count") { try db.execute(sql: "ALTER TABLE map_points ADD COLUMN likes_count INTEGER NOT NULL DEFAULT 0") }
+      if !columns.contains("liked_by_current_user") { try db.execute(sql: "ALTER TABLE map_points ADD COLUMN liked_by_current_user INTEGER NOT NULL DEFAULT 0") }
+      if !columns.contains("user_reaction") { try db.execute(sql: "ALTER TABLE map_points ADD COLUMN user_reaction TEXT") }
     }
 
     return migrator

@@ -354,6 +354,11 @@ final class AppDataRepository {
           "name": row["name"] as String?,
           "description": row["description"] as String?,
           "media": Self.decodeJson((row["media_json"] as? String) ?? "[]") as? [[String: Any?]] ?? [],
+          "authorId": row["author_id"] as String?,
+          "authorName": row["author_name"] as String?,
+          "likesCount": row["likes_count"] as Int64? ?? 0,
+          "likedByCurrentUser": (row["liked_by_current_user"] as Int64? ?? 0) != 0,
+          "userReaction": row["user_reaction"] as String?,
           "createdAt": row["created_at"] as Int64,
           "updatedAt": row["updated_at"] as Int64,
         ]
@@ -385,22 +390,22 @@ final class AppDataRepository {
 
   private static func insertMapPoint(
     _ db: Database,
-    _ c: (String, String, Int64, Int64, String?, String?, String?, Int64, Int64)
+    _ c: (String, String, Int64, Int64, String?, String?, String?, String?, String?, Int64, Int64, Int64, Int64, String?)
   ) throws {
     try db.execute(
       sql: """
         INSERT OR REPLACE INTO map_points (
-          id, kind, latitude_e7, longitude_e7, name, description, media_json, created_at, updated_at
+          id, kind, latitude_e7, longitude_e7, name, description, media_json, author_id, author_name, likes_count, liked_by_current_user, user_reaction, created_at, updated_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-      arguments: [c.0, c.1, c.2, c.3, c.4, c.5, c.6, c.7, c.8]
+      arguments: [c.0, c.1, c.2, c.3, c.4, c.5, c.6, c.7, c.8, c.9, c.10, c.11, c.12, c.13]
     )
   }
 
   private static func mapPointColumns(
     _ point: [String: Any?]
-  ) -> (String, String, Int64, Int64, String?, String?, String?, Int64, Int64)? {
+  ) -> (String, String, Int64, Int64, String?, String?, String?, String?, String?, Int64, Int64, Int64, Int64, String?)? {
     guard
       let id = point["id"] as? String,
       let kind = (point["kind"] as? String), validMapPointKinds.contains(kind),
@@ -418,6 +423,11 @@ final class AppDataRepository {
       optionalString(point["name"] ?? nil),
       optionalString(point["description"] ?? nil),
       encodeJson(point["media"] ?? []),
+      optionalString(point["authorId"] ?? nil),
+      optionalString(point["authorName"] ?? nil),
+      longValue(point["likesCount"] ?? nil) ?? 0,
+      longValue(point["likedByCurrentUser"] ?? nil) ?? 0,
+      (point["userReaction"] as? String).flatMap { ["up", "down"].contains($0) ? $0 : nil },
       createdAt,
       updatedAt
     )

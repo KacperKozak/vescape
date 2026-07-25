@@ -174,6 +174,42 @@ test('updates non-direction Map Point metadata through native storage', async ()
   expect(upsertMapPoint).toHaveBeenLastCalledWith(updated)
 })
 
+test('persists likes and metadata across a store reload', async () => {
+  const { useMapStore } = await import('@/modules/map/store/mapStore')
+
+  const point = await useMapStore.getState().saveMapPoint('viewpoint', 52.1, 21.1)
+  const saved = await useMapStore.getState().updateMapPoint(point.id, {
+    name: 'Saved lookout',
+    description: 'Survives process death',
+    media: [{ id: 'photo-1', uri: 'file:///photo.jpg', filename: 'photo.jpg', mediaType: 'photo' }],
+  })
+  expect(saved?.name).toBe('Saved lookout')
+
+  const liked = await useMapStore.getState().setMapPointReaction(point.id, 'up')
+  expect(liked?.likesCount).toBe(1)
+  expect(liked?.likedByCurrentUser).toBe(true)
+
+  const toggledOff = await useMapStore.getState().setMapPointReaction(point.id, null)
+  expect(toggledOff?.likesCount).toBe(0)
+  expect(toggledOff?.userReaction).toBe(null)
+
+  const disliked = await useMapStore.getState().setMapPointReaction(point.id, 'down')
+  expect(disliked?.likesCount).toBe(-1)
+  expect(disliked?.userReaction).toBe('down')
+
+  useMapStore.setState({ mapPoints: [], loaded: false })
+  await useMapStore.getState().load()
+
+  expect(useMapStore.getState().mapPoints[0]).toMatchObject({
+    id: point.id,
+    name: 'Saved lookout',
+    description: 'Survives process death',
+    likesCount: -1,
+    likedByCurrentUser: false,
+    userReaction: 'down',
+  })
+})
+
 test('replacing direction point leaves non-direction points intact', async () => {
   const { useMapStore } = await import('@/modules/map/store/mapStore')
   const drop: MapPoint = {

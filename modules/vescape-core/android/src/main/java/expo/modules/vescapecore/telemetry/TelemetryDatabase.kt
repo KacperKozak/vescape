@@ -12,7 +12,7 @@ import java.io.File
 // @parity /modules/vescape-core/ios/VescapeCoreModule.swift
 internal const val TELEMETRY_DATABASE_NAME = "vescape.db"
 internal const val LEGACY_TELEMETRY_DATABASE_NAME = "telemetry.db"
-internal const val TELEMETRY_DATABASE_VERSION = 27
+internal const val TELEMETRY_DATABASE_VERSION = 29
 
 @Database(
   entities = [
@@ -325,6 +325,11 @@ abstract class TelemetryDatabase : RoomDatabase() {
             name TEXT,
             description TEXT,
             media_json TEXT,
+            author_id TEXT,
+            author_name TEXT,
+            likes_count INTEGER NOT NULL DEFAULT 0,
+            liked_by_current_user INTEGER NOT NULL DEFAULT 0,
+            user_reaction TEXT,
             created_at INTEGER NOT NULL,
             updated_at INTEGER NOT NULL
           )
@@ -451,6 +456,21 @@ abstract class TelemetryDatabase : RoomDatabase() {
       }
     }
 
+    internal val MIGRATION_27_28 = object : Migration(27, 28) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        if (!hasColumn(db, "map_points", "author_id")) db.execSQL("ALTER TABLE map_points ADD COLUMN author_id TEXT")
+        if (!hasColumn(db, "map_points", "author_name")) db.execSQL("ALTER TABLE map_points ADD COLUMN author_name TEXT")
+        if (!hasColumn(db, "map_points", "likes_count")) db.execSQL("ALTER TABLE map_points ADD COLUMN likes_count INTEGER NOT NULL DEFAULT 0")
+        if (!hasColumn(db, "map_points", "liked_by_current_user")) db.execSQL("ALTER TABLE map_points ADD COLUMN liked_by_current_user INTEGER NOT NULL DEFAULT 0")
+      }
+    }
+
+    internal val MIGRATION_28_29 = object : Migration(28, 29) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        if (!hasColumn(db, "map_points", "user_reaction")) db.execSQL("ALTER TABLE map_points ADD COLUMN user_reaction TEXT")
+      }
+    }
+
     /**
      * One-time file rename from the pre-release "telemetry.db" name. Checkpoints the legacy WAL so
      * the whole database lives in the main file, then renames it in place. Idempotent: once the new
@@ -505,6 +525,8 @@ abstract class TelemetryDatabase : RoomDatabase() {
             MIGRATION_24_25,
             MIGRATION_25_26,
             MIGRATION_26_27,
+            MIGRATION_27_28,
+            MIGRATION_28_29,
           )
           .fallbackToDestructiveMigration(true)
           .addCallback(object : Callback() {
