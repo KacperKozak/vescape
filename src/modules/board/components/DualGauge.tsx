@@ -379,8 +379,8 @@ function HalfAlertTick({ fraction }: HalfAlertTickProps) {
 }
 
 // Numeric marker labels sit just inside the arc, centered on the tick.
-const HALF_LABEL_INSET = 11
-const HALF_LABEL_FONT_SIZE = 8
+const HALF_LABEL_INSET = 9
+const HALF_LABEL_FONT_SIZE = 6
 const HALF_LABEL_COLOR = theme.palette.yellow.text
 
 interface HalfAlertLabelProps {
