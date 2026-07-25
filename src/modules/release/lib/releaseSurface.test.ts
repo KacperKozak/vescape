@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { AppStatus, AppVersionStatus, CommunityMessage } from 'vescape-core'
 
 import { DEFAULT_APP_BLOCK_MESSAGE } from '@/modules/release/constants/appBlock'
+import { DEFAULT_ONLINE_BLOCK_MESSAGE } from '@/modules/release/constants/onlineBlock'
 import { DEFAULT_UPDATE_WARNING_MESSAGE } from '@/modules/release/constants/updateWarning'
 import {
   selectReleaseSurface,
@@ -30,7 +31,7 @@ function status(
 function inputs(over: Partial<ReleaseSurfaceInputs> = {}): ReleaseSurfaceInputs {
   return {
     status: null,
-    updateWarningDismissed: false,
+    versionNoticeDismissed: false,
     dismissedCommunityMessageIds: [],
     ...over,
   }
@@ -63,21 +64,34 @@ describe('selectReleaseSurface', () => {
     const surface = selectReleaseSurface(
       inputs({
         status: status('update-warning', { messages: [message({ id: 'a' })] }),
-        updateWarningDismissed: true,
+        versionNoticeDismissed: true,
       }),
     )
     expect(surface).toEqual({ kind: 'community-message', message: message({ id: 'a' }) })
   })
 
-  test('an app block ignores the update-warning dismissal', () => {
+  test('an app block ignores the version-notice dismissal', () => {
     const surface = selectReleaseSurface(
-      inputs({ status: status('app-blocked'), updateWarningDismissed: true }),
+      inputs({ status: status('app-blocked'), versionNoticeDismissed: true }),
     )
     expect(surface?.kind).toBe('app-block')
   })
 
-  test('online-blocked gates only Group Ride, never a Release surface', () => {
-    expect(selectReleaseSurface(inputs({ status: status('online-blocked') }))).toBeNull()
+  test('online-blocked shows the Online Block notice, outranking a Community Message', () => {
+    const surface = selectReleaseSurface(
+      inputs({ status: status('online-blocked', { messages: [message({ id: 'a' })] }) }),
+    )
+    expect(surface).toEqual({ kind: 'online-block', message: DEFAULT_ONLINE_BLOCK_MESSAGE })
+  })
+
+  test('a dismissed Online Block notice lets the Community Message through', () => {
+    const surface = selectReleaseSurface(
+      inputs({
+        status: status('online-blocked', { messages: [message({ id: 'a' })] }),
+        versionNoticeDismissed: true,
+      }),
+    )
+    expect(surface).toEqual({ kind: 'community-message', message: message({ id: 'a' }) })
   })
 
   test('uses the server message over the bundled default', () => {

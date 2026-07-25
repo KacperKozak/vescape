@@ -12,12 +12,13 @@ import { useTriggerRef } from '@/components/overlays/measureTrigger'
 import { IconHero } from '@/components/settings/IconHero'
 import { InfoModal } from '@/components/modals/InfoModal'
 import { TextPromptModal } from '@/components/modals/TextPromptModal'
-import { UpdateWarningModal } from '@/modules/release/components/UpdateWarningModal'
+import { VersionNoticeModal } from '@/modules/release/components/VersionNoticeModal'
 import { CommunityMessageModal } from '@/modules/release/components/CommunityMessageModal'
 import { AppBlockScreen } from '@/modules/release/components/AppBlockScreen'
 import type { CommunityMessage, CommunityMessageType } from 'vescape-core'
 import { ShowcaseCard } from '@/components/dev/ShowcaseCard'
 import { ChipRow, OpenButton, ToggleRow } from '@/components/dev/ShowcaseControls'
+import { DEFAULT_ONLINE_BLOCK_MESSAGE } from '@/modules/release/constants/onlineBlock'
 import { DEFAULT_UPDATE_WARNING_MESSAGE } from '@/modules/release/constants/updateWarning'
 import { DEFAULT_APP_BLOCK_MESSAGE } from '@/modules/release/constants/appBlock'
 import { theme } from '@/constants/theme'
@@ -111,26 +112,31 @@ const SERVER_UPDATE_MESSAGE = [
   '- Fixes reported ride-history gaps',
 ].join('\n')
 
-function UpdateWarningModalShowcase() {
+function VersionNoticeModalShowcase() {
   const [visible, setVisible] = useState(false)
   const [serverMessage, setServerMessage] = useState(true)
+  const [onlineBlock, setOnlineBlock] = useState(false)
+
+  const bundled = onlineBlock ? DEFAULT_ONLINE_BLOCK_MESSAGE : DEFAULT_UPDATE_WARNING_MESSAGE
 
   return (
     <ShowcaseCard
-      name="UpdateWarningModal"
+      name="VersionNoticeModal"
       controls={
         <>
           <ToggleRow label="server message" value={serverMessage} onToggle={setServerMessage} />
+          <ToggleRow label="online block" value={onlineBlock} onToggle={setOnlineBlock} />
           <OpenButton onPress={() => setVisible(true)} />
         </>
       }
     >
       <Text style={styles.previewHint}>
-        Server Markdown, or the bundled default when the rule carries none
+        Update Warning or Online Block, with server Markdown or the bundled default
       </Text>
-      <UpdateWarningModal
+      <VersionNoticeModal
+        kind={onlineBlock ? 'online-block' : 'update-warning'}
         visible={visible}
-        message={serverMessage ? SERVER_UPDATE_MESSAGE : DEFAULT_UPDATE_WARNING_MESSAGE}
+        message={serverMessage ? SERVER_UPDATE_MESSAGE : bundled}
         onDismiss={() => setVisible(false)}
         onUpdate={() => setVisible(false)}
       />
@@ -410,12 +416,12 @@ export default function ModalsPage() {
       <ScrollView contentContainerStyle={styles.content}>
         <IconHero
           icon={SquaresFourIcon}
-          description="FadeCardModal, ConfirmModal, InfoModal, UpdateWarningModal, CommunityMessageModal, AppBlockScreen, TextPromptModal, EdgeDrawer, FloatingSheet."
+          description="FadeCardModal, ConfirmModal, InfoModal, VersionNoticeModal, CommunityMessageModal, AppBlockScreen, TextPromptModal, EdgeDrawer, FloatingSheet."
         />
         <FadeCardModalShowcase />
         <ConfirmModalShowcase />
         <InfoModalShowcase />
-        <UpdateWarningModalShowcase />
+        <VersionNoticeModalShowcase />
         <CommunityMessageModalShowcase />
         <AppBlockScreenShowcase />
         <TextPromptModalShowcase />

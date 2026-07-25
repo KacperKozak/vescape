@@ -5,8 +5,9 @@ import { openAppUpdate, type CommunityMessageAction } from 'vescape-core'
 
 import { AppBlockScreen } from '@/modules/release/components/AppBlockScreen'
 import { CommunityMessageModal } from '@/modules/release/components/CommunityMessageModal'
-import { UpdateWarningModal } from '@/modules/release/components/UpdateWarningModal'
+import { VersionNoticeModal } from '@/modules/release/components/VersionNoticeModal'
 import { DEFAULT_APP_BLOCK_MESSAGE } from '@/modules/release/constants/appBlock'
+import { DEFAULT_ONLINE_BLOCK_MESSAGE } from '@/modules/release/constants/onlineBlock'
 import { DEFAULT_UPDATE_WARNING_MESSAGE } from '@/modules/release/constants/updateWarning'
 import { acknowledgeCommunityMessage } from '@/modules/release/lib/communityMessages'
 import { selectReleaseSurface, type ReleaseSurface } from '@/modules/release/lib/releaseSurface'
@@ -15,7 +16,7 @@ import { useSettingsStore } from '@/modules/settings/store/settingsStore'
 
 /**
  * The single mount point for every Release surface, presented one at a time in precedence order
- * (App Block, then Update Warning, then Community Message — see `selectReleaseSurface`). Sibling
+ * (App Block, then Online Block, then Update Warning, then Community Message — see `selectReleaseSurface`). Sibling
  * modals would collide: iOS presents one modal at a time and drops the rest.
  *
  * Native owns the truth behind all three — resolved App Status (in-process) and acknowledged
@@ -25,8 +26,8 @@ import { useSettingsStore } from '@/modules/settings/store/settingsStore'
  */
 export function ReleaseSurfaces() {
   const status = useAppStatusStore((state) => state.status)
-  const updateWarningDismissed = useAppStatusStore((state) => state.updateWarningDismissed)
-  const dismissUpdateWarning = useAppStatusStore((state) => state.dismissUpdateWarning)
+  const versionNoticeDismissed = useAppStatusStore((state) => state.versionNoticeDismissed)
+  const dismissVersionNotice = useAppStatusStore((state) => state.dismissVersionNotice)
   const dismissedCommunityMessageIds = useSettingsStore(
     (state) => state.dismissedCommunityMessageIds,
   )
@@ -34,7 +35,7 @@ export function ReleaseSurfaces() {
 
   const surface = selectReleaseSurface({
     status,
-    updateWarningDismissed,
+    versionNoticeDismissed,
     dismissedCommunityMessageIds,
   })
   const { presented, exiting, finishExit } = useSequencedSurface(surface?.kind ?? null)
@@ -67,14 +68,28 @@ export function ReleaseSurfaces() {
     )
   }
 
+  if (presented === 'online-block') {
+    return (
+      <VersionNoticeModal
+        kind="online-block"
+        visible={!exiting}
+        message={surface?.kind === 'online-block' ? surface.message : DEFAULT_ONLINE_BLOCK_MESSAGE}
+        onDismiss={dismissVersionNotice}
+        onUpdate={openAppUpdate}
+        onExited={finishExit}
+      />
+    )
+  }
+
   if (presented === 'update-warning') {
     return (
-      <UpdateWarningModal
+      <VersionNoticeModal
+        kind="update-warning"
         visible={!exiting}
         message={
           surface?.kind === 'update-warning' ? surface.message : DEFAULT_UPDATE_WARNING_MESSAGE
         }
-        onDismiss={dismissUpdateWarning}
+        onDismiss={dismissVersionNotice}
         onUpdate={openAppUpdate}
         onExited={finishExit}
       />

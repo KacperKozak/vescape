@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { GiftIcon } from 'phosphor-react-native'
+import { ArrowFatLinesUpIcon } from 'phosphor-react-native'
 
 import { Button } from '@/components/base/Button'
 import { Markdown } from '@/components/base/Markdown'
@@ -7,7 +7,11 @@ import { FadeCardModal } from '@/components/modals/FadeCardModal'
 import { theme } from '@/constants/theme'
 import { DEFAULT_UPDATE_WARNING_MESSAGE } from '@/modules/release/constants/updateWarning'
 
-interface UpdateWarningModalProps {
+/** The two dismissible version notices. An App Block is not one — it owns a full-screen shell. */
+export type VersionNoticeKind = 'update-warning' | 'online-block'
+
+interface VersionNoticeModalProps {
+  kind: VersionNoticeKind
   visible: boolean
   /** Markdown body — the server message or a bundled default. */
   message: string
@@ -18,29 +22,46 @@ interface UpdateWarningModalProps {
   onExited?: () => void
 }
 
+const NOTICE = {
+  'update-warning': {
+    title: 'Update available',
+    icon: ArrowFatLinesUpIcon,
+    iconColor: theme.status.upgrade.color,
+  },
+  'online-block': {
+    title: 'Update required',
+    icon: ArrowFatLinesUpIcon,
+    iconColor: theme.status.upgrade.color,
+  },
+} as const
+
 /**
- * Non-blocking Update Warning surface: renders the server (or bundled) Markdown message and a single
- * dismiss action. An Update Warning changes no capability availability — this only recommends.
- * Presentational only; {@link ReleaseSurfaces} decides when it appears and drives dismissal.
+ * Dismissible version notice: renders the server (or bundled) Markdown message and a single update
+ * action. An Update Warning changes no capability availability; an Online Block already denies
+ * Online Capabilities natively, so this only tells the rider why. Presentational only;
+ * {@link ReleaseSurfaces} decides when it appears and drives dismissal.
  */
-export function UpdateWarningModal({
+export function VersionNoticeModal({
+  kind,
   visible,
   message,
   onDismiss,
   onUpdate,
   onExited,
-}: UpdateWarningModalProps) {
+}: VersionNoticeModalProps) {
   // Keep the last shown message so the exit animation renders content instead of blanking.
   const [rendered, setRendered] = useState(DEFAULT_UPDATE_WARNING_MESSAGE)
   if (visible && message !== rendered) setRendered(message)
+
+  const notice = NOTICE[kind]
 
   return (
     <FadeCardModal
       visible={visible}
       onDismiss={onDismiss}
-      title="Update available"
-      titleIcon={GiftIcon}
-      titleIconColor={theme.palette.purple.color}
+      title={notice.title}
+      titleIcon={notice.icon}
+      titleIconColor={notice.iconColor}
       footer={
         <Button
           label="Update"

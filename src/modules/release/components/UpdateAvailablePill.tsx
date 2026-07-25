@@ -1,4 +1,4 @@
-import { GiftIcon } from 'phosphor-react-native'
+import { ArrowFatLinesUpIcon } from 'phosphor-react-native'
 
 import { Button } from '@/components/base/Button'
 import { theme } from '@/constants/theme'
@@ -13,7 +13,7 @@ export function UpdateAvailablePill({ latestVersion, onPress }: UpdateAvailableP
     <Button
       label={`Update to v${latestVersion}`}
       onPress={onPress}
-      icon={GiftIcon}
+      icon={ArrowFatLinesUpIcon}
       accessibilityLabel={`Update Vescape to version ${latestVersion}`}
       style={{ backgroundColor: theme.status.upgrade.color, marginTop: 12 }}
     />

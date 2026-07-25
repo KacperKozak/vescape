@@ -6,7 +6,6 @@ import {
   ChartLineUpIcon,
   CrosshairIcon,
   DeviceMobileIcon,
-  GiftIcon,
   GaugeIcon,
   BatteryMediumIcon,
   PaletteIcon,
@@ -19,8 +18,6 @@ import {
   type Icon,
 } from 'phosphor-react-native'
 import { router } from 'expo-router'
-import { openAppUpdate } from 'vescape-core'
-
 import { Button } from '@/components/base/Button'
 import { Placeholder } from '@/components/base/Placeholder'
 import { ColorPicker } from '@/components/forms/ColorPicker'
@@ -146,20 +143,19 @@ function GroupRideWidget() {
         icon={BroadcastIcon}
         title="Group Ride"
         accent={accent}
+        height={240}
         footer={
           <Button
-            label="Update Vescape"
-            icon={GiftIcon}
-            onPress={() => openAppUpdate()}
-            style={[styles.fill, styles.updateAction]}
-            accessibilityLabel="Update Vescape"
+            label="Create"
+            icon={PlusIcon}
+            onPress={() => {}}
+            disabled
+            style={[styles.fill, styles.actionBtn]}
+            accessibilityLabel="Create group ride"
           />
         }
       >
-        <Placeholder
-          icon={WarningIcon}
-          description="Update Vescape to use Group Ride. Your board, recording, and history keep working."
-        />
+        <Placeholder icon={WarningIcon} description="Not available in this version." />
       </CanvasWidget>
     )
   }
@@ -447,9 +443,6 @@ const styles = StyleSheet.create({
   },
   fill: {
     flex: 1,
-  },
-  updateAction: {
-    backgroundColor: theme.status.upgrade.color,
   },
   actionBtn: {
     backgroundColor: theme.palette.groupRide.border,

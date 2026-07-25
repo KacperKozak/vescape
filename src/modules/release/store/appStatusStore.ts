@@ -6,7 +6,7 @@ import { addAppStatusListener, getAppStatus, type AppStatus } from 'vescape-core
 /**
  * JS mirror of native App Status. Native owns the truth — it fetches on foreground, coalesces
  * refreshes, and keeps the last success for the process; this store only projects that state and
- * remembers the Update Warning dismissal for the current cold launch.
+ * remembers the version-notice dismissal for the current cold launch.
  *
  * `status` is `null` until the first successful native fetch (fail-open), so a rider with no
  * connectivity sees no version UI at all.
@@ -15,19 +15,19 @@ interface AppStatusState {
   /** Latest native App Status, or `null` when no successful fetch has landed this process. */
   status: AppStatus | null
   /**
-   * Update Warning prompts the rider has dismissed for this cold launch. In-memory only — a fresh
-   * process forgets it and the warning returns (PRD story 4). Never persisted.
+   * Whether the rider dismissed the version notice (Update Warning / Online Block) for this cold
+   * launch. In-memory only — a fresh process forgets it and the notice returns (PRD story 4).
    */
-  updateWarningDismissed: boolean
+  versionNoticeDismissed: boolean
   replace: (status: AppStatus | null) => void
-  dismissUpdateWarning: () => void
+  dismissVersionNotice: () => void
 }
 
 export const useAppStatusStore = create<AppStatusState>((set) => ({
   status: null,
-  updateWarningDismissed: false,
+  versionNoticeDismissed: false,
   replace: (status) => set({ status }),
-  dismissUpdateWarning: () => set({ updateWarningDismissed: true }),
+  dismissVersionNotice: () => set({ versionNoticeDismissed: true }),
 }))
 
 /**
