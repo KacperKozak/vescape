@@ -1,6 +1,6 @@
 import { Modal, ScrollView, StyleSheet, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { ArrowFatLinesUpIcon, WarningOctagonIcon } from 'phosphor-react-native'
+import { ArrowFatLinesUpIcon, ArrowRightIcon } from 'phosphor-react-native'
 
 import { Button } from '@/components/base/Button'
 import { Markdown } from '@/components/base/Markdown'
@@ -10,6 +10,10 @@ import { theme } from '@/constants/theme'
 interface AppBlockScreenProps {
   /** Markdown body — the server message or a bundled default. */
   message: string
+  /** The blocked build the rider is on. */
+  installedVersion: string
+  /** The build to update to. */
+  latestVersion: string
   /** Open the stable platform download route. The only action App Block offers. */
   onUpdate: () => void
 }
@@ -23,7 +27,12 @@ interface AppBlockScreenProps {
  * This shell issues no Board Session or Ride Recording command: already-running native work keeps
  * going underneath it (PRD story 9).
  */
-export function AppBlockScreen({ message, onUpdate }: AppBlockScreenProps) {
+export function AppBlockScreen({
+  message,
+  installedVersion,
+  latestVersion,
+  onUpdate,
+}: AppBlockScreenProps) {
   return (
     <Modal
       visible
@@ -36,12 +45,17 @@ export function AppBlockScreen({ message, onUpdate }: AppBlockScreenProps) {
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
           <View style={styles.badge}>
-            <WarningOctagonIcon size={28} color={theme.status.error.color} weight="fill" />
+            <ArrowFatLinesUpIcon size={28} color={theme.status.upgrade.color} weight="bold" />
           </View>
           <Text style={styles.title}>Update required</Text>
+          <View style={styles.versions}>
+            <Text style={styles.versionFrom}>v{installedVersion}</Text>
+            <ArrowRightIcon size={14} color={theme.palette.slate.textMuted} weight="bold" />
+            <Text style={styles.versionTo}>v{latestVersion}</Text>
+          </View>
         </View>
         <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
-          <Markdown>{message}</Markdown>
+          <Markdown align="center">{message}</Markdown>
         </ScrollView>
         <Button
           label="Update Vescape"
@@ -72,15 +86,29 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: theme.status.error.bg,
+    backgroundColor: theme.status.upgrade.bg,
     borderWidth: 1,
-    borderColor: theme.status.error.border,
+    borderColor: theme.status.upgrade.border,
   },
   title: {
     color: theme.palette.slate.textPrimary,
     fontSize: 22,
     fontWeight: '800',
     textAlign: 'center',
+  },
+  versions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  versionFrom: {
+    color: theme.palette.slate.textMuted,
+    fontSize: 14,
+  },
+  versionTo: {
+    color: theme.palette.purple.light,
+    fontSize: 14,
+    fontWeight: '700',
   },
   body: {
     flex: 1,

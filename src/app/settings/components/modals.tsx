@@ -173,6 +173,8 @@ function AppBlockScreenShowcase() {
       {visible ? (
         <AppBlockScreen
           message={serverMessage ? SERVER_APP_BLOCK_MESSAGE : DEFAULT_APP_BLOCK_MESSAGE}
+          installedVersion="0.70.0"
+          latestVersion="0.80.2"
           onUpdate={() => setVisible(false)}
         />
       ) : null}

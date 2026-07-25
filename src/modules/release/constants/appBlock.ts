@@ -3,4 +3,4 @@
  * message. Markdown, rendered by `Markdown`. The server can override this per release.
  */
 export const DEFAULT_APP_BLOCK_MESSAGE =
-  'This version of Vescape can no longer be used safely and must be updated before you continue. Any active ride keeps recording — updating will not interrupt it.'
+  'This version of Vescape can no longer be used safely and must be updated before you continue.'

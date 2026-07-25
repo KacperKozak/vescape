@@ -6,7 +6,6 @@ import { openAppUpdate, type CommunityMessageAction } from 'vescape-core'
 import { AppBlockScreen } from '@/modules/release/components/AppBlockScreen'
 import { CommunityMessageModal } from '@/modules/release/components/CommunityMessageModal'
 import { VersionNoticeModal } from '@/modules/release/components/VersionNoticeModal'
-import { DEFAULT_APP_BLOCK_MESSAGE } from '@/modules/release/constants/appBlock'
 import { DEFAULT_ONLINE_BLOCK_MESSAGE } from '@/modules/release/constants/onlineBlock'
 import { DEFAULT_UPDATE_WARNING_MESSAGE } from '@/modules/release/constants/updateWarning'
 import { acknowledgeCommunityMessage } from '@/modules/release/lib/communityMessages'
@@ -59,10 +58,12 @@ export function ReleaseSurfaces() {
     void Linking.openURL(action.url).catch(() => {})
   }
 
-  if (presented === 'app-block') {
+  if (presented === 'app-block' && surface?.kind === 'app-block') {
     return (
       <AppBlockScreen
-        message={surface?.kind === 'app-block' ? surface.message : DEFAULT_APP_BLOCK_MESSAGE}
+        message={surface.message}
+        installedVersion={surface.installedVersion}
+        latestVersion={surface.latestVersion}
         onUpdate={openAppUpdate}
       />
     )

@@ -25,6 +25,8 @@ interface MarkdownProps {
   children: string
   /** Layout-level container style (margins, flex) — not visual overrides. */
   style?: StyleProp<ViewStyle>
+  /** Horizontal text alignment for paragraphs and headings. Defaults to left. */
+  align?: MarkdownAlign
   /** Defaults to opening the href with the OS handler. */
   onLinkPress?: (href: string) => void
 }
@@ -48,13 +50,13 @@ const openLink = (href: string) => {
  * tables, and soft/hard breaks. Wide tables scroll horizontally; images fill
  * the available width and fall back to their alt text on failure.
  */
-export function Markdown({ children, style, onLinkPress = openLink }: MarkdownProps) {
+export function Markdown({ children, style, align, onLinkPress = openLink }: MarkdownProps) {
   const blocks = useMemo(() => parseMarkdown(children), [children])
 
   return (
     <View style={[styles.root, style]}>
       {blocks.map((block, index) => (
-        <Block key={index} block={block} onLinkPress={onLinkPress} />
+        <Block key={index} block={block} align={align} onLinkPress={onLinkPress} />
       ))}
     </View>
   )
@@ -62,10 +64,11 @@ export function Markdown({ children, style, onLinkPress = openLink }: MarkdownPr
 
 interface BlockProps {
   block: MarkdownBlock
+  align?: MarkdownAlign
   onLinkPress: (href: string) => void
 }
 
-function Block({ block, onLinkPress }: BlockProps) {
+function Block({ block, align, onLinkPress }: BlockProps) {
   switch (block.type) {
     case 'paragraph':
       return (
@@ -74,7 +77,7 @@ function Block({ block, onLinkPress }: BlockProps) {
             run.kind === 'image' ? (
               <MarkdownImage key={index} src={run.src} alt={run.alt} />
             ) : (
-              <Text key={index} style={styles.paragraph}>
+              <Text key={index} style={[styles.paragraph, alignStyle(align ?? null)]}>
                 {inlineNodes(run.nodes, onLinkPress)}
               </Text>
             ),
@@ -84,7 +87,7 @@ function Block({ block, onLinkPress }: BlockProps) {
 
     case 'heading':
       return (
-        <Text style={[styles.heading, headingStyles[block.level]]}>
+        <Text style={[styles.heading, headingStyles[block.level], alignStyle(align ?? null)]}>
           {inlineNodes(block.children, onLinkPress)}
         </Text>
       )
@@ -99,7 +102,7 @@ function Block({ block, onLinkPress }: BlockProps) {
               </Text>
               <View style={styles.listBody}>
                 {item.map((child, childIndex) => (
-                  <Block key={childIndex} block={child} onLinkPress={onLinkPress} />
+                  <Block key={childIndex} block={child} align={align} onLinkPress={onLinkPress} />
                 ))}
               </View>
             </View>
@@ -111,7 +114,7 @@ function Block({ block, onLinkPress }: BlockProps) {
       return (
         <View style={styles.quote}>
           {block.children.map((child, index) => (
-            <Block key={index} block={child} onLinkPress={onLinkPress} />
+            <Block key={index} block={child} align={align} onLinkPress={onLinkPress} />
           ))}
         </View>
       )

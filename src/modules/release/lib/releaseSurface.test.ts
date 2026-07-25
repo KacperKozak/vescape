@@ -50,7 +50,12 @@ describe('selectReleaseSurface', () => {
     const surface = selectReleaseSurface(
       inputs({ status: status('app-blocked', { messages: [message({ id: 'a' })] }) }),
     )
-    expect(surface).toEqual({ kind: 'app-block', message: DEFAULT_APP_BLOCK_MESSAGE })
+    expect(surface).toEqual({
+      kind: 'app-block',
+      message: DEFAULT_APP_BLOCK_MESSAGE,
+      installedVersion: '0.70.0',
+      latestVersion: '0.80.2',
+    })
   })
 
   test('an update warning outranks a pending Community Message', () => {
@@ -97,7 +102,12 @@ describe('selectReleaseSurface', () => {
   test('uses the server message over the bundled default', () => {
     expect(
       selectReleaseSurface(inputs({ status: status('app-blocked', { message: '# Stop' }) })),
-    ).toEqual({ kind: 'app-block', message: '# Stop' })
+    ).toEqual({
+      kind: 'app-block',
+      message: '# Stop',
+      installedVersion: '0.70.0',
+      latestVersion: '0.80.2',
+    })
     expect(
       selectReleaseSurface(inputs({ status: status('update-warning', { message: '# Soon' }) })),
     ).toEqual({ kind: 'update-warning', message: '# Soon' })

@@ -10,7 +10,7 @@ import { currentCommunityMessage } from '@/modules/release/lib/communityMessages
  * time on iOS, so stacked surfaces would silently swallow each other.
  */
 export type ReleaseSurface =
-  | { kind: 'app-block'; message: string }
+  | { kind: 'app-block'; message: string; installedVersion: string; latestVersion: string }
   | { kind: 'online-block'; message: string }
   | { kind: 'update-warning'; message: string }
   | { kind: 'community-message'; message: CommunityMessage }
@@ -40,7 +40,12 @@ export function selectReleaseSurface(inputs: ReleaseSurfaceInputs): ReleaseSurfa
   const version = inputs.status?.version
 
   if (version?.status === 'app-blocked') {
-    return { kind: 'app-block', message: version.message ?? DEFAULT_APP_BLOCK_MESSAGE }
+    return {
+      kind: 'app-block',
+      message: version.message ?? DEFAULT_APP_BLOCK_MESSAGE,
+      installedVersion: version.installed,
+      latestVersion: version.latest,
+    }
   }
 
   if (version?.status === 'online-blocked' && !inputs.versionNoticeDismissed) {
