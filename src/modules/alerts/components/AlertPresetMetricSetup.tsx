@@ -5,19 +5,11 @@ import { theme } from '@/constants/theme'
 import { AlertPresetControl } from '@/modules/alerts/components/AlertPresetControl'
 import { type AlertPresetLevel, type AlertPresetMetric } from '@/modules/alerts/lib/alertPresets'
 
-export const ALERT_PRESET_METRIC_LABELS: Record<AlertPresetMetric, string> = {
-  battery: 'Battery',
-  speed: 'Speed',
-  duty: 'Duty',
-  'motor-temp': 'Motor temperature',
-  'controller-temp': 'Controller temperature',
-}
-
 /**
- * A single metric's Alert Preset control (labeled gauge preview + Off/Safe/Normal/Minimal slider),
- * controlled by its caller so it works both against the active Board (Settings) and a draft (the
- * add-board wizard). Offline preview — no live telemetry needle — so it works before a board
- * session exists. One metric per instance so the wizard can page through them one at a time.
+ * A single metric's Alert Preset level (labeled gauge preview + level slider), controlled by its
+ * caller. Presets only: board settings edits any Board, including one that is not active, whose
+ * rules the alerts store does not hold — so custom rules are edited from `/control` and the
+ * add-board wizard, where the rule set on screen is the one being written.
  */
 export function AlertPresetMetricSetup({
   metric,

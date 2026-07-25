@@ -2,7 +2,6 @@ import { useMemo } from 'react'
 
 import { ControlDetailLayout } from '@/modules/board/components/ControlDetailLayout'
 import { MetricDetailChart } from '@/modules/board/components/MetricDetailChart'
-import { MetricPresetGauge } from '@/modules/board/components/MetricPresetGauge'
 import { toTelemetryChartPoints } from '@/modules/board/components/metricDetailData'
 import { telemetry } from '@/modules/board/constants/telemetry'
 import {
@@ -27,7 +26,7 @@ export default function SpeedScreen() {
       title={cfg.label}
       controlId={cfg.controlId}
       unit={cfg.unit}
-      gauge={<MetricPresetGauge metric="speed" value={liveTelemetryRuntime.values.speedKmh} />}
+      liveValue={liveTelemetryRuntime.values.speedKmh}
     >
       <MetricDetailChart
         metric={cfg}

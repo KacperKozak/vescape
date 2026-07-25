@@ -467,6 +467,7 @@ function AlertPresetControlShowcase() {
   const [level, setLevel] = useState<AlertPresetLevel>('normal')
   const [live, setLive] = useState(false)
   const [custom, setCustom] = useState(false)
+  const [editable, setEditable] = useState(true)
   const [disabled, setDisabled] = useState(false)
   const liveValue = useSharedValue<number | null>(null)
 
@@ -497,6 +498,7 @@ function AlertPresetControlShowcase() {
           />
           <ToggleRow label="live session" value={live} onToggle={setLive} />
           <ToggleRow label="custom markers" value={custom} onToggle={setCustom} />
+          <ToggleRow label="editable" value={editable} onToggle={setEditable} />
           <ToggleRow label="disabled" value={disabled} onToggle={setDisabled} />
         </>
       }
@@ -514,6 +516,8 @@ function AlertPresetControlShowcase() {
             : undefined
         }
         disabled={disabled}
+        onCustomize={editable ? () => setLevel('custom') : undefined}
+        onDiscardCustom={editable ? () => setLevel('normal') : undefined}
       />
     </ShowcaseCard>
   )

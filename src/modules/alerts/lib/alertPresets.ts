@@ -24,12 +24,20 @@ import { TELEMETRY_THRESHOLDS } from '@/modules/board/constants/telemetryThresho
  * counts/values here — never in native or in components.
  */
 
-export type AlertPresetLevel = 'off' | 'safe' | 'normal' | 'minimal'
+/**
+ * A metric's alert setup: one of the generated intensity levels, `off`, or `custom` —
+ * the rider took ownership and hand-edits the rules themselves. `custom` generates
+ * nothing, exactly like `off`; the difference is who owns the metric's rules.
+ */
+export type AlertPresetLevel = 'off' | 'safe' | 'normal' | 'minimal' | 'custom'
 
 export type AlertPresetMetric = 'battery' | 'speed' | 'duty' | 'motor-temp' | 'controller-temp'
 
-/** Ordered intensity levels excluding `off`, safest first. */
+/** Ordered generated intensity levels (excludes `off` and `custom`), safest first. */
 export const ALERT_PRESET_ACTIVE_LEVELS = ['safe', 'normal', 'minimal'] as const
+
+/** The level a metric lands on when the rider discards their custom rules. */
+export const ALERT_PRESET_FALLBACK_LEVEL: AlertPresetLevel = 'normal'
 
 type ActiveLevel = (typeof ALERT_PRESET_ACTIVE_LEVELS)[number]
 
@@ -144,7 +152,7 @@ export interface GenerateAlertPresetRulesOptions {
 }
 
 function isActiveLevel(level: AlertPresetLevel): level is ActiveLevel {
-  return level !== 'off'
+  return (ALERT_PRESET_ACTIVE_LEVELS as readonly string[]).includes(level)
 }
 
 /** Round to one decimal place, avoiding trailing binary-float noise. */
@@ -155,7 +163,7 @@ function roundTenth(value: number): number {
 /**
  * Deterministically expand a preset selection into concrete rule specs.
  *
- * `off` — and any guard failure (battery without a valid config, speed without a
+ * `off`, `custom` — and any guard failure (battery without a valid config, speed without a
  * usable Board Top Speed) — yields `[]` rather than garbage rules. Discrete metrics
  * emit one single-threshold rule per configured point in config order; geiger
  * metrics emit a single range rule.
@@ -247,7 +255,18 @@ export const ALERT_PRESET_METRICS = Object.keys(ALERT_PRESET_LEVELS) as AlertPre
 /** The rider's chosen level per metric — the durable `alertPreset` settings bag. */
 export type AlertPresetSelection = Record<AlertPresetMetric, AlertPresetLevel>
 
-const ALERT_PRESET_LEVEL_VALUES: AlertPresetLevel[] = ['off', ...ALERT_PRESET_ACTIVE_LEVELS]
+const ALERT_PRESET_LEVEL_VALUES: AlertPresetLevel[] = [
+  'off',
+  ...ALERT_PRESET_ACTIVE_LEVELS,
+  'custom',
+]
+
+/** Narrow a control id to the preset metric it names, or `null` when it has no presets. */
+export function asAlertPresetMetric(controlId: string | undefined): AlertPresetMetric | null {
+  return ALERT_PRESET_METRICS.includes(controlId as AlertPresetMetric)
+    ? (controlId as AlertPresetMetric)
+    : null
+}
 
 /** Every metric `off` — the default before a rider touches any preset. */
 export const DEFAULT_ALERT_PRESET_SELECTION: AlertPresetSelection = Object.fromEntries(

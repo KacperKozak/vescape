@@ -14,7 +14,8 @@ import {
   type TelemetryAlertTab as AlertTab,
 } from '@/modules/board/constants/telemetryThresholds'
 import { type DerivedBatteryConfig } from '@/modules/battery/lib/types'
-import { type AlertRule, type AlertSoundType } from '@/modules/alerts/store/alertsStore'
+import { type AlertSoundType } from '@/modules/alerts/store/alertsStore'
+import { type DraftAlertRule } from '@/modules/alerts/lib/customAlertRules'
 import {
   type AlertSound,
   type AlertSoundCategory,
@@ -100,14 +101,14 @@ interface AlertFormModalProps {
   visible: boolean
   controlId: string
   unit: string
-  editRule: AlertRule | null
+  editRule: DraftAlertRule | null
   batteryConfig: DerivedBatteryConfig | null
   onClose(): void
   onSave(threshold: number, thresholdMax: number | null, soundType: AlertSoundType): void
 }
 
 function getEditFormDefaults(
-  editRule: AlertRule,
+  editRule: DraftAlertRule,
   dialConfig: ReturnType<typeof getAlertDialConfig>,
   batteryConfig: DerivedBatteryConfig | null,
 ) {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/base/Text'
 import {
@@ -22,13 +22,14 @@ import { useShallow } from 'zustand/react/shallow'
 
 import {
   ALERT_PRESET_METRIC_LABELS,
-  AlertPresetMetricSetup,
-} from '@/modules/alerts/components/AlertPresetMetricSetup'
+  ALERT_PRESET_METRIC_UNITS,
+} from '@/modules/alerts/constants/metricLabels'
+import { MetricAlerts } from '@/modules/alerts/components/MetricAlerts'
+import { useDraftMetricAlerts, type DraftAlertSetup } from '@/modules/alerts/hooks/useMetricAlerts'
 import { BoardTopSpeedCard } from '@/modules/alerts/components/BoardTopSpeedCard'
 import {
   ALERT_PRESET_METRICS,
   formatAlertPresetSummary,
-  normalizeAlertPresetSelection,
   type AlertPresetMetric,
 } from '@/modules/alerts/lib/alertPresets'
 import { BoardBatteryForm } from '@/modules/board/components/BoardBatteryForm'
@@ -453,32 +454,44 @@ function PresetsStep({ wizard }: Props) {
             Pick how loudly this metric warns you. Adjust it any time from its control on the main
             screen.
           </Text>
-          <AlertPresetMetricSetup
-            metric={substep.key as AlertPresetMetric}
-            level={
-              normalizeAlertPresetSelection(wizard.alertPreset)[substep.key as AlertPresetMetric]
-            }
-            onLevelChange={(level) => wizard.setAlertLevel(substep.key as AlertPresetMetric, level)}
-            topSpeedKmh={wizard.topSpeedKmh}
-            hasBatteryConfig={wizard.hasBatteryConfig}
-          />
+          <DraftMetricAlerts wizard={wizard} metric={substep.key as AlertPresetMetric} />
         </>
       )}
     </StepContainer>
   )
 }
 
+/** The draft-backed alert block for one metric — the same UI `/control` shows for a saved Board. */
+function DraftMetricAlerts({ wizard, metric }: Props & { metric: AlertPresetMetric }) {
+  const { setAlertSetup } = wizard
+  const onChange = useCallback(
+    (setup: DraftAlertSetup) => setAlertSetup(metric, setup),
+    [setAlertSetup, metric],
+  )
+  const controller = useDraftMetricAlerts(metric, {
+    setup: wizard.alertSetup[metric],
+    topSpeedKmh: wizard.topSpeedKmh,
+    hasBatteryConfig: wizard.hasBatteryConfig,
+    onChange,
+  })
+
+  return <MetricAlerts controller={controller} unit={ALERT_PRESET_METRIC_UNITS[metric]} />
+}
+
 function ConfirmStep({ wizard }: Props) {
   const alertSummaries = useMemo(() => {
-    const selection = normalizeAlertPresetSelection(wizard.alertPreset)
-    return ALERT_PRESET_METRICS.map((metric) => ({
-      metric,
-      summary: formatAlertPresetSummary(metric, selection[metric], {
-        boardTopSpeedKmh: wizard.topSpeedKmh,
-        hasBatteryConfig: wizard.hasBatteryConfig,
-      }),
-    })).filter((row): row is { metric: AlertPresetMetric; summary: string } => row.summary != null)
-  }, [wizard.alertPreset, wizard.hasBatteryConfig, wizard.topSpeedKmh])
+    return ALERT_PRESET_METRICS.map((metric) => {
+      const { level, rules } = wizard.alertSetup[metric]
+      const summary =
+        level === 'custom'
+          ? `${rules.length} custom ${rules.length === 1 ? 'alert' : 'alerts'}`
+          : formatAlertPresetSummary(metric, level, {
+              boardTopSpeedKmh: wizard.topSpeedKmh,
+              hasBatteryConfig: wizard.hasBatteryConfig,
+            })
+      return { metric, summary }
+    }).filter((row): row is { metric: AlertPresetMetric; summary: string } => row.summary != null)
+  }, [wizard.alertSetup, wizard.hasBatteryConfig, wizard.topSpeedKmh])
 
   return (
     <StepContainer

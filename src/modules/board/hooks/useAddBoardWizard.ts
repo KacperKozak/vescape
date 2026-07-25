@@ -4,12 +4,12 @@ import { useShallow } from 'zustand/react/shallow'
 import type { BatteryConfig, BoardLink } from 'vescape-core'
 
 import {
+  ALERT_PRESET_METRICS,
   NEW_BOARD_ALERT_PRESET_SELECTION,
-  normalizeAlertPresetSelection,
-  type AlertPresetLevel,
   type AlertPresetMetric,
   type AlertPresetSelection,
 } from '@/modules/alerts/lib/alertPresets'
+import { type DraftAlertSetup } from '@/modules/alerts/hooks/useMetricAlerts'
 import { DEFAULT_BOARD_TOP_SPEED_KMH } from '@/modules/alerts/lib/boardAlertSettings'
 import { useAlertPresetStore } from '@/modules/alerts/store/alertPresetStore'
 import { useAlertsStore } from '@/modules/alerts/store/alertsStore'
@@ -22,6 +22,23 @@ import {
   parseVoltage,
 } from '@/modules/board/lib/boardSetup'
 import { useBoardStore } from '@/modules/board/store/boardStore'
+
+/** The wizard's buffered alert setup for every preset metric, flushed onto the Board on save. */
+export type DraftAlertSetupBag = Record<AlertPresetMetric, DraftAlertSetup>
+
+const DEFAULT_DRAFT_ALERT_SETUP = Object.fromEntries(
+  ALERT_PRESET_METRICS.map((metric): [AlertPresetMetric, DraftAlertSetup] => [
+    metric,
+    { level: NEW_BOARD_ALERT_PRESET_SELECTION[metric], rules: [] },
+  ]),
+) as DraftAlertSetupBag
+
+/** The durable `alertPreset` bag a draft setup persists as — its levels, without the draft rules. */
+export function draftAlertPresetSelection(setup: DraftAlertSetupBag): AlertPresetSelection {
+  return Object.fromEntries(
+    ALERT_PRESET_METRICS.map((metric) => [metric, setup[metric].level]),
+  ) as AlertPresetSelection
+}
 
 /** Canonical step order. `presets` is the per-board Alert Preset setup step. */
 export const WIZARD_STEPS = ['scan', 'name', 'battery', 'presets', 'confirm'] as const
@@ -49,9 +66,9 @@ interface AddBoardWizardState {
   manualMaxVoltage: string
   batteryWarning: string | null
   batterySummary: BatterySummary
-  /** Draft Board Top Speed + per-metric Alert Preset selection, persisted to the new Board on save. */
+  /** Draft Board Top Speed + per-metric alert setup, persisted to the new Board on save. */
   topSpeedKmh: number
-  alertPreset: AlertPresetSelection
+  alertSetup: DraftAlertSetupBag
   /** True when the draft battery config is usable (gates SoC %-based presets). */
   hasBatteryConfig: boolean
   canSave: boolean
@@ -74,7 +91,7 @@ interface AddBoardWizardActions {
   setManualMinVoltage: (v: string) => void
   setManualMaxVoltage: (v: string) => void
   setTopSpeedKmh: (v: number) => void
-  setAlertLevel: (metric: AlertPresetMetric, level: AlertPresetLevel) => void
+  setAlertSetup: (metric: AlertPresetMetric, setup: DraftAlertSetup) => void
   save: () => void
 }
 
@@ -102,12 +119,10 @@ export function useAddBoardWizard(): UseAddBoardWizard {
   const [manualMinVoltage, setManualMinVoltage] = useState('60')
   const [manualMaxVoltage, setManualMaxVoltage] = useState('84')
   const [topSpeedKmh, setTopSpeedKmh] = useState(DEFAULT_BOARD_TOP_SPEED_KMH)
-  const [alertPreset, setAlertPreset] = useState<AlertPresetSelection>(
-    NEW_BOARD_ALERT_PRESET_SELECTION,
-  )
+  const [alertSetup, setAlertSetup] = useState<DraftAlertSetupBag>(DEFAULT_DRAFT_ALERT_SETUP)
 
-  const setAlertLevel = (metric: AlertPresetMetric, level: AlertPresetLevel) =>
-    setAlertPreset((prev) => ({ ...normalizeAlertPresetSelection(prev), [metric]: level }))
+  const setMetricAlertSetup = (metric: AlertPresetMetric, setup: DraftAlertSetup) =>
+    setAlertSetup((prev) => ({ ...prev, [metric]: setup }))
 
   const previewConfig: BatteryConfig =
     batteryMode === 'preset'
@@ -180,12 +195,19 @@ export function useAddBoardWizard(): UseAddBoardWizard {
       batteryConfig,
       // Persist the draft alert setup onto the new Board (#254), then materialize its preset rules.
       topSpeedKmh,
-      alertPreset,
+      alertPreset: draftAlertPresetSelection(alertSetup),
       alertPresetsOnboarded: true,
     })
     setActiveBoard(board.id)
     void (async () => {
       await useAlertsStore.getState().load(board.id)
+      // Flush the rider's own rules first: they carry no board id until one exists, and metrics
+      // holding them are `custom`, so the regeneration below never touches them.
+      for (const { rules } of Object.values(alertSetup)) {
+        for (const rule of rules) {
+          await useAlertsStore.getState().upsert({ ...rule, boardId: board.id })
+        }
+      }
       await useAlertPresetStore.getState().regenerateAll()
     })()
     router.dismissAll()
@@ -210,7 +232,7 @@ export function useAddBoardWizard(): UseAddBoardWizard {
     batteryWarning,
     batterySummary,
     topSpeedKmh,
-    alertPreset,
+    alertSetup,
     hasBatteryConfig,
     canSave,
     setStep,
@@ -229,7 +251,7 @@ export function useAddBoardWizard(): UseAddBoardWizard {
     setManualMinVoltage,
     setManualMaxVoltage,
     setTopSpeedKmh,
-    setAlertLevel,
+    setAlertSetup: setMetricAlertSetup,
     save,
   }
 }

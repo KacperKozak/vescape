@@ -6,7 +6,6 @@ import { useSharedValue } from 'react-native-reanimated'
 import { BmsCellVoltages } from '@/modules/battery/components/BmsCellVoltages'
 import { ControlDetailLayout } from '@/modules/board/components/ControlDetailLayout'
 import { MetricDetailChart } from '@/modules/board/components/MetricDetailChart'
-import { MetricPresetGauge } from '@/modules/board/components/MetricPresetGauge'
 import { toTelemetryChartPoints } from '@/modules/board/components/metricDetailData'
 import { IconButton } from '@/components/base/IconButton'
 import { computeAutoRange } from '@/components/charts/chartMath'
@@ -114,7 +113,7 @@ export default function BatteryScreen() {
       title="Battery"
       controlId={battVoltageCfg.controlId}
       unit={battVoltageCfg.unit}
-      gauge={<MetricPresetGauge metric="battery" value={percentValue} />}
+      liveValue={percentValue}
     >
       {/* Cell groups sit above the charts so a scrubbing thumb doesn't cover them. */}
       <BmsCellVoltages scrubTimeMs={scrubTimeMs} windowMs={windowMs} />

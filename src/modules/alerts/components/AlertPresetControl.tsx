@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
+import { PencilSimpleIcon, SlidersHorizontalIcon, TrashIcon } from 'phosphor-react-native'
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -7,6 +8,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated'
 
+import { IconButton } from '@/components/base/IconButton'
 import { Text } from '@/components/base/Text'
 import { type DualGaugeAlert } from '@/components/charts/gaugeAlert'
 import { SingleGauge } from '@/modules/board/components/DualGauge'
@@ -122,6 +124,11 @@ interface AlertPresetControlProps {
   hotRange?: PresetGaugeHotRange | null
   /** Blocks slider interaction and dims it (e.g. battery without a valid config). */
   disabled?: boolean
+  /** Take ownership of this level's rules. Omitted where custom rules aren't offered (the gauge
+   * preview in board settings), which also hides the action button. */
+  onCustomize?: () => void
+  /** Give the metric back to the presets. Only reachable while `level` is `custom`. */
+  onDiscardCustom?: () => void
 }
 
 export function AlertPresetControl({
@@ -134,6 +141,8 @@ export function AlertPresetControl({
   customAlerts,
   hotRange,
   disabled,
+  onCustomize,
+  onDiscardCustom,
 }: AlertPresetControlProps) {
   const gauge = PRESET_GAUGE[metric]
   const max =
@@ -155,11 +164,26 @@ export function AlertPresetControl({
       label: gauge.formatMarker(spec.threshold),
       labelMax: spec.thresholdMax == null ? undefined : gauge.formatMarker(spec.thresholdMax),
     }))
-    return customAlerts ? [...presetMarkers, ...customAlerts] : presetMarkers
+    if (!customAlerts) return presetMarkers
+    // Custom markers arrive as bare thresholds; this component owns the per-metric formatting, so
+    // label them here rather than making every caller reproduce it.
+    return [
+      ...presetMarkers,
+      ...customAlerts.map((alert) => ({
+        ...alert,
+        label: alert.label ?? gauge.formatMarker(alert.threshold),
+        labelMax:
+          alert.labelMax ??
+          (alert.thresholdMax == null ? undefined : gauge.formatMarker(alert.thresholdMax)),
+      })),
+    ]
   }, [metric, level, boardTopSpeedKmh, hasBatteryConfig, gauge, customAlerts])
 
   // A stable null placeholder so the gauge always has a SharedValue; the needle is hidden offline.
   const placeholder = useSharedValue<number | null>(null)
+
+  const isCustom = level === 'custom'
+  const editAction = isCustom ? onDiscardCustom : onCustomize
 
   return (
     <View style={styles.container}>
@@ -176,7 +200,31 @@ export function AlertPresetControl({
         showValue={liveValue != null}
         containerStyle={styles.gauge}
       />
-      <LevelSlider value={level} onChange={onLevelChange} disabled={disabled} />
+      <View style={styles.levelRow}>
+        {isCustom ? (
+          <CustomChip />
+        ) : (
+          <LevelSlider value={level} onChange={onLevelChange} disabled={disabled} />
+        )}
+        {editAction && !disabled ? (
+          <IconButton
+            icon={isCustom ? TrashIcon : PencilSimpleIcon}
+            destructive={isCustom}
+            accessibilityLabel={isCustom ? 'Discard custom alerts' : 'Edit alerts'}
+            onPress={editAction}
+          />
+        ) : null}
+      </View>
+    </View>
+  )
+}
+
+/** Stands in for the level slider once the rider owns the metric's rules — there is no level. */
+function CustomChip() {
+  return (
+    <View style={styles.customChip}>
+      <SlidersHorizontalIcon size={14} color={theme.palette.orange.color} weight="bold" />
+      <Text style={styles.customChipLabel}>Custom</Text>
     </View>
   )
 }
@@ -270,7 +318,30 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     paddingHorizontal: 0,
   },
+  levelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  customChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    height: 38,
+    borderRadius: 19,
+    borderWidth: 1,
+    backgroundColor: theme.palette.orange.bg,
+    borderColor: theme.palette.orange.border,
+  },
+  customChipLabel: {
+    color: theme.palette.orange.color,
+    fontSize: 13,
+    fontWeight: '800',
+  },
   slider: {
+    flex: 1,
     flexDirection: 'row',
     height: 38,
     borderRadius: 19,

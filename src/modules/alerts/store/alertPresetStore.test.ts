@@ -202,3 +202,55 @@ test('editing an inactive board regenerates only that board rules', async () => 
   expect(useAlertsStore.getState().boardId).toBe(BOARD_ID)
   expect(useAlertsStore.getState().rules).toHaveLength(0)
 })
+
+test('customize hands the level rules to the rider and stops regenerating the metric', async () => {
+  const { useAlertsStore, useBoardStore, useAlertPresetStore } = await setup()
+
+  await useAlertPresetStore.getState().setLevel('battery', 'normal')
+  const generated = presetRules(useAlertsStore.getState().rules, 'battery')
+
+  await useAlertPresetStore.getState().customize('battery')
+
+  const board = useBoardStore.getState().boards.find((b) => b.id === BOARD_ID)
+  expect(boardSelection(board)).toMatchObject({ battery: 'custom' })
+
+  const rules = useAlertsStore.getState().rules.filter((rule) => rule.controlId === 'battery')
+  // Same alerts, now rider-owned: no preset provenance and no deterministic preset ids to be
+  // overwritten by a later regeneration.
+  expect(rules.map((rule) => rule.threshold)).toEqual(generated.map((rule) => rule.threshold))
+  expect(rules.map((rule) => rule.soundType)).toEqual(generated.map((rule) => rule.soundType))
+  expect(rules.every((rule) => rule.source == null)).toBe(true)
+  expect(rules.some((rule) => rule.id.startsWith('preset:'))).toBe(false)
+
+  await useAlertPresetStore.getState().regenerateAll()
+  expect(useAlertsStore.getState().rules.filter((r) => r.controlId === 'battery')).toEqual(rules)
+})
+
+test('customize from off starts the rider with an empty set', async () => {
+  const { useAlertsStore, useBoardStore, useAlertPresetStore } = await setup()
+
+  await useAlertPresetStore.getState().setLevel('duty', 'off')
+  await useAlertPresetStore.getState().customize('duty')
+
+  expect(boardSelection(useBoardStore.getState().boards[0])).toMatchObject({ duty: 'custom' })
+  expect(useAlertsStore.getState().rules.filter((rule) => rule.controlId === 'duty')).toHaveLength(
+    0,
+  )
+})
+
+test('discarding custom rules clears them and returns the metric to a preset', async () => {
+  const { useAlertsStore, useBoardStore, useAlertPresetStore } = await setup()
+
+  await useAlertPresetStore.getState().setLevel('duty', 'safe')
+  await useAlertPresetStore.getState().customize('duty')
+  useAlertsStore.getState().add('duty', 70, null, 'preset:beep')
+  expect(useAlertsStore.getState().rules.filter((rule) => rule.controlId === 'duty').length).toBe(2)
+
+  await useAlertPresetStore.getState().discardCustom('duty')
+
+  const rules = useAlertsStore.getState().rules.filter((rule) => rule.controlId === 'duty')
+  // Every rider rule goes, including ones added after customizing; what is left is generated.
+  expect(boardSelection(useBoardStore.getState().boards[0])).toMatchObject({ duty: 'normal' })
+  expect(rules.length).toBeGreaterThan(0)
+  expect(rules.every((rule) => rule.source === 'preset')).toBe(true)
+})

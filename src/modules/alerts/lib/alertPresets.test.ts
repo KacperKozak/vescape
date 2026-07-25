@@ -5,6 +5,7 @@ import {
   ALERT_PRESET_GEIGER_SOUND_TYPE,
   ALERT_PRESET_LEVELS,
   generateAlertPresetRules,
+  normalizeAlertPresetSelection,
   type AlertPresetMetric,
 } from '@/modules/alerts/lib/alertPresets'
 
@@ -143,5 +144,23 @@ describe('generateAlertPresetRules — speed / duty (geiger)', () => {
     expect(generateAlertPresetRules('speed', 'normal', { boardTopSpeedKmh: 0 })).toEqual([])
     expect(generateAlertPresetRules('speed', 'normal', { boardTopSpeedKmh: null })).toEqual([])
     expect(generateAlertPresetRules('speed', 'normal', { boardTopSpeedKmh: NaN })).toEqual([])
+  })
+})
+
+test('custom generates nothing — the rider owns the metric rules', () => {
+  for (const metric of ALL_METRICS) {
+    expect(
+      generateAlertPresetRules(metric, 'custom', {
+        boardTopSpeedKmh: 40,
+        hasBatteryConfig: true,
+      }),
+    ).toEqual([])
+  }
+})
+
+test('custom survives a selection round-trip', () => {
+  expect(normalizeAlertPresetSelection({ battery: 'custom', speed: 'nonsense' })).toMatchObject({
+    battery: 'custom',
+    speed: 'off',
   })
 })

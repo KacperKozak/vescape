@@ -17,10 +17,8 @@ import { BoardBatteryEditorModal } from '@/modules/board/components/BoardBattery
 import { BoardInfoEditorModal } from '@/modules/board/components/BoardInfoEditorModal'
 import { ConfirmModal } from '@/components/modals/ConfirmModal'
 import { SettingsSectionTitle } from '@/components/settings/SettingsSectionTitle'
-import {
-  ALERT_PRESET_METRIC_LABELS,
-  AlertPresetMetricSetup,
-} from '@/modules/alerts/components/AlertPresetMetricSetup'
+import { AlertPresetMetricSetup } from '@/modules/alerts/components/AlertPresetMetricSetup'
+import { ALERT_PRESET_METRIC_LABELS } from '@/modules/alerts/constants/metricLabels'
 import { BoardTopSpeedCard } from '@/modules/alerts/components/BoardTopSpeedCard'
 import { ALERT_PRESET_METRICS } from '@/modules/alerts/lib/alertPresets'
 import {
