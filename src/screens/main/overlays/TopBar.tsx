@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/base/Text'
 import {
+  ArrowFatLinesUpIcon,
   BroadcastIcon,
   CaretDownIcon,
   GearSixIcon,
@@ -28,6 +29,8 @@ import type { Board } from '@/modules/board/store/boardStore'
 import { useGroupRideStore } from '@/modules/group-ride/store/groupRideStore'
 import { useWeatherStore } from '@/modules/weather/store/weatherStore'
 import { theme } from '@/constants/theme'
+import { selectAvailableUpdate } from '@/modules/release/lib/availableUpdate'
+import { useAppStatusStore } from '@/modules/release/store/appStatusStore'
 
 interface TopBarProps {
   boards: Board[]
@@ -62,6 +65,11 @@ export function TopBar({
   const weatherCode = useWeatherStore((s) => s.weatherCode)
   const weatherTemp = useWeatherStore((s) => s.temperature)
   const weatherPrecip = useWeatherStore((s) => s.precipitationProbability)
+  const appStatus = useAppStatusStore((s) => s.status)
+  const availableUpdate = selectAvailableUpdate(appStatus)
+  // A Release Policy warning escalates the gear itself; a merely newer version stays a quiet dot.
+  const versionWarning =
+    appStatus?.version.status === 'update-warning' || appStatus?.version.status === 'online-blocked'
   const sunrise = useWeatherStore((s) => s.sunrise)
   const sunset = useWeatherStore((s) => s.sunset)
   const hasWeather = weatherCode != null && weatherTemp != null
@@ -138,10 +146,16 @@ export function TopBar({
           )}
           {activeBoardId && <BoardWarningControl boardId={activeBoardId} />}
         </View>
+        {/* An Update Warning / Online Block takes over the gear's icon and accent — same treatment
+            as an active group ride; a plain available update only badges it with a dot. Settings
+            stays this button's one destination, and the update is started from the pill inside. */}
         <IconButton
-          icon={GearSixIcon}
+          icon={versionWarning ? ArrowFatLinesUpIcon : GearSixIcon}
           onPress={() => router.push(routes.settings)}
           onLongPress={() => router.push(routes.settingsComponents)}
+          accent={versionWarning ? theme.status.upgrade.color : undefined}
+          dot={!versionWarning && availableUpdate ? theme.status.upgrade.color : undefined}
+          accessibilityLabel={availableUpdate ? 'Settings, update available' : 'Settings'}
           style={styles.iconRight}
         />
       </View>

@@ -19,6 +19,8 @@ import { startAppDataSync } from '@/bootstrap/appDataSync'
 import { startBoardWarningsSync } from '@/modules/board/store/boardWarningsStore'
 import { useGroupRideStore } from '@/modules/group-ride/store/groupRideStore'
 import { useRiderStore } from '@/modules/group-ride/store/riderStore'
+import { ReleaseSurfaces } from '@/modules/release/components/ReleaseSurfaces'
+import { startAppStatusSync } from '@/modules/release/store/appStatusStore'
 import { useSettingsStore } from '@/modules/settings/store/settingsStore'
 import { theme } from '@/constants/theme'
 
@@ -63,10 +65,12 @@ function RootLayout() {
     useGroupRideStore.getState().startObserving()
     const stopAppDataSync = startAppDataSync()
     const stopBoardWarningsSync = startBoardWarningsSync()
+    const stopAppStatusSync = startAppStatusSync()
     return () => {
       useGroupRideStore.getState().stopObserving()
       stopAppDataSync()
       stopBoardWarningsSync()
+      stopAppStatusSync()
     }
   }, [])
 
@@ -154,6 +158,8 @@ function RootLayout() {
             <Stack.Screen name={stackScreens.editBoard} options={{ title: 'Edit Board' }} />
             <Stack.Screen name={stackScreens.editBoardLink} options={{ title: 'Board Link' }} />
           </Stack>
+          {/* Above navigation so a Release surface covers every screen. Only ever one at a time. */}
+          <ReleaseSurfaces />
           <StatusBar style="light" />
         </GestureHandlerRootView>
       </DiagnosticErrorBoundary>

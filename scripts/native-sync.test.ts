@@ -100,6 +100,14 @@ describe('prebuildFingerprint', () => {
     expect(prebuildFingerprint('android', root)).not.toEqual(before)
   })
 
+  it('changes when env values prebuild bakes into the native projects change', () => {
+    write('.env', 'EXPO_PUBLIC_SERVER_URL=https://vescape.app')
+    const before = prebuildFingerprint('android', root)
+    write('.env.local', 'EXPO_PUBLIC_SERVER_URL=http://localhost:3000')
+
+    expect(prebuildFingerprint('android', root)).not.toEqual(before)
+  })
+
   it('ignores art the JS bundle loads at runtime', () => {
     const before = prebuildFingerprint('android', root)
     write('assets/logo/logo.png', 'logo')

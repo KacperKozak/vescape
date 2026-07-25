@@ -353,6 +353,12 @@ data class AppSettingEntity(
   val updatedAt: Long,
 )
 
+/**
+ * Durable app-scoped settings. A TS/Android/iOS parity triangle — the container tag covers every
+ * key; individual literals are not tagged separately (see AGENTS.md).
+ * @parity /modules/vescape-core/src/index.ts `AppSettings`
+ * @parity /modules/vescape-core/ios/telemetry/AppDataRepository.swift `defaultSettings`
+ */
 data class AppSettings(
   val liveHistoryLimit: Int = 5,
   val autoConnect: Boolean = true,
@@ -386,6 +392,7 @@ data class AppSettings(
   val riderName: String? = null,
   val riderColor: String? = null,
   val legalMode: Map<String, Any?>? = null,
+  val dismissedCommunityMessageIds: List<String> = emptyList(),
 )
 
 @Entity(

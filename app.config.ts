@@ -124,6 +124,7 @@ const config: ExpoConfig = {
     './plugins/withWearMirror',
     './plugins/withSentryNativeInit',
     './plugins/withAndroidSigningConfig',
+    './plugins/withServerOrigin',
   ],
   experiments: {
     typedRoutes: true,

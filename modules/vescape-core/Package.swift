@@ -70,9 +70,13 @@ let package = Package(
         "location/GpsMonitor.swift",
         "protocol/VescProtocolTests.swift",
         "notification/RideLiveActivityController.swift",
+        "appstatus/AppStatusTests.swift",
+        "appstatus/AppStatusCoordinatorTests.swift",
       ],
       sources: [
         "alerts/AlertEngine.swift",
+        "appstatus/AppStatus.swift",
+        "appstatus/AppStatusCoordinator.swift",
         "config/ConfigRWController.swift",
         "warnings/ConfigSafetyDetector.swift",
         "connection/BoardPhase.swift",
@@ -110,6 +114,8 @@ let package = Package(
       path: "ios",
       sources: [
         "alerts/AlertEngineTests.swift",
+        "appstatus/AppStatusTests.swift",
+        "appstatus/AppStatusCoordinatorTests.swift",
         "warnings/BatteryConfigMismatchDetectorTests.swift",
         "warnings/BoardWarningPayloadTests.swift",
         "warnings/CellSpreadDetectorTests.swift",
