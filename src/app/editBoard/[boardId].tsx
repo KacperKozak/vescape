@@ -12,20 +12,12 @@ import { router, useLocalSearchParams, useNavigation } from 'expo-router'
 import { PencilSimpleIcon, WarningIcon } from 'phosphor-react-native'
 import { useShallow } from 'zustand/react/shallow'
 
-import { Text } from '@/components/base/Text'
 import { BoardBatteryEditorModal } from '@/modules/board/components/BoardBatteryEditorModal'
 import { BoardInfoEditorModal } from '@/modules/board/components/BoardInfoEditorModal'
 import { ConfirmModal } from '@/components/modals/ConfirmModal'
 import { SettingsSectionTitle } from '@/components/settings/SettingsSectionTitle'
-import { AlertPresetMetricSetup } from '@/modules/alerts/components/AlertPresetMetricSetup'
-import { ALERT_PRESET_METRIC_LABELS } from '@/modules/alerts/constants/metricLabels'
 import { BoardTopSpeedCard } from '@/modules/alerts/components/BoardTopSpeedCard'
-import { ALERT_PRESET_METRICS } from '@/modules/alerts/lib/alertPresets'
-import {
-  boardAlertPresetSelection,
-  boardHasBatteryConfig,
-  boardTopSpeedKmh,
-} from '@/modules/alerts/lib/boardAlertSettings'
+import { boardTopSpeedKmh } from '@/modules/alerts/lib/boardAlertSettings'
 import { useAlertPresetStore } from '@/modules/alerts/store/alertPresetStore'
 import { EditBoardSettings } from '@/modules/board/components/EditBoardSettings'
 import { EdgeDrawer } from '@/components/overlays/AnchoredSheet'
@@ -112,9 +104,7 @@ export default function EditBoardScreen() {
   const dismissedKinds = editingBoard.dismissedWarnings ?? []
   const dismissedCount = warnings.filter((w) => dismissedKinds.includes(w.kind)).length
   const warningCounts = { active: warnings.length - dismissedCount, dismissed: dismissedCount }
-  const alertPreset = boardAlertPresetSelection(editingBoard)
   const topSpeedKmh = boardTopSpeedKmh(editingBoard)
-  const hasBatteryConfig = boardHasBatteryConfig(editingBoard)
 
   return (
     <KeyboardAvoidingView
@@ -141,24 +131,6 @@ export default function EditBoardScreen() {
                     )
                   }}
                 />
-
-                <SettingsSectionTitle>Alert presets</SettingsSectionTitle>
-                {ALERT_PRESET_METRICS.map((metric) => (
-                  <View key={metric} style={styles.alertPreset}>
-                    <Text style={styles.alertPresetLabel}>
-                      {ALERT_PRESET_METRIC_LABELS[metric]}
-                    </Text>
-                    <AlertPresetMetricSetup
-                      metric={metric}
-                      level={alertPreset[metric]}
-                      onLevelChange={(level) => {
-                        void useAlertPresetStore.getState().setLevel(metric, level, editingBoard.id)
-                      }}
-                      topSpeedKmh={topSpeedKmh}
-                      hasBatteryConfig={hasBatteryConfig}
-                    />
-                  </View>
-                ))}
               </>
             }
             warningCounts={warningCounts}
@@ -237,17 +209,5 @@ const styles = StyleSheet.create({
   },
   headerAction: {
     marginRight: 4,
-  },
-  alertPreset: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  alertPresetLabel: {
-    color: theme.palette.slate.textMuted,
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginLeft: 4,
   },
 })
