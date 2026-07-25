@@ -92,9 +92,9 @@ export const ALERT_PRESET_GEIGER_SOUND_TYPE = 'preset:tick'
  * same tiers but generate as independent rule sets keyed by their own `controlId`.
  */
 const TEMP_LEVELS: Record<ActiveLevel, number[]> = {
-  safe: [55, 60, 65, temp.warning, 75, temp.critical],
+  safe: [65, temp.warning, 75, temp.critical],
   normal: [temp.warning, 75, temp.critical],
-  minimal: [temp.critical],
+  minimal: [75, temp.critical],
 }
 
 /**
@@ -120,9 +120,9 @@ export const ALERT_PRESET_LEVELS: Record<AlertPresetMetric, AlertPresetMetricCon
     family: 'geiger',
     soundType: ALERT_PRESET_GEIGER_SOUND_TYPE,
     levels: {
-      safe: { start: 65, ceiling: duty.critical },
+      safe: { start: 75, ceiling: duty.critical },
       normal: { start: duty.warning, ceiling: duty.critical },
-      minimal: { start: 88, ceiling: duty.critical },
+      minimal: { start: 85, ceiling: duty.critical },
     },
   },
   'motor-temp': {
@@ -141,8 +141,8 @@ export const ALERT_PRESET_LEVELS: Record<AlertPresetMetric, AlertPresetMetricCon
     requiresBatteryConfig: true,
     levels: {
       safe: [50, 40, batteryWarningPct, 20, 15, batteryCriticalPct, 5],
-      normal: [batteryWarningPct, 20, batteryCriticalPct],
-      minimal: [15, 5],
+      normal: [50, 35, 20, batteryCriticalPct, 5],
+      minimal: [20, batteryCriticalPct, 5],
     },
   },
 }
