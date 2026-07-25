@@ -101,28 +101,11 @@ const TEMP_LEVELS: Record<ActiveLevel, number[]> = {
  * Declarative safe/normal/minimal definition for every preset metric. Battery points
  * are in percent (native compares battery single-threshold rules against SoC %
  * directly); temperatures in °C; duty in %; speed as a fraction of Board Top Speed.
+ *
+ * Key order is the rider-facing order (see {@link ALERT_PRESET_METRICS}): ride metrics
+ * first, then the two temperatures, then battery.
  */
 export const ALERT_PRESET_LEVELS: Record<AlertPresetMetric, AlertPresetMetricConfig> = {
-  battery: {
-    family: 'discrete',
-    soundType: 'tts:Battery {percent}%',
-    requiresBatteryConfig: true,
-    levels: {
-      safe: [50, 40, batteryWarningPct, 20, 15, batteryCriticalPct, 5],
-      normal: [batteryWarningPct, 20, batteryCriticalPct],
-      minimal: [15, 5],
-    },
-  },
-  'motor-temp': {
-    family: 'discrete',
-    soundType: 'tts:Motor {value} {unit}',
-    levels: TEMP_LEVELS,
-  },
-  'controller-temp': {
-    family: 'discrete',
-    soundType: 'tts:Controller {value} {unit}',
-    levels: TEMP_LEVELS,
-  },
   speed: {
     family: 'geiger',
     soundType: ALERT_PRESET_GEIGER_SOUND_TYPE,
@@ -140,6 +123,26 @@ export const ALERT_PRESET_LEVELS: Record<AlertPresetMetric, AlertPresetMetricCon
       safe: { start: 65, ceiling: duty.critical },
       normal: { start: duty.warning, ceiling: duty.critical },
       minimal: { start: 88, ceiling: duty.critical },
+    },
+  },
+  'motor-temp': {
+    family: 'discrete',
+    soundType: 'tts:Motor {value} {unit}',
+    levels: TEMP_LEVELS,
+  },
+  'controller-temp': {
+    family: 'discrete',
+    soundType: 'tts:Controller {value} {unit}',
+    levels: TEMP_LEVELS,
+  },
+  battery: {
+    family: 'discrete',
+    soundType: 'tts:Battery {percent}%',
+    requiresBatteryConfig: true,
+    levels: {
+      safe: [50, 40, batteryWarningPct, 20, 15, batteryCriticalPct, 5],
+      normal: [batteryWarningPct, 20, batteryCriticalPct],
+      minimal: [15, 5],
     },
   },
 }
@@ -249,7 +252,7 @@ export function formatAlertPresetSummary(
 /** Free-text `AlertRule.source` tag marking a rule as generated + owned by preset regeneration. */
 export const ALERT_PRESET_SOURCE = 'preset'
 
-/** Every metric that carries a preset selection, in a stable order. */
+/** Every metric that carries a preset selection, in the stable rider-facing order. */
 export const ALERT_PRESET_METRICS = Object.keys(ALERT_PRESET_LEVELS) as AlertPresetMetric[]
 
 /** The rider's chosen level per metric — the durable `alertPreset` settings bag. */

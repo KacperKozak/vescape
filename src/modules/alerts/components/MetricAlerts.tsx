@@ -1,10 +1,7 @@
 import { useMemo, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { type SharedValue } from 'react-native-reanimated'
-import { BellRingingIcon } from 'phosphor-react-native'
-import { router } from 'expo-router'
 
-import { Button } from '@/components/base/Button'
 import { Text } from '@/components/base/Text'
 import { type DualGaugeAlert } from '@/components/charts/gaugeAlert'
 import { ConfirmModal } from '@/components/modals/ConfirmModal'
@@ -14,7 +11,6 @@ import { type DerivedBatteryConfig } from '@/modules/battery/lib/types'
 import { AlertPresetControl } from '@/modules/alerts/components/AlertPresetControl'
 import { AlertRuleList } from '@/modules/alerts/components/AlertRuleList'
 import { type MetricAlertsController } from '@/modules/alerts/hooks/useMetricAlerts'
-import { routes } from '@/navigation/routes'
 import { useBoardStore } from '@/modules/board/store/boardStore'
 
 /** Structural mirror of the gauge hot-range span; keeps this module clear of the history module. */
@@ -121,21 +117,13 @@ function useBatteryConfig(controlId: string | undefined): DerivedBatteryConfig |
   }, [controlId, board?.batteryConfig])
 }
 
+/** The section header already carries the alert bell and the screen its own add-board path, so
+ * this is the sentence alone — no second icon, no competing call to action. */
 function NoBoardNotice() {
   return (
-    <View style={styles.noBoard}>
-      <BellRingingIcon size={20} color={theme.palette.slate.textDim} weight="duotone" />
-      <Text style={styles.noBoardText}>
-        Alerts belong to a board — add yours to set up what it warns you about.
-      </Text>
-      <Button
-        label="Add board"
-        variant="secondary"
-        size="sm"
-        onPress={() => router.push(routes.addBoard)}
-        style={styles.noBoardButton}
-      />
-    </View>
+    <Text style={styles.note}>
+      Alerts belong to a board — add yours to set up what it warns you about.
+    </Text>
   )
 }
 
@@ -151,18 +139,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '500',
     lineHeight: 16,
-  },
-  noBoard: {
-    gap: 10,
-    alignItems: 'flex-start',
-  },
-  noBoardText: {
-    color: theme.palette.slate.textMuted,
-    fontSize: 13,
-    fontWeight: '500',
-    lineHeight: 18,
-  },
-  noBoardButton: {
-    alignSelf: 'flex-start',
   },
 })

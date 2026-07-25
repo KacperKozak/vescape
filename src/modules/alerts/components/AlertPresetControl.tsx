@@ -202,7 +202,7 @@ export function AlertPresetControl({
       />
       <View style={styles.levelRow}>
         {isCustom ? (
-          <CustomChip />
+          <CustomLabel />
         ) : (
           <LevelSlider value={level} onChange={onLevelChange} disabled={disabled} />
         )}
@@ -219,12 +219,16 @@ export function AlertPresetControl({
   )
 }
 
-/** Stands in for the level slider once the rider owns the metric's rules — there is no level. */
-function CustomChip() {
+/**
+ * Stands in for the level slider once the rider owns the metric's rules — there is no level.
+ * Deliberately flat and unfilled: it is a status label, and anything pill-shaped in this row
+ * reads as a button the rider then taps to no effect.
+ */
+function CustomLabel() {
   return (
-    <View style={styles.customChip}>
-      <SlidersHorizontalIcon size={14} color={theme.palette.orange.color} weight="bold" />
-      <Text style={styles.customChipLabel}>Custom</Text>
+    <View style={styles.customLabel}>
+      <SlidersHorizontalIcon size={14} color={theme.palette.slate.textMuted} weight="bold" />
+      <Text style={styles.customLabelText}>Custom alerts</Text>
     </View>
   )
 }
@@ -323,22 +327,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  customChip: {
+  customLabel: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: 6,
     height: 38,
-    borderRadius: 19,
-    borderWidth: 1,
-    backgroundColor: theme.palette.orange.bg,
-    borderColor: theme.palette.orange.border,
   },
-  customChipLabel: {
-    color: theme.palette.orange.color,
+  customLabelText: {
+    color: theme.palette.slate.textMuted,
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: '700',
   },
   slider: {
     flex: 1,

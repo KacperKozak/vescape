@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native'
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/base/Text'
 import {
   Bluetooth,
@@ -85,14 +85,22 @@ const ALERT_SUBSTEPS: AlertSubstep[] = [
 interface Props {
   wizard: UseAddBoardWizard
   onLinkActiveStepIndexChange?: (index: number) => void
+  /** The Pair step's scroller, driven by {@link onLinkActiveStepIndexChange}. */
+  scrollRef?: React.RefObject<ScrollView | null>
 }
 
-export function AddBoardWizard({ wizard, onLinkActiveStepIndexChange }: Props) {
+// The progress bar stays pinned above every step, and each step pins its own footer — only the
+// body between them scrolls.
+export function AddBoardWizard({ wizard, onLinkActiveStepIndexChange, scrollRef }: Props) {
   return (
     <>
       <ProgressBar steps={wizard.steps} step={wizard.step} />
       {wizard.stepId === 'scan' && (
-        <ScanStep wizard={wizard} onLinkActiveStepIndexChange={onLinkActiveStepIndexChange} />
+        <ScanStep
+          wizard={wizard}
+          scrollRef={scrollRef}
+          onLinkActiveStepIndexChange={onLinkActiveStepIndexChange}
+        />
       )}
       {wizard.stepId === 'name' && <NameStep wizard={wizard} />}
       {wizard.stepId === 'battery' && <BatteryStep wizard={wizard} />}
@@ -141,18 +149,29 @@ function ProgressBar({ steps, step }: { steps: readonly WizardStepId[]; step: nu
   )
 }
 
-function ScanStep({ wizard, onLinkActiveStepIndexChange }: Props) {
+function ScanStep({ wizard, onLinkActiveStepIndexChange, scrollRef }: Props) {
   if (wizard.pairPhase === 'probing') {
-    return <LinkStep wizard={wizard} onLinkActiveStepIndexChange={onLinkActiveStepIndexChange} />
+    return (
+      <LinkStep
+        wizard={wizard}
+        scrollRef={scrollRef}
+        onLinkActiveStepIndexChange={onLinkActiveStepIndexChange}
+      />
+    )
   }
   return <ScanSelectStep wizard={wizard} />
 }
 
-function LinkStep({ wizard, onLinkActiveStepIndexChange }: Props) {
+function LinkStep({ wizard, onLinkActiveStepIndexChange, scrollRef }: Props) {
   const link = useBoardLink(wizard.bleId || null)
 
   return (
-    <View style={styles.step}>
+    <ScrollView
+      ref={scrollRef}
+      style={styles.stepScroll}
+      contentContainerStyle={styles.step}
+      keyboardShouldPersistTaps="handled"
+    >
       <BoardLinkTimeline
         phase={link.phase}
         progress={link.progress}
@@ -201,7 +220,7 @@ function LinkStep({ wizard, onLinkActiveStepIndexChange }: Props) {
           ) : null
         }
       />
-    </View>
+    </ScrollView>
   )
 }
 
@@ -243,7 +262,11 @@ function ScanSelectStep({ wizard }: Props) {
   const SignalIcon = isScanning ? WifiHigh : devices.length > 0 ? WifiLow : WifiSlash
 
   return (
-    <View style={styles.step}>
+    <ScrollView
+      style={styles.stepScroll}
+      contentContainerStyle={styles.step}
+      keyboardShouldPersistTaps="handled"
+    >
       <View style={styles.stepHeader}>
         <Bluetooth size={20} color={theme.palette.sky.color} weight="duotone" />
         <Text style={styles.stepTitle}>Pair your board</Text>
@@ -335,7 +358,7 @@ function ScanSelectStep({ wizard }: Props) {
           )}
         </>
       )}
-    </View>
+    </ScrollView>
   )
 }
 
@@ -609,7 +632,8 @@ interface StepContainerProps {
 
 // Title + content are vertically centered in the free space; `headerRight` (e.g. the
 // Skip link) stays pinned top-right and the footer pins to the bottom — the shared
-// frame for every step past Pair.
+// frame for every step past Pair. Content taller than that space scrolls between the
+// two, so the footer and the progress bar above never leave the screen.
 function StepContainer({
   title,
   icon: Icon,
@@ -621,13 +645,17 @@ function StepContainer({
   return (
     <View style={styles.stepFill}>
       {headerRight ? <View style={styles.stepTopBar}>{headerRight}</View> : null}
-      <View style={styles.stepBody}>
+      <ScrollView
+        style={styles.stepScroll}
+        contentContainerStyle={styles.stepBody}
+        keyboardShouldPersistTaps="handled"
+      >
         <View style={styles.stepHeader}>
           <Icon size={20} color={color} weight="duotone" />
           <Text style={styles.stepTitle}>{title}</Text>
         </View>
         {children}
-      </View>
+      </ScrollView>
       {footer}
     </View>
   )
@@ -724,6 +752,7 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   step: {
+    flexGrow: 1,
     gap: 14,
   },
   // Fills the free height below the progress bar so the footer can pin to the bottom.
@@ -731,9 +760,13 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 14,
   },
-  // Vertically centers the title + step content between the top bar and the pinned footer.
-  stepBody: {
+  // The scroller itself must not grow past the space left between top bar and footer.
+  stepScroll: {
     flex: 1,
+  },
+  // Vertically centers the title + step content while it fits, scrolls once it doesn't.
+  stepBody: {
+    flexGrow: 1,
     justifyContent: 'center',
     gap: 14,
   },
