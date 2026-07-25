@@ -9,7 +9,7 @@ import {
 } from '@/modules/release/lib/releaseSurface'
 
 function message(overrides: Partial<CommunityMessage> & { id: string }): CommunityMessage {
-  return { type: 'info', body: 'body', action: null, ...overrides }
+  return { type: 'info', title: null, body: 'body', action: null, ...overrides }
 }
 
 function status(

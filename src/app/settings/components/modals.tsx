@@ -182,10 +182,15 @@ const COMMUNITY_MESSAGE_BODY = [
   '- ~18 km, one charge stop',
 ].join('\n')
 
-function communityMessage(type: CommunityMessageType, withAction: boolean): CommunityMessage {
+function communityMessage(
+  type: CommunityMessageType,
+  withAction: boolean,
+  withTitle: boolean,
+): CommunityMessage {
   return {
     id: `showcase-${type}`,
     type,
+    title: withTitle ? 'Weekend group ride' : null,
     body: COMMUNITY_MESSAGE_BODY,
     action: withAction
       ? {
@@ -201,6 +206,7 @@ function CommunityMessageModalShowcase() {
   const [visible, setVisible] = useState(false)
   const [type, setType] = useState<CommunityMessageType>('info')
   const [withAction, setWithAction] = useState(true)
+  const [withTitle, setWithTitle] = useState(true)
 
   return (
     <ShowcaseCard
@@ -214,15 +220,17 @@ function CommunityMessageModalShowcase() {
             onSelect={(v) => setType(v as CommunityMessageType)}
           />
           <ToggleRow label="action" value={withAction} onToggle={setWithAction} />
+          <ToggleRow label="title" value={withTitle} onToggle={setWithTitle} />
           <OpenButton onPress={() => setVisible(true)} />
         </>
       }
     >
       <Text style={styles.previewHint}>
-        Info / warning / critical styling, with an optional primary/secondary action
+        Info / warning / critical styling, with an optional server title and primary/secondary
+        action
       </Text>
       <CommunityMessageModal
-        message={visible ? communityMessage(type, withAction) : null}
+        message={visible ? communityMessage(type, withAction, withTitle) : null}
         onDismiss={() => setVisible(false)}
         onAction={() => setVisible(false)}
       />

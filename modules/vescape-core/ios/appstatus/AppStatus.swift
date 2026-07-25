@@ -43,11 +43,12 @@ struct CommunityMessageAction: Equatable {
 struct CommunityMessage: Equatable {
   let id: String
   let type: CommunityMessageType
+  let title: String?
   let body: String
   let action: CommunityMessageAction?
 
   func toMap() -> [String: Any?] {
-    ["id": id, "type": type.rawValue, "body": body, "action": action?.toMap()]
+    ["id": id, "type": type.rawValue, "title": title, "body": body, "action": action?.toMap()]
   }
 }
 
@@ -125,6 +126,12 @@ private func decodeMessage(_ json: [String: Any]) -> CommunityMessage? {
         let type = CommunityMessageType(rawValue: typeSlug),
         let body = json.nonEmptyString("body")
   else { return nil }
+  // Absent title is legitimate (the app falls back to its per-type label); a malformed one is not.
+  var title: String?
+  if json.hasValue("title") {
+    guard let resolved = json.nonEmptyString("title") else { return nil }
+    title = resolved
+  }
   var action: CommunityMessageAction?
   if json.hasValue("action") {
     guard let actionJson = json["action"] as? [String: Any],
@@ -132,7 +139,7 @@ private func decodeMessage(_ json: [String: Any]) -> CommunityMessage? {
     else { return nil }
     action = resolved
   }
-  return CommunityMessage(id: id, type: type, body: body, action: action)
+  return CommunityMessage(id: id, type: type, title: title, body: body, action: action)
 }
 
 private func decodeAction(_ json: [String: Any]) -> CommunityMessageAction? {

@@ -1157,6 +1157,8 @@ export interface CommunityMessageAction {
 export interface CommunityMessage {
   id: string
   type: CommunityMessageType
+  /** Server-authored headline. `null` falls back to the per-type label. */
+  title: string | null
   /** Markdown body, rendered by `Markdown`. */
   body: string
   action: CommunityMessageAction | null

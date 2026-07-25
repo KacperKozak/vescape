@@ -7,7 +7,10 @@ import { Markdown } from '@/components/base/Markdown'
 import { FadeCardModal } from '@/components/modals/FadeCardModal'
 import { theme } from '@/constants/theme'
 
-/** Icon, accent color and header label per message type — the importance cue (PRD story 27). */
+/**
+ * Icon, accent color and fallback header label per message type — the importance cue (PRD story 27).
+ * A message carrying its own `title` replaces the label; icon and color always follow the type.
+ */
 const TYPE_STYLE: Record<CommunityMessageType, { icon: Icon; color: string; label: string }> = {
   info: { icon: InfoIcon, color: theme.status.info.color, label: 'Announcement' },
   warning: { icon: WarningIcon, color: theme.status.warning.color, label: 'Heads up' },
@@ -48,7 +51,7 @@ export function CommunityMessageModal({
     <FadeCardModal
       visible={message !== null}
       onDismiss={onDismiss}
-      title={label}
+      title={rendered.title ?? label}
       titleIcon={icon}
       titleIconColor={color}
       titleColor={color}

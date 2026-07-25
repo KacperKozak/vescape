@@ -51,7 +51,7 @@ class AppStatusTest {
       body(
         currentVersion,
         """[
-          {"id":"m1","type":"critical","body":"Relay down",
+          {"id":"m1","type":"critical","title":"Relay outage","body":"Relay down",
            "action":{"type":"primary","label":"Status","url":"https://vescape.app/status"}},
           {"id":"m2","type":"info","body":"Hello"}
         ]""",
@@ -63,6 +63,8 @@ class AppStatusTest {
     assertEquals(CommunityMessageActionType.PRIMARY, status?.messages?.get(0)?.action?.type)
     assertEquals("https://vescape.app/status", status?.messages?.get(0)?.action?.url)
     assertNull(status?.messages?.get(1)?.action)
+    assertEquals("Relay outage", status?.messages?.get(0)?.title)
+    assertNull(status?.messages?.get(1)?.title)
   }
 
   @Test
@@ -120,6 +122,7 @@ class AppStatusTest {
           {"id":"ok","type":"warning","body":"valid"},
           {"id":"bad-type","type":"shout","body":"Hi"},
           {"id":"bad-action","type":"info","body":"Hi","action":{"type":"primary"}},
+          {"id":"bad-title","type":"info","title":42,"body":"Hi"},
           {"id":"tertiary","type":"info","body":"Hi","action":{"type":"tertiary","label":"a","url":"b"}},
           "notAnObject"
         ]""",
@@ -154,6 +157,7 @@ class AppStatusTest {
         mapOf(
           "id" to "m1",
           "type" to "warning",
+          "title" to null,
           "body" to "Hi",
           "action" to mapOf("type" to "secondary", "label" to "Read", "url" to "https://vescape.app"),
         ),

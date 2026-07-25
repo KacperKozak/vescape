@@ -11,6 +11,7 @@ import {
 function message(overrides: Partial<CommunityMessage> & { id: string }): CommunityMessage {
   return {
     type: 'info',
+    title: null,
     body: 'body',
     action: null,
     ...overrides,

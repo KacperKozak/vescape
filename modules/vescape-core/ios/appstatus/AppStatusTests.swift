@@ -42,7 +42,7 @@ final class AppStatusTests: XCTestCase {
         currentVersion,
         messages: """
         [
-          {"id":"m1","type":"critical","body":"Relay down",
+          {"id":"m1","type":"critical","title":"Relay outage","body":"Relay down",
            "action":{"type":"primary","label":"Status","url":"https://vescape.app/status"}},
           {"id":"m2","type":"info","body":"Hello"}
         ]
@@ -52,6 +52,8 @@ final class AppStatusTests: XCTestCase {
 
     XCTAssertEqual(status?.messages.count, 2)
     XCTAssertEqual(status?.messages.first?.type, .critical)
+    XCTAssertEqual(status?.messages.first?.title, "Relay outage")
+    XCTAssertNil(status?.messages.last?.title)
     XCTAssertEqual(status?.messages.first?.action?.type, .primary)
     XCTAssertEqual(status?.messages.first?.action?.url, "https://vescape.app/status")
     XCTAssertNil(status?.messages.last?.action)
@@ -115,6 +117,7 @@ final class AppStatusTests: XCTestCase {
           {"id":"ok","type":"warning","body":"valid"},
           {"id":"bad-type","type":"shout","body":"Hi"},
           {"id":"bad-action","type":"info","body":"Hi","action":{"type":"primary"}},
+          {"id":"bad-title","type":"info","title":42,"body":"Hi"},
           {"id":"tertiary","type":"info","body":"Hi","action":{"type":"tertiary","label":"a","url":"b"}},
           "notAnObject"
         ]

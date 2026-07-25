@@ -78,12 +78,14 @@ data class CommunityMessageAction(
 data class CommunityMessage(
   val id: String,
   val type: CommunityMessageType,
+  val title: String?,
   val body: String,
   val action: CommunityMessageAction?,
 ) {
   fun toMap(): Map<String, Any?> = mapOf(
     "id" to id,
     "type" to type.slug,
+    "title" to title,
     "body" to body,
     "action" to action?.toMap(),
   )
@@ -172,13 +174,19 @@ private fun parseMessages(value: Any?): List<CommunityMessage> {
 private fun parseMessage(json: JSONObject): CommunityMessage? {
   val id = json.nonEmptyString("id") ?: return null
   val type = CommunityMessageType.fromSlug(json.nonEmptyString("type") ?: return null) ?: return null
+  // Absent title is legitimate (the app falls back to its per-type label); a malformed one is not.
+  val title = if (json.has("title") && !json.isNull("title")) {
+    json.nonEmptyString("title") ?: return null
+  } else {
+    null
+  }
   val body = json.nonEmptyString("body") ?: return null
   val action = if (json.has("action") && !json.isNull("action")) {
     parseAction(json.optJSONObject("action") ?: return null) ?: return null
   } else {
     null
   }
-  return CommunityMessage(id = id, type = type, body = body, action = action)
+  return CommunityMessage(id = id, type = type, title = title, body = body, action = action)
 }
 
 private fun parseAction(json: JSONObject): CommunityMessageAction? {
