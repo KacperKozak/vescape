@@ -8,10 +8,11 @@
  * Expo layers `.env.local` into release bundles too, so `build:release` pins this
  * var to the prod URL — a dev localhost override can't leak into a shipped APK.
  *
- * Native App Status fetches run before JS is ready, so both platforms hardcode the
- * production origin instead of receiving it from here.
+ * Native App Status fetches run before JS is ready, so they cannot receive the origin
+ * from here. `plugins/withServerOrigin.ts` bakes the same env var into the native
+ * projects at prebuild time instead, and both platforms fall back to production.
  * @parity /modules/vescape-core/ios/appstatus/AppStatusCoordinator.swift `serverBaseUrl`
- * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/appstatus/AppStatusCoordinator.kt `SERVER_BASE_URL`
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/appstatus/AppStatusCoordinator.kt `serverBaseUrl`
  */
 export const SERVER_URL = process.env.EXPO_PUBLIC_SERVER_URL ?? 'https://vescape.app'
 

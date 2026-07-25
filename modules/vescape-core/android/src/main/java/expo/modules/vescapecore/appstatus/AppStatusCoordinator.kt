@@ -1,6 +1,7 @@
 package expo.modules.vescapecore.appstatus
 
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -127,19 +128,41 @@ class AppStatusCoordinator internal constructor(
     const val APP_VERSION_HEADER = "Vescape-App-Version"
 
     /**
-     * Vescape backend origin. Native fetches App Status before JS is ready, so it cannot receive
-     * the URL from JS the way Group Ride does — it holds the production origin itself.
-     * @parity /modules/vescape-core/ios/appstatus/AppStatusCoordinator.swift `serverBaseUrl`
+     * Vescape backend origin for a shipped build, and the fallback whenever the baked manifest value
+     * is missing.
+     * @parity /modules/vescape-core/ios/appstatus/AppStatusCoordinator.swift `productionServerBaseUrl`
      * @parity /src/config/server.ts `SERVER_URL`
      */
-    const val SERVER_BASE_URL = "https://vescape.app"
+    const val PRODUCTION_SERVER_BASE_URL = "https://vescape.app"
+
+    /**
+     * Manifest meta-data holding the backend origin. Native fetches App Status before JS is ready,
+     * so it cannot receive the URL from JS the way Group Ride does — prebuild bakes
+     * `EXPO_PUBLIC_SERVER_URL` in instead, which is what lets a dev build talk to a local server.
+     * @parity /plugins/withServerOrigin.ts `ANDROID_METADATA_NAME`
+     * @parity /modules/vescape-core/ios/appstatus/AppStatusCoordinator.swift `serverBaseUrlInfoKey`
+     */
+    const val SERVER_BASE_URL_METADATA = "app.vescape.SERVER_BASE_URL"
 
     /**
      * Stable Android download route. Server-owned redirect, so the app never hardcodes the final
-     * store destination.
+     * store destination. Always production: a local server has no store redirect to serve.
      * @parity /modules/vescape-core/ios/appstatus/AppStatusCoordinator.swift `iosDownloadUrl`
      */
-    fun androidDownloadUrl(): String = "$SERVER_BASE_URL/download/android"
+    fun androidDownloadUrl(): String = "$PRODUCTION_SERVER_BASE_URL/download/android"
+
+    /**
+     * Baked backend origin, trailing slash trimmed so path concatenation stays single-slashed.
+     * @parity /modules/vescape-core/ios/appstatus/AppStatusCoordinator.swift `serverBaseUrl`
+     */
+    fun serverBaseUrl(context: Context): String {
+      val app = context.applicationContext
+      val metaData = app.packageManager
+        .getApplicationInfo(app.packageName, PackageManager.GET_META_DATA)
+        .metaData
+      val baked = metaData?.getString(SERVER_BASE_URL_METADATA)?.trimEnd('/')
+      return if (baked.isNullOrEmpty()) PRODUCTION_SERVER_BASE_URL else baked
+    }
 
     @Volatile
     private var instance: AppStatusCoordinator? = null
@@ -149,7 +172,7 @@ class AppStatusCoordinator internal constructor(
       instance ?: synchronized(this) {
         instance ?: AppStatusCoordinator(
           installedVersion = installedMarketingVersion(context),
-          baseUrl = SERVER_BASE_URL,
+          baseUrl = serverBaseUrl(context),
           transport = OkHttpAppStatusTransport(Handler(Looper.getMainLooper())),
         ).also { instance = it }
       }

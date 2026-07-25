@@ -27,16 +27,31 @@ final class AppStatusCoordinator {
   /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/appstatus/AppStatusCoordinator.kt `APP_VERSION_HEADER`
   static let appVersionHeader = "Vescape-App-Version"
 
-  /// Vescape backend origin. Native fetches App Status before JS is ready, so it cannot receive the
-  /// URL from JS the way Group Ride does — it holds the production origin itself.
-  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/appstatus/AppStatusCoordinator.kt `SERVER_BASE_URL`
+  /// Vescape backend origin for a shipped build, and the fallback whenever the baked Info.plist
+  /// value is missing.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/appstatus/AppStatusCoordinator.kt `PRODUCTION_SERVER_BASE_URL`
   /// @parity /src/config/server.ts `SERVER_URL`
-  static let serverBaseUrl = "https://vescape.app"
+  static let productionServerBaseUrl = "https://vescape.app"
+
+  /// Info.plist key holding the backend origin. Native fetches App Status before JS is ready, so it
+  /// cannot receive the URL from JS the way Group Ride does — prebuild bakes `EXPO_PUBLIC_SERVER_URL`
+  /// in instead, which is what lets a dev build talk to a local server.
+  /// @parity /plugins/withServerOrigin.ts `IOS_INFO_PLIST_KEY`
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/appstatus/AppStatusCoordinator.kt `SERVER_BASE_URL_METADATA`
+  static let serverBaseUrlInfoKey = "VescapeServerBaseUrl"
+
+  /// Baked backend origin, trailing slash trimmed so path concatenation stays single-slashed.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/appstatus/AppStatusCoordinator.kt `serverBaseUrl`
+  static let serverBaseUrl: String = {
+    var baked = (Bundle.main.object(forInfoDictionaryKey: serverBaseUrlInfoKey) as? String) ?? ""
+    while baked.hasSuffix("/") { baked.removeLast() }
+    return baked.isEmpty ? productionServerBaseUrl : baked
+  }()
 
   /// Stable iOS download route. Server-owned redirect, so the app never hardcodes the final store
-  /// destination.
+  /// destination. Always production: a local server has no store redirect to serve.
   /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/appstatus/AppStatusCoordinator.kt `androidDownloadUrl`
-  static let iosDownloadUrl = "\(serverBaseUrl)/download/ios"
+  static let iosDownloadUrl = "\(productionServerBaseUrl)/download/ios"
 
   private static let callTimeoutSeconds: TimeInterval = 10
 
