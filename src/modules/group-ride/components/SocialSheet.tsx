@@ -6,7 +6,7 @@ import {
   ChartLineUpIcon,
   CrosshairIcon,
   DeviceMobileIcon,
-  DownloadSimpleIcon,
+  GiftIcon,
   GaugeIcon,
   BatteryMediumIcon,
   PaletteIcon,
@@ -149,9 +149,9 @@ function GroupRideWidget() {
         footer={
           <Button
             label="Update Vescape"
-            icon={DownloadSimpleIcon}
+            icon={GiftIcon}
             onPress={() => openAppUpdate()}
-            style={styles.fill}
+            style={[styles.fill, styles.updateAction]}
             accessibilityLabel="Update Vescape"
           />
         }
@@ -447,6 +447,9 @@ const styles = StyleSheet.create({
   },
   fill: {
     flex: 1,
+  },
+  updateAction: {
+    backgroundColor: theme.status.upgrade.color,
   },
   actionBtn: {
     backgroundColor: theme.palette.groupRide.border,

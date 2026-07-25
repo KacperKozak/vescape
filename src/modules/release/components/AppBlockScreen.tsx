@@ -1,6 +1,6 @@
 import { Modal, ScrollView, StyleSheet, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { WarningOctagonIcon } from 'phosphor-react-native'
+import { GiftIcon, WarningOctagonIcon } from 'phosphor-react-native'
 
 import { Button } from '@/components/base/Button'
 import { Markdown } from '@/components/base/Markdown'
@@ -43,7 +43,7 @@ export function AppBlockScreen({ message, onUpdate }: AppBlockScreenProps) {
         <ScrollView style={styles.body} contentContainerStyle={styles.bodyContent}>
           <Markdown>{message}</Markdown>
         </ScrollView>
-        <Button label="Update Vescape" onPress={onUpdate} style={styles.action} />
+        <Button label="Update Vescape" icon={GiftIcon} onPress={onUpdate} style={styles.action} />
       </SafeAreaView>
     </Modal>
   )

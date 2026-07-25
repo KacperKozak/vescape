@@ -61,12 +61,6 @@ export default function SettingsScreen() {
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
         <IconHero media={<VescapeWordmark width={200} />}>
-          {availableUpdate ? (
-            <UpdateAvailablePill
-              latestVersion={availableUpdate.latestVersion}
-              onPress={openAppUpdate}
-            />
-          ) : null}
           <View style={styles.headerStats}>
             <View style={styles.headerItem}>
               <TagIcon size={14} color={theme.palette.sky.color} weight="duotone" />
@@ -89,6 +83,12 @@ export default function SettingsScreen() {
               </Text>
             </View>
           </View>
+          {availableUpdate ? (
+            <UpdateAvailablePill
+              latestVersion={availableUpdate.latestVersion}
+              onPress={openAppUpdate}
+            />
+          ) : null}
         </IconHero>
 
         <SettingsSectionTitle>General</SettingsSectionTitle>

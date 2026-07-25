@@ -75,6 +75,7 @@ export function ReleaseSurfaces() {
           surface?.kind === 'update-warning' ? surface.message : DEFAULT_UPDATE_WARNING_MESSAGE
         }
         onDismiss={dismissUpdateWarning}
+        onUpdate={openAppUpdate}
         onExited={finishExit}
       />
     )

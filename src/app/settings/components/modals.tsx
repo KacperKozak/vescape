@@ -132,6 +132,7 @@ function UpdateWarningModalShowcase() {
         visible={visible}
         message={serverMessage ? SERVER_UPDATE_MESSAGE : DEFAULT_UPDATE_WARNING_MESSAGE}
         onDismiss={() => setVisible(false)}
+        onUpdate={() => setVisible(false)}
       />
     </ShowcaseCard>
   )

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ArrowClockwiseIcon } from 'phosphor-react-native'
+import { GiftIcon } from 'phosphor-react-native'
 
 import { Button } from '@/components/base/Button'
 import { Markdown } from '@/components/base/Markdown'
@@ -12,6 +12,8 @@ interface UpdateWarningModalProps {
   /** Markdown body — the server message or a bundled default. */
   message: string
   onDismiss: () => void
+  /** Open the stable platform download route. */
+  onUpdate: () => void
   /** The card finished fading out. Lets the caller hand over to the next Release surface. */
   onExited?: () => void
 }
@@ -25,6 +27,7 @@ export function UpdateWarningModal({
   visible,
   message,
   onDismiss,
+  onUpdate,
   onExited,
 }: UpdateWarningModalProps) {
   // Keep the last shown message so the exit animation renders content instead of blanking.
@@ -36,9 +39,15 @@ export function UpdateWarningModal({
       visible={visible}
       onDismiss={onDismiss}
       title="Update available"
-      titleIcon={ArrowClockwiseIcon}
+      titleIcon={GiftIcon}
       titleIconColor={theme.palette.purple.color}
-      footer={<Button label="Later" variant="secondary" onPress={onDismiss} />}
+      footer={
+        <Button
+          label="Update"
+          onPress={onUpdate}
+          style={{ backgroundColor: theme.status.upgrade.color }}
+        />
+      }
       onExited={onExited}
     >
       <Markdown>{rendered}</Markdown>
