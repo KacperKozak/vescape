@@ -249,11 +249,12 @@ const LEVEL_OPTIONS: { id: AlertPresetLevel; label: string; tone: LevelTone }[] 
       color: theme.palette.slate.textSecondary,
     },
   },
-  // Cautiousness ramp, not an alarm ramp: careful (blue) → balanced (green) → risky (orange).
-  // Green marks the recommended default; red stays reserved for real alerts.
+  // Cautiousness ramp, not an alarm ramp: careful (blue) → balanced (green) → risky (yellow).
+  // Green marks the recommended default; orange and red stay reserved for real alerts, so
+  // `minimal` must not borrow either — it is a choice, never a fault.
   { id: 'safe', label: 'Safe', tone: theme.palette.blue },
   { id: 'normal', label: 'Normal', tone: theme.palette.green },
-  { id: 'minimal', label: 'Minimal', tone: theme.palette.orange },
+  { id: 'minimal', label: 'Minimal', tone: theme.palette.yellow },
 ]
 
 const ALL_LEVELS: AlertPresetLevel[] = ['off', ...ALERT_PRESET_ACTIVE_LEVELS]
