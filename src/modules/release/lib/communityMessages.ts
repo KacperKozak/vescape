@@ -18,12 +18,20 @@ const TYPE_PRIORITY: Record<CommunityMessageType, number> = {
  * senders bypass that path, so a bad entry must never crash or hide the valid ones.
  */
 function isRenderableMessage(message: CommunityMessage): boolean {
+  const action = message?.action
   return (
     typeof message?.id === 'string' &&
     message.id.length > 0 &&
     typeof message.body === 'string' &&
     message.body.length > 0 &&
-    message.type in TYPE_PRIORITY
+    message.type in TYPE_PRIORITY &&
+    (action === null ||
+      (typeof action === 'object' &&
+        (action.type === 'primary' || action.type === 'secondary') &&
+        typeof action.label === 'string' &&
+        action.label.length > 0 &&
+        typeof action.url === 'string' &&
+        action.url.length > 0))
   )
 }
 

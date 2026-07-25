@@ -1,5 +1,6 @@
 import {
   AndroidConfig,
+  IOSConfig,
   withAndroidManifest,
   withInfoPlist,
   type ConfigPlugin,
@@ -40,15 +41,26 @@ const withServerOrigin: ConfigPlugin = (config) => {
 
     const { protocol, hostname } = new URL(serverUrl)
     if (protocol === 'http:') {
+      const appTransportSecurity = asPlistObject(cfg.modResults.NSAppTransportSecurity)
+      const exceptionDomains = asPlistObject(appTransportSecurity.NSExceptionDomains)
       cfg.modResults.NSAppTransportSecurity = {
-        ...(cfg.modResults.NSAppTransportSecurity as Record<string, unknown> | undefined),
+        ...appTransportSecurity,
         NSExceptionDomains: {
+          ...exceptionDomains,
           [hostname]: { NSExceptionAllowsInsecureHTTPLoads: true, NSIncludesSubdomains: true },
         },
       }
     }
     return cfg
   })
+}
+
+type PlistObject = Extract<NonNullable<IOSConfig.InfoPlist[string]>, Record<string, unknown>>
+
+function asPlistObject(value: unknown): PlistObject {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as PlistObject)
+    : {}
 }
 
 export default withServerOrigin

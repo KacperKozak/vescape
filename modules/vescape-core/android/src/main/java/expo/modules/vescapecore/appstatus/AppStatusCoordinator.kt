@@ -157,11 +157,16 @@ class AppStatusCoordinator internal constructor(
      */
     fun serverBaseUrl(context: Context): String {
       val app = context.applicationContext
-      val metaData = app.packageManager
-        .getApplicationInfo(app.packageName, PackageManager.GET_META_DATA)
-        .metaData
-      val baked = metaData?.getString(SERVER_BASE_URL_METADATA)?.trimEnd('/')
-      return if (baked.isNullOrEmpty()) PRODUCTION_SERVER_BASE_URL else baked
+      return try {
+        val metaData = app.packageManager
+          .getApplicationInfo(app.packageName, PackageManager.GET_META_DATA)
+          .metaData
+        val baked = metaData?.getString(SERVER_BASE_URL_METADATA)?.trimEnd('/')
+        if (baked.isNullOrEmpty()) PRODUCTION_SERVER_BASE_URL else baked
+      } catch (e: Exception) {
+        Log.w(TAG, "Cannot read baked server origin: ${e.message}")
+        PRODUCTION_SERVER_BASE_URL
+      }
     }
 
     @Volatile
@@ -201,10 +206,15 @@ internal class OkHttpAppStatusTransport(private val handler: Handler) : AppStatu
     .build()
 
   override fun fetch(url: String, appVersion: String, onResult: (String?) -> Unit) {
-    val request = Request.Builder()
-      .url(url)
-      .header(AppStatusCoordinator.APP_VERSION_HEADER, appVersion)
-      .build()
+    val request = try {
+      Request.Builder()
+        .url(url)
+        .header(AppStatusCoordinator.APP_VERSION_HEADER, appVersion)
+        .build()
+    } catch (_: IllegalArgumentException) {
+      handler.post { onResult(null) }
+      return
+    }
     client.newCall(request).enqueue(object : Callback {
       override fun onFailure(call: Call, e: IOException) {
         handler.post { onResult(null) }

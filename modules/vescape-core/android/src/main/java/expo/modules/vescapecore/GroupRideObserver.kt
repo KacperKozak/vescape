@@ -120,6 +120,10 @@ internal class GroupRideObserver(
         emitConnection("blocked")
     }
 
+    /** Callback may arrive after its socket was closed or superseded. */
+    private fun isCurrentSocket(ws: WebSocket): Boolean =
+        !stopped && !online.onlineBlocked && webSocket === ws
+
     /**
      * Create a Group Ride over the live observe socket: bind this connection's Rider with
      * `hello`, then send `create` carrying the creator's location and optional name. This is
@@ -232,7 +236,7 @@ internal class GroupRideObserver(
     private val listener = object : WebSocketListener() {
         override fun onOpen(ws: WebSocket, response: Response) {
             handler.post {
-                if (stopped) return@post
+                if (!isCurrentSocket(ws)) return@post
                 reconnectAttempt = 0
                 emitConnection("connected")
                 val id = riderId
@@ -244,30 +248,31 @@ internal class GroupRideObserver(
         }
 
         override fun onMessage(ws: WebSocket, text: String) {
-            handler.post { if (!stopped) handleMessage(text) }
+            handler.post { if (isCurrentSocket(ws)) handleMessage(text) }
         }
 
         override fun onClosing(ws: WebSocket, code: Int, reason: String) {
-            ws.close(NORMAL_CLOSURE, null)
+            handler.post {
+                if (isCurrentSocket(ws)) ws.close(NORMAL_CLOSURE, null)
+            }
         }
 
         override fun onClosed(ws: WebSocket, code: Int, reason: String) {
-            handler.post { scheduleReconnect() }
+            handler.post {
+                if (isCurrentSocket(ws)) scheduleReconnect()
+            }
         }
 
         override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
             Log.w(TAG, "Group Ride observe WS failure: ${t.message}")
             val code = response?.code
             handler.post {
+                if (!isCurrentSocket(ws)) return@post
                 if (code == GroupRideOnlineGate.VERSION_REJECTION_CODE) {
                     // Server refused the upgrade for this app version — refresh App Status so the
                     // gate learns the block, and surface `blocked` rather than reconnect-looping.
                     online.refresh()
-                    handler.removeCallbacks(reconnectRunnable)
-                    webSocket = null
-                    joinedRideId = null
-                    stopHeartbeat()
-                    emitConnection("blocked")
+                    tearDownForBlock()
                     return@post
                 }
                 scheduleReconnect()

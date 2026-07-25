@@ -328,7 +328,8 @@ class AppDataRepository private constructor(private val context: Context) {
         if (value == null || value == JSONObject.NULL) null
         else value.asStringKeyMap() ?: return@withContext
       "dismissedCommunityMessageIds" ->
-        validDismissedCommunityMessageIds(value) ?: return@withContext
+        if (value == null || value == JSONObject.NULL) emptyList()
+        else validDismissedCommunityMessageIds(value) ?: return@withContext
       else -> return@withContext
     }
     val normalizedKey = when (key) {

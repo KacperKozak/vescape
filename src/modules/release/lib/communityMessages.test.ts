@@ -64,10 +64,20 @@ describe('communityMessageQueue', () => {
       body: 'x',
       action: null,
     } as unknown as CommunityMessage
+    const badAction = {
+      ...message({ id: 'bad-action' }),
+      action: { type: 'primary', label: '', url: 'https://vescape.app' },
+    } as unknown as CommunityMessage
+    const validAction = message({
+      id: 'action',
+      action: { type: 'primary', label: 'Open', url: 'https://vescape.app' },
+    })
 
-    expect(communityMessageQueue([noId, valid, emptyBody, badType], []).map((m) => m.id)).toEqual([
-      'ok',
-    ])
+    expect(
+      communityMessageQueue([noId, valid, emptyBody, badType, badAction, validAction], []).map(
+        (m) => m.id,
+      ),
+    ).toEqual(['ok', 'action'])
   })
 })
 

@@ -75,7 +75,7 @@ function Block({ block, align, onLinkPress }: BlockProps) {
         <View style={styles.paragraphGroup}>
           {splitInlineRuns(block.children).map((run, index) =>
             run.kind === 'image' ? (
-              <MarkdownImage key={index} src={run.src} alt={run.alt} />
+              <MarkdownImage key={`${run.src}:${index}`} src={run.src} alt={run.alt} />
             ) : (
               <Text key={index} style={[styles.paragraph, alignStyle(align ?? null)]}>
                 {inlineNodes(run.nodes, onLinkPress)}

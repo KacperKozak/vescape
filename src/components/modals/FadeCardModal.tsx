@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import {
   Animated,
   Modal,
@@ -72,8 +72,8 @@ export function FadeCardModal({
   children,
   onExited,
 }: FadeCardModalProps) {
-  const opacity = useMemo(() => new Animated.Value(0), [])
-  const scale = useMemo(() => new Animated.Value(0.92), [])
+  const [opacity] = useState(() => new Animated.Value(0))
+  const [scale] = useState(() => new Animated.Value(0.92))
   const [mounted, setMounted] = useState(false)
   const [prevVisible, setPrevVisible] = useState(false)
   // Held in a ref so an inline callback can't retrigger the animation effect mid-fade.
@@ -120,7 +120,13 @@ export function FadeCardModal({
           <Text style={[styles.title, titleColor ? { color: titleColor } : null]}>{title}</Text>
         </View>
         {onDismiss && showClose ? (
-          <Pressable style={styles.closeButton} onPress={dismiss} disabled={dismissDisabled}>
+          <Pressable
+            style={styles.closeButton}
+            onPress={dismiss}
+            disabled={dismissDisabled}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+          >
             <XIcon size={15} color={theme.palette.slate.textSecondary} weight="bold" />
           </Pressable>
         ) : null}
