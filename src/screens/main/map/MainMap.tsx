@@ -90,6 +90,8 @@ import {
 
 Mapbox.setAccessToken(MAPBOX_ACCESS_TOKEN)
 
+const OFFSCREEN_INDICATOR_VISIBILITY_CHECK_MS = 200
+
 export interface MainMapHandle {
   recenterLive: (options?: { resetPadding?: boolean; animationDuration?: number }) => void
   previewHistorySession: (preview: HistoryPreviewTarget) => void
@@ -263,6 +265,7 @@ export const MainMap = memo(
     const mapViewRef = useRef<ElementRef<typeof Mapbox.MapView> | null>(null)
     const gestureActiveRef = useRef(false)
     const offscreenProjectionRequestRef = useRef(0)
+    const offscreenProjectionRefreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const suppressNextMapPressRef = useRef(false)
     const suppressNextMapPressTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const [mapOpacity] = useState(() => new Animated.Value(0))
@@ -415,13 +418,6 @@ export const MainMap = memo(
     const phoneHeadingDegRef = useRef<number | null>(null)
     const [phoneHeadingStatus, setPhoneHeadingStatus] = useState<PhoneHeadingStatus | 'idle'>(
       'idle',
-    )
-    const handlePhoneHeadingChange = useCallback(
-      (headingDeg: number | null) => {
-        phoneHeadingDegRef.current = headingDeg
-        onPhoneHeadingChange(headingDeg)
-      },
-      [onPhoneHeadingChange],
     )
     const headingFollowMode = gpsHeadingMode || phoneHeadingMode
     useRenderRateWarning('MainMap')
@@ -737,6 +733,44 @@ export const MainMap = memo(
       riderTargetPoints,
       selectedMapPoint,
     ])
+
+    const scheduleOffscreenMapIndicatorRefresh = useCallback(() => {
+      if (offscreenProjectionRefreshTimeoutRef.current) return
+      offscreenProjectionRefreshTimeoutRef.current = setTimeout(() => {
+        offscreenProjectionRefreshTimeoutRef.current = null
+        updateOffscreenMapIndicators()
+      }, OFFSCREEN_INDICATOR_VISIBILITY_CHECK_MS)
+    }, [updateOffscreenMapIndicators])
+
+    const handlePhoneHeadingChange = useCallback(
+      (headingDeg: number | null) => {
+        phoneHeadingDegRef.current = headingDeg
+        onPhoneHeadingChange(headingDeg)
+
+        if (headingDeg == null || !phoneHeadingMode || !followGps) return
+        const currentCamera = currentCameraRef.current
+        if (!currentCamera) return
+
+        const repositionedIndicators = repositionOffscreenMapIndicators(
+          offscreenMapIndicatorsRef.current,
+          { ...currentCamera, heading: headingDeg },
+          mapLayout,
+        )
+        if (repositionedIndicators !== offscreenMapIndicatorsRef.current) {
+          publishOffscreenMapIndicators(repositionedIndicators)
+        }
+        scheduleOffscreenMapIndicatorRefresh()
+      },
+      [
+        currentCameraRef,
+        followGps,
+        mapLayout,
+        onPhoneHeadingChange,
+        phoneHeadingMode,
+        publishOffscreenMapIndicators,
+        scheduleOffscreenMapIndicatorRefresh,
+      ],
+    )
 
     const handleOffscreenIndicatorPress = useCallback(
       (indicator: OffscreenMapIndicatorState) => {
@@ -1145,7 +1179,17 @@ export const MainMap = memo(
     const handleMapIdle = useCallback(() => {
       const heading = currentCameraRef.current?.heading
       if (heading != null) setCameraHeading(heading)
-    }, [currentCameraRef])
+      scheduleOffscreenMapIndicatorRefresh()
+    }, [currentCameraRef, scheduleOffscreenMapIndicatorRefresh])
+
+    useEffect(
+      () => () => {
+        if (offscreenProjectionRefreshTimeoutRef.current) {
+          clearTimeout(offscreenProjectionRefreshTimeoutRef.current)
+        }
+      },
+      [],
+    )
 
     useEffect(() => {
       const frame = requestAnimationFrame(updateOffscreenMapIndicators)
