@@ -32,7 +32,7 @@ final class AppStatusCoordinatorTests: XCTestCase {
   ) -> AppStatusCoordinator {
     AppStatusCoordinator(
       installedVersion: installedVersion,
-      baseUrl: "https://vescape.app",
+      baseUrl: "https://api.vescape.app",
       transport: transport.transport
     )
   }
@@ -46,7 +46,7 @@ final class AppStatusCoordinatorTests: XCTestCase {
 
     coordinator(transport).refresh()
 
-    XCTAssertEqual(transport.urls, ["https://vescape.app/api/app-status"])
+    XCTAssertEqual(transport.urls, ["https://api.vescape.app/api/app-status"])
     XCTAssertEqual(transport.versions, ["0.70.0"])
   }
 

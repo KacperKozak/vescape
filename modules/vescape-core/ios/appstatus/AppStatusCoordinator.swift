@@ -31,7 +31,7 @@ final class AppStatusCoordinator {
   /// value is missing.
   /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/appstatus/AppStatusCoordinator.kt `PRODUCTION_SERVER_BASE_URL`
   /// @parity /src/config/server.ts `SERVER_URL`
-  static let productionServerBaseUrl = "https://vescape.app"
+  static let productionServerBaseUrl = "https://api.vescape.app"
 
   /// Info.plist key holding the backend origin. Native fetches App Status before JS is ready, so it
   /// cannot receive the URL from JS the way Group Ride does — prebuild bakes `EXPO_PUBLIC_SERVER_URL`

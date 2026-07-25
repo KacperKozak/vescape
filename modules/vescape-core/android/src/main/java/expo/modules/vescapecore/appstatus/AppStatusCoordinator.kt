@@ -133,7 +133,7 @@ class AppStatusCoordinator internal constructor(
      * @parity /modules/vescape-core/ios/appstatus/AppStatusCoordinator.swift `productionServerBaseUrl`
      * @parity /src/config/server.ts `SERVER_URL`
      */
-    const val PRODUCTION_SERVER_BASE_URL = "https://vescape.app"
+    const val PRODUCTION_SERVER_BASE_URL = "https://api.vescape.app"
 
     /**
      * Manifest meta-data holding the backend origin. Native fetches App Status before JS is ready,

@@ -1,7 +1,7 @@
 /**
  * Base URL of the Vescape backend — the single server behind every networked
  * feature (the Group Ride relay today; more to come). It lives in a separate repo
- * (`../vescape-server`) and is deployed to `https://vescape.app`. Override per
+ * (`../vescape-server`) and is deployed to `https://api.vescape.app`. Override per
  * environment with `EXPO_PUBLIC_SERVER_URL` (e.g. `http://localhost:3000` for a
  * local `bun dev` server).
  *
@@ -14,7 +14,7 @@
  * @parity /modules/vescape-core/ios/appstatus/AppStatusCoordinator.swift `serverBaseUrl`
  * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/appstatus/AppStatusCoordinator.kt `serverBaseUrl`
  */
-export const SERVER_URL = process.env.EXPO_PUBLIC_SERVER_URL ?? 'https://vescape.app'
+export const SERVER_URL = process.env.EXPO_PUBLIC_SERVER_URL ?? 'https://api.vescape.app'
 
 /** Build the dedicated Group Ride WebSocket endpoint from the backend origin. */
 export function toGroupRideWebSocketUrl(serverUrl: string) {

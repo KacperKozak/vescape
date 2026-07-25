@@ -38,7 +38,7 @@ class AppStatusCoordinatorTest {
     installedVersion: String = "0.70.0",
   ) = AppStatusCoordinator(
     installedVersion = installedVersion,
-    baseUrl = "https://vescape.app",
+    baseUrl = "https://api.vescape.app",
     transport = transport,
   )
 
@@ -51,7 +51,7 @@ class AppStatusCoordinatorTest {
 
     coordinator(transport).refresh()
 
-    assertEquals(listOf("https://vescape.app/api/app-status"), transport.urls)
+    assertEquals(listOf("https://api.vescape.app/api/app-status"), transport.urls)
     assertEquals(listOf("0.70.0"), transport.versions)
   }
 

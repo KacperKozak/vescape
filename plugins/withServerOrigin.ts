@@ -24,7 +24,7 @@ import {
  */
 const ANDROID_METADATA_NAME = 'app.vescape.SERVER_BASE_URL'
 const IOS_INFO_PLIST_KEY = 'VescapeServerBaseUrl'
-const PRODUCTION_SERVER_URL = 'https://vescape.app'
+const PRODUCTION_SERVER_URL = 'https://api.vescape.app'
 
 const withServerOrigin: ConfigPlugin = (config) => {
   const serverUrl = process.env.EXPO_PUBLIC_SERVER_URL || PRODUCTION_SERVER_URL
