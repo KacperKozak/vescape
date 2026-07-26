@@ -13,11 +13,11 @@ import {
   SignOutIcon,
   ThermometerSimpleIcon,
   UsersIcon,
+  WarningIcon,
   XIcon,
   type Icon,
 } from 'phosphor-react-native'
 import { router } from 'expo-router'
-
 import { Button } from '@/components/base/Button'
 import { Placeholder } from '@/components/base/Placeholder'
 import { ColorPicker } from '@/components/forms/ColorPicker'
@@ -130,9 +130,35 @@ function GroupRideWidget() {
   const activeRide = rides.find((r) => r.id === activeRideId)
   const active = activeRideId != null
   const connected = connection === 'connected'
+  // Native gates the relay socket when the installed version is Online/App Blocked and reports it
+  // as `blocked`; Group Ride is unusable until the app updates, so replace the live UI entirely.
+  const blocked = connection === 'blocked'
   const showNearby = !active && nearby.length > 0 && !nearbyDismissed
   const accent = theme.palette.groupRide.color
   const rideName = activeRide?.name?.trim() || 'Your group ride'
+
+  if (blocked) {
+    return (
+      <CanvasWidget
+        icon={BroadcastIcon}
+        title="Group Ride"
+        accent={accent}
+        height={240}
+        footer={
+          <Button
+            label="Create"
+            icon={PlusIcon}
+            onPress={() => {}}
+            disabled
+            style={[styles.fill, styles.actionBtn]}
+            accessibilityLabel="Create group ride"
+          />
+        }
+      >
+        <Placeholder icon={WarningIcon} description="Not available in this version." />
+      </CanvasWidget>
+    )
+  }
 
   const footer = active ? (
     <Button

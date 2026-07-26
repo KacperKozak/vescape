@@ -87,7 +87,7 @@ export function IconButton({
         pressed && !isDisabled && { opacity: interaction.pressedOpacity },
         style,
       ]}
-      android_ripple={interaction.ripple}
+      android_ripple={{ ...interaction.rippleBorderless, radius: dim / 2 }}
       onPress={onPress}
       onLongPress={onLongPress}
       disabled={isDisabled}

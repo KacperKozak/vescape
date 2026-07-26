@@ -101,7 +101,7 @@ const config: ExpoConfig = {
           minSdkVersion: 33,
         },
         ios: {
-          deploymentTarget: '16.4',
+          deploymentTarget: '17.0',
         },
       },
     ],
@@ -124,6 +124,7 @@ const config: ExpoConfig = {
     './plugins/withWearMirror',
     './plugins/withSentryNativeInit',
     './plugins/withAndroidSigningConfig',
+    './plugins/withServerOrigin',
   ],
   experiments: {
     typedRoutes: true,

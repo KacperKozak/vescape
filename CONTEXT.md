@@ -148,16 +148,24 @@ _Avoid_: Deck disturbance, rider lean, foot pressure, throttle, acceleration com
 A footpad sensor mode that treats both sensor zones as one engagement zone.
 _Avoid_: Posi switch, dual switch
 
+**Legal Policy**:
+The jurisdiction rules currently applicable across Boards, including the Legal Speed Limit, Legal Warning Speed, and Legal Road Status.
+_Avoid_: Legal Mode policy, legal settings
+
 **Legal Mode**:
-A rider-selected mode that prepares a Board to meet a chosen legal limit through mandatory speed-warning feedback and optional board-enforced speed constraint.
-_Avoid_: Police mode, cop mode, inspection mode
+A durable per-Board choice to apply the current Legal Policy through mandatory speed warnings and board-enforced constraints.
+_Avoid_: Legal Policy, Police mode, cop mode, inspection mode
 
 **Legal Speed Limit**:
-The target maximum riding speed used by Legal Mode, either rider-entered or suggested from a jurisdiction.
+The jurisdiction-defined target maximum riding speed in the current Legal Policy.
 _Avoid_: Max board speed, engine limit
 
+**Board Top Speed**:
+The rider-entered maximum speed the rider rides a specific **Board** at, held per-Board as a **Board Setting**. Drives that Board's speed gauge full-scale and the km/h thresholds a speed **Alert Preset** level resolves to (a level is a percentage of this value). Not a legal or firmware limit — a personal figure for this Board. Distinct from **Legal Speed Limit** (a legal target) and from any controller top-speed setting.
+_Avoid_: Rider Top Speed (former profile-level name), Legal Speed Limit, max board speed, speed cap
+
 **Legal Warning Speed**:
-The speed at which Legal Mode starts audible warning feedback before the Legal Speed Limit is reached.
+The jurisdiction-defined speed in the current Legal Policy at which Legal Mode starts audible warning feedback before the Legal Speed Limit is reached.
 _Avoid_: Alert threshold, warning threshold
 
 **Legal Road Status**:
@@ -173,12 +181,16 @@ A rider intent that depends on the connected controller's Refloat behavior rathe
 _Avoid_: Runtime command, board action, unsafe command
 
 **Alert Rule**:
-A user-defined telemetry threshold that can trigger board-riding feedback during a live connection. A rule with only a threshold fires a one-shot alert; a rule with both threshold and thresholdMax fires a geiger-style progressive alert that accelerates with range depth.
+A user-defined telemetry threshold, owned by one **Board**, that can trigger board-riding feedback during a live connection to that Board. A rule with only a threshold fires a one-shot alert; a rule with both threshold and thresholdMax fires a geiger-style progressive alert that accelerates with range depth.
 _Avoid_: Alarm, notification
 
+**Alert Sound**:
+A bundled audio asset used for alert feedback, belonging to exactly one category: single (one-threshold alerts) or geiger (range alerts with progressive ticking). Selected on an **Alert Rule** via its sound type.
+_Avoid_: Alert Preset (now the rider's intensity concept), sound effect, ringtone, tone
+
 **Alert Preset**:
-A bundled audio asset used for alert feedback, belonging to exactly one category: single (one-threshold alerts) or geiger (range alerts with progressive ticking).
-_Avoid_: Sound effect, ringtone, tone
+A rider-selected intensity level for one telemetry metric (battery, speed, duty, motor temperature, controller temperature) that expands into a set of **Alert Rules** at once. Motor and controller temperature are independent presets. Held per-**Board** as a **Board Setting** — each Board carries its own levels. The level is durable truth; the rules it produces are virtual — derived from the level, tagged by source, and regenerated as a whole when the level changes, never hand-edited one by one. Manual **Alert Rules** may coexist alongside a preset's rules for the same metric. A metric with the preset disabled has no preset-sourced rules.
+_Avoid_: Alert Sound (the audio asset), Alert Level as a rules concept, warning pack
 
 **Alert Message Template**:
 A user-authored spoken phrase on a one-shot Alert Rule that may include current alert-value placeholders and is spoken by native text-to-speech when the rule fires.
@@ -207,6 +219,34 @@ _Avoid_: session log, BLE dump, trace
 **App Setting**:
 A user-controlled app preference that affects app behavior across boards unless explicitly scoped elsewhere.
 _Avoid_: Option, config
+
+**Board Setting**:
+A rider-adjustable preference or soft state scoped to one **Board**, stored schemalessly per Board (key-value). Distinct from Board identity and probe-confirmed facts (name, **Board Link**), which are structured Board fields. Examples: battery configuration, **Alert Preset** levels, **Board Top Speed**.
+_Avoid_: Board config, per-board App Setting
+
+**Release Policy**:
+The app-version compatibility boundary that may identify the latest release, issue an Update Warning, impose an Online Block, or exceptionally impose an App Block.
+_Avoid_: Force Update, minimum version, version warning
+
+**Update Warning**:
+A Release Policy outcome that urges an affected app version to update without changing capability availability.
+_Avoid_: Online Block, update available, soft block
+
+**Online Block**:
+A Release Policy outcome that denies Online Capabilities for an affected app version while leaving local capabilities available.
+_Avoid_: Warning, soft block, server block
+
+**App Block**:
+An exceptional Release Policy outcome that requires an update before normal app UI continues without ending already-running Board work.
+_Avoid_: Force Update, hard block, kill switch
+
+**Community Message**:
+A server-authored, rider-facing communication that may inform, warn, or announce without changing capability availability.
+_Avoid_: Release warning, push notification, server error
+
+**Online Capability**:
+An app capability that depends on the Vescape server and remains separate from local Board, recording, history, and tuning capabilities.
+_Avoid_: Server feature, cloud feature, online mode
 
 **Diagnostic Event**:
 An app-observed abnormal condition that helps explain board connection, telemetry, tuning, recording, or UI failures.
@@ -282,10 +322,10 @@ _Avoid_: Position update, presence ping, location share, group telemetry
 - A **Tune Preview** derives an idealized board-angle response from one **Tune Profile** and never predicts whether the **Board** can physically achieve it.
 - A **Pitch Input** adds pitch error over time without directly commanding speed or motor power.
 - A **Posi Sensor** setting belongs to a **Tune Profile** when the board firmware exposes that Refloat field.
-- **Legal Mode** applies to one **Board** and combines tune-level constraints with **Alert Rules** when activated.
-- **Legal Mode** has one **Legal Speed Limit** and one **Legal Warning Speed**.
-- A **Legal Warning Speed** must be lower than its **Legal Speed Limit**.
-- A **Legal Road Status** may warn the rider without removing **Legal Speed Limit** controls.
+- One current **Legal Policy** is selected automatically from the first resolvable GPS Fix, changes only on explicit refresh, and applies to every Board without per-Board snapshots.
+- **Legal Mode** belongs to one **Board**, requires a resolved **Legal Policy** plus a live **Board Session** with trusted link integrity to enable, and remains enabled until explicitly disabled.
+- **Legal Mode** can always be disabled, even when its Board is disconnected or no **Legal Policy** is available.
+- A **Legal Warning Speed** is lower than its **Legal Speed Limit**; **Legal Road Status** may warn without removing Legal Mode.
 - A **Board Move** requires a live **Board Session** but must not be treated as riding.
 - **Board Move**, light controls, tune writes, and quick tune controls are **Firmware-Dependent Commands**.
 - A **Board Warning** belongs to one **Board** and one problem kind; re-detection updates the existing warning instead of creating another.
@@ -295,11 +335,20 @@ _Avoid_: Position update, presence ping, location share, group telemetry
 - A **Board Warning** is not an **Alert Rule** (app-authored, not rider-authored) and produces no riding feedback; it is passive display only.
 - A **Board Warning** detector can be replayed offline against a **Debug Recording**'s BLE frames; a committed clean Debug Recording guards against false positives.
 - An **Alert Rule** evaluates against live **Telemetry Samples**.
+- An **Alert Rule** belongs to one **Board**; the alert engine evaluates only the connected **Board**'s rules, and deleting a **Board** deletes its rules.
+- An **Alert Preset** is set per metric and produces zero or more **Alert Rules** for that metric; those rules are regenerated wholesale when its level changes and coexist with the rider's manual **Alert Rules**.
+- A speed **Alert Preset** resolves its km/h thresholds from **Board Top Speed**; changing **Board Top Speed** regenerates the speed preset's **Alert Rules**.
 - An **Alert Message Template** belongs to one **Alert Rule**.
 - A **Watch Mirror** receives **Watch Frames** and **Watch Alerts** from the phone and never sends data back; it is not a **Board**, a **Board Session**, or a source of **Telemetry Samples**.
 - A **Watch Frame** is derived from **Live State** and is only pushed while a **Board Session** is producing **Telemetry Samples**.
 - A **Watch Alert** is pushed when an **Alert Rule** fires on the phone and does not re-evaluate any threshold on the **Watch Mirror**.
 - An **App Setting** affects app behavior and is not part of a **Tune Profile** or **Board** identity.
+- A **Release Policy** may issue an **Update Warning**, impose an **Online Block**, or impose an **App Block** for affected app versions.
+- An **Update Warning** does not change local or online capability availability.
+- An **Online Block** denies every **Online Capability** while preserving local app capabilities.
+- An **App Block** also denies every **Online Capability**, but does not end an already-running **Board Session** or **Ride Recording**.
+- A **Community Message** never changes whether an **Online Capability** is available.
+- A **Group Ride** is an **Online Capability**; a **Board Session**, **Ride Recording**, **Ride History**, and tuning are not.
 - A **Diagnostic Event** may describe failures around a **Board**, **Live State**, **Telemetry Sample**, **Ride Recording**, or **Tune Profile** workflow.
 - A **Group Ride** contains zero or more **Riders** and exists only while at least one **Rider** is present; it owns no durable truth and is never written to **Ride History**.
 - A **Rider** may be in at most one **Group Ride** at a time and is identified independently of any **Board**.
@@ -320,6 +369,9 @@ _Avoid_: Position update, presence ping, location share, group telemetry
 
 > **Dev:** "Does someone need to sign in before connecting a Board or recording a ride?"
 > **Domain expert:** "No. A Vescape Account is optional; local board and ride features remain available offline."
+
+> **Dev:** "If an Online Block applies to this app version, does the rider lose access to their Board?"
+> **Domain expert:** "No. Only Online Capabilities such as Group Ride are unavailable; local Board and ride capabilities remain available. An exceptional App Block may hide normal app UI, but it still does not end already-running Board work."
 
 ## Flagged Ambiguities
 
@@ -349,5 +401,8 @@ _Avoid_: Position update, presence ping, location share, group telemetry
 - "ride" may mean a personal persisted capture or a live shared room; resolved terms: use **Ride Recording** for the local persisted capture and **Group Ride** for the live shared room. The two are independent — a Rider can do either, both, or neither.
 - "presence" / "location share" may mean a one-off map dot or the live group feed; resolved term: use **Rider Presence** for what a **Rider** shares into a **Group Ride**.
 - "account", "profile", and "Rider" were used interchangeably; resolved: a **Vescape Account** is optional online identity, while a **Rider** remains an anonymous device-local Group Ride participant.
+- "force update" was used to mean both denying server compatibility and locking app UI; resolved terms: use **Online Block** for denying **Online Capabilities** and **App Block** for the exceptional update-only UI state.
+- "version warning" was used for both an update prompt and denial of server features; resolved terms: use **Update Warning** for the non-blocking prompt and **Online Block** when **Online Capabilities** are denied.
+- "message" may mean version compatibility or general communication; resolved: compatibility belongs to the **Release Policy**, while a **Community Message** never changes capability availability.
 - "posi switch" and "dual switch" refer to **Posi Sensor** mode in rider language; the firmware field name is an implementation detail.
 - "move board" may mean **Remote Tilt** or motor movement while disengaged; resolved term: use **Board Move** for deliberate app-driven movement of a disengaged Board.

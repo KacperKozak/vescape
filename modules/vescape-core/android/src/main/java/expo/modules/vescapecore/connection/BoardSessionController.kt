@@ -8,6 +8,8 @@ import expo.modules.vescapecore.service.ACTION_DISCONNECT_FROM_NOTIFICATION
 import expo.modules.vescapecore.service.ACTION_EXIT_FROM_NOTIFICATION
 import expo.modules.vescapecore.alerts.AlertCoordinator
 import expo.modules.vescapecore.alerts.AlertFeedback
+import expo.modules.vescapecore.alerts.withLegalModeOverlay
+import expo.modules.vescapecore.location.LegalPolicyCatalog
 import expo.modules.vescapecore.telemetry.BmsSeriesFrame
 import expo.modules.vescapecore.telemetry.BmsSeriesRing
 import expo.modules.vescapecore.protocol.BmsTelemetry
@@ -27,6 +29,7 @@ import expo.modules.vescapecore.service.CoreForegroundService
 import expo.modules.vescapecore.diagnostics.DiagnosticReporter
 import expo.modules.vescapecore.location.GpsMonitor
 import expo.modules.vescapecore.GroupRideObserver
+import expo.modules.vescapecore.appstatus.AppStatusCoordinator
 import expo.modules.vescapecore.telemetry.LiveSeriesEmitter
 import expo.modules.vescapecore.protocol.LocationSnapshot
 import expo.modules.vescapecore.location.LocationTracker
@@ -133,6 +136,22 @@ private const val NOTIFICATION_TELEMETRY_INTERVAL_MS = 10_000L
 private const val GATT_CONNECT_TIMEOUT_MS = 6_000L
 private const val GATT_READY_TIMEOUT_MS = 6_000L
 
+/** @parity /modules/vescape-core/ios/connection/BoardSessionController.swift `legalModeEnableError` */
+internal fun legalModeEnableError(
+    phase: BoardPhase,
+    activeBoardId: String?,
+    linkIntegrity: LinkIntegrity,
+    requestedBoardId: String,
+): Pair<String, String>? {
+    if (phase != BoardPhase.Connected || activeBoardId != requestedBoardId) {
+        return "LEGAL_MODE_BOARD_NOT_CONNECTED" to "Matching active Board Session required"
+    }
+    if (linkIntegrity != LinkIntegrity.Trusted) {
+        return "LINK_NOT_TRUSTED" to "Trusted Board Link required to enable Legal Mode"
+    }
+    return null
+}
+
 /**
  * Owns the durable board-session state and orchestration. [CoreForegroundService] is a thin Android
  * shell delegating lifecycle + the static JS bridge here. Holds a [service] reference solely for the
@@ -187,6 +206,7 @@ internal class BoardSessionController(private val service: CoreForegroundService
     private val notificationGate = NotificationUpdateGate(NOTIFICATION_TELEMETRY_INTERVAL_MS)
     private val alertFeedback by lazy { AlertFeedback(service, mainHandler) }
     private val alertCoordinator by lazy { AlertCoordinator { alertFeedback } }
+    private val legalPolicyCatalog by lazy { LegalPolicyCatalog(service.applicationContext) }
     private val diagnosticsRecorder: DiagnosticsRecorder by lazy {
         DiagnosticsRecorder(
             local = { name, props ->
@@ -301,7 +321,11 @@ internal class BoardSessionController(private val service: CoreForegroundService
         )
     }
     private val groupRideObserver by lazy {
-        GroupRideObserver(handler = mainHandler, emit = ::emitEvent)
+        GroupRideObserver(
+            handler = mainHandler,
+            emit = ::emitEvent,
+            online = AppStatusCoordinator.get(service.applicationContext),
+        )
     }
 
     /**
@@ -868,8 +892,10 @@ private var wearAutoLaunchOnConnect = true
         isStoppingService = false
         stopCurrentBoardSession(emitDisconnected = false, updateNotification = false)
         refreshLiveHistoryLimit()
-        CoreForegroundService.reloadAlertRules(service.applicationContext)
         boardConfig = start.boardConfig
+        // Load rules only after boardConfig is assigned — the engine scopes to the connected Board's
+        // rules (#254), so reading before assignment would install the wrong Board's (or no) rules.
+        CoreForegroundService.reloadAlertRules(service.applicationContext)
         replayTransport = start.boardConfig.replayRecordingName?.let {
             ReplayTransport(
                 context = service,
@@ -1666,6 +1692,15 @@ private var wearAutoLaunchOnConnect = true
     private fun firmwareCommandsTrusted(): Boolean =
         boardStatus == BoardPhase.Connected && boardSession?.linkIntegrity == LinkIntegrity.Trusted
 
+    fun legalModeEnableError(boardId: String): Pair<String, String>? {
+        return legalModeEnableError(
+            boardStatus,
+            boardConfig?.appBoardId,
+            boardSession?.linkIntegrity ?: LinkIntegrity.Unknown,
+            boardId,
+        )
+    }
+
     fun setRemoteTilt(value: Int): Boolean =
         firmwareCommandsTrusted() && remoteTiltController.hold(value)
 
@@ -2062,14 +2097,36 @@ private var wearAutoLaunchOnConnect = true
         )
     }
 
-    suspend fun loadAlertRules(context: Context) {
+    suspend fun loadAlertRules(context: Context, generation: Long) {
+        // The alert engine evaluates only the connected Board's rules. No connected Board ⇒ no rules.
+        val boardId = boardConfig?.appBoardId
+        if (boardId == null) {
+            if (CoreForegroundService.isLatestAlertRulesGeneration(generation)) {
+                alertCoordinator.replaceRules(emptyList())
+            }
+            return
+        }
         try {
-            val rules = AppDataRepository.get(context).getEnabledAlertRuleEntities()
+            val repo = AppDataRepository.get(context)
+            val board = repo.getBoard(boardId)
+            val enabled = ((board?.get("legalMode") as? Map<*, *>)?.get("enabled") as? Boolean) == true
+            val jurisdictionCode = repo.getTypedSettings().legalPolicy?.get("jurisdictionCode")
+            val speeds = jurisdictionCode?.let(legalPolicyCatalog::speeds)
+            val rules = withLegalModeOverlay(
+                repo.getEnabledAlertRuleEntities(boardId),
+                boardId,
+                enabled,
+                speeds?.warningSpeedKmh,
+                speeds?.limitSpeedKmh,
+            )
+            if (!CoreForegroundService.isLatestAlertRulesGeneration(generation)) return
             alertCoordinator.replaceRules(rules)
             Log.d(VESC_SESSION_TAG, "Loaded ${rules.size} alert rule(s)")
         } catch (e: Exception) {
             Log.w(VESC_SESSION_TAG, "Failed to load alert rules: ${e.message}")
-            alertCoordinator.replaceRules(emptyList())
+            if (CoreForegroundService.isLatestAlertRulesGeneration(generation)) {
+                alertCoordinator.replaceRules(emptyList())
+            }
         }
     }
 

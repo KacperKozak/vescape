@@ -20,6 +20,7 @@ class AlertEngineTest {
         thresholdMax: Double? = null,
         soundType: String = "default",
     ) = AlertRuleEntity(
+        boardId = "board-1",
         id = id,
         controlId = controlId,
         threshold = threshold,
@@ -65,6 +66,52 @@ class AlertEngineTest {
         lastPacketAt = 0L,
         location = null,
     )
+
+    @Test
+    fun legalModeOverlayStaysAbsentWhenDisabled() {
+        val rules = withLegalModeOverlay(
+            listOf(rule()),
+            "board-2",
+            false,
+            15.0,
+            20.0,
+        )
+
+        assertEquals(1, rules.size)
+    }
+
+    @Test
+    fun legalModeOverlaySynthesizesBoardAgnosticGeigerRule() {
+        val rules = withLegalModeOverlay(
+            emptyList(),
+            "board-2",
+            true,
+            15.0,
+            20.0,
+        )
+
+        assertEquals(1, rules.size)
+        assertEquals("board-2", rules[0].boardId)
+        assertEquals("speed", rules[0].controlId)
+        assertEquals(15.0, rules[0].threshold, 0.0)
+        assertEquals(20.0, rules[0].thresholdMax!!, 0.0)
+        assertEquals("preset:tick", rules[0].soundType)
+        assertNull(rules[0].source)
+    }
+
+    @Test
+    fun legalModeOverlayUsesLatestSpeedSettings() {
+        val rules = withLegalModeOverlay(
+            emptyList(),
+            "board-1",
+            true,
+            24.0,
+            30.0,
+        )
+
+        assertEquals(24.0, rules[0].threshold, 0.0)
+        assertEquals(30.0, rules[0].thresholdMax!!, 0.0)
+    }
 
     // --- Basic firing ---
 

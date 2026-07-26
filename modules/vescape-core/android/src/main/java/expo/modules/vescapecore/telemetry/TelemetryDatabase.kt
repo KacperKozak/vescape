@@ -12,7 +12,7 @@ import java.io.File
 // @parity /modules/vescape-core/ios/VescapeCoreModule.swift
 internal const val TELEMETRY_DATABASE_NAME = "vescape.db"
 internal const val LEGACY_TELEMETRY_DATABASE_NAME = "telemetry.db"
-internal const val TELEMETRY_DATABASE_VERSION = 29
+internal const val TELEMETRY_DATABASE_VERSION = 30
 
 @Database(
   entities = [
@@ -472,6 +472,44 @@ abstract class TelemetryDatabase : RoomDatabase() {
     }
 
     /**
+     * Per-board Alert Rules (#254). Alert Rules become owned by one Board (`board_id NOT NULL`,
+     * composite PK so preset ids repeat per board). Pre-release decision: existing global rules are
+     * dropped, not reassigned — riders redo alert setup per board. The three former global settings
+     * keys (Alert Preset selection, Rider Top Speed, onboarding flag) move to Board Settings, so
+     * their app_settings rows are dropped.
+     *
+     * @parity /modules/vescape-core/ios/telemetry/TelemetryDatabase.swift `v30_alert_board_id`
+     */
+    internal val MIGRATION_29_30 = object : Migration(29, 30) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("DROP TABLE IF EXISTS alerts")
+        db.execSQL(
+          """
+          CREATE TABLE alerts (
+            board_id TEXT NOT NULL,
+            id TEXT NOT NULL,
+            control_id TEXT NOT NULL,
+            threshold REAL NOT NULL,
+            threshold_max REAL,
+            enabled INTEGER NOT NULL,
+            sound_type TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            source TEXT,
+            PRIMARY KEY (board_id, id)
+          )
+          """.trimIndent(),
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_alerts_board_id ON alerts(board_id)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_alerts_control_id ON alerts(control_id)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_alerts_enabled ON alerts(enabled)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_alerts_created_at ON alerts(created_at)")
+        db.execSQL(
+          "DELETE FROM app_settings WHERE key IN ('alertPreset', 'riderTopSpeedKmh', 'alertPresetsOnboarded')",
+        )
+      }
+    }
+
+    /**
      * One-time file rename from the pre-release "telemetry.db" name. Checkpoints the legacy WAL so
      * the whole database lives in the main file, then renames it in place. Idempotent: once the new
      * file exists (or no legacy file is present) this is a no-op.
@@ -527,6 +565,7 @@ abstract class TelemetryDatabase : RoomDatabase() {
             MIGRATION_26_27,
             MIGRATION_27_28,
             MIGRATION_28_29,
+            MIGRATION_29_30,
           )
           .fallbackToDestructiveMigration(true)
           .addCallback(object : Callback() {

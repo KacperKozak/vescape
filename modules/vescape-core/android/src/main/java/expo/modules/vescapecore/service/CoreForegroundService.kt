@@ -21,11 +21,14 @@ import expo.modules.vescapecore.telemetry.MAX_LIVE_HISTORY_LIMIT_MINUTES
 import expo.modules.vescapecore.telemetry.MIN_LIVE_HISTORY_LIMIT_MINUTES
 import expo.modules.vescapecore.telemetry.TelemetryRepository
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 internal const val VESC_SESSION_TAG = "VescSession"
 internal const val ACTION_START_SESSION = "expo.modules.vescapecore.ACTION_START_SESSION"
@@ -90,6 +93,8 @@ class CoreForegroundService : Service() {
         internal var pendingGpsStart = false
         internal var pendingGroupRideUrl: String? = null
         internal val appDataScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        private val alertRulesGeneration = AtomicLong(0)
+        private val alertRulesReloadMutex = Mutex()
 
         // Board Warning registry writes run on a single thread so a burst of findings (e.g. a
         // cell-spread warn then critical) commits its get-then-upsert pairs in submission order.
@@ -325,10 +330,20 @@ class CoreForegroundService : Service() {
         }
 
         fun reloadAlertRules(context: Context) {
+            val generation = alertRulesGeneration.incrementAndGet()
             appDataScope.launch {
-                instance?.controller?.loadAlertRules(context.applicationContext)
+                alertRulesReloadMutex.withLock {
+                    instance?.controller?.loadAlertRules(context.applicationContext, generation)
+                }
             }
         }
+
+        internal fun isLatestAlertRulesGeneration(generation: Long): Boolean =
+            alertRulesGeneration.get() == generation
+
+        internal fun legalModeEnableError(boardId: String): Pair<String, String>? =
+            instance?.controller?.legalModeEnableError(boardId)
+                ?: ("LEGAL_MODE_BOARD_NOT_CONNECTED" to "Matching active Board Session required")
 
         /** Refresh the Group Ride presence Privacy Zone gate after a zone change (issue #144). */
         fun reloadPrivacyZones(context: Context) {

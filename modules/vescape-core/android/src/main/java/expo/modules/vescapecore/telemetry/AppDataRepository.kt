@@ -64,11 +64,34 @@ internal fun validCompanionCooldownMinutes(value: Any?): Int? =
     ?.toInt()
     ?.coerceIn(0, 1440)
 
+/**
+ * Acknowledged Community Message IDs: a de-duplicated list of non-empty ID strings, or `null` when
+ * the raw value is not a list at all. An empty or all-invalid list normalizes to `[]` (not `null`)
+ * so a legitimately-empty stored value is never treated as corrupt.
+ */
+internal fun validDismissedCommunityMessageIds(value: Any?): List<String>? {
+  val list = value as? List<*> ?: return null
+  return list.filterIsInstance<String>().filter { it.isNotEmpty() }.distinct()
+}
+
 /** Auto close delay in minutes; at least 1 so a fired timer always had a real wait. */
 internal fun validAutoCloseDelayMinutes(value: Any?): Int? =
   (value as? Number)
     ?.toInt()
     ?.coerceIn(1, 1440)
+
+/** Display default Board Top Speed in km/h, applied when a Board has no `topSpeedKmh` setting. */
+internal const val DEFAULT_TOP_SPEED_KMH = 50.0
+
+/**
+ * Board Top Speed in km/h; the speed gauge full-scale. Clamped to a sane 5–150 km/h band.
+ * @parity /modules/vescape-core/ios/telemetry/AppDataRepository.swift `topSpeedKmh`
+ */
+internal fun validTopSpeedKmh(value: Any?): Double? =
+  (value as? Number)
+    ?.toDouble()
+    ?.takeIf { it.isFinite() }
+    ?.coerceIn(5.0, 150.0)
 
 /** Watch Mirror push interval in ms; floored at 50ms (20Hz), capped at 10s. */
 internal fun validWearMirrorIntervalMs(value: Any?): Int? =
@@ -170,24 +193,27 @@ class AppDataRepository private constructor(private val context: Context) {
     notifyDataChanged(AppDataScope.BOARDS)
   }
 
-  suspend fun getAlertRules(): List<Map<String, Any?>> = withContext(Dispatchers.IO) {
-    dao.getAlertRules().map { it.toMap() }
+  suspend fun getAlertRules(boardId: String): List<Map<String, Any?>> = withContext(Dispatchers.IO) {
+    dao.getAlertRules(boardId).map { it.toMap() }
   }
 
-  suspend fun getEnabledAlertRuleEntities(): List<AlertRuleEntity> = withContext(Dispatchers.IO) {
-    dao.getEnabledAlertRules()
-  }
+  /** The given Board's enabled rules — the alert engine evaluates only the connected Board's rules. */
+  suspend fun getEnabledAlertRuleEntities(boardId: String): List<AlertRuleEntity> =
+    withContext(Dispatchers.IO) {
+      dao.getEnabledAlertRules(boardId)
+    }
 
   suspend fun upsertAlertRule(rule: Map<String, Any?>): Unit = withContext(Dispatchers.IO) {
     dao.upsertAlertRule(rule.toAlertRuleEntity())
   }
 
-  suspend fun setAlertRuleEnabled(id: String, enabled: Boolean): Unit = withContext(Dispatchers.IO) {
-    dao.setAlertRuleEnabled(id, enabled)
-  }
+  suspend fun setAlertRuleEnabled(boardId: String, id: String, enabled: Boolean): Unit =
+    withContext(Dispatchers.IO) {
+      dao.setAlertRuleEnabled(boardId, id, enabled)
+    }
 
-  suspend fun deleteAlertRule(id: String): Unit = withContext(Dispatchers.IO) {
-    dao.deleteAlertRule(id)
+  suspend fun deleteAlertRule(boardId: String, id: String): Unit = withContext(Dispatchers.IO) {
+    dao.deleteAlertRule(boardId, id)
   }
 
   suspend fun getSettings(): Map<String, Any?> = withContext(Dispatchers.IO) {
@@ -246,7 +272,9 @@ class AppDataRepository private constructor(private val context: Context) {
       riderId = opt("riderId") { it as? String },
       riderName = opt("riderName") { it as? String },
       riderColor = opt("riderColor") { it as? String },
-      legalMode = opt("legalMode") { it.asStringKeyMap() },
+      legalPolicy = opt("legalPolicy", ::normalizeLegalPolicy),
+      dismissedCommunityMessageIds =
+        req("dismissedCommunityMessageIds", emptyList(), ::validDismissedCommunityMessageIds),
     )
 
     if (badKeys.isNotEmpty()) {
@@ -314,9 +342,11 @@ class AppDataRepository private constructor(private val context: Context) {
       "autoCloseDelayMinutes" ->
         validAutoCloseDelayMinutes(value) ?: return@withContext
       "riderId", "riderName", "riderColor" -> value as? String
-      "legalMode" ->
-        if (value == null || value == JSONObject.NULL) null
-        else value.asStringKeyMap() ?: return@withContext
+      // Legal Policy is native-owned. JS can request refresh through the dedicated intent.
+      "legalPolicy" -> return@withContext
+      "dismissedCommunityMessageIds" ->
+        if (value == null || value == JSONObject.NULL) emptyList()
+        else validDismissedCommunityMessageIds(value) ?: return@withContext
       else -> return@withContext
     }
     val normalizedKey = when (key) {
@@ -359,7 +389,8 @@ class AppDataRepository private constructor(private val context: Context) {
         "riderId" -> d.riderId
         "riderName" -> d.riderName
         "riderColor" -> d.riderColor
-        "legalMode" -> d.legalMode
+        "legalPolicy" -> d.legalPolicy
+        "dismissedCommunityMessageIds" -> d.dismissedCommunityMessageIds
         else -> null
       }
     }
@@ -384,6 +415,27 @@ class AppDataRepository private constructor(private val context: Context) {
     notifyDataChanged(AppDataScope.SETTINGS)
   }
 
+  /**
+   * Persist only the resolved jurisdiction reference; policy values stay in the shared catalog.
+   *
+   * @parity /modules/vescape-core/ios/telemetry/AppDataRepository.swift `updateLegalPolicy`
+   */
+  suspend fun updateLegalPolicy(jurisdictionCode: String?): Unit = withContext(Dispatchers.IO) {
+    val normalized = jurisdictionCode?.trim()?.uppercase()?.takeIf { it.length == 2 }
+    if (normalized == null) {
+      dao.deleteAppSetting("legalPolicy")
+    } else {
+      dao.upsertAppSetting(
+        AppSettingEntity(
+          key = "legalPolicy",
+          valueJson = encodeSettingJson(mapOf("jurisdictionCode" to normalized)),
+          updatedAt = System.currentTimeMillis(),
+        ),
+      )
+    }
+    notifyDataChanged(AppDataScope.SETTINGS)
+  }
+
   suspend fun setSelectedBoardId(id: String?): Unit = updateSetting("selectedBoardId", id)
 
   suspend fun updateLastBattery(
@@ -394,6 +446,22 @@ class AppDataRepository private constructor(private val context: Context) {
   ): Unit = withContext(Dispatchers.IO) {
     val value = mapOf("percent" to percent, "voltage" to voltage, "at" to atMs)
     dao.upsertBoardSetting(BoardSettingEntity(boardId, "lastBattery", encodeSettingJson(value), atMs))
+    notifyDataChanged(AppDataScope.BOARDS)
+  }
+
+  /**
+   * Dedicated native Legal Mode write; generic Board upserts cannot bypass enable validation.
+   * @parity /modules/vescape-core/ios/telemetry/AppDataRepository.swift `updateLegalMode`
+   */
+  suspend fun updateLegalMode(boardId: String, enabled: Boolean): Unit = withContext(Dispatchers.IO) {
+    dao.upsertBoardSetting(
+      BoardSettingEntity(
+        boardId = boardId,
+        key = "legalMode",
+        valueJson = encodeSettingJson(mapOf("enabled" to enabled)),
+        updatedAt = System.currentTimeMillis(),
+      ),
+    )
     notifyDataChanged(AppDataScope.BOARDS)
   }
 
@@ -607,6 +675,13 @@ fun BoardEntity.toMap(settings: List<BoardSettingEntity>): Map<String, Any?> {
     "batteryConfig" to values["batteryConfig"],
     "lastBattery" to values["lastBattery"],
     "dismissedWarnings" to values["dismissedWarnings"],
+    // Alert Preset board settings, normalized to display defaults when the row is absent so JS
+    // always reads a concrete Board Top Speed / onboarded flag. `alertPreset` stays null until the
+    // rider touches setup — no preset rules generate before then.
+    "topSpeedKmh" to (values["topSpeedKmh"] ?: DEFAULT_TOP_SPEED_KMH),
+    "alertPreset" to values["alertPreset"],
+    "alertPresetsOnboarded" to (values["alertPresetsOnboarded"] ?: false),
+    "legalMode" to (values["legalMode"] ?: mapOf("enabled" to false)),
     "link" to link,
   )
 }
@@ -643,8 +718,18 @@ fun AppSettings.toMap(): Map<String, Any?> = mapOf(
   "riderId" to riderId,
   "riderName" to riderName,
   "riderColor" to riderColor,
-  "legalMode" to legalMode,
+  "legalPolicy" to legalPolicy,
+  "dismissedCommunityMessageIds" to dismissedCommunityMessageIds,
 )
+
+private fun normalizeLegalPolicy(raw: Any): Map<String, String>? {
+  val code = (raw.asStringKeyMap()?.get("jurisdictionCode") as? String)
+    ?.trim()
+    ?.uppercase()
+    ?.takeIf { it.length == 2 }
+    ?: return null
+  return mapOf("jurisdictionCode" to code)
+}
 
 internal fun encodeSettingJson(value: Any?): String {
   val arr = JSONArray()
@@ -660,6 +745,7 @@ internal fun decodeSettingJson(json: String): Any? {
 }
 
 fun AlertRuleEntity.toMap(): Map<String, Any?> = mapOf(
+  "boardId" to boardId,
   "id" to id,
   "controlId" to controlId,
   "threshold" to threshold,
@@ -880,6 +966,10 @@ internal fun Map<String, Any?>.toBoardSettingEntities(boardId: String): Pair<Lis
   putOrDelete("description", (get("description") as? String)?.takeIf { it.isNotBlank() })
   putOrDelete("batteryConfig", normalizeBatteryConfig(get("batteryConfig")))
   putOrDelete("dismissedWarnings", normalizeDismissedWarnings(get("dismissedWarnings")))
+  putOrDelete("topSpeedKmh", validTopSpeedKmh(get("topSpeedKmh")))
+  putOrDelete("alertPreset", normalizeAlertPreset(get("alertPreset")))
+  putOrDelete("alertPresetsOnboarded", get("alertPresetsOnboarded") as? Boolean)
+  // Legal Mode changes only through the dedicated native intent.
   val link = normalizedBoardLink()
   putOrDelete("transport", BoardTransport.encode(BoardTransport.fromBridge(link?.get("transport"))))
   putOrDelete("linkVersion", (link?.get("linkVersion") as? Number)?.toInt()?.takeIf { it == BOARD_LINK_VERSION })
@@ -908,8 +998,25 @@ private fun BoardSettingEntity.decodeBoardSetting(): Pair<String, Any?>? {
     "vescFirmwareVersion", "refloatVersion", "refloatBaseVersion" -> (raw as? String)?.let { key to it }
     "lastBattery" -> decodeLastBattery(raw)?.let { key to it }
     "dismissedWarnings" -> normalizeDismissedWarnings(raw)?.let { key to it }
+    "topSpeedKmh" -> validTopSpeedKmh(raw)?.let { key to it }
+    "alertPreset" -> normalizeAlertPreset(raw)?.let { key to it }
+    "alertPresetsOnboarded" -> (raw as? Boolean)?.let { key to it }
+    "legalMode" -> normalizeLegalMode(raw)?.let { key to it }
     else -> null
   }
+}
+
+private fun normalizeLegalMode(raw: Any?): Map<String, Boolean>? =
+  (raw.asStringKeyMap()?.get("enabled") as? Boolean)?.let { mapOf("enabled" to it) }
+
+/**
+ * Durable Alert Preset per-metric level selection bag. JS owns behavior; native persists it as an
+ * opaque object. Non-object/empty payloads normalize away (row removed).
+ * @parity /modules/vescape-core/ios/telemetry/AppDataRepository.swift `normalizeAlertPreset`
+ */
+private fun normalizeAlertPreset(raw: Any?): Map<String, Any?>? {
+  val map = raw.asStringKeyMap() ?: return null
+  return map.ifEmpty { null }
 }
 
 /**
@@ -988,6 +1095,7 @@ private fun parseLegacyMapString(value: String): Map<String, Any?>? {
 }
 
 private fun Map<String, Any?>.toAlertRuleEntity(): AlertRuleEntity = AlertRuleEntity(
+  boardId = getString("boardId"),
   id = getString("id"),
   controlId = getString("controlId"),
   threshold = getDouble("threshold"),

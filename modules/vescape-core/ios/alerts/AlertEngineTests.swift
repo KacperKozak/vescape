@@ -13,6 +13,7 @@ final class AlertEngineTests: XCTestCase {
     soundType: String = "default"
   ) -> AlertRule {
     AlertRule(
+      boardId: "board-1",
       id: id,
       controlId: controlId,
       threshold: threshold,
@@ -59,6 +60,49 @@ final class AlertEngineTests: XCTestCase {
       pullRateHz: nil,
       lastPacketAt: 0
     )
+  }
+
+  func testLegalModeOverlayStaysAbsentWhenDisabled() {
+    let rules = withLegalModeOverlay(
+      [rule()],
+      boardId: "board-2",
+      enabled: false,
+      warningSpeedKmh: 15,
+      limitSpeedKmh: 20
+    )
+
+    XCTAssertEqual(1, rules.count)
+  }
+
+  func testLegalModeOverlaySynthesizesBoardAgnosticGeigerRule() {
+    let rules = withLegalModeOverlay(
+      [],
+      boardId: "board-2",
+      enabled: true,
+      warningSpeedKmh: 15,
+      limitSpeedKmh: 20
+    )
+
+    XCTAssertEqual(1, rules.count)
+    XCTAssertEqual("board-2", rules[0].boardId)
+    XCTAssertEqual("speed", rules[0].controlId)
+    XCTAssertEqual(15, rules[0].threshold)
+    XCTAssertEqual(20, rules[0].thresholdMax)
+    XCTAssertEqual("preset:tick", rules[0].soundType)
+    XCTAssertNil(rules[0].source)
+  }
+
+  func testLegalModeOverlayUsesLatestSpeedSettings() {
+    let rules = withLegalModeOverlay(
+      [],
+      boardId: "board-1",
+      enabled: true,
+      warningSpeedKmh: 24,
+      limitSpeedKmh: 30
+    )
+
+    XCTAssertEqual(24, rules[0].threshold)
+    XCTAssertEqual(30, rules[0].thresholdMax)
   }
 
   // MARK: - Basic firing

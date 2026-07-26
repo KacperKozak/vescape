@@ -46,7 +46,7 @@ enum TelemetryDatabase {
     let legacy = url.deletingLastPathComponent().appendingPathComponent(legacyDatabaseName)
     guard !fm.fileExists(atPath: url.path), fm.fileExists(atPath: legacy.path) else { return }
     if let legacyPool = try? DatabasePool(path: legacy.path) {
-      try? legacyPool.writeWithoutTransaction { db in try db.checkpoint(.truncate) }
+      _ = try? legacyPool.writeWithoutTransaction { db in try db.checkpoint(.truncate) }
       try? legacyPool.close()
     }
     do {
@@ -145,16 +145,19 @@ enum TelemetryDatabase {
 
       try db.execute(sql: """
         CREATE TABLE alerts (
-          id TEXT NOT NULL PRIMARY KEY,
+          board_id TEXT NOT NULL,
+          id TEXT NOT NULL,
           control_id TEXT NOT NULL,
           threshold REAL NOT NULL,
           threshold_max REAL,
           enabled INTEGER NOT NULL,
           sound_type TEXT NOT NULL,
           created_at INTEGER NOT NULL,
-          source TEXT
+          source TEXT,
+          PRIMARY KEY (board_id, id)
         )
         """)
+      try db.execute(sql: "CREATE INDEX index_alerts_board_id ON alerts(board_id)")
       try db.execute(sql: "CREATE INDEX index_alerts_control_id ON alerts(control_id)")
       try db.execute(sql: "CREATE INDEX index_alerts_enabled ON alerts(enabled)")
       try db.execute(sql: "CREATE INDEX index_alerts_created_at ON alerts(created_at)")
@@ -403,6 +406,38 @@ enum TelemetryDatabase {
       if !columns.contains("likes_count") { try db.execute(sql: "ALTER TABLE map_points ADD COLUMN likes_count INTEGER NOT NULL DEFAULT 0") }
       if !columns.contains("liked_by_current_user") { try db.execute(sql: "ALTER TABLE map_points ADD COLUMN liked_by_current_user INTEGER NOT NULL DEFAULT 0") }
       if !columns.contains("user_reaction") { try db.execute(sql: "ALTER TABLE map_points ADD COLUMN user_reaction TEXT") }
+    // MARK: Per-board Alert Rules (#254)
+    // Alert Rules become owned by one Board (`board_id NOT NULL`, composite PK so preset ids repeat
+    // per board). Pre-release decision: existing global rules are dropped, not reassigned — riders
+    // redo alert setup per board. The three former global settings keys (Alert Preset selection,
+    // Rider Top Speed, onboarding flag) move to Board Settings, so their app_settings rows are dropped.
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `MIGRATION_29_30`
+    migrator.registerMigration("v30_alert_board_id") { db in
+      let hasBoardId = try db.columns(in: "alerts").contains { $0.name == "board_id" }
+      if !hasBoardId {
+        try db.execute(sql: "DROP TABLE IF EXISTS alerts")
+        try db.execute(sql: """
+          CREATE TABLE alerts (
+            board_id TEXT NOT NULL,
+            id TEXT NOT NULL,
+            control_id TEXT NOT NULL,
+            threshold REAL NOT NULL,
+            threshold_max REAL,
+            enabled INTEGER NOT NULL,
+            sound_type TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            source TEXT,
+            PRIMARY KEY (board_id, id)
+          )
+          """)
+        try db.execute(sql: "CREATE INDEX index_alerts_board_id ON alerts(board_id)")
+        try db.execute(sql: "CREATE INDEX index_alerts_control_id ON alerts(control_id)")
+        try db.execute(sql: "CREATE INDEX index_alerts_enabled ON alerts(enabled)")
+        try db.execute(sql: "CREATE INDEX index_alerts_created_at ON alerts(created_at)")
+      }
+      try db.execute(sql: """
+        DELETE FROM app_settings WHERE key IN ('alertPreset', 'riderTopSpeedKmh', 'alertPresetsOnboarded')
+        """)
     }
 
     return migrator

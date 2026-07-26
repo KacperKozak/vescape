@@ -74,4 +74,33 @@ final class BoardSessionLinkIntegrityTests: XCTestCase {
     missingBms.observeRefloat(expected: complete, refloatVersion: "Refloat 3.0.7")
     XCTAssertEqual(.mismatched, missingBms.markBmsMissing(expected: complete))
   }
+
+  func testLegalModeEnableRequiresMatchingConnectedBoardAndTrustedLink() {
+    XCTAssertEqual(
+      legalModeEnableError(
+        phase: .connected,
+        activeBoardId: "board-1",
+        linkIntegrity: .trusted,
+        requestedBoardId: "board-2"
+      )?.0,
+      "LEGAL_MODE_BOARD_NOT_CONNECTED"
+    )
+    XCTAssertEqual(
+      legalModeEnableError(
+        phase: .connected,
+        activeBoardId: "board-1",
+        linkIntegrity: .checking,
+        requestedBoardId: "board-1"
+      )?.0,
+      "LINK_NOT_TRUSTED"
+    )
+    XCTAssertNil(
+      legalModeEnableError(
+        phase: .connected,
+        activeBoardId: "board-1",
+        linkIntegrity: .trusted,
+        requestedBoardId: "board-1"
+      )
+    )
+  }
 }

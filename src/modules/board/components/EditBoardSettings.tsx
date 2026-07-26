@@ -1,4 +1,4 @@
-import type { RefObject } from 'react'
+import type { ReactNode, RefObject } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/base/Text'
 import {
@@ -26,6 +26,8 @@ interface EditBoardSettingsProps {
   linkSaving?: boolean
   keepMissingBatteryConfig: boolean
   batterySummary: BatterySummary
+  /** Board-scoped controls composed by the edit route (Board Top Speed + Alert Presets). */
+  boardControls?: ReactNode
   /** Active/dismissed Board Warning counts; the row renders only when the board has any warnings. */
   warningCounts: { active: number; dismissed: number }
   /** Anchor for the warnings drawer, wrapped around the warnings row. */
@@ -45,6 +47,7 @@ export function EditBoardSettings({
   linkSaving = false,
   keepMissingBatteryConfig,
   batterySummary,
+  boardControls,
   warningCounts,
   warningsAnchorRef,
   onOpenWarnings,
@@ -76,6 +79,8 @@ export function EditBoardSettings({
           testID="edit-board-battery-row"
         />
       </SettingsCard>
+
+      {boardControls}
 
       <SettingsCard>
         <SettingsRow

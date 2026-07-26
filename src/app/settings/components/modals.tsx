@@ -3,16 +3,59 @@ import { Text } from '@/components/base/Text'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useState } from 'react'
 
-import { SquaresFourIcon, UsersThreeIcon } from 'phosphor-react-native'
+import { InfoIcon, SquaresFourIcon, UsersThreeIcon } from 'phosphor-react-native'
+import { Button } from '@/components/base/Button'
+import { FadeCardModal } from '@/components/modals/FadeCardModal'
 import { ConfirmModal } from '@/components/modals/ConfirmModal'
 import { EdgeDrawer, FloatingSheet } from '@/components/overlays/AnchoredSheet'
 import { useTriggerRef } from '@/components/overlays/measureTrigger'
 import { IconHero } from '@/components/settings/IconHero'
 import { InfoModal } from '@/components/modals/InfoModal'
 import { TextPromptModal } from '@/components/modals/TextPromptModal'
+import { VersionNoticeModal } from '@/modules/release/components/VersionNoticeModal'
+import { CommunityMessageModal } from '@/modules/release/components/CommunityMessageModal'
+import { AppBlockScreen } from '@/modules/release/components/AppBlockScreen'
+import type { CommunityMessage, CommunityMessageType } from 'vescape-core'
 import { ShowcaseCard } from '@/components/dev/ShowcaseCard'
-import { OpenButton, ToggleRow } from '@/components/dev/ShowcaseControls'
+import { ChipRow, OpenButton, ToggleRow } from '@/components/dev/ShowcaseControls'
+import { DEFAULT_ONLINE_BLOCK_MESSAGE } from '@/modules/release/constants/onlineBlock'
+import { DEFAULT_UPDATE_WARNING_MESSAGE } from '@/modules/release/constants/updateWarning'
+import { DEFAULT_APP_BLOCK_MESSAGE } from '@/modules/release/constants/appBlock'
 import { theme } from '@/constants/theme'
+
+function FadeCardModalShowcase() {
+  const [visible, setVisible] = useState(false)
+  const [dismissible, setDismissible] = useState(true)
+
+  return (
+    <ShowcaseCard
+      name="FadeCardModal"
+      controls={
+        <>
+          <ToggleRow label="dismissible" value={dismissible} onToggle={setDismissible} />
+          <OpenButton onPress={() => setVisible(true)} />
+        </>
+      }
+    >
+      <Text style={styles.previewHint}>
+        The shared card shell behind ConfirmModal, InfoModal and the Release surfaces
+      </Text>
+      <FadeCardModal
+        visible={visible}
+        onDismiss={dismissible ? () => setVisible(false) : undefined}
+        title="Card title"
+        titleIcon={InfoIcon}
+        titleIconColor={theme.palette.sky.color}
+        footer={<Button label="Close" onPress={() => setVisible(false)} />}
+      >
+        <Text style={styles.previewHint}>
+          Fade + scale in, dim backdrop, optional header and close button, scrollable body, footer
+          action row. Non-dismissible drops the backdrop tap, the close button and Android back.
+        </Text>
+      </FadeCardModal>
+    </ShowcaseCard>
+  )
+}
 
 function ConfirmModalShowcase() {
   const [visible, setVisible] = useState(false)
@@ -55,6 +98,150 @@ function InfoModalShowcase() {
         title="Motor Temperature"
         message="Measures heat at the motor stator. High temperatures reduce magnet strength and can damage winding insulation. Keep below 150°C for longevity."
         onDismiss={() => setVisible(false)}
+      />
+    </ShowcaseCard>
+  )
+}
+
+const SERVER_UPDATE_MESSAGE = [
+  '## Update recommended',
+  '',
+  'A newer Vescape build is available with **improved BLE reconnect** and fresh Refloat presets.',
+  '',
+  '- Keeps you compatible with online features',
+  '- Fixes reported ride-history gaps',
+].join('\n')
+
+function VersionNoticeModalShowcase() {
+  const [visible, setVisible] = useState(false)
+  const [serverMessage, setServerMessage] = useState(true)
+  const [onlineBlock, setOnlineBlock] = useState(false)
+
+  const bundled = onlineBlock ? DEFAULT_ONLINE_BLOCK_MESSAGE : DEFAULT_UPDATE_WARNING_MESSAGE
+
+  return (
+    <ShowcaseCard
+      name="VersionNoticeModal"
+      controls={
+        <>
+          <ToggleRow label="server message" value={serverMessage} onToggle={setServerMessage} />
+          <ToggleRow label="online block" value={onlineBlock} onToggle={setOnlineBlock} />
+          <OpenButton onPress={() => setVisible(true)} />
+        </>
+      }
+    >
+      <Text style={styles.previewHint}>
+        Update Warning or Online Block, with server Markdown or the bundled default
+      </Text>
+      <VersionNoticeModal
+        kind={onlineBlock ? 'online-block' : 'update-warning'}
+        visible={visible}
+        message={serverMessage ? SERVER_UPDATE_MESSAGE : bundled}
+        onDismiss={() => setVisible(false)}
+        onUpdate={() => setVisible(false)}
+      />
+    </ShowcaseCard>
+  )
+}
+
+const SERVER_APP_BLOCK_MESSAGE = [
+  '## This version is blocked',
+  '',
+  'A critical problem was found in this build. Update to keep using Vescape.',
+  '',
+  '- An active ride keeps recording',
+  '- Your board stays connected',
+].join('\n')
+
+function AppBlockScreenShowcase() {
+  const [visible, setVisible] = useState(false)
+  const [serverMessage, setServerMessage] = useState(true)
+
+  return (
+    <ShowcaseCard
+      name="AppBlockScreen"
+      controls={
+        <>
+          <ToggleRow label="server message" value={serverMessage} onToggle={setServerMessage} />
+          <OpenButton onPress={() => setVisible(true)} />
+        </>
+      }
+    >
+      <Text style={styles.previewHint}>
+        Full-screen, non-dismissible update-only shell. In this preview the update action closes it.
+      </Text>
+      {visible ? (
+        <AppBlockScreen
+          message={serverMessage ? SERVER_APP_BLOCK_MESSAGE : DEFAULT_APP_BLOCK_MESSAGE}
+          installedVersion="0.70.0"
+          latestVersion="0.80.2"
+          onUpdate={() => setVisible(false)}
+        />
+      ) : null}
+    </ShowcaseCard>
+  )
+}
+
+const COMMUNITY_MESSAGE_BODY = [
+  '## Weekend group ride',
+  '',
+  'Join the **Sunday coastal loop** — casual pace, all boards welcome.',
+  '',
+  '- Meet 10:00 at the pier',
+  '- ~18 km, one charge stop',
+].join('\n')
+
+function communityMessage(
+  type: CommunityMessageType,
+  withAction: boolean,
+  withTitle: boolean,
+): CommunityMessage {
+  return {
+    id: `showcase-${type}`,
+    type,
+    title: withTitle ? 'Weekend group ride' : null,
+    body: COMMUNITY_MESSAGE_BODY,
+    action: withAction
+      ? {
+          type: type === 'critical' ? 'primary' : 'secondary',
+          label: 'Learn more',
+          url: 'https://vescape.app',
+        }
+      : null,
+  }
+}
+
+function CommunityMessageModalShowcase() {
+  const [visible, setVisible] = useState(false)
+  const [type, setType] = useState<CommunityMessageType>('info')
+  const [withAction, setWithAction] = useState(true)
+  const [withTitle, setWithTitle] = useState(true)
+
+  return (
+    <ShowcaseCard
+      name="CommunityMessageModal"
+      controls={
+        <>
+          <ChipRow
+            label="type"
+            options={['info', 'warning', 'critical']}
+            selected={type}
+            onSelect={(v) => setType(v as CommunityMessageType)}
+          />
+          <ToggleRow label="action" value={withAction} onToggle={setWithAction} />
+          <ToggleRow label="title" value={withTitle} onToggle={setWithTitle} />
+          <OpenButton onPress={() => setVisible(true)} />
+        </>
+      }
+    >
+      <Text style={styles.previewHint}>
+        Info / warning / critical styling, with an optional server title and primary/secondary
+        action
+      </Text>
+      <CommunityMessageModal
+        message={visible ? communityMessage(type, withAction, withTitle) : null}
+        onDismiss={() => setVisible(false)}
+        onAction={() => setVisible(false)}
       />
     </ShowcaseCard>
   )
@@ -231,10 +418,14 @@ export default function ModalsPage() {
       <ScrollView contentContainerStyle={styles.content}>
         <IconHero
           icon={SquaresFourIcon}
-          description="ConfirmModal, InfoModal, TextPromptModal, EdgeDrawer, FloatingSheet."
+          description="FadeCardModal, ConfirmModal, InfoModal, VersionNoticeModal, CommunityMessageModal, AppBlockScreen, TextPromptModal, EdgeDrawer, FloatingSheet."
         />
+        <FadeCardModalShowcase />
         <ConfirmModalShowcase />
         <InfoModalShowcase />
+        <VersionNoticeModalShowcase />
+        <CommunityMessageModalShowcase />
+        <AppBlockScreenShowcase />
         <TextPromptModalShowcase />
         <EdgeDrawerPositionShowcase
           edge="auto"

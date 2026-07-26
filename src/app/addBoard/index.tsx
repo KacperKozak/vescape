@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react'
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet } from 'react-native'
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 
 import { AddBoardWizard } from '@/modules/board/components/AddBoardWizard'
@@ -26,17 +26,16 @@ export default function AddBoardScreen() {
       style={styles.flex}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
+      {/* Fixed frame: the wizard pins its own progress bar and footer, and scrolls only the
+          step body between them. */}
       <SafeAreaView style={styles.container} edges={['bottom']}>
-        <ScrollView
-          ref={scrollRef}
-          contentContainerStyle={styles.content}
-          keyboardShouldPersistTaps="handled"
-        >
+        <View style={styles.content}>
           <AddBoardWizard
             wizard={wizard}
+            scrollRef={scrollRef}
             onLinkActiveStepIndexChange={handleLinkActiveStepIndexChange}
           />
-        </ScrollView>
+        </View>
       </SafeAreaView>
     </KeyboardAvoidingView>
   )
@@ -51,6 +50,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   content: {
+    flex: 1,
     padding: 16,
     gap: 10,
   },

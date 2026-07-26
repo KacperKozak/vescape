@@ -68,6 +68,7 @@ Use one or more app-area labels for filtering:
 | `area:map`         | `[Map]`         | maps, routes, GPS display                                                                     |
 | `area:weather`     | `[Weather]`     | weather data and UI                                                                           |
 | `area:core`        | `[Core]`        | app shell, storage, lifecycle, infra                                                          |
+| `area:server`      | `[Server]`      | Vescape backend APIs, relay behavior, server policy, and deployment-facing contracts          |
 | `area:board`       | `[Board]`       | board profiles, board table/settings                                                          |
 | `area:telemetry`   | `[Telemetry]`   | live telemetry ingest/display                                                                 |
 | `area:tunes`       | `[Tunes]`       | VESC tune read/write flows                                                                    |

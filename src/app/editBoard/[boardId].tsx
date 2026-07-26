@@ -15,6 +15,10 @@ import { useShallow } from 'zustand/react/shallow'
 import { BoardBatteryEditorModal } from '@/modules/board/components/BoardBatteryEditorModal'
 import { BoardInfoEditorModal } from '@/modules/board/components/BoardInfoEditorModal'
 import { ConfirmModal } from '@/components/modals/ConfirmModal'
+import { SettingsSectionTitle } from '@/components/settings/SettingsSectionTitle'
+import { BoardTopSpeedCard } from '@/modules/alerts/components/BoardTopSpeedCard'
+import { boardTopSpeedKmh } from '@/modules/alerts/lib/boardAlertSettings'
+import { useAlertPresetStore } from '@/modules/alerts/store/alertPresetStore'
 import { EditBoardSettings } from '@/modules/board/components/EditBoardSettings'
 import { EdgeDrawer } from '@/components/overlays/AnchoredSheet'
 import { BoardWarningsSheet } from '@/modules/board/components/BoardWarningsSheet'
@@ -100,6 +104,7 @@ export default function EditBoardScreen() {
   const dismissedKinds = editingBoard.dismissedWarnings ?? []
   const dismissedCount = warnings.filter((w) => dismissedKinds.includes(w.kind)).length
   const warningCounts = { active: warnings.length - dismissedCount, dismissed: dismissedCount }
+  const topSpeedKmh = boardTopSpeedKmh(editingBoard)
 
   return (
     <KeyboardAvoidingView
@@ -115,6 +120,19 @@ export default function EditBoardScreen() {
             linkSaving={form.saving === 'link'}
             keepMissingBatteryConfig={form.keepMissingBatteryConfig}
             batterySummary={form.batterySummary}
+            boardControls={
+              <>
+                <SettingsSectionTitle>Board top speed</SettingsSectionTitle>
+                <BoardTopSpeedCard
+                  value={topSpeedKmh}
+                  onChange={(kmh) => {
+                    void updateBoard({ ...editingBoard, topSpeedKmh: kmh }).then(() =>
+                      useAlertPresetStore.getState().regenerateSpeed(editingBoard.id),
+                    )
+                  }}
+                />
+              </>
+            }
             warningCounts={warningCounts}
             warningsAnchorRef={warningsAnchorRef}
             onOpenWarnings={() => setWarningsOpen(true)}

@@ -1,6 +1,7 @@
 package expo.modules.vescapecore
 
 import expo.modules.vescapecore.alerts.AlertFeedback
+import expo.modules.vescapecore.appstatus.AppStatusCoordinator
 import expo.modules.vescapecore.service.BoardProbeAutoStartGate
 import expo.modules.vescapecore.connection.BoardTransport
 import expo.modules.vescapecore.connection.BoardTransportDetector
@@ -23,8 +24,11 @@ import android.bluetooth.BluetoothManager
 import android.bluetooth.le.ScanCallback
 import android.bluetooth.le.ScanResult
 import android.bluetooth.le.ScanSettings
+import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
@@ -38,6 +42,8 @@ import expo.modules.vescapecore.telemetry.DatabaseBackupManager
 import expo.modules.vescapecore.telemetry.ProfileStatsRepository
 import expo.modules.vescapecore.telemetry.TELEMETRY_DATABASE_NAME
 import expo.modules.vescapecore.telemetry.TelemetryRepository
+import expo.modules.vescapecore.location.LegalPolicyResolver
+import expo.modules.vescapecore.location.LegalPolicyCatalog
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -71,9 +77,13 @@ class VescapeCoreModule : Module() {
   private val mainHandler = Handler(Looper.getMainLooper())
   private var activeProbe: ActiveBoardProbe? = null
   private var previewAlertFeedback: AlertFeedback? = null
+  /** Remover for this module's App Status mirror listener; cleared in OnDestroy. */
+  private var appStatusUnsub: (() -> Unit)? = null
   private val companionPresence by lazy {
     CompanionPresence(context.applicationContext, activityProvider = { appContext.currentActivity })
   }
+  private val legalPolicyResolver by lazy { LegalPolicyResolver(context.applicationContext) }
+  private val legalPolicyCatalog by lazy { LegalPolicyCatalog(context.applicationContext) }
 
   private val context: Context get() = appContext.reactContext
     ?: throw IllegalStateException("No React context")
@@ -119,7 +129,19 @@ class VescapeCoreModule : Module() {
       "onGroupRideError",
       "onAppDataChanged",
       "onBoardWarnings",
+      "onAppStatus",
     )
+
+    // Native owns App Status truth; JS mirrors it. Push every successful refresh (late subscribers
+    // pull the current snapshot below and through `getAppStatus`).
+    // @parity /modules/vescape-core/ios/VescapeCoreModule.swift `sendAppStatus`
+    // @parity /modules/vescape-core/src/index.ts `AppStatusEvent`
+    // The coordinator already notifies on the main thread, so emit straight from the callback.
+    appStatusUnsub = AppStatusCoordinator.get(context).addChangeListener { status ->
+      if (shouldEmitToFrontend("onAppStatus")) {
+        sendEvent("onAppStatus", mapOf("status" to status?.toMap()))
+      }
+    }
 
     // JS keeps a dumb mirror of the durable Board Warning registry; push the full board list on
     // every registry change so late subscribers self-heal on the next emit (and on subscribe below).
@@ -181,11 +203,23 @@ class VescapeCoreModule : Module() {
       CoroutineScope(Dispatchers.IO).launch { BoardWarningRegistry.get(context).emitSnapshot() }
     }
     OnStopObserving("onBoardWarnings") { stopObserving("onBoardWarnings") }
+    OnStartObserving("onAppStatus") {
+      startObserving("onAppStatus")
+      sendEvent("onAppStatus", mapOf("status" to AppStatusCoordinator.get(context).current?.toMap()))
+    }
+    OnStopObserving("onAppStatus") { stopObserving("onAppStatus") }
+
+    OnCreate {
+      // Cold start: fetch App Status before JS asks. A foreground event arriving right after is
+      // coalesced into this request.
+      AppStatusCoordinator.get(context).refresh()
+    }
 
     OnActivityEntersForeground {
       frontendActive = true
       // User opened the app again — re-arm companion auto start immediately.
       CompanionRestartGate.clear(context.applicationContext)
+      AppStatusCoordinator.get(context).refresh()
     }
     OnActivityEntersBackground {
       frontendActive = false
@@ -200,6 +234,8 @@ class VescapeCoreModule : Module() {
       // module reachable (mirrors iOS OnDestroy nulling `onChange`). A fresh module re-attaches in
       // its own definition().
       BoardWarningRegistry.get(context).onChange = null
+      appStatusUnsub?.invoke()
+      appStatusUnsub = null
       previewAlertFeedback?.release()
       previewAlertFeedback = null
       cancelActiveProbe(null, "module_destroyed")
@@ -241,7 +277,7 @@ class VescapeCoreModule : Module() {
     Function("previewAlertSound") { soundType: String ->
       CoreForegroundService.previewAlertSound(context.applicationContext, soundType)
     }
-    Function("getAlertPresets") {
+    Function("getAlertSounds") {
       CoreForegroundService.alertSoundPresets()
     }
     Function("startGeigerSimulation") { soundType: String, rangeDepth: Double ->
@@ -254,6 +290,26 @@ class VescapeCoreModule : Module() {
     }
     Function("getLiveState") {
       liveStateWithScan(CoreForegroundService.currentLiveState(context.applicationContext))
+    }
+    // Last successful App Status for this process, or null while none has been fetched (fail-open).
+    // @parity /modules/vescape-core/ios/VescapeCoreModule.swift `getAppStatus`
+    Function("getAppStatus") {
+      AppStatusCoordinator.get(context).current?.toMap()
+    }
+    // Stable Vescape route keeps the app decoupled from the final store destination.
+    // @parity /modules/vescape-core/ios/VescapeCoreModule.swift `openAppUpdate`
+    // @platform-diff Android uses the stable Android download route.
+    // @parity /modules/vescape-core/src/index.ts `openAppUpdate`
+    Function("openAppUpdate") {
+      val intent = Intent(Intent.ACTION_VIEW, Uri.parse(AppStatusCoordinator.androidDownloadUrl()))
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+      try {
+        context.startActivity(intent)
+      } catch (e: ActivityNotFoundException) {
+        // No browser to take the link. This is the App Block's only action, so failing loudly here
+        // would crash the one screen the rider can still see.
+        Log.w(TAG, "Cannot open the download route: ${e.message}")
+      }
     }
     Function("getRemoteTiltState") {
       CoreForegroundService.currentRemoteTiltState()
@@ -513,19 +569,19 @@ class VescapeCoreModule : Module() {
     AsyncFunction("deleteBoard") Coroutine { id: String ->
       AppDataRepository.get(context.applicationContext).deleteBoard(id)
     }
-    AsyncFunction("getAlertRules") {
-      runBlocking { AppDataRepository.get(context.applicationContext).getAlertRules() }
+    AsyncFunction("getAlertRules") { boardId: String ->
+      runBlocking { AppDataRepository.get(context.applicationContext).getAlertRules(boardId) }
     }
     AsyncFunction("upsertAlertRule") Coroutine { rule: Map<String, Any?> ->
       AppDataRepository.get(context.applicationContext).upsertAlertRule(rule)
       CoreForegroundService.reloadAlertRules(context.applicationContext)
     }
-    AsyncFunction("setAlertRuleEnabled") Coroutine { id: String, enabled: Boolean ->
-      AppDataRepository.get(context.applicationContext).setAlertRuleEnabled(id, enabled)
+    AsyncFunction("setAlertRuleEnabled") Coroutine { boardId: String, id: String, enabled: Boolean ->
+      AppDataRepository.get(context.applicationContext).setAlertRuleEnabled(boardId, id, enabled)
       CoreForegroundService.reloadAlertRules(context.applicationContext)
     }
-    AsyncFunction("deleteAlertRule") Coroutine { id: String ->
-      AppDataRepository.get(context.applicationContext).deleteAlertRule(id)
+    AsyncFunction("deleteAlertRule") Coroutine { boardId: String, id: String ->
+      AppDataRepository.get(context.applicationContext).deleteAlertRule(boardId, id)
       CoreForegroundService.reloadAlertRules(context.applicationContext)
     }
     AsyncFunction("getPrivacyZones") {
@@ -564,6 +620,46 @@ class VescapeCoreModule : Module() {
     }
     AsyncFunction("getSettings") {
       runBlocking { AppDataRepository.get(context.applicationContext).getSettings() }
+    }
+    // @parity /modules/vescape-core/ios/VescapeCoreModule.swift `refreshLegalPolicy`
+    // @parity /modules/vescape-core/src/index.ts `refreshLegalPolicy`
+    AsyncFunction("refreshLegalPolicy") Coroutine { ->
+      val repository = AppDataRepository.get(context.applicationContext)
+      val settings = repository.getTypedSettings()
+      val latitude = settings.lastGpsLatitude
+      val longitude = settings.lastGpsLongitude
+      val countryCode = if (latitude != null && longitude != null) {
+        legalPolicyResolver.resolve(latitude, longitude)
+      } else {
+        null
+      }
+      repository.updateLegalPolicy(countryCode)
+      CoreForegroundService.reloadAlertRules(context.applicationContext)
+    }
+    // @parity /modules/vescape-core/ios/VescapeCoreModule.swift `setLegalMode`
+    // @parity /modules/vescape-core/src/index.ts `setLegalMode`
+    AsyncFunction("setLegalMode") { boardId: String, enabled: Boolean, promise: Promise ->
+      CoroutineScope(Dispatchers.IO).launch {
+        val repository = AppDataRepository.get(context.applicationContext)
+        if (repository.getBoard(boardId) == null) {
+          promise.reject("BOARD_NOT_FOUND", "Board not found: $boardId", null)
+          return@launch
+        }
+        if (enabled) {
+          CoreForegroundService.legalModeEnableError(boardId)?.let { (code, message) ->
+            promise.reject(code, message, null)
+            return@launch
+          }
+          val jurisdictionCode = repository.getTypedSettings().legalPolicy?.get("jurisdictionCode")
+          if (jurisdictionCode == null || legalPolicyCatalog.speeds(jurisdictionCode) == null) {
+            promise.reject("LEGAL_POLICY_UNRESOLVED", "Resolved Legal Policy required", null)
+            return@launch
+          }
+        }
+        repository.updateLegalMode(boardId, enabled)
+        CoreForegroundService.reloadAlertRules(context.applicationContext)
+        promise.resolve(null)
+      }
     }
     AsyncFunction("updateSetting") Coroutine { key: String, value: Any? ->
       AppDataRepository.get(context.applicationContext).updateSetting(key, value)
