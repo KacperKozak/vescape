@@ -25,6 +25,7 @@ final class ManualBoardStopTests: XCTestCase {
       stop: {
         stopCount += 1
         activeBoardId = nil
+        return true
       }
     )
 
@@ -39,12 +40,33 @@ final class ManualBoardStopTests: XCTestCase {
     let command = ManualBoardStop(
       defaults: defaults,
       activeBoardId: { nil },
-      stop: { stopCount += 1 }
+      stop: {
+        stopCount += 1
+        return true
+      }
     )
 
     XCTAssertFalse(command.perform())
     XCTAssertEqual(stopCount, 0)
     XCTAssertNil(defaults.string(forKey: ManualBoardStop.suppressedBoardKey))
+  }
+
+  func testStaleBoardIdDoesNotSuppressAutoStartWhenNoSessionStops() {
+    var stopCount = 0
+    let command = ManualBoardStop(
+      defaults: defaults,
+      activeBoardId: { "stale-board" },
+      stop: {
+        stopCount += 1
+        return false
+      }
+    )
+
+    XCTAssertFalse(command.perform())
+    XCTAssertEqual(stopCount, 1)
+    XCTAssertFalse(
+      ManualBoardStop.isAutoStartSuppressed(boardId: "stale-board", defaults: defaults)
+    )
   }
 
   func testClearAllowsAutoStartAgain() {

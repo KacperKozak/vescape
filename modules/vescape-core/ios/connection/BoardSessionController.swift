@@ -285,9 +285,11 @@ internal final class BoardSessionController: VescGattListener {
     )
   }
 
-  func stopBoard() {
-    guard session != nil else { return }
+  @discardableResult
+  func stopBoard() -> Bool {
+    guard session != nil else { return false }
     endSession(phase: .idle, error: nil)
+    return true
   }
 
   /// Read Refloat config from the connected Board and seed the first Tune Profile. Mirrors Android
