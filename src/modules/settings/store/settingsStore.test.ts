@@ -35,7 +35,8 @@ const BASE: AppSettings = {
   riderId: null,
   riderName: null,
   riderColor: null,
-  legalMode: null,
+  legalPolicy: null,
+  dismissedCommunityMessageIds: [],
 }
 
 let settings: AppSettings = BASE

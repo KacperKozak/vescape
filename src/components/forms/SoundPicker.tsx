@@ -2,10 +2,10 @@ import { StyleSheet, TouchableOpacity, View } from 'react-native'
 import { Text } from '@/components/base/Text'
 
 import { theme } from '@/constants/theme'
-import { type AlertPreset, previewAlertSound } from 'vescape-core'
+import { type AlertSound, previewAlertSound } from 'vescape-core'
 
 interface SoundPickerProps {
-  presets: AlertPreset[]
+  presets: AlertSound[]
   selected: string
   onSelect: (uri: string) => void
 }

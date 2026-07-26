@@ -11,6 +11,12 @@ import android.location.LocationManager
 import android.os.Looper
 import android.util.Log
 import androidx.core.content.ContextCompat
+import expo.modules.vescapecore.telemetry.AppDataRepository
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 // @parity /modules/vescape-core/ios/location/GpsMonitor.swift
 internal class GpsMonitor(
@@ -18,8 +24,14 @@ internal class GpsMonitor(
     private val looper: Looper,
     onLocation: (Location) -> Unit,
 ) {
-    private val locationListener = LocationListener { location -> onLocation(location) }
+    private val locationListener = LocationListener { location ->
+        onLocation(location)
+        resolveInitialLegalPolicy(location)
+    }
     private var locationManager: LocationManager? = null
+    private val legalPolicyResolutionStarted = AtomicBoolean(false)
+    private val legalPolicyResolver = LegalPolicyResolver(context.applicationContext)
+    private val resolutionScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     val active: Boolean
         get() = locationManager != null
@@ -62,5 +74,15 @@ internal class GpsMonitor(
         } catch (_: Exception) {
         }
         locationManager = null
+    }
+
+    private fun resolveInitialLegalPolicy(location: Location) {
+        if (!legalPolicyResolutionStarted.compareAndSet(false, true)) return
+        resolutionScope.launch {
+            val repository = AppDataRepository.get(context.applicationContext)
+            if (repository.getTypedSettings().legalPolicy != null) return@launch
+            val countryCode = legalPolicyResolver.resolve(location.latitude, location.longitude)
+            if (countryCode != null) repository.updateLegalPolicy(countryCode)
+        }
     }
 }

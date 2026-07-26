@@ -14,6 +14,18 @@ apply plugin: 'com.android.application'
 apply plugin: 'kotlin-android'
 apply plugin: 'org.jetbrains.kotlin.plugin.compose'
 
+def releaseVersionName = project.findProperty('APP_VERSION')?.toString() ?: '1.0.0'
+def releaseVersionCode = (project.findProperty('WEAR_VERSION_CODE') ?: '1').toString().toInteger()
+def releaseSigningProperties = [
+  'VESCAPE_UPLOAD_STORE_FILE',
+  'VESCAPE_UPLOAD_STORE_PASSWORD',
+  'VESCAPE_UPLOAD_KEY_ALIAS',
+  'VESCAPE_UPLOAD_KEY_PASSWORD',
+]
+def hasReleaseSigning = releaseSigningProperties.every {
+  project.hasProperty(it) && project.property(it).toString()
+}
+
 android {
   namespace 'app.vescape.wear'
   compileSdk 35
@@ -23,17 +35,31 @@ android {
     applicationId 'app.vescape'
     minSdk 30
     targetSdk 35
-    versionCode 1
-    versionName '1.0'
+    versionCode releaseVersionCode
+    versionName releaseVersionName
   }
 
   buildFeatures {
     compose true
   }
 
+  signingConfigs {
+    release {
+      if (hasReleaseSigning) {
+        storeFile file(project.property('VESCAPE_UPLOAD_STORE_FILE'))
+        storePassword project.property('VESCAPE_UPLOAD_STORE_PASSWORD')
+        keyAlias project.property('VESCAPE_UPLOAD_KEY_ALIAS')
+        keyPassword project.property('VESCAPE_UPLOAD_KEY_PASSWORD')
+      }
+    }
+  }
+
   buildTypes {
     release {
       minifyEnabled false
+      if (hasReleaseSigning) {
+        signingConfig signingConfigs.release
+      }
     }
   }
 

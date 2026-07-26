@@ -259,14 +259,17 @@ data class BoardSettingEntity(
 
 @Entity(
   tableName = "alerts",
+  primaryKeys = ["board_id", "id"],
   indices = [
+    Index(value = ["board_id"]),
     Index(value = ["control_id"]),
     Index(value = ["enabled"]),
     Index(value = ["created_at"]),
   ],
 )
 data class AlertRuleEntity(
-  @PrimaryKey
+  @ColumnInfo(name = "board_id")
+  val boardId: String,
   val id: String,
   @ColumnInfo(name = "control_id")
   val controlId: String,
@@ -278,6 +281,10 @@ data class AlertRuleEntity(
   val soundType: String,
   @ColumnInfo(name = "created_at")
   val createdAt: Long,
+  /**
+   * Free-text provenance tag mirroring TS `AlertRule.source`: `manual` (or null) or `preset`.
+   * JS authors and regenerates preset rules; native only persists the string.
+   */
   val source: String?,
 )
 
@@ -353,6 +360,12 @@ data class AppSettingEntity(
   val updatedAt: Long,
 )
 
+/**
+ * Durable app-scoped settings. A TS/Android/iOS parity triangle — the container tag covers every
+ * key; individual literals are not tagged separately (see AGENTS.md).
+ * @parity /modules/vescape-core/src/index.ts `AppSettings`
+ * @parity /modules/vescape-core/ios/telemetry/AppDataRepository.swift `defaultSettings`
+ */
 data class AppSettings(
   val liveHistoryLimit: Int = 5,
   val autoConnect: Boolean = true,
@@ -385,7 +398,8 @@ data class AppSettings(
   val riderId: String? = null,
   val riderName: String? = null,
   val riderColor: String? = null,
-  val legalMode: Map<String, Any?>? = null,
+  val legalPolicy: Map<String, String>? = null,
+  val dismissedCommunityMessageIds: List<String> = emptyList(),
 )
 
 @Entity(

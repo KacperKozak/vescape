@@ -7,7 +7,6 @@ import {
   type AppSettings,
 } from 'vescape-core'
 import { DEFAULT_HISTORY_METRIC_HOT_RANGES } from '@/modules/history/lib/metricColorScale'
-import { DEFAULT_LEGAL_MODE_SETTINGS, type LegalModeSettings } from '@/modules/legal/lib/legalMode'
 import {
   DEFAULT_SATELLITE_IMAGERY_OPACITY,
   DEFAULT_SATELLITE_MAP_IMAGERY_OPACITY,
@@ -46,14 +45,17 @@ const DEFAULTS: AppSettings = {
   riderId: null,
   riderName: null,
   riderColor: null,
-  legalMode: DEFAULT_LEGAL_MODE_SETTINGS as unknown as Record<string, unknown>,
+  legalPolicy: null,
+  dismissedCommunityMessageIds: [],
 }
 
 interface SettingsState extends AppSettings {
   loaded: boolean
   load: () => Promise<void>
-  set: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => Promise<void>
-  setLegalMode: (value: LegalModeSettings) => Promise<void>
+  set: <K extends Exclude<keyof AppSettings, 'legalPolicy'>>(
+    key: K,
+    value: AppSettings[K],
+  ) => Promise<void>
   setCompanionPresence: (enabled: boolean) => Promise<void>
 }
 
@@ -94,11 +96,6 @@ export const useSettingsStore = create<SettingsState>((set, get) => ({
     if (key === 'autoConnect' && value === false && get().companionPresenceEnabled) return
     set({ [key]: value })
     await updateSetting(key, value)
-  },
-
-  async setLegalMode(value) {
-    set({ legalMode: value as unknown as Record<string, unknown> })
-    await updateSetting('legalMode', value as unknown as Record<string, unknown>)
   },
 
   async setCompanionPresence(enabled) {

@@ -19,6 +19,10 @@ const PREBUILD_INPUTS = [
   'bun.lock',
   'plugins',
   'patches',
+  // Prebuild reads the loaded env: `app.config.ts` and the plugins bake values (server origin,
+  // Sentry DSN, Apple team) into the native projects, so an env edit is a native input.
+  '.env',
+  '.env.local',
   // Every file here is baked into the native projects by prebuild (launcher icon, adaptive icon
   // layers, splash). Images the JS bundle loads at runtime live in `assets/logo` and
   // `assets/map-points`, so this stays narrow enough not to prebuild on unrelated art edits.
@@ -135,7 +139,7 @@ export function podsFingerprint(root = ROOT): Fingerprint {
 }
 
 /**
- * `shared/` is the single source of truth for alert audio and cell presets. Android needs real
+ * `shared/` is the single source of truth for alert audio and shared data catalogs. Android needs real
  * copies of it inside the module (Gradle cannot follow a symlink out of the module), so those copies
  * are generated state that drifts whenever `shared/` changes — or whenever someone deletes them.
  */

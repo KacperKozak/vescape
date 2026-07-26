@@ -10,7 +10,7 @@ import { theme } from '@/constants/theme'
  * components. Add new metrics here when they need an alert level.
  *
  * Consumers today: roster stat visibility, the live battery gauge hint, and the
- * per-metric alert seed values (see {@link DEFAULT_ALERT_PRESETS}).
+ * per-metric alert seed values (see {@link DEFAULT_ALERT_SEEDS}).
  */
 export const TELEMETRY_THRESHOLDS = {
   /** Battery SoC as a 0-1 fraction. */
@@ -92,7 +92,7 @@ export function dutyLevel(percent: number | null | undefined): TelemetryLevel {
 
 /**
  * Alert UI tab the per-control alert editor opens in. Mirrors the local tab
- * state kept by the editor; kept here so {@link DEFAULT_ALERT_PRESETS} can be
+ * state kept by the editor; kept here so {@link DEFAULT_ALERT_SEEDS} can be
  * the single source of truth for the seed values without circular imports.
  */
 export type TelemetryAlertTab = 'single' | 'geiger' | 'message'
@@ -113,7 +113,7 @@ export interface TelemetryAlertPreset {
  * Battery threshold is expressed in percent for the alert dial, while the
  * underlying tier uses a 0-1 fraction (see {@link TELEMETRY_THRESHOLDS.battery}).
  */
-export const DEFAULT_ALERT_PRESETS: Record<string, TelemetryAlertPreset> = {
+export const DEFAULT_ALERT_SEEDS: Record<string, TelemetryAlertPreset> = {
   'motor-temp': { tab: 'message', threshold: TELEMETRY_THRESHOLDS.temp.warning },
   battery: { tab: 'message', threshold: TELEMETRY_THRESHOLDS.battery.warning * 100 },
   speed: {

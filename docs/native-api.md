@@ -194,17 +194,17 @@ only stable identity (`id`, `name`, `ble_id`, `created_at`).
 
 ## Alert rules
 
-| fn                                            | sync  | returns                                                        |
-| --------------------------------------------- | ----- | -------------------------------------------------------------- |
-| `getAlertRules()`                             | async | `AlertRule[]` by created_at ASC                                |
-| `upsertAlertRule(rule)`                       | async | void. Reloads foreground service rules                         |
-| `setAlertRuleEnabled(id,enabled)`             | async | void. Reloads rules                                            |
-| `deleteAlertRule(id)`                         | async | void. Reloads rules                                            |
-| `getAlertPresets()`                           | sync  | `AlertPreset[]`. Falls back to hardcoded if native unavailable |
-| `previewAlertSound(soundType)`                | sync  | void                                                           |
-| `startGeigerSimulation(soundType,rangeDepth)` | sync  | void                                                           |
-| `stopGeigerSimulation()`                      | sync  | void                                                           |
-| `reloadAlertRules()`                          | sync  | void. Force foreground service re-read                         |
+| fn                                            | sync  | returns                                                       |
+| --------------------------------------------- | ----- | ------------------------------------------------------------- |
+| `getAlertRules()`                             | async | `AlertRule[]` by created_at ASC                               |
+| `upsertAlertRule(rule)`                       | async | void. Reloads foreground service rules                        |
+| `setAlertRuleEnabled(id,enabled)`             | async | void. Reloads rules                                           |
+| `deleteAlertRule(id)`                         | async | void. Reloads rules                                           |
+| `getAlertSounds()`                            | sync  | `AlertSound[]`. Falls back to hardcoded if native unavailable |
+| `previewAlertSound(soundType)`                | sync  | void                                                          |
+| `startGeigerSimulation(soundType,rangeDepth)` | sync  | void                                                          |
+| `stopGeigerSimulation()`                      | sync  | void                                                          |
+| `reloadAlertRules()`                          | sync  | void. Force foreground service re-read                        |
 
 ### AlertRule shape
 
@@ -214,7 +214,7 @@ only stable identity (`id`, `name`, `ble_id`, `created_at`).
 
 Single threshold -> one-shot alert. Both threshold+thresholdMax -> geiger (progressive ticking).
 
-### AlertPreset shape
+### AlertSound shape
 
 ```ts
 { name, uri, category: 'single'|'geiger' }
@@ -263,10 +263,10 @@ Presets: beep, urgent, notify (single); tick, tick_hard, gamma (geiger)
 
 ```ts
 { liveHistoryLimit, autoConnect, autoRecording, selectedBoardId?,
-  lastGpsLatitude?, lastGpsLongitude?, movingSpeedThresholdKmh }
+  lastGpsLatitude?, lastGpsLongitude?, movingSpeedThresholdKmh, riderTopSpeedKmh }
 ```
 
-Valid keys: `liveHistoryLimit`, `autoConnect`, `autoRecording`, `selectedBoardId`, `lastGpsLatitude`, `lastGpsLongitude`, `movingSpeedThresholdKmh` (aliases: `avgSpeedCutoffKmh`, `movingAvgSpeedThresholdKmh`)
+Valid keys: `liveHistoryLimit`, `autoConnect`, `autoRecording`, `selectedBoardId`, `lastGpsLatitude`, `lastGpsLongitude`, `movingSpeedThresholdKmh` (aliases: `avgSpeedCutoffKmh`, `movingAvgSpeedThresholdKmh`), `riderTopSpeedKmh` (Rider Top Speed, km/h; speed gauge full-scale, clamped 5–150, default 50)
 
 Writing default-equivalent value deletes the override row. Unknown keys and type mismatches are silently ignored.
 

@@ -10,6 +10,8 @@ internal final class GpsMonitor: NSObject, CLLocationManagerDelegate {
   private let onLocation: (TelemetryLocationCapture) -> Void
   private var manager: CLLocationManager?
   private var lastError: String?
+  private var legalPolicyResolutionStarted = false
+  private let legalPolicyResolver = LegalPolicyResolver()
 
   init(onLocation: @escaping (TelemetryLocationCapture) -> Void) {
     self.onLocation = onLocation
@@ -63,9 +65,25 @@ internal final class GpsMonitor: NSObject, CLLocationManagerDelegate {
         precise: isPreciseGpsFix(accuracyM: accuracy)
       )
     )
+    resolveInitialLegalPolicy(location)
   }
 
   func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
     lastError = error.localizedDescription
+  }
+
+  private func resolveInitialLegalPolicy(_ location: CLLocation) {
+    guard !legalPolicyResolutionStarted else { return }
+    legalPolicyResolutionStarted = true
+    Task {
+      let appData = AppDataRepository.shared
+      let stored = appData.getSettings()["legalPolicy"] ?? nil
+      guard stored == nil || stored is NSNull else { return }
+      let countryCode = await legalPolicyResolver.resolve(
+        latitude: location.coordinate.latitude,
+        longitude: location.coordinate.longitude
+      )
+      if let countryCode { appData.updateLegalPolicy(jurisdictionCode: countryCode) }
+    }
   }
 }

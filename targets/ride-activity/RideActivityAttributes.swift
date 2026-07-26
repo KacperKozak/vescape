@@ -1,1 +1,1 @@
-../../modules/vesc-ble/ios/notification/RideActivityAttributes.swift
+../../modules/vescape-core/ios/notification/RideActivityAttributes.swift

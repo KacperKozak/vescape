@@ -114,6 +114,33 @@ internal data class FiredAlert(
     )
 }
 
+/**
+ * Adds Legal Mode's per-Board speed warning to in-memory rules. No Alert Rule row is materialized.
+ * @parity /modules/vescape-core/ios/alerts/AlertEngine.swift `withLegalModeOverlay`
+ */
+internal fun withLegalModeOverlay(
+    rules: List<AlertRuleEntity>,
+    boardId: String,
+    enabled: Boolean,
+    warningSpeedKmh: Double?,
+    limitSpeedKmh: Double?,
+): List<AlertRuleEntity> {
+    if (!enabled || warningSpeedKmh == null || limitSpeedKmh == null) return rules
+    if (warningSpeedKmh <= 0.0 || limitSpeedKmh <= warningSpeedKmh) return rules
+
+    return rules + AlertRuleEntity(
+        boardId = boardId,
+        id = "native:legal-mode:speed",
+        controlId = "speed",
+        threshold = warningSpeedKmh,
+        thresholdMax = limitSpeedKmh,
+        enabled = true,
+        soundType = "preset:tick",
+        createdAt = 0L,
+        source = null,
+    )
+}
+
 internal class AlertEngine {
     // @parity /modules/vescape-core/ios/alerts/AlertEngine.swift `AlertEngine`
     private val lastFiredAt = HashMap<String, Long>()
@@ -459,11 +486,11 @@ internal fun alertSoundPresetMaps(): List<Map<String, Any>> =
         .map { it.toMap() }
 
 // @parity /modules/vescape-core/ios/alerts/AlertAudioPlayer.swift `alertCategorySingle`
-// @parity /modules/vescape-core/src/index.ts `AlertPresetCategory`
+// @parity /modules/vescape-core/src/index.ts `AlertSoundCategory`
 private const val ALERT_CATEGORY_SINGLE = "single"
 
 // @parity /modules/vescape-core/ios/alerts/AlertAudioPlayer.swift `alertCategoryGeiger`
-// @parity /modules/vescape-core/src/index.ts `AlertPresetCategory`
+// @parity /modules/vescape-core/src/index.ts `AlertSoundCategory`
 private const val ALERT_CATEGORY_GEIGER = "geiger"
 
 private val ALERT_SOUND_PRESETS = listOf(

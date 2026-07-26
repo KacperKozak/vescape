@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native'
 import Animated, {
   interpolateColor,
@@ -9,10 +9,8 @@ import Animated, {
 import { Text } from '@/components/base/Text'
 import {
   ArrowsDownUpIcon,
-  BellRingingIcon,
   FadersIcon,
   FootprintsIcon,
-  GaugeIcon,
   LightbulbIcon,
   SirenIcon,
   SpeedometerIcon,
@@ -22,7 +20,6 @@ import {
 import { router } from 'expo-router'
 
 import { RemoteTiltControl } from '@/modules/board/components/RemoteTiltControl'
-import { Input } from '@/components/forms/Input'
 import { InfoModal } from '@/components/modals/InfoModal'
 import {
   tuneProfileColorTheme,
@@ -33,23 +30,15 @@ import { StepperWidget } from '@/components/widgets/StepperWidget'
 import { SwitchWidget } from '@/components/widgets/SwitchWidget'
 import { widgetSurface } from '@/components/widgets/widgetSurface'
 import { canRunFirmwareCommand } from '@/modules/board/lib/boardLinkIntegrity'
-import {
-  applyJurisdictionDefaults,
-  normalizeLegalModeSettings,
-  resolveJurisdictionFromLocation,
-} from '@/modules/legal/lib/legalMode'
+import { legalPolicyFromReference } from '@/modules/legal/lib/legalMode'
 import { routes } from '@/navigation/routes'
 import { theme } from '@/constants/theme'
+import { errorMessage } from '@/helpers/error'
 import { useBleStore } from '@/modules/board/store/bleStore'
 import { useBoardStore } from '@/modules/board/store/boardStore'
 import { useLegalModeStore } from '@/modules/legal/store/legalModeStore'
 import { useSettingsStore } from '@/modules/settings/store/settingsStore'
 import { useTuneProfileStore } from '@/modules/tune/store/tuneProfileStore'
-import {
-  LEGAL_SPEED_DRAFT_COMMIT_DELAY_MS,
-  hasSpeedDraftValue,
-  parseSpeed,
-} from '@/modules/legal/lib/speedDraft'
 
 interface TuneDrawerProps {
   onNavigate: () => void
@@ -64,18 +53,7 @@ const AnimatedText = Animated.createAnimatedComponent(Text)
 export function TuneDrawer({ onNavigate, onOpenLegalLimits }: TuneDrawerProps) {
   const [tuneSelectOpen, setTuneSelectOpen] = useState(false)
   const [legalWarningOpen, setLegalWarningOpen] = useState(false)
-  const [legalSpeedDraft, setLegalSpeedDraft] = useState('')
-  const [warningSpeedDraft, setWarningSpeedDraft] = useState('')
-  const [editingLegalField, setEditingLegalField] = useState<'legal' | 'warning' | null>(null)
-  const legalDraftRef = useRef({
-    editingField: null as 'legal' | 'warning' | null,
-    legalSpeedDraft: '',
-    warningSpeedDraft: '',
-    legalSpeedKmh: 0,
-    warningSpeedKmh: 0,
-    setLegalSpeed: (_speedKmh: number) => Promise.resolve(),
-    setWarningSpeed: (_speedKmh: number) => Promise.resolve(),
-  })
+  const [legalModeError, setLegalModeError] = useState<string | null>(null)
   const activeBoardId = useBoardStore((state) => state.activeBoardId)
   const tuneCompatibility = useBoardStore(
     (state) =>
@@ -89,16 +67,18 @@ export function TuneDrawer({ onNavigate, onOpenLegalLimits }: TuneDrawerProps) {
   const profileCompatibility = useTuneProfileStore((state) => state.refloatBaseVersion)
   const loadProfiles = useTuneProfileStore((state) => state.loadProfiles)
   const setActiveProfile = useTuneProfileStore((state) => state.setActiveProfile)
-  const rawLegalMode = useSettingsStore((state) => state.legalMode)
-  const setLegalModeSetting = useSettingsStore((state) => state.setLegalMode)
+  const legalModeEnabled = useBoardStore(
+    (state) =>
+      state.boards.find((board) => board.id === state.activeBoardId)?.legalMode?.enabled ?? false,
+  )
+  const legalPolicyReference = useSettingsStore((state) => state.legalPolicy)
   const setLegalModeEnabled = useLegalModeStore((state) => state.setEnabled)
-  const setLegalModeLegalSpeed = useLegalModeStore((state) => state.setLegalSpeed)
-  const setLegalModeWarningSpeed = useLegalModeStore((state) => state.setWarningSpeed)
-  const latestApproximateLocation = useBleStore((state) => state.latestApproximateLocation)
-  const legalMode = useMemo(() => normalizeLegalModeSettings(rawLegalMode), [rawLegalMode])
+  const legalPolicy = useMemo(
+    () => legalPolicyFromReference(legalPolicyReference),
+    [legalPolicyReference],
+  )
   const showLegalWarning =
-    legalMode.jurisdiction?.legalRoadStatus === 'restricted' ||
-    legalMode.jurisdiction?.legalRoadStatus === 'notRoadLegal'
+    legalPolicy?.status === 'restricted' || legalPolicy?.status === 'notRoadLegal'
   const profilesLoadedForBoard =
     activeBoardId != null &&
     profileBoardId === activeBoardId &&
@@ -125,71 +105,6 @@ export function TuneDrawer({ onNavigate, onOpenLegalLimits }: TuneDrawerProps) {
     if (activeBoardId) void loadProfiles(activeBoardId, tuneCompatibility).catch(() => undefined)
   }, [activeBoardId, loadProfiles, tuneCompatibility])
 
-  useEffect(() => {
-    if (!latestApproximateLocation) return
-    const jurisdiction = resolveJurisdictionFromLocation(latestApproximateLocation)
-    if (!jurisdiction || legalMode.jurisdiction?.countryCode === jurisdiction.countryCode) return
-    void setLegalModeSetting(applyJurisdictionDefaults(legalMode, jurisdiction)).catch(
-      () => undefined,
-    )
-  }, [latestApproximateLocation, legalMode, setLegalModeSetting])
-
-  useEffect(() => {
-    legalDraftRef.current = {
-      editingField: editingLegalField,
-      legalSpeedDraft,
-      warningSpeedDraft,
-      legalSpeedKmh: legalMode.legalSpeedKmh,
-      warningSpeedKmh: legalMode.warningSpeedKmh,
-      setLegalSpeed: setLegalModeLegalSpeed,
-      setWarningSpeed: setLegalModeWarningSpeed,
-    }
-  }, [
-    editingLegalField,
-    legalMode.legalSpeedKmh,
-    legalMode.warningSpeedKmh,
-    legalSpeedDraft,
-    setLegalModeLegalSpeed,
-    setLegalModeWarningSpeed,
-    warningSpeedDraft,
-  ])
-
-  useEffect(() => {
-    if (editingLegalField !== 'legal' || !hasSpeedDraftValue(legalSpeedDraft)) return
-    const nextSpeed = parseSpeed(legalSpeedDraft, legalMode.legalSpeedKmh)
-    if (nextSpeed === legalMode.legalSpeedKmh) return
-    const timer = setTimeout(() => {
-      void setLegalModeLegalSpeed(nextSpeed).catch(() => undefined)
-    }, LEGAL_SPEED_DRAFT_COMMIT_DELAY_MS)
-    return () => clearTimeout(timer)
-  }, [editingLegalField, legalMode.legalSpeedKmh, legalSpeedDraft, setLegalModeLegalSpeed])
-
-  useEffect(() => {
-    if (editingLegalField !== 'warning' || !hasSpeedDraftValue(warningSpeedDraft)) return
-    const nextSpeed = parseSpeed(warningSpeedDraft, legalMode.warningSpeedKmh)
-    if (nextSpeed === legalMode.warningSpeedKmh) return
-    const timer = setTimeout(() => {
-      void setLegalModeWarningSpeed(nextSpeed).catch(() => undefined)
-    }, LEGAL_SPEED_DRAFT_COMMIT_DELAY_MS)
-    return () => clearTimeout(timer)
-  }, [editingLegalField, legalMode.warningSpeedKmh, setLegalModeWarningSpeed, warningSpeedDraft])
-
-  useEffect(() => {
-    return () => {
-      const draft = legalDraftRef.current
-      if (draft.editingField === 'legal' && hasSpeedDraftValue(draft.legalSpeedDraft)) {
-        void draft
-          .setLegalSpeed(parseSpeed(draft.legalSpeedDraft, draft.legalSpeedKmh))
-          .catch(() => undefined)
-      }
-      if (draft.editingField === 'warning' && hasSpeedDraftValue(draft.warningSpeedDraft)) {
-        void draft
-          .setWarningSpeed(parseSpeed(draft.warningSpeedDraft, draft.warningSpeedKmh))
-          .catch(() => undefined)
-      }
-    }
-  }, [])
-
   const openTune = () => {
     onNavigate()
     router.push(routes.tune)
@@ -201,18 +116,10 @@ export function TuneDrawer({ onNavigate, onOpenLegalLimits }: TuneDrawerProps) {
   }
 
   const toggleLegalMode = (enabled: boolean) => {
-    void setLegalModeEnabled(enabled).catch(() => undefined)
-  }
-
-  const commitLegalSpeed = (value: string) => {
-    setEditingLegalField(null)
-    void setLegalModeLegalSpeed(parseSpeed(value, legalMode.legalSpeedKmh)).catch(() => undefined)
-  }
-  const commitWarningSpeed = (value: string) => {
-    setEditingLegalField(null)
-    void setLegalModeWarningSpeed(parseSpeed(value, legalMode.warningSpeedKmh)).catch(
-      () => undefined,
-    )
+    if (!activeBoardId) return
+    void setLegalModeEnabled(activeBoardId, enabled).catch((error: unknown) => {
+      setLegalModeError(errorMessage(error, 'Could not change Legal Mode.'))
+    })
   }
 
   const activeName =
@@ -221,7 +128,9 @@ export function TuneDrawer({ onNavigate, onOpenLegalLimits }: TuneDrawerProps) {
       : profilesLoadedForBoard
         ? (activeProfileForBoard?.name ?? (profileLoading ? 'Loading...' : 'No profile'))
         : 'Loading...'
-  const legalModeDescription = `${legalMode.jurisdiction?.countryName ?? 'Current country'} · max ${legalMode.legalSpeedKmh} km/h`
+  const legalModeDescription = legalPolicy
+    ? `${legalPolicy.name} · max ${legalPolicy.referenceSpeedKmh ?? 'N/A'} km/h`
+    : 'Jurisdiction unresolved'
   const SelectIcon = activeProfileForBoard
     ? tuneProfileIconComponent(activeProfileForBoard.icon)
     : undefined
@@ -319,7 +228,7 @@ export function TuneDrawer({ onNavigate, onOpenLegalLimits }: TuneDrawerProps) {
       <View style={styles.legalGroup}>
         <View style={styles.legalRow}>
           <LegalModeWidget
-            value={legalMode.enabled}
+            value={legalModeEnabled}
             description={legalModeDescription}
             warning={showLegalWarning}
             onValueChange={toggleLegalMode}
@@ -330,101 +239,23 @@ export function TuneDrawer({ onNavigate, onOpenLegalLimits }: TuneDrawerProps) {
             <LegalMapWidget onPress={onOpenLegalLimits} />
           </View>
         </View>
-        {legalMode.enabled ? (
-          <View style={styles.legalSettingsBox}>
-            <View style={styles.legalAlertSection}>
-              <View style={styles.legalAlertTitleRow}>
-                <BellRingingIcon size={24} color={theme.palette.amber.color} weight="duotone" />
-                <Text style={styles.legalSettingsTitle}>Speed warning alert</Text>
-              </View>
-              <View style={styles.legalInputRow}>
-                <View style={styles.legalInputCell}>
-                  <Text style={styles.legalInputLabel}>Legal limit</Text>
-                  <View style={styles.legalInputWrap}>
-                    <Input
-                      value={
-                        editingLegalField === 'legal'
-                          ? legalSpeedDraft
-                          : String(legalMode.legalSpeedKmh)
-                      }
-                      onChangeText={setLegalSpeedDraft}
-                      onFocus={() => {
-                        setLegalSpeedDraft(String(legalMode.legalSpeedKmh))
-                        setEditingLegalField('legal')
-                      }}
-                      onBlur={() => commitLegalSpeed(legalSpeedDraft)}
-                      onSubmitEditing={(event) => commitLegalSpeed(event.nativeEvent.text)}
-                      keyboardType="numeric"
-                      returnKeyType="done"
-                      maxLength={4}
-                      style={styles.legalInput}
-                      accessibilityLabel="Legal Speed Limit"
-                    />
-                    <Text style={styles.legalInputUnit}>km/h</Text>
-                  </View>
-                </View>
-                <View style={styles.legalInputCell}>
-                  <Text style={styles.legalInputLabel}>Alert starts</Text>
-                  <View style={styles.legalInputWrap}>
-                    <Input
-                      value={
-                        editingLegalField === 'warning'
-                          ? warningSpeedDraft
-                          : String(legalMode.warningSpeedKmh)
-                      }
-                      onChangeText={setWarningSpeedDraft}
-                      onFocus={() => {
-                        setWarningSpeedDraft(String(legalMode.warningSpeedKmh))
-                        setEditingLegalField('warning')
-                      }}
-                      onBlur={() => commitWarningSpeed(warningSpeedDraft)}
-                      onSubmitEditing={(event) => commitWarningSpeed(event.nativeEvent.text)}
-                      keyboardType="numeric"
-                      returnKeyType="done"
-                      maxLength={4}
-                      style={styles.legalInput}
-                      accessibilityLabel="Legal Warning Speed"
-                    />
-                    <Text style={styles.legalInputUnit}>km/h</Text>
-                  </View>
-                </View>
-              </View>
-            </View>
-            <View style={styles.legalSettingsDivider} />
-            <View style={styles.legalMotorLimitColumn}>
-              <View style={styles.legalMotorLimitRow}>
-                <GaugeIcon size={24} color={theme.palette.red.light} weight="duotone" />
-                <View style={styles.legalMotorLimitText}>
-                  <Text style={styles.legalMotorLimitLabel}>Motor limit</Text>
-                  <Text style={styles.legalMotorLimitWarning}>
-                    Can cause nosedive. Disabled until tested.
-                  </Text>
-                </View>
-                <Switch
-                  value={false}
-                  disabled
-                  onValueChange={() => {}}
-                  trackColor={{
-                    false: theme.palette.slate.border,
-                    true: theme.alpha(theme.palette.slate.textMuted, 0.6),
-                  }}
-                  thumbColor={theme.palette.slate.textMuted}
-                  ios_backgroundColor={theme.palette.slate.border}
-                  accessibilityLabel="Motor limit"
-                />
-              </View>
-            </View>
-          </View>
-        ) : null}
       </View>
 
       <InfoModal
         visible={legalWarningOpen}
         title="Legal Road Status"
-        message={legalMode.jurisdiction?.warningText ?? 'This jurisdiction has restricted status.'}
+        message={legalPolicy?.warningText ?? 'This jurisdiction has restricted status.'}
         variant="warning"
         dismissLabel="Close"
         onDismiss={() => setLegalWarningOpen(false)}
+      />
+      <InfoModal
+        visible={legalModeError != null}
+        title="Legal Mode unavailable"
+        message={legalModeError ?? ''}
+        variant="danger"
+        dismissLabel="Close"
+        onDismiss={() => setLegalModeError(null)}
       />
     </View>
   )
@@ -523,6 +354,7 @@ function LegalModeWidget({
       style={({ pressed }) => [
         styles.legalModeCell,
         styles.legalModeWidget,
+        value && styles.legalModeWidgetActive,
         pressed && styles.legalModeWidgetPressed,
       ]}
       accessibilityRole="switch"
@@ -642,88 +474,6 @@ const styles = StyleSheet.create({
   wideCell: {
     width: '100%',
   },
-  legalSettingsBox: {
-    gap: 12,
-    padding: 14,
-    borderTopWidth: 1,
-    borderTopColor: theme.palette.slate.border,
-  },
-  legalSettingsTitle: {
-    color: theme.palette.slate.textPrimary,
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  legalAlertSection: {
-    gap: 8,
-  },
-  legalAlertTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  legalInputRow: {
-    marginLeft: 36,
-    flexDirection: 'row',
-    gap: 10,
-  },
-  legalInputCell: {
-    flex: 1,
-    minWidth: 0,
-    gap: 6,
-  },
-  legalSettingsDivider: {
-    height: 1,
-    marginHorizontal: -14,
-    backgroundColor: theme.palette.slate.border,
-  },
-  legalMotorLimitColumn: {
-    gap: 8,
-    opacity: 0.45,
-  },
-  legalInputLabel: {
-    color: theme.palette.slate.textMuted,
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-  legalInputWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  legalInput: {
-    flex: 1,
-    minWidth: 0,
-    paddingHorizontal: 10,
-    paddingVertical: 9,
-    textAlign: 'center',
-  },
-  legalInputUnit: {
-    color: theme.palette.slate.textMuted,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  legalMotorLimitRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  legalMotorLimitText: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-  },
-  legalMotorLimitLabel: {
-    color: theme.palette.slate.textPrimary,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  legalMotorLimitWarning: {
-    color: theme.status.error.text,
-    fontSize: 11,
-    fontWeight: '700',
-    lineHeight: 14,
-  },
   legalGroup: {
     ...widgetSurface,
     width: '100%',
@@ -754,6 +504,10 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 14,
     paddingHorizontal: 14,
+  },
+  legalModeWidgetActive: {
+    borderWidth: 1,
+    borderColor: theme.status.error.border,
   },
   legalModeWidgetPressed: {
     backgroundColor: theme.palette.slate.surface,

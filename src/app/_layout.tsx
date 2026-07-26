@@ -14,11 +14,13 @@ import { DiagnosticErrorBoundary } from '@/modules/diagnostics/DiagnosticErrorBo
 import { HeaderBackButton } from '@/components/base/HeaderBackButton'
 import { initSentry } from '@/config/sentry'
 import { stackScreens } from '@/navigation/routes'
-import { useAlertsStore } from '@/modules/alerts/store/alertsStore'
+import { startAlertsBoardSync } from '@/bootstrap/alertsBoardSync'
 import { startAppDataSync } from '@/bootstrap/appDataSync'
 import { startBoardWarningsSync } from '@/modules/board/store/boardWarningsStore'
 import { useGroupRideStore } from '@/modules/group-ride/store/groupRideStore'
 import { useRiderStore } from '@/modules/group-ride/store/riderStore'
+import { ReleaseSurfaces } from '@/modules/release/components/ReleaseSurfaces'
+import { startAppStatusSync } from '@/modules/release/store/appStatusStore'
 import { useSettingsStore } from '@/modules/settings/store/settingsStore'
 import { theme } from '@/constants/theme'
 
@@ -58,15 +60,18 @@ function RootLayout() {
 
   useEffect(() => {
     void useSettingsStore.getState().load()
-    void useAlertsStore.getState().load()
     void useRiderStore.getState().load()
     useGroupRideStore.getState().startObserving()
     const stopAppDataSync = startAppDataSync()
     const stopBoardWarningsSync = startBoardWarningsSync()
+    const stopAlertsBoardSync = startAlertsBoardSync()
+    const stopAppStatusSync = startAppStatusSync()
     return () => {
       useGroupRideStore.getState().stopObserving()
       stopAppDataSync()
       stopBoardWarningsSync()
+      stopAlertsBoardSync()
+      stopAppStatusSync()
     }
   }, [])
 
@@ -140,7 +145,7 @@ function RootLayout() {
               name={stackScreens.settingsLiveTelemetry}
               options={{ title: 'Live telemetry' }}
             />
-            <Stack.Screen name={stackScreens.settingsVisuals} options={{ title: 'Map visuals' }} />
+            <Stack.Screen name={stackScreens.settingsMap} options={{ title: 'Map' }} />
             <Stack.Screen name={stackScreens.settingsWatch} options={{ title: 'Watch' }} />
             <Stack.Screen name={stackScreens.settingsFilters} options={{ title: 'Filters' }} />
             <Stack.Screen name={stackScreens.settingsGraphs} options={{ title: 'Graphs' }} />
@@ -154,6 +159,8 @@ function RootLayout() {
             <Stack.Screen name={stackScreens.editBoard} options={{ title: 'Edit Board' }} />
             <Stack.Screen name={stackScreens.editBoardLink} options={{ title: 'Board Link' }} />
           </Stack>
+          {/* Above navigation so a Release surface covers every screen. Only ever one at a time. */}
+          <ReleaseSurfaces />
           <StatusBar style="light" />
         </GestureHandlerRootView>
       </DiagnosticErrorBoundary>

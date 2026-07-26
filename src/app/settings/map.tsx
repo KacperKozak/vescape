@@ -17,7 +17,7 @@ import { Stepper } from '@/components/forms/Stepper'
 import { theme } from '@/constants/theme'
 import { useSettingsStore } from '@/modules/settings/store/settingsStore'
 
-export default function MapVisualsSettingsScreen() {
+export default function MapSettingsScreen() {
   const {
     satelliteOverlayEnabled,
     satelliteImageryOpacity,

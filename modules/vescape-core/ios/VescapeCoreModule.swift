@@ -1,5 +1,6 @@
 import ExpoModulesCore
 import Foundation
+import UIKit
 import UserNotifications
 
 private final class ActiveBoardProbe {
@@ -25,6 +26,9 @@ public class VescapeCoreModule: Module {
   // MARK: - Session state
 
   private var selectedBoardId: String? = nil
+  /// Dev-setting request: capture a raw debug Session Recorder for the next Board Session.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `requestedDebugRecordingEnabled`
+  private var requestedDebugRecordingEnabled = false
   private let manualDisconnectSuppressedBoardKey = "vesc_manual_disconnect_auto_start_board_id"
 
   /// Retains the in-flight Board Probe across its async BLE lifecycle. Only one runs at a time —
@@ -53,8 +57,10 @@ public class VescapeCoreModule: Module {
   // MARK: - App data state
 
   private let appData = AppDataRepository.shared
+  private let legalPolicyResolver = LegalPolicyResolver()
+  private let legalPolicyCatalog = LegalPolicyCatalog()
 
-  /// Bundled alert presets surfaced to JS through `getAlertPresets`. Mirrors Android
+  /// Bundled alert sounds surfaced to JS through `getAlertSounds`. Mirrors Android
   /// `alertSoundPresetMaps()`.
   /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/alerts/AlertEngine.kt `alertSoundPresetMaps`
   private let alertPresets: [[String: Any]] = alertSoundPresetMaps()
@@ -66,7 +72,7 @@ public class VescapeCoreModule: Module {
 
     // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `Events`
     // @parity /modules/vescape-core/src/index.ts `VescapeCoreEvents`
-    Events("onDevice", "onError", "onLiveState", "onLiveTick", "onLiveSeries", "onTelemetryHistory", "onBms", "onBmsSeries", "onLocation", "onTelemetryRebuildProgress", "onBoardProbeProgress", "onAppDataChanged", "onGroupRideConnection", "onGroupRideSnapshot", "onGroupRideCreated", "onGroupRideUpdated", "onGroupRideEnded", "onGroupRideJoined", "onGroupRideRoster", "onGroupRideError", "onBoardWarnings")
+    Events("onDevice", "onError", "onLiveState", "onLiveTick", "onLiveSeries", "onTelemetryHistory", "onBms", "onBmsSeries", "onLocation", "onTelemetryRebuildProgress", "onBoardProbeProgress", "onAppDataChanged", "onGroupRideConnection", "onGroupRideSnapshot", "onGroupRideCreated", "onGroupRideUpdated", "onGroupRideEnded", "onGroupRideJoined", "onGroupRideRoster", "onGroupRideError", "onBoardWarnings", "onAppStatus")
 
     // Track per-event JS listeners so native skips emitting into the void, and gate the whole
     // firehose on app foreground (see `frontendActive`). Mirrors Android's observing + lifecycle
@@ -97,8 +103,20 @@ public class VescapeCoreModule: Module {
       BoardWarningRegistry.shared.emitSnapshot()
     }
     OnStopObserving("onBoardWarnings") { self.observedEvents.remove("onBoardWarnings") }
+    OnStartObserving("onAppStatus") {
+      self.observedEvents.insert("onAppStatus")
+      // Late subscriber: replay the current App Status so JS is immediately consistent.
+      self.sendEvent("onAppStatus", ["status": AppStatusCoordinator.shared.current?.toMap()])
+    }
+    OnStopObserving("onAppStatus") { self.observedEvents.remove("onAppStatus") }
 
     OnCreate {
+      // Native owns App Status truth; JS mirrors it. Push every successful refresh (late
+      // subscribers replay above and through `getAppStatus`).
+      AppStatusCoordinator.shared.onChange = { [weak self] status in self?.sendAppStatus(status) }
+      // Cold start: fetch App Status before JS asks. A foreground event arriving right after is
+      // coalesced into this request.
+      AppStatusCoordinator.shared.refresh()
       self.attachToCoordinator()
       AppDataRepository.onDataChanged = { [weak self] scope in self?.sendAppDataChanged(scope) }
       // JS keeps a dumb mirror of the durable Board Warning registry; push the full board list on
@@ -111,6 +129,7 @@ public class VescapeCoreModule: Module {
 
     OnAppEntersForeground {
       self.frontendActive = true
+      AppStatusCoordinator.shared.refresh()
     }
     OnAppEntersBackground {
       self.frontendActive = false
@@ -125,6 +144,7 @@ public class VescapeCoreModule: Module {
       self.detachFromCoordinator()
       AppDataRepository.onDataChanged = nil
       BoardWarningRegistry.shared.onChange = nil
+      AppStatusCoordinator.shared.onChange = nil
       self.frontendActive = false
       self.observedEvents.removeAll()
       self.cancelActiveProbe(reason: "module_destroyed")
@@ -167,6 +187,10 @@ public class VescapeCoreModule: Module {
     }
 
     // MARK: Group Ride (Android native implementation; iOS keeps bridge shape)
+    // @platform-diff Group Ride networking is Android-only, so the Online Capability gate (refuse/
+    // tear down the relay socket while App Status is Online/App Blocked, `blocked` connection state,
+    // `Vescape-App-Version` upgrade header, 426 handling) has no iOS peer. These stubs never open a
+    // socket, so there is nothing to gate; iOS AppStatusCoordinator keeps its single `onChange` sink.
 
     Function("startGroupRideObserve") { (_: String) in
       self.sendEvent("onGroupRideConnection", ["state": "idle"])
@@ -234,7 +258,7 @@ public class VescapeCoreModule: Module {
       self.coordinator.previewAlertSound(soundType)
     }
 
-    Function("getAlertPresets") {
+    Function("getAlertSounds") {
       self.alertPresets
     }
 
@@ -244,6 +268,25 @@ public class VescapeCoreModule: Module {
 
     Function("stopGeigerSimulation") {
       self.coordinator.stopGeigerSimulation()
+    }
+
+    // MARK: App Status
+
+    // Last successful App Status for this process, or nil while none has been fetched (fail-open).
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `getAppStatus`
+    Function("getAppStatus") { () -> [String: Any?]? in
+      AppStatusCoordinator.shared.current?.toMap()
+    }
+
+    // Stable Vescape route keeps the app decoupled from the final store destination.
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `openAppUpdate`
+    // @platform-diff iOS uses the stable iOS download route.
+    // @parity /modules/vescape-core/src/index.ts `openAppUpdate`
+    Function("openAppUpdate") {
+      guard let url = URL(string: AppStatusCoordinator.iosDownloadUrl) else { return }
+      DispatchQueue.main.async {
+        UIApplication.shared.open(url)
+      }
     }
 
     // MARK: Board session
@@ -266,16 +309,50 @@ public class VescapeCoreModule: Module {
       promise.reject("UNSUPPORTED_PLATFORM", "Companion presence is Android-only")
     }
 
-    Function("setDebugRecordingEnabled") { (_: Bool) in
-      // Debug raw BLE recording is Android-only.
+    Function("setDebugRecordingEnabled") { (enabled: Bool) in
+      self.requestedDebugRecordingEnabled = enabled
     }
 
-    AsyncFunction("listDebugRecordings") { () -> [[String: Any]] in
-      []
+    AsyncFunction("listDebugRecordings") { (promise: Promise) in
+      do {
+        promise.resolve(try DebugRecordingStore().list())
+      } catch {
+        promise.reject("ERR_LIST_DEBUG_RECORDINGS", error.localizedDescription)
+      }
     }
 
-    AsyncFunction("exportDebugRecording") { (_: String, promise: Promise) in
-      promise.reject("UNSUPPORTED_PLATFORM", "Debug recording export is Android-only")
+    AsyncFunction("listBundledDebugFixtures") { () -> [[String: Any]] in
+      ReplayRecordings.listBundled()
+    }
+
+    AsyncFunction("exportDebugRecording") { (name: String, promise: Promise) in
+      do {
+        promise.resolve(try DebugRecordingStore().export(name: name))
+      } catch {
+        promise.reject("ERR_EXPORT_DEBUG_RECORDING", error.localizedDescription)
+      }
+    }
+
+    AsyncFunction("deleteDebugRecording") { (name: String, promise: Promise) in
+      do {
+        try DebugRecordingStore().delete(name: name)
+        promise.resolve(nil)
+      } catch {
+        promise.reject("ERR_DELETE_DEBUG_RECORDING", error.localizedDescription)
+      }
+    }
+
+    AsyncFunction("startDebugReplay") { (name: String, promise: Promise) in
+      self.coordinator.startReplay(
+        recordingName: name,
+        onSuccess: { promise.resolve(nil) },
+        onError: { code, message in promise.reject(code, message) }
+      )
+    }
+
+    AsyncFunction("stopDebugReplay") { (promise: Promise) in
+      self.coordinator.stopBoard()
+      promise.resolve(nil)
     }
 
     AsyncFunction("selectBoard") { (boardId: String, promise: Promise) in
@@ -565,8 +642,8 @@ public class VescapeCoreModule: Module {
       promise.resolve(nil)
     }
 
-    AsyncFunction("getAlertRules") { (promise: Promise) in
-      promise.resolve(self.appData.getAlertRules())
+    AsyncFunction("getAlertRules") { (boardId: String, promise: Promise) in
+      promise.resolve(self.appData.getAlertRules(boardId))
     }
 
     AsyncFunction("upsertAlertRule") { (rule: [String: Any], promise: Promise) in
@@ -575,14 +652,14 @@ public class VescapeCoreModule: Module {
       promise.resolve(nil)
     }
 
-    AsyncFunction("setAlertRuleEnabled") { (id: String, enabled: Bool, promise: Promise) in
-      self.appData.setAlertRuleEnabled(id, enabled)
+    AsyncFunction("setAlertRuleEnabled") { (boardId: String, id: String, enabled: Bool, promise: Promise) in
+      self.appData.setAlertRuleEnabled(boardId, id, enabled)
       self.coordinator.reloadAlertRules()
       promise.resolve(nil)
     }
 
-    AsyncFunction("deleteAlertRule") { (id: String, promise: Promise) in
-      self.appData.deleteAlertRule(id)
+    AsyncFunction("deleteAlertRule") { (boardId: String, id: String, promise: Promise) in
+      self.appData.deleteAlertRule(boardId, id)
       self.coordinator.reloadAlertRules()
       promise.resolve(nil)
     }
@@ -630,6 +707,49 @@ public class VescapeCoreModule: Module {
 
     AsyncFunction("getSettings") { (promise: Promise) in
       promise.resolve(self.appData.getSettings())
+    }
+
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `refreshLegalPolicy`
+    // @parity /modules/vescape-core/src/index.ts `refreshLegalPolicy`
+    AsyncFunction("refreshLegalPolicy") { (promise: Promise) in
+      let settings = self.appData.getSettings()
+      let latitude = settings["lastGpsLatitude"] as? Double
+      let longitude = settings["lastGpsLongitude"] as? Double
+      Task {
+        let countryCode = if let latitude, let longitude {
+          await self.legalPolicyResolver.resolve(latitude: latitude, longitude: longitude)
+        } else {
+          nil
+        }
+        self.appData.updateLegalPolicy(jurisdictionCode: countryCode)
+        self.coordinator.reloadAlertRules()
+        promise.resolve(nil)
+      }
+    }
+
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `setLegalMode`
+    // @parity /modules/vescape-core/src/index.ts `setLegalMode`
+    AsyncFunction("setLegalMode") { (boardId: String, enabled: Bool, promise: Promise) in
+      guard self.appData.getBoard(boardId) != nil else {
+        promise.reject("BOARD_NOT_FOUND", "Board not found: \(boardId)")
+        return
+      }
+      if enabled {
+        if let (code, message) = self.coordinator.legalModeEnableError(boardId: boardId) {
+          promise.reject(code, message)
+          return
+        }
+        let settings = self.appData.getSettings()
+        let jurisdictionCode =
+          ((settings["legalPolicy"] ?? nil) as? [String: Any])?["jurisdictionCode"] as? String
+        guard let jurisdictionCode, self.legalPolicyCatalog.speeds(countryCode: jurisdictionCode) != nil else {
+          promise.reject("LEGAL_POLICY_UNRESOLVED", "Resolved Legal Policy required")
+          return
+        }
+      }
+      self.appData.updateLegalMode(boardId: boardId, enabled: enabled)
+      self.coordinator.reloadAlertRules()
+      promise.resolve(nil)
     }
 
     // JS sends the raw setting value (bool/number/string/object/null), matching Android's
@@ -798,7 +918,8 @@ public class VescapeCoreModule: Module {
       refloatBaseVersion: link["refloatBaseVersion"] as? String,
       pollIntervalMs: hz > 0 ? 1000 / hz : 0,
       batteryConfig: AppDataRepository.normalizeBatteryConfig(board["batteryConfig"] ?? nil),
-      liveHistoryLimitMinutes: AppDataRepository.liveHistoryLimitMinutes(settings["liveHistoryLimit"] ?? nil) ?? 5
+      liveHistoryLimitMinutes: AppDataRepository.liveHistoryLimitMinutes(settings["liveHistoryLimit"] ?? nil) ?? 5,
+      recordingEnabled: requestedDebugRecordingEnabled
     )
   }
 
@@ -888,6 +1009,18 @@ public class VescapeCoreModule: Module {
     DispatchQueue.main.async {
       guard self.shouldEmitToFrontend("onBoardWarnings") else { return }
       self.sendEvent("onBoardWarnings", ["boardId": boardId, "warnings": warnings.map { $0.toMap() }])
+    }
+  }
+
+  /// Emit `onAppStatus` with the process's current App Status (`nil` while none was fetched).
+  /// `sendEvent` must run on the main thread; drop the emit when no JS listener is attached — the
+  /// replay on subscribe and the next successful refresh self-heal it.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `onAppStatus`
+  /// @parity /modules/vescape-core/src/index.ts `AppStatusEvent`
+  private func sendAppStatus(_ status: AppStatus?) {
+    DispatchQueue.main.async {
+      guard self.shouldEmitToFrontend("onAppStatus") else { return }
+      self.sendEvent("onAppStatus", ["status": status?.toMap()])
     }
   }
 

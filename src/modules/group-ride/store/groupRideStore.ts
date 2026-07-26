@@ -74,7 +74,24 @@ export const useGroupRideStore = create<GroupRideState>((set, get) => ({
   startObserving() {
     if (get().observing) return
     subscriptions = [
-      addGroupRideConnectionListener(({ state }) => set({ connection: state })),
+      addGroupRideConnectionListener(({ state }) =>
+        // Native gates the relay socket: on `blocked` (Online/App Block) it tore the connection
+        // down, so clear the now-stale online ride/roster the Social surface would otherwise show.
+        set(
+          state === 'blocked'
+            ? {
+                connection: state,
+                rides: [],
+                nearby: [],
+                badge: false,
+                activeRideId: null,
+                roster: [],
+                rosterRows: [],
+                error: null,
+              }
+            : { connection: state },
+        ),
+      ),
       addGroupRideSnapshotListener(({ rides }) =>
         set((state) => ({
           ...deriveNearby({ rides }, state),
