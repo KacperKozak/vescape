@@ -16,7 +16,7 @@ def android_release_properties
 end
 
 platform :android do
-  desc "Build signed phone and Wear AABs, ship to QA, and stage production drafts"
+  desc "Build signed phone and Wear AABs, ship to QA, and stage production review"
   lane :release do
     release_properties = android_release_properties
 
@@ -57,7 +57,7 @@ platform :android do
 
     upload_to_play_store(
       track: "production",
-      release_status: "draft",
+      release_status: "completed",
       version_code: ENV["VERSION_CODE"].to_i,
       skip_upload_aab: true,
       skip_upload_apk: true,
@@ -83,7 +83,7 @@ platform :android do
 
     upload_to_play_store(
       track: "wear:production",
-      release_status: "draft",
+      release_status: "completed",
       version_code: ENV["WEAR_VERSION_CODE"].to_i,
       skip_upload_aab: true,
       skip_upload_apk: true,
