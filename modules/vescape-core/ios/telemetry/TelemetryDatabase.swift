@@ -46,7 +46,7 @@ enum TelemetryDatabase {
     let legacy = url.deletingLastPathComponent().appendingPathComponent(legacyDatabaseName)
     guard !fm.fileExists(atPath: url.path), fm.fileExists(atPath: legacy.path) else { return }
     if let legacyPool = try? DatabasePool(path: legacy.path) {
-      try? legacyPool.writeWithoutTransaction { db in try db.checkpoint(.truncate) }
+      _ = try? legacyPool.writeWithoutTransaction { db in try db.checkpoint(.truncate) }
       try? legacyPool.close()
     }
     do {

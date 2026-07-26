@@ -101,7 +101,7 @@ const config: ExpoConfig = {
           minSdkVersion: 33,
         },
         ios: {
-          deploymentTarget: '16.4',
+          deploymentTarget: '17.0',
         },
       },
     ],

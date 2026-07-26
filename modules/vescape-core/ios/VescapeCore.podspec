@@ -10,9 +10,9 @@ Pod::Spec.new do |s|
   s.license        = 'MIT'
   s.author         = 'vesc-app-poc'
   s.homepage       = 'https://github.com/vesc-app-poc'
-  # 16.4 to match the app deployment target: the Board Session Live Activity (ActivityKit) driven
-  # from this pod needs 16.1+, and the app already ships 16.4, so nothing runs below it.
-  s.platform       = :ios, '16.4'
+  # 17.0 to match the app deployment target: the Board Session Live Activity (ActivityKit) driven
+  # from this pod needs 16.1+, and the app already ships 17.0, so nothing runs below it.
+  s.platform       = :ios, '17.0'
   s.swift_version  = '5.9'
   s.source         = { :git => '' }
 

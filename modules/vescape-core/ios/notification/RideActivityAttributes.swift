@@ -9,7 +9,7 @@ import ActivityKit
 /// (which renders it — added to that target by `plugins/withLiveActivityAttributes.ts`). ActivityKit
 /// matches the two separately-compiled copies by unqualified type name. Keep it dependency-free.
 ///
-/// Deployment target is 16.4 (> ActivityKit's 16.1 floor), so no `@available` gating is needed.
+/// Deployment target is 17.0 (> ActivityKit's 16.1 floor), so no `@available` gating is needed.
 ///
 /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/notification/NotificationController.kt
 struct RideActivityAttributes: ActivityAttributes {
