@@ -10,8 +10,7 @@ Pod::Spec.new do |s|
   s.license        = 'MIT'
   s.author         = 'vesc-app-poc'
   s.homepage       = 'https://github.com/vesc-app-poc'
-  # 17.0 to match the app deployment target: the Board Session Live Activity (ActivityKit) driven
-  # from this pod needs 16.1+, and the app already ships 17.0, so nothing runs below it.
+  # 17.0 matches the app deployment target required by Clerk's native iOS SDK.
   s.platform       = :ios, '17.0'
   s.swift_version  = '5.9'
   s.source         = { :git => '' }
