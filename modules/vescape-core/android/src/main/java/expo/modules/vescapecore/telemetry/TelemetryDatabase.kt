@@ -12,7 +12,7 @@ import java.io.File
 // @parity /modules/vescape-core/ios/VescapeCoreModule.swift
 internal const val TELEMETRY_DATABASE_NAME = "vescape.db"
 internal const val LEGACY_TELEMETRY_DATABASE_NAME = "telemetry.db"
-internal const val TELEMETRY_DATABASE_VERSION = 27
+internal const val TELEMETRY_DATABASE_VERSION = 28
 
 @Database(
   entities = [
@@ -473,6 +473,38 @@ abstract class TelemetryDatabase : RoomDatabase() {
     }
 
     /**
+     * Incremental-sync cursor on `boards`, `alerts` and `telemetry_minute_buckets`. The first two
+     * carried `created_at` only, so a board rename or an alert toggle was invisible to an
+     * "everything changed since T" query — the shape every other mutable table already supports.
+     * Buckets are append-and-merge targets with no cursor at all.
+     *
+     * Existing rows backfill to the best evidence of when they last changed — `created_at` for
+     * boards and alerts, `last_sample_at_ms` for buckets — never 0 and never null, so a first sync
+     * after upgrade reports each row at its true age instead of flooding the server with
+     * epoch-zero rows.
+     *
+     * @parity /modules/vescape-core/ios/telemetry/TelemetryDatabase.swift `v28_sync_cursors`
+     */
+    internal val MIGRATION_27_28 = object : Migration(27, 28) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE boards ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("UPDATE boards SET updated_at = created_at")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_boards_updated_at ON boards(updated_at)")
+
+        db.execSQL("ALTER TABLE alerts ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("UPDATE alerts SET updated_at = created_at")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_alerts_updated_at ON alerts(updated_at)")
+
+        db.execSQL("ALTER TABLE telemetry_minute_buckets ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("UPDATE telemetry_minute_buckets SET updated_at = last_sample_at_ms")
+        db.execSQL(
+          "CREATE INDEX IF NOT EXISTS index_telemetry_minute_buckets_updated_at " +
+            "ON telemetry_minute_buckets(updated_at)",
+        )
+      }
+    }
+
+    /**
      * One-time file rename from the pre-release "telemetry.db" name. Checkpoints the legacy WAL so
      * the whole database lives in the main file, then renames it in place. Idempotent: once the new
      * file exists (or no legacy file is present) this is a no-op.
@@ -526,6 +558,7 @@ abstract class TelemetryDatabase : RoomDatabase() {
             MIGRATION_24_25,
             MIGRATION_25_26,
             MIGRATION_26_27,
+            MIGRATION_27_28,
           )
           .fallbackToDestructiveMigration(true)
           .addCallback(object : Callback() {

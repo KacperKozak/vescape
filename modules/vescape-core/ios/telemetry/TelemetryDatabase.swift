@@ -115,7 +115,9 @@ enum TelemetryDatabase {
     }
   }
 
-  private static var migrator: DatabaseMigrator {
+  /// Internal rather than private so migration tests can replay the same migrator against an
+  /// in-memory database instead of re-declaring the schema.
+  static var migrator: DatabaseMigrator {
     var migrator = DatabaseMigrator()
 
     migrator.registerMigration("v1") { db in
@@ -414,6 +416,31 @@ enum TelemetryDatabase {
       try db.execute(sql: """
         DELETE FROM app_settings WHERE key IN ('alertPreset', 'riderTopSpeedKmh', 'alertPresetsOnboarded')
         """)
+    }
+
+    // MARK: Incremental-sync cursors
+    // `boards` and `alerts` carried `created_at` only, so a board rename or an alert toggle was
+    // invisible to an "everything changed since T" query — the shape every other mutable table
+    // already supports. `telemetry_minute_buckets` is an append-and-merge target with no cursor at all.
+    //
+    // Existing rows backfill to the best evidence of when they last changed — `created_at` for boards
+    // and alerts, `last_sample_at_ms` for buckets — never 0 and never null, so a first sync after
+    // upgrade reports each row at its true age instead of flooding the server with epoch-zero rows.
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `MIGRATION_27_28`
+    migrator.registerMigration("v28_sync_cursors") { db in
+      let backfillSource = [
+        "boards": "created_at",
+        "alerts": "created_at",
+        "telemetry_minute_buckets": "last_sample_at_ms",
+      ]
+      for (table, source) in backfillSource.sorted(by: { $0.key < $1.key }) {
+        let hasUpdatedAt = try db.columns(in: table).contains { $0.name == "updated_at" }
+        if !hasUpdatedAt {
+          try db.execute(sql: "ALTER TABLE \(table) ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0")
+          try db.execute(sql: "UPDATE \(table) SET updated_at = \(source)")
+        }
+        try db.execute(sql: "CREATE INDEX IF NOT EXISTS index_\(table)_updated_at ON \(table)(updated_at)")
+      }
     }
 
     return migrator

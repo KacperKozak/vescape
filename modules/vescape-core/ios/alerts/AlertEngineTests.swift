@@ -21,7 +21,8 @@ final class AlertEngineTests: XCTestCase {
       enabled: true,
       soundType: soundType,
       createdAt: 0,
-      source: nil
+      source: nil,
+      updatedAt: 0
     )
   }
 

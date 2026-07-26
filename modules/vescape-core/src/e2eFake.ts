@@ -3,6 +3,7 @@ import type { EventSubscription } from 'expo-modules-core'
 import type {
   AppSettings,
   Board,
+  BoardInput,
   BoardProbeProgressEvent,
   BoardProbeResult,
   DeviceFoundEvent,
@@ -679,12 +680,14 @@ export const e2eFake = {
     return [...e2eBoards]
   },
 
-  upsertBoard(board: Board): void {
-    const index = e2eBoards.findIndex((b) => b.id === board.id)
+  upsertBoard(board: BoardInput): void {
+    // Stand in for native: the sync cursor is stamped by the store on every write, never by the caller.
+    const stored: Board = { ...board, updatedAt: Date.now() }
+    const index = e2eBoards.findIndex((b) => b.id === stored.id)
     if (index >= 0) {
-      e2eBoards[index] = board
+      e2eBoards[index] = stored
     } else {
-      e2eBoards.push(board)
+      e2eBoards.push(stored)
     }
   },
 
@@ -702,13 +705,17 @@ export const e2eFake = {
   },
 
   seedE2EData(flow: string): void {
+    // Seeded rows stand in for freshly inserted ones, where the sync cursor equals `createdAt`.
+    const seededAt = Date.now()
+
     if (flow === 'connect-board') {
       const boardId = 'e2e-board-1'
       const board: Board = {
         id: boardId,
         name: 'E2E Board',
         description: 'Seeded by Maestro',
-        createdAt: Date.now(),
+        createdAt: seededAt,
+        updatedAt: seededAt,
         batteryConfig: {
           mode: 'preset',
           cellPresetId: 'molicel:21700:p50b',
@@ -729,7 +736,8 @@ export const e2eFake = {
         id: boardId,
         name: 'E2E History Board',
         description: 'Seeded by Maestro',
-        createdAt: Date.now(),
+        createdAt: seededAt,
+        updatedAt: seededAt,
         batteryConfig: {
           mode: 'preset',
           cellPresetId: 'molicel:21700:p50b',
@@ -751,7 +759,8 @@ export const e2eFake = {
         id: boardId,
         name: 'E2E Privacy Board',
         description: 'Seeded by Maestro',
-        createdAt: Date.now(),
+        createdAt: seededAt,
+        updatedAt: seededAt,
         batteryConfig: {
           mode: 'preset',
           cellPresetId: 'molicel:21700:p50b',

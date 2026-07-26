@@ -385,8 +385,15 @@ interface TelemetryDao {
   @Insert(onConflict = OnConflictStrategy.REPLACE)
   suspend fun upsertAlertRule(rule: AlertRuleEntity)
 
-  @Query("UPDATE alerts SET enabled = :enabled WHERE board_id = :boardId AND id = :id")
-  suspend fun setAlertRuleEnabled(boardId: String, id: String, enabled: Boolean)
+  /**
+   * Targeted toggle. Unlike the `@Insert` upserts it never round-trips an entity, so `updated_at`
+   * has to move here explicitly — without it, toggling a rule leaves the sync cursor stale and the
+   * change never reaches the server.
+   *
+   * @parity /modules/vescape-core/ios/telemetry/AppDataRepository.swift `setAlertRuleEnabled`
+   */
+  @Query("UPDATE alerts SET enabled = :enabled, updated_at = :updatedAt WHERE board_id = :boardId AND id = :id")
+  suspend fun setAlertRuleEnabled(boardId: String, id: String, enabled: Boolean, updatedAt: Long)
 
   @Query("DELETE FROM alerts WHERE board_id = :boardId AND id = :id")
   suspend fun deleteAlertRule(boardId: String, id: String)
@@ -588,6 +595,9 @@ private fun TelemetryMinuteBucketEntity.merge(next: TelemetryMinuteBucketEntity)
     },
     firstMovingAtMs = mergeNullableMin(firstMovingAtMs, next.firstMovingAtMs),
     lastMovingAtMs = mergeNullableMax(lastMovingAtMs, next.lastMovingAtMs),
+    // The merged row is being written now, so `next` carries the fresher stamp. `maxOf` keeps the
+    // cursor monotonic even if the device clock steps backwards between writes.
+    updatedAt = maxOf(updatedAt, next.updatedAt),
   )
 }
 

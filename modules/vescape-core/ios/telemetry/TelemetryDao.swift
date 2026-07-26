@@ -83,7 +83,11 @@ internal func insertFrame(_ db: Database, _ state: FullTelemetryState) throws {
   )
 }
 
-internal func upsertBucket(_ db: Database, _ b: TelemetryBucket) throws {
+/// [now] is the incremental-sync cursor stamped on the row, so every append or rebuild that reaches
+/// the database is visible to cursor sync. `MAX` on conflict keeps it monotonic even if the device
+/// clock steps backwards between writes.
+/// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryBucketBuilder.kt `toEntity`
+internal func upsertBucket(_ db: Database, _ b: TelemetryBucket, now: Int64 = telemetryNowMs()) throws {
   try db.execute(
     sql: """
       INSERT INTO telemetry_minute_buckets (
@@ -93,8 +97,8 @@ internal func upsertBucket(_ db: Database, _ b: TelemetryBucket) throws {
         max_battery_current_abs_ma, battery_used_wh_milli, battery_regen_wh_milli, max_duty_abs_permille,
         fault_count, first_odometer_cm, last_odometer_cm, gps_point_count, precise_gps_point_count,
         gps_distance_cm, max_gps_speed_centi_mps, max_temp_mosfet_deci_c, max_temp_motor_deci_c,
-        first_latitude_e7, first_longitude_e7, first_moving_at_ms, last_moving_at_ms
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)
+        first_latitude_e7, first_longitude_e7, first_moving_at_ms, last_moving_at_ms, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(bucket_start_ms, device_id) DO UPDATE SET
         device_name=excluded.device_name,
         sample_count=telemetry_minute_buckets.sample_count + excluded.sample_count,
@@ -117,7 +121,8 @@ internal func upsertBucket(_ db: Database, _ b: TelemetryBucket) throws {
         max_temp_mosfet_deci_c=MAX(telemetry_minute_buckets.max_temp_mosfet_deci_c, excluded.max_temp_mosfet_deci_c),
         max_temp_motor_deci_c=MAX(telemetry_minute_buckets.max_temp_motor_deci_c, excluded.max_temp_motor_deci_c),
         first_moving_at_ms=MIN(telemetry_minute_buckets.first_moving_at_ms, excluded.first_moving_at_ms),
-        last_moving_at_ms=MAX(telemetry_minute_buckets.last_moving_at_ms, excluded.last_moving_at_ms)
+        last_moving_at_ms=MAX(telemetry_minute_buckets.last_moving_at_ms, excluded.last_moving_at_ms),
+        updated_at=MAX(telemetry_minute_buckets.updated_at, excluded.updated_at)
       """,
     arguments: [
       b.bucketStartMs, b.deviceId, b.deviceName, b.sampleCount, b.firstSampleAtMs, b.lastSampleAtMs,
@@ -125,7 +130,7 @@ internal func upsertBucket(_ db: Database, _ b: TelemetryBucket) throws {
       b.minBatteryVoltageMv, b.maxMotorCurrentAbsMa, b.maxBatteryCurrentAbsMa, b.batteryUsedWhMilli,
       b.batteryRegenWhMilli, b.maxDutyAbsPermille, b.faultCount, b.firstOdometerCm, b.lastOdometerCm,
       b.gpsPointCount, b.preciseGpsPointCount, b.maxGpsSpeedCentiMps, b.maxTempMosfetDeciC,
-      b.maxTempMotorDeciC, b.firstLatitudeE7, b.firstLongitudeE7, b.firstMovingAtMs, b.lastMovingAtMs,
+      b.maxTempMotorDeciC, b.firstLatitudeE7, b.firstLongitudeE7, b.firstMovingAtMs, b.lastMovingAtMs, now,
     ]
   )
 }

@@ -25,9 +25,20 @@ final class AppDataRepository {
   /// `CoreForegroundService.emitEvent` static — a module-owned emit the repo funnels through.
   static var onDataChanged: ((String) -> Void)?
 
-  private var pool: DatabasePool? { TelemetryDatabase.pool }
+  /// Test seam, mirroring `TuneProfileStore(dbWriter:)` / `BoardWarningStore(dbWriter:)`: nil in the
+  /// app so every access follows the shared pool (including a hot-swap after a restore).
+  private let dbWriter: (any DatabaseWriter)?
 
-  private init() {}
+  private var writer: (any DatabaseWriter)? { dbWriter ?? TelemetryDatabase.pool }
+
+  private init(dbWriter: (any DatabaseWriter)? = nil) {
+    self.dbWriter = dbWriter
+  }
+
+  /// In-memory instance for DB-backed tests. The app always uses `shared`.
+  static func forTesting(dbWriter: any DatabaseWriter) -> AppDataRepository {
+    AppDataRepository(dbWriter: dbWriter)
+  }
 
   /// Notify JS that persisted data in [scope] changed, so the matching store reloads and stays in
   /// sync without an app restart. Every mutating method below funnels through here — new writes get
@@ -39,13 +50,13 @@ final class AppDataRepository {
   }
 
   private func read<T>(_ fallback: T, _ body: (Database) throws -> T) -> T {
-    guard let pool else { return fallback }
-    return (try? pool.read(body)) ?? fallback
+    guard let writer else { return fallback }
+    return (try? writer.read(body)) ?? fallback
   }
 
   private func write(_ body: @escaping (Database) throws -> Void) {
-    guard let pool else { return }
-    try? pool.write(body)
+    guard let writer else { return }
+    try? writer.write(body)
   }
 
   private func nowMs() -> Int64 { Int64(Date().timeIntervalSince1970 * 1000) }
@@ -56,7 +67,7 @@ final class AppDataRepository {
     read([]) { db in
       let boards = try Row.fetchAll(
         db,
-        sql: "SELECT id, name, ble_id, transport, created_at FROM boards ORDER BY created_at ASC"
+        sql: "SELECT id, name, ble_id, transport, created_at, updated_at FROM boards ORDER BY created_at ASC"
       )
       let settings = try Row.fetchAll(db, sql: "SELECT board_id, key, value_json FROM board_settings")
       var byBoard: [String: [(String, String)]] = [:]
@@ -72,7 +83,7 @@ final class AppDataRepository {
     read(nil) { db in
       guard let board = try Row.fetchOne(
         db,
-        sql: "SELECT id, name, ble_id, transport, created_at FROM boards WHERE id = ? LIMIT 1",
+        sql: "SELECT id, name, ble_id, transport, created_at, updated_at FROM boards WHERE id = ? LIMIT 1",
         arguments: [id]
       ) else { return nil }
       let settings = try Row.fetchAll(
@@ -103,12 +114,18 @@ final class AppDataRepository {
       // Legal Mode changes only through the dedicated native intent.
     ] + linkSettings.filter { $0.0 != "transport" }
     let transport = linkSettings.first { $0.0 == "transport" }?.1 as? String
+    // One stamp for the board row's sync cursor and every board-setting row written below. Native
+    // stamps it rather than trusting the bridge value: it must come from the device clock that
+    // already writes `created_at` and must move on every upsert, including partial edits.
     let updatedAt = nowMs()
 
     write { db in
       try db.execute(
-        sql: "INSERT OR REPLACE INTO boards (id, name, ble_id, transport, created_at) VALUES (?, ?, ?, ?, ?)",
-        arguments: [id, name, bleId, transport, createdAt]
+        sql: """
+          INSERT OR REPLACE INTO boards (id, name, ble_id, transport, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?)
+          """,
+        arguments: [id, name, bleId, transport, createdAt, updatedAt]
       )
       for (key, value) in settings {
         guard let value, let json = Self.encodeJson(value) else {
@@ -186,6 +203,7 @@ final class AppDataRepository {
       "alertPresetsOnboarded": values["alertPresetsOnboarded"] ?? false,
       "legalMode": values["legalMode"] ?? ["enabled": false],
       "link": link,
+      "updatedAt": row["updated_at"] as Int64,
     ]
   }
 
@@ -269,6 +287,7 @@ final class AppDataRepository {
           "soundType": row["sound_type"] as String,
           "createdAt": row["created_at"] as Int64,
           "source": row["source"] as String?,
+          "updatedAt": row["updated_at"] as Int64,
         ]
       }
     }
@@ -294,7 +313,8 @@ final class AppDataRepository {
           enabled: (row["enabled"] as Int64) != 0,
           soundType: row["sound_type"] as String,
           createdAt: row["created_at"] as Int64,
-          source: row["source"] as String?
+          source: row["source"] as String?,
+          updatedAt: row["updated_at"] as Int64
         )
       }
     }
@@ -312,22 +332,32 @@ final class AppDataRepository {
     let soundType = rule["soundType"] as? String ?? "default"
     let createdAt = Self.longValue(rule["createdAt"] ?? nil) ?? nowMs()
     let source = rule["source"] as? String
+    // Native stamps the sync cursor rather than trusting the bridge value: it must come from the
+    // device clock that already writes `created_at` and must move on every upsert.
+    let updatedAt = nowMs()
     write { db in
       try db.execute(
         sql: """
-          INSERT OR REPLACE INTO alerts (board_id, id, control_id, threshold, threshold_max, enabled, sound_type, created_at, source)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT OR REPLACE INTO alerts (board_id, id, control_id, threshold, threshold_max, enabled, sound_type, created_at, source, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           """,
-        arguments: [boardId, id, controlId, threshold, thresholdMax, enabled ? 1 : 0, soundType, createdAt, source]
+        arguments: [
+          boardId, id, controlId, threshold, thresholdMax, enabled ? 1 : 0, soundType, createdAt, source, updatedAt,
+        ]
       )
     }
   }
 
+  /// Targeted toggle. Unlike `upsertAlertRule` it never rewrites the whole row, so `updated_at` has
+  /// to move here explicitly — without it, toggling a rule leaves the sync cursor stale and the
+  /// change never reaches the server.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDao.kt `setAlertRuleEnabled`
   func setAlertRuleEnabled(_ boardId: String, _ id: String, _ enabled: Bool) {
+    let updatedAt = nowMs()
     write { db in
       try db.execute(
-        sql: "UPDATE alerts SET enabled = ? WHERE board_id = ? AND id = ?",
-        arguments: [enabled ? 1 : 0, boardId, id]
+        sql: "UPDATE alerts SET enabled = ?, updated_at = ? WHERE board_id = ? AND id = ?",
+        arguments: [enabled ? 1 : 0, updatedAt, boardId, id]
       )
     }
   }

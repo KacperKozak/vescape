@@ -109,7 +109,10 @@ data class TelemetryFrameEntity(
 @Entity(
   tableName = "telemetry_minute_buckets",
   primaryKeys = ["bucket_start_ms", "device_id"],
-  indices = [Index(value = ["bucket_start_ms"])],
+  indices = [
+    Index(value = ["bucket_start_ms"]),
+    Index(value = ["updated_at"]),
+  ],
 )
 data class TelemetryMinuteBucketEntity(
   @ColumnInfo(name = "bucket_start_ms")
@@ -170,6 +173,14 @@ data class TelemetryMinuteBucketEntity(
   val firstMovingAtMs: Long? = null,
   @ColumnInfo(name = "last_moving_at_ms")
   val lastMovingAtMs: Long? = null,
+  /**
+   * Incremental-sync cursor: wall-clock epoch ms of the last write to this bucket. Distinct from
+   * [lastSampleAtMs], which tracks the newest *sample* in the bucket — a merge that folds in older
+   * samples, or a bucket rebuild, changes the row without moving that. Only a write-time stamp
+   * makes an appended bucket visible to a "everything changed since T" query.
+   */
+  @ColumnInfo(name = "updated_at")
+  val updatedAt: Long,
 )
 
 @Entity(
@@ -228,6 +239,7 @@ data class DiagnosticEventEntity(
   tableName = "boards",
   indices = [
     Index(value = ["created_at"]),
+    Index(value = ["updated_at"]),
   ],
 )
 data class BoardEntity(
@@ -238,6 +250,13 @@ data class BoardEntity(
   val bleId: String?,
   @ColumnInfo(name = "created_at")
   val createdAt: Long,
+  /**
+   * Incremental-sync cursor: epoch ms of the last write to this row, from the same clock as
+   * [createdAt]. Equal to [createdAt] on insert and bumped on every mutation, so the client can ask
+   * the server for "everything changed since T". Indexed because cursor sync scans on it.
+   */
+  @ColumnInfo(name = "updated_at")
+  val updatedAt: Long,
 )
 
 @Entity(
@@ -265,6 +284,7 @@ data class BoardSettingEntity(
     Index(value = ["control_id"]),
     Index(value = ["enabled"]),
     Index(value = ["created_at"]),
+    Index(value = ["updated_at"]),
   ],
 )
 data class AlertRuleEntity(
@@ -286,6 +306,14 @@ data class AlertRuleEntity(
    * JS authors and regenerates preset rules; native only persists the string.
    */
   val source: String?,
+  /**
+   * Incremental-sync cursor: epoch ms of the last write to this row, from the same clock as
+   * [createdAt]. Equal to [createdAt] on insert and bumped on every mutation — including the
+   * targeted enable/disable update — so a toggled rule is visible to sync. Indexed because cursor
+   * sync scans on it.
+   */
+  @ColumnInfo(name = "updated_at")
+  val updatedAt: Long,
 )
 
 @Entity(

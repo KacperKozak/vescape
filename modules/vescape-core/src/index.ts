@@ -163,11 +163,19 @@ export interface BoardLink {
   refloatBaseVersion?: string
 }
 
+// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryEntities.kt `BoardEntity`
+// @parity /modules/vescape-core/ios/telemetry/AppDataRepository.swift `composeBoard`
 export interface Board {
   id: string
   name: string
   description: string | null
   createdAt: number
+  /**
+   * Incremental-sync cursor: epoch ms of the last write to this board, from the same clock as
+   * {@link createdAt}. Native stamps it on every upsert (including partial edits), so a value sent
+   * from JS is ignored — read it, do not author it.
+   */
+  updatedAt: number
   batteryConfig: BatteryConfig | null
   /** Last Battery SoC Estimate persisted natively; survives full app kill. `undefined` before first session. */
   lastBattery?: LastBattery | null
@@ -206,6 +214,12 @@ export interface Board {
   /** Probe-confirmed reachability. `null` means offline-only/unlinked. */
   link: BoardLink | null
 }
+
+/**
+ * Write shape for {@link upsertBoard}. Native stamps `updatedAt` from its own clock on every write,
+ * so callers never author it — a board that has never been persisted has no cursor yet.
+ */
+export type BoardInput = Omit<Board, 'updatedAt'>
 
 export interface LastBattery {
   percent: number
@@ -256,11 +270,23 @@ export interface AlertRule {
   soundType: AlertSoundType
   createdAt: number
   /**
+   * Incremental-sync cursor: epoch ms of the last write to this rule, from the same clock as
+   * {@link createdAt}. Native stamps it on every upsert and on the enable/disable toggle, so a
+   * value sent from JS is ignored — read it, do not author it.
+   */
+  updatedAt: number
+  /**
    * Provenance tag. `manual` (or absent) = rider-authored. `preset` rules are generated + owned
    * by JS orchestration and regenerated wholesale; native persists the string opaquely.
    */
   source?: 'manual' | 'preset'
 }
+
+/**
+ * Write shape for {@link upsertAlertRule}. Native stamps `updatedAt` from its own clock on every
+ * write, so callers never author it — a rule that has never been persisted has no cursor yet.
+ */
+export type AlertRuleInput = Omit<AlertRule, 'updatedAt'>
 
 export type PrivacyZonePreset = 'home' | 'work' | 'custom'
 
@@ -1407,10 +1433,10 @@ type VescapeCoreNativeModule = NativeEventEmitter<VescapeCoreEvents> & {
   deleteTelemetryRange(options: TelemetryDeleteRangeOptions): Promise<number>
   clearTelemetryHistory(): Promise<void>
   getBoards(): Promise<Board[]>
-  upsertBoard(board: Board): Promise<void>
+  upsertBoard(board: BoardInput): Promise<void>
   deleteBoard(id: string): Promise<void>
   getAlertRules(boardId: string): Promise<AlertRule[]>
-  upsertAlertRule(rule: AlertRule): Promise<void>
+  upsertAlertRule(rule: AlertRuleInput): Promise<void>
   setAlertRuleEnabled(boardId: string, id: string, enabled: boolean): Promise<void>
   deleteAlertRule(boardId: string, id: string): Promise<void>
   getPrivacyZones(): Promise<PrivacyZone[]>
@@ -2012,7 +2038,7 @@ export async function getBoards(): Promise<Board[]> {
   return native.getBoards()
 }
 
-export async function upsertBoard(board: Board): Promise<void> {
+export async function upsertBoard(board: BoardInput): Promise<void> {
   if (E2E_ENABLED) {
     e2eFake.upsertBoard(board)
     return
@@ -2028,7 +2054,7 @@ export async function getAlertRules(boardId: string): Promise<AlertRule[]> {
   return native.getAlertRules(boardId)
 }
 
-export async function upsertAlertRule(rule: AlertRule): Promise<void> {
+export async function upsertAlertRule(rule: AlertRuleInput): Promise<void> {
   return native.upsertAlertRule(rule)
 }
 

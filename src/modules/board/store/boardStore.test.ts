@@ -101,6 +101,7 @@ test('stored Board Link survives a store reload from native boards', async () =>
     name: 'ADV',
     description: null,
     createdAt: 1,
+    updatedAt: 1,
     batteryConfig: null,
     link: null,
   }
@@ -130,6 +131,7 @@ test('updated battery config survives a store reload from native boards', async 
     name: 'ADV',
     description: null,
     createdAt: 1,
+    updatedAt: 1,
     batteryConfig: {
       mode: 'preset',
       cellPresetId: 'molicel:21700:p50b',

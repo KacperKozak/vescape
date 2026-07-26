@@ -28,6 +28,7 @@ function makeBoard(overrides?: {
     name: 'Board',
     description: null,
     createdAt: 1,
+    updatedAt: 1,
     // Honor an explicit `null` (invalid config) — `??` would swallow it back to the valid default.
     batteryConfig:
       overrides && 'batteryConfig' in overrides ? (overrides.batteryConfig ?? null) : VALID_BATTERY,
@@ -126,6 +127,7 @@ test('manual rules and other metrics survive a preset regeneration', async () =>
     enabled: true,
     soundType: 'preset:beep',
     createdAt: 1,
+    updatedAt: 1,
     source: 'manual',
   }
   const otherPreset: AlertRule = {
@@ -137,6 +139,7 @@ test('manual rules and other metrics survive a preset regeneration', async () =>
     enabled: true,
     soundType: 'preset:tick',
     createdAt: 1,
+    updatedAt: 1,
     source: 'preset',
   }
   const { useAlertsStore, useAlertPresetStore } = await setup({ seedRules: [manual, otherPreset] })
@@ -185,6 +188,7 @@ test('editing an inactive board regenerates only that board rules', async () => 
     enabled: true,
     soundType: 'preset:tick',
     createdAt: 1,
+    updatedAt: 1,
     source: 'preset',
   }
   getAlertRules.mockImplementation(async (boardId: string) =>
