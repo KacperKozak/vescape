@@ -84,8 +84,14 @@ internal func insertFrame(_ db: Database, _ state: FullTelemetryState) throws {
 }
 
 /// [now] is the incremental-sync cursor stamped on the row, so every append or rebuild that reaches
-/// the database is visible to cursor sync. `MAX` on conflict keeps it monotonic even if the device
-/// clock steps backwards between writes.
+/// the database is visible to cursor sync. `MAX` on conflict clamps a backwards device-clock step:
+/// the value stays at the last real write time instead of regressing below a cursor already synced.
+/// Bounded and self-correcting — once the clock passes the old value again the stamp is truthful,
+/// unlike a ratcheting `existing + 1` counter, which would permanently inflate this row against
+/// other devices under last-write-wins.
+///
+/// Not a completeness guarantee: a frozen stamp is only picked up because the sync query is
+/// `updated_at >= watermark`. Clock-rewind completeness is tracked separately (see #275).
 /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryBucketBuilder.kt `toEntity`
 internal func upsertBucket(_ db: Database, _ b: TelemetryBucket, now: Int64 = telemetryNowMs()) throws {
   try db.execute(
