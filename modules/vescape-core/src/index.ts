@@ -179,6 +179,30 @@ export interface Board {
    * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/AppDataRepository.kt `normalizeDismissedWarnings`
    */
   dismissedWarnings?: string[]
+  /**
+   * Board Top Speed in km/h (renamed from the former profile-level Rider Top Speed): the rider's
+   * self-assessed max on this Board. Drives the speed gauge full-scale and the km/h thresholds a
+   * speed Alert Preset resolves to. Not a legal or firmware limit. Absent ⇒ display default 50.
+   */
+  topSpeedKmh?: number
+  /**
+   * Durable per-metric Alert Preset level selection for this Board. JS owns behavior; native only
+   * persists this bag. Absent ⇒ all metrics Off (no preset rules until the rider touches setup).
+   */
+  alertPreset?: Record<string, unknown> | null
+  /**
+   * One-time gate for the guided Alert Preset step in the add-board wizard, per Board. False until
+   * the rider completes that step for this Board. The durable setup home is the Alerts settings
+   * entry regardless of this flag.
+   */
+  alertPresetsOnboarded?: boolean
+  /**
+   * Durable per-Board Legal Mode activation. Native owns behavior and persists this setting;
+   * JS reads it and sends the dedicated activation intent. Absent ⇒ disabled.
+   * @parity /modules/vescape-core/ios/telemetry/AppDataRepository.swift `composeBoard`
+   * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/AppDataRepository.kt `toMap`
+   */
+  legalMode?: { enabled: boolean }
   /** Probe-confirmed reachability. `null` means offline-only/unlinked. */
   link: BoardLink | null
 }
@@ -211,17 +235,19 @@ export type AlertSoundType = string
  * @parity /modules/vescape-core/ios/alerts/AlertAudioPlayer.swift `alertCategorySingle`, `alertCategoryGeiger`
  * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/alerts/AlertEngine.kt `ALERT_CATEGORY_SINGLE`, `ALERT_CATEGORY_GEIGER`
  */
-export type AlertPresetCategory = 'single' | 'geiger'
+export type AlertSoundCategory = 'single' | 'geiger'
 
-export interface AlertPreset {
+export interface AlertSound {
   name: string
   uri: string
-  category: AlertPresetCategory
+  category: AlertSoundCategory
 }
 
 // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryEntities.kt `AlertRuleEntity`
 // @parity /modules/vescape-core/ios/alerts/AlertEngine.swift `AlertRule`
 export interface AlertRule {
+  /** Owning Board. The alert engine evaluates only the connected Board's rules (see docs/alerts.md). */
+  boardId: string
   id: string
   controlId: string
   threshold: number
@@ -229,7 +255,11 @@ export interface AlertRule {
   enabled: boolean
   soundType: AlertSoundType
   createdAt: number
-  source?: 'manual' | 'legal-mode'
+  /**
+   * Provenance tag. `manual` (or absent) = rider-authored. `preset` rules are generated + owned
+   * by JS orchestration and regenerated wholesale; native persists the string opaquely.
+   */
+  source?: 'manual' | 'preset'
 }
 
 export type PrivacyZonePreset = 'home' | 'work' | 'custom'
@@ -767,6 +797,10 @@ export interface ProfileStatsMonth {
   month: number
 }
 
+export interface LegalPolicyReference {
+  jurisdictionCode: string
+}
+
 /**
  * Durable app-scoped settings. The keys here are a TS/Android/iOS parity triangle — every field is
  * persisted natively and projected back through {@link getSettings}/{@link updateSetting}. The
@@ -862,8 +896,8 @@ export interface AppSettings {
   riderName: string | null
   /** Rider-chosen marker color (hex) shown on other Riders' maps. Null when unset. */
   riderColor: string | null
-  /** Durable Legal Mode UI/default state. JS owns behavior; native only persists this bag. */
-  legalMode: Record<string, unknown> | null
+  /** Native-resolved app-wide jurisdiction reference. Policy values live in shared catalog data. */
+  legalPolicy: LegalPolicyReference | null
   /**
    * Community Message IDs the rider permanently acknowledged (dismissed or acted on). A dismissed
    * ID stays hidden across launches; a revised message re-appears only under a new ID. Native stores
@@ -1283,7 +1317,7 @@ type VescapeCoreNativeModule = NativeEventEmitter<VescapeCoreEvents> & {
   reloadAlertRules(): void
   getCriticalRideNotificationPermissionStatus(): Promise<CriticalRideNotificationPermissionStatus>
   requestCriticalRideNotificationPermission(): Promise<CriticalRideNotificationPermissionStatus>
-  getAlertPresets(): AlertPreset[]
+  getAlertSounds(): AlertSound[]
   previewAlertSound(soundType: AlertSoundType): void
   startGeigerSimulation(soundType: string, rangeDepth: number): void
   stopGeigerSimulation(): void
@@ -1375,10 +1409,10 @@ type VescapeCoreNativeModule = NativeEventEmitter<VescapeCoreEvents> & {
   getBoards(): Promise<Board[]>
   upsertBoard(board: Board): Promise<void>
   deleteBoard(id: string): Promise<void>
-  getAlertRules(): Promise<AlertRule[]>
+  getAlertRules(boardId: string): Promise<AlertRule[]>
   upsertAlertRule(rule: AlertRule): Promise<void>
-  setAlertRuleEnabled(id: string, enabled: boolean): Promise<void>
-  deleteAlertRule(id: string): Promise<void>
+  setAlertRuleEnabled(boardId: string, id: string, enabled: boolean): Promise<void>
+  deleteAlertRule(boardId: string, id: string): Promise<void>
   getPrivacyZones(): Promise<PrivacyZone[]>
   upsertPrivacyZone(zone: PrivacyZone): Promise<void>
   setPrivacyZoneEnabled(id: string, enabled: boolean): Promise<void>
@@ -1388,6 +1422,8 @@ type VescapeCoreNativeModule = NativeEventEmitter<VescapeCoreEvents> & {
   replaceDirectionMapPoint(point: MapPoint): Promise<void>
   deleteMapPoint(id: string): Promise<void>
   getSettings(): Promise<AppSettings>
+  refreshLegalPolicy(): Promise<void>
+  setLegalMode(boardId: string, enabled: boolean): Promise<void>
   updateSetting(
     key: string,
     value: number | boolean | string | string[] | Record<string, unknown> | null,
@@ -1554,7 +1590,7 @@ export async function requestCriticalRideNotificationPermission(): Promise<Criti
   }
 }
 
-const FALLBACK_PRESETS: AlertPreset[] = [
+const FALLBACK_PRESETS: AlertSound[] = [
   { name: 'Beep', uri: 'preset:beep', category: 'single' },
   { name: 'Urgent', uri: 'preset:urgent', category: 'single' },
   { name: 'Notify', uri: 'preset:notify', category: 'single' },
@@ -1563,9 +1599,9 @@ const FALLBACK_PRESETS: AlertPreset[] = [
   { name: 'Gamma', uri: 'preset:gamma', category: 'geiger' },
 ]
 
-export function getAlertPresets(): AlertPreset[] {
+export function getAlertSounds(): AlertSound[] {
   try {
-    return native.getAlertPresets()
+    return native.getAlertSounds()
   } catch {
     return FALLBACK_PRESETS
   }
@@ -1988,20 +2024,24 @@ export async function deleteBoard(id: string): Promise<void> {
   return native.deleteBoard(id)
 }
 
-export async function getAlertRules(): Promise<AlertRule[]> {
-  return native.getAlertRules()
+export async function getAlertRules(boardId: string): Promise<AlertRule[]> {
+  return native.getAlertRules(boardId)
 }
 
 export async function upsertAlertRule(rule: AlertRule): Promise<void> {
   return native.upsertAlertRule(rule)
 }
 
-export async function setAlertRuleEnabled(id: string, enabled: boolean): Promise<void> {
-  return native.setAlertRuleEnabled(id, enabled)
+export async function setAlertRuleEnabled(
+  boardId: string,
+  id: string,
+  enabled: boolean,
+): Promise<void> {
+  return native.setAlertRuleEnabled(boardId, id, enabled)
 }
 
-export async function deleteAlertRule(id: string): Promise<void> {
-  return native.deleteAlertRule(id)
+export async function deleteAlertRule(boardId: string, id: string): Promise<void> {
+  return native.deleteAlertRule(boardId, id)
 }
 
 export async function getPrivacyZones(): Promise<PrivacyZone[]> {
@@ -2054,6 +2094,27 @@ export async function getSettings(): Promise<AppSettings> {
     return e2eFake.getSettings()
   }
   return native.getSettings()
+}
+
+/**
+ * @parity /modules/vescape-core/ios/VescapeCoreModule.swift `refreshLegalPolicy`
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `refreshLegalPolicy`
+ */
+export async function refreshLegalPolicy(): Promise<void> {
+  if (E2E_ENABLED) return
+  return native.refreshLegalPolicy()
+}
+
+/**
+ * @parity /modules/vescape-core/ios/VescapeCoreModule.swift `setLegalMode`
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `setLegalMode`
+ */
+export async function setLegalMode(boardId: string, enabled: boolean): Promise<void> {
+  if (E2E_ENABLED) {
+    e2eFake.setLegalMode(boardId, enabled)
+    return
+  }
+  return native.setLegalMode(boardId, enabled)
 }
 
 export async function updateSetting(

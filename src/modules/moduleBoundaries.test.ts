@@ -18,20 +18,19 @@ const ALLOWED_EDGES = new Set([
   'alerts -> battery',
   'board -> battery',
   // settings store is app-settings truth read by domain stores
+  'alerts -> settings',
   'board -> settings',
   'history -> settings',
   'legal -> settings',
   // release reads/persists dismissed Community Message IDs through App Settings
   'release -> settings',
   // settings defaults sourced from owning domains
+  'settings -> alerts',
   'settings -> history',
   'settings -> legal',
   'settings -> map',
   // rider trails/pins are map layers and share map rendering defaults
   'group-ride -> map',
-  // legal mode drives alert rules; alerts render the legal-mode rule
-  'alerts -> legal',
-  'legal -> alerts',
   // TODO(decouple): board components read alertsStore + history color scale
   'board -> alerts',
   'board -> history',

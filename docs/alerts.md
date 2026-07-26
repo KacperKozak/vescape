@@ -5,18 +5,33 @@ JS layer may be suspended during a ride. Alerts are evaluated natively so they f
 ## Data flow
 
 ```
-JS calls VescapeCore alert CRUD → native Room storage updates → CoreForegroundService reloads rules
+JS calls VescapeCore alert CRUD / Legal Mode intent → native storage updates → native reloads rules
 CoreForegroundService: each BLE packet → evaluateAlerts() → SoundPool/TextToSpeech + Vibrator
 Fired alerts embedded in that packet's telemetry map → visible in recentTelemetry
 ```
 
 No separate event. No JS-side audio. Native storage is the source of truth.
 
+## Per-board ownership
+
+Alert Rules are owned by one Board. The native alert engine loads **only the connected Board's**
+enabled rules at session start (and on any rule edit), so switching Boards switches the effective rule
+set — engine and UI both. Deleting a Board deletes its rules. Rules for a non-connected Board never
+evaluate.
+
+Preset rule ids (`preset:<metric>:<index>`) repeat across Boards; uniqueness is per Board via the
+composite primary key `(board_id, id)`.
+
+Legal Mode is durable per-Board state in `board_settings`, independent of Board-owned Alert Rule
+rows. Native combines that Board's `legalMode.enabled` with the app-wide Legal Policy jurisdiction
+and adds a virtual geiger speed rule whenever rules load. Nothing is written to `alerts`.
+
 ## Schema — `alerts` table
 
 | column          | type          | notes                                                          |
 | --------------- | ------------- | -------------------------------------------------------------- |
-| `id`            | TEXT PK       | UUID                                                           |
+| `board_id`      | TEXT          | owning Board; PK is `(board_id, id)`                           |
+| `id`            | TEXT          | UUID or `preset:<metric>:<index>`                              |
 | `control_id`    | TEXT          | see Control IDs below                                          |
 | `threshold`     | REAL          | trigger point                                                  |
 | `threshold_max` | REAL nullable | range upper bound (Geiger mode)                                |
@@ -93,20 +108,95 @@ Runtime behavior:
 - Preview supports `tts:` templates with sample placeholder values.
 - There is no app-level template length limit beyond what native storage and the platform can handle.
 
+## Alert Presets
+
+Presets are a JS-only layer that generates ordinary Alert Rules — native knows nothing about them. A
+rider picks one **level** per **metric**; `generateAlertPresetRules` (`src/modules/alerts/lib/alertPresets.ts`)
+deterministically expands `(metric, level, options)` into concrete rule specs the Alert Preset store
+persists through the same CRUD as manual rules.
+
+### Levels
+
+Four levels, safest first: **Off**, **Safe**, **Normal**, **Pro**. `off` (and any guard failure)
+generates no rules. Safer levels add more warning points and start earlier; Pro warns late and only at
+the extreme.
+
+### Metrics & families
+
+Five metrics, in two feedback families:
+
+| metric            | family   | feedback                                                         |
+| ----------------- | -------- | ---------------------------------------------------------------- |
+| `battery`         | discrete | one TTS rule per SoC % point; needs a valid Board battery config |
+| `motor-temp`      | discrete | one TTS rule per °C point                                        |
+| `controller-temp` | discrete | one TTS rule per °C point                                        |
+| `speed`           | geiger   | one range rule, start scaled by Rider Top Speed                  |
+| `duty`            | geiger   | one range rule over % duty                                       |
+
+- **discrete** → one single-threshold `tts:` rule per configured point.
+- **geiger** → one range rule (`threshold` → `thresholdMax`); the start drops with protection while the
+  ceiling stays fixed.
+
+Values seed from the shared `TELEMETRY_THRESHOLDS` where sensible so presets track the visual warning
+tiers. Tune counts/values only in `alertPresets.ts` — never in native or components.
+
+### Provenance & regeneration
+
+Preset rules carry `source = "preset"` (`ALERT_PRESET_SOURCE`) with deterministic ids
+(`presetAlertRuleId(metric, index)`) and the active Board's `board_id`. Changing a level regenerates
+that one metric wholesale (delete-then-upsert scoped to its preset rules on that Board) — manual rules
+and other metrics' preset rules survive. The per-metric level selection is the durable `alertPreset`
+**Board Settings** bag; regeneration reads it back plus that Board's Board Top Speed and battery config.
+
+### Board Top Speed
+
+`topSpeedKmh` (a **Board Settings** key, renamed from the former profile-level Rider Top Speed) scales
+the speed preset's thresholds and the speed gauge full-scale — it is the rider's self-assessed top speed
+for that Board, not a legal or firmware limit. Changing it regenerates the speed preset. Missing ⇒
+display default 50 km/h.
+
+### Board Settings keys
+
+Four per-Board keys drive Alert Presets and Legal Mode, backed by the `board_settings` table and composed onto the
+`Board` object (like `batteryConfig`). Missing keys normalize to display defaults; no preset rules are
+generated until the rider touches setup:
+
+| key                     | default  | meaning                                          |
+| ----------------------- | -------- | ------------------------------------------------ |
+| `alertPreset`           | null     | per-metric level selection bag (null ⇒ all Off)  |
+| `topSpeedKmh`           | 50       | Board Top Speed (km/h)                           |
+| `alertPresetsOnboarded` | false    | one-time guided-setup gate for this Board        |
+| `legalMode`             | disabled | native-owned `{ enabled }` Legal Mode activation |
+
+### Setup surfaces
+
+The same setup (Board Top Speed + all five sliders, `AlertPresetSetup`) is reached two ways:
+
+- **Add-board wizard** — a `presets` step shown for every new Board (each Board gets its own guided
+  setup). The step edits a draft; on save the draft is persisted onto the new Board and its preset rules
+  are generated. Completing sets that Board's `alertPresetsOnboarded`.
+- **Settings › Alerts** — the durable home for the active Board, always available.
+
 ## JS side
 
 ```ts
-// store — backed by native VescapeCore APIs
-useAlertsStore.getState().load()        // on app mount
-store.add(controlId, threshold, thresholdMax?)
+// store — backed by native VescapeCore APIs, bound to the active Board (#254)
+store.load(boardId)                     // `startAlertsBoardSync` calls this on every active-board change
+store.add(controlId, threshold, thresholdMax?)   // stamps the bound boardId
 store.toggle(id)
 store.remove(id)
+
+// native API is board-scoped
+getAlertRules(boardId)
+upsertAlertRule(rule)                    // rule carries boardId
+setAlertRuleEnabled(boardId, id, enabled)
+deleteAlertRule(boardId, id)
 
 // fired alerts arrive on every matching telemetry packet
 onTelemetry: (e) => e.firedAlerts?.forEach(a => ...)
 ```
 
-Native alert mutations reload foreground-service rules after writing.
+Native alert mutations reload the connected Board's foreground-service rules after writing.
 
 ## iOS
 

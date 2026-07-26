@@ -17,12 +17,14 @@ import { Stepper } from '@/components/forms/Stepper'
 import { ShowcaseCard } from '@/components/dev/ShowcaseCard'
 import { IconHero } from '@/components/settings/IconHero'
 import { theme } from '@/constants/theme'
+import { BoardTopSpeedCard } from '@/modules/alerts/components/BoardTopSpeedCard'
 import { UpdateAvailablePill } from '@/modules/release/components/UpdateAvailablePill'
 
 export default function SettingsPage() {
   const [darkMode, setDarkMode] = useState(true)
   const [notifications, setNotifications] = useState(false)
   const [threshold, setThreshold] = useState(3)
+  const [boardTopSpeed, setBoardTopSpeed] = useState(50)
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -111,6 +113,10 @@ export default function SettingsPage() {
               onPress={() => {}}
             />
           </SettingsCard>
+        </ShowcaseCard>
+
+        <ShowcaseCard name="BoardTopSpeedCard">
+          <BoardTopSpeedCard value={boardTopSpeed} onChange={setBoardTopSpeed} />
         </ShowcaseCard>
       </ScrollView>
     </SafeAreaView>

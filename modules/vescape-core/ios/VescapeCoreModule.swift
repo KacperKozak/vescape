@@ -57,8 +57,10 @@ public class VescapeCoreModule: Module {
   // MARK: - App data state
 
   private let appData = AppDataRepository.shared
+  private let legalPolicyResolver = LegalPolicyResolver()
+  private let legalPolicyCatalog = LegalPolicyCatalog()
 
-  /// Bundled alert presets surfaced to JS through `getAlertPresets`. Mirrors Android
+  /// Bundled alert sounds surfaced to JS through `getAlertSounds`. Mirrors Android
   /// `alertSoundPresetMaps()`.
   /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/alerts/AlertEngine.kt `alertSoundPresetMaps`
   private let alertPresets: [[String: Any]] = alertSoundPresetMaps()
@@ -256,7 +258,7 @@ public class VescapeCoreModule: Module {
       self.coordinator.previewAlertSound(soundType)
     }
 
-    Function("getAlertPresets") {
+    Function("getAlertSounds") {
       self.alertPresets
     }
 
@@ -640,8 +642,8 @@ public class VescapeCoreModule: Module {
       promise.resolve(nil)
     }
 
-    AsyncFunction("getAlertRules") { (promise: Promise) in
-      promise.resolve(self.appData.getAlertRules())
+    AsyncFunction("getAlertRules") { (boardId: String, promise: Promise) in
+      promise.resolve(self.appData.getAlertRules(boardId))
     }
 
     AsyncFunction("upsertAlertRule") { (rule: [String: Any], promise: Promise) in
@@ -650,14 +652,14 @@ public class VescapeCoreModule: Module {
       promise.resolve(nil)
     }
 
-    AsyncFunction("setAlertRuleEnabled") { (id: String, enabled: Bool, promise: Promise) in
-      self.appData.setAlertRuleEnabled(id, enabled)
+    AsyncFunction("setAlertRuleEnabled") { (boardId: String, id: String, enabled: Bool, promise: Promise) in
+      self.appData.setAlertRuleEnabled(boardId, id, enabled)
       self.coordinator.reloadAlertRules()
       promise.resolve(nil)
     }
 
-    AsyncFunction("deleteAlertRule") { (id: String, promise: Promise) in
-      self.appData.deleteAlertRule(id)
+    AsyncFunction("deleteAlertRule") { (boardId: String, id: String, promise: Promise) in
+      self.appData.deleteAlertRule(boardId, id)
       self.coordinator.reloadAlertRules()
       promise.resolve(nil)
     }
@@ -705,6 +707,49 @@ public class VescapeCoreModule: Module {
 
     AsyncFunction("getSettings") { (promise: Promise) in
       promise.resolve(self.appData.getSettings())
+    }
+
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `refreshLegalPolicy`
+    // @parity /modules/vescape-core/src/index.ts `refreshLegalPolicy`
+    AsyncFunction("refreshLegalPolicy") { (promise: Promise) in
+      let settings = self.appData.getSettings()
+      let latitude = settings["lastGpsLatitude"] as? Double
+      let longitude = settings["lastGpsLongitude"] as? Double
+      Task {
+        let countryCode = if let latitude, let longitude {
+          await self.legalPolicyResolver.resolve(latitude: latitude, longitude: longitude)
+        } else {
+          nil
+        }
+        self.appData.updateLegalPolicy(jurisdictionCode: countryCode)
+        self.coordinator.reloadAlertRules()
+        promise.resolve(nil)
+      }
+    }
+
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `setLegalMode`
+    // @parity /modules/vescape-core/src/index.ts `setLegalMode`
+    AsyncFunction("setLegalMode") { (boardId: String, enabled: Bool, promise: Promise) in
+      guard self.appData.getBoard(boardId) != nil else {
+        promise.reject("BOARD_NOT_FOUND", "Board not found: \(boardId)")
+        return
+      }
+      if enabled {
+        if let (code, message) = self.coordinator.legalModeEnableError(boardId: boardId) {
+          promise.reject(code, message)
+          return
+        }
+        let settings = self.appData.getSettings()
+        let jurisdictionCode =
+          ((settings["legalPolicy"] ?? nil) as? [String: Any])?["jurisdictionCode"] as? String
+        guard let jurisdictionCode, self.legalPolicyCatalog.speeds(countryCode: jurisdictionCode) != nil else {
+          promise.reject("LEGAL_POLICY_UNRESOLVED", "Resolved Legal Policy required")
+          return
+        }
+      }
+      self.appData.updateLegalMode(boardId: boardId, enabled: enabled)
+      self.coordinator.reloadAlertRules()
+      promise.resolve(nil)
     }
 
     // JS sends the raw setting value (bool/number/string/object/null), matching Android's

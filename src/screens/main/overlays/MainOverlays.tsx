@@ -17,15 +17,7 @@ import {
   XIcon,
   type Icon,
 } from 'phosphor-react-native'
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type RefObject,
-} from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import {
   ActivityIndicator,
   Platform,
@@ -105,7 +97,6 @@ import type { MediaAssetInput, MediaHistoryAsset } from '@/modules/history/lib/m
 import { useWeatherStore } from '@/modules/weather/store/weatherStore'
 import { useRainViewerRadarStore } from '@/modules/weather/store/rainViewerRadarStore'
 import { isNightAtTime, weatherCodeToColor } from '@/modules/weather/lib/weather'
-import { normalizeLegalModeSettings } from '@/modules/legal/lib/legalMode'
 import {
   LEGAL_LIMIT_COUNTRIES,
   LEGAL_ROAD_STATUS_COLORS,
@@ -113,7 +104,6 @@ import {
   LEGAL_ROAD_STATUS_LABELS,
   type LegalLimitCountry,
 } from '@/modules/legal/lib/legalLimits'
-import { useSettingsStore } from '@/modules/settings/store/settingsStore'
 
 const LEGAL_LIST_PANEL_HEIGHT = 280
 const LEGAL_OVERLAY_GAP = 8
@@ -724,7 +714,7 @@ export function MainOverlays({
   const weatherLoading = useWeatherStore((s) => s.loading)
   const radarLoading = useRainViewerRadarStore((s) => s.loading)
   const refreshRadar = useRainViewerRadarStore((s) => s.fetch)
-  const legalModeActive = useSettingsStore((s) => normalizeLegalModeSettings(s.legalMode).enabled)
+  const legalModeActive = board.activeBoard?.legalMode?.enabled ?? false
   const historyBusy = history.loadingSession || history.historyLoading
   const telemetryInteractive = mode === 'telemetry' && !revealGestureActive
   const legalListVisible = mode === 'legalLimits' && legalListOpen
@@ -898,15 +888,11 @@ export function MainOverlays({
           ]}
         >
           <IconButton
-            icon={SlidersHorizontalIcon}
+            icon={legalModeActive ? SirenIcon : SlidersHorizontalIcon}
             size="lg"
+            accent={legalModeActive ? theme.status.error.color : undefined}
             onPress={() => setTuneDrawerOpen(true)}
           />
-          {legalModeActive ? (
-            <View style={styles.legalModeBadge}>
-              <SirenIcon size={13} color={theme.palette.mono.white} weight="fill" />
-            </View>
-          ) : null}
         </View>
         <EdgeDrawer
           visible={tuneDrawerOpen}
@@ -1690,19 +1676,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 12,
     zIndex: 20,
-  },
-  legalModeBadge: {
-    position: 'absolute',
-    top: -3,
-    right: -3,
-    width: 21,
-    height: 21,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.status.error.color,
-    borderWidth: 2,
-    borderColor: theme.palette.slate.surfaceDeep,
   },
   historyError: {
     position: 'absolute',

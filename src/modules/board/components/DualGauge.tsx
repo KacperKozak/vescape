@@ -24,13 +24,16 @@ import {
   Path,
   RadialGradient,
   Skia,
+  Text as SkiaText,
   vec,
+  type SkFont,
   type SkPath,
 } from '@shopify/react-native-skia'
 
 import { SparklineMaxBadge, type SparklinePoint } from '@/components/charts/Sparkline'
 import { buildSparklinePaths, SparklineLayer } from '@/components/charts/SparklineLayer'
 import { telemetry } from '@/modules/board/constants/telemetry'
+import { useSkiaFont } from '@/hooks/useSkiaFont'
 import { interaction, theme } from '@/constants/theme'
 import {
   getHistoryMetricHotRange,
@@ -67,6 +70,8 @@ interface SingleGaugeProps {
   label?: string
   alerts?: DualGaugeAlert[]
   hotRange?: MetricHotRange | null
+  /** Draw the live needle + numeric readout. Off for static, offline previews. */
+  showValue?: boolean
   containerStyle?: StyleProp<ViewStyle>
 }
 
@@ -373,13 +378,39 @@ function HalfAlertTick({ fraction }: HalfAlertTickProps) {
   )
 }
 
+// Numeric marker labels sit just inside the arc, centered on the tick.
+const HALF_LABEL_INSET = 9
+const HALF_LABEL_FONT_SIZE = 6
+const HALF_LABEL_COLOR = theme.palette.yellow.text
+
+interface HalfAlertLabelProps {
+  fraction: number
+  text: string
+  font: SkFont
+}
+
+function HalfAlertLabel({ fraction, text, font }: HalfAlertLabelProps) {
+  const p = polarHalf(HALF_R - HALF_LABEL_INSET, fraction)
+  const width = font.getTextWidth(text)
+  return (
+    <SkiaText
+      x={p.x - width / 2}
+      y={p.y + HALF_LABEL_FONT_SIZE / 2}
+      text={text}
+      font={font}
+      color={HALF_LABEL_COLOR}
+    />
+  )
+}
+
 interface HalfAlertMarkerProps {
   alert: DualGaugeAlert
   min: number
   max: number
+  labelFont: SkFont | null
 }
 
-function HalfAlertMarker({ alert, min, max }: HalfAlertMarkerProps) {
+function HalfAlertMarker({ alert, min, max, labelFont }: HalfAlertMarkerProps) {
   const thresholdFraction = normalizeFraction(alert.threshold, min, max)
   const maxFraction =
     alert.thresholdMax == null ? null : normalizeFraction(alert.thresholdMax, min, max)
@@ -402,11 +433,24 @@ function HalfAlertMarker({ alert, min, max }: HalfAlertMarkerProps) {
         </Path>
         <HalfAlertTick fraction={thresholdFraction} />
         <HalfAlertTick fraction={maxFraction} />
+        {labelFont && alert.label ? (
+          <HalfAlertLabel fraction={thresholdFraction} text={alert.label} font={labelFont} />
+        ) : null}
+        {labelFont && alert.labelMax ? (
+          <HalfAlertLabel fraction={maxFraction} text={alert.labelMax} font={labelFont} />
+        ) : null}
       </>
     )
   }
 
-  return <HalfAlertTick fraction={thresholdFraction} />
+  return (
+    <>
+      <HalfAlertTick fraction={thresholdFraction} />
+      {labelFont && alert.label ? (
+        <HalfAlertLabel fraction={thresholdFraction} text={alert.label} font={labelFont} />
+      ) : null}
+    </>
+  )
 }
 
 function useCanvasSize() {
@@ -427,10 +471,12 @@ function HalfArc({
   decimals = 0,
   alerts = [],
   hotRange,
+  showValue = true,
 }: Required<Pick<SingleGaugeProps, 'value' | 'min' | 'max' | 'color' | 'unit'>> &
-  Pick<SingleGaugeProps, 'decimals' | 'alerts' | 'hotRange'>) {
+  Pick<SingleGaugeProps, 'decimals' | 'alerts' | 'hotRange' | 'showValue'>) {
   const { size, onLayout } = useCanvasSize()
   const scale = size.w > 0 ? size.w / HALF_VB_W : 0
+  const labelFont = useSkiaFont('700', HALF_LABEL_FONT_SIZE)
 
   const animatedValueProps = useAnimatedProps(() => {
     const current = value.value
@@ -451,7 +497,9 @@ function HalfArc({
     svgPath(halfWedgePath(normalizeFraction(value.value ?? min, min, max))),
   )
   const markerPath = useDerivedValue(() => {
-    const fraction = normalizeFraction(value.value ?? min, min, max)
+    // No live value → no needle: a zero-position needle next to a "—" readout reads as a real 0.
+    if (value.value == null) return Skia.Path.Make()
+    const fraction = normalizeFraction(value.value, min, max)
     const inner = polarHalf(HALF_R - MARKER_INSET, fraction)
     const outer = polarHalf(HALF_R + STROKE / 2, fraction)
     return segmentPath(inner.x, inner.y, outer.x, outer.y)
@@ -492,28 +540,38 @@ function HalfArc({
                 strokeCap="butt"
               />
               {alerts.map((alert) => (
-                <HalfAlertMarker key={alert.id} alert={alert} min={min} max={max} />
+                <HalfAlertMarker
+                  key={alert.id}
+                  alert={alert}
+                  min={min}
+                  max={max}
+                  labelFont={labelFont}
+                />
               ))}
-              <Path
-                path={markerPath}
-                color={arcColor}
-                style="stroke"
-                strokeWidth={1.7}
-                strokeCap="butt"
-              />
+              {showValue ? (
+                <Path
+                  path={markerPath}
+                  color={arcColor}
+                  style="stroke"
+                  strokeWidth={1.7}
+                  strokeCap="butt"
+                />
+              ) : null}
             </Group>
           </Canvas>
         ) : null}
       </View>
 
-      <View style={styles.halfBowl} pointerEvents="none">
-        <AnimatedTextInput
-          editable={false}
-          animatedProps={animatedValueProps}
-          style={[styles.halfValue, animatedValueStyle]}
-        />
-        <Text style={styles.halfUnit}>{unit}</Text>
-      </View>
+      {showValue ? (
+        <View style={styles.halfBowl} pointerEvents="none">
+          <AnimatedTextInput
+            editable={false}
+            animatedProps={animatedValueProps}
+            style={[styles.halfValue, animatedValueStyle]}
+          />
+          <Text style={styles.halfUnit}>{unit}</Text>
+        </View>
+      ) : null}
     </View>
   )
 }
@@ -815,6 +873,7 @@ export function SingleGauge({
   label,
   alerts = [],
   hotRange,
+  showValue = true,
   containerStyle,
 }: SingleGaugeProps) {
   return (
@@ -829,6 +888,7 @@ export function SingleGauge({
         decimals={decimals}
         alerts={alerts}
         hotRange={hotRange}
+        showValue={showValue}
       />
     </View>
   )

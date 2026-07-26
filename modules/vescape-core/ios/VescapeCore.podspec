@@ -37,7 +37,12 @@ Pod::Spec.new do |s|
   # `fixtures` is a symlink to `../../shared/fixtures` — bundled replay fixtures for the dev-mode
   # Replay UI (#230), same single-source pattern as `cell-presets.json`.
   s.resource_bundles = {
-    'VescapeCoreAssets' => ['cell-presets.json', 'alerts/*.wav', 'fixtures/*.jsonl']
+    'VescapeCoreAssets' => [
+      'cell-presets.json',
+      'legal-policies.json',
+      'alerts/*.wav',
+      'fixtures/*.jsonl'
+    ]
   }
 
   s.test_spec 'Tests' do |test_spec|

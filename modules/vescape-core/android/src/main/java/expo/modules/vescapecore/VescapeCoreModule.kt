@@ -42,6 +42,8 @@ import expo.modules.vescapecore.telemetry.DatabaseBackupManager
 import expo.modules.vescapecore.telemetry.ProfileStatsRepository
 import expo.modules.vescapecore.telemetry.TELEMETRY_DATABASE_NAME
 import expo.modules.vescapecore.telemetry.TelemetryRepository
+import expo.modules.vescapecore.location.LegalPolicyResolver
+import expo.modules.vescapecore.location.LegalPolicyCatalog
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -80,6 +82,8 @@ class VescapeCoreModule : Module() {
   private val companionPresence by lazy {
     CompanionPresence(context.applicationContext, activityProvider = { appContext.currentActivity })
   }
+  private val legalPolicyResolver by lazy { LegalPolicyResolver(context.applicationContext) }
+  private val legalPolicyCatalog by lazy { LegalPolicyCatalog(context.applicationContext) }
 
   private val context: Context get() = appContext.reactContext
     ?: throw IllegalStateException("No React context")
@@ -273,7 +277,7 @@ class VescapeCoreModule : Module() {
     Function("previewAlertSound") { soundType: String ->
       CoreForegroundService.previewAlertSound(context.applicationContext, soundType)
     }
-    Function("getAlertPresets") {
+    Function("getAlertSounds") {
       CoreForegroundService.alertSoundPresets()
     }
     Function("startGeigerSimulation") { soundType: String, rangeDepth: Double ->
@@ -565,19 +569,19 @@ class VescapeCoreModule : Module() {
     AsyncFunction("deleteBoard") Coroutine { id: String ->
       AppDataRepository.get(context.applicationContext).deleteBoard(id)
     }
-    AsyncFunction("getAlertRules") {
-      runBlocking { AppDataRepository.get(context.applicationContext).getAlertRules() }
+    AsyncFunction("getAlertRules") { boardId: String ->
+      runBlocking { AppDataRepository.get(context.applicationContext).getAlertRules(boardId) }
     }
     AsyncFunction("upsertAlertRule") Coroutine { rule: Map<String, Any?> ->
       AppDataRepository.get(context.applicationContext).upsertAlertRule(rule)
       CoreForegroundService.reloadAlertRules(context.applicationContext)
     }
-    AsyncFunction("setAlertRuleEnabled") Coroutine { id: String, enabled: Boolean ->
-      AppDataRepository.get(context.applicationContext).setAlertRuleEnabled(id, enabled)
+    AsyncFunction("setAlertRuleEnabled") Coroutine { boardId: String, id: String, enabled: Boolean ->
+      AppDataRepository.get(context.applicationContext).setAlertRuleEnabled(boardId, id, enabled)
       CoreForegroundService.reloadAlertRules(context.applicationContext)
     }
-    AsyncFunction("deleteAlertRule") Coroutine { id: String ->
-      AppDataRepository.get(context.applicationContext).deleteAlertRule(id)
+    AsyncFunction("deleteAlertRule") Coroutine { boardId: String, id: String ->
+      AppDataRepository.get(context.applicationContext).deleteAlertRule(boardId, id)
       CoreForegroundService.reloadAlertRules(context.applicationContext)
     }
     AsyncFunction("getPrivacyZones") {
@@ -616,6 +620,46 @@ class VescapeCoreModule : Module() {
     }
     AsyncFunction("getSettings") {
       runBlocking { AppDataRepository.get(context.applicationContext).getSettings() }
+    }
+    // @parity /modules/vescape-core/ios/VescapeCoreModule.swift `refreshLegalPolicy`
+    // @parity /modules/vescape-core/src/index.ts `refreshLegalPolicy`
+    AsyncFunction("refreshLegalPolicy") Coroutine { ->
+      val repository = AppDataRepository.get(context.applicationContext)
+      val settings = repository.getTypedSettings()
+      val latitude = settings.lastGpsLatitude
+      val longitude = settings.lastGpsLongitude
+      val countryCode = if (latitude != null && longitude != null) {
+        legalPolicyResolver.resolve(latitude, longitude)
+      } else {
+        null
+      }
+      repository.updateLegalPolicy(countryCode)
+      CoreForegroundService.reloadAlertRules(context.applicationContext)
+    }
+    // @parity /modules/vescape-core/ios/VescapeCoreModule.swift `setLegalMode`
+    // @parity /modules/vescape-core/src/index.ts `setLegalMode`
+    AsyncFunction("setLegalMode") { boardId: String, enabled: Boolean, promise: Promise ->
+      CoroutineScope(Dispatchers.IO).launch {
+        val repository = AppDataRepository.get(context.applicationContext)
+        if (repository.getBoard(boardId) == null) {
+          promise.reject("BOARD_NOT_FOUND", "Board not found: $boardId", null)
+          return@launch
+        }
+        if (enabled) {
+          CoreForegroundService.legalModeEnableError(boardId)?.let { (code, message) ->
+            promise.reject(code, message, null)
+            return@launch
+          }
+          val jurisdictionCode = repository.getTypedSettings().legalPolicy?.get("jurisdictionCode")
+          if (jurisdictionCode == null || legalPolicyCatalog.speeds(jurisdictionCode) == null) {
+            promise.reject("LEGAL_POLICY_UNRESOLVED", "Resolved Legal Policy required", null)
+            return@launch
+          }
+        }
+        repository.updateLegalMode(boardId, enabled)
+        CoreForegroundService.reloadAlertRules(context.applicationContext)
+        promise.resolve(null)
+      }
     }
     AsyncFunction("updateSetting") Coroutine { key: String, value: Any? ->
       AppDataRepository.get(context.applicationContext).updateSetting(key, value)

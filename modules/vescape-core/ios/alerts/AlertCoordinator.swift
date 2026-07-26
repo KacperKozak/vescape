@@ -17,6 +17,11 @@ internal final class AlertCoordinator {
   }
 
   func replaceRules(_ value: [AlertRule]) {
+    let geigerRuleIds = Set(value.compactMap { $0.thresholdMax == nil ? nil : $0.id })
+    for ruleId in activeGeigerRuleIds.subtracting(geigerRuleIds) {
+      player.stopGeiger(ruleId: ruleId)
+    }
+    activeGeigerRuleIds.formIntersection(geigerRuleIds)
     rules = value
     engine.resetDebounce()
   }

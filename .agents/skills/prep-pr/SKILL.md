@@ -13,7 +13,7 @@ Prepare a feature PR as the stable landing place for a PRD or issue group. This 
 - Never write copy like "this PR sets up docs" unless the feature really is only docs. Use final-feature language such as "This PR adds..." or "This PR implements...".
 - If the branch has no changes or no commits ahead of base, create an empty commit so GitHub can host the PR.
 - New initial feature PRs start as draft PRs. Use `gh pr create --draft` unless the user explicitly asks for a ready PR.
-- If a PR already exists for the current branch, update that PR instead of creating a duplicate.
+- If a PR already exists for the current branch, update that PR instead of creating a duplicate — but only after the Branch safety check confirms the current branch belongs to this feature. Never overwrite an unrelated PR's title/body.
 - Keep the PR useful for navigation: link the PRD, all implementation issues, and any tracking parent issue.
 - Do not close or modify the PRD/issues unless the user explicitly asks.
 - Use `gh` for GitHub operations. This repo is private; do not fetch GitHub issue/PR pages over unauthenticated HTTP.
@@ -36,6 +36,29 @@ Prefer discovery before asking:
    - `git log --oneline <base>..HEAD`
 
 Ask one concise question only if no PRD/issues/PR context can be inferred.
+
+## Branch safety check
+
+Run this before creating or refreshing any PR. The skill keys off the current branch, so a mechanical run on the wrong branch can clobber an unrelated PR or graft this feature onto someone else's work.
+
+The current branch is safe to use only if **one** of these holds:
+
+- It has no commits ahead of base and no existing PR (a clean placeholder branch), or
+- It already hosts a PR/commits for **this same** PRD/issue group (a refresh of the intended feature branch).
+
+Stop and confirm with the user when the current branch looks unrelated, i.e. any of:
+
+- Commits ahead of base whose messages/issue refs point at a different feature.
+- An existing PR whose linked PRD/issues differ from the target PRD/issue group.
+- The branch name clearly belongs to another feature.
+
+In that case do **not** refresh the existing PR. Ask the user, and prefer branching a fresh feature branch off base (e.g. `dev`):
+
+```bash
+git checkout <base> && git checkout -b <feature-name>
+```
+
+Only proceed on the current branch once it passes this check or the user explicitly approves it.
 
 ## Empty branch handling
 

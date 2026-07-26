@@ -3,6 +3,7 @@ import Foundation
 /// Alert rule persisted in GRDB (`alerts` table). Mirrors Android `AlertRuleEntity`.
 /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryEntities.kt
 internal struct AlertRule {
+  let boardId: String
   let id: String
   let controlId: String
   let threshold: Double
@@ -10,7 +11,41 @@ internal struct AlertRule {
   let enabled: Bool
   let soundType: String
   let createdAt: Int64
+  /// Free-text provenance tag mirroring TS `AlertRule.source`: `manual` (or nil) or `preset`.
+  /// JS authors and regenerates preset rules; native only persists the string.
   let source: String?
+}
+
+/// Adds Legal Mode's per-Board speed warning to in-memory rules. No Alert Rule row is materialized.
+/// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/alerts/AlertEngine.kt `withLegalModeOverlay`
+internal func withLegalModeOverlay(
+  _ rules: [AlertRule],
+  boardId: String,
+  enabled: Bool,
+  warningSpeedKmh: Double?,
+  limitSpeedKmh: Double?
+) -> [AlertRule] {
+  guard
+    enabled,
+    let warningSpeedKmh,
+    let limitSpeedKmh,
+    warningSpeedKmh > 0,
+    limitSpeedKmh > warningSpeedKmh
+  else { return rules }
+
+  return rules + [
+    AlertRule(
+      boardId: boardId,
+      id: "native:legal-mode:speed",
+      controlId: "speed",
+      threshold: warningSpeedKmh,
+      thresholdMax: limitSpeedKmh,
+      enabled: true,
+      soundType: "preset:tick",
+      createdAt: 0,
+      source: nil
+    ),
+  ]
 }
 
 /// One fired alert surfaced to JS through the telemetry event payload.

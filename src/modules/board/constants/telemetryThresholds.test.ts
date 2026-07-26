@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   batteryLevel,
   dutyLevel,
-  DEFAULT_ALERT_PRESETS,
+  DEFAULT_ALERT_SEEDS,
   speedLevel,
   tempLevel,
 } from '@/modules/board/constants/telemetryThresholds'
@@ -104,16 +104,16 @@ describe('dutyLevel', () => {
   })
 })
 
-describe('DEFAULT_ALERT_PRESETS', () => {
+describe('DEFAULT_ALERT_SEEDS', () => {
   test('battery temp speed duty presets sourced from thresholds', () => {
-    expect(DEFAULT_ALERT_PRESETS['motor-temp']).toEqual({ tab: 'message', threshold: 70 })
-    expect(DEFAULT_ALERT_PRESETS['battery']).toEqual({ tab: 'message', threshold: 30 })
-    expect(DEFAULT_ALERT_PRESETS['speed']).toEqual({
+    expect(DEFAULT_ALERT_SEEDS['motor-temp']).toEqual({ tab: 'message', threshold: 70 })
+    expect(DEFAULT_ALERT_SEEDS['battery']).toEqual({ tab: 'message', threshold: 30 })
+    expect(DEFAULT_ALERT_SEEDS['speed']).toEqual({
       tab: 'geiger',
       threshold: 35,
       thresholdMax: 45,
     })
-    expect(DEFAULT_ALERT_PRESETS['duty']).toEqual({
+    expect(DEFAULT_ALERT_SEEDS['duty']).toEqual({
       tab: 'geiger',
       threshold: 80,
       thresholdMax: 90,
