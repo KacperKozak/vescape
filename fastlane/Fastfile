@@ -58,7 +58,7 @@ platform :android do
     upload_to_play_store(
       track: "production",
       release_status: "draft",
-      version_codes: [ENV["VERSION_CODE"].to_i],
+      version_code: ENV["VERSION_CODE"].to_i,
       skip_upload_aab: true,
       skip_upload_apk: true,
       skip_upload_metadata: true,
@@ -84,7 +84,7 @@ platform :android do
     upload_to_play_store(
       track: "wear:production",
       release_status: "draft",
-      version_codes: [ENV["WEAR_VERSION_CODE"].to_i],
+      version_code: ENV["WEAR_VERSION_CODE"].to_i,
       skip_upload_aab: true,
       skip_upload_apk: true,
       skip_upload_metadata: true,
