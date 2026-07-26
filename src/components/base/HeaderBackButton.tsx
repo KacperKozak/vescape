@@ -5,5 +5,5 @@ import { IconButton } from '@/components/base/IconButton'
 
 export function HeaderBackButton() {
   const router = useRouter()
-  return <IconButton icon={ArrowLeftIcon} onPress={() => router.back()} style={{ marginLeft: 4 }} />
+  return <IconButton icon={ArrowLeftIcon} onPress={() => router.back()} />
 }
