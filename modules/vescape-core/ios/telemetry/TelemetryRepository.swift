@@ -1,5 +1,4 @@
 import Foundation
-import ExpoModulesCore
 import GRDB
 
 internal let TELEMETRY_FLAG_KEYFRAME = 1
@@ -28,7 +27,9 @@ internal let SAMPLE_COLUMN_COUNT = 25
 internal final class TelemetryRepository {
   static let shared = TelemetryRepository()
 
-  private var pool: DatabasePool? { TelemetryDatabase.pool }
+  /// Internal, not private: `getRange` lives in `TelemetryRangePayload.swift` because it returns an
+  /// Expo `NativeArrayBuffer`, and a cross-file extension can only reach internal members.
+  internal var pool: DatabasePool? { TelemetryDatabase.pool }
   private let queue = DispatchQueue(label: "vesc.telemetry.repository")
   private var pendingStates: [FullTelemetryState] = []
   private var pendingPersisted: [FullTelemetryState] = []
@@ -176,46 +177,6 @@ internal final class TelemetryRepository {
     }) ?? []
   }
 
-  func getRange(_ options: [String: Any]) -> [String: Any?] {
-    let fromMs = telemetryLong(options["fromMs"]) ?? 0
-    let toMs = telemetryLong(options["toMs"]) ?? telemetryNowMs()
-    let limit = min(MAX_SAMPLE_LIMIT, max(1, telemetryInt(options["limit"]) ?? DEFAULT_SAMPLE_LIMIT))
-    let deviceId = options["deviceId"] as? String
-    guard let pool else { return emptyRangePayload() }
-    // Battery configs and the smoothing window are read up front (each opens its own DB read) so
-    // the estimate stays a pure computation inside the range read below.
-    let configs = batteryConfigByDevice()
-    let windowMs = socWindowMs()
-    return (try? pool.read { db -> [String: Any?] in
-      let sampleRows = try Row.fetchAll(
-        db,
-        sql: """
-          SELECT * FROM telemetry_frames
-          WHERE captured_at_ms >= ? AND captured_at_ms <= ? AND (? IS NULL OR device_id = ?)
-          ORDER BY captured_at_ms ASC
-          LIMIT ?
-          """,
-        arguments: [fromMs, toMs, deviceId, deviceId, limit]
-      )
-      let markers = try Row.fetchAll(
-        db,
-        sql: "SELECT * FROM telemetry_markers WHERE occurred_at_ms >= ? AND occurred_at_ms <= ? AND (? IS NULL OR device_id = ?) ORDER BY occurred_at_ms ASC",
-        arguments: [fromMs, toMs, deviceId, deviceId]
-      )
-      let exclusions = try Row.fetchAll(
-        db,
-        sql: "SELECT * FROM metric_exclusion_ranges WHERE end_ms >= ? AND start_ms <= ? AND (? IS NULL OR device_id = ?) ORDER BY start_ms ASC",
-        arguments: [fromMs, toMs, deviceId, deviceId]
-      ).map(exclusionMap)
-      let percents = self.batteryPercents(sampleRows, configs: configs, windowMs: windowMs)
-      return mergeTelemetryPayload(sampleColumns(sampleRows, batteryPercents: percents), [
-        "gpsSamples": gpsMaps(sampleRows),
-        "markers": markers.map(markerMap),
-        "exclusions": exclusions,
-      ])
-    }) ?? emptyRangePayload()
-  }
-
   // MARK: - Battery SoC on read (ADR-0016)
 
   /// Per-sample Battery SoC Estimate for a run of frames (ordered by captured_at_ms): the
@@ -224,7 +185,7 @@ internal final class TelemetryRepository {
   /// Mirrors how the live path derives % per frame; approximate on read only because Android stores
   /// delta-encoded frames.
   /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryRepository.kt `smoothedSampleMaps`
-  private func batteryPercents(_ rows: [Row], configs: [String: [String: Any]], windowMs: Int64) -> [Double?] {
+  internal func batteryPercents(_ rows: [Row], configs: [String: [String: Any]], windowMs: Int64) -> [Double?] {
     var windows: [String: SocMedianWindow] = [:]
     return rows.map { row in
       let deviceId = row["device_id"] as String?
@@ -251,7 +212,7 @@ internal final class TelemetryRepository {
 
   /// bleId (telemetry deviceId) -> the board's normalized battery config.
   /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryRepository.kt `batteryConfigByDevice`
-  private func batteryConfigByDevice() -> [String: [String: Any]] {
+  internal func batteryConfigByDevice() -> [String: [String: Any]] {
     batteryEstimator.ensureLoaded()
     var result: [String: [String: Any]] = [:]
     for board in AppDataRepository.shared.getBoards() {
@@ -266,7 +227,7 @@ internal final class TelemetryRepository {
   }
 
   /// SoC median window length from app settings (seconds → ms), defaulting to Android's 20 s.
-  private func socWindowMs() -> Int64 {
+  internal func socWindowMs() -> Int64 {
     Int64(telemetryInt(AppDataRepository.shared.getSettings()["socEstimateWindowSeconds"] ?? nil) ?? 20) * 1000
   }
 

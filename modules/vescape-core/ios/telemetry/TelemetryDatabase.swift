@@ -115,7 +115,9 @@ enum TelemetryDatabase {
     }
   }
 
-  private static var migrator: DatabaseMigrator {
+  /// Internal, not private, so migration tests can run the real migrator against an in-memory
+  /// database and stop at a chosen version with `migrate(_:upTo:)`.
+  internal static var migrator: DatabaseMigrator {
     var migrator = DatabaseMigrator()
 
     migrator.registerMigration("v1") { db in

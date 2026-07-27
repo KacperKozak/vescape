@@ -1,4 +1,5 @@
 import Foundation
+@testable import VescapeCore
 
 /// Config-scoped Board Warning replay harness (ADR 0024): reconstructs the Refloat config read from a
 /// `.jsonl` Debug Recording by driving the **real** `ConfigRWController` with the recorded `rx`
