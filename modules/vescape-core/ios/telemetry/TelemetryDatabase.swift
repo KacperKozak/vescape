@@ -443,6 +443,42 @@ enum TelemetryDatabase {
       }
     }
 
+    // MARK: Sync Cursor split off the last-write-wins timestamp
+    // `sync_seq` is a device-local counter the upload scan runs on; `updated_at` keeps its wall-clock
+    // meaning and stays the value the server compares. Scanning a counter is what makes the scan
+    // complete under a device clock that steps backwards, which an `updated_at >= watermark` scan is
+    // not: a rewound clock lands the write below a cursor the phone has already passed.
+    //
+    // Existing rows backfill from `rowid`. Nothing has ever been uploaded, so any strictly increasing
+    // assignment works, and `rowid` gives one for free without an O(n²) self-join over tables that
+    // hold a row per ridden minute. Each counter then starts above every assigned value.
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `MIGRATION_28_29`
+    migrator.registerMigration("v29_sync_seq") { db in
+      try db.execute(
+        sql: """
+          CREATE TABLE IF NOT EXISTS sync_sequences (
+            name TEXT NOT NULL PRIMARY KEY,
+            last_value INTEGER NOT NULL
+          )
+          """
+      )
+      for table in syncSeqTables {
+        let hasSyncSeq = try db.columns(in: table).contains { $0.name == "sync_seq" }
+        if !hasSyncSeq {
+          try db.execute(sql: "ALTER TABLE \(table) ADD COLUMN sync_seq INTEGER NOT NULL DEFAULT 0")
+          try db.execute(sql: "UPDATE \(table) SET sync_seq = rowid")
+        }
+        try db.execute(sql: "CREATE INDEX IF NOT EXISTS index_\(table)_sync_seq ON \(table)(sync_seq)")
+        try db.execute(
+          sql: """
+            INSERT OR REPLACE INTO sync_sequences (name, last_value)
+            VALUES (?, (SELECT COALESCE(MAX(sync_seq), 0) FROM \(table)))
+            """,
+          arguments: [table]
+        )
+      }
+    }
+
     return migrator
   }
 }

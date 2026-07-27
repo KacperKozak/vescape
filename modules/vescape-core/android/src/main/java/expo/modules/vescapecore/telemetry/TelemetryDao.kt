@@ -110,13 +110,39 @@ interface TelemetryDao {
   @Transaction
   suspend fun upsertBuckets(buckets: Collection<TelemetryMinuteBucketEntity>) {
     for (bucket in buckets) {
-      val existing = getBucket(bucket.bucketStartMs, bucket.deviceId)
+      // A merge rewrites a row the scan may already have passed, so the seq moves on both branches.
+      val next = bucket.copy(syncSeq = nextSyncSeq(SYNC_SEQ_MINUTE_BUCKETS))
+      val existing = getBucket(next.bucketStartMs, next.deviceId)
       if (existing == null) {
-        insertBucket(bucket)
+        insertBucket(next)
       } else {
-        updateBucket(existing.merge(bucket))
+        updateBucket(existing.merge(next))
       }
     }
+  }
+
+  @Query("INSERT OR IGNORE INTO sync_sequences (name, last_value) VALUES (:name, 0)")
+  suspend fun seedSyncSequence(name: String)
+
+  @Query("UPDATE sync_sequences SET last_value = last_value + 1 WHERE name = :name")
+  suspend fun bumpSyncSequence(name: String)
+
+  @Query("SELECT last_value FROM sync_sequences WHERE name = :name")
+  suspend fun getSyncSequence(name: String): Long?
+
+  /**
+   * Hands out the next Sync Cursor position for [name]. Bump-then-read rather than read-then-bump so
+   * two writes racing inside the same database can never be handed the same number; both statements
+   * run in the caller's transaction.
+   *
+   * Seeds the row first because a fresh install builds the schema from the entities and never runs
+   * the migration that inserts it.
+   */
+  @Transaction
+  suspend fun nextSyncSeq(name: String): Long {
+    seedSyncSequence(name)
+    bumpSyncSequence(name)
+    return getSyncSequence(name) ?: 0L
   }
 
   @Transaction
@@ -340,7 +366,25 @@ interface TelemetryDao {
   suspend fun getBoard(id: String): BoardEntity?
 
   @Insert(onConflict = OnConflictStrategy.REPLACE)
-  suspend fun upsertBoard(board: BoardEntity)
+  suspend fun insertBoardRow(board: BoardEntity)
+
+  @Query("SELECT updated_at FROM boards WHERE id = :id")
+  suspend fun getBoardUpdatedAt(id: String): Long?
+
+  /**
+   * Stamps both sync columns before the row lands: a fresh `sync_seq` so the upload scan sees this
+   * write, and a ratcheted `updated_at` so the server keeps it. Caller-supplied values for either
+   * are overwritten — see [SyncSequenceEntity] and [BoardEntity.updatedAt].
+   */
+  @Transaction
+  suspend fun upsertBoard(board: BoardEntity) {
+    insertBoardRow(
+      board.copy(
+        updatedAt = ratchetUpdatedAt(getBoardUpdatedAt(board.id), board.updatedAt),
+        syncSeq = nextSyncSeq(SYNC_SEQ_BOARDS),
+      ),
+    )
+  }
 
   @Query("SELECT * FROM board_settings WHERE board_id = :boardId")
   suspend fun getBoardSettings(boardId: String): List<BoardSettingEntity>
@@ -383,17 +427,47 @@ interface TelemetryDao {
   suspend fun getEnabledAlertRules(boardId: String): List<AlertRuleEntity>
 
   @Insert(onConflict = OnConflictStrategy.REPLACE)
-  suspend fun upsertAlertRule(rule: AlertRuleEntity)
+  suspend fun insertAlertRuleRow(rule: AlertRuleEntity)
+
+  @Query("SELECT updated_at FROM alerts WHERE board_id = :boardId AND id = :id")
+  suspend fun getAlertRuleUpdatedAt(boardId: String, id: String): Long?
+
+  /** Stamps both sync columns; see [upsertBoard]. */
+  @Transaction
+  suspend fun upsertAlertRule(rule: AlertRuleEntity) {
+    insertAlertRuleRow(
+      rule.copy(
+        updatedAt = ratchetUpdatedAt(getAlertRuleUpdatedAt(rule.boardId, rule.id), rule.updatedAt),
+        syncSeq = nextSyncSeq(SYNC_SEQ_ALERTS),
+      ),
+    )
+  }
 
   /**
-   * Targeted toggle. Unlike the `@Insert` upserts it never round-trips an entity, so `updated_at`
-   * has to move here explicitly — without it, toggling a rule leaves the sync cursor stale and the
-   * change never reaches the server.
+   * Targeted toggle. Unlike the `@Insert` upserts it never round-trips an entity, so both sync
+   * columns have to move here explicitly — without them, toggling a rule leaves it invisible to the
+   * upload scan and the change never reaches the server.
    *
-   * @parity /modules/vescape-core/ios/telemetry/AppDataRepository.swift `setAlertRuleEnabled`
+   * The `MAX(updated_at + 1, :updatedAt)` fold is the same ratchet [upsertBoard] applies, expressed
+   * in SQL because the row is already being read by the `WHERE`.
    */
-  @Query("UPDATE alerts SET enabled = :enabled, updated_at = :updatedAt WHERE board_id = :boardId AND id = :id")
-  suspend fun setAlertRuleEnabled(boardId: String, id: String, enabled: Boolean, updatedAt: Long)
+  @Query(
+    "UPDATE alerts SET enabled = :enabled, updated_at = MAX(updated_at + 1, :updatedAt), " +
+      "sync_seq = :syncSeq WHERE board_id = :boardId AND id = :id",
+  )
+  suspend fun setAlertRuleEnabledRow(
+    boardId: String,
+    id: String,
+    enabled: Boolean,
+    updatedAt: Long,
+    syncSeq: Long,
+  )
+
+  /** @parity /modules/vescape-core/ios/telemetry/AppDataRepository.swift `setAlertRuleEnabled` */
+  @Transaction
+  suspend fun setAlertRuleEnabled(boardId: String, id: String, enabled: Boolean, updatedAt: Long) {
+    setAlertRuleEnabledRow(boardId, id, enabled, updatedAt, nextSyncSeq(SYNC_SEQ_ALERTS))
+  }
 
   @Query("DELETE FROM alerts WHERE board_id = :boardId AND id = :id")
   suspend fun deleteAlertRule(boardId: String, id: String)
@@ -597,15 +671,24 @@ private fun TelemetryMinuteBucketEntity.merge(next: TelemetryMinuteBucketEntity)
     lastMovingAtMs = mergeNullableMax(lastMovingAtMs, next.lastMovingAtMs),
     // The merged row is being written now, so `next` normally carries the fresher stamp. `maxOf`
     // clamps a backwards device-clock step: the value stays at the last real write time instead of
-    // regressing below a cursor already synced. Bounded and self-correcting — once the clock passes
-    // the old value again the stamp is truthful, unlike a ratcheting `existing + 1` counter, which
-    // would permanently inflate this row against other devices under last-write-wins.
+    // regressing. No `+ 1` ratchet here, unlike boards and alerts — the server writes this table
+    // with an unconditional upsert, so a stale stamp is never grounds for rejecting the row.
     //
-    // Not a completeness guarantee: a frozen stamp is only picked up because the sync query is
-    // `updated_at >= watermark`. Clock-rewind completeness is tracked separately (see #275).
+    // Completeness is [syncSeq]'s job, not this column's.
     updatedAt = maxOf(updatedAt, next.updatedAt),
+    syncSeq = next.syncSeq,
   )
 }
+
+/**
+ * The write-time fold behind [BoardEntity.updatedAt]: never below the value already stored, and
+ * strictly above it whenever the clock fails to be.
+ *
+ * `+ 1` rather than a plain `maxOf` because the server keeps the stored row unless the incoming
+ * stamp is strictly newer. Freezing at the old value would satisfy the scan and still lose the edit.
+ */
+internal fun ratchetUpdatedAt(previous: Long?, now: Long): Long =
+  if (previous == null) now else maxOf(previous + 1, now)
 
 private fun mergeNullableSums(a: Int?, b: Int?): Int? {
   if (a == null && b == null) return null

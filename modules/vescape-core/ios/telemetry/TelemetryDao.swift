@@ -83,17 +83,59 @@ internal func insertFrame(_ db: Database, _ state: FullTelemetryState) throws {
   )
 }
 
-/// [now] is the incremental-sync cursor stamped on the row, so every append or rebuild that reaches
-/// the database is visible to cursor sync. `MAX` on conflict clamps a backwards device-clock step:
-/// the value stays at the last real write time instead of regressing below a cursor already synced.
-/// Bounded and self-correcting — once the clock passes the old value again the stamp is truthful,
-/// unlike a ratcheting `existing + 1` counter, which would permanently inflate this row against
-/// other devices under last-write-wins.
+/// Table names carrying a `sync_seq`, and the keys their counters use in `sync_sequences`.
+internal let syncSeqBoards = "boards"
+internal let syncSeqAlerts = "alerts"
+internal let syncSeqMinuteBuckets = "telemetry_minute_buckets"
+internal let syncSeqTables = [syncSeqBoards, syncSeqAlerts, syncSeqMinuteBuckets]
+
+/// Hands out the next Sync Cursor position for [name].
 ///
-/// Not a completeness guarantee: a frozen stamp is only picked up because the sync query is
-/// `updated_at >= watermark`. Clock-rewind completeness is tracked separately (see #275).
+/// The Sync Cursor is the phone's own record of how far it has uploaded and never crosses the wire,
+/// which is what lets the upload scan run on a counter instead of a clock: a device clock that steps
+/// backwards makes an `updated_at >= watermark` scan skip the write entirely, because the row lands
+/// below a cursor the phone already passed. A counter cannot regress.
+///
+/// Bump-then-read rather than read-then-bump so two writes racing inside the same database can never
+/// be handed the same number; both statements run in the caller's transaction. The counter lives in
+/// its own table rather than being derived as `MAX(sync_seq) + 1`, which would hand the same number
+/// out twice after the highest row is deleted. Seeded on demand because a database created fresh
+/// never runs the migration that inserts the row.
+/// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDao.kt `nextSyncSeq`
+internal func nextSyncSeq(_ db: Database, _ name: String) throws -> Int64 {
+  try db.execute(
+    sql: "INSERT OR IGNORE INTO sync_sequences (name, last_value) VALUES (?, 0)",
+    arguments: [name]
+  )
+  try db.execute(
+    sql: "UPDATE sync_sequences SET last_value = last_value + 1 WHERE name = ?",
+    arguments: [name]
+  )
+  return try Int64.fetchOne(db, sql: "SELECT last_value FROM sync_sequences WHERE name = ?", arguments: [name]) ?? 0
+}
+
+/// The write-time fold behind `updated_at` on `boards` and `alerts`: never below the value already
+/// stored, and strictly above it whenever the clock fails to be.
+///
+/// `+ 1` rather than a plain `max` because the server keeps the stored row unless the incoming stamp
+/// is strictly newer — freezing at the old value would satisfy the scan and still lose the edit. Per
+/// row, so the inflation is bounded by the rewind and disappears once the wall clock passes it.
+/// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDao.kt `ratchetUpdatedAt`
+internal func ratchetUpdatedAt(_ previous: Int64?, _ now: Int64) -> Int64 {
+  guard let previous else { return now }
+  return max(previous + 1, now)
+}
+
+/// [now] is the last-write-wins timestamp stamped on the row. `MAX` on conflict clamps a backwards
+/// device-clock step so the value stays at the last real write time instead of regressing. No `+ 1`
+/// ratchet here, unlike boards and alerts — the server writes this table with an unconditional
+/// upsert, so a stale stamp is never grounds for rejecting the row.
+///
+/// Completeness is `sync_seq`'s job, and it moves on every write including a merge into a row the
+/// scan may already have passed.
 /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryBucketBuilder.kt `toEntity`
 internal func upsertBucket(_ db: Database, _ b: TelemetryBucket, now: Int64 = telemetryNowMs()) throws {
+  let syncSeq = try nextSyncSeq(db, syncSeqMinuteBuckets)
   try db.execute(
     sql: """
       INSERT INTO telemetry_minute_buckets (
@@ -103,8 +145,9 @@ internal func upsertBucket(_ db: Database, _ b: TelemetryBucket, now: Int64 = te
         max_battery_current_abs_ma, battery_used_wh_milli, battery_regen_wh_milli, max_duty_abs_permille,
         fault_count, first_odometer_cm, last_odometer_cm, gps_point_count, precise_gps_point_count,
         gps_distance_cm, max_gps_speed_centi_mps, max_temp_mosfet_deci_c, max_temp_motor_deci_c,
-        first_latitude_e7, first_longitude_e7, first_moving_at_ms, last_moving_at_ms, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?)
+        first_latitude_e7, first_longitude_e7, first_moving_at_ms, last_moving_at_ms, updated_at,
+        sync_seq
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(bucket_start_ms, device_id) DO UPDATE SET
         device_name=excluded.device_name,
         sample_count=telemetry_minute_buckets.sample_count + excluded.sample_count,
@@ -128,7 +171,8 @@ internal func upsertBucket(_ db: Database, _ b: TelemetryBucket, now: Int64 = te
         max_temp_motor_deci_c=MAX(telemetry_minute_buckets.max_temp_motor_deci_c, excluded.max_temp_motor_deci_c),
         first_moving_at_ms=MIN(telemetry_minute_buckets.first_moving_at_ms, excluded.first_moving_at_ms),
         last_moving_at_ms=MAX(telemetry_minute_buckets.last_moving_at_ms, excluded.last_moving_at_ms),
-        updated_at=MAX(telemetry_minute_buckets.updated_at, excluded.updated_at)
+        updated_at=MAX(telemetry_minute_buckets.updated_at, excluded.updated_at),
+        sync_seq=excluded.sync_seq
       """,
     arguments: [
       b.bucketStartMs, b.deviceId, b.deviceName, b.sampleCount, b.firstSampleAtMs, b.lastSampleAtMs,
@@ -137,6 +181,7 @@ internal func upsertBucket(_ db: Database, _ b: TelemetryBucket, now: Int64 = te
       b.batteryRegenWhMilli, b.maxDutyAbsPermille, b.faultCount, b.firstOdometerCm, b.lastOdometerCm,
       b.gpsPointCount, b.preciseGpsPointCount, b.maxGpsSpeedCentiMps, b.maxTempMosfetDeciC,
       b.maxTempMotorDeciC, b.firstLatitudeE7, b.firstLongitudeE7, b.firstMovingAtMs, b.lastMovingAtMs, now,
+      syncSeq,
     ]
   )
 }

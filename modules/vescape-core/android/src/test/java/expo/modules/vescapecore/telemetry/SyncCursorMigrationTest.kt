@@ -1,5 +1,6 @@
 package expo.modules.vescapecore.telemetry
 
+import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -10,7 +11,8 @@ import java.lang.reflect.Proxy
 /**
  * Incremental-sync cursors: schema 27→28 adds `updated_at` to `boards`, `alerts` and
  * `telemetry_minute_buckets`, backfills it from each table's best evidence of last change, and
- * indexes it. Every write path then has to move it.
+ * indexes it. Schema 28→29 then splits the two jobs that column was doing — `sync_seq` carries the
+ * Sync Cursor, `updated_at` stays the last-write-wins timestamp. Every write path has to move both.
  *
  * @parity /modules/vescape-core/ios/telemetry/SyncCursorMigrationTests.swift
  */
@@ -22,7 +24,7 @@ class SyncCursorMigrationTest {
     "telemetry_minute_buckets" to "last_sample_at_ms",
   )
 
-  private fun migrationSql(): List<String> {
+  private fun migrationSql(migration: Migration): List<String> {
     val sql = mutableListOf<String>()
     val db = Proxy.newProxyInstance(
       SupportSQLiteDatabase::class.java.classLoader,
@@ -35,9 +37,14 @@ class SyncCursorMigrationTest {
         throw UnsupportedOperationException(method.name)
       }
     } as SupportSQLiteDatabase
-    TelemetryDatabase.MIGRATION_27_28.migrate(db)
+    migration.migrate(db)
     return sql
   }
+
+  private fun migrationSql(): List<String> = migrationSql(TelemetryDatabase.MIGRATION_27_28)
+
+  private fun daoSource(): String =
+    File("src/main/java/expo/modules/vescapecore/telemetry/TelemetryDao.kt").readText()
 
   @Test
   fun migrationAddsUpdatedAtColumnAndIndexToEverySyncedTable() {
@@ -75,30 +82,129 @@ class SyncCursorMigrationTest {
   }
 
   @Test
-  fun migrationTargetsTheCurrentSchemaVersion() {
-    assertEquals(28, TELEMETRY_DATABASE_VERSION)
+  fun migrationsTargetTheCurrentSchemaVersion() {
+    assertEquals(29, TELEMETRY_DATABASE_VERSION)
     assertEquals(27, TelemetryDatabase.MIGRATION_27_28.startVersion)
     assertEquals(28, TelemetryDatabase.MIGRATION_27_28.endVersion)
+    assertEquals(28, TelemetryDatabase.MIGRATION_28_29.startVersion)
+    assertEquals(29, TelemetryDatabase.MIGRATION_28_29.endVersion)
   }
 
   /**
    * The regression this whole change exists to prevent. `setAlertRuleEnabled` is a targeted UPDATE
-   * rather than an entity round-trip, so it is the one write path that can silently skip the cursor
-   * — toggling an alert would then never reach the server.
+   * rather than an entity round-trip, so it is the one write path that can silently skip both sync
+   * columns — toggling an alert would then never reach the server.
    *
    * Asserted against the DAO source because Room's `@Query` has BINARY retention (invisible to
    * runtime reflection) and its generated implementation keeps the SQL in a method-local string.
    * A JVM unit test has no other handle on the statement Room will actually run.
    */
   @Test
-  fun setAlertRuleEnabledQueryBumpsUpdatedAt() {
-    val dao = File("src/main/java/expo/modules/vescapecore/telemetry/TelemetryDao.kt").readText()
-    val query = Regex("""@Query\("(UPDATE alerts SET[^"]*)"\)""").find(dao)?.groupValues?.get(1)
+  fun setAlertRuleEnabledQueryMovesBothSyncColumns() {
+    // The statement is written as a concatenation to stay inside the line limit; join it back up
+    // before matching so the test sees the string Room will compile.
+    val dao = daoSource().replace(Regex("""\"\s*\+\s*\""""), "")
+    val query = Regex("""\"(UPDATE alerts SET[^"]*)\"""").find(dao)?.groupValues?.get(1)
 
     assertEquals(
-      "UPDATE alerts SET enabled = :enabled, updated_at = :updatedAt " +
-        "WHERE board_id = :boardId AND id = :id",
+      "UPDATE alerts SET enabled = :enabled, updated_at = MAX(updated_at + 1, :updatedAt), " +
+        "sync_seq = :syncSeq WHERE board_id = :boardId AND id = :id",
       query,
+    )
+  }
+
+  // MARK: Sync Cursor sequence (#275)
+
+  /**
+   * The Sync Cursor scan runs on `sync_seq`, not on `updated_at`. A wall clock that steps backwards
+   * lands a write below a cursor the phone has already passed, and the scan never picks it up; a
+   * counter cannot regress.
+   */
+  @Test
+  fun syncSeqMigrationAddsColumnIndexAndCounterToEverySyncedTable() {
+    val sql = migrationSql(TelemetryDatabase.MIGRATION_28_29)
+
+    assertTrue(
+      "missing sync_sequences table",
+      sql.any { it.contains("CREATE TABLE IF NOT EXISTS sync_sequences") },
+    )
+    for (table in SYNC_SEQ_TABLES) {
+      assertTrue(
+        "missing sync_seq column on $table",
+        sql.any { it == "ALTER TABLE $table ADD COLUMN sync_seq INTEGER NOT NULL DEFAULT 0" },
+      )
+      assertTrue(
+        "missing sync_seq index on $table",
+        sql.any { it == "CREATE INDEX IF NOT EXISTS index_${table}_sync_seq ON $table(sync_seq)" },
+      )
+      assertTrue(
+        "missing counter seed for $table",
+        sql.any { it.contains("INSERT OR REPLACE INTO sync_sequences") && it.contains("'$table'") },
+      )
+    }
+  }
+
+  /**
+   * Existing rows need distinct, increasing positions and the counter has to resume above all of
+   * them, or the first writes after upgrade reuse numbers the scan would order wrongly.
+   */
+  @Test
+  fun syncSeqMigrationBackfillsExistingRowsBeforeSeedingTheCounter() {
+    val sql = migrationSql(TelemetryDatabase.MIGRATION_28_29)
+
+    for (table in SYNC_SEQ_TABLES) {
+      val backfilled = sql.indexOf("UPDATE $table SET sync_seq = rowid")
+      val seeded = sql.indexOfFirst {
+        it.contains("INSERT OR REPLACE INTO sync_sequences") && it.contains("'$table'")
+      }
+      assertTrue("missing sync_seq backfill for $table", backfilled >= 0)
+      assertTrue("counter for $table is seeded before its rows are numbered", seeded > backfilled)
+    }
+  }
+
+  /** Every entity write path stamps a fresh position, including the merge branch for buckets. */
+  @Test
+  fun everyEntityWritePathAllocatesASyncSeq() {
+    val dao = daoSource()
+
+    for (marker in listOf(
+      "syncSeq = nextSyncSeq(SYNC_SEQ_BOARDS)",
+      "syncSeq = nextSyncSeq(SYNC_SEQ_ALERTS)",
+      "syncSeq = nextSyncSeq(SYNC_SEQ_MINUTE_BUCKETS)",
+    )) {
+      assertTrue("no write path allocates via `$marker`", dao.contains(marker))
+    }
+    // The bucket merge folds into the stored row, so the fresh position has to survive the fold.
+    assertTrue("bucket merge drops the new sync_seq", dao.contains("syncSeq = next.syncSeq"))
+  }
+
+  // MARK: Last-write-wins ratchet (#275)
+
+  /**
+   * The server keeps its stored row unless the incoming stamp is strictly newer, so a rewound clock
+   * that stamps at or below it is a silently dropped edit — freezing the value is not enough.
+   */
+  @Test
+  fun ratchetStepsPastAStampTheClockCannotBeat() {
+    assertEquals(1_000L, ratchetUpdatedAt(null, 1_000L))
+    // Clock ahead of the stored row: truthful wall clock, no inflation.
+    assertEquals(5_000L, ratchetUpdatedAt(1_000L, 5_000L))
+    // Clock rewound below it, or stalled on it: strictly above.
+    assertEquals(5_001L, ratchetUpdatedAt(5_000L, 1_000L))
+    assertEquals(5_001L, ratchetUpdatedAt(5_000L, 5_000L))
+  }
+
+  @Test
+  fun boardAndAlertUpsertsRatchetAgainstTheStoredStamp() {
+    val dao = daoSource()
+
+    assertTrue(
+      "board upsert does not ratchet",
+      dao.contains("ratchetUpdatedAt(getBoardUpdatedAt(board.id), board.updatedAt)"),
+    )
+    assertTrue(
+      "alert upsert does not ratchet",
+      dao.contains("ratchetUpdatedAt(getAlertRuleUpdatedAt(rule.boardId, rule.id), rule.updatedAt)"),
     )
   }
 

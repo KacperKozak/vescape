@@ -114,18 +114,24 @@ final class AppDataRepository {
       // Legal Mode changes only through the dedicated native intent.
     ] + linkSettings.filter { $0.0 != "transport" }
     let transport = linkSettings.first { $0.0 == "transport" }?.1 as? String
-    // One stamp for the board row's sync cursor and every board-setting row written below. Native
-    // stamps it rather than trusting the bridge value: it must come from the device clock that
-    // already writes `created_at` and must move on every upsert, including partial edits.
+    // One stamp for the board row's last-write-wins timestamp and every board-setting row written
+    // below. Native stamps it rather than trusting the bridge value: it must come from the device
+    // clock that already writes `created_at` and must move on every upsert, including partial edits.
     let updatedAt = nowMs()
 
     write { db in
+      // Read-modify-write rather than an `ON CONFLICT` fold: `INSERT OR REPLACE` deletes the old row
+      // before inserting, so the ratchet has no `excluded`-style handle on the value it replaces.
+      let previous = try Int64.fetchOne(db, sql: "SELECT updated_at FROM boards WHERE id = ?", arguments: [id])
       try db.execute(
         sql: """
-          INSERT OR REPLACE INTO boards (id, name, ble_id, transport, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?)
+          INSERT OR REPLACE INTO boards (id, name, ble_id, transport, created_at, updated_at, sync_seq)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
           """,
-        arguments: [id, name, bleId, transport, createdAt, updatedAt]
+        arguments: [
+          id, name, bleId, transport, createdAt,
+          ratchetUpdatedAt(previous, updatedAt), try nextSyncSeq(db, syncSeqBoards),
+        ]
       )
       for (key, value) in settings {
         guard let value, let json = Self.encodeJson(value) else {
@@ -332,32 +338,45 @@ final class AppDataRepository {
     let soundType = rule["soundType"] as? String ?? "default"
     let createdAt = Self.longValue(rule["createdAt"] ?? nil) ?? nowMs()
     let source = rule["source"] as? String
-    // Native stamps the sync cursor rather than trusting the bridge value: it must come from the
-    // device clock that already writes `created_at` and must move on every upsert.
+    // Native stamps the last-write-wins timestamp rather than trusting the bridge value: it must come
+    // from the device clock that already writes `created_at` and must move on every upsert.
     let updatedAt = nowMs()
     write { db in
+      // See `upsertBoard` for why the ratchet reads the old value instead of folding it on conflict.
+      let previous = try Int64.fetchOne(
+        db,
+        sql: "SELECT updated_at FROM alerts WHERE board_id = ? AND id = ?",
+        arguments: [boardId, id]
+      )
       try db.execute(
         sql: """
-          INSERT OR REPLACE INTO alerts (board_id, id, control_id, threshold, threshold_max, enabled, sound_type, created_at, source, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT OR REPLACE INTO alerts (board_id, id, control_id, threshold, threshold_max, enabled, sound_type, created_at, source, updated_at, sync_seq)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           """,
         arguments: [
-          boardId, id, controlId, threshold, thresholdMax, enabled ? 1 : 0, soundType, createdAt, source, updatedAt,
+          boardId, id, controlId, threshold, thresholdMax, enabled ? 1 : 0, soundType, createdAt, source,
+          ratchetUpdatedAt(previous, updatedAt), try nextSyncSeq(db, syncSeqAlerts),
         ]
       )
     }
   }
 
-  /// Targeted toggle. Unlike `upsertAlertRule` it never rewrites the whole row, so `updated_at` has
-  /// to move here explicitly — without it, toggling a rule leaves the sync cursor stale and the
-  /// change never reaches the server.
+  /// Targeted toggle. Unlike `upsertAlertRule` it never rewrites the whole row, so both sync columns
+  /// have to move here explicitly — without them, toggling a rule leaves it invisible to the upload
+  /// scan and the change never reaches the server.
+  ///
+  /// The `MAX(updated_at + 1, ?)` fold is the same ratchet `ratchetUpdatedAt` applies, expressed in
+  /// SQL because the row is already being read by the `WHERE`.
   /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDao.kt `setAlertRuleEnabled`
   func setAlertRuleEnabled(_ boardId: String, _ id: String, _ enabled: Bool) {
     let updatedAt = nowMs()
     write { db in
       try db.execute(
-        sql: "UPDATE alerts SET enabled = ?, updated_at = ? WHERE board_id = ? AND id = ?",
-        arguments: [enabled ? 1 : 0, updatedAt, boardId, id]
+        sql: """
+          UPDATE alerts SET enabled = ?, updated_at = MAX(updated_at + 1, ?), sync_seq = ?
+          WHERE board_id = ? AND id = ?
+          """,
+        arguments: [enabled ? 1 : 0, updatedAt, try nextSyncSeq(db, syncSeqAlerts), boardId, id]
       )
     }
   }

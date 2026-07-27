@@ -12,7 +12,7 @@ import java.io.File
 // @parity /modules/vescape-core/ios/VescapeCoreModule.swift
 internal const val TELEMETRY_DATABASE_NAME = "vescape.db"
 internal const val LEGACY_TELEMETRY_DATABASE_NAME = "telemetry.db"
-internal const val TELEMETRY_DATABASE_VERSION = 28
+internal const val TELEMETRY_DATABASE_VERSION = 29
 
 @Database(
   entities = [
@@ -30,6 +30,7 @@ internal const val TELEMETRY_DATABASE_VERSION = 28
     PrivacyZoneEntity::class,
     MapPointEntity::class,
     BoardWarningEntity::class,
+    SyncSequenceEntity::class,
   ],
   version = TELEMETRY_DATABASE_VERSION,
   exportSchema = false,
@@ -505,6 +506,40 @@ abstract class TelemetryDatabase : RoomDatabase() {
     }
 
     /**
+     * Splits the Sync Cursor off the last-write-wins timestamp (#275). `sync_seq` is a device-local
+     * counter the upload scan runs on; `updated_at` keeps its wall-clock meaning and stays the value
+     * the server compares. Scanning a counter is what makes the scan complete under a device clock
+     * that steps backwards, which an `updated_at >= watermark` scan is not.
+     *
+     * Existing rows backfill from `rowid`: nothing has ever been uploaded, so any strictly
+     * increasing assignment works, and `rowid` gives one for free without an O(n²) self-join over
+     * tables that hold a row per ridden minute. Each counter then starts above every assigned value.
+     *
+     * @parity /modules/vescape-core/ios/telemetry/TelemetryDatabase.swift `v29_sync_seq`
+     */
+    internal val MIGRATION_28_29 = object : Migration(28, 29) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+          """
+          CREATE TABLE IF NOT EXISTS sync_sequences (
+            name TEXT NOT NULL PRIMARY KEY,
+            last_value INTEGER NOT NULL
+          )
+          """.trimIndent(),
+        )
+        for (table in SYNC_SEQ_TABLES) {
+          db.execSQL("ALTER TABLE $table ADD COLUMN sync_seq INTEGER NOT NULL DEFAULT 0")
+          db.execSQL("UPDATE $table SET sync_seq = rowid")
+          db.execSQL("CREATE INDEX IF NOT EXISTS index_${table}_sync_seq ON $table(sync_seq)")
+          db.execSQL(
+            "INSERT OR REPLACE INTO sync_sequences (name, last_value) " +
+              "VALUES ('$table', (SELECT COALESCE(MAX(sync_seq), 0) FROM $table))",
+          )
+        }
+      }
+    }
+
+    /**
      * One-time file rename from the pre-release "telemetry.db" name. Checkpoints the legacy WAL so
      * the whole database lives in the main file, then renames it in place. Idempotent: once the new
      * file exists (or no legacy file is present) this is a no-op.
@@ -559,6 +594,7 @@ abstract class TelemetryDatabase : RoomDatabase() {
             MIGRATION_25_26,
             MIGRATION_26_27,
             MIGRATION_27_28,
+            MIGRATION_28_29,
           )
           .fallbackToDestructiveMigration(true)
           .addCallback(object : Callback() {

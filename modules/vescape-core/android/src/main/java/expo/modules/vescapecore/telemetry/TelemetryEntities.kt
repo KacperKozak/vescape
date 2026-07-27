@@ -112,6 +112,7 @@ data class TelemetryFrameEntity(
   indices = [
     Index(value = ["bucket_start_ms"]),
     Index(value = ["updated_at"]),
+    Index(value = ["sync_seq"]),
   ],
 )
 data class TelemetryMinuteBucketEntity(
@@ -174,13 +175,18 @@ data class TelemetryMinuteBucketEntity(
   @ColumnInfo(name = "last_moving_at_ms")
   val lastMovingAtMs: Long? = null,
   /**
-   * Incremental-sync cursor: wall-clock epoch ms of the last write to this bucket. Distinct from
+   * Last-write-wins timestamp: wall-clock epoch ms of the last write to this bucket. Distinct from
    * [lastSampleAtMs], which tracks the newest *sample* in the bucket — a merge that folds in older
-   * samples, or a bucket rebuild, changes the row without moving that. Only a write-time stamp
-   * makes an appended bucket visible to a "everything changed since T" query.
+   * samples, or a bucket rebuild, changes the row without moving that.
+   *
+   * Not the Sync Cursor column; [syncSeq] is. This one crosses the wire and decides which of two
+   * writes to the same row the server keeps, so it stays a truthful wall clock.
    */
   @ColumnInfo(name = "updated_at")
   val updatedAt: Long,
+  /** Device-local Sync Cursor position; see [SyncSequenceEntity]. */
+  @ColumnInfo(name = "sync_seq")
+  val syncSeq: Long = 0,
 )
 
 @Entity(
@@ -240,6 +246,7 @@ data class DiagnosticEventEntity(
   indices = [
     Index(value = ["created_at"]),
     Index(value = ["updated_at"]),
+    Index(value = ["sync_seq"]),
   ],
 )
 data class BoardEntity(
@@ -251,12 +258,21 @@ data class BoardEntity(
   @ColumnInfo(name = "created_at")
   val createdAt: Long,
   /**
-   * Incremental-sync cursor: epoch ms of the last write to this row, from the same clock as
-   * [createdAt]. Equal to [createdAt] on insert and bumped on every mutation, so the client can ask
-   * the server for "everything changed since T". Indexed because cursor sync scans on it.
+   * Last-write-wins timestamp: epoch ms of the last write to this row, from the same clock as
+   * [createdAt]. Equal to [createdAt] on insert and bumped on every mutation. It crosses the wire
+   * and is what the server compares to decide which of two writes to this row it keeps, so it stays
+   * a truthful wall clock rather than a counter.
+   *
+   * Ratcheted to `max(previous + 1, now)` on write. A device clock that steps backwards would
+   * otherwise stamp an edit below the copy the server already holds, and the server's
+   * last-write-wins guard would silently drop it. Per row, so the inflation is bounded by the
+   * rewind and disappears once the wall clock passes it again.
    */
   @ColumnInfo(name = "updated_at")
   val updatedAt: Long,
+  /** Device-local Sync Cursor position; see [SyncSequenceEntity]. */
+  @ColumnInfo(name = "sync_seq")
+  val syncSeq: Long = 0,
 )
 
 @Entity(
@@ -285,6 +301,7 @@ data class BoardSettingEntity(
     Index(value = ["enabled"]),
     Index(value = ["created_at"]),
     Index(value = ["updated_at"]),
+    Index(value = ["sync_seq"]),
   ],
 )
 data class AlertRuleEntity(
@@ -307,14 +324,46 @@ data class AlertRuleEntity(
    */
   val source: String?,
   /**
-   * Incremental-sync cursor: epoch ms of the last write to this row, from the same clock as
-   * [createdAt]. Equal to [createdAt] on insert and bumped on every mutation — including the
-   * targeted enable/disable update — so a toggled rule is visible to sync. Indexed because cursor
-   * sync scans on it.
+   * Last-write-wins timestamp, ratcheted on write exactly as [BoardEntity.updatedAt] is, and moved
+   * by every mutation including the targeted enable/disable update.
    */
   @ColumnInfo(name = "updated_at")
   val updatedAt: Long,
+  /** Device-local Sync Cursor position; see [SyncSequenceEntity]. */
+  @ColumnInfo(name = "sync_seq")
+  val syncSeq: Long = 0,
 )
+
+/**
+ * One counter per syncable table, handing out the strictly increasing `sync_seq` those tables stamp
+ * on every write.
+ *
+ * The Sync Cursor is the phone's own record of how far it has uploaded, and it never crosses the
+ * wire — the server stores no watermark and has no opinion about one. That is what lets the scan
+ * run on a counter instead of a clock: a device clock that steps backwards makes an
+ * `updated_at >= watermark` scan skip the write entirely, because the row lands below a cursor the
+ * phone already passed. A counter cannot regress, so the scan stays complete however the clock
+ * behaves.
+ *
+ * The counter lives in its own table rather than being derived as `MAX(sync_seq) + 1` per table:
+ * deleting the highest row would hand the same number out twice, and the second row would fall on
+ * the wrong side of a cursor already advanced past it.
+ */
+@Entity(tableName = "sync_sequences")
+data class SyncSequenceEntity(
+  @PrimaryKey
+  val name: String,
+  @ColumnInfo(name = "last_value")
+  val lastValue: Long,
+)
+
+/** Table names used as [SyncSequenceEntity] keys. */
+internal const val SYNC_SEQ_BOARDS = "boards"
+internal const val SYNC_SEQ_ALERTS = "alerts"
+internal const val SYNC_SEQ_MINUTE_BUCKETS = "telemetry_minute_buckets"
+
+/** Every table carrying a `sync_seq`, in the order the migration adds it. */
+internal val SYNC_SEQ_TABLES = listOf(SYNC_SEQ_BOARDS, SYNC_SEQ_ALERTS, SYNC_SEQ_MINUTE_BUCKETS)
 
 @Entity(
   tableName = "metric_exclusion_ranges",
