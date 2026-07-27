@@ -264,6 +264,10 @@ _Avoid_: User, account, member, profile, friend
 An optional online identity that never gates the app's local, offline-first capabilities or ownership of local data.
 _Avoid_: Rider profile, User, Profile
 
+**Device Token**:
+A long-lived server-issued credential held by one app install that lets native call the Vescape server for a **Vescape Account's** own data without a signed-in JS runtime.
+_Avoid_: API key, session token, sync token, auth token, refresh token
+
 **Rider Presence**:
 A **Rider's** live shared snapshot within a **Group Ride**: location and heading from the phone **GPS Fix**, plus optional speed and **Battery SoC Estimate** when a **Board Session** is live. Ephemeral and server-relayed, never persisted on phone or server, suppressed while the Rider is inside a **Privacy Zone**. A Rider with no recent Rider Presence goes stale, then drops from the Group Ride.
 _Avoid_: Position update, presence ping, location share, group telemetry
@@ -353,6 +357,9 @@ _Avoid_: Position update, presence ping, location share, group telemetry
 - A **Group Ride** contains zero or more **Riders** and exists only while at least one **Rider** is present; it owns no durable truth and is never written to **Ride History**.
 - A **Rider** may be in at most one **Group Ride** at a time and is identified independently of any **Board**.
 - A **Vescape Account** is independent of a **Rider** and may enable optional online services such as backup, sync, or paid entitlements, but is not required to use local Boards, Ride Recording, Ride History, or tuning.
+- **Ride History** is owned by the **Vescape Account** and only labelled by a **Board**; deleting a Board hides it and drops its configuration but never removes the rides it produced, on the phone or on the server.
+- A **Device Token** belongs to exactly one **Vescape Account** and one app install; it authorizes reading and writing that Account's data, never changing the Account itself, which requires a freshly signed-in JS runtime.
+- A **Device Token** is revoked on sign-out and is not a **Group Ride** credential, which stays unauthenticated.
 - A **Rider Presence** belongs to one **Rider** in one **Group Ride**, derives location from a **GPS Fix** and optional speed/**Battery SoC Estimate** from a live **Board Session**, and is not produced while the Rider is inside a **Privacy Zone**.
 - A **Group Ride** requires only a phone **GPS Fix** to join; a **Board Session** is optional and only enriches a **Rider Presence**, never gates it.
 
@@ -404,5 +411,6 @@ _Avoid_: Position update, presence ping, location share, group telemetry
 - "force update" was used to mean both denying server compatibility and locking app UI; resolved terms: use **Online Block** for denying **Online Capabilities** and **App Block** for the exceptional update-only UI state.
 - "version warning" was used for both an update prompt and denial of server features; resolved terms: use **Update Warning** for the non-blocking prompt and **Online Block** when **Online Capabilities** are denied.
 - "message" may mean version compatibility or general communication; resolved: compatibility belongs to the **Release Policy**, while a **Community Message** never changes capability availability.
+- "device" in **Device Token** names the calling app install, not a **Board** and not the phone BLE peripheral; resolved: a **Device Token** identifies a caller, while records the app backs up carry no device or install identity of their own.
 - "posi switch" and "dual switch" refer to **Posi Sensor** mode in rider language; the firmware field name is an implementation detail.
 - "move board" may mean **Remote Tilt** or motor movement while disengaged; resolved term: use **Board Move** for deliberate app-driven movement of a disengaged Board.
