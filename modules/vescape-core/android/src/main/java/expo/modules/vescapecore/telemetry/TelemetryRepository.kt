@@ -6,6 +6,7 @@ import android.util.Log
 import expo.modules.kotlin.jni.NativeArrayBuffer
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.UUID
 import org.json.JSONObject
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -526,6 +527,87 @@ class TelemetryRepository private constructor(context: Context) {
     val query = RangeMutationOptions.from(options)
     flushNow()
     dao.deleteRange(query.fromMs, query.toMs, query.deviceId)
+  }
+
+  // Favorites (ADR 0029)
+
+  /** @parity /modules/vescape-core/ios/telemetry/TelemetryRepository.swift `getFavorites` */
+  suspend fun getFavorites(): List<Map<String, Any?>> = withContext(Dispatchers.IO) {
+    dao.getFavorites().map { it.toMap() }
+  }
+
+  /**
+   * Pin a time range as a Favorite. Identity and timestamps are minted here — the range and the
+   * optional name are the only things JS gets to supply. Summary stats come from the raw samples
+   * inside the range, so a range that cuts mid-bucket still gets exact numbers.
+   *
+   * @parity /modules/vescape-core/ios/telemetry/TelemetryRepository.swift `createFavorite`
+   */
+  suspend fun createFavorite(options: Map<String, Any?>): Map<String, Any?>? = withContext(Dispatchers.IO) {
+    val startMs = options.requiredLong("startMs")
+    val endMs = options.requiredLong("endMs")
+    require(endMs >= startMs) { "endMs must be greater than or equal to startMs" }
+    val deviceId = options["deviceId"] as? String
+    val name = (options["name"] as? String)?.trim()?.ifEmpty { null }
+    flushNow()
+
+    val states = getSampleStates(startMs, endMs, deviceId, Int.MAX_VALUE)
+    val summary = favoriteSummary(states)
+    val nowMs = System.currentTimeMillis()
+    val favorite = FavoriteEntity(
+      id = UUID.randomUUID().toString(),
+      deviceId = deviceId ?: summary.deviceId,
+      deviceName = summary.deviceName,
+      name = name,
+      startMs = startMs,
+      endMs = endMs,
+      createdAt = nowMs,
+      updatedAt = nowMs,
+      sampleCount = summary.sampleCount,
+      gpsPointCount = summary.gpsPointCount,
+      distanceCm = summary.distanceCm,
+      movingDurationMs = summary.movingDurationMs,
+      avgSpeedCentiKmh = summary.avgSpeedCentiKmh,
+      maxSpeedCentiKmh = summary.maxSpeedCentiKmh,
+      batteryUsedWhMilli = summary.batteryUsedWhMilli,
+    )
+    dao.insertFavorite(favorite)
+    favorite.toMap()
+  }
+
+  /**
+   * Unpin a Favorite. Telemetry in its range stays and becomes normally deletable (ADR 0029).
+   *
+   * @parity /modules/vescape-core/ios/telemetry/TelemetryRepository.swift `deleteFavorite`
+   */
+  suspend fun deleteFavorite(id: String): Boolean = withContext(Dispatchers.IO) {
+    dao.deleteFavorite(id) > 0
+  }
+
+  /**
+   * Run the raw samples of a Favorite range through the same Metric Sanitizers the recording flush
+   * applies, then collapse the resulting buckets into one denormalized summary. Exclusion ranges are
+   * deliberately not persisted: creating a Favorite is a read of Ride History, not a rewrite.
+   *
+   * @parity /modules/vescape-core/ios/telemetry/TelemetryRepository.swift `favoriteSummary`
+   */
+  private fun favoriteSummary(states: List<HistoryTelemetryState>): FavoriteSummary {
+    if (states.isEmpty()) return FavoriteSummary()
+    val telemetryPoints = states.map { it.state.toBucketPoint() }
+    val sanitization = sanitizeTelemetrySamples(telemetryPoints, metricSanitizerConfig)
+    val sanitizedPoints = telemetryPoints.mapIndexed { index, point ->
+      point.copy(
+        excludedFromAvgSpeed = sanitization.samples[index].excludedFromAvgSpeed,
+        excludedFromMaxSpeed = sanitization.samples[index].excludedFromMaxSpeed,
+        excludedFromMaxDuty = sanitization.samples[index].excludedFromMaxDuty,
+      )
+    }
+    return buildFavoriteSummary(
+      buildTelemetryBuckets(
+        telemetryPoints = sanitizedPoints,
+        locationPoints = states.toBucketLocationPoints(),
+      ),
+    )
   }
 
   suspend fun rebuildBuckets(onProgress: (current: Int, total: Int) -> Unit = { _, _ -> }): Int = withContext(Dispatchers.IO) {

@@ -12,7 +12,7 @@ import java.io.File
 // @parity /modules/vescape-core/ios/VescapeCoreModule.swift
 internal const val TELEMETRY_DATABASE_NAME = "vescape.db"
 internal const val LEGACY_TELEMETRY_DATABASE_NAME = "telemetry.db"
-internal const val TELEMETRY_DATABASE_VERSION = 27
+internal const val TELEMETRY_DATABASE_VERSION = 28
 
 @Database(
   entities = [
@@ -30,6 +30,7 @@ internal const val TELEMETRY_DATABASE_VERSION = 27
     PrivacyZoneEntity::class,
     MapPointEntity::class,
     BoardWarningEntity::class,
+    FavoriteEntity::class,
   ],
   version = TELEMETRY_DATABASE_VERSION,
   exportSchema = false,
@@ -473,6 +474,42 @@ abstract class TelemetryDatabase : RoomDatabase() {
     }
 
     /**
+     * Favorites (#287). Durable, optionally named time ranges over Ride History (ADR 0029). The row
+     * carries a native-minted UUID id, native-owned timestamps, and the summary stats computed once
+     * from the raw samples inside the range.
+     *
+     * @parity /modules/vescape-core/ios/telemetry/TelemetryDatabase.swift `v28_favorites`
+     */
+    internal val MIGRATION_27_28 = object : Migration(27, 28) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+          """
+          CREATE TABLE IF NOT EXISTS favorites (
+            id TEXT NOT NULL PRIMARY KEY,
+            device_id TEXT,
+            device_name TEXT,
+            name TEXT,
+            start_ms INTEGER NOT NULL,
+            end_ms INTEGER NOT NULL,
+            created_at INTEGER NOT NULL,
+            updated_at INTEGER NOT NULL,
+            sample_count INTEGER NOT NULL,
+            gps_point_count INTEGER NOT NULL,
+            distance_cm INTEGER,
+            moving_duration_ms INTEGER NOT NULL,
+            avg_speed_centi_kmh INTEGER NOT NULL,
+            max_speed_centi_kmh INTEGER NOT NULL,
+            battery_used_wh_milli INTEGER NOT NULL
+          )
+          """.trimIndent(),
+        )
+        db.execSQL(
+          "CREATE INDEX IF NOT EXISTS index_favorites_start_ms_end_ms ON favorites(start_ms, end_ms)",
+        )
+      }
+    }
+
+    /**
      * One-time file rename from the pre-release "telemetry.db" name. Checkpoints the legacy WAL so
      * the whole database lives in the main file, then renames it in place. Idempotent: once the new
      * file exists (or no legacy file is present) this is a no-op.
@@ -526,6 +563,7 @@ abstract class TelemetryDatabase : RoomDatabase() {
             MIGRATION_24_25,
             MIGRATION_25_26,
             MIGRATION_26_27,
+            MIGRATION_27_28,
           )
           .fallbackToDestructiveMigration(true)
           .addCallback(object : Callback() {

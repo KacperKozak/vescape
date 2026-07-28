@@ -526,6 +526,18 @@ class VescapeCoreModule : Module() {
     AsyncFunction("getProfileStatMonths") {
       runBlocking { ProfileStatsRepository.get(context.applicationContext).getProfileStatMonths() }
     }
+    // Favorites (ADR 0029). JS supplies only the range and an optional name; identity, timestamps
+    // and the denormalized summary are native.
+    // @parity /modules/vescape-core/ios/VescapeCoreModule.swift `getFavorites`
+    AsyncFunction("getFavorites") Coroutine { ->
+      TelemetryRepository.get(context.applicationContext).getFavorites()
+    }
+    AsyncFunction("createFavorite") Coroutine { options: Map<String, Any?> ->
+      TelemetryRepository.get(context.applicationContext).createFavorite(options)
+    }
+    AsyncFunction("deleteFavorite") Coroutine { id: String ->
+      TelemetryRepository.get(context.applicationContext).deleteFavorite(id)
+    }
     AsyncFunction("deleteTelemetryBefore") Coroutine { beforeMs: Double ->
       TelemetryRepository.get(context.applicationContext).deleteBefore(beforeMs.toLong())
     }

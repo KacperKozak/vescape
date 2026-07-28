@@ -600,6 +600,25 @@ public class VescapeCoreModule: Module {
       promise.resolve(ProfileStatsRepository.shared.getProfileStatMonths())
     }
 
+    // Favorites (ADR 0029). JS supplies only the range and an optional name; identity, timestamps
+    // and the denormalized summary are native.
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `getFavorites`
+    AsyncFunction("getFavorites") { (promise: Promise) in
+      promise.resolve(TelemetryRepository.shared.getFavorites())
+    }
+
+    AsyncFunction("createFavorite") { (options: [String: Any], promise: Promise) in
+      guard let favorite = TelemetryRepository.shared.createFavorite(options) else {
+        promise.reject("ERR_CREATE_FAVORITE", "favorite range is invalid or could not be stored")
+        return
+      }
+      promise.resolve(favorite)
+    }
+
+    AsyncFunction("deleteFavorite") { (id: String, promise: Promise) in
+      promise.resolve(TelemetryRepository.shared.deleteFavorite(id))
+    }
+
     AsyncFunction("deleteTelemetryBefore") { (beforeMs: Double, promise: Promise) in
       promise.resolve(TelemetryRepository.shared.deleteBefore(Int64(beforeMs)))
     }

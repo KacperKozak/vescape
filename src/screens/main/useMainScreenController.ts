@@ -6,7 +6,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { exitApp } from 'vescape-core'
 
 import type { MainMapHandle } from '@/screens/main/map/MainMap'
-import { useMainScreenStore } from '@/screens/main/mainScreenStore'
+import { useMainScreenStore, type HistoryTab } from '@/screens/main/mainScreenStore'
 import {
   getLatestSession,
   getNextRideSession,
@@ -14,6 +14,8 @@ import {
 } from '@/screens/main/mainState'
 import { useBleStore } from '@/modules/board/store/bleStore'
 import { useHistoryStore, type HistorySession } from '@/modules/history/store/historyStore'
+import { useFavoriteStore } from '@/modules/history/store/favoriteStore'
+import { favoriteRangeForSession, findSessionFavorite } from '@/modules/history/lib/favorites'
 import { useMapStore } from '@/modules/map/store/mapStore'
 import { useSettingsStore } from '@/modules/settings/store/settingsStore'
 import { useWeatherStore } from '@/modules/weather/store/weatherStore'
@@ -34,6 +36,7 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
   const [openMediaAssetId, setOpenMediaAssetId] = useState<string | null>(null)
   const {
     mode,
+    historyTab,
     historySheetVisible,
     mapSelector,
     perspectiveEnabled,
@@ -43,6 +46,7 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
     enterWeather,
     enterLegalLimits,
     enterHistory,
+    setHistoryTab,
     setHistorySheetVisible,
     setMapSelector,
     dismissMapSelector,
@@ -52,6 +56,7 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
   } = useMainScreenStore(
     useShallow((s) => ({
       mode: s.mode,
+      historyTab: s.historyTab,
       historySheetVisible: s.historySheetVisible,
       mapSelector: s.mapSelector,
       perspectiveEnabled: s.perspectiveEnabled,
@@ -61,6 +66,7 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
       enterWeather: s.enterWeather,
       enterLegalLimits: s.enterLegalLimits,
       enterHistory: s.enterHistory,
+      setHistoryTab: s.setHistoryTab,
       setHistorySheetVisible: s.setHistorySheetVisible,
       setMapSelector: s.setMapSelector,
       dismissMapSelector: s.dismissMapSelector,
@@ -69,6 +75,16 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
       setActiveHistoryMapMetric: s.setActiveHistoryMapMetric,
     })),
   )
+  const { favorites, favoritesLoading, loadFavorites, addFavorite, removeFavorite } =
+    useFavoriteStore(
+      useShallow((s) => ({
+        favorites: s.favorites,
+        favoritesLoading: s.loading,
+        loadFavorites: s.load,
+        addFavorite: s.add,
+        removeFavorite: s.remove,
+      })),
+    )
   const liveLocations = useBleStore((s) => s.liveLocationHistory)
   const latestApproximateLocation = useBleStore((s) => s.latestApproximateLocation)
   const fetchWeather = useWeatherStore((s) => s.fetch)
@@ -225,14 +241,44 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
     requestAnimationFrame(() => mapRef.current?.recenterLive())
   }, [enterTelemetry, mapRef])
 
+  const selectedSessionFavorite = useMemo(
+    () => (selectedSession ? findSessionFavorite(favorites, selectedSession) : null),
+    [favorites, selectedSession],
+  )
+
+  const selectHistoryTab = useCallback(
+    (tab: HistoryTab) => {
+      setHistoryTab(tab)
+      if (tab === 'favorites') void loadFavorites()
+    },
+    [loadFavorites, setHistoryTab],
+  )
+
+  /** Star on an open ride pins its full Moving Window; starring again unpins that same range. */
+  const toggleSelectedRideFavorite = useCallback(async () => {
+    const session = useHistoryStore.getState().selectedSession
+    if (!session) return
+    const existing = findSessionFavorite(useFavoriteStore.getState().favorites, session)
+    if (existing) {
+      await removeFavorite(existing.id)
+      return
+    }
+    const range = favoriteRangeForSession(session)
+    await addFavorite({
+      ...range,
+      ...(session.deviceId ? { deviceId: session.deviceId } : {}),
+    })
+  }, [addFavorite, removeFavorite])
+
   const exitHistory = useCallback(() => {
     setOpenMediaAssetId(null)
+    setHistoryTab('history')
     void selectSession(null)
     enterTelemetry()
     requestAnimationFrame(() =>
       mapRef.current?.recenterLive({ resetPadding: true, animationDuration: 0 }),
     )
-  }, [enterTelemetry, mapRef, selectSession])
+  }, [enterTelemetry, mapRef, selectSession, setHistoryTab])
 
   const loadOlderHistoryPages = useCallback(
     async (targetSessionCount = TARGET_INITIAL_HISTORY_SESSIONS) => {
@@ -251,6 +297,7 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
 
   const enterHistoryMode = useCallback(async () => {
     enterHistory()
+    void loadFavorites()
     await loadInitial()
     await loadOlderHistoryPages()
     if (useMainScreenStore.getState().mode !== 'history') return
@@ -258,7 +305,7 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
     if (latest) {
       await selectSession(latest)
     }
-  }, [enterHistory, loadInitial, loadOlderHistoryPages, selectSession])
+  }, [enterHistory, loadFavorites, loadInitial, loadOlderHistoryPages, selectSession])
 
   const selectPreviousRide = useCallback(async () => {
     setOpenMediaAssetId(null)
@@ -430,6 +477,13 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
     historyError,
     historySheetVisible,
     setHistorySheetVisible,
+    historyTab,
+    selectHistoryTab,
+    favorites,
+    favoritesLoading,
+    selectedSessionFavorite,
+    toggleSelectedRideFavorite,
+    removeFavorite,
     selectSession,
     loadMoreHistory: loadMore,
     selectPreviousRide,

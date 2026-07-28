@@ -231,6 +231,79 @@ internal final class TelemetryRepository {
     Int64(telemetryInt(AppDataRepository.shared.getSettings()["socEstimateWindowSeconds"] ?? nil) ?? 20) * 1000
   }
 
+  // MARK: - Favorites (ADR 0029)
+
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryRepository.kt `getFavorites`
+  func getFavorites() -> [[String: Any?]] {
+    FavoriteStore.shared.list().map { $0.toMap() }
+  }
+
+  /// Pin a time range as a Favorite. Identity and timestamps are minted here — the range and the
+  /// optional name are the only things JS gets to supply. Summary stats come from the raw samples
+  /// inside the range, so a range that cuts mid-bucket still gets exact numbers.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryRepository.kt `createFavorite`
+  func createFavorite(_ options: [String: Any]) -> [String: Any?]? {
+    flushBlocking()
+    guard let pool else { return nil }
+    let startMs = telemetryLong(options["startMs"]) ?? 0
+    let endMs = telemetryLong(options["endMs"]) ?? 0
+    guard endMs >= startMs else { return nil }
+    let deviceId = options["deviceId"] as? String
+    let trimmedName = (options["name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+    let config = queue.sync { metricConfig }
+    let points = (try? pool.read { db in
+      try Row.fetchAll(
+        db,
+        sql: """
+          SELECT * FROM telemetry_frames
+          WHERE captured_at_ms >= ? AND captured_at_ms <= ? AND (? IS NULL OR device_id = ?)
+          ORDER BY captured_at_ms ASC
+          """,
+        arguments: [startMs, endMs, deviceId, deviceId]
+      ).compactMap(bucketPoint)
+    }) ?? []
+    let summary = Self.favoriteSummary(points, config: config)
+    let nowMs = telemetryNowMs()
+    let favorite = Favorite(
+      id: UUID().uuidString,
+      deviceId: deviceId ?? summary.deviceId,
+      deviceName: summary.deviceName,
+      name: (trimmedName?.isEmpty ?? true) ? nil : trimmedName,
+      startMs: startMs,
+      endMs: endMs,
+      createdAtMs: nowMs,
+      updatedAtMs: nowMs,
+      summary: summary
+    )
+    guard FavoriteStore.shared.insert(favorite) else { return nil }
+    return favorite.toMap()
+  }
+
+  /// Unpin a Favorite. Telemetry in its range stays and becomes normally deletable (ADR 0029).
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryRepository.kt `deleteFavorite`
+  func deleteFavorite(_ id: String) -> Bool {
+    FavoriteStore.shared.delete(id)
+  }
+
+  /// Run the raw samples of a Favorite range through the same Metric Sanitizers the recording flush
+  /// applies, then collapse the resulting buckets into one denormalized summary. Exclusion ranges
+  /// are deliberately not persisted: creating a Favorite is a read of Ride History, not a rewrite.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryRepository.kt `favoriteSummary`
+  internal static func favoriteSummary(
+    _ points: [BucketTelemetryPoint],
+    config: MetricSanitizerConfig
+  ) -> FavoriteSummary {
+    guard !points.isEmpty else { return FavoriteSummary() }
+    let sanitization = sanitizeTelemetrySamples(points, config: config)
+    var sanitized = points
+    for i in sanitized.indices {
+      sanitized[i].excludedFromAvgSpeed = sanitization.samples[i].excludedFromAvgSpeed
+      sanitized[i].excludedFromMaxSpeed = sanitization.samples[i].excludedFromMaxSpeed
+      sanitized[i].excludedFromMaxDuty = sanitization.samples[i].excludedFromMaxDuty
+    }
+    return buildFavoriteSummary(buildTelemetryBuckets(sanitized))
+  }
+
   func deleteBefore(_ beforeMs: Int64) -> Int {
     guard let pool else { return 0 }
     return (try? pool.write { db in

@@ -526,6 +526,19 @@ interface TelemetryDao {
 
   @Query("DELETE FROM board_warnings WHERE board_id = :boardId")
   suspend fun deleteBoardWarnings(boardId: String): Int
+
+  // Favorites — durable pins over Ride History (ADR 0029). Deleting a row only unpins; telemetry
+  // inside the range is never touched here.
+  // @parity /modules/vescape-core/ios/telemetry/FavoriteStore.swift
+
+  @Query("SELECT * FROM favorites ORDER BY start_ms DESC")
+  suspend fun getFavorites(): List<FavoriteEntity>
+
+  @Insert
+  suspend fun insertFavorite(favorite: FavoriteEntity)
+
+  @Query("DELETE FROM favorites WHERE id = :id")
+  suspend fun deleteFavorite(id: String): Int
 }
 
 private fun TelemetryMinuteBucketEntity.merge(next: TelemetryMinuteBucketEntity): TelemetryMinuteBucketEntity {

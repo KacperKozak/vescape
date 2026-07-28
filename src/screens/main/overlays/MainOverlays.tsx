@@ -37,12 +37,13 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import type { HistoryMarker, MapPointKind } from 'vescape-core'
+import type { Favorite, HistoryMarker, MapPointKind } from 'vescape-core'
 
 import { ConfirmModal } from '@/components/modals/ConfirmModal'
 import { EdgeDrawer } from '@/components/overlays/AnchoredSheet'
 import { MediaHistoryViewer } from '@/modules/history/components/MediaHistoryViewer'
 import { FloatingBar } from '@/modules/board/components/FloatingBar'
+import { FavoriteList } from '@/modules/history/components/FavoriteList'
 import { HistorySessionSheet } from '@/modules/history/components/HistorySessionSheet'
 import { IconButton } from '@/components/base/IconButton'
 import { MapNavigationSelector } from '@/modules/map/components/MapNavigationSelector'
@@ -71,7 +72,7 @@ import {
   OffscreenMapIndicator,
   type OffscreenMapIndicatorState,
 } from '@/screens/main/map/offscreenMapIndicators'
-import type { MapSelector } from '@/screens/main/mainScreenStore'
+import type { HistoryTab, MapSelector } from '@/screens/main/mainScreenStore'
 import type { MainViewState } from '@/screens/main/mainViewState'
 import { HistoryControls } from '@/screens/main/history/HistoryControls'
 import { HistoryEmptyState } from '@/modules/history/components/HistoryEmptyState'
@@ -161,6 +162,13 @@ interface MainHistoryOverlayProps {
   sessions: HistorySession[]
   historySheetVisible: boolean
   setHistorySheetVisible: (visible: boolean) => void
+  historyTab: HistoryTab
+  selectHistoryTab: (tab: HistoryTab) => void
+  favorites: Favorite[]
+  favoritesLoading: boolean
+  selectedSessionFavorite: Favorite | null
+  toggleSelectedRideFavorite: () => Promise<void>
+  removeFavorite: (id: string) => Promise<void>
   selectSession: (session: HistorySession | null) => Promise<void>
   loadMoreHistory: () => Promise<void>
   selectPreviousRide: () => Promise<void>
@@ -1087,7 +1095,30 @@ export function MainOverlays({
         />
       </View>
 
-      {mode === 'history' && history.selectedSession && (
+      {mode === 'history' && history.historyTab === 'favorites' && (
+        <>
+          <FavoriteList
+            favorites={history.favorites}
+            loading={history.favoritesLoading}
+            onRemove={(favorite) => {
+              void history.removeFavorite(favorite.id)
+            }}
+          />
+          <HistoryControls
+            loading={historyBusy}
+            tab={history.historyTab}
+            canRemove={false}
+            canFavorite={false}
+            favorited={false}
+            onSelectTab={history.selectHistoryTab}
+            onBack={history.exitHistory}
+            onRemove={() => undefined}
+            onToggleFavorite={() => undefined}
+          />
+        </>
+      )}
+
+      {mode === 'history' && history.historyTab === 'history' && history.selectedSession && (
         <>
           {historyBusy && (
             <View pointerEvents="none" style={styles.mapLoading}>
@@ -1123,14 +1154,21 @@ export function MainOverlays({
           <HistoryStatsBar session={history.selectedSession} />
           <HistoryControls
             loading={historyBusy}
+            tab={history.historyTab}
             canRemove={true}
+            canFavorite={true}
+            favorited={history.selectedSessionFavorite != null}
+            onSelectTab={history.selectHistoryTab}
             onBack={history.exitHistory}
             onRemove={handleRemovePress}
+            onToggleFavorite={() => {
+              void history.toggleSelectedRideFavorite()
+            }}
           />
         </>
       )}
 
-      {mode === 'history' && !history.selectedSession && (
+      {mode === 'history' && history.historyTab === 'history' && !history.selectedSession && (
         <>
           {historyBusy ? (
             <View pointerEvents="none" style={styles.mapLoading}>
@@ -1141,9 +1179,14 @@ export function MainOverlays({
           )}
           <HistoryControls
             loading={historyBusy}
+            tab={history.historyTab}
             canRemove={false}
+            canFavorite={false}
+            favorited={false}
+            onSelectTab={history.selectHistoryTab}
             onBack={history.exitHistory}
             onRemove={() => undefined}
+            onToggleFavorite={() => undefined}
           />
         </>
       )}

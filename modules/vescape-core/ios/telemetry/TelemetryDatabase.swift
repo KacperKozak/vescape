@@ -418,6 +418,15 @@ enum TelemetryDatabase {
         """)
     }
 
+    // MARK: Favorites (#287)
+    // Durable, optionally named time ranges over Ride History (ADR 0029). DDL lives on
+    // `FavoriteStore` so the schema stays single-source with the tests that reuse it. Mirrors
+    // Android Room migration 27→28.
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `MIGRATION_27_28`
+    migrator.registerMigration("v28_favorites") { db in
+      try FavoriteStore.createTables(db)
+    }
+
     return migrator
   }
 }

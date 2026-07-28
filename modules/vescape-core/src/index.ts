@@ -731,6 +731,43 @@ export interface TelemetrySummary {
   droppedPendingSamples: number
 }
 
+/**
+ * One Favorite: a durable, optionally named time range over Ride History (ADR 0029). Identity,
+ * timestamps and the summary stats are native-owned — JS only ever sends a range and a name.
+ *
+ * @parity /modules/vescape-core/ios/telemetry/FavoriteStore.swift `Favorite`
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryEntities.kt `FavoriteEntity`
+ */
+export interface Favorite {
+  id: string
+  deviceId: string | null
+  deviceName: string | null
+  name: string | null
+  startMs: number
+  endMs: number
+  createdAtMs: number
+  updatedAtMs: number
+  sampleCount: number
+  gpsPointCount: number
+  /** Null when the favorited range carries no distance source. */
+  distanceM: number | null
+  movingDurationMs: number
+  avgSpeedKmh: number
+  maxSpeedKmh: number
+  batteryUsedWh: number
+}
+
+/**
+ * @parity /modules/vescape-core/ios/telemetry/TelemetryRepository.swift `createFavorite`
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryRepository.kt `createFavorite`
+ */
+export interface CreateFavoriteOptions {
+  startMs: number
+  endMs: number
+  deviceId?: string
+  name?: string
+}
+
 export interface RefloatConfigField {
   id: string
   label: string
@@ -1355,6 +1392,9 @@ type VescapeCoreNativeModule = NativeEventEmitter<VescapeCoreEvents> & {
     limit?: number
   }): Promise<NativeHistoryRange>
   getTelemetrySummary(): Promise<TelemetrySummary>
+  getFavorites(): Promise<Favorite[]>
+  createFavorite(options: CreateFavoriteOptions): Promise<Favorite>
+  deleteFavorite(id: string): Promise<boolean>
   getDiagnosticEvents(options: DiagnosticEventOptions): Promise<LocalDiagnosticEvent[]>
   clearDiagnosticEvents(): Promise<void>
   getBoardWarnings(): Promise<BoardWarning[]>
@@ -1816,6 +1856,20 @@ export async function getTelemetrySummary(): Promise<TelemetrySummary> {
     return e2eFake.getTelemetrySummary()
   }
   return native.getTelemetrySummary()
+}
+
+export async function getFavorites(): Promise<Favorite[]> {
+  return native.getFavorites()
+}
+
+/** Pin a time range as a Favorite. Native mints the id, the timestamps and the summary stats. */
+export async function createFavorite(options: CreateFavoriteOptions): Promise<Favorite> {
+  return native.createFavorite(options)
+}
+
+/** Unpin a Favorite. Its telemetry stays and becomes normally deletable (ADR 0029). */
+export async function deleteFavorite(id: string): Promise<boolean> {
+  return native.deleteFavorite(id)
 }
 
 export async function getDiagnosticEvents(

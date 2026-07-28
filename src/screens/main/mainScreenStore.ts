@@ -5,8 +5,12 @@ import type { MainViewState } from '@/screens/main/mainViewState'
 
 export type MapSelector = 'navigation' | 'style' | null
 
+/** Which list the history screen shows: recorded rides, or the Favorites the rider starred. */
+export type HistoryTab = 'history' | 'favorites'
+
 interface MainScreenState {
   mode: MainViewState
+  historyTab: HistoryTab
   historySheetVisible: boolean
   mapSelector: MapSelector
   perspectiveEnabled: boolean
@@ -21,6 +25,7 @@ interface MainScreenActions {
   enterWeather: () => void
   enterLegalLimits: () => void
   enterHistory: () => void
+  setHistoryTab: (tab: HistoryTab) => void
   setHistorySheetVisible: (visible: boolean) => void
   setMapSelector: (selector: MapSelector) => void
   dismissMapSelector: () => void
@@ -31,6 +36,7 @@ interface MainScreenActions {
 
 const initialState: MainScreenState = {
   mode: 'telemetry',
+  historyTab: 'history',
   historySheetVisible: false,
   mapSelector: null,
   perspectiveEnabled: true,
@@ -63,6 +69,12 @@ export const useMainScreenStore = create<MainScreenState & MainScreenActions>((s
 
   enterHistory() {
     set({ mode: 'history', mapSelector: null })
+  },
+
+  setHistoryTab(tab) {
+    set((state) =>
+      state.historyTab === tab ? state : { historyTab: tab, historySheetVisible: false },
+    )
   },
 
   setHistorySheetVisible(visible) {
