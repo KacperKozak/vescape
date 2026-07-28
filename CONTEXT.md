@@ -101,8 +101,8 @@ A phone photo or video whose capture time falls inside a selected Ride Recording
 _Avoid_: Ride photo, recording media, uploaded media
 
 **Map Point**:
-A user-authored map-visible location that is independent from Ride Recording and Ride History. A Map Point may describe a direction target, trail feature, viewpoint, charging place, or similar location.
-_Avoid_: Marker, GPS point, telemetry marker
+A globally shared, Account-authored map-visible location that is independent from Ride Recording and Ride History. A Map Point describes a categorized riding place such as a drop, bonk, trail entry, viewpoint, or charging place; a personal navigation target is not a Map Point.
+_Avoid_: Marker, GPS point, telemetry marker, direction point
 
 **Map Camera Controller**:
 The app-owned volatile coordinator for map camera position, zoom, pitch, heading, padding, animation, and transitions between live follow, manual browse, and ride history framing.
