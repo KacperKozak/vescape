@@ -285,6 +285,44 @@ function SeekPositionPin({ rideGpsSamples }: { rideGpsSamples: HistoryGpsSample[
   )
 }
 
+// Live sub-range highlight while trimming a Favorite. Subscribes to the trim range directly so a
+// drag only re-renders this layer, not the whole map. rideGpsSamples is a stable prop.
+function TrimRouteHighlight({ rideGpsSamples }: { rideGpsSamples: HistoryGpsSample[] }) {
+  const trimRange = useMainScreenStore((s) => s.trimRange)
+  const shape = useMemo(() => {
+    if (!trimRange) return null
+    const lo = Math.min(trimRange.startMs, trimRange.endMs)
+    const hi = Math.max(trimRange.startMs, trimRange.endMs)
+    const coordinates: [number, number][] = []
+    for (const gps of rideGpsSamples) {
+      if (gps.capturedAtMs < lo) continue
+      if (gps.capturedAtMs > hi) break
+      coordinates.push([gps.longitude, gps.latitude])
+    }
+    if (coordinates.length < 2) return null
+    return {
+      type: 'Feature',
+      geometry: { type: 'LineString', coordinates },
+      properties: {},
+    } as const
+  }, [trimRange, rideGpsSamples])
+
+  if (!shape) return null
+  return (
+    <ShapeSource id="center-ride-trim-source" shape={shape}>
+      <LineLayer
+        id="center-ride-trim-line"
+        style={{
+          lineColor: theme.palette.amber.color,
+          lineWidth: 5,
+          lineCap: 'round',
+          lineJoin: 'round',
+        }}
+      />
+    </ShapeSource>
+  )
+}
+
 export function HistoryMapLayers({
   rideRouteShape,
   rideRoute,
@@ -316,6 +354,8 @@ export function HistoryMapLayers({
   onOpenMedia: MainMapLayersProps['onOpenMedia']
   highContrastRoutes: boolean
 }) {
+  // Flips only on trim enter/exit, so the whole-route layers dim without per-drag re-renders.
+  const trimming = useMainScreenStore((s) => s.trimRange != null)
   const [highlightProgress, setHighlightProgress] = useState(0)
   const highlightDurationMs = useMemo(
     () => getHistoryRouteHighlightDurationMs(rideRoute),
@@ -376,6 +416,7 @@ export function HistoryMapLayers({
               lineWidth: highContrastRoutes ? 8 : 0,
               lineCap: 'round',
               lineJoin: 'round',
+              lineOpacity: trimming ? 0.3 : 1,
             }}
           />
           <LineLayer
@@ -385,6 +426,7 @@ export function HistoryMapLayers({
               lineWidth: highContrastRoutes ? 5 : 4,
               lineCap: 'round',
               lineJoin: 'round',
+              lineOpacity: trimming ? 0.3 : 1,
               ...(routeMetricGradient ? { lineGradient: routeMetricGradient } : {}),
             }}
           />
@@ -395,10 +437,12 @@ export function HistoryMapLayers({
               lineWidth: highContrastRoutes ? 5 : 4,
               lineCap: 'round',
               lineJoin: 'round',
+              lineOpacity: trimming ? 0.3 : 1,
             }}
           />
         </ShapeSource>
       )}
+      <TrimRouteHighlight rideGpsSamples={rideGpsSamples} />
       {rideRoute[0] && (
         <MapPin
           id="center-ride-start"

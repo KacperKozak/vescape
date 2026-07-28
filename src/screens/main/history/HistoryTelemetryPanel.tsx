@@ -21,6 +21,7 @@ import {
 } from '@/components/charts/chartMath'
 import {
   TelemetryLineChart,
+  type ChartTrimConfig,
   type SecondaryChartSeries,
 } from '@/components/charts/TelemetryLineChart'
 import { PrevNextSelector } from '@/components/controls/PrevNextSelector'
@@ -61,6 +62,8 @@ interface HistoryTelemetryPanelProps {
   onSeek?: (timeMs: number) => void
   onMetricInteraction?: (metric: HistoryMetricKey) => void
   onHeightChange?: (height: number) => void
+  /** When set, the primary chart becomes a Favorite range trimmer and scrubbing is suspended. */
+  trim?: ChartTrimConfig
 }
 
 const CHART_MAX_POINTS = 220
@@ -88,6 +91,7 @@ export function HistoryTelemetryPanel({
   onSeek,
   onMetricInteraction,
   onHeightChange,
+  trim,
 }: HistoryTelemetryPanelProps) {
   const insets = useSafeAreaInsets()
   const [headTimeMs, setHeadTimeMs] = useState<number | null>(null)
@@ -534,10 +538,11 @@ export function HistoryTelemetryPanel({
             formatValue={(v) => telemetry.speed.formatWithUnit(v)}
             getPointColor={speedPointColor}
             onGestureStart={() => onMetricInteraction?.('speed')}
-            onPointSelected={handlePointSelected}
+            onPointSelected={trim ? undefined : handlePointSelected}
             scrubTimeMs={scrubTimeMs}
-            onScrubTimeChange={handleScrubTimeChange}
+            onScrubTimeChange={trim ? undefined : handleScrubTimeChange}
             excludedRanges={speedExcludedRanges}
+            trim={trim}
           />
 
           {OPTIONAL_CHART_METRICS.filter((m) => activeCharts.has(m.key)).map((metric) => {
@@ -556,9 +561,9 @@ export function HistoryTelemetryPanel({
                 formatValue={cfg.formatValue}
                 getPointColor={cfg.getPointColor}
                 onGestureStart={() => onMetricInteraction?.(metric.key)}
-                onPointSelected={handlePointSelected}
+                onPointSelected={trim ? undefined : handlePointSelected}
                 scrubTimeMs={scrubTimeMs}
-                onScrubTimeChange={handleScrubTimeChange}
+                onScrubTimeChange={trim ? undefined : handleScrubTimeChange}
                 excludedRanges={
                   'excludedRanges' in cfg
                     ? (cfg.excludedRanges as ExcludedRange[] | undefined)

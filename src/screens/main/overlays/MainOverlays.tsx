@@ -37,7 +37,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import type { Favorite, HistoryMarker, MapPointKind } from 'vescape-core'
+import type { Favorite, HistoryGpsSample, HistoryMarker, MapPointKind } from 'vescape-core'
 
 import { ConfirmModal } from '@/components/modals/ConfirmModal'
 import { EdgeDrawer } from '@/components/overlays/AnchoredSheet'
@@ -82,6 +82,7 @@ import { WeatherRadarTimeline } from '@/modules/weather/components/WeatherRadarT
 import { useMapWeather } from '@/modules/weather/hooks/useMapWeather'
 import { HistoryStatsBar } from '@/screens/main/history/HistoryStatsBar'
 import { HistoryTelemetryPanel } from '@/screens/main/history/HistoryTelemetryPanel'
+import { TrimStatsBar } from '@/screens/main/history/TrimStatsBar'
 import { LegalLimitCountrySheet } from '@/modules/legal/components/LegalLimitCountrySheet'
 import { LiveHud } from '@/screens/main/overlays/LiveHud'
 import { MapRevealGesture } from '@/screens/main/map/MapRevealGesture'
@@ -150,6 +151,7 @@ interface MainHistoryOverlayProps {
   enterHistoryMode: () => void
   selectedSession: HistorySession | null
   sessionSamples: TelemetrySample[]
+  sessionGpsSamples: HistoryGpsSample[]
   sessionMarkers: HistoryMarker[]
   previousRide: HistorySession | null
   nextRide: HistorySession | null
@@ -169,7 +171,12 @@ interface MainHistoryOverlayProps {
   favoritesSaving: boolean
   favoritesError: string | undefined
   selectedSessionFavorite: Favorite | null
-  toggleSelectedRideFavorite: () => Promise<void>
+  trimming: boolean
+  trimSeed: { startMs: number; endMs: number } | null
+  beginTrimFavorite: () => void
+  updateTrimRange: (startMs: number, endMs: number) => void
+  cancelTrim: () => void
+  saveTrim: () => Promise<void>
   removeFavorite: (id: string) => Promise<void>
   selectSession: (session: HistorySession | null) => Promise<void>
   loadMoreHistory: () => Promise<void>
@@ -1112,10 +1119,14 @@ export function MainOverlays({
             canRemove={false}
             canFavorite={false}
             favorited={false}
+            trimming={false}
+            saving={false}
             onSelectTab={history.selectHistoryTab}
             onBack={history.exitHistory}
             onRemove={() => undefined}
             onToggleFavorite={() => undefined}
+            onCancelTrim={() => undefined}
+            onSaveTrim={() => undefined}
           />
         </>
       )}
@@ -1134,8 +1145,8 @@ export function MainOverlays({
             movingEndAtMs={history.selectedSession.movingEndAtMs}
             deviceName={history.selectedSession.deviceName}
             samples={history.sessionSamples}
-            canPrevious={history.canPreviousRide}
-            canNext={!!history.nextRide}
+            canPrevious={!history.trimming && history.canPreviousRide}
+            canNext={!history.trimming && !!history.nextRide}
             mediaAssets={history.mediaHistory.assets}
             mediaUnmatched={history.mediaHistory.unmatched}
             mediaLoading={history.mediaHistory.loading}
@@ -1152,19 +1163,41 @@ export function MainOverlays({
             onSeek={history.onSeek}
             onMetricInteraction={history.setActiveHistoryMapMetric}
             onHeightChange={setPanelHeight}
+            trim={
+              history.trimming && history.trimSeed
+                ? {
+                    startMs: history.trimSeed.startMs,
+                    endMs: history.trimSeed.endMs,
+                    onChange: history.updateTrimRange,
+                    onCommit: history.updateTrimRange,
+                  }
+                : undefined
+            }
           />
-          <HistoryStatsBar session={history.selectedSession} />
+          {history.trimming ? (
+            <TrimStatsBar
+              session={history.selectedSession}
+              samples={history.sessionSamples}
+              gpsSamples={history.sessionGpsSamples}
+            />
+          ) : (
+            <HistoryStatsBar session={history.selectedSession} />
+          )}
           <HistoryControls
             loading={historyBusy || history.favoritesSaving}
             tab={history.historyTab}
             canRemove={true}
             canFavorite={true}
             favorited={history.selectedSessionFavorite != null}
+            trimming={history.trimming}
+            saving={history.favoritesSaving}
             onSelectTab={history.selectHistoryTab}
             onBack={history.exitHistory}
             onRemove={handleRemovePress}
-            onToggleFavorite={() => {
-              void history.toggleSelectedRideFavorite()
+            onToggleFavorite={history.beginTrimFavorite}
+            onCancelTrim={history.cancelTrim}
+            onSaveTrim={() => {
+              void history.saveTrim()
             }}
           />
         </>
@@ -1185,10 +1218,14 @@ export function MainOverlays({
             canRemove={false}
             canFavorite={false}
             favorited={false}
+            trimming={false}
+            saving={false}
             onSelectTab={history.selectHistoryTab}
             onBack={history.exitHistory}
             onRemove={() => undefined}
             onToggleFavorite={() => undefined}
+            onCancelTrim={() => undefined}
+            onSaveTrim={() => undefined}
           />
         </>
       )}

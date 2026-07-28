@@ -34,6 +34,12 @@ const MAX_HISTORY_PREFETCH_PAGES = 8
 export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs) {
   const backPressedOnce = useRef(false)
   const [openMediaAssetId, setOpenMediaAssetId] = useState<string | null>(null)
+  // Flips only on trim enter/exit; the live range lives in the store where narrow subscribers
+  // (map highlight, stats preview) read it without re-rendering the whole screen.
+  const trimming = useMainScreenStore((s) => s.trimRange != null)
+  // A stable seed for the chart handles, captured when trim opens so per-drag store writes don't
+  // fight the handle positions.
+  const [trimSeed, setTrimSeed] = useState<{ startMs: number; endMs: number } | null>(null)
   const {
     mode,
     historyTab,
@@ -184,6 +190,9 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
 
   useEffect(() => {
     setSeekTimeMs(null)
+    // Switching rides abandons any in-progress trim. The stale seed is harmless — it is only read
+    // while trimming, which endTrim() ends here.
+    useMainScreenStore.getState().endTrim()
   }, [selectedSession, setSeekTimeMs])
 
   useEffect(() => {
@@ -263,25 +272,41 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
     [loadFavorites, setHistoryTab],
   )
 
-  /** Star on an open ride pins its full Moving Window; starring again unpins that same range. */
-  const toggleSelectedRideFavorite = useCallback(async () => {
+  /** Star on an open ride opens trim mode, seeded with the full Moving Window (one-tap whole ride). */
+  const beginTrimFavorite = useCallback(() => {
     const session = useHistoryStore.getState().selectedSession
     if (!session) return
-    const existing = findSessionFavorite(useFavoriteStore.getState().favorites, session)
-    if (existing) {
-      await removeFavorite(existing.id)
-      return
-    }
     const range = favoriteRangeForSession(session)
-    await addFavorite({
-      ...range,
+    setTrimSeed(range)
+    useMainScreenStore.getState().beginTrim(range)
+  }, [setTrimSeed])
+
+  /** Per drag-frame update of the trimmed span; drives the live map highlight and stats preview. */
+  const updateTrimRange = useCallback((startMs: number, endMs: number) => {
+    useMainScreenStore.getState().setTrimRange({ startMs, endMs })
+  }, [])
+
+  const cancelTrim = useCallback(() => {
+    useMainScreenStore.getState().endTrim()
+  }, [])
+
+  /** Save the trimmed range as a Favorite. Native mints identity, timestamps and durable stats. */
+  const saveTrim = useCallback(async () => {
+    const range = useMainScreenStore.getState().trimRange
+    const session = useHistoryStore.getState().selectedSession
+    if (!range || !session) return
+    const favorite = await addFavorite({
+      startMs: Math.min(range.startMs, range.endMs),
+      endMs: Math.max(range.startMs, range.endMs),
       ...(session.deviceId ? { deviceId: session.deviceId } : {}),
     })
-  }, [addFavorite, removeFavorite])
+    if (favorite) useMainScreenStore.getState().endTrim()
+  }, [addFavorite])
 
   const exitHistory = useCallback(() => {
     setOpenMediaAssetId(null)
     setHistoryTab('history')
+    useMainScreenStore.getState().endTrim()
     void selectSession(null)
     enterTelemetry()
     requestAnimationFrame(() =>
@@ -402,6 +427,10 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
     useCallback(() => {
       const handler = BackHandler.addEventListener('hardwareBackPress', () => {
         if (mode === 'history') {
+          if (useMainScreenStore.getState().trimRange) {
+            useMainScreenStore.getState().endTrim()
+            return true
+          }
           exitHistory()
           return true
         }
@@ -493,7 +522,12 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
     favoritesSaving,
     favoritesError,
     selectedSessionFavorite,
-    toggleSelectedRideFavorite,
+    trimming,
+    trimSeed,
+    beginTrimFavorite,
+    updateTrimRange,
+    cancelTrim,
+    saveTrim,
     removeFavorite,
     selectSession,
     loadMoreHistory: loadMore,

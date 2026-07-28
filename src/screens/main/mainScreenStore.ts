@@ -8,6 +8,12 @@ export type MapSelector = 'navigation' | 'style' | null
 /** Which list the history screen shows: recorded rides, or the Favorites the rider starred. */
 export type HistoryTab = 'history' | 'favorites'
 
+/** The time span a rider is trimming into a Favorite. Non-null means trim mode is active. */
+export interface TrimRange {
+  startMs: number
+  endMs: number
+}
+
 interface MainScreenState {
   mode: MainViewState
   historyTab: HistoryTab
@@ -15,6 +21,7 @@ interface MainScreenState {
   mapSelector: MapSelector
   perspectiveEnabled: boolean
   seekTimeMs: number | null
+  trimRange: TrimRange | null
   activeHistoryMapMetric: HistoryMetricKey
 }
 
@@ -31,6 +38,12 @@ interface MainScreenActions {
   dismissMapSelector: () => void
   setPerspectiveEnabled: (enabled: boolean) => void
   setSeekTimeMs: (timeMs: number | null) => void
+  /** Enter trim mode seeded with a default range (the ride's full Moving Window). */
+  beginTrim: (range: TrimRange) => void
+  /** Live-update the trimmed span while a handle is dragged. */
+  setTrimRange: (range: TrimRange) => void
+  /** Leave trim mode (save or cancel). */
+  endTrim: () => void
   setActiveHistoryMapMetric: (metric: HistoryMetricKey) => void
 }
 
@@ -41,6 +54,7 @@ const initialState: MainScreenState = {
   mapSelector: null,
   perspectiveEnabled: true,
   seekTimeMs: null,
+  trimRange: null,
   activeHistoryMapMetric: 'speed',
 }
 
@@ -52,7 +66,13 @@ export const useMainScreenStore = create<MainScreenState & MainScreenActions>((s
   },
 
   enterTelemetry() {
-    set({ mode: 'telemetry', historySheetVisible: false, mapSelector: null, seekTimeMs: null })
+    set({
+      mode: 'telemetry',
+      historySheetVisible: false,
+      mapSelector: null,
+      seekTimeMs: null,
+      trimRange: null,
+    })
   },
 
   enterMap() {
@@ -95,6 +115,25 @@ export const useMainScreenStore = create<MainScreenState & MainScreenActions>((s
 
   setSeekTimeMs(timeMs) {
     set((state) => (state.seekTimeMs === timeMs ? state : { seekTimeMs: timeMs }))
+  },
+
+  beginTrim(range) {
+    // The scrub head and a trim selection are mutually exclusive interactions on the chart.
+    set({ trimRange: range, seekTimeMs: null })
+  },
+
+  setTrimRange(range) {
+    set((state) =>
+      state.trimRange &&
+      state.trimRange.startMs === range.startMs &&
+      state.trimRange.endMs === range.endMs
+        ? state
+        : { trimRange: range },
+    )
+  },
+
+  endTrim() {
+    set((state) => (state.trimRange === null ? state : { trimRange: null }))
   },
 
   setActiveHistoryMapMetric(metric) {
