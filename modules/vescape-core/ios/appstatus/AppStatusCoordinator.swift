@@ -30,6 +30,7 @@ final class AppStatusCoordinator {
   /// Carries the installed marketing version on every app-originated request. The server resolves
   /// its Release Policy ranges from it.
   /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/appstatus/AppStatusCoordinator.kt `APP_VERSION_HEADER`
+  /// @parity /src/modules/profile/lib/deviceAuth.ts `APP_VERSION_HEADER`
   static let appVersionHeader = "Vescape-App-Version"
 
   /// Vescape backend origin for a shipped build, and the fallback whenever the baked Info.plist

@@ -143,6 +143,7 @@ class AppStatusCoordinator internal constructor(
      * Carries the installed marketing version on every app-originated request. The server resolves
      * its Release Policy ranges from it.
      * @parity /modules/vescape-core/ios/appstatus/AppStatusCoordinator.swift `appVersionHeader`
+     * @parity /src/modules/profile/lib/deviceAuth.ts `APP_VERSION_HEADER`
      */
     const val APP_VERSION_HEADER = "Vescape-App-Version"
 

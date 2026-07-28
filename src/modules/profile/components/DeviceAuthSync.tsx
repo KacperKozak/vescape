@@ -1,4 +1,5 @@
 import { useAuth, useSession } from '@clerk/expo'
+import Constants from 'expo-constants'
 import { useCallback, useEffect } from 'react'
 
 import { SERVER_URL } from '@/config/server'
@@ -9,6 +10,9 @@ import {
   provisionDeviceCredential,
 } from 'vescape-core'
 
+import { useDeviceAuthStore } from '@/modules/profile/store/deviceAuthStore'
+import { exchangeDeviceToken } from '@/modules/profile/lib/deviceAuth'
+
 let provisioning: Promise<void> | null = null
 const attemptedSessionIds = new Set<string>()
 
@@ -17,12 +21,18 @@ export function DeviceAuthSync() {
     treatPendingAsSignedOut: false,
   })
   const { session } = useSession()
+  const retryRequestId = useDeviceAuthStore((state) => state.retryRequestId)
+  const setStatus = useDeviceAuthStore((state) => state.setStatus)
 
   const tryProvision = useCallback(() => {
     if (!isLoaded || !isSignedIn || !session) return
     const state = getDeviceCredentialState().state
-    if (state === 'ready') return
+    if (state === 'ready') {
+      setStatus('ready')
+      return
+    }
     if (state === 'rejected') {
+      setStatus('failed', 'Native credential was rejected')
       clearDeviceCredential()
       void signOut()
       return
@@ -30,18 +40,25 @@ export function DeviceAuthSync() {
     if (provisioning !== null || attemptedSessionIds.has(session.id)) return
 
     attemptedSessionIds.add(session.id)
+    setStatus('provisioning')
     provisioning = provision(getToken)
-      .catch(() => {
+      .then(() => setStatus('ready'))
+      .catch((error: unknown) => {
         attemptedSessionIds.delete(session.id)
+        setStatus('failed', visibleError(error))
       })
       .finally(() => {
         provisioning = null
       })
-  }, [getToken, isLoaded, isSignedIn, session, signOut])
+  }, [getToken, isLoaded, isSignedIn, session, setStatus, signOut])
+
+  useEffect(() => {
+    if (isLoaded && !isSignedIn) setStatus('idle')
+  }, [isLoaded, isSignedIn, setStatus])
 
   useEffect(() => {
     tryProvision()
-  }, [tryProvision])
+  }, [retryRequestId, tryProvision])
 
   useEffect(() => {
     if (!isSignedIn) return
@@ -62,25 +79,14 @@ export function DeviceAuthSync() {
 
 async function provision(getToken: () => Promise<string | null>): Promise<void> {
   const clerkToken = await getToken()
-  if (!clerkToken) return
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), 10_000)
-  const response = await fetch(`${SERVER_URL.replace(/\/+$/, '')}/api/auth/device-tokens`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${clerkToken}`,
-    },
-    signal: controller.signal,
-  }).finally(() => clearTimeout(timeout))
-  if (response.status === 401) return
-  if (!response.ok) throw new Error(`Device credential exchange failed (${response.status})`)
-  const body: unknown = await response.json()
-  if (!isExchangeResponse(body)) throw new Error('Device credential exchange response is invalid')
+  if (!clerkToken) throw new Error('Clerk session token is unavailable')
+  const appVersion = Constants.expoConfig?.version
+  if (!appVersion) throw new Error('Installed app version is unavailable')
+  const body = await exchangeDeviceToken({ serverUrl: SERVER_URL, clerkToken, appVersion })
   await provisionDeviceCredential(SERVER_URL, body.deviceToken, body.accountId)
 }
 
-function isExchangeResponse(value: unknown): value is { accountId: string; deviceToken: string } {
-  if (value === null || typeof value !== 'object') return false
-  const record = value as Record<string, unknown>
-  return typeof record.accountId === 'string' && typeof record.deviceToken === 'string'
+function visibleError(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error)
+  return message.replace(/\s+/g, ' ').trim().slice(0, 160) || 'Unknown error'
 }
