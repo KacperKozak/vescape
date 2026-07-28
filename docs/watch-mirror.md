@@ -9,7 +9,7 @@ Phone and Wear builds are separate signed AABs under the existing `app.vescape` 
 
 ```text
 :app:bundleRelease    -> mobile internal       -> mobile production draft
-:wearos:bundleRelease -> wear:qa completed     -> wear:production draft
+:wearos:bundleRelease -> wear:internal completed -> wear:production draft
 ```
 
 Both use the existing Android upload key. `APP_VERSION` supplies the shared package version name.
