@@ -2,6 +2,7 @@ package expo.modules.vescapecore.telemetry
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
@@ -330,6 +331,10 @@ data class PrivacyZoneEntity(
   val updatedAt: Long,
 )
 
+/**
+ * @parity /modules/vescape-core/ios/telemetry/AppDataRepository.swift `MapPointColumns`
+ * @parity /modules/vescape-core/src/index.ts `MapPoint`
+ */
 @Entity(
   tableName = "map_points",
   indices = [
@@ -350,16 +355,40 @@ data class MapPointEntity(
   val mediaJson: String?,
   @ColumnInfo(name = "author_id")
   val authorId: String?,
-  @ColumnInfo(name = "author_name")
-  val authorName: String?,
-  @ColumnInfo(name = "likes_count")
-  val likesCount: Int,
-  @ColumnInfo(name = "liked_by_current_user")
-  val likedByCurrentUser: Boolean,
-  @ColumnInfo(name = "user_reaction")
-  val userReaction: String?,
   @ColumnInfo(name = "created_at")
   val createdAt: Long,
+  @ColumnInfo(name = "updated_at")
+  val updatedAt: Long,
+)
+
+/**
+ * One Clerk user reaction to one Map Point. Clerk owns identity; this table stores only its stable
+ * user id with no local account copy.
+ *
+ * @parity /modules/vescape-core/ios/telemetry/TelemetryDatabase.swift `map_point_reactions`
+ */
+@Entity(
+  tableName = "map_point_reactions",
+  primaryKeys = ["clerk_user_id", "map_point_id"],
+  foreignKeys = [
+    ForeignKey(
+      entity = MapPointEntity::class,
+      parentColumns = ["id"],
+      childColumns = ["map_point_id"],
+      onDelete = ForeignKey.CASCADE,
+    ),
+  ],
+  indices = [
+    Index(value = ["clerk_user_id"]),
+    Index(value = ["map_point_id"]),
+  ],
+)
+data class MapPointReactionEntity(
+  @ColumnInfo(name = "clerk_user_id")
+  val clerkUserId: String,
+  @ColumnInfo(name = "map_point_id")
+  val mapPointId: String,
+  val reaction: String,
   @ColumnInfo(name = "updated_at")
   val updatedAt: Long,
 )

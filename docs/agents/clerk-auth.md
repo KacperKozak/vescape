@@ -28,6 +28,8 @@ The integration is owned by these durable files:
 - `src/modules/profile/screens/ClerkAccountScreen.tsx` renders the native account profile.
 - `src/modules/profile/components/AccountWidget.tsx` exposes sign-in and account management in the
   Social sheet.
+- `src/bootstrap/MapPointClerkIdentitySync.tsx` keeps the active Clerk user id in volatile Map Point
+  store state; no Clerk account profile is copied into the native database.
 
 Do not fix Clerk integration in generated `android/` or `ios/` folders. Plugin or dependency changes
 require a fresh native sync/build through `bun run android`.
@@ -162,3 +164,11 @@ the problem in a release build before treating a development-server disconnect a
   the signed-in user.
 - Kill and reopen the app to confirm the session persists.
 - Sign out and confirm protected account UI is no longer available.
+
+## Map contribution identity
+
+`src/bootstrap/MapPointClerkIdentitySync.tsx` reads the active Clerk user id and keeps it only in
+volatile JavaScript state. Map Point writes pass that id directly to native storage. There is no
+anonymous fallback or cached Clerk account table: adding, editing, deleting, or reacting requires
+Clerk to report a signed-in session. Viewing local points and using the direction/navigation point
+remain available signed out.

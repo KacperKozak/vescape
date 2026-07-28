@@ -602,20 +602,25 @@ class VescapeCoreModule : Module() {
       AppDataRepository.get(appCtx).deletePrivacyZone(id)
       reloadPrivacyZonesIntoRecorder(appCtx)
     }
-    AsyncFunction("getMapPoints") {
-      runBlocking { AppDataRepository.get(context.applicationContext).getMapPoints() }
+    AsyncFunction("getMapPoints") { clerkUserId: String? ->
+      runBlocking { AppDataRepository.get(context.applicationContext).getMapPoints(clerkUserId) }
     }
-    AsyncFunction("upsertMapPoint") Coroutine { point: Map<String, Any?> ->
-      AppDataRepository.get(context.applicationContext).upsertMapPoint(point)
+    AsyncFunction("upsertMapPoint") Coroutine { point: Map<String, Any?>, clerkUserId: String? ->
+      AppDataRepository.get(context.applicationContext).upsertMapPoint(point, clerkUserId)
+    }
+
+    AsyncFunction("setMapPointReaction") Coroutine { mapPointId: String, clerkUserId: String, reaction: String? ->
+      AppDataRepository.get(context.applicationContext)
+        .setMapPointReaction(mapPointId, clerkUserId, reaction)
     }
     AsyncFunction("replaceDirectionMapPoint") Coroutine { point: Map<String, Any?> ->
       val appCtx = context.applicationContext
       AppDataRepository.get(appCtx).replaceDirectionMapPoint(point)
       CoreForegroundService.reloadGroupRideTarget(appCtx)
     }
-    AsyncFunction("deleteMapPoint") Coroutine { id: String ->
+    AsyncFunction("deleteMapPoint") Coroutine { id: String, clerkUserId: String? ->
       val appCtx = context.applicationContext
-      AppDataRepository.get(appCtx).deleteMapPoint(id)
+      AppDataRepository.get(appCtx).deleteMapPoint(id, clerkUserId)
       CoreForegroundService.reloadGroupRideTarget(appCtx)
     }
     AsyncFunction("getSettings") {

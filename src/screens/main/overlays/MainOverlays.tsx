@@ -1,5 +1,7 @@
 import * as Haptics from 'expo-haptics'
 import * as ImagePicker from 'expo-image-picker'
+import { useAuth } from '@clerk/expo'
+import { useRouter } from 'expo-router'
 import {
   ArrowLeftIcon,
   ArrowsClockwiseIcon,
@@ -77,6 +79,7 @@ import {
   MAP_POINT_KIND_OPTIONS,
 } from '@/modules/map/constants/mapPoints'
 import { theme } from '@/constants/theme'
+import { routes } from '@/navigation/routes'
 import type { MapSelection } from '@/modules/map/lib/mapSelection'
 import { type MapSearchResult } from '@/modules/map/lib/search'
 import { useMapSearch } from '@/modules/map/hooks/useMapSearch'
@@ -168,6 +171,8 @@ interface MainMapOverlayProps {
   directionPoint: MapPoint | null
   activeNavigationTarget: MapSelection | null
   selectedNavigationTarget: MapSelection | null
+  longPressMapTarget: MapSelection | null
+  onLongPressMapTargetHandled: () => void
   onSelectNavigationTarget: (selection: MapSelection) => void
   onNavigateTarget: (selection: MapSelection) => Promise<void>
   onNavigateSelectedTarget: () => Promise<void>
@@ -176,9 +181,7 @@ interface MainMapOverlayProps {
   addMapPoint: (kind: MapPointKind, latitude: number, longitude: number) => Promise<MapPoint>
   updateMapPoint: (
     id: string,
-    patch: Partial<
-      Pick<MapPoint, 'name' | 'description' | 'media' | 'likesCount' | 'likedByCurrentUser'>
-    >,
+    patch: Partial<Pick<MapPoint, 'name' | 'description' | 'media'>>,
   ) => Promise<MapPoint | null>
   setMapPointReaction: (id: string, reaction: 'up' | 'down' | null) => void
   onRemoveMapPoint: (id: string) => void
@@ -257,10 +260,10 @@ interface FullMapControlsProps {
   bottom: number
   sheetBottom: number
   bottomControlsVisible: boolean
-  openAddMenuKey: number
-  onOpenAddMenuHandled: () => void
+  addMenuOpen: boolean
   onAddMenuVisibilityChange: (visible: boolean) => void
   onBeginEditMapPoint: (id: string) => void
+  onRequireMapAccount: () => boolean
 }
 
 interface MapControlsProps {
@@ -312,18 +315,16 @@ function FullMapControls({
   bottom,
   sheetBottom,
   bottomControlsVisible,
-  openAddMenuKey,
-  onOpenAddMenuHandled,
+  addMenuOpen,
   onAddMenuVisibilityChange,
   onBeginEditMapPoint,
+  onRequireMapAccount,
 }: FullMapControlsProps) {
   const riderColor = useRiderStore((s) => s.riderColor)
   const [searchOpen, setSearchOpen] = useState(false)
-  const [addMenuOpen, setAddMenuOpen] = useState(false)
   const [placementPulseKey, setPlacementPulseKey] = useState(0)
   const [filterMenuOpen, setFilterMenuOpen] = useState(false)
   const placementTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const handledOpenAddMenuKeyRef = useRef(0)
   const addMenuZoomedRef = useRef(false)
   const {
     searchQuery,
@@ -352,7 +353,6 @@ function FullMapControls({
       }
       addMenuZoomedRef.current = false
       setPlacementPulseKey(0)
-      setAddMenuOpen(false)
       onAddMenuVisibilityChange(false)
     },
     [addMenuOpen, mapRef, onAddMenuVisibilityChange],
@@ -416,26 +416,12 @@ function FullMapControls({
       closeAddMenu()
       return
     }
+    if (!onRequireMapAccount()) return
     mapRef.current?.zoomBy(0.45)
     addMenuZoomedRef.current = true
     setPlacementPulseKey(0)
     onAddMenuVisibilityChange(true)
-    setAddMenuOpen(true)
-  }, [addMenuOpen, closeAddMenu, mapRef, onAddMenuVisibilityChange])
-
-  useEffect(() => {
-    if (openAddMenuKey === 0 || handledOpenAddMenuKeyRef.current === openAddMenuKey) return
-    handledOpenAddMenuKeyRef.current = openAddMenuKey
-    setFilterMenuOpen(false)
-    closeSearch()
-    onAddMenuVisibilityChange(true)
-    setPlacementPulseKey(0)
-    setAddMenuOpen((open) => {
-      if (!open) addMenuZoomedRef.current = false
-      return true
-    })
-    onOpenAddMenuHandled()
-  }, [closeSearch, onAddMenuVisibilityChange, onOpenAddMenuHandled, openAddMenuKey])
+  }, [addMenuOpen, closeAddMenu, mapRef, onAddMenuVisibilityChange, onRequireMapAccount])
 
   const toggleFilterMenu = useCallback(() => {
     closeAddMenu()
@@ -991,7 +977,7 @@ function MapTargetSheet({
     id: string,
     patch: Partial<Pick<MapPoint, 'name' | 'description' | 'media'>>,
   ) => Promise<MapPoint | null>
-  onLikeMapPoint?: (id: string, reaction: 'up' | 'down' | null) => void
+  onLikeMapPoint?: (id: string, reaction: 'up' | 'down' | null) => boolean
   onDelete?: () => void
   onDismiss?: () => void
   onFocusTarget?: () => void
@@ -1002,9 +988,7 @@ function MapTargetSheet({
   const [name, setName] = useState(point?.name ?? '')
   const [description, setDescription] = useState(point?.description ?? '')
   const [media, setMedia] = useState(point?.media ?? [])
-  const [reaction, setReaction] = useState<'up' | 'down' | null>(
-    point?.userReaction ?? (point?.likedByCurrentUser ? 'up' : null),
-  )
+  const [reaction, setReaction] = useState<'up' | 'down' | null>(point?.myReaction ?? null)
   const [mediaSaving, setMediaSaving] = useState(false)
   const keyboardLift = useKeyboardLift(mode === 'edit')
   const sheetBottom = mode === 'edit' ? Math.max(bottom, keyboardLift + 12) : bottom
@@ -1131,7 +1115,7 @@ function MapTargetSheet({
         )}
         {isMapPoint && mode !== 'edit' ? (
           <Text style={styles.mapTargetMetaText} numberOfLines={1}>
-            {selectedPoint?.authorName ?? 'Local rider'} · {pointCreatedText ?? 'Unknown date'}
+            Vescape rider · {pointCreatedText ?? 'Unknown date'}
           </Text>
         ) : detailText ? (
           <Text style={styles.mapTargetSubtitle} numberOfLines={2}>
@@ -1210,12 +1194,12 @@ function MapTargetSheet({
       ) : null}
       {isMapPoint && mode !== 'edit' ? (
         <View style={styles.mapTargetLikeCount}>
-          {(point?.likesCount ?? 0) < 0 ? (
+          {(point?.voteScore ?? 0) < 0 ? (
             <ThumbsDownIcon size={14} color={theme.status.error.text} weight="fill" />
           ) : (
             <ThumbsUpIcon size={14} color={theme.palette.cyan.text} weight="fill" />
           )}
-          <Text style={styles.mapTargetMetaText}>{selectedPoint?.likesCount ?? 0}</Text>
+          <Text style={styles.mapTargetMetaText}>{selectedPoint?.voteScore ?? 0}</Text>
         </View>
       ) : null}
 
@@ -1271,8 +1255,8 @@ function MapTargetSheet({
                 accessibilityLabel="Like map feature"
                 onPress={() => {
                   const nextReaction = reaction === 'up' ? null : 'up'
+                  if (!onLikeMapPoint(selectedPoint.id, nextReaction)) return
                   setReaction(nextReaction)
-                  onLikeMapPoint(selectedPoint.id, nextReaction)
                 }}
                 style={({ pressed }) => [
                   styles.mapTargetVoteButton,
@@ -1293,8 +1277,8 @@ function MapTargetSheet({
                 accessibilityLabel="Remove like from map feature"
                 onPress={() => {
                   const nextReaction = reaction === 'down' ? null : 'down'
+                  if (!onLikeMapPoint(selectedPoint.id, nextReaction)) return
                   setReaction(nextReaction)
-                  onLikeMapPoint(selectedPoint.id, nextReaction)
                 }}
                 style={({ pressed }) => [
                   styles.mapTargetVoteButton,
@@ -1353,18 +1337,20 @@ export function MainOverlays({
   map,
   history,
 }: MainOverlaysProps) {
+  const router = useRouter()
+  const { isLoaded: authLoaded, isSignedIn, userId } = useAuth({ treatPendingAsSignedOut: false })
   const insets = useSafeAreaInsets()
   const aboveStripBottom = STRIP_CONTENT_HEIGHT + Math.max(insets.bottom * 0.5, 8) + 8
   const historyPanelBottom = Math.max(insets.bottom, 16) + 8
   const [panelHeight, setPanelHeight] = useState(0)
   const [removeConfirmVisible, setRemoveConfirmVisible] = useState(false)
+  const [signInPromptVisible, setSignInPromptVisible] = useState(false)
   const [revealGestureActive, setRevealGestureActive] = useState(false)
   const revealCommittedRef = useRef(false)
   const [tuneDrawerOpen, setTuneDrawerOpen] = useState(false)
   const [legalListOpen, setLegalListOpen] = useState(false)
   const [editingMapPointId, setEditingMapPointId] = useState<string | null>(null)
-  const [openAddMenuKey, setOpenAddMenuKey] = useState(0)
-  const [targetAddMenuOpen, setTargetAddMenuOpen] = useState(false)
+  const [addMenuOpen, setAddMenuOpen] = useState(false)
   const [selectedLegalCountry, setSelectedLegalCountry] = useState<LegalLimitCountry | null>(null)
   const tuneButtonRef = useRef<View>(null)
   const revealProgress = useSharedValue(0)
@@ -1399,13 +1385,18 @@ export function MainOverlays({
   const navigationActionColor = riderColor ?? theme.palette.green.color
   const navigationActionTextColor = riderColor ?? theme.palette.green.text
   const targetSheetVisible =
-    map.selectedNavigationTarget != null || (activeNavigationTarget != null && !targetAddMenuOpen)
+    map.selectedNavigationTarget != null || (activeNavigationTarget != null && !addMenuOpen)
   const focusTargetOnMap = useCallback(
     (target: MapSelection) => {
       mapRef.current?.centerCoordinatePreservingCamera([target.longitude, target.latitude])
     },
     [mapRef],
   )
+  const requireMapAccount = useCallback(() => {
+    if (authLoaded && isSignedIn) return true
+    setSignInPromptVisible(true)
+    return false
+  }, [authLoaded, isSignedIn])
   const interfaceFadeStyle = useAnimatedStyle(() => ({
     opacity: (1 - dragOpacity.value) * telemetryReturnOpacity.value,
   }))
@@ -1438,21 +1429,38 @@ export function MainOverlays({
   useEffect(() => {
     if (mode === 'map') return
     const frame = requestAnimationFrame(() => {
-      setOpenAddMenuKey(0)
-      setTargetAddMenuOpen(false)
+      setAddMenuOpen(false)
     })
     return () => cancelAnimationFrame(frame)
   }, [mode])
 
+  useEffect(() => {
+    const target = map.longPressMapTarget
+    if (mode !== 'map' || !target) return
+    const frame = requestAnimationFrame(() => {
+      if (!authLoaded || !isSignedIn) {
+        setSignInPromptVisible(true)
+        map.onLongPressMapTargetHandled()
+        return
+      }
+      mapRef.current?.centerCoordinatePreservingCamera([target.longitude, target.latitude])
+      setEditingMapPointId(null)
+      setAddMenuOpen(true)
+      map.onDismissSelectedTarget()
+      map.onLongPressMapTargetHandled()
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [authLoaded, isSignedIn, map, mapRef, mode])
+
   const handleOpenAddFeatureAtSelectedTarget = useCallback(() => {
     const target = map.selectedNavigationTarget
     if (!target || target.type === 'mapPoint') return
+    if (!requireMapAccount()) return
     mapRef.current?.centerCoordinatePreservingCamera([target.longitude, target.latitude])
     setEditingMapPointId(null)
-    setTargetAddMenuOpen(true)
+    setAddMenuOpen(true)
     map.onDismissSelectedTarget()
-    setOpenAddMenuKey((key) => key + 1)
-  }, [map, mapRef])
+  }, [map, mapRef, requireMapAccount])
 
   const resetLegalSelection = useCallback(() => {
     setLegalListOpen(false)
@@ -1647,10 +1655,10 @@ export function MainOverlays({
             bottom={aboveStripBottom - 112}
             sheetBottom={mapTargetBottom}
             bottomControlsVisible={!targetSheetVisible}
-            openAddMenuKey={openAddMenuKey}
-            onOpenAddMenuHandled={() => setOpenAddMenuKey(0)}
-            onAddMenuVisibilityChange={setTargetAddMenuOpen}
+            addMenuOpen={addMenuOpen}
+            onAddMenuVisibilityChange={setAddMenuOpen}
             onBeginEditMapPoint={setEditingMapPointId}
+            onRequireMapAccount={requireMapAccount}
           />
         ) : null}
         {mode === 'map' && map.selectedNavigationTarget ? (
@@ -1688,21 +1696,29 @@ export function MainOverlays({
                 : handleOpenAddFeatureAtSelectedTarget
             }
             onEdit={
-              map.selectedNavigationTarget.type === 'mapPoint'
-                ? () => setEditingMapPointId(map.selectedNavigationTarget?.id ?? null)
+              map.selectedNavigationTarget.type === 'mapPoint' &&
+              map.selectedNavigationTarget.point.authorId === userId
+                ? () => {
+                    if (!requireMapAccount()) return
+                    setEditingMapPointId(map.selectedNavigationTarget?.id ?? null)
+                  }
                 : undefined
             }
             onSave={() => setEditingMapPointId(null)}
             onSaveMapPoint={map.updateMapPoint}
             onLikeMapPoint={(id, nextReaction) => {
+              if (!requireMapAccount()) return false
               map.setMapPointReaction(id, nextReaction)
+              return true
             }}
             onFocusTarget={() => {
               if (map.selectedNavigationTarget) focusTargetOnMap(map.selectedNavigationTarget)
             }}
             onDelete={
-              map.selectedNavigationTarget.type === 'mapPoint'
+              map.selectedNavigationTarget.type === 'mapPoint' &&
+              map.selectedNavigationTarget.point.authorId === userId
                 ? () => {
+                    if (!requireMapAccount()) return
                     const id = map.selectedNavigationTarget?.id
                     if (!id) return
                     setEditingMapPointId(null)
@@ -1712,13 +1728,13 @@ export function MainOverlays({
             }
             onDismiss={() => {
               setEditingMapPointId(null)
-              setTargetAddMenuOpen(false)
+              setAddMenuOpen(false)
               map.onDismissSelectedTarget()
             }}
           />
         ) : null}
         {mode === 'map' &&
-        !targetAddMenuOpen &&
+        !addMenuOpen &&
         !map.selectedNavigationTarget &&
         activeNavigationTarget ? (
           <MapTargetSheet
@@ -1984,6 +2000,19 @@ export function MainOverlays({
           onClose={history.closeMedia}
         />
       ) : null}
+
+      <ConfirmModal
+        visible={signInPromptVisible}
+        title="Sign in to contribute"
+        message="A Vescape account is required to add, edit, delete, or react to map features. This test version stores those changes only in the local phone database."
+        confirmLabel="Sign in"
+        cancelLabel="Not now"
+        onConfirm={() => {
+          setSignInPromptVisible(false)
+          router.push(routes.signIn)
+        }}
+        onCancel={() => setSignInPromptVisible(false)}
+      />
 
       <ConfirmModal
         visible={removeConfirmVisible}

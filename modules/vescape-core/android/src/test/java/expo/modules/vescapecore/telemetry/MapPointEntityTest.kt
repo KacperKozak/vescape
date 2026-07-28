@@ -55,15 +55,42 @@ class MapPointEntityTest {
           ),
         ),
         "authorId" to null,
-        "authorName" to null,
-        "likesCount" to 0,
-        "likedByCurrentUser" to false,
-        "userReaction" to null,
+        "voteScore" to 0,
+        "myReaction" to null,
         "createdAt" to 1000L,
         "updatedAt" to 2000L,
       ),
       entity.toMap(),
     )
+  }
+
+  @Test
+  fun scoreAndCurrentReactionAreComposedFromClerkUserRows() {
+    val point = mapOf(
+      "id" to "point-1",
+      "kind" to "viewpoint",
+      "latitude" to 52.2297,
+      "longitude" to 21.0122,
+    ).toMapPointEntity()
+    val reactions = listOf(
+      MapPointReactionEntity(
+        clerkUserId = "user-1",
+        mapPointId = point.id,
+        reaction = "up",
+        updatedAt = 122L,
+      ),
+      MapPointReactionEntity(
+        clerkUserId = "user-2",
+        mapPointId = point.id,
+        reaction = "down",
+        updatedAt = 123L,
+      ),
+    )
+
+    val composed = point.toMap(reactions, "user-2")
+
+    assertEquals(0, composed["voteScore"])
+    assertEquals("down", composed["myReaction"])
   }
 
   @Test
@@ -85,6 +112,15 @@ class MapPointEntityTest {
         "id" to "point-1",
         "kind" to "drop",
         "latitude" to Double.NaN,
+        "longitude" to 21.0122,
+      ).toMapPointEntity()
+    }
+
+    assertThrows(IllegalArgumentException::class.java) {
+      mapOf(
+        "id" to "point-2",
+        "kind" to "drop",
+        "latitude" to 91.0,
         "longitude" to 21.0122,
       ).toMapPointEntity()
     }
@@ -131,13 +167,42 @@ class MapPointEntityTest {
     assertTrue(sql.any { it.contains("kind TEXT NOT NULL") })
     assertTrue(sql.any { it.contains("latitude_e7 INTEGER NOT NULL") })
     assertTrue(sql.any { it.contains("longitude_e7 INTEGER NOT NULL") })
-    assertTrue(sql.any { it.contains("name TEXT") })
-    assertTrue(sql.any { it.contains("description TEXT") })
-    assertTrue(sql.any { it.contains("media_json TEXT") })
+    assertTrue(sql.none { it.contains("name TEXT") })
+    assertTrue(sql.none { it.contains("description TEXT") })
+    assertTrue(sql.none { it.contains("media_json TEXT") })
     assertTrue(
       sql.any {
         it == "CREATE INDEX IF NOT EXISTS index_map_points_kind ON map_points(kind)"
       },
     )
+  }
+
+  @Test
+  fun migrationAddsDirectClerkReactionModelInOneVersionStep() {
+    val sql = mutableListOf<String>()
+    val db = Proxy.newProxyInstance(
+      SupportSQLiteDatabase::class.java.classLoader,
+      arrayOf(SupportSQLiteDatabase::class.java),
+    ) { _, method, args ->
+      if (method.name == "execSQL") {
+        sql += args?.firstOrNull() as String
+        null
+      } else {
+        throw UnsupportedOperationException(method.name)
+      }
+    } as SupportSQLiteDatabase
+
+    TelemetryDatabase.MIGRATION_27_28.migrate(db)
+
+    assertEquals(27, TelemetryDatabase.MIGRATION_27_28.startVersion)
+    assertEquals(28, TelemetryDatabase.MIGRATION_27_28.endVersion)
+    assertTrue(sql.any { it == "ALTER TABLE map_points ADD COLUMN author_id TEXT" })
+    assertTrue(sql.any { it.contains("CREATE TABLE IF NOT EXISTS map_point_reactions") })
+    assertTrue(sql.any { it.contains("PRIMARY KEY (clerk_user_id, map_point_id)") })
+    assertTrue(sql.any { it.contains("reaction TEXT NOT NULL") })
+    assertTrue(sql.none { it.contains("vescape_accounts") })
+    assertTrue(sql.none { it.contains("synced_reaction") || it.contains("sync_status") })
+    assertTrue(sql.none { it.contains("vote_score") || it.contains("author_name") })
+    assertTrue(sql.none { it.contains("liked_by_current_user") || it.contains("user_reaction") })
   }
 }

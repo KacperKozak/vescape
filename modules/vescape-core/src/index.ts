@@ -293,6 +293,16 @@ export type MapPointKind =
   | 'charging'
   | 'charging_food'
 
+/**
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/AppDataRepository.kt `VALID_MAP_POINT_REACTIONS`
+ * @parity /modules/vescape-core/ios/telemetry/AppDataRepository.swift `validMapPointReactions`
+ */
+export type MapPointReaction = 'up' | 'down'
+
+/**
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryEntities.kt `MapPointEntity`
+ * @parity /modules/vescape-core/ios/telemetry/AppDataRepository.swift `MapPointColumns`
+ */
 export interface MapPoint {
   id: string
   kind: MapPointKind
@@ -302,10 +312,10 @@ export interface MapPoint {
   description?: string | null
   media?: MapPointMediaAsset[]
   authorId?: string | null
-  authorName?: string | null
-  likesCount?: number
-  likedByCurrentUser?: boolean
-  userReaction?: 'up' | 'down' | null
+  /** Score calculated from locally stored Clerk-user reactions. */
+  voteScore?: number
+  /** Reaction belonging to the provided current Clerk user id. */
+  myReaction?: MapPointReaction | null
   createdAt: number
   updatedAt: number
 }
@@ -1434,10 +1444,15 @@ type VescapeCoreNativeModule = NativeEventEmitter<VescapeCoreEvents> & {
   upsertPrivacyZone(zone: PrivacyZone): Promise<void>
   setPrivacyZoneEnabled(id: string, enabled: boolean): Promise<void>
   deletePrivacyZone(id: string): Promise<void>
-  getMapPoints(): Promise<MapPoint[]>
-  upsertMapPoint(point: MapPoint): Promise<void>
+  getMapPoints(clerkUserId: string | null): Promise<MapPoint[]>
+  upsertMapPoint(point: MapPoint, clerkUserId: string | null): Promise<void>
+  setMapPointReaction(
+    mapPointId: string,
+    clerkUserId: string,
+    reaction: MapPointReaction | null,
+  ): Promise<void>
   replaceDirectionMapPoint(point: MapPoint): Promise<void>
-  deleteMapPoint(id: string): Promise<void>
+  deleteMapPoint(id: string, clerkUserId: string | null): Promise<void>
   getSettings(): Promise<AppSettings>
   refreshLegalPolicy(): Promise<void>
   setLegalMode(boardId: string, enabled: boolean): Promise<void>
@@ -2090,20 +2105,28 @@ export async function deletePrivacyZone(id: string): Promise<void> {
   return native.deletePrivacyZone(id)
 }
 
-export async function getMapPoints(): Promise<MapPoint[]> {
-  return native.getMapPoints()
+export async function getMapPoints(clerkUserId: string | null): Promise<MapPoint[]> {
+  return native.getMapPoints(clerkUserId)
 }
 
-export async function upsertMapPoint(point: MapPoint): Promise<void> {
-  return native.upsertMapPoint(point)
+export async function upsertMapPoint(point: MapPoint, clerkUserId: string | null): Promise<void> {
+  return native.upsertMapPoint(point, clerkUserId)
+}
+
+export async function setMapPointReaction(
+  mapPointId: string,
+  clerkUserId: string,
+  reaction: MapPointReaction | null,
+): Promise<void> {
+  return native.setMapPointReaction(mapPointId, clerkUserId, reaction)
 }
 
 export async function replaceDirectionMapPoint(point: MapPoint): Promise<void> {
   return native.replaceDirectionMapPoint(point)
 }
 
-export async function deleteMapPoint(id: string): Promise<void> {
-  return native.deleteMapPoint(id)
+export async function deleteMapPoint(id: string, clerkUserId: string | null): Promise<void> {
+  return native.deleteMapPoint(id, clerkUserId)
 }
 
 export async function getSettings(): Promise<AppSettings> {

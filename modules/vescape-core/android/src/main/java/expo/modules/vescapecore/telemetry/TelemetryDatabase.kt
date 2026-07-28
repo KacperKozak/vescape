@@ -12,7 +12,7 @@ import java.io.File
 // @parity /modules/vescape-core/ios/VescapeCoreModule.swift
 internal const val TELEMETRY_DATABASE_NAME = "vescape.db"
 internal const val LEGACY_TELEMETRY_DATABASE_NAME = "telemetry.db"
-internal const val TELEMETRY_DATABASE_VERSION = 30
+internal const val TELEMETRY_DATABASE_VERSION = 28
 
 @Database(
   entities = [
@@ -29,6 +29,7 @@ internal const val TELEMETRY_DATABASE_VERSION = 30
     DiagnosticEventEntity::class,
     PrivacyZoneEntity::class,
     MapPointEntity::class,
+    MapPointReactionEntity::class,
     BoardWarningEntity::class,
   ],
   version = TELEMETRY_DATABASE_VERSION,
@@ -322,14 +323,6 @@ abstract class TelemetryDatabase : RoomDatabase() {
             kind TEXT NOT NULL,
             latitude_e7 INTEGER NOT NULL,
             longitude_e7 INTEGER NOT NULL,
-            name TEXT,
-            description TEXT,
-            media_json TEXT,
-            author_id TEXT,
-            author_name TEXT,
-            likes_count INTEGER NOT NULL DEFAULT 0,
-            liked_by_current_user INTEGER NOT NULL DEFAULT 0,
-            user_reaction TEXT,
             created_at INTEGER NOT NULL,
             updated_at INTEGER NOT NULL
           )
@@ -442,35 +435,6 @@ abstract class TelemetryDatabase : RoomDatabase() {
       }
     }
 
-    internal val MIGRATION_26_27 = object : Migration(26, 27) {
-      override fun migrate(db: SupportSQLiteDatabase) {
-        if (!hasColumn(db, "map_points", "name")) {
-          db.execSQL("ALTER TABLE map_points ADD COLUMN name TEXT")
-        }
-        if (!hasColumn(db, "map_points", "description")) {
-          db.execSQL("ALTER TABLE map_points ADD COLUMN description TEXT")
-        }
-        if (!hasColumn(db, "map_points", "media_json")) {
-          db.execSQL("ALTER TABLE map_points ADD COLUMN media_json TEXT")
-        }
-      }
-    }
-
-    internal val MIGRATION_27_28 = object : Migration(27, 28) {
-      override fun migrate(db: SupportSQLiteDatabase) {
-        if (!hasColumn(db, "map_points", "author_id")) db.execSQL("ALTER TABLE map_points ADD COLUMN author_id TEXT")
-        if (!hasColumn(db, "map_points", "author_name")) db.execSQL("ALTER TABLE map_points ADD COLUMN author_name TEXT")
-        if (!hasColumn(db, "map_points", "likes_count")) db.execSQL("ALTER TABLE map_points ADD COLUMN likes_count INTEGER NOT NULL DEFAULT 0")
-        if (!hasColumn(db, "map_points", "liked_by_current_user")) db.execSQL("ALTER TABLE map_points ADD COLUMN liked_by_current_user INTEGER NOT NULL DEFAULT 0")
-      }
-    }
-
-    internal val MIGRATION_28_29 = object : Migration(28, 29) {
-      override fun migrate(db: SupportSQLiteDatabase) {
-        if (!hasColumn(db, "map_points", "user_reaction")) db.execSQL("ALTER TABLE map_points ADD COLUMN user_reaction TEXT")
-      }
-    }
-
     /**
      * Per-board Alert Rules (#254). Alert Rules become owned by one Board (`board_id NOT NULL`,
      * composite PK so preset ids repeat per board). Pre-release decision: existing global rules are
@@ -478,9 +442,9 @@ abstract class TelemetryDatabase : RoomDatabase() {
      * keys (Alert Preset selection, Rider Top Speed, onboarding flag) move to Board Settings, so
      * their app_settings rows are dropped.
      *
-     * @parity /modules/vescape-core/ios/telemetry/TelemetryDatabase.swift `v30_alert_board_id`
+     * @parity /modules/vescape-core/ios/telemetry/TelemetryDatabase.swift `v27_alert_board_id`
      */
-    internal val MIGRATION_29_30 = object : Migration(29, 30) {
+    internal val MIGRATION_26_27 = object : Migration(26, 27) {
       override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("DROP TABLE IF EXISTS alerts")
         db.execSQL(
@@ -506,6 +470,36 @@ abstract class TelemetryDatabase : RoomDatabase() {
         db.execSQL(
           "DELETE FROM app_settings WHERE key IN ('alertPreset', 'riderTopSpeedKmh', 'alertPresetsOnboarded')",
         )
+      }
+    }
+
+    /**
+     * Whole Map Point feature schema shipped after v27: shared point metadata and reactions keyed
+     * directly by Clerk user id. Intermediate branch schemas were never released and are
+     * intentionally not replayed.
+     *
+     * @parity /modules/vescape-core/ios/telemetry/TelemetryDatabase.swift `v28_map_point_reactions`
+     */
+    internal val MIGRATION_27_28 = object : Migration(27, 28) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE map_points ADD COLUMN name TEXT")
+        db.execSQL("ALTER TABLE map_points ADD COLUMN description TEXT")
+        db.execSQL("ALTER TABLE map_points ADD COLUMN media_json TEXT")
+        db.execSQL("ALTER TABLE map_points ADD COLUMN author_id TEXT")
+        db.execSQL(
+          """
+          CREATE TABLE IF NOT EXISTS map_point_reactions (
+            clerk_user_id TEXT NOT NULL,
+            map_point_id TEXT NOT NULL,
+            reaction TEXT NOT NULL,
+            updated_at INTEGER NOT NULL,
+            PRIMARY KEY (clerk_user_id, map_point_id),
+            FOREIGN KEY (map_point_id) REFERENCES map_points(id) ON UPDATE NO ACTION ON DELETE CASCADE
+          )
+          """.trimIndent(),
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_map_point_reactions_clerk_user_id ON map_point_reactions(clerk_user_id)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_map_point_reactions_map_point_id ON map_point_reactions(map_point_id)")
       }
     }
 
@@ -564,8 +558,6 @@ abstract class TelemetryDatabase : RoomDatabase() {
             MIGRATION_25_26,
             MIGRATION_26_27,
             MIGRATION_27_28,
-            MIGRATION_28_29,
-            MIGRATION_29_30,
           )
           .fallbackToDestructiveMigration(true)
           .addCallback(object : Callback() {

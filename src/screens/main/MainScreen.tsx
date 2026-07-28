@@ -68,6 +68,7 @@ export function MainScreen({
   const [selectedNavigationTarget, setSelectedNavigationTarget] = useState<MapSelection | null>(
     null,
   )
+  const [longPressMapTarget, setLongPressMapTarget] = useState<MapSelection | null>(null)
   const [activeNavigationTarget, setActiveNavigationTarget] = useState<MapSelection | null>(null)
   const dismissMapSelector = controller.dismissMapSelector
   const mapInteractionHandlerRef = useRef<(selection?: MapSelection) => boolean | void>(() => {})
@@ -85,21 +86,17 @@ export function MainScreen({
     selectMapPoint,
     toggleMapPointSelection,
   } = controller
-  const handleLongPressTarget = useCallback(
-    (target: { latitude: number; longitude: number }) => {
-      clearSelectedMapPoints()
-      setSelectedNavigationTarget({
-        type: 'coordinate',
-        id: `long-press-${target.longitude.toFixed(6)}-${target.latitude.toFixed(6)}`,
-        latitude: target.latitude,
-        longitude: target.longitude,
-        title: 'Dropped pin',
-        subtitle: null,
-        loadingDetails: true,
-      })
-    },
-    [clearSelectedMapPoints],
-  )
+  const handleLongPressTarget = useCallback((target: { latitude: number; longitude: number }) => {
+    setLongPressMapTarget({
+      type: 'coordinate',
+      id: `long-press-${target.longitude.toFixed(6)}-${target.latitude.toFixed(6)}`,
+      latitude: target.latitude,
+      longitude: target.longitude,
+      title: 'Dropped pin',
+      subtitle: null,
+      loadingDetails: true,
+    })
+  }, [])
   const handleRawMapPress = useCallback((selection: MapSelection) => {
     return mapInteractionHandlerRef.current(selection) === true
   }, [])
@@ -421,6 +418,8 @@ export function MainScreen({
           directionPoint: controller.directionPoint,
           activeNavigationTarget,
           selectedNavigationTarget,
+          longPressMapTarget,
+          onLongPressMapTargetHandled: () => setLongPressMapTarget(null),
           onSelectNavigationTarget: handleSelectNavigationTarget,
           onNavigateTarget: handleNavigateTarget,
           onNavigateSelectedTarget: handleNavigateSelectedTarget,

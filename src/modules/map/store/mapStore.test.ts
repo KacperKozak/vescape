@@ -4,6 +4,8 @@ import type { MapPoint } from 'vescape-core'
 const actualVescapeCore = await import('@/../modules/vescape-core/src/index')
 
 let persistedMapPoints: MapPoint[] = []
+const persistedReactions = new Map<string, 'up' | 'down'>()
+const clerkUserId = 'clerk-user-1'
 
 class MockFile {
   uri: string
@@ -23,8 +25,6 @@ class MockFile {
 class MockDirectory {
   exists = true
 
-  constructor(..._parts: unknown[]) {}
-
   create() {}
 
   delete() {
@@ -32,8 +32,25 @@ class MockDirectory {
   }
 }
 
-const getMapPoints = mock(async () => persistedMapPoints)
-const upsertMapPoint = mock(async (point: MapPoint) => {
+const reactionScore = (reaction: 'up' | 'down' | null | undefined) =>
+  reaction === 'up' ? 1 : reaction === 'down' ? -1 : 0
+const reactionKey = (userId: string, pointId: string) => `${userId}:${pointId}`
+const getMapPoints = mock(async (currentClerkUserId: string | null) =>
+  persistedMapPoints.map((point) => {
+    const reactions = [...persistedReactions.entries()]
+      .filter(([key]) => key.endsWith(`:${point.id}`))
+      .map(([, reaction]) => reaction)
+    const reaction = currentClerkUserId
+      ? (persistedReactions.get(reactionKey(currentClerkUserId, point.id)) ?? null)
+      : null
+    return {
+      ...point,
+      voteScore: reactions.reduce((score, value) => score + reactionScore(value), 0),
+      myReaction: reaction,
+    }
+  }),
+)
+const upsertMapPoint = mock(async (point: MapPoint, _clerkUserId: string | null) => {
   persistedMapPoints = [
     ...persistedMapPoints.filter((candidate) => candidate.id !== point.id),
     point,
@@ -45,9 +62,19 @@ const replaceDirectionMapPoint = mock(async (point: MapPoint) => {
     { ...point, kind: 'direction' },
   ]
 })
-const deleteMapPoint = mock(async (id: string) => {
+const deleteMapPoint = mock(async (id: string, _clerkUserId: string | null) => {
   persistedMapPoints = persistedMapPoints.filter((candidate) => candidate.id !== id)
+  for (const key of persistedReactions.keys()) {
+    if (key.endsWith(`:${id}`)) persistedReactions.delete(key)
+  }
 })
+const setMapPointReaction = mock(
+  async (id: string, userId: string, reaction: 'up' | 'down' | null) => {
+    const key = reactionKey(userId, id)
+    if (reaction == null) persistedReactions.delete(key)
+    else persistedReactions.set(key, reaction)
+  },
+)
 
 const vescBleMock = {
   ...actualVescapeCore,
@@ -55,6 +82,7 @@ const vescBleMock = {
   upsertMapPoint,
   replaceDirectionMapPoint,
   deleteMapPoint,
+  setMapPointReaction,
 }
 
 mock.module('vescape-core', () => vescBleMock)
@@ -67,15 +95,18 @@ mock.module('expo-file-system', () => ({
 
 beforeEach(async () => {
   persistedMapPoints = []
+  persistedReactions.clear()
   getMapPoints.mockClear()
   upsertMapPoint.mockClear()
   replaceDirectionMapPoint.mockClear()
   deleteMapPoint.mockClear()
+  setMapPointReaction.mockClear()
   const { useMapStore } = await import('@/modules/map/store/mapStore')
   useMapStore.setState({
     mapPoints: [],
     selectedMapPointId: null,
     hiddenMapPointKinds: [],
+    clerkUserId,
     loaded: false,
   })
 })
@@ -95,7 +126,7 @@ test('loads Map Points from native storage', async () => {
   await useMapStore.getState().load()
 
   expect(useMapStore.getState().loaded).toBe(true)
-  expect(useMapStore.getState().mapPoints).toEqual([point])
+  expect(useMapStore.getState().mapPoints).toEqual([{ ...point, voteScore: 0, myReaction: null }])
 })
 
 test('stores no independent targetLocation state', async () => {
@@ -108,6 +139,16 @@ test('stores no independent targetLocation state', async () => {
   expect(Object.keys(useMapStore.getState())).not.toContain('clearTargetLocation')
 })
 
+test('requires a Clerk user id for community Map Point changes', async () => {
+  const { useMapStore } = await import('@/modules/map/store/mapStore')
+  useMapStore.setState({ clerkUserId: null })
+
+  await expect(useMapStore.getState().saveMapPoint('drop', 52.1, 21.1)).rejects.toThrow(
+    'Clerk sign-in is required',
+  )
+  expect(upsertMapPoint).not.toHaveBeenCalled()
+})
+
 test('saves and removes non-direction Map Points through native storage', async () => {
   const { useMapStore } = await import('@/modules/map/store/mapStore')
 
@@ -115,13 +156,13 @@ test('saves and removes non-direction Map Points through native storage', async 
 
   expect(point.kind).toBe('drop')
   expect(useMapStore.getState().mapPoints).toEqual([point])
-  expect(upsertMapPoint).toHaveBeenCalledWith(point)
+  expect(upsertMapPoint).toHaveBeenCalledWith(point, clerkUserId)
   expect(replaceDirectionMapPoint).not.toHaveBeenCalled()
 
   await useMapStore.getState().removeMapPoint(point.id)
 
   expect(useMapStore.getState().mapPoints).toEqual([])
-  expect(deleteMapPoint).toHaveBeenCalledWith(point.id)
+  expect(deleteMapPoint).toHaveBeenCalledWith(point.id, clerkUserId)
 })
 
 test('updates non-direction Map Point metadata through native storage', async () => {
@@ -171,10 +212,10 @@ test('updates non-direction Map Point metadata through native storage', async ()
     }),
   )
   expect(useMapStore.getState().mapPoints[0]).toEqual(updated)
-  expect(upsertMapPoint).toHaveBeenLastCalledWith(updated)
+  expect(upsertMapPoint).toHaveBeenLastCalledWith(updated, clerkUserId)
 })
 
-test('persists likes and metadata across a store reload', async () => {
+test('stores Clerk-user reactions separately from Map Point metadata', async () => {
   const { useMapStore } = await import('@/modules/map/store/mapStore')
 
   const point = await useMapStore.getState().saveMapPoint('viewpoint', 52.1, 21.1)
@@ -186,16 +227,18 @@ test('persists likes and metadata across a store reload', async () => {
   expect(saved?.name).toBe('Saved lookout')
 
   const liked = await useMapStore.getState().setMapPointReaction(point.id, 'up')
-  expect(liked?.likesCount).toBe(1)
-  expect(liked?.likedByCurrentUser).toBe(true)
+  expect(liked?.voteScore).toBe(1)
+  expect(liked?.myReaction).toBe('up')
+  expect(setMapPointReaction).toHaveBeenLastCalledWith(point.id, clerkUserId, 'up')
+  expect(upsertMapPoint).toHaveBeenCalledTimes(2)
 
   const toggledOff = await useMapStore.getState().setMapPointReaction(point.id, null)
-  expect(toggledOff?.likesCount).toBe(0)
-  expect(toggledOff?.userReaction).toBe(null)
+  expect(toggledOff?.voteScore).toBe(0)
+  expect(toggledOff?.myReaction).toBe(null)
 
   const disliked = await useMapStore.getState().setMapPointReaction(point.id, 'down')
-  expect(disliked?.likesCount).toBe(-1)
-  expect(disliked?.userReaction).toBe('down')
+  expect(disliked?.voteScore).toBe(-1)
+  expect(disliked?.myReaction).toBe('down')
 
   useMapStore.setState({ mapPoints: [], loaded: false })
   await useMapStore.getState().load()
@@ -204,9 +247,8 @@ test('persists likes and metadata across a store reload', async () => {
     id: point.id,
     name: 'Saved lookout',
     description: 'Survives process death',
-    likesCount: -1,
-    likedByCurrentUser: false,
-    userReaction: 'down',
+    voteScore: -1,
+    myReaction: 'down',
   })
 })
 
@@ -217,6 +259,7 @@ test('replacing direction point leaves non-direction points intact', async () =>
     kind: 'drop',
     latitude: 52.1,
     longitude: 21.1,
+    authorId: clerkUserId,
     createdAt: 1000,
     updatedAt: 1000,
   }
@@ -288,7 +331,7 @@ test('clears direction point through native storage', async () => {
   await useMapStore.getState().clearDirectionPoint()
 
   expect(useMapStore.getState().mapPoints).toEqual([])
-  expect(deleteMapPoint).toHaveBeenCalledWith(direction.id)
+  expect(deleteMapPoint).toHaveBeenCalledWith(direction.id, null)
 })
 
 test('toggles one non-direction Map Point selection at a time', async () => {
@@ -428,6 +471,7 @@ test('prunes stale selected Map Point id on remove and load', async () => {
     kind: 'drop',
     latitude: 52.1,
     longitude: 21.1,
+    authorId: clerkUserId,
     createdAt: 1000,
     updatedAt: 1000,
   }

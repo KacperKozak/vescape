@@ -6,6 +6,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
+import androidx.room.Upsert
 
 // @parity /modules/vescape-core/ios/telemetry/TelemetryDao.swift
 @Dao
@@ -71,10 +72,22 @@ interface TelemetryDao {
   @Query("SELECT * FROM map_points ORDER BY created_at ASC")
   suspend fun getMapPoints(): List<MapPointEntity>
 
+  @Query("SELECT * FROM map_point_reactions")
+  suspend fun getMapPointReactions(): List<MapPointReactionEntity>
+
+  @Upsert
+  suspend fun upsertMapPointReaction(reaction: MapPointReactionEntity)
+
+  @Query("DELETE FROM map_point_reactions WHERE clerk_user_id = :clerkUserId AND map_point_id = :mapPointId")
+  suspend fun deleteMapPointReaction(clerkUserId: String, mapPointId: String)
+
   @Query("SELECT * FROM map_points WHERE kind = 'direction' LIMIT 1")
   suspend fun getDirectionMapPoint(): MapPointEntity?
 
-  @Insert(onConflict = OnConflictStrategy.REPLACE)
+  @Query("SELECT * FROM map_points WHERE id = :id LIMIT 1")
+  suspend fun getMapPoint(id: String): MapPointEntity?
+
+  @Upsert
   suspend fun upsertMapPoint(point: MapPointEntity)
 
   @Query("DELETE FROM map_points WHERE kind = 'direction'")

@@ -948,11 +948,21 @@ export const MainMap = memo(
     const handleLongPress = useCallback(
       (feature: { geometry: { coordinates: number[] } }) => {
         if (mode !== 'map' || historyActive) return
-        onMapInteraction()
         const [longitude, latitude] = feature.geometry.coordinates
+        const selection: MapSelection = {
+          type: 'coordinate',
+          id: `long-press-${longitude.toFixed(6)}-${latitude.toFixed(6)}`,
+          latitude,
+          longitude,
+          title: 'Dropped pin',
+          subtitle: null,
+          loadingDetails: true,
+        }
+        if (onRawMapPress(selection)) return
+        onMapInteraction()
         onLongPressTarget({ latitude, longitude })
       },
-      [historyActive, mode, onLongPressTarget, onMapInteraction],
+      [historyActive, mode, onLongPressTarget, onMapInteraction, onRawMapPress],
     )
 
     const handleSuppressNextMapPress = useCallback(() => {

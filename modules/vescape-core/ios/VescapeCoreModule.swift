@@ -686,12 +686,17 @@ public class VescapeCoreModule: Module {
       promise.resolve(nil)
     }
 
-    AsyncFunction("getMapPoints") { (promise: Promise) in
-      promise.resolve(self.appData.getMapPoints())
+    AsyncFunction("getMapPoints") { (clerkUserId: String?, promise: Promise) in
+      promise.resolve(self.appData.getMapPoints(clerkUserId: clerkUserId))
     }
 
-    AsyncFunction("upsertMapPoint") { (point: [String: Any], promise: Promise) in
-      self.appData.upsertMapPoint(point)
+    AsyncFunction("upsertMapPoint") { (point: [String: Any], clerkUserId: String?, promise: Promise) in
+      self.appData.upsertMapPoint(point, clerkUserId: clerkUserId)
+      promise.resolve(nil)
+    }
+
+    AsyncFunction("setMapPointReaction") { (mapPointId: String, clerkUserId: String, reaction: String?, promise: Promise) in
+      self.appData.setMapPointReaction(mapPointId, clerkUserId: clerkUserId, reaction: reaction)
       promise.resolve(nil)
     }
 
@@ -700,8 +705,8 @@ public class VescapeCoreModule: Module {
       promise.resolve(nil)
     }
 
-    AsyncFunction("deleteMapPoint") { (id: String, promise: Promise) in
-      self.appData.deleteMapPoint(id)
+    AsyncFunction("deleteMapPoint") { (id: String, clerkUserId: String?, promise: Promise) in
+      self.appData.deleteMapPoint(id, clerkUserId: clerkUserId)
       promise.resolve(nil)
     }
 

@@ -592,12 +592,49 @@ class AppDataRepository private constructor(private val context: Context) {
     dao.deletePrivacyZone(id)
   }
 
-  suspend fun getMapPoints(): List<Map<String, Any?>> = withContext(Dispatchers.IO) {
-    dao.getMapPoints().map { it.toMap() }
+  suspend fun getMapPoints(clerkUserId: String?): List<Map<String, Any?>> = withContext(Dispatchers.IO) {
+    val reactions = dao.getMapPointReactions().groupBy { it.mapPointId }
+    dao.getMapPoints().map { point -> point.toMap(reactions[point.id].orEmpty(), clerkUserId) }
   }
 
-  suspend fun upsertMapPoint(point: Map<String, Any?>): Unit = withContext(Dispatchers.IO) {
-    dao.upsertMapPoint(point.toMapPointEntity())
+  suspend fun upsertMapPoint(point: Map<String, Any?>, clerkUserId: String?): Unit = withContext(Dispatchers.IO) {
+    val incoming = point.toMapPointEntity()
+    if (incoming.kind != MAP_POINT_KIND_DIRECTION) require(!clerkUserId.isNullOrBlank()) {
+      "Clerk user id is required for Map Point changes"
+    }
+    val existing = dao.getMapPoint(incoming.id)
+    require(existing == null || existing.kind == MAP_POINT_KIND_DIRECTION || existing.authorId == clerkUserId) {
+      "Only the Map Point author can update it"
+    }
+    val entity = if (incoming.kind == MAP_POINT_KIND_DIRECTION) incoming else incoming.copy(
+      authorId = clerkUserId,
+    )
+    dao.upsertMapPoint(entity)
+    notifyDataChanged(AppDataScope.MAP_POINTS)
+  }
+
+  suspend fun setMapPointReaction(
+    mapPointId: String,
+    clerkUserId: String,
+    reaction: String?,
+  ): Unit = withContext(Dispatchers.IO) {
+    require(clerkUserId.isNotBlank()) { "Clerk user id is required for Map Point reactions" }
+    require(reaction == null || reaction in VALID_MAP_POINT_REACTIONS) {
+      "Invalid Map Point reaction: $reaction"
+    }
+    require(dao.getMapPoint(mapPointId) != null) { "Unknown Map Point: $mapPointId" }
+    if (reaction == null) {
+      dao.deleteMapPointReaction(clerkUserId, mapPointId)
+    } else {
+      dao.upsertMapPointReaction(
+        MapPointReactionEntity(
+          clerkUserId = clerkUserId,
+          mapPointId = mapPointId,
+          reaction = reaction,
+          updatedAt = System.currentTimeMillis(),
+        ),
+      )
+    }
     notifyDataChanged(AppDataScope.MAP_POINTS)
   }
 
@@ -610,7 +647,13 @@ class AppDataRepository private constructor(private val context: Context) {
     notifyDataChanged(AppDataScope.MAP_POINTS)
   }
 
-  suspend fun deleteMapPoint(id: String): Unit = withContext(Dispatchers.IO) {
+  suspend fun deleteMapPoint(id: String, clerkUserId: String?): Unit = withContext(Dispatchers.IO) {
+    val point = dao.getMapPoint(id) ?: return@withContext
+    if (point.kind != MAP_POINT_KIND_DIRECTION) {
+      require(!clerkUserId.isNullOrBlank() && point.authorId == clerkUserId) {
+        "Only the Map Point author can delete it"
+      }
+    }
     dao.deleteMapPoint(id)
     notifyDataChanged(AppDataScope.MAP_POINTS)
   }
@@ -855,6 +898,7 @@ fun PrivacyZoneEntity.toMap(): Map<String, Any?> = mapOf(
 )
 
 internal const val MAP_POINT_KIND_DIRECTION = "direction"
+internal val VALID_MAP_POINT_REACTIONS = setOf("up", "down")
 
 // @parity /modules/vescape-core/ios/telemetry/AppDataRepository.swift `validMapPointKinds`
 // @parity /modules/vescape-core/src/index.ts `MapPointKind`
@@ -869,7 +913,19 @@ internal val VALID_MAP_POINT_KINDS = setOf(
   "charging_food",
 )
 
-fun MapPointEntity.toMap(): Map<String, Any?> = mapOf(
+private fun reactionScore(reaction: String?): Int = when (reaction) {
+  "up" -> 1
+  "down" -> -1
+  else -> 0
+}
+
+internal fun effectiveVoteScore(reactions: List<MapPointReactionEntity>): Int =
+  reactions.sumOf { reactionScore(it.reaction) }
+
+fun MapPointEntity.toMap(
+  reactions: List<MapPointReactionEntity> = emptyList(),
+  clerkUserId: String? = null,
+): Map<String, Any?> = mapOf(
   "id" to id,
   "kind" to kind,
   "latitude" to latitudeE7 / 10_000_000.0,
@@ -878,10 +934,8 @@ fun MapPointEntity.toMap(): Map<String, Any?> = mapOf(
   "description" to description,
   "media" to (mediaJson?.let(::decodeSettingJson).takeIf { it is List<*> } ?: emptyList<Map<String, Any?>>()),
   "authorId" to authorId,
-  "authorName" to authorName,
-  "likesCount" to likesCount,
-  "likedByCurrentUser" to likedByCurrentUser,
-  "userReaction" to userReaction,
+  "voteScore" to effectiveVoteScore(reactions),
+  "myReaction" to reactions.firstOrNull { it.clerkUserId == clerkUserId }?.reaction,
   "createdAt" to createdAt,
   "updatedAt" to updatedAt,
 )
@@ -892,7 +946,9 @@ internal fun Map<String, Any?>.toMapPointEntity(): MapPointEntity {
     ?: throw IllegalArgumentException("Invalid Map Point kind: ${get("kind")}")
   val latitude = getDouble("latitude")
   val longitude = getDouble("longitude")
-  require(latitude.isFinite() && longitude.isFinite()) { "Invalid Map Point coordinate" }
+  require(latitude in -90.0..90.0 && longitude in -180.0..180.0) {
+    "Invalid Map Point coordinate"
+  }
   return MapPointEntity(
     id = getString("id"),
     kind = kind,
@@ -902,10 +958,6 @@ internal fun Map<String, Any?>.toMapPointEntity(): MapPointEntity {
     description = getOptionalString("description"),
     mediaJson = encodeSettingJson(get("media") ?: emptyList<Map<String, Any?>>()),
     authorId = getOptionalString("authorId"),
-    authorName = getOptionalString("authorName"),
-    likesCount = (get("likesCount") as? Number)?.toInt() ?: 0,
-    likedByCurrentUser = get("likedByCurrentUser") as? Boolean ?: false,
-    userReaction = (get("userReaction") as? String)?.takeIf { it == "up" || it == "down" },
     createdAt = (get("createdAt") as? Number)?.toLong() ?: now,
     updatedAt = (get("updatedAt") as? Number)?.toLong() ?: now,
   )

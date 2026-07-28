@@ -182,14 +182,6 @@ enum TelemetryDatabase {
           kind TEXT NOT NULL,
           latitude_e7 INTEGER NOT NULL,
           longitude_e7 INTEGER NOT NULL,
-          name TEXT,
-          description TEXT,
-          media_json TEXT,
-          author_id TEXT,
-          author_name TEXT,
-          likes_count INTEGER NOT NULL DEFAULT 0,
-          liked_by_current_user INTEGER NOT NULL DEFAULT 0,
-          user_reaction TEXT,
           created_at INTEGER NOT NULL,
           updated_at INTEGER NOT NULL
         )
@@ -390,29 +382,10 @@ enum TelemetryDatabase {
       }
     }
 
-    migrator.registerMigration("v27_map_point_metadata") { db in
-      let columns = try db.columns(in: "map_points").map(\.name)
-      if !columns.contains("name") {
-        try db.execute(sql: "ALTER TABLE map_points ADD COLUMN name TEXT")
-      }
-      if !columns.contains("description") {
-        try db.execute(sql: "ALTER TABLE map_points ADD COLUMN description TEXT")
-      }
-      if !columns.contains("media_json") {
-        try db.execute(sql: "ALTER TABLE map_points ADD COLUMN media_json TEXT")
-      }
-      if !columns.contains("author_id") { try db.execute(sql: "ALTER TABLE map_points ADD COLUMN author_id TEXT") }
-      if !columns.contains("author_name") { try db.execute(sql: "ALTER TABLE map_points ADD COLUMN author_name TEXT") }
-      if !columns.contains("likes_count") { try db.execute(sql: "ALTER TABLE map_points ADD COLUMN likes_count INTEGER NOT NULL DEFAULT 0") }
-      if !columns.contains("liked_by_current_user") { try db.execute(sql: "ALTER TABLE map_points ADD COLUMN liked_by_current_user INTEGER NOT NULL DEFAULT 0") }
-      if !columns.contains("user_reaction") { try db.execute(sql: "ALTER TABLE map_points ADD COLUMN user_reaction TEXT") }
-    // MARK: Per-board Alert Rules (#254)
-    // Alert Rules become owned by one Board (`board_id NOT NULL`, composite PK so preset ids repeat
-    // per board). Pre-release decision: existing global rules are dropped, not reassigned — riders
-    // redo alert setup per board. The three former global settings keys (Alert Preset selection,
-    // Rider Top Speed, onboarding flag) move to Board Settings, so their app_settings rows are dropped.
-    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `MIGRATION_29_30`
-    migrator.registerMigration("v30_alert_board_id") { db in
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `MIGRATION_26_27`
+    // Per-board Alert Rules (#254). Existing global rules are intentionally dropped; the former
+    // global alert settings are now board-scoped settings.
+    migrator.registerMigration("v27_alert_board_id") { db in
       let hasBoardId = try db.columns(in: "alerts").contains { $0.name == "board_id" }
       if !hasBoardId {
         try db.execute(sql: "DROP TABLE IF EXISTS alerts")
@@ -440,6 +413,33 @@ enum TelemetryDatabase {
         """)
     }
 
+    // Whole Map Point feature schema shipped after v27. Reactions use Clerk ids directly;
+    // intermediate branch schemas were never released and are intentionally not replayed.
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `MIGRATION_27_28`
+    migrator.registerMigration("v28_map_point_reactions") { db in
+      try db.execute(sql: "ALTER TABLE map_points ADD COLUMN name TEXT")
+      try db.execute(sql: "ALTER TABLE map_points ADD COLUMN description TEXT")
+      try db.execute(sql: "ALTER TABLE map_points ADD COLUMN media_json TEXT")
+      try db.execute(sql: "ALTER TABLE map_points ADD COLUMN author_id TEXT")
+      try createMapReactionTable(db)
+    }
+
     return migrator
+  }
+
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `MIGRATION_27_28`
+  private static func createMapReactionTable(_ db: Database) throws {
+    try db.execute(sql: """
+      CREATE TABLE IF NOT EXISTS map_point_reactions (
+        clerk_user_id TEXT NOT NULL,
+        map_point_id TEXT NOT NULL,
+        reaction TEXT NOT NULL,
+        updated_at INTEGER NOT NULL,
+        PRIMARY KEY (clerk_user_id, map_point_id),
+        FOREIGN KEY (map_point_id) REFERENCES map_points(id) ON UPDATE NO ACTION ON DELETE CASCADE
+      )
+      """)
+    try db.execute(sql: "CREATE INDEX IF NOT EXISTS index_map_point_reactions_clerk_user_id ON map_point_reactions(clerk_user_id)")
+    try db.execute(sql: "CREATE INDEX IF NOT EXISTS index_map_point_reactions_map_point_id ON map_point_reactions(map_point_id)")
   }
 }
