@@ -1,9 +1,10 @@
 import { useAuth, useSession } from '@clerk/expo'
-import { useEffect } from 'react'
+import { useCallback, useEffect } from 'react'
 
 import { SERVER_URL } from '@/config/server'
 import {
   addAppStatusListener,
+  clearDeviceCredential,
   getDeviceCredentialState,
   provisionDeviceCredential,
 } from 'vescape-core'
@@ -17,11 +18,12 @@ export function DeviceAuthSync() {
   })
   const { session } = useSession()
 
-  useEffect(() => {
+  const tryProvision = useCallback(() => {
     if (!isLoaded || !isSignedIn || !session) return
     const state = getDeviceCredentialState().state
     if (state === 'ready') return
     if (state === 'rejected') {
+      clearDeviceCredential()
       void signOut()
       return
     }
@@ -29,19 +31,31 @@ export function DeviceAuthSync() {
 
     attemptedSessionIds.add(session.id)
     provisioning = provision(getToken)
-      .catch(() => undefined)
+      .catch(() => {
+        attemptedSessionIds.delete(session.id)
+      })
       .finally(() => {
         provisioning = null
       })
   }, [getToken, isLoaded, isSignedIn, session, signOut])
 
   useEffect(() => {
+    tryProvision()
+  }, [tryProvision])
+
+  useEffect(() => {
     if (!isSignedIn) return
     const subscription = addAppStatusListener(() => {
-      if (getDeviceCredentialState().state === 'rejected') void signOut()
+      const state = getDeviceCredentialState().state
+      if (state === 'rejected') {
+        clearDeviceCredential()
+        void signOut()
+      } else if (state === 'unavailable') {
+        tryProvision()
+      }
     })
     return () => subscription.remove()
-  }, [isSignedIn, signOut])
+  }, [isSignedIn, signOut, tryProvision])
 
   return null
 }
@@ -49,12 +63,15 @@ export function DeviceAuthSync() {
 async function provision(getToken: () => Promise<string | null>): Promise<void> {
   const clerkToken = await getToken()
   if (!clerkToken) return
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 10_000)
   const response = await fetch(`${SERVER_URL.replace(/\/+$/, '')}/api/auth/device-tokens`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${clerkToken}`,
     },
-  })
+    signal: controller.signal,
+  }).finally(() => clearTimeout(timeout))
   if (response.status === 401) return
   if (!response.ok) throw new Error(`Device credential exchange failed (${response.status})`)
   const body: unknown = await response.json()

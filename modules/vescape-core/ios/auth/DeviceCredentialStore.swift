@@ -21,8 +21,11 @@ final class DeviceCredentialStore {
   private let service = "app.vescape.device-auth"
   private let credentialAccount = "credential"
   private let stateKey = "vescape_device_auth_state"
+  private let lock = NSRecursiveLock()
 
   func read() -> DeviceCredential? {
+    lock.lock()
+    defer { lock.unlock() }
     var query = baseQuery(account: credentialAccount)
     query[kSecReturnData as String] = true
     query[kSecMatchLimit as String] = kSecMatchLimitOne
@@ -35,6 +38,8 @@ final class DeviceCredentialStore {
   }
 
   func write(_ credential: DeviceCredential) throws {
+    lock.lock()
+    defer { lock.unlock() }
     let data = try JSONEncoder().encode(credential)
     let query = baseQuery(account: credentialAccount)
     let attributes: [String: Any] = [
@@ -55,22 +60,30 @@ final class DeviceCredentialStore {
   }
 
   func updateExpiry(_ expiresAt: String) {
+    lock.lock()
+    defer { lock.unlock() }
     guard var credential = read() else { return }
     credential.expiresAt = expiresAt
     try? write(credential)
   }
 
   func reject() {
+    lock.lock()
+    defer { lock.unlock() }
     deleteCredential()
     UserDefaults.standard.set(DeviceCredentialState.rejected.rawValue, forKey: stateKey)
   }
 
   func clear() {
+    lock.lock()
+    defer { lock.unlock() }
     deleteCredential()
     UserDefaults.standard.set(DeviceCredentialState.unavailable.rawValue, forKey: stateKey)
   }
 
   func state() -> DeviceCredentialState {
+    lock.lock()
+    defer { lock.unlock() }
     if read() != nil { return .ready }
     return DeviceCredentialState(
       rawValue: UserDefaults.standard.string(forKey: stateKey) ?? ""

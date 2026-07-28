@@ -36,7 +36,9 @@ final class NativeAuthCoordinator {
           json["id"] as? String == accountId
     else { throw NSError(domain: "NativeAuth", code: response.statusCode) }
     try store.write(credential)
-    AppStatusCoordinator.shared.refresh()
+    await MainActor.run {
+      AppStatusCoordinator.shared.refresh()
+    }
     return stateMap()
   }
 
