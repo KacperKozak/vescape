@@ -11,8 +11,9 @@ import GRDB
 /// @parity /modules/vescape-core/src/index.ts `Favorite`
 struct Favorite {
   let id: String
-  let deviceId: String?
-  let deviceName: String?
+  /// Owning Board (`boards.id`), or `nil` when the recorded samples match no saved Board. Never the
+  /// BLE peripheral id: that changes on re-link and differs per install, so it is not an identity.
+  let boardId: String?
   let name: String?
   let startMs: Int64
   let endMs: Int64
@@ -20,11 +21,12 @@ struct Favorite {
   let updatedAtMs: Int64
   let summary: FavoriteSummary
 
-  func toMap() -> [String: Any?] {
+  /// Board name is resolved on read from `boards`, not snapshotted, so renames propagate.
+  func toMap(boardName: String?) -> [String: Any?] {
     [
       "id": id,
-      "deviceId": deviceId,
-      "deviceName": deviceName,
+      "boardId": boardId,
+      "boardName": boardName,
       "name": name,
       "startMs": startMs,
       "endMs": endMs,
@@ -44,8 +46,6 @@ struct Favorite {
 /// Denormalized ride stats for one Favorite range, mirroring the history session summary fields.
 /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/FavoriteSummaryBuilder.kt `FavoriteSummary`
 struct FavoriteSummary {
-  var deviceId: String?
-  var deviceName: String?
   var sampleCount = 0
   var gpsPointCount = 0
   /// Odometer delta across the range, or `nil` when the range carries no odometer readings.
@@ -84,8 +84,6 @@ internal func buildFavoriteSummary(_ buckets: [TelemetryBucket]) -> FavoriteSumm
     movingSampleCount += bucket.movingSpeedSampleCount
     summary.maxSpeedCentiKmh = max(summary.maxSpeedCentiKmh, bucket.maxAbsSpeedCentiKmh)
     summary.batteryUsedWhMilli += bucket.batteryUsedWhMilli
-    if summary.deviceId == nil, !bucket.deviceId.isEmpty { summary.deviceId = bucket.deviceId }
-    if summary.deviceName == nil { summary.deviceName = bucket.deviceName }
     if let first = bucket.firstOdometerCm, let last = bucket.lastOdometerCm {
       distanceCm = (distanceCm ?? 0) + max(0, last - first)
     }
@@ -140,8 +138,7 @@ struct FavoriteStore {
     try db.execute(sql: """
       CREATE TABLE favorites (
         id TEXT NOT NULL PRIMARY KEY,
-        device_id TEXT,
-        device_name TEXT,
+        board_id TEXT,
         name TEXT,
         start_ms INTEGER NOT NULL,
         end_ms INTEGER NOT NULL,
@@ -157,6 +154,7 @@ struct FavoriteStore {
       )
       """)
     try db.execute(sql: "CREATE INDEX index_favorites_start_ms_end_ms ON favorites(start_ms, end_ms)")
+    try db.execute(sql: "CREATE INDEX index_favorites_board_id ON favorites(board_id)")
   }
 
   // MARK: - Reads
@@ -179,13 +177,13 @@ struct FavoriteStore {
         try db.execute(
           sql: """
             INSERT INTO favorites (
-              id, device_id, device_name, name, start_ms, end_ms, created_at, updated_at,
+              id, board_id, name, start_ms, end_ms, created_at, updated_at,
               sample_count, gps_point_count, distance_cm, moving_duration_ms,
               avg_speed_centi_kmh, max_speed_centi_kmh, battery_used_wh_milli
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
           arguments: [
-            favorite.id, favorite.deviceId, favorite.deviceName, favorite.name,
+            favorite.id, favorite.boardId, favorite.name,
             favorite.startMs, favorite.endMs, favorite.createdAtMs, favorite.updatedAtMs,
             favorite.summary.sampleCount, favorite.summary.gpsPointCount, favorite.summary.distanceCm,
             favorite.summary.movingDurationMs, favorite.summary.avgSpeedCentiKmh,
@@ -212,16 +210,13 @@ struct FavoriteStore {
   private static func favorite(_ row: Row) -> Favorite {
     Favorite(
       id: row["id"] as String,
-      deviceId: row["device_id"] as String?,
-      deviceName: row["device_name"] as String?,
+      boardId: row["board_id"] as String?,
       name: row["name"] as String?,
       startMs: row["start_ms"] as Int64,
       endMs: row["end_ms"] as Int64,
       createdAtMs: row["created_at"] as Int64,
       updatedAtMs: row["updated_at"] as Int64,
       summary: FavoriteSummary(
-        deviceId: row["device_id"] as String?,
-        deviceName: row["device_name"] as String?,
         sampleCount: row["sample_count"] as Int,
         gpsPointCount: row["gps_point_count"] as Int,
         distanceCm: row["distance_cm"] as Int64?,

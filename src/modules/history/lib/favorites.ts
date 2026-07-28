@@ -13,21 +13,19 @@ export function favoriteRangeForSession(
   return window ?? { startMs: session.startAtMs, endMs: session.endAtMs }
 }
 
-/** True when a Favorite already covers this ride's Moving Window, so the star reads as filled. */
+/**
+ * The Favorite already covering this ride's Moving Window, so the star reads as filled. Matched on
+ * the range alone: only one Board Session records at a time, so a range never spans two boards, and
+ * a Favorite stores a Board id rather than the ble id a history session carries.
+ */
 export function findSessionFavorite(
   favorites: Favorite[],
-  session: Pick<
-    HistorySession,
-    'movingStartAtMs' | 'movingEndAtMs' | 'startAtMs' | 'endAtMs' | 'deviceId'
-  >,
+  session: Pick<HistorySession, 'movingStartAtMs' | 'movingEndAtMs' | 'startAtMs' | 'endAtMs'>,
 ): Favorite | null {
   const range = favoriteRangeForSession(session)
   return (
     favorites.find(
-      (favorite) =>
-        favorite.startMs === range.startMs &&
-        favorite.endMs === range.endMs &&
-        (favorite.deviceId ?? null) === session.deviceId,
+      (favorite) => favorite.startMs === range.startMs && favorite.endMs === range.endMs,
     ) ?? null
   )
 }

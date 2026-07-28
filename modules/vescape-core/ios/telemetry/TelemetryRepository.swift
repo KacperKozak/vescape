@@ -233,9 +233,14 @@ internal final class TelemetryRepository {
 
   // MARK: - Favorites (ADR 0029)
 
+  /// Board names are resolved here, not stored on the row: a Favorite outlives board renames, and
+  /// a snapshot would drift.
   /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryRepository.kt `getFavorites`
   func getFavorites() -> [[String: Any?]] {
-    FavoriteStore.shared.list().map { $0.toMap() }
+    let boardNames = Self.boardNamesById()
+    return FavoriteStore.shared.list().map { favorite in
+      favorite.toMap(boardName: favorite.boardId.flatMap { boardNames[$0] })
+    }
   }
 
   /// Pin a time range as a Favorite. Identity and timestamps are minted here — the range and the
@@ -266,8 +271,7 @@ internal final class TelemetryRepository {
     let nowMs = telemetryNowMs()
     let favorite = Favorite(
       id: UUID().uuidString,
-      deviceId: deviceId ?? summary.deviceId,
-      deviceName: summary.deviceName,
+      boardId: deviceId.flatMap { Self.boardId(forBleId: $0) },
       name: (trimmedName?.isEmpty ?? true) ? nil : trimmedName,
       startMs: startMs,
       endMs: endMs,
@@ -276,7 +280,26 @@ internal final class TelemetryRepository {
       summary: summary
     )
     guard FavoriteStore.shared.insert(favorite) else { return nil }
-    return favorite.toMap()
+    return favorite.toMap(boardName: favorite.boardId.flatMap { Self.boardNamesById()[$0] })
+  }
+
+  /// The Board that recorded under this BLE peripheral id, resolved once at creation. The ble id is
+  /// a transport key — it changes on re-link and differs per install — so the durable `boards.id` is
+  /// what the Favorite keeps.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryRepository.kt `boardId`
+  private static func boardId(forBleId bleId: String) -> String? {
+    AppDataRepository.shared.getBoards().first { board in
+      (board["link"] as? [String: Any?])?["bleId"] as? String == bleId
+    }?["id"] as? String
+  }
+
+  private static func boardNamesById() -> [String: String] {
+    var names: [String: String] = [:]
+    for board in AppDataRepository.shared.getBoards() {
+      guard let id = board["id"] as? String, let name = board["name"] as? String else { continue }
+      names[id] = name
+    }
+    return names
   }
 
   /// Unpin a Favorite. Telemetry in its range stays and becomes normally deletable (ADR 0029).

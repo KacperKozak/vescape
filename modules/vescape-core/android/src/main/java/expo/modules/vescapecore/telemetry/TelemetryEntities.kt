@@ -486,15 +486,18 @@ data class BoardWarningEntity(
   tableName = "favorites",
   indices = [
     Index(value = ["start_ms", "end_ms"]),
+    Index(value = ["board_id"]),
   ],
 )
 data class FavoriteEntity(
   @PrimaryKey
   val id: String,
-  @ColumnInfo(name = "device_id")
-  val deviceId: String?,
-  @ColumnInfo(name = "device_name")
-  val deviceName: String?,
+  /**
+   * Owning Board (`boards.id`), or null when the recorded samples match no saved Board. Never the
+   * BLE peripheral id: that changes on re-link and differs per install, so it is not an identity.
+   */
+  @ColumnInfo(name = "board_id")
+  val boardId: String?,
   val name: String?,
   @ColumnInfo(name = "start_ms")
   val startMs: Long,
@@ -520,11 +523,15 @@ data class FavoriteEntity(
   @ColumnInfo(name = "battery_used_wh_milli")
   val batteryUsedWhMilli: Long,
 ) {
-  /** @parity /modules/vescape-core/ios/telemetry/FavoriteStore.swift `Favorite.toMap` */
-  fun toMap(): Map<String, Any?> = mapOf(
+  /**
+   * Board name is resolved on read from `boards`, not snapshotted, so renames propagate.
+   *
+   * @parity /modules/vescape-core/ios/telemetry/FavoriteStore.swift `Favorite.toMap`
+   */
+  fun toMap(boardName: String?): Map<String, Any?> = mapOf(
     "id" to id,
-    "deviceId" to deviceId,
-    "deviceName" to deviceName,
+    "boardId" to boardId,
+    "boardName" to boardName,
     "name" to name,
     "startMs" to startMs,
     "endMs" to endMs,

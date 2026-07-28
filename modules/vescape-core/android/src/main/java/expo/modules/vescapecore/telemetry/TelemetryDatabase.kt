@@ -486,8 +486,7 @@ abstract class TelemetryDatabase : RoomDatabase() {
           """
           CREATE TABLE IF NOT EXISTS favorites (
             id TEXT NOT NULL PRIMARY KEY,
-            device_id TEXT,
-            device_name TEXT,
+            board_id TEXT,
             name TEXT,
             start_ms INTEGER NOT NULL,
             end_ms INTEGER NOT NULL,
@@ -506,6 +505,7 @@ abstract class TelemetryDatabase : RoomDatabase() {
         db.execSQL(
           "CREATE INDEX IF NOT EXISTS index_favorites_start_ms_end_ms ON favorites(start_ms, end_ms)",
         )
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_favorites_board_id ON favorites(board_id)")
       }
     }
 

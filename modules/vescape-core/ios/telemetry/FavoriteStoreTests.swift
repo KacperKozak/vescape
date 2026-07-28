@@ -25,12 +25,11 @@ final class FavoriteStoreTests: XCTestCase {
   func testInsertedFavoriteRoundTripsThroughTheStore() throws {
     let favorite = makeFavorite(
       id: "fav-1",
+      boardId: "board-uuid-1",
       name: "Dolina single track",
       startMs: 1_000,
       endMs: 61_000,
       summary: FavoriteSummary(
-        deviceId: "board-1",
-        deviceName: "VESC Board",
         sampleCount: 12,
         gpsPointCount: 4,
         distanceCm: 123_400,
@@ -48,7 +47,7 @@ final class FavoriteStoreTests: XCTestCase {
     XCTAssertEqual(stored.name, "Dolina single track")
     XCTAssertEqual(stored.startMs, 1_000)
     XCTAssertEqual(stored.endMs, 61_000)
-    XCTAssertEqual(stored.deviceId, "board-1")
+    XCTAssertEqual(stored.boardId, "board-uuid-1")
     XCTAssertEqual(stored.summary.distanceCm, 123_400)
     XCTAssertEqual(stored.summary.movingDurationMs, 55_000)
     XCTAssertEqual(stored.summary.avgSpeedCentiKmh, 1_850)
@@ -87,8 +86,9 @@ final class FavoriteStoreTests: XCTestCase {
         maxSpeedCentiKmh: 3_000,
         batteryUsedWhMilli: 12_500
       )
-    ).toMap()
+    ).toMap(boardName: "Onewheel")
 
+    XCTAssertEqual(map["boardName"] as? String, "Onewheel")
     XCTAssertEqual(map["distanceM"] as? Double, 2_500.0)
     XCTAssertEqual(map["avgSpeedKmh"] as? Double, 15.0)
     XCTAssertEqual(map["maxSpeedKmh"] as? Double, 30.0)
@@ -98,7 +98,7 @@ final class FavoriteStoreTests: XCTestCase {
   /// A range with no odometer readings has no distance to report — the bridge must send `nil`
   /// rather than a fabricated zero, so the row renders "-" like a history row without distance.
   func testMissingDistanceStaysNullAcrossTheBridge() {
-    let map = makeFavorite(id: "fav-1", startMs: 1_000, endMs: 2_000).toMap()
+    let map = makeFavorite(id: "fav-1", startMs: 1_000, endMs: 2_000).toMap(boardName: nil)
 
     XCTAssertNil(map["distanceM"] ?? nil)
   }
@@ -117,7 +117,6 @@ final class FavoriteStoreTests: XCTestCase {
     // 1 m per sample interval. Distance sums per-bucket odometer deltas, so the hop across a bucket
     // boundary is not counted — the same arithmetic history session rows already use.
     XCTAssertEqual(summary.distanceCm, 11_800)
-    XCTAssertEqual(summary.deviceId, "board-1")
   }
 
   /// The point of computing from raw samples: a Favorite trimmed inside a minute bucket must report
@@ -160,6 +159,7 @@ final class FavoriteStoreTests: XCTestCase {
 
   private func makeFavorite(
     id: String,
+    boardId: String? = nil,
     name: String? = nil,
     startMs: Int64,
     endMs: Int64,
@@ -167,8 +167,7 @@ final class FavoriteStoreTests: XCTestCase {
   ) -> Favorite {
     Favorite(
       id: id,
-      deviceId: summary.deviceId,
-      deviceName: summary.deviceName,
+      boardId: boardId,
       name: name,
       startMs: startMs,
       endMs: endMs,

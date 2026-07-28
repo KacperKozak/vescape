@@ -531,9 +531,15 @@ class TelemetryRepository private constructor(context: Context) {
 
   // Favorites (ADR 0029)
 
-  /** @parity /modules/vescape-core/ios/telemetry/TelemetryRepository.swift `getFavorites` */
+  /**
+   * Board names are resolved here, not stored on the row: a Favorite outlives board renames, and a
+   * snapshot would drift.
+   *
+   * @parity /modules/vescape-core/ios/telemetry/TelemetryRepository.swift `getFavorites`
+   */
   suspend fun getFavorites(): List<Map<String, Any?>> = withContext(Dispatchers.IO) {
-    dao.getFavorites().map { it.toMap() }
+    val boardNames = dao.getBoards().associate { it.id to it.name }
+    dao.getFavorites().map { it.toMap(boardNames[it.boardId]) }
   }
 
   /**
@@ -553,11 +559,15 @@ class TelemetryRepository private constructor(context: Context) {
 
     val states = getSampleStates(startMs, endMs, deviceId, Int.MAX_VALUE)
     val summary = favoriteSummary(states)
+    val boards = dao.getBoards()
+    // The ble id is a transport key — it changes on re-link and differs per install — so the
+    // Favorite keeps the durable `boards.id` instead.
+    // @parity /modules/vescape-core/ios/telemetry/TelemetryRepository.swift `boardId`
+    val boardId = deviceId?.let { ble -> boards.firstOrNull { it.bleId == ble }?.id }
     val nowMs = System.currentTimeMillis()
     val favorite = FavoriteEntity(
       id = UUID.randomUUID().toString(),
-      deviceId = deviceId ?: summary.deviceId,
-      deviceName = summary.deviceName,
+      boardId = boardId,
       name = name,
       startMs = startMs,
       endMs = endMs,
@@ -572,7 +582,7 @@ class TelemetryRepository private constructor(context: Context) {
       batteryUsedWhMilli = summary.batteryUsedWhMilli,
     )
     dao.insertFavorite(favorite)
-    favorite.toMap()
+    favorite.toMap(boards.firstOrNull { it.id == boardId }?.name)
   }
 
   /**

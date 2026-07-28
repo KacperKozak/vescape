@@ -26,7 +26,6 @@ class FavoriteSummaryBuilderTest {
     // 1 m per sample interval. Distance sums per-bucket odometer deltas, so the hop across a bucket
     // boundary is not counted — the same arithmetic history session rows already use.
     assertEquals(11_800L, summary.distanceCm)
-    assertEquals("board-1", summary.deviceId)
   }
 
   /**
@@ -86,8 +85,11 @@ class FavoriteSummaryBuilderTest {
 
   @Test
   fun favoriteEntityMapsToRiderUnitsAcrossTheBridge() {
-    val map = favorite(distanceCm = 250_000L).toMap()
+    val map = favorite(distanceCm = 250_000L).toMap(boardName = "Onewheel")
 
+    assertEquals("board-uuid-1", map["boardId"])
+    // Board name is resolved on read, never snapshotted, so renames propagate to old favorites.
+    assertEquals("Onewheel", map["boardName"])
     assertEquals(2_500.0, map["distanceM"])
     assertEquals(15.0, map["avgSpeedKmh"])
     assertEquals(30.0, map["maxSpeedKmh"])
@@ -100,7 +102,7 @@ class FavoriteSummaryBuilderTest {
    */
   @Test
   fun missingDistanceStaysNullAcrossTheBridge() {
-    assertNull(favorite(distanceCm = null).toMap()["distanceM"])
+    assertNull(favorite(distanceCm = null).toMap(boardName = null)["distanceM"])
   }
 
   @Test
@@ -122,6 +124,7 @@ class FavoriteSummaryBuilderTest {
 
     assertTrue(sql.any { it.contains("CREATE TABLE IF NOT EXISTS favorites") })
     assertTrue(sql.any { it.contains("id TEXT NOT NULL PRIMARY KEY") })
+    assertTrue(sql.any { it.contains("board_id TEXT") })
     assertTrue(sql.any { it.contains("start_ms INTEGER NOT NULL") })
     assertTrue(sql.any { it.contains("end_ms INTEGER NOT NULL") })
     assertTrue(sql.any { it.contains("created_at INTEGER NOT NULL") })
@@ -130,6 +133,9 @@ class FavoriteSummaryBuilderTest {
       sql.any {
         it == "CREATE INDEX IF NOT EXISTS index_favorites_start_ms_end_ms ON favorites(start_ms, end_ms)"
       },
+    )
+    assertTrue(
+      sql.any { it == "CREATE INDEX IF NOT EXISTS index_favorites_board_id ON favorites(board_id)" },
     )
   }
 
@@ -209,8 +215,7 @@ class FavoriteSummaryBuilderTest {
 
   private fun favorite(distanceCm: Long?) = FavoriteEntity(
     id = "fav-1",
-    deviceId = "board-1",
-    deviceName = "VESC Board",
+    boardId = "board-uuid-1",
     name = "Dolina single track",
     startMs = 1_000,
     endMs = 61_000,

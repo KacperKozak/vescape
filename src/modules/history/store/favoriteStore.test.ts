@@ -6,8 +6,8 @@ const actualVescapeCore = await import('@/../modules/vescape-core/src/index')
 
 function favorite(overrides: Partial<Favorite> & Pick<Favorite, 'id' | 'startMs'>): Favorite {
   return {
-    deviceId: 'board-1',
-    deviceName: 'VESC Board',
+    boardId: 'board-uuid-1',
+    boardName: 'Onewheel',
     name: null,
     endMs: overrides.startMs + 60_000,
     createdAtMs: 1_700_000_000_000,

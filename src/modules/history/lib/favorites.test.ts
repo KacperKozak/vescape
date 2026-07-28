@@ -9,14 +9,13 @@ const session = {
   endAtMs: 1_600_000,
   movingStartAtMs: 1_100_000,
   movingEndAtMs: 1_500_000,
-  deviceId: 'board-1',
 }
 
 function favorite(overrides: Partial<Favorite>): Favorite {
   return {
     id: 'fav-1',
-    deviceId: 'board-1',
-    deviceName: 'VESC Board',
+    boardId: 'board-uuid-1',
+    boardName: 'Onewheel',
     name: null,
     startMs: 1_100_000,
     endMs: 1_500_000,
@@ -43,8 +42,8 @@ test('legacy rides without a Moving Window fall back to their wall-clock span', 
   ).toEqual({ startMs: 1_000_000, endMs: 1_600_000 })
 })
 
-test('a ride counts as favorited only when a favorite covers its exact range and board', () => {
+test('a ride counts as favorited only when a favorite covers its exact Moving Window', () => {
   expect(findSessionFavorite([favorite({})], session)?.id).toBe('fav-1')
   expect(findSessionFavorite([favorite({ endMs: 1_400_000 })], session)).toBeNull()
-  expect(findSessionFavorite([favorite({ deviceId: 'board-2' })], session)).toBeNull()
+  expect(findSessionFavorite([favorite({ startMs: 1_050_000 })], session)).toBeNull()
 })

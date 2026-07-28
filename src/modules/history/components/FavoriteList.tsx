@@ -54,7 +54,7 @@ export function FavoriteList({ favorites, loading, onRemove }: FavoriteListProps
             </Text>
             <Text style={styles.rowSubtitle} numberOfLines={1}>
               {formatRideTime(favorite.startMs, favorite.endMs)}
-              {favorite.deviceName ? ` · ${favorite.deviceName}` : ''}
+              {favorite.boardName ? ` · ${favorite.boardName}` : ''}
             </Text>
             <Text style={styles.rowMeta} numberOfLines={1}>
               {formatDuration(favorite.movingDurationMs)} · {formatDistance(favorite.distanceM)} ·{' '}

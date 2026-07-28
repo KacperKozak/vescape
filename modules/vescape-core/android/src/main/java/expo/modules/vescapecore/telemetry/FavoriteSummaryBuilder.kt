@@ -6,8 +6,6 @@ package expo.modules.vescapecore.telemetry
  * @parity /modules/vescape-core/ios/telemetry/FavoriteStore.swift `FavoriteSummary`
  */
 internal data class FavoriteSummary(
-  val deviceId: String? = null,
-  val deviceName: String? = null,
   val sampleCount: Int = 0,
   val gpsPointCount: Int = 0,
   /** Odometer delta across the range, or null when the range carries no odometer readings. */
@@ -29,8 +27,6 @@ internal data class FavoriteSummary(
 internal fun buildFavoriteSummary(buckets: Collection<TelemetryMinuteBucketEntity>): FavoriteSummary {
   if (buckets.isEmpty()) return FavoriteSummary()
 
-  var deviceId: String? = null
-  var deviceName: String? = null
   var sampleCount = 0
   var gpsPointCount = 0
   var sumAbsSpeed = 0L
@@ -54,8 +50,6 @@ internal fun buildFavoriteSummary(buckets: Collection<TelemetryMinuteBucketEntit
     maxSpeedCentiKmh = maxOf(maxSpeedCentiKmh, bucket.maxAbsSpeedCentiKmh)
     batteryUsedWhMilli += bucket.batteryUsedWhMilli
     gpsDistanceCm += bucket.gpsDistanceCm
-    if (deviceId == null && bucket.deviceId.isNotEmpty()) deviceId = bucket.deviceId
-    if (deviceName == null) deviceName = bucket.deviceName
     val first = bucket.firstOdometerCm
     val last = bucket.lastOdometerCm
     if (first != null && last != null) {
@@ -78,8 +72,6 @@ internal fun buildFavoriteSummary(buckets: Collection<TelemetryMinuteBucketEntit
   }
 
   return FavoriteSummary(
-    deviceId = deviceId,
-    deviceName = deviceName,
     sampleCount = sampleCount,
     gpsPointCount = gpsPointCount,
     distanceCm = odometerDistanceCm ?: gpsDistanceCm.takeIf { it > 0 },

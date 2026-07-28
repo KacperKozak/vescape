@@ -740,8 +740,13 @@ export interface TelemetrySummary {
  */
 export interface Favorite {
   id: string
-  deviceId: string | null
-  deviceName: string | null
+  /**
+   * Owning Board (`Board.id`), or null when the recorded samples match no saved Board. Never a BLE
+   * peripheral id: that changes on re-link and differs per install, so it is not an identity.
+   */
+  boardId: string | null
+  /** Resolved from `boards` on read, not snapshotted — board renames propagate to old Favorites. */
+  boardName: string | null
   name: string | null
   startMs: number
   endMs: number
