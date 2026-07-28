@@ -2,6 +2,7 @@ package expo.modules.vescapecore
 
 import expo.modules.vescapecore.alerts.AlertFeedback
 import expo.modules.vescapecore.appstatus.AppStatusCoordinator
+import expo.modules.vescapecore.auth.NativeAuthCoordinator
 import expo.modules.vescapecore.service.BoardProbeAutoStartGate
 import expo.modules.vescapecore.connection.BoardTransport
 import expo.modules.vescapecore.connection.BoardTransportDetector
@@ -295,6 +296,23 @@ class VescapeCoreModule : Module() {
     // @parity /modules/vescape-core/ios/VescapeCoreModule.swift `getAppStatus`
     Function("getAppStatus") {
       AppStatusCoordinator.get(context).current?.toMap()
+    }
+    // @parity /modules/vescape-core/ios/VescapeCoreModule.swift `provisionDeviceCredential`
+    AsyncFunction("provisionDeviceCredential") Coroutine {
+        serverUrl: String,
+        deviceToken: String,
+        accountId: String,
+      ->
+      NativeAuthCoordinator.get(context).provision(serverUrl, deviceToken, accountId)
+    }
+    Function("getDeviceCredentialState") {
+      NativeAuthCoordinator.get(context).stateMap()
+    }
+    AsyncFunction("revokeDeviceCredential") Coroutine { ->
+      NativeAuthCoordinator.get(context).revoke()
+    }
+    Function("clearDeviceCredential") {
+      NativeAuthCoordinator.get(context).clear()
     }
     // Stable Vescape route keeps the app decoupled from the final store destination.
     // @parity /modules/vescape-core/ios/VescapeCoreModule.swift `openAppUpdate`

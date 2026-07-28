@@ -26,6 +26,7 @@ import { ReleaseSurfaces } from '@/modules/release/components/ReleaseSurfaces'
 import { startAppStatusSync } from '@/modules/release/store/appStatusStore'
 import { useSettingsStore } from '@/modules/settings/store/settingsStore'
 import { theme } from '@/constants/theme'
+import { DeviceAuthSync } from '@/modules/profile/components/DeviceAuthSync'
 
 const clerkPublishableKey = requireClerkPublishableKey()
 
@@ -90,6 +91,7 @@ function RootLayout() {
       // blank the account UI or look like a sign-out.
       __experimental_resourceCache={resourceCache}
     >
+      <DeviceAuthSync />
       <MapPointClerkIdentitySync />
       <DiagnosticErrorBoundary>
         <GestureHandlerRootView style={{ flex: 1 }}>

@@ -1260,6 +1260,18 @@ export interface AppStatusEvent {
   status: AppStatus | null
 }
 
+/**
+ * @parity /modules/vescape-core/ios/auth/DeviceCredentialStore.swift
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/auth/DeviceCredentialStore.kt
+ */
+export type DeviceCredentialState = 'unavailable' | 'ready' | 'rejected'
+
+export interface DeviceCredentialStatus {
+  state: DeviceCredentialState
+  accountId: string | null
+  expiresAt: string | null
+}
+
 export type CriticalRideNotificationPermissionStatus =
   | 'not-determined'
   | 'denied'
@@ -1364,6 +1376,14 @@ type VescapeCoreNativeModule = NativeEventEmitter<VescapeCoreEvents> & {
   getDiagnosticStatus(): DiagnosticStatus
   getLiveState(): LiveStateEvent
   getAppStatus(): AppStatus | null
+  provisionDeviceCredential(
+    serverUrl: string,
+    deviceToken: string,
+    accountId: string,
+  ): Promise<DeviceCredentialStatus>
+  getDeviceCredentialState(): DeviceCredentialStatus
+  revokeDeviceCredential(): Promise<void>
+  clearDeviceCredential(): void
   openAppUpdate(): void
   getRemoteTiltState(): RemoteTiltState | null
   setSelectedBoard(boardId: string | null): void
@@ -1775,6 +1795,26 @@ export function getLiveState(): LiveStateEvent {
 export function getAppStatus(): AppStatus | null {
   if (E2E_ENABLED) return null
   return native.getAppStatus()
+}
+
+export async function provisionDeviceCredential(
+  serverUrl: string,
+  deviceToken: string,
+  accountId: string,
+): Promise<DeviceCredentialStatus> {
+  return native.provisionDeviceCredential(serverUrl, deviceToken, accountId)
+}
+
+export function getDeviceCredentialState(): DeviceCredentialStatus {
+  return native.getDeviceCredentialState()
+}
+
+export async function revokeDeviceCredential(): Promise<void> {
+  return native.revokeDeviceCredential()
+}
+
+export function clearDeviceCredential(): void {
+  native.clearDeviceCredential()
 }
 
 /**

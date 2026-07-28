@@ -18,6 +18,9 @@ Pod::Spec.new do |s|
 
   s.dependency 'ExpoModulesCore'
   # Single on-device database (mirrors Android Room). App data + telemetry live in one GRDB file.
+  # 6.24.1 is the newest GRDB published to CocoaPods trunk; the 6.25–6.29 tags are SPM-only. The
+  # SPM test target in `../Package.swift` therefore pins 6.29.3, the first 6.x that compiles under
+  # SPM on current Xcode. Same major, same DatabaseMigrator semantics — see the note there.
   s.dependency 'GRDB.swift', '~> 6.24.1'
 
   # Swift/Objective-C compatibility
