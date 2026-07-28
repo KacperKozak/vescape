@@ -10,6 +10,8 @@ import {
 interface FavoriteState {
   favorites: Favorite[]
   loading: boolean
+  /** A create/delete is in flight. Single-flight: the star must not queue a second mutation. */
+  saving: boolean
   error: string | undefined
 }
 
@@ -24,6 +26,7 @@ interface FavoriteActions {
 export const useFavoriteStore = create<FavoriteState & FavoriteActions>((set, get) => ({
   favorites: [],
   loading: false,
+  saving: false,
   error: undefined,
 
   async load() {
@@ -38,7 +41,8 @@ export const useFavoriteStore = create<FavoriteState & FavoriteActions>((set, ge
   },
 
   async add(options) {
-    set({ error: undefined })
+    if (get().saving) return null
+    set({ saving: true, error: undefined })
     try {
       const favorite = await createFavorite(options)
       set({
@@ -48,16 +52,21 @@ export const useFavoriteStore = create<FavoriteState & FavoriteActions>((set, ge
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err) })
       return null
+    } finally {
+      set({ saving: false })
     }
   },
 
   async remove(id) {
-    set({ error: undefined })
+    if (get().saving) return
+    set({ saving: true, error: undefined })
     try {
       await deleteFavorite(id)
       set({ favorites: get().favorites.filter((favorite) => favorite.id !== id) })
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err) })
+    } finally {
+      set({ saving: false })
     }
   },
 }))

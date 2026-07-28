@@ -49,7 +49,7 @@ beforeEach(async () => {
   })
   deleteFavorite.mockImplementation(async () => true)
   const { useFavoriteStore } = await import('@/modules/history/store/favoriteStore')
-  useFavoriteStore.setState({ favorites: [], loading: false, error: undefined })
+  useFavoriteStore.setState({ favorites: [], loading: false, saving: false, error: undefined })
 })
 
 test('loads favorites from native', async () => {
@@ -99,4 +99,20 @@ test('removes only the deleted favorite', async () => {
 
   expect(deleteFavorite).toHaveBeenCalledWith('gone')
   expect(useFavoriteStore.getState().favorites).toEqual([kept])
+})
+
+test('a second star tap while a create is in flight does not add a duplicate', async () => {
+  const created = favorite({ id: 'fav-1', startMs: 2_000_000 })
+  createFavorite.mockImplementation(async () => created)
+  const { useFavoriteStore } = await import('@/modules/history/store/favoriteStore')
+
+  const [first, second] = await Promise.all([
+    useFavoriteStore.getState().add({ startMs: created.startMs, endMs: created.endMs }),
+    useFavoriteStore.getState().add({ startMs: created.startMs, endMs: created.endMs }),
+  ])
+
+  expect(createFavorite).toHaveBeenCalledTimes(1)
+  expect([first, second]).toEqual([created, null])
+  expect(useFavoriteStore.getState().favorites).toEqual([created])
+  expect(useFavoriteStore.getState().saving).toBe(false)
 })

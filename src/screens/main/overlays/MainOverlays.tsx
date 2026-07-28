@@ -166,6 +166,8 @@ interface MainHistoryOverlayProps {
   selectHistoryTab: (tab: HistoryTab) => void
   favorites: Favorite[]
   favoritesLoading: boolean
+  favoritesSaving: boolean
+  favoritesError: string | undefined
   selectedSessionFavorite: Favorite | null
   toggleSelectedRideFavorite: () => Promise<void>
   removeFavorite: (id: string) => Promise<void>
@@ -1153,7 +1155,7 @@ export function MainOverlays({
           />
           <HistoryStatsBar session={history.selectedSession} />
           <HistoryControls
-            loading={historyBusy}
+            loading={historyBusy || history.favoritesSaving}
             tab={history.historyTab}
             canRemove={true}
             canFavorite={true}
@@ -1209,10 +1211,10 @@ export function MainOverlays({
         }}
       />
 
-      {mode === 'history' && history.historyError ? (
+      {mode === 'history' && (history.historyError ?? history.favoritesError) ? (
         <View style={[styles.historyError, { bottom: aboveStripBottom }]}>
           <Text style={styles.historyErrorText} selectable>
-            {history.historyError}
+            {history.historyError ?? history.favoritesError}
           </Text>
         </View>
       ) : null}

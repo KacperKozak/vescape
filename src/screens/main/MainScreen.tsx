@@ -212,6 +212,8 @@ export function MainScreen({
           selectHistoryTab: controller.selectHistoryTab,
           favorites: controller.favorites,
           favoritesLoading: controller.favoritesLoading,
+          favoritesSaving: controller.favoritesSaving,
+          favoritesError: controller.favoritesError,
           selectedSessionFavorite: controller.selectedSessionFavorite,
           toggleSelectedRideFavorite: controller.toggleSelectedRideFavorite,
           removeFavorite: controller.removeFavorite,

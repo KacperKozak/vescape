@@ -75,16 +75,25 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
       setActiveHistoryMapMetric: s.setActiveHistoryMapMetric,
     })),
   )
-  const { favorites, favoritesLoading, loadFavorites, addFavorite, removeFavorite } =
-    useFavoriteStore(
-      useShallow((s) => ({
-        favorites: s.favorites,
-        favoritesLoading: s.loading,
-        loadFavorites: s.load,
-        addFavorite: s.add,
-        removeFavorite: s.remove,
-      })),
-    )
+  const {
+    favorites,
+    favoritesLoading,
+    favoritesSaving,
+    favoritesError,
+    loadFavorites,
+    addFavorite,
+    removeFavorite,
+  } = useFavoriteStore(
+    useShallow((s) => ({
+      favorites: s.favorites,
+      favoritesLoading: s.loading,
+      favoritesSaving: s.saving,
+      favoritesError: s.error,
+      loadFavorites: s.load,
+      addFavorite: s.add,
+      removeFavorite: s.remove,
+    })),
+  )
   const liveLocations = useBleStore((s) => s.liveLocationHistory)
   const latestApproximateLocation = useBleStore((s) => s.latestApproximateLocation)
   const fetchWeather = useWeatherStore((s) => s.fetch)
@@ -481,6 +490,8 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
     selectHistoryTab,
     favorites,
     favoritesLoading,
+    favoritesSaving,
+    favoritesError,
     selectedSessionFavorite,
     toggleSelectedRideFavorite,
     removeFavorite,
