@@ -278,6 +278,25 @@ public class VescapeCoreModule: Module {
       AppStatusCoordinator.shared.current?.toMap()
     }
 
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `provisionDeviceCredential`
+    AsyncFunction("provisionDeviceCredential") {
+      (serverUrl: String, deviceToken: String, accountId: String) async throws -> [String: Any?] in
+      try await NativeAuthCoordinator.shared.provision(
+        serverUrl: serverUrl,
+        token: deviceToken,
+        accountId: accountId
+      )
+    }
+    Function("getDeviceCredentialState") { () -> [String: Any?] in
+      NativeAuthCoordinator.shared.stateMap()
+    }
+    AsyncFunction("revokeDeviceCredential") { () async throws in
+      try await NativeAuthCoordinator.shared.revoke()
+    }
+    Function("clearDeviceCredential") {
+      NativeAuthCoordinator.shared.clear()
+    }
+
     // Stable Vescape route keeps the app decoupled from the final store destination.
     // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `openAppUpdate`
     // @platform-diff iOS uses the stable iOS download route.
