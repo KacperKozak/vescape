@@ -716,7 +716,7 @@ public class VescapeCoreModule: Module {
       let latitude = settings["lastGpsLatitude"] as? Double
       let longitude = settings["lastGpsLongitude"] as? Double
       Task {
-        let countryCode = if let latitude, let longitude {
+        let countryCode: String? = if let latitude, let longitude {
           await self.legalPolicyResolver.resolve(latitude: latitude, longitude: longitude)
         } else {
           nil

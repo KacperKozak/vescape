@@ -3,7 +3,9 @@ import { ClerkProvider } from '@clerk/expo'
 import { tokenCache } from '@clerk/expo/token-cache'
 import { resourceCache } from '@clerk/expo/resource-cache'
 import { useFonts } from 'expo-font'
-import { Stack } from 'expo-router'
+// App navigation chrome is intentionally JS-rendered. Native iOS headers apply system visual
+// treatments (including Liquid Glass) that conflict with Vescape's cross-platform header design.
+import { Stack } from 'expo-router/js-stack'
 import * as SplashScreen from 'expo-splash-screen'
 import { StatusBar } from 'expo-status-bar'
 import { useEffect } from 'react'
@@ -97,7 +99,9 @@ function RootLayout() {
               headerTitleAlign: 'center',
               headerShadowVisible: false,
               headerLeft: () => <HeaderBackButton />,
-              contentStyle: { backgroundColor: theme.palette.slate.bg },
+              headerLeftContainerStyle: { paddingLeft: 10 },
+              headerRightContainerStyle: { paddingRight: 10 },
+              cardStyle: { backgroundColor: theme.palette.slate.bg },
             }}
           >
             <Stack.Screen name={stackScreens.home} options={{ headerShown: false }} />

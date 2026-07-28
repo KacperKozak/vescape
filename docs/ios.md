@@ -56,7 +56,7 @@ symlink; this is verified to compile on device.
 - `app.config.ts`: `ios.infoPlist.NSSupportsLiveActivities = true`.
 - `ios.appleTeamId` (via `APPLE_TEAM_ID` env) is **required** — apple-targets needs it to sign the
   extension. Set it in `.env` / EAS secrets or prebuild warns and device builds fail to sign.
-- `VescapeCore.podspec` platform is `16.4` (ActivityKit needs 16.1+; the app already ships 16.4, so
+- `VescapeCore.podspec` platform is `17.0` (ActivityKit needs 16.1+; the app already ships 17.0, so
   nothing runs below it). This is why no `@available` gating is needed in the ActivityKit code.
 - The `widget` target adds an App Group entitlement by default. It is unused (local `update`s pass
   `ContentState` directly, no shared storage) but harmless; EAS auto-registers it.
@@ -64,8 +64,8 @@ symlink; this is verified to compile on device.
 ### Limits
 
 - **No action buttons.** Android's chip has Disconnect / Connect / Exit; the Live Activity is
-  tap-to-open only. Interactive buttons need App Intents (iOS 17+) and the deployment floor is 16.4.
-  Tracked as `TODO(iOS parity)` in `RideLiveActivityController`.
+  tap-to-open only. Interactive buttons use App Intents; the iOS 17 deployment floor now supports
+  them, but they remain unimplemented. Tracked as `TODO(iOS parity)` in `RideLiveActivityController`.
 - The user can disable Live Activities per-app in Settings; `RideLiveActivityController` checks
   `ActivityAuthorizationInfo().areActivitiesEnabled` and no-ops silently when off.
 

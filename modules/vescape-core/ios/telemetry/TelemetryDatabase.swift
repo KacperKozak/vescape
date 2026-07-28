@@ -46,7 +46,7 @@ enum TelemetryDatabase {
     let legacy = url.deletingLastPathComponent().appendingPathComponent(legacyDatabaseName)
     guard !fm.fileExists(atPath: url.path), fm.fileExists(atPath: legacy.path) else { return }
     if let legacyPool = try? DatabasePool(path: legacy.path) {
-      try? legacyPool.writeWithoutTransaction { db in try db.checkpoint(.truncate) }
+      _ = try? legacyPool.writeWithoutTransaction { db in try db.checkpoint(.truncate) }
       try? legacyPool.close()
     }
     do {
@@ -115,7 +115,9 @@ enum TelemetryDatabase {
     }
   }
 
-  private static var migrator: DatabaseMigrator {
+  /// Internal, not private, so migration tests can run the real migrator against an in-memory
+  /// database and stop at a chosen version with `migrate(_:upTo:)`.
+  internal static var migrator: DatabaseMigrator {
     var migrator = DatabaseMigrator()
 
     migrator.registerMigration("v1") { db in

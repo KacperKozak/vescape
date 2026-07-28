@@ -390,7 +390,7 @@ internal final class BoardSessionController: VescGattListener {
   }
 
   func legalModeEnableError(boardId: String) -> (String, String)? {
-    legalModeEnableError(
+    VescapeCore.legalModeEnableError(
       phase: phase,
       activeBoardId: connectedBoardId,
       linkIntegrity: linkIntegrity,

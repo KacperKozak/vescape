@@ -115,6 +115,8 @@ export const palette = {
   groupRide: hue('#10c69a', '#5eead4', '#7af0d6', '#04302a', '#0c8f74'),
   // Balance pitch alternate — kept for pink family completeness
   pink: hue('#ec4899', '#f472b6', '#fbcfe8', '#500724', '#be185d'),
+  // Natural and neutral accents used by rider identity colors.
+  beige: hue('#d6c2a5', '#e8dcc8', '#f5eee4', '#3a3026', '#8d7353'),
 } as const
 
 export const telemetry = {

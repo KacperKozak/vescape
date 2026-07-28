@@ -444,7 +444,10 @@ interface TelemetryDao {
   @Insert
   suspend fun insertTuneHistoryEntry(entry: TuneHistoryEntryEntity): Long
 
-  @Query("SELECT * FROM tune_history_entries WHERE profile_id = :profileId ORDER BY created_at DESC")
+  // `id` breaks ties: a save and a rollback can land in the same millisecond, and without a
+  // monotonic tiebreaker `created_at DESC` alone returns them in insertion order — oldest first —
+  // which is the opposite of what Tune History shows.
+  @Query("SELECT * FROM tune_history_entries WHERE profile_id = :profileId ORDER BY created_at DESC, id DESC")
   suspend fun getTuneHistoryEntries(profileId: String): List<TuneHistoryEntryEntity>
 
   @Query("UPDATE tune_profiles SET fields_json = :fieldsJson, updated_at = :updatedAt WHERE id = :profileId")

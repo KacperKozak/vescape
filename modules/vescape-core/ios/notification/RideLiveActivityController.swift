@@ -10,7 +10,7 @@ import Foundation
 /// `start` must run while the app is foreground, which holds because a session always begins from a
 /// user-initiated connect.
 ///
-/// Deployment target is 16.4, so ActivityKit is unconditionally available (no `@available` gating).
+/// Deployment target is 17.0, so ActivityKit is unconditionally available (no `@available` gating).
 ///
 /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/notification/NotificationController.kt
 /// @platform-diff Android renders a system notification with Disconnect/Connect/Exit actions; the
