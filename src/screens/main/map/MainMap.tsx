@@ -370,22 +370,28 @@ export const MainMap = memo(
       cameraFix,
       persistedFallback,
       perspectiveEnabled,
-      historyActive,
-      historySelectionKey: history.selectionKey,
-      historyPreview,
-      historyPreviewRoute: history.previewRoute,
-      rideRoute,
       mapViewport: mapLayout,
       mapNavigationMode,
-      gpsHeadingMode: headingFollowMode,
-      phoneHeadingMode,
-      phoneHeadingReady: phoneHeadingStatus === 'ready',
-      getFollowHeadingDeg,
-      resetHeadingOnRecenter: mapNavigationMode !== 'freeRotate',
-      liveFollowUpdatesEnabled: !(phoneHeadingMode && mode === 'map'),
-      followAnimationDuration: headingFollowMode
-        ? phoneHeadingAnimationDuration()
-        : MAP_DEFAULTS.followAnimationDuration,
+      heading: {
+        gpsMode: headingFollowMode,
+        phoneMode: phoneHeadingMode,
+        phoneReady: phoneHeadingStatus === 'ready',
+        getFollowDeg: getFollowHeadingDeg,
+        resetOnRecenter: mapNavigationMode !== 'freeRotate',
+      },
+      history: {
+        active: historyActive,
+        selectionKey: history.selectionKey,
+        preview: historyPreview,
+        previewRoute: history.previewRoute,
+        rideRoute,
+      },
+      follow: {
+        updatesEnabled: !(phoneHeadingMode && mode === 'map'),
+        animationDuration: headingFollowMode
+          ? phoneHeadingAnimationDuration()
+          : MAP_DEFAULTS.followAnimationDuration,
+      },
       getViewfinderCoordinateFromMap,
       onHeadingChange,
       onPerspectiveChange,
