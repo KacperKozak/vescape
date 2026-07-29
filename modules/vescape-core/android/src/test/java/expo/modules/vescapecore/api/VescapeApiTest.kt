@@ -89,6 +89,15 @@ class VescapeApiTest {
     assertNull(transport.requests.single().headers["Authorization"])
   }
 
+  @Test
+  fun `matches the credential origin whatever the trailing slash`() {
+    val transport = FakeTransport(ok())
+    api(transport, baseUrl = "https://api.vescape.app/").text()
+
+    assertEquals("Bearer device-token", transport.requests.single().headers["Authorization"])
+    assertEquals("https://api.vescape.app/map-points", transport.requests.single().url)
+  }
+
   /** A credential minted against another origin belongs to another environment. */
   @Test
   fun `ignores a credential stored for a different origin`() {

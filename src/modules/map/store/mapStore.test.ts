@@ -146,6 +146,20 @@ test('a failed read empties the map and reports why', async () => {
   expect(state.error).toBe('Could not reach the server. Map features need a connection.')
 })
 
+/** Otherwise a rider parked on the spot would sit on an empty map until they panned far enough. */
+test('a still camera retries after a failed read', async () => {
+  nearbyError = new ApiError('MAP_POINT_UNREACHABLE')
+  await useMapStore.getState().refreshNearby(52.1, 21.1, 14)
+
+  nearbyError = null
+  nearbyResult = { items: [serverPoint({ id: 'a' })], truncated: false }
+  await useMapStore.getState().refreshNearby(52.1, 21.1, 14)
+
+  expect(getNearbyMapPoints).toHaveBeenCalledTimes(2)
+  expect(useMapStore.getState().mapPoints.map((point) => point.id)).toEqual(['a'])
+  expect(useMapStore.getState().error).toBeNull()
+})
+
 test('creating a Map Point adds the server row, not a local guess', async () => {
   const point = await useMapStore.getState().addMapPoint('bonk', 52.2, 21.2)
 

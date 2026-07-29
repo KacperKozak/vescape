@@ -108,7 +108,29 @@ export const useMapStore = create<MapState & MapActions>((set, get) => {
       }))
     } catch (error) {
       // Nothing is cached offline (Map Points are server-owned), so the map goes empty and says so.
-      set({ mapPoints: [], truncated: false, loading: false, error: mapPointErrorMessage(error) })
+      // `lastRead` is dropped so a still camera retries on its next idle instead of staying empty
+      // until the rider pans far enough to beat the skip heuristic.
+      set({
+        mapPoints: [],
+        truncated: false,
+        loading: false,
+        lastRead: null,
+        error: mapPointErrorMessage(error),
+      })
+    }
+  }
+
+  /**
+   * The target moves on screen immediately, but native owns it — Group Ride presence reads native,
+   * not this store. A failed write puts the previous target back so the two cannot disagree.
+   */
+  async function moveDirectionPoint(next: DirectionPoint | null) {
+    const previous = get().directionPoint
+    set({ directionPoint: next })
+    try {
+      await persistDirectionPoint(next?.latitude ?? null, next?.longitude ?? null)
+    } catch (error) {
+      set({ directionPoint: previous, error: mapPointErrorMessage(error) })
     }
   }
 
@@ -203,8 +225,12 @@ export const useMapStore = create<MapState & MapActions>((set, get) => {
         set({ error: null })
         return optimistic
       } catch (error) {
+        // Only roll back if this is still the reaction on screen. A newer vote may have landed
+        // while this one was in flight, and restoring `previous` would undo it.
         set((s) => ({
-          mapPoints: s.mapPoints.map((point) => (point.id === id ? previous : point)),
+          mapPoints: s.mapPoints.map((point) =>
+            point.id === id && point.myReaction === optimistic.myReaction ? previous : point,
+          ),
           error: mapPointErrorMessage(error),
         }))
         return null
@@ -227,14 +253,12 @@ export const useMapStore = create<MapState & MapActions>((set, get) => {
     },
 
     async setDirectionPoint(latitude, longitude) {
-      set({ directionPoint: { latitude, longitude } })
-      await persistDirectionPoint(latitude, longitude)
+      await moveDirectionPoint({ latitude, longitude })
     },
 
     async clearDirectionPoint() {
       if (!get().directionPoint) return
-      set({ directionPoint: null })
-      await persistDirectionPoint(null, null)
+      await moveDirectionPoint(null)
     },
 
     selectMapPoint(id) {

@@ -26,13 +26,16 @@ import java.util.concurrent.TimeUnit
  * @parity /modules/vescape-core/ios/api/VescapeApi.swift
  */
 class VescapeApi(
-  private val baseUrl: String,
+  baseUrl: String,
   private val appVersion: String,
   private val credentialProvider: () -> DeviceCredential? = { null },
   private val onUnauthorized: () -> Unit = {},
   private val transport: ApiTransport = OkHttpApiTransport,
   private val retryDelayMillis: Long = RETRY_DELAY_MILLIS,
 ) {
+  /** Trailing slash trimmed once, so path joins stay single-slashed and origin compares hold. */
+  private val baseUrl = baseUrl.trimEnd('/')
+
   suspend fun <T> request(
     method: HttpMethod,
     path: String,

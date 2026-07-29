@@ -98,6 +98,14 @@ final class VescapeApiTests: XCTestCase {
     XCTAssertNil(transport.requests.first?.headers["Authorization"])
   }
 
+  func testMatchesCredentialOriginWithTrailingSlash() async {
+    let transport = FakeTransport(ok())
+    _ = await text(api(transport, stored: credential, baseUrl: "https://api.vescape.app/"))
+
+    XCTAssertEqual(transport.requests.first?.headers["Authorization"], "Bearer device-token")
+    XCTAssertEqual(transport.requests.first?.url, "https://api.vescape.app/map-points")
+  }
+
   /// A credential minted against another origin belongs to another environment.
   func testIgnoresCredentialFromAnotherOrigin() async {
     let transport = FakeTransport(ok())
