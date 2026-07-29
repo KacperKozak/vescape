@@ -115,9 +115,9 @@ enum TelemetryDatabase {
     }
   }
 
-  /// Internal rather than private so migration tests can replay the same migrator against an
-  /// in-memory database instead of re-declaring the schema.
-  static var migrator: DatabaseMigrator {
+  /// Internal, not private, so migration tests can run the real migrator against an in-memory
+  /// database and stop at a chosen version with `migrate(_:upTo:)`.
+  internal static var migrator: DatabaseMigrator {
     var migrator = DatabaseMigrator()
 
     migrator.registerMigration("v1") { db in
@@ -384,12 +384,9 @@ enum TelemetryDatabase {
       }
     }
 
-    // MARK: Per-board Alert Rules (#254)
-    // Alert Rules become owned by one Board (`board_id NOT NULL`, composite PK so preset ids repeat
-    // per board). Pre-release decision: existing global rules are dropped, not reassigned — riders
-    // redo alert setup per board. The three former global settings keys (Alert Preset selection,
-    // Rider Top Speed, onboarding flag) move to Board Settings, so their app_settings rows are dropped.
     // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `MIGRATION_26_27`
+    // Per-board Alert Rules (#254). Existing global rules are intentionally dropped; the former
+    // global alert settings are now board-scoped settings.
     migrator.registerMigration("v27_alert_board_id") { db in
       let hasBoardId = try db.columns(in: "alerts").contains { $0.name == "board_id" }
       if !hasBoardId {
@@ -418,16 +415,20 @@ enum TelemetryDatabase {
         """)
     }
 
-    // MARK: Incremental-sync cursors
-    // `boards` and `alerts` carried `created_at` only, so a board rename or an alert toggle was
-    // invisible to an "everything changed since T" query — the shape every other mutable table
-    // already supports. `telemetry_minute_buckets` is an append-and-merge target with no cursor at all.
-    //
-    // Existing rows backfill to the best evidence of when they last changed — `created_at` for boards
-    // and alerts, `last_sample_at_ms` for buckets — never 0 and never null, so a first sync after
-    // upgrade reports each row at its true age instead of flooding the server with epoch-zero rows.
-    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `MIGRATION_27_28`
-    migrator.registerMigration("v28_sync_cursors") { db in
+    // Map Points became server-owned (server ADR-0009), so the app keeps no local copy. Drops the
+    // v27 table and the reaction table that only ever existed on a feature branch. The direction
+    // target it used to hold moves to app settings, which start empty here — a rider re-picks it.
+    // GRDB keys migrations by name, so one migration covers both released and feature-branch
+    // installs; Room needs two steps because it keys them by version number.
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `MIGRATION_28_29`
+    migrator.registerMigration("v29_drop_map_points") { db in
+      try db.execute(sql: "DROP TABLE IF EXISTS map_point_reactions")
+      try db.execute(sql: "DROP TABLE IF EXISTS map_points")
+    }
+
+    // Adds incremental-sync timestamps after the Map Point removal migration already named v29.
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `MIGRATION_29_30`
+    migrator.registerMigration("v30_sync_cursors") { db in
       let backfillSource = [
         "boards": "created_at",
         "alerts": "created_at",
@@ -439,21 +440,15 @@ enum TelemetryDatabase {
           try db.execute(sql: "ALTER TABLE \(table) ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0")
           try db.execute(sql: "UPDATE \(table) SET updated_at = \(source)")
         }
-        try db.execute(sql: "CREATE INDEX IF NOT EXISTS index_\(table)_updated_at ON \(table)(updated_at)")
+        try db.execute(
+          sql: "CREATE INDEX IF NOT EXISTS index_\(table)_updated_at ON \(table)(updated_at)"
+        )
       }
     }
 
-    // MARK: Sync Cursor split off the last-write-wins timestamp
-    // `sync_seq` is a device-local counter the upload scan runs on; `updated_at` keeps its wall-clock
-    // meaning and stays the value the server compares. Scanning a counter is what makes the scan
-    // complete under a device clock that steps backwards, which an `updated_at >= watermark` scan is
-    // not: a rewound clock lands the write below a cursor the phone has already passed.
-    //
-    // Existing rows backfill from `rowid`. Nothing has ever been uploaded, so any strictly increasing
-    // assignment works, and `rowid` gives one for free without an O(n²) self-join over tables that
-    // hold a row per ridden minute. Each counter then starts above every assigned value.
-    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `MIGRATION_28_29`
-    migrator.registerMigration("v29_sync_seq") { db in
+    // Splits the device-local Sync Cursor from the wall-clock last-write-wins timestamp.
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `MIGRATION_30_31`
+    migrator.registerMigration("v31_sync_seq") { db in
       try db.execute(
         sql: """
           CREATE TABLE IF NOT EXISTS sync_sequences (

@@ -1,9 +1,10 @@
 import type { ExpoConfig } from 'expo/config'
 import pkg from './package.json' with { type: 'json' }
+import { applicationId, isDevelopmentApp } from './src/config/appVariant.ts'
 import { androidVersionCode } from './src/helpers/version.ts'
 
 const config: ExpoConfig = {
-  name: 'vescape',
+  name: isDevelopmentApp ? 'vescape dev' : 'vescape',
   slug: 'vescape',
   version: pkg.version,
   orientation: 'portrait',
@@ -12,7 +13,7 @@ const config: ExpoConfig = {
   userInterfaceStyle: 'automatic',
   ios: {
     supportsTablet: true,
-    bundleIdentifier: 'app.vescape',
+    bundleIdentifier: applicationId,
     // Required by @bacons/apple-targets to sign the ride-activity widget extension. Account-specific
     // 10-char Apple Developer team ID — set APPLE_TEAM_ID at prebuild/build time (EAS secret / .env).
     appleTeamId: process.env.APPLE_TEAM_ID,
@@ -37,7 +38,7 @@ const config: ExpoConfig = {
       monochromeImage: './assets/images/androidIconMonochrome.png',
     },
     predictiveBackGestureEnabled: false,
-    package: 'app.vescape',
+    package: applicationId,
     // Play's Photo and Video Permissions policy rejected READ_MEDIA_*; ride media uses the
     // permissionless system photo picker instead. The storage pair is minSdk<=32 only and
     // this app's minSdk is 33, so all of these are stripped from the merged manifest.

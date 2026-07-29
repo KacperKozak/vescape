@@ -83,6 +83,7 @@ Use one or more app-area labels for filtering:
 | `area:warnings`    | `[Warnings]`    | Board Warnings — native fault-code detection, warning registry, rider-facing warning surface  |
 | `area:diagnostics` | `[Diagnostics]` | Debug Recordings, replay tooling, Diagnostic Events, dev-mode debugging surfaces              |
 | `area:sync`        | `[Sync]`        | Backup sync — native uploader, Sync Cursors, Sync Actions, Device Token, backup status        |
+| `area:auth`        | `[Auth]`        | Clerk sessions, native Device Tokens, credential lifecycle, and endpoint caller policy        |
 
 When a PRD or issue-planning skill creates or starts using a new app-area label, update this table in the same turn. Add the label, title prefix, and a short "Use for" description so future PRDs and implementation issues can reuse the prefix consistently.
 

@@ -14,7 +14,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.util.UUID
 
-// @parity /modules/vescape-core/ios/VescapeCoreModule.swift
+// @parity /modules/vescape-core/ios/telemetry/AppDataRepository.swift `AppDataScope`
+// @parity /modules/vescape-core/src/index.ts `AppDataChangedEvent`
 /** Scope of an `onAppDataChanged` emit; mirrors the JS `AppDataChangedEvent['scope']` union. */
 internal enum class AppDataScope(val wire: String) {
   BOARDS("boards"),
@@ -245,6 +246,8 @@ class AppDataRepository private constructor(private val context: Context) {
       selectedBoardId = opt("selectedBoardId") { it as? String },
       lastGpsLatitude = opt("lastGpsLatitude") { (it as? Number)?.toDouble() },
       lastGpsLongitude = opt("lastGpsLongitude") { (it as? Number)?.toDouble() },
+      directionPointLatitude = opt(DIRECTION_POINT_LATITUDE) { (it as? Number)?.toDouble() },
+      directionPointLongitude = opt(DIRECTION_POINT_LONGITUDE) { (it as? Number)?.toDouble() },
       movingSpeedThresholdKmh = req("movingSpeedThresholdKmh", 3.0) { (it as? Number)?.toDouble() },
       freeSpinMaxSpeedDeltaKmh = req("freeSpinMaxSpeedDeltaKmh", DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH) { (it as? Number)?.toDouble() },
       freeSpinStationaryBoardCapKmh = req("freeSpinStationaryBoardCapKmh", DEFAULT_FREE_SPIN_STATIONARY_BOARD_CAP_KMH) { (it as? Number)?.toDouble() },
@@ -590,25 +593,30 @@ class AppDataRepository private constructor(private val context: Context) {
     dao.deletePrivacyZone(id)
   }
 
-  suspend fun getMapPoints(): List<Map<String, Any?>> = withContext(Dispatchers.IO) {
-    dao.getMapPoints().map { it.toMap() }
+  /**
+   * The personal direction target. Not a Map Point: it is never shared, and Group Ride presence
+   * reads it natively while JS is gone.
+   *
+   * @parity /modules/vescape-core/ios/telemetry/AppDataRepository.swift `directionPoint`
+   */
+  suspend fun getDirectionPoint(): Pair<Double, Double>? = withContext(Dispatchers.IO) {
+    val settings = getTypedSettings()
+    val latitude = settings.directionPointLatitude
+    val longitude = settings.directionPointLongitude
+    if (latitude == null || longitude == null) null else latitude to longitude
   }
 
-  suspend fun upsertMapPoint(point: Map<String, Any?>): Unit = withContext(Dispatchers.IO) {
-    dao.upsertMapPoint(point.toMapPointEntity())
-  }
-
-  suspend fun getDirectionMapPointEntity(): MapPointEntity? = withContext(Dispatchers.IO) {
-    dao.getDirectionMapPoint()
-  }
-
-  suspend fun replaceDirectionMapPoint(point: Map<String, Any?>): Unit = withContext(Dispatchers.IO) {
-    dao.replaceDirectionMapPoint(point.toDirectionMapPointEntity())
-  }
-
-  suspend fun deleteMapPoint(id: String): Unit = withContext(Dispatchers.IO) {
-    dao.deleteMapPoint(id)
-  }
+  suspend fun setDirectionPoint(latitude: Double?, longitude: Double?): Unit =
+    withContext(Dispatchers.IO) {
+      val now = System.currentTimeMillis()
+      dao.upsertAppSetting(
+        AppSettingEntity(DIRECTION_POINT_LATITUDE, encodeSettingJson(latitude), now),
+      )
+      dao.upsertAppSetting(
+        AppSettingEntity(DIRECTION_POINT_LONGITUDE, encodeSettingJson(longitude), now),
+      )
+      notifyDataChanged(AppDataScope.SETTINGS)
+    }
 
   suspend fun getAutoConnectBoard(): Map<String, Any?>? = withContext(Dispatchers.IO) {
     val settings = getTypedSettings()
@@ -689,6 +697,8 @@ fun AppSettings.toMap(): Map<String, Any?> = mapOf(
   "selectedBoardId" to selectedBoardId,
   "lastGpsLatitude" to lastGpsLatitude,
   "lastGpsLongitude" to lastGpsLongitude,
+  DIRECTION_POINT_LATITUDE to directionPointLatitude,
+  DIRECTION_POINT_LONGITUDE to directionPointLongitude,
   "movingSpeedThresholdKmh" to movingSpeedThresholdKmh,
   "freeSpinMaxSpeedDeltaKmh" to freeSpinMaxSpeedDeltaKmh,
   "freeSpinStationaryBoardCapKmh" to freeSpinStationaryBoardCapKmh,
@@ -851,49 +861,14 @@ fun PrivacyZoneEntity.toMap(): Map<String, Any?> = mapOf(
   "updatedAt" to updatedAt,
 )
 
-internal const val MAP_POINT_KIND_DIRECTION = "direction"
-
-// @parity /modules/vescape-core/ios/telemetry/AppDataRepository.swift `validMapPointKinds`
-// @parity /modules/vescape-core/src/index.ts `MapPointKind`
-internal val VALID_MAP_POINT_KINDS = setOf(
-  MAP_POINT_KIND_DIRECTION,
-  "drop",
-  "bonk",
-  "nose_slide",
-  "trail_entry",
-  "viewpoint",
-  "charging",
-  "charging_food",
-)
-
-fun MapPointEntity.toMap(): Map<String, Any?> = mapOf(
-  "id" to id,
-  "kind" to kind,
-  "latitude" to latitudeE7 / 10_000_000.0,
-  "longitude" to longitudeE7 / 10_000_000.0,
-  "createdAt" to createdAt,
-  "updatedAt" to updatedAt,
-)
-
-internal fun Map<String, Any?>.toMapPointEntity(): MapPointEntity {
-  val now = System.currentTimeMillis()
-  val kind = getString("kind").takeIf { it in VALID_MAP_POINT_KINDS }
-    ?: throw IllegalArgumentException("Invalid Map Point kind: ${get("kind")}")
-  val latitude = getDouble("latitude")
-  val longitude = getDouble("longitude")
-  require(latitude.isFinite() && longitude.isFinite()) { "Invalid Map Point coordinate" }
-  return MapPointEntity(
-    id = getString("id"),
-    kind = kind,
-    latitudeE7 = (latitude * 10_000_000.0).toInt(),
-    longitudeE7 = (longitude * 10_000_000.0).toInt(),
-    createdAt = (get("createdAt") as? Number)?.toLong() ?: now,
-    updatedAt = (get("updatedAt") as? Number)?.toLong() ?: now,
-  )
-}
-
-internal fun Map<String, Any?>.toDirectionMapPointEntity(): MapPointEntity =
-  toMapPointEntity().copy(kind = MAP_POINT_KIND_DIRECTION)
+/**
+ * Direction target settings keys. The target is one coordinate, so it rides in app settings rather
+ * than a table of its own.
+ * @parity /modules/vescape-core/ios/telemetry/AppDataRepository.swift `directionPointLatitudeKey`
+ * @parity /modules/vescape-core/src/index.ts `AppSettings`
+ */
+internal const val DIRECTION_POINT_LATITUDE = "directionPointLatitude"
+internal const val DIRECTION_POINT_LONGITUDE = "directionPointLongitude"
 
 private fun Map<String, Any?>.toPrivacyZoneEntity(): PrivacyZoneEntity {
   val now = System.currentTimeMillis()
@@ -1099,6 +1074,9 @@ internal fun Map<String, Any?>.toAlertRuleEntity(
 
 private fun Map<String, Any?>.getString(key: String): String =
   get(key) as? String ?: throw IllegalArgumentException("Missing string field: $key")
+
+private fun Map<String, Any?>.getOptionalString(key: String): String? =
+  (get(key) as? String)?.trim()?.takeIf { it.isNotEmpty() }
 
 private fun Map<String, Any?>.getBoolean(key: String): Boolean = when (val value = get(key)) {
   is Boolean -> value

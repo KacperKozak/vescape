@@ -11,6 +11,8 @@ export const riderColorOptions: readonly string[] = [
   palette.teal.color,
   palette.groupRide.color,
   palette.green.color,
+  palette.beige.color,
+  palette.yellow.color,
   palette.amber.color,
   palette.orange.color,
   palette.red.color,
@@ -18,5 +20,4 @@ export const riderColorOptions: readonly string[] = [
   palette.fuchsia.color,
   palette.purple.color,
   palette.violet.color,
-  palette.yellow.color,
 ]

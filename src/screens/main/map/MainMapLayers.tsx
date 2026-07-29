@@ -4,29 +4,35 @@ import {
   FillLayer,
   Images,
   LineLayer,
+  MarkerView,
   RasterLayer,
   RasterSource,
   ShapeSource,
   SymbolLayer,
 } from '@rnmapbox/maps'
 import { useEffect, useMemo, useState } from 'react'
-import type { MapPoint, MapPointKind } from 'vescape-core'
+import { StyleSheet, View } from 'react-native'
+import Animated, { withTiming } from 'react-native-reanimated'
+import type { MapPoint, MapPointCategory } from 'vescape-core'
+
+import type { DirectionPoint } from '@/modules/map/store/mapStore'
 
 import { MediaHistoryPin } from '@/modules/history/components/MediaHistoryPin'
 import { MapPin } from '@/modules/map/components/MapPin'
 import { RainViewerOverlay } from '@/modules/weather/components/RainViewerOverlay'
 import { MAPY_TILE_URL_TEMPLATE } from '@/config/mapy'
 import { MAP_DEFAULTS } from '@/modules/map/constants/mapStyles'
-import { getMapPointKindIcon } from '@/modules/map/constants/mapPointIcons'
+import { getMapPointKindIcon } from '@/modules/map-points/constants/mapPointIcons'
 import {
   getMapPointKindColor,
   getMapPointKindLabel,
   getMapPointKindTextColor,
-} from '@/modules/map/constants/mapPoints'
+} from '@/modules/map-points/constants/mapPoints'
 import { theme } from '@/constants/theme'
 import { makeCircleFeature, makeTrailLineString } from '@/helpers/mapGeometry'
 import { findNearestSampleIndexByTime } from '@/modules/history/lib/playback'
 import { resolveMarkerRenderData } from '@/modules/history/lib/markerOverlap'
+import type { MapSelection } from '@/modules/map/lib/mapSelection'
 import {
   clusterMediaHistoryAssets,
   MEDIA_CLUSTER_DISTANCE_M,
@@ -36,7 +42,7 @@ import type {
   HistoryMetricKey,
   HistoryMetricHotRanges,
 } from '@/modules/history/lib/metricColorScale'
-import { isMapPointKindVisible } from '@/modules/map/lib/mapPointVisibility'
+import { isMapPinKindVisible } from '@/modules/map-points/lib/mapPointVisibility'
 import type {
   HistoryGpsSample,
   HistoryMarker,
@@ -99,17 +105,18 @@ interface MainMapLayersProps {
   mapZoom: number
   historyMetricGradientsEnabled: boolean
   historyMetricHotRanges: HistoryMetricHotRanges
-  directionPoint: MapPoint | null
+  directionPoint: DirectionPoint | null
+  activeNavigationTarget: MapSelection | null
+  selectedNavigationTarget: MapSelection | null
   mapPoints: MapPoint[]
   selectedMapPointId: string | null
-  hiddenMapPointKinds: MapPointKind[]
-  onClearDirectionPoint: () => void
+  hiddenMapPointCategories: MapPointCategory[]
   onToggleMapPointSelection: (id: string) => void
-  onRemoveMapPoint: (id: string) => void
   onSuppressNextMapPress: () => void
   onSelectMarker: (selection: SelectedHistoryMarker) => void
   onOpenMedia: (asset: MediaHistoryAsset) => void
   onSelectLegalCountry: (country: LegalLimitCountry) => void
+  onFocusDirectionPoint: () => void
 }
 
 function LiveMapLayers({
@@ -283,6 +290,39 @@ function SeekPositionPin({ rideGpsSamples }: { rideGpsSamples: HistoryGpsSample[
       color={MAP_DEFAULTS.markerColor}
     />
   )
+}
+
+function PendingNavigationTargetPin({
+  coordinate,
+  color,
+}: {
+  coordinate: [number, number]
+  color: string
+}) {
+  return (
+    <MarkerView coordinate={coordinate} allowOverlap>
+      <Animated.View
+        entering={pendingNavigationTargetEntering}
+        style={[styles.pendingNavigationTarget, { borderColor: color }]}
+      >
+        <View style={[styles.pendingNavigationTargetCore, { backgroundColor: color }]} />
+      </Animated.View>
+    </MarkerView>
+  )
+}
+
+const pendingNavigationTargetEntering = () => {
+  'worklet'
+  return {
+    initialValues: {
+      opacity: 0,
+      transform: [{ scale: 1.8 }],
+    },
+    animations: {
+      opacity: withTiming(1, { duration: 260 }),
+      transform: [{ scale: withTiming(1, { duration: 260 }) }],
+    },
+  }
 }
 
 export function HistoryMapLayers({
@@ -469,16 +509,17 @@ export function MainMapLayers({
   historyMetricGradientsEnabled,
   historyMetricHotRanges,
   directionPoint,
+  activeNavigationTarget,
+  selectedNavigationTarget,
   mapPoints,
   selectedMapPointId,
-  hiddenMapPointKinds,
-  onClearDirectionPoint,
+  hiddenMapPointCategories,
   onToggleMapPointSelection,
-  onRemoveMapPoint,
   onSuppressNextMapPress,
   onSelectMarker,
   onOpenMedia,
   onSelectLegalCountry,
+  onFocusDirectionPoint,
 }: MainMapLayersProps) {
   const riderColor = useRiderStore((state) => state.riderColor)
   const directionColor = riderColor ?? DESTINATION_POINT_COLOR
@@ -487,10 +528,17 @@ export function MainMapLayers({
     () =>
       mapPoints.find(
         (point) =>
-          point.id === selectedMapPointId && isMapPointKindVisible(point.kind, hiddenMapPointKinds),
+          point.id === selectedMapPointId &&
+          isMapPinKindVisible(point.category, hiddenMapPointCategories),
       ) ?? null,
-    [hiddenMapPointKinds, mapPoints, selectedMapPointId],
+    [hiddenMapPointCategories, mapPoints, selectedMapPointId],
   )
+  const activeNavigationMapPointId =
+    activeNavigationTarget?.type === 'mapPoint' ? activeNavigationTarget.point.id : null
+  const showDirectionPoint =
+    directionPoint != null && activeNavigationTarget?.type !== 'mapPoint' && !historyActive
+  const directionPointIconKind = 'direction' as const
+  const mapObjectsInteractive = !weatherActive && !legalLimitsActive && !historyActive
 
   return (
     <>
@@ -548,22 +596,30 @@ export function MainMapLayers({
           highContrastRoutes={isSatellite}
         />
       )}
-      {directionPoint && !historyActive && (
+      {showDirectionPoint && (
         <MapPin
           // Color in the key: PointAnnotation snapshots its children natively, so a
-          // rider-color change must remount the pin to re-render.
-          key={`center-direction-position-${directionColor}`}
+          // rider-color or icon change must remount the pin to re-render.
+          key={`center-direction-position-${directionColor}-${directionPointIconKind}`}
           id="center-direction-position"
           coordinate={[directionPoint.longitude, directionPoint.latitude]}
           color={directionColor}
-          icon={getMapPointKindIcon(directionPoint.kind)}
+          icon={getMapPointKindIcon(directionPointIconKind)}
           iconColor={directionTextColor}
-          onSelected={() => {
-            onSuppressNextMapPress()
-            onClearDirectionPoint()
-          }}
+          selected
+          navigationActive
+          onSelected={onFocusDirectionPoint}
         />
       )}
+      {selectedNavigationTarget &&
+      selectedNavigationTarget.type !== 'mapPoint' &&
+      !historyActive ? (
+        <PendingNavigationTargetPin
+          key={`center-selected-navigation-target-${selectedNavigationTarget.id}`}
+          coordinate={[selectedNavigationTarget.longitude, selectedNavigationTarget.latitude]}
+          color={directionColor}
+        />
+      ) : null}
       {!historyActive &&
         riders.map((rider, index) =>
           rider.presence?.target ? (
@@ -580,31 +636,49 @@ export function MainMapLayers({
         )}
       {!historyActive &&
         mapPoints
-          .filter(
-            (point) =>
-              point.kind !== 'direction' && isMapPointKindVisible(point.kind, hiddenMapPointKinds),
-          )
+          .filter((point) => isMapPinKindVisible(point.category, hiddenMapPointCategories))
           .map((point) => (
             <MapPin
               key={point.id}
               id={`center-map-point-${point.id}`}
               coordinate={[point.longitude, point.latitude]}
-              color={getMapPointKindColor(point.kind)}
-              icon={getMapPointKindIcon(point.kind)}
-              iconColor={getMapPointKindTextColor(point.kind)}
-              selected={selectedMapPoint?.id === point.id}
-              expandSelected={expandSelectedMapPoints}
-              label={getMapPointKindLabel(point.kind)}
-              onSelected={() => {
-                onSuppressNextMapPress()
-                onToggleMapPointSelection(point.id)
-              }}
-              onRemove={() => {
-                onSuppressNextMapPress()
-                onRemoveMapPoint(point.id)
-              }}
+              color={getMapPointKindColor(point.category)}
+              icon={getMapPointKindIcon(point.category)}
+              iconColor={getMapPointKindTextColor(point.category)}
+              selected={
+                selectedMapPoint?.id === point.id || activeNavigationMapPointId === point.id
+              }
+              navigationActive={activeNavigationMapPointId === point.id}
+              expandSelected={expandSelectedMapPoints && selectedMapPoint?.id === point.id}
+              label={point.name?.trim() || getMapPointKindLabel(point.category)}
+              onSelected={
+                mapObjectsInteractive
+                  ? () => {
+                      onSuppressNextMapPress()
+                      onToggleMapPointSelection(point.id)
+                    }
+                  : undefined
+              }
             />
           ))}
     </>
   )
 }
+
+const styles = StyleSheet.create({
+  pendingNavigationTarget: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.4),
+  },
+  pendingNavigationTargetCore: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+})

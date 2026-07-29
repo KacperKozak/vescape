@@ -2,6 +2,7 @@ import { readdirSync } from 'fs'
 import { basename, join } from 'path'
 import { createInterface } from 'readline/promises'
 import { stdin as input, stdout as output } from 'process'
+import { applicationId } from '../src/config/appVariant.ts'
 
 const ROOT = join(import.meta.dir, '..')
 const FLOWS_DIR = join(ROOT, 'e2e', 'flows')
@@ -75,12 +76,15 @@ function flowPath(flow: string): string {
 }
 
 async function runFlow(flow: string): Promise<void> {
-  const proc = Bun.spawn(['maestro', 'test', '-e', `E2E_FLOW=${flow}`, flowPath(flow)], {
-    cwd: ROOT,
-    stdout: 'inherit',
-    stderr: 'inherit',
-    stdin: 'inherit',
-  })
+  const proc = Bun.spawn(
+    ['maestro', 'test', '-e', `APP_ID=${applicationId}`, '-e', `E2E_FLOW=${flow}`, flowPath(flow)],
+    {
+      cwd: ROOT,
+      stdout: 'inherit',
+      stderr: 'inherit',
+      stdin: 'inherit',
+    },
+  )
   const code = await proc.exited
   if (code !== 0) process.exit(code)
 }

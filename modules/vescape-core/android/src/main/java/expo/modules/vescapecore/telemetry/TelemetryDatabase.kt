@@ -12,7 +12,7 @@ import java.io.File
 // @parity /modules/vescape-core/ios/VescapeCoreModule.swift
 internal const val TELEMETRY_DATABASE_NAME = "vescape.db"
 internal const val LEGACY_TELEMETRY_DATABASE_NAME = "telemetry.db"
-internal const val TELEMETRY_DATABASE_VERSION = 29
+internal const val TELEMETRY_DATABASE_VERSION = 31
 
 @Database(
   entities = [
@@ -28,7 +28,6 @@ internal const val TELEMETRY_DATABASE_VERSION = 29
     TuneHistoryEntryEntity::class,
     DiagnosticEventEntity::class,
     PrivacyZoneEntity::class,
-    MapPointEntity::class,
     BoardWarningEntity::class,
     SyncSequenceEntity::class,
   ],
@@ -474,19 +473,38 @@ abstract class TelemetryDatabase : RoomDatabase() {
     }
 
     /**
-     * Incremental-sync cursor on `boards`, `alerts` and `telemetry_minute_buckets`. The first two
-     * carried `created_at` only, so a board rename or an alert toggle was invisible to an
-     * "everything changed since T" query — the shape every other mutable table already supports.
-     * Buckets are append-and-merge targets with no cursor at all.
+     * Map Points became server-owned (server ADR-0009), so the app keeps no local copy. Drops the
+     * v27 table. The direction target it used to hold moves to app settings, which start empty
+     * here — a rider re-picks it.
      *
-     * Existing rows backfill to the best evidence of when they last changed — `created_at` for
-     * boards and alerts, `last_sample_at_ms` for buckets — never 0 and never null, so a first sync
-     * after upgrade reports each row at its true age instead of flooding the server with
-     * epoch-zero rows.
-     *
-     * @parity /modules/vescape-core/ios/telemetry/TelemetryDatabase.swift `v28_sync_cursors`
+     * @parity /modules/vescape-core/ios/telemetry/TelemetryDatabase.swift `v29_drop_map_points`
      */
     internal val MIGRATION_27_28 = object : Migration(27, 28) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        dropMapPointTables(db)
+      }
+    }
+
+    /**
+     * Feature-branch builds shipped a different v28 that added Map Point columns and a reaction
+     * table. Those installs never pass through 27 again, so the same drop runs once more for them.
+     * A device that arrived through the migration above finds nothing left to drop.
+     *
+     * @parity /modules/vescape-core/ios/telemetry/TelemetryDatabase.swift `v29_drop_map_points`
+     */
+    internal val MIGRATION_28_29 = object : Migration(28, 29) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        dropMapPointTables(db)
+      }
+    }
+
+    /**
+     * Adds incremental-sync timestamps after the Map Point removal migrations already assigned
+     * schema versions 28 and 29.
+     *
+     * @parity /modules/vescape-core/ios/telemetry/TelemetryDatabase.swift `v30_sync_cursors`
+     */
+    internal val MIGRATION_29_30 = object : Migration(29, 30) {
       override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("ALTER TABLE boards ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0")
         db.execSQL("UPDATE boards SET updated_at = created_at")
@@ -496,7 +514,9 @@ abstract class TelemetryDatabase : RoomDatabase() {
         db.execSQL("UPDATE alerts SET updated_at = created_at")
         db.execSQL("CREATE INDEX IF NOT EXISTS index_alerts_updated_at ON alerts(updated_at)")
 
-        db.execSQL("ALTER TABLE telemetry_minute_buckets ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0")
+        db.execSQL(
+          "ALTER TABLE telemetry_minute_buckets ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0",
+        )
         db.execSQL("UPDATE telemetry_minute_buckets SET updated_at = last_sample_at_ms")
         db.execSQL(
           "CREATE INDEX IF NOT EXISTS index_telemetry_minute_buckets_updated_at " +
@@ -506,18 +526,11 @@ abstract class TelemetryDatabase : RoomDatabase() {
     }
 
     /**
-     * Splits the Sync Cursor off the last-write-wins timestamp (#275). `sync_seq` is a device-local
-     * counter the upload scan runs on; `updated_at` keeps its wall-clock meaning and stays the value
-     * the server compares. Scanning a counter is what makes the scan complete under a device clock
-     * that steps backwards, which an `updated_at >= watermark` scan is not.
+     * Splits the device-local Sync Cursor from the wall-clock last-write-wins timestamp.
      *
-     * Existing rows backfill from `rowid`: nothing has ever been uploaded, so any strictly
-     * increasing assignment works, and `rowid` gives one for free without an O(n²) self-join over
-     * tables that hold a row per ridden minute. Each counter then starts above every assigned value.
-     *
-     * @parity /modules/vescape-core/ios/telemetry/TelemetryDatabase.swift `v29_sync_seq`
+     * @parity /modules/vescape-core/ios/telemetry/TelemetryDatabase.swift `v31_sync_seq`
      */
-    internal val MIGRATION_28_29 = object : Migration(28, 29) {
+    internal val MIGRATION_30_31 = object : Migration(30, 31) {
       override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL(
           """
@@ -537,6 +550,11 @@ abstract class TelemetryDatabase : RoomDatabase() {
           )
         }
       }
+    }
+
+    private fun dropMapPointTables(db: SupportSQLiteDatabase) {
+      db.execSQL("DROP TABLE IF EXISTS map_point_reactions")
+      db.execSQL("DROP TABLE IF EXISTS map_points")
     }
 
     /**
@@ -595,6 +613,8 @@ abstract class TelemetryDatabase : RoomDatabase() {
             MIGRATION_26_27,
             MIGRATION_27_28,
             MIGRATION_28_29,
+            MIGRATION_29_30,
+            MIGRATION_30_31,
           )
           .fallbackToDestructiveMigration(true)
           .addCallback(object : Callback() {

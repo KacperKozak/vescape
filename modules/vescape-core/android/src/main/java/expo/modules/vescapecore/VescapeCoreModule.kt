@@ -2,6 +2,7 @@ package expo.modules.vescapecore
 
 import expo.modules.vescapecore.alerts.AlertFeedback
 import expo.modules.vescapecore.appstatus.AppStatusCoordinator
+import expo.modules.vescapecore.auth.NativeAuthCoordinator
 import expo.modules.vescapecore.service.BoardProbeAutoStartGate
 import expo.modules.vescapecore.connection.BoardTransport
 import expo.modules.vescapecore.connection.BoardTransportDetector
@@ -37,6 +38,7 @@ import expo.modules.kotlin.Promise
 import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import expo.modules.vescapecore.mappoints.MapPointApi
 import expo.modules.vescapecore.telemetry.AppDataRepository
 import expo.modules.vescapecore.telemetry.DatabaseBackupManager
 import expo.modules.vescapecore.telemetry.ProfileStatsRepository
@@ -295,6 +297,23 @@ class VescapeCoreModule : Module() {
     // @parity /modules/vescape-core/ios/VescapeCoreModule.swift `getAppStatus`
     Function("getAppStatus") {
       AppStatusCoordinator.get(context).current?.toMap()
+    }
+    // @parity /modules/vescape-core/ios/VescapeCoreModule.swift `provisionDeviceCredential`
+    AsyncFunction("provisionDeviceCredential") Coroutine {
+        serverUrl: String,
+        deviceToken: String,
+        accountId: String,
+      ->
+      NativeAuthCoordinator.get(context).provision(serverUrl, deviceToken, accountId)
+    }
+    Function("getDeviceCredentialState") {
+      NativeAuthCoordinator.get(context).stateMap()
+    }
+    AsyncFunction("revokeDeviceCredential") Coroutine { ->
+      NativeAuthCoordinator.get(context).revoke()
+    }
+    Function("clearDeviceCredential") {
+      NativeAuthCoordinator.get(context).clear()
     }
     // Stable Vescape route keeps the app decoupled from the final store destination.
     // @parity /modules/vescape-core/ios/VescapeCoreModule.swift `openAppUpdate`
@@ -602,20 +621,27 @@ class VescapeCoreModule : Module() {
       AppDataRepository.get(appCtx).deletePrivacyZone(id)
       reloadPrivacyZonesIntoRecorder(appCtx)
     }
-    AsyncFunction("getMapPoints") {
-      runBlocking { AppDataRepository.get(context.applicationContext).getMapPoints() }
+    // Map Points are server-owned; native holds no copy. @parity /modules/vescape-core/ios/VescapeCoreModule.swift `getNearbyMapPoints`
+    AsyncFunction("getNearbyMapPoints") Coroutine { latitude: Double, longitude: Double, radiusMeters: Int ->
+      MapPointApi.get(context.applicationContext).nearby(latitude, longitude, radiusMeters)
     }
-    AsyncFunction("upsertMapPoint") Coroutine { point: Map<String, Any?> ->
-      AppDataRepository.get(context.applicationContext).upsertMapPoint(point)
+    AsyncFunction("createMapPoint") Coroutine { values: Map<String, Any?> ->
+      MapPointApi.get(context.applicationContext).create(values)
     }
-    AsyncFunction("replaceDirectionMapPoint") Coroutine { point: Map<String, Any?> ->
-      val appCtx = context.applicationContext
-      AppDataRepository.get(appCtx).replaceDirectionMapPoint(point)
-      CoreForegroundService.reloadGroupRideTarget(appCtx)
+    AsyncFunction("updateMapPoint") Coroutine { id: String, patch: Map<String, Any?> ->
+      MapPointApi.get(context.applicationContext).update(id, patch)
     }
     AsyncFunction("deleteMapPoint") Coroutine { id: String ->
+      MapPointApi.get(context.applicationContext).delete(id)
+    }
+    AsyncFunction("setMapPointReaction") Coroutine { id: String, reaction: String? ->
+      MapPointApi.get(context.applicationContext).setReaction(id, reaction)
+    }
+    // The direction target is personal client state, never a Map Point. Native keeps it so Group
+    // Ride presence can read it while JS is gone.
+    AsyncFunction("setDirectionPoint") Coroutine { latitude: Double?, longitude: Double? ->
       val appCtx = context.applicationContext
-      AppDataRepository.get(appCtx).deleteMapPoint(id)
+      AppDataRepository.get(appCtx).setDirectionPoint(latitude, longitude)
       CoreForegroundService.reloadGroupRideTarget(appCtx)
     }
     AsyncFunction("getSettings") {

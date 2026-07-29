@@ -9,15 +9,15 @@ import java.io.File
 import java.lang.reflect.Proxy
 
 /**
- * Incremental-sync cursors: schema 27→28 adds `updated_at` to `boards`, `alerts` and
+ * Incremental-sync cursors: schema 29→30 adds `updated_at` to `boards`, `alerts` and
  * `telemetry_minute_buckets`, backfills it from each table's best evidence of last change, and
- * indexes it. Schema 28→29 then splits the two jobs that column was doing — `sync_seq` carries the
+ * indexes it. Schema 30→31 then splits the two jobs that column was doing — `sync_seq` carries the
  * Sync Cursor, `updated_at` stays the last-write-wins timestamp. Every write path has to move both.
  *
  * @parity /modules/vescape-core/ios/telemetry/SyncCursorMigrationTests.swift
  */
 class SyncCursorMigrationTest {
-  /** Table → the column its pre-28 rows backfill from. */
+  /** Table → the column its pre-30 rows backfill from. */
   private val backfillSource = mapOf(
     "boards" to "created_at",
     "alerts" to "created_at",
@@ -41,7 +41,7 @@ class SyncCursorMigrationTest {
     return sql
   }
 
-  private fun migrationSql(): List<String> = migrationSql(TelemetryDatabase.MIGRATION_27_28)
+  private fun migrationSql(): List<String> = migrationSql(TelemetryDatabase.MIGRATION_29_30)
 
   private fun daoSource(): String =
     File("src/main/java/expo/modules/vescapecore/telemetry/TelemetryDao.kt").readText()
@@ -83,11 +83,11 @@ class SyncCursorMigrationTest {
 
   @Test
   fun migrationsTargetTheCurrentSchemaVersion() {
-    assertEquals(29, TELEMETRY_DATABASE_VERSION)
-    assertEquals(27, TelemetryDatabase.MIGRATION_27_28.startVersion)
-    assertEquals(28, TelemetryDatabase.MIGRATION_27_28.endVersion)
-    assertEquals(28, TelemetryDatabase.MIGRATION_28_29.startVersion)
-    assertEquals(29, TelemetryDatabase.MIGRATION_28_29.endVersion)
+    assertEquals(31, TELEMETRY_DATABASE_VERSION)
+    assertEquals(29, TelemetryDatabase.MIGRATION_29_30.startVersion)
+    assertEquals(30, TelemetryDatabase.MIGRATION_29_30.endVersion)
+    assertEquals(30, TelemetryDatabase.MIGRATION_30_31.startVersion)
+    assertEquals(31, TelemetryDatabase.MIGRATION_30_31.endVersion)
   }
 
   /**
@@ -122,7 +122,7 @@ class SyncCursorMigrationTest {
    */
   @Test
   fun syncSeqMigrationAddsColumnIndexAndCounterToEverySyncedTable() {
-    val sql = migrationSql(TelemetryDatabase.MIGRATION_28_29)
+    val sql = migrationSql(TelemetryDatabase.MIGRATION_30_31)
 
     assertTrue(
       "missing sync_sequences table",
@@ -150,7 +150,7 @@ class SyncCursorMigrationTest {
    */
   @Test
   fun syncSeqMigrationBackfillsExistingRowsBeforeSeedingTheCounter() {
-    val sql = migrationSql(TelemetryDatabase.MIGRATION_28_29)
+    val sql = migrationSql(TelemetryDatabase.MIGRATION_30_31)
 
     for (table in SYNC_SEQ_TABLES) {
       val backfilled = sql.indexOf("UPDATE $table SET sync_seq = rowid")

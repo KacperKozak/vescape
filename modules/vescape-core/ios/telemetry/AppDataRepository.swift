@@ -2,7 +2,7 @@ import Foundation
 import GRDB
 
 /// CRUD over the single GRDB database for app data: boards (with Board Link), alert rules, privacy
-/// zones, map points and key-value settings. Values cross the bridge as `[String: Any?]` bags to
+/// zones and key-value settings. Values cross the bridge as `[String: Any?]` bags to
 /// mirror the JS contract; persistence uses the same column/table shapes as Android Room.
 ///
 /// A Board Link is whole-or-nothing: it is composed only when a board has both a `ble_id` and a
@@ -11,6 +11,7 @@ import GRDB
 ///
 /// Scope of an `onAppDataChanged` emit; mirrors the JS `AppDataChangedEvent['scope']` union.
 /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/AppDataRepository.kt `AppDataScope`
+/// @parity /modules/vescape-core/src/index.ts `AppDataChangedEvent`
 enum AppDataScope: String {
   case boards
   case settings
@@ -446,71 +447,17 @@ final class AppDataRepository {
     write { db in try db.execute(sql: "DELETE FROM privacy_zones WHERE id = ?", arguments: [id]) }
   }
 
-  // MARK: - Map points
+  // MARK: - Direction point
 
-  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/AppDataRepository.kt `VALID_MAP_POINT_KINDS`
-  /// @parity /modules/vescape-core/src/index.ts `MapPointKind`
-  private static let validMapPointKinds: Set<String> = [
-    "direction", "drop", "bonk", "nose_slide", "trail_entry", "viewpoint", "charging", "charging_food",
-  ]
+  /// The personal direction target. Not a Map Point: it is never shared, and it is one coordinate,
+  /// so it rides in app settings rather than a table of its own.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/AppDataRepository.kt `getDirectionPoint`
+  static let directionPointLatitudeKey = "directionPointLatitude"
+  static let directionPointLongitudeKey = "directionPointLongitude"
 
-  func getMapPoints() -> [[String: Any?]] {
-    read([]) { db in
-      try Row.fetchAll(db, sql: "SELECT * FROM map_points ORDER BY created_at ASC").map { row in
-        [
-          "id": row["id"] as String,
-          "kind": row["kind"] as String,
-          "latitude": (row["latitude_e7"] as Int64).asE7Degrees,
-          "longitude": (row["longitude_e7"] as Int64).asE7Degrees,
-          "createdAt": row["created_at"] as Int64,
-          "updatedAt": row["updated_at"] as Int64,
-        ]
-      }
-    }
-  }
-
-  func upsertMapPoint(_ point: [String: Any?]) {
-    guard let entity = Self.mapPointColumns(point) else { return }
-    write { db in try Self.insertMapPoint(db, entity) }
-  }
-
-  func replaceDirectionMapPoint(_ point: [String: Any?]) {
-    var forced = point
-    forced["kind"] = "direction"
-    guard let entity = Self.mapPointColumns(forced) else { return }
-    write { db in
-      try db.execute(sql: "DELETE FROM map_points WHERE kind = 'direction'")
-      try Self.insertMapPoint(db, entity)
-    }
-  }
-
-  func deleteMapPoint(_ id: String) {
-    write { db in try db.execute(sql: "DELETE FROM map_points WHERE id = ?", arguments: [id]) }
-  }
-
-  private static func insertMapPoint(_ db: Database, _ c: (String, String, Int64, Int64, Int64, Int64)) throws {
-    try db.execute(
-      sql: """
-        INSERT OR REPLACE INTO map_points (id, kind, latitude_e7, longitude_e7, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-        """,
-      arguments: [c.0, c.1, c.2, c.3, c.4, c.5]
-    )
-  }
-
-  private static func mapPointColumns(
-    _ point: [String: Any?]
-  ) -> (String, String, Int64, Int64, Int64, Int64)? {
-    guard
-      let id = point["id"] as? String,
-      let kind = (point["kind"] as? String), validMapPointKinds.contains(kind),
-      let latitude = doubleValue(point["latitude"] ?? nil), latitude.isFinite,
-      let longitude = doubleValue(point["longitude"] ?? nil), longitude.isFinite
-    else { return nil }
-    let now = Int64(Date().timeIntervalSince1970 * 1000)
-    let createdAt = longValue(point["createdAt"] ?? nil) ?? now
-    let updatedAt = longValue(point["updatedAt"] ?? nil) ?? now
-    return (id, kind, latitude.toE7, longitude.toE7, createdAt, updatedAt)
+  func setDirectionPoint(latitude: Double?, longitude: Double?) {
+    updateSetting(Self.directionPointLatitudeKey, rawValue: latitude)
+    updateSetting(Self.directionPointLongitudeKey, rawValue: longitude)
   }
 
   // MARK: - Settings
@@ -617,6 +564,8 @@ final class AppDataRepository {
     "riderColor": NSNull(),
     "lastGpsLatitude": NSNull(),
     "lastGpsLongitude": NSNull(),
+    "directionPointLatitude": NSNull(),
+    "directionPointLongitude": NSNull(),
     "legalPolicy": NSNull(),
     "movingSpeedThresholdKmh": 3,
     "freeSpinMaxSpeedDeltaKmh": DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH,
@@ -748,6 +697,12 @@ final class AppDataRepository {
     if let value = raw as? Int { return Int64(value) }
     if let value = raw as? NSNumber { return value.int64Value }
     return nil
+  }
+
+  static func optionalString(_ raw: Any?) -> String? {
+    guard let value = raw as? String else { return nil }
+    let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.isEmpty ? nil : trimmed
   }
 
   private static func encodeJson(_ value: Any?) -> String? {

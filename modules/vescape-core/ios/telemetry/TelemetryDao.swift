@@ -1,58 +1,7 @@
 import Foundation
-import ExpoModulesCore
 import GRDB
 
 /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDao.kt
-internal func sampleColumns(_ rows: [Row], batteryPercents: [Double?]) -> [String: Any?] {
-  var data = Data(capacity: rows.count * SAMPLE_COLUMN_COUNT * MemoryLayout<Double>.size)
-  var deviceIds: [String?] = []
-  var deviceNames: [String] = []
-  var deviceIndex: [String: Int] = [:]
-  for (i, row) in rows.enumerated() {
-    let id: Int64 = row["id"]
-    let rawDeviceId = row["device_id"] as String?
-    let key = rawDeviceId ?? ""
-    let index = deviceIndex[key] ?? {
-      deviceIds.append(rawDeviceId)
-      deviceNames.append(row["device_name"] as String? ?? "VESC Board")
-      let newIndex = deviceIds.count - 1
-      deviceIndex[key] = newIndex
-      return newIndex
-    }()
-    appendDouble(&data, Double(id))
-    appendDouble(&data, Double(row["captured_at_ms"] as Int64))
-    appendDouble(&data, Double(index))
-    appendDouble(&data, Double(row["speed_centi_kmh"] as Int? ?? 0) / 100.0)
-    appendDouble(&data, Double(row["battery_voltage_mv"] as Int? ?? 0) / 1000.0)
-    appendNullableDouble(&data, batteryPercents[i])
-    appendDouble(&data, Double(row["motor_current_ma"] as Int? ?? 0) / 1000.0)
-    appendDouble(&data, Double(row["battery_current_ma"] as Int? ?? 0) / 1000.0)
-    appendDouble(&data, Double(row["duty_permille"] as Int? ?? 0) / 1000.0)
-    appendDouble(&data, Double(row["pitch_centi_deg"] as Int? ?? 0) / 100.0)
-    appendDouble(&data, Double(row["roll_centi_deg"] as Int? ?? 0) / 100.0)
-    appendDouble(&data, Double(row["balance_pitch_centi_deg"] as Int? ?? 0) / 100.0)
-    appendDouble(&data, Double(row["balance_current_ma"] as Int? ?? 0) / 1000.0)
-    appendDouble(&data, Double(row["erpm"] as Int? ?? 0))
-    appendDouble(&data, Double(row["state"] as Int? ?? 0))
-    appendDouble(&data, Double(row["switch_state"] as Int? ?? 0))
-    appendDouble(&data, Double(row["adc1_milli"] as Int? ?? 0) / 1000.0)
-    appendDouble(&data, Double(row["adc2_milli"] as Int? ?? 0) / 1000.0)
-    appendNullableDouble(&data, (row["odometer_cm"] as Int64?).map { Double($0) / 100.0 })
-    appendNullableDouble(&data, (row["temp_mosfet_deci_c"] as Int?).map { Double($0) / 10.0 })
-    appendNullableDouble(&data, (row["temp_motor_deci_c"] as Int?).map { Double($0) / 10.0 })
-    appendDouble(&data, ((row["fault_code"] as Int?) ?? 0) != 0 ? 1.0 : 0.0)
-    appendDouble(&data, Double((row["fault_code"] as Int?) ?? 0))
-    appendNullableDouble(&data, (row["latitude_e7"] as Int64?).map { Double($0) / 10_000_000.0 })
-    appendNullableDouble(&data, (row["longitude_e7"] as Int64?).map { Double($0) / 10_000_000.0 })
-  }
-  return [
-    "boardColumns": (try? NativeArrayBuffer.copy(data: data)) ?? NativeArrayBuffer.allocate(size: 0),
-    "boardCount": rows.count,
-    "boardDevices": deviceIds,
-    "boardDeviceNames": deviceNames,
-  ]
-}
-
 internal func insertFrame(_ db: Database, _ state: FullTelemetryState) throws {
   let t = state.t
   let loc = state.location
@@ -374,18 +323,6 @@ internal func bucketPoint(_ row: Row) -> BucketTelemetryPoint? {
     altitudeCm: row["altitude_cm"] as Int?,
     preciseGps: ((row["accuracy_cm"] as Int?) ?? Int.max) <= 2_000
   )
-}
-
-internal func emptyRangePayload() -> [String: Any?] {
-  [
-    "boardColumns": NativeArrayBuffer.allocate(size: 0),
-    "boardCount": 0,
-    "boardDevices": [] as [String?],
-    "boardDeviceNames": [] as [String],
-    "gpsSamples": [] as [[String: Any?]],
-    "markers": [] as [[String: Any?]],
-    "exclusions": [] as [[String: Any?]],
-  ]
 }
 
 internal func appendNullableDouble(_ data: inout Data, _ value: Double?) {

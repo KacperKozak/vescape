@@ -23,6 +23,11 @@ const withWearMirror: ConfigPlugin = (config) =>
   withDangerousMod(config, [
     'android',
     (cfg) => {
+      const applicationId = cfg.android?.package
+      if (!applicationId) {
+        throw new Error('[withWearMirror] android.package is required')
+      }
+
       const projectRoot = cfg.modRequest.projectRoot
       const androidRoot = cfg.modRequest.platformProjectRoot
 
@@ -35,6 +40,19 @@ const withWearMirror: ConfigPlugin = (config) =>
       const dest = path.join(androidRoot, 'wearos')
       rmSync(dest, { recursive: true, force: true })
       cpSync(source, dest, { recursive: true })
+
+      // Keep phone and Wear application IDs aligned: the Wear Data Layer only connects apps with
+      // the same application ID and signing certificate. Namespace/source packages stay stable.
+      const buildGradlePath = path.join(dest, 'build.gradle')
+      const buildGradle = readFileSync(buildGradlePath, 'utf8')
+      const applicationIdPattern = /^(\s*)applicationId\s+['"][^'"]+['"]/m
+      if (!applicationIdPattern.test(buildGradle)) {
+        throw new Error(`[withWearMirror] applicationId missing from ${buildGradlePath}`)
+      }
+      writeFileSync(
+        buildGradlePath,
+        buildGradle.replace(applicationIdPattern, `$1applicationId '${applicationId}'`),
+      )
 
       // 2. Register the Gradle module.
       const settingsPath = path.join(androidRoot, 'settings.gradle')
