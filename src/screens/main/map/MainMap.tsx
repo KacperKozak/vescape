@@ -1,4 +1,4 @@
-import Mapbox, { Camera, SymbolLayer } from '@rnmapbox/maps'
+import Mapbox, { Camera, RasterLayer, SymbolLayer } from '@rnmapbox/maps'
 import { CrosshairSimpleIcon, type Icon } from 'phosphor-react-native'
 import {
   forwardRef,
@@ -12,7 +12,9 @@ import {
 } from 'react'
 import { Animated, StyleSheet, View, type LayoutChangeEvent } from 'react-native'
 import { Text } from '@/components/base/Text'
-import type { LocationEvent, MapPoint, MapPointKind } from 'vescape-core'
+import type { LocationEvent, MapPoint, MapPointCategory } from 'vescape-core'
+
+import type { DirectionPoint } from '@/modules/map/store/mapStore'
 
 import { InfoModal } from '@/components/modals/InfoModal'
 import { IS_MAPY_CONFIGURED, MAPBOX_ACCESS_TOKEN } from '@/config/mapy'
@@ -23,7 +25,10 @@ import {
   type MapNavigationMode,
   type MapStyleKey,
 } from '@/modules/map/constants/mapStyles'
-import { getSatelliteDarkMapStyle } from '@/modules/map/constants/satelliteDarkMapStyle'
+import {
+  getSatelliteDarkMapStyle,
+  getSatelliteImageryPaint,
+} from '@/modules/map/constants/satelliteDarkMapStyle'
 import { getMapPointKindIcon } from '@/modules/map/constants/mapPointIcons'
 import { getMapPointKindColor, getMapPointKindTextColor } from '@/modules/map/constants/mapPoints'
 import { getOneDarkMapStyle } from '@/modules/map/constants/oneDarkMapStyle'
@@ -34,7 +39,8 @@ import {
 } from '@/helpers/liveGpsPresentation'
 import { distanceMeters, makeCircleFeature, makeTrailLineString } from '@/helpers/mapGeometry'
 import type { MediaHistoryAsset } from '@/modules/history/lib/mediaHistory'
-import { isMapPointKindVisible } from '@/modules/map/lib/mapPointVisibility'
+import type { MapSelection } from '@/modules/map/lib/mapSelection'
+import { isMapPinKindVisible } from '@/modules/map/lib/mapPointVisibility'
 import type { HistoryMetricKey } from '@/modules/history/lib/metricColorScale'
 import { getNavigationFallbackReason } from '@/modules/map/lib/navigationDiagnostics'
 import { getGpsPuckBearing } from '@/modules/map/lib/gpsPuckHeading'
@@ -86,6 +92,8 @@ import {
 
 Mapbox.setAccessToken(MAPBOX_ACCESS_TOKEN)
 
+const OFFSCREEN_INDICATOR_VISIBILITY_CHECK_MS = 200
+
 export interface MainMapHandle {
   recenterLive: (options?: { resetPadding?: boolean; animationDuration?: number }) => void
   previewHistorySession: (preview: HistoryPreviewTarget) => void
@@ -106,6 +114,7 @@ export interface MainMapHandle {
   setPadding: (bottom: number) => void
   zoomBy: (delta: number) => void
   focusCoordinate: (coordinate: [number, number]) => void
+  centerCoordinatePreservingCamera: (coordinate: [number, number]) => void
   focusWeather: () => void
   focusLegalLimits: () => void
   getViewfinderCoordinate: () => Promise<{ latitude: number; longitude: number }>
@@ -121,6 +130,23 @@ interface MapLayout {
 const RiderDotIcon: Icon = ({ color }) => (
   <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: color }} />
 )
+const SATELLITE_ROAD_LINE_LAYER_IDS = [
+  'road-path',
+  'road-track',
+  'road-service',
+  'road-street',
+  'road-secondary-tertiary',
+  'road-primary',
+  'road-trunk',
+  'road-motorway',
+] as const
+
+const SELECTABLE_BASE_MAP_LAYER_IDS = [
+  'poi-label',
+  'poi-icon',
+  'transit-label',
+  'transit-stop-icon',
+] as const
 
 function usableCoordinate(location: { longitude: number; latitude: number } | null | undefined) {
   if (!location) return null
@@ -129,6 +155,17 @@ function usableCoordinate(location: { longitude: number; latitude: number } | nu
     longitude: location.longitude,
     latitude: location.latitude,
   }
+}
+
+function formatMapboxCategory(value: string | null) {
+  if (!value) return null
+  const words = value
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s*,\s*/g, ' and ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!words) return null
+  return words.charAt(0).toUpperCase() + words.slice(1).toLowerCase()
 }
 
 interface MainMapProps {
@@ -158,16 +195,19 @@ interface MainMapProps {
   onPhoneHeadingChange: (heading: number | null) => void
   onLongPressTarget: (target: { latitude: number; longitude: number }) => void
   onMapInteraction: () => void
-  onMapPress: () => void
+  onRawMapPress: (selection: MapSelection) => boolean | void
+  onMapPress: (selection: MapSelection) => void
   onEnterMapMode: () => void
   onOffscreenMapIndicatorsChange: (indicators: OffscreenMapIndicatorState[]) => void
-  directionPoint: MapPoint | null
+  directionPoint: DirectionPoint | null
+  activeNavigationTarget: MapSelection | null
+  selectedNavigationTarget: MapSelection | null
   mapPoints: MapPoint[]
   selectedMapPointId: string | null
-  hiddenMapPointKinds: MapPointKind[]
+  hiddenMapPointCategories: MapPointCategory[]
   onToggleMapPointSelection: (id: string) => void
-  onRemoveMapPoint: (id: string) => void
-  onClearDirectionPoint: () => void
+  /** Camera came to rest: where the map should read its Map Points around. */
+  onCameraSettled: (latitude: number, longitude: number, zoom: number) => void
   weatherActive: boolean
   legalLimitsActive: boolean
   historyPreview:
@@ -206,18 +246,20 @@ export const MainMap = memo(
       onPhoneHeadingChange,
       onLongPressTarget,
       onMapInteraction,
+      onRawMapPress,
       onMapPress,
       onEnterMapMode,
       onOffscreenMapIndicatorsChange,
       directionPoint,
+      activeNavigationTarget,
+      selectedNavigationTarget,
       mapPoints,
       selectedMapPointId,
-      hiddenMapPointKinds,
+      hiddenMapPointCategories,
       onToggleMapPointSelection,
-      onRemoveMapPoint,
+      onCameraSettled,
       weatherActive,
       legalLimitsActive,
-      onClearDirectionPoint,
       historyPreview,
     },
     ref,
@@ -228,10 +270,12 @@ export const MainMap = memo(
     const mapViewRef = useRef<ElementRef<typeof Mapbox.MapView> | null>(null)
     const gestureActiveRef = useRef(false)
     const offscreenProjectionRequestRef = useRef(0)
+    const offscreenProjectionRefreshTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const suppressNextMapPressRef = useRef(false)
     const suppressNextMapPressTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
     const [mapOpacity] = useState(() => new Animated.Value(0))
     const [cameraReady, setCameraReady] = useState(false)
+    const [loadedStyleSignature, setLoadedStyleSignature] = useState<string | null>(null)
     const [selectedHistoryMarker, setSelectedHistoryMarker] =
       useState<SelectedHistoryMarker | null>(null)
     const [selectedLegalCountry, setSelectedLegalCountry] = useState<LegalLimitCountry | null>(null)
@@ -306,24 +350,32 @@ export const MainMap = memo(
     const satelliteStyleJSON = useMemo(
       () =>
         getSatelliteDarkMapStyle(
-          effectiveSatelliteImageryOpacity,
-          mapDetailsVisible,
-          mapDetailsVisible,
+          satelliteImageryOpacity,
+          true,
+          true,
           false,
           true,
-          effectiveSatelliteImagerySaturation,
-          mode === 'telemetry' ? 0.35 : 0.75,
+          satelliteImagerySaturation,
+          0.35,
         ),
-      [
-        effectiveSatelliteImageryOpacity,
-        effectiveSatelliteImagerySaturation,
-        mapDetailsVisible,
-        mode,
-      ],
+      [satelliteImageryOpacity, satelliteImagerySaturation],
     )
+    const satelliteImageryPaint = useMemo(
+      () =>
+        getSatelliteImageryPaint(
+          effectiveSatelliteImageryOpacity,
+          effectiveSatelliteImagerySaturation,
+        ),
+      [effectiveSatelliteImageryOpacity, effectiveSatelliteImagerySaturation],
+    )
+    const satelliteRoadLineOpacity = mode === 'telemetry' ? 0.35 : 0.75
     const oneDarkStyleJSON = useMemo(() => getOneDarkMapStyle(true, true, false), [])
     const showBuildings3d =
       selectedMapStyle.key === 'outdoors' || selectedMapStyle.key === 'onedark'
+    const styleSignature = isSatelliteOverlay
+      ? `${selectedMapStyle.key}:${satelliteImageryOpacity}:${satelliteImagerySaturation}`
+      : `${selectedMapStyle.key}:${useCustomJSON ? 'json' : selectedMapStyle.styleURL}`
+    const canUpdateExistingStyleLayers = loadedStyleSignature === styleSignature && !isMapy
 
     const gpsPresentation = useMemo(
       () =>
@@ -359,11 +411,10 @@ export const MainMap = memo(
       () =>
         mapPoints.find(
           (point) =>
-            point.kind !== 'direction' &&
             point.id === selectedMapPointId &&
-            isMapPointKindVisible(point.kind, hiddenMapPointKinds),
+            isMapPinKindVisible(point.category, hiddenMapPointCategories),
         ) ?? null,
-      [hiddenMapPointKinds, mapPoints, selectedMapPointId],
+      [hiddenMapPointCategories, mapPoints, selectedMapPointId],
     )
     const retainedGpsBearing = gpsPresentation.nextReliableBearing
     const gpsHeadingMode = mapNavigationMode === 'gpsHeading'
@@ -371,13 +422,6 @@ export const MainMap = memo(
     const phoneHeadingDegRef = useRef<number | null>(null)
     const [phoneHeadingStatus, setPhoneHeadingStatus] = useState<PhoneHeadingStatus | 'idle'>(
       'idle',
-    )
-    const handlePhoneHeadingChange = useCallback(
-      (headingDeg: number | null) => {
-        phoneHeadingDegRef.current = headingDeg
-        onPhoneHeadingChange(headingDeg)
-      },
-      [onPhoneHeadingChange],
     )
     const headingFollowMode = gpsHeadingMode || phoneHeadingMode
     useRenderRateWarning('MainMap')
@@ -490,6 +534,43 @@ export const MainMap = memo(
         }),
       [mapRiders],
     )
+    const activeNavigationPoint = useMemo(() => {
+      if (!activeNavigationTarget) {
+        if (!directionPoint) return null
+        return {
+          id: 'direction',
+          type: 'direction' as const,
+          coordinate: [directionPoint.longitude, directionPoint.latitude] as [number, number],
+          color: riderColor ?? DESTINATION_POINT_COLOR,
+          textColor: riderColor ?? DESTINATION_POINT_TEXT_COLOR,
+          icon: getMapPointKindIcon('direction'),
+        }
+      }
+      if (activeNavigationTarget.type === 'mapPoint') {
+        const point =
+          mapPoints.find((candidate) => candidate.id === activeNavigationTarget.id) ??
+          activeNavigationTarget.point
+        return {
+          id: `navigation-map-point-${point.id}`,
+          type: 'mapPoint' as const,
+          coordinate: [point.longitude, point.latitude] as [number, number],
+          color: getMapPointKindColor(point.category),
+          textColor: getMapPointKindTextColor(point.category),
+          icon: getMapPointKindIcon(point.category),
+        }
+      }
+      return {
+        id: 'direction',
+        type: 'direction' as const,
+        coordinate: [activeNavigationTarget.longitude, activeNavigationTarget.latitude] as [
+          number,
+          number,
+        ],
+        color: riderColor ?? DESTINATION_POINT_COLOR,
+        textColor: riderColor ?? DESTINATION_POINT_TEXT_COLOR,
+        icon: getMapPointKindIcon('direction'),
+      }
+    }, [activeNavigationTarget, directionPoint, mapPoints, riderColor])
     // Peers themselves, same shape and index-aligned tint as their map pins.
     const riderPoints = useMemo(
       () =>
@@ -554,7 +635,7 @@ export const MainMap = memo(
         mapView == null ||
         historyActive ||
         (offscreenMapGpsCoordinate == null &&
-          directionPoint == null &&
+          activeNavigationPoint == null &&
           selectedMapPoint == null &&
           riderTargetPoints.length === 0 &&
           riderPoints.length === 0) ||
@@ -585,19 +666,9 @@ export const MainMap = memo(
               },
             ]
           : []),
-        ...(directionPoint
-          ? [
-              {
-                id: 'direction',
-                type: 'direction' as const,
-                coordinate: [directionPoint.longitude, directionPoint.latitude] as [number, number],
-                color: riderColor ?? DESTINATION_POINT_COLOR,
-                textColor: riderColor ?? DESTINATION_POINT_TEXT_COLOR,
-                icon: getMapPointKindIcon('direction'),
-              },
-            ]
-          : []),
-        ...(selectedMapPoint
+        ...(activeNavigationPoint ? [activeNavigationPoint] : []),
+        ...(selectedMapPoint &&
+        activeNavigationPoint?.id !== `navigation-map-point-${selectedMapPoint.id}`
           ? [
               {
                 id: `map-point-${selectedMapPoint.id}`,
@@ -606,9 +677,9 @@ export const MainMap = memo(
                   number,
                   number,
                 ],
-                color: getMapPointKindColor(selectedMapPoint.kind),
-                textColor: getMapPointKindTextColor(selectedMapPoint.kind),
-                icon: getMapPointKindIcon(selectedMapPoint.kind),
+                color: getMapPointKindColor(selectedMapPoint.category),
+                textColor: getMapPointKindTextColor(selectedMapPoint.category),
+                icon: getMapPointKindIcon(selectedMapPoint.category),
               },
             ]
           : []),
@@ -656,8 +727,8 @@ export const MainMap = memo(
     }, [
       applyOffscreenMapIndicatorDrafts,
       clearOffscreenMapIndicators,
+      activeNavigationPoint,
       currentCameraRef,
-      directionPoint,
       historyActive,
       mapLayout,
       offscreenMapGpsCoordinate,
@@ -666,6 +737,44 @@ export const MainMap = memo(
       riderTargetPoints,
       selectedMapPoint,
     ])
+
+    const scheduleOffscreenMapIndicatorRefresh = useCallback(() => {
+      if (offscreenProjectionRefreshTimeoutRef.current) return
+      offscreenProjectionRefreshTimeoutRef.current = setTimeout(() => {
+        offscreenProjectionRefreshTimeoutRef.current = null
+        updateOffscreenMapIndicators()
+      }, OFFSCREEN_INDICATOR_VISIBILITY_CHECK_MS)
+    }, [updateOffscreenMapIndicators])
+
+    const handlePhoneHeadingChange = useCallback(
+      (headingDeg: number | null) => {
+        phoneHeadingDegRef.current = headingDeg
+        onPhoneHeadingChange(headingDeg)
+
+        if (headingDeg == null || !phoneHeadingMode || !followGps) return
+        const currentCamera = currentCameraRef.current
+        if (!currentCamera) return
+
+        const repositionedIndicators = repositionOffscreenMapIndicators(
+          offscreenMapIndicatorsRef.current,
+          { ...currentCamera, heading: headingDeg },
+          mapLayout,
+        )
+        if (repositionedIndicators !== offscreenMapIndicatorsRef.current) {
+          publishOffscreenMapIndicators(repositionedIndicators)
+        }
+        scheduleOffscreenMapIndicatorRefresh()
+      },
+      [
+        currentCameraRef,
+        followGps,
+        mapLayout,
+        onPhoneHeadingChange,
+        phoneHeadingMode,
+        publishOffscreenMapIndicators,
+        scheduleOffscreenMapIndicatorRefresh,
+      ],
+    )
 
     const handleOffscreenIndicatorPress = useCallback(
       (indicator: OffscreenMapIndicatorState) => {
@@ -707,6 +816,21 @@ export const MainMap = memo(
         setFollowGps,
       ],
     )
+
+    const handleFocusDirectionPoint = useCallback(() => {
+      if (!directionPoint) return
+      onMapInteraction()
+      setFollowGps(false)
+      const currentCamera = currentCameraRef.current
+      cameraRef.current?.setCamera({
+        centerCoordinate: [directionPoint.longitude, directionPoint.latitude],
+        zoomLevel: currentCamera?.zoomLevel,
+        heading: currentCamera?.heading,
+        pitch: currentCamera?.pitch,
+        animationDuration: MAP_DEFAULTS.animationDuration,
+        animationMode: 'easeTo',
+      })
+    }, [cameraRef, currentCameraRef, directionPoint, onMapInteraction, setFollowGps])
 
     useEffect(() => {
       updateNavigationDiagnostics({
@@ -792,6 +916,7 @@ export const MainMap = memo(
     )
 
     const handleMapLoaded = useCallback(() => {
+      setLoadedStyleSignature(styleSignature)
       const styleReloadCamera = styleReloadCameraRef.current
       styleReloadCameraRef.current = null
       if (styleReloadCamera && gestureActiveRef.current) return
@@ -821,16 +946,27 @@ export const MainMap = memo(
       historyActive,
       historyPreview,
       perspectiveEnabled,
+      styleSignature,
     ])
 
     const handleLongPress = useCallback(
       (feature: { geometry: { coordinates: number[] } }) => {
-        if (historyActive) return
-        onMapInteraction()
+        if (mode !== 'map' || historyActive) return
         const [longitude, latitude] = feature.geometry.coordinates
+        const selection: MapSelection = {
+          type: 'coordinate',
+          id: `long-press-${longitude.toFixed(6)}-${latitude.toFixed(6)}`,
+          latitude,
+          longitude,
+          title: 'Dropped pin',
+          subtitle: null,
+          loadingDetails: true,
+        }
+        if (onRawMapPress(selection)) return
+        onMapInteraction()
         onLongPressTarget({ latitude, longitude })
       },
-      [historyActive, onLongPressTarget, onMapInteraction],
+      [historyActive, mode, onLongPressTarget, onMapInteraction, onRawMapPress],
     )
 
     const handleSuppressNextMapPress = useCallback(() => {
@@ -849,17 +985,96 @@ export const MainMap = memo(
       stopCameraAnimation()
     }, [onMapInteraction, stopCameraAnimation])
 
-    const handleMapPress = useCallback(() => {
-      if (suppressNextMapPressRef.current) {
-        suppressNextMapPressRef.current = false
-        if (suppressNextMapPressTimeoutRef.current) {
-          clearTimeout(suppressNextMapPressTimeoutRef.current)
-          suppressNextMapPressTimeoutRef.current = null
+    const handleMapPress = useCallback(
+      (feature: GeoJSON.Feature<GeoJSON.Point, { screenPointX: number; screenPointY: number }>) => {
+        if (suppressNextMapPressRef.current) {
+          suppressNextMapPressRef.current = false
+          if (suppressNextMapPressTimeoutRef.current) {
+            clearTimeout(suppressNextMapPressTimeoutRef.current)
+            suppressNextMapPressTimeoutRef.current = null
+          }
+          return
         }
-        return
-      }
-      onMapPress()
-    }, [onMapPress])
+        if (mode !== 'map' || historyActive) return
+        const coordinates = feature.geometry?.coordinates
+        const [longitude, latitude] = coordinates ?? []
+        if (typeof longitude !== 'number' || typeof latitude !== 'number') return
+        if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) return
+
+        const screenPointX = feature.properties?.screenPointX
+        const screenPointY = feature.properties?.screenPointY
+        const fallbackSelection: MapSelection = {
+          type: 'coordinate',
+          id: `coordinate-${longitude.toFixed(6)}-${latitude.toFixed(6)}`,
+          latitude,
+          longitude,
+          title: 'Dropped pin',
+          subtitle: null,
+          loadingDetails: true,
+        }
+
+        if (onRawMapPress(fallbackSelection)) return
+
+        if (typeof screenPointX !== 'number' || typeof screenPointY !== 'number') {
+          onMapPress(fallbackSelection)
+          return
+        }
+
+        void mapViewRef.current
+          ?.queryRenderedFeaturesAtPoint(
+            [screenPointX, screenPointY],
+            [],
+            [...SELECTABLE_BASE_MAP_LAYER_IDS],
+          )
+          .then((features) => {
+            const place = features?.features.find((candidate) => {
+              const name = candidate.properties?.name
+              return typeof name === 'string' && name.trim().length > 0
+            })
+            if (!place) {
+              onMapPress(fallbackSelection)
+              return
+            }
+            const placeCoordinates =
+              place.geometry.type === 'Point' ? place.geometry.coordinates : null
+            const placeLongitude =
+              typeof placeCoordinates?.[0] === 'number' ? placeCoordinates[0] : longitude
+            const placeLatitude =
+              typeof placeCoordinates?.[1] === 'number' ? placeCoordinates[1] : latitude
+            const title =
+              typeof place.properties?.name === 'string' ? place.properties.name : 'Map place'
+            const category =
+              typeof place.properties?.category === 'string'
+                ? formatMapboxCategory(place.properties.category)
+                : typeof place.properties?.class === 'string'
+                  ? formatMapboxCategory(place.properties.class)
+                  : null
+            const subtitle =
+              typeof place.properties?.full_address === 'string'
+                ? place.properties.full_address
+                : typeof place.properties?.address === 'string'
+                  ? place.properties.address
+                  : category
+            onMapPress({
+              type: 'place',
+              id:
+                typeof place.id === 'string'
+                  ? place.id
+                  : `place-${placeLongitude.toFixed(6)}-${placeLatitude.toFixed(6)}`,
+              latitude: placeLatitude,
+              longitude: placeLongitude,
+              title,
+              subtitle,
+              category,
+              loadingDetails: subtitle == null,
+            })
+          })
+          .catch(() => {
+            onMapPress(fallbackSelection)
+          })
+      },
+      [historyActive, mode, onMapPress, onRawMapPress],
+    )
 
     useEffect(() => {
       if (mode === 'telemetry') {
@@ -976,9 +1191,26 @@ export const MainMap = memo(
     )
 
     const handleMapIdle = useCallback(() => {
-      const heading = currentCameraRef.current?.heading
+      const camera = currentCameraRef.current
+      const heading = camera?.heading
       if (heading != null) setCameraHeading(heading)
-    }, [currentCameraRef])
+      scheduleOffscreenMapIndicatorRefresh()
+      // Map Points live on the server, so the visible set is read per camera rest. The handler
+      // drops the call when the camera has not moved far enough to reveal anything new.
+      if (camera) {
+        const [longitude, latitude] = camera.centerCoordinate
+        onCameraSettled(latitude, longitude, camera.zoomLevel)
+      }
+    }, [currentCameraRef, onCameraSettled, scheduleOffscreenMapIndicatorRefresh])
+
+    useEffect(
+      () => () => {
+        if (offscreenProjectionRefreshTimeoutRef.current) {
+          clearTimeout(offscreenProjectionRefreshTimeoutRef.current)
+        }
+      },
+      [],
+    )
 
     useEffect(() => {
       const frame = requestAnimationFrame(updateOffscreenMapIndicators)
@@ -1039,7 +1271,42 @@ export const MainMap = memo(
             maxZoomLevel={MAP_DEFAULTS.maxZoom}
             animationMode="easeTo"
           />
-          {isOneDark ? (
+          {canUpdateExistingStyleLayers && isSatelliteOverlay ? (
+            <>
+              <RasterLayer
+                id="satellite"
+                existing
+                style={{
+                  ...satelliteImageryPaint,
+                  rasterOpacityTransition: { duration: 260, delay: 0 },
+                  rasterSaturationTransition: { duration: 260, delay: 0 },
+                  rasterContrastTransition: { duration: 260, delay: 0 },
+                }}
+              />
+              {SATELLITE_ROAD_LINE_LAYER_IDS.map((id) => (
+                <Mapbox.LineLayer
+                  key={id}
+                  id={id}
+                  existing
+                  style={{
+                    lineOpacity: satelliteRoadLineOpacity,
+                    lineOpacityTransition: { duration: 260, delay: 0 },
+                  }}
+                />
+              ))}
+              <SymbolLayer
+                id="poi-label"
+                existing
+                style={{ visibility: mapDetailsVisible ? 'visible' : 'none' }}
+              />
+              <SymbolLayer
+                id="transit-label"
+                existing
+                style={{ visibility: mapDetailsVisible ? 'visible' : 'none' }}
+              />
+            </>
+          ) : null}
+          {canUpdateExistingStyleLayers && isOneDark ? (
             <>
               <SymbolLayer
                 id="poi-label"
@@ -1068,7 +1335,8 @@ export const MainMap = memo(
               />
             </>
           ) : null}
-          {(selectedMapStyle.key === 'outdoors' || (isSatellite && !isSatelliteOverlay)) && (
+          {canUpdateExistingStyleLayers &&
+          (selectedMapStyle.key === 'outdoors' || (isSatellite && !isSatelliteOverlay)) ? (
             <>
               <SymbolLayer
                 id="poi-label"
@@ -1085,7 +1353,7 @@ export const MainMap = memo(
                 }}
               />
             </>
-          )}
+          ) : null}
           <PhoneHeadingMapLayer
             active={!historyActive && !gpsHeadingMode}
             followCamera={phoneHeadingMode && followGps && !phoneHeadingCameraSuspended}
@@ -1121,18 +1389,19 @@ export const MainMap = memo(
             historyMetricGradientsEnabled={historyMetricGradientsEnabled}
             historyMetricHotRanges={historyMetricHotRanges}
             directionPoint={directionPoint}
+            activeNavigationTarget={activeNavigationTarget}
+            selectedNavigationTarget={selectedNavigationTarget}
             mapPoints={mapPoints}
             selectedMapPointId={selectedMapPointId}
-            hiddenMapPointKinds={hiddenMapPointKinds}
-            onClearDirectionPoint={onClearDirectionPoint}
+            hiddenMapPointCategories={hiddenMapPointCategories}
             onToggleMapPointSelection={onToggleMapPointSelection}
-            onRemoveMapPoint={onRemoveMapPoint}
             onSuppressNextMapPress={handleSuppressNextMapPress}
             onSelectMarker={setSelectedHistoryMarker}
             onOpenMedia={onOpenMedia}
             onSelectLegalCountry={(country) => {
               if (legalLimitsActive) setSelectedLegalCountry(country)
             }}
+            onFocusDirectionPoint={handleFocusDirectionPoint}
           />
         </Mapbox.MapView>
         <InfoModal

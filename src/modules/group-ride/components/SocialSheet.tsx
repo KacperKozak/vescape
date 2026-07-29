@@ -24,7 +24,6 @@ import { ColorPicker } from '@/components/forms/ColorPicker'
 import { CanvasWidget } from '@/components/widgets/CanvasWidget'
 import { InputWidget } from '@/components/widgets/InputWidget'
 import { LinkWidget } from '@/components/widgets/LinkWidget'
-import { widgetSurface } from '@/components/widgets/widgetSurface'
 import { riderColorOptions } from '@/modules/group-ride/constants/riderColors'
 import {
   batteryLevel,
@@ -72,44 +71,40 @@ function RiderNameWidget() {
   const setName = useRiderStore((s) => s.setName)
   const riderColor = useRiderStore((s) => s.riderColor)
   const setColor = useRiderStore((s) => s.setColor)
-  const [pickerOpen, setPickerOpen] = useState(false)
 
   return (
-    <View style={styles.nameGroup}>
-      <InputWidget
-        label="Your name"
-        value={riderName}
-        placeholder="Add a display name"
-        maxLength={32}
-        onCommit={(value) => void setName(value)}
-        accessibilityLabel="Rider display name"
-        accessory={
-          <Pressable
-            onPress={() => setPickerOpen((open) => !open)}
-            hitSlop={8}
-            accessibilityLabel="Pick your color"
-            style={[
-              styles.colorDot,
-              riderColor ? { backgroundColor: riderColor } : styles.colorDotEmpty,
-              pickerOpen && styles.colorDotActive,
-            ]}
-          >
-            {riderColor ? null : (
-              <PaletteIcon size={16} color={theme.palette.slate.textSecondary} weight="bold" />
-            )}
-          </Pressable>
-        }
-      />
-      {pickerOpen ? (
-        <View style={styles.pickerPanel}>
+    <InputWidget
+      label="Your name"
+      value={riderName}
+      placeholder="Add a display name"
+      maxLength={32}
+      onCommit={(value) => void setName(value)}
+      accessibilityLabel="Rider display name"
+      commitOnBlur={false}
+      leading={
+        <View
+          style={[
+            styles.colorDot,
+            riderColor ? { backgroundColor: riderColor } : styles.colorDotEmpty,
+          ]}
+          accessibilityLabel={riderColor ? `Your color ${riderColor}` : 'No color selected'}
+        >
+          {riderColor ? null : (
+            <PaletteIcon size={14} color={theme.palette.slate.textSecondary} weight="duotone" />
+          )}
+        </View>
+      }
+      editingContent={
+        <View style={styles.colorEditor}>
+          <Text style={styles.colorLabel}>Color</Text>
           <ColorPicker
             value={riderColor}
             colors={riderColorOptions}
             onChange={(color) => void setColor(color)}
           />
         </View>
-      ) : null}
-    </View>
+      }
+    />
   )
 }
 
@@ -419,27 +414,28 @@ const styles = StyleSheet.create({
   list: {
     gap: 12,
   },
-  nameGroup: {
-    gap: 8,
-  },
   colorDot: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: theme.palette.slate.border,
   },
   colorDotEmpty: {
     backgroundColor: theme.palette.slate.surfaceDeep,
   },
-  colorDotActive: {
-    borderColor: theme.palette.slate.textPrimary,
+  colorEditor: {
+    marginLeft: 36,
+    gap: 8,
   },
-  pickerPanel: {
-    ...widgetSurface,
-    padding: 16,
+  colorLabel: {
+    color: theme.palette.slate.textMuted,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   fill: {
     flex: 1,

@@ -53,6 +53,8 @@ const e2eSettings: AppSettings = {
   selectedBoardId: null,
   lastGpsLatitude: null,
   lastGpsLongitude: null,
+  directionPointLatitude: null,
+  directionPointLongitude: null,
   movingSpeedThresholdKmh: 5,
   freeSpinMaxSpeedDeltaKmh: 3,
   freeSpinStationaryBoardCapKmh: 1,

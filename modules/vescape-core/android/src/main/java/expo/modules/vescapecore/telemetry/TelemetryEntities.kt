@@ -2,6 +2,7 @@ package expo.modules.vescapecore.telemetry
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
@@ -330,26 +331,6 @@ data class PrivacyZoneEntity(
   val updatedAt: Long,
 )
 
-@Entity(
-  tableName = "map_points",
-  indices = [
-    Index(value = ["kind"]),
-  ],
-)
-data class MapPointEntity(
-  @PrimaryKey
-  val id: String,
-  val kind: String,
-  @ColumnInfo(name = "latitude_e7")
-  val latitudeE7: Int,
-  @ColumnInfo(name = "longitude_e7")
-  val longitudeE7: Int,
-  @ColumnInfo(name = "created_at")
-  val createdAt: Long,
-  @ColumnInfo(name = "updated_at")
-  val updatedAt: Long,
-)
-
 @Entity(tableName = "app_settings")
 data class AppSettingEntity(
   @PrimaryKey
@@ -373,6 +354,8 @@ data class AppSettings(
   val selectedBoardId: String? = null,
   val lastGpsLatitude: Double? = null,
   val lastGpsLongitude: Double? = null,
+  val directionPointLatitude: Double? = null,
+  val directionPointLongitude: Double? = null,
   val movingSpeedThresholdKmh: Double = 3.0,
   val freeSpinMaxSpeedDeltaKmh: Double = DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH,
   val freeSpinStationaryBoardCapKmh: Double = DEFAULT_FREE_SPIN_STATIONARY_BOARD_CAP_KMH,

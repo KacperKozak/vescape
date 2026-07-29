@@ -17,6 +17,7 @@ import { useHistoryStore, type HistorySession } from '@/modules/history/store/hi
 import { useFavoriteStore } from '@/modules/history/store/favoriteStore'
 import { favoriteRangeForSession, findSessionFavorite } from '@/modules/history/lib/favorites'
 import { useMapStore } from '@/modules/map/store/mapStore'
+import { useMapContributionReady } from '@/modules/profile/hooks/useMapContributionReady'
 import { useSettingsStore } from '@/modules/settings/store/settingsStore'
 import { useWeatherStore } from '@/modules/weather/store/weatherStore'
 import { useMediaHistory } from '@/modules/history/hooks/useMediaHistory'
@@ -150,33 +151,41 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
   const {
     mapPoints,
     selectedMapPointId,
-    hiddenMapPointKinds,
-    loadMapPoints,
-    saveMapPoint,
-    replaceDirectionPoint,
+    hiddenMapPointCategories,
+    refreshNearbyMapPoints,
+    reloadMapPoints,
+    loadDirectionPoint,
+    directionPoint,
+    addMapPoint,
+    updateMapPoint,
+    setMapPointReaction,
+    setDirectionPoint,
     clearDirectionPoint,
     removeMapPoint,
+    selectMapPoint,
     toggleMapPointSelection,
     clearSelectedMapPoints,
-    toggleMapPointKindVisibility,
+    toggleMapPointCategoryVisibility,
   } = useMapStore(
     useShallow((s) => ({
       mapPoints: s.mapPoints,
       selectedMapPointId: s.selectedMapPointId,
-      hiddenMapPointKinds: s.hiddenMapPointKinds,
-      loadMapPoints: s.load,
-      saveMapPoint: s.saveMapPoint,
-      replaceDirectionPoint: s.replaceDirectionPoint,
+      hiddenMapPointCategories: s.hiddenMapPointCategories,
+      refreshNearbyMapPoints: s.refreshNearby,
+      reloadMapPoints: s.reload,
+      loadDirectionPoint: s.loadDirectionPoint,
+      directionPoint: s.directionPoint,
+      addMapPoint: s.addMapPoint,
+      updateMapPoint: s.editMapPoint,
+      setMapPointReaction: s.setMapPointReaction,
+      setDirectionPoint: s.setDirectionPoint,
       clearDirectionPoint: s.clearDirectionPoint,
       removeMapPoint: s.removeMapPoint,
+      selectMapPoint: s.selectMapPoint,
       toggleMapPointSelection: s.toggleMapPointSelection,
       clearSelectedMapPoints: s.clearSelectedMapPoints,
-      toggleMapPointKindVisibility: s.toggleMapPointKindVisibility,
+      toggleMapPointCategoryVisibility: s.toggleMapPointCategoryVisibility,
     })),
-  )
-  const directionPoint = useMemo(
-    () => mapPoints.find((point) => point.kind === 'direction') ?? null,
-    [mapPoints],
   )
   const mediaHistory = useMediaHistory({
     selectedSession,
@@ -184,9 +193,18 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
     markers: sessionMarkers,
   })
 
+  const canContribute = useMapContributionReady()
+
   useEffect(() => {
-    void loadMapPoints()
-  }, [loadMapPoints])
+    void loadDirectionPoint()
+  }, [loadDirectionPoint])
+
+  // Signing in changes what the server says about the visible Map Points (`ownedByMe`,
+  // `myReaction`), and those only arrive with a read. Without this the rider would have to pan
+  // before their own votes and edit buttons showed up.
+  useEffect(() => {
+    void reloadMapPoints()
+  }, [canContribute, reloadMapPoints])
 
   useEffect(() => {
     setSeekTimeMs(null)
@@ -487,14 +505,18 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
     directionPoint,
     mapPoints,
     selectedMapPointId,
-    hiddenMapPointKinds,
-    saveMapPoint,
-    replaceDirectionPoint,
+    hiddenMapPointCategories,
+    refreshNearbyMapPoints,
+    addMapPoint,
+    updateMapPoint,
+    setMapPointReaction,
+    setDirectionPoint,
     clearDirectionPoint,
     removeMapPoint,
+    selectMapPoint,
     toggleMapPointSelection,
     clearSelectedMapPoints,
-    toggleMapPointKindVisibility,
+    toggleMapPointCategoryVisibility,
     sessions,
     selectedSession,
     sessionSamples,

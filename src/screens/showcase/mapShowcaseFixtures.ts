@@ -1,6 +1,7 @@
 import type { HistoryGpsSample, HistoryMarker, MapPoint, TelemetrySample } from 'vescape-core'
 
 import { makeCircleFeature, makeTrailLineString } from '@/helpers/mapGeometry'
+import type { DirectionPoint } from '@/modules/map/store/mapStore'
 import type { MediaHistoryAsset } from '@/modules/history/lib/mediaHistory'
 import { DEFAULT_HISTORY_METRIC_HOT_RANGES } from '@/modules/history/lib/metricColorScale'
 import type { RosterRider } from '@/modules/group-ride/lib/roster'
@@ -11,7 +12,7 @@ const BASE_LAT = 50.0755
 const PLACEHOLDER_MEDIA_URI =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
 
-const MAP_POINT_KINDS: MapPoint['kind'][] = [
+const MAP_POINT_CATEGORIES: MapPoint['category'][] = [
   'drop',
   'bonk',
   'nose_slide',
@@ -23,25 +24,27 @@ const MAP_POINT_KINDS: MapPoint['kind'][] = [
 export const FIXTURE_CAMERA_CENTER: [number, number] = [BASE_LON, BASE_LAT]
 export const FIXTURE_CAMERA_ZOOM = 13.7
 
-export const FIXTURE_MAP_POINTS: MapPoint[] = MAP_POINT_KINDS.map((kind, index) => {
-  const angle = (index / MAP_POINT_KINDS.length) * Math.PI * 2
+export const FIXTURE_MAP_POINTS: MapPoint[] = MAP_POINT_CATEGORIES.map((category, index) => {
+  const angle = (index / MAP_POINT_CATEGORIES.length) * Math.PI * 2
   return {
-    id: `fixture-point-${kind}`,
-    kind,
+    id: `fixture-point-${category}`,
+    category,
     longitude: BASE_LON + Math.cos(angle) * 0.008,
     latitude: BASE_LAT + Math.sin(angle) * 0.008,
-    createdAt: NOW,
-    updatedAt: NOW,
+    name: null,
+    description: null,
+    score: index - 2,
+    myReaction: null,
+    ownedByMe: index === 0,
+    distanceMeters: 120 * (index + 1),
+    createdAt: new Date(NOW).toISOString(),
+    updatedAt: new Date(NOW).toISOString(),
   }
 })
 
-export const FIXTURE_DIRECTION_POINT: MapPoint = {
-  id: 'fixture-direction',
-  kind: 'direction',
+export const FIXTURE_DIRECTION_POINT: DirectionPoint = {
   longitude: BASE_LON + 0.0045,
   latitude: BASE_LAT + 0.0035,
-  createdAt: NOW,
-  updatedAt: NOW,
 }
 
 const ROUTE_POINT_COUNT = 14

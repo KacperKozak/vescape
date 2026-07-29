@@ -120,7 +120,7 @@ class FavoriteSummaryBuilderTest {
       }
     } as SupportSQLiteDatabase
 
-    TelemetryDatabase.MIGRATION_27_28.migrate(db)
+    TelemetryDatabase.MIGRATION_29_30.migrate(db)
 
     assertTrue(sql.any { it.contains("CREATE TABLE IF NOT EXISTS favorites") })
     assertTrue(sql.any { it.contains("id TEXT NOT NULL PRIMARY KEY") })

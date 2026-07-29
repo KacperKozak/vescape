@@ -384,12 +384,9 @@ enum TelemetryDatabase {
       }
     }
 
-    // MARK: Per-board Alert Rules (#254)
-    // Alert Rules become owned by one Board (`board_id NOT NULL`, composite PK so preset ids repeat
-    // per board). Pre-release decision: existing global rules are dropped, not reassigned — riders
-    // redo alert setup per board. The three former global settings keys (Alert Preset selection,
-    // Rider Top Speed, onboarding flag) move to Board Settings, so their app_settings rows are dropped.
     // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `MIGRATION_26_27`
+    // Per-board Alert Rules (#254). Existing global rules are intentionally dropped; the former
+    // global alert settings are now board-scoped settings.
     migrator.registerMigration("v27_alert_board_id") { db in
       let hasBoardId = try db.columns(in: "alerts").contains { $0.name == "board_id" }
       if !hasBoardId {
@@ -418,12 +415,23 @@ enum TelemetryDatabase {
         """)
     }
 
+    // Map Points became server-owned (server ADR-0009), so the app keeps no local copy. Drops the
+    // v27 table and the reaction table that only ever existed on a feature branch. The direction
+    // target it used to hold moves to app settings, which start empty here — a rider re-picks it.
+    // GRDB keys migrations by name, so one migration covers both released and feature-branch
+    // installs; Room needs two steps because it keys them by version number.
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `MIGRATION_28_29`
+    migrator.registerMigration("v29_drop_map_points") { db in
+      try db.execute(sql: "DROP TABLE IF EXISTS map_point_reactions")
+      try db.execute(sql: "DROP TABLE IF EXISTS map_points")
+    }
+
     // MARK: Favorites (#287)
     // Durable, optionally named time ranges over Ride History (ADR 0029). DDL lives on
     // `FavoriteStore` so the schema stays single-source with the tests that reuse it. Mirrors
-    // Android Room migration 27→28.
-    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `MIGRATION_27_28`
-    migrator.registerMigration("v28_favorites") { db in
+    // Android Room migration 29→30.
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `MIGRATION_29_30`
+    migrator.registerMigration("v30_favorites") { db in
       try FavoriteStore.createTables(db)
     }
 

@@ -16,7 +16,7 @@ def android_release_properties
 end
 
 platform :android do
-  desc "Build signed phone and Wear AABs, ship to QA, and stage production review"
+  desc "Build signed phone and Wear AABs, ship to internal testing, and stage production review"
   lane :release do
     release_properties = android_release_properties
 
@@ -42,7 +42,7 @@ platform :android do
     phone_aab = "android/app/build/outputs/bundle/release/app-release.aab"
     wear_aab = "android/wearos/build/outputs/bundle/release/wearos-release.aab"
 
-    # Phone delivery remains unchanged.
+    # Publish the phone build for immediate internal testing.
     upload_to_play_store(
       aab: phone_aab,
       track: "internal",
@@ -55,9 +55,11 @@ platform :android do
       changes_not_sent_for_review: true
     )
 
+    # Promote the same artifact to a production draft for manual review.
     upload_to_play_store(
-      track: "production",
-      release_status: "completed",
+      track: "internal",
+      track_promote_to: "production",
+      release_status: "draft",
       version_code: ENV["VERSION_CODE"].to_i,
       skip_upload_aab: true,
       skip_upload_apk: true,
@@ -71,7 +73,7 @@ platform :android do
     # Wear OS uses form-factor-prefixed API track identifiers.
     upload_to_play_store(
       aab: wear_aab,
-      track: "wear:qa",
+      track: "wear:internal",
       release_status: "completed",
       skip_upload_apk: true,
       skip_upload_metadata: true,

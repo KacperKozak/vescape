@@ -25,9 +25,27 @@ The integration is owned by these durable files:
 - `app.config.ts` enables the Clerk and SecureStore Expo plugins.
 - `src/app/_layout.tsx` creates `ClerkProvider` with the publishable key and Clerk token cache.
 - `src/modules/profile/screens/ClerkAuthScreen.tsx` renders the native `AuthView`.
-- `src/modules/profile/screens/ClerkAccountScreen.tsx` renders the native account profile.
+- `src/modules/profile/screens/ClerkAccountScreen.tsx` owns revoke-before-clear sign-out.
+- `src/modules/profile/components/DeviceAuthSync.tsx` exchanges the active Clerk session once and
+  provisions native Device Token storage.
 - `src/modules/profile/components/AccountWidget.tsx` exposes sign-in and account management in the
   Social sheet.
+- `modules/vescape-core/{android,ios}/auth/` owns Device Token storage and authenticated native
+  requests. Android encrypts with an Android Keystore key. iOS uses Keychain accessibility
+  `AfterFirstUnlockThisDeviceOnly`, so long-lived native work can read it while the screen is locked.
+
+Device Tokens are never exposed back to JS after provisioning. Native App Status attaches the
+credential, persists renewed expiry, and changes the credential state to `rejected` for expired or
+revoked tokens. A `401` from a native authenticated request does the same without retrying.
+
+Sign-out ordering is security-sensitive:
+
+```text
+native revoke -> native clear -> Clerk sign-out
+```
+
+If revocation fails, the app stays signed in and retains the credential so it can retry. Never clear
+Clerk first: that would strand a live Device Token the client can no longer revoke.
 
 Do not fix Clerk integration in generated `android/` or `ios/` folders. Plugin or dependency changes
 require a fresh native sync/build through `bun run android`.
@@ -162,3 +180,10 @@ the problem in a release build before treating a development-server disconnect a
   the signed-in user.
 - Kill and reopen the app to confirm the session persists.
 - Sign out and confirm protected account UI is no longer available.
+
+## Map contribution identity
+
+Map Points are server-owned. The app never sends a Clerk id with them: native attaches the Device
+Token provisioned above, and the server resolves the Account from it. Reading Map Points needs no
+credential; adding, editing, deleting and reacting reject with `MAP_POINT_SIGN_IN_REQUIRED` when no
+Device Token is stored.

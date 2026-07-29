@@ -1,4 +1,5 @@
 import * as Haptics from 'expo-haptics'
+import { useRouter } from 'expo-router'
 import {
   ArrowLeftIcon,
   ArrowsClockwiseIcon,
@@ -9,8 +10,7 @@ import {
   MagnifyingGlassIcon,
   MapTrifoldIcon,
   MapPinIcon,
-  FunnelIcon,
-  PlusIcon,
+  NavigationArrowIcon,
   SlidersHorizontalIcon,
   SirenIcon,
   SpeedometerIcon,
@@ -37,7 +37,16 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import type { Favorite, HistoryGpsSample, HistoryMarker, MapPointKind } from 'vescape-core'
+import type {
+  Favorite,
+  HistoryGpsSample,
+  HistoryMarker,
+  MapPoint,
+  MapPointCategory,
+  MapPointPatch,
+} from 'vescape-core'
+
+import type { DirectionPoint } from '@/modules/map/store/mapStore'
 
 import { ConfirmModal } from '@/components/modals/ConfirmModal'
 import { EdgeDrawer } from '@/components/overlays/AnchoredSheet'
@@ -51,17 +60,13 @@ import { MapStyleSwitch } from '@/modules/map/components/MapStyleSwitch'
 import { PillSelector, PillSelectorItem } from '@/components/controls/PillSelector'
 import { WeatherIcon } from '@/modules/weather/components/WeatherIcon'
 import type { MapNavigationMode, MapStyleKey } from '@/modules/map/constants/mapStyles'
-import { getMapPointKindIcon } from '@/modules/map/constants/mapPointIcons'
-import {
-  FILTERABLE_MAP_POINT_KIND_OPTIONS,
-  getMapPointKindColor,
-  getMapPointKindTextColor,
-  MAP_POINT_KIND_OPTIONS,
-} from '@/modules/map/constants/mapPoints'
+import { getMapPointKindLabel } from '@/modules/map/constants/mapPoints'
 import { theme } from '@/constants/theme'
+import { routes } from '@/navigation/routes'
+import type { MapSelection } from '@/modules/map/lib/mapSelection'
 import { type MapSearchResult } from '@/modules/map/lib/search'
 import { useMapSearch } from '@/modules/map/hooks/useMapSearch'
-import { isCompactMapPointKind } from '@/modules/map/lib/mapPointVisibility'
+import {} from '@/modules/map/store/mapPointPhotoFiles'
 import type { HistoryMetricKey } from '@/modules/history/lib/metricColorScale'
 import {
   BottomTelemetryStrip,
@@ -106,6 +111,12 @@ import {
   LEGAL_ROAD_STATUS_LABELS,
   type LegalLimitCountry,
 } from '@/modules/legal/lib/legalLimits'
+import { useRiderStore } from '@/modules/group-ride/store/riderStore'
+import { MapPointAddMenu } from '@/modules/map/components/MapPointAddMenu'
+import { MapPointFilterMenu } from '@/modules/map/components/MapPointFilterMenu'
+import { MapPointStatusBanner } from '@/modules/map/components/MapPointStatusBanner'
+import { MapTargetSheet } from '@/modules/map/components/MapTargetSheet'
+import { useMapContributionReady } from '@/modules/profile/hooks/useMapContributionReady'
 
 const LEGAL_LIST_PANEL_HEIGHT = 280
 const LEGAL_OVERLAY_GAP = 8
@@ -127,6 +138,8 @@ interface MainMapOverlayProps {
   heading: SharedValue<number>
   mapStyleKey: MapStyleKey
   setMapStyleKey: (key: MapStyleKey) => void
+  satelliteMapImageryOpacity: number
+  setSatelliteMapImageryOpacity: (opacity: number) => void
   mapNavigationMode: MapNavigationMode
   setMapNavigationMode: (mode: MapNavigationMode) => void
   mapSelector: MapSelector
@@ -139,10 +152,26 @@ interface MainMapOverlayProps {
   exitLegalLimits: () => void
   refreshWeather: () => void
   weatherLocation: { latitude: number; longitude: number } | null
-  replaceDirectionPoint: (latitude: number, longitude: number) => Promise<unknown>
-  addMapPoint: (kind: MapPointKind, latitude: number, longitude: number) => Promise<unknown>
-  hiddenMapPointKinds: MapPointKind[]
-  toggleMapPointKindVisibility: (kind: MapPointKind) => void
+  directionPoint: DirectionPoint | null
+  activeNavigationTarget: MapSelection | null
+  selectedNavigationTarget: MapSelection | null
+  longPressMapTarget: MapSelection | null
+  onLongPressMapTargetHandled: () => void
+  onSelectNavigationTarget: (selection: MapSelection) => void
+  onNavigateTarget: (selection: MapSelection) => Promise<void>
+  onNavigateSelectedTarget: () => Promise<void>
+  onCancelNavigation: () => void
+  onDismissSelectedTarget: () => void
+  addMapPoint: (
+    category: MapPointCategory,
+    latitude: number,
+    longitude: number,
+  ) => Promise<MapPoint | null>
+  updateMapPoint: (id: string, patch: MapPointPatch) => Promise<MapPoint | null>
+  setMapPointReaction: (id: string, reaction: 'up' | 'down' | null) => void
+  onRemoveMapPoint: (id: string) => void
+  hiddenMapPointCategories: MapPointCategory[]
+  toggleMapPointCategoryVisibility: (category: MapPointCategory) => void
   offscreenMapIndicators: OffscreenMapIndicatorState[]
   onOffscreenIndicatorPress: (indicator: OffscreenMapIndicatorState) => void
 }
@@ -202,7 +231,7 @@ interface MainHistoryOverlayProps {
 interface MainOverlaysProps {
   mode: MainViewState
   mapRef: RefObject<MainMapHandle | null>
-  mapInteractionHandlerRef: RefObject<() => void>
+  mapInteractionHandlerRef: RefObject<(selection?: MapSelection) => boolean | void>
   board: MainBoardOverlayProps
   map: MainMapOverlayProps
   history: MainHistoryOverlayProps
@@ -211,12 +240,30 @@ interface MainOverlaysProps {
 const RECORD_BUTTON_HEIGHT = 48
 const HISTORY_BUTTON_SIZE = 54
 const TELEMETRY_FADE_TIMING = { duration: 260 } as const
+function clearPlacementTimeoutRef(ref: { current: ReturnType<typeof setTimeout> | null }) {
+  if (!ref.current) return
+  clearTimeout(ref.current)
+  ref.current = null
+}
+
+function navigationActionColors(riderColor: string | null) {
+  return {
+    color: riderColor ?? theme.palette.green.color,
+    textColor: riderColor ?? theme.palette.green.text,
+  }
+}
 interface FullMapControlsProps {
   mapRef: RefObject<MainMapHandle | null>
   map: MainMapOverlayProps
-  mapInteractionHandlerRef: RefObject<() => void>
+  mapInteractionHandlerRef: RefObject<(selection?: MapSelection) => boolean | void>
   top: number
   bottom: number
+  sheetBottom: number
+  bottomControlsVisible: boolean
+  addMenuOpen: boolean
+  onAddMenuVisibilityChange: (visible: boolean) => void
+  onBeginEditMapPoint: (id: string) => void
+  onRequireMapAccount: () => boolean
 }
 
 interface MapControlsProps {
@@ -237,11 +284,25 @@ const centerPlacementPointerEntering = () => {
   return {
     initialValues: {
       opacity: 0,
-      transform: [{ scale: 1.8 }],
+      transform: [{ scale: 1.2 }],
     },
     animations: {
       opacity: withTiming(1, { duration: 260 }),
       transform: [{ scale: withTiming(1, { duration: 260 }) }],
+    },
+  }
+}
+
+const centerPlacementPulseEntering = () => {
+  'worklet'
+  return {
+    initialValues: {
+      opacity: 0.65,
+      transform: [{ scale: 0.75 }],
+    },
+    animations: {
+      opacity: withTiming(0, { duration: 320 }),
+      transform: [{ scale: withTiming(2.05, { duration: 320 }) }],
     },
   }
 }
@@ -252,10 +313,19 @@ function FullMapControls({
   mapInteractionHandlerRef,
   top,
   bottom,
+  sheetBottom,
+  bottomControlsVisible,
+  addMenuOpen,
+  onAddMenuVisibilityChange,
+  onBeginEditMapPoint,
+  onRequireMapAccount,
 }: FullMapControlsProps) {
+  const riderColor = useRiderStore((s) => s.riderColor)
   const [searchOpen, setSearchOpen] = useState(false)
-  const [addMenuOpen, setAddMenuOpen] = useState(false)
+  const [placementPulseKey, setPlacementPulseKey] = useState(0)
   const [filterMenuOpen, setFilterMenuOpen] = useState(false)
+  const placementTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const addMenuZoomedRef = useRef(false)
   const {
     searchQuery,
     setSearchQuery,
@@ -275,12 +345,29 @@ function FullMapControls({
     resetSearch()
   }, [resetSearch])
 
+  const closeAddMenu = useCallback(
+    (restoreZoom = true) => {
+      clearPlacementTimeoutRef(placementTimeoutRef)
+      if (addMenuOpen && restoreZoom && addMenuZoomedRef.current) {
+        mapRef.current?.zoomBy(-0.45)
+      }
+      addMenuZoomedRef.current = false
+      setPlacementPulseKey(0)
+      onAddMenuVisibilityChange(false)
+    },
+    [addMenuOpen, mapRef, onAddMenuVisibilityChange],
+  )
+
   useEffect(() => {
-    const dismissTransientControls = () => {
-      if (!searchOpen && !addMenuOpen && !filterMenuOpen) return
+    const dismissTransientControls = (selection?: MapSelection) => {
+      if (addMenuOpen && selection) {
+        mapRef.current?.centerCoordinatePreservingCamera([selection.longitude, selection.latitude])
+        return true
+      }
+      if (!searchOpen && !filterMenuOpen) return false
       closeSearch()
-      setAddMenuOpen(false)
       setFilterMenuOpen(false)
+      return false
     }
     mapInteractionHandlerRef.current = dismissTransientControls
     return () => {
@@ -288,14 +375,29 @@ function FullMapControls({
         mapInteractionHandlerRef.current = () => {}
       }
     }
-  }, [addMenuOpen, closeSearch, filterMenuOpen, mapInteractionHandlerRef, searchOpen])
+  }, [addMenuOpen, closeSearch, filterMenuOpen, mapInteractionHandlerRef, mapRef, searchOpen])
+
+  useEffect(
+    () => () => {
+      if (placementTimeoutRef.current) clearTimeout(placementTimeoutRef.current)
+    },
+    [],
+  )
 
   const handleSearchSelect = useCallback(
     (result: MapSearchResult) => {
       setSearchOpen(false)
       setSearchQuery(result.title)
       mapRef.current?.focusCoordinate([result.longitude, result.latitude])
-      void map.replaceDirectionPoint(result.latitude, result.longitude)
+      map.onSelectNavigationTarget({
+        type: 'place',
+        id: result.id,
+        latitude: result.latitude,
+        longitude: result.longitude,
+        title: result.title,
+        subtitle: result.subtitle,
+        category: null,
+      })
     },
     [map, mapRef, setSearchQuery],
   )
@@ -310,41 +412,84 @@ function FullMapControls({
 
   const toggleAddMenu = useCallback(() => {
     setFilterMenuOpen(false)
-    mapRef.current?.zoomBy(addMenuOpen ? -0.45 : 0.45)
-    setAddMenuOpen(!addMenuOpen)
-  }, [addMenuOpen, mapRef])
+    if (addMenuOpen) {
+      closeAddMenu()
+      return
+    }
+    if (!onRequireMapAccount()) return
+    mapRef.current?.zoomBy(0.45)
+    addMenuZoomedRef.current = true
+    setPlacementPulseKey(0)
+    onAddMenuVisibilityChange(true)
+  }, [addMenuOpen, closeAddMenu, mapRef, onAddMenuVisibilityChange, onRequireMapAccount])
 
   const toggleFilterMenu = useCallback(() => {
-    if (addMenuOpen) mapRef.current?.zoomBy(-0.45)
-    setAddMenuOpen(false)
+    closeAddMenu()
     setFilterMenuOpen((open) => !open)
-  }, [addMenuOpen, mapRef])
+  }, [closeAddMenu])
+
+  const handleExitMapFocus = useCallback(() => {
+    closeAddMenu()
+    map.exitMapFocus()
+  }, [closeAddMenu, map])
 
   const handleSelectMapPoint = useCallback(
-    async (kind: MapPointKind) => {
+    async (category: MapPointCategory) => {
       const center = await mapRef.current?.getViewfinderCoordinate()
       if (!center) return
-      mapRef.current?.zoomBy(-0.45)
-      setAddMenuOpen(false)
-      void map.addMapPoint(kind, center.latitude, center.longitude)
+      await Haptics.selectionAsync()
+      setPlacementPulseKey((key) => key + 1)
+      clearPlacementTimeoutRef(placementTimeoutRef)
+      placementTimeoutRef.current = setTimeout(() => {
+        closeAddMenu()
+        void map.addMapPoint(category, center.latitude, center.longitude).then((point) => {
+          if (!point) return
+          map.onSelectNavigationTarget({
+            type: 'mapPoint',
+            id: point.id,
+            latitude: point.latitude,
+            longitude: point.longitude,
+            title: point.name?.trim() || getMapPointKindLabel(point.category),
+            subtitle: null,
+            point,
+          })
+          onBeginEditMapPoint(point.id)
+        })
+        placementTimeoutRef.current = null
+      }, 180)
     },
-    [map, mapRef],
+    [closeAddMenu, map, mapRef, onBeginEditMapPoint],
   )
-  const compactMapPointOptions = MAP_POINT_KIND_OPTIONS.filter((option) =>
-    isCompactMapPointKind(option.kind),
-  )
-  const stackedMapPointOptions = MAP_POINT_KIND_OPTIONS.filter(
-    (option) => !isCompactMapPointKind(option.kind),
-  )
+  const handleSelectNavigationPoint = useCallback(async () => {
+    const center = await mapRef.current?.getViewfinderCoordinate()
+    if (!center) return
+    await Haptics.selectionAsync()
+    closeAddMenu()
+    await map.onNavigateTarget({
+      type: 'coordinate',
+      id: `center-${center.longitude.toFixed(6)}-${center.latitude.toFixed(6)}`,
+      latitude: center.latitude,
+      longitude: center.longitude,
+      title: 'Dropped pin',
+      subtitle: null,
+      loadingDetails: true,
+    })
+  }, [closeAddMenu, map, mapRef])
+  const navigationAction = navigationActionColors(riderColor)
 
   return (
     <>
-      {addMenuOpen ? <CenterPlacementPointer /> : null}
+      {addMenuOpen ? (
+        <CenterPlacementPointer
+          color={riderColor ?? theme.palette.green.color}
+          pulseKey={placementPulseKey}
+        />
+      ) : null}
       {searchOpen ? <MapVignette mode="map" idPrefix="search-map-vignette" topOnly /> : null}
       <IconButton
         icon={ArrowLeftIcon}
         size="sm"
-        onPress={map.exitMapFocus}
+        onPress={handleExitMapFocus}
         style={[styles.mapTopBackButton, { top }]}
       />
       {searchOpen ? (
@@ -433,116 +578,26 @@ function FullMapControls({
           style={[styles.mapSearchButton, { top }]}
         />
       )}
-      <View style={[styles.mapFilterAction, { bottom }]}>
-        {filterMenuOpen ? (
-          <View style={[styles.mapFilterMenu, styles.mapFilterMenuAttached]}>
-            {FILTERABLE_MAP_POINT_KIND_OPTIONS.map((option, index) => {
-              const IconComponent = getMapPointKindIcon(option.kind)
-              const color = getMapPointKindColor(option.kind)
-              const visible = !map.hiddenMapPointKinds.includes(option.kind)
-              return (
-                <Pressable
-                  key={option.kind}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${option.label} visibility`}
-                  accessibilityState={{ checked: visible }}
-                  style={({ pressed }) => [
-                    styles.mapFilterRow,
-                    !visible && styles.mapFilterRowHidden,
-                    pressed && styles.mapAddRowPressed,
-                  ]}
-                  onPress={() => map.toggleMapPointKindVisibility(option.kind)}
-                >
-                  <View style={[styles.mapAddRowIcon, { borderColor: color }]}>
-                    <IconComponent
-                      size={16}
-                      color={getMapPointKindTextColor(option.kind)}
-                      weight="duotone"
-                    />
-                  </View>
-                  <Text style={styles.mapFilterRowLabel}>{option.label}</Text>
-                  {index < FILTERABLE_MAP_POINT_KIND_OPTIONS.length - 1 ? (
-                    <View style={styles.mapFilterRowBorder} />
-                  ) : null}
-                </Pressable>
-              )
-            })}
-          </View>
-        ) : null}
-        <IconButton
-          icon={FunnelIcon}
-          size="lg"
-          onPress={toggleFilterMenu}
-          style={filterMenuOpen ? styles.mapFilterButtonAttached : undefined}
+      {bottomControlsVisible && !addMenuOpen ? (
+        <MapPointFilterMenu
+          bottom={bottom}
+          open={filterMenuOpen}
+          hiddenCategories={map.hiddenMapPointCategories}
+          onToggleMenu={toggleFilterMenu}
+          onToggleCategory={map.toggleMapPointCategoryVisibility}
         />
-      </View>
-      <View style={[styles.mapAddAction, { bottom }]}>
-        {addMenuOpen ? (
-          <View style={[styles.mapAddMenu, styles.mapAddMenuAttached]}>
-            <View style={styles.mapAddCompactRow}>
-              {compactMapPointOptions.map((option, index) => {
-                const IconComponent = getMapPointKindIcon(option.kind)
-                const color = getMapPointKindColor(option.kind)
-                return (
-                  <Pressable
-                    key={option.kind}
-                    accessibilityRole="button"
-                    accessibilityLabel={option.label}
-                    style={({ pressed }) => [
-                      styles.mapAddCompactItem,
-                      pressed && styles.mapAddRowPressed,
-                    ]}
-                    onPress={() => handleSelectMapPoint(option.kind)}
-                  >
-                    <View style={[styles.mapAddRowIcon, { borderColor: color }]}>
-                      <IconComponent
-                        size={16}
-                        color={getMapPointKindTextColor(option.kind)}
-                        weight="duotone"
-                      />
-                    </View>
-                    {index < compactMapPointOptions.length - 1 ? (
-                      <View style={styles.mapAddCompactDivider} />
-                    ) : null}
-                  </Pressable>
-                )
-              })}
-              <View style={styles.mapAddRowBorder} />
-            </View>
-            {stackedMapPointOptions.map((option, index) => {
-              const IconComponent = getMapPointKindIcon(option.kind)
-              const color = getMapPointKindColor(option.kind)
-              return (
-                <Pressable
-                  key={option.kind}
-                  style={({ pressed }) => [styles.mapAddRow, pressed && styles.mapAddRowPressed]}
-                  onPress={() => handleSelectMapPoint(option.kind)}
-                >
-                  <Text style={styles.mapAddRowLabel}>{option.label}</Text>
-                  <View style={[styles.mapAddRowIcon, { borderColor: color }]}>
-                    <IconComponent
-                      size={16}
-                      color={getMapPointKindTextColor(option.kind)}
-                      weight="duotone"
-                    />
-                  </View>
-                  {index < stackedMapPointOptions.length - 1 ? (
-                    <View style={styles.mapAddRowBorder} />
-                  ) : null}
-                </Pressable>
-              )
-            })}
-          </View>
-        ) : null}
-        <Animated.View>
-          <IconButton
-            icon={addMenuOpen ? XIcon : PlusIcon}
-            size="lg"
-            onPress={toggleAddMenu}
-            style={addMenuOpen ? styles.mapAddButtonAttached : undefined}
-          />
-        </Animated.View>
-      </View>
+      ) : null}
+      {bottomControlsVisible ? (
+        <MapPointAddMenu
+          bottom={bottom}
+          sheetBottom={sheetBottom}
+          open={addMenuOpen}
+          navigationAction={navigationAction}
+          onToggle={toggleAddMenu}
+          onSelectCategory={handleSelectMapPoint}
+          onSelectNavigationPoint={() => void handleSelectNavigationPoint()}
+        />
+      ) : null}
     </>
   )
 }
@@ -692,7 +747,7 @@ function MapModeTabs({ mode, top, map, onResetLegalSelection }: MapModeTabsProps
   )
 }
 
-function CenterPlacementPointer() {
+function CenterPlacementPointer({ color, pulseKey }: { color: string; pulseKey: number }) {
   return (
     <Animated.View
       pointerEvents="none"
@@ -700,8 +755,16 @@ function CenterPlacementPointer() {
       exiting={FadeOut.duration(140)}
       style={styles.centerPlacementPointer}
     >
-      <View style={styles.centerPlacementBall} />
-      <View style={styles.centerPlacementDot} />
+      {pulseKey > 0 ? (
+        <Animated.View
+          key={pulseKey}
+          entering={centerPlacementPulseEntering}
+          style={[styles.centerPlacementPulse, { borderColor: color }]}
+        />
+      ) : null}
+      <View style={[styles.centerPlacementBall, { borderColor: color }]}>
+        <View style={[styles.centerPlacementDot, { backgroundColor: color }]} />
+      </View>
     </Animated.View>
   )
 }
@@ -714,15 +777,21 @@ export function MainOverlays({
   map,
   history,
 }: MainOverlaysProps) {
+  const router = useRouter()
+  // The server authorizes Map Point writes on the Device Token, so that is what gates the UI.
+  const canContribute = useMapContributionReady()
   const insets = useSafeAreaInsets()
   const aboveStripBottom = STRIP_CONTENT_HEIGHT + Math.max(insets.bottom * 0.5, 8) + 8
   const historyPanelBottom = Math.max(insets.bottom, 16) + 8
   const [panelHeight, setPanelHeight] = useState(0)
   const [removeConfirmVisible, setRemoveConfirmVisible] = useState(false)
+  const [signInPromptVisible, setSignInPromptVisible] = useState(false)
   const [revealGestureActive, setRevealGestureActive] = useState(false)
   const revealCommittedRef = useRef(false)
   const [tuneDrawerOpen, setTuneDrawerOpen] = useState(false)
   const [legalListOpen, setLegalListOpen] = useState(false)
+  const [editingMapPointId, setEditingMapPointId] = useState<string | null>(null)
+  const [addMenuOpen, setAddMenuOpen] = useState(false)
   const [selectedLegalCountry, setSelectedLegalCountry] = useState<LegalLimitCountry | null>(null)
   const tuneButtonRef = useRef<View>(null)
   const revealProgress = useSharedValue(0)
@@ -731,6 +800,7 @@ export function MainOverlays({
   const weatherLoading = useWeatherStore((s) => s.loading)
   const radarLoading = useRainViewerRadarStore((s) => s.loading)
   const refreshRadar = useRainViewerRadarStore((s) => s.fetch)
+  const riderColor = useRiderStore((s) => s.riderColor)
   const legalModeActive = board.activeBoard?.legalMode?.enabled ?? false
   const historyBusy = history.loadingSession || history.historyLoading
   const telemetryInteractive = mode === 'telemetry' && !revealGestureActive
@@ -740,6 +810,34 @@ export function MainOverlays({
   const legalListToggleBottom = legalLegendBottom + LEGAL_LEGEND_HEIGHT + LEGAL_OVERLAY_GAP
   const mapModeTabsTop = Math.max(insets.top, 8)
   const belowMapModeTabsTop = mapModeTabsTop + 48
+  const mapTargetBottom = Math.max(insets.bottom, 16) + 16
+  const activeNavigationTarget =
+    map.activeNavigationTarget ??
+    (map.directionPoint
+      ? ({
+          type: 'coordinate',
+          id: `direction-${map.directionPoint.latitude}-${map.directionPoint.longitude}`,
+          latitude: map.directionPoint.latitude,
+          longitude: map.directionPoint.longitude,
+          title: 'Direction point',
+          subtitle: null,
+        } satisfies MapSelection)
+      : null)
+  const navigationActionColor = riderColor ?? theme.palette.green.color
+  const navigationActionTextColor = riderColor ?? theme.palette.green.text
+  const targetSheetVisible =
+    map.selectedNavigationTarget != null || (activeNavigationTarget != null && !addMenuOpen)
+  const focusTargetOnMap = useCallback(
+    (target: MapSelection) => {
+      mapRef.current?.centerCoordinatePreservingCamera([target.longitude, target.latitude])
+    },
+    [mapRef],
+  )
+  const requireMapAccount = useCallback(() => {
+    if (canContribute) return true
+    setSignInPromptVisible(true)
+    return false
+  }, [canContribute])
   const interfaceFadeStyle = useAnimatedStyle(() => ({
     opacity: (1 - dragOpacity.value) * telemetryReturnOpacity.value,
   }))
@@ -762,6 +860,48 @@ export function MainOverlays({
     const frame = requestAnimationFrame(() => setSelectedLegalCountry(null))
     return () => cancelAnimationFrame(frame)
   }, [mode])
+
+  useEffect(() => {
+    if (map.selectedNavigationTarget?.type === 'mapPoint') return
+    const frame = requestAnimationFrame(() => setEditingMapPointId(null))
+    return () => cancelAnimationFrame(frame)
+  }, [map.selectedNavigationTarget])
+
+  useEffect(() => {
+    if (mode === 'map') return
+    const frame = requestAnimationFrame(() => {
+      setAddMenuOpen(false)
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [mode])
+
+  useEffect(() => {
+    const target = map.longPressMapTarget
+    if (mode !== 'map' || !target) return
+    const frame = requestAnimationFrame(() => {
+      if (!canContribute) {
+        setSignInPromptVisible(true)
+        map.onLongPressMapTargetHandled()
+        return
+      }
+      mapRef.current?.centerCoordinatePreservingCamera([target.longitude, target.latitude])
+      setEditingMapPointId(null)
+      setAddMenuOpen(true)
+      map.onDismissSelectedTarget()
+      map.onLongPressMapTargetHandled()
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [canContribute, map, mapRef, mode])
+
+  const handleOpenAddFeatureAtSelectedTarget = useCallback(() => {
+    const target = map.selectedNavigationTarget
+    if (!target || target.type === 'mapPoint') return
+    if (!requireMapAccount()) return
+    mapRef.current?.centerCoordinatePreservingCamera([target.longitude, target.latitude])
+    setEditingMapPointId(null)
+    setAddMenuOpen(true)
+    map.onDismissSelectedTarget()
+  }, [map, mapRef, requireMapAccount])
 
   const resetLegalSelection = useCallback(() => {
     setLegalListOpen(false)
@@ -863,6 +1003,8 @@ export function MainOverlays({
         />
       ) : null}
 
+      {mode === 'map' ? <MapPointStatusBanner top={belowMapModeTabsTop} /> : null}
+
       <Animated.View
         pointerEvents={telemetryInteractive ? 'box-none' : 'none'}
         style={[styles.telemetryInterface, interfaceFadeStyle]}
@@ -954,6 +1096,106 @@ export function MainOverlays({
             mapInteractionHandlerRef={mapInteractionHandlerRef}
             top={mapModeTabsTop}
             bottom={aboveStripBottom - 112}
+            sheetBottom={mapTargetBottom}
+            bottomControlsVisible={!targetSheetVisible}
+            addMenuOpen={addMenuOpen}
+            onAddMenuVisibilityChange={setAddMenuOpen}
+            onBeginEditMapPoint={setEditingMapPointId}
+            onRequireMapAccount={requireMapAccount}
+          />
+        ) : null}
+        {mode === 'map' && map.selectedNavigationTarget ? (
+          <MapTargetSheet
+            key={map.selectedNavigationTarget.id}
+            target={map.selectedNavigationTarget}
+            bottom={mapTargetBottom}
+            mode={
+              map.selectedNavigationTarget.type === 'mapPoint' &&
+              editingMapPointId === map.selectedNavigationTarget.id
+                ? 'edit'
+                : 'select'
+            }
+            action={{
+              label:
+                map.selectedNavigationTarget.type === 'mapPoint' &&
+                editingMapPointId === map.selectedNavigationTarget.id
+                  ? 'Save'
+                  : 'Navigate',
+              accessibilityLabel:
+                map.selectedNavigationTarget.type === 'mapPoint' &&
+                editingMapPointId === map.selectedNavigationTarget.id
+                  ? 'Save map feature'
+                  : 'Navigate to target',
+              color: navigationActionColor,
+              textColor: navigationActionTextColor,
+              borderColor: navigationActionColor,
+              bgColor: theme.alpha(navigationActionColor, 0.12),
+              Icon: NavigationArrowIcon,
+              onPress: () => void map.onNavigateSelectedTarget(),
+            }}
+            onAddFeature={
+              map.selectedNavigationTarget.type === 'mapPoint'
+                ? undefined
+                : handleOpenAddFeatureAtSelectedTarget
+            }
+            onEdit={
+              map.selectedNavigationTarget.type === 'mapPoint' &&
+              map.selectedNavigationTarget.point.ownedByMe
+                ? () => {
+                    if (!requireMapAccount()) return
+                    setEditingMapPointId(map.selectedNavigationTarget?.id ?? null)
+                  }
+                : undefined
+            }
+            onSave={() => setEditingMapPointId(null)}
+            onSaveMapPoint={map.updateMapPoint}
+            onVoteMapPoint={(id, nextReaction) => {
+              if (!requireMapAccount()) return false
+              map.setMapPointReaction(id, nextReaction)
+              return true
+            }}
+            onFocusTarget={() => {
+              if (map.selectedNavigationTarget) focusTargetOnMap(map.selectedNavigationTarget)
+            }}
+            onDelete={
+              map.selectedNavigationTarget.type === 'mapPoint' &&
+              map.selectedNavigationTarget.point.ownedByMe
+                ? () => {
+                    if (!requireMapAccount()) return
+                    const id = map.selectedNavigationTarget?.id
+                    if (!id) return
+                    setEditingMapPointId(null)
+                    map.onRemoveMapPoint(id)
+                  }
+                : undefined
+            }
+            onDismiss={() => {
+              setEditingMapPointId(null)
+              setAddMenuOpen(false)
+              map.onDismissSelectedTarget()
+            }}
+          />
+        ) : null}
+        {mode === 'map' &&
+        !addMenuOpen &&
+        !map.selectedNavigationTarget &&
+        activeNavigationTarget ? (
+          <MapTargetSheet
+            key={activeNavigationTarget.id}
+            target={activeNavigationTarget}
+            bottom={mapTargetBottom}
+            mode="navigation"
+            action={{
+              label: 'Cancel navigation',
+              accessibilityLabel: 'Cancel navigation',
+              color: navigationActionColor,
+              textColor: navigationActionTextColor,
+              borderColor: navigationActionColor,
+              bgColor: theme.alpha(navigationActionColor, 0.12),
+              Icon: XIcon,
+              onPress: map.onCancelNavigation,
+            }}
+            onFocusTarget={() => focusTargetOnMap(activeNavigationTarget)}
           />
         ) : null}
       </View>
@@ -1268,6 +1510,19 @@ export function MainOverlays({
       ) : null}
 
       <ConfirmModal
+        visible={signInPromptVisible}
+        title="Sign in to contribute"
+        message="A Vescape account is required to add, edit, delete, or react to map features. Map features are shared with other riders."
+        confirmLabel="Sign in"
+        cancelLabel="Not now"
+        onConfirm={() => {
+          setSignInPromptVisible(false)
+          router.push(routes.signIn)
+        }}
+        onCancel={() => setSignInPromptVisible(false)}
+      />
+
+      <ConfirmModal
         visible={removeConfirmVisible}
         title="Delete Ride"
         message="This ride and all its telemetry data will be permanently removed."
@@ -1433,140 +1688,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 8,
   },
-  mapAddAction: {
-    position: 'absolute',
-    right: 12,
-    zIndex: 31,
-    alignItems: 'flex-end',
-    gap: 0,
-  },
-  mapFilterAction: {
-    position: 'absolute',
-    left: 12,
-    zIndex: 31,
-    alignItems: 'flex-start',
-    gap: 0,
-  },
-  mapFilterMenu: {
-    minWidth: 178,
-    alignItems: 'stretch',
-    borderRadius: 21,
-    overflow: 'hidden',
-    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
-    borderWidth: 1,
-    borderColor: theme.alpha(theme.palette.slate.light, 0.3),
-  },
-  mapFilterMenuAttached: {
-    borderBottomLeftRadius: 5,
-  },
-  mapFilterButtonAttached: {
-    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
-    borderColor: theme.alpha(theme.palette.slate.light, 0.3),
-    borderTopLeftRadius: 5,
-    borderTopRightRadius: 5,
-    borderBottomLeftRadius: 27,
-    borderBottomRightRadius: 27,
-  },
-  mapFilterRow: {
-    height: 42,
-    paddingLeft: 5,
-    paddingRight: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    gap: 12,
-  },
-  mapFilterRowHidden: {
-    opacity: 0.38,
-  },
-  mapFilterRowLabel: {
-    color: theme.palette.slate.textPrimary,
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  mapFilterRowBorder: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 1,
-    backgroundColor: theme.alpha(theme.palette.slate.light, 0.3),
-  },
-  mapAddMenu: {
-    minWidth: 178,
-    alignItems: 'stretch',
-    borderRadius: 21,
-    overflow: 'hidden',
-    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
-    borderWidth: 1,
-    borderColor: theme.alpha(theme.palette.slate.light, 0.3),
-  },
-  mapAddMenuAttached: {
-    borderBottomRightRadius: 5,
-  },
-  mapAddButtonAttached: {
-    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
-    borderColor: theme.alpha(theme.palette.slate.light, 0.3),
-    borderTopLeftRadius: 5,
-    borderTopRightRadius: 5,
-    borderBottomLeftRadius: 27,
-    borderBottomRightRadius: 27,
-  },
-  mapAddRow: {
-    height: 42,
-    paddingLeft: 16,
-    paddingRight: 5,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  mapAddCompactRow: {
-    height: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    position: 'relative',
-  },
-  mapAddCompactItem: {
-    flex: 1,
-    height: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  mapAddCompactDivider: {
-    position: 'absolute',
-    top: 7,
-    right: 0,
-    bottom: 7,
-    width: 1,
-    backgroundColor: theme.alpha(theme.palette.slate.light, 0.3),
-  },
-  mapAddRowBorder: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 1,
-    backgroundColor: theme.alpha(theme.palette.slate.light, 0.3),
-  },
-  mapAddRowPressed: {
-    opacity: 0.55,
-  },
-  mapAddRowLabel: {
-    color: theme.palette.slate.textPrimary,
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  mapAddRowIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.palette.slate.surfaceDeep,
-  },
   centerPlacementPointer: {
     ...StyleSheet.absoluteFill,
     zIndex: 29,
@@ -1574,19 +1695,27 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   centerPlacementBall: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     borderWidth: 2,
-    borderColor: theme.palette.slate.textPrimary,
-    backgroundColor: theme.alpha(theme.palette.mono.black, 0),
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.4),
+  },
+  centerPlacementPulse: {
+    position: 'absolute',
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 2,
+    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.3),
   },
   centerPlacementDot: {
-    position: 'absolute',
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: theme.palette.slate.textPrimary,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   telemetryInterface: {
     ...StyleSheet.absoluteFill,
