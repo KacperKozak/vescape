@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, View, StyleSheet } from 'react-native'
 import { useSharedValue } from 'react-native-reanimated'
 
@@ -321,6 +321,71 @@ export function MainScreen({
     return () => abortController.abort()
   }, [activeNavigationTarget])
 
+  // Grouped MainMap props are memoized so the memo'd map does not re-render on every
+  // MainScreen render just because a fresh object literal was handed to it.
+  const mapHistoryProps = useMemo(
+    () => ({
+      active: controller.historyActive,
+      selectionKey: controller.selectedSession?.id ?? null,
+      preview: controller.historyPreview,
+      previewRoute: controller.historyPreviewRoute,
+      gpsSamples: controller.sessionGpsSamples,
+      telemetrySamples: controller.sessionSamples,
+      markers: controller.sessionMarkers,
+      mediaAssets: controller.mediaHistory.assets,
+      onOpenMedia: controller.openMedia,
+      activeMapMetric: controller.activeHistoryMapMetric,
+    }),
+    [
+      controller.activeHistoryMapMetric,
+      controller.historyActive,
+      controller.historyPreview,
+      controller.historyPreviewRoute,
+      controller.mediaHistory.assets,
+      controller.openMedia,
+      controller.selectedSession?.id,
+      controller.sessionGpsSamples,
+      controller.sessionMarkers,
+      controller.sessionSamples,
+    ],
+  )
+
+  const mapStyleProps = useMemo(
+    () => ({
+      mapStyleKey: controller.mapStyleKey,
+      satelliteOverlayEnabled: controller.satelliteOverlayEnabled,
+      satelliteImageryOpacity: controller.satelliteImageryOpacity,
+      satelliteMapImageryOpacity: controller.satelliteMapImageryOpacity,
+      satelliteImagerySaturation: controller.satelliteImagerySaturation,
+      hideTelemetryMapDetails: controller.hideTelemetryMapDetails,
+    }),
+    [
+      controller.hideTelemetryMapDetails,
+      controller.mapStyleKey,
+      controller.satelliteImageryOpacity,
+      controller.satelliteImagerySaturation,
+      controller.satelliteMapImageryOpacity,
+      controller.satelliteOverlayEnabled,
+    ],
+  )
+
+  const mapPointProps = useMemo(
+    () => ({
+      points: controller.mapPoints,
+      selectedId: controller.selectedMapPointId,
+      hiddenCategories: controller.hiddenMapPointCategories,
+      onToggleSelection: handleToggleMapPointSelection,
+      onCameraSettled: controller.refreshNearbyMapPoints,
+    }),
+    [
+      controller.hiddenMapPointCategories,
+      controller.mapPoints,
+      controller.refreshNearbyMapPoints,
+      controller.selectedMapPointId,
+      handleToggleMapPointSelection,
+    ],
+  )
+
   if (!boardsLoaded) {
     return (
       <View style={styles.container}>
@@ -339,22 +404,9 @@ export function MainScreen({
         mode={controller.mode}
         liveLocations={controller.liveLocations}
         latestApproximateLocation={controller.latestApproximateLocation}
-        rideGpsSamples={controller.sessionGpsSamples}
-        rideTelemetrySamples={controller.sessionSamples}
-        rideMarkers={controller.sessionMarkers}
-        mediaAssets={controller.mediaHistory.assets}
-        onOpenMedia={controller.openMedia}
-        activeHistoryMapMetric={controller.activeHistoryMapMetric}
-        historySelectionKey={controller.selectedSession?.id ?? null}
-        historyPreview={controller.historyPreview}
-        historyPreviewRoute={controller.historyPreviewRoute}
-        historyActive={controller.historyActive}
-        mapStyleKey={controller.mapStyleKey}
-        satelliteOverlayEnabled={controller.satelliteOverlayEnabled}
-        satelliteImageryOpacity={controller.satelliteImageryOpacity}
-        satelliteMapImageryOpacity={controller.satelliteMapImageryOpacity}
-        satelliteImagerySaturation={controller.satelliteImagerySaturation}
-        hideTelemetryMapDetails={controller.hideTelemetryMapDetails}
+        history={mapHistoryProps}
+        style={mapStyleProps}
+        mapPoints={mapPointProps}
         mapNavigationMode={controller.mapNavigationMode}
         rotationLocked={controller.rotationLocked}
         perspectiveEnabled={controller.perspectiveEnabled}
@@ -370,11 +422,6 @@ export function MainScreen({
         directionPoint={controller.directionPoint}
         activeNavigationTarget={activeNavigationTarget}
         selectedNavigationTarget={selectedNavigationTarget}
-        mapPoints={controller.mapPoints}
-        selectedMapPointId={controller.selectedMapPointId}
-        hiddenMapPointCategories={controller.hiddenMapPointCategories}
-        onCameraSettled={controller.refreshNearbyMapPoints}
-        onToggleMapPointSelection={handleToggleMapPointSelection}
         weatherActive={controller.weatherActive}
         legalLimitsActive={controller.legalLimitsActive}
       />
