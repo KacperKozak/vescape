@@ -17,23 +17,23 @@ import { IconButton } from '@/components/base/IconButton'
 import { Text } from '@/components/base/Text'
 import { theme } from '@/constants/theme'
 import { useKeyboardLift } from '@/hooks/useKeyboardLift'
-import { MapPointMediaActions } from '@/modules/map/components/MapPointMediaAddButton'
-import { MapPointMediaPreview } from '@/modules/map/components/MapPointMediaPreview'
-import { mapSheetStyles } from '@/modules/map/components/mapSheetStyles'
-import { getMapPointKindIcon } from '@/modules/map/constants/mapPointIcons'
+import { MapPointMediaActions } from '@/modules/map-points/components/MapPointMediaAddButton'
+import { MapPointMediaPreview } from '@/modules/map-points/components/MapPointMediaPreview'
+import { mapSheetStyles } from '@/modules/map-points/components/mapSheetStyles'
+import { getMapPointKindIcon } from '@/modules/map-points/constants/mapPointIcons'
 import {
   getMapPointKindColor,
   getMapPointKindLabel,
   getMapPointKindTextColor,
   MAP_POINT_MEDIA_ENABLED,
-} from '@/modules/map/constants/mapPoints'
+} from '@/modules/map-points/constants/mapPoints'
 import type { MapSelection } from '@/modules/map/lib/mapSelection'
 import {
   deleteMapPointMediaAsset,
   saveMapPointMediaAssets,
   type MapPointMediaAsset,
   type PickedMapPointMediaAsset,
-} from '@/modules/map/store/mapPointPhotoFiles'
+} from '@/modules/map-points/store/mapPointPhotoFiles'
 
 /**
  * The sheet for whatever the map has selected: a searched place, a dropped pin, or a Map Point.

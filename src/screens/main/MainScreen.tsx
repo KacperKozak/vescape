@@ -11,7 +11,7 @@ import type { MapPointPatch } from 'vescape-core'
 
 import type { Board } from '@/modules/board/store/boardStore'
 import { theme } from '@/constants/theme'
-import { getMapPointKindLabel } from '@/modules/map/constants/mapPoints'
+import { getMapPointKindLabel } from '@/modules/map-points/constants/mapPoints'
 import type { MapSelection } from '@/modules/map/lib/mapSelection'
 import { reverseGeocodeMapCoordinate } from '@/modules/map/lib/search'
 

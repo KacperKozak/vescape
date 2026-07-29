@@ -52,13 +52,13 @@ import { MapStyleSwitch } from '@/modules/map/components/MapStyleSwitch'
 import { PillSelector, PillSelectorItem } from '@/components/controls/PillSelector'
 import { WeatherIcon } from '@/modules/weather/components/WeatherIcon'
 import type { MapNavigationMode, MapStyleKey } from '@/modules/map/constants/mapStyles'
-import { getMapPointKindLabel } from '@/modules/map/constants/mapPoints'
+import { getMapPointKindLabel } from '@/modules/map-points/constants/mapPoints'
 import { theme } from '@/constants/theme'
 import { routes } from '@/navigation/routes'
 import type { MapSelection } from '@/modules/map/lib/mapSelection'
 import { type MapSearchResult } from '@/modules/map/lib/search'
 import { useMapSearch } from '@/modules/map/hooks/useMapSearch'
-import {} from '@/modules/map/store/mapPointPhotoFiles'
+import {} from '@/modules/map-points/store/mapPointPhotoFiles'
 import type { HistoryMetricKey } from '@/modules/history/lib/metricColorScale'
 import {
   BottomTelemetryStrip,
@@ -103,10 +103,10 @@ import {
   type LegalLimitCountry,
 } from '@/modules/legal/lib/legalLimits'
 import { useRiderStore } from '@/modules/group-ride/store/riderStore'
-import { MapPointAddMenu } from '@/modules/map/components/MapPointAddMenu'
-import { MapPointFilterMenu } from '@/modules/map/components/MapPointFilterMenu'
-import { MapPointStatusBanner } from '@/modules/map/components/MapPointStatusBanner'
-import { MapTargetSheet } from '@/modules/map/components/MapTargetSheet'
+import { MapPointAddMenu } from '@/modules/map-points/components/MapPointAddMenu'
+import { MapPointFilterMenu } from '@/modules/map-points/components/MapPointFilterMenu'
+import { MapPointStatusBanner } from '@/modules/map-points/components/MapPointStatusBanner'
+import { MapTargetSheet } from '@/modules/map-points/components/MapTargetSheet'
 import { useMapContributionReady } from '@/modules/profile/hooks/useMapContributionReady'
 
 const LEGAL_LIST_PANEL_HEIGHT = 280

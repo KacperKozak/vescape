@@ -12,7 +12,7 @@ import { useMemo, useState } from 'react'
 import { Modal, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
-import type { MapPointMediaAsset } from '@/modules/map/store/mapPointPhotoFiles'
+import type { MapPointMediaAsset } from '@/modules/map-points/store/mapPointPhotoFiles'
 
 import { IconButton } from '@/components/base/IconButton'
 import { Text } from '@/components/base/Text'
