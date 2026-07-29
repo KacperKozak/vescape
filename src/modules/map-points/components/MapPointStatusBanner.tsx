@@ -16,7 +16,9 @@ export function MapPointStatusBanner({ top }: { top: number }) {
   const mapPointError = useMapPointStore((state) => state.error)
   const directionPointError = useMapStore((state) => state.error)
   const truncated = useMapPointStore((state) => state.truncated)
-  const error = mapPointError ?? directionPointError
+  // A failed Map Point read stays on screen until the next read succeeds, so a direction point
+  // failure has to win — it belongs to the action the rider just took.
+  const error = directionPointError ?? mapPointError
 
   const message =
     error ?? (truncated ? 'Showing the closest map features only. Zoom in for more.' : null)
