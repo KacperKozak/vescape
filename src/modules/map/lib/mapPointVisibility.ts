@@ -1,18 +1,22 @@
-import type { MapPointKind } from 'vescape-core'
+import type { MapPointCategory } from 'vescape-core'
 
-const ALWAYS_VISIBLE_MAP_POINT_KIND: MapPointKind = 'direction'
+import type { MapPinKind } from '@/modules/map/constants/mapPoints'
 
-export function isFilterableMapPointKind(kind: MapPointKind) {
-  return kind !== ALWAYS_VISIBLE_MAP_POINT_KIND
+/** The direction target is the rider's own and is never filtered away. */
+export function isFilterableMapPinKind(kind: MapPinKind): kind is MapPointCategory {
+  return kind !== 'direction'
 }
 
-export function isMapPointKindVisible(kind: MapPointKind, hiddenKinds: readonly MapPointKind[]) {
-  return !isFilterableMapPointKind(kind) || !hiddenKinds.includes(kind)
+export function isMapPinKindVisible(
+  kind: MapPinKind,
+  hiddenCategories: readonly MapPointCategory[],
+) {
+  return !isFilterableMapPinKind(kind) || !hiddenCategories.includes(kind)
 }
 
 /** Kinds rendered as compact chips in the map-point placement picker. */
-const COMPACT_MAP_POINT_KINDS: readonly MapPointKind[] = ['drop', 'bonk', 'nose_slide']
+const COMPACT_MAP_POINT_CATEGORIES: readonly MapPointCategory[] = ['drop', 'bonk', 'nose_slide']
 
-export function isCompactMapPointKind(kind: MapPointKind) {
-  return COMPACT_MAP_POINT_KINDS.includes(kind)
+export function isCompactMapPointCategory(category: MapPointCategory) {
+  return COMPACT_MAP_POINT_CATEGORIES.includes(category)
 }

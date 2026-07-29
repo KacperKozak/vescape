@@ -10,6 +10,8 @@ const BASE: AppSettings = {
   selectedBoardId: null,
   lastGpsLatitude: null,
   lastGpsLongitude: null,
+  directionPointLatitude: null,
+  directionPointLongitude: null,
   movingSpeedThresholdKmh: 3,
   freeSpinMaxSpeedDeltaKmh: 12,
   freeSpinStationaryBoardCapKmh: 15,

@@ -180,3 +180,10 @@ the problem in a release build before treating a development-server disconnect a
   the signed-in user.
 - Kill and reopen the app to confirm the session persists.
 - Sign out and confirm protected account UI is no longer available.
+
+## Map contribution identity
+
+Map Points are server-owned. The app never sends a Clerk id with them: native attaches the Device
+Token provisioned above, and the server resolves the Account from it. Reading Map Points needs no
+credential; adding, editing, deleting and reacting reject with `MAP_POINT_SIGN_IN_REQUIRED` when no
+Device Token is stored.

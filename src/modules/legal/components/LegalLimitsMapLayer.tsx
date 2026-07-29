@@ -12,8 +12,10 @@ import {
 const LEGAL_LIMIT_LABEL_SHAPE = legalLimitLabelShape()
 
 export function LegalLimitsMapLayer({
+  interactive = true,
   onSelectCountry,
 }: {
+  interactive?: boolean
   onSelectCountry: (country: LegalLimitCountry) => void
 }) {
   const handlePress = (event: { features: GeoJSON.Feature[] }) => {
@@ -39,7 +41,7 @@ export function LegalLimitsMapLayer({
         id="legal-country-boundaries"
         url="mapbox://mapbox.country-boundaries-v1"
         hitbox={{ width: 44, height: 44 }}
-        onPress={handlePress}
+        onPress={interactive ? handlePress : undefined}
       >
         <FillLayer
           id="legal-country-fill"
@@ -65,7 +67,7 @@ export function LegalLimitsMapLayer({
         id="legal-speed-labels"
         shape={LEGAL_LIMIT_LABEL_SHAPE}
         hitbox={{ width: 44, height: 44 }}
-        onPress={handleLabelPress}
+        onPress={interactive ? handleLabelPress : undefined}
       >
         <SymbolLayer
           id="legal-speed-label"
