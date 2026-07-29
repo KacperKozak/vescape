@@ -368,6 +368,8 @@ const ChartLineSegments = memo(function ChartLineSegments({
   )
 })
 
+// TODO: Split chart state derivation to reduce cyclomatic complexity below 30.
+// eslint-disable-next-line complexity
 export function TelemetryLineChart({
   label,
   value,

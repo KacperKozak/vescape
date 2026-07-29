@@ -49,6 +49,8 @@ import { theme } from '@/constants/theme'
 import { useTuneModals } from '@/modules/tune/hooks/useTuneModals'
 import type { TuneProfileColorId, TuneProfileIconId } from '@/modules/tune/lib/profileMetadata'
 
+// TODO: Split screen orchestration to reduce cyclomatic complexity below 30.
+// eslint-disable-next-line complexity
 export default function TuneScreen() {
   const navigation = useNavigation()
   const router = useRouter()
