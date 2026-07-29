@@ -28,8 +28,6 @@ internal const val TELEMETRY_DATABASE_VERSION = 28
     TuneHistoryEntryEntity::class,
     DiagnosticEventEntity::class,
     PrivacyZoneEntity::class,
-    MapPointEntity::class,
-    MapPointReactionEntity::class,
     BoardWarningEntity::class,
   ],
   version = TELEMETRY_DATABASE_VERSION,
@@ -474,32 +472,16 @@ abstract class TelemetryDatabase : RoomDatabase() {
     }
 
     /**
-     * Whole Map Point feature schema shipped after v27: shared point metadata and reactions keyed
-     * directly by Clerk user id. Intermediate branch schemas were never released and are
-     * intentionally not replayed.
+     * Map Points became server-owned (server ADR-0009), so the app keeps no local copy. Drops the
+     * v27 table and the reaction table that only ever existed on a feature branch. The direction
+     * target it used to hold moves to app settings, which start empty here — a rider re-picks it.
      *
-     * @parity /modules/vescape-core/ios/telemetry/TelemetryDatabase.swift `v28_map_point_reactions`
+     * @parity /modules/vescape-core/ios/telemetry/TelemetryDatabase.swift `v28_drop_map_points`
      */
     internal val MIGRATION_27_28 = object : Migration(27, 28) {
       override fun migrate(db: SupportSQLiteDatabase) {
-        db.execSQL("ALTER TABLE map_points ADD COLUMN name TEXT")
-        db.execSQL("ALTER TABLE map_points ADD COLUMN description TEXT")
-        db.execSQL("ALTER TABLE map_points ADD COLUMN media_json TEXT")
-        db.execSQL("ALTER TABLE map_points ADD COLUMN author_id TEXT")
-        db.execSQL(
-          """
-          CREATE TABLE IF NOT EXISTS map_point_reactions (
-            clerk_user_id TEXT NOT NULL,
-            map_point_id TEXT NOT NULL,
-            reaction TEXT NOT NULL,
-            updated_at INTEGER NOT NULL,
-            PRIMARY KEY (clerk_user_id, map_point_id),
-            FOREIGN KEY (map_point_id) REFERENCES map_points(id) ON UPDATE NO ACTION ON DELETE CASCADE
-          )
-          """.trimIndent(),
-        )
-        db.execSQL("CREATE INDEX IF NOT EXISTS index_map_point_reactions_clerk_user_id ON map_point_reactions(clerk_user_id)")
-        db.execSQL("CREATE INDEX IF NOT EXISTS index_map_point_reactions_map_point_id ON map_point_reactions(map_point_id)")
+        db.execSQL("DROP TABLE IF EXISTS map_point_reactions")
+        db.execSQL("DROP TABLE IF EXISTS map_points")
       }
     }
 

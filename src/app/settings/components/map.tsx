@@ -136,7 +136,7 @@ export default function MapComponentsShowcase() {
           selectedNavigationTarget={null}
           mapPoints={mapPoints}
           selectedMapPointId={selectedMapPointId}
-          hiddenMapPointKinds={[]}
+          hiddenMapPointCategories={[]}
           onToggleMapPointSelection={(id) =>
             setSelectedMapPointId((current) => (current === id ? null : id))
           }

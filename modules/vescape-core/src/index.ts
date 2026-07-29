@@ -277,14 +277,14 @@ export interface PrivacyZone {
 }
 
 /**
- * Native validates incoming map points against its own copy of this list; a kind added here only
- * is rejected at the bridge.
+ * Map Point categories the server accepts. `direction` is not one of them: a direction target is
+ * personal client state, never a shared place.
  *
- * @parity /modules/vescape-core/ios/telemetry/AppDataRepository.swift
- * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/AppDataRepository.kt
+ * @parity /modules/vescape-core/ios/mappoints/MapPointApi.swift
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/mappoints/MapPointApi.kt
+ * @parity /Users/kacper/Workspace/vescape-server/src/mapPoints/protocol.ts `MapPointCategorySchema`
  */
-export type MapPointKind =
-  | 'direction'
+export type MapPointCategory =
   | 'drop'
   | 'bonk'
   | 'nose_slide'
@@ -293,39 +293,61 @@ export type MapPointKind =
   | 'charging'
   | 'charging_food'
 
-/**
- * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/AppDataRepository.kt `VALID_MAP_POINT_REACTIONS`
- * @parity /modules/vescape-core/ios/telemetry/AppDataRepository.swift `validMapPointReactions`
- */
 export type MapPointReaction = 'up' | 'down'
 
 /**
- * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryEntities.kt `MapPointEntity`
- * @parity /modules/vescape-core/ios/telemetry/AppDataRepository.swift `MapPointColumns`
+ * One server-owned Map Point as the nearby read returns it. `score`, `myReaction` and `ownedByMe`
+ * are resolved by the server for the calling Account; the app derives none of them.
+ *
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/mappoints/MapPointApi.kt `mapPoint`
+ * @parity /modules/vescape-core/ios/mappoints/MapPointApi.swift `mapPoint`
  */
 export interface MapPoint {
   id: string
-  kind: MapPointKind
+  category: MapPointCategory
+  latitude: number
+  longitude: number
+  name: string | null
+  description: string | null
+  score: number
+  myReaction: MapPointReaction | null
+  ownedByMe: boolean
+  distanceMeters: number
+  /** ISO-8601, server clock. */
+  createdAt: string
+  updatedAt: string
+}
+
+export interface NearbyMapPoints {
+  items: MapPoint[]
+  /** More Map Points match than the server returned. Version one has no pagination. */
+  truncated: boolean
+}
+
+/** Values a Map Point is created with. Category and coordinates are required. */
+export interface MapPointValues {
+  category: MapPointCategory
   latitude: number
   longitude: number
   name?: string | null
   description?: string | null
-  media?: MapPointMediaAsset[]
-  authorId?: string | null
-  /** Score calculated from locally stored Clerk-user reactions. */
-  voteScore?: number
-  /** Reaction belonging to the provided current Clerk user id. */
-  myReaction?: MapPointReaction | null
-  createdAt: number
-  updatedAt: number
 }
 
-export interface MapPointMediaAsset {
-  id: string
-  uri: string
-  filename: string
-  mediaType: 'photo' | 'video'
-}
+/** Editable fields; an absent key is left alone, an explicit `null` clears the field. */
+export type MapPointPatch = Partial<MapPointValues>
+
+/**
+ * Codes a failed Map Point call rejects with, so JS can tell "sign in" from "you are offline".
+ *
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/mappoints/MapPointApi.kt `MapPointApiException`
+ * @parity /modules/vescape-core/ios/mappoints/MapPointApi.swift `MapPointApiError`
+ */
+export type MapPointErrorCode =
+  | 'MAP_POINT_SIGN_IN_REQUIRED'
+  | 'MAP_POINT_NOT_YOURS'
+  | 'MAP_POINT_GONE'
+  | 'MAP_POINT_REFUSED'
+  | 'MAP_POINT_UNREACHABLE'
 
 export interface TelemetryEvent {
   generation?: number
@@ -840,6 +862,9 @@ export interface AppSettings {
   selectedBoardId: string | null
   lastGpsLatitude: number | null
   lastGpsLongitude: number | null
+  /** Personal direction target; `null` when the rider has none. */
+  directionPointLatitude: number | null
+  directionPointLongitude: number | null
   movingSpeedThresholdKmh: number
   freeSpinMaxSpeedDeltaKmh: number
   freeSpinStationaryBoardCapKmh: number
@@ -1125,7 +1150,7 @@ export interface GroupRideErrorEvent {
  * @parity /modules/vescape-core/ios/telemetry/AppDataRepository.swift `AppDataScope`
  */
 export interface AppDataChangedEvent {
-  scope: 'boards' | 'settings' | 'mapPoints'
+  scope: 'boards' | 'settings'
 }
 
 /**
@@ -1464,15 +1489,16 @@ type VescapeCoreNativeModule = NativeEventEmitter<VescapeCoreEvents> & {
   upsertPrivacyZone(zone: PrivacyZone): Promise<void>
   setPrivacyZoneEnabled(id: string, enabled: boolean): Promise<void>
   deletePrivacyZone(id: string): Promise<void>
-  getMapPoints(clerkUserId: string | null): Promise<MapPoint[]>
-  upsertMapPoint(point: MapPoint, clerkUserId: string | null): Promise<void>
-  setMapPointReaction(
-    mapPointId: string,
-    clerkUserId: string,
-    reaction: MapPointReaction | null,
-  ): Promise<void>
-  replaceDirectionMapPoint(point: MapPoint): Promise<void>
-  deleteMapPoint(id: string, clerkUserId: string | null): Promise<void>
+  getNearbyMapPoints(
+    latitude: number,
+    longitude: number,
+    radiusMeters: number,
+  ): Promise<NearbyMapPoints>
+  createMapPoint(values: MapPointValues): Promise<MapPoint>
+  updateMapPoint(id: string, patch: MapPointPatch): Promise<MapPoint>
+  deleteMapPoint(id: string): Promise<void>
+  setMapPointReaction(id: string, reaction: MapPointReaction | null): Promise<void>
+  setDirectionPoint(latitude: number | null, longitude: number | null): Promise<void>
   getSettings(): Promise<AppSettings>
   refreshLegalPolicy(): Promise<void>
   setLegalMode(boardId: string, enabled: boolean): Promise<void>
@@ -2145,28 +2171,44 @@ export async function deletePrivacyZone(id: string): Promise<void> {
   return native.deletePrivacyZone(id)
 }
 
-export async function getMapPoints(clerkUserId: string | null): Promise<MapPoint[]> {
-  return native.getMapPoints(clerkUserId)
+/**
+ * Map Points nearest to a coordinate, newest server truth. Reads need no account; a stored Device
+ * Token additionally resolves `ownedByMe` and `myReaction`.
+ */
+export async function getNearbyMapPoints(
+  latitude: number,
+  longitude: number,
+  radiusMeters: number,
+): Promise<NearbyMapPoints> {
+  return native.getNearbyMapPoints(latitude, longitude, radiusMeters)
 }
 
-export async function upsertMapPoint(point: MapPoint, clerkUserId: string | null): Promise<void> {
-  return native.upsertMapPoint(point, clerkUserId)
+export async function createMapPoint(values: MapPointValues): Promise<MapPoint> {
+  return native.createMapPoint(values)
 }
 
+export async function updateMapPoint(id: string, patch: MapPointPatch): Promise<MapPoint> {
+  return native.updateMapPoint(id, patch)
+}
+
+export async function deleteMapPoint(id: string): Promise<void> {
+  return native.deleteMapPoint(id)
+}
+
+/** `null` removes the reaction. The server keeps at most one per Account and Map Point. */
 export async function setMapPointReaction(
-  mapPointId: string,
-  clerkUserId: string,
+  id: string,
   reaction: MapPointReaction | null,
 ): Promise<void> {
-  return native.setMapPointReaction(mapPointId, clerkUserId, reaction)
+  return native.setMapPointReaction(id, reaction)
 }
 
-export async function replaceDirectionMapPoint(point: MapPoint): Promise<void> {
-  return native.replaceDirectionMapPoint(point)
-}
-
-export async function deleteMapPoint(id: string, clerkUserId: string | null): Promise<void> {
-  return native.deleteMapPoint(id, clerkUserId)
+/** Personal direction target, kept natively so Group Ride presence reads it without JS. */
+export async function setDirectionPoint(
+  latitude: number | null,
+  longitude: number | null,
+): Promise<void> {
+  return native.setDirectionPoint(latitude, longitude)
 }
 
 export async function getSettings(): Promise<AppSettings> {

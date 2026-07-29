@@ -30,8 +30,6 @@ The integration is owned by these durable files:
   provisions native Device Token storage.
 - `src/modules/profile/components/AccountWidget.tsx` exposes sign-in and account management in the
   Social sheet.
-- `src/bootstrap/MapPointClerkIdentitySync.tsx` keeps the active Clerk user id in volatile Map Point
-  store state; no Clerk account profile is copied into the native database.
 - `modules/vescape-core/{android,ios}/auth/` owns Device Token storage and authenticated native
   requests. Android encrypts with an Android Keystore key. iOS uses Keychain accessibility
   `AfterFirstUnlockThisDeviceOnly`, so long-lived native work can read it while the screen is locked.
@@ -185,8 +183,7 @@ the problem in a release build before treating a development-server disconnect a
 
 ## Map contribution identity
 
-`src/bootstrap/MapPointClerkIdentitySync.tsx` reads the active Clerk user id and keeps it only in
-volatile JavaScript state. Map Point writes pass that id directly to native storage. There is no
-anonymous fallback or cached Clerk account table: adding, editing, deleting, or reacting requires
-Clerk to report a signed-in session. Viewing local points and using the direction/navigation point
-remain available signed out.
+Map Points are server-owned. The app never sends a Clerk id with them: native attaches the Device
+Token provisioned above, and the server resolves the Account from it. Reading Map Points needs no
+credential; adding, editing, deleting and reacting reject with `MAP_POINT_SIGN_IN_REQUIRED` when no
+Device Token is stored.

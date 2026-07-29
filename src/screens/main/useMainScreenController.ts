@@ -119,39 +119,39 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
   const {
     mapPoints,
     selectedMapPointId,
-    hiddenMapPointKinds,
-    loadMapPoints,
-    saveMapPoint,
+    hiddenMapPointCategories,
+    refreshNearbyMapPoints,
+    loadDirectionPoint,
+    directionPoint,
+    addMapPoint,
     updateMapPoint,
     setMapPointReaction,
-    replaceDirectionPoint,
+    setDirectionPoint,
     clearDirectionPoint,
     removeMapPoint,
     selectMapPoint,
     toggleMapPointSelection,
     clearSelectedMapPoints,
-    toggleMapPointKindVisibility,
+    toggleMapPointCategoryVisibility,
   } = useMapStore(
     useShallow((s) => ({
       mapPoints: s.mapPoints,
       selectedMapPointId: s.selectedMapPointId,
-      hiddenMapPointKinds: s.hiddenMapPointKinds,
-      loadMapPoints: s.load,
-      saveMapPoint: s.saveMapPoint,
-      updateMapPoint: s.updateMapPoint,
+      hiddenMapPointCategories: s.hiddenMapPointCategories,
+      refreshNearbyMapPoints: s.refreshNearby,
+      loadDirectionPoint: s.loadDirectionPoint,
+      directionPoint: s.directionPoint,
+      addMapPoint: s.addMapPoint,
+      updateMapPoint: s.editMapPoint,
       setMapPointReaction: s.setMapPointReaction,
-      replaceDirectionPoint: s.replaceDirectionPoint,
+      setDirectionPoint: s.setDirectionPoint,
       clearDirectionPoint: s.clearDirectionPoint,
       removeMapPoint: s.removeMapPoint,
       selectMapPoint: s.selectMapPoint,
       toggleMapPointSelection: s.toggleMapPointSelection,
       clearSelectedMapPoints: s.clearSelectedMapPoints,
-      toggleMapPointKindVisibility: s.toggleMapPointKindVisibility,
+      toggleMapPointCategoryVisibility: s.toggleMapPointCategoryVisibility,
     })),
-  )
-  const directionPoint = useMemo(
-    () => mapPoints.find((point) => point.kind === 'direction') ?? null,
-    [mapPoints],
   )
   const mediaHistory = useMediaHistory({
     selectedSession,
@@ -160,8 +160,8 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
   })
 
   useEffect(() => {
-    void loadMapPoints()
-  }, [loadMapPoints])
+    void loadDirectionPoint()
+  }, [loadDirectionPoint])
 
   useEffect(() => {
     setSeekTimeMs(null)
@@ -408,17 +408,17 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
     directionPoint,
     mapPoints,
     selectedMapPointId,
-    hiddenMapPointKinds,
-    saveMapPoint,
+    hiddenMapPointCategories,
+    addMapPoint,
     updateMapPoint,
     setMapPointReaction,
-    replaceDirectionPoint,
+    setDirectionPoint,
     clearDirectionPoint,
     removeMapPoint,
     selectMapPoint,
     toggleMapPointSelection,
     clearSelectedMapPoints,
-    toggleMapPointKindVisibility,
+    toggleMapPointCategoryVisibility,
     sessions,
     selectedSession,
     sessionSamples,

@@ -69,38 +69,6 @@ interface TelemetryDao {
   @Query("DELETE FROM privacy_zones WHERE id = :id")
   suspend fun deletePrivacyZone(id: String)
 
-  @Query("SELECT * FROM map_points ORDER BY created_at ASC")
-  suspend fun getMapPoints(): List<MapPointEntity>
-
-  @Query("SELECT * FROM map_point_reactions")
-  suspend fun getMapPointReactions(): List<MapPointReactionEntity>
-
-  @Upsert
-  suspend fun upsertMapPointReaction(reaction: MapPointReactionEntity)
-
-  @Query("DELETE FROM map_point_reactions WHERE clerk_user_id = :clerkUserId AND map_point_id = :mapPointId")
-  suspend fun deleteMapPointReaction(clerkUserId: String, mapPointId: String)
-
-  @Query("SELECT * FROM map_points WHERE kind = 'direction' LIMIT 1")
-  suspend fun getDirectionMapPoint(): MapPointEntity?
-
-  @Query("SELECT * FROM map_points WHERE id = :id LIMIT 1")
-  suspend fun getMapPoint(id: String): MapPointEntity?
-
-  @Upsert
-  suspend fun upsertMapPoint(point: MapPointEntity)
-
-  @Query("DELETE FROM map_points WHERE kind = 'direction'")
-  suspend fun deleteDirectionMapPoints()
-
-  @Transaction
-  suspend fun replaceDirectionMapPoint(point: MapPointEntity) {
-    deleteDirectionMapPoints()
-    upsertMapPoint(point)
-  }
-
-  @Query("DELETE FROM map_points WHERE id = :id")
-  suspend fun deleteMapPoint(id: String)
 
   @Insert
   suspend fun insertFrames(frames: List<TelemetryFrameEntity>): List<Long>

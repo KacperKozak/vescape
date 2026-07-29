@@ -38,6 +38,7 @@ import expo.modules.kotlin.Promise
 import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import expo.modules.vescapecore.mappoints.MapPointApi
 import expo.modules.vescapecore.telemetry.AppDataRepository
 import expo.modules.vescapecore.telemetry.DatabaseBackupManager
 import expo.modules.vescapecore.telemetry.ProfileStatsRepository
@@ -620,25 +621,27 @@ class VescapeCoreModule : Module() {
       AppDataRepository.get(appCtx).deletePrivacyZone(id)
       reloadPrivacyZonesIntoRecorder(appCtx)
     }
-    AsyncFunction("getMapPoints") { clerkUserId: String? ->
-      runBlocking { AppDataRepository.get(context.applicationContext).getMapPoints(clerkUserId) }
+    // Map Points are server-owned; native holds no copy. @parity /modules/vescape-core/ios/VescapeCoreModule.swift `getNearbyMapPoints`
+    AsyncFunction("getNearbyMapPoints") Coroutine { latitude: Double, longitude: Double, radiusMeters: Int ->
+      MapPointApi.get(context.applicationContext).nearby(latitude, longitude, radiusMeters)
     }
-    AsyncFunction("upsertMapPoint") Coroutine { point: Map<String, Any?>, clerkUserId: String? ->
-      AppDataRepository.get(context.applicationContext).upsertMapPoint(point, clerkUserId)
+    AsyncFunction("createMapPoint") Coroutine { values: Map<String, Any?> ->
+      MapPointApi.get(context.applicationContext).create(values)
     }
-
-    AsyncFunction("setMapPointReaction") Coroutine { mapPointId: String, clerkUserId: String, reaction: String? ->
-      AppDataRepository.get(context.applicationContext)
-        .setMapPointReaction(mapPointId, clerkUserId, reaction)
+    AsyncFunction("updateMapPoint") Coroutine { id: String, patch: Map<String, Any?> ->
+      MapPointApi.get(context.applicationContext).update(id, patch)
     }
-    AsyncFunction("replaceDirectionMapPoint") Coroutine { point: Map<String, Any?> ->
+    AsyncFunction("deleteMapPoint") Coroutine { id: String ->
+      MapPointApi.get(context.applicationContext).delete(id)
+    }
+    AsyncFunction("setMapPointReaction") Coroutine { id: String, reaction: String? ->
+      MapPointApi.get(context.applicationContext).setReaction(id, reaction)
+    }
+    // The direction target is personal client state, never a Map Point. Native keeps it so Group
+    // Ride presence can read it while JS is gone.
+    AsyncFunction("setDirectionPoint") Coroutine { latitude: Double?, longitude: Double? ->
       val appCtx = context.applicationContext
-      AppDataRepository.get(appCtx).replaceDirectionMapPoint(point)
-      CoreForegroundService.reloadGroupRideTarget(appCtx)
-    }
-    AsyncFunction("deleteMapPoint") Coroutine { id: String, clerkUserId: String? ->
-      val appCtx = context.applicationContext
-      AppDataRepository.get(appCtx).deleteMapPoint(id, clerkUserId)
+      AppDataRepository.get(appCtx).setDirectionPoint(latitude, longitude)
       CoreForegroundService.reloadGroupRideTarget(appCtx)
     }
     AsyncFunction("getSettings") {

@@ -55,7 +55,9 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import type { HistoryMarker, MapPoint, MapPointKind, MapPointMediaAsset } from 'vescape-core'
+import type { HistoryMarker, MapPoint, MapPointCategory, MapPointPatch } from 'vescape-core'
+
+import type { DirectionPoint } from '@/modules/map/store/mapStore'
 
 import { ConfirmModal } from '@/components/modals/ConfirmModal'
 import { EdgeDrawer } from '@/components/overlays/AnchoredSheet'
@@ -76,17 +78,18 @@ import {
   getMapPointKindColor,
   getMapPointKindLabel,
   getMapPointKindTextColor,
-  MAP_POINT_KIND_OPTIONS,
+  MAP_POINT_MEDIA_ENABLED,
 } from '@/modules/map/constants/mapPoints'
 import { theme } from '@/constants/theme'
 import { routes } from '@/navigation/routes'
 import type { MapSelection } from '@/modules/map/lib/mapSelection'
 import { type MapSearchResult } from '@/modules/map/lib/search'
 import { useMapSearch } from '@/modules/map/hooks/useMapSearch'
-import { isCompactMapPointKind } from '@/modules/map/lib/mapPointVisibility'
+import { isCompactMapPointCategory } from '@/modules/map/lib/mapPointVisibility'
 import {
   deleteMapPointMediaAsset,
   saveMapPointMediaAssets,
+  type MapPointMediaAsset,
   type PickedMapPointMediaAsset,
 } from '@/modules/map/store/mapPointPhotoFiles'
 import type { HistoryMetricKey } from '@/modules/history/lib/metricColorScale'
@@ -168,7 +171,7 @@ interface MainMapOverlayProps {
   exitLegalLimits: () => void
   refreshWeather: () => void
   weatherLocation: { latitude: number; longitude: number } | null
-  directionPoint: MapPoint | null
+  directionPoint: DirectionPoint | null
   activeNavigationTarget: MapSelection | null
   selectedNavigationTarget: MapSelection | null
   longPressMapTarget: MapSelection | null
@@ -178,15 +181,16 @@ interface MainMapOverlayProps {
   onNavigateSelectedTarget: () => Promise<void>
   onCancelNavigation: () => void
   onDismissSelectedTarget: () => void
-  addMapPoint: (kind: MapPointKind, latitude: number, longitude: number) => Promise<MapPoint>
-  updateMapPoint: (
-    id: string,
-    patch: Partial<Pick<MapPoint, 'name' | 'description' | 'media'>>,
+  addMapPoint: (
+    category: MapPointCategory,
+    latitude: number,
+    longitude: number,
   ) => Promise<MapPoint | null>
+  updateMapPoint: (id: string, patch: MapPointPatch) => Promise<MapPoint | null>
   setMapPointReaction: (id: string, reaction: 'up' | 'down' | null) => void
   onRemoveMapPoint: (id: string) => void
-  hiddenMapPointKinds: MapPointKind[]
-  toggleMapPointKindVisibility: (kind: MapPointKind) => void
+  hiddenMapPointCategories: MapPointCategory[]
+  toggleMapPointCategoryVisibility: (category: MapPointCategory) => void
   offscreenMapIndicators: OffscreenMapIndicatorState[]
   onOffscreenIndicatorPress: (indicator: OffscreenMapIndicatorState) => void
 }
@@ -434,7 +438,7 @@ function FullMapControls({
   }, [closeAddMenu, map])
 
   const handleSelectMapPoint = useCallback(
-    async (kind: MapPointKind) => {
+    async (category: MapPointCategory) => {
       const center = await mapRef.current?.getViewfinderCoordinate()
       if (!center) return
       await Haptics.selectionAsync()
@@ -442,13 +446,14 @@ function FullMapControls({
       clearPlacementTimeoutRef(placementTimeoutRef)
       placementTimeoutRef.current = setTimeout(() => {
         closeAddMenu()
-        void map.addMapPoint(kind, center.latitude, center.longitude).then((point) => {
+        void map.addMapPoint(category, center.latitude, center.longitude).then((point) => {
+          if (!point) return
           map.onSelectNavigationTarget({
             type: 'mapPoint',
             id: point.id,
             latitude: point.latitude,
             longitude: point.longitude,
-            title: point.name?.trim() || getMapPointKindLabel(point.kind),
+            title: point.name?.trim() || getMapPointKindLabel(point.category),
             subtitle: null,
             point,
           })
@@ -474,11 +479,11 @@ function FullMapControls({
       loadingDetails: true,
     })
   }, [closeAddMenu, map, mapRef])
-  const compactMapPointOptions = MAP_POINT_KIND_OPTIONS.filter((option) =>
-    isCompactMapPointKind(option.kind),
+  const compactMapPointOptions = FILTERABLE_MAP_POINT_KIND_OPTIONS.filter((option) =>
+    isCompactMapPointCategory(option.kind),
   )
-  const secondaryMapPointOptions = MAP_POINT_KIND_OPTIONS.filter(
-    (option) => option.kind !== 'direction' && !isCompactMapPointKind(option.kind),
+  const secondaryMapPointOptions = FILTERABLE_MAP_POINT_KIND_OPTIONS.filter(
+    (option) => !isCompactMapPointCategory(option.kind),
   )
   const navigationAction = navigationActionColors(riderColor)
 
@@ -590,7 +595,7 @@ function FullMapControls({
               {FILTERABLE_MAP_POINT_KIND_OPTIONS.map((option, index) => {
                 const IconComponent = getMapPointKindIcon(option.kind)
                 const color = getMapPointKindColor(option.kind)
-                const visible = !map.hiddenMapPointKinds.includes(option.kind)
+                const visible = !map.hiddenMapPointCategories.includes(option.kind)
                 return (
                   <Pressable
                     key={option.kind}
@@ -602,7 +607,7 @@ function FullMapControls({
                       !visible && styles.mapFilterRowHidden,
                       pressed && styles.mapAddRowPressed,
                     ]}
-                    onPress={() => map.toggleMapPointKindVisibility(option.kind)}
+                    onPress={() => map.toggleMapPointCategoryVisibility(option.kind)}
                   >
                     <View style={[styles.mapAddRowIcon, { borderColor: color }]}>
                       <IconComponent
@@ -952,7 +957,7 @@ function MapTargetSheet({
   onEdit,
   onSave,
   onSaveMapPoint,
-  onLikeMapPoint,
+  onVoteMapPoint,
   onDelete,
   onDismiss,
   onFocusTarget,
@@ -973,11 +978,8 @@ function MapTargetSheet({
   onAddFeature?: () => void
   onEdit?: () => void
   onSave?: () => void
-  onSaveMapPoint?: (
-    id: string,
-    patch: Partial<Pick<MapPoint, 'name' | 'description' | 'media'>>,
-  ) => Promise<MapPoint | null>
-  onLikeMapPoint?: (id: string, reaction: 'up' | 'down' | null) => boolean
+  onSaveMapPoint?: (id: string, patch: MapPointPatch) => Promise<MapPoint | null>
+  onVoteMapPoint?: (id: string, reaction: 'up' | 'down' | null) => boolean
   onDelete?: () => void
   onDismiss?: () => void
   onFocusTarget?: () => void
@@ -987,21 +989,24 @@ function MapTargetSheet({
   const selectedPoint = point as MapPoint | null
   const [name, setName] = useState(point?.name ?? '')
   const [description, setDescription] = useState(point?.description ?? '')
-  const [media, setMedia] = useState(point?.media ?? [])
+  // Parked with `MAP_POINT_MEDIA_ENABLED`: media stays on the device because server Map Points
+  // carry none, so it is never part of the saved patch.
+  const [media, setMedia] = useState<MapPointMediaAsset[]>([])
   const [reaction, setReaction] = useState<'up' | 'down' | null>(point?.myReaction ?? null)
   const [mediaSaving, setMediaSaving] = useState(false)
   const keyboardLift = useKeyboardLift(mode === 'edit')
   const sheetBottom = mode === 'edit' ? Math.max(bottom, keyboardLift + 12) : bottom
-  const color = target.type === 'mapPoint' ? getMapPointKindColor(target.point.kind) : action.color
+  const color =
+    target.type === 'mapPoint' ? getMapPointKindColor(target.point.category) : action.color
   const textColor =
-    target.type === 'mapPoint' ? getMapPointKindTextColor(target.point.kind) : action.textColor
-  const icon = createElement(isMapPoint ? getMapPointKindIcon(target.point.kind) : MapPinIcon, {
+    target.type === 'mapPoint' ? getMapPointKindTextColor(target.point.category) : action.textColor
+  const icon = createElement(isMapPoint ? getMapPointKindIcon(target.point.category) : MapPinIcon, {
     size: 18,
     color: textColor,
     weight: 'duotone',
   })
   const headerTitle = isMapPoint
-    ? point?.name?.trim() || getMapPointKindLabel(point?.kind ?? 'drop')
+    ? point?.name?.trim() || getMapPointKindLabel(point?.category ?? 'drop')
     : target.title
   const detailText =
     isMapPoint && mode !== 'edit'
@@ -1030,14 +1035,12 @@ function MapTargetSheet({
       const saved = await saveMapPointMediaAssets(point.id, picked)
       setMedia((current) => {
         const existingUris = new Set(current.map((asset) => asset.uri))
-        const nextMedia = [...current, ...saved.filter((asset) => !existingUris.has(asset.uri))]
-        void onSaveMapPoint?.(point.id, { media: nextMedia })
-        return nextMedia
+        return [...current, ...saved.filter((asset) => !existingUris.has(asset.uri))]
       })
     } finally {
       setMediaSaving(false)
     }
-  }, [onSaveMapPoint, point])
+  }, [point])
   const handleCaptureMedia = useCallback(
     async (mediaTypes: ['images'] | ['videos']) => {
       if (!point) return
@@ -1064,37 +1067,24 @@ function MapTargetSheet({
         const saved = await saveMapPointMediaAssets(point.id, picked)
         setMedia((current) => {
           const existingUris = new Set(current.map((asset) => asset.uri))
-          const nextMedia = [...current, ...saved.filter((asset) => !existingUris.has(asset.uri))]
-          void onSaveMapPoint?.(point.id, { media: nextMedia })
-          return nextMedia
+          return [...current, ...saved.filter((asset) => !existingUris.has(asset.uri))]
         })
       } finally {
         setMediaSaving(false)
       }
     },
-    [onSaveMapPoint, point],
+    [point],
   )
   const handleSave = useCallback(async () => {
     if (point && onSaveMapPoint) {
-      await onSaveMapPoint(point.id, {
-        name,
-        description,
-        media,
-      })
+      await onSaveMapPoint(point.id, { name, description })
     }
     onSave?.()
-  }, [description, media, name, onSave, onSaveMapPoint, point])
-  const handleRemoveMedia = useCallback(
-    (asset: MapPointMediaAsset) => {
-      setMedia((current) => {
-        const nextMedia = current.filter((candidate) => candidate.uri !== asset.uri)
-        void onSaveMapPoint?.(point?.id ?? '', { media: nextMedia })
-        return nextMedia
-      })
-      deleteMapPointMediaAsset(asset.uri)
-    },
-    [onSaveMapPoint, point?.id],
-  )
+  }, [description, name, onSave, onSaveMapPoint, point])
+  const handleRemoveMedia = useCallback((asset: MapPointMediaAsset) => {
+    setMedia((current) => current.filter((candidate) => candidate.uri !== asset.uri))
+    deleteMapPointMediaAsset(asset.uri)
+  }, [])
   const headerTargetContent = (
     <>
       <View style={[styles.mapTargetIcon, { borderColor: color }]}>{icon}</View>
@@ -1103,7 +1093,7 @@ function MapTargetSheet({
           <TextInput
             value={name}
             onChangeText={setName}
-            placeholder={getMapPointKindLabel(point?.kind ?? 'drop')}
+            placeholder={getMapPointKindLabel(point?.category ?? 'drop')}
             placeholderTextColor={theme.palette.slate.textMuted}
             style={[styles.mapTargetInput, styles.mapTargetNameInput]}
             accessibilityLabel="Map feature name"
@@ -1176,30 +1166,32 @@ function MapTargetSheet({
             style={[styles.mapTargetInput, styles.mapTargetDescriptionInput]}
             accessibilityLabel="Map feature description"
           />
-          <View style={styles.mapTargetMediaBox}>
-            <MapPointMediaPreview assets={media} onRemove={handleRemoveMedia} />
-            <MapPointMediaActions
-              loading={mediaSaving}
-              onAdd={handlePickMedia}
-              onCapturePhoto={() => void handleCaptureMedia(['images'])}
-              onCaptureVideo={() => void handleCaptureMedia(['videos'])}
-            />
-          </View>
+          {MAP_POINT_MEDIA_ENABLED ? (
+            <View style={styles.mapTargetMediaBox}>
+              <MapPointMediaPreview assets={media} onRemove={handleRemoveMedia} />
+              <MapPointMediaActions
+                loading={mediaSaving}
+                onAdd={handlePickMedia}
+                onCapturePhoto={() => void handleCaptureMedia(['images'])}
+                onCaptureVideo={() => void handleCaptureMedia(['videos'])}
+              />
+            </View>
+          ) : null}
         </View>
       ) : null}
-      {isMapPoint && mode !== 'edit' && media.length > 0 ? (
+      {MAP_POINT_MEDIA_ENABLED && isMapPoint && mode !== 'edit' && media.length > 0 ? (
         <View style={styles.mapTargetMediaBox}>
           <MapPointMediaPreview assets={media} />
         </View>
       ) : null}
-      {isMapPoint && mode !== 'edit' ? (
-        <View style={styles.mapTargetLikeCount}>
-          {(point?.voteScore ?? 0) < 0 ? (
+      {isMapPoint && mode !== 'edit' && point ? (
+        <View style={styles.mapTargetVoteCount}>
+          {point.score < 0 ? (
             <ThumbsDownIcon size={14} color={theme.status.error.text} weight="fill" />
           ) : (
             <ThumbsUpIcon size={14} color={theme.palette.cyan.text} weight="fill" />
           )}
-          <Text style={styles.mapTargetMetaText}>{selectedPoint?.voteScore ?? 0}</Text>
+          <Text style={styles.mapTargetMetaText}>{point.score}</Text>
         </View>
       ) : null}
 
@@ -1248,14 +1240,14 @@ function MapTargetSheet({
               <Text style={[styles.mapTargetNavigateText, styles.mapTargetSaveText]}>Edit</Text>
             </Pressable>
           ) : null}
-          {isMapPoint && mode === 'select' && onLikeMapPoint && selectedPoint ? (
+          {isMapPoint && mode === 'select' && onVoteMapPoint && selectedPoint ? (
             <View style={styles.mapTargetVoteGroup}>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Like map feature"
+                accessibilityLabel="Vote map feature up"
                 onPress={() => {
                   const nextReaction = reaction === 'up' ? null : 'up'
-                  if (!onLikeMapPoint(selectedPoint.id, nextReaction)) return
+                  if (!onVoteMapPoint(selectedPoint.id, nextReaction)) return
                   setReaction(nextReaction)
                 }}
                 style={({ pressed }) => [
@@ -1274,10 +1266,10 @@ function MapTargetSheet({
               </Pressable>
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel="Remove like from map feature"
+                accessibilityLabel="Vote map feature down"
                 onPress={() => {
                   const nextReaction = reaction === 'down' ? null : 'down'
-                  if (!onLikeMapPoint(selectedPoint.id, nextReaction)) return
+                  if (!onVoteMapPoint(selectedPoint.id, nextReaction)) return
                   setReaction(nextReaction)
                 }}
                 style={({ pressed }) => [
@@ -1375,7 +1367,7 @@ export function MainOverlays({
     (map.directionPoint
       ? ({
           type: 'coordinate',
-          id: map.directionPoint.id,
+          id: `direction-${map.directionPoint.latitude}-${map.directionPoint.longitude}`,
           latitude: map.directionPoint.latitude,
           longitude: map.directionPoint.longitude,
           title: 'Direction point',
@@ -1697,7 +1689,7 @@ export function MainOverlays({
             }
             onEdit={
               map.selectedNavigationTarget.type === 'mapPoint' &&
-              map.selectedNavigationTarget.point.authorId === userId
+              map.selectedNavigationTarget.point.ownedByMe
                 ? () => {
                     if (!requireMapAccount()) return
                     setEditingMapPointId(map.selectedNavigationTarget?.id ?? null)
@@ -1706,7 +1698,7 @@ export function MainOverlays({
             }
             onSave={() => setEditingMapPointId(null)}
             onSaveMapPoint={map.updateMapPoint}
-            onLikeMapPoint={(id, nextReaction) => {
+            onVoteMapPoint={(id, nextReaction) => {
               if (!requireMapAccount()) return false
               map.setMapPointReaction(id, nextReaction)
               return true
@@ -1716,7 +1708,7 @@ export function MainOverlays({
             }}
             onDelete={
               map.selectedNavigationTarget.type === 'mapPoint' &&
-              map.selectedNavigationTarget.point.authorId === userId
+              map.selectedNavigationTarget.point.ownedByMe
                 ? () => {
                     if (!requireMapAccount()) return
                     const id = map.selectedNavigationTarget?.id
@@ -2452,7 +2444,7 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
-  mapTargetLikeCount: {
+  mapTargetVoteCount: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,

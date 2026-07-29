@@ -13,7 +13,9 @@ import {
 import { useEffect, useMemo, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import Animated, { withTiming } from 'react-native-reanimated'
-import type { MapPoint, MapPointKind } from 'vescape-core'
+import type { MapPoint, MapPointCategory } from 'vescape-core'
+
+import type { DirectionPoint } from '@/modules/map/store/mapStore'
 
 import { MediaHistoryPin } from '@/modules/history/components/MediaHistoryPin'
 import { MapPin } from '@/modules/map/components/MapPin'
@@ -40,7 +42,7 @@ import type {
   HistoryMetricKey,
   HistoryMetricHotRanges,
 } from '@/modules/history/lib/metricColorScale'
-import { isMapPointKindVisible } from '@/modules/map/lib/mapPointVisibility'
+import { isMapPinKindVisible } from '@/modules/map/lib/mapPointVisibility'
 import type {
   HistoryGpsSample,
   HistoryMarker,
@@ -103,12 +105,12 @@ interface MainMapLayersProps {
   mapZoom: number
   historyMetricGradientsEnabled: boolean
   historyMetricHotRanges: HistoryMetricHotRanges
-  directionPoint: MapPoint | null
+  directionPoint: DirectionPoint | null
   activeNavigationTarget: MapSelection | null
   selectedNavigationTarget: MapSelection | null
   mapPoints: MapPoint[]
   selectedMapPointId: string | null
-  hiddenMapPointKinds: MapPointKind[]
+  hiddenMapPointCategories: MapPointCategory[]
   onToggleMapPointSelection: (id: string) => void
   onSuppressNextMapPress: () => void
   onSelectMarker: (selection: SelectedHistoryMarker) => void
@@ -511,7 +513,7 @@ export function MainMapLayers({
   selectedNavigationTarget,
   mapPoints,
   selectedMapPointId,
-  hiddenMapPointKinds,
+  hiddenMapPointCategories,
   onToggleMapPointSelection,
   onSuppressNextMapPress,
   onSelectMarker,
@@ -526,17 +528,16 @@ export function MainMapLayers({
     () =>
       mapPoints.find(
         (point) =>
-          point.id === selectedMapPointId && isMapPointKindVisible(point.kind, hiddenMapPointKinds),
+          point.id === selectedMapPointId &&
+          isMapPinKindVisible(point.category, hiddenMapPointCategories),
       ) ?? null,
-    [hiddenMapPointKinds, mapPoints, selectedMapPointId],
+    [hiddenMapPointCategories, mapPoints, selectedMapPointId],
   )
   const activeNavigationMapPointId =
     activeNavigationTarget?.type === 'mapPoint' ? activeNavigationTarget.point.id : null
   const showDirectionPoint =
     directionPoint != null && activeNavigationTarget?.type !== 'mapPoint' && !historyActive
-  const directionPointIconKind = activeNavigationTarget
-    ? 'direction'
-    : (directionPoint?.kind ?? 'direction')
+  const directionPointIconKind = 'direction' as const
   const mapObjectsInteractive = !weatherActive && !legalLimitsActive && !historyActive
 
   return (
@@ -635,24 +636,21 @@ export function MainMapLayers({
         )}
       {!historyActive &&
         mapPoints
-          .filter(
-            (point) =>
-              point.kind !== 'direction' && isMapPointKindVisible(point.kind, hiddenMapPointKinds),
-          )
+          .filter((point) => isMapPinKindVisible(point.category, hiddenMapPointCategories))
           .map((point) => (
             <MapPin
               key={point.id}
               id={`center-map-point-${point.id}`}
               coordinate={[point.longitude, point.latitude]}
-              color={getMapPointKindColor(point.kind)}
-              icon={getMapPointKindIcon(point.kind)}
-              iconColor={getMapPointKindTextColor(point.kind)}
+              color={getMapPointKindColor(point.category)}
+              icon={getMapPointKindIcon(point.category)}
+              iconColor={getMapPointKindTextColor(point.category)}
               selected={
                 selectedMapPoint?.id === point.id || activeNavigationMapPointId === point.id
               }
               navigationActive={activeNavigationMapPointId === point.id}
               expandSelected={expandSelectedMapPoints && selectedMapPoint?.id === point.id}
-              label={point.name?.trim() || getMapPointKindLabel(point.kind)}
+              label={point.name?.trim() || getMapPointKindLabel(point.category)}
               onSelected={
                 mapObjectsInteractive
                   ? () => {

@@ -2055,8 +2055,8 @@ private var wearAutoLaunchOnConnect = true
      */
     suspend fun loadGroupRideTarget(context: Context) {
         groupRideTarget = try {
-            AppDataRepository.get(context).getDirectionMapPointEntity()?.let {
-                TargetPoint(lat = it.latitudeE7 / 10_000_000.0, lng = it.longitudeE7 / 10_000_000.0)
+            AppDataRepository.get(context).getDirectionPoint()?.let { (latitude, longitude) ->
+                TargetPoint(lat = latitude, lng = longitude)
             }
         } catch (e: Exception) {
             Log.w(VESC_SESSION_TAG, "Failed to load direction target for presence: ${e.message}")

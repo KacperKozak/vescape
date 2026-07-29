@@ -20,7 +20,6 @@ import java.util.UUID
 internal enum class AppDataScope(val wire: String) {
   BOARDS("boards"),
   SETTINGS("settings"),
-  MAP_POINTS("mapPoints"),
 }
 
 internal fun validMapStyleKey(value: Any?): String? =
@@ -247,6 +246,8 @@ class AppDataRepository private constructor(private val context: Context) {
       selectedBoardId = opt("selectedBoardId") { it as? String },
       lastGpsLatitude = opt("lastGpsLatitude") { (it as? Number)?.toDouble() },
       lastGpsLongitude = opt("lastGpsLongitude") { (it as? Number)?.toDouble() },
+      directionPointLatitude = opt(DIRECTION_POINT_LATITUDE) { (it as? Number)?.toDouble() },
+      directionPointLongitude = opt(DIRECTION_POINT_LONGITUDE) { (it as? Number)?.toDouble() },
       movingSpeedThresholdKmh = req("movingSpeedThresholdKmh", 3.0) { (it as? Number)?.toDouble() },
       freeSpinMaxSpeedDeltaKmh = req("freeSpinMaxSpeedDeltaKmh", DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH) { (it as? Number)?.toDouble() },
       freeSpinStationaryBoardCapKmh = req("freeSpinStationaryBoardCapKmh", DEFAULT_FREE_SPIN_STATIONARY_BOARD_CAP_KMH) { (it as? Number)?.toDouble() },
@@ -592,71 +593,30 @@ class AppDataRepository private constructor(private val context: Context) {
     dao.deletePrivacyZone(id)
   }
 
-  suspend fun getMapPoints(clerkUserId: String?): List<Map<String, Any?>> = withContext(Dispatchers.IO) {
-    val reactions = dao.getMapPointReactions().groupBy { it.mapPointId }
-    dao.getMapPoints().map { point -> point.toMap(reactions[point.id].orEmpty(), clerkUserId) }
+  /**
+   * The personal direction target. Not a Map Point: it is never shared, and Group Ride presence
+   * reads it natively while JS is gone.
+   *
+   * @parity /modules/vescape-core/ios/telemetry/AppDataRepository.swift `directionPoint`
+   */
+  suspend fun getDirectionPoint(): Pair<Double, Double>? = withContext(Dispatchers.IO) {
+    val settings = getTypedSettings()
+    val latitude = settings.directionPointLatitude
+    val longitude = settings.directionPointLongitude
+    if (latitude == null || longitude == null) null else latitude to longitude
   }
 
-  suspend fun upsertMapPoint(point: Map<String, Any?>, clerkUserId: String?): Unit = withContext(Dispatchers.IO) {
-    val incoming = point.toMapPointEntity()
-    if (incoming.kind != MAP_POINT_KIND_DIRECTION) require(!clerkUserId.isNullOrBlank()) {
-      "Clerk user id is required for Map Point changes"
-    }
-    val existing = dao.getMapPoint(incoming.id)
-    require(existing == null || existing.kind == MAP_POINT_KIND_DIRECTION || existing.authorId == clerkUserId) {
-      "Only the Map Point author can update it"
-    }
-    val entity = if (incoming.kind == MAP_POINT_KIND_DIRECTION) incoming else incoming.copy(
-      authorId = clerkUserId,
-    )
-    dao.upsertMapPoint(entity)
-    notifyDataChanged(AppDataScope.MAP_POINTS)
-  }
-
-  suspend fun setMapPointReaction(
-    mapPointId: String,
-    clerkUserId: String,
-    reaction: String?,
-  ): Unit = withContext(Dispatchers.IO) {
-    require(clerkUserId.isNotBlank()) { "Clerk user id is required for Map Point reactions" }
-    require(reaction == null || reaction in VALID_MAP_POINT_REACTIONS) {
-      "Invalid Map Point reaction: $reaction"
-    }
-    require(dao.getMapPoint(mapPointId) != null) { "Unknown Map Point: $mapPointId" }
-    if (reaction == null) {
-      dao.deleteMapPointReaction(clerkUserId, mapPointId)
-    } else {
-      dao.upsertMapPointReaction(
-        MapPointReactionEntity(
-          clerkUserId = clerkUserId,
-          mapPointId = mapPointId,
-          reaction = reaction,
-          updatedAt = System.currentTimeMillis(),
-        ),
+  suspend fun setDirectionPoint(latitude: Double?, longitude: Double?): Unit =
+    withContext(Dispatchers.IO) {
+      val now = System.currentTimeMillis()
+      dao.upsertAppSetting(
+        AppSettingEntity(DIRECTION_POINT_LATITUDE, encodeSettingJson(latitude), now),
       )
+      dao.upsertAppSetting(
+        AppSettingEntity(DIRECTION_POINT_LONGITUDE, encodeSettingJson(longitude), now),
+      )
+      notifyDataChanged(AppDataScope.SETTINGS)
     }
-    notifyDataChanged(AppDataScope.MAP_POINTS)
-  }
-
-  suspend fun getDirectionMapPointEntity(): MapPointEntity? = withContext(Dispatchers.IO) {
-    dao.getDirectionMapPoint()
-  }
-
-  suspend fun replaceDirectionMapPoint(point: Map<String, Any?>): Unit = withContext(Dispatchers.IO) {
-    dao.replaceDirectionMapPoint(point.toDirectionMapPointEntity())
-    notifyDataChanged(AppDataScope.MAP_POINTS)
-  }
-
-  suspend fun deleteMapPoint(id: String, clerkUserId: String?): Unit = withContext(Dispatchers.IO) {
-    val point = dao.getMapPoint(id) ?: return@withContext
-    if (point.kind != MAP_POINT_KIND_DIRECTION) {
-      require(!clerkUserId.isNullOrBlank() && point.authorId == clerkUserId) {
-        "Only the Map Point author can delete it"
-      }
-    }
-    dao.deleteMapPoint(id)
-    notifyDataChanged(AppDataScope.MAP_POINTS)
-  }
 
   suspend fun getAutoConnectBoard(): Map<String, Any?>? = withContext(Dispatchers.IO) {
     val settings = getTypedSettings()
@@ -736,6 +696,8 @@ fun AppSettings.toMap(): Map<String, Any?> = mapOf(
   "selectedBoardId" to selectedBoardId,
   "lastGpsLatitude" to lastGpsLatitude,
   "lastGpsLongitude" to lastGpsLongitude,
+  DIRECTION_POINT_LATITUDE to directionPointLatitude,
+  DIRECTION_POINT_LONGITUDE to directionPointLongitude,
   "movingSpeedThresholdKmh" to movingSpeedThresholdKmh,
   "freeSpinMaxSpeedDeltaKmh" to freeSpinMaxSpeedDeltaKmh,
   "freeSpinStationaryBoardCapKmh" to freeSpinStationaryBoardCapKmh,
@@ -897,74 +859,14 @@ fun PrivacyZoneEntity.toMap(): Map<String, Any?> = mapOf(
   "updatedAt" to updatedAt,
 )
 
-internal const val MAP_POINT_KIND_DIRECTION = "direction"
-internal val VALID_MAP_POINT_REACTIONS = setOf("up", "down")
-
-// @parity /modules/vescape-core/ios/telemetry/AppDataRepository.swift `validMapPointKinds`
-// @parity /modules/vescape-core/src/index.ts `MapPointKind`
-internal val VALID_MAP_POINT_KINDS = setOf(
-  MAP_POINT_KIND_DIRECTION,
-  "drop",
-  "bonk",
-  "nose_slide",
-  "trail_entry",
-  "viewpoint",
-  "charging",
-  "charging_food",
-)
-
-private fun reactionScore(reaction: String?): Int = when (reaction) {
-  "up" -> 1
-  "down" -> -1
-  else -> 0
-}
-
-internal fun effectiveVoteScore(reactions: List<MapPointReactionEntity>): Int =
-  reactions.sumOf { reactionScore(it.reaction) }
-
-fun MapPointEntity.toMap(
-  reactions: List<MapPointReactionEntity> = emptyList(),
-  clerkUserId: String? = null,
-): Map<String, Any?> = mapOf(
-  "id" to id,
-  "kind" to kind,
-  "latitude" to latitudeE7 / 10_000_000.0,
-  "longitude" to longitudeE7 / 10_000_000.0,
-  "name" to name,
-  "description" to description,
-  "media" to (mediaJson?.let(::decodeSettingJson).takeIf { it is List<*> } ?: emptyList<Map<String, Any?>>()),
-  "authorId" to authorId,
-  "voteScore" to effectiveVoteScore(reactions),
-  "myReaction" to reactions.firstOrNull { it.clerkUserId == clerkUserId }?.reaction,
-  "createdAt" to createdAt,
-  "updatedAt" to updatedAt,
-)
-
-internal fun Map<String, Any?>.toMapPointEntity(): MapPointEntity {
-  val now = System.currentTimeMillis()
-  val kind = getString("kind").takeIf { it in VALID_MAP_POINT_KINDS }
-    ?: throw IllegalArgumentException("Invalid Map Point kind: ${get("kind")}")
-  val latitude = getDouble("latitude")
-  val longitude = getDouble("longitude")
-  require(latitude in -90.0..90.0 && longitude in -180.0..180.0) {
-    "Invalid Map Point coordinate"
-  }
-  return MapPointEntity(
-    id = getString("id"),
-    kind = kind,
-    latitudeE7 = (latitude * 10_000_000.0).toInt(),
-    longitudeE7 = (longitude * 10_000_000.0).toInt(),
-    name = getOptionalString("name"),
-    description = getOptionalString("description"),
-    mediaJson = encodeSettingJson(get("media") ?: emptyList<Map<String, Any?>>()),
-    authorId = getOptionalString("authorId"),
-    createdAt = (get("createdAt") as? Number)?.toLong() ?: now,
-    updatedAt = (get("updatedAt") as? Number)?.toLong() ?: now,
-  )
-}
-
-internal fun Map<String, Any?>.toDirectionMapPointEntity(): MapPointEntity =
-  toMapPointEntity().copy(kind = MAP_POINT_KIND_DIRECTION)
+/**
+ * Direction target settings keys. The target is one coordinate, so it rides in app settings rather
+ * than a table of its own.
+ * @parity /modules/vescape-core/ios/telemetry/AppDataRepository.swift `directionPointLatitudeKey`
+ * @parity /modules/vescape-core/src/index.ts `AppSettings`
+ */
+internal const val DIRECTION_POINT_LATITUDE = "directionPointLatitude"
+internal const val DIRECTION_POINT_LONGITUDE = "directionPointLongitude"
 
 private fun Map<String, Any?>.toPrivacyZoneEntity(): PrivacyZoneEntity {
   val now = System.currentTimeMillis()

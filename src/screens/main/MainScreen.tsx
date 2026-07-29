@@ -7,6 +7,8 @@ import { MainMap, type MainMapHandle } from '@/screens/main/map/MainMap'
 import type { OffscreenMapIndicatorState } from '@/screens/main/map/offscreenMapIndicators'
 import { MainOverlays } from '@/screens/main/overlays/MainOverlays'
 import { useMainScreenController } from '@/screens/main/useMainScreenController'
+import type { MapPointPatch } from 'vescape-core'
+
 import type { Board } from '@/modules/board/store/boardStore'
 import { theme } from '@/constants/theme'
 import { getMapPointKindLabel } from '@/modules/map/constants/mapPoints'
@@ -77,7 +79,7 @@ export function MainScreen({
     mapInteractionHandlerRef.current()
   }, [dismissMapSelector])
   const {
-    replaceDirectionPoint,
+    setDirectionPoint,
     clearSelectedMapPoints,
     removeMapPoint,
     clearDirectionPoint,
@@ -133,7 +135,7 @@ export function MainScreen({
         id: point.id,
         latitude: point.latitude,
         longitude: point.longitude,
-        title: point.name?.trim() || getMapPointKindLabel(point.kind),
+        title: point.name?.trim() || getMapPointKindLabel(point.category),
         subtitle: point.description ?? null,
         point,
       })
@@ -161,7 +163,7 @@ export function MainScreen({
             ? {
                 ...current,
                 point,
-                title: point.name || getMapPointKindLabel(point.kind),
+                title: point.name || getMapPointKindLabel(point.category),
                 subtitle: point.description ?? null,
               }
             : current,
@@ -171,15 +173,7 @@ export function MainScreen({
     [setMapPointReaction],
   )
   const handleUpdateMapPoint = useCallback(
-    async (
-      id: string,
-      patch: Partial<
-        Pick<
-          NonNullable<Extract<MapSelection, { type: 'mapPoint' }>['point']>,
-          'name' | 'description' | 'media'
-        >
-      >,
-    ) => {
+    async (id: string, patch: MapPointPatch) => {
       const point = await updateMapPoint(id, patch)
       if (!point) return null
       const nextSelection: MapSelection = {
@@ -187,7 +181,7 @@ export function MainScreen({
         id: point.id,
         latitude: point.latitude,
         longitude: point.longitude,
-        title: point.name || getMapPointKindLabel(point.kind),
+        title: point.name || getMapPointKindLabel(point.category),
         subtitle: point.description ?? null,
         point,
       }
@@ -241,7 +235,7 @@ export function MainScreen({
   )
   const navigateToTarget = useCallback(
     async (target: MapSelection) => {
-      await replaceDirectionPoint(target.latitude, target.longitude)
+      await setDirectionPoint(target.latitude, target.longitude)
       setActiveNavigationTarget({
         ...target,
         id: `direction-${target.id}`,
@@ -251,7 +245,7 @@ export function MainScreen({
       setSelectedNavigationTarget(null)
       controller.exitMapFocus()
     },
-    [clearSelectedMapPoints, controller, replaceDirectionPoint],
+    [clearSelectedMapPoints, controller, setDirectionPoint],
   )
   const handleNavigateSelectedTarget = useCallback(async () => {
     if (!selectedNavigationTarget) return
@@ -378,7 +372,7 @@ export function MainScreen({
         selectedNavigationTarget={selectedNavigationTarget}
         mapPoints={controller.mapPoints}
         selectedMapPointId={controller.selectedMapPointId}
-        hiddenMapPointKinds={controller.hiddenMapPointKinds}
+        hiddenMapPointCategories={controller.hiddenMapPointCategories}
         onToggleMapPointSelection={handleToggleMapPointSelection}
         weatherActive={controller.weatherActive}
         legalLimitsActive={controller.legalLimitsActive}
@@ -425,12 +419,12 @@ export function MainScreen({
           onNavigateSelectedTarget: handleNavigateSelectedTarget,
           onCancelNavigation: handleClearDirectionPoint,
           onDismissSelectedTarget: handleDismissSelectedTarget,
-          addMapPoint: controller.saveMapPoint,
+          addMapPoint: controller.addMapPoint,
           updateMapPoint: handleUpdateMapPoint,
           setMapPointReaction: handleSetMapPointReaction,
           onRemoveMapPoint: handleRemoveMapPoint,
-          hiddenMapPointKinds: controller.hiddenMapPointKinds,
-          toggleMapPointKindVisibility: controller.toggleMapPointKindVisibility,
+          hiddenMapPointCategories: controller.hiddenMapPointCategories,
+          toggleMapPointCategoryVisibility: controller.toggleMapPointCategoryVisibility,
           offscreenMapIndicators,
           onOffscreenIndicatorPress: handleOffscreenIndicatorPress,
         }}

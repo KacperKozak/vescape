@@ -5,7 +5,7 @@ import {
   FlagIcon,
   type Icon,
 } from 'phosphor-react-native'
-import type { MapPointKind } from 'vescape-core'
+import type { MapPinKind } from '@/modules/map/constants/mapPoints'
 
 import {
   BonkMapPointIcon,
@@ -13,7 +13,7 @@ import {
   SlideMapPointIcon,
 } from '@/modules/map/components/MapPointSvgIcons'
 
-const MAP_POINT_KIND_ICONS: Record<MapPointKind, Icon> = {
+const MAP_POINT_KIND_ICONS: Record<MapPinKind, Icon> = {
   direction: CompassIcon,
   drop: DropMapPointIcon,
   bonk: BonkMapPointIcon,
@@ -24,6 +24,6 @@ const MAP_POINT_KIND_ICONS: Record<MapPointKind, Icon> = {
   charging_food: ChargingStationIcon,
 }
 
-export function getMapPointKindIcon(kind: MapPointKind) {
+export function getMapPointKindIcon(kind: MapPinKind) {
   return MAP_POINT_KIND_ICONS[kind]
 }

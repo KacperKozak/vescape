@@ -18,7 +18,6 @@ import { initSentry } from '@/config/sentry'
 import { stackScreens } from '@/navigation/routes'
 import { startAlertsBoardSync } from '@/bootstrap/alertsBoardSync'
 import { startAppDataSync } from '@/bootstrap/appDataSync'
-import { MapPointClerkIdentitySync } from '@/bootstrap/MapPointClerkIdentitySync'
 import { startBoardWarningsSync } from '@/modules/board/store/boardWarningsStore'
 import { useGroupRideStore } from '@/modules/group-ride/store/groupRideStore'
 import { useRiderStore } from '@/modules/group-ride/store/riderStore'
@@ -92,7 +91,6 @@ function RootLayout() {
       __experimental_resourceCache={resourceCache}
     >
       <DeviceAuthSync />
-      <MapPointClerkIdentitySync />
       <DiagnosticErrorBoundary>
         <GestureHandlerRootView style={{ flex: 1 }}>
           <Stack

@@ -1,231 +1,263 @@
 import { create } from 'zustand'
 import {
+  createMapPoint,
   deleteMapPoint,
-  getMapPoints,
-  replaceDirectionMapPoint,
+  getNearbyMapPoints,
+  getSettings,
+  setDirectionPoint as persistDirectionPoint,
   setMapPointReaction as persistMapPointReaction,
-  upsertMapPoint,
+  updateMapPoint,
   type MapPoint,
-  type MapPointKind,
+  type MapPointCategory,
+  type MapPointPatch,
   type MapPointReaction,
 } from 'vescape-core'
 
-import { generateId } from '@/helpers/id'
-import { isFilterableMapPointKind } from '@/modules/map/lib/mapPointVisibility'
-import { deleteMapPointMedia } from '@/modules/map/store/mapPointPhotoFiles'
+import { mapPointErrorMessage } from '@/modules/map/lib/mapPointErrors'
+import { distanceMeters, nearbyRadiusMeters } from '@/modules/map/lib/nearbyRadius'
 
 export type { MapPoint } from 'vescape-core'
 
-const DIRECTION_MAP_POINT_KIND: MapPointKind = 'direction'
+/**
+ * Personal navigation target. Not a Map Point: it is never shared, has no author and no reactions.
+ * Native persists it so Group Ride presence can read it while JS is gone.
+ */
+export interface DirectionPoint {
+  latitude: number
+  longitude: number
+}
+
+interface NearbyRead {
+  latitude: number
+  longitude: number
+  radiusMeters: number
+}
+
+/** Skip a refetch while the camera stays inside this much of the last read's radius. */
+const REFETCH_MOVE_FRACTION = 0.4
 
 interface MapState {
+  /** Server truth for the last nearby read. The app keeps no durable copy. */
   mapPoints: MapPoint[]
+  /** More Map Points matched than the server returned; the map is showing the nearest slice. */
+  truncated: boolean
+  loading: boolean
+  /** Last read or write failure, in rider-facing words. Cleared by the next success. */
+  error: string | null
+  directionPoint: DirectionPoint | null
   selectedMapPointId: string | null
-  hiddenMapPointKinds: MapPointKind[]
-  clerkUserId: string | null
-  loaded: boolean
+  hiddenMapPointCategories: MapPointCategory[]
+  lastRead: NearbyRead | null
 }
 
 interface MapActions {
-  load(): Promise<void>
-  setClerkUserId(clerkUserId: string | null): void
-  saveMapPoint(kind: MapPointKind, latitude: number, longitude: number): Promise<MapPoint>
-  updateMapPoint(id: string, patch: MapPointMetadataPatch): Promise<MapPoint | null>
+  /** Read Map Points around a camera position. Cheap to call on every map idle. */
+  refreshNearby(latitude: number, longitude: number, zoom: number): Promise<void>
+  /** Re-run the last nearby read, e.g. after sign-in or a foreground catch-up. */
+  reload(): Promise<void>
+  loadDirectionPoint(): Promise<void>
+  addMapPoint(
+    category: MapPointCategory,
+    latitude: number,
+    longitude: number,
+  ): Promise<MapPoint | null>
+  editMapPoint(id: string, patch: MapPointPatch): Promise<MapPoint | null>
   setMapPointReaction(id: string, reaction: MapPointReaction | null): Promise<MapPoint | null>
-  replaceDirectionPoint(latitude: number, longitude: number): Promise<MapPoint>
+  removeMapPoint(id: string): Promise<boolean>
+  setDirectionPoint(latitude: number, longitude: number): Promise<void>
   clearDirectionPoint(): Promise<void>
-  removeMapPoint(id: string): Promise<void>
-  getDirectionPoint(): MapPoint | null
   selectMapPoint(id: string): void
   toggleMapPointSelection(id: string): void
   clearSelectedMapPoints(): void
-  toggleMapPointKindVisibility(kind: MapPointKind): void
+  toggleMapPointCategoryVisibility(category: MapPointCategory): void
 }
 
-const byCreatedAt = (a: MapPoint, b: MapPoint) => a.createdAt - b.createdAt
-const isSelectableMapPoint = (point: MapPoint) => point.kind !== DIRECTION_MAP_POINT_KIND
-type MapPointMetadataPatch = Partial<Pick<MapPoint, 'name' | 'description' | 'media'>>
-
-function requireClerkUserId(clerkUserId: string | null) {
-  if (!clerkUserId) throw new Error('Clerk sign-in is required for Map Point changes')
-  return clerkUserId
-}
-
-function compactText(value: string | null | undefined) {
-  const trimmed = value?.trim()
-  return trimmed ? trimmed : null
-}
-
-function applyMapPointMetadata(point: MapPoint, patch: MapPointMetadataPatch): MapPoint {
-  return {
-    ...point,
-    name: 'name' in patch ? compactText(patch.name) : (point.name ?? null),
-    description:
-      'description' in patch ? compactText(patch.description) : (point.description ?? null),
-    media: patch.media ?? point.media ?? [],
-    updatedAt: Date.now(),
-  }
-}
+const byDistance = (a: MapPoint, b: MapPoint) =>
+  a.distanceMeters - b.distanceMeters || a.id.localeCompare(b.id)
 
 function pruneSelectedMapPointId(selectedId: string | null, mapPoints: MapPoint[]) {
   if (!selectedId) return null
-  const point = mapPoints.find((candidate) => candidate.id === selectedId)
-  return point && isSelectableMapPoint(point) ? selectedId : null
+  return mapPoints.some((point) => point.id === selectedId) ? selectedId : null
 }
 
-export const useMapStore = create<MapState & MapActions>((set, get) => ({
-  mapPoints: [],
-  selectedMapPointId: null,
-  hiddenMapPointKinds: [],
-  clerkUserId: null,
-  loaded: false,
+function reactionScore(reaction: MapPointReaction | null) {
+  return reaction === 'up' ? 1 : reaction === 'down' ? -1 : 0
+}
 
-  async load() {
-    const mapPoints = await getMapPoints(get().clerkUserId)
-    set((s) => ({
-      mapPoints,
-      selectedMapPointId: pruneSelectedMapPointId(s.selectedMapPointId, mapPoints),
-      loaded: true,
-    }))
-  },
-
-  setClerkUserId(clerkUserId) {
-    if (get().clerkUserId === clerkUserId) return
-    set({ clerkUserId })
-    void get().load()
-  },
-
-  async saveMapPoint(kind, latitude, longitude) {
-    if (kind === DIRECTION_MAP_POINT_KIND) {
-      return get().replaceDirectionPoint(latitude, longitude)
+export const useMapStore = create<MapState & MapActions>((set, get) => {
+  /**
+   * One read path. Overlapping reads are dropped rather than queued: the map idles constantly, and
+   * a stale answer landing after a newer one would rewrite the visible set backwards.
+   */
+  async function read(target: NearbyRead) {
+    if (get().loading) return
+    set({ loading: true, lastRead: target })
+    try {
+      const nearby = await getNearbyMapPoints(
+        target.latitude,
+        target.longitude,
+        target.radiusMeters,
+      )
+      const mapPoints = [...nearby.items].sort(byDistance)
+      set((s) => ({
+        mapPoints,
+        truncated: nearby.truncated,
+        selectedMapPointId: pruneSelectedMapPointId(s.selectedMapPointId, mapPoints),
+        loading: false,
+        error: null,
+      }))
+    } catch (error) {
+      // Nothing is cached offline (Map Points are server-owned), so the map goes empty and says so.
+      set({ mapPoints: [], truncated: false, loading: false, error: mapPointErrorMessage(error) })
     }
+  }
 
-    const clerkUserId = requireClerkUserId(get().clerkUserId)
-    const now = Date.now()
-    const point: MapPoint = {
-      id: generateId(),
-      kind,
-      latitude,
-      longitude,
-      authorId: clerkUserId,
-      createdAt: now,
-      updatedAt: now,
-      voteScore: 0,
-      myReaction: null,
+  /** One write path: run it, replace the point it answers with, surface any failure. */
+  async function mutate(run: () => Promise<MapPoint>): Promise<MapPoint | null> {
+    try {
+      const point = await run()
+      set((s) => ({
+        mapPoints: s.mapPoints
+          .map((candidate) => (candidate.id === point.id ? point : candidate))
+          .sort(byDistance),
+        error: null,
+      }))
+      return point
+    } catch (error) {
+      set({ error: mapPointErrorMessage(error) })
+      return null
     }
-    set((s) => ({ mapPoints: [...s.mapPoints, point].sort(byCreatedAt) }))
-    await upsertMapPoint(point, clerkUserId)
-    return point
-  },
+  }
 
-  async updateMapPoint(id, patch) {
-    const existing = get().mapPoints.find((point) => point.id === id)
-    if (!existing || !isSelectableMapPoint(existing)) return null
-    const clerkUserId = requireClerkUserId(get().clerkUserId)
-    if (existing.authorId !== clerkUserId) return null
-    const updated = applyMapPointMetadata(existing, patch)
-    set((s) => ({
-      mapPoints: s.mapPoints.map((point) => (point.id === id ? updated : point)).sort(byCreatedAt),
-    }))
-    await upsertMapPoint(updated, clerkUserId)
-    return updated
-  },
+  return {
+    mapPoints: [],
+    truncated: false,
+    loading: false,
+    error: null,
+    directionPoint: null,
+    selectedMapPointId: null,
+    hiddenMapPointCategories: [],
+    lastRead: null,
 
-  async setMapPointReaction(id, reaction) {
-    const point = get().mapPoints.find((candidate) => candidate.id === id)
-    if (!point || !isSelectableMapPoint(point)) return null
-    const clerkUserId = requireClerkUserId(get().clerkUserId)
-    const currentReaction = point.myReaction ?? null
-    if (currentReaction === reaction) return point
-    const score = (value: MapPointReaction | null) =>
-      value === 'up' ? 1 : value === 'down' ? -1 : 0
-    const updated: MapPoint = {
-      ...point,
-      myReaction: reaction,
-      voteScore: (point.voteScore ?? 0) - score(currentReaction) + score(reaction),
-      updatedAt: Date.now(),
-    }
-    set((s) => ({
-      mapPoints: s.mapPoints.map((candidate) => (candidate.id === id ? updated : candidate)),
-    }))
-    await persistMapPointReaction(id, clerkUserId, reaction)
-    return updated
-  },
+    async refreshNearby(latitude, longitude, zoom) {
+      const radiusMeters = nearbyRadiusMeters(zoom, latitude)
+      const previous = get().lastRead
+      const settled =
+        previous !== null &&
+        previous.radiusMeters === radiusMeters &&
+        distanceMeters(previous, { latitude, longitude }) < radiusMeters * REFETCH_MOVE_FRACTION
+      if (settled) return
+      await read({ latitude, longitude, radiusMeters })
+    },
 
-  async replaceDirectionPoint(latitude, longitude) {
-    const now = Date.now()
-    const existing = get().getDirectionPoint()
-    const point: MapPoint = {
-      id: existing?.id ?? generateId(),
-      kind: DIRECTION_MAP_POINT_KIND,
-      latitude,
-      longitude,
-      createdAt: existing?.createdAt ?? now,
-      updatedAt: now,
-      voteScore: existing?.voteScore ?? 0,
-      myReaction: existing?.myReaction ?? null,
-    }
-    set((s) => ({
-      mapPoints: [
-        ...s.mapPoints.filter((candidate) => candidate.kind !== DIRECTION_MAP_POINT_KIND),
-        point,
-      ].sort(byCreatedAt),
-    }))
-    await replaceDirectionMapPoint(point)
-    return point
-  },
+    async reload() {
+      const last = get().lastRead
+      if (!last) return
+      await read(last)
+    },
 
-  async clearDirectionPoint() {
-    const existing = get().getDirectionPoint()
-    if (!existing) return
-    set((s) => ({
-      mapPoints: s.mapPoints.filter((point) => point.id !== existing.id),
-    }))
-    await deleteMapPoint(existing.id, null)
-  },
+    async loadDirectionPoint() {
+      const settings = await getSettings()
+      const { directionPointLatitude, directionPointLongitude } = settings
+      set({
+        directionPoint:
+          directionPointLatitude != null && directionPointLongitude != null
+            ? { latitude: directionPointLatitude, longitude: directionPointLongitude }
+            : null,
+      })
+    },
 
-  async removeMapPoint(id) {
-    const existing = get().mapPoints.find((point) => point.id === id)
-    const clerkUserId = requireClerkUserId(get().clerkUserId)
-    if (!existing || existing.authorId !== clerkUserId) return
-    set((s) => ({
-      mapPoints: s.mapPoints.filter((point) => point.id !== id),
-      selectedMapPointId: s.selectedMapPointId === id ? null : s.selectedMapPointId,
-    }))
-    await deleteMapPoint(id, clerkUserId)
-    if (existing) deleteMapPointMedia(existing.id)
-  },
+    async addMapPoint(category, latitude, longitude) {
+      try {
+        const point = await createMapPoint({ category, latitude, longitude })
+        set((s) => ({ mapPoints: [...s.mapPoints, point].sort(byDistance), error: null }))
+        return point
+      } catch (error) {
+        set({ error: mapPointErrorMessage(error) })
+        return null
+      }
+    },
 
-  getDirectionPoint() {
-    return get().mapPoints.find((point) => point.kind === DIRECTION_MAP_POINT_KIND) ?? null
-  },
+    async editMapPoint(id, patch) {
+      return mutate(() => updateMapPoint(id, patch))
+    },
 
-  selectMapPoint(id) {
-    set((s) => {
-      const point = s.mapPoints.find((candidate) => candidate.id === id)
-      if (!point || !isSelectableMapPoint(point)) return s
-      return { selectedMapPointId: id }
-    })
-  },
+    async setMapPointReaction(id, reaction) {
+      const previous = get().mapPoints.find((point) => point.id === id)
+      if (!previous) return null
+      if (previous.myReaction === reaction) return previous
 
-  toggleMapPointSelection(id) {
-    set((s) => {
-      const point = s.mapPoints.find((candidate) => candidate.id === id)
-      if (!point || !isSelectableMapPoint(point)) return s
-      return { selectedMapPointId: s.selectedMapPointId === id ? null : id }
-    })
-  },
+      // Optimistic: a vote must feel instant. The server answer is not echoed back, so the score is
+      // adjusted locally and reconciled by the next nearby read.
+      const optimistic: MapPoint = {
+        ...previous,
+        myReaction: reaction,
+        score: previous.score - reactionScore(previous.myReaction) + reactionScore(reaction),
+      }
+      set((s) => ({
+        mapPoints: s.mapPoints.map((point) => (point.id === id ? optimistic : point)),
+      }))
 
-  clearSelectedMapPoints() {
-    set((s) => (s.selectedMapPointId == null ? s : { selectedMapPointId: null }))
-  },
+      try {
+        await persistMapPointReaction(id, reaction)
+        set({ error: null })
+        return optimistic
+      } catch (error) {
+        set((s) => ({
+          mapPoints: s.mapPoints.map((point) => (point.id === id ? previous : point)),
+          error: mapPointErrorMessage(error),
+        }))
+        return null
+      }
+    },
 
-  toggleMapPointKindVisibility(kind) {
-    if (!isFilterableMapPointKind(kind)) return
-    set((s) => ({
-      hiddenMapPointKinds: s.hiddenMapPointKinds.includes(kind)
-        ? s.hiddenMapPointKinds.filter((candidate) => candidate !== kind)
-        : [...s.hiddenMapPointKinds, kind],
-    }))
-  },
-}))
+    async removeMapPoint(id) {
+      try {
+        await deleteMapPoint(id)
+        set((s) => ({
+          mapPoints: s.mapPoints.filter((point) => point.id !== id),
+          selectedMapPointId: s.selectedMapPointId === id ? null : s.selectedMapPointId,
+          error: null,
+        }))
+        return true
+      } catch (error) {
+        set({ error: mapPointErrorMessage(error) })
+        return false
+      }
+    },
+
+    async setDirectionPoint(latitude, longitude) {
+      set({ directionPoint: { latitude, longitude } })
+      await persistDirectionPoint(latitude, longitude)
+    },
+
+    async clearDirectionPoint() {
+      if (!get().directionPoint) return
+      set({ directionPoint: null })
+      await persistDirectionPoint(null, null)
+    },
+
+    selectMapPoint(id) {
+      set((s) => (s.mapPoints.some((point) => point.id === id) ? { selectedMapPointId: id } : s))
+    },
+
+    toggleMapPointSelection(id) {
+      set((s) => {
+        if (!s.mapPoints.some((point) => point.id === id)) return s
+        return { selectedMapPointId: s.selectedMapPointId === id ? null : id }
+      })
+    },
+
+    clearSelectedMapPoints() {
+      set((s) => (s.selectedMapPointId == null ? s : { selectedMapPointId: null }))
+    },
+
+    toggleMapPointCategoryVisibility(category) {
+      set((s) => ({
+        hiddenMapPointCategories: s.hiddenMapPointCategories.includes(category)
+          ? s.hiddenMapPointCategories.filter((candidate) => candidate !== category)
+          : [...s.hiddenMapPointCategories, category],
+      }))
+    },
+  }
+})

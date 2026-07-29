@@ -12,7 +12,9 @@ import {
 } from 'react'
 import { Animated, StyleSheet, View, type LayoutChangeEvent } from 'react-native'
 import { Text } from '@/components/base/Text'
-import type { LocationEvent, MapPoint, MapPointKind } from 'vescape-core'
+import type { LocationEvent, MapPoint, MapPointCategory } from 'vescape-core'
+
+import { useMapStore, type DirectionPoint } from '@/modules/map/store/mapStore'
 
 import { InfoModal } from '@/components/modals/InfoModal'
 import { IS_MAPY_CONFIGURED, MAPBOX_ACCESS_TOKEN } from '@/config/mapy'
@@ -38,7 +40,7 @@ import {
 import { distanceMeters, makeCircleFeature, makeTrailLineString } from '@/helpers/mapGeometry'
 import type { MediaHistoryAsset } from '@/modules/history/lib/mediaHistory'
 import type { MapSelection } from '@/modules/map/lib/mapSelection'
-import { isMapPointKindVisible } from '@/modules/map/lib/mapPointVisibility'
+import { isMapPinKindVisible } from '@/modules/map/lib/mapPointVisibility'
 import type { HistoryMetricKey } from '@/modules/history/lib/metricColorScale'
 import { getNavigationFallbackReason } from '@/modules/map/lib/navigationDiagnostics'
 import { getGpsPuckBearing } from '@/modules/map/lib/gpsPuckHeading'
@@ -197,12 +199,12 @@ interface MainMapProps {
   onMapPress: (selection: MapSelection) => void
   onEnterMapMode: () => void
   onOffscreenMapIndicatorsChange: (indicators: OffscreenMapIndicatorState[]) => void
-  directionPoint: MapPoint | null
+  directionPoint: DirectionPoint | null
   activeNavigationTarget: MapSelection | null
   selectedNavigationTarget: MapSelection | null
   mapPoints: MapPoint[]
   selectedMapPointId: string | null
-  hiddenMapPointKinds: MapPointKind[]
+  hiddenMapPointCategories: MapPointCategory[]
   onToggleMapPointSelection: (id: string) => void
   weatherActive: boolean
   legalLimitsActive: boolean
@@ -251,7 +253,7 @@ export const MainMap = memo(
       selectedNavigationTarget,
       mapPoints,
       selectedMapPointId,
-      hiddenMapPointKinds,
+      hiddenMapPointCategories,
       onToggleMapPointSelection,
       weatherActive,
       legalLimitsActive,
@@ -406,11 +408,10 @@ export const MainMap = memo(
       () =>
         mapPoints.find(
           (point) =>
-            point.kind !== 'direction' &&
             point.id === selectedMapPointId &&
-            isMapPointKindVisible(point.kind, hiddenMapPointKinds),
+            isMapPinKindVisible(point.category, hiddenMapPointCategories),
         ) ?? null,
-      [hiddenMapPointKinds, mapPoints, selectedMapPointId],
+      [hiddenMapPointCategories, mapPoints, selectedMapPointId],
     )
     const retainedGpsBearing = gpsPresentation.nextReliableBearing
     const gpsHeadingMode = mapNavigationMode === 'gpsHeading'
@@ -550,9 +551,9 @@ export const MainMap = memo(
           id: `navigation-map-point-${point.id}`,
           type: 'mapPoint' as const,
           coordinate: [point.longitude, point.latitude] as [number, number],
-          color: getMapPointKindColor(point.kind),
-          textColor: getMapPointKindTextColor(point.kind),
-          icon: getMapPointKindIcon(point.kind),
+          color: getMapPointKindColor(point.category),
+          textColor: getMapPointKindTextColor(point.category),
+          icon: getMapPointKindIcon(point.category),
         }
       }
       return {
@@ -673,9 +674,9 @@ export const MainMap = memo(
                   number,
                   number,
                 ],
-                color: getMapPointKindColor(selectedMapPoint.kind),
-                textColor: getMapPointKindTextColor(selectedMapPoint.kind),
-                icon: getMapPointKindIcon(selectedMapPoint.kind),
+                color: getMapPointKindColor(selectedMapPoint.category),
+                textColor: getMapPointKindTextColor(selectedMapPoint.category),
+                icon: getMapPointKindIcon(selectedMapPoint.category),
               },
             ]
           : []),
@@ -1187,9 +1188,16 @@ export const MainMap = memo(
     )
 
     const handleMapIdle = useCallback(() => {
-      const heading = currentCameraRef.current?.heading
+      const camera = currentCameraRef.current
+      const heading = camera?.heading
       if (heading != null) setCameraHeading(heading)
       scheduleOffscreenMapIndicatorRefresh()
+      // Map Points live on the server, so the visible set is read per camera rest. The store drops
+      // the call when the camera has not moved far enough to reveal anything new.
+      if (camera) {
+        const [longitude, latitude] = camera.centerCoordinate
+        void useMapStore.getState().refreshNearby(latitude, longitude, camera.zoomLevel)
+      }
     }, [currentCameraRef, scheduleOffscreenMapIndicatorRefresh])
 
     useEffect(
@@ -1382,7 +1390,7 @@ export const MainMap = memo(
             selectedNavigationTarget={selectedNavigationTarget}
             mapPoints={mapPoints}
             selectedMapPointId={selectedMapPointId}
-            hiddenMapPointKinds={hiddenMapPointKinds}
+            hiddenMapPointCategories={hiddenMapPointCategories}
             onToggleMapPointSelection={onToggleMapPointSelection}
             onSuppressNextMapPress={handleSuppressNextMapPress}
             onSelectMarker={setSelectedHistoryMarker}

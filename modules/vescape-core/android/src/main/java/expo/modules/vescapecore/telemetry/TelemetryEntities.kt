@@ -331,68 +331,6 @@ data class PrivacyZoneEntity(
   val updatedAt: Long,
 )
 
-/**
- * @parity /modules/vescape-core/ios/telemetry/AppDataRepository.swift `MapPointColumns`
- * @parity /modules/vescape-core/src/index.ts `MapPoint`
- */
-@Entity(
-  tableName = "map_points",
-  indices = [
-    Index(value = ["kind"]),
-  ],
-)
-data class MapPointEntity(
-  @PrimaryKey
-  val id: String,
-  val kind: String,
-  @ColumnInfo(name = "latitude_e7")
-  val latitudeE7: Int,
-  @ColumnInfo(name = "longitude_e7")
-  val longitudeE7: Int,
-  val name: String?,
-  val description: String?,
-  @ColumnInfo(name = "media_json")
-  val mediaJson: String?,
-  @ColumnInfo(name = "author_id")
-  val authorId: String?,
-  @ColumnInfo(name = "created_at")
-  val createdAt: Long,
-  @ColumnInfo(name = "updated_at")
-  val updatedAt: Long,
-)
-
-/**
- * One Clerk user reaction to one Map Point. Clerk owns identity; this table stores only its stable
- * user id with no local account copy.
- *
- * @parity /modules/vescape-core/ios/telemetry/TelemetryDatabase.swift `map_point_reactions`
- */
-@Entity(
-  tableName = "map_point_reactions",
-  primaryKeys = ["clerk_user_id", "map_point_id"],
-  foreignKeys = [
-    ForeignKey(
-      entity = MapPointEntity::class,
-      parentColumns = ["id"],
-      childColumns = ["map_point_id"],
-      onDelete = ForeignKey.CASCADE,
-    ),
-  ],
-  indices = [
-    Index(value = ["clerk_user_id"]),
-    Index(value = ["map_point_id"]),
-  ],
-)
-data class MapPointReactionEntity(
-  @ColumnInfo(name = "clerk_user_id")
-  val clerkUserId: String,
-  @ColumnInfo(name = "map_point_id")
-  val mapPointId: String,
-  val reaction: String,
-  @ColumnInfo(name = "updated_at")
-  val updatedAt: Long,
-)
-
 @Entity(tableName = "app_settings")
 data class AppSettingEntity(
   @PrimaryKey
@@ -416,6 +354,8 @@ data class AppSettings(
   val selectedBoardId: String? = null,
   val lastGpsLatitude: Double? = null,
   val lastGpsLongitude: Double? = null,
+  val directionPointLatitude: Double? = null,
+  val directionPointLongitude: Double? = null,
   val movingSpeedThresholdKmh: Double = 3.0,
   val freeSpinMaxSpeedDeltaKmh: Double = DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH,
   val freeSpinStationaryBoardCapKmh: Double = DEFAULT_FREE_SPIN_STATIONARY_BOARD_CAP_KMH,

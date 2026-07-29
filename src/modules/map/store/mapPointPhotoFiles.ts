@@ -1,5 +1,15 @@
 import { Directory, File, Paths } from 'expo-file-system'
-import type { MapPointMediaAsset } from 'vescape-core'
+
+/**
+ * Local media attached to a Map Point. Server Map Points v1 carries no media, so this stays a
+ * device-local shape and the UI that uses it is parked behind `MAP_POINT_MEDIA_ENABLED`.
+ */
+export interface MapPointMediaAsset {
+  id: string
+  uri: string
+  filename: string
+  mediaType: 'photo' | 'video'
+}
 
 export type PickedMapPointMediaAsset = {
   id: string
@@ -38,11 +48,6 @@ export async function saveMapPointMediaAssets(
     saved.push({ ...asset, uri: target.uri, filename })
   }
   return saved
-}
-
-export function deleteMapPointMedia(pointId: string): void {
-  const directory = mapPointMediaDirectory(pointId)
-  if (directory.exists) directory.delete()
 }
 
 export function deleteMapPointMediaAsset(uri: string): void {

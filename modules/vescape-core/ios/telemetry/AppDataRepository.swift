@@ -2,7 +2,7 @@ import Foundation
 import GRDB
 
 /// CRUD over the single GRDB database for app data: boards (with Board Link), alert rules, privacy
-/// zones, map points and key-value settings. Values cross the bridge as `[String: Any?]` bags to
+/// zones and key-value settings. Values cross the bridge as `[String: Any?]` bags to
 /// mirror the JS contract; persistence uses the same column/table shapes as Android Room.
 ///
 /// A Board Link is whole-or-nothing: it is composed only when a board has both a `ble_id` and a
@@ -15,7 +15,6 @@ import GRDB
 enum AppDataScope: String {
   case boards
   case settings
-  case mapPoints
 }
 
 /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/AppDataRepository.kt
@@ -399,195 +398,17 @@ final class AppDataRepository {
     write { db in try db.execute(sql: "DELETE FROM privacy_zones WHERE id = ?", arguments: [id]) }
   }
 
-  // MARK: - Map points
+  // MARK: - Direction point
 
-  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/AppDataRepository.kt `VALID_MAP_POINT_KINDS`
-  /// @parity /modules/vescape-core/src/index.ts `MapPointKind`
-  private static let validMapPointKinds: Set<String> = [
-    "direction", "drop", "bonk", "nose_slide", "trail_entry", "viewpoint", "charging", "charging_food",
-  ]
-  private static let validMapPointReactions: Set<String> = ["up", "down"]
-  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryEntities.kt `MapPointEntity`
-  /// @parity /modules/vescape-core/src/index.ts `MapPoint`
-  private struct MapPointColumns {
-    let id: String
-    let kind: String
-    let latitudeE7: Int64
-    let longitudeE7: Int64
-    let name: String?
-    let description: String?
-    let mediaJson: String?
-    var authorId: String?
-    let createdAt: Int64
-    let updatedAt: Int64
-  }
+  /// The personal direction target. Not a Map Point: it is never shared, and it is one coordinate,
+  /// so it rides in app settings rather than a table of its own.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/AppDataRepository.kt `getDirectionPoint`
+  static let directionPointLatitudeKey = "directionPointLatitude"
+  static let directionPointLongitudeKey = "directionPointLongitude"
 
-  private static func reactionScore(_ reaction: String?) -> Int64 {
-    if reaction == "up" { return 1 }
-    if reaction == "down" { return -1 }
-    return 0
-  }
-
-  func getMapPoints(clerkUserId: String?) -> [[String: Any?]] {
-    read([]) { db in
-      let reactions = try Row.fetchAll(db, sql: "SELECT * FROM map_point_reactions")
-      let reactionsByPoint = Dictionary(grouping: reactions) { $0["map_point_id"] as String }
-      return try Row.fetchAll(db, sql: "SELECT * FROM map_points ORDER BY created_at ASC").map { row in
-        let pointReactions = reactionsByPoint[row["id"] as String] ?? []
-        let myReaction = pointReactions.first {
-          ($0["clerk_user_id"] as String) == clerkUserId
-        }
-        return [
-          "id": row["id"] as String,
-          "kind": row["kind"] as String,
-          "latitude": (row["latitude_e7"] as Int64).asE7Degrees,
-          "longitude": (row["longitude_e7"] as Int64).asE7Degrees,
-          "name": row["name"] as String?,
-          "description": row["description"] as String?,
-          "media": Self.decodeJson((row["media_json"] as? String) ?? "[]") as? [[String: Any?]] ?? [],
-          "authorId": row["author_id"] as String?,
-          "voteScore": pointReactions.reduce(Int64(0)) {
-            $0 + Self.reactionScore($1["reaction"] as String?)
-          },
-          "myReaction": myReaction?["reaction"] as String?,
-          "createdAt": row["created_at"] as Int64,
-          "updatedAt": row["updated_at"] as Int64,
-        ]
-      }
-    }
-  }
-
-  func upsertMapPoint(_ point: [String: Any?], clerkUserId: String?) {
-    guard var entity = Self.mapPointColumns(point) else { return }
-    write { db in
-      guard entity.kind == "direction" || clerkUserId?.isEmpty == false else { return }
-      if let existing = try Row.fetchOne(
-        db,
-        sql: "SELECT kind, author_id FROM map_points WHERE id = ? LIMIT 1",
-        arguments: [entity.id]
-      ) {
-        let kind: String = existing["kind"]
-        let authorId: String? = existing["author_id"]
-        guard kind == "direction" || authorId == clerkUserId else { return }
-      }
-      if entity.kind != "direction" {
-        entity.authorId = clerkUserId
-      }
-      try Self.insertMapPoint(db, entity)
-    }
-    notifyDataChanged(.mapPoints)
-  }
-
-  func setMapPointReaction(_ mapPointId: String, clerkUserId: String, reaction: String?) {
-    guard !clerkUserId.isEmpty else { return }
-    guard reaction == nil || Self.validMapPointReactions.contains(reaction!) else { return }
-    write { db in
-      guard try Bool.fetchOne(
-        db,
-        sql: "SELECT EXISTS(SELECT 1 FROM map_points WHERE id = ?)",
-        arguments: [mapPointId]
-      ) == true else { return }
-      if reaction == nil {
-        try db.execute(
-          sql: "DELETE FROM map_point_reactions WHERE clerk_user_id = ? AND map_point_id = ?",
-          arguments: [clerkUserId, mapPointId]
-        )
-        return
-      }
-      try db.execute(
-        sql: """
-          INSERT INTO map_point_reactions (
-            clerk_user_id, map_point_id, reaction, updated_at
-          ) VALUES (?, ?, ?, ?)
-          ON CONFLICT(clerk_user_id, map_point_id) DO UPDATE SET
-            reaction = excluded.reaction,
-            updated_at = excluded.updated_at
-          """,
-        arguments: [clerkUserId, mapPointId, reaction, self.nowMs()]
-      )
-    }
-    notifyDataChanged(.mapPoints)
-  }
-
-  func replaceDirectionMapPoint(_ point: [String: Any?]) {
-    var forced = point
-    forced["kind"] = "direction"
-    guard let entity = Self.mapPointColumns(forced) else { return }
-    write { db in
-      try db.execute(sql: "DELETE FROM map_points WHERE kind = 'direction'")
-      try Self.insertMapPoint(db, entity)
-    }
-    notifyDataChanged(.mapPoints)
-  }
-
-  func deleteMapPoint(_ id: String, clerkUserId: String?) {
-    write { db in
-      guard let point = try Row.fetchOne(
-        db,
-        sql: "SELECT kind, author_id FROM map_points WHERE id = ? LIMIT 1",
-        arguments: [id]
-      ) else { return }
-      let kind: String = point["kind"]
-      if kind != "direction" {
-        let authorId: String? = point["author_id"]
-        guard clerkUserId?.isEmpty == false, authorId == clerkUserId else { return }
-      }
-      try db.execute(sql: "DELETE FROM map_points WHERE id = ?", arguments: [id])
-    }
-    notifyDataChanged(.mapPoints)
-  }
-
-  private static func insertMapPoint(
-    _ db: Database,
-    _ c: MapPointColumns
-  ) throws {
-    try db.execute(
-      sql: """
-        INSERT INTO map_points (
-          id, kind, latitude_e7, longitude_e7, name, description, media_json, author_id, created_at, updated_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET
-          kind = excluded.kind,
-          latitude_e7 = excluded.latitude_e7,
-          longitude_e7 = excluded.longitude_e7,
-          name = excluded.name,
-          description = excluded.description,
-          media_json = excluded.media_json,
-          author_id = excluded.author_id,
-          updated_at = excluded.updated_at
-        """,
-      arguments: [
-        c.id, c.kind, c.latitudeE7, c.longitudeE7, c.name, c.description, c.mediaJson,
-        c.authorId, c.createdAt, c.updatedAt,
-      ]
-    )
-  }
-
-  private static func mapPointColumns(
-    _ point: [String: Any?]
-  ) -> MapPointColumns? {
-    guard
-      let id = point["id"] as? String,
-      let kind = (point["kind"] as? String), validMapPointKinds.contains(kind),
-      let latitude = doubleValue(point["latitude"] ?? nil), (-90.0...90.0).contains(latitude),
-      let longitude = doubleValue(point["longitude"] ?? nil), (-180.0...180.0).contains(longitude)
-    else { return nil }
-    let now = Int64(Date().timeIntervalSince1970 * 1000)
-    let createdAt = longValue(point["createdAt"] ?? nil) ?? now
-    let updatedAt = longValue(point["updatedAt"] ?? nil) ?? now
-    return MapPointColumns(
-      id: id,
-      kind: kind,
-      latitudeE7: latitude.toE7,
-      longitudeE7: longitude.toE7,
-      name: optionalString(point["name"] ?? nil),
-      description: optionalString(point["description"] ?? nil),
-      mediaJson: encodeJson(point["media"] ?? []),
-      authorId: optionalString(point["authorId"] ?? nil),
-      createdAt: createdAt,
-      updatedAt: updatedAt
-    )
+  func setDirectionPoint(latitude: Double?, longitude: Double?) {
+    updateSetting(Self.directionPointLatitudeKey, rawValue: latitude)
+    updateSetting(Self.directionPointLongitudeKey, rawValue: longitude)
   }
 
   // MARK: - Settings
@@ -694,6 +515,8 @@ final class AppDataRepository {
     "riderColor": NSNull(),
     "lastGpsLatitude": NSNull(),
     "lastGpsLongitude": NSNull(),
+    "directionPointLatitude": NSNull(),
+    "directionPointLongitude": NSNull(),
     "legalPolicy": NSNull(),
     "movingSpeedThresholdKmh": 3,
     "freeSpinMaxSpeedDeltaKmh": DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH,
