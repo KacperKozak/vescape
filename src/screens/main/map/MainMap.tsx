@@ -63,6 +63,7 @@ import { MainMapLayers } from '@/screens/main/map/MainMapLayers'
 import { LegalLimitCountrySheet } from '@/modules/legal/components/LegalLimitCountrySheet'
 import {
   OffscreenMapIndicator,
+  type MapLayout,
   type OffscreenMapIndicatorState,
 } from '@/screens/main/map/offscreenMapIndicators'
 import {
@@ -111,11 +112,6 @@ export interface MainMapHandle {
   focusWeather: () => void
   focusLegalLimits: () => void
   getViewfinderCoordinate: () => Promise<{ latitude: number; longitude: number }>
-}
-
-interface MapLayout {
-  width: number
-  height: number
 }
 
 function usableCoordinate(location: { longitude: number; latitude: number } | null | undefined) {

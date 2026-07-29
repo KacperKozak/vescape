@@ -20,7 +20,7 @@ const OFFSCREEN_GPS_EDGE_SIDE_INSET = 58
 const OFFSCREEN_GPS_EDGE_TOP_INSET = 122
 const OFFSCREEN_GPS_EDGE_BOTTOM_INSET = 142
 
-interface MapLayout {
+export interface MapLayout {
   width: number
   height: number
 }

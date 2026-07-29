@@ -7,17 +7,13 @@ import {
   projectCoordinateToEdgePoint,
   repositionOffscreenMapIndicators,
   type OffscreenMapIndicatorDraft,
+  type MapLayout,
   type OffscreenMapIndicatorState,
   type TrackedMapPoint,
 } from '@/screens/main/map/offscreenMapIndicators'
 import type { CameraSnapshot } from '@/screens/main/map/useCameraControls'
 
 const OFFSCREEN_INDICATOR_VISIBILITY_CHECK_MS = 200
-
-interface MapLayout {
-  width: number
-  height: number
-}
 
 /**
  * Owns the edge indicators for tracked points that fall outside the viewport.
