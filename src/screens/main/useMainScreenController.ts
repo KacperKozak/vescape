@@ -15,6 +15,7 @@ import {
 import { useBleStore } from '@/modules/board/store/bleStore'
 import { useHistoryStore, type HistorySession } from '@/modules/history/store/historyStore'
 import { useMapStore } from '@/modules/map/store/mapStore'
+import { useMapContributionReady } from '@/modules/profile/hooks/useMapContributionReady'
 import { useSettingsStore } from '@/modules/settings/store/settingsStore'
 import { useWeatherStore } from '@/modules/weather/store/weatherStore'
 import { useMediaHistory } from '@/modules/history/hooks/useMediaHistory'
@@ -121,6 +122,7 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
     selectedMapPointId,
     hiddenMapPointCategories,
     refreshNearbyMapPoints,
+    reloadMapPoints,
     loadDirectionPoint,
     directionPoint,
     addMapPoint,
@@ -139,6 +141,7 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
       selectedMapPointId: s.selectedMapPointId,
       hiddenMapPointCategories: s.hiddenMapPointCategories,
       refreshNearbyMapPoints: s.refreshNearby,
+      reloadMapPoints: s.reload,
       loadDirectionPoint: s.loadDirectionPoint,
       directionPoint: s.directionPoint,
       addMapPoint: s.addMapPoint,
@@ -159,9 +162,18 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
     markers: sessionMarkers,
   })
 
+  const canContribute = useMapContributionReady()
+
   useEffect(() => {
     void loadDirectionPoint()
   }, [loadDirectionPoint])
+
+  // Signing in changes what the server says about the visible Map Points (`ownedByMe`,
+  // `myReaction`), and those only arrive with a read. Without this the rider would have to pan
+  // before their own votes and edit buttons showed up.
+  useEffect(() => {
+    void reloadMapPoints()
+  }, [canContribute, reloadMapPoints])
 
   useEffect(() => {
     setSeekTimeMs(null)

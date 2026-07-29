@@ -118,7 +118,7 @@ final class VescapeApi {
     }
   }
 
-  /// Only idempotent calls repeat: the Map Point API has no create idempotency, so a repeated POST
+  /// Only idempotent calls repeat. No endpoint here takes a create key, so a repeated POST
   /// duplicates.
   private func canRetry(_ request: ApiRequest, retried: Bool) -> Bool {
     request.method.idempotent && !retried

@@ -83,8 +83,6 @@ export function MapTargetSheet({
   const selectedPoint = point as MapPoint | null
   // The vote lives in the store (optimistically), so the sheet only renders it.
   const reaction = point?.myReaction ?? null
-  // Name and description are unsaved drafts, so they stay local. The caller keys this component by
-  // target, so selecting another feature remounts it rather than inheriting the previous draft.
   const [name, setName] = useState(point?.name ?? '')
   const [description, setDescription] = useState(point?.description ?? '')
   // Parked with `MAP_POINT_MEDIA_ENABLED`: media stays on the device because server Map Points
