@@ -21,7 +21,6 @@ const MAP_POINT_KIND_ICONS: Record<MapPinKind, Icon> = {
   trail_entry: FlagIcon,
   viewpoint: EyeIcon,
   charging: ChargingStationIcon,
-  charging_food: ChargingStationIcon,
 }
 
 export function getMapPointKindIcon(kind: MapPinKind) {

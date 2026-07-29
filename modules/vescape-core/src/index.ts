@@ -291,7 +291,6 @@ export type MapPointCategory =
   | 'trail_entry'
   | 'viewpoint'
   | 'charging'
-  | 'charging_food'
 
 export type MapPointReaction = 'up' | 'down'
 
