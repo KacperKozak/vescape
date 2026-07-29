@@ -1,0 +1,189 @@
+import { useCallback } from 'react'
+
+import { MAP_DEFAULTS } from '@/modules/map/constants/mapStyles'
+import type { MapNavigationMode } from '@/modules/map/constants/mapStyles'
+import { LEGAL_LIMIT_MAP_CAMERA } from '@/modules/legal/lib/legalLimits'
+import type { reduceMapCameraIntent } from '@/modules/map/lib/cameraController'
+import { getPitchForZoom } from '@/modules/map/lib/cameraProfiles'
+import { clamp, MIN_ZOOM, type CameraSnapshot } from '@/modules/map/lib/cameraMotion'
+import type { CameraControlRefs } from '@/screens/main/map/cameraControlTypes'
+
+interface UseCameraIntentCommandsParams {
+  cameraRefs: CameraControlRefs
+  gpsCamera: Pick<CameraSnapshot, 'centerCoordinate' | 'zoomLevel'>
+  mapNavigationMode: MapNavigationMode
+  perspectiveEnabled: boolean
+  dispatchCameraIntent: (
+    intent: Parameters<typeof reduceMapCameraIntent>[1],
+  ) => ReturnType<typeof reduceMapCameraIntent>['effect']
+  getFollowHeadingDeg: () => number
+  setFollowGps: (enabled: boolean) => void
+  onHeadingChange: (heading: number) => void
+  onPerspectiveChange: (enabled: boolean) => void
+}
+
+export function useCameraIntentCommands({
+  cameraRefs,
+  gpsCamera,
+  mapNavigationMode,
+  perspectiveEnabled,
+  dispatchCameraIntent,
+  getFollowHeadingDeg,
+  setFollowGps,
+  onHeadingChange,
+  onPerspectiveChange,
+}: UseCameraIntentCommandsParams) {
+  const { cameraRef, currentCameraRef, followZoomLevelRef } = cameraRefs
+  const applyCamera = useCallback(
+    (
+      camera: Partial<CameraSnapshot> | undefined,
+      overrides?: { animationDuration?: number; zoomLevel?: number },
+    ) => {
+      cameraRef.current?.setCamera({
+        ...camera,
+        ...overrides,
+        animationDuration: overrides?.animationDuration ?? MAP_DEFAULTS.animationDuration,
+        animationMode: 'easeTo',
+      })
+    },
+    [cameraRef],
+  )
+
+  const resetRotation = useCallback(() => {
+    followZoomLevelRef.current = null
+    applyCamera({ heading: 0 })
+    onHeadingChange(0)
+  }, [applyCamera, followZoomLevelRef, onHeadingChange])
+
+  const togglePerspective = useCallback(() => {
+    const enabled = !perspectiveEnabled
+    onPerspectiveChange(enabled)
+    const effect = dispatchCameraIntent({
+      type: 'ChangePerspective',
+      enabled,
+      currentCamera: currentCameraRef.current,
+      fallbackZoomLevel: gpsCamera.zoomLevel,
+      navigationMode: mapNavigationMode,
+    })
+    applyCamera(effect?.camera)
+  }, [
+    applyCamera,
+    currentCameraRef,
+    dispatchCameraIntent,
+    gpsCamera.zoomLevel,
+    mapNavigationMode,
+    onPerspectiveChange,
+    perspectiveEnabled,
+  ])
+
+  const setPadding = useCallback(
+    (bottom: number) => {
+      applyCamera(
+        { padding: { paddingBottom: bottom, paddingTop: 0, paddingLeft: 0, paddingRight: 0 } },
+        { animationDuration: bottom === 0 ? 0 : 300 },
+      )
+    },
+    [applyCamera],
+  )
+
+  const zoomBy = useCallback(
+    (delta: number) => {
+      setFollowGps(false)
+      const zoomLevel = clamp(
+        (currentCameraRef.current?.zoomLevel ?? gpsCamera.zoomLevel) + delta,
+        MIN_ZOOM,
+        MAP_DEFAULTS.maxZoom,
+      )
+      const current = currentCameraRef.current
+      applyCamera({
+        ...(current ? { centerCoordinate: current.centerCoordinate } : {}),
+        zoomLevel,
+        pitch: getPitchForZoom(zoomLevel, perspectiveEnabled),
+      })
+    },
+    [applyCamera, currentCameraRef, gpsCamera.zoomLevel, perspectiveEnabled, setFollowGps],
+  )
+
+  const focusCoordinate = useCallback(
+    (coordinate: [number, number]) => {
+      const effect = dispatchCameraIntent({
+        type: 'FocusCoordinate',
+        coordinate,
+        currentCamera: currentCameraRef.current,
+        fallbackZoomLevel: gpsCamera.zoomLevel,
+        navigationMode: mapNavigationMode,
+        perspectiveEnabled,
+      })
+      applyCamera(effect?.camera, {
+        zoomLevel: effect?.camera.zoomLevel ?? currentCameraRef.current?.zoomLevel,
+      })
+    },
+    [
+      applyCamera,
+      currentCameraRef,
+      dispatchCameraIntent,
+      gpsCamera.zoomLevel,
+      mapNavigationMode,
+      perspectiveEnabled,
+    ],
+  )
+
+  const centerCoordinatePreservingCamera = useCallback(
+    (coordinate: [number, number]) => {
+      setFollowGps(false)
+      const current = currentCameraRef.current
+      const camera = {
+        centerCoordinate: coordinate,
+        zoomLevel: current?.zoomLevel ?? gpsCamera.zoomLevel,
+        heading: current?.heading ?? getFollowHeadingDeg(),
+        pitch: current?.pitch ?? getPitchForZoom(gpsCamera.zoomLevel, perspectiveEnabled),
+        padding: { paddingBottom: 0, paddingTop: 0, paddingLeft: 0, paddingRight: 0 },
+      }
+      currentCameraRef.current = camera
+      applyCamera(camera)
+    },
+    [
+      applyCamera,
+      currentCameraRef,
+      getFollowHeadingDeg,
+      gpsCamera.zoomLevel,
+      perspectiveEnabled,
+      setFollowGps,
+    ],
+  )
+
+  const focusWeather = useCallback(() => {
+    const effect = dispatchCameraIntent({
+      type: 'EnterWeatherView',
+      currentCamera: currentCameraRef.current,
+      fallbackCenterCoordinate: gpsCamera.centerCoordinate,
+      perspectiveEnabled,
+    })
+    applyCamera(effect?.camera)
+  }, [
+    applyCamera,
+    currentCameraRef,
+    dispatchCameraIntent,
+    gpsCamera.centerCoordinate,
+    perspectiveEnabled,
+  ])
+
+  const focusLegalLimits = useCallback(() => {
+    const effect = dispatchCameraIntent({
+      type: 'EnterLegalLimitsView',
+      camera: LEGAL_LIMIT_MAP_CAMERA,
+    })
+    applyCamera(effect?.camera)
+  }, [applyCamera, dispatchCameraIntent])
+
+  return {
+    resetRotation,
+    togglePerspective,
+    setPadding,
+    zoomBy,
+    focusCoordinate,
+    centerCoordinatePreservingCamera,
+    focusWeather,
+    focusLegalLimits,
+  }
+}

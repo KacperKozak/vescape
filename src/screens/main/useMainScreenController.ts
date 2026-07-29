@@ -6,7 +6,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { exitApp } from 'vescape-core'
 
 import type { MainMapHandle } from '@/screens/main/map/MainMap'
-import { useMainScreenStore, type HistoryTab } from '@/screens/main/mainScreenStore'
+import { useMainScreenStore } from '@/screens/main/mainScreenStore'
 import {
   getLatestSession,
   getNextRideSession,
@@ -14,9 +14,9 @@ import {
 } from '@/screens/main/mainState'
 import { useBleStore } from '@/modules/board/store/bleStore'
 import { useHistoryStore, type HistorySession } from '@/modules/history/store/historyStore'
-import { useFavoriteStore } from '@/modules/history/store/favoriteStore'
-import { favoriteRangeForSession, findSessionFavorite } from '@/modules/history/lib/favorites'
+import { useHistoryFavorites } from '@/screens/main/history/useHistoryFavorites'
 import { useMapStore } from '@/modules/map/store/mapStore'
+import { useMapPointStore } from '@/modules/map-points/store/mapPointStore'
 import { useMapContributionReady } from '@/modules/profile/hooks/useMapContributionReady'
 import { useSettingsStore } from '@/modules/settings/store/settingsStore'
 import { useWeatherStore } from '@/modules/weather/store/weatherStore'
@@ -35,15 +35,8 @@ const MAX_HISTORY_PREFETCH_PAGES = 8
 export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs) {
   const backPressedOnce = useRef(false)
   const [openMediaAssetId, setOpenMediaAssetId] = useState<string | null>(null)
-  // Flips only on trim enter/exit; the live range lives in the store where narrow subscribers
-  // (map highlight, stats preview) read it without re-rendering the whole screen.
-  const trimming = useMainScreenStore((s) => s.trimRange != null)
-  // A stable seed for the chart handles, captured when trim opens so per-drag store writes don't
-  // fight the handle positions.
-  const [trimSeed, setTrimSeed] = useState<{ startMs: number; endMs: number } | null>(null)
   const {
     mode,
-    historyTab,
     historySheetVisible,
     mapSelector,
     perspectiveEnabled,
@@ -53,7 +46,6 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
     enterWeather,
     enterLegalLimits,
     enterHistory,
-    setHistoryTab,
     setHistorySheetVisible,
     setMapSelector,
     dismissMapSelector,
@@ -63,7 +55,6 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
   } = useMainScreenStore(
     useShallow((s) => ({
       mode: s.mode,
-      historyTab: s.historyTab,
       historySheetVisible: s.historySheetVisible,
       mapSelector: s.mapSelector,
       perspectiveEnabled: s.perspectiveEnabled,
@@ -73,32 +64,12 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
       enterWeather: s.enterWeather,
       enterLegalLimits: s.enterLegalLimits,
       enterHistory: s.enterHistory,
-      setHistoryTab: s.setHistoryTab,
       setHistorySheetVisible: s.setHistorySheetVisible,
       setMapSelector: s.setMapSelector,
       dismissMapSelector: s.dismissMapSelector,
       setPerspectiveEnabled: s.setPerspectiveEnabled,
       setSeekTimeMs: s.setSeekTimeMs,
       setActiveHistoryMapMetric: s.setActiveHistoryMapMetric,
-    })),
-  )
-  const {
-    favorites,
-    favoritesLoading,
-    favoritesSaving,
-    favoritesError,
-    loadFavorites,
-    addFavorite,
-    removeFavorite,
-  } = useFavoriteStore(
-    useShallow((s) => ({
-      favorites: s.favorites,
-      favoritesLoading: s.loading,
-      favoritesSaving: s.saving,
-      favoritesError: s.error,
-      loadFavorites: s.load,
-      addFavorite: s.add,
-      removeFavorite: s.remove,
     })),
   )
   const liveLocations = useBleStore((s) => s.liveLocationHistory)
@@ -148,38 +119,31 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
       removeSelectedSession: s.removeSelectedSession,
     })),
   )
+  const historyFavorites = useHistoryFavorites(selectedSession)
   const {
     mapPoints,
     selectedMapPointId,
     hiddenMapPointCategories,
     refreshNearbyMapPoints,
     reloadMapPoints,
-    loadDirectionPoint,
-    directionPoint,
     addMapPoint,
     updateMapPoint,
     setMapPointReaction,
-    setDirectionPoint,
-    clearDirectionPoint,
     removeMapPoint,
     selectMapPoint,
     toggleMapPointSelection,
     clearSelectedMapPoints,
     toggleMapPointCategoryVisibility,
-  } = useMapStore(
+  } = useMapPointStore(
     useShallow((s) => ({
       mapPoints: s.mapPoints,
       selectedMapPointId: s.selectedMapPointId,
       hiddenMapPointCategories: s.hiddenMapPointCategories,
       refreshNearbyMapPoints: s.refreshNearby,
       reloadMapPoints: s.reload,
-      loadDirectionPoint: s.loadDirectionPoint,
-      directionPoint: s.directionPoint,
       addMapPoint: s.addMapPoint,
       updateMapPoint: s.editMapPoint,
       setMapPointReaction: s.setMapPointReaction,
-      setDirectionPoint: s.setDirectionPoint,
-      clearDirectionPoint: s.clearDirectionPoint,
       removeMapPoint: s.removeMapPoint,
       selectMapPoint: s.selectMapPoint,
       toggleMapPointSelection: s.toggleMapPointSelection,
@@ -187,6 +151,15 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
       toggleMapPointCategoryVisibility: s.toggleMapPointCategoryVisibility,
     })),
   )
+  const { loadDirectionPoint, directionPoint, setDirectionPoint, clearDirectionPoint } =
+    useMapStore(
+      useShallow((s) => ({
+        loadDirectionPoint: s.loadDirectionPoint,
+        directionPoint: s.directionPoint,
+        setDirectionPoint: s.setDirectionPoint,
+        clearDirectionPoint: s.clearDirectionPoint,
+      })),
+    )
   const mediaHistory = useMediaHistory({
     selectedSession,
     gpsSamples: sessionGpsSamples,
@@ -208,9 +181,6 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
 
   useEffect(() => {
     setSeekTimeMs(null)
-    // Switching rides abandons any in-progress trim. The stale seed is harmless — it is only read
-    // while trimming, which endTrim() ends here.
-    useMainScreenStore.getState().endTrim()
   }, [selectedSession, setSeekTimeMs])
 
   useEffect(() => {
@@ -277,60 +247,15 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
     requestAnimationFrame(() => mapRef.current?.recenterLive())
   }, [enterTelemetry, mapRef])
 
-  const selectedSessionFavorite = useMemo(
-    () => (selectedSession ? findSessionFavorite(favorites, selectedSession) : null),
-    [favorites, selectedSession],
-  )
-
-  const selectHistoryTab = useCallback(
-    (tab: HistoryTab) => {
-      setHistoryTab(tab)
-      if (tab === 'favorites') void loadFavorites()
-    },
-    [loadFavorites, setHistoryTab],
-  )
-
-  /** Star on an open ride opens trim mode, seeded with the full Moving Window (one-tap whole ride). */
-  const beginTrimFavorite = useCallback(() => {
-    const session = useHistoryStore.getState().selectedSession
-    if (!session) return
-    const range = favoriteRangeForSession(session)
-    setTrimSeed(range)
-    useMainScreenStore.getState().beginTrim(range)
-  }, [setTrimSeed])
-
-  /** Per drag-frame update of the trimmed span; drives the live map highlight and stats preview. */
-  const updateTrimRange = useCallback((startMs: number, endMs: number) => {
-    useMainScreenStore.getState().setTrimRange({ startMs, endMs })
-  }, [])
-
-  const cancelTrim = useCallback(() => {
-    useMainScreenStore.getState().endTrim()
-  }, [])
-
-  /** Save the trimmed range as a Favorite. Native mints identity, timestamps and durable stats. */
-  const saveTrim = useCallback(async () => {
-    const range = useMainScreenStore.getState().trimRange
-    const session = useHistoryStore.getState().selectedSession
-    if (!range || !session) return
-    const favorite = await addFavorite({
-      startMs: Math.min(range.startMs, range.endMs),
-      endMs: Math.max(range.startMs, range.endMs),
-      ...(session.deviceId ? { deviceId: session.deviceId } : {}),
-    })
-    if (favorite) useMainScreenStore.getState().endTrim()
-  }, [addFavorite])
-
   const exitHistory = useCallback(() => {
     setOpenMediaAssetId(null)
-    setHistoryTab('history')
-    useMainScreenStore.getState().endTrim()
+    historyFavorites.resetHistoryFavorites()
     void selectSession(null)
     enterTelemetry()
     requestAnimationFrame(() =>
       mapRef.current?.recenterLive({ resetPadding: true, animationDuration: 0 }),
     )
-  }, [enterTelemetry, mapRef, selectSession, setHistoryTab])
+  }, [enterTelemetry, historyFavorites, mapRef, selectSession])
 
   const loadOlderHistoryPages = useCallback(
     async (targetSessionCount = TARGET_INITIAL_HISTORY_SESSIONS) => {
@@ -349,7 +274,7 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
 
   const enterHistoryMode = useCallback(async () => {
     enterHistory()
-    void loadFavorites()
+    void historyFavorites.loadFavorites()
     await loadInitial()
     await loadOlderHistoryPages()
     if (useMainScreenStore.getState().mode !== 'history') return
@@ -357,7 +282,7 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
     if (latest) {
       await selectSession(latest)
     }
-  }, [enterHistory, loadFavorites, loadInitial, loadOlderHistoryPages, selectSession])
+  }, [enterHistory, historyFavorites, loadInitial, loadOlderHistoryPages, selectSession])
 
   const selectPreviousRide = useCallback(async () => {
     setOpenMediaAssetId(null)
@@ -537,20 +462,7 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
     historyError,
     historySheetVisible,
     setHistorySheetVisible,
-    historyTab,
-    selectHistoryTab,
-    favorites,
-    favoritesLoading,
-    favoritesSaving,
-    favoritesError,
-    selectedSessionFavorite,
-    trimming,
-    trimSeed,
-    beginTrimFavorite,
-    updateTrimRange,
-    cancelTrim,
-    saveTrim,
-    removeFavorite,
+    ...historyFavorites,
     selectSession,
     loadMoreHistory: loadMore,
     selectPreviousRide,

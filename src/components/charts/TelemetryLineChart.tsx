@@ -32,6 +32,13 @@ import {
   type ExcludedRange,
   type TelemetryChartPoint,
 } from '@/components/charts/chartMath'
+import {
+  TelemetryChartTrimOverlay,
+  useChartTrim,
+  type ChartTrimConfig,
+} from '@/components/charts/TelemetryChartTrim'
+
+export type { ChartTrimConfig } from '@/components/charts/TelemetryChartTrim'
 
 const DEFAULT_HEIGHT = 54
 const Y_AXIS_WIDTH = 34
@@ -125,62 +132,6 @@ function createScrubGesture({
       const timeMs = activeScrubTimeMs.value
       activeScrubTimeMs.value = null
       runOnJS(endDrag)(timeMs)
-    })
-}
-
-/**
- * Range-trim pan: one gesture over the whole graph. onBegin grabs whichever handle is nearer the
- * touch; onUpdate drags it in free milliseconds, clamped to the domain and unable to cross its peer.
- * The handle tracks the finger on the UI thread; JS is poked (throttled) only to drive the preview.
- * Module-level so the shared-value writes live outside the component's render closure.
- */
-function createTrimGesture({
-  enabled,
-  chartWidth,
-  domainStartMs,
-  domainEndMs,
-  trimStartMs,
-  trimEndMs,
-  activeHandle,
-  notifyTrim,
-  commitTrim,
-}: {
-  enabled: boolean
-  chartWidth: number
-  domainStartMs: number
-  domainEndMs: number
-  trimStartMs: SharedValue<number>
-  trimEndMs: SharedValue<number>
-  activeHandle: SharedValue<0 | 1 | null>
-  notifyTrim: (startMs: number, endMs: number) => void
-  commitTrim: (startMs: number, endMs: number) => void
-}) {
-  const span = domainEndMs - domainStartMs
-  return Gesture.Pan()
-    .enabled(enabled)
-    .onBegin((event) => {
-      'worklet'
-      const xStart = (chartWidth * (trimStartMs.value - domainStartMs)) / span
-      const xEnd = (chartWidth * (trimEndMs.value - domainStartMs)) / span
-      activeHandle.value = Math.abs(event.x - xStart) <= Math.abs(event.x - xEnd) ? 0 : 1
-    })
-    .onUpdate((event) => {
-      'worklet'
-      const clampedX = Math.max(0, Math.min(chartWidth, event.x))
-      let ms = domainStartMs + (clampedX / chartWidth) * span
-      if (activeHandle.value === 0) {
-        if (ms > trimEndMs.value) ms = trimEndMs.value
-        trimStartMs.value = ms
-      } else if (activeHandle.value === 1) {
-        if (ms < trimStartMs.value) ms = trimStartMs.value
-        trimEndMs.value = ms
-      }
-      runOnJS(notifyTrim)(trimStartMs.value, trimEndMs.value)
-    })
-    .onFinalize(() => {
-      'worklet'
-      activeHandle.value = null
-      runOnJS(commitTrim)(trimStartMs.value, trimEndMs.value)
     })
 }
 
@@ -316,24 +267,6 @@ export interface SecondaryChartSeries {
   formatValue?: (value: number) => string
 }
 
-/**
- * Turns the chart into a range trimmer: two draggable handles over the timeline, the region outside
- * them dimmed. `startMs`/`endMs` seed the handles (re-seeded when either changes). Handles are
- * clamped to the chart's own time domain and cannot cross — free milliseconds, no snapping, no
- * minimum span. `onChange` fires per drag frame (throttled by the chart); `onCommit` fires on
- * release. Both report the raw span so consumers can drive a live map/stats preview.
- */
-export interface ChartTrimConfig {
-  startMs: number
-  endMs: number
-  onChange: (startMs: number, endMs: number) => void
-  onCommit: (startMs: number, endMs: number) => void
-}
-
-// Trim handle position is pushed to JS at most this often; the handle itself tracks the finger on
-// the UI thread, so this only paces the map/stats preview, mirroring the scrub-seek throttle.
-const TRIM_NOTIFY_THROTTLE_MS = 50
-
 interface TelemetryLineChartProps {
   label?: string
   value: string
@@ -444,6 +377,8 @@ const ChartLineSegments = memo(function ChartLineSegments({
   )
 })
 
+// TODO: Split chart state derivation to reduce cyclomatic complexity below 30.
+// eslint-disable-next-line complexity
 export function TelemetryLineChart({
   label,
   value,
@@ -475,12 +410,6 @@ export function TelemetryLineChart({
   const onPointSelectedRef = useRef(onPointSelected)
   const onGestureStartRef = useRef(onGestureStart)
   const onScrubTimeChangeRef = useRef(onScrubTimeChange)
-  const trimOnChangeRef = useRef(trim?.onChange)
-  const trimOnCommitRef = useRef(trim?.onCommit)
-  const lastTrimNotifyAtRef = useRef(0)
-  const trimStartMs = useSharedValue(trim?.startMs ?? 0)
-  const trimEndMs = useSharedValue(trim?.endMs ?? 0)
-  const activeTrimHandle = useSharedValue<0 | 1 | null>(null)
   // Live charts keep streaming while the user scrubs; rebuilding paths and the marker
   // table mid-gesture starves the JS thread. Freeze the series for the drag instead.
   const liveSeriesRef = useRef({ points, secondary })
@@ -495,18 +424,8 @@ export function TelemetryLineChart({
     onPointSelectedRef.current = onPointSelected
     onGestureStartRef.current = onGestureStart
     onScrubTimeChangeRef.current = onScrubTimeChange
-    trimOnChangeRef.current = trim?.onChange
-    trimOnCommitRef.current = trim?.onCommit
     liveSeriesRef.current = { points, secondary }
   })
-
-  // Re-seed the handles whenever a new trim session opens (start/end change identity).
-  useEffect(() => {
-    if (!trim) return
-    setSharedValue(trimStartMs, trim.startMs)
-    setSharedValue(trimEndMs, trim.endMs)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- shared values are stable refs
-  }, [trim?.startMs, trim?.endMs])
 
   useEffect(() => {
     setSharedValue(currentTimeMs, currentPoint?.date.getTime() ?? null)
@@ -645,68 +564,13 @@ export function TelemetryLineChart({
   // Trim shares the chart's own time domain: first→last plotted sample maps to [0, chartWidth].
   const trimDomainStartMs = displayPoints[0]?.date.getTime() ?? 0
   const trimDomainEndMs = displayPoints.at(-1)?.date.getTime() ?? 0
-  const trimEnabled = !!trim && chartWidth > 0 && trimDomainEndMs > trimDomainStartMs
-
-  const notifyTrim = useCallback((start: number, end: number) => {
-    const now = Date.now()
-    if (now - lastTrimNotifyAtRef.current < TRIM_NOTIFY_THROTTLE_MS) return
-    lastTrimNotifyAtRef.current = now
-    trimOnChangeRef.current?.(start, end)
-  }, [])
-  const commitTrim = useCallback((start: number, end: number) => {
-    lastTrimNotifyAtRef.current = 0
-    trimOnCommitRef.current?.(start, end)
-  }, [])
-
-  const trimGesture = useMemo(
-    () =>
-      // eslint-disable-next-line react-hooks/refs -- shared values are only touched inside worklets
-      createTrimGesture({
-        enabled: trimEnabled,
-        chartWidth,
-        domainStartMs: trimDomainStartMs,
-        domainEndMs: trimDomainEndMs,
-        trimStartMs,
-        trimEndMs,
-        activeHandle: activeTrimHandle,
-        notifyTrim,
-        commitTrim,
-      }),
-    [
-      activeTrimHandle,
-      chartWidth,
-      commitTrim,
-      notifyTrim,
-      trimDomainEndMs,
-      trimDomainStartMs,
-      trimEnabled,
-      trimEndMs,
-      trimStartMs,
-    ],
-  )
-
-  const trimStartXStyle = useAnimatedStyle(() => {
-    const span = trimDomainEndMs - trimDomainStartMs
-    const x = span > 0 ? (chartWidth * (trimStartMs.value - trimDomainStartMs)) / span : 0
-    return { transform: [{ translateX: Math.max(0, Math.min(chartWidth, x)) }] }
+  const trimState = useChartTrim({
+    trim,
+    chartWidth,
+    domainStartMs: trimDomainStartMs,
+    domainEndMs: trimDomainEndMs,
   })
-  const trimEndXStyle = useAnimatedStyle(() => {
-    const span = trimDomainEndMs - trimDomainStartMs
-    const x = span > 0 ? (chartWidth * (trimEndMs.value - trimDomainStartMs)) / span : 0
-    return { transform: [{ translateX: Math.max(0, Math.min(chartWidth, x)) }] }
-  })
-  const trimDimLeftStyle = useAnimatedStyle(() => {
-    const span = trimDomainEndMs - trimDomainStartMs
-    const x = span > 0 ? (chartWidth * (trimStartMs.value - trimDomainStartMs)) / span : 0
-    return { width: Math.max(0, Math.min(chartWidth, x)) }
-  })
-  const trimDimRightStyle = useAnimatedStyle(() => {
-    const span = trimDomainEndMs - trimDomainStartMs
-    const x = span > 0 ? (chartWidth * (trimEndMs.value - trimDomainStartMs)) / span : chartWidth
-    return { width: Math.max(0, chartWidth - Math.max(0, Math.min(chartWidth, x))) }
-  })
-
-  const activeGesture = trim ? trimGesture : panGesture
+  const activeGesture = trim ? trimState.gesture : panGesture
 
   const yMid = (range.y.min + range.y.max) / 2
   const secondaryYMid = secondary ? (secondary.range.y.min + secondary.range.y.max) / 2 : 0
@@ -859,16 +723,11 @@ export function TelemetryLineChart({
               </Canvas>
             )}
             {trim && chartWidth > 0 && (
-              <View style={[styles.trimOverlay, { height }]} pointerEvents="none">
-                <Animated.View style={[styles.trimDim, styles.trimDimLeft, trimDimLeftStyle]} />
-                <Animated.View style={[styles.trimDim, styles.trimDimRight, trimDimRightStyle]} />
-                <Animated.View style={[styles.trimHandle, trimStartXStyle]}>
-                  <View style={styles.trimHandleKnob} />
-                </Animated.View>
-                <Animated.View style={[styles.trimHandle, trimEndXStyle]}>
-                  <View style={styles.trimHandleKnob} />
-                </Animated.View>
-              </View>
+              <TelemetryChartTrimOverlay
+                height={height}
+                chartWidth={chartWidth}
+                trimState={trimState}
+              />
             )}
           </View>
         </GestureDetector>
@@ -971,42 +830,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     pointerEvents: 'none',
-  },
-  trimOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-  },
-  trimDim: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    backgroundColor: theme.alpha(theme.palette.slate.bg, 0.6),
-  },
-  trimDimLeft: {
-    left: 0,
-  },
-  trimDimRight: {
-    right: 0,
-  },
-  trimHandle: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    width: 2,
-    marginLeft: -1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.palette.amber.color,
-  },
-  trimHandleKnob: {
-    width: 12,
-    height: 20,
-    borderRadius: 6,
-    backgroundColor: theme.palette.amber.color,
-    borderWidth: 1,
-    borderColor: theme.palette.slate.surfaceDeep,
   },
   xAxis: {
     flexDirection: 'row',

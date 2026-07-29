@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, View, StyleSheet } from 'react-native'
 import { useSharedValue } from 'react-native-reanimated'
 
@@ -11,7 +11,7 @@ import type { MapPointPatch } from 'vescape-core'
 
 import type { Board } from '@/modules/board/store/boardStore'
 import { theme } from '@/constants/theme'
-import { getMapPointKindLabel } from '@/modules/map/constants/mapPoints'
+import { getMapPointKindLabel } from '@/modules/map-points/constants/mapPoints'
 import type { MapSelection } from '@/modules/map/lib/mapSelection'
 import { reverseGeocodeMapCoordinate } from '@/modules/map/lib/search'
 
@@ -25,6 +25,53 @@ interface MainScreenProps {
   onRetryConnect: () => void
   onSelectBoard: (id: string) => void
   onAddBoard: () => void
+}
+
+function buildHistoryOverlayProps(controller: ReturnType<typeof useMainScreenController>) {
+  return {
+    enterHistoryMode: controller.enterHistoryMode,
+    selectedSession: controller.selectedSession,
+    sessionSamples: controller.sessionSamples,
+    sessionGpsSamples: controller.sessionGpsSamples,
+    sessionMarkers: controller.sessionMarkers,
+    nextRide: controller.nextRide,
+    canPreviousRide: controller.canPreviousRide,
+    loadingSession: controller.loadingSession,
+    historyLoading: controller.historyLoading,
+    historyHasMore: controller.historyHasMore,
+    historyError: controller.historyError,
+    blocks: controller.blocks,
+    sessions: controller.sessions,
+    historySheetVisible: controller.historySheetVisible,
+    setHistorySheetVisible: controller.setHistorySheetVisible,
+    historyTab: controller.historyTab,
+    selectHistoryTab: controller.selectHistoryTab,
+    favorites: controller.favorites,
+    favoritesLoading: controller.favoritesLoading,
+    favoritesSaving: controller.favoritesSaving,
+    favoritesError: controller.favoritesError,
+    selectedSessionFavorite: controller.selectedSessionFavorite,
+    trimming: controller.trimming,
+    trimSeed: controller.trimSeed,
+    beginTrimFavorite: controller.beginTrimFavorite,
+    updateTrimRange: controller.updateTrimRange,
+    cancelTrim: controller.cancelTrim,
+    saveTrim: controller.saveTrim,
+    removeFavorite: controller.removeFavorite,
+    selectSession: controller.selectSession,
+    loadMoreHistory: controller.loadMoreHistory,
+    selectPreviousRide: controller.selectPreviousRide,
+    selectNextRide: controller.selectNextRide,
+    selectRide: controller.selectRide,
+    exitHistory: controller.exitHistory,
+    removeSession: controller.removeSession,
+    onSeek: controller.onSeek,
+    setActiveHistoryMapMetric: controller.setActiveHistoryMapMetric,
+    mediaHistory: controller.mediaHistory,
+    openMedia: controller.openMedia,
+    openMediaAssetId: controller.openMediaAssetId,
+    closeMedia: controller.closeMedia,
+  }
 }
 
 export function MainScreen({
@@ -321,6 +368,71 @@ export function MainScreen({
     return () => abortController.abort()
   }, [activeNavigationTarget])
 
+  // Grouped MainMap props are memoized so the memo'd map does not re-render on every
+  // MainScreen render just because a fresh object literal was handed to it.
+  const mapHistoryProps = useMemo(
+    () => ({
+      active: controller.historyActive,
+      selectionKey: controller.selectedSession?.id ?? null,
+      preview: controller.historyPreview,
+      previewRoute: controller.historyPreviewRoute,
+      gpsSamples: controller.sessionGpsSamples,
+      telemetrySamples: controller.sessionSamples,
+      markers: controller.sessionMarkers,
+      mediaAssets: controller.mediaHistory.assets,
+      onOpenMedia: controller.openMedia,
+      activeMapMetric: controller.activeHistoryMapMetric,
+    }),
+    [
+      controller.activeHistoryMapMetric,
+      controller.historyActive,
+      controller.historyPreview,
+      controller.historyPreviewRoute,
+      controller.mediaHistory.assets,
+      controller.openMedia,
+      controller.selectedSession?.id,
+      controller.sessionGpsSamples,
+      controller.sessionMarkers,
+      controller.sessionSamples,
+    ],
+  )
+
+  const mapStyleProps = useMemo(
+    () => ({
+      mapStyleKey: controller.mapStyleKey,
+      satelliteOverlayEnabled: controller.satelliteOverlayEnabled,
+      satelliteImageryOpacity: controller.satelliteImageryOpacity,
+      satelliteMapImageryOpacity: controller.satelliteMapImageryOpacity,
+      satelliteImagerySaturation: controller.satelliteImagerySaturation,
+      hideTelemetryMapDetails: controller.hideTelemetryMapDetails,
+    }),
+    [
+      controller.hideTelemetryMapDetails,
+      controller.mapStyleKey,
+      controller.satelliteImageryOpacity,
+      controller.satelliteImagerySaturation,
+      controller.satelliteMapImageryOpacity,
+      controller.satelliteOverlayEnabled,
+    ],
+  )
+
+  const mapPointProps = useMemo(
+    () => ({
+      points: controller.mapPoints,
+      selectedId: controller.selectedMapPointId,
+      hiddenCategories: controller.hiddenMapPointCategories,
+      onToggleSelection: handleToggleMapPointSelection,
+      onCameraSettled: controller.refreshNearbyMapPoints,
+    }),
+    [
+      controller.hiddenMapPointCategories,
+      controller.mapPoints,
+      controller.refreshNearbyMapPoints,
+      controller.selectedMapPointId,
+      handleToggleMapPointSelection,
+    ],
+  )
+
   if (!boardsLoaded) {
     return (
       <View style={styles.container}>
@@ -339,22 +451,9 @@ export function MainScreen({
         mode={controller.mode}
         liveLocations={controller.liveLocations}
         latestApproximateLocation={controller.latestApproximateLocation}
-        rideGpsSamples={controller.sessionGpsSamples}
-        rideTelemetrySamples={controller.sessionSamples}
-        rideMarkers={controller.sessionMarkers}
-        mediaAssets={controller.mediaHistory.assets}
-        onOpenMedia={controller.openMedia}
-        activeHistoryMapMetric={controller.activeHistoryMapMetric}
-        historySelectionKey={controller.selectedSession?.id ?? null}
-        historyPreview={controller.historyPreview}
-        historyPreviewRoute={controller.historyPreviewRoute}
-        historyActive={controller.historyActive}
-        mapStyleKey={controller.mapStyleKey}
-        satelliteOverlayEnabled={controller.satelliteOverlayEnabled}
-        satelliteImageryOpacity={controller.satelliteImageryOpacity}
-        satelliteMapImageryOpacity={controller.satelliteMapImageryOpacity}
-        satelliteImagerySaturation={controller.satelliteImagerySaturation}
-        hideTelemetryMapDetails={controller.hideTelemetryMapDetails}
+        history={mapHistoryProps}
+        style={mapStyleProps}
+        mapPoints={mapPointProps}
         mapNavigationMode={controller.mapNavigationMode}
         rotationLocked={controller.rotationLocked}
         perspectiveEnabled={controller.perspectiveEnabled}
@@ -370,11 +469,6 @@ export function MainScreen({
         directionPoint={controller.directionPoint}
         activeNavigationTarget={activeNavigationTarget}
         selectedNavigationTarget={selectedNavigationTarget}
-        mapPoints={controller.mapPoints}
-        selectedMapPointId={controller.selectedMapPointId}
-        hiddenMapPointCategories={controller.hiddenMapPointCategories}
-        onCameraSettled={controller.refreshNearbyMapPoints}
-        onToggleMapPointSelection={handleToggleMapPointSelection}
         weatherActive={controller.weatherActive}
         legalLimitsActive={controller.legalLimitsActive}
       />
@@ -396,8 +490,6 @@ export function MainScreen({
           heading: selectorHeading,
           mapStyleKey: controller.mapStyleKey,
           setMapStyleKey: controller.setMapStyleKey,
-          satelliteMapImageryOpacity: controller.satelliteMapImageryOpacity,
-          setSatelliteMapImageryOpacity: controller.setSatelliteMapImageryOpacity,
           mapNavigationMode: controller.mapNavigationMode,
           setMapNavigationMode: controller.setMapNavigationMode,
           mapSelector: controller.mapSelector,
@@ -420,60 +512,13 @@ export function MainScreen({
           onNavigateSelectedTarget: handleNavigateSelectedTarget,
           onCancelNavigation: handleClearDirectionPoint,
           onDismissSelectedTarget: handleDismissSelectedTarget,
-          addMapPoint: controller.addMapPoint,
           updateMapPoint: handleUpdateMapPoint,
           setMapPointReaction: handleSetMapPointReaction,
           onRemoveMapPoint: handleRemoveMapPoint,
-          hiddenMapPointCategories: controller.hiddenMapPointCategories,
-          toggleMapPointCategoryVisibility: controller.toggleMapPointCategoryVisibility,
           offscreenMapIndicators,
           onOffscreenIndicatorPress: handleOffscreenIndicatorPress,
         }}
-        history={{
-          enterHistoryMode: controller.enterHistoryMode,
-          selectedSession: controller.selectedSession,
-          sessionSamples: controller.sessionSamples,
-          sessionGpsSamples: controller.sessionGpsSamples,
-          sessionMarkers: controller.sessionMarkers,
-          previousRide: controller.previousRide,
-          nextRide: controller.nextRide,
-          canPreviousRide: controller.canPreviousRide,
-          loadingSession: controller.loadingSession,
-          historyLoading: controller.historyLoading,
-          historyHasMore: controller.historyHasMore,
-          historyError: controller.historyError,
-          blocks: controller.blocks,
-          sessions: controller.sessions,
-          historySheetVisible: controller.historySheetVisible,
-          setHistorySheetVisible: controller.setHistorySheetVisible,
-          historyTab: controller.historyTab,
-          selectHistoryTab: controller.selectHistoryTab,
-          favorites: controller.favorites,
-          favoritesLoading: controller.favoritesLoading,
-          favoritesSaving: controller.favoritesSaving,
-          favoritesError: controller.favoritesError,
-          selectedSessionFavorite: controller.selectedSessionFavorite,
-          trimming: controller.trimming,
-          trimSeed: controller.trimSeed,
-          beginTrimFavorite: controller.beginTrimFavorite,
-          updateTrimRange: controller.updateTrimRange,
-          cancelTrim: controller.cancelTrim,
-          saveTrim: controller.saveTrim,
-          removeFavorite: controller.removeFavorite,
-          selectSession: controller.selectSession,
-          loadMoreHistory: controller.loadMoreHistory,
-          selectPreviousRide: controller.selectPreviousRide,
-          selectNextRide: controller.selectNextRide,
-          selectRide: controller.selectRide,
-          exitHistory: controller.exitHistory,
-          removeSession: controller.removeSession,
-          onSeek: controller.onSeek,
-          setActiveHistoryMapMetric: controller.setActiveHistoryMapMetric,
-          mediaHistory: controller.mediaHistory,
-          openMedia: controller.openMedia,
-          openMediaAssetId: controller.openMediaAssetId,
-          closeMedia: controller.closeMedia,
-        }}
+        history={buildHistoryOverlayProps(controller)}
       />
     </View>
   )

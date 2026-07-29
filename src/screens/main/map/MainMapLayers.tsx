@@ -22,12 +22,12 @@ import { MapPin } from '@/modules/map/components/MapPin'
 import { RainViewerOverlay } from '@/modules/weather/components/RainViewerOverlay'
 import { MAPY_TILE_URL_TEMPLATE } from '@/config/mapy'
 import { MAP_DEFAULTS } from '@/modules/map/constants/mapStyles'
-import { getMapPointKindIcon } from '@/modules/map/constants/mapPointIcons'
+import { getMapPointKindIcon } from '@/modules/map-points/constants/mapPointIcons'
 import {
   getMapPointKindColor,
   getMapPointKindLabel,
   getMapPointKindTextColor,
-} from '@/modules/map/constants/mapPoints'
+} from '@/modules/map-points/constants/mapPoints'
 import { theme } from '@/constants/theme'
 import { makeCircleFeature, makeTrailLineString } from '@/helpers/mapGeometry'
 import { findNearestSampleIndexByTime } from '@/modules/history/lib/playback'
@@ -42,7 +42,7 @@ import type {
   HistoryMetricKey,
   HistoryMetricHotRanges,
 } from '@/modules/history/lib/metricColorScale'
-import { isMapPinKindVisible } from '@/modules/map/lib/mapPointVisibility'
+import { isMapPinKindVisible } from '@/modules/map-points/lib/mapPointVisibility'
 import type {
   HistoryGpsSample,
   HistoryMarker,

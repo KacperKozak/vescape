@@ -1,4 +1,4 @@
-appId: app.vescape
+appId: ${APP_ID}
 ---
 - extendedWaitUntil:
     visible: E2E Board
