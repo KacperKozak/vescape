@@ -86,11 +86,22 @@ function reactionScore(reaction: MapPointReaction | null) {
 
 export const useMapStore = create<MapState & MapActions>((set, get) => {
   /**
-   * One read path. Overlapping reads are dropped rather than queued: the map idles constantly, and
-   * a stale answer landing after a newer one would rewrite the visible set backwards.
+   * Newest camera position asked for while a read is in flight. Kept to one: older positions are
+   * worthless once the rider has moved past them.
+   */
+  let queuedRead: NearbyRead | null = null
+
+  /**
+   * One read path. Reads never overlap — a stale answer landing after a newer one would rewrite the
+   * visible set backwards — but the newest target is remembered and run once the current read
+   * settles. Dropping it outright would strand the map on the old area, because the camera only
+   * idles again when the rider moves it again.
    */
   async function read(target: NearbyRead) {
-    if (get().loading) return
+    if (get().loading) {
+      queuedRead = target
+      return
+    }
     set({ loading: true, lastRead: target })
     try {
       const nearby = await getNearbyMapPoints(
@@ -118,6 +129,10 @@ export const useMapStore = create<MapState & MapActions>((set, get) => {
         error: mapPointErrorMessage(error),
       })
     }
+
+    const next = queuedRead
+    queuedRead = null
+    if (next) await read(next)
   }
 
   /**

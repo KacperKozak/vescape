@@ -36,7 +36,15 @@ let settings = {
   directionPointLongitude: null as number | null,
 }
 
+/** Set to hold the next read open, so a second read can be started mid-flight. */
+let releaseNearby: (() => void) | null = null
+
 const getNearbyMapPoints = mock(async (_lat: number, _lng: number, _radius: number) => {
+  if (releaseNearby !== null) {
+    await new Promise<void>((resolve) => {
+      releaseNearby = resolve
+    })
+  }
   if (nearbyError) throw nearbyError
   return nearbyResult
 })
@@ -77,6 +85,7 @@ const { useMapStore } = await import('@/modules/map/store/mapStore')
 beforeEach(() => {
   nearbyResult = { items: [], truncated: false }
   nearbyError = null
+  releaseNearby = null
   writeError = null
   settings = { directionPointLatitude: null, directionPointLongitude: null }
   useMapStore.setState({
@@ -158,6 +167,27 @@ test('a still camera retries after a failed read', async () => {
   expect(getNearbyMapPoints).toHaveBeenCalledTimes(2)
   expect(useMapStore.getState().mapPoints.map((point) => point.id)).toEqual(['a'])
   expect(useMapStore.getState().error).toBeNull()
+})
+
+/**
+ * The camera only idles again when the rider moves it again, so a target dropped mid-flight would
+ * strand the map on the previous area.
+ */
+test('a camera move during a read is served once the read settles', async () => {
+  nearbyResult = { items: [serverPoint({ id: 'first' })], truncated: false }
+  releaseNearby = () => {}
+  const first = useMapStore.getState().refreshNearby(52.1, 21.1, 14)
+
+  const second = useMapStore.getState().refreshNearby(52.4, 21.6, 14)
+  nearbyResult = { items: [serverPoint({ id: 'second' })], truncated: false }
+  releaseNearby?.()
+  releaseNearby = null
+  await Promise.all([first, second])
+
+  expect(getNearbyMapPoints).toHaveBeenCalledTimes(2)
+  expect(getNearbyMapPoints.mock.calls[1]?.slice(0, 2)).toEqual([52.4, 21.6])
+  expect(useMapStore.getState().mapPoints.map((point) => point.id)).toEqual(['second'])
+  expect(useMapStore.getState().loading).toBe(false)
 })
 
 test('creating a Map Point adds the server row, not a local guess', async () => {
