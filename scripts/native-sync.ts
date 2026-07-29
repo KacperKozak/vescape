@@ -15,6 +15,7 @@ export type Platform = (typeof PLATFORMS)[number]
  */
 const PREBUILD_INPUTS = [
   'app.config.ts',
+  'src/config/appVariant.ts',
   'package.json',
   'bun.lock',
   'plugins',
