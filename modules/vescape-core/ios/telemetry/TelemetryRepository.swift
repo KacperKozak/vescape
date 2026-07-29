@@ -302,6 +302,20 @@ internal final class TelemetryRepository {
     return names
   }
 
+  /// Rename a Favorite, or clear its name with an empty/absent value. The range and the summary are
+  /// immutable — re-trimming is delete + recreate (ADR 0029). `updated_at` is minted here.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryRepository.kt `renameFavorite`
+  func renameFavorite(_ id: String, name: String?) -> [String: Any?]? {
+    let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines)
+    let renamed = FavoriteStore.shared.rename(
+      id,
+      name: (trimmed?.isEmpty ?? true) ? nil : trimmed,
+      updatedAtMs: telemetryNowMs()
+    )
+    guard let renamed else { return nil }
+    return renamed.toMap(boardName: renamed.boardId.flatMap { Self.boardNamesById()[$0] })
+  }
+
   /// Unpin a Favorite. Telemetry in its range stays and becomes normally deletable (ADR 0029).
   /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryRepository.kt `deleteFavorite`
   func deleteFavorite(_ id: String) -> Bool {

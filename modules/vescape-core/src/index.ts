@@ -1470,6 +1470,7 @@ type VescapeCoreNativeModule = NativeEventEmitter<VescapeCoreEvents> & {
   getTelemetrySummary(): Promise<TelemetrySummary>
   getFavorites(): Promise<Favorite[]>
   createFavorite(options: CreateFavoriteOptions): Promise<Favorite>
+  renameFavorite(id: string, name: string | null): Promise<Favorite>
   deleteFavorite(id: string): Promise<boolean>
   getDiagnosticEvents(options: DiagnosticEventOptions): Promise<LocalDiagnosticEvent[]>
   clearDiagnosticEvents(): Promise<void>
@@ -1967,6 +1968,14 @@ export async function getFavorites(): Promise<Favorite[]> {
 /** Pin a time range as a Favorite. Native mints the id, the timestamps and the summary stats. */
 export async function createFavorite(options: CreateFavoriteOptions): Promise<Favorite> {
   return native.createFavorite(options)
+}
+
+/**
+ * Rename a Favorite, or clear its name with `null`. The range and the summary stay as created —
+ * changing what a Favorite covers is delete + recreate (ADR 0029).
+ */
+export async function renameFavorite(id: string, name: string | null): Promise<Favorite> {
+  return native.renameFavorite(id, name)
 }
 
 /** Unpin a Favorite. Its telemetry stays and becomes normally deletable (ADR 0029). */

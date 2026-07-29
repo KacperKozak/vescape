@@ -62,6 +62,44 @@ final class FavoriteStoreTests: XCTestCase {
     XCTAssertEqual(store.list().map(\.id), ["newer", "older"])
   }
 
+  /// Renaming touches the name and `updated_at` only: the pinned range and the summary a Favorite
+  /// was created with must survive, because re-trimming is delete + recreate.
+  func testRenameKeepsRangeAndSummaryAndBumpsUpdatedAt() throws {
+    store.insert(
+      makeFavorite(
+        id: "fav-1",
+        name: "Dolina",
+        startMs: 1_000,
+        endMs: 61_000,
+        summary: FavoriteSummary(sampleCount: 12, movingDurationMs: 55_000)
+      )
+    )
+
+    let renamed = try XCTUnwrap(store.rename("fav-1", name: "Dolina single track", updatedAtMs: 1_800_000_000_000))
+
+    XCTAssertEqual(renamed.name, "Dolina single track")
+    XCTAssertEqual(renamed.startMs, 1_000)
+    XCTAssertEqual(renamed.endMs, 61_000)
+    XCTAssertEqual(renamed.summary.sampleCount, 12)
+    XCTAssertEqual(renamed.summary.movingDurationMs, 55_000)
+    XCTAssertEqual(renamed.createdAtMs, 1_700_000_000_000)
+    XCTAssertEqual(renamed.updatedAtMs, 1_800_000_000_000)
+  }
+
+  /// Naming stays optional after creation too, so clearing a name is a supported rename.
+  func testRenameToNilClearsTheName() throws {
+    store.insert(makeFavorite(id: "fav-1", name: "Dolina", startMs: 1_000, endMs: 2_000))
+
+    let cleared = try XCTUnwrap(store.rename("fav-1", name: nil, updatedAtMs: 1_800_000_000_000))
+
+    XCTAssertNil(cleared.name)
+    XCTAssertNil(try XCTUnwrap(store.list().first).name)
+  }
+
+  func testRenameOfAnUnknownFavoriteReportsNoRow() {
+    XCTAssertNil(store.rename("missing", name: "Nope", updatedAtMs: 1_800_000_000_000))
+  }
+
   /// Removing a Favorite unpins it and nothing else: only its own row goes away.
   func testDeleteRemovesOnlyTheTargetRow() {
     store.insert(makeFavorite(id: "fav-1", startMs: 1_000, endMs: 2_000))

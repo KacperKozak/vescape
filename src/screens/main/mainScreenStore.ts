@@ -17,6 +17,8 @@ export interface TrimRange {
 interface MainScreenState {
   mode: MainViewState
   historyTab: HistoryTab
+  /** The Favorite whose detail is open, or null while the Favorites list is showing. */
+  openFavoriteId: string | null
   historySheetVisible: boolean
   mapSelector: MapSelector
   perspectiveEnabled: boolean
@@ -33,6 +35,10 @@ interface MainScreenActions {
   enterLegalLimits: () => void
   enterHistory: () => void
   setHistoryTab: (tab: HistoryTab) => void
+  /** Open one Favorite's detail. */
+  openFavorite: (id: string) => void
+  /** Back to the Favorites list. */
+  closeFavorite: () => void
   setHistorySheetVisible: (visible: boolean) => void
   setMapSelector: (selector: MapSelector) => void
   dismissMapSelector: () => void
@@ -50,6 +56,7 @@ interface MainScreenActions {
 const initialState: MainScreenState = {
   mode: 'telemetry',
   historyTab: 'history',
+  openFavoriteId: null,
   historySheetVisible: false,
   mapSelector: null,
   perspectiveEnabled: true,
@@ -72,6 +79,7 @@ export const useMainScreenStore = create<MainScreenState & MainScreenActions>((s
       mapSelector: null,
       seekTimeMs: null,
       trimRange: null,
+      openFavoriteId: null,
     })
   },
 
@@ -93,8 +101,18 @@ export const useMainScreenStore = create<MainScreenState & MainScreenActions>((s
 
   setHistoryTab(tab) {
     set((state) =>
-      state.historyTab === tab ? state : { historyTab: tab, historySheetVisible: false },
+      state.historyTab === tab
+        ? state
+        : { historyTab: tab, historySheetVisible: false, openFavoriteId: null },
     )
+  },
+
+  openFavorite(id) {
+    set({ openFavoriteId: id, historySheetVisible: false, seekTimeMs: null })
+  },
+
+  closeFavorite() {
+    set((state) => (state.openFavoriteId === null ? state : { openFavoriteId: null }))
   },
 
   setHistorySheetVisible(visible) {

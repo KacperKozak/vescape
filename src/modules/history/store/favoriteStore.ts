@@ -3,6 +3,7 @@ import {
   createFavorite,
   deleteFavorite,
   getFavorites,
+  renameFavorite,
   type Favorite,
   type CreateFavoriteOptions,
 } from 'vescape-core'
@@ -19,6 +20,8 @@ interface FavoriteActions {
   load: () => Promise<void>
   /** Pin a range. Native owns identity, timestamps and stats — JS only sends range + name. */
   add: (options: CreateFavoriteOptions) => Promise<Favorite | null>
+  /** Rename, or clear the name with `null`. Native owns the row; JS mirrors what it returns. */
+  rename: (id: string, name: string | null) => Promise<void>
   /** Unpin. Telemetry inside the range stays (ADR 0029). */
   remove: (id: string) => Promise<void>
 }
@@ -52,6 +55,21 @@ export const useFavoriteStore = create<FavoriteState & FavoriteActions>((set, ge
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err) })
       return null
+    } finally {
+      set({ saving: false })
+    }
+  },
+
+  async rename(id, name) {
+    if (get().saving) return
+    set({ saving: true, error: undefined })
+    try {
+      const renamed = await renameFavorite(id, name)
+      set({
+        favorites: get().favorites.map((favorite) => (favorite.id === id ? renamed : favorite)),
+      })
+    } catch (err) {
+      set({ error: err instanceof Error ? err.message : String(err) })
     } finally {
       set({ saving: false })
     }

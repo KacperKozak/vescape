@@ -197,6 +197,23 @@ struct FavoriteStore {
     }
   }
 
+  /// Rename one Favorite, or clear its name with `nil`. The range and the summary are immutable:
+  /// changing what a Favorite covers is delete + recreate (ADR 0029). Returns the stored row so the
+  /// caller never has to guess what native now holds.
+  func rename(_ id: String, name: String?, updatedAtMs: Int64) -> Favorite? {
+    guard let writer = resolveWriter() else { return nil }
+    let updated = try? writer.write { db -> Favorite? in
+      try db.execute(
+        sql: "UPDATE favorites SET name = ?, updated_at = ? WHERE id = ?",
+        arguments: [name, updatedAtMs, id]
+      )
+      guard db.changesCount > 0 else { return nil }
+      return try Row.fetchOne(db, sql: "SELECT * FROM favorites WHERE id = ?", arguments: [id])
+        .map(Self.favorite)
+    }
+    return updated ?? nil
+  }
+
   /// Unpin one Favorite. Telemetry inside its range is untouched and becomes deletable again.
   @discardableResult
   func delete(_ id: String) -> Bool {

@@ -269,6 +269,33 @@ function TextPromptModalShowcase() {
   )
 }
 
+/** Clearable variant: confirm stays enabled with an empty field, for optional names. */
+function TextPromptModalClearableShowcase() {
+  const [visible, setVisible] = useState(false)
+
+  return (
+    <ShowcaseCard
+      name="TextPromptModal (clearable)"
+      controls={<OpenButton onPress={() => setVisible(true)} />}
+    >
+      <Text style={styles.previewHint}>Tap &quot;Open Modal&quot; below</Text>
+      <TextPromptModal
+        visible={visible}
+        title="Rename Favorite"
+        placeholder="Dolina single track"
+        initialValue="Dolina"
+        confirmLabel="Save"
+        allowEmpty
+        onConfirm={(value) => {
+          setVisible(false)
+          console.log(value)
+        }}
+        onDismiss={() => setVisible(false)}
+      />
+    </ShowcaseCard>
+  )
+}
+
 interface EdgeDrawerPositionShowcaseProps {
   edge: 'auto' | 'top' | 'bottom'
   name: string
@@ -427,6 +454,7 @@ export default function ModalsPage() {
         <CommunityMessageModalShowcase />
         <AppBlockScreenShowcase />
         <TextPromptModalShowcase />
+        <TextPromptModalClearableShowcase />
         <EdgeDrawerPositionShowcase
           edge="auto"
           name="EdgeDrawer — automatic edge"

@@ -27,12 +27,16 @@ const getFavorites = mock(async () => [] as Favorite[])
 const createFavorite = mock(async (): Promise<Favorite> => {
   throw new Error('createFavorite not stubbed')
 })
+const renameFavorite = mock(async (): Promise<Favorite> => {
+  throw new Error('renameFavorite not stubbed')
+})
 const deleteFavorite = mock(async () => true)
 
 const vescapeCoreMock = {
   ...actualVescapeCore,
   getFavorites,
   createFavorite,
+  renameFavorite,
   deleteFavorite,
 }
 
@@ -42,10 +46,14 @@ mock.module('../../modules/vescape-core/src/index', () => vescapeCoreMock)
 beforeEach(async () => {
   getFavorites.mockClear()
   createFavorite.mockClear()
+  renameFavorite.mockClear()
   deleteFavorite.mockClear()
   getFavorites.mockImplementation(async () => [])
   createFavorite.mockImplementation(async () => {
     throw new Error('createFavorite not stubbed')
+  })
+  renameFavorite.mockImplementation(async () => {
+    throw new Error('renameFavorite not stubbed')
   })
   deleteFavorite.mockImplementation(async () => true)
   const { useFavoriteStore } = await import('@/modules/history/store/favoriteStore')
@@ -115,4 +123,36 @@ test('a second star tap while a create is in flight does not add a duplicate', a
   expect([first, second]).toEqual([created, null])
   expect(useFavoriteStore.getState().favorites).toEqual([created])
   expect(useFavoriteStore.getState().saving).toBe(false)
+})
+
+test('a rename mirrors the row native returns, without touching the others', async () => {
+  const other = favorite({ id: 'other', startMs: 3_000_000 })
+  const renamed = favorite({ id: 'fav-1', startMs: 1_000_000, name: 'Dolina single track' })
+  getFavorites.mockImplementation(async () => [
+    other,
+    favorite({ id: 'fav-1', startMs: 1_000_000 }),
+  ])
+  renameFavorite.mockImplementation(async () => renamed)
+  const { useFavoriteStore } = await import('@/modules/history/store/favoriteStore')
+
+  await useFavoriteStore.getState().load()
+  await useFavoriteStore.getState().rename('fav-1', 'Dolina single track')
+
+  expect(renameFavorite).toHaveBeenCalledWith('fav-1', 'Dolina single track')
+  expect(useFavoriteStore.getState().favorites).toEqual([other, renamed])
+})
+
+test('a failed rename leaves the stored name alone and surfaces the error', async () => {
+  const stored = favorite({ id: 'fav-1', startMs: 1_000_000, name: 'Dolina' })
+  getFavorites.mockImplementation(async () => [stored])
+  renameFavorite.mockImplementation(async () => {
+    throw new Error('favorite does not exist')
+  })
+  const { useFavoriteStore } = await import('@/modules/history/store/favoriteStore')
+
+  await useFavoriteStore.getState().load()
+  await useFavoriteStore.getState().rename('fav-1', null)
+
+  expect(useFavoriteStore.getState().favorites).toEqual([stored])
+  expect(useFavoriteStore.getState().error).toBe('favorite does not exist')
 })

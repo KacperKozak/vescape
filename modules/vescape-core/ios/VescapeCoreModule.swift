@@ -634,6 +634,14 @@ public class VescapeCoreModule: Module {
       promise.resolve(favorite)
     }
 
+    AsyncFunction("renameFavorite") { (id: String, name: String?, promise: Promise) in
+      guard let favorite = TelemetryRepository.shared.renameFavorite(id, name: name) else {
+        promise.reject("ERR_RENAME_FAVORITE", "favorite does not exist or could not be stored")
+        return
+      }
+      promise.resolve(favorite)
+    }
+
     AsyncFunction("deleteFavorite") { (id: String, promise: Promise) in
       promise.resolve(TelemetryRepository.shared.deleteFavorite(id))
     }

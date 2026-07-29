@@ -545,6 +545,13 @@ interface TelemetryDao {
   @Insert
   suspend fun insertFavorite(favorite: FavoriteEntity)
 
+  @Query("SELECT * FROM favorites WHERE id = :id")
+  suspend fun getFavorite(id: String): FavoriteEntity?
+
+  /** Name only: the range and the denormalized summary of a Favorite are immutable (ADR 0029). */
+  @Query("UPDATE favorites SET name = :name, updated_at = :updatedAt WHERE id = :id")
+  suspend fun renameFavorite(id: String, name: String?, updatedAt: Long): Int
+
   @Query("DELETE FROM favorites WHERE id = :id")
   suspend fun deleteFavorite(id: String): Int
 }

@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { ActivityIndicator, StyleSheet, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { Favorite, HistoryGpsSample, HistoryMarker } from 'vescape-core'
 
@@ -19,9 +19,8 @@ import type {
   TelemetrySample,
 } from '@/modules/history/store/historyStore'
 import { HistoryControls } from '@/screens/main/history/HistoryControls'
-import { HistoryStatsBar } from '@/screens/main/history/HistoryStatsBar'
-import { HistoryTelemetryPanel } from '@/screens/main/history/HistoryTelemetryPanel'
-import { TrimStatsBar } from '@/screens/main/history/TrimStatsBar'
+import { HistoryMapLoading } from '@/screens/main/history/HistoryMapLoading'
+import { HistoryRideDetail } from '@/screens/main/history/HistoryRideDetail'
 import type { HistoryTab } from '@/screens/main/mainScreenStore'
 import { STRIP_CONTENT_HEIGHT } from '@/screens/main/overlays/BottomTelemetryStrip'
 
@@ -54,6 +53,12 @@ export interface MainHistoryOverlayProps {
   cancelTrim: () => void
   saveTrim: () => Promise<void>
   removeFavorite: (id: string) => Promise<void>
+  /** The Favorite whose detail is open, or null while the Favorites list is showing. */
+  openFavorite: Favorite | null
+  showFavorite: (favorite: Favorite) => Promise<void>
+  hideFavorite: () => Promise<void>
+  renameOpenFavorite: (name: string | null) => Promise<void>
+  removeOpenFavorite: () => Promise<void>
   selectSession: (session: HistorySession | null) => Promise<void>
   loadMoreHistory: () => Promise<void>
   selectPreviousRide: () => Promise<void>
@@ -99,6 +104,11 @@ export function HistoryOverlay({
     history.favoritesSaving
   const aboveStripBottom = STRIP_CONTENT_HEIGHT + Math.max(insets.bottom * 0.5, 8) + 8
   const sheetBottom = Math.max(insets.bottom, 16) + 8 + panelHeight + 8
+  // Favorite detail is the history detail fed a favorite-backed session: same panel, map and stats,
+  // only the header actions differ.
+  const favoriteMode = history.historyTab === 'favorites' && history.openFavorite != null
+  const detailSession =
+    history.historyTab === 'history' || favoriteMode ? history.selectedSession : null
   const selectedSessionContainsFavorite =
     history.selectedSession != null &&
     sessionContainsFavorite(history.favorites, history.selectedSession)
@@ -110,11 +120,14 @@ export function HistoryOverlay({
 
   return (
     <>
-      {visible && history.historyTab === 'favorites' && (
+      {visible && history.historyTab === 'favorites' && !history.openFavorite && (
         <>
           <FavoriteList
             favorites={history.favorites}
             loading={history.favoritesLoading}
+            onOpen={(favorite) => {
+              void history.showFavorite(favorite)
+            }}
             onRemove={(favorite) => {
               void history.removeFavorite(favorite.id)
             }}
@@ -137,87 +150,20 @@ export function HistoryOverlay({
         </>
       )}
 
-      {visible && history.historyTab === 'history' && history.selectedSession && (
-        <>
-          {busy && (
-            <View pointerEvents="none" style={styles.mapLoading}>
-              <ActivityIndicator size="small" color={theme.palette.sky.color} />
-            </View>
-          )}
-          <HistoryTelemetryPanel
-            startAtMs={history.selectedSession.startAtMs}
-            endAtMs={history.selectedSession.endAtMs}
-            movingStartAtMs={history.selectedSession.movingStartAtMs}
-            movingEndAtMs={history.selectedSession.movingEndAtMs}
-            deviceName={history.selectedSession.deviceName}
-            samples={history.sessionSamples}
-            canPrevious={!history.trimming && history.canPreviousRide}
-            canNext={!history.trimming && !!history.nextRide}
-            mediaAssets={history.mediaHistory.assets}
-            mediaUnmatched={history.mediaHistory.unmatched}
-            mediaLoading={history.mediaHistory.loading}
-            mediaError={history.mediaHistory.error}
-            onPrevious={() => {
-              void history.selectPreviousRide()
-            }}
-            onNext={() => {
-              void history.selectNextRide()
-            }}
-            onOpenList={() => history.setHistorySheetVisible(true)}
-            onAddMedia={() => void history.mediaHistory.add()}
-            onOpenMedia={history.openMedia}
-            onSeek={history.onSeek}
-            onMetricInteraction={history.setActiveHistoryMapMetric}
-            onHeightChange={onPanelHeightChange}
-            trim={
-              history.trimming && history.trimSeed
-                ? {
-                    startMs: history.trimSeed.startMs,
-                    endMs: history.trimSeed.endMs,
-                    onChange: history.updateTrimRange,
-                    onCommit: history.updateTrimRange,
-                  }
-                : undefined
-            }
-          />
-          {history.trimming ? (
-            <TrimStatsBar
-              session={history.selectedSession}
-              samples={history.sessionSamples}
-              gpsSamples={history.sessionGpsSamples}
-            />
-          ) : (
-            <HistoryStatsBar session={history.selectedSession} />
-          )}
-          <HistoryControls
-            loading={busy}
-            tab={history.historyTab}
-            canRemove={true}
-            canFavorite={true}
-            favorited={history.selectedSessionFavorite != null}
-            trimming={history.trimming}
-            saving={history.favoritesSaving}
-            onSelectTab={history.selectHistoryTab}
-            onBack={history.exitHistory}
-            onRemove={() => setRemoveConfirmVisible(true)}
-            onToggleFavorite={history.beginTrimFavorite}
-            onCancelTrim={history.cancelTrim}
-            onSaveTrim={() => {
-              void history.saveTrim()
-            }}
-          />
-        </>
+      {visible && detailSession && (
+        <HistoryRideDetail
+          history={history}
+          session={detailSession}
+          favoriteMode={favoriteMode}
+          busy={busy}
+          onRemoveSession={() => setRemoveConfirmVisible(true)}
+          onPanelHeightChange={onPanelHeightChange}
+        />
       )}
 
       {visible && history.historyTab === 'history' && !history.selectedSession && (
         <>
-          {busy ? (
-            <View pointerEvents="none" style={styles.mapLoading}>
-              <ActivityIndicator size="small" color={theme.palette.sky.color} />
-            </View>
-          ) : (
-            <HistoryEmptyState />
-          )}
+          {busy ? <HistoryMapLoading /> : <HistoryEmptyState />}
           <HistoryControls
             loading={busy}
             tab={history.historyTab}
@@ -308,20 +254,5 @@ const styles = StyleSheet.create({
     color: theme.status.error.text,
     fontSize: 12,
     fontWeight: '700',
-  },
-  mapLoading: {
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    zIndex: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: theme.alpha(theme.palette.slate.bg, 0.6),
-    borderWidth: 1,
-    borderColor: theme.alpha(theme.palette.slate.light, 0.3),
-    transform: [{ translateX: -17 }, { translateY: -17 }],
   },
 })

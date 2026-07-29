@@ -1,11 +1,11 @@
-import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native'
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native'
 import { StarIcon, TrashIcon } from 'phosphor-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { IconButton } from '@/components/base/IconButton'
 import { Placeholder } from '@/components/base/Placeholder'
 import { Text } from '@/components/base/Text'
-import { theme } from '@/constants/theme'
+import { interaction, theme } from '@/constants/theme'
 import { telemetry } from '@/modules/board/constants/telemetry'
 import { formatRideDate, formatRideTime } from '@/modules/history/lib/rideFormat'
 import type { Favorite } from '@/modules/history/store/favoriteStore'
@@ -13,11 +13,12 @@ import type { Favorite } from '@/modules/history/store/favoriteStore'
 interface FavoriteListProps {
   favorites: Favorite[]
   loading: boolean
+  onOpen: (favorite: Favorite) => void
   onRemove: (favorite: Favorite) => void
 }
 
 /** Favorites tab: the starred ranges, newest first. Unnamed rows fall back to date, like history. */
-export function FavoriteList({ favorites, loading, onRemove }: FavoriteListProps) {
+export function FavoriteList({ favorites, loading, onOpen, onRemove }: FavoriteListProps) {
   const insets = useSafeAreaInsets()
 
   if (loading && favorites.length === 0) {
@@ -47,7 +48,12 @@ export function FavoriteList({ favorites, loading, onRemove }: FavoriteListProps
       contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 16) + 16 }]}
     >
       {favorites.map((favorite) => (
-        <View key={favorite.id} testID={`favorite-row-${favorite.id}`} style={styles.row}>
+        <Pressable
+          key={favorite.id}
+          testID={`favorite-row-${favorite.id}`}
+          style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+          onPress={() => onOpen(favorite)}
+        >
           <View style={styles.rowMain}>
             <Text style={styles.rowTitle} numberOfLines={1}>
               {favorite.name ?? formatRideDate(favorite.startMs, favorite.endMs)}
@@ -68,7 +74,7 @@ export function FavoriteList({ favorites, loading, onRemove }: FavoriteListProps
             testID={`favorite-remove-${favorite.id}`}
             onPress={() => onRemove(favorite)}
           />
-        </View>
+        </Pressable>
       ))}
     </ScrollView>
   )
@@ -113,6 +119,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+  },
+  rowPressed: {
+    backgroundColor: interaction.pressedBg,
   },
   rowMain: {
     flex: 1,

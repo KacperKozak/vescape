@@ -374,6 +374,10 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
             useMainScreenStore.getState().endTrim()
             return true
           }
+          if (useMainScreenStore.getState().openFavoriteId) {
+            void historyFavorites.hideFavorite()
+            return true
+          }
           exitHistory()
           return true
         }
@@ -401,7 +405,7 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
         return true
       })
       return () => handler.remove()
-    }, [exitHistory, exitLegalLimitsMode, exitMapFocus, exitWeatherMode, mode]),
+    }, [exitHistory, exitLegalLimitsMode, exitMapFocus, exitWeatherMode, historyFavorites, mode]),
   )
 
   return {

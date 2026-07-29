@@ -592,6 +592,19 @@ class TelemetryRepository private constructor(context: Context) {
   }
 
   /**
+   * Rename a Favorite, or clear its name with an empty/absent value. The range and the summary are
+   * immutable — re-trimming is delete + recreate (ADR 0029). `updated_at` is minted here.
+   *
+   * @parity /modules/vescape-core/ios/telemetry/TelemetryRepository.swift `renameFavorite`
+   */
+  suspend fun renameFavorite(id: String, name: String?): Map<String, Any?>? = withContext(Dispatchers.IO) {
+    val trimmed = name?.trim()?.ifEmpty { null }
+    if (dao.renameFavorite(id, trimmed, System.currentTimeMillis()) == 0) return@withContext null
+    val favorite = dao.getFavorite(id) ?: return@withContext null
+    favorite.toMap(dao.getBoards().firstOrNull { it.id == favorite.boardId }?.name)
+  }
+
+  /**
    * Unpin a Favorite. Telemetry in its range stays and becomes normally deletable (ADR 0029).
    *
    * @parity /modules/vescape-core/ios/telemetry/TelemetryRepository.swift `deleteFavorite`

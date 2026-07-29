@@ -35,6 +35,7 @@ import android.os.Looper
 import android.util.Log
 import androidx.core.content.ContextCompat
 import expo.modules.kotlin.Promise
+import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -553,6 +554,10 @@ class VescapeCoreModule : Module() {
     }
     AsyncFunction("createFavorite") Coroutine { options: Map<String, Any?> ->
       TelemetryRepository.get(context.applicationContext).createFavorite(options)
+    }
+    AsyncFunction("renameFavorite") Coroutine { id: String, name: String? ->
+      TelemetryRepository.get(context.applicationContext).renameFavorite(id, name)
+        ?: throw CodedException("ERR_RENAME_FAVORITE", "favorite does not exist or could not be stored", null)
     }
     AsyncFunction("deleteFavorite") Coroutine { id: String ->
       TelemetryRepository.get(context.applicationContext).deleteFavorite(id)

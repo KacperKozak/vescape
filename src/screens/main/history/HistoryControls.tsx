@@ -3,6 +3,7 @@ import {
   ArrowLeftIcon,
   CheckIcon,
   ClockCounterClockwiseIcon,
+  PencilSimpleIcon,
   StarIcon,
   TrashIcon,
   XIcon,
@@ -24,6 +25,15 @@ interface HistoryControlsProps {
   favorited: boolean
   /** Trim mode swaps tabs/star/trash for a cancel/save pair over the range being pinned. */
   trimming: boolean
+  /**
+   * Favorite detail mode: the tabs and the star give way to the Favorite's own title plus rename
+   * and delete. Back returns to the Favorites list rather than leaving history.
+   */
+  favorite?: {
+    title: string
+    onRename: () => void
+    onDelete: () => void
+  }
   saving: boolean
   onSelectTab: (tab: HistoryTab) => void
   onBack: () => void
@@ -40,6 +50,7 @@ export function HistoryControls({
   canFavorite,
   favorited,
   trimming,
+  favorite,
   saving,
   onSelectTab,
   onBack,
@@ -55,8 +66,8 @@ export function HistoryControls({
       <View style={[styles.wrap, { paddingTop: Math.max(insets.top, 8) }]} pointerEvents="box-none">
         <View style={styles.row}>
           <IconButton icon={XIcon} onPress={onCancelTrim} disabled={saving} testID="trim-cancel" />
-          <View style={styles.trimTitleWrap}>
-            <Text style={styles.trimTitle} numberOfLines={1}>
+          <View style={styles.headerTitleWrap}>
+            <Text style={styles.headerTitle} numberOfLines={1}>
               Trim favorite
             </Text>
           </View>
@@ -66,6 +77,34 @@ export function HistoryControls({
             loading={saving}
             testID="trim-save"
             accent={theme.palette.amber.color}
+          />
+        </View>
+      </View>
+    )
+  }
+
+  if (favorite) {
+    return (
+      <View style={[styles.wrap, { paddingTop: Math.max(insets.top, 8) }]} pointerEvents="box-none">
+        <View style={styles.row}>
+          <IconButton icon={ArrowLeftIcon} onPress={onBack} testID="favorite-detail-back" />
+          <View style={styles.headerTitleWrap}>
+            <Text style={styles.headerTitle} numberOfLines={1}>
+              {favorite.title}
+            </Text>
+          </View>
+          <IconButton
+            icon={PencilSimpleIcon}
+            onPress={favorite.onRename}
+            disabled={loading}
+            testID="favorite-rename"
+          />
+          <IconButton
+            icon={TrashIcon}
+            onPress={favorite.onDelete}
+            destructive
+            disabled={loading}
+            testID="favorite-delete"
           />
         </View>
       </View>
@@ -136,11 +175,11 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
   },
-  trimTitleWrap: {
+  headerTitleWrap: {
     flex: 1,
     alignItems: 'center',
   },
-  trimTitle: {
+  headerTitle: {
     color: theme.palette.slate.textPrimary,
     fontSize: 14,
     fontWeight: '800',
