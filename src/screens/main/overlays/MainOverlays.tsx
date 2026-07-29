@@ -1,6 +1,4 @@
 import * as Haptics from 'expo-haptics'
-import * as ImagePicker from 'expo-image-picker'
-import { useAuth } from '@clerk/expo'
 import { useRouter } from 'expo-router'
 import {
   ArrowLeftIcon,
@@ -13,37 +11,21 @@ import {
   MapTrifoldIcon,
   MapPinIcon,
   NavigationArrowIcon,
-  PencilSimpleIcon,
-  ThumbsDownIcon,
-  ThumbsUpIcon,
-  FunnelIcon,
-  PlusIcon,
   SlidersHorizontalIcon,
   SirenIcon,
   SpeedometerIcon,
-  TrashIcon,
   XIcon,
   type Icon,
 } from 'phosphor-react-native'
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  createElement,
-  type RefObject,
-} from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
 import {
   ActivityIndicator,
-  Keyboard,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   TextInput,
   View,
-  type KeyboardEvent,
 } from 'react-native'
 import { Text } from '@/components/base/Text'
 import Animated, {
@@ -66,32 +48,17 @@ import { FloatingBar } from '@/modules/board/components/FloatingBar'
 import { HistorySessionSheet } from '@/modules/history/components/HistorySessionSheet'
 import { IconButton } from '@/components/base/IconButton'
 import { MapNavigationSelector } from '@/modules/map/components/MapNavigationSelector'
-import { MapPointMediaActions } from '@/modules/map/components/MapPointMediaAddButton'
-import { MapPointMediaPreview } from '@/modules/map/components/MapPointMediaPreview'
 import { MapStyleSwitch } from '@/modules/map/components/MapStyleSwitch'
 import { PillSelector, PillSelectorItem } from '@/components/controls/PillSelector'
 import { WeatherIcon } from '@/modules/weather/components/WeatherIcon'
 import type { MapNavigationMode, MapStyleKey } from '@/modules/map/constants/mapStyles'
-import { getMapPointKindIcon } from '@/modules/map/constants/mapPointIcons'
-import {
-  FILTERABLE_MAP_POINT_KIND_OPTIONS,
-  getMapPointKindColor,
-  getMapPointKindLabel,
-  getMapPointKindTextColor,
-  MAP_POINT_MEDIA_ENABLED,
-} from '@/modules/map/constants/mapPoints'
+import { getMapPointKindLabel } from '@/modules/map/constants/mapPoints'
 import { theme } from '@/constants/theme'
 import { routes } from '@/navigation/routes'
 import type { MapSelection } from '@/modules/map/lib/mapSelection'
 import { type MapSearchResult } from '@/modules/map/lib/search'
 import { useMapSearch } from '@/modules/map/hooks/useMapSearch'
-import { isCompactMapPointCategory } from '@/modules/map/lib/mapPointVisibility'
-import {
-  deleteMapPointMediaAsset,
-  saveMapPointMediaAssets,
-  type MapPointMediaAsset,
-  type PickedMapPointMediaAsset,
-} from '@/modules/map/store/mapPointPhotoFiles'
+import {} from '@/modules/map/store/mapPointPhotoFiles'
 import type { HistoryMetricKey } from '@/modules/history/lib/metricColorScale'
 import {
   BottomTelemetryStrip,
@@ -136,6 +103,11 @@ import {
   type LegalLimitCountry,
 } from '@/modules/legal/lib/legalLimits'
 import { useRiderStore } from '@/modules/group-ride/store/riderStore'
+import { MapPointAddMenu } from '@/modules/map/components/MapPointAddMenu'
+import { MapPointFilterMenu } from '@/modules/map/components/MapPointFilterMenu'
+import { MapPointStatusBanner } from '@/modules/map/components/MapPointStatusBanner'
+import { MapTargetSheet } from '@/modules/map/components/MapTargetSheet'
+import { useMapContributionReady } from '@/modules/profile/hooks/useMapContributionReady'
 
 const LEGAL_LIST_PANEL_HEIGHT = 280
 const LEGAL_OVERLAY_GAP = 8
@@ -479,12 +451,6 @@ function FullMapControls({
       loadingDetails: true,
     })
   }, [closeAddMenu, map, mapRef])
-  const compactMapPointOptions = FILTERABLE_MAP_POINT_KIND_OPTIONS.filter((option) =>
-    isCompactMapPointCategory(option.kind),
-  )
-  const secondaryMapPointOptions = FILTERABLE_MAP_POINT_KIND_OPTIONS.filter(
-    (option) => !isCompactMapPointCategory(option.kind),
-  )
   const navigationAction = navigationActionColors(riderColor)
 
   return (
@@ -589,171 +555,24 @@ function FullMapControls({
         />
       )}
       {bottomControlsVisible && !addMenuOpen ? (
-        <View style={[styles.mapFilterAction, { bottom }]}>
-          {filterMenuOpen ? (
-            <View style={[styles.mapFilterMenu, styles.mapFilterMenuAttached]}>
-              {FILTERABLE_MAP_POINT_KIND_OPTIONS.map((option, index) => {
-                const IconComponent = getMapPointKindIcon(option.kind)
-                const color = getMapPointKindColor(option.kind)
-                const visible = !map.hiddenMapPointCategories.includes(option.kind)
-                return (
-                  <Pressable
-                    key={option.kind}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${option.label} visibility`}
-                    accessibilityState={{ checked: visible }}
-                    style={({ pressed }) => [
-                      styles.mapFilterRow,
-                      !visible && styles.mapFilterRowHidden,
-                      pressed && styles.mapAddRowPressed,
-                    ]}
-                    onPress={() => map.toggleMapPointCategoryVisibility(option.kind)}
-                  >
-                    <View style={[styles.mapAddRowIcon, { borderColor: color }]}>
-                      <IconComponent
-                        size={16}
-                        color={getMapPointKindTextColor(option.kind)}
-                        weight="duotone"
-                      />
-                    </View>
-                    <Text style={styles.mapFilterRowLabel}>{option.label}</Text>
-                    {index < FILTERABLE_MAP_POINT_KIND_OPTIONS.length - 1 ? (
-                      <View style={styles.mapFilterRowBorder} />
-                    ) : null}
-                  </Pressable>
-                )
-              })}
-            </View>
-          ) : null}
-          <IconButton
-            icon={FunnelIcon}
-            size="lg"
-            onPress={toggleFilterMenu}
-            style={filterMenuOpen ? styles.mapFilterButtonAttached : undefined}
-          />
-        </View>
+        <MapPointFilterMenu
+          bottom={bottom}
+          open={filterMenuOpen}
+          hiddenCategories={map.hiddenMapPointCategories}
+          onToggleMenu={toggleFilterMenu}
+          onToggleCategory={map.toggleMapPointCategoryVisibility}
+        />
       ) : null}
-      {bottomControlsVisible && addMenuOpen ? (
-        <View style={[styles.mapAddSheet, { bottom: sheetBottom }]}>
-          <View style={styles.mapAddSheetHeader}>
-            <View style={[styles.mapTargetIcon, { borderColor: theme.palette.cyan.color }]}>
-              <PlusIcon size={18} color={theme.palette.cyan.text} weight="bold" />
-            </View>
-            <View style={styles.mapTargetTitleBlock}>
-              <Text style={styles.mapTargetTitle} numberOfLines={1}>
-                Add map feature
-              </Text>
-              <Text style={styles.mapTargetSubtitle} numberOfLines={1}>
-                Places at the map center
-              </Text>
-            </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Close add map feature"
-              onPress={toggleAddMenu}
-              style={({ pressed }) => [
-                styles.mapAddCloseButton,
-                pressed && styles.mapTargetClosePressed,
-              ]}
-            >
-              <XIcon size={20} color={theme.palette.slate.textSecondary} weight="bold" />
-            </Pressable>
-          </View>
-          <View style={styles.mapAddButtonGrid}>
-            <View style={styles.mapAddCompactRow}>
-              {compactMapPointOptions.map((option) => {
-                const IconComponent = getMapPointKindIcon(option.kind)
-                const color = getMapPointKindColor(option.kind)
-                const textColor = getMapPointKindTextColor(option.kind)
-                return (
-                  <Pressable
-                    key={option.kind}
-                    accessibilityRole="button"
-                    accessibilityLabel={option.label}
-                    style={({ pressed }) => [
-                      styles.mapAddFeatureButton,
-                      {
-                        backgroundColor: theme.alpha(color, 0.12),
-                        borderColor: theme.alpha(color, 0.6),
-                      },
-                      styles.mapAddFeatureButtonHorizontal,
-                      styles.mapAddFeatureButtonCompact,
-                      pressed && styles.mapAddRowPressed,
-                    ]}
-                    onPress={() => handleSelectMapPoint(option.kind)}
-                  >
-                    <IconComponent size={16} color={textColor} weight="duotone" />
-                    <Text
-                      style={[styles.mapAddFeatureLabel, { color: textColor }]}
-                      numberOfLines={1}
-                    >
-                      {option.label}
-                    </Text>
-                  </Pressable>
-                )
-              })}
-            </View>
-            <View style={styles.mapAddSecondaryRow}>
-              {secondaryMapPointOptions.map((option) => {
-                const IconComponent = getMapPointKindIcon(option.kind)
-                const color = getMapPointKindColor(option.kind)
-                const textColor = getMapPointKindTextColor(option.kind)
-                return (
-                  <Pressable
-                    key={option.kind}
-                    accessibilityRole="button"
-                    accessibilityLabel={option.label}
-                    style={({ pressed }) => [
-                      styles.mapAddFeatureButton,
-                      {
-                        backgroundColor: theme.alpha(color, 0.12),
-                        borderColor: theme.alpha(color, 0.6),
-                      },
-                      styles.mapAddFeatureButtonHorizontal,
-                      styles.mapAddFeatureButtonSecondary,
-                      pressed && styles.mapAddRowPressed,
-                    ]}
-                    onPress={() => handleSelectMapPoint(option.kind)}
-                  >
-                    <IconComponent size={16} color={textColor} weight="duotone" />
-                    <Text
-                      style={[styles.mapAddFeatureLabel, { color: textColor }]}
-                      numberOfLines={1}
-                    >
-                      {option.label}
-                    </Text>
-                  </Pressable>
-                )
-              })}
-            </View>
-            <View style={styles.mapAddStackedButtons}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Navigate to map center"
-                onPress={() => void handleSelectNavigationPoint()}
-                style={({ pressed }) => [
-                  styles.mapTargetNavigate,
-                  {
-                    backgroundColor: theme.alpha(navigationAction.color, 0.12),
-                    borderColor: navigationAction.color,
-                  },
-                  pressed && styles.mapTargetNavigatePressed,
-                ]}
-              >
-                <NavigationArrowIcon size={18} color={navigationAction.textColor} weight="bold" />
-                <Text style={[styles.mapTargetNavigateText, { color: navigationAction.textColor }]}>
-                  Navigate
-                </Text>
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      ) : bottomControlsVisible ? (
-        <View style={[styles.mapAddAction, { bottom }]}>
-          <Animated.View>
-            <IconButton icon={PlusIcon} size="lg" onPress={toggleAddMenu} />
-          </Animated.View>
-        </View>
+      {bottomControlsVisible ? (
+        <MapPointAddMenu
+          bottom={bottom}
+          sheetBottom={sheetBottom}
+          open={addMenuOpen}
+          navigationAction={navigationAction}
+          onToggle={toggleAddMenu}
+          onSelectCategory={handleSelectMapPoint}
+          onSelectNavigationPoint={() => void handleSelectNavigationPoint()}
+        />
       ) : null}
     </>
   )
@@ -926,401 +745,6 @@ function CenterPlacementPointer({ color, pulseKey }: { color: string; pulseKey: 
   )
 }
 
-function useKeyboardLift(enabled: boolean) {
-  const [keyboardHeight, setKeyboardHeight] = useState(0)
-
-  useEffect(() => {
-    if (!enabled) return
-
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow'
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide'
-    const show = Keyboard.addListener(showEvent, (event: KeyboardEvent) => {
-      setKeyboardHeight(event.endCoordinates.height)
-    })
-    const hide = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0))
-
-    return () => {
-      show.remove()
-      hide.remove()
-    }
-  }, [enabled])
-
-  return enabled ? keyboardHeight : 0
-}
-
-function MapTargetSheet({
-  target,
-  bottom,
-  mode,
-  action,
-  onAddFeature,
-  onEdit,
-  onSave,
-  onSaveMapPoint,
-  onVoteMapPoint,
-  onDelete,
-  onDismiss,
-  onFocusTarget,
-}: {
-  target: MapSelection
-  bottom: number
-  mode: 'select' | 'navigation' | 'edit'
-  action: {
-    label: string
-    accessibilityLabel: string
-    color: string
-    textColor: string
-    borderColor: string
-    bgColor: string
-    Icon: Icon
-    onPress: () => void
-  }
-  onAddFeature?: () => void
-  onEdit?: () => void
-  onSave?: () => void
-  onSaveMapPoint?: (id: string, patch: MapPointPatch) => Promise<MapPoint | null>
-  onVoteMapPoint?: (id: string, reaction: 'up' | 'down' | null) => boolean
-  onDelete?: () => void
-  onDismiss?: () => void
-  onFocusTarget?: () => void
-}) {
-  const isMapPoint = target.type === 'mapPoint'
-  const point = isMapPoint ? target.point : null
-  const selectedPoint = point as MapPoint | null
-  const [name, setName] = useState(point?.name ?? '')
-  const [description, setDescription] = useState(point?.description ?? '')
-  // Parked with `MAP_POINT_MEDIA_ENABLED`: media stays on the device because server Map Points
-  // carry none, so it is never part of the saved patch.
-  const [media, setMedia] = useState<MapPointMediaAsset[]>([])
-  const [reaction, setReaction] = useState<'up' | 'down' | null>(point?.myReaction ?? null)
-  const [mediaSaving, setMediaSaving] = useState(false)
-  const keyboardLift = useKeyboardLift(mode === 'edit')
-  const sheetBottom = mode === 'edit' ? Math.max(bottom, keyboardLift + 12) : bottom
-  const color =
-    target.type === 'mapPoint' ? getMapPointKindColor(target.point.category) : action.color
-  const textColor =
-    target.type === 'mapPoint' ? getMapPointKindTextColor(target.point.category) : action.textColor
-  const icon = createElement(isMapPoint ? getMapPointKindIcon(target.point.category) : MapPinIcon, {
-    size: 18,
-    color: textColor,
-    weight: 'duotone',
-  })
-  const headerTitle = isMapPoint
-    ? point?.name?.trim() || getMapPointKindLabel(point?.category ?? 'drop')
-    : target.title
-  const detailText =
-    isMapPoint && mode !== 'edit'
-      ? point?.description?.trim() || null
-      : target.loadingDetails
-        ? 'Loading details'
-        : target.subtitle ||
-          (!isMapPoint ? `${target.latitude.toFixed(5)}, ${target.longitude.toFixed(5)}` : null)
-  const pointCreatedText = point ? new Date(point.createdAt).toLocaleDateString() : null
-  const handlePickMedia = useCallback(async () => {
-    if (!point) return
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images', 'videos'],
-      allowsMultipleSelection: true,
-      quality: 0.9,
-    })
-    if (result.canceled || !result.assets[0]?.uri) return
-    setMediaSaving(true)
-    try {
-      const picked: PickedMapPointMediaAsset[] = result.assets.map((asset) => ({
-        id: asset.assetId ?? asset.uri,
-        uri: asset.uri,
-        filename: asset.fileName ?? '',
-        mediaType: asset.type === 'video' ? 'video' : 'photo',
-      }))
-      const saved = await saveMapPointMediaAssets(point.id, picked)
-      setMedia((current) => {
-        const existingUris = new Set(current.map((asset) => asset.uri))
-        return [...current, ...saved.filter((asset) => !existingUris.has(asset.uri))]
-      })
-    } finally {
-      setMediaSaving(false)
-    }
-  }, [point])
-  const handleCaptureMedia = useCallback(
-    async (mediaTypes: ['images'] | ['videos']) => {
-      if (!point) return
-      const permission = await ImagePicker.getCameraPermissionsAsync()
-      const granted = permission.granted
-        ? true
-        : (await ImagePicker.requestCameraPermissionsAsync()).granted
-      if (!granted) return
-
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes,
-        quality: 0.9,
-        videoQuality: ImagePicker.UIImagePickerControllerQualityType.High,
-      })
-      if (result.canceled || !result.assets[0]?.uri) return
-      setMediaSaving(true)
-      try {
-        const picked: PickedMapPointMediaAsset[] = result.assets.map((asset) => ({
-          id: asset.assetId ?? asset.uri,
-          uri: asset.uri,
-          filename: asset.fileName ?? '',
-          mediaType: asset.type === 'video' ? 'video' : 'photo',
-        }))
-        const saved = await saveMapPointMediaAssets(point.id, picked)
-        setMedia((current) => {
-          const existingUris = new Set(current.map((asset) => asset.uri))
-          return [...current, ...saved.filter((asset) => !existingUris.has(asset.uri))]
-        })
-      } finally {
-        setMediaSaving(false)
-      }
-    },
-    [point],
-  )
-  const handleSave = useCallback(async () => {
-    if (point && onSaveMapPoint) {
-      await onSaveMapPoint(point.id, { name, description })
-    }
-    onSave?.()
-  }, [description, name, onSave, onSaveMapPoint, point])
-  const handleRemoveMedia = useCallback((asset: MapPointMediaAsset) => {
-    setMedia((current) => current.filter((candidate) => candidate.uri !== asset.uri))
-    deleteMapPointMediaAsset(asset.uri)
-  }, [])
-  const headerTargetContent = (
-    <>
-      <View style={[styles.mapTargetIcon, { borderColor: color }]}>{icon}</View>
-      <View style={styles.mapTargetTitleBlock}>
-        {isMapPoint && mode === 'edit' ? (
-          <TextInput
-            value={name}
-            onChangeText={setName}
-            placeholder={getMapPointKindLabel(point?.category ?? 'drop')}
-            placeholderTextColor={theme.palette.slate.textMuted}
-            style={[styles.mapTargetInput, styles.mapTargetNameInput]}
-            accessibilityLabel="Map feature name"
-          />
-        ) : (
-          <Text style={styles.mapTargetTitle} numberOfLines={1}>
-            {headerTitle}
-          </Text>
-        )}
-        {isMapPoint && mode !== 'edit' ? (
-          <Text style={styles.mapTargetMetaText} numberOfLines={1}>
-            Vescape rider · {pointCreatedText ?? 'Unknown date'}
-          </Text>
-        ) : detailText ? (
-          <Text style={styles.mapTargetSubtitle} numberOfLines={2}>
-            {detailText}
-          </Text>
-        ) : null}
-      </View>
-    </>
-  )
-
-  return (
-    <View style={[styles.mapTargetSheet, { bottom: sheetBottom }]}>
-      <View style={styles.mapTargetHeader}>
-        {onFocusTarget ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Center map on target"
-            onPress={onFocusTarget}
-            style={({ pressed }) => [
-              styles.mapTargetFocusArea,
-              pressed && styles.mapTargetFocusAreaPressed,
-            ]}
-          >
-            {headerTargetContent}
-          </Pressable>
-        ) : (
-          <View style={styles.mapTargetFocusArea}>{headerTargetContent}</View>
-        )}
-        {onDismiss ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Close target"
-            onPress={onDismiss}
-            style={({ pressed }) => [
-              styles.mapTargetClose,
-              pressed && styles.mapTargetClosePressed,
-            ]}
-          >
-            <XIcon size={20} color={theme.palette.slate.textSecondary} weight="bold" />
-          </Pressable>
-        ) : null}
-      </View>
-
-      {isMapPoint && mode !== 'edit' && detailText ? (
-        <View style={styles.mapTargetDescriptionBlock}>
-          <Text style={styles.mapTargetSubtitle}>{detailText}</Text>
-        </View>
-      ) : null}
-
-      {isMapPoint && mode === 'edit' ? (
-        <View style={styles.mapTargetDraftFields}>
-          <TextInput
-            value={description}
-            onChangeText={setDescription}
-            placeholder="Description"
-            placeholderTextColor={theme.palette.slate.textMuted}
-            multiline
-            style={[styles.mapTargetInput, styles.mapTargetDescriptionInput]}
-            accessibilityLabel="Map feature description"
-          />
-          {MAP_POINT_MEDIA_ENABLED ? (
-            <View style={styles.mapTargetMediaBox}>
-              <MapPointMediaPreview assets={media} onRemove={handleRemoveMedia} />
-              <MapPointMediaActions
-                loading={mediaSaving}
-                onAdd={handlePickMedia}
-                onCapturePhoto={() => void handleCaptureMedia(['images'])}
-                onCaptureVideo={() => void handleCaptureMedia(['videos'])}
-              />
-            </View>
-          ) : null}
-        </View>
-      ) : null}
-      {MAP_POINT_MEDIA_ENABLED && isMapPoint && mode !== 'edit' && media.length > 0 ? (
-        <View style={styles.mapTargetMediaBox}>
-          <MapPointMediaPreview assets={media} />
-        </View>
-      ) : null}
-      {isMapPoint && mode !== 'edit' && point ? (
-        <View style={styles.mapTargetVoteCount}>
-          {point.score < 0 ? (
-            <ThumbsDownIcon size={14} color={theme.status.error.text} weight="fill" />
-          ) : (
-            <ThumbsUpIcon size={14} color={theme.palette.cyan.text} weight="fill" />
-          )}
-          <Text style={styles.mapTargetMetaText}>{point.score}</Text>
-        </View>
-      ) : null}
-
-      {mode === 'edit' ? (
-        <View style={styles.mapTargetActionRow}>
-          {onDelete ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Delete map feature"
-              onPress={onDelete}
-              style={({ pressed }) => [
-                styles.mapTargetDeleteIconButton,
-                styles.mapTargetDeleteButton,
-                pressed && styles.mapTargetNavigatePressed,
-              ]}
-            >
-              <TrashIcon size={18} color={theme.status.error.text} weight="bold" />
-            </Pressable>
-          ) : null}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Save map feature"
-            onPress={handleSave}
-            style={({ pressed }) => [
-              styles.mapTargetActionButton,
-              styles.mapTargetSaveButton,
-              pressed && styles.mapTargetNavigatePressed,
-            ]}
-          >
-            <Text style={[styles.mapTargetNavigateText, styles.mapTargetSaveText]}>Save</Text>
-          </Pressable>
-        </View>
-      ) : (
-        <View style={styles.mapTargetActionRow}>
-          {isMapPoint && mode === 'select' && onEdit ? (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Edit map feature"
-              onPress={onEdit}
-              style={({ pressed }) => [
-                styles.mapTargetEditButton,
-                pressed && styles.mapTargetNavigatePressed,
-              ]}
-            >
-              <PencilSimpleIcon size={18} color={theme.palette.slate.textPrimary} weight="bold" />
-              <Text style={[styles.mapTargetNavigateText, styles.mapTargetSaveText]}>Edit</Text>
-            </Pressable>
-          ) : null}
-          {isMapPoint && mode === 'select' && onVoteMapPoint && selectedPoint ? (
-            <View style={styles.mapTargetVoteGroup}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Vote map feature up"
-                onPress={() => {
-                  const nextReaction = reaction === 'up' ? null : 'up'
-                  if (!onVoteMapPoint(selectedPoint.id, nextReaction)) return
-                  setReaction(nextReaction)
-                }}
-                style={({ pressed }) => [
-                  styles.mapTargetVoteButton,
-                  reaction === 'up' && styles.mapTargetUpButtonActive,
-                  pressed && styles.mapTargetNavigatePressed,
-                ]}
-              >
-                <ThumbsUpIcon
-                  size={18}
-                  color={
-                    reaction === 'up' ? theme.palette.cyan.text : theme.palette.slate.textPrimary
-                  }
-                  weight={reaction === 'up' ? 'fill' : 'bold'}
-                />
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Vote map feature down"
-                onPress={() => {
-                  const nextReaction = reaction === 'down' ? null : 'down'
-                  if (!onVoteMapPoint(selectedPoint.id, nextReaction)) return
-                  setReaction(nextReaction)
-                }}
-                style={({ pressed }) => [
-                  styles.mapTargetVoteButton,
-                  reaction === 'down' && styles.mapTargetDownButtonActive,
-                  pressed && styles.mapTargetNavigatePressed,
-                ]}
-              >
-                <ThumbsDownIcon
-                  size={18}
-                  color={
-                    reaction === 'down' ? theme.status.error.text : theme.palette.slate.textPrimary
-                  }
-                  weight={reaction === 'down' ? 'fill' : 'bold'}
-                />
-              </Pressable>
-            </View>
-          ) : null}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={action.accessibilityLabel}
-            onPress={action.onPress}
-            style={({ pressed }) => [
-              styles.mapTargetActionButton,
-              {
-                backgroundColor: action.bgColor,
-                borderColor: action.borderColor,
-              },
-              pressed && styles.mapTargetNavigatePressed,
-            ]}
-          >
-            <action.Icon size={18} color={action.textColor} weight="bold" />
-            <Text style={[styles.mapTargetNavigateText, { color: action.textColor }]}>
-              {action.label}
-            </Text>
-          </Pressable>
-          {!isMapPoint && mode === 'select' && onAddFeature ? (
-            <IconButton
-              icon={PlusIcon}
-              size="md"
-              onPress={onAddFeature}
-              accent={theme.palette.cyan.text}
-              accessibilityLabel="Add map feature here"
-            />
-          ) : null}
-        </View>
-      )}
-    </View>
-  )
-}
-
 export function MainOverlays({
   mode,
   mapRef,
@@ -1330,7 +754,8 @@ export function MainOverlays({
   history,
 }: MainOverlaysProps) {
   const router = useRouter()
-  const { isLoaded: authLoaded, isSignedIn, userId } = useAuth({ treatPendingAsSignedOut: false })
+  // The server authorizes Map Point writes on the Device Token, so that is what gates the UI.
+  const canContribute = useMapContributionReady()
   const insets = useSafeAreaInsets()
   const aboveStripBottom = STRIP_CONTENT_HEIGHT + Math.max(insets.bottom * 0.5, 8) + 8
   const historyPanelBottom = Math.max(insets.bottom, 16) + 8
@@ -1385,10 +810,10 @@ export function MainOverlays({
     [mapRef],
   )
   const requireMapAccount = useCallback(() => {
-    if (authLoaded && isSignedIn) return true
+    if (canContribute) return true
     setSignInPromptVisible(true)
     return false
-  }, [authLoaded, isSignedIn])
+  }, [canContribute])
   const interfaceFadeStyle = useAnimatedStyle(() => ({
     opacity: (1 - dragOpacity.value) * telemetryReturnOpacity.value,
   }))
@@ -1430,7 +855,7 @@ export function MainOverlays({
     const target = map.longPressMapTarget
     if (mode !== 'map' || !target) return
     const frame = requestAnimationFrame(() => {
-      if (!authLoaded || !isSignedIn) {
+      if (!canContribute) {
         setSignInPromptVisible(true)
         map.onLongPressMapTargetHandled()
         return
@@ -1442,7 +867,7 @@ export function MainOverlays({
       map.onLongPressMapTargetHandled()
     })
     return () => cancelAnimationFrame(frame)
-  }, [authLoaded, isSignedIn, map, mapRef, mode])
+  }, [canContribute, map, mapRef, mode])
 
   const handleOpenAddFeatureAtSelectedTarget = useCallback(() => {
     const target = map.selectedNavigationTarget
@@ -1553,6 +978,8 @@ export function MainOverlays({
           onResetLegalSelection={resetLegalSelection}
         />
       ) : null}
+
+      {mode === 'map' ? <MapPointStatusBanner top={belowMapModeTabsTop} /> : null}
 
       <Animated.View
         pointerEvents={telemetryInteractive ? 'box-none' : 'none'}
@@ -1996,7 +1423,7 @@ export function MainOverlays({
       <ConfirmModal
         visible={signInPromptVisible}
         title="Sign in to contribute"
-        message="A Vescape account is required to add, edit, delete, or react to map features. This test version stores those changes only in the local phone database."
+        message="A Vescape account is required to add, edit, delete, or react to map features. Map features are shared with other riders."
         confirmLabel="Sign in"
         cancelLabel="Not now"
         onConfirm={() => {
@@ -2172,149 +1599,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 8,
   },
-  mapAddAction: {
-    position: 'absolute',
-    right: 12,
-    zIndex: 31,
-    alignItems: 'flex-end',
-    gap: 0,
-  },
-  mapAddSheet: {
-    position: 'absolute',
-    left: 12,
-    right: 12,
-    zIndex: 45,
-    gap: 12,
-    padding: 12,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: theme.alpha(theme.palette.slate.light, 0.3),
-    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
-  },
-  mapAddSheetHeader: {
-    minHeight: 46,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  mapAddCloseButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  mapAddButtonGrid: {
-    gap: 8,
-  },
-  mapFilterAction: {
-    position: 'absolute',
-    left: 12,
-    zIndex: 31,
-    alignItems: 'flex-start',
-    gap: 0,
-  },
-  mapFilterMenu: {
-    minWidth: 178,
-    alignItems: 'stretch',
-    borderRadius: 21,
-    overflow: 'hidden',
-    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
-    borderWidth: 1,
-    borderColor: theme.alpha(theme.palette.slate.light, 0.3),
-  },
-  mapFilterMenuAttached: {
-    borderBottomLeftRadius: 5,
-  },
-  mapFilterButtonAttached: {
-    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
-    borderColor: theme.alpha(theme.palette.slate.light, 0.3),
-    borderTopLeftRadius: 5,
-    borderTopRightRadius: 5,
-    borderBottomLeftRadius: 27,
-    borderBottomRightRadius: 27,
-  },
-  mapFilterRow: {
-    height: 42,
-    paddingLeft: 5,
-    paddingRight: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-    gap: 12,
-  },
-  mapFilterRowHidden: {
-    opacity: 0.38,
-  },
-  mapFilterRowLabel: {
-    color: theme.palette.slate.textPrimary,
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  mapFilterRowBorder: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 1,
-    backgroundColor: theme.alpha(theme.palette.slate.light, 0.3),
-  },
-  mapAddCompactRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  mapAddFeatureButton: {
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: theme.alpha(theme.palette.slate.light, 0.3),
-    backgroundColor: theme.alpha(theme.palette.slate.light, 0.12),
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  mapAddFeatureButtonCompact: {
-    flex: 1,
-    minWidth: 0,
-    height: 46,
-    paddingHorizontal: 6,
-  },
-  mapAddStackedButtons: {
-    gap: 8,
-  },
-  mapAddSecondaryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  mapAddFeatureButtonSecondary: {
-    flex: 1,
-    minWidth: 0,
-    height: 46,
-    paddingHorizontal: 8,
-  },
-  mapAddFeatureButtonHorizontal: {
-    flexDirection: 'row',
-  },
-  mapAddFeatureLabel: {
-    maxWidth: '100%',
-    color: theme.palette.slate.textPrimary,
-    fontSize: 12,
-    fontWeight: '800',
-    textAlign: 'center',
-  },
-  mapAddRowPressed: {
-    opacity: 0.55,
-  },
-  mapAddRowIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.palette.slate.surfaceDeep,
-  },
   centerPlacementPointer: {
     ...StyleSheet.absoluteFill,
     zIndex: 29,
@@ -2343,204 +1627,6 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-  },
-  mapTargetSheet: {
-    position: 'absolute',
-    left: 12,
-    right: 12,
-    zIndex: 45,
-    gap: 12,
-    padding: 12,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: theme.alpha(theme.palette.slate.light, 0.3),
-    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
-  },
-  mapTargetHeader: {
-    minHeight: 46,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  mapTargetFocusArea: {
-    flex: 1,
-    minWidth: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    borderRadius: 18,
-  },
-  mapTargetFocusAreaPressed: {
-    opacity: 0.65,
-  },
-  mapTargetIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.palette.slate.surfaceDeep,
-  },
-  mapTargetTitleBlock: {
-    flex: 1,
-    minWidth: 0,
-  },
-  mapTargetTitle: {
-    color: theme.palette.slate.textPrimary,
-    fontSize: 15,
-    fontWeight: '900',
-  },
-  mapTargetSubtitle: {
-    marginTop: 2,
-    color: theme.palette.slate.textSecondary,
-    fontSize: 12,
-    fontWeight: '700',
-    lineHeight: 16,
-  },
-  mapTargetClose: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  mapTargetClosePressed: {
-    opacity: 0.55,
-  },
-  mapTargetDraftFields: {
-    gap: 8,
-  },
-  mapTargetInput: {
-    minHeight: 42,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: theme.alpha(theme.palette.slate.light, 0.3),
-    backgroundColor: theme.alpha(theme.palette.slate.bg, 0.75),
-    paddingHorizontal: 12,
-    color: theme.palette.slate.textPrimary,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  mapTargetNameInput: {
-    minHeight: 38,
-    paddingHorizontal: 10,
-    fontSize: 15,
-    fontWeight: '900',
-  },
-  mapTargetDescriptionInput: {
-    minHeight: 72,
-    paddingTop: 10,
-    textAlignVertical: 'top',
-  },
-  mapTargetMediaBox: {
-    gap: 12,
-  },
-  mapTargetDescriptionBlock: {
-    paddingRight: 36,
-  },
-  mapTargetMetaText: {
-    color: theme.palette.slate.textSecondary,
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  mapTargetVoteCount: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  mapTargetActionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  mapTargetActionButton: {
-    flex: 1,
-    minWidth: 0,
-    height: 46,
-    borderRadius: 23,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: theme.palette.green.bg,
-    borderWidth: 1,
-    borderColor: theme.palette.green.border,
-  },
-  mapTargetEditButton: {
-    minWidth: 88,
-    height: 46,
-    paddingHorizontal: 14,
-    borderRadius: 23,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-    borderWidth: 1,
-    borderColor: theme.alpha(theme.palette.slate.light, 0.3),
-    backgroundColor: theme.alpha(theme.palette.slate.bg, 0.75),
-  },
-  mapTargetVoteGroup: {
-    flexDirection: 'row',
-    gap: 4,
-  },
-  mapTargetVoteButton: {
-    width: 46,
-    height: 46,
-    paddingHorizontal: 0,
-    borderRadius: 23,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: theme.alpha(theme.palette.slate.light, 0.3),
-    backgroundColor: theme.alpha(theme.palette.slate.bg, 0.75),
-  },
-  mapTargetUpButtonActive: {
-    borderColor: theme.palette.cyan.border,
-    backgroundColor: theme.palette.cyan.bg,
-  },
-  mapTargetDownButtonActive: {
-    borderColor: theme.status.error.border,
-    backgroundColor: theme.status.error.bg,
-  },
-  mapTargetDeleteButton: {
-    backgroundColor: theme.status.error.bg,
-    borderColor: theme.status.error.border,
-  },
-  mapTargetSaveButton: {
-    backgroundColor: theme.palette.cyan.border,
-    borderColor: theme.palette.cyan.border,
-  },
-  mapTargetSaveText: {
-    color: theme.palette.slate.textPrimary,
-  },
-  mapTargetDeleteIconButton: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-  },
-  mapTargetNavigate: {
-    height: 46,
-    borderRadius: 23,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: theme.palette.green.bg,
-    borderWidth: 1,
-    borderColor: theme.palette.green.border,
-  },
-  mapTargetNavigatePressed: {
-    opacity: 0.55,
-  },
-  mapTargetNavigateText: {
-    color: theme.palette.green.text,
-    fontSize: 13,
-    fontWeight: '900',
   },
   telemetryInterface: {
     ...StyleSheet.absoluteFill,

@@ -149,14 +149,18 @@ export const useMapStore = create<MapState & MapActions>((set, get) => {
     }
   }
 
-  /** One write path: run it, replace the point it answers with, surface any failure. */
-  async function mutate(run: () => Promise<MapPoint>): Promise<MapPoint | null> {
+  /**
+   * One write path: run it, put the answered point into the visible set, surface any failure. The
+   * server answer replaces a point already on the map and is appended when it is new.
+   */
+  async function write(run: () => Promise<MapPoint>): Promise<MapPoint | null> {
     try {
       const point = await run()
       set((s) => ({
-        mapPoints: s.mapPoints
-          .map((candidate) => (candidate.id === point.id ? point : candidate))
-          .sort(byDistance),
+        mapPoints: (s.mapPoints.some((candidate) => candidate.id === point.id)
+          ? s.mapPoints.map((candidate) => (candidate.id === point.id ? point : candidate))
+          : [...s.mapPoints, point]
+        ).sort(byDistance),
         error: null,
       }))
       return point
@@ -179,11 +183,19 @@ export const useMapStore = create<MapState & MapActions>((set, get) => {
     async refreshNearby(latitude, longitude, zoom) {
       const radiusMeters = nearbyRadiusMeters(zoom, latitude)
       const previous = get().lastRead
-      const settled =
-        previous !== null &&
-        previous.radiusMeters === radiusMeters &&
-        distanceMeters(previous, { latitude, longitude }) < radiusMeters * REFETCH_MOVE_FRACTION
-      if (settled) return
+      if (previous !== null && !get().truncated) {
+        const moved = distanceMeters(previous, { latitude, longitude })
+        // Same area, near enough to the last centre: nothing new to reveal.
+        if (
+          previous.radiusMeters === radiusMeters &&
+          moved < radiusMeters * REFETCH_MOVE_FRACTION
+        ) {
+          return
+        }
+        // Zoomed in: the new circle sits inside the one already read, so its points are on screen
+        // already. A truncated answer is the exception — there, zooming in reveals more.
+        if (moved + radiusMeters <= previous.radiusMeters) return
+      }
       await read({ latitude, longitude, radiusMeters })
     },
 
@@ -205,18 +217,11 @@ export const useMapStore = create<MapState & MapActions>((set, get) => {
     },
 
     async addMapPoint(category, latitude, longitude) {
-      try {
-        const point = await createMapPoint({ category, latitude, longitude })
-        set((s) => ({ mapPoints: [...s.mapPoints, point].sort(byDistance), error: null }))
-        return point
-      } catch (error) {
-        set({ error: mapPointErrorMessage(error) })
-        return null
-      }
+      return write(() => createMapPoint({ category, latitude, longitude }))
     },
 
     async editMapPoint(id, patch) {
-      return mutate(() => updateMapPoint(id, patch))
+      return write(() => updateMapPoint(id, patch))
     },
 
     async setMapPointReaction(id, reaction) {

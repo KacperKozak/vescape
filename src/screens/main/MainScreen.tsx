@@ -373,6 +373,7 @@ export function MainScreen({
         mapPoints={controller.mapPoints}
         selectedMapPointId={controller.selectedMapPointId}
         hiddenMapPointCategories={controller.hiddenMapPointCategories}
+        onCameraSettled={controller.refreshNearbyMapPoints}
         onToggleMapPointSelection={handleToggleMapPointSelection}
         weatherActive={controller.weatherActive}
         legalLimitsActive={controller.legalLimitsActive}

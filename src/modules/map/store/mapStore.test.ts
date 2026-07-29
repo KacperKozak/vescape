@@ -135,6 +135,24 @@ test('a camera nudge inside the last radius does not re-read', async () => {
   expect(getNearbyMapPoints).toHaveBeenCalledTimes(1)
 })
 
+/** The new circle sits inside the one already read, so its points are already on screen. */
+test('zooming into an already-read area does not re-read', async () => {
+  nearbyResult = { items: [serverPoint({ id: 'a' })], truncated: false }
+  await useMapStore.getState().refreshNearby(52.1, 21.1, 12)
+  await useMapStore.getState().refreshNearby(52.1, 21.1, 15)
+
+  expect(getNearbyMapPoints).toHaveBeenCalledTimes(1)
+})
+
+/** Unless the server said there were more than it returned — then zooming in reveals them. */
+test('zooming into a truncated area re-reads', async () => {
+  nearbyResult = { items: [serverPoint({ id: 'a' })], truncated: true }
+  await useMapStore.getState().refreshNearby(52.1, 21.1, 12)
+  await useMapStore.getState().refreshNearby(52.1, 21.1, 15)
+
+  expect(getNearbyMapPoints).toHaveBeenCalledTimes(2)
+})
+
 test('panning far enough re-reads around the new centre', async () => {
   await useMapStore.getState().refreshNearby(52.1, 21.1, 14)
   await useMapStore.getState().refreshNearby(52.4, 21.6, 14)

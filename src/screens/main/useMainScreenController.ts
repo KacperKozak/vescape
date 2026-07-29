@@ -409,6 +409,7 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
     mapPoints,
     selectedMapPointId,
     hiddenMapPointCategories,
+    refreshNearbyMapPoints,
     addMapPoint,
     updateMapPoint,
     setMapPointReaction,

@@ -14,7 +14,7 @@ import { Animated, StyleSheet, View, type LayoutChangeEvent } from 'react-native
 import { Text } from '@/components/base/Text'
 import type { LocationEvent, MapPoint, MapPointCategory } from 'vescape-core'
 
-import { useMapStore, type DirectionPoint } from '@/modules/map/store/mapStore'
+import type { DirectionPoint } from '@/modules/map/store/mapStore'
 
 import { InfoModal } from '@/components/modals/InfoModal'
 import { IS_MAPY_CONFIGURED, MAPBOX_ACCESS_TOKEN } from '@/config/mapy'
@@ -206,6 +206,8 @@ interface MainMapProps {
   selectedMapPointId: string | null
   hiddenMapPointCategories: MapPointCategory[]
   onToggleMapPointSelection: (id: string) => void
+  /** Camera came to rest: where the map should read its Map Points around. */
+  onCameraSettled: (latitude: number, longitude: number, zoom: number) => void
   weatherActive: boolean
   legalLimitsActive: boolean
   historyPreview:
@@ -255,6 +257,7 @@ export const MainMap = memo(
       selectedMapPointId,
       hiddenMapPointCategories,
       onToggleMapPointSelection,
+      onCameraSettled,
       weatherActive,
       legalLimitsActive,
       historyPreview,
@@ -1192,13 +1195,13 @@ export const MainMap = memo(
       const heading = camera?.heading
       if (heading != null) setCameraHeading(heading)
       scheduleOffscreenMapIndicatorRefresh()
-      // Map Points live on the server, so the visible set is read per camera rest. The store drops
-      // the call when the camera has not moved far enough to reveal anything new.
+      // Map Points live on the server, so the visible set is read per camera rest. The handler
+      // drops the call when the camera has not moved far enough to reveal anything new.
       if (camera) {
         const [longitude, latitude] = camera.centerCoordinate
-        void useMapStore.getState().refreshNearby(latitude, longitude, camera.zoomLevel)
+        onCameraSettled(latitude, longitude, camera.zoomLevel)
       }
-    }, [currentCameraRef, scheduleOffscreenMapIndicatorRefresh])
+    }, [currentCameraRef, onCameraSettled, scheduleOffscreenMapIndicatorRefresh])
 
     useEffect(
       () => () => {
