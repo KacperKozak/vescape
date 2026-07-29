@@ -432,12 +432,12 @@ final class AppDataRepository {
     read([]) { db in
       let reactions = try Row.fetchAll(db, sql: "SELECT * FROM map_point_reactions")
       let reactionsByPoint = Dictionary(grouping: reactions) { $0["map_point_id"] as String }
-      try Row.fetchAll(db, sql: "SELECT * FROM map_points ORDER BY created_at ASC").map { row in
+      return try Row.fetchAll(db, sql: "SELECT * FROM map_points ORDER BY created_at ASC").map { row in
         let pointReactions = reactionsByPoint[row["id"] as String] ?? []
         let myReaction = pointReactions.first {
           ($0["clerk_user_id"] as String) == clerkUserId
         }
-        [
+        return [
           "id": row["id"] as String,
           "kind": row["kind"] as String,
           "latitude": (row["latitude_e7"] as Int64).asE7Degrees,
