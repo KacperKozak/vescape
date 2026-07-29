@@ -1,5 +1,13 @@
 import type { Camera as CameraRef } from '@rnmapbox/maps'
-import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { Dimensions } from 'react-native'
 
 import { MAP_DEFAULTS } from '@/modules/map/constants/mapStyles'
@@ -516,12 +524,52 @@ export function useCameraControls({
     [perspectiveEnabled, setFollowGps],
   )
 
+  const imperativeHandleLatest = {
+    applyLiveFollowCamera,
+    dispatchCameraIntent,
+    followGps,
+    getFollowHeadingDeg,
+    getLiveFollowCamera,
+    getViewfinderCoordinateFromMap,
+    gpsCamera,
+    gpsHeadingMode,
+    historyActive,
+    mapNavigationMode,
+    onHeadingChange,
+    onPerspectiveChange,
+    perspectiveEnabled,
+    previewHistorySession,
+    recenterLive,
+    restorePreviewPan,
+    setFreeMapZoom,
+    setFollowGps,
+    setFollowZoomLevel,
+  }
+  const imperativeHandleLatestRef = useRef(imperativeHandleLatest)
+  useLayoutEffect(() => {
+    imperativeHandleLatestRef.current = imperativeHandleLatest
+  })
+
   useImperativeHandle(
     ref,
     () => ({
-      recenterLive,
-      previewHistorySession,
+      recenterLive(options?: { resetPadding?: boolean; animationDuration?: number }) {
+        imperativeHandleLatestRef.current.recenterLive(options)
+      },
+      previewHistorySession(preview: HistoryPreviewTarget) {
+        imperativeHandleLatestRef.current.previewHistorySession(preview)
+      },
       beginPreviewPan() {
+        const {
+          followGps,
+          getFollowHeadingDeg,
+          getLiveFollowCamera,
+          gpsCamera,
+          gpsHeadingMode,
+          historyActive,
+          perspectiveEnabled,
+          setFollowGps,
+        } = imperativeHandleLatestRef.current
         previewPanActiveRef.current = true
         previewPanCameraRef.current = null
         const baseCamera =
@@ -542,6 +590,7 @@ export function useCameraControls({
         setFollowGps(false)
       },
       previewPanBy(deltaX: number, deltaY: number, animationDuration = 0, revealProgress = 0) {
+        const { perspectiveEnabled, setFollowGps } = imperativeHandleLatestRef.current
         setFollowGps(false)
         const baseCamera = previewPanBaseRef.current
         if (!baseCamera) return
@@ -569,16 +618,20 @@ export function useCameraControls({
         })
       },
       endPreviewPan() {
+        const { setFollowGps } = imperativeHandleLatestRef.current
         setFollowGps(false)
         previewPanActiveRef.current = false
         previewPanBaseRef.current = null
         previewPanCameraRef.current = null
       },
       beginPreviewZoom() {
+        const { followGps, getLiveFollowCamera, historyActive } = imperativeHandleLatestRef.current
         previewZoomBaseRef.current =
           followGps && !historyActive ? getLiveFollowCamera() : currentCameraRef.current
       },
       previewZoomBy(scale: number) {
+        const { applyLiveFollowCamera, followGps, historyActive, setFollowZoomLevel } =
+          imperativeHandleLatestRef.current
         const baseCamera = previewZoomBaseRef.current
         if (!baseCamera || scale <= 0) return
         const zoomLevel = clamp(
@@ -592,16 +645,21 @@ export function useCameraControls({
         }
       },
       endPreviewZoom() {
+        void imperativeHandleLatestRef.current
         previewZoomBaseRef.current = null
       },
-      restorePreviewPan,
+      restorePreviewPan() {
+        imperativeHandleLatestRef.current.restorePreviewPan()
+      },
       async getViewfinderCoordinate() {
+        const { getViewfinderCoordinateFromMap, gpsCamera } = imperativeHandleLatestRef.current
         const viewfinderCoordinate = await getViewfinderCoordinateFromMap?.()
         if (viewfinderCoordinate) return viewfinderCoordinate
         const center = currentCameraRef.current?.centerCoordinate ?? gpsCamera.centerCoordinate
         return { longitude: center[0], latitude: center[1] }
       },
       resetRotation() {
+        const { onHeadingChange } = imperativeHandleLatestRef.current
         followZoomLevelRef.current = null
         cameraRef.current?.setCamera({
           heading: 0,
@@ -611,6 +669,13 @@ export function useCameraControls({
         onHeadingChange(0)
       },
       togglePerspective() {
+        const {
+          dispatchCameraIntent,
+          gpsCamera,
+          mapNavigationMode,
+          onPerspectiveChange,
+          perspectiveEnabled,
+        } = imperativeHandleLatestRef.current
         const enabled = !perspectiveEnabled
         onPerspectiveChange(enabled)
         const effect = dispatchCameraIntent({
@@ -627,6 +692,7 @@ export function useCameraControls({
         })
       },
       setPadding(bottom: number) {
+        void imperativeHandleLatestRef.current
         cameraRef.current?.setCamera({
           padding: { paddingBottom: bottom, paddingTop: 0, paddingLeft: 0, paddingRight: 0 },
           animationDuration: bottom === 0 ? 0 : 300,
@@ -634,6 +700,7 @@ export function useCameraControls({
         })
       },
       zoomBy(delta: number) {
+        const { gpsCamera, setFreeMapZoom } = imperativeHandleLatestRef.current
         setFreeMapZoom(
           clamp(
             (currentCameraRef.current?.zoomLevel ?? gpsCamera.zoomLevel) + delta,
@@ -643,6 +710,8 @@ export function useCameraControls({
         )
       },
       focusCoordinate(coordinate: [number, number]) {
+        const { dispatchCameraIntent, gpsCamera, mapNavigationMode, perspectiveEnabled } =
+          imperativeHandleLatestRef.current
         const effect = dispatchCameraIntent({
           type: 'FocusCoordinate',
           coordinate,
@@ -660,6 +729,8 @@ export function useCameraControls({
         })
       },
       centerCoordinatePreservingCamera(coordinate: [number, number]) {
+        const { getFollowHeadingDeg, gpsCamera, perspectiveEnabled, setFollowGps } =
+          imperativeHandleLatestRef.current
         setFollowGps(false)
         const current = currentCameraRef.current
         const camera = {
@@ -677,6 +748,8 @@ export function useCameraControls({
         })
       },
       focusWeather() {
+        const { dispatchCameraIntent, gpsCamera, perspectiveEnabled } =
+          imperativeHandleLatestRef.current
         const effect = dispatchCameraIntent({
           type: 'EnterWeatherView',
           currentCamera: currentCameraRef.current,
@@ -690,6 +763,7 @@ export function useCameraControls({
         })
       },
       focusLegalLimits() {
+        const { dispatchCameraIntent } = imperativeHandleLatestRef.current
         const effect = dispatchCameraIntent({
           type: 'EnterLegalLimitsView',
           camera: LEGAL_LIMIT_MAP_CAMERA,
@@ -701,27 +775,7 @@ export function useCameraControls({
         })
       },
     }),
-    [
-      applyLiveFollowCamera,
-      dispatchCameraIntent,
-      followGps,
-      getFollowHeadingDeg,
-      getLiveFollowCamera,
-      getViewfinderCoordinateFromMap,
-      gpsCamera,
-      gpsHeadingMode,
-      historyActive,
-      mapNavigationMode,
-      onHeadingChange,
-      onPerspectiveChange,
-      perspectiveEnabled,
-      previewHistorySession,
-      recenterLive,
-      restorePreviewPan,
-      setFreeMapZoom,
-      setFollowGps,
-      setFollowZoomLevel,
-    ],
+    [],
   )
 
   useEffect(() => {
