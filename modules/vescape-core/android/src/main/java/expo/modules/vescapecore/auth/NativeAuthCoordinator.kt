@@ -1,20 +1,22 @@
 package expo.modules.vescapecore.auth
 
 import android.content.Context
+import expo.modules.vescapecore.api.ApiResult
+import expo.modules.vescapecore.api.AuthMode
+import expo.modules.vescapecore.api.HttpMethod
+import expo.modules.vescapecore.api.VescapeApi
 import expo.modules.vescapecore.appstatus.AppStatusCoordinator
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import java.util.concurrent.TimeUnit
+import org.json.JSONObject
 
 /**
- * Reusable native authenticated HTTP boundary.
+ * Device Token lifecycle: verify a freshly exchanged credential, store it, revoke it. The HTTP
+ * boundary itself belongs to [VescapeApi] so every native caller shares one credential and one 401
+ * policy.
+ *
  * @parity /modules/vescape-core/ios/auth/NativeAuthCoordinator.swift
  */
 class NativeAuthCoordinator(private val context: Context) {
   private val store = DeviceCredentialStore(context)
-  private val client = OkHttpClient.Builder().callTimeout(10, TimeUnit.SECONDS).build()
 
   fun stateMap(): Map<String, Any?> {
     val credential = store.read()
@@ -25,53 +27,60 @@ class NativeAuthCoordinator(private val context: Context) {
     )
   }
 
+  /**
+   * Verifies the exchanged token against the Account it claims before storing it. The token is not
+   * in the store yet, so the call carries it explicitly.
+   */
   suspend fun provision(
     serverUrl: String,
     token: String,
     accountId: String,
-  ): Map<String, Any?> = withContext(Dispatchers.IO) {
-    val candidate = DeviceCredential(serverUrl.trimEnd('/'), token, accountId, null)
-    val request = authenticatedRequest(candidate, "/api/account").get().build()
-    client.newCall(request).execute().use { response ->
-      if (response.code == 401) {
-        store.reject()
-        throw IllegalStateException("Device credential rejected")
-      }
-      check(response.isSuccessful) { "Account verification failed (${response.code})" }
-      val returnedId = response.body?.string()
-        ?.let { org.json.JSONObject(it).optString("id") }
-        .orEmpty()
-      check(returnedId == accountId) { "Account verification mismatch" }
-      store.write(candidate)
+  ): Map<String, Any?> {
+    val origin = serverUrl.trimEnd('/')
+    val result = VescapeApi.forOrigin(context, origin).request(
+      method = HttpMethod.GET,
+      path = ACCOUNT_PATH,
+      auth = AuthMode.Bearer(token),
+    ) { body -> JSONObject(body).optString("id") }
+
+    when (result) {
+      is ApiResult.Ok ->
+        check(result.value == accountId) { "Account verification mismatch" }
+      // `VescapeApi` already rejected the stored credential and refreshed App Status.
+      ApiResult.Unauthorized -> throw IllegalStateException("Device credential rejected")
+      else -> throw IllegalStateException("Account verification failed ($result)")
     }
+
+    store.write(DeviceCredential(origin, token, accountId, null))
     AppStatusCoordinator.get(context).refresh()
-    stateMap()
+    return stateMap()
   }
 
-  suspend fun revoke() = withContext(Dispatchers.IO) {
-    val credential = store.read() ?: return@withContext
-    val request = authenticatedRequest(credential, "/api/auth/device-tokens/current")
-      .delete()
-      .build()
-    client.newCall(request).execute().use { response ->
-      check(response.isSuccessful || response.code == 401) {
-        "Device credential revocation failed (${response.code})"
-      }
+  /**
+   * Revokes server-side before the local copy goes away. A `401` means the server already considers
+   * it gone, which is the same end state.
+   */
+  suspend fun revoke() {
+    val credential = store.read() ?: return
+    val result = VescapeApi.forOrigin(context, credential.serverUrl).request(
+      method = HttpMethod.DELETE,
+      path = REVOKE_PATH,
+      auth = AuthMode.Required,
+    ) { }
+
+    when (result) {
+      is ApiResult.Ok, ApiResult.Unauthorized -> Unit
+      else -> throw IllegalStateException("Device credential revocation failed ($result)")
     }
     store.clear()
   }
 
   fun clear() = store.clear()
 
-  private fun authenticatedRequest(
-    credential: DeviceCredential,
-    path: String,
-  ): Request.Builder = Request.Builder()
-    .url("${credential.serverUrl}$path")
-    .header("Authorization", "Bearer ${credential.token}")
-    .header(AppStatusCoordinator.APP_VERSION_HEADER, AppStatusCoordinator.get(context).appVersion)
-
   companion object {
+    private const val ACCOUNT_PATH = "/api/account"
+    private const val REVOKE_PATH = "/api/auth/device-tokens/current"
+
     @Volatile private var instance: NativeAuthCoordinator? = null
     fun get(context: Context): NativeAuthCoordinator =
       instance ?: synchronized(this) {
