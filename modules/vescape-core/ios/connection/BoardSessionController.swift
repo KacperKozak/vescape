@@ -1084,6 +1084,11 @@ internal final class BoardSessionController: VescGattListener {
     )
   }
 
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/connection/BoardSessionController.kt `setFocusedSeriesMetrics`
+  func setFocusedSeriesMetrics(_ metrics: [String]) {
+    liveSeries.setFocusedMetrics(metrics)
+  }
+
   private func bmsSeriesWindowMs() -> Int64 {
     Int64(max(1, config?.liveHistoryLimitMinutes ?? 5)) * 60_000
   }
