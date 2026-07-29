@@ -15,7 +15,7 @@ export interface ExcludedRange {
 
 const DEFAULT_GAP_MULTIPLIER = 3
 
-interface AutoRangeOptions {
+export interface AutoRangeOptions {
   includeZero?: boolean
   minSpan?: number
   paddingRatio?: number
