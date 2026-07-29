@@ -5,13 +5,13 @@ import type { MapPointCategory } from 'vescape-core'
 import { IconButton } from '@/components/base/IconButton'
 import { Text } from '@/components/base/Text'
 import { theme } from '@/constants/theme'
-import { mapSheetStyles } from '@/modules/map/components/mapSheetStyles'
-import { getMapPointKindIcon } from '@/modules/map/constants/mapPointIcons'
+import { mapSheetStyles } from '@/modules/map-points/components/mapSheetStyles'
+import { getMapPointKindIcon } from '@/modules/map-points/constants/mapPointIcons'
 import {
   MAP_POINT_CATEGORY_OPTIONS,
   getMapPointKindColor,
   getMapPointKindTextColor,
-} from '@/modules/map/constants/mapPoints'
+} from '@/modules/map-points/constants/mapPoints'
 
 /** Per-category visibility for the Map Points on the map. The direction target is never filtered. */
 export function MapPointFilterMenu({

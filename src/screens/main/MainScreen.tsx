@@ -11,7 +11,7 @@ import type { MapPointPatch } from 'vescape-core'
 
 import type { Board } from '@/modules/board/store/boardStore'
 import { theme } from '@/constants/theme'
-import { getMapPointKindLabel } from '@/modules/map/constants/mapPoints'
+import { getMapPointKindLabel } from '@/modules/map-points/constants/mapPoints'
 import type { MapSelection } from '@/modules/map/lib/mapSelection'
 import { reverseGeocodeMapCoordinate } from '@/modules/map/lib/search'
 
@@ -396,8 +396,6 @@ export function MainScreen({
           heading: selectorHeading,
           mapStyleKey: controller.mapStyleKey,
           setMapStyleKey: controller.setMapStyleKey,
-          satelliteMapImageryOpacity: controller.satelliteMapImageryOpacity,
-          setSatelliteMapImageryOpacity: controller.setSatelliteMapImageryOpacity,
           mapNavigationMode: controller.mapNavigationMode,
           setMapNavigationMode: controller.setMapNavigationMode,
           mapSelector: controller.mapSelector,
@@ -420,12 +418,9 @@ export function MainScreen({
           onNavigateSelectedTarget: handleNavigateSelectedTarget,
           onCancelNavigation: handleClearDirectionPoint,
           onDismissSelectedTarget: handleDismissSelectedTarget,
-          addMapPoint: controller.addMapPoint,
           updateMapPoint: handleUpdateMapPoint,
           setMapPointReaction: handleSetMapPointReaction,
           onRemoveMapPoint: handleRemoveMapPoint,
-          hiddenMapPointCategories: controller.hiddenMapPointCategories,
-          toggleMapPointCategoryVisibility: controller.toggleMapPointCategoryVisibility,
           offscreenMapIndicators,
           onOffscreenIndicatorPress: handleOffscreenIndicatorPress,
         }}
@@ -434,7 +429,6 @@ export function MainScreen({
           selectedSession: controller.selectedSession,
           sessionSamples: controller.sessionSamples,
           sessionMarkers: controller.sessionMarkers,
-          previousRide: controller.previousRide,
           nextRide: controller.nextRide,
           canPreviousRide: controller.canPreviousRide,
           loadingSession: controller.loadingSession,
@@ -445,7 +439,6 @@ export function MainScreen({
           sessions: controller.sessions,
           historySheetVisible: controller.historySheetVisible,
           setHistorySheetVisible: controller.setHistorySheetVisible,
-          selectSession: controller.selectSession,
           loadMoreHistory: controller.loadMoreHistory,
           selectPreviousRide: controller.selectPreviousRide,
           selectNextRide: controller.selectNextRide,

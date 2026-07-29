@@ -29,8 +29,11 @@ import {
   getSatelliteDarkMapStyle,
   getSatelliteImageryPaint,
 } from '@/modules/map/constants/satelliteDarkMapStyle'
-import { getMapPointKindIcon } from '@/modules/map/constants/mapPointIcons'
-import { getMapPointKindColor, getMapPointKindTextColor } from '@/modules/map/constants/mapPoints'
+import { getMapPointKindIcon } from '@/modules/map-points/constants/mapPointIcons'
+import {
+  getMapPointKindColor,
+  getMapPointKindTextColor,
+} from '@/modules/map-points/constants/mapPoints'
 import { getOneDarkMapStyle } from '@/modules/map/constants/oneDarkMapStyle'
 import { theme } from '@/constants/theme'
 import {
@@ -40,7 +43,7 @@ import {
 import { distanceMeters, makeCircleFeature, makeTrailLineString } from '@/helpers/mapGeometry'
 import type { MediaHistoryAsset } from '@/modules/history/lib/mediaHistory'
 import type { MapSelection } from '@/modules/map/lib/mapSelection'
-import { isMapPinKindVisible } from '@/modules/map/lib/mapPointVisibility'
+import { isMapPinKindVisible } from '@/modules/map-points/lib/mapPointVisibility'
 import type { HistoryMetricKey } from '@/modules/history/lib/metricColorScale'
 import { getNavigationFallbackReason } from '@/modules/map/lib/navigationDiagnostics'
 import { getGpsPuckBearing } from '@/modules/map/lib/gpsPuckHeading'

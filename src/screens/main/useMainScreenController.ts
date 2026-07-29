@@ -15,6 +15,7 @@ import {
 import { useBleStore } from '@/modules/board/store/bleStore'
 import { useHistoryStore, type HistorySession } from '@/modules/history/store/historyStore'
 import { useMapStore } from '@/modules/map/store/mapStore'
+import { useMapPointStore } from '@/modules/map-points/store/mapPointStore'
 import { useMapContributionReady } from '@/modules/profile/hooks/useMapContributionReady'
 import { useSettingsStore } from '@/modules/settings/store/settingsStore'
 import { useWeatherStore } from '@/modules/weather/store/weatherStore'
@@ -123,32 +124,24 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
     hiddenMapPointCategories,
     refreshNearbyMapPoints,
     reloadMapPoints,
-    loadDirectionPoint,
-    directionPoint,
     addMapPoint,
     updateMapPoint,
     setMapPointReaction,
-    setDirectionPoint,
-    clearDirectionPoint,
     removeMapPoint,
     selectMapPoint,
     toggleMapPointSelection,
     clearSelectedMapPoints,
     toggleMapPointCategoryVisibility,
-  } = useMapStore(
+  } = useMapPointStore(
     useShallow((s) => ({
       mapPoints: s.mapPoints,
       selectedMapPointId: s.selectedMapPointId,
       hiddenMapPointCategories: s.hiddenMapPointCategories,
       refreshNearbyMapPoints: s.refreshNearby,
       reloadMapPoints: s.reload,
-      loadDirectionPoint: s.loadDirectionPoint,
-      directionPoint: s.directionPoint,
       addMapPoint: s.addMapPoint,
       updateMapPoint: s.editMapPoint,
       setMapPointReaction: s.setMapPointReaction,
-      setDirectionPoint: s.setDirectionPoint,
-      clearDirectionPoint: s.clearDirectionPoint,
       removeMapPoint: s.removeMapPoint,
       selectMapPoint: s.selectMapPoint,
       toggleMapPointSelection: s.toggleMapPointSelection,
@@ -156,6 +149,15 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
       toggleMapPointCategoryVisibility: s.toggleMapPointCategoryVisibility,
     })),
   )
+  const { loadDirectionPoint, directionPoint, setDirectionPoint, clearDirectionPoint } =
+    useMapStore(
+      useShallow((s) => ({
+        loadDirectionPoint: s.loadDirectionPoint,
+        directionPoint: s.directionPoint,
+        setDirectionPoint: s.setDirectionPoint,
+        clearDirectionPoint: s.clearDirectionPoint,
+      })),
+    )
   const mediaHistory = useMediaHistory({
     selectedSession,
     gpsSamples: sessionGpsSamples,
