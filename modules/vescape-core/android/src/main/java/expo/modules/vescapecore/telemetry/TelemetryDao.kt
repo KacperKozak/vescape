@@ -302,10 +302,20 @@ interface TelemetryDao {
   @Query("DELETE FROM telemetry_markers WHERE occurred_at_ms >= :fromMs AND occurred_at_ms <= :toMs")
   suspend fun deleteMarkersRangeAllDevices(fromMs: Long, toMs: Long): Int
 
+  @Query(
+    """
+    DELETE FROM telemetry_minute_buckets
+    WHERE last_sample_at_ms >= :fromMs
+      AND first_sample_at_ms <= :toMs
+    """,
+  )
+  suspend fun deleteBucketsRangeAllDevices(fromMs: Long, toMs: Long): Int
+
   @Transaction
   suspend fun deleteRangeAllDevices(fromMs: Long, toMs: Long): Int {
     val frames = deleteFramesRangeAllDevices(fromMs, toMs)
     deleteMarkersRangeAllDevices(fromMs, toMs)
+    deleteBucketsRangeAllDevices(fromMs, toMs)
     deleteExclusionsRange(fromMs, toMs)
     return frames
   }

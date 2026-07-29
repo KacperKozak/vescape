@@ -4,6 +4,16 @@ import XCTest
 final class TelemetryRangeSubtractionTests: XCTestCase {
   private let requested = TelemetryTimeRange(startMs: 100, endMs: 200)
 
+  func testFavoriteProtectionExpandsToEveryTouchedBucket() {
+    XCTAssertEqual(
+      expandTelemetryRangeToBuckets(
+        TelemetryTimeRange(startMs: 75_000, endMs: 120_000),
+        bucketSizeMs: 60_000
+      ),
+      TelemetryTimeRange(startMs: 60_000, endMs: 179_999)
+    )
+  }
+
   func testFullOverlapLeavesNothingDeletable() {
     XCTAssertEqual(
       subtractProtectedTelemetryRanges(

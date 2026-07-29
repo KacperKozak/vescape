@@ -532,7 +532,6 @@ class TelemetryRepository private constructor(context: Context) {
     val deleted = subtractProtectedTelemetryRanges(requested, protected).sumOf { range ->
       dao.deleteRange(range.startMs, range.endMs, query.deviceId)
     }
-    rebuildBuckets()
     deleted
   }
 
@@ -628,11 +627,11 @@ class TelemetryRepository private constructor(context: Context) {
   }
 
   suspend fun rebuildBuckets(onProgress: (current: Int, total: Int) -> Unit = { _, _ -> }): Int = withContext(Dispatchers.IO) {
-    dao.clearBuckets()
-    dao.clearExclusions()
-
     val firstMs = dao.firstFrameAt() ?: return@withContext 0
     val lastMs = dao.lastFrameAt() ?: return@withContext 0
+
+    dao.clearBuckets()
+    dao.clearExclusions()
 
     val chunkMs = 3_600_000L
     val chunks = ((lastMs - firstMs) / chunkMs + 1).toInt()
@@ -683,7 +682,6 @@ class TelemetryRepository private constructor(context: Context) {
         dao.deleteRangeAllDevices(range.startMs, range.endMs)
       }
       dao.clearDiagnosticEvents()
-      rebuildBuckets()
     }
     synchronized(lock) {
       pending.clear()
@@ -703,7 +701,9 @@ class TelemetryRepository private constructor(context: Context) {
    * @parity /modules/vescape-core/ios/telemetry/TelemetryRepository.swift `favoriteTelemetryRanges`
    */
   private suspend fun favoriteTelemetryRanges(): List<TelemetryTimeRange> =
-    dao.getFavorites().map { TelemetryTimeRange(it.startMs, it.endMs) }
+    dao.getFavorites().map {
+      expandTelemetryRangeToBuckets(TelemetryTimeRange(it.startMs, it.endMs))
+    }
 
   /**
    * Android stores delta frames. Promote the first retained frame in each protected island before

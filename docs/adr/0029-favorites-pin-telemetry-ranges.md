@@ -6,7 +6,7 @@ A Favorite is a durable, optionally named time range `[startMs, endMs]` over tel
 
 - Favorites live in a native table (`@parity` iOS/Android) so telemetry deletion paths can see them.
 - A Favorite has a native-minted stable UUID plus native-owned `created_at` and `updated_at`; JS cannot supply them.
-- `deleteTelemetryRange` and `clearTelemetryHistory` carve out favorited ranges instead of deleting them. Deleting a ride around a Favorite leaves the favorited samples as a telemetry island, which history grouping surfaces as a short standalone ride.
+- `deleteTelemetryRange` and `clearTelemetryHistory` protect every minute bucket touched by a favorited range. Both the precomputed bucket and all its raw samples stay together; only buckets and telemetry wholly outside those bucket-aligned protected ranges are deleted. Deleting a ride around a Favorite leaves the protected buckets as a short standalone ride.
 - Rides containing a favorited range are marked in history as not fully deletable.
 - Removing a Favorite only unpins: its telemetry stays and becomes deletable like any ride. Its Favorite Media is deleted with it.
 - Summary stats (mirroring history session summary fields) are computed once from raw samples at creation time and denormalized onto the row (ADR 0005 style); the route preview is derived on read from pinned samples.
@@ -20,6 +20,6 @@ A Favorite is a durable, optionally named time range `[startMs, endMs]` over tel
 
 ## Consequences
 
-- Delete paths need range-hole support; history grouping already tolerates gaps.
+- Delete paths subtract bucket-aligned protected ranges. This deliberately keeps up to 59 seconds of telemetry beyond each exact Favorite edge so bucket summaries stay truthful without rebuilding the full telemetry database; the Favorite's own range and denormalized summary remain exact.
 - Favorited telemetry is exempt from any future retention pruning.
 - Orphan favorite islands appear in History after surrounding-ride deletion; this is accepted as honest.

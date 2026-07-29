@@ -365,7 +365,6 @@ internal final class TelemetryRepository {
       }
       return count
     }) ?? 0
-    _ = rebuildBuckets()
     return deleted
   }
 
@@ -373,12 +372,12 @@ internal final class TelemetryRepository {
     flushBlocking()
     guard let pool else { return 0 }
     return (try? pool.write { db in
-      try db.execute(sql: "DELETE FROM telemetry_minute_buckets")
-      try db.execute(sql: "DELETE FROM metric_exclusion_ranges")
       guard
         let firstMs = try Int64.fetchOne(db, sql: "SELECT MIN(captured_at_ms) FROM telemetry_frames"),
         let lastMs = try Int64.fetchOne(db, sql: "SELECT MAX(captured_at_ms) FROM telemetry_frames")
       else { return 0 }
+      try db.execute(sql: "DELETE FROM telemetry_minute_buckets")
+      try db.execute(sql: "DELETE FROM metric_exclusion_ranges")
 
       let chunkMs: Int64 = 3_600_000
       let chunks = Int((lastMs - firstMs) / chunkMs + 1)
@@ -443,12 +442,15 @@ internal final class TelemetryRepository {
             arguments: [range.startMs, range.endMs]
           )
           try db.execute(
+            sql: "DELETE FROM telemetry_minute_buckets WHERE last_sample_at_ms >= ? AND first_sample_at_ms <= ?",
+            arguments: [range.startMs, range.endMs]
+          )
+          try db.execute(
             sql: "DELETE FROM metric_exclusion_ranges WHERE end_ms >= ? AND start_ms <= ?",
             arguments: [range.startMs, range.endMs]
           )
         }
       }
-      _ = rebuildBuckets()
     }
     queue.sync {
       pendingStates.removeAll()
@@ -466,7 +468,9 @@ internal final class TelemetryRepository {
   /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryRepository.kt `favoriteTelemetryRanges`
   private func favoriteTelemetryRanges() -> [TelemetryTimeRange] {
     FavoriteStore.shared.list().map {
-      TelemetryTimeRange(startMs: $0.startMs, endMs: $0.endMs)
+      expandTelemetryRangeToBuckets(
+        TelemetryTimeRange(startMs: $0.startMs, endMs: $0.endMs)
+      )
     }
   }
 

@@ -7,6 +7,17 @@ class TelemetryRangeSubtractionTest {
   private val requested = TelemetryTimeRange(100, 200)
 
   @Test
+  fun `favorite protection expands to every touched bucket`() {
+    assertEquals(
+      TelemetryTimeRange(60_000, 179_999),
+      expandTelemetryRangeToBuckets(
+        TelemetryTimeRange(75_000, 120_000),
+        bucketSizeMs = 60_000,
+      ),
+    )
+  }
+
+  @Test
   fun `full overlap leaves nothing deletable`() {
     assertEquals(
       emptyList<TelemetryTimeRange>(),

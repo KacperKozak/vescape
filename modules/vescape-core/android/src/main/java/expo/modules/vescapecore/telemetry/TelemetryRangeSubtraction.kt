@@ -16,6 +16,22 @@ internal data class TelemetryTimeRange(
 }
 
 /**
+ * Deletion protection is bucket-granular: retain every raw sample in each minute bucket touched by
+ * a Favorite so its existing precomputed bucket stays truthful without a history-wide rebuild.
+ *
+ * @parity /modules/vescape-core/ios/telemetry/TelemetryRangeSubtraction.swift `expandTelemetryRangeToBuckets`
+ */
+internal fun expandTelemetryRangeToBuckets(
+  range: TelemetryTimeRange,
+  bucketSizeMs: Long = TELEMETRY_BUCKET_SIZE_MS,
+): TelemetryTimeRange {
+  require(bucketSizeMs > 0)
+  val start = range.startMs - (range.startMs % bucketSizeMs)
+  val endStart = range.endMs - (range.endMs % bucketSizeMs)
+  return TelemetryTimeRange(start, endStart + bucketSizeMs - 1)
+}
+
+/**
  * Carve protected ranges out of one requested delete range. Protected ranges are clipped, sorted,
  * and merged first so overlapping Favorites never produce duplicate or inverted delete ranges.
  *
