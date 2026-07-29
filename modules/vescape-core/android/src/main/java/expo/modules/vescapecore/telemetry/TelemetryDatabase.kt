@@ -12,7 +12,7 @@ import java.io.File
 // @parity /modules/vescape-core/ios/VescapeCoreModule.swift
 internal const val TELEMETRY_DATABASE_NAME = "vescape.db"
 internal const val LEGACY_TELEMETRY_DATABASE_NAME = "telemetry.db"
-internal const val TELEMETRY_DATABASE_VERSION = 28
+internal const val TELEMETRY_DATABASE_VERSION = 29
 
 @Database(
   entities = [
@@ -473,16 +473,33 @@ abstract class TelemetryDatabase : RoomDatabase() {
 
     /**
      * Map Points became server-owned (server ADR-0009), so the app keeps no local copy. Drops the
-     * v27 table and the reaction table that only ever existed on a feature branch. The direction
-     * target it used to hold moves to app settings, which start empty here — a rider re-picks it.
+     * v27 table. The direction target it used to hold moves to app settings, which start empty
+     * here — a rider re-picks it.
      *
-     * @parity /modules/vescape-core/ios/telemetry/TelemetryDatabase.swift `v28_drop_map_points`
+     * @parity /modules/vescape-core/ios/telemetry/TelemetryDatabase.swift `v29_drop_map_points`
      */
     internal val MIGRATION_27_28 = object : Migration(27, 28) {
       override fun migrate(db: SupportSQLiteDatabase) {
-        db.execSQL("DROP TABLE IF EXISTS map_point_reactions")
-        db.execSQL("DROP TABLE IF EXISTS map_points")
+        dropMapPointTables(db)
       }
+    }
+
+    /**
+     * Feature-branch builds shipped a different v28 that added Map Point columns and a reaction
+     * table. Those installs never pass through 27 again, so the same drop runs once more for them.
+     * A device that arrived through the migration above finds nothing left to drop.
+     *
+     * @parity /modules/vescape-core/ios/telemetry/TelemetryDatabase.swift `v29_drop_map_points`
+     */
+    internal val MIGRATION_28_29 = object : Migration(28, 29) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        dropMapPointTables(db)
+      }
+    }
+
+    private fun dropMapPointTables(db: SupportSQLiteDatabase) {
+      db.execSQL("DROP TABLE IF EXISTS map_point_reactions")
+      db.execSQL("DROP TABLE IF EXISTS map_points")
     }
 
     /**
@@ -540,6 +557,7 @@ abstract class TelemetryDatabase : RoomDatabase() {
             MIGRATION_25_26,
             MIGRATION_26_27,
             MIGRATION_27_28,
+            MIGRATION_28_29,
           )
           .fallbackToDestructiveMigration(true)
           .addCallback(object : Callback() {

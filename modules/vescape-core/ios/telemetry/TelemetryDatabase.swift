@@ -418,8 +418,10 @@ enum TelemetryDatabase {
     // Map Points became server-owned (server ADR-0009), so the app keeps no local copy. Drops the
     // v27 table and the reaction table that only ever existed on a feature branch. The direction
     // target it used to hold moves to app settings, which start empty here — a rider re-picks it.
-    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `MIGRATION_27_28`
-    migrator.registerMigration("v28_drop_map_points") { db in
+    // GRDB keys migrations by name, so one migration covers both released and feature-branch
+    // installs; Room needs two steps because it keys them by version number.
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `MIGRATION_28_29`
+    migrator.registerMigration("v29_drop_map_points") { db in
       try db.execute(sql: "DROP TABLE IF EXISTS map_point_reactions")
       try db.execute(sql: "DROP TABLE IF EXISTS map_points")
     }
