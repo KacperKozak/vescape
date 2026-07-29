@@ -47,6 +47,15 @@ On iOS the two scopes chain: a prebuild regenerates the Podfile, and `expo prebu
 reliably install from it, so every iOS sync ends with `pod install`. It is a fast no-op when Pods
 already match.
 
+## The same drift hits the Swift test target
+
+`bun run test:ios` builds `modules/vescape-core/Package.swift`, which globs `ios/` instead of listing
+files, so a new test needs no manifest edit. SwiftPM memoizes the evaluated manifest keyed on
+`Package.swift`'s contents, though, and a new file leaves those contents identical — the stale memo
+would keep the old source list and the new test would silently never run. `scripts/test-ios.ts`
+therefore reuses `podsFingerprint()` (the same sorted-path-list signal Pods drift on) and drops the
+SwiftPM manifest memo when the layout moves. Its own fingerprint lives in `.expo/test-ios/`.
+
 ## Why the scopes are platform-lopsided
 
 Android has no Pods equivalent: Gradle autolinking resolves Kotlin sources through a directory glob

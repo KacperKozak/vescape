@@ -2,7 +2,7 @@
 # Lands on the connected home telemetry view (map + gauges + sparklines),
 # with the e2e fake feed streaming. scripts/perf-telemetry.ts then measures
 # rendering while the app sits here.
-appId: app.vescape
+appId: ${APP_ID}
 ---
 - runFlow: _launch.yaml
 - openLink: 'vescape://e2e-seed?flow=connect-board'

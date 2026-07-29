@@ -30,6 +30,7 @@ interface StatItem {
   key: string
   label: string
   value: string
+  unit?: string
   icon: Icon
   accent: string
 }
@@ -38,8 +39,8 @@ export function HistoryStatsBar({ session }: HistoryStatsBarProps) {
   const insets = useSafeAreaInsets()
   const [expanded, setExpanded] = useState(false)
   const stats = useMemo(() => sessionToStats(session), [session])
-  const primaryStats = stats.slice(0, 4)
-  const secondaryStats = stats.slice(4)
+  const primaryStats = stats.slice(0, 5)
+  const secondaryStats = stats.slice(5)
 
   return (
     <View style={[styles.wrap, { top: Math.max(insets.top, 8) + 46 }]} pointerEvents="box-none">
@@ -103,6 +104,11 @@ function CompactStat({ item }: CompactStatProps) {
         <Text style={styles.compactValue} numberOfLines={1} adjustsFontSizeToFit>
           {item.value}
         </Text>
+        {item.unit ? (
+          <Text style={styles.compactUnit} numberOfLines={1}>
+            {item.unit}
+          </Text>
+        ) : null}
       </View>
     </View>
   )
@@ -113,7 +119,7 @@ function sessionToStats(session: HistorySession): StatItem[] {
     {
       key: 'distance',
       label: 'Distance',
-      value: formatDistance(session.distanceM),
+      ...formatDistance(session.distanceM),
       icon: RoadHorizonIcon,
       accent: theme.palette.sky.color,
     },
@@ -121,48 +127,58 @@ function sessionToStats(session: HistorySession): StatItem[] {
       key: 'topSpeed',
       label: 'Top Speed',
       value: formatSpeed(session.maxSpeedKmh),
+      unit: 'km/h',
       icon: GaugeIcon,
       accent: theme.telemetry.speed,
+    },
+    {
+      key: 'maxDuty',
+      label: 'Max Duty',
+      value: formatDuty(session.maxDuty),
+      unit: '%',
+      icon: LightningIcon,
+      accent: theme.telemetry.duty,
+    },
+    {
+      key: 'rideTime',
+      label: 'Time',
+      ...formatDuration(rideDurationMs(session)),
+      icon: ClockCountdownIcon,
+      accent: theme.palette.purple.color,
     },
     {
       key: 'avgSpeed',
       label: 'Avg Speed',
       value: formatSpeed(session.avgSpeedKmh),
+      unit: 'km/h',
       icon: RepeatIcon,
       accent: theme.palette.teal.color,
     },
     {
-      key: 'rideTime',
-      label: 'Time',
-      value: formatDuration(rideDurationMs(session)),
-      icon: ClockCountdownIcon,
-      accent: theme.palette.purple.color,
-    },
-    {
       key: 'mosfetTemp',
       label: 'Ctrl Max',
-      value: formatTemp(session.maxTempMosfet),
+      ...formatTemp(session.maxTempMosfet),
       icon: ThermometerHotIcon,
       accent: theme.telemetry.controllerTemp,
     },
     {
       key: 'motorTemp',
       label: 'Motor Max',
-      value: formatTemp(session.maxTempMotor),
+      ...formatTemp(session.maxTempMotor),
       icon: ThermometerSimpleIcon,
       accent: theme.telemetry.motorTemp,
     },
     {
       key: 'batteryUsed',
       label: 'Used',
-      value: formatWh(session.batteryUsedWh),
+      ...formatWh(session.batteryUsedWh),
       icon: BatteryMediumIcon,
       accent: theme.status.warning.color,
     },
     {
       key: 'batteryRegen',
       label: 'Regen',
-      value: formatWh(session.batteryRegenWh),
+      ...formatWh(session.batteryRegenWh),
       icon: BatteryChargingIcon,
       accent: theme.palette.green.color,
     },
@@ -173,13 +189,6 @@ function sessionToStats(session: HistorySession): StatItem[] {
       icon: WaveformIcon,
       accent: theme.palette.cyan.color,
     },
-    {
-      key: 'maxDuty',
-      label: 'Max Duty',
-      value: formatDuty(session.maxDuty),
-      icon: LightningIcon,
-      accent: theme.telemetry.duty,
-    },
   ]
 }
 
@@ -189,36 +198,38 @@ function formatCount(value: number): string {
   return `${Math.round(value / 1000)}k`
 }
 
-function formatDistance(valueM: number | null): string {
-  if (valueM == null) return '-'
-  if (valueM < 1000) return `${Math.round(valueM)} m`
-  return `${(valueM / 1000).toFixed(1)} km`
+function formatDistance(valueM: number | null): Pick<StatItem, 'value' | 'unit'> {
+  if (valueM == null) return { value: '-' }
+  if (valueM < 1000) return { value: String(Math.round(valueM)), unit: 'm' }
+  return { value: (valueM / 1000).toFixed(1), unit: 'km' }
 }
 
-function formatDuration(valueMs: number): string {
+function formatDuration(valueMs: number): Pick<StatItem, 'value' | 'unit'> {
   const totalMinutes = Math.max(1, Math.round(valueMs / 60_000))
-  if (totalMinutes < 60) return `${totalMinutes} min`
+  if (totalMinutes < 60) return { value: String(totalMinutes), unit: 'min' }
   const hours = Math.floor(totalMinutes / 60)
   const minutes = totalMinutes % 60
-  return minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`
+  return minutes === 0
+    ? { value: String(hours), unit: 'h' }
+    : { value: String(hours), unit: `h ${minutes}m` }
 }
 
 function formatSpeed(valueKmh: number): string {
-  return `${Math.round(valueKmh)} km/h`
+  return String(Math.round(valueKmh))
 }
 
-function formatTemp(value: number | null): string {
-  if (value == null) return '-'
-  return `${Math.round(value)}°C`
+function formatTemp(value: number | null): Pick<StatItem, 'value' | 'unit'> {
+  if (value == null) return { value: '-' }
+  return { value: String(Math.round(value)), unit: '°C' }
 }
 
 function formatDuty(value: number): string {
-  return `${Math.round(value * 100)}%`
+  return String(Math.round(value * 100))
 }
 
-function formatWh(value: number): string {
-  if (value < 1) return `${(value * 1000).toFixed(0)} mWh`
-  return `${value.toFixed(1)} Wh`
+function formatWh(value: number): Pick<StatItem, 'value' | 'unit'> {
+  if (value < 1) return { value: (value * 1000).toFixed(0), unit: 'mWh' }
+  return { value: value.toFixed(1), unit: 'Wh' }
 }
 
 const styles = StyleSheet.create({
@@ -233,8 +244,19 @@ const styles = StyleSheet.create({
   },
   compactValue: {
     color: theme.palette.slate.textPrimary,
-    fontSize: 12,
+    fontFamily: 'monospace',
+    fontSize: 13,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+    lineHeight: 16,
+    textAlign: 'left',
+  },
+  compactUnit: {
+    color: theme.palette.slate.textSecondary,
+    fontSize: 9,
     fontWeight: '800',
+    lineHeight: 11,
+    marginBottom: 1,
     textAlign: 'left',
   },
   compactLabel: {
@@ -242,6 +264,7 @@ const styles = StyleSheet.create({
     fontSize: 8,
     fontWeight: '700',
     textAlign: 'left',
+    textTransform: 'uppercase',
   },
   compactCell: {
     flex: 1,
@@ -257,7 +280,7 @@ const styles = StyleSheet.create({
   valueRow: {
     minWidth: 0,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     gap: 3,
   },
   bar: {
@@ -289,8 +312,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   toggleCell: {
-    flex: 1,
-    minWidth: 0,
+    width: 44,
+    flexShrink: 0,
     alignItems: 'flex-end',
     justifyContent: 'center',
   },

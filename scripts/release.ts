@@ -1,7 +1,6 @@
 #!/usr/bin/env bun
 import { $ } from 'bun'
 import { join } from 'path'
-import { homedir } from 'os'
 import { androidVersionCode } from '../src/helpers/version'
 
 const isPatch = process.argv.includes('--patch')
@@ -41,9 +40,8 @@ async function branchSha(branch: string): Promise<string> {
 
 async function rollbackLocalRelease(state: {
   originalBranch: string
-  devSha?: string
-  mainSha?: string
-  branchSha?: string
+  devSha: string
+  mainSha: string
   releaseTag?: string
   published: boolean
 }) {
@@ -59,20 +57,10 @@ async function rollbackLocalRelease(state: {
     await $`git merge --abort`.cwd(root).nothrow()
   }
 
-  if (state.devSha) {
-    await $`git checkout dev`.cwd(root).nothrow()
-    await $`git reset --hard ${state.devSha}`.cwd(root).nothrow()
-  }
-
-  if (state.mainSha) {
-    await $`git checkout main`.cwd(root).nothrow()
-    await $`git reset --hard ${state.mainSha}`.cwd(root).nothrow()
-  }
-
-  if (!state.devSha && state.branchSha) {
-    await $`git checkout ${state.originalBranch}`.cwd(root).nothrow()
-    await $`git reset --hard ${state.branchSha}`.cwd(root).nothrow()
-  }
+  await $`git checkout dev`.cwd(root).nothrow()
+  await $`git reset --hard ${state.devSha}`.cwd(root).nothrow()
+  await $`git checkout main`.cwd(root).nothrow()
+  await $`git reset --hard ${state.mainSha}`.cwd(root).nothrow()
 
   await $`git checkout ${state.originalBranch}`.cwd(root).nothrow()
   console.log('✓ Local release changes rolled back')
@@ -100,45 +88,29 @@ async function ensureOnlyExpectedChanges(expectedPaths: string[]) {
   }
 }
 
-async function copyApk(apkLabel: string) {
-  const apkSrc = join(root, 'android/app/build/outputs/apk/release/app-release.apk')
-  const driveDir =
-    Bun.env.RELEASE_APK_DIR ??
-    join(homedir(), 'Library/CloudStorage/GoogleDrive-dexted.xt@gmail.com/My Drive/Apps')
-  await $`mkdir -p ${driveDir}`
-  const apkDest = join(driveDir, `vescape-${apkLabel}.apk`)
-  await Bun.write(apkDest, Bun.file(apkSrc))
-  console.log(`✓ Copied APK → ${apkDest}`)
-}
-
 const branch = await currentBranch()
-const isDevBranch = branch === 'dev'
-
-if (isDevBranch) {
-  console.log('✓ On branch "dev" — full release')
-} else {
-  console.log(`→ On branch "${branch}" — branch build (no version bump, no merge)`)
+if (branch !== 'dev') {
+  console.error(`✗ Release must run from "dev", currently on "${branch}"`)
+  process.exit(1)
 }
+console.log('✓ On branch "dev"')
 
 await ensureCleanWorkingTree()
 await run('Pull latest', 'git pull --ff-only')
 
-if (isDevBranch) {
-  await run('Switch to main', 'git checkout main')
-  try {
-    await run('Pull main', 'git pull --ff-only')
-  } finally {
-    if ((await currentBranch()) !== 'dev') {
-      await run('Switch back to dev', 'git checkout dev')
-    }
+await run('Switch to main', 'git checkout main')
+try {
+  await run('Pull main', 'git pull --ff-only')
+} finally {
+  if ((await currentBranch()) !== 'dev') {
+    await run('Switch back to dev', 'git checkout dev')
   }
 }
 
 const state = {
   originalBranch: branch,
-  devSha: isDevBranch ? await branchSha('dev') : undefined,
-  mainSha: isDevBranch ? await branchSha('main') : undefined,
-  branchSha: isDevBranch ? undefined : await branchSha(branch),
+  devSha: await branchSha('dev'),
+  mainSha: await branchSha('main'),
   releaseTag: undefined as string | undefined,
   published: false,
 }
@@ -148,58 +120,26 @@ try {
   const pkg = JSON.parse(await Bun.file(pkgPath).text())
   const baseVersion: string = pkg.version
 
-  let apkLabel: string
+  const newVersion = bumpVersion(baseVersion, isPatch)
+  await updateVersion(newVersion)
+  console.log(
+    `\n→ Version bumped ${baseVersion} → ${newVersion} (Android versionCode ${androidVersionCode(newVersion)})`,
+  )
 
-  if (isDevBranch) {
-    const newVersion = bumpVersion(baseVersion, isPatch)
-    await updateVersion(newVersion)
-    console.log(
-      `\n→ Version bumped ${baseVersion} → ${newVersion} (Android versionCode ${androidVersionCode(newVersion)})`,
-    )
-    apkLabel = `v${newVersion}`
-  } else {
-    const safeBranch = branch.replace(/[^a-zA-Z0-9._-]/g, '-')
-    apkLabel = `v${baseVersion}-${safeBranch}`
-  }
-
-  // Drop Expo's generated typed-routes file before the TS check. It's only
-  // refreshed by a running dev server (or `expo export`), so at release time it
-  // can be stale — listing routes that no longer exist, or missing newly-added
-  // ones — and fail tsc against correct code. Absent, expo-router falls back to
-  // a permissive `Href`, so route strings aren't checked here; the live dev
-  // server still enforces them day-to-day. Regenerated next time Metro runs.
-  await run('Clear stale route types', 'rm -f .expo/types/router.d.ts')
-  // Regenerate android/ so config plugins and the bumped version are always
-  // applied — the generated folder is gitignored and otherwise goes stale.
-  await run('Prebuild android', 'bunx expo prebuild --platform android')
-  await run('TypeScript check', 'bun run ts')
-  await run('Lint', 'bun run lint')
-  await run('Copy shared files', 'bun run copy:shared')
-  await run('Tests', 'bun run test')
-  await run('Build release APK', 'bun run build:release')
-  await copyApk(apkLabel)
-
-  if (isDevBranch) {
-    await ensureOnlyExpectedChanges(['package.json'])
-    await run(
-      'Commit release version',
-      `git add package.json && git commit -m "${apkLabel.slice(1)}"`,
-    )
-    await run('Switch to main', 'git checkout main')
-    await run('Merge dev → main', `git merge dev --no-ff -m "release: ${apkLabel.slice(1)}"`)
-    state.releaseTag = `production-${apkLabel.slice(1)}`
-    await run('Tag production release', `git tag ${state.releaseTag}`)
-    await run('Switch back to dev', 'git checkout dev')
-    // Advance dev to the release merge commit so dev and main never drift.
-    // Without this the merge commit lives only on main, their common base goes
-    // stale, and the next version bump conflicts on package.json's version line.
-    await run('Fast-forward dev to main', 'git merge --ff-only main')
-    await run('Push dev, main and tag', `git push --atomic origin dev main ${state.releaseTag}`)
-    state.published = true
-    console.log(`\n✓ Release ${apkLabel.slice(1)} complete`)
-  } else {
-    console.log(`\n✓ Branch build ${apkLabel} complete`)
-  }
+  await ensureOnlyExpectedChanges(['package.json'])
+  await run('Commit release version', `git add package.json && git commit -m "${newVersion}"`)
+  await run('Switch to main', 'git checkout main')
+  await run('Merge dev → main', `git merge dev --no-ff -m "release: ${newVersion}"`)
+  state.releaseTag = `production-${newVersion}`
+  await run('Tag production release', `git tag ${state.releaseTag}`)
+  await run('Switch back to dev', 'git checkout dev')
+  // Advance dev to the release merge commit so dev and main never drift.
+  // Without this the merge commit lives only on main, their common base goes
+  // stale, and the next version bump conflicts on package.json's version line.
+  await run('Fast-forward dev to main', 'git merge --ff-only main')
+  await run('Push dev, main and tag', `git push --atomic origin dev main ${state.releaseTag}`)
+  state.published = true
+  console.log(`\n✓ Release ${newVersion} complete`)
 } catch (error) {
   console.error(`✗ ${error instanceof Error ? error.message : String(error)}`)
   await rollbackLocalRelease(state)

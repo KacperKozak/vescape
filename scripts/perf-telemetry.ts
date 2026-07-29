@@ -21,9 +21,10 @@
  */
 import { join } from 'path'
 import { mkdirSync, writeFileSync, readFileSync } from 'fs'
+import { applicationId } from '../src/config/appVariant.ts'
 
 const ROOT = join(import.meta.dir, '..')
-const PKG = 'app.vescape'
+const PKG = applicationId
 const PERF_FLOW = join(ROOT, 'e2e', 'flows', '_perf-home.yaml')
 const RESULTS_DIR = join(ROOT, 'perf-results')
 
@@ -193,7 +194,7 @@ async function getClkTck(device: string): Promise<number> {
 
 async function runSetup(): Promise<void> {
   console.log('› Setup: connecting board via Maestro (_perf-home.yaml)…')
-  const proc = Bun.spawn(['maestro', 'test', PERF_FLOW], {
+  const proc = Bun.spawn(['maestro', 'test', '-e', `APP_ID=${applicationId}`, PERF_FLOW], {
     cwd: ROOT,
     stdout: 'inherit',
     stderr: 'inherit',

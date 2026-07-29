@@ -6,6 +6,7 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Transaction
 import androidx.room.Update
+import androidx.room.Upsert
 
 // @parity /modules/vescape-core/ios/telemetry/TelemetryDao.swift
 @Dao
@@ -68,26 +69,6 @@ interface TelemetryDao {
   @Query("DELETE FROM privacy_zones WHERE id = :id")
   suspend fun deletePrivacyZone(id: String)
 
-  @Query("SELECT * FROM map_points ORDER BY created_at ASC")
-  suspend fun getMapPoints(): List<MapPointEntity>
-
-  @Query("SELECT * FROM map_points WHERE kind = 'direction' LIMIT 1")
-  suspend fun getDirectionMapPoint(): MapPointEntity?
-
-  @Insert(onConflict = OnConflictStrategy.REPLACE)
-  suspend fun upsertMapPoint(point: MapPointEntity)
-
-  @Query("DELETE FROM map_points WHERE kind = 'direction'")
-  suspend fun deleteDirectionMapPoints()
-
-  @Transaction
-  suspend fun replaceDirectionMapPoint(point: MapPointEntity) {
-    deleteDirectionMapPoints()
-    upsertMapPoint(point)
-  }
-
-  @Query("DELETE FROM map_points WHERE id = :id")
-  suspend fun deleteMapPoint(id: String)
 
   @Insert
   suspend fun insertFrames(frames: List<TelemetryFrameEntity>): List<Long>
@@ -444,7 +425,10 @@ interface TelemetryDao {
   @Insert
   suspend fun insertTuneHistoryEntry(entry: TuneHistoryEntryEntity): Long
 
-  @Query("SELECT * FROM tune_history_entries WHERE profile_id = :profileId ORDER BY created_at DESC")
+  // `id` breaks ties: a save and a rollback can land in the same millisecond, and without a
+  // monotonic tiebreaker `created_at DESC` alone returns them in insertion order — oldest first —
+  // which is the opposite of what Tune History shows.
+  @Query("SELECT * FROM tune_history_entries WHERE profile_id = :profileId ORDER BY created_at DESC, id DESC")
   suspend fun getTuneHistoryEntries(profileId: String): List<TuneHistoryEntryEntity>
 
   @Query("UPDATE tune_profiles SET fields_json = :fieldsJson, updated_at = :updatedAt WHERE id = :profileId")

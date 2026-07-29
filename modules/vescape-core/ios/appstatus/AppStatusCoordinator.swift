@@ -2,7 +2,12 @@ import Foundation
 
 /// One App Status fetch attempt. `nil` body means "no usable response" (transport or HTTP error).
 /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/appstatus/AppStatusCoordinator.kt `AppStatusTransport`
-typealias AppStatusTransport = (_ url: String, _ appVersion: String, _ onResult: @escaping (Data?) -> Void) -> Void
+typealias AppStatusTransport = (
+  _ url: String,
+  _ appVersion: String,
+  _ deviceToken: String?,
+  _ onResult: @escaping (Data?) -> Void
+) -> Void
 
 /// Process-owned App Status truth. Native reads the installed marketing version, fetches
 /// `GET /api/app-status` on every foreground, and keeps the last **successful** result for the life
@@ -25,6 +30,7 @@ final class AppStatusCoordinator {
   /// Carries the installed marketing version on every app-originated request. The server resolves
   /// its Release Policy ranges from it.
   /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/appstatus/AppStatusCoordinator.kt `APP_VERSION_HEADER`
+  /// @parity /src/modules/profile/lib/deviceAuth.ts `APP_VERSION_HEADER`
   static let appVersionHeader = "Vescape-App-Version"
 
   /// Vescape backend origin for a shipped build, and the fallback whenever the baked Info.plist
@@ -71,12 +77,21 @@ final class AppStatusCoordinator {
   private let installedVersion: String
   private let baseUrl: String
   private let transport: AppStatusTransport
+  private let deviceTokenProvider: () -> String?
   private var refreshing = false
 
-  init(installedVersion: String, baseUrl: String, transport: @escaping AppStatusTransport) {
+  init(
+    installedVersion: String,
+    baseUrl: String,
+    transport: @escaping AppStatusTransport,
+    deviceTokenProvider: @escaping () -> String? = {
+      DeviceCredentialStore.shared.read()?.token
+    }
+  ) {
     self.installedVersion = installedVersion
     self.baseUrl = baseUrl
     self.transport = transport
+    self.deviceTokenProvider = deviceTokenProvider
   }
 
   /// Fetch App Status now. Foreground events arrive repeatedly (and a cold start fires both create
@@ -85,7 +100,11 @@ final class AppStatusCoordinator {
   func refresh() {
     guard !refreshing, !installedVersion.isEmpty else { return }
     refreshing = true
-    transport("\(baseUrl)\(Self.appStatusPath)", installedVersion) { [weak self] body in
+    transport(
+      "\(baseUrl)\(Self.appStatusPath)",
+      installedVersion,
+      deviceTokenProvider()
+    ) { [weak self] body in
       self?.onFetched(body)
     }
   }
@@ -98,19 +117,37 @@ final class AppStatusCoordinator {
       return
     }
     current = status
+    applyDeviceTokenState(body)
     onChange?(status)
+  }
+
+  private func applyDeviceTokenState(_ body: Data) {
+    guard let root = try? JSONSerialization.jsonObject(with: body) as? [String: Any],
+          let token = root["deviceToken"] as? [String: Any],
+          let state = token["state"] as? String
+    else { return }
+    switch state {
+    case "valid":
+      if let expiresAt = token["expiresAt"] as? String {
+        DeviceCredentialStore.shared.updateExpiry(expiresAt)
+      }
+    case "expired", "revoked":
+      DeviceCredentialStore.shared.reject()
+    default:
+      break
+    }
   }
 
   /// Installed marketing version (`CFBundleShortVersionString`) — the same value Release Policy
   /// ranges match on both platforms. Build numbers are never used.
   /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/appstatus/AppStatusCoordinator.kt `installedMarketingVersion`
-  private static func installedMarketingVersion() -> String {
+  static func installedMarketingVersion() -> String {
     Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
   }
 
   /// Default transport: one short-timeout GET, result handed back on the main thread.
   private static func urlSessionTransport() -> AppStatusTransport {
-    { url, appVersion, onResult in
+    { url, appVersion, deviceToken, onResult in
       guard let target = URL(string: url) else {
         DispatchQueue.main.async { onResult(nil) }
         return
@@ -118,6 +155,9 @@ final class AppStatusCoordinator {
       var request = URLRequest(url: target)
       request.timeoutInterval = callTimeoutSeconds
       request.setValue(appVersion, forHTTPHeaderField: appVersionHeader)
+      if let deviceToken {
+        request.setValue("Bearer \(deviceToken)", forHTTPHeaderField: "Authorization")
+      }
       URLSession.shared.dataTask(with: request) { data, response, _ in
         let ok = (response as? HTTPURLResponse).map { (200..<300).contains($0.statusCode) } ?? false
         DispatchQueue.main.async { onResult(ok ? data : nil) }

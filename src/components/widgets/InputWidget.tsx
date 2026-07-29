@@ -16,8 +16,14 @@ interface InputWidgetProps {
   size?: WidgetSize
   onCommit: (value: string) => void
   accessibilityLabel?: string
+  /** Optional visual rendered at the leading edge of a row input. */
+  leading?: ReactNode
   /** Optional control rendered at the widget's trailing edge, before the edit button. */
   accessory?: ReactNode
+  /** Optional content shown below the input while the row is being edited. */
+  editingContent?: ReactNode
+  /** Keep the row editor open when the input loses focus, so inline controls remain usable. */
+  commitOnBlur?: boolean
 }
 
 /** A labelled value that flips to an inline text field when the pencil is tapped. */
@@ -33,7 +39,10 @@ function RowInput({
   maxLength,
   onCommit,
   accessibilityLabel,
+  leading,
   accessory,
+  editingContent,
+  commitOnBlur = true,
 }: InputWidgetProps) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
@@ -49,42 +58,50 @@ function RowInput({
   }
 
   return (
-    <View style={[styles.widget, styles.widgetRow]}>
-      <View style={styles.text}>
-        <Text style={styles.label}>{label}</Text>
-        {editing ? (
-          <Input
-            value={draft}
-            onChangeText={setDraft}
-            onBlur={commit}
-            onSubmitEditing={commit}
-            placeholder={placeholder}
-            placeholderTextColor={theme.palette.slate.textMuted}
-            returnKeyType="done"
-            maxLength={maxLength}
-            autoFocus
-            style={styles.input}
-            accessibilityLabel={accessibilityLabel ?? label}
-          />
-        ) : (
-          <Text style={styles.value} numberOfLines={1}>
-            {value?.trim() || placeholder}
-          </Text>
-        )}
+    <View style={[styles.widget, editing ? styles.widgetEditing : styles.widgetRow]}>
+      <View style={styles.headerRow}>
+        {leading}
+        <View style={styles.content}>
+          <View style={styles.text}>
+            <Text style={styles.label}>{label}</Text>
+            {editing ? (
+              <Input
+                value={draft}
+                onChangeText={setDraft}
+                onBlur={commitOnBlur ? commit : undefined}
+                onSubmitEditing={commit}
+                placeholder={placeholder}
+                placeholderTextColor={theme.palette.slate.textMuted}
+                returnKeyType="done"
+                maxLength={maxLength}
+                autoFocus
+                style={styles.input}
+                accessibilityLabel={accessibilityLabel ?? label}
+              />
+            ) : (
+              <Text style={styles.value} numberOfLines={1}>
+                {value?.trim() || placeholder}
+              </Text>
+            )}
+          </View>
+        </View>
+        {accessory}
+        <Pressable
+          onPress={editing ? commit : startEdit}
+          hitSlop={10}
+          style={styles.editBtn}
+          accessibilityLabel={editing ? 'Save' : 'Edit'}
+        >
+          {editing ? (
+            <CheckIcon size={18} color={theme.palette.green.color} weight="bold" />
+          ) : (
+            <PencilSimpleIcon size={18} color={theme.palette.slate.textSecondary} weight="bold" />
+          )}
+        </Pressable>
       </View>
-      {accessory}
-      <Pressable
-        onPress={editing ? commit : startEdit}
-        hitSlop={10}
-        style={styles.editBtn}
-        accessibilityLabel={editing ? 'Save' : 'Edit'}
-      >
-        {editing ? (
-          <CheckIcon size={18} color={theme.palette.green.color} weight="bold" />
-        ) : (
-          <PencilSimpleIcon size={18} color={theme.palette.slate.textSecondary} weight="bold" />
-        )}
-      </Pressable>
+      {editing && editingContent ? (
+        <View style={styles.editingContent}>{editingContent}</View>
+      ) : null}
     </View>
   )
 }
@@ -96,6 +113,7 @@ function SquareInput({
   maxLength,
   onCommit,
   accessibilityLabel,
+  leading,
   accessory,
 }: InputWidgetProps) {
   const [open, setOpen] = useState(false)
@@ -109,6 +127,7 @@ function SquareInput({
       >
         <Text style={styles.label}>{label}</Text>
         <View style={styles.squareFooter}>
+          {leading}
           <Text style={styles.value} numberOfLines={2}>
             {value?.trim() || placeholder}
           </Text>
@@ -136,10 +155,16 @@ const styles = StyleSheet.create({
     ...widgetSurface,
   },
   widgetRow: {
+    padding: 16,
+  },
+  widgetEditing: {
+    gap: 14,
+    padding: 16,
+  },
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    padding: 16,
   },
   widgetSquare: {
     aspectRatio: 1,
@@ -151,9 +176,15 @@ const styles = StyleSheet.create({
     backgroundColor: theme.palette.slate.surface,
   },
   text: {
-    flex: 1,
     minWidth: 0,
     gap: 4,
+  },
+  content: {
+    flex: 1,
+    minWidth: 0,
+  },
+  editingContent: {
+    minWidth: 0,
   },
   label: {
     color: theme.palette.slate.textMuted,

@@ -277,6 +277,25 @@ public class VescapeCoreModule: Module {
       AppStatusCoordinator.shared.current?.toMap()
     }
 
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `provisionDeviceCredential`
+    AsyncFunction("provisionDeviceCredential") {
+      (serverUrl: String, deviceToken: String, accountId: String) async throws -> [String: Any?] in
+      try await NativeAuthCoordinator.shared.provision(
+        serverUrl: serverUrl,
+        token: deviceToken,
+        accountId: accountId
+      )
+    }
+    Function("getDeviceCredentialState") { () -> [String: Any?] in
+      NativeAuthCoordinator.shared.stateMap()
+    }
+    AsyncFunction("revokeDeviceCredential") { () async throws in
+      try await NativeAuthCoordinator.shared.revoke()
+    }
+    Function("clearDeviceCredential") {
+      NativeAuthCoordinator.shared.clear()
+    }
+
     // Stable Vescape route keeps the app decoupled from the final store destination.
     // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `openAppUpdate`
     // @platform-diff iOS uses the stable iOS download route.
@@ -686,22 +705,58 @@ public class VescapeCoreModule: Module {
       promise.resolve(nil)
     }
 
-    AsyncFunction("getMapPoints") { (promise: Promise) in
-      promise.resolve(self.appData.getMapPoints())
+    // Map Points are server-owned; native holds no copy.
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `getNearbyMapPoints`
+    AsyncFunction("getNearbyMapPoints") {
+      (latitude: Double, longitude: Double, radiusMeters: Int, promise: Promise) in
+      Task {
+        do {
+          promise.resolve(
+            try await MapPointApi.shared.nearby(
+              latitude: latitude,
+              longitude: longitude,
+              radiusMeters: radiusMeters
+            )
+          )
+        } catch { Self.rejectMapPoint(promise, error) }
+      }
     }
 
-    AsyncFunction("upsertMapPoint") { (point: [String: Any], promise: Promise) in
-      self.appData.upsertMapPoint(point)
-      promise.resolve(nil)
+    AsyncFunction("createMapPoint") { (values: [String: Any], promise: Promise) in
+      Task {
+        do { promise.resolve(try await MapPointApi.shared.create(values)) }
+        catch { Self.rejectMapPoint(promise, error) }
+      }
     }
 
-    AsyncFunction("replaceDirectionMapPoint") { (point: [String: Any], promise: Promise) in
-      self.appData.replaceDirectionMapPoint(point)
-      promise.resolve(nil)
+    AsyncFunction("updateMapPoint") { (id: String, patch: [String: Any], promise: Promise) in
+      Task {
+        do { promise.resolve(try await MapPointApi.shared.update(id, patch: patch)) }
+        catch { Self.rejectMapPoint(promise, error) }
+      }
     }
 
     AsyncFunction("deleteMapPoint") { (id: String, promise: Promise) in
-      self.appData.deleteMapPoint(id)
+      Task {
+        do {
+          try await MapPointApi.shared.delete(id)
+          promise.resolve(nil)
+        } catch { Self.rejectMapPoint(promise, error) }
+      }
+    }
+
+    AsyncFunction("setMapPointReaction") { (id: String, reaction: String?, promise: Promise) in
+      Task {
+        do {
+          try await MapPointApi.shared.setReaction(id, reaction: reaction)
+          promise.resolve(nil)
+        } catch { Self.rejectMapPoint(promise, error) }
+      }
+    }
+
+    // The direction target is personal client state, never a Map Point.
+    AsyncFunction("setDirectionPoint") { (latitude: Double?, longitude: Double?, promise: Promise) in
+      self.appData.setDirectionPoint(latitude: latitude, longitude: longitude)
       promise.resolve(nil)
     }
 
@@ -1012,6 +1067,16 @@ public class VescapeCoreModule: Module {
       guard self.shouldEmitToFrontend("onAppStatus") else { return }
       self.sendEvent("onAppStatus", ["status": status?.toMap()])
     }
+  }
+
+  /// Map Point failures carry a code JS branches on; anything else is an unexpected native fault.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/mappoints/MapPointApi.kt `MapPointApiException`
+  private static func rejectMapPoint(_ promise: Promise, _ error: Error) {
+    guard let apiError = error as? MapPointApiError else {
+      promise.reject(MapPointApiError.refused, error.localizedDescription)
+      return
+    }
+    promise.reject(apiError.code, apiError.message)
   }
 
   private static func notificationPermissionStatus(_ status: UNAuthorizationStatus) -> String {

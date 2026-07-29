@@ -16,13 +16,20 @@ class AppStatusCoordinatorTest {
   private class RecordingTransport : AppStatusTransport {
     val urls = mutableListOf<String>()
     val versions = mutableListOf<String>()
+    val deviceTokens = mutableListOf<String?>()
     private val pending = mutableListOf<(String?) -> Unit>()
 
     val inFlight: Int get() = pending.size
 
-    override fun fetch(url: String, appVersion: String, onResult: (String?) -> Unit) {
+    override fun fetch(
+      url: String,
+      appVersion: String,
+      deviceToken: String?,
+      onResult: (String?) -> Unit,
+    ) {
       urls.add(url)
       versions.add(appVersion)
+      deviceTokens.add(deviceToken)
       pending.add(onResult)
     }
 
@@ -36,10 +43,12 @@ class AppStatusCoordinatorTest {
   private fun coordinator(
     transport: AppStatusTransport,
     installedVersion: String = "0.70.0",
+    deviceToken: String? = null,
   ) = AppStatusCoordinator(
     installedVersion = installedVersion,
     baseUrl = "https://api.vescape.app",
     transport = transport,
+    deviceTokenProvider = { deviceToken },
   )
 
   private fun statusBody(status: String, latest: String = "0.80.2") =
@@ -53,6 +62,15 @@ class AppStatusCoordinatorTest {
 
     assertEquals(listOf("https://api.vescape.app/api/app-status"), transport.urls)
     assertEquals(listOf("0.70.0"), transport.versions)
+  }
+
+  @Test
+  fun `optionally supplies the device token to app status`() {
+    val transport = RecordingTransport()
+
+    coordinator(transport, deviceToken = "device-token").refresh()
+
+    assertEquals(listOf("device-token"), transport.deviceTokens)
   }
 
   @Test

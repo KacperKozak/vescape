@@ -24,6 +24,27 @@ const appStateAdd = mock((_event: string, cb: (state: string) => void) => {
 })
 
 mock.module('react-native', () => ({ AppState: { addEventListener: appStateAdd } }))
+mock.module('expo-file-system', () => ({
+  Directory: class {
+    exists = true
+    create() {}
+    delete() {
+      this.exists = false
+    }
+  },
+  File: class {
+    uri = ''
+    exists = false
+    constructor(...parts: unknown[]) {
+      this.uri = parts.map(String).join('/')
+    }
+    delete() {
+      this.exists = false
+    }
+    async copy() {}
+  },
+  Paths: { document: 'file:///document' },
+}))
 
 const boardLoad = mock(async () => {})
 const settingsLoad = mock(async () => {})

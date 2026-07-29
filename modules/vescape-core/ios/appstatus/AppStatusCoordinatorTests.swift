@@ -9,13 +9,16 @@ final class AppStatusCoordinatorTests: XCTestCase {
   private final class RecordingTransport {
     var urls: [String] = []
     var versions: [String] = []
+    var deviceTokens: [String?] = []
     private var pending: [(Data?) -> Void] = []
 
     var inFlight: Int { pending.count }
 
-    lazy var transport: AppStatusTransport = { [unowned self] url, appVersion, onResult in
+    lazy var transport: AppStatusTransport = {
+      [unowned self] url, appVersion, deviceToken, onResult in
       self.urls.append(url)
       self.versions.append(appVersion)
+      self.deviceTokens.append(deviceToken)
       self.pending.append(onResult)
     }
 
@@ -28,13 +31,24 @@ final class AppStatusCoordinatorTests: XCTestCase {
 
   private func coordinator(
     _ transport: RecordingTransport,
-    installedVersion: String = "0.70.0"
+    installedVersion: String = "0.70.0",
+    deviceToken: String? = nil
   ) -> AppStatusCoordinator {
     AppStatusCoordinator(
       installedVersion: installedVersion,
       baseUrl: "https://api.vescape.app",
-      transport: transport.transport
+      transport: transport.transport,
+      deviceTokenProvider: { deviceToken }
     )
+  }
+
+  func testOptionallySuppliesTheDeviceTokenToAppStatus() {
+    let transport = RecordingTransport()
+
+    coordinator(transport, deviceToken: "device-token").refresh()
+
+    XCTAssertEqual(transport.deviceTokens.count, 1)
+    XCTAssertEqual(transport.deviceTokens[0], "device-token")
   }
 
   private func statusBody(_ status: String, latest: String = "0.80.2") -> Data {
