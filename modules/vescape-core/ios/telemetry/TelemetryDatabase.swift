@@ -46,7 +46,7 @@ enum TelemetryDatabase {
     let legacy = url.deletingLastPathComponent().appendingPathComponent(legacyDatabaseName)
     guard !fm.fileExists(atPath: url.path), fm.fileExists(atPath: legacy.path) else { return }
     if let legacyPool = try? DatabasePool(path: legacy.path) {
-      try? legacyPool.writeWithoutTransaction { db in try db.checkpoint(.truncate) }
+      _ = try? legacyPool.writeWithoutTransaction { db in try db.checkpoint(.truncate) }
       try? legacyPool.close()
     }
     do {
@@ -115,7 +115,9 @@ enum TelemetryDatabase {
     }
   }
 
-  private static var migrator: DatabaseMigrator {
+  /// Internal, not private, so migration tests can run the real migrator against an in-memory
+  /// database and stop at a chosen version with `migrate(_:upTo:)`.
+  internal static var migrator: DatabaseMigrator {
     var migrator = DatabaseMigrator()
 
     migrator.registerMigration("v1") { db in
@@ -145,16 +147,19 @@ enum TelemetryDatabase {
 
       try db.execute(sql: """
         CREATE TABLE alerts (
-          id TEXT NOT NULL PRIMARY KEY,
+          board_id TEXT NOT NULL,
+          id TEXT NOT NULL,
           control_id TEXT NOT NULL,
           threshold REAL NOT NULL,
           threshold_max REAL,
           enabled INTEGER NOT NULL,
           sound_type TEXT NOT NULL,
           created_at INTEGER NOT NULL,
-          source TEXT
+          source TEXT,
+          PRIMARY KEY (board_id, id)
         )
         """)
+      try db.execute(sql: "CREATE INDEX index_alerts_board_id ON alerts(board_id)")
       try db.execute(sql: "CREATE INDEX index_alerts_control_id ON alerts(control_id)")
       try db.execute(sql: "CREATE INDEX index_alerts_enabled ON alerts(enabled)")
       try db.execute(sql: "CREATE INDEX index_alerts_created_at ON alerts(created_at)")
@@ -377,6 +382,48 @@ enum TelemetryDatabase {
       if !hasSource {
         try db.execute(sql: "ALTER TABLE alerts ADD COLUMN source TEXT")
       }
+    }
+
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `MIGRATION_26_27`
+    // Per-board Alert Rules (#254). Existing global rules are intentionally dropped; the former
+    // global alert settings are now board-scoped settings.
+    migrator.registerMigration("v27_alert_board_id") { db in
+      let hasBoardId = try db.columns(in: "alerts").contains { $0.name == "board_id" }
+      if !hasBoardId {
+        try db.execute(sql: "DROP TABLE IF EXISTS alerts")
+        try db.execute(sql: """
+          CREATE TABLE alerts (
+            board_id TEXT NOT NULL,
+            id TEXT NOT NULL,
+            control_id TEXT NOT NULL,
+            threshold REAL NOT NULL,
+            threshold_max REAL,
+            enabled INTEGER NOT NULL,
+            sound_type TEXT NOT NULL,
+            created_at INTEGER NOT NULL,
+            source TEXT,
+            PRIMARY KEY (board_id, id)
+          )
+          """)
+        try db.execute(sql: "CREATE INDEX index_alerts_board_id ON alerts(board_id)")
+        try db.execute(sql: "CREATE INDEX index_alerts_control_id ON alerts(control_id)")
+        try db.execute(sql: "CREATE INDEX index_alerts_enabled ON alerts(enabled)")
+        try db.execute(sql: "CREATE INDEX index_alerts_created_at ON alerts(created_at)")
+      }
+      try db.execute(sql: """
+        DELETE FROM app_settings WHERE key IN ('alertPreset', 'riderTopSpeedKmh', 'alertPresetsOnboarded')
+        """)
+    }
+
+    // Map Points became server-owned (server ADR-0009), so the app keeps no local copy. Drops the
+    // v27 table and the reaction table that only ever existed on a feature branch. The direction
+    // target it used to hold moves to app settings, which start empty here — a rider re-picks it.
+    // GRDB keys migrations by name, so one migration covers both released and feature-branch
+    // installs; Room needs two steps because it keys them by version number.
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `MIGRATION_28_29`
+    migrator.registerMigration("v29_drop_map_points") { db in
+      try db.execute(sql: "DROP TABLE IF EXISTS map_point_reactions")
+      try db.execute(sql: "DROP TABLE IF EXISTS map_points")
     }
 
     return migrator

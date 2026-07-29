@@ -40,14 +40,19 @@ jobs:
               exit 1
             fi
           fi
-          # Compute Android versionCode (major*10000 + minor*100 + patch)
-          VERSION_CODE=$(node -e "
+          # Phone keeps its existing code. Wear uses a disjoint high range because
+          # both AABs share one Play listing and every artifact code must be unique.
+          read -r VERSION_CODE WEAR_VERSION_CODE <<< "$(node -e "
             const v = '$PKG_VERSION'.split('.').map(Number);
-            console.log(v[0] * 10000 + v[1] * 100 + v[2]);
-          ")
-          echo "✓ Version $PKG_VERSION (versionCode $VERSION_CODE)"
-          echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
-          echo "APP_VERSION=$PKG_VERSION"   >> "$GITHUB_ENV"
+            const phone = v[0] * 10000 + v[1] * 100 + v[2];
+            const wear = 1_000_000_000 + phone;
+            if (wear > 2_100_000_000) throw new Error('Wear versionCode exceeds Play limit');
+            console.log(phone, wear);
+          ")"
+          echo "✓ Version $PKG_VERSION (phone $VERSION_CODE, Wear $WEAR_VERSION_CODE)"
+          echo "VERSION_CODE=$VERSION_CODE"           >> "$GITHUB_ENV"
+          echo "WEAR_VERSION_CODE=$WEAR_VERSION_CODE" >> "$GITHUB_ENV"
+          echo "APP_VERSION=$PKG_VERSION"              >> "$GITHUB_ENV"
 
       # ── Toolchain ──────────────────────────────────────────────────────────
       - uses: oven-sh/setup-bun@v2
@@ -82,6 +87,8 @@ jobs:
           EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN: ${{ secrets.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN }}
           EXPO_PUBLIC_GOOGLE_MAPS_API_KEY: ${{ secrets.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY }}
           EXPO_PUBLIC_MAPY_API_KEY: ${{ secrets.EXPO_PUBLIC_MAPY_API_KEY }}
+          EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          EXPO_PUBLIC_SENTRY_DSN: ${{ secrets.EXPO_PUBLIC_SENTRY_DSN }}
           EXPO_PUBLIC_POSTHOG_API_KEY: ${{ secrets.EXPO_PUBLIC_POSTHOG_API_KEY }}
           EXPO_PUBLIC_POSTHOG_HOST: ${{ secrets.EXPO_PUBLIC_POSTHOG_HOST }}
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
@@ -118,10 +125,14 @@ jobs:
           VESCAPE_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           SUPPLY_JSON_KEY: ${{ env.SUPPLY_JSON_KEY }}
           VERSION_CODE: ${{ env.VERSION_CODE }}
+          WEAR_VERSION_CODE: ${{ env.WEAR_VERSION_CODE }}
+          APP_VERSION: ${{ env.APP_VERSION }}
           # Also pass map/API keys so Metro can bundle them into the AAB
           EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN: ${{ secrets.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN }}
           EXPO_PUBLIC_GOOGLE_MAPS_API_KEY: ${{ secrets.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY }}
           EXPO_PUBLIC_MAPY_API_KEY: ${{ secrets.EXPO_PUBLIC_MAPY_API_KEY }}
+          EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          EXPO_PUBLIC_SENTRY_DSN: ${{ secrets.EXPO_PUBLIC_SENTRY_DSN }}
           EXPO_PUBLIC_POSTHOG_API_KEY: ${{ secrets.EXPO_PUBLIC_POSTHOG_API_KEY }}
           EXPO_PUBLIC_POSTHOG_HOST: ${{ secrets.EXPO_PUBLIC_POSTHOG_HOST }}
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
@@ -130,10 +141,18 @@ jobs:
 
       # Keep the signed AAB even when the Play upload fails (e.g. a new
       # foreground-service permission needs a manual Console upload first).
-      - name: Upload AAB artifact
+      - name: Upload phone AAB artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: app-release-${{ env.APP_VERSION }}
           path: android/app/build/outputs/bundle/release/app-release.aab
+          if-no-files-found: ignore
+
+      - name: Upload Wear AAB artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wearos-release-${{ env.APP_VERSION }}
+          path: android/wearos/build/outputs/bundle/release/wearos-release.aab
           if-no-files-found: ignore

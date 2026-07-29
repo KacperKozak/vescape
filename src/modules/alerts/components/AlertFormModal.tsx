@@ -10,20 +10,21 @@ import { TuneDial } from '@/modules/tune/components/TuneDial'
 import { telemetryByControlId } from '@/modules/board/constants/telemetry'
 import { theme } from '@/constants/theme'
 import {
-  DEFAULT_ALERT_PRESETS,
+  DEFAULT_ALERT_SEEDS,
   type TelemetryAlertTab as AlertTab,
 } from '@/modules/board/constants/telemetryThresholds'
 import { type DerivedBatteryConfig } from '@/modules/battery/lib/types'
-import { type AlertRule, type AlertSoundType } from '@/modules/alerts/store/alertsStore'
+import { type AlertSoundType } from '@/modules/alerts/store/alertsStore'
+import { type DraftAlertRule } from '@/modules/alerts/lib/customAlertRules'
 import {
-  type AlertPreset,
-  type AlertPresetCategory,
-  getAlertPresets,
+  type AlertSound,
+  type AlertSoundCategory,
+  getAlertSounds,
   previewAlertSound,
 } from 'vescape-core'
 
-function getPresetsForCategory(category: AlertPresetCategory): AlertPreset[] {
-  return getAlertPresets().filter((p) => p.category === category)
+function getPresetsForCategory(category: AlertSoundCategory): AlertSound[] {
+  return getAlertSounds().filter((p) => p.category === category)
 }
 
 function getDefaultMessageTemplate(
@@ -100,14 +101,14 @@ interface AlertFormModalProps {
   visible: boolean
   controlId: string
   unit: string
-  editRule: AlertRule | null
+  editRule: DraftAlertRule | null
   batteryConfig: DerivedBatteryConfig | null
   onClose(): void
   onSave(threshold: number, thresholdMax: number | null, soundType: AlertSoundType): void
 }
 
 function getEditFormDefaults(
-  editRule: AlertRule,
+  editRule: DraftAlertRule,
   dialConfig: ReturnType<typeof getAlertDialConfig>,
   batteryConfig: DerivedBatteryConfig | null,
 ) {
@@ -137,7 +138,7 @@ function getNewFormDefaults(
     )
   const high = snap(dialConfig.min + (dialConfig.max - dialConfig.min) * 0.75)
 
-  const preset = DEFAULT_ALERT_PRESETS[controlId]
+  const preset = DEFAULT_ALERT_SEEDS[controlId]
   if (preset) {
     return {
       tab: preset.tab,

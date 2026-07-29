@@ -379,6 +379,8 @@ class TelemetryRepository private constructor(context: Context) {
    * ArrayBuffer. This replaces ~25 per-field JSI conversions × N samples (the dominant history-load
    * cost) with a single buffer transfer; JS rebuilds TelemetrySample objects locally. Nullable
    * numeric lanes use NaN as the null sentinel; deviceId/deviceName are dictionary-encoded.
+   *
+   * @parity /modules/vescape-core/ios/telemetry/TelemetryRangePayload.swift `sampleColumns`
    */
   private suspend fun smoothedSampleColumns(
     samples: List<HistoryTelemetryState>,

@@ -368,6 +368,8 @@ const ChartLineSegments = memo(function ChartLineSegments({
   )
 })
 
+// TODO: Split chart state derivation to reduce cyclomatic complexity below 30.
+// eslint-disable-next-line complexity
 export function TelemetryLineChart({
   label,
   value,
@@ -479,10 +481,13 @@ export function TelemetryLineChart({
     const idx = liveIdx.value
     return idx >= 0 ? markerTableSV.value.timeStrs[idx] : ''
   })
+  // Only the string is captured: closing over `secondary` would drag its points
+  // (and their Date fields) into the worklet, which Reanimated cannot copy.
+  const secondaryFallbackValue = secondary?.value ?? '-'
   const liveSecondaryValueText = useDerivedValue(() => {
     const idx = liveIdx.value
     const values = markerTableSV.value.secondaryValueStrs
-    return idx >= 0 && values ? values[idx] : (secondary?.value ?? '-')
+    return idx >= 0 && values ? values[idx] : secondaryFallbackValue
   })
   const tooltipAnimatedStyle = useAnimatedStyle(() => {
     const half = TOOLTIP_WIDTH / 2

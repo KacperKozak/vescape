@@ -1,0 +1,115 @@
+import type { ReactNode } from 'react'
+import { ScrollView, StyleSheet, View } from 'react-native'
+import { Text } from '@/components/base/Text'
+import type { Icon } from 'phosphor-react-native'
+
+import { Button } from '@/components/base/Button'
+import { theme } from '@/constants/theme'
+
+interface WizardStepLayoutProps {
+  title: string
+  icon: Icon
+  color: string
+  headerRight?: ReactNode
+  footer?: ReactNode
+  children: ReactNode
+}
+
+export function WizardStepLayout({
+  title,
+  icon: IconComponent,
+  color,
+  headerRight,
+  footer,
+  children,
+}: WizardStepLayoutProps) {
+  return (
+    <View style={styles.fill}>
+      {headerRight ? <View style={styles.topBar}>{headerRight}</View> : null}
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.body}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.header}>
+          <IconComponent size={20} color={color} weight="duotone" />
+          <Text style={styles.title}>{title}</Text>
+        </View>
+        {children}
+      </ScrollView>
+      {footer}
+    </View>
+  )
+}
+
+interface WizardNavActionsProps {
+  canContinue: boolean
+  onBack: () => void
+  onNext: () => void
+  nextLabel?: string
+  testIDPrefix: string
+}
+
+export function WizardNavActions({
+  canContinue,
+  onBack,
+  onNext,
+  nextLabel = 'Next',
+  testIDPrefix,
+}: WizardNavActionsProps) {
+  return (
+    <View style={styles.actions}>
+      <Button
+        style={styles.action}
+        label="Back"
+        variant="secondary"
+        onPress={onBack}
+        testID={`${testIDPrefix}-back`}
+      />
+      <Button
+        style={styles.action}
+        label={nextLabel}
+        onPress={onNext}
+        disabled={!canContinue}
+        testID={`${testIDPrefix}-next`}
+      />
+    </View>
+  )
+}
+
+const styles = StyleSheet.create({
+  fill: {
+    flex: 1,
+    gap: 14,
+  },
+  scroll: {
+    flex: 1,
+  },
+  body: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    gap: 14,
+  },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  title: {
+    color: theme.palette.slate.textPrimary,
+    fontSize: 20,
+    fontWeight: '800',
+  },
+  actions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  action: {
+    flex: 1,
+  },
+})

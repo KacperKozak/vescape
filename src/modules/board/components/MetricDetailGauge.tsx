@@ -3,7 +3,7 @@ import { StyleSheet } from 'react-native'
 import type { SharedValue } from 'react-native-reanimated'
 
 import { type DualGaugeAlert } from '@/components/charts/gaugeAlert'
-import { SingleGauge } from '@/modules/board/components/DualGauge'
+import { SingleGauge } from '@/modules/board/components/SingleGauge'
 import type { TelemetryMetricConfig } from '@/modules/board/constants/telemetry'
 import {
   getHistoryMetricHotRange,

@@ -15,11 +15,11 @@ import { TuneDial } from '@/modules/tune/components/TuneDial'
 import { IconHero } from '@/components/settings/IconHero'
 import { theme } from '@/constants/theme'
 import {
-  type AlertPreset,
+  type AlertSound,
   clearAllBoardWarnings,
   devInjectBoardWarning,
   devReportCleanBoardWarning,
-  getAlertPresets,
+  getAlertSounds,
   previewAlertSound,
   startGeigerSimulation,
   stopGeigerSimulation,
@@ -50,7 +50,7 @@ const TTS_EXAMPLES = [
 ]
 
 export default function OtherSettingsScreen() {
-  const presets = useMemo(() => getAlertPresets(), [])
+  const presets = useMemo(() => getAlertSounds(), [])
   const singlePresets = useMemo(
     () => presets.filter((preset) => preset.category === 'single'),
     [presets],
@@ -347,7 +347,7 @@ export default function OtherSettingsScreen() {
 }
 
 interface PresetButtonProps {
-  preset: AlertPreset
+  preset: AlertSound
   selected: boolean
   onPress: () => void
 }

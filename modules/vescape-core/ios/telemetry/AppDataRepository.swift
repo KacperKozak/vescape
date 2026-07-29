@@ -2,7 +2,7 @@ import Foundation
 import GRDB
 
 /// CRUD over the single GRDB database for app data: boards (with Board Link), alert rules, privacy
-/// zones, map points and key-value settings. Values cross the bridge as `[String: Any?]` bags to
+/// zones and key-value settings. Values cross the bridge as `[String: Any?]` bags to
 /// mirror the JS contract; persistence uses the same column/table shapes as Android Room.
 ///
 /// A Board Link is whole-or-nothing: it is composed only when a board has both a `ble_id` and a
@@ -11,6 +11,7 @@ import GRDB
 ///
 /// Scope of an `onAppDataChanged` emit; mirrors the JS `AppDataChangedEvent['scope']` union.
 /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/AppDataRepository.kt `AppDataScope`
+/// @parity /modules/vescape-core/src/index.ts `AppDataChangedEvent`
 enum AppDataScope: String {
   case boards
   case settings
@@ -97,6 +98,10 @@ final class AppDataRepository {
       ("description", (board["description"] as? String).flatMap { $0.isEmpty ? nil : $0 }),
       ("batteryConfig", Self.normalizeBatteryConfig(board["batteryConfig"] ?? nil)),
       ("dismissedWarnings", Self.normalizeDismissedWarnings(board["dismissedWarnings"] ?? nil)),
+      ("topSpeedKmh", Self.topSpeedKmh(board["topSpeedKmh"] ?? nil)),
+      ("alertPreset", Self.normalizeAlertPreset(board["alertPreset"] ?? nil)),
+      ("alertPresetsOnboarded", board["alertPresetsOnboarded"] as? Bool),
+      // Legal Mode changes only through the dedicated native intent.
     ] + linkSettings.filter { $0.0 != "transport" }
     let transport = linkSettings.first { $0.0 == "transport" }?.1 as? String
     let updatedAt = nowMs()
@@ -123,6 +128,8 @@ final class AppDataRepository {
   func deleteBoard(_ id: String) {
     write { db in
       try db.execute(sql: "DELETE FROM board_settings WHERE board_id = ?", arguments: [id])
+      // Alert Rules are Board-owned (#254) — drop them with the Board so no orphan rows survive.
+      try db.execute(sql: "DELETE FROM alerts WHERE board_id = ?", arguments: [id])
       try db.execute(sql: "DELETE FROM boards WHERE id = ?", arguments: [id])
     }
     notifyDataChanged(.boards)
@@ -138,6 +145,19 @@ final class AppDataRepository {
       try db.execute(
         sql: "INSERT OR REPLACE INTO board_settings (board_id, key, value_json, updated_at) VALUES (?, ?, ?, ?)",
         arguments: [boardId, "lastBattery", json, atMs]
+      )
+    }
+    notifyDataChanged(.boards)
+  }
+
+  /// Dedicated native Legal Mode write; generic Board upserts cannot bypass enable validation.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/AppDataRepository.kt `updateLegalMode`
+  func updateLegalMode(boardId: String, enabled: Bool) {
+    guard let json = Self.encodeJson(["enabled": enabled]) else { return }
+    write { db in
+      try db.execute(
+        sql: "INSERT OR REPLACE INTO board_settings (board_id, key, value_json, updated_at) VALUES (?, ?, ?, ?)",
+        arguments: [boardId, "legalMode", json, self.nowMs()]
       )
     }
     notifyDataChanged(.boards)
@@ -159,6 +179,13 @@ final class AppDataRepository {
       "batteryConfig": values["batteryConfig"],
       "lastBattery": values["lastBattery"],
       "dismissedWarnings": values["dismissedWarnings"],
+      // Alert Preset board settings, normalized to display defaults when the row is absent so JS
+      // always reads a concrete Board Top Speed / onboarded flag. `alertPreset` stays nil until the
+      // rider touches setup — no preset rules generate before then.
+      "topSpeedKmh": values["topSpeedKmh"] ?? defaultTopSpeedKmh,
+      "alertPreset": values["alertPreset"],
+      "alertPresetsOnboarded": values["alertPresetsOnboarded"] ?? false,
+      "legalMode": values["legalMode"] ?? ["enabled": false],
       "link": link,
     ]
   }
@@ -180,9 +207,30 @@ final class AppDataRepository {
       return decodeLastBattery(raw)
     case "dismissedWarnings":
       return normalizeDismissedWarnings(raw)
+    case "topSpeedKmh":
+      return topSpeedKmh(raw)
+    case "alertPreset":
+      return normalizeAlertPreset(raw)
+    case "alertPresetsOnboarded":
+      return raw as? Bool
+    case "legalMode":
+      return normalizeLegalMode(raw)
     default:
       return nil
     }
+  }
+
+  /// Durable Alert Preset per-metric level selection bag. JS owns behavior; native persists it as an
+  /// opaque object. Non-object/empty payloads normalize away (row removed).
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/AppDataRepository.kt `normalizeAlertPreset`
+  private static func normalizeAlertPreset(_ raw: Any?) -> [String: Any]? {
+    guard let map = raw as? [String: Any], !map.isEmpty else { return nil }
+    return map
+  }
+
+  private static func normalizeLegalMode(_ raw: Any?) -> [String: Bool]? {
+    guard let map = raw as? [String: Any], let enabled = map["enabled"] as? Bool else { return nil }
+    return ["enabled": enabled]
   }
 
   /// Dismissed Board Warning kinds persisted as a board setting: a non-empty array of kind slugs, or
@@ -205,10 +253,15 @@ final class AppDataRepository {
 
   // MARK: - Alert rules
 
-  func getAlertRules() -> [[String: Any?]] {
+  func getAlertRules(_ boardId: String) -> [[String: Any?]] {
     read([]) { db in
-      try Row.fetchAll(db, sql: "SELECT * FROM alerts ORDER BY created_at ASC").map { row in
+      try Row.fetchAll(
+        db,
+        sql: "SELECT * FROM alerts WHERE board_id = ? ORDER BY created_at ASC",
+        arguments: [boardId]
+      ).map { row in
         [
+          "boardId": row["board_id"] as String,
           "id": row["id"] as String,
           "controlId": row["control_id"] as String,
           "threshold": row["threshold"] as Double,
@@ -222,16 +275,19 @@ final class AppDataRepository {
     }
   }
 
-  /// Enabled rules materialized as `AlertRule` for the alert engine. Mirrors Android
+  /// The given Board's enabled rules materialized as `AlertRule` for the alert engine. The engine
+  /// evaluates only the connected Board's rules. Mirrors Android
   /// `AppDataRepository.getEnabledAlertRuleEntities`.
   /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/AppDataRepository.kt `getEnabledAlertRuleEntities`
-  func getEnabledAlertRules() -> [AlertRule] {
+  func getEnabledAlertRules(_ boardId: String) -> [AlertRule] {
     read([]) { db in
       try Row.fetchAll(
         db,
-        sql: "SELECT * FROM alerts WHERE enabled = 1 ORDER BY created_at ASC"
+        sql: "SELECT * FROM alerts WHERE board_id = ? AND enabled = 1 ORDER BY created_at ASC",
+        arguments: [boardId]
       ).map { row in
         AlertRule(
+          boardId: row["board_id"] as String,
           id: row["id"] as String,
           controlId: row["control_id"] as String,
           threshold: row["threshold"] as Double,
@@ -246,7 +302,11 @@ final class AppDataRepository {
   }
 
   func upsertAlertRule(_ rule: [String: Any?]) {
-    guard let id = rule["id"] as? String, let controlId = rule["controlId"] as? String else { return }
+    guard
+      let boardId = rule["boardId"] as? String,
+      let id = rule["id"] as? String,
+      let controlId = rule["controlId"] as? String
+    else { return }
     let threshold = Self.doubleValue(rule["threshold"] ?? nil) ?? 0
     let thresholdMax = Self.doubleValue(rule["thresholdMax"] ?? nil)
     let enabled = (rule["enabled"] as? Bool) ?? false
@@ -256,22 +316,27 @@ final class AppDataRepository {
     write { db in
       try db.execute(
         sql: """
-          INSERT OR REPLACE INTO alerts (id, control_id, threshold, threshold_max, enabled, sound_type, created_at, source)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT OR REPLACE INTO alerts (board_id, id, control_id, threshold, threshold_max, enabled, sound_type, created_at, source)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
           """,
-        arguments: [id, controlId, threshold, thresholdMax, enabled ? 1 : 0, soundType, createdAt, source]
+        arguments: [boardId, id, controlId, threshold, thresholdMax, enabled ? 1 : 0, soundType, createdAt, source]
       )
     }
   }
 
-  func setAlertRuleEnabled(_ id: String, _ enabled: Bool) {
+  func setAlertRuleEnabled(_ boardId: String, _ id: String, _ enabled: Bool) {
     write { db in
-      try db.execute(sql: "UPDATE alerts SET enabled = ? WHERE id = ?", arguments: [enabled ? 1 : 0, id])
+      try db.execute(
+        sql: "UPDATE alerts SET enabled = ? WHERE board_id = ? AND id = ?",
+        arguments: [enabled ? 1 : 0, boardId, id]
+      )
     }
   }
 
-  func deleteAlertRule(_ id: String) {
-    write { db in try db.execute(sql: "DELETE FROM alerts WHERE id = ?", arguments: [id]) }
+  func deleteAlertRule(_ boardId: String, _ id: String) {
+    write { db in
+      try db.execute(sql: "DELETE FROM alerts WHERE board_id = ? AND id = ?", arguments: [boardId, id])
+    }
   }
 
   // MARK: - Privacy zones
@@ -333,71 +398,17 @@ final class AppDataRepository {
     write { db in try db.execute(sql: "DELETE FROM privacy_zones WHERE id = ?", arguments: [id]) }
   }
 
-  // MARK: - Map points
+  // MARK: - Direction point
 
-  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/AppDataRepository.kt `VALID_MAP_POINT_KINDS`
-  /// @parity /modules/vescape-core/src/index.ts `MapPointKind`
-  private static let validMapPointKinds: Set<String> = [
-    "direction", "drop", "bonk", "nose_slide", "trail_entry", "viewpoint", "charging", "charging_food",
-  ]
+  /// The personal direction target. Not a Map Point: it is never shared, and it is one coordinate,
+  /// so it rides in app settings rather than a table of its own.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/AppDataRepository.kt `getDirectionPoint`
+  static let directionPointLatitudeKey = "directionPointLatitude"
+  static let directionPointLongitudeKey = "directionPointLongitude"
 
-  func getMapPoints() -> [[String: Any?]] {
-    read([]) { db in
-      try Row.fetchAll(db, sql: "SELECT * FROM map_points ORDER BY created_at ASC").map { row in
-        [
-          "id": row["id"] as String,
-          "kind": row["kind"] as String,
-          "latitude": (row["latitude_e7"] as Int64).asE7Degrees,
-          "longitude": (row["longitude_e7"] as Int64).asE7Degrees,
-          "createdAt": row["created_at"] as Int64,
-          "updatedAt": row["updated_at"] as Int64,
-        ]
-      }
-    }
-  }
-
-  func upsertMapPoint(_ point: [String: Any?]) {
-    guard let entity = Self.mapPointColumns(point) else { return }
-    write { db in try Self.insertMapPoint(db, entity) }
-  }
-
-  func replaceDirectionMapPoint(_ point: [String: Any?]) {
-    var forced = point
-    forced["kind"] = "direction"
-    guard let entity = Self.mapPointColumns(forced) else { return }
-    write { db in
-      try db.execute(sql: "DELETE FROM map_points WHERE kind = 'direction'")
-      try Self.insertMapPoint(db, entity)
-    }
-  }
-
-  func deleteMapPoint(_ id: String) {
-    write { db in try db.execute(sql: "DELETE FROM map_points WHERE id = ?", arguments: [id]) }
-  }
-
-  private static func insertMapPoint(_ db: Database, _ c: (String, String, Int64, Int64, Int64, Int64)) throws {
-    try db.execute(
-      sql: """
-        INSERT OR REPLACE INTO map_points (id, kind, latitude_e7, longitude_e7, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-        """,
-      arguments: [c.0, c.1, c.2, c.3, c.4, c.5]
-    )
-  }
-
-  private static func mapPointColumns(
-    _ point: [String: Any?]
-  ) -> (String, String, Int64, Int64, Int64, Int64)? {
-    guard
-      let id = point["id"] as? String,
-      let kind = (point["kind"] as? String), validMapPointKinds.contains(kind),
-      let latitude = doubleValue(point["latitude"] ?? nil), latitude.isFinite,
-      let longitude = doubleValue(point["longitude"] ?? nil), longitude.isFinite
-    else { return nil }
-    let now = Int64(Date().timeIntervalSince1970 * 1000)
-    let createdAt = longValue(point["createdAt"] ?? nil) ?? now
-    let updatedAt = longValue(point["updatedAt"] ?? nil) ?? now
-    return (id, kind, latitude.toE7, longitude.toE7, createdAt, updatedAt)
+  func setDirectionPoint(latitude: Double?, longitude: Double?) {
+    updateSetting(Self.directionPointLatitudeKey, rawValue: latitude)
+    updateSetting(Self.directionPointLongitudeKey, rawValue: longitude)
   }
 
   // MARK: - Settings
@@ -421,6 +432,8 @@ final class AppDataRepository {
   }
 
   func updateSetting(_ key: String, rawValue: Any?) {
+    // Legal Policy is native-owned. JS can request refresh through the dedicated intent.
+    guard key != "legalPolicy", key != "legalMode" else { return }
     let updatedAt = nowMs()
     guard let rawValue, !(rawValue is NSNull) else {
       write { db in try db.execute(sql: "DELETE FROM app_settings WHERE key = ?", arguments: [key]) }
@@ -441,10 +454,13 @@ final class AppDataRepository {
       guard let saturation = Self.satelliteImagerySaturation(rawValue) else { return }
       value = saturation
     } else if key == "boardWarningsEnabled" {
-      // Kill switch must stay a strict Bool (Android rejects non-Boolean too) so JS state and the
-      // native detector gate can never diverge on a malformed value.
-      guard let enabled = rawValue as? Bool else { return }
-      value = enabled
+      // Strict Bool (Android rejects non-Boolean too): the board-warnings kill switch must never
+      // persist a malformed value that reads back truthy.
+      guard let flag = rawValue as? Bool else { return }
+      value = flag
+    } else if key == "dismissedCommunityMessageIds" {
+      guard let ids = Self.dismissedCommunityMessageIds(rawValue) else { return }
+      value = ids
     } else {
       value = rawValue
     }
@@ -458,8 +474,30 @@ final class AppDataRepository {
     notifyDataChanged(.settings)
   }
 
+  /// Persist only the resolved jurisdiction reference; policy values stay in the shared catalog.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/AppDataRepository.kt `updateLegalPolicy`
+  func updateLegalPolicy(jurisdictionCode: String?) {
+    let code = jurisdictionCode?.trimmingCharacters(in: .whitespaces).uppercased()
+    let value = code.flatMap { $0.count == 2 ? ["jurisdictionCode": $0] : nil }
+    write { db in
+      guard let value, let json = Self.encodeJson(value) else {
+        try db.execute(sql: "DELETE FROM app_settings WHERE key = 'legalPolicy'")
+        return
+      }
+      try db.execute(
+        sql: "INSERT OR REPLACE INTO app_settings (key, value_json, updated_at) VALUES (?, ?, ?)",
+        arguments: ["legalPolicy", json, self.nowMs()]
+      )
+    }
+    notifyDataChanged(.settings)
+  }
+
   // MARK: - Shared pure helpers (also used by VescapeCoreModule bridge glue)
 
+  /// Durable app-scoped settings shape. A TS/Android/iOS parity triangle — the container tag covers
+  /// every key; individual literals are not tagged separately (see AGENTS.md).
+  /// @parity /modules/vescape-core/src/index.ts `AppSettings`
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryEntities.kt `AppSettings`
   static let defaultSettings: [String: Any] = [
     "liveHistoryLimit": 5,
     "autoConnect": true,
@@ -477,7 +515,9 @@ final class AppDataRepository {
     "riderColor": NSNull(),
     "lastGpsLatitude": NSNull(),
     "lastGpsLongitude": NSNull(),
-    "legalMode": NSNull(),
+    "directionPointLatitude": NSNull(),
+    "directionPointLongitude": NSNull(),
+    "legalPolicy": NSNull(),
     "movingSpeedThresholdKmh": 3,
     "freeSpinMaxSpeedDeltaKmh": DEFAULT_FREE_SPIN_MAX_SPEED_DELTA_KMH,
     "freeSpinStationaryBoardCapKmh": DEFAULT_FREE_SPIN_STATIONARY_BOARD_CAP_KMH,
@@ -496,6 +536,7 @@ final class AppDataRepository {
       "motorCurrent": ["start": 35, "end": 55],
       "batteryCurrent": ["start": 25, "end": 45],
     ],
+    "dismissedCommunityMessageIds": [String](),
   ]
 
   static func normalizeSettings(_ settings: [String: Any]) -> [String: Any] {
@@ -508,7 +549,44 @@ final class AppDataRepository {
       satelliteImageryOpacity(settings["satelliteMapImageryOpacity"]) ?? defaultSettings["satelliteMapImageryOpacity"]
     normalized["satelliteImagerySaturation"] =
       satelliteImagerySaturation(settings["satelliteImagerySaturation"]) ?? defaultSettings["satelliteImagerySaturation"]
+    normalized["legalPolicy"] = normalizeLegalPolicy(settings["legalPolicy"]) ?? NSNull()
+    normalized["dismissedCommunityMessageIds"] =
+      dismissedCommunityMessageIds(settings["dismissedCommunityMessageIds"]) ?? [String]()
+    normalized["legalPolicy"] = normalizeLegalPolicy(settings["legalPolicy"]) ?? NSNull()
     return normalized
+  }
+
+  /// Acknowledged Community Message IDs: a de-duplicated list of non-empty ID strings, or `nil` when
+  /// the raw value is not an array at all. An empty or all-invalid array normalizes to `[]`.
+  static func dismissedCommunityMessageIds(_ value: Any?) -> [String]? {
+    guard let array = value as? [Any] else { return nil }
+    var seen = Set<String>()
+    var result: [String] = []
+    for entry in array {
+      guard let id = entry as? String, !id.isEmpty, seen.insert(id).inserted else { continue }
+      result.append(id)
+    }
+    return result
+  }
+
+  private static func normalizeLegalPolicy(_ raw: Any?) -> [String: String]? {
+    guard
+      let value = raw as? [String: Any],
+      let rawCode = value["jurisdictionCode"] as? String
+    else { return nil }
+    let code = rawCode.trimmingCharacters(in: .whitespaces).uppercased()
+    return code.count == 2 ? ["jurisdictionCode": code] : nil
+  }
+
+  /// Display default Board Top Speed in km/h, applied when a Board has no `topSpeedKmh` setting.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/AppDataRepository.kt `DEFAULT_TOP_SPEED_KMH`
+  static let defaultTopSpeedKmh: Double = 50
+
+  /// Board Top Speed in km/h; the speed gauge full-scale. Clamped to a sane 5–150 km/h band.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/AppDataRepository.kt `normalizeTopSpeedKmh`
+  static func topSpeedKmh(_ value: Any?) -> Double? {
+    guard let topSpeed = doubleValue(value), topSpeed.isFinite else { return nil }
+    return min(150, max(5, topSpeed))
   }
 
   static func satelliteImageryOpacity(_ value: Any?) -> Double? {
@@ -570,6 +648,12 @@ final class AppDataRepository {
     if let value = raw as? Int { return Int64(value) }
     if let value = raw as? NSNumber { return value.int64Value }
     return nil
+  }
+
+  static func optionalString(_ raw: Any?) -> String? {
+    guard let value = raw as? String else { return nil }
+    let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.isEmpty ? nil : trimmed
   }
 
   private static func encodeJson(_ value: Any?) -> String? {

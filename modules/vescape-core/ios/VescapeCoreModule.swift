@@ -1,5 +1,6 @@
 import ExpoModulesCore
 import Foundation
+import UIKit
 import UserNotifications
 
 private final class ActiveBoardProbe {
@@ -56,8 +57,10 @@ public class VescapeCoreModule: Module {
   // MARK: - App data state
 
   private let appData = AppDataRepository.shared
+  private let legalPolicyResolver = LegalPolicyResolver()
+  private let legalPolicyCatalog = LegalPolicyCatalog()
 
-  /// Bundled alert presets surfaced to JS through `getAlertPresets`. Mirrors Android
+  /// Bundled alert sounds surfaced to JS through `getAlertSounds`. Mirrors Android
   /// `alertSoundPresetMaps()`.
   /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/alerts/AlertEngine.kt `alertSoundPresetMaps`
   private let alertPresets: [[String: Any]] = alertSoundPresetMaps()
@@ -69,7 +72,7 @@ public class VescapeCoreModule: Module {
 
     // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `Events`
     // @parity /modules/vescape-core/src/index.ts `VescapeCoreEvents`
-    Events("onDevice", "onError", "onLiveState", "onLiveTick", "onLiveSeries", "onFocusedSeries", "onTelemetryHistory", "onBms", "onBmsSeries", "onLocation", "onTelemetryRebuildProgress", "onBoardProbeProgress", "onAppDataChanged", "onGroupRideConnection", "onGroupRideSnapshot", "onGroupRideCreated", "onGroupRideUpdated", "onGroupRideEnded", "onGroupRideJoined", "onGroupRideRoster", "onGroupRideError", "onBoardWarnings")
+    Events("onDevice", "onError", "onLiveState", "onLiveTick", "onLiveSeries", "onFocusedSeries", "onTelemetryHistory", "onBms", "onBmsSeries", "onLocation", "onTelemetryRebuildProgress", "onBoardProbeProgress", "onAppDataChanged", "onGroupRideConnection", "onGroupRideSnapshot", "onGroupRideCreated", "onGroupRideUpdated", "onGroupRideEnded", "onGroupRideJoined", "onGroupRideRoster", "onGroupRideError", "onBoardWarnings", "onAppStatus")
 
     // Track per-event JS listeners so native skips emitting into the void, and gate the whole
     // firehose on app foreground (see `frontendActive`). Mirrors Android's observing + lifecycle
@@ -102,8 +105,20 @@ public class VescapeCoreModule: Module {
       BoardWarningRegistry.shared.emitSnapshot()
     }
     OnStopObserving("onBoardWarnings") { self.observedEvents.remove("onBoardWarnings") }
+    OnStartObserving("onAppStatus") {
+      self.observedEvents.insert("onAppStatus")
+      // Late subscriber: replay the current App Status so JS is immediately consistent.
+      self.sendEvent("onAppStatus", ["status": AppStatusCoordinator.shared.current?.toMap()])
+    }
+    OnStopObserving("onAppStatus") { self.observedEvents.remove("onAppStatus") }
 
     OnCreate {
+      // Native owns App Status truth; JS mirrors it. Push every successful refresh (late
+      // subscribers replay above and through `getAppStatus`).
+      AppStatusCoordinator.shared.onChange = { [weak self] status in self?.sendAppStatus(status) }
+      // Cold start: fetch App Status before JS asks. A foreground event arriving right after is
+      // coalesced into this request.
+      AppStatusCoordinator.shared.refresh()
       self.attachToCoordinator()
       AppDataRepository.onDataChanged = { [weak self] scope in self?.sendAppDataChanged(scope) }
       // JS keeps a dumb mirror of the durable Board Warning registry; push the full board list on
@@ -116,6 +131,7 @@ public class VescapeCoreModule: Module {
 
     OnAppEntersForeground {
       self.frontendActive = true
+      AppStatusCoordinator.shared.refresh()
     }
     OnAppEntersBackground {
       self.frontendActive = false
@@ -130,6 +146,7 @@ public class VescapeCoreModule: Module {
       self.detachFromCoordinator()
       AppDataRepository.onDataChanged = nil
       BoardWarningRegistry.shared.onChange = nil
+      AppStatusCoordinator.shared.onChange = nil
       self.frontendActive = false
       self.observedEvents.removeAll()
       self.cancelActiveProbe(reason: "module_destroyed")
@@ -172,6 +189,10 @@ public class VescapeCoreModule: Module {
     }
 
     // MARK: Group Ride (Android native implementation; iOS keeps bridge shape)
+    // @platform-diff Group Ride networking is Android-only, so the Online Capability gate (refuse/
+    // tear down the relay socket while App Status is Online/App Blocked, `blocked` connection state,
+    // `Vescape-App-Version` upgrade header, 426 handling) has no iOS peer. These stubs never open a
+    // socket, so there is nothing to gate; iOS AppStatusCoordinator keeps its single `onChange` sink.
 
     Function("startGroupRideObserve") { (_: String) in
       self.sendEvent("onGroupRideConnection", ["state": "idle"])
@@ -244,7 +265,7 @@ public class VescapeCoreModule: Module {
       self.coordinator.previewAlertSound(soundType)
     }
 
-    Function("getAlertPresets") {
+    Function("getAlertSounds") {
       self.alertPresets
     }
 
@@ -254,6 +275,44 @@ public class VescapeCoreModule: Module {
 
     Function("stopGeigerSimulation") {
       self.coordinator.stopGeigerSimulation()
+    }
+
+    // MARK: App Status
+
+    // Last successful App Status for this process, or nil while none has been fetched (fail-open).
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `getAppStatus`
+    Function("getAppStatus") { () -> [String: Any?]? in
+      AppStatusCoordinator.shared.current?.toMap()
+    }
+
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `provisionDeviceCredential`
+    AsyncFunction("provisionDeviceCredential") {
+      (serverUrl: String, deviceToken: String, accountId: String) async throws -> [String: Any?] in
+      try await NativeAuthCoordinator.shared.provision(
+        serverUrl: serverUrl,
+        token: deviceToken,
+        accountId: accountId
+      )
+    }
+    Function("getDeviceCredentialState") { () -> [String: Any?] in
+      NativeAuthCoordinator.shared.stateMap()
+    }
+    AsyncFunction("revokeDeviceCredential") { () async throws in
+      try await NativeAuthCoordinator.shared.revoke()
+    }
+    Function("clearDeviceCredential") {
+      NativeAuthCoordinator.shared.clear()
+    }
+
+    // Stable Vescape route keeps the app decoupled from the final store destination.
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `openAppUpdate`
+    // @platform-diff iOS uses the stable iOS download route.
+    // @parity /modules/vescape-core/src/index.ts `openAppUpdate`
+    Function("openAppUpdate") {
+      guard let url = URL(string: AppStatusCoordinator.iosDownloadUrl) else { return }
+      DispatchQueue.main.async {
+        UIApplication.shared.open(url)
+      }
     }
 
     // MARK: Board session
@@ -609,8 +668,8 @@ public class VescapeCoreModule: Module {
       promise.resolve(nil)
     }
 
-    AsyncFunction("getAlertRules") { (promise: Promise) in
-      promise.resolve(self.appData.getAlertRules())
+    AsyncFunction("getAlertRules") { (boardId: String, promise: Promise) in
+      promise.resolve(self.appData.getAlertRules(boardId))
     }
 
     AsyncFunction("upsertAlertRule") { (rule: [String: Any], promise: Promise) in
@@ -619,14 +678,14 @@ public class VescapeCoreModule: Module {
       promise.resolve(nil)
     }
 
-    AsyncFunction("setAlertRuleEnabled") { (id: String, enabled: Bool, promise: Promise) in
-      self.appData.setAlertRuleEnabled(id, enabled)
+    AsyncFunction("setAlertRuleEnabled") { (boardId: String, id: String, enabled: Bool, promise: Promise) in
+      self.appData.setAlertRuleEnabled(boardId, id, enabled)
       self.coordinator.reloadAlertRules()
       promise.resolve(nil)
     }
 
-    AsyncFunction("deleteAlertRule") { (id: String, promise: Promise) in
-      self.appData.deleteAlertRule(id)
+    AsyncFunction("deleteAlertRule") { (boardId: String, id: String, promise: Promise) in
+      self.appData.deleteAlertRule(boardId, id)
       self.coordinator.reloadAlertRules()
       promise.resolve(nil)
     }
@@ -653,27 +712,106 @@ public class VescapeCoreModule: Module {
       promise.resolve(nil)
     }
 
-    AsyncFunction("getMapPoints") { (promise: Promise) in
-      promise.resolve(self.appData.getMapPoints())
+    // Map Points are server-owned; native holds no copy.
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `getNearbyMapPoints`
+    AsyncFunction("getNearbyMapPoints") {
+      (latitude: Double, longitude: Double, radiusMeters: Int, promise: Promise) in
+      Task {
+        do {
+          promise.resolve(
+            try await MapPointApi.shared.nearby(
+              latitude: latitude,
+              longitude: longitude,
+              radiusMeters: radiusMeters
+            )
+          )
+        } catch { Self.rejectMapPoint(promise, error) }
+      }
     }
 
-    AsyncFunction("upsertMapPoint") { (point: [String: Any], promise: Promise) in
-      self.appData.upsertMapPoint(point)
-      promise.resolve(nil)
+    AsyncFunction("createMapPoint") { (values: [String: Any], promise: Promise) in
+      Task {
+        do { promise.resolve(try await MapPointApi.shared.create(values)) }
+        catch { Self.rejectMapPoint(promise, error) }
+      }
     }
 
-    AsyncFunction("replaceDirectionMapPoint") { (point: [String: Any], promise: Promise) in
-      self.appData.replaceDirectionMapPoint(point)
-      promise.resolve(nil)
+    AsyncFunction("updateMapPoint") { (id: String, patch: [String: Any], promise: Promise) in
+      Task {
+        do { promise.resolve(try await MapPointApi.shared.update(id, patch: patch)) }
+        catch { Self.rejectMapPoint(promise, error) }
+      }
     }
 
     AsyncFunction("deleteMapPoint") { (id: String, promise: Promise) in
-      self.appData.deleteMapPoint(id)
+      Task {
+        do {
+          try await MapPointApi.shared.delete(id)
+          promise.resolve(nil)
+        } catch { Self.rejectMapPoint(promise, error) }
+      }
+    }
+
+    AsyncFunction("setMapPointReaction") { (id: String, reaction: String?, promise: Promise) in
+      Task {
+        do {
+          try await MapPointApi.shared.setReaction(id, reaction: reaction)
+          promise.resolve(nil)
+        } catch { Self.rejectMapPoint(promise, error) }
+      }
+    }
+
+    // The direction target is personal client state, never a Map Point.
+    AsyncFunction("setDirectionPoint") { (latitude: Double?, longitude: Double?, promise: Promise) in
+      self.appData.setDirectionPoint(latitude: latitude, longitude: longitude)
       promise.resolve(nil)
     }
 
     AsyncFunction("getSettings") { (promise: Promise) in
       promise.resolve(self.appData.getSettings())
+    }
+
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `refreshLegalPolicy`
+    // @parity /modules/vescape-core/src/index.ts `refreshLegalPolicy`
+    AsyncFunction("refreshLegalPolicy") { (promise: Promise) in
+      let settings = self.appData.getSettings()
+      let latitude = settings["lastGpsLatitude"] as? Double
+      let longitude = settings["lastGpsLongitude"] as? Double
+      Task {
+        let countryCode: String? = if let latitude, let longitude {
+          await self.legalPolicyResolver.resolve(latitude: latitude, longitude: longitude)
+        } else {
+          nil
+        }
+        self.appData.updateLegalPolicy(jurisdictionCode: countryCode)
+        self.coordinator.reloadAlertRules()
+        promise.resolve(nil)
+      }
+    }
+
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `setLegalMode`
+    // @parity /modules/vescape-core/src/index.ts `setLegalMode`
+    AsyncFunction("setLegalMode") { (boardId: String, enabled: Bool, promise: Promise) in
+      guard self.appData.getBoard(boardId) != nil else {
+        promise.reject("BOARD_NOT_FOUND", "Board not found: \(boardId)")
+        return
+      }
+      if enabled {
+        if let (code, message) = self.coordinator.legalModeEnableError(boardId: boardId) {
+          promise.reject(code, message)
+          return
+        }
+        let settings = self.appData.getSettings()
+        let jurisdictionCode =
+          ((settings["legalPolicy"] ?? nil) as? [String: Any])?["jurisdictionCode"] as? String
+        guard let jurisdictionCode, self.legalPolicyCatalog.speeds(countryCode: jurisdictionCode) != nil else {
+          promise.reject("LEGAL_POLICY_UNRESOLVED", "Resolved Legal Policy required")
+          return
+        }
+      }
+      self.appData.updateLegalMode(boardId: boardId, enabled: enabled)
+      self.coordinator.reloadAlertRules()
+      promise.resolve(nil)
     }
 
     // JS sends the raw setting value (bool/number/string/object/null), matching Android's
@@ -934,6 +1072,28 @@ public class VescapeCoreModule: Module {
       guard self.shouldEmitToFrontend("onBoardWarnings") else { return }
       self.sendEvent("onBoardWarnings", ["boardId": boardId, "warnings": warnings.map { $0.toMap() }])
     }
+  }
+
+  /// Emit `onAppStatus` with the process's current App Status (`nil` while none was fetched).
+  /// `sendEvent` must run on the main thread; drop the emit when no JS listener is attached — the
+  /// replay on subscribe and the next successful refresh self-heal it.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `onAppStatus`
+  /// @parity /modules/vescape-core/src/index.ts `AppStatusEvent`
+  private func sendAppStatus(_ status: AppStatus?) {
+    DispatchQueue.main.async {
+      guard self.shouldEmitToFrontend("onAppStatus") else { return }
+      self.sendEvent("onAppStatus", ["status": status?.toMap()])
+    }
+  }
+
+  /// Map Point failures carry a code JS branches on; anything else is an unexpected native fault.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/mappoints/MapPointApi.kt `MapPointApiException`
+  private static func rejectMapPoint(_ promise: Promise, _ error: Error) {
+    guard let apiError = error as? MapPointApiError else {
+      promise.reject(MapPointApiError.refused, error.localizedDescription)
+      return
+    }
+    promise.reject(apiError.code, apiError.message)
   }
 
   private static func notificationPermissionStatus(_ status: UNAuthorizationStatus) -> String {

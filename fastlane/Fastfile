@@ -1,28 +1,50 @@
 default_platform(:android)
 
+def android_release_properties
+  names = %w[
+    VESCAPE_UPLOAD_STORE_FILE
+    VESCAPE_UPLOAD_STORE_PASSWORD
+    VESCAPE_UPLOAD_KEY_ALIAS
+    VESCAPE_UPLOAD_KEY_PASSWORD
+    APP_VERSION
+    WEAR_VERSION_CODE
+  ]
+  missing = names.select { |name| ENV[name].to_s.empty? }
+  UI.user_error!("Missing Android release env: #{missing.join(", ")}") unless missing.empty?
+
+  names.to_h { |name| [name, ENV.fetch(name)] }
+end
+
 platform :android do
-  desc "Build a signed AAB, ship to internal testers, and stage a production draft"
+  desc "Build signed phone and Wear AABs, ship to internal testing, and stage production review"
   lane :release do
-    # Build a signed App Bundle. Signing props come from env vars set by the
-    # GitHub Actions workflow; the withAndroidSigningConfig plugin wires them
-    # into the generated android/app/build.gradle via Gradle project properties.
+    release_properties = android_release_properties
+
+    # Leave signer identity in CI logs before producing either artifact.
     gradle(
       project_dir: "android",
-      task: "bundle",       # bundleRelease → .aab (Play Store requires AAB, not APK)
-      build_type: "Release",
-      properties: {
-        "VESCAPE_UPLOAD_STORE_FILE"     => ENV["VESCAPE_UPLOAD_STORE_FILE"],
-        "VESCAPE_UPLOAD_STORE_PASSWORD" => ENV["VESCAPE_UPLOAD_STORE_PASSWORD"],
-        "VESCAPE_UPLOAD_KEY_ALIAS"      => ENV["VESCAPE_UPLOAD_KEY_ALIAS"],
-        "VESCAPE_UPLOAD_KEY_PASSWORD"   => ENV["VESCAPE_UPLOAD_KEY_PASSWORD"],
-      }
+      task: ":wearos:signingReport",
+      properties: release_properties
     )
 
-    aab = "android/app/build/outputs/bundle/release/app-release.aab"
+    # Explicit module tasks avoid Gradle's ambiguous root bundleRelease task.
+    gradle(
+      project_dir: "android",
+      task: ":app:bundleRelease",
+      properties: release_properties
+    )
+    gradle(
+      project_dir: "android",
+      task: ":wearos:bundleRelease",
+      properties: release_properties
+    )
 
-    # Step 1: Upload to internal testing track and auto-roll to testers.
+    phone_aab = "android/app/build/outputs/bundle/release/app-release.aab"
+    wear_aab = "android/wearos/build/outputs/bundle/release/wearos-release.aab"
+
+    # Publish the phone build for immediate internal testing.
     upload_to_play_store(
-      aab: aab,
+      aab: phone_aab,
       track: "internal",
       release_status: "completed",
       skip_upload_apk: true,
@@ -33,12 +55,38 @@ platform :android do
       changes_not_sent_for_review: true
     )
 
-    # Step 2: Create a production draft with the same build so you can review
-    # and manually promote in Play Console (no second AAB upload needed).
+    # Promote the same artifact to a production draft for manual review.
     upload_to_play_store(
-      track: "production",
+      track: "internal",
+      track_promote_to: "production",
       release_status: "draft",
-      version_codes: [ENV["VERSION_CODE"].to_i],
+      version_code: ENV["VERSION_CODE"].to_i,
+      skip_upload_aab: true,
+      skip_upload_apk: true,
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      skip_upload_changelogs: true,
+      changes_not_sent_for_review: true
+    )
+
+    # Wear OS uses form-factor-prefixed API track identifiers.
+    upload_to_play_store(
+      aab: wear_aab,
+      track: "wear:internal",
+      release_status: "completed",
+      skip_upload_apk: true,
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      skip_upload_changelogs: true,
+      changes_not_sent_for_review: true
+    )
+
+    upload_to_play_store(
+      track: "wear:production",
+      release_status: "completed",
+      version_code: ENV["WEAR_VERSION_CODE"].to_i,
       skip_upload_aab: true,
       skip_upload_apk: true,
       skip_upload_metadata: true,

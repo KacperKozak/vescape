@@ -1,11 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Animated, Modal, Pressable, StyleSheet, View } from 'react-native'
+import { StyleSheet, View } from 'react-native'
+
 import { Text } from '@/components/base/Text'
-
 import { Button } from '@/components/base/Button'
+import { FadeCardModal } from '@/components/modals/FadeCardModal'
 import { theme } from '@/constants/theme'
-
-const FADE_DURATION = 120
 
 interface ConfirmModalProps {
   visible: boolean
@@ -30,90 +28,44 @@ export function ConfirmModal({
   onConfirm,
   onCancel,
 }: ConfirmModalProps) {
-  const opacity = useMemo(() => new Animated.Value(0), [])
-  const scale = useMemo(() => new Animated.Value(0.92), [])
-  const [mounted, setMounted] = useState(false)
-  const [prevVisible, setPrevVisible] = useState(false)
-
-  if (visible !== prevVisible) {
-    setPrevVisible(visible)
-    if (visible) setMounted(true)
-  }
-
-  useEffect(() => {
-    if (visible) {
-      Animated.parallel([
-        Animated.timing(opacity, { toValue: 1, duration: FADE_DURATION, useNativeDriver: true }),
-        Animated.timing(scale, { toValue: 1, duration: FADE_DURATION, useNativeDriver: true }),
-      ]).start()
-    } else if (mounted) {
-      Animated.parallel([
-        Animated.timing(opacity, { toValue: 0, duration: FADE_DURATION, useNativeDriver: true }),
-        Animated.timing(scale, { toValue: 0.92, duration: FADE_DURATION, useNativeDriver: true }),
-      ]).start(() => setMounted(false))
-    }
-  }, [visible, mounted, opacity, scale])
-
-  if (!mounted) return null
-
-  const handleCancel = () => {
-    if (!loading) onCancel()
-  }
-
   return (
-    <Modal visible transparent animationType="none" onRequestClose={handleCancel}>
-      <Animated.View style={[styles.overlay, { opacity }]}>
-        <Pressable style={styles.backdrop} onPress={handleCancel} disabled={loading} />
-        <Animated.View style={[styles.card, { transform: [{ scale }] }]}>
-          <Text style={styles.title}>{title}</Text>
-          <Text style={styles.message}>{message}</Text>
-          <View style={styles.actions}>
-            <Button
-              style={styles.actionBtn}
-              label={cancelLabel}
-              variant="secondary"
-              disabled={loading}
-              onPress={handleCancel}
-            />
-            <Button
-              style={styles.actionBtn}
-              label={confirmLabel}
-              variant={destructive ? 'destructive' : 'primary'}
-              loading={loading}
-              onPress={onConfirm}
-            />
-          </View>
-        </Animated.View>
-      </Animated.View>
-    </Modal>
+    <FadeCardModal
+      visible={visible}
+      onDismiss={onCancel}
+      dismissDisabled={loading}
+      title={title}
+      showClose={false}
+      scrollable={false}
+      cardStyle={styles.card}
+      footer={
+        <View style={styles.actions}>
+          <Button
+            style={styles.actionBtn}
+            label={cancelLabel}
+            variant="secondary"
+            disabled={loading}
+            onPress={onCancel}
+          />
+          <Button
+            style={styles.actionBtn}
+            label={confirmLabel}
+            variant={destructive ? 'destructive' : 'primary'}
+            loading={loading}
+            onPress={onConfirm}
+          />
+        </View>
+      }
+    >
+      <Text style={styles.message}>{message}</Text>
+    </FadeCardModal>
   )
 }
 
 const styles = StyleSheet.create({
-  overlay: {
-    flex: 1,
-    backgroundColor: theme.alpha(theme.palette.mono.black, 0.6),
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 32,
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFill,
-  },
   card: {
-    width: '100%',
     maxWidth: 320,
-    backgroundColor: theme.palette.slate.surfaceDeep,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: theme.palette.slate.border,
     padding: 20,
     gap: 12,
-  },
-  title: {
-    color: theme.palette.slate.textPrimary,
-    fontSize: 16,
-    fontWeight: '800',
   },
   message: {
     color: theme.palette.slate.textSecondary,

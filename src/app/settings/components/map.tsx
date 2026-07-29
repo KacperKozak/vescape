@@ -132,18 +132,19 @@ export default function MapComponentsShowcase() {
           historyMetricGradientsEnabled
           historyMetricHotRanges={FIXTURE_HISTORY_METRIC_HOT_RANGES}
           directionPoint={FIXTURE_DIRECTION_POINT}
+          activeNavigationTarget={null}
+          selectedNavigationTarget={null}
           mapPoints={mapPoints}
           selectedMapPointId={selectedMapPointId}
-          hiddenMapPointKinds={[]}
-          onClearDirectionPoint={() => {}}
+          hiddenMapPointCategories={[]}
           onToggleMapPointSelection={(id) =>
             setSelectedMapPointId((current) => (current === id ? null : id))
           }
-          onRemoveMapPoint={(id) => setMapPoints((current) => current.filter((p) => p.id !== id))}
           onSuppressNextMapPress={() => {}}
           onSelectMarker={() => {}}
           onOpenMedia={() => {}}
           onSelectLegalCountry={() => {}}
+          onFocusDirectionPoint={() => {}}
         />
         {/* Rendered alongside the live layer (not behind historyActive) so the ride route,
             markers and media pins are always visible together with everything above. */}

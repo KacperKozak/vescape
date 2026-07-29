@@ -123,7 +123,10 @@ struct TuneProfileStore {
     return (try? writer.read { db in
       try Row.fetchAll(
         db,
-        sql: "SELECT * FROM tune_history_entries WHERE profile_id = ? ORDER BY created_at DESC",
+        // `id` breaks ties: a save and a rollback can land in the same millisecond, and without a
+        // monotonic tiebreaker `created_at DESC` alone returns them in insertion order — oldest
+        // first — which is the opposite of what Tune History shows.
+        sql: "SELECT * FROM tune_history_entries WHERE profile_id = ? ORDER BY created_at DESC, id DESC",
         arguments: [profileId]
       ).map { Self.historyMap($0) }
     }) ?? []

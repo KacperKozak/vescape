@@ -1,8 +1,18 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { router } from 'expo-router'
 import { useShallow } from 'zustand/react/shallow'
 import type { BatteryConfig, BoardLink } from 'vescape-core'
 
+import {
+  ALERT_PRESET_METRICS,
+  NEW_BOARD_ALERT_PRESET_SELECTION,
+  type AlertPresetMetric,
+  type AlertPresetSelection,
+} from '@/modules/alerts/lib/alertPresets'
+import { type DraftAlertSetup } from '@/modules/alerts/hooks/useMetricAlerts'
+import { DEFAULT_BOARD_TOP_SPEED_KMH } from '@/modules/alerts/lib/boardAlertSettings'
+import { useAlertPresetStore } from '@/modules/alerts/store/alertPresetStore'
+import { useAlertsStore } from '@/modules/alerts/store/alertsStore'
 import { DEFAULT_BATTERY_CONFIG, deriveBatteryConfig } from '@/modules/battery/lib'
 import {
   type BatteryMode,
@@ -13,7 +23,25 @@ import {
 } from '@/modules/board/lib/boardSetup'
 import { useBoardStore } from '@/modules/board/store/boardStore'
 
-export const WIZARD_STEPS = ['scan', 'name', 'battery', 'confirm'] as const
+/** The wizard's buffered alert setup for every preset metric, flushed onto the Board on save. */
+export type DraftAlertSetupBag = Record<AlertPresetMetric, DraftAlertSetup>
+
+const DEFAULT_DRAFT_ALERT_SETUP = Object.fromEntries(
+  ALERT_PRESET_METRICS.map((metric): [AlertPresetMetric, DraftAlertSetup] => [
+    metric,
+    { level: NEW_BOARD_ALERT_PRESET_SELECTION[metric], rules: [] },
+  ]),
+) as DraftAlertSetupBag
+
+/** The durable `alertPreset` bag a draft setup persists as — its levels, without the draft rules. */
+export function draftAlertPresetSelection(setup: DraftAlertSetupBag): AlertPresetSelection {
+  return Object.fromEntries(
+    ALERT_PRESET_METRICS.map((metric) => [metric, setup[metric].level]),
+  ) as AlertPresetSelection
+}
+
+/** Canonical step order. `presets` is the per-board Alert Preset setup step. */
+export const WIZARD_STEPS = ['scan', 'name', 'battery', 'presets', 'confirm'] as const
 export type WizardStepId = (typeof WIZARD_STEPS)[number]
 
 /** Sub-phase of the Pair step: choosing a peripheral, or probing the chosen one. */
@@ -22,6 +50,8 @@ type PairPhase = 'select' | 'probing'
 interface AddBoardWizardState {
   step: number
   stepId: WizardStepId
+  /** Active steps for this run. */
+  steps: readonly WizardStepId[]
   pairPhase: PairPhase
   bleId: string
   bleName: string
@@ -36,6 +66,11 @@ interface AddBoardWizardState {
   manualMaxVoltage: string
   batteryWarning: string | null
   batterySummary: BatterySummary
+  /** Draft Board Top Speed + per-metric alert setup, persisted to the new Board on save. */
+  topSpeedKmh: number
+  alertSetup: DraftAlertSetupBag
+  /** True when the draft battery config is usable (gates SoC %-based presets). */
+  hasBatteryConfig: boolean
   canSave: boolean
 }
 
@@ -55,6 +90,8 @@ interface AddBoardWizardActions {
   setParallelCount: (v: number) => void
   setManualMinVoltage: (v: string) => void
   setManualMaxVoltage: (v: string) => void
+  setTopSpeedKmh: (v: number) => void
+  setAlertSetup: (metric: AlertPresetMetric, setup: DraftAlertSetup) => void
   save: () => void
 }
 
@@ -64,6 +101,9 @@ export function useAddBoardWizard(): UseAddBoardWizard {
   const { addBoard, setActiveBoard } = useBoardStore(
     useShallow((s) => ({ addBoard: s.addBoard, setActiveBoard: s.setActiveBoard })),
   )
+
+  // Alert setup is per-board now (#254), so every new board gets its own guided preset step.
+  const steps = WIZARD_STEPS
 
   const [step, setStep] = useState(0)
   const [pairPhase, setPairPhase] = useState<PairPhase>('select')
@@ -78,6 +118,11 @@ export function useAddBoardWizard(): UseAddBoardWizard {
   const [parallelCount, setParallelCount] = useState(DEFAULT_BATTERY_CONFIG.parallelCount)
   const [manualMinVoltage, setManualMinVoltage] = useState('60')
   const [manualMaxVoltage, setManualMaxVoltage] = useState('84')
+  const [topSpeedKmh, setTopSpeedKmh] = useState(DEFAULT_BOARD_TOP_SPEED_KMH)
+  const [alertSetup, setAlertSetup] = useState<DraftAlertSetupBag>(DEFAULT_DRAFT_ALERT_SETUP)
+
+  const setMetricAlertSetup = (metric: AlertPresetMetric, setup: DraftAlertSetup) =>
+    setAlertSetup((prev) => ({ ...prev, [metric]: setup }))
 
   const previewConfig: BatteryConfig =
     batteryMode === 'preset'
@@ -89,6 +134,7 @@ export function useAddBoardWizard(): UseAddBoardWizard {
         }
   const derivedBattery = deriveBatteryConfig(previewConfig)
   const batteryWarning = derivedBattery.warning
+  const hasBatteryConfig = batteryWarning == null
   const canSave = Boolean(name.trim()) && batteryWarning == null
   const batterySummary = getBatterySummary(
     false,
@@ -99,7 +145,7 @@ export function useAddBoardWizard(): UseAddBoardWizard {
     parallelCount,
   )
 
-  const next = () => setStep((s) => Math.min(s + 1, WIZARD_STEPS.length - 1))
+  const next = () => setStep((s) => Math.min(s + 1, steps.length - 1))
   const back = () => setStep((s) => Math.max(s - 1, 0))
 
   // Selecting a peripheral starts a Board Probe before the rest of the wizard.
@@ -147,14 +193,30 @@ export function useAddBoardWizard(): UseAddBoardWizard {
       description: description.trim() || undefined,
       link: draftLink,
       batteryConfig,
+      // Persist the draft alert setup onto the new Board (#254), then materialize its preset rules.
+      topSpeedKmh,
+      alertPreset: draftAlertPresetSelection(alertSetup),
+      alertPresetsOnboarded: true,
     })
     setActiveBoard(board.id)
+    void (async () => {
+      await useAlertsStore.getState().load(board.id)
+      // Flush the rider's own rules first: they carry no board id until one exists, and metrics
+      // holding them are `custom`, so the regeneration below never touches them.
+      for (const { rules } of Object.values(alertSetup)) {
+        for (const rule of rules) {
+          await useAlertsStore.getState().upsert({ ...rule, boardId: board.id })
+        }
+      }
+      await useAlertPresetStore.getState().regenerateAll()
+    })()
     router.dismissAll()
   }
 
   return {
     step,
-    stepId: WIZARD_STEPS[step],
+    stepId: steps[step] ?? steps[steps.length - 1]!,
+    steps,
     pairPhase,
     bleId,
     bleName,
@@ -169,6 +231,9 @@ export function useAddBoardWizard(): UseAddBoardWizard {
     manualMaxVoltage,
     batteryWarning,
     batterySummary,
+    topSpeedKmh,
+    alertSetup,
+    hasBatteryConfig,
     canSave,
     setStep,
     next,
@@ -185,6 +250,8 @@ export function useAddBoardWizard(): UseAddBoardWizard {
     setParallelCount,
     setManualMinVoltage,
     setManualMaxVoltage,
+    setTopSpeedKmh,
+    setAlertSetup: setMetricAlertSetup,
     save,
   }
 }

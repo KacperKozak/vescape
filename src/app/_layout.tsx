@@ -3,24 +3,33 @@ import { ClerkProvider } from '@clerk/expo'
 import { tokenCache } from '@clerk/expo/token-cache'
 import { resourceCache } from '@clerk/expo/resource-cache'
 import { useFonts } from 'expo-font'
-import { Stack } from 'expo-router'
+// App navigation chrome is intentionally JS-rendered. Native iOS headers apply system visual
+// treatments (including Liquid Glass) that conflict with Vescape's cross-platform header design.
+import { Stack } from 'expo-router/js-stack'
 import * as SplashScreen from 'expo-splash-screen'
 import { StatusBar } from 'expo-status-bar'
 import { useEffect } from 'react'
+import { View } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { configureReanimatedLogger } from 'react-native-reanimated'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
+import { Text } from '@/components/base/Text'
 import { DiagnosticErrorBoundary } from '@/modules/diagnostics/DiagnosticErrorBoundary'
 import { HeaderBackButton } from '@/components/base/HeaderBackButton'
+import { isDevelopmentApp } from '@/config/appVariant'
 import { initSentry } from '@/config/sentry'
 import { stackScreens } from '@/navigation/routes'
-import { useAlertsStore } from '@/modules/alerts/store/alertsStore'
+import { startAlertsBoardSync } from '@/bootstrap/alertsBoardSync'
 import { startAppDataSync } from '@/bootstrap/appDataSync'
 import { startBoardWarningsSync } from '@/modules/board/store/boardWarningsStore'
 import { useGroupRideStore } from '@/modules/group-ride/store/groupRideStore'
 import { useRiderStore } from '@/modules/group-ride/store/riderStore'
+import { ReleaseSurfaces } from '@/modules/release/components/ReleaseSurfaces'
+import { startAppStatusSync } from '@/modules/release/store/appStatusStore'
 import { useSettingsStore } from '@/modules/settings/store/settingsStore'
 import { theme } from '@/constants/theme'
+import { DeviceAuthSync } from '@/modules/profile/components/DeviceAuthSync'
 
 const clerkPublishableKey = requireClerkPublishableKey()
 
@@ -28,6 +37,49 @@ function requireClerkPublishableKey(): string {
   const key = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY
   if (!key) throw new Error('EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY is not configured')
   return key
+}
+
+function DevelopmentBadge() {
+  const insets = useSafeAreaInsets()
+  if (!isDevelopmentApp) return null
+
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        top: Math.max(2, insets.top - 6),
+        left: 0,
+        right: 0,
+        zIndex: 100,
+        alignItems: 'center',
+      }}
+    >
+      <View
+        style={{
+          paddingHorizontal: 5,
+          paddingVertical: 1,
+          borderWidth: 1,
+          borderColor: theme.status.warning.color,
+          borderRadius: 999,
+          backgroundColor: theme.status.warning.bg,
+        }}
+      >
+        <Text
+          style={{
+            color: theme.status.warning.text,
+            fontSize: 8,
+            lineHeight: 10,
+            fontWeight: '800',
+            letterSpacing: 0.6,
+            textTransform: 'uppercase',
+          }}
+        >
+          dev
+        </Text>
+      </View>
+    </View>
+  )
 }
 
 // Keep the native splash visible until Raleway loads so there is no font-flash
@@ -58,15 +110,18 @@ function RootLayout() {
 
   useEffect(() => {
     void useSettingsStore.getState().load()
-    void useAlertsStore.getState().load()
     void useRiderStore.getState().load()
     useGroupRideStore.getState().startObserving()
     const stopAppDataSync = startAppDataSync()
     const stopBoardWarningsSync = startBoardWarningsSync()
+    const stopAlertsBoardSync = startAlertsBoardSync()
+    const stopAppStatusSync = startAppStatusSync()
     return () => {
       useGroupRideStore.getState().stopObserving()
       stopAppDataSync()
       stopBoardWarningsSync()
+      stopAlertsBoardSync()
+      stopAppStatusSync()
     }
   }, [])
 
@@ -82,6 +137,7 @@ function RootLayout() {
       // blank the account UI or look like a sign-out.
       __experimental_resourceCache={resourceCache}
     >
+      <DeviceAuthSync />
       <DiagnosticErrorBoundary>
         <GestureHandlerRootView style={{ flex: 1 }}>
           <Stack
@@ -92,7 +148,9 @@ function RootLayout() {
               headerTitleAlign: 'center',
               headerShadowVisible: false,
               headerLeft: () => <HeaderBackButton />,
-              contentStyle: { backgroundColor: theme.palette.slate.bg },
+              headerLeftContainerStyle: { paddingLeft: 10 },
+              headerRightContainerStyle: { paddingRight: 10 },
+              cardStyle: { backgroundColor: theme.palette.slate.bg },
             }}
           >
             <Stack.Screen name={stackScreens.home} options={{ headerShown: false }} />
@@ -154,6 +212,9 @@ function RootLayout() {
             <Stack.Screen name={stackScreens.editBoard} options={{ title: 'Edit Board' }} />
             <Stack.Screen name={stackScreens.editBoardLink} options={{ title: 'Board Link' }} />
           </Stack>
+          {/* Above navigation so a Release surface covers every screen. Only ever one at a time. */}
+          <ReleaseSurfaces />
+          <DevelopmentBadge />
           <StatusBar style="light" />
         </GestureHandlerRootView>
       </DiagnosticErrorBoundary>

@@ -6,11 +6,11 @@ import UIKit
 
 private let ttsPrefix = "tts:"
 /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/alerts/AlertEngine.kt `ALERT_CATEGORY_SINGLE`
-/// @parity /modules/vescape-core/src/index.ts `AlertPresetCategory`
+/// @parity /modules/vescape-core/src/index.ts `AlertSoundCategory`
 internal let alertCategorySingle = "single"
 
 /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/alerts/AlertEngine.kt `ALERT_CATEGORY_GEIGER`
-/// @parity /modules/vescape-core/src/index.ts `AlertPresetCategory`
+/// @parity /modules/vescape-core/src/index.ts `AlertSoundCategory`
 internal let alertCategoryGeiger = "geiger"
 
 /// Bundled alert sound preset. Mirrors Android `AlertSoundPreset`.

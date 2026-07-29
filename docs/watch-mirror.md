@@ -3,6 +3,40 @@
 The Watch Mirror is a Wear OS companion app under `watch/wearos/`. The phone app owns the Board
 Session and pushes Watch Frames from native code; the watch only renders received frames.
 
+## Google Play Release
+
+Phone and Wear builds are separate signed AABs under the existing `app.vescape` Play listing:
+
+```text
+:app:bundleRelease    -> mobile internal       -> mobile production draft
+:wearos:bundleRelease -> wear:internal completed -> wear:production draft
+```
+
+Both use the existing Android upload key. `APP_VERSION` supplies the shared package version name.
+Phone version codes keep `major * 10000 + minor * 100 + patch`; Wear codes use
+`1_000_000_000 + phoneVersionCode`. The disjoint range keeps every artifact code unique in the
+shared listing and remains monotonic with package versions.
+
+A `production-<version>` workflow retains both artifacts even when a Play upload fails:
+
+```text
+android/app/build/outputs/bundle/release/app-release.aab
+android/wearos/build/outputs/bundle/release/wearos-release.aab
+```
+
+One-time Play Console setup remains human-owned:
+
+1. Add the Wear OS form factor to the existing app.
+2. Upload an accurate watch screenshot. Capture from the physical watch with
+   `adb -s <watch-serial> exec-out screencap -p > wear-screenshot.png`.
+3. Enable the dedicated Wear OS testing and production tracks.
+4. Upload the first Wear AAB manually if Console requires it while enabling the form factor.
+5. Opt into Wear OS review.
+
+After CI publishes a test build, install both phone and watch apps from Play on the paired physical
+devices. Launch the Watch Mirror, connect a Board on the phone, and confirm live telemetry reaches
+the watch. This validates Play signing and Data Layer delivery together; local debug installs do not.
+
 ## Local Install
 
 Pair/connect the watch with wireless ADB, then install the Wear app directly:

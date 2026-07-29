@@ -13,18 +13,17 @@ import {
   SignOutIcon,
   ThermometerSimpleIcon,
   UsersIcon,
+  WarningIcon,
   XIcon,
   type Icon,
 } from 'phosphor-react-native'
 import { router } from 'expo-router'
-
 import { Button } from '@/components/base/Button'
 import { Placeholder } from '@/components/base/Placeholder'
 import { ColorPicker } from '@/components/forms/ColorPicker'
 import { CanvasWidget } from '@/components/widgets/CanvasWidget'
 import { InputWidget } from '@/components/widgets/InputWidget'
 import { LinkWidget } from '@/components/widgets/LinkWidget'
-import { widgetSurface } from '@/components/widgets/widgetSurface'
 import { riderColorOptions } from '@/modules/group-ride/constants/riderColors'
 import {
   batteryLevel,
@@ -72,44 +71,40 @@ function RiderNameWidget() {
   const setName = useRiderStore((s) => s.setName)
   const riderColor = useRiderStore((s) => s.riderColor)
   const setColor = useRiderStore((s) => s.setColor)
-  const [pickerOpen, setPickerOpen] = useState(false)
 
   return (
-    <View style={styles.nameGroup}>
-      <InputWidget
-        label="Your name"
-        value={riderName}
-        placeholder="Add a display name"
-        maxLength={32}
-        onCommit={(value) => void setName(value)}
-        accessibilityLabel="Rider display name"
-        accessory={
-          <Pressable
-            onPress={() => setPickerOpen((open) => !open)}
-            hitSlop={8}
-            accessibilityLabel="Pick your color"
-            style={[
-              styles.colorDot,
-              riderColor ? { backgroundColor: riderColor } : styles.colorDotEmpty,
-              pickerOpen && styles.colorDotActive,
-            ]}
-          >
-            {riderColor ? null : (
-              <PaletteIcon size={16} color={theme.palette.slate.textSecondary} weight="bold" />
-            )}
-          </Pressable>
-        }
-      />
-      {pickerOpen ? (
-        <View style={styles.pickerPanel}>
+    <InputWidget
+      label="Your name"
+      value={riderName}
+      placeholder="Add a display name"
+      maxLength={32}
+      onCommit={(value) => void setName(value)}
+      accessibilityLabel="Rider display name"
+      commitOnBlur={false}
+      leading={
+        <View
+          style={[
+            styles.colorDot,
+            riderColor ? { backgroundColor: riderColor } : styles.colorDotEmpty,
+          ]}
+          accessibilityLabel={riderColor ? `Your color ${riderColor}` : 'No color selected'}
+        >
+          {riderColor ? null : (
+            <PaletteIcon size={14} color={theme.palette.slate.textSecondary} weight="duotone" />
+          )}
+        </View>
+      }
+      editingContent={
+        <View style={styles.colorEditor}>
+          <Text style={styles.colorLabel}>Color</Text>
           <ColorPicker
             value={riderColor}
             colors={riderColorOptions}
             onChange={(color) => void setColor(color)}
           />
         </View>
-      ) : null}
-    </View>
+      }
+    />
   )
 }
 
@@ -130,9 +125,35 @@ function GroupRideWidget() {
   const activeRide = rides.find((r) => r.id === activeRideId)
   const active = activeRideId != null
   const connected = connection === 'connected'
+  // Native gates the relay socket when the installed version is Online/App Blocked and reports it
+  // as `blocked`; Group Ride is unusable until the app updates, so replace the live UI entirely.
+  const blocked = connection === 'blocked'
   const showNearby = !active && nearby.length > 0 && !nearbyDismissed
   const accent = theme.palette.groupRide.color
   const rideName = activeRide?.name?.trim() || 'Your group ride'
+
+  if (blocked) {
+    return (
+      <CanvasWidget
+        icon={BroadcastIcon}
+        title="Group Ride"
+        accent={accent}
+        height={240}
+        footer={
+          <Button
+            label="Create"
+            icon={PlusIcon}
+            onPress={() => {}}
+            disabled
+            style={[styles.fill, styles.actionBtn]}
+            accessibilityLabel="Create group ride"
+          />
+        }
+      >
+        <Placeholder icon={WarningIcon} description="Not available in this version." />
+      </CanvasWidget>
+    )
+  }
 
   const footer = active ? (
     <Button
@@ -393,27 +414,28 @@ const styles = StyleSheet.create({
   list: {
     gap: 12,
   },
-  nameGroup: {
-    gap: 8,
-  },
   colorDot: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: theme.palette.slate.border,
   },
   colorDotEmpty: {
     backgroundColor: theme.palette.slate.surfaceDeep,
   },
-  colorDotActive: {
-    borderColor: theme.palette.slate.textPrimary,
+  colorEditor: {
+    marginLeft: 36,
+    gap: 8,
   },
-  pickerPanel: {
-    ...widgetSurface,
-    padding: 16,
+  colorLabel: {
+    color: theme.palette.slate.textMuted,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
   },
   fill: {
     flex: 1,

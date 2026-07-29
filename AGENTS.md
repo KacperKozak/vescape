@@ -13,6 +13,12 @@ Always use **bun** for all package management and script execution:
 
 Do **not** use `npm`, `yarn`, `npx`, or `pnpm`.
 
+## Formatter
+
+Use **Oxfmt** (`bun run format`) for repository formatting. Do not run Prettier or
+apply Prettier-formatted rewrites; Prettier rewrites the style globally and causes
+`Formatter mismatch caught: Prettier rewrote style globally`.
+
 ## Git Branch Names
 
 Do **not** add generated prefixes to branch names, including agent/tool names like `codex/`,

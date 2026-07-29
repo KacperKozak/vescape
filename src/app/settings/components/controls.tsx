@@ -1,7 +1,14 @@
 import { ScrollView, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/base/Text'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import {
+  cancelAnimation,
+  Easing,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated'
 import {
   ArrowUpIcon,
   ArrowsClockwiseIcon,
@@ -40,8 +47,10 @@ import {
   PillSelector,
 } from '@/components/controls/PillSelector'
 import { MapOptionSelector } from '@/components/controls/MapOptionSelector'
+import { AlertPresetControl } from '@/modules/alerts/components/AlertPresetControl'
+import type { AlertPresetLevel, AlertPresetMetric } from '@/modules/alerts/lib/alertPresets'
 import { ShowcaseCard } from '@/components/dev/ShowcaseCard'
-import { ChipRow } from '@/components/dev/ShowcaseControls'
+import { ChipRow, ToggleRow } from '@/components/dev/ShowcaseControls'
 import { theme } from '@/constants/theme'
 
 function ZonePillsShowcase() {
@@ -427,14 +436,102 @@ function MapOptionSelectorShowcase() {
   )
 }
 
+const PRESET_METRICS: AlertPresetMetric[] = [
+  'speed',
+  'duty',
+  'battery',
+  'motor-temp',
+  'controller-temp',
+]
+
+// Full-scale per metric, matching AlertPresetControl's gauge — drives the demo needle sweep.
+const PRESET_DEMO_MAX: Record<AlertPresetMetric, number> = {
+  speed: 50,
+  duty: 100,
+  battery: 100,
+  'motor-temp': 80,
+  'controller-temp': 80,
+}
+
+// A couple of custom (non-preset) markers so the showcase demonstrates preset + custom layering.
+const PRESET_DEMO_CUSTOM_ALERTS: Record<AlertPresetMetric, { id: string; threshold: number }[]> = {
+  speed: [{ id: 'demo-speed', threshold: 45 }],
+  duty: [{ id: 'demo-duty', threshold: 92 }],
+  battery: [{ id: 'demo-battery', threshold: 10 }],
+  'motor-temp': [{ id: 'demo-motor', threshold: 78 }],
+  'controller-temp': [{ id: 'demo-controller', threshold: 78 }],
+}
+
+function AlertPresetControlShowcase() {
+  const [metric, setMetric] = useState<AlertPresetMetric>('speed')
+  const [level, setLevel] = useState<AlertPresetLevel>('normal')
+  const [live, setLive] = useState(false)
+  const [custom, setCustom] = useState(false)
+  const [editable, setEditable] = useState(true)
+  const [disabled, setDisabled] = useState(false)
+  const liveValue = useSharedValue<number | null>(null)
+
+  useEffect(() => {
+    if (!live) {
+      liveValue.value = null
+      return
+    }
+    liveValue.value = 0
+    liveValue.value = withRepeat(
+      withTiming(PRESET_DEMO_MAX[metric], { duration: 2200, easing: Easing.inOut(Easing.quad) }),
+      -1,
+      true,
+    )
+    return () => cancelAnimation(liveValue)
+  }, [live, metric, liveValue])
+
+  return (
+    <ShowcaseCard
+      name="AlertPresetControl"
+      controls={
+        <>
+          <ChipRow
+            label="metric"
+            options={PRESET_METRICS}
+            selected={metric}
+            onSelect={(v) => setMetric(v as AlertPresetMetric)}
+          />
+          <ToggleRow label="live session" value={live} onToggle={setLive} />
+          <ToggleRow label="custom markers" value={custom} onToggle={setCustom} />
+          <ToggleRow label="editable" value={editable} onToggle={setEditable} />
+          <ToggleRow label="disabled" value={disabled} onToggle={setDisabled} />
+        </>
+      }
+    >
+      <AlertPresetControl
+        metric={metric}
+        level={level}
+        onLevelChange={setLevel}
+        liveValue={live ? liveValue : undefined}
+        boardTopSpeedKmh={50}
+        hasBatteryConfig
+        customAlerts={
+          custom
+            ? PRESET_DEMO_CUSTOM_ALERTS[metric].map((a) => ({ ...a, thresholdMax: null }))
+            : undefined
+        }
+        disabled={disabled}
+        onCustomize={editable ? () => setLevel('custom') : undefined}
+        onDiscardCustom={editable ? () => setLevel('normal') : undefined}
+      />
+    </ShowcaseCard>
+  )
+}
+
 export default function ControlsPage() {
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
       <ScrollView contentContainerStyle={styles.content}>
         <IconHero
           icon={SwatchesIcon}
-          description="CircleButton, FloatingBar, PrevNextSelector, PillSelector, MapOptionSelector."
+          description="CircleButton, FloatingBar, PrevNextSelector, PillSelector, MapOptionSelector, AlertPresetControl."
         />
+        <AlertPresetControlShowcase />
         <CircleButtonShowcase />
         <FloatingBarShowcase />
         <FloatingActionPillShowcase />

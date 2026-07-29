@@ -10,6 +10,8 @@ const BASE: AppSettings = {
   selectedBoardId: null,
   lastGpsLatitude: null,
   lastGpsLongitude: null,
+  directionPointLatitude: null,
+  directionPointLongitude: null,
   movingSpeedThresholdKmh: 3,
   freeSpinMaxSpeedDeltaKmh: 12,
   freeSpinStationaryBoardCapKmh: 15,
@@ -35,7 +37,8 @@ const BASE: AppSettings = {
   riderId: null,
   riderName: null,
   riderColor: null,
-  legalMode: null,
+  legalPolicy: null,
+  dismissedCommunityMessageIds: [],
 }
 
 let settings: AppSettings = BASE

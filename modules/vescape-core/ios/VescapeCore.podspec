@@ -10,14 +10,17 @@ Pod::Spec.new do |s|
   s.license        = 'MIT'
   s.author         = 'vesc-app-poc'
   s.homepage       = 'https://github.com/vesc-app-poc'
-  # 16.4 to match the app deployment target: the Board Session Live Activity (ActivityKit) driven
-  # from this pod needs 16.1+, and the app already ships 16.4, so nothing runs below it.
-  s.platform       = :ios, '16.4'
+  # 17.0 to match the app deployment target: the Board Session Live Activity (ActivityKit) driven
+  # from this pod needs 16.1+, and the app already ships 17.0, so nothing runs below it.
+  s.platform       = :ios, '17.0'
   s.swift_version  = '5.9'
   s.source         = { :git => '' }
 
   s.dependency 'ExpoModulesCore'
   # Single on-device database (mirrors Android Room). App data + telemetry live in one GRDB file.
+  # 6.24.1 is the newest GRDB published to CocoaPods trunk; the 6.25–6.29 tags are SPM-only. The
+  # SPM test target in `../Package.swift` therefore pins 6.29.3, the first 6.x that compiles under
+  # SPM on current Xcode. Same major, same DatabaseMigrator semantics — see the note there.
   s.dependency 'GRDB.swift', '~> 6.24.1'
 
   # Swift/Objective-C compatibility
@@ -37,7 +40,12 @@ Pod::Spec.new do |s|
   # `fixtures` is a symlink to `../../shared/fixtures` — bundled replay fixtures for the dev-mode
   # Replay UI (#230), same single-source pattern as `cell-presets.json`.
   s.resource_bundles = {
-    'VescapeCoreAssets' => ['cell-presets.json', 'alerts/*.wav', 'fixtures/*.jsonl']
+    'VescapeCoreAssets' => [
+      'cell-presets.json',
+      'legal-policies.json',
+      'alerts/*.wav',
+      'fixtures/*.jsonl'
+    ]
   }
 
   s.test_spec 'Tests' do |test_spec|
