@@ -1,330 +1,328 @@
 import { beforeEach, expect, mock, test } from 'bun:test'
-import type { MapPoint } from 'vescape-core'
+import type { MapPoint, MapPointCategory, MapPointPatch, MapPointReaction } from 'vescape-core'
 
 const actualVescapeCore = await import('@/../modules/vescape-core/src/index')
 
-let persistedMapPoints: MapPoint[] = []
-
-const getMapPoints = mock(async () => persistedMapPoints)
-const upsertMapPoint = mock(async (point: MapPoint) => {
-  persistedMapPoints = [
-    ...persistedMapPoints.filter((candidate) => candidate.id !== point.id),
-    point,
-  ]
-})
-const replaceDirectionMapPoint = mock(async (point: MapPoint) => {
-  persistedMapPoints = [
-    ...persistedMapPoints.filter((candidate) => candidate.kind !== 'direction'),
-    { ...point, kind: 'direction' },
-  ]
-})
-const deleteMapPoint = mock(async (id: string) => {
-  persistedMapPoints = persistedMapPoints.filter((candidate) => candidate.id !== id)
-})
-
-const vescBleMock = {
-  ...actualVescapeCore,
-  getMapPoints,
-  upsertMapPoint,
-  replaceDirectionMapPoint,
-  deleteMapPoint,
+/** One server-shaped Map Point; only the fields a test cares about need overriding. */
+function serverPoint(overrides: Partial<MapPoint> & Pick<MapPoint, 'id'>): MapPoint {
+  return {
+    category: 'drop',
+    latitude: 52.1,
+    longitude: 21.1,
+    name: null,
+    description: null,
+    score: 0,
+    myReaction: null,
+    ownedByMe: false,
+    distanceMeters: 100,
+    createdAt: '2026-07-29T10:00:00.000Z',
+    updatedAt: '2026-07-29T10:00:00.000Z',
+    ...overrides,
+  }
 }
 
-mock.module('vescape-core', () => vescBleMock)
-mock.module('../../modules/vescape-core/src/index', () => vescBleMock)
+/** Native rejects with a coded error; the store turns the code into rider-facing words. */
+class ApiError extends Error {
+  constructor(readonly code: string) {
+    super(code)
+  }
+}
 
-beforeEach(async () => {
-  persistedMapPoints = []
-  getMapPoints.mockClear()
-  upsertMapPoint.mockClear()
-  replaceDirectionMapPoint.mockClear()
-  deleteMapPoint.mockClear()
-  const { useMapStore } = await import('@/modules/map/store/mapStore')
+let nearbyResult: { items: MapPoint[]; truncated: boolean } = { items: [], truncated: false }
+let nearbyError: Error | null = null
+let writeError: Error | null = null
+let settings = {
+  directionPointLatitude: null as number | null,
+  directionPointLongitude: null as number | null,
+}
+
+/** Set to hold the next read open, so a second read can be started mid-flight. */
+let releaseNearby: (() => void) | null = null
+
+const getNearbyMapPoints = mock(async (_lat: number, _lng: number, _radius: number) => {
+  if (releaseNearby !== null) {
+    await new Promise<void>((resolve) => {
+      releaseNearby = resolve
+    })
+  }
+  if (nearbyError) throw nearbyError
+  return nearbyResult
+})
+const createMapPoint = mock(
+  async (values: { category: MapPointCategory; latitude: number; longitude: number }) => {
+    if (writeError) throw writeError
+    return serverPoint({ id: 'created-1', ...values })
+  },
+)
+const updateMapPoint = mock(async (id: string, patch: MapPointPatch) => {
+  if (writeError) throw writeError
+  return serverPoint({ id, ...patch })
+})
+const deleteMapPoint = mock(async (_id: string) => {
+  if (writeError) throw writeError
+})
+const setMapPointReaction = mock(async (_id: string, _reaction: MapPointReaction | null) => {
+  if (writeError) throw writeError
+})
+const setDirectionPoint = mock(async (latitude: number | null, longitude: number | null) => {
+  settings = { directionPointLatitude: latitude, directionPointLongitude: longitude }
+})
+const getSettings = mock(async () => settings)
+
+mock.module('vescape-core', () => ({
+  ...actualVescapeCore,
+  getNearbyMapPoints,
+  createMapPoint,
+  updateMapPoint,
+  deleteMapPoint,
+  setMapPointReaction,
+  setDirectionPoint,
+  getSettings,
+}))
+
+const { useMapStore } = await import('@/modules/map/store/mapStore')
+
+beforeEach(() => {
+  nearbyResult = { items: [], truncated: false }
+  nearbyError = null
+  releaseNearby = null
+  writeError = null
+  settings = { directionPointLatitude: null, directionPointLongitude: null }
   useMapStore.setState({
     mapPoints: [],
+    truncated: false,
+    loading: false,
+    error: null,
+    directionPoint: null,
     selectedMapPointId: null,
-    hiddenMapPointKinds: [],
-    loaded: false,
+    hiddenMapPointCategories: [],
+    lastRead: null,
   })
-})
-
-test('loads Map Points from native storage', async () => {
-  const { useMapStore } = await import('@/modules/map/store/mapStore')
-  const point: MapPoint = {
-    id: 'drop-1',
-    kind: 'drop',
-    latitude: 52.1,
-    longitude: 21.1,
-    createdAt: 1000,
-    updatedAt: 1000,
+  for (const fn of [
+    getNearbyMapPoints,
+    createMapPoint,
+    updateMapPoint,
+    deleteMapPoint,
+    setMapPointReaction,
+    setDirectionPoint,
+    getSettings,
+  ]) {
+    fn.mockClear()
   }
-  persistedMapPoints = [point]
-
-  await useMapStore.getState().load()
-
-  expect(useMapStore.getState().loaded).toBe(true)
-  expect(useMapStore.getState().mapPoints).toEqual([point])
 })
 
-test('stores no independent targetLocation state', async () => {
-  const { useMapStore } = await import('@/modules/map/store/mapStore')
+test('a nearby read renders the server answer nearest first', async () => {
+  nearbyResult = {
+    items: [
+      serverPoint({ id: 'far', distanceMeters: 900 }),
+      serverPoint({ id: 'near', distanceMeters: 20 }),
+    ],
+    truncated: true,
+  }
 
-  await useMapStore.getState().load()
+  await useMapStore.getState().refreshNearby(52.1, 21.1, 14)
 
-  expect(Object.keys(useMapStore.getState())).not.toContain('targetLocation')
-  expect(Object.keys(useMapStore.getState())).not.toContain('setTargetLocation')
-  expect(Object.keys(useMapStore.getState())).not.toContain('clearTargetLocation')
+  const state = useMapStore.getState()
+  expect(state.mapPoints.map((point) => point.id)).toEqual(['near', 'far'])
+  expect(state.truncated).toBe(true)
+  expect(state.error).toBeNull()
 })
 
-test('saves and removes non-direction Map Points through native storage', async () => {
-  const { useMapStore } = await import('@/modules/map/store/mapStore')
+test('a camera nudge inside the last radius does not re-read', async () => {
+  await useMapStore.getState().refreshNearby(52.1, 21.1, 14)
+  await useMapStore.getState().refreshNearby(52.1001, 21.1001, 14)
 
-  const point = await useMapStore.getState().saveMapPoint('drop', 52.1, 21.1)
+  expect(getNearbyMapPoints).toHaveBeenCalledTimes(1)
+})
 
-  expect(point.kind).toBe('drop')
-  expect(useMapStore.getState().mapPoints).toEqual([point])
-  expect(upsertMapPoint).toHaveBeenCalledWith(point)
-  expect(replaceDirectionMapPoint).not.toHaveBeenCalled()
+/** The new circle sits inside the one already read, so its points are already on screen. */
+test('zooming into an already-read area does not re-read', async () => {
+  nearbyResult = { items: [serverPoint({ id: 'a' })], truncated: false }
+  await useMapStore.getState().refreshNearby(52.1, 21.1, 12)
+  await useMapStore.getState().refreshNearby(52.1, 21.1, 15)
 
-  await useMapStore.getState().removeMapPoint(point.id)
+  expect(getNearbyMapPoints).toHaveBeenCalledTimes(1)
+})
 
+/** Unless the server said there were more than it returned — then zooming in reveals them. */
+test('zooming into a truncated area re-reads', async () => {
+  nearbyResult = { items: [serverPoint({ id: 'a' })], truncated: true }
+  await useMapStore.getState().refreshNearby(52.1, 21.1, 12)
+  await useMapStore.getState().refreshNearby(52.1, 21.1, 15)
+
+  expect(getNearbyMapPoints).toHaveBeenCalledTimes(2)
+})
+
+test('panning far enough re-reads around the new centre', async () => {
+  await useMapStore.getState().refreshNearby(52.1, 21.1, 14)
+  await useMapStore.getState().refreshNearby(52.4, 21.6, 14)
+
+  expect(getNearbyMapPoints).toHaveBeenCalledTimes(2)
+})
+
+/** Map Points are server-owned, so a failed read has nothing to fall back on. */
+test('a failed read empties the map and reports why', async () => {
+  nearbyResult = { items: [serverPoint({ id: 'a' })], truncated: false }
+  await useMapStore.getState().refreshNearby(52.1, 21.1, 14)
+
+  nearbyError = new ApiError('MAP_POINT_UNREACHABLE')
+  await useMapStore.getState().reload()
+
+  const state = useMapStore.getState()
+  expect(state.mapPoints).toEqual([])
+  expect(state.error).toBe('Could not reach the server. Map features need a connection.')
+})
+
+/** Otherwise a rider parked on the spot would sit on an empty map until they panned far enough. */
+test('a still camera retries after a failed read', async () => {
+  nearbyError = new ApiError('MAP_POINT_UNREACHABLE')
+  await useMapStore.getState().refreshNearby(52.1, 21.1, 14)
+
+  nearbyError = null
+  nearbyResult = { items: [serverPoint({ id: 'a' })], truncated: false }
+  await useMapStore.getState().refreshNearby(52.1, 21.1, 14)
+
+  expect(getNearbyMapPoints).toHaveBeenCalledTimes(2)
+  expect(useMapStore.getState().mapPoints.map((point) => point.id)).toEqual(['a'])
+  expect(useMapStore.getState().error).toBeNull()
+})
+
+/**
+ * The camera only idles again when the rider moves it again, so a target dropped mid-flight would
+ * strand the map on the previous area.
+ */
+test('a camera move during a read is served once the read settles', async () => {
+  nearbyResult = { items: [serverPoint({ id: 'first' })], truncated: false }
+  releaseNearby = () => {}
+  const first = useMapStore.getState().refreshNearby(52.1, 21.1, 14)
+
+  const second = useMapStore.getState().refreshNearby(52.4, 21.6, 14)
+  nearbyResult = { items: [serverPoint({ id: 'second' })], truncated: false }
+  releaseNearby?.()
+  releaseNearby = null
+  await Promise.all([first, second])
+
+  expect(getNearbyMapPoints).toHaveBeenCalledTimes(2)
+  expect(getNearbyMapPoints.mock.calls[1]?.slice(0, 2)).toEqual([52.4, 21.6])
+  expect(useMapStore.getState().mapPoints.map((point) => point.id)).toEqual(['second'])
+  expect(useMapStore.getState().loading).toBe(false)
+})
+
+test('creating a Map Point adds the server row, not a local guess', async () => {
+  const point = await useMapStore.getState().addMapPoint('bonk', 52.2, 21.2)
+
+  expect(createMapPoint).toHaveBeenCalledWith({
+    category: 'bonk',
+    latitude: 52.2,
+    longitude: 21.2,
+  })
+  expect(point?.id).toBe('created-1')
+  expect(useMapStore.getState().mapPoints.map((candidate) => candidate.id)).toEqual(['created-1'])
+})
+
+test('a refused write leaves the map alone and explains itself', async () => {
+  writeError = new ApiError('MAP_POINT_SIGN_IN_REQUIRED')
+
+  const point = await useMapStore.getState().addMapPoint('drop', 52.2, 21.2)
+
+  expect(point).toBeNull()
   expect(useMapStore.getState().mapPoints).toEqual([])
-  expect(deleteMapPoint).toHaveBeenCalledWith(point.id)
+  expect(useMapStore.getState().error).toBe('Sign in to add or change map features.')
 })
 
-test('replacing direction point leaves non-direction points intact', async () => {
-  const { useMapStore } = await import('@/modules/map/store/mapStore')
-  const drop: MapPoint = {
-    id: 'drop-1',
-    kind: 'drop',
-    latitude: 52.1,
-    longitude: 21.1,
-    createdAt: 1000,
-    updatedAt: 1000,
-  }
-  const oldDirection: MapPoint = {
-    id: 'direction-1',
-    kind: 'direction',
-    latitude: 52.2,
-    longitude: 21.2,
-    createdAt: 1100,
-    updatedAt: 1100,
-  }
-  useMapStore.setState({ mapPoints: [drop, oldDirection], loaded: true })
+test('voting is optimistic and adjusts the score locally', async () => {
+  nearbyResult = { items: [serverPoint({ id: 'a', score: 3 })], truncated: false }
+  await useMapStore.getState().refreshNearby(52.1, 21.1, 14)
 
-  const next = await useMapStore.getState().replaceDirectionPoint(53.3, 22.3)
+  await useMapStore.getState().setMapPointReaction('a', 'up')
+  expect(useMapStore.getState().mapPoints[0]).toMatchObject({ myReaction: 'up', score: 4 })
 
-  expect(next.id).toBe(oldDirection.id)
-  expect(next.createdAt).toBe(oldDirection.createdAt)
-  expect(next.kind).toBe('direction')
-  expect(
-    useMapStore.getState().mapPoints.filter((point) => point.kind === 'direction'),
-  ).toHaveLength(1)
-  expect(useMapStore.getState().mapPoints.find((point) => point.id === drop.id)).toEqual(drop)
-  expect(replaceDirectionMapPoint).toHaveBeenCalledWith(
-    expect.objectContaining({ id: oldDirection.id }),
+  await useMapStore.getState().setMapPointReaction('a', 'down')
+  expect(useMapStore.getState().mapPoints[0]).toMatchObject({ myReaction: 'down', score: 2 })
+
+  await useMapStore.getState().setMapPointReaction('a', null)
+  expect(useMapStore.getState().mapPoints[0]).toMatchObject({ myReaction: null, score: 3 })
+})
+
+test('a rejected vote rolls back to the previous reaction', async () => {
+  nearbyResult = { items: [serverPoint({ id: 'a', score: 3, myReaction: 'up' })], truncated: false }
+  await useMapStore.getState().refreshNearby(52.1, 21.1, 14)
+  writeError = new ApiError('MAP_POINT_UNREACHABLE')
+
+  const result = await useMapStore.getState().setMapPointReaction('a', 'down')
+
+  expect(result).toBeNull()
+  expect(useMapStore.getState().mapPoints[0]).toMatchObject({ myReaction: 'up', score: 3 })
+  expect(useMapStore.getState().error).toBe(
+    'Could not reach the server. Map features need a connection.',
   )
 })
 
-test('saving direction point uses singleton replacement path', async () => {
-  const { useMapStore } = await import('@/modules/map/store/mapStore')
-  const oldDirection: MapPoint = {
-    id: 'direction-1',
-    kind: 'direction',
-    latitude: 52.2,
-    longitude: 21.2,
-    createdAt: 1100,
-    updatedAt: 1100,
-  }
-  useMapStore.setState({ mapPoints: [oldDirection], loaded: true })
+test('deleting drops the point and its selection', async () => {
+  nearbyResult = { items: [serverPoint({ id: 'a', ownedByMe: true })], truncated: false }
+  await useMapStore.getState().refreshNearby(52.1, 21.1, 14)
+  useMapStore.getState().selectMapPoint('a')
 
-  const next = await useMapStore.getState().saveMapPoint('direction', 53.3, 22.3)
+  const removed = await useMapStore.getState().removeMapPoint('a')
 
-  expect(next.id).toBe(oldDirection.id)
-  expect(upsertMapPoint).not.toHaveBeenCalled()
-  expect(replaceDirectionMapPoint).toHaveBeenCalledWith(
-    expect.objectContaining({
-      id: oldDirection.id,
-      kind: 'direction',
-      latitude: 53.3,
-      longitude: 22.3,
-    }),
-  )
-  expect(
-    useMapStore.getState().mapPoints.filter((point) => point.kind === 'direction'),
-  ).toHaveLength(1)
+  expect(removed).toBe(true)
+  expect(useMapStore.getState().mapPoints).toEqual([])
+  expect(useMapStore.getState().selectedMapPointId).toBeNull()
 })
 
-test('clears direction point through native storage', async () => {
-  const { useMapStore } = await import('@/modules/map/store/mapStore')
-  const direction: MapPoint = {
-    id: 'direction-1',
-    kind: 'direction',
-    latitude: 52.2,
-    longitude: 21.2,
-    createdAt: 1100,
-    updatedAt: 1100,
-  }
-  useMapStore.setState({ mapPoints: [direction], loaded: true })
+test('a failed delete keeps the point on the map', async () => {
+  nearbyResult = { items: [serverPoint({ id: 'a' })], truncated: false }
+  await useMapStore.getState().refreshNearby(52.1, 21.1, 14)
+  writeError = new ApiError('MAP_POINT_NOT_YOURS')
+
+  const removed = await useMapStore.getState().removeMapPoint('a')
+
+  expect(removed).toBe(false)
+  expect(useMapStore.getState().mapPoints.map((point) => point.id)).toEqual(['a'])
+  expect(useMapStore.getState().error).toBe('Only the rider who added this feature can change it.')
+})
+
+test('editing replaces the point with the server answer', async () => {
+  nearbyResult = { items: [serverPoint({ id: 'a' })], truncated: false }
+  await useMapStore.getState().refreshNearby(52.1, 21.1, 14)
+
+  const point = await useMapStore.getState().editMapPoint('a', { name: 'Kicker' })
+
+  expect(updateMapPoint).toHaveBeenCalledWith('a', { name: 'Kicker' })
+  expect(point?.name).toBe('Kicker')
+  expect(useMapStore.getState().mapPoints[0].name).toBe('Kicker')
+})
+
+test('a read drops a selection the server no longer returns', async () => {
+  nearbyResult = { items: [serverPoint({ id: 'a' })], truncated: false }
+  await useMapStore.getState().refreshNearby(52.1, 21.1, 14)
+  useMapStore.getState().selectMapPoint('a')
+
+  nearbyResult = { items: [serverPoint({ id: 'b' })], truncated: false }
+  await useMapStore.getState().reload()
+
+  expect(useMapStore.getState().selectedMapPointId).toBeNull()
+})
+
+/** The direction target is personal client state and never reaches the Map Point API. */
+test('the direction point round-trips through native settings', async () => {
+  await useMapStore.getState().setDirectionPoint(52.5, 21.5)
+  expect(setDirectionPoint).toHaveBeenCalledWith(52.5, 21.5)
+
+  useMapStore.setState({ directionPoint: null })
+  await useMapStore.getState().loadDirectionPoint()
+  expect(useMapStore.getState().directionPoint).toEqual({ latitude: 52.5, longitude: 21.5 })
 
   await useMapStore.getState().clearDirectionPoint()
-
-  expect(useMapStore.getState().mapPoints).toEqual([])
-  expect(deleteMapPoint).toHaveBeenCalledWith(direction.id)
+  expect(setDirectionPoint).toHaveBeenLastCalledWith(null, null)
+  expect(useMapStore.getState().directionPoint).toBeNull()
+  expect(createMapPoint).not.toHaveBeenCalled()
 })
 
-test('toggles one non-direction Map Point selection at a time', async () => {
-  const { useMapStore } = await import('@/modules/map/store/mapStore')
-  const first: MapPoint = {
-    id: 'drop-1',
-    kind: 'drop',
-    latitude: 52.1,
-    longitude: 21.1,
-    createdAt: 1000,
-    updatedAt: 1000,
-  }
-  const second: MapPoint = {
-    id: 'bonk-1',
-    kind: 'bonk',
-    latitude: 52.2,
-    longitude: 21.2,
-    createdAt: 1100,
-    updatedAt: 1100,
-  }
-  useMapStore.setState({ mapPoints: [first, second], selectedMapPointId: null, loaded: true })
+test('category visibility toggles on and off', () => {
+  useMapStore.getState().toggleMapPointCategoryVisibility('drop')
+  expect(useMapStore.getState().hiddenMapPointCategories).toEqual(['drop'])
 
-  useMapStore.getState().toggleMapPointSelection(first.id)
-
-  expect(useMapStore.getState().selectedMapPointId).toBe(first.id)
-
-  useMapStore.getState().toggleMapPointSelection(second.id)
-
-  expect(useMapStore.getState().selectedMapPointId).toBe(second.id)
-
-  useMapStore.getState().toggleMapPointSelection(second.id)
-
-  expect(useMapStore.getState().selectedMapPointId).toBe(null)
-})
-
-test('ignores direction point selection', async () => {
-  const { useMapStore } = await import('@/modules/map/store/mapStore')
-  const direction: MapPoint = {
-    id: 'direction-1',
-    kind: 'direction',
-    latitude: 52.2,
-    longitude: 21.2,
-    createdAt: 1100,
-    updatedAt: 1100,
-  }
-  useMapStore.setState({ mapPoints: [direction], selectedMapPointId: null, loaded: true })
-
-  useMapStore.getState().toggleMapPointSelection(direction.id)
-
-  expect(useMapStore.getState().selectedMapPointId).toBe(null)
-})
-
-test('clears selected non-direction Map Points without clearing direction point', async () => {
-  const { useMapStore } = await import('@/modules/map/store/mapStore')
-  const drop: MapPoint = {
-    id: 'drop-1',
-    kind: 'drop',
-    latitude: 52.1,
-    longitude: 21.1,
-    createdAt: 1000,
-    updatedAt: 1000,
-  }
-  const direction: MapPoint = {
-    id: 'direction-1',
-    kind: 'direction',
-    latitude: 52.2,
-    longitude: 21.2,
-    createdAt: 1100,
-    updatedAt: 1100,
-  }
-  useMapStore.setState({
-    mapPoints: [drop, direction],
-    selectedMapPointId: drop.id,
-    loaded: true,
-  })
-
-  useMapStore.getState().clearSelectedMapPoints()
-
-  expect(useMapStore.getState().selectedMapPointId).toBe(null)
-  expect(useMapStore.getState().getDirectionPoint()).toEqual(direction)
-})
-
-test('prunes stale selected Map Point id on remove and load', async () => {
-  const { useMapStore } = await import('@/modules/map/store/mapStore')
-  const drop: MapPoint = {
-    id: 'drop-1',
-    kind: 'drop',
-    latitude: 52.1,
-    longitude: 21.1,
-    createdAt: 1000,
-    updatedAt: 1000,
-  }
-  const bonk: MapPoint = {
-    id: 'bonk-1',
-    kind: 'bonk',
-    latitude: 52.2,
-    longitude: 21.2,
-    createdAt: 1100,
-    updatedAt: 1100,
-  }
-  persistedMapPoints = [bonk]
-  useMapStore.setState({
-    mapPoints: [drop, bonk],
-    selectedMapPointId: drop.id,
-    loaded: true,
-  })
-
-  await useMapStore.getState().removeMapPoint(drop.id)
-
-  expect(useMapStore.getState().selectedMapPointId).toBe(null)
-
-  useMapStore.setState({ selectedMapPointId: bonk.id })
-
-  await useMapStore.getState().load()
-
-  expect(useMapStore.getState().selectedMapPointId).toBe(bonk.id)
-
-  useMapStore.setState({ selectedMapPointId: 'missing' })
-
-  await useMapStore.getState().load()
-
-  expect(useMapStore.getState().selectedMapPointId).toBe(null)
-})
-
-test('toggles Map Point Visibility without changing stored Map Points', async () => {
-  const { useMapStore } = await import('@/modules/map/store/mapStore')
-  const drop: MapPoint = {
-    id: 'drop-1',
-    kind: 'drop',
-    latitude: 52.1,
-    longitude: 21.1,
-    createdAt: 1000,
-    updatedAt: 1000,
-  }
-  useMapStore.setState({ mapPoints: [drop], hiddenMapPointKinds: [], loaded: true })
-
-  useMapStore.getState().toggleMapPointKindVisibility('drop')
-
-  expect(useMapStore.getState().hiddenMapPointKinds).toEqual(['drop'])
-  expect(useMapStore.getState().mapPoints).toEqual([drop])
-  expect(upsertMapPoint).not.toHaveBeenCalled()
-  expect(deleteMapPoint).not.toHaveBeenCalled()
-
-  useMapStore.getState().toggleMapPointKindVisibility('drop')
-
-  expect(useMapStore.getState().hiddenMapPointKinds).toEqual([])
-  expect(useMapStore.getState().mapPoints).toEqual([drop])
-})
-
-test('keeps direction Map Point always visible', async () => {
-  const { useMapStore } = await import('@/modules/map/store/mapStore')
-
-  useMapStore.getState().toggleMapPointKindVisibility('direction')
-
-  expect(useMapStore.getState().hiddenMapPointKinds).toEqual([])
-  expect(deleteMapPoint).not.toHaveBeenCalled()
+  useMapStore.getState().toggleMapPointCategoryVisibility('drop')
+  expect(useMapStore.getState().hiddenMapPointCategories).toEqual([])
 })

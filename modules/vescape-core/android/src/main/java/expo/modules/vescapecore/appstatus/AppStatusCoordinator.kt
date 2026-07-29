@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import expo.modules.vescapecore.auth.DeviceCredentialStore
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.OkHttpClient
@@ -18,7 +19,7 @@ private const val TAG = "AppStatusCoordinator"
 
 /** One App Status fetch attempt. `null` body means "no usable response" (transport or HTTP error). */
 fun interface AppStatusTransport {
-  fun fetch(url: String, appVersion: String, onResult: (String?) -> Unit)
+  fun fetch(url: String, appVersion: String, deviceToken: String?, onResult: (String?) -> Unit)
 }
 
 /**
@@ -62,6 +63,8 @@ class AppStatusCoordinator internal constructor(
   private val installedVersion: String,
   private val baseUrl: String,
   private val transport: AppStatusTransport,
+  private val credentialStore: DeviceCredentialStore? = null,
+  private val deviceTokenProvider: () -> String? = { credentialStore?.read()?.token },
 ) : OnlineCapability {
   /** Last successful App Status for this process, or `null` while none has been fetched. */
   @Volatile
@@ -98,7 +101,12 @@ class AppStatusCoordinator internal constructor(
   override fun refresh() {
     if (refreshing || installedVersion.isEmpty()) return
     refreshing = true
-    transport.fetch("$baseUrl$APP_STATUS_PATH", installedVersion, ::onFetched)
+    transport.fetch(
+      "$baseUrl$APP_STATUS_PATH",
+      installedVersion,
+      deviceTokenProvider(),
+      ::onFetched,
+    )
   }
 
   private fun onFetched(body: String?) {
@@ -110,7 +118,18 @@ class AppStatusCoordinator internal constructor(
       return
     }
     current = status
+    body?.let(::applyDeviceTokenState)
     listeners.forEach { it(status) }
+  }
+
+  private fun applyDeviceTokenState(body: String) {
+    val store = credentialStore ?: return
+    val token = runCatching { org.json.JSONObject(body).optJSONObject("deviceToken") }.getOrNull()
+      ?: return
+    when (token.optString("state")) {
+      "valid" -> token.optString("expiresAt").takeIf { it.isNotEmpty() }?.let(store::updateExpiry)
+      "expired", "revoked" -> store.reject()
+    }
   }
 
   companion object {
@@ -124,6 +143,7 @@ class AppStatusCoordinator internal constructor(
      * Carries the installed marketing version on every app-originated request. The server resolves
      * its Release Policy ranges from it.
      * @parity /modules/vescape-core/ios/appstatus/AppStatusCoordinator.swift `appVersionHeader`
+     * @parity /src/modules/profile/lib/deviceAuth.ts `APP_VERSION_HEADER`
      */
     const val APP_VERSION_HEADER = "Vescape-App-Version"
 
@@ -179,6 +199,7 @@ class AppStatusCoordinator internal constructor(
           installedVersion = installedMarketingVersion(context),
           baseUrl = serverBaseUrl(context),
           transport = OkHttpAppStatusTransport(Handler(Looper.getMainLooper())),
+          credentialStore = DeviceCredentialStore(context),
         ).also { instance = it }
       }
 
@@ -205,11 +226,19 @@ internal class OkHttpAppStatusTransport(private val handler: Handler) : AppStatu
     .callTimeout(CALL_TIMEOUT_SECONDS, TimeUnit.SECONDS)
     .build()
 
-  override fun fetch(url: String, appVersion: String, onResult: (String?) -> Unit) {
+  override fun fetch(
+    url: String,
+    appVersion: String,
+    deviceToken: String?,
+    onResult: (String?) -> Unit,
+  ) {
     val request = try {
       Request.Builder()
         .url(url)
         .header(AppStatusCoordinator.APP_VERSION_HEADER, appVersion)
+        .apply {
+          if (deviceToken != null) header("Authorization", "Bearer $deviceToken")
+        }
         .build()
     } catch (_: IllegalArgumentException) {
       handler.post { onResult(null) }

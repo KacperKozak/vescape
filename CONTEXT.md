@@ -101,8 +101,16 @@ A phone photo or video whose capture time falls inside a selected Ride Recording
 _Avoid_: Ride photo, recording media, uploaded media
 
 **Map Point**:
-A user-authored map-visible location that is independent from Ride Recording and Ride History. A Map Point may describe a direction target, trail feature, viewpoint, charging place, or similar location.
-_Avoid_: Marker, GPS point, telemetry marker
+A globally shared, Account-authored map-visible location that is independent from Ride Recording and Ride History. A Map Point describes a categorized riding place such as a drop, bonk, trail entry, viewpoint, or charging place; a personal navigation target is not a Map Point. Reading a Map Point needs no account; contributing or changing one requires sign-in.
+_Avoid_: Marker, GPS point, telemetry marker, direction point
+
+**Direction Point**:
+One rider's private navigation target on the map, stored on the phone only. It is not a Map Point: it is never shared as a place, has no category, author or reactions, and Group Ride presence reads it natively.
+_Avoid_: Direction map point, navigation Map Point, destination marker
+
+**Map Point Reaction**:
+One Account's `up` or `down` vote on one Map Point. A reaction belongs to exactly one Account and one Map Point, changing it replaces the row, and removing it deletes the row. The score is derived by adding up votes and subtracting down votes; it is never stored on the Map Point.
+_Avoid_: Like flag, liked point, reaction column on Map Point
 
 **Map Camera Controller**:
 The app-owned volatile coordinator for map camera position, zoom, pitch, heading, padding, animation, and transitions between live follow, manual browse, and ride history framing.
@@ -296,7 +304,9 @@ _Avoid_: Position update, presence ping, location share, group telemetry
 - A **Metric Sanitizer** may create **Metric Exclusions** for values derived from **Telemetry Samples** while preserving the original samples and current live board readout.
 - A **Metric Exclusion** belongs to one **Telemetry Sample** and one metric.
 - A **GPS Fix** may be associated with live map state, but only GPS fixes captured alongside **Telemetry Samples** contribute to a **Ride Recording**.
-- A **Map Point** is placed by the user on the live map and does not belong to **Ride Recording** or **Ride History**.
+- A **Map Point** is placed by a signed-in **Vescape Account** on the live map and does not belong to **Ride Recording** or **Ride History**; the server owns it, and the app reads the ones near the camera without keeping a durable copy.
+- A **Map Point Reaction** belongs to one **Vescape Account** and one **Map Point**; the server derives the score from its reaction rows.
+- A **Direction Point** is one rider's private navigation target, is never a **Map Point**, and stays on the phone so **Group Ride** presence can share it.
 - A **Map Camera Controller** may frame **Live State**, **Ride History**, **GPS Fixes**, or **Map Points**, but does not own those domain objects.
 - A **Map Camera Intent** is interpreted by the **Map Camera Controller**; outside components request camera behavior instead of mutating the map camera directly.
 - A **History Camera Refinement** belongs to one selected **Ride Recording** in **Ride History** and is ignored if the selected ride changes or the rider manually browses the map.
