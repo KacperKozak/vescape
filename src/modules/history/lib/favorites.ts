@@ -29,3 +29,13 @@ export function findSessionFavorite(
     ) ?? null
   )
 }
+
+/** Any overlap means deleting this history session must leave a protected telemetry island. */
+export function sessionContainsFavorite(
+  favorites: Favorite[],
+  session: Pick<HistorySession, 'startAtMs' | 'endAtMs'>,
+): boolean {
+  return favorites.some(
+    (favorite) => favorite.startMs <= session.endAtMs && favorite.endMs >= session.startAtMs,
+  )
+}

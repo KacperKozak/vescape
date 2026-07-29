@@ -126,6 +126,7 @@ test('removes selected session from history and selects next ride', async () => 
     endAtMs: 1_060_000,
   })
   getTelemetryHistory.mockResolvedValueOnce([newest, selected, oldest])
+  getTelemetryHistory.mockResolvedValueOnce([newest, oldest])
 
   const { useHistoryStore } = await import('@/modules/history/store/historyStore')
 

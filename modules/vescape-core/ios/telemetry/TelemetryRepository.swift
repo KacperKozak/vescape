@@ -345,30 +345,40 @@ internal final class TelemetryRepository {
     let fromMs = telemetryLong(options["fromMs"]) ?? 0
     let toMs = telemetryLong(options["toMs"]) ?? 0
     let deviceId = options["deviceId"] as? String
-    return (try? pool.write { db in
-      let count = try Int.fetchOne(
-        db,
-        sql: "SELECT COUNT(*) FROM telemetry_frames WHERE captured_at_ms >= ? AND captured_at_ms <= ? AND (? IS NULL OR device_id = ?)",
-        arguments: [fromMs, toMs, deviceId, deviceId]
-      ) ?? 0
-      try db.execute(sql: "DELETE FROM telemetry_frames WHERE captured_at_ms >= ? AND captured_at_ms <= ? AND ((? IS NOT NULL AND device_id = ?) OR (? IS NULL AND device_id IS NULL))", arguments: [fromMs, toMs, deviceId, deviceId, deviceId])
-      try db.execute(sql: "DELETE FROM telemetry_minute_buckets WHERE last_sample_at_ms >= ? AND first_sample_at_ms <= ? AND device_id = ?", arguments: [fromMs, toMs, deviceId ?? ""])
-      try db.execute(sql: "DELETE FROM metric_exclusion_ranges WHERE end_ms >= ? AND start_ms <= ?", arguments: [fromMs, toMs])
-      try db.execute(sql: "DELETE FROM telemetry_markers WHERE occurred_at_ms >= ? AND occurred_at_ms <= ? AND ((? IS NOT NULL AND device_id = ?) OR (? IS NULL AND device_id IS NULL))", arguments: [fromMs, toMs, deviceId, deviceId, deviceId])
+    guard toMs >= fromMs else { return 0 }
+    let deletable = subtractProtectedTelemetryRanges(
+      deleteRange: TelemetryTimeRange(startMs: fromMs, endMs: toMs),
+      protectedRanges: favoriteTelemetryRanges()
+    )
+    let deleted = (try? pool.write { db in
+      var count = 0
+      for range in deletable {
+        count += try Int.fetchOne(
+          db,
+          sql: "SELECT COUNT(*) FROM telemetry_frames WHERE captured_at_ms >= ? AND captured_at_ms <= ? AND ((? IS NOT NULL AND device_id = ?) OR (? IS NULL AND device_id IS NULL))",
+          arguments: [range.startMs, range.endMs, deviceId, deviceId, deviceId]
+        ) ?? 0
+        try db.execute(sql: "DELETE FROM telemetry_frames WHERE captured_at_ms >= ? AND captured_at_ms <= ? AND ((? IS NOT NULL AND device_id = ?) OR (? IS NULL AND device_id IS NULL))", arguments: [range.startMs, range.endMs, deviceId, deviceId, deviceId])
+        try db.execute(sql: "DELETE FROM telemetry_minute_buckets WHERE last_sample_at_ms >= ? AND first_sample_at_ms <= ? AND device_id = ?", arguments: [range.startMs, range.endMs, deviceId ?? ""])
+        try db.execute(sql: "DELETE FROM metric_exclusion_ranges WHERE end_ms >= ? AND start_ms <= ?", arguments: [range.startMs, range.endMs])
+        try db.execute(sql: "DELETE FROM telemetry_markers WHERE occurred_at_ms >= ? AND occurred_at_ms <= ? AND ((? IS NOT NULL AND device_id = ?) OR (? IS NULL AND device_id IS NULL))", arguments: [range.startMs, range.endMs, deviceId, deviceId, deviceId])
+      }
       return count
     }) ?? 0
+    _ = rebuildBuckets()
+    return deleted
   }
 
   func rebuildBuckets(onProgress: (Int, Int) -> Void = { _, _ in }) -> Int {
     flushBlocking()
     guard let pool else { return 0 }
     return (try? pool.write { db in
+      try db.execute(sql: "DELETE FROM telemetry_minute_buckets")
+      try db.execute(sql: "DELETE FROM metric_exclusion_ranges")
       guard
         let firstMs = try Int64.fetchOne(db, sql: "SELECT MIN(captured_at_ms) FROM telemetry_frames"),
         let lastMs = try Int64.fetchOne(db, sql: "SELECT MAX(captured_at_ms) FROM telemetry_frames")
       else { return 0 }
-      try db.execute(sql: "DELETE FROM telemetry_minute_buckets")
-      try db.execute(sql: "DELETE FROM metric_exclusion_ranges")
 
       let chunkMs: Int64 = 3_600_000
       let chunks = Int((lastMs - firstMs) / chunkMs + 1)
@@ -407,12 +417,38 @@ internal final class TelemetryRepository {
   }
 
   func clearAll() {
+    flushBlocking()
     guard let pool else { return }
-    try? pool.write { db in
-      try db.execute(sql: "DELETE FROM telemetry_frames")
-      try db.execute(sql: "DELETE FROM telemetry_minute_buckets")
-      try db.execute(sql: "DELETE FROM telemetry_markers")
-      try db.execute(sql: "DELETE FROM metric_exclusion_ranges")
+    let protected = favoriteTelemetryRanges()
+    if protected.isEmpty {
+      try? pool.write { db in
+        try db.execute(sql: "DELETE FROM telemetry_frames")
+        try db.execute(sql: "DELETE FROM telemetry_minute_buckets")
+        try db.execute(sql: "DELETE FROM telemetry_markers")
+        try db.execute(sql: "DELETE FROM metric_exclusion_ranges")
+      }
+    } else {
+      let deletable = subtractProtectedTelemetryRanges(
+        deleteRange: TelemetryTimeRange(startMs: Int64.min, endMs: Int64.max),
+        protectedRanges: protected
+      )
+      try? pool.write { db in
+        for range in deletable {
+          try db.execute(
+            sql: "DELETE FROM telemetry_frames WHERE captured_at_ms >= ? AND captured_at_ms <= ?",
+            arguments: [range.startMs, range.endMs]
+          )
+          try db.execute(
+            sql: "DELETE FROM telemetry_markers WHERE occurred_at_ms >= ? AND occurred_at_ms <= ?",
+            arguments: [range.startMs, range.endMs]
+          )
+          try db.execute(
+            sql: "DELETE FROM metric_exclusion_ranges WHERE end_ms >= ? AND start_ms <= ?",
+            arguments: [range.startMs, range.endMs]
+          )
+        }
+      }
+      _ = rebuildBuckets()
     }
     queue.sync {
       pendingStates.removeAll()
@@ -421,6 +457,16 @@ internal final class TelemetryRepository {
       lastFrameAtMs = nil
       lastHistoryAtMs = nil
       lastKeyframeAtMs = nil
+    }
+  }
+
+  /// Favorites protect time ranges globally. A Board can be re-linked after a Favorite is created,
+  /// so its current BLE id cannot safely identify the historical telemetry device id.
+  ///
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryRepository.kt `favoriteTelemetryRanges`
+  private func favoriteTelemetryRanges() -> [TelemetryTimeRange] {
+    FavoriteStore.shared.list().map {
+      TelemetryTimeRange(startMs: $0.startMs, endMs: $0.endMs)
     }
   }
 

@@ -73,6 +73,9 @@ interface TelemetryDao {
   @Insert
   suspend fun insertFrames(frames: List<TelemetryFrameEntity>): List<Long>
 
+  @Update
+  suspend fun updateFrame(frame: TelemetryFrameEntity)
+
   @Insert
   suspend fun insertMarkers(markers: List<TelemetryMarkerEntity>)
 
@@ -289,6 +292,20 @@ interface TelemetryDao {
     val frames = deleteFramesRange(fromMs, toMs, deviceId)
     deleteMarkersRange(fromMs, toMs, deviceId)
     deleteBucketsRange(fromMs, toMs, deviceId ?: UNKNOWN_TELEMETRY_DEVICE_ID)
+    deleteExclusionsRange(fromMs, toMs)
+    return frames
+  }
+
+  @Query("DELETE FROM telemetry_frames WHERE captured_at_ms >= :fromMs AND captured_at_ms <= :toMs")
+  suspend fun deleteFramesRangeAllDevices(fromMs: Long, toMs: Long): Int
+
+  @Query("DELETE FROM telemetry_markers WHERE occurred_at_ms >= :fromMs AND occurred_at_ms <= :toMs")
+  suspend fun deleteMarkersRangeAllDevices(fromMs: Long, toMs: Long): Int
+
+  @Transaction
+  suspend fun deleteRangeAllDevices(fromMs: Long, toMs: Long): Int {
+    val frames = deleteFramesRangeAllDevices(fromMs, toMs)
+    deleteMarkersRangeAllDevices(fromMs, toMs)
     deleteExclusionsRange(fromMs, toMs)
     return frames
   }

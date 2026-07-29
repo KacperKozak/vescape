@@ -526,7 +526,14 @@ class TelemetryRepository private constructor(context: Context) {
   suspend fun deleteRange(options: Map<String, Any?>): Int = withContext(Dispatchers.IO) {
     val query = RangeMutationOptions.from(options)
     flushNow()
-    dao.deleteRange(query.fromMs, query.toMs, query.deviceId)
+    val requested = TelemetryTimeRange(query.fromMs, query.toMs)
+    val protected = favoriteTelemetryRanges()
+    promoteProtectedRangeStarts(protected, query.deviceId)
+    val deleted = subtractProtectedTelemetryRanges(requested, protected).sumOf { range ->
+      dao.deleteRange(range.startMs, range.endMs, query.deviceId)
+    }
+    rebuildBuckets()
+    deleted
   }
 
   // Favorites (ADR 0029)
@@ -621,11 +628,11 @@ class TelemetryRepository private constructor(context: Context) {
   }
 
   suspend fun rebuildBuckets(onProgress: (current: Int, total: Int) -> Unit = { _, _ -> }): Int = withContext(Dispatchers.IO) {
-    val firstMs = dao.firstFrameAt() ?: return@withContext 0
-    val lastMs = dao.lastFrameAt() ?: return@withContext 0
-
     dao.clearBuckets()
     dao.clearExclusions()
+
+    val firstMs = dao.firstFrameAt() ?: return@withContext 0
+    val lastMs = dao.lastFrameAt() ?: return@withContext 0
 
     val chunkMs = 3_600_000L
     val chunks = ((lastMs - firstMs) / chunkMs + 1).toInt()
@@ -665,7 +672,19 @@ class TelemetryRepository private constructor(context: Context) {
   }
 
   suspend fun clearAll() = withContext(Dispatchers.IO) {
-    dao.clearAll()
+    flushNow()
+    val protected = favoriteTelemetryRanges()
+    if (protected.isEmpty()) {
+      dao.clearAll()
+    } else {
+      promoteProtectedRangeStarts(protected, deviceId = null)
+      val requested = TelemetryTimeRange(Long.MIN_VALUE, Long.MAX_VALUE)
+      for (range in subtractProtectedTelemetryRanges(requested, protected)) {
+        dao.deleteRangeAllDevices(range.startMs, range.endMs)
+      }
+      dao.clearDiagnosticEvents()
+      rebuildBuckets()
+    }
     synchronized(lock) {
       pending.clear()
       pendingMarkers.clear()
@@ -674,6 +693,45 @@ class TelemetryRepository private constructor(context: Context) {
       lastHistoryAtMs = null
       lastKeyframeAtMs = null
       forceNextKeyframe = true
+    }
+  }
+
+  /**
+   * Favorites protect time ranges globally. A Board can be re-linked after a Favorite is created,
+   * so its current BLE id cannot safely identify the historical telemetry device id.
+   *
+   * @parity /modules/vescape-core/ios/telemetry/TelemetryRepository.swift `favoriteTelemetryRanges`
+   */
+  private suspend fun favoriteTelemetryRanges(): List<TelemetryTimeRange> =
+    dao.getFavorites().map { TelemetryTimeRange(it.startMs, it.endMs) }
+
+  /**
+   * Android stores delta frames. Promote the first retained frame in each protected island before
+   * deleting its predecessor, otherwise the Favorite could survive in SQLite but become undecodable.
+   *
+   * iOS stores full keyframe rows for every sample and needs no promotion.
+   */
+  private suspend fun promoteProtectedRangeStarts(
+    protected: Collection<TelemetryTimeRange>,
+    deviceId: String?,
+  ) {
+    for (range in protected) {
+      val devices = if (deviceId != null) {
+        listOf(deviceId)
+      } else {
+        dao.getFrames(range.startMs, range.endMs, null, Int.MAX_VALUE)
+          .map { it.deviceId }
+          .distinct()
+      }
+      for (protectedDeviceId in devices) {
+        val first = getSampleStates(
+          range.startMs,
+          range.endMs,
+          protectedDeviceId,
+          Int.MAX_VALUE,
+        ).firstOrNull() ?: continue
+        dao.updateFrame(first.state.toFrame(previous = null, keyframe = true).copy(id = first.id))
+      }
     }
   }
 

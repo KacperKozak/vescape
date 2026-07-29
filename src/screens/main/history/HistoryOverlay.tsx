@@ -11,6 +11,7 @@ import { HistoryEmptyState } from '@/modules/history/components/HistoryEmptyStat
 import { HistorySessionSheet } from '@/modules/history/components/HistorySessionSheet'
 import { MediaHistoryViewer } from '@/modules/history/components/MediaHistoryViewer'
 import type { MediaAssetInput, MediaHistoryAsset } from '@/modules/history/lib/mediaHistory'
+import { sessionContainsFavorite } from '@/modules/history/lib/favorites'
 import type { HistoryMetricKey } from '@/modules/history/lib/metricColorScale'
 import type {
   HistorySession,
@@ -98,6 +99,9 @@ export function HistoryOverlay({
     history.favoritesSaving
   const aboveStripBottom = STRIP_CONTENT_HEIGHT + Math.max(insets.bottom * 0.5, 8) + 8
   const sheetBottom = Math.max(insets.bottom, 16) + 8 + panelHeight + 8
+  const selectedSessionContainsFavorite =
+    history.selectedSession != null &&
+    sessionContainsFavorite(history.favorites, history.selectedSession)
 
   const handleRemoveConfirm = useCallback(() => {
     setRemoveConfirmVisible(false)
@@ -237,6 +241,7 @@ export function HistoryOverlay({
         bottomOffset={sheetBottom}
         blocks={history.blocks}
         sessions={history.sessions}
+        favorites={history.favorites}
         selectedSessionId={history.selectedSession?.id ?? null}
         hasMore={history.historyHasMore}
         loadingMore={history.historyLoading}
@@ -272,7 +277,11 @@ export function HistoryOverlay({
       <ConfirmModal
         visible={removeConfirmVisible}
         title="Delete Ride"
-        message="This ride and all its telemetry data will be permanently removed."
+        message={
+          selectedSessionContainsFavorite
+            ? 'Favorited telemetry will be kept. The rest of this ride will be permanently removed.'
+            : 'This ride and all its telemetry data will be permanently removed.'
+        }
         confirmLabel="Delete"
         cancelLabel="Keep"
         destructive

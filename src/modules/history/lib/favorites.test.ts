@@ -2,7 +2,11 @@ import { expect, test } from 'bun:test'
 
 import type { Favorite } from 'vescape-core'
 
-import { favoriteRangeForSession, findSessionFavorite } from '@/modules/history/lib/favorites'
+import {
+  favoriteRangeForSession,
+  findSessionFavorite,
+  sessionContainsFavorite,
+} from '@/modules/history/lib/favorites'
 
 const session = {
   startAtMs: 1_000_000,
@@ -46,4 +50,13 @@ test('a ride counts as favorited only when a favorite covers its exact Moving Wi
   expect(findSessionFavorite([favorite({})], session)?.id).toBe('fav-1')
   expect(findSessionFavorite([favorite({ endMs: 1_400_000 })], session)).toBeNull()
   expect(findSessionFavorite([favorite({ startMs: 1_050_000 })], session)).toBeNull()
+})
+
+test('a ride contains a favorite when their ranges overlap at all', () => {
+  expect(sessionContainsFavorite([favorite({ startMs: 900_000, endMs: 1_000_000 })], session)).toBe(
+    true,
+  )
+  expect(
+    sessionContainsFavorite([favorite({ startMs: 1_600_001, endMs: 1_700_000 })], session),
+  ).toBe(false)
 })
