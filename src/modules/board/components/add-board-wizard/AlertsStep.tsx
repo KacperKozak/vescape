@@ -38,10 +38,14 @@ export function AlertsStep({ wizard }: { wizard: UseAddBoardWizard }) {
   const isLast = index === ALERT_SUBSTEPS.length - 1
   const onBack = () => (isFirst ? wizard.back() : setIndex((current) => current - 1))
   const onNext = () => (isLast ? wizard.next() : setIndex((current) => current + 1))
+  const description = isFirst
+    ? 'The fastest you consider yourself capable of riding. Scales the speed gauge and alerts.'
+    : 'Pick how loudly this metric warns you. Adjust it any time from its control on the main screen.'
 
   return (
     <WizardStepLayout
       title={substep.title}
+      description={description}
       icon={substep.icon}
       color={theme.palette.amber.color}
       headerRight={
@@ -71,20 +75,9 @@ export function AlertsStep({ wizard }: { wizard: UseAddBoardWizard }) {
       }
     >
       {isFirst ? (
-        <>
-          <Text style={styles.hint}>
-            The fastest you consider yourself capable of riding. Scales the speed gauge and alerts.
-          </Text>
-          <BoardTopSpeedCard value={wizard.topSpeedKmh} onChange={wizard.setTopSpeedKmh} />
-        </>
+        <BoardTopSpeedCard value={wizard.topSpeedKmh} onChange={wizard.setTopSpeedKmh} />
       ) : (
-        <>
-          <Text style={styles.hint}>
-            Pick how loudly this metric warns you. Adjust it any time from its control on the main
-            screen.
-          </Text>
-          <DraftMetricAlerts wizard={wizard} metric={substep.key as AlertPresetMetric} />
-        </>
+        <DraftMetricAlerts wizard={wizard} metric={substep.key as AlertPresetMetric} />
       )}
     </WizardStepLayout>
   )
@@ -152,11 +145,5 @@ const styles = StyleSheet.create({
   },
   segmentActive: {
     backgroundColor: theme.palette.amber.color,
-  },
-  hint: {
-    color: theme.palette.slate.textSecondary,
-    fontSize: 13,
-    fontWeight: '500',
-    lineHeight: 18,
   },
 })

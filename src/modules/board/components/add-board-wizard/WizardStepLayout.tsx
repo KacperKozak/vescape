@@ -8,6 +8,7 @@ import { theme } from '@/constants/theme'
 
 interface WizardStepLayoutProps {
   title: string
+  description?: ReactNode
   icon: Icon
   color: string
   headerRight?: ReactNode
@@ -17,6 +18,7 @@ interface WizardStepLayoutProps {
 
 export function WizardStepLayout({
   title,
+  description,
   icon: IconComponent,
   color,
   headerRight,
@@ -36,6 +38,7 @@ export function WizardStepLayout({
             <IconComponent size={20} color={color} weight="duotone" />
             <Text style={styles.title}>{title}</Text>
           </View>
+          {description ? <Text style={styles.description}>{description}</Text> : null}
         </View>
         <View style={styles.mainContent}>
           <View style={styles.contentStack}>{children}</View>
@@ -106,7 +109,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   topContent: {
-    gap: 10,
+    gap: 6,
   },
   mainContent: {
     flex: 1,
@@ -121,6 +124,12 @@ const styles = StyleSheet.create({
     color: theme.palette.slate.textPrimary,
     fontSize: 20,
     fontWeight: '800',
+  },
+  description: {
+    color: theme.palette.slate.textSecondary,
+    fontSize: 13,
+    fontWeight: '500',
+    lineHeight: 18,
   },
   actions: {
     flexDirection: 'row',
