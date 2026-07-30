@@ -95,8 +95,8 @@ const styles = StyleSheet.create({
   body: {
     flexGrow: 1,
     justifyContent: 'space-between',
-    gap: 22,
-    paddingBottom: 18,
+    gap: 14,
+    paddingBottom: 4,
   },
   topBar: {
     flexDirection: 'row',
@@ -114,11 +114,11 @@ const styles = StyleSheet.create({
   mainContent: {
     flex: 1,
     minHeight: 0,
-    justifyContent: 'flex-end',
+    justifyContent: 'center',
   },
   contentStack: {
     gap: 14,
-    paddingBottom: 18,
+    paddingBottom: 6,
   },
   title: {
     color: theme.palette.slate.textPrimary,
@@ -136,7 +136,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   footer: {
-    paddingBottom: 10,
+    paddingBottom: 4,
   },
   action: {
     flex: 1,
