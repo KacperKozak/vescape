@@ -1,20 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import {
-  ActivityIndicator,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  View,
-  useWindowDimensions,
-} from 'react-native'
+import { useMemo, useRef, type RefObject } from 'react'
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/base/Text'
-import { CaretRightIcon } from 'phosphor-react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { CaretRightIcon, ClockCounterClockwiseIcon, StarIcon } from 'phosphor-react-native'
 import { Canvas, Circle, Path, Skia } from '@shopify/react-native-skia'
 import type { Favorite } from 'vescape-core'
 
+import { EdgeDrawer } from '@/components/overlays/AnchoredSheet'
 import { interaction, theme } from '@/constants/theme'
 import { HistoryRideLabel } from '@/modules/history/components/HistoryRideLabel'
 import { favoriteSessionId } from '@/modules/history/lib/favorites'
@@ -28,7 +19,8 @@ import type { HistorySession, TelemetryMinuteBucket } from '@/modules/history/st
 
 interface HistorySessionSheetProps {
   visible: boolean
-  bottomOffset: number
+  triggerRef: RefObject<View | null>
+  favoriteMode: boolean
   blocks: TelemetryMinuteBucket[]
   sessions: HistorySession[]
   favorites: Favorite[]
@@ -40,15 +32,10 @@ interface HistorySessionSheetProps {
   onLoadMore: () => void
 }
 
-const CONTENT_PADDING_VERTICAL = 12
-const ROUTE_ROW_HEIGHT = 72
-const ROUTE_ROW_PITCH = ROUTE_ROW_HEIGHT + 8
-const MAX_PANEL_HEIGHT = 480
-const TOP_CLEARANCE = 72
-
 export function HistorySessionSheet({
   visible,
-  bottomOffset,
+  triggerRef,
+  favoriteMode,
   blocks,
   sessions,
   favorites,
@@ -59,124 +46,87 @@ export function HistorySessionSheet({
   onSelectSession,
   onLoadMore,
 }: HistorySessionSheetProps) {
-  const insets = useSafeAreaInsets()
-  const { height: windowHeight } = useWindowDimensions()
-  const scrollRef = useRef<ScrollView>(null)
-  const [viewportHeight, setViewportHeight] = useState(0)
-  const selectedIndex = useMemo(
-    () => sessions.findIndex((session) => session.id === selectedSessionId),
-    [sessions, selectedSessionId],
-  )
+  const selectedRowRef = useRef<View>(null)
   const favoritesBySessionId = useMemo(
     () => new Map(favorites.map((favorite) => [favoriteSessionId(favorite.id), favorite])),
     [favorites],
   )
 
-  useEffect(() => {
-    if (!visible || selectedIndex < 0 || viewportHeight <= 0) return
-    const frame = requestAnimationFrame(() => {
-      const rowCenterY =
-        CONTENT_PADDING_VERTICAL + selectedIndex * ROUTE_ROW_PITCH + ROUTE_ROW_HEIGHT / 2
-      scrollRef.current?.scrollTo({
-        y: Math.max(0, rowCenterY - viewportHeight / 2),
-        animated: false,
-      })
-    })
-    return () => cancelAnimationFrame(frame)
-  }, [selectedIndex, viewportHeight, visible])
-
-  if (!visible) return null
-
-  const availableHeight = windowHeight - bottomOffset - Math.max(insets.top, 8) - TOP_CLEARANCE
-  const panelMaxHeight = Math.max(0, Math.min(MAX_PANEL_HEIGHT, availableHeight))
-
-  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    if (!hasMore || loadingMore) return
-    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent
-    const distanceFromEnd = contentSize.height - (contentOffset.y + layoutMeasurement.height)
-    if (distanceFromEnd < 80) onLoadMore()
-  }
-
   return (
-    <>
-      <Pressable
-        testID="history-session-sheet-backdrop"
-        style={styles.backdrop}
-        onPress={onClose}
-      />
-      <View
-        testID="history-session-sheet"
-        style={[styles.panel, { bottom: bottomOffset, maxHeight: panelMaxHeight }]}
-      >
-        <ScrollView
-          ref={scrollRef}
-          style={styles.scroll}
-          contentContainerStyle={styles.content}
-          scrollEventThrottle={120}
-          onLayout={(event) => setViewportHeight(event.nativeEvent.layout.height)}
-          onScroll={handleScroll}
-        >
-          {sessions.length === 0 ? (
-            <Text style={styles.emptyText}>No sessions</Text>
-          ) : (
-            sessions.map((session) => {
-              const selected = session.id === selectedSessionId
-              const routePoints = getSessionRoutePreviewPoints(blocks, session)
-              const favorite = favoritesBySessionId.get(session.id)
-              const rideWindow = rideMovingWindow(session) ?? {
-                startMs: session.startAtMs,
-                endMs: session.endAtMs,
-              }
-              const dateTime = formatRideListDateTime(rideWindow.startMs, rideWindow.endMs)
-              const details = formatRideListDetails(
-                rideWindow.endMs - rideWindow.startMs,
-                session.distanceM,
-                favorite?.boardName ?? session.deviceName,
-              )
-              return (
-                <Pressable
-                  key={session.id}
-                  testID={`history-session-row-${session.id}`}
-                  style={({ pressed }) => [
-                    styles.row,
-                    selected && styles.rowSelected,
-                    pressed && styles.rowPressed,
-                  ]}
-                  onPress={() => onSelectSession(session)}
-                >
-                  <RoutePreview points={routePoints} selected={selected} />
-                  <View style={styles.rowMain}>
-                    <HistoryRideLabel
-                      title={
-                        favorite
-                          ? formatFavoriteName(favorite.name, favorite.startMs, favorite.endMs)
-                          : dateTime
-                      }
-                      subtitle={favorite ? dateTime : details}
-                      details={favorite ? details : undefined}
-                    />
-                  </View>
-                  <CaretRightIcon size={16} color={theme.palette.slate.textDim} weight="bold" />
-                </Pressable>
-              )
-            })
-          )}
-          {hasMore && (
-            <Pressable
-              style={({ pressed }) => [styles.loadingRow, pressed && styles.loadingPressed]}
-              disabled={loadingMore}
-              onPress={onLoadMore}
-            >
-              {loadingMore ? (
-                <ActivityIndicator size="small" color={theme.palette.sky.color} />
-              ) : (
-                <Text style={styles.loadingText}>Load older rides</Text>
-              )}
-            </Pressable>
-          )}
-        </ScrollView>
+    <EdgeDrawer
+      visible={visible}
+      triggerRef={triggerRef}
+      title={favoriteMode ? 'Favorites' : 'History'}
+      icon={favoriteMode ? StarIcon : ClockCounterClockwiseIcon}
+      iconColor={favoriteMode ? theme.palette.amber.color : theme.palette.purple.color}
+      onClose={onClose}
+      initialFocusRef={selectedRowRef}
+      onReachContentEnd={hasMore && !loadingMore ? onLoadMore : undefined}
+      backdropTestID="history-session-sheet-backdrop"
+    >
+      <View testID="history-session-sheet" style={styles.content}>
+        {sessions.length === 0 ? (
+          <Text style={styles.emptyText}>No sessions</Text>
+        ) : (
+          sessions.map((session) => {
+            const selected = session.id === selectedSessionId
+            const routePoints = getSessionRoutePreviewPoints(blocks, session)
+            const favorite = favoritesBySessionId.get(session.id)
+            const rideWindow = rideMovingWindow(session) ?? {
+              startMs: session.startAtMs,
+              endMs: session.endAtMs,
+            }
+            const dateTime = formatRideListDateTime(rideWindow.startMs, rideWindow.endMs)
+            const details = formatRideListDetails(
+              rideWindow.endMs - rideWindow.startMs,
+              session.distanceM,
+              favorite?.boardName ?? session.deviceName,
+            )
+            return (
+              <Pressable
+                ref={selected ? selectedRowRef : undefined}
+                key={session.id}
+                testID={`history-session-row-${session.id}`}
+                accessibilityState={{ selected }}
+                style={({ pressed }) => [
+                  styles.row,
+                  selected && styles.rowSelected,
+                  pressed && styles.rowPressed,
+                ]}
+                onPress={() => onSelectSession(session)}
+              >
+                <RoutePreview points={routePoints} selected={selected} />
+                <View style={styles.rowMain}>
+                  <HistoryRideLabel
+                    title={
+                      favorite
+                        ? formatFavoriteName(favorite.name, favorite.startMs, favorite.endMs)
+                        : dateTime
+                    }
+                    subtitle={favorite ? dateTime : details}
+                    details={favorite ? details : undefined}
+                  />
+                </View>
+                <CaretRightIcon size={16} color={theme.palette.slate.textDim} weight="bold" />
+              </Pressable>
+            )
+          })
+        )}
+        {hasMore && (
+          <Pressable
+            style={({ pressed }) => [styles.loadingRow, pressed && styles.loadingPressed]}
+            disabled={loadingMore}
+            onPress={onLoadMore}
+          >
+            {loadingMore ? (
+              <ActivityIndicator size="small" color={theme.palette.sky.color} />
+            ) : (
+              <Text style={styles.loadingText}>Load older rides</Text>
+            )}
+          </Pressable>
+        )}
       </View>
-    </>
+    </EdgeDrawer>
   )
 }
 
@@ -263,32 +213,7 @@ function formatPreviewPoint(points: RoutePoint[], index: number): { x: number; y
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
-    ...StyleSheet.absoluteFill,
-    zIndex: 24,
-  },
-  panel: {
-    position: 'absolute',
-    left: 16,
-    right: 16,
-    zIndex: 25,
-    backgroundColor: theme.palette.slate.surfaceDeep,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: theme.palette.slate.border,
-    overflow: 'hidden',
-    shadowColor: theme.palette.mono.black,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.45,
-    shadowRadius: 20,
-    elevation: 16,
-  },
-  scroll: {
-    maxHeight: '100%',
-  },
   content: {
-    paddingHorizontal: 12,
-    paddingVertical: 12,
     gap: 8,
   },
   emptyText: {

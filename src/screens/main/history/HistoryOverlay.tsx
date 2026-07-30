@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { StarIcon } from 'phosphor-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -100,13 +100,13 @@ export function HistoryOverlay({
 }: HistoryOverlayProps) {
   const insets = useSafeAreaInsets()
   const [removeConfirmVisible, setRemoveConfirmVisible] = useState(false)
+  const listButtonRef = useRef<View>(null)
   const busy =
     history.loadingSession ||
     history.historyLoading ||
     history.favoritesLoading ||
     history.favoritesSaving
   const aboveStripBottom = STRIP_CONTENT_HEIGHT + Math.max(insets.bottom * 0.5, 8) + 8
-  const sheetBottom = Math.max(insets.bottom, 16) + 8 + panelHeight + 8
   const favoriteMode = history.historyTab === 'favorites'
   const detailSession =
     history.historyTab === 'history' || history.openFavorite ? history.selectedSession : null
@@ -129,6 +129,7 @@ export function HistoryOverlay({
           busy={busy}
           onRemoveSession={() => setRemoveConfirmVisible(true)}
           onPanelHeightChange={onPanelHeightChange}
+          listButtonRef={listButtonRef}
         />
       )}
 
@@ -166,7 +167,8 @@ export function HistoryOverlay({
 
       <HistorySessionSheet
         visible={history.historySheetVisible}
-        bottomOffset={sheetBottom}
+        triggerRef={listButtonRef}
+        favoriteMode={favoriteMode}
         blocks={history.blocks}
         sessions={favoriteMode ? history.favoriteSessions : history.sessions}
         favorites={favoriteMode ? history.favorites : []}

@@ -1,7 +1,7 @@
 import { ScrollView, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/base/Text'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 import { InfoIcon, SquaresFourIcon, UsersThreeIcon } from 'phosphor-react-native'
 import { Button } from '@/components/base/Button'
@@ -407,6 +407,73 @@ function EdgeDrawerLongContentShowcase() {
   )
 }
 
+function EdgeDrawerInitialFocusShowcase() {
+  const triggerRef = useTriggerRef()
+  const focusedRowRef = useRef<View>(null)
+  const [visible, setVisible] = useState(false)
+  const [expanded, setExpanded] = useState(false)
+
+  useEffect(() => {
+    if (!visible) return
+    const timer = setTimeout(() => setExpanded(true), 300)
+    return () => clearTimeout(timer)
+  }, [visible])
+
+  return (
+    <ShowcaseCard
+      name="EdgeDrawer — initial focus"
+      controls={
+        <View
+          ref={triggerRef}
+          collapsable={false}
+          testID="edge-drawer-focus-open"
+          style={styles.trigger}
+        >
+          <OpenButton
+            label="Open focused content"
+            onPress={() => {
+              setExpanded(false)
+              setVisible(true)
+            }}
+          />
+        </View>
+      }
+    >
+      <Text style={styles.previewHint}>
+        A long bottom drawer opens with row 1 inside the visible area.
+      </Text>
+      <EdgeDrawer
+        visible={visible}
+        triggerRef={triggerRef}
+        edge="bottom"
+        title={expanded ? 'Focused list expanded' : 'Focused list'}
+        initialFocusRef={focusedRowRef}
+        onClose={() => setVisible(false)}
+      >
+        <View style={styles.focusList}>
+          {Array.from({ length: expanded ? 24 : 12 }, (_, index) => {
+            const focused = index === 0
+            return (
+              <View
+                ref={focused ? focusedRowRef : undefined}
+                key={index}
+                style={[styles.tile, focused && styles.focusedTile]}
+              >
+                <Text
+                  testID={focused ? 'edge-drawer-focused-row' : undefined}
+                  style={styles.tileText}
+                >
+                  {focused ? 'Selected row 1' : `Row ${index + 1}`}
+                </Text>
+              </View>
+            )
+          })}
+        </View>
+      </EdgeDrawer>
+    </ShowcaseCard>
+  )
+}
+
 function FloatingSheetShowcase() {
   const triggerRef = useTriggerRef()
   const [visible, setVisible] = useState(false)
@@ -471,6 +538,7 @@ export default function ModalsPage() {
           description="Always opens from the bottom. The complete drawer follows a downward drag."
         />
         <EdgeDrawerLongContentShowcase />
+        <EdgeDrawerInitialFocusShowcase />
         <FloatingSheetShowcase />
       </ScrollView>
     </SafeAreaView>
@@ -490,6 +558,8 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   tileText: { color: theme.palette.slate.textSecondary, fontSize: 14 },
+  focusList: { gap: 8 },
+  focusedTile: { borderColor: theme.palette.sky.color },
   article: { gap: 28, paddingHorizontal: 10, paddingBottom: 24 },
   articleLead: {
     color: theme.palette.slate.textPrimary,

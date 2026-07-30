@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useRef, useState, type RefObject } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { useSharedValue } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -47,6 +47,7 @@ interface HistoryTelemetryPanelProps {
   mediaUnmatched: MediaAssetInput[]
   mediaLoading: boolean
   mediaError: string | null
+  listButtonRef: RefObject<View | null>
   onPrevious: () => void
   onNext: () => void
   onOpenList: () => void
@@ -80,6 +81,7 @@ export function HistoryTelemetryPanel({
   mediaUnmatched,
   mediaLoading,
   mediaError,
+  listButtonRef,
   onPrevious,
   onNext,
   onOpenList,
@@ -176,6 +178,7 @@ export function HistoryTelemetryPanel({
           mediaCount={mediaAssets.length + mediaUnmatched.length}
           mediaLoading={mediaLoading}
           mediaButtonRef={mediaButtonRef}
+          listButtonRef={listButtonRef}
           onPrevious={onPrevious}
           onNext={onNext}
           onOpenList={onOpenList}

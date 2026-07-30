@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, type RefObject } from 'react'
+import type { View } from 'react-native'
 
 import { ConfirmModal } from '@/components/modals/ConfirmModal'
 import {
@@ -26,6 +27,7 @@ interface HistoryRideDetailProps {
   busy: boolean
   onRemoveSession: () => void
   onPanelHeightChange: (height: number) => void
+  listButtonRef: RefObject<View | null>
 }
 
 /** The replayed ride: chart panel, stats and header. Shared by history mode and favorite mode. */
@@ -36,6 +38,7 @@ export function HistoryRideDetail({
   busy,
   onRemoveSession,
   onPanelHeightChange,
+  listButtonRef,
 }: HistoryRideDetailProps) {
   const [deleteVisible, setDeleteVisible] = useState(false)
   const [trimName, setTrimName] = useState('')
@@ -75,6 +78,7 @@ export function HistoryRideDetail({
         mediaUnmatched={history.mediaHistory.unmatched}
         mediaLoading={history.mediaHistory.loading}
         mediaError={history.mediaHistory.error}
+        listButtonRef={listButtonRef}
         onPrevious={() => {
           void (favoriteMode ? history.selectPreviousFavorite() : history.selectPreviousRide())
         }}

@@ -23,6 +23,7 @@ interface HistoryPanelNavProps {
   mediaCount: number
   mediaLoading: boolean
   mediaButtonRef: RefObject<View | null>
+  listButtonRef: RefObject<View | null>
   onPrevious: () => void
   onNext: () => void
   onOpenList: () => void
@@ -45,6 +46,7 @@ export function HistoryPanelNav({
   mediaCount,
   mediaLoading,
   mediaButtonRef,
+  listButtonRef,
   onPrevious,
   onNext,
   onOpenList,
@@ -86,6 +88,8 @@ export function HistoryPanelNav({
         style={styles.navSelector}
         selectControl={
           <Pressable
+            ref={listButtonRef}
+            collapsable={false}
             testID="history-ride-list-button"
             style={({ pressed }) => [styles.titleButton, pressed && styles.titleButtonPressed]}
             android_ripple={interaction.ripple}
