@@ -126,6 +126,7 @@ test('removes selected session from history and selects next ride', async () => 
     endAtMs: 1_060_000,
   })
   getTelemetryHistory.mockResolvedValueOnce([newest, selected, oldest])
+  getTelemetryHistory.mockResolvedValueOnce([newest, oldest])
 
   const { useHistoryStore } = await import('@/modules/history/store/historyStore')
 
@@ -459,4 +460,30 @@ test('keeps selected session addressable when older page expands it', async () =
   expect(useHistoryStore.getState().sessions).toHaveLength(2)
   expect(useHistoryStore.getState().selectedSession?.startAtMs).toBe(1_960_000)
   expect(useHistoryStore.getState().selectedSession?.endAtMs).toBe(2_060_000)
+})
+
+test('clearHistory invalidates an in-flight live refresh', async () => {
+  const stale = block({
+    id: 'stale',
+    startAtMs: 1_000_000,
+    endAtMs: 1_060_000,
+  })
+  let resolveRefresh: (blocks: TelemetryMinuteBucket[]) => void = () => {}
+  getTelemetryHistory.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        resolveRefresh = resolve
+      }),
+  )
+  getTelemetryHistory.mockResolvedValueOnce([])
+  const { useHistoryStore } = await import('@/modules/history/store/historyStore')
+
+  const refresh = useHistoryStore.getState().refreshLive()
+  await Promise.resolve()
+  await useHistoryStore.getState().clearHistory()
+  resolveRefresh([stale])
+  await refresh
+
+  expect(useHistoryStore.getState().blocks).toEqual([])
+  expect(useHistoryStore.getState().liveBlocks).toEqual([])
 })

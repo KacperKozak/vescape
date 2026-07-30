@@ -27,6 +27,60 @@ interface MainScreenProps {
   onAddBoard: () => void
 }
 
+function buildHistoryOverlayProps(controller: ReturnType<typeof useMainScreenController>) {
+  return {
+    enterHistoryMode: controller.enterHistoryMode,
+    selectedSession: controller.selectedSession,
+    sessionSamples: controller.sessionSamples,
+    sessionGpsSamples: controller.sessionGpsSamples,
+    sessionMarkers: controller.sessionMarkers,
+    nextRide: controller.nextRide,
+    canPreviousRide: controller.canPreviousRide,
+    loadingSession: controller.loadingSession,
+    historyLoading: controller.historyLoading,
+    historyHasMore: controller.historyHasMore,
+    historyError: controller.historyError,
+    blocks: controller.blocks,
+    sessions: controller.sessions,
+    historySheetVisible: controller.historySheetVisible,
+    setHistorySheetVisible: controller.setHistorySheetVisible,
+    historyTab: controller.historyTab,
+    selectHistoryTab: controller.selectHistoryTab,
+    favorites: controller.favorites,
+    favoritesLoading: controller.favoritesLoading,
+    favoritesSaving: controller.favoritesSaving,
+    favoritesError: controller.favoritesError,
+    selectedSessionFavorite: controller.selectedSessionFavorite,
+    trimming: controller.trimming,
+    trimSeed: controller.trimSeed,
+    beginTrimFavorite: controller.beginTrimFavorite,
+    beginEditFavorite: controller.beginEditFavorite,
+    updateTrimRange: controller.updateTrimRange,
+    cancelTrim: controller.cancelTrim,
+    saveTrim: controller.saveTrim,
+    favoriteSessions: controller.favoriteSessions,
+    canPreviousFavorite: controller.canPreviousFavorite,
+    canNextFavorite: controller.canNextFavorite,
+    selectPreviousFavorite: controller.selectPreviousFavorite,
+    selectNextFavorite: controller.selectNextFavorite,
+    openFavorite: controller.openFavorite,
+    selectFavorite: controller.selectFavorite,
+    removeOpenFavorite: controller.removeOpenFavorite,
+    loadMoreHistory: controller.loadMoreHistory,
+    selectPreviousRide: controller.selectPreviousRide,
+    selectNextRide: controller.selectNextRide,
+    selectRide: controller.selectRide,
+    exitHistory: controller.exitHistory,
+    removeSession: controller.removeSession,
+    onSeek: controller.onSeek,
+    setActiveHistoryMapMetric: controller.setActiveHistoryMapMetric,
+    mediaHistory: controller.mediaHistory,
+    openMedia: controller.openMedia,
+    openMediaAssetId: controller.openMediaAssetId,
+    closeMedia: controller.closeMedia,
+  }
+}
+
 export function MainScreen({
   activeBoard,
   activeBoardId,
@@ -333,6 +387,10 @@ export function MainScreen({
       telemetrySamples: controller.sessionSamples,
       markers: controller.sessionMarkers,
       mediaAssets: controller.mediaHistory.assets,
+      favoriteRanges:
+        controller.historyTab === 'history'
+          ? controller.favorites.map(({ startMs, endMs }) => ({ startMs, endMs }))
+          : [],
       onOpenMedia: controller.openMedia,
       activeMapMetric: controller.activeHistoryMapMetric,
     }),
@@ -341,6 +399,8 @@ export function MainScreen({
       controller.historyActive,
       controller.historyPreview,
       controller.historyPreviewRoute,
+      controller.historyTab,
+      controller.favorites,
       controller.mediaHistory.assets,
       controller.openMedia,
       controller.selectedSession?.id,
@@ -471,34 +531,7 @@ export function MainScreen({
           offscreenMapIndicators,
           onOffscreenIndicatorPress: handleOffscreenIndicatorPress,
         }}
-        history={{
-          enterHistoryMode: controller.enterHistoryMode,
-          selectedSession: controller.selectedSession,
-          sessionSamples: controller.sessionSamples,
-          sessionMarkers: controller.sessionMarkers,
-          nextRide: controller.nextRide,
-          canPreviousRide: controller.canPreviousRide,
-          loadingSession: controller.loadingSession,
-          historyLoading: controller.historyLoading,
-          historyHasMore: controller.historyHasMore,
-          historyError: controller.historyError,
-          blocks: controller.blocks,
-          sessions: controller.sessions,
-          historySheetVisible: controller.historySheetVisible,
-          setHistorySheetVisible: controller.setHistorySheetVisible,
-          loadMoreHistory: controller.loadMoreHistory,
-          selectPreviousRide: controller.selectPreviousRide,
-          selectNextRide: controller.selectNextRide,
-          selectRide: controller.selectRide,
-          exitHistory: controller.exitHistory,
-          removeSession: controller.removeSession,
-          onSeek: controller.onSeek,
-          setActiveHistoryMapMetric: controller.setActiveHistoryMapMetric,
-          mediaHistory: controller.mediaHistory,
-          openMedia: controller.openMedia,
-          openMediaAssetId: controller.openMediaAssetId,
-          closeMedia: controller.closeMedia,
-        }}
+        history={buildHistoryOverlayProps(controller)}
       />
     </View>
   )

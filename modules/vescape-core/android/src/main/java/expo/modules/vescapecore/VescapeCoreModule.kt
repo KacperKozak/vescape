@@ -35,6 +35,7 @@ import android.os.Looper
 import android.util.Log
 import androidx.core.content.ContextCompat
 import expo.modules.kotlin.Promise
+import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -544,6 +545,29 @@ class VescapeCoreModule : Module() {
     }
     AsyncFunction("getProfileStatMonths") {
       runBlocking { ProfileStatsRepository.get(context.applicationContext).getProfileStatMonths() }
+    }
+    // Favorites (ADR 0029). JS supplies only the range and an optional name; identity, timestamps
+    // and the denormalized summary are native.
+    // @parity /modules/vescape-core/ios/VescapeCoreModule.swift `getFavorites`
+    AsyncFunction("getFavorites") Coroutine { ->
+      TelemetryRepository.get(context.applicationContext).getFavorites()
+    }
+    AsyncFunction("createFavorite") Coroutine { options: Map<String, Any?> ->
+      TelemetryRepository.get(context.applicationContext).createFavorite(options)
+        ?: throw CodedException("ERR_CREATE_FAVORITE", "favorite range is invalid or could not be stored", null)
+    }
+    AsyncFunction("updateFavorite") Coroutine { id: String, options: Map<String, Any?> ->
+      TelemetryRepository.get(context.applicationContext).updateFavorite(id, options)
+        ?: throw CodedException("ERR_UPDATE_FAVORITE", "favorite does not exist or could not be stored", null)
+    }
+    AsyncFunction("deleteFavorite") Coroutine { id: String ->
+      TelemetryRepository.get(context.applicationContext).deleteFavorite(id)
+    }
+    AsyncFunction("getFavoriteMedia") Coroutine { favoriteId: String ->
+      TelemetryRepository.get(context.applicationContext).getFavoriteMedia(favoriteId)
+    }
+    AsyncFunction("importFavoriteMedia") Coroutine { options: Map<String, Any?> ->
+      TelemetryRepository.get(context.applicationContext).importFavoriteMedia(options)
     }
     AsyncFunction("deleteTelemetryBefore") Coroutine { beforeMs: Double ->
       TelemetryRepository.get(context.applicationContext).deleteBefore(beforeMs.toLong())
