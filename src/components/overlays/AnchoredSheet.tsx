@@ -33,6 +33,7 @@ import {
   measureTrigger,
   type TriggerLayout,
 } from '@/components/overlays/measureTrigger'
+import { edgeDrawerScrollEndAction } from '@/components/overlays/edgeDrawerClose'
 import { NativeScrollGestureContext } from '@/components/gestures/NativeScrollGestureContext'
 import { theme } from '@/constants/theme'
 
@@ -306,10 +307,12 @@ export function EdgeDrawer({
   const insets = useSafeAreaInsets()
   const { width, height } = useWindowDimensions()
   const [mounted, setMounted] = useState(false)
+  const [closing, setClosing] = useState(false)
   const [opensFromTop, setOpensFromTop] = useState(true)
   const [dismissRange, setDismissRange] = useState(0)
   const [keyboardInset, setKeyboardInset] = useState(0)
   const scrollRef = useRef<ScrollView>(null)
+  const closeRequestedRef = useRef(false)
   const positionedRef = useRef(false)
   const dismissRangeRef = useRef(0)
   const previousContentHeightRef = useRef(0)
@@ -326,10 +329,12 @@ export function EdgeDrawer({
       setOpensFromTop(fromTop)
       setMounted(true)
       setDismissRange(0)
+      setClosing(false)
       dismissRangeRef.current = 0
       positionedRef.current = false
       previousContentHeightRef.current = 0
       setKeyboardInset(0)
+      closeRequestedRef.current = false
       scrollOffsetRef.current = 0
       scrollOffset.value = 0
       animatedGradientFullStrengthRange.value = Math.max(1, height * DRAWER_INITIAL_OPEN_FRACTION)
@@ -360,19 +365,27 @@ export function EdgeDrawer({
   }, [mounted])
 
   const finishClose = useCallback(() => {
+    closeRequestedRef.current = false
+    setClosing(false)
     setMounted(false)
     setDismissRange(0)
     onClose()
   }, [onClose])
 
   const close = useCallback(() => {
+    closeRequestedRef.current = true
     if (dismissRange <= 0) {
       requestAnimationFrame(finishClose)
       return
     }
-    scrollRef.current?.scrollTo({
-      y: opensFromTop ? dismissRange : 0,
-      animated: true,
+    requestAnimationFrame(() => {
+      setClosing(true)
+      requestAnimationFrame(() => {
+        scrollRef.current?.scrollTo({
+          y: opensFromTop ? dismissRange : 0,
+          animated: true,
+        })
+      })
     })
   }, [dismissRange, finishClose, opensFromTop])
 
@@ -476,9 +489,13 @@ export function EdgeDrawer({
   )
 
   const scrollFullyOut = useCallback(() => {
-    scrollRef.current?.scrollTo({
-      y: opensFromTop ? dismissRange : 0,
-      animated: true,
+    closeRequestedRef.current = true
+    setClosing(true)
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({
+        y: opensFromTop ? dismissRange : 0,
+        animated: true,
+      })
     })
   }, [dismissRange, opensFromTop])
 
@@ -494,7 +511,12 @@ export function EdgeDrawer({
       const offset = event.nativeEvent.contentOffset.y
       scrollOffsetRef.current = offset
       const fullyHidden = opensFromTop ? offset >= dismissRange - 1 : offset <= 1
-      if (fullyHidden) {
+      const action = edgeDrawerScrollEndAction({
+        closeRequested: closeRequestedRef.current,
+        fullyHidden,
+        withinAutoCloseRange: shouldAutoCloseAtOffset(offset),
+      })
+      if (action === 'finish') {
         finishClose()
         return
       }
@@ -502,7 +524,7 @@ export function EdgeDrawer({
       const distanceFromEnd =
         event.nativeEvent.contentSize.height - (offset + event.nativeEvent.layoutMeasurement.height)
       if (distanceFromEnd <= contentEndThreshold) onReachContentEnd?.()
-      if (shouldAutoCloseAtOffset(offset)) scrollFullyOut()
+      if (action === 'continue-closing') scrollFullyOut()
     },
     [
       contentEndThreshold,
@@ -521,15 +543,21 @@ export function EdgeDrawer({
       scrollOffsetRef.current = contentOffset.y
       const projectedOffset =
         targetContentOffset?.y ?? contentOffset.y - (velocity?.y ?? 0) * DRAWER_FLING_PROJECTION_MS
+      const fullyHidden = opensFromTop ? contentOffset.y >= dismissRange - 1 : contentOffset.y <= 1
+      const action = edgeDrawerScrollEndAction({
+        closeRequested: closeRequestedRef.current,
+        fullyHidden,
+        withinAutoCloseRange: shouldAutoCloseAtOffset(projectedOffset),
+      })
 
-      if (shouldAutoCloseAtOffset(projectedOffset)) {
+      if (action === 'continue-closing') {
         scrollFullyOut()
         return
       }
 
       handleScrollEnd(event)
     },
-    [handleScrollEnd, scrollFullyOut, shouldAutoCloseAtOffset],
+    [dismissRange, handleScrollEnd, opensFromTop, scrollFullyOut, shouldAutoCloseAtOffset],
   )
 
   if (!mounted) return null
@@ -596,6 +624,7 @@ export function EdgeDrawer({
                 onScroll={scrollHandler}
                 onScrollEndDrag={handleScrollEndDrag}
                 onMomentumScrollEnd={handleScrollEnd}
+                scrollEnabled={!closing}
                 scrollEventThrottle={16}
                 showsVerticalScrollIndicator={false}
                 bounces={false}
