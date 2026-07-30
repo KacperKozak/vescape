@@ -149,7 +149,7 @@ function ButtonShowcase() {
           <Button
             style={{ flex: 1 }}
             label="Skip"
-            variant="secondary"
+            variant="accent"
             icon={ArrowRightIcon}
             iconPosition="right"
             size="sm"

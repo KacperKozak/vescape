@@ -60,7 +60,7 @@ export function AlertsStep({
       headerRight={
         <Button
           label="Skip"
-          variant="secondary"
+          variant="accent"
           size="sm"
           icon={ArrowRightIcon}
           iconPosition="right"
