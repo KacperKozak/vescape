@@ -1,7 +1,11 @@
 import { useState } from 'react'
 
 import { ConfirmModal } from '@/components/modals/ConfirmModal'
-import { formatFavoriteName, formatRideTime } from '@/modules/history/lib/rideFormat'
+import {
+  formatFavoriteName,
+  formatRideTime,
+  suggestFavoriteName,
+} from '@/modules/history/lib/rideFormat'
 import type { HistorySession } from '@/modules/history/store/historyStore'
 import { HistoryControls } from '@/screens/main/history/HistoryControls'
 import { HistoryMapLoading } from '@/screens/main/history/HistoryMapLoading'
@@ -47,7 +51,11 @@ export function HistoryRideDetail({
         movingStartAtMs={session.movingStartAtMs}
         movingEndAtMs={session.movingEndAtMs}
         deviceName={session.deviceName}
-        navigationTitle={openFavorite ? formatFavoriteName(openFavorite.name) : undefined}
+        navigationTitle={
+          openFavorite
+            ? formatFavoriteName(openFavorite.name, openFavorite.startMs, openFavorite.endMs)
+            : undefined
+        }
         navigationSubtitle={
           openFavorite
             ? [formatRideTime(openFavorite.startMs, openFavorite.endMs), openFavorite.boardName]
@@ -110,6 +118,11 @@ export function HistoryRideDetail({
         trimming={trimming}
         saving={history.favoritesSaving}
         trimName={trimName}
+        trimNamePlaceholder={
+          history.trimSeed
+            ? suggestFavoriteName(history.trimSeed.startMs, history.trimSeed.endMs)
+            : 'Favorite name'
+        }
         onTrimNameChange={setTrimName}
         favorite={
           openFavorite

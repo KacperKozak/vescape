@@ -147,7 +147,11 @@ export function HistorySessionSheet({
                   <RoutePreview points={routePoints} selected={selected} />
                   <View style={styles.rowMain}>
                     <HistoryRideLabel
-                      title={favorite ? formatFavoriteName(favorite.name) : dateTime}
+                      title={
+                        favorite
+                          ? formatFavoriteName(favorite.name, favorite.startMs, favorite.endMs)
+                          : dateTime
+                      }
                       subtitle={favorite ? dateTime : details}
                       details={favorite ? details : undefined}
                     />

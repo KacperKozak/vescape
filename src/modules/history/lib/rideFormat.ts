@@ -48,8 +48,22 @@ export function formatRideListDetails(
     .join(' · ')
 }
 
-export function formatFavoriteName(name: string | null): string {
-  return name?.trim() || 'Unnamed favorite'
+export function formatFavoriteName(name: string | null, startMs: number, endMs: number): string {
+  return name?.trim() || suggestFavoriteName(startMs, endMs)
+}
+
+export function suggestFavoriteName(startMs: number, endMs: number): string {
+  const start = Math.min(startMs, endMs)
+  const durationHours = Math.abs(endMs - startMs) / 3_600_000
+  if (durationHours >= 36) return 'Multi-day ride'
+  if (durationHours >= 18) return 'All-day ride'
+  if (durationHours >= 12) return 'Day ride'
+
+  const hour = new Date(start).getHours()
+  if (hour >= 4 && hour < 12) return 'Morning ride'
+  if (hour >= 12 && hour < 17) return 'Afternoon ride'
+  if (hour >= 17 && hour < 22) return 'Evening ride'
+  return 'Night ride'
 }
 
 function formatRideListDuration(durationMs: number): string {

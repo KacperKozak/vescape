@@ -79,6 +79,7 @@ appId: ${APP_ID}
     id: history-ride-list-button
 - tapOn:
     id: trim-favorite-name
+- eraseText
 - inputText: Evening ride
 - tapOn:
     id: trim-save

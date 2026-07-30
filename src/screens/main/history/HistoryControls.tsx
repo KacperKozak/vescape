@@ -31,6 +31,7 @@ interface HistoryControlsProps {
   }
   saving: boolean
   trimName: string
+  trimNamePlaceholder?: string
   onTrimNameChange: (name: string) => void
   onSelectTab: (tab: HistoryTab) => void
   onBack: () => void
@@ -47,6 +48,7 @@ export function HistoryControls({
   favorite,
   saving,
   trimName,
+  trimNamePlaceholder = 'Favorite name',
   onTrimNameChange,
   onSelectTab,
   onBack,
@@ -66,7 +68,7 @@ export function HistoryControls({
               testID="trim-favorite-name"
               value={trimName}
               onChangeText={onTrimNameChange}
-              placeholder="Favorite name"
+              placeholder={trimNamePlaceholder}
               editable={!saving}
               returnKeyType="done"
               onSubmitEditing={onSaveTrim}
