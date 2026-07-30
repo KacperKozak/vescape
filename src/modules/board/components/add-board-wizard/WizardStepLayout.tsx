@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { ScrollView, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/base/Text'
-import type { Icon } from 'phosphor-react-native'
+import { ArrowLeftIcon, ArrowRightIcon, type Icon } from 'phosphor-react-native'
 
 import { Button } from '@/components/base/Button'
 import { theme } from '@/constants/theme'
@@ -74,12 +74,15 @@ export function WizardNavActions({
         style={styles.action}
         label="Back"
         variant="secondary"
+        icon={ArrowLeftIcon}
         onPress={onBack}
         testID={`${testIDPrefix}-back`}
       />
       <Button
         style={styles.action}
         label={nextLabel}
+        icon={ArrowRightIcon}
+        iconPosition="right"
         onPress={onNext}
         disabled={!canContinue}
         testID={`${testIDPrefix}-next`}
