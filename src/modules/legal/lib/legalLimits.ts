@@ -82,13 +82,15 @@ const LEGAL_LIMIT_COUNTRY_DETAILS: Record<string, LegalLimitCountryDetail> = {
   },
   CZ: {
     vehicleScope:
-      'A powered vehicle must retain the normal character of a bicycle or scooter to use the simplified 25 km/h category. A OneWheel/EUC does not.',
+      'Czech courts classify a self-balancing electric unicycle as an “osobní přepravník” under § 2(nn) and § 60a. A OneWheel-style board uses the same fore-aft self-balancing mechanism and is treated here as the analogous device covered by the statute.',
     where:
-      'Ordinary public-road use requires the vehicle to fit an approved motor-vehicle or category-Z route; typical consumer devices do not have that approval.',
+      'Use pedestrian routes and undivided pedestrian/cycle paths only at walking pace. Dedicated cycle lanes and paths follow the applicable cycling rules. Use the carriageway only when the listed pedestrian or cycle infrastructure is unavailable or the pavement is impassable, then stay on the left shoulder or edge. Signposted local bans may apply.',
     equipment:
-      'Technical approval and, depending on classification, registration, licence and insurance would be required.',
-    insurance: 'Insurance does not itself legalise an unapproved device.',
-    notes: 'Only a specifically technically approved model could have a different result.',
+      'The personal-transporter rules do not set one nationwide design-speed cap. Follow route-specific and local limits, and do not endanger pedestrians or cyclists.',
+    insurance:
+      'Motor-liability insurance is required when maximum design speed exceeds 25 km/h, or when operating weight exceeds 25 kg and maximum design speed exceeds 14 km/h.',
+    notes:
+      'The 25 km/h bicycle/e-scooter approval category does not determine the road status of a self-balancing personal transporter. A selected software riding mode does not change the vehicle’s maximum design speed.',
   },
   DK: {
     vehicleScope:
