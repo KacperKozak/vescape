@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type RefObject } from 'react'
+import { useCallback, useMemo, useRef, useState, type RefObject } from 'react'
 import { StyleSheet, View } from 'react-native'
 import { useSharedValue } from 'react-native-reanimated'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { type TelemetryChartPoint } from '@/components/charts/chartMath'
 import { TelemetryLineChart, type ChartTrimConfig } from '@/components/charts/TelemetryLineChart'
 import { InfoModal } from '@/components/modals/InfoModal'
+import { theme } from '@/constants/theme'
 import {
   OPTIONAL_CHART_METRICS,
   SPEED_CHART_DEF,
@@ -41,6 +42,7 @@ interface HistoryTelemetryPanelProps {
   canPrevious: boolean
   canNext: boolean
   favoriteMode: boolean
+  favoriteRanges: { startMs: number; endMs: number }[]
   favorited: boolean
   actionDisabled: boolean
   mediaAssets: MediaHistoryAsset[]
@@ -75,6 +77,7 @@ export function HistoryTelemetryPanel({
   canPrevious,
   canNext,
   favoriteMode,
+  favoriteRanges,
   favorited,
   actionDisabled,
   mediaAssets,
@@ -120,6 +123,14 @@ export function HistoryTelemetryPanel({
     pointColors,
     excludedRanges,
   })
+  const favoriteChartHighlights = useMemo(
+    () =>
+      favoriteRanges.map((range) => ({
+        ...range,
+        color: theme.alpha(theme.status.favorite.color, 0.12),
+      })),
+    [favoriteRanges],
+  )
 
   const rideWindow = rideMovingWindow({ movingStartAtMs, movingEndAtMs })
   const titleStartMs = rideWindow?.startMs ?? startAtMs
@@ -206,6 +217,7 @@ export function HistoryTelemetryPanel({
             scrubTimeMs={scrubTimeMs}
             onScrubTimeChange={trim ? undefined : handleScrubTimeChange}
             excludedRanges={excludedRanges.speed}
+            timeRangeHighlights={favoriteChartHighlights}
             trim={trim}
           />
 

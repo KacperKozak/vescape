@@ -72,6 +72,7 @@ export function HistoryRideDetail({
         }
         canNext={!trimming && (favoriteMode ? history.canNextFavorite : history.nextRide != null)}
         favoriteMode={favoriteMode}
+        favoriteRanges={favoriteMode ? [] : history.favorites}
         favorited={history.selectedSessionFavorite != null}
         actionDisabled={busy || history.favoritesSaving}
         mediaAssets={history.mediaHistory.assets}

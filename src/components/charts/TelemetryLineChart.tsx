@@ -18,6 +18,7 @@ import {
   Line,
   LinearGradient,
   Path,
+  Rect,
   RoundedRect,
   Skia,
   vec,
@@ -26,6 +27,7 @@ import {
 import { theme } from '@/constants/theme'
 import {
   getChartPosition,
+  getChartTimeRangeBands,
   getChartTimeLabels,
   getXPosition,
   splitChartPointSegments,
@@ -261,6 +263,12 @@ export interface SecondaryChartSeries {
   formatValue?: (value: number) => string
 }
 
+export interface ChartTimeRangeHighlight {
+  startMs: number
+  endMs: number
+  color: string
+}
+
 interface TelemetryLineChartProps {
   label?: string
   value: string
@@ -288,6 +296,8 @@ interface TelemetryLineChartProps {
   reserveRightAxis?: boolean
   /** When set, the chart is a range trimmer instead of a scrubber. */
   trim?: ChartTrimConfig
+  /** Solid translucent bands rendered behind the chart lines. */
+  timeRangeHighlights?: ChartTimeRangeHighlight[]
 }
 
 interface ChartLineSegmentsProps {
@@ -397,6 +407,7 @@ export function TelemetryLineChart({
   scrubbable = false,
   reserveRightAxis = false,
   trim,
+  timeRangeHighlights,
 }: TelemetryLineChartProps) {
   'use no memo'
   const [chartWidth, setChartWidth] = useState(0)
@@ -575,6 +586,10 @@ export function TelemetryLineChart({
   const timeLabels = useMemo(() => {
     return getChartTimeLabels(displayPoints, windowMs, timeMode)
   }, [displayPoints, timeMode, windowMs])
+  const timeRangeBands = useMemo(
+    () => getChartTimeRangeBands(displayPoints, timeRangeHighlights ?? [], chartWidth, windowMs),
+    [chartWidth, displayPoints, timeRangeHighlights, windowMs],
+  )
 
   const activeColor = resolveActiveChartColor(currentPoint, color, getPointColor)
   const valueColorStyle = getPointColor && currentPoint ? { color: activeColor } : undefined
@@ -626,6 +641,16 @@ export function TelemetryLineChart({
           <View style={[styles.graphWrap, { height }]} onLayout={onGraphLayout}>
             {chartWidth > 0 && (
               <Canvas style={{ width: chartWidth, height }}>
+                {timeRangeBands.map((band) => (
+                  <Rect
+                    key={`${band.startMs}-${band.endMs}-${band.color}`}
+                    x={band.x}
+                    y={0}
+                    width={band.width}
+                    height={height}
+                    color={band.color}
+                  />
+                ))}
                 <Line
                   p1={vec(0, 0.5)}
                   p2={vec(chartWidth, 0.5)}

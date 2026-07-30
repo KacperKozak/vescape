@@ -4,6 +4,7 @@ import {
   computeAutoRange,
   findNearestChartPointAtX,
   getChartPosition,
+  getChartTimeRangeBands,
   getChartTimeLabels,
   splitChartLineSegments,
   type TelemetryChartPoint,
@@ -32,6 +33,23 @@ test('getChartPosition clamps inside bounds', () => {
   const out: TelemetryChartPoint = { date: new Date(base + 5_000), value: 200 }
   const pos = getChartPosition(points, out, range, 100, 50)
   expect(pos).toEqual({ x: 100, y: 0 })
+})
+
+test('chart time-range bands clip to the visible domain and ignore outside ranges', () => {
+  expect(
+    getChartTimeRangeBands(
+      points,
+      [
+        { startMs: base - 1_000, endMs: base + 500, id: 'left' },
+        { startMs: base + 1_500, endMs: base + 3_000, id: 'right' },
+        { startMs: base + 3_000, endMs: base + 4_000, id: 'outside' },
+      ],
+      100,
+    ),
+  ).toEqual([
+    { startMs: base - 1_000, endMs: base + 500, id: 'left', x: 0, width: 25 },
+    { startMs: base + 1_500, endMs: base + 3_000, id: 'right', x: 75, width: 25 },
+  ])
 })
 
 test('findNearestChartPointAtX picks nearest and clamps x', () => {

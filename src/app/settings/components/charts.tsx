@@ -356,6 +356,13 @@ function TrimChartShowcase() {
           onChange: (startMs, endMs) => setRange({ startMs, endMs }),
           onCommit: (startMs, endMs) => setRange({ startMs, endMs }),
         }}
+        timeRangeHighlights={[
+          {
+            startMs: domainStartMs + span * 0.3,
+            endMs: domainStartMs + span * 0.55,
+            color: theme.alpha(theme.status.favorite.color, 0.12),
+          },
+        ]}
       />
       <Text style={styles.trimReadout}>Selected span: {selectedSeconds}s</Text>
     </ShowcaseCard>

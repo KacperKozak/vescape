@@ -141,6 +141,32 @@ export function getXPosition(
   return Math.max(0, Math.min(width, x))
 }
 
+export interface ChartTimeRange {
+  startMs: number
+  endMs: number
+}
+
+export function getChartTimeRangeBands<T extends ChartTimeRange>(
+  points: TelemetryChartPoint[],
+  ranges: readonly T[],
+  width: number,
+  windowMs?: number,
+): (T & { x: number; width: number })[] {
+  if (points.length < 2 || width <= 0) return []
+  const domainEndMs = points.at(-1)!.date.getTime()
+  const domainStartMs = windowMs ? domainEndMs - windowMs : points[0].date.getTime()
+
+  return ranges.flatMap((range) => {
+    const startMs = Math.max(domainStartMs, Math.min(range.startMs, range.endMs))
+    const endMs = Math.min(domainEndMs, Math.max(range.startMs, range.endMs))
+    if (endMs <= startMs) return []
+    const x1 = getXPosition(points, startMs, width, windowMs)
+    const x2 = getXPosition(points, endMs, width, windowMs)
+    if (x1 == null || x2 == null || x2 <= x1) return []
+    return [{ ...range, x: x1, width: x2 - x1 }]
+  })
+}
+
 export function toExcludedRanges(
   exclusions: Array<{
     startMs: number
