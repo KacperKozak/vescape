@@ -12,7 +12,7 @@ import java.io.File
 // @parity /modules/vescape-core/ios/VescapeCoreModule.swift
 internal const val TELEMETRY_DATABASE_NAME = "vescape.db"
 internal const val LEGACY_TELEMETRY_DATABASE_NAME = "telemetry.db"
-internal const val TELEMETRY_DATABASE_VERSION = 30
+internal const val TELEMETRY_DATABASE_VERSION = 31
 
 @Database(
   entities = [
@@ -30,6 +30,7 @@ internal const val TELEMETRY_DATABASE_VERSION = 30
     PrivacyZoneEntity::class,
     BoardWarningEntity::class,
     FavoriteEntity::class,
+    FavoriteMediaEntity::class,
   ],
   version = TELEMETRY_DATABASE_VERSION,
   exportSchema = false,
@@ -540,6 +541,37 @@ abstract class TelemetryDatabase : RoomDatabase() {
     }
 
     /**
+     * Favorite Media (#291). Native manifest metadata truth; bytes live in canonical Favorite-owned
+     * app storage (ADR 0030).
+     *
+     * @parity /modules/vescape-core/ios/telemetry/TelemetryDatabase.swift `v31_favorite_media`
+     */
+    internal val MIGRATION_30_31 = object : Migration(30, 31) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+          """
+          CREATE TABLE IF NOT EXISTS favorite_media (
+            id TEXT NOT NULL PRIMARY KEY,
+            favorite_id TEXT NOT NULL,
+            captured_at INTEGER,
+            mime_type TEXT NOT NULL,
+            media_kind TEXT NOT NULL,
+            byte_count INTEGER NOT NULL,
+            content_hash TEXT NOT NULL,
+            created_at INTEGER NOT NULL
+          )
+          """.trimIndent(),
+        )
+        db.execSQL(
+          """
+          CREATE INDEX IF NOT EXISTS index_favorite_media_favorite_id_created_at
+          ON favorite_media(favorite_id, created_at)
+          """.trimIndent(),
+        )
+      }
+    }
+
+    /**
      * One-time file rename from the pre-release "telemetry.db" name. Checkpoints the legacy WAL so
      * the whole database lives in the main file, then renames it in place. Idempotent: once the new
      * file exists (or no legacy file is present) this is a no-op.
@@ -596,6 +628,7 @@ abstract class TelemetryDatabase : RoomDatabase() {
             MIGRATION_27_28,
             MIGRATION_28_29,
             MIGRATION_29_30,
+            MIGRATION_30_31,
           )
           .fallbackToDestructiveMigration(true)
           .addCallback(object : Callback() {

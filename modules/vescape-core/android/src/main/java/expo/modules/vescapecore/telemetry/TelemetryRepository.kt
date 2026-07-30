@@ -91,6 +91,7 @@ class TelemetryRepository private constructor(context: Context) {
   private val appContext = context.applicationContext
   private val db = TelemetryDatabase.get(context)
   private val dao = db.telemetryDao()
+  private val favoriteMediaStore = FavoriteMediaStore(appContext, dao)
   private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
   private val lock = Any()
   private val pending = ArrayDeque<PendingFrame>()
@@ -544,6 +545,7 @@ class TelemetryRepository private constructor(context: Context) {
    * @parity /modules/vescape-core/ios/telemetry/TelemetryRepository.swift `getFavorites`
    */
   suspend fun getFavorites(): List<Map<String, Any?>> = withContext(Dispatchers.IO) {
+    favoriteMediaStore.reconcileAll()
     val boardNames = dao.getBoards().associate { it.id to it.name }
     dao.getFavorites().map { it.toMap(boardNames[it.boardId]) }
   }
@@ -610,7 +612,29 @@ class TelemetryRepository private constructor(context: Context) {
    * @parity /modules/vescape-core/ios/telemetry/TelemetryRepository.swift `deleteFavorite`
    */
   suspend fun deleteFavorite(id: String): Boolean = withContext(Dispatchers.IO) {
-    dao.deleteFavorite(id) > 0
+    val deleted = dao.deleteFavorite(id) > 0
+    if (deleted) favoriteMediaStore.deleteDirectory(id)
+    deleted
+  }
+
+  /**
+   * Read and reconcile Favorite Media. Missing files remove their manifest rows; temp/orphan files
+   * are deleted and never published to JS.
+   *
+   * @parity /modules/vescape-core/ios/telemetry/TelemetryRepository.swift `getFavoriteMedia`
+   */
+  suspend fun getFavoriteMedia(favoriteId: String): List<Map<String, Any?>> = withContext(Dispatchers.IO) {
+    favoriteMediaStore.list(favoriteId)
+  }
+
+  /**
+   * Copy picker bytes into canonical app storage, hashing as they stream, then publish the
+   * immutable manifest only after the final file exists.
+   *
+   * @parity /modules/vescape-core/ios/telemetry/TelemetryRepository.swift `importFavoriteMedia`
+   */
+  suspend fun importFavoriteMedia(options: Map<String, Any?>): Map<String, Any?> = withContext(Dispatchers.IO) {
+    favoriteMediaStore.importMedia(options)
   }
 
   /**

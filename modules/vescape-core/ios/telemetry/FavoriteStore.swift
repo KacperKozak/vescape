@@ -215,10 +215,13 @@ struct FavoriteStore {
   }
 
   /// Unpin one Favorite. Telemetry inside its range is untouched and becomes deletable again.
+  /// Favorite Media rows are parent-covered and raw-deleted in the same transaction (ADR 0030);
+  /// filesystem cleanup is best-effort in the repository after this commit succeeds.
   @discardableResult
   func delete(_ id: String) -> Bool {
     guard let writer = resolveWriter() else { return false }
     return (try? writer.write { db in
+      try db.execute(sql: "DELETE FROM favorite_media WHERE favorite_id = ?", arguments: [id])
       try db.execute(sql: "DELETE FROM favorites WHERE id = ?", arguments: [id])
       return db.changesCount > 0
     }) ?? false

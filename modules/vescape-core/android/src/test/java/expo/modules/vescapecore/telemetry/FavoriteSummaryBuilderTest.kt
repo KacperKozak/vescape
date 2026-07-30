@@ -139,6 +139,58 @@ class FavoriteSummaryBuilderTest {
     )
   }
 
+  @Test
+  fun favoriteMediaMigrationAddsImmutableManifestMetadata() {
+    val sql = mutableListOf<String>()
+    val db = Proxy.newProxyInstance(
+      SupportSQLiteDatabase::class.java.classLoader,
+      arrayOf(SupportSQLiteDatabase::class.java),
+    ) { _, method, args ->
+      if (method.name == "execSQL") {
+        sql += args?.firstOrNull() as String
+        null
+      } else {
+        throw UnsupportedOperationException(method.name)
+      }
+    } as SupportSQLiteDatabase
+
+    TelemetryDatabase.MIGRATION_30_31.migrate(db)
+
+    assertTrue(sql.any { it.contains("CREATE TABLE IF NOT EXISTS favorite_media") })
+    for (column in listOf(
+      "id TEXT NOT NULL PRIMARY KEY",
+      "favorite_id TEXT NOT NULL",
+      "captured_at INTEGER",
+      "mime_type TEXT NOT NULL",
+      "media_kind TEXT NOT NULL",
+      "byte_count INTEGER NOT NULL",
+      "content_hash TEXT NOT NULL",
+      "created_at INTEGER NOT NULL",
+    )) {
+      assertTrue("$column missing", sql.any { it.contains(column) })
+    }
+    assertTrue(sql.any { it.contains("ON favorite_media(favorite_id, created_at)") })
+  }
+
+  @Test
+  fun favoriteMediaEntityMapsManifestAndCanonicalUriAcrossBridge() {
+    val map = FavoriteMediaEntity(
+      id = "media-1",
+      favoriteId = "favorite-1",
+      capturedAt = 1_000,
+      mimeType = "image/jpeg",
+      mediaKind = "photo",
+      byteCount = 12,
+      contentHash = "abc",
+      createdAt = 2_000,
+    ).toMap("file:///favoriteMedia/favorite-1/media-1.jpg", "media-1.jpg")
+
+    assertEquals("favorite-1", map["favoriteId"])
+    assertEquals(12L, map["byteCount"])
+    assertEquals("abc", map["contentHash"])
+    assertEquals("file:///favoriteMedia/favorite-1/media-1.jpg", map["uri"])
+  }
+
   private fun bucketsFor(points: List<BucketTelemetryPoint>): Collection<TelemetryMinuteBucketEntity> {
     val sanitization = sanitizeTelemetrySamples(points, MetricSanitizerConfig())
     val sanitized = points.mapIndexed { index, point ->

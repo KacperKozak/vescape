@@ -38,6 +38,7 @@ interface HistoryTelemetryPanelProps {
   samples: TelemetrySample[]
   canPrevious: boolean
   canNext: boolean
+  showMedia: boolean
   mediaAssets: MediaHistoryAsset[]
   mediaUnmatched: MediaAssetInput[]
   mediaLoading: boolean
@@ -65,6 +66,7 @@ export function HistoryTelemetryPanel({
   samples,
   canPrevious,
   canNext,
+  showMedia,
   mediaAssets,
   mediaUnmatched,
   mediaLoading,
@@ -155,6 +157,7 @@ export function HistoryTelemetryPanel({
         deviceName={deviceName}
         canPrevious={canPrevious}
         canNext={canNext}
+        showMedia={showMedia}
         mediaCount={mediaAssets.length + mediaUnmatched.length}
         mediaLoading={mediaLoading}
         mediaButtonRef={mediaButtonRef}
@@ -214,17 +217,19 @@ export function HistoryTelemetryPanel({
           <HistoryMetricLegend />
         </>
       )}
-      <HistoryRideMediaDrawer
-        visible={mediaDrawerVisible}
-        triggerRef={mediaButtonRef}
-        assets={mediaAssets}
-        unmatched={mediaUnmatched}
-        loading={mediaLoading}
-        error={mediaError}
-        onClose={() => setMediaDrawerVisible(false)}
-        onAdd={onAddMedia}
-        onOpenMedia={onOpenMedia}
-      />
+      {showMedia ? (
+        <HistoryRideMediaDrawer
+          visible={mediaDrawerVisible}
+          triggerRef={mediaButtonRef}
+          assets={mediaAssets}
+          unmatched={mediaUnmatched}
+          loading={mediaLoading}
+          error={mediaError}
+          onClose={() => setMediaDrawerVisible(false)}
+          onAdd={onAddMedia}
+          onOpenMedia={onOpenMedia}
+        />
+      ) : null}
       <InfoModal
         visible={shareInfoVisible}
         title="Share Ride"

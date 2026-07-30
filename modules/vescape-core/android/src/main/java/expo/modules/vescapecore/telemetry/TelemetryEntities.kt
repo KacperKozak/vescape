@@ -529,3 +529,48 @@ data class FavoriteEntity(
     "batteryUsedWh" to batteryUsedWhMilli / 1000.0,
   )
 }
+
+/**
+ * One immutable Favorite Media manifest row. SQLite owns metadata; the canonical file path is
+ * derived only from the Favorite and media ids plus the stored MIME type (ADR 0030).
+ *
+ * @parity /modules/vescape-core/ios/telemetry/FavoriteMediaStore.swift `FavoriteMedia`
+ * @parity /modules/vescape-core/src/index.ts `FavoriteMedia`
+ */
+@Entity(
+  tableName = "favorite_media",
+  indices = [
+    Index(value = ["favorite_id", "created_at"]),
+  ],
+)
+data class FavoriteMediaEntity(
+  @PrimaryKey
+  val id: String,
+  @ColumnInfo(name = "favorite_id")
+  val favoriteId: String,
+  @ColumnInfo(name = "captured_at")
+  val capturedAt: Long?,
+  @ColumnInfo(name = "mime_type")
+  val mimeType: String,
+  @ColumnInfo(name = "media_kind")
+  val mediaKind: String,
+  @ColumnInfo(name = "byte_count")
+  val byteCount: Long,
+  @ColumnInfo(name = "content_hash")
+  val contentHash: String,
+  @ColumnInfo(name = "created_at")
+  val createdAt: Long,
+) {
+  fun toMap(uri: String, filename: String): Map<String, Any?> = mapOf(
+    "id" to id,
+    "favoriteId" to favoriteId,
+    "capturedAtMs" to capturedAt,
+    "mimeType" to mimeType,
+    "mediaKind" to mediaKind,
+    "byteCount" to byteCount,
+    "contentHash" to contentHash,
+    "createdAtMs" to createdAt,
+    "uri" to uri,
+    "filename" to filename,
+  )
+}

@@ -20,9 +20,8 @@ import { useMapPointStore } from '@/modules/map-points/store/mapPointStore'
 import { useMapContributionReady } from '@/modules/profile/hooks/useMapContributionReady'
 import { useSettingsStore } from '@/modules/settings/store/settingsStore'
 import { useWeatherStore } from '@/modules/weather/store/weatherStore'
-import { useMediaHistory } from '@/modules/history/hooks/useMediaHistory'
+import { useFavoriteMedia } from '@/modules/history/hooks/useMediaHistory'
 import type { MediaAssetInput } from '@/modules/history/lib/mediaHistory'
-import { deleteRideMediaAssets } from '@/modules/history/store/rideMediaFiles'
 import { getHistoryPreviewRoute } from '@/modules/history/lib/previewRoute'
 
 interface UseMainScreenControllerArgs {
@@ -160,7 +159,8 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
         clearDirectionPoint: s.clearDirectionPoint,
       })),
     )
-  const mediaHistory = useMediaHistory({
+  const mediaHistory = useFavoriteMedia({
+    favoriteId: historyFavorites.openFavorite?.id ?? null,
     selectedSession,
     gpsSamples: sessionGpsSamples,
     markers: sessionMarkers,
@@ -316,14 +316,6 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
   }, [selectSession])
 
   const removeSession = useCallback(() => {
-    const session = useHistoryStore.getState().selectedSession
-    if (session) {
-      try {
-        deleteRideMediaAssets(session.id)
-      } catch {
-        // Ride removal must not fail on media cleanup; orphaned folders are harmless.
-      }
-    }
     void removeSelectedSession()
   }, [removeSelectedSession])
 

@@ -11,7 +11,10 @@ final class FavoriteStoreTests: XCTestCase {
 
   override func setUpWithError() throws {
     queue = try DatabaseQueue()
-    try queue.write { db in try FavoriteStore.createTables(db) }
+    try queue.write { db in
+      try FavoriteStore.createTables(db)
+      try FavoriteMediaStore.createTables(db)
+    }
     store = FavoriteStore(dbWriter: queue)
   }
 
@@ -108,6 +111,25 @@ final class FavoriteStoreTests: XCTestCase {
     XCTAssertTrue(store.delete("fav-1"))
     XCTAssertEqual(store.list().map(\.id), ["fav-2"])
     XCTAssertFalse(store.delete("fav-1"))
+  }
+
+  func testDeleteRawCascadesFavoriteMediaManifestRows() throws {
+    store.insert(makeFavorite(id: "fav-1", startMs: 1_000, endMs: 2_000))
+    try queue.write { db in
+      try db.execute(
+        sql: """
+          INSERT INTO favorite_media (
+            id, favorite_id, captured_at, mime_type, media_kind, byte_count, content_hash, created_at
+          ) VALUES ('media-1', 'fav-1', 1000, 'image/jpeg', 'photo', 1, '00', 1000)
+          """
+      )
+    }
+
+    XCTAssertTrue(store.delete("fav-1"))
+    let mediaCount = try queue.read { db in
+      try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM favorite_media")
+    }
+    XCTAssertEqual(mediaCount, 0)
   }
 
   func testBridgeMapConvertsStoredIntegersToRiderUnits() {

@@ -51,6 +51,7 @@ export function HistoryRideDetail({
         samples={history.sessionSamples}
         canPrevious={!favoriteMode && !trimming && history.canPreviousRide}
         canNext={!favoriteMode && !trimming && !!history.nextRide}
+        showMedia={favoriteMode}
         mediaAssets={history.mediaHistory.assets}
         mediaUnmatched={history.mediaHistory.unmatched}
         mediaLoading={history.mediaHistory.loading}

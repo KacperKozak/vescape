@@ -562,6 +562,12 @@ class VescapeCoreModule : Module() {
     AsyncFunction("deleteFavorite") Coroutine { id: String ->
       TelemetryRepository.get(context.applicationContext).deleteFavorite(id)
     }
+    AsyncFunction("getFavoriteMedia") Coroutine { favoriteId: String ->
+      TelemetryRepository.get(context.applicationContext).getFavoriteMedia(favoriteId)
+    }
+    AsyncFunction("importFavoriteMedia") Coroutine { options: Map<String, Any?> ->
+      TelemetryRepository.get(context.applicationContext).importFavoriteMedia(options)
+    }
     AsyncFunction("deleteTelemetryBefore") Coroutine { beforeMs: Double ->
       TelemetryRepository.get(context.applicationContext).deleteBefore(beforeMs.toLong())
     }

@@ -14,6 +14,7 @@ interface HistoryPanelNavProps {
   deviceName: string
   canPrevious: boolean
   canNext: boolean
+  showMedia: boolean
   mediaCount: number
   mediaLoading: boolean
   mediaButtonRef: RefObject<View | null>
@@ -30,6 +31,7 @@ export function HistoryPanelNav({
   deviceName,
   canPrevious,
   canNext,
+  showMedia,
   mediaCount,
   mediaLoading,
   mediaButtonRef,
@@ -42,17 +44,21 @@ export function HistoryPanelNav({
   return (
     <View style={styles.navControls}>
       <View ref={mediaButtonRef} style={styles.navSide}>
-        <IconButton
-          icon={ImagesSquareIcon}
-          onPress={onOpenMediaDrawer}
-          loading={mediaLoading}
-          size="lg"
-          style={mediaCount > 0 ? styles.mediaEnabled : undefined}
-        />
-        {mediaCount > 0 ? (
-          <View style={styles.mediaCountBadge} pointerEvents="none">
-            <Text style={styles.mediaCountText}>{mediaCount > 99 ? '99+' : mediaCount}</Text>
-          </View>
+        {showMedia ? (
+          <>
+            <IconButton
+              icon={ImagesSquareIcon}
+              onPress={onOpenMediaDrawer}
+              loading={mediaLoading}
+              size="lg"
+              style={mediaCount > 0 ? styles.mediaEnabled : undefined}
+            />
+            {mediaCount > 0 ? (
+              <View style={styles.mediaCountBadge} pointerEvents="none">
+                <Text style={styles.mediaCountText}>{mediaCount > 99 ? '99+' : mediaCount}</Text>
+              </View>
+            ) : null}
+          </>
         ) : null}
       </View>
       <PrevNextSelector

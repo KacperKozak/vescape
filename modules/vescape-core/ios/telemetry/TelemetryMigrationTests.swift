@@ -82,6 +82,7 @@ final class TelemetryMigrationTests: XCTestCase {
       "boards", "board_settings", "alerts", "app_settings", "telemetry_frames",
       "telemetry_minute_buckets", "telemetry_markers", "metric_exclusion_ranges",
       "diagnostic_events", "tune_profiles", "tune_history_entries", "board_warnings", "favorites",
+      "favorite_media",
     ]
     for table in tables {
       XCTAssertTrue(try queue.read { db in try db.tableExists(table) }, "\(table) is missing")

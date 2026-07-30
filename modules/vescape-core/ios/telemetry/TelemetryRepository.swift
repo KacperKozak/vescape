@@ -237,6 +237,7 @@ internal final class TelemetryRepository {
   /// a snapshot would drift.
   /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryRepository.kt `getFavorites`
   func getFavorites() -> [[String: Any?]] {
+    FavoriteMediaStore.shared.reconcileAll()
     let boardNames = Self.boardNamesById()
     return FavoriteStore.shared.list().map { favorite in
       favorite.toMap(boardName: favorite.boardId.flatMap { boardNames[$0] })
@@ -319,7 +320,38 @@ internal final class TelemetryRepository {
   /// Unpin a Favorite. Telemetry in its range stays and becomes normally deletable (ADR 0029).
   /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryRepository.kt `deleteFavorite`
   func deleteFavorite(_ id: String) -> Bool {
-    FavoriteStore.shared.delete(id)
+    let deleted = FavoriteStore.shared.delete(id)
+    if deleted { FavoriteMediaStore.shared.deleteDirectory(favoriteId: id) }
+    return deleted
+  }
+
+  /// Read and reconcile Favorite Media. Missing files remove their manifest rows; temp/orphan files
+  /// are deleted and never published to JS.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryRepository.kt `getFavoriteMedia`
+  func getFavoriteMedia(_ favoriteId: String) -> [[String: Any?]] {
+    FavoriteMediaStore.shared.list(favoriteId: favoriteId).map {
+      $0.toMap(fileURL: FavoriteMediaStore.shared.fileURL(for: $0))
+    }
+  }
+
+  /// Copy picker bytes into canonical app storage, hashing as they stream, then publish the
+  /// immutable manifest only after the final file exists.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryRepository.kt `importFavoriteMedia`
+  func importFavoriteMedia(_ options: [String: Any]) throws -> [String: Any?] {
+    guard
+      let favoriteId = options["favoriteId"] as? String,
+      let sourceURI = options["uri"] as? String,
+      let mimeType = options["mimeType"] as? String,
+      let mediaKind = options["mediaKind"] as? String
+    else { throw FavoriteMediaStoreError.invalidSource }
+    let media = try FavoriteMediaStore.shared.importMedia(
+      favoriteId: favoriteId,
+      sourceURI: sourceURI,
+      capturedAtMs: telemetryLong(options["capturedAtMs"]),
+      mimeType: mimeType,
+      mediaKind: mediaKind
+    )
+    return media.toMap(fileURL: FavoriteMediaStore.shared.fileURL(for: media))
   }
 
   /// Run the raw samples of a Favorite range through the same Metric Sanitizers the recording flush

@@ -435,6 +435,13 @@ enum TelemetryDatabase {
       try FavoriteStore.createTables(db)
     }
 
+    // Favorite Media (#291). Native manifest metadata truth; bytes live in canonical Favorite-owned
+    // app storage (ADR 0030).
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `MIGRATION_30_31`
+    migrator.registerMigration("v31_favorite_media") { db in
+      try FavoriteMediaStore.createTables(db)
+    }
+
     return migrator
   }
 }

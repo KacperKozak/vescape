@@ -646,6 +646,18 @@ public class VescapeCoreModule: Module {
       promise.resolve(TelemetryRepository.shared.deleteFavorite(id))
     }
 
+    AsyncFunction("getFavoriteMedia") { (favoriteId: String, promise: Promise) in
+      promise.resolve(TelemetryRepository.shared.getFavoriteMedia(favoriteId))
+    }
+
+    AsyncFunction("importFavoriteMedia") { (options: [String: Any], promise: Promise) in
+      do {
+        promise.resolve(try TelemetryRepository.shared.importFavoriteMedia(options))
+      } catch {
+        promise.reject("ERR_IMPORT_FAVORITE_MEDIA", "favorite media could not be imported", error)
+      }
+    }
+
     AsyncFunction("deleteTelemetryBefore") { (beforeMs: Double, promise: Promise) in
       promise.resolve(TelemetryRepository.shared.deleteBefore(Int64(beforeMs)))
     }

@@ -553,7 +553,32 @@ interface TelemetryDao {
   suspend fun renameFavorite(id: String, name: String?, updatedAt: Long): Int
 
   @Query("DELETE FROM favorites WHERE id = :id")
-  suspend fun deleteFavorite(id: String): Int
+  suspend fun deleteFavoriteRow(id: String): Int
+
+  // Favorite Media — native manifest metadata truth (ADR 0030).
+  // @parity /modules/vescape-core/ios/telemetry/FavoriteMediaStore.swift
+
+  @Query("SELECT * FROM favorite_media WHERE favorite_id = :favoriteId ORDER BY created_at, id")
+  suspend fun getFavoriteMedia(favoriteId: String): List<FavoriteMediaEntity>
+
+  @Insert
+  suspend fun insertFavoriteMedia(media: FavoriteMediaEntity)
+
+  @Query("DELETE FROM favorite_media WHERE id = :id")
+  suspend fun deleteFavoriteMedia(id: String): Int
+
+  @Query("DELETE FROM favorite_media WHERE favorite_id = :favoriteId")
+  suspend fun deleteFavoriteMediaForFavorite(favoriteId: String): Int
+
+  @Query("DELETE FROM favorite_media WHERE favorite_id NOT IN (SELECT id FROM favorites)")
+  suspend fun deleteOrphanFavoriteMedia(): Int
+
+  /** Parent-covered raw cascade: media rows and Favorite disappear in one SQLite transaction. */
+  @Transaction
+  suspend fun deleteFavorite(id: String): Int {
+    deleteFavoriteMediaForFavorite(id)
+    return deleteFavoriteRow(id)
+  }
 }
 
 private fun TelemetryMinuteBucketEntity.merge(next: TelemetryMinuteBucketEntity): TelemetryMinuteBucketEntity {

@@ -819,6 +819,32 @@ export interface CreateFavoriteOptions {
   name?: string
 }
 
+/**
+ * One immutable Favorite Media manifest row. Native owns metadata and canonical storage.
+ * @parity /modules/vescape-core/ios/telemetry/FavoriteMediaStore.swift `FavoriteMedia`
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryEntities.kt `FavoriteMediaEntity`
+ */
+export interface FavoriteMedia {
+  id: string
+  favoriteId: string
+  capturedAtMs: number | null
+  mimeType: string
+  mediaKind: 'photo' | 'video'
+  byteCount: number
+  contentHash: string
+  createdAtMs: number
+  uri: string
+  filename: string
+}
+
+export interface ImportFavoriteMediaOptions {
+  favoriteId: string
+  uri: string
+  capturedAtMs?: number
+  mimeType: string
+  mediaKind: 'photo' | 'video'
+}
+
 export interface RefloatConfigField {
   id: string
   label: string
@@ -1472,6 +1498,8 @@ type VescapeCoreNativeModule = NativeEventEmitter<VescapeCoreEvents> & {
   createFavorite(options: CreateFavoriteOptions): Promise<Favorite>
   renameFavorite(id: string, name: string | null): Promise<Favorite>
   deleteFavorite(id: string): Promise<boolean>
+  getFavoriteMedia(favoriteId: string): Promise<FavoriteMedia[]>
+  importFavoriteMedia(options: ImportFavoriteMediaOptions): Promise<FavoriteMedia>
   getDiagnosticEvents(options: DiagnosticEventOptions): Promise<LocalDiagnosticEvent[]>
   clearDiagnosticEvents(): Promise<void>
   getBoardWarnings(): Promise<BoardWarning[]>
@@ -1981,6 +2009,18 @@ export async function renameFavorite(id: string, name: string | null): Promise<F
 /** Unpin a Favorite. Its telemetry stays and becomes normally deletable (ADR 0029). */
 export async function deleteFavorite(id: string): Promise<boolean> {
   return native.deleteFavorite(id)
+}
+
+/** List native-manifested Favorite Media after filesystem reconciliation. */
+export async function getFavoriteMedia(favoriteId: string): Promise<FavoriteMedia[]> {
+  return native.getFavoriteMedia(favoriteId)
+}
+
+/** Import picker bytes into canonical Favorite-owned app storage. */
+export async function importFavoriteMedia(
+  options: ImportFavoriteMediaOptions,
+): Promise<FavoriteMedia> {
+  return native.importFavoriteMedia(options)
 }
 
 export async function getDiagnosticEvents(
