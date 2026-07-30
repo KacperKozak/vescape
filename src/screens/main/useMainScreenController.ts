@@ -14,13 +14,14 @@ import {
 } from '@/screens/main/mainState'
 import { useBleStore } from '@/modules/board/store/bleStore'
 import { useHistoryStore, type HistorySession } from '@/modules/history/store/historyStore'
+import { useHistoryFavorites } from '@/screens/main/history/useHistoryFavorites'
 import { useMapStore } from '@/modules/map/store/mapStore'
+import { useMapPointStore } from '@/modules/map-points/store/mapPointStore'
 import { useMapContributionReady } from '@/modules/profile/hooks/useMapContributionReady'
 import { useSettingsStore } from '@/modules/settings/store/settingsStore'
 import { useWeatherStore } from '@/modules/weather/store/weatherStore'
-import { useMediaHistory } from '@/modules/history/hooks/useMediaHistory'
+import { useFavoriteMedia } from '@/modules/history/hooks/useMediaHistory'
 import type { MediaAssetInput } from '@/modules/history/lib/mediaHistory'
-import { deleteRideMediaAssets } from '@/modules/history/store/rideMediaFiles'
 import { getHistoryPreviewRoute } from '@/modules/history/lib/previewRoute'
 
 interface UseMainScreenControllerArgs {
@@ -117,38 +118,32 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
       removeSelectedSession: s.removeSelectedSession,
     })),
   )
+  const historyFavorites = useHistoryFavorites(selectedSession, blocks)
+  const cancelHistoryTrim = historyFavorites.cancelTrim
   const {
     mapPoints,
     selectedMapPointId,
     hiddenMapPointCategories,
     refreshNearbyMapPoints,
     reloadMapPoints,
-    loadDirectionPoint,
-    directionPoint,
     addMapPoint,
     updateMapPoint,
     setMapPointReaction,
-    setDirectionPoint,
-    clearDirectionPoint,
     removeMapPoint,
     selectMapPoint,
     toggleMapPointSelection,
     clearSelectedMapPoints,
     toggleMapPointCategoryVisibility,
-  } = useMapStore(
+  } = useMapPointStore(
     useShallow((s) => ({
       mapPoints: s.mapPoints,
       selectedMapPointId: s.selectedMapPointId,
       hiddenMapPointCategories: s.hiddenMapPointCategories,
       refreshNearbyMapPoints: s.refreshNearby,
       reloadMapPoints: s.reload,
-      loadDirectionPoint: s.loadDirectionPoint,
-      directionPoint: s.directionPoint,
       addMapPoint: s.addMapPoint,
       updateMapPoint: s.editMapPoint,
       setMapPointReaction: s.setMapPointReaction,
-      setDirectionPoint: s.setDirectionPoint,
-      clearDirectionPoint: s.clearDirectionPoint,
       removeMapPoint: s.removeMapPoint,
       selectMapPoint: s.selectMapPoint,
       toggleMapPointSelection: s.toggleMapPointSelection,
@@ -156,7 +151,17 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
       toggleMapPointCategoryVisibility: s.toggleMapPointCategoryVisibility,
     })),
   )
-  const mediaHistory = useMediaHistory({
+  const { loadDirectionPoint, directionPoint, setDirectionPoint, clearDirectionPoint } =
+    useMapStore(
+      useShallow((s) => ({
+        loadDirectionPoint: s.loadDirectionPoint,
+        directionPoint: s.directionPoint,
+        setDirectionPoint: s.setDirectionPoint,
+        clearDirectionPoint: s.clearDirectionPoint,
+      })),
+    )
+  const mediaHistory = useFavoriteMedia({
+    favoriteId: historyFavorites.openFavorite?.id ?? null,
     selectedSession,
     gpsSamples: sessionGpsSamples,
     markers: sessionMarkers,
@@ -245,12 +250,13 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
 
   const exitHistory = useCallback(() => {
     setOpenMediaAssetId(null)
+    historyFavorites.resetHistoryFavorites()
     void selectSession(null)
     enterTelemetry()
     requestAnimationFrame(() =>
       mapRef.current?.recenterLive({ resetPadding: true, animationDuration: 0 }),
     )
-  }, [enterTelemetry, mapRef, selectSession])
+  }, [enterTelemetry, historyFavorites, mapRef, selectSession])
 
   const loadOlderHistoryPages = useCallback(
     async (targetSessionCount = TARGET_INITIAL_HISTORY_SESSIONS) => {
@@ -269,6 +275,7 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
 
   const enterHistoryMode = useCallback(async () => {
     enterHistory()
+    void historyFavorites.loadFavorites()
     await loadInitial()
     await loadOlderHistoryPages()
     if (useMainScreenStore.getState().mode !== 'history') return
@@ -276,7 +283,7 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
     if (latest) {
       await selectSession(latest)
     }
-  }, [enterHistory, loadInitial, loadOlderHistoryPages, selectSession])
+  }, [enterHistory, historyFavorites, loadInitial, loadOlderHistoryPages, selectSession])
 
   const selectPreviousRide = useCallback(async () => {
     setOpenMediaAssetId(null)
@@ -310,14 +317,6 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
   }, [selectSession])
 
   const removeSession = useCallback(() => {
-    const session = useHistoryStore.getState().selectedSession
-    if (session) {
-      try {
-        deleteRideMediaAssets(session.id)
-      } catch {
-        // Ride removal must not fail on media cleanup; orphaned folders are harmless.
-      }
-    }
     void removeSelectedSession()
   }, [removeSelectedSession])
 
@@ -364,6 +363,10 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
     useCallback(() => {
       const handler = BackHandler.addEventListener('hardwareBackPress', () => {
         if (mode === 'history') {
+          if (useMainScreenStore.getState().trimRange) {
+            void cancelHistoryTrim()
+            return true
+          }
           exitHistory()
           return true
         }
@@ -391,7 +394,7 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
         return true
       })
       return () => handler.remove()
-    }, [exitHistory, exitLegalLimitsMode, exitMapFocus, exitWeatherMode, mode]),
+    }, [cancelHistoryTrim, exitHistory, exitLegalLimitsMode, exitMapFocus, exitWeatherMode, mode]),
   )
 
   return {
@@ -452,6 +455,7 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
     historyError,
     historySheetVisible,
     setHistorySheetVisible,
+    ...historyFavorites,
     selectSession,
     loadMoreHistory: loadMore,
     selectPreviousRide,

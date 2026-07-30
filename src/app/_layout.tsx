@@ -9,11 +9,15 @@ import { Stack } from 'expo-router/js-stack'
 import * as SplashScreen from 'expo-splash-screen'
 import { StatusBar } from 'expo-status-bar'
 import { useEffect } from 'react'
+import { View } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { configureReanimatedLogger } from 'react-native-reanimated'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
+import { Text } from '@/components/base/Text'
 import { DiagnosticErrorBoundary } from '@/modules/diagnostics/DiagnosticErrorBoundary'
 import { HeaderBackButton } from '@/components/base/HeaderBackButton'
+import { isDevelopmentApp } from '@/config/appVariant'
 import { initSentry } from '@/config/sentry'
 import { stackScreens } from '@/navigation/routes'
 import { startAlertsBoardSync } from '@/bootstrap/alertsBoardSync'
@@ -33,6 +37,49 @@ function requireClerkPublishableKey(): string {
   const key = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY
   if (!key) throw new Error('EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY is not configured')
   return key
+}
+
+function DevelopmentBadge() {
+  const insets = useSafeAreaInsets()
+  if (!isDevelopmentApp) return null
+
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        top: Math.max(2, insets.top - 6),
+        left: 0,
+        right: 0,
+        zIndex: 100,
+        alignItems: 'center',
+      }}
+    >
+      <View
+        style={{
+          paddingHorizontal: 5,
+          paddingVertical: 1,
+          borderWidth: 1,
+          borderColor: theme.status.warning.color,
+          borderRadius: 999,
+          backgroundColor: theme.status.warning.bg,
+        }}
+      >
+        <Text
+          style={{
+            color: theme.status.warning.text,
+            fontSize: 8,
+            lineHeight: 10,
+            fontWeight: '800',
+            letterSpacing: 0.6,
+            textTransform: 'uppercase',
+          }}
+        >
+          dev
+        </Text>
+      </View>
+    </View>
+  )
 }
 
 // Keep the native splash visible until Raleway loads so there is no font-flash
@@ -167,6 +214,7 @@ function RootLayout() {
           </Stack>
           {/* Above navigation so a Release surface covers every screen. Only ever one at a time. */}
           <ReleaseSurfaces />
+          <DevelopmentBadge />
           <StatusBar style="light" />
         </GestureHandlerRootView>
       </DiagnosticErrorBoundary>

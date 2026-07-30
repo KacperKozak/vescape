@@ -13,9 +13,34 @@ export interface ExcludedRange {
   reason: string
 }
 
+export type ChartTimeMode = 'relative' | 'clock'
+
+export function getChartTimeLabels(
+  points: TelemetryChartPoint[],
+  windowMs: number | undefined,
+  mode: ChartTimeMode,
+): { start: string; end: string } | null {
+  if (points.length < 2) return null
+  const now = points[points.length - 1].date
+  const start = windowMs ? new Date(now.getTime() - windowMs) : points[0].date
+  if (mode === 'clock') {
+    return { start: formatClockTime(start), end: formatClockTime(now) }
+  }
+  const diffMs = now.getTime() - start.getTime()
+  const diffSec = Math.round(diffMs / 1000)
+  const startLabel = diffSec < 60 ? `-${diffSec}s` : `-${Math.round(diffSec / 60)}m`
+  return { start: startLabel, end: 'now' }
+}
+
+function formatClockTime(date: Date): string {
+  const hours = date.getHours().toString().padStart(2, '0')
+  const minutes = date.getMinutes().toString().padStart(2, '0')
+  return `${hours}:${minutes}`
+}
+
 const DEFAULT_GAP_MULTIPLIER = 3
 
-interface AutoRangeOptions {
+export interface AutoRangeOptions {
   includeZero?: boolean
   minSpan?: number
   paddingRatio?: number
@@ -114,6 +139,32 @@ export function getXPosition(
   if (xSpan <= 0) return null
   const x = width * ((timeMs - xMin) / xSpan)
   return Math.max(0, Math.min(width, x))
+}
+
+export interface ChartTimeRange {
+  startMs: number
+  endMs: number
+}
+
+export function getChartTimeRangeBands<T extends ChartTimeRange>(
+  points: TelemetryChartPoint[],
+  ranges: readonly T[],
+  width: number,
+  windowMs?: number,
+): (T & { x: number; width: number })[] {
+  if (points.length < 2 || width <= 0) return []
+  const domainEndMs = points.at(-1)!.date.getTime()
+  const domainStartMs = windowMs ? domainEndMs - windowMs : points[0].date.getTime()
+
+  return ranges.flatMap((range) => {
+    const startMs = Math.max(domainStartMs, Math.min(range.startMs, range.endMs))
+    const endMs = Math.min(domainEndMs, Math.max(range.startMs, range.endMs))
+    if (endMs <= startMs) return []
+    const x1 = getXPosition(points, startMs, width, windowMs)
+    const x2 = getXPosition(points, endMs, width, windowMs)
+    if (x1 == null || x2 == null || x2 <= x1) return []
+    return [{ ...range, x: x1, width: x2 - x1 }]
+  })
 }
 
 export function toExcludedRanges(

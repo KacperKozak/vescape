@@ -11,7 +11,7 @@ import Animated, {
 import { IconButton } from '@/components/base/IconButton'
 import { Text } from '@/components/base/Text'
 import { type DualGaugeAlert } from '@/components/charts/gaugeAlert'
-import { SingleGauge } from '@/modules/board/components/DualGauge'
+import { SingleGauge } from '@/modules/board/components/SingleGauge'
 import { telemetry } from '@/modules/board/constants/telemetry'
 import {
   ALERT_PRESET_ACTIVE_LEVELS,
@@ -275,9 +275,14 @@ function LevelSlider({ value, onChange, disabled }: LevelSliderProps) {
     progress.value = withTiming(activeIndex, SLIDER_ANIMATION)
   }, [activeIndex, progress])
 
-  const highlightStyle = useAnimatedStyle(
+  const highlightPositionStyle = useAnimatedStyle(
     () => ({
       left: `${(progress.value / LEVEL_OPTIONS.length) * 100}%`,
+    }),
+    [],
+  )
+  const highlightColorStyle = useAnimatedStyle(
+    () => ({
       backgroundColor: tone.bg,
       borderColor: tone.border,
     }),
@@ -286,7 +291,9 @@ function LevelSlider({ value, onChange, disabled }: LevelSliderProps) {
 
   return (
     <View style={[styles.slider, disabled && styles.sliderDisabled]}>
-      <Animated.View style={[styles.sliderHighlight, highlightStyle]} />
+      <Animated.View style={[styles.sliderHighlightSlot, highlightPositionStyle]}>
+        <Animated.View style={[styles.sliderHighlight, highlightColorStyle]} />
+      </Animated.View>
       {LEVEL_OPTIONS.map((option) => {
         const active = option.id === value
         return (
@@ -345,18 +352,24 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     height: 38,
     borderRadius: 19,
-    backgroundColor: theme.palette.slate.surfaceDeep,
+    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
+    borderWidth: 1,
+    borderColor: theme.alpha(theme.palette.slate.light, 0.3),
     position: 'relative',
     overflow: 'hidden',
   },
   sliderDisabled: {
     opacity: 0.45,
   },
-  sliderHighlight: {
+  sliderHighlightSlot: {
     position: 'absolute',
-    top: 3,
-    bottom: 3,
+    top: 2,
+    bottom: 2,
     width: `${100 / LEVEL_OPTIONS.length}%`,
+  },
+  sliderHighlight: {
+    flex: 1,
+    marginHorizontal: 1,
     borderRadius: 16,
     borderWidth: 1,
   },

@@ -15,9 +15,10 @@ interface ButtonProps {
   onPress: () => Promise<void> | void
   testID?: string
   accessibilityLabel?: string
-  variant?: 'primary' | 'secondary' | 'destructive'
+  variant?: 'primary' | 'accent' | 'secondary' | 'destructive'
   size?: 'sm' | 'md'
   icon?: Icon
+  iconPosition?: 'left' | 'right'
   loading?: boolean
   disabled?: boolean
   style?: StyleProp<ViewStyle>
@@ -31,11 +32,20 @@ export function Button({
   variant = 'primary',
   size = 'md',
   icon: IconComponent,
+  iconPosition = 'left',
   loading = false,
   disabled = false,
   style,
 }: ButtonProps) {
   const isDisabled = disabled || loading
+  const icon =
+    IconComponent && !loading ? (
+      <IconComponent
+        size={size === 'sm' ? 13 : 15}
+        color={variantStyles[variant].iconColor}
+        weight="bold"
+      />
+    ) : null
 
   return (
     <Pressable
@@ -55,15 +65,9 @@ export function Button({
     >
       {loading ? (
         <ActivityIndicator size="small" color={variantStyles[variant].indicatorColor} />
-      ) : (
-        IconComponent && (
-          <IconComponent
-            size={size === 'sm' ? 13 : 15}
-            color={variantStyles[variant].iconColor}
-            weight="bold"
-          />
-        )
-      )}
+      ) : iconPosition === 'left' ? (
+        icon
+      ) : null}
       <Text
         style={[
           styles.label,
@@ -73,6 +77,7 @@ export function Button({
       >
         {label}
       </Text>
+      {!loading && iconPosition === 'right' ? icon : null}
     </Pressable>
   )
 }
@@ -83,6 +88,16 @@ const variantStyles = {
     text: { color: theme.palette.slate.textPrimary },
     iconColor: theme.palette.slate.textPrimary,
     indicatorColor: theme.palette.slate.textPrimary,
+  },
+  accent: {
+    button: {
+      backgroundColor: theme.palette.slate.surface,
+      borderWidth: 1,
+      borderColor: theme.palette.cyan.border,
+    },
+    text: { color: theme.palette.cyan.text },
+    iconColor: theme.palette.cyan.text,
+    indicatorColor: theme.palette.cyan.text,
   },
   secondary: {
     button: {

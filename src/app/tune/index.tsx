@@ -1,12 +1,5 @@
-import { useCallback, useLayoutEffect, useRef, useState } from 'react'
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  useWindowDimensions,
-  View,
-} from 'react-native'
+import { useCallback, useLayoutEffect, useRef } from 'react'
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/base/Text'
 import { useIsFocused, useNavigation, useRouter } from 'expo-router'
 import {
@@ -20,8 +13,6 @@ import {
   WarningCircleIcon,
 } from 'phosphor-react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useSharedValue } from 'react-native-reanimated'
-import { Canvas, LinearGradient, Rect, vec } from '@shopify/react-native-skia'
 import { type RefloatConfigField, type TuneProfileFieldValue } from 'vescape-core'
 
 import { Button } from '@/components/base/Button'
@@ -46,11 +37,7 @@ import {
 import { basicSliderColor, basicSliderIcon } from '@/modules/tune/components/basicSliderIcons'
 import { TuneGroupGrid } from '@/modules/tune/components/TuneGroupGrid'
 import { TuneSyncBar } from '@/modules/tune/components/TuneSyncBar'
-import { TunePreview } from '@/modules/tune/components/TunePreview'
-import {
-  TunePreviewScenarioControls,
-  type HillsPresetId,
-} from '@/modules/tune/components/TunePreviewScenarioControls'
+import { TunePreviewSection } from '@/modules/tune/components/TunePreviewSection'
 import { routes } from '@/navigation/routes'
 import { TextPromptModal } from '@/components/modals/TextPromptModal'
 import { BoardPickerModal } from '@/modules/tune/components/BoardPickerModal'
@@ -60,40 +47,15 @@ import type { BasicSliderItem } from '@/modules/tune/lib/sliderDefinitions'
 import { useTuneScreenData } from '@/modules/tune/hooks/useTuneScreenData'
 import { theme } from '@/constants/theme'
 import { useTuneModals } from '@/modules/tune/hooks/useTuneModals'
-import { DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS } from '@/modules/tune/lib/tunePreview'
 import type { TuneProfileColorId, TuneProfileIconId } from '@/modules/tune/lib/profileMetadata'
 
-let previewHelpShownThisSession = false
-const PREVIEW_PINNED_GRADIENT_HEIGHT = 210
-
+// TODO: Split screen orchestration to reduce cyclomatic complexity below 30.
+// eslint-disable-next-line complexity
 export default function TuneScreen() {
   const navigation = useNavigation()
   const router = useRouter()
   const insets = useSafeAreaInsets()
-  const { width } = useWindowDimensions()
   const isFocused = useIsFocused()
-  const pitchInputDegrees = useSharedValue(0)
-  const pitchInputActive = useSharedValue(false)
-  const previewSpeedKmh = useSharedValue(15)
-  const groundToBoardAngleDegrees = useSharedValue(0)
-  const previewGradientColor = theme.palette.slate.bg
-  const previewGradientColors = [
-    theme.alpha(previewGradientColor, 1),
-    theme.alpha(previewGradientColor, 0.75),
-    theme.alpha(previewGradientColor, 0),
-  ]
-  const [hillsPreset, setHillsPreset] = useState<HillsPresetId>('flat')
-  const [hillHeightMeters, setHillHeightMeters] = useState(2.5)
-  const [hillSpacingMeters, setHillSpacingMeters] = useState(30)
-  const [previewPinnedHeight, setPreviewPinnedHeight] = useState(PREVIEW_PINNED_GRADIENT_HEIGHT)
-  const hillLoadAmps = useSharedValue(0)
-  const hillsEnabled = hillsPreset !== 'flat'
-  const [advancedPhysics, setAdvancedPhysics] = useState(DEFAULT_TUNE_PREVIEW_ADVANCED_PHYSICS)
-  const [previewHelpVisible, setPreviewHelpVisible] = useState(() => {
-    if (previewHelpShownThisSession) return false
-    previewHelpShownThisSession = true
-    return true
-  })
   const {
     activeProfile,
     allBoards,
@@ -278,224 +240,163 @@ export default function TuneScreen() {
         </View>
       ) : null}
 
-      {hasTuneView ? (
-        <View style={styles.tuneView}>
-          <ScrollView
-            style={styles.formScroll}
-            contentContainerStyle={{ paddingBottom: insets.bottom + 96 }}
-            contentInsetAdjustmentBehavior="automatic"
-            stickyHeaderIndices={[0]}
+      <TunePreviewSection fields={profileFields ?? {}} active={isFocused} visible={hasTuneView}>
+        {profileError ? (
+          <View style={styles.errorBanner}>
+            <WarningCircleIcon size={16} color={theme.status.error.color} />
+            <Text style={styles.errorBannerText}>{profileError}</Text>
+          </View>
+        ) : null}
+
+        {schemaMismatchFields ? (
+          <Pressable
+            style={styles.schemaMismatchBar}
+            onPress={() =>
+              modals.showBadgeInfo(
+                'Schema Mismatch',
+                `Profile and board have different field sets.${
+                  schemaMismatchFields.profileOnly.length > 0
+                    ? `\n\nIn profile but not board: ${schemaMismatchFields.profileOnly.join(', ')}`
+                    : ''
+                }${
+                  schemaMismatchFields.boardOnly.length > 0
+                    ? `\n\nIn board but not profile: ${schemaMismatchFields.boardOnly.join(', ')}`
+                    : ''
+                }`,
+              )
+            }
           >
-            <View
-              style={styles.previewPinned}
-              onLayout={(event) => setPreviewPinnedHeight(event.nativeEvent.layout.height)}
-            >
-              <Canvas style={styles.previewGradient} pointerEvents="none">
-                <Rect x={0} y={0} width={width} height={previewPinnedHeight}>
-                  <LinearGradient
-                    start={vec(0, 0)}
-                    end={vec(0, previewPinnedHeight)}
-                    colors={previewGradientColors}
-                    positions={[0, 0.7, 1]}
-                  />
-                </Rect>
-              </Canvas>
-              <TunePreview
-                fields={profileFields ?? {}}
-                pitchInputDegrees={pitchInputDegrees}
-                pitchInputActive={pitchInputActive}
-                hillsEnabled={hillsEnabled}
-                hillHeightMeters={hillHeightMeters}
-                hillSpacingMeters={hillSpacingMeters}
-                advancedPhysics={advancedPhysics}
-                active={isFocused}
-                onHelp={() => setPreviewHelpVisible(true)}
-                hillLoadAmps={hillLoadAmps}
-                speedKmh={previewSpeedKmh}
-                groundToBoardAngleDegrees={groundToBoardAngleDegrees}
-              />
+            <WarningCircleIcon size={16} color={theme.palette.yellow.color} weight="fill" />
+            <View style={styles.schemaMismatchTextWrap}>
+              <Text style={styles.schemaMismatchTitle}>Schema mismatch</Text>
+              <Text style={styles.schemaMismatchText}>
+                {schemaMismatchFields.profileOnly.length > 0
+                  ? `${schemaMismatchFields.profileOnly.length} field${schemaMismatchFields.profileOnly.length === 1 ? '' : 's'} in profile not on board`
+                  : ''}
+                {schemaMismatchFields.profileOnly.length > 0 &&
+                schemaMismatchFields.boardOnly.length > 0
+                  ? ' · '
+                  : ''}
+                {schemaMismatchFields.boardOnly.length > 0
+                  ? `${schemaMismatchFields.boardOnly.length} new field${schemaMismatchFields.boardOnly.length === 1 ? '' : 's'} on board`
+                  : ''}
+              </Text>
             </View>
-            <View style={styles.content}>
-              <View style={styles.previewOptionsHeader}>
-                <Text style={styles.previewOptionsTitle}>Preview options</Text>
-              </View>
-              <TunePreviewScenarioControls
-                advancedPhysics={advancedPhysics}
-                onAdvancedPhysicsChange={setAdvancedPhysics}
-                hillsPreset={hillsPreset}
-                onHillsPresetChange={setHillsPreset}
-                hillHeightMeters={hillHeightMeters}
-                onHillHeightChange={setHillHeightMeters}
-                hillSpacingMeters={hillSpacingMeters}
-                onHillSpacingChange={setHillSpacingMeters}
-                hillsEnabled={hillsEnabled}
-                hillLoadAmps={hillLoadAmps}
-                pitchInputDegrees={pitchInputDegrees}
-                pitchInputActive={pitchInputActive}
-                speedKmh={previewSpeedKmh}
-                groundToBoardAngleDegrees={groundToBoardAngleDegrees}
-              />
+          </Pressable>
+        ) : null}
 
-              {profileError ? (
-                <View style={styles.errorBanner}>
-                  <WarningCircleIcon size={16} color={theme.status.error.color} />
-                  <Text style={styles.errorBannerText}>{profileError}</Text>
-                </View>
-              ) : null}
-
-              {schemaMismatchFields ? (
-                <Pressable
-                  style={styles.schemaMismatchBar}
+        {boardSnapshot ? (
+          <View style={styles.metaRow}>
+            <View style={styles.metaBadges}>
+              {boardSnapshot.fwVersion ? (
+                <InfoBadge
+                  label={boardSnapshot.fwVersion}
                   onPress={() =>
                     modals.showBadgeInfo(
-                      'Schema Mismatch',
-                      `Profile and board have different field sets.${
-                        schemaMismatchFields.profileOnly.length > 0
-                          ? `\n\nIn profile but not board: ${schemaMismatchFields.profileOnly.join(', ')}`
-                          : ''
-                      }${
-                        schemaMismatchFields.boardOnly.length > 0
-                          ? `\n\nIn board but not profile: ${schemaMismatchFields.boardOnly.join(', ')}`
-                          : ''
-                      }`,
+                      'Firmware',
+                      'Firmware reported by the connected controller. This is useful diagnostic context, but the config decoder uses the board XML schema as the source of truth.',
                     )
                   }
-                >
-                  <WarningCircleIcon size={16} color={theme.palette.yellow.color} weight="fill" />
-                  <View style={styles.schemaMismatchTextWrap}>
-                    <Text style={styles.schemaMismatchTitle}>Schema mismatch</Text>
-                    <Text style={styles.schemaMismatchText}>
-                      {schemaMismatchFields.profileOnly.length > 0
-                        ? `${schemaMismatchFields.profileOnly.length} field${schemaMismatchFields.profileOnly.length === 1 ? '' : 's'} in profile not on board`
-                        : ''}
-                      {schemaMismatchFields.profileOnly.length > 0 &&
-                      schemaMismatchFields.boardOnly.length > 0
-                        ? ' · '
-                        : ''}
-                      {schemaMismatchFields.boardOnly.length > 0
-                        ? `${schemaMismatchFields.boardOnly.length} new field${schemaMismatchFields.boardOnly.length === 1 ? '' : 's'} on board`
-                        : ''}
-                    </Text>
-                  </View>
-                </Pressable>
+                />
               ) : null}
-
-              {boardSnapshot ? (
-                <View style={styles.metaRow}>
-                  <View style={styles.metaBadges}>
-                    {boardSnapshot.fwVersion ? (
-                      <InfoBadge
-                        label={boardSnapshot.fwVersion}
-                        onPress={() =>
-                          modals.showBadgeInfo(
-                            'Firmware',
-                            'Firmware reported by the connected controller. This is useful diagnostic context, but the config decoder uses the board XML schema as the source of truth.',
-                          )
-                        }
-                      />
-                    ) : null}
-                    {boardSnapshot.refloatVersion ? (
-                      <InfoBadge
-                        label={boardSnapshot.refloatVersion}
-                        onPress={() =>
-                          modals.showBadgeInfo(
-                            'Refloat',
-                            'Refloat package version reported by the connected controller.',
-                          )
-                        }
-                      />
-                    ) : null}
-                    <InfoBadge
-                      label={`CAN ${boardSnapshot.canId}`}
-                      onPress={() =>
-                        modals.showBadgeInfo(
-                          'CAN ID',
-                          `Controller CAN ID ${boardSnapshot.canId}. Refloat config commands are forwarded to this controller before reading the schema and binary config.`,
-                        )
-                      }
-                    />
-                    <InfoBadge
-                      label={`${boardSnapshot.rawConfigLength} bytes`}
-                      onPress={() =>
-                        modals.showBadgeInfo(
-                          'Config Size',
-                          `${boardSnapshot.rawConfigLength} bytes is the size of the raw Refloat custom config payload read from the controller. The app decodes only known tune fields from that binary struct.`,
-                        )
-                      }
-                    />
-                    {boardSnapshot.missingFieldIds.length > 0 ? (
-                      <InfoBadge
-                        label={`${boardSnapshot.missingFieldIds.length} missing`}
-                        danger
-                        onPress={() =>
-                          modals.showBadgeInfo(
-                            'Missing Fields',
-                            `These allowlisted fields were not present in the board schema: ${boardSnapshot.missingFieldIds.join(', ')}`,
-                          )
-                        }
-                      />
-                    ) : null}
-                  </View>
-                  {boardConnected ? (
-                    <IconButton
-                      icon={ArrowsClockwiseIcon}
-                      onPress={() => void loadOnline()}
-                      loading={boardSnapshotStatus === 'loading'}
-                    />
-                  ) : null}
-                </View>
-              ) : null}
-
-              <TuneGroupGrid title="Basic">
-                {basicSliders.map((item) => (
-                  <BasicSliderItemCell
-                    key={item.id}
-                    item={item}
-                    editable={activeProfile != null}
-                    fullWidth={item.id === 'aggressiveness' || item.id === 'atrIntensity'}
-                    onPress={modals.openBasicSliderEditor}
-                    onResetFormula={() => modals.handleBasicSliderReset(item.id)}
-                  />
-                ))}
-              </TuneGroupGrid>
-
-              {displayGroups.map((group) => (
-                <TuneGroupGrid
-                  key={group.id}
-                  title={group.title}
-                  subtitle={
-                    activeProfile
-                      ? `${group.fields.length} profile values${
-                          group.fields.some((field) => boardDiffByField.has(field.id))
-                            ? ` - ${
-                                group.fields.filter((field) => boardDiffByField.has(field.id))
-                                  .length
-                              } changed`
-                            : ''
-                        }`
-                      : `${group.fields.length} read-only values`
+              {boardSnapshot.refloatVersion ? (
+                <InfoBadge
+                  label={boardSnapshot.refloatVersion}
+                  onPress={() =>
+                    modals.showBadgeInfo(
+                      'Refloat',
+                      'Refloat package version reported by the connected controller.',
+                    )
                   }
-                >
-                  {group.fields.map((field) => (
-                    <TuneFieldCell
-                      key={field.id}
-                      field={field}
-                      savedValue={activeProfile?.fields[field.id]}
-                      boardValue={boardDiffByField.get(field.id)?.boardValue}
-                      profileValue={boardDiffByField.get(field.id)?.profileValue}
-                      dirty={Object.prototype.hasOwnProperty.call(dirtyFields, field.id)}
-                      boardChanged={boardDiffByField.has(field.id)}
-                      onPress={modals.openFieldEditor}
-                      onRevert={() => revertField(field.id)}
-                      onAcceptBoard={() => acceptBoardField(field.id)}
-                    />
-                  ))}
-                </TuneGroupGrid>
-              ))}
+                />
+              ) : null}
+              <InfoBadge
+                label={`CAN ${boardSnapshot.canId}`}
+                onPress={() =>
+                  modals.showBadgeInfo(
+                    'CAN ID',
+                    `Controller CAN ID ${boardSnapshot.canId}. Refloat config commands are forwarded to this controller before reading the schema and binary config.`,
+                  )
+                }
+              />
+              <InfoBadge
+                label={`${boardSnapshot.rawConfigLength} bytes`}
+                onPress={() =>
+                  modals.showBadgeInfo(
+                    'Config Size',
+                    `${boardSnapshot.rawConfigLength} bytes is the size of the raw Refloat custom config payload read from the controller. The app decodes only known tune fields from that binary struct.`,
+                  )
+                }
+              />
+              {boardSnapshot.missingFieldIds.length > 0 ? (
+                <InfoBadge
+                  label={`${boardSnapshot.missingFieldIds.length} missing`}
+                  danger
+                  onPress={() =>
+                    modals.showBadgeInfo(
+                      'Missing Fields',
+                      `These allowlisted fields were not present in the board schema: ${boardSnapshot.missingFieldIds.join(', ')}`,
+                    )
+                  }
+                />
+              ) : null}
             </View>
-          </ScrollView>
-        </View>
-      ) : null}
+            {boardConnected ? (
+              <IconButton
+                icon={ArrowsClockwiseIcon}
+                onPress={() => void loadOnline()}
+                loading={boardSnapshotStatus === 'loading'}
+              />
+            ) : null}
+          </View>
+        ) : null}
+
+        <TuneGroupGrid title="Basic">
+          {basicSliders.map((item) => (
+            <BasicSliderItemCell
+              key={item.id}
+              item={item}
+              editable={activeProfile != null}
+              fullWidth={item.id === 'aggressiveness' || item.id === 'atrIntensity'}
+              onPress={modals.openBasicSliderEditor}
+              onResetFormula={() => modals.handleBasicSliderReset(item.id)}
+            />
+          ))}
+        </TuneGroupGrid>
+
+        {displayGroups.map((group) => (
+          <TuneGroupGrid
+            key={group.id}
+            title={group.title}
+            subtitle={
+              activeProfile
+                ? `${group.fields.length} profile values${
+                    group.fields.some((field) => boardDiffByField.has(field.id))
+                      ? ` - ${
+                          group.fields.filter((field) => boardDiffByField.has(field.id)).length
+                        } changed`
+                      : ''
+                  }`
+                : `${group.fields.length} read-only values`
+            }
+          >
+            {group.fields.map((field) => (
+              <TuneFieldCell
+                key={field.id}
+                field={field}
+                savedValue={activeProfile?.fields[field.id]}
+                boardValue={boardDiffByField.get(field.id)?.boardValue}
+                profileValue={boardDiffByField.get(field.id)?.profileValue}
+                dirty={Object.prototype.hasOwnProperty.call(dirtyFields, field.id)}
+                boardChanged={boardDiffByField.has(field.id)}
+                onPress={modals.openFieldEditor}
+                onRevert={() => revertField(field.id)}
+                onAcceptBoard={() => acceptBoardField(field.id)}
+              />
+            ))}
+          </TuneGroupGrid>
+        ))}
+      </TunePreviewSection>
 
       {hasTuneView && !modals.editor ? (
         <TuneSyncBar
@@ -509,14 +410,6 @@ export default function TuneScreen() {
           bottomOffset={Math.max(insets.bottom, 24) + 16}
         />
       ) : null}
-
-      <InfoModal
-        visible={previewHelpVisible}
-        variant="warning"
-        title="Work in progress"
-        message={`Tune Editor is a work in progress and is the only place in this app that can change your board's settings.\n\nTune Preview is not a real-world simulation and will never perfectly represent how your board will behave while riding. It is only a comparison tool to help you understand tune behavior and differences between settings.`}
-        onDismiss={() => setPreviewHelpVisible(false)}
-      />
 
       <InfoModal
         visible={modals.infoModal != null}
@@ -691,36 +584,6 @@ const styles = StyleSheet.create({
   headerPillsContent: {
     minWidth: 0,
     paddingHorizontal: 2,
-  },
-  tuneView: { flex: 1 },
-  previewPinned: {
-    paddingTop: 0,
-    paddingBottom: 0,
-    gap: 5,
-    overflow: 'hidden',
-    zIndex: 1,
-  },
-  previewGradient: {
-    position: 'absolute',
-    inset: 0,
-  },
-  previewOptionsHeader: {
-    paddingHorizontal: 4,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  previewOptionsTitle: {
-    color: theme.palette.slate.textMuted,
-    fontSize: 12,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  formScroll: { flex: 1 },
-  content: {
-    padding: 16,
-    gap: 16,
   },
   mainState: {
     flex: 1,
