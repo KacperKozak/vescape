@@ -77,17 +77,18 @@ export function AlertRuleList({
         </Text>
       ) : null}
 
-      <Button
-        label="Add alert"
-        icon={PlusIcon}
-        variant="secondary"
-        size="sm"
-        onPress={() => {
-          setEditRule(null)
-          setFormVisible(true)
-        }}
-        style={styles.addButton}
-      />
+      <View style={styles.addButtonRow}>
+        <Button
+          label="Add alert"
+          icon={PlusIcon}
+          variant="secondary"
+          size="sm"
+          onPress={() => {
+            setEditRule(null)
+            setFormVisible(true)
+          }}
+        />
+      </View>
 
       <AlertFormModal
         visible={formVisible}
@@ -229,8 +230,8 @@ const styles = StyleSheet.create({
   ruleAction: {
     padding: 6,
   },
-  addButton: {
-    alignSelf: 'flex-start',
+  addButtonRow: {
+    alignItems: 'center',
     marginTop: 2,
   },
   emptyHintText: {
