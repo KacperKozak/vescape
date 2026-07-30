@@ -3,15 +3,28 @@ import { useShallow } from 'zustand/react/shallow'
 
 import {
   favoriteRangeForSession,
+  favoriteSessionId,
   favoriteToSession,
   findSessionFavorite,
 } from '@/modules/history/lib/favorites'
 import { useFavoriteStore, type Favorite } from '@/modules/history/store/favoriteStore'
-import { useHistoryStore, type HistorySession } from '@/modules/history/store/historyStore'
+import {
+  useHistoryStore,
+  type HistorySession,
+  type TelemetryMinuteBucket,
+} from '@/modules/history/store/historyStore'
 import { useMainScreenStore, type HistoryTab } from '@/screens/main/mainScreenStore'
+import {
+  getLatestSession,
+  getNextRideSession,
+  getPreviousRideSession,
+} from '@/screens/main/mainState'
 
 /** Favorites-tab and trim workflow kept outside the already-busy main screen coordinator. */
-export function useHistoryFavorites(selectedSession: HistorySession | null) {
+export function useHistoryFavorites(
+  selectedSession: HistorySession | null,
+  blocks: TelemetryMinuteBucket[],
+) {
   const trimming = useMainScreenStore((state) => state.trimRange != null)
   const historyTab = useMainScreenStore((state) => state.historyTab)
   const openFavoriteId = useMainScreenStore((state) => state.openFavoriteId)
@@ -49,17 +62,49 @@ export function useHistoryFavorites(selectedSession: HistorySession | null) {
     [favorites, selectedSession],
   )
 
+  const favoriteSessions = useMemo(
+    () => favorites.map((favorite) => favoriteToSession(favorite, blocks)),
+    [blocks, favorites],
+  )
+
   const openFavorite = useMemo(
     () => favorites.find((favorite) => favorite.id === openFavoriteId) ?? null,
     [favorites, openFavoriteId],
   )
 
+  const selectFavorite = useCallback(async (favorite: Favorite) => {
+    useMainScreenStore.getState().openFavorite(favorite.id)
+    await useHistoryStore
+      .getState()
+      .selectSession(favoriteToSession(favorite, useHistoryStore.getState().blocks))
+  }, [])
+
   const selectHistoryTab = useCallback(
     (tab: HistoryTab) => {
+      if (tab === useMainScreenStore.getState().historyTab) return
+
+      if (tab === 'history') {
+        setHistoryTab(tab)
+        const session =
+          historySessionBeforeFavorite.current ??
+          getLatestSession(useHistoryStore.getState().sessions)
+        historySessionBeforeFavorite.current = null
+        void useHistoryStore.getState().selectSession(session)
+        return
+      }
+
+      historySessionBeforeFavorite.current = useHistoryStore.getState().selectedSession
       setHistoryTab(tab)
-      if (tab === 'favorites') void loadFavorites()
+      const cachedLatest = useFavoriteStore.getState().favorites[0]
+      if (cachedLatest) void selectFavorite(cachedLatest)
+      void loadFavorites().then(() => {
+        if (useMainScreenStore.getState().historyTab !== 'favorites') return
+        const latest = useFavoriteStore.getState().favorites[0]
+        if (latest) void selectFavorite(latest)
+        else void useHistoryStore.getState().selectSession(null)
+      })
     },
-    [loadFavorites, setHistoryTab],
+    [loadFavorites, selectFavorite, setHistoryTab],
   )
 
   const beginTrimFavorite = useCallback(() => {
@@ -90,24 +135,26 @@ export function useHistoryFavorites(selectedSession: HistorySession | null) {
     if (favorite) useMainScreenStore.getState().endTrim()
   }, [addFavorite])
 
-  /**
-   * Favorite detail is the history detail path fed a favorite-backed session, so the chart, the map
-   * route and the stats all come from the pinned range with no parallel implementation.
-   */
-  const showFavorite = useCallback(async (favorite: Favorite) => {
-    historySessionBeforeFavorite.current = useHistoryStore.getState().selectedSession
-    useMainScreenStore.getState().openFavorite(favorite.id)
-    await useHistoryStore
+  const selectPreviousFavorite = useCallback(async () => {
+    const previous = getPreviousRideSession(
+      favoriteSessions,
+      useHistoryStore.getState().selectedSession,
+    )
+    if (!previous) return
+    const favorite = useFavoriteStore
       .getState()
-      .selectSession(favoriteToSession(favorite, useHistoryStore.getState().blocks))
-  }, [])
+      .favorites.find((item) => previous.id === favoriteSessionId(item.id))
+    if (favorite) await selectFavorite(favorite)
+  }, [favoriteSessions, selectFavorite])
 
-  const hideFavorite = useCallback(async () => {
-    const historySession = historySessionBeforeFavorite.current
-    historySessionBeforeFavorite.current = null
-    useMainScreenStore.getState().closeFavorite()
-    await useHistoryStore.getState().selectSession(historySession)
-  }, [])
+  const selectNextFavorite = useCallback(async () => {
+    const next = getNextRideSession(favoriteSessions, useHistoryStore.getState().selectedSession)
+    if (!next) return
+    const favorite = useFavoriteStore
+      .getState()
+      .favorites.find((item) => next.id === favoriteSessionId(item.id))
+    if (favorite) await selectFavorite(favorite)
+  }, [favoriteSessions, selectFavorite])
 
   const renameOpenFavorite = useCallback(
     async (name: string | null) => {
@@ -125,16 +172,23 @@ export function useHistoryFavorites(selectedSession: HistorySession | null) {
     [renameFavorite],
   )
 
-  /** Unpinning the open Favorite leaves nothing to show: fall back to the Favorites list. */
   const removeOpenFavorite = useCallback(async () => {
     const id = useMainScreenStore.getState().openFavoriteId
     if (!id) return
+    const removedIndex = useFavoriteStore.getState().favorites.findIndex((item) => item.id === id)
     await removeFavorite(id)
     if (useFavoriteStore.getState().error) return
-    await hideFavorite()
-  }, [hideFavorite, removeFavorite])
+    const remaining = useFavoriteStore.getState().favorites
+    const replacement = remaining[Math.min(Math.max(removedIndex, 0), remaining.length - 1)]
+    if (replacement) await selectFavorite(replacement)
+    else {
+      useMainScreenStore.getState().closeFavorite()
+      await useHistoryStore.getState().selectSession(null)
+    }
+  }, [removeFavorite, selectFavorite])
 
   const resetHistoryFavorites = useCallback(() => {
+    historySessionBeforeFavorite.current = null
     setHistoryTab('history')
     useMainScreenStore.getState().closeFavorite()
     useMainScreenStore.getState().endTrim()
@@ -147,6 +201,7 @@ export function useHistoryFavorites(selectedSession: HistorySession | null) {
     favoritesLoading,
     favoritesSaving,
     favoritesError,
+    favoriteSessions,
     selectedSessionFavorite,
     trimming,
     trimSeed,
@@ -155,11 +210,13 @@ export function useHistoryFavorites(selectedSession: HistorySession | null) {
     cancelTrim,
     saveTrim,
     openFavorite,
-    showFavorite,
-    hideFavorite,
+    selectFavorite,
+    canPreviousFavorite: getPreviousRideSession(favoriteSessions, selectedSession) != null,
+    canNextFavorite: getNextRideSession(favoriteSessions, selectedSession) != null,
+    selectPreviousFavorite,
+    selectNextFavorite,
     renameOpenFavorite,
     removeOpenFavorite,
-    removeFavorite,
     loadFavorites,
     resetHistoryFavorites,
   }

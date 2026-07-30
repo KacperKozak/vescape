@@ -26,11 +26,9 @@ interface HistoryControlsProps {
   /** Trim mode swaps tabs/star/trash for a cancel/save pair over the range being pinned. */
   trimming: boolean
   /**
-   * Favorite detail mode: the tabs and the star give way to the Favorite's own title plus rename
-   * and delete. Back returns to the Favorites list rather than leaving history.
+   * Favorite tab actions. Selection stays in the shared history panel below.
    */
   favorite?: {
-    title: string
     onRename: () => void
     onDelete: () => void
   }
@@ -83,44 +81,25 @@ export function HistoryControls({
     )
   }
 
-  if (favorite) {
-    return (
-      <View style={[styles.wrap, { paddingTop: Math.max(insets.top, 8) }]} pointerEvents="box-none">
-        <View style={styles.row}>
-          <IconButton icon={ArrowLeftIcon} onPress={onBack} testID="favorite-detail-back" />
-          <View style={styles.headerTitleWrap}>
-            <Text style={styles.headerTitle} numberOfLines={1}>
-              {favorite.title}
-            </Text>
-          </View>
-          <IconButton
-            icon={PencilSimpleIcon}
-            onPress={favorite.onRename}
-            disabled={loading}
-            testID="favorite-rename"
-          />
-          <IconButton
-            icon={TrashIcon}
-            onPress={favorite.onDelete}
-            destructive
-            disabled={loading}
-            testID="favorite-delete"
-          />
-        </View>
-      </View>
-    )
-  }
-
   return (
     <View style={[styles.wrap, { paddingTop: Math.max(insets.top, 8) }]} pointerEvents="box-none">
       <View style={styles.row}>
         <IconButton icon={ArrowLeftIcon} onPress={onBack} />
-        <View style={styles.tabsWrap}>
-          <PillSelector activeId={tab} fitContent>
+        <View style={styles.tabsWrap} pointerEvents="box-none">
+          <PillSelector
+            activeId={tab}
+            contained
+            fitContent
+            style={styles.tabs}
+            contentContainerStyle={styles.tabsContent}
+          >
             <PillSelectorItem
               id="history"
               label="History"
               icon={ClockCounterClockwiseIcon}
+              activeLabelOnly
+              activeWidth={116}
+              inactiveWidth={46}
               color={theme.palette.sky}
               testID="history-tab-history"
               onPress={() => onSelectTab('history')}
@@ -129,26 +108,47 @@ export function HistoryControls({
               id="favorites"
               label="Favorites"
               icon={StarIcon}
+              activeLabelOnly
+              activeWidth={126}
+              inactiveWidth={46}
               color={theme.palette.amber}
               testID="history-tab-favorites"
               onPress={() => onSelectTab('favorites')}
             />
           </PillSelector>
         </View>
-        {canFavorite ? (
-          <IconButton
-            icon={StarIcon}
-            onPress={onToggleFavorite}
-            disabled={loading}
-            testID="history-favorite-ride"
-            accent={favorited ? theme.palette.amber.color : undefined}
-          />
-        ) : null}
-        {canRemove ? (
-          <IconButton icon={TrashIcon} onPress={onRemove} destructive disabled={loading} />
-        ) : (
-          <View style={styles.actionSpacer} />
-        )}
+        <View style={styles.actions}>
+          {favorite ? (
+            <>
+              <IconButton
+                icon={PencilSimpleIcon}
+                onPress={favorite.onRename}
+                disabled={loading}
+                testID="favorite-rename"
+              />
+              <IconButton
+                icon={TrashIcon}
+                onPress={favorite.onDelete}
+                destructive
+                disabled={loading}
+                testID="favorite-delete"
+              />
+            </>
+          ) : canFavorite ? (
+            <IconButton
+              icon={StarIcon}
+              onPress={onToggleFavorite}
+              disabled={loading}
+              testID="history-favorite-ride"
+              accent={favorited ? theme.palette.amber.color : undefined}
+            />
+          ) : null}
+          {!favorite && canRemove ? (
+            <IconButton icon={TrashIcon} onPress={onRemove} destructive disabled={loading} />
+          ) : !favorite ? (
+            <View style={styles.actionSpacer} />
+          ) : null}
+        </View>
       </View>
     </View>
   )
@@ -169,11 +169,27 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 8,
   },
   tabsWrap: {
-    flex: 1,
+    position: 'absolute',
+    left: 0,
+    right: 0,
     alignItems: 'center',
+  },
+  actions: {
+    marginLeft: 'auto',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    zIndex: 1,
+  },
+  tabs: {
+    alignSelf: 'center',
+  },
+  tabsContent: {
+    justifyContent: 'center',
   },
   headerTitleWrap: {
     flex: 1,

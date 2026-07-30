@@ -1,17 +1,18 @@
 import { useCallback, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
+import { StarIcon } from 'phosphor-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { Favorite, HistoryGpsSample, HistoryMarker } from 'vescape-core'
 
+import { Placeholder } from '@/components/base/Placeholder'
 import { Text } from '@/components/base/Text'
 import { ConfirmModal } from '@/components/modals/ConfirmModal'
 import { theme } from '@/constants/theme'
-import { FavoriteList } from '@/modules/history/components/FavoriteList'
 import { HistoryEmptyState } from '@/modules/history/components/HistoryEmptyState'
 import { HistorySessionSheet } from '@/modules/history/components/HistorySessionSheet'
 import { MediaHistoryViewer } from '@/modules/history/components/MediaHistoryViewer'
 import type { MediaAssetInput, MediaHistoryAsset } from '@/modules/history/lib/mediaHistory'
-import { sessionContainsFavorite } from '@/modules/history/lib/favorites'
+import { favoriteSessionId, sessionContainsFavorite } from '@/modules/history/lib/favorites'
 import type { HistoryMetricKey } from '@/modules/history/lib/metricColorScale'
 import type {
   HistorySession,
@@ -52,14 +53,16 @@ export interface MainHistoryOverlayProps {
   updateTrimRange: (startMs: number, endMs: number) => void
   cancelTrim: () => void
   saveTrim: () => Promise<void>
-  removeFavorite: (id: string) => Promise<void>
-  /** The Favorite whose detail is open, or null while the Favorites list is showing. */
+  favoriteSessions: HistorySession[]
+  canPreviousFavorite: boolean
+  canNextFavorite: boolean
+  selectPreviousFavorite: () => Promise<void>
+  selectNextFavorite: () => Promise<void>
+  /** The selected Favorite while the Favorites tab is active. */
   openFavorite: Favorite | null
-  showFavorite: (favorite: Favorite) => Promise<void>
-  hideFavorite: () => Promise<void>
+  selectFavorite: (favorite: Favorite) => Promise<void>
   renameOpenFavorite: (name: string | null) => Promise<void>
   removeOpenFavorite: () => Promise<void>
-  selectSession: (session: HistorySession | null) => Promise<void>
   loadMoreHistory: () => Promise<void>
   selectPreviousRide: () => Promise<void>
   selectNextRide: () => Promise<void>
@@ -104,11 +107,9 @@ export function HistoryOverlay({
     history.favoritesSaving
   const aboveStripBottom = STRIP_CONTENT_HEIGHT + Math.max(insets.bottom * 0.5, 8) + 8
   const sheetBottom = Math.max(insets.bottom, 16) + 8 + panelHeight + 8
-  // Favorite detail is the history detail fed a favorite-backed session: same panel, map and stats,
-  // only the header actions differ.
-  const favoriteMode = history.historyTab === 'favorites' && history.openFavorite != null
+  const favoriteMode = history.historyTab === 'favorites'
   const detailSession =
-    history.historyTab === 'history' || favoriteMode ? history.selectedSession : null
+    history.historyTab === 'history' || history.openFavorite ? history.selectedSession : null
   const selectedSessionContainsFavorite =
     history.selectedSession != null &&
     sessionContainsFavorite(history.favorites, history.selectedSession)
@@ -120,36 +121,6 @@ export function HistoryOverlay({
 
   return (
     <>
-      {visible && history.historyTab === 'favorites' && !history.openFavorite && (
-        <>
-          <FavoriteList
-            favorites={history.favorites}
-            loading={history.favoritesLoading}
-            onOpen={(favorite) => {
-              void history.showFavorite(favorite)
-            }}
-            onRemove={(favorite) => {
-              void history.removeFavorite(favorite.id)
-            }}
-          />
-          <HistoryControls
-            loading={busy}
-            tab={history.historyTab}
-            canRemove={false}
-            canFavorite={false}
-            favorited={false}
-            trimming={false}
-            saving={false}
-            onSelectTab={history.selectHistoryTab}
-            onBack={history.exitHistory}
-            onRemove={() => undefined}
-            onToggleFavorite={() => undefined}
-            onCancelTrim={() => undefined}
-            onSaveTrim={() => undefined}
-          />
-        </>
-      )}
-
       {visible && detailSession && (
         <HistoryRideDetail
           history={history}
@@ -161,9 +132,21 @@ export function HistoryOverlay({
         />
       )}
 
-      {visible && history.historyTab === 'history' && !history.selectedSession && (
+      {visible && !detailSession && (
         <>
-          {busy ? <HistoryMapLoading /> : <HistoryEmptyState />}
+          {busy ? (
+            <HistoryMapLoading />
+          ) : favoriteMode ? (
+            <View style={styles.emptyState}>
+              <Placeholder
+                icon={StarIcon}
+                title="No favorites yet"
+                description="Star a ride in History to keep it here"
+              />
+            </View>
+          ) : (
+            <HistoryEmptyState />
+          )}
           <HistoryControls
             loading={busy}
             tab={history.historyTab}
@@ -186,15 +169,22 @@ export function HistoryOverlay({
         visible={history.historySheetVisible}
         bottomOffset={sheetBottom}
         blocks={history.blocks}
-        sessions={history.sessions}
+        sessions={favoriteMode ? history.favoriteSessions : history.sessions}
         favorites={history.favorites}
         selectedSessionId={history.selectedSession?.id ?? null}
-        hasMore={history.historyHasMore}
+        hasMore={!favoriteMode && history.historyHasMore}
         loadingMore={history.historyLoading}
         onClose={() => history.setHistorySheetVisible(false)}
         onSelectSession={(session) => {
           history.setHistorySheetVisible(false)
-          history.selectRide(session)
+          if (favoriteMode) {
+            const favorite = history.favorites.find(
+              (item) => session.id === favoriteSessionId(item.id),
+            )
+            if (favorite) void history.selectFavorite(favorite)
+          } else {
+            history.selectRide(session)
+          }
         }}
         onLoadMore={() => {
           void history.loadMoreHistory()
@@ -239,6 +229,12 @@ export function HistoryOverlay({
 }
 
 const styles = StyleSheet.create({
+  emptyState: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   historyError: {
     position: 'absolute',
     left: 12,

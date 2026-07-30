@@ -70,7 +70,7 @@ appId: ${APP_ID}
 - tapOn:
     id: history-session-sheet-backdrop
 
-# A Favorite reuses ride detail without destroying the selected Ride History session.
+# Favorites is a filtered History tab: newest Favorite opens immediately and keeps the same nav.
 - tapOn:
     id: history-favorite-ride
 - assertVisible: Trim favorite
@@ -80,20 +80,16 @@ appId: ${APP_ID}
     id: history-tab-favorites
 - extendedWaitUntil:
     visible:
-      id: favorites-list
+      id: favorite-rename
     timeout: 5000
 - tapOn:
-    id: 'favorite-row-.*'
+    id: history-ride-list-button
 - extendedWaitUntil:
     visible:
-      id: favorite-detail-back
+      id: history-session-sheet
     timeout: 5000
 - tapOn:
-    id: favorite-detail-back
-- extendedWaitUntil:
-    visible:
-      id: favorites-list
-    timeout: 5000
+    id: history-session-sheet-backdrop
 - tapOn:
     id: history-tab-history
 - assertNotVisible: No rides yet

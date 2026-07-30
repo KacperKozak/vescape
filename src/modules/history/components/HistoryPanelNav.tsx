@@ -12,6 +12,8 @@ interface HistoryPanelNavProps {
   titleStartMs: number
   titleEndMs: number
   deviceName: string
+  title?: string
+  subtitle?: string
   canPrevious: boolean
   canNext: boolean
   showMedia: boolean
@@ -29,6 +31,8 @@ export function HistoryPanelNav({
   titleStartMs,
   titleEndMs,
   deviceName,
+  title,
+  subtitle,
   canPrevious,
   canNext,
   showMedia,
@@ -41,6 +45,9 @@ export function HistoryPanelNav({
   onOpenMediaDrawer,
   onOpenShareInfo,
 }: HistoryPanelNavProps) {
+  const primaryLabel = title ?? formatRideTime(titleStartMs, titleEndMs)
+  const secondaryLabel = subtitle ?? formatRideMeta(titleStartMs, titleEndMs, deviceName)
+
   return (
     <View style={styles.navControls}>
       <View ref={mediaButtonRef} style={styles.navSide}>
@@ -62,7 +69,7 @@ export function HistoryPanelNav({
         ) : null}
       </View>
       <PrevNextSelector
-        label={formatRideTime(titleStartMs, titleEndMs)}
+        label={primaryLabel}
         previousDisabled={!canPrevious}
         nextDisabled={!canNext}
         onPrevious={onPrevious}
@@ -79,10 +86,10 @@ export function HistoryPanelNav({
           >
             <View style={styles.titleContent}>
               <Text style={styles.titleTime} numberOfLines={1}>
-                {formatRideTime(titleStartMs, titleEndMs)}
+                {primaryLabel}
               </Text>
               <Text style={styles.titleMeta} numberOfLines={1}>
-                {formatRideMeta(titleStartMs, titleEndMs, deviceName)}
+                {secondaryLabel}
               </Text>
             </View>
             <CaretDownIcon size={12} color={theme.palette.slate.textSecondary} weight="bold" />

@@ -112,11 +112,7 @@ export function MainOverlays({
     <>
       <MapVignette
         mode={mode}
-        panelHeight={
-          mode === 'history' && history.historyTab === 'history' && history.selectedSession
-            ? panelHeight
-            : 0
-        }
+        panelHeight={mode === 'history' && history.selectedSession ? panelHeight : 0}
         visible
         fadeOutProgress={dragOpacity}
       />

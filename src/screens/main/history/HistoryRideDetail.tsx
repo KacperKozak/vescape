@@ -2,7 +2,7 @@ import { useState } from 'react'
 
 import { ConfirmModal } from '@/components/modals/ConfirmModal'
 import { TextPromptModal } from '@/components/modals/TextPromptModal'
-import { formatRideDate } from '@/modules/history/lib/rideFormat'
+import { formatRideDate, formatRideTime } from '@/modules/history/lib/rideFormat'
 import type { HistorySession } from '@/modules/history/store/historyStore'
 import { HistoryControls } from '@/screens/main/history/HistoryControls'
 import { HistoryMapLoading } from '@/screens/main/history/HistoryMapLoading'
@@ -48,24 +48,35 @@ export function HistoryRideDetail({
         movingStartAtMs={session.movingStartAtMs}
         movingEndAtMs={session.movingEndAtMs}
         deviceName={session.deviceName}
+        navigationTitle={
+          openFavorite
+            ? (openFavorite.name ?? formatRideDate(openFavorite.startMs, openFavorite.endMs))
+            : undefined
+        }
+        navigationSubtitle={
+          openFavorite
+            ? [formatRideTime(openFavorite.startMs, openFavorite.endMs), openFavorite.boardName]
+                .filter(Boolean)
+                .join(' · ')
+            : undefined
+        }
         samples={history.sessionSamples}
-        canPrevious={!favoriteMode && !trimming && history.canPreviousRide}
-        canNext={!favoriteMode && !trimming && !!history.nextRide}
+        canPrevious={
+          !trimming && (favoriteMode ? history.canPreviousFavorite : history.canPreviousRide)
+        }
+        canNext={!trimming && (favoriteMode ? history.canNextFavorite : history.nextRide != null)}
         showMedia={favoriteMode}
         mediaAssets={history.mediaHistory.assets}
         mediaUnmatched={history.mediaHistory.unmatched}
         mediaLoading={history.mediaHistory.loading}
         mediaError={history.mediaHistory.error}
         onPrevious={() => {
-          void history.selectPreviousRide()
+          void (favoriteMode ? history.selectPreviousFavorite() : history.selectPreviousRide())
         }}
         onNext={() => {
-          void history.selectNextRide()
+          void (favoriteMode ? history.selectNextFavorite() : history.selectNextRide())
         }}
-        onOpenList={() => {
-          if (favoriteMode) void history.hideFavorite()
-          else history.setHistorySheetVisible(true)
-        }}
+        onOpenList={() => history.setHistorySheetVisible(true)}
         onAddMedia={() => void history.mediaHistory.add()}
         onOpenMedia={history.openMedia}
         onSeek={history.onSeek}
@@ -102,21 +113,13 @@ export function HistoryRideDetail({
         favorite={
           openFavorite
             ? {
-                title:
-                  openFavorite.name ?? formatRideDate(openFavorite.startMs, openFavorite.endMs),
                 onRename: () => setRenameVisible(true),
                 onDelete: () => setDeleteVisible(true),
               }
             : undefined
         }
         onSelectTab={history.selectHistoryTab}
-        onBack={
-          favoriteMode
-            ? () => {
-                void history.hideFavorite()
-              }
-            : history.exitHistory
-        }
+        onBack={history.exitHistory}
         onRemove={onRemoveSession}
         onToggleFavorite={history.beginTrimFavorite}
         onCancelTrim={history.cancelTrim}
