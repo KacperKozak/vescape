@@ -26,7 +26,7 @@ interface HistoryControlsProps {
    * Favorite tab actions. Selection stays in the shared history panel below.
    */
   favorite?: {
-    onRename: () => void
+    onEdit: () => void
     onDelete: () => void
   }
   saving: boolean
@@ -126,9 +126,9 @@ export function HistoryControls({
             <>
               <IconButton
                 icon={PencilSimpleIcon}
-                onPress={favorite.onRename}
+                onPress={favorite.onEdit}
                 disabled={loading}
-                testID="favorite-rename"
+                testID="favorite-edit"
               />
               <IconButton
                 icon={TrashIcon}

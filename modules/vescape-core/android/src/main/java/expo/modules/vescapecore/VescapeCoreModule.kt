@@ -555,9 +555,9 @@ class VescapeCoreModule : Module() {
     AsyncFunction("createFavorite") Coroutine { options: Map<String, Any?> ->
       TelemetryRepository.get(context.applicationContext).createFavorite(options)
     }
-    AsyncFunction("renameFavorite") Coroutine { id: String, name: String? ->
-      TelemetryRepository.get(context.applicationContext).renameFavorite(id, name)
-        ?: throw CodedException("ERR_RENAME_FAVORITE", "favorite does not exist or could not be stored", null)
+    AsyncFunction("updateFavorite") Coroutine { id: String, options: Map<String, Any?> ->
+      TelemetryRepository.get(context.applicationContext).updateFavorite(id, options)
+        ?: throw CodedException("ERR_UPDATE_FAVORITE", "favorite does not exist or could not be stored", null)
     }
     AsyncFunction("deleteFavorite") Coroutine { id: String ->
       TelemetryRepository.get(context.applicationContext).deleteFavorite(id)

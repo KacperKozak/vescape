@@ -29,3 +29,33 @@ export function formatRideMeta(startAtMs: number, endAtMs: number, deviceName: s
     ? `${formatRideDate(startAtMs, endAtMs)} · ${deviceName}`
     : formatRideDate(startAtMs, endAtMs)
 }
+
+export function formatRideListDateTime(startAtMs: number, endAtMs: number): string {
+  return `${formatRideTime(startAtMs, endAtMs)} · ${formatRideDate(startAtMs, endAtMs)}`
+}
+
+export function formatRideListDetails(
+  durationMs: number,
+  distanceM: number | null,
+  deviceName: string | null,
+): string {
+  return [
+    formatRideListDuration(durationMs),
+    distanceM == null ? null : `${(distanceM / 1000).toFixed(2)} km`,
+    deviceName?.trim() || null,
+  ]
+    .filter((part): part is string => part != null)
+    .join(' · ')
+}
+
+export function formatFavoriteName(name: string | null): string {
+  return name?.trim() || 'Unnamed favorite'
+}
+
+function formatRideListDuration(durationMs: number): string {
+  const totalMinutes = Math.max(1, Math.round(durationMs / 60_000))
+  if (totalMinutes < 60) return `${totalMinutes} min`
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  return minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`
+}

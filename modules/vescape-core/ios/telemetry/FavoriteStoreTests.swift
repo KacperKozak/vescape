@@ -65,9 +65,7 @@ final class FavoriteStoreTests: XCTestCase {
     XCTAssertEqual(store.list().map(\.id), ["newer", "older"])
   }
 
-  /// Renaming touches the name and `updated_at` only: the pinned range and the summary a Favorite
-  /// was created with must survive, because re-trimming is delete + recreate.
-  func testRenameKeepsRangeAndSummaryAndBumpsUpdatedAt() throws {
+  func testUpdateKeepsIdentityAndCreationTimeWhileReplacingRangeNameAndSummary() throws {
     store.insert(
       makeFavorite(
         id: "fav-1",
@@ -77,30 +75,74 @@ final class FavoriteStoreTests: XCTestCase {
         summary: FavoriteSummary(sampleCount: 12, movingDurationMs: 55_000)
       )
     )
+    try queue.write { db in
+      try db.execute(
+        sql: """
+          INSERT INTO favorite_media (
+            id, favorite_id, captured_at, mime_type, media_kind, byte_count, content_hash, created_at
+          ) VALUES ('media-1', 'fav-1', 1000, 'image/jpeg', 'photo', 1, '00', 1000)
+          """
+      )
+    }
 
-    let renamed = try XCTUnwrap(store.rename("fav-1", name: "Dolina single track", updatedAtMs: 1_800_000_000_000))
+    let updated = try XCTUnwrap(
+      store.update(
+        makeFavorite(
+          id: "fav-1",
+          name: "Dolina single track",
+          startMs: 10_000,
+          endMs: 50_000,
+          updatedAtMs: 1_800_000_000_000,
+          summary: FavoriteSummary(sampleCount: 8, movingDurationMs: 35_000)
+        )
+      )
+    )
 
-    XCTAssertEqual(renamed.name, "Dolina single track")
-    XCTAssertEqual(renamed.startMs, 1_000)
-    XCTAssertEqual(renamed.endMs, 61_000)
-    XCTAssertEqual(renamed.summary.sampleCount, 12)
-    XCTAssertEqual(renamed.summary.movingDurationMs, 55_000)
-    XCTAssertEqual(renamed.createdAtMs, 1_700_000_000_000)
-    XCTAssertEqual(renamed.updatedAtMs, 1_800_000_000_000)
+    XCTAssertEqual(updated.id, "fav-1")
+    XCTAssertEqual(updated.name, "Dolina single track")
+    XCTAssertEqual(updated.startMs, 10_000)
+    XCTAssertEqual(updated.endMs, 50_000)
+    XCTAssertEqual(updated.summary.sampleCount, 8)
+    XCTAssertEqual(updated.summary.movingDurationMs, 35_000)
+    XCTAssertEqual(updated.createdAtMs, 1_700_000_000_000)
+    XCTAssertEqual(updated.updatedAtMs, 1_800_000_000_000)
+    let mediaCount = try queue.read { db in
+      try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM favorite_media WHERE favorite_id = 'fav-1'")
+    }
+    XCTAssertEqual(mediaCount, 1)
   }
 
-  /// Naming stays optional after creation too, so clearing a name is a supported rename.
-  func testRenameToNilClearsTheName() throws {
+  func testUpdateToNilClearsTheName() throws {
     store.insert(makeFavorite(id: "fav-1", name: "Dolina", startMs: 1_000, endMs: 2_000))
 
-    let cleared = try XCTUnwrap(store.rename("fav-1", name: nil, updatedAtMs: 1_800_000_000_000))
+    let cleared = try XCTUnwrap(
+      store.update(
+        makeFavorite(
+          id: "fav-1",
+          name: nil,
+          startMs: 1_000,
+          endMs: 2_000,
+          updatedAtMs: 1_800_000_000_000
+        )
+      )
+    )
 
     XCTAssertNil(cleared.name)
     XCTAssertNil(try XCTUnwrap(store.list().first).name)
   }
 
-  func testRenameOfAnUnknownFavoriteReportsNoRow() {
-    XCTAssertNil(store.rename("missing", name: "Nope", updatedAtMs: 1_800_000_000_000))
+  func testUpdateOfAnUnknownFavoriteReportsNoRow() {
+    XCTAssertNil(
+      store.update(
+        makeFavorite(
+          id: "missing",
+          name: "Nope",
+          startMs: 1_000,
+          endMs: 2_000,
+          updatedAtMs: 1_800_000_000_000
+        )
+      )
+    )
   }
 
   /// Removing a Favorite unpins it and nothing else: only its own row goes away.
@@ -223,6 +265,7 @@ final class FavoriteStoreTests: XCTestCase {
     name: String? = nil,
     startMs: Int64,
     endMs: Int64,
+    updatedAtMs: Int64 = 1_700_000_000_000,
     summary: FavoriteSummary = FavoriteSummary()
   ) -> Favorite {
     Favorite(
@@ -232,7 +275,7 @@ final class FavoriteStoreTests: XCTestCase {
       startMs: startMs,
       endMs: endMs,
       createdAtMs: 1_700_000_000_000,
-      updatedAtMs: 1_700_000_000_000,
+      updatedAtMs: updatedAtMs,
       summary: summary
     )
   }

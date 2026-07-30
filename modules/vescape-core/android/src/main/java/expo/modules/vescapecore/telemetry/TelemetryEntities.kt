@@ -459,8 +459,8 @@ data class BoardWarningEntity(
  * One Favorite: a durable, optionally named time range over Ride History (ADR 0029). Identity and
  * timestamps are native-minted — JS may only supply the range and the name.
  *
- * Summary stats are denormalized at creation from raw Telemetry Samples (ADR 0005 style) because
- * minute buckets are too coarse for a range that cuts mid-bucket.
+ * Summary stats are denormalized at creation/update from raw Telemetry Samples (ADR 0005 style)
+ * because minute buckets are too coarse for a range that cuts mid-bucket.
  *
  * @parity /modules/vescape-core/ios/telemetry/FavoriteStore.swift `Favorite`
  * @parity /modules/vescape-core/src/index.ts `Favorite`

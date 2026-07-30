@@ -820,6 +820,17 @@ export interface CreateFavoriteOptions {
 }
 
 /**
+ * @parity /modules/vescape-core/ios/telemetry/TelemetryRepository.swift `updateFavorite`
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryRepository.kt `updateFavorite`
+ */
+export interface UpdateFavoriteOptions {
+  startMs: number
+  endMs: number
+  deviceId?: string
+  name: string | null
+}
+
+/**
  * One immutable Favorite Media manifest row. Native owns metadata and canonical storage.
  * @parity /modules/vescape-core/ios/telemetry/FavoriteMediaStore.swift `FavoriteMedia`
  * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryEntities.kt `FavoriteMediaEntity`
@@ -1496,7 +1507,7 @@ type VescapeCoreNativeModule = NativeEventEmitter<VescapeCoreEvents> & {
   getTelemetrySummary(): Promise<TelemetrySummary>
   getFavorites(): Promise<Favorite[]>
   createFavorite(options: CreateFavoriteOptions): Promise<Favorite>
-  renameFavorite(id: string, name: string | null): Promise<Favorite>
+  updateFavorite(id: string, options: UpdateFavoriteOptions): Promise<Favorite>
   deleteFavorite(id: string): Promise<boolean>
   getFavoriteMedia(favoriteId: string): Promise<FavoriteMedia[]>
   importFavoriteMedia(options: ImportFavoriteMediaOptions): Promise<FavoriteMedia>
@@ -1998,12 +2009,12 @@ export async function createFavorite(options: CreateFavoriteOptions): Promise<Fa
   return native.createFavorite(options)
 }
 
-/**
- * Rename a Favorite, or clear its name with `null`. The range and the summary stay as created —
- * changing what a Favorite covers is delete + recreate (ADR 0029).
- */
-export async function renameFavorite(id: string, name: string | null): Promise<Favorite> {
-  return native.renameFavorite(id, name)
+/** Update a Favorite in place, preserving identity and media while native recomputes its summary. */
+export async function updateFavorite(
+  id: string,
+  options: UpdateFavoriteOptions,
+): Promise<Favorite> {
+  return native.updateFavorite(id, options)
 }
 
 /** Unpin a Favorite. Its telemetry stays and becomes normally deletable (ADR 0029). */

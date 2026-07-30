@@ -50,8 +50,9 @@ export interface MainHistoryOverlayProps {
   trimming: boolean
   trimSeed: { startMs: number; endMs: number } | null
   beginTrimFavorite: () => void
+  beginEditFavorite: () => Promise<void>
   updateTrimRange: (startMs: number, endMs: number) => void
-  cancelTrim: () => void
+  cancelTrim: () => Promise<void>
   saveTrim: (name: string) => Promise<void>
   favoriteSessions: HistorySession[]
   canPreviousFavorite: boolean
@@ -61,7 +62,6 @@ export interface MainHistoryOverlayProps {
   /** The selected Favorite while the Favorites tab is active. */
   openFavorite: Favorite | null
   selectFavorite: (favorite: Favorite) => Promise<void>
-  renameOpenFavorite: (name: string | null) => Promise<void>
   removeOpenFavorite: () => Promise<void>
   loadMoreHistory: () => Promise<void>
   selectPreviousRide: () => Promise<void>
@@ -169,6 +169,7 @@ export function HistoryOverlay({
         bottomOffset={sheetBottom}
         blocks={history.blocks}
         sessions={favoriteMode ? history.favoriteSessions : history.sessions}
+        favorites={favoriteMode ? history.favorites : []}
         selectedSessionId={history.selectedSession?.id ?? null}
         hasMore={!favoriteMode && history.historyHasMore}
         loadingMore={history.historyLoading}

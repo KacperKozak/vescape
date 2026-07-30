@@ -38,7 +38,7 @@ export function useHistoryFavorites(
     favoritesError,
     loadFavorites,
     addFavorite,
-    renameFavorite,
+    updateFavorite,
     removeFavorite,
   } = useFavoriteStore(
     useShallow((state) => ({
@@ -48,12 +48,18 @@ export function useHistoryFavorites(
       favoritesError: state.error,
       loadFavorites: state.load,
       addFavorite: state.add,
-      renameFavorite: state.rename,
+      updateFavorite: state.update,
       removeFavorite: state.remove,
     })),
   )
+  const editingFavoriteIdRef = useRef<string | null>(null)
+  const keepTrimOnNextSelectionRef = useRef(false)
 
   useEffect(() => {
+    if (keepTrimOnNextSelectionRef.current) {
+      keepTrimOnNextSelectionRef.current = false
+      return
+    }
     useMainScreenStore.getState().endTrim()
   }, [selectedSession])
 
@@ -111,6 +117,31 @@ export function useHistoryFavorites(
     const session = useHistoryStore.getState().selectedSession
     if (!session) return
     const range = initialFavoriteTrimRangeForSession(session)
+    editingFavoriteIdRef.current = null
+    setTrimSeed(range)
+    useMainScreenStore.getState().beginTrim(range)
+  }, [])
+
+  const beginEditFavorite = useCallback(async () => {
+    const id = useMainScreenStore.getState().openFavoriteId
+    const favorite = useFavoriteStore.getState().favorites.find((item) => item.id === id)
+    if (!favorite) return
+
+    editingFavoriteIdRef.current = favorite.id
+    const containingSession = useHistoryStore
+      .getState()
+      .sessions.find(
+        (session) => session.startAtMs <= favorite.startMs && session.endAtMs >= favorite.endMs,
+      )
+    if (
+      containingSession &&
+      containingSession.id !== useHistoryStore.getState().selectedSession?.id
+    ) {
+      keepTrimOnNextSelectionRef.current = true
+      await useHistoryStore.getState().selectSession(containingSession)
+    }
+
+    const range = { startMs: favorite.startMs, endMs: favorite.endMs }
     setTrimSeed(range)
     useMainScreenStore.getState().beginTrim(range)
   }, [])
@@ -119,18 +150,42 @@ export function useHistoryFavorites(
     useMainScreenStore.getState().setTrimRange({ startMs, endMs })
   }, [])
 
-  const cancelTrim = useCallback(() => {
+  const cancelTrim = useCallback(async () => {
+    const editingId = editingFavoriteIdRef.current
+    editingFavoriteIdRef.current = null
     useMainScreenStore.getState().endTrim()
-  }, [])
+    setTrimSeed(null)
+    if (!editingId) return
+    const favorite = useFavoriteStore.getState().favorites.find((item) => item.id === editingId)
+    if (favorite) await selectFavorite(favorite)
+  }, [selectFavorite])
 
   const saveTrim = useCallback(
     async (name: string) => {
       const range = useMainScreenStore.getState().trimRange
       const session = useHistoryStore.getState().selectedSession
       if (!range || !session) return
+      const startMs = Math.min(range.startMs, range.endMs)
+      const endMs = Math.max(range.startMs, range.endMs)
+      const editingId = editingFavoriteIdRef.current
+      if (editingId) {
+        const updated = await updateFavorite(editingId, {
+          startMs,
+          endMs,
+          ...(session.deviceId ? { deviceId: session.deviceId } : {}),
+          name: name.trim() || null,
+        })
+        if (!updated) return
+        editingFavoriteIdRef.current = null
+        useMainScreenStore.getState().endTrim()
+        setTrimSeed(null)
+        await selectFavorite(updated)
+        return
+      }
+
       const favorite = await addFavorite({
-        startMs: Math.min(range.startMs, range.endMs),
-        endMs: Math.max(range.startMs, range.endMs),
+        startMs,
+        endMs,
         ...(session.deviceId ? { deviceId: session.deviceId } : {}),
         ...(name.trim() ? { name: name.trim() } : {}),
       })
@@ -138,10 +193,11 @@ export function useHistoryFavorites(
 
       historySessionBeforeFavorite.current = session
       useMainScreenStore.getState().endTrim()
+      setTrimSeed(null)
       setHistoryTab('favorites')
       await selectFavorite(favorite)
     },
-    [addFavorite, selectFavorite, setHistoryTab],
+    [addFavorite, selectFavorite, setHistoryTab, updateFavorite],
   )
 
   const selectPreviousFavorite = useCallback(async () => {
@@ -165,22 +221,6 @@ export function useHistoryFavorites(
     if (favorite) await selectFavorite(favorite)
   }, [favoriteSessions, selectFavorite])
 
-  const renameOpenFavorite = useCallback(
-    async (name: string | null) => {
-      const id = useMainScreenStore.getState().openFavoriteId
-      if (!id) return
-      await renameFavorite(id, name)
-      const renamed = useFavoriteStore.getState().favorites.find((item) => item.id === id)
-      // The name doubles as the session label, so the open detail has to be rebuilt to show it.
-      if (renamed) {
-        await useHistoryStore
-          .getState()
-          .selectSession(favoriteToSession(renamed, useHistoryStore.getState().blocks))
-      }
-    },
-    [renameFavorite],
-  )
-
   const removeOpenFavorite = useCallback(async () => {
     const id = useMainScreenStore.getState().openFavoriteId
     if (!id) return
@@ -198,6 +238,9 @@ export function useHistoryFavorites(
 
   const resetHistoryFavorites = useCallback(() => {
     historySessionBeforeFavorite.current = null
+    editingFavoriteIdRef.current = null
+    keepTrimOnNextSelectionRef.current = false
+    setTrimSeed(null)
     setHistoryTab('history')
     useMainScreenStore.getState().closeFavorite()
     useMainScreenStore.getState().endTrim()
@@ -215,6 +258,7 @@ export function useHistoryFavorites(
     trimming,
     trimSeed,
     beginTrimFavorite,
+    beginEditFavorite,
     updateTrimRange,
     cancelTrim,
     saveTrim,
@@ -224,7 +268,6 @@ export function useHistoryFavorites(
     canNextFavorite: getNextRideSession(favoriteSessions, selectedSession) != null,
     selectPreviousFavorite,
     selectNextFavorite,
-    renameOpenFavorite,
     removeOpenFavorite,
     loadFavorites,
     resetHistoryFavorites,

@@ -4,8 +4,8 @@ import GRDB
 /// One Favorite: a durable, optionally named time range over Ride History (ADR 0029). Identity and
 /// timestamps are native-minted — JS may only supply the range and the name.
 ///
-/// Summary stats are denormalized at creation from raw Telemetry Samples (ADR 0005 style) because
-/// minute buckets are too coarse for a range that cuts mid-bucket.
+/// Summary stats are denormalized at creation/update from raw Telemetry Samples (ADR 0005 style)
+/// because minute buckets are too coarse for a range that cuts mid-bucket.
 ///
 /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryEntities.kt `FavoriteEntity`
 /// @parity /modules/vescape-core/src/index.ts `Favorite`
@@ -197,18 +197,32 @@ struct FavoriteStore {
     }
   }
 
-  /// Rename one Favorite, or clear its name with `nil`. The range and the summary are immutable:
-  /// changing what a Favorite covers is delete + recreate (ADR 0029). Returns the stored row so the
-  /// caller never has to guess what native now holds.
-  func rename(_ id: String, name: String?, updatedAtMs: Int64) -> Favorite? {
+  /// Re-trim/rename one row in place so identity, creation time and Favorite Media remain stable.
+  func update(_ favorite: Favorite) -> Favorite? {
     guard let writer = resolveWriter() else { return nil }
     let updated = try? writer.write { db -> Favorite? in
       try db.execute(
-        sql: "UPDATE favorites SET name = ?, updated_at = ? WHERE id = ?",
-        arguments: [name, updatedAtMs, id]
+        sql: """
+          UPDATE favorites SET
+            name = ?, start_ms = ?, end_ms = ?, updated_at = ?,
+            sample_count = ?, gps_point_count = ?, distance_cm = ?, moving_duration_ms = ?,
+            avg_speed_centi_kmh = ?, max_speed_centi_kmh = ?, battery_used_wh_milli = ?
+          WHERE id = ?
+          """,
+        arguments: [
+          favorite.name, favorite.startMs, favorite.endMs, favorite.updatedAtMs,
+          favorite.summary.sampleCount, favorite.summary.gpsPointCount,
+          favorite.summary.distanceCm, favorite.summary.movingDurationMs,
+          favorite.summary.avgSpeedCentiKmh, favorite.summary.maxSpeedCentiKmh,
+          favorite.summary.batteryUsedWhMilli, favorite.id,
+        ]
       )
       guard db.changesCount > 0 else { return nil }
-      return try Row.fetchOne(db, sql: "SELECT * FROM favorites WHERE id = ?", arguments: [id])
+      return try Row.fetchOne(
+        db,
+        sql: "SELECT * FROM favorites WHERE id = ?",
+        arguments: [favorite.id]
+      )
         .map(Self.favorite)
     }
     return updated ?? nil

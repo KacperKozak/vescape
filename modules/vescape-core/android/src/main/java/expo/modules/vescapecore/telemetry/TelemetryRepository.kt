@@ -594,16 +594,39 @@ class TelemetryRepository private constructor(context: Context) {
   }
 
   /**
-   * Rename a Favorite, or clear its name with an empty/absent value. The range and the summary are
-   * immutable — re-trimming is delete + recreate (ADR 0029). `updated_at` is minted here.
+   * Re-trim/rename a Favorite in place. Identity, creation time and Favorite Media stay attached;
+   * summary stats are rebuilt from raw samples for the new exact range.
    *
-   * @parity /modules/vescape-core/ios/telemetry/TelemetryRepository.swift `renameFavorite`
+   * @parity /modules/vescape-core/ios/telemetry/TelemetryRepository.swift `updateFavorite`
    */
-  suspend fun renameFavorite(id: String, name: String?): Map<String, Any?>? = withContext(Dispatchers.IO) {
-    val trimmed = name?.trim()?.ifEmpty { null }
-    if (dao.renameFavorite(id, trimmed, System.currentTimeMillis()) == 0) return@withContext null
-    val favorite = dao.getFavorite(id) ?: return@withContext null
-    favorite.toMap(dao.getBoards().firstOrNull { it.id == favorite.boardId }?.name)
+  suspend fun updateFavorite(
+    id: String,
+    options: Map<String, Any?>,
+  ): Map<String, Any?>? = withContext(Dispatchers.IO) {
+    val existing = dao.getFavorite(id) ?: return@withContext null
+    val startMs = options.requiredLong("startMs")
+    val endMs = options.requiredLong("endMs")
+    require(endMs >= startMs) { "endMs must be greater than or equal to startMs" }
+    val deviceId = options["deviceId"] as? String
+    val name = (options["name"] as? String)?.trim()?.ifEmpty { null }
+    flushNow()
+
+    val summary = favoriteSummary(getSampleStates(startMs, endMs, deviceId, Int.MAX_VALUE))
+    val updated = existing.copy(
+      name = name,
+      startMs = startMs,
+      endMs = endMs,
+      updatedAt = System.currentTimeMillis(),
+      sampleCount = summary.sampleCount,
+      gpsPointCount = summary.gpsPointCount,
+      distanceCm = summary.distanceCm,
+      movingDurationMs = summary.movingDurationMs,
+      avgSpeedCentiKmh = summary.avgSpeedCentiKmh,
+      maxSpeedCentiKmh = summary.maxSpeedCentiKmh,
+      batteryUsedWhMilli = summary.batteryUsedWhMilli,
+    )
+    if (dao.updateFavorite(updated) == 0) return@withContext null
+    updated.toMap(dao.getBoards().firstOrNull { it.id == updated.boardId }?.name)
   }
 
   /**

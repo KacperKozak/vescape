@@ -125,9 +125,9 @@ test('a favorite-backed session reports the pinned range and the pinned summary'
   expect(detail.deviceId).toBe('ble-1')
 })
 
-test('a named favorite reads by its name, an unnamed one by its board', () => {
+test('a favorite-backed session keeps board identity separate from its name', () => {
   expect(favoriteToSession(favorite({ name: 'Dolina single track' }), []).deviceName).toBe(
-    'Dolina single track',
+    'Onewheel',
   )
   expect(favoriteToSession(favorite({}), []).deviceName).toBe('Onewheel')
 })

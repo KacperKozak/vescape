@@ -6,6 +6,7 @@ import { IconButton } from '@/components/base/IconButton'
 import { Text } from '@/components/base/Text'
 import { PrevNextSelector } from '@/components/controls/PrevNextSelector'
 import { interaction, theme } from '@/constants/theme'
+import { HistoryRideLabel } from '@/modules/history/components/HistoryRideLabel'
 import { formatRideMeta, formatRideTime } from '@/modules/history/lib/rideFormat'
 
 interface HistoryPanelNavProps {
@@ -90,14 +91,7 @@ export function HistoryPanelNav({
             android_ripple={interaction.ripple}
             onPress={onOpenList}
           >
-            <View style={styles.titleContent}>
-              <Text style={styles.titleTime} numberOfLines={1}>
-                {primaryLabel}
-              </Text>
-              <Text style={styles.titleMeta} numberOfLines={1}>
-                {secondaryLabel}
-              </Text>
-            </View>
+            <HistoryRideLabel title={primaryLabel} subtitle={secondaryLabel} compact />
             <CaretDownIcon size={12} color={theme.palette.slate.textSecondary} weight="bold" />
           </Pressable>
         }
@@ -179,20 +173,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-  },
-  titleContent: {
-    flex: 1,
-    minWidth: 0,
-    gap: 1,
-  },
-  titleTime: {
-    color: theme.palette.slate.textPrimary,
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  titleMeta: {
-    color: theme.palette.slate.textMuted,
-    fontSize: 9,
-    fontWeight: '600',
   },
 })

@@ -303,18 +303,42 @@ internal final class TelemetryRepository {
     return names
   }
 
-  /// Rename a Favorite, or clear its name with an empty/absent value. The range and the summary are
-  /// immutable — re-trimming is delete + recreate (ADR 0029). `updated_at` is minted here.
-  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryRepository.kt `renameFavorite`
-  func renameFavorite(_ id: String, name: String?) -> [String: Any?]? {
-    let trimmed = name?.trimmingCharacters(in: .whitespacesAndNewlines)
-    let renamed = FavoriteStore.shared.rename(
-      id,
-      name: (trimmed?.isEmpty ?? true) ? nil : trimmed,
-      updatedAtMs: telemetryNowMs()
+  /// Re-trim/rename a Favorite in place. Identity, creation time and Favorite Media stay attached;
+  /// summary stats are rebuilt from raw samples for the new exact range.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryRepository.kt `updateFavorite`
+  func updateFavorite(_ id: String, options: [String: Any]) -> [String: Any?]? {
+    flushBlocking()
+    guard let existing = FavoriteStore.shared.list().first(where: { $0.id == id }), let pool
+    else { return nil }
+    let startMs = telemetryLong(options["startMs"]) ?? 0
+    let endMs = telemetryLong(options["endMs"]) ?? 0
+    guard endMs >= startMs else { return nil }
+    let deviceId = options["deviceId"] as? String
+    let trimmedName = (options["name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+    let config = queue.sync { metricConfig }
+    let points = (try? pool.read { db in
+      try Row.fetchAll(
+        db,
+        sql: """
+          SELECT * FROM telemetry_frames
+          WHERE captured_at_ms >= ? AND captured_at_ms <= ? AND (? IS NULL OR device_id = ?)
+          ORDER BY captured_at_ms ASC
+          """,
+        arguments: [startMs, endMs, deviceId, deviceId]
+      ).compactMap(bucketPoint)
+    }) ?? []
+    let updated = Favorite(
+      id: existing.id,
+      boardId: existing.boardId,
+      name: (trimmedName?.isEmpty ?? true) ? nil : trimmedName,
+      startMs: startMs,
+      endMs: endMs,
+      createdAtMs: existing.createdAtMs,
+      updatedAtMs: telemetryNowMs(),
+      summary: Self.favoriteSummary(points, config: config)
     )
-    guard let renamed else { return nil }
-    return renamed.toMap(boardName: renamed.boardId.flatMap { Self.boardNamesById()[$0] })
+    guard let stored = FavoriteStore.shared.update(updated) else { return nil }
+    return stored.toMap(boardName: stored.boardId.flatMap { Self.boardNamesById()[$0] })
   }
 
   /// Unpin a Favorite. Telemetry in its range stays and becomes normally deletable (ADR 0029).

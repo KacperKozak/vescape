@@ -3,15 +3,16 @@ import {
   createFavorite,
   deleteFavorite,
   getFavorites,
-  renameFavorite,
+  updateFavorite,
   type Favorite,
   type CreateFavoriteOptions,
+  type UpdateFavoriteOptions,
 } from 'vescape-core'
 
 interface FavoriteState {
   favorites: Favorite[]
   loading: boolean
-  /** A create/delete is in flight. Single-flight: the star must not queue a second mutation. */
+  /** One create/update/delete at a time; controls must not queue a second mutation. */
   saving: boolean
   error: string | undefined
 }
@@ -20,8 +21,8 @@ interface FavoriteActions {
   load: () => Promise<void>
   /** Pin a range. Native owns identity, timestamps and stats — JS only sends range + name. */
   add: (options: CreateFavoriteOptions) => Promise<Favorite | null>
-  /** Rename, or clear the name with `null`. Native owns the row; JS mirrors what it returns. */
-  rename: (id: string, name: string | null) => Promise<void>
+  /** Re-trim/rename in place. Native preserves identity/media and recomputes the summary. */
+  update: (id: string, options: UpdateFavoriteOptions) => Promise<Favorite | null>
   /** Unpin. Telemetry inside the range stays (ADR 0029). */
   remove: (id: string) => Promise<void>
 }
@@ -60,16 +61,20 @@ export const useFavoriteStore = create<FavoriteState & FavoriteActions>((set, ge
     }
   },
 
-  async rename(id, name) {
-    if (get().saving) return
+  async update(id, options) {
+    if (get().saving) return null
     set({ saving: true, error: undefined })
     try {
-      const renamed = await renameFavorite(id, name)
+      const updated = await updateFavorite(id, options)
       set({
-        favorites: get().favorites.map((favorite) => (favorite.id === id ? renamed : favorite)),
+        favorites: get()
+          .favorites.map((favorite) => (favorite.id === id ? updated : favorite))
+          .sort((a, b) => b.startMs - a.startMs),
       })
+      return updated
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err) })
+      return null
     } finally {
       set({ saving: false })
     }

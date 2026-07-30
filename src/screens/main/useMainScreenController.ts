@@ -119,6 +119,7 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
     })),
   )
   const historyFavorites = useHistoryFavorites(selectedSession, blocks)
+  const cancelHistoryTrim = historyFavorites.cancelTrim
   const {
     mapPoints,
     selectedMapPointId,
@@ -363,7 +364,7 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
       const handler = BackHandler.addEventListener('hardwareBackPress', () => {
         if (mode === 'history') {
           if (useMainScreenStore.getState().trimRange) {
-            useMainScreenStore.getState().endTrim()
+            void cancelHistoryTrim()
             return true
           }
           exitHistory()
@@ -393,7 +394,7 @@ export function useMainScreenController({ mapRef }: UseMainScreenControllerArgs)
         return true
       })
       return () => handler.remove()
-    }, [exitHistory, exitLegalLimitsMode, exitMapFocus, exitWeatherMode, mode]),
+    }, [cancelHistoryTrim, exitHistory, exitLegalLimitsMode, exitMapFocus, exitWeatherMode, mode]),
   )
 
   return {

@@ -13,10 +13,17 @@ import { Text } from '@/components/base/Text'
 import { CaretRightIcon } from 'phosphor-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Canvas, Circle, Path, Skia } from '@shopify/react-native-skia'
+import type { Favorite } from 'vescape-core'
 
 import { interaction, theme } from '@/constants/theme'
-import { telemetry } from '@/modules/board/constants/telemetry'
-import { rideDurationMs } from '@/modules/history/lib/sessions'
+import { HistoryRideLabel } from '@/modules/history/components/HistoryRideLabel'
+import { favoriteSessionId } from '@/modules/history/lib/favorites'
+import {
+  formatFavoriteName,
+  formatRideListDateTime,
+  formatRideListDetails,
+} from '@/modules/history/lib/rideFormat'
+import { rideMovingWindow } from '@/modules/history/lib/sessions'
 import type { HistorySession, TelemetryMinuteBucket } from '@/modules/history/store/historyStore'
 
 interface HistorySessionSheetProps {
@@ -24,6 +31,7 @@ interface HistorySessionSheetProps {
   bottomOffset: number
   blocks: TelemetryMinuteBucket[]
   sessions: HistorySession[]
+  favorites: Favorite[]
   selectedSessionId: string | null
   hasMore: boolean
   loadingMore: boolean
@@ -43,6 +51,7 @@ export function HistorySessionSheet({
   bottomOffset,
   blocks,
   sessions,
+  favorites,
   selectedSessionId,
   hasMore,
   loadingMore,
@@ -57,6 +66,10 @@ export function HistorySessionSheet({
   const selectedIndex = useMemo(
     () => sessions.findIndex((session) => session.id === selectedSessionId),
     [sessions, selectedSessionId],
+  )
+  const favoritesBySessionId = useMemo(
+    () => new Map(favorites.map((favorite) => [favoriteSessionId(favorite.id), favorite])),
+    [favorites],
   )
 
   useEffect(() => {
@@ -109,6 +122,17 @@ export function HistorySessionSheet({
             sessions.map((session) => {
               const selected = session.id === selectedSessionId
               const routePoints = getSessionRoutePreviewPoints(blocks, session)
+              const favorite = favoritesBySessionId.get(session.id)
+              const rideWindow = rideMovingWindow(session) ?? {
+                startMs: session.startAtMs,
+                endMs: session.endAtMs,
+              }
+              const dateTime = formatRideListDateTime(rideWindow.startMs, rideWindow.endMs)
+              const details = formatRideListDetails(
+                rideWindow.endMs - rideWindow.startMs,
+                session.distanceM,
+                favorite?.boardName ?? session.deviceName,
+              )
               return (
                 <Pressable
                   key={session.id}
@@ -122,18 +146,11 @@ export function HistorySessionSheet({
                 >
                   <RoutePreview points={routePoints} selected={selected} />
                   <View style={styles.rowMain}>
-                    <Text style={styles.rowDate}>
-                      {new Date(session.startAtMs).toLocaleString()}
-                    </Text>
-                    <Text style={styles.rowName} numberOfLines={1}>
-                      {session.deviceName}
-                    </Text>
-                    <Text style={styles.rowMeta}>
-                      {formatDuration(rideDurationMs(session))} ·{' '}
-                      {formatDistance(session.distanceM)} ·{' '}
-                      {telemetry.speed.formatWithUnit(session.maxSpeedKmh)} · GPS{' '}
-                      {session.gpsPointCount}
-                    </Text>
+                    <HistoryRideLabel
+                      title={favorite ? formatFavoriteName(favorite.name) : dateTime}
+                      subtitle={favorite ? dateTime : details}
+                      details={favorite ? details : undefined}
+                    />
                   </View>
                   <CaretRightIcon size={16} color={theme.palette.slate.textDim} weight="bold" />
                 </Pressable>
@@ -241,19 +258,6 @@ function formatPreviewPoint(points: RoutePoint[], index: number): { x: number; y
   return { x, y }
 }
 
-function formatDuration(ms: number): string {
-  const mins = Math.max(1, Math.round(ms / 60_000))
-  if (mins < 60) return `${mins}m`
-  const h = Math.floor(mins / 60)
-  const rem = mins % 60
-  return rem ? `${h}h ${rem}m` : `${h}h`
-}
-
-function formatDistance(distanceM: number | null): string {
-  if (distanceM == null) return '-'
-  return `${(distanceM / 1000).toFixed(2)} km`
-}
-
 const styles = StyleSheet.create({
   backdrop: {
     ...StyleSheet.absoluteFill,
@@ -308,20 +312,6 @@ const styles = StyleSheet.create({
   rowMain: {
     flex: 1,
     minWidth: 0,
-    gap: 2,
-  },
-  rowDate: {
-    color: theme.palette.slate.textPrimary,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  rowName: {
-    color: theme.palette.slate.textSecondary,
-    fontSize: 12,
-  },
-  rowMeta: {
-    color: theme.palette.slate.textMuted,
-    fontSize: 11,
   },
   routePreview: {
     width: PREVIEW_WIDTH,

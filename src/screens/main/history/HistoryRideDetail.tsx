@@ -1,8 +1,7 @@
 import { useState } from 'react'
 
 import { ConfirmModal } from '@/components/modals/ConfirmModal'
-import { TextPromptModal } from '@/components/modals/TextPromptModal'
-import { formatRideDate, formatRideTime } from '@/modules/history/lib/rideFormat'
+import { formatFavoriteName, formatRideTime } from '@/modules/history/lib/rideFormat'
 import type { HistorySession } from '@/modules/history/store/historyStore'
 import { HistoryControls } from '@/screens/main/history/HistoryControls'
 import { HistoryMapLoading } from '@/screens/main/history/HistoryMapLoading'
@@ -34,11 +33,10 @@ export function HistoryRideDetail({
   onRemoveSession,
   onPanelHeightChange,
 }: HistoryRideDetailProps) {
-  const [renameVisible, setRenameVisible] = useState(false)
   const [deleteVisible, setDeleteVisible] = useState(false)
   const [trimName, setTrimName] = useState('')
   const openFavorite = favoriteMode ? history.openFavorite : null
-  const trimming = !favoriteMode && history.trimming
+  const trimming = history.trimming
 
   return (
     <>
@@ -49,11 +47,7 @@ export function HistoryRideDetail({
         movingStartAtMs={session.movingStartAtMs}
         movingEndAtMs={session.movingEndAtMs}
         deviceName={session.deviceName}
-        navigationTitle={
-          openFavorite
-            ? (openFavorite.name ?? formatRideDate(openFavorite.startMs, openFavorite.endMs))
-            : undefined
-        }
+        navigationTitle={openFavorite ? formatFavoriteName(openFavorite.name) : undefined}
         navigationSubtitle={
           openFavorite
             ? [formatRideTime(openFavorite.startMs, openFavorite.endMs), openFavorite.boardName]
@@ -120,7 +114,10 @@ export function HistoryRideDetail({
         favorite={
           openFavorite
             ? {
-                onRename: () => setRenameVisible(true),
+                onEdit: () => {
+                  setTrimName(openFavorite.name ?? '')
+                  void history.beginEditFavorite()
+                },
                 onDelete: () => setDeleteVisible(true),
               }
             : undefined
@@ -130,25 +127,11 @@ export function HistoryRideDetail({
         onRemove={onRemoveSession}
         onCancelTrim={() => {
           setTrimName('')
-          history.cancelTrim()
+          void history.cancelTrim()
         }}
         onSaveTrim={() => {
           void history.saveTrim(trimName)
         }}
-      />
-
-      <TextPromptModal
-        visible={renameVisible}
-        title="Rename Favorite"
-        placeholder="Dolina single track"
-        initialValue={openFavorite?.name ?? ''}
-        confirmLabel="Save"
-        allowEmpty
-        onConfirm={(value) => {
-          setRenameVisible(false)
-          void history.renameOpenFavorite(value.length > 0 ? value : null)
-        }}
-        onDismiss={() => setRenameVisible(false)}
       />
 
       <ConfirmModal

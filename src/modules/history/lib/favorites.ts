@@ -43,7 +43,7 @@ export function findSessionFavorite(
  * The pinned summary wins over anything derivable from buckets: it was computed from raw samples at
  * creation and is exact for a range that cuts a bucket in half. Only what the row cannot carry
  * (geography, the buckets to read, the recording device) is derived from the overlapping buckets.
- * The name stands in for the device label so a named Favorite reads by its name.
+ * Favorite identity stays separate from the recording device so each can be presented consistently.
  */
 export function favoriteToSession(
   favorite: Favorite,
@@ -57,7 +57,7 @@ export function favoriteToSession(
   return {
     id: favoriteSessionId(favorite.id),
     deviceId: spanned.find((block) => block.deviceId != null)?.deviceId ?? null,
-    deviceName: favorite.name ?? favorite.boardName ?? spanned[0]?.deviceName ?? 'Favorite',
+    deviceName: favorite.boardName ?? spanned[0]?.deviceName ?? '',
     startAtMs: favorite.startMs,
     endAtMs: favorite.endMs,
     // A Favorite is already a trimmed span: it is its own Moving Window, so the chart and the title
