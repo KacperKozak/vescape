@@ -23,8 +23,17 @@ interface MetricAlertRuleSnapshotSource {
   hasBatteryConfig: boolean
 }
 
-/** Cubic ease-out: move quickly at first, then decelerate continuously toward the maximum. */
+/** Cubic ease-out: reach the alert range early, then decelerate without extending the sweep. */
 export function highRangeAlertTestEasing(progress: number): number {
+  'worklet'
+  if (progress <= 0) return 0
+  if (progress >= 1) return 1
+  const remaining = 1 - progress
+  return 1 - remaining * remaining * remaining
+}
+
+/** Battery drains promptly from full, then continuously slows as it approaches empty. */
+export function batteryDrainAlertTestEasing(progress: number): number {
   'worklet'
   if (progress <= 0) return 0
   if (progress >= 1) return 1

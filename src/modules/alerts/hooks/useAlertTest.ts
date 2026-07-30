@@ -9,12 +9,17 @@ import {
 } from 'react-native-reanimated'
 import { startAlertTest, stopAlertTest, updateAlertTest, type AlertTestRule } from 'vescape-core'
 
-import { highRangeAlertTestEasing } from '@/modules/alerts/lib/alertTest'
+import {
+  batteryDrainAlertTestEasing,
+  highRangeAlertTestEasing,
+} from '@/modules/alerts/lib/alertTest'
 
 const STANDARD_LEG_DURATION_MS = 5_000
-const BATTERY_DRAIN_DURATION_MS = 8_000
-const HIGH_RANGE_SWEEP_DURATION_MS = 8_000
+const BATTERY_DRAIN_DURATION_MS = 32_000
+const HIGH_RANGE_SWEEP_DURATION_MS = 16_000
+const MESSAGE_SWEEP_DURATION_MS = 32_000
 const FAST_RESET_DURATION_MS = 600
+const HIGH_RANGE_MAX_HOLD_MS = 1_000
 const SAMPLE_INTERVAL_MS = 100
 
 interface AlertTestOptions {
@@ -25,10 +30,19 @@ interface AlertTestOptions {
   alertAbove: boolean
   /** Speed and duty need most of their test time in the high alert range. */
   lingerNearMax: boolean
+  /** Spoken temperature/current alerts need a longer sweep so messages can finish. */
+  slowForMessages?: boolean
 }
 
 /** Own the synthetic gauge sweep and its isolated native alert-engine lifecycle. */
-export function useAlertTest({ rules, min, max, alertAbove, lingerNearMax }: AlertTestOptions) {
+export function useAlertTest({
+  rules,
+  min,
+  max,
+  alertAbove,
+  lingerNearMax,
+  slowForMessages = false,
+}: AlertTestOptions) {
   const value = useSharedValue<number | null>(null)
   const timer = useRef<ReturnType<typeof setInterval> | null>(null)
   const [running, setRunning] = useState(false)
@@ -52,28 +66,40 @@ export function useAlertTest({ rules, min, max, alertAbove, lingerNearMax }: Ale
     const turnValue = alertAbove ? max : min
     const outboundDuration = lingerNearMax
       ? HIGH_RANGE_SWEEP_DURATION_MS
+      : slowForMessages
+        ? MESSAGE_SWEEP_DURATION_MS
+        : alertAbove
+          ? STANDARD_LEG_DURATION_MS
+          : BATTERY_DRAIN_DURATION_MS
+    const returnDuration = !alertAbove ? FAST_RESET_DURATION_MS : STANDARD_LEG_DURATION_MS
+    const outboundEasing = lingerNearMax
+      ? highRangeAlertTestEasing
       : alertAbove
-        ? STANDARD_LEG_DURATION_MS
-        : BATTERY_DRAIN_DURATION_MS
-    const returnDuration =
-      lingerNearMax || !alertAbove ? FAST_RESET_DURATION_MS : STANDARD_LEG_DURATION_MS
-    const outboundEasing = lingerNearMax ? highRangeAlertTestEasing : Easing.inOut(Easing.quad)
+        ? Easing.inOut(Easing.quad)
+        : batteryDrainAlertTestEasing
     const returnEasing = Easing.inOut(Easing.quad)
     const startedAt = Date.now()
-    const totalDuration = outboundDuration + returnDuration
+    const stopAtMaximum = lingerNearMax || slowForMessages
+    const maxHoldDuration = stopAtMaximum ? HIGH_RANGE_MAX_HOLD_MS : 0
+    const totalDuration = outboundDuration + (stopAtMaximum ? maxHoldDuration : returnDuration)
 
     value.set(startValue)
     value.set(
-      withSequence(
-        withTiming(turnValue, {
-          duration: outboundDuration,
-          easing: outboundEasing,
-        }),
-        withTiming(startValue, {
-          duration: returnDuration,
-          easing: returnEasing,
-        }),
-      ),
+      stopAtMaximum
+        ? withTiming(turnValue, {
+            duration: outboundDuration,
+            easing: slowForMessages ? batteryDrainAlertTestEasing : outboundEasing,
+          })
+        : withSequence(
+            withTiming(turnValue, {
+              duration: outboundDuration,
+              easing: outboundEasing,
+            }),
+            withTiming(startValue, {
+              duration: returnDuration,
+              easing: returnEasing,
+            }),
+          ),
     )
     startAlertTest(rules)
     updateAlertTest(startValue)
@@ -82,12 +108,16 @@ export function useAlertTest({ rules, min, max, alertAbove, lingerNearMax }: Ale
     timer.current = setInterval(() => {
       const elapsed = Date.now() - startedAt
       if (elapsed >= totalDuration) {
-        updateAlertTest(startValue)
+        updateAlertTest(stopAtMaximum ? turnValue : startValue)
         stop()
         return
       }
 
       const outbound = elapsed < outboundDuration
+      if (stopAtMaximum && !outbound) {
+        updateAlertTest(turnValue)
+        return
+      }
       const legProgress = outbound
         ? elapsed / outboundDuration
         : (elapsed - outboundDuration) / returnDuration
@@ -96,7 +126,7 @@ export function useAlertTest({ rules, min, max, alertAbove, lingerNearMax }: Ale
       const to = outbound ? turnValue : startValue
       updateAlertTest(from + (to - from) * eased)
     }, SAMPLE_INTERVAL_MS)
-  }, [alertAbove, lingerNearMax, max, min, rules, stop, value])
+  }, [alertAbove, lingerNearMax, max, min, rules, slowForMessages, stop, value])
 
   // A route can blur without unmounting. Blur cleanup guarantees no test survives leaving a page.
   useFocusEffect(useCallback(() => stop, [stop]))

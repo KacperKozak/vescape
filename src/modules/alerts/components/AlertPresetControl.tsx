@@ -208,6 +208,7 @@ export function AlertPresetControl({
     max,
     alertAbove: metric !== 'battery',
     lingerNearMax: metric === 'speed' || metric === 'duty',
+    slowForMessages: metric === 'motor-temp' || metric === 'controller-temp',
   })
   const gaugeValue = alertTest.running ? alertTest.value : liveValue
 
