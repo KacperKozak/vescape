@@ -123,17 +123,21 @@ export function useHistoryFavorites(
     useMainScreenStore.getState().endTrim()
   }, [])
 
-  const saveTrim = useCallback(async () => {
-    const range = useMainScreenStore.getState().trimRange
-    const session = useHistoryStore.getState().selectedSession
-    if (!range || !session) return
-    const favorite = await addFavorite({
-      startMs: Math.min(range.startMs, range.endMs),
-      endMs: Math.max(range.startMs, range.endMs),
-      ...(session.deviceId ? { deviceId: session.deviceId } : {}),
-    })
-    if (favorite) useMainScreenStore.getState().endTrim()
-  }, [addFavorite])
+  const saveTrim = useCallback(
+    async (name: string) => {
+      const range = useMainScreenStore.getState().trimRange
+      const session = useHistoryStore.getState().selectedSession
+      if (!range || !session) return
+      const favorite = await addFavorite({
+        startMs: Math.min(range.startMs, range.endMs),
+        endMs: Math.max(range.startMs, range.endMs),
+        ...(session.deviceId ? { deviceId: session.deviceId } : {}),
+        ...(name.trim() ? { name: name.trim() } : {}),
+      })
+      if (favorite) useMainScreenStore.getState().endTrim()
+    },
+    [addFavorite],
+  )
 
   const selectPreviousFavorite = useCallback(async () => {
     const previous = getPreviousRideSession(

@@ -73,7 +73,13 @@ appId: ${APP_ID}
 # Favorites is a filtered History tab: newest Favorite opens immediately and keeps the same nav.
 - tapOn:
     id: history-favorite-ride
-- assertVisible: Trim favorite
+- assertVisible:
+    id: trim-favorite-name
+- assertNotVisible:
+    id: history-ride-list-button
+- tapOn:
+    id: trim-favorite-name
+- inputText: Evening ride
 - tapOn:
     id: trim-save
 - tapOn:

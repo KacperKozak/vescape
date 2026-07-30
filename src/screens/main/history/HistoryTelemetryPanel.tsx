@@ -40,7 +40,9 @@ interface HistoryTelemetryPanelProps {
   samples: TelemetrySample[]
   canPrevious: boolean
   canNext: boolean
-  showMedia: boolean
+  favoriteMode: boolean
+  favorited: boolean
+  actionDisabled: boolean
   mediaAssets: MediaHistoryAsset[]
   mediaUnmatched: MediaAssetInput[]
   mediaLoading: boolean
@@ -50,6 +52,7 @@ interface HistoryTelemetryPanelProps {
   onOpenList: () => void
   onAddMedia: () => void
   onOpenMedia: (asset: MediaAssetInput) => void
+  onToggleFavorite: () => void
   onSeek?: (timeMs: number) => void
   onMetricInteraction?: (metric: HistoryMetricKey) => void
   onHeightChange?: (height: number) => void
@@ -70,7 +73,9 @@ export function HistoryTelemetryPanel({
   samples,
   canPrevious,
   canNext,
-  showMedia,
+  favoriteMode,
+  favorited,
+  actionDisabled,
   mediaAssets,
   mediaUnmatched,
   mediaLoading,
@@ -80,6 +85,7 @@ export function HistoryTelemetryPanel({
   onOpenList,
   onAddMedia,
   onOpenMedia,
+  onToggleFavorite,
   onSeek,
   onMetricInteraction,
   onHeightChange,
@@ -155,24 +161,29 @@ export function HistoryTelemetryPanel({
       style={[styles.panel, { bottom: bottomInset }]}
       onLayout={(e) => onHeightChange?.(e.nativeEvent.layout.height)}
     >
-      <HistoryPanelNav
-        titleStartMs={titleStartMs}
-        titleEndMs={titleEndMs}
-        deviceName={deviceName}
-        title={navigationTitle}
-        subtitle={navigationSubtitle}
-        canPrevious={canPrevious}
-        canNext={canNext}
-        showMedia={showMedia}
-        mediaCount={mediaAssets.length + mediaUnmatched.length}
-        mediaLoading={mediaLoading}
-        mediaButtonRef={mediaButtonRef}
-        onPrevious={onPrevious}
-        onNext={onNext}
-        onOpenList={onOpenList}
-        onOpenMediaDrawer={() => setMediaDrawerVisible(true)}
-        onOpenShareInfo={() => setShareInfoVisible(true)}
-      />
+      {!trim ? (
+        <HistoryPanelNav
+          titleStartMs={titleStartMs}
+          titleEndMs={titleEndMs}
+          deviceName={deviceName}
+          title={navigationTitle}
+          subtitle={navigationSubtitle}
+          canPrevious={canPrevious}
+          canNext={canNext}
+          favoriteMode={favoriteMode}
+          favorited={favorited}
+          actionDisabled={actionDisabled}
+          mediaCount={mediaAssets.length + mediaUnmatched.length}
+          mediaLoading={mediaLoading}
+          mediaButtonRef={mediaButtonRef}
+          onPrevious={onPrevious}
+          onNext={onNext}
+          onOpenList={onOpenList}
+          onOpenMediaDrawer={() => setMediaDrawerVisible(true)}
+          onToggleFavorite={onToggleFavorite}
+          onOpenShareInfo={() => setShareInfoVisible(true)}
+        />
+      ) : null}
       {hasChartData && headPoint && optionalChartConfig && headSample != null && (
         <>
           <TelemetryLineChart
@@ -223,7 +234,7 @@ export function HistoryTelemetryPanel({
           <HistoryMetricLegend />
         </>
       )}
-      {showMedia ? (
+      {favoriteMode ? (
         <HistoryRideMediaDrawer
           visible={mediaDrawerVisible}
           triggerRef={mediaButtonRef}

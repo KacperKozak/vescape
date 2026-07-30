@@ -10,15 +10,13 @@ import {
   useWindowDimensions,
 } from 'react-native'
 import { Text } from '@/components/base/Text'
-import { CaretRightIcon, LockKeyIcon } from 'phosphor-react-native'
+import { CaretRightIcon } from 'phosphor-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Canvas, Circle, Path, Skia } from '@shopify/react-native-skia'
 
 import { interaction, theme } from '@/constants/theme'
 import { telemetry } from '@/modules/board/constants/telemetry'
-import { sessionContainsFavorite } from '@/modules/history/lib/favorites'
 import { rideDurationMs } from '@/modules/history/lib/sessions'
-import type { Favorite } from '@/modules/history/store/favoriteStore'
 import type { HistorySession, TelemetryMinuteBucket } from '@/modules/history/store/historyStore'
 
 interface HistorySessionSheetProps {
@@ -26,7 +24,6 @@ interface HistorySessionSheetProps {
   bottomOffset: number
   blocks: TelemetryMinuteBucket[]
   sessions: HistorySession[]
-  favorites: Favorite[]
   selectedSessionId: string | null
   hasMore: boolean
   loadingMore: boolean
@@ -46,7 +43,6 @@ export function HistorySessionSheet({
   bottomOffset,
   blocks,
   sessions,
-  favorites,
   selectedSessionId,
   hasMore,
   loadingMore,
@@ -113,7 +109,6 @@ export function HistorySessionSheet({
             sessions.map((session) => {
               const selected = session.id === selectedSessionId
               const routePoints = getSessionRoutePreviewPoints(blocks, session)
-              const containsFavorite = sessionContainsFavorite(favorites, session)
               return (
                 <Pressable
                   key={session.id}
@@ -140,15 +135,6 @@ export function HistorySessionSheet({
                       {session.gpsPointCount}
                     </Text>
                   </View>
-                  {containsFavorite && (
-                    <View
-                      testID={`history-session-protected-${session.id}`}
-                      accessibilityLabel="Contains favorite; ride cannot be fully deleted"
-                      style={styles.protectedMarker}
-                    >
-                      <LockKeyIcon size={14} color={theme.palette.amber.color} weight="fill" />
-                    </View>
-                  )}
                   <CaretRightIcon size={16} color={theme.palette.slate.textDim} weight="bold" />
                 </Pressable>
               )
@@ -336,11 +322,6 @@ const styles = StyleSheet.create({
   rowMeta: {
     color: theme.palette.slate.textMuted,
     fontSize: 11,
-  },
-  protectedMarker: {
-    width: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   routePreview: {
     width: PREVIEW_WIDTH,

@@ -1,4 +1,4 @@
-import { CaretDownIcon, CloudArrowUpIcon, ImagesSquareIcon } from 'phosphor-react-native'
+import { CaretDownIcon, CloudArrowUpIcon, ImagesSquareIcon, StarIcon } from 'phosphor-react-native'
 import type { RefObject } from 'react'
 import { Pressable, StyleSheet, View } from 'react-native'
 
@@ -16,7 +16,9 @@ interface HistoryPanelNavProps {
   subtitle?: string
   canPrevious: boolean
   canNext: boolean
-  showMedia: boolean
+  favoriteMode: boolean
+  favorited: boolean
+  actionDisabled: boolean
   mediaCount: number
   mediaLoading: boolean
   mediaButtonRef: RefObject<View | null>
@@ -24,6 +26,7 @@ interface HistoryPanelNavProps {
   onNext: () => void
   onOpenList: () => void
   onOpenMediaDrawer: () => void
+  onToggleFavorite: () => void
   onOpenShareInfo: () => void
 }
 
@@ -35,7 +38,9 @@ export function HistoryPanelNav({
   subtitle,
   canPrevious,
   canNext,
-  showMedia,
+  favoriteMode,
+  favorited,
+  actionDisabled,
   mediaCount,
   mediaLoading,
   mediaButtonRef,
@@ -43,6 +48,7 @@ export function HistoryPanelNav({
   onNext,
   onOpenList,
   onOpenMediaDrawer,
+  onToggleFavorite,
   onOpenShareInfo,
 }: HistoryPanelNavProps) {
   const primaryLabel = title ?? formatRideTime(titleStartMs, titleEndMs)
@@ -51,7 +57,7 @@ export function HistoryPanelNav({
   return (
     <View style={styles.navControls}>
       <View ref={mediaButtonRef} style={styles.navSide}>
-        {showMedia ? (
+        {favoriteMode ? (
           <>
             <IconButton
               icon={ImagesSquareIcon}
@@ -97,7 +103,24 @@ export function HistoryPanelNav({
         }
       />
       <View style={styles.navSide}>
-        <IconButton icon={CloudArrowUpIcon} onPress={onOpenShareInfo} size="lg" />
+        {favoriteMode ? (
+          <IconButton
+            icon={CloudArrowUpIcon}
+            onPress={onOpenShareInfo}
+            size="lg"
+            testID="history-share-favorite"
+            disabled={actionDisabled}
+          />
+        ) : (
+          <IconButton
+            icon={StarIcon}
+            onPress={onToggleFavorite}
+            size="lg"
+            testID="history-favorite-ride"
+            accent={favorited ? theme.palette.amber.color : undefined}
+            disabled={actionDisabled}
+          />
+        )}
       </View>
     </View>
   )

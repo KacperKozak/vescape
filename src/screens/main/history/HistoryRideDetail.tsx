@@ -36,6 +36,7 @@ export function HistoryRideDetail({
 }: HistoryRideDetailProps) {
   const [renameVisible, setRenameVisible] = useState(false)
   const [deleteVisible, setDeleteVisible] = useState(false)
+  const [trimName, setTrimName] = useState('')
   const openFavorite = favoriteMode ? history.openFavorite : null
   const trimming = !favoriteMode && history.trimming
 
@@ -65,7 +66,9 @@ export function HistoryRideDetail({
           !trimming && (favoriteMode ? history.canPreviousFavorite : history.canPreviousRide)
         }
         canNext={!trimming && (favoriteMode ? history.canNextFavorite : history.nextRide != null)}
-        showMedia={favoriteMode}
+        favoriteMode={favoriteMode}
+        favorited={history.selectedSessionFavorite != null}
+        actionDisabled={busy || history.favoritesSaving}
         mediaAssets={history.mediaHistory.assets}
         mediaUnmatched={history.mediaHistory.unmatched}
         mediaLoading={history.mediaHistory.loading}
@@ -79,6 +82,10 @@ export function HistoryRideDetail({
         onOpenList={() => history.setHistorySheetVisible(true)}
         onAddMedia={() => void history.mediaHistory.add()}
         onOpenMedia={history.openMedia}
+        onToggleFavorite={() => {
+          setTrimName('')
+          history.beginTrimFavorite()
+        }}
         onSeek={history.onSeek}
         onMetricInteraction={history.setActiveHistoryMapMetric}
         onHeightChange={onPanelHeightChange}
@@ -106,10 +113,10 @@ export function HistoryRideDetail({
         loading={busy}
         tab={history.historyTab}
         canRemove={!favoriteMode}
-        canFavorite={!favoriteMode}
-        favorited={history.selectedSessionFavorite != null}
         trimming={trimming}
         saving={history.favoritesSaving}
+        trimName={trimName}
+        onTrimNameChange={setTrimName}
         favorite={
           openFavorite
             ? {
@@ -121,10 +128,12 @@ export function HistoryRideDetail({
         onSelectTab={history.selectHistoryTab}
         onBack={history.exitHistory}
         onRemove={onRemoveSession}
-        onToggleFavorite={history.beginTrimFavorite}
-        onCancelTrim={history.cancelTrim}
+        onCancelTrim={() => {
+          setTrimName('')
+          history.cancelTrim()
+        }}
         onSaveTrim={() => {
-          void history.saveTrim()
+          void history.saveTrim(trimName)
         }}
       />
 

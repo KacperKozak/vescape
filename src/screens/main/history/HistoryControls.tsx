@@ -11,8 +11,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { IconButton } from '@/components/base/IconButton'
-import { Text } from '@/components/base/Text'
 import { PillSelector, PillSelectorItem } from '@/components/controls/PillSelector'
+import { Input } from '@/components/forms/Input'
 import { theme } from '@/constants/theme'
 import type { HistoryTab } from '@/screens/main/mainScreenStore'
 
@@ -20,9 +20,6 @@ interface HistoryControlsProps {
   loading: boolean
   tab: HistoryTab
   canRemove: boolean
-  /** Star is offered only for an open ride; filled once that ride is already favorited. */
-  canFavorite: boolean
-  favorited: boolean
   /** Trim mode swaps tabs/star/trash for a cancel/save pair over the range being pinned. */
   trimming: boolean
   /**
@@ -33,10 +30,11 @@ interface HistoryControlsProps {
     onDelete: () => void
   }
   saving: boolean
+  trimName: string
+  onTrimNameChange: (name: string) => void
   onSelectTab: (tab: HistoryTab) => void
   onBack: () => void
   onRemove: () => void
-  onToggleFavorite: () => void
   onCancelTrim: () => void
   onSaveTrim: () => void
 }
@@ -45,15 +43,14 @@ export function HistoryControls({
   loading,
   tab,
   canRemove,
-  canFavorite,
-  favorited,
   trimming,
   favorite,
   saving,
+  trimName,
+  onTrimNameChange,
   onSelectTab,
   onBack,
   onRemove,
-  onToggleFavorite,
   onCancelTrim,
   onSaveTrim,
 }: HistoryControlsProps) {
@@ -65,9 +62,16 @@ export function HistoryControls({
         <View style={styles.row}>
           <IconButton icon={XIcon} onPress={onCancelTrim} disabled={saving} testID="trim-cancel" />
           <View style={styles.headerTitleWrap}>
-            <Text style={styles.headerTitle} numberOfLines={1}>
-              Trim favorite
-            </Text>
+            <Input
+              testID="trim-favorite-name"
+              value={trimName}
+              onChangeText={onTrimNameChange}
+              placeholder="Favorite name"
+              editable={!saving}
+              returnKeyType="done"
+              onSubmitEditing={onSaveTrim}
+              style={styles.nameInput}
+            />
           </View>
           <IconButton
             icon={CheckIcon}
@@ -134,14 +138,6 @@ export function HistoryControls({
                 testID="favorite-delete"
               />
             </>
-          ) : canFavorite ? (
-            <IconButton
-              icon={StarIcon}
-              onPress={onToggleFavorite}
-              disabled={loading}
-              testID="history-favorite-ride"
-              accent={favorited ? theme.palette.amber.color : undefined}
-            />
           ) : null}
           {!favorite && canRemove ? (
             <IconButton icon={TrashIcon} onPress={onRemove} destructive disabled={loading} />
@@ -195,9 +191,10 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
   },
-  headerTitle: {
-    color: theme.palette.slate.textPrimary,
-    fontSize: 14,
-    fontWeight: '800',
+  nameInput: {
+    width: '100%',
+    height: 38,
+    paddingVertical: 0,
+    textAlign: 'center',
   },
 })
