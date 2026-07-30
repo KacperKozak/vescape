@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 
 import {
@@ -17,6 +17,7 @@ export function useHistoryFavorites(selectedSession: HistorySession | null) {
   const openFavoriteId = useMainScreenStore((state) => state.openFavoriteId)
   const setHistoryTab = useMainScreenStore((state) => state.setHistoryTab)
   const [trimSeed, setTrimSeed] = useState<{ startMs: number; endMs: number } | null>(null)
+  const historySessionBeforeFavorite = useRef<HistorySession | null>(null)
   const {
     favorites,
     favoritesLoading,
@@ -94,6 +95,7 @@ export function useHistoryFavorites(selectedSession: HistorySession | null) {
    * route and the stats all come from the pinned range with no parallel implementation.
    */
   const showFavorite = useCallback(async (favorite: Favorite) => {
+    historySessionBeforeFavorite.current = useHistoryStore.getState().selectedSession
     useMainScreenStore.getState().openFavorite(favorite.id)
     await useHistoryStore
       .getState()
@@ -101,8 +103,10 @@ export function useHistoryFavorites(selectedSession: HistorySession | null) {
   }, [])
 
   const hideFavorite = useCallback(async () => {
+    const historySession = historySessionBeforeFavorite.current
+    historySessionBeforeFavorite.current = null
     useMainScreenStore.getState().closeFavorite()
-    await useHistoryStore.getState().selectSession(null)
+    await useHistoryStore.getState().selectSession(historySession)
   }, [])
 
   const renameOpenFavorite = useCallback(

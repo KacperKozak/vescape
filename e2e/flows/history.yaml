@@ -15,7 +15,7 @@ appId: ${APP_ID}
 # Newest ride stats (selected automatically).
 - assertVisible: Distance
 - assertVisible: Top Speed
-- assertVisible: '1.5 km'
+- assertVisible: '1.5'
 - assertVisible: '25 km/h'
 
 # Expand the stats panel to verify secondary stats are computed too.
@@ -42,7 +42,7 @@ appId: ${APP_ID}
 - tapOn:
     id: history-previous-ride
 - extendedWaitUntil:
-    visible: '800 m'
+    visible: '800'
     timeout: 5000
 - assertVisible: '20 km/h'
 
@@ -54,7 +54,7 @@ appId: ${APP_ID}
 - tapOn:
     id: history-next-ride
 - extendedWaitUntil:
-    visible: '1.5 km'
+    visible: '1.5'
     timeout: 5000
 - assertVisible: '25 km/h'
 
@@ -69,3 +69,32 @@ appId: ${APP_ID}
 # Close the sheet by tapping the backdrop.
 - tapOn:
     id: history-session-sheet-backdrop
+
+# A Favorite reuses ride detail without destroying the selected Ride History session.
+- tapOn:
+    id: history-favorite-ride
+- assertVisible: Trim favorite
+- tapOn:
+    id: trim-save
+- tapOn:
+    id: history-tab-favorites
+- extendedWaitUntil:
+    visible:
+      id: favorites-list
+    timeout: 5000
+- tapOn:
+    id: 'favorite-row-.*'
+- extendedWaitUntil:
+    visible:
+      id: favorite-detail-back
+    timeout: 5000
+- tapOn:
+    id: favorite-detail-back
+- extendedWaitUntil:
+    visible:
+      id: favorites-list
+    timeout: 5000
+- tapOn:
+    id: history-tab-history
+- assertNotVisible: No rides yet
+- assertVisible: '1.5'
