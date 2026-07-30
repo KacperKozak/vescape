@@ -8,7 +8,6 @@ import { theme } from '@/constants/theme'
 
 interface WizardStepLayoutProps {
   title: string
-  titlePrefix?: string
   description?: ReactNode
   icon: Icon
   color: string
@@ -19,7 +18,6 @@ interface WizardStepLayoutProps {
 
 export function WizardStepLayout({
   title,
-  titlePrefix,
   description,
   icon: IconComponent,
   color,
@@ -38,9 +36,6 @@ export function WizardStepLayout({
           <View style={styles.headerRow}>
             <View style={styles.headerTitle}>
               <IconComponent size={20} color={color} weight="duotone" />
-              {titlePrefix ? (
-                <Text style={[styles.titlePrefix, { color }]}>{titlePrefix}</Text>
-              ) : null}
               <Text style={styles.title} numberOfLines={2}>
                 {title}
               </Text>
@@ -140,11 +135,6 @@ const styles = StyleSheet.create({
     color: theme.palette.slate.textPrimary,
     fontSize: 20,
     fontWeight: '800',
-  },
-  titlePrefix: {
-    fontSize: 13,
-    fontWeight: '800',
-    fontVariant: ['tabular-nums'],
   },
   description: {
     color: theme.palette.slate.textSecondary,

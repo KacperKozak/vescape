@@ -57,7 +57,6 @@ export function AlertsStep({
       description={description}
       icon={substep.icon}
       color={theme.palette.amber.color}
-      titlePrefix={`${substepIndex + 1}/${ALERT_SUBSTEP_COUNT}`}
       headerRight={
         <Button
           label="Skip"
