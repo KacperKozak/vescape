@@ -56,6 +56,13 @@ const TUNE_ANIMATION = { duration: 180 } as const
 const AnimatedText = Animated.createAnimatedComponent(Text)
 type PillSelectorLabelBehavior = 'active-only' | 'always'
 type PillSelectorSlotVisibility = 'active' | 'inactive' | 'always'
+interface PillSelectorResolvedState {
+  active: boolean
+  showLabel: boolean
+  collapseLabel: boolean
+  showBadge: boolean
+  showHint: boolean
+}
 
 function usePillSelectorCtx() {
   const ctx = useContext(PillSelectorContext)
@@ -172,6 +179,91 @@ interface PillSelectorItemProps {
   children?: ReactNode
 }
 
+function slotVisible(visibility: PillSelectorSlotVisibility, active: boolean) {
+  if (visibility === 'always') return true
+  return visibility === 'active' ? active : !active
+}
+
+function resolveItemState({
+  active,
+  icon,
+  activeLabelOnly,
+  labelBehavior,
+  badgeVisibility,
+  hintVisibility,
+}: {
+  active: boolean
+  icon?: Icon
+  activeLabelOnly?: boolean
+  labelBehavior?: PillSelectorLabelBehavior
+  badgeVisibility: PillSelectorSlotVisibility
+  hintVisibility: PillSelectorSlotVisibility
+}): PillSelectorResolvedState {
+  const resolvedLabelBehavior = activeLabelOnly ? 'active-only' : (labelBehavior ?? 'active-only')
+  const collapseLabel = resolvedLabelBehavior === 'active-only' && icon != null
+  return {
+    active,
+    collapseLabel,
+    showLabel: !collapseLabel || active,
+    showBadge: slotVisible(badgeVisibility, active),
+    showHint: slotVisible(hintVisibility, active),
+  }
+}
+
+interface PillSelectorItemContentProps extends PillSelectorResolvedState {
+  label: string
+  icon?: Icon
+  accentColor: string
+  inactiveAccent: string
+  hint?: ReactNode
+  hintGap: number
+  badge?: ReactNode
+  labelStyle: object
+}
+
+function PillSelectorItemContent({
+  label,
+  icon: IconComp,
+  active,
+  collapseLabel,
+  showLabel,
+  showHint,
+  showBadge,
+  accentColor,
+  inactiveAccent,
+  hint,
+  hintGap,
+  badge,
+  labelStyle,
+}: PillSelectorItemContentProps) {
+  const textStateStyle = active
+    ? { color: accentColor, fontWeight: '800' as const }
+    : { color: inactiveAccent }
+
+  return (
+    <>
+      {IconComp ? (
+        <IconComp
+          size={collapseLabel ? 18 : 14}
+          color={active ? accentColor : inactiveAccent}
+          weight="duotone"
+        />
+      ) : null}
+      {collapseLabel ? (
+        <AnimatedText style={[styles.pillText, textStateStyle, labelStyle]} numberOfLines={1}>
+          {label}
+        </AnimatedText>
+      ) : showLabel ? (
+        <Text style={[styles.pillText, textStateStyle]} numberOfLines={1}>
+          {label}
+        </Text>
+      ) : null}
+      {hint && showHint ? <View style={[styles.hint, { marginLeft: hintGap }]}>{hint}</View> : null}
+      {badge && showBadge ? badge : null}
+    </>
+  )
+}
+
 export function PillSelectorItem({
   id,
   label,
@@ -193,35 +285,32 @@ export function PillSelectorItem({
   const { activeId, contained, openMenu, closeMenu } = usePillSelectorCtx()
   const pillRef = useRef<View>(null)
   const active = id === activeId
-  const resolvedLabelBehavior = activeLabelOnly ? 'active-only' : (labelBehavior ?? 'active-only')
-  const collapseLabel = resolvedLabelBehavior === 'active-only' && IconComp != null
-  const showLabel = !collapseLabel || active
-  const showBadge =
-    badgeVisibility === 'always' ||
-    (badgeVisibility === 'active' && active) ||
-    (badgeVisibility === 'inactive' && !active)
-  const showHint =
-    hintVisibility === 'always' ||
-    (hintVisibility === 'active' && active) ||
-    (hintVisibility === 'inactive' && !active)
+  const resolved = resolveItemState({
+    active,
+    icon: IconComp,
+    activeLabelOnly,
+    labelBehavior,
+    badgeVisibility,
+    hintVisibility,
+  })
   const accentBg = color?.bg ?? theme.palette.green.bg
   const accentBorder = color?.border ?? theme.palette.green.border
   const accentColor = color?.color ?? theme.palette.green.color
   const inactiveAccent = theme.alpha(accentColor, 0.6)
   const activeProgress = useSharedValue(active ? 1 : 0)
-  const labelProgress = useSharedValue(showLabel ? 1 : 0)
+  const labelProgress = useSharedValue(resolved.showLabel ? 1 : 0)
 
   useEffect(() => {
     activeProgress.value = withTiming(active ? 1 : 0, TUNE_ANIMATION)
   }, [active, activeProgress])
 
   useEffect(() => {
-    labelProgress.value = withTiming(showLabel ? 1 : 0, TUNE_ANIMATION)
-  }, [labelProgress, showLabel])
+    labelProgress.value = withTiming(resolved.showLabel ? 1 : 0, TUNE_ANIMATION)
+  }, [labelProgress, resolved.showLabel])
 
   const frameStyle = useAnimatedStyle(
     () => ({
-      width: collapseLabel
+      width: resolved.collapseLabel
         ? inactiveWidth + (activeWidth - inactiveWidth) * activeProgress.value
         : undefined,
       backgroundColor: interpolateColor(
@@ -241,7 +330,7 @@ export function PillSelectorItem({
         ],
       ),
     }),
-    [accentBg, accentBorder, activeWidth, collapseLabel, contained, inactiveWidth],
+    [accentBg, accentBorder, activeWidth, resolved.collapseLabel, contained, inactiveWidth],
   )
   const labelStyle = useAnimatedStyle(
     () => ({
@@ -268,15 +357,15 @@ export function PillSelectorItem({
       ref={pillRef}
       style={[
         styles.pill,
-        collapseLabel && styles.iconPill,
-        collapseLabel && { maxWidth: activeWidth },
+        resolved.collapseLabel && styles.iconPill,
+        resolved.collapseLabel && { maxWidth: activeWidth },
         contained && styles.containedPill,
         frameStyle,
       ]}
     >
       <Pressable
         testID={testID}
-        style={[styles.pillPressable, collapseLabel && styles.collapsingPillPressable]}
+        style={[styles.pillPressable, resolved.collapseLabel && styles.collapsingPillPressable]}
         accessibilityRole="button"
         accessibilityLabel={label}
         accessibilityState={{ selected: active }}
@@ -291,39 +380,17 @@ export function PillSelectorItem({
         onLongPress={hasMenu ? handleLongPress : undefined}
         delayLongPress={400}
       >
-        {IconComp ? (
-          <IconComp
-            size={collapseLabel ? 18 : 14}
-            color={active ? accentColor : inactiveAccent}
-            weight="duotone"
-          />
-        ) : null}
-        {collapseLabel ? (
-          <AnimatedText
-            style={[
-              styles.pillText,
-              active ? { color: accentColor, fontWeight: '800' } : { color: inactiveAccent },
-              labelStyle,
-            ]}
-            numberOfLines={1}
-          >
-            {label}
-          </AnimatedText>
-        ) : showLabel ? (
-          <Text
-            style={[
-              styles.pillText,
-              active ? { color: accentColor, fontWeight: '800' } : { color: inactiveAccent },
-            ]}
-            numberOfLines={1}
-          >
-            {label}
-          </Text>
-        ) : null}
-        {hint && showHint ? (
-          <View style={[styles.hint, { marginLeft: hintGap }]}>{hint}</View>
-        ) : null}
-        {badge && showBadge ? badge : null}
+        <PillSelectorItemContent
+          {...resolved}
+          label={label}
+          icon={IconComp}
+          accentColor={accentColor}
+          inactiveAccent={inactiveAccent}
+          hint={hint}
+          hintGap={hintGap}
+          badge={badge}
+          labelStyle={labelStyle}
+        />
       </Pressable>
     </Animated.View>
   )
