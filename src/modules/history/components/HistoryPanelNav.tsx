@@ -68,6 +68,7 @@ export function HistoryPanelNav({
               loading={mediaLoading}
               size="lg"
               style={mediaCount > 0 ? styles.mediaEnabled : undefined}
+              accessibilityLabel="Favorite media"
             />
             {mediaCount > 0 ? (
               <View style={styles.mediaCountBadge} pointerEvents="none">
@@ -108,6 +109,7 @@ export function HistoryPanelNav({
             size="lg"
             testID="history-share-favorite"
             disabled={actionDisabled}
+            accessibilityLabel="Share Favorite"
           />
         ) : (
           <IconButton
@@ -117,6 +119,7 @@ export function HistoryPanelNav({
             testID="history-favorite-ride"
             accent={favorited ? theme.palette.amber.color : undefined}
             disabled={actionDisabled}
+            accessibilityLabel={favorited ? 'Edit Favorite' : 'Create Favorite'}
           />
         )}
       </View>
@@ -156,11 +159,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderRadius: 9,
     borderWidth: 1,
-    borderColor: theme.palette.slate.surfaceDeep,
-    backgroundColor: theme.palette.purple.color,
+    borderColor: theme.palette.purple.border,
+    backgroundColor: theme.palette.purple.bg,
   },
   mediaCountText: {
-    color: theme.palette.slate.bg,
+    color: theme.palette.purple.text,
     fontSize: 9,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],

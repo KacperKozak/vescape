@@ -303,8 +303,9 @@ internal final class TelemetryRepository {
     return names
   }
 
-  /// Favorite ranges are required bridge input. Missing or inverted bounds must fail exactly like
-  /// Android's `requiredLong` path instead of silently pinning epoch zero.
+  /// Favorite ranges are required bridge input. Missing or inverted bounds must fail instead of
+  /// silently pinning epoch zero.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryRepository.kt `favoriteRange`
   internal static func favoriteRange(_ options: [String: Any]) -> TelemetryTimeRange? {
     guard
       let startMs = telemetryLong(options["startMs"]),

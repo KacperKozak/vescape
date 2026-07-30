@@ -97,7 +97,7 @@ A temporary state of a Ride Recording in which sample persistence halts because 
 _Avoid_: Stop recording, auto-stop, sleep, parked mode
 
 **Favorite**:
-A user-created, optionally named durable time range over Ride History, created by trimming a past ride to the span the rider wants to keep. A ride may produce multiple Favorites. Its name can be changed or cleared later; its range and its summary stats cannot — re-trimming is delete and recreate. A Favorite pins its telemetry range: history deletion skips favorited ranges, and removing a Favorite only unpins — it never deletes telemetry. Owns its Favorite Media.
+A user-created, optionally named durable time range over Ride History, created by trimming a past ride to the span the rider wants to keep. A ride may produce multiple Favorites. Its name can be changed or cleared later, and re-trimming updates its range and recomputed summary while preserving its identity and Favorite Media. A Favorite pins its telemetry range: history deletion skips favorited ranges, and removing a Favorite only unpins — it never deletes telemetry. Owns its Favorite Media.
 _Avoid_: Favorite ride, segment, bookmark, saved ride
 
 **Favorite Media**:

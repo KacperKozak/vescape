@@ -558,9 +558,9 @@ class TelemetryRepository private constructor(context: Context) {
    * @parity /modules/vescape-core/ios/telemetry/TelemetryRepository.swift `createFavorite`
    */
   suspend fun createFavorite(options: Map<String, Any?>): Map<String, Any?>? = withContext(Dispatchers.IO) {
-    val startMs = options.requiredLong("startMs")
-    val endMs = options.requiredLong("endMs")
-    require(endMs >= startMs) { "endMs must be greater than or equal to startMs" }
+    val range = favoriteRange(options) ?: return@withContext null
+    val startMs = range.startMs
+    val endMs = range.endMs
     val deviceId = options["deviceId"] as? String
     val name = (options["name"] as? String)?.trim()?.ifEmpty { null }
     flushNow()
@@ -604,9 +604,9 @@ class TelemetryRepository private constructor(context: Context) {
     options: Map<String, Any?>,
   ): Map<String, Any?>? = withContext(Dispatchers.IO) {
     val existing = dao.getFavorite(id) ?: return@withContext null
-    val startMs = options.requiredLong("startMs")
-    val endMs = options.requiredLong("endMs")
-    require(endMs >= startMs) { "endMs must be greater than or equal to startMs" }
+    val range = favoriteRange(options) ?: return@withContext null
+    val startMs = range.startMs
+    val endMs = range.endMs
     val deviceId = options["deviceId"] as? String
     val name = (options["name"] as? String)?.trim()?.ifEmpty { null }
     flushNow()
@@ -1292,6 +1292,18 @@ private fun sanitizeDiagnosticProperties(properties: Map<String, Any?>): Map<Str
 private fun Map<String, Any?>.long(key: String): Long? = (this[key] as? Number)?.toLong()
 
 private fun Map<String, Any?>.int(key: String): Int? = (this[key] as? Number)?.toInt()
+
+/**
+ * Favorite ranges are required bridge input. Invalid bounds return through the module's controlled
+ * `ERR_CREATE_FAVORITE` / `ERR_UPDATE_FAVORITE` path instead of leaking IllegalArgumentException.
+ *
+ * @parity /modules/vescape-core/ios/telemetry/TelemetryRepository.swift `favoriteRange`
+ */
+internal fun favoriteRange(options: Map<String, Any?>): TelemetryTimeRange? {
+  val startMs = options.long("startMs") ?: return null
+  val endMs = options.long("endMs") ?: return null
+  return if (endMs >= startMs) TelemetryTimeRange(startMs, endMs) else null
+}
 
 private fun Map<String, Any?>.requiredLong(key: String): Long =
   long(key) ?: throw IllegalArgumentException("$key is required")

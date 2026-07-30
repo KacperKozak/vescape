@@ -554,6 +554,7 @@ class VescapeCoreModule : Module() {
     }
     AsyncFunction("createFavorite") Coroutine { options: Map<String, Any?> ->
       TelemetryRepository.get(context.applicationContext).createFavorite(options)
+        ?: throw CodedException("ERR_CREATE_FAVORITE", "favorite range is invalid or could not be stored", null)
     }
     AsyncFunction("updateFavorite") Coroutine { id: String, options: Map<String, Any?> ->
       TelemetryRepository.get(context.applicationContext).updateFavorite(id, options)

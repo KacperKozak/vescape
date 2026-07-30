@@ -1,10 +1,8 @@
 import { useCallback, useRef, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
-import { StarIcon } from 'phosphor-react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { Favorite, HistoryGpsSample, HistoryMarker } from 'vescape-core'
 
-import { Placeholder } from '@/components/base/Placeholder'
 import { Text } from '@/components/base/Text'
 import { ConfirmModal } from '@/components/modals/ConfirmModal'
 import { theme } from '@/constants/theme'
@@ -135,19 +133,7 @@ export function HistoryOverlay({
 
       {visible && !detailSession && (
         <>
-          {busy ? (
-            <HistoryMapLoading />
-          ) : favoriteMode ? (
-            <View style={styles.emptyState}>
-              <Placeholder
-                icon={StarIcon}
-                title="No favorites yet"
-                description="Star a ride in History to keep it here"
-              />
-            </View>
-          ) : (
-            <HistoryEmptyState />
-          )}
+          {busy ? <HistoryMapLoading /> : <HistoryEmptyState favoriteMode={favoriteMode} />}
           <HistoryControls
             loading={busy}
             tab={history.historyTab}
@@ -230,12 +216,6 @@ export function HistoryOverlay({
 }
 
 const styles = StyleSheet.create({
-  emptyState: {
-    ...StyleSheet.absoluteFill,
-    zIndex: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   historyError: {
     position: 'absolute',
     left: 12,
