@@ -22,6 +22,16 @@ describe('Legal Policy derivation', () => {
     expect(normalizeLegalPolicyReference(null)).toBeNull()
   })
 
+  test('classifies Czech self-balancing transporters as restricted rather than prohibited', () => {
+    expect(legalPolicyFromReference({ jurisdictionCode: 'CZ' })).toMatchObject({
+      code: 'CZ',
+      legalSpeedKmh: null,
+      referenceSpeedKmh: null,
+      status: 'restricted',
+      confidence: 'high',
+    })
+  })
+
   test('catalog country codes are unique and warning speeds stay below legal limits', () => {
     const codes = LEGAL_LIMIT_COUNTRIES.map((country) => country.code)
 

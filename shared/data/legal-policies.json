@@ -80,14 +80,14 @@
     "alpha3": "CZE",
     "legalSpeedKmh": null,
     "warningSpeedKmh": null,
-    "referenceSpeedKmh": 25,
-    "status": "notRoadLegal",
-    "confidence": "medium",
+    "referenceSpeedKmh": null,
+    "status": "restricted",
+    "confidence": "high",
     "labelCoordinate": [15.5, 49.8],
-    "sourceUrl": "https://md.gov.cz/Media/Na-pravou-miru/Elektricka-vozitka-Pravidla-a-regulace?returl=%2FZajimave-stranky",
-    "warningText": "Ordinary consumer OneWheels/EUCs lack the technical approval required for this vehicle form.",
-    "checkedAt": "2026-07-17",
-    "speedLimitBasis": "E-scooter/bicycle-equivalent reference limit"
+    "sourceUrl": "https://nalus.usoud.cz/Search/GetText.aspx?sz=2-1129-26_1",
+    "warningText": "Self-balancing personal transporters are permitted under route-specific rules: walking pace on pedestrian routes, cycling rules on dedicated cycle facilities, and carriageway use only as a fallback.",
+    "checkedAt": "2026-07-30",
+    "speedLimitBasis": "Route-dependent personal-transporter rules"
   },
   {
     "name": "Denmark",

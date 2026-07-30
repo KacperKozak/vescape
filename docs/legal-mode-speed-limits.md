@@ -18,6 +18,13 @@ Sources checked on 2026-07-17:
 - Gov.pl / Ministry of Infrastructure, Polish UTO and e-scooter rules: https://www.gov.pl/web/infrastruktura/nowe-przepisy-dotyczace-hulajnog-elektrycznych-i-urzadzen-transportu-osobistego
 - Germany eKFV, official law text: https://www.gesetze-im-internet.de/ekfv/
 
+Czech sources checked on 2026-07-30:
+
+- Czech Road Traffic Act 361/2000, § 2(nn) and § 60a: https://www.zakonyprolidi.cz/cs/2000-361
+- Czech Supreme Administrative Court, 2 As 192/2025-48: https://www.zakonyprolidi.cz/judikat/nsscr/2-as-192-2025-48
+- Czech Constitutional Court, II. ÚS 1129/26: https://nalus.usoud.cz/Search/GetText.aspx?sz=2-1129-26_1
+- Czech motor-liability insurance act 30/2024, § 2 and § 6: https://www.zakonyprolidi.cz/cs/2024-30
+
 ## UI Rules
 
 - If `legalRoadStatus` is `notRoadLegal` or `restricted`, show a red warning mark on the Legal Mode icon.
@@ -44,7 +51,7 @@ Sources checked on 2026-07-17:
 | Bulgaria       | BG           |             25 km/h |               20 km/h | Nearest regulated micromobility reference limit    | unknown                                        | low        | No authoritative rule explicitly covering handlebarless one-wheel devices was located.                                                              |
 | Croatia        | HR           |             25 km/h |               20 km/h | One-wheel/self-balancing category limit            | likelyLegal                                    | high       | Only devices with continuous rated power up to 600 W qualify.                                                                                       |
 | Cyprus         | CY           |             20 km/h |               15 km/h | E-scooter reference limit                          | notRoadLegal                                   | medium     | The legal e-scooter category requires handlebars and at least two wheels.                                                                           |
-| Czech Republic | CZ           |             25 km/h |               20 km/h | E-scooter/bicycle-equivalent reference limit       | notRoadLegal                                   | medium     | Ordinary consumer OneWheels/EUCs lack the technical approval required for this vehicle form.                                                        |
+| Czech Republic | CZ           |                 N/A |                   N/A | Route-dependent personal-transporter rules         | restricted                                     | high       | Walking pace on pedestrian routes; cycling rules on dedicated cycle facilities; carriageway use only as a fallback.                                 |
 | Denmark        | DK           |             20 km/h |               15 km/h | One-wheel/self-balancing category limit            | likelyLegal                                    | high       | No warning.                                                                                                                                         |
 | Estonia        | EE           |             25 km/h |               20 km/h | One-wheel/self-balancing category limit            | likelyLegal                                    | high       | No warning.                                                                                                                                         |
 | Finland        | FI           |             25 km/h |               20 km/h | One-wheel/self-balancing category limit            | likelyLegal                                    | high       | Maximum rated power is 1 kW; faster or more powerful devices need another approval category.                                                        |
