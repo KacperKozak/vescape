@@ -8,6 +8,7 @@ import { theme } from '@/constants/theme'
 
 interface WizardStepLayoutProps {
   title: string
+  titlePrefix?: string
   description?: ReactNode
   icon: Icon
   color: string
@@ -18,6 +19,7 @@ interface WizardStepLayoutProps {
 
 export function WizardStepLayout({
   title,
+  titlePrefix,
   description,
   icon: IconComponent,
   color,
@@ -27,16 +29,23 @@ export function WizardStepLayout({
 }: WizardStepLayoutProps) {
   return (
     <View style={styles.fill}>
-      {headerRight ? <View style={styles.topBar}>{headerRight}</View> : null}
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.body}
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.topContent}>
-          <View style={styles.header}>
-            <IconComponent size={20} color={color} weight="duotone" />
-            <Text style={styles.title}>{title}</Text>
+          <View style={styles.headerRow}>
+            <View style={styles.headerTitle}>
+              <IconComponent size={20} color={color} weight="duotone" />
+              {titlePrefix ? (
+                <Text style={[styles.titlePrefix, { color }]}>{titlePrefix}</Text>
+              ) : null}
+              <Text style={styles.title} numberOfLines={2}>
+                {title}
+              </Text>
+            </View>
+            {headerRight ? <View style={styles.headerRight}>{headerRight}</View> : null}
           </View>
           {description ? <Text style={styles.description}>{description}</Text> : null}
         </View>
@@ -98,15 +107,21 @@ const styles = StyleSheet.create({
     gap: 14,
     paddingBottom: 4,
   },
-  topBar: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 12,
   },
-  header: {
+  headerTitle: {
+    flex: 1,
+    minWidth: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  headerRight: {
+    flexShrink: 0,
   },
   topContent: {
     gap: 6,
@@ -121,9 +136,15 @@ const styles = StyleSheet.create({
     paddingBottom: 6,
   },
   title: {
+    flexShrink: 1,
     color: theme.palette.slate.textPrimary,
     fontSize: 20,
     fontWeight: '800',
+  },
+  titlePrefix: {
+    fontSize: 13,
+    fontWeight: '800',
+    fontVariant: ['tabular-nums'],
   },
   description: {
     color: theme.palette.slate.textSecondary,
