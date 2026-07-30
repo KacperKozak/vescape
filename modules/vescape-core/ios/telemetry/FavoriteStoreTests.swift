@@ -205,6 +205,15 @@ final class FavoriteStoreTests: XCTestCase {
     XCTAssertNil(map["distanceM"] ?? nil)
   }
 
+  func testFavoriteRangeRequiresValidBridgeBounds() {
+    XCTAssertNil(TelemetryRepository.favoriteRange([:]))
+    XCTAssertNil(TelemetryRepository.favoriteRange(["startMs": 2_000, "endMs": 1_000]))
+    XCTAssertEqual(
+      TelemetryRepository.favoriteRange(["startMs": 1_000, "endMs": 2_000]),
+      TelemetryTimeRange(startMs: 1_000, endMs: 2_000)
+    )
+  }
+
   // MARK: - Summary from raw samples
 
   func testSummaryAggregatesRawSamplesAcrossBucketBoundaries() {

@@ -98,8 +98,12 @@ export function useFavoriteMedia({
     try {
       const picked = await pickFavoriteMedia(favoriteId)
       if (picked.length === 0) return
-      for (const media of picked) await importFavoriteMedia(media)
+      const imports = await Promise.allSettled(picked.map((media) => importFavoriteMedia(media)))
       setStored((await getFavoriteMedia(favoriteId)).map(toMediaAsset))
+      const failedCount = imports.filter((result) => result.status === 'rejected').length
+      if (failedCount > 0) {
+        setError(`Could not save ${failedCount} of ${picked.length} Favorite Media items`)
+      }
     } catch (cause: unknown) {
       setError(cause instanceof Error ? cause.message : 'Could not save Favorite Media')
     } finally {

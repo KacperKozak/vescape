@@ -251,9 +251,9 @@ internal final class TelemetryRepository {
   func createFavorite(_ options: [String: Any]) -> [String: Any?]? {
     flushBlocking()
     guard let pool else { return nil }
-    let startMs = telemetryLong(options["startMs"]) ?? 0
-    let endMs = telemetryLong(options["endMs"]) ?? 0
-    guard endMs >= startMs else { return nil }
+    guard let range = Self.favoriteRange(options) else { return nil }
+    let startMs = range.startMs
+    let endMs = range.endMs
     let deviceId = options["deviceId"] as? String
     let trimmedName = (options["name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
     let config = queue.sync { metricConfig }
@@ -303,6 +303,17 @@ internal final class TelemetryRepository {
     return names
   }
 
+  /// Favorite ranges are required bridge input. Missing or inverted bounds must fail exactly like
+  /// Android's `requiredLong` path instead of silently pinning epoch zero.
+  internal static func favoriteRange(_ options: [String: Any]) -> TelemetryTimeRange? {
+    guard
+      let startMs = telemetryLong(options["startMs"]),
+      let endMs = telemetryLong(options["endMs"]),
+      endMs >= startMs
+    else { return nil }
+    return TelemetryTimeRange(startMs: startMs, endMs: endMs)
+  }
+
   /// Re-trim/rename a Favorite in place. Identity, creation time and Favorite Media stay attached;
   /// summary stats are rebuilt from raw samples for the new exact range.
   /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryRepository.kt `updateFavorite`
@@ -310,9 +321,9 @@ internal final class TelemetryRepository {
     flushBlocking()
     guard let existing = FavoriteStore.shared.list().first(where: { $0.id == id }), let pool
     else { return nil }
-    let startMs = telemetryLong(options["startMs"]) ?? 0
-    let endMs = telemetryLong(options["endMs"]) ?? 0
-    guard endMs >= startMs else { return nil }
+    guard let range = Self.favoriteRange(options) else { return nil }
+    let startMs = range.startMs
+    let endMs = range.endMs
     let deviceId = options["deviceId"] as? String
     let trimmedName = (options["name"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
     let config = queue.sync { metricConfig }
@@ -382,6 +393,8 @@ internal final class TelemetryRepository {
   /// applies, then collapse the resulting buckets into one denormalized summary. Exclusion ranges
   /// are deliberately not persisted: creating a Favorite is a read of Ride History, not a rewrite.
   /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryRepository.kt `favoriteSummary`
+  /// @parity /src/modules/history/lib/favoritePreview.ts `summarizeFavoriteRange`
+  /// @platform-diff JS is a live preview over loaded samples; this is the durable sanitized summary.
   internal static func favoriteSummary(
     _ points: [BucketTelemetryPoint],
     config: MetricSanitizerConfig

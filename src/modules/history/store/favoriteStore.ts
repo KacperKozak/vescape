@@ -27,6 +27,9 @@ interface FavoriteActions {
   remove: (id: string) => Promise<void>
 }
 
+let favoriteLoadVersion = 0
+let favoriteMutationVersion = 0
+
 export const useFavoriteStore = create<FavoriteState & FavoriteActions>((set, get) => ({
   favorites: [],
   loading: false,
@@ -34,18 +37,26 @@ export const useFavoriteStore = create<FavoriteState & FavoriteActions>((set, ge
   error: undefined,
 
   async load() {
+    const loadVersion = ++favoriteLoadVersion
+    const mutationVersion = favoriteMutationVersion
     set({ loading: true, error: undefined })
     try {
-      set({ favorites: await getFavorites() })
+      const favorites = await getFavorites()
+      if (loadVersion === favoriteLoadVersion && mutationVersion === favoriteMutationVersion) {
+        set({ favorites })
+      }
     } catch (err) {
-      set({ error: err instanceof Error ? err.message : String(err) })
+      if (loadVersion === favoriteLoadVersion && mutationVersion === favoriteMutationVersion) {
+        set({ error: err instanceof Error ? err.message : String(err) })
+      }
     } finally {
-      set({ loading: false })
+      if (loadVersion === favoriteLoadVersion) set({ loading: false })
     }
   },
 
   async add(options) {
     if (get().saving) return null
+    favoriteMutationVersion++
     set({ saving: true, error: undefined })
     try {
       const favorite = await createFavorite(options)
@@ -57,12 +68,14 @@ export const useFavoriteStore = create<FavoriteState & FavoriteActions>((set, ge
       set({ error: err instanceof Error ? err.message : String(err) })
       return null
     } finally {
+      favoriteMutationVersion++
       set({ saving: false })
     }
   },
 
   async update(id, options) {
     if (get().saving) return null
+    favoriteMutationVersion++
     set({ saving: true, error: undefined })
     try {
       const updated = await updateFavorite(id, options)
@@ -76,12 +89,14 @@ export const useFavoriteStore = create<FavoriteState & FavoriteActions>((set, ge
       set({ error: err instanceof Error ? err.message : String(err) })
       return null
     } finally {
+      favoriteMutationVersion++
       set({ saving: false })
     }
   },
 
   async remove(id) {
     if (get().saving) return
+    favoriteMutationVersion++
     set({ saving: true, error: undefined })
     try {
       await deleteFavorite(id)
@@ -89,6 +104,7 @@ export const useFavoriteStore = create<FavoriteState & FavoriteActions>((set, ge
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err) })
     } finally {
+      favoriteMutationVersion++
       set({ saving: false })
     }
   },

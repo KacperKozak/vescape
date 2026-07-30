@@ -404,6 +404,7 @@ export const useHistoryStore = create<HistoryState & HistoryActions>((set, get) 
 
   async clearHistory() {
     const reloadLimit = Math.min(500, Math.max(PAGE_SIZE, get().blocks.length))
+    liveRefreshVersion++
     set({ loading: true, error: undefined })
     try {
       await clearTelemetryHistory()

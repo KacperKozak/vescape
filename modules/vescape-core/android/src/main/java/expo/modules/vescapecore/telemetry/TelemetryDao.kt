@@ -217,6 +217,33 @@ interface TelemetryDao {
   )
   suspend fun getFrames(fromMs: Long, toMs: Long, deviceId: String?, limit: Int): List<TelemetryFrameEntity>
 
+  @Query(
+    """
+    SELECT DISTINCT device_id FROM telemetry_frames
+    WHERE captured_at_ms >= :fromMs
+      AND captured_at_ms <= :toMs
+      AND device_id IS NOT NULL
+    ORDER BY device_id ASC
+    """,
+  )
+  suspend fun getDeviceIdsInRange(fromMs: Long, toMs: Long): List<String>
+
+  @Query(
+    """
+    SELECT * FROM telemetry_frames
+    WHERE captured_at_ms >= :fromMs
+      AND captured_at_ms <= :toMs
+      AND device_id = :deviceId
+    ORDER BY captured_at_ms ASC
+    LIMIT 1
+    """,
+  )
+  suspend fun getFirstFrameInRange(
+    fromMs: Long,
+    toMs: Long,
+    deviceId: String,
+  ): TelemetryFrameEntity?
+
   @Query("SELECT COUNT(*) FROM telemetry_frames")
   suspend fun countFrames(): Long
 

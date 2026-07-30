@@ -779,17 +779,20 @@ class TelemetryRepository private constructor(context: Context) {
       val devices = if (deviceId != null) {
         listOf(deviceId)
       } else {
-        dao.getFrames(range.startMs, range.endMs, null, Int.MAX_VALUE)
-          .map { it.deviceId }
-          .distinct()
+        dao.getDeviceIdsInRange(range.startMs, range.endMs)
       }
       for (protectedDeviceId in devices) {
-        val first = getSampleStates(
+        val firstFrame = dao.getFirstFrameInRange(
           range.startMs,
           range.endMs,
           protectedDeviceId,
+        ) ?: continue
+        val first = getSampleStates(
+          range.startMs,
+          firstFrame.capturedAtMs,
+          protectedDeviceId,
           Int.MAX_VALUE,
-        ).firstOrNull() ?: continue
+        ).firstOrNull { it.id == firstFrame.id } ?: continue
         dao.updateFrame(first.state.toFrame(previous = null, keyframe = true).copy(id = first.id))
       }
     }

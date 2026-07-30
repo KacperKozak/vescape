@@ -62,7 +62,13 @@ export function HistoryControls({
     return (
       <View style={[styles.wrap, { paddingTop: Math.max(insets.top, 8) }]} pointerEvents="box-none">
         <View style={styles.row}>
-          <IconButton icon={XIcon} onPress={onCancelTrim} disabled={saving} testID="trim-cancel" />
+          <IconButton
+            icon={XIcon}
+            onPress={onCancelTrim}
+            disabled={saving}
+            testID="trim-cancel"
+            accessibilityLabel="Cancel Favorite edit"
+          />
           <View style={styles.headerTitleWrap}>
             <Input
               testID="trim-favorite-name"
@@ -81,6 +87,7 @@ export function HistoryControls({
             loading={saving}
             testID="trim-save"
             accent={theme.palette.amber.color}
+            accessibilityLabel="Save Favorite"
           />
         </View>
       </View>
@@ -90,7 +97,7 @@ export function HistoryControls({
   return (
     <View style={[styles.wrap, { paddingTop: Math.max(insets.top, 8) }]} pointerEvents="box-none">
       <View style={styles.row}>
-        <IconButton icon={ArrowLeftIcon} onPress={onBack} />
+        <IconButton icon={ArrowLeftIcon} onPress={onBack} accessibilityLabel="Back" />
         <View style={styles.tabsWrap} pointerEvents="box-none">
           <PillSelector
             activeId={tab}
@@ -131,6 +138,7 @@ export function HistoryControls({
                 onPress={favorite.onEdit}
                 disabled={loading}
                 testID="favorite-edit"
+                accessibilityLabel="Edit Favorite"
               />
               <IconButton
                 icon={TrashIcon}
@@ -138,11 +146,18 @@ export function HistoryControls({
                 destructive
                 disabled={loading}
                 testID="favorite-delete"
+                accessibilityLabel="Delete Favorite"
               />
             </>
           ) : null}
           {!favorite && canRemove ? (
-            <IconButton icon={TrashIcon} onPress={onRemove} destructive disabled={loading} />
+            <IconButton
+              icon={TrashIcon}
+              onPress={onRemove}
+              destructive
+              disabled={loading}
+              accessibilityLabel="Delete ride"
+            />
           ) : !favorite ? (
             <View style={styles.actionSpacer} />
           ) : null}

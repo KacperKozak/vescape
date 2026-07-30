@@ -103,12 +103,17 @@ export const useMainScreenStore = create<MainScreenState & MainScreenActions>((s
     set((state) =>
       state.historyTab === tab
         ? state
-        : { historyTab: tab, historySheetVisible: false, openFavoriteId: null },
+        : {
+            historyTab: tab,
+            historySheetVisible: false,
+            openFavoriteId: null,
+            trimRange: null,
+          },
     )
   },
 
   openFavorite(id) {
-    set({ openFavoriteId: id, historySheetVisible: false, seekTimeMs: null })
+    set({ openFavoriteId: id, historySheetVisible: false, seekTimeMs: null, trimRange: null })
   },
 
   closeFavorite() {

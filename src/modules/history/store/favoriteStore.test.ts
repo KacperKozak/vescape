@@ -84,6 +84,58 @@ test('keeps the list newest first after adding a favorite', async () => {
   expect(useFavoriteStore.getState().favorites.map((f) => f.id)).toEqual(['newer', 'older'])
 })
 
+test('does not let a stale load overwrite a favorite added while it was in flight', async () => {
+  const created = favorite({ id: 'newer', startMs: 3_000_000 })
+  let resolveLoad: (favorites: Favorite[]) => void = () => {}
+  getFavorites.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        resolveLoad = resolve
+      }),
+  )
+  createFavorite.mockImplementation(async () => created)
+  const { useFavoriteStore } = await import('@/modules/history/store/favoriteStore')
+
+  const load = useFavoriteStore.getState().load()
+  await Promise.resolve()
+  await useFavoriteStore.getState().add({ startMs: created.startMs, endMs: created.endMs })
+  resolveLoad([])
+  await load
+
+  expect(useFavoriteStore.getState().favorites).toEqual([created])
+  expect(useFavoriteStore.getState().loading).toBe(false)
+})
+
+test('does not apply a load snapshot taken during an in-flight favorite mutation', async () => {
+  const created = favorite({ id: 'newer', startMs: 3_000_000 })
+  let resolveCreate: (favorite: Favorite) => void = () => {}
+  let resolveLoad: (favorites: Favorite[]) => void = () => {}
+  createFavorite.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        resolveCreate = resolve
+      }),
+  )
+  getFavorites.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        resolveLoad = resolve
+      }),
+  )
+  const { useFavoriteStore } = await import('@/modules/history/store/favoriteStore')
+
+  const add = useFavoriteStore.getState().add({ startMs: created.startMs, endMs: created.endMs })
+  await Promise.resolve()
+  const load = useFavoriteStore.getState().load()
+  resolveCreate(created)
+  await add
+  resolveLoad([])
+  await load
+
+  expect(useFavoriteStore.getState().favorites).toEqual([created])
+  expect(useFavoriteStore.getState().loading).toBe(false)
+})
+
 test('surfaces a create failure instead of inserting a phantom row', async () => {
   createFavorite.mockImplementation(async () => {
     throw new Error('range has no samples')

@@ -22,6 +22,8 @@ internal data class FavoriteSummary(
  * into a history session summary, including the GPS-distance fallback for rides with no odometer.
  *
  * @parity /modules/vescape-core/ios/telemetry/FavoriteStore.swift `buildFavoriteSummary`
+ * @parity /src/modules/history/lib/favoritePreview.ts `summarizeFavoriteRange`
+ * @platform-diff JS is a live preview over loaded samples; this is the durable sanitized summary.
  * @platform-diff Only Android fills `gps_distance_cm`, so the GPS fallback has no iOS counterpart.
  */
 internal fun buildFavoriteSummary(buckets: Collection<TelemetryMinuteBucketEntity>): FavoriteSummary {
