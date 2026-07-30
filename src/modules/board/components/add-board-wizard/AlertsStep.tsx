@@ -1,6 +1,6 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
 import { StyleSheet } from 'react-native'
-import { SpeedometerIcon, type Icon } from 'phosphor-react-native'
+import { ArrowRightIcon, SpeedometerIcon, type Icon } from 'phosphor-react-native'
 
 import { Button } from '@/components/base/Button'
 import { BoardTopSpeedCard } from '@/modules/alerts/components/BoardTopSpeedCard'
@@ -63,6 +63,8 @@ export function AlertsStep({
           label="Skip"
           variant="secondary"
           size="sm"
+          icon={ArrowRightIcon}
+          iconPosition="right"
           onPress={wizard.next}
           testID="add-board-skip-alerts"
           style={styles.skipButton}

@@ -3,6 +3,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useState } from 'react'
 import {
   ArrowLeftIcon,
+  ArrowRightIcon,
   CubeIcon,
   GearSixIcon,
   GhostIcon,
@@ -147,8 +148,10 @@ function ButtonShowcase() {
           />
           <Button
             style={{ flex: 1 }}
-            label="Secondary sm"
+            label="Skip"
             variant="secondary"
+            icon={ArrowRightIcon}
+            iconPosition="right"
             size="sm"
             onPress={() => {}}
             loading={loading}
