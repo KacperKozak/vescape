@@ -387,6 +387,10 @@ export function MainScreen({
       telemetrySamples: controller.sessionSamples,
       markers: controller.sessionMarkers,
       mediaAssets: controller.mediaHistory.assets,
+      favoriteRanges:
+        controller.historyTab === 'history'
+          ? controller.favorites.map(({ startMs, endMs }) => ({ startMs, endMs }))
+          : [],
       onOpenMedia: controller.openMedia,
       activeMapMetric: controller.activeHistoryMapMetric,
     }),
@@ -395,6 +399,8 @@ export function MainScreen({
       controller.historyActive,
       controller.historyPreview,
       controller.historyPreviewRoute,
+      controller.historyTab,
+      controller.favorites,
       controller.mediaHistory.assets,
       controller.openMedia,
       controller.selectedSession?.id,

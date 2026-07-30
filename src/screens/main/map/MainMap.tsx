@@ -80,6 +80,7 @@ export interface MainMapHistoryProps {
   telemetrySamples: TelemetrySample[]
   markers: HistoryMarker[]
   mediaAssets: MediaHistoryAsset[]
+  favoriteRanges: { startMs: number; endMs: number }[]
   onOpenMedia: (asset: MediaHistoryAsset) => void
   activeMapMetric: HistoryMetricKey
 }

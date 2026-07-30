@@ -31,6 +31,7 @@ import {
 import { theme } from '@/constants/theme'
 import { makeCircleFeature, makeTrailLineString } from '@/helpers/mapGeometry'
 import { findNearestSampleIndexByTime } from '@/modules/history/lib/playback'
+import { getFavoriteRouteSegments } from '@/modules/history/lib/favoriteRoute'
 import { resolveMarkerRenderData } from '@/modules/history/lib/markerOverlap'
 import type { MapSelection } from '@/modules/map/lib/mapSelection'
 import {
@@ -102,6 +103,7 @@ interface MainMapLayersProps {
   rideMarkers: HistoryMarker[]
   rideGpsSamples: HistoryGpsSample[]
   mediaAssets: MediaHistoryAsset[]
+  favoriteRanges: { startMs: number; endMs: number }[]
   mapZoom: number
   historyMetricGradientsEnabled: boolean
   historyMetricHotRanges: HistoryMetricHotRanges
@@ -330,6 +332,45 @@ function TrimRouteHighlight({ rideGpsSamples }: { rideGpsSamples: HistoryGpsSamp
   )
 }
 
+function FavoriteRouteBorder({
+  rideGpsSamples,
+  favoriteRanges,
+  highContrastRoutes,
+  trimming,
+}: {
+  rideGpsSamples: HistoryGpsSample[]
+  favoriteRanges: MainMapLayersProps['favoriteRanges']
+  highContrastRoutes: boolean
+  trimming: boolean
+}) {
+  const shape = useMemo(() => {
+    const coordinates = getFavoriteRouteSegments(rideGpsSamples, favoriteRanges)
+    if (coordinates.length === 0) return null
+    return {
+      type: 'Feature',
+      geometry: { type: 'MultiLineString', coordinates },
+      properties: {},
+    } as const
+  }, [favoriteRanges, rideGpsSamples])
+
+  if (!shape) return null
+  return (
+    <ShapeSource id="center-ride-favorites-source" shape={shape}>
+      <LineLayer
+        id="center-ride-favorites-border"
+        belowLayerID="center-ride-route-casing"
+        style={{
+          lineColor: theme.status.favorite.color,
+          lineWidth: highContrastRoutes ? 10 : 6,
+          lineOpacity: trimming ? 1 : 0.9,
+          lineCap: 'round',
+          lineJoin: 'round',
+        }}
+      />
+    </ShapeSource>
+  )
+}
+
 function PendingNavigationTargetPin({
   coordinate,
   color,
@@ -371,6 +412,7 @@ export function HistoryMapLayers({
   rideMarkers,
   rideGpsSamples,
   mediaAssets,
+  favoriteRanges,
   mapZoom,
   historyMetricGradientsEnabled: gradientsEnabled,
   historyMetricHotRanges: hotRanges,
@@ -386,6 +428,7 @@ export function HistoryMapLayers({
   rideMarkers: MainMapLayersProps['rideMarkers']
   rideGpsSamples: MainMapLayersProps['rideGpsSamples']
   mediaAssets: MainMapLayersProps['mediaAssets']
+  favoriteRanges: MainMapLayersProps['favoriteRanges']
   mapZoom: MainMapLayersProps['mapZoom']
   historyMetricGradientsEnabled: MainMapLayersProps['historyMetricGradientsEnabled']
   historyMetricHotRanges: MainMapLayersProps['historyMetricHotRanges']
@@ -447,6 +490,12 @@ export function HistoryMapLayers({
 
   return (
     <>
+      <FavoriteRouteBorder
+        rideGpsSamples={rideGpsSamples}
+        favoriteRanges={favoriteRanges}
+        highContrastRoutes={highContrastRoutes}
+        trimming={trimming}
+      />
       {rideRouteShape && (
         <ShapeSource id="center-ride-route-source" shape={rideRouteShape} lineMetrics>
           <LineLayer
@@ -549,6 +598,7 @@ export function MainMapLayers({
   rideMarkers,
   rideGpsSamples,
   mediaAssets,
+  favoriteRanges,
   mapZoom,
   historyMetricGradientsEnabled,
   historyMetricHotRanges,
@@ -622,6 +672,7 @@ export function MainMapLayers({
           rideMarkers={rideMarkers}
           rideGpsSamples={rideGpsSamples}
           mediaAssets={mediaAssets}
+          favoriteRanges={favoriteRanges}
           mapZoom={mapZoom}
           historyMetricGradientsEnabled={historyMetricGradientsEnabled}
           historyMetricHotRanges={historyMetricHotRanges}
