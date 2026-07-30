@@ -195,6 +195,7 @@ export function HistoryTelemetryPanel({
             currentPoint={headPoint}
             height={48}
             containerStyle={styles.chart}
+            timeMode="clock"
             formatValue={SPEED_CHART_DEF.formatValue}
             getPointColor={pointColors.speed}
             onGestureStart={() => onMetricInteraction?.('speed')}
@@ -218,6 +219,7 @@ export function HistoryTelemetryPanel({
                 currentPoint={{ date: new Date(headSample.capturedAtMs), value: cfg.headValue }}
                 height={40}
                 containerStyle={styles.chart}
+                timeMode="clock"
                 formatValue={cfg.formatValue}
                 getPointColor={cfg.getPointColor}
                 onGestureStart={() => onMetricInteraction?.(metric.key)}

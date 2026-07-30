@@ -4,6 +4,7 @@ import {
   computeAutoRange,
   findNearestChartPointAtX,
   getChartPosition,
+  getChartTimeLabels,
   splitChartLineSegments,
   type TelemetryChartPoint,
   toExcludedRanges,
@@ -39,6 +40,25 @@ test('findNearestChartPointAtX picks nearest and clamps x', () => {
   expect(findNearestChartPointAtX(points, 100, 100)).toEqual(points[2])
   expect(findNearestChartPointAtX(points, -1_000, 100)).toEqual(points[0])
   expect(findNearestChartPointAtX(points, 1_000, 100)).toEqual(points[2])
+})
+
+test('history chart time labels use local clock time', () => {
+  const historyPoints = [
+    { date: new Date(2026, 6, 10, 17, 15), value: 10 },
+    { date: new Date(2026, 6, 10, 17, 19), value: 20 },
+  ]
+
+  expect(getChartTimeLabels(historyPoints, undefined, 'clock')).toEqual({
+    start: '17:15',
+    end: '17:19',
+  })
+})
+
+test('live chart time labels remain relative to now', () => {
+  expect(getChartTimeLabels(points, undefined, 'relative')).toEqual({
+    start: '-2s',
+    end: 'now',
+  })
 })
 
 test('computeAutoRange supports zero include and min span', () => {

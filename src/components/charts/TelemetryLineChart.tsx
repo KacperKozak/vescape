@@ -26,10 +26,12 @@ import {
 import { theme } from '@/constants/theme'
 import {
   getChartPosition,
+  getChartTimeLabels,
   getXPosition,
   splitChartPointSegments,
   splitChartLineSegments,
   type ExcludedRange,
+  type ChartTimeMode,
   type TelemetryChartPoint,
 } from '@/components/charts/chartMath'
 import {
@@ -160,14 +162,6 @@ function formatTime(date: Date): string {
   return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}:${date.getSeconds().toString().padStart(2, '0')}`
 }
 
-function formatRelativeTime(date: Date, now: Date): string {
-  const diffMs = now.getTime() - date.getTime()
-  const diffSec = Math.round(diffMs / 1000)
-  if (diffSec < 60) return `-${diffSec}s`
-  const diffMin = Math.round(diffSec / 60)
-  return `-${diffMin}m`
-}
-
 function formatAxisNumber(value: number): string {
   const abs = Math.abs(value)
   if (abs >= 100 || Number.isInteger(value)) return Math.round(value).toString()
@@ -281,6 +275,8 @@ interface TelemetryLineChartProps {
   formatValue?: (value: number) => string
   getPointColor?: (value: number) => string
   windowMs?: number
+  /** Live charts count back from now; history charts show local wall-clock endpoints. */
+  timeMode?: ChartTimeMode
   excludedRanges?: ExcludedRange[]
   /** Optional second line plotted on a right-side axis with its own range. */
   secondary?: SecondaryChartSeries
@@ -393,6 +389,7 @@ export function TelemetryLineChart({
   formatValue,
   getPointColor,
   windowMs,
+  timeMode = 'relative',
   excludedRanges,
   secondary,
   scrubTimeMs,
@@ -576,15 +573,8 @@ export function TelemetryLineChart({
   const secondaryYMid = secondary ? (secondary.range.y.min + secondary.range.y.max) / 2 : 0
 
   const timeLabels = useMemo(() => {
-    const points = displayPoints
-    if (points.length < 2) return null
-    const now = points[points.length - 1].date
-    const start = windowMs ? new Date(now.getTime() - windowMs) : points[0].date
-    return {
-      start: formatRelativeTime(start, now),
-      end: 'now',
-    }
-  }, [displayPoints, windowMs])
+    return getChartTimeLabels(displayPoints, windowMs, timeMode)
+  }, [displayPoints, timeMode, windowMs])
 
   const activeColor = resolveActiveChartColor(currentPoint, color, getPointColor)
   const valueColorStyle = getPointColor && currentPoint ? { color: activeColor } : undefined

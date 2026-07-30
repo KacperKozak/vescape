@@ -13,6 +13,31 @@ export interface ExcludedRange {
   reason: string
 }
 
+export type ChartTimeMode = 'relative' | 'clock'
+
+export function getChartTimeLabels(
+  points: TelemetryChartPoint[],
+  windowMs: number | undefined,
+  mode: ChartTimeMode,
+): { start: string; end: string } | null {
+  if (points.length < 2) return null
+  const now = points[points.length - 1].date
+  const start = windowMs ? new Date(now.getTime() - windowMs) : points[0].date
+  if (mode === 'clock') {
+    return { start: formatClockTime(start), end: formatClockTime(now) }
+  }
+  const diffMs = now.getTime() - start.getTime()
+  const diffSec = Math.round(diffMs / 1000)
+  const startLabel = diffSec < 60 ? `-${diffSec}s` : `-${Math.round(diffSec / 60)}m`
+  return { start: startLabel, end: 'now' }
+}
+
+function formatClockTime(date: Date): string {
+  const hours = date.getHours().toString().padStart(2, '0')
+  const minutes = date.getMinutes().toString().padStart(2, '0')
+  return `${hours}:${minutes}`
+}
+
 const DEFAULT_GAP_MULTIPLIER = 3
 
 export interface AutoRangeOptions {
