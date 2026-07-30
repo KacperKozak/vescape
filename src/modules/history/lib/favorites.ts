@@ -2,15 +2,21 @@ import type { Favorite, TelemetryMinuteBucket } from 'vescape-core'
 
 import { rideMovingWindow, type HistorySession } from '@/modules/history/lib/sessions'
 
-/**
- * The range a star on an open ride pins: the full Moving Window, so favoriting a whole ride is one
- * tap. Rides with no precomputed window (legacy data) fall back to their wall-clock span.
- */
+/** The canonical full-ride range. Legacy rides fall back from Moving Window to wall-clock span. */
 export function favoriteRangeForSession(
   session: Pick<HistorySession, 'movingStartAtMs' | 'movingEndAtMs' | 'startAtMs' | 'endAtMs'>,
 ): { startMs: number; endMs: number } {
   const window = rideMovingWindow(session)
   return window ?? { startMs: session.startAtMs, endMs: session.endAtMs }
+}
+
+/** Seed trim handles visibly inside the ride so their draggable direction is obvious. */
+export function initialFavoriteTrimRangeForSession(
+  session: Pick<HistorySession, 'movingStartAtMs' | 'movingEndAtMs' | 'startAtMs' | 'endAtMs'>,
+): { startMs: number; endMs: number } {
+  const range = favoriteRangeForSession(session)
+  const inset = (range.endMs - range.startMs) * 0.15
+  return { startMs: range.startMs + inset, endMs: range.endMs - inset }
 }
 
 /**

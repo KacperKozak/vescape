@@ -2,10 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 
 import {
-  favoriteRangeForSession,
   favoriteSessionId,
   favoriteToSession,
   findSessionFavorite,
+  initialFavoriteTrimRangeForSession,
 } from '@/modules/history/lib/favorites'
 import { useFavoriteStore, type Favorite } from '@/modules/history/store/favoriteStore'
 import {
@@ -110,7 +110,7 @@ export function useHistoryFavorites(
   const beginTrimFavorite = useCallback(() => {
     const session = useHistoryStore.getState().selectedSession
     if (!session) return
-    const range = favoriteRangeForSession(session)
+    const range = initialFavoriteTrimRangeForSession(session)
     setTrimSeed(range)
     useMainScreenStore.getState().beginTrim(range)
   }, [])
@@ -134,9 +134,14 @@ export function useHistoryFavorites(
         ...(session.deviceId ? { deviceId: session.deviceId } : {}),
         ...(name.trim() ? { name: name.trim() } : {}),
       })
-      if (favorite) useMainScreenStore.getState().endTrim()
+      if (!favorite) return
+
+      historySessionBeforeFavorite.current = session
+      useMainScreenStore.getState().endTrim()
+      setHistoryTab('favorites')
+      await selectFavorite(favorite)
     },
-    [addFavorite],
+    [addFavorite, selectFavorite, setHistoryTab],
   )
 
   const selectPreviousFavorite = useCallback(async () => {

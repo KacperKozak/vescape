@@ -330,7 +330,7 @@ function TrimChartShowcase() {
   const domainEndMs = points.at(-1)?.date.getTime() ?? 0
   const span = domainEndMs - domainStartMs
   const seed = useMemo(
-    () => ({ startMs: domainStartMs + span * 0.2, endMs: domainStartMs + span * 0.8 }),
+    () => ({ startMs: domainStartMs + span * 0.15, endMs: domainStartMs + span * 0.85 }),
     [domainStartMs, span],
   )
   const [range, setRange] = useState(seed)
@@ -341,7 +341,7 @@ function TrimChartShowcase() {
   return (
     <ShowcaseCard name="TelemetryLineChart / trim range">
       <TelemetryLineChart
-        label="Trim / drag the amber handles"
+        label="Trim / drag either amber half"
         value={currentPoint ? telemetry.speed.formatWithUnit(currentPoint.value) : '-'}
         points={points}
         currentPoint={currentPoint}

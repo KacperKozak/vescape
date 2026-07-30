@@ -6,6 +6,7 @@ import {
   favoriteRangeForSession,
   favoriteToSession,
   findSessionFavorite,
+  initialFavoriteTrimRangeForSession,
   sessionContainsFavorite,
 } from '@/modules/history/lib/favorites'
 
@@ -37,7 +38,7 @@ function favorite(overrides: Partial<Favorite>): Favorite {
   }
 }
 
-test('star pins the full Moving Window, not the idle-padded ride span', () => {
+test('canonical ride range uses the Moving Window, not the idle-padded span', () => {
   expect(favoriteRangeForSession(session)).toEqual({ startMs: 1_100_000, endMs: 1_500_000 })
 })
 
@@ -45,6 +46,13 @@ test('legacy rides without a Moving Window fall back to their wall-clock span', 
   expect(
     favoriteRangeForSession({ ...session, movingStartAtMs: null, movingEndAtMs: null }),
   ).toEqual({ startMs: 1_000_000, endMs: 1_600_000 })
+})
+
+test('new trim handles start 15% inside each ride edge', () => {
+  expect(initialFavoriteTrimRangeForSession(session)).toEqual({
+    startMs: 1_160_000,
+    endMs: 1_440_000,
+  })
 })
 
 test('a ride counts as favorited only when a favorite covers its exact Moving Window', () => {

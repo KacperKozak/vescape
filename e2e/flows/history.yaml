@@ -82,12 +82,12 @@ appId: ${APP_ID}
 - inputText: Evening ride
 - tapOn:
     id: trim-save
-- tapOn:
-    id: history-tab-favorites
+# Saving opens the new Favorite immediately.
 - extendedWaitUntil:
     visible:
       id: favorite-rename
     timeout: 5000
+- assertVisible: Evening ride
 - tapOn:
     id: history-ride-list-button
 - extendedWaitUntil:
