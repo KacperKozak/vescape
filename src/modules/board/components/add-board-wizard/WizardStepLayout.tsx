@@ -31,13 +31,17 @@ export function WizardStepLayout({
         contentContainerStyle={styles.body}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={styles.header}>
-          <IconComponent size={20} color={color} weight="duotone" />
-          <Text style={styles.title}>{title}</Text>
+        <View style={styles.topContent}>
+          <View style={styles.header}>
+            <IconComponent size={20} color={color} weight="duotone" />
+            <Text style={styles.title}>{title}</Text>
+          </View>
         </View>
-        {children}
+        <View style={styles.mainContent}>
+          <View style={styles.contentStack}>{children}</View>
+        </View>
       </ScrollView>
-      {footer}
+      {footer ? <View style={styles.footer}>{footer}</View> : null}
     </View>
   )
 }
@@ -87,8 +91,9 @@ const styles = StyleSheet.create({
   },
   body: {
     flexGrow: 1,
-    justifyContent: 'center',
-    gap: 14,
+    justifyContent: 'space-between',
+    gap: 22,
+    paddingBottom: 18,
   },
   topBar: {
     flexDirection: 'row',
@@ -100,6 +105,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
+  topContent: {
+    gap: 10,
+  },
+  mainContent: {
+    flex: 1,
+    minHeight: 0,
+    justifyContent: 'flex-end',
+  },
+  contentStack: {
+    gap: 14,
+    paddingBottom: 18,
+  },
   title: {
     color: theme.palette.slate.textPrimary,
     fontSize: 20,
@@ -108,6 +125,9 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: 'row',
     gap: 10,
+  },
+  footer: {
+    paddingBottom: 10,
   },
   action: {
     flex: 1,
