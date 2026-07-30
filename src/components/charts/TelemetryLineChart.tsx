@@ -4,6 +4,7 @@ import type { LayoutChangeEvent, StyleProp, ViewStyle } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { AnimatedValueText } from '@/components/base/AnimatedValueText'
 import { Text } from '@/components/base/Text'
+import { ChartAlertAxisLabels } from '@/components/charts/ChartAlertAxisLabels'
 import Animated, {
   runOnJS,
   useAnimatedStyle,
@@ -27,6 +28,7 @@ import { theme } from '@/constants/theme'
 import {
   getChartPosition,
   getXPosition,
+  layoutChartAlertMarkers,
   splitChartPointSegments,
   splitChartLineSegments,
   type ExcludedRange,
@@ -39,6 +41,8 @@ const TOOLTIP_WIDTH = 94
 const CARD_HORIZONTAL_PADDING = 8
 const EXCLUSION_MARKER_HEIGHT = 1
 const EXCLUSION_MARKER_INSET = 1
+const ALERT_LINE_COLOR = theme.alpha(theme.palette.yellow.color, 0.1)
+const NO_ALERT_THRESHOLDS: number[] = []
 const EMPTY_MARKER_TABLE: MarkerTable = {
   ts: [],
   xs: [],
@@ -283,6 +287,8 @@ interface TelemetryLineChartProps {
   scrubbable?: boolean
   /** Reserve the right-axis gutter so charts with and without a secondary axis align. */
   reserveRightAxis?: boolean
+  /** Alert starts and range ceilings drawn as faint horizontal reference lines. */
+  alertThresholds?: number[]
 }
 
 interface ChartLineSegmentsProps {
@@ -390,6 +396,7 @@ export function TelemetryLineChart({
   onScrubTimeChange,
   scrubbable = false,
   reserveRightAxis = false,
+  alertThresholds = NO_ALERT_THRESHOLDS,
 }: TelemetryLineChartProps) {
   'use no memo'
   const [chartWidth, setChartWidth] = useState(0)
@@ -550,6 +557,10 @@ export function TelemetryLineChart({
 
   const yMid = (range.y.min + range.y.max) / 2
   const secondaryYMid = secondary ? (secondary.range.y.min + secondary.range.y.max) / 2 : 0
+  const alertMarkers = useMemo(
+    () => layoutChartAlertMarkers(alertThresholds, range, height),
+    [alertThresholds, height, range],
+  )
 
   const timeLabels = useMemo(() => {
     const points = displayPoints
@@ -606,6 +617,7 @@ export function TelemetryLineChart({
           <Text style={styles.yLabel}>{formatAxisNumber(range.y.max)}</Text>
           <Text style={styles.yLabel}>{formatAxisNumber(yMid)}</Text>
           <Text style={styles.yLabel}>{formatAxisNumber(range.y.min)}</Text>
+          <ChartAlertAxisLabels markers={alertMarkers} formatValue={formatAxisNumber} />
         </View>
 
         <GestureDetector gesture={panGesture}>
@@ -632,6 +644,16 @@ export function TelemetryLineChart({
                   color={theme.palette.slate.surface}
                   strokeWidth={0.5}
                 />
+
+                {alertMarkers.map((marker) => (
+                  <Line
+                    key={marker.value}
+                    p1={vec(0, marker.y)}
+                    p2={vec(chartWidth, marker.y)}
+                    color={ALERT_LINE_COLOR}
+                    strokeWidth={1}
+                  />
+                ))}
 
                 {excludedRanges?.map((range) => {
                   const x1 = getXPosition(displayPoints, range.startMs, chartWidth, windowMs)
@@ -776,6 +798,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-end',
     paddingRight: 4,
+    position: 'relative',
   },
   rightAxis: {
     width: Y_AXIS_WIDTH,

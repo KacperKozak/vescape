@@ -1,6 +1,7 @@
 package expo.modules.vescapecore
 
 import expo.modules.vescapecore.alerts.AlertFeedback
+import expo.modules.vescapecore.alerts.AlertCoordinator
 import expo.modules.vescapecore.appstatus.AppStatusCoordinator
 import expo.modules.vescapecore.auth.NativeAuthCoordinator
 import expo.modules.vescapecore.service.BoardProbeAutoStartGate
@@ -44,6 +45,7 @@ import expo.modules.vescapecore.telemetry.DatabaseBackupManager
 import expo.modules.vescapecore.telemetry.ProfileStatsRepository
 import expo.modules.vescapecore.telemetry.TELEMETRY_DATABASE_NAME
 import expo.modules.vescapecore.telemetry.TelemetryRepository
+import expo.modules.vescapecore.telemetry.AlertRuleEntity
 import expo.modules.vescapecore.location.LegalPolicyResolver
 import expo.modules.vescapecore.location.LegalPolicyCatalog
 import kotlinx.coroutines.CompletableDeferred
@@ -54,6 +56,26 @@ import kotlinx.coroutines.runBlocking
 
 private const val TAG = "VescapeCore"
 private const val SCAN_RETRY_LIMIT = 3
+
+/** Parse the minimal, ephemeral rule shape accepted from JS for an alert test. */
+private fun Map<String, Any?>.toAlertTestRule(): AlertRuleEntity? {
+  val id = this["id"] as? String ?: return null
+  val controlId = this["controlId"] as? String ?: return null
+  val threshold = (this["threshold"] as? Number)?.toDouble() ?: return null
+  val thresholdMax = (this["thresholdMax"] as? Number)?.toDouble()
+  val soundType = this["soundType"] as? String ?: return null
+  return AlertRuleEntity(
+    boardId = "alert-test",
+    id = id,
+    controlId = controlId,
+    threshold = threshold,
+    thresholdMax = thresholdMax,
+    enabled = true,
+    soundType = soundType,
+    createdAt = 0,
+    source = null,
+  )
+}
 
 /**
  * @parity /modules/vescape-core/ios/VescapeCoreModule.swift
@@ -79,6 +101,10 @@ class VescapeCoreModule : Module() {
   private val mainHandler = Handler(Looper.getMainLooper())
   private var activeProbe: ActiveBoardProbe? = null
   private var previewAlertFeedback: AlertFeedback? = null
+  /** UI alert tests own feedback + evaluator state separate from the live Board Session. */
+  private var alertTestFeedback: AlertFeedback? = null
+  private var alertTestCoordinator: AlertCoordinator? = null
+  private var alertTestControlId: String? = null
   /** Remover for this module's App Status mirror listener; cleared in OnDestroy. */
   private var appStatusUnsub: (() -> Unit)? = null
   private val companionPresence by lazy {
@@ -240,6 +266,7 @@ class VescapeCoreModule : Module() {
       appStatusUnsub = null
       previewAlertFeedback?.release()
       previewAlertFeedback = null
+      stopAlertTest()
       cancelActiveProbe(null, "module_destroyed")
       if (CoreForegroundService.emitEvent != null) {
         CoreForegroundService.emitEvent = null
@@ -289,6 +316,24 @@ class VescapeCoreModule : Module() {
     }
     Function("stopGeigerSimulation") {
       previewAlertFeedback?.stopGeiger("preview")
+    }
+    // @parity /modules/vescape-core/ios/VescapeCoreModule.swift `startAlertTest`
+    // @parity /modules/vescape-core/src/index.ts `startAlertTest`
+    Function("startAlertTest") { rules: List<Map<String, Any?>> ->
+      startAlertTest(rules)
+    }
+    Function("updateAlertTest") { value: Double ->
+      val controlId = alertTestControlId ?: return@Function
+      alertTestCoordinator?.evaluateValues(
+        // Battery thresholds compare synthetic SoC, while message `{voltage}` keeps a plausible
+        // raw sample instead of incorrectly speaking the percentage as volts.
+        values = mapOf(controlId to if (controlId == "battery") 48.0 else value),
+        batteryPercent = value.takeIf { controlId == "battery" },
+        onDiagnostic = { _, _ -> },
+      )
+    }
+    Function("stopAlertTest") {
+      stopAlertTest()
     }
     Function("getLiveState") {
       liveStateWithScan(CoreForegroundService.currentLiveState(context.applicationContext))
@@ -707,6 +752,28 @@ key == "wearAutoLaunchOnConnect" ||
         CoreForegroundService.reloadTelemetrySettings(context.applicationContext)
       }
     }
+  }
+
+  private fun startAlertTest(ruleMaps: List<Map<String, Any?>>) {
+    stopAlertTest()
+    val rules = ruleMaps.mapNotNull { it.toAlertTestRule() }
+    val controlId = rules.firstOrNull()?.controlId ?: return
+    if (rules.any { it.controlId != controlId }) return
+
+    val feedback = AlertFeedback(context.applicationContext, mainHandler)
+    val coordinator = AlertCoordinator(feedback = { feedback }, vibrateSingles = false)
+    coordinator.replaceRules(rules)
+    alertTestFeedback = feedback
+    alertTestCoordinator = coordinator
+    alertTestControlId = controlId
+  }
+
+  private fun stopAlertTest() {
+    alertTestCoordinator?.stopAllGeiger()
+    alertTestCoordinator = null
+    alertTestControlId = null
+    alertTestFeedback?.release()
+    alertTestFeedback = null
   }
 
   private fun shouldEmitToFrontend(name: String): Boolean = frontendActive && observedEvents.contains(name)

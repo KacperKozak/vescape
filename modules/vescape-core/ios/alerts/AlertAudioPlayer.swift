@@ -117,6 +117,9 @@ private final class GeigerLoop {
 /// `Handler`; sustained loops schedule the buffer with a completion callback instead of SoundPool
 /// loop index. TTS uses `AVSpeechSynthesizer` instead of Android `TextToSpeech`.
 internal final class AlertAudioPlayer {
+  private static let audioSessionLock = NSLock()
+  private static var audioSessionOwnerCount = 0
+
   private let engine = AVAudioEngine()
   private let geigerQueue = DispatchQueue(label: "vescape.alerts.geiger", qos: .userInitiated)
   private let synthesizer = AVSpeechSynthesizer()
@@ -124,9 +127,11 @@ internal final class AlertAudioPlayer {
   private var geigerLoops: [String: GeigerLoop] = [:]
   private var activeOneShotNodes: [AVAudioPlayerNode] = []
   private var started = false
+  private var ownsAudioSession = false
+  private var released = false
 
   init() {
-    configureAudioSession()
+    acquireAudioSession()
     let standardFormat = makeStandardFormat()
     do {
       try engine.start()
@@ -152,7 +157,16 @@ internal final class AlertAudioPlayer {
 
   // MARK: - Session
 
-  private func configureAudioSession() {
+  /** AVAudioSession is process-global. Test and production players may overlap, so only the last
+   * owner deactivates it; stopping a UI test must never silence the live Board alert player. */
+  private func acquireAudioSession() {
+    Self.audioSessionLock.lock()
+    let shouldConfigure = Self.audioSessionOwnerCount == 0
+    Self.audioSessionOwnerCount += 1
+    ownsAudioSession = true
+    Self.audioSessionLock.unlock()
+    guard shouldConfigure else { return }
+
     let session = AVAudioSession.sharedInstance()
     do {
       try session.setCategory(
@@ -168,8 +182,20 @@ internal final class AlertAudioPlayer {
     }
   }
 
+  private func releaseAudioSession() {
+    guard ownsAudioSession else { return }
+    ownsAudioSession = false
+    Self.audioSessionLock.lock()
+    Self.audioSessionOwnerCount = max(0, Self.audioSessionOwnerCount - 1)
+    let shouldDeactivate = Self.audioSessionOwnerCount == 0
+    Self.audioSessionLock.unlock()
+    if shouldDeactivate {
+      try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
+    }
+  }
+
   private func startIfNeeded() {
-    guard !started, engine.isRunning == false else { return }
+    guard !released, !started, engine.isRunning == false else { return }
     do {
       try AVAudioSession.sharedInstance().setActive(true, options: [])
       try engine.start()
@@ -273,6 +299,7 @@ internal final class AlertAudioPlayer {
 
   /// Triple-beep pattern (0 / 500ms / 1000ms) ported from Android `playSingle`.
   func playSingle(soundType: String) {
+    guard !released else { return }
     let preset = resolveAlertPreset(soundType: soundType, category: alertCategorySingle)
     play(preset.fileName)
     geigerQueue.asyncAfter(deadline: .now() + 0.5) { [weak self] in self?.play(preset.fileName) }
@@ -283,6 +310,7 @@ internal final class AlertAudioPlayer {
 
   /// Play a preset once for UI preview, or speak a `tts:` template with a sample fired alert.
   func preview(soundType: String) {
+    guard !released else { return }
     Self.log("AlertAudioPlayer.preview: \(soundType)")
     if soundType.hasPrefix(ttsPrefix) {
       let template = String(soundType.dropFirst(ttsPrefix.count))
@@ -303,6 +331,7 @@ internal final class AlertAudioPlayer {
   // MARK: - Geiger
 
   func updateGeiger(ruleId: String, soundType: String, rangeDepth: Double) {
+    guard !released else { return }
     geigerQueue.async { [weak self] in
       self?.updateGeigerSync(ruleId: ruleId, soundType: soundType, rangeDepth: rangeDepth)
     }
@@ -435,6 +464,7 @@ internal final class AlertAudioPlayer {
   // MARK: - TTS
 
   func speakMessage(_ text: String) {
+    guard !released else { return }
     let utterance = AVSpeechUtterance(string: text)
     utterance.voice = AVSpeechSynthesisVoice(language: "en-US")
     utterance.preUtteranceDelay = 0
@@ -447,6 +477,7 @@ internal final class AlertAudioPlayer {
   /// Haptic feedback mirroring Android `vibrate`. A range-less alert triggers a crisp waveform
   /// pattern; a geiger alert scales one-shot intensity with `rangeDepth`.
   func vibrate(rangeDepth: Double?) {
+    guard !released else { return }
     #if canImport(UIKit)
     if let rangeDepth {
       let intensity = min(max(rangeDepth, 0.0), 1.0)
@@ -462,6 +493,9 @@ internal final class AlertAudioPlayer {
   // MARK: - Release
 
   func release() {
+    guard !released else { return }
+    released = true
+    synthesizer.stopSpeaking(at: .immediate)
     geigerQueue.sync {
       for loop in geigerLoops.values {
         loop.workItem?.cancel()
@@ -479,13 +513,14 @@ internal final class AlertAudioPlayer {
     }
     if engine.isRunning { engine.stop() }
     started = false
-    try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
+    releaseAudioSession()
     buffersByFileName.removeAll(keepingCapacity: true)
   }
 
   // MARK: - Low-level
 
   private func play(_ fileName: String) {
+    guard !released else { return }
     guard let buffer = buffersByFileName[fileName] else {
       Self.log("AlertAudioPlayer.play: NO BUFFER for \(fileName)")
       return

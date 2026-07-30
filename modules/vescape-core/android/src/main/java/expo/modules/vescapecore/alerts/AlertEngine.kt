@@ -155,6 +155,25 @@ internal class AlertEngine {
         rules: List<AlertRuleEntity>,
         t: RefloatTelemetry,
         batteryPercent: Double? = null,
+    ): List<FiredAlert> = evaluateRules(rules, batteryPercent) { extractAlertValue(it, t) }
+
+    /**
+     * Evaluate already-normalized metric values. Production telemetry and the UI alert test both
+     * enter the same stateful threshold/debounce/hysteresis path; callers isolate state by owning
+     * separate [AlertEngine] instances.
+     *
+     * @parity /modules/vescape-core/ios/alerts/AlertEngine.swift `evaluateValues`
+     */
+    fun evaluateValues(
+        rules: List<AlertRuleEntity>,
+        values: Map<String, Double>,
+        batteryPercent: Double? = null,
+    ): List<FiredAlert> = evaluateRules(rules, batteryPercent) { values[it] }
+
+    private fun evaluateRules(
+        rules: List<AlertRuleEntity>,
+        batteryPercent: Double?,
+        valueFor: (String) -> Double?,
     ): List<FiredAlert> {
         if (rules.isEmpty()) return emptyList()
         val now = System.currentTimeMillis()
@@ -171,7 +190,7 @@ internal class AlertEngine {
         }
 
         for (rule in rules) {
-            val value = extractAlertValue(rule.controlId, t) ?: continue
+            val value = valueFor(rule.controlId) ?: continue
             val compareValue = if (rule.controlId == "battery" && batteryPercent != null) batteryPercent else value
             val aboveDir = alertDirectionIsAbove(rule.controlId)
             val triggered = if (aboveDir) compareValue >= rule.threshold else compareValue <= rule.threshold
@@ -260,6 +279,7 @@ internal class AlertFeedback(
     private var tts: TextToSpeech? = null
     private var ttsReady = false
     private var ttsPendingText: String? = null
+    private var released = false
 
     private val soundPool = SoundPool.Builder()
         .setMaxStreams(8)
@@ -296,10 +316,16 @@ internal class AlertFeedback(
     }
 
     fun speakMessage(text: String) {
+        if (released) return
         val existing = tts
         if (existing == null) {
             ttsPendingText = text
             tts = TextToSpeech(context) { status ->
+                if (released) {
+                    tts?.shutdown()
+                    tts = null
+                    return@TextToSpeech
+                }
                 if (status == TextToSpeech.SUCCESS) {
                     tts?.setAudioAttributes(ttsAlarmAttributes())
                     ttsReady = true
@@ -349,6 +375,7 @@ internal class AlertFeedback(
     }
 
     fun updateGeiger(ruleId: String, soundType: String, rangeDepth: Double) {
+        if (released) return
         try {
             val depth = rangeDepth.coerceIn(0.0, 1.0)
             val existing = geigerLoops[ruleId]
@@ -396,6 +423,8 @@ internal class AlertFeedback(
     }
 
     fun release() {
+        if (released) return
+        released = true
         stopAllGeiger()
         soundPool.release()
         tts?.stop()
@@ -419,6 +448,7 @@ internal class AlertFeedback(
     }
 
     private fun playPreset(preset: AlertSoundPreset, loop: Int = 0): Int {
+        if (released) return 0
         val soundId = soundIds[preset.resId] ?: return 0
         return soundPool.play(soundId, 1f, 1f, 1, loop, 1f)
     }

@@ -52,6 +52,7 @@ import {
 } from '@/components/controls/PillSelector'
 import { MapOptionSelector } from '@/components/controls/MapOptionSelector'
 import { AlertPresetControl } from '@/modules/alerts/components/AlertPresetControl'
+import { buildAlertTestRules } from '@/modules/alerts/lib/alertTest'
 import type { AlertPresetLevel, AlertPresetMetric } from '@/modules/alerts/lib/alertPresets'
 import { ShowcaseCard } from '@/components/dev/ShowcaseCard'
 import { ChipRow, ToggleRow } from '@/components/dev/ShowcaseControls'
@@ -541,6 +542,27 @@ function AlertPresetControlShowcase() {
   const [editable, setEditable] = useState(true)
   const [disabled, setDisabled] = useState(false)
   const liveValue = useSharedValue<number | null>(null)
+  const testRules = useMemo(
+    () =>
+      buildAlertTestRules({
+        metric,
+        level,
+        boardTopSpeedKmh: 50,
+        hasBatteryConfig: true,
+        customRules:
+          level === 'custom'
+            ? PRESET_DEMO_CUSTOM_ALERTS[metric].map((rule) => ({
+                ...rule,
+                controlId: metric,
+                thresholdMax: null,
+                enabled: true,
+                soundType: metric === 'speed' || metric === 'duty' ? 'preset:tick' : 'preset:beep',
+                createdAt: 0,
+              }))
+            : [],
+      }),
+    [level, metric],
+  )
 
   useEffect(() => {
     if (!live) {
@@ -587,6 +609,7 @@ function AlertPresetControlShowcase() {
             : undefined
         }
         disabled={disabled}
+        testRules={testRules}
         onCustomize={editable ? () => setLevel('custom') : undefined}
         onDiscardCustom={editable ? () => setLevel('normal') : undefined}
       />

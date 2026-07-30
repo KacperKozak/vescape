@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native'
 import {
   useAnimatedProps,
@@ -39,6 +40,8 @@ interface SingleGaugeProps {
   unit: string
   decimals?: number
   label?: string
+  /** Optional action aligned with the gauge label in the chart's top-right corner. */
+  headerRight?: ReactNode
   alerts?: DualGaugeAlert[]
   hotRange?: MetricHotRange | null
   /** Draw the live needle + numeric readout. Off for static, offline previews. */
@@ -174,6 +177,7 @@ export function SingleGauge({
   unit,
   decimals,
   label,
+  headerRight,
   alerts = [],
   hotRange,
   showValue = true,
@@ -181,7 +185,12 @@ export function SingleGauge({
 }: SingleGaugeProps) {
   return (
     <View style={[styles.singleWrap, containerStyle]}>
-      {label ? <Text style={styles.singleLabel}>{label}</Text> : null}
+      {label || headerRight ? (
+        <View style={styles.singleHeader}>
+          {label ? <Text style={styles.singleLabel}>{label}</Text> : <View />}
+          {headerRight}
+        </View>
+      ) : null}
       <HalfArc
         value={value}
         min={min}
@@ -221,6 +230,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
+  },
+  singleHeader: {
+    minHeight: 28,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
   },
   halfBowl: {
     position: 'absolute',

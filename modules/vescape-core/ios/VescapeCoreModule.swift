@@ -64,6 +64,10 @@ public class VescapeCoreModule: Module {
   /// `alertSoundPresetMaps()`.
   /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/alerts/AlertEngine.kt `alertSoundPresetMaps`
   private let alertPresets: [[String: Any]] = alertSoundPresetMaps()
+  /// UI alert tests never share evaluator or audio state with the live Board Session.
+  private var alertTestPlayer: AlertAudioPlayer?
+  private var alertTestCoordinator: AlertCoordinator?
+  private var alertTestControlId: String?
 
   // MARK: - Module definition
 
@@ -148,6 +152,7 @@ public class VescapeCoreModule: Module {
       self.frontendActive = false
       self.observedEvents.removeAll()
       self.cancelActiveProbe(reason: "module_destroyed")
+      self.stopAlertTest()
     }
 
     // MARK: Scan
@@ -268,6 +273,27 @@ public class VescapeCoreModule: Module {
 
     Function("stopGeigerSimulation") {
       self.coordinator.stopGeigerSimulation()
+    }
+
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `startAlertTest`
+    // @parity /modules/vescape-core/src/index.ts `startAlertTest`
+    Function("startAlertTest") { (ruleMaps: [[String: Any]]) in
+      self.startAlertTest(ruleMaps)
+    }
+
+    Function("updateAlertTest") { (value: Double) in
+      guard let controlId = self.alertTestControlId else { return }
+      _ = self.alertTestCoordinator?.evaluateValues(
+        // Battery thresholds compare synthetic SoC, while message `{voltage}` keeps a plausible
+        // raw sample instead of incorrectly speaking the percentage as volts.
+        [controlId: controlId == "battery" ? 48.0 : value],
+        batteryPercent: controlId == "battery" ? value : nil,
+        onDiagnostic: { _, _ in }
+      )
+    }
+
+    Function("stopAlertTest") {
+      self.stopAlertTest()
     }
 
     // MARK: App Status
@@ -828,6 +854,48 @@ public class VescapeCoreModule: Module {
         self.coordinator.reloadTelemetrySettings()
       }
     }
+  }
+
+  private func startAlertTest(_ ruleMaps: [[String: Any]]) {
+    stopAlertTest()
+    let rules = ruleMaps.compactMap(Self.alertTestRule)
+    guard let controlId = rules.first?.controlId else { return }
+    guard rules.allSatisfy({ $0.controlId == controlId }) else { return }
+
+    let player = AlertAudioPlayer()
+    let coordinator = AlertCoordinator(player: player, vibrateSingles: false)
+    coordinator.replaceRules(rules)
+    alertTestPlayer = player
+    alertTestCoordinator = coordinator
+    alertTestControlId = controlId
+  }
+
+  private func stopAlertTest() {
+    alertTestCoordinator?.stopAllGeiger()
+    alertTestCoordinator = nil
+    alertTestControlId = nil
+    alertTestPlayer?.release()
+    alertTestPlayer = nil
+  }
+
+  private static func alertTestRule(_ value: [String: Any]) -> AlertRule? {
+    guard
+      let id = value["id"] as? String,
+      let controlId = value["controlId"] as? String,
+      let threshold = (value["threshold"] as? NSNumber)?.doubleValue,
+      let soundType = value["soundType"] as? String
+    else { return nil }
+    return AlertRule(
+      boardId: "alert-test",
+      id: id,
+      controlId: controlId,
+      threshold: threshold,
+      thresholdMax: (value["thresholdMax"] as? NSNumber)?.doubleValue,
+      enabled: true,
+      soundType: soundType,
+      createdAt: 0,
+      source: nil
+    )
   }
 
   // MARK: - Board Probe
