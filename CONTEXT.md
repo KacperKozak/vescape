@@ -96,9 +96,13 @@ _Avoid_: Trim range, active range, ride duration
 A temporary state of a Ride Recording in which sample persistence halts because the Board has produced no moving Telemetry Sample for a sustained interval, while the Board Session stays live at a reduced poll rate and auto-resumes on the next moving sample. Cuts battery, stored frames, and bucket sample counts together while the board is parked.
 _Avoid_: Stop recording, auto-stop, sleep, parked mode
 
-**Media History Asset**:
-A phone photo or video whose capture time falls inside a selected Ride Recording and which can be placed using a nearby recording-backed GPS fix. The asset remains owned by the OS photo library and is never copied into Ride History.
-_Avoid_: Ride photo, recording media, uploaded media
+**Favorite**:
+A user-created, optionally named durable time range over Ride History, created by trimming a past ride to the span the rider wants to keep. A ride may produce multiple Favorites. Its name can be changed or cleared later, and re-trimming updates its range and recomputed summary while preserving its identity and Favorite Media. A Favorite pins its telemetry range: history deletion skips favorited ranges, and removing a Favorite only unpins — it never deletes telemetry. Owns its Favorite Media.
+_Avoid_: Favorite ride, segment, bookmark, saved ride
+
+**Favorite Media**:
+A photo or video the rider explicitly attached to a Favorite, copied from the OS picker into app storage owned by that Favorite and recorded in the native Favorite Media manifest. Placed on the map using a nearby recording-backed GPS fix by capture time. Deleted together with its Favorite.
+_Avoid_: Media History Asset, ride photo, gallery match, uploaded media
 
 **Map Point**:
 A globally shared, Account-authored map-visible location that is independent from Ride Recording and Ride History. A Map Point describes a categorized riding place such as a drop, bonk, trail entry, viewpoint, or charging place; a personal navigation target is not a Map Point. Reading a Map Point needs no account; contributing or changing one requires sign-in.
@@ -321,7 +325,8 @@ _Avoid_: Position update, presence ping, location share, group telemetry
 - A **Moving Window** belongs to one **Ride Recording** and is derived from which **Telemetry Samples** are excluded from speed metrics; a Ride Recording without one is excluded from **Ride History**.
 - A **Ride History Marker** belongs to **Ride History** and may explain where a **Ride Recording** lost or regained board data.
 - An **Idle Pause** belongs to one **Ride Recording**, begins after a sustained absence of moving **Telemetry Samples**, keeps the **Board Session** live at a reduced poll rate, and produces a **Ride History Marker**; its sample gap stays inside the **Moving Window** (and counts toward ride time) when it occurs between two moving spans.
-- A **Media History Asset** is a local-only view of an OS photo-library asset matched to one selected **Ride Recording** by capture time and placed from a nearby recording-backed **GPS Fix**.
+- A **Favorite** is a durable time range over **Ride History**; its telemetry is pinned against deletion, and a deleted ride leaves its favorited sub-ranges intact.
+- **Favorite Media** belongs to one **Favorite**, is copied into app storage, and is placed from a nearby recording-backed **GPS Fix** by capture time.
 - A **Tune Snapshot** belongs to the currently connected **Board** and is read-only.
 - A **Tune Profile** belongs to a **Board** and stores semantic field values independently of firmware schema.
 - A **Tune Profile** also belongs to one **Tune Compatibility**; profiles from other Refloat package versions are retained but not used for the current board state.

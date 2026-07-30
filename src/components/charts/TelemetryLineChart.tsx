@@ -19,6 +19,7 @@ import {
   Line,
   LinearGradient,
   Path,
+  Rect,
   RoundedRect,
   Skia,
   vec,
@@ -27,13 +28,23 @@ import {
 import { theme } from '@/constants/theme'
 import {
   getChartPosition,
+  getChartTimeRangeBands,
+  getChartTimeLabels,
   getXPosition,
   layoutChartAlertMarkers,
   splitChartPointSegments,
   splitChartLineSegments,
   type ExcludedRange,
+  type ChartTimeMode,
   type TelemetryChartPoint,
 } from '@/components/charts/chartMath'
+import {
+  TelemetryChartTrimOverlay,
+  useChartTrim,
+  type ChartTrimConfig,
+} from '@/components/charts/TelemetryChartTrim'
+
+export type { ChartTrimConfig } from '@/components/charts/TelemetryChartTrim'
 
 const DEFAULT_HEIGHT = 54
 const Y_AXIS_WIDTH = 34
@@ -157,14 +168,6 @@ function formatTime(date: Date): string {
   return `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}:${date.getSeconds().toString().padStart(2, '0')}`
 }
 
-function formatRelativeTime(date: Date, now: Date): string {
-  const diffMs = now.getTime() - date.getTime()
-  const diffSec = Math.round(diffMs / 1000)
-  if (diffSec < 60) return `-${diffSec}s`
-  const diffMin = Math.round(diffSec / 60)
-  return `-${diffMin}m`
-}
-
 function formatAxisNumber(value: number): string {
   const abs = Math.abs(value)
   if (abs >= 100 || Number.isInteger(value)) return Math.round(value).toString()
@@ -264,6 +267,12 @@ export interface SecondaryChartSeries {
   formatValue?: (value: number) => string
 }
 
+export interface ChartTimeRangeHighlight {
+  startMs: number
+  endMs: number
+  color: string
+}
+
 interface TelemetryLineChartProps {
   label?: string
   value: string
@@ -278,6 +287,8 @@ interface TelemetryLineChartProps {
   formatValue?: (value: number) => string
   getPointColor?: (value: number) => string
   windowMs?: number
+  /** Live charts count back from now; history charts show local wall-clock endpoints. */
+  timeMode?: ChartTimeMode
   excludedRanges?: ExcludedRange[]
   /** Optional second line plotted on a right-side axis with its own range. */
   secondary?: SecondaryChartSeries
@@ -289,6 +300,10 @@ interface TelemetryLineChartProps {
   reserveRightAxis?: boolean
   /** Alert starts and range ceilings drawn as faint horizontal reference lines. */
   alertThresholds?: number[]
+  /** When set, the chart is a range trimmer instead of a scrubber. */
+  trim?: ChartTrimConfig
+  /** Solid translucent bands rendered behind the chart lines. */
+  timeRangeHighlights?: ChartTimeRangeHighlight[]
 }
 
 interface ChartLineSegmentsProps {
@@ -390,6 +405,7 @@ export function TelemetryLineChart({
   formatValue,
   getPointColor,
   windowMs,
+  timeMode = 'relative',
   excludedRanges,
   secondary,
   scrubTimeMs,
@@ -397,6 +413,8 @@ export function TelemetryLineChart({
   scrubbable = false,
   reserveRightAxis = false,
   alertThresholds = NO_ALERT_THRESHOLDS,
+  trim,
+  timeRangeHighlights,
 }: TelemetryLineChartProps) {
   'use no memo'
   const [chartWidth, setChartWidth] = useState(0)
@@ -529,7 +547,10 @@ export function TelemetryLineChart({
   }, [])
 
   const scrubEnabled =
-    points.length > 0 && chartWidth > 0 && (scrubbable || !!onPointSelected || !!onScrubTimeChange)
+    !trim &&
+    points.length > 0 &&
+    chartWidth > 0 &&
+    (scrubbable || !!onPointSelected || !!onScrubTimeChange)
 
   const hasScrubCallback = !!onScrubTimeChange
   const panGesture = useMemo(
@@ -555,6 +576,17 @@ export function TelemetryLineChart({
     ],
   )
 
+  // Trim shares the chart's own time domain: first→last plotted sample maps to [0, chartWidth].
+  const trimDomainStartMs = displayPoints[0]?.date.getTime() ?? 0
+  const trimDomainEndMs = displayPoints.at(-1)?.date.getTime() ?? 0
+  const trimState = useChartTrim({
+    trim,
+    chartWidth,
+    domainStartMs: trimDomainStartMs,
+    domainEndMs: trimDomainEndMs,
+  })
+  const activeGesture = trim ? trimState.gesture : panGesture
+
   const yMid = (range.y.min + range.y.max) / 2
   const secondaryYMid = secondary ? (secondary.range.y.min + secondary.range.y.max) / 2 : 0
   const alertMarkers = useMemo(
@@ -563,15 +595,12 @@ export function TelemetryLineChart({
   )
 
   const timeLabels = useMemo(() => {
-    const points = displayPoints
-    if (points.length < 2) return null
-    const now = points[points.length - 1].date
-    const start = windowMs ? new Date(now.getTime() - windowMs) : points[0].date
-    return {
-      start: formatRelativeTime(start, now),
-      end: 'now',
-    }
-  }, [displayPoints, windowMs])
+    return getChartTimeLabels(displayPoints, windowMs, timeMode)
+  }, [displayPoints, timeMode, windowMs])
+  const timeRangeBands = useMemo(
+    () => getChartTimeRangeBands(displayPoints, timeRangeHighlights ?? [], chartWidth, windowMs),
+    [chartWidth, displayPoints, timeRangeHighlights, windowMs],
+  )
 
   const activeColor = resolveActiveChartColor(currentPoint, color, getPointColor)
   const valueColorStyle = getPointColor && currentPoint ? { color: activeColor } : undefined
@@ -620,10 +649,20 @@ export function TelemetryLineChart({
           <ChartAlertAxisLabels markers={alertMarkers} formatValue={formatAxisNumber} />
         </View>
 
-        <GestureDetector gesture={panGesture}>
+        <GestureDetector gesture={activeGesture}>
           <View style={[styles.graphWrap, { height }]} onLayout={onGraphLayout}>
             {chartWidth > 0 && (
               <Canvas style={{ width: chartWidth, height }}>
+                {timeRangeBands.map((band) => (
+                  <Rect
+                    key={`${band.startMs}-${band.endMs}-${band.color}`}
+                    x={band.x}
+                    y={0}
+                    width={band.width}
+                    height={height}
+                    color={band.color}
+                  />
+                ))}
                 <Line
                   p1={vec(0, 0.5)}
                   p2={vec(chartWidth, 0.5)}
@@ -696,7 +735,7 @@ export function TelemetryLineChart({
                 />
               </Canvas>
             )}
-            {chartWidth > 0 && hasMarker && (
+            {chartWidth > 0 && hasMarker && !trim && (
               <Canvas style={[styles.markerCanvas, { width: chartWidth, height }]}>
                 {isDragging && (
                   <Line
@@ -719,6 +758,13 @@ export function TelemetryLineChart({
                   strokeWidth={2}
                 />
               </Canvas>
+            )}
+            {trim && chartWidth > 0 && (
+              <TelemetryChartTrimOverlay
+                height={height}
+                chartWidth={chartWidth}
+                trimState={trimState}
+              />
             )}
           </View>
         </GestureDetector>

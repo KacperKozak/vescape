@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Easing, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated'
 
 import { ChartLineUpIcon } from 'phosphor-react-native'
+import { Text } from '@/components/base/Text'
 import { LinearGauge } from '@/components/charts/LinearGauge'
 import { IconHero } from '@/components/settings/IconHero'
 import { TelemetryLineChart } from '@/components/charts/TelemetryLineChart'
@@ -321,6 +322,54 @@ function RandomLineChartsShowcase() {
   )
 }
 
+function TrimChartShowcase() {
+  const points = useMemo(
+    () => generateChartData({ count: 160, base: 18, variance: 5, seed: 21, spikeEvery: 29 }),
+    [],
+  )
+  const domainStartMs = points[0]?.date.getTime() ?? 0
+  const domainEndMs = points.at(-1)?.date.getTime() ?? 0
+  const span = domainEndMs - domainStartMs
+  const seed = useMemo(
+    () => ({ startMs: domainStartMs + span * 0.15, endMs: domainStartMs + span * 0.85 }),
+    [domainStartMs, span],
+  )
+  const [range, setRange] = useState(seed)
+  const currentPoint = points.at(-1) ?? null
+  const chartRange = computeAutoRange(points, { includeZero: true, minSpan: 10, paddingRatio: 0.1 })
+  const selectedSeconds = Math.round((range.endMs - range.startMs) / 1000)
+
+  return (
+    <ShowcaseCard name="TelemetryLineChart / trim range">
+      <TelemetryLineChart
+        label="Trim / drag either amber half"
+        value={currentPoint ? telemetry.speed.formatWithUnit(currentPoint.value) : '-'}
+        points={points}
+        currentPoint={currentPoint}
+        color={telemetry.speed.color}
+        range={chartRange}
+        height={70}
+        formatValue={telemetry.speed.formatWithUnit}
+        containerStyle={styles.chartExample}
+        trim={{
+          startMs: seed.startMs,
+          endMs: seed.endMs,
+          onChange: (startMs, endMs) => setRange({ startMs, endMs }),
+          onCommit: (startMs, endMs) => setRange({ startMs, endMs }),
+        }}
+        timeRangeHighlights={[
+          {
+            startMs: domainStartMs + span * 0.3,
+            endMs: domainStartMs + span * 0.55,
+            color: theme.alpha(theme.status.favorite.color, 0.12),
+          },
+        ]}
+      />
+      <Text style={styles.trimReadout}>Selected span: {selectedSeconds}s</Text>
+    </ShowcaseCard>
+  )
+}
+
 const CELL_SCENARIOS = {
   'Small imbalance': {
     cells: [4.012, 4.03, 4.028, 4.031, 4.019, 4.03, 4.027, 4.03, 4.025, 4.029],
@@ -404,6 +453,7 @@ export default function ChartsPage() {
         <LinearGaugeShowcase />
         <AnimatedSingleGaugeShowcase />
         <RandomLineChartsShowcase />
+        <TrimChartShowcase />
         <BmsCellVoltagesShowcase />
       </ScrollView>
     </SafeAreaView>
@@ -414,4 +464,10 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.palette.slate.bg },
   content: { padding: 12, gap: 12, paddingBottom: 40 },
   chartExample: { marginBottom: 10 },
+  trimReadout: {
+    color: theme.palette.slate.textSecondary,
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
 })

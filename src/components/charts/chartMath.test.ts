@@ -5,6 +5,8 @@ import {
   findNearestChartPointAtX,
   getChartPosition,
   layoutChartAlertMarkers,
+  getChartTimeRangeBands,
+  getChartTimeLabels,
   splitChartLineSegments,
   type TelemetryChartPoint,
   toExcludedRanges,
@@ -56,12 +58,48 @@ test('alert marker layout omits values outside the visible chart range', () => {
   ).toEqual([20])
 })
 
+test('chart time-range bands clip to the visible domain and ignore outside ranges', () => {
+  expect(
+    getChartTimeRangeBands(
+      points,
+      [
+        { startMs: base - 1_000, endMs: base + 500, id: 'left' },
+        { startMs: base + 1_500, endMs: base + 3_000, id: 'right' },
+        { startMs: base + 3_000, endMs: base + 4_000, id: 'outside' },
+      ],
+      100,
+    ),
+  ).toEqual([
+    { startMs: base - 1_000, endMs: base + 500, id: 'left', x: 0, width: 25 },
+    { startMs: base + 1_500, endMs: base + 3_000, id: 'right', x: 75, width: 25 },
+  ])
+})
+
 test('findNearestChartPointAtX picks nearest and clamps x', () => {
   expect(findNearestChartPointAtX(points, 0, 100)).toEqual(points[0])
   expect(findNearestChartPointAtX(points, 50, 100)).toEqual(points[1])
   expect(findNearestChartPointAtX(points, 100, 100)).toEqual(points[2])
   expect(findNearestChartPointAtX(points, -1_000, 100)).toEqual(points[0])
   expect(findNearestChartPointAtX(points, 1_000, 100)).toEqual(points[2])
+})
+
+test('history chart time labels use local clock time', () => {
+  const historyPoints = [
+    { date: new Date(2026, 6, 10, 17, 15), value: 10 },
+    { date: new Date(2026, 6, 10, 17, 19), value: 20 },
+  ]
+
+  expect(getChartTimeLabels(historyPoints, undefined, 'clock')).toEqual({
+    start: '17:15',
+    end: '17:19',
+  })
+})
+
+test('live chart time labels remain relative to now', () => {
+  expect(getChartTimeLabels(points, undefined, 'relative')).toEqual({
+    start: '-2s',
+    end: 'now',
+  })
 })
 
 test('computeAutoRange supports zero include and min span', () => {

@@ -181,6 +181,7 @@ export function MainMapScene({
           rideMarkers={history.markers}
           rideGpsSamples={history.gpsSamples}
           mediaAssets={history.mediaAssets}
+          favoriteRanges={history.favoriteRanges}
           mapZoom={cameraZoom}
           historyMetricGradientsEnabled={historyMetricGradientsEnabled}
           historyMetricHotRanges={historyMetricHotRanges}
