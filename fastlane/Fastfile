@@ -1,107 +1,54 @@
 default_platform(:android)
 
-def android_release_properties
+def require_release_env(*names)
+  missing = names.select { |name| ENV[name].to_s.empty? }
+  UI.user_error!("Missing Android release env: #{missing.join(", ")}") unless missing.empty?
+end
+
+def signing_properties
   names = %w[
     VESCAPE_UPLOAD_STORE_FILE
     VESCAPE_UPLOAD_STORE_PASSWORD
     VESCAPE_UPLOAD_KEY_ALIAS
     VESCAPE_UPLOAD_KEY_PASSWORD
     APP_VERSION
+    VERSION_CODE
     WEAR_VERSION_CODE
   ]
-  missing = names.select { |name| ENV[name].to_s.empty? }
-  UI.user_error!("Missing Android release env: #{missing.join(", ")}") unless missing.empty?
-
+  require_release_env(*names)
   names.to_h { |name| [name, ENV.fetch(name)] }
 end
 
-platform :android do
-  desc "Build signed phone and Wear AABs, ship to internal testing, and stage production review"
-  lane :release do
-    release_properties = android_release_properties
-
-    # Leave signer identity in CI logs before producing either artifact.
-    gradle(
-      project_dir: "android",
-      task: ":wearos:signingReport",
-      properties: release_properties
-    )
-
-    # Explicit module tasks avoid Gradle's ambiguous root bundleRelease task.
-    gradle(
-      project_dir: "android",
-      task: ":app:bundleRelease",
-      properties: release_properties
-    )
-    gradle(
-      project_dir: "android",
-      task: ":wearos:bundleRelease",
-      properties: release_properties
-    )
-
-    phone_aab = "android/app/build/outputs/bundle/release/app-release.aab"
-    wear_aab = "android/wearos/build/outputs/bundle/release/wearos-release.aab"
-
-    # Publish the phone build for immediate internal testing.
-    upload_to_play_store(
-      aab: phone_aab,
-      track: "internal",
-      release_status: "completed",
-      skip_upload_apk: true,
-      skip_upload_metadata: true,
-      skip_upload_images: true,
-      skip_upload_screenshots: true,
-      skip_upload_changelogs: true,
-      changes_not_sent_for_review: true
-    )
-
-    # Promote the same artifact to a production draft for manual review.
-    upload_to_play_store(
-      track: "internal",
-      track_promote_to: "production",
-      release_status: "draft",
-      version_code: ENV["VERSION_CODE"].to_i,
-      skip_upload_aab: true,
-      skip_upload_apk: true,
-      skip_upload_metadata: true,
-      skip_upload_images: true,
-      skip_upload_screenshots: true,
-      skip_upload_changelogs: true,
-      changes_not_sent_for_review: true
-    )
-
-    # Wear OS uses form-factor-prefixed API track identifiers.
-    upload_to_play_store(
-      aab: wear_aab,
-      track: "wear:internal",
-      release_status: "completed",
-      skip_upload_apk: true,
-      skip_upload_metadata: true,
-      skip_upload_images: true,
-      skip_upload_screenshots: true,
-      skip_upload_changelogs: true,
-      changes_not_sent_for_review: true
-    )
-
-    upload_to_play_store(
-      track: "wear:production",
-      release_status: "completed",
-      version_code: ENV["WEAR_VERSION_CODE"].to_i,
-      skip_upload_aab: true,
-      skip_upload_apk: true,
-      skip_upload_metadata: true,
-      skip_upload_images: true,
-      skip_upload_screenshots: true,
-      skip_upload_changelogs: true,
-      changes_not_sent_for_review: true
-    )
-  end
+def internal_upload(aab, track)
+  require_release_env("SUPPLY_JSON_KEY")
+  upload_to_play_store(
+    aab: aab,
+    track: track,
+    release_status: "completed",
+    skip_upload_apk: true,
+    skip_upload_metadata: true,
+    skip_upload_images: true,
+    skip_upload_screenshots: true,
+    skip_upload_changelogs: true,
+    changes_not_sent_for_review: true
+  )
 end
 
-# iOS — add below once ready:
-# platform :ios do
-#   lane :release do
-#     build_app(scheme: "vescape", workspace: "ios/vescape.xcworkspace")
-#     upload_to_app_store   # or `pilot` for TestFlight-only
-#   end
-# end
+platform :android do
+  desc "Build the signed phone and Wear AABs once"
+  lane :build_internal do
+    properties = signing_properties
+    gradle(project_dir: "android", task: ":app:bundleRelease", properties: properties)
+    gradle(project_dir: "android", task: ":wearos:bundleRelease", properties: properties)
+  end
+
+  desc "Upload the existing phone AAB to internal testing only"
+  lane :upload_phone_internal do
+    internal_upload("android/app/build/outputs/bundle/release/app-release.aab", "internal")
+  end
+
+  desc "Upload the existing Wear AAB to internal testing only"
+  lane :upload_wear_internal do
+    internal_upload("android/wearos/build/outputs/bundle/release/wearos-release.aab", "wear:internal")
+  end
+end
