@@ -176,6 +176,13 @@ export interface Board {
    * from JS is ignored — read it, do not author it.
    */
   updatedAt: number
+  /**
+   * Tombstone stamp: epoch ms of the rider's delete, `null` while the Board is alive. A deleted
+   * Board keeps its row so Ride History can still name it (ADR 0027) — {@link getBoards} filters
+   * tombstones, {@link getBoard} deliberately does not. Native-owned like {@link updatedAt}:
+   * deletion goes through {@link deleteBoard}, never through an upsert.
+   */
+  deletedAt: number | null
   batteryConfig: BatteryConfig | null
   /** Last Battery SoC Estimate persisted natively; survives full app kill. `undefined` before first session. */
   lastBattery?: LastBattery | null
@@ -217,9 +224,11 @@ export interface Board {
 
 /**
  * Write shape for {@link upsertBoard}. Native stamps `updatedAt` from its own clock on every write,
- * so callers never author it — a board that has never been persisted has no cursor yet.
+ * so callers never author it — a board that has never been persisted has no cursor yet. `deletedAt`
+ * is out for the same reason: a tombstone is stamped by {@link deleteBoard} alone, and an upsert
+ * never clears the one already on the row.
  */
-export type BoardInput = Omit<Board, 'updatedAt'>
+export type BoardInput = Omit<Board, 'updatedAt' | 'deletedAt'>
 
 export interface LastBattery {
   percent: number

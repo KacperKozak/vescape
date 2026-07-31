@@ -29,6 +29,7 @@ function makeBoard(overrides?: {
     description: null,
     createdAt: 1,
     updatedAt: 1,
+    deletedAt: null,
     // Honor an explicit `null` (invalid config) — `??` would swallow it back to the valid default.
     batteryConfig:
       overrides && 'batteryConfig' in overrides ? (overrides.batteryConfig ?? null) : VALID_BATTERY,

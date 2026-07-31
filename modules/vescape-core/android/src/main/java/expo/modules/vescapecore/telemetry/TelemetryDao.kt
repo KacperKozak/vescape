@@ -394,9 +394,14 @@ interface TelemetryDao {
     clearExclusions()
   }
 
-  @Query("SELECT * FROM boards ORDER BY created_at ASC")
+  /** Live Boards only — a tombstoned Board is gone from every Rider-facing list (ADR 0027). */
+  @Query("SELECT * FROM boards WHERE deleted_at IS NULL ORDER BY created_at ASC")
   suspend fun getBoards(): List<BoardEntity>
 
+  /**
+   * Resolves tombstones too, deliberately: Ride History still has to name a deleted Board. Callers
+   * that act on a Board rather than describe one check [BoardEntity.deletedAt] and refuse.
+   */
   @Query("SELECT * FROM boards WHERE id = :id LIMIT 1")
   suspend fun getBoard(id: String): BoardEntity?
 
@@ -406,10 +411,16 @@ interface TelemetryDao {
   @Query("SELECT updated_at FROM boards WHERE id = :id")
   suspend fun getBoardUpdatedAt(id: String): Long?
 
+  @Query("SELECT deleted_at FROM boards WHERE id = :id")
+  suspend fun getBoardDeletedAt(id: String): Long?
+
   /**
    * Stamps both sync columns before the row lands: a fresh `sync_seq` so the upload scan sees this
    * write, and a ratcheted `updated_at` so the server keeps it. Caller-supplied values for either
    * are overwritten — see [SyncSequenceEntity] and [BoardEntity.updatedAt].
+   *
+   * An existing tombstone survives the write, so an ordinary upsert can never resurrect a deleted
+   * Board — deletion is terminal (ADR 0027). Only [deleteBoardWithSettings] stamps a new one.
    */
   @Transaction
   suspend fun upsertBoard(board: BoardEntity) {
@@ -417,6 +428,7 @@ interface TelemetryDao {
       board.copy(
         updatedAt = ratchetUpdatedAt(getBoardUpdatedAt(board.id), board.updatedAt),
         syncSeq = nextSyncSeq(SYNC_SEQ_BOARDS),
+        deletedAt = board.deletedAt ?: getBoardDeletedAt(board.id),
       ),
     )
   }
@@ -443,16 +455,21 @@ interface TelemetryDao {
   @Query("DELETE FROM board_settings WHERE board_id = :boardId")
   suspend fun deleteBoardSettings(boardId: String)
 
-  @Query("DELETE FROM boards WHERE id = :id")
-  suspend fun deleteBoard(id: String)
-
+  /**
+   * The Rider-facing delete: configuration goes, the Board row stays as a tombstone (ADR 0027).
+   * Telemetry and Tune Profiles are untouched — both outlive the Board.
+   *
+   * The tombstone is an ordinary write, so it runs through [upsertBoard] and moves both sync
+   * columns like any other edit. An unknown or already-tombstoned id is a no-op.
+   */
   @Transaction
-  suspend fun deleteBoardWithSettings(id: String) {
+  suspend fun deleteBoardWithSettings(id: String, deletedAt: Long) {
+    val board = getBoard(id)?.takeIf { it.deletedAt == null } ?: return
     deleteBoardSettings(id)
     deleteBoardWarnings(id)
     // Alert Rules are Board-owned (#254) — drop them with the Board so no orphan rows survive.
     deleteAlertRules(id)
-    deleteBoard(id)
+    upsertBoard(board.copy(deletedAt = deletedAt, updatedAt = deletedAt))
   }
 
   @Query("SELECT * FROM alerts WHERE board_id = :boardId ORDER BY created_at ASC")

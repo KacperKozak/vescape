@@ -994,6 +994,8 @@ public class VescapeCoreModule: Module {
   /// transport is read straight from the link, never rediscovered.
   private func connectConfig(boardId: String) -> BoardConnectConfig? {
     guard let board = appData.getBoard(boardId) else { return nil }
+    // Reads resolve tombstones so history can name them (ADR 0027); connecting to one is refused.
+    guard board["deletedAt"] as? Int64 == nil else { return nil }
     guard let link = board["link"] as? [String: Any?] else { return nil }
     guard let bleId = link["bleId"] as? String, !bleId.isEmpty else { return nil }
     let transport = BoardTransport.fromBridge(link["transport"] ?? nil) ?? .direct

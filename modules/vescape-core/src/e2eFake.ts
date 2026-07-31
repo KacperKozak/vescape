@@ -684,8 +684,13 @@ export const e2eFake = {
 
   upsertBoard(board: BoardInput): void {
     // Stand in for native: the sync cursor is stamped by the store on every write, never by the caller.
-    const stored: Board = { ...board, updatedAt: Date.now() }
-    const index = e2eBoards.findIndex((b) => b.id === stored.id)
+    const index = e2eBoards.findIndex((b) => b.id === board.id)
+    // A tombstone survives an upsert, like native — only a delete stamps one.
+    const stored: Board = {
+      ...board,
+      updatedAt: Date.now(),
+      deletedAt: index >= 0 ? e2eBoards[index].deletedAt : null,
+    }
     if (index >= 0) {
       e2eBoards[index] = stored
     } else {
@@ -718,6 +723,7 @@ export const e2eFake = {
         description: 'Seeded by Maestro',
         createdAt: seededAt,
         updatedAt: seededAt,
+        deletedAt: null,
         batteryConfig: {
           mode: 'preset',
           cellPresetId: 'molicel:21700:p50b',
@@ -740,6 +746,7 @@ export const e2eFake = {
         description: 'Seeded by Maestro',
         createdAt: seededAt,
         updatedAt: seededAt,
+        deletedAt: null,
         batteryConfig: {
           mode: 'preset',
           cellPresetId: 'molicel:21700:p50b',
@@ -763,6 +770,7 @@ export const e2eFake = {
         description: 'Seeded by Maestro',
         createdAt: seededAt,
         updatedAt: seededAt,
+        deletedAt: null,
         batteryConfig: {
           mode: 'preset',
           cellPresetId: 'molicel:21700:p50b',

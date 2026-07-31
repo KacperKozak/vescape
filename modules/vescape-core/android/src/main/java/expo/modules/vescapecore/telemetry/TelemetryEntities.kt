@@ -274,6 +274,15 @@ data class BoardEntity(
   /** Device-local Sync Cursor position; see [SyncSequenceEntity]. */
   @ColumnInfo(name = "sync_seq")
   val syncSeq: Long = 0,
+  /**
+   * Tombstone stamp: epoch ms of the rider's delete, null while the Board is alive. A deleted Board
+   * keeps its row so Ride History can still name it and the server's Board-owned foreign keys hold;
+   * only the Board's configuration is hard-deleted (ADR-0027).
+   *
+   * Written by the delete path only — an upsert from the bridge never authors it, like [updatedAt].
+   */
+  @ColumnInfo(name = "deleted_at")
+  val deletedAt: Long? = null,
 )
 
 @Entity(

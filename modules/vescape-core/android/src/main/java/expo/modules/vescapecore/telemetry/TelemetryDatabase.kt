@@ -12,7 +12,7 @@ import java.io.File
 // @parity /modules/vescape-core/ios/VescapeCoreModule.swift
 internal const val TELEMETRY_DATABASE_NAME = "vescape.db"
 internal const val LEGACY_TELEMETRY_DATABASE_NAME = "telemetry.db"
-internal const val TELEMETRY_DATABASE_VERSION = 33
+internal const val TELEMETRY_DATABASE_VERSION = 34
 
 @Database(
   entities = [
@@ -570,6 +570,21 @@ abstract class TelemetryDatabase : RoomDatabase() {
       }
     }
 
+    /**
+     * Board tombstones (#279). Deleting a Board stops removing its row and stamps `deleted_at`
+     * instead, so Ride History outlives the Board that produced it (ADR 0027). Additive: existing
+     * rows stay null, i.e. alive.
+     *
+     * @parity /modules/vescape-core/ios/telemetry/TelemetryDatabase.swift `v34_board_deleted_at`
+     */
+    internal val MIGRATION_33_34 = object : Migration(33, 34) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        if (!hasColumn(db, "boards", "deleted_at")) {
+          db.execSQL("ALTER TABLE boards ADD COLUMN deleted_at INTEGER")
+        }
+      }
+    }
+
     private fun dropMapPointTables(db: SupportSQLiteDatabase) {
       db.execSQL("DROP TABLE IF EXISTS map_point_reactions")
       db.execSQL("DROP TABLE IF EXISTS map_points")
@@ -710,6 +725,7 @@ abstract class TelemetryDatabase : RoomDatabase() {
             MIGRATION_30_31,
             MIGRATION_31_32,
             MIGRATION_32_33,
+            MIGRATION_33_34,
           )
           .fallbackToDestructiveMigration(true)
           .addCallback(object : Callback() {

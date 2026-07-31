@@ -64,11 +64,16 @@ final class AppDataRepository {
 
   // MARK: - Boards
 
+  /// Live Boards only — a tombstoned Board is gone from every Rider-facing list (ADR 0027).
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDao.kt `getBoards`
   func getBoards() -> [[String: Any?]] {
     read([]) { db in
       let boards = try Row.fetchAll(
         db,
-        sql: "SELECT id, name, ble_id, transport, created_at, updated_at FROM boards ORDER BY created_at ASC"
+        sql: """
+          SELECT id, name, ble_id, transport, created_at, updated_at, deleted_at FROM boards
+          WHERE deleted_at IS NULL ORDER BY created_at ASC
+          """
       )
       let settings = try Row.fetchAll(db, sql: "SELECT board_id, key, value_json FROM board_settings")
       var byBoard: [String: [(String, String)]] = [:]
@@ -80,11 +85,17 @@ final class AppDataRepository {
     }
   }
 
+  /// Resolves tombstones too, deliberately: Ride History still has to name a deleted Board. Callers
+  /// that act on a Board rather than describe one check `deletedAt` and refuse.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDao.kt `getBoard`
   func getBoard(_ id: String) -> [String: Any?]? {
     read(nil) { db in
       guard let board = try Row.fetchOne(
         db,
-        sql: "SELECT id, name, ble_id, transport, created_at, updated_at FROM boards WHERE id = ? LIMIT 1",
+        sql: """
+          SELECT id, name, ble_id, transport, created_at, updated_at, deleted_at FROM boards
+          WHERE id = ? LIMIT 1
+          """,
         arguments: [id]
       ) else { return nil }
       let settings = try Row.fetchAll(
@@ -124,14 +135,17 @@ final class AppDataRepository {
       // Read-modify-write rather than an `ON CONFLICT` fold: `INSERT OR REPLACE` deletes the old row
       // before inserting, so the ratchet has no `excluded`-style handle on the value it replaces.
       let previous = try Int64.fetchOne(db, sql: "SELECT updated_at FROM boards WHERE id = ?", arguments: [id])
+      // An existing tombstone survives the write, so an ordinary upsert can never resurrect a
+      // deleted Board — deletion is terminal (ADR 0027). Only `deleteBoard` stamps a new one.
+      let deletedAt = try Int64.fetchOne(db, sql: "SELECT deleted_at FROM boards WHERE id = ?", arguments: [id])
       try db.execute(
         sql: """
-          INSERT OR REPLACE INTO boards (id, name, ble_id, transport, created_at, updated_at, sync_seq)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
+          INSERT OR REPLACE INTO boards (id, name, ble_id, transport, created_at, updated_at, sync_seq, deleted_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
           """,
         arguments: [
           id, name, bleId, transport, createdAt,
-          ratchetUpdatedAt(previous, updatedAt), try nextSyncSeq(db, syncSeqBoards),
+          ratchetUpdatedAt(previous, updatedAt), try nextSyncSeq(db, syncSeqBoards), deletedAt,
         ]
       )
       for (key, value) in settings {
@@ -148,12 +162,31 @@ final class AppDataRepository {
     notifyDataChanged(.boards)
   }
 
+  /// The Rider-facing delete: configuration goes, the Board row stays as a tombstone (ADR 0027).
+  /// Telemetry and Tune Profiles are untouched — both outlive the Board.
+  ///
+  /// The tombstone is an ordinary write, so it moves both sync columns like any other edit. A Board
+  /// that is not there (or already deleted) is left alone.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDao.kt `deleteBoardWithSettings`
   func deleteBoard(_ id: String) {
+    let deletedAt = nowMs()
     write { db in
       try db.execute(sql: "DELETE FROM board_settings WHERE board_id = ?", arguments: [id])
+      try db.execute(sql: "DELETE FROM board_warnings WHERE board_id = ?", arguments: [id])
       // Alert Rules are Board-owned (#254) — drop them with the Board so no orphan rows survive.
       try db.execute(sql: "DELETE FROM alerts WHERE board_id = ?", arguments: [id])
-      try db.execute(sql: "DELETE FROM boards WHERE id = ?", arguments: [id])
+      guard let row = try Row.fetchOne(
+        db,
+        sql: "SELECT updated_at, deleted_at FROM boards WHERE id = ?",
+        arguments: [id]
+      ), row["deleted_at"] as Int64? == nil else { return }
+      try db.execute(
+        sql: "UPDATE boards SET deleted_at = ?, updated_at = ?, sync_seq = ? WHERE id = ?",
+        arguments: [
+          deletedAt, ratchetUpdatedAt(row["updated_at"] as Int64?, deletedAt),
+          try nextSyncSeq(db, syncSeqBoards), id,
+        ]
+      )
     }
     notifyDataChanged(.boards)
   }
@@ -211,6 +244,7 @@ final class AppDataRepository {
       "legalMode": values["legalMode"] ?? ["enabled": false],
       "link": link,
       "updatedAt": row["updated_at"] as Int64,
+      "deletedAt": row["deleted_at"] as Int64?,
     ]
   }
 
