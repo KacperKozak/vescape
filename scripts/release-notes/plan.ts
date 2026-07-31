@@ -65,6 +65,17 @@ export function parsePublishedReleases(value: unknown): PublishedRelease[] {
     .toSorted((left, right) => right.publishedAt.localeCompare(left.publishedAt))
 }
 
+export function parseHistoricalProductionTags(value: string): PublishedRelease[] {
+  return value
+    .split('\n')
+    .map((tagName) => tagName.trim())
+    .filter(Boolean)
+    .flatMap((tagName) => {
+      const match = /^production-(\d+\.\d+\.\d+)$/.exec(tagName)
+      return match ? [{ tagName, name: match[1], publishedAt: '' }] : []
+    })
+}
+
 export async function resolveReleaseNotePlan(
   targetRef: string,
   versionOverride?: string,
@@ -95,16 +106,35 @@ export async function resolveReleaseNotePlan(
     'Cannot list published releases',
   )
   const releases = parsePublishedReleases(JSON.parse(response))
+  const historicalTags = parseHistoricalProductionTags(
+    await checked(
+      'git',
+      ['tag', '--list', 'production-*', '--sort=-version:refname'],
+      'Cannot list historical production tags',
+    ),
+  )
+  const candidates = [...releases, ...historicalTags].filter(
+    (candidate, index, all) =>
+      all.findIndex((other) => other.tagName === candidate.tagName) === index,
+  )
   let previous: ReleaseNotePlan['previous'] = null
-  for (const release of releases) {
+  let previousDistance = Number.POSITIVE_INFINITY
+  for (const release of candidates) {
     const resolved = await command('git', ['rev-parse', '--verify', `${release.tagName}^{commit}`])
     if (resolved.exitCode !== 0) continue
     const sha = resolved.stdout.toLowerCase()
     if (sha === targetSha) continue
     const ancestor = await command('git', ['merge-base', '--is-ancestor', sha, targetSha])
-    if (ancestor.exitCode === 0) {
+    if (ancestor.exitCode !== 0) continue
+    const distanceResult = await command('git', ['rev-list', '--count', `${sha}..${targetSha}`])
+    const distance = Number(distanceResult.stdout)
+    if (
+      distanceResult.exitCode === 0 &&
+      Number.isSafeInteger(distance) &&
+      distance < previousDistance
+    ) {
       previous = { ...release, sha }
-      break
+      previousDistance = distance
     }
   }
 
