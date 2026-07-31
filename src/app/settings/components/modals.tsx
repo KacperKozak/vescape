@@ -440,7 +440,8 @@ function EdgeDrawerInitialFocusShowcase() {
       }
     >
       <Text style={styles.previewHint}>
-        A long bottom drawer opens with row 1 inside the visible area.
+        A long bottom drawer opens with row 1 inside the visible area. Automatic close remains
+        committed if another gesture reaches the drawer while it is moving.
       </Text>
       <EdgeDrawer
         visible={visible}
@@ -450,6 +451,12 @@ function EdgeDrawerInitialFocusShowcase() {
         initialFocusRef={focusedRowRef}
         onClose={() => setVisible(false)}
       >
+        <Button
+          label="Close automatically"
+          variant="secondary"
+          size="sm"
+          onPress={() => setVisible(false)}
+        />
         <View style={styles.focusList}>
           {Array.from({ length: expanded ? 24 : 12 }, (_, index) => {
             const focused = index === 0
