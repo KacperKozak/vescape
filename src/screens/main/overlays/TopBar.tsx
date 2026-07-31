@@ -88,7 +88,7 @@ export function TopBar({
       ? theme.palette.green.color
       : bleStatus === 'error'
         ? theme.status.error.color
-        : theme.palette.slate.textSecondary
+        : theme.neutral.textSecondary
 
   return (
     <View style={[styles.wrap, { paddingTop: Math.max(insets.top, 8) }]} pointerEvents="box-none">
@@ -114,7 +114,7 @@ export function TopBar({
             <Text style={styles.boardText} numberOfLines={1}>
               {name}
             </Text>
-            <CaretDownIcon size={12} color={theme.palette.slate.textSecondary} weight="bold" />
+            <CaretDownIcon size={12} color={theme.neutral.textSecondary} weight="bold" />
           </Pressable>
           <View style={styles.divider} />
           <Pressable
@@ -128,7 +128,7 @@ export function TopBar({
           >
             <PencilSimpleIcon
               size={14}
-              color={activeBoard ? theme.palette.slate.textPrimary : theme.palette.slate.textMuted}
+              color={activeBoard ? theme.neutral.textPrimary : theme.neutral.textMuted}
               weight="bold"
             />
           </Pressable>
@@ -236,8 +236,8 @@ const styles = StyleSheet.create({
     minHeight: 38,
     borderRadius: 19,
     borderWidth: 1,
-    borderColor: theme.palette.slate.border,
-    backgroundColor: theme.palette.slate.surfaceDeep,
+    borderColor: theme.neutral.border,
+    backgroundColor: theme.neutral.surfaceDeep,
     overflow: 'hidden',
   },
   boardButton: {
@@ -254,7 +254,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   boardText: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 13,
     fontWeight: '800',
     maxWidth: 120,
@@ -263,7 +263,7 @@ const styles = StyleSheet.create({
   divider: {
     width: 1,
     height: 20,
-    backgroundColor: theme.palette.slate.border,
+    backgroundColor: theme.neutral.border,
   },
   plugButton: {
     width: 38,

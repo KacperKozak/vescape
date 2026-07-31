@@ -17,6 +17,7 @@ import {
   type TrimHandle,
 } from '@/components/charts/telemetryChartTrimMath'
 import { theme } from '@/constants/theme'
+import { useResolvedAccentColors, useResolvedNeutralColors } from '@/hooks/useTheme'
 
 export interface ChartTrimConfig {
   startMs: number
@@ -248,6 +249,8 @@ export function TelemetryChartTrimOverlay({
   chartWidth,
   trimState,
 }: TelemetryChartTrimOverlayProps) {
+  const neutral = useResolvedNeutralColors()
+  const accents = useResolvedAccentColors()
   return (
     <View style={[styles.overlay, { height }]} pointerEvents="none">
       <Canvas style={[styles.canvas, { width: chartWidth, height }]}>
@@ -256,23 +259,23 @@ export function TelemetryChartTrimOverlay({
           y={0}
           width={trimState.startX}
           height={height}
-          color={theme.alpha(theme.palette.slate.bg, 0.6)}
+          color={theme.alpha(neutral.bg, 0.6)}
         />
         <Rect
           x={trimState.endX}
           y={0}
           width={trimState.rightDimWidth}
           height={height}
-          color={theme.alpha(theme.palette.slate.bg, 0.6)}
+          color={theme.alpha(neutral.bg, 0.6)}
         />
         <Rect x={trimState.startX} y={0} width={trimState.leftSelectionWidth} height={height}>
           <LinearGradient
             start={trimState.leftGradientStart}
             end={trimState.leftGradientEnd}
             colors={[
-              theme.alpha(theme.palette.amber.color, 0.3),
-              theme.alpha(theme.palette.amber.color, 0.12),
-              theme.alpha(theme.palette.amber.color, 0),
+              theme.alpha(accents.amber.color, 0.3),
+              theme.alpha(accents.amber.color, 0.12),
+              theme.alpha(accents.amber.color, 0),
             ]}
             positions={[0, 0.3, 1]}
           />
@@ -282,9 +285,9 @@ export function TelemetryChartTrimOverlay({
             start={trimState.rightGradientStart}
             end={trimState.rightGradientEnd}
             colors={[
-              theme.alpha(theme.palette.amber.color, 0),
-              theme.alpha(theme.palette.amber.color, 0.12),
-              theme.alpha(theme.palette.amber.color, 0.3),
+              theme.alpha(accents.amber.color, 0),
+              theme.alpha(accents.amber.color, 0.12),
+              theme.alpha(accents.amber.color, 0.3),
             ]}
             positions={[0, 0.7, 1]}
           />
@@ -295,7 +298,7 @@ export function TelemetryChartTrimOverlay({
           width={HANDLE_WIDTH}
           height={height}
           r={HANDLE_WIDTH / 2}
-          color={theme.palette.amber.color}
+          color={accents.amber.color}
         />
         <RoundedRect
           x={trimState.endHandleX}
@@ -303,7 +306,7 @@ export function TelemetryChartTrimOverlay({
           width={HANDLE_WIDTH}
           height={height}
           r={HANDLE_WIDTH / 2}
-          color={theme.palette.amber.color}
+          color={accents.amber.color}
         />
       </Canvas>
     </View>

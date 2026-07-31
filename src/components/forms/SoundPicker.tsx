@@ -42,7 +42,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   fieldLabel: {
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontSize: 10,
     fontWeight: '600',
     letterSpacing: 0.5,
@@ -56,8 +56,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: theme.palette.slate.surface,
-    backgroundColor: theme.palette.slate.surfaceDeep,
+    borderColor: theme.neutral.surface,
+    backgroundColor: theme.neutral.surfaceDeep,
     paddingVertical: 10,
   },
   soundOptionActive: {
@@ -65,11 +65,11 @@ const styles = StyleSheet.create({
     backgroundColor: theme.palette.sky.bg,
   },
   soundOptionText: {
-    color: theme.palette.slate.textSecondary,
+    color: theme.neutral.textSecondary,
     fontSize: 12,
     fontWeight: '600',
   },
   soundOptionTextActive: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
   },
 })

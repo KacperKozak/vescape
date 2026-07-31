@@ -28,6 +28,7 @@ import {
   type AlertPresetMetric,
 } from '@/modules/alerts/lib/alertPresets'
 import { theme } from '@/constants/theme'
+import { useResolvedNeutralColors } from '@/hooks/useTheme'
 import { useAlertTest } from '@/modules/alerts/hooks/useAlertTest'
 
 /**
@@ -268,7 +269,7 @@ export function AlertPresetControl({
 function CustomLabel() {
   return (
     <View style={styles.customLabel}>
-      <SlidersHorizontalIcon size={14} color={theme.palette.slate.textMuted} weight="bold" />
+      <SlidersHorizontalIcon size={14} color={theme.neutral.textMuted} weight="bold" />
       <Text style={styles.customLabelText}>Custom alerts</Text>
     </View>
   )
@@ -285,9 +286,9 @@ const LEVEL_OPTIONS: { id: AlertPresetLevel; label: string; tone: LevelTone }[] 
     id: 'off',
     label: 'Off',
     tone: {
-      bg: theme.palette.slate.surface,
-      border: theme.palette.slate.border,
-      color: theme.palette.slate.textSecondary,
+      bg: theme.neutral.surface,
+      border: theme.neutral.border,
+      color: theme.neutral.textSecondary,
     },
   },
   // Cautiousness ramp, not an alarm ramp: careful (blue) → balanced (green) → risky (yellow).
@@ -308,8 +309,12 @@ interface LevelSliderProps {
 }
 
 function LevelSlider({ value, onChange, disabled }: LevelSliderProps) {
+  const neutral = useResolvedNeutralColors()
   const activeIndex = Math.max(0, ALL_LEVELS.indexOf(value))
-  const tone = LEVEL_OPTIONS[activeIndex]!.tone
+  const tone =
+    activeIndex === 0
+      ? { bg: neutral.surface, border: neutral.border, color: neutral.textSecondary }
+      : LEVEL_OPTIONS[activeIndex]!.tone
   const progress = useSharedValue(activeIndex)
 
   useEffect(() => {
@@ -350,7 +355,7 @@ function LevelSlider({ value, onChange, disabled }: LevelSliderProps) {
             <Text
               style={[
                 styles.sliderLabel,
-                { color: active ? option.tone.color : theme.palette.slate.textMuted },
+                { color: active ? option.tone.color : theme.neutral.textMuted },
               ]}
               numberOfLines={1}
             >
@@ -389,7 +394,7 @@ const styles = StyleSheet.create({
     height: 38,
   },
   customLabelText: {
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontSize: 13,
     fontWeight: '700',
   },
@@ -398,7 +403,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     height: 38,
     borderRadius: 19,
-    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
+    backgroundColor: theme.alpha(theme.neutral.surfaceDeep, 0.85),
     borderWidth: 1,
     borderColor: theme.alpha(theme.palette.slate.light, 0.3),
     position: 'relative',

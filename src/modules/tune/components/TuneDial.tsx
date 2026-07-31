@@ -42,12 +42,16 @@ import { NativeScrollGestureContext } from '@/components/gestures/NativeScrollGe
 import { useSkiaFont } from '@/hooks/useSkiaFont'
 import { theme } from '@/constants/theme'
 import { formatTuneValue } from '@/modules/tune/lib/fields'
+import {
+  useResolvedAccentColors,
+  useResolvedColor,
+  useResolvedNeutralColors,
+} from '@/hooks/useTheme'
 
 const DIAL_HEIGHT = 105
 const TOP_VALUE_BAND_HEIGHT = 22
 const MAJOR_TICK_TOP = TOP_VALUE_BAND_HEIGHT + 5
 const RULER_LABEL_BAND_TOP = 76
-const VALUE_LABEL_WIDTH = 28
 const VALUE_LABEL_HEIGHT = 14
 const CURRENT_VALUE_TOP = 2
 const MARKER_LINE_WIDTH = 2.5
@@ -57,11 +61,6 @@ const BADGE_FONT_SIZE = 18
 const BADGE_WIDTH = 80
 const BADGE_BASELINE = 17
 const LABEL_BASELINE_Y = RULER_LABEL_BAND_TOP + (VALUE_LABEL_HEIGHT + LABEL_FONT_SIZE) / 2 - 1.5
-const PREV_MARK_COLOR = theme.palette.yellow.color
-const MAJOR_TICK_COLOR = theme.palette.slate.textMuted
-const MINOR_TICK_COLOR = theme.palette.slate.border
-const LABEL_COLOR = theme.palette.slate.textMuted
-
 const SNAP_SPRING = { damping: 18, stiffness: 700, mass: 0.8 }
 
 interface TuneDialProps {
@@ -97,6 +96,9 @@ export function TuneDial({
   onValueChange,
 }: TuneDialProps) {
   'use no memo'
+  const neutral = useResolvedNeutralColors()
+  const accents = useResolvedAccentColors()
+  const resolvedColor = useResolvedColor(color)
   const nativeScrollGesture = use(NativeScrollGestureContext)
   const range = max - min
   const {
@@ -495,13 +497,13 @@ export function TuneDial({
                   <Path
                     path={minorTicksPath}
                     style="stroke"
-                    color={MINOR_TICK_COLOR}
+                    color={neutral.border}
                     strokeWidth={1}
                   />
                   <Path
                     path={majorTicksPath}
                     style="stroke"
-                    color={MAJOR_TICK_COLOR}
+                    color={neutral.textMuted}
                     strokeWidth={1}
                   />
                   {labelFont &&
@@ -512,7 +514,7 @@ export function TuneDial({
                         y={LABEL_BASELINE_Y}
                         text={label.text}
                         font={labelFont}
-                        color={LABEL_COLOR}
+                        color={neutral.textMuted}
                       />
                     ))}
                   {prevMarkOffset != null && (
@@ -522,12 +524,12 @@ export function TuneDial({
                         y={TOP_VALUE_BAND_HEIGHT}
                         width={3}
                         height={RULER_LABEL_BAND_TOP - TOP_VALUE_BAND_HEIGHT}
-                        color={theme.palette.slate.surface}
+                        color={neutral.surface}
                       />
                       <Line
                         p1={vec(prevMarkOffset, TOP_VALUE_BAND_HEIGHT)}
                         p2={vec(prevMarkOffset, RULER_LABEL_BAND_TOP)}
-                        color={PREV_MARK_COLOR}
+                        color={accents.yellow.color}
                         strokeWidth={1}
                       >
                         <DashPathEffect intervals={[3, 3]} />
@@ -538,7 +540,7 @@ export function TuneDial({
                           y={LABEL_BASELINE_Y}
                           text={previousValueLabel}
                           font={prevLabelFont}
-                          color={PREV_MARK_COLOR}
+                          color={accents.yellow.color}
                         />
                       )}
                     </>
@@ -556,8 +558,8 @@ export function TuneDial({
                       end={vec(indicatorGlow === 'left' ? centerX : centerX + GLOW_WIDTH, 0)}
                       colors={
                         indicatorGlow === 'left'
-                          ? [`${color}00`, `${color}12`, `${color}1A`]
-                          : [`${color}1A`, `${color}12`, `${color}00`]
+                          ? [`${resolvedColor}00`, `${resolvedColor}12`, `${resolvedColor}1A`]
+                          : [`${resolvedColor}1A`, `${resolvedColor}12`, `${resolvedColor}00`]
                       }
                     />
                   </Rect>
@@ -567,7 +569,10 @@ export function TuneDial({
           </Animated.View>
         </GestureDetector>
         <View
-          style={[styles.indicatorTop, { backgroundColor: color, shadowColor: color }]}
+          style={[
+            styles.indicatorTop,
+            { backgroundColor: resolvedColor, shadowColor: resolvedColor },
+          ]}
           pointerEvents="none"
         />
         <View style={styles.valueBadgeAnchor} pointerEvents="none">
@@ -578,7 +583,7 @@ export function TuneDial({
                 y={BADGE_BASELINE}
                 text={badgeText}
                 font={badgeFont}
-                color={color}
+                color={resolvedColor}
               />
             )}
           </Canvas>
@@ -639,7 +644,7 @@ const styles = StyleSheet.create({
     left: '50%',
     marginLeft: 7,
     bottom: 3,
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontSize: 9,
     fontWeight: '800',
     lineHeight: 10,

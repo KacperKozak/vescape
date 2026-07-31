@@ -14,6 +14,7 @@ import {
   TunePreviewScenarioControls,
   type HillsPresetId,
 } from '@/modules/tune/components/TunePreviewScenarioControls'
+import { useResolvedNeutralColors } from '@/hooks/useTheme'
 
 let previewHelpShownThisSession = false
 const PREVIEW_PINNED_GRADIENT_HEIGHT = 210
@@ -26,13 +27,14 @@ interface TunePreviewSectionProps {
 }
 
 export function TunePreviewSection({ fields, active, visible, children }: TunePreviewSectionProps) {
+  const neutral = useResolvedNeutralColors()
   const insets = useSafeAreaInsets()
   const { width } = useWindowDimensions()
   const pitchInputDegrees = useSharedValue(0)
   const pitchInputActive = useSharedValue(false)
   const previewSpeedKmh = useSharedValue(15)
   const groundToBoardAngleDegrees = useSharedValue(0)
-  const previewGradientColor = theme.palette.slate.bg
+  const previewGradientColor = neutral.bg
   const previewGradientColors = [
     theme.alpha(previewGradientColor, 1),
     theme.alpha(previewGradientColor, 0.75),
@@ -150,7 +152,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   previewOptionsTitle: {
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontSize: 12,
     fontWeight: '700',
     textTransform: 'uppercase',

@@ -16,6 +16,7 @@ import { summarizeBms, summarizeBmsWindow } from '@/modules/battery/lib'
 import { ShowcaseCard } from '@/components/dev/ShowcaseCard'
 import { ChipRow, ToggleRow } from '@/components/dev/ShowcaseControls'
 import { theme } from '@/constants/theme'
+import { useResolvedNeutralColors } from '@/hooks/useTheme'
 import { telemetry } from '@/modules/board/constants/telemetry'
 import {
   getHistoryMetricHotRange,
@@ -194,6 +195,7 @@ function AnimatedSingleGaugeShowcase() {
 }
 
 function LinearGaugeShowcase() {
+  const neutral = useResolvedNeutralColors()
   const [empty, setEmpty] = useState(false)
   const [charging, setCharging] = useState(false)
   const [percent, setPercent] = useState('82')
@@ -228,7 +230,7 @@ function LinearGaugeShowcase() {
       <LinearGauge
         value={empty ? null : value}
         max={100}
-        color={stale ? theme.palette.slate.textSecondary : telemetry.battVoltage.color}
+        color={stale ? neutral.textSecondary : telemetry.battVoltage.color}
         unit="%"
         aux={empty ? undefined : mode === 'stale old' ? `${voltageText} · 2h ago` : voltageText}
         charging={charging}
@@ -461,11 +463,11 @@ export default function ChartsPage() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.palette.slate.bg },
+  container: { flex: 1, backgroundColor: theme.neutral.bg },
   content: { padding: 12, gap: 12, paddingBottom: 40 },
   chartExample: { marginBottom: 10 },
   trimReadout: {
-    color: theme.palette.slate.textSecondary,
+    color: theme.neutral.textSecondary,
     fontSize: 12,
     fontWeight: '700',
     textAlign: 'center',

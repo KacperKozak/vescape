@@ -492,7 +492,7 @@ export default function PrivacyZonesScreen() {
               value={addNameText}
               onChangeText={setAddNameText}
               placeholder="e.g. Gym, Work 2"
-              placeholderTextColor={theme.palette.slate.textDim}
+              placeholderTextColor={theme.neutral.textDim}
               autoFocus
               maxLength={32}
               onSubmitEditing={handleAddConfirm}
@@ -533,7 +533,7 @@ export default function PrivacyZonesScreen() {
               value={renameText}
               onChangeText={setRenameText}
               placeholder="Zone name"
-              placeholderTextColor={theme.palette.slate.textDim}
+              placeholderTextColor={theme.neutral.textDim}
               autoFocus
               maxLength={32}
               onSubmitEditing={() => void handleRenameConfirm()}
@@ -575,7 +575,7 @@ export default function PrivacyZonesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.palette.slate.bg,
+    backgroundColor: theme.neutral.bg,
   },
   pillsFloating: {
     position: 'absolute',
@@ -606,7 +606,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   zoneLabel: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 14,
     fontWeight: '700',
     textShadowColor: theme.alpha(theme.palette.mono.black, 0.85),
@@ -617,7 +617,7 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: theme.alpha(theme.palette.slate.bg, 0.6),
+    backgroundColor: theme.alpha(theme.neutral.bg, 0.6),
   },
   bottomBar: {
     position: 'absolute',
@@ -643,15 +643,15 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     width: '100%',
-    backgroundColor: theme.palette.slate.surface,
+    backgroundColor: theme.neutral.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: theme.palette.slate.border,
+    borderColor: theme.neutral.border,
     padding: 20,
     gap: 16,
   },
   modalTitle: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 16,
     fontWeight: '700',
   },

@@ -90,7 +90,7 @@ const styles = StyleSheet.create({
     left: 12,
     zIndex: 32,
     borderColor: theme.alpha(theme.palette.slate.light, 0.3),
-    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
+    backgroundColor: theme.alpha(theme.neutral.surfaceDeep, 0.85),
   },
   weatherRefreshButton: {
     position: 'absolute',

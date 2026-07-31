@@ -54,12 +54,8 @@ export function IconButton({
   const isDisabled = disabled || loading
   const dim = SIZES[size]
   const iconSize = ICON_SIZES[size]
-  const iconColor = destructive
-    ? theme.status.error.text
-    : (accent ?? theme.palette.slate.textSecondary)
-  const borderColor = destructive
-    ? theme.status.error.border
-    : (accent ?? theme.palette.slate.border)
+  const iconColor = destructive ? theme.status.error.text : (accent ?? theme.neutral.textSecondary)
+  const borderColor = destructive ? theme.status.error.border : (accent ?? theme.neutral.border)
 
   const pulse = useSharedValue(0)
   useEffect(() => {
@@ -111,7 +107,7 @@ const styles = StyleSheet.create({
   base: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: theme.palette.slate.surfaceDeep,
+    backgroundColor: theme.neutral.surfaceDeep,
     borderWidth: 1,
   },
   disabled: {
@@ -125,6 +121,6 @@ const styles = StyleSheet.create({
     height: 10,
     borderRadius: 5,
     borderWidth: 2,
-    borderColor: theme.palette.slate.surfaceDeep,
+    borderColor: theme.neutral.surfaceDeep,
   },
 })

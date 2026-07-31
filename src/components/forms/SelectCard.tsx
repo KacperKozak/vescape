@@ -71,7 +71,7 @@ export function SelectCard<T extends string = string>({
           >
             {selectedOption?.label ?? 'Select…'}
           </Text>
-          <CaretDownIcon size={16} color={theme.palette.slate.textMuted} weight="bold" />
+          <CaretDownIcon size={16} color={theme.neutral.textMuted} weight="bold" />
         </View>
       </Pressable>
       {children}
@@ -114,10 +114,10 @@ const styles = StyleSheet.create({
   container: {
     gap: 4,
     borderWidth: 1,
-    borderColor: theme.palette.slate.border,
+    borderColor: theme.neutral.border,
     borderRadius: 10,
     padding: 12,
-    backgroundColor: theme.palette.slate.surface,
+    backgroundColor: theme.neutral.surface,
   },
   trigger: {
     flexDirection: 'row',
@@ -126,8 +126,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  title: { color: theme.palette.slate.textPrimary, fontSize: 13, fontWeight: '900' },
-  description: { color: theme.palette.slate.textMuted, fontSize: 10, fontWeight: '600' },
+  title: { color: theme.neutral.textPrimary, fontSize: 13, fontWeight: '900' },
+  description: { color: theme.neutral.textMuted, fontSize: 10, fontWeight: '600' },
   valueRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -135,13 +135,13 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   valueText: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 11,
     fontWeight: '700',
     flexShrink: 1,
     paddingRight: 5,
   },
-  placeholderText: { color: theme.palette.slate.textMuted },
+  placeholderText: { color: theme.neutral.textMuted },
   option: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -151,12 +151,12 @@ const styles = StyleSheet.create({
   },
   optionBorder: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.palette.slate.border,
+    borderBottomColor: theme.neutral.border,
   },
   optionSelected: { backgroundColor: theme.palette.sky.bg },
   optionPressed: { backgroundColor: interaction.pressedBg },
   optionText: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 14,
     fontWeight: '500',
   },

@@ -1,3 +1,7 @@
+import { accentColors, theme } from '@/constants/theme'
+
+export const CHART_ALERT_LINE_COLOR = theme.alpha(accentColors.dark.yellow.color, 0.1)
+
 export interface TelemetryChartPoint {
   date: Date
   value: number
@@ -154,6 +158,10 @@ export function getChartAlertMarkers(
     .map((value) => ({ value, y: getChartYPosition(value, range, height) }))
     .filter((marker): marker is { value: number; y: number } => marker.y != null)
     .sort((a, b) => a.y - b.y)
+}
+
+export function getChartExclusionColor(reason: string, neutralColor: string): string {
+  return reason === 'free_spin' ? accentColors.dark.yellow.color : neutralColor
 }
 
 export function getXPosition(

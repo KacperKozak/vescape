@@ -106,13 +106,11 @@ export default function ConnectionSettingsScreen() {
                     value={companionPresenceEnabled}
                     onValueChange={(v) => void onCompanionToggle(v)}
                     trackColor={{
-                      false: theme.palette.slate.border,
+                      false: theme.neutral.border,
                       true: theme.palette.sky.border,
                     }}
                     thumbColor={
-                      companionPresenceEnabled
-                        ? theme.palette.sky.color
-                        : theme.palette.slate.textMuted
+                      companionPresenceEnabled ? theme.palette.sky.color : theme.neutral.textMuted
                     }
                   />
                 }
@@ -161,17 +159,15 @@ export default function ConnectionSettingsScreen() {
                 disabled={companionPresenceEnabled}
                 onValueChange={(v) => void set('autoConnect', v)}
                 trackColor={{
-                  false: theme.palette.slate.border,
-                  true: companionPresenceEnabled
-                    ? theme.palette.slate.border
-                    : theme.palette.sky.border,
+                  false: theme.neutral.border,
+                  true: companionPresenceEnabled ? theme.neutral.border : theme.palette.sky.border,
                 }}
                 thumbColor={
                   companionPresenceEnabled
-                    ? theme.palette.slate.textMuted
+                    ? theme.neutral.textMuted
                     : autoConnect
                       ? theme.palette.sky.color
-                      : theme.palette.slate.textMuted
+                      : theme.neutral.textMuted
                 }
               />
             }
@@ -186,8 +182,8 @@ export default function ConnectionSettingsScreen() {
               <Switch
                 value={autoRecording}
                 onValueChange={(v) => void set('autoRecording', v)}
-                trackColor={{ false: theme.palette.slate.border, true: theme.palette.sky.border }}
-                thumbColor={autoRecording ? theme.palette.sky.color : theme.palette.slate.textMuted}
+                trackColor={{ false: theme.neutral.border, true: theme.palette.sky.border }}
+                thumbColor={autoRecording ? theme.palette.sky.color : theme.neutral.textMuted}
               />
             }
           />
@@ -200,9 +196,9 @@ export default function ConnectionSettingsScreen() {
               <Switch
                 value={connectionSoundsEnabled}
                 onValueChange={(v) => void set('connectionSoundsEnabled', v)}
-                trackColor={{ false: theme.palette.slate.border, true: theme.palette.sky.border }}
+                trackColor={{ false: theme.neutral.border, true: theme.palette.sky.border }}
                 thumbColor={
-                  connectionSoundsEnabled ? theme.palette.sky.color : theme.palette.slate.textMuted
+                  connectionSoundsEnabled ? theme.palette.sky.color : theme.neutral.textMuted
                 }
               />
             }
@@ -223,11 +219,11 @@ export default function ConnectionSettingsScreen() {
                     value={autoCloseEnabled}
                     onValueChange={(v) => void set('autoCloseEnabled', v)}
                     trackColor={{
-                      false: theme.palette.slate.border,
+                      false: theme.neutral.border,
                       true: theme.palette.sky.border,
                     }}
                     thumbColor={
-                      autoCloseEnabled ? theme.palette.sky.color : theme.palette.slate.textMuted
+                      autoCloseEnabled ? theme.palette.sky.color : theme.neutral.textMuted
                     }
                   />
                 }
@@ -295,7 +291,7 @@ export default function ConnectionSettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.palette.slate.bg,
+    backgroundColor: theme.neutral.bg,
   },
   content: {
     padding: 16,

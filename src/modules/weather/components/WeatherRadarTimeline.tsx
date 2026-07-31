@@ -219,8 +219,8 @@ const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
     alignSelf: 'center',
-    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
-    borderColor: theme.alpha(theme.palette.slate.textSecondary, 0.3),
+    backgroundColor: theme.alpha(theme.neutral.surfaceDeep, 0.85),
+    borderColor: theme.alpha(theme.neutral.textSecondary, 0.3),
     borderRadius: 18,
     borderWidth: 1,
     flexDirection: 'row',
@@ -240,7 +240,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   timeText: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontFamily: theme.font('800'),
     fontSize: 12,
     margin: 0,
@@ -248,7 +248,7 @@ const styles = StyleSheet.create({
     padding: 0,
   },
   rangeText: {
-    color: theme.palette.slate.textSecondary,
+    color: theme.neutral.textSecondary,
     fontSize: 11,
     fontWeight: '700',
   },
@@ -262,7 +262,7 @@ const styles = StyleSheet.create({
     height: 3,
   },
   thumb: {
-    backgroundColor: theme.palette.slate.surfaceDeep,
+    backgroundColor: theme.neutral.surfaceDeep,
     borderColor: theme.palette.sky.light,
     borderRadius: 6,
     borderWidth: 2,

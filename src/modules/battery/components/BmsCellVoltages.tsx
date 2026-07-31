@@ -22,11 +22,11 @@ import {
 import { useRenderRateWarning } from '@/hooks/useRenderRateWarning'
 import { useBleStore } from '@/modules/board/store/bleStore'
 import { useBoardStore } from '@/modules/board/store/boardStore'
-import { theme } from '@/constants/theme'
+import { accentColors, theme } from '@/constants/theme'
 
-const COLOR_MIN = theme.status.warning.color
-const COLOR_MAX = theme.palette.yellow.color
-const COLOR_NORMAL = theme.palette.green.color
+const COLOR_MIN = accentColors.dark.orange.color
+const COLOR_MAX = accentColors.dark.yellow.color
+const COLOR_NORMAL = accentColors.dark.green.color
 
 const formatCell = (v: number) => `${v.toFixed(3)}V`
 const formatSpread = (v: number) => `${v.toFixed(3)}V`
@@ -263,7 +263,7 @@ function statColor(tone: 'min' | 'max' | 'neutral' | 'spread'): string {
       ? theme.palette.yellow.text
       : tone === 'spread'
         ? theme.palette.green.text
-        : theme.palette.slate.textPrimary
+        : theme.neutral.textPrimary
 }
 
 function LiveStat({
@@ -375,13 +375,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   title: {
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.5,
   },
   empty: {
-    color: theme.palette.slate.textSecondary,
+    color: theme.neutral.textSecondary,
     fontSize: 12,
     fontWeight: '600',
   },
@@ -399,7 +399,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   statLabel: {
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontSize: 9,
     fontWeight: '700',
     letterSpacing: 0.5,
@@ -418,7 +418,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   rowIndex: {
-    color: theme.palette.slate.textDim,
+    color: theme.neutral.textDim,
     fontSize: 8,
     fontWeight: '600',
     fontFamily: 'monospace',

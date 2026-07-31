@@ -18,7 +18,7 @@ export type SettingsRowProps = {
 
 export function SettingsRow({
   icon: IconComponent,
-  iconColor = theme.palette.slate.textSecondary,
+  iconColor = theme.neutral.textSecondary,
   iconWeight = 'duotone',
   label,
   hint,
@@ -76,7 +76,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 8,
-    backgroundColor: theme.palette.slate.surfaceDeep,
+    backgroundColor: theme.neutral.surfaceDeep,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -85,12 +85,12 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   label: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 15,
     fontWeight: '600',
   },
   hint: {
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontSize: 12,
     fontWeight: '500',
   },

@@ -116,8 +116,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: theme.palette.slate.border,
-    backgroundColor: theme.palette.slate.surface,
+    borderColor: theme.neutral.border,
+    backgroundColor: theme.neutral.surface,
     overflow: 'hidden',
   },
   cellDirty: {
@@ -165,7 +165,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 10,
     bottom: 4,
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 22,
     fontWeight: '500',
     fontVariant: ['tabular-nums'],
@@ -182,7 +182,7 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   cellProfileValue: {
-    color: theme.palette.slate.textSecondary,
+    color: theme.neutral.textSecondary,
     fontSize: 10,
     fontWeight: '800',
     marginTop: 1,
@@ -194,7 +194,7 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   cellLabel: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 13,
     fontWeight: '800',
     flex: 1,

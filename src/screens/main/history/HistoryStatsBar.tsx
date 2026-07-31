@@ -61,7 +61,7 @@ export function HistoryStatsBar({ session }: HistoryStatsBarProps) {
               ))}
               <View style={styles.toggleCell}>
                 <View style={styles.expandedToggle}>
-                  <CaretUpIcon size={16} color={theme.palette.slate.textSecondary} weight="bold" />
+                  <CaretUpIcon size={16} color={theme.neutral.textSecondary} weight="bold" />
                 </View>
               </View>
             </View>
@@ -78,7 +78,7 @@ export function HistoryStatsBar({ session }: HistoryStatsBarProps) {
             ))}
             <View style={styles.toggleCell}>
               <View style={styles.toggle}>
-                <CaretDownIcon size={16} color={theme.palette.slate.textSecondary} weight="bold" />
+                <CaretDownIcon size={16} color={theme.neutral.textSecondary} weight="bold" />
               </View>
             </View>
           </View>
@@ -243,7 +243,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   compactValue: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontFamily: 'monospace',
     fontSize: 13,
     fontWeight: '700',
@@ -252,7 +252,7 @@ const styles = StyleSheet.create({
     textAlign: 'left',
   },
   compactUnit: {
-    color: theme.palette.slate.textSecondary,
+    color: theme.neutral.textSecondary,
     fontSize: 9,
     fontWeight: '800',
     lineHeight: 11,
@@ -260,7 +260,7 @@ const styles = StyleSheet.create({
     textAlign: 'left',
   },
   compactLabel: {
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontSize: 8,
     fontWeight: '700',
     textAlign: 'left',
@@ -293,7 +293,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   expandedPanel: {
-    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.6),
+    backgroundColor: theme.alpha(theme.neutral.surfaceDeep, 0.6),
     borderWidth: 1,
     borderColor: theme.alpha(theme.palette.slate.light, 0.3),
     borderRadius: 12,
@@ -323,9 +323,9 @@ const styles = StyleSheet.create({
     borderRadius: 19,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: theme.palette.slate.surfaceDeep,
+    backgroundColor: theme.neutral.surfaceDeep,
     borderWidth: 1,
-    borderColor: theme.palette.slate.border,
+    borderColor: theme.neutral.border,
   },
   expandedToggle: {
     width: 38,

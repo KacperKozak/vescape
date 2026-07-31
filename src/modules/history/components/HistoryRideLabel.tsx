@@ -44,7 +44,7 @@ const styles = StyleSheet.create({
     gap: 1,
   },
   title: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 15,
     fontWeight: '700',
   },
@@ -53,17 +53,17 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   subtitle: {
-    color: theme.palette.slate.textSecondary,
+    color: theme.neutral.textSecondary,
     fontSize: 12,
     fontWeight: '500',
   },
   subtitleCompact: {
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontSize: 9,
     fontWeight: '600',
   },
   details: {
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontSize: 11,
     fontWeight: '500',
   },

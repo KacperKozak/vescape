@@ -36,6 +36,7 @@ import {
 import { edgeDrawerScrollEndAction } from '@/components/overlays/edgeDrawerClose'
 import { NativeScrollGestureContext } from '@/components/gestures/NativeScrollGestureContext'
 import { theme } from '@/constants/theme'
+import { useResolvedNeutralColors } from '@/hooks/useTheme'
 
 const OPEN_DURATION = 260
 const CLOSE_DURATION = 180
@@ -159,7 +160,7 @@ function Sheet({
   layout,
   title,
   icon: IconComponent,
-  iconColor = theme.palette.slate.textSecondary,
+  iconColor = theme.neutral.textSecondary,
   contentContainerStyle,
   children,
 }: SheetProps) {
@@ -296,7 +297,7 @@ export function EdgeDrawer({
   edge = 'auto',
   title,
   icon: IconComponent,
-  iconColor = theme.palette.slate.textSecondary,
+  iconColor = theme.neutral.textSecondary,
   autoScrollOnContentExpand = false,
   initialFocusRef,
   onReachContentEnd,
@@ -304,6 +305,7 @@ export function EdgeDrawer({
   backdropTestID,
   children,
 }: EdgeDrawerProps) {
+  const neutral = useResolvedNeutralColors()
   const insets = useSafeAreaInsets()
   const { width, height } = useWindowDimensions()
   const [mounted, setMounted] = useState(false)
@@ -573,7 +575,7 @@ export function EdgeDrawer({
     height > 0
       ? Math.min(DRAWER_INITIAL_OPEN_FRACTION, Math.max(0, dismissRange / height))
       : DRAWER_INITIAL_OPEN_FRACTION
-  const vignetteColor = theme.palette.slate.surfaceDeep
+  const vignetteColor = neutral.surfaceDeep
   const gradientColors = opensFromTop
     ? [
         theme.alpha(vignetteColor, 1),
@@ -702,10 +704,10 @@ const styles = StyleSheet.create({
   },
   sheet: {
     position: 'absolute',
-    backgroundColor: theme.alpha(theme.palette.slate.surface, 0.85),
+    backgroundColor: theme.alpha(theme.neutral.surface, 0.85),
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: theme.palette.slate.border,
+    borderColor: theme.neutral.border,
     overflow: 'hidden',
     shadowColor: theme.palette.mono.black,
     shadowOffset: { width: 0, height: 10 },
@@ -723,7 +725,7 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   title: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 16,
     fontWeight: '800',
   },
@@ -754,7 +756,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   drawerTitle: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 22,
     fontWeight: '300',
   },
@@ -766,7 +768,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 5,
     borderRadius: 999,
-    backgroundColor: theme.alpha(theme.palette.slate.textSecondary, 0.6),
+    backgroundColor: theme.alpha(theme.neutral.textSecondary, 0.6),
     marginVertical: 3,
   },
 })

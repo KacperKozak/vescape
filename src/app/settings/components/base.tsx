@@ -21,6 +21,7 @@ import { ScreenTitle } from '@/components/base/ScreenTitle'
 import { ShowcaseCard } from '@/components/dev/ShowcaseCard'
 import { ChipRow, ToggleRow } from '@/components/dev/ShowcaseControls'
 import { theme } from '@/constants/theme'
+import { useResolvedNeutralColors } from '@/hooks/useTheme'
 
 function IconButtonShowcase() {
   const [loading, setLoading] = useState(false)
@@ -174,9 +175,10 @@ function ButtonShowcase() {
 }
 
 function PlaceholderShowcase() {
+  const neutral = useResolvedNeutralColors()
   const [showTitle, setShowTitle] = useState(true)
   const [showAction, setShowAction] = useState(true)
-  const [color, setColor] = useState<string>(theme.palette.slate.textMuted)
+  const [color, setColor] = useState<string>(neutral.textMuted)
 
   return (
     <ShowcaseCard
@@ -187,11 +189,7 @@ function PlaceholderShowcase() {
           <ToggleRow label="showAction" value={showAction} onToggle={setShowAction} />
           <ChipRow
             label="iconColor"
-            options={[
-              theme.palette.slate.textMuted,
-              theme.palette.sky.color,
-              theme.status.error.color,
-            ]}
+            options={[neutral.textMuted, theme.palette.sky.color, theme.status.error.color]}
             selected={color}
             onSelect={setColor}
           />
@@ -270,6 +268,6 @@ export default function BaseComponentsPage() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.palette.slate.bg },
+  container: { flex: 1, backgroundColor: theme.neutral.bg },
   content: { padding: 12, gap: 12, paddingBottom: 40 },
 })

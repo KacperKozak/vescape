@@ -8,7 +8,6 @@ import {
   type TelemetryChartRange,
 } from '@/components/charts/chartMath'
 import type { SecondaryChartSeries } from '@/components/charts/TelemetryLineChart'
-import { theme } from '@/constants/theme'
 import { telemetry } from '@/modules/board/constants/telemetry'
 import {
   HISTORY_CHART_DEFS,
@@ -26,6 +25,7 @@ import { downsampleTimeSeries, findNearestSampleIndexByTime } from '@/modules/hi
 import { RIDE_TRIM_PADDING_MS, rideMovingWindow } from '@/modules/history/lib/sessions'
 import { useHistoryStore, type TelemetrySample } from '@/modules/history/store/historyStore'
 import { useSettingsStore } from '@/modules/settings/store/settingsStore'
+import { useResolvedNeutralColors } from '@/hooks/useTheme'
 
 const CHART_MAX_POINTS = 220
 
@@ -142,6 +142,7 @@ export function useOptionalChartConfig({
   pointColors,
   excludedRanges,
 }: OptionalChartConfigInput): Record<OptionalChartMetric, OptionalChartConfig> | null {
+  const neutral = useResolvedNeutralColors()
   const batteryPercentPoints = useMemo(
     () =>
       chartSamples
@@ -160,6 +161,7 @@ export function useOptionalChartConfig({
             series.battery,
             ranges.battery,
             pointColors.battery,
+            neutral.textMuted,
           )
         : buildMetricConfig(
             def,
@@ -202,6 +204,7 @@ function buildBatteryConfig(
   voltagePoints: TelemetryChartPoint[],
   voltageRange: TelemetryChartRange,
   voltagePointColor: ((value: number) => string) | undefined,
+  secondaryColor: string,
 ): OptionalChartConfig {
   if (percentPoints.length > 0) {
     return {
@@ -217,7 +220,7 @@ function buildBatteryConfig(
       secondary: {
         points: voltagePoints,
         range: voltageRange,
-        color: theme.palette.slate.textMuted,
+        color: secondaryColor,
         value: telemetry.battVoltage.formatWithUnit(headSample.batteryVoltage),
         formatValue: telemetry.battVoltage.formatWithUnit,
       },

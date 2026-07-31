@@ -33,7 +33,7 @@ export function HistoryMetricTabs({ activeCharts, onToggle }: HistoryMetricTabsP
             <View
               style={[
                 styles.metricTabLine,
-                { backgroundColor: active ? metric.color : theme.palette.slate.surface },
+                { backgroundColor: active ? metric.color : theme.neutral.surface },
               ]}
             />
             {metric.multilineLabel ? (
@@ -74,8 +74,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: theme.palette.slate.border,
-    backgroundColor: theme.palette.slate.surfaceDeep,
+    borderColor: theme.neutral.border,
+    backgroundColor: theme.neutral.surfaceDeep,
     overflow: 'hidden',
   },
   metricTab: {
@@ -83,14 +83,14 @@ const styles = StyleSheet.create({
     minWidth: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: theme.palette.slate.surfaceDeep,
+    backgroundColor: theme.neutral.surfaceDeep,
     paddingHorizontal: 8,
     paddingTop: 10,
     paddingBottom: 10,
   },
   metricTabDivider: {
     borderRightWidth: 1,
-    borderRightColor: theme.palette.slate.border,
+    borderRightColor: theme.neutral.border,
   },
   metricTabActive: {
     backgroundColor: theme.palette.sky.bg,
@@ -108,7 +108,7 @@ const styles = StyleSheet.create({
     gap: 1,
   },
   metricTabText: {
-    color: theme.palette.slate.textSecondary,
+    color: theme.neutral.textSecondary,
     fontSize: 10,
     fontWeight: '700',
     width: '100%',

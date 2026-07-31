@@ -30,7 +30,7 @@ interface CanvasWidgetProps {
 export function CanvasWidget({
   icon: IconComponent,
   title,
-  accent = theme.palette.slate.textSecondary,
+  accent = theme.neutral.textSecondary,
   active = false,
   size = 'full',
   height,
@@ -80,7 +80,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   title: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 15,
     fontWeight: '800',
     flex: 1,

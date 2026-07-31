@@ -22,8 +22,12 @@ import { useDerivedValue, type SharedValue } from 'react-native-reanimated'
 import { type DualGaugeAlert } from '@/components/charts/gaugeAlert'
 import { interaction, theme } from '@/constants/theme'
 import { getLinearGaugeValueSlot } from '@/components/charts/linearGaugeLayout'
+import {
+  useResolvedAccentColors,
+  useResolvedColor,
+  useResolvedNeutralColors,
+} from '@/hooks/useTheme'
 
-const TRACK_COLOR = theme.palette.slate.border
 const LINE_THICK = 2
 // Sizes mirror the gauge, expressed against the line thickness (gauge STROKE):
 // alert tick 0.35× wide / 2× long, marker 1.5× wide. Marker length tracks bar height.
@@ -169,6 +173,8 @@ interface GaugeBarProps {
 }
 
 function GaugeBar({ width, height, fraction, color, alerts, min, max, charging }: GaugeBarProps) {
+  const neutral = useResolvedNeutralColors()
+  const accents = useResolvedAccentColors()
   // Line sits at the bottom (the "rim", like the gauge arc). Ticks/glow rise from it.
   const lineY = height - LINE_THICK
   const fillW = width * fraction
@@ -201,7 +207,7 @@ function GaugeBar({ width, height, fraction, color, alerts, min, max, charging }
         width={width}
         height={LINE_THICK}
         r={LINE_THICK / 2}
-        color={TRACK_COLOR}
+        color={neutral.border}
       />
 
       {/* Alert range bands — faint highlight tint hugging the line */}
@@ -217,7 +223,7 @@ function GaugeBar({ width, height, fraction, color, alerts, min, max, charging }
             y={lineY - bandH}
             width={to - from}
             height={bandH + LINE_THICK}
-            color={theme.alpha(theme.palette.yellow.color, 0.12)}
+            color={theme.alpha(accents.yellow.color, 0.12)}
           />
         )
       })}
@@ -244,7 +250,7 @@ function GaugeBar({ width, height, fraction, color, alerts, min, max, charging }
             y={lineY - TICK_LEN}
             width={TICK_W}
             height={TICK_LEN}
-            color={theme.palette.yellow.color}
+            color={accents.yellow.color}
           />
         ))
       })}
@@ -309,6 +315,7 @@ export function LinearGauge({
   onPress,
   testID,
 }: LinearGaugeProps) {
+  const resolvedColor = useResolvedColor(color)
   const { width, onLayout } = useBarWidth()
   const height = compact ? BAR_H_COMPACT : BAR_H
   const fraction = value == null ? 0 : fractionOf(value, min, max)
@@ -329,7 +336,7 @@ export function LinearGauge({
             width={width}
             height={height}
             fraction={fraction}
-            color={color}
+            color={resolvedColor}
             alerts={alerts}
             min={min}
             max={max}
@@ -339,7 +346,7 @@ export function LinearGauge({
         {value != null && width > 0 ? (
           <View style={[styles.valueSlot, valueSlot, { top: valueSlotTop }]} pointerEvents="none">
             <Text
-              style={[styles.value, compact && styles.valueCompact, { color }]}
+              style={[styles.value, compact && styles.valueCompact, { color: resolvedColor }]}
               numberOfLines={1}
             >
               {valueText}
@@ -381,7 +388,7 @@ export function LinearGauge({
 
 const styles = StyleSheet.create({
   wrap: {
-    backgroundColor: theme.palette.slate.surface,
+    backgroundColor: theme.neutral.surface,
     borderRadius: 12,
     paddingVertical: 10,
     paddingHorizontal: 14,
@@ -432,7 +439,7 @@ const styles = StyleSheet.create({
     marginTop: -4,
   },
   auxText: {
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontSize: 10,
     fontFamily: 'monospace',
     fontWeight: '600',
@@ -444,7 +451,7 @@ const styles = StyleSheet.create({
     top: 0,
     bottom: LINE_THICK,
     textAlignVertical: 'center',
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontSize: 10,
     fontWeight: '600',
     textAlign: 'center',

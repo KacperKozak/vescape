@@ -36,14 +36,22 @@ describe('satellite dark map style', () => {
     })
   })
 
+  test('uses the explicit theme contrast without restoring full-contrast imagery', () => {
+    expect(getSatelliteImageryPaint(0.9, -0.1, -0.1)).toEqual({
+      rasterOpacity: 0.9,
+      rasterSaturation: -0.1,
+      rasterContrast: -0.1,
+    })
+  })
+
   test('stores satellite overlay paint in the style JSON', () => {
     const style = JSON.parse(
       getSatelliteDarkMapStyle(0.2, false, false, false, true, -0.35, 2),
     ) as {
-      layers: Array<{
+      layers: {
         id: string
         paint?: Record<string, unknown>
-      }>
+      }[]
     }
 
     expect(style.layers.find((layer) => layer.id === 'satellite')?.paint).toMatchObject({

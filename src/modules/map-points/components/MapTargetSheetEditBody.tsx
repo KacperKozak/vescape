@@ -61,7 +61,7 @@ export function MapTargetEditBody({
           value={description}
           onChangeText={setDescription}
           placeholder="Description"
-          placeholderTextColor={theme.palette.slate.textMuted}
+          placeholderTextColor={theme.neutral.textMuted}
           multiline
           style={[mapTargetSheetChromeStyles.input, styles.descriptionInput]}
           accessibilityLabel="Map feature description"
@@ -136,6 +136,6 @@ const styles = StyleSheet.create({
     borderColor: theme.palette.cyan.border,
   },
   saveText: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
   },
 })

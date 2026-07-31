@@ -69,7 +69,7 @@ export function WizardProgress({ steps, step, alertSubstep }: Props) {
             <View key={id} style={styles.labelItem}>
               <meta.icon
                 size={12}
-                color={active ? meta.color : theme.palette.slate.textDim}
+                color={active ? meta.color : theme.neutral.textDim}
                 weight="bold"
               />
               <Text style={[styles.label, active && { color: meta.color }]} numberOfLines={1}>
@@ -96,7 +96,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 2,
     borderRadius: 1,
-    backgroundColor: theme.palette.slate.border,
+    backgroundColor: theme.neutral.border,
   },
   alertSegment: {
     flexDirection: 'row',
@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 2,
     borderRadius: 1,
-    backgroundColor: theme.palette.slate.border,
+    backgroundColor: theme.neutral.border,
   },
   alertSubsegmentActive: {
     backgroundColor: theme.palette.amber.color,
@@ -126,7 +126,7 @@ const styles = StyleSheet.create({
   label: {
     flex: 1,
     minWidth: 0,
-    color: theme.palette.slate.textDim,
+    color: theme.neutral.textDim,
     fontSize: 11,
     fontWeight: '700',
     textTransform: 'uppercase',

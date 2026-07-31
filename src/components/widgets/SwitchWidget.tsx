@@ -37,9 +37,9 @@ export function SwitchWidget({
       value={value}
       onValueChange={onValueChange}
       disabled={disabled}
-      trackColor={{ false: theme.palette.slate.border, true: theme.alpha(accent, 0.6) }}
-      thumbColor={value ? accent : theme.palette.slate.textMuted}
-      ios_backgroundColor={theme.palette.slate.border}
+      trackColor={{ false: theme.neutral.border, true: theme.alpha(accent, 0.6) }}
+      thumbColor={value ? accent : theme.neutral.textMuted}
+      ios_backgroundColor={theme.neutral.border}
       accessibilityLabel={accessibilityLabel ?? label}
     />
   )
@@ -93,12 +93,12 @@ const styles = StyleSheet.create({
     opacity: 0.45,
   },
   label: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 15,
     fontWeight: '700',
   },
   hint: {
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontSize: 12,
   },
   squareControl: {

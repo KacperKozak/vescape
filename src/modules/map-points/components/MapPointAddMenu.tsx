@@ -76,7 +76,7 @@ export function MapPointAddMenu({
             pressed && mapSheetStyles.mapTargetClosePressed,
           ]}
         >
-          <XIcon size={20} color={theme.palette.slate.textSecondary} weight="bold" />
+          <XIcon size={20} color={theme.neutral.textSecondary} weight="bold" />
         </Pressable>
       </View>
       <View style={styles.mapAddButtonGrid}>
@@ -216,7 +216,7 @@ const styles = StyleSheet.create({
   },
   mapAddFeatureLabel: {
     maxWidth: '100%',
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 12,
     fontWeight: '800',
     textAlign: 'center',
@@ -236,7 +236,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     borderWidth: 1,
     borderColor: theme.alpha(theme.palette.slate.light, 0.3),
-    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
+    backgroundColor: theme.alpha(theme.neutral.surfaceDeep, 0.85),
   },
   mapAddSheetHeader: {
     minHeight: 46,

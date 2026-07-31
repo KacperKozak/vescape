@@ -17,6 +17,7 @@ import { telemetry } from '@/modules/board/constants/telemetry'
 import { useLiveMetric, liveSelectors } from '@/modules/board/hooks/useLiveMetric'
 import { useLiveWindowMs } from '@/modules/settings/store/settingsStore'
 import { theme } from '@/constants/theme'
+import { useResolvedAccentColors, useResolvedNeutralColors } from '@/hooks/useTheme'
 import { liveTelemetryRuntime } from '@/modules/board/lib/liveTelemetryRuntime'
 
 const pitchCfg = telemetry.pitch
@@ -73,43 +74,47 @@ interface HotAttitudeBarsProps {
 }
 
 function HotAttitudeBars({ pitch, roll, balancePitch }: HotAttitudeBarsProps) {
-  const pitchZeroColorStyle = useAnimatedStyle<ViewStyle>(() => ({
-    backgroundColor: pitch.value == null ? theme.palette.slate.textDim : theme.palette.sky.color,
-  }))
-  const rollZeroColorStyle = useAnimatedStyle<ViewStyle>(() => ({
-    backgroundColor: roll.value == null ? theme.palette.slate.textDim : theme.palette.cyan.color,
-  }))
+  const neutral = useResolvedNeutralColors()
+  const accents = useResolvedAccentColors()
+  const pitchZeroColorStyle = useAnimatedStyle<ViewStyle>(
+    () => ({
+      backgroundColor: pitch.value == null ? neutral.textDim : accents.sky.color,
+    }),
+    [accents.sky.color, neutral.textDim],
+  )
+  const rollZeroColorStyle = useAnimatedStyle<ViewStyle>(
+    () => ({
+      backgroundColor: roll.value == null ? neutral.textDim : accents.cyan.color,
+    }),
+    [accents.cyan.color, neutral.textDim],
+  )
   const balanceLineStyle = useAnimatedStyle<ViewStyle>(() => ({
     transform: [{ rotate: `${balancePitch.value ?? 0}deg` }],
   }))
-  const pitchBoardStyle = useAnimatedStyle<ViewStyle>(() => ({
-    transform: [{ rotate: `${pitch.value ?? 0}deg` }],
-    backgroundColor: pitch.value == null ? theme.palette.slate.textDim : theme.palette.sky.color,
-  }))
-  const rollBoardStyle = useAnimatedStyle<ViewStyle>(() => ({
-    transform: [{ rotate: `${roll.value ?? 0}deg` }],
-    backgroundColor: roll.value == null ? theme.palette.slate.textDim : theme.palette.cyan.color,
-  }))
+  const pitchBoardStyle = useAnimatedStyle<ViewStyle>(
+    () => ({
+      transform: [{ rotate: `${pitch.value ?? 0}deg` }],
+      backgroundColor: pitch.value == null ? neutral.textDim : accents.sky.color,
+    }),
+    [accents.sky.color, neutral.textDim],
+  )
+  const rollBoardStyle = useAnimatedStyle<ViewStyle>(
+    () => ({
+      transform: [{ rotate: `${roll.value ?? 0}deg` }],
+      backgroundColor: roll.value == null ? neutral.textDim : accents.cyan.color,
+    }),
+    [accents.cyan.color, neutral.textDim],
+  )
 
   return (
     <View style={styles.attitudeGrid}>
-      <AttitudeView
-        title="SIDE"
-        value={pitch}
-        unit={pitchCfg.unit}
-        accentColor={theme.palette.sky.color}
-      >
+      <AttitudeView title="SIDE" value={pitch} unit={pitchCfg.unit} accentColor={accents.sky.color}>
         <ZeroLevelMarker colorStyle={pitchZeroColorStyle} />
         <Animated.View style={[styles.balanceLine, balanceLineStyle]} />
         <Animated.View style={[styles.sideBoard, pitchBoardStyle]} />
       </AttitudeView>
 
-      <AttitudeView
-        title="BACK"
-        value={roll}
-        unit={rollCfg.unit}
-        accentColor={theme.palette.cyan.color}
-      >
+      <AttitudeView title="BACK" value={roll} unit={rollCfg.unit} accentColor={accents.cyan.color}>
         <ZeroLevelMarker colorStyle={rollZeroColorStyle} />
         <Animated.View style={[styles.frontBoard, rollBoardStyle]} />
       </AttitudeView>
@@ -132,6 +137,7 @@ function ZeroLevelMarker({ colorStyle }: ZeroLevelMarkerProps) {
 }
 
 export default function ImuScreen() {
+  const neutral = useResolvedNeutralColors()
   const pitch = useLiveMetric(liveSelectors.pitch)
   const roll = useLiveMetric(liveSelectors.roll)
   const balancePitch = useLiveMetric(liveSelectors.balancePitch)
@@ -179,7 +185,7 @@ export default function ImuScreen() {
           value={hot.balancePitch}
           decimals={balanceCfg.decimals}
           unit={balanceCfg.unit}
-          color={theme.palette.slate.textSecondary}
+          color={neutral.textSecondary}
         />
       </View>
 
@@ -235,7 +241,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   liveLabel: {
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.7,
@@ -256,13 +262,13 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   sectionLabel: {
-    color: theme.palette.slate.textSecondary,
+    color: theme.neutral.textSecondary,
     fontSize: 11,
     fontWeight: '600',
     letterSpacing: 0.5,
   },
   sectionHint: {
-    color: theme.palette.slate.textDim,
+    color: theme.neutral.textDim,
     fontSize: 11,
     fontWeight: '600',
   },
@@ -282,13 +288,13 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   attitudeTitle: {
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.7,
   },
   attitudeValue: {
-    color: theme.palette.slate.textSecondary,
+    color: theme.neutral.textSecondary,
     fontSize: 11,
     fontFamily: 'monospace',
     fontWeight: '600',
@@ -321,14 +327,14 @@ const styles = StyleSheet.create({
     width: 12,
     height: 2,
     borderRadius: 1,
-    backgroundColor: theme.palette.slate.textDim,
+    backgroundColor: theme.neutral.textDim,
   },
   zeroRing: {
     width: 12,
     height: 12,
     borderRadius: 999,
     borderWidth: 0,
-    backgroundColor: theme.palette.slate.textDim,
+    backgroundColor: theme.neutral.textDim,
   },
   sideBoard: {
     position: 'absolute',
@@ -341,7 +347,7 @@ const styles = StyleSheet.create({
     width: '54%',
     height: 2,
     borderRadius: 1,
-    backgroundColor: theme.palette.slate.textMuted,
+    backgroundColor: theme.neutral.textMuted,
   },
   frontBoard: {
     position: 'absolute',

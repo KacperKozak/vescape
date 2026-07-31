@@ -9,6 +9,7 @@ import { SoundPicker } from '@/components/forms/SoundPicker'
 import { TuneDial } from '@/modules/tune/components/TuneDial'
 import { telemetryByControlId } from '@/modules/board/constants/telemetry'
 import { theme } from '@/constants/theme'
+import { useResolvedAccentColors } from '@/hooks/useTheme'
 import {
   DEFAULT_ALERT_SEEDS,
   type TelemetryAlertTab as AlertTab,
@@ -167,6 +168,7 @@ export function AlertFormModal({
   onClose,
   onSave,
 }: AlertFormModalProps) {
+  const accents = useResolvedAccentColors()
   const isEditing = editRule != null
   const dialConfig = useMemo(
     () => getAlertDialConfig(controlId, batteryConfig),
@@ -250,11 +252,7 @@ export function AlertFormModal({
               >
                 <WaveformIcon
                   size={14}
-                  color={
-                    tab === 'single'
-                      ? theme.palette.slate.textPrimary
-                      : theme.palette.slate.textMuted
-                  }
+                  color={tab === 'single' ? theme.neutral.textPrimary : theme.neutral.textMuted}
                   weight="fill"
                 />
                 <Text style={[styles.tabText, tab === 'single' && styles.tabTextActive]}>
@@ -267,11 +265,7 @@ export function AlertFormModal({
               >
                 <RadioactiveIcon
                   size={14}
-                  color={
-                    tab === 'geiger'
-                      ? theme.palette.slate.textPrimary
-                      : theme.palette.slate.textMuted
-                  }
+                  color={tab === 'geiger' ? theme.neutral.textPrimary : theme.neutral.textMuted}
                   weight="fill"
                 />
                 <Text style={[styles.tabText, tab === 'geiger' && styles.tabTextActive]}>
@@ -284,11 +278,7 @@ export function AlertFormModal({
               >
                 <ChatTextIcon
                   size={14}
-                  color={
-                    tab === 'message'
-                      ? theme.palette.slate.textPrimary
-                      : theme.palette.slate.textMuted
-                  }
+                  color={tab === 'message' ? theme.neutral.textPrimary : theme.neutral.textMuted}
                   weight="fill"
                 />
                 <Text style={[styles.tabText, tab === 'message' && styles.tabTextActive]}>
@@ -337,7 +327,7 @@ export function AlertFormModal({
                   onChangeText={setMessageTemplate}
                   multiline
                   placeholder="e.g. Speed {value} {unit}"
-                  placeholderTextColor={theme.palette.slate.textDim}
+                  placeholderTextColor={theme.neutral.textDim}
                   style={styles.templateInput}
                 />
                 <View style={styles.placeholderRow}>
@@ -370,8 +360,13 @@ export function AlertFormModal({
               />
             )}
 
-            <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-              <Text style={styles.saveButtonText}>{isEditing ? 'Save' : 'Add'}</Text>
+            <TouchableOpacity
+              style={[styles.saveButton, { backgroundColor: accents.sky.solid }]}
+              onPress={handleSave}
+            >
+              <Text style={[styles.saveButtonText, { color: accents.sky.onSolid }]}>
+                {isEditing ? 'Save' : 'Add'}
+              </Text>
             </TouchableOpacity>
           </ScrollView>
         </View>
@@ -389,10 +384,10 @@ const styles = StyleSheet.create({
     padding: 24,
   },
   modal: {
-    backgroundColor: theme.palette.slate.surface,
+    backgroundColor: theme.neutral.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: theme.palette.slate.border,
+    borderColor: theme.neutral.border,
     width: '100%',
     maxWidth: 340,
     maxHeight: '90%',
@@ -402,7 +397,7 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   modalTitle: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 16,
     fontWeight: '800',
   },
@@ -411,7 +406,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: theme.palette.slate.surface,
+    borderColor: theme.neutral.surface,
   },
   tab: {
     flex: 1,
@@ -420,37 +415,35 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     paddingVertical: 10,
-    backgroundColor: theme.palette.slate.surfaceDeep,
+    backgroundColor: theme.neutral.surfaceDeep,
   },
   tabActive: {
     backgroundColor: theme.palette.sky.bg,
   },
   tabText: {
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontSize: 13,
     fontWeight: '600',
   },
   tabTextActive: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
   },
   dialField: {
     gap: 6,
   },
   fieldLabel: {
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontSize: 10,
     fontWeight: '600',
     letterSpacing: 0.5,
   },
   saveButton: {
-    backgroundColor: theme.palette.sky.color,
     borderRadius: 10,
     paddingVertical: 12,
     alignItems: 'center',
     marginTop: 4,
   },
   saveButtonText: {
-    color: theme.palette.sky.bg,
     fontSize: 15,
     fontWeight: '700',
   },
@@ -467,24 +460,24 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   placeholderChip: {
-    backgroundColor: theme.palette.slate.surface,
+    backgroundColor: theme.neutral.surface,
     borderRadius: 6,
     paddingHorizontal: 8,
     paddingVertical: 4,
   },
   placeholderChipText: {
-    color: theme.palette.slate.textSecondary,
+    color: theme.neutral.textSecondary,
     fontSize: 12,
     fontWeight: '600',
   },
   previewButton: {
-    backgroundColor: theme.palette.slate.surface,
+    backgroundColor: theme.neutral.surface,
     borderRadius: 8,
     paddingVertical: 8,
     alignItems: 'center',
   },
   previewButtonText: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 13,
     fontWeight: '600',
   },

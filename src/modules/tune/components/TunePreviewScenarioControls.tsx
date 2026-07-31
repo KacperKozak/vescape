@@ -339,7 +339,7 @@ export function TunePreviewScenarioControls({
           </View>
           <CaretDownIcon
             size={16}
-            color={theme.palette.slate.textMuted}
+            color={theme.neutral.textMuted}
             weight="bold"
             style={{ transform: [{ rotate: advancedExpanded ? '180deg' : '0deg' }] }}
           />
@@ -476,15 +476,15 @@ const styles = StyleSheet.create({
   container: {
     gap: 4,
     borderWidth: 1,
-    borderColor: theme.palette.slate.border,
+    borderColor: theme.neutral.border,
     borderRadius: 10,
     padding: 12,
-    backgroundColor: theme.palette.slate.surface,
+    backgroundColor: theme.neutral.surface,
   },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  title: { color: theme.palette.slate.textPrimary, fontSize: 13, fontWeight: '900' },
-  description: { color: theme.palette.slate.textMuted, fontSize: 10, fontWeight: '600' },
+  title: { color: theme.neutral.textPrimary, fontSize: 13, fontWeight: '900' },
+  description: { color: theme.neutral.textMuted, fontSize: 10, fontWeight: '600' },
   physicsControls: { gap: 4 },
   valueSummary: {
     color: theme.telemetry.motorCurrent,

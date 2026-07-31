@@ -434,7 +434,7 @@ function MapOptionSelectorShowcase() {
         icon: (
           <ArrowUpIcon
             size={20}
-            color={active === 'north' ? theme.palette.green.text : theme.palette.slate.textDim}
+            color={active === 'north' ? theme.palette.green.text : theme.neutral.textDim}
             weight="bold"
           />
         ),
@@ -445,7 +445,7 @@ function MapOptionSelectorShowcase() {
         icon: (
           <NavigationArrowIcon
             size={20}
-            color={active === 'gps' ? theme.palette.green.text : theme.palette.slate.textDim}
+            color={active === 'gps' ? theme.palette.green.text : theme.neutral.textDim}
             weight="fill"
           />
         ),
@@ -456,7 +456,7 @@ function MapOptionSelectorShowcase() {
         icon: (
           <ArrowsClockwiseIcon
             size={20}
-            color={active === 'free' ? theme.palette.green.text : theme.palette.slate.textDim}
+            color={active === 'free' ? theme.palette.green.text : theme.neutral.textDim}
             weight="bold"
           />
         ),
@@ -638,7 +638,7 @@ export default function ControlsPage() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.palette.slate.bg },
+  container: { flex: 1, backgroundColor: theme.neutral.bg },
   content: { padding: 12, gap: 12, paddingBottom: 40 },
   buttonRow: {
     flexDirection: 'row',
@@ -663,7 +663,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   selectorCaption: {
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontSize: 12,
     fontWeight: '700',
     textAlign: 'center',

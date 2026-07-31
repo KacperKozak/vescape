@@ -960,6 +960,8 @@ export interface AppSettings {
   movingSpeedThresholdKmh: number
   freeSpinMaxSpeedDeltaKmh: number
   freeSpinStationaryBoardCapKmh: number
+  /** App appearance source. `sun` resolves from local sunrise/sunset at the last GPS fix. */
+  themeMode: 'system' | 'light' | 'dark' | 'sun'
   mapStyleKey: 'onedark' | 'outdoors' | 'satellite' | 'mapy'
   /** Use the custom satellite overlay style instead of the stock satellite style. */
   satelliteOverlayEnabled: boolean

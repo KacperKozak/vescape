@@ -8,7 +8,8 @@ import {
 } from 'react-native'
 import { Text } from '@/components/base/Text'
 
-import { interaction, theme } from '@/constants/theme'
+import { interaction } from '@/constants/theme'
+import { useResolvedAccentColors, useResolvedNeutralColors } from '@/hooks/useTheme'
 
 interface ButtonProps {
   label: string
@@ -37,6 +38,52 @@ export function Button({
   disabled = false,
   style,
 }: ButtonProps) {
+  const accents = useResolvedAccentColors()
+  const neutral = useResolvedNeutralColors()
+  const variantStyles = {
+    primary: {
+      button: { backgroundColor: accents.cyan.solid },
+      text: { color: accents.cyan.onSolid },
+      iconColor: accents.cyan.onSolid,
+      indicatorColor: accents.cyan.onSolid,
+    },
+    accent: {
+      button: {
+        backgroundColor: neutral.surface,
+        borderWidth: 1,
+        borderColor: accents.cyan.border,
+      },
+      text: { color: accents.cyan.text },
+      iconColor: accents.cyan.text,
+      indicatorColor: accents.cyan.text,
+    },
+    tune: {
+      button: { backgroundColor: accents.purple.solid },
+      text: { color: accents.purple.onSolid },
+      iconColor: accents.purple.onSolid,
+      indicatorColor: accents.purple.onSolid,
+    },
+    secondary: {
+      button: {
+        backgroundColor: neutral.surface,
+        borderWidth: 1,
+        borderColor: neutral.border,
+      },
+      text: { color: neutral.textSecondary },
+      iconColor: neutral.textSecondary,
+      indicatorColor: neutral.textSecondary,
+    },
+    destructive: {
+      button: {
+        backgroundColor: accents.red.bg,
+        borderWidth: 1,
+        borderColor: accents.red.border,
+      },
+      text: { color: accents.red.text },
+      iconColor: accents.red.text,
+      indicatorColor: accents.red.text,
+    },
+  } as const
   const isDisabled = disabled || loading
   const icon =
     IconComponent && !loading ? (
@@ -81,51 +128,6 @@ export function Button({
     </Pressable>
   )
 }
-
-const variantStyles = {
-  primary: {
-    button: { backgroundColor: theme.palette.cyan.border },
-    text: { color: theme.palette.slate.textPrimary },
-    iconColor: theme.palette.slate.textPrimary,
-    indicatorColor: theme.palette.slate.textPrimary,
-  },
-  accent: {
-    button: {
-      backgroundColor: theme.palette.slate.surface,
-      borderWidth: 1,
-      borderColor: theme.palette.cyan.border,
-    },
-    text: { color: theme.palette.cyan.text },
-    iconColor: theme.palette.cyan.text,
-    indicatorColor: theme.palette.cyan.text,
-  },
-  tune: {
-    button: { backgroundColor: theme.tune.border },
-    text: { color: theme.palette.slate.textPrimary },
-    iconColor: theme.palette.slate.textPrimary,
-    indicatorColor: theme.palette.slate.textPrimary,
-  },
-  secondary: {
-    button: {
-      backgroundColor: theme.palette.slate.surface,
-      borderWidth: 1,
-      borderColor: theme.palette.slate.border,
-    },
-    text: { color: theme.palette.slate.textSecondary },
-    iconColor: theme.palette.slate.textSecondary,
-    indicatorColor: theme.palette.slate.textSecondary,
-  },
-  destructive: {
-    button: {
-      backgroundColor: theme.status.error.bg,
-      borderWidth: 1,
-      borderColor: theme.status.error.border,
-    },
-    text: { color: theme.status.error.text },
-    iconColor: theme.status.error.text,
-    indicatorColor: theme.status.error.text,
-  },
-} as const
 
 const styles = StyleSheet.create({
   base: {

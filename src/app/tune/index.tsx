@@ -526,14 +526,14 @@ function TuneFieldCell({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.palette.slate.bg,
+    backgroundColor: theme.neutral.bg,
   },
   headerActions: {
     flexDirection: 'row',
     gap: 8,
   },
   headerTitle: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 17,
     fontWeight: '900',
   },
@@ -555,7 +555,7 @@ const styles = StyleSheet.create({
     minWidth: 240,
   },
   stateText: {
-    color: theme.palette.slate.textSecondary,
+    color: theme.neutral.textSecondary,
     fontSize: 15,
   },
   errorText: {

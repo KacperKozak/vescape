@@ -167,7 +167,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   note: {
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontSize: 12,
     fontWeight: '500',
     lineHeight: 16,

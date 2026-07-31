@@ -46,6 +46,7 @@ import {
   terrainHeightRelativeToWheel,
   tunePreviewDeckLine,
 } from '@/modules/tune/lib/tunePreviewGeometry'
+import { useResolvedAccentColors, useResolvedNeutralColors } from '@/hooks/useTheme'
 
 interface TunePreviewProps {
   fields: Record<string, TuneProfileFieldValue>
@@ -112,6 +113,8 @@ export function TunePreview({
   speedKmh,
   groundToBoardAngleDegrees,
 }: TunePreviewProps) {
+  const neutral = useResolvedNeutralColors()
+  const accents = useResolvedAccentColors()
   const model = useMemo(
     () => createTunePreviewModel(fields),
     // Restart the animation loop after a model hot reload instead of retaining its old closure.
@@ -283,7 +286,7 @@ export function TunePreview({
           <View style={styles.titleRow}>
             <Text style={styles.title}>Tune Preview</Text>
             <Pressable hitSlop={8} onPress={onHelp}>
-              <QuestionIcon size={14} color={theme.palette.slate.textMuted} weight="bold" />
+              <QuestionIcon size={14} color={neutral.textMuted} weight="bold" />
             </Pressable>
           </View>
           <View style={styles.legend}>
@@ -297,7 +300,7 @@ export function TunePreview({
                     y={READOUT_BASELINE}
                     text={boardAngleStr}
                     font={readoutFont}
-                    color={theme.palette.sky.color}
+                    color={accents.sky.color}
                   />
                 )}
               </Canvas>
@@ -312,7 +315,7 @@ export function TunePreview({
                     y={READOUT_BASELINE}
                     text={targetAngleStr}
                     font={readoutFont}
-                    color={theme.palette.purple.light}
+                    color={accents.purple.light}
                   />
                 )}
               </Canvas>
@@ -330,11 +333,7 @@ export function TunePreview({
               pressed && { opacity: interaction.pressedOpacity },
             ]}
           >
-            <ArrowCounterClockwiseIcon
-              size={13}
-              color={theme.palette.slate.textMuted}
-              weight="bold"
-            />
+            <ArrowCounterClockwiseIcon size={13} color={neutral.textMuted} weight="bold" />
             <View style={styles.speedValueGroup}>
               <Canvas style={styles.speedCanvas}>
                 {speedFont && (
@@ -357,7 +356,7 @@ export function TunePreview({
                 y={READOUT_BASELINE}
                 text={currentStr}
                 font={readoutFont}
-                color={theme.palette.slate.textMuted}
+                color={neutral.textMuted}
               />
             )}
           </Canvas>
@@ -378,7 +377,7 @@ export function TunePreview({
                 DECK_CENTER_Y,
               )}
               p2={vec(centerX - DECK_HALF_LENGTH - ZERO_MARKER_GAP, DECK_CENTER_Y)}
-              color={theme.palette.slate.textMuted}
+              color={neutral.textMuted}
               strokeWidth={1.5}
               strokeCap="round"
             />
@@ -388,22 +387,17 @@ export function TunePreview({
                 centerX + DECK_HALF_LENGTH + ZERO_MARKER_GAP + ZERO_MARKER_LENGTH,
                 DECK_CENTER_Y,
               )}
-              color={theme.palette.slate.textMuted}
+              color={neutral.textMuted}
               strokeWidth={1.5}
               strokeCap="round"
             />
-            <Path
-              path={targetPath}
-              style="stroke"
-              color={theme.palette.purple.light}
-              strokeWidth={1}
-            >
+            <Path path={targetPath} style="stroke" color={accents.purple.light} strokeWidth={1}>
               <DashPathEffect intervals={[6, 5]} />
             </Path>
             <Path
               path={deckPath}
               style="stroke"
-              color={theme.palette.sky.color}
+              color={accents.sky.color}
               strokeWidth={1}
               strokeCap="round"
             />
@@ -411,7 +405,7 @@ export function TunePreview({
               path={frontArrowPath}
               opacity={frontArrowOpacity}
               style="stroke"
-              color={theme.palette.sky.color}
+              color={accents.sky.color}
               strokeWidth={1.5}
               strokeCap="round"
               strokeJoin="round"
@@ -420,51 +414,36 @@ export function TunePreview({
               path={rearArrowPath}
               opacity={rearArrowOpacity}
               style="stroke"
-              color={theme.palette.sky.color}
+              color={accents.sky.color}
               strokeWidth={1.5}
               strokeCap="round"
               strokeJoin="round"
             />
-            <Circle
-              cx={centerX}
-              cy={GROUND_Y - WHEEL_RADIUS}
-              r={WHEEL_RADIUS}
-              color={theme.palette.slate.bg}
-            />
+            <Circle cx={centerX} cy={GROUND_Y - WHEEL_RADIUS} r={WHEEL_RADIUS} color={neutral.bg} />
             <Circle
               cx={centerX}
               cy={GROUND_Y - WHEEL_RADIUS}
               r={WHEEL_RADIUS}
               style="stroke"
-              color={theme.palette.slate.textSecondary}
+              color={neutral.textSecondary}
               strokeWidth={1}
             />
-            <Path
-              path={ticksPath}
-              style="stroke"
-              color={theme.palette.slate.textMuted}
-              strokeWidth={1}
-            />
+            <Path path={ticksPath} style="stroke" color={neutral.textMuted} strokeWidth={1} />
             <Circle
               cx={centerX}
               cy={GROUND_Y - WHEEL_RADIUS}
               r={4}
               style="stroke"
-              color={theme.palette.slate.border}
+              color={neutral.border}
               strokeWidth={1}
             />
             {hillsEnabled ? (
-              <Path
-                path={terrainPath}
-                style="stroke"
-                color={theme.palette.slate.textMuted}
-                strokeWidth={1}
-              />
+              <Path path={terrainPath} style="stroke" color={neutral.textMuted} strokeWidth={1} />
             ) : (
               <Line
                 p1={vec(0, GROUND_Y)}
                 p2={vec(canvasWidth, GROUND_Y)}
-                color={theme.palette.slate.textMuted}
+                color={neutral.textMuted}
                 strokeWidth={1}
               />
             )}
@@ -474,7 +453,7 @@ export function TunePreview({
                 y={GROUND_TO_BOARD_BASELINE_Y}
                 text={groundToBoardAngleStr}
                 font={readoutBoldFont}
-                color={theme.palette.slate.textPrimary}
+                color={neutral.textPrimary}
               />
             )}
           </Canvas>
@@ -532,7 +511,7 @@ const styles = StyleSheet.create({
   titleBlock: { gap: 2 },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   title: {
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontSize: 12,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -541,8 +520,8 @@ const styles = StyleSheet.create({
   headerMetrics: { alignItems: 'flex-end', gap: 1 },
 
   unsupported: { height: CANVAS_HEIGHT, alignItems: 'center', justifyContent: 'center', gap: 5 },
-  unsupportedTitle: { color: theme.palette.slate.textPrimary, fontSize: 13, fontWeight: '800' },
-  unsupportedText: { color: theme.palette.slate.textMuted, fontSize: 11 },
+  unsupportedTitle: { color: theme.neutral.textPrimary, fontSize: 13, fontWeight: '800' },
+  unsupportedText: { color: theme.neutral.textMuted, fontSize: 11 },
   legend: { alignItems: 'flex-start', gap: 2, marginTop: 14 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 5 },
   boardSwatch: { width: 18, height: 1, backgroundColor: theme.palette.sky.color },
@@ -580,7 +559,7 @@ const styles = StyleSheet.create({
     height: SPEED_HEIGHT,
   },
   speedUnit: {
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontSize: 10,
     fontWeight: '700',
     marginBottom: 4,

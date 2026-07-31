@@ -140,7 +140,7 @@ function AlertRuleRow({
       <View style={styles.ruleTypeIcon}>
         <TypeIcon
           size={18}
-          color={rule.enabled ? theme.palette.yellow.color : theme.palette.slate.textDim}
+          color={rule.enabled ? theme.palette.yellow.color : theme.neutral.textDim}
           weight="duotone"
         />
       </View>
@@ -172,7 +172,7 @@ function AlertRuleRow({
         {rule.enabled ? (
           <SpeakerHighIcon size={16} color={theme.palette.yellow.color} />
         ) : (
-          <SpeakerSlashIcon size={16} color={theme.palette.slate.textDim} />
+          <SpeakerSlashIcon size={16} color={theme.neutral.textDim} />
         )}
       </TouchableOpacity>
 
@@ -208,24 +208,24 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: theme.palette.slate.surface,
+    backgroundColor: theme.neutral.surface,
   },
   ruleContent: {
     flex: 1,
   },
   ruleThreshold: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 14,
     fontWeight: '500',
   },
   ruleTtsTemplate: {
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontSize: 12,
     fontWeight: '500',
     marginTop: 1,
   },
   ruleTextDisabled: {
-    color: theme.palette.slate.textDim,
+    color: theme.neutral.textDim,
   },
   ruleAction: {
     padding: 6,
@@ -235,7 +235,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   emptyHintText: {
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontSize: 12,
     fontWeight: '500',
   },

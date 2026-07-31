@@ -58,6 +58,7 @@ const e2eSettings: AppSettings = {
   movingSpeedThresholdKmh: 5,
   freeSpinMaxSpeedDeltaKmh: 3,
   freeSpinStationaryBoardCapKmh: 1,
+  themeMode: 'system',
   mapStyleKey: 'onedark',
   satelliteOverlayEnabled: true,
   satelliteImageryOpacity: 0.2,

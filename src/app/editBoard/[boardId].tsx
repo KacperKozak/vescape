@@ -65,7 +65,7 @@ export default function EditBoardScreen() {
           hitSlop={8}
           testID="edit-board-header"
         >
-          <PencilSimpleIcon size={20} color={theme.palette.slate.textSecondary} weight="duotone" />
+          <PencilSimpleIcon size={20} color={theme.neutral.textSecondary} weight="duotone" />
         </Pressable>
       ),
     })
@@ -198,7 +198,7 @@ export default function EditBoardScreen() {
 const styles = StyleSheet.create({
   flex: {
     flex: 1,
-    backgroundColor: theme.palette.slate.bg,
+    backgroundColor: theme.neutral.bg,
   },
   container: {
     flex: 1,

@@ -51,6 +51,7 @@ import type {
 } from '@/modules/history/store/historyStore'
 import { useRiderStore } from '@/modules/group-ride/store/riderStore'
 import type { RosterRider } from '@/modules/group-ride/lib/roster'
+import { useResolvedAccentColors, useResolvedNeutralColors } from '@/hooks/useTheme'
 import { useMainScreenStore } from '@/screens/main/mainScreenStore'
 
 import {
@@ -58,11 +59,6 @@ import {
   HISTORY_MARKER_ICONS,
   type SelectedHistoryMarker,
 } from '@/modules/history/lib/historyMapMarkerInfo'
-import {
-  DESTINATION_POINT_COLOR,
-  DESTINATION_POINT_TEXT_COLOR,
-  GPS_POINT_COLOR,
-} from '@/screens/main/map/offscreenMapIndicators'
 import {
   getHistoryMetricBaseColor,
   getHistoryRouteHighlightDurationMs,
@@ -136,15 +132,17 @@ function LiveMapLayers({
   riders: MainMapLayersProps['riders']
   highContrastRoutes: boolean
 }) {
+  const neutral = useResolvedNeutralColors()
+  const accents = useResolvedAccentColors()
   const riderColor = useRiderStore((state) => state.riderColor)
-  const gpsPointColor = riderColor ?? GPS_POINT_COLOR
-  const trailColor = riderColor ?? MAP_DEFAULTS.trailColor
+  const gpsPointColor = riderColor ?? accents.purple.color
+  const trailColor = riderColor ?? accents.violet.color
   const trailGradientStart = riderColor
     ? theme.alpha(riderColor, 0)
-    : MAP_DEFAULTS.trailGradientStart
+    : theme.alpha(accents.violet.color, 0)
   const trailGradientEnd = riderColor
     ? theme.alpha(riderColor, 0.85)
-    : MAP_DEFAULTS.trailGradientEnd
+    : theme.alpha(accents.violet.color, 0.85)
   const gpsPuckPositionShape = useMemo(
     () =>
       accuracyFix
@@ -186,7 +184,7 @@ function LiveMapLayers({
           <LineLayer
             id="center-live-trail-casing"
             style={{
-              lineColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
+              lineColor: theme.alpha(neutral.surfaceDeep, 0.85),
               lineWidth: highContrastRoutes ? MAP_DEFAULTS.trailWidth + 4 : 0,
               lineCap: 'round',
               lineJoin: 'round',
@@ -218,7 +216,7 @@ function LiveMapLayers({
             <ShapeSource id="center-gps-accuracy-source" shape={accuracyShape}>
               <FillLayer
                 id="center-gps-accuracy-fill"
-                style={{ fillColor: MAP_DEFAULTS.accuracyFillColor }}
+                style={{ fillColor: theme.alpha(accents.violet.color, 0.12) }}
               />
             </ShapeSource>
           )}
@@ -277,6 +275,7 @@ function LiveMapLayers({
 // Subscribes to the scrub head directly so dragging the telemetry chart only re-renders this pin,
 // not the whole map/overlay tree. rideGpsSamples is a stable prop (changes only on session switch).
 function SeekPositionPin({ rideGpsSamples }: { rideGpsSamples: HistoryGpsSample[] }) {
+  const accents = useResolvedAccentColors()
   const seekTimeMs = useMainScreenStore((s) => s.seekTimeMs)
   const seekPosition = useMemo(() => {
     if (seekTimeMs == null || rideGpsSamples.length === 0) return null
@@ -289,7 +288,7 @@ function SeekPositionPin({ rideGpsSamples }: { rideGpsSamples: HistoryGpsSample[
     <MapPin
       id="center-seek-position"
       coordinate={[seekPosition.longitude, seekPosition.latitude]}
-      color={MAP_DEFAULTS.markerColor}
+      color={accents.violet.color}
     />
   )
 }
@@ -297,6 +296,7 @@ function SeekPositionPin({ rideGpsSamples }: { rideGpsSamples: HistoryGpsSample[
 // Live sub-range highlight while trimming a Favorite. Subscribes to the trim range directly so a
 // drag only re-renders this layer, not the whole map. rideGpsSamples is a stable prop.
 function TrimRouteHighlight({ rideGpsSamples }: { rideGpsSamples: HistoryGpsSample[] }) {
+  const accents = useResolvedAccentColors()
   const trimRange = useMainScreenStore((s) => s.trimRange)
   const shape = useMemo(() => {
     if (!trimRange) return null
@@ -322,7 +322,7 @@ function TrimRouteHighlight({ rideGpsSamples }: { rideGpsSamples: HistoryGpsSamp
       <LineLayer
         id="center-ride-trim-line"
         style={{
-          lineColor: theme.palette.amber.color,
+          lineColor: accents.amber.color,
           lineWidth: 5,
           lineCap: 'round',
           lineJoin: 'round',
@@ -343,6 +343,7 @@ function FavoriteRouteBorder({
   highContrastRoutes: boolean
   trimming: boolean
 }) {
+  const accents = useResolvedAccentColors()
   const shape = useMemo(() => {
     const coordinates = getFavoriteRouteSegments(rideGpsSamples, favoriteRanges)
     if (coordinates.length === 0) return null
@@ -360,7 +361,7 @@ function FavoriteRouteBorder({
         id="center-ride-favorites-border"
         belowLayerID="center-ride-route-casing"
         style={{
-          lineColor: theme.status.favorite.color,
+          lineColor: accents.yellow.color,
           lineWidth: highContrastRoutes ? 10 : 6,
           lineOpacity: trimming ? 1 : 0.9,
           lineCap: 'round',
@@ -437,6 +438,8 @@ export function HistoryMapLayers({
   onOpenMedia: MainMapLayersProps['onOpenMedia']
   highContrastRoutes: boolean
 }) {
+  const neutral = useResolvedNeutralColors()
+  const accents = useResolvedAccentColors()
   // Flips only on trim enter/exit, so the whole-route layers dim without per-drag re-renders.
   const trimming = useMainScreenStore((s) => s.trimRange != null)
   const [highlightProgress, setHighlightProgress] = useState(0)
@@ -501,7 +504,7 @@ export function HistoryMapLayers({
           <LineLayer
             id="center-ride-route-casing"
             style={{
-              lineColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
+              lineColor: theme.alpha(neutral.surfaceDeep, 0.85),
               lineWidth: highContrastRoutes ? 8 : 0,
               lineCap: 'round',
               lineJoin: 'round',
@@ -533,18 +536,10 @@ export function HistoryMapLayers({
       )}
       <TrimRouteHighlight rideGpsSamples={rideGpsSamples} />
       {rideRoute[0] && (
-        <MapPin
-          id="center-ride-start"
-          coordinate={rideRoute[0]}
-          color={theme.palette.green.color}
-        />
+        <MapPin id="center-ride-start" coordinate={rideRoute[0]} color={accents.green.color} />
       )}
       {rideRoute.at(-1) && (
-        <MapPin
-          id="center-ride-end"
-          coordinate={rideRoute.at(-1)!}
-          color={theme.status.error.color}
-        />
+        <MapPin id="center-ride-end" coordinate={rideRoute.at(-1)!} color={accents.red.color} />
       )}
       <SeekPositionPin rideGpsSamples={rideGpsSamples} />
 
@@ -615,9 +610,10 @@ export function MainMapLayers({
   onSelectLegalCountry,
   onFocusDirectionPoint,
 }: MainMapLayersProps) {
+  const accents = useResolvedAccentColors()
   const riderColor = useRiderStore((state) => state.riderColor)
-  const directionColor = riderColor ?? DESTINATION_POINT_COLOR
-  const directionTextColor = riderColor ?? DESTINATION_POINT_TEXT_COLOR
+  const directionColor = riderColor ?? accents.green.color
+  const directionTextColor = riderColor ?? accents.green.text
   const selectedMapPoint = useMemo(
     () =>
       mapPoints.find(
@@ -721,10 +717,10 @@ export function MainMapLayers({
             <MapPin
               // Color in the key: PointAnnotation snapshots its children natively, so a
               // color change must remount the pin to re-render.
-              key={`center-rider-target-${rider.id}-${rosterRiderColor(rider, index)}`}
+              key={`center-rider-target-${rider.id}-${rosterRiderColor(rider, index, accents)}`}
               id={`center-rider-target-${rider.id}`}
               coordinate={[rider.presence.target.lng, rider.presence.target.lat]}
-              color={rosterRiderColor(rider, index)}
+              color={rosterRiderColor(rider, index, accents)}
               icon={getMapPointKindIcon('direction')}
             />
           ) : null,
@@ -737,9 +733,9 @@ export function MainMapLayers({
               key={point.id}
               id={`center-map-point-${point.id}`}
               coordinate={[point.longitude, point.latitude]}
-              color={getMapPointKindColor(point.category)}
+              color={getMapPointKindColor(point.category, accents)}
               icon={getMapPointKindIcon(point.category)}
-              iconColor={getMapPointKindTextColor(point.category)}
+              iconColor={getMapPointKindTextColor(point.category, accents)}
               selected={
                 selectedMapPoint?.id === point.id || activeNavigationMapPointId === point.id
               }
@@ -769,7 +765,7 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.4),
+    backgroundColor: theme.alpha(theme.neutral.surfaceDeep, 0.4),
   },
   pendingNavigationTargetCore: {
     width: 8,

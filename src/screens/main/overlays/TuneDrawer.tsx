@@ -38,6 +38,7 @@ import { useBleStore } from '@/modules/board/store/bleStore'
 import { useBoardStore } from '@/modules/board/store/boardStore'
 import { useLegalModeStore } from '@/modules/legal/store/legalModeStore'
 import { useSettingsStore } from '@/modules/settings/store/settingsStore'
+import { useResolvedNeutralColors } from '@/hooks/useTheme'
 import { useTuneProfileStore } from '@/modules/tune/store/tuneProfileStore'
 
 interface TuneDrawerProps {
@@ -276,6 +277,7 @@ function TuneProfilePill({
   color,
   onPress,
 }: TuneProfilePillProps) {
+  const neutral = useResolvedNeutralColors()
   const fadedColor = theme.alpha(color.color, 0.6)
   const activeProgress = useSharedValue(active ? 1 : 0)
 
@@ -290,15 +292,11 @@ function TuneProfilePill({
       backgroundColor: interpolateColor(
         activeProgress.value,
         [0, 1],
-        [theme.palette.slate.surfaceDeep, color.bg],
+        [neutral.surfaceDeep, color.bg],
       ),
-      borderColor: interpolateColor(
-        activeProgress.value,
-        [0, 1],
-        [theme.palette.slate.border, color.border],
-      ),
+      borderColor: interpolateColor(activeProgress.value, [0, 1], [neutral.border, color.border]),
     }),
-    [color.bg, color.border],
+    [color.bg, color.border, neutral.border, neutral.surfaceDeep],
   )
   const labelStyle = useAnimatedStyle(
     () => ({
@@ -322,7 +320,7 @@ function TuneProfilePill({
         <AnimatedText
           style={[
             styles.profilePillText,
-            { color: active ? color.color : theme.palette.slate.textMuted },
+            { color: active ? color.color : theme.neutral.textMuted },
             labelStyle,
           ]}
           numberOfLines={1}
@@ -391,11 +389,11 @@ function LegalModeWidget({
         value={value}
         onValueChange={onValueChange}
         trackColor={{
-          false: theme.palette.slate.border,
+          false: theme.neutral.border,
           true: theme.alpha(theme.status.error.color, 0.6),
         }}
-        thumbColor={value ? theme.status.error.color : theme.palette.slate.textMuted}
-        ios_backgroundColor={theme.palette.slate.border}
+        thumbColor={value ? theme.status.error.color : theme.neutral.textMuted}
+        ios_backgroundColor={theme.neutral.border}
         accessibilityLabel="Legal Mode"
       />
     </Pressable>
@@ -446,10 +444,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   profilePillPressed: {
-    backgroundColor: theme.palette.slate.surface,
+    backgroundColor: theme.neutral.surface,
   },
   profilePillText: {
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -463,7 +461,7 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   quickDisabledNote: {
-    color: theme.palette.slate.textDim,
+    color: theme.neutral.textDim,
     fontSize: 12,
     fontWeight: '600',
   },
@@ -495,7 +493,7 @@ const styles = StyleSheet.create({
   legalRowDivider: {
     width: 1,
     alignSelf: 'stretch',
-    backgroundColor: theme.palette.slate.border,
+    backgroundColor: theme.neutral.border,
   },
   legalModeWidget: {
     flex: 1,
@@ -510,7 +508,7 @@ const styles = StyleSheet.create({
     borderColor: theme.status.error.border,
   },
   legalModeWidgetPressed: {
-    backgroundColor: theme.palette.slate.surface,
+    backgroundColor: theme.neutral.surface,
   },
   legalModeText: {
     flex: 1,
@@ -523,12 +521,12 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   legalModeLabel: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 15,
     fontWeight: '700',
   },
   legalModeDescription: {
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontSize: 11,
     fontWeight: '700',
   },
@@ -542,7 +540,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
   },
   legalMapWidgetPressed: {
-    backgroundColor: theme.palette.slate.surface,
+    backgroundColor: theme.neutral.surface,
   },
   legalMapText: {
     flex: 1,
@@ -550,12 +548,12 @@ const styles = StyleSheet.create({
     gap: 1,
   },
   legalMapLabel: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 13,
     fontWeight: '700',
   },
   legalMapDescription: {
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontSize: 10,
     fontWeight: '700',
   },
@@ -565,7 +563,7 @@ const styles = StyleSheet.create({
     borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: theme.palette.slate.surfaceDeep,
+    backgroundColor: theme.neutral.surfaceDeep,
     borderWidth: 1,
     borderColor: theme.status.error.border,
   },

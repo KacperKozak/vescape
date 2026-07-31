@@ -11,7 +11,7 @@ import {
 } from '@shopify/react-native-skia'
 
 import { type DualGaugeAlert } from '@/components/charts/gaugeAlert'
-import { theme, type AlphaLevel } from '@/constants/theme'
+import { accentColors, theme, type AlphaLevel } from '@/constants/theme'
 import { type MetricHotRange } from '@/modules/history/lib/metricColorScale'
 import {
   clamp01,
@@ -25,8 +25,7 @@ import {
 
 export const AnimatedTextInput = Animated.createAnimatedComponent(TextInput)
 
-export const BG_ARC_COLOR = theme.palette.slate.border
-const GAUGE_HOT_COLOR = theme.status.error.color
+const GAUGE_HOT_COLOR = accentColors.dark.red.color
 
 /** Ramp the gauge color toward the hot color across the metric's hot range. */
 export function gaugeRampColor(
@@ -74,7 +73,7 @@ function AlertTick({ arc, fraction }: { arc: Arc; fraction: number }) {
   return (
     <Path
       path={path}
-      color={theme.palette.yellow.color}
+      color={accentColors.dark.yellow.color}
       style="stroke"
       strokeWidth={TICK_WIDTH}
       strokeCap="butt"
@@ -105,7 +104,7 @@ function AlertLabel({
       y={p.y + LABEL_FONT_SIZE / 2}
       text={text}
       font={font}
-      color={theme.palette.yellow.text}
+      color={accentColors.dark.yellow.text}
     />
   )
 }
@@ -138,7 +137,7 @@ export function AlertMarker({ arc, alert, min = 0, max, labelFont = null }: Aler
           <RadialGradient
             c={vec(arc.cx, arc.cy)}
             r={arc.r}
-            colors={ALERT_OPACITIES.map((o) => theme.alpha(theme.palette.yellow.color, o))}
+            colors={ALERT_OPACITIES.map((o) => theme.alpha(accentColors.dark.yellow.color, o))}
             positions={ALERT_STOPS}
           />
         </Path>

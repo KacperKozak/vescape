@@ -8,22 +8,33 @@ Visual design principles for the Vescape app. Follow these when building or modi
 
 > **No large solid bright fills — anywhere in the app.**
 > Bright accent colours (`theme.*.color`) are for **thin borders, icons, and text**, not for filling large areas. Avoid `weight="fill"` glyphs, bright filled discs/badges/blocks, and bright-coloured backgrounds behind content. State and emphasis come from thin borders + coloured icons/text on the dark surface.
-> Permitted fills: dark surfaces (`theme.neutral.surface`/`surfaceDeep`), dark tinted pill backgrounds (`theme.*.bg`), and the primary `Button`. Small bright accents (a thin underline, a dot, a 1–2px border) are fine; large bright planes are not.
+> Permitted fills: neutral surfaces (`theme.neutral.surface`/`surfaceDeep`), tinted pill backgrounds (`theme.*.bg`), and the primary `Button`. Small bright accents (a thin underline, a dot, a 1–2px border) are fine; large bright planes are not.
 
 ## Theme
 
-Dark-first. All screens use dark backgrounds with light text.
+The app has adaptive light and dark appearances. The durable `themeMode` setting supports:
 
-| Role           | Token                               |
-| -------------- | ----------------------------------- |
-| Background     | `theme.palette.slate.bg`            |
-| Card / surface | `theme.palette.slate.surface`       |
-| Deep surface   | `theme.palette.slate.surfaceDeep`   |
-| Border         | `theme.palette.slate.border`        |
-| Primary text   | `theme.palette.slate.textPrimary`   |
-| Secondary text | `theme.palette.slate.textSecondary` |
-| Muted text     | `theme.palette.slate.textMuted`     |
-| Dim text       | `theme.palette.slate.textDim`       |
+- `system` (default) — follows the phone appearance.
+- `light` — always light.
+- `dark` — always dark.
+- `sun` — light between local sunrise and sunset, dark otherwise, using the current or last known GPS location. It falls back to the system appearance when no location is available.
+
+Selecting the explicit One Dark or Outdoors basemap applies a dark or light appearance override for the current app session. This does not overwrite `themeMode`; Satellite and Mapy.cz clear the session override.
+
+Neutral UI colors come from `theme.neutral`, while accent UI colors come from `theme.palette.<hue>`. Both are backed by iOS dynamic colors and Android day/night resources, so values captured by `StyleSheet.create` still update when the active appearance changes. `theme.palette.slate` remains a raw dark swatch for fixed dark map styles; do not use it for app surfaces or text.
+
+Non-React-Native renderers and worklets use the plain-string palettes from `useResolvedNeutralColors()` and `useResolvedAccentColors()`; native adaptive color objects must not cross into Mapbox, Skia, Reanimated worklets, or string-valued state.
+
+| Role           | Token                         |
+| -------------- | ----------------------------- |
+| Background     | `theme.neutral.bg`            |
+| Card / surface | `theme.neutral.surface`       |
+| Deep surface   | `theme.neutral.surfaceDeep`   |
+| Border         | `theme.neutral.border`        |
+| Primary text   | `theme.neutral.textPrimary`   |
+| Secondary text | `theme.neutral.textSecondary` |
+| Muted text     | `theme.neutral.textMuted`     |
+| Dim text       | `theme.neutral.textDim`       |
 
 ## Layout Principles
 
@@ -41,6 +52,8 @@ Use `src/constants/theme.ts` for all accent colors. Never hardcode a hex value, 
 The theme is organized into domains:
 
 ### `palette`
+
+Each accent hue has two appearance-specific palettes. Use `color` for icons and thin emphasis, `text` for foreground text, `bg`/`border` for tinted controls, and the `solid`/`onSolid` pair for filled actions such as primary buttons. Never place a guessed black or white label over an accent fill.
 
 Named hue swatches. Every hue exposes `.color`, `.alt` (alias of `.light`), `.light`, `.text`, `.bg`, and `.border`.
 
@@ -109,7 +122,7 @@ Every translucent value (overlays, backdrops, zone tints, glow gradients, vignet
 type AlphaLevel = 0 | 0.12 | 0.3 | 0.4 | 0.6 | 0.7 | 0.8 | 0.85 | 1
 ```
 
-Neutral row icons use `theme.palette.slate.textSecondary`.
+Neutral row icons use `theme.neutral.textSecondary`.
 
 ## Icons
 

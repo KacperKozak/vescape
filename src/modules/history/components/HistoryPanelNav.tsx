@@ -97,7 +97,7 @@ export function HistoryPanelNav({
             onPress={onOpenList}
           >
             <HistoryRideLabel title={primaryLabel} subtitle={secondaryLabel} compact />
-            <CaretDownIcon size={12} color={theme.palette.slate.textSecondary} weight="bold" />
+            <CaretDownIcon size={12} color={theme.neutral.textSecondary} weight="bold" />
           </Pressable>
         }
       />

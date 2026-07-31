@@ -146,19 +146,19 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   accountLabel: {
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
   name: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 15,
     fontWeight: '700',
   },
   secondaryText: {
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontSize: 12,
     lineHeight: 17,
   },
@@ -177,7 +177,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   deviceAuthErrorDetail: {
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontFamily: 'monospace',
     fontSize: 11,
     lineHeight: 15,

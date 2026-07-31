@@ -382,7 +382,7 @@ function CanvasWidgetShowcase() {
         action={
           active ? null : (
             <Pressable onPress={() => setActive(true)} hitSlop={10} accessibilityLabel="Dismiss">
-              <XIcon size={18} color={theme.palette.slate.textSecondary} weight="bold" />
+              <XIcon size={18} color={theme.neutral.textSecondary} weight="bold" />
             </Pressable>
           )
         }
@@ -465,26 +465,26 @@ export default function WidgetsPage() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.palette.slate.bg },
+  container: { flex: 1, backgroundColor: theme.neutral.bg },
   content: { padding: 12, gap: 12, paddingBottom: 40 },
   row: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
   cell: { flex: 1 },
   sizeLabel: {
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontSize: 10,
     fontWeight: '700',
     fontFamily: 'monospace',
     marginTop: 4,
   },
   fill: { flex: 1 },
-  name: { color: theme.palette.slate.textPrimary, fontSize: 17, fontWeight: '700' },
+  name: { color: theme.neutral.textPrimary, fontSize: 17, fontWeight: '700' },
   squareValue: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 26,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
   },
-  meta: { color: theme.palette.slate.textSecondary, fontSize: 13 },
+  meta: { color: theme.neutral.textSecondary, fontSize: 13 },
   collapsiblePreview: { minHeight: 120 },
   optionList: { gap: 6 },
   optionRow: {
@@ -493,10 +493,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   optionRowActive: {
-    backgroundColor: theme.palette.slate.surfaceDeep,
+    backgroundColor: theme.neutral.surfaceDeep,
   },
   optionText: {
-    color: theme.palette.slate.textSecondary,
+    color: theme.neutral.textSecondary,
     fontSize: 14,
     fontWeight: '700',
   },

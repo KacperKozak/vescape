@@ -36,9 +36,9 @@ export default function WatchSettingsScreen() {
               <Switch
                 value={wearAutoLaunchOnConnect}
                 onValueChange={(v) => void set('wearAutoLaunchOnConnect', v)}
-                trackColor={{ false: theme.palette.slate.border, true: theme.palette.sky.border }}
+                trackColor={{ false: theme.neutral.border, true: theme.palette.sky.border }}
                 thumbColor={
-                  wearAutoLaunchOnConnect ? theme.palette.sky.color : theme.palette.slate.textMuted
+                  wearAutoLaunchOnConnect ? theme.palette.sky.color : theme.neutral.textMuted
                 }
               />
             }
@@ -73,7 +73,7 @@ export default function WatchSettingsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.palette.slate.bg,
+    backgroundColor: theme.neutral.bg,
   },
   content: {
     padding: 16,

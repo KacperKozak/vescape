@@ -185,10 +185,10 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
   },
   panel: {
-    backgroundColor: theme.palette.slate.surface,
+    backgroundColor: theme.neutral.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: theme.palette.slate.border,
+    borderColor: theme.neutral.border,
     overflow: 'hidden',
     shadowColor: theme.palette.mono.black,
     shadowOffset: { width: 0, height: 8 },

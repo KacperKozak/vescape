@@ -14,6 +14,7 @@ import {
 import { TuneDial } from '@/modules/tune/components/TuneDial'
 import { IconHero } from '@/components/settings/IconHero'
 import { theme } from '@/constants/theme'
+import { useResolvedAccentColors } from '@/hooks/useTheme'
 import {
   type AlertSound,
   clearAllBoardWarnings,
@@ -50,6 +51,7 @@ const TTS_EXAMPLES = [
 ]
 
 export default function OtherSettingsScreen() {
+  const accents = useResolvedAccentColors()
   const presets = useMemo(() => getAlertSounds(), [])
   const singlePresets = useMemo(
     () => presets.filter((preset) => preset.category === 'single'),
@@ -265,9 +267,12 @@ export default function OtherSettingsScreen() {
           <>
             <Text style={styles.sectionTitle}>Play</Text>
             <View style={styles.card}>
-              <Pressable style={styles.playButton} onPress={handlePlaySingle}>
-                <PlayIcon size={20} color={theme.palette.sky.bg} weight="fill" />
-                <Text style={styles.playButtonText}>
+              <Pressable
+                style={[styles.playButton, { backgroundColor: accents.sky.solid }]}
+                onPress={handlePlaySingle}
+              >
+                <PlayIcon size={20} color={accents.sky.onSolid} weight="fill" />
+                <Text style={[styles.playButtonText, { color: accents.sky.onSolid }]}>
                   Play {selectedPreset?.name ?? selectedUri}
                 </Text>
               </Pressable>
@@ -292,15 +297,25 @@ export default function OtherSettingsScreen() {
               </View>
 
               <Pressable
-                style={[styles.playButton, geigerActive && styles.stopButton]}
+                style={[
+                  styles.playButton,
+                  {
+                    backgroundColor: geigerActive ? accents.red.solid : accents.sky.solid,
+                  },
+                ]}
                 onPress={handleToggleGeiger}
               >
                 {geigerActive ? (
-                  <StopIcon size={20} color={theme.palette.slate.textPrimary} weight="fill" />
+                  <StopIcon size={20} color={accents.red.onSolid} weight="fill" />
                 ) : (
-                  <PlayIcon size={20} color={theme.palette.sky.bg} weight="fill" />
+                  <PlayIcon size={20} color={accents.sky.onSolid} weight="fill" />
                 )}
-                <Text style={[styles.playButtonText, geigerActive && styles.stopButtonText]}>
+                <Text
+                  style={[
+                    styles.playButtonText,
+                    { color: geigerActive ? accents.red.onSolid : accents.sky.onSolid },
+                  ]}
+                >
                   {geigerActive ? 'Stop' : 'Start Geiger'}
                 </Text>
               </Pressable>
@@ -332,13 +347,16 @@ export default function OtherSettingsScreen() {
             value={ttsTemplate}
             onChangeText={setTtsTemplate}
             placeholder="Enter template…"
-            placeholderTextColor={theme.palette.slate.textDim}
+            placeholderTextColor={theme.neutral.textDim}
             autoCapitalize="none"
             autoCorrect={false}
           />
-          <Pressable style={styles.playButton} onPress={handleSpeakTts}>
-            <SpeakerHighIcon size={20} color={theme.palette.sky.bg} weight="fill" />
-            <Text style={styles.playButtonText}>Speak</Text>
+          <Pressable
+            style={[styles.playButton, { backgroundColor: accents.sky.solid }]}
+            onPress={handleSpeakTts}
+          >
+            <SpeakerHighIcon size={20} color={accents.sky.onSolid} weight="fill" />
+            <Text style={[styles.playButtonText, { color: accents.sky.onSolid }]}>Speak</Text>
           </Pressable>
         </View>
       </ScrollView>
@@ -367,14 +385,14 @@ function PresetButton({ preset, selected, onPress }: PresetButtonProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.palette.slate.bg,
+    backgroundColor: theme.neutral.bg,
   },
   content: {
     padding: 16,
     gap: 8,
   },
   sectionTitle: {
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontSize: 13,
     fontWeight: '700',
     textTransform: 'uppercase',
@@ -384,17 +402,17 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
   plainCard: {
-    backgroundColor: theme.palette.slate.surface,
+    backgroundColor: theme.neutral.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: theme.palette.slate.border,
+    borderColor: theme.neutral.border,
     overflow: 'hidden',
   },
   card: {
-    backgroundColor: theme.palette.slate.surface,
+    backgroundColor: theme.neutral.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: theme.palette.slate.border,
+    borderColor: theme.neutral.border,
     overflow: 'hidden',
     padding: 14,
   },
@@ -409,7 +427,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 8,
-    backgroundColor: theme.palette.slate.surfaceDeep,
+    backgroundColor: theme.neutral.surfaceDeep,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -418,12 +436,12 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   rowLabel: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 15,
     fontWeight: '600',
   },
   rowHint: {
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontSize: 12,
   },
   controlGroup: {
@@ -441,15 +459,15 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   hapticButton: {
-    backgroundColor: theme.palette.slate.surfaceDeep,
+    backgroundColor: theme.neutral.surfaceDeep,
     borderWidth: 1,
-    borderColor: theme.palette.slate.border,
+    borderColor: theme.neutral.border,
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 8,
   },
   hapticButtonText: {
-    color: theme.palette.slate.textSecondary,
+    color: theme.neutral.textSecondary,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -459,9 +477,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   presetButton: {
-    backgroundColor: theme.palette.slate.surfaceDeep,
+    backgroundColor: theme.neutral.surfaceDeep,
     borderWidth: 1,
-    borderColor: theme.palette.slate.border,
+    borderColor: theme.neutral.border,
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -472,15 +490,15 @@ const styles = StyleSheet.create({
     backgroundColor: theme.palette.sky.bg,
   },
   presetName: {
-    color: theme.palette.slate.textSecondary,
+    color: theme.neutral.textSecondary,
     fontSize: 13,
     fontWeight: '700',
   },
   presetNameActive: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
   },
   presetCategory: {
-    color: theme.palette.slate.textDim,
+    color: theme.neutral.textDim,
     fontSize: 10,
     fontWeight: '600',
     textTransform: 'uppercase',
@@ -491,27 +509,26 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: theme.palette.slate.border,
+    borderColor: theme.neutral.border,
   },
   modeButton: {
     flex: 1,
     alignItems: 'center',
     paddingVertical: 10,
-    backgroundColor: theme.palette.slate.surfaceDeep,
+    backgroundColor: theme.neutral.surfaceDeep,
   },
   modeButtonActive: {
     backgroundColor: theme.palette.sky.bg,
   },
   modeText: {
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontSize: 13,
     fontWeight: '600',
   },
   modeTextActive: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
   },
   playButton: {
-    backgroundColor: theme.palette.sky.color,
     borderRadius: 8,
     paddingVertical: 14,
     flexDirection: 'row',
@@ -520,18 +537,11 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   playButtonText: {
-    color: theme.palette.sky.bg,
     fontSize: 15,
     fontWeight: '700',
   },
-  stopButton: {
-    backgroundColor: theme.status.error.color,
-  },
-  stopButtonText: {
-    color: theme.palette.slate.textPrimary,
-  },
   ttsHint: {
-    color: theme.palette.slate.textDim,
+    color: theme.neutral.textDim,
     fontSize: 11,
     marginBottom: 10,
     lineHeight: 16,
@@ -543,9 +553,9 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   ttsChip: {
-    backgroundColor: theme.palette.slate.surfaceDeep,
+    backgroundColor: theme.neutral.surfaceDeep,
     borderWidth: 1,
-    borderColor: theme.palette.slate.border,
+    borderColor: theme.neutral.border,
     borderRadius: 6,
     paddingHorizontal: 10,
     paddingVertical: 6,
@@ -555,21 +565,21 @@ const styles = StyleSheet.create({
     backgroundColor: theme.palette.sky.bg,
   },
   ttsChipText: {
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontSize: 11,
     fontWeight: '600',
   },
   ttsChipTextActive: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
   },
   ttsInput: {
-    backgroundColor: theme.palette.slate.surfaceDeep,
+    backgroundColor: theme.neutral.surfaceDeep,
     borderWidth: 1,
-    borderColor: theme.palette.slate.border,
+    borderColor: theme.neutral.border,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 13,
     marginBottom: 12,
     fontFamily: 'monospace',
@@ -584,7 +594,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   dialLabel: {
-    color: theme.palette.slate.textSecondary,
+    color: theme.neutral.textSecondary,
     fontSize: 13,
     fontWeight: '600',
   },
@@ -596,9 +606,9 @@ const styles = StyleSheet.create({
   warningButton: {
     flex: 1,
     alignItems: 'center',
-    backgroundColor: theme.palette.slate.surfaceDeep,
+    backgroundColor: theme.neutral.surfaceDeep,
     borderWidth: 1,
-    borderColor: theme.palette.slate.border,
+    borderColor: theme.neutral.border,
     borderRadius: 8,
     paddingVertical: 12,
   },
@@ -609,12 +619,12 @@ const styles = StyleSheet.create({
     borderColor: theme.status.error.color,
   },
   warningButtonText: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 13,
     fontWeight: '700',
   },
   warningEmpty: {
-    color: theme.palette.slate.textDim,
+    color: theme.neutral.textDim,
     fontSize: 12,
     marginTop: 12,
   },
@@ -623,12 +633,12 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   warningRowKind: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 13,
     fontWeight: '700',
   },
   warningRowPayload: {
-    color: theme.palette.slate.textDim,
+    color: theme.neutral.textDim,
     fontSize: 11,
     fontFamily: 'monospace',
   },

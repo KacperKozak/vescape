@@ -22,7 +22,7 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 17,
-    backgroundColor: theme.alpha(theme.palette.slate.bg, 0.6),
+    backgroundColor: theme.alpha(theme.neutral.bg, 0.6),
     borderWidth: 1,
     borderColor: theme.alpha(theme.palette.slate.light, 0.3),
     transform: [{ translateX: -17 }, { translateY: -17 }],

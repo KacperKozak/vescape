@@ -117,7 +117,7 @@ function DetailRow({ icon: IconComponent, title, body }: DetailRowProps) {
   return (
     <View style={styles.detailRow}>
       <View style={styles.detailIcon}>
-        <IconComponent size={16} color={theme.palette.slate.textPrimary} weight="fill" />
+        <IconComponent size={16} color={theme.neutral.textPrimary} weight="fill" />
       </View>
       <View style={styles.detailText}>
         <Text style={styles.detailTitle}>{title}</Text>
@@ -166,20 +166,20 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   badgeLabel: {
-    color: theme.palette.slate.textDim,
+    color: theme.neutral.textDim,
     fontSize: 10,
     fontWeight: '800',
     textTransform: 'uppercase',
   },
   badgeValue: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 13,
     fontWeight: '900',
   },
   badgeCaption: {
     flex: 1,
     minWidth: 0,
-    color: theme.palette.slate.textSecondary,
+    color: theme.neutral.textSecondary,
     fontSize: 10,
     fontWeight: '700',
     lineHeight: 13,
@@ -202,7 +202,7 @@ const styles = StyleSheet.create({
   },
   alertText: {
     flex: 1,
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 12,
     fontWeight: '800',
     lineHeight: 17,
@@ -229,12 +229,12 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   detailTitle: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 12,
     fontWeight: '900',
   },
   detailBody: {
-    color: theme.palette.slate.textSecondary,
+    color: theme.neutral.textSecondary,
     fontSize: 12,
     fontWeight: '600',
     lineHeight: 17,
@@ -245,13 +245,13 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   sourceLabel: {
-    color: theme.palette.slate.textDim,
+    color: theme.neutral.textDim,
     fontSize: 10,
     fontWeight: '800',
     textTransform: 'uppercase',
   },
   sourceValue: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 12,
     fontWeight: '800',
   },

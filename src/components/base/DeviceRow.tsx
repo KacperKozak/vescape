@@ -42,7 +42,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 14,
     paddingHorizontal: 16,
-    backgroundColor: theme.palette.slate.surface,
+    backgroundColor: theme.neutral.surface,
     borderRadius: 10,
     marginBottom: 8,
   },
@@ -51,7 +51,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   name: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 16,
     fontWeight: '600',
   },
@@ -60,12 +60,12 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
   },
   id: {
-    color: theme.palette.slate.textSecondary,
+    color: theme.neutral.textSecondary,
     fontSize: 12,
     fontFamily: 'monospace',
   },
   chevron: {
-    color: theme.palette.slate.textDim,
+    color: theme.neutral.textDim,
     fontSize: 22,
     fontWeight: '300',
   },

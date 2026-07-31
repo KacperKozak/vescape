@@ -8,6 +8,12 @@ For visual design principles (colors, layout, typography, when to use cards), se
 
 Every color must come from the `theme` object in `src/constants/theme.ts`. Never hardcode a hex or rgba value directly in a component.
 
+Use `theme.neutral` for every appearance-aware surface, border, and neutral text/icon. Use `theme.palette.<hue>` for adaptive accent text, icons, borders, and tinted surfaces rendered by React Native. Raw `theme.palette.slate` values are fixed dark swatches for map JSON and other non-adaptive assets.
+
+The adaptive neutral and accent tokens are native color objects at runtime. Mapbox, Skia, Reanimated worklets, and string-valued state/options cannot consume them. Use `useResolvedNeutralColors()` and `useResolvedAccentColors()` from `src/hooks/useTheme.ts` in those paths and pass their plain string values into the renderer or data structure.
+
+Filled actions use the resolved hue's `solid` background and `onSolid` content pair. Do not infer the foreground from `color`, `text`, or a fixed black/white value; the pair is contrast-checked separately for each appearance.
+
 ```tsx
 import { theme } from '@/constants/theme'
 

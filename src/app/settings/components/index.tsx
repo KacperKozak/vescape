@@ -40,7 +40,7 @@ const groups = [
         hint: 'Raleway across every UI text role, with weight and tabular-nums parity',
         route: '/settings/components/typography',
         icon: TextAaIcon,
-        color: theme.palette.slate.textSecondary,
+        color: theme.neutral.textSecondary,
       },
       {
         label: 'Markdown',
@@ -164,6 +164,6 @@ export default function ComponentsIndex() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.palette.slate.bg },
+  container: { flex: 1, backgroundColor: theme.neutral.bg },
   content: { padding: 16, gap: 8 },
 })

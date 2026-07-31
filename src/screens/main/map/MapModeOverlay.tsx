@@ -10,6 +10,7 @@ import { IconButton } from '@/components/base/IconButton'
 import { Text } from '@/components/base/Text'
 import { ConfirmModal } from '@/components/modals/ConfirmModal'
 import { theme } from '@/constants/theme'
+import { useResolvedAccentColors } from '@/hooks/useTheme'
 import { getMapPointKindLabel } from '@/modules/map-points/constants/mapPoints'
 import { MapPointAddMenu } from '@/modules/map-points/components/MapPointAddMenu'
 import { MapPointFilterMenu } from '@/modules/map-points/components/MapPointFilterMenu'
@@ -58,10 +59,14 @@ function clearPlacementTimeoutRef(ref: { current: ReturnType<typeof setTimeout> 
   ref.current = null
 }
 
-function navigationActionColors(riderColor: string | null) {
+function navigationActionColors(
+  riderColor: string | null,
+  defaultColor: string,
+  defaultTextColor: string,
+) {
   return {
-    color: riderColor ?? theme.palette.green.color,
-    textColor: riderColor ?? theme.palette.green.text,
+    color: riderColor ?? defaultColor,
+    textColor: riderColor ?? defaultTextColor,
   }
 }
 
@@ -151,6 +156,7 @@ function FullMapControls({
   onBeginEditMapPoint,
   onRequireMapAccount,
 }: FullMapControlsProps) {
+  const accents = useResolvedAccentColors()
   const riderColor = useRiderStore((s) => s.riderColor)
   // Category visibility and Map Point creation are store truth, not screen wiring.
   const hiddenMapPointCategories = useMapPointStore((s) => s.hiddenMapPointCategories)
@@ -314,13 +320,17 @@ function FullMapControls({
     })
   }, [closeAddMenu, mapRef, onNavigateTarget])
 
-  const navigationAction = navigationActionColors(riderColor)
+  const navigationAction = navigationActionColors(
+    riderColor,
+    accents.green.solid,
+    accents.green.onSolid,
+  )
 
   return (
     <>
       {addMenuOpen ? (
         <CenterPlacementPointer
-          color={riderColor ?? theme.palette.green.color}
+          color={riderColor ?? accents.green.color}
           pulseKey={placementPulseKey}
         />
       ) : null}
@@ -334,11 +344,7 @@ function FullMapControls({
       {searchOpen ? (
         <View style={[styles.mapSearchSheet, { top }]}>
           <View style={styles.mapSearchBar}>
-            <MagnifyingGlassIcon
-              size={22}
-              color={theme.palette.slate.textSecondary}
-              weight="bold"
-            />
+            <MagnifyingGlassIcon size={22} color={theme.neutral.textSecondary} weight="bold" />
             <TextInput
               autoFocus
               selectTextOnFocus
@@ -346,7 +352,7 @@ function FullMapControls({
               onChangeText={handleSearchQueryChange}
               onSubmitEditing={handleSearchSubmit}
               placeholder="Address or place"
-              placeholderTextColor={theme.palette.slate.textMuted}
+              placeholderTextColor={theme.neutral.textMuted}
               returnKeyType="search"
               style={styles.mapSearchInput}
             />
@@ -359,7 +365,7 @@ function FullMapControls({
                 pressed && styles.mapSearchClosePressed,
               ]}
             >
-              <XIcon size={22} color={theme.palette.slate.textSecondary} weight="bold" />
+              <XIcon size={22} color={theme.neutral.textSecondary} weight="bold" />
             </Pressable>
           </View>
           {searchLoading || searchError || showNoResults || searchResults.length > 0 ? (
@@ -468,6 +474,7 @@ export function MapModeOverlay({
   setMapPointReaction,
   onRemoveMapPoint,
 }: MapModeOverlayProps) {
+  const accents = useResolvedAccentColors()
   const router = useRouter()
   // The server authorizes Map Point writes on the Device Token, so that is what gates the UI.
   const canContribute = useMapContributionReady()
@@ -490,7 +497,11 @@ export function MapModeOverlay({
       : null)
   const targetSheetVisible =
     selectedNavigationTarget != null || (navigationTarget != null && !addMenuOpen)
-  const navigationAction = navigationActionColors(riderColor)
+  const navigationAction = navigationActionColors(
+    riderColor,
+    accents.green.solid,
+    accents.green.onSolid,
+  )
 
   const focusTargetOnMap = useCallback(
     (target: MapSelection) => {
@@ -642,14 +653,14 @@ const styles = StyleSheet.create({
     left: 12,
     zIndex: 32,
     borderColor: theme.alpha(theme.palette.slate.light, 0.3),
-    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
+    backgroundColor: theme.alpha(theme.neutral.surfaceDeep, 0.85),
   },
   mapSearchButton: {
     position: 'absolute',
     right: 12,
     zIndex: 44,
     borderColor: theme.alpha(theme.palette.slate.light, 0.3),
-    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
+    backgroundColor: theme.alpha(theme.neutral.surfaceDeep, 0.85),
   },
   mapSearchSheet: {
     position: 'absolute',
@@ -663,7 +674,7 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     borderWidth: 1,
     borderColor: theme.alpha(theme.palette.slate.light, 0.3),
-    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
+    backgroundColor: theme.alpha(theme.neutral.surfaceDeep, 0.85),
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
@@ -673,7 +684,7 @@ const styles = StyleSheet.create({
   mapSearchInput: {
     flex: 1,
     minWidth: 0,
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 15,
     fontWeight: '700',
     paddingVertical: 10,
@@ -692,7 +703,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: theme.alpha(theme.palette.slate.light, 0.3),
-    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.85),
+    backgroundColor: theme.alpha(theme.neutral.surfaceDeep, 0.85),
   },
   mapSearchStatusRow: {
     minHeight: 48,
@@ -702,7 +713,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   mapSearchStatusText: {
-    color: theme.palette.slate.textSecondary,
+    color: theme.neutral.textSecondary,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -731,19 +742,19 @@ const styles = StyleSheet.create({
     borderColor: theme.palette.green.border,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: theme.palette.slate.surfaceDeep,
+    backgroundColor: theme.neutral.surfaceDeep,
   },
   mapSearchResultText: {
     flex: 1,
     minWidth: 0,
   },
   mapSearchResultTitle: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 13,
     fontWeight: '800',
   },
   mapSearchResultSubtitle: {
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontSize: 11,
     fontWeight: '600',
     marginTop: 2,
@@ -770,7 +781,7 @@ const styles = StyleSheet.create({
     borderStyle: 'dashed',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.4),
+    backgroundColor: theme.alpha(theme.neutral.surfaceDeep, 0.4),
   },
   centerPlacementPulse: {
     position: 'absolute',
@@ -778,7 +789,7 @@ const styles = StyleSheet.create({
     height: 42,
     borderRadius: 21,
     borderWidth: 2,
-    backgroundColor: theme.alpha(theme.palette.slate.surfaceDeep, 0.3),
+    backgroundColor: theme.alpha(theme.neutral.surfaceDeep, 0.3),
   },
   centerPlacementDot: {
     width: 8,

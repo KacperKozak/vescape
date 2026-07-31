@@ -26,7 +26,7 @@ export function StepperWidget({
   label,
   previousIcon = CaretDownIcon,
   nextIcon = CaretUpIcon,
-  accent = theme.palette.slate.textSecondary,
+  accent = theme.neutral.textSecondary,
   size = 'full',
   disabled,
   previousAccessibilityLabel = `${label} back`,
@@ -75,7 +75,7 @@ const styles = StyleSheet.create({
   label: {
     flex: 1,
     minWidth: 0,
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 15,
     fontWeight: '700',
   },

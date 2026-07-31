@@ -48,7 +48,7 @@ export function Select<T extends string = string>({
         <Text style={[styles.triggerText, !selectedOption && styles.placeholderText]}>
           {selectedOption?.label ?? placeholder}
         </Text>
-        <CaretDownIcon size={14} color={theme.palette.slate.textMuted} weight="bold" />
+        <CaretDownIcon size={14} color={theme.neutral.textMuted} weight="bold" />
       </Pressable>
 
       <Dropdown
@@ -97,13 +97,13 @@ const styles = StyleSheet.create({
     height: 42,
   },
   triggerText: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 15,
     fontWeight: '600',
     flex: 1,
   },
   placeholderText: {
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
   },
   option: {
     flexDirection: 'row',
@@ -114,7 +114,7 @@ const styles = StyleSheet.create({
   },
   optionBorder: {
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.palette.slate.border,
+    borderBottomColor: theme.neutral.border,
   },
   optionSelected: {
     backgroundColor: theme.palette.sky.bg,
@@ -123,7 +123,7 @@ const styles = StyleSheet.create({
     backgroundColor: interaction.pressedBg,
   },
   optionText: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 14,
     fontWeight: '500',
   },

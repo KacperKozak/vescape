@@ -1,6 +1,8 @@
 import Mapbox from '@rnmapbox/maps'
 import { MoonStarsIcon, MountainsIcon, PlanetIcon, SunIcon } from 'phosphor-react-native'
-import { theme } from '@/constants/theme'
+import { accentColors, theme } from '@/constants/theme'
+
+const mapAccent = accentColors.dark.violet
 
 export const MAP_DEFAULTS = {
   fallbackCoordinate: [15.0, 54.0] as [number, number],
@@ -17,13 +19,13 @@ export const MAP_DEFAULTS = {
   animationDuration: 350,
   followAnimationDuration: 450,
   pitchThreshold: 10,
-  markerColor: theme.palette.violet.color,
+  markerColor: mapAccent.color,
   markerInactiveColor: theme.palette.slate.light,
-  trailColor: theme.palette.violet.color,
+  trailColor: mapAccent.color,
   trailWidth: 3,
-  accuracyFillColor: theme.alpha(theme.palette.violet.color, 0.12),
-  trailGradientStart: theme.alpha(theme.palette.violet.color, 0),
-  trailGradientEnd: theme.alpha(theme.palette.violet.color, 0.85),
+  accuracyFillColor: theme.alpha(mapAccent.color, 0.12),
+  trailGradientStart: theme.alpha(mapAccent.color, 0),
+  trailGradientEnd: theme.alpha(mapAccent.color, 0.85),
 } as const
 
 export const BLANK_STYLE = JSON.stringify({

@@ -40,7 +40,7 @@ export function WeatherIcon({
   hour,
   isNight,
   size = 20,
-  color = theme.palette.slate.textSecondary,
+  color = theme.neutral.textSecondary,
   weight = 'duotone',
 }: WeatherIconProps) {
   const name = weatherCodeToIconName(code, hour, isNight)

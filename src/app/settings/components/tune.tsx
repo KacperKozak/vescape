@@ -435,7 +435,7 @@ export default function TunePage() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.palette.slate.bg },
+  container: { flex: 1, backgroundColor: theme.neutral.bg },
   content: { padding: 12, gap: 12, paddingBottom: 40 },
   basicSliderShowcaseSingle: {
     maxWidth: 200,

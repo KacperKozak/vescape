@@ -71,7 +71,7 @@ function RowInput({
                 onBlur={commitOnBlur ? commit : undefined}
                 onSubmitEditing={commit}
                 placeholder={placeholder}
-                placeholderTextColor={theme.palette.slate.textMuted}
+                placeholderTextColor={theme.neutral.textMuted}
                 returnKeyType="done"
                 maxLength={maxLength}
                 autoFocus
@@ -95,7 +95,7 @@ function RowInput({
           {editing ? (
             <CheckIcon size={18} color={theme.palette.green.color} weight="bold" />
           ) : (
-            <PencilSimpleIcon size={18} color={theme.palette.slate.textSecondary} weight="bold" />
+            <PencilSimpleIcon size={18} color={theme.neutral.textSecondary} weight="bold" />
           )}
         </Pressable>
       </View>
@@ -173,7 +173,7 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   pressed: {
-    backgroundColor: theme.palette.slate.surface,
+    backgroundColor: theme.neutral.surface,
   },
   text: {
     minWidth: 0,
@@ -187,14 +187,14 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   label: {
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.5,
     textTransform: 'uppercase',
   },
   value: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 17,
     fontWeight: '700',
     flex: 1,

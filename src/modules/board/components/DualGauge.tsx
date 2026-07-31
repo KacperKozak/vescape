@@ -32,11 +32,11 @@ import {
 import {
   AlertMarker,
   AnimatedTextInput,
-  BG_ARC_COLOR,
   gaugeRampColor,
   GlowGradient,
   useCanvasSize,
 } from '@/modules/board/components/gauge/gaugeShared'
+import { useResolvedNeutralColors } from '@/hooks/useTheme'
 
 interface DualGaugeProps {
   speedValue: SharedValue<number | null>
@@ -105,6 +105,7 @@ function QuarterArcLayer({
   hotRange,
   transform,
 }: QuarterArcLayerProps) {
+  const neutral = useResolvedNeutralColors()
   const isLeft = side === 'left'
   const arc = isLeft ? LEFT_ARC : RIGHT_ARC
 
@@ -129,7 +130,7 @@ function QuarterArcLayer({
       {/* Static background arc */}
       <Path
         path={isLeft ? BG_ARC_LEFT : BG_ARC_RIGHT}
-        color={BG_ARC_COLOR}
+        color={neutral.border}
         style="stroke"
         strokeWidth={STROKE}
         strokeCap="butt"
@@ -388,7 +389,7 @@ export function DualGauge({
 
 const styles = StyleSheet.create({
   wrap: {
-    backgroundColor: theme.palette.slate.surface,
+    backgroundColor: theme.neutral.surface,
     borderRadius: 16,
     padding: 12,
     marginHorizontal: 4,
@@ -445,7 +446,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   value: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 36,
     fontFamily: 'monospace',
     fontWeight: '700',
@@ -454,7 +455,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   unit: {
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontSize: 10,
     textAlign: 'center',
     marginTop: 2,

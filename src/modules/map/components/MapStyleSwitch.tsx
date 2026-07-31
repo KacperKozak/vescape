@@ -36,9 +36,7 @@ export function MapStyleSwitch({
       <style.Icon
         size={iconSize}
         color={
-          effectiveActiveKey === style.key
-            ? theme.palette.sky.text
-            : theme.palette.slate.textSecondary
+          effectiveActiveKey === style.key ? theme.palette.sky.text : theme.neutral.textSecondary
         }
         weight={effectiveActiveKey === style.key ? 'fill' : 'bold'}
       />

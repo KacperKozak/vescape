@@ -15,6 +15,7 @@ const BASE: AppSettings = {
   movingSpeedThresholdKmh: 3,
   freeSpinMaxSpeedDeltaKmh: 12,
   freeSpinStationaryBoardCapKmh: 15,
+  themeMode: 'system',
   mapStyleKey: 'onedark',
   satelliteOverlayEnabled: true,
   satelliteImageryOpacity: 0.2,

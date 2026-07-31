@@ -14,6 +14,7 @@ import {
 } from '@/components/controls/MapOptionSelector'
 import { MAP_NAVIGATION_MODES, type MapNavigationMode } from '@/modules/map/constants/mapStyles'
 import { theme } from '@/constants/theme'
+import { useResolvedAccentColors } from '@/hooks/useTheme'
 
 const COLLAPSED_ICON_COLOR = theme.palette.mono.white
 
@@ -34,6 +35,7 @@ export function MapNavigationSelector({
   onToggle,
   onSelect,
 }: MapNavigationSelectorProps) {
+  const accents = useResolvedAccentColors()
   const iconSize = size === 'sm' ? 18 : 21
   const optionIconSize = size === 'sm' ? 17 : 20
   const freeRotateIconStyle = useAnimatedStyle(() => ({
@@ -69,8 +71,8 @@ export function MapNavigationSelector({
     <MapOptionSelector
       activeKey={activeMode}
       activeIcon={activeIcon}
-      activeColor={theme.palette.green.text}
-      activeBackground={theme.alpha(theme.palette.green.color, 0.12)}
+      activeColor={accents.green.text}
+      activeBackground={theme.alpha(accents.green.color, 0.12)}
       collapsedAccessibilityLabel={`Navigation: ${activeMode === 'northUp' ? 'North up' : activeMode === 'gpsHeading' ? 'GPS heading' : activeMode === 'phoneHeading' ? 'Compass' : 'Free rotate'}`}
       expanded={expanded}
       size={size}
@@ -86,7 +88,7 @@ function getNavigationIcon(
   activeMode: MapNavigationMode,
   iconSize: number,
 ) {
-  const color = activeMode === mode ? theme.palette.green.text : theme.palette.slate.textSecondary
+  const color = activeMode === mode ? theme.palette.green.text : theme.neutral.textSecondary
   if (mode === 'northUp') {
     return <ArrowUpIcon size={iconSize} color={color} weight="bold" />
   }

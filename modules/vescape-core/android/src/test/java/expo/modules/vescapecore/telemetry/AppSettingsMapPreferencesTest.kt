@@ -24,6 +24,16 @@ class AppSettingsMapPreferencesTest {
   }
 
   @Test
+  fun themeModeValidationAcceptsSupportedModesOnly() {
+    assertEquals("system", validThemeMode("system"))
+    assertEquals("light", validThemeMode("light"))
+    assertEquals("dark", validThemeMode("dark"))
+    assertEquals("sun", validThemeMode("sun"))
+    assertNull(validThemeMode("automatic"))
+    assertNull(validThemeMode(false))
+  }
+
+  @Test
   fun navigationValidationAcceptsSupportedModesOnly() {
     assertEquals("northUp", validMapNavigationMode("northUp"))
     assertEquals("gpsHeading", validMapNavigationMode("gpsHeading"))

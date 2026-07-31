@@ -31,11 +31,10 @@ export function WeatherStat({
   isNight,
   precipProbability,
   size = 'sm',
-  iconColor = theme.palette.slate.textSecondary,
+  iconColor = theme.neutral.textSecondary,
 }: WeatherStatProps) {
   const dims = SIZES[size]
-  const tempColor =
-    size === 'md' ? theme.palette.slate.textPrimary : theme.palette.slate.textSecondary
+  const tempColor = size === 'md' ? theme.neutral.textPrimary : theme.neutral.textSecondary
 
   return (
     <View style={styles.row}>

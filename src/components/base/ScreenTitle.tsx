@@ -12,7 +12,7 @@ export function ScreenTitle({ title }: Props) {
 
 const styles = StyleSheet.create({
   title: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 14,
     fontWeight: '600',
     letterSpacing: 0.5,

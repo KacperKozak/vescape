@@ -61,7 +61,7 @@ export function MapTargetSelectBody({
               pressed && mapSheetStyles.mapTargetNavigatePressed,
             ]}
           >
-            <PencilSimpleIcon size={18} color={theme.palette.slate.textPrimary} weight="bold" />
+            <PencilSimpleIcon size={18} color={theme.neutral.textPrimary} weight="bold" />
             <Text style={[mapSheetStyles.mapTargetNavigateText, styles.editText]}>Edit</Text>
           </Pressable>
         ) : null}
@@ -105,7 +105,7 @@ function MapPointVoteButtons({
       >
         <ThumbsUpIcon
           size={18}
-          color={reaction === 'up' ? theme.palette.cyan.text : theme.palette.slate.textPrimary}
+          color={reaction === 'up' ? theme.palette.cyan.text : theme.neutral.textPrimary}
           weight={reaction === 'up' ? 'fill' : 'bold'}
         />
       </Pressable>
@@ -121,7 +121,7 @@ function MapPointVoteButtons({
       >
         <ThumbsDownIcon
           size={18}
-          color={reaction === 'down' ? theme.status.error.text : theme.palette.slate.textPrimary}
+          color={reaction === 'down' ? theme.status.error.text : theme.neutral.textPrimary}
           weight={reaction === 'down' ? 'fill' : 'bold'}
         />
       </Pressable>
@@ -145,10 +145,10 @@ const styles = StyleSheet.create({
     gap: 7,
     borderWidth: 1,
     borderColor: theme.alpha(theme.palette.slate.light, 0.3),
-    backgroundColor: theme.alpha(theme.palette.slate.bg, 0.75),
+    backgroundColor: theme.alpha(theme.neutral.bg, 0.75),
   },
   editText: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
   },
   upButtonActive: {
     borderColor: theme.palette.cyan.border,
@@ -164,7 +164,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: theme.alpha(theme.palette.slate.light, 0.3),
-    backgroundColor: theme.alpha(theme.palette.slate.bg, 0.75),
+    backgroundColor: theme.alpha(theme.neutral.bg, 0.75),
   },
   voteGroup: {
     flexDirection: 'row',

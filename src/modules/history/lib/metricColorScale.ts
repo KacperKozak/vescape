@@ -1,4 +1,4 @@
-import { theme } from '@/constants/theme'
+import { accentColors, theme } from '@/constants/theme'
 import { dutyPercent } from '@/helpers/format'
 import type { TelemetrySample } from '@/modules/history/store/historyStore'
 
@@ -91,7 +91,7 @@ export function makeMetricColorRange(
   const min = Math.min(hotRange.start, hotRange.end)
   const max = Math.max(hotRange.start, hotRange.end)
   if (min === max) return null
-  return { min, max, baseColor, hotColor: theme.status.error.color }
+  return { min, max, baseColor, hotColor: accentColors.dark.red.color }
 }
 
 function isFiniteHotRange(value: MetricHotRange | undefined): value is MetricHotRange {

@@ -90,7 +90,7 @@ function RiderNameWidget() {
           accessibilityLabel={riderColor ? `Your color ${riderColor}` : 'No color selected'}
         >
           {riderColor ? null : (
-            <PaletteIcon size={14} color={theme.palette.slate.textSecondary} weight="duotone" />
+            <PaletteIcon size={14} color={theme.neutral.textSecondary} weight="duotone" />
           )}
         </View>
       }
@@ -191,7 +191,7 @@ function GroupRideWidget() {
       hitSlop={10}
       accessibilityLabel="Dismiss nearby rides"
     >
-      <XIcon size={18} color={theme.palette.slate.textSecondary} weight="bold" />
+      <XIcon size={18} color={theme.neutral.textSecondary} weight="bold" />
     </Pressable>
   ) : null
 
@@ -318,7 +318,7 @@ function StatCell({
   level?: TelemetryLevel
 }) {
   const alert = level !== 'normal'
-  const color = alert ? TELEMETRY_LEVEL_COLOR[level] : theme.palette.slate.textSecondary
+  const color = alert ? TELEMETRY_LEVEL_COLOR[level] : theme.neutral.textSecondary
   return (
     <View style={styles.statCell}>
       <View style={styles.statIconSlot}>
@@ -340,12 +340,12 @@ function RiderCell({
   accent: string
   connected: boolean
 }) {
-  const dotColor = rider.color || theme.palette.slate.textMuted
+  const dotColor = rider.color || theme.neutral.textMuted
   const boardName = rider.presence?.boardName?.trim() || 'Board not connected'
   // Only claim a rider is "Live" when our own relay link is up — otherwise the roster is just
   // the last snapshot we received and we can't know it's current.
   const fresh = !rider.stale && connected
-  const statusColor = fresh ? accent : theme.palette.slate.textMuted
+  const statusColor = fresh ? accent : theme.neutral.textMuted
   const status = fresh ? 'Live' : 'Stale'
   const s = riderStats(rider.presence)
 
@@ -421,17 +421,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
-    borderColor: theme.palette.slate.border,
+    borderColor: theme.neutral.border,
   },
   colorDotEmpty: {
-    backgroundColor: theme.palette.slate.surfaceDeep,
+    backgroundColor: theme.neutral.surfaceDeep,
   },
   colorEditor: {
     marginLeft: 36,
     gap: 8,
   },
   colorLabel: {
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.5,
@@ -444,16 +444,16 @@ const styles = StyleSheet.create({
     backgroundColor: theme.palette.groupRide.border,
   },
   rideName: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 17,
     fontWeight: '700',
   },
   rideMeta: {
-    color: theme.palette.slate.textSecondary,
+    color: theme.neutral.textSecondary,
     fontSize: 13,
   },
   rideMetaDim: {
-    color: theme.palette.slate.textSecondary,
+    color: theme.neutral.textSecondary,
     fontSize: 12,
     opacity: 0.7,
   },
@@ -498,7 +498,7 @@ const styles = StyleSheet.create({
   },
   riderName: {
     flexShrink: 1,
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -514,7 +514,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   riderBoard: {
-    color: theme.palette.slate.textSecondary,
+    color: theme.neutral.textSecondary,
     fontSize: 12,
   },
   statGrid: {
@@ -548,7 +548,7 @@ const styles = StyleSheet.create({
   },
   statValue: {
     flexShrink: 1,
-    color: theme.palette.slate.textSecondary,
+    color: theme.neutral.textSecondary,
     fontSize: 11,
     fontWeight: '600',
   },

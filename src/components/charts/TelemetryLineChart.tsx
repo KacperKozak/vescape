@@ -31,6 +31,8 @@ import {
   getChartTimeLabels,
   getXPosition,
   getChartAlertMarkers,
+  CHART_ALERT_LINE_COLOR,
+  getChartExclusionColor,
   splitChartPointSegments,
   splitChartLineSegments,
   type ExcludedRange,
@@ -42,6 +44,7 @@ import {
   useChartTrim,
   type ChartTrimConfig,
 } from '@/components/charts/TelemetryChartTrim'
+import { useResolvedColor, useResolvedColorItems, useResolvedNeutralColors } from '@/hooks/useTheme'
 
 export type { ChartTrimConfig } from '@/components/charts/TelemetryChartTrim'
 
@@ -51,7 +54,6 @@ const TOOLTIP_WIDTH = 94
 const CARD_HORIZONTAL_PADDING = 8
 const EXCLUSION_MARKER_HEIGHT = 1
 const EXCLUSION_MARKER_INSET = 1
-const ALERT_LINE_COLOR = theme.alpha(theme.palette.yellow.color, 0.1)
 const NO_ALERT_THRESHOLDS: number[] = []
 const EMPTY_MARKER_TABLE: MarkerTable = {
   ts: [],
@@ -140,10 +142,6 @@ function createScrubGesture({
       activeScrubTimeMs.value = null
       runOnJS(endDrag)(timeMs)
     })
-}
-
-function exclusionColor(reason: string): string {
-  return reason === 'free_spin' ? theme.palette.yellow.color : theme.palette.slate.textSecondary
 }
 
 function formatTime(date: Date): string {
@@ -399,6 +397,9 @@ export function TelemetryLineChart({
   timeRangeHighlights,
 }: TelemetryLineChartProps) {
   'use no memo'
+  const neutral = useResolvedNeutralColors()
+  const resolvedColor = useResolvedColor(color)
+  const resolvedTimeRangeHighlights = useResolvedColorItems(timeRangeHighlights)
   const [chartWidth, setChartWidth] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
   const internalScrubTimeMs = useSharedValue<number | null>(null)
@@ -407,7 +408,6 @@ export function TelemetryLineChart({
   const onPointSelectedRef = useRef(onPointSelected)
   const onGestureStartRef = useRef(onGestureStart)
   const onScrubTimeChangeRef = useRef(onScrubTimeChange)
-  // Freeze live series while dragging so path and marker-table rebuilds do not starve JS.
   const liveSeriesRef = useRef({ points, secondary })
   const [frozenSeries, setFrozenSeries] = useState<{
     points: TelemetryChartPoint[]
@@ -438,7 +438,7 @@ export function TelemetryLineChart({
         range,
         width: chartWidth,
         height,
-        color,
+        color: resolvedColor,
         getPointColor,
         formatValue,
         windowMs,
@@ -446,7 +446,7 @@ export function TelemetryLineChart({
       }),
     [
       chartWidth,
-      color,
+      resolvedColor,
       displayPoints,
       displaySecondary,
       formatValue,
@@ -488,8 +488,7 @@ export function TelemetryLineChart({
     const idx = liveIdx.value
     return idx >= 0 ? markerTableSV.value.timeStrs[idx] : ''
   })
-  // Only the string is captured: closing over `secondary` would drag its points
-  // (and their Date fields) into the worklet, which Reanimated cannot copy.
+  // Capture only the string; Reanimated cannot copy the secondary series' Date fields.
   const secondaryFallbackValue = secondary?.value ?? '-'
   const liveSecondaryValueText = useDerivedValue(() => {
     const idx = liveIdx.value
@@ -580,11 +579,11 @@ export function TelemetryLineChart({
     return getChartTimeLabels(displayPoints, windowMs, timeMode)
   }, [displayPoints, timeMode, windowMs])
   const timeRangeBands = useMemo(
-    () => getChartTimeRangeBands(displayPoints, timeRangeHighlights ?? [], chartWidth, windowMs),
-    [chartWidth, displayPoints, timeRangeHighlights, windowMs],
+    () => getChartTimeRangeBands(displayPoints, resolvedTimeRangeHighlights, chartWidth, windowMs),
+    [chartWidth, displayPoints, resolvedTimeRangeHighlights, windowMs],
   )
 
-  const activeColor = resolveActiveChartColor(currentPoint, color, getPointColor)
+  const activeColor = resolveActiveChartColor(currentPoint, resolvedColor, getPointColor)
   const valueColorStyle = getPointColor && currentPoint ? { color: activeColor } : undefined
   const hasMarker = markerTable.ts.length > 0
 
@@ -647,13 +646,13 @@ export function TelemetryLineChart({
                 <Line
                   p1={vec(0, 0.5)}
                   p2={vec(chartWidth, 0.5)}
-                  color={theme.palette.slate.surface}
+                  color={neutral.surface}
                   strokeWidth={0.5}
                 />
                 <Line
                   p1={vec(0, height / 2)}
                   p2={vec(chartWidth, height / 2)}
-                  color={theme.palette.slate.surface}
+                  color={neutral.surface}
                   strokeWidth={0.5}
                 >
                   <DashPathEffect intervals={[4, 4]} />
@@ -661,7 +660,7 @@ export function TelemetryLineChart({
                 <Line
                   p1={vec(0, height - 0.5)}
                   p2={vec(chartWidth, height - 0.5)}
-                  color={theme.palette.slate.surface}
+                  color={neutral.surface}
                   strokeWidth={0.5}
                 />
 
@@ -670,7 +669,7 @@ export function TelemetryLineChart({
                     key={marker.value}
                     p1={vec(0, marker.y)}
                     p2={vec(chartWidth, marker.y)}
-                    color={ALERT_LINE_COLOR}
+                    color={CHART_ALERT_LINE_COLOR}
                     strokeWidth={1}
                   />
                 ))}
@@ -688,7 +687,7 @@ export function TelemetryLineChart({
                       width={bandWidth}
                       height={EXCLUSION_MARKER_HEIGHT}
                       r={0.5}
-                      color={exclusionColor(range.reason)}
+                      color={getChartExclusionColor(range.reason, neutral.textSecondary)}
                       opacity={0.85}
                     />
                   )
@@ -710,7 +709,7 @@ export function TelemetryLineChart({
                   range={range}
                   width={chartWidth}
                   height={height}
-                  color={color}
+                  color={resolvedColor}
                   getPointColor={getPointColor}
                   windowMs={windowMs}
                 />
@@ -722,14 +721,14 @@ export function TelemetryLineChart({
                   <Line
                     p1={markerLineTop}
                     p2={markerLineBottom}
-                    color={theme.palette.slate.textDim}
+                    color={neutral.textDim}
                     strokeWidth={1}
                   >
                     <DashPathEffect intervals={[3, 3]} />
                   </Line>
                 )}
 
-                <Circle cx={markerX} cy={markerY} r={4} color={theme.palette.slate.surfaceDeep} />
+                <Circle cx={markerX} cy={markerY} r={4} color={neutral.surfaceDeep} />
                 <Circle
                   cx={markerX}
                   cy={markerY}
@@ -801,18 +800,18 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   headerTime: {
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontSize: 9,
     fontVariant: ['tabular-nums'],
   },
   label: {
-    color: theme.palette.slate.textSecondary,
+    color: theme.neutral.textSecondary,
     fontSize: 10,
     fontWeight: '700',
     textTransform: 'uppercase',
   },
   value: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 11,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
@@ -834,7 +833,7 @@ const styles = StyleSheet.create({
     paddingLeft: 4,
   },
   yLabel: {
-    color: theme.palette.slate.textDim,
+    color: theme.neutral.textDim,
     fontSize: 8,
     fontVariant: ['tabular-nums'],
     lineHeight: 10,
@@ -856,7 +855,7 @@ const styles = StyleSheet.create({
     paddingTop: 2,
   },
   xLabel: {
-    color: theme.palette.slate.textDim,
+    color: theme.neutral.textDim,
     fontSize: 8,
     fontVariant: ['tabular-nums'],
   },
@@ -867,10 +866,10 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 2,
     width: TOOLTIP_WIDTH,
-    backgroundColor: theme.palette.slate.surfaceDeep,
+    backgroundColor: theme.neutral.surfaceDeep,
     borderRadius: 4,
     borderWidth: 1,
-    borderColor: theme.palette.slate.border,
+    borderColor: theme.neutral.border,
     paddingHorizontal: 6,
     paddingVertical: 2,
     flexDirection: 'column',
@@ -884,13 +883,13 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   tooltipValue: {
-    color: theme.palette.slate.textPrimary,
+    color: theme.neutral.textPrimary,
     fontSize: 9,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
   },
   tooltipTime: {
-    color: theme.palette.slate.textMuted,
+    color: theme.neutral.textMuted,
     fontSize: 8,
     fontVariant: ['tabular-nums'],
   },
