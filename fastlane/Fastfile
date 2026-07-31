@@ -137,6 +137,11 @@ rescue ArgumentError
   UI.user_error!("Invalid ROLLOUT_PERCENTAGE: #{ENV['ROLLOUT_PERCENTAGE']}")
 end
 
+def rollout_upload_options(fraction)
+  return {} if fraction == 1.0
+  { rollout: fraction.to_s }
+end
+
 def manage_production_artifact(label, code, source_track, target_track)
   require_release_env("PRODUCTION_OPERATION", "PRODUCTION_RESULT_PATH")
   operation = ENV.fetch("PRODUCTION_OPERATION")
@@ -159,7 +164,7 @@ def manage_production_artifact(label, code, source_track, target_track)
         **production_upload_options(source_track, code),
         track_promote_to: target_track,
         track_promote_release_status: initial_rollout == 1.0 ? "completed" : "inProgress",
-        rollout: initial_rollout
+        **rollout_upload_options(initial_rollout)
       )
       "promoted"
     end
@@ -171,7 +176,7 @@ def manage_production_artifact(label, code, source_track, target_track)
       upload_to_play_store(
         **production_upload_options(target_track, code),
         release_status: "halted",
-        rollout: current[:rolloutPercentage] / 100.0
+        rollout: (current[:rolloutPercentage] / 100.0).to_s
       )
     end
     "halted"
@@ -184,7 +189,7 @@ def manage_production_artifact(label, code, source_track, target_track)
         **production_upload_options(target_track, code),
         track_promote_to: target_track,
         track_promote_release_status: "inProgress",
-        rollout: current[:rolloutPercentage] / 100.0
+        rollout: (current[:rolloutPercentage] / 100.0).to_s
       )
     end
     "resumed"
@@ -201,7 +206,7 @@ def manage_production_artifact(label, code, source_track, target_track)
         upload_to_play_store(
           **production_upload_options(target_track, code),
           release_status: requested == 1.0 ? "completed" : "inProgress",
-          rollout: requested
+          **rollout_upload_options(requested)
         )
       end
     end
