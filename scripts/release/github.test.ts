@@ -4,6 +4,7 @@ import {
   createPromotionDispatchPayload,
   createProductionDispatchPayload,
   parseArtifactRunIds,
+  parseArtifactJson,
   parseInternalWorkflowRuns,
   parseManifestRunIds,
   parsePromotionWorkflowRuns,
@@ -91,6 +92,14 @@ describe('release workflow dispatch', () => {
   test('builds a failed-jobs-only retry command', () => {
     expect(retryFailedJobsArgs(123)).toEqual(['run', 'rerun', '123', '--failed'])
     expect(() => retryFailedJobsArgs(0)).toThrow('Invalid workflow run ID')
+  })
+
+  test('reports empty and malformed workflow artifacts clearly', () => {
+    expect(() => parseArtifactJson('', 'Promotion manifest')).toThrow('Promotion manifest is empty')
+    expect(() => parseArtifactJson('{', 'Promotion manifest')).toThrow(
+      'Promotion manifest is invalid JSON',
+    )
+    expect(parseArtifactJson('{"ok":true}', 'Promotion manifest')).toEqual({ ok: true })
   })
 
   test('dispatches exact candidate identity from trusted main', () => {

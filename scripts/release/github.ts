@@ -476,9 +476,19 @@ export async function downloadManifest(runId: number): Promise<ReleaseManifest> 
       'Cannot download release manifest',
     )
     const contents = await readFile(join(directory, 'release-manifest.json'), 'utf8')
-    return parseReleaseManifest(JSON.parse(contents))
+    return parseReleaseManifest(parseArtifactJson(contents, 'Release manifest'))
   } finally {
     await rm(directory, { recursive: true, force: true })
+  }
+}
+
+export function parseArtifactJson(contents: string, label: string): unknown {
+  if (!contents.trim()) throw new Error(`${label} is empty; inspect its workflow run`)
+  try {
+    return JSON.parse(contents)
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    throw new Error(`${label} is invalid JSON; inspect its workflow run (${detail})`)
   }
 }
 
@@ -610,7 +620,7 @@ export async function downloadPromotionManifest(runId: number): Promise<Promotio
       'Cannot download promotion manifest',
     )
     const contents = await readFile(join(directory, 'promotion-manifest.json'), 'utf8')
-    return parsePromotionManifest(JSON.parse(contents))
+    return parsePromotionManifest(parseArtifactJson(contents, 'Promotion manifest'))
   } finally {
     await rm(directory, { recursive: true, force: true })
   }
@@ -624,7 +634,7 @@ export async function downloadProductionManifest(runId: number): Promise<Product
       'Cannot download production manifest',
     )
     const contents = await readFile(join(directory, 'production-manifest.json'), 'utf8')
-    return parseProductionManifest(JSON.parse(contents))
+    return parseProductionManifest(parseArtifactJson(contents, 'Production manifest'))
   } finally {
     await rm(directory, { recursive: true, force: true })
   }

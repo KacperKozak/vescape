@@ -29,6 +29,8 @@ describe('open-promotion workflow contract', () => {
 
   test('records phone and Wear results independently for safe retry', () => {
     expect(workflow).toContain('status:"failed"')
+    expect(workflow).toContain('PROMOTION_RESULT_PATH: ${{ github.workspace }}/phone-result.json')
+    expect(workflow).toContain('PROMOTION_RESULT_PATH: ${{ github.workspace }}/wear-result.json')
     expect(workflow).toContain('--slurpfile phone phone-result.json')
     expect(workflow).toContain('--slurpfile wear wear-result.json')
     expect(fastfile).toContain('"already-open"')

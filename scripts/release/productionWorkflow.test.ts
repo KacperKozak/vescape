@@ -42,6 +42,11 @@ describe('production promotion workflow contract', () => {
     expect(fastfile).toContain('rollout cannot move backwards')
   })
 
+  test('writes Fastlane results where the workflow assembles the manifest', () => {
+    expect(workflow).toContain('PRODUCTION_RESULT_PATH: ${{ github.workspace }}/phone-result.json')
+    expect(workflow).toContain('PRODUCTION_RESULT_PATH: ${{ github.workspace }}/wear-result.json')
+  })
+
   test('creates immutable v tag and canonical GitHub Release after Play success', () => {
     expect(workflow).toContain('TAG="v$MARKETING_VERSION"')
     expect(workflow).toContain('test "$(git rev-parse "$TAG^{commit}")" = "$SOURCE_SHA"')

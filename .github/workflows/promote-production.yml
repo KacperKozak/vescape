@@ -141,7 +141,7 @@ jobs:
         continue-on-error: true
         run: bundle exec fastlane android manage_phone_production
         env:
-          PRODUCTION_RESULT_PATH: phone-result.json
+          PRODUCTION_RESULT_PATH: ${{ github.workspace }}/phone-result.json
       - name: Record failed phone operation
         if: steps.phone.outcome != 'success'
         run: |
@@ -152,7 +152,7 @@ jobs:
         continue-on-error: true
         run: bundle exec fastlane android manage_wear_production
         env:
-          PRODUCTION_RESULT_PATH: wear-result.json
+          PRODUCTION_RESULT_PATH: ${{ github.workspace }}/wear-result.json
       - name: Record failed Wear operation
         if: steps.wear.outcome != 'success'
         run: |
