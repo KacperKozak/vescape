@@ -476,20 +476,57 @@ export async function downloadManifest(runId: number): Promise<ReleaseManifest> 
       'Cannot download release manifest',
     )
     const contents = await readFile(join(directory, 'release-manifest.json'), 'utf8')
-    return parseReleaseManifest(parseArtifactJson(contents, 'Release manifest'))
+    return parseWorkflowArtifact(contents, 'Release manifest', parseReleaseManifest)
   } finally {
     await rm(directory, { recursive: true, force: true })
   }
 }
 
+export class InvalidWorkflowArtifactError extends Error {}
+
 export function parseArtifactJson(contents: string, label: string): unknown {
-  if (!contents.trim()) throw new Error(`${label} is empty; inspect its workflow run`)
+  if (!contents.trim())
+    throw new InvalidWorkflowArtifactError(`${label} is empty; inspect its workflow run`)
   try {
     return JSON.parse(contents)
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error)
-    throw new Error(`${label} is invalid JSON; inspect its workflow run (${detail})`)
+    throw new InvalidWorkflowArtifactError(
+      `${label} is invalid JSON; inspect its workflow run (${detail})`,
+    )
   }
+}
+
+function parseWorkflowArtifact<T>(
+  contents: string,
+  label: string,
+  parse: (value: unknown) => T,
+): T {
+  const value = parseArtifactJson(contents, label)
+  try {
+    return parse(value)
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error)
+    throw new InvalidWorkflowArtifactError(
+      `${label} is invalid; inspect its workflow run (${detail})`,
+    )
+  }
+}
+
+export async function loadValidWorkflowArtifacts<T>(
+  runIds: readonly number[],
+  load: (runId: number) => Promise<T>,
+): Promise<Array<{ runId: number; artifact: T }>> {
+  const artifacts: Array<{ runId: number; artifact: T }> = []
+  for (const runId of runIds) {
+    try {
+      artifacts.push({ runId, artifact: await load(runId) })
+    } catch (error) {
+      if (error instanceof InvalidWorkflowArtifactError) continue
+      throw error
+    }
+  }
+  return artifacts
 }
 
 export function parseArtifactRunIds(value: unknown, artifactName: string): number[] {
@@ -521,9 +558,12 @@ export async function listInternalCandidates(repo: string): Promise<ReleaseManif
     ['api', `repos/${repo}/actions/artifacts?name=release-manifest&per_page=30`],
     'Cannot list internal release manifests',
   )
+  const artifacts = await loadValidWorkflowArtifacts(
+    parseManifestRunIds(JSON.parse(output)),
+    downloadManifest,
+  )
   const candidates: ReleaseManifest[] = []
-  for (const runId of parseManifestRunIds(JSON.parse(output))) {
-    const manifest = await downloadManifest(runId)
+  for (const { artifact: manifest } of artifacts) {
     if (manifest.uploads.phone === 'succeeded' && manifest.uploads.wear === 'succeeded') {
       candidates.push(manifest)
     }
@@ -537,10 +577,18 @@ export async function listProductionCandidates(repo: string): Promise<Production
     'Cannot list open-promotion manifests',
   )
   const candidates: ProductionCandidate[] = []
-  for (const openPromotionRunId of parseArtifactRunIds(JSON.parse(output), 'promotion-manifest')) {
-    const open = await downloadPromotionManifest(openPromotionRunId)
+  const openArtifacts = await loadValidWorkflowArtifacts(
+    parseArtifactRunIds(JSON.parse(output), 'promotion-manifest'),
+    downloadPromotionManifest,
+  )
+  for (const { runId: openPromotionRunId, artifact: open } of openArtifacts) {
     if (open.phone.status === 'failed' || open.wear.status === 'failed') continue
-    const manifest = await downloadManifest(open.candidateRunId)
+    const [releaseArtifact] = await loadValidWorkflowArtifacts(
+      [open.candidateRunId],
+      downloadManifest,
+    )
+    if (!releaseArtifact) continue
+    const manifest = releaseArtifact.artifact
     if (
       open.sourceSha === manifest.sourceSha &&
       open.marketingVersion === manifest.marketingVersion &&
@@ -620,7 +668,7 @@ export async function downloadPromotionManifest(runId: number): Promise<Promotio
       'Cannot download promotion manifest',
     )
     const contents = await readFile(join(directory, 'promotion-manifest.json'), 'utf8')
-    return parsePromotionManifest(parseArtifactJson(contents, 'Promotion manifest'))
+    return parseWorkflowArtifact(contents, 'Promotion manifest', parsePromotionManifest)
   } finally {
     await rm(directory, { recursive: true, force: true })
   }
@@ -634,7 +682,7 @@ export async function downloadProductionManifest(runId: number): Promise<Product
       'Cannot download production manifest',
     )
     const contents = await readFile(join(directory, 'production-manifest.json'), 'utf8')
-    return parseProductionManifest(parseArtifactJson(contents, 'Production manifest'))
+    return parseWorkflowArtifact(contents, 'Production manifest', parseProductionManifest)
   } finally {
     await rm(directory, { recursive: true, force: true })
   }

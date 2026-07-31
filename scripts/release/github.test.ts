@@ -3,6 +3,8 @@ import {
   createDispatchPayload,
   createPromotionDispatchPayload,
   createProductionDispatchPayload,
+  InvalidWorkflowArtifactError,
+  loadValidWorkflowArtifacts,
   parseArtifactRunIds,
   parseArtifactJson,
   parseInternalWorkflowRuns,
@@ -100,6 +102,21 @@ describe('release workflow dispatch', () => {
       'Promotion manifest is invalid JSON',
     )
     expect(parseArtifactJson('{"ok":true}', 'Promotion manifest')).toEqual({ ok: true })
+  })
+
+  test('skips invalid historical artifacts without hiding download failures', async () => {
+    expect(
+      await loadValidWorkflowArtifacts([3, 2], async (runId) => {
+        if (runId === 2) throw new InvalidWorkflowArtifactError('empty')
+        return `manifest-${runId}`
+      }),
+    ).toEqual([{ runId: 3, artifact: 'manifest-3' }])
+
+    expect(
+      loadValidWorkflowArtifacts([3], async () => {
+        throw new Error('GitHub unavailable')
+      }),
+    ).rejects.toThrow('GitHub unavailable')
   })
 
   test('dispatches exact candidate identity from trusted main', () => {
