@@ -5,6 +5,7 @@ import {
   createDispatchPayload,
   dispatchInternalBuild,
   downloadManifest,
+  failedWorkflowJobs,
   findDispatchedRun,
   getWorkflowRun,
   marketingVersion,
@@ -89,7 +90,18 @@ function App() {
       }
 
       setStatus('Reading release manifest…')
-      const manifest = await downloadManifest(workflowRun.id)
+      let manifest
+      try {
+        manifest = await downloadManifest(workflowRun.id)
+      } catch (manifestError) {
+        if (workflowRun.conclusion !== 'success') {
+          const failedJobs = await failedWorkflowJobs(confirmedPlan.repo, workflowRun.id)
+          throw new Error(
+            `Workflow failed${failedJobs.length > 0 ? ` in ${failedJobs.join(', ')}` : ''}. ${workflowRun.html_url}`,
+          )
+        }
+        throw manifestError
+      }
       const outcome = releaseOutcome(manifest)
       if (outcome.kind === 'success') {
         setStatus(

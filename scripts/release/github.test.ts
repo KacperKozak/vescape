@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test'
-import { createDispatchPayload, parseWorkflowRuns } from './github'
+import {
+  createDispatchPayload,
+  parseFailedWorkflowJobs,
+  parseWorkflowRuns,
+  retryFailedJobsArgs,
+} from './github'
 
 describe('release workflow dispatch', () => {
   test('pins the trusted definition to main and passes source separately', () => {
@@ -26,5 +31,22 @@ describe('release workflow dispatch', () => {
         requestId,
       ),
     ).toEqual(run)
+  })
+
+  test('names failed jobs from the structured workflow result', () => {
+    expect(
+      parseFailedWorkflowJobs({
+        jobs: [
+          { name: 'Release gates', conclusion: 'failure' },
+          { name: 'Build signed artifacts once', conclusion: 'skipped' },
+          { name: 'Cleanup', conclusion: 'success' },
+        ],
+      }),
+    ).toEqual(['Release gates'])
+  })
+
+  test('builds a failed-jobs-only retry command', () => {
+    expect(retryFailedJobsArgs(123)).toEqual(['run', 'rerun', '123', '--failed'])
+    expect(() => retryFailedJobsArgs(0)).toThrow('Invalid workflow run ID')
   })
 })

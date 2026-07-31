@@ -76,9 +76,3 @@ export function releaseOutcome(manifest: ReleaseManifest): ReleaseOutcome {
     ? { kind: 'partial', succeeded: 'phone', failed: 'wear' }
     : { kind: 'partial', succeeded: 'wear', failed: 'phone' }
 }
-
-export function retryFailedJobsArgs(manifest: ReleaseManifest): string[] | null {
-  return releaseOutcome(manifest).kind === 'success'
-    ? null
-    : ['run', 'rerun', String(manifest.workflow.runId), '--failed']
-}

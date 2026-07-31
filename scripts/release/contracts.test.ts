@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { ReleaseManifest } from './contracts'
-import { parseReleaseManifest, releaseOutcome, retryFailedJobsArgs } from './contracts'
+import { parseReleaseManifest, releaseOutcome } from './contracts'
 
 const manifest = (
   phone: 'succeeded' | 'failed',
@@ -31,15 +31,5 @@ describe('release manifest', () => {
       succeeded: 'phone',
       failed: 'wear',
     })
-  })
-
-  test('retries failed workflow jobs while preserving successful uploads', () => {
-    expect(retryFailedJobsArgs(manifest('succeeded', 'failed'))).toEqual([
-      'run',
-      'rerun',
-      '123',
-      '--failed',
-    ])
-    expect(retryFailedJobsArgs(manifest('succeeded', 'succeeded'))).toBeNull()
   })
 })

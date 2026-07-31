@@ -36,6 +36,11 @@ export interface DispatchPayload {
   }
 }
 
+interface WorkflowJob {
+  name: string
+  conclusion: string | null
+}
+
 export function createDispatchPayload(sourceSha: string, requestId: string): DispatchPayload {
   if (!/^[0-9a-f]{40}$/i.test(sourceSha))
     throw new Error('Source SHA must be a full 40-character SHA')
@@ -147,6 +152,30 @@ export async function getWorkflowRun(repo: string, runId: number): Promise<Workf
   return JSON.parse(output) as WorkflowRun
 }
 
+export function parseFailedWorkflowJobs(value: unknown): string[] {
+  if (!value || typeof value !== 'object') throw new Error('Workflow jobs response is invalid')
+  const jobs = (value as { jobs?: unknown }).jobs
+  if (!Array.isArray(jobs)) throw new Error('Workflow jobs response has no jobs')
+  return jobs
+    .filter(
+      (job): job is WorkflowJob =>
+        !!job &&
+        typeof job === 'object' &&
+        typeof (job as WorkflowJob).name === 'string' &&
+        (job as WorkflowJob).conclusion !== 'success' &&
+        (job as WorkflowJob).conclusion !== 'skipped',
+    )
+    .map((job) => job.name)
+}
+
+export async function failedWorkflowJobs(repo: string, runId: number): Promise<string[]> {
+  const output = await checkedGh(
+    ['api', `repos/${repo}/actions/runs/${runId}/jobs?filter=latest&per_page=100`],
+    'Cannot read workflow jobs',
+  )
+  return parseFailedWorkflowJobs(JSON.parse(output))
+}
+
 export async function downloadManifest(runId: number): Promise<ReleaseManifest> {
   const directory = await mkdtemp(join(tmpdir(), 'vescape-release-'))
   try {
@@ -162,5 +191,11 @@ export async function downloadManifest(runId: number): Promise<ReleaseManifest> 
 }
 
 export async function retryFailedJobs(runId: number): Promise<void> {
-  await checkedGh(['run', 'rerun', String(runId), '--failed'], 'Cannot retry failed jobs')
+  await checkedGh(retryFailedJobsArgs(runId), 'Cannot retry failed jobs')
+}
+
+export function retryFailedJobsArgs(runId: number): string[] {
+  if (!Number.isSafeInteger(runId) || runId < 1)
+    throw new Error(`Invalid workflow run ID "${runId}"`)
+  return ['run', 'rerun', String(runId), '--failed']
 }
