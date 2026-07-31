@@ -22,7 +22,10 @@ const plan = await resolveReleaseNotePlan(targetRef, versionOverride)
 const editorCommand = resolveEditorCommand()
 const destination = join(RELEASE_NOTES_DIRECTORY, `${plan.marketingVersion}.md`)
 if (await Bun.file(destination).exists()) {
-  throw new Error(`${destination} already exists; edit the canonical note directly`)
+  validateReleaseMarkdown(await readFile(destination, 'utf8'), `${plan.marketingVersion}.md`)
+  await buildReleaseNotes()
+  console.log(`Using existing ${destination}`)
+  process.exit(0)
 }
 
 console.log('Release-note plan')
