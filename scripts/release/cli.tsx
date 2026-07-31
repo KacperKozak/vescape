@@ -104,15 +104,24 @@ const versionBumps: ReadonlyArray<{ bump: VersionBump; label: string }> = [
 ]
 
 const productionOperations: ReadonlyArray<{
+  id: string
   operation: ProductionOperation
   shortcut: string
   label: string
+  rolloutPercentage?: number
 }> = [
-  { operation: 'promote', shortcut: 'p', label: 'Promote staged rollout' },
-  { operation: 'status', shortcut: 's', label: 'Show rollout status' },
-  { operation: 'halt', shortcut: 'h', label: 'Halt rollout' },
-  { operation: 'resume', shortcut: 'r', label: 'Resume rollout' },
-  { operation: 'advance', shortcut: 'a', label: 'Advance rollout percentage' },
+  { id: 'promote-staged', operation: 'promote', shortcut: 'p', label: 'Promote staged rollout' },
+  {
+    id: 'promote-full',
+    operation: 'promote',
+    shortcut: 'f',
+    label: 'Promote full rollout (100%)',
+    rolloutPercentage: 100,
+  },
+  { id: 'status', operation: 'status', shortcut: 's', label: 'Show rollout status' },
+  { id: 'halt', operation: 'halt', shortcut: 'h', label: 'Halt rollout' },
+  { id: 'resume', operation: 'resume', shortcut: 'r', label: 'Resume rollout' },
+  { id: 'advance', operation: 'advance', shortcut: 'a', label: 'Advance rollout percentage' },
 ]
 
 const sleep = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds))
@@ -294,11 +303,18 @@ function App({ finish, initialPhase = 'select', initialSourceRef }: AppProps) {
     }
   }
 
-  const selectProductionOperation = (operation: ProductionOperation) => {
+  const selectProductionOperation = (choice: (typeof productionOperations)[number]) => {
     if (!productionPlan) return
-    const next = { ...productionPlan, operation, requestId: crypto.randomUUID() }
+    const next = {
+      ...productionPlan,
+      operation: choice.operation,
+      requestId: crypto.randomUUID(),
+      rolloutPercentage: choice.rolloutPercentage ?? productionPlan.rolloutPercentage,
+    }
     setProductionPlan(next)
-    if (operation === 'promote' || operation === 'advance') {
+    if (choice.rolloutPercentage !== undefined) {
+      setPhase('production-confirm')
+    } else if (choice.operation === 'promote' || choice.operation === 'advance') {
       setRolloutInput(String(next.rolloutPercentage ?? 10))
       setPhase('production-percentage')
     } else {
@@ -603,7 +619,7 @@ function App({ finish, initialPhase = 'select', initialSourceRef }: AppProps) {
         setOperationIndex((value) => (value + 1) % productionOperations.length)
       else if (key.return || shortcutIndex >= 0) {
         setOperationIndex(selectedIndex)
-        selectProductionOperation(productionOperations[selectedIndex].operation)
+        selectProductionOperation(productionOperations[selectedIndex])
       } else if (key.escape) setPhase('production-candidate')
       return
     }
@@ -787,7 +803,7 @@ function App({ finish, initialPhase = 'select', initialSourceRef }: AppProps) {
           {productionOperations.map((item, index) => {
             const selected = index === operationIndex
             return (
-              <Text key={item.operation} color={selected ? 'cyan' : undefined} bold={selected}>
+              <Text key={item.id} color={selected ? 'cyan' : undefined} bold={selected}>
                 {selected ? '◆ ' : '  '}
                 {item.label} <Text dimColor>({item.shortcut.toUpperCase()})</Text>
               </Text>
