@@ -34,11 +34,11 @@ const styles = StyleSheet.create({
   },
   label: {
     position: 'absolute',
-    right: 4,
+    right: 14,
     color: LABEL_COLOR,
-    fontSize: 8,
+    fontSize: 7,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
-    lineHeight: 10,
+    lineHeight: 8,
   },
 })

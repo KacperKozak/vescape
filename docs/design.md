@@ -36,6 +36,8 @@ Dark-first. All screens use dark backgrounds with light text.
 
 Use `src/constants/theme.ts` for all accent colors. Never hardcode a hex value, `rgba(...)` literal, or any color string directly in a component.
 
+`theme.tune` aliases the purple palette for Tune Profile actions and entry points.
+
 The theme is organized into domains:
 
 ### `palette`

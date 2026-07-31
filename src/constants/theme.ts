@@ -186,6 +186,9 @@ export const status = {
   },
 } as const
 
+/** Tune Profile actions and entry points. */
+export const tune = palette.purple
+
 /** Banner callouts — flat row, accent icon + neutral text. */
 export const banner = {
   info: { icon: status.info.color },
@@ -248,6 +251,7 @@ export const theme = {
   telemetry,
   map,
   status,
+  tune,
   alpha,
   banner,
   weather,
