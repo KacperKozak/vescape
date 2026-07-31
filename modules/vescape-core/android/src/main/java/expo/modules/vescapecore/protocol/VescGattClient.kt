@@ -13,6 +13,7 @@ import android.bluetooth.BluetoothGattDescriptor
 import android.bluetooth.BluetoothProfile
 import android.bluetooth.BluetoothStatusCodes
 import android.content.Context
+import android.os.Build
 import android.os.Handler
 import android.util.Log
 import java.util.UUID
@@ -199,7 +200,25 @@ internal class VescGattClient(
             dispatchListener { listener.onGattReady() }
         }
 
+        /** API 33+ signature. Below 33 the framework calls the deprecated 2-param peer instead. */
         override fun onCharacteristicChanged(
+            gatt: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic,
+            value: ByteArray,
+        ) {
+            handleNotification(gatt, characteristic, value)
+        }
+
+        @Deprecated("Deprecated in Java")
+        @Suppress("DEPRECATION")
+        override fun onCharacteristicChanged(
+            gatt: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic,
+        ) {
+            handleNotification(gatt, characteristic, characteristic.value ?: return)
+        }
+
+        private fun handleNotification(
             gatt: BluetoothGatt,
             characteristic: BluetoothGattCharacteristic,
             value: ByteArray,
@@ -235,11 +254,20 @@ internal class VescGattClient(
         val bytes = write.bytes
         writeRetry?.let { handler.removeCallbacks(it) }
         writeRetry = null
-        val ok = g.writeCharacteristic(
-            tx,
-            bytes,
-            BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT,
-        ) == BluetoothStatusCodes.SUCCESS
+        val ok = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            g.writeCharacteristic(
+                tx,
+                bytes,
+                BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT,
+            ) == BluetoothStatusCodes.SUCCESS
+        } else {
+            @Suppress("DEPRECATION")
+            run {
+                tx.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
+                tx.value = bytes
+                g.writeCharacteristic(tx)
+            }
+        }
         if (!ok) {
             writeQueue.retryInFlight()
             Log.w(VESC_SESSION_TAG, "gatt writeCharacteristic failed bytes=${bytes.size}; retrying")
@@ -253,8 +281,16 @@ internal class VescGattClient(
     }
 
     private fun writeCccd(gatt: BluetoothGatt, descriptor: BluetoothGattDescriptor) {
-        val ok = gatt.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE) ==
-            BluetoothStatusCodes.SUCCESS
+        val ok = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            gatt.writeDescriptor(descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE) ==
+                BluetoothStatusCodes.SUCCESS
+        } else {
+            @Suppress("DEPRECATION")
+            run {
+                descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                gatt.writeDescriptor(descriptor)
+            }
+        }
         Log.d(VESC_SESSION_TAG, "gatt writeCccd started=$ok")
     }
 
