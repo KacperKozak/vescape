@@ -16,15 +16,22 @@ Both use the existing Android upload key. `APP_VERSION` supplies the shared pack
 CI allocates monotonic, disjoint phone and Wear version codes for every internal build and records
 them, with the immutable source SHA and artifact hashes, in the release manifest.
 
-`bun run release` offers separate internal-build and open-promotion actions. Open promotion selects
-one successful internal manifest, requires canonical `release-notes/<version>.md`, and promotes the
+`bun run release` first offers explicit Major, Minor, and Patch release-candidate preparation. It
+updates `package.json`, runs canonical note authoring, commits the version and accepted notes on `dev`,
+merges `dev` into `main`, fast-forwards `dev` to the release merge, and atomically pushes both branches.
+The resulting shared commit is the immutable source offered to the Internal build. The CLI also offers
+internal-build, Internal status/resume, open-promotion, and production actions.
+Status/resume discovers recent GitHub workflow runs, then shows the live job, step, elapsed time, and
+estimated remaining range; it does not depend on terminal-local state. Open promotion selects one
+successful internal manifest, requires canonical `release-notes/<version>.md`, and promotes the
 manifest's exact existing codes. It never rebuilds or uploads an AAB. Track IDs come from the
 `PLAY_PHONE_INTERNAL_TRACK`, `PLAY_PHONE_OPEN_TRACK`, `PLAY_WEAR_INTERNAL_TRACK`, and
 `PLAY_WEAR_OPEN_TRACK` repository variables. Production targets use
 `PLAY_PHONE_PRODUCTION_TRACK` and `PLAY_WEAR_PRODUCTION_TRACK`. Defaults are `internal`, `beta`,
 `production`, `wear:internal`, `wear:beta`, and `wear:production`.
 
-Before mutation, the trusted `main` workflow verifies both requested codes against Play. A code may
+Workflow dispatches use the repository's trusted default-branch definition while keeping the immutable
+artifact source SHA separate. Before mutation, the workflow verifies both requested codes against Play. A code may
 be on its internal source track or already on its open target track: this makes a retry converge after
 phone-only or Wear-only success. Promotion then runs phone and Wear serially and publishes a
 per-form-factor result (`promoted`, `already-open`, or `failed`). It does not touch production tracks,

@@ -7,6 +7,7 @@ const workflow = readFileSync(join(root, '.github/workflows/promote-production.y
 const internalWorkflow = readFileSync(join(root, '.github/workflows/release-android.yml'), 'utf8')
 const fastfile = readFileSync(join(root, 'fastlane/Fastfile'), 'utf8')
 const releaseEntry = readFileSync(join(root, 'scripts/release.ts'), 'utf8')
+const releasePreparation = readFileSync(join(root, 'scripts/release/prepare.ts'), 'utf8')
 
 describe('production promotion workflow contract', () => {
   test('serializes Play writes and requires the production environment', () => {
@@ -60,8 +61,9 @@ describe('production promotion workflow contract', () => {
     expect(workflow).toContain('echo skipped > github-release-status.txt')
   })
 
-  test('has no legacy tag-triggered or branch-mutating production path', () => {
+  test('has no legacy or hidden second production path', () => {
     expect(internalWorkflow).not.toContain("tags: ['production-*']")
-    expect(releaseEntry).toBe("#!/usr/bin/env bun\nawait import('./release/cli.tsx')\n")
+    expect(releaseEntry).not.toMatch(/production-|git tag|promote-production/)
+    expect(releasePreparation).not.toMatch(/production-|git tag|gh release|fastlane/)
   })
 })

@@ -4,11 +4,13 @@ import {
   createPromotionDispatchPayload,
   createProductionDispatchPayload,
   parseArtifactRunIds,
+  parseInternalWorkflowRuns,
   parseManifestRunIds,
   parsePromotionWorkflowRuns,
   parseProductionWorkflowRuns,
   parseTrackConfig,
   parseFailedWorkflowJobs,
+  parseWorkflowJobs,
   parseWorkflowRuns,
   retryFailedJobsArgs,
 } from './github'
@@ -21,6 +23,12 @@ describe('release workflow dispatch', () => {
       ref: 'main',
       inputs: { source_sha: sha.toLowerCase(), request_id: requestId },
     })
+  })
+
+  test('targets an explicit trusted workflow branch', () => {
+    const sha = 'a'.repeat(40)
+    const requestId = crypto.randomUUID()
+    expect(createDispatchPayload(sha, requestId, 'dev').ref).toBe('dev')
   })
 
   test('correlates the exact structured run title', () => {
@@ -50,6 +58,34 @@ describe('release workflow dispatch', () => {
         ],
       }),
     ).toEqual(['Release gates'])
+  })
+
+  test('discovers resumable internal runs and their live steps', () => {
+    const resumable = {
+      id: 302,
+      html_url: 'https://example.test/run/302',
+      display_title: `Internal ${crypto.randomUUID()}`,
+      status: 'in_progress' as const,
+      conclusion: null,
+    }
+    expect(
+      parseInternalWorkflowRuns({
+        workflow_runs: [resumable, { ...resumable, id: 1, display_title: 'Legacy release' }],
+      }),
+    ).toEqual([resumable])
+    expect(
+      parseWorkflowJobs({
+        jobs: [
+          {
+            id: 10,
+            name: 'Build signed artifacts once',
+            status: 'in_progress',
+            conclusion: null,
+            steps: [{ name: 'Build phone and Wear AABs', status: 'in_progress' }],
+          },
+        ],
+      })[0]?.steps[0]?.name,
+    ).toBe('Build phone and Wear AABs')
   })
 
   test('builds a failed-jobs-only retry command', () => {
