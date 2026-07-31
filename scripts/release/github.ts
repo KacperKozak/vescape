@@ -1,10 +1,11 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { ReleaseManifest, WorkflowRun } from './contracts'
-import { parseReleaseManifest } from './contracts'
+import type { PromotionManifest, ReleaseManifest, WorkflowRun } from './contracts'
+import { parsePromotionManifest, parseReleaseManifest } from './contracts'
 
 const WORKFLOW_FILE = 'release-android.yml'
+const PROMOTION_WORKFLOW_FILE = 'promote-open.yml'
 
 interface GhResult {
   exitCode: number
@@ -36,6 +37,31 @@ export interface DispatchPayload {
   }
 }
 
+export interface PromotionDispatchPayload {
+  ref: 'main'
+  inputs: {
+    request_id: string
+    candidate_run_id: string
+    source_sha: string
+    marketing_version: string
+    phone_code: string
+    wear_code: string
+  }
+}
+
+export interface ReleaseTrackConfig {
+  phoneInternal: string
+  phoneOpen: string
+  wearInternal: string
+  wearOpen: string
+}
+
+interface ActionsArtifact {
+  name: string
+  expired: boolean
+  workflow_run?: { id?: number }
+}
+
 interface WorkflowJob {
   name: string
   conclusion: string | null
@@ -46,6 +72,28 @@ export function createDispatchPayload(sourceSha: string, requestId: string): Dis
     throw new Error('Source SHA must be a full 40-character SHA')
   if (!/^[0-9a-f-]{36}$/i.test(requestId)) throw new Error('Request ID must be a UUID')
   return { ref: 'main', inputs: { source_sha: sourceSha.toLowerCase(), request_id: requestId } }
+}
+
+export function createPromotionDispatchPayload(
+  manifest: ReleaseManifest,
+  requestId: string,
+): PromotionDispatchPayload {
+  if (!/^[0-9a-f-]{36}$/i.test(requestId)) throw new Error('Request ID must be a UUID')
+  if (!/^[0-9a-f]{40}$/i.test(manifest.sourceSha))
+    throw new Error('Candidate source SHA must be a full 40-character SHA')
+  if (manifest.uploads.phone !== 'succeeded' || manifest.uploads.wear !== 'succeeded')
+    throw new Error('Candidate must have both successful internal uploads')
+  return {
+    ref: 'main',
+    inputs: {
+      request_id: requestId,
+      candidate_run_id: String(manifest.workflow.runId),
+      source_sha: manifest.sourceSha.toLowerCase(),
+      marketing_version: manifest.marketingVersion,
+      phone_code: String(manifest.versionCodes.phone),
+      wear_code: String(manifest.versionCodes.wear),
+    },
+  }
 }
 
 export async function verifyGhAuthentication(): Promise<void> {
@@ -115,6 +163,27 @@ export async function dispatchInternalBuild(repo: string, payload: DispatchPaylo
   )
 }
 
+export async function dispatchOpenPromotion(
+  repo: string,
+  payload: PromotionDispatchPayload,
+): Promise<void> {
+  await checkedGh(
+    [
+      'api',
+      '--method',
+      'POST',
+      `repos/${repo}/actions/workflows/${PROMOTION_WORKFLOW_FILE}/dispatches`,
+      '--raw-field',
+      `ref=${payload.ref}`,
+      ...Object.entries(payload.inputs).flatMap(([key, value]) => [
+        '--raw-field',
+        `inputs[${key}]=${value}`,
+      ]),
+    ],
+    'Open-promotion workflow dispatch failed',
+  )
+}
+
 export function parseWorkflowRuns(value: unknown, requestId: string): WorkflowRun | null {
   if (!value || typeof value !== 'object') throw new Error('Workflow runs response is invalid')
   const runs = (value as { workflow_runs?: unknown }).workflow_runs
@@ -130,6 +199,22 @@ export function parseWorkflowRuns(value: unknown, requestId: string): WorkflowRu
   return match ?? null
 }
 
+export function parsePromotionWorkflowRuns(value: unknown, requestId: string): WorkflowRun | null {
+  if (!value || typeof value !== 'object') throw new Error('Workflow runs response is invalid')
+  const runs = (value as { workflow_runs?: unknown }).workflow_runs
+  if (!Array.isArray(runs)) throw new Error('Workflow runs response has no workflow_runs')
+  const title = `Open ${requestId}`
+  return (
+    runs.find(
+      (run): run is WorkflowRun =>
+        !!run &&
+        typeof run === 'object' &&
+        (run as WorkflowRun).display_title === title &&
+        typeof (run as WorkflowRun).id === 'number',
+    ) ?? null
+  )
+}
+
 export async function findDispatchedRun(
   repo: string,
   requestId: string,
@@ -142,6 +227,20 @@ export async function findDispatchedRun(
     'Cannot list workflow runs',
   )
   return parseWorkflowRuns(JSON.parse(output), requestId)
+}
+
+export async function findPromotionRun(
+  repo: string,
+  requestId: string,
+): Promise<WorkflowRun | null> {
+  const output = await checkedGh(
+    [
+      'api',
+      `repos/${repo}/actions/workflows/${PROMOTION_WORKFLOW_FILE}/runs?event=workflow_dispatch&per_page=50`,
+    ],
+    'Cannot list open-promotion workflow runs',
+  )
+  return parsePromotionWorkflowRuns(JSON.parse(output), requestId)
 }
 
 export async function getWorkflowRun(repo: string, runId: number): Promise<WorkflowRun> {
@@ -185,6 +284,106 @@ export async function downloadManifest(runId: number): Promise<ReleaseManifest> 
     )
     const contents = await readFile(join(directory, 'release-manifest.json'), 'utf8')
     return parseReleaseManifest(JSON.parse(contents))
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+}
+
+export function parseManifestRunIds(value: unknown): number[] {
+  if (!value || typeof value !== 'object') throw new Error('Artifacts response is invalid')
+  const artifacts = (value as { artifacts?: unknown }).artifacts
+  if (!Array.isArray(artifacts)) throw new Error('Artifacts response has no artifacts')
+  return [
+    ...new Set(
+      artifacts
+        .filter(
+          (artifact): artifact is ActionsArtifact =>
+            !!artifact &&
+            typeof artifact === 'object' &&
+            (artifact as ActionsArtifact).name === 'release-manifest' &&
+            (artifact as ActionsArtifact).expired === false &&
+            Number.isSafeInteger((artifact as ActionsArtifact).workflow_run?.id),
+        )
+        .map((artifact) => artifact.workflow_run!.id!),
+    ),
+  ]
+}
+
+export async function listInternalCandidates(repo: string): Promise<ReleaseManifest[]> {
+  const output = await checkedGh(
+    ['api', `repos/${repo}/actions/artifacts?name=release-manifest&per_page=30`],
+    'Cannot list internal release manifests',
+  )
+  const candidates: ReleaseManifest[] = []
+  for (const runId of parseManifestRunIds(JSON.parse(output))) {
+    const manifest = await downloadManifest(runId)
+    if (manifest.uploads.phone === 'succeeded' && manifest.uploads.wear === 'succeeded') {
+      candidates.push(manifest)
+    }
+  }
+  return candidates.sort((left, right) => right.workflow.runId - left.workflow.runId)
+}
+
+export function parseTrackConfig(value: unknown): ReleaseTrackConfig {
+  const defaults: ReleaseTrackConfig = {
+    phoneInternal: 'internal',
+    phoneOpen: 'beta',
+    wearInternal: 'wear:internal',
+    wearOpen: 'wear:beta',
+  }
+  if (
+    !value ||
+    typeof value !== 'object' ||
+    !Array.isArray((value as { variables?: unknown }).variables)
+  )
+    return defaults
+  const entries = (value as { variables: Array<{ name?: unknown; value?: unknown }> }).variables
+    .filter(
+      (entry): entry is { name: string; value: string } =>
+        typeof entry.name === 'string' && typeof entry.value === 'string' && entry.value.length > 0,
+    )
+    .map((entry) => [entry.name, entry.value] as const)
+  const variables = Object.fromEntries(entries)
+  return {
+    phoneInternal: variables.PLAY_PHONE_INTERNAL_TRACK ?? defaults.phoneInternal,
+    phoneOpen: variables.PLAY_PHONE_OPEN_TRACK ?? defaults.phoneOpen,
+    wearInternal: variables.PLAY_WEAR_INTERNAL_TRACK ?? defaults.wearInternal,
+    wearOpen: variables.PLAY_WEAR_OPEN_TRACK ?? defaults.wearOpen,
+  }
+}
+
+export async function releaseTrackConfig(repo: string): Promise<ReleaseTrackConfig> {
+  const output = await checkedGh(
+    ['api', `repos/${repo}/actions/variables?per_page=100`],
+    'Cannot read Play track configuration',
+  )
+  return parseTrackConfig(JSON.parse(output))
+}
+
+export async function canonicalNotesPath(repo: string, marketingVersion: string): Promise<string> {
+  if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(marketingVersion))
+    throw new Error(`Invalid marketing version "${marketingVersion}"`)
+  const path = `release-notes/${marketingVersion}.md`
+  await checkedGh(
+    [
+      'api',
+      `repos/${repo}/contents/release-notes/${encodeURIComponent(marketingVersion)}.md?ref=main`,
+      '--silent',
+    ],
+    `Canonical release notes missing at ${path} on main`,
+  )
+  return path
+}
+
+export async function downloadPromotionManifest(runId: number): Promise<PromotionManifest> {
+  const directory = await mkdtemp(join(tmpdir(), 'vescape-promotion-'))
+  try {
+    await checkedGh(
+      ['run', 'download', String(runId), '--name', 'promotion-manifest', '--dir', directory],
+      'Cannot download promotion manifest',
+    )
+    const contents = await readFile(join(directory, 'promotion-manifest.json'), 'utf8')
+    return parsePromotionManifest(JSON.parse(contents))
   } finally {
     await rm(directory, { recursive: true, force: true })
   }

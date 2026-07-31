@@ -8,16 +8,28 @@ Session and pushes Watch Frames from native code; the watch only renders receive
 Phone and Wear builds are separate signed AABs under the existing `app.vescape` Play listing:
 
 ```text
-:app:bundleRelease    -> mobile internal       -> mobile production draft
-:wearos:bundleRelease -> wear:internal completed -> wear:production draft
+:app:bundleRelease    -> phone internal -> phone open testing
+:wearos:bundleRelease -> wear:internal  -> wear open testing
 ```
 
 Both use the existing Android upload key. `APP_VERSION` supplies the shared package version name.
-Phone version codes keep `major * 10000 + minor * 100 + patch`; Wear codes use
-`1_000_000_000 + phoneVersionCode`. The disjoint range keeps every artifact code unique in the
-shared listing and remains monotonic with package versions.
+CI allocates monotonic, disjoint phone and Wear version codes for every internal build and records
+them, with the immutable source SHA and artifact hashes, in the release manifest.
 
-A `production-<version>` workflow retains both artifacts even when a Play upload fails:
+`bun run release` offers separate internal-build and open-promotion actions. Open promotion selects
+one successful internal manifest, requires canonical `release-notes/<version>.md`, and promotes the
+manifest's exact existing codes. It never rebuilds or uploads an AAB. Track IDs come from the
+`PLAY_PHONE_INTERNAL_TRACK`, `PLAY_PHONE_OPEN_TRACK`, `PLAY_WEAR_INTERNAL_TRACK`, and
+`PLAY_WEAR_OPEN_TRACK` repository variables; defaults are `internal`, `beta`, `wear:internal`, and
+`wear:beta`.
+
+Before mutation, the trusted `main` workflow verifies both requested codes against Play. A code may
+be on its internal source track or already on its open target track: this makes a retry converge after
+phone-only or Wear-only success. Promotion then runs phone and Wear serially and publishes a
+per-form-factor result (`promoted`, `already-open`, or `failed`). It does not touch production tracks,
+tags, GitHub Releases, `main`, or `dev`.
+
+The internal workflow retains both artifacts even when a Play upload fails:
 
 ```text
 android/app/build/outputs/bundle/release/app-release.aab

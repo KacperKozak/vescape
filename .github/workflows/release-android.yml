@@ -21,6 +21,10 @@ concurrency:
   group: play-publish
   cancel-in-progress: false
 
+env:
+  PHONE_INTERNAL_TRACK: ${{ vars.PLAY_PHONE_INTERNAL_TRACK || 'internal' }}
+  WEAR_INTERNAL_TRACK: ${{ vars.PLAY_WEAR_INTERNAL_TRACK || 'wear:internal' }}
+
 jobs:
   gates:
     name: Release gates

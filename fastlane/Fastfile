@@ -1,5 +1,7 @@
 default_platform(:android)
 
+require "json"
+
 def require_release_env(*names)
   missing = names.select { |name| ENV[name].to_s.empty? }
   UI.user_error!("Missing Android release env: #{missing.join(", ")}") unless missing.empty?
@@ -34,6 +36,61 @@ def internal_upload(aab, track)
   )
 end
 
+def play_track_codes(track)
+  require_release_env("SUPPLY_JSON_KEY")
+  Array(google_play_track_version_codes(track: track)).map(&:to_i)
+end
+
+def exact_code(name)
+  value = Integer(ENV.fetch(name), 10)
+  UI.user_error!("Invalid #{name}: #{value}") unless value.positive?
+  value
+rescue ArgumentError
+  UI.user_error!("Invalid #{name}: #{ENV[name]}")
+end
+
+def validate_promotion_artifact(label, code, source_track, target_track)
+  source_codes = play_track_codes(source_track)
+  target_codes = play_track_codes(target_track)
+  return if source_codes.include?(code) || target_codes.include?(code)
+
+  UI.user_error!(
+    "#{label} version code #{code} is on neither #{source_track} nor #{target_track}"
+  )
+end
+
+def promote_exact_artifact(label, code, source_track, target_track)
+  require_release_env("PROMOTION_RESULT_PATH")
+  status = if play_track_codes(target_track).include?(code)
+    "already-open"
+  else
+    source_codes = play_track_codes(source_track)
+    UI.user_error!("#{label} version code #{code} is not active on #{source_track}") unless source_codes.include?(code)
+    upload_to_play_store(
+      track: source_track,
+      track_promote_to: target_track,
+      version_code: code,
+      track_promote_release_status: "completed",
+      skip_upload_apk: true,
+      skip_upload_aab: true,
+      skip_upload_metadata: true,
+      skip_upload_images: true,
+      skip_upload_screenshots: true,
+      skip_upload_changelogs: true
+    )
+    "promoted"
+  end
+  File.write(
+    ENV.fetch("PROMOTION_RESULT_PATH"),
+    JSON.generate(
+      versionCode: code,
+      sourceTrack: source_track,
+      targetTrack: target_track,
+      status: status
+    )
+  )
+end
+
 platform :android do
   desc "Build the signed phone and Wear AABs once"
   lane :build_internal do
@@ -44,11 +101,60 @@ platform :android do
 
   desc "Upload the existing phone AAB to internal testing only"
   lane :upload_phone_internal do
-    internal_upload("android/app/build/outputs/bundle/release/app-release.aab", "internal")
+    internal_upload(
+      "android/app/build/outputs/bundle/release/app-release.aab",
+      ENV.fetch("PHONE_INTERNAL_TRACK", "internal")
+    )
   end
 
   desc "Upload the existing Wear AAB to internal testing only"
   lane :upload_wear_internal do
-    internal_upload("android/wearos/build/outputs/bundle/release/wearos-release.aab", "wear:internal")
+    internal_upload(
+      "android/wearos/build/outputs/bundle/release/wearos-release.aab",
+      ENV.fetch("WEAR_INTERNAL_TRACK", "wear:internal")
+    )
+  end
+  desc "Validate exact phone and Wear artifacts before open promotion"
+  lane :validate_open_promotion do
+    require_release_env(
+      "PHONE_VERSION_CODE",
+      "WEAR_VERSION_CODE",
+      "PHONE_INTERNAL_TRACK",
+      "PHONE_OPEN_TRACK",
+      "WEAR_INTERNAL_TRACK",
+      "WEAR_OPEN_TRACK"
+    )
+    validate_promotion_artifact(
+      "Phone",
+      exact_code("PHONE_VERSION_CODE"),
+      ENV.fetch("PHONE_INTERNAL_TRACK"),
+      ENV.fetch("PHONE_OPEN_TRACK")
+    )
+    validate_promotion_artifact(
+      "Wear",
+      exact_code("WEAR_VERSION_CODE"),
+      ENV.fetch("WEAR_INTERNAL_TRACK"),
+      ENV.fetch("WEAR_OPEN_TRACK")
+    )
+  end
+
+  desc "Promote one exact phone artifact from internal to open testing"
+  lane :promote_phone_open do
+    promote_exact_artifact(
+      "Phone",
+      exact_code("PHONE_VERSION_CODE"),
+      ENV.fetch("PHONE_INTERNAL_TRACK"),
+      ENV.fetch("PHONE_OPEN_TRACK")
+    )
+  end
+
+  desc "Promote one exact Wear artifact from internal to open testing"
+  lane :promote_wear_open do
+    promote_exact_artifact(
+      "Wear",
+      exact_code("WEAR_VERSION_CODE"),
+      ENV.fetch("WEAR_INTERNAL_TRACK"),
+      ENV.fetch("WEAR_OPEN_TRACK")
+    )
   end
 end

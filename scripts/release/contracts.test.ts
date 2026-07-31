@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'bun:test'
 import type { ReleaseManifest } from './contracts'
-import { parseReleaseManifest, releaseOutcome } from './contracts'
+import {
+  parsePromotionManifest,
+  parseReleaseManifest,
+  promotionSummary,
+  releaseOutcome,
+} from './contracts'
 
 const manifest = (
   phone: 'succeeded' | 'failed',
@@ -17,6 +22,41 @@ const manifest = (
     wear: { name: 'wearos-release.aab', sha256: 'b', signingCertificateSha256: 'c' },
   },
   uploads: { phone, wear },
+})
+
+describe('open promotion manifest', () => {
+  const promotion = {
+    schemaVersion: 1 as const,
+    requestId: '7f787fe8-4a30-4fcf-a3b1-4a9dd8606e38',
+    candidateRunId: 123,
+    sourceSha: 'a'.repeat(40),
+    marketingVersion: '0.83.1',
+    phone: {
+      versionCode: 100_000_042,
+      sourceTrack: 'internal',
+      targetTrack: 'beta',
+      status: 'already-open' as const,
+    },
+    wear: {
+      versionCode: 1_100_000_042,
+      sourceTrack: 'wear:internal',
+      targetTrack: 'wear:beta',
+      status: 'promoted' as const,
+    },
+  }
+
+  test('parses exact per-form-factor state', () => {
+    expect(parsePromotionManifest(promotion)).toEqual(promotion)
+    expect(() => parsePromotionManifest({ ...promotion, candidateRunId: 0 })).toThrow(
+      'invalid shape',
+    )
+  })
+
+  test('renders partial retry convergence', () => {
+    expect(promotionSummary(promotion)).toBe(
+      'phone 100000042: already-open · Wear 1100000042: promoted',
+    )
+  })
 })
 
 describe('release manifest', () => {
