@@ -307,7 +307,7 @@ internal class AlertFeedback(
     fun playDisconnect() = playRaw(disconnectSoundId)
 
     private fun playRaw(soundId: Int) {
-        if (soundId == 0) return
+        if (released || soundId == 0) return
         try {
             soundPool.play(soundId, 1f, 1f, 1, 0, 1f)
         } catch (e: Exception) {
@@ -434,6 +434,7 @@ internal class AlertFeedback(
     }
 
     fun vibrate(rangeDepth: Double?) {
+        if (released) return
         try {
             val v = context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator ?: return
             if (rangeDepth != null) {
