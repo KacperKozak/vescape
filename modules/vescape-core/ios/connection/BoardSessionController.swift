@@ -285,8 +285,11 @@ internal final class BoardSessionController: VescGattListener {
     )
   }
 
-  func stopBoard() {
+  @discardableResult
+  func stopBoard() -> Bool {
+    guard session != nil else { return false }
     endSession(phase: .idle, error: nil)
+    return true
   }
 
   /// Read Refloat config from the connected Board and seed the first Tune Profile. Mirrors Android
@@ -1629,6 +1632,22 @@ internal final class BoardSessionController: VescGattListener {
 
   private func nowMs() -> Int64 { Int64(Date().timeIntervalSince1970 * 1000) }
   private func elapsedMs() -> Int64 { Int64(ProcessInfo.processInfo.systemUptime * 1000.0) }
+}
+
+/// App-process command facade used by both Expo module calls and `StopRideIntent`. Keeping the
+/// command below module lifetime lets iOS launch the app process for the intent without requiring
+/// a live JS runtime or a `VescapeCoreModule` instance.
+@MainActor
+enum BoardSessionCommands {
+  @discardableResult
+  static func stopRide() -> Bool {
+    let controller = BoardSessionController.shared
+    return ManualBoardStop(
+      defaults: .standard,
+      activeBoardId: { controller.connectedBoardId },
+      stop: { controller.stopBoard() }
+    ).perform()
+  }
 }
 
 private extension BoardConnectConfig {
