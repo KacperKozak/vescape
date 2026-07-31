@@ -1,4 +1,4 @@
-import { useCallback, useLayoutEffect, useRef } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native'
 import { Text } from '@/components/base/Text'
 import { useIsFocused, useNavigation, useRouter } from 'expo-router'
@@ -47,6 +47,7 @@ import { useTuneScreenData } from '@/modules/tune/hooks/useTuneScreenData'
 import { theme } from '@/constants/theme'
 import { useTuneModals } from '@/modules/tune/hooks/useTuneModals'
 import type { TuneProfileColorId, TuneProfileIconId } from '@/modules/tune/lib/profileMetadata'
+import { reportTuneCompatibilityIssue } from '@/modules/tune/lib/tuneCompatibilityReporting'
 
 // TODO: Split screen orchestration to reduce cyclomatic complexity below 30.
 // eslint-disable-next-line complexity
@@ -79,7 +80,9 @@ export default function TuneScreen() {
     schemaMismatchFields,
     selectedBoardId,
     syncBarState,
+    tuneCompatibilityIssue,
   } = useTuneScreenData()
+  const reportedCompatibilityIssue = useRef<string | null>(null)
   const setActiveProfile = useTuneProfileStore((s) => s.setActiveProfile)
   const revertField = useTuneProfileStore((s) => s.revertField)
   const acceptBoardField = useTuneProfileStore((s) => s.acceptBoardField)
@@ -89,6 +92,16 @@ export default function TuneScreen() {
   const syncToBoard = useTuneProfileStore((s) => s.syncToBoard)
 
   const modals = useTuneModals(activeProfile, basicSliders, draftFields, allBoards, selectedBoardId)
+
+  useEffect(() => {
+    if (!tuneCompatibilityIssue || !boardSnapshot) return
+    const reportKey = [selectedBoardId, boardSnapshot.refloatVersion, boardSnapshot.fwVersion].join(
+      ':',
+    )
+    if (reportedCompatibilityIssue.current === reportKey) return
+    reportedCompatibilityIssue.current = reportKey
+    reportTuneCompatibilityIssue(tuneCompatibilityIssue, boardSnapshot)
+  }, [boardSnapshot, selectedBoardId, tuneCompatibilityIssue])
 
   const openHistory = useCallback(() => {
     router.push(routes.tuneHistory)
@@ -235,11 +248,19 @@ export default function TuneScreen() {
       {profileState.phase === 'error' && !hasTuneView ? (
         <View style={styles.mainState}>
           <WarningCircleIcon size={28} color={theme.status.error.text} />
-          <Text style={styles.errorText}>{profileState.error}</Text>
+          <Text selectable style={styles.errorText}>
+            {profileState.error}
+          </Text>
           <Button
             label="Retry"
             icon={ArrowsClockwiseIcon}
-            onPress={() => (selectedBoardId ? void loadOffline(selectedBoardId) : undefined)}
+            onPress={() => {
+              if (profileState.retry === 'online') {
+                void loadOnline()
+              } else if (selectedBoardId) {
+                void loadOffline(selectedBoardId)
+              }
+            }}
           />
         </View>
       ) : null}
