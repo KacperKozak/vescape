@@ -6,6 +6,7 @@ import type {
   ProductionOperation,
   PromotionManifest,
   ReleaseManifest,
+  WorkflowJob,
   WorkflowRun,
 } from './contracts'
 import { parseProductionManifest, parsePromotionManifest, parseReleaseManifest } from './contracts'
@@ -37,7 +38,7 @@ async function checkedGh(args: string[], label: string): Promise<string> {
 }
 
 export interface DispatchPayload {
-  ref: 'main'
+  ref: string
   inputs: {
     source_sha: string
     request_id: string
@@ -45,7 +46,7 @@ export interface DispatchPayload {
 }
 
 export interface PromotionDispatchPayload {
-  ref: 'main'
+  ref: string
   inputs: {
     request_id: string
     candidate_run_id: string
@@ -72,7 +73,7 @@ export interface ProductionCandidate {
 }
 
 export interface ProductionDispatchPayload {
-  ref: 'main'
+  ref: string
   inputs: {
     request_id: string
     operation: ProductionOperation
@@ -92,21 +93,24 @@ interface ActionsArtifact {
   workflow_run?: { id?: number }
 }
 
-interface WorkflowJob {
-  name: string
-  conclusion: string | null
-}
-
-export function createDispatchPayload(sourceSha: string, requestId: string): DispatchPayload {
+export function createDispatchPayload(
+  sourceSha: string,
+  requestId: string,
+  workflowRef = 'main',
+): DispatchPayload {
   if (!/^[0-9a-f]{40}$/i.test(sourceSha))
     throw new Error('Source SHA must be a full 40-character SHA')
   if (!/^[0-9a-f-]{36}$/i.test(requestId)) throw new Error('Request ID must be a UUID')
-  return { ref: 'main', inputs: { source_sha: sourceSha.toLowerCase(), request_id: requestId } }
+  return {
+    ref: workflowRef,
+    inputs: { source_sha: sourceSha.toLowerCase(), request_id: requestId },
+  }
 }
 
 export function createPromotionDispatchPayload(
   manifest: ReleaseManifest,
   requestId: string,
+  workflowRef = 'main',
 ): PromotionDispatchPayload {
   if (!/^[0-9a-f-]{36}$/i.test(requestId)) throw new Error('Request ID must be a UUID')
   if (!/^[0-9a-f]{40}$/i.test(manifest.sourceSha))
@@ -114,7 +118,7 @@ export function createPromotionDispatchPayload(
   if (manifest.uploads.phone !== 'succeeded' || manifest.uploads.wear !== 'succeeded')
     throw new Error('Candidate must have both successful internal uploads')
   return {
-    ref: 'main',
+    ref: workflowRef,
     inputs: {
       request_id: requestId,
       candidate_run_id: String(manifest.workflow.runId),
@@ -131,6 +135,7 @@ export function createProductionDispatchPayload(
   operation: ProductionOperation,
   requestId: string,
   rolloutPercentage?: number,
+  workflowRef = 'main',
 ): ProductionDispatchPayload {
   if (!/^[0-9a-f-]{36}$/i.test(requestId)) throw new Error('Request ID must be a UUID')
   if (!['promote', 'status', 'halt', 'resume', 'advance'].includes(operation))
@@ -160,7 +165,7 @@ export function createProductionDispatchPayload(
     throw new Error('Candidate is not an exact successful open-tested release')
   }
   return {
-    ref: 'main',
+    ref: workflowRef,
     inputs: {
       request_id: requestId,
       operation,
@@ -185,6 +190,15 @@ export async function repositoryName(): Promise<string> {
     'Cannot resolve repository',
   )
   if (!/^[^/]+\/[^/]+$/.test(value)) throw new Error(`Invalid GitHub repository "${value}"`)
+  return value
+}
+
+export async function repositoryDefaultBranch(repo: string): Promise<string> {
+  const value = await checkedGh(
+    ['api', `repos/${repo}`, '--jq', '.default_branch'],
+    'Cannot resolve trusted workflow branch',
+  )
+  if (!/^[0-9A-Za-z._/-]+$/.test(value)) throw new Error(`Invalid default branch "${value}"`)
   return value
 }
 
@@ -379,6 +393,55 @@ export async function getWorkflowRun(repo: string, runId: number): Promise<Workf
     'Cannot read workflow run',
   )
   return JSON.parse(output) as WorkflowRun
+}
+
+export function parseInternalWorkflowRuns(value: unknown): WorkflowRun[] {
+  if (!value || typeof value !== 'object') throw new Error('Workflow runs response is invalid')
+  const runs = (value as { workflow_runs?: unknown }).workflow_runs
+  if (!Array.isArray(runs)) throw new Error('Workflow runs response has no workflow_runs')
+  return runs.filter(
+    (run): run is WorkflowRun =>
+      !!run &&
+      typeof run === 'object' &&
+      typeof (run as WorkflowRun).id === 'number' &&
+      typeof (run as WorkflowRun).html_url === 'string' &&
+      typeof (run as WorkflowRun).display_title === 'string' &&
+      /^Internal [0-9a-f-]{36}$/i.test((run as WorkflowRun).display_title),
+  )
+}
+
+export async function listInternalWorkflowRuns(repo: string): Promise<WorkflowRun[]> {
+  const output = await checkedGh(
+    [
+      'api',
+      `repos/${repo}/actions/workflows/${WORKFLOW_FILE}/runs?event=workflow_dispatch&per_page=20`,
+    ],
+    'Cannot list Internal workflow runs',
+  )
+  return parseInternalWorkflowRuns(JSON.parse(output))
+}
+
+export function parseWorkflowJobs(value: unknown): WorkflowJob[] {
+  if (!value || typeof value !== 'object') throw new Error('Workflow jobs response is invalid')
+  const jobs = (value as { jobs?: unknown }).jobs
+  if (!Array.isArray(jobs)) throw new Error('Workflow jobs response has no jobs')
+  return jobs.filter(
+    (job): job is WorkflowJob =>
+      !!job &&
+      typeof job === 'object' &&
+      typeof (job as WorkflowJob).id === 'number' &&
+      typeof (job as WorkflowJob).name === 'string' &&
+      typeof (job as WorkflowJob).status === 'string' &&
+      Array.isArray((job as WorkflowJob).steps),
+  )
+}
+
+export async function getWorkflowJobs(repo: string, runId: number): Promise<WorkflowJob[]> {
+  const output = await checkedGh(
+    ['api', `repos/${repo}/actions/runs/${runId}/jobs?filter=latest&per_page=100`],
+    'Cannot read workflow progress',
+  )
+  return parseWorkflowJobs(JSON.parse(output))
 }
 
 export function parseFailedWorkflowJobs(value: unknown): string[] {

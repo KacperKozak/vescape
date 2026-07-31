@@ -36,6 +36,28 @@ export interface WorkflowRun {
   display_title: string
   status: 'queued' | 'in_progress' | 'completed' | 'waiting' | 'requested' | 'pending'
   conclusion: string | null
+  head_sha?: string
+  run_number?: number
+  run_attempt?: number
+  created_at?: string
+  run_started_at?: string | null
+  updated_at?: string
+}
+
+export interface WorkflowStep {
+  name: string
+  status: string
+  conclusion: string | null
+}
+
+export interface WorkflowJob {
+  id: number
+  name: string
+  status: string
+  conclusion: string | null
+  started_at: string | null
+  completed_at: string | null
+  steps: WorkflowStep[]
 }
 
 export type PromotionArtifactStatus = 'promoted' | 'already-open' | 'failed'

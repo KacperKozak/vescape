@@ -31,7 +31,10 @@ describe('release-note bundler', () => {
     expect(() => validateReleaseMarkdown('<script>alert(1)</script>')).toThrow(
       'unsupported Markdown',
     )
-    expect(() => validateReleaseMarkdown('# Version 1')).toThrow('document-level title')
+    expect(() => validateReleaseMarkdown('# Version 1')).toThrow('unsupported section heading')
+    expect(() => validateReleaseMarkdown('## Fixed\n\n- One\n\n## New\n\n- Two')).toThrow(
+      'sections must be ordered',
+    )
   })
 
   test('reports missing and stale generated output clearly', () => {

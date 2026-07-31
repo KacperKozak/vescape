@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Box, render, Text, useApp, useInput } from 'ink'
-import type { ProductionOperation, ReleaseManifest } from './contracts'
+import type { ProductionOperation, ReleaseManifest, WorkflowJob, WorkflowRun } from './contracts'
 import { productionSummary, promotionSummary, releaseOutcome } from './contracts'
 import {
   canonicalNotesPath,
@@ -18,22 +18,35 @@ import {
   findPromotionRun,
   findProductionRun,
   getWorkflowRun,
+  getWorkflowJobs,
   listInternalCandidates,
+  listInternalWorkflowRuns,
   listProductionCandidates,
   marketingVersion,
   type ReleaseTrackConfig,
   type ProductionCandidate,
   releaseTrackConfig,
+  repositoryDefaultBranch,
   repositoryName,
   resolveSourceSha,
   retryFailedJobs,
   verifyGhAuthentication,
   verifyRemoteCommit,
 } from './github'
+import { internalReleaseProgress, workflowElapsed } from './progress'
+import {
+  bumpMarketingVersion,
+  currentMarketingVersion,
+  type VersionBump,
+  verifyReleasePreparationReady,
+} from './prepare'
 
 type Phase =
   | 'select'
+  | 'version-bump'
+  | 'version-confirm'
   | 'build-source'
+  | 'internal-runs'
   | 'checking'
   | 'candidate'
   | 'production-candidate'
@@ -50,6 +63,7 @@ type Phase =
 
 interface Plan {
   repo: string
+  workflowRef: string
   sourceSha: string
   marketingVersion: string
   requestId: string
@@ -57,6 +71,7 @@ interface Plan {
 
 interface PromotionPlan {
   repo: string
+  workflowRef: string
   candidate: ReleaseManifest
   requestId: string
   notesPath: string
@@ -65,6 +80,7 @@ interface PromotionPlan {
 
 interface ProductionPlan {
   repo: string
+  workflowRef: string
   candidate: ProductionCandidate
   requestId: string
   notesPath: string
@@ -74,10 +90,18 @@ interface ProductionPlan {
 }
 
 const releaseActions = [
-  { shortcut: 'b', label: 'Build and send to Internal' },
-  { shortcut: 'o', label: 'Promote Internal → Open testing' },
-  { shortcut: 'p', label: 'Promote Open → Production / rollout controls' },
+  { id: 'prepare', shortcut: 'n', label: 'Prepare a new release version' },
+  { id: 'build', shortcut: 'b', label: 'Build and send to Internal' },
+  { id: 'watch', shortcut: 'w', label: 'Watch / resume an Internal release' },
+  { id: 'open', shortcut: 'o', label: 'Promote Internal → Open testing' },
+  { id: 'production', shortcut: 'p', label: 'Promote Open → Production / rollout controls' },
 ] as const
+
+const versionBumps: ReadonlyArray<{ bump: VersionBump; label: string }> = [
+  { bump: 'major', label: 'Major' },
+  { bump: 'minor', label: 'Minor' },
+  { bump: 'patch', label: 'Patch' },
+]
 
 const productionOperations: ReadonlyArray<{
   operation: ProductionOperation
@@ -93,18 +117,38 @@ const productionOperations: ReadonlyArray<{
 
 const sleep = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds))
 
-function App() {
+export interface ReleaseCliOptions {
+  initialPhase?: 'select' | 'build-source'
+  initialSourceRef?: string
+}
+
+export type ReleaseCliResult = { kind: 'exit' } | { kind: 'prepare'; bump: VersionBump }
+
+interface AppProps extends ReleaseCliOptions {
+  finish: (result: ReleaseCliResult) => void
+}
+
+function App({ finish, initialPhase = 'select', initialSourceRef }: AppProps) {
   const { exit } = useApp()
-  const initialRef = process.argv.find((value) => value.startsWith('--sha='))?.slice(6) ?? 'HEAD'
+  const initialRef =
+    initialSourceRef ?? process.argv.find((value) => value.startsWith('--sha='))?.slice(6) ?? 'HEAD'
   const [sourceRef, setSourceRef] = useState(initialRef)
-  const [phase, setPhase] = useState<Phase>('select')
+  const [phase, setPhase] = useState<Phase>(initialPhase)
   const [status, setStatus] = useState('Ready')
   const [plan, setPlan] = useState<Plan | null>(null)
   const [promotionPlan, setPromotionPlan] = useState<PromotionPlan | null>(null)
   const [productionPlan, setProductionPlan] = useState<ProductionPlan | null>(null)
   const [candidates, setCandidates] = useState<ReleaseManifest[]>([])
   const [productionCandidates, setProductionCandidates] = useState<ProductionCandidate[]>([])
+  const [internalRuns, setInternalRuns] = useState<WorkflowRun[]>([])
+  const [internalRunsRepo, setInternalRunsRepo] = useState('')
+  const [workflowJobs, setWorkflowJobs] = useState<WorkflowJob[]>([])
+  const [watchedRun, setWatchedRun] = useState<WorkflowRun | null>(null)
+  const [clock, setClock] = useState(Date.now())
   const [actionIndex, setActionIndex] = useState(0)
+  const [versionBumpIndex, setVersionBumpIndex] = useState(1)
+  const [currentVersion, setCurrentVersion] = useState('')
+  const [runIndex, setRunIndex] = useState(0)
   const [candidateIndex, setCandidateIndex] = useState(0)
   const [operationIndex, setOperationIndex] = useState(0)
   const [rolloutInput, setRolloutInput] = useState('10')
@@ -112,16 +156,38 @@ function App() {
   const [error, setError] = useState<string | null>(null)
   const [retryRunId, setRetryRunId] = useState<number | null>(null)
 
+  const prepareVersionMenu = async () => {
+    setPhase('checking')
+    setStatus('Checking branch and working tree…')
+    try {
+      await verifyReleasePreparationReady()
+      setCurrentVersion(await currentMarketingVersion())
+      setVersionBumpIndex(1)
+      setStatus('Choose the marketing version bump')
+      setPhase('version-bump')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught))
+      setPhase('error')
+    }
+  }
+
   const prepare = async () => {
     setPhase('checking')
     setStatus('Checking gh auth and source commit…')
     try {
       await verifyGhAuthentication()
       const repo = await repositoryName()
+      const workflowRef = await repositoryDefaultBranch(repo)
       const sourceSha = await resolveSourceSha(sourceRef)
       await verifyRemoteCommit(repo, sourceSha)
       const version = await marketingVersion(repo, sourceSha)
-      setPlan({ repo, sourceSha, marketingVersion: version, requestId: crypto.randomUUID() })
+      setPlan({
+        repo,
+        workflowRef,
+        sourceSha,
+        marketingVersion: version,
+        requestId: crypto.randomUUID(),
+      })
       setPhase('confirm')
       setStatus('Dispatch plan ready')
     } catch (caught) {
@@ -136,15 +202,17 @@ function App() {
     try {
       await verifyGhAuthentication()
       const repo = await repositoryName()
-      const [available, tracks] = await Promise.all([
+      const [available, tracks, workflowRef] = await Promise.all([
         listInternalCandidates(repo),
         releaseTrackConfig(repo),
+        repositoryDefaultBranch(repo),
       ])
       if (available.length === 0) throw new Error('No successful internal release manifests found')
       setCandidates(available)
       setCandidateIndex(0)
       setPromotionPlan({
         repo,
+        workflowRef,
         candidate: available[0],
         requestId: crypto.randomUUID(),
         notesPath: '',
@@ -180,15 +248,17 @@ function App() {
     try {
       await verifyGhAuthentication()
       const repo = await repositoryName()
-      const [available, tracks] = await Promise.all([
+      const [available, tracks, workflowRef] = await Promise.all([
         listProductionCandidates(repo),
         releaseTrackConfig(repo),
+        repositoryDefaultBranch(repo),
       ])
       if (available.length === 0) throw new Error('No exact open-tested release manifests found')
       setProductionCandidates(available)
       setCandidateIndex(0)
       setProductionPlan({
         repo,
+        workflowRef,
         candidate: available[0],
         requestId: crypto.randomUUID(),
         notesPath: '',
@@ -248,13 +318,100 @@ function App() {
     setPhase('production-confirm')
   }
 
+  const prepareInternalRuns = async () => {
+    setPhase('checking')
+    setStatus('Finding recent Internal releases…')
+    try {
+      await verifyGhAuthentication()
+      const repo = await repositoryName()
+      const available = await listInternalWorkflowRuns(repo)
+      if (available.length === 0) throw new Error('No resumable Internal release runs found')
+      setInternalRunsRepo(repo)
+      setInternalRuns(available)
+      setRunIndex(0)
+      setStatus('Select an Internal release to watch')
+      setPhase('internal-runs')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught))
+      setPhase('error')
+    }
+  }
+
+  const finishInternalRun = async (repo: string, workflowRun: WorkflowRun) => {
+    setStatus('Reading release manifest…')
+    let manifest
+    try {
+      manifest = await downloadManifest(workflowRun.id)
+    } catch (manifestError) {
+      if (workflowRun.conclusion !== 'success') {
+        const failedJobs = await failedWorkflowJobs(repo, workflowRun.id)
+        throw new Error(
+          `Workflow failed${failedJobs.length > 0 ? ` in ${failedJobs.join(', ')}` : ''}. ${workflowRun.html_url}`,
+        )
+      }
+      throw manifestError
+    }
+    const outcome = releaseOutcome(manifest)
+    if (outcome.kind === 'success') {
+      setStatus(
+        `Internal ready · phone ${manifest.versionCodes.phone} · Wear ${manifest.versionCodes.wear}`,
+      )
+    } else if (outcome.kind === 'partial') {
+      setStatus(`${outcome.succeeded} uploaded; ${outcome.failed} failed`)
+      setRetryRunId(workflowRun.id)
+    } else {
+      setStatus('Both internal uploads failed')
+      setRetryRunId(workflowRun.id)
+    }
+    setPhase('complete')
+  }
+
+  const watchInternalRun = async (repo: string, initialRun: WorkflowRun) => {
+    let workflowRun = initialRun
+    setClock(Date.now())
+    setRun({ id: workflowRun.id, url: workflowRun.html_url })
+    setWatchedRun(workflowRun)
+    setWorkflowJobs(await getWorkflowJobs(repo, workflowRun.id))
+    setPhase('running')
+    while (workflowRun.status !== 'completed') {
+      setStatus(`Internal release ${workflowRun.status.replace('_', ' ')}…`)
+      await sleep(10_000)
+      const [nextRun, jobs] = await Promise.all([
+        getWorkflowRun(repo, workflowRun.id),
+        getWorkflowJobs(repo, workflowRun.id),
+      ])
+      workflowRun = nextRun
+      setWatchedRun(nextRun)
+      setWorkflowJobs(jobs)
+    }
+    await finishInternalRun(repo, workflowRun)
+  }
+
+  const resumeInternalRun = async () => {
+    const selected = internalRuns[runIndex]
+    if (!selected || !internalRunsRepo) return
+    setPhase('checking')
+    setStatus('Loading live workflow progress…')
+    try {
+      const current = await getWorkflowRun(internalRunsRepo, selected.id)
+      await watchInternalRun(internalRunsRepo, current)
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught))
+      setPhase('error')
+    }
+  }
+
   const dispatch = async (confirmedPlan: Plan) => {
     setPhase('dispatching')
-    setStatus('Dispatching trusted workflow from main…')
+    setStatus(`Dispatching trusted workflow from ${confirmedPlan.workflowRef}…`)
     try {
       await dispatchInternalBuild(
         confirmedPlan.repo,
-        createDispatchPayload(confirmedPlan.sourceSha, confirmedPlan.requestId),
+        createDispatchPayload(
+          confirmedPlan.sourceSha,
+          confirmedPlan.requestId,
+          confirmedPlan.workflowRef,
+        ),
       )
       setPhase('waiting')
       setStatus('Waiting for structured workflow run…')
@@ -264,41 +421,7 @@ function App() {
         if (!workflowRun) await sleep(2_000)
       }
       if (!workflowRun) throw new Error('Dispatch succeeded, but its workflow run was not found')
-      setRun({ id: workflowRun.id, url: workflowRun.html_url })
-      setPhase('running')
-
-      while (workflowRun.status !== 'completed') {
-        setStatus(`Workflow ${workflowRun.status.replace('_', ' ')}…`)
-        await sleep(10_000)
-        workflowRun = await getWorkflowRun(confirmedPlan.repo, workflowRun.id)
-      }
-
-      setStatus('Reading release manifest…')
-      let manifest
-      try {
-        manifest = await downloadManifest(workflowRun.id)
-      } catch (manifestError) {
-        if (workflowRun.conclusion !== 'success') {
-          const failedJobs = await failedWorkflowJobs(confirmedPlan.repo, workflowRun.id)
-          throw new Error(
-            `Workflow failed${failedJobs.length > 0 ? ` in ${failedJobs.join(', ')}` : ''}. ${workflowRun.html_url}`,
-          )
-        }
-        throw manifestError
-      }
-      const outcome = releaseOutcome(manifest)
-      if (outcome.kind === 'success') {
-        setStatus(
-          `Internal ready · phone ${manifest.versionCodes.phone} · Wear ${manifest.versionCodes.wear}`,
-        )
-      } else if (outcome.kind === 'partial') {
-        setStatus(`${outcome.succeeded} uploaded; ${outcome.failed} failed`)
-        setRetryRunId(workflowRun.id)
-      } else {
-        setStatus('Both internal uploads failed')
-        setRetryRunId(workflowRun.id)
-      }
-      setPhase('complete')
+      await watchInternalRun(confirmedPlan.repo, workflowRun)
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught))
       setPhase('error')
@@ -307,11 +430,15 @@ function App() {
 
   const promote = async (confirmedPlan: PromotionPlan) => {
     setPhase('dispatching')
-    setStatus('Dispatching trusted open-promotion workflow from main…')
+    setStatus(`Dispatching trusted open-promotion workflow from ${confirmedPlan.workflowRef}…`)
     try {
       await dispatchOpenPromotion(
         confirmedPlan.repo,
-        createPromotionDispatchPayload(confirmedPlan.candidate, confirmedPlan.requestId),
+        createPromotionDispatchPayload(
+          confirmedPlan.candidate,
+          confirmedPlan.requestId,
+          confirmedPlan.workflowRef,
+        ),
       )
       setPhase('waiting')
       setStatus('Waiting for structured promotion run…')
@@ -343,7 +470,9 @@ function App() {
 
   const runProduction = async (confirmedPlan: ProductionPlan) => {
     setPhase('dispatching')
-    setStatus(`Dispatching trusted production ${confirmedPlan.operation} workflow from main…`)
+    setStatus(
+      `Dispatching trusted production ${confirmedPlan.operation} workflow from ${confirmedPlan.workflowRef}…`,
+    )
     try {
       await dispatchProduction(
         confirmedPlan.repo,
@@ -354,6 +483,7 @@ function App() {
           confirmedPlan.operation === 'promote' || confirmedPlan.operation === 'advance'
             ? confirmedPlan.rolloutPercentage
             : undefined,
+          confirmedPlan.workflowRef,
         ),
       )
       setPhase('waiting')
@@ -400,9 +530,30 @@ function App() {
         setActionIndex((value) => (value + 1) % releaseActions.length)
       else if (key.return || shortcutIndex >= 0) {
         setActionIndex(selectedIndex)
-        if (selectedIndex === 0) setPhase('build-source')
-        else if (selectedIndex === 1) void preparePromotion()
+        const action = releaseActions[selectedIndex].id
+        if (action === 'prepare') void prepareVersionMenu()
+        else if (action === 'build') setPhase('build-source')
+        else if (action === 'watch') void prepareInternalRuns()
+        else if (action === 'open') void preparePromotion()
         else void prepareProduction()
+      }
+      return
+    }
+    if (phase === 'version-bump') {
+      if (key.upArrow || input.toLowerCase() === 'k')
+        setVersionBumpIndex((value) => (value - 1 + versionBumps.length) % versionBumps.length)
+      else if (key.downArrow || input.toLowerCase() === 'j')
+        setVersionBumpIndex((value) => (value + 1) % versionBumps.length)
+      else if (key.return) setPhase('version-confirm')
+      else if (key.escape) setPhase('select')
+      return
+    }
+    if (phase === 'version-confirm') {
+      if (input.toLowerCase() === 'y') {
+        finish({ kind: 'prepare', bump: versionBumps[versionBumpIndex].bump })
+        exit()
+      } else if (input.toLowerCase() === 'n' || key.escape) {
+        setPhase('version-bump')
       }
       return
     }
@@ -419,6 +570,14 @@ function App() {
       else if (key.downArrow || input.toLowerCase() === 'j')
         setCandidateIndex((value) => Math.min(candidates.length - 1, value + 1))
       else if (key.return) void confirmPromotionCandidate()
+      else if (key.escape) setPhase('select')
+      return
+    }
+    if (phase === 'internal-runs') {
+      if (key.upArrow || input.toLowerCase() === 'k') setRunIndex((value) => Math.max(0, value - 1))
+      else if (key.downArrow || input.toLowerCase() === 'j')
+        setRunIndex((value) => Math.min(internalRuns.length - 1, value + 1))
+      else if (key.return) void resumeInternalRun()
       else if (key.escape) setPhase('select')
       return
     }
@@ -481,6 +640,7 @@ function App() {
     }
     if (phase === 'complete' && retryRunId && input.toLowerCase() === 'r') {
       setRetryRunId(null)
+      setWatchedRun(null)
       setPhase('running')
       setStatus('Retrying failed jobs only…')
       void retryFailedJobs(retryRunId)
@@ -494,15 +654,19 @@ function App() {
         })
       return
     }
-    if ((phase === 'complete' || phase === 'error') && (input === 'q' || key.escape)) exit()
+    if ((phase === 'complete' || phase === 'error') && (input === 'q' || key.escape)) {
+      finish({ kind: 'exit' })
+      exit()
+    }
   })
 
   useEffect(() => {
-    if (phase === 'complete' && !retryRunId) {
-      const timer = setTimeout(exit, 1_500)
-      return () => clearTimeout(timer)
-    }
-  }, [exit, phase, retryRunId])
+    if (phase !== 'running' || !watchedRun) return
+    const timer = setInterval(() => setClock(Date.now()), 1_000)
+    return () => clearInterval(timer)
+  }, [phase, watchedRun])
+
+  const progress = watchedRun ? internalReleaseProgress(workflowJobs) : null
 
   return (
     <Box flexDirection="column" gap={1}>
@@ -525,6 +689,40 @@ function App() {
           <Text dimColor>↑/↓ or j/k to move · Enter to select · shortcuts work directly</Text>
         </Box>
       )}
+      {phase === 'version-bump' && (
+        <Box flexDirection="column">
+          <Text bold>Choose the next marketing version</Text>
+          {versionBumps.map((item, index) => {
+            const selected = index === versionBumpIndex
+            return (
+              <Text key={item.bump} color={selected ? 'cyan' : undefined} bold={selected}>
+                {selected ? '◆ ' : '  '}
+                {item.label}: {currentVersion} → {bumpMarketingVersion(currentVersion, item.bump)}
+              </Text>
+            )
+          })}
+          <Text dimColor>↑/↓ or j/k · Enter selects · Esc goes back</Text>
+        </Box>
+      )}
+      {phase === 'version-confirm' && (
+        <Box flexDirection="column">
+          <Text bold>Prepare release candidate</Text>
+          <Text>
+            Version: {currentVersion} →{' '}
+            <Text color="cyan">
+              {bumpMarketingVersion(currentVersion, versionBumps[versionBumpIndex].bump)}
+            </Text>
+          </Text>
+          <Text>
+            Next: author canonical notes → commit dev → merge dev into main → atomic push → Internal
+            build
+          </Text>
+          <Text dimColor>
+            No Play upload, tag, GitHub Release, or production mutation happens yet.
+          </Text>
+          <Text color="yellow">Prepare and push this release candidate? y/N</Text>
+        </Box>
+      )}
       {phase === 'build-source' && (
         <Box flexDirection="column">
           <Text>Build and send to Internal</Text>
@@ -532,6 +730,22 @@ function App() {
             Source commit: <Text color="yellow">{sourceRef || ' '}</Text>
           </Text>
           <Text dimColor>Type a git ref or SHA · Enter continues · Esc cancels</Text>
+        </Box>
+      )}
+      {phase === 'internal-runs' && (
+        <Box flexDirection="column">
+          <Text bold>Watch / resume an Internal release</Text>
+          {internalRuns.map((workflowRun, index) => (
+            <Text key={workflowRun.id} color={index === runIndex ? 'cyan' : undefined}>
+              {index === runIndex ? '◆ ' : '  '}#{workflowRun.run_number ?? workflowRun.id} ·{' '}
+              {workflowRun.status === 'completed'
+                ? (workflowRun.conclusion ?? 'completed')
+                : workflowRun.status.replace('_', ' ')}{' '}
+              · {workflowElapsed(workflowRun, clock)} ·{' '}
+              {workflowRun.head_sha?.slice(0, 12) ?? 'SHA unknown'}
+            </Text>
+          ))}
+          <Text dimColor>Newest first · ↑/↓ or j/k · Enter watches · Esc goes back</Text>
         </Box>
       )}
       {phase === 'candidate' && (
@@ -594,7 +808,7 @@ function App() {
       )}
       {plan && (phase === 'confirm' || phase === 'dispatching') && (
         <Box flexDirection="column">
-          <Text>Workflow definition: main:.github/workflows/release-android.yml</Text>
+          <Text>Workflow definition: {plan.workflowRef}:.github/workflows/release-android.yml</Text>
           <Text>Repository: {plan.repo}</Text>
           <Text>Source SHA: {plan.sourceSha}</Text>
           <Text>Marketing version: {plan.marketingVersion}</Text>
@@ -604,7 +818,9 @@ function App() {
       )}
       {promotionPlan && phase === 'promote-confirm' && (
         <Box flexDirection="column">
-          <Text>Workflow definition: main:.github/workflows/promote-open.yml</Text>
+          <Text>
+            Workflow definition: {promotionPlan.workflowRef}:.github/workflows/promote-open.yml
+          </Text>
           <Text>Marketing version: {promotionPlan.candidate.marketingVersion}</Text>
           <Text>Source SHA: {promotionPlan.candidate.sourceSha}</Text>
           <Text>
@@ -627,7 +843,10 @@ function App() {
       )}
       {productionPlan && phase === 'production-confirm' && (
         <Box flexDirection="column">
-          <Text>Workflow definition: main:.github/workflows/promote-production.yml</Text>
+          <Text>
+            Workflow definition: {productionPlan.workflowRef}
+            :.github/workflows/promote-production.yml
+          </Text>
           <Text>Operation: {productionPlan.operation}</Text>
           <Text>Marketing version: {productionPlan.candidate.manifest.marketingVersion}</Text>
           <Text>Source SHA: {productionPlan.candidate.manifest.sourceSha}</Text>
@@ -657,6 +876,52 @@ function App() {
           <Text color="yellow">Run explicitly approved production operation? y/N</Text>
         </Box>
       )}
+      {phase === 'running' && watchedRun && progress && (
+        <Box flexDirection="column">
+          <Text>
+            <Text color="cyan">[{progress.bar}]</Text> {progress.completed}/{progress.total} stages
+          </Text>
+          <Text>
+            Now: <Text bold>{progress.current}</Text>
+          </Text>
+          {progress.detail && <Text dimColor>Step: {progress.detail}</Text>}
+          <Box flexDirection="column" marginTop={1}>
+            {progress.stages.map((stage) => (
+              <Text
+                key={stage.name}
+                color={
+                  stage.state === 'done'
+                    ? 'green'
+                    : stage.state === 'active'
+                      ? 'cyan'
+                      : stage.state === 'failed'
+                        ? 'red'
+                        : undefined
+                }
+                dimColor={stage.state === 'waiting' || stage.state === 'skipped'}
+              >
+                {stage.state === 'done'
+                  ? '✓'
+                  : stage.state === 'active'
+                    ? '◆'
+                    : stage.state === 'failed'
+                      ? '✗'
+                      : stage.state === 'skipped'
+                        ? '–'
+                        : '○'}{' '}
+                {stage.name}
+              </Text>
+            ))}
+          </Box>
+          <Text>
+            Elapsed: {workflowElapsed(watchedRun, clock)} · Remaining: {progress.remaining}
+          </Text>
+          <Text dimColor>
+            Run #{watchedRun.run_number ?? watchedRun.id} · attempt {watchedRun.run_attempt ?? 1} ·{' '}
+            {watchedRun.head_sha?.slice(0, 12) ?? 'source SHA unavailable'}
+          </Text>
+        </Box>
+      )}
       {run && (
         <Text>
           Run: {run.id} · {run.url}
@@ -665,6 +930,7 @@ function App() {
       {phase === 'complete' && retryRunId && (
         <Text color="yellow">R retry failed jobs only · Q quit</Text>
       )}
+      {phase === 'complete' && !retryRunId && <Text dimColor>Q quit</Text>}
       {phase === 'error' && (
         <Box flexDirection="column">
           <Text color="red">{error}</Text>
@@ -675,4 +941,11 @@ function App() {
   )
 }
 
-render(<App />)
+export async function runReleaseCli(options: ReleaseCliOptions = {}): Promise<ReleaseCliResult> {
+  let result: ReleaseCliResult = { kind: 'exit' }
+  const instance = render(<App {...options} finish={(next) => (result = next)} />)
+  await instance.waitUntilExit()
+  return result
+}
+
+if (import.meta.main) await runReleaseCli()

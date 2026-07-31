@@ -3,11 +3,12 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createInterface } from 'node:readline/promises'
 
 import { buildReleaseNotes, RELEASE_NOTES_DIRECTORY, validateReleaseMarkdown } from './bundler'
 import { runCodexDraft } from './codex'
+import { resolveEditorCommand } from './editor'
 import { resolveReleaseNotePlan } from './plan'
+import { selectPrompt, textPrompt } from './prompt'
 
 const ROOT = join(import.meta.dir, '../..')
 const targetRef = argument('sha') ?? 'HEAD'
@@ -18,9 +19,13 @@ if (!process.stdin.isTTY || !process.stdout.isTTY) {
 }
 
 const plan = await resolveReleaseNotePlan(targetRef, versionOverride)
+const editorCommand = resolveEditorCommand()
 const destination = join(RELEASE_NOTES_DIRECTORY, `${plan.marketingVersion}.md`)
 if (await Bun.file(destination).exists()) {
-  throw new Error(`${destination} already exists; edit the canonical note directly`)
+  validateReleaseMarkdown(await readFile(destination, 'utf8'), `${plan.marketingVersion}.md`)
+  await buildReleaseNotes()
+  console.log(`Using existing ${destination}`)
+  process.exit(0)
 }
 
 console.log('Release-note plan')
@@ -30,10 +35,10 @@ console.log(
 console.log(`  Target SHA: ${plan.targetSha}`)
 console.log(`  Marketing version: ${plan.marketingVersion}`)
 console.log(`  Compared range: ${plan.comparison}`)
+console.log(`  Editor: ${editorCommand.join(' ')}`)
 
 const temporaryDirectory = await mkdtemp(join(tmpdir(), 'vescape-release-notes-'))
 const draftFile = join(temporaryDirectory, 'draft.md')
-const reader = createInterface({ input: process.stdin, output: process.stdout })
 
 try {
   console.log('\nAsking local Codex to inspect the compared changes…')
@@ -45,24 +50,29 @@ try {
 
   while (true) {
     preview(result.markdown)
-    const choice = (
-      await reader.question('\n[a]ccept  [r]e-prompt  [e]dit in $EDITOR  [d]iscard > ')
-    )
-      .trim()
-      .toLowerCase()
+    const choice = await selectPrompt('Review release-note draft', [
+      { value: 'accept', label: 'Accept canonical notes', shortcut: 'a' },
+      { value: 'revise', label: 'Revise with Codex', shortcut: 'r' },
+      { value: 'edit', label: `Edit in ${editorCommand[0]}`, shortcut: 'e' },
+      { value: 'discard', label: 'Discard draft', shortcut: 'd' },
+    ] as const)
 
-    if (choice === 'd') {
+    if (choice === 'discard') {
       console.log('Draft discarded; canonical release notes unchanged')
       break
     }
-    if (choice === 'e') {
-      await openEditor(draftFile)
-      result = { ...result, markdown: await readFile(draftFile, 'utf8') }
+    if (choice === 'edit') {
+      try {
+        await openEditor(draftFile, editorCommand)
+        result = { ...result, markdown: await readFile(draftFile, 'utf8') }
+      } catch (error) {
+        console.error(error instanceof Error ? error.message : String(error))
+      }
       continue
     }
-    if (choice === 'r') {
-      const instruction = await reader.question('Revision instruction > ')
-      if (!instruction.trim()) continue
+    if (choice === 'revise') {
+      const instruction = await textPrompt('How should Codex revise the draft?')
+      if (!instruction) continue
       result = await runCodexDraft({
         root: ROOT,
         outputFile: draftFile,
@@ -71,7 +81,7 @@ try {
       })
       continue
     }
-    if (choice === 'a') {
+    if (choice === 'accept') {
       try {
         validateReleaseMarkdown(result.markdown, `${plan.marketingVersion}.md`)
       } catch (error) {
@@ -86,7 +96,6 @@ try {
     }
   }
 } finally {
-  reader.close()
   await rm(temporaryDirectory, { recursive: true, force: true })
 }
 
@@ -101,6 +110,8 @@ function initialPrompt(): string {
     `The target is ${plan.targetSha} and the marketing version is ${plan.marketingVersion}.`,
     `Inspect the real diff with: git diff ${plan.diffBase} ${plan.targetSha}`,
     `Also inspect relevant source around changed behavior and git log ${plan.diffBase}..${plan.targetSha}.`,
+    'Use only ## New, ## Improved, and ## Fixed, in that order, omitting empty sections.',
+    'Include only important rider-visible outcomes. Consolidate related changes into one bullet and lead each section with its most important change.',
     'Do not modify the working tree. Return only the complete Markdown body.',
   ].join('\n')
 }
@@ -111,10 +122,7 @@ function preview(source: string): void {
   console.log('----- end draft -----')
 }
 
-async function openEditor(file: string): Promise<void> {
-  const command = process.env.VISUAL ?? process.env.EDITOR
-  if (!command) throw new Error('$VISUAL or $EDITOR is not set')
-  const [program, ...args] = command.trim().split(/\s+/)
+async function openEditor(file: string, [program, ...args]: string[]): Promise<void> {
   const child = Bun.spawn([program, ...args, file], {
     stdin: 'inherit',
     stdout: 'inherit',
