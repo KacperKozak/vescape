@@ -803,6 +803,85 @@ export interface TelemetrySummary {
   droppedPendingSamples: number
 }
 
+/**
+ * One Favorite: a durable, optionally named time range over Ride History (ADR 0029). Identity,
+ * timestamps and the summary stats are native-owned — JS only ever sends a range and a name.
+ *
+ * @parity /modules/vescape-core/ios/telemetry/FavoriteStore.swift `Favorite`
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryEntities.kt `FavoriteEntity`
+ */
+export interface Favorite {
+  id: string
+  /**
+   * Owning Board (`Board.id`), or null when the recorded samples match no saved Board. Never a BLE
+   * peripheral id: that changes on re-link and differs per install, so it is not an identity.
+   */
+  boardId: string | null
+  /** Resolved from `boards` on read, not snapshotted — board renames propagate to old Favorites. */
+  boardName: string | null
+  name: string | null
+  startMs: number
+  endMs: number
+  createdAtMs: number
+  updatedAtMs: number
+  sampleCount: number
+  gpsPointCount: number
+  /** Null when the favorited range carries no distance source. */
+  distanceM: number | null
+  movingDurationMs: number
+  avgSpeedKmh: number
+  maxSpeedKmh: number
+  batteryUsedWh: number
+}
+
+/**
+ * @parity /modules/vescape-core/ios/telemetry/TelemetryRepository.swift `createFavorite`
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryRepository.kt `createFavorite`
+ */
+export interface CreateFavoriteOptions {
+  startMs: number
+  endMs: number
+  deviceId?: string
+  name?: string
+}
+
+/**
+ * @parity /modules/vescape-core/ios/telemetry/TelemetryRepository.swift `updateFavorite`
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryRepository.kt `updateFavorite`
+ */
+export interface UpdateFavoriteOptions {
+  startMs: number
+  endMs: number
+  deviceId?: string
+  name: string | null
+}
+
+/**
+ * One immutable Favorite Media manifest row. Native owns metadata and canonical storage.
+ * @parity /modules/vescape-core/ios/telemetry/FavoriteMediaStore.swift `FavoriteMedia`
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryEntities.kt `FavoriteMediaEntity`
+ */
+export interface FavoriteMedia {
+  id: string
+  favoriteId: string
+  capturedAtMs: number | null
+  mimeType: string
+  mediaKind: 'photo' | 'video'
+  byteCount: number
+  contentHash: string
+  createdAtMs: number
+  uri: string
+  filename: string
+}
+
+export interface ImportFavoriteMediaOptions {
+  favoriteId: string
+  uri: string
+  capturedAtMs?: number
+  mimeType: string
+  mediaKind: 'photo' | 'video'
+}
+
 export interface RefloatConfigField {
   id: string
   label: string
@@ -1452,6 +1531,12 @@ type VescapeCoreNativeModule = NativeEventEmitter<VescapeCoreEvents> & {
     limit?: number
   }): Promise<NativeHistoryRange>
   getTelemetrySummary(): Promise<TelemetrySummary>
+  getFavorites(): Promise<Favorite[]>
+  createFavorite(options: CreateFavoriteOptions): Promise<Favorite>
+  updateFavorite(id: string, options: UpdateFavoriteOptions): Promise<Favorite>
+  deleteFavorite(id: string): Promise<boolean>
+  getFavoriteMedia(favoriteId: string): Promise<FavoriteMedia[]>
+  importFavoriteMedia(options: ImportFavoriteMediaOptions): Promise<FavoriteMedia>
   getDiagnosticEvents(options: DiagnosticEventOptions): Promise<LocalDiagnosticEvent[]>
   clearDiagnosticEvents(): Promise<void>
   getBoardWarnings(): Promise<BoardWarning[]>
@@ -1939,6 +2024,40 @@ export async function getTelemetrySummary(): Promise<TelemetrySummary> {
     return e2eFake.getTelemetrySummary()
   }
   return native.getTelemetrySummary()
+}
+
+export async function getFavorites(): Promise<Favorite[]> {
+  return native.getFavorites()
+}
+
+/** Pin a time range as a Favorite. Native mints the id, the timestamps and the summary stats. */
+export async function createFavorite(options: CreateFavoriteOptions): Promise<Favorite> {
+  return native.createFavorite(options)
+}
+
+/** Update a Favorite in place, preserving identity and media while native recomputes its summary. */
+export async function updateFavorite(
+  id: string,
+  options: UpdateFavoriteOptions,
+): Promise<Favorite> {
+  return native.updateFavorite(id, options)
+}
+
+/** Unpin a Favorite. Its telemetry stays and becomes normally deletable (ADR 0029). */
+export async function deleteFavorite(id: string): Promise<boolean> {
+  return native.deleteFavorite(id)
+}
+
+/** List native-manifested Favorite Media after filesystem reconciliation. */
+export async function getFavoriteMedia(favoriteId: string): Promise<FavoriteMedia[]> {
+  return native.getFavoriteMedia(favoriteId)
+}
+
+/** Import picker bytes into canonical Favorite-owned app storage. */
+export async function importFavoriteMedia(
+  options: ImportFavoriteMediaOptions,
+): Promise<FavoriteMedia> {
+  return native.importFavoriteMedia(options)
 }
 
 export async function getDiagnosticEvents(

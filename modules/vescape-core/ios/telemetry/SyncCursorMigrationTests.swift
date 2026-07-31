@@ -2,9 +2,9 @@ import XCTest
 import GRDB
 @testable import VescapeCore
 
-/// Incremental-sync cursors: the `v30_sync_cursors` migration adds `updated_at` to `boards`,
+/// Incremental-sync cursors: the `v32_sync_cursors` migration adds `updated_at` to `boards`,
 /// `alerts` and `telemetry_minute_buckets`, backfills it from each table's best evidence of last
-/// change, and indexes it. `v31_sync_seq` then splits the two jobs that column was doing — `sync_seq`
+/// change, and indexes it. `v33_sync_seq` then splits the two jobs that column was doing — `sync_seq`
 /// carries the Sync Cursor, `updated_at` stays the last-write-wins timestamp. Every write path has to
 /// move both.
 ///

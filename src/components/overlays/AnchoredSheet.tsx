@@ -272,6 +272,12 @@ interface EdgeDrawerProps {
   iconColor?: string
   /** Scroll newly expanded content into view when the drawer grows. */
   autoScrollOnContentExpand?: boolean
+  /** Bring one child into the initially visible drawer area after opening. */
+  initialFocusRef?: React.RefObject<View | null>
+  /** Called after scrolling settles near the end of the drawer content. */
+  onReachContentEnd?: () => void
+  contentEndThreshold?: number
+  backdropTestID?: string
   children: React.ReactNode
 }
 
@@ -291,6 +297,10 @@ export function EdgeDrawer({
   icon: IconComponent,
   iconColor = theme.palette.slate.textSecondary,
   autoScrollOnContentExpand = false,
+  initialFocusRef,
+  onReachContentEnd,
+  contentEndThreshold = 80,
+  backdropTestID,
   children,
 }: EdgeDrawerProps) {
   const insets = useSafeAreaInsets()
@@ -407,12 +417,31 @@ export function EdgeDrawer({
         scrollOffset.value = initialOffset
         requestAnimationFrame(() => {
           scrollRef.current?.scrollTo({ y: initialOffset, animated: false })
+          if (!initialFocusRef?.current) return
+          requestAnimationFrame(() => {
+            const nativeScrollRef = scrollRef.current?.getNativeScrollRef()
+            if (!initialFocusRef.current || !nativeScrollRef) return
+            initialFocusRef.current.measureLayout(
+              nativeScrollRef,
+              (_x, focusY, _width, focusHeight) => {
+                const visibleCenter = height * (opensFromTop ? 0.375 : 0.625)
+                const minimumOffset = opensFromTop ? 0 : initialOffset
+                const focusedOffset = Math.max(
+                  minimumOffset,
+                  Math.min(range, focusY + focusHeight / 2 - visibleCenter),
+                )
+                scrollOffsetRef.current = focusedOffset
+                scrollOffset.value = focusedOffset
+                scrollRef.current?.scrollTo({ y: focusedOffset, animated: false })
+              },
+            )
+          })
         })
         return
       }
 
       const bottomDrawerWasFullyOpen = !opensFromTop && scrollOffsetRef.current >= previousRange - 1
-      if (bottomDrawerWasFullyOpen && range > previousRange) {
+      if (!initialFocusRef && bottomDrawerWasFullyOpen && range > previousRange) {
         requestAnimationFrame(() => {
           scrollRef.current?.scrollTo({ y: range, animated: true })
         })
@@ -431,6 +460,7 @@ export function EdgeDrawer({
       animatedGradientFullStrengthRange,
       autoScrollOnContentExpand,
       height,
+      initialFocusRef,
       opensFromTop,
       scrollOffset,
     ],
@@ -469,9 +499,20 @@ export function EdgeDrawer({
         return
       }
 
+      const distanceFromEnd =
+        event.nativeEvent.contentSize.height - (offset + event.nativeEvent.layoutMeasurement.height)
+      if (distanceFromEnd <= contentEndThreshold) onReachContentEnd?.()
       if (shouldAutoCloseAtOffset(offset)) scrollFullyOut()
     },
-    [dismissRange, finishClose, opensFromTop, scrollFullyOut, shouldAutoCloseAtOffset],
+    [
+      contentEndThreshold,
+      dismissRange,
+      finishClose,
+      onReachContentEnd,
+      opensFromTop,
+      scrollFullyOut,
+      shouldAutoCloseAtOffset,
+    ],
   )
 
   const handleScrollEndDrag = useCallback(
@@ -540,7 +581,7 @@ export function EdgeDrawer({
                 />
               </Rect>
             </Canvas>
-            <Pressable style={StyleSheet.absoluteFill} onPress={close} />
+            <Pressable testID={backdropTestID} style={StyleSheet.absoluteFill} onPress={close} />
           </Reanimated.View>
         </Reanimated.View>
         <Reanimated.View

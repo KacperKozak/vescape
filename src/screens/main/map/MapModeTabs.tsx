@@ -88,15 +88,15 @@ export function MapModeTabs({
           color={weatherSelection}
           activeWidth={142}
           inactiveWidth={58}
-          badge={
-            weather && activeId !== 'weather' ? (
-              <View style={styles.mapModeBadge}>
-                <Text style={[styles.mapModeBadgeText, { color: weatherColor }]}>
-                  {weather.temperature}°
-                </Text>
-              </View>
+          hint={
+            weather ? (
+              <Text style={[styles.mapModeBadgeText, { color: weatherColor }]}>
+                {weather.temperature}°
+              </Text>
             ) : null
           }
+          hintVisibility="inactive"
+          hintGap={2}
           onPress={onEnterWeather}
         />
         <PillSelectorItem
@@ -127,11 +127,6 @@ const styles = StyleSheet.create({
   },
   mapModePillsContent: {
     justifyContent: 'center',
-  },
-  mapModeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
   },
   mapModeBadgeText: {
     fontSize: 11,

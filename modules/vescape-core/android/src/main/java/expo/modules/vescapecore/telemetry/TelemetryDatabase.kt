@@ -12,7 +12,7 @@ import java.io.File
 // @parity /modules/vescape-core/ios/VescapeCoreModule.swift
 internal const val TELEMETRY_DATABASE_NAME = "vescape.db"
 internal const val LEGACY_TELEMETRY_DATABASE_NAME = "telemetry.db"
-internal const val TELEMETRY_DATABASE_VERSION = 31
+internal const val TELEMETRY_DATABASE_VERSION = 33
 
 @Database(
   entities = [
@@ -30,6 +30,8 @@ internal const val TELEMETRY_DATABASE_VERSION = 31
     PrivacyZoneEntity::class,
     BoardWarningEntity::class,
     SyncSequenceEntity::class,
+    FavoriteEntity::class,
+    FavoriteMediaEntity::class,
   ],
   version = TELEMETRY_DATABASE_VERSION,
   exportSchema = false,
@@ -502,22 +504,33 @@ abstract class TelemetryDatabase : RoomDatabase() {
      * Adds incremental-sync timestamps after the Map Point removal migrations already assigned
      * schema versions 28 and 29.
      *
-     * @parity /modules/vescape-core/ios/telemetry/TelemetryDatabase.swift `v30_sync_cursors`
+     * Also creates Favorites for feature-branch installs that reached schema 31 with the sync
+     * migrations but without the released Favorites migrations.
+     *
+     * @parity /modules/vescape-core/ios/telemetry/TelemetryDatabase.swift `v32_sync_cursors`
      */
-    internal val MIGRATION_29_30 = object : Migration(29, 30) {
+    internal val MIGRATION_31_32 = object : Migration(31, 32) {
       override fun migrate(db: SupportSQLiteDatabase) {
-        db.execSQL("ALTER TABLE boards ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0")
-        db.execSQL("UPDATE boards SET updated_at = created_at")
+        createFavoritesTable(db)
+
+        if (!hasColumn(db, "boards", "updated_at")) {
+          db.execSQL("ALTER TABLE boards ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0")
+          db.execSQL("UPDATE boards SET updated_at = created_at")
+        }
         db.execSQL("CREATE INDEX IF NOT EXISTS index_boards_updated_at ON boards(updated_at)")
 
-        db.execSQL("ALTER TABLE alerts ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0")
-        db.execSQL("UPDATE alerts SET updated_at = created_at")
+        if (!hasColumn(db, "alerts", "updated_at")) {
+          db.execSQL("ALTER TABLE alerts ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0")
+          db.execSQL("UPDATE alerts SET updated_at = created_at")
+        }
         db.execSQL("CREATE INDEX IF NOT EXISTS index_alerts_updated_at ON alerts(updated_at)")
 
-        db.execSQL(
-          "ALTER TABLE telemetry_minute_buckets ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0",
-        )
-        db.execSQL("UPDATE telemetry_minute_buckets SET updated_at = last_sample_at_ms")
+        if (!hasColumn(db, "telemetry_minute_buckets", "updated_at")) {
+          db.execSQL(
+            "ALTER TABLE telemetry_minute_buckets ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0",
+          )
+          db.execSQL("UPDATE telemetry_minute_buckets SET updated_at = last_sample_at_ms")
+        }
         db.execSQL(
           "CREATE INDEX IF NOT EXISTS index_telemetry_minute_buckets_updated_at " +
             "ON telemetry_minute_buckets(updated_at)",
@@ -528,10 +541,13 @@ abstract class TelemetryDatabase : RoomDatabase() {
     /**
      * Splits the device-local Sync Cursor from the wall-clock last-write-wins timestamp.
      *
-     * @parity /modules/vescape-core/ios/telemetry/TelemetryDatabase.swift `v31_sync_seq`
+     * Also creates Favorite Media for feature-branch installs that reached schema 31 without it.
+     *
+     * @parity /modules/vescape-core/ios/telemetry/TelemetryDatabase.swift `v33_sync_seq`
      */
-    internal val MIGRATION_30_31 = object : Migration(30, 31) {
+    internal val MIGRATION_32_33 = object : Migration(32, 33) {
       override fun migrate(db: SupportSQLiteDatabase) {
+        createFavoriteMediaTable(db)
         db.execSQL(
           """
           CREATE TABLE IF NOT EXISTS sync_sequences (
@@ -541,8 +557,10 @@ abstract class TelemetryDatabase : RoomDatabase() {
           """.trimIndent(),
         )
         for (table in SYNC_SEQ_TABLES) {
-          db.execSQL("ALTER TABLE $table ADD COLUMN sync_seq INTEGER NOT NULL DEFAULT 0")
-          db.execSQL("UPDATE $table SET sync_seq = rowid")
+          if (!hasColumn(db, table, "sync_seq")) {
+            db.execSQL("ALTER TABLE $table ADD COLUMN sync_seq INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("UPDATE $table SET sync_seq = rowid")
+          }
           db.execSQL("CREATE INDEX IF NOT EXISTS index_${table}_sync_seq ON $table(sync_seq)")
           db.execSQL(
             "INSERT OR REPLACE INTO sync_sequences (name, last_value) " +
@@ -555,6 +573,81 @@ abstract class TelemetryDatabase : RoomDatabase() {
     private fun dropMapPointTables(db: SupportSQLiteDatabase) {
       db.execSQL("DROP TABLE IF EXISTS map_point_reactions")
       db.execSQL("DROP TABLE IF EXISTS map_points")
+    }
+
+    /**
+     * Favorites (#287). Durable, optionally named time ranges over Ride History (ADR 0029). The row
+     * carries a native-minted UUID id, native-owned timestamps, and the summary stats computed once
+     * from the raw samples inside the range.
+     *
+     * @parity /modules/vescape-core/ios/telemetry/TelemetryDatabase.swift `v30_favorites`
+     */
+    internal val MIGRATION_29_30 = object : Migration(29, 30) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        createFavoritesTable(db)
+      }
+    }
+
+    private fun createFavoritesTable(db: SupportSQLiteDatabase) {
+      db.execSQL(
+        """
+        CREATE TABLE IF NOT EXISTS favorites (
+          id TEXT NOT NULL PRIMARY KEY,
+          board_id TEXT,
+          name TEXT,
+          start_ms INTEGER NOT NULL,
+          end_ms INTEGER NOT NULL,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          sample_count INTEGER NOT NULL,
+          gps_point_count INTEGER NOT NULL,
+          distance_cm INTEGER,
+          moving_duration_ms INTEGER NOT NULL,
+          avg_speed_centi_kmh INTEGER NOT NULL,
+          max_speed_centi_kmh INTEGER NOT NULL,
+          battery_used_wh_milli INTEGER NOT NULL
+        )
+        """.trimIndent(),
+      )
+      db.execSQL(
+        "CREATE INDEX IF NOT EXISTS index_favorites_start_ms_end_ms ON favorites(start_ms, end_ms)",
+      )
+      db.execSQL("CREATE INDEX IF NOT EXISTS index_favorites_board_id ON favorites(board_id)")
+    }
+
+    /**
+     * Favorite Media (#291). Native manifest metadata truth; bytes live in canonical Favorite-owned
+     * app storage (ADR 0030).
+     *
+     * @parity /modules/vescape-core/ios/telemetry/TelemetryDatabase.swift `v31_favorite_media`
+     */
+    internal val MIGRATION_30_31 = object : Migration(30, 31) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        createFavoriteMediaTable(db)
+      }
+    }
+
+    private fun createFavoriteMediaTable(db: SupportSQLiteDatabase) {
+      db.execSQL(
+        """
+        CREATE TABLE IF NOT EXISTS favorite_media (
+          id TEXT NOT NULL PRIMARY KEY,
+          favorite_id TEXT NOT NULL,
+          captured_at INTEGER,
+          mime_type TEXT NOT NULL,
+          media_kind TEXT NOT NULL,
+          byte_count INTEGER NOT NULL,
+          content_hash TEXT NOT NULL,
+          created_at INTEGER NOT NULL
+        )
+        """.trimIndent(),
+      )
+      db.execSQL(
+        """
+        CREATE INDEX IF NOT EXISTS index_favorite_media_favorite_id_created_at
+        ON favorite_media(favorite_id, created_at)
+        """.trimIndent(),
+      )
     }
 
     /**
@@ -615,6 +708,8 @@ abstract class TelemetryDatabase : RoomDatabase() {
             MIGRATION_28_29,
             MIGRATION_29_30,
             MIGRATION_30_31,
+            MIGRATION_31_32,
+            MIGRATION_32_33,
           )
           .fallbackToDestructiveMigration(true)
           .addCallback(object : Callback() {

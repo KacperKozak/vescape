@@ -22,6 +22,7 @@ import {
   FIXTURE_CAMERA_CENTER,
   FIXTURE_CAMERA_ZOOM,
   FIXTURE_DIRECTION_POINT,
+  FIXTURE_FAVORITE_RANGES,
   FIXTURE_GPS_PUCK_BEARING_DEG,
   FIXTURE_HISTORY_METRIC_HOT_RANGES,
   FIXTURE_LIVE_TRAIL_SHAPE,
@@ -53,7 +54,7 @@ export default function MapComponentsShowcase() {
   const [styleExpanded, setStyleExpanded] = useState(false)
   const [weatherActive, setWeatherActive] = useState(false)
   const [legalLimitsActive, setLegalLimitsActive] = useState(false)
-  const [mapPoints, setMapPoints] = useState<MapPoint[]>(FIXTURE_MAP_POINTS)
+  const [mapPoints] = useState<MapPoint[]>(FIXTURE_MAP_POINTS)
   const [selectedMapPointId, setSelectedMapPointId] = useState<string | null>(null)
   const [activeHistoryMapMetric, setActiveHistoryMapMetric] = useState<HistoryMetricKey>('speed')
   const [lastEvent, setLastEvent] = useState<string | null>(null)
@@ -128,6 +129,7 @@ export default function MapComponentsShowcase() {
           rideMarkers={[]}
           rideGpsSamples={[]}
           mediaAssets={[]}
+          favoriteRanges={[]}
           mapZoom={FIXTURE_CAMERA_ZOOM}
           historyMetricGradientsEnabled
           historyMetricHotRanges={FIXTURE_HISTORY_METRIC_HOT_RANGES}
@@ -156,6 +158,7 @@ export default function MapComponentsShowcase() {
           rideMarkers={FIXTURE_RIDE_MARKERS}
           rideGpsSamples={FIXTURE_RIDE_GPS_SAMPLES}
           mediaAssets={FIXTURE_MEDIA_ASSETS}
+          favoriteRanges={FIXTURE_FAVORITE_RANGES}
           mapZoom={FIXTURE_CAMERA_ZOOM}
           historyMetricGradientsEnabled
           historyMetricHotRanges={FIXTURE_HISTORY_METRIC_HOT_RANGES}

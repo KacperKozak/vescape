@@ -357,6 +357,7 @@ export const useHistoryStore = create<HistoryState & HistoryActions>((set, get) 
   async removeSelectedSession() {
     const { selectedSession, sessions } = get()
     if (!selectedSession) return
+    const reloadLimit = Math.min(500, Math.max(PAGE_SIZE, get().blocks.length))
     liveRefreshVersion++
     set({ loadingSession: true, error: undefined })
     try {
@@ -366,9 +367,8 @@ export const useHistoryStore = create<HistoryState & HistoryActions>((set, get) 
         deviceId: selectedSession.deviceId,
       })
       const selectedIndex = sessions.findIndex((session) => session.id === selectedSession.id)
-      const selectedBlockIds = new Set(selectedSession.blockIds)
-      const blocks = get().blocks.filter((block) => !selectedBlockIds.has(block.id))
-      const liveBlocks = get().liveBlocks.filter((block) => !selectedBlockIds.has(block.id))
+      const blocks = await getTelemetryHistory({ limit: reloadLimit })
+      const liveBlocks = blocks.slice(0, useSettingsStore.getState().liveHistoryLimit)
       const nextSessions = groupHistorySessions(blocks)
       const nextSelectedSession =
         selectedIndex >= 0
@@ -390,6 +390,7 @@ export const useHistoryStore = create<HistoryState & HistoryActions>((set, get) 
         sessionExclusions: [],
         markers: [],
         sessionTruncated: false,
+        hasMore: blocks.length === reloadLimit,
       })
       if (nextSelectedSession) {
         await get().selectSession(nextSelectedSession)
@@ -402,13 +403,16 @@ export const useHistoryStore = create<HistoryState & HistoryActions>((set, get) 
   },
 
   async clearHistory() {
+    const reloadLimit = Math.min(500, Math.max(PAGE_SIZE, get().blocks.length))
+    liveRefreshVersion++
     set({ loading: true, error: undefined })
     try {
       await clearTelemetryHistory()
+      const blocks = await getTelemetryHistory({ limit: reloadLimit })
       set({
-        blocks: [],
-        sessions: [],
-        liveBlocks: [],
+        blocks,
+        sessions: groupHistorySessions(blocks),
+        liveBlocks: blocks.slice(0, useSettingsStore.getState().liveHistoryLimit),
         selectedBlock: null,
         selectedSession: null,
         samples: [],
@@ -422,7 +426,7 @@ export const useHistoryStore = create<HistoryState & HistoryActions>((set, get) 
         markers: [],
         sessionTruncated: false,
         summary: await getTelemetrySummary(),
-        hasMore: false,
+        hasMore: blocks.length === reloadLimit,
       })
     } catch (err) {
       set({ error: err instanceof Error ? err.message : String(err) })

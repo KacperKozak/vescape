@@ -426,9 +426,26 @@ enum TelemetryDatabase {
       try db.execute(sql: "DROP TABLE IF EXISTS map_points")
     }
 
-    // Adds incremental-sync timestamps after the Map Point removal migration already named v29.
+    // MARK: Favorites (#287)
+    // Durable, optionally named time ranges over Ride History (ADR 0029). DDL lives on
+    // `FavoriteStore` so the schema stays single-source with the tests that reuse it. Mirrors
+    // Android Room migration 29→30.
     // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `MIGRATION_29_30`
-    migrator.registerMigration("v30_sync_cursors") { db in
+    migrator.registerMigration("v30_favorites") { db in
+      try FavoriteStore.createTables(db)
+    }
+
+    // Favorite Media (#291). Native manifest metadata truth; bytes live in canonical Favorite-owned
+    // app storage (ADR 0030).
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `MIGRATION_30_31`
+    migrator.registerMigration("v31_favorite_media") { db in
+      try FavoriteMediaStore.createTables(db)
+    }
+
+    // Adds incremental-sync timestamps after the released Favorites migrations. Column checks also
+    // support feature-branch installs that already ran the old v30 sync migration.
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `MIGRATION_31_32`
+    migrator.registerMigration("v32_sync_cursors") { db in
       let backfillSource = [
         "boards": "created_at",
         "alerts": "created_at",
@@ -447,8 +464,8 @@ enum TelemetryDatabase {
     }
 
     // Splits the device-local Sync Cursor from the wall-clock last-write-wins timestamp.
-    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `MIGRATION_30_31`
-    migrator.registerMigration("v31_sync_seq") { db in
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `MIGRATION_32_33`
+    migrator.registerMigration("v33_sync_seq") { db in
       try db.execute(
         sql: """
           CREATE TABLE IF NOT EXISTS sync_sequences (

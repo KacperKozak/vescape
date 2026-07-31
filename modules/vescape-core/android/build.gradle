@@ -24,6 +24,7 @@ android {
   defaultConfig {
     minSdkVersion safeExtGet("minSdkVersion", 26)
     targetSdkVersion safeExtGet("targetSdkVersion", 35)
+    testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
   }
 
   buildTypes {
@@ -59,4 +60,7 @@ dependencies {
   testImplementation "junit:junit:4.13.2"
   testImplementation "org.json:json:20231013"
   testImplementation "androidx.room:room-testing:2.8.4"
+  androidTestImplementation "androidx.test:core:1.6.1"
+  androidTestImplementation "androidx.test.ext:junit:1.2.1"
+  androidTestImplementation "androidx.test:runner:1.6.2"
 }
