@@ -73,6 +73,24 @@ interface ProductionPlan {
   rolloutPercentage?: number
 }
 
+const releaseActions = [
+  { shortcut: 'b', label: 'Build and send to Internal' },
+  { shortcut: 'o', label: 'Promote Internal → Open testing' },
+  { shortcut: 'p', label: 'Promote Open → Production / rollout controls' },
+] as const
+
+const productionOperations: ReadonlyArray<{
+  operation: ProductionOperation
+  shortcut: string
+  label: string
+}> = [
+  { operation: 'promote', shortcut: 'p', label: 'Promote staged rollout' },
+  { operation: 'status', shortcut: 's', label: 'Show rollout status' },
+  { operation: 'halt', shortcut: 'h', label: 'Halt rollout' },
+  { operation: 'resume', shortcut: 'r', label: 'Resume rollout' },
+  { operation: 'advance', shortcut: 'a', label: 'Advance rollout percentage' },
+]
+
 const sleep = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds))
 
 function App() {
@@ -86,7 +104,9 @@ function App() {
   const [productionPlan, setProductionPlan] = useState<ProductionPlan | null>(null)
   const [candidates, setCandidates] = useState<ReleaseManifest[]>([])
   const [productionCandidates, setProductionCandidates] = useState<ProductionCandidate[]>([])
+  const [actionIndex, setActionIndex] = useState(0)
   const [candidateIndex, setCandidateIndex] = useState(0)
+  const [operationIndex, setOperationIndex] = useState(0)
   const [rolloutInput, setRolloutInput] = useState('10')
   const [run, setRun] = useState<{ id: number; url: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -370,9 +390,20 @@ function App() {
 
   useInput((input, key) => {
     if (phase === 'select') {
-      if (input.toLowerCase() === 'b' || key.return) setPhase('build-source')
-      else if (input.toLowerCase() === 'o') void preparePromotion()
-      else if (input.toLowerCase() === 'p') void prepareProduction()
+      const shortcutIndex = releaseActions.findIndex(
+        (action) => action.shortcut === input.toLowerCase(),
+      )
+      const selectedIndex = shortcutIndex >= 0 ? shortcutIndex : actionIndex
+      if (key.upArrow || input.toLowerCase() === 'k')
+        setActionIndex((value) => (value - 1 + releaseActions.length) % releaseActions.length)
+      else if (key.downArrow || input.toLowerCase() === 'j')
+        setActionIndex((value) => (value + 1) % releaseActions.length)
+      else if (key.return || shortcutIndex >= 0) {
+        setActionIndex(selectedIndex)
+        if (selectedIndex === 0) setPhase('build-source')
+        else if (selectedIndex === 1) void preparePromotion()
+        else void prepareProduction()
+      }
       return
     }
     if (phase === 'build-source') {
@@ -401,13 +432,20 @@ function App() {
       return
     }
     if (phase === 'production-operation') {
-      const operation = input.toLowerCase()
-      if (operation === 'p') selectProductionOperation('promote')
-      else if (operation === 's') selectProductionOperation('status')
-      else if (operation === 'h') selectProductionOperation('halt')
-      else if (operation === 'r') selectProductionOperation('resume')
-      else if (operation === 'a') selectProductionOperation('advance')
-      else if (key.escape) setPhase('production-candidate')
+      const shortcutIndex = productionOperations.findIndex(
+        (item) => item.shortcut === input.toLowerCase(),
+      )
+      const selectedIndex = shortcutIndex >= 0 ? shortcutIndex : operationIndex
+      if (key.upArrow || input.toLowerCase() === 'k')
+        setOperationIndex(
+          (value) => (value - 1 + productionOperations.length) % productionOperations.length,
+        )
+      else if (key.downArrow || input.toLowerCase() === 'j')
+        setOperationIndex((value) => (value + 1) % productionOperations.length)
+      else if (key.return || shortcutIndex >= 0) {
+        setOperationIndex(selectedIndex)
+        selectProductionOperation(productionOperations[selectedIndex].operation)
+      } else if (key.escape) setPhase('production-candidate')
       return
     }
     if (phase === 'production-percentage') {
@@ -474,10 +512,17 @@ function App() {
       <Text>Status: {status}</Text>
       {phase === 'select' && (
         <Box flexDirection="column">
-          <Text>B Build and send to Internal</Text>
-          <Text>O Promote Internal → Open testing</Text>
-          <Text>P Promote Open → Production / rollout controls</Text>
-          <Text dimColor>Choose an action</Text>
+          <Text bold>What do you want to do?</Text>
+          {releaseActions.map((action, index) => {
+            const selected = index === actionIndex
+            return (
+              <Text key={action.shortcut} color={selected ? 'cyan' : undefined} bold={selected}>
+                {selected ? '◆ ' : '  '}
+                {action.label} <Text dimColor>({action.shortcut.toUpperCase()})</Text>
+              </Text>
+            )
+          })}
+          <Text dimColor>↑/↓ or j/k to move · Enter to select · shortcuts work directly</Text>
         </Box>
       )}
       {phase === 'build-source' && (
@@ -524,12 +569,18 @@ function App() {
       )}
       {phase === 'production-operation' && (
         <Box flexDirection="column">
-          <Text>P Promote staged rollout</Text>
-          <Text>S Status</Text>
-          <Text>H Halt</Text>
-          <Text>R Resume</Text>
-          <Text>A Advance percentage</Text>
-          <Text dimColor>All operations target the selected exact phone/Wear codes</Text>
+          <Text bold>Production rollout</Text>
+          {productionOperations.map((item, index) => {
+            const selected = index === operationIndex
+            return (
+              <Text key={item.operation} color={selected ? 'cyan' : undefined} bold={selected}>
+                {selected ? '◆ ' : '  '}
+                {item.label} <Text dimColor>({item.shortcut.toUpperCase()})</Text>
+              </Text>
+            )
+          })}
+          <Text dimColor>↑/↓ or j/k · Enter selects · Esc goes back</Text>
+          <Text dimColor>Every operation targets the selected exact phone/Wear codes</Text>
         </Box>
       )}
       {phase === 'production-percentage' && productionPlan && (
