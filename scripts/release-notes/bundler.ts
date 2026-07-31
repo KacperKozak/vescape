@@ -31,8 +31,20 @@ export function validateReleaseMarkdown(source: string, label = 'Release note'):
     ),
   )
   if (unsupported) throw new Error(`${label} uses unsupported Markdown (${unsupported.type})`)
-  const title = allTokens.find((token) => token.type === 'heading_open' && token.tag === 'h1')
-  if (title) throw new Error(`${label} must not contain a document-level title`)
+  const allowedSections = ['New', 'Improved', 'Fixed']
+  const sections = tokens.flatMap((token, index) => {
+    if (token.type !== 'heading_open') return []
+    const name = tokens[index + 1]?.type === 'inline' ? tokens[index + 1].content.trim() : ''
+    if (token.tag !== 'h2' || !allowedSections.includes(name)) {
+      throw new Error(`${label} contains unsupported section heading "${name}"`)
+    }
+    return [name]
+  })
+  if (new Set(sections).size !== sections.length) throw new Error(`${label} repeats a section`)
+  const indexes = sections.map((section) => allowedSections.indexOf(section))
+  if (indexes.some((index, position) => position > 0 && index <= indexes[position - 1])) {
+    throw new Error(`${label} sections must be ordered New, Improved, Fixed`)
+  }
 }
 
 export function compileReleaseNotes(notes: readonly CanonicalReleaseNote[]): string {

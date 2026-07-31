@@ -1,5 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { resolveEditorCommand } from '../release-notes/editor'
 
 const ROOT = join(import.meta.dir, '../..')
 const PACKAGE_PATH = join(ROOT, 'package.json')
@@ -53,6 +54,7 @@ export async function currentMarketingVersion(): Promise<string> {
 }
 
 export async function verifyReleasePreparationReady(): Promise<void> {
+  resolveEditorCommand()
   const branch = await checked('git', ['branch', '--show-current'], 'Cannot read current branch')
   if (branch !== 'dev')
     throw new Error(`Release preparation must run from dev, currently ${branch}`)
