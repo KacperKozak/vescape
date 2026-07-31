@@ -56,6 +56,9 @@ modules/vescape-core/*.d
 modules/vescape-core/*.dia
 modules/vescape-core/*.swiftdeps
 
+# generated from canonical release-notes/*.md
+/src/modules/release/generated/releaseNotes.ts
+
 # other stuff
 /reports/*
 /reverse-engineering/

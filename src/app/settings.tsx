@@ -32,7 +32,7 @@ import { SettingsSectionTitle } from '@/components/settings/SettingsSectionTitle
 import { IconHero } from '@/components/settings/IconHero'
 import { VescapeWordmark } from '@/components/base/VescapeWordmark'
 import { useSettingsDatabaseOps } from '@/modules/settings/hooks/useSettingsDatabaseOps'
-import { UpdateAvailablePill } from '@/modules/release/components/UpdateAvailablePill'
+import { ReleaseActionPill } from '@/modules/release/components/ReleaseActionPill'
 import { selectAvailableUpdate } from '@/modules/release/lib/availableUpdate'
 import { useAppStatusStore } from '@/modules/release/store/appStatusStore'
 import { openAppUpdate } from 'vescape-core'
@@ -83,12 +83,12 @@ export default function SettingsScreen() {
               </Text>
             </View>
           </View>
-          {availableUpdate ? (
-            <UpdateAvailablePill
-              latestVersion={availableUpdate.latestVersion}
-              onPress={openAppUpdate}
-            />
-          ) : null}
+          <ReleaseActionPill
+            latestVersion={availableUpdate?.latestVersion}
+            onPress={
+              availableUpdate ? openAppUpdate : () => router.push(routes.settingsReleaseNotes)
+            }
+          />
         </IconHero>
 
         <SettingsSectionTitle>General</SettingsSectionTitle>

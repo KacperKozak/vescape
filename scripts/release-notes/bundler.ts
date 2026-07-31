@@ -1,0 +1,109 @@
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
+
+import MarkdownIt from 'markdown-it'
+
+import {
+  compareMarketingVersions,
+  parseMarketingVersion,
+  type BundledReleaseNote,
+} from '../../src/modules/release/lib/releaseNotes'
+
+const markdown = new MarkdownIt('default', { html: true })
+const ROOT = join(import.meta.dir, '../..')
+export const RELEASE_NOTES_DIRECTORY = join(ROOT, 'release-notes')
+export const GENERATED_RELEASE_NOTES_FILE = join(
+  ROOT,
+  'src/modules/release/generated/releaseNotes.ts',
+)
+
+export interface CanonicalReleaseNote extends BundledReleaseNote {
+  fileName: string
+}
+
+export function validateReleaseMarkdown(source: string, label = 'Release note'): void {
+  if (!source.trim()) throw new Error(`${label} is empty`)
+  const tokens = markdown.parse(source, {})
+  const allTokens = tokens.flatMap((token) => [token, ...(token.children ?? [])])
+  const unsupported = allTokens.find((token) =>
+    ['html_block', 'html_inline', 'code_block', 'fence', 'image', 'table_open'].includes(
+      token.type,
+    ),
+  )
+  if (unsupported) throw new Error(`${label} uses unsupported Markdown (${unsupported.type})`)
+  const title = allTokens.find((token) => token.type === 'heading_open' && token.tag === 'h1')
+  if (title) throw new Error(`${label} must not contain a document-level title`)
+}
+
+export function compileReleaseNotes(notes: readonly CanonicalReleaseNote[]): string {
+  const versions = new Set<string>()
+  for (const note of notes) {
+    if (!parseMarketingVersion(note.version)) {
+      throw new Error(`${note.fileName} is not named with a marketing version`)
+    }
+    if (versions.has(note.version))
+      throw new Error(`Duplicate release-note version ${note.version}`)
+    versions.add(note.version)
+    validateReleaseMarkdown(note.markdown, note.fileName)
+  }
+
+  const sorted = notes.toSorted((left, right) =>
+    compareMarketingVersions(right.version, left.version),
+  )
+  const rows = sorted
+    .map(
+      ({ version, markdown: body }) =>
+        `  { version: ${JSON.stringify(version)}, markdown: ${JSON.stringify(body)} },`,
+    )
+    .join('\n')
+  return [
+    "import type { BundledReleaseNote } from '../lib/releaseNotes'",
+    '',
+    'export const bundledReleaseNotes = [',
+    rows,
+    '] as const satisfies readonly BundledReleaseNote[]',
+    '',
+  ].join('\n')
+}
+
+export async function readCanonicalReleaseNotes(): Promise<CanonicalReleaseNote[]> {
+  const entries = await readdir(RELEASE_NOTES_DIRECTORY, { withFileTypes: true })
+  const markdownFiles = entries.filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
+  return Promise.all(
+    markdownFiles.map(async ({ name }) => ({
+      fileName: name,
+      version: name.slice(0, -3),
+      markdown: await readFile(join(RELEASE_NOTES_DIRECTORY, name), 'utf8'),
+    })),
+  )
+}
+
+export async function expectedBundledReleaseNotes(): Promise<string> {
+  return compileReleaseNotes(await readCanonicalReleaseNotes())
+}
+
+export async function buildReleaseNotes(): Promise<void> {
+  const output = await expectedBundledReleaseNotes()
+  await mkdir(dirname(GENERATED_RELEASE_NOTES_FILE), { recursive: true })
+  await writeFile(GENERATED_RELEASE_NOTES_FILE, output)
+}
+
+export async function checkReleaseNotes(): Promise<void> {
+  const expected = await expectedBundledReleaseNotes()
+  let actual: string | null
+  try {
+    actual = await readFile(GENERATED_RELEASE_NOTES_FILE, 'utf8')
+  } catch {
+    actual = null
+  }
+  validateGeneratedReleaseNotes(actual, expected)
+}
+
+export function validateGeneratedReleaseNotes(actual: string | null, expected: string): void {
+  if (actual === null) {
+    throw new Error('Bundled release notes are missing; run `bun run release-notes:build`')
+  }
+  if (actual !== expected) {
+    throw new Error('Bundled release notes are stale; run `bun run release-notes:build`')
+  }
+}

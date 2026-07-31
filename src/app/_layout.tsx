@@ -204,6 +204,10 @@ function RootLayout() {
             <Stack.Screen name={stackScreens.settingsGraphs} options={{ title: 'Graphs' }} />
             <Stack.Screen name={stackScreens.settingsDatabase} options={{ title: 'Database' }} />
             <Stack.Screen name={stackScreens.settingsAbout} options={{ title: 'About us' }} />
+            <Stack.Screen
+              name={stackScreens.settingsReleaseNotes}
+              options={{ title: 'Release notes' }}
+            />
             <Stack.Screen name={stackScreens.controlBatteryRaw} options={{ title: 'Raw BMS' }} />
             <Stack.Screen name={stackScreens.tune} options={{ title: 'Tune' }} />
             <Stack.Screen name={stackScreens.tuneHistory} options={{ title: 'Tune History' }} />
