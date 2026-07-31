@@ -42,6 +42,15 @@ describe('production promotion workflow contract', () => {
     expect(fastfile).toContain('rollout cannot move backwards')
   })
 
+  test('passes staged rollout fractions as Fastlane strings and omits them at 100%', () => {
+    expect(fastfile).toContain('def rollout_upload_options')
+    expect(fastfile).toContain('{ rollout: fraction.to_s }')
+    expect(fastfile).toContain('**rollout_upload_options(initial_rollout)')
+    expect(fastfile).toContain('**rollout_upload_options(requested)')
+    expect(fastfile).not.toContain('rollout: initial_rollout')
+    expect(fastfile).not.toContain('rollout: requested')
+  })
+
   test('writes Fastlane results where the workflow assembles the manifest', () => {
     expect(workflow).toContain('PRODUCTION_RESULT_PATH: ${{ github.workspace }}/phone-result.json')
     expect(workflow).toContain('PRODUCTION_RESULT_PATH: ${{ github.workspace }}/wear-result.json')
