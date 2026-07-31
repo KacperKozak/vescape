@@ -4,7 +4,6 @@ import type { LayoutChangeEvent, StyleProp, ViewStyle } from 'react-native'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { AnimatedValueText } from '@/components/base/AnimatedValueText'
 import { Text } from '@/components/base/Text'
-import { ChartAlertAxisLabels } from '@/components/charts/ChartAlertAxisLabels'
 import Animated, {
   runOnJS,
   useAnimatedStyle,
@@ -31,7 +30,7 @@ import {
   getChartTimeRangeBands,
   getChartTimeLabels,
   getXPosition,
-  layoutChartAlertMarkers,
+  getChartAlertMarkers,
   splitChartPointSegments,
   splitChartLineSegments,
   type ExcludedRange,
@@ -573,7 +572,7 @@ export function TelemetryLineChart({
   const yMid = (range.y.min + range.y.max) / 2
   const secondaryYMid = secondary ? (secondary.range.y.min + secondary.range.y.max) / 2 : 0
   const alertMarkers = useMemo(
-    () => layoutChartAlertMarkers(alertThresholds, range, height),
+    () => getChartAlertMarkers(alertThresholds, range, height),
     [alertThresholds, height, range],
   )
 
@@ -629,7 +628,6 @@ export function TelemetryLineChart({
           <Text style={styles.yLabel}>{formatAxisNumber(range.y.max)}</Text>
           <Text style={styles.yLabel}>{formatAxisNumber(yMid)}</Text>
           <Text style={styles.yLabel}>{formatAxisNumber(range.y.min)}</Text>
-          <ChartAlertAxisLabels markers={alertMarkers} formatValue={formatAxisNumber} />
         </View>
 
         <GestureDetector gesture={activeGesture}>

@@ -7,12 +7,9 @@ export interface TelemetryChartRange {
   y: { min: number; max: number }
 }
 
-export interface ChartAlertMarkerLayout {
+export interface ChartAlertMarker {
   value: number
-  /** Exact chart-space position of the horizontal threshold line. */
   y: number
-  /** Collision-adjusted top position of its left-axis value label. */
-  labelTop: number
 }
 
 export interface ExcludedRange {
@@ -146,40 +143,17 @@ export function getChartYPosition(
   return Math.max(0, Math.min(height, y))
 }
 
-/**
- * Position alert lines exactly while gently separating dense left-axis labels. Values outside the
- * visible chart range are omitted instead of piling up against its upper or lower edge.
- */
-export function layoutChartAlertMarkers(
+/** Position visible alert lines exactly; omit thresholds outside the chart range. */
+export function getChartAlertMarkers(
   values: number[],
   range: { y: { min: number; max: number } },
   height: number,
-  labelHeight = 10,
-): ChartAlertMarkerLayout[] {
-  const markers = [...new Set(values)]
+): ChartAlertMarker[] {
+  return [...new Set(values)]
     .filter((value) => value >= range.y.min && value <= range.y.max)
     .map((value) => ({ value, y: getChartYPosition(value, range, height) }))
     .filter((marker): marker is { value: number; y: number } => marker.y != null)
     .sort((a, b) => a.y - b.y)
-
-  if (markers.length === 0) return []
-
-  const maxTop = Math.max(0, height - labelHeight)
-  const gap = markers.length === 1 ? 0 : Math.min(labelHeight, maxTop / (markers.length - 1))
-  const laidOut = markers.map((marker) => ({
-    ...marker,
-    labelTop: Math.max(0, Math.min(maxTop, marker.y - labelHeight / 2)),
-  }))
-
-  for (let index = 1; index < laidOut.length; index += 1) {
-    laidOut[index].labelTop = Math.max(laidOut[index].labelTop, laidOut[index - 1].labelTop + gap)
-  }
-  laidOut[laidOut.length - 1].labelTop = Math.min(laidOut[laidOut.length - 1].labelTop, maxTop)
-  for (let index = laidOut.length - 2; index >= 0; index -= 1) {
-    laidOut[index].labelTop = Math.min(laidOut[index].labelTop, laidOut[index + 1].labelTop - gap)
-  }
-
-  return laidOut
 }
 
 export function getXPosition(

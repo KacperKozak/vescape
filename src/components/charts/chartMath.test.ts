@@ -4,7 +4,7 @@ import {
   computeAutoRange,
   findNearestChartPointAtX,
   getChartPosition,
-  layoutChartAlertMarkers,
+  getChartAlertMarkers,
   getChartTimeRangeBands,
   getChartTimeLabels,
   splitChartLineSegments,
@@ -36,23 +36,16 @@ test('getChartPosition clamps inside bounds', () => {
   expect(pos).toEqual({ x: 100, y: 0 })
 })
 
-test('alert marker layout preserves line positions and separates dense labels', () => {
-  const markers = layoutChartAlertMarkers(
-    [50, 40, 30, 20, 15, 10, 5],
-    { y: { min: 0, max: 100 } },
-    80,
-  )
+test('alert markers preserve visible line positions', () => {
+  const markers = getChartAlertMarkers([50, 40, 30, 20, 15, 10, 5], { y: { min: 0, max: 100 } }, 80)
 
   expect(markers.map((marker) => marker.value)).toEqual([50, 40, 30, 20, 15, 10, 5])
   expect(markers.every((marker) => marker.y >= 0 && marker.y <= 80)).toBe(true)
-  for (let index = 1; index < markers.length; index += 1) {
-    expect(markers[index].labelTop - markers[index - 1].labelTop).toBeGreaterThanOrEqual(10)
-  }
 })
 
-test('alert marker layout omits values outside the visible chart range', () => {
+test('alert markers omit values outside the visible chart range', () => {
   expect(
-    layoutChartAlertMarkers([-1, 20, 120], { y: { min: 0, max: 100 } }, 80).map(
+    getChartAlertMarkers([-1, 20, 120], { y: { min: 0, max: 100 } }, 80).map(
       (marker) => marker.value,
     ),
   ).toEqual([20])
