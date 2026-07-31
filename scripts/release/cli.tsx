@@ -1,22 +1,28 @@
 import React, { useEffect, useState } from 'react'
 import { Box, render, Text, useApp, useInput } from 'ink'
-import type { ReleaseManifest } from './contracts'
-import { promotionSummary, releaseOutcome } from './contracts'
+import type { ProductionOperation, ReleaseManifest } from './contracts'
+import { productionSummary, promotionSummary, releaseOutcome } from './contracts'
 import {
   canonicalNotesPath,
   createDispatchPayload,
   createPromotionDispatchPayload,
+  createProductionDispatchPayload,
   dispatchInternalBuild,
   dispatchOpenPromotion,
+  dispatchProduction,
   downloadManifest,
   downloadPromotionManifest,
+  downloadProductionManifest,
   failedWorkflowJobs,
   findDispatchedRun,
   findPromotionRun,
+  findProductionRun,
   getWorkflowRun,
   listInternalCandidates,
+  listProductionCandidates,
   marketingVersion,
   type ReleaseTrackConfig,
+  type ProductionCandidate,
   releaseTrackConfig,
   repositoryName,
   resolveSourceSha,
@@ -30,8 +36,12 @@ type Phase =
   | 'build-source'
   | 'checking'
   | 'candidate'
+  | 'production-candidate'
+  | 'production-operation'
+  | 'production-percentage'
   | 'confirm'
   | 'promote-confirm'
+  | 'production-confirm'
   | 'dispatching'
   | 'waiting'
   | 'running'
@@ -53,6 +63,16 @@ interface PromotionPlan {
   tracks: ReleaseTrackConfig
 }
 
+interface ProductionPlan {
+  repo: string
+  candidate: ProductionCandidate
+  requestId: string
+  notesPath: string
+  tracks: ReleaseTrackConfig
+  operation: ProductionOperation
+  rolloutPercentage?: number
+}
+
 const sleep = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds))
 
 function App() {
@@ -63,8 +83,11 @@ function App() {
   const [status, setStatus] = useState('Ready')
   const [plan, setPlan] = useState<Plan | null>(null)
   const [promotionPlan, setPromotionPlan] = useState<PromotionPlan | null>(null)
+  const [productionPlan, setProductionPlan] = useState<ProductionPlan | null>(null)
   const [candidates, setCandidates] = useState<ReleaseManifest[]>([])
+  const [productionCandidates, setProductionCandidates] = useState<ProductionCandidate[]>([])
   const [candidateIndex, setCandidateIndex] = useState(0)
+  const [rolloutInput, setRolloutInput] = useState('10')
   const [run, setRun] = useState<{ id: number; url: string } | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [retryRunId, setRetryRunId] = useState<number | null>(null)
@@ -129,6 +152,80 @@ function App() {
       setError(caught instanceof Error ? caught.message : String(caught))
       setPhase('error')
     }
+  }
+
+  const prepareProduction = async () => {
+    setPhase('checking')
+    setStatus('Loading releases proven active on open testing…')
+    try {
+      await verifyGhAuthentication()
+      const repo = await repositoryName()
+      const [available, tracks] = await Promise.all([
+        listProductionCandidates(repo),
+        releaseTrackConfig(repo),
+      ])
+      if (available.length === 0) throw new Error('No exact open-tested release manifests found')
+      setProductionCandidates(available)
+      setCandidateIndex(0)
+      setProductionPlan({
+        repo,
+        candidate: available[0],
+        requestId: crypto.randomUUID(),
+        notesPath: '',
+        tracks,
+        operation: 'promote',
+        rolloutPercentage: 10,
+      })
+      setStatus('Select an open-tested release')
+      setPhase('production-candidate')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught))
+      setPhase('error')
+    }
+  }
+
+  const confirmProductionCandidate = async () => {
+    const candidate = productionCandidates[candidateIndex]
+    if (!productionPlan || !candidate) return
+    setPhase('checking')
+    setStatus(`Checking canonical notes for ${candidate.manifest.marketingVersion}…`)
+    try {
+      const notesPath = await canonicalNotesPath(
+        productionPlan.repo,
+        candidate.manifest.marketingVersion,
+        candidate.manifest.sourceSha,
+      )
+      setProductionPlan({ ...productionPlan, candidate, notesPath })
+      setStatus('Select production rollout operation')
+      setPhase('production-operation')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught))
+      setPhase('error')
+    }
+  }
+
+  const selectProductionOperation = (operation: ProductionOperation) => {
+    if (!productionPlan) return
+    const next = { ...productionPlan, operation, requestId: crypto.randomUUID() }
+    setProductionPlan(next)
+    if (operation === 'promote' || operation === 'advance') {
+      setRolloutInput(String(next.rolloutPercentage ?? 10))
+      setPhase('production-percentage')
+    } else {
+      setPhase('production-confirm')
+    }
+  }
+
+  const confirmProductionPercentage = () => {
+    if (!productionPlan) return
+    const percentage = Number(rolloutInput)
+    if (!Number.isFinite(percentage) || percentage <= 0 || percentage > 100) {
+      setError('Rollout percentage must be greater than 0 and at most 100')
+      setPhase('error')
+      return
+    }
+    setProductionPlan({ ...productionPlan, rolloutPercentage: percentage })
+    setPhase('production-confirm')
   }
 
   const dispatch = async (confirmedPlan: Plan) => {
@@ -224,10 +321,58 @@ function App() {
     }
   }
 
+  const runProduction = async (confirmedPlan: ProductionPlan) => {
+    setPhase('dispatching')
+    setStatus(`Dispatching trusted production ${confirmedPlan.operation} workflow from main…`)
+    try {
+      await dispatchProduction(
+        confirmedPlan.repo,
+        createProductionDispatchPayload(
+          confirmedPlan.candidate,
+          confirmedPlan.operation,
+          confirmedPlan.requestId,
+          confirmedPlan.operation === 'promote' || confirmedPlan.operation === 'advance'
+            ? confirmedPlan.rolloutPercentage
+            : undefined,
+        ),
+      )
+      setPhase('waiting')
+      setStatus('Waiting for structured production run…')
+      let workflowRun = null
+      for (let attempt = 0; attempt < 30 && !workflowRun; attempt += 1) {
+        workflowRun = await findProductionRun(confirmedPlan.repo, confirmedPlan.requestId)
+        if (!workflowRun) await sleep(2_000)
+      }
+      if (!workflowRun) throw new Error('Dispatch succeeded, but its production run was not found')
+      setRun({ id: workflowRun.id, url: workflowRun.html_url })
+      setPhase('running')
+      while (workflowRun.status !== 'completed') {
+        setStatus(`Production ${workflowRun.status.replace('_', ' ')}…`)
+        await sleep(10_000)
+        workflowRun = await getWorkflowRun(confirmedPlan.repo, workflowRun.id)
+      }
+      setStatus('Reading exact production rollout state…')
+      const manifest = await downloadProductionManifest(workflowRun.id)
+      setStatus(productionSummary(manifest))
+      if (
+        manifest.phone.status === 'failed' ||
+        manifest.wear.status === 'failed' ||
+        manifest.githubRelease === 'failed'
+      ) {
+        setRetryRunId(workflowRun.id)
+      }
+      setPhase('complete')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught))
+      setPhase('error')
+    }
+  }
+
   useInput((input, key) => {
     if (phase === 'select') {
       if (input.toLowerCase() === 'b' || key.return) setPhase('build-source')
-      else if (input.toLowerCase() === 'p') void preparePromotion()
+      else if (input.toLowerCase() === 'o') void preparePromotion()
+      else if (input.toLowerCase() === 'p') void prepareProduction()
       return
     }
     if (phase === 'build-source') {
@@ -246,6 +391,32 @@ function App() {
       else if (key.escape) setPhase('select')
       return
     }
+    if (phase === 'production-candidate') {
+      if (key.upArrow || input.toLowerCase() === 'k')
+        setCandidateIndex((value) => Math.max(0, value - 1))
+      else if (key.downArrow || input.toLowerCase() === 'j')
+        setCandidateIndex((value) => Math.min(productionCandidates.length - 1, value + 1))
+      else if (key.return) void confirmProductionCandidate()
+      else if (key.escape) setPhase('select')
+      return
+    }
+    if (phase === 'production-operation') {
+      const operation = input.toLowerCase()
+      if (operation === 'p') selectProductionOperation('promote')
+      else if (operation === 's') selectProductionOperation('status')
+      else if (operation === 'h') selectProductionOperation('halt')
+      else if (operation === 'r') selectProductionOperation('resume')
+      else if (operation === 'a') selectProductionOperation('advance')
+      else if (key.escape) setPhase('production-candidate')
+      return
+    }
+    if (phase === 'production-percentage') {
+      if (key.return) confirmProductionPercentage()
+      else if (key.escape) setPhase('production-operation')
+      else if (key.backspace || key.delete) setRolloutInput((value) => value.slice(0, -1))
+      else if (/^[0-9.]$/.test(input)) setRolloutInput((value) => value + input)
+      return
+    }
     if (phase === 'confirm') {
       if (input.toLowerCase() === 'y' && plan) void dispatch(plan)
       else if (input.toLowerCase() === 'n' || key.escape) {
@@ -259,6 +430,14 @@ function App() {
       else if (input.toLowerCase() === 'n' || key.escape) {
         setPhase('candidate')
         setStatus('Select an internal candidate')
+      }
+      return
+    }
+    if (phase === 'production-confirm') {
+      if (input.toLowerCase() === 'y' && productionPlan) void runProduction(productionPlan)
+      else if (input.toLowerCase() === 'n' || key.escape) {
+        setPhase('production-operation')
+        setStatus('Select production rollout operation')
       }
       return
     }
@@ -296,7 +475,8 @@ function App() {
       {phase === 'select' && (
         <Box flexDirection="column">
           <Text>B Build and send to Internal</Text>
-          <Text>P Promote Internal → Open testing</Text>
+          <Text>O Promote Internal → Open testing</Text>
+          <Text>P Promote Open → Production / rollout controls</Text>
           <Text dimColor>Choose an action</Text>
         </Box>
       )}
@@ -323,6 +503,42 @@ function App() {
             </Text>
           ))}
           <Text dimColor>↑/↓ or j/k · Enter selects · Esc cancels</Text>
+        </Box>
+      )}
+      {phase === 'production-candidate' && (
+        <Box flexDirection="column">
+          <Text>Promote Open → Production</Text>
+          {productionCandidates.map((candidate, index) => (
+            <Text
+              key={candidate.openPromotionRunId}
+              color={index === candidateIndex ? 'yellow' : undefined}
+            >
+              {index === candidateIndex ? '› ' : '  '}v{candidate.manifest.marketingVersion} ·{' '}
+              {candidate.manifest.sourceSha.slice(0, 12)} · phone{' '}
+              {candidate.manifest.versionCodes.phone} · Wear {candidate.manifest.versionCodes.wear}{' '}
+              · open proof {candidate.openPromotionRunId}
+            </Text>
+          ))}
+          <Text dimColor>Only successful exact open-promotion manifests · ↑/↓ or j/k</Text>
+        </Box>
+      )}
+      {phase === 'production-operation' && (
+        <Box flexDirection="column">
+          <Text>P Promote staged rollout</Text>
+          <Text>S Status</Text>
+          <Text>H Halt</Text>
+          <Text>R Resume</Text>
+          <Text>A Advance percentage</Text>
+          <Text dimColor>All operations target the selected exact phone/Wear codes</Text>
+        </Box>
+      )}
+      {phase === 'production-percentage' && productionPlan && (
+        <Box flexDirection="column">
+          <Text>
+            {productionPlan.operation === 'promote' ? 'Initial rollout' : 'Advance rollout'}:{' '}
+            <Text color="yellow">{rolloutInput || ' '}%</Text>
+          </Text>
+          <Text dimColor>Type percentage 0–100 · Enter continues · Esc cancels</Text>
         </Box>
       )}
       {plan && (phase === 'confirm' || phase === 'dispatching') && (
@@ -356,6 +572,38 @@ function App() {
             Workflow revalidates both exact codes on live Play tracks before mutation.
           </Text>
           <Text color="yellow">Promote existing Play artifacts? y/N</Text>
+        </Box>
+      )}
+      {productionPlan && phase === 'production-confirm' && (
+        <Box flexDirection="column">
+          <Text>Workflow definition: main:.github/workflows/promote-production.yml</Text>
+          <Text>Operation: {productionPlan.operation}</Text>
+          <Text>Marketing version: {productionPlan.candidate.manifest.marketingVersion}</Text>
+          <Text>Source SHA: {productionPlan.candidate.manifest.sourceSha}</Text>
+          <Text>
+            Phone code: {productionPlan.candidate.manifest.versionCodes.phone} · current{' '}
+            {productionPlan.candidate.open.phone.targetTrack}:{' '}
+            {productionPlan.candidate.open.phone.status} · target{' '}
+            {productionPlan.tracks.phoneProduction}
+          </Text>
+          <Text>
+            Wear code: {productionPlan.candidate.manifest.versionCodes.wear} · current{' '}
+            {productionPlan.candidate.open.wear.targetTrack}:{' '}
+            {productionPlan.candidate.open.wear.status} · target{' '}
+            {productionPlan.tracks.wearProduction}
+          </Text>
+          <Text>Canonical notes: {productionPlan.notesPath} at exact source SHA</Text>
+          {(productionPlan.operation === 'promote' || productionPlan.operation === 'advance') && (
+            <Text>Rollout percentage: {productionPlan.rolloutPercentage}%</Text>
+          )}
+          {productionPlan.operation === 'promote' && (
+            <Text>New release tag: v{productionPlan.candidate.manifest.marketingVersion}</Text>
+          )}
+          <Text dimColor>
+            Trusted workflow revalidates source ancestry, canonical notes, and both live Play
+            tracks.
+          </Text>
+          <Text color="yellow">Run explicitly approved production operation? y/N</Text>
         </Box>
       )}
       {run && (

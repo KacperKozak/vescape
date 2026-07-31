@@ -1,11 +1,18 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { PromotionManifest, ReleaseManifest, WorkflowRun } from './contracts'
-import { parsePromotionManifest, parseReleaseManifest } from './contracts'
+import type {
+  ProductionManifest,
+  ProductionOperation,
+  PromotionManifest,
+  ReleaseManifest,
+  WorkflowRun,
+} from './contracts'
+import { parseProductionManifest, parsePromotionManifest, parseReleaseManifest } from './contracts'
 
 const WORKFLOW_FILE = 'release-android.yml'
 const PROMOTION_WORKFLOW_FILE = 'promote-open.yml'
+const PRODUCTION_WORKFLOW_FILE = 'promote-production.yml'
 
 interface GhResult {
   exitCode: number
@@ -52,8 +59,31 @@ export interface PromotionDispatchPayload {
 export interface ReleaseTrackConfig {
   phoneInternal: string
   phoneOpen: string
+  phoneProduction: string
   wearInternal: string
   wearOpen: string
+  wearProduction: string
+}
+
+export interface ProductionCandidate {
+  manifest: ReleaseManifest
+  open: PromotionManifest
+  openPromotionRunId: number
+}
+
+export interface ProductionDispatchPayload {
+  ref: 'main'
+  inputs: {
+    request_id: string
+    operation: ProductionOperation
+    open_promotion_run_id: string
+    candidate_run_id: string
+    source_sha: string
+    marketing_version: string
+    phone_code: string
+    wear_code: string
+    rollout_percentage: string
+  }
 }
 
 interface ActionsArtifact {
@@ -92,6 +122,55 @@ export function createPromotionDispatchPayload(
       marketing_version: manifest.marketingVersion,
       phone_code: String(manifest.versionCodes.phone),
       wear_code: String(manifest.versionCodes.wear),
+    },
+  }
+}
+
+export function createProductionDispatchPayload(
+  candidate: ProductionCandidate,
+  operation: ProductionOperation,
+  requestId: string,
+  rolloutPercentage?: number,
+): ProductionDispatchPayload {
+  if (!/^[0-9a-f-]{36}$/i.test(requestId)) throw new Error('Request ID must be a UUID')
+  if (!['promote', 'status', 'halt', 'resume', 'advance'].includes(operation))
+    throw new Error(`Invalid production operation "${operation}"`)
+  if (!Number.isSafeInteger(candidate.openPromotionRunId) || candidate.openPromotionRunId < 1)
+    throw new Error('Open-promotion run ID must be a positive integer')
+  if (operation === 'promote' || operation === 'advance') {
+    if (
+      typeof rolloutPercentage !== 'number' ||
+      !Number.isFinite(rolloutPercentage) ||
+      rolloutPercentage <= 0 ||
+      rolloutPercentage > 100
+    ) {
+      throw new Error('Rollout percentage must be greater than 0 and at most 100')
+    }
+  }
+  const { manifest, open } = candidate
+  if (
+    open.phone.status === 'failed' ||
+    open.wear.status === 'failed' ||
+    open.candidateRunId !== manifest.workflow.runId ||
+    open.sourceSha !== manifest.sourceSha ||
+    open.marketingVersion !== manifest.marketingVersion ||
+    open.phone.versionCode !== manifest.versionCodes.phone ||
+    open.wear.versionCode !== manifest.versionCodes.wear
+  ) {
+    throw new Error('Candidate is not an exact successful open-tested release')
+  }
+  return {
+    ref: 'main',
+    inputs: {
+      request_id: requestId,
+      operation,
+      open_promotion_run_id: String(candidate.openPromotionRunId),
+      candidate_run_id: String(manifest.workflow.runId),
+      source_sha: manifest.sourceSha,
+      marketing_version: manifest.marketingVersion,
+      phone_code: String(manifest.versionCodes.phone),
+      wear_code: String(manifest.versionCodes.wear),
+      rollout_percentage: rolloutPercentage === undefined ? '0' : String(rolloutPercentage),
     },
   }
 }
@@ -184,6 +263,27 @@ export async function dispatchOpenPromotion(
   )
 }
 
+export async function dispatchProduction(
+  repo: string,
+  payload: ProductionDispatchPayload,
+): Promise<void> {
+  await checkedGh(
+    [
+      'api',
+      '--method',
+      'POST',
+      `repos/${repo}/actions/workflows/${PRODUCTION_WORKFLOW_FILE}/dispatches`,
+      '--raw-field',
+      `ref=${payload.ref}`,
+      ...Object.entries(payload.inputs).flatMap(([key, value]) => [
+        '--raw-field',
+        `inputs[${key}]=${value}`,
+      ]),
+    ],
+    'Production workflow dispatch failed',
+  )
+}
+
 export function parseWorkflowRuns(value: unknown, requestId: string): WorkflowRun | null {
   if (!value || typeof value !== 'object') throw new Error('Workflow runs response is invalid')
   const runs = (value as { workflow_runs?: unknown }).workflow_runs
@@ -204,6 +304,22 @@ export function parsePromotionWorkflowRuns(value: unknown, requestId: string): W
   const runs = (value as { workflow_runs?: unknown }).workflow_runs
   if (!Array.isArray(runs)) throw new Error('Workflow runs response has no workflow_runs')
   const title = `Open ${requestId}`
+  return (
+    runs.find(
+      (run): run is WorkflowRun =>
+        !!run &&
+        typeof run === 'object' &&
+        (run as WorkflowRun).display_title === title &&
+        typeof (run as WorkflowRun).id === 'number',
+    ) ?? null
+  )
+}
+
+export function parseProductionWorkflowRuns(value: unknown, requestId: string): WorkflowRun | null {
+  if (!value || typeof value !== 'object') throw new Error('Workflow runs response is invalid')
+  const runs = (value as { workflow_runs?: unknown }).workflow_runs
+  if (!Array.isArray(runs)) throw new Error('Workflow runs response has no workflow_runs')
+  const title = `Production ${requestId}`
   return (
     runs.find(
       (run): run is WorkflowRun =>
@@ -241,6 +357,20 @@ export async function findPromotionRun(
     'Cannot list open-promotion workflow runs',
   )
   return parsePromotionWorkflowRuns(JSON.parse(output), requestId)
+}
+
+export async function findProductionRun(
+  repo: string,
+  requestId: string,
+): Promise<WorkflowRun | null> {
+  const output = await checkedGh(
+    [
+      'api',
+      `repos/${repo}/actions/workflows/${PRODUCTION_WORKFLOW_FILE}/runs?event=workflow_dispatch&per_page=50`,
+    ],
+    'Cannot list production workflow runs',
+  )
+  return parseProductionWorkflowRuns(JSON.parse(output), requestId)
 }
 
 export async function getWorkflowRun(repo: string, runId: number): Promise<WorkflowRun> {
@@ -289,7 +419,7 @@ export async function downloadManifest(runId: number): Promise<ReleaseManifest> 
   }
 }
 
-export function parseManifestRunIds(value: unknown): number[] {
+export function parseArtifactRunIds(value: unknown, artifactName: string): number[] {
   if (!value || typeof value !== 'object') throw new Error('Artifacts response is invalid')
   const artifacts = (value as { artifacts?: unknown }).artifacts
   if (!Array.isArray(artifacts)) throw new Error('Artifacts response has no artifacts')
@@ -300,13 +430,17 @@ export function parseManifestRunIds(value: unknown): number[] {
           (artifact): artifact is ActionsArtifact =>
             !!artifact &&
             typeof artifact === 'object' &&
-            (artifact as ActionsArtifact).name === 'release-manifest' &&
+            (artifact as ActionsArtifact).name === artifactName &&
             (artifact as ActionsArtifact).expired === false &&
             Number.isSafeInteger((artifact as ActionsArtifact).workflow_run?.id),
         )
         .map((artifact) => artifact.workflow_run!.id!),
     ),
   ]
+}
+
+export function parseManifestRunIds(value: unknown): number[] {
+  return parseArtifactRunIds(value, 'release-manifest')
 }
 
 export async function listInternalCandidates(repo: string): Promise<ReleaseManifest[]> {
@@ -324,12 +458,36 @@ export async function listInternalCandidates(repo: string): Promise<ReleaseManif
   return candidates.sort((left, right) => right.workflow.runId - left.workflow.runId)
 }
 
+export async function listProductionCandidates(repo: string): Promise<ProductionCandidate[]> {
+  const output = await checkedGh(
+    ['api', `repos/${repo}/actions/artifacts?name=promotion-manifest&per_page=30`],
+    'Cannot list open-promotion manifests',
+  )
+  const candidates: ProductionCandidate[] = []
+  for (const openPromotionRunId of parseArtifactRunIds(JSON.parse(output), 'promotion-manifest')) {
+    const open = await downloadPromotionManifest(openPromotionRunId)
+    if (open.phone.status === 'failed' || open.wear.status === 'failed') continue
+    const manifest = await downloadManifest(open.candidateRunId)
+    if (
+      open.sourceSha === manifest.sourceSha &&
+      open.marketingVersion === manifest.marketingVersion &&
+      open.phone.versionCode === manifest.versionCodes.phone &&
+      open.wear.versionCode === manifest.versionCodes.wear
+    ) {
+      candidates.push({ manifest, open, openPromotionRunId })
+    }
+  }
+  return candidates.sort((left, right) => right.openPromotionRunId - left.openPromotionRunId)
+}
+
 export function parseTrackConfig(value: unknown): ReleaseTrackConfig {
   const defaults: ReleaseTrackConfig = {
     phoneInternal: 'internal',
     phoneOpen: 'beta',
+    phoneProduction: 'production',
     wearInternal: 'wear:internal',
     wearOpen: 'wear:beta',
+    wearProduction: 'wear:production',
   }
   if (
     !value ||
@@ -347,8 +505,10 @@ export function parseTrackConfig(value: unknown): ReleaseTrackConfig {
   return {
     phoneInternal: variables.PLAY_PHONE_INTERNAL_TRACK ?? defaults.phoneInternal,
     phoneOpen: variables.PLAY_PHONE_OPEN_TRACK ?? defaults.phoneOpen,
+    phoneProduction: variables.PLAY_PHONE_PRODUCTION_TRACK ?? defaults.phoneProduction,
     wearInternal: variables.PLAY_WEAR_INTERNAL_TRACK ?? defaults.wearInternal,
     wearOpen: variables.PLAY_WEAR_OPEN_TRACK ?? defaults.wearOpen,
+    wearProduction: variables.PLAY_WEAR_PRODUCTION_TRACK ?? defaults.wearProduction,
   }
 }
 
@@ -360,17 +520,21 @@ export async function releaseTrackConfig(repo: string): Promise<ReleaseTrackConf
   return parseTrackConfig(JSON.parse(output))
 }
 
-export async function canonicalNotesPath(repo: string, marketingVersion: string): Promise<string> {
+export async function canonicalNotesPath(
+  repo: string,
+  marketingVersion: string,
+  ref = 'main',
+): Promise<string> {
   if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(marketingVersion))
     throw new Error(`Invalid marketing version "${marketingVersion}"`)
   const path = `release-notes/${marketingVersion}.md`
   await checkedGh(
     [
       'api',
-      `repos/${repo}/contents/release-notes/${encodeURIComponent(marketingVersion)}.md?ref=main`,
+      `repos/${repo}/contents/release-notes/${encodeURIComponent(marketingVersion)}.md?ref=${encodeURIComponent(ref)}`,
       '--silent',
     ],
-    `Canonical release notes missing at ${path} on main`,
+    `Canonical release notes missing at ${path} on ${ref}`,
   )
   return path
 }
@@ -384,6 +548,20 @@ export async function downloadPromotionManifest(runId: number): Promise<Promotio
     )
     const contents = await readFile(join(directory, 'promotion-manifest.json'), 'utf8')
     return parsePromotionManifest(JSON.parse(contents))
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+}
+
+export async function downloadProductionManifest(runId: number): Promise<ProductionManifest> {
+  const directory = await mkdtemp(join(tmpdir(), 'vescape-production-'))
+  try {
+    await checkedGh(
+      ['run', 'download', String(runId), '--name', 'production-manifest', '--dir', directory],
+      'Cannot download production manifest',
+    )
+    const contents = await readFile(join(directory, 'production-manifest.json'), 'utf8')
+    return parseProductionManifest(JSON.parse(contents))
   } finally {
     await rm(directory, { recursive: true, force: true })
   }

@@ -1,6 +1,7 @@
 default_platform(:android)
 
 require "json"
+require "supply/client"
 
 def require_release_env(*names)
   missing = names.select { |name| ENV[name].to_s.empty? }
@@ -91,6 +92,138 @@ def promote_exact_artifact(label, code, source_track, target_track)
   )
 end
 
+def play_release_state(track, code)
+  require_release_env("SUPPLY_JSON_KEY")
+  client = Supply::Client.make_from_config(
+    params: {
+      json_key: ENV.fetch("SUPPLY_JSON_KEY"),
+      timeout: 300
+    }
+  )
+  client.begin_edit(package_name: "app.vescape")
+  begin
+    release = client.get_edit_track(track)&.releases&.find do |candidate|
+      Array(candidate.version_codes).map(&:to_i).include?(code)
+    end
+    return nil unless release
+
+    {
+      playStatus: release.status,
+      rolloutPercentage: release.user_fraction.nil? ? nil : release.user_fraction.to_f * 100
+    }
+  ensure
+    client.abort_current_edit
+  end
+end
+
+def production_upload_options(track, code)
+  {
+    track: track,
+    version_code: code,
+    skip_upload_apk: true,
+    skip_upload_aab: true,
+    skip_upload_metadata: true,
+    skip_upload_images: true,
+    skip_upload_screenshots: true,
+    skip_upload_changelogs: true
+  }
+end
+
+def rollout_fraction
+  percentage = Float(ENV.fetch("ROLLOUT_PERCENTAGE"))
+  UI.user_error!("Rollout percentage must be greater than 0 and at most 100") unless percentage.positive? && percentage <= 100
+  percentage / 100.0
+rescue ArgumentError
+  UI.user_error!("Invalid ROLLOUT_PERCENTAGE: #{ENV['ROLLOUT_PERCENTAGE']}")
+end
+
+def manage_production_artifact(label, code, source_track, target_track)
+  require_release_env("PRODUCTION_OPERATION", "PRODUCTION_RESULT_PATH")
+  operation = ENV.fetch("PRODUCTION_OPERATION")
+  current = play_release_state(target_track, code)
+  result_status = case operation
+  when "status"
+    UI.user_error!("#{label} version code #{code} is not on #{target_track}") unless current
+    "active"
+  when "promote"
+    initial_rollout = rollout_fraction
+    if current
+      expected_status = initial_rollout == 1.0 ? "completed" : "inProgress"
+      expected_percentage = initial_rollout == 1.0 ? nil : initial_rollout * 100
+      percentage_matches = expected_percentage.nil? ? current[:rolloutPercentage].nil? : (current[:rolloutPercentage].to_f - expected_percentage).abs < 0.0001
+      UI.user_error!("#{label} production state does not match the requested rollout") unless current[:playStatus] == expected_status && percentage_matches
+      "already-production"
+    else
+      UI.user_error!("#{label} version code #{code} is not active on #{source_track}") unless play_release_state(source_track, code)
+      upload_to_play_store(
+        **production_upload_options(source_track, code),
+        track_promote_to: target_track,
+        track_promote_release_status: initial_rollout == 1.0 ? "completed" : "inProgress",
+        rollout: initial_rollout
+      )
+      "promoted"
+    end
+  when "halt"
+    UI.user_error!("#{label} version code #{code} is not on #{target_track}") unless current
+    unless current[:playStatus] == "halted"
+      UI.user_error!("#{label} rollout is #{current[:playStatus]}, not inProgress") unless current[:playStatus] == "inProgress"
+      UI.user_error!("#{label} rollout has no staged percentage") unless current[:rolloutPercentage]
+      upload_to_play_store(
+        **production_upload_options(target_track, code),
+        release_status: "halted",
+        rollout: current[:rolloutPercentage] / 100.0
+      )
+    end
+    "halted"
+  when "resume"
+    UI.user_error!("#{label} version code #{code} is not on #{target_track}") unless current
+    unless current[:playStatus] == "inProgress"
+      UI.user_error!("#{label} rollout is #{current[:playStatus]}, not halted") unless current[:playStatus] == "halted"
+      UI.user_error!("#{label} rollout has no staged percentage") unless current[:rolloutPercentage]
+      upload_to_play_store(
+        **production_upload_options(target_track, code),
+        track_promote_to: target_track,
+        track_promote_release_status: "inProgress",
+        rollout: current[:rolloutPercentage] / 100.0
+      )
+    end
+    "resumed"
+  when "advance"
+    UI.user_error!("#{label} version code #{code} is not on #{target_track}") unless current
+    requested = rollout_fraction
+    current_fraction = current[:rolloutPercentage].to_f / 100.0
+    if current[:playStatus] == "completed" && requested == 1.0
+      # Idempotent retry after completing the rollout.
+    else
+      UI.user_error!("#{label} rollout is #{current[:playStatus]}, not inProgress") unless current[:playStatus] == "inProgress"
+      UI.user_error!("#{label} rollout cannot move backwards") if requested < current_fraction
+      if requested > current_fraction
+        upload_to_play_store(
+          **production_upload_options(target_track, code),
+          release_status: requested == 1.0 ? "completed" : "inProgress",
+          rollout: requested
+        )
+      end
+    end
+    "advanced"
+  else
+    UI.user_error!("Invalid production operation: #{operation}")
+  end
+
+  state = play_release_state(target_track, code)
+  File.write(
+    ENV.fetch("PRODUCTION_RESULT_PATH"),
+    JSON.generate(
+      versionCode: code,
+      sourceTrack: source_track,
+      targetTrack: target_track,
+      status: result_status,
+      playStatus: state&.fetch(:playStatus),
+      rolloutPercentage: state&.fetch(:rolloutPercentage)
+    )
+  )
+end
+
 platform :android do
   desc "Build the signed phone and Wear AABs once"
   lane :build_internal do
@@ -155,6 +288,52 @@ platform :android do
       exact_code("WEAR_VERSION_CODE"),
       ENV.fetch("WEAR_INTERNAL_TRACK"),
       ENV.fetch("WEAR_OPEN_TRACK")
+    )
+  end
+
+
+  desc "Validate exact open-tested artifacts before production work"
+  lane :validate_production_candidate do
+    require_release_env(
+      "PHONE_VERSION_CODE",
+      "WEAR_VERSION_CODE",
+      "PHONE_OPEN_TRACK",
+      "PHONE_PRODUCTION_TRACK",
+      "WEAR_OPEN_TRACK",
+      "WEAR_PRODUCTION_TRACK",
+      "PRODUCTION_OPERATION"
+    )
+    [
+      ["Phone", exact_code("PHONE_VERSION_CODE"), ENV.fetch("PHONE_OPEN_TRACK"), ENV.fetch("PHONE_PRODUCTION_TRACK")],
+      ["Wear", exact_code("WEAR_VERSION_CODE"), ENV.fetch("WEAR_OPEN_TRACK"), ENV.fetch("WEAR_PRODUCTION_TRACK")]
+    ].each do |label, code, open_track, production_track|
+      on_open = play_release_state(open_track, code)
+      on_production = play_release_state(production_track, code)
+      if ENV.fetch("PRODUCTION_OPERATION") == "promote"
+        UI.user_error!("#{label} version code #{code} is on neither #{open_track} nor #{production_track}") unless on_open || on_production
+      else
+        UI.user_error!("#{label} version code #{code} is not on #{production_track}") unless on_production
+      end
+    end
+  end
+
+  desc "Manage one exact phone production rollout"
+  lane :manage_phone_production do
+    manage_production_artifact(
+      "Phone",
+      exact_code("PHONE_VERSION_CODE"),
+      ENV.fetch("PHONE_OPEN_TRACK"),
+      ENV.fetch("PHONE_PRODUCTION_TRACK")
+    )
+  end
+
+  desc "Manage one exact Wear production rollout"
+  lane :manage_wear_production do
+    manage_production_artifact(
+      "Wear",
+      exact_code("WEAR_VERSION_CODE"),
+      ENV.fetch("WEAR_OPEN_TRACK"),
+      ENV.fetch("WEAR_PRODUCTION_TRACK")
     )
   end
 end

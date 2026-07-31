@@ -57,6 +57,38 @@ export interface PromotionManifest {
   wear: PromotionArtifactResult
 }
 
+export type ProductionOperation = 'promote' | 'status' | 'halt' | 'resume' | 'advance'
+export type ProductionArtifactStatus =
+  | 'promoted'
+  | 'already-production'
+  | 'active'
+  | 'halted'
+  | 'resumed'
+  | 'advanced'
+  | 'failed'
+
+export interface ProductionArtifactResult {
+  versionCode: number
+  sourceTrack: string
+  targetTrack: string
+  status: ProductionArtifactStatus
+  playStatus: string | null
+  rolloutPercentage: number | null
+}
+
+export interface ProductionManifest {
+  schemaVersion: 1
+  requestId: string
+  openPromotionRunId: number
+  sourceSha: string
+  marketingVersion: string
+  operation: ProductionOperation
+  requestedRolloutPercentage: number | null
+  phone: ProductionArtifactResult
+  wear: ProductionArtifactResult
+  githubRelease: 'created' | 'existing' | 'skipped' | 'failed'
+}
+
 export function parseReleaseManifest(value: unknown): ReleaseManifest {
   if (!value || typeof value !== 'object') throw new Error('Release manifest is not an object')
   const manifest = value as Partial<ReleaseManifest>
@@ -131,4 +163,62 @@ export function promotionSummary(manifest: PromotionManifest): string {
   const render = (name: string, artifact: PromotionArtifactResult) =>
     `${name} ${artifact.versionCode}: ${artifact.status}`
   return `${render('phone', manifest.phone)} · ${render('Wear', manifest.wear)}`
+}
+
+export function parseProductionManifest(value: unknown): ProductionManifest {
+  if (!value || typeof value !== 'object') throw new Error('Production manifest is not an object')
+  const manifest = value as Partial<ProductionManifest>
+  const operations: ProductionOperation[] = ['promote', 'status', 'halt', 'resume', 'advance']
+  const statuses: ProductionArtifactStatus[] = [
+    'promoted',
+    'already-production',
+    'active',
+    'halted',
+    'resumed',
+    'advanced',
+    'failed',
+  ]
+  const validPercentage = (value: unknown) =>
+    value === null || (typeof value === 'number' && value > 0 && value <= 100)
+  const validArtifact = (artifact: ProductionArtifactResult | undefined) =>
+    artifact &&
+    Number.isSafeInteger(artifact.versionCode) &&
+    artifact.versionCode > 0 &&
+    typeof artifact.sourceTrack === 'string' &&
+    artifact.sourceTrack.length > 0 &&
+    typeof artifact.targetTrack === 'string' &&
+    artifact.targetTrack.length > 0 &&
+    statuses.includes(artifact.status) &&
+    (artifact.playStatus === null || typeof artifact.playStatus === 'string') &&
+    validPercentage(artifact.rolloutPercentage)
+  const operationNeedsPercentage =
+    manifest.operation === 'promote' || manifest.operation === 'advance'
+  if (
+    manifest.schemaVersion !== 1 ||
+    typeof manifest.requestId !== 'string' ||
+    !/^[0-9a-f-]{36}$/i.test(manifest.requestId) ||
+    !Number.isSafeInteger(manifest.openPromotionRunId) ||
+    manifest.openPromotionRunId! < 1 ||
+    typeof manifest.sourceSha !== 'string' ||
+    !/^[0-9a-f]{40}$/i.test(manifest.sourceSha) ||
+    typeof manifest.marketingVersion !== 'string' ||
+    !/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(manifest.marketingVersion) ||
+    !operations.includes(manifest.operation as ProductionOperation) ||
+    !validPercentage(manifest.requestedRolloutPercentage) ||
+    operationNeedsPercentage !== (typeof manifest.requestedRolloutPercentage === 'number') ||
+    !validArtifact(manifest.phone) ||
+    !validArtifact(manifest.wear) ||
+    !['created', 'existing', 'skipped', 'failed'].includes(manifest.githubRelease ?? '')
+  ) {
+    throw new Error('Production manifest has an invalid shape')
+  }
+  return manifest as ProductionManifest
+}
+
+export function productionSummary(manifest: ProductionManifest): string {
+  const render = (name: string, artifact: ProductionArtifactResult) => {
+    const rollout = artifact.rolloutPercentage === null ? '' : ` @ ${artifact.rolloutPercentage}%`
+    return `${name} ${artifact.versionCode}: ${artifact.status}${rollout}`
+  }
+  return `${render('phone', manifest.phone)} · ${render('Wear', manifest.wear)} · GitHub ${manifest.githubRelease}`
 }

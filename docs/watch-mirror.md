@@ -20,14 +20,33 @@ them, with the immutable source SHA and artifact hashes, in the release manifest
 one successful internal manifest, requires canonical `release-notes/<version>.md`, and promotes the
 manifest's exact existing codes. It never rebuilds or uploads an AAB. Track IDs come from the
 `PLAY_PHONE_INTERNAL_TRACK`, `PLAY_PHONE_OPEN_TRACK`, `PLAY_WEAR_INTERNAL_TRACK`, and
-`PLAY_WEAR_OPEN_TRACK` repository variables; defaults are `internal`, `beta`, `wear:internal`, and
-`wear:beta`.
+`PLAY_WEAR_OPEN_TRACK` repository variables. Production targets use
+`PLAY_PHONE_PRODUCTION_TRACK` and `PLAY_WEAR_PRODUCTION_TRACK`. Defaults are `internal`, `beta`,
+`production`, `wear:internal`, `wear:beta`, and `wear:production`.
 
 Before mutation, the trusted `main` workflow verifies both requested codes against Play. A code may
 be on its internal source track or already on its open target track: this makes a retry converge after
 phone-only or Wear-only success. Promotion then runs phone and Wear serially and publishes a
 per-form-factor result (`promoted`, `already-open`, or `failed`). It does not touch production tracks,
 tags, GitHub Releases, `main`, or `dev`.
+
+Production is a separate, explicitly confirmed `Promote Open → Production` action. Candidate discovery
+uses successful open-promotion manifests, so phone and Wear identity stays pinned to the same source SHA
+and exact version codes from build through production. A trusted workflow rechecks that source against
+`main`, verifies its `package.json` version and canonical release notes, then checks both live open tracks
+before making any production change. It promotes existing Play artifacts only; no build, signing, or AAB
+upload occurs.
+
+The initial production rollout percentage is explicit. Status, halt, resume, and percentage advancement
+all target the selected exact phone and Wear codes and share the non-cancelling `play-publish` concurrency
+boundary. Retries converge when only one form factor or Play itself succeeded. Advancement cannot reduce
+the current percentage.
+
+After both Play production operations succeed, the workflow creates an immutable `v<version>` tag at the
+artifact source SHA and creates the GitHub Release from `release-notes/<version>.md` verbatim. An existing
+tag must already point to that SHA; an existing GitHub Release is reused. Historical `production-*` tags
+stay untouched, but no current workflow triggers from them and no release command mutates `dev` or
+`main`. The `production` GitHub environment is the human approval boundary for live rollout changes.
 
 The internal workflow retains both artifacts even when a Play upload fails:
 
@@ -44,6 +63,10 @@ One-time Play Console setup remains human-owned:
 3. Enable the dedicated Wear OS testing and production tracks.
 4. Upload the first Wear AAB manually if Console requires it while enabling the form factor.
 5. Opt into Wear OS review.
+
+Protect the GitHub `production` environment with required reviewers before the first live release.
+The production workflow deliberately targets that environment, so a CLI confirmation alone cannot bypass
+the final human approval gate.
 
 After CI publishes a test build, install both phone and watch apps from Play on the paired physical
 devices. Launch the Watch Mirror, connect a Board on the phone, and confirm live telemetry reaches

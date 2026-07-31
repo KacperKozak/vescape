@@ -2,8 +2,11 @@ import { describe, expect, test } from 'bun:test'
 import {
   createDispatchPayload,
   createPromotionDispatchPayload,
+  createProductionDispatchPayload,
+  parseArtifactRunIds,
   parseManifestRunIds,
   parsePromotionWorkflowRuns,
+  parseProductionWorkflowRuns,
   parseTrackConfig,
   parseFailedWorkflowJobs,
   parseWorkflowRuns,
@@ -106,8 +109,10 @@ describe('release workflow dispatch', () => {
     ).toEqual({
       phoneInternal: 'internal',
       phoneOpen: 'open-testing',
+      phoneProduction: 'production',
       wearInternal: 'wear:internal',
       wearOpen: 'wear:open-testing',
+      wearProduction: 'wear:production',
     })
   })
 
@@ -129,5 +134,105 @@ describe('release workflow dispatch', () => {
         requestId,
       )?.id,
     ).toBe(304)
+  })
+
+  test('lists only successful open-proof artifact runs', () => {
+    expect(
+      parseArtifactRunIds(
+        {
+          artifacts: [
+            { name: 'promotion-manifest', expired: false, workflow_run: { id: 8 } },
+            { name: 'promotion-manifest', expired: true, workflow_run: { id: 7 } },
+            { name: 'release-manifest', expired: false, workflow_run: { id: 6 } },
+          ],
+        },
+        'promotion-manifest',
+      ),
+    ).toEqual([8])
+  })
+
+  test('dispatches exact production identity and explicit rollout', () => {
+    const release = {
+      schemaVersion: 1 as const,
+      requestId: crypto.randomUUID(),
+      sourceSha: 'a'.repeat(40),
+      marketingVersion: '0.83.1',
+      versionCodes: { phone: 100_000_042, wear: 1_100_000_042 },
+      workflow: { runId: 302, runUrl: 'https://example.test/302', runAttempt: 1 },
+      artifacts: {
+        phone: { name: 'phone.aab', sha256: 'a', signingCertificateSha256: 'c' },
+        wear: { name: 'wear.aab', sha256: 'b', signingCertificateSha256: 'c' },
+      },
+      uploads: { phone: 'succeeded' as const, wear: 'succeeded' as const },
+    }
+    const open = {
+      schemaVersion: 1 as const,
+      requestId: crypto.randomUUID(),
+      candidateRunId: 302,
+      sourceSha: release.sourceSha,
+      marketingVersion: release.marketingVersion,
+      phone: {
+        versionCode: release.versionCodes.phone,
+        sourceTrack: 'internal',
+        targetTrack: 'beta',
+        status: 'promoted' as const,
+      },
+      wear: {
+        versionCode: release.versionCodes.wear,
+        sourceTrack: 'wear:internal',
+        targetTrack: 'wear:beta',
+        status: 'already-open' as const,
+      },
+    }
+    const requestId = crypto.randomUUID()
+    expect(
+      createProductionDispatchPayload(
+        { manifest: release, open, openPromotionRunId: 304 },
+        'promote',
+        requestId,
+        10,
+      ),
+    ).toEqual({
+      ref: 'main',
+      inputs: {
+        request_id: requestId,
+        operation: 'promote',
+        open_promotion_run_id: '304',
+        candidate_run_id: '302',
+        source_sha: release.sourceSha,
+        marketing_version: '0.83.1',
+        phone_code: '100000042',
+        wear_code: '1100000042',
+        rollout_percentage: '10',
+      },
+    })
+    expect(() =>
+      createProductionDispatchPayload(
+        { manifest: release, open, openPromotionRunId: 304 },
+        'advance',
+        requestId,
+        101,
+      ),
+    ).toThrow('Rollout percentage')
+  })
+
+  test('correlates exact production run title', () => {
+    const requestId = crypto.randomUUID()
+    expect(
+      parseProductionWorkflowRuns(
+        {
+          workflow_runs: [
+            {
+              id: 305,
+              html_url: 'https://example.test/305',
+              display_title: `Production ${requestId}`,
+              status: 'queued',
+              conclusion: null,
+            },
+          ],
+        },
+        requestId,
+      )?.id,
+    ).toBe(305)
   })
 })
