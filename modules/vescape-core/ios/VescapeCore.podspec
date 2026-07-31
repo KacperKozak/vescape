@@ -8,8 +8,8 @@ Pod::Spec.new do |s|
   s.summary        = package['description']
   s.description    = package['description']
   s.license        = 'MIT'
-  s.author         = 'vesc-app-poc'
-  s.homepage       = 'https://github.com/vesc-app-poc'
+  s.author         = 'vescape'
+  s.homepage       = 'https://github.com/vescape'
   # 17.0 to match the app deployment target: the Board Session Live Activity (ActivityKit) driven
   # from this pod needs 16.1+, and the app already ships 17.0, so nothing runs below it.
   s.platform       = :ios, '17.0'
