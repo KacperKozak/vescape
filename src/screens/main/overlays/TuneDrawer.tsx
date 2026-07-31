@@ -146,7 +146,7 @@ export function TuneDrawer({ onNavigate, onOpenLegalLimits }: TuneDrawerProps) {
         label="Tune profiles"
         value={activeName}
         description="Pick how your board should feel."
-        accent={theme.palette.purple.color}
+        accent={theme.tune.color}
         selectAccent={selectTheme.color}
         selectBackground={selectTheme.bg}
         selectBorder={selectTheme.border}

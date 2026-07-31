@@ -5,6 +5,7 @@ import {
   ArrowLeftIcon,
   ArrowRightIcon,
   CubeIcon,
+  FadersIcon,
   GearSixIcon,
   GhostIcon,
   TrashIcon,
@@ -128,6 +129,15 @@ function ButtonShowcase() {
           />
           <Button
             style={{ flex: 1 }}
+            label="Tune"
+            variant="tune"
+            icon={FadersIcon}
+            onPress={() => {}}
+            loading={loading}
+            disabled={disabled}
+          />
+          <Button
+            style={{ flex: 1 }}
             label="Delete"
             variant="destructive"
             onPress={() => {}}
@@ -165,6 +175,7 @@ function ButtonShowcase() {
 
 function PlaceholderShowcase() {
   const [showTitle, setShowTitle] = useState(true)
+  const [showAction, setShowAction] = useState(true)
   const [color, setColor] = useState<string>(theme.palette.slate.textMuted)
 
   return (
@@ -173,6 +184,7 @@ function PlaceholderShowcase() {
       controls={
         <>
           <ToggleRow label="showTitle" value={showTitle} onToggle={setShowTitle} />
+          <ToggleRow label="showAction" value={showAction} onToggle={setShowAction} />
           <ChipRow
             label="iconColor"
             options={[
@@ -186,12 +198,17 @@ function PlaceholderShowcase() {
         </>
       }
     >
-      <View style={{ height: 140 }}>
+      <View style={{ height: 220 }}>
         <Placeholder
           icon={GhostIcon}
           title={showTitle ? 'No data yet' : undefined}
           description="Connect board to start streaming telemetry"
           iconColor={color}
+          action={
+            showAction ? (
+              <Button label="Get started" size="lg" icon={ArrowRightIcon} onPress={() => {}} />
+            ) : null
+          }
         />
       </View>
     </ShowcaseCard>

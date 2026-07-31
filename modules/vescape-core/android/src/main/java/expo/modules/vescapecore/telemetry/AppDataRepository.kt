@@ -774,7 +774,7 @@ fun TuneProfileEntity.toMap(): Map<String, Any?> = mapOf(
 )
 
 internal fun validRefloatBaseVersion(value: String?): String? =
-  value?.takeIf { it.matches(Regex("""\d+\.\d+\.\d+""")) }
+  value?.takeIf { it.matches(Regex("""\d+\.\d+(?:\.\d+)?""")) }
 
 fun TuneHistoryEntryEntity.toMap(): Map<String, Any?> = mapOf(
   "id" to id,
