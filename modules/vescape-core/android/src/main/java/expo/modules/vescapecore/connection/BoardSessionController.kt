@@ -205,7 +205,7 @@ internal class BoardSessionController(private val service: CoreForegroundService
     }
     private val notificationGate = NotificationUpdateGate(NOTIFICATION_TELEMETRY_INTERVAL_MS)
     private val alertFeedback by lazy { AlertFeedback(service, mainHandler) }
-    private val alertCoordinator by lazy { AlertCoordinator { alertFeedback } }
+    private val alertCoordinator by lazy { AlertCoordinator(feedback = { alertFeedback }) }
     private val legalPolicyCatalog by lazy { LegalPolicyCatalog(service.applicationContext) }
     private val diagnosticsRecorder: DiagnosticsRecorder by lazy {
         DiagnosticsRecorder(

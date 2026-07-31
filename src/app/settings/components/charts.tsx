@@ -313,6 +313,7 @@ function RandomLineChartsShowcase() {
             getPointColor={
               colorRange ? (value) => getMetricRampColor(value, colorRange) : undefined
             }
+            alertThresholds={chart.key === 'duty' ? [75, 90] : undefined}
             containerStyle={styles.chartExample}
           />
         )

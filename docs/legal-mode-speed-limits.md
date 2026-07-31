@@ -29,6 +29,13 @@ Czech sources checked on 2026-07-30:
 - Czech Constitutional Court, II. ÚS 1129/26: https://nalus.usoud.cz/Search/GetText.aspx?sz=2-1129-26_1
 - Czech motor-liability insurance act 30/2024, § 2 and § 6: https://www.zakonyprolidi.cz/cs/2024-30
 
+Czech sources checked on 2026-07-30:
+
+- Czech Road Traffic Act 361/2000, § 2(nn) and § 60a: https://www.zakonyprolidi.cz/cs/2000-361
+- Czech Supreme Administrative Court, 2 As 192/2025-48: https://www.zakonyprolidi.cz/judikat/nsscr/2-as-192-2025-48
+- Czech Constitutional Court, II. ÚS 1129/26: https://nalus.usoud.cz/Search/GetText.aspx?sz=2-1129-26_1
+- Czech motor-liability insurance act 30/2024, § 2 and § 6: https://www.zakonyprolidi.cz/cs/2024-30
+
 ## UI Rules
 
 - If `legalRoadStatus` is `notRoadLegal` or `restricted`, show a red warning mark on the Legal Mode icon.

@@ -30,6 +30,7 @@ import {
   getChartTimeRangeBands,
   getChartTimeLabels,
   getXPosition,
+  getChartAlertMarkers,
   splitChartPointSegments,
   splitChartLineSegments,
   type ExcludedRange,
@@ -50,6 +51,8 @@ const TOOLTIP_WIDTH = 94
 const CARD_HORIZONTAL_PADDING = 8
 const EXCLUSION_MARKER_HEIGHT = 1
 const EXCLUSION_MARKER_INSET = 1
+const ALERT_LINE_COLOR = theme.alpha(theme.palette.yellow.color, 0.1)
+const NO_ALERT_THRESHOLDS: number[] = []
 const EMPTY_MARKER_TABLE: MarkerTable = {
   ts: [],
   xs: [],
@@ -73,20 +76,20 @@ function setSharedValue<T>(shared: SharedValue<T>, value: T) {
   shared.value = value
 }
 
-function pickMarkerIndexByX(table: MarkerTable, x: number): number {
+function pickNearestSortedIndex(values: number[], target: number): number {
   'worklet'
-  const count = table.xs.length
+  const count = values.length
   if (count === 0) return -1
   let lo = 0
   let hi = count - 1
   while (lo < hi) {
     const mid = Math.floor((lo + hi) / 2)
-    if (table.xs[mid] < x) lo = mid + 1
+    if (values[mid] < target) lo = mid + 1
     else hi = mid
   }
   if (lo === 0) return 0
   const prev = lo - 1
-  return Math.abs(table.xs[prev] - x) <= Math.abs(table.xs[lo] - x) ? prev : lo
+  return Math.abs(values[prev] - target) <= Math.abs(values[lo] - target) ? prev : lo
 }
 
 /**
@@ -115,7 +118,7 @@ function createScrubGesture({
     .enabled(enabled)
     .onBegin((event) => {
       'worklet'
-      const idx = pickMarkerIndexByX(markerTableSV.value, event.x)
+      const idx = pickNearestSortedIndex(markerTableSV.value.xs, event.x)
       if (idx < 0) return
       const timeMs = markerTableSV.value.ts[idx]
       activeScrubTimeMs.value = timeMs
@@ -124,7 +127,7 @@ function createScrubGesture({
     })
     .onUpdate((event) => {
       'worklet'
-      const idx = pickMarkerIndexByX(markerTableSV.value, event.x)
+      const idx = pickNearestSortedIndex(markerTableSV.value.xs, event.x)
       if (idx < 0) return
       const timeMs = markerTableSV.value.ts[idx]
       if (timeMs === activeScrubTimeMs.value) return
@@ -139,25 +142,8 @@ function createScrubGesture({
     })
 }
 
-function pickMarkerIndex(table: MarkerTable, timeMs: number | null): number {
-  'worklet'
-  const count = table.ts.length
-  if (count === 0 || timeMs == null) return -1
-  let lo = 0
-  let hi = count - 1
-  while (lo < hi) {
-    const mid = Math.floor((lo + hi) / 2)
-    if (table.ts[mid] < timeMs) lo = mid + 1
-    else hi = mid
-  }
-  if (lo === 0) return 0
-  const prev = lo - 1
-  return Math.abs(table.ts[prev] - timeMs) <= Math.abs(table.ts[lo] - timeMs) ? prev : lo
-}
-
 function exclusionColor(reason: string): string {
-  if (reason === 'free_spin') return theme.palette.yellow.color
-  return theme.palette.slate.textSecondary
+  return reason === 'free_spin' ? theme.palette.yellow.color : theme.palette.slate.textSecondary
 }
 
 function formatTime(date: Date): string {
@@ -294,6 +280,8 @@ interface TelemetryLineChartProps {
   scrubbable?: boolean
   /** Reserve the right-axis gutter so charts with and without a secondary axis align. */
   reserveRightAxis?: boolean
+  /** Alert starts and range ceilings drawn as faint horizontal reference lines. */
+  alertThresholds?: number[]
   /** When set, the chart is a range trimmer instead of a scrubber. */
   trim?: ChartTrimConfig
   /** Solid translucent bands rendered behind the chart lines. */
@@ -406,6 +394,7 @@ export function TelemetryLineChart({
   onScrubTimeChange,
   scrubbable = false,
   reserveRightAxis = false,
+  alertThresholds = NO_ALERT_THRESHOLDS,
   trim,
   timeRangeHighlights,
 }: TelemetryLineChartProps) {
@@ -418,8 +407,7 @@ export function TelemetryLineChart({
   const onPointSelectedRef = useRef(onPointSelected)
   const onGestureStartRef = useRef(onGestureStart)
   const onScrubTimeChangeRef = useRef(onScrubTimeChange)
-  // Live charts keep streaming while the user scrubs; rebuilding paths and the marker
-  // table mid-gesture starves the JS thread. Freeze the series for the drag instead.
+  // Freeze live series while dragging so path and marker-table rebuilds do not starve JS.
   const liveSeriesRef = useRef({ points, secondary })
   const [frozenSeries, setFrozenSeries] = useState<{
     points: TelemetryChartPoint[]
@@ -474,9 +462,10 @@ export function TelemetryLineChart({
     setSharedValue(markerTableSV, markerTable)
   }, [markerTable, markerTableSV])
 
-  const liveIdx = useDerivedValue(() =>
-    pickMarkerIndex(markerTableSV.value, activeScrubTimeMs.value ?? currentTimeMs.value),
-  )
+  const liveIdx = useDerivedValue(() => {
+    const timeMs = activeScrubTimeMs.value ?? currentTimeMs.value
+    return timeMs == null ? -1 : pickNearestSortedIndex(markerTableSV.value.ts, timeMs)
+  })
   const markerX = useDerivedValue(() => {
     const idx = liveIdx.value
     return idx >= 0 ? markerTableSV.value.xs[idx] : -100
@@ -582,6 +571,10 @@ export function TelemetryLineChart({
 
   const yMid = (range.y.min + range.y.max) / 2
   const secondaryYMid = secondary ? (secondary.range.y.min + secondary.range.y.max) / 2 : 0
+  const alertMarkers = useMemo(
+    () => getChartAlertMarkers(alertThresholds, range, height),
+    [alertThresholds, height, range],
+  )
 
   const timeLabels = useMemo(() => {
     return getChartTimeLabels(displayPoints, windowMs, timeMode)
@@ -671,6 +664,16 @@ export function TelemetryLineChart({
                   color={theme.palette.slate.surface}
                   strokeWidth={0.5}
                 />
+
+                {alertMarkers.map((marker) => (
+                  <Line
+                    key={marker.value}
+                    p1={vec(0, marker.y)}
+                    p2={vec(chartWidth, marker.y)}
+                    color={ALERT_LINE_COLOR}
+                    strokeWidth={1}
+                  />
+                ))}
 
                 {excludedRanges?.map((range) => {
                   const x1 = getXPosition(displayPoints, range.startMs, chartWidth, windowMs)
@@ -822,6 +825,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'flex-end',
     paddingRight: 4,
+    position: 'relative',
   },
   rightAxis: {
     width: Y_AXIS_WIDTH,

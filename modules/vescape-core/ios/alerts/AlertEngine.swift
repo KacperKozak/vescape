@@ -226,6 +226,26 @@ internal final class AlertEngine {
     telemetry t: RefloatTelemetry,
     batteryPercent: Double? = nil
   ) -> [FiredAlert] {
+    evaluateRules(rules: rules, batteryPercent: batteryPercent) { self.extractAlertValue($0, t) }
+  }
+
+  /// Evaluate already-normalized metric values. Production telemetry and the UI alert test both
+  /// enter the same stateful threshold/debounce/hysteresis path; callers isolate state by owning
+  /// separate `AlertEngine` instances.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/alerts/AlertEngine.kt `evaluateValues`
+  func evaluateValues(
+    rules: [AlertRule],
+    values: [String: Double],
+    batteryPercent: Double? = nil
+  ) -> [FiredAlert] {
+    evaluateRules(rules: rules, batteryPercent: batteryPercent) { values[$0] }
+  }
+
+  private func evaluateRules(
+    rules: [AlertRule],
+    batteryPercent: Double?,
+    valueFor: (String) -> Double?
+  ) -> [FiredAlert] {
     guard !rules.isEmpty else { return [] }
     let now = nowMs()
     var fired: [FiredAlert] = []
@@ -240,7 +260,7 @@ internal final class AlertEngine {
     }
 
     for rule in rules {
-      guard let value = extractAlertValue(rule.controlId, t) else { continue }
+      guard let value = valueFor(rule.controlId) else { continue }
       let compareValue = (rule.controlId == "battery" && batteryPercent != nil) ? batteryPercent! : value
       let aboveDir = alertDirectionIsAbove(rule.controlId)
       let triggered = aboveDir ? compareValue >= rule.threshold : compareValue <= rule.threshold

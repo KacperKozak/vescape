@@ -7,6 +7,11 @@ export interface TelemetryChartRange {
   y: { min: number; max: number }
 }
 
+export interface ChartAlertMarker {
+  value: number
+  y: number
+}
+
 export interface ExcludedRange {
   startMs: number
   endMs: number
@@ -113,17 +118,42 @@ export function getChartPosition(
   const xMax = points[points.length - 1].date.getTime()
   const xMin = windowMs ? xMax - windowMs : points[0].date.getTime()
   const xSpan = xMax - xMin
-  const ySpan = range.y.max - range.y.min
-  if (xSpan <= 0 || ySpan <= 0) return null
+  const y = getChartYPosition(point.value, range, height)
+  if (xSpan <= 0 || y == null) return null
 
-  const inset = 2
   const x = width * ((point.date.getTime() - xMin) / xSpan)
-  const t = (point.value - range.y.min) / ySpan
-  const y = height - inset - (height - inset * 2) * t
   return {
     x: Math.max(0, Math.min(width, x)),
-    y: Math.max(0, Math.min(height, y)),
+    y,
   }
+}
+
+/** Map one metric value onto the same inset Y scale used by telemetry points. */
+export function getChartYPosition(
+  value: number,
+  range: { y: { min: number; max: number } },
+  height: number,
+): number | null {
+  const ySpan = range.y.max - range.y.min
+  if (!Number.isFinite(value) || ySpan <= 0 || height <= 0) return null
+
+  const inset = 2
+  const t = (value - range.y.min) / ySpan
+  const y = height - inset - (height - inset * 2) * t
+  return Math.max(0, Math.min(height, y))
+}
+
+/** Position visible alert lines exactly; omit thresholds outside the chart range. */
+export function getChartAlertMarkers(
+  values: number[],
+  range: { y: { min: number; max: number } },
+  height: number,
+): ChartAlertMarker[] {
+  return [...new Set(values)]
+    .filter((value) => value >= range.y.min && value <= range.y.max)
+    .map((value) => ({ value, y: getChartYPosition(value, range, height) }))
+    .filter((marker): marker is { value: number; y: number } => marker.y != null)
+    .sort((a, b) => a.y - b.y)
 }
 
 export function getXPosition(

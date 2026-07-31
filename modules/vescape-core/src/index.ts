@@ -243,6 +243,20 @@ export interface AlertSound {
   category: AlertSoundCategory
 }
 
+/**
+ * Ephemeral rule snapshot for the isolated UI alert test. It deliberately omits Board ownership
+ * and persistence fields: native evaluates it in a test-only coordinator and never stores it.
+ * @parity /modules/vescape-core/ios/VescapeCoreModule.swift `alertTestRule`
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `toAlertTestRule`
+ */
+export interface AlertTestRule {
+  id: string
+  controlId: string
+  threshold: number
+  thresholdMax: number | null
+  soundType: AlertSoundType
+}
+
 // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryEntities.kt `AlertRuleEntity`
 // @parity /modules/vescape-core/ios/alerts/AlertEngine.swift `AlertRule`
 export interface AlertRule {
@@ -1463,6 +1477,9 @@ type VescapeCoreNativeModule = NativeEventEmitter<VescapeCoreEvents> & {
   previewAlertSound(soundType: AlertSoundType): void
   startGeigerSimulation(soundType: string, rangeDepth: number): void
   stopGeigerSimulation(): void
+  startAlertTest(rules: AlertTestRule[]): void
+  updateAlertTest(value: number): void
+  stopAlertTest(): void
   selectBoard(boardId: string): Promise<void>
   stopBoard(): Promise<void>
   probeBoardLink(bleId: string, probeId: string): Promise<BoardProbeResult>
@@ -1786,6 +1803,33 @@ export function stopGeigerSimulation(): void {
     native.stopGeigerSimulation()
   } catch {
     // Native geiger simulation not yet available
+  }
+}
+
+/** Start an isolated alert-engine test from an exact JS rule snapshot (saved or wizard draft). */
+export function startAlertTest(rules: AlertTestRule[]): void {
+  try {
+    native.startAlertTest(rules)
+  } catch {
+    // Older development clients may not expose the test bridge yet; the visual sweep still runs.
+  }
+}
+
+/** Feed one normalized gauge value into the isolated alert test. */
+export function updateAlertTest(value: number): void {
+  try {
+    native.updateAlertTest(value)
+  } catch {
+    // Native alert test not available in this development client.
+  }
+}
+
+/** Stop only test feedback. Live Board alert state and playback remain untouched. */
+export function stopAlertTest(): void {
+  try {
+    native.stopAlertTest()
+  } catch {
+    // Native alert test not available in this development client.
   }
 }
 
