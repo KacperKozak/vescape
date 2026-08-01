@@ -283,6 +283,11 @@ interface TelemetryDao {
    * nowhere to put a sample that belongs to none (ADR-0028) — so the scan does not offer them and
    * the cursor moves over them. They are unowned local rows, not rows a Rider is waiting to see
    * backed up.
+   *
+   * The consequence is deliberate: a later owned frame carries the cursor past a skipped one, so
+   * cursor-gated retention prunes unowned telemetry on age alone, exactly as it did before the
+   * Account binding existed. Holding it forever would be the only alternative, because no future
+   * upload can ever accept it.
    */
   @Query(
     "SELECT * FROM telemetry_frames WHERE id > :cursor AND board_id IS NOT NULL " +

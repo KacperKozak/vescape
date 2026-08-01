@@ -29,7 +29,10 @@ protocol SyncSource {
   /// Commit the advance set in its own transaction, after the response. Never alongside the rows: a
   /// cursor advanced past rows the server did not take is unrecoverable, whereas a cursor left
   /// behind is a re-send the server upserts idempotently. Always fail toward re-sending.
-  func commit(_ advances: [SyncTable: Int64])
+  ///
+  /// Throws rather than swallowing a write failure: an uncommitted cursor leaves the same rows
+  /// pending, and a caller that believed the checkpoint landed would resend them without pause.
+  func commit(_ advances: [SyncTable: Int64]) throws
 
   /// Bumped by an Account change. Captured before a request and re-read before the commit, so a
   /// response belonging to the previous Account becomes a no-op instead of advancing a cursor over
@@ -53,6 +56,8 @@ struct SyncEnvironment {
 /// What one pass did, for the loop and for tests.
 enum SyncPass: Equatable {
   case idle
+  /// Nothing was accepted, but the next attempt differs from this one — a narrowed byte target.
+  case retry
   case sent(rowCount: Int, morePending: Bool)
   case waiting(untilMs: Int64)
   case paused(SyncPauseReason)
@@ -126,6 +131,10 @@ final class SyncEngine {
   }
 
   private func send() async -> SyncPass {
+    // Captured before the rows are read, not after: an Account reset between the scan and the
+    // request would otherwise leave a batch of the previous Account's rows looking current, and its
+    // cursor advance would land on the fresh database.
+    let generation = source.generation()
     let pending: [SyncPendingTable]
     do {
       pending = try source.pending(rowLimit: maxSyncBatchRows)
@@ -141,12 +150,11 @@ final class SyncEngine {
     case .rowTooLarge(let table, let cursor, _):
       return pause(.rowTooLarge, detail: "\(table.wire)@\(cursor)")
     case .ready(let batch):
-      return await deliver(batch)
+      return await deliver(batch, generation: generation)
     }
   }
 
-  private func deliver(_ batch: SyncBuiltBatch) async -> SyncPass {
-    let generation = source.generation()
+  private func deliver(_ batch: SyncBuiltBatch, generation: Int64) async -> SyncPass {
     let response = await transport(batch.body)
     // A response that outlived its Account cannot touch the fresh database it would land in.
     if source.generation() != generation { return .idle }
@@ -169,7 +177,15 @@ final class SyncEngine {
     else {
       return pause(.protocolFailure, detail: "acceptedMismatch")
     }
-    source.commit(batch.advances)
+    do {
+      try source.commit(batch.advances)
+    } catch {
+      // The server took the rows but the checkpoint did not land. Backing off re-sends the identical
+      // batch, which the server upserts idempotently — reporting success here would spin instead,
+      // because the same rows are still pending.
+      backoffMs = SyncPolicy.nextBackoffMs(backoffMs)
+      return backOff(backoffMs)
+    }
     backoffMs = 0
     retryAtMs = 0
     byteTarget = maxSyncBatchBytes
@@ -179,11 +195,15 @@ final class SyncEngine {
   /// `413` narrows the byte target instead of dropping anything. Once the target can no longer hold
   /// even one row, that row is a permanent local protocol error — it is retained, not skipped.
   private func shrink(_ batch: SyncBuiltBatch) -> SyncPass {
-    if batch.rowCount <= 1, let table = batch.tables.first {
-      return pause(.rowTooLarge, detail: "\(table.wire)@\(batch.advances[table] ?? 0)")
-    }
+    let table = batch.tables.first
+    let detail = "\(table?.wire ?? "batch")@\(table.flatMap { batch.advances[$0] } ?? 0)"
+    if batch.rowCount <= 1 { return pause(.rowTooLarge, detail: detail) }
+    // Already as small as a batch gets: halving again would resend the same bytes forever, so the
+    // disagreement about the wire limit is treated as what it is — permanent, with the rows kept.
+    if byteTarget <= Self.minByteTarget { return pause(.rowTooLarge, detail: detail) }
+
     byteTarget = max(byteTarget / 2, Self.minByteTarget)
-    return .sent(rowCount: 0, morePending: true)
+    return .retry
   }
 
   private func backOff(_ delayMs: Int64) -> SyncPass {

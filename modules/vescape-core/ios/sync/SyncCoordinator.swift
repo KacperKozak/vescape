@@ -47,6 +47,9 @@ final class SyncCoordinator {
   /// Failure keys already recorded this process, so a wedged batch writes one event, not a stream.
   private var recordedFailures = Set<String>()
   private var loop: Task<Void, Never>?
+  /// Every pass chains onto this, so scan → send → commit never interleaves with another pass or
+  /// with an Account reset. Cancelled by `stop()` together with the loop.
+  private var chain: Task<Void, Never>?
 
   private let monitor = NWPathMonitor()
   private lazy var store = SyncStore(
@@ -115,26 +118,57 @@ final class SyncCoordinator {
     )
   }
 
+  /// Pick the uploader back up on a cold launch: the credential outlives the process, so a phone
+  /// that was signed in stays signed in, and nothing else would ever start the loop again. Binding
+  /// the stored Account is a no-op when this database already belongs to it, and cannot claim a
+  /// database that belongs to another one.
+  func resumeIfBound() {
+    guard let credential = DeviceCredentialStore.shared.read() else { return }
+    if bindAccount(credential.accountId) { start() }
+  }
+
   func start() {
     guard loop == nil else { return }
     loop = Task { [weak self] in
       while !Task.isCancelled {
         guard let self else { return }
-        let waitMs = await self.pass()
+        let waitMs = await self.serialized { await self.pass() }
         try? await Task.sleep(nanoseconds: UInt64(max(waitMs, 0)) * 1_000_000)
       }
     }
   }
 
+  /// Stops the loop and every pass in flight, so nothing is left running over a replaced database.
   func stop() {
     loop?.cancel()
     loop = nil
+    chain?.cancel()
+    chain = nil
   }
 
   /// Connectivity regained, ride ended, sign-in: send now rather than waiting for the next tick.
   func kick() {
     guard loop != nil else { return start() }
-    Task { [weak self] in _ = await self?.pass() }
+    Task { [weak self] in
+      guard let self else { return }
+      _ = await self.serialized { await self.pass() }
+    }
+  }
+
+  /// Runs `work` after whatever is already queued, so a scan, its request and its cursor commit
+  /// always complete against one database — an Account reset waits its turn rather than landing in
+  /// the middle.
+  private func serialized<T>(_ work: @escaping () async -> T) async -> T {
+    lock.lock()
+    let previous = chain
+    let task = Task<T, Never> {
+      await previous?.value
+      return await work()
+    }
+    // The chain only has to say "the previous link finished", so its own value is discarded.
+    chain = Task { _ = await task.value }
+    lock.unlock()
+    return await task.value
   }
 
   /// One pass, draining while the server keeps accepting: a `200` with rows still pending sends
@@ -149,6 +183,9 @@ final class SyncCoordinator {
         lock.unlock()
         if !morePending { return interval() }
         drains += 1
+      // Nothing was accepted, but the next attempt differs — a narrowed byte target.
+      case .retry:
+        drains += 1
       case .waiting(let untilMs):
         return min(max(untilMs - telemetryNowMs(), 0), SyncPolicy.backoffMaxMs)
       case .paused:
@@ -157,7 +194,8 @@ final class SyncCoordinator {
         return interval()
       }
     }
-    return 0
+    // A drain that never finishes yields rather than spinning; the next tick resumes it.
+    return SyncPolicy.rideIntervalMs
   }
 
   private func interval() -> Int64 {
@@ -251,19 +289,33 @@ final class SyncCoordinator {
   ///
   /// The wipe is local maintenance and emits no Sync Actions to either Account — replacing the file
   /// removes the log with everything else.
-  func resetForAccount(_ accountId: String) throws {
+  func resetForAccount(_ accountId: String) async throws {
     stop()
-    lock.lock()
-    // Every in-flight response now belongs to a previous Account and can no longer commit.
-    generation += 1
-    recordedFailures.removeAll()
-    lastUploadAtMs = nil
-    lock.unlock()
+    // Queued behind any pass still in flight: one that started before `stop()` finishes its scan,
+    // send and commit against the old database before the file is replaced, and none can start
+    // midway through the transition.
+    let outcome: Result<Void, Error> = await serialized { [self] in
+      lock.lock()
+      // Every in-flight response now belongs to a previous Account and can no longer commit.
+      generation += 1
+      recordedFailures.removeAll()
+      lastUploadAtMs = nil
+      lock.unlock()
 
-    try TelemetryDatabase.replaceWithFreshDatabase()
-    store.bindAccount(accountId)
-    engine.resume()
-    start()
+      do {
+        try TelemetryDatabase.replaceWithFreshDatabase()
+        guard store.bindAccount(accountId) else {
+          throw SyncStoreError.databaseUnavailable
+        }
+        engine.resume()
+        return .success(())
+      } catch {
+        return .failure(error)
+      }
+    }
+    try outcome.get()
+    // Deliberately not started here: the caller installs the new Device Token first, so the loop
+    // never runs with the previous Account's credential against the new Account's database.
   }
 
   /// One coalesced Diagnostic Event per failure class, table and cursor. Metadata only: an error

@@ -80,8 +80,11 @@ class NativeAuthCoordinator(private val context: Context) {
   ): Map<String, Any?> {
     val origin = serverUrl.trimEnd('/')
     SyncCoordinator.get(context).resetForAccount(accountId)
+    // The token is installed before the uploader starts: a loop running on the previous Account's
+    // credential against the new Account's database is exactly what this ordering exists to prevent.
     store.write(DeviceCredential(origin, token, accountId, null))
     AppStatusCoordinator.get(context).refresh()
+    SyncCoordinator.get(context).start()
     return stateMap()
   }
 

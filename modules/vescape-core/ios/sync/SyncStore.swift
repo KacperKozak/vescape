@@ -22,6 +22,11 @@ internal func createSyncBindingTable(_ db: Database) throws {
   )
 }
 
+/// The database went away underneath the uploader — a swap, or a pool that failed to open.
+enum SyncStoreError: Error {
+  case databaseUnavailable
+}
+
 /// How far a table has been accepted. A table with no committed cursor has delivered nothing.
 /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDao.kt `cursorOf`
 internal func syncCursor(_ db: Database, _ name: String) throws -> Int64 {
@@ -72,6 +77,11 @@ final class SyncStore: SyncSource {
   /// Frames and buckets that name no Board are not offered: the server keys those tables on the
   /// Board and has nowhere to put a sample that belongs to none (ADR-0028). They are unowned local
   /// rows, not rows a Rider is waiting to see backed up.
+  ///
+  /// The consequence is deliberate: a later owned row carries the cursor past a skipped one, so
+  /// cursor-gated retention prunes unowned telemetry on age alone, exactly as it did before the
+  /// Account binding existed. Holding it forever would be the only alternative, because no future
+  /// upload can ever accept it.
   private func scanPredicate(_ table: SyncTable) -> String {
     switch table {
     case .telemetryFrames: return " AND board_id IS NOT NULL"
@@ -142,14 +152,16 @@ final class SyncStore: SyncSource {
 
   /// Cursors move only here, only after the server accepted. The accepted Sync Action cursor is also
   /// what prunes the log, so pruning can never outrun it.
-  func commit(_ advances: [SyncTable: Int64]) {
-    guard let pool else { return }
-    try? pool.write { db in
+  func commit(_ advances: [SyncTable: Int64]) throws {
+    guard let pool else { throw SyncStoreError.databaseUnavailable }
+    try pool.write { db in
       for (table, cursor) in advances {
         try commitSyncCursor(db, table.cursorKey, cursor)
       }
     }
     guard advances[.deleteActions] != nil else { return }
+    // Pruning is a follow-up to the checkpoint, not part of it: a failure here leaves accepted
+    // actions on disk, which re-send as no-ops, so it must not fail the commit itself.
     try? pool.write { db in
       try pruneUploadedSyncActions(db)
     }

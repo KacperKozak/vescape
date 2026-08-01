@@ -110,7 +110,9 @@ object DatabaseBackupManager {
     resetRepositoriesAndCloseDatabase()
 
     val dbFile = appContext.getDatabasePath(TELEMETRY_DATABASE_NAME)
-    dbFile.delete()
+    // Checked rather than best-effort: a delete that quietly failed would reopen the previous
+    // Account's database, which the caller is about to hand a different Account's Device Token.
+    check(!dbFile.exists() || dbFile.delete()) { "Could not remove the existing database" }
     sidecarFiles(dbFile).forEach { it.delete() }
 
     // Opening rebuilds the schema from the entities, so the new database starts unbound.

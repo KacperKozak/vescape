@@ -17,6 +17,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 private const val TAG = "SyncCoordinator"
 
@@ -62,6 +64,12 @@ class SyncCoordinator private constructor(private val context: Context) {
 
   private var loop: Job? = null
 
+  /** Kicks in flight, so [stop] leaves nothing running against a database about to be replaced. */
+  private val kicks = java.util.concurrent.CopyOnWriteArrayList<Job>()
+
+  /** Serializes passes against each other and against [resetForAccount]. */
+  private val passLock = Mutex()
+
   private val store = SyncStore(
     database = { dao },
     generation = { generation },
@@ -93,6 +101,19 @@ class SyncCoordinator private constructor(private val context: Context) {
     lastUploadAtMs = lastUploadAtMs,
   )
 
+  /**
+   * Pick the uploader back up on a cold launch: the credential outlives the process, so a phone that
+   * was signed in stays signed in, and nothing else would ever start the loop again. Binding the
+   * stored Account is a no-op when this database already belongs to it, and cannot claim a database
+   * that belongs to another one.
+   */
+  fun resumeIfBound() {
+    val credential = credentials.read() ?: return
+    scope.launch {
+      if (bindAccount(credential.accountId)) start()
+    }
+  }
+
   fun start() {
     if (loop?.isActive == true) return
     loop = scope.launch {
@@ -108,22 +129,31 @@ class SyncCoordinator private constructor(private val context: Context) {
     }
   }
 
+  /** Stops the loop and every kick in flight, so nothing is left running over a replaced database. */
   fun stop() {
     loop?.cancel()
     loop = null
+    kicks.forEach { it.cancel() }
+    kicks.clear()
   }
 
   /** Connectivity regained, ride ended, sign-in: send now rather than waiting for the next tick. */
   fun kick() {
     if (loop?.isActive != true) return start()
-    scope.launch { runCatching { pass() } }
+    val job = scope.launch { runCatching { pass() } }
+    kicks.add(job)
+    job.invokeOnCompletion { kicks.remove(job) }
   }
 
   /**
    * One pass, draining while the server keeps accepting: a `200` with rows still pending sends again
    * straight away, so a long backlog drains instead of trickling.
+   *
+   * Serialized against every other pass and against an Account reset: the whole scan → send →
+   * commit sequence holds the lock, so a reset can never land between reading a previous Account's
+   * rows and checkpointing them onto the fresh database.
    */
-  private suspend fun pass(): Long {
+  private suspend fun pass(): Long = passLock.withLock {
     var drains = 0
     while (drains < MAX_DRAIN_STEPS) {
       when (val outcome = engine.runOnce()) {
@@ -132,13 +162,16 @@ class SyncCoordinator private constructor(private val context: Context) {
           if (!outcome.morePending) return interval()
           drains += 1
         }
+        // Nothing was accepted, but the next attempt differs — a narrowed byte target.
+        SyncPass.Retry -> drains += 1
         is SyncPass.Waiting ->
           return (outcome.untilMs - System.currentTimeMillis()).coerceIn(0, SyncPolicy.BACKOFF_MAX_MS)
         is SyncPass.Paused -> return SyncPolicy.IDLE_INTERVAL_MS
         SyncPass.Idle -> return interval()
       }
     }
-    return 0
+    // A drain that never finishes yields rather than spinning; the next tick resumes it.
+    return SyncPolicy.RIDE_INTERVAL_MS
   }
 
   private fun interval(): Long =
@@ -218,14 +251,19 @@ class SyncCoordinator private constructor(private val context: Context) {
    */
   suspend fun resetForAccount(accountId: String) {
     stop()
-    // Every in-flight response now belongs to a previous Account and can no longer commit.
-    generation += 1
-    recordedFailures.clear()
-    DatabaseBackupManager.replaceWithFreshDatabase(context)
-    dao.bindAccount(accountId)
-    engine.resume()
-    lastUploadAtMs = null
-    start()
+    // Held across the whole transition: a pass that started before `stop()` finishes its scan, send
+    // and commit against the old database before the file is replaced, and none can start midway.
+    passLock.withLock {
+      // Every in-flight response now belongs to a previous Account and can no longer commit.
+      generation += 1
+      recordedFailures.clear()
+      DatabaseBackupManager.replaceWithFreshDatabase(context)
+      check(dao.bindAccount(accountId)) { "Fresh database did not accept the new Account" }
+      engine.resume()
+      lastUploadAtMs = null
+    }
+    // Deliberately not started here: the caller installs the new Device Token first, so the loop
+    // never runs with the previous Account's credential against the new Account's database.
   }
 
   /**

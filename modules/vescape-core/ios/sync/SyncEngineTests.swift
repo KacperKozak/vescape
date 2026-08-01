@@ -13,6 +13,7 @@ final class SyncEngineTests: XCTestCase {
     var currentGeneration: Int64 = 0
     var failures: [(SyncPauseReason, String)] = []
     var encodeFailure: SyncProtocolError?
+    var commitFailure: Error?
 
     init(rows: Int) { self.remaining = rows }
 
@@ -26,7 +27,8 @@ final class SyncEngineTests: XCTestCase {
 
     func pendingCount() -> Int { remaining }
 
-    func commit(_ advances: [SyncTable: Int64]) {
+    func commit(_ advances: [SyncTable: Int64]) throws {
+      if let commitFailure { throw commitFailure }
       committed.append(advances)
       remaining = max(0, remaining - 2)
     }
@@ -185,6 +187,44 @@ final class SyncEngineTests: XCTestCase {
     XCTAssertEqual(pass, .paused(.rowTooLarge))
     XCTAssertTrue(source.committed.isEmpty)
     XCTAssertEqual(source.remaining, 1)
+  }
+
+  /// A shrink accepted nothing, so it must not be reported as an upload.
+  func test413OnAMultiRowBatchNarrowsTheTargetAndRetries() async {
+    let source = FakeSource(rows: 4)
+    let engine = engine(source, [.tooLarge])
+
+    let pass = await engine.runOnce()
+    XCTAssertEqual(pass, .retry)
+    XCTAssertTrue(source.committed.isEmpty)
+    XCTAssertEqual(source.remaining, 4)
+  }
+
+  /// Halving forever against a server that keeps refusing would be an unbounded request storm.
+  func test413AtTheSmallestBatchPausesInsteadOfResendingForever() async {
+    let source = FakeSource(rows: 4)
+    let engine = engine(source, Array(repeating: SyncResponse.tooLarge, count: 10))
+
+    var outcome = await engine.runOnce()
+    var passes = 0
+    while outcome == .retry, passes < 10 {
+      outcome = await engine.runOnce()
+      passes += 1
+    }
+    XCTAssertEqual(outcome, .paused(.rowTooLarge))
+    XCTAssertTrue(source.committed.isEmpty)
+  }
+
+  /// The server took the rows; the checkpoint did not land. Resending is safe, claiming success is not.
+  func testAFailedCursorCommitBacksOffInsteadOfReportingAnUpload() async {
+    let source = FakeSource(rows: 2)
+    source.commitFailure = SyncStoreError.databaseUnavailable
+    let engine = engine(source, [.accepted(body: accepted(boards: 2))])
+
+    let outcome = await engine.runOnce()
+    if case .waiting = outcome {} else { XCTFail("expected a backoff wait") }
+    XCTAssertTrue(source.committed.isEmpty)
+    XCTAssertEqual(source.remaining, 2)
   }
 
   func test429WaitsForTheServersOwnDelay() async {

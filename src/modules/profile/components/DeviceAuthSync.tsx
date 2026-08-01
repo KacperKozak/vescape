@@ -59,6 +59,9 @@ export function DeviceAuthSync() {
       .then((pending) => {
         // A different Account cannot activate backup until the Rider confirms that all local app
         // data is erased; native has stored nothing yet, so cancelling leaves this phone untouched.
+        // The session is un-attempted again so a Rider who cancels, or whose confirm fails, can
+        // retry instead of being stuck with no credential and no way to ask for one.
+        if (pending) attemptedSessionIds.delete(session.id)
         setPendingAccountReset(pending)
         setStatus(pending ? 'idle' : 'ready')
       })

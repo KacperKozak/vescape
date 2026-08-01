@@ -106,6 +106,34 @@ class SyncBatchBuilderTest {
     assertEquals(SyncBatchBuild.RowTooLarge(SyncTable.BOARDS, 9, huge.byteCount), built)
   }
 
+  /**
+   * A Board left behind by the byte cap must not be followed by its Alert Rules in the same batch —
+   * the server writes them in this order and refuses the whole batch on the foreign key.
+   */
+  @Test
+  fun `a table truncated by the byte cap ends the batch instead of sending children`() {
+    val full = SyncBatchBuilder.build(
+      listOf(
+        SyncPendingTable(SyncTable.BOARDS, rows(2, size = 40)),
+        SyncPendingTable(SyncTable.ALERTS, rows(1, size = 4)),
+      ),
+      byteCap = Int.MAX_VALUE,
+    ) as SyncBatchBuild.Ready
+    assertEquals(3, full.rowCount)
+
+    val truncated = SyncBatchBuilder.build(
+      listOf(
+        SyncPendingTable(SyncTable.BOARDS, rows(2, size = 40)),
+        SyncPendingTable(SyncTable.ALERTS, rows(1, size = 4)),
+      ),
+      byteCap = full.byteCount - 20,
+    ) as SyncBatchBuild.Ready
+
+    assertEquals(listOf(SyncTable.BOARDS), truncated.counts.keys.toList())
+    assertEquals(1, truncated.counts.getValue(SyncTable.BOARDS))
+    assertEquals(truncated.body.toByteArray(Charsets.UTF_8).size, truncated.byteCount)
+  }
+
   @Test
   fun `nothing pending is idle, not an empty batch`() {
     assertEquals(SyncBatchBuild.Empty, SyncBatchBuilder.build(emptyList()))

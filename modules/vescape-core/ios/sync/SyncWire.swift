@@ -42,14 +42,16 @@ enum SyncWire {
     return writer.build()
   }
 
-  /// `transport` is iOS-only in the local schema but not a Board column the server declares; it is
-  /// sent as null on both platforms so a Board row reads identically from either phone.
+  /// `transport` is the one column only iOS stores on the Board itself — Android keeps it in board
+  /// settings and sends null there. The server declares the field for exactly this reason, so a
+  /// restored iPhone keeps the Board Link's selected transport instead of re-probing for it.
+  /// @platform-diff Android has no `boards.transport` column and sends null.
   static func board(_ row: Row) throws -> String {
     let writer = SyncRowWriter(.boards)
     try writer.keyText("id", text(row, "id"))
     writer.text("name", row["name"])
     writer.text("bleId", row["ble_id"])
-    writer.text("transport", nil)
+    writer.text("transport", row["transport"])
     try writer.timestamp("createdAt", row["created_at"])
     try writer.timestamp("updatedAt", row["updated_at"])
     return writer.build()

@@ -83,13 +83,16 @@ final class NativeAuthCoordinator {
     accountId: String
   ) async throws -> [String: Any?] {
     let origin = serverUrl.hasSuffix("/") ? String(serverUrl.dropLast()) : serverUrl
-    try SyncCoordinator.shared.resetForAccount(accountId)
+    try await SyncCoordinator.shared.resetForAccount(accountId)
+    // The token is installed before the uploader starts: a loop running on the previous Account's
+    // credential against the new Account's database is exactly what this ordering exists to prevent.
     try store.write(
       DeviceCredential(serverUrl: origin, token: token, accountId: accountId, expiresAt: nil)
     )
     await MainActor.run {
       AppStatusCoordinator.shared.refresh()
     }
+    SyncCoordinator.shared.start()
     return stateMap()
   }
 

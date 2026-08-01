@@ -87,6 +87,7 @@ enum SyncBatchBuilder {
       if byteCount + tableOverhead > byteCap { break }
 
       var opened = false
+      var truncated = false
       for row in group.rows {
         if rowCount >= rowCap { break }
         let rowCost = row.byteCount + (opened ? 1 : 0)
@@ -96,6 +97,7 @@ enum SyncBatchBuilder {
           if tables.isEmpty, !opened, 2 + tableOverhead + row.byteCount > byteCap {
             return .rowTooLarge(table: group.table, cursor: row.cursor, byteCount: row.byteCount)
           }
+          truncated = true
           break
         }
 
@@ -115,6 +117,11 @@ enum SyncBatchBuilder {
         advances[group.table] = row.cursor
       }
       if opened { body += "]" }
+      // A table cut short by the byte cap may still hold a parent — a Board whose settings, alerts
+      // or Tune Profiles sit further down this same batch. Carrying on would send the child ahead of
+      // it, and the server refuses that whole batch on the foreign key. The rest waits for the next
+      // batch, which starts where this one stopped.
+      if truncated { break }
     }
 
     if tables.isEmpty { return .empty }

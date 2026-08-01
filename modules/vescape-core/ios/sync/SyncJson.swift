@@ -106,7 +106,12 @@ final class SyncRowWriter {
   }
 
   private func boundedText(_ field: String, _ value: String) throws -> SyncRowWriter {
-    if value.count > maxSyncKeyLength { throw fail(field, "exceeds \(maxSyncKeyLength) characters") }
+    // UTF-16 code units, matching the server's compiled `value.length <= 128` and Kotlin's
+    // `String.length`. Swift's `count` is grapheme clusters, which would let a key through here that
+    // the server refuses — and a refused batch is a permanent pause.
+    if value.utf16.count > maxSyncKeyLength {
+      throw fail(field, "exceeds \(maxSyncKeyLength) characters")
+    }
     return raw(field, quote(value))
   }
 

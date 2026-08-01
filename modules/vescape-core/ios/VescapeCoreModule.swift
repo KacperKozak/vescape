@@ -121,6 +121,9 @@ public class VescapeCoreModule: Module {
       // Cold start: fetch App Status before JS asks. A foreground event arriving right after is
       // coalesced into this request.
       AppStatusCoordinator.shared.refresh()
+      // The Device Token outlives the process, so a signed-in phone has to pick the uploader back
+      // up here: provisioning only happens once, and nothing else would start the loop again.
+      SyncCoordinator.shared.resumeIfBound()
       self.attachToCoordinator()
       AppDataRepository.onDataChanged = { [weak self] scope in self?.sendAppDataChanged(scope) }
       // JS keeps a dumb mirror of the durable Board Warning registry; push the full board list on

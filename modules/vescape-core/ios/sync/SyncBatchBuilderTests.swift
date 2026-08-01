@@ -80,6 +80,22 @@ final class SyncBatchBuilderTests: XCTestCase {
     XCTAssertEqual(build, .rowTooLarge(table: .boards, cursor: 9, byteCount: huge.byteCount))
   }
 
+  /// A Board left behind by the byte cap must not be followed by its Alert Rules in the same batch —
+  /// the server writes them in this order and refuses the whole batch on the foreign key.
+  func testATableTruncatedByTheByteCapEndsTheBatch() throws {
+    let pending = [
+      SyncPendingTable(table: .boards, rows: rows(2, size: 40)),
+      SyncPendingTable(table: .alerts, rows: rows(1, size: 4)),
+    ]
+    let full = try ready(SyncBatchBuilder.build(pending, byteCap: Int.max))
+    XCTAssertEqual(full.rowCount, 3)
+
+    let truncated = try ready(SyncBatchBuilder.build(pending, byteCap: full.byteCount - 20))
+    XCTAssertEqual(truncated.tables, [.boards])
+    XCTAssertEqual(truncated.counts[.boards], 1)
+    XCTAssertEqual(truncated.body.utf8.count, truncated.byteCount)
+  }
+
   func testNothingPendingIsIdleNotAnEmptyBatch() {
     XCTAssertEqual(SyncBatchBuilder.build([]), .empty)
     XCTAssertEqual(SyncBatchBuilder.build([SyncPendingTable(table: .boards, rows: [])]), .empty)

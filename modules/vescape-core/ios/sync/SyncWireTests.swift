@@ -8,8 +8,19 @@ import GRDB
 ///
 /// @parity /modules/vescape-core/android/src/test/java/expo/modules/vescapecore/sync/SyncWireTest.kt
 final class SyncWireTests: XCTestCase {
-  private func boardRow(id: String = "board-1", name: String = "Board") -> Row {
-    Row(["id": id, "name": name, "ble_id": nil, "created_at": 10, "updated_at": 20])
+  private func boardRow(
+    id: String = "board-1",
+    name: String = "Board",
+    transport: String? = nil
+  ) -> Row {
+    Row([
+      "id": id,
+      "name": name,
+      "ble_id": nil,
+      "transport": transport,
+      "created_at": 10,
+      "updated_at": 20,
+    ])
   }
 
   private func frameRow(boardId: String? = "board-1", speed: Int64? = 100) -> Row {
@@ -42,6 +53,13 @@ final class SyncWireTests: XCTestCase {
     )
   }
 
+  /// iOS is the platform that stores Board Transport on the Board, and the server declares the field
+  /// for exactly that — dropping it would lose the Board Link's transport on restore.
+  func testABoardCarriesTheTransportOnlyIosStores() throws {
+    let encoded = try SyncWire.board(boardRow(transport: "direct"))
+    XCTAssertTrue(encoded.contains(#""transport":"direct""#))
+  }
+
   /// "Cleared" and "not mentioned" are different intents, and only one survives a missing key.
   func testNullableColumnsAreExplicitNullsNeverOmittedKeys() throws {
     let encoded = try SyncWire.telemetryFrame(frameRow(speed: nil))
@@ -59,6 +77,15 @@ final class SyncWireTests: XCTestCase {
     XCTAssertThrowsError(
       try SyncWire.board(boardRow(id: String(repeating: "b", count: maxSyncKeyLength + 1)))
     )
+  }
+
+  /// The server compiles `value.length <= 128`, which counts UTF-16 code units — so an emoji is two.
+  /// Swift's `count` would see 64 characters here and let a key through that the server refuses.
+  func testKeyLengthIsMeasuredInUtf16CodeUnitsLikeTheServer() {
+    let emoji = String(repeating: "🛹", count: 65)
+    XCTAssertEqual(emoji.count, 65)
+    XCTAssertEqual(emoji.utf16.count, 130)
+    XCTAssertThrowsError(try SyncWire.board(boardRow(id: emoji)))
   }
 
   func testAnEmptyKeyIsRefusedWhereTheServerNamesIt() throws {

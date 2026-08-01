@@ -20,6 +20,7 @@ class SyncEngineTest {
     var generation = 0L
     var failures = mutableListOf<Pair<SyncPauseReason, String>>()
     var encodeFailure: SyncProtocolException? = null
+    var commitFailure: Exception? = null
     var rowJson = "\"row\""
 
     override suspend fun pending(rowLimit: Int): List<SyncPendingTable> {
@@ -33,6 +34,7 @@ class SyncEngineTest {
     override suspend fun pendingCount(): Int = remaining
 
     override suspend fun commit(advances: Map<SyncTable, Long>) {
+      commitFailure?.let { throw it }
       committed += advances
       remaining -= advances.size.let { 2 }.coerceAtMost(remaining)
     }
@@ -197,6 +199,46 @@ class SyncEngineTest {
       assertTrue(source.committed.isEmpty())
       assertEquals(1, source.remaining)
     }
+
+  /** A shrink accepted nothing, so it must not be reported as an upload. */
+  @Test
+  fun `413 on a multi-row batch narrows the target and retries`() = runBlocking {
+    val source = FakeSource(rows = 4)
+    val engine = engine(source, mutableListOf(SyncResponse.TooLarge))
+
+    assertEquals(SyncPass.Retry, engine.runOnce())
+    assertTrue(source.committed.isEmpty())
+    assertEquals(4, source.remaining)
+  }
+
+  /** Halving forever against a server that keeps refusing would be an unbounded request storm. */
+  @Test
+  fun `413 at the smallest batch pauses instead of resending the same bytes forever`() = runBlocking {
+    val source = FakeSource(rows = 4)
+    val engine = engine(source, MutableList(10) { SyncResponse.TooLarge })
+
+    var passes = 0
+    var outcome = engine.runOnce()
+    while (outcome == SyncPass.Retry && passes < 10) {
+      outcome = engine.runOnce()
+      passes += 1
+    }
+    assertEquals(SyncPass.Paused(SyncPauseReason.ROW_TOO_LARGE), outcome)
+    assertTrue(source.committed.isEmpty())
+  }
+
+  /** The server took the rows; the checkpoint did not land. Resending is safe, claiming success is not. */
+  @Test
+  fun `a failed cursor commit backs off instead of reporting an upload`() = runBlocking {
+    val source = FakeSource(rows = 2)
+    source.commitFailure = IllegalStateException("disk full")
+    val engine = engine(source, mutableListOf(SyncResponse.Accepted(accepted(2))))
+
+    val outcome = engine.runOnce()
+    assertTrue(outcome is SyncPass.Waiting)
+    assertTrue(source.committed.isEmpty())
+    assertEquals(2, source.remaining)
+  }
 
   @Test
   fun `429 waits for the server's own delay`() = runBlocking {

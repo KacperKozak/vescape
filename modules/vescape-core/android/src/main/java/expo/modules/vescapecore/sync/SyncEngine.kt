@@ -42,6 +42,9 @@ interface SyncSource {
    * Commit the advance set in its own transaction, after the response. Never alongside the rows: a
    * cursor advanced past rows the server did not take is unrecoverable, whereas a cursor left behind
    * is a re-send the server upserts idempotently. Always fail toward re-sending.
+   *
+   * Throws rather than swallowing a write failure: an uncommitted cursor leaves the same rows
+   * pending, and a caller that believed the checkpoint landed would resend them without pause.
    */
   suspend fun commit(advances: Map<SyncTable, Long>)
 
@@ -69,6 +72,10 @@ data class SyncEnvironment(
 /** What one pass did, for the loop and for tests. */
 sealed interface SyncPass {
   object Idle : SyncPass
+
+  /** Nothing was accepted, but the next attempt differs from this one — a narrowed byte target. */
+  object Retry : SyncPass
+
   data class Sent(val rowCount: Int, val morePending: Boolean) : SyncPass
   data class Waiting(val untilMs: Long) : SyncPass
   data class Paused(val reason: SyncPauseReason) : SyncPass
@@ -133,6 +140,10 @@ class SyncEngine(
   }
 
   private suspend fun send(): SyncPass {
+    // Captured before the rows are read, not after: an Account reset between the scan and the
+    // request would otherwise leave a batch of the previous Account's rows looking current, and its
+    // cursor advance would land on the fresh database.
+    val generation = source.generation()
     val pending = try {
       source.pending(MAX_SYNC_BATCH_ROWS)
     } catch (e: SyncProtocolException) {
@@ -143,12 +154,11 @@ class SyncEngine(
       SyncBatchBuild.Empty -> SyncPass.Idle
       is SyncBatchBuild.RowTooLarge ->
         pauseWith(SyncPauseReason.ROW_TOO_LARGE, "${built.table.wire}@${built.cursor}")
-      is SyncBatchBuild.Ready -> deliver(built)
+      is SyncBatchBuild.Ready -> deliver(built, generation)
     }
   }
 
-  private suspend fun deliver(batch: SyncBatchBuild.Ready): SyncPass {
-    val generation = source.generation()
+  private suspend fun deliver(batch: SyncBatchBuild.Ready, generation: Long): SyncPass {
     val response = transport.send(batch.body)
     // A response that outlived its Account cannot touch the fresh database it would land in.
     if (source.generation() != generation) return SyncPass.Idle
@@ -169,7 +179,15 @@ class SyncEngine(
     if (accepted == null || !SyncAccepted.matches(batch.counts, accepted)) {
       return pauseWith(SyncPauseReason.PROTOCOL, "acceptedMismatch")
     }
-    source.commit(batch.advances)
+    try {
+      source.commit(batch.advances)
+    } catch (e: Exception) {
+      // The server took the rows but the checkpoint did not land. Backing off re-sends the identical
+      // batch, which the server upserts idempotently — reporting success here would spin instead,
+      // because the same rows are still pending.
+      backoffMs = SyncPolicy.nextBackoffMs(backoffMs)
+      return backOff(backoffMs)
+    }
     backoffMs = 0
     retryAtMs = 0
     byteTarget = MAX_SYNC_BATCH_BYTES
@@ -181,15 +199,15 @@ class SyncEngine(
    * even one row, that row is a permanent local protocol error — it is retained, not skipped.
    */
   private suspend fun shrink(batch: SyncBatchBuild.Ready): SyncPass {
-    if (batch.rowCount <= 1) {
-      val table = batch.counts.keys.first()
-      return pauseWith(
-        SyncPauseReason.ROW_TOO_LARGE,
-        "${table.wire}@${batch.advances.getValue(table)}",
-      )
-    }
+    val table = batch.counts.keys.first()
+    val detail = "${table.wire}@${batch.advances.getValue(table)}"
+    if (batch.rowCount <= 1) return pauseWith(SyncPauseReason.ROW_TOO_LARGE, detail)
+    // Already as small as a batch gets: halving again would resend the same bytes forever, so the
+    // disagreement about the wire limit is treated as what it is — permanent, with the rows kept.
+    if (byteTarget <= MIN_BYTE_TARGET) return pauseWith(SyncPauseReason.ROW_TOO_LARGE, detail)
+
     byteTarget = maxOf(byteTarget / 2, MIN_BYTE_TARGET)
-    return SyncPass.Sent(0, morePending = true)
+    return SyncPass.Retry
   }
 
   private fun backOff(delayMs: Long): SyncPass {
