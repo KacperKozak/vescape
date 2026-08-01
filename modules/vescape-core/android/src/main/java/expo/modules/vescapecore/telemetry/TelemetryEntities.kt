@@ -423,6 +423,83 @@ internal val SYNC_SEQ_TABLES_V36 = listOf(
  */
 internal val SYNC_SEQ_TABLES = SYNC_SEQ_TABLES_V33 + SYNC_SEQ_TABLES_V36
 
+/**
+ * What a [SyncActionEntity] can name — and, by omission, what it cannot.
+ *
+ * Every case is configuration or current state a Rider edits directly. Ride History is absent on
+ * purpose: Telemetry Samples, markers, minute buckets, exclusion ranges and diagnostic events are
+ * pruned on a retention rule, and an action naming one of those would make the server delete exactly
+ * the rides the backup exists to preserve. Leaving them unnameable makes that boundary structural
+ * rather than a rule someone has to remember (server ADR-0004).
+ *
+ * [table] is the local table the case removes from, so a test can assert no retained table is ever
+ * given a case.
+ *
+ * @parity /modules/vescape-core/ios/telemetry/SyncActionLog.swift `DeleteTarget`
+ * @parity /modules/vescape-core/src/index.ts `DeleteTarget`
+ */
+enum class DeleteTarget(val wire: String, val table: String) {
+  APP_SETTING("appSetting", "app_settings"),
+  BOARD("board", "boards"),
+  BOARD_SETTING("boardSetting", "board_settings"),
+  BOARD_WARNING("boardWarning", "board_warnings"),
+  ALERT("alert", "alerts"),
+  TUNE_PROFILE("tuneProfile", "tune_profiles"),
+  PRIVACY_ZONE("privacyZone", "privacy_zones"),
+
+  /**
+   * Favorites have no server table yet (#286 owns that half), so the uploader drops this case until
+   * they do. The log still records it: a Favorite removed while the phone is offline has to survive
+   * as intent, not as a gap the restore silently re-creates.
+   */
+  FAVORITE("favorite", "favorites"),
+}
+
+/** The only Sync Action type today. Named rather than implied so a later intent needs no second log. */
+internal const val SYNC_ACTION_TYPE_DELETE = "delete"
+
+/**
+ * One Sync Action: an append-only record that something was semantically removed. A deleted row
+ * cannot carry a Change Timestamp saying it is gone, so this log is the only signal the server can
+ * apply the same durable state transition from.
+ *
+ * Its cursor is [id] — `AUTOINCREMENT`, which SQLite guarantees monotonic and never reused — so the
+ * log needs no `sync_seq` of its own. The row is transport state, not durable truth: it is pruned
+ * once the server has accepted it.
+ *
+ * Written only from Rider-facing removal paths, never from a trigger or a retention sweep. Intent
+ * cannot be inferred from SQL alone, so there is no database trigger behind this table.
+ *
+ * @parity /modules/vescape-core/ios/telemetry/SyncActionLog.swift `createSyncActionsTable`
+ */
+@Entity(
+  tableName = "sync_actions",
+  indices = [Index(value = ["target"])],
+)
+data class SyncActionEntity(
+  @PrimaryKey(autoGenerate = true)
+  val id: Long = 0,
+  /** Always [SYNC_ACTION_TYPE_DELETE] today; see [DeleteTarget]. */
+  val type: String = SYNC_ACTION_TYPE_DELETE,
+  /** [DeleteTarget.wire]. */
+  val target: String,
+  /** Owning Board, or null when the target is not Board-owned. A Board names itself in [key]. */
+  @ColumnInfo(name = "board_id")
+  val boardId: String?,
+  /** The removed row's identity within its scope: a settings key, a warning kind, a row id. */
+  val key: String,
+  /**
+   * Epoch ms of the removal, stamped `max(now, row.updated_at)` from the row being removed. A plain
+   * `now` on a rewound clock produces an action the server treats as a no-op, and it cannot
+   * self-heal by re-sending because the row it would re-send is gone.
+   */
+  @ColumnInfo(name = "deleted_at")
+  val deletedAt: Long,
+)
+
+/** [SyncSequenceEntity] key holding the highest action cursor the server has accepted. */
+internal const val SYNC_ACTIONS_UPLOADED_CURSOR = "sync_actions_uploaded"
+
 @Entity(
   tableName = "metric_exclusion_ranges",
   indices = [

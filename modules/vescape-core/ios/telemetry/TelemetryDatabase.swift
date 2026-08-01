@@ -558,6 +558,16 @@ enum TelemetryDatabase {
       )
     }
 
+    // The Sync Action log (#282): an append-only record of semantic removals, which no surviving row
+    // can express. Additive — a new table only — and guarded, so a re-run is a no-op.
+    //
+    // The log is keyed on its own `AUTOINCREMENT` cursor and carries no `sync_seq`: SQLite
+    // guarantees that key monotonic and never reused, so it already *is* the cursor.
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `MIGRATION_36_37`
+    migrator.registerMigration("v37_sync_actions") { db in
+      try createSyncActionsTable(db)
+    }
+
     return migrator
   }
 }

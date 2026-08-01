@@ -12,6 +12,10 @@ _Avoid_: Device, controller, scooter
 A deleted Board's surviving row, marked by a deletion stamp. The Board leaves every Rider-facing list but stays resolvable by id, so Ride History can still name the Board that produced it. Its configuration is hard-deleted; its telemetry and Tune Profiles are not (ADR 0027).
 _Avoid_: Soft delete, archived Board
 
+**Sync Action**:
+An append-only local record that something was semantically removed, so the removal reaches the Vescape Account backup. A deleted row cannot carry a **Change Timestamp** saying it is gone, so the log is the only signal there is. Typed — `delete` is the only type today — and written from Rider-facing removal paths only, never from retention, migrations or a database trigger.
+_Avoid_: Delete log, tombstone table, audit trail, change event
+
 **Board Link**:
 The saved, probe-confirmed reachability details for a Board, including BLE peripheral id, selected Board Transport, and capabilities or firmware facts discovered for that transport.
 _Avoid_: Pairing, connection settings, device config

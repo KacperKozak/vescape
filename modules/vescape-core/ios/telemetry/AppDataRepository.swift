@@ -181,7 +181,17 @@ final class AppDataRepository {
       )
       for (key, value) in settings {
         guard let value, let json = Self.encodeJson(value) else {
-          try db.execute(sql: "DELETE FROM board_settings WHERE board_id = ? AND key = ?", arguments: [id, key])
+          // Semantic removal: a Board edit that drops a key is the Rider clearing that setting, so a
+          // restore must not resurrect the old value (#282).
+          try deleteForSync(
+            db,
+            target: .boardSetting,
+            boardId: id,
+            key: key,
+            whereClause: "board_id = ? AND key = ?",
+            keys: [id, key],
+            now: updatedAt
+          )
           continue
         }
         try Self.writeBoardSetting(db, boardId: id, key: key, json: json, now: updatedAt)
@@ -199,21 +209,31 @@ final class AppDataRepository {
   func deleteBoard(_ id: String) {
     let deletedAt = nowMs()
     write { db in
-      try db.execute(sql: "DELETE FROM board_settings WHERE board_id = ?", arguments: [id])
-      try db.execute(sql: "DELETE FROM board_warnings WHERE board_id = ?", arguments: [id])
-      // Alert Rules are Board-owned (#254) — drop them with the Board so no orphan rows survive.
-      try db.execute(sql: "DELETE FROM alerts WHERE board_id = ?", arguments: [id])
       guard let row = try Row.fetchOne(
         db,
         sql: "SELECT updated_at, deleted_at FROM boards WHERE id = ?",
         arguments: [id]
       ), row["deleted_at"] as Int64? == nil else { return }
+      // The children are raw deletes — the Board's own Sync Action covers the whole cascade, so an
+      // upsert never quietly deletes rows in three other tables (#282).
+      try db.execute(sql: "DELETE FROM board_settings WHERE board_id = ?", arguments: [id])
+      try db.execute(sql: "DELETE FROM board_warnings WHERE board_id = ?", arguments: [id])
+      // Alert Rules are Board-owned (#254) — drop them with the Board so no orphan rows survive.
+      try db.execute(sql: "DELETE FROM alerts WHERE board_id = ?", arguments: [id])
+      // The action and the tombstone share one timestamp, the newly ratcheted `updated_at`, so the
+      // server judges both against the same moment.
+      let tombstonedAt = ratchetUpdatedAt(row["updated_at"] as Int64?, deletedAt)
+      try appendDeleteAction(
+        db,
+        target: .board,
+        boardId: nil,
+        key: id,
+        rowStamp: tombstonedAt,
+        now: tombstonedAt
+      )
       try db.execute(
         sql: "UPDATE boards SET deleted_at = ?, updated_at = ?, sync_seq = ? WHERE id = ?",
-        arguments: [
-          deletedAt, ratchetUpdatedAt(row["updated_at"] as Int64?, deletedAt),
-          try nextSyncSeq(db, syncSeqBoards), id,
-        ]
+        arguments: [tombstonedAt, tombstonedAt, try nextSyncSeq(db, syncSeqBoards), id]
       )
     }
     notifyDataChanged(.boards)
@@ -438,9 +458,19 @@ final class AppDataRepository {
     }
   }
 
+  /// Semantic removal, and the path preset regeneration takes too: JS regenerates a Board's preset
+  /// rules by deleting the old ones and writing new ones, and the deleted ones have to disappear
+  /// server-side as well (#282).
   func deleteAlertRule(_ boardId: String, _ id: String) {
     write { db in
-      try db.execute(sql: "DELETE FROM alerts WHERE board_id = ? AND id = ?", arguments: [boardId, id])
+      try deleteForSync(
+        db,
+        target: .alert,
+        boardId: boardId,
+        key: id,
+        whereClause: "board_id = ? AND id = ?",
+        keys: [boardId, id]
+      )
     }
   }
 
@@ -512,8 +542,18 @@ final class AppDataRepository {
     }
   }
 
+  /// Semantic removal: the Rider deleted the zone, so the server has to lose it too (#282).
   func deletePrivacyZone(_ id: String) {
-    write { db in try db.execute(sql: "DELETE FROM privacy_zones WHERE id = ?", arguments: [id]) }
+    write { db in
+      try deleteForSync(
+        db,
+        target: .privacyZone,
+        boardId: nil,
+        key: id,
+        whereClause: "id = ?",
+        keys: [id]
+      )
+    }
   }
 
   // MARK: - Direction point
@@ -554,7 +594,7 @@ final class AppDataRepository {
     guard key != "legalPolicy", key != "legalMode" else { return }
     let updatedAt = nowMs()
     guard let rawValue, !(rawValue is NSNull) else {
-      write { db in try db.execute(sql: "DELETE FROM app_settings WHERE key = ?", arguments: [key]) }
+      write { db in try Self.deleteAppSetting(db, key: key, now: updatedAt) }
       notifyDataChanged(.settings)
       return
     }
@@ -596,7 +636,7 @@ final class AppDataRepository {
     let value = code.flatMap { $0.count == 2 ? ["jurisdictionCode": $0] : nil }
     write { db in
       guard let value, let json = Self.encodeJson(value) else {
-        try db.execute(sql: "DELETE FROM app_settings WHERE key = 'legalPolicy'")
+        try Self.deleteAppSetting(db, key: "legalPolicy", now: self.nowMs())
         return
       }
       try Self.writeAppSetting(db, key: "legalPolicy", json: json, now: self.nowMs())
@@ -627,6 +667,28 @@ final class AppDataRepository {
         VALUES (?, ?, ?, ?, ?)
         """,
       arguments: [boardId, key, json, stamp.updatedAt, stamp.syncSeq]
+    )
+  }
+
+  /// Semantic removal of a stored app setting. Every caller means the same thing — the stored
+  /// override is gone: an edit back to the default, and `legalPolicy` resolving to nothing.
+  ///
+  /// Phone-local keys never reach the server (they carry `sync_seq = 0`), so removing one records no
+  /// action either — an action for a row the server never held would delete nothing and say nothing.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDao.kt `deleteAppSetting`
+  internal static func deleteAppSetting(_ db: Database, key: String, now: Int64) throws {
+    guard !notSyncedSettingKeys.contains(key) else {
+      try db.execute(sql: "DELETE FROM app_settings WHERE key = ?", arguments: [key])
+      return
+    }
+    try deleteForSync(
+      db,
+      target: .appSetting,
+      boardId: nil,
+      key: key,
+      whereClause: "key = ?",
+      keys: [key],
+      now: now
     )
   }
 

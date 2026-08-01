@@ -1270,6 +1270,28 @@ export interface AppDataChangedEvent {
 }
 
 /**
+ * What a Sync Action can name — and, by omission, what it cannot. A deleted row cannot carry a
+ * Change Timestamp saying it is gone, so native appends a Sync Action for every semantic removal and
+ * the server replays it against the Rider's backup.
+ *
+ * Every case is configuration or current state a Rider edits directly. Ride History is absent on
+ * purpose: telemetry is pruned locally on a retention rule, and an action naming it would delete
+ * exactly the rides the backup exists to preserve. The log is native-owned — JS never writes it —
+ * and this union exists so the two native definitions cannot drift apart unnoticed.
+ * @parity /modules/vescape-core/ios/telemetry/SyncActionLog.swift `DeleteTarget`
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryEntities.kt `DeleteTarget`
+ */
+export type DeleteTarget =
+  | 'appSetting'
+  | 'board'
+  | 'boardSetting'
+  | 'boardWarning'
+  | 'alert'
+  | 'tuneProfile'
+  | 'privacyZone'
+  | 'favorite'
+
+/**
  * Two-level Board Warning severity, fixed at detection time.
  * @parity /modules/vescape-core/ios/warnings/BoardWarningKind.swift `BoardWarningSeverity`
  * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/warnings/BoardWarningRegistry.kt `BoardWarningSeverity`

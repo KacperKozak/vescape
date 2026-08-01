@@ -91,7 +91,14 @@ interface TelemetryDao {
   }
 
   @Query("DELETE FROM privacy_zones WHERE id = :id")
-  suspend fun deletePrivacyZone(id: String)
+  suspend fun deletePrivacyZoneRow(id: String)
+
+  /** Semantic removal: the Rider deleted the zone, so the server has to lose it too. */
+  @Transaction
+  suspend fun deletePrivacyZone(id: String) {
+    appendDeleteAction(DeleteTarget.PRIVACY_ZONE, null, id, getPrivacyZoneUpdatedAt(id))
+    deletePrivacyZoneRow(id)
+  }
 
 
   @Insert
@@ -151,6 +158,76 @@ interface TelemetryDao {
     seedSyncSequence(name)
     bumpSyncSequence(name)
     return getSyncSequence(name) ?: 0L
+  }
+
+  // Sync Actions — the append-only log of semantic removals (#282). Every write below runs inside
+  // the caller's transaction, so an action and the delete it describes commit together or not at all.
+  // @parity /modules/vescape-core/ios/telemetry/SyncActionLog.swift
+
+  @Insert
+  suspend fun insertSyncAction(action: SyncActionEntity): Long
+
+  /**
+   * Record that [target] identified by [boardId]/[key] was semantically removed.
+   *
+   * [rowUpdatedAt] is the removed row's own last-write-wins timestamp, read before the delete: the
+   * action is stamped `max(now, rowUpdatedAt)` so a rewound device clock cannot produce an action
+   * the server reads as older than the row it names — that action would be dropped as a no-op, and
+   * the phone could not self-heal by re-sending, because the row is gone.
+   *
+   * A null [rowUpdatedAt] means there was no row to remove, so no intent to record either.
+   */
+  @Transaction
+  suspend fun appendDeleteAction(
+    target: DeleteTarget,
+    boardId: String?,
+    key: String,
+    rowUpdatedAt: Long?,
+    now: Long = System.currentTimeMillis(),
+  ) {
+    if (rowUpdatedAt == null) return
+    insertSyncAction(
+      SyncActionEntity(
+        target = target.wire,
+        boardId = boardId,
+        key = key,
+        deletedAt = maxOf(now, rowUpdatedAt),
+      ),
+    )
+  }
+
+  /** The next page of actions to upload, in cursor order. */
+  @Query("SELECT * FROM sync_actions WHERE id > :afterId ORDER BY id ASC LIMIT :limit")
+  suspend fun getSyncActionsAfter(afterId: Long, limit: Int): List<SyncActionEntity>
+
+  @Query(
+    "INSERT OR REPLACE INTO sync_sequences (name, last_value) VALUES (:name, " +
+      "MAX(:value, COALESCE((SELECT last_value FROM sync_sequences WHERE name = :name), 0)))",
+  )
+  suspend fun commitSyncActionCursorRow(name: String, value: Long)
+
+  /**
+   * Checkpoint the highest action cursor the server has accepted. Its own transaction, committed
+   * before [pruneUploadedSyncActions] runs: a crash between the two leaves rows that will be sent
+   * again — harmless, since applying an action twice is a no-op — whereas pruning first would drop
+   * an action nobody has accepted. Never moves backwards, so an out-of-order commit cannot un-accept
+   * what an earlier upload already checkpointed.
+   */
+  @Transaction
+  suspend fun commitSyncActionCursor(throughId: Long) =
+    commitSyncActionCursorRow(SYNC_ACTIONS_UPLOADED_CURSOR, throughId)
+
+  @Query("DELETE FROM sync_actions WHERE id <= :throughId")
+  suspend fun deleteSyncActionsThrough(throughId: Long): Int
+
+  /**
+   * Drop what the server has already accepted. Gated on the committed cursor rather than a caller's
+   * number, so pruning structurally cannot outrun the checkpoint.
+   */
+  @Transaction
+  suspend fun pruneUploadedSyncActions(): Int {
+    val accepted = getSyncSequence(SYNC_ACTIONS_UPLOADED_CURSOR) ?: return 0
+    return deleteSyncActionsThrough(accepted)
   }
 
   @Transaction
@@ -500,7 +577,22 @@ interface TelemetryDao {
   }
 
   @Query("DELETE FROM board_settings WHERE board_id = :boardId AND key = :key")
-  suspend fun deleteBoardSetting(boardId: String, key: String)
+  suspend fun deleteBoardSettingRow(boardId: String, key: String)
+
+  /**
+   * Semantic removal: a Board edit that drops a key is the Rider clearing that setting, so a restore
+   * must not resurrect the old value.
+   */
+  @Transaction
+  suspend fun deleteBoardSetting(boardId: String, key: String) {
+    appendDeleteAction(
+      DeleteTarget.BOARD_SETTING,
+      boardId,
+      key,
+      getBoardSettingUpdatedAt(boardId, key),
+    )
+    deleteBoardSettingRow(boardId, key)
+  }
 
   @Transaction
   suspend fun upsertBoardWithSettings(board: BoardEntity, settings: List<BoardSettingEntity>, deletedKeys: List<String>) {
@@ -509,8 +601,9 @@ interface TelemetryDao {
     settings.forEach { upsertBoardSetting(it) }
   }
 
+  /** Parent-covered cascade: raw, because the Board's own action covers its configuration. */
   @Query("DELETE FROM board_settings WHERE board_id = :boardId")
-  suspend fun deleteBoardSettings(boardId: String)
+  suspend fun deleteBoardSettingsRaw(boardId: String)
 
   /**
    * The Rider-facing delete: configuration goes, the Board row stays as a tombstone (ADR 0027).
@@ -518,15 +611,26 @@ interface TelemetryDao {
    *
    * The tombstone is an ordinary write, so it runs through [upsertBoard] and moves both sync
    * columns like any other edit. An unknown or already-tombstoned id is a no-op.
+   *
+   * The tombstone syncs as an ordinary upsert *and* emits one Sync Action, because the two say
+   * different things: the row says the Board is deleted, the action says its configuration is gone.
+   * Keeping the cascade an explicit, replay-safe action is what stops a dumb upsert from quietly
+   * deleting rows in three other tables. The children are raw deletes — the Board's action covers
+   * them (#282).
+   *
+   * The action and the tombstone share one timestamp, the newly ratcheted `updated_at`, so the
+   * server judges both against the same moment.
    */
   @Transaction
   suspend fun deleteBoardWithSettings(id: String, deletedAt: Long) {
     val board = getBoard(id)?.takeIf { it.deletedAt == null } ?: return
-    deleteBoardSettings(id)
-    deleteBoardWarnings(id)
+    val tombstonedAt = ratchetUpdatedAt(board.updatedAt, deletedAt)
+    deleteBoardSettingsRaw(id)
+    deleteBoardWarningsRaw(id)
     // Alert Rules are Board-owned (#254) — drop them with the Board so no orphan rows survive.
-    deleteAlertRules(id)
-    upsertBoard(board.copy(deletedAt = deletedAt, updatedAt = deletedAt))
+    deleteAlertRulesRaw(id)
+    appendDeleteAction(DeleteTarget.BOARD, null, id, tombstonedAt, tombstonedAt)
+    upsertBoard(board.copy(deletedAt = tombstonedAt, updatedAt = tombstonedAt))
   }
 
   @Query("SELECT * FROM alerts WHERE board_id = :boardId ORDER BY created_at ASC")
@@ -579,10 +683,22 @@ interface TelemetryDao {
   }
 
   @Query("DELETE FROM alerts WHERE board_id = :boardId AND id = :id")
-  suspend fun deleteAlertRule(boardId: String, id: String)
+  suspend fun deleteAlertRuleRow(boardId: String, id: String)
 
+  /**
+   * Semantic removal, and the path preset regeneration takes too: JS regenerates a Board's preset
+   * rules by deleting the old ones and writing new ones, and the deleted ones have to disappear
+   * server-side as well.
+   */
+  @Transaction
+  suspend fun deleteAlertRule(boardId: String, id: String) {
+    appendDeleteAction(DeleteTarget.ALERT, boardId, id, getAlertRuleUpdatedAt(boardId, id))
+    deleteAlertRuleRow(boardId, id)
+  }
+
+  /** Parent-covered cascade: raw, because the Board's own action covers its Alert Rules. */
   @Query("DELETE FROM alerts WHERE board_id = :boardId")
-  suspend fun deleteAlertRules(boardId: String)
+  suspend fun deleteAlertRulesRaw(boardId: String)
 
   @Query("SELECT * FROM app_settings")
   suspend fun getAllAppSettings(): List<AppSettingEntity>
@@ -613,7 +729,24 @@ interface TelemetryDao {
   }
 
   @Query("DELETE FROM app_settings WHERE key = :key")
-  suspend fun deleteAppSetting(key: String)
+  suspend fun deleteAppSettingRow(key: String)
+
+  /**
+   * Semantic removal. Every caller means the same thing — the stored override is gone: an edit back
+   * to the default, `legalPolicy` resolving to nothing, and the corrupt-value cleanup in
+   * [AppDataRepository.getTypedSettings], which is deliberately semantic so a restore cannot
+   * resurrect a value this phone already rejected.
+   *
+   * Phone-local keys never reach the server (they carry `sync_seq = 0`), so removing one records no
+   * action either — an action for a row the server never held would delete nothing and say nothing.
+   */
+  @Transaction
+  suspend fun deleteAppSetting(key: String) {
+    if (key !in NOT_SYNCED_SETTING_KEYS) {
+      appendDeleteAction(DeleteTarget.APP_SETTING, null, key, getAppSettingUpdatedAt(key))
+    }
+    deleteAppSettingRow(key)
+  }
 
   // Tune Profile / Tune History DAO. Transactional bodies below are mirrored in Swift.
   // @parity /modules/vescape-core/ios/telemetry/TuneProfileStore.swift
@@ -624,10 +757,11 @@ interface TelemetryDao {
   suspend fun getTuneProfile(id: String): TuneProfileEntity?
 
   @Query("DELETE FROM tune_profiles WHERE id = :id")
-  suspend fun deleteTuneProfile(id: String)
+  suspend fun deleteTuneProfileRow(id: String)
 
+  /** Parent-covered cascade: raw, because the profile's own action covers its Tune History. */
   @Query("DELETE FROM tune_history_entries WHERE profile_id = :profileId")
-  suspend fun deleteTuneHistoryForProfile(profileId: String)
+  suspend fun deleteTuneHistoryForProfileRaw(profileId: String)
 
   /** Targeted rename that bypasses the upsert, so it moves both columns itself; see
    * [setAlertRuleEnabledRow]. */
@@ -742,8 +876,9 @@ interface TelemetryDao {
     if (countTuneProfilesForBoard(profile.boardId, profile.refloatBaseVersion) <= 1) {
       throw IllegalStateException("Cannot delete the last profile for a board")
     }
-    deleteTuneHistoryForProfile(profileId)
-    deleteTuneProfile(profileId)
+    deleteTuneHistoryForProfileRaw(profileId)
+    appendDeleteAction(DeleteTarget.TUNE_PROFILE, null, profileId, profile.updatedAt)
+    deleteTuneProfileRow(profileId)
   }
 
   @Transaction
@@ -810,11 +945,47 @@ interface TelemetryDao {
     )
   }
 
+  @Query("SELECT last_detected_at FROM board_warnings WHERE board_id = :boardId AND kind = :kind")
+  suspend fun getBoardWarningLastDetectedAt(boardId: String, kind: String): Long?
+
+  @Query("SELECT kind FROM board_warnings WHERE board_id = :boardId")
+  suspend fun getBoardWarningKinds(boardId: String): List<String>
+
   @Query("DELETE FROM board_warnings WHERE board_id = :boardId AND kind = :kind")
-  suspend fun deleteBoardWarning(boardId: String, kind: String): Int
+  suspend fun deleteBoardWarningRow(boardId: String, kind: String): Int
+
+  /**
+   * Semantic removal, whether the Rider cleared the warning or a detector evaluated the kind with
+   * real data and found the condition gone — an automatic clear is still a durable state transition
+   * the server has to make (#282).
+   *
+   * Stamped from `last_detected_at` rather than `updated_at`: it is the warning's own change clock,
+   * and it is what the row's `updated_at` was written from.
+   */
+  @Transaction
+  suspend fun deleteBoardWarning(boardId: String, kind: String): Int {
+    appendDeleteAction(
+      DeleteTarget.BOARD_WARNING,
+      boardId,
+      kind,
+      getBoardWarningLastDetectedAt(boardId, kind),
+    )
+    return deleteBoardWarningRow(boardId, kind)
+  }
 
   @Query("DELETE FROM board_warnings WHERE board_id = :boardId")
-  suspend fun deleteBoardWarnings(boardId: String): Int
+  suspend fun deleteBoardWarningsRaw(boardId: String): Int
+
+  /**
+   * The Rider cleared every warning on one Board: one action per removed row, because each row is a
+   * separate piece of current state. Distinct from the Board delete's cascade, which is raw.
+   */
+  @Transaction
+  suspend fun deleteBoardWarnings(boardId: String): Int {
+    var removed = 0
+    for (kind in getBoardWarningKinds(boardId)) removed += deleteBoardWarning(boardId, kind)
+    return removed
+  }
 
   // Favorites — durable pins over Ride History (ADR 0029). Deleting a row only unpins; telemetry
   // inside the range is never touched here.
@@ -868,16 +1039,21 @@ interface TelemetryDao {
   @Query("DELETE FROM favorite_media WHERE id = :id")
   suspend fun deleteFavoriteMedia(id: String): Int
 
+  /** Parent-covered cascade: raw, because the Favorite's own action covers its manifest rows. */
   @Query("DELETE FROM favorite_media WHERE favorite_id = :favoriteId")
-  suspend fun deleteFavoriteMediaForFavorite(favoriteId: String): Int
+  suspend fun deleteFavoriteMediaForFavoriteRaw(favoriteId: String): Int
 
   @Query("DELETE FROM favorite_media WHERE favorite_id NOT IN (SELECT id FROM favorites)")
   suspend fun deleteOrphanFavoriteMedia(): Int
 
-  /** Parent-covered raw cascade: media rows and Favorite disappear in one SQLite transaction. */
+  /**
+   * Semantic removal of the Favorite, with its Favorite Media manifest rows as a parent-covered raw
+   * cascade — one action, not one per media row, matching the server's own cascade.
+   */
   @Transaction
   suspend fun deleteFavorite(id: String): Int {
-    deleteFavoriteMediaForFavorite(id)
+    deleteFavoriteMediaForFavoriteRaw(id)
+    appendDeleteAction(DeleteTarget.FAVORITE, null, id, getFavoriteUpdatedAt(id))
     return deleteFavoriteRow(id)
   }
 }

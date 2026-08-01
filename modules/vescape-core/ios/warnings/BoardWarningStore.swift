@@ -71,6 +71,7 @@ struct BoardWarningStore {
     try db.execute(sql: "CREATE INDEX index_board_warnings_board_id ON board_warnings(board_id)")
     try db.execute(sql: "CREATE INDEX IF NOT EXISTS index_board_warnings_sync_seq ON board_warnings(sync_seq)")
     try createSyncSequencesTable(db)
+    try createSyncActionsTable(db)
   }
 
   /// The shared pool failed to open — findings are dropped / reads come back empty, so leave the
@@ -175,6 +176,13 @@ struct BoardWarningStore {
     }
   }
 
+  /// Semantic removal, whether the Rider cleared the warning or a detector evaluated the kind with
+  /// real data and found the condition gone — an automatic clear is still a durable state transition
+  /// the server has to make (#282).
+  ///
+  /// Stamped from `last_detected_at` rather than `updated_at`: it is the warning's own change clock,
+  /// and it is what the row's `updated_at` was written from.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDao.kt `deleteBoardWarning`
   @discardableResult
   func delete(_ boardId: String, _ kind: String) -> Bool {
     guard let writer = resolveWriter() else {
@@ -183,11 +191,15 @@ struct BoardWarningStore {
     }
     do {
       return try writer.write { db in
-        try db.execute(
-          sql: "DELETE FROM board_warnings WHERE board_id = ? AND kind = ?",
-          arguments: [boardId, kind]
+        try deleteForSync(
+          db,
+          target: .boardWarning,
+          boardId: boardId,
+          key: kind,
+          whereClause: "board_id = ? AND kind = ?",
+          keys: [boardId, kind],
+          stampColumn: "last_detected_at"
         )
-        return db.changesCount > 0
       }
     } catch {
       BoardWarningFailureReporter.shared.report(site: "store_delete", error: error)
@@ -195,6 +207,10 @@ struct BoardWarningStore {
     }
   }
 
+  /// The Rider cleared every warning on one Board: one action per removed row, because each row is
+  /// a separate piece of current state. Distinct from the Board delete's cascade, which is raw and
+  /// covered by the Board's own action.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDao.kt `deleteBoardWarnings`
   @discardableResult
   func deleteForBoard(_ boardId: String) -> Bool {
     guard let writer = resolveWriter() else {
@@ -203,8 +219,24 @@ struct BoardWarningStore {
     }
     do {
       return try writer.write { db in
-        try db.execute(sql: "DELETE FROM board_warnings WHERE board_id = ?", arguments: [boardId])
-        return db.changesCount > 0
+        let kinds = try String.fetchAll(
+          db,
+          sql: "SELECT kind FROM board_warnings WHERE board_id = ?",
+          arguments: [boardId]
+        )
+        var removed = false
+        for kind in kinds {
+          removed = try deleteForSync(
+            db,
+            target: .boardWarning,
+            boardId: boardId,
+            key: kind,
+            whereClause: "board_id = ? AND kind = ?",
+            keys: [boardId, kind],
+            stampColumn: "last_detected_at"
+          ) || removed
+        }
+        return removed
       }
     } catch {
       BoardWarningFailureReporter.shared.report(site: "store_delete_for_board", error: error)

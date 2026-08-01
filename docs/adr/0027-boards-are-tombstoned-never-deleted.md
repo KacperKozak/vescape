@@ -14,7 +14,7 @@ A tombstone keeps the parent row alive, so the foreign key holds, history surviv
 
 ## Consequences
 
-- `boards.deleted_at` is nullable and part of the synced row, so a tombstone reaches the server as an ordinary upsert as well as through its **Delete Action**.
+- `boards.deleted_at` is nullable and part of the synced row, so a tombstone reaches the server as an ordinary upsert as well as through its **Delete Action**. The two say different things and are both needed: the row says the Board is deleted, the action says its configuration is gone. Keeping the cascade an explicit, replay-safe action is what stops a dumb upsert from quietly deleting rows in three other tables — the phone writes both in one transaction, stamped with the same ratcheted timestamp (#282).
 - `getBoards()` filters `deleted_at IS NULL`. `getBoard(id)` deliberately does not — **Ride History** must still be able to name a deleted Board. Callers that act on a Board rather than describe one (`buildSessionConfig`) check `deletedAt` and refuse.
 - On the server the `ON DELETE CASCADE` behind the Board-owned configuration tables stops firing, because nothing is deleted anymore. The Delete Action handler deletes those children explicitly, which makes the server's cascade identical to `deleteBoardWithSettings` rather than merely similar.
 - **Tune Profiles** are deliberately outside that cascade on both sides. Tuning work is expensive to recreate and survives its Board; removing one takes its own Delete Action.

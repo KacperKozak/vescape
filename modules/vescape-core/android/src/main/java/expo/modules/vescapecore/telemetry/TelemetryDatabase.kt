@@ -12,7 +12,7 @@ import java.io.File
 // @parity /modules/vescape-core/ios/VescapeCoreModule.swift
 internal const val TELEMETRY_DATABASE_NAME = "vescape.db"
 internal const val LEGACY_TELEMETRY_DATABASE_NAME = "telemetry.db"
-internal const val TELEMETRY_DATABASE_VERSION = 36
+internal const val TELEMETRY_DATABASE_VERSION = 37
 
 @Database(
   entities = [
@@ -30,6 +30,7 @@ internal const val TELEMETRY_DATABASE_VERSION = 36
     PrivacyZoneEntity::class,
     BoardWarningEntity::class,
     SyncSequenceEntity::class,
+    SyncActionEntity::class,
     FavoriteEntity::class,
     FavoriteMediaEntity::class,
   ],
@@ -646,6 +647,33 @@ abstract class TelemetryDatabase : RoomDatabase() {
     }
 
     /**
+     * The Sync Action log (#282): an append-only record of semantic removals, which no surviving row
+     * can express. Additive — a new table only — and guarded, so a re-run is a no-op.
+     *
+     * The log is keyed on its own `AUTOINCREMENT` cursor and carries no `sync_seq`: SQLite
+     * guarantees that key monotonic and never reused, so it already *is* the cursor.
+     *
+     * @parity /modules/vescape-core/ios/telemetry/TelemetryDatabase.swift `v37_sync_actions`
+     */
+    internal val MIGRATION_36_37 = object : Migration(36, 37) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+          """
+          CREATE TABLE IF NOT EXISTS sync_actions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+            type TEXT NOT NULL,
+            target TEXT NOT NULL,
+            board_id TEXT,
+            key TEXT NOT NULL,
+            deleted_at INTEGER NOT NULL
+          )
+          """.trimIndent(),
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_sync_actions_target ON sync_actions(target)")
+      }
+    }
+
+    /**
      * Telemetry whose `device_id` matches no Board would lose both its identity and its label:
      * either the Board was hard-deleted before tombstones existed (ADR 0027), or it was re-linked
      * to a different peripheral and the old identifier no longer resolves. One tombstoned Board is
@@ -1051,6 +1079,7 @@ abstract class TelemetryDatabase : RoomDatabase() {
             MIGRATION_33_34,
             MIGRATION_34_35,
             MIGRATION_35_36,
+            MIGRATION_36_37,
           )
           .fallbackToDestructiveMigration(true)
           .addCallback(object : Callback() {

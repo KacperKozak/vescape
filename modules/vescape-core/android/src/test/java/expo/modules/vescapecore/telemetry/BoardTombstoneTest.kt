@@ -69,7 +69,7 @@ class BoardTombstoneTest {
 
   @Test
   fun migrationTargetsTheCurrentSchemaVersion() {
-    assertEquals(36, TELEMETRY_DATABASE_VERSION)
+    assertEquals(37, TELEMETRY_DATABASE_VERSION)
     assertEquals(33, TelemetryDatabase.MIGRATION_33_34.startVersion)
     assertEquals(34, TelemetryDatabase.MIGRATION_33_34.endVersion)
   }
@@ -100,7 +100,7 @@ class BoardTombstoneTest {
     assertFalse("a DELETE on boards survives", dao.contains("DELETE FROM boards"))
     assertTrue(
       "the delete path does not stamp a tombstone",
-      dao.contains("upsertBoard(board.copy(deletedAt = deletedAt, updatedAt = deletedAt))"),
+      dao.contains("upsertBoard(board.copy(deletedAt = tombstonedAt, updatedAt = tombstonedAt))"),
     )
   }
 
@@ -110,7 +110,7 @@ class BoardTombstoneTest {
     val dao = daoSource()
     val body = dao.substringAfter("suspend fun deleteBoardWithSettings").substringBefore("\n  }")
 
-    for (call in listOf("deleteBoardSettings(id)", "deleteBoardWarnings(id)", "deleteAlertRules(id)")) {
+    for (call in listOf("deleteBoardSettingsRaw(id)", "deleteBoardWarningsRaw(id)", "deleteAlertRulesRaw(id)")) {
       assertTrue("the delete path dropped `$call`", body.contains(call))
     }
   }

@@ -85,6 +85,7 @@ struct TuneProfileStore {
     try db.execute(sql: "CREATE INDEX index_tune_profiles_board_id ON tune_profiles(board_id)")
     try db.execute(sql: "CREATE INDEX IF NOT EXISTS index_tune_profiles_sync_seq ON tune_profiles(sync_seq)")
     try createSyncSequencesTable(db)
+    try createSyncActionsTable(db)
     try db.execute(sql: "CREATE INDEX index_tune_profiles_board_id_refloat_base_version ON tune_profiles(board_id, refloat_base_version)")
 
     try db.execute(sql: """
@@ -206,8 +207,17 @@ struct TuneProfileStore {
         arguments: [boardId, row["refloat_base_version"] as String]
       ) ?? 0
       if count <= 1 { throw TuneProfileError.cannotDeleteLast }
+      // Tune History is a parent-covered cascade: raw, because the profile's own Sync Action
+      // covers it (#282).
       try db.execute(sql: "DELETE FROM tune_history_entries WHERE profile_id = ?", arguments: [profileId])
-      try db.execute(sql: "DELETE FROM tune_profiles WHERE id = ?", arguments: [profileId])
+      try deleteForSync(
+        db,
+        target: .tuneProfile,
+        boardId: nil,
+        key: profileId,
+        whereClause: "id = ?",
+        keys: [profileId]
+      )
       return true
     }
   }
