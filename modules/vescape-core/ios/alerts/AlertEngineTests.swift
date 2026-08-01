@@ -303,6 +303,26 @@ final class AlertEngineTests: XCTestCase {
     XCTAssertEqual(1, fired.count)
   }
 
+  func testNormalizedTestValueUsesTheProductionEvaluationPath() {
+    let fired = engine.evaluateValues(
+      rules: [rule(threshold: 70.0, thresholdMax: 90.0)],
+      values: ["duty": 80.0]
+    )
+
+    XCTAssertEqual(1, fired.count)
+    XCTAssertEqual(0.5, fired[0].rangeDepth!, accuracy: 0.01)
+  }
+
+  func testIsolatedTestEngineDoesNotResetProductionDebounce() {
+    let rules = [rule(threshold: 60.0)]
+    let production = AlertEngine()
+    let test = AlertEngine()
+
+    XCTAssertEqual(1, production.evaluateValues(rules: rules, values: ["duty": 70.0]).count)
+    XCTAssertEqual(1, test.evaluateValues(rules: rules, values: ["duty": 70.0]).count)
+    XCTAssertTrue(production.evaluateValues(rules: rules, values: ["duty": 70.0]).isEmpty)
+  }
+
   // MARK: - Speed / duty absolute
 
   func testSpeedAlertUsesAbsoluteValue() {

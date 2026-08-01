@@ -326,6 +326,28 @@ class AlertEngineTest {
         assertEquals(1, fired.size)
     }
 
+    @Test
+    fun normalizedTestValueUsesTheProductionEvaluationPath() {
+        val fired = engine.evaluateValues(
+            rules = listOf(rule(threshold = 70.0, thresholdMax = 90.0)),
+            values = mapOf("duty" to 80.0),
+        )
+
+        assertEquals(1, fired.size)
+        assertEquals(0.5, fired[0].rangeDepth!!, 0.01)
+    }
+
+    @Test
+    fun isolatedTestEngineDoesNotResetProductionDebounce() {
+        val rules = listOf(rule(threshold = 60.0))
+        val production = AlertEngine()
+        val test = AlertEngine()
+
+        assertEquals(1, production.evaluateValues(rules, mapOf("duty" to 70.0)).size)
+        assertEquals(1, test.evaluateValues(rules, mapOf("duty" to 70.0)).size)
+        assertTrue(production.evaluateValues(rules, mapOf("duty" to 70.0)).isEmpty())
+    }
+
     // --- Speed uses abs value ---
 
     @Test

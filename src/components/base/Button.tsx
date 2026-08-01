@@ -15,8 +15,8 @@ interface ButtonProps {
   onPress: () => Promise<void> | void
   testID?: string
   accessibilityLabel?: string
-  variant?: 'primary' | 'accent' | 'secondary' | 'destructive'
-  size?: 'sm' | 'md'
+  variant?: 'primary' | 'accent' | 'tune' | 'secondary' | 'destructive'
+  size?: 'sm' | 'md' | 'lg'
   icon?: Icon
   iconPosition?: 'left' | 'right'
   loading?: boolean
@@ -41,7 +41,7 @@ export function Button({
   const icon =
     IconComponent && !loading ? (
       <IconComponent
-        size={size === 'sm' ? 13 : 15}
+        size={size === 'sm' ? 13 : size === 'lg' ? 17 : 15}
         color={variantStyles[variant].iconColor}
         weight="bold"
       />
@@ -51,7 +51,7 @@ export function Button({
     <Pressable
       style={({ pressed }) => [
         styles.base,
-        size === 'sm' ? styles.sm : styles.md,
+        size === 'sm' ? styles.sm : size === 'lg' ? styles.lg : styles.md,
         variantStyles[variant].button,
         isDisabled && styles.disabled,
         pressed && !isDisabled && { opacity: interaction.pressedOpacity },
@@ -71,7 +71,7 @@ export function Button({
       <Text
         style={[
           styles.label,
-          size === 'sm' ? styles.labelSm : styles.labelMd,
+          size === 'sm' ? styles.labelSm : size === 'lg' ? styles.labelLg : styles.labelMd,
           variantStyles[variant].text,
         ]}
       >
@@ -98,6 +98,12 @@ const variantStyles = {
     text: { color: theme.palette.cyan.text },
     iconColor: theme.palette.cyan.text,
     indicatorColor: theme.palette.cyan.text,
+  },
+  tune: {
+    button: { backgroundColor: theme.tune.border },
+    text: { color: theme.palette.slate.textPrimary },
+    iconColor: theme.palette.slate.textPrimary,
+    indicatorColor: theme.palette.slate.textPrimary,
   },
   secondary: {
     button: {
@@ -134,6 +140,10 @@ const styles = StyleSheet.create({
     height: 40,
     paddingHorizontal: 16,
   },
+  lg: {
+    height: 48,
+    paddingHorizontal: 20,
+  },
   sm: {
     height: 32,
     paddingHorizontal: 12,
@@ -146,6 +156,9 @@ const styles = StyleSheet.create({
   },
   labelMd: {
     fontSize: 13,
+  },
+  labelLg: {
+    fontSize: 14,
   },
   labelSm: {
     fontSize: 12,

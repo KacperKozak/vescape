@@ -40,6 +40,7 @@ export const routes = {
   settingsGraphs: '/settings/graphs' as Href,
   settingsDatabase: '/settings/database' as Href,
   settingsAbout: '/settings/about' as Href,
+  settingsReleaseNotes: '/settings/release-notes' as Href,
 } as const
 
 export const stackScreens = {
@@ -72,4 +73,5 @@ export const stackScreens = {
   settingsGraphs: 'settings/graphs',
   settingsDatabase: 'settings/database',
   settingsAbout: 'settings/about',
+  settingsReleaseNotes: 'settings/release-notes',
 } as const

@@ -4,6 +4,7 @@ import {
   computeAutoRange,
   findNearestChartPointAtX,
   getChartPosition,
+  getChartAlertMarkers,
   getChartTimeRangeBands,
   getChartTimeLabels,
   splitChartLineSegments,
@@ -33,6 +34,21 @@ test('getChartPosition clamps inside bounds', () => {
   const out: TelemetryChartPoint = { date: new Date(base + 5_000), value: 200 }
   const pos = getChartPosition(points, out, range, 100, 50)
   expect(pos).toEqual({ x: 100, y: 0 })
+})
+
+test('alert markers preserve visible line positions', () => {
+  const markers = getChartAlertMarkers([50, 40, 30, 20, 15, 10, 5], { y: { min: 0, max: 100 } }, 80)
+
+  expect(markers.map((marker) => marker.value)).toEqual([50, 40, 30, 20, 15, 10, 5])
+  expect(markers.every((marker) => marker.y >= 0 && marker.y <= 80)).toBe(true)
+})
+
+test('alert markers omit values outside the visible chart range', () => {
+  expect(
+    getChartAlertMarkers([-1, 20, 120], { y: { min: 0, max: 100 } }, 80).map(
+      (marker) => marker.value,
+    ),
+  ).toEqual([20])
 })
 
 test('chart time-range bands clip to the visible domain and ignore outside ranges', () => {

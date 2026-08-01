@@ -117,7 +117,7 @@ When adding or changing a reusable UI component (or a new visual variant/state o
 
 ### Issue tracker
 
-Issues and PRDs are tracked in GitHub Issues for `KacperKozak/vesc-app-poc`. See `docs/agents/issue-tracker.md`.
+Issues and PRDs are tracked in GitHub Issues for `KacperKozak/vescape`. See `docs/agents/issue-tracker.md`.
 
 ### E2E tests
 
