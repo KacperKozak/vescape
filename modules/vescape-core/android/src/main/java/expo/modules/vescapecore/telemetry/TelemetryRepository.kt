@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.SystemClock
 import android.util.Log
 import expo.modules.kotlin.jni.NativeArrayBuffer
+import expo.modules.vescapecore.sync.SyncCoordinator
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.UUID
@@ -549,8 +550,13 @@ class TelemetryRepository private constructor(context: Context) {
     dao.clearDiagnosticEvents()
   }
 
+  /**
+   * Retention sweep. Age-only while this database has never been bound to an Account, and age plus
+   * the accepted Sync Cursor once it has — cleanup must not remove a row the uploader has not
+   * delivered (#284).
+   */
   suspend fun deleteBefore(beforeMs: Long): Int = withContext(Dispatchers.IO) {
-    dao.deleteBefore(beforeMs)
+    dao.deleteBeforeGated(beforeMs)
   }
 
   suspend fun deleteRange(options: Map<String, Any?>): Int = withContext(Dispatchers.IO) {
@@ -882,6 +888,9 @@ class TelemetryRepository private constructor(context: Context) {
         markers = markers,
         exclusions = sanitization.exclusions,
       )
+      // Samples are actually being produced, which is what the uploader's ride cadence follows —
+      // Idle Pause halts production without ending the Board Session.
+      SyncCoordinator.get(appContext).notifySamplesPersisted()
     } catch (e: Exception) {
       Log.w(TAG, "Telemetry flush failed: ${e.message}")
     }

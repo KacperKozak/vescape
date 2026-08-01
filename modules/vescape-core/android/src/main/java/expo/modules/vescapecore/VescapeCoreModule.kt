@@ -4,6 +4,7 @@ import expo.modules.vescapecore.alerts.AlertFeedback
 import expo.modules.vescapecore.alerts.AlertCoordinator
 import expo.modules.vescapecore.appstatus.AppStatusCoordinator
 import expo.modules.vescapecore.auth.NativeAuthCoordinator
+import expo.modules.vescapecore.sync.SyncCoordinator
 import expo.modules.vescapecore.service.BoardProbeAutoStartGate
 import expo.modules.vescapecore.connection.BoardTransport
 import expo.modules.vescapecore.connection.BoardTransportDetector
@@ -363,6 +364,22 @@ class VescapeCoreModule : Module() {
     }
     Function("clearDeviceCredential") {
       NativeAuthCoordinator.get(context).clear()
+    }
+    // The Rider confirmed the destructive Account change; native performs the ordered transition.
+    // @parity /modules/vescape-core/ios/VescapeCoreModule.swift `confirmSyncAccountReset`
+    AsyncFunction("confirmSyncAccountReset") Coroutine {
+        serverUrl: String,
+        deviceToken: String,
+        accountId: String,
+      ->
+      NativeAuthCoordinator.get(context).confirmAccountReset(serverUrl, deviceToken, accountId)
+    }
+    // @parity /modules/vescape-core/ios/VescapeCoreModule.swift `getSyncStatus`
+    AsyncFunction("getSyncStatus") Coroutine { ->
+      SyncCoordinator.get(context).status().toMap()
+    }
+    Function("setSyncWifiOnly") { enabled: Boolean ->
+      SyncCoordinator.get(context).setWifiOnly(enabled)
     }
     // Stable Vescape route keeps the app decoupled from the final store destination.
     // @parity /modules/vescape-core/ios/VescapeCoreModule.swift `openAppUpdate`

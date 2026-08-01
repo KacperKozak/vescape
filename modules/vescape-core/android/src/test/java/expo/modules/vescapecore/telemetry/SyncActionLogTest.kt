@@ -67,6 +67,14 @@ class SyncActionLogTest {
     "deleteBucketsBefore",
     "deleteDiagnosticEventsBefore",
     "deleteBefore",
+    // Cursor-gated retention (#284): the same sweep, refusing to prune a row the uploader has not
+    // delivered yet.
+    "deleteBeforeGated",
+    "deleteFramesBeforeUpTo",
+    "deleteMarkersBeforeUpTo",
+    "deleteBucketsBeforeUpTo",
+    "deleteDiagnosticEventsBeforeUpTo",
+    "deleteExclusionsBeforeUpTo",
     "deleteFramesRange",
     "deleteMarkersRange",
     "deleteBucketsRange",

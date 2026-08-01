@@ -115,6 +115,31 @@ enum TelemetryDatabase {
     }
   }
 
+  /// Replace the app-data database with an empty one, taking the Sync Cursors, the pending Sync
+  /// Actions and the Account binding with it (#284).
+  ///
+  /// Deleting the file rather than clearing tables is what makes the Account change safe: nothing
+  /// can survive with a cursor position or a binding that belonged to the previous Account. The wipe
+  /// is local maintenance and emits no Sync Actions to either Account — the log is part of what
+  /// goes.
+  ///
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/DatabaseBackupManager.kt `replaceWithFreshDatabase`
+  static func replaceWithFreshDatabase() throws {
+    guard let target = databaseURL else { throw CocoaError(.fileNoSuchFile) }
+    if let reopened { try? reopened.close() }
+    else if case let .success(pool) = poolResult { try? pool.close() }
+
+    let fm = FileManager.default
+    for suffix in ["", "-wal", "-shm"] {
+      try? fm.removeItem(at: URL(fileURLWithPath: target.path + suffix))
+    }
+
+    // Migrating rebuilds the schema, so the new database starts unbound with no cursors.
+    let pool = try DatabasePool(path: target.path)
+    try migrator.migrate(pool)
+    reopened = pool
+  }
+
   /// Internal, not private, so migration tests can run the real migrator against an in-memory
   /// database and stop at a chosen version with `migrate(_:upTo:)`.
   internal static var migrator: DatabaseMigrator {
@@ -566,6 +591,15 @@ enum TelemetryDatabase {
     // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `MIGRATION_36_37`
     migrator.registerMigration("v37_sync_actions") { db in
       try createSyncActionsTable(db)
+    }
+
+    // The Account binding (#284): which Vescape Account this local database belongs to. Additive and
+    // guarded, and deliberately left empty — an existing install is unbound until an Account signs
+    // in and claims it, which is also what keeps the current age-only retention behaviour until
+    // then.
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `MIGRATION_37_38`
+    migrator.registerMigration("v38_sync_binding") { db in
+      try createSyncBindingTable(db)
     }
 
     return migrator

@@ -230,6 +230,182 @@ interface TelemetryDao {
     return deleteSyncActionsThrough(accepted)
   }
 
+  // Sync Cursors — the uploader's forward scan (#284). Mutable tables scan on `sync_seq`,
+  // append-only tables on their `AUTOINCREMENT` key; both are device-local counters that never
+  // cross the wire.
+  // @parity /modules/vescape-core/ios/sync/SyncStore.swift
+
+  /**
+   * Checkpoint how far [name] has been accepted. Its own transaction, run after the response and
+   * never alongside the rows: a cursor advanced past rows the server did not take is unrecoverable,
+   * whereas a cursor left behind is a re-send the server upserts idempotently. Never moves
+   * backwards, so an out-of-order commit cannot un-accept an earlier one.
+   */
+  @Transaction
+  suspend fun commitSyncCursor(name: String, throughValue: Long) =
+    commitSyncActionCursorRow(name, throughValue)
+
+  @Query("SELECT * FROM app_settings WHERE sync_seq > :cursor ORDER BY sync_seq ASC LIMIT :limit")
+  suspend fun getAppSettingsAfter(cursor: Long, limit: Int): List<AppSettingEntity>
+
+  @Query("SELECT * FROM boards WHERE sync_seq > :cursor ORDER BY sync_seq ASC LIMIT :limit")
+  suspend fun getBoardsAfter(cursor: Long, limit: Int): List<BoardEntity>
+
+  @Query("SELECT * FROM board_settings WHERE sync_seq > :cursor ORDER BY sync_seq ASC LIMIT :limit")
+  suspend fun getBoardSettingsAfter(cursor: Long, limit: Int): List<BoardSettingEntity>
+
+  @Query("SELECT * FROM board_warnings WHERE sync_seq > :cursor ORDER BY sync_seq ASC LIMIT :limit")
+  suspend fun getBoardWarningsAfter(cursor: Long, limit: Int): List<BoardWarningEntity>
+
+  @Query("SELECT * FROM alerts WHERE sync_seq > :cursor ORDER BY sync_seq ASC LIMIT :limit")
+  suspend fun getAlertsAfter(cursor: Long, limit: Int): List<AlertRuleEntity>
+
+  @Query("SELECT * FROM tune_profiles WHERE sync_seq > :cursor ORDER BY sync_seq ASC LIMIT :limit")
+  suspend fun getTuneProfilesAfter(cursor: Long, limit: Int): List<TuneProfileEntity>
+
+  @Query("SELECT * FROM tune_history_entries WHERE id > :cursor ORDER BY id ASC LIMIT :limit")
+  suspend fun getTuneHistoryEntriesAfter(cursor: Long, limit: Int): List<TuneHistoryEntryEntity>
+
+  @Query("SELECT * FROM privacy_zones WHERE sync_seq > :cursor ORDER BY sync_seq ASC LIMIT :limit")
+  suspend fun getPrivacyZonesAfter(cursor: Long, limit: Int): List<PrivacyZoneEntity>
+
+  @Query("SELECT * FROM telemetry_markers WHERE id > :cursor ORDER BY id ASC LIMIT :limit")
+  suspend fun getTelemetryMarkersAfter(cursor: Long, limit: Int): List<TelemetryMarkerEntity>
+
+  @Query("SELECT * FROM metric_exclusion_ranges WHERE id > :cursor ORDER BY id ASC LIMIT :limit")
+  suspend fun getExclusionRangesAfter(cursor: Long, limit: Int): List<MetricExclusionRangeEntity>
+
+  @Query("SELECT * FROM diagnostic_events WHERE id > :cursor ORDER BY id ASC LIMIT :limit")
+  suspend fun getDiagnosticEventsAfter(cursor: Long, limit: Int): List<DiagnosticEventEntity>
+
+  /**
+   * Frames that name no Board cannot be uploaded — the server keys this table on the Board and has
+   * nowhere to put a sample that belongs to none (ADR-0028) — so the scan does not offer them and
+   * the cursor moves over them. They are unowned local rows, not rows a Rider is waiting to see
+   * backed up.
+   */
+  @Query(
+    "SELECT * FROM telemetry_frames WHERE id > :cursor AND board_id IS NOT NULL " +
+      "ORDER BY id ASC LIMIT :limit",
+  )
+  suspend fun getTelemetryFramesAfter(cursor: Long, limit: Int): List<TelemetryFrameEntity>
+
+  /** Buckets whose Board is the unknown-Board sentinel are unowned in the same way as a frame. */
+  @Query(
+    "SELECT * FROM telemetry_minute_buckets WHERE sync_seq > :cursor AND board_id != '' " +
+      "ORDER BY sync_seq ASC LIMIT :limit",
+  )
+  suspend fun getMinuteBucketsAfter(cursor: Long, limit: Int): List<TelemetryMinuteBucketEntity>
+
+  @Query("SELECT * FROM favorites WHERE sync_seq > :cursor ORDER BY sync_seq ASC LIMIT :limit")
+  suspend fun getFavoritesAfter(cursor: Long, limit: Int): List<FavoriteEntity>
+
+  @Query("SELECT COUNT(*) FROM app_settings WHERE sync_seq > :cursor")
+  suspend fun countAppSettingsAfter(cursor: Long): Int
+
+  @Query("SELECT COUNT(*) FROM boards WHERE sync_seq > :cursor")
+  suspend fun countBoardsAfter(cursor: Long): Int
+
+  @Query("SELECT COUNT(*) FROM board_settings WHERE sync_seq > :cursor")
+  suspend fun countBoardSettingsAfter(cursor: Long): Int
+
+  @Query("SELECT COUNT(*) FROM board_warnings WHERE sync_seq > :cursor")
+  suspend fun countBoardWarningsAfter(cursor: Long): Int
+
+  @Query("SELECT COUNT(*) FROM alerts WHERE sync_seq > :cursor")
+  suspend fun countAlertsAfter(cursor: Long): Int
+
+  @Query("SELECT COUNT(*) FROM tune_profiles WHERE sync_seq > :cursor")
+  suspend fun countTuneProfilesAfter(cursor: Long): Int
+
+  @Query("SELECT COUNT(*) FROM tune_history_entries WHERE id > :cursor")
+  suspend fun countTuneHistoryEntriesAfter(cursor: Long): Int
+
+  @Query("SELECT COUNT(*) FROM privacy_zones WHERE sync_seq > :cursor")
+  suspend fun countPrivacyZonesAfter(cursor: Long): Int
+
+  @Query("SELECT COUNT(*) FROM telemetry_markers WHERE id > :cursor")
+  suspend fun countTelemetryMarkersAfter(cursor: Long): Int
+
+  @Query("SELECT COUNT(*) FROM metric_exclusion_ranges WHERE id > :cursor")
+  suspend fun countExclusionRangesAfter(cursor: Long): Int
+
+  @Query("SELECT COUNT(*) FROM diagnostic_events WHERE id > :cursor")
+  suspend fun countDiagnosticEventsAfter(cursor: Long): Int
+
+  @Query("SELECT COUNT(*) FROM telemetry_frames WHERE id > :cursor AND board_id IS NOT NULL")
+  suspend fun countTelemetryFramesAfter(cursor: Long): Int
+
+  @Query("SELECT COUNT(*) FROM telemetry_minute_buckets WHERE sync_seq > :cursor AND board_id != ''")
+  suspend fun countMinuteBucketsAfter(cursor: Long): Int
+
+  @Query("SELECT COUNT(*) FROM favorites WHERE sync_seq > :cursor")
+  suspend fun countFavoritesAfter(cursor: Long): Int
+
+  @Query("SELECT COUNT(*) FROM sync_actions WHERE id > :cursor")
+  suspend fun countSyncActionsAfter(cursor: Long): Int
+
+  // Account binding — which Vescape Account this local database belongs to (#284). One row, so a
+  // database replaced on an Account change starts unbound with no cursors and no actions.
+
+  @Query("SELECT account_id FROM sync_binding WHERE id = 0")
+  suspend fun getBoundAccountId(): String?
+
+  @Query("INSERT OR REPLACE INTO sync_binding (id, account_id, bound_at) VALUES (0, :accountId, :boundAt)")
+  suspend fun bindAccountRow(accountId: String, boundAt: Long)
+
+  /**
+   * Claim this database for [accountId], or confirm it already belongs to it. Returns false when it
+   * belongs to a different Account: the caller has to replace the database first, because resetting
+   * the cursors over these rows would upload the previous Account's data to the new one.
+   */
+  @Transaction
+  suspend fun bindAccount(accountId: String, now: Long = System.currentTimeMillis()): Boolean {
+    val bound = getBoundAccountId()
+    if (bound != null) return bound == accountId
+    bindAccountRow(accountId, now)
+    return true
+  }
+
+  // Cursor-gated retention (#284). A retention cutoff is only a candidate cutoff: cleanup must not
+  // remove a row the uploader has not delivered. Each sweep reads its table cursor and deletes in
+  // one transaction, so racing an upload fails safe — before the cursor commit the rows are
+  // retained, after it the server has accepted them. A missing cursor is 0, protecting every row.
+
+  @Query("DELETE FROM telemetry_frames WHERE captured_at_ms < :beforeMs AND id <= :cursor")
+  suspend fun deleteFramesBeforeUpTo(beforeMs: Long, cursor: Long): Int
+
+  @Query("DELETE FROM telemetry_markers WHERE occurred_at_ms < :beforeMs AND id <= :cursor")
+  suspend fun deleteMarkersBeforeUpTo(beforeMs: Long, cursor: Long): Int
+
+  @Query("DELETE FROM telemetry_minute_buckets WHERE bucket_start_ms < :beforeMs AND sync_seq <= :cursor")
+  suspend fun deleteBucketsBeforeUpTo(beforeMs: Long, cursor: Long): Int
+
+  @Query("DELETE FROM diagnostic_events WHERE occurred_at_ms < :beforeMs AND id <= :cursor")
+  suspend fun deleteDiagnosticEventsBeforeUpTo(beforeMs: Long, cursor: Long): Int
+
+  @Query("DELETE FROM metric_exclusion_ranges WHERE end_ms < :beforeMs AND id <= :cursor")
+  suspend fun deleteExclusionsBeforeUpTo(beforeMs: Long, cursor: Long): Int
+
+  /**
+   * Age-only cleanup while the database has never been bound to an Account, and age plus the
+   * accepted Sync Cursor once it has. Emits no Sync Actions — a retention sweep is maintenance, and
+   * `DeleteTarget` has no case that could name a pruned table.
+   */
+  @Transaction
+  suspend fun deleteBeforeGated(beforeMs: Long): Int {
+    if (getBoundAccountId() == null) return deleteBefore(beforeMs)
+    val frames = deleteFramesBeforeUpTo(beforeMs, cursorOf(SYNC_CURSOR_FRAMES))
+    deleteMarkersBeforeUpTo(beforeMs, cursorOf(SYNC_CURSOR_MARKERS))
+    deleteBucketsBeforeUpTo(beforeMs, cursorOf(SYNC_CURSOR_MINUTE_BUCKETS))
+    deleteDiagnosticEventsBeforeUpTo(beforeMs, cursorOf(SYNC_CURSOR_DIAGNOSTIC_EVENTS))
+    deleteExclusionsBeforeUpTo(beforeMs, cursorOf(SYNC_CURSOR_EXCLUSION_RANGES))
+    return frames
+  }
+
+  /** A table with no committed cursor has delivered nothing, so none of its rows may be pruned. */
+  suspend fun cursorOf(name: String): Long = getSyncSequence(name) ?: 0L
+
   @Transaction
   suspend fun insertBatch(
     frames: List<TelemetryFrameEntity>,

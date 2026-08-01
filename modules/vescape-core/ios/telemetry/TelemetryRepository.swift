@@ -420,15 +420,13 @@ internal final class TelemetryRepository {
     return buildFavoriteSummary(buildTelemetryBuckets(sanitized))
   }
 
+  /// Retention sweep. Age-only while this database has never been bound to an Account, and age plus
+  /// the accepted Sync Cursor once it has — cleanup must not remove a row the uploader has not
+  /// delivered (#284).
   func deleteBefore(_ beforeMs: Int64) -> Int {
     guard let pool else { return 0 }
     return (try? pool.write { db in
-      let count = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM telemetry_frames WHERE captured_at_ms < ?", arguments: [beforeMs]) ?? 0
-      try db.execute(sql: "DELETE FROM telemetry_frames WHERE captured_at_ms < ?", arguments: [beforeMs])
-      try db.execute(sql: "DELETE FROM telemetry_minute_buckets WHERE bucket_start_ms < ?", arguments: [beforeMs])
-      try db.execute(sql: "DELETE FROM telemetry_markers WHERE occurred_at_ms < ?", arguments: [beforeMs])
-      try db.execute(sql: "DELETE FROM metric_exclusion_ranges WHERE end_ms < ?", arguments: [beforeMs])
-      return count
+      try deleteBeforeGated(db, beforeMs: beforeMs)
     }) ?? 0
   }
 
@@ -598,6 +596,9 @@ internal final class TelemetryRepository {
       for marker in markers { try insertMarker(db, marker) }
       for range in sanitization.exclusions { try insertExclusion(db, range) }
     }
+    // Samples are actually being produced, which is what the uploader's ride cadence follows — Idle
+    // Pause halts production without ending the Board Session.
+    SyncCoordinator.shared.notifySamplesPersisted()
   }
 
   private func marker(type: String, capture: TelemetryCapture, gapMs: Int64?) -> [String: Any?] {

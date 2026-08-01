@@ -1447,6 +1447,35 @@ export interface DeviceCredentialStatus {
   state: DeviceCredentialState
   accountId: string | null
   expiresAt: string | null
+  /**
+   * A different Vescape Account signed in on a phone whose local database already belongs to another
+   * one. Native refuses to bind — resetting the Sync Cursors over the existing rows would upload the
+   * previous Account's data to the new one — so the credential is not stored until the Rider
+   * confirms through `confirmSyncAccountReset` that all local app data is erased.
+   */
+  accountChangeRequiresReset?: boolean
+}
+
+/**
+ * Why the uploader stopped. A paused engine is not woken by ordinary timer or connectivity kicks.
+ *
+ * @parity /modules/vescape-core/ios/sync/SyncPolicy.swift `SyncPauseReason`
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/sync/SyncPolicy.kt `SyncPauseReason`
+ */
+export type SyncPauseReason = 'authentication' | 'protocol' | 'rowTooLarge'
+
+/**
+ * Native-owned backup state. JS renders it and never infers one of its own.
+ *
+ * @parity /modules/vescape-core/ios/sync/SyncCoordinator.swift `SyncStatus`
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/sync/SyncCoordinator.kt `SyncStatus`
+ */
+export interface SyncStatus {
+  /** The Account this local database is bound to, or null while it has never been claimed. */
+  accountId: string | null
+  pendingRows: number
+  pause: SyncPauseReason | null
+  lastUploadAtMs: number | null
 }
 
 export type CriticalRideNotificationPermissionStatus =
@@ -1564,6 +1593,13 @@ type VescapeCoreNativeModule = NativeEventEmitter<VescapeCoreEvents> & {
   getDeviceCredentialState(): DeviceCredentialStatus
   revokeDeviceCredential(): Promise<void>
   clearDeviceCredential(): void
+  confirmSyncAccountReset(
+    serverUrl: string,
+    deviceToken: string,
+    accountId: string,
+  ): Promise<DeviceCredentialStatus>
+  getSyncStatus(): Promise<SyncStatus>
+  setSyncWifiOnly(enabled: boolean): void
   openAppUpdate(): void
   getRemoteTiltState(): RemoteTiltState | null
   setSelectedBoard(boardId: string | null): void
@@ -2021,6 +2057,29 @@ export async function provisionDeviceCredential(
 
 export function getDeviceCredentialState(): DeviceCredentialStatus {
   return native.getDeviceCredentialState()
+}
+
+/**
+ * Erase all local app data and hand the fresh database to a different Account. Destructive, and only
+ * ever called after the Rider confirms — cloud restore does not exist in this version, so what is
+ * erased is gone.
+ */
+export async function confirmSyncAccountReset(
+  serverUrl: string,
+  deviceToken: string,
+  accountId: string,
+): Promise<DeviceCredentialStatus> {
+  return native.confirmSyncAccountReset(serverUrl, deviceToken, accountId)
+}
+
+/** Read native-owned backup state: what is bound, what is pending, and why it stopped. */
+export async function getSyncStatus(): Promise<SyncStatus> {
+  return native.getSyncStatus()
+}
+
+/** Back up over Wi-Fi only. Native waits for Wi-Fi rather than failing on a metered connection. */
+export function setSyncWifiOnly(enabled: boolean): void {
+  native.setSyncWifiOnly(enabled)
 }
 
 export async function revokeDeviceCredential(): Promise<void> {

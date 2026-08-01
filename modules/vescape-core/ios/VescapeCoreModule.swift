@@ -322,6 +322,23 @@ public class VescapeCoreModule: Module {
     Function("clearDeviceCredential") {
       NativeAuthCoordinator.shared.clear()
     }
+    // The Rider confirmed the destructive Account change; native performs the ordered transition.
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `confirmSyncAccountReset`
+    AsyncFunction("confirmSyncAccountReset") {
+      (serverUrl: String, deviceToken: String, accountId: String) async throws -> [String: Any?] in
+      try await NativeAuthCoordinator.shared.confirmAccountReset(
+        serverUrl: serverUrl,
+        token: deviceToken,
+        accountId: accountId
+      )
+    }
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `getSyncStatus`
+    AsyncFunction("getSyncStatus") { () -> [String: Any?] in
+      SyncCoordinator.shared.status().toMap()
+    }
+    Function("setSyncWifiOnly") { (enabled: Bool) in
+      SyncCoordinator.shared.setWifiOnly(enabled)
+    }
 
     // Stable Vescape route keeps the app decoupled from the final store destination.
     // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `openAppUpdate`

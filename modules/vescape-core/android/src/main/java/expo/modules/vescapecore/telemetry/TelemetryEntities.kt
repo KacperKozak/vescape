@@ -500,6 +500,42 @@ data class SyncActionEntity(
 /** [SyncSequenceEntity] key holding the highest action cursor the server has accepted. */
 internal const val SYNC_ACTIONS_UPLOADED_CURSOR = "sync_actions_uploaded"
 
+/**
+ * [SyncSequenceEntity] keys holding how far each table has been accepted — the Sync Cursors the
+ * uploader commits and cursor-gated retention reads back. Prefixed so a cursor can never collide
+ * with the write counters, which are keyed on the bare table name.
+ *
+ * The five below are the retained tables; every other table's key is derived the same way from
+ * `SyncTable`, and a test pins the two spellings together.
+ */
+internal const val SYNC_CURSOR_PREFIX = "sync_cursor_"
+internal const val SYNC_CURSOR_FRAMES = "sync_cursor_telemetry_frames"
+internal const val SYNC_CURSOR_MARKERS = "sync_cursor_telemetry_markers"
+internal const val SYNC_CURSOR_MINUTE_BUCKETS = "sync_cursor_telemetry_minute_buckets"
+internal const val SYNC_CURSOR_DIAGNOSTIC_EVENTS = "sync_cursor_diagnostic_events"
+internal const val SYNC_CURSOR_EXCLUSION_RANGES = "sync_cursor_metric_exclusion_ranges"
+
+/**
+ * Which Vescape Account this local database belongs to. One row, claimed by the first Account to
+ * sign in and never rewritten in place: a different Account replaces the whole database, because
+ * resetting the cursors over these rows would upload the previous Account's Boards, Ride History,
+ * locations and settings to the new one.
+ *
+ * Signing out does not clear the binding, so data recorded while signed out keeps its retention
+ * protection for the same Account.
+ *
+ * @parity /modules/vescape-core/ios/sync/SyncStore.swift `createSyncBindingTable`
+ */
+@Entity(tableName = "sync_binding")
+data class SyncBindingEntity(
+  @PrimaryKey
+  val id: Int = 0,
+  @ColumnInfo(name = "account_id")
+  val accountId: String,
+  @ColumnInfo(name = "bound_at")
+  val boundAt: Long,
+)
+
 @Entity(
   tableName = "metric_exclusion_ranges",
   indices = [

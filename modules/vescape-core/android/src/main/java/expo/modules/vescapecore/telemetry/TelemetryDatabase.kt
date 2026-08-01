@@ -12,7 +12,7 @@ import java.io.File
 // @parity /modules/vescape-core/ios/VescapeCoreModule.swift
 internal const val TELEMETRY_DATABASE_NAME = "vescape.db"
 internal const val LEGACY_TELEMETRY_DATABASE_NAME = "telemetry.db"
-internal const val TELEMETRY_DATABASE_VERSION = 37
+internal const val TELEMETRY_DATABASE_VERSION = 38
 
 @Database(
   entities = [
@@ -31,6 +31,7 @@ internal const val TELEMETRY_DATABASE_VERSION = 37
     BoardWarningEntity::class,
     SyncSequenceEntity::class,
     SyncActionEntity::class,
+    SyncBindingEntity::class,
     FavoriteEntity::class,
     FavoriteMediaEntity::class,
   ],
@@ -674,6 +675,28 @@ abstract class TelemetryDatabase : RoomDatabase() {
     }
 
     /**
+     * The Account binding (#284): which Vescape Account this local database belongs to. Additive and
+     * guarded, and deliberately left empty — an existing install is unbound until an Account signs
+     * in and claims it, which is also what keeps the current age-only retention behaviour until
+     * then.
+     *
+     * @parity /modules/vescape-core/ios/telemetry/TelemetryDatabase.swift `v38_sync_binding`
+     */
+    internal val MIGRATION_37_38 = object : Migration(37, 38) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+          """
+          CREATE TABLE IF NOT EXISTS sync_binding (
+            id INTEGER PRIMARY KEY NOT NULL,
+            account_id TEXT NOT NULL,
+            bound_at INTEGER NOT NULL
+          )
+          """.trimIndent(),
+        )
+      }
+    }
+
+    /**
      * Telemetry whose `device_id` matches no Board would lose both its identity and its label:
      * either the Board was hard-deleted before tombstones existed (ADR 0027), or it was re-linked
      * to a different peripheral and the old identifier no longer resolves. One tombstoned Board is
@@ -1080,6 +1103,7 @@ abstract class TelemetryDatabase : RoomDatabase() {
             MIGRATION_34_35,
             MIGRATION_35_36,
             MIGRATION_36_37,
+            MIGRATION_37_38,
           )
           .fallbackToDestructiveMigration(true)
           .addCallback(object : Callback() {

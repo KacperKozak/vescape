@@ -16,6 +16,18 @@ _Avoid_: Soft delete, archived Board
 An append-only local record that something was semantically removed, so the removal reaches the Vescape Account backup. A deleted row cannot carry a **Change Timestamp** saying it is gone, so the log is the only signal there is. Typed — `delete` is the only type today — and written from Rider-facing removal paths only, never from retention, migrations or a database trigger.
 _Avoid_: Delete log, tombstone table, audit trail, change event
 
+**Sync Cursor**:
+A phone-held, device-local position saying how far one table has been accepted by the server. It never crosses the wire — the server keeps no watermark — and it runs on a counter rather than a clock, so a device clock that steps backwards cannot make the upload scan skip a write. Advanced only after a response, in its own transaction, so the failure mode is always a harmless re-send.
+_Avoid_: Watermark, sync token, last-synced timestamp, offset
+
+**Sync Batch**:
+One upload: rows from one or more tables, sent in the order the server applies them so a Board-owned row never arrives before its Board. Capped by row count and by actual compact JSON bytes. Accepted whole or refused whole — nothing is half-applied, and nothing is skipped to make a batch fit.
+_Avoid_: Sync payload, upload chunk, page, delta
+
+**Account Binding**:
+The one **Vescape Account** a phone's local database belongs to, claimed by the first Account to sign in. It survives sign-out, so data recorded while signed out stays protected from retention for the same Account. A different Account cannot take over the database; it can only replace it, which the Rider has to confirm.
+_Avoid_: Account link, owner id, current user
+
 **Board Link**:
 The saved, probe-confirmed reachability details for a Board, including BLE peripheral id, selected Board Transport, and capabilities or firmware facts discovered for that transport.
 _Avoid_: Pairing, connection settings, device config
