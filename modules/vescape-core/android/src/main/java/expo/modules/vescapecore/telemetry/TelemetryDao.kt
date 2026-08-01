@@ -61,10 +61,34 @@ interface TelemetryDao {
   suspend fun getEnabledPrivacyZones(): List<PrivacyZoneEntity>
 
   @Insert(onConflict = OnConflictStrategy.REPLACE)
-  suspend fun upsertPrivacyZone(zone: PrivacyZoneEntity)
+  suspend fun insertPrivacyZoneRow(zone: PrivacyZoneEntity)
 
-  @Query("UPDATE privacy_zones SET enabled = :enabled, updated_at = :updatedAt WHERE id = :id")
-  suspend fun setPrivacyZoneEnabled(id: String, enabled: Boolean, updatedAt: Long)
+  @Query("SELECT updated_at FROM privacy_zones WHERE id = :id")
+  suspend fun getPrivacyZoneUpdatedAt(id: String): Long?
+
+  /** Stamps both sync columns; see [upsertBoard]. */
+  @Transaction
+  suspend fun upsertPrivacyZone(zone: PrivacyZoneEntity) {
+    insertPrivacyZoneRow(
+      zone.copy(
+        updatedAt = ratchetUpdatedAt(getPrivacyZoneUpdatedAt(zone.id), zone.updatedAt),
+        syncSeq = nextSyncSeq(SYNC_SEQ_PRIVACY_ZONES),
+      ),
+    )
+  }
+
+  /** Targeted toggle that bypasses the upsert, so it moves both columns itself; see
+   * [setAlertRuleEnabledRow]. */
+  @Query(
+    "UPDATE privacy_zones SET enabled = :enabled, updated_at = MAX(updated_at + 1, :updatedAt), " +
+      "sync_seq = :syncSeq WHERE id = :id",
+  )
+  suspend fun setPrivacyZoneEnabledRow(id: String, enabled: Boolean, updatedAt: Long, syncSeq: Long)
+
+  @Transaction
+  suspend fun setPrivacyZoneEnabled(id: String, enabled: Boolean, updatedAt: Long) {
+    setPrivacyZoneEnabledRow(id, enabled, updatedAt, nextSyncSeq(SYNC_SEQ_PRIVACY_ZONES))
+  }
 
   @Query("DELETE FROM privacy_zones WHERE id = :id")
   suspend fun deletePrivacyZone(id: String)
@@ -456,7 +480,24 @@ interface TelemetryDao {
   suspend fun getBoardSettings(boardIds: List<String>): List<BoardSettingEntity>
 
   @Insert(onConflict = OnConflictStrategy.REPLACE)
-  suspend fun upsertBoardSetting(setting: BoardSettingEntity)
+  suspend fun insertBoardSettingRow(setting: BoardSettingEntity)
+
+  @Query("SELECT updated_at FROM board_settings WHERE board_id = :boardId AND key = :key")
+  suspend fun getBoardSettingUpdatedAt(boardId: String, key: String): Long?
+
+  /** Stamps both sync columns; see [upsertBoard]. */
+  @Transaction
+  suspend fun upsertBoardSetting(setting: BoardSettingEntity) {
+    insertBoardSettingRow(
+      setting.copy(
+        updatedAt = ratchetUpdatedAt(
+          getBoardSettingUpdatedAt(setting.boardId, setting.key),
+          setting.updatedAt,
+        ),
+        syncSeq = nextSyncSeq(SYNC_SEQ_BOARD_SETTINGS),
+      ),
+    )
+  }
 
   @Query("DELETE FROM board_settings WHERE board_id = :boardId AND key = :key")
   suspend fun deleteBoardSetting(boardId: String, key: String)
@@ -550,7 +591,26 @@ interface TelemetryDao {
   suspend fun getAppSetting(key: String): AppSettingEntity?
 
   @Insert(onConflict = OnConflictStrategy.REPLACE)
-  suspend fun upsertAppSetting(setting: AppSettingEntity)
+  suspend fun insertAppSettingRow(setting: AppSettingEntity)
+
+  @Query("SELECT updated_at FROM app_settings WHERE key = :key")
+  suspend fun getAppSettingUpdatedAt(key: String): Long?
+
+  /**
+   * Stamps both sync columns like [upsertBoard], except for the phone-local keys in
+   * [NOT_SYNCED_SETTING_KEYS]: those keep `sync_seq` at 0, which sits below every Sync Cursor, so
+   * the upload scan never picks the row up and the key stays on this phone (#277).
+   */
+  @Transaction
+  suspend fun upsertAppSetting(setting: AppSettingEntity) {
+    val phoneLocal = setting.key in NOT_SYNCED_SETTING_KEYS
+    insertAppSettingRow(
+      setting.copy(
+        updatedAt = ratchetUpdatedAt(getAppSettingUpdatedAt(setting.key), setting.updatedAt),
+        syncSeq = if (phoneLocal) 0L else nextSyncSeq(SYNC_SEQ_APP_SETTINGS),
+      ),
+    )
+  }
 
   @Query("DELETE FROM app_settings WHERE key = :key")
   suspend fun deleteAppSetting(key: String)
@@ -569,23 +629,69 @@ interface TelemetryDao {
   @Query("DELETE FROM tune_history_entries WHERE profile_id = :profileId")
   suspend fun deleteTuneHistoryForProfile(profileId: String)
 
-  @Query("UPDATE tune_profiles SET name = :name, icon = :icon, color = :color, updated_at = :updatedAt WHERE id = :profileId")
+  /** Targeted rename that bypasses the upsert, so it moves both columns itself; see
+   * [setAlertRuleEnabledRow]. */
+  @Query(
+    "UPDATE tune_profiles SET name = :name, icon = :icon, color = :color, " +
+      "updated_at = MAX(updated_at + 1, :updatedAt), sync_seq = :syncSeq WHERE id = :profileId",
+  )
+  suspend fun updateProfileMetadataRow(
+    profileId: String,
+    name: String,
+    icon: String,
+    color: String,
+    updatedAt: Long,
+    syncSeq: Long,
+  ): Int
+
+  @Transaction
   suspend fun updateProfileMetadata(
     profileId: String,
     name: String,
     icon: String,
     color: String,
     updatedAt: Long,
-  ): Int
+  ): Int = updateProfileMetadataRow(
+    profileId,
+    name,
+    icon,
+    color,
+    updatedAt,
+    nextSyncSeq(SYNC_SEQ_TUNE_PROFILES),
+  )
 
   @Query("SELECT * FROM tune_history_entries WHERE id = :id LIMIT 1")
   suspend fun getTuneHistoryEntry(id: Long): TuneHistoryEntryEntity?
 
   @Insert(onConflict = OnConflictStrategy.REPLACE)
-  suspend fun upsertTuneProfile(profile: TuneProfileEntity)
+  suspend fun insertTuneProfileRow(profile: TuneProfileEntity)
+
+  @Query("SELECT updated_at FROM tune_profiles WHERE id = :id")
+  suspend fun getTuneProfileUpdatedAt(id: String): Long?
+
+  /** Stamps both sync columns; see [upsertBoard]. */
+  @Transaction
+  suspend fun upsertTuneProfile(profile: TuneProfileEntity) {
+    insertTuneProfileRow(
+      profile.copy(
+        updatedAt = ratchetUpdatedAt(getTuneProfileUpdatedAt(profile.id), profile.updatedAt),
+        syncSeq = nextSyncSeq(SYNC_SEQ_TUNE_PROFILES),
+      ),
+    )
+  }
 
   @Insert(onConflict = OnConflictStrategy.IGNORE)
-  suspend fun insertTuneProfile(profile: TuneProfileEntity): Long
+  suspend fun insertTuneProfileRowIfAbsent(profile: TuneProfileEntity): Long
+
+  /** Stamps both sync columns; see [upsertBoard]. Returns -1 when the row already exists. */
+  @Transaction
+  suspend fun insertTuneProfile(profile: TuneProfileEntity): Long =
+    insertTuneProfileRowIfAbsent(
+      profile.copy(
+        updatedAt = ratchetUpdatedAt(getTuneProfileUpdatedAt(profile.id), profile.updatedAt),
+        syncSeq = nextSyncSeq(SYNC_SEQ_TUNE_PROFILES),
+      ),
+    )
 
   @Query("SELECT COUNT(*) FROM tune_profiles WHERE board_id = :boardId AND refloat_base_version = :refloatBaseVersion")
   suspend fun countTuneProfilesForBoard(boardId: String, refloatBaseVersion: String): Int
@@ -599,8 +705,22 @@ interface TelemetryDao {
   @Query("SELECT * FROM tune_history_entries WHERE profile_id = :profileId ORDER BY created_at DESC, id DESC")
   suspend fun getTuneHistoryEntries(profileId: String): List<TuneHistoryEntryEntity>
 
-  @Query("UPDATE tune_profiles SET fields_json = :fieldsJson, updated_at = :updatedAt WHERE id = :profileId")
-  suspend fun updateProfileFields(profileId: String, fieldsJson: String, updatedAt: Long): Int
+  /** Targeted save that bypasses the upsert, so it moves both columns itself; see
+   * [setAlertRuleEnabledRow]. */
+  @Query(
+    "UPDATE tune_profiles SET fields_json = :fieldsJson, " +
+      "updated_at = MAX(updated_at + 1, :updatedAt), sync_seq = :syncSeq WHERE id = :profileId",
+  )
+  suspend fun updateProfileFieldsRow(
+    profileId: String,
+    fieldsJson: String,
+    updatedAt: Long,
+    syncSeq: Long,
+  ): Int
+
+  @Transaction
+  suspend fun updateProfileFields(profileId: String, fieldsJson: String, updatedAt: Long): Int =
+    updateProfileFieldsRow(profileId, fieldsJson, updatedAt, nextSyncSeq(SYNC_SEQ_TUNE_PROFILES))
 
   @Transaction
   suspend fun saveTuneProfile(profileId: String, fieldsJson: String, updatedAt: Long): TuneProfileEntity {
@@ -668,7 +788,27 @@ interface TelemetryDao {
   suspend fun getAllBoardWarnings(): List<BoardWarningEntity>
 
   @Insert(onConflict = OnConflictStrategy.REPLACE)
-  suspend fun upsertBoardWarning(warning: BoardWarningEntity)
+  suspend fun insertBoardWarningRow(warning: BoardWarningEntity)
+
+  @Query("SELECT updated_at FROM board_warnings WHERE board_id = :boardId AND kind = :kind")
+  suspend fun getBoardWarningUpdatedAt(boardId: String, kind: String): Long?
+
+  /**
+   * Stamps both sync columns; see [upsertBoard]. The caller supplies detection times only —
+   * `updated_at` is authored here, from [BoardWarningEntity.lastDetectedAt] as the write clock.
+   */
+  @Transaction
+  suspend fun upsertBoardWarning(warning: BoardWarningEntity) {
+    insertBoardWarningRow(
+      warning.copy(
+        updatedAt = ratchetUpdatedAt(
+          getBoardWarningUpdatedAt(warning.boardId, warning.kind),
+          warning.lastDetectedAt,
+        ),
+        syncSeq = nextSyncSeq(SYNC_SEQ_BOARD_WARNINGS),
+      ),
+    )
+  }
 
   @Query("DELETE FROM board_warnings WHERE board_id = :boardId AND kind = :kind")
   suspend fun deleteBoardWarning(boardId: String, kind: String): Int
@@ -684,14 +824,34 @@ interface TelemetryDao {
   suspend fun getFavorites(): List<FavoriteEntity>
 
   @Insert
-  suspend fun insertFavorite(favorite: FavoriteEntity)
+  suspend fun insertFavoriteRow(favorite: FavoriteEntity)
 
   @Query("SELECT * FROM favorites WHERE id = :id")
   suspend fun getFavorite(id: String): FavoriteEntity?
 
-  /** Re-trim/rename one row in place so its identity and Favorite Media remain stable. */
+  @Query("SELECT updated_at FROM favorites WHERE id = :id")
+  suspend fun getFavoriteUpdatedAt(id: String): Long?
+
   @Update
-  suspend fun updateFavorite(favorite: FavoriteEntity): Int
+  suspend fun updateFavoriteRow(favorite: FavoriteEntity): Int
+
+  /** Stamps both sync columns; see [upsertBoard]. */
+  @Transaction
+  suspend fun insertFavorite(favorite: FavoriteEntity) {
+    insertFavoriteRow(favorite.copy(syncSeq = nextSyncSeq(SYNC_SEQ_FAVORITES)))
+  }
+
+  /**
+   * Re-trim/rename one row in place so its identity and Favorite Media remain stable. Stamps both
+   * sync columns; see [upsertBoard].
+   */
+  @Transaction
+  suspend fun updateFavorite(favorite: FavoriteEntity): Int = updateFavoriteRow(
+    favorite.copy(
+      updatedAt = ratchetUpdatedAt(getFavoriteUpdatedAt(favorite.id), favorite.updatedAt),
+      syncSeq = nextSyncSeq(SYNC_SEQ_FAVORITES),
+    ),
+  )
 
   @Query("DELETE FROM favorites WHERE id = :id")
   suspend fun deleteFavoriteRow(id: String): Int
@@ -784,13 +944,11 @@ private fun TelemetryMinuteBucketEntity.merge(next: TelemetryMinuteBucketEntity)
     },
     firstMovingAtMs = mergeNullableMin(firstMovingAtMs, next.firstMovingAtMs),
     lastMovingAtMs = mergeNullableMax(lastMovingAtMs, next.lastMovingAtMs),
-    // The merged row is being written now, so `next` normally carries the fresher stamp. `maxOf`
-    // clamps a backwards device-clock step: the value stays at the last real write time instead of
-    // regressing. No `+ 1` ratchet here, unlike boards and alerts — the server writes this table
-    // with an unconditional upsert, so a stale stamp is never grounds for rejecting the row.
-    //
-    // Completeness is [syncSeq]'s job, not this column's.
-    updatedAt = maxOf(updatedAt, next.updatedAt),
+    // The merged row is being written now, so `next` normally carries the fresher stamp. The same
+    // ratchet as boards and alerts, for the same reason: the server guards this table with
+    // `WHERE stored.updated_at < EXCLUDED.updated_at` like every other mutable table, so a stamp
+    // frozen at the stored value would satisfy the scan and still be dropped server-side.
+    updatedAt = ratchetUpdatedAt(updatedAt, next.updatedAt),
     syncSeq = next.syncSeq,
   )
 }

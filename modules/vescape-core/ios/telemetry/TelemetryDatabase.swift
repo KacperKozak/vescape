@@ -474,7 +474,7 @@ enum TelemetryDatabase {
           )
           """
       )
-      for table in syncSeqTables {
+      for table in syncSeqTablesV33 {
         let hasSyncSeq = try db.columns(in: table).contains { $0.name == "sync_seq" }
         if !hasSyncSeq {
           try db.execute(sql: "ALTER TABLE \(table) ADD COLUMN sync_seq INTEGER NOT NULL DEFAULT 0")
@@ -515,6 +515,47 @@ enum TelemetryDatabase {
       try mintOrphanBoards(db)
       try rebuildFramesOnBoardId(db)
       try rebuildBucketsOnBoardId(db)
+    }
+
+    // Sync Cursors for the six remaining mutable tables (#281). `board_warnings` also gains the
+    // wall-clock `updated_at` every other mutable table already carries, backfilled from its newest
+    // detection.
+    //
+    // Existing rows are backfilled from `rowid` — distinct and non-zero, so no two rows share a
+    // cursor position and none of them sit at the seed value — and each table's sequence is seeded
+    // past the highest value handed out. Every step is guarded, so a re-run is a no-op.
+    // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDatabase.kt `MIGRATION_35_36`
+    migrator.registerMigration("v36_sync_seq_remaining") { db in
+      let hasWarningUpdatedAt = try db.columns(in: "board_warnings").contains { $0.name == "updated_at" }
+      if !hasWarningUpdatedAt {
+        try db.execute(sql: "ALTER TABLE board_warnings ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0")
+        try db.execute(sql: "UPDATE board_warnings SET updated_at = last_detected_at")
+      }
+
+      for table in syncSeqTablesV36 {
+        let hasSyncSeq = try db.columns(in: table).contains { $0.name == "sync_seq" }
+        if !hasSyncSeq {
+          try db.execute(sql: "ALTER TABLE \(table) ADD COLUMN sync_seq INTEGER NOT NULL DEFAULT 0")
+          try db.execute(sql: "UPDATE \(table) SET sync_seq = rowid")
+        }
+        try db.execute(sql: "CREATE INDEX IF NOT EXISTS index_\(table)_sync_seq ON \(table)(sync_seq)")
+        try db.execute(
+          sql: """
+            INSERT OR REPLACE INTO sync_sequences (name, last_value)
+            VALUES (?, (SELECT COALESCE(MAX(sync_seq), 0) FROM \(table)))
+            """,
+          arguments: [table]
+        )
+      }
+
+      // Phone-local keys are defined by their absence from the scan, so the backfill above has to be
+      // undone for them: an uploader would otherwise ship whatever this phone happened to hold at
+      // upgrade time, exactly once. See `notSyncedSettingKeys`.
+      let placeholders = notSyncedSettingKeys.map { _ in "?" }.joined(separator: ",")
+      try db.execute(
+        sql: "UPDATE app_settings SET sync_seq = 0 WHERE key IN (\(placeholders))",
+        arguments: StatementArguments(notSyncedSettingKeys)
+      )
     }
 
     return migrator

@@ -177,9 +177,10 @@ final class SyncCursorMigrationTests: XCTestCase {
     XCTAssertEqual(samples, 2)
   }
 
-  /// A device clock that steps backwards must never walk the cursor back, or the server would stop
-  /// seeing later writes.
-  func testBucketCursorIsMonotonicAcrossClockSteps() throws {
+  /// A device clock that steps backwards must not merely freeze the stamp: the server guards this
+  /// table with `stored.updated_at < EXCLUDED.updated_at` like every other mutable table, so a
+  /// frozen stamp is scanned, sent, and silently dropped. The merge ratchets strictly past it (#281).
+  func testBucketCursorRatchetsPastAStampTheClockCannotBeat() throws {
     try migrateToLatest()
     var bucket = TelemetryBucket(bucketStartMs: 60_000, boardId: "board-1")
     bucket.firstSampleAtMs = 60_000
@@ -190,7 +191,7 @@ final class SyncCursorMigrationTests: XCTestCase {
 
     XCTAssertEqual(
       try queue.read { db in try Int64.fetchOne(db, sql: "SELECT updated_at FROM telemetry_minute_buckets") },
-      5_000
+      5_001
     )
   }
 
@@ -323,5 +324,127 @@ final class SyncCursorMigrationTests: XCTestCase {
 
     XCTAssertEqual(try alertCursor(), ahead + 1)
     XCTAssertGreaterThan(try XCTUnwrap(syncSeq(syncSeqAlerts)), seqBefore)
+  }
+
+  // MARK: - The six remaining mutable tables (#281)
+
+  private func rowSyncSeq(_ table: String, _ whereClause: String, _ args: StatementArguments) throws -> Int64? {
+    try queue.read { db in
+      try Int64.fetchOne(db, sql: "SELECT sync_seq FROM \(table) WHERE \(whereClause)", arguments: args)
+    }
+  }
+
+  func testRemainingMutableTablesCarryACursorAndItsIndex() throws {
+    try migrateToLatest()
+
+    for table in syncSeqTablesV36 {
+      XCTAssertTrue(try columnNames(table).contains("sync_seq"), "\(table) is missing sync_seq")
+      XCTAssertTrue(
+        try indexNames(table).contains("index_\(table)_sync_seq"),
+        "\(table) is missing its sync_seq index"
+      )
+    }
+    XCTAssertTrue(try columnNames("board_warnings").contains("updated_at"))
+  }
+
+  /// Append-only tables key on `INTEGER PRIMARY KEY AUTOINCREMENT`, which SQLite guarantees
+  /// monotonic and never reused — that key already is their cursor, so a second one would be dead
+  /// weight the write paths would have to keep in step.
+  func testAppendOnlyTablesGainNoCursor() throws {
+    try migrateToLatest()
+
+    for table in ["telemetry_frames", "telemetry_markers", "diagnostic_events",
+                  "metric_exclusion_ranges", "tune_history_entries"] {
+      XCTAssertFalse(try columnNames(table).contains("sync_seq"), "\(table) should not carry sync_seq")
+    }
+  }
+
+  func testMigrationBackfillsRemainingTablesWithDistinctPositions() throws {
+    try TelemetryDatabase.migrator.migrate(queue, upTo: "v35_telemetry_board_id")
+    try queue.write { db in
+      for (index, id) in ["zone-1", "zone-2", "zone-3"].enumerated() {
+        try db.execute(
+          sql: """
+            INSERT INTO privacy_zones
+              (id, preset, name, enabled, center_latitude_e7, center_longitude_e7, radius_meters, created_at, updated_at)
+            VALUES (?, 'home', 'Home', 1, 0, 0, 100, ?, ?)
+            """,
+          arguments: [id, 1_000 + index, 1_000 + index]
+        )
+      }
+    }
+
+    try migrateToLatest()
+
+    let seqs = try queue.read { db in
+      try Int64.fetchAll(db, sql: "SELECT sync_seq FROM privacy_zones ORDER BY sync_seq")
+    }
+    XCTAssertEqual(Set(seqs).count, 3, "backfilled positions collide")
+    XCTAssertFalse(seqs.contains(0), "a backfilled row sits at the seed value")
+    XCTAssertEqual(try counter(syncSeqPrivacyZones), seqs.max())
+  }
+
+  /// Re-running the migrator must not renumber rows or re-seed the counter below positions already
+  /// handed out.
+  func testRemainingTablesMigrationIsANoOpOnReRun() throws {
+    try migrateToLatest()
+    let repo = try makeRepository()
+    repo.upsertPrivacyZone(["id": "zone-1", "preset": "home", "name": "Home",
+                            "centerLatitude": 0.0, "centerLongitude": 0.0, "radiusMeters": 100])
+    let before = try counter(syncSeqPrivacyZones)
+
+    try migrateToLatest()
+
+    XCTAssertEqual(try counter(syncSeqPrivacyZones), before)
+  }
+
+  func testPrivacyZoneToggleMovesBothColumns() throws {
+    try migrateToLatest()
+    let repo = try makeRepository()
+    repo.upsertPrivacyZone(["id": "zone-1", "preset": "home", "name": "Home",
+                            "centerLatitude": 0.0, "centerLongitude": 0.0, "radiusMeters": 100])
+    let first = try XCTUnwrap(syncSeq("privacy_zones"))
+    let stamp = try queue.read { db in try Int64.fetchOne(db, sql: "SELECT updated_at FROM privacy_zones") }
+
+    repo.setPrivacyZoneEnabled("zone-1", false)
+
+    XCTAssertGreaterThan(try XCTUnwrap(syncSeq("privacy_zones")), first)
+    XCTAssertGreaterThan(
+      try XCTUnwrap(queue.read { db in try Int64.fetchOne(db, sql: "SELECT updated_at FROM privacy_zones") }),
+      try XCTUnwrap(stamp)
+    )
+  }
+
+  /// Rider identity and this phone's session state live in `app_settings` but name the phone, not
+  /// the Rider (#277). They are excluded by never being given a cursor position: 0 sits below every
+  /// Sync Cursor, so no scan sees the row.
+  func testPhoneLocalSettingsKeepNoCursorPosition() throws {
+    try migrateToLatest()
+    let repo = try makeRepository()
+
+    repo.updateSetting("riderName", rawValue: "Kacper")
+    repo.updateSetting("liveHistoryLimit", rawValue: 10)
+
+    XCTAssertEqual(try rowSyncSeq("app_settings", "key = ?", ["riderName"]), 0)
+    XCTAssertGreaterThan(try XCTUnwrap(rowSyncSeq("app_settings", "key = ?", ["liveHistoryLimit"])), 0)
+  }
+
+  /// The backfill numbers every existing row from `rowid`, which would hand a phone-local key a
+  /// position and ship it exactly once on the first upload after upgrade.
+  func testMigrationStripsCursorsFromPhoneLocalSettings() throws {
+    try TelemetryDatabase.migrator.migrate(queue, upTo: "v35_telemetry_board_id")
+    try queue.write { db in
+      for key in ["riderName", "liveHistoryLimit"] {
+        try db.execute(
+          sql: "INSERT INTO app_settings (key, value_json, updated_at) VALUES (?, ?, ?)",
+          arguments: [key, "1", 1_000]
+        )
+      }
+    }
+
+    try migrateToLatest()
+
+    XCTAssertEqual(try rowSyncSeq("app_settings", "key = ?", ["riderName"]), 0)
+    XCTAssertGreaterThan(try XCTUnwrap(rowSyncSeq("app_settings", "key = ?", ["liveHistoryLimit"])), 0)
   }
 }

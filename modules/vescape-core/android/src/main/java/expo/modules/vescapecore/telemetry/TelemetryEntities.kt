@@ -302,6 +302,7 @@ data class BoardNameRow(
   primaryKeys = ["board_id", "key"],
   indices = [
     Index(value = ["board_id"]),
+    Index(value = ["sync_seq"]),
   ],
 )
 data class BoardSettingEntity(
@@ -310,8 +311,12 @@ data class BoardSettingEntity(
   val key: String,
   @ColumnInfo(name = "value_json")
   val valueJson: String,
+  /** Ratcheted last-write-wins timestamp; see [BoardEntity.updatedAt]. */
   @ColumnInfo(name = "updated_at")
   val updatedAt: Long,
+  /** Device-local Sync Cursor position; see [SyncSequenceEntity]. */
+  @ColumnInfo(name = "sync_seq")
+  val syncSeq: Long = 0,
 )
 
 @Entity(
@@ -383,9 +388,40 @@ data class SyncSequenceEntity(
 internal const val SYNC_SEQ_BOARDS = "boards"
 internal const val SYNC_SEQ_ALERTS = "alerts"
 internal const val SYNC_SEQ_MINUTE_BUCKETS = "telemetry_minute_buckets"
+internal const val SYNC_SEQ_APP_SETTINGS = "app_settings"
+internal const val SYNC_SEQ_BOARD_SETTINGS = "board_settings"
+internal const val SYNC_SEQ_BOARD_WARNINGS = "board_warnings"
+internal const val SYNC_SEQ_PRIVACY_ZONES = "privacy_zones"
+internal const val SYNC_SEQ_TUNE_PROFILES = "tune_profiles"
+internal const val SYNC_SEQ_FAVORITES = "favorites"
 
-/** Every table carrying a `sync_seq`, in the order the migration adds it. */
-internal val SYNC_SEQ_TABLES = listOf(SYNC_SEQ_BOARDS, SYNC_SEQ_ALERTS, SYNC_SEQ_MINUTE_BUCKETS)
+/**
+ * The three tables the schema-33 migration gave a `sync_seq`, frozen at the set that existed then.
+ * A migration iterates the tables it actually shipped with, never the current [SYNC_SEQ_TABLES] —
+ * growing that list must not retroactively change what an older migration step does.
+ */
+internal val SYNC_SEQ_TABLES_V33 = listOf(
+  SYNC_SEQ_BOARDS,
+  SYNC_SEQ_ALERTS,
+  SYNC_SEQ_MINUTE_BUCKETS,
+)
+
+/** The six remaining mutable tables, given a `sync_seq` at schema 36 (#281). */
+internal val SYNC_SEQ_TABLES_V36 = listOf(
+  SYNC_SEQ_APP_SETTINGS,
+  SYNC_SEQ_BOARD_SETTINGS,
+  SYNC_SEQ_BOARD_WARNINGS,
+  SYNC_SEQ_PRIVACY_ZONES,
+  SYNC_SEQ_TUNE_PROFILES,
+  SYNC_SEQ_FAVORITES,
+)
+
+/**
+ * Every table carrying a `sync_seq`. Append-only tables are deliberately absent: they declare
+ * `INTEGER PRIMARY KEY AUTOINCREMENT`, which SQLite guarantees monotonic and never reused, so their
+ * key already *is* their cursor.
+ */
+internal val SYNC_SEQ_TABLES = SYNC_SEQ_TABLES_V33 + SYNC_SEQ_TABLES_V36
 
 @Entity(
   tableName = "metric_exclusion_ranges",
@@ -410,6 +446,9 @@ data class MetricExclusionRangeEntity(
 
 @Entity(
   tableName = "privacy_zones",
+  indices = [
+    Index(value = ["sync_seq"]),
+  ],
 )
 data class PrivacyZoneEntity(
   @PrimaryKey
@@ -425,18 +464,68 @@ data class PrivacyZoneEntity(
   val radiusMeters: Int,
   @ColumnInfo(name = "created_at")
   val createdAt: Long,
+  /** Ratcheted last-write-wins timestamp; see [BoardEntity.updatedAt]. */
   @ColumnInfo(name = "updated_at")
   val updatedAt: Long,
+  /** Device-local Sync Cursor position; see [SyncSequenceEntity]. */
+  @ColumnInfo(name = "sync_seq")
+  val syncSeq: Long = 0,
 )
 
-@Entity(tableName = "app_settings")
+@Entity(
+  tableName = "app_settings",
+  indices = [
+    Index(value = ["sync_seq"]),
+  ],
+)
 data class AppSettingEntity(
   @PrimaryKey
   val key: String,
   @ColumnInfo(name = "value_json")
   val valueJson: String,
+  /** Ratcheted last-write-wins timestamp; see [BoardEntity.updatedAt]. */
   @ColumnInfo(name = "updated_at")
   val updatedAt: Long,
+  /**
+   * Device-local Sync Cursor position; see [SyncSequenceEntity]. Stays 0 — below every cursor, so
+   * invisible to the upload scan — for the keys in [NOT_SYNCED_SETTING_KEYS].
+   */
+  @ColumnInfo(name = "sync_seq")
+  val syncSeq: Long = 0,
+)
+
+/**
+ * App settings that name *this phone* rather than the Rider, and so never leave it: restoring them
+ * onto a second phone would overwrite that phone's own identity or session state. Enforced at the
+ * write path — [TelemetryDao.upsertAppSetting] leaves their `sync_seq` at 0, which is below every
+ * Sync Cursor, so no upload scan ever sees the row.
+ *
+ * Rider Name and Rider Color live in `app_settings` by design, so that Group Ride keeps working
+ * signed-out; that placement is what makes them phone-local rather than Account-scoped. See #277.
+ *
+ * @parity /modules/vescape-core/ios/telemetry/AppDataRepository.swift `notSyncedSettingKeys`
+ */
+internal val NOT_SYNCED_SETTING_KEYS = setOf(
+  // Rider identity — a second phone in the same Group Ride must not become the same Rider.
+  "riderId",
+  "riderName",
+  "riderColor",
+  // Device/session state — names this phone's current session, not the Rider's configuration.
+  "selectedBoardId",
+  "lastGpsLatitude",
+  "lastGpsLongitude",
+  "directionPointLatitude",
+  "directionPointLongitude",
+  // Connection and companion behaviour — phone-side BLE and foreground policy.
+  "autoConnect",
+  "companionPresenceEnabled",
+  "companionPresenceCooldownMinutes",
+  "connectionSoundsEnabled",
+  "autoCloseEnabled",
+  "autoCloseDelayMinutes",
+  // Wear pairing — the watch is paired to one phone.
+  "wearMirrorIntervalMs",
+  "wearAutoLaunchOnConnect",
 )
 
 /**
@@ -488,6 +577,7 @@ data class AppSettings(
   indices = [
     Index(value = ["board_id"]),
     Index(value = ["board_id", "refloat_base_version"]),
+    Index(value = ["sync_seq"]),
   ],
 )
 data class TuneProfileEntity(
@@ -504,8 +594,12 @@ data class TuneProfileEntity(
   val fieldsJson: String,
   @ColumnInfo(name = "created_at")
   val createdAt: Long,
+  /** Ratcheted last-write-wins timestamp; see [BoardEntity.updatedAt]. */
   @ColumnInfo(name = "updated_at")
   val updatedAt: Long,
+  /** Device-local Sync Cursor position; see [SyncSequenceEntity]. */
+  @ColumnInfo(name = "sync_seq")
+  val syncSeq: Long = 0,
 )
 
 @Entity(
@@ -538,6 +632,7 @@ data class TuneHistoryEntryEntity(
   primaryKeys = ["board_id", "kind"],
   indices = [
     Index(value = ["board_id"]),
+    Index(value = ["sync_seq"]),
   ],
 )
 data class BoardWarningEntity(
@@ -551,6 +646,16 @@ data class BoardWarningEntity(
   val lastDetectedAt: Long,
   @ColumnInfo(name = "payload_json")
   val payloadJson: String,
+  /**
+   * Ratcheted last-write-wins timestamp; see [BoardEntity.updatedAt]. Distinct from
+   * [lastDetectedAt], which moves only when the detector fires — a severity or payload change
+   * rewrites the row without necessarily being a fresh detection.
+   */
+  @ColumnInfo(name = "updated_at")
+  val updatedAt: Long = 0,
+  /** Device-local Sync Cursor position; see [SyncSequenceEntity]. */
+  @ColumnInfo(name = "sync_seq")
+  val syncSeq: Long = 0,
 )
 
 /**
@@ -568,6 +673,7 @@ data class BoardWarningEntity(
   indices = [
     Index(value = ["start_ms", "end_ms"]),
     Index(value = ["board_id"]),
+    Index(value = ["sync_seq"]),
   ],
 )
 data class FavoriteEntity(
@@ -603,6 +709,9 @@ data class FavoriteEntity(
   val maxSpeedCentiKmh: Int,
   @ColumnInfo(name = "battery_used_wh_milli")
   val batteryUsedWhMilli: Long,
+  /** Device-local Sync Cursor position; see [SyncSequenceEntity]. */
+  @ColumnInfo(name = "sync_seq")
+  val syncSeq: Long = 0,
 ) {
   /**
    * Board name is resolved on read from `boards`, not snapshotted, so renames propagate.

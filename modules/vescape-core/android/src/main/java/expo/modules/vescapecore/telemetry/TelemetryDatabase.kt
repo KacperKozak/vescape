@@ -12,7 +12,7 @@ import java.io.File
 // @parity /modules/vescape-core/ios/VescapeCoreModule.swift
 internal const val TELEMETRY_DATABASE_NAME = "vescape.db"
 internal const val LEGACY_TELEMETRY_DATABASE_NAME = "telemetry.db"
-internal const val TELEMETRY_DATABASE_VERSION = 35
+internal const val TELEMETRY_DATABASE_VERSION = 36
 
 @Database(
   entities = [
@@ -556,7 +556,7 @@ abstract class TelemetryDatabase : RoomDatabase() {
           )
           """.trimIndent(),
         )
-        for (table in SYNC_SEQ_TABLES) {
+        for (table in SYNC_SEQ_TABLES_V33) {
           if (!hasColumn(db, table, "sync_seq")) {
             db.execSQL("ALTER TABLE $table ADD COLUMN sync_seq INTEGER NOT NULL DEFAULT 0")
             db.execSQL("UPDATE $table SET sync_seq = rowid")
@@ -604,6 +604,44 @@ abstract class TelemetryDatabase : RoomDatabase() {
         mintOrphanBoards(db)
         rebuildFramesOnBoardId(db)
         rebuildBucketsOnBoardId(db)
+      }
+    }
+
+    /**
+     * Sync Cursors for the six remaining mutable tables (#281). `board_warnings` also gains the
+     * wall-clock `updated_at` every other mutable table already carries, backfilled from its newest
+     * detection.
+     *
+     * Existing rows are backfilled from `rowid` — distinct and non-zero, so no two rows share a
+     * cursor position and none of them sit at the seed value — and each table's sequence is seeded
+     * past the highest value handed out. Every step is guarded, so a re-run is a no-op.
+     *
+     * @parity /modules/vescape-core/ios/telemetry/TelemetryDatabase.swift `v36_sync_seq_remaining`
+     */
+    internal val MIGRATION_35_36 = object : Migration(35, 36) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        if (!hasColumn(db, "board_warnings", "updated_at")) {
+          db.execSQL("ALTER TABLE board_warnings ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0")
+          db.execSQL("UPDATE board_warnings SET updated_at = last_detected_at")
+        }
+
+        for (table in SYNC_SEQ_TABLES_V36) {
+          if (!hasColumn(db, table, "sync_seq")) {
+            db.execSQL("ALTER TABLE $table ADD COLUMN sync_seq INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("UPDATE $table SET sync_seq = rowid")
+          }
+          db.execSQL("CREATE INDEX IF NOT EXISTS index_${table}_sync_seq ON $table(sync_seq)")
+          db.execSQL(
+            "INSERT OR REPLACE INTO sync_sequences (name, last_value) " +
+              "VALUES ('$table', (SELECT COALESCE(MAX(sync_seq), 0) FROM $table))",
+          )
+        }
+
+        // Phone-local keys are defined by their absence from the scan, so the backfill above has to
+        // be undone for them: an uploader would otherwise ship whatever this phone happened to hold
+        // at upgrade time, exactly once. See NOT_SYNCED_SETTING_KEYS.
+        val phoneLocal = NOT_SYNCED_SETTING_KEYS.joinToString(",") { "'$it'" }
+        db.execSQL("UPDATE app_settings SET sync_seq = 0 WHERE key IN ($phoneLocal)")
       }
     }
 
@@ -1012,6 +1050,7 @@ abstract class TelemetryDatabase : RoomDatabase() {
             MIGRATION_32_33,
             MIGRATION_33_34,
             MIGRATION_34_35,
+            MIGRATION_35_36,
           )
           .fallbackToDestructiveMigration(true)
           .addCallback(object : Callback() {

@@ -63,10 +63,14 @@ struct BoardWarningStore {
         first_detected_at INTEGER NOT NULL,
         last_detected_at INTEGER NOT NULL,
         payload_json TEXT NOT NULL,
+        updated_at INTEGER NOT NULL DEFAULT 0,
+        sync_seq INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (board_id, kind)
       )
       """)
     try db.execute(sql: "CREATE INDEX index_board_warnings_board_id ON board_warnings(board_id)")
+    try db.execute(sql: "CREATE INDEX IF NOT EXISTS index_board_warnings_sync_seq ON board_warnings(sync_seq)")
+    try createSyncSequencesTable(db)
   }
 
   /// The shared pool failed to open — findings are dropped / reads come back empty, so leave the
@@ -149,16 +153,20 @@ struct BoardWarningStore {
         try db.execute(
           sql: """
             INSERT INTO board_warnings
-              (board_id, kind, severity, first_detected_at, last_detected_at, payload_json)
-            VALUES (?, ?, ?, ?, ?, ?)
+              (board_id, kind, severity, first_detected_at, last_detected_at, payload_json,
+               updated_at, sync_seq)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(board_id, kind) DO UPDATE SET
               severity = excluded.severity,
               last_detected_at = excluded.last_detected_at,
-              payload_json = excluded.payload_json
+              payload_json = excluded.payload_json,
+              updated_at = MAX(board_warnings.updated_at + 1, excluded.updated_at),
+              sync_seq = excluded.sync_seq
             """,
           arguments: [
             warning.boardId, warning.kind, warning.severity,
             warning.firstDetectedAtMs, warning.lastDetectedAtMs, warning.payloadJson,
+            warning.lastDetectedAtMs, try nextSyncSeq(db, syncSeqBoardWarnings),
           ]
         )
       }

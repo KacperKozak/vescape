@@ -36,7 +36,47 @@ internal func insertFrame(_ db: Database, _ state: FullTelemetryState) throws {
 internal let syncSeqBoards = "boards"
 internal let syncSeqAlerts = "alerts"
 internal let syncSeqMinuteBuckets = "telemetry_minute_buckets"
-internal let syncSeqTables = [syncSeqBoards, syncSeqAlerts, syncSeqMinuteBuckets]
+internal let syncSeqAppSettings = "app_settings"
+internal let syncSeqBoardSettings = "board_settings"
+internal let syncSeqBoardWarnings = "board_warnings"
+internal let syncSeqPrivacyZones = "privacy_zones"
+internal let syncSeqTuneProfiles = "tune_profiles"
+internal let syncSeqFavorites = "favorites"
+
+/// The three tables the `v33_sync_seq` migration gave a `sync_seq`, frozen at the set that existed
+/// then. A migration iterates the tables it actually shipped with, never the current
+/// [syncSeqTables] — growing that list must not retroactively change an older migration step.
+internal let syncSeqTablesV33 = [syncSeqBoards, syncSeqAlerts, syncSeqMinuteBuckets]
+
+/// The six remaining mutable tables, given a `sync_seq` by `v36_sync_seq_remaining` (#281).
+internal let syncSeqTablesV36 = [
+  syncSeqAppSettings,
+  syncSeqBoardSettings,
+  syncSeqBoardWarnings,
+  syncSeqPrivacyZones,
+  syncSeqTuneProfiles,
+  syncSeqFavorites,
+]
+
+/// Every table carrying a `sync_seq`. Append-only tables are deliberately absent: they declare
+/// `INTEGER PRIMARY KEY AUTOINCREMENT`, which SQLite guarantees monotonic and never reused, so their
+/// key already *is* their cursor.
+internal let syncSeqTables = syncSeqTablesV33 + syncSeqTablesV36
+
+/// The Sync Cursor counter table. Idempotent, and called both from the migration that introduced it
+/// and from the store-level `createTables` seams tests build their schema from — a table whose write
+/// path allocates a cursor cannot be created without it.
+/// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryEntities.kt `SyncSequenceEntity`
+internal func createSyncSequencesTable(_ db: Database) throws {
+  try db.execute(
+    sql: """
+      CREATE TABLE IF NOT EXISTS sync_sequences (
+        name TEXT NOT NULL PRIMARY KEY,
+        last_value INTEGER NOT NULL
+      )
+      """
+  )
+}
 
 /// Hands out the next Sync Cursor position for [name].
 ///
@@ -75,10 +115,31 @@ internal func ratchetUpdatedAt(_ previous: Int64?, _ now: Int64) -> Int64 {
   return max(previous + 1, now)
 }
 
-/// [now] is the last-write-wins timestamp stamped on the row. `MAX` on conflict clamps a backwards
-/// device-clock step so the value stays at the last real write time instead of regressing. No `+ 1`
-/// ratchet here, unlike boards and alerts — the server writes this table with an unconditional
-/// upsert, so a stale stamp is never grounds for rejecting the row.
+/// Stamps `updated_at` and `sync_seq` on a row that `INSERT OR REPLACE` is about to rewrite.
+///
+/// Read-modify-write rather than an `ON CONFLICT` fold: `INSERT OR REPLACE` deletes the old row
+/// before inserting, so the ratchet has no `excluded`-style handle on the value it replaces.
+/// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDao.kt `upsertBoardSetting`
+internal func stampSyncColumns(
+  _ db: Database,
+  table: String,
+  sequence: String,
+  whereClause: String,
+  keys: StatementArguments,
+  now: Int64
+) throws -> (updatedAt: Int64, syncSeq: Int64) {
+  let previous = try Int64.fetchOne(
+    db,
+    sql: "SELECT updated_at FROM \(table) WHERE \(whereClause)",
+    arguments: keys
+  )
+  return (ratchetUpdatedAt(previous, now), try nextSyncSeq(db, sequence))
+}
+
+/// [now] is the last-write-wins timestamp stamped on the row, ratcheted on conflict exactly as
+/// boards and alerts are: the server guards this table with `WHERE stored.updated_at <
+/// EXCLUDED.updated_at` like every other mutable table, so a stamp frozen at the stored value would
+/// satisfy the scan and still be dropped server-side.
 ///
 /// Completeness is `sync_seq`'s job, and it moves on every write including a merge into a row the
 /// scan may already have passed.
@@ -119,7 +180,7 @@ internal func upsertBucket(_ db: Database, _ b: TelemetryBucket, now: Int64 = te
         max_temp_motor_deci_c=MAX(telemetry_minute_buckets.max_temp_motor_deci_c, excluded.max_temp_motor_deci_c),
         first_moving_at_ms=MIN(telemetry_minute_buckets.first_moving_at_ms, excluded.first_moving_at_ms),
         last_moving_at_ms=MAX(telemetry_minute_buckets.last_moving_at_ms, excluded.last_moving_at_ms),
-        updated_at=MAX(telemetry_minute_buckets.updated_at, excluded.updated_at),
+        updated_at=MAX(telemetry_minute_buckets.updated_at + 1, excluded.updated_at),
         sync_seq=excluded.sync_seq
       """,
     arguments: [

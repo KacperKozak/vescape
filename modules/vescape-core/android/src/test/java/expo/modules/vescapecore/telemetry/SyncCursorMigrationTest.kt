@@ -98,11 +98,13 @@ class SyncCursorMigrationTest {
 
   @Test
   fun migrationsTargetTheCurrentSchemaVersion() {
-    assertEquals(35, TELEMETRY_DATABASE_VERSION)
+    assertEquals(36, TELEMETRY_DATABASE_VERSION)
     assertEquals(31, TelemetryDatabase.MIGRATION_31_32.startVersion)
     assertEquals(32, TelemetryDatabase.MIGRATION_31_32.endVersion)
     assertEquals(32, TelemetryDatabase.MIGRATION_32_33.startVersion)
     assertEquals(33, TelemetryDatabase.MIGRATION_32_33.endVersion)
+    assertEquals(35, TelemetryDatabase.MIGRATION_35_36.startVersion)
+    assertEquals(36, TelemetryDatabase.MIGRATION_35_36.endVersion)
   }
 
   /**
@@ -143,7 +145,7 @@ class SyncCursorMigrationTest {
       "missing sync_sequences table",
       sql.any { it.contains("CREATE TABLE IF NOT EXISTS sync_sequences") },
     )
-    for (table in SYNC_SEQ_TABLES) {
+    for (table in SYNC_SEQ_TABLES_V33) {
       assertTrue(
         "missing sync_seq column on $table",
         sql.any { it == "ALTER TABLE $table ADD COLUMN sync_seq INTEGER NOT NULL DEFAULT 0" },
@@ -167,7 +169,7 @@ class SyncCursorMigrationTest {
   fun syncSeqMigrationBackfillsExistingRowsBeforeSeedingTheCounter() {
     val sql = migrationSql(TelemetryDatabase.MIGRATION_32_33)
 
-    for (table in SYNC_SEQ_TABLES) {
+    for (table in SYNC_SEQ_TABLES_V33) {
       val backfilled = sql.indexOf("UPDATE $table SET sync_seq = rowid")
       val seeded = sql.indexOfFirst {
         it.contains("INSERT OR REPLACE INTO sync_sequences") && it.contains("'$table'")
@@ -186,11 +188,133 @@ class SyncCursorMigrationTest {
       "syncSeq = nextSyncSeq(SYNC_SEQ_BOARDS)",
       "syncSeq = nextSyncSeq(SYNC_SEQ_ALERTS)",
       "syncSeq = nextSyncSeq(SYNC_SEQ_MINUTE_BUCKETS)",
+      "syncSeq = nextSyncSeq(SYNC_SEQ_BOARD_SETTINGS)",
+      "syncSeq = nextSyncSeq(SYNC_SEQ_BOARD_WARNINGS)",
+      "syncSeq = nextSyncSeq(SYNC_SEQ_PRIVACY_ZONES)",
+      "syncSeq = nextSyncSeq(SYNC_SEQ_TUNE_PROFILES)",
+      "syncSeq = nextSyncSeq(SYNC_SEQ_FAVORITES)",
     )) {
       assertTrue("no write path allocates via `$marker`", dao.contains(marker))
     }
     // The bucket merge folds into the stored row, so the fresh position has to survive the fold.
     assertTrue("bucket merge drops the new sync_seq", dao.contains("syncSeq = next.syncSeq"))
+  }
+
+  // MARK: The six remaining mutable tables (#281)
+
+  private fun remainingTablesSql(): List<String> =
+    migrationSql(TelemetryDatabase.MIGRATION_35_36)
+
+  @Test
+  fun remainingTablesGainColumnIndexAndCounter() {
+    val sql = remainingTablesSql()
+
+    for (table in SYNC_SEQ_TABLES_V36) {
+      assertTrue(
+        "missing sync_seq column on $table",
+        sql.any { it == "ALTER TABLE $table ADD COLUMN sync_seq INTEGER NOT NULL DEFAULT 0" },
+      )
+      assertTrue(
+        "missing sync_seq index on $table",
+        sql.any { it == "CREATE INDEX IF NOT EXISTS index_${table}_sync_seq ON $table(sync_seq)" },
+      )
+      val backfilled = sql.indexOf("UPDATE $table SET sync_seq = rowid")
+      val seeded = sql.indexOfFirst {
+        it.contains("INSERT OR REPLACE INTO sync_sequences") && it.contains("'$table'")
+      }
+      assertTrue("missing sync_seq backfill for $table", backfilled >= 0)
+      assertTrue("counter for $table is seeded before its rows are numbered", seeded > backfilled)
+    }
+  }
+
+  /**
+   * `board_warnings` is the one table of the six that never had a wall-clock stamp: without it the
+   * server has nothing to compare and every re-detection would win or lose arbitrarily.
+   */
+  @Test
+  fun boardWarningsGainUpdatedAtBackfilledFromItsNewestDetection() {
+    val sql = remainingTablesSql()
+
+    val added = sql.indexOf("ALTER TABLE board_warnings ADD COLUMN updated_at INTEGER NOT NULL DEFAULT 0")
+    val backfilled = sql.indexOf("UPDATE board_warnings SET updated_at = last_detected_at")
+    assertTrue("missing updated_at on board_warnings", added >= 0)
+    assertTrue("backfill runs before the column is added", backfilled > added)
+  }
+
+  /**
+   * Every step is guarded on the column being absent, so a re-run adds nothing and renumbers
+   * nothing — the counter would otherwise be re-seeded below positions already handed out.
+   */
+  @Test
+  fun remainingTablesMigrationIsGuardedForReRun() {
+    val guarded = TelemetryDatabase.MIGRATION_35_36
+    val sql = migrationSql(guarded)
+
+    // `migrationSql` answers every column probe with an empty cursor, i.e. "column absent", so this
+    // run is the first-time path. The guarded statements are exactly the ones missing from a re-run.
+    assertTrue(
+      "column adds are unguarded",
+      sql.any { it.startsWith("ALTER TABLE") },
+    )
+    for (statement in sql.filter { it.startsWith("CREATE INDEX") }) {
+      assertTrue("index create is not idempotent: $statement", statement.contains("IF NOT EXISTS"))
+    }
+  }
+
+  /**
+   * Rider identity and this phone's session state live in `app_settings` but name the phone, not the
+   * Rider (#277). They are excluded by never being given a cursor position: 0 sits below every Sync
+   * Cursor, so no scan sees the row. The migration's `rowid` backfill has to be undone for them.
+   */
+  @Test
+  fun phoneLocalSettingsKeysAreExcludedFromTheCursor() {
+    val sql = remainingTablesSql()
+
+    val reset = sql.single { it.startsWith("UPDATE app_settings SET sync_seq = 0") }
+    for (key in NOT_SYNCED_SETTING_KEYS) {
+      assertTrue("phone-local key $key is left syncable", reset.contains("'$key'"))
+    }
+    assertTrue("riderName must stay on the phone", "riderName" in NOT_SYNCED_SETTING_KEYS)
+    assertTrue("liveHistoryLimit is Rider config, not phone state", "liveHistoryLimit" !in NOT_SYNCED_SETTING_KEYS)
+
+    assertTrue(
+      "app settings write path ignores the phone-local list",
+      daoSource().contains("if (phoneLocal) 0L else nextSyncSeq(SYNC_SEQ_APP_SETTINGS)"),
+    )
+  }
+
+  /**
+   * Every targeted `UPDATE` on the six tables bypasses the entity round-trip, which is exactly the
+   * shape that made `setAlertRuleEnabled` regress: it has to move both columns in its own SQL.
+   */
+  @Test
+  fun targetedUpdatesOnTheSixTablesMoveBothSyncColumns() {
+    val dao = daoSource().replace(Regex("""\"\s*\+\s*\""""), "")
+
+    for (statement in Regex("""\"(UPDATE (?:privacy_zones|tune_profiles) SET[^"]*)\"""").findAll(dao)) {
+      val sql = statement.groupValues[1]
+      assertTrue("targeted update does not ratchet: $sql", sql.contains("MAX(updated_at + 1, :updatedAt)"))
+      assertTrue("targeted update does not move the cursor: $sql", sql.contains("sync_seq = :syncSeq"))
+    }
+  }
+
+  /**
+   * The bucket merge used to freeze `updated_at` at the stored value on a backwards clock step, on
+   * the premise that the server upserts this table unconditionally. It does not — the same
+   * last-write-wins guard applies, so a frozen stamp is a scanned, sent, silently dropped row.
+   */
+  @Test
+  fun bucketMergeRatchetsLikeBoardsAndAlerts() {
+    val dao = daoSource()
+
+    assertTrue(
+      "bucket merge does not ratchet",
+      dao.contains("updatedAt = ratchetUpdatedAt(updatedAt, next.updatedAt)"),
+    )
+    assertTrue(
+      "the retired unconditional-upsert claim is still in the source",
+      !dao.contains("unconditional upsert"),
+    )
   }
 
   // MARK: Last-write-wins ratchet (#275)

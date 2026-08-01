@@ -17,6 +17,37 @@ enum AppDataScope: String {
   case settings
 }
 
+/// App settings that name *this phone* rather than the Rider, and so never leave it: restoring them
+/// onto a second phone would overwrite that phone's own identity or session state. Enforced at the
+/// write path — `writeAppSetting` leaves their `sync_seq` at 0, which is below every Sync Cursor, so
+/// no upload scan ever sees the row.
+///
+/// Rider Name and Rider Color live in `app_settings` by design, so that Group Ride keeps working
+/// signed-out; that placement is what makes them phone-local rather than Account-scoped. See #277.
+/// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryEntities.kt `NOT_SYNCED_SETTING_KEYS`
+internal let notSyncedSettingKeys: [String] = [
+  // Rider identity — a second phone in the same Group Ride must not become the same Rider.
+  "riderId",
+  "riderName",
+  "riderColor",
+  // Device/session state — names this phone's current session, not the Rider's configuration.
+  "selectedBoardId",
+  "lastGpsLatitude",
+  "lastGpsLongitude",
+  "directionPointLatitude",
+  "directionPointLongitude",
+  // Connection and companion behaviour — phone-side BLE and foreground policy.
+  "autoConnect",
+  "companionPresenceEnabled",
+  "companionPresenceCooldownMinutes",
+  "connectionSoundsEnabled",
+  "autoCloseEnabled",
+  "autoCloseDelayMinutes",
+  // Wear pairing — the watch is paired to one phone.
+  "wearMirrorIntervalMs",
+  "wearAutoLaunchOnConnect",
+]
+
 /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/AppDataRepository.kt
 final class AppDataRepository {
   static let shared = AppDataRepository()
@@ -153,10 +184,7 @@ final class AppDataRepository {
           try db.execute(sql: "DELETE FROM board_settings WHERE board_id = ? AND key = ?", arguments: [id, key])
           continue
         }
-        try db.execute(
-          sql: "INSERT OR REPLACE INTO board_settings (board_id, key, value_json, updated_at) VALUES (?, ?, ?, ?)",
-          arguments: [id, key, json, updatedAt]
-        )
+        try Self.writeBoardSetting(db, boardId: id, key: key, json: json, now: updatedAt)
       }
     }
     notifyDataChanged(.boards)
@@ -198,10 +226,7 @@ final class AppDataRepository {
     let value: [String: Any] = ["percent": percent, "voltage": voltage ?? NSNull(), "at": atMs]
     guard let json = Self.encodeJson(value) else { return }
     write { db in
-      try db.execute(
-        sql: "INSERT OR REPLACE INTO board_settings (board_id, key, value_json, updated_at) VALUES (?, ?, ?, ?)",
-        arguments: [boardId, "lastBattery", json, atMs]
-      )
+      try Self.writeBoardSetting(db, boardId: boardId, key: "lastBattery", json: json, now: atMs)
     }
     notifyDataChanged(.boards)
   }
@@ -211,10 +236,7 @@ final class AppDataRepository {
   func updateLegalMode(boardId: String, enabled: Bool) {
     guard let json = Self.encodeJson(["enabled": enabled]) else { return }
     write { db in
-      try db.execute(
-        sql: "INSERT OR REPLACE INTO board_settings (board_id, key, value_json, updated_at) VALUES (?, ?, ?, ?)",
-        arguments: [boardId, "legalMode", json, self.nowMs()]
-      )
+      try Self.writeBoardSetting(db, boardId: boardId, key: "legalMode", json: json, now: self.nowMs())
     }
     notifyDataChanged(.boards)
   }
@@ -456,23 +478,36 @@ final class AppDataRepository {
     let createdAt = Self.longValue(zone["createdAt"] ?? nil) ?? now
     let updatedAt = Self.longValue(zone["updatedAt"] ?? nil) ?? now
     write { db in
+      let stamp = try stampSyncColumns(
+        db,
+        table: "privacy_zones",
+        sequence: syncSeqPrivacyZones,
+        whereClause: "id = ?",
+        keys: [id],
+        now: updatedAt
+      )
       try db.execute(
         sql: """
           INSERT OR REPLACE INTO privacy_zones
-            (id, preset, name, enabled, center_latitude_e7, center_longitude_e7, radius_meters, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (id, preset, name, enabled, center_latitude_e7, center_longitude_e7, radius_meters, created_at, updated_at, sync_seq)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           """,
-        arguments: [id, preset, name, enabled ? 1 : 0, latitude.toE7, longitude.toE7, radius, createdAt, updatedAt]
+        arguments: [
+          id, preset, name, enabled ? 1 : 0, latitude.toE7, longitude.toE7, radius, createdAt,
+          stamp.updatedAt, stamp.syncSeq,
+        ]
       )
     }
   }
 
+  /// Targeted toggle that bypasses the upsert, so it moves both sync columns itself; see
+  /// `setAlertRuleEnabled`.
   func setPrivacyZoneEnabled(_ id: String, _ enabled: Bool) {
     let updatedAt = nowMs()
     write { db in
       try db.execute(
-        sql: "UPDATE privacy_zones SET enabled = ?, updated_at = ? WHERE id = ?",
-        arguments: [enabled ? 1 : 0, updatedAt, id]
+        sql: "UPDATE privacy_zones SET enabled = ?, updated_at = MAX(updated_at + 1, ?), sync_seq = ? WHERE id = ?",
+        arguments: [enabled ? 1 : 0, updatedAt, try nextSyncSeq(db, syncSeqPrivacyZones), id]
       )
     }
   }
@@ -549,10 +584,7 @@ final class AppDataRepository {
     }
     guard let json = Self.encodeJson(value) else { return }
     write { db in
-      try db.execute(
-        sql: "INSERT OR REPLACE INTO app_settings (key, value_json, updated_at) VALUES (?, ?, ?)",
-        arguments: [key, json, updatedAt]
-      )
+      try Self.writeAppSetting(db, key: key, json: json, now: updatedAt)
     }
     notifyDataChanged(.settings)
   }
@@ -567,12 +599,55 @@ final class AppDataRepository {
         try db.execute(sql: "DELETE FROM app_settings WHERE key = 'legalPolicy'")
         return
       }
-      try db.execute(
-        sql: "INSERT OR REPLACE INTO app_settings (key, value_json, updated_at) VALUES (?, ?, ?)",
-        arguments: ["legalPolicy", json, self.nowMs()]
-      )
+      try Self.writeAppSetting(db, key: "legalPolicy", json: json, now: self.nowMs())
     }
     notifyDataChanged(.settings)
+  }
+
+  /// Stamps both sync columns; see `upsertBoard`.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDao.kt `upsertBoardSetting`
+  private static func writeBoardSetting(
+    _ db: Database,
+    boardId: String,
+    key: String,
+    json: String,
+    now: Int64
+  ) throws {
+    let stamp = try stampSyncColumns(
+      db,
+      table: "board_settings",
+      sequence: syncSeqBoardSettings,
+      whereClause: "board_id = ? AND key = ?",
+      keys: [boardId, key],
+      now: now
+    )
+    try db.execute(
+      sql: """
+        INSERT OR REPLACE INTO board_settings (board_id, key, value_json, updated_at, sync_seq)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+      arguments: [boardId, key, json, stamp.updatedAt, stamp.syncSeq]
+    )
+  }
+
+  /// Stamps both sync columns like `upsertBoard`, except for the phone-local keys in
+  /// [notSyncedSettingKeys]: those keep `sync_seq` at 0, which sits below every Sync Cursor, so the
+  /// upload scan never picks the row up and the key stays on this phone (#277).
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryDao.kt `upsertAppSetting`
+  private static func writeAppSetting(_ db: Database, key: String, json: String, now: Int64) throws {
+    let previous = try Int64.fetchOne(
+      db,
+      sql: "SELECT updated_at FROM app_settings WHERE key = ?",
+      arguments: [key]
+    )
+    let syncSeq = notSyncedSettingKeys.contains(key) ? 0 : try nextSyncSeq(db, syncSeqAppSettings)
+    try db.execute(
+      sql: """
+        INSERT OR REPLACE INTO app_settings (key, value_json, updated_at, sync_seq)
+        VALUES (?, ?, ?, ?)
+        """,
+      arguments: [key, json, ratchetUpdatedAt(previous, now), syncSeq]
+    )
   }
 
   // MARK: - Shared pure helpers (also used by VescapeCoreModule bridge glue)
