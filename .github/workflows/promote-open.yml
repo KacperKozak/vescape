@@ -54,7 +54,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ github.workflow_sha }}
-      - name: Validate immutable inputs and canonical notes
+      - name: Validate immutable inputs
         run: |
           [[ "$REQUEST_ID" =~ ^[0-9a-fA-F-]{36}$ ]]
           [[ "$CANDIDATE_RUN_ID" =~ ^[1-9][0-9]*$ ]]
@@ -62,7 +62,6 @@ jobs:
           [[ "$MARKETING_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$ ]]
           [[ "$PHONE_VERSION_CODE" =~ ^[1-9][0-9]*$ ]]
           [[ "$WEAR_VERSION_CODE" =~ ^[1-9][0-9]*$ ]]
-          test -s "release-notes/$MARKETING_VERSION.md"
         env:
           REQUEST_ID: ${{ inputs.request_id }}
           CANDIDATE_RUN_ID: ${{ inputs.candidate_run_id }}

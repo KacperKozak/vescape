@@ -16,6 +16,10 @@ describe('open-promotion workflow contract', () => {
     )
   })
 
+  test('does not require release notes before open promotion', () => {
+    expect(workflow).not.toContain('release-notes/$MARKETING_VERSION.md')
+  })
+
   test('passes exact version codes without build or binary upload commands', () => {
     const promotionHelper = fastfile.slice(
       fastfile.indexOf('def promote_exact_artifact'),
