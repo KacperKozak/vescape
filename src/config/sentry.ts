@@ -10,6 +10,9 @@ import * as Sentry from '@sentry/react-native'
  * native startup are captured too; this call re-initializes it with the JS
  * options and hooks up the JS error handlers.
  *
+ * On iOS there is no manifest equivalent — sentry-cocoa only starts from code — so failures
+ * before this call (native startup, root module evaluation) are still invisible there.
+ *
  * Disabled when `EXPO_PUBLIC_SENTRY_DSN` is unset (local dev without a DSN).
  */
 const dsn = process.env.EXPO_PUBLIC_SENTRY_DSN
