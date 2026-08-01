@@ -34,6 +34,7 @@ import {
   verifyGhAuthentication,
   verifyRemoteCommit,
 } from './github'
+import { publishGithubPrerelease } from './githubPrerelease'
 import { internalReleaseProgress, workflowElapsed } from './progress'
 import {
   bumpMarketingVersion,
@@ -351,9 +352,9 @@ function App({ finish, initialPhase = 'dashboard', initialSourceRef }: AppProps)
     }
     const outcome = releaseOutcome(manifest)
     if (outcome.kind === 'success') {
-      setStatus(
-        `Internal ready · phone ${manifest.versionCodes.phone} · Wear ${manifest.versionCodes.wear}`,
-      )
+      setStatus(`Publishing v${manifest.marketingVersion} GitHub prerelease…`)
+      const githubRelease = await publishGithubPrerelease(repo, manifest)
+      setStatus(`Internal ready · GitHub prerelease ${githubRelease}`)
     } else if (outcome.kind === 'partial') {
       setStatus(`${outcome.succeeded} uploaded; ${outcome.failed} failed`)
       setRetryRunId(workflowRun.id)
