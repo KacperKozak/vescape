@@ -1,100 +1,121 @@
-name: Release iOS
+name: iOS Internal Release
 
-# Triggered by a tag of the form `production-<version>` (e.g. production-0.65.0)
-# pushed on the main branch. The tag version must match package.json exactly.
-# Can also be run manually (workflow_dispatch) to produce a signed IPA artifact
-# without tagging; the version then comes straight from package.json.
+run-name: iOS ${{ inputs.request_id }}
+
 on:
-  push:
-    tags: ['production-*']
   workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Immutable source commit to build
+        required: true
+        type: string
+      request_id:
+        description: Unique CLI dispatch correlation id
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: asc-publish
+  cancel-in-progress: false
 
 jobs:
-  release:
+  gates:
+    name: Release gates
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          # Full history is needed to verify the tag points at a main-branch commit.
-          fetch-depth: 0
-
-      # ── Guard: tag must point at a commit on main ──────────────────────────
-      - name: Verify tag is on main
-        if: github.event_name == 'push'
+          ref: ${{ inputs.source_sha }}
+      - name: Verify immutable source
         run: |
-          git fetch origin main
-          if ! git merge-base --is-ancestor HEAD origin/main; then
-            echo "✗ Tagged commit is not on main. Aborting."
-            exit 1
-          fi
-          echo "✓ Tag is on main"
-
-      # ── Guard: tag version must match package.json ─────────────────────────
-      - name: Verify version matches package.json
-        run: |
-          PKG_VERSION=$(node -p "require('./package.json').version")
-          if [ "${{ github.event_name }}" = "push" ]; then
-            TAG_VERSION="${GITHUB_REF_NAME#production-}"
-            if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
-              echo "✗ Tag version ($TAG_VERSION) does not match package.json ($PKG_VERSION). Aborting."
-              exit 1
-            fi
-          fi
-          # Compute iOS CFBundleVersion using the same formula as Android versionCode
-          # (major*10000 + minor*100 + patch) so builds stay aligned across platforms.
-          VERSION_CODE=$(node -e "
-            const v = '$PKG_VERSION'.split('.').map(Number);
-            console.log(v[0] * 10000 + v[1] * 100 + v[2]);
-          ")
-          echo "✓ Version $PKG_VERSION (build number $VERSION_CODE)"
-          echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
-          echo "APP_VERSION=$PKG_VERSION"   >> "$GITHUB_ENV"
-
-      # ── Toolchain ──────────────────────────────────────────────────────────
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-
-      # ── JS + native generation ─────────────────────────────────────────────
-      - name: Install JS dependencies
-        run: bun install
-
-      - name: Copy shared JS into native modules
-        run: bun run copy:shared
-
-      - name: Generate ios/ via expo prebuild
+      - run: bun install --frozen-lockfile
+      - run: bun run copy:shared
+      - name: Generate iOS project
         run: bunx expo prebuild --platform ios --no-install
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          # Map/telemetry keys are baked into the JS bundle at build time.
+          EXPO_PUBLIC_SERVER_URL: https://api.vescape.app
           EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN: ${{ secrets.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN }}
           EXPO_PUBLIC_GOOGLE_MAPS_API_KEY: ${{ secrets.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY }}
           EXPO_PUBLIC_MAPY_API_KEY: ${{ secrets.EXPO_PUBLIC_MAPY_API_KEY }}
+          EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          EXPO_PUBLIC_SENTRY_DSN: ${{ secrets.EXPO_PUBLIC_SENTRY_DSN }}
           EXPO_PUBLIC_POSTHOG_API_KEY: ${{ secrets.EXPO_PUBLIC_POSTHOG_API_KEY }}
           EXPO_PUBLIC_POSTHOG_HOST: ${{ secrets.EXPO_PUBLIC_POSTHOG_HOST }}
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
           SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+      - run: bun run check:ci
 
+  build:
+    name: Build signed IPA and upload to TestFlight
+    needs: gates
+    runs-on: macos-latest
+    outputs:
+      marketing_version: ${{ steps.release.outputs.marketing_version }}
+      build_number: ${{ steps.release.outputs.build_number }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+      - name: Check out trusted release tooling
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: .release-trusted
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Allocate artifact version
+        id: release
+        run: |
+          MARKETING_VERSION=$(bun -p "require('./package.json').version")
+          BUILD_NUMBER=${{ github.run_number }}
+          echo "marketing_version=$MARKETING_VERSION" >> "$GITHUB_OUTPUT"
+          echo "build_number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
+      - run: bun install --frozen-lockfile
+      - run: bun run copy:shared
+      - name: Generate iOS project
+        run: bunx expo prebuild --platform ios --no-install
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          EXPO_PUBLIC_SERVER_URL: https://api.vescape.app
+          EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN: ${{ secrets.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN }}
+          EXPO_PUBLIC_GOOGLE_MAPS_API_KEY: ${{ secrets.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY }}
+          EXPO_PUBLIC_MAPY_API_KEY: ${{ secrets.EXPO_PUBLIC_MAPY_API_KEY }}
+          EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          EXPO_PUBLIC_SENTRY_DSN: ${{ secrets.EXPO_PUBLIC_SENTRY_DSN }}
+          EXPO_PUBLIC_POSTHOG_API_KEY: ${{ secrets.EXPO_PUBLIC_POSTHOG_API_KEY }}
+          EXPO_PUBLIC_POSTHOG_HOST: ${{ secrets.EXPO_PUBLIC_POSTHOG_HOST }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
       - name: Install CocoaPods
         run: pod install
         working-directory: ios
-
-      # ── App Store Connect API key ──────────────────────────────────────────
       - name: Decode ASC API key
         run: |
           echo "$ASC_KEY_P8_BASE64" | base64 --decode > "$RUNNER_TEMP/asc.p8"
           echo "ASC_KEY_PATH=$RUNNER_TEMP/asc.p8" >> "$GITHUB_ENV"
         env:
           ASC_KEY_P8_BASE64: ${{ secrets.ASC_KEY_P8_BASE64 }}
-
-      # ── fastlane ───────────────────────────────────────────────────────────
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.3'
-          bundler-cache: true # caches gems; commit Gemfile.lock to speed this up
-
-      - name: Build IPA and publish to TestFlight + App Store draft
+          bundler-cache: true
+      - name: Install trusted release lanes
+        run: cp .release-trusted/fastlane/Fastfile fastlane/Fastfile
+      - name: Build IPA and upload to TestFlight
         run: bundle exec fastlane ios release
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
@@ -104,23 +125,48 @@ jobs:
           MATCH_GIT_URL: ${{ secrets.MATCH_GIT_URL }}
           MATCH_PASSWORD: ${{ secrets.MATCH_PASSWORD }}
           MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
-          VERSION_CODE: ${{ env.VERSION_CODE }}
-          APP_VERSION: ${{ env.APP_VERSION }}
-          # Also pass map/API keys so Metro can bundle them into the IPA
+          VERSION_CODE: ${{ steps.release.outputs.build_number }}
+          APP_VERSION: ${{ steps.release.outputs.marketing_version }}
+          EXPO_PUBLIC_SERVER_URL: https://api.vescape.app
           EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN: ${{ secrets.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN }}
           EXPO_PUBLIC_GOOGLE_MAPS_API_KEY: ${{ secrets.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY }}
           EXPO_PUBLIC_MAPY_API_KEY: ${{ secrets.EXPO_PUBLIC_MAPY_API_KEY }}
+          EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: ${{ secrets.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY }}
+          EXPO_PUBLIC_SENTRY_DSN: ${{ secrets.EXPO_PUBLIC_SENTRY_DSN }}
           EXPO_PUBLIC_POSTHOG_API_KEY: ${{ secrets.EXPO_PUBLIC_POSTHOG_API_KEY }}
           EXPO_PUBLIC_POSTHOG_HOST: ${{ secrets.EXPO_PUBLIC_POSTHOG_HOST }}
           SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
           SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT }}
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-
-      # Keep the signed IPA even when the App Store upload fails.
+      - name: Record artifact identity
+        run: |
+          jq -n \
+            --arg request_id "$REQUEST_ID" \
+            --arg source_sha "$SOURCE_SHA" \
+            --arg version "$MARKETING_VERSION" \
+            --argjson build_number "$BUILD_NUMBER" \
+            --argjson run_id "$RUN_ID" \
+            --arg run_url "$RUN_URL" \
+            --argjson run_attempt "$RUN_ATTEMPT" \
+            '{schemaVersion:1,requestId:$request_id,sourceSha:$source_sha,marketingVersion:$version,buildNumber:$build_number,workflow:{runId:$run_id,runUrl:$run_url,runAttempt:$run_attempt}}' \
+            > release-manifest-ios.json
+        env:
+          REQUEST_ID: ${{ inputs.request_id }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          MARKETING_VERSION: ${{ steps.release.outputs.marketing_version }}
+          BUILD_NUMBER: ${{ steps.release.outputs.build_number }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-manifest-ios
+          path: release-manifest-ios.json
+          retention-days: 90
       - name: Upload IPA artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-ios-${{ env.APP_VERSION }}
-          path: ios/build/Release-iphoneos/vescape.ipa
+          name: signed-ipa
+          path: '*.ipa'
           if-no-files-found: ignore
