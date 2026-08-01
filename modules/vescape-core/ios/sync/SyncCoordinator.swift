@@ -44,6 +44,8 @@ final class SyncCoordinator {
   private var lastSamplePersistedAtMs: Int64 = 0
   private var lastUploadAtMs: Int64?
   private var wifiOnly = false
+  /// The master switch. Off by default: nothing uploads until the Rider turns backup on.
+  private var enabled = false
   private var onWifi = false
   private var online = true
   /// Failure keys already recorded this process, so a wedged batch writes one event, not a stream.
@@ -68,6 +70,7 @@ final class SyncCoordinator {
     environment: { [weak self] in
       self?.environment() ?? SyncEnvironment(
         ridingSamples: false,
+        enabled: false,
         online: false,
         wifiOnly: false,
         onWifi: false,
@@ -112,6 +115,26 @@ final class SyncCoordinator {
     lock.unlock()
   }
 
+  /// The master switch, from the App Setting native owns. Off stops the loop outright — no scan, no
+  /// request, no backoff, no pause notification — rather than leaving a loop that decides to do
+  /// nothing every five minutes.
+  func setEnabled(_ value: Bool) {
+    lock.lock()
+    let changed = enabled != value
+    enabled = value
+    lock.unlock()
+    guard changed else { return }
+    if value {
+      start()
+    } else {
+      stop()
+      // A switched-off uploader asks the Rider for nothing: an earlier pause is no longer theirs to
+      // act on until they turn backup back on.
+      SyncNotifier.shared.update(nil)
+    }
+    publishStatus()
+  }
+
   /// The "Back up over Wi-Fi only" App Setting, pushed by `AppDataRepository` on every write and
   /// read back on launch. Native reads the setting itself — JS never carries the switch to the
   /// uploader.
@@ -140,6 +163,7 @@ final class SyncCoordinator {
           nowMs: telemetryNowMs(),
           pendingRows: pending,
           ridingSamples: environment.ridingSamples,
+          enabled: environment.enabled,
           online: environment.online,
           wifiOnly: environment.wifiOnly,
           onWifi: environment.onWifi,
@@ -185,15 +209,22 @@ final class SyncCoordinator {
   func resumeIfBound() {
     // The switch is a durable App Setting, so the uploader restores it before the first pass of this
     // process — otherwise a cold launch on mobile data would upload once before JS loaded.
-    setWifiOnly(AppDataRepository.shared.getSettings()["syncWifiOnly"] as? Bool ?? false)
-    if let credential = DeviceCredentialStore.shared.read(), bindAccount(credential.accountId) {
-      start()
+    let settings = AppDataRepository.shared.getSettings()
+    setWifiOnly(settings["syncWifiOnly"] as? Bool ?? false)
+    // Binding still happens with the switch off — it is what makes this database's Account known,
+    // and starting the loop is the only thing the switch gates.
+    if let credential = DeviceCredentialStore.shared.read() {
+      bindAccount(credential.accountId)
     }
+    setEnabled((settings["syncEnabled"] as? Bool) ?? false)
     publishStatus()
   }
 
   func start() {
-    guard loop == nil else { return }
+    lock.lock()
+    let running = enabled
+    lock.unlock()
+    guard running, loop == nil else { return }
     loop = Task { [weak self] in
       while !Task.isCancelled {
         guard let self else { return }
@@ -214,6 +245,10 @@ final class SyncCoordinator {
 
   /// Connectivity regained, ride ended, sign-in: send now rather than waiting for the next tick.
   func kick() {
+    lock.lock()
+    let running = enabled
+    lock.unlock()
+    guard running else { return }
     guard loop != nil else { return start() }
     Task { [weak self] in
       guard let self else { return }
@@ -286,10 +321,12 @@ final class SyncCoordinator {
     let reachable = online
     let wifi = onWifi
     let meteredOnly = wifiOnly
+    let running = enabled
     lock.unlock()
     let status = AppStatusCoordinator.shared.current?.version.status
     return SyncEnvironment(
       ridingSamples: samplesProducing(),
+      enabled: running,
       online: reachable,
       wifiOnly: meteredOnly,
       onWifi: wifi,

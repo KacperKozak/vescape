@@ -50,6 +50,7 @@ final class SyncEngineTests: XCTestCase {
   private func environment() -> SyncEnvironment {
     SyncEnvironment(
       ridingSamples: false,
+      enabled: true,
       online: true,
       wifiOnly: false,
       onWifi: false,

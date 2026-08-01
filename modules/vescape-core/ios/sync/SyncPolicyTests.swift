@@ -7,6 +7,7 @@ final class SyncPolicyTests: XCTestCase {
   private func state(
     pendingRows: Int = 1,
     ridingSamples: Bool = false,
+    enabled: Bool = true,
     online: Bool = true,
     wifiOnly: Bool = false,
     onWifi: Bool = false,
@@ -19,6 +20,7 @@ final class SyncPolicyTests: XCTestCase {
       nowMs: 1_000,
       pendingRows: pendingRows,
       ridingSamples: ridingSamples,
+      enabled: enabled,
       online: online,
       wifiOnly: wifiOnly,
       onWifi: onWifi,
@@ -61,6 +63,21 @@ final class SyncPolicyTests: XCTestCase {
   func testAPauseIsNotBypassedByAnOrdinaryKick() {
     XCTAssertEqual(SyncPolicy.decide(state(pause: .protocolFailure)), .paused(.protocolFailure))
     XCTAssertEqual(SyncPolicy.decide(state(credentialReady: false)), .paused(.authentication))
+  }
+
+  func testTheMasterSwitchStopsTheUploaderOutrightAndOutranksEveryOtherState() {
+    XCTAssertEqual(
+      SyncPolicy.decide(state(enabled: false)),
+      .wait(atMs: 1_000 + SyncPolicy.idleIntervalMs)
+    )
+    // Not a pause: switched off is not a broken uploader waiting to be resumed.
+    XCTAssertEqual(
+      SyncPolicy.decide(state(enabled: false, pause: .protocolFailure)),
+      .wait(atMs: 1_000 + SyncPolicy.idleIntervalMs)
+    )
+    XCTAssertEqual(SyncPolicy.describe(state(enabled: false)), .disabled)
+    XCTAssertEqual(SyncPolicy.describe(state(enabled: false, credentialReady: false)), .disabled)
+    XCTAssertEqual(SyncPolicy.describe(state(enabled: false, pause: .authentication)), .disabled)
   }
 
   func testAPhoneWithNoCredentialReadsAsSignedOutNotAsABrokenBackup() {

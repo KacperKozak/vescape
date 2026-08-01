@@ -21,6 +21,8 @@ enum SyncPauseReason: String {
 /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/sync/SyncPolicy.kt `SyncActivity`
 /// @parity /modules/vescape-core/src/index.ts `SyncActivity`
 enum SyncActivity: String {
+  /// The master switch is off. Nothing is scanned, sent, retried or reported.
+  case disabled
   /// No credential: backup has never been turned on, or the Rider signed out.
   case signedOut
   case upToDate
@@ -50,6 +52,8 @@ struct SyncState {
   let pendingRows: Int
   /// A Board Session is producing samples — Idle Pause halts production without ending the session.
   let ridingSamples: Bool
+  /// The Rider's master switch. Off means the uploader does nothing at all.
+  let enabled: Bool
   let online: Bool
   /// Metered-connection setting; the uploader waits for Wi-Fi rather than failing.
   let wifiOnly: Bool
@@ -79,6 +83,9 @@ enum SyncPolicy {
   static let backoffMaxMs: Int64 = 15 * 60_000
 
   static func decide(_ state: SyncState) -> SyncDecision {
+    // The master switch is checked before everything, including a pause: switched off is not a
+    // broken uploader waiting to be resumed, it is one that is not running.
+    if !state.enabled { return .wait(atMs: state.nowMs + idleIntervalMs) }
     if let pause = state.pause { return .paused(pause) }
     if !state.credentialReady { return .paused(.authentication) }
 
@@ -96,6 +103,7 @@ enum SyncPolicy {
   /// Signed out wins over the pause it produces: a phone with no credential is not a broken backup,
   /// it is one that was never turned on. Everything below the pause is ordinary waiting.
   static func describe(_ state: SyncState) -> SyncActivity {
+    if !state.enabled { return .disabled }
     if !state.credentialReady { return .signedOut }
     if state.pause != nil { return .paused }
     if state.pendingRows <= 0 { return .upToDate }

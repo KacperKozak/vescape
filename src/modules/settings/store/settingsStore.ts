@@ -41,6 +41,7 @@ const DEFAULTS: AppSettings = {
   companionPresenceCooldownMinutes: 60,
   autoCloseEnabled: false,
   autoCloseDelayMinutes: 15,
+  syncEnabled: false,
   syncWifiOnly: false,
   syncBackupChoiceMade: false,
   telemetryPollRateHz: 20,

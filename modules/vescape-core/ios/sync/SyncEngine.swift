@@ -46,6 +46,8 @@ protocol SyncSource {
 /// Environment the policy reads. Owned by the caller, so the engine keeps no platform types.
 struct SyncEnvironment {
   let ridingSamples: Bool
+  /// The Rider's master switch, read from the App Setting native owns.
+  let enabled: Bool
   let online: Bool
   let wifiOnly: Bool
   let onWifi: Bool
@@ -114,6 +116,7 @@ final class SyncEngine {
         nowMs: clock(),
         pendingRows: source.pendingCount(),
         ridingSamples: env.ridingSamples,
+        enabled: env.enabled,
         online: env.online,
         wifiOnly: env.wifiOnly,
         onWifi: env.onWifi,

@@ -17,6 +17,7 @@ const NOW = 1_800_000_000_000
 describe('backupStatusCopy', () => {
   test('names every backup state, so a stopped backup never renders as nothing', () => {
     const activities: SyncStatus['activity'][] = [
+      'disabled',
       'signedOut',
       'upToDate',
       'syncing',

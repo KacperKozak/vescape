@@ -46,6 +46,9 @@ internal let notSyncedSettingKeys: [String] = [
   // Wear pairing — the watch is paired to one phone.
   "wearMirrorIntervalMs",
   "wearAutoLaunchOnConnect",
+  // The backup master switch is per phone, and deliberately does not travel through the mechanism
+  // it turns off: a restored snapshot must never be able to switch backup back on.
+  "syncEnabled",
   // The backup choice is per phone: the expensive first upload belongs to the phone that holds the
   // backlog, so a restore onto a second phone asks that Rider again rather than deciding for them.
   "syncBackupChoiceMade",
@@ -614,7 +617,7 @@ final class AppDataRepository {
     } else if key == "satelliteImagerySaturation" {
       guard let saturation = Self.satelliteImagerySaturation(rawValue) else { return }
       value = saturation
-    } else if key == "syncWifiOnly" || key == "syncBackupChoiceMade" {
+    } else if key == "syncEnabled" || key == "syncWifiOnly" || key == "syncBackupChoiceMade" {
       // Strict Bool (Android rejects non-Boolean too): the backup switch must never persist a
       // malformed value that reads back truthy.
       guard let flag = rawValue as? Bool else { return }
@@ -636,6 +639,7 @@ final class AppDataRepository {
     }
     // The uploader reads the Wi-Fi switch from native truth, not from a JS call, so a write from any
     // source — the settings row, the one-time choice, a restored backup — reaches it the same way.
+    if key == "syncEnabled" { SyncCoordinator.shared.setEnabled(value as? Bool ?? false) }
     if key == "syncWifiOnly" { SyncCoordinator.shared.setWifiOnly(value as? Bool ?? false) }
     notifyDataChanged(.settings)
   }
@@ -740,6 +744,8 @@ final class AppDataRepository {
     // the keys exist here only so getSettings() returns the full settings shape.
     "autoCloseEnabled": false,
     "autoCloseDelayMinutes": 15,
+    // Backup master switch. Off by default: the uploader does nothing until the Rider turns it on.
+    "syncEnabled": false,
     // Nothing uploads on a metered connection while this is on — mid-ride included.
     "syncWifiOnly": false,
     // The one-time backup choice has been offered on this phone and answered.

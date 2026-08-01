@@ -20,6 +20,9 @@ enum class SyncPauseReason(val slug: String) {
  * @parity /modules/vescape-core/src/index.ts `SyncActivity`
  */
 enum class SyncActivity(val slug: String) {
+  /** The master switch is off. Nothing is scanned, sent, retried or reported. */
+  DISABLED("disabled"),
+
   /** No credential: backup has never been turned on, or the Rider signed out. */
   SIGNED_OUT("signedOut"),
   UP_TO_DATE("upToDate"),
@@ -54,6 +57,8 @@ data class SyncState(
   val pendingRows: Int,
   /** A Board Session is producing samples — Idle Pause halts production without ending the session. */
   val ridingSamples: Boolean,
+  /** The Rider's master switch. Off means the uploader does nothing at all. */
+  val enabled: Boolean,
   val online: Boolean,
   /** Metered-connection setting; the uploader waits for Wi-Fi rather than failing. */
   val wifiOnly: Boolean,
@@ -85,6 +90,9 @@ object SyncPolicy {
   const val BACKOFF_MAX_MS = 15 * 60_000L
 
   fun decide(state: SyncState): SyncDecision {
+    // The master switch is checked before everything, including a pause: switched off is not a
+    // broken uploader waiting to be resumed, it is one that is not running.
+    if (!state.enabled) return SyncDecision.Wait(state.nowMs + IDLE_INTERVAL_MS)
     state.pause?.let { return SyncDecision.Paused(it) }
     if (!state.credentialReady) return SyncDecision.Paused(SyncPauseReason.AUTHENTICATION)
 
@@ -104,6 +112,7 @@ object SyncPolicy {
    * it is one that was never turned on. Everything below the pause is ordinary waiting.
    */
   fun describe(state: SyncState): SyncActivity = when {
+    !state.enabled -> SyncActivity.DISABLED
     !state.credentialReady -> SyncActivity.SIGNED_OUT
     state.pause != null -> SyncActivity.PAUSED
     state.pendingRows <= 0 -> SyncActivity.UP_TO_DATE

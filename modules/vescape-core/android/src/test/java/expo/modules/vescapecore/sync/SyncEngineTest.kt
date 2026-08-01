@@ -66,6 +66,7 @@ class SyncEngineTest {
     environment = {
       SyncEnvironment(
         ridingSamples = false,
+        enabled = true,
         online = true,
         wifiOnly = false,
         onWifi = false,
@@ -158,6 +159,7 @@ class SyncEngineTest {
       environment = {
         SyncEnvironment(
           ridingSamples = false,
+          enabled = true,
           online = true,
           wifiOnly = false,
           onWifi = false,

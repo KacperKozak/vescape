@@ -30,6 +30,8 @@ const PAUSE_LABELS: Record<SyncPauseReason, string> = {
  */
 export function backupStatusCopy(status: SyncStatus, nowMs = Date.now()): BackupStatusCopy {
   switch (status.activity) {
+    case 'disabled':
+      return { label: 'Backup is off', color: theme.palette.slate.textMuted, busy: false }
     case 'signedOut':
       return {
         label: 'Sign in to back up your rides',

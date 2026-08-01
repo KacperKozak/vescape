@@ -205,6 +205,7 @@ function RootLayout() {
             <Stack.Screen name={stackScreens.settingsWatch} options={{ title: 'Watch' }} />
             <Stack.Screen name={stackScreens.settingsFilters} options={{ title: 'Filters' }} />
             <Stack.Screen name={stackScreens.settingsGraphs} options={{ title: 'Graphs' }} />
+            <Stack.Screen name={stackScreens.settingsSync} options={{ title: 'Sync' }} />
             <Stack.Screen name={stackScreens.settingsDatabase} options={{ title: 'Database' }} />
             <Stack.Screen name={stackScreens.settingsAbout} options={{ title: 'About us' }} />
             <Stack.Screen

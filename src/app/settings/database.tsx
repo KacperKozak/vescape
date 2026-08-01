@@ -1,4 +1,4 @@
-import { View, StyleSheet, ScrollView, Pressable, Switch } from 'react-native'
+import { View, StyleSheet, ScrollView, Pressable } from 'react-native'
 import { Text } from '@/components/base/Text'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
@@ -7,8 +7,6 @@ import {
   DownloadSimpleIcon,
   UploadSimpleIcon,
   DatabaseIcon,
-  CloudArrowUpIcon,
-  WifiHighIcon,
 } from 'phosphor-react-native'
 
 import { theme } from '@/constants/theme'
@@ -18,14 +16,9 @@ import { Button } from '@/components/base/Button'
 import { ConfirmModal } from '@/components/modals/ConfirmModal'
 import { useSettingsDatabaseOps } from '@/modules/settings/hooks/useSettingsDatabaseOps'
 import { IconHero } from '@/components/settings/IconHero'
-import { SettingsSectionTitle } from '@/components/settings/SettingsSectionTitle'
-import { BackupStatusLine } from '@/modules/profile/components/BackupStatusLine'
-import { useSettingsStore } from '@/modules/settings/store/settingsStore'
 
 export default function DatabaseSettingsScreen() {
   const db = useSettingsDatabaseOps()
-  const syncWifiOnly = useSettingsStore((s) => s.syncWifiOnly)
-  const set = useSettingsStore((s) => s.set)
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
@@ -34,33 +27,6 @@ export default function DatabaseSettingsScreen() {
           icon={DatabaseIcon}
           description="Back up, restore, and rebuild your ride history database."
         />
-        <SettingsSectionTitle>Backup</SettingsSectionTitle>
-        <SettingsCard>
-          <SettingsRow
-            icon={CloudArrowUpIcon}
-            iconColor={theme.palette.cyan.color}
-            label="Ride backup"
-            hint="Rides, boards and tunes upload to your Vescape account"
-          >
-            <BackupStatusLine />
-          </SettingsRow>
-          <SettingsRow
-            icon={WifiHighIcon}
-            iconColor={theme.palette.cyan.color}
-            label="Back up over Wi-Fi only"
-            hint="Nothing uploads on mobile data, including during a ride"
-            right={
-              <Switch
-                value={syncWifiOnly}
-                onValueChange={(v) => void set('syncWifiOnly', v)}
-                trackColor={{ false: theme.palette.slate.border, true: theme.palette.sky.border }}
-                thumbColor={syncWifiOnly ? theme.palette.sky.color : theme.palette.slate.textMuted}
-              />
-            }
-          />
-        </SettingsCard>
-
-        <SettingsSectionTitle>Local database</SettingsSectionTitle>
         <SettingsCard>
           <SettingsRow
             icon={ClockCounterClockwiseIcon}

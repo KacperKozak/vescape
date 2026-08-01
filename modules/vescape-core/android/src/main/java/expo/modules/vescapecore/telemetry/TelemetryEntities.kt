@@ -639,6 +639,9 @@ internal val NOT_SYNCED_SETTING_KEYS = setOf(
   // Wear pairing — the watch is paired to one phone.
   "wearMirrorIntervalMs",
   "wearAutoLaunchOnConnect",
+  // The backup master switch is per phone, and deliberately does not travel through the mechanism
+  // it turns off: a restored snapshot must never be able to switch backup back on.
+  "syncEnabled",
   // The backup choice is per phone: the expensive first upload belongs to the phone that holds the
   // backlog, so a restore onto a second phone asks that Rider again rather than deciding for them.
   "syncBackupChoiceMade",
@@ -681,6 +684,8 @@ data class AppSettings(
   val companionPresenceCooldownMinutes: Int = 60,
   val autoCloseEnabled: Boolean = false,
   val autoCloseDelayMinutes: Int = 15,
+  /** Backup master switch. Off by default: the uploader does nothing until the Rider turns it on. */
+  val syncEnabled: Boolean = false,
   /** Nothing uploads on a metered connection while this is on — mid-ride included. */
   val syncWifiOnly: Boolean = false,
   /** The one-time backup choice has been offered on this phone and answered. */

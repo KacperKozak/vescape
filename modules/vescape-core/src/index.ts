@@ -1048,6 +1048,12 @@ export interface AppSettings {
   /** Minutes without a board connection before auto close fires. UI offers 1–480; native accepts up to 1440. */
   autoCloseDelayMinutes: number
   /**
+   * Backup master switch, off by default. Off means the uploader does nothing at all: no scan, no
+   * request, no retry, no notification. Phone-local, and deliberately not synced — a restored
+   * snapshot must never be able to switch backup back on.
+   */
+  syncEnabled: boolean
+  /**
    * Nothing uploads on a metered connection while this is on — mid-ride included. No row classes,
    * no backlog thresholds, no partial exceptions.
    */
@@ -1481,6 +1487,7 @@ export type SyncPauseReason = 'authentication' | 'protocol' | 'rowTooLarge'
  * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/sync/SyncPolicy.kt `SyncActivity`
  */
 export type SyncActivity =
+  | 'disabled'
   | 'signedOut'
   | 'upToDate'
   | 'syncing'

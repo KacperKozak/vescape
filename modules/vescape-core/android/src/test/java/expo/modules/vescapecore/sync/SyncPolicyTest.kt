@@ -12,6 +12,7 @@ class SyncPolicyTest {
   private fun state(
     pendingRows: Int = 1,
     ridingSamples: Boolean = false,
+    enabled: Boolean = true,
     online: Boolean = true,
     wifiOnly: Boolean = false,
     onWifi: Boolean = false,
@@ -23,6 +24,7 @@ class SyncPolicyTest {
     nowMs = 1_000,
     pendingRows = pendingRows,
     ridingSamples = ridingSamples,
+    enabled = enabled,
     online = online,
     wifiOnly = wifiOnly,
     onWifi = onWifi,
@@ -74,6 +76,28 @@ class SyncPolicyTest {
     assertEquals(
       SyncDecision.Paused(SyncPauseReason.AUTHENTICATION),
       SyncPolicy.decide(state(credentialReady = false)),
+    )
+  }
+
+  @Test
+  fun `the master switch stops the uploader outright and outranks every other state`() {
+    assertEquals(
+      SyncDecision.Wait(1_000 + SyncPolicy.IDLE_INTERVAL_MS),
+      SyncPolicy.decide(state(enabled = false)),
+    )
+    // Not a pause: switched off is not a broken uploader waiting to be resumed.
+    assertEquals(
+      SyncDecision.Wait(1_000 + SyncPolicy.IDLE_INTERVAL_MS),
+      SyncPolicy.decide(state(enabled = false, pause = SyncPauseReason.PROTOCOL)),
+    )
+    assertEquals(SyncActivity.DISABLED, SyncPolicy.describe(state(enabled = false)))
+    assertEquals(
+      SyncActivity.DISABLED,
+      SyncPolicy.describe(state(enabled = false, credentialReady = false)),
+    )
+    assertEquals(
+      SyncActivity.DISABLED,
+      SyncPolicy.describe(state(enabled = false, pause = SyncPauseReason.AUTHENTICATION)),
     )
   }
 

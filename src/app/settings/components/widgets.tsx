@@ -458,6 +458,7 @@ function BackupStatusLineShowcase() {
   return (
     <ShowcaseCard name="BackupStatusLine">
       <View style={styles.statusList}>
+        <BackupStatusLine status={{ ...base, accountId: null, activity: 'disabled' }} />
         <BackupStatusLine status={{ ...base, accountId: null, activity: 'signedOut' }} />
         <BackupStatusLine
           status={{ ...base, activity: 'upToDate', lastUploadAtMs: SHOWCASE_UPLOADED_AT }}

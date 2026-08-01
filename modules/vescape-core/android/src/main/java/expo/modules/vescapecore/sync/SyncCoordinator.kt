@@ -62,6 +62,9 @@ class SyncCoordinator private constructor(private val context: Context) {
   @Volatile private var lastUploadAtMs: Long? = null
   @Volatile private var wifiOnly = false
 
+  /** The master switch. Off by default: nothing uploads until the Rider turns backup on. */
+  @Volatile private var enabled = false
+
   /** Failure keys already recorded this process, so a wedged batch writes one event, not a stream. */
   private val recordedFailures = HashSet<String>()
 
@@ -102,6 +105,25 @@ class SyncCoordinator private constructor(private val context: Context) {
   }
 
   /**
+   * The master switch, from the App Setting native owns. Off stops the loop outright — no scan, no
+   * request, no backoff, no pause notification — rather than leaving a loop that decides to do
+   * nothing every five minutes.
+   */
+  fun setEnabled(value: Boolean) {
+    if (enabled == value) return
+    enabled = value
+    if (value) {
+      start()
+    } else {
+      stop()
+      // A switched-off uploader asks the Rider for nothing: an earlier pause is no longer theirs to
+      // act on until they turn backup back on.
+      SyncNotifier.get(context).update(null)
+    }
+    scope.launch { publishStatus() }
+  }
+
+  /**
    * The "Back up over Wi-Fi only" App Setting, pushed by [AppDataRepository] on every write and read
    * back on launch. Native reads the setting itself — JS never carries the switch to the uploader.
    */
@@ -124,6 +146,7 @@ class SyncCoordinator private constructor(private val context: Context) {
           nowMs = System.currentTimeMillis(),
           pendingRows = pending,
           ridingSamples = environment.ridingSamples,
+          enabled = environment.enabled,
           online = environment.online,
           wifiOnly = environment.wifiOnly,
           onWifi = environment.onWifi,
@@ -164,16 +187,19 @@ class SyncCoordinator private constructor(private val context: Context) {
     scope.launch {
       // The switch is a durable App Setting, so the uploader restores it before the first pass of
       // this process — otherwise a cold launch on mobile data would upload once before JS loaded.
-      wifiOnly = runCatching {
-        AppDataRepository.get(context).getTypedSettings().syncWifiOnly
-      }.getOrDefault(false)
+      val settings = runCatching { AppDataRepository.get(context).getTypedSettings() }.getOrNull()
+      wifiOnly = settings?.syncWifiOnly ?: false
+      enabled = settings?.syncEnabled ?: false
       val credential = credentials.read()
-      if (credential != null && bindAccount(credential.accountId)) start()
+      // Binding still happens with the switch off — it is what makes this database's Account known,
+      // and `start()` below is the only thing the switch gates.
+      if (credential != null && bindAccount(credential.accountId) && enabled) start()
       publishStatus()
     }
   }
 
   fun start() {
+    if (!enabled) return
     if (loop?.isActive == true) return
     loop = scope.launch {
       while (isActive) {
@@ -199,6 +225,7 @@ class SyncCoordinator private constructor(private val context: Context) {
 
   /** Connectivity regained, ride ended, sign-in: send now rather than waiting for the next tick. */
   fun kick() {
+    if (!enabled) return
     if (loop?.isActive != true) return start()
     val job = scope.launch {
       runCatching { pass() }
@@ -250,6 +277,7 @@ class SyncCoordinator private constructor(private val context: Context) {
     }.getOrNull()
     return SyncEnvironment(
       ridingSamples = samplesProducing(),
+      enabled = enabled,
       online = capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true,
       wifiOnly = wifiOnly,
       onWifi = capabilities?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true,

@@ -62,6 +62,8 @@ interface SyncSource {
 /** Environment the policy reads. Owned by the caller, so the engine keeps no platform types. */
 data class SyncEnvironment(
   val ridingSamples: Boolean,
+  /** The Rider's master switch, read from the App Setting native owns. */
+  val enabled: Boolean,
   val online: Boolean,
   val wifiOnly: Boolean,
   val onWifi: Boolean,
@@ -123,6 +125,7 @@ class SyncEngine(
         nowMs = clock(),
         pendingRows = source.pendingCount(),
         ridingSamples = env.ridingSamples,
+        enabled = env.enabled,
         online = env.online,
         wifiOnly = env.wifiOnly,
         onWifi = env.onWifi,

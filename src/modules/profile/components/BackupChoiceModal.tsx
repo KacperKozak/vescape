@@ -23,12 +23,15 @@ interface BackupChoiceModalProps {
 export function BackupChoiceModal({ preview }: BackupChoiceModalProps) {
   const status = useSyncStatusStore((state) => state.status)
   const loaded = useSettingsStore((state) => state.loaded)
+  const syncEnabled = useSettingsStore((state) => state.syncEnabled)
   const choiceMade = useSettingsStore((state) => state.syncBackupChoiceMade)
   const set = useSettingsStore((state) => state.set)
 
-  // Only once backup is actually on: a signed-out phone has nothing to decide about yet.
+  // Only once backup is actually on: a phone with the master switch off, or signed out, has nothing
+  // to decide about yet.
   const visible =
-    preview != null || (loaded && !choiceMade && status.accountId !== null && status.pause === null)
+    preview != null ||
+    (loaded && syncEnabled && !choiceMade && status.accountId !== null && status.pause === null)
   const pendingRows = preview?.pendingRows ?? status.pendingRows
 
   const choose = (wifiOnly: boolean) => {
