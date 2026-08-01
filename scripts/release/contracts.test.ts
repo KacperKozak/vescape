@@ -101,7 +101,7 @@ describe('production manifest', () => {
       playStatus: 'inProgress',
       rolloutPercentage: 10,
     },
-    githubRelease: 'created' as const,
+    githubRelease: 'released' as const,
   }
 
   test('parses exact staged rollout and GitHub state', () => {
@@ -113,7 +113,7 @@ describe('production manifest', () => {
 
   test('renders partial retry state precisely', () => {
     expect(productionSummary(production)).toBe(
-      'phone 100000042: promoted @ 10% · Wear 1100000042: already-production @ 10% · GitHub created',
+      'phone 100000042: promoted @ 10% · Wear 1100000042: already-production @ 10% · GitHub released',
     )
   })
 })

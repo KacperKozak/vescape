@@ -87,7 +87,7 @@ export function assertReleasePreparationStatus({
 }
 
 export function releaseTrain(version: string): string {
-  const match = /^(\d+)\.(\d+)\.\d+$/.exec(version)
+  const match = /^(\d+)\.(\d+)\.\d+(?:-[0-9A-Za-z.-]+)?$/.exec(version)
   if (!match) throw new Error(`Cannot resolve release train for "${version}"`)
   return `${match[1]}.${match[2]}`
 }

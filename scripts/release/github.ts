@@ -10,6 +10,7 @@ import type {
   WorkflowRun,
 } from './contracts'
 import { parseProductionManifest, parsePromotionManifest, parseReleaseManifest } from './contracts'
+import { releaseTrainNotesPath } from './prepare'
 
 const WORKFLOW_FILE = 'release-android.yml'
 const PROMOTION_WORKFLOW_FILE = 'promote-open.yml'
@@ -35,6 +36,17 @@ async function checkedGh(args: string[], label: string): Promise<string> {
   const result = await gh(args)
   if (result.exitCode !== 0) throw new Error(`${label}: ${result.stderr || result.stdout}`)
   return result.stdout
+}
+
+async function checkedGit(args: string[], label: string): Promise<string> {
+  const process = Bun.spawn(['git', ...args], { stdout: 'pipe', stderr: 'pipe' })
+  const [exitCode, stdout, stderr] = await Promise.all([
+    process.exited,
+    new Response(process.stdout).text(),
+    new Response(process.stderr).text(),
+  ])
+  if (exitCode !== 0) throw new Error(`${label}: ${stderr.trim() || stdout.trim()}`)
+  return stdout.trim()
 }
 
 export interface DispatchPayload {
@@ -646,18 +658,55 @@ export async function canonicalNotesPath(
   marketingVersion: string,
   ref = 'main',
 ): Promise<string> {
-  if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(marketingVersion))
-    throw new Error(`Invalid marketing version "${marketingVersion}"`)
-  const path = `release-notes/${marketingVersion}.md`
+  const path = releaseTrainNotesPath(marketingVersion)
+  const train = path.slice('release-notes/'.length, -'.md'.length)
   await checkedGh(
     [
       'api',
-      `repos/${repo}/contents/release-notes/${encodeURIComponent(marketingVersion)}.md?ref=${encodeURIComponent(ref)}`,
+      `repos/${repo}/contents/release-notes/${encodeURIComponent(train)}.md?ref=${encodeURIComponent(ref)}`,
       '--silent',
     ],
     `Canonical release notes missing at ${path} on ${ref}`,
   )
   return path
+}
+
+export function trainFreezeWarning(
+  notesPath: string,
+  firstProductionTag: string,
+  firstProductionAt: number,
+  notesModifiedAt: number,
+): string | null {
+  if (notesModifiedAt <= firstProductionAt) return null
+  return `${notesPath} changed after ${firstProductionTag} reached production; train is frozen. Put late release notes in next train.`
+}
+
+export async function releaseTrainFreezeWarning(marketingVersion: string): Promise<string | null> {
+  const notesPath = releaseTrainNotesPath(marketingVersion)
+  const train = notesPath.slice('release-notes/'.length, -'.md'.length)
+  await checkedGit(['fetch', 'origin', 'main', '--tags'], 'Cannot refresh release train history')
+  const tags = await checkedGit(
+    [
+      'for-each-ref',
+      '--sort=creatordate',
+      '--format=%(refname:short) %(creatordate:unix)',
+      `refs/tags/v${train}.*`,
+    ],
+    `Cannot inspect production tags for train ${train}`,
+  )
+  const first = tags.split('\n').find((line) => line.length > 0)
+  if (!first) return null
+  const match = /^(v\S+) (\d+)$/.exec(first)
+  if (!match) throw new Error(`Invalid production tag metadata "${first}"`)
+  const notesModifiedAt = Number(
+    await checkedGit(
+      ['log', '-1', '--format=%ct', 'origin/main', '--', notesPath],
+      `Cannot inspect history for ${notesPath}`,
+    ),
+  )
+  if (!Number.isSafeInteger(notesModifiedAt) || notesModifiedAt < 1)
+    throw new Error(`Cannot find history for ${notesPath}`)
+  return trainFreezeWarning(notesPath, match[1], Number(match[2]), notesModifiedAt)
 }
 
 export async function downloadPromotionManifest(runId: number): Promise<PromotionManifest> {

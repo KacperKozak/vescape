@@ -72,6 +72,7 @@ describe('release candidate version bump', () => {
 
   test('resolves patch versions to their release-train notes', () => {
     expect(releaseTrainNotesPath('0.84.3')).toBe('release-notes/0.84.md')
+    expect(releaseTrainNotesPath('0.84.3-rc.1')).toBe('release-notes/0.84.md')
   })
 })
 

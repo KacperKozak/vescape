@@ -23,6 +23,7 @@ import {
   listInternalWorkflowRuns,
   listProductionCandidates,
   marketingVersion,
+  releaseTrainFreezeWarning,
   type ReleaseTrackConfig,
   type ProductionCandidate,
   releaseTrackConfig,
@@ -87,6 +88,7 @@ interface ProductionPlan {
   tracks: ReleaseTrackConfig
   operation: ProductionOperation
   rolloutPercentage?: number
+  freezeWarning: string | null
 }
 
 const releaseActions = [
@@ -274,6 +276,7 @@ function App({ finish, initialPhase = 'select', initialSourceRef }: AppProps) {
         tracks,
         operation: 'promote',
         rolloutPercentage: 10,
+        freezeWarning: null,
       })
       setStatus('Select an open-tested release')
       setPhase('production-candidate')
@@ -294,7 +297,8 @@ function App({ finish, initialPhase = 'select', initialSourceRef }: AppProps) {
         candidate.manifest.marketingVersion,
         candidate.manifest.sourceSha,
       )
-      setProductionPlan({ ...productionPlan, candidate, notesPath })
+      const freezeWarning = await releaseTrainFreezeWarning(candidate.manifest.marketingVersion)
+      setProductionPlan({ ...productionPlan, candidate, notesPath, freezeWarning })
       setStatus('Select production rollout operation')
       setPhase('production-operation')
     } catch (caught) {
@@ -883,7 +887,10 @@ function App({ finish, initialPhase = 'select', initialSourceRef }: AppProps) {
             <Text>Rollout percentage: {productionPlan.rolloutPercentage}%</Text>
           )}
           {productionPlan.operation === 'promote' && (
-            <Text>New release tag: v{productionPlan.candidate.manifest.marketingVersion}</Text>
+            <Text>Existing prerelease: v{productionPlan.candidate.manifest.marketingVersion}</Text>
+          )}
+          {productionPlan.freezeWarning && (
+            <Text color="yellow">Warning: {productionPlan.freezeWarning}</Text>
           )}
           <Text dimColor>
             Trusted workflow revalidates source ancestry, canonical notes, and both live Play
