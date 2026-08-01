@@ -12,7 +12,7 @@ export const REQUIRED_PRODUCTION_ENV = [
   'EXPO_PUBLIC_MAPY_API_KEY',
   'EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY',
   'EXPO_PUBLIC_SENTRY_DSN',
-  // PostHog is deliberately absent: its secrets are unset and the integration is being removed.
+  // No analytics keys: diagnostics stay local-only (ADR 0031) and Sentry owns monitoring.
   'SENTRY_ORG',
   'SENTRY_PROJECT',
   'SENTRY_AUTH_TOKEN',

@@ -212,7 +212,6 @@ internal class BoardSessionController(private val service: CoreForegroundService
             local = { name, props ->
                 TelemetryRepository.get(service.applicationContext).recordDiagnosticEvent(name, props)
             },
-            remote = { name, props -> DiagnosticReporter.get(service).capture(name, props) },
             context = {
                 DiagnosticContext(
                     phaseWire = boardStatus.wireValue,
@@ -752,7 +751,6 @@ private var wearAutoLaunchOnConnect = true
         alertFeedback.release()
         stopLocationUpdates()
         groupRideObserver.stop()
-        DiagnosticReporter.get(service).flush()
         service.stopForeground(Service.STOP_FOREGROUND_REMOVE)
     }
 

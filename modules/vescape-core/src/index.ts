@@ -1049,9 +1049,6 @@ export interface AppSettings {
 }
 
 export interface DiagnosticStatus {
-  enabled: boolean
-  host: string
-  distinctId: string | null
   captureCount: number
   lastEventName: string | null
   lastCaptureAt: number | null
