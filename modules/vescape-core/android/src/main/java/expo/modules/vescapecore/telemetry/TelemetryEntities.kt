@@ -36,7 +36,7 @@ const val TELEMETRY_MASK2_LOCATION = 1
   tableName = "telemetry_frames",
   indices = [
     Index(value = ["captured_at_ms"]),
-    Index(value = ["device_id", "captured_at_ms"]),
+    Index(value = ["board_id", "captured_at_ms"]),
   ],
 )
 data class TelemetryFrameEntity(
@@ -46,10 +46,13 @@ data class TelemetryFrameEntity(
   val capturedAtMs: Long,
   @ColumnInfo(name = "elapsed_realtime_ms")
   val elapsedRealtimeMs: Long,
-  @ColumnInfo(name = "device_id")
-  val deviceId: String?,
-  @ColumnInfo(name = "device_name")
-  val deviceName: String?,
+  /**
+   * Owning Board (`boards.id`), or null when the samples match no saved Board. Never the BLE
+   * identifier: it is nullable, it moves when a Board is re-linked, and it is not an identity
+   * (ADR 0028). The Board name is resolved from `boards` on read, never denormalized here.
+   */
+  @ColumnInfo(name = "board_id")
+  val boardId: String?,
   @ColumnInfo(name = "can_id")
   val canId: Int?,
   val flags: Int,
@@ -109,7 +112,7 @@ data class TelemetryFrameEntity(
 
 @Entity(
   tableName = "telemetry_minute_buckets",
-  primaryKeys = ["bucket_start_ms", "device_id"],
+  primaryKeys = ["bucket_start_ms", "board_id"],
   indices = [
     Index(value = ["bucket_start_ms"]),
     Index(value = ["updated_at"]),
@@ -119,10 +122,13 @@ data class TelemetryFrameEntity(
 data class TelemetryMinuteBucketEntity(
   @ColumnInfo(name = "bucket_start_ms")
   val bucketStartMs: Long,
-  @ColumnInfo(name = "device_id")
-  val deviceId: String,
-  @ColumnInfo(name = "device_name")
-  val deviceName: String?,
+  /**
+   * Owning Board (`boards.id`), or [UNKNOWN_TELEMETRY_BOARD_ID] when the samples match no saved
+   * Board — the column is part of the primary key, so it cannot be null. Keyed on the Board rather
+   * than the BLE identifier (ADR 0028), which is also what the server keys this table on.
+   */
+  @ColumnInfo(name = "board_id")
+  val boardId: String,
   @ColumnInfo(name = "sample_count")
   val sampleCount: Int,
   @ColumnInfo(name = "first_sample_at_ms")
@@ -283,6 +289,12 @@ data class BoardEntity(
    */
   @ColumnInfo(name = "deleted_at")
   val deletedAt: Long? = null,
+)
+
+/** Projection for Ride History name resolution — see `TelemetryDao.getBoardNames`. */
+data class BoardNameRow(
+  val id: String,
+  val name: String,
 )
 
 @Entity(

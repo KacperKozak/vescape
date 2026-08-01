@@ -533,7 +533,8 @@ export interface LiveStateEvent {
 export interface TelemetryHistoryOptions {
   fromMs?: number
   toMs?: number
-  deviceId?: string
+  /** Scope to one Board (`boards.id`). Telemetry is keyed on the Board, not the BLE id (ADR 0028). */
+  boardId?: string
   limit?: number
   cursorBeforeMs?: number
 }
@@ -548,7 +549,7 @@ export interface DiagnosticEventOptions {
 export interface TelemetryDeleteRangeOptions {
   fromMs: number
   toMs: number
-  deviceId?: string | null
+  boardId?: string | null
 }
 
 export interface TelemetryMinuteBucket {
@@ -556,8 +557,10 @@ export interface TelemetryMinuteBucket {
   startAtMs: number
   endAtMs: number
   bucketStartMs: number
-  deviceId: string | null
-  deviceName: string
+  /** Owning Board (`boards.id`), or null when the samples match no saved Board. */
+  boardId: string | null
+  /** Resolved from `boards` on read, never stored on the row — a rename relabels history. */
+  boardName: string
   sampleCount: number
   gpsPointCount: number
   preciseGpsPointCount: number
@@ -595,8 +598,8 @@ export interface TelemetryMinuteBucket {
 export interface TelemetrySample {
   id: number
   capturedAtMs: number
-  deviceId: string | null
-  deviceName: string
+  boardId: string | null
+  boardName: string
   speedKmh: number
   batteryVoltage: number
   /** IR-compensated battery %, derived on read from the board's battery config. Null if no config. */
@@ -625,8 +628,8 @@ export interface TelemetrySample {
 export interface HistoryGpsSample {
   id: number
   capturedAtMs: number
-  deviceId: string | null
-  deviceName: string
+  boardId: string | null
+  boardName: string
   latitude: number
   longitude: number
   speedMps: number | null
@@ -700,8 +703,8 @@ const BMS_SERIES_BALANCE_LANE_BITS = 30
 interface NativeHistoryRange {
   boardColumns: ArrayBuffer
   boardCount: number
-  boardDevices: (string | null)[]
-  boardDeviceNames: string[]
+  boardIds: (string | null)[]
+  boardNames: string[]
   gpsSamples: HistoryGpsSample[]
   markers: HistoryMarker[]
   exclusions: MetricExclusion[]
@@ -719,18 +722,18 @@ const nullableLane = (value: number): number | null => (Number.isNaN(value) ? nu
  * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/TelemetryRepository.kt
  */
 function decodeBoardSamples(range: NativeHistoryRange): TelemetrySample[] {
-  const { boardCount, boardDevices, boardDeviceNames } = range
+  const { boardCount, boardIds, boardNames } = range
   if (!boardCount || !range.boardColumns) return []
   const lanes = new Float64Array(range.boardColumns)
   const samples = new Array<TelemetrySample>(boardCount)
   for (let i = 0; i < boardCount; i++) {
     const o = i * SAMPLE_COLUMN_COUNT
-    const deviceIndex = lanes[o + 2]
+    const boardIndex = lanes[o + 2]
     samples[i] = {
       id: lanes[o],
       capturedAtMs: lanes[o + 1],
-      deviceId: boardDevices[deviceIndex] ?? null,
-      deviceName: boardDeviceNames[deviceIndex],
+      boardId: boardIds[boardIndex] ?? null,
+      boardName: boardNames[boardIndex],
       speedKmh: lanes[o + 3],
       batteryVoltage: lanes[o + 4],
       batteryPercent: nullableLane(lanes[o + 5]),
@@ -850,7 +853,7 @@ export interface Favorite {
 export interface CreateFavoriteOptions {
   startMs: number
   endMs: number
-  deviceId?: string
+  boardId?: string
   name?: string
 }
 
@@ -861,7 +864,7 @@ export interface CreateFavoriteOptions {
 export interface UpdateFavoriteOptions {
   startMs: number
   endMs: number
-  deviceId?: string
+  boardId?: string
   name: string | null
 }
 
@@ -1530,13 +1533,13 @@ type VescapeCoreNativeModule = NativeEventEmitter<VescapeCoreEvents> & {
   getTelemetrySamples(options: {
     fromMs: number
     toMs: number
-    deviceId?: string
+    boardId?: string
     limit?: number
   }): Promise<TelemetrySample[]>
   getHistoryRange(options: {
     fromMs: number
     toMs: number
-    deviceId?: string
+    boardId?: string
     limit?: number
   }): Promise<NativeHistoryRange>
   getTelemetrySummary(): Promise<TelemetrySummary>
@@ -2001,7 +2004,7 @@ export async function getTelemetryHistory(
 export async function getTelemetrySamples(options: {
   fromMs: number
   toMs: number
-  deviceId?: string
+  boardId?: string
   limit?: number
 }): Promise<TelemetrySample[]> {
   if (E2E_ENABLED) {
@@ -2014,7 +2017,7 @@ export async function getTelemetrySamples(options: {
 export async function getHistoryRange(options: {
   fromMs: number
   toMs: number
-  deviceId?: string
+  boardId?: string
   limit?: number
 }): Promise<HistoryRange> {
   const range = E2E_ENABLED

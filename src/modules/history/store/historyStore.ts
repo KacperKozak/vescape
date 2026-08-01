@@ -63,8 +63,8 @@ function bucketToPreviewSample(bucket: TelemetryMinuteBucket): TelemetrySample {
   return {
     id: 0,
     capturedAtMs: bucket.bucketStartMs,
-    deviceId: bucket.deviceId,
-    deviceName: bucket.deviceName,
+    boardId: bucket.boardId,
+    boardName: bucket.boardName,
     speedKmh: bucket.avgSpeedKmh,
     batteryVoltage: bucket.minBatteryVoltage ?? 0,
     batteryPercent: null,
@@ -105,7 +105,7 @@ function getSessionRangeOptions(session: HistorySession) {
   return {
     fromMs: session.startAtMs,
     toMs: session.endAtMs,
-    ...(session.deviceId ? { deviceId: session.deviceId } : {}),
+    ...(session.boardId ? { boardId: session.boardId } : {}),
   }
 }
 
@@ -225,7 +225,7 @@ export const useHistoryStore = create<HistoryState & HistoryActions>((set, get) 
         ? sessions.find(
             (session) =>
               session.id === selectedSession.id ||
-              (session.deviceId === selectedSession.deviceId &&
+              (session.boardId === selectedSession.boardId &&
                 session.startAtMs <= selectedSession.endAtMs &&
                 session.endAtMs >= selectedSession.startAtMs),
           )
@@ -266,7 +266,7 @@ export const useHistoryStore = create<HistoryState & HistoryActions>((set, get) 
       const range = await getHistoryRange({
         fromMs: block.startAtMs,
         toMs: block.endAtMs,
-        ...(block.deviceId ? { deviceId: block.deviceId } : {}),
+        ...(block.boardId ? { boardId: block.boardId } : {}),
         limit: 500,
       })
       set({
@@ -364,7 +364,7 @@ export const useHistoryStore = create<HistoryState & HistoryActions>((set, get) 
       await deleteTelemetryRange({
         fromMs: selectedSession.startAtMs,
         toMs: selectedSession.endAtMs,
-        deviceId: selectedSession.deviceId,
+        boardId: selectedSession.boardId,
       })
       const selectedIndex = sessions.findIndex((session) => session.id === selectedSession.id)
       const blocks = await getTelemetryHistory({ limit: reloadLimit })

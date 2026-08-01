@@ -1390,6 +1390,7 @@ internal final class BoardSessionController: VescGattListener {
     return TelemetryCapture(
       capturedAtMs: telemetry.lastPacketAt,
       elapsedRealtimeMs: elapsedMs(),
+      boardId: config.appBoardId,
       deviceId: config.bleId,
       deviceName: config.name,
       canId: canId,

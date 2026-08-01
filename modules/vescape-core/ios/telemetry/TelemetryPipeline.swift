@@ -27,6 +27,9 @@ internal struct TelemetryLocationCapture {
 internal struct TelemetryCapture {
   let capturedAtMs: Int64
   let elapsedRealtimeMs: Int64
+  /// Owning Board (`boards.id`) — what frames and buckets are keyed on (ADR 0028).
+  let boardId: String?
+  /// BLE identifier; still stamped on markers and diagnostic events, never on frames or buckets.
   let deviceId: String?
   let deviceName: String?
   let canId: Int?
@@ -36,8 +39,10 @@ internal struct TelemetryCapture {
 
 internal struct BucketTelemetryPoint {
   let capturedAtMs: Int64
+  /// Owning Board (`boards.id`); the durable identity telemetry is keyed on (ADR 0028).
+  let boardId: String?
+  /// BLE identifier. Not stored on frames or buckets — only Metric Exclusion Ranges still key on it.
   let deviceId: String?
-  let deviceName: String?
   let speedCentiKmh: Int
   let batteryVoltageMv: Int
   let motorCurrentMa: Int
@@ -66,6 +71,7 @@ internal struct FullTelemetryState {
   var t: RefloatTelemetry { capture.telemetry }
   var capturedAtMs: Int64 { capture.capturedAtMs }
   var elapsedRealtimeMs: Int64 { capture.elapsedRealtimeMs }
+  var boardId: String? { capture.boardId }
   var deviceId: String? { capture.deviceId }
   var deviceName: String? { capture.deviceName }
   var location: TelemetryLocationCapture? { capture.location }
@@ -73,8 +79,8 @@ internal struct FullTelemetryState {
   func toBucketPoint() -> BucketTelemetryPoint {
     BucketTelemetryPoint(
       capturedAtMs: capturedAtMs,
+      boardId: boardId,
       deviceId: deviceId,
-      deviceName: deviceName,
       speedCentiKmh: telemetryCenti(t.speed),
       batteryVoltageMv: telemetryMilli(t.batteryVoltage),
       motorCurrentMa: telemetryMilli(t.motorCurrent),

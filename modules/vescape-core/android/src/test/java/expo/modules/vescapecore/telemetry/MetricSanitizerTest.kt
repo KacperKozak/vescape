@@ -356,8 +356,8 @@ class MetricSanitizerTest {
     dutyPermille: Int = 0,
   ) = BucketTelemetryPoint(
     capturedAtMs = capturedAtMs,
+    boardId = deviceId,
     deviceId = deviceId,
-    deviceName = "Test",
     speedCentiKmh = speedCentiKmh,
     batteryVoltageMv = 70_000,
     motorCurrentMa = 0,
@@ -377,8 +377,8 @@ class MetricSanitizerTest {
     gpsAccuracyCm: Int = 500,
   ) = BucketTelemetryPoint(
     capturedAtMs = capturedAtMs,
+    boardId = deviceId,
     deviceId = deviceId,
-    deviceName = "Test",
     speedCentiKmh = speedCentiKmh,
     batteryVoltageMv = 70_000,
     motorCurrentMa = 0,

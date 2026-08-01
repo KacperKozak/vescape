@@ -6,8 +6,8 @@ function makeGps(id: number, capturedAtMs: number, lat: number, lng: number): Hi
   return {
     id,
     capturedAtMs,
-    deviceId: null,
-    deviceName: 'test',
+    boardId: null,
+    boardName: 'test',
     latitude: lat,
     longitude: lng,
     speedMps: null,

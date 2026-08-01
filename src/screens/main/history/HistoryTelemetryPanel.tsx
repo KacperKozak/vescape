@@ -35,7 +35,7 @@ interface HistoryTelemetryPanelProps {
   endAtMs: number
   movingStartAtMs: number | null
   movingEndAtMs: number | null
-  deviceName: string
+  boardName: string
   navigationTitle?: string
   navigationSubtitle?: string
   samples: TelemetrySample[]
@@ -70,7 +70,7 @@ export function HistoryTelemetryPanel({
   endAtMs,
   movingStartAtMs,
   movingEndAtMs,
-  deviceName,
+  boardName,
   navigationTitle,
   navigationSubtitle,
   samples,
@@ -178,7 +178,7 @@ export function HistoryTelemetryPanel({
         <HistoryPanelNav
           titleStartMs={titleStartMs}
           titleEndMs={titleEndMs}
-          deviceName={deviceName}
+          boardName={boardName}
           title={navigationTitle}
           subtitle={navigationSubtitle}
           canPrevious={canPrevious}

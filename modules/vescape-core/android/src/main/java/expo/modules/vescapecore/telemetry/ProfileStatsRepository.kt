@@ -16,7 +16,12 @@ class ProfileStatsRepository private constructor(context: Context) {
   suspend fun getTotalProfileStats(): Map<String, Any?> {
     val buckets = dao.getAllHistoryBucketsAsc()
     val markers = markersForBuckets(buckets)
-    return computeProfileStatsForBuckets(buckets, markers, month = null)
+    return computeProfileStatsForBuckets(
+      buckets = buckets,
+      markers = markers,
+      month = null,
+      bleIdByBoardId = bleIdByBoardId(),
+    )
   }
 
   suspend fun getMonthlyProfileStats(options: Map<String, Any?>): Map<String, Any?> {
@@ -32,13 +37,14 @@ class ProfileStatsRepository private constructor(context: Context) {
       buckets = buckets,
       markers = markers,
       month = ProfileStatsMonth(year = year, month = month),
+      bleIdByBoardId = bleIdByBoardId(),
     )
   }
 
   suspend fun getProfileStatMonths(): List<Map<String, Any?>> {
     val buckets = dao.getAllHistoryBucketsAsc()
     val markers = markersForBuckets(buckets)
-    return computeProfileStatMonthsForBuckets(buckets, markers).map { month ->
+    return computeProfileStatMonthsForBuckets(buckets, markers, bleIdByBoardId = bleIdByBoardId()).map { month ->
       mapOf("year" to month.year, "month" to month.month)
     }
   }
@@ -51,6 +57,13 @@ class ProfileStatsRepository private constructor(context: Context) {
     val toMs = buckets.maxOf { it.lastSampleAtMs } + TELEMETRY_BUCKET_SIZE_MS
     return dao.getMarkers(fromMs = fromMs, toMs = toMs, deviceId = null)
   }
+
+  /**
+   * Buckets key on the Board (ADR 0028); markers still key on the BLE identifier. Session boundary
+   * detection compares the two, so it needs the translation.
+   */
+  private suspend fun bleIdByBoardId(): Map<String, String> =
+    dao.getBoards().mapNotNull { board -> board.bleId?.let { board.id to it } }.toMap()
 
   companion object {
     @Volatile
@@ -71,7 +84,7 @@ class ProfileStatsRepository private constructor(context: Context) {
 }
 
 private data class ProfileSessionAggregate(
-  val deviceId: String,
+  val boardId: String,
   var startAtMs: Long,
   var endAtMs: Long,
   var sampleCount: Int,
@@ -90,8 +103,9 @@ internal fun computeProfileStatsForBuckets(
   markers: List<TelemetryMarkerEntity>,
   month: ProfileStatsMonth?,
   zoneId: ZoneId = ZoneId.systemDefault(),
+  bleIdByBoardId: Map<String, String> = emptyMap(),
 ): Map<String, Any?> {
-  val sessions = groupProfileSessions(buckets, markers).filter { it.avgSpeedSampleCount > 0 }
+  val sessions = groupProfileSessions(buckets, markers, bleIdByBoardId).filter { it.avgSpeedSampleCount > 0 }
   val included = if (month == null) {
     sessions
   } else {
@@ -140,8 +154,9 @@ internal fun computeProfileStatMonthsForBuckets(
   buckets: List<TelemetryMinuteBucketEntity>,
   markers: List<TelemetryMarkerEntity>,
   zoneId: ZoneId = ZoneId.systemDefault(),
+  bleIdByBoardId: Map<String, String> = emptyMap(),
 ): List<ProfileStatsMonth> {
-  return groupProfileSessions(buckets, markers)
+  return groupProfileSessions(buckets, markers, bleIdByBoardId)
     .filter { it.avgSpeedSampleCount > 0 }
     .map { profileMonth(it.startAtMs, zoneId) }
     .distinct()
@@ -151,6 +166,7 @@ internal fun computeProfileStatMonthsForBuckets(
 private fun groupProfileSessions(
   buckets: List<TelemetryMinuteBucketEntity>,
   markers: List<TelemetryMarkerEntity>,
+  bleIdByBoardId: Map<String, String>,
 ): List<ProfileSessionAggregate> {
   if (buckets.isEmpty()) return emptyList()
   val sorted = buckets.sortedBy { it.firstSampleAtMs }
@@ -160,15 +176,15 @@ private fun groupProfileSessions(
 
   for (bucket in sorted) {
     if (bucket.sampleCount <= 0) continue
-    val boundaryBefore = markerBoundaryForBucket(bucket, markers)
-    val breakByDevice = current == null || current.deviceId != bucket.deviceId
+    val boundaryBefore = markerBoundaryForBucket(bucket, markers, bleIdByBoardId)
+    val breakByBoard = current == null || current.boardId != bucket.boardId
     val breakByGap = previous != null && bucket.firstSampleAtMs - previous.lastSampleAtMs > PROFILE_SESSION_GAP_MS
     val breakByBoundary = boundaryBefore != null && PROFILE_BREAK_BOUNDARIES.contains(boundaryBefore)
 
-    if (breakByDevice || breakByGap || breakByBoundary) {
+    if (breakByBoard || breakByGap || breakByBoundary) {
       current?.let { sessions.add(it) }
       current = ProfileSessionAggregate(
-        deviceId = bucket.deviceId,
+        boardId = bucket.boardId,
         startAtMs = bucket.firstSampleAtMs,
         endAtMs = bucket.lastSampleAtMs,
         sampleCount = 0,
@@ -194,18 +210,15 @@ private fun groupProfileSessions(
 private fun markerBoundaryForBucket(
   bucket: TelemetryMinuteBucketEntity,
   markers: List<TelemetryMarkerEntity>,
+  bleIdByBoardId: Map<String, String>,
 ): String? {
+  val bucketDeviceId = bleIdByBoardId[bucket.boardId] ?: UNKNOWN_TELEMETRY_DEVICE_ID
   val marker = markers.lastOrNull { marker ->
     marker.occurredAtMs >= bucket.firstSampleAtMs - 5_000L &&
       marker.occurredAtMs <= bucket.firstSampleAtMs + 1_000L &&
-      sameMarkerDeviceAsBucket(marker.deviceId, bucket.deviceId)
+      (marker.deviceId ?: UNKNOWN_TELEMETRY_DEVICE_ID) == bucketDeviceId
   }
   return marker?.type
-}
-
-private fun sameMarkerDeviceAsBucket(markerDeviceId: String?, bucketDeviceId: String): Boolean {
-  val normalizedMarker = markerDeviceId ?: UNKNOWN_TELEMETRY_DEVICE_ID
-  return normalizedMarker == bucketDeviceId
 }
 
 private fun mergeBucketIntoSession(

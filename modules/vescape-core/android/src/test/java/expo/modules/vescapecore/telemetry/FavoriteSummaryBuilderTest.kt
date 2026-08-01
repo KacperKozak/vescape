@@ -216,8 +216,8 @@ class FavoriteSummaryBuilderTest {
     val capturedAtMs = startMs + index * intervalMs
     BucketTelemetryPoint(
       capturedAtMs = capturedAtMs,
+      boardId = "board-1",
       deviceId = "board-1",
-      deviceName = "VESC Board",
       speedCentiKmh = speedCentiKmh,
       batteryVoltageMv = 50_000,
       motorCurrentMa = 10_000,
@@ -235,8 +235,7 @@ class FavoriteSummaryBuilderTest {
     lastOdometerCm: Long? = 1_000L,
   ) = TelemetryMinuteBucketEntity(
     bucketStartMs = bucketStartMs,
-    deviceId = "board-1",
-    deviceName = "VESC Board",
+    boardId = "board-1",
     sampleCount = 10,
     firstSampleAtMs = bucketStartMs,
     lastSampleAtMs = bucketStartMs + 9_000,

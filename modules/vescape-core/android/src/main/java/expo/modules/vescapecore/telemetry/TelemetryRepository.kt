@@ -60,6 +60,9 @@ data class TelemetryLocationCapture(
 data class TelemetryCapture(
   val capturedAtMs: Long,
   val elapsedRealtimeMs: Long,
+  /** Owning Board (`boards.id`) — what frames and buckets are keyed on (ADR 0028). */
+  val boardId: String?,
+  /** BLE identifier; still stamped on markers and diagnostic events, never on frames or buckets. */
   val deviceId: String?,
   val deviceName: String,
   val canId: Int?,
@@ -282,13 +285,14 @@ class TelemetryRepository private constructor(context: Context) {
       query.fromMs,
       query.toMs,
       query.beforeMs,
-      query.deviceId,
+      query.boardId,
       query.limit,
     )
     if (buckets.isEmpty()) return@withContext emptyList()
     val markerFrom = buckets.minOf { it.bucketStartMs } - GAP_BOUNDARY_MS
     val markerTo = buckets.maxOf { it.bucketStartMs } + TELEMETRY_BUCKET_SIZE_MS
-    val markers = dao.getMarkers(markerFrom, markerTo, query.deviceId)
+    val markers = dao.getMarkers(markerFrom, markerTo, bleIdForBoard(query.boardId))
+    val boardNames = boardNamesById()
     buckets.map { bucket ->
       val marker = markers.lastOrNull {
         it.occurredAtMs >= bucket.firstSampleAtMs - 5_000L &&
@@ -312,12 +316,12 @@ class TelemetryRepository private constructor(context: Context) {
       val maxGpsSpeedKmh = bucket.maxGpsSpeedCentiMps?.let { it / 100.0 * 3.6 }
       val distanceM = distanceDeltaM(bucket) ?: bucket.gpsDistanceCm.takeIf { it > 0L }?.let { it / 100.0 }
       mapOf(
-        "id" to "${bucket.deviceId}:${bucket.bucketStartMs}",
+        "id" to "${bucket.boardId}:${bucket.bucketStartMs}",
         "startAtMs" to bucket.firstSampleAtMs,
         "endAtMs" to bucket.lastSampleAtMs,
         "bucketStartMs" to bucket.bucketStartMs,
-        "deviceId" to bucket.deviceId.ifBlank { null },
-        "deviceName" to (bucket.deviceName ?: UNKNOWN_TELEMETRY_DEVICE_NAME),
+        "boardId" to bucket.boardId.ifBlank { null },
+        "boardName" to (boardNames[bucket.boardId] ?: UNKNOWN_TELEMETRY_BOARD_NAME),
         "sampleCount" to bucket.sampleCount,
         "gpsPointCount" to bucket.gpsPointCount,
         "preciseGpsPointCount" to bucket.preciseGpsPointCount,
@@ -350,8 +354,8 @@ class TelemetryRepository private constructor(context: Context) {
   suspend fun getSamples(options: Map<String, Any?>): List<Map<String, Any?>> = withContext(Dispatchers.IO) {
     val query = SampleQueryOptions.from(options)
     smoothedSampleMaps(
-      getSampleStates(query.fromMs, query.toMs, query.deviceId, query.limit),
-      batteryConfigByDevice(),
+      getSampleStates(query.fromMs, query.toMs, query.boardId, query.limit),
+      batteryConfigByBoard(),
     )
   }
 
@@ -366,12 +370,17 @@ class TelemetryRepository private constructor(context: Context) {
   ): List<Map<String, Any?>> {
     val windowMs = AppDataRepository.get(appContext).getTypedSettings().socEstimateWindowSeconds * 1000L
     val windows = HashMap<String?, SocMedianWindow>()
+    val boardNames = boardNamesById()
     return samples.map { sample ->
       val estimate = deriveBatteryPercent(sample.state, configs)?.let {
-        windows.getOrPut(sample.state.deviceId) { SocMedianWindow(windowMs) }
+        windows.getOrPut(sample.state.boardId) { SocMedianWindow(windowMs) }
           .median(it, sample.state.capturedAtMs)
       }
-      sample.state.toSampleMap(sample.id, estimate)
+      sample.state.toSampleMap(
+        sample.id,
+        boardNames[sample.state.boardId] ?: UNKNOWN_TELEMETRY_BOARD_NAME,
+        estimate,
+      )
     }
   }
 
@@ -380,7 +389,7 @@ class TelemetryRepository private constructor(context: Context) {
    * little-endian Float64 lanes packed row-major into one direct ByteBuffer, returned as a JSI
    * ArrayBuffer. This replaces ~25 per-field JSI conversions × N samples (the dominant history-load
    * cost) with a single buffer transfer; JS rebuilds TelemetrySample objects locally. Nullable
-   * numeric lanes use NaN as the null sentinel; deviceId/deviceName are dictionary-encoded.
+   * numeric lanes use NaN as the null sentinel; the Board id and name are dictionary-encoded.
    *
    * @parity /modules/vescape-core/ios/telemetry/TelemetryRangePayload.swift `sampleColumns`
    */
@@ -390,21 +399,22 @@ class TelemetryRepository private constructor(context: Context) {
   ): Map<String, Any?> {
     val windowMs = AppDataRepository.get(appContext).getTypedSettings().socEstimateWindowSeconds * 1000L
     val windows = HashMap<String?, SocMedianWindow>()
-    val deviceIds = ArrayList<String?>()
-    val deviceNames = ArrayList<String>()
-    val deviceIndex = HashMap<String?, Int>()
+    val boardNames = boardNamesById()
+    val boardIds = ArrayList<String?>()
+    val names = ArrayList<String>()
+    val boardIndex = HashMap<String?, Int>()
     val buffer = ByteBuffer
       .allocateDirect(samples.size * SAMPLE_COLUMN_COUNT * 8)
       .order(ByteOrder.LITTLE_ENDIAN)
     for (sample in samples) {
       val s = sample.state
       val estimate = deriveBatteryPercent(s, configs)?.let {
-        windows.getOrPut(s.deviceId) { SocMedianWindow(windowMs) }.median(it, s.capturedAtMs)
+        windows.getOrPut(s.boardId) { SocMedianWindow(windowMs) }.median(it, s.capturedAtMs)
       }
-      val di = deviceIndex.getOrPut(s.deviceId) {
-        deviceIds.add(s.deviceId)
-        deviceNames.add(s.deviceName ?: UNKNOWN_TELEMETRY_DEVICE_NAME)
-        deviceIds.size - 1
+      val di = boardIndex.getOrPut(s.boardId) {
+        boardIds.add(s.boardId)
+        names.add(boardNames[s.boardId] ?: UNKNOWN_TELEMETRY_BOARD_NAME)
+        boardIds.size - 1
       }
       buffer
         .putDouble(sample.id.toDouble())
@@ -436,32 +446,50 @@ class TelemetryRepository private constructor(context: Context) {
     return mapOf(
       "boardColumns" to NativeArrayBuffer.wrap(buffer),
       "boardCount" to samples.size,
-      "boardDevices" to deviceIds,
-      "boardDeviceNames" to deviceNames,
+      "boardIds" to boardIds,
+      "boardNames" to names,
     )
   }
 
-  /** bleId (telemetry deviceId) -> the board's normalized battery config. */
-  private suspend fun batteryConfigByDevice(): Map<String, Map<String, Any?>> {
+  /**
+   * `boards.id` -> the Board's normalized battery config. Keyed on the Board rather than its BLE
+   * identifier now that samples carry the Board id (ADR 0028), so a re-linked Board keeps its
+   * config across its whole history.
+   */
+  private suspend fun batteryConfigByBoard(): Map<String, Map<String, Any?>> {
     BatterySocEstimator.ensureInitialized(appContext)
     val result = mutableMapOf<String, Map<String, Any?>>()
     for (board in AppDataRepository.get(appContext).getBoards()) {
-      @Suppress("UNCHECKED_CAST")
-      val link = board["link"] as? Map<String, Any?> ?: continue
-      val bleId = link["bleId"] as? String ?: continue
+      val id = board["id"] as? String ?: continue
       @Suppress("UNCHECKED_CAST")
       val config = board["batteryConfig"] as? Map<String, Any?> ?: continue
-      result[bleId] = config
+      result[id] = config
     }
     return result
   }
+
+  /**
+   * `boards.id` -> Board name, tombstones included: Ride History still has to name a Board the
+   * Rider deleted (ADR 0027), and resolving on read is what makes a rename retroactive.
+   */
+  private suspend fun boardNamesById(): Map<String, String> =
+    dao.getBoardNames().associate { it.id to it.name }
+
+  /**
+   * The BLE identifier a Board currently claims. Markers, diagnostic events and Metric Exclusion
+   * Ranges still key on it, so a Board-scoped query has to translate. A Board re-linked since the
+   * ride no longer resolves its older markers — accepted: they are low-cardinality display rows,
+   * not the sample stream (ADR 0028).
+   */
+  private suspend fun bleIdForBoard(boardId: String?): String? =
+    boardId?.let { dao.getBoardBleId(it) }
 
   /** Derive IR-compensated battery % on read, mirroring the live native path. */
   private fun deriveBatteryPercent(
     state: FullTelemetryState,
     configs: Map<String, Map<String, Any?>>,
   ): Double? {
-    val config = state.deviceId?.let { configs[it] } ?: return null
+    val config = state.boardId?.let { configs[it] } ?: return null
     return BatterySocEstimator.estimateBatteryPercent(
       state.batteryVoltageMv / 1000.0,
       config,
@@ -472,12 +500,12 @@ class TelemetryRepository private constructor(context: Context) {
   private suspend fun getSampleStates(
     fromMs: Long,
     toMs: Long,
-    deviceId: String?,
+    boardId: String?,
     limit: Int,
   ): List<HistoryTelemetryState> {
-    val keyframe = dao.getLatestKeyframeBefore(fromMs, deviceId)
+    val keyframe = dao.getLatestKeyframeBefore(fromMs, boardId)
     val start = keyframe?.capturedAtMs ?: fromMs
-    val frames = dao.getFrames(start, toMs, deviceId, limit + 1)
+    val frames = dao.getFrames(start, toMs, boardId, limit + 1)
     var state: FullTelemetryState? = null
     val samples = mutableListOf<HistoryTelemetryState>()
     for (frame in frames) {
@@ -492,12 +520,13 @@ class TelemetryRepository private constructor(context: Context) {
 
   suspend fun getRange(options: Map<String, Any?>): Map<String, Any?> = withContext(Dispatchers.IO) {
     val query = SampleQueryOptions.from(options)
-    val samples = getSampleStates(query.fromMs, query.toMs, query.deviceId, query.limit)
-    val configs = batteryConfigByDevice()
+    val samples = getSampleStates(query.fromMs, query.toMs, query.boardId, query.limit)
+    val configs = batteryConfigByBoard()
+    val deviceId = bleIdForBoard(query.boardId)
     smoothedSampleColumns(samples, configs) + mapOf(
-      "gpsSamples" to samples.toGpsSampleMaps(),
-      "markers" to dao.getMarkers(query.fromMs, query.toMs, query.deviceId).map { it.toMap() },
-      "exclusions" to dao.getExclusions(query.fromMs, query.toMs, query.deviceId).map { it.toMap() },
+      "gpsSamples" to samples.toGpsSampleMaps(boardNamesById()),
+      "markers" to dao.getMarkers(query.fromMs, query.toMs, deviceId).map { it.toMap() },
+      "exclusions" to dao.getExclusions(query.fromMs, query.toMs, deviceId).map { it.toMap() },
     )
   }
 
@@ -529,9 +558,10 @@ class TelemetryRepository private constructor(context: Context) {
     flushNow()
     val requested = TelemetryTimeRange(query.fromMs, query.toMs)
     val protected = favoriteTelemetryRanges()
-    promoteProtectedRangeStarts(protected, query.deviceId)
+    val deviceId = bleIdForBoard(query.boardId)
+    promoteProtectedRangeStarts(protected, query.boardId)
     val deleted = subtractProtectedTelemetryRanges(requested, protected).sumOf { range ->
-      dao.deleteRange(range.startMs, range.endMs, query.deviceId)
+      dao.deleteRange(range.startMs, range.endMs, query.boardId, deviceId)
     }
     deleted
   }
@@ -546,7 +576,7 @@ class TelemetryRepository private constructor(context: Context) {
    */
   suspend fun getFavorites(): List<Map<String, Any?>> = withContext(Dispatchers.IO) {
     favoriteMediaStore.reconcileAll()
-    val boardNames = dao.getBoards().associate { it.id to it.name }
+    val boardNames = boardNamesById()
     dao.getFavorites().map { it.toMap(boardNames[it.boardId]) }
   }
 
@@ -561,17 +591,12 @@ class TelemetryRepository private constructor(context: Context) {
     val range = favoriteRange(options) ?: return@withContext null
     val startMs = range.startMs
     val endMs = range.endMs
-    val deviceId = options["deviceId"] as? String
+    val boardId = options["boardId"] as? String
     val name = (options["name"] as? String)?.trim()?.ifEmpty { null }
     flushNow()
 
-    val states = getSampleStates(startMs, endMs, deviceId, Int.MAX_VALUE)
+    val states = getSampleStates(startMs, endMs, boardId, Int.MAX_VALUE)
     val summary = favoriteSummary(states)
-    val boards = dao.getBoards()
-    // The ble id is a transport key — it changes on re-link and differs per install — so the
-    // Favorite keeps the durable `boards.id` instead.
-    // @parity /modules/vescape-core/ios/telemetry/TelemetryRepository.swift `boardId`
-    val boardId = deviceId?.let { ble -> boards.firstOrNull { it.bleId == ble }?.id }
     val nowMs = System.currentTimeMillis()
     val favorite = FavoriteEntity(
       id = UUID.randomUUID().toString(),
@@ -590,7 +615,7 @@ class TelemetryRepository private constructor(context: Context) {
       batteryUsedWhMilli = summary.batteryUsedWhMilli,
     )
     dao.insertFavorite(favorite)
-    favorite.toMap(boards.firstOrNull { it.id == boardId }?.name)
+    favorite.toMap(boardId?.let { boardNamesById()[it] })
   }
 
   /**
@@ -607,11 +632,11 @@ class TelemetryRepository private constructor(context: Context) {
     val range = favoriteRange(options) ?: return@withContext null
     val startMs = range.startMs
     val endMs = range.endMs
-    val deviceId = options["deviceId"] as? String
+    val boardId = options["boardId"] as? String
     val name = (options["name"] as? String)?.trim()?.ifEmpty { null }
     flushNow()
 
-    val summary = favoriteSummary(getSampleStates(startMs, endMs, deviceId, Int.MAX_VALUE))
+    val summary = favoriteSummary(getSampleStates(startMs, endMs, boardId, Int.MAX_VALUE))
     val updated = existing.copy(
       name = name,
       startMs = startMs,
@@ -626,7 +651,7 @@ class TelemetryRepository private constructor(context: Context) {
       batteryUsedWhMilli = summary.batteryUsedWhMilli,
     )
     if (dao.updateFavorite(updated) == 0) return@withContext null
-    updated.toMap(dao.getBoards().firstOrNull { it.id == updated.boardId }?.name)
+    updated.toMap(updated.boardId?.let { boardNamesById()[it] })
   }
 
   /**
@@ -736,7 +761,7 @@ class TelemetryRepository private constructor(context: Context) {
     if (protected.isEmpty()) {
       dao.clearAll()
     } else {
-      promoteProtectedRangeStarts(protected, deviceId = null)
+      promoteProtectedRangeStarts(protected, boardId = null)
       val requested = TelemetryTimeRange(Long.MIN_VALUE, Long.MAX_VALUE)
       for (range in subtractProtectedTelemetryRanges(requested, protected)) {
         dao.deleteRangeAllDevices(range.startMs, range.endMs)
@@ -773,24 +798,24 @@ class TelemetryRepository private constructor(context: Context) {
    */
   private suspend fun promoteProtectedRangeStarts(
     protected: Collection<TelemetryTimeRange>,
-    deviceId: String?,
+    boardId: String?,
   ) {
     for (range in protected) {
-      val devices = if (deviceId != null) {
-        listOf(deviceId)
+      val boards = if (boardId != null) {
+        listOf(boardId)
       } else {
-        dao.getDeviceIdsInRange(range.startMs, range.endMs)
+        dao.getBoardIdsInRange(range.startMs, range.endMs)
       }
-      for (protectedDeviceId in devices) {
+      for (protectedBoardId in boards) {
         val firstFrame = dao.getFirstFrameInRange(
           range.startMs,
           range.endMs,
-          protectedDeviceId,
+          protectedBoardId,
         ) ?: continue
         val first = getSampleStates(
           range.startMs,
           firstFrame.capturedAtMs,
-          protectedDeviceId,
+          protectedBoardId,
           Int.MAX_VALUE,
         ).firstOrNull { it.id == firstFrame.id } ?: continue
         dao.updateFrame(first.state.toFrame(previous = null, keyframe = true).copy(id = first.id))
@@ -890,7 +915,7 @@ private data class HistoryQueryOptions(
   val fromMs: Long,
   val toMs: Long,
   val beforeMs: Long,
-  val deviceId: String?,
+  val boardId: String?,
   val limit: Int,
 ) {
   companion object {
@@ -900,7 +925,7 @@ private data class HistoryQueryOptions(
         fromMs = options.long("fromMs") ?: 0L,
         toMs = toMs,
         beforeMs = options.long("cursorBeforeMs") ?: toMs,
-        deviceId = options["deviceId"] as? String,
+        boardId = options["boardId"] as? String,
         limit = (options.int("limit") ?: DEFAULT_HISTORY_LIMIT).coerceIn(1, 500),
       )
     }
@@ -929,7 +954,7 @@ private data class DiagnosticQueryOptions(
 private data class SampleQueryOptions(
   val fromMs: Long,
   val toMs: Long,
-  val deviceId: String?,
+  val boardId: String?,
   val limit: Int,
 ) {
   companion object {
@@ -937,7 +962,7 @@ private data class SampleQueryOptions(
       SampleQueryOptions(
         fromMs = options.requiredLong("fromMs"),
         toMs = options.requiredLong("toMs"),
-        deviceId = options["deviceId"] as? String,
+        boardId = options["boardId"] as? String,
         limit = (options.int("limit") ?: DEFAULT_SAMPLE_LIMIT).coerceIn(1, MAX_SAMPLE_LIMIT),
       )
   }
@@ -946,7 +971,7 @@ private data class SampleQueryOptions(
 private data class RangeMutationOptions(
   val fromMs: Long,
   val toMs: Long,
-  val deviceId: String?,
+  val boardId: String?,
 ) {
   companion object {
     fun from(options: Map<String, Any?>): RangeMutationOptions {
@@ -956,7 +981,7 @@ private data class RangeMutationOptions(
       return RangeMutationOptions(
         fromMs = fromMs,
         toMs = toMs,
-        deviceId = options["deviceId"] as? String,
+        boardId = options["boardId"] as? String,
       )
     }
   }
@@ -970,8 +995,9 @@ internal data class HistoryTelemetryState(
 internal data class FullTelemetryState(
   val capturedAtMs: Long,
   val elapsedRealtimeMs: Long,
+  val boardId: String?,
+  /** Kept off the persisted frame; only the live capture path needs it, for markers. */
   val deviceId: String?,
-  val deviceName: String?,
   val canId: Int?,
   val hasFault: Boolean,
   val faultCode: Int,
@@ -1013,8 +1039,7 @@ internal data class FullTelemetryState(
     return TelemetryFrameEntity(
       capturedAtMs = capturedAtMs,
       elapsedRealtimeMs = elapsedRealtimeMs,
-      deviceId = deviceId,
-      deviceName = deviceName,
+      boardId = boardId,
       canId = canId,
       flags = flags,
       changedMask1 = 0,
@@ -1047,11 +1072,12 @@ internal data class FullTelemetryState(
     ).copy(changedMask1 = mask1, changedMask2 = mask2)
   }
 
-  fun toSampleMap(id: Long, batteryPercent: Double? = null): Map<String, Any?> = mapOf(
+  /** Board name is resolved by the caller from `boards`, never read off the row (ADR 0028). */
+  fun toSampleMap(id: Long, boardName: String?, batteryPercent: Double? = null): Map<String, Any?> = mapOf(
     "id" to id,
     "capturedAtMs" to capturedAtMs,
-    "deviceId" to deviceId,
-    "deviceName" to (deviceName ?: UNKNOWN_TELEMETRY_DEVICE_NAME),
+    "boardId" to boardId,
+    "boardName" to boardName,
     "speedKmh" to speedCentiKmh / 100.0,
     "batteryVoltage" to batteryVoltageMv / 1000.0,
     "batteryPercent" to batteryPercent,
@@ -1078,8 +1104,8 @@ internal data class FullTelemetryState(
 
   fun toBucketPoint(): BucketTelemetryPoint = BucketTelemetryPoint(
     capturedAtMs = capturedAtMs,
+    boardId = boardId,
     deviceId = deviceId,
-    deviceName = deviceName,
     speedCentiKmh = speedCentiKmh,
     batteryVoltageMv = batteryVoltageMv,
     motorCurrentMa = motorCurrentMa,
@@ -1098,8 +1124,8 @@ internal data class FullTelemetryState(
     fun from(capture: TelemetryCapture): FullTelemetryState = FullTelemetryState(
       capturedAtMs = capture.capturedAtMs,
       elapsedRealtimeMs = capture.elapsedRealtimeMs,
+      boardId = capture.boardId,
       deviceId = capture.deviceId,
-      deviceName = capture.deviceName,
       canId = capture.canId,
       hasFault = capture.hasFault,
       faultCode = capture.faultCode,
@@ -1149,8 +1175,9 @@ internal data class FullTelemetryState(
       return FullTelemetryState(
         capturedAtMs = frame.capturedAtMs,
         elapsedRealtimeMs = frame.elapsedRealtimeMs,
-        deviceId = frame.deviceId ?: base?.deviceId,
-        deviceName = frame.deviceName ?: base?.deviceName,
+        boardId = frame.boardId ?: base?.boardId,
+        // Frames never carried the BLE identifier, so a replayed state has none.
+        deviceId = base?.deviceId,
         canId = frame.canId ?: base?.canId,
         hasFault = (frame.flags and TELEMETRY_FLAG_HAS_FAULT) != 0,
         faultCode = faultCode,

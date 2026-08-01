@@ -147,4 +147,188 @@ final class TelemetryMigrationTests: XCTestCase {
 
     XCTAssertEqual(try alertCount(), 1)
   }
+
+  // MARK: - Telemetry keys on the Board id (#280, ADR 0028)
+
+  /// The last migration before `v35_telemetry_board_id`. Stopping here leaves both telemetry tables
+  /// in their `device_id` shape, with `updated_at` and `sync_seq` already on the buckets.
+  private static let beforeBoardId = "v34_board_deleted_at"
+
+  private func insertBoard(id: String, name: String, bleId: String?) throws {
+    try queue.write { db in
+      try db.execute(
+        sql: """
+          INSERT INTO boards (id, name, ble_id, created_at, updated_at, sync_seq)
+          VALUES (?, ?, ?, 1000, 1000, 1)
+          """,
+        arguments: [id, name, bleId]
+      )
+    }
+  }
+
+  private func insertLegacyFrame(deviceId: String?, deviceName: String?, capturedAtMs: Int64) throws {
+    try queue.write { db in
+      try db.execute(
+        sql: """
+          INSERT INTO telemetry_frames
+            (captured_at_ms, elapsed_realtime_ms, device_id, device_name, flags, changed_mask_1, changed_mask_2)
+          VALUES (?, 0, ?, ?, 1, 0, 0)
+          """,
+        arguments: [capturedAtMs, deviceId, deviceName]
+      )
+    }
+  }
+
+  private func insertLegacyBucket(
+    deviceId: String,
+    deviceName: String?,
+    bucketStartMs: Int64,
+    sampleCount: Int = 1,
+    updatedAt: Int64 = 7_000,
+    syncSeq: Int64 = 42
+  ) throws {
+    try queue.write { db in
+      try db.execute(
+        sql: """
+          INSERT INTO telemetry_minute_buckets (
+            bucket_start_ms, device_id, device_name, sample_count, first_sample_at_ms,
+            last_sample_at_ms, sum_abs_speed_centi_kmh, max_abs_speed_centi_kmh,
+            max_motor_current_abs_ma, max_battery_current_abs_ma, battery_used_wh_milli,
+            battery_regen_wh_milli, max_duty_abs_permille, fault_count, gps_point_count,
+            precise_gps_point_count, gps_distance_cm, updated_at, sync_seq
+          ) VALUES (?, ?, ?, ?, ?, ?, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ?, ?)
+          """,
+        arguments: [
+          bucketStartMs, deviceId, deviceName, sampleCount, bucketStartMs, bucketStartMs + 500,
+          updatedAt, syncSeq,
+        ]
+      )
+    }
+  }
+
+  private func boardIds(fromFrames: Bool = true) throws -> [String?] {
+    let table = fromFrames ? "telemetry_frames" : "telemetry_minute_buckets"
+    return try queue.read { db in
+      try Row.fetchAll(db, sql: "SELECT board_id FROM \(table) ORDER BY rowid")
+        .map { $0["board_id"] as String? }
+    }
+  }
+
+  private func board(_ id: String) throws -> Row? {
+    try queue.read { db in
+      try Row.fetchOne(db, sql: "SELECT * FROM boards WHERE id = ?", arguments: [id])
+    }
+  }
+
+  /// Telemetry that still resolves keeps its Board; the retired columns go with the rebuild.
+  func testTelemetryBackfillsBoardIdFromTheLinkedBoardAndDropsTheOldColumns() throws {
+    try migrate(upTo: Self.beforeBoardId)
+    try insertBoard(id: "board-1", name: "ADV", bleId: "ble-a")
+    try insertLegacyFrame(deviceId: "ble-a", deviceName: "ADV", capturedAtMs: 60_000)
+    try insertLegacyBucket(deviceId: "ble-a", deviceName: "ADV", bucketStartMs: 60_000)
+
+    try migrate()
+
+    XCTAssertEqual(try boardIds(), ["board-1"])
+    XCTAssertEqual(try boardIds(fromFrames: false), ["board-1"])
+    for table in ["telemetry_frames", "telemetry_minute_buckets"] {
+      let columns = try columnNames(table)
+      XCTAssertFalse(columns.contains("device_id"), "\(table) kept device_id")
+      XCTAssertFalse(columns.contains("device_name"), "\(table) kept device_name")
+    }
+  }
+
+  /// A frame that never carried an identifier stays unattributed rather than joining a random
+  /// Board; the bucket column is part of the primary key, so it takes the sentinel instead.
+  func testTelemetryWithNoIdentifierStaysUnattributed() throws {
+    try migrate(upTo: Self.beforeBoardId)
+    try insertLegacyFrame(deviceId: nil, deviceName: nil, capturedAtMs: 60_000)
+    try insertLegacyBucket(deviceId: "", deviceName: nil, bucketStartMs: 60_000)
+
+    try migrate()
+
+    XCTAssertEqual(try boardIds(), [nil])
+    XCTAssertEqual(try boardIds(fromFrames: false), [""])
+    XCTAssertEqual(try queue.read { db in try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM boards") }, 0)
+  }
+
+  // MARK: Orphan minting
+
+  /// The regression this exists to prevent: telemetry from a Board hard-deleted before tombstones
+  /// existed resolves to nothing, and without a minted Board it loses both its identity and its
+  /// label. It must end up pointing at a Board that exists, is tombstoned, and keeps the name the
+  /// history itself recorded.
+  func testUnresolvedIdentifierMintsATombstonedBoardCarryingTheHistoricalName() throws {
+    try migrate(upTo: Self.beforeBoardId)
+    try insertLegacyFrame(deviceId: "ble-gone", deviceName: "Old Board", capturedAtMs: 60_000)
+
+    try migrate()
+
+    let mintedId = try XCTUnwrap(try boardIds().first ?? nil)
+    XCTAssertEqual(mintedId, "\(ORPHAN_BOARD_ID_PREFIX)ble-gone")
+
+    let minted = try XCTUnwrap(try board(mintedId))
+    XCTAssertEqual(minted["name"] as String, "Old Board")
+    XCTAssertNotNil(minted["deleted_at"] as Int64?, "a minted Board is not tombstoned")
+    XCTAssertNil(minted["ble_id"] as String?, "a minted Board carries a Board Link")
+    // Every write has to upload, and every existing row is already above zero.
+    XCTAssertGreaterThan(minted["sync_seq"] as Int64, 0)
+  }
+
+  /// A minted Board is invisible to the Rider: `getBoards()` filters tombstones (ADR 0027), so the
+  /// only place it surfaces is the history label it exists to provide.
+  func testAMintedBoardNeverAppearsInTheRidersBoardList() throws {
+    try migrate(upTo: Self.beforeBoardId)
+    try insertBoard(id: "board-1", name: "ADV", bleId: "ble-a")
+    try insertLegacyFrame(deviceId: "ble-gone", deviceName: "Old Board", capturedAtMs: 60_000)
+
+    try migrate()
+
+    let live = try queue.read { db in
+      try String.fetchAll(db, sql: "SELECT id FROM boards WHERE deleted_at IS NULL ORDER BY id")
+    }
+    XCTAssertEqual(live, ["board-1"])
+  }
+
+  /// Minting is derived from the identifier, not random, so a database that somehow reaches the
+  /// migration twice does not accumulate a second Board per ride.
+  func testMintingTheSameIdentifierTwiceIsANoOp() throws {
+    try migrate(upTo: Self.beforeBoardId)
+    try insertLegacyFrame(deviceId: "ble-gone", deviceName: "Old Board", capturedAtMs: 60_000)
+    try insertLegacyBucket(deviceId: "ble-gone", deviceName: "Old Board", bucketStartMs: 60_000)
+
+    try migrate()
+
+    XCTAssertEqual(try queue.read { db in try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM boards") }, 1)
+  }
+
+  // MARK: Bucket rebuild
+
+  /// The primary key move is a table rebuild. `updated_at` and `sync_seq` landed on this table
+  /// earlier in the same release, so a copy that forgets them silently resets every bucket's Sync
+  /// Cursor position and the rows stop uploading.
+  func testTheBucketRebuildMovesThePrimaryKeyAndPreservesUpdatedAtAndSyncSeq() throws {
+    try migrate(upTo: Self.beforeBoardId)
+    try insertBoard(id: "board-1", name: "ADV", bleId: "ble-a")
+    try insertLegacyBucket(
+      deviceId: "ble-a",
+      deviceName: "ADV",
+      bucketStartMs: 60_000,
+      updatedAt: 7_777,
+      syncSeq: 99
+    )
+
+    try migrate()
+
+    XCTAssertEqual(
+      try queue.read { db in try db.primaryKey("telemetry_minute_buckets").columns },
+      ["bucket_start_ms", "board_id"]
+    )
+    let row = try XCTUnwrap(try queue.read { db in
+      try Row.fetchOne(db, sql: "SELECT * FROM telemetry_minute_buckets")
+    })
+    XCTAssertEqual(row["updated_at"] as Int64, 7_777)
+    XCTAssertEqual(row["sync_seq"] as Int64, 99)
+  }
+
 }

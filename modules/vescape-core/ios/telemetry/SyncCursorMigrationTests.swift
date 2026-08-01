@@ -158,7 +158,7 @@ final class SyncCursorMigrationTests: XCTestCase {
   /// leaves most aggregate columns folded into the existing row.
   func testBucketUpsertAdvancesTheCursorOnMerge() throws {
     try migrateToLatest()
-    var bucket = TelemetryBucket(bucketStartMs: 60_000, deviceId: "board-1")
+    var bucket = TelemetryBucket(bucketStartMs: 60_000, boardId: "board-1")
     bucket.firstSampleAtMs = 60_000
     bucket.lastSampleAtMs = 60_500
     bucket.sampleCount = 1
@@ -181,7 +181,7 @@ final class SyncCursorMigrationTests: XCTestCase {
   /// seeing later writes.
   func testBucketCursorIsMonotonicAcrossClockSteps() throws {
     try migrateToLatest()
-    var bucket = TelemetryBucket(bucketStartMs: 60_000, deviceId: "board-1")
+    var bucket = TelemetryBucket(bucketStartMs: 60_000, boardId: "board-1")
     bucket.firstSampleAtMs = 60_000
     bucket.lastSampleAtMs = 60_500
 
@@ -267,7 +267,7 @@ final class SyncCursorMigrationTests: XCTestCase {
 
   func testBucketMergeAdvancesTheSyncSeq() throws {
     try migrateToLatest()
-    var bucket = TelemetryBucket(bucketStartMs: 60_000, deviceId: "board-1")
+    var bucket = TelemetryBucket(bucketStartMs: 60_000, boardId: "board-1")
     bucket.firstSampleAtMs = 60_000
     bucket.lastSampleAtMs = 60_500
 

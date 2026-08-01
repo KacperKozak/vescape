@@ -12,7 +12,7 @@ import java.io.File
 // @parity /modules/vescape-core/ios/VescapeCoreModule.swift
 internal const val TELEMETRY_DATABASE_NAME = "vescape.db"
 internal const val LEGACY_TELEMETRY_DATABASE_NAME = "telemetry.db"
-internal const val TELEMETRY_DATABASE_VERSION = 34
+internal const val TELEMETRY_DATABASE_VERSION = 35
 
 @Database(
   entities = [
@@ -585,6 +585,291 @@ abstract class TelemetryDatabase : RoomDatabase() {
       }
     }
 
+    /**
+     * Telemetry keys on the Board id (#280, ADR 0028). `telemetry_frames` and
+     * `telemetry_minute_buckets` gain `board_id` and lose `device_id` (the BLE identifier) and
+     * `device_name` (the Board name denormalized at capture time); Ride History resolves the name
+     * by looking the Board up instead. Markers, diagnostic events and metric exclusion ranges are
+     * deliberately untouched — that is what crosses the wire for them.
+     *
+     * Both tables are rebuilt rather than altered: the bucket primary key moves to
+     * `(bucket_start_ms, board_id)`, and dropping a column in place needs a SQLite newer than the
+     * oldest supported device ships. The rebuild is a full copy, so it is the expensive step of
+     * this upgrade on a phone with a long Ride History.
+     *
+     * @parity /modules/vescape-core/ios/telemetry/TelemetryDatabase.swift `v35_telemetry_board_id`
+     */
+    internal val MIGRATION_34_35 = object : Migration(34, 35) {
+      override fun migrate(db: SupportSQLiteDatabase) {
+        mintOrphanBoards(db)
+        rebuildFramesOnBoardId(db)
+        rebuildBucketsOnBoardId(db)
+      }
+    }
+
+    /**
+     * Telemetry whose `device_id` matches no Board would lose both its identity and its label:
+     * either the Board was hard-deleted before tombstones existed (ADR 0027), or it was re-linked
+     * to a different peripheral and the old identifier no longer resolves. One tombstoned Board is
+     * minted per unresolved identifier, named from that telemetry's own historical `device_name`,
+     * so the history stays joinable, keeps a label, and can be backed up.
+     *
+     * The minted row is a tombstone with no Board Link: `deleted_at` keeps it out of every
+     * Rider-facing list, and a null `ble_id` stops it from ever capturing a future re-link. The id
+     * is derived from the identifier rather than random so re-running the migration is a no-op.
+     */
+    private fun mintOrphanBoards(db: SupportSQLiteDatabase) {
+      val now = System.currentTimeMillis()
+      for (table in listOf("telemetry_frames" to "captured_at_ms", "telemetry_minute_buckets" to "bucket_start_ms")) {
+        val (name, timeColumn) = table
+        db.execSQL(
+          """
+          INSERT OR IGNORE INTO boards (id, name, ble_id, created_at, updated_at, sync_seq, deleted_at)
+          SELECT
+            '$ORPHAN_BOARD_ID_PREFIX' || t.device_id,
+            COALESCE(
+              (
+                SELECT n.device_name FROM $name n
+                WHERE n.device_id = t.device_id AND n.device_name IS NOT NULL
+                ORDER BY n.$timeColumn DESC LIMIT 1
+              ),
+              '$UNKNOWN_TELEMETRY_BOARD_NAME'
+            ),
+            NULL,
+            MIN(t.$timeColumn),
+            $now,
+            0,
+            $now
+          FROM $name t
+          WHERE t.device_id IS NOT NULL
+            AND t.device_id != ''
+            AND NOT EXISTS (SELECT 1 FROM boards b WHERE b.ble_id = t.device_id)
+          GROUP BY t.device_id
+          """.trimIndent(),
+        )
+      }
+      // A minted Board is an ordinary write and has to upload like one. Every row that survived
+      // migration 32→33 carries a positive `sync_seq`, so zero marks exactly the rows just minted.
+      db.execSQL(
+        """
+        UPDATE boards
+        SET sync_seq = (SELECT COALESCE(last_value, 0) FROM sync_sequences WHERE name = 'boards') + rowid
+        WHERE sync_seq = 0
+        """.trimIndent(),
+      )
+      db.execSQL(
+        "INSERT OR REPLACE INTO sync_sequences (name, last_value) " +
+          "VALUES ('boards', (SELECT COALESCE(MAX(sync_seq), 0) FROM boards))",
+      )
+    }
+
+    /**
+     * Resolves a telemetry row's `device_id` to a Board id: the linked Board when one still claims
+     * the identifier, otherwise the tombstone minted for it above. A row that never carried an
+     * identifier stays unattributed.
+     */
+    private fun boardIdFromDeviceId(alias: String): String =
+      """
+      CASE
+        WHEN $alias.device_id IS NULL OR $alias.device_id = '' THEN %s
+        ELSE COALESCE(
+          (SELECT b.id FROM boards b WHERE b.ble_id = $alias.device_id LIMIT 1),
+          '$ORPHAN_BOARD_ID_PREFIX' || $alias.device_id
+        )
+      END
+      """.trimIndent()
+
+    private fun rebuildFramesOnBoardId(db: SupportSQLiteDatabase) {
+      val columns =
+        "captured_at_ms, elapsed_realtime_ms, can_id, flags, changed_mask_1, changed_mask_2, " +
+          "speed_centi_kmh, battery_voltage_mv, motor_current_ma, battery_current_ma, duty_permille, " +
+          "pitch_centi_deg, roll_centi_deg, balance_pitch_centi_deg, balance_current_ma, erpm, state, " +
+          "switch_state, adc1_milli, adc2_milli, odometer_cm, temp_mosfet_deci_c, temp_motor_deci_c, " +
+          "fault_code, latitude_e7, longitude_e7, gps_speed_centi_mps, bearing_centi_deg, accuracy_cm, " +
+          "altitude_cm, location_timestamp_ms"
+      db.execSQL("DROP INDEX IF EXISTS index_telemetry_frames_captured_at_ms")
+      db.execSQL("DROP INDEX IF EXISTS index_telemetry_frames_device_id_captured_at_ms")
+      db.execSQL("DROP INDEX IF EXISTS index_telemetry_frames_fault")
+      db.execSQL(
+        """
+        CREATE TABLE telemetry_frames_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+          captured_at_ms INTEGER NOT NULL,
+          elapsed_realtime_ms INTEGER NOT NULL,
+          board_id TEXT,
+          can_id INTEGER,
+          flags INTEGER NOT NULL,
+          changed_mask_1 INTEGER NOT NULL,
+          changed_mask_2 INTEGER NOT NULL,
+          speed_centi_kmh INTEGER,
+          battery_voltage_mv INTEGER,
+          motor_current_ma INTEGER,
+          battery_current_ma INTEGER,
+          duty_permille INTEGER,
+          pitch_centi_deg INTEGER,
+          roll_centi_deg INTEGER,
+          balance_pitch_centi_deg INTEGER,
+          balance_current_ma INTEGER,
+          erpm INTEGER,
+          state INTEGER,
+          switch_state INTEGER,
+          adc1_milli INTEGER,
+          adc2_milli INTEGER,
+          odometer_cm INTEGER,
+          temp_mosfet_deci_c INTEGER,
+          temp_motor_deci_c INTEGER,
+          fault_code INTEGER,
+          latitude_e7 INTEGER,
+          longitude_e7 INTEGER,
+          gps_speed_centi_mps INTEGER,
+          bearing_centi_deg INTEGER,
+          accuracy_cm INTEGER,
+          altitude_cm INTEGER,
+          location_timestamp_ms INTEGER
+        )
+        """.trimIndent(),
+      )
+      db.execSQL(
+        """
+        INSERT INTO telemetry_frames_new (id, board_id, $columns)
+        SELECT f.id, ${boardIdFromDeviceId("f").format("NULL")}, $columns
+        FROM telemetry_frames f
+        """.trimIndent(),
+      )
+      db.execSQL("DROP TABLE telemetry_frames")
+      db.execSQL("ALTER TABLE telemetry_frames_new RENAME TO telemetry_frames")
+      db.execSQL(
+        "CREATE INDEX IF NOT EXISTS index_telemetry_frames_captured_at_ms " +
+          "ON telemetry_frames(captured_at_ms)",
+      )
+      db.execSQL(
+        "CREATE INDEX IF NOT EXISTS index_telemetry_frames_board_id_captured_at_ms " +
+          "ON telemetry_frames(board_id, captured_at_ms)",
+      )
+      db.execSQL(
+        """
+        CREATE INDEX IF NOT EXISTS index_telemetry_frames_fault
+        ON telemetry_frames(captured_at_ms)
+        WHERE fault_code IS NOT NULL AND fault_code != 0
+        """.trimIndent(),
+      )
+    }
+
+    /**
+     * The primary key move from `(bucket_start_ms, device_id)` to `(bucket_start_ms, board_id)` is
+     * a table rebuild, not an `ALTER`. `updated_at` and `sync_seq` were added to this table earlier
+     * in the same release, so the copy has to carry them across explicitly or every bucket silently
+     * resets its Sync Cursor position.
+     */
+    private fun rebuildBucketsOnBoardId(db: SupportSQLiteDatabase) {
+      val columns =
+        "bucket_start_ms, sample_count, first_sample_at_ms, last_sample_at_ms, " +
+          "sum_abs_speed_centi_kmh, moving_speed_sample_count, sum_moving_abs_speed_centi_kmh, " +
+          "max_abs_speed_centi_kmh, min_battery_voltage_mv, max_motor_current_abs_ma, " +
+          "max_battery_current_abs_ma, battery_used_wh_milli, battery_regen_wh_milli, " +
+          "max_duty_abs_permille, fault_count, first_odometer_cm, last_odometer_cm, gps_point_count, " +
+          "precise_gps_point_count, gps_distance_cm, max_gps_speed_centi_mps, max_temp_mosfet_deci_c, " +
+          "max_temp_motor_deci_c, first_latitude_e7, first_longitude_e7, first_moving_at_ms, " +
+          "last_moving_at_ms, updated_at, sync_seq"
+      db.execSQL("DROP INDEX IF EXISTS index_telemetry_minute_buckets_bucket_start_ms")
+      db.execSQL("DROP INDEX IF EXISTS index_telemetry_minute_buckets_updated_at")
+      db.execSQL("DROP INDEX IF EXISTS index_telemetry_minute_buckets_sync_seq")
+      db.execSQL(
+        """
+        CREATE TABLE telemetry_minute_buckets_new (
+          bucket_start_ms INTEGER NOT NULL,
+          board_id TEXT NOT NULL,
+          sample_count INTEGER NOT NULL,
+          first_sample_at_ms INTEGER NOT NULL,
+          last_sample_at_ms INTEGER NOT NULL,
+          sum_abs_speed_centi_kmh INTEGER NOT NULL,
+          moving_speed_sample_count INTEGER,
+          sum_moving_abs_speed_centi_kmh INTEGER,
+          max_abs_speed_centi_kmh INTEGER NOT NULL,
+          min_battery_voltage_mv INTEGER,
+          max_motor_current_abs_ma INTEGER NOT NULL,
+          max_battery_current_abs_ma INTEGER NOT NULL,
+          battery_used_wh_milli INTEGER NOT NULL,
+          battery_regen_wh_milli INTEGER NOT NULL,
+          max_duty_abs_permille INTEGER NOT NULL,
+          fault_count INTEGER NOT NULL,
+          first_odometer_cm INTEGER,
+          last_odometer_cm INTEGER,
+          gps_point_count INTEGER NOT NULL,
+          precise_gps_point_count INTEGER NOT NULL,
+          gps_distance_cm INTEGER NOT NULL,
+          max_gps_speed_centi_mps INTEGER,
+          max_temp_mosfet_deci_c INTEGER,
+          max_temp_motor_deci_c INTEGER,
+          first_latitude_e7 INTEGER,
+          first_longitude_e7 INTEGER,
+          first_moving_at_ms INTEGER,
+          last_moving_at_ms INTEGER,
+          updated_at INTEGER NOT NULL,
+          sync_seq INTEGER NOT NULL DEFAULT 0,
+          PRIMARY KEY (bucket_start_ms, board_id)
+        )
+        """.trimIndent(),
+      )
+      // Grouped rather than copied row-for-row so the rebuild is total. A `board_id` collision on
+      // the new key needs two identifiers resolving to one Board inside one minute, which the
+      // resolver below cannot currently produce — but an ungrouped copy would abort the whole
+      // migration on a constraint error if it ever did, stranding the database mid-upgrade. The
+      // fold sums the additive lanes and takes the extreme of the peaks, as an upsert merge would.
+      db.execSQL(
+        """
+        INSERT INTO telemetry_minute_buckets_new (board_id, $columns)
+        SELECT
+          ${boardIdFromDeviceId("b").format("''")} AS board_id,
+          b.bucket_start_ms,
+          SUM(b.sample_count),
+          MIN(b.first_sample_at_ms),
+          MAX(b.last_sample_at_ms),
+          SUM(b.sum_abs_speed_centi_kmh),
+          SUM(b.moving_speed_sample_count),
+          SUM(b.sum_moving_abs_speed_centi_kmh),
+          MAX(b.max_abs_speed_centi_kmh),
+          MIN(b.min_battery_voltage_mv),
+          MAX(b.max_motor_current_abs_ma),
+          MAX(b.max_battery_current_abs_ma),
+          SUM(b.battery_used_wh_milli),
+          SUM(b.battery_regen_wh_milli),
+          MAX(b.max_duty_abs_permille),
+          SUM(b.fault_count),
+          MIN(b.first_odometer_cm),
+          MAX(b.last_odometer_cm),
+          SUM(b.gps_point_count),
+          SUM(b.precise_gps_point_count),
+          SUM(b.gps_distance_cm),
+          MAX(b.max_gps_speed_centi_mps),
+          MAX(b.max_temp_mosfet_deci_c),
+          MAX(b.max_temp_motor_deci_c),
+          MIN(b.first_latitude_e7),
+          MIN(b.first_longitude_e7),
+          MIN(b.first_moving_at_ms),
+          MAX(b.last_moving_at_ms),
+          MAX(b.updated_at),
+          MAX(b.sync_seq)
+        FROM telemetry_minute_buckets b
+        GROUP BY b.bucket_start_ms, board_id
+        """.trimIndent(),
+      )
+      db.execSQL("DROP TABLE telemetry_minute_buckets")
+      db.execSQL("ALTER TABLE telemetry_minute_buckets_new RENAME TO telemetry_minute_buckets")
+      db.execSQL(
+        "CREATE INDEX IF NOT EXISTS index_telemetry_minute_buckets_bucket_start_ms " +
+          "ON telemetry_minute_buckets(bucket_start_ms)",
+      )
+      db.execSQL(
+        "CREATE INDEX IF NOT EXISTS index_telemetry_minute_buckets_updated_at " +
+          "ON telemetry_minute_buckets(updated_at)",
+      )
+      db.execSQL(
+        "CREATE INDEX IF NOT EXISTS index_telemetry_minute_buckets_sync_seq " +
+          "ON telemetry_minute_buckets(sync_seq)",
+      )
+    }
+
     private fun dropMapPointTables(db: SupportSQLiteDatabase) {
       db.execSQL("DROP TABLE IF EXISTS map_point_reactions")
       db.execSQL("DROP TABLE IF EXISTS map_points")
@@ -726,6 +1011,7 @@ abstract class TelemetryDatabase : RoomDatabase() {
             MIGRATION_31_32,
             MIGRATION_32_33,
             MIGRATION_33_34,
+            MIGRATION_34_35,
           )
           .fallbackToDestructiveMigration(true)
           .addCallback(object : Callback() {
