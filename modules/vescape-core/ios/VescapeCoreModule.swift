@@ -933,7 +933,10 @@ public class VescapeCoreModule: Module {
       enabled: true,
       soundType: soundType,
       createdAt: 0,
-      source: nil
+      source: nil,
+      // Ephemeral: the preview rule is never persisted, so it has no last-write-wins timestamp to
+      // carry and never reaches the upload scan.
+      updatedAt: 0
     )
   }
 
