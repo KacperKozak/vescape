@@ -7,6 +7,7 @@ import expo.modules.vescapecore.diagnostics.DiagnosticReporter
 import expo.modules.vescapecore.service.CoreForegroundService
 
 import expo.modules.vescapecore.connection.BoardTransport
+import expo.modules.vescapecore.sync.SyncCoordinator
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -271,6 +272,8 @@ class AppDataRepository private constructor(private val context: Context) {
       companionPresenceCooldownMinutes = req("companionPresenceCooldownMinutes", 60, ::validCompanionCooldownMinutes),
       autoCloseEnabled = req("autoCloseEnabled", false) { it as? Boolean },
       autoCloseDelayMinutes = req("autoCloseDelayMinutes", 15, ::validAutoCloseDelayMinutes),
+      syncWifiOnly = req("syncWifiOnly", false) { it as? Boolean },
+      syncBackupChoiceMade = req("syncBackupChoiceMade", false) { it as? Boolean },
       riderId = opt("riderId") { it as? String },
       riderName = opt("riderName") { it as? String },
       riderColor = opt("riderColor") { it as? String },
@@ -343,6 +346,7 @@ class AppDataRepository private constructor(private val context: Context) {
       "autoCloseEnabled" -> value as? Boolean ?: return@withContext
       "autoCloseDelayMinutes" ->
         validAutoCloseDelayMinutes(value) ?: return@withContext
+      "syncWifiOnly", "syncBackupChoiceMade" -> value as? Boolean ?: return@withContext
       "riderId", "riderName", "riderColor" -> value as? String
       // Legal Policy is native-owned. JS can request refresh through the dedicated intent.
       "legalPolicy" -> return@withContext
@@ -388,6 +392,8 @@ class AppDataRepository private constructor(private val context: Context) {
         "companionPresenceCooldownMinutes" -> d.companionPresenceCooldownMinutes
         "autoCloseEnabled" -> d.autoCloseEnabled
         "autoCloseDelayMinutes" -> d.autoCloseDelayMinutes
+        "syncWifiOnly" -> d.syncWifiOnly
+        "syncBackupChoiceMade" -> d.syncBackupChoiceMade
         "riderId" -> d.riderId
         "riderName" -> d.riderName
         "riderColor" -> d.riderColor
@@ -406,6 +412,11 @@ class AppDataRepository private constructor(private val context: Context) {
           updatedAt = System.currentTimeMillis(),
         ),
       )
+    }
+    // The uploader reads the Wi-Fi switch from native truth, not from a JS call, so a write from any
+    // source — the settings row, the one-time choice, a restored backup — reaches it the same way.
+    if (normalizedKey == "syncWifiOnly") {
+      SyncCoordinator.get(context).setWifiOnly(coerced as? Boolean ?: false)
     }
     notifyDataChanged(AppDataScope.SETTINGS)
   }
@@ -724,6 +735,8 @@ fun AppSettings.toMap(): Map<String, Any?> = mapOf(
   "companionPresenceCooldownMinutes" to companionPresenceCooldownMinutes,
   "autoCloseEnabled" to autoCloseEnabled,
   "autoCloseDelayMinutes" to autoCloseDelayMinutes,
+  "syncWifiOnly" to syncWifiOnly,
+  "syncBackupChoiceMade" to syncBackupChoiceMade,
   "riderId" to riderId,
   "riderName" to riderName,
   "riderColor" to riderColor,

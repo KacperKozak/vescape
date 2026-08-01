@@ -12,6 +12,7 @@ import {
 } from 'vescape-core'
 
 import { ConfirmModal } from '@/components/modals/ConfirmModal'
+import { BackupChoiceModal } from '@/modules/profile/components/BackupChoiceModal'
 
 import {
   useDeviceAuthStore,
@@ -123,17 +124,20 @@ export function DeviceAuthSync() {
   }, [setPendingAccountReset, signOut])
 
   return (
-    <ConfirmModal
-      visible={pendingAccountReset !== null}
-      title="Erase this phone's data?"
-      message={ACCOUNT_RESET_MESSAGE}
-      confirmLabel="Erase and continue"
-      cancelLabel="Cancel"
-      destructive
-      loading={resetting}
-      onConfirm={confirmReset}
-      onCancel={cancelReset}
-    />
+    <>
+      <BackupChoiceModal />
+      <ConfirmModal
+        visible={pendingAccountReset !== null}
+        title="Erase this phone's data?"
+        message={ACCOUNT_RESET_MESSAGE}
+        confirmLabel="Erase and continue"
+        cancelLabel="Cancel"
+        destructive
+        loading={resetting}
+        onConfirm={confirmReset}
+        onCancel={cancelReset}
+      />
+    </>
   )
 }
 

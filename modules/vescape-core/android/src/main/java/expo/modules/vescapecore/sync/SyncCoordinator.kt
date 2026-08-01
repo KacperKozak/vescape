@@ -8,6 +8,7 @@ import expo.modules.vescapecore.api.HttpMethod
 import expo.modules.vescapecore.api.VescapeApi
 import expo.modules.vescapecore.appstatus.AppStatusCoordinator
 import expo.modules.vescapecore.auth.DeviceCredentialStore
+import expo.modules.vescapecore.telemetry.AppDataRepository
 import expo.modules.vescapecore.telemetry.DatabaseBackupManager
 import expo.modules.vescapecore.telemetry.TelemetryDatabase
 import expo.modules.vescapecore.telemetry.TelemetryRepository
@@ -26,12 +27,14 @@ private const val TAG = "SyncCoordinator"
 data class SyncStatus(
   val accountId: String?,
   val pendingRows: Int,
+  val activity: SyncActivity,
   val pause: SyncPauseReason?,
   val lastUploadAtMs: Long?,
 ) {
   fun toMap(): Map<String, Any?> = mapOf(
     "accountId" to accountId,
     "pendingRows" to pendingRows,
+    "activity" to activity.slug,
     "pause" to pause?.slug,
     "lastUploadAtMs" to lastUploadAtMs,
   )
@@ -84,22 +87,72 @@ class SyncCoordinator private constructor(private val context: Context) {
 
   val pauseReason: SyncPauseReason? get() = engine.pauseReason
 
+  /**
+   * Wired by the module: every status transition, pushed to JS. Native owns the state; JS renders it
+   * and never derives one of its own.
+   */
+  @Volatile var onStatusChanged: ((Map<String, Any?>) -> Unit)? = null
+
+  /** Last map handed out, so an unchanged status emits nothing and raises no second notification. */
+  @Volatile private var publishedStatus: Map<String, Any?>? = null
+
   /** Recording persisted samples: the ride cadence follows sample production, not session presence. */
   fun notifySamplesPersisted(atMs: Long = System.currentTimeMillis()) {
     lastSamplePersistedAtMs = atMs
   }
 
+  /**
+   * The "Back up over Wi-Fi only" App Setting, pushed by [AppDataRepository] on every write and read
+   * back on launch. Native reads the setting itself — JS never carries the switch to the uploader.
+   */
   fun setWifiOnly(enabled: Boolean) {
+    if (wifiOnly == enabled) return
     wifiOnly = enabled
     kick()
+    scope.launch { publishStatus() }
   }
 
-  suspend fun status(): SyncStatus = SyncStatus(
-    accountId = dao.getBoundAccountId(),
-    pendingRows = store.pendingCount(),
-    pause = engine.pauseReason,
-    lastUploadAtMs = lastUploadAtMs,
-  )
+  suspend fun status(): SyncStatus {
+    val environment = environment()
+    val pending = store.pendingCount()
+    val pause = engine.pauseReason
+    return SyncStatus(
+      accountId = dao.getBoundAccountId(),
+      pendingRows = pending,
+      activity = SyncPolicy.describe(
+        SyncState(
+          nowMs = System.currentTimeMillis(),
+          pendingRows = pending,
+          ridingSamples = environment.ridingSamples,
+          online = environment.online,
+          wifiOnly = environment.wifiOnly,
+          onWifi = environment.onWifi,
+          credentialReady = environment.credentialReady,
+          onlineBlocked = environment.onlineBlocked,
+          pause = pause,
+          // Backoff is invisible to the Rider: a batch waiting to be retried is still syncing.
+          retryAtMs = 0,
+        ),
+      ),
+      pause = pause,
+      lastUploadAtMs = lastUploadAtMs,
+    )
+  }
+
+  /**
+   * Emit the current status when it differs from the last one, and raise the notification a pause
+   * needs: a permanent failure does not resolve through ordinary retry, so a backup that stopped
+   * weeks ago must not wait for the Rider to open the social sheet.
+   */
+  private suspend fun publishStatus() {
+    val status = runCatching { status() }.getOrNull() ?: return
+    val map = status.toMap()
+    if (map == publishedStatus) return
+    val previousPause = publishedStatus?.get("pause") as? String
+    publishedStatus = map
+    if (status.pause?.slug != previousPause) SyncNotifier.get(context).update(status.pause)
+    onStatusChanged?.invoke(map)
+  }
 
   /**
    * Pick the uploader back up on a cold launch: the credential outlives the process, so a phone that
@@ -108,9 +161,15 @@ class SyncCoordinator private constructor(private val context: Context) {
    * that belongs to another one.
    */
   fun resumeIfBound() {
-    val credential = credentials.read() ?: return
     scope.launch {
-      if (bindAccount(credential.accountId)) start()
+      // The switch is a durable App Setting, so the uploader restores it before the first pass of
+      // this process — otherwise a cold launch on mobile data would upload once before JS loaded.
+      wifiOnly = runCatching {
+        AppDataRepository.get(context).getTypedSettings().syncWifiOnly
+      }.getOrDefault(false)
+      val credential = credentials.read()
+      if (credential != null && bindAccount(credential.accountId)) start()
+      publishStatus()
     }
   }
 
@@ -124,6 +183,7 @@ class SyncCoordinator private constructor(private val context: Context) {
           Log.w(TAG, "Sync pass failed: ${e.message}")
           SyncPolicy.IDLE_INTERVAL_MS
         }
+        publishStatus()
         delay(waitMs)
       }
     }
@@ -140,7 +200,10 @@ class SyncCoordinator private constructor(private val context: Context) {
   /** Connectivity regained, ride ended, sign-in: send now rather than waiting for the next tick. */
   fun kick() {
     if (loop?.isActive != true) return start()
-    val job = scope.launch { runCatching { pass() } }
+    val job = scope.launch {
+      runCatching { pass() }
+      publishStatus()
+    }
     kicks.add(job)
     job.invokeOnCompletion { kicks.remove(job) }
   }
@@ -264,6 +327,7 @@ class SyncCoordinator private constructor(private val context: Context) {
     }
     // Deliberately not started here: the caller installs the new Device Token first, so the loop
     // never runs with the previous Account's credential against the new Account's database.
+    publishStatus()
   }
 
   /**

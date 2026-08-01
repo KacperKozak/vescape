@@ -6,6 +6,7 @@ import Network
 struct SyncStatus {
   let accountId: String?
   let pendingRows: Int
+  let activity: SyncActivity
   let pause: SyncPauseReason?
   let lastUploadAtMs: Int64?
 
@@ -13,6 +14,7 @@ struct SyncStatus {
     [
       "accountId": accountId,
       "pendingRows": pendingRows,
+      "activity": activity.slug,
       "pause": pause?.slug,
       "lastUploadAtMs": lastUploadAtMs,
     ]
@@ -92,6 +94,17 @@ final class SyncCoordinator {
 
   var pauseReason: SyncPauseReason? { engine.pauseReason }
 
+  /// Wired by the module: every status transition, pushed to JS. Native owns the state; JS renders
+  /// it and never derives one of its own.
+  var onStatusChanged: (([String: Any?]) -> Void)?
+
+  /// Last status handed out, so an unchanged status emits nothing and raises no second notification.
+  private var publishedActivity: String?
+  private var publishedPause: String?
+  private var publishedPending: Int?
+  private var publishedUploadAtMs: Int64?
+  private var publishedAccountId: String?
+
   /// Recording persisted samples: the ride cadence follows sample production, not session presence.
   func notifySamplesPersisted(atMs: Int64 = telemetryNowMs()) {
     lock.lock()
@@ -99,23 +112,70 @@ final class SyncCoordinator {
     lock.unlock()
   }
 
+  /// The "Back up over Wi-Fi only" App Setting, pushed by `AppDataRepository` on every write and
+  /// read back on launch. Native reads the setting itself — JS never carries the switch to the
+  /// uploader.
   func setWifiOnly(_ enabled: Bool) {
     lock.lock()
+    let changed = wifiOnly != enabled
     wifiOnly = enabled
     lock.unlock()
+    guard changed else { return }
     kick()
+    publishStatus()
   }
 
   func status() -> SyncStatus {
     lock.lock()
     let uploadedAt = lastUploadAtMs
     lock.unlock()
+    let environment = environment()
+    let pending = store.pendingCount()
+    let pause = engine.pauseReason
     return SyncStatus(
       accountId: store.boundAccountId(),
-      pendingRows: store.pendingCount(),
-      pause: engine.pauseReason,
+      pendingRows: pending,
+      activity: SyncPolicy.describe(
+        SyncState(
+          nowMs: telemetryNowMs(),
+          pendingRows: pending,
+          ridingSamples: environment.ridingSamples,
+          online: environment.online,
+          wifiOnly: environment.wifiOnly,
+          onWifi: environment.onWifi,
+          credentialReady: environment.credentialReady,
+          onlineBlocked: environment.onlineBlocked,
+          pause: pause,
+          // Backoff is invisible to the Rider: a batch waiting to be retried is still syncing.
+          retryAtMs: 0
+        )
+      ),
+      pause: pause,
       lastUploadAtMs: uploadedAt
     )
+  }
+
+  /// Emit the current status when it differs from the last one, and raise the notification a pause
+  /// needs: a permanent failure does not resolve through ordinary retry, so a backup that stopped
+  /// weeks ago must not wait for the Rider to open the social sheet.
+  private func publishStatus() {
+    let status = status()
+    lock.lock()
+    let unchanged = status.activity.slug == publishedActivity
+      && status.pause?.slug == publishedPause
+      && status.pendingRows == publishedPending
+      && status.lastUploadAtMs == publishedUploadAtMs
+      && status.accountId == publishedAccountId
+    let previousPause = publishedPause
+    publishedActivity = status.activity.slug
+    publishedPause = status.pause?.slug
+    publishedPending = status.pendingRows
+    publishedUploadAtMs = status.lastUploadAtMs
+    publishedAccountId = status.accountId
+    lock.unlock()
+    guard !unchanged else { return }
+    if status.pause?.slug != previousPause { SyncNotifier.shared.update(status.pause) }
+    onStatusChanged?(status.toMap())
   }
 
   /// Pick the uploader back up on a cold launch: the credential outlives the process, so a phone
@@ -123,8 +183,13 @@ final class SyncCoordinator {
   /// the stored Account is a no-op when this database already belongs to it, and cannot claim a
   /// database that belongs to another one.
   func resumeIfBound() {
-    guard let credential = DeviceCredentialStore.shared.read() else { return }
-    if bindAccount(credential.accountId) { start() }
+    // The switch is a durable App Setting, so the uploader restores it before the first pass of this
+    // process — otherwise a cold launch on mobile data would upload once before JS loaded.
+    setWifiOnly(AppDataRepository.shared.getSettings()["syncWifiOnly"] as? Bool ?? false)
+    if let credential = DeviceCredentialStore.shared.read(), bindAccount(credential.accountId) {
+      start()
+    }
+    publishStatus()
   }
 
   func start() {
@@ -133,6 +198,7 @@ final class SyncCoordinator {
       while !Task.isCancelled {
         guard let self else { return }
         let waitMs = await self.serialized { await self.pass() }
+        self.publishStatus()
         try? await Task.sleep(nanoseconds: UInt64(max(waitMs, 0)) * 1_000_000)
       }
     }
@@ -152,6 +218,7 @@ final class SyncCoordinator {
     Task { [weak self] in
       guard let self else { return }
       _ = await self.serialized { await self.pass() }
+      self.publishStatus()
     }
   }
 
@@ -314,6 +381,7 @@ final class SyncCoordinator {
       }
     }
     try outcome.get()
+    publishStatus()
     // Deliberately not started here: the caller installs the new Device Token first, so the loop
     // never runs with the previous Account's credential against the new Account's database.
   }

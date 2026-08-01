@@ -46,6 +46,9 @@ internal let notSyncedSettingKeys: [String] = [
   // Wear pairing — the watch is paired to one phone.
   "wearMirrorIntervalMs",
   "wearAutoLaunchOnConnect",
+  // The backup choice is per phone: the expensive first upload belongs to the phone that holds the
+  // backlog, so a restore onto a second phone asks that Rider again rather than deciding for them.
+  "syncBackupChoiceMade",
 ]
 
 /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/telemetry/AppDataRepository.kt
@@ -611,6 +614,11 @@ final class AppDataRepository {
     } else if key == "satelliteImagerySaturation" {
       guard let saturation = Self.satelliteImagerySaturation(rawValue) else { return }
       value = saturation
+    } else if key == "syncWifiOnly" || key == "syncBackupChoiceMade" {
+      // Strict Bool (Android rejects non-Boolean too): the backup switch must never persist a
+      // malformed value that reads back truthy.
+      guard let flag = rawValue as? Bool else { return }
+      value = flag
     } else if key == "boardWarningsEnabled" {
       // Strict Bool (Android rejects non-Boolean too): the board-warnings kill switch must never
       // persist a malformed value that reads back truthy.
@@ -626,6 +634,9 @@ final class AppDataRepository {
     write { db in
       try Self.writeAppSetting(db, key: key, json: json, now: updatedAt)
     }
+    // The uploader reads the Wi-Fi switch from native truth, not from a JS call, so a write from any
+    // source — the settings row, the one-time choice, a restored backup — reaches it the same way.
+    if key == "syncWifiOnly" { SyncCoordinator.shared.setWifiOnly(value as? Bool ?? false) }
     notifyDataChanged(.settings)
   }
 
@@ -729,6 +740,10 @@ final class AppDataRepository {
     // the keys exist here only so getSettings() returns the full settings shape.
     "autoCloseEnabled": false,
     "autoCloseDelayMinutes": 15,
+    // Nothing uploads on a metered connection while this is on — mid-ride included.
+    "syncWifiOnly": false,
+    // The one-time backup choice has been offered on this phone and answered.
+    "syncBackupChoiceMade": false,
     "selectedBoardId": NSNull(),
     "riderId": NSNull(),
     "riderName": NSNull(),

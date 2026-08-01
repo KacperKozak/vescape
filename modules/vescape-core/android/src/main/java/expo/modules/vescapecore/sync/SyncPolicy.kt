@@ -12,6 +12,25 @@ enum class SyncPauseReason(val slug: String) {
   ROW_TOO_LARGE("rowTooLarge"),
 }
 
+/**
+ * The backup state the Rider is shown. Derived from the same [SyncState] the loop decides on, so the
+ * status line can never disagree with what the uploader is actually doing.
+ *
+ * @parity /modules/vescape-core/ios/sync/SyncPolicy.swift `SyncActivity`
+ * @parity /modules/vescape-core/src/index.ts `SyncActivity`
+ */
+enum class SyncActivity(val slug: String) {
+  /** No credential: backup has never been turned on, or the Rider signed out. */
+  SIGNED_OUT("signedOut"),
+  UP_TO_DATE("upToDate"),
+  SYNCING("syncing"),
+  WAITING_FOR_WIFI("waitingForWifi"),
+  OFFLINE("offline"),
+
+  /** Stopped on a permanent failure; [SyncStatus.pause] names which one. */
+  PAUSED("paused"),
+}
+
 /** What the loop should do next. */
 sealed interface SyncDecision {
   /** Send the next batch now. */
@@ -76,6 +95,21 @@ object SyncPolicy {
     if (state.wifiOnly && !state.onWifi) return SyncDecision.Wait(state.nowMs + interval)
     if (state.retryAtMs > state.nowMs) return SyncDecision.Wait(state.retryAtMs)
     return SyncDecision.SendNow
+  }
+
+  /**
+   * The same state, as the one line the Rider reads.
+   *
+   * Signed out wins over the pause it produces: a phone with no credential is not a broken backup,
+   * it is one that was never turned on. Everything below the pause is ordinary waiting.
+   */
+  fun describe(state: SyncState): SyncActivity = when {
+    !state.credentialReady -> SyncActivity.SIGNED_OUT
+    state.pause != null -> SyncActivity.PAUSED
+    state.pendingRows <= 0 -> SyncActivity.UP_TO_DATE
+    !state.online || state.onlineBlocked -> SyncActivity.OFFLINE
+    state.wifiOnly && !state.onWifi -> SyncActivity.WAITING_FOR_WIFI
+    else -> SyncActivity.SYNCING
   }
 
   /** Next backoff step: doubling from [BACKOFF_START_MS], capped, and reset to 0 on success. */

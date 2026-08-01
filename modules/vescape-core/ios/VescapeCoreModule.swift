@@ -76,7 +76,7 @@ public class VescapeCoreModule: Module {
 
     // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `Events`
     // @parity /modules/vescape-core/src/index.ts `VescapeCoreEvents`
-    Events("onDevice", "onError", "onLiveState", "onLiveTick", "onLiveSeries", "onTelemetryHistory", "onBms", "onBmsSeries", "onLocation", "onTelemetryRebuildProgress", "onBoardProbeProgress", "onAppDataChanged", "onGroupRideConnection", "onGroupRideSnapshot", "onGroupRideCreated", "onGroupRideUpdated", "onGroupRideEnded", "onGroupRideJoined", "onGroupRideRoster", "onGroupRideError", "onBoardWarnings", "onAppStatus")
+    Events("onDevice", "onError", "onLiveState", "onLiveTick", "onLiveSeries", "onTelemetryHistory", "onBms", "onBmsSeries", "onLocation", "onTelemetryRebuildProgress", "onBoardProbeProgress", "onAppDataChanged", "onGroupRideConnection", "onGroupRideSnapshot", "onGroupRideCreated", "onGroupRideUpdated", "onGroupRideEnded", "onGroupRideJoined", "onGroupRideRoster", "onGroupRideError", "onBoardWarnings", "onAppStatus", "onSyncStatus")
 
     // Track per-event JS listeners so native skips emitting into the void, and gate the whole
     // firehose on app foreground (see `frontendActive`). Mirrors Android's observing + lifecycle
@@ -113,6 +113,12 @@ public class VescapeCoreModule: Module {
       self.sendEvent("onAppStatus", ["status": AppStatusCoordinator.shared.current?.toMap()])
     }
     OnStopObserving("onAppStatus") { self.observedEvents.remove("onAppStatus") }
+    OnStartObserving("onSyncStatus") {
+      self.observedEvents.insert("onSyncStatus")
+      // Late subscriber: replay the current backup status so JS is immediately consistent.
+      self.sendSyncStatus(SyncCoordinator.shared.status().toMap())
+    }
+    OnStopObserving("onSyncStatus") { self.observedEvents.remove("onSyncStatus") }
 
     OnCreate {
       // Native owns App Status truth; JS mirrors it. Push every successful refresh (late
@@ -123,6 +129,9 @@ public class VescapeCoreModule: Module {
       AppStatusCoordinator.shared.refresh()
       // The Device Token outlives the process, so a signed-in phone has to pick the uploader back
       // up here: provisioning only happens once, and nothing else would start the loop again.
+      // Native owns backup state; JS mirrors it. Push every transition (late subscribers replay
+      // above and through `getSyncStatus`).
+      SyncCoordinator.shared.onStatusChanged = { [weak self] status in self?.sendSyncStatus(status) }
       SyncCoordinator.shared.resumeIfBound()
       self.attachToCoordinator()
       AppDataRepository.onDataChanged = { [weak self] scope in self?.sendAppDataChanged(scope) }
@@ -338,9 +347,6 @@ public class VescapeCoreModule: Module {
     // @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `getSyncStatus`
     AsyncFunction("getSyncStatus") { () -> [String: Any?] in
       SyncCoordinator.shared.status().toMap()
-    }
-    Function("setSyncWifiOnly") { (enabled: Bool) in
-      SyncCoordinator.shared.setWifiOnly(enabled)
     }
 
     // Stable Vescape route keeps the app decoupled from the final store destination.
@@ -1208,6 +1214,18 @@ public class VescapeCoreModule: Module {
     DispatchQueue.main.async {
       guard self.shouldEmitToFrontend("onAppStatus") else { return }
       self.sendEvent("onAppStatus", ["status": status?.toMap()])
+    }
+  }
+
+  /// Emit `onSyncStatus` with the uploader's current state. `sendEvent` must run on the main thread;
+  /// drop the emit when no JS listener is attached — the replay on subscribe and the next transition
+  /// self-heal it.
+  /// @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `onSyncStatus`
+  /// @parity /modules/vescape-core/src/index.ts `SyncStatusEvent`
+  private func sendSyncStatus(_ status: [String: Any?]) {
+    DispatchQueue.main.async {
+      guard self.shouldEmitToFrontend("onSyncStatus") else { return }
+      self.sendEvent("onSyncStatus", status)
     }
   }
 

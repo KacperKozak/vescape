@@ -9,6 +9,7 @@ import { Text } from '@/components/base/Text'
 import { LinkWidget } from '@/components/widgets/LinkWidget'
 import { widgetSurface } from '@/components/widgets/widgetSurface'
 import { theme } from '@/constants/theme'
+import { BackupStatusLine } from '@/modules/profile/components/BackupStatusLine'
 import { useDeviceAuthStore } from '@/modules/profile/store/deviceAuthStore'
 import { routes } from '@/navigation/routes'
 
@@ -43,7 +44,7 @@ export function AccountWidget({ onNavigate }: AccountWidgetProps) {
         icon={UserCircleIcon}
         accent={theme.palette.cyan.color}
         label="Vescape account"
-        hint="Optional — sign in for online features"
+        hint="Sign in to back up your rides, boards and tunes"
         onPress={() => navigate(routes.signIn)}
       />
     )
@@ -79,6 +80,8 @@ export function AccountWidget({ onNavigate }: AccountWidgetProps) {
           onPress={() => navigate(routes.account)}
         />
       </View>
+
+      <BackupStatusLine />
 
       {deviceAuthStatus === 'provisioning' ? (
         <View style={styles.deviceAuthStatus}>

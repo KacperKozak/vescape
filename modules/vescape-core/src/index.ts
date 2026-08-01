@@ -1048,6 +1048,16 @@ export interface AppSettings {
   /** Minutes without a board connection before auto close fires. UI offers 1–480; native accepts up to 1440. */
   autoCloseDelayMinutes: number
   /**
+   * Nothing uploads on a metered connection while this is on — mid-ride included. No row classes,
+   * no backlog thresholds, no partial exceptions.
+   */
+  syncWifiOnly: boolean
+  /**
+   * The one-time backup choice has been offered on this phone and answered. Phone-local: the
+   * expensive first upload belongs to the phone that holds the backlog.
+   */
+  syncBackupChoiceMade: boolean
+  /**
    * Max telemetry poll rate in Hz, applied as a minimum spacing floor between
    * requests. Polling stays response-paced (the next request is only sent once
    * the previous reply lands), so this caps the rate without ever outrunning the
@@ -1465,6 +1475,20 @@ export interface DeviceCredentialStatus {
 export type SyncPauseReason = 'authentication' | 'protocol' | 'rowTooLarge'
 
 /**
+ * The backup state the Rider is shown, derived natively from the same state the uploader decides on.
+ *
+ * @parity /modules/vescape-core/ios/sync/SyncPolicy.swift `SyncActivity`
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/sync/SyncPolicy.kt `SyncActivity`
+ */
+export type SyncActivity =
+  | 'signedOut'
+  | 'upToDate'
+  | 'syncing'
+  | 'waitingForWifi'
+  | 'offline'
+  | 'paused'
+
+/**
  * Native-owned backup state. JS renders it and never infers one of its own.
  *
  * @parity /modules/vescape-core/ios/sync/SyncCoordinator.swift `SyncStatus`
@@ -1474,9 +1498,19 @@ export interface SyncStatus {
   /** The Account this local database is bound to, or null while it has never been claimed. */
   accountId: string | null
   pendingRows: number
+  activity: SyncActivity
+  /** Which permanent failure stopped the uploader, when `activity` is `paused`. */
   pause: SyncPauseReason | null
   lastUploadAtMs: number | null
 }
+
+/**
+ * Backup state changed. Emitted on every transition and replayed on subscribe, so a late listener is
+ * immediately consistent.
+ * @parity /modules/vescape-core/ios/VescapeCoreModule.swift `sendSyncStatus`
+ * @parity /modules/vescape-core/android/src/main/java/expo/modules/vescapecore/VescapeCoreModule.kt `onSyncStatus`
+ */
+export type SyncStatusEvent = SyncStatus
 
 export type CriticalRideNotificationPermissionStatus =
   | 'not-determined'
@@ -1524,6 +1558,7 @@ type VescapeCoreEvents = {
   onBoardWarnings: (event: BoardWarningsEvent) => void
   /** Native App Status, on every successful refresh and on subscribe. */
   onAppStatus: (event: AppStatusEvent) => void
+  onSyncStatus: (event: SyncStatusEvent) => void
 }
 
 interface NativeEventEmitter<TEvents extends Record<string, (...args: never[]) => void>> {
@@ -1599,7 +1634,6 @@ type VescapeCoreNativeModule = NativeEventEmitter<VescapeCoreEvents> & {
     accountId: string,
   ): Promise<DeviceCredentialStatus>
   getSyncStatus(): Promise<SyncStatus>
-  setSyncWifiOnly(enabled: boolean): void
   openAppUpdate(): void
   getRemoteTiltState(): RemoteTiltState | null
   setSelectedBoard(boardId: string | null): void
@@ -2078,10 +2112,6 @@ export async function getSyncStatus(): Promise<SyncStatus> {
 }
 
 /** Back up over Wi-Fi only. Native waits for Wi-Fi rather than failing on a metered connection. */
-export function setSyncWifiOnly(enabled: boolean): void {
-  native.setSyncWifiOnly(enabled)
-}
-
 export async function revokeDeviceCredential(): Promise<void> {
   return native.revokeDeviceCredential()
 }
@@ -2575,6 +2605,10 @@ export function addBoardWarningsListener(
 
 export function addAppStatusListener(cb: (event: AppStatusEvent) => void): EventSubscription {
   return emitter.addListener('onAppStatus', cb)
+}
+
+export function addSyncStatusListener(cb: (event: SyncStatusEvent) => void): EventSubscription {
+  return emitter.addListener('onSyncStatus', cb)
 }
 
 export function addLiveStateListener(cb: (event: LiveStateEvent) => void): EventSubscription {

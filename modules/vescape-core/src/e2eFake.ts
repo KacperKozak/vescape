@@ -75,6 +75,8 @@ const e2eSettings: AppSettings = {
   companionPresenceCooldownMinutes: 60,
   autoCloseEnabled: false,
   autoCloseDelayMinutes: 15,
+  syncWifiOnly: false,
+  syncBackupChoiceMade: false,
   telemetryPollRateHz: 20,
   wearMirrorIntervalMs: 500,
   wearAutoLaunchOnConnect: true,

@@ -639,6 +639,9 @@ internal val NOT_SYNCED_SETTING_KEYS = setOf(
   // Wear pairing — the watch is paired to one phone.
   "wearMirrorIntervalMs",
   "wearAutoLaunchOnConnect",
+  // The backup choice is per phone: the expensive first upload belongs to the phone that holds the
+  // backlog, so a restore onto a second phone asks that Rider again rather than deciding for them.
+  "syncBackupChoiceMade",
 )
 
 /**
@@ -678,6 +681,10 @@ data class AppSettings(
   val companionPresenceCooldownMinutes: Int = 60,
   val autoCloseEnabled: Boolean = false,
   val autoCloseDelayMinutes: Int = 15,
+  /** Nothing uploads on a metered connection while this is on — mid-ride included. */
+  val syncWifiOnly: Boolean = false,
+  /** The one-time backup choice has been offered on this phone and answered. */
+  val syncBackupChoiceMade: Boolean = false,
   val riderId: String? = null,
   val riderName: String? = null,
   val riderColor: String? = null,

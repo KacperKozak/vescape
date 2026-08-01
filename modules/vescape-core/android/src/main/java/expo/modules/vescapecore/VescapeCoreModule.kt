@@ -163,6 +163,7 @@ class VescapeCoreModule : Module() {
       "onAppDataChanged",
       "onBoardWarnings",
       "onAppStatus",
+      "onSyncStatus",
     )
 
     // Native owns App Status truth; JS mirrors it. Push every successful refresh (late subscribers
@@ -236,6 +237,26 @@ class VescapeCoreModule : Module() {
       CoroutineScope(Dispatchers.IO).launch { BoardWarningRegistry.get(context).emitSnapshot() }
     }
     OnStopObserving("onBoardWarnings") { stopObserving("onBoardWarnings") }
+    // Native owns backup state; JS mirrors it. Push every transition, and replay the current one on
+    // subscribe so a late listener never renders an empty status line.
+    // @parity /modules/vescape-core/ios/VescapeCoreModule.swift `sendSyncStatus`
+    // @parity /modules/vescape-core/src/index.ts `SyncStatusEvent`
+    SyncCoordinator.get(context).onStatusChanged = { status ->
+      if (shouldEmitToFrontend("onSyncStatus")) {
+        mainHandler.post {
+          if (shouldEmitToFrontend("onSyncStatus")) sendEvent("onSyncStatus", status)
+        }
+      }
+    }
+
+    OnStartObserving("onSyncStatus") {
+      startObserving("onSyncStatus")
+      CoroutineScope(Dispatchers.IO).launch {
+        val status = SyncCoordinator.get(context).status().toMap()
+        mainHandler.post { sendEvent("onSyncStatus", status) }
+      }
+    }
+    OnStopObserving("onSyncStatus") { stopObserving("onSyncStatus") }
     OnStartObserving("onAppStatus") {
       startObserving("onAppStatus")
       sendEvent("onAppStatus", mapOf("status" to AppStatusCoordinator.get(context).current?.toMap()))
@@ -380,9 +401,6 @@ class VescapeCoreModule : Module() {
     // @parity /modules/vescape-core/ios/VescapeCoreModule.swift `getSyncStatus`
     AsyncFunction("getSyncStatus") Coroutine { ->
       SyncCoordinator.get(context).status().toMap()
-    }
-    Function("setSyncWifiOnly") { enabled: Boolean ->
-      SyncCoordinator.get(context).setWifiOnly(enabled)
     }
     // Stable Vescape route keeps the app decoupled from the final store destination.
     // @parity /modules/vescape-core/ios/VescapeCoreModule.swift `openAppUpdate`

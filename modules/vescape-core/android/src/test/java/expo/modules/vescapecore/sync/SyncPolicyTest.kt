@@ -78,6 +78,45 @@ class SyncPolicyTest {
   }
 
   @Test
+  fun `a phone with no credential reads as signed out, not as a broken backup`() {
+    assertEquals(SyncActivity.SIGNED_OUT, SyncPolicy.describe(state(credentialReady = false)))
+    assertEquals(
+      SyncActivity.SIGNED_OUT,
+      SyncPolicy.describe(state(credentialReady = false, pause = SyncPauseReason.AUTHENTICATION)),
+    )
+  }
+
+  @Test
+  fun `every waiting reason is named separately`() {
+    assertEquals(SyncActivity.UP_TO_DATE, SyncPolicy.describe(state(pendingRows = 0)))
+    assertEquals(SyncActivity.SYNCING, SyncPolicy.describe(state()))
+    assertEquals(SyncActivity.OFFLINE, SyncPolicy.describe(state(online = false)))
+    assertEquals(SyncActivity.OFFLINE, SyncPolicy.describe(state(onlineBlocked = true)))
+    assertEquals(
+      SyncActivity.WAITING_FOR_WIFI,
+      SyncPolicy.describe(state(wifiOnly = true, onWifi = false)),
+    )
+    assertEquals(SyncActivity.SYNCING, SyncPolicy.describe(state(wifiOnly = true, onWifi = true)))
+  }
+
+  @Test
+  fun `a pause outranks everything except being signed out`() {
+    assertEquals(
+      SyncActivity.PAUSED,
+      SyncPolicy.describe(state(pendingRows = 0, pause = SyncPauseReason.PROTOCOL)),
+    )
+    assertEquals(
+      SyncActivity.PAUSED,
+      SyncPolicy.describe(state(online = false, pause = SyncPauseReason.ROW_TOO_LARGE)),
+    )
+  }
+
+  @Test
+  fun `a batch waiting on backoff still reads as syncing`() {
+    assertEquals(SyncActivity.SYNCING, SyncPolicy.describe(state(retryAtMs = 60_000)))
+  }
+
+  @Test
   fun `backoff doubles from the first step and stops at the cap`() {
     assertEquals(SyncPolicy.BACKOFF_START_MS, SyncPolicy.nextBackoffMs(0))
     assertEquals(60_000, SyncPolicy.nextBackoffMs(30_000))

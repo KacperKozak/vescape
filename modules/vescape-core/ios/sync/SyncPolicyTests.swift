@@ -63,6 +63,32 @@ final class SyncPolicyTests: XCTestCase {
     XCTAssertEqual(SyncPolicy.decide(state(credentialReady: false)), .paused(.authentication))
   }
 
+  func testAPhoneWithNoCredentialReadsAsSignedOutNotAsABrokenBackup() {
+    XCTAssertEqual(SyncPolicy.describe(state(credentialReady: false)), .signedOut)
+    XCTAssertEqual(
+      SyncPolicy.describe(state(credentialReady: false, pause: .authentication)),
+      .signedOut
+    )
+  }
+
+  func testEveryWaitingReasonIsNamedSeparately() {
+    XCTAssertEqual(SyncPolicy.describe(state(pendingRows: 0)), .upToDate)
+    XCTAssertEqual(SyncPolicy.describe(state()), .syncing)
+    XCTAssertEqual(SyncPolicy.describe(state(online: false)), .offline)
+    XCTAssertEqual(SyncPolicy.describe(state(onlineBlocked: true)), .offline)
+    XCTAssertEqual(SyncPolicy.describe(state(wifiOnly: true, onWifi: false)), .waitingForWifi)
+    XCTAssertEqual(SyncPolicy.describe(state(wifiOnly: true, onWifi: true)), .syncing)
+  }
+
+  func testAPauseOutranksEverythingExceptBeingSignedOut() {
+    XCTAssertEqual(SyncPolicy.describe(state(pendingRows: 0, pause: .protocolFailure)), .paused)
+    XCTAssertEqual(SyncPolicy.describe(state(online: false, pause: .rowTooLarge)), .paused)
+  }
+
+  func testABatchWaitingOnBackoffStillReadsAsSyncing() {
+    XCTAssertEqual(SyncPolicy.describe(state(retryAtMs: 60_000)), .syncing)
+  }
+
   func testBackoffDoublesFromTheFirstStepAndStopsAtTheCap() {
     XCTAssertEqual(SyncPolicy.nextBackoffMs(0), SyncPolicy.backoffStartMs)
     XCTAssertEqual(SyncPolicy.nextBackoffMs(30_000), 60_000)

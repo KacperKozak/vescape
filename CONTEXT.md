@@ -24,6 +24,10 @@ _Avoid_: Watermark, sync token, last-synced timestamp, offset
 One upload: rows from one or more tables, sent in the order the server applies them so a Board-owned row never arrives before its Board. Capped by row count and by actual compact JSON bytes. Accepted whole or refused whole — nothing is half-applied, and nothing is skipped to make a batch fit.
 _Avoid_: Sync payload, upload chunk, page, delta
 
+**Backup Status**:
+Native's one answer to "what is my backup doing": signed out, up to date, syncing, waiting for Wi-Fi, offline, or paused with the reason that stopped it. Derived from the same state the uploader decides on, so a status line can never disagree with the uploader. JS renders it and derives none of its own; every paused reason also raises a notification, because a pause never clears through ordinary retry.
+_Avoid_: Sync state, upload progress, connection status
+
 **Account Binding**:
 The one **Vescape Account** a phone's local database belongs to, claimed by the first Account to sign in. It survives sign-out, so data recorded while signed out stays protected from retention for the same Account. A different Account cannot take over the database; it can only replace it, which the Rider has to confirm.
 _Avoid_: Account link, owner id, current user
