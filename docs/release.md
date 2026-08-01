@@ -2,8 +2,6 @@
 
 How Vescape versions, notes, and Android releases work.
 
-> Implementation tracked in issues [#307](https://github.com/KacperKozak/vescape/issues/307)–[#311](https://github.com/KacperKozak/vescape/issues/311). Until they land, tags and GitHub Releases are created only at production promote.
-
 ## Trains
 
 A **train** is a `major.minor` version line (`1.0`, `1.1`). It exists implicitly: bumping the app to `1.1.0` starts train `1.1` — no ceremony.
