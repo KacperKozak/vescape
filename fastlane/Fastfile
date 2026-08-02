@@ -394,10 +394,15 @@ platform :ios do
     # Build a signed IPA from the expo-prebuilt workspace.
     # CFBundleVersion is set to VERSION_CODE (major*10000 + minor*100 + patch),
     # matching the Android versionCode convention so builds stay aligned.
+    # export_options passes the profile mapping match resolved so Xcode
+    # doesn't fall back to automatic signing and fail to find them.
     build_app(
       workspace:      "ios/vescape.xcworkspace",
       scheme:         "vescape",
       export_method:  "app-store",
+      export_options: {
+        provisioningProfiles: lane_context[SharedValues::MATCH_PROVISIONING_PROFILE_MAPPING]
+      },
       xcargs:         "CURRENT_PROJECT_VERSION=#{ENV["VERSION_CODE"]} MARKETING_VERSION=#{ENV["APP_VERSION"]}"
     )
 
